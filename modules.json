@@ -1,0 +1,135 @@
+{
+  "schema_version": 2,
+  "repository": "github.com/faustbrian/go-identity",
+  "go_version": "1.26.6",
+  "modules": [
+    {
+      "directory": ".",
+      "module_path": "github.com/faustbrian/go-identity",
+      "go_version": "1.26.6",
+      "packages": [
+        {
+          "module_directory": ".",
+          "directory": ".",
+          "name": "planned",
+          "import_path": "github.com/faustbrian/go-identity",
+          "kind": "planned entry point",
+          "production": false,
+          "executable": false,
+          "coverage_required": false,
+          "build_required": false,
+          "build_tags": []
+        }
+      ],
+      "purpose": "Planned storage-neutral identity core for users, accounts, login identifiers, credential references, verification state, account status, and domain events; no runtime package is implemented or released.",
+      "lifecycle": "planned",
+      "kind": "public library",
+      "releasable": true,
+      "family": "service-edge",
+      "family_label": "Service Edge",
+      "family_description": "Request-edge policy, identity, access decisions, routing, middleware, and process lifecycle.",
+      "family_order": 2,
+      "version": "",
+      "tag_prefix": "v",
+      "owned_dependencies": [],
+      "reverse_owned_dependencies": [],
+      "external_runtime_dependencies": [],
+      "required_services": [],
+      "build_tags": [],
+      "test_tags": [],
+      "interoperability_tools": [],
+      "specifications": [],
+      "conformance_corpora": [],
+      "provenance": [],
+      "goal_files": [
+        "docs/goal.md"
+      ],
+      "goal_status": "planned",
+      "goal_evidence": [],
+      "cohesion": {
+        "family": "service-edge",
+        "secondary_capabilities": [
+          "identity-and-access"
+        ],
+        "responsibility": "Plan a storage-neutral identity core for users, accounts, identifiers, credential references, verification state, account status, policy boundaries, and domain events.",
+        "non_goals": [
+          "Claim that a public package identifier, runtime API, implementation, compatibility promise, or release currently exists.",
+          "Own sessions, authentication ceremonies, credential verification, provider protocols, message delivery, organization membership, or user interfaces.",
+          "Own database clients, migrations, transactions, caches, background workers, or application authorization policy."
+        ],
+        "public_package_identifier": "none",
+        "primary_entry_packages": [
+          "github.com/faustbrian/go-identity"
+        ],
+        "package_selection": {
+          "github.com/faustbrian/go-identity": "Planning identity only; no importable package or runtime API currently exists."
+        },
+        "lifecycle_status": "planned",
+        "maturity": "experimental",
+        "construction_styles": [
+          "new-config",
+          "plain-function",
+          "validated-value"
+        ],
+        "lifecycle_styles": [
+          "stateless"
+        ],
+        "ownership": {
+          "configuration": "caller",
+          "mutable_inputs": [
+            "copy"
+          ],
+          "runtime_resources": "caller",
+          "background_work": "none"
+        },
+        "optional_owned_dependencies": [],
+        "adapters": [],
+        "companions": [],
+        "supported_go": {
+          "minimum": "1.26.6",
+          "tested": [
+            "1.26.6"
+          ]
+        },
+        "supported_platforms": [
+          "portable-go"
+        ],
+        "supported_backends": [],
+        "supported_protocols": [],
+        "documentation": {
+          "readme": "README.md",
+          "api": null,
+          "adoption": null,
+          "security": null,
+          "compatibility": null,
+          "performance": null,
+          "examples": null,
+          "faq": null,
+          "changelog": null,
+          "pkg_go_dev": null,
+          "ecosystem_index": "https://github.com/faustbrian/go-library-tools/blob/v1.4.0/docs/ecosystem/README.md"
+        },
+        "known_good_compatibility_sets": [],
+        "delivery": {
+          "implementation": "not-started",
+          "hardening": "not-started",
+          "release": "not-started"
+        }
+      },
+      "gates": {
+        "api_compatibility": false,
+        "benchmarks": false,
+        "conformance": false,
+        "coverage": false,
+        "documentation": true,
+        "fuzz": false,
+        "interoperability": false,
+        "lint": false,
+        "mutation": false,
+        "race": false,
+        "security": false,
+        "tests": false
+      }
+    }
+  ]
+}
