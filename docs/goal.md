@@ -22,6 +22,11 @@ That record contains proposed contracts; it is not implementation evidence.
   checksum-verified `go-library-tools` v1.4.0 tooling.
 - Do not claim a public package identifier, installation path, runtime API,
   compatibility promise, or released behavior.
+- Keep `releasable: false` and delivery release `blocked` until implementation,
+  security verification, and release review provide executable evidence.
+- Maintain the [repository threat model](security/threat-model-v0.1.md) and
+  [private vulnerability reporting process](../SECURITY.md) as planning
+  documents, not evidence of implemented controls.
 
 ## Deferred implementation
 
