@@ -1,7 +1,9 @@
 # go-identity
 
 > **Status: planned.** This repository does not currently provide an
-> installable package, a released version, or a runtime API.
+> installable package, a released version, or a runtime API. The module is
+> non-releasable while implementation and executable security evidence are
+> absent.
 
 `go-identity` reserves the planned Golib boundary for users, accounts, login
 identifiers, credential references, verification state, account status, and
@@ -30,8 +32,8 @@ Their presence in planning material does not make them available here.
 
 ## Lifecycle and ownership
 
-Implementation, hardening, and release have not started. The current module
-declaration exists only so repository tooling can validate the planned
+Implementation and hardening have not started; release is blocked. The current
+module declaration exists only so repository tooling can validate the planned
 identity, family, ownership, and lifecycle metadata.
 
 The plan requires caller-owned configuration and runtime resources, copied
@@ -39,11 +41,18 @@ mutable inputs, context-bounded external operations, and no package-owned
 background work. These are design constraints, not claims about released
 behavior.
 
+The [versioned threat model](docs/security/threat-model-v0.1.md) records
+candidate trust boundaries, abuse cases, and verification obligations. It is
+planning evidence only. [Security reporting](SECURITY.md) uses a private
+GitHub advisory channel; no released version is currently supported.
+
 ## Planning and verification
 
 The [repository goal](docs/goal.md) and `modules.json` record the planning scope
-and schema-v2 engineering inventory. Planned lifecycle
-state excludes this module from installable and released consumer catalogs.
+and schema-v2 engineering inventory. Planned lifecycle state and
+`releasable: false` exclude this module from installable and released consumer
+catalogs. Release remains blocked until implementation and focused, executable
+security evidence establish the relevant controls.
 The local `make cohesion` target validates that boundary with the exact
 checksum-pinned `go-library-tools` release declared in `.golib.yaml`.
 
