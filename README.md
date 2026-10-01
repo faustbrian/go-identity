@@ -2,7 +2,8 @@
 
 Composable backend identity-domain ownership for Golib. This module is under
 development; current implemented slices are subject/pre-authentication ID
-contracts and structural user/status-policy validation. Lifecycle commands,
+contracts, structural user/status-policy validation and authorized user lookup.
+Lifecycle commands,
 repositories, authorization policies, hooks, directory import and privacy
 workflows are not implemented yet.
 
@@ -22,6 +23,8 @@ The compiled examples demonstrate persisted-value reconstruction. See
 tradeoffs and FAQ. This is not a complete login service or administrative UI.
 See [user and lifecycle policy](docs/users.md) for structural validation and
 transition constraints, including their distinction from authority and writes.
+See [authorized user queries](docs/queries.md) for the read-only service and
+its trusted composition boundary. No PostgreSQL adapter is implemented yet.
 
 ## Development verification
 
