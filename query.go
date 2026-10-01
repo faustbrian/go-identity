@@ -134,10 +134,12 @@ type UserQueryConfig struct {
 // explicit read-only composition without mutation/capability dependencies; the
 // full identity service composes this same query implementation.
 type UserQueryService struct {
-	repo      UserQueryRepository
-	authorize authorization.Service
-	redact    RedactFunc
-	config    UserQueryConfig
+	repo       UserQueryRepository
+	authorize  authorization.Service
+	redact     RedactFunc
+	config     UserQueryConfig
+	list       UserListRepository
+	listConfig UserListConfig
 }
 
 // NewUserQueryService validates and snapshots the read composition without I/O.
@@ -233,8 +235,12 @@ func (s *UserQueryService) UserGet(ctx context.Context, req UserGetRequest) (res
 }
 
 func (r UserGetRequest) validate(version uint64) error {
-	request := r.Context.Request
-	if !validDirectoryID(string(r.TenantID)) || !validDirectoryID(string(r.UserID)) || !validDirectoryID(string(request.Subject.ID)) || request.Action != "identity.user.get" || request.Resource.Type != "identity.user" || request.Resource.ID != authorization.ResourceID(r.UserID) || request.Tenant != authorization.TenantID(r.TenantID) || r.Context.PolicyRevision != authorization.Revision(version) {
+	return validateQueryContext(r.Context, r.TenantID, string(r.UserID), "identity.user.get", "identity.user", version)
+}
+
+func validateQueryContext(dc authorization.DecisionContext, tenant TenantID, target, action, resourceType string, version uint64) error {
+	request := dc.Request
+	if !validDirectoryID(string(tenant)) || !validDirectoryID(target) || !validDirectoryID(string(request.Subject.ID)) || request.Action != authorization.Action(action) || request.Resource.Type != authorization.ResourceType(resourceType) || request.Resource.ID != authorization.ResourceID(target) || request.Tenant != authorization.TenantID(tenant) || dc.PolicyRevision != authorization.Revision(version) {
 		return InvalidInputError{Field: "query_scope"}
 	}
 	if request.Subject.Kind != authorization.SubjectUser && request.Subject.Kind != authorization.SubjectAPIKey && request.Subject.Kind != authorization.SubjectServiceAccount {
@@ -272,7 +278,7 @@ func (r UserGetRequest) validate(version uint64) error {
 			}
 		}
 	}
-	if r.Context.Validate() != nil {
+	if dc.Validate() != nil {
 		return InvalidInputError{Field: "decision_context"}
 	}
 	return nil

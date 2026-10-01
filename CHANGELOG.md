@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Add tenant-scoped bounded user listing with stable-snapshot continuations,
+  confidential signed cursors and fresh collection/row authorization. Bind each
+  continuation to its viewer, filters, limit and policy; retain its original
+  expiry and withhold all partial output on cancellation or malformed pages.
+  The existing get-only constructor remains valid; directory composition adds
+  listing explicitly and requires an owned snapshot repository.
+
 - Add bounded user lookup through the upstream revision-fenced authorization
   service, injected canonical-ID validation and typed redaction. Reject scope
   mismatches before storage and never disclose users after cancellation,
