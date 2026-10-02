@@ -47,7 +47,11 @@ func (MigrationSource) Load(ctx context.Context) ([]migrations.Migration, error)
 	if err != nil {
 		return nil, identity.UnavailableError{}
 	}
-	return []migrations.Migration{migration, claims, journal, terminal, plan}, nil
+	attributes, err := migrations.NewMigration(6, "identity_attributes", migrations.TransactionModeDefault, attributeSchemaSQL, "")
+	if err != nil {
+		return nil, identity.UnavailableError{}
+	}
+	return []migrations.Migration{migration, claims, journal, terminal, plan, attributes}, nil
 }
 
 // An unconstrained numeric plus integer/range checks rejects fractional input

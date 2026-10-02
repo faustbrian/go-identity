@@ -122,8 +122,9 @@ func (*Repository) Descriptor() ContributorDescriptor {
 // exact enlisted repository's Work. Returned User is provisional, not durable
 // and not fresh authorization. Only Coordinator.Commit establishes its result.
 // A repeated apply, changed command, foreign repository or unsupported nonempty
-// attribute profile fails closed without silently dropping fields. Complete
-// typed attribute persistence remains under development. Primary/unique-key
+// attribute profile fails closed without silently dropping fields. Registered
+// ordinary scalar/list attributes persist with the same mutation; unsupported
+// secret/index profiles fail closed. Primary/unique-key
 // conflicts are redacted and poison further SQL; the caller must Abort.
 func (r *Repository) ApplyUserCreation(ctx context.Context, w Work, command identity.Command) (identity.User, error) {
 	if r == nil || r.read == nil || ctx == nil {
@@ -148,12 +149,21 @@ func (r *Repository) ApplyUserCreation(ctx context.Context, w Work, command iden
 		return identity.User{}, w.fail(ctx, invalidWork())
 	}
 	spec, ok := command.CreateUser()
-	if !ok || spec.Binding != w.state.binding || len(spec.Attributes) != 0 {
+	if !ok || spec.Binding != w.state.binding {
 		return identity.User{}, w.fail(ctx, identity.InvalidInputError{Field: "creation_command"})
 	}
 	q, err := prepareClaim(command, w.state.execution.coordinator.keys.retained[w.state.execution.coordinator.keys.current])
 	if err != nil || !bytes.Equal(q.canonical, w.state.execution.reservation.request.canonical) {
 		return identity.User{}, w.fail(ctx, identity.ConflictError{})
+	}
+	registered, attributes, err := r.prepareCreationAttributes(spec)
+	if err != nil {
+		return identity.User{}, w.fail(ctx, err)
+	}
+	if attributes != nil {
+		if err := persistCreationSchema(ctx, w, registered); err != nil {
+			return identity.User{}, err
+		}
 	}
 	count, err := w.Exec(ctx, `INSERT INTO identity.users(tenant_id,user_id,status,version) VALUES($1,$2,'active',1) ON CONFLICT(tenant_id,user_id) DO NOTHING`, string(spec.Binding.TenantID), string(spec.Binding.UserID))
 	if err != nil {
@@ -161,6 +171,11 @@ func (r *Repository) ApplyUserCreation(ctx context.Context, w Work, command iden
 	}
 	if count != 1 {
 		return identity.User{}, w.fail(ctx, identity.ConflictError{})
+	}
+	if attributes != nil {
+		if _, err := w.Exec(ctx, `INSERT INTO identity.user_attributes(tenant_id,user_id,schema_id,schema_version,encoding_version,document) VALUES($1,$2,$3,$4,1,$5)`, string(spec.Binding.TenantID), string(spec.Binding.UserID), registered.schema.ID, registered.schema.Version, attributes); err != nil {
+			return identity.User{}, err
+		}
 	}
 	user := identity.User{ID: spec.Binding.UserID, TenantID: spec.Binding.TenantID, Status: identity.StatusActive, Version: 1}
 	w.state.creation = &user

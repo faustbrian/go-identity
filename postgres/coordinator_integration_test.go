@@ -388,8 +388,22 @@ func testCoordinatorPlanUpgrade(t *testing.T, ctx context.Context, parent *datab
 	if err != nil {
 		t.Fatal(err)
 	}
-	if result, err := upgraded.Up(ctx); err != nil || len(result.Records()) != 1 || result.Records()[0].Version() != 5 {
+	if _, err := pool.Raw().Exec(ctx, `INSERT INTO identity.users(tenant_id,user_id,status,version) VALUES('old-tenant','old-user','active',1)`); err != nil {
+		t.Fatal("old binary user fixture failed")
+	}
+	if result, err := upgraded.Up(ctx); err != nil || len(result.Records()) != 2 || result.Records()[0].Version() != 5 || result.Records()[1].Version() != 6 {
 		t.Fatal("populated forward upgrade failed", err)
+	}
+	legacy, err := NewRepository(pool, Config{MaximumDuration: time.Second})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if user, err := legacy.Get(ctx, identity.GetUserQuery{TenantID: "old-tenant", UserID: "old-user"}); err != nil || user.Version != 1 {
+		t.Fatal("populated attribute upgrade changed old structural user")
+	}
+	var fabricated int
+	if err := pool.Raw().QueryRow(ctx, `SELECT count(*) FROM identity.user_attributes`).Scan(&fabricated); err != nil || fabricated != 0 {
+		t.Fatal("attribute upgrade fabricated old values")
 	}
 	c, err := NewCoordinator(pool, fixture.registry, CoordinatorConfig{MaximumDuration: time.Second, LeaseDuration: time.Second, CurrentFingerprintKeyVersion: 1, RetainedFingerprintKeys: map[uint32][32]byte{1: {1}}})
 	if err != nil {

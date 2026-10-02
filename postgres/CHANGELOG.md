@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Persist declared versioned scalar/list attributes atomically with user
+  creation, preserving empty values, full int64 values and exact UTC instants.
+  Registered schemas are copied and immutable within a tenant/version; changed
+  definitions and undeclared fields fail closed. Migration 6 preserves old
+  structural users without fabricated defaults. Indexed/secret profiles and
+  public field projection remain pending, never plaintext or silent fallbacks.
+
 - Add single-use Coordinator.Begin, enlisted structural user creation and
   Commit/Abort. Successful creation commits the user, required audit, lifecycle
   effects and terminal receipt together; failed prefixes roll back. Forged

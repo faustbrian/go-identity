@@ -6,6 +6,7 @@ package postgres
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strconv"
 	"time"
 
@@ -16,7 +17,23 @@ import (
 
 // Config defines finite per-read budgets. MaximumDuration must be positive and
 // at most one minute; an earlier caller deadline always wins. Zero is invalid.
-type Config struct{ MaximumDuration time.Duration }
+type Config struct {
+	MaximumDuration time.Duration
+	// AttributeSchemas declares at most 32 immutable scalar-storage schemas.
+	// Defaults/fields are copied. Indexed and secret fields require explicit
+	// migration/encryption profiles and currently fail closed.
+	AttributeSchemas []identity.AttributeSchema
+}
+
+// Format prevents schema defaults from appearing in diagnostics.
+func (Config) Format(state fmt.State, _ rune) {
+	_, _ = state.Write([]byte("postgres.Config(redacted)"))
+}
+
+// MarshalJSON rejects configuration serialization containing private defaults.
+func (Config) MarshalJSON() ([]byte, error) {
+	return nil, identity.InvalidInputError{Field: "postgres_configuration"}
+}
 
 // Repository reads from a caller-owned primary pool and applies structural
 // creation only through exact enlisted Coordinator Work. It never closes that pool,
@@ -25,8 +42,14 @@ type Config struct{ MaximumDuration time.Duration }
 // contract. A read is a snapshot, not authorization or revocation evidence.
 // Values are safe for concurrent calls; the zero value is invalid.
 type Repository struct {
-	maximumDuration time.Duration
-	read            func(context.Context, identity.TenantID, identity.UserID) pgx.Row
+	maximumDuration  time.Duration
+	read             func(context.Context, identity.TenantID, identity.UserID) pgx.Row
+	attributeSchemas map[schemaKey]registeredSchema
+}
+
+// Format prevents private schema defaults or database configuration disclosure.
+func (Repository) Format(state fmt.State, _ rune) {
+	_, _ = state.Write([]byte("postgres.Repository(redacted)"))
 }
 
 var _ identity.UserQueryRepository = (*Repository)(nil)
@@ -40,7 +63,11 @@ func NewRepository(pool *database.Pool, config Config) (*Repository, error) {
 	if pool == nil || pool.Raw() == nil || config.MaximumDuration <= 0 || config.MaximumDuration > time.Minute {
 		return nil, identity.InvalidInputError{Field: "postgres_configuration"}
 	}
-	return &Repository{maximumDuration: config.MaximumDuration, read: func(ctx context.Context, tenant identity.TenantID, user identity.UserID) pgx.Row {
+	schemas, err := freezeAttributeSchemas(config.AttributeSchemas)
+	if err != nil {
+		return nil, err
+	}
+	return &Repository{maximumDuration: config.MaximumDuration, attributeSchemas: schemas, read: func(ctx context.Context, tenant identity.TenantID, user identity.UserID) pgx.Row {
 		conn, err := pool.Acquire(ctx)
 		if err != nil {
 			return storedRow{err: err}

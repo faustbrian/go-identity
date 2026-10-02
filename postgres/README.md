@@ -259,8 +259,12 @@ releasing the caller-owned pool connection.
 
 `Repository.ApplyUserCreation(ctx, work, command)` requires the exact registered
 repository and frozen creation command. It inserts an active version-1 user;
-the returned user is provisional until Commit. Nonempty attributes currently
-fail closed, not silently disappear. Repeated apply poisons the transaction.
+the returned user is provisional until Commit. Declare up to 32 copied,
+versioned `Config.AttributeSchemas` for ordinary scalar/list storage. The exact
+tenant/schema/version definition becomes immutable in the same transaction;
+different definitions under that identity conflict. Undeclared fields/kinds or
+unsupported indexed/secret profiles fail closed, not silently disappear.
+Repeated apply poisons the transaction.
 Stage the required successful audit with redacted structural changes and the
 declared lifecycle record before `Coordinator.Commit(work, result)`. Commit
 checks the caller result against the actual mutation, invokes the registered
@@ -276,7 +280,20 @@ together. Missing evidence or lost ownership leaves pending/Unknown for recovery
 not fabricated success or denial. Detached cleanup remains bounded after caller
 cancellation; driver and caller error text is never exposed.
 
-This is **not yet an adoptable identity.UnitOfWork**: complete attribute storage,
+Attributes use a private bounded version-1 canonical CBOR document, preserving
+present false/zero/empty values, int64 extrema, ordered string lists and UTC
+microsecond-exact instants without float conversion or JSON escaping growth.
+They are private stored values, never diagnostic snapshots. Recoverable secret
+fields require the future owned secret-envelope profile; there is no plaintext
+fallback. Indexed fields need explicit field migrations, not arbitrary search.
+Migration 6 adds schema/value tables without inventing values for old users;
+old structural writers/readers remain supported. Definition update/delete/
+truncate is rejected for ordinary writers, not hostile DDL/database owners.
+Public reads still return structural fields only; field authorization,
+redacted projection, attribute updates/backfills and secret/index profiles
+remain required.
+
+This is **not yet an adoptable identity.UnitOfWork**: remaining attribute profiles,
 other domain commands, the owned service bridge, classified retries and scoped
 query/recovery remain required. The integration suite proves actual PostgreSQL
 transaction behavior with typed audit/lifecycle SQL seams, not production

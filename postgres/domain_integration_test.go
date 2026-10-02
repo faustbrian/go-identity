@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/base64"
 	"errors"
+	"reflect"
 	"testing"
 	"time"
 
@@ -76,7 +77,7 @@ func testDomainExecution(t *testing.T, ctx context.Context, pool *database.Pool,
 	if err != nil {
 		t.Fatal(err)
 	}
-	prepare := func(t *testing.T) (identity.CommandBinding, identity.Command, CommandPlan, audit.Record, Reservation) {
+	prepare := func(t *testing.T, attributes ...identity.AttributeUpdate) (identity.CommandBinding, identity.Command, CommandPlan, audit.Record, Reservation) {
 		t.Helper()
 		binding := codecBinding()
 		binding.CommandID, err = identity.NewCommandID()
@@ -99,7 +100,7 @@ func testDomainExecution(t *testing.T, ctx context.Context, pool *database.Pool,
 		if err != nil {
 			t.Fatal(err)
 		}
-		command, err := identity.NewUserCreationCommand(identity.CreateUserCommand{Binding: binding, Status: identity.StatusActive})
+		command, err := identity.NewUserCreationCommand(identity.CreateUserCommand{Binding: binding, Status: identity.StatusActive, Attributes: attributes})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -115,10 +116,10 @@ func testDomainExecution(t *testing.T, ctx context.Context, pool *database.Pool,
 	}
 	counts := func(t *testing.T, binding identity.CommandBinding, users, audits, effects int) {
 		t.Helper()
-		var u, a, e int
-		err := pool.Raw().QueryRow(ctx, `SELECT (SELECT count(*) FROM identity.users WHERE tenant_id=$1 AND user_id=$2),(SELECT count(*) FROM public.identity_test_audits WHERE command_id=$3),(SELECT count(*) FROM public.identity_test_lifecycle WHERE command_id=$3)`, string(binding.TenantID), string(binding.UserID), string(binding.CommandID)).Scan(&u, &a, &e)
-		if err != nil || u != users || a != audits || e != effects {
-			t.Fatalf("atomic state %d/%d/%d", u, a, e)
+		var u, a, e, document int
+		err := pool.Raw().QueryRow(ctx, `SELECT (SELECT count(*) FROM identity.users WHERE tenant_id=$1 AND user_id=$2),(SELECT count(*) FROM public.identity_test_audits WHERE command_id=$3),(SELECT count(*) FROM public.identity_test_lifecycle WHERE command_id=$3),(SELECT count(*) FROM identity.user_attributes WHERE tenant_id=$1 AND user_id=$2)`, string(binding.TenantID), string(binding.UserID), string(binding.CommandID)).Scan(&u, &a, &e, &document)
+		if err != nil || u != users || a != audits || e != effects || document != users {
+			t.Fatalf("atomic state %d/%d/%d/%d", u, a, e, document)
 		}
 	}
 	stage := func(t *testing.T, w Work, record audit.Record) {
@@ -170,6 +171,86 @@ func testDomainExecution(t *testing.T, ctx context.Context, pool *database.Pool,
 			t.Fatal("committed creation replay changed", err)
 		}
 		counts(t, binding, 1, 1, 1)
+	})
+	t.Run("typed attributes survive atomic creation", func(t *testing.T) {
+		values := storageValues()
+		binding, command, plan, record, reservation := prepare(t, values...)
+		w, err := c.Begin(ctx, reservation)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer func() { _, _ = c.Abort(w, identity.UnavailableError{}) }()
+		user, err := repo.ApplyUserCreation(ctx, w, command)
+		if err != nil {
+			t.Fatal("declared attribute creation rejected", err)
+		}
+		stage(t, w, record)
+		result, err := c.Commit(w, identity.CommandResult{Binding: binding, Outcome: identity.CommitOutcomeCommitted, User: user, AuditEventID: record.ID()})
+		if err != nil || result.Outcome != identity.CommitOutcomeCommitted {
+			t.Fatal("attribute creation not committed", err)
+		}
+		var document []byte
+		if err := pool.Raw().QueryRow(ctx, `SELECT document FROM identity.user_attributes WHERE tenant_id=$1 AND user_id=$2`, string(binding.TenantID), string(binding.UserID)).Scan(&document); err != nil {
+			t.Fatal("typed attribute document missing")
+		}
+		got, err := decodeStoredAttributes(binding, storageSchema(), document)
+		if err != nil || !reflect.DeepEqual(got, values) {
+			t.Fatal("durable typed attributes changed")
+		}
+		counts(t, binding, 1, 1, 1)
+		if r, result, err := c.ReserveCommand(ctx, binding, command, plan); err != nil || r.state != nil || result.Outcome != identity.CommitOutcomeCommitted {
+			t.Fatal("attribute replay changed")
+		}
+		counts(t, binding, 1, 1, 1)
+	})
+	t.Run("undeclared attributes leave no user", func(t *testing.T) {
+		value := storageValues()[0]
+		value.Name = "undeclared"
+		binding, command, _, _, reservation := prepare(t, value)
+		w, err := c.Begin(ctx, reservation)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer func() { _, _ = c.Abort(w, identity.UnavailableError{}) }()
+		if _, err := repo.ApplyUserCreation(ctx, w, command); err == nil {
+			t.Fatal("undeclared field stored")
+		}
+		_, _ = c.Abort(w, identity.InvalidInputError{Field: "attribute_storage"})
+		counts(t, binding, 0, 0, 0)
+	})
+	t.Run("incompatible schema redeclaration fails", func(t *testing.T) {
+		schema := storageSchema()
+		schema.Fields[0].OutputPermission = identity.FieldDenied
+		other, err := NewRepository(pool, Config{MaximumDuration: time.Second, AttributeSchemas: []identity.AttributeSchema{schema}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		registered, err := NewContributorRegistry([]Contributor{other, auditPhase, lifecyclePhase})
+		if err != nil {
+			t.Fatal(err)
+		}
+		coordinator, err := NewCoordinator(pool, registered, CoordinatorConfig{MaximumDuration: time.Second, LeaseDuration: time.Minute, CurrentFingerprintKeyVersion: 1, RetainedFingerprintKeys: map[uint32][32]byte{1: {1}}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		original := c
+		c = coordinator
+		defer func() { c = original }()
+		binding, command, _, _, reservation := prepare(t, storageValues()...)
+		w, err := c.Begin(ctx, reservation)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer func() { _, _ = c.Abort(w, identity.UnavailableError{}) }()
+		var conflict identity.ConflictError
+		if _, err := other.ApplyUserCreation(ctx, w, command); !errors.As(err, &conflict) {
+			t.Fatal("registered version acquired different meaning", err)
+		}
+		_, _ = c.Abort(w, conflict)
+		counts(t, binding, 0, 0, 0)
+		if _, err := pool.Raw().Exec(ctx, `UPDATE identity.attribute_schemas SET definition=definition WHERE tenant_id=$1 AND schema_id=$2`, string(binding.TenantID), binding.SchemaID); err == nil {
+			t.Fatal("immutable schema updated")
+		}
 	})
 	t.Run("phase failure rolls back every prefix", func(t *testing.T) {
 		binding, command, _, record, reservation := prepare(t)
