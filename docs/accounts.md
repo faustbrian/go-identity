@@ -72,6 +72,27 @@ unlinks must not each rely on the other's soon-to-be-removed credential.
 
 ## Tradeoffs, FAQ and pending work
 
+`ApplyAccountUnlink` computes the proposed next state for the durable owner's
+locked transition. `AccountUnlinkState` binds the connection's social-link
+version and the user's credential authority version to the complete access
+snapshot. `AccountUnlinkChange` supplies exact expected user, account,
+social-link and credential versions. Zero/overflow versions are invalid;
+stale versions conflict. The transition repeats final-access validation, removes
+the exact account and all dependent credential references, preserves independent
+methods, increments the user aggregate/social-link/tombstone versions and only
+increments credential authority when an authentication link was removed.
+Input and output slices never alias. Diagnostics redact the entire state.
+
+This is executable domain policy, not `AccountUnlink` public workflow admission
+or a commit. The platform command owner must authorize and validate fresh proofs,
+lock and re-read complete primary eligibility, then persist the returned state,
+tombstone, exact authority events, audit, cleanup intents and immutable command
+receipt atomically with applicable one-use proofs/risk. Same-command replay is
+checked before changing state. Serial lock ownership is essential: two removals
+cannot each reuse a snapshot where the other's method still exists. Provider
+revoke choice and pending/rejected/unknown external outcomes belong to the
+enlisted workflow; this function makes no provider call or completion claim.
+
 Why not count API keys? They do not replace a human login/recovery method.
 Why separate provider links and credentials? A link may be data-only, and one
 removed link can invalidate several credential observations.

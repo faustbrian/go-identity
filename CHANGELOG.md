@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add the identity-owned unlink state transition with aggregate, account,
+  social-link and credential fences. Recheck final usable access against locked
+  primary eligibility; produce copied next state and a tombstone version without
+  claiming a durable commit or provider cleanup. Data-only unlink preserves the
+  credential authority dimension.
 - Target Go 1.27, matching the current Golib module baseline.
 - Add tenant-bound account and non-secret credential metadata, current-subject
   account reads with per-row policy/redaction and a shared final-access decision.
