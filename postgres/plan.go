@@ -13,8 +13,8 @@ import (
 // the exact command and its authoritative retained-key fingerprint. Callers
 // must not mutate its slices during admission. Admission owns copies, so later
 // changes do not affect execution. Zero is invalid. This value conveys no
-// transaction authority. Typed one-time/feature inputs and public Coordinator
-// admission remain under development; the current kernel-only profile cannot
+// transaction authority. Typed one-time/feature inputs remain under
+// development; the current kernel-only profile cannot
 // admit those contributors by name alone.
 // Lifecycle, when present, requires the typed outbox contributor and declares
 // the successful mutation notification. Nil preserves the older audit-only
@@ -40,20 +40,30 @@ type CommandPlan struct {
 // omitted. Invalid inputs return redacted identity.InvalidInputError. It does
 // no I/O or callbacks. Concurrent calls require immutable caller-owned inputs.
 func KernelPlanDigest(binding identity.CommandBinding, fingerprint [32]byte, plan CommandPlan) ([32]byte, error) {
+	encoded, err := encodeKernelPlan(binding, fingerprint, plan)
+	if err != nil {
+		return [32]byte{}, err
+	}
+	return sha256.Sum256(encoded), nil
+}
+
+// The journal freezes the exact digest input, not a second serialization that
+// can disagree with admission or omit a participant field.
+func encodeKernelPlan(binding identity.CommandBinding, fingerprint [32]byte, plan CommandPlan) ([]byte, error) {
 	probe := identity.CommandResult{Binding: binding, Outcome: identity.CommitOutcomeInProgress, RetryAfter: time.Microsecond}
 	count := 2
 	if plan.Lifecycle != nil {
 		count++
 	}
 	if probe.Validate() != nil || fingerprint == ([32]byte{}) || len(plan.Contributors) != count || validateKernelAuditPlans(binding, plan.Audits) != nil || validateLifecyclePlan(binding, plan.Lifecycle) != nil {
-		return [32]byte{}, invalidPlan()
+		return nil, invalidPlan()
 	}
 	domains, audits, lifecycles := 0, 0, 0
 	contributors := make([][]byte, len(plan.Contributors))
 	seen := make(map[string]bool, len(plan.Contributors))
 	for i, d := range plan.Contributors {
 		if !validContributorDescriptor(d) || seen[d.ContractID] {
-			return [32]byte{}, invalidPlan()
+			return nil, invalidPlan()
 		}
 		seen[d.ContractID] = true
 		switch d.Owner {
@@ -63,16 +73,16 @@ func KernelPlanDigest(binding identity.CommandBinding, fingerprint [32]byte, pla
 			audits++
 		case "outbox/postgres":
 			if plan.Lifecycle == nil || d.ContractID != "identity.lifecycle" || d.Version != 1 {
-				return [32]byte{}, invalidPlan()
+				return nil, invalidPlan()
 			}
 			lifecycles++
 		default:
-			return [32]byte{}, invalidPlan()
+			return nil, invalidPlan()
 		}
 		contributors[i] = cborMap(map[string][]byte{"owner": cborText(d.Owner), "contract_id": cborText(d.ContractID), "version": cborUint(uint64(d.Version))})
 	}
 	if domains != 1 || audits != 1 || plan.Lifecycle != nil && lifecycles != 1 {
-		return [32]byte{}, invalidPlan()
+		return nil, invalidPlan()
 	}
 	events := make([][]byte, len(plan.Audits))
 	for i, p := range plan.Audits {
@@ -87,8 +97,7 @@ func KernelPlanDigest(binding identity.CommandBinding, fingerprint [32]byte, pla
 	if p := plan.Lifecycle; p != nil {
 		fields["lifecycle"] = cborMap(map[string][]byte{"event_type": cborText(p.EventType), "event_index": cborUint(uint64(p.EventIndex)), "before_version": cborUint(p.BeforeVersion), "after_version": cborUint(p.AfterVersion)})
 	}
-	encoded := cborMap(fields)
-	return sha256.Sum256(encoded), nil
+	return cborMap(fields), nil
 }
 
 // admittedKernelPlan never escapes the coordinator boundary. It freezes only

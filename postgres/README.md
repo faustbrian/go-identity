@@ -26,12 +26,12 @@ Commands, snapshots, attributes, imports, lifecycle cascades, audit/outbox,
 reconciliation and the shared transaction coordinator remain unfinished.
 
 The appended command-claim migration installs the global ID claim and scoped
-journal foundation. Private admission runs inside the future Coordinator's
+journal foundation. Private admission runs inside the Coordinator's
 transaction, never commits independently, and does not grant mutation authority.
 Exact replay selects the stored fingerprint-key version; missing retained keys
 or missing scoped rows fail closed. Retired IDs conflict permanently. The owned
-full journal state/result fields, participant plans, leases, retirement policy
-and recovery still require implementation.
+retirement policy and scoped recovery still require implementation; the later
+migrations provide leases, terminal receipts and frozen plans.
 
 The private codec maps all seven current core command variants, including
 account link/unlink and all identifier actions, through typed accessors. It uses the closed
@@ -207,9 +207,50 @@ neither admits whitespace or normalization. Composition roots own canonical
 IDs and contributor lifetimes. Returned `Descriptors()` slices are caller-owned
 copies and registry reads are concurrent-safe. Implementations remain open to
 independent modules. This is identity admission only: no transaction phase,
-typed participant input, Work issuance, Coordinator, late registration or commit API is
-provided. Unsupported phase combinations and foreign plan rejection remain
+typed participant input, Work issuance, late registration or commit API is
+provided by registration. Unsupported phase combinations and foreign plan rejection remain
 part of the forthcoming complete Coordinator, not guarantees of this constructor.
+
+### Command reservation
+
+`NewCoordinator(primaryPool, registry, CoordinatorConfig{...})` owns bounded
+reservation transactions. Configure positive operation/lease durations no longer
+than one minute, a microsecond-exact lease, and 1..32 retained nonzero 32-byte
+fingerprint keys with an explicit current version. Keep the pool primary-only
+and caller-owned. Configuration/Coordinator diagnostics hide keys and reject
+JSON serialization. Registration is immutable; contributor resources stay
+owned by the composition root.
+
+Use `PrepareCommandPlan(binding, typedCommand, plan)` to obtain an owned digest
+with the current key, then `ReserveCommand(ctx, binding, typedCommand, plan)`.
+The initial public profile requires user creation, one required audit slot and
+the matching lifecycle declaration with typed audit/outbox contributors.
+One-time and cascade profiles are rejected before SQL. Services must authorize
+commands first; preparation is not authentication or authorization.
+
+Migration 5 adds a bounded immutable canonical plan to the existing journal.
+It leaves historical rows NULL, not invented participant history. A matching
+replay uses the stored key version and fingerprint; key rotation cannot rewrite
+the declaration. Changed scope, intent or plan conflicts; missing retained
+keys, NULL historical plans and corrupt history fail closed. Plan replacement
+is rejected by a SECURITY INVOKER trigger, not a defense against privileged
+administrators or DDL owners. Cleanup remains the retention owner's obligation
+and must preserve global non-reassignable claims.
+
+A new or expired reservation returns opaque generation ownership and
+`InProgress`. Busy replay has no ownership; terminal replay retains the exact
+historical receipt, not current authority. A proven reservation commit is never
+a user commit. Failures before durable observation or after proven rollback
+return a zero result, not fabricated `NotCommitted`. Any commit-attempt failure
+or unproven rollback returns `Unknown`; no automatic retry or rollback follows
+a commit attempt. The detached rollback budget is finite and earlier operation
+deadlines win. No contributor callback executes during reservation.
+
+This is an incremental reservation phase, **not yet an adoptable UnitOfWork**:
+public Begin, actual domain application, mandatory audit/outbox persistence,
+Commit/Abort and scoped recovery still need implementation. Reservations have
+no public Work/SQL/closure capability. Do not supply application-owned identity
+transactions to bridge the unfinished phase.
 
 ### FAQ
 

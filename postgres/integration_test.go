@@ -71,7 +71,7 @@ func TestPostgresIntegration(t *testing.T) {
 		t.Fatal("invalid migration source")
 	}
 	result, err := runner.Up(ctx)
-	if err != nil || len(result.Records()) != 4 {
+	if err != nil || len(result.Records()) != 5 {
 		t.Fatal("empty install failed")
 	}
 	pool, err := database.Connect(ctx, database.Config{DSN: dsn, MaxConns: 2, Configure: func(native *database.PoolConfig) error { native.ConnConfig.Database = name; return nil }})
@@ -94,6 +94,8 @@ func TestPostgresIntegration(t *testing.T) {
 	t.Run("terminal journal", func(t *testing.T) { testJournalTerminal(t, ctx, pool) })
 	t.Run("begin ownership", func(t *testing.T) { testBeginJournal(t, ctx, pool) })
 	t.Run("work execution", func(t *testing.T) { testWorkExecution(t, ctx, pool) })
+	t.Run("coordinator reservation", func(t *testing.T) { testCoordinatorReservation(t, ctx, pool) })
+	t.Run("populated plan upgrade", func(t *testing.T) { testCoordinatorPlanUpgrade(t, ctx, pool) })
 	insert := func(tenant, user, status, version string) error {
 		_, err := pool.Raw().Exec(ctx, `INSERT INTO identity.users(tenant_id,user_id,status,version) VALUES($1,$2,$3,$4::numeric)`, tenant, user, status, version)
 		return err

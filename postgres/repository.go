@@ -1,6 +1,6 @@
 // Package postgres implements the authoritative PostgreSQL identity store.
 // This initial read implementation includes owned forward-only user migrations;
-// commands and the shared transaction coordinator remain under development.
+// complete commands and shared transaction execution remain under development.
 package postgres
 
 import (

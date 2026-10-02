@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add primary Coordinator reservation for user creation with mandatory typed
+  audit/lifecycle plans, retained-key replay and opaque generation ownership.
+  Forward migration 5 freezes the exact canonical plan in the command journal;
+  changed plans conflict and legacy NULL plans fail closed. Reservation never
+  claims a user mutation; domain execution and scoped recovery remain pending.
+
 - Add typed lifecycle staging, stable command/class/index effect IDs and
   outbox phase admission. Safe scalar-only events must match the successful
   audit's aggregate/version transition; no payload secrets or external-success
