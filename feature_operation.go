@@ -51,8 +51,8 @@ func (d FeatureOperation) Validate() error {
 // ownership and policy must come from trusted composition, not this input.
 // This is structural validation, not authentication, authorization, current
 // authority, registration, a fingerprint or a transaction. Existing kernel
-// Command constructors and CommandResult.Validate remain a separate closed
-// union and continue to reject feature operation bindings. Zero is invalid;
+// Kernel Command constructors and kernel receipts remain separate closed
+// variants. Feature receipts require their explicit Feature branch. Zero is invalid;
 // invalid input returns redacted InvalidInputError. No I/O or callbacks run.
 func (b CommandBinding) ValidateFor(d FeatureOperation) error {
 	_, validID := decodeID(string(b.CommandID))

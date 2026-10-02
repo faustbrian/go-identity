@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add an explicit safe structural feature receipt branch to CommandResult,
+  retaining exact operation/schema policy and outcome-specific primary-record
+  versions without credential-bearing payloads. Preserve historical kernel
+  receipt JSON bytes and reject mixed variants. Feature execution remains
+  disabled pending owned adapter admission and lifecycle phases.
+
 - Add an explicit immutable structural feature command branch with exact
   operation binding and bounded named scalar input, preserving unsigned
   authority versions, UTC instants and copied binary metadata. Kernel command

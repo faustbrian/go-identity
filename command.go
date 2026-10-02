@@ -177,6 +177,10 @@ type CommandResult struct {
 	Link *AccountLinkReceipt
 	// Identifier is present only on a committed identifier mutation.
 	Identifier *IdentifierReceipt
+	// Feature is the exclusive structural feature receipt branch. Nil is omitted
+	// from JSON to preserve every historical kernel receipt byte. It never carries
+	// credentials or feature-native response payloads. Treat it as immutable.
+	Feature *FeatureReceipt `json:",omitempty"`
 }
 
 // Validate checks the closed receipt shape, immutable operation binding,
@@ -234,6 +238,9 @@ func cloneUpdates(updates []AttributeUpdate) []AttributeUpdate {
 }
 
 func (r CommandResult) valid() bool {
+	if r.Feature != nil {
+		return validFeatureResult(r)
+	}
 	if !validCommandBinding(r.Binding) {
 		return false
 	}

@@ -34,6 +34,13 @@ schemas; applications do not implement that workflow. Raw credential/bearer
 secrets are forbidden. Opaque commands redact formatting and deny JSON; trusted
 returned projections are never responses, logs or evidence snapshots. Existing
 kernel receipts and PostgreSQL admission remain closed to this new branch.
+`CommandResult.Feature` carries only an exact structural feature descriptor and
+safe primary-record before/after versions, never a bearer or native response.
+Every outcome retains its descriptor; only committed record mutations have one
+successor version and an audit ID. Mixed kernel payloads fail validation. Nil
+feature fields are omitted from JSON so historical kernel replay bytes remain
+unchanged. Validation does not prove a commit or enable feature execution;
+trusted durable adapters and feature-native result policy still own those claims.
 Remaining destructive lifecycle commands, durable repositories, complete policy composition,
 hooks, directory import and privacy workflows are not implemented yet.
 
