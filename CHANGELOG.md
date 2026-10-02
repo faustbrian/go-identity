@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Add versioned typed additional-field schemas and bounded command preparation.
+  Preserve false, zero, empty strings/lists and full int64 values; normalize
+  through explicit versioned composition, enforce field permissions through the
+  existing authorization service and reject the whole request on invalid or
+  denied fields. Creation defaults and returned lists are privately copied.
+  This prepares values only; durable create/update commands remain in development.
+
 - Add tenant-scoped bounded user listing with stable-snapshot continuations,
   confidential signed cursors and fresh collection/row authorization. Bind each
   continuation to its viewer, filters, limit and policy; retain its original
