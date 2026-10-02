@@ -26,6 +26,9 @@ type CoordinatorConfig struct {
 	LeaseDuration                time.Duration
 	CurrentFingerprintKeyVersion uint32
 	RetainedFingerprintKeys      map[uint32][32]byte
+	// QueryPolicy enables authorized primary receipt lookup. Nil disables it.
+	// The policy is copied; its dependencies must support concurrent calls.
+	QueryPolicy *CommandQueryPolicy
 }
 
 // Format prevents diagnostic formatting from exposing fingerprint keys.
@@ -51,6 +54,8 @@ type Coordinator struct {
 	registry                       *ContributorRegistry
 	maximumDuration, leaseDuration time.Duration
 	keys                           claimKeys
+	queryPolicy                    *CommandQueryPolicy
+	commandRead                    func(context.Context, identity.CommandID) (commandObservation, error)
 }
 
 // Format prevents diagnostics from exposing retained keys and pool settings.
@@ -73,7 +78,16 @@ func NewCoordinator(pool *database.Pool, registry *ContributorRegistry, config C
 	for version, key := range config.RetainedFingerprintKeys {
 		keys.retained[version] = key
 	}
-	return &Coordinator{pool: pool, registry: &ContributorRegistry{state: registry.state}, maximumDuration: config.MaximumDuration, leaseDuration: config.LeaseDuration, keys: keys}, nil
+	c := &Coordinator{pool: pool, registry: &ContributorRegistry{state: registry.state}, maximumDuration: config.MaximumDuration, leaseDuration: config.LeaseDuration, keys: keys}
+	if config.QueryPolicy != nil {
+		if !validCommandQueryPolicy(*config.QueryPolicy) {
+			return nil, coordinatorError()
+		}
+		policy := *config.QueryPolicy
+		c.queryPolicy = &policy
+		c.commandRead = c.readCommand
+	}
+	return c, nil
 }
 
 // Reservation is opaque, generation-bound ownership from a proven durable

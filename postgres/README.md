@@ -13,6 +13,35 @@ Cancellation and deadline classifications remain observable.
 
 ## Current development boundary
 
+### Primary command lookup
+
+`CoordinatorConfig.QueryPolicy` optionally enables `QueryCommand(ctx, query,
+caller)`. Configure the existing `authorization.Service`, a trusted `clock.Clock`
+and positive current `PolicyVersion`; nil keeps lookup disabled. Policy callbacks
+run before the single primary read, never under an open transaction.
+
+Trusted authenticated composition supplies the `authorization.DecisionContext`:
+the actor/kind, tenant, original operation and `identity.user` resource targeting
+the query's user must match at that current revision. Do not decode caller
+identity or authorization attributes from client overrides. Every historical
+query field—including optional record ID and link mode—must match the stored
+command. Current policy permits disclosure but never rewrites old policy/schema
+versions or correlation. Reserved `identity.command.*` attributes are rebuilt
+from the exact query: ID, record ID, decimal link mode and recovery/read-admission
+flags cannot be replaced by caller attributes. Missing, wrong-scope and denied requests all perform
+the bounded decision/read shape and expose zero receipt plus ForbiddenError;
+this is not an identical wall-clock latency guarantee.
+
+Pending, including an expired lease, remains InProgress. `CommandRecord` exposes
+only historical scope, outcome and retry metadata, never stored profile,
+attribute, account or credential payloads. It is not current user status or fresh
+authentication authority. Protected replay values stay inside owned core
+recovery and its current field-redaction policy. Orphaned,
+legacy/incomplete or corrupt history fails closed. Lookup neither locks for
+mutation nor changes a lease, generation or contributor. `RecoverCommand` and
+the owned UnitOfWork service bridge remain unfinished; callers must not implement
+their own transactions or participant recovery to replace them.
+
 `MigrationSource{}` owns `identity.users` with `tenant_id`, `user_id`, `status`
 and `version`. Compose the source with the existing `go-migrations/v3` Runner
 and PostgreSQL backend before constructing the repository. The source creates

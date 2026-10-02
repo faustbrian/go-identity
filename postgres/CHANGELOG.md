@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add opt-in, current-policy-authorized primary command lookup with exact
+  historical scope and receipt preservation. Missing, wrong-scope and denied
+  callers receive the same protected response and decision/read work shape.
+  Pending lease expiry never becomes rollback proof; queries do not acquire
+  ownership or renew authority. Frozen-plan reconciliation remains pending.
+
 - Add bounded decoding of immutable historical command scope for primary
   recovery composition, preserving original policy/schema versions and exact
   identifiers. Alternate or corrupt encodings fail closed; public command

@@ -161,6 +161,7 @@ func testDomainExecution(t *testing.T, ctx context.Context, pool *database.Pool,
 			t.Fatal("atomic creation commit failed", err)
 		}
 		counts(t, binding, 1, 1, 1)
+		testCommandQuery(t, ctx, c, binding, receipt)
 		if _, err := alias.Scope(); err == nil {
 			t.Fatal("alias survived commit")
 		}
@@ -316,8 +317,49 @@ func testDomainExecution(t *testing.T, ctx context.Context, pool *database.Pool,
 			t.Fatal("denial not terminalized", err)
 		}
 		counts(t, binding, 0, 1, 0)
+		testCommandQuery(t, ctx, c, binding, result)
 		if _, result, err := c.ReserveCommand(ctx, binding, command, plan); err != nil || result.Outcome != identity.CommitOutcomeNotCommitted {
 			t.Fatal("aborted receipt replay failed", err)
+		}
+	})
+	t.Run("pending query never takes over", func(t *testing.T) {
+		binding, command, _, _, reservation := prepare(t)
+		pending := identity.CommandResult{Binding: binding, Outcome: identity.CommitOutcomeInProgress, RetryAfter: time.Microsecond}
+		testCommandQuery(t, ctx, c, binding, pending)
+		work, err := c.Begin(ctx, reservation)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer func() { _, _ = c.Abort(work, identity.UnavailableError{}) }()
+		if _, err := repo.ApplyUserCreation(ctx, work, command); err != nil {
+			t.Fatal(err)
+		}
+		// Plain SELECT observes the durable pending snapshot while domain work
+		// holds its row lock; query must not attempt takeover or wait for commit.
+		testCommandQuery(t, ctx, c, binding, pending)
+		_, _ = c.Abort(work, identity.UnavailableError{})
+		id, _ := base64.RawURLEncoding.DecodeString(string(binding.CommandID))
+		if _, err := pool.Raw().Exec(ctx, `UPDATE identity.commands SET lease_until=clock_timestamp()-interval '1 second' WHERE command_id=$1`, id); err != nil {
+			t.Fatal(err)
+		}
+		reader := testCommandQuery(t, ctx, c, binding, pending)
+		counts(t, binding, 0, 0, 0)
+		if _, err := pool.Raw().Exec(ctx, `DELETE FROM identity.commands WHERE command_id=$1`, id); err != nil {
+			t.Fatal(err)
+		}
+		query, caller := queryInputs(binding)
+		got, err := reader.QueryCommand(ctx, query, caller)
+		var unavailable identity.UnavailableError
+		if !errors.As(err, &unavailable) || got.Outcome != identity.CommitOutcomeInvalid {
+			t.Fatal("orphaned claim fabricated absence/noncommit")
+		}
+		if _, err := pool.Raw().Exec(ctx, `UPDATE identity.identity_command_id_claims SET retired=true,tenant_id=NULL,purpose=NULL,fingerprint=NULL,fingerprint_key_version=NULL,safe_fields=NULL WHERE command_id=$1`, id); err != nil {
+			t.Fatal(err)
+		}
+		got, err = reader.QueryCommand(ctx, query, caller)
+		var forbidden identity.ForbiddenError
+		if !errors.As(err, &forbidden) || got.Outcome != identity.CommitOutcomeInvalid {
+			t.Fatal("retired claim disclosed a result")
 		}
 	})
 	t.Run("repeated apply poisons and rolls back", func(t *testing.T) {
