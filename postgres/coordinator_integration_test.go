@@ -391,7 +391,7 @@ func testCoordinatorPlanUpgrade(t *testing.T, ctx context.Context, parent *datab
 	if _, err := pool.Raw().Exec(ctx, `INSERT INTO identity.users(tenant_id,user_id,status,version) VALUES('old-tenant','old-user','active',1)`); err != nil {
 		t.Fatal("old binary user fixture failed")
 	}
-	if result, err := upgraded.Up(ctx); err != nil || len(result.Records()) != 3 || result.Records()[0].Version() != 5 || result.Records()[1].Version() != 6 || result.Records()[2].Version() != 7 {
+	if result, err := upgraded.Up(ctx); err != nil || len(result.Records()) != 4 || result.Records()[0].Version() != 5 || result.Records()[1].Version() != 6 || result.Records()[2].Version() != 7 || result.Records()[3].Version() != 8 {
 		t.Fatal("populated forward upgrade failed", err)
 	}
 	legacy, err := NewRepository(pool, Config{MaximumDuration: time.Second})
@@ -403,6 +403,15 @@ func testCoordinatorPlanUpgrade(t *testing.T, ctx context.Context, parent *datab
 	}
 	if page, err := legacy.List(ctx, identity.ListUsersQuery{TenantID: "old-tenant", Filters: identity.UserListFilters{Statuses: []identity.Status{identity.StatusActive}}, Limit: 10, ExpiresAt: time.Now().Add(time.Second)}); err != nil || len(page.Users) != 1 || page.Users[0].ID != "old-user" {
 		t.Fatal("populated listing upgrade lost old user", err)
+	}
+	oldProfileSchema := storageSchema()
+	oldProfileSchema.Fields[0].Default = identity.AttributeValue{Kind: identity.AttributeString, Scalar: identity.AttributeScalar{Kind: identity.AttributeString, String: "not-a-backfill"}}
+	profiles, err := NewRepository(pool, Config{MaximumDuration: time.Second, AttributeSchemas: []identity.AttributeSchema{oldProfileSchema}, ProfileSchema: ProfileSchemaRef{ID: "fields", Version: 1}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if record, err := profiles.GetProfile(ctx, identity.ProfileQuery{TenantID: "old-tenant", UserID: "old-user"}); err != nil || record.Profile.ID != "old-user" || record.Profile.Name != "" || record.Profile.Image != "" || len(record.Profile.AdditionalFields) != 0 {
+		t.Fatal("old structural user fabricated profile defaults", err)
 	}
 	var fabricated int
 	if err := pool.Raw().QueryRow(ctx, `SELECT count(*) FROM identity.user_attributes`).Scan(&fabricated); err != nil || fabricated != 0 {

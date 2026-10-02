@@ -53,6 +53,40 @@ application-written domain store to fill those gaps.
 
 ## Current development boundary
 
+### Consistent self-profile reads
+
+The repository also implements `identity.ProfileRepository`. Select it explicitly
+with `Config.ProfileSchema: ProfileSchemaRef{ID: "fields", Version: 1}` and
+declare that same schema in `Config.AttributeSchemas` and
+`identity.ProfileConfig.Fields.Schema`. Zero leaves profile reads disabled.
+The selected schema must contain at most 123 additional fields, without aliases
+for name/image, credentials, identifiers, roles or other privileged core fields.
+
+`GetProfile` observes the user, name/image and typed attribute document in one
+primary SQL statement. The stored schema key and immutable definition must match
+the selected declaration exactly. A missing structural user is `ErrUserAbsent`;
+an incompatible/corrupt stored document is `Unavailable`, with no partial output.
+The whole document is validated even for a narrow projection. Empty requested
+fields select all output-readable fields; explicit fields must be unique and
+known, with schema output permission. Structural ID/tenant/version remain bound
+to the aggregate; unselected values are not returned. Returned collections own
+their memory. Existing false/zero/empty values and full versions remain exact.
+
+Forward migration 8 adds the owned `identity.user_profiles` name/image table.
+It preserves migrations 1–7, structural-only users and old writers. Missing rows
+produce empty name/image, not invented additional-field defaults or backfills.
+No independent profile version or authority is created. Grant selected storage
+roles SELECT on profile, attribute and schema tables along with user reads.
+
+Compose through `identity.NewProfileService` for current-human self scope,
+active status, authorization, schema output filtering and current redaction.
+Storage reads confer no caller authority. Database image strings are bounded,
+never fetched, and still require the public service's exact HTTPS origin policy.
+The existing creation UnitOfWork can supply the service's dependency for reads;
+profile mutation/recovery are not implemented by that creation-only owner.
+Complete profile writes, indexed/secret storage and privacy erasure remain
+required platform work, not application-written repositories or SQL workflows.
+
 ### Owned creation service composition
 
 `NewCreationUnitOfWork(coordinator, repository, CreationUnitOfWorkConfig{

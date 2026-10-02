@@ -68,6 +68,7 @@ func testCreationOwner(t *testing.T, ctx context.Context, pool *database.Pool, r
 			t.Fatal("wrong owned creation effects", u, a, e, err)
 		}
 	}
+	t.Run("consistent public self-profile reads", func(t *testing.T) { testProfileReads(t, ctx, pool, repo, owner, service, request) })
 	t.Run("public creation recovery replay and redaction", func(t *testing.T) {
 		req := request()
 		first, err := service.UserCreate(ctx, req)

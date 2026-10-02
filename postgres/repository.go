@@ -26,6 +26,10 @@ type Config struct {
 	// Defaults/fields are copied. Indexed and secret fields require explicit
 	// migration/encryption profiles and currently fail closed.
 	AttributeSchemas []identity.AttributeSchema
+	// ProfileSchema selects one of AttributeSchemas for self-profile reads.
+	// Zero disables GetProfile. Use the same declaration in ProfileService;
+	// stored versions are never guessed, migrated or default-filled on reads.
+	ProfileSchema ProfileSchemaRef
 }
 
 // Format prevents schema defaults from appearing in diagnostics.
@@ -50,6 +54,7 @@ type Repository struct {
 	listConfig       UserListSnapshotConfig
 	read             func(context.Context, identity.TenantID, identity.UserID) pgx.Row
 	attributeSchemas map[schemaKey]registeredSchema
+	profileSchema    schemaKey
 }
 
 // Format prevents private schema defaults or database configuration disclosure.
@@ -76,7 +81,11 @@ func NewRepository(pool *database.Pool, config Config) (*Repository, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Repository{maximumDuration: config.MaximumDuration, pool: pool, listConfig: listConfig, attributeSchemas: schemas, read: func(ctx context.Context, tenant identity.TenantID, user identity.UserID) pgx.Row {
+	profileSchema, err := selectProfileSchema(config.ProfileSchema, schemas)
+	if err != nil {
+		return nil, err
+	}
+	return &Repository{maximumDuration: config.MaximumDuration, pool: pool, listConfig: listConfig, attributeSchemas: schemas, profileSchema: profileSchema, read: func(ctx context.Context, tenant identity.TenantID, user identity.UserID) pgx.Row {
 		conn, err := pool.Acquire(ctx)
 		if err != nil {
 			return storedRow{err: err}

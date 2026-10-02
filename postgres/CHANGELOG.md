@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Add opt-in, schema-bound self-profile reads through the existing public
+  ProfileRepository/ProfileService. Primary aggregate snapshots preserve typed
+  fields and respect output selection without fabricated defaults; incompatible
+  schemas and corrupt documents fail without partial disclosure. Forward
+  migration 8 stores bounded name/image values while preserving old users and
+  writers. Profile writes and lifecycle erasure remain under development.
+
 - Add durable status-filtered user listing through the existing public directory
   service. Snapshot pages retain exact bytewise IDs, statuses, full versions
   and original expiry across live changes and process replacement. Finite

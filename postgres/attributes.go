@@ -120,8 +120,42 @@ func encodeStoredAttributes(spec identity.CreateUserCommand, schema identity.Att
 	}
 	// The constructor owns shape/size validation and the private payload copy.
 	spec, _ = command.CreateUser()
-	entries := make([][]byte, len(spec.Attributes))
-	for i, update := range spec.Attributes {
+	return encodeAttributeDocument(schema, spec.Attributes)
+}
+
+// Reuse the public schema's intrinsic value and aggregate payload validation
+// without fabricating command/actor authority for a primary read.
+func encodeAttributeDocument(schema identity.AttributeSchema, values []identity.AttributeUpdate) ([]byte, error) {
+	if len(values) > 128 || schema.Validate() != nil {
+		return nil, attributeStorageError()
+	}
+	schema.Fields = slices.Clone(schema.Fields)
+	for i := range schema.Fields {
+		schema.Fields[i].Default = identity.AttributeValue{}
+	}
+	for i, value := range values {
+		for _, previous := range values[:i] {
+			if previous.Name == value.Name {
+				return nil, attributeStorageError()
+			}
+		}
+		found := false
+		for j, field := range schema.Fields {
+			if field.Name == value.Name {
+				schema.Fields[j].Default = value.Value
+				found = true
+				break
+			}
+		}
+		if !found {
+			return nil, attributeStorageError()
+		}
+	}
+	if schema.Validate() != nil {
+		return nil, attributeStorageError()
+	}
+	entries := make([][]byte, len(values))
+	for i, update := range values {
 		admitted := false
 		for _, field := range schema.Fields {
 			if field.Name == update.Name {
@@ -148,6 +182,17 @@ func encodeStoredAttributes(spec identity.CreateUserCommand, schema identity.Att
 }
 
 func decodeStoredAttributes(binding identity.CommandBinding, schema identity.AttributeSchema, encoded []byte) ([]identity.AttributeUpdate, error) {
+	values, err := decodeAttributeDocument(schema, encoded)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := identity.NewUserCreationCommand(identity.CreateUserCommand{Binding: binding, Status: identity.StatusActive, Attributes: values}); err != nil {
+		return nil, attributeStorageError()
+	}
+	return values, nil
+}
+
+func decodeAttributeDocument(schema identity.AttributeSchema, encoded []byte) ([]identity.AttributeUpdate, error) {
 	if len(encoded) == 0 || len(encoded) > maxStoredAttributeBytes {
 		return nil, attributeStorageError()
 	}
@@ -189,7 +234,7 @@ func decodeStoredAttributes(binding identity.CommandBinding, schema identity.Att
 	if len(reader.data) != 0 {
 		return nil, attributeStorageError()
 	}
-	canonical, err := encodeStoredAttributes(identity.CreateUserCommand{Binding: binding, Status: identity.StatusActive, Attributes: values}, schema)
+	canonical, err := encodeAttributeDocument(schema, values)
 	// Reject duplicate names, nonminimal heads and every alternative spelling.
 	if err != nil || !bytes.Equal(encoded, canonical) {
 		return nil, attributeStorageError()

@@ -71,7 +71,7 @@ func TestPostgresIntegration(t *testing.T) {
 		t.Fatal("invalid migration source")
 	}
 	result, err := runner.Up(ctx)
-	if err != nil || len(result.Records()) != 7 {
+	if err != nil || len(result.Records()) != 8 {
 		t.Fatal("empty install failed")
 	}
 	pool, err := database.Connect(ctx, database.Config{DSN: dsn, MaxConns: 2, Configure: func(native *database.PoolConfig) error { native.ConnConfig.Database = name; return nil }})
@@ -85,7 +85,7 @@ func TestPostgresIntegration(t *testing.T) {
 			t.Error("pool cleanup failed")
 		}
 	}()
-	repo, err := NewRepository(pool, Config{MaximumDuration: time.Second, AttributeSchemas: []identity.AttributeSchema{storageSchema()}})
+	repo, err := NewRepository(pool, Config{MaximumDuration: time.Second, AttributeSchemas: []identity.AttributeSchema{storageSchema()}, ProfileSchema: ProfileSchemaRef{ID: "fields", Version: 1}})
 	if err != nil {
 		t.Fatal("repository unavailable")
 	}
