@@ -220,6 +220,40 @@ mutation nor changes a lease, generation or contributor. `RecoverCommand` and
 the owned UnitOfWork service bridge remain unfinished; callers must not implement
 their own transactions or participant recovery to replace them.
 
+## Identifier and verification partitions
+
+Apply forward migration9 before calling `GetIdentifierState`. It adds the
+positive `identifier_version` authority dimension to users (initial version1)
+and identity-owned identifier/verification rows. Existing users retain their
+aggregate versions; structural writers that omit the new column remain valid.
+The migration takes PostgreSQL DDL locks and validates the new user constraint;
+run it through the bounded migration Runner during a reviewed migration window.
+No destructive downgrade or application-written backfill is supported.
+
+`GetIdentifierState(ctx, identity.IdentifierQuery{TenantID: tenant,
+UserID: user, MaximumIdentifiers: 128})` implements the existing public storage
+port. One indexed SQL statement returns the complete ordered partition or an
+error with no partial state. The limit must be1..128; oversized partitions are
+unavailable, not truncated. Missing users return `ErrUserAbsent`. The configured
+repository budget and any earlier caller deadline bound pool acquisition and
+query execution. Returned slices own their memory; the pool remains caller-owned.
+
+Canonical values are exact, case-sensitive, at most512 UTF-8 bytes with no C0/C1
+controls. Optional display values have the same bounds but may be empty. IDs
+preserve the existing validated directory-ID profile. Record and canonical-value
+uniqueness is tenant-local; canonical uniqueness also includes kind. A user has
+at most one verified primary identifier of each kind. Verification state and
+identifier flags share a row and database constraints; pending has no timestamp,
+verified requires one, revoked may retain the original timestamp. Reads reject
+future or otherwise inconsistent verification timestamps and preserve uint64
+versions without signed-bigint truncation. Neither snapshots nor structural
+validation grant authorization or prove a challenge.
+
+This is the storage foundation, not a complete identifier workflow. Use the
+existing `IdentifierService` for admission once coordinated identifier writes,
+atomic capability/risk participants and retirement tombstones are implemented.
+Do not supply application-owned SQL or transactions to bypass those requirements.
+
 `MigrationSource{}` owns `identity.users` with `tenant_id`, `user_id`, `status`
 and `version`. Compose the source with the existing `go-migrations/v3` Runner
 and PostgreSQL backend before constructing the repository. The source creates

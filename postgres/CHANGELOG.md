@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Add primary identifier/verification partition reads and forward migration9.
+  Reads preserve canonical values, full uint64 versions and tenant scope,
+  returning no partial state when limits or consistency checks fail. Database
+  constraints enforce tenant-local canonical and record-ID uniqueness, verified
+  primary selection and consistent verification state. Existing structural
+  users and writers receive initial identifier authority version1. Coordinated
+  identifier mutations, proof consumption and retirement remain pending.
+
 - Add opt-in durable administrative typed-field updates through the existing
   UserUpdateAdminService and sole Coordinator. Exact schema/version fencing
   preserves omitted and output-denied values, lifecycle status and original
