@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Add explicit versioned suspend/ban and restore/unban commands with registered
+  reasons, bounded absolute expiry, scoped recovery and distinct user authority
+  versions. Preserve historical replay and known commitment after output failure;
+  reject future versions and purpose substitution. Owner admission reports every
+  required consumer pending, never asynchronous revocation completion. Durable
+  SQL, consumer acknowledgements, audited expiry and keyed transport are pending.
+
 - Add self-service profile reads, versioned explicit-command updates and scoped
   recovery with a distinct email/status/role-excluding projection. Require the
   current human subject, current operation/field policy, bounded allowlisted

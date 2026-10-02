@@ -11,7 +11,9 @@ Administrative typed-field updates enforce expected-version commands and scoped
 recovery through the same durable owner.
 Self-service profile reads/updates use a distinct safe projection and exact
 current-human-subject scope, bounded image origins, typed fields and recovery.
-Remaining lifecycle commands, durable repositories, complete policy composition,
+Suspend/ban and restore/unban use versioned commands with distinct user authority
+versions, exact required-consumer manifests and pending cascade admission.
+Remaining destructive lifecycle commands, durable repositories, complete policy composition,
 hooks, directory import and privacy workflows are not implemented yet.
 
 ## Quick start
@@ -45,6 +47,8 @@ See [administrative updates](docs/updates.md) for field policy, replay-before-
 version-check semantics and required durable status/version fencing.
 See [self-service profiles](docs/profiles.md) for name/image, safe additional
 fields, current subject policy and the pending session/keyed/SQL composition.
+See [status commands](docs/status.md) for authorization, expiry, replay, pending
+cleanup and authority-preserving restore behavior.
 
 ## Development verification
 

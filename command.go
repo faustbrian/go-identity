@@ -87,6 +87,7 @@ type Command struct {
 	create  *CreateUserCommand
 	update  *UpdateUserCommand
 	profile *ProfileUpdateCommand
+	status  *UserStatusCommand
 }
 
 // NewUserCreationCommand validates and snapshots a creation's structural input.
@@ -119,7 +120,7 @@ func NewUserCreationCommand(spec CreateUserCommand) (Command, error) {
 // CreateUser returns a private copy and false for an invalid/zero command.
 // Returned contents are for trusted adapters, never diagnostics or snapshots.
 func (c Command) CreateUser() (CreateUserCommand, bool) {
-	if c.create == nil || c.update != nil || c.profile != nil {
+	if c.create == nil || c.update != nil || c.profile != nil || c.status != nil {
 		return CreateUserCommand{}, false
 	}
 	spec := *c.create
@@ -153,6 +154,9 @@ type CommandResult struct {
 	// Profile exists only for a committed self-service profile command. Adapters
 	// retain immutable copies; callers must never mutate a receipt concurrently.
 	Profile *UserProfile
+	// Revocation is present only on a committed status admission. It records
+	// pending cleanup, never fabricated asynchronous completion.
+	Revocation *RevocationOutcome
 }
 
 // RecoveryQuery scopes a primary-authority lookup to the original command,
@@ -168,7 +172,7 @@ type RecoveryQuery struct {
 
 func validCommandBinding(b CommandBinding) bool {
 	_, validID := decodeID(string(b.CommandID))
-	return validID && validDirectoryID(string(b.TenantID)) && validDirectoryID(string(b.UserID)) && validDirectoryID(string(b.ActorID)) && (b.ActorKind == authorization.SubjectUser || b.ActorKind == authorization.SubjectAPIKey || b.ActorKind == authorization.SubjectServiceAccount) && (b.OperationID == "identity.user.create" || b.OperationID == "identity.user.update-admin" || b.OperationID == "identity.profile.update") && validDirectoryID(b.PolicyID) && b.PolicyVersion > 0 && validDirectoryID(b.SchemaID) && b.SchemaVersion > 0 && validDirectoryID(b.CorrelationID)
+	return validID && validDirectoryID(string(b.TenantID)) && validDirectoryID(string(b.UserID)) && validDirectoryID(string(b.ActorID)) && (b.ActorKind == authorization.SubjectUser || b.ActorKind == authorization.SubjectAPIKey || b.ActorKind == authorization.SubjectServiceAccount) && (b.OperationID == "identity.user.create" || b.OperationID == "identity.user.update-admin" || b.OperationID == "identity.profile.update" || statusTarget(b.OperationID).Valid()) && validDirectoryID(b.PolicyID) && b.PolicyVersion > 0 && validDirectoryID(b.SchemaID) && b.SchemaVersion > 0 && validDirectoryID(b.CorrelationID)
 }
 
 func cloneUpdates(updates []AttributeUpdate) []AttributeUpdate {
@@ -188,6 +192,12 @@ func (r CommandResult) valid() bool {
 		if r.RetryAfter != 0 || r.User.Validate(r.Binding.TenantID) != nil || r.User.ID != r.Binding.UserID || !validDirectoryID(r.AuditEventID) {
 			return false
 		}
+		if target := statusTarget(r.Binding.OperationID); target.Valid() {
+			return r.Profile == nil && r.Revocation != nil && r.Revocation.validAdmission(r.Binding.OperationID) && r.User.Status == target && r.ExpectedVersion > 0 && r.ExpectedVersion < ^uint64(0) && r.User.Version == r.ExpectedVersion+1
+		}
+		if r.Revocation != nil {
+			return false
+		}
 		if r.Binding.OperationID == "identity.user.create" {
 			return r.Profile == nil && r.ExpectedVersion == 0 && r.User.Status == StatusActive && r.User.Version == 1
 		}
@@ -199,9 +209,9 @@ func (r CommandResult) valid() bool {
 		}
 		return r.ExpectedVersion > 0 && r.ExpectedVersion < ^uint64(0) && r.User.Version == r.ExpectedVersion+1 && r.User.Status != StatusDeleted && r.User.Status != StatusAnonymized
 	case CommitOutcomeNotCommitted, CommitOutcomeUnknown, CommitOutcomeConflict:
-		return r.Profile == nil && r.ExpectedVersion == 0 && r.User == (User{}) && r.AuditEventID == "" && r.RetryAfter == 0
+		return r.Revocation == nil && r.Profile == nil && r.ExpectedVersion == 0 && r.User == (User{}) && r.AuditEventID == "" && r.RetryAfter == 0
 	case CommitOutcomeInProgress:
-		return r.Profile == nil && r.ExpectedVersion == 0 && r.User == (User{}) && r.AuditEventID == "" && r.RetryAfter > 0 && r.RetryAfter <= time.Minute
+		return r.Revocation == nil && r.Profile == nil && r.ExpectedVersion == 0 && r.User == (User{}) && r.AuditEventID == "" && r.RetryAfter > 0 && r.RetryAfter <= time.Minute
 	default:
 		return false
 	}
