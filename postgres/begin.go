@@ -15,8 +15,9 @@ import (
 // The coordinator must bound its domain context by the remaining lease and
 // recheck ownership at terminalization; this snapshot cannot renew authority.
 type journalWorkFence struct {
-	generation uint64
-	now, until time.Time
+	generation  uint64
+	now, until  time.Time
+	readStarted time.Time
 }
 
 // beginJournal revalidates the admitted command and locks its pending journal
@@ -62,6 +63,7 @@ WHERE command_id=$1 AND tenant_id=$2 AND purpose=$3 FOR UPDATE`, id, string(q.te
 	// Time read before either lock wait could extend expired ownership. Read
 	// only after both locks; a live reservation is not itself fresh authority.
 	var now time.Time
+	readStarted := time.Now()
 	if err = tx.QueryRow(ctx, `SELECT clock_timestamp()`).Scan(&now); err != nil {
 		return journalWorkFence{}, readFailure(ctx, err)
 	}
@@ -74,5 +76,5 @@ WHERE command_id=$1 AND tenant_id=$2 AND purpose=$3 FOR UPDATE`, id, string(q.te
 	if !until.After(now) {
 		return journalWorkFence{}, identity.ConflictError{}
 	}
-	return journalWorkFence{generation: gen, now: now.UTC(), until: until.UTC()}, nil
+	return journalWorkFence{generation: gen, now: now.UTC(), until: until.UTC(), readStarted: readStarted}, nil
 }

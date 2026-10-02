@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Add generation-bound Work SQL execution with owned result cursors, exact
+  scope, conservative lease deadlines, closed scalar parameters/destinations,
+  bounded results and failure poisoning. Extended-protocol execution rejects
+  multi-statements without exposing raw connections or transaction closure.
+  Work issuance, mandatory audit/effect staging and the public Coordinator
+  remain under development; this is not yet an adoptable command pipeline.
+
 - Add private domain-begin fencing against the exact retained-key command,
   pending generation and lease owner. Database time is read after lock waits
   so expired, stale and terminal reservations cannot reenter domain work.

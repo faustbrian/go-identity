@@ -95,7 +95,38 @@ terminal rows never become apply authority. Missing history or keys fails
 closed. The future Coordinator owns rollback on every failure and bounds Work
 by the remaining lease; this private snapshot neither renews validity nor
 begins/commits/rolls back a transaction or invokes participants. Public Work
-and complete Begin orchestration are still unavailable.
+issuance and complete Begin orchestration are still unavailable.
+
+### Restricted Work execution
+
+`Work` now provides `Scope`, `Exec`, `Query` and `DatabaseTime` for trusted
+compile-time enlisted adapters. Its constructor is private; application code
+cannot acquire valid Work until the complete Coordinator is available. All
+aliases share generation, scope, deadline, failure and closure. Work/WorkRows
+are serial, not concurrent APIs. The deadline starts before the authoritative
+clock read roundtrip, cannot restart on construction, and is never renewed by
+DatabaseTime. The coordinator must invalidate aliases/active rows before closing
+its transaction and retain sole commit/rollback ownership.
+
+SQL must be a trusted compile-time SELECT/INSERT/UPDATE/DELETE/WITH statement
+up to 64 KiB with no more than 64 closed scalar parameters/1 MiB total. Inputs
+do not admit driver options, query rewriters or custom marshalers. Extended
+protocol executes the exact SQL through a fixed owned binary scalar profile,
+even without parameters; prepared-name aliases and caller-installed codecs
+cannot replace it. Multi-statements are rejected by PostgreSQL. Initial execution
+errors are resolved before returning rows. `WorkRows` exposes no driver or connection and permits only closed
+typed scan destinations, not RowScanner or custom scanners. It returns at most
+256 rows, 64 columns and 1 MiB raw result bytes. Close rows before another
+query, inspect Err, and discard all destinations after a Scan error. SQL/scan/
+budget/cancellation failures poison further execution; diagnostics are redacted.
+Empty byte parameters remain non-NULL and are copied before I/O.
+
+This is not a sandbox for malicious adapter SQL, a tenant query rewriter, or a
+bound on server-side query work. Contributors must use scoped/indexed statements
+and cannot invoke functions changing transaction ownership/isolation or external
+state. No raw transaction, connection, nested transaction or closure API exists.
+Audit/effect writers, typed participant phases and complete Coordinator issuance
+remain required next; this partial execution surface is not full command authority.
 
 ### Contributor registration
 
@@ -109,7 +140,7 @@ neither admits whitespace or normalization. Composition roots own canonical
 IDs and contributor lifetimes. Returned `Descriptors()` slices are caller-owned
 copies and registry reads are concurrent-safe. Implementations remain open to
 independent modules. This is identity admission only: no transaction phase,
-typed participant input, Work, Coordinator, late registration or commit API is
+typed participant input, Work issuance, Coordinator, late registration or commit API is
 provided. Unsupported phase combinations and foreign plan rejection remain
 part of the forthcoming complete Coordinator, not guarantees of this constructor.
 
