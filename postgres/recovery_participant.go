@@ -110,7 +110,7 @@ func (w RecoveryWork) LifecyclePlan() (LifecyclePlan, error) {
 // An existing user is not evidence that this command committed; without an
 // original command linkage that case conservatively remains unknown. No live
 // user data or receipt is reconstructed. Only this exact enlisted instance may
-// inspect its evidence. For profile mutation, only the unchanged original
+// inspect its evidence. For field mutation, only the unchanged original
 // aggregate version is negative evidence under the coordinator's journal and
 // tenant fences. A changed/missing aggregate remains unknown; it is never
 // treated as a committed receipt. Other domain profiles remain unsupported.
@@ -119,10 +119,10 @@ func (r *Repository) RecoverParticipant(ctx context.Context, recovery RecoveryWo
 		return RecoveryUnknown, invalidWork()
 	}
 	b, err := recovery.Scope()
-	if err != nil || b.OperationID != "identity.user.create" && b.OperationID != "identity.profile.update" {
+	if err != nil || b.OperationID != "identity.user.create" && b.OperationID != "identity.profile.update" && b.OperationID != "identity.user.update-admin" {
 		return RecoveryUnknown, invalidWork()
 	}
-	if b.OperationID == "identity.profile.update" {
+	if b.OperationID == "identity.profile.update" || b.OperationID == "identity.user.update-admin" {
 		plan := recovery.state.plan.lifecycle
 		if plan == nil || plan.BeforeVersion == 0 {
 			return RecoveryUnknown, invalidWork()

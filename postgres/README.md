@@ -119,7 +119,41 @@ Storage roles need UPDATE on users and SELECT/INSERT/UPDATE on profile/value
 tables, with SELECT/INSERT on immutable schema definitions and the existing
 command, audit and outbox permissions. Migration 8 already supplies profile
 storage; migrations 1–8 and existing structural writers are unchanged.
-Administrative updates and the remaining kernel lifecycle profiles are unfinished.
+The remaining kernel lifecycle profiles are unfinished.
+
+### Durable administrative attribute updates
+
+`NewUserUpdateUnitOfWork` supplies the existing `UserUpdateAdminService` with
+the sole Coordinator's command protocol. Register the exact Repository and
+typed audit/lifecycle phases as for creation. Select frozen `AttributeSchemas`;
+the independent `ProfileSchema` feature is not required. Current operation and
+per-field authorization remain in the core service, not role labels or direct
+adapter calls. The current audit actor profile supports human and service
+accounts; API-key actor composition remains unsupported and fails closed.
+
+`ApplyUserUpdate` locks the authoritative aggregate and replaces individual
+whole typed values, preserving omissions, explicit zeros, output-denied stored
+fields, and the existing lifecycle status. Deleted/anonymized users cannot be
+updated. The expected version fences exactly one full-width successor. Neither
+name/image storage nor credentials, identifiers, roles or authority versions
+are changed. Each command uses its exact registered schema ID/version; stored
+definition mismatches and corrupt documents fail without a partial result.
+
+One transaction persists the values, protected `identity.user.update` audit,
+`identity.updated.v1` lifecycle and original structural receipt. Exact replay
+precedes current-state CAS; a live parallel retry can return InProgress and
+must retain the same command ID. Recovery observes the original receipt under
+current core authorization/redaction. Expired pending commands close only with
+the unchanged original aggregate version and negative evidence from every
+frozen participant; missing/changed evidence remains unresolved. No second
+transaction owner, callback inside SQL or migration is introduced. Storage
+roles need the existing user and attribute/schema read/write permissions;
+administrative updates do not require writes on the self-profile table.
+
+Focused real PostgreSQL tests exercise these adapter semantics through the
+public service with typed SQL audit/outbox test phases. Updated production
+audit/outbox administrative composition and complete lifecycle/release gates
+remain pending; the self-profile production composition is separately proven.
 
 ### Owned creation service composition
 

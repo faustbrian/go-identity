@@ -145,7 +145,7 @@ func (r *Repository) decodeProfileRow(q identity.ProfileQuery, fields []string, 
 	}
 	var values []identity.AttributeUpdate
 	if row.schemaID.Valid {
-		if row.schemaID.String != r.profileSchema.id || row.schemaVersion.String != strconv.FormatUint(uint64(r.profileSchema.version), 10) || !row.schemaVersion.Valid || !row.encoding.Valid || row.encoding.Int16 != 1 || !bytes.Equal(row.definition, registered.definition) {
+		if row.schemaID.String != registered.schema.ID || row.schemaVersion.String != strconv.FormatUint(uint64(registered.schema.Version), 10) || !row.schemaVersion.Valid || !row.encoding.Valid || row.encoding.Int16 != 1 || !bytes.Equal(row.definition, registered.definition) {
 			return identity.ProfileRecord{}, identity.UnavailableError{}
 		}
 		values, err = decodeAttributeDocument(registered.schema, row.document)

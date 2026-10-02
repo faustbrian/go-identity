@@ -43,7 +43,7 @@ func (o *ProfileUnitOfWork) Execute(ctx context.Context, command identity.Comman
 	if _, ok := command.UpdateProfile(); !ok {
 		return identity.CommandResult{}, identity.InvalidInputError{Field: "profile_command"}
 	}
-	return o.owner.execute(ctx, command, true)
+	return o.owner.execute(ctx, command, "identity.profile.update")
 }
 
 // Recover observes the original self-scoped profile receipt, never infers
@@ -53,7 +53,7 @@ func (o *ProfileUnitOfWork) Recover(ctx context.Context, q identity.RecoveryQuer
 	if o == nil || o.owner == nil || q.OperationID != "identity.profile.update" {
 		return identity.CommandResult{}, coordinatorError()
 	}
-	return o.owner.recover(ctx, q, true)
+	return o.owner.recover(ctx, q, "identity.profile.update")
 }
 
 // Format prevents dependency and command disclosure.

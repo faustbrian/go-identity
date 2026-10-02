@@ -13,7 +13,7 @@ import (
 
 // CreationUnitOfWorkConfig fixes the positive audit retention policy revision
 // before admission. It is immutable copied configuration, not a callback or
-// participant factory. The profile composition uses the same retention input.
+// participant factory. Field-update compositions use the same retention input.
 type CreationUnitOfWorkConfig struct{ RetentionPolicyVersion uint64 }
 
 // CreationUnitOfWork is the owned creation-only implementation of the core
@@ -86,24 +86,30 @@ func (CreationUnitOfWork) MarshalJSON() ([]byte, error) { return nil, coordinato
 // Unknown. Unsupported commands/actor profiles fail before reservation. This
 // trusted adapter seam is not an authenticated application endpoint.
 func (o *CreationUnitOfWork) Execute(ctx context.Context, command identity.Command) (result identity.CommandResult, err error) {
-	return o.execute(ctx, command, false)
+	return o.execute(ctx, command, "identity.user.create")
 }
 
-// The profile composition selects an additional command variant, not another
+// Field-update composition selects an additional command variant, not another
 // reservation, transaction or recovery owner.
-func (o *CreationUnitOfWork) execute(ctx context.Context, command identity.Command, profileEnabled bool) (result identity.CommandResult, err error) {
+func (o *CreationUnitOfWork) execute(ctx context.Context, command identity.Command, operation string) (result identity.CommandResult, err error) {
 	if o == nil || ctx == nil || o.coordinator == nil || o.repository == nil {
 		return result, coordinatorError()
 	}
 	spec, ok := command.CreateUser()
 	profile, updating := command.UpdateProfile()
-	if !ok && (!profileEnabled || !updating) {
+	admin, administering := command.UpdateUser()
+	if operation != "identity.user.create" && operation != "identity.profile.update" && operation != "identity.user.update-admin" || !ok && !updating && !administering || ok && spec.Binding.OperationID != operation || updating && profile.Binding.OperationID != operation || administering && admin.Binding.OperationID != operation {
 		return result, identity.InvalidInputError{Field: "creation_command"}
 	}
 	binding, before := spec.Binding, uint64(0)
 	if updating {
 		binding, before = profile.Binding, profile.ExpectedVersion
 		if _, _, e := o.repository.prepareProfileAttributes(profile); e != nil {
+			return result, e
+		}
+	} else if administering {
+		binding, before = admin.Binding, admin.ExpectedVersion
+		if _, _, e := o.repository.prepareAdministrativeAttributes(admin); e != nil {
 			return result, e
 		}
 	} else {
@@ -142,7 +148,7 @@ func (o *CreationUnitOfWork) execute(ctx context.Context, command identity.Comma
 			// primary scope without executing or allocating another command.
 			cleanup, stop := context.WithTimeout(context.Background(), c.maximumDuration)
 			defer stop()
-			observed, e := o.recover(cleanup, creationRecoveryQuery(binding), profileEnabled)
+			observed, e := o.recover(cleanup, creationRecoveryQuery(binding), operation)
 			if observed.Validate() == nil && observed.Outcome != identity.CommitOutcomeInProgress {
 				result, err = observed, e
 			} else {
@@ -177,6 +183,8 @@ func (o *CreationUnitOfWork) execute(ctx context.Context, command identity.Comma
 	if updating {
 		updated, e = o.repository.ApplyProfileUpdate(bounded, work, command)
 		user = identity.User{ID: binding.UserID, TenantID: binding.TenantID, Status: identity.StatusActive, Version: updated.Version}
+	} else if administering {
+		user, e = o.repository.ApplyUserUpdate(bounded, work, command)
 	} else {
 		user, e = o.repository.ApplyUserCreation(bounded, work, command)
 	}
@@ -191,8 +199,11 @@ func (o *CreationUnitOfWork) execute(ctx context.Context, command identity.Comma
 		return c.Abort(work, e)
 	}
 	result = identity.CommandResult{Binding: binding, Outcome: identity.CommitOutcomeCommitted, User: user, AuditEventID: success.ID()}
+	if updating || administering {
+		result.ExpectedVersion = before
+	}
 	if updating {
-		result.ExpectedVersion, result.Profile = before, &updated
+		result.Profile = &updated
 	}
 	result, err = c.Commit(work, result)
 	return coreCreationReceipt(result, err)
@@ -206,11 +217,11 @@ func (o *CreationUnitOfWork) execute(ctx context.Context, command identity.Comma
 // and atomically persisted failure auditing. Missing/unknown evidence stays
 // pending. This never infers success from current user state or replays commands.
 func (o *CreationUnitOfWork) Recover(ctx context.Context, q identity.RecoveryQuery) (identity.CommandResult, error) {
-	return o.recover(ctx, q, false)
+	return o.recover(ctx, q, "identity.user.create")
 }
 
-func (o *CreationUnitOfWork) recover(ctx context.Context, q identity.RecoveryQuery, profileEnabled bool) (identity.CommandResult, error) {
-	if o == nil || o.coordinator == nil || ctx == nil || q.OperationID != "identity.user.create" && (!profileEnabled || q.OperationID != "identity.profile.update") {
+func (o *CreationUnitOfWork) recover(ctx context.Context, q identity.RecoveryQuery, operation string) (identity.CommandResult, error) {
+	if o == nil || o.coordinator == nil || ctx == nil || q.OperationID != operation || operation != "identity.user.create" && operation != "identity.profile.update" && operation != "identity.user.update-admin" {
 		return identity.CommandResult{}, coordinatorError()
 	}
 	if _, e := identity.ParseCommandID(string(q.CommandID)); e != nil {
@@ -282,7 +293,11 @@ func kernelMutationAudit(ctx context.Context, b identity.CommandBinding, before 
 	if e != nil {
 		return audit.Record{}, invalidAudit()
 	}
-	record, e := builder.Build(audit.RecordInput{OccurredAt: now, Action: kernelCommandAudit(b.OperationID), Outcome: outcome, ReasonCode: reason, Actor: audit.ActorInput{Kind: actorKind, ID: string(b.ActorID)}, Subject: audit.SubjectInput{Type: "user", ID: string(b.UserID)}, Context: audit.ContextInput{TenantID: string(b.TenantID), CorrelationID: b.CorrelationID}, Policy: audit.PolicyMetadata{PolicyID: b.PolicyID, Version: strconv.FormatUint(b.PolicyVersion, 10)}, Changes: changes, Attributes: map[string]string{"identity.profile": "identity.security.v1", "command.id": string(b.CommandID), "retention.class": "standard", "aggregate.type": "user", "aggregate.id": string(b.UserID), "aggregate.before_version": strconv.FormatUint(before, 10), "aggregate.after_version": after}})
+	retention := "standard"
+	if b.OperationID == "identity.user.update-admin" {
+		retention = "protected"
+	}
+	record, e := builder.Build(audit.RecordInput{OccurredAt: now, Action: kernelCommandAudit(b.OperationID), Outcome: outcome, ReasonCode: reason, Actor: audit.ActorInput{Kind: actorKind, ID: string(b.ActorID)}, Subject: audit.SubjectInput{Type: "user", ID: string(b.UserID)}, Context: audit.ContextInput{TenantID: string(b.TenantID), CorrelationID: b.CorrelationID}, Policy: audit.PolicyMetadata{PolicyID: b.PolicyID, Version: strconv.FormatUint(b.PolicyVersion, 10)}, Changes: changes, Attributes: map[string]string{"identity.profile": "identity.security.v1", "command.id": string(b.CommandID), "retention.class": retention, "aggregate.type": "user", "aggregate.id": string(b.UserID), "aggregate.before_version": strconv.FormatUint(before, 10), "aggregate.after_version": after}})
 	if e != nil {
 		return audit.Record{}, invalidAudit()
 	}

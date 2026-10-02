@@ -70,6 +70,7 @@ func testCreationOwner(t *testing.T, ctx context.Context, pool *database.Pool, r
 	}
 	t.Run("consistent public self-profile reads", func(t *testing.T) { testProfileReads(t, ctx, pool, repo, owner, service, request) })
 	t.Run("durable public self-profile updates", func(t *testing.T) { testProfileUpdates(t, ctx, pool) })
+	t.Run("durable administrative attributes", func(t *testing.T) { testAdministrativeUpdates(t, ctx, pool) })
 	t.Run("public creation recovery replay and redaction", func(t *testing.T) {
 		req := request()
 		first, err := service.UserCreate(ctx, req)

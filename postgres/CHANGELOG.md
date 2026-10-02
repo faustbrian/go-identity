@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Add opt-in durable administrative typed-field updates through the existing
+  UserUpdateAdminService and sole Coordinator. Exact schema/version fencing
+  preserves omitted and output-denied values, lifecycle status and original
+  replay/recovery receipts. Protected audits and lifecycle effects commit with
+  the mutation; failed/panicking phases leave no domain prefix. Terminal users
+  cannot be updated, and missing or changed recovery evidence stays unresolved.
+  Self-profile and creation APIs retain their separate opt-in boundaries.
+
 - Add opt-in durable self-profile updates through the existing ProfileService:
   active/version-fenced name, image and partial typed-field replacements commit
   with mandatory audit, lifecycle and immutable replay/recovery receipts. Current

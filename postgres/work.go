@@ -16,7 +16,7 @@ import (
 // Copies share lifetime and failure state. Methods and returned rows must be
 // used serially and must not be retained beyond the contributor invocation.
 // Any SQL, scan, budget or cancellation failure poisons subsequent execution.
-// Zero is invalid. Coordinator.Begin issues Work for creation and self-profile
+// Zero is invalid. Coordinator.Begin issues Work for creation and field-update
 // mutation; other domain profiles remain under development. Work alone is not
 // complete command authority.
 type Work struct{ state *workState }
@@ -37,6 +37,7 @@ type workState struct {
 	execution  *domainExecution
 	creation   *identity.User
 	profile    *identity.UserProfile
+	update     *identity.User
 }
 
 // newWork is private: only the sole coordinator may call it after verifying

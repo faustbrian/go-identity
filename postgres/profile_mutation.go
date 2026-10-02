@@ -39,6 +39,12 @@ func (r *Repository) prepareProfileAttributes(spec identity.ProfileUpdateCommand
 // rejected. Every error poisons Work; callers must Abort. No policy callback
 // runs inside SQL; identity.ProfileService owns admission and output policy.
 func (r *Repository) ApplyProfileUpdate(ctx context.Context, w Work, command identity.Command) (identity.UserProfile, error) {
+	return r.applyAttributeUpdate(ctx, w, command, false)
+}
+
+// applyAttributeUpdate shares document merge and aggregate fencing across the
+// two independently selected field-update profiles, not their admission policy.
+func (r *Repository) applyAttributeUpdate(ctx context.Context, w Work, command identity.Command, administrative bool) (identity.UserProfile, error) {
 	if r == nil || r.read == nil || ctx == nil {
 		return identity.UserProfile{}, invalidWork()
 	}
@@ -46,7 +52,7 @@ func (r *Repository) ApplyProfileUpdate(ctx context.Context, w Work, command ide
 		return identity.UserProfile{}, err
 	}
 	fail := func(err error) (identity.UserProfile, error) { return identity.UserProfile{}, w.fail(ctx, err) }
-	if w.state.execution == nil || w.state.creation != nil || w.state.profile != nil {
+	if w.state.execution == nil || w.state.creation != nil || w.state.profile != nil || w.state.update != nil {
 		return fail(invalidWork())
 	}
 	enlisted := false
@@ -59,6 +65,11 @@ func (r *Repository) ApplyProfileUpdate(ctx context.Context, w Work, command ide
 		return fail(invalidWork())
 	}
 	spec, ok := command.UpdateProfile()
+	admin, adminOK := command.UpdateUser()
+	if administrative {
+		spec = identity.ProfileUpdateCommand{Binding: admin.Binding, ExpectedVersion: admin.ExpectedVersion, AdditionalFields: admin.Attributes}
+		ok = adminOK
+	}
 	if !ok || spec.Binding != w.state.binding {
 		return fail(identity.InvalidInputError{Field: "profile_command"})
 	}
@@ -66,7 +77,12 @@ func (r *Repository) ApplyProfileUpdate(ctx context.Context, w Work, command ide
 	if err != nil || !bytes.Equal(q.canonical, w.state.execution.reservation.request.canonical) {
 		return fail(identity.ConflictError{})
 	}
-	registered, _, err := r.prepareProfileAttributes(spec)
+	var registered registeredSchema
+	if administrative {
+		registered, _, err = r.prepareAdministrativeAttributes(admin)
+	} else {
+		registered, _, err = r.prepareProfileAttributes(spec)
+	}
 	if err != nil {
 		return fail(err)
 	}
@@ -102,7 +118,7 @@ func (r *Repository) ApplyProfileUpdate(ctx context.Context, w Work, command ide
 	if err != nil {
 		return fail(err)
 	}
-	if record.User.Status != identity.StatusActive {
+	if !administrative && record.User.Status != identity.StatusActive || record.User.Status == identity.StatusDeleted || record.User.Status == identity.StatusAnonymized {
 		return fail(identity.ForbiddenError{})
 	}
 	if record.User.Version != spec.ExpectedVersion {
@@ -130,22 +146,30 @@ func (r *Repository) ApplyProfileUpdate(ctx context.Context, w Work, command ide
 	if err := persistCreationSchema(ctx, w, registered); err != nil {
 		return identity.UserProfile{}, err
 	}
-	count, err := w.Exec(ctx, `UPDATE identity.users SET version=version+1 WHERE tenant_id=$1 AND user_id=$2 AND status='active' AND version=$3::numeric`, string(spec.Binding.TenantID), string(spec.Binding.UserID), strconv.FormatUint(spec.ExpectedVersion, 10))
+	count, err := w.Exec(ctx, `UPDATE identity.users SET version=version+1 WHERE tenant_id=$1 AND user_id=$2 AND version=$3::numeric AND status=$4`, string(spec.Binding.TenantID), string(spec.Binding.UserID), strconv.FormatUint(spec.ExpectedVersion, 10), string(record.User.Status))
 	if err != nil {
 		return identity.UserProfile{}, err
 	}
 	if count != 1 {
 		return fail(identity.ConflictError{})
 	}
-	if _, err := w.Exec(ctx, `INSERT INTO identity.user_profiles(tenant_id,user_id,name,image) VALUES($1,$2,$3,$4) ON CONFLICT(tenant_id,user_id) DO UPDATE SET name=excluded.name,image=excluded.image`, string(spec.Binding.TenantID), string(spec.Binding.UserID), profile.Name, profile.Image); err != nil {
-		return identity.UserProfile{}, err
+	if !administrative {
+		if _, err := w.Exec(ctx, `INSERT INTO identity.user_profiles(tenant_id,user_id,name,image) VALUES($1,$2,$3,$4) ON CONFLICT(tenant_id,user_id) DO UPDATE SET name=excluded.name,image=excluded.image`, string(spec.Binding.TenantID), string(spec.Binding.UserID), profile.Name, profile.Image); err != nil {
+			return identity.UserProfile{}, err
+		}
 	}
 	if _, err := w.Exec(ctx, `INSERT INTO identity.user_attributes(tenant_id,user_id,schema_id,schema_version,encoding_version,document) VALUES($1,$2,$3,$4,1,$5) ON CONFLICT(tenant_id,user_id) DO UPDATE SET document=excluded.document`, string(spec.Binding.TenantID), string(spec.Binding.UserID), registered.schema.ID, registered.schema.Version, document); err != nil {
 		return identity.UserProfile{}, err
 	}
 	profile.Version++
-	owned := cloneStoredProfile(profile)
-	w.state.profile = &owned
+	if administrative {
+		user := record.User
+		user.Version++
+		w.state.update = &user
+	} else {
+		owned := cloneStoredProfile(profile)
+		w.state.profile = &owned
+	}
 	return profile, nil
 }
 
@@ -158,6 +182,9 @@ func cloneStoredProfile(p identity.UserProfile) identity.UserProfile {
 }
 
 func matchesDomainResult(w Work, result identity.CommandResult) bool {
+	if w.state.update != nil {
+		return w.state.creation == nil && w.state.profile == nil && result.Profile == nil && result.Binding.OperationID == "identity.user.update-admin" && result.User == *w.state.update && result.ExpectedVersion == w.state.lifecycle.plan.BeforeVersion
+	}
 	if w.state.creation != nil {
 		return w.state.profile == nil && result.User == *w.state.creation && result.Binding.OperationID == "identity.user.create"
 	}
