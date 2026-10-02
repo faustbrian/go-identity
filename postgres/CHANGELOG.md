@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Map immutable feature command scalars into the existing keyed command codec,
+  preserving full-width versions, UTC instants, exact kinds and owner policy.
+  Digest all values conservatively and retain prior-key replay semantics.
+  Adopt the committed feature command contract; feature execution admission
+  remains disabled pending its owned schema, receipt and lifecycle phases.
+
 - Freeze optional feature operation declarations in the existing contributor
   registry with exact adapter ownership, supported schemas, record policy and
   bounded conflict checks. Legacy contributors remain unchanged; registration

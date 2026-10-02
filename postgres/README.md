@@ -29,6 +29,14 @@ Kernel command plans remain closed; typed feature command/receipt preparation,
 reservation, apply/finalize/recovery and session issuance remain in development.
 Do not advertise routes from these declarations or substitute private journals.
 
+The existing private command codec also maps immutable `identity.Command`
+feature inputs for future owned phases. Exact owner/record policy and every
+named scalar kind/value affect the keyed fingerprint; all scalar values are
+conservatively digested before canonical encoding. Scope remains separate from
+private intent, and retained-key replay regenerates the original fingerprint.
+This is not schema validation or execution readiness: public plan preparation
+and reservation still reject feature commands before any SQL.
+
 ## Stable status-filtered listing
 
 Compose the same repository through `identity.NewUserDirectoryService` for
