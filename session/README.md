@@ -4,7 +4,9 @@ Experimental Go 1.27 session policy module. This first batch implements shared
 remember-policy resolution, lifetime evaluation, secure host-cookie attributes
 and opaque token/key custody with tenant-bound lookups. **Session issuance,
 authentication, persistence, rotation,
-revocation, transfers and authority snapshots are not yet implemented.**
+revocation and transfers are not yet implemented.** Complete authority-vector
+construction and exact comparison are available, but do not read primary
+authority or prove activity/freshness.
 
 ## Quick start and API
 
@@ -43,6 +45,10 @@ authentication or persistence. Reference defaults belong to deployment.
 - `NewDigestKey` defensively copies 32..64 independently generated key bytes
   and a positive version. `Token.Digest` derives a tenant/version/domain-bound
   HMAC-SHA-256 lookup without exposing or storing raw credentials.
+- `NewAuthoritySnapshot` freezes all eight required authority bindings and
+  explicit organization/factor/passkey applicability. Use `Bindings` only for
+  trusted persistence/composition. `CompareCurrent` denies any scope, version,
+  selection or presence change, including version increases and regressions.
 
 ## Adoption, security and tradeoffs
 
@@ -61,6 +67,16 @@ session/tombstone paths are retired. Key provisioning, encrypted durable
 recovery custody and rotation readiness remain unfinished composition
 requirements. Raw tokens must never become database lookup keys or cache
 projections; stable digests should not be logged because they correlate usage.
+
+Authority keys are canonical dimension-qualified keys supplied by each durable
+lifecycle owner, not normalized user inputs. Their exact tenant and aggregate
+IDs must be derived from the session/proof; construction does not check a
+database, active status, membership, proof applicability or freshness. Never
+accept a credential solely because two caller-created snapshots match.
+Primary-authority adapters must compare the complete vector, check active state
+and expiry, and retain the original bounded read evidence. JSON encoding of the
+opaque wrapper fails rather than silently persisting an empty object. Extract
+the complete scalar projection for trusted storage; do not log its scope data.
 
 Browser sessions cap server lifetime at 24 hours. Browser restoration may retain
 nonpersistent cookies; expiry and revocation remain necessary. Activity never
