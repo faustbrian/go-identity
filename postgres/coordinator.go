@@ -69,8 +69,9 @@ func (Coordinator) MarshalJSON() ([]byte, error) { return nil, coordinatorError(
 
 // NewCoordinator validates and copies composition without I/O. Migrate the
 // primary database before reservation. Registry implementations are trusted
-// typed adapters; no contributor method or caller callback runs here or in
-// reservation transactions. Invalid configuration returns a redacted error.
+// typed adapters; no contributor method or caller callback runs here. Registered
+// capability reservation phases run only in coordinator-owned reservation
+// transactions. Invalid configuration returns a redacted error.
 func NewCoordinator(pool *database.Pool, registry *ContributorRegistry, config CoordinatorConfig) (*Coordinator, error) {
 	if pool == nil || pool.Raw() == nil || registry == nil || registry.state == nil || !validCoordinatorConfig(config) {
 		return nil, coordinatorError()
@@ -122,8 +123,10 @@ func (Reservation) MarshalJSON() ([]byte, error) {
 // computes the current-key fingerprint and returns an owned plan snapshot.
 // The supplied Digest is replaced. It performs no I/O, reserves nothing and
 // supplies no authorization: the identity service must authorize and prepare
-// the command before calling the trusted composition adapter. Unsupported
-// one-time/cascade command profiles are rejected before any SQL. Mutating
+// the command before calling the trusted composition adapter. Identifier intent
+// may prepare an exact typed capability reservation plan; other unsupported
+// one-time/cascade profiles fail before SQL. Domain Begin for capability-bearing
+// plans remains disabled until the complete workflow phases exist. Mutating
 // returned slices affects only that caller's plan; do not mutate inputs during
 // the call. A replay is rebound to its stored retained-key fingerprint inside
 // ReserveCommand, never assigned a new fingerprint after key rotation.
@@ -139,7 +142,12 @@ func (c *Coordinator) prepare(binding identity.CommandBinding, command identity.
 	// No proof/cascade declaration is inferred from a contributor name. Those
 	// command profiles need their typed reservation phases before admission.
 	probe := identity.CommandResult{Binding: binding, Outcome: identity.CommitOutcomeInProgress, RetryAfter: time.Microsecond}
-	if !isCreation(command) && !isProfile(command) && !isUpdate(command) || plan.Capability != nil || plan.Lifecycle == nil || len(plan.Contributors) != 3 || len(plan.Audits) != 1 || probe.Validate() != nil {
+	proofReservation := capabilityReservationCommand(command, plan)
+	count := 3
+	if proofReservation {
+		count++
+	}
+	if !isCreation(command) && !isProfile(command) && !isUpdate(command) && !proofReservation || plan.Capability != nil && !proofReservation || plan.Lifecycle == nil || len(plan.Contributors) != count || len(plan.Audits) != 1 || probe.Validate() != nil {
 		return claimRequest{}, CommandPlan{}, nil, invalidPlan()
 	}
 	if spec, ok := command.UpdateProfile(); ok && (plan.Lifecycle.BeforeVersion != spec.ExpectedVersion || plan.Lifecycle.AfterVersion != spec.ExpectedVersion+1) {
@@ -158,6 +166,10 @@ func (c *Coordinator) prepare(binding identity.CommandBinding, command identity.
 	snapshot := CommandPlan{Contributors: append([]ContributorDescriptor(nil), plan.Contributors...), Audits: append([]AuditPlan(nil), plan.Audits...)}
 	lifecycle := *plan.Lifecycle
 	snapshot.Lifecycle = &lifecycle
+	if plan.Capability != nil {
+		capability := *plan.Capability
+		snapshot.Capability = &capability
+	}
 	fingerprint := claimFingerprint(c.keys.retained[c.keys.current], q.canonical)
 	snapshot.Digest, err = KernelPlanDigest(binding, fingerprint, snapshot)
 	if err != nil {
@@ -181,7 +193,11 @@ func (c *Coordinator) prepare(binding identity.CommandBinding, command identity.
 // NotCommitted. Any commit-attempt failure or unproven rollback returns Unknown
 // with zero reservation; no automatic retry or local rollback after commit.
 // Earlier caller deadlines win. All driver diagnostics are redacted. This
-// phase performs no domain mutation or participant persistence. It grants no
+// phase performs no domain mutation or capability use. A typed capability
+// reservation or exact predecessor rebind commits with the claim/journal, or
+// every prefix rolls back together. Contributor errors, panic, unfinished rows
+// or cancellation return no ownership. Invocation aliases expire before commit.
+// It grants no
 // proof that required audit/outbox effects have been written.
 func (c *Coordinator) ReserveCommand(ctx context.Context, binding identity.CommandBinding, command identity.Command, plan CommandPlan) (Reservation, identity.CommandResult, error) {
 	if ctx == nil {
@@ -236,6 +252,9 @@ func (c *Coordinator) ReserveCommand(ctx context.Context, binding identity.Comma
 			result = *journal.result
 		}
 		return c.failedReservation(tx, binding, result, nil)
+	}
+	if err = c.reserveCapability(bounded, tx, q, admitted, journal, owner); err != nil {
+		return c.failedReservation(tx, binding, identity.CommandResult{}, err)
 	}
 	// Commit owns closure after it begins. Even a driver-classified failure is
 	// Unknown at this API; authoritative scoped recovery must resolve it later.

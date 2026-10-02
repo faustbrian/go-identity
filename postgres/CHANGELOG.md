@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Atomically reserve or CAS-rebind a registered capability participant with
+  exact identifier intent and the command journal. Invocation-bound SQL handles
+  preserve original fingerprints/generations and expire on return; participant
+  failure or panic rolls back all reservation prefixes. Capability domain Begin
+  remains disabled until the remaining workflow phases exist. Existing kernel
+  mutation and historical plan contracts are unchanged.
+
 - Freeze typed one-use capability inputs into command-plan digests and bounded
   historical codecs without changing existing audit/lifecycle bytes. Unsupported
   execution rejects the input rather than silently omitting it. Atomic capability

@@ -444,10 +444,17 @@ the exact signed ID, purpose, expiry/use bound, independently keyed replay diges
 and retained key version, and immutable proof fingerprint. The enclosing command
 fingerprint binds target/version intent. Existing audit-only and lifecycle plan
 bytes are unchanged. Formatting redacts this input and JSON export is rejected.
-This is not proof validation, reservation or an active participant: public
-Coordinator preparation and registry execution admission reject it until atomic
-reserve/rebind/apply/finalize/release/recovery phases are implemented. Inputs
-cannot be silently discarded from an otherwise supported command.
+This declaration is not proof validation. Exact identifier commands can now
+prepare/reserve when the registry supplies a `CapabilityReservationContributor`.
+The coordinator freezes owned inputs, checks signed ID/expiry/use and target
+versions, and invokes Reserve or exact-predecessor Rebind under the same claim,
+journal and tenant locks. Failure, panic or unfinished rows rolls back every
+prefix; returned invocation handles and rows cannot outlive the phase. Retained
+fingerprint keys remain authoritative on replay. Contributors never own closure.
+`Begin` still rejects these reservations before consuming their opaque handle:
+domain/session/risk/apply/finalize/release/recovery phases and the production
+capability store are pending. No capability use or complete workflow is claimed
+by a reserved journal. Existing creation/profile/admin composition is unchanged.
 
 Contributor identities can now be composed with
 `NewContributorRegistry([]Contributor{...})`. The registry snapshots 1..64

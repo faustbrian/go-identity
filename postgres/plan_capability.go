@@ -19,8 +19,9 @@ import (
 // separately binds target identities and expected authority versions.
 //
 // This is declaration metadata, never cryptographic validation, freshness or
-// transaction authority. The current Coordinator rejects this profile until
-// its atomic reservation phases are implemented. Do not mutate caller-owned
+// transaction authority. The current Coordinator can reserve identifier intent
+// through the typed contributor, but cannot Begin domain execution until the
+// remaining participant phases exist. Do not mutate caller-owned
 // inputs concurrently with digest preparation. Diagnostics are redacted and
 // serialization is rejected; historical plans use the private canonical codec.
 type CapabilityPlan struct {

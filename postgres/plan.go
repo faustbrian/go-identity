@@ -24,8 +24,8 @@ type CommandPlan struct {
 	Contributors []ContributorDescriptor
 	Audits       []AuditPlan
 	Lifecycle    *LifecyclePlan
-	// Capability declares a typed one-use participant input for digest/codec
-	// preparation only; execution admission remains disabled until its phases exist.
+	// Capability declares a typed one-use participant input. Identifier reservation
+	// requires its registered reservation contributor; domain execution is disabled.
 	Capability *CapabilityPlan
 	Digest     [32]byte
 }
@@ -41,8 +41,9 @@ type CommandPlan struct {
 // identity.lifecycle v1 contributor. A capability declaration requires lifecycle
 // plus exactly one capability.one-use v1 contributor. Existing audit-only and
 // lifecycle digest bytes remain unchanged. Digest preparation does not activate
-// that participant: execution admission remains disabled until atomic phases
-// exist. Feature/one-time contributors without typed inputs are rejected, not
+// that participant: reservation additionally requires the typed contributor;
+// domain execution remains disabled until its remaining phases exist.
+// Feature/one-time contributors without typed inputs are rejected, not
 // silently omitted. Invalid inputs return redacted identity.InvalidInputError. It does
 // no I/O or callbacks. Concurrent calls require immutable caller-owned inputs.
 func KernelPlanDigest(binding identity.CommandBinding, fingerprint [32]byte, plan CommandPlan) ([32]byte, error) {
@@ -129,14 +130,11 @@ type admittedKernelPlan struct {
 	contributors []registeredContributor
 	audits       []AuditPlan
 	lifecycle    *LifecyclePlan
+	capability   *CapabilityPlan
+	fingerprint  [32]byte
 }
 
 func (r *ContributorRegistry) admitKernelPlan(binding identity.CommandBinding, fingerprint [32]byte, p CommandPlan) (*admittedKernelPlan, error) {
-	// Typed freezing must not activate a one-time contributor before reservation,
-	// finalization and recovery are owned by the sole coordinator.
-	if p.Capability != nil {
-		return nil, invalidPlan()
-	}
 	digest, err := KernelPlanDigest(binding, fingerprint, p)
 	if err != nil || digest != p.Digest {
 		return nil, invalidPlan()
@@ -156,13 +154,23 @@ func (r *ContributorRegistry) admitKernelPlan(binding identity.CommandBinding, f
 				return nil, invalidPlan()
 			}
 		}
+		if entry.descriptor.Owner == "capability/postgres" {
+			if _, ok := capabilityReservationParticipant(entry.contributor); !ok {
+				return nil, invalidPlan()
+			}
+		}
 	}
 	var lifecycle *LifecyclePlan
 	if p.Lifecycle != nil {
 		snapshot := *p.Lifecycle
 		lifecycle = &snapshot
 	}
-	return &admittedKernelPlan{registry: r.state, binding: binding, digest: digest, contributors: entries, audits: append([]AuditPlan(nil), p.Audits...), lifecycle: lifecycle}, nil
+	var capability *CapabilityPlan
+	if p.Capability != nil {
+		snapshot := *p.Capability
+		capability = &snapshot
+	}
+	return &admittedKernelPlan{registry: r.state, binding: binding, digest: digest, contributors: entries, audits: append([]AuditPlan(nil), p.Audits...), lifecycle: lifecycle, capability: capability, fingerprint: fingerprint}, nil
 }
 
 func (p *admittedKernelPlan) belongsTo(r *ContributorRegistry) error {
