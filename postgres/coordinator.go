@@ -44,10 +44,10 @@ func (CoordinatorConfig) MarshalJSON() ([]byte, error) {
 // Coordinator owns bounded command reservation transactions against a
 // caller-owned primary pool and immutable registry. It starts no goroutines
 // and never closes the pool. Concurrent reservations are supported. This
-// incremental implementation admits user creation with required audit and
-// lifecycle declarations only. Begin, Repository.ApplyUserCreation and
-// Commit/Abort and CreationUnitOfWork own creation execution. RecoverCommand
-// supports conservative creation-only reconciliation; other recovery profiles
+// incremental implementation admits creation and self-profile mutation with
+// required audit and lifecycle declarations. Begin, the enlisted Repository,
+// Commit/Abort and the owned service compositions control execution. Recovery
+// supports conservative creation/profile reconciliation; other recovery profiles
 // and deadline alerting remain under development. Reservation is
 // bookkeeping, never proof of a user mutation or audit/outbox persistence.
 type Coordinator struct {
@@ -139,7 +139,10 @@ func (c *Coordinator) prepare(binding identity.CommandBinding, command identity.
 	// No proof/cascade declaration is inferred from a contributor name. Those
 	// command profiles need their typed reservation phases before admission.
 	probe := identity.CommandResult{Binding: binding, Outcome: identity.CommitOutcomeInProgress, RetryAfter: time.Microsecond}
-	if !isCreation(command) || plan.Lifecycle == nil || len(plan.Contributors) != 3 || len(plan.Audits) != 1 || probe.Validate() != nil {
+	if !isCreation(command) && !isProfile(command) || plan.Lifecycle == nil || len(plan.Contributors) != 3 || len(plan.Audits) != 1 || probe.Validate() != nil {
+		return claimRequest{}, CommandPlan{}, nil, invalidPlan()
+	}
+	if spec, ok := command.UpdateProfile(); ok && (plan.Lifecycle.BeforeVersion != spec.ExpectedVersion || plan.Lifecycle.AfterVersion != spec.ExpectedVersion+1) {
 		return claimRequest{}, CommandPlan{}, nil, invalidPlan()
 	}
 	q, err := prepareClaim(command, c.keys.retained[c.keys.current])

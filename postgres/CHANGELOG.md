@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Add opt-in durable self-profile updates through the existing ProfileService:
+  active/version-fenced name, image and partial typed-field replacements commit
+  with mandatory audit, lifecycle and immutable replay/recovery receipts. Current
+  disclosure policy still applies to historic results. Failure/panic leaves no
+  domain prefix; unknown outcomes retain conservative frozen-participant recovery.
+  Handle concurrent command-claim insertion through either existing unique key
+  without losing exact scope/intent checks or returning spurious unknown outcomes.
+
 - Add opt-in, schema-bound self-profile reads through the existing public
   ProfileRepository/ProfileService. Primary aggregate snapshots preserve typed
   fields and respect output selection without fabricated defaults; incompatible

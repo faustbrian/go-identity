@@ -16,7 +16,7 @@ import (
 // attempting primary reconciliation. It exposes metadata only, never private
 // replay fields. Missing/wrong-scope/denied requests retain QueryCommand's
 // decision/read shape and perform no mutation. Live pending is observational.
-// Expired creation recovery resolves only the exact frozen registry entries
+// Expired creation/profile recovery resolves only the exact frozen registry entries
 // through RecoveryContributor, takes a new generation, and aborts only after
 // all participants prove non-commit and a required failure audit is persisted
 // in the same guarded transaction. Missing/unknown/conflicting evidence leaves
@@ -99,7 +99,7 @@ func (c *Coordinator) recoverCommandReceipt(ctx context.Context, q identity.Reco
 	if observed.until.After(observed.now) {
 		return result, nil
 	}
-	if q.OperationID != "identity.user.create" {
+	if q.OperationID != "identity.user.create" && q.OperationID != "identity.profile.update" {
 		return result, identity.UnavailableError{}
 	}
 	fingerprint := [32]byte(observed.fingerprint)
@@ -169,7 +169,7 @@ func (c *Coordinator) recoverCommandReceipt(ctx context.Context, q identity.Reco
 	if e != nil {
 		return result, e
 	}
-	record, e := creationAudit(bounded, result.Binding, now, "dependency-failure")
+	record, e := kernelMutationAudit(bounded, result.Binding, admitted.lifecycle.BeforeVersion, now, "dependency-failure")
 	if e != nil {
 		return result, e
 	}

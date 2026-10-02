@@ -13,7 +13,7 @@ import (
 
 // CreationUnitOfWorkConfig fixes the positive audit retention policy revision
 // before admission. It is immutable copied configuration, not a callback or
-// participant factory. Other command profiles remain under development.
+// participant factory. The profile composition uses the same retention input.
 type CreationUnitOfWorkConfig struct{ RetentionPolicyVersion uint64 }
 
 // CreationUnitOfWork is the owned creation-only implementation of the core
@@ -86,36 +86,51 @@ func (CreationUnitOfWork) MarshalJSON() ([]byte, error) { return nil, coordinato
 // Unknown. Unsupported commands/actor profiles fail before reservation. This
 // trusted adapter seam is not an authenticated application endpoint.
 func (o *CreationUnitOfWork) Execute(ctx context.Context, command identity.Command) (result identity.CommandResult, err error) {
+	return o.execute(ctx, command, false)
+}
+
+// The profile composition selects an additional command variant, not another
+// reservation, transaction or recovery owner.
+func (o *CreationUnitOfWork) execute(ctx context.Context, command identity.Command, profileEnabled bool) (result identity.CommandResult, err error) {
 	if o == nil || ctx == nil || o.coordinator == nil || o.repository == nil {
 		return result, coordinatorError()
 	}
 	spec, ok := command.CreateUser()
-	if !ok {
+	profile, updating := command.UpdateProfile()
+	if !ok && (!profileEnabled || !updating) {
 		return result, identity.InvalidInputError{Field: "creation_command"}
 	}
-	if _, _, e := o.repository.prepareCreationAttributes(spec); e != nil {
-		return result, e
+	binding, before := spec.Binding, uint64(0)
+	if updating {
+		binding, before = profile.Binding, profile.ExpectedVersion
+		if _, _, e := o.repository.prepareProfileAttributes(profile); e != nil {
+			return result, e
+		}
+	} else {
+		if _, _, e := o.repository.prepareCreationAttributes(spec); e != nil {
+			return result, e
+		}
 	}
 	c := o.coordinator
 	bounded, cancel := context.WithTimeout(ctx, c.maximumDuration)
 	defer cancel()
-	seed, e := creationAudit(bounded, spec.Binding, time.Now().UTC().Truncate(time.Microsecond), "committed")
+	seed, e := kernelMutationAudit(bounded, binding, before, time.Now().UTC().Truncate(time.Microsecond), "committed")
 	if e != nil {
 		return result, e
 	}
-	digest, e := AuditBindingDigest(spec.Binding, seed)
+	digest, e := AuditBindingDigest(binding, seed)
 	if e != nil {
 		return result, e
 	}
-	plan, e := c.PrepareCommandPlan(spec.Binding, command, CommandPlan{Contributors: o.contributors, Audits: []AuditPlan{{EventType: "identity.user.create", SchemaVersion: 1, BindingDigest: digest, RetentionPolicyVersion: o.retention, RequiredRecordCount: 1, MaxRecordBytes: 16384, MaxAggregateBytes: 16384, Required: true}}, Lifecycle: &LifecyclePlan{EventType: "identity.created.v1", AfterVersion: 1}})
+	plan, e := c.PrepareCommandPlan(binding, command, CommandPlan{Contributors: o.contributors, Audits: []AuditPlan{{EventType: kernelCommandAudit(binding.OperationID), SchemaVersion: 1, BindingDigest: digest, RetentionPolicyVersion: o.retention, RequiredRecordCount: 1, MaxRecordBytes: 16384, MaxAggregateBytes: 16384, Required: true}}, Lifecycle: &LifecyclePlan{EventType: kernelLifecycleEvent(binding.OperationID), BeforeVersion: before, AfterVersion: before + 1}})
 	if e != nil {
 		return result, e
 	}
-	reservation, result, err := c.ReserveCommand(bounded, spec.Binding, command, plan)
+	reservation, result, err := c.ReserveCommand(bounded, binding, command, plan)
 	if err != nil || reservation.state == nil {
 		return coreCreationReceipt(result, err)
 	}
-	result = identity.CommandResult{Binding: spec.Binding, Outcome: identity.CommitOutcomeUnknown}
+	result = identity.CommandResult{Binding: binding, Outcome: identity.CommitOutcomeUnknown}
 	var work Work
 	defer func() {
 		panicked := recover() != nil
@@ -127,11 +142,11 @@ func (o *CreationUnitOfWork) Execute(ctx context.Context, command identity.Comma
 			// primary scope without executing or allocating another command.
 			cleanup, stop := context.WithTimeout(context.Background(), c.maximumDuration)
 			defer stop()
-			observed, e := o.Recover(cleanup, creationRecoveryQuery(spec.Binding))
+			observed, e := o.recover(cleanup, creationRecoveryQuery(binding), profileEnabled)
 			if observed.Validate() == nil && observed.Outcome != identity.CommitOutcomeInProgress {
 				result, err = observed, e
 			} else {
-				result = identity.CommandResult{Binding: spec.Binding, Outcome: identity.CommitOutcomeUnknown}
+				result = identity.CommandResult{Binding: binding, Outcome: identity.CommitOutcomeUnknown}
 				err = identity.UnavailableError{}
 			}
 		}
@@ -147,17 +162,24 @@ func (o *CreationUnitOfWork) Execute(ctx context.Context, command identity.Comma
 	}
 	work.state.execution.abortAudits = make(map[string]audit.Record, 5)
 	for _, class := range []string{"denied", "conflict", "cancelled", "deadline-exceeded", "dependency-failure"} {
-		record, e := creationAudit(bounded, spec.Binding, now, class)
+		record, e := kernelMutationAudit(bounded, binding, before, now, class)
 		if e != nil {
 			return c.Abort(work, e)
 		}
 		work.state.execution.abortAudits[class] = record
 	}
-	success, e := creationAudit(bounded, spec.Binding, now, "committed")
+	success, e := kernelMutationAudit(bounded, binding, before, now, "committed")
 	if e != nil {
 		return c.Abort(work, e)
 	}
-	user, e := o.repository.ApplyUserCreation(bounded, work, command)
+	var user identity.User
+	var updated identity.UserProfile
+	if updating {
+		updated, e = o.repository.ApplyProfileUpdate(bounded, work, command)
+		user = identity.User{ID: binding.UserID, TenantID: binding.TenantID, Status: identity.StatusActive, Version: updated.Version}
+	} else {
+		user, e = o.repository.ApplyUserCreation(bounded, work, command)
+	}
 	if e != nil {
 		r, e := c.Abort(work, e)
 		return coreCreationReceipt(r, e)
@@ -168,7 +190,11 @@ func (o *CreationUnitOfWork) Execute(ctx context.Context, command identity.Comma
 	if e = work.StageLifecycle(0, now); e != nil {
 		return c.Abort(work, e)
 	}
-	result, err = c.Commit(work, identity.CommandResult{Binding: spec.Binding, Outcome: identity.CommitOutcomeCommitted, User: user, AuditEventID: success.ID()})
+	result = identity.CommandResult{Binding: binding, Outcome: identity.CommitOutcomeCommitted, User: user, AuditEventID: success.ID()}
+	if updating {
+		result.ExpectedVersion, result.Profile = before, &updated
+	}
+	result, err = c.Commit(work, result)
 	return coreCreationReceipt(result, err)
 }
 
@@ -180,7 +206,11 @@ func (o *CreationUnitOfWork) Execute(ctx context.Context, command identity.Comma
 // and atomically persisted failure auditing. Missing/unknown evidence stays
 // pending. This never infers success from current user state or replays commands.
 func (o *CreationUnitOfWork) Recover(ctx context.Context, q identity.RecoveryQuery) (identity.CommandResult, error) {
-	if o == nil || o.coordinator == nil || ctx == nil || q.OperationID != "identity.user.create" {
+	return o.recover(ctx, q, false)
+}
+
+func (o *CreationUnitOfWork) recover(ctx context.Context, q identity.RecoveryQuery, profileEnabled bool) (identity.CommandResult, error) {
+	if o == nil || o.coordinator == nil || ctx == nil || q.OperationID != "identity.user.create" && (!profileEnabled || q.OperationID != "identity.profile.update") {
 		return identity.CommandResult{}, coordinatorError()
 	}
 	if _, e := identity.ParseCommandID(string(q.CommandID)); e != nil {
@@ -218,6 +248,10 @@ func coreCreationReceipt(r identity.CommandResult, e error) (identity.CommandRes
 }
 
 func creationAudit(ctx context.Context, b identity.CommandBinding, now time.Time, class string) (audit.Record, error) {
+	return kernelMutationAudit(ctx, b, 0, now, class)
+}
+
+func kernelMutationAudit(ctx context.Context, b identity.CommandBinding, before uint64, now time.Time, class string) (audit.Record, error) {
 	actorKind := audit.ActorHuman
 	switch b.ActorKind {
 	case authorization.SubjectUser:
@@ -226,9 +260,9 @@ func creationAudit(ctx context.Context, b identity.CommandBinding, now time.Time
 	default:
 		return audit.Record{}, identity.InvalidInputError{Field: "creation_actor"}
 	}
-	outcome, reason, changes, after := audit.OutcomeSucceeded, "completed", audit.ChangeSetInput{Redacted: true}, "1"
+	outcome, reason, changes, after := audit.OutcomeSucceeded, "completed", audit.ChangeSetInput{Redacted: true}, strconv.FormatUint(before+1, 10)
 	if class != "committed" {
-		changes, after = audit.ChangeSetInput{NoChange: true}, "0"
+		changes, after = audit.ChangeSetInput{NoChange: true}, strconv.FormatUint(before, 10)
 		switch class {
 		case "denied":
 			outcome, reason = audit.OutcomeDenied, "not_authorized"
@@ -248,7 +282,7 @@ func creationAudit(ctx context.Context, b identity.CommandBinding, now time.Time
 	if e != nil {
 		return audit.Record{}, invalidAudit()
 	}
-	record, e := builder.Build(audit.RecordInput{OccurredAt: now, Action: b.OperationID, Outcome: outcome, ReasonCode: reason, Actor: audit.ActorInput{Kind: actorKind, ID: string(b.ActorID)}, Subject: audit.SubjectInput{Type: "user", ID: string(b.UserID)}, Context: audit.ContextInput{TenantID: string(b.TenantID), CorrelationID: b.CorrelationID}, Policy: audit.PolicyMetadata{PolicyID: b.PolicyID, Version: strconv.FormatUint(b.PolicyVersion, 10)}, Changes: changes, Attributes: map[string]string{"identity.profile": "identity.security.v1", "command.id": string(b.CommandID), "retention.class": "standard", "aggregate.type": "user", "aggregate.id": string(b.UserID), "aggregate.before_version": "0", "aggregate.after_version": after}})
+	record, e := builder.Build(audit.RecordInput{OccurredAt: now, Action: kernelCommandAudit(b.OperationID), Outcome: outcome, ReasonCode: reason, Actor: audit.ActorInput{Kind: actorKind, ID: string(b.ActorID)}, Subject: audit.SubjectInput{Type: "user", ID: string(b.UserID)}, Context: audit.ContextInput{TenantID: string(b.TenantID), CorrelationID: b.CorrelationID}, Policy: audit.PolicyMetadata{PolicyID: b.PolicyID, Version: strconv.FormatUint(b.PolicyVersion, 10)}, Changes: changes, Attributes: map[string]string{"identity.profile": "identity.security.v1", "command.id": string(b.CommandID), "retention.class": "standard", "aggregate.type": "user", "aggregate.id": string(b.UserID), "aggregate.before_version": strconv.FormatUint(before, 10), "aggregate.after_version": after}})
 	if e != nil {
 		return audit.Record{}, invalidAudit()
 	}

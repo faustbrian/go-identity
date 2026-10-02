@@ -55,9 +55,12 @@ func lockCommandClaim(ctx context.Context, tx pgx.Tx, q claimRequest, keys claim
 	}
 	id, _ := base64.RawURLEncoding.DecodeString(string(q.commandID))
 	digest := claimFingerprint(keys.retained[keys.current], q.canonical)
+	// Both the ID primary key and scoped FK-supporting unique key can arbitrate
+	// the same concurrent insertion. Handle either conflict, then lock and check
+	// the ID's complete immutable scope below; nothing is adopted blindly.
 	inserted, err := tx.Exec(ctx, `INSERT INTO identity.identity_command_id_claims
 (command_id,tenant_id,purpose,fingerprint,fingerprint_key_version,safe_fields)
-VALUES($1,$2,$3,$4,$5,$6) ON CONFLICT(command_id) DO NOTHING`, id, string(q.tenant), q.purpose, digest[:], int64(keys.current), q.safeFields)
+VALUES($1,$2,$3,$4,$5,$6) ON CONFLICT DO NOTHING`, id, string(q.tenant), q.purpose, digest[:], int64(keys.current), q.safeFields)
 	if err != nil {
 		return claimInvalid, readFailure(ctx, err)
 	}

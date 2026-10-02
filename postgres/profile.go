@@ -45,6 +45,14 @@ func reservedProfileField(name string) bool {
 	return false
 }
 
+const profileSelect = `SELECT u.tenant_id,u.user_id,u.status,u.version::text,
+ p.name,p.image,a.schema_id,a.schema_version::text,a.encoding_version,a.document,s.definition
+ FROM identity.users u
+ LEFT JOIN identity.user_profiles p USING(tenant_id,user_id)
+ LEFT JOIN identity.user_attributes a USING(tenant_id,user_id)
+ LEFT JOIN identity.attribute_schemas s ON s.tenant_id=a.tenant_id AND s.schema_id=a.schema_id AND s.schema_version=a.schema_version
+ WHERE u.tenant_id=$1 AND u.user_id=$2`
+
 // GetProfile implements the existing primary ProfileRepository port. One SQL
 // statement observes the structural user, optional name/image and exact typed
 // attribute document as one aggregate snapshot. It never fabricates defaults
@@ -81,54 +89,83 @@ func (r *Repository) GetProfile(ctx context.Context, q identity.ProfileQuery) (r
 	if err := bounded.Err(); err != nil {
 		return record, readFailure(bounded, err)
 	}
-	var tenant, user, status, version string
-	var name, image, schemaID, schemaVersion pgtype.Text
-	var encoding pgtype.Int2
-	var document, definition []byte
-	err = r.pool.Raw().QueryRow(bounded, `SELECT u.tenant_id,u.user_id,u.status,u.version::text,
- p.name,p.image,a.schema_id,a.schema_version::text,a.encoding_version,a.document,s.definition
- FROM identity.users u
- LEFT JOIN identity.user_profiles p USING(tenant_id,user_id)
- LEFT JOIN identity.user_attributes a USING(tenant_id,user_id)
- LEFT JOIN identity.attribute_schemas s ON s.tenant_id=a.tenant_id AND s.schema_id=a.schema_id AND s.schema_version=a.schema_version
- WHERE u.tenant_id=$1 AND u.user_id=$2`, string(q.TenantID), string(q.UserID)).Scan(&tenant, &user, &status, &version, &name, &image, &schemaID, &schemaVersion, &encoding, &document, &definition)
+	row, err := scanProfileRow(r.pool.Raw().QueryRow(bounded, profileSelect, string(q.TenantID), string(q.UserID)))
 	if err != nil {
 		return record, readFailure(bounded, err)
 	}
 	if err := bounded.Err(); err != nil {
 		return record, readFailure(bounded, err)
 	}
-	number, err := strconv.ParseUint(version, 10, 64)
-	structural := identity.User{ID: identity.UserID(user), TenantID: identity.TenantID(tenant), Status: identity.Status(status), Version: number}
-	if err != nil || strconv.FormatUint(number, 10) != version || structural.ID != q.UserID || structural.Validate(q.TenantID) != nil || name.Valid != image.Valid || len(name.String) > 256 || len(image.String) > 2048 || !utf8.ValidString(name.String) || !utf8.ValidString(image.String) {
-		return record, identity.UnavailableError{}
+	record, err = r.decodeProfileRow(q, fields, registered, row)
+	if err != nil {
+		return identity.ProfileRecord{}, err
+	}
+	if err := bounded.Err(); err != nil {
+		return identity.ProfileRecord{}, readFailure(bounded, err)
+	}
+	return record, nil
+}
+
+type profileRow struct {
+	tenant, user, status, version        string
+	name, image, schemaID, schemaVersion pgtype.Text
+	encoding                             pgtype.Int2
+	document, definition                 []byte
+}
+
+func scanProfileRow(scanner interface{ Scan(...any) error }) (row profileRow, err error) {
+	// Use the Work seam's closed nullable scalar profile, not custom scanners.
+	var name, image, schemaID, schemaVersion *string
+	var encoding *int64
+	err = scanner.Scan(&row.tenant, &row.user, &row.status, &row.version, &name, &image, &schemaID, &schemaVersion, &encoding, &row.document, &row.definition)
+	if err != nil {
+		return row, err
+	}
+	text := func(value *string) pgtype.Text {
+		if value == nil {
+			return pgtype.Text{}
+		}
+		return pgtype.Text{String: *value, Valid: true}
+	}
+	row.name, row.image, row.schemaID, row.schemaVersion = text(name), text(image), text(schemaID), text(schemaVersion)
+	if encoding != nil {
+		if *encoding != 1 {
+			return row, identity.UnavailableError{}
+		}
+		row.encoding = pgtype.Int2{Int16: 1, Valid: true}
+	}
+	return row, err
+}
+
+func (r *Repository) decodeProfileRow(q identity.ProfileQuery, fields []string, registered registeredSchema, row profileRow) (identity.ProfileRecord, error) {
+	number, err := strconv.ParseUint(row.version, 10, 64)
+	structural := identity.User{ID: identity.UserID(row.user), TenantID: identity.TenantID(row.tenant), Status: identity.Status(row.status), Version: number}
+	if err != nil || strconv.FormatUint(number, 10) != row.version || structural.ID != q.UserID || structural.Validate(q.TenantID) != nil || row.name.Valid != row.image.Valid || len(row.name.String) > 256 || len(row.image.String) > 2048 || !utf8.ValidString(row.name.String) || !utf8.ValidString(row.image.String) {
+		return identity.ProfileRecord{}, identity.UnavailableError{}
 	}
 	var values []identity.AttributeUpdate
-	if schemaID.Valid {
-		if schemaID.String != r.profileSchema.id || schemaVersion.String != strconv.FormatUint(uint64(r.profileSchema.version), 10) || !schemaVersion.Valid || !encoding.Valid || encoding.Int16 != 1 || !bytes.Equal(definition, registered.definition) {
-			return record, identity.UnavailableError{}
+	if row.schemaID.Valid {
+		if row.schemaID.String != r.profileSchema.id || row.schemaVersion.String != strconv.FormatUint(uint64(r.profileSchema.version), 10) || !row.schemaVersion.Valid || !row.encoding.Valid || row.encoding.Int16 != 1 || !bytes.Equal(row.definition, registered.definition) {
+			return identity.ProfileRecord{}, identity.UnavailableError{}
 		}
-		values, err = decodeAttributeDocument(registered.schema, document)
+		values, err = decodeAttributeDocument(registered.schema, row.document)
 		if err != nil {
-			return record, identity.UnavailableError{}
+			return identity.ProfileRecord{}, identity.UnavailableError{}
 		}
-	} else if schemaVersion.Valid || encoding.Valid || len(document) != 0 || len(definition) != 0 {
-		return record, identity.UnavailableError{}
+	} else if row.schemaVersion.Valid || row.encoding.Valid || len(row.document) != 0 || len(row.definition) != 0 {
+		return identity.ProfileRecord{}, identity.UnavailableError{}
 	}
 	profile := identity.UserProfile{ID: structural.ID, TenantID: structural.TenantID, Version: structural.Version}
 	if slices.Contains(fields, "name") {
-		profile.Name = name.String
+		profile.Name = row.name.String
 	}
 	if slices.Contains(fields, "image") {
-		profile.Image = image.String
+		profile.Image = row.image.String
 	}
 	for _, value := range values {
 		if slices.Contains(fields, value.Name) {
 			profile.AdditionalFields = append(profile.AdditionalFields, value)
 		}
-	}
-	if err := bounded.Err(); err != nil {
-		return record, readFailure(bounded, err)
 	}
 	return identity.ProfileRecord{User: structural, Profile: profile}, nil
 }

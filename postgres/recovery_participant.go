@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"fmt"
+	"strconv"
 
 	identity "github.com/faustbrian/go-identity"
 )
@@ -109,14 +110,42 @@ func (w RecoveryWork) LifecyclePlan() (LifecyclePlan, error) {
 // An existing user is not evidence that this command committed; without an
 // original command linkage that case conservatively remains unknown. No live
 // user data or receipt is reconstructed. Only this exact enlisted instance may
-// inspect its evidence. Other domain profiles remain unsupported.
+// inspect its evidence. For profile mutation, only the unchanged original
+// aggregate version is negative evidence under the coordinator's journal and
+// tenant fences. A changed/missing aggregate remains unknown; it is never
+// treated as a committed receipt. Other domain profiles remain unsupported.
 func (r *Repository) RecoverParticipant(ctx context.Context, recovery RecoveryWork) (RecoveryStatus, error) {
 	if r == nil || ctx == nil || recovery.usable() != nil || recovery.state.entry.contributor != r {
 		return RecoveryUnknown, invalidWork()
 	}
 	b, err := recovery.Scope()
-	if err != nil || b.OperationID != "identity.user.create" {
+	if err != nil || b.OperationID != "identity.user.create" && b.OperationID != "identity.profile.update" {
 		return RecoveryUnknown, invalidWork()
+	}
+	if b.OperationID == "identity.profile.update" {
+		plan := recovery.state.plan.lifecycle
+		if plan == nil || plan.BeforeVersion == 0 {
+			return RecoveryUnknown, invalidWork()
+		}
+		rows, e := recovery.Query(ctx, `SELECT EXISTS(SELECT 1 FROM identity.users WHERE tenant_id=$1 AND user_id=$2 AND version=$3::numeric)`, string(b.TenantID), string(b.UserID), strconv.FormatUint(plan.BeforeVersion, 10))
+		if e != nil {
+			return RecoveryUnknown, e
+		}
+		defer rows.Close()
+		var unchanged bool
+		if !rows.Next() {
+			return RecoveryUnknown, identity.UnavailableError{}
+		}
+		if e := rows.Scan(&unchanged); e != nil {
+			return RecoveryUnknown, e
+		}
+		if rows.Next() || rows.Err() != nil {
+			return RecoveryUnknown, identity.UnavailableError{}
+		}
+		if !unchanged {
+			return RecoveryUnknown, nil
+		}
+		return RecoveryNotCommitted, nil
 	}
 	rows, err := recovery.Query(ctx, `SELECT EXISTS(SELECT 1 FROM identity.users WHERE tenant_id=$1 AND user_id=$2)`, string(b.TenantID), string(b.UserID))
 	if err != nil {

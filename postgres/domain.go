@@ -21,7 +21,7 @@ type domainExecution struct {
 	reservation *reservationState
 	ctx         context.Context
 	cancel      context.CancelFunc
-	// Only the owned creation bridge supplies prebuilt failure records. They
+	// Only the owned service bridge supplies prebuilt failure records. They
 	// never unpoison Work or permit more domain SQL; Abort stages after rollback.
 	abortAudits map[string]audit.Record
 }
@@ -37,7 +37,7 @@ type domainExecution struct {
 // locks for an abandoned idle handle, but does not release caller-held pool
 // ownership: explicit closure remains required. Constructor pools remain
 // caller-owned. Pre-observation failures are redacted; unproven rollback is
-// identity.UnknownCommitError. This is still the creation-only profile.
+// identity.UnknownCommitError. Creation and self-profile mutation are supported.
 func (c *Coordinator) Begin(ctx context.Context, r Reservation) (Work, error) {
 	if ctx == nil || c == nil || c.pool == nil || c.pool.Raw() == nil || r.state == nil || r.state.coordinator != c || r.state.plan.belongsTo(c.registry) != nil {
 		return Work{}, invalidWork()
@@ -143,7 +143,7 @@ func (r *Repository) ApplyUserCreation(ctx context.Context, w Work, command iden
 	if w.state.execution == nil {
 		return identity.User{}, invalidWork()
 	}
-	if w.state.creation != nil {
+	if w.state.creation != nil || w.state.profile != nil {
 		return identity.User{}, w.fail(ctx, identity.ConflictError{})
 	}
 	enlisted := false
@@ -189,7 +189,7 @@ func (r *Repository) ApplyUserCreation(ctx context.Context, w Work, command iden
 	return user, nil
 }
 
-// Commit verifies the receipt against the owned actual creation and exact
+// Commit verifies the receipt against the owned actual mutation and exact
 // staged successful audit/lifecycle transition, persists registered audit then
 // outbox phases through this same Work, and writes the terminal result before
 // one primary commit. A caller-authored receipt cannot fabricate a mutation.
@@ -210,7 +210,7 @@ func (c *Coordinator) Commit(w Work, result identity.CommandResult) (identity.Co
 	if err := w.usable(); err != nil {
 		return c.Abort(w, err)
 	}
-	if w.state.rows != nil || w.state.creation == nil || result.Validate() != nil || result.Outcome != identity.CommitOutcomeCommitted || result.Binding != w.state.binding || result.User != *w.state.creation {
+	if w.state.rows != nil || result.Validate() != nil || result.Outcome != identity.CommitOutcomeCommitted || result.Binding != w.state.binding || !matchesDomainResult(w, result) {
 		return c.Abort(w, identity.InvalidInputError{Field: "command_result"})
 	}
 	if err := completeAudits(w); err != nil {
@@ -218,7 +218,8 @@ func (c *Coordinator) Commit(w Work, result identity.CommandResult) (identity.Co
 	}
 	record := w.state.audits.records[0]
 	attrs := record.Attributes()
-	if record.ID() != result.AuditEventID || record.Outcome() != audit.OutcomeSucceeded || record.ReasonCode() != "completed" || !record.Changes().Redacted() || attrs["aggregate.before_version"] != "0" || attrs["aggregate.after_version"] != "1" {
+	before := w.state.execution.reservation.plan.lifecycle.BeforeVersion
+	if record.ID() != result.AuditEventID || record.Outcome() != audit.OutcomeSucceeded || record.ReasonCode() != "completed" || !record.Changes().Redacted() || attrs["aggregate.before_version"] != strconv.FormatUint(before, 10) || attrs["aggregate.after_version"] != strconv.FormatUint(before+1, 10) {
 		return c.Abort(w, invalidAudit())
 	}
 	if _, err := w.StagedLifecycle(); err != nil {
@@ -279,7 +280,8 @@ func (c *Coordinator) Abort(w Work, cause error) (identity.CommandResult, error)
 	}
 	if complete {
 		attrs := record.Attributes()
-		complete = record.Outcome() == outcome && record.ReasonCode() == reason && record.Changes().NoChange() && attrs["aggregate.before_version"] == "0" && attrs["aggregate.after_version"] == "0"
+		before := strconv.FormatUint(r.plan.lifecycle.BeforeVersion, 10)
+		complete = record.Outcome() == outcome && record.ReasonCode() == reason && record.Changes().NoChange() && attrs["aggregate.before_version"] == before && attrs["aggregate.after_version"] == before
 	}
 	invalidateWork(w)
 	cleanup, cancel := context.WithTimeout(context.Background(), c.maximumDuration)

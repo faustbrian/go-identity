@@ -83,9 +83,43 @@ active status, authorization, schema output filtering and current redaction.
 Storage reads confer no caller authority. Database image strings are bounded,
 never fetched, and still require the public service's exact HTTPS origin policy.
 The existing creation UnitOfWork can supply the service's dependency for reads;
-profile mutation/recovery are not implemented by that creation-only owner.
-Complete profile writes, indexed/secret storage and privacy erasure remain
-required platform work, not application-written repositories or SQL workflows.
+select the profile composition below to enable mutation and recovery. Indexed/
+secret storage and privacy erasure remain required platform work, not
+application-written repositories or SQL workflows.
+
+### Durable self-profile mutations
+
+Use `NewProfileUnitOfWork(coordinator, repository, CreationUnitOfWorkConfig{
+RetentionPolicyVersion: revision})` as the `identity.NewProfileService` command
+dependency. It requires the exact registered repository, selected ProfileSchema
+and typed audit/outbox phases. The existing creation owner remains creation-only.
+This is an opt-in composition of the same Coordinator, not another transaction,
+claim, receipt or recovery engine. No caller-written plans or SQL are needed.
+
+`ProfileUpdate` admits current self scope and per-field policy before SQL.
+The storage owner resolves exact command replay before CAS, then requires an
+active user at the expected aggregate version. Name/image omissions preserve
+existing values; explicit additional false/zero/empty values replace only their
+named fields, preserving all omitted values without default backfills. Selected
+schema definitions must agree exactly. Name/image, the canonical typed document,
+one full-uint64 version increment, privacy-safe `identity.user.update` audit,
+`identity.updated.v1` outbox event and original receipt commit atomically.
+
+`RecoverProfileUpdate` and exact retries preserve the original result after
+later mutations; current authorization/redaction still control its disclosure.
+A changed command conflicts; stale or blocked new writes close with audited
+NotCommitted and no domain/outbox prefix. Participant failure/panic rolls back;
+unproved or ambiguous closure remains Unknown. Expired pending recovery requires
+all frozen participants' negative evidence. The domain's original unchanged
+version is negative evidence under the journal and tenant fences; a missing or
+changed aggregate remains unknown, never inferred success. No fresh authority,
+session, provider call or background worker is created.
+
+Storage roles need UPDATE on users and SELECT/INSERT/UPDATE on profile/value
+tables, with SELECT/INSERT on immutable schema definitions and the existing
+command, audit and outbox permissions. Migration 8 already supplies profile
+storage; migrations 1–8 and existing structural writers are unchanged.
+Administrative updates and the remaining kernel lifecycle profiles are unfinished.
 
 ### Owned creation service composition
 
