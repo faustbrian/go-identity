@@ -32,6 +32,12 @@ executable example demonstrates lifetime/cookie composition without inventing
 authentication or persistence. Reference defaults belong to deployment.
 
 - `LifetimeConfig` requires explicit durations and an explicit default.
+- `RememberPolicy.Bindings` exports the explicit choice and all four resolved
+  durations for trusted persistence. `NewRememberPolicy` reconstructs exactly:
+  unresolved, out-of-bounds or clamp-requiring values fail. Store the complete
+  projection, not just absolute expiry; never resolve a deployment default
+  again when loading a session or continuing authentication. Neither API
+  proves current authority or changes original authentication timestamps.
 - `RememberPolicy.Evaluate` takes authoritative original issuance, accepted-use
   and completed authentication timestamps. It returns earliest idle/absolute
   expiry, ordinary freshness and advisory refresh eligibility without a store.

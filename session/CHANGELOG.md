@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Preserve all resolved remember-policy limits through trusted persistence
+  projections and exact reconstruction. Invalid or unresolved stored values
+  fail rather than applying new defaults or silently clamping lifetime limits.
+
 - Add immutable authenticated issue requests retaining the upstream opaque
   final proof with its exact native command. Expected-authority validation
   rejects foreign proof provenance and metadata/credential substitutions;

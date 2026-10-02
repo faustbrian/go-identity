@@ -51,6 +51,45 @@ type RememberPolicy struct {
 	absolute, idle, refresh, fresh time.Duration
 }
 
+// RememberPolicySpec is the complete non-secret resolved policy projection for
+// trusted persistence and authentication continuations. Durations retain their
+// exact nanosecond precision. Choice must be explicit; no deployment default
+// belongs in a stored policy. This value supplies no authentication authority.
+type RememberPolicySpec struct {
+	Choice       RememberChoice
+	AbsoluteTTL  time.Duration
+	IdleTTL      time.Duration
+	RefreshAfter time.Duration
+	FreshFor     time.Duration
+}
+
+// NewRememberPolicy reconstructs a previously resolved policy. Invalid bounds,
+// omitted choices and values requiring browser/lifetime clamping return
+// ErrInvalidPolicy rather than silently changing the stored policy. Call
+// ResolveRememberPolicy only for new choices using deployment configuration.
+// Reconstruction performs no IO and does not renew any timestamp or authority.
+func NewRememberPolicy(s RememberPolicySpec) (RememberPolicy, error) {
+	p, err := ResolveRememberPolicy(s.Choice, LifetimeConfig{
+		Default: s.Choice, AbsoluteTTL: s.AbsoluteTTL, IdleTTL: s.IdleTTL,
+		RefreshAfter: s.RefreshAfter, FreshFor: s.FreshFor,
+	})
+	if err != nil || p.absolute != s.AbsoluteTTL || p.idle != s.IdleTTL || p.refresh != s.RefreshAfter || p.fresh != s.FreshFor {
+		return RememberPolicy{}, ErrInvalidPolicy
+	}
+	return p, nil
+}
+
+// Bindings returns an owned complete scalar projection without choosing a new
+// default or extending limits. A zero policy returns ErrInvalidPolicy. The
+// projection is configuration, not proof of a live or authorized session.
+func (p RememberPolicy) Bindings() (RememberPolicySpec, error) {
+	if !explicit(p.choice) {
+		return RememberPolicySpec{}, ErrInvalidPolicy
+	}
+	return RememberPolicySpec{Choice: p.choice, AbsoluteTTL: p.absolute,
+		IdleTTL: p.idle, RefreshAfter: p.refresh, FreshFor: p.fresh}, nil
+}
+
 // ResolveRememberPolicy resolves omitted input once. A browser choice cannot
 // be upgraded by a later continuation: retain the returned value unchanged.
 // Invalid configuration fails even for explicit choices. No callbacks or IO run.
