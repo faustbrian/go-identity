@@ -29,6 +29,8 @@ type workState struct {
 	closed     bool
 	failed     error
 	rows       *WorkRows
+	audits     *workAudits
+	sqlStarted bool
 }
 
 // newWork is private: only the sole coordinator may call it after verifying
@@ -129,6 +131,7 @@ func (w Work) Query(ctx context.Context, sql string, args ...any) (*WorkRows, er
 		cancel()
 		return nil, failure
 	}
+	w.state.sqlStarted = true
 	native := pgx.RowsFromResultReader(codecs, connection.ExecParams(call, sql, values, oids, formats, nil))
 	// Resolve initial execution errors before returning a cursor, preserving
 	// their classification before cancellation used solely for cleanup.

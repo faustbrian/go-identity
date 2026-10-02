@@ -215,6 +215,16 @@ func testWorkExecution(t *testing.T, ctx context.Context, pool *database.Pool) {
 			t.Fatal("failed owner executed")
 		}
 	})
+	t.Run("audit admission must precede SQL", func(t *testing.T) {
+		w, _ := open(t)
+		if _, err := w.Exec(ctx, "SELECT 1"); err != nil {
+			t.Fatal("late audit fixture")
+		}
+		_, _, plan := auditFixture(t)
+		if bindAuditPlans(w, []AuditPlan{plan}) == nil {
+			t.Fatal("audit enlisted after SQL")
+		}
+	})
 	t.Run("caller cancellation denies prefetched row", func(t *testing.T) {
 		w, _ := open(t)
 		call, cancel := context.WithCancel(ctx)

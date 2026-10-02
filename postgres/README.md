@@ -128,6 +128,37 @@ state. No raw transaction, connection, nested transaction or closure API exists.
 Audit/effect writers, typed participant phases and complete Coordinator issuance
 remain required next; this partial execution surface is not full command authority.
 
+### Kernel audit admission
+
+`AuditPlan`, `AuditBindingDigest` and `Work.StageAudit` now implement the kernel
+staging boundary. Coordinator-private admission freezes the plan before SQL;
+the current kernel mapping requires exactly one action for its command, including
+the canonical user action for profile/admin aliases. It rejects empty, duplicate,
+late or rebound plans. No public method can enlist an audit or obtain valid Work.
+Records must match the declared index/action/schema, command, tenant, actor,
+target aggregate, policy and correlation. Exactly one immutable record is staged
+per index; missing or duplicated staging fails closed. Invalid staging poisons
+Work. Record/aggregate bounds may lower the 16 KiB identity security ceiling.
+
+The current kernel profile accepts privacy-processed no-change/redacted records,
+closed aggregate/version/reason attributes, safe opaque context IDs and bounded
+producer tokens. Free descriptions, raw network/user-agent data, unknown
+attributes, arbitrary structured changes and delegation are unsupported and
+rejected. Feature-specific fields, composed multi-action mappings and the typed
+complete `IdentitySecurityEventV1` builder remain required implementation.
+The identity profile requires 128-bit-or-stronger opaque IDs: configure
+`audit.Builder` with a trusted random generator, such as `identity.NewSubjectID`,
+before `Build`. The primitive default UUID has fewer than 128 random bits and
+is not selected by this profile. Staging preserves IDs; it never derives them
+from a command or replaces them. Canonical base64url 128-bit and lowercase hex
+128-bit ID profiles are accepted; format validation cannot attest randomness.
+
+This is owned in-memory staging, not persistence, an independently committable
+audit transaction or complete command authority. The registered audit contributor
+must persist each canonical record and its command/index binding through the
+same Work; the future Coordinator must enforce completeness before commit and
+retain denial/unknown recovery evidence. Those durable paths are not yet present.
+
 ### Contributor registration
 
 Contributor identities can now be composed with

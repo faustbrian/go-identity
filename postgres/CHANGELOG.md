@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add pre-SQL required kernel audit plans and Work.StageAudit with exact
+  binding, profile, byte-budget, duplicate and lifetime enforcement. Builder
+  event IDs and outcome classifications are preserved. This stages owned
+  records only; durable contributor delivery and Coordinator commit enforcement
+  remain unfinished.
+
 - Add generation-bound Work SQL execution with owned result cursors, exact
   scope, conservative lease deadlines, closed scalar parameters/destinations,
   bounded results and failure poisoning. Extended-protocol execution rejects
