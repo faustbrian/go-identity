@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Add authorized explicit-ID user creation and scoped command recovery through
+  storage-neutral UnitOfWork execute/recover contracts. Freeze typed command
+  payloads, reuse field enforcement and sample trusted time once. Preserve
+  committed/conflict/in-progress/unknown outcomes; withhold output after current
+  redaction failure or cancellation without inventing rollback. Durable adapters,
+  keyed transport admission and remaining lifecycle operations are still pending.
+
 - Add versioned typed additional-field schemas and bounded command preparation.
   Preserve false, zero, empty strings/lists and full int64 values; normalize
   through explicit versioned composition, enforce field permissions through the

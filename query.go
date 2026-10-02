@@ -145,7 +145,20 @@ type UserQueryService struct {
 // NewUserQueryService validates and snapshots the read composition without I/O.
 // It rejects nil/typed-nil dependencies, missing policies and unbounded config.
 func NewUserQueryService(repo UserQueryRepository, authorize authorization.Service, redact RedactFunc, config UserQueryConfig) (*UserQueryService, error) {
-	if nilDependency(repo) || nilDependency(authorize) || nilDependency(config.Clock) || redact == nil || config.ValidateCanonicalUserID == nil || config.MaximumDuration <= 0 || config.MaximumDuration > time.Minute || !validDirectoryID(config.PolicyID) || config.PolicyVersion == 0 {
+	if nilDependency(repo) {
+		return nil, InvalidInputError{Field: "query_configuration"}
+	}
+	s, err := newQueryPolicy(authorize, redact, config)
+	if err != nil {
+		return nil, err
+	}
+	s.repo = repo
+	return s, nil
+}
+
+// Mutation projection reuses the read policy without creating another store.
+func newQueryPolicy(authorize authorization.Service, redact RedactFunc, config UserQueryConfig) (*UserQueryService, error) {
+	if nilDependency(authorize) || nilDependency(config.Clock) || redact == nil || config.ValidateCanonicalUserID == nil || config.MaximumDuration <= 0 || config.MaximumDuration > time.Minute || !validDirectoryID(config.PolicyID) || config.PolicyVersion == 0 {
 		return nil, InvalidInputError{Field: "query_configuration"}
 	}
 	if len(config.RedactionReasons) == 0 || len(config.RedactionReasons) > 32 {
@@ -157,7 +170,7 @@ func NewUserQueryService(repo UserQueryRepository, authorize authorization.Servi
 		}
 	}
 	config.RedactionReasons = slices.Clone(config.RedactionReasons)
-	return &UserQueryService{repo: repo, authorize: authorize, redact: redact, config: config}, nil
+	return &UserQueryService{authorize: authorize, redact: redact, config: config}, nil
 }
 
 // UserGet admits scope before policy or storage work, requires explicit Allow

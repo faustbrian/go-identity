@@ -200,7 +200,7 @@ func (s AttributeSchema) Validate() error {
 	}
 	total := 0
 	for i, f := range s.Fields {
-		if !validFieldName(f.Name) || f.Name == "id" || f.Name == "tenant_id" || f.Name == "status" || f.Name == "version" || f.MigrationVersion != s.Version || !validAttributeKind(f.Kind) || f.Cardinality != cardinalityFor(f.Kind) || !validNormalization(f.Normalization) || f.Normalization != NormalizeNone && f.Kind != AttributeString && f.Kind != AttributeStringList || !validPermission(f.InputPermission) || !validPermission(f.OutputPermission) || !validWriteClass(f.WriteAuthorization) || !validSensitivity(f.Sensitivity) || f.Sensitivity == SensitivitySecret && (f.Indexed || readable(f.OutputPermission)) {
+		if !validFieldName(f.Name) || reservedFieldName(f.Name) || f.MigrationVersion != s.Version || !validAttributeKind(f.Kind) || f.Cardinality != cardinalityFor(f.Kind) || !validNormalization(f.Normalization) || f.Normalization != NormalizeNone && f.Kind != AttributeString && f.Kind != AttributeStringList || !validPermission(f.InputPermission) || !validPermission(f.OutputPermission) || !validWriteClass(f.WriteAuthorization) || !validSensitivity(f.Sensitivity) || f.Sensitivity == SensitivitySecret && (f.Indexed || readable(f.OutputPermission)) {
 			return InvalidInputError{Field: "field_policy"}
 		}
 		for _, previous := range s.Fields[:i] {
@@ -233,6 +233,12 @@ const attributeBudget = 256 << 10
 // metadata is replaced, not accepted from callers. No partial output survives
 // a deny, cancellation, malformed callback output, dependency error or panic.
 func (p *AttributeProcessor) Prepare(ctx context.Context, req AttributePrepareRequest) (result []AttributeUpdate, err error) {
+	return p.prepare(ctx, req, time.Time{})
+}
+
+// Creation shares its single trusted sample with the same field implementation.
+// No public caller can override the field processor's decision time.
+func (p *AttributeProcessor) prepare(ctx context.Context, req AttributePrepareRequest, decisionTime time.Time) (result []AttributeUpdate, err error) {
 	defer func() {
 		if recover() != nil {
 			result = nil
@@ -317,7 +323,10 @@ func (p *AttributeProcessor) Prepare(ctx context.Context, req AttributePrepareRe
 	if err := readContextError(ctx); err != nil {
 		return nil, err
 	}
-	now := p.config.Clock.Now()
+	now := decisionTime
+	if now.IsZero() {
+		now = p.config.Clock.Now()
+	}
 	if now.IsZero() {
 		return nil, UnavailableError{}
 	}
@@ -472,6 +481,10 @@ func validFieldName(name string) bool {
 		}
 	}
 	return true
+}
+
+func reservedFieldName(name string) bool {
+	return name == "id" || name == "tenant_id" || name == "status" || name == "version"
 }
 
 func attributeSize(v AttributeValue, kind AttributeKind) (int, bool) {

@@ -3,10 +3,10 @@
 Composable backend identity-domain ownership for Golib. This module is under
 development; current implemented slices are subject/pre-authentication ID
 contracts, structural user/status-policy validation and authorized user reads
-with bounded, stable-snapshot listing, and versioned typed-field preparation.
-Lifecycle commands,
-repositories, authorization policies, hooks, directory import and privacy
-workflows are not implemented yet.
+with bounded, stable-snapshot listing, versioned typed-field preparation and
+authorized explicit-ID creation/recovery through a storage-neutral command owner.
+Remaining lifecycle commands, durable repositories, complete policy composition,
+hooks, directory import and privacy workflows are not implemented yet.
 
 ## Quick start
 
@@ -31,6 +31,8 @@ signed snapshot cursors; a cursor is never authority.
 See [typed additional fields](docs/attributes.md) for normalization, defaults,
 per-field write enforcement and the boundary between prepared values and a
 durably authorized command.
+See [creation and recovery](docs/creation.md) for the current command boundary,
+durable outcome semantics and the pending PostgreSQL/keyed-admission integration.
 
 ## Development verification
 
