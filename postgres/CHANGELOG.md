@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add immutable, bounded contributor identity registration with exact-version
+  admission, duplicate rejection and owned descriptor snapshots. The open
+  interface is implementable by independently owned adapters; transaction
+  phases and the public Coordinator remain under development.
+
 - Persist versioned terminal command receipts with generation/owner/lease
   fencing and immutable committed/aborted replay. Unknown remains a caller
   observation. This private journal phase does not provide the unfinished

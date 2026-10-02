@@ -85,6 +85,22 @@ validates bounded core values before allocation; decode rejects bodies over
 8 MiB. Required audit/participant staging and public scoped recovery are not yet
 implemented, so private terminal SQL is not a conforming composed mutation API.
 
+### Contributor registration
+
+Contributor identities can now be composed with
+`NewContributorRegistry([]Contributor{...})`. The registry snapshots 1..64
+trusted compile-time adapter descriptors once, preserves composition order,
+rejects nil/typed-nil, duplicate contract IDs and conflicting versions, and
+allows only exact registered descriptors in private command admission. Owners
+are bounded lowercase printable ASCII; contract IDs are bounded printable ASCII;
+neither admits whitespace or normalization. Composition roots own canonical
+IDs and contributor lifetimes. Returned `Descriptors()` slices are caller-owned
+copies and registry reads are concurrent-safe. Implementations remain open to
+independent modules. This is identity admission only: no transaction phase,
+typed participant input, Work, Coordinator, late registration or commit API is
+provided. Unsupported phase combinations and foreign plan rejection remain
+part of the forthcoming complete Coordinator, not guarantees of this constructor.
+
 ### FAQ
 
 - Can I use a replica? No; the repository's primary consistency contract is
