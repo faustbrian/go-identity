@@ -94,15 +94,25 @@ func bindAuditPlans(w Work, plans []AuditPlan) error {
 	// Each currently implemented kernel command has exactly one mandatory
 	// action. Feature composition will declare its own exhaustive multi-action
 	// mapping; do not accept an empty or duplicated kernel action meanwhile.
-	if w.state.audits != nil || w.state.sqlStarted || len(plans) != 1 {
+	if w.state.audits != nil || w.state.sqlStarted {
+		return invalidAudit()
+	}
+	if err := validateKernelAuditPlans(w.state.binding, plans); err != nil {
+		return err
+	}
+	w.state.audits = &workAudits{plans: append([]AuditPlan(nil), plans...), records: make([]audit.Record, len(plans)), staged: make([]bool, len(plans)), ids: make(map[string]struct{})}
+	return nil
+}
+
+func validateKernelAuditPlans(binding identity.CommandBinding, plans []AuditPlan) error {
+	if len(plans) != 1 {
 		return invalidAudit()
 	}
 	for i, p := range plans {
-		if !kernelAuditAction(p.EventType) || p.EventType != kernelCommandAudit(w.state.binding.OperationID) || p.SchemaVersion != 1 || p.BindingDigest == ([32]byte{}) || p.RetentionPolicyVersion == 0 || p.RequiredRecordCount != 1 || !p.Required || p.MaxRecordBytes == 0 || p.MaxRecordBytes > 16384 || p.MaxAggregateBytes < p.MaxRecordBytes || p.MaxAggregateBytes > 16384 || i > 0 && plans[i-1].EventIndex >= p.EventIndex {
+		if !kernelAuditAction(p.EventType) || p.EventType != kernelCommandAudit(binding.OperationID) || p.SchemaVersion != 1 || p.BindingDigest == ([32]byte{}) || p.RetentionPolicyVersion == 0 || p.RequiredRecordCount != 1 || !p.Required || p.MaxRecordBytes == 0 || p.MaxRecordBytes > 16384 || p.MaxAggregateBytes < p.MaxRecordBytes || p.MaxAggregateBytes > 16384 || i > 0 && plans[i-1].EventIndex >= p.EventIndex {
 			return invalidAudit()
 		}
 	}
-	w.state.audits = &workAudits{plans: append([]AuditPlan(nil), plans...), records: make([]audit.Record, len(plans)), staged: make([]bool, len(plans)), ids: make(map[string]struct{})}
 	return nil
 }
 

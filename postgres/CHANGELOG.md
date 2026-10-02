@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add bounded kernel CommandPlan digest and private registry-bound admission.
+  Command scope, authoritative fingerprint, ordered contributors and every
+  audit declaration are frozen before execution; changed inputs and foreign
+  Work are rejected. Typed feature inputs and public Coordinator remain pending.
+
 - Add pre-SQL required kernel audit plans and Work.StageAudit with exact
   binding, profile, byte-budget, duplicate and lifetime enforcement. Builder
   event IDs and outcome classifications are preserved. This stages owned

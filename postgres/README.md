@@ -161,6 +161,19 @@ retain denial/unknown recovery evidence. Those durable paths are not yet present
 
 ### Contributor registration
 
+`CommandPlan` declares ordered contributor descriptors, required audit slots
+and a digest. `KernelPlanDigest` binds the current kernel-only profile to the
+exact command scope and authoritative fingerprint using deterministic CBOR.
+Admission snapshots the slices against the exact registry; later input mutation
+cannot change admitted work. Audit binding rejects foreign-registry Work,
+different commands and late/repeated enlistment before SQL.
+
+This intermediate profile supports exactly one domain and one audit contributor.
+It does not accept feature, risk, capability or OTP contributors without their
+typed inputs; it cannot substitute for their atomic reservation. The Coordinator
+must resolve retained-key fingerprints before plan admission. Public command
+issuance, durable audit delivery and complete participant phases remain pending.
+
 Contributor identities can now be composed with
 `NewContributorRegistry([]Contributor{...})`. The registry snapshots 1..64
 trusted compile-time adapter descriptors once, preserves composition order,
