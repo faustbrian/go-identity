@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add bounded decoding of immutable historical command scope for primary
+  recovery composition, preserving original policy/schema versions and exact
+  identifiers. Alternate or corrupt encodings fail closed; public command
+  lookup and reconciliation remain under development.
+
 - Persist declared versioned scalar/list attributes atomically with user
   creation, preserving empty values, full int64 values and exact UTC instants.
   Registered schemas are copied and immutable within a tenant/version; changed
