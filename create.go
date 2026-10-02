@@ -166,6 +166,7 @@ func (s *UserCreationService) UserCreate(ctx context.Context, req UserCreateRequ
 	dc.Request.Resource.Attributes["identity.user.status"] = authorization.StringValue(string(StatusActive))
 	dc.Request.Resource.Attributes["identity.user.version"] = authorization.StringValue("1")
 	dc.Request.Resource.Attributes["identity.command.recovery"] = authorization.BoolValue(false)
+	dc.Request.Resource.Attributes["identity.command.read-admission"] = authorization.BoolValue(false)
 	fields, e := s.attributes.prepare(ctx, AttributePrepareRequest{TenantID: req.TenantID, UserID: req.UserID, SchemaVersion: req.SchemaVersion, Updates: req.Fields, Context: dc}, now)
 	if e != nil {
 		return result, e
@@ -193,6 +194,12 @@ func (s *UserCreationService) UserCreate(ctx context.Context, req UserCreateRequ
 // Historic policy/schema bindings remain intact while current policy controls
 // disclosure. Committed recovery does not assert current user status/freshness.
 func (s *UserCreationService) RecoverUserCreate(ctx context.Context, req UserCreateRecoveryRequest) (result UserCreateResult, err error) {
+	return s.recoverCommand(ctx, req, "identity.user.create")
+}
+
+// Shared scoped recovery keeps purpose fencing and known-outcome semantics in
+// one implementation as the closed command union gains update variants.
+func (s *UserCreationService) recoverCommand(ctx context.Context, req UserCreateRecoveryRequest, operation string) (result UserCreateResult, err error) {
 	result = UserCreateResult{}
 	attempted := false
 	defer func() {
@@ -212,7 +219,7 @@ func (s *UserCreationService) RecoverUserCreate(ctx context.Context, req UserCre
 		return result, InvalidInputError{Field: "command_id"}
 	}
 	result.CommandID = req.CommandID
-	if e := validateQueryContext(req.ActorScope, req.TenantID, string(req.UserID), "identity.user.create", "identity.user", s.policy.config.PolicyVersion); e != nil {
+	if e := validateQueryContext(req.ActorScope, req.TenantID, string(req.UserID), operation, "identity.user", s.policy.config.PolicyVersion); e != nil {
 		return result, e
 	}
 	ctx, cancel := context.WithTimeout(ctx, s.policy.config.MaximumDuration)
@@ -242,6 +249,7 @@ func (s *UserCreationService) RecoverUserCreate(ctx context.Context, req UserCre
 		delete(dc.Request.Resource.Attributes, key)
 	}
 	dc.Request.Resource.Attributes["identity.command.recovery"] = authorization.BoolValue(true)
+	dc.Request.Resource.Attributes["identity.command.read-admission"] = authorization.BoolValue(false)
 	if len(dc.Request.Resource.Attributes) > 128 {
 		return result, InvalidInputError{Field: "authorization_attributes"}
 	}
@@ -259,7 +267,7 @@ func (s *UserCreationService) RecoverUserCreate(ctx context.Context, req UserCre
 	attempted = true
 	result.CommitOutcome = CommitOutcomeUnknown
 	receipt, dependencyErr := s.uow.Recover(ctx, q)
-	if !receipt.valid() || receipt.Binding.CommandID != q.CommandID || receipt.Binding.TenantID != q.TenantID || receipt.Binding.UserID != q.UserID || receipt.Binding.ActorID != q.ActorID || receipt.Binding.ActorKind != q.ActorKind {
+	if !receipt.valid() || receipt.Binding.OperationID != operation || receipt.Binding.CommandID != q.CommandID || receipt.Binding.TenantID != q.TenantID || receipt.Binding.UserID != q.UserID || receipt.Binding.ActorID != q.ActorID || receipt.Binding.ActorKind != q.ActorKind {
 		return result, unknownError(ctx, req.CommandID)
 	}
 	result.CommitOutcome = receipt.Outcome
@@ -286,7 +294,7 @@ func (s *UserCreationService) finish(ctx context.Context, result UserCreateResul
 		return result, NotCommittedError{result.CommandID}
 	}
 	deadline, _ := ctx.Deadline()
-	d, err := s.policy.redact(ctx, RedactionPolicyInput{TenantID: receipt.Binding.TenantID, ViewerID: ActorID(dc.Request.Subject.ID), Resource: RedactionResource{Kind: "identity.user", ID: string(receipt.Binding.UserID)}, Fields: userProjectionFields(), OperationID: "identity.user.create", PolicyVersion: s.policy.config.PolicyVersion, Deadline: deadline.UTC()})
+	d, err := s.policy.redact(ctx, RedactionPolicyInput{TenantID: receipt.Binding.TenantID, ViewerID: ActorID(dc.Request.Subject.ID), Resource: RedactionResource{Kind: "identity.user", ID: string(receipt.Binding.UserID)}, Fields: userProjectionFields(), OperationID: receipt.Binding.OperationID, PolicyVersion: s.policy.config.PolicyVersion, Deadline: deadline.UTC()})
 	if e := readContextError(ctx); e != nil {
 		return result, e
 	}

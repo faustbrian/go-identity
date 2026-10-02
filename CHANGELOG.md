@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Add explicit-ID administrative typed-field updates and scoped recovery.
+  Preserve same-command replay before stale-version checks, retain original
+  known outcomes after output failure, and bind new writes to field policy and
+  a single aggregate-version advance. Creation/update recovery reject wrong
+  purposes. Reject future expected versions before mutation so authorization
+  cannot cross into a newer account state. Durable adapters, keyed admission
+  and self-service profile remain
+  unfinished integration work.
+
 - Add the five-member PolicySet and bounded typed risk, claims, retention and
   redaction evaluation. Copy policy inputs/results, enforce current versions and
   registered reasons, reject destructive legal-hold allows and incomplete field

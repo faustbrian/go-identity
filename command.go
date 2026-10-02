@@ -83,13 +83,16 @@ type CreateUserCommand struct {
 // Formatting is always redacted and JSON serialization is forbidden. Adapter
 // mapping uses the typed accessor, never reflection or command JSON. The adapter
 // owns versioned keyed canonical fingerprints, reservations and durable replay.
-type Command struct{ create *CreateUserCommand }
+type Command struct {
+	create *CreateUserCommand
+	update *UpdateUserCommand
+}
 
 // NewUserCreationCommand validates and snapshots a creation's structural input.
 // It does NOT authorize, canonicalize directory IDs or validate a field schema.
 // Trusted composition uses UserCreationService before crossing UnitOfWork.
 func NewUserCreationCommand(spec CreateUserCommand) (Command, error) {
-	if !validCommandBinding(spec.Binding) || spec.Status != StatusActive || len(spec.Attributes) > 128 {
+	if !validCommandBinding(spec.Binding) || spec.Binding.OperationID != "identity.user.create" || spec.Status != StatusActive || len(spec.Attributes) > 128 {
 		return Command{}, InvalidInputError{Field: "creation_command"}
 	}
 	total := 0
@@ -115,7 +118,7 @@ func NewUserCreationCommand(spec CreateUserCommand) (Command, error) {
 // CreateUser returns a private copy and false for an invalid/zero command.
 // Returned contents are for trusted adapters, never diagnostics or snapshots.
 func (c Command) CreateUser() (CreateUserCommand, bool) {
-	if c.create == nil {
+	if c.create == nil || c.update != nil {
 		return CreateUserCommand{}, false
 	}
 	spec := *c.create
@@ -143,6 +146,9 @@ type CommandResult struct {
 	User         User
 	AuditEventID string
 	RetryAfter   time.Duration
+	// ExpectedVersion is present only on a committed update receipt; the
+	// immutable result must be exactly one greater. Creation keeps it zero.
+	ExpectedVersion uint64
 }
 
 // RecoveryQuery scopes a primary-authority lookup to the original command,
@@ -158,7 +164,7 @@ type RecoveryQuery struct {
 
 func validCommandBinding(b CommandBinding) bool {
 	_, validID := decodeID(string(b.CommandID))
-	return validID && validDirectoryID(string(b.TenantID)) && validDirectoryID(string(b.UserID)) && validDirectoryID(string(b.ActorID)) && (b.ActorKind == authorization.SubjectUser || b.ActorKind == authorization.SubjectAPIKey || b.ActorKind == authorization.SubjectServiceAccount) && b.OperationID == "identity.user.create" && validDirectoryID(b.PolicyID) && b.PolicyVersion > 0 && validDirectoryID(b.SchemaID) && b.SchemaVersion > 0 && validDirectoryID(b.CorrelationID)
+	return validID && validDirectoryID(string(b.TenantID)) && validDirectoryID(string(b.UserID)) && validDirectoryID(string(b.ActorID)) && (b.ActorKind == authorization.SubjectUser || b.ActorKind == authorization.SubjectAPIKey || b.ActorKind == authorization.SubjectServiceAccount) && (b.OperationID == "identity.user.create" || b.OperationID == "identity.user.update-admin") && validDirectoryID(b.PolicyID) && b.PolicyVersion > 0 && validDirectoryID(b.SchemaID) && b.SchemaVersion > 0 && validDirectoryID(b.CorrelationID)
 }
 
 func cloneUpdates(updates []AttributeUpdate) []AttributeUpdate {
@@ -175,11 +181,17 @@ func (r CommandResult) valid() bool {
 	}
 	switch r.Outcome {
 	case CommitOutcomeCommitted:
-		return r.RetryAfter == 0 && r.User.Validate(r.Binding.TenantID) == nil && r.User.ID == r.Binding.UserID && r.User.Status == StatusActive && r.User.Version == 1 && validDirectoryID(r.AuditEventID)
+		if r.RetryAfter != 0 || r.User.Validate(r.Binding.TenantID) != nil || r.User.ID != r.Binding.UserID || !validDirectoryID(r.AuditEventID) {
+			return false
+		}
+		if r.Binding.OperationID == "identity.user.create" {
+			return r.ExpectedVersion == 0 && r.User.Status == StatusActive && r.User.Version == 1
+		}
+		return r.ExpectedVersion > 0 && r.ExpectedVersion < ^uint64(0) && r.User.Version == r.ExpectedVersion+1 && r.User.Status != StatusDeleted && r.User.Status != StatusAnonymized
 	case CommitOutcomeNotCommitted, CommitOutcomeUnknown, CommitOutcomeConflict:
-		return r.User == (User{}) && r.AuditEventID == "" && r.RetryAfter == 0
+		return r.ExpectedVersion == 0 && r.User == (User{}) && r.AuditEventID == "" && r.RetryAfter == 0
 	case CommitOutcomeInProgress:
-		return r.User == (User{}) && r.AuditEventID == "" && r.RetryAfter > 0 && r.RetryAfter <= time.Minute
+		return r.ExpectedVersion == 0 && r.User == (User{}) && r.AuditEventID == "" && r.RetryAfter > 0 && r.RetryAfter <= time.Minute
 	default:
 		return false
 	}
