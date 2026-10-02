@@ -17,7 +17,7 @@ import (
 // serializes Command through JSON/reflection and is not an authority issuer.
 // Directory IDs preserve their validated representation (including ULIDs);
 // only the core fixed-width random CommandID is decoded to bytes.
-// Until every variant is implemented, unsupported variants fail closed.
+// Every current closed core variant is mapped; invalid commands fail closed.
 func prepareClaim(c identity.Command, key [32]byte) (claimRequest, error) {
 	if key == ([32]byte{}) {
 		return claimRequest{}, codecError()
@@ -25,21 +25,25 @@ func prepareClaim(c identity.Command, key [32]byte) (claimRequest, error) {
 	var binding identity.CommandBinding
 	payload := map[string][]byte{}
 	var attrs []identity.AttributeUpdate
+	attributeCommand := false
 	switch {
 	case isCreation(c):
 		s, _ := c.CreateUser()
 		binding = s.Binding
 		attrs = s.Attributes
+		attributeCommand = true
 		payload["status"] = cborText(string(s.Status))
 	case isUpdate(c):
 		s, _ := c.UpdateUser()
 		binding = s.Binding
 		attrs = s.Attributes
+		attributeCommand = true
 		payload["expected_version"] = cborUint(s.ExpectedVersion)
 	case isProfile(c):
 		s, _ := c.UpdateProfile()
 		binding = s.Binding
 		attrs = s.AdditionalFields
+		attributeCommand = true
 		payload["expected_version"] = cborUint(s.ExpectedVersion)
 		for name, value := range map[string]string{"name": s.Name, "image": s.Image} {
 			if value != "" {
@@ -69,6 +73,30 @@ func prepareClaim(c identity.Command, key [32]byte) (claimRequest, error) {
 			items[i] = cborText(v)
 		}
 		payload["required_consumers"] = cborArray(items)
+	case isLink(c):
+		s, _ := c.LinkAccount()
+		binding = s.Binding
+		var err error
+		payload, err = encodeLink(s, key)
+		if err != nil {
+			return claimRequest{}, err
+		}
+	case isUnlink(c):
+		s, _ := c.UnlinkAccount()
+		binding = s.Binding
+		var err error
+		payload, err = encodeUnlink(s, key)
+		if err != nil {
+			return claimRequest{}, err
+		}
+	case isIdentifier(c):
+		s, _ := c.ChangeIdentifier()
+		binding = s.Binding
+		var err error
+		payload, err = encodeIdentifier(s, key)
+		if err != nil {
+			return claimRequest{}, err
+		}
 	default:
 		return claimRequest{}, codecError()
 	}
@@ -86,7 +114,7 @@ func prepareClaim(c identity.Command, key [32]byte) (claimRequest, error) {
 		}
 		fields[a.Name] = cborBytes(digest)
 	}
-	if !isStatus(c) {
+	if attributeCommand {
 		payload["attributes"] = cborMap(fields)
 	}
 	scope := commandScope(binding)
@@ -99,14 +127,17 @@ func prepareClaim(c identity.Command, key [32]byte) (claimRequest, error) {
 	return claimRequest{commandID: binding.CommandID, tenant: binding.TenantID, purpose: binding.OperationID, canonical: canonical, safeFields: safe, source: &c}, nil
 }
 
-func isCreation(c identity.Command) bool { _, ok := c.CreateUser(); return ok }
-func isUpdate(c identity.Command) bool   { _, ok := c.UpdateUser(); return ok }
-func isProfile(c identity.Command) bool  { _, ok := c.UpdateProfile(); return ok }
-func isStatus(c identity.Command) bool   { _, ok := c.UserStatus(); return ok }
+func isCreation(c identity.Command) bool   { _, ok := c.CreateUser(); return ok }
+func isUpdate(c identity.Command) bool     { _, ok := c.UpdateUser(); return ok }
+func isProfile(c identity.Command) bool    { _, ok := c.UpdateProfile(); return ok }
+func isStatus(c identity.Command) bool     { _, ok := c.UserStatus(); return ok }
+func isLink(c identity.Command) bool       { _, ok := c.LinkAccount(); return ok }
+func isUnlink(c identity.Command) bool     { _, ok := c.UnlinkAccount(); return ok }
+func isIdentifier(c identity.Command) bool { _, ok := c.ChangeIdentifier(); return ok }
 
 func commandScope(b identity.CommandBinding) map[string][]byte {
 	id, _ := base64.RawURLEncoding.DecodeString(string(b.CommandID))
-	return map[string][]byte{
+	scope := map[string][]byte{
 		"profile": cborText("identity-command-v1"), "command_id": cborBytes(id),
 		"tenant_id": cborText(string(b.TenantID)), "user_id": cborText(string(b.UserID)),
 		"actor_id": cborText(string(b.ActorID)), "actor_kind": cborText(string(b.ActorKind)),
@@ -114,6 +145,13 @@ func commandScope(b identity.CommandBinding) map[string][]byte {
 		"policy_version": cborUint(b.PolicyVersion), "schema_id": cborText(b.SchemaID),
 		"schema_version": cborUint(uint64(b.SchemaVersion)), "correlation_id": cborText(b.CorrelationID),
 	}
+	if b.RecordID != "" {
+		scope["record_id"] = cborText(b.RecordID)
+	}
+	if b.LinkMode != 0 {
+		scope["link_mode"] = cborUint(uint64(b.LinkMode))
+	}
+	return scope
 }
 
 func encodeAttribute(v identity.AttributeValue) ([]byte, error) {

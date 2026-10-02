@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Complete typed canonical encoding of account link/unlink and identifier
+  mutations, binding version fences, proof authority and continuation choices
+  while keeping provider/identifier values and private proof caveats digested.
+  Encoding does not consume proofs or provide the unfinished Coordinator.
+
 - Add private deterministic command encoding for creation, field updates,
   profile changes and status transitions, with framed private-field digests
   and stored-key regeneration during replay. Remaining command variants and

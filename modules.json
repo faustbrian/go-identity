@@ -53,7 +53,7 @@
       "family": "service-edge",
       "version": "0.0.0",
       "tag_prefix": "postgres/v",
-      "owned_dependencies": ["github.com/faustbrian/go-authorization","github.com/faustbrian/go-clock","github.com/faustbrian/go-identity","github.com/faustbrian/go-migrations/v3","github.com/faustbrian/go-postgres"],
+      "owned_dependencies": ["github.com/faustbrian/go-authorization","github.com/faustbrian/go-capability","github.com/faustbrian/go-clock","github.com/faustbrian/go-identity","github.com/faustbrian/go-migrations/v3","github.com/faustbrian/go-postgres"],
       "reverse_owned_dependencies": [],
       "external_runtime_dependencies": ["postgresql"],
       "required_services": ["postgresql"],

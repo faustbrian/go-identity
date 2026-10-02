@@ -63,6 +63,53 @@ SELECT command_id,tenant_id,purpose FROM identity.identity_command_id_claims WHE
 	if got, err := execute(prepared, rotated, true); err != nil || got != claimReplay {
 		t.Fatal("stored-key secret re-encoding failed")
 	}
+	for _, build := range []func(bool) identity.Command{
+		func(changed bool) identity.Command {
+			return recordLink(t, identity.AccountLinkImplicit, func(s *identity.AccountLinkCommand) {
+				if changed {
+					s.Change.ExpectedUserVersion++
+				}
+			}, nil, "proof-key")
+		},
+		func(changed bool) identity.Command {
+			return recordUnlink(t, func(s *identity.AccountUnlinkCommand) {
+				s.Binding.CommandID = "AAAAAAAAAAAAAAAAAAAABg"
+				if changed {
+					s.RevokeProvider = false
+				}
+			}, nil)
+		},
+		func(changed bool) identity.Command {
+			return recordIdentifier(t, identity.IdentifierReplace, func(s *identity.IdentifierCommand) {
+				s.Binding.CommandID = "AAAAAAAAAAAAAAAAAAAABw"
+				if changed {
+					s.Change.CanonicalValue = "changed@example.test"
+				}
+			}, nil)
+		},
+	} {
+		q, err := prepareClaim(build(false), keys.retained[keys.current])
+		if err != nil {
+			t.Fatal("record command preparation failed")
+		}
+		if got, err := execute(q, keys, true); err != nil || got != claimNew {
+			t.Fatal("record claim failed")
+		}
+		q, err = prepareClaim(build(false), rotated.retained[rotated.current])
+		if err != nil {
+			t.Fatal("rotated record preparation failed")
+		}
+		if got, err := execute(q, rotated, true); err != nil || got != claimReplay {
+			t.Fatal("rotated record replay failed")
+		}
+		q, err = prepareClaim(build(true), rotated.retained[rotated.current])
+		if err != nil {
+			t.Fatal("changed record preparation failed")
+		}
+		if got, err := execute(q, rotated, true); err != nil || got != claimConflict {
+			t.Fatal("record ID acquired different meaning")
+		}
+	}
 	if got, err := execute(request, rotated, true); err != nil || got != claimReplay {
 		t.Fatal("retained-key replay failed")
 	}
