@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Add durable status-filtered user listing through the existing public directory
+  service. Snapshot pages retain exact bytewise IDs, statuses, full versions
+  and original expiry across live changes and process replacement. Finite
+  per-tenant size/quota limits fail without truncation; explicit primary-time
+  cleanup removes expired snapshots. Forward migration 7 preserves history
+  and populated users. Identifier-filtered listing and field projection remain
+  pending the owned identifier and attribute read profiles.
+
 - Add primary creation recovery with exact frozen participant selection,
   generation takeover and invocation-bound typed evidence queries. Proven
   absence closes with required failure auditing and an aborted receipt in one

@@ -1,6 +1,6 @@
 # Identity PostgreSQL
 
-Experimental Go 1.27 module implementing `identity.UserQueryRepository` using
+Experimental Go 1.27 module implementing `identity.UserDirectoryRepository` using
 the owned `go-postgres` pool. Tenant and user IDs are matched exactly; lifecycle
 states and the full uint64 version range are preserved. Reads are primary-only,
 bounded and uncached. Configure primary endpoints explicitly.
@@ -10,6 +10,46 @@ compose it through `identity.NewUserQueryService` for policy and redaction.
 The caller owns pool shutdown. No globals or background goroutines are created.
 Driver errors are discarded rather than exposed through `errors.As` or logs.
 Cancellation and deadline classifications remain observable.
+
+## Stable status-filtered listing
+
+Compose the same repository through `identity.NewUserDirectoryService` for
+collection/row authorization, redaction and authenticated wire cursors.
+`List` materializes structural IDs, statuses and versions atomically in the
+primary database; it is not a live OFFSET query or an authorization cache.
+Migration 7 creates the owned snapshot/row tables without changing users or
+migrations 1–6. Existing get-only consumers keep their APIs and configuration.
+
+Ordering is bytewise ascending canonical user ID. Filters are an exact closed
+status set. Continuations require the original tenant, status set and expiry,
+and survive repository replacement and live insertion/update/deletion.
+Expiry retains nanosecond identity, lasts at most 15 minutes and cannot be
+renewed; primary time plus a shortened local deadline bounds each operation.
+Snapshot status is historical directory data, never current identity authority.
+The public service must reauthorize every page and each scanned row.
+
+`Config.ListSnapshots` defaults to 10,000 users and 32 retained snapshots per
+tenant. Explicit profiles require both positive limits, at most 100,000 users
+and 32 snapshots. Pages are at most 100 rows. Each status branch uses the
+existing tenant/status/user index and bounds candidates before materializing.
+Quota or size pressure is `identity.UnavailableError`, never a partial snapshot
+or silent truncation. Mismatched/expired continuations are redacted invalid
+input; database failures disclose no diagnostics. An ambiguous snapshot commit
+returns no page/cursor and remains bounded by retention/quota.
+
+New snapshot admission removes at most one expired snapshot. Trusted platform
+maintenance must also call `PruneUserListSnapshots(ctx, tenant, maximum)` for
+inactive tenants, with `maximum` in 1–32; primary expiry and SKIP LOCKED keep
+active/in-use snapshots intact, and removal cascades to their rows. The library
+starts no worker and never closes the caller's pool. These storage APIs confer
+no tenant permission. Grant the selected storage role the snapshot-table CRUD
+and existing user SELECT permissions; no DDL or table ownership is required.
+
+**Remaining scope:** exact identifier filters require the remaining identity-
+owned identifier lifecycle store and fail closed today. Arbitrary attribute
+search, complete fields, privacy/lifecycle snapshot erasure and full domain
+commands remain unfinished. Do not create a list-only identifier authority or
+application-written domain store to fill those gaps.
 
 ## Current development boundary
 

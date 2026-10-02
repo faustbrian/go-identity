@@ -15,10 +15,13 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// Config defines finite per-read budgets. MaximumDuration must be positive and
+// Config defines finite per-operation budgets. MaximumDuration must be positive and
 // at most one minute; an earlier caller deadline always wins. Zero is invalid.
 type Config struct {
 	MaximumDuration time.Duration
+	// ListSnapshots bounds retained structural listing; zero selects documented
+	// finite defaults. Existing get-only compositions need no additional config.
+	ListSnapshots UserListSnapshotConfig
 	// AttributeSchemas declares at most 32 immutable scalar-storage schemas.
 	// Defaults/fields are copied. Indexed and secret fields require explicit
 	// migration/encryption profiles and currently fail closed.
@@ -35,7 +38,7 @@ func (Config) MarshalJSON() ([]byte, error) {
 	return nil, identity.InvalidInputError{Field: "postgres_configuration"}
 }
 
-// Repository reads from a caller-owned primary pool and applies structural
+// Repository reads and lists from a caller-owned primary pool and applies structural
 // creation only through exact enlisted Coordinator Work. It never closes that pool,
 // starts background work or caches authority. Configure the pool with primary
 // endpoints only: replica reads cannot satisfy this repository's consistency
@@ -43,6 +46,8 @@ func (Config) MarshalJSON() ([]byte, error) {
 // Values are safe for concurrent calls; the zero value is invalid.
 type Repository struct {
 	maximumDuration  time.Duration
+	pool             *database.Pool
+	listConfig       UserListSnapshotConfig
 	read             func(context.Context, identity.TenantID, identity.UserID) pgx.Row
 	attributeSchemas map[schemaKey]registeredSchema
 }
@@ -56,8 +61,8 @@ var _ identity.UserQueryRepository = (*Repository)(nil)
 
 // NewRepository constructs the primary read adapter without I/O. The caller
 // must migrate the database before use and keep the pool alive until all reads
-// finish. Reads support UserQueryRepository; ApplyUserCreation participates in
-// the creation-only coordinator profile. Attribute projections, listing and
+// finish. Reads support UserDirectoryRepository; ApplyUserCreation participates in
+// the creation-only coordinator profile. Attribute projections and
 // complete domain writes remain under development.
 func NewRepository(pool *database.Pool, config Config) (*Repository, error) {
 	if pool == nil || pool.Raw() == nil || config.MaximumDuration <= 0 || config.MaximumDuration > time.Minute {
@@ -67,7 +72,11 @@ func NewRepository(pool *database.Pool, config Config) (*Repository, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Repository{maximumDuration: config.MaximumDuration, attributeSchemas: schemas, read: func(ctx context.Context, tenant identity.TenantID, user identity.UserID) pgx.Row {
+	listConfig, err := listSnapshotConfig(config.ListSnapshots)
+	if err != nil {
+		return nil, err
+	}
+	return &Repository{maximumDuration: config.MaximumDuration, pool: pool, listConfig: listConfig, attributeSchemas: schemas, read: func(ctx context.Context, tenant identity.TenantID, user identity.UserID) pgx.Row {
 		conn, err := pool.Acquire(ctx)
 		if err != nil {
 			return storedRow{err: err}

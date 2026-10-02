@@ -71,7 +71,7 @@ func TestPostgresIntegration(t *testing.T) {
 		t.Fatal("invalid migration source")
 	}
 	result, err := runner.Up(ctx)
-	if err != nil || len(result.Records()) != 6 {
+	if err != nil || len(result.Records()) != 7 {
 		t.Fatal("empty install failed")
 	}
 	pool, err := database.Connect(ctx, database.Config{DSN: dsn, MaxConns: 2, Configure: func(native *database.PoolConfig) error { native.ConnConfig.Database = name; return nil }})
@@ -106,6 +106,7 @@ func TestPostgresIntegration(t *testing.T) {
 	if insert("tenant-a", "shared-user", "active", "18446744073709551615") != nil || insert("tenant-b", "shared-user", "banned", "1") != nil {
 		t.Fatal("tenant fixtures failed")
 	}
+	t.Run("stable user listing", func(t *testing.T) { testUserListing(t, ctx, pool, repo) })
 	t.Run("primary reads", func(t *testing.T) {
 		a, err := repo.Get(ctx, identity.GetUserQuery{TenantID: "tenant-a", UserID: "shared-user"})
 		if err != nil || a.Version != math.MaxUint64 || a.Status != identity.StatusActive {
