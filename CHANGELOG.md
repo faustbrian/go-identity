@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Align the module inventory with the Go 1.27 minimum and register the optional
+  PostgreSQL adapter as an independently releasable experimental module.
+
 - Add identity-owned identifier commands with exact signed one-use intent,
   current-human session scope, bounded primary admission and record/action-
   specific recovery. Separate all five transitions; conserve known commitment
