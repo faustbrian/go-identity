@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/faustbrian/go-audit"
@@ -297,7 +298,11 @@ func kernelMutationAudit(ctx context.Context, b identity.CommandBinding, before 
 	if b.OperationID == "identity.user.update-admin" {
 		retention = "protected"
 	}
-	record, e := builder.Build(audit.RecordInput{OccurredAt: now, Action: kernelCommandAudit(b.OperationID), Outcome: outcome, ReasonCode: reason, Actor: audit.ActorInput{Kind: actorKind, ID: string(b.ActorID)}, Subject: audit.SubjectInput{Type: "user", ID: string(b.UserID)}, Context: audit.ContextInput{TenantID: string(b.TenantID), CorrelationID: b.CorrelationID}, Policy: audit.PolicyMetadata{PolicyID: b.PolicyID, Version: strconv.FormatUint(b.PolicyVersion, 10)}, Changes: changes, Attributes: map[string]string{"identity.profile": "identity.security.v1", "command.id": string(b.CommandID), "retention.class": retention, "aggregate.type": "user", "aggregate.id": string(b.UserID), "aggregate.before_version": strconv.FormatUint(before, 10), "aggregate.after_version": after}})
+	target, kind := string(b.UserID), "user"
+	if strings.HasPrefix(b.OperationID, "identity.identifier.") {
+		target, kind = b.RecordID, "identifier"
+	}
+	record, e := builder.Build(audit.RecordInput{OccurredAt: now, Action: kernelCommandAudit(b.OperationID), Outcome: outcome, ReasonCode: reason, Actor: audit.ActorInput{Kind: actorKind, ID: string(b.ActorID)}, Subject: audit.SubjectInput{Type: kind, ID: target}, Context: audit.ContextInput{TenantID: string(b.TenantID), CorrelationID: b.CorrelationID}, Policy: audit.PolicyMetadata{PolicyID: b.PolicyID, Version: strconv.FormatUint(b.PolicyVersion, 10)}, Changes: changes, Attributes: map[string]string{"identity.profile": "identity.security.v1", "command.id": string(b.CommandID), "retention.class": retention, "aggregate.type": kind, "aggregate.id": target, "aggregate.before_version": strconv.FormatUint(before, 10), "aggregate.after_version": after}})
 	if e != nil {
 		return audit.Record{}, invalidAudit()
 	}

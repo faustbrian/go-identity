@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Recover abandoned identifier-attachment reservations through frozen primary
+  participant evidence. Only unanimous non-commit proof grants terminal capability
+  release; release, failure audit and aborted receipt commit together. Unknown,
+  missing or conflicting evidence and callback failures retain the reservation.
+  Capability expiry alone never grants release or reactivation. Domain execution
+  and the production capability adapter remain unfinished.
+
 - Atomically reserve or CAS-rebind a registered capability participant with
   exact identifier intent and the command journal. Invocation-bound SQL handles
   preserve original fingerprints/generations and expire on return; participant

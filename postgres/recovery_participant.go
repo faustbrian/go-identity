@@ -27,8 +27,9 @@ const (
 // declaration. Only Coordinator calls this method. Implementations must inspect
 // retained bindings, not merely prunable payloads, and own only their evidence.
 // No network, hooks, private transactions, command-ledger changes or retained
-// handles are allowed. A nil error is not commit proof. This kernel profile
-// admits no one-time participants or participant transitions during recovery.
+// handles are allowed. A nil error is not commit proof. This interface grants
+// evidence reads only. Identifier attachment's separate typed release phase is
+// invoked only after every participant proves non-commit.
 // Implementations must support concurrent invocations with independent handles.
 type RecoveryContributor interface {
 	Contributor
@@ -106,6 +107,28 @@ func (w RecoveryWork) LifecyclePlan() (LifecyclePlan, error) {
 	return *w.state.plan.lifecycle, nil
 }
 
+// CapabilityBinding returns frozen participant input only to the exact
+// registered capability instance. Generation is the recovery owner and
+// PreviousGeneration is the reserved owner being reconciled. The handle grants
+// evidence reads only: expiry or a negative capability observation alone cannot
+// release it. Missing or mismatched retained bindings must remain unknown.
+func (w RecoveryWork) CapabilityBinding(p CapabilityReleaseContributor) (CapabilityReservationBinding, error) {
+	if w.usable() != nil || w.state.entry.descriptor.Owner != "capability/postgres" || w.state.work.state.execution == nil {
+		return CapabilityReservationBinding{}, invalidWork()
+	}
+	r := w.state.work.state.execution.reservation
+	if r == nil {
+		return CapabilityReservationBinding{}, invalidWork()
+	}
+	s := &capabilityReservationState{coordinator: w.state.work.state.execution.coordinator, work: w.state.work, plan: w.state.plan, previousGeneration: r.journal.previousGeneration, active: true}
+	var ok bool
+	s.contributor, ok = capabilityReservationParticipant(w.state.entry.contributor)
+	if !ok {
+		return CapabilityReservationBinding{}, invalidWork()
+	}
+	return (CapabilityReleaseWork{state: s}).Binding(p)
+}
+
 // RecoverParticipant proves absence of a creation target on the locked primary.
 // An existing user is not evidence that this command committed; without an
 // original command linkage that case conservatively remains unknown. No live
@@ -113,14 +136,31 @@ func (w RecoveryWork) LifecyclePlan() (LifecyclePlan, error) {
 // inspect its evidence. For field mutation, only the unchanged original
 // aggregate version is negative evidence under the coordinator's journal and
 // tenant fences. A changed/missing aggregate remains unknown; it is never
-// treated as a committed receipt. Other domain profiles remain unsupported.
+// treated as a committed receipt. Identifier attachment requires target absence
+// plus the other participants' retained negative evidence; any existing target
+// remains unknown. Other domain profiles remain unsupported.
 func (r *Repository) RecoverParticipant(ctx context.Context, recovery RecoveryWork) (RecoveryStatus, error) {
 	if r == nil || ctx == nil || recovery.usable() != nil || recovery.state.entry.contributor != r {
 		return RecoveryUnknown, invalidWork()
 	}
 	b, err := recovery.Scope()
-	if err != nil || b.OperationID != "identity.user.create" && b.OperationID != "identity.profile.update" && b.OperationID != "identity.user.update-admin" {
+	if err != nil || b.OperationID != "identity.user.create" && b.OperationID != "identity.profile.update" && b.OperationID != "identity.user.update-admin" && b.OperationID != "identity.identifier.attach" {
 		return RecoveryUnknown, invalidWork()
+	}
+	if b.OperationID == "identity.identifier.attach" {
+		rows, e := recovery.Query(ctx, `SELECT EXISTS(SELECT 1 FROM identity.identifiers WHERE tenant_id=$1 AND identifier_id=$2)`, string(b.TenantID), b.RecordID)
+		if e != nil {
+			return RecoveryUnknown, e
+		}
+		defer rows.Close()
+		var exists bool
+		if !rows.Next() || rows.Scan(&exists) != nil || rows.Next() || rows.Err() != nil {
+			return RecoveryUnknown, identity.UnavailableError{}
+		}
+		if exists {
+			return RecoveryUnknown, nil
+		}
+		return RecoveryNotCommitted, nil
 	}
 	if b.OperationID == "identity.profile.update" || b.OperationID == "identity.user.update-admin" {
 		plan := recovery.state.plan.lifecycle

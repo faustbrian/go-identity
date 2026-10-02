@@ -452,9 +452,22 @@ journal and tenant locks. Failure, panic or unfinished rows rolls back every
 prefix; returned invocation handles and rows cannot outlive the phase. Retained
 fingerprint keys remain authoritative on replay. Contributors never own closure.
 `Begin` still rejects these reservations before consuming their opaque handle:
-domain/session/risk/apply/finalize/release/recovery phases and the production
+domain/session/risk/apply/finalize phases and the production
 capability store are pending. No capability use or complete workflow is claimed
 by a reserved journal. Existing creation/profile/admin composition is unchanged.
+
+Expired identifier-attachment commands additionally support primary recovery
+when every frozen contributor supplies `RecoveryContributor` and the capability
+participant supplies `CapabilityReleaseContributor`. Missing targets and exact
+reserved capability bindings are negative evidence, never sufficient alone.
+Only unanimous non-commit evidence under journal and tenant exclusions grants
+`CapabilityReleaseWork`; it CAS-releases the prior generation to a terminal
+state with the new recovery generation. Failure audit, terminal capability and
+aborted receipt commit together. Missing, conflicting or unknown evidence and
+callback errors/panics roll back the entire takeover. Capability expiry does not
+release an unknown outcome; terminal repeat returns the original receipt. These
+SQL fixture tests prove coordinator atomicity, not production capability-store
+composition. Other identifier operations and successful consumption remain open.
 
 Contributor identities can now be composed with
 `NewContributorRegistry([]Contributor{...})`. The registry snapshots 1..64

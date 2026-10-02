@@ -16,13 +16,16 @@ import (
 // attempting primary reconciliation. It exposes metadata only, never private
 // replay fields. Missing/wrong-scope/denied requests retain QueryCommand's
 // decision/read shape and perform no mutation. Live pending is observational.
-// Expired creation/field-update recovery resolves only the exact frozen registry entries
+// Expired creation, field-update and identifier-attachment recovery resolves
+// only the exact frozen registry entries
 // through RecoveryContributor, takes a new generation, and aborts only after
 // all participants prove non-commit and a required failure audit is persisted
 // in the same guarded transaction. Missing/unknown/conflicting evidence leaves
 // pending; no success is reconstructed. Commit-attempt failure is Unknown.
-// It performs no command replay, network callbacks or one-time recovery; those
-// profiles and recovery-deadline/operator alerting remain under development.
+// Identifier attachment additionally requires the typed capability release
+// phase: only unanimous non-commit proof permits terminal release in the same
+// transaction. It performs no command replay or network callbacks. Other
+// one-time profiles and recovery-deadline/operator alerting remain unfinished.
 func (c *Coordinator) RecoverCommand(ctx context.Context, q identity.RecoveryQuery, caller authorization.DecisionContext) (CommandRecord, error) {
 	if c == nil || ctx == nil || c.maximumDuration <= 0 || c.maximumDuration > time.Minute {
 		return CommandRecord{}, coordinatorError()
@@ -99,7 +102,7 @@ func (c *Coordinator) recoverCommandReceipt(ctx context.Context, q identity.Reco
 	if observed.until.After(observed.now) {
 		return result, nil
 	}
-	if q.OperationID != "identity.user.create" && q.OperationID != "identity.profile.update" && q.OperationID != "identity.user.update-admin" {
+	if q.OperationID != "identity.user.create" && q.OperationID != "identity.profile.update" && q.OperationID != "identity.user.update-admin" && q.OperationID != "identity.identifier.attach" {
 		return result, identity.UnavailableError{}
 	}
 	fingerprint := [32]byte(observed.fingerprint)
@@ -117,6 +120,14 @@ func (c *Coordinator) recoverCommandReceipt(ctx context.Context, q identity.Reco
 		if _, ok := entry.contributor.(RecoveryContributor); !ok {
 			return result, identity.UnavailableError{}
 		}
+		if entry.descriptor.Owner == "capability/postgres" {
+			if _, ok := entry.contributor.(CapabilityReleaseContributor); !ok {
+				return result, identity.UnavailableError{}
+			}
+		}
+	}
+	if q.OperationID == "identity.identifier.attach" && (admitted.capability == nil || admitted.lifecycle == nil || admitted.lifecycle.BeforeVersion != 0) {
+		return result, identity.UnavailableError{}
 	}
 	var owner [16]byte
 	if _, e = rand.Read(owner[:]); e != nil || owner == ([16]byte{}) {
@@ -177,6 +188,9 @@ func (c *Coordinator) recoverCommandReceipt(ctx context.Context, q identity.Reco
 		return result, e
 	}
 	if e = c.persistAuditPhase(work); e != nil {
+		return result, identity.UnavailableError{}
+	}
+	if e = c.releaseCapability(bounded, work, admitted, journal); e != nil {
 		return result, identity.UnavailableError{}
 	}
 	// Contributor return values cannot erase a latched local/SQL failure.
