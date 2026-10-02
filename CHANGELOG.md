@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Add self-service profile reads, versioned explicit-command updates and scoped
+  recovery with a distinct email/status/role-excluding projection. Require the
+  current human subject, current operation/field policy, bounded allowlisted
+  HTTPS images, privately copied output and replay-before-active/version CAS.
+  Preserve known commits after disclosure failure. Session/keyed transport,
+  durable adapters and full catalog/composition integration remain pending.
+
 - Add explicit-ID administrative typed-field updates and scoped recovery.
   Preserve same-command replay before stale-version checks, retain original
   known outcomes after output failure, and bind new writes to field policy and

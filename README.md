@@ -9,6 +9,8 @@ Pure risk, claims, retention and redaction callbacks have a bounded validated
 policy evaluator; the authorization engine remains the upstream service.
 Administrative typed-field updates enforce expected-version commands and scoped
 recovery through the same durable owner.
+Self-service profile reads/updates use a distinct safe projection and exact
+current-human-subject scope, bounded image origins, typed fields and recovery.
 Remaining lifecycle commands, durable repositories, complete policy composition,
 hooks, directory import and privacy workflows are not implemented yet.
 
@@ -41,6 +43,8 @@ See [policy composition](docs/policies.md) for typed fail-closed callbacks and
 current read/create redaction integration.
 See [administrative updates](docs/updates.md) for field policy, replay-before-
 version-check semantics and required durable status/version fencing.
+See [self-service profiles](docs/profiles.md) for name/image, safe additional
+fields, current subject policy and the pending session/keyed/SQL composition.
 
 ## Development verification
 
