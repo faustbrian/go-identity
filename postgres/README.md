@@ -30,8 +30,21 @@ journal foundation. Private admission runs inside the future Coordinator's
 transaction, never commits independently, and does not grant mutation authority.
 Exact replay selects the stored fingerprint-key version; missing retained keys
 or missing scoped rows fail closed. Retired IDs conflict permanently. The owned
-canonical command codec, full journal state/result fields, participant plans,
+canonical command codec for account and identifier variants, full journal state/result fields, participant plans,
 leases, retirement policy and recovery still require implementation.
+
+The private codec currently maps creation, whole-field update, profile and
+status commands through typed core accessors. It uses the closed
+`identity-command-v1` deterministic encoding profile, framed HMAC-SHA-256
+digests for all private fields, and stored-key regeneration on rotated-key
+replay. Directory IDs retain their exact validated representation, including
+ULIDs; random command IDs become fixed-width byte strings. Attribute times
+must be microsecond-exact within PostgreSQL years 1..9999; no rounding is
+performed. Equivalent whole-field replacement ordering does not change intent,
+but list ordering does. No raw command, name, image or attribute value enters
+persisted collision fields. Unsupported command variants fail closed.
+The encoder follows [RFC 8949](https://www.rfc-editor.org/rfc/rfc8949.html);
+full protocol interoperability and release evidence remain pending.
 
 ### FAQ
 

@@ -48,6 +48,21 @@ SELECT command_id,tenant_id,purpose FROM identity.identity_command_id_claims WHE
 	}
 	rotated := keys
 	rotated.current = 2
+	typed := codecCreation(t, []identity.AttributeUpdate{{Name: "private", Value: identity.AttributeValue{Kind: identity.AttributeString, Scalar: identity.AttributeScalar{Kind: identity.AttributeString, String: "synthetic"}}}})
+	prepared, err := prepareClaim(typed, keys.retained[keys.current])
+	if err != nil {
+		t.Fatal("typed claim preparation failed")
+	}
+	if got, err := execute(prepared, keys, true); err != nil || got != claimNew {
+		t.Fatal("typed initial admission failed")
+	}
+	prepared, err = prepareClaim(typed, rotated.retained[rotated.current])
+	if err != nil {
+		t.Fatal("rotated typed preparation failed")
+	}
+	if got, err := execute(prepared, rotated, true); err != nil || got != claimReplay {
+		t.Fatal("stored-key secret re-encoding failed")
+	}
 	if got, err := execute(request, rotated, true); err != nil || got != claimReplay {
 		t.Fatal("retained-key replay failed")
 	}
@@ -87,6 +102,7 @@ SELECT command_id,tenant_id,purpose FROM identity.identity_command_id_claims WHE
 	if err != nil {
 		t.Fatal("rollback transaction unavailable")
 	}
+	defer tx.Rollback(ctx)
 	if got, err := lockCommandClaim(ctx, tx, q, keys); err != nil || got != claimNew {
 		t.Fatal("rollback fixture failed")
 	}

@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add private deterministic command encoding for creation, field updates,
+  profile changes and status transitions, with framed private-field digests
+  and stored-key regeneration during replay. Remaining command variants and
+  the public Coordinator are not yet available.
+
 - Add the global command-ID claim and scoped journal foundation with retained-
   key replay checks, scope collision rejection and retired-ID tombstones.
   This private admission step is not yet a complete Coordinator or command API.
