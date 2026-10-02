@@ -11,6 +11,24 @@ The caller owns pool shutdown. No globals or background goroutines are created.
 Driver errors are discarded rather than exposed through `errors.As` or logs.
 Cancellation and deadline classifications remain observable.
 
+## Feature operation registration
+
+Durable feature adapters may implement `FeatureContributor` alongside the
+existing `Contributor`. The same immutable registry snapshots their compile-time
+`identity.FeatureOperation` descriptors once, including all supported schemas,
+explicit record policy and exact adapter owner. Each core owner maps to its
+`<owner>/postgres` adapter; each operation belongs to one exact contributor
+across schema versions. Duplicate/conflicting schemas and foreign ownership
+fail construction before any transaction opens. Limits are 64 declarations per
+feature contributor and 1024 total. Legacy contributors need no new methods.
+
+`ContributorRegistry.FeatureOperations` returns an owned scalar projection for
+trusted composition; it performs no callbacks. This is **not** enabled-feature
+discovery, registration of codecs, authorization or execution readiness.
+Kernel command plans remain closed; typed feature command/receipt preparation,
+reservation, apply/finalize/recovery and session issuance remain in development.
+Do not advertise routes from these declarations or substitute private journals.
+
 ## Stable status-filtered listing
 
 Compose the same repository through `identity.NewUserDirectoryService` for

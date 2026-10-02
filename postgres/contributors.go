@@ -36,8 +36,11 @@ type ContributorDescriptor struct {
 type ContributorRegistry struct{ state *contributorRegistryState }
 
 type contributorRegistryState struct {
-	entries []registeredContributor
-	byID    map[string]int
+	entries      []registeredContributor
+	byID         map[string]int
+	features     []FeatureRegistration
+	featureByKey map[featureOperationKey]int
+	featureOwner map[string]int
 }
 
 type registeredContributor struct {
@@ -53,12 +56,22 @@ type registeredContributor struct {
 // Descriptors are read exactly once and copied; mutating the input slice later
 // cannot change admission. Contributors are trusted compile-time adapters, not
 // arbitrary callbacks: panics in their Descriptor method are not recovered.
+// Optional FeatureContributor declarations are read once and frozen as well;
+// malformed/empty/oversized declarations, wrong owner relationships, duplicate
+// operation schemas and cross-contributor operation ownership fail atomically.
+// At most 64 schemas per feature contributor and 1024 total may be declared.
+// Panics in these trusted composition methods are not recovered. Callers must
+// not mutate contributor declarations during construction. Registration alone
+// never enables an unsupported command codec or execution phase.
 // This constructor performs no I/O and never grants mutation authority.
 func NewContributorRegistry(contributors []Contributor) (*ContributorRegistry, error) {
 	if len(contributors) == 0 || len(contributors) > 64 {
 		return nil, invalidRegistry()
 	}
-	s := &contributorRegistryState{entries: make([]registeredContributor, 0, len(contributors)), byID: make(map[string]int, len(contributors))}
+	s := &contributorRegistryState{
+		entries: make([]registeredContributor, 0, len(contributors)), byID: make(map[string]int, len(contributors)),
+		featureByKey: make(map[featureOperationKey]int), featureOwner: make(map[string]int),
+	}
 	for _, c := range contributors {
 		if nilContributor(c) {
 			return nil, invalidRegistry()
@@ -72,6 +85,9 @@ func NewContributorRegistry(contributors []Contributor) (*ContributorRegistry, e
 		}
 		s.byID[d.ContractID] = len(s.entries)
 		s.entries = append(s.entries, registeredContributor{descriptor: d, contributor: c, registry: s})
+		if err := s.registerFeatures(len(s.entries) - 1); err != nil {
+			return nil, err
+		}
 	}
 	return &ContributorRegistry{state: s}, nil
 }

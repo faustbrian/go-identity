@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Freeze optional feature operation declarations in the existing contributor
+  registry with exact adapter ownership, supported schemas, record policy and
+  bounded conflict checks. Legacy contributors remain unchanged; registration
+  does not enable feature execution. Adopt identity's additive operation-binding
+  contract as the adapter dependency baseline.
+
 - Recover abandoned identifier-attachment reservations through frozen primary
   participant evidence. Only unanimous non-commit proof grants terminal capability
   release; release, failure audit and aborted receipt commit together. Unknown,
