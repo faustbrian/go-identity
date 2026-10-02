@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add the five-member PolicySet and bounded typed risk, claims, retention and
+  redaction evaluation. Copy policy inputs/results, enforce current versions and
+  registered reasons, reject destructive legal-hold allows and incomplete field
+  partitions, and omit every failed decision. Existing upstream authorization
+  and read/create APIs remain unchanged; full workflow integration is pending.
+
 - Add authorized explicit-ID user creation and scoped command recovery through
   storage-neutral UnitOfWork execute/recover contracts. Freeze typed command
   payloads, reuse field enforcement and sample trusted time once. Preserve

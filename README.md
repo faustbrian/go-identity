@@ -5,6 +5,8 @@ development; current implemented slices are subject/pre-authentication ID
 contracts, structural user/status-policy validation and authorized user reads
 with bounded, stable-snapshot listing, versioned typed-field preparation and
 authorized explicit-ID creation/recovery through a storage-neutral command owner.
+Pure risk, claims, retention and redaction callbacks have a bounded validated
+policy evaluator; the authorization engine remains the upstream service.
 Remaining lifecycle commands, durable repositories, complete policy composition,
 hooks, directory import and privacy workflows are not implemented yet.
 
@@ -33,6 +35,8 @@ per-field write enforcement and the boundary between prepared values and a
 durably authorized command.
 See [creation and recovery](docs/creation.md) for the current command boundary,
 durable outcome semantics and the pending PostgreSQL/keyed-admission integration.
+See [policy composition](docs/policies.md) for typed fail-closed callbacks and
+current read/create redaction integration.
 
 ## Development verification
 
