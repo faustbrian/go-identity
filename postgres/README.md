@@ -25,6 +25,14 @@ write application-owned identity tables or transactions to bridge that gap.
 Commands, snapshots, attributes, imports, lifecycle cascades, audit/outbox,
 reconciliation and the shared transaction coordinator remain unfinished.
 
+The appended command-claim migration installs the global ID claim and scoped
+journal foundation. Private admission runs inside the future Coordinator's
+transaction, never commits independently, and does not grant mutation authority.
+Exact replay selects the stored fingerprint-key version; missing retained keys
+or missing scoped rows fail closed. Retired IDs conflict permanently. The owned
+canonical command codec, full journal state/result fields, participant plans,
+leases, retirement policy and recovery still require implementation.
+
 ### FAQ
 
 - Can I use a replica? No; the repository's primary consistency contract is
