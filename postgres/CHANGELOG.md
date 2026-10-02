@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Reconstruct bounded canonical feature-plan history with exact binding,
+  fingerprint, contributor order, audit slots and lifecycle versions. Malformed
+  history fails closed without returning a partial plan. Historical decoding
+  does not enable feature reservation, receipt disclosure or recovery execution.
+
 - Prepare exact registered feature plans through the existing coordinator,
   binding ordered contributors, bounded required audit slots, lifecycle and
   keyed command intent. Match safe receipts to their exact feature descriptor
