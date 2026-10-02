@@ -92,16 +92,17 @@ type Lifetime struct {
 
 // Evaluate computes expiry at authoritative now. issuedAt is original family
 // issuance, lastActivity is an authoritative accepted-use timestamp and
-// authenticatedAt is the last completed authentication/reauthentication within
-// that family. Activity/rotation never resets issuedAt or authenticatedAt.
-// Future, pre-issuance, zero and out-of-range times fail closed; equality with
+// authenticatedAt is the original completed authentication/reauthentication.
+// It may precede issuance: resetting it to issuance would renew proof freshness.
+// Activity/rotation never resets issuedAt or authenticatedAt.
+// Future, pre-issuance activity, zero and out-of-range times fail closed; equality with
 // expiry is expired and equality with freshness end is not fresh. No skew is
 // silently granted. Evaluate neither reads nor mutates a store.
 func (p RememberPolicy) Evaluate(now, issuedAt, lastActivity, authenticatedAt time.Time) (Lifetime, error) {
 	if !explicit(p.choice) {
 		return Lifetime{}, ErrInvalidPolicy
 	}
-	if !validTime(now) || !validTime(issuedAt) || !validTime(lastActivity) || !validTime(authenticatedAt) || issuedAt.After(now) || lastActivity.Before(issuedAt) || lastActivity.After(now) || authenticatedAt.Before(issuedAt) || authenticatedAt.After(now) {
+	if !validTime(now) || !validTime(issuedAt) || !validTime(lastActivity) || !validTime(authenticatedAt) || issuedAt.After(now) || lastActivity.Before(issuedAt) || lastActivity.After(now) || authenticatedAt.After(now) {
 		return Lifetime{}, ErrInvalidTime
 	}
 	abs := issuedAt.Add(p.absolute)

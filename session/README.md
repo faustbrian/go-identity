@@ -8,6 +8,12 @@ revocation and transfers are not yet implemented.** Complete authority-vector
 construction and exact comparison are available, but do not read primary
 authority or prove activity/freshness.
 
+Immutable complete session records and exact-bound native issue commands are
+also available for trusted storage/adapters. They are **not** session issuance:
+caller-created `authentication.Proof` metadata and `AuthenticationVerified`
+cannot establish authentication authority. No command in this module executes
+or opens a transaction, reserves a proof, writes a record or reveals a token.
+
 ## Quick start and API
 
 ```go
@@ -49,6 +55,26 @@ authentication or persistence. Reference defaults belong to deployment.
   explicit organization/factor/passkey applicability. Use `Bindings` only for
   trusted persistence/composition. `CompareCurrent` denies any scope, version,
   selection or presence change, including version increases and regressions.
+- `NewSession` reconstructs a complete bounded `SessionSpec`: exact IDs and
+  record/family versions, original issuance/activity/authentication times,
+  resolved remember policy, one full authority vector and versioned token
+  lookup digest. `Bindings` returns an owned projection; `Lifetime` calculates
+  recorded expiry/freshness only. Neither method verifies current activity.
+- `AuthenticationMetadata` explicitly separates completed-authentication
+  metadata from anonymous state. Verified metadata retains the proof ID/version,
+  exact authenticating credential ID/version and original proof projection.
+  Anonymous state cannot assert credential proof, factor or passkey authority.
+  The snapshot's aggregate credential dimension remains separate from the
+  exact credential's version. The future issuer must validate live proof,
+  credential, factor/passkey applicability and exact derived scope keys.
+- `NewIssueCommand` freezes exact root `CommandBinding` plus one new version1
+  session, preserving family version. `IssueOperation` declares its v1 mapping.
+  `Issue` exposes the native projection; `ValidateIssueAt` rechecks temporal
+  preparation only. Authenticated issue requires `session-issue` proof purpose,
+  exact tenant/subject/audience, unexpired proof and original freshness.
+  The actual issuer must still verify expected private proof authority and
+  current operation policy/vector before reserve/apply through the sole
+  `identity/postgres` coordinator. This command cannot activate that adapter.
 
 ## Adoption, security and tradeoffs
 
@@ -84,6 +110,17 @@ renews authentication freshness or absolute lifetime. Expiry equality denies;
 invalid/future timelines fail closed without silent skew. Sensitive operations
 need a separate stricter freshness gate. Calculations are **not** authoritative
 shared-issuer validity evidence.
+
+Completed authentication may precede session issuance. Preserve its original
+timestamp: replacing it with issuance would renew sensitive-operation freshness.
+Activity must still be at/after issuance, and future authentication denies.
+Proof expiry is historical record metadata, not the session's lifetime deadline;
+new issue preparation separately checks exclusive proof expiry. Stored proof
+projections are not authority, and arbitrary matching authority keys are not
+primary evidence. No default, normalization, callback or implicit upgrade is
+introduced by record reconstruction. These APIs preserve existing root contracts
+and consume pinned, unreleased identity/authentication revisions; published
+clean-consumer, typed catalog and complete release checks remain pending.
 
 Cookie attributes fix Secure, HttpOnly, path `/`, no Domain and no partitioning.
 The reference profile's High priority attribute awaits HTTP serialization;

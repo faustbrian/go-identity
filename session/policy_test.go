@@ -85,7 +85,7 @@ func TestLifetimeNeverExtendsAbsoluteOrAuthenticationTime(t *testing.T) {
 	for _, times := range [][4]time.Time{
 		{time.Time{}, issued, issued, issued}, {issued.Add(-time.Second), issued, issued, issued},
 		{issued, issued, issued.Add(time.Second), issued}, {issued, issued, issued, issued.Add(time.Second)},
-		{issued, issued, issued.Add(-time.Second), issued}, {issued, issued, issued, issued.Add(-time.Second)},
+		{issued, issued, issued.Add(-time.Second), issued},
 		{issued, issued.AddDate(10000, 0, 0), issued, issued},
 		{time.Date(9999, 12, 31, 0, 0, 0, 0, time.UTC), time.Date(9999, 12, 31, 0, 0, 0, 0, time.UTC), time.Date(9999, 12, 31, 0, 0, 0, 0, time.UTC), time.Date(9999, 12, 31, 0, 0, 0, 0, time.UTC)},
 	} {
@@ -125,6 +125,17 @@ func TestPolicyCapsDoNotEnlargeSelectedLifetime(t *testing.T) {
 	}
 	if _, e = cp.Attributes(p, now, time.Time{}); !errors.Is(e, session.ErrInvalidTime) {
 		t.Fatal("zero expiry accepted")
+	}
+}
+
+func TestLifetimeRetainsAuthenticationCompletedBeforeIssuance(t *testing.T) {
+	p, _ := session.ResolveRememberPolicy(session.BrowserSession, config())
+	issued := time.Date(2026, 10, 3, 12, 0, 0, 0, time.UTC)
+	authenticated := issued.Add(-time.Minute)
+	now := authenticated.Add(24 * time.Hour)
+	got, err := p.Evaluate(now, issued, issued, authenticated)
+	if err != nil || got.Fresh || got.AbsoluteExpiresAt != issued.Add(24*time.Hour) {
+		t.Fatal("issuance must not renew proof freshness", err)
 	}
 }
 
