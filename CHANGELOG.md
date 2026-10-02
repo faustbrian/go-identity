@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add current-subject account unlink command admission and scoped recovery.
+  Verify exact issuer/audience/session/command/version/provider-choice bindings
+  using signed one-use capabilities; preserve unknown or known committed
+  outcomes without claiming provider revocation success. Durable proof/risk
+  consumption, SQL and full public transport composition remain pending.
 - Add the identity-owned unlink state transition with aggregate, account,
   social-link and credential fences. Recheck final usable access against locked
   primary eligibility; produce copied next state and a tombstone version without

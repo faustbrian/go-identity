@@ -72,6 +72,38 @@ unlinks must not each rely on the other's soon-to-be-removed credential.
 
 ## Tradeoffs, FAQ and pending work
 
+`NewAccountUnlinkService` composes the existing `UnitOfWork`, exact upstream
+authorization and capability services, redaction and a primary unlink repository.
+Its explicit trusted issuer/audience and maximum proof age (positive, at most
+15 minutes) have no defaults. `AccountUnlink` admits only the current human
+subject, verifies the opaque signed capability, checks current primary policy
+and then executes the closed immutable `AccountUnlinkCommand`. Verification
+does not consume the capability. A trusted issuer issues it only after the
+required current credential-specific reauthentication; constructing a proof or
+grant projection does not establish that authentication.
+
+The signed profile is non-bearer, has exactly one audience, maximum uses one,
+literal `identity.account.unlink` purpose, exact account resource, tenant/user,
+and exactly nine caveats: command_id, session_id, session_version, user_version,
+account_version, social_link_version, credential_version, policy_version and
+revoke_provider. Numeric values use canonical decimal and provider choice uses
+literal true/false. Future, expired, over-age, reusable or substituted evidence
+denies. Session/actor input comes from authenticated platform composition, not
+client JSON. The durable owner must revalidate current session/credential/proof
+expiry and atomically reserve/finalize one use with the protected transition
+and applicable risk evidence; this core layer does not consume them early.
+
+The repository retains social-link tombstone authority after removal, allowing
+same-command replay. New stale commands must conflict under the durable owner's
+lock; only exact existing commands can replay before CAS. `RecoverAccountUnlink`
+requires current exact subject policy and target, calls only primary recovery,
+and never performs another unlink. Malformed/mismatched receipts remain unknown.
+Known commits survive cancellation or projection failure with output withheld.
+Provider observations are immutable initial pending/not-requested intent, never
+current external completion. No provider network work occurs in core admission.
+The request here is explicit-ID trusted core composition; keyed HTTP admission
+and the complete transport/catalog facade still require their owned adapters.
+
 `ApplyAccountUnlink` computes the proposed next state for the durable owner's
 locked transition. `AccountUnlinkState` binds the connection's social-link
 version and the user's credential authority version to the complete access
