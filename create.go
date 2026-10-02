@@ -263,7 +263,7 @@ func (s *UserCreationService) recoverCommand(ctx context.Context, req UserCreate
 	if decision.Outcome != authorization.Allow || decision.Revision != authorization.Revision(s.policy.config.PolicyVersion) {
 		return result, ForbiddenError{}
 	}
-	q := RecoveryQuery{CommandID: req.CommandID, TenantID: req.TenantID, UserID: req.UserID, ActorID: ActorID(req.ActorScope.Request.Subject.ID), ActorKind: req.ActorScope.Request.Subject.Kind}
+	q := RecoveryQuery{CommandID: req.CommandID, TenantID: req.TenantID, UserID: req.UserID, ActorID: ActorID(req.ActorScope.Request.Subject.ID), ActorKind: req.ActorScope.Request.Subject.Kind, OperationID: operation}
 	attempted = true
 	result.CommitOutcome = CommitOutcomeUnknown
 	receipt, dependencyErr := s.uow.Recover(ctx, q)

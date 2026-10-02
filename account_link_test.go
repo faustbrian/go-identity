@@ -142,6 +142,7 @@ func TestAccountLinkProofPayloadHasExactOwnedBindings(t *testing.T) {
 	_, o, r, _, _ := linkCommandFixture(t)
 	now := queryClock{}.Now()
 	command := AccountLinkCommand{Binding: CommandBinding{CommandID: r.CommandID, TenantID: r.Change.Account.TenantID, UserID: r.Change.Account.UserID, ActorID: ActorID(r.ActorScope.Request.Subject.ID), ActorKind: r.ActorScope.Request.Subject.Kind, OperationID: "identity.account.link-token", PolicyID: "identity-read", PolicyVersion: 1, SchemaID: "identity-account", SchemaVersion: 1, CorrelationID: string(r.CommandID)}, Change: r.Change, SessionID: r.SessionID, SessionVersion: r.SessionVersion}
+	command.Binding.RecordID, command.Binding.LinkMode = string(r.Change.Account.ID), r.Change.Mode
 	p, e := BuildAccountLinkProofPayload(AccountLinkProofSpec{Command: command, Issuer: "https://identity.example", Audience: "identity-backend", ID: "proof-link-aaaaaaaaaa", IssuedAt: now.Add(-time.Minute), ExpiresAt: now.Add(time.Minute)})
 	if e != nil || p.Subject != string(o.state.Access.User.ID) || p.Resource != string(r.Change.Account.ID) || p.Tenant != string(r.Change.Account.TenantID) || p.MaxUses != 1 || p.Bearer || p.Operation != "identity.account.link-token" || len(p.Caveats) != 8 || p.Caveats["session_id"] != "present:session-a" || p.Caveats["pre_auth_id"] != "absent" || p.Caveats["command_id"] != string(r.CommandID) {
 		t.Fatal("owned proof builder omitted exact binding")
@@ -462,6 +463,41 @@ func TestAccountLinkRecoveryUsesExactAccountPolicyBeforeReceiptRead(t *testing.T
 			}
 		} else if e == nil || out.AccountID != "" || reads != 0 {
 			t.Fatal("denied account recovered or read receipt")
+		}
+	}
+}
+
+func TestAccountLinkRecoveryRejectsWrongRecordAndModeForEveryOutcome(t *testing.T) {
+	for _, outcome := range []CommitOutcome{CommitOutcomeNotCommitted, CommitOutcomeConflict, CommitOutcomeInProgress, CommitOutcomeUnknown} {
+		s, _, r, _, _ := linkCommandFixture(t)
+		var receipt CommandResult
+		s.uow = creationOwnerFunc{execute: func(_ context.Context, c Command) (CommandResult, error) {
+			spec, _ := c.LinkAccount()
+			receipt = CommandResult{Binding: spec.Binding, Outcome: outcome}
+			if outcome == CommitOutcomeInProgress {
+				receipt.RetryAfter = time.Second
+			}
+			return receipt, nil
+		}, recover: func(context.Context, RecoveryQuery) (CommandResult, error) { return receipt, nil }}
+		_, _ = s.AccountLink(context.Background(), r)
+		q := AccountLinkRecoveryRequest{CommandID: r.CommandID, TenantID: r.Change.Account.TenantID, UserID: r.Change.Account.UserID, AccountID: r.Change.Account.ID, Mode: r.Change.Mode, ActorScope: r.ActorScope}
+		for _, wrongMode := range []bool{false, true} {
+			q.AccountID, q.Mode = r.Change.Account.ID, r.Change.Mode
+			if wrongMode {
+				q.Mode = AccountLinkAdministrative
+			} else {
+				q.AccountID = "permitted-other-record"
+			}
+			out, e := s.RecoverAccountLink(context.Background(), q)
+			var unknown UnknownCommitError
+			if !errors.As(e, &unknown) || out.CommitOutcome != CommitOutcomeUnknown || out.AccountID != "" {
+				t.Fatal("other account/mode disclosed noncommitted receipt", outcome, wrongMode)
+			}
+		}
+		q.AccountID, q.Mode = r.Change.Account.ID, r.Change.Mode
+		out, e := s.RecoverAccountLink(context.Background(), q)
+		if e == nil || out.CommitOutcome != outcome {
+			t.Fatal("exact scope lost outcome", outcome)
 		}
 	}
 }

@@ -61,6 +61,9 @@ type AccountUnlinkCommand struct {
 // NewAccountUnlinkCommand freezes validated intent. Construction does not
 // authorize or establish freshness; only trusted composition crosses UnitOfWork.
 func NewAccountUnlinkCommand(s AccountUnlinkCommand) (Command, error) {
+	if s.Binding.RecordID != string(s.Change.AccountID) {
+		return Command{}, InvalidInputError{Field: "unlink_command"}
+	}
 	if !validCommandBinding(s.Binding) || s.Binding.OperationID != "identity.account.unlink" || s.Binding.SchemaID != "identity-account" || s.Binding.SchemaVersion != 1 || s.Binding.ActorKind != authorization.SubjectUser || string(s.Binding.ActorID) != string(s.Binding.UserID) || s.Change.TenantID != s.Binding.TenantID || s.Change.UserID != s.Binding.UserID || !validDirectoryID(string(s.Change.AccountID)) || !validDirectoryID(s.SessionID) || s.SessionVersion == 0 || !unlinkVersion(s.Change.ExpectedUserVersion) || !unlinkVersion(s.Change.ExpectedAccountVersion) || !unlinkVersion(s.Change.ExpectedSocialLinkVersion) || !unlinkVersion(s.Change.ExpectedCredentialVersion) {
 		return Command{}, InvalidInputError{Field: "unlink_command"}
 	}
@@ -73,7 +76,7 @@ func NewAccountUnlinkCommand(s AccountUnlinkCommand) (Command, error) {
 
 // UnlinkAccount returns an immutable adapter value copy for this variant only.
 func (c Command) UnlinkAccount() (AccountUnlinkCommand, bool) {
-	if c.unlink == nil || c.create != nil || c.update != nil || c.profile != nil || c.status != nil || c.link != nil {
+	if c.unlink == nil || c.create != nil || c.update != nil || c.profile != nil || c.status != nil || c.link != nil || c.identifier != nil {
 		return AccountUnlinkCommand{}, false
 	}
 	return *c.unlink, true
@@ -189,6 +192,7 @@ func (s *AccountUnlinkService) AccountUnlink(ctx context.Context, r AccountUnlin
 		r.CorrelationID = string(r.CommandID)
 	}
 	b := CommandBinding{CommandID: r.CommandID, TenantID: r.Change.TenantID, UserID: r.Change.UserID, ActorID: ActorID(r.ActorScope.Request.Subject.ID), ActorKind: r.ActorScope.Request.Subject.Kind, OperationID: "identity.account.unlink", PolicyID: s.config.Query.PolicyID, PolicyVersion: s.config.Query.PolicyVersion, SchemaID: "identity-account", SchemaVersion: 1, CorrelationID: r.CorrelationID}
+	b.RecordID = string(r.Change.AccountID)
 	if !validCommandBinding(b) {
 		return out, InvalidInputError{Field: "unlink_binding"}
 	}
@@ -285,11 +289,11 @@ func (s *AccountUnlinkService) RecoverAccountUnlink(ctx context.Context, r Accou
 	if e != nil {
 		return out, e
 	}
-	q := RecoveryQuery{r.CommandID, r.TenantID, r.UserID, ActorID(r.ActorScope.Request.Subject.ID), r.ActorScope.Request.Subject.Kind}
+	q := RecoveryQuery{CommandID: r.CommandID, TenantID: r.TenantID, UserID: r.UserID, ActorID: ActorID(r.ActorScope.Request.Subject.ID), ActorKind: r.ActorScope.Request.Subject.Kind, OperationID: "identity.account.unlink", RecordID: string(r.AccountID)}
 	attempted = true
 	out.CommitOutcome = CommitOutcomeUnknown
 	receipt, e := s.uow.Recover(ctx, q)
-	if !receipt.valid() || receipt.Binding.OperationID != "identity.account.unlink" || receipt.Binding.CommandID != q.CommandID || receipt.Binding.TenantID != q.TenantID || receipt.Binding.UserID != q.UserID || receipt.Binding.ActorID != q.ActorID || receipt.Binding.ActorKind != q.ActorKind || receipt.Outcome == CommitOutcomeCommitted && receipt.Unlink.AccountID != r.AccountID {
+	if !receipt.valid() || receipt.Binding.OperationID != q.OperationID || receipt.Binding.RecordID != q.RecordID || receipt.Binding.CommandID != q.CommandID || receipt.Binding.TenantID != q.TenantID || receipt.Binding.UserID != q.UserID || receipt.Binding.ActorID != q.ActorID || receipt.Binding.ActorKind != q.ActorKind || receipt.Outcome == CommitOutcomeCommitted && receipt.Unlink.AccountID != r.AccountID {
 		return out, unknownError(ctx, r.CommandID)
 	}
 	out.CommitOutcome = receipt.Outcome

@@ -229,6 +229,12 @@ Link and unlink admission, including recovery, overwrite
 evaluation. Caller-supplied reserved metadata cannot select another account.
 Account-specific denial prevents receipt reads; recovery still checks the
 returned receipt's original account binding before disclosure.
+`CommandBinding.RecordID` retains the exact account for every receipt outcome,
+and account linking also retains `LinkMode`. `RecoveryQuery` carries the exact
+operation/record/mode; the owner and service must match all of them even for
+conflict, not-committed, pending and unknown outcomes. Missing historical scope
+fails closed and cannot be filled from the caller's request. Trusted command
+and unsigned proof builders require these matching binding fields.
 
 All dependencies must be concurrency-safe and honor the configured bounded
 context. No service-owned goroutine, transaction or second provider-link store

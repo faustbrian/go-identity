@@ -159,7 +159,7 @@ func NewUserStatusCommand(spec UserStatusCommand) (Command, error) {
 
 // UserStatus returns a value copy, or false for another/invalid command variant.
 func (c Command) UserStatus() (UserStatusCommand, bool) {
-	if c.status == nil || c.create != nil || c.update != nil || c.profile != nil || c.unlink != nil || c.link != nil {
+	if c.status == nil || c.create != nil || c.update != nil || c.profile != nil || c.unlink != nil || c.link != nil || c.identifier != nil {
 		return UserStatusCommand{}, false
 	}
 	return *c.status, true
@@ -388,7 +388,7 @@ func (s *UserStatusService) RecoverUserStatus(ctx context.Context, req UserStatu
 	}
 	attempted = true
 	result.CommitOutcome = CommitOutcomeUnknown
-	receipt, dependencyErr := s.uow.Recover(ctx, RecoveryQuery{CommandID: req.CommandID, TenantID: req.TenantID, UserID: req.UserID, ActorID: ActorID(dc.Request.Subject.ID), ActorKind: dc.Request.Subject.Kind})
+	receipt, dependencyErr := s.uow.Recover(ctx, RecoveryQuery{CommandID: req.CommandID, TenantID: req.TenantID, UserID: req.UserID, ActorID: ActorID(dc.Request.Subject.ID), ActorKind: dc.Request.Subject.Kind, OperationID: operation})
 	b := receipt.Binding
 	// The receipt retains its original policy identity/version. Current policy
 	// above governs disclosure, not the identity of an already committed command.

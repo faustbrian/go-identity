@@ -277,3 +277,30 @@ func TestAccountUnlinkRecoveryUsesExactAccountPolicyBeforeReceiptRead(t *testing
 		}
 	}
 }
+
+func TestAccountUnlinkRecoveryRejectsWrongRecordForEveryOutcome(t *testing.T) {
+	for _, outcome := range []CommitOutcome{CommitOutcomeNotCommitted, CommitOutcomeConflict, CommitOutcomeInProgress, CommitOutcomeUnknown} {
+		s, _, r, _, _ := unlinkCommandFixture(t)
+		var receipt CommandResult
+		s.uow = creationOwnerFunc{execute: func(_ context.Context, c Command) (CommandResult, error) {
+			spec, _ := c.UnlinkAccount()
+			receipt = CommandResult{Binding: spec.Binding, Outcome: outcome}
+			if outcome == CommitOutcomeInProgress {
+				receipt.RetryAfter = time.Second
+			}
+			return receipt, nil
+		}, recover: func(context.Context, RecoveryQuery) (CommandResult, error) { return receipt, nil }}
+		_, _ = s.AccountUnlink(context.Background(), r)
+		q := AccountUnlinkRecoveryRequest{CommandID: r.CommandID, TenantID: r.Change.TenantID, UserID: r.Change.UserID, AccountID: "permitted-other-record", ActorScope: r.ActorScope}
+		out, e := s.RecoverAccountUnlink(context.Background(), q)
+		var unknown UnknownCommitError
+		if !errors.As(e, &unknown) || out.CommitOutcome != CommitOutcomeUnknown || out.Version != 0 {
+			t.Fatal("other account disclosed noncommitted receipt", outcome)
+		}
+		q.AccountID = r.Change.AccountID
+		out, e = s.RecoverAccountUnlink(context.Background(), q)
+		if e == nil || out.CommitOutcome != outcome {
+			t.Fatal("exact account lost outcome", outcome)
+		}
+	}
+}

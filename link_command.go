@@ -54,7 +54,7 @@ func validLinkContinuation(s AccountLinkCommand) bool {
 }
 
 func validLinkCommandShape(s AccountLinkCommand) bool {
-	return validCommandBinding(s.Binding) && s.Binding.OperationID == "identity.account.link-token" && s.Binding.SchemaID == "identity-account" && s.Binding.SchemaVersion == 1 && s.Change.valid() && s.Change.Account.TenantID == s.Binding.TenantID && s.Change.Account.UserID == s.Binding.UserID && validLinkActor(s.Change.Mode, s.Binding.ActorKind, s.Binding.ActorID, s.Binding.UserID) && validLinkContinuation(s)
+	return validCommandBinding(s.Binding) && s.Binding.RecordID == string(s.Change.Account.ID) && s.Binding.LinkMode == s.Change.Mode && s.Binding.OperationID == "identity.account.link-token" && s.Binding.SchemaID == "identity-account" && s.Binding.SchemaVersion == 1 && s.Change.valid() && s.Change.Account.TenantID == s.Binding.TenantID && s.Change.Account.UserID == s.Binding.UserID && validLinkActor(s.Change.Mode, s.Binding.ActorKind, s.Binding.ActorID, s.Binding.UserID) && validLinkContinuation(s)
 }
 
 // NewAccountLinkCommand snapshots validated intent. It grants no authority,
@@ -105,7 +105,7 @@ func BuildAccountLinkProofPayload(s AccountLinkProofSpec) (capability.Payload, e
 
 // LinkAccount returns an independent typed adapter copy for this variant only.
 func (c Command) LinkAccount() (AccountLinkCommand, bool) {
-	if c.link == nil || c.create != nil || c.update != nil || c.profile != nil || c.status != nil || c.unlink != nil {
+	if c.link == nil || c.create != nil || c.update != nil || c.profile != nil || c.status != nil || c.unlink != nil || c.identifier != nil {
 		return AccountLinkCommand{}, false
 	}
 	s := *c.link
@@ -272,6 +272,7 @@ func (s *AccountLinkService) AccountLink(ctx context.Context, r AccountLinkReque
 		r.CorrelationID = string(r.CommandID)
 	}
 	b := CommandBinding{CommandID: r.CommandID, TenantID: r.Change.Account.TenantID, UserID: r.Change.Account.UserID, ActorID: ActorID(r.ActorScope.Request.Subject.ID), ActorKind: r.ActorScope.Request.Subject.Kind, OperationID: "identity.account.link-token", PolicyID: s.config.Query.PolicyID, PolicyVersion: s.config.Query.PolicyVersion, SchemaID: "identity-account", SchemaVersion: 1, CorrelationID: r.CorrelationID}
+	b.RecordID, b.LinkMode = string(r.Change.Account.ID), r.Change.Mode
 	if !validCommandBinding(b) || !r.Change.valid() {
 		return out, InvalidInputError{Field: "link_binding"}
 	}
@@ -373,11 +374,11 @@ func (s *AccountLinkService) RecoverAccountLink(ctx context.Context, r AccountLi
 	if e != nil {
 		return out, e
 	}
-	q := RecoveryQuery{r.CommandID, r.TenantID, r.UserID, ActorID(r.ActorScope.Request.Subject.ID), r.ActorScope.Request.Subject.Kind}
+	q := RecoveryQuery{CommandID: r.CommandID, TenantID: r.TenantID, UserID: r.UserID, ActorID: ActorID(r.ActorScope.Request.Subject.ID), ActorKind: r.ActorScope.Request.Subject.Kind, OperationID: "identity.account.link-token", RecordID: string(r.AccountID), LinkMode: r.Mode}
 	attempted = true
 	out.CommitOutcome = CommitOutcomeUnknown
 	receipt, e := s.uow.Recover(ctx, q)
-	if !receipt.valid() || receipt.Binding.OperationID != "identity.account.link-token" || receipt.Binding.CommandID != q.CommandID || receipt.Binding.TenantID != q.TenantID || receipt.Binding.UserID != q.UserID || receipt.Binding.ActorID != q.ActorID || receipt.Binding.ActorKind != q.ActorKind || receipt.Outcome == CommitOutcomeCommitted && (receipt.Link.AccountID != r.AccountID || receipt.Link.Mode != r.Mode) {
+	if !receipt.valid() || receipt.Binding.OperationID != q.OperationID || receipt.Binding.RecordID != q.RecordID || receipt.Binding.LinkMode != q.LinkMode || receipt.Binding.CommandID != q.CommandID || receipt.Binding.TenantID != q.TenantID || receipt.Binding.UserID != q.UserID || receipt.Binding.ActorID != q.ActorID || receipt.Binding.ActorKind != q.ActorKind || receipt.Outcome == CommitOutcomeCommitted && (receipt.Link.AccountID != r.AccountID || receipt.Link.Mode != r.Mode) {
 		return out, unknownError(ctx, r.CommandID)
 	}
 	out.CommitOutcome = receipt.Outcome

@@ -49,7 +49,7 @@ func NewUserUpdateCommand(spec UpdateUserCommand) (Command, error) {
 
 // UpdateUser returns a private copy, or false for another/invalid command kind.
 func (c Command) UpdateUser() (UpdateUserCommand, bool) {
-	if c.update == nil || c.create != nil || c.profile != nil || c.status != nil || c.unlink != nil || c.link != nil {
+	if c.update == nil || c.create != nil || c.profile != nil || c.status != nil || c.unlink != nil || c.link != nil || c.identifier != nil {
 		return UpdateUserCommand{}, false
 	}
 	spec := *c.update

@@ -16,6 +16,9 @@ Suspend/ban and restore/unban use versioned commands with distinct user authorit
 versions, exact required-consumer manifests and pending cascade admission.
 Account reads expose scoped permission-filtered metadata; the shared final-access
 check excludes the removed link, expired/disabled methods and API keys.
+Account linking and identifier changes have exact signed-intent command
+admission/recovery; the platform-owned durable adapters and real feature proof
+ceremonies remain required before these become complete public workflows.
 Remaining destructive lifecycle commands, durable repositories, complete policy composition,
 hooks, directory import and privacy workflows are not implemented yet.
 

@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+- Add identity-owned identifier commands with exact signed one-use intent,
+  current-human session scope, bounded primary admission and record/action-
+  specific recovery. Separate all five transitions; conserve known commitment
+  after output/cancellation failures and unknown outcomes after lost replies.
+  Feature normalization/challenge ceremonies, durable uniqueness/reuse/final
+  access, atomic proof/risk/cascades, SQL and public composition remain pending.
+  Retain exact record and link-mode scope across every command receipt outcome;
+  recovery now binds operation/record/mode, including failed and pending results.
+  Trusted record command/proof builders require the matching binding metadata;
+  historical receipts without original scope fail closed rather than borrowing
+  the caller's requested record.
+
 - Add identity-owned account linking with explicit, opt-in verified implicit
   and opt-in administrative paths. Bind signed one-use evidence to exact actor,
   provider subject, command, continuation and authority/record choices; preserve

@@ -312,7 +312,7 @@ func (s *ProfileService) RecoverProfileUpdate(ctx context.Context, req ProfileRe
 	}
 	id := UserID(dc.Request.Subject.ID)
 	out.CommitOutcome = CommitOutcomeUnknown
-	receipt, dependencyErr := s.creation.uow.Recover(ctx, RecoveryQuery{CommandID: req.CommandID, TenantID: req.TenantID, UserID: id, ActorID: ActorID(id), ActorKind: authorization.SubjectUser})
+	receipt, dependencyErr := s.creation.uow.Recover(ctx, RecoveryQuery{CommandID: req.CommandID, TenantID: req.TenantID, UserID: id, ActorID: ActorID(id), ActorKind: authorization.SubjectUser, OperationID: "identity.profile.update"})
 	if !receipt.valid() || receipt.Binding.CommandID != req.CommandID || receipt.Binding.TenantID != req.TenantID || receipt.Binding.UserID != id || receipt.Binding.ActorID != ActorID(id) || receipt.Binding.ActorKind != authorization.SubjectUser || receipt.Binding.OperationID != "identity.profile.update" {
 		return out, unknownError(ctx, req.CommandID)
 	}
@@ -576,7 +576,7 @@ func NewProfileUpdateCommand(spec ProfileUpdateCommand) (Command, error) {
 
 // UpdateProfile returns a private adapter copy, never another command variant.
 func (c Command) UpdateProfile() (ProfileUpdateCommand, bool) {
-	if c.profile == nil || c.create != nil || c.update != nil || c.status != nil || c.unlink != nil || c.link != nil {
+	if c.profile == nil || c.create != nil || c.update != nil || c.status != nil || c.unlink != nil || c.link != nil || c.identifier != nil {
 		return ProfileUpdateCommand{}, false
 	}
 	spec := *c.profile
