@@ -73,7 +73,7 @@ func NewAccountUnlinkCommand(s AccountUnlinkCommand) (Command, error) {
 
 // UnlinkAccount returns an immutable adapter value copy for this variant only.
 func (c Command) UnlinkAccount() (AccountUnlinkCommand, bool) {
-	if c.unlink == nil || c.create != nil || c.update != nil || c.profile != nil || c.status != nil {
+	if c.unlink == nil || c.create != nil || c.update != nil || c.profile != nil || c.status != nil || c.link != nil {
 		return AccountUnlinkCommand{}, false
 	}
 	return *c.unlink, true
@@ -195,7 +195,7 @@ func (s *AccountUnlinkService) AccountUnlink(ctx context.Context, r AccountUnlin
 	out.CommandID = r.CommandID
 	ctx, cancel := context.WithTimeout(ctx, s.config.Query.MaximumDuration)
 	defer cancel()
-	dc, now, e := s.admit(ctx, r.Change.TenantID, r.Change.UserID, r.ActorScope, false)
+	dc, now, e := s.admit(ctx, r.Change.TenantID, r.Change.UserID, r.Change.AccountID, r.ActorScope, false)
 	if e != nil {
 		return out, e
 	}
@@ -281,7 +281,7 @@ func (s *AccountUnlinkService) RecoverAccountUnlink(ctx context.Context, r Accou
 	out.CommandID = r.CommandID
 	ctx, cancel := context.WithTimeout(ctx, s.config.Query.MaximumDuration)
 	defer cancel()
-	dc, _, e := s.admit(ctx, r.TenantID, r.UserID, r.ActorScope, true)
+	dc, _, e := s.admit(ctx, r.TenantID, r.UserID, r.AccountID, r.ActorScope, true)
 	if e != nil {
 		return out, e
 	}
@@ -296,7 +296,7 @@ func (s *AccountUnlinkService) RecoverAccountUnlink(ctx context.Context, r Accou
 	return s.finish(ctx, out, receipt, e, dc)
 }
 
-func (s *AccountUnlinkService) admit(ctx context.Context, tenant TenantID, user UserID, scope authorization.DecisionContext, recovery bool) (authorization.DecisionContext, time.Time, error) {
+func (s *AccountUnlinkService) admit(ctx context.Context, tenant TenantID, user UserID, account AccountID, scope authorization.DecisionContext, recovery bool) (authorization.DecisionContext, time.Time, error) {
 	zero := authorization.DecisionContext{}
 	if scope.Request.Subject.Kind != authorization.SubjectUser || string(scope.Request.Subject.ID) != string(user) {
 		return zero, time.Time{}, ForbiddenError{}
@@ -332,6 +332,7 @@ func (s *AccountUnlinkService) admit(ctx context.Context, tenant TenantID, user 
 	}
 	dc.Request.Resource.Attributes["identity.command.recovery"] = authorization.BoolValue(recovery)
 	dc.Request.Resource.Attributes["identity.command.read-admission"] = authorization.BoolValue(!recovery)
+	dc.Request.Resource.Attributes["identity.account.id"] = authorization.StringValue(string(account))
 	if e := s.policy.allow(ctx, dc); e != nil {
 		return zero, time.Time{}, e
 	}

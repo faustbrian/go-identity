@@ -248,3 +248,32 @@ func TestAccountUnlinkCommandClosedUnionAndReceiptRejectCrossPurpose(t *testing.
 		t.Fatal("unlink payload accepted under other operation")
 	}
 }
+
+func TestAccountUnlinkRecoveryUsesExactAccountPolicyBeforeReceiptRead(t *testing.T) {
+	for _, allow := range []bool{false, true} {
+		s, o, r, _, _ := unlinkCommandFixture(t)
+		if _, e := s.AccountUnlink(context.Background(), r); e != nil {
+			t.Fatal(e)
+		}
+		reads := 0
+		s.uow = creationOwnerFunc{recover: func(ctx context.Context, q RecoveryQuery) (CommandResult, error) { reads++; return o.Recover(ctx, q) }}
+		s.policy.policy.authorize = queryDecisionFunc(func(_ context.Context, dc authorization.DecisionContext) (authorization.Decision, error) {
+			account, _ := dc.Request.Resource.Attributes["identity.account.id"].String()
+			outcome := authorization.Allow
+			if allow && account != string(r.Change.AccountID) || !allow && account == string(r.Change.AccountID) {
+				outcome = authorization.Deny
+			}
+			return authorization.Decision{Outcome: outcome, Revision: 1}, nil
+		})
+		q := AccountUnlinkRecoveryRequest{CommandID: r.CommandID, TenantID: r.Change.TenantID, UserID: r.Change.UserID, AccountID: r.Change.AccountID, ActorScope: r.ActorScope}
+		q.ActorScope.Request.Resource.Attributes = authorization.Attributes{"identity.account.id": authorization.StringValue("spoofed")}
+		out, e := s.RecoverAccountUnlink(context.Background(), q)
+		if allow {
+			if e != nil || out.Version == 0 || reads != 1 {
+				t.Fatal("allowed exact account could not recover")
+			}
+		} else if e == nil || out.Version != 0 || reads != 0 {
+			t.Fatal("denied account recovered or read receipt")
+		}
+	}
+}

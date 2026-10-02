@@ -576,7 +576,7 @@ func NewProfileUpdateCommand(spec ProfileUpdateCommand) (Command, error) {
 
 // UpdateProfile returns a private adapter copy, never another command variant.
 func (c Command) UpdateProfile() (ProfileUpdateCommand, bool) {
-	if c.profile == nil || c.create != nil || c.update != nil || c.status != nil || c.unlink != nil {
+	if c.profile == nil || c.create != nil || c.update != nil || c.status != nil || c.unlink != nil || c.link != nil {
 		return ProfileUpdateCommand{}, false
 	}
 	spec := *c.profile

@@ -89,6 +89,7 @@ type Command struct {
 	profile *ProfileUpdateCommand
 	status  *UserStatusCommand
 	unlink  *AccountUnlinkCommand
+	link    *AccountLinkCommand
 }
 
 // NewUserCreationCommand validates and snapshots a creation's structural input.
@@ -121,7 +122,7 @@ func NewUserCreationCommand(spec CreateUserCommand) (Command, error) {
 // CreateUser returns a private copy and false for an invalid/zero command.
 // Returned contents are for trusted adapters, never diagnostics or snapshots.
 func (c Command) CreateUser() (CreateUserCommand, bool) {
-	if c.create == nil || c.update != nil || c.profile != nil || c.status != nil || c.unlink != nil {
+	if c.create == nil || c.update != nil || c.profile != nil || c.status != nil || c.unlink != nil || c.link != nil {
 		return CreateUserCommand{}, false
 	}
 	spec := *c.create
@@ -161,6 +162,8 @@ type CommandResult struct {
 	// Unlink is present only for a committed account unlink, never external
 	// provider completion. Treat retained receipts as immutable snapshots.
 	Unlink *AccountUnlinkReceipt
+	// Link is present only for committed identity-owned account link admission.
+	Link *AccountLinkReceipt
 }
 
 // RecoveryQuery scopes a primary-authority lookup to the original command,
@@ -176,7 +179,7 @@ type RecoveryQuery struct {
 
 func validCommandBinding(b CommandBinding) bool {
 	_, validID := decodeID(string(b.CommandID))
-	return validID && validDirectoryID(string(b.TenantID)) && validDirectoryID(string(b.UserID)) && validDirectoryID(string(b.ActorID)) && (b.ActorKind == authorization.SubjectUser || b.ActorKind == authorization.SubjectAPIKey || b.ActorKind == authorization.SubjectServiceAccount) && (b.OperationID == "identity.user.create" || b.OperationID == "identity.user.update-admin" || b.OperationID == "identity.profile.update" || b.OperationID == "identity.account.unlink" || statusTarget(b.OperationID).Valid()) && validDirectoryID(b.PolicyID) && b.PolicyVersion > 0 && validDirectoryID(b.SchemaID) && b.SchemaVersion > 0 && validDirectoryID(b.CorrelationID)
+	return validID && validDirectoryID(string(b.TenantID)) && validDirectoryID(string(b.UserID)) && validDirectoryID(string(b.ActorID)) && (b.ActorKind == authorization.SubjectUser || b.ActorKind == authorization.SubjectAPIKey || b.ActorKind == authorization.SubjectServiceAccount) && (b.OperationID == "identity.user.create" || b.OperationID == "identity.user.update-admin" || b.OperationID == "identity.profile.update" || b.OperationID == "identity.account.unlink" || b.OperationID == "identity.account.link-token" || statusTarget(b.OperationID).Valid()) && validDirectoryID(b.PolicyID) && b.PolicyVersion > 0 && validDirectoryID(b.SchemaID) && b.SchemaVersion > 0 && validDirectoryID(b.CorrelationID)
 }
 
 func cloneUpdates(updates []AttributeUpdate) []AttributeUpdate {
@@ -197,9 +200,12 @@ func (r CommandResult) valid() bool {
 			return false
 		}
 		if r.Binding.OperationID == "identity.account.unlink" {
-			return r.Profile == nil && r.Revocation == nil && r.Unlink != nil && r.Unlink.valid() && r.User.Status == StatusActive && r.Binding.ActorKind == authorization.SubjectUser && string(r.Binding.ActorID) == string(r.User.ID) && unlinkVersion(r.ExpectedVersion) && r.User.Version == r.ExpectedVersion+1
+			return r.Link == nil && r.Profile == nil && r.Revocation == nil && r.Unlink != nil && r.Unlink.valid() && r.User.Status == StatusActive && r.Binding.ActorKind == authorization.SubjectUser && string(r.Binding.ActorID) == string(r.User.ID) && unlinkVersion(r.ExpectedVersion) && r.User.Version == r.ExpectedVersion+1
 		}
-		if r.Unlink != nil {
+		if r.Binding.OperationID == "identity.account.link-token" {
+			return r.Unlink == nil && r.Profile == nil && r.Revocation == nil && r.Link != nil && r.Link.valid() && r.User.Status == StatusActive && validLinkActor(r.Link.Mode, r.Binding.ActorKind, r.Binding.ActorID, r.User.ID) && unlinkVersion(r.ExpectedVersion) && r.User.Version == r.ExpectedVersion+1
+		}
+		if r.Unlink != nil || r.Link != nil {
 			return false
 		}
 		if target := statusTarget(r.Binding.OperationID); target.Valid() {
@@ -219,9 +225,9 @@ func (r CommandResult) valid() bool {
 		}
 		return r.ExpectedVersion > 0 && r.ExpectedVersion < ^uint64(0) && r.User.Version == r.ExpectedVersion+1 && r.User.Status != StatusDeleted && r.User.Status != StatusAnonymized
 	case CommitOutcomeNotCommitted, CommitOutcomeUnknown, CommitOutcomeConflict:
-		return r.Unlink == nil && r.Revocation == nil && r.Profile == nil && r.ExpectedVersion == 0 && r.User == (User{}) && r.AuditEventID == "" && r.RetryAfter == 0
+		return r.Link == nil && r.Unlink == nil && r.Revocation == nil && r.Profile == nil && r.ExpectedVersion == 0 && r.User == (User{}) && r.AuditEventID == "" && r.RetryAfter == 0
 	case CommitOutcomeInProgress:
-		return r.Unlink == nil && r.Revocation == nil && r.Profile == nil && r.ExpectedVersion == 0 && r.User == (User{}) && r.AuditEventID == "" && r.RetryAfter > 0 && r.RetryAfter <= time.Minute
+		return r.Link == nil && r.Unlink == nil && r.Revocation == nil && r.Profile == nil && r.ExpectedVersion == 0 && r.User == (User{}) && r.AuditEventID == "" && r.RetryAfter > 0 && r.RetryAfter <= time.Minute
 	default:
 		return false
 	}

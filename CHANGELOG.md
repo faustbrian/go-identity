@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Add identity-owned account linking with explicit, opt-in verified implicit
+  and opt-in administrative paths. Bind signed one-use evidence to exact actor,
+  provider subject, command, continuation and authority/record choices; preserve
+  collisions, tombstones, independent access and known/unknown commit outcomes.
+  Add canonical proof-payload construction without treating it as authority.
+  Authorize exact account IDs before link/unlink recovery receipt reads,
+  overriding caller metadata and preserving account-specific policy denial.
+  Provider ceremonies, durable proof/risk/token-vault atomicity, SQL and public
+  feature/transport composition remain required integration work.
 - Add bounded identity-owned identifier and verification records, and copied
   attach/verify/primary/replace/remove transitions with explicit authority and
   record fences. Replacement clears verification and primary selection; removal
