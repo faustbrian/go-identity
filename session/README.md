@@ -1,8 +1,9 @@
 # Session
 
 Experimental Go 1.27 session policy module. This first batch implements shared
-remember-policy resolution, lifetime evaluation and secure host-cookie
-attributes. **Session issuance, authentication, persistence, rotation,
+remember-policy resolution, lifetime evaluation, secure host-cookie attributes
+and opaque token/key custody with tenant-bound lookups. **Session issuance,
+authentication, persistence, rotation,
 revocation, transfers and authority snapshots are not yet implemented.**
 
 ## Quick start and API
@@ -33,13 +34,33 @@ authentication or persistence. Reference defaults belong to deployment.
   independently enforces `Lifetime.ExpiresAt`. Browser sessions
   omit Max-Age and Expires. Only the transport populates the credential.
 - `DeletionAttributes` matches issuance scope but does not revoke authority.
+- `NewToken` generates 32..64 random bytes; `ParseToken` checks bounded,
+  canonical unpadded base64url credentials. Neither operation issues a session.
+- `Token.Reveal` permits one explicit delivery across all value copies,
+  including concurrent copies. A recipient already holding wire bytes can
+  parse again: this is custody protection, not replay prevention. Never reveal
+  uncommitted/unknown issuance, or mint replacements to recover an outcome.
+- `NewDigestKey` defensively copies 32..64 independently generated key bytes
+  and a positive version. `Token.Digest` derives a tenant/version/domain-bound
+  HMAC-SHA-256 lookup without exposing or storing raw credentials.
 
 ## Adoption, security and tradeoffs
 
 Zero policies are invalid; use the constructors. Redacted sentinel errors work
 with `errors.Is`. Values are immutable and concurrency-safe, and returned
-cookies are caller-owned copies. No IO, callback, goroutine or hidden clock
+cookies are caller-owned copies. Policy methods perform no IO. Token generation
+uses standard-library secure OS entropy. No callback, goroutine or hidden clock
 exists. Root identity APIs remain unchanged.
+
+Token/key formatting redacts; automatic JSON/text serialization fails closed.
+Explicitly revealed strings are secrets, no longer protected by wrappers.
+Custody neither erases memory nor prevents recipient retention. Keys must be
+CSPRNG-derived and independent of other cryptographic purposes. Never reuse
+versions for different key material. Retain old lookup keys until all required
+session/tombstone paths are retired. Key provisioning, encrypted durable
+recovery custody and rotation readiness remain unfinished composition
+requirements. Raw tokens must never become database lookup keys or cache
+projections; stable digests should not be logged because they correlate usage.
 
 Browser sessions cap server lifetime at 24 hours. Browser restoration may retain
 nonpersistent cookies; expiry and revocation remain necessary. Activity never
