@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Persist versioned terminal command receipts with generation/owner/lease
+  fencing and immutable committed/aborted replay. Unknown remains a caller
+  observation. This private journal phase does not provide the unfinished
+  public Coordinator, mandatory audit or atomic participant orchestration.
+
 - Add durable pending command leases with database-time heartbeats, rollback-safe
   generation takeover and stale-owner fencing. Foundation-only rows retain
   unclassified metadata and fail closed. Full participant rebinding, terminal

@@ -11,7 +11,7 @@ import (
 func TestMigrationSourceImmutableAndForwardOnly(t *testing.T) {
 	var source migrations.Source = MigrationSource{}
 	first, err := source.Load(context.Background())
-	if err != nil || len(first) != 3 {
+	if err != nil || len(first) != 4 {
 		t.Fatal("missing complete migration history")
 	}
 	if first[0].Version() != 1 || first[0].DownSQL() != "" || first[0].TransactionMode() != migrations.TransactionModeDefault {

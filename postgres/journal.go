@@ -16,6 +16,7 @@ const (
 	journalInvalid journalDisposition = iota
 	journalOwned
 	journalBusy
+	journalTerminal
 )
 
 // This private snapshot is not public apply authority. A takeover must rebind
@@ -24,6 +25,7 @@ type journalReservation struct {
 	disposition                             journalDisposition
 	generation, previousGeneration, attempt uint64
 	retryAfter                              time.Duration
+	result                                  *identity.CommandResult
 }
 
 // reserveJournal runs only after the global claim has been locked and matched.
@@ -45,12 +47,14 @@ SELECT $1,$2,$3,'pending',1,1,$4,now+($5::bigint*interval '1 microsecond'),now,n
 	}
 	var state, generation, attempt *string
 	var until *time.Time
-	e := tx.QueryRow(ctx, `SELECT state,generation::text,attempt::text,lease_until FROM identity.commands
-WHERE command_id=$1 AND tenant_id=$2 AND purpose=$3 FOR UPDATE`, id, string(q.tenant), q.purpose).Scan(&state, &generation, &attempt, &until)
+	var resultVersion *int32
+	var result []byte
+	e := tx.QueryRow(ctx, `SELECT state,generation::text,attempt::text,lease_until,result_version,result FROM identity.commands
+WHERE command_id=$1 AND tenant_id=$2 AND purpose=$3 FOR UPDATE`, id, string(q.tenant), q.purpose).Scan(&state, &generation, &attempt, &until, &resultVersion, &result)
 	if e != nil {
 		return journalReservation{}, readFailure(ctx, e)
 	}
-	if state == nil || *state != "pending" || generation == nil || attempt == nil || until == nil || !postgresExactTime(*until) {
+	if state == nil || generation == nil || attempt == nil || until == nil || !postgresExactTime(*until) {
 		return journalReservation{}, identity.UnavailableError{}
 	}
 	gen, e := strconv.ParseUint(*generation, 10, 64)
@@ -59,6 +63,19 @@ WHERE command_id=$1 AND tenant_id=$2 AND purpose=$3 FOR UPDATE`, id, string(q.te
 	}
 	tries, e := strconv.ParseUint(*attempt, 10, 64)
 	if e != nil || tries < gen {
+		return journalReservation{}, identity.UnavailableError{}
+	}
+	if *state == "committed" || *state == "aborted" {
+		if resultVersion == nil || *resultVersion != 1 {
+			return journalReservation{}, identity.UnavailableError{}
+		}
+		r, err := decodeJournalResult(q, result)
+		if err != nil || (*state == "committed") != (r.Outcome == identity.CommitOutcomeCommitted) {
+			return journalReservation{}, identity.UnavailableError{}
+		}
+		return journalReservation{disposition: journalTerminal, generation: gen, attempt: tries, result: &r}, nil
+	}
+	if *state != "pending" || resultVersion != nil || result != nil {
 		return journalReservation{}, identity.UnavailableError{}
 	}
 	// Read after acquiring the row lock: lock wait must not extend old authority.

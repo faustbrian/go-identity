@@ -67,6 +67,24 @@ claim code; the new reservation path rejects them until authoritative recovery
 can prove their history. This migration does not fabricate ownership, classify
 them as aborted or enable terminal rows without complete safe receipts.
 
+The fourth migration enables committed/aborted rows only with a positive
+supported receipt version, bounded body, database terminal time and closed
+classification. Private terminalization locks and rechecks live generation and
+owner; it never commits independently. Exact replay returns the original typed
+receipt, not current user authority. Core `CommandResult.Validate` owns receipt
+invariants; the private version-1 JSON storage representation rejects unknown
+fields, duplicates, alternate spelling, lossy values and trailing input by
+requiring exact re-encoding. JSON is not used for command fingerprints.
+Retained attribute instants are encoded from an owned UTC copy and must be
+microsecond-exact within PostgreSQL UTC years 1..9999. Second-offset time zones
+cannot lose offset seconds in JSON, and caller-owned receipt values are untouched.
+Receipts may retain authorized profile/attribute snapshots and private identifier
+intent digests; treat this restricted replay storage as identity data under
+retention/access policy, never logs, metrics or transport responses. Encoding
+validates bounded core values before allocation; decode rejects bodies over
+8 MiB. Required audit/participant staging and public scoped recovery are not yet
+implemented, so private terminal SQL is not a conforming composed mutation API.
+
 ### FAQ
 
 - Can I use a replica? No; the repository's primary consistency contract is
