@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Target Go 1.27, matching the current Golib module baseline.
+- Add tenant-bound account and non-secret credential metadata, current-subject
+  account reads with per-row policy/redaction and a shared final-access decision.
+  Preserve imported canonical IDs and federation URNs. Refuse removal when no
+  independent usable human login method remains; API keys and expired/disabled
+  methods do not qualify. Transactional link/unlink, pagination, fresh proofs
+  and provider cleanup remain unfinished integration work.
+
 - Add explicit versioned suspend/ban and restore/unban commands with registered
   reasons, bounded absolute expiry, scoped recovery and distinct user authority
   versions. Preserve historical replay and known commitment after output failure;

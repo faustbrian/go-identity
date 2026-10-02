@@ -1,7 +1,8 @@
 # identity
 
 Composable backend identity-domain ownership for Golib. This module is under
-development; current implemented slices are subject/pre-authentication ID
+development and targets Go 1.27.
+Current implemented slices are subject/pre-authentication ID
 contracts, structural user/status-policy validation and authorized user reads
 with bounded, stable-snapshot listing, versioned typed-field preparation and
 authorized explicit-ID creation/recovery through a storage-neutral command owner.
@@ -13,6 +14,8 @@ Self-service profile reads/updates use a distinct safe projection and exact
 current-human-subject scope, bounded image origins, typed fields and recovery.
 Suspend/ban and restore/unban use versioned commands with distinct user authority
 versions, exact required-consumer manifests and pending cascade admission.
+Account reads expose scoped permission-filtered metadata; the shared final-access
+check excludes the removed link, expired/disabled methods and API keys.
 Remaining destructive lifecycle commands, durable repositories, complete policy composition,
 hooks, directory import and privacy workflows are not implemented yet.
 
@@ -49,6 +52,8 @@ See [self-service profiles](docs/profiles.md) for name/image, safe additional
 fields, current subject policy and the pending session/keyed/SQL composition.
 See [status commands](docs/status.md) for authorization, expiry, replay, pending
 cleanup and authority-preserving restore behavior.
+See [account ownership](docs/accounts.md) for safe reads, credential references
+and the final-access boundary that transactional unlink must enforce.
 
 ## Development verification
 
