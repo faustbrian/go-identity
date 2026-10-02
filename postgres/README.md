@@ -246,11 +246,42 @@ or unproven rollback returns `Unknown`; no automatic retry or rollback follows
 a commit attempt. The detached rollback budget is finite and earlier operation
 deadlines win. No contributor callback executes during reservation.
 
-This is an incremental reservation phase, **not yet an adoptable UnitOfWork**:
-public Begin, actual domain application, mandatory audit/outbox persistence,
-Commit/Abort and scoped recovery still need implementation. Reservations have
-no public Work/SQL/closure capability. Do not supply application-owned identity
-transactions to bridge the unfinished phase.
+### Creation execution (development profile)
+
+`Coordinator.Begin(ctx, reservation)` consumes exact ownership once and opens
+one bounded primary transaction. Reservation copies cannot issue another Work.
+The original lease is checked after command locks; waiting never renews it.
+Kernel mutations also take a transaction-scoped tenant lock. Work and its
+cursors are serial-use; every path must close through Commit or Abort, including
+panic (normally with deferred Abort). No closure goroutine is started. An idle
+transaction timeout limits abandoned server locks but does not substitute for
+releasing the caller-owned pool connection.
+
+`Repository.ApplyUserCreation(ctx, work, command)` requires the exact registered
+repository and frozen creation command. It inserts an active version-1 user;
+the returned user is provisional until Commit. Nonempty attributes currently
+fail closed, not silently disappear. Repeated apply poisons the transaction.
+Stage the required successful audit with redacted structural changes and the
+declared lifecycle record before `Coordinator.Commit(work, result)`. Commit
+checks the caller result against the actual mutation, invokes the registered
+audit then lifecycle persistence phases through the same Work, terminalizes the
+journal and commits once. Missing evidence, open cursors, changed results or a
+phase failure roll back all prefixes. All aliases close before transaction
+closure. Any error after commit starts is Unknown, never automatically retried.
+
+`Coordinator.Abort(work, cause)` proves rollback before a separate bounded
+terminal transaction. A complete matching pre-staged denial/failure audit is
+required for a known NotCommitted result; terminal audit and receipt commit
+together. Missing evidence or lost ownership leaves pending/Unknown for recovery,
+not fabricated success or denial. Detached cleanup remains bounded after caller
+cancellation; driver and caller error text is never exposed.
+
+This is **not yet an adoptable identity.UnitOfWork**: complete attribute storage,
+other domain commands, the owned service bridge, classified retries and scoped
+query/recovery remain required. The integration suite proves actual PostgreSQL
+transaction behavior with typed audit/lifecycle SQL seams, not production
+audit/outbox adapter interoperability. Do not supply application-owned identity
+transactions or stores to bridge the unfinished profile.
 
 ### FAQ
 

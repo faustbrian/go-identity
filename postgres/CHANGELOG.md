@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Add single-use Coordinator.Begin, enlisted structural user creation and
+  Commit/Abort. Successful creation commits the user, required audit, lifecycle
+  effects and terminal receipt together; failed prefixes roll back. Forged
+  receipts, missing evidence, foreign handles and expired ownership fail closed.
+  Known denial requires matching atomic audit evidence; commit ambiguity stays
+  Unknown. Full attributes, recovery and the UnitOfWork bridge remain pending.
+
 - Add primary Coordinator reservation for user creation with mandatory typed
   audit/lifecycle plans, retained-key replay and opaque generation ownership.
   Forward migration 5 freezes the exact canonical plan in the command journal;

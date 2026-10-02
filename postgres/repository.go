@@ -1,6 +1,6 @@
 // Package postgres implements the authoritative PostgreSQL identity store.
-// This initial read implementation includes owned forward-only user migrations;
-// complete commands and shared transaction execution remain under development.
+// It includes owned forward-only migrations and structural creation execution;
+// complete commands, attributes and recovery remain under development.
 package postgres
 
 import (
@@ -18,7 +18,8 @@ import (
 // at most one minute; an earlier caller deadline always wins. Zero is invalid.
 type Config struct{ MaximumDuration time.Duration }
 
-// Repository reads from a caller-owned primary pool. It never closes that pool,
+// Repository reads from a caller-owned primary pool and applies structural
+// creation only through exact enlisted Coordinator Work. It never closes that pool,
 // starts background work or caches authority. Configure the pool with primary
 // endpoints only: replica reads cannot satisfy this repository's consistency
 // contract. A read is a snapshot, not authorization or revocation evidence.
@@ -32,8 +33,9 @@ var _ identity.UserQueryRepository = (*Repository)(nil)
 
 // NewRepository constructs the primary read adapter without I/O. The caller
 // must migrate the database before use and keep the pool alive until all reads
-// finish. This adapter currently supports UserQueryRepository only, not domain
-// writes, attribute projections, listing or the transaction coordinator.
+// finish. Reads support UserQueryRepository; ApplyUserCreation participates in
+// the creation-only coordinator profile. Attribute projections, listing and
+// complete domain writes remain under development.
 func NewRepository(pool *database.Pool, config Config) (*Repository, error) {
 	if pool == nil || pool.Raw() == nil || config.MaximumDuration <= 0 || config.MaximumDuration > time.Minute {
 		return nil, identity.InvalidInputError{Field: "postgres_configuration"}

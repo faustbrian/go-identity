@@ -16,8 +16,9 @@ import (
 // Copies share lifetime and failure state. Methods and returned rows must be
 // used serially and must not be retained beyond the contributor invocation.
 // Any SQL, scan, budget or cancellation failure poisons subsequent execution.
-// Zero is invalid. Audit/effect staging and the public Coordinator are still
-// under development; this execution surface is not complete command authority.
+// Zero is invalid. Coordinator.Begin issues Work for the creation profile;
+// other domain profiles and the adapter-neutral UnitOfWork bridge remain under
+// development. Work alone is not complete command authority.
 type Work struct{ state *workState }
 
 type workState struct {
@@ -33,6 +34,8 @@ type workState struct {
 	lifecycle  *workLifecycle
 	registry   *contributorRegistryState
 	sqlStarted bool
+	execution  *domainExecution
+	creation   *identity.User
 }
 
 // newWork is private: only the sole coordinator may call it after verifying
@@ -205,6 +208,9 @@ func (w Work) fail(ctx context.Context, err error) error {
 		}
 		if _, ok := err.(identity.InvalidInputError); ok {
 			w.state.failed = err
+		} else if _, ok := err.(identity.ConflictError); ok && ctx.Err() == nil {
+			// Preserve an owned domain conflict without retaining driver causes.
+			w.state.failed = identity.ConflictError{}
 		} else {
 			w.state.failed = readFailure(ctx, err)
 		}

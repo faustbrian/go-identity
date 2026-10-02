@@ -96,6 +96,7 @@ func TestPostgresIntegration(t *testing.T) {
 	t.Run("work execution", func(t *testing.T) { testWorkExecution(t, ctx, pool) })
 	t.Run("coordinator reservation", func(t *testing.T) { testCoordinatorReservation(t, ctx, pool) })
 	t.Run("populated plan upgrade", func(t *testing.T) { testCoordinatorPlanUpgrade(t, ctx, pool) })
+	t.Run("domain execution", func(t *testing.T) { testDomainExecution(t, ctx, pool, repo) })
 	insert := func(tenant, user, status, version string) error {
 		_, err := pool.Raw().Exec(ctx, `INSERT INTO identity.users(tenant_id,user_id,status,version) VALUES($1,$2,$3,$4::numeric)`, tenant, user, status, version)
 		return err

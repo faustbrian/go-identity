@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"sync/atomic"
 	"time"
 
 	identity "github.com/faustbrian/go-identity"
@@ -41,8 +42,9 @@ func (CoordinatorConfig) MarshalJSON() ([]byte, error) {
 // caller-owned primary pool and immutable registry. It starts no goroutines
 // and never closes the pool. Concurrent reservations are supported. This
 // incremental implementation admits user creation with required audit and
-// lifecycle declarations only; it does not yet implement domain Begin,
-// Commit/Abort or recovery and is not an identity.UnitOfWork. Reservation is
+// lifecycle declarations only. Begin, Repository.ApplyUserCreation and
+// Commit/Abort own creation execution; complete recovery and the
+// identity.UnitOfWork bridge remain under development. Reservation is
 // bookkeeping, never proof of a user mutation or audit/outbox persistence.
 type Coordinator struct {
 	pool                           *database.Pool
@@ -75,10 +77,11 @@ func NewCoordinator(pool *database.Pool, registry *ContributorRegistry, config C
 }
 
 // Reservation is opaque, generation-bound ownership from a proven durable
-// reservation commit. Copies share the private immutable snapshot. It grants
-// no Work, SQL, closure or independently usable execution authority; zero is
-// invalid. It cannot be serialized and diagnostics are redacted. No public
-// execution phase consumes it yet. Retain it only for the owning Coordinator.
+// reservation commit. Copies share the private snapshot and single-use state.
+// It grants no Work, SQL, closure or independently usable execution authority;
+// zero is invalid. It cannot be serialized and diagnostics are redacted.
+// Begin consumes it once, including a failed admitted attempt. Retain it only
+// for the owning Coordinator; it is not authority to renew the lease.
 type Reservation struct{ state *reservationState }
 
 type reservationState struct {
@@ -87,6 +90,7 @@ type reservationState struct {
 	plan        *admittedKernelPlan
 	journal     journalReservation
 	owner       [16]byte
+	started     atomic.Bool
 }
 
 // Format hides command, tenant, lease owner and retained private command data.
