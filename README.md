@@ -19,6 +19,12 @@ check excludes the removed link, expired/disabled methods and API keys.
 Account linking and identifier changes have exact signed-intent command
 admission/recovery; the platform-owned durable adapters and real feature proof
 ceremonies remain required before these become complete public workflows.
+Feature adapters can structurally match common command scope to a trusted
+`FeatureOperation` with `CommandBinding.ValidateFor`: exact operation/schema,
+safe identities, positive policy version and explicit required/omitted record.
+This does not authorize or register a feature, enable execution or open the
+existing kernel command/receipt union. Coordinator feature phases remain in
+development; adapters must not substitute private transactions or journals.
 Remaining destructive lifecycle commands, durable repositories, complete policy composition,
 hooks, directory import and privacy workflows are not implemented yet.
 

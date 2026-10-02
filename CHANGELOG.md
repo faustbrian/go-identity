@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add storage-neutral feature operation descriptors and exact common command
+  binding validation, with explicit schema and record-target requirements.
+  Preserve the closed kernel command/receipt union; descriptor validation does
+  not activate feature execution or confer authorization.
+
 - Register the experimental session child module with shared remember/lifetime
   and secure host-cookie policy. Durable session workflows remain in development.
 

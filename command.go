@@ -66,8 +66,9 @@ type CommandBinding struct {
 	SchemaID      string
 	SchemaVersion uint32
 	CorrelationID string
-	// RecordID is the exact account/identifier target for record commands,
-	// including every noncommitted receipt. Other operations must omit it.
+	// RecordID is the exact account/identifier target for kernel record commands,
+	// including every noncommitted receipt; other kernel operations omit it.
+	// Feature bindings follow their FeatureOperation.RecordRequirement instead.
 	RecordID string
 	// LinkMode is required only for account-link commands, for every outcome.
 	LinkMode AccountLinkMode
@@ -207,7 +208,7 @@ func validCommandBinding(b CommandBinding) bool {
 		return false
 	}
 	_, validID := decodeID(string(b.CommandID))
-	return validID && validDirectoryID(string(b.TenantID)) && validDirectoryID(string(b.UserID)) && validDirectoryID(string(b.ActorID)) && (b.ActorKind == authorization.SubjectUser || b.ActorKind == authorization.SubjectAPIKey || b.ActorKind == authorization.SubjectServiceAccount) && (b.OperationID == "identity.user.create" || b.OperationID == "identity.user.update-admin" || b.OperationID == "identity.profile.update" || b.OperationID == "identity.account.unlink" || b.OperationID == "identity.account.link-token" || statusTarget(b.OperationID).Valid() || identifierAction(b.OperationID) != 0) && validDirectoryID(b.PolicyID) && b.PolicyVersion > 0 && validDirectoryID(b.SchemaID) && b.SchemaVersion > 0 && validDirectoryID(b.CorrelationID)
+	return validID && validDirectoryID(string(b.TenantID)) && validDirectoryID(string(b.UserID)) && validDirectoryID(string(b.ActorID)) && (b.ActorKind == authorization.SubjectUser || b.ActorKind == authorization.SubjectAPIKey || b.ActorKind == authorization.SubjectServiceAccount) && kernelOperationID(b.OperationID) && validDirectoryID(b.PolicyID) && b.PolicyVersion > 0 && validDirectoryID(b.SchemaID) && b.SchemaVersion > 0 && validDirectoryID(b.CorrelationID)
 }
 
 func validCommandRecordBinding(b CommandBinding) bool {
