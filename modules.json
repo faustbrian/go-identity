@@ -64,6 +64,28 @@
       "conformance_corpora": []
     },
     {
+      "directory": "session/postgres",
+      "module_path": "github.com/faustbrian/go-identity/session/postgres",
+      "go_version": "1.27.0",
+      "packages": [{"module_directory":"session/postgres","directory":".","name":"postgres","import_path":"github.com/faustbrian/go-identity/session/postgres","kind":"public","production":true,"executable":true,"coverage_required":true,"build_required":true,"build_tags":[]}],
+      "purpose": "Durable complete session records and bounded tenant-scoped primary reads; shared-coordinator writes in development.",
+      "lifecycle": "experimental",
+      "kind": "public library",
+      "releasable": true,
+      "family": "service-edge",
+      "version": "0.0.0",
+      "tag_prefix": "session/postgres/v",
+      "owned_dependencies": ["github.com/faustbrian/go-authentication","github.com/faustbrian/go-identity","github.com/faustbrian/go-identity/session","github.com/faustbrian/go-migrations/v3","github.com/faustbrian/go-postgres"],
+      "reverse_owned_dependencies": [],
+      "external_runtime_dependencies": ["postgresql"],
+      "required_services": ["postgresql"],
+      "build_tags": [],
+      "test_tags": ["integration"],
+      "interoperability_tools": [],
+      "specifications": [],
+      "conformance_corpora": []
+    },
+    {
       "directory": "postgres",
       "module_path": "github.com/faustbrian/go-identity/postgres",
       "go_version": "1.27.0",
