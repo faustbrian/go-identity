@@ -304,7 +304,7 @@ func (f UserListFilters) valid() bool {
 	if f.IdentifierKind == "" {
 		return f.CanonicalIdentifier == ""
 	}
-	if f.IdentifierKind != IdentifierEmail && f.IdentifierKind != IdentifierPhone && f.IdentifierKind != IdentifierUsername && f.IdentifierKind != IdentifierProviderSubject {
+	if !f.IdentifierKind.Valid() {
 		return false
 	}
 	return len(f.CanonicalIdentifier) > 0 && len(f.CanonicalIdentifier) <= 512 && utf8.ValidString(f.CanonicalIdentifier)

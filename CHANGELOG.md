@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add bounded identity-owned identifier and verification records, and copied
+  attach/verify/primary/replace/remove transitions with explicit authority and
+  record fences. Replacement clears verification and primary selection; removal
+  retains versioned retirement data for scoped reuse tombstones. Canonical
+  normalization, fresh proof consumption, tenant-wide uniqueness, final access,
+  durable commands and feature/transport composition remain pending.
 - Add current-subject account unlink command admission and scoped recovery.
   Verify exact issuer/audience/session/command/version/provider-choice bindings
   using signed one-use capabilities; preserve unknown or known committed
