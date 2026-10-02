@@ -56,6 +56,7 @@ func nilQueryDependency(value any) bool {
 type commandObservation struct {
 	tenant, purpose string
 	scope           []byte
+	fingerprint     []byte
 	retired         bool
 	state           *string
 	until           *time.Time
@@ -101,10 +102,10 @@ func (c *Coordinator) readCommand(ctx context.Context, id identity.CommandID) (c
 	key, _ := base64.RawURLEncoding.DecodeString(string(id))
 	var observed commandObservation
 	err := c.pool.Raw().QueryRow(ctx, `SELECT coalesce(c.tenant_id::text,''),coalesce(c.purpose,''),c.safe_fields,c.retired,
-j.state,j.lease_until,clock_timestamp(),j.result_version,j.terminal_class,j.result,j.command_plan
+j.state,j.lease_until,clock_timestamp(),j.result_version,j.terminal_class,j.result,j.command_plan,c.fingerprint
 FROM identity.identity_command_id_claims c LEFT JOIN identity.commands j
 ON j.command_id=c.command_id AND j.tenant_id=c.tenant_id AND j.purpose=c.purpose
-WHERE c.command_id=$1`, key).Scan(&observed.tenant, &observed.purpose, &observed.scope, &observed.retired, &observed.state, &observed.until, &observed.now, &observed.resultVersion, &observed.class, &observed.result, &observed.plan)
+WHERE c.command_id=$1`, key).Scan(&observed.tenant, &observed.purpose, &observed.scope, &observed.retired, &observed.state, &observed.until, &observed.now, &observed.resultVersion, &observed.class, &observed.result, &observed.plan, &observed.fingerprint)
 	return observed, err
 }
 
@@ -188,6 +189,12 @@ func commandReceipt(q identity.RecoveryQuery, observed commandObservation, err e
 		return identity.CommandResult{}, identity.ForbiddenError{}
 	}
 	if observed.state == nil || observed.until == nil || !postgresExactTime(*observed.until) || !postgresExactTime(observed.now) || len(observed.plan) == 0 || len(observed.plan) > 65536 {
+		return identity.CommandResult{}, identity.UnavailableError{}
+	}
+	if len(observed.fingerprint) != 32 {
+		return identity.CommandResult{}, identity.UnavailableError{}
+	}
+	if _, err := decodeKernelPlan(binding, [32]byte(observed.fingerprint), observed.plan); err != nil {
 		return identity.CommandResult{}, identity.UnavailableError{}
 	}
 	if *observed.state == "pending" {

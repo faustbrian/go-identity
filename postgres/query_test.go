@@ -39,7 +39,7 @@ func TestQueryCommandDoesNotExposeReplayPayload(t *testing.T) {
 		return authorization.Decision{Outcome: authorization.Allow, Revision: 9}, nil
 	})}
 	c.commandRead = func(context.Context, identity.CommandID) (commandObservation, error) {
-		return commandObservation{tenant: string(b.TenantID), purpose: b.OperationID, scope: cborMap(commandScope(b)), state: &state, until: &now, now: now, plan: []byte{1}, resultVersion: &version, class: &class, result: body}, nil
+		return commandObservation{tenant: string(b.TenantID), purpose: b.OperationID, scope: cborMap(commandScope(b)), state: &state, until: &now, now: now, plan: queryFrozenPlan(t, b), fingerprint: queryFingerprint(), resultVersion: &version, class: &class, result: body}, nil
 	}
 	got, err := c.QueryCommand(context.Background(), q, dc)
 	if err != nil || got != (CommandRecord{Binding: b, Outcome: identity.CommitOutcomeCommitted}) || got.Validate() != nil {
@@ -89,7 +89,7 @@ func TestQueryCommandConstantWorkAndScope(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		stored := commandObservation{tenant: string(b.TenantID), purpose: b.OperationID, scope: cborMap(commandScope(b)), state: &state, until: &until, now: until.Add(time.Second), plan: []byte{1}}
+		stored := commandObservation{tenant: string(b.TenantID), purpose: b.OperationID, scope: cborMap(commandScope(b)), state: &state, until: &until, now: until.Add(time.Second), plan: queryFrozenPlan(t, b), fingerprint: queryFingerprint()}
 		if state != "pending" {
 			stored.resultVersion, stored.class, stored.result = &version, &class, body
 		}
@@ -154,11 +154,17 @@ func TestQueryCommandFailsClosedOnCorruptHistoryAndPolicy(t *testing.T) {
 	q, dc := queryInputs(b)
 	state := "pending"
 	until := time.Now().UTC().Truncate(time.Microsecond)
-	good := commandObservation{tenant: string(b.TenantID), purpose: b.OperationID, scope: cborMap(commandScope(b)), state: &state, until: &until, now: until, plan: []byte{1}}
+	good := commandObservation{tenant: string(b.TenantID), purpose: b.OperationID, scope: cborMap(commandScope(b)), state: &state, until: &until, now: until, plan: queryFrozenPlan(t, b), fingerprint: queryFingerprint()}
 	for _, mutate := range []func(*commandObservation){
 		func(o *commandObservation) { o.state = nil },
 		func(o *commandObservation) { o.until = nil },
 		func(o *commandObservation) { o.plan = nil },
+		func(o *commandObservation) { o.plan = []byte{1} },
+		func(o *commandObservation) { o.fingerprint = nil },
+		func(o *commandObservation) { o.fingerprint = make([]byte, 32) },
+		func(o *commandObservation) { o.fingerprint = make([]byte, 31) },
+		func(o *commandObservation) { o.fingerprint = make([]byte, 33) },
+		func(o *commandObservation) { o.fingerprint = append([]byte{2}, o.fingerprint[1:]...) },
 		func(o *commandObservation) { o.scope = []byte{0} },
 		func(o *commandObservation) { o.now = time.Time{} },
 		func(o *commandObservation) { o.result = []byte{0} },
@@ -225,7 +231,7 @@ func TestQueryCommandOwnsRecordPolicyScope(t *testing.T) {
 		state := "pending"
 		now := time.Now().UTC().Truncate(time.Microsecond)
 		c.commandRead = func(context.Context, identity.CommandID) (commandObservation, error) {
-			return commandObservation{tenant: string(b.TenantID), purpose: b.OperationID, scope: cborMap(commandScope(b)), state: &state, until: &now, now: now, plan: []byte{1}}, nil
+			return commandObservation{tenant: string(b.TenantID), purpose: b.OperationID, scope: cborMap(commandScope(b)), state: &state, until: &now, now: now, plan: queryFrozenPlan(t, b), fingerprint: queryFingerprint()}, nil
 		}
 		got, err := c.QueryCommand(context.Background(), q, dc)
 		if err != nil || got.Binding != b || got.Validate() != nil {

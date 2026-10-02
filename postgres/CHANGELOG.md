@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Reject malformed, noncanonical or misbound frozen participant plans before
+  returning primary command outcomes. Historical audit-only plans remain
+  readable without today's contributor registry or retained key selection.
+  Observation does not acquire execution ownership or reconcile participants.
+
 - Add owned creation UnitOfWork composition for core creation and historical
   recovery without caller-written plans, audit builders or transaction glue.
   Required failure auditing survives poisoned SQL Work without reviving writes;

@@ -43,7 +43,7 @@ func testCommandQuery(t *testing.T, ctx context.Context, owner *Coordinator, bin
 	id, _ := base64.RawURLEncoding.DecodeString(string(binding.CommandID))
 	snapshot := func() string {
 		var json string
-		if err := owner.pool.Raw().QueryRow(ctx, `SELECT row_to_json(j)::text FROM identity.commands j WHERE command_id=$1`, id).Scan(&json); err != nil {
+		if err := owner.pool.Raw().QueryRow(ctx, `SELECT json_build_array(row_to_json(j),row_to_json(c))::text FROM identity.commands j JOIN identity.identity_command_id_claims c USING(command_id) WHERE j.command_id=$1`, id).Scan(&json); err != nil {
 			t.Fatal(err)
 		}
 		return json
@@ -63,6 +63,22 @@ func testCommandQuery(t *testing.T, ctx context.Context, owner *Coordinator, bin
 		} else if got != (CommandRecord{Binding: expected.Binding, Outcome: expected.Outcome}) {
 			t.Fatal("query changed historical receipt", err)
 		}
+	}
+	// Corrupt the primary observation at the read seam, not immutable storage
+	// through a disabled trigger. Valid fixtures above exercise real SQL bytes.
+	c.commandRead = func(ctx context.Context, id identity.CommandID) (commandObservation, error) {
+		o, err := originalRead(ctx, id)
+		o.plan = []byte{1}
+		return o, err
+	}
+	corrupt, corruptErr := c.QueryCommand(ctx, query, caller)
+	var unavailable identity.UnavailableError
+	if !errors.As(corruptErr, &unavailable) || corrupt != (CommandRecord{}) {
+		t.Fatal("corrupt primary plan disclosed historical outcome")
+	}
+	c.commandRead = func(ctx context.Context, id identity.CommandID) (commandObservation, error) {
+		reads++
+		return originalRead(ctx, id)
 	}
 	for _, change := range []func(*identity.RecoveryQuery){
 		func(q *identity.RecoveryQuery) { q.CommandID, _ = identity.NewCommandID() },
