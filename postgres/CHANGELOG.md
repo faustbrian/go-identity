@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add durable pending command leases with database-time heartbeats, rollback-safe
+  generation takeover and stale-owner fencing. Foundation-only rows retain
+  unclassified metadata and fail closed. Full participant rebinding, terminal
+  receipts and the public Coordinator remain unavailable.
+
 - Complete typed canonical encoding of account link/unlink and identifier
   mutations, binding version fences, proof authority and continuation choices
   while keeping provider/identifier values and private proof caveats digested.

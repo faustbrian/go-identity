@@ -54,6 +54,19 @@ not yet reserve or finalize proof use with a domain mutation.
 The encoder follows [RFC 8949](https://www.rfc-editor.org/rfc/rfc8949.html);
 full protocol interoperability and release evidence remain pending.
 
+The third forward migration extends the existing command journal with private
+pending ownership, positive generation/attempt counters and database-time lease,
+heartbeat and creation/update fields. Matching live reservations return bounded
+retry delays; expired reservations acquire a new generation inside their caller's
+transaction. Heartbeats cannot renew expired or stale ownership. A takeover is
+not public apply authority: all declared participants must still be rebound in
+that same transaction before the future Coordinator can commit it. No private
+helper owns commit/rollback or infers a terminal result from lease expiry.
+Foundation-only rows keep NULL ownership metadata and remain readable by older
+claim code; the new reservation path rejects them until authoritative recovery
+can prove their history. This migration does not fabricate ownership, classify
+them as aborted or enable terminal rows without complete safe receipts.
+
 ### FAQ
 
 - Can I use a replica? No; the repository's primary consistency contract is
