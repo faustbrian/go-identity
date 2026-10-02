@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add immutable authenticated issue requests retaining the upstream opaque
+  final proof with its exact native command. Expected-authority validation
+  rejects foreign proof provenance and metadata/credential substitutions;
+  copying preserves original proof expiry and resolved session lifetime.
+  This admission does not issue, persist, consume or reveal a session.
+
 - Add immutable complete session records and closed, exact-bound native issue
   commands carrying resolved remember policy, full authority vector, digest-only
   lookup and original proof/credential metadata. Anonymous records have a

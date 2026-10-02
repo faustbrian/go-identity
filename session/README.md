@@ -78,6 +78,20 @@ authentication or persistence. Reference defaults belong to deployment.
 
 ## Adoption, security and tradeoffs
 
+`NewAuthenticatedIssueRequest` binds a closed `SessionCommand` to the upstream
+opaque `authentication.AuthenticatedProof`, including its original proof and
+credential versions. Its `Validate` requires the expected configured
+`AuthorityAuthenticator` and trusted time; a request-selected or foreign
+authority cannot substitute provenance. Structural metadata is not a proof,
+and anonymous sessions require their separate unprivileged path. The immutable
+`Command` projection intentionally loses proof admission.
+
+Validation admits final authentication only: it does not read current lifecycle
+authority, reserve or finalize proof use, issue a token, persist a session or
+commit required audit/outbox effects. The authoritative adapter must retain the
+original request and perform those checks and effects atomically under the sole
+coordinator. A positive result alone must not authenticate a stored session.
+
 Zero policies are invalid; use the constructors. Redacted sentinel errors work
 with `errors.Is`. Values are immutable and concurrency-safe, and returned
 cookies are caller-owned copies. Policy methods perform no IO. Token generation
