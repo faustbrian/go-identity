@@ -4,7 +4,9 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"math"
+	"time"
 
+	"github.com/faustbrian/go-capability"
 	identity "github.com/faustbrian/go-identity"
 )
 
@@ -17,7 +19,7 @@ func decodeKernelPlan(binding identity.CommandBinding, fingerprint [32]byte, enc
 	}
 	r := planReader{attributeReader: attributeReader{data: encoded}, ok: true}
 	fields, ok := r.head(5)
-	if !ok || (fields != 5 && fields != 6) {
+	if !ok || (fields != 5 && fields != 6 && fields != 7) {
 		return fail()
 	}
 	r.key("audits")
@@ -54,7 +56,7 @@ func decodeKernelPlan(binding identity.CommandBinding, fingerprint [32]byte, enc
 	r.key("profile")
 	r.consume(cborText("identity-kernel-plan-v1"))
 	plan := CommandPlan{Audits: []AuditPlan{audit}}
-	if fields == 6 {
+	if fields >= 6 {
 		r.key("lifecycle")
 		r.expect(5, 4)
 		p := &LifecyclePlan{}
@@ -68,12 +70,35 @@ func decodeKernelPlan(binding identity.CommandBinding, fingerprint [32]byte, enc
 		p.BeforeVersion = r.number(math.MaxUint64)
 		plan.Lifecycle = p
 	}
+	if fields == 7 {
+		r.key("capability")
+		r.expect(5, 7)
+		p := &CapabilityPlan{}
+		r.key("purpose")
+		p.Purpose = capability.Purpose(r.string(128))
+		r.key("max_uses")
+		p.MaxUses = uint32(r.number(math.MaxUint32))
+		r.key("expires_at")
+		p.ExpiresAt = time.Unix(int64(r.number(253402300799)), 0).UTC()
+		r.key("capability_id")
+		p.CapabilityID = r.string(256)
+		r.key("replay_digest")
+		r.digest(&p.ReplayDigest)
+		r.key("proof_fingerprint")
+		r.digest(&p.ProofFingerprint)
+		r.key("replay_key_version")
+		p.ReplayKeyVersion = uint32(r.number(math.MaxUint32))
+		plan.Capability = p
+	}
 	r.key("fingerprint")
 	r.consume(cborBytes(fingerprint[:]))
 	r.key("contributors")
 	count := uint64(2)
-	if fields == 6 {
+	if fields >= 6 {
 		count = 3
+	}
+	if fields == 7 {
+		count = 4
 	}
 	r.expect(4, count)
 	// Counts are fixed by the closed profile, never by an untrusted allocation.
@@ -141,4 +166,14 @@ func (r *planReader) number(max uint64) uint64 {
 		return 0
 	}
 	return value
+}
+
+func (r *planReader) digest(out *[32]byte) {
+	r.expect(2, 32)
+	if !r.ok || len(r.data) < 32 {
+		r.ok = false
+		return
+	}
+	copy(out[:], r.data[:32])
+	r.data = r.data[32:]
 }

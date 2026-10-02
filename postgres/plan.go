@@ -13,9 +13,9 @@ import (
 // the exact command and its authoritative retained-key fingerprint. Callers
 // must not mutate its slices during admission. Admission owns copies, so later
 // changes do not affect execution. Zero is invalid. This value conveys no
-// transaction authority. Typed one-time/feature inputs remain under
-// development; the current kernel-only profile cannot
-// admit those contributors by name alone.
+// transaction authority. Typed Capability input can be frozen and inspected,
+// but its execution phases remain under development; no one-time contributor
+// can be admitted by name or declaration alone.
 // Lifecycle, when present, requires the typed outbox contributor and declares
 // the successful mutation notification. Nil preserves the older audit-only
 // admission profile; it is not sufficient for a future successful mutation
@@ -24,7 +24,10 @@ type CommandPlan struct {
 	Contributors []ContributorDescriptor
 	Audits       []AuditPlan
 	Lifecycle    *LifecyclePlan
-	Digest       [32]byte
+	// Capability declares a typed one-use participant input for digest/codec
+	// preparation only; execution admission remains disabled until its phases exist.
+	Capability *CapabilityPlan
+	Digest     [32]byte
 }
 
 // KernelPlanDigest returns a domain-separated SHA-256 digest of the current
@@ -35,9 +38,12 @@ type CommandPlan struct {
 // resolve retained fingerprint keys and compute it from the typed command.
 // Exactly one identity/postgres and one audit/postgres contributor are required;
 // a lifecycle declaration additionally requires exactly one outbox/postgres
-// identity.lifecycle v1 contributor. Audit-only digest bytes remain unchanged.
-// feature/one-time contributors without typed inputs are rejected, not silently
-// omitted. Invalid inputs return redacted identity.InvalidInputError. It does
+// identity.lifecycle v1 contributor. A capability declaration requires lifecycle
+// plus exactly one capability.one-use v1 contributor. Existing audit-only and
+// lifecycle digest bytes remain unchanged. Digest preparation does not activate
+// that participant: execution admission remains disabled until atomic phases
+// exist. Feature/one-time contributors without typed inputs are rejected, not
+// silently omitted. Invalid inputs return redacted identity.InvalidInputError. It does
 // no I/O or callbacks. Concurrent calls require immutable caller-owned inputs.
 func KernelPlanDigest(binding identity.CommandBinding, fingerprint [32]byte, plan CommandPlan) ([32]byte, error) {
 	encoded, err := encodeKernelPlan(binding, fingerprint, plan)
@@ -55,10 +61,16 @@ func encodeKernelPlan(binding identity.CommandBinding, fingerprint [32]byte, pla
 	if plan.Lifecycle != nil {
 		count++
 	}
-	if probe.Validate() != nil || fingerprint == ([32]byte{}) || len(plan.Contributors) != count || validateKernelAuditPlans(binding, plan.Audits) != nil || validateLifecyclePlan(binding, plan.Lifecycle) != nil {
+	if plan.Capability != nil {
+		count++
+		if plan.Lifecycle == nil {
+			return nil, invalidPlan()
+		}
+	}
+	if probe.Validate() != nil || fingerprint == ([32]byte{}) || len(plan.Contributors) != count || validateKernelAuditPlans(binding, plan.Audits) != nil || validateLifecyclePlan(binding, plan.Lifecycle) != nil || validateCapabilityPlan(binding, plan.Capability) != nil {
 		return nil, invalidPlan()
 	}
-	domains, audits, lifecycles := 0, 0, 0
+	domains, audits, lifecycles, capabilities := 0, 0, 0, 0
 	contributors := make([][]byte, len(plan.Contributors))
 	seen := make(map[string]bool, len(plan.Contributors))
 	for i, d := range plan.Contributors {
@@ -76,12 +88,17 @@ func encodeKernelPlan(binding identity.CommandBinding, fingerprint [32]byte, pla
 				return nil, invalidPlan()
 			}
 			lifecycles++
+		case "capability/postgres":
+			if plan.Capability == nil || d.ContractID != "capability.one-use" || d.Version != 1 {
+				return nil, invalidPlan()
+			}
+			capabilities++
 		default:
 			return nil, invalidPlan()
 		}
 		contributors[i] = cborMap(map[string][]byte{"owner": cborText(d.Owner), "contract_id": cborText(d.ContractID), "version": cborUint(uint64(d.Version))})
 	}
-	if domains != 1 || audits != 1 || plan.Lifecycle != nil && lifecycles != 1 {
+	if domains != 1 || audits != 1 || plan.Lifecycle != nil && lifecycles != 1 || plan.Capability != nil && capabilities != 1 {
 		return nil, invalidPlan()
 	}
 	events := make([][]byte, len(plan.Audits))
@@ -96,6 +113,9 @@ func encodeKernelPlan(binding identity.CommandBinding, fingerprint [32]byte, pla
 	fields := map[string][]byte{"profile": cborText("identity-kernel-plan-v1"), "binding": cborMap(commandScope(binding)), "fingerprint": cborBytes(fingerprint[:]), "contributors": cborArray(contributors), "audits": cborArray(events)}
 	if p := plan.Lifecycle; p != nil {
 		fields["lifecycle"] = cborMap(map[string][]byte{"event_type": cborText(p.EventType), "event_index": cborUint(uint64(p.EventIndex)), "before_version": cborUint(p.BeforeVersion), "after_version": cborUint(p.AfterVersion)})
+	}
+	if plan.Capability != nil {
+		fields["capability"] = encodeCapabilityPlan(plan.Capability)
 	}
 	return cborMap(fields), nil
 }
@@ -112,6 +132,11 @@ type admittedKernelPlan struct {
 }
 
 func (r *ContributorRegistry) admitKernelPlan(binding identity.CommandBinding, fingerprint [32]byte, p CommandPlan) (*admittedKernelPlan, error) {
+	// Typed freezing must not activate a one-time contributor before reservation,
+	// finalization and recovery are owned by the sole coordinator.
+	if p.Capability != nil {
+		return nil, invalidPlan()
+	}
 	digest, err := KernelPlanDigest(binding, fingerprint, p)
 	if err != nil || digest != p.Digest {
 		return nil, invalidPlan()

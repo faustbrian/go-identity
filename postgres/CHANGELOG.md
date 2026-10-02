@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Freeze typed one-use capability inputs into command-plan digests and bounded
+  historical codecs without changing existing audit/lifecycle bytes. Unsupported
+  execution rejects the input rather than silently omitting it. Atomic capability
+  reservation/consumption phases remain pending; this declaration grants no
+  workflow or transaction authority.
+
 - Add primary identifier/verification partition reads and forward migration9.
   Reads preserve canonical values, full uint64 versions and tenant scope,
   returning no partial state when limits or consistency checks fail. Database
