@@ -14,6 +14,7 @@
       "build_required": true,
       "build_tags": []
     },
+    {"module_directory":"session","directory":".","name":"session","import_path":"github.com/faustbrian/go-identity/session","kind":"public","production":true,"executable":true,"coverage_required":true,"build_required":true,"build_tags":[]},
     {"module_directory":"postgres","directory":".","name":"postgres","import_path":"github.com/faustbrian/go-identity/postgres","kind":"public","production":true,"executable":true,"coverage_required":true,"build_required":true,"build_tags":[]}
   ]
 }

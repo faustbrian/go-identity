@@ -42,6 +42,28 @@
       "conformance_corpora": []
     },
     {
+      "directory": "session",
+      "module_path": "github.com/faustbrian/go-identity/session",
+      "go_version": "1.27.0",
+      "packages": [{"module_directory":"session","directory":".","name":"session","import_path":"github.com/faustbrian/go-identity/session","kind":"public","production":true,"executable":true,"coverage_required":true,"build_required":true,"build_tags":[]}],
+      "purpose": "Shared session lifetime and secure transport policy; issuance and storage in development.",
+      "lifecycle": "experimental",
+      "kind": "public library",
+      "releasable": true,
+      "family": "service-edge",
+      "version": "0.0.0",
+      "tag_prefix": "session/v",
+      "owned_dependencies": [],
+      "reverse_owned_dependencies": [],
+      "external_runtime_dependencies": [],
+      "required_services": [],
+      "build_tags": [],
+      "test_tags": [],
+      "interoperability_tools": [],
+      "specifications": [],
+      "conformance_corpora": []
+    },
+    {
       "directory": "postgres",
       "module_path": "github.com/faustbrian/go-identity/postgres",
       "go_version": "1.27.0",

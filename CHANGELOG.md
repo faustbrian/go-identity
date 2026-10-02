@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Register the experimental session child module with shared remember/lifetime
+  and secure host-cookie policy. Durable session workflows remain in development.
+
 - Expose adapter-neutral command receipt validation, preserving the existing
   closed outcome, scope, version and operation-specific payload invariants.
 
