@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add owned creation UnitOfWork composition for core creation and historical
+  recovery without caller-written plans, audit builders or transaction glue.
+  Required failure auditing survives poisoned SQL Work without reviving writes;
+  ambiguous closure remains unknown. Pending recovery is observation only.
+
 - Add opt-in, current-policy-authorized primary command lookup with exact
   historical scope and receipt preservation. Missing, wrong-scope and denied
   callers receive the same protected response and decision/read work shape.

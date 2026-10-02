@@ -21,6 +21,9 @@ type domainExecution struct {
 	reservation *reservationState
 	ctx         context.Context
 	cancel      context.CancelFunc
+	// Only the owned creation bridge supplies prebuilt failure records. They
+	// never unpoison Work or permit more domain SQL; Abort stages after rollback.
+	abortAudits map[string]audit.Record
 }
 
 // Begin opens one bounded primary domain transaction after rechecking the
@@ -265,8 +268,12 @@ func (c *Coordinator) Abort(w Work, cause error) (identity.CommandResult, error)
 	class, reason, outcome, safeCause := abortClassification(cause)
 	var record audit.Record
 	complete := w.state.audits != nil && len(w.state.audits.records) == 1 && w.state.audits.staged[0]
-	if complete {
+	if candidate, exists := execution.abortAudits[class]; exists {
+		record, complete = candidate, true
+	} else if complete {
 		record = w.state.audits.records[0]
+	}
+	if complete {
 		attrs := record.Attributes()
 		complete = record.Outcome() == outcome && record.ReasonCode() == reason && record.Changes().NoChange() && attrs["aggregate.before_version"] == "0" && attrs["aggregate.after_version"] == "0"
 	}

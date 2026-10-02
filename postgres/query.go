@@ -165,7 +165,19 @@ func (c *Coordinator) queryCommandReceipt(ctx context.Context, q identity.Recove
 	if policyErr != nil {
 		return identity.CommandResult{}, identity.UnavailableError{}
 	}
-	if !allowed || errors.Is(err, pgx.ErrNoRows) || observed.retired || observed.tenant != string(q.TenantID) || observed.purpose != q.OperationID {
+	if !allowed {
+		return identity.CommandResult{}, identity.ForbiddenError{}
+	}
+	return commandReceipt(q, observed, err)
+}
+
+// Both owned recovery and authorized public metadata lookup share the same
+// historical fences. This parser grants no caller authorization or ownership.
+func commandReceipt(q identity.RecoveryQuery, observed commandObservation, err error) (identity.CommandResult, error) {
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		return identity.CommandResult{}, identity.UnavailableError{}
+	}
+	if errors.Is(err, pgx.ErrNoRows) || observed.retired || observed.tenant != string(q.TenantID) || observed.purpose != q.OperationID {
 		return identity.CommandResult{}, identity.ForbiddenError{}
 	}
 	binding, decodeErr := decodeCommandScope(observed.scope)

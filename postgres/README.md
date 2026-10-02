@@ -13,6 +13,31 @@ Cancellation and deadline classifications remain observable.
 
 ## Current development boundary
 
+### Owned creation service composition
+
+`NewCreationUnitOfWork(coordinator, repository, CreationUnitOfWorkConfig{
+RetentionPolicyVersion: revision})` supplies the core `identity.UnitOfWork`
+dependency for `identity.NewUserCreationService`. The exact repository instance
+must already be registered with typed audit and lifecycle contributors. The
+adapter owns plan construction, privacy-safe audit records, primary time,
+reservation, execution, closure and scoped receipt lookup. Consumers do not
+implement a domain store or supply Work, audit-record builders or command plans.
+
+This is a trusted storage seam, not a transport endpoint: only the core service
+provides current caller authorization, field preparation and output redaction.
+Creation supports human and service-account actors; API-key actor audit mapping
+remains unsupported and fails before reservation. Failure evidence is built
+before domain writes and staged after proven rollback, never by unpoisoning SQL
+Work. No success prefixes survive participant failure. A failed failure-audit
+commit or ambiguous transaction remains Unknown. Replay preserves the original
+receipt and audit ID, including after retained fingerprint-key rotation.
+
+Recovery returns historical creation, not current user status. Live or expired
+pending returns InProgress without changing ownership. Full frozen-participant
+reconciliation and other command profiles remain unfinished. Existing test SQL
+contributors prove coordinator atomicity, not production audit/outbox adapter
+interoperability; that composition remains required before package completion.
+
 ### Primary command lookup
 
 `CoordinatorConfig.QueryPolicy` optionally enables `QueryCommand(ctx, query,
