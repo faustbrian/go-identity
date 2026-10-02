@@ -105,7 +105,7 @@ func BuildAccountLinkProofPayload(s AccountLinkProofSpec) (capability.Payload, e
 
 // LinkAccount returns an independent typed adapter copy for this variant only.
 func (c Command) LinkAccount() (AccountLinkCommand, bool) {
-	if c.link == nil || c.create != nil || c.update != nil || c.profile != nil || c.status != nil || c.unlink != nil || c.identifier != nil {
+	if c.link == nil || c.create != nil || c.update != nil || c.profile != nil || c.status != nil || c.unlink != nil || c.identifier != nil || c.feature != nil {
 		return AccountLinkCommand{}, false
 	}
 	s := *c.link

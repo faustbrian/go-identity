@@ -89,6 +89,9 @@ type CreateUserCommand struct {
 // Formatting is always redacted and JSON serialization is forbidden. Adapter
 // mapping uses the typed accessor, never reflection or command JSON. The adapter
 // owns versioned keyed canonical fingerprints, reservations and durable replay.
+// Kernel variants retain exact owned types; the explicit feature branch carries
+// bounded named typed input for exhaustive feature-adapter schema mapping. It
+// grants no generic callback, transaction, receipt or execution authority.
 type Command struct {
 	create     *CreateUserCommand
 	update     *UpdateUserCommand
@@ -97,6 +100,7 @@ type Command struct {
 	unlink     *AccountUnlinkCommand
 	link       *AccountLinkCommand
 	identifier *IdentifierCommand
+	feature    *featureCommandState
 }
 
 // NewUserCreationCommand validates and snapshots a creation's structural input.
@@ -129,7 +133,7 @@ func NewUserCreationCommand(spec CreateUserCommand) (Command, error) {
 // CreateUser returns a private copy and false for an invalid/zero command.
 // Returned contents are for trusted adapters, never diagnostics or snapshots.
 func (c Command) CreateUser() (CreateUserCommand, bool) {
-	if c.create == nil || c.update != nil || c.profile != nil || c.status != nil || c.unlink != nil || c.link != nil || c.identifier != nil {
+	if c.create == nil || c.update != nil || c.profile != nil || c.status != nil || c.unlink != nil || c.link != nil || c.identifier != nil || c.feature != nil {
 		return CreateUserCommand{}, false
 	}
 	spec := *c.create

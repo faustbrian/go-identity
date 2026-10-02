@@ -119,7 +119,7 @@ func NewIdentifierCommand(c IdentifierCommand) (Command, error) {
 
 // ChangeIdentifier returns a private value copy for this variant only.
 func (c Command) ChangeIdentifier() (IdentifierCommand, bool) {
-	if c.identifier == nil || c.create != nil || c.update != nil || c.profile != nil || c.status != nil || c.unlink != nil || c.link != nil {
+	if c.identifier == nil || c.create != nil || c.update != nil || c.profile != nil || c.status != nil || c.unlink != nil || c.link != nil || c.feature != nil {
 		return IdentifierCommand{}, false
 	}
 	return *c.identifier, true

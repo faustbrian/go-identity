@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add an explicit immutable structural feature command branch with exact
+  operation binding and bounded named scalar input, preserving unsigned
+  authority versions, UTC instants and copied binary metadata. Kernel command
+  variants remain distinct; feature fingerprint, receipt and execution mapping
+  require their owned adapter phases and are not activated by construction.
+
 - Add storage-neutral feature operation descriptors and exact common command
   binding validation, with explicit schema and record-target requirements.
   Preserve the closed kernel command/receipt union; descriptor validation does

@@ -25,6 +25,15 @@ safe identities, positive policy version and explicit required/omitted record.
 This does not authorize or register a feature, enable execution or open the
 existing kernel command/receipt union. Coordinator feature phases remain in
 development; adapters must not substitute private transactions or journals.
+`NewFeatureCommand` freezes an explicit structural feature branch: exact binding
+and operation plus a bounded named scalar payload (including full uint64
+versions, microsecond UTC instants and copied binary metadata). It grants no
+authentication, schema completeness, current authority or execution readiness.
+Feature adapters must exhaustively map native domain commands and validate their
+schemas; applications do not implement that workflow. Raw credential/bearer
+secrets are forbidden. Opaque commands redact formatting and deny JSON; trusted
+returned projections are never responses, logs or evidence snapshots. Existing
+kernel receipts and PostgreSQL admission remain closed to this new branch.
 Remaining destructive lifecycle commands, durable repositories, complete policy composition,
 hooks, directory import and privacy workflows are not implemented yet.
 
