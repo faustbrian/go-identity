@@ -27,7 +27,10 @@ type CommandPlan struct {
 	// Capability declares a typed one-use participant input. Identifier reservation
 	// requires its registered reservation contributor; domain execution is disabled.
 	Capability *CapabilityPlan
-	Digest     [32]byte
+	// Feature declares one exact registered feature schema for preparation only.
+	// Kernel digests reject it; feature reservation/execution remains disabled.
+	Feature *FeatureRegistration
+	Digest  [32]byte
 }
 
 // KernelPlanDigest returns a domain-separated SHA-256 digest of the current
@@ -57,6 +60,9 @@ func KernelPlanDigest(binding identity.CommandBinding, fingerprint [32]byte, pla
 // The journal freezes the exact digest input, not a second serialization that
 // can disagree with admission or omit a participant field.
 func encodeKernelPlan(binding identity.CommandBinding, fingerprint [32]byte, plan CommandPlan) ([]byte, error) {
+	if plan.Feature != nil {
+		return nil, invalidPlan()
+	}
 	probe := identity.CommandResult{Binding: binding, Outcome: identity.CommitOutcomeInProgress, RetryAfter: time.Microsecond}
 	count := 2
 	if plan.Lifecycle != nil {

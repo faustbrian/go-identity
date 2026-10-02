@@ -23,6 +23,7 @@ func prepareClaim(c identity.Command, key [32]byte) (claimRequest, error) {
 		return claimRequest{}, codecError()
 	}
 	var binding identity.CommandBinding
+	var feature *identity.FeatureOperation
 	payload := map[string][]byte{}
 	var attrs []identity.AttributeUpdate
 	attributeCommand := false
@@ -100,6 +101,8 @@ func prepareClaim(c identity.Command, key [32]byte) (claimRequest, error) {
 	case isFeature(c):
 		s, _ := c.Feature()
 		binding = s.Binding
+		operation := s.Operation
+		feature = &operation
 		var err error
 		payload, err = encodeFeature(s, key)
 		if err != nil {
@@ -126,13 +129,26 @@ func prepareClaim(c identity.Command, key [32]byte) (claimRequest, error) {
 		payload["attributes"] = cborMap(fields)
 	}
 	scope := commandScope(binding)
+	if feature != nil {
+		scope["feature_owner"] = cborText(feature.Owner)
+		scope["record_requirement"] = cborUint(uint64(feature.RecordRequirement))
+	}
 	safe := cborMap(scope)
 	scope["payload"] = cborMap(payload)
 	canonical := cborMap(scope)
 	if len(canonical) > 1<<20 || len(safe) > 65536 {
 		return claimRequest{}, codecError()
 	}
-	return claimRequest{commandID: binding.CommandID, tenant: binding.TenantID, purpose: binding.OperationID, canonical: canonical, safeFields: safe, source: &c}, nil
+	return claimRequest{commandID: binding.CommandID, tenant: binding.TenantID, purpose: binding.OperationID, canonical: canonical, safeFields: safe, source: &c, feature: feature}, nil
+}
+
+func commandSafeFields(b identity.CommandBinding, feature *identity.FeatureOperation) []byte {
+	scope := commandScope(b)
+	if feature != nil {
+		scope["feature_owner"] = cborText(feature.Owner)
+		scope["record_requirement"] = cborUint(uint64(feature.RecordRequirement))
+	}
+	return cborMap(scope)
 }
 
 func isCreation(c identity.Command) bool   { _, ok := c.CreateUser(); return ok }

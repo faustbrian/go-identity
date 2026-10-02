@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Prepare exact registered feature plans through the existing coordinator,
+  binding ordered contributors, bounded required audit slots, lifecycle and
+  keyed command intent. Match safe receipts to their exact feature descriptor
+  and include feature owner policy in collision-check scope. Kernel plan bytes
+  remain unchanged; feature reservation, native policy and execution stay disabled
+  until their typed phases and historical recovery are implemented.
+
 - Map immutable feature command scalars into the existing keyed command codec,
   preserving full-width versions, UTC instants, exact kinds and owner policy.
   Digest all values conservatively and retain prior-key replay semantics.

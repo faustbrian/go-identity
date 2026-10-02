@@ -14,7 +14,7 @@ import (
 const maxJournalResultBytes = 8 << 20
 
 func encodeJournalResult(q claimRequest, r identity.CommandResult) ([]byte, error) {
-	if r.Validate() != nil || (r.Outcome != identity.CommitOutcomeCommitted && r.Outcome != identity.CommitOutcomeNotCommitted) || !bytes.Equal(q.safeFields, cborMap(commandScope(r.Binding))) {
+	if r.Validate() != nil || (r.Outcome != identity.CommitOutcomeCommitted && r.Outcome != identity.CommitOutcomeNotCommitted) || !matchesResultFeature(q, r) || !bytes.Equal(q.safeFields, commandSafeFields(r.Binding, q.feature)) {
 		return nil, identity.InvalidInputError{Field: "command_result"}
 	}
 	if r.Profile != nil {
@@ -38,6 +38,13 @@ func encodeJournalResult(q claimRequest, r identity.CommandResult) ([]byte, erro
 		return nil, identity.UnavailableError{}
 	}
 	return b, nil
+}
+
+func matchesResultFeature(q claimRequest, r identity.CommandResult) bool {
+	if q.feature == nil {
+		return r.Feature == nil
+	}
+	return r.Feature != nil && r.Feature.Operation == *q.feature
 }
 
 func decodeJournalResult(q claimRequest, b []byte) (identity.CommandResult, error) {

@@ -32,6 +32,9 @@ type claimRequest struct {
 	// Only the owned typed codec populates source. Replays must regenerate its
 	// secret digests under the stored key, not the newest issuance key.
 	source *identity.Command
+	// feature is the exact immutable codec descriptor, not inferred from scope.
+	// Historical feature recovery must obtain it from the frozen owned plan.
+	feature *identity.FeatureOperation
 }
 type claimKeys struct {
 	current  uint32

@@ -123,8 +123,13 @@ func (Reservation) MarshalJSON() ([]byte, error) {
 // computes the current-key fingerprint and returns an owned plan snapshot.
 // The supplied Digest is replaced. It performs no I/O, reserves nothing and
 // supplies no authorization: the identity service must authorize and prepare
-// the command before calling the trusted composition adapter. Identifier intent
-// may prepare an exact typed capability reservation plan; other unsupported
+// the command before calling the trusted composition adapter.
+// Feature commands can prepare their exact registered schema, ordered mandatory
+// contributors, bounded audit slots and lifecycle declaration. This is structural
+// preparation only; ReserveCommand rejects features until native schema mapping,
+// typed phases and historical recovery exist. No admitted execution handle is
+// produced. Event declarations do not prove native policy completeness.
+// Identifier intent may prepare an exact typed capability reservation plan; other unsupported
 // one-time/cascade profiles fail before SQL. Domain Begin for capability-bearing
 // plans remains disabled until the complete workflow phases exist. Mutating
 // returned slices affects only that caller's plan; do not mutate inputs during
@@ -138,6 +143,12 @@ func (c *Coordinator) PrepareCommandPlan(binding identity.CommandBinding, comman
 func (c *Coordinator) prepare(binding identity.CommandBinding, command identity.Command, plan CommandPlan) (claimRequest, CommandPlan, *admittedKernelPlan, error) {
 	if c == nil || c.registry == nil || c.registry.state == nil || c.keys.current == 0 {
 		return claimRequest{}, CommandPlan{}, nil, coordinatorError()
+	}
+	if spec, ok := command.Feature(); ok {
+		return c.prepareFeature(binding, command, spec, plan)
+	}
+	if plan.Feature != nil {
+		return claimRequest{}, CommandPlan{}, nil, invalidPlan()
 	}
 	// No proof/cascade declaration is inferred from a contributor name. Those
 	// command profiles need their typed reservation phases before admission.
@@ -202,6 +213,11 @@ func (c *Coordinator) prepare(binding identity.CommandBinding, command identity.
 func (c *Coordinator) ReserveCommand(ctx context.Context, binding identity.CommandBinding, command identity.Command, plan CommandPlan) (Reservation, identity.CommandResult, error) {
 	if ctx == nil {
 		return Reservation{}, identity.CommandResult{}, coordinatorError()
+	}
+	// Structural preparation must not activate reservation before native schema,
+	// receipt/recovery and all typed lifecycle phases are implemented.
+	if isFeature(command) || plan.Feature != nil {
+		return Reservation{}, identity.CommandResult{}, invalidPlan()
 	}
 	q, snapshot, _, err := c.prepare(binding, command, plan)
 	if err != nil {

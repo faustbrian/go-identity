@@ -25,8 +25,8 @@ feature contributor and 1024 total. Legacy contributors need no new methods.
 `ContributorRegistry.FeatureOperations` returns an owned scalar projection for
 trusted composition; it performs no callbacks. This is **not** enabled-feature
 discovery, registration of codecs, authorization or execution readiness.
-Kernel command plans remain closed; typed feature command/receipt preparation,
-reservation, apply/finalize/recovery and session issuance remain in development.
+Kernel command plans remain closed; feature reservation, native schema/action
+mapping, apply/finalize/recovery and session issuance remain in development.
 Do not advertise routes from these declarations or substitute private journals.
 
 The existing private command codec also maps immutable `identity.Command`
@@ -34,8 +34,27 @@ feature inputs for future owned phases. Exact owner/record policy and every
 named scalar kind/value affect the keyed fingerprint; all scalar values are
 conservatively digested before canonical encoding. Scope remains separate from
 private intent, and retained-key replay regenerates the original fingerprint.
-This is not schema validation or execution readiness: public plan preparation
-and reservation still reject feature commands before any SQL.
+This is not schema validation or execution readiness.
+
+`CommandPlan.Feature` selects one exact frozen registration. Public
+`PrepareCommandPlan` copies the matching contributor order, 1..64 strictly
+ordered required audit slots and lifecycle declaration, and computes
+`FeaturePlanDigest` using the current retained-key command fingerprint. The
+preparation profile requires identity, audit, lifecycle/outbox and the exact
+feature contributor; audit/outbox contributors must implement their typed phases.
+Each audit slot has exactly one record, schema 1, positive retention version and
+at most 16 KiB record/aggregate bounds. Required record lifecycle versions are
+one checked successor; record-free declarations keep both zero. Feature-owned
+adapters remain responsible for exhaustive native schemas and action policy.
+Feature capability/cascade inputs fail rather than being silently discarded.
+
+This metadata preparation produces no execution handle. `ReserveCommand` still
+rejects features before SQL; no feature journal or lifecycle execution is enabled.
+The feature profile is not decoded for durable recovery yet. Kernel digest bytes
+remain unchanged and kernel plans reject feature declarations. Private feature
+receipt encoding/decoding requires the exact descriptor from the prepared
+command; scope alone cannot supply a historical owner. Native response and
+reveal-once material never enter the shared receipt.
 
 ## Stable status-filtered listing
 
