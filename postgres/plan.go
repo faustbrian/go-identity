@@ -16,9 +16,14 @@ import (
 // transaction authority. Typed one-time/feature inputs and public Coordinator
 // admission remain under development; the current kernel-only profile cannot
 // admit those contributors by name alone.
+// Lifecycle, when present, requires the typed outbox contributor and declares
+// the successful mutation notification. Nil preserves the older audit-only
+// admission profile; it is not sufficient for a future successful mutation
+// commit, which must require its lifecycle and full effect declarations.
 type CommandPlan struct {
 	Contributors []ContributorDescriptor
 	Audits       []AuditPlan
+	Lifecycle    *LifecyclePlan
 	Digest       [32]byte
 }
 
@@ -29,15 +34,21 @@ type CommandPlan struct {
 // proof that the fingerprint is authoritative: the sole coordinator must
 // resolve retained fingerprint keys and compute it from the typed command.
 // Exactly one identity/postgres and one audit/postgres contributor are required;
+// a lifecycle declaration additionally requires exactly one outbox/postgres
+// identity.lifecycle v1 contributor. Audit-only digest bytes remain unchanged.
 // feature/one-time contributors without typed inputs are rejected, not silently
 // omitted. Invalid inputs return redacted identity.InvalidInputError. It does
 // no I/O or callbacks. Concurrent calls require immutable caller-owned inputs.
 func KernelPlanDigest(binding identity.CommandBinding, fingerprint [32]byte, plan CommandPlan) ([32]byte, error) {
 	probe := identity.CommandResult{Binding: binding, Outcome: identity.CommitOutcomeInProgress, RetryAfter: time.Microsecond}
-	if probe.Validate() != nil || fingerprint == ([32]byte{}) || len(plan.Contributors) != 2 || validateKernelAuditPlans(binding, plan.Audits) != nil {
+	count := 2
+	if plan.Lifecycle != nil {
+		count++
+	}
+	if probe.Validate() != nil || fingerprint == ([32]byte{}) || len(plan.Contributors) != count || validateKernelAuditPlans(binding, plan.Audits) != nil || validateLifecyclePlan(binding, plan.Lifecycle) != nil {
 		return [32]byte{}, invalidPlan()
 	}
-	domains, audits := 0, 0
+	domains, audits, lifecycles := 0, 0, 0
 	contributors := make([][]byte, len(plan.Contributors))
 	seen := make(map[string]bool, len(plan.Contributors))
 	for i, d := range plan.Contributors {
@@ -50,12 +61,17 @@ func KernelPlanDigest(binding identity.CommandBinding, fingerprint [32]byte, pla
 			domains++
 		case "audit/postgres":
 			audits++
+		case "outbox/postgres":
+			if plan.Lifecycle == nil || d.ContractID != "identity.lifecycle" || d.Version != 1 {
+				return [32]byte{}, invalidPlan()
+			}
+			lifecycles++
 		default:
 			return [32]byte{}, invalidPlan()
 		}
 		contributors[i] = cborMap(map[string][]byte{"owner": cborText(d.Owner), "contract_id": cborText(d.ContractID), "version": cborUint(uint64(d.Version))})
 	}
-	if domains != 1 || audits != 1 {
+	if domains != 1 || audits != 1 || plan.Lifecycle != nil && lifecycles != 1 {
 		return [32]byte{}, invalidPlan()
 	}
 	events := make([][]byte, len(plan.Audits))
@@ -67,7 +83,11 @@ func KernelPlanDigest(binding identity.CommandBinding, fingerprint [32]byte, pla
 			"max_record_bytes": cborUint(uint64(p.MaxRecordBytes)), "max_aggregate_bytes": cborUint(uint64(p.MaxAggregateBytes)), "required": cborBool(p.Required),
 		})
 	}
-	encoded := cborMap(map[string][]byte{"profile": cborText("identity-kernel-plan-v1"), "binding": cborMap(commandScope(binding)), "fingerprint": cborBytes(fingerprint[:]), "contributors": cborArray(contributors), "audits": cborArray(events)})
+	fields := map[string][]byte{"profile": cborText("identity-kernel-plan-v1"), "binding": cborMap(commandScope(binding)), "fingerprint": cborBytes(fingerprint[:]), "contributors": cborArray(contributors), "audits": cborArray(events)}
+	if p := plan.Lifecycle; p != nil {
+		fields["lifecycle"] = cborMap(map[string][]byte{"event_type": cborText(p.EventType), "event_index": cborUint(uint64(p.EventIndex)), "before_version": cborUint(p.BeforeVersion), "after_version": cborUint(p.AfterVersion)})
+	}
+	encoded := cborMap(fields)
 	return sha256.Sum256(encoded), nil
 }
 
@@ -79,6 +99,7 @@ type admittedKernelPlan struct {
 	digest       [32]byte
 	contributors []registeredContributor
 	audits       []AuditPlan
+	lifecycle    *LifecyclePlan
 }
 
 func (r *ContributorRegistry) admitKernelPlan(binding identity.CommandBinding, fingerprint [32]byte, p CommandPlan) (*admittedKernelPlan, error) {
@@ -96,8 +117,18 @@ func (r *ContributorRegistry) admitKernelPlan(binding identity.CommandBinding, f
 				return nil, invalidPlan()
 			}
 		}
+		if entry.descriptor.Owner == "outbox/postgres" {
+			if _, ok := entry.contributor.(LifecycleContributor); !ok {
+				return nil, invalidPlan()
+			}
+		}
 	}
-	return &admittedKernelPlan{registry: r.state, binding: binding, digest: digest, contributors: entries, audits: append([]AuditPlan(nil), p.Audits...)}, nil
+	var lifecycle *LifecyclePlan
+	if p.Lifecycle != nil {
+		snapshot := *p.Lifecycle
+		lifecycle = &snapshot
+	}
+	return &admittedKernelPlan{registry: r.state, binding: binding, digest: digest, contributors: entries, audits: append([]AuditPlan(nil), p.Audits...), lifecycle: lifecycle}, nil
 }
 
 func (p *admittedKernelPlan) belongsTo(r *ContributorRegistry) error {
@@ -114,7 +145,15 @@ func (p *admittedKernelPlan) bindWork(w Work) error {
 	if p == nil || p.registry == nil || p.registry != w.state.registry || p.binding != w.state.binding {
 		return invalidPlan()
 	}
-	return bindAuditPlans(w, p.audits)
+	if err := bindAuditPlans(w, p.audits); err != nil {
+		return err
+	}
+	if p.lifecycle != nil {
+		if err := bindLifecyclePlan(w, p.lifecycle); err != nil {
+			return w.fail(w.state.ctx, err)
+		}
+	}
+	return nil
 }
 
 func invalidPlan() error { return identity.InvalidInputError{Field: "command_plan"} }

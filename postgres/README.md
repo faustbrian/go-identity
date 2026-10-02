@@ -161,6 +161,22 @@ retain denial/unknown recovery evidence. Those durable paths are not yet present
 
 ### Contributor registration
 
+`CommandPlan.Lifecycle` adds one typed kernel notification plus the exact
+`outbox/postgres` `identity.lifecycle` v1 contributor. `Work.StageLifecycle`
+constructs a safe scalar-only record with a stable command/class/index ID;
+`StagedLifecycle` returns an owned snapshot only after successful required audit
+staging agrees on its target and before/after versions. It accepts no arbitrary
+payload, identifier value or bearer. The trusted adapter obtains occurrence
+time from `Work.DatabaseTime`; staging itself does not perform I/O. Closed or
+failed Work cannot produce notifications. Mismatches poison the Work.
+
+The open `LifecycleContributor` will persist these records through the same
+Work, not a separately committable transaction. Persistence, cascade consumer
+snapshots/checkpoints, encrypted delivery/provider effect profiles and complete
+Coordinator invocation are still pending. Older audit-only admission remains
+compatible, but cannot satisfy a successful future mutation commit. The deletion
+notification is `identity.deletion_requested.v1`, never proof of completed erasure.
+
 `AuditContributor` supplies the open durable audit phase.
 `Work.StagedAudits` exposes owned declaration/record pairs only when every
 required slot is staged. The registered audit adapter uses this snapshot to

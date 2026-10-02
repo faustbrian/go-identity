@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add typed lifecycle staging, stable command/class/index effect IDs and
+  outbox phase admission. Safe scalar-only events must match the successful
+  audit's aggregate/version transition; no payload secrets or external-success
+  claim is admitted. Durable outbox/Coordinator execution remains pending.
+
 - Expose complete owned audit-staging snapshots and an open AuditContributor
   persistence phase for same-transaction adapter composition. Snapshot access
   never conveys commit authority or a durable receipt.

@@ -30,6 +30,7 @@ type workState struct {
 	failed     error
 	rows       *WorkRows
 	audits     *workAudits
+	lifecycle  *workLifecycle
 	registry   *contributorRegistryState
 	sqlStarted bool
 }
