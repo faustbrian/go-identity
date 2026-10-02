@@ -22,7 +22,8 @@ type CreationUnitOfWorkConfig struct{ RetentionPolicyVersion uint64 }
 // do not authorize a caller. The exact Repository must already be enlisted
 // with typed audit/outbox adapters in Coordinator. It starts no background work
 // and owns no pool; immutable composition supports concurrent service calls.
-// Zero is invalid. Full pending-plan reconciliation remains under development.
+// Zero is invalid. Creation recovery requires every frozen participant's typed
+// recovery phase; other profiles/deadline alerting remain under development.
 type CreationUnitOfWork struct {
 	coordinator  *Coordinator
 	repository   *Repository
@@ -174,8 +175,10 @@ func (o *CreationUnitOfWork) Execute(ctx context.Context, command identity.Comma
 // Recover observes historical creation on the primary for the exact original
 // scope, without constructing an authenticated DecisionContext from IDs. It
 // belongs behind core current authorization/redaction, not a public transport.
-// Missing/wrong scope reveals no receipt; pending, even expired, is InProgress
-// and never takeover or rollback proof. Historical fields remain unchanged.
+// Missing/wrong scope reveals no receipt; live pending is InProgress. Expired
+// creation may be aborted only with all frozen participants' negative evidence
+// and atomically persisted failure auditing. Missing/unknown evidence stays
+// pending. This never infers success from current user state or replays commands.
 func (o *CreationUnitOfWork) Recover(ctx context.Context, q identity.RecoveryQuery) (identity.CommandResult, error) {
 	if o == nil || o.coordinator == nil || ctx == nil || q.OperationID != "identity.user.create" {
 		return identity.CommandResult{}, coordinatorError()
@@ -197,11 +200,7 @@ func (o *CreationUnitOfWork) Recover(ctx context.Context, q identity.RecoveryQue
 	if e := bounded.Err(); e != nil {
 		return identity.CommandResult{}, readFailure(bounded, e)
 	}
-	observed, e := c.readCommand(bounded, q.CommandID)
-	if bounded.Err() != nil {
-		return identity.CommandResult{}, readFailure(bounded, e)
-	}
-	result, e := commandReceipt(q, observed, e)
+	result, e := c.recoverCommandReceipt(bounded, q)
 	return coreCreationReceipt(result, e)
 }
 

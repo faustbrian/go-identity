@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add primary creation recovery with exact frozen participant selection,
+  generation takeover and invocation-bound typed evidence queries. Proven
+  absence closes with required failure auditing and an aborted receipt in one
+  transaction; partial/unknown evidence stays pending. Other command profiles,
+  recovery-deadline alerting and production participant integration remain open.
+
 - Reject malformed, noncanonical or misbound frozen participant plans before
   returning primary command outcomes. Historical audit-only plans remain
   readable without today's contributor registry or retained key selection.

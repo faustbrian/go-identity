@@ -32,11 +32,22 @@ Work. No success prefixes survive participant failure. A failed failure-audit
 commit or ambiguous transaction remains Unknown. Replay preserves the original
 receipt and audit ID, including after retained fingerprint-key rotation.
 
-Recovery returns historical creation, not current user status. Live or expired
-pending returns InProgress without changing ownership. Full frozen-participant
-reconciliation and other command profiles remain unfinished. Existing test SQL
+Recovery returns historical creation, not current user status. Live pending
+returns InProgress without changing ownership. Expired creation can take a new
+generation and atomically abort with failure auditing only when every exact
+frozen contributor supplies `RecoveryContributor` and proves non-commit.
+Missing, unknown or conflicting evidence remains pending. Existing users never
+become reconstructed success receipts. Other command profiles, recovery-deadline
+alerting and transaction retry policy remain unfinished. Existing test SQL
 contributors prove coordinator atomicity, not production audit/outbox adapter
 interoperability; that composition remains required before package completion.
+
+`RecoverCommand(ctx, query, caller)` uses current `QueryPolicy` authorization
+and returns metadata only; owned core recovery uses the trusted storage seam
+without synthesizing caller identity. `RecoveryWork` is invocation-bound, exposes
+only scope, bounded evidence queries and the participant's frozen declaration,
+and cannot stage mutations or close transactions. Contributors read retained
+bindings even when payloads have been pruned. QueryCommand remains observational.
 
 ### Primary command lookup
 

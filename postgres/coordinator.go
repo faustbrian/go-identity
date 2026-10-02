@@ -46,8 +46,9 @@ func (CoordinatorConfig) MarshalJSON() ([]byte, error) {
 // and never closes the pool. Concurrent reservations are supported. This
 // incremental implementation admits user creation with required audit and
 // lifecycle declarations only. Begin, Repository.ApplyUserCreation and
-// Commit/Abort own creation execution; complete recovery and the
-// identity.UnitOfWork bridge remain under development. Reservation is
+// Commit/Abort and CreationUnitOfWork own creation execution. RecoverCommand
+// supports conservative creation-only reconciliation; other recovery profiles
+// and deadline alerting remain under development. Reservation is
 // bookkeeping, never proof of a user mutation or audit/outbox persistence.
 type Coordinator struct {
 	pool                           *database.Pool

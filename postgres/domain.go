@@ -82,23 +82,27 @@ func (c *Coordinator) Begin(ctx context.Context, r Reservation) (Work, error) {
 		return fail(err)
 	}
 	w.state.execution = &domainExecution{coordinator: c, reservation: r.state, ctx: bounded, cancel: cancel}
+	if err := configureKernelWork(bounded, w); err != nil {
+		invalidateWork(w)
+		return fail(err)
+	}
+	return w, nil
+}
+
+func configureKernelWork(ctx context.Context, w Work) error {
 	deadline, _ := w.state.ctx.Deadline()
 	millis := time.Until(deadline).Milliseconds()
 	if millis < 1 {
 		millis = 1
 	}
-	if _, err := w.Exec(bounded, `SELECT set_config('idle_in_transaction_session_timeout',$1,true)`, strconv.FormatInt(millis, 10)+"ms"); err != nil {
-		invalidateWork(w)
-		return fail(err)
+	if _, err := w.Exec(ctx, `SELECT set_config('idle_in_transaction_session_timeout',$1,true)`, strconv.FormatInt(millis, 10)+"ms"); err != nil {
+		return err
 	}
-	// All kernel writers use this tenant lock before aggregate mutations. Hash
-	// collisions only add contention; they cannot merge scope or grant authority.
+	// All kernel writers and recovery use this tenant lock before aggregate
+	// access. Hash collisions add contention, never scope or authority.
 	key := sha256.Sum256(cborMap(map[string][]byte{"profile": cborText("identity-tenant-lock-v1"), "tenant": cborText(string(w.state.binding.TenantID))}))
-	if _, err := w.Exec(bounded, `SELECT pg_advisory_xact_lock($1)`, int64(binary.BigEndian.Uint64(key[:8]))); err != nil {
-		invalidateWork(w)
-		return fail(err)
-	}
-	return w, nil
+	_, err := w.Exec(ctx, `SELECT pg_advisory_xact_lock($1)`, int64(binary.BigEndian.Uint64(key[:8])))
+	return err
 }
 
 func (p *admittedKernelPlan) snapshot() CommandPlan {
