@@ -161,6 +161,13 @@ retain denial/unknown recovery evidence. Those durable paths are not yet present
 
 ### Contributor registration
 
+`AuditContributor` supplies the open durable audit phase.
+`Work.StagedAudits` exposes owned declaration/record pairs only when every
+required slot is staged. The registered audit adapter uses this snapshot to
+write canonical records and immutable command/index bindings through that same
+Work. It cannot retain Work or own transaction closure; success is staging,
+not commit. Complete Coordinator phase invocation remains under development.
+
 `CommandPlan` declares ordered contributor descriptors, required audit slots
 and a digest. `KernelPlanDigest` binds the current kernel-only profile to the
 exact command scope and authoritative fingerprint using deterministic CBOR.

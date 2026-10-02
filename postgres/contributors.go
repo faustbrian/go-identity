@@ -10,7 +10,8 @@ import (
 // adapter. Descriptor must be a pure, bounded local operation returning a
 // stable compile-time identity; it must not perform I/O or call user hooks.
 // Registration conveys no transaction, commit or cross-package authority.
-// Transaction phase capabilities are not yet implemented by this interface.
+// Phase capabilities are separately typed: AuditContributor supplies durable
+// audit staging. Other participant phases remain under development.
 type Contributor interface {
 	Descriptor() ContributorDescriptor
 }

@@ -1,14 +1,19 @@
 package postgres
 
 import (
+	"context"
 	"testing"
 )
+
+type planAuditContributor struct{ registryContributor }
+
+func (*planAuditContributor) PersistAudits(context.Context, Work) error { return nil }
 
 func TestKernelPlanOwnsSelectionAndAudits(t *testing.T) {
 	w, record, ap := auditFixture(t)
 	domain := ContributorDescriptor{Owner: "identity/postgres", ContractID: "identity.domain", Version: 1}
 	auditing := ContributorDescriptor{Owner: "audit/postgres", ContractID: "audit.records", Version: 1}
-	registry, err := NewContributorRegistry([]Contributor{&registryContributor{domain}, &registryContributor{auditing}})
+	registry, err := NewContributorRegistry([]Contributor{&registryContributor{domain}, &planAuditContributor{registryContributor{auditing}}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -39,7 +44,7 @@ func TestKernelPlanOwnsSelectionAndAudits(t *testing.T) {
 	if err := completeAudits(w); err != nil {
 		t.Fatal(err)
 	}
-	other, _ := NewContributorRegistry([]Contributor{&registryContributor{domain}, &registryContributor{auditing}})
+	other, _ := NewContributorRegistry([]Contributor{&registryContributor{domain}, &planAuditContributor{registryContributor{auditing}}})
 	if err := admitted.belongsTo(other); err == nil {
 		t.Fatal("foreign registry accepted")
 	}
@@ -85,7 +90,7 @@ func TestKernelPlanDigestConservesInputs(t *testing.T) {
 func TestKernelPlanCannotBindForeignOrLateWork(t *testing.T) {
 	w, _, ap := auditFixture(t)
 	ds := []ContributorDescriptor{{Owner: "identity/postgres", ContractID: "identity.domain", Version: 1}, {Owner: "audit/postgres", ContractID: "audit.records", Version: 1}}
-	r, _ := NewContributorRegistry([]Contributor{&registryContributor{ds[0]}, &registryContributor{ds[1]}})
+	r, _ := NewContributorRegistry([]Contributor{&registryContributor{ds[0]}, &planAuditContributor{registryContributor{ds[1]}}})
 	p := CommandPlan{Contributors: ds, Audits: []AuditPlan{ap}}
 	fp := [32]byte{1}
 	p.Digest, _ = KernelPlanDigest(w.state.binding, fp, p)
@@ -96,7 +101,7 @@ func TestKernelPlanCannotBindForeignOrLateWork(t *testing.T) {
 	if e = admitted.bindWork(w); e == nil {
 		t.Fatal("unbound Work accepted")
 	}
-	other, _ := NewContributorRegistry([]Contributor{&registryContributor{ds[0]}, &registryContributor{ds[1]}})
+	other, _ := NewContributorRegistry([]Contributor{&registryContributor{ds[0]}, &planAuditContributor{registryContributor{ds[1]}}})
 	w.state.registry = other.state
 	if e = admitted.bindWork(w); e == nil {
 		t.Fatal("foreign Work accepted")
@@ -131,7 +136,7 @@ func TestKernelPlanRejectsInvalidAdmission(t *testing.T) {
 	domain := ContributorDescriptor{Owner: "identity/postgres", ContractID: "identity.domain", Version: 1}
 	auditing := ContributorDescriptor{Owner: "audit/postgres", ContractID: "audit.records", Version: 1}
 	extra := ContributorDescriptor{Owner: "capability/postgres", ContractID: "capability.one-use", Version: 1}
-	registry, _ := NewContributorRegistry([]Contributor{&registryContributor{domain}, &registryContributor{auditing}, &registryContributor{extra}})
+	registry, _ := NewContributorRegistry([]Contributor{&registryContributor{domain}, &planAuditContributor{registryContributor{auditing}}, &registryContributor{extra}})
 	good := CommandPlan{Contributors: []ContributorDescriptor{domain, auditing}, Audits: []AuditPlan{ap}}
 	fingerprint := [32]byte{1}
 	good.Digest, _ = KernelPlanDigest(w.state.binding, fingerprint, good)

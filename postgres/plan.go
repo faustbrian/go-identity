@@ -90,6 +90,13 @@ func (r *ContributorRegistry) admitKernelPlan(binding identity.CommandBinding, f
 	if err != nil {
 		return nil, invalidPlan()
 	}
+	for _, entry := range entries {
+		if entry.descriptor.Owner == "audit/postgres" {
+			if _, ok := entry.contributor.(AuditContributor); !ok {
+				return nil, invalidPlan()
+			}
+		}
+	}
 	return &admittedKernelPlan{registry: r.state, binding: binding, digest: digest, contributors: entries, audits: append([]AuditPlan(nil), p.Audits...)}, nil
 }
 

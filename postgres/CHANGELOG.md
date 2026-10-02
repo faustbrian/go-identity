@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Expose complete owned audit-staging snapshots and an open AuditContributor
+  persistence phase for same-transaction adapter composition. Snapshot access
+  never conveys commit authority or a durable receipt.
+
 - Add bounded kernel CommandPlan digest and private registry-bound admission.
   Command scope, authoritative fingerprint, ordered contributors and every
   audit declaration are frozen before execution; changed inputs and foreign
