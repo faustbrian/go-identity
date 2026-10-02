@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add private domain-begin fencing against the exact retained-key command,
+  pending generation and lease owner. Database time is read after lock waits
+  so expired, stale and terminal reservations cannot reenter domain work.
+  Complete public Work/Coordinator and participant staging remain unfinished.
+
 - Add immutable, bounded contributor identity registration with exact-version
   admission, duplicate rejection and owned descriptor snapshots. The open
   interface is implementable by independently owned adapters; transaction

@@ -85,6 +85,18 @@ validates bounded core values before allocation; decode rejects bodies over
 8 MiB. Required audit/participant staging and public scoped recovery are not yet
 implemented, so private terminal SQL is not a conforming composed mutation API.
 
+### Domain begin admission
+
+Private domain-begin admission now revalidates the retained-key global claim,
+locks the scoped pending journal and verifies generation, owner and lease using
+database time read after lock waits. A key rotation with the retained original
+key preserves admission; changed intent, stale/foreign/expired ownership and
+terminal rows never become apply authority. Missing history or keys fails
+closed. The future Coordinator owns rollback on every failure and bounds Work
+by the remaining lease; this private snapshot neither renews validity nor
+begins/commits/rolls back a transaction or invokes participants. Public Work
+and complete Begin orchestration are still unavailable.
+
 ### Contributor registration
 
 Contributor identities can now be composed with

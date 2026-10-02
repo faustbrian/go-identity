@@ -92,6 +92,7 @@ func TestPostgresIntegration(t *testing.T) {
 	t.Run("global command claims", func(t *testing.T) { testCommandClaims(t, ctx, pool) })
 	t.Run("journal leases", func(t *testing.T) { testJournalLeases(t, ctx, pool) })
 	t.Run("terminal journal", func(t *testing.T) { testJournalTerminal(t, ctx, pool) })
+	t.Run("begin ownership", func(t *testing.T) { testBeginJournal(t, ctx, pool) })
 	insert := func(tenant, user, status, version string) error {
 		_, err := pool.Raw().Exec(ctx, `INSERT INTO identity.users(tenant_id,user_id,status,version) VALUES($1,$2,$3,$4::numeric)`, tenant, user, status, version)
 		return err
