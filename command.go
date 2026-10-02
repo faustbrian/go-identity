@@ -174,6 +174,17 @@ type CommandResult struct {
 	Identifier *IdentifierReceipt
 }
 
+// Validate checks the closed receipt shape, immutable operation binding,
+// version relationships and outcome-specific payload without authorization or
+// current-state I/O. It returns a redacted InvalidInputError for invalid values.
+// The zero value is invalid. Callers must not mutate a receipt concurrently.
+func (r CommandResult) Validate() error {
+	if !r.valid() {
+		return InvalidInputError{Field: "command_result"}
+	}
+	return nil
+}
+
 // RecoveryQuery scopes a primary-authority lookup to the original command,
 // tenant, target, actor, operation and exact record/link mode for all outcomes.
 // The owner must match every field against immutable command scope before

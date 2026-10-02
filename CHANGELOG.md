@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Expose adapter-neutral command receipt validation, preserving the existing
+  closed outcome, scope, version and operation-specific payload invariants.
+
 - Align the module inventory with the Go 1.27 minimum and register the optional
   PostgreSQL adapter as an independently releasable experimental module.
 
