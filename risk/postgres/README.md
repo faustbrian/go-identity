@@ -136,7 +136,51 @@ reference and timestamps without provider work or duplicate effects.
 ## Remaining work
 
 Domain apply/finalization and completion's additional participants;
-durable lockouts/counters; CAPTCHA participants;
+durable lockouts/overrides, counter retirement and pruning; CAPTCHA participants;
 investigation, retention and anonymization; complete
 public examples/API baseline and package/release verification remain pending.
 There is no supported login or phone recovery workflow from this module yet.
+
+## Protected command counters
+
+Set `Config.CommandCounters` to an explicit core `CommandCounterPolicyConfig`
+with the same risk policy version and 1..4 newest-first retained digest keys.
+Nil retains issuance-only setup. Install `CounterMigrationSource` after the
+evidence reservation history; prior migration bytes and evidence remain intact.
+The coordinator and risk dependencies must include the committed protected-counter
+contracts pinned by this module. No private transaction or consumer-written
+counter store is required or supported.
+
+The native feature owner passes its opaque command, trusted canonical subject
+and primary preparation time to `PrepareCommandCounters`, then declares the
+returned `CommandCounterPlan` in the coordinator plan. The native owner validates
+its own fields plus the reserved `counter.*` fields. The exact registered risk
+instance reconstructs tenant/operation/attempt, bound subject or actor/resource,
+session/network dimensions, policy bounds and original retained-key projection
+before SQL. Raw network/session inputs stay in the in-memory opaque command;
+only bounded keyed projections and structural command linkage persist.
+
+`ReserveCommandCounters` is invoked only under coordinator ownership. A fixed
+window begins at primary time, resets at exclusive expiry, and never wraps its
+uint64 count. All retained digest aliases share one logical window. Durable
+tenant/operation key history rejects omitted or changed unretired versions;
+adding a strictly newer key preserves active counts. This initial history is
+append-only: retiring keys or pruning windows/snapshots is not yet supported.
+An active incompatible window configuration fails closed instead of resetting
+allowance. No lockout duration or policy is inferred from these attempt limits.
+
+Every charge retains its original four dimension snapshots and observation time.
+Allowed SQL is provisional until the coordinator commits pending ownership;
+denied charges commit with failure audit and aborted receipt. Exact replay does
+not call the mutation phase. Takeover transfers only the exact predecessor and
+reuses its original allowed decision, never a new count or fresh observation.
+Historical recovery checks the retained predecessor charge without treating it
+as domain commitment; only unanimous independent noncommit evidence can abort
+the owning command. Recovery never refunds a charged attempt.
+
+Native PostgreSQL tests exercise threshold denial, hot-key contention, replay,
+takeover, rotation, missing retained keys, preparation expiry, window expiry,
+saturation, failed snapshot rollback and charged noncommit reconciliation. The
+feature owner in these tests is a seam; no password mutation or login journey is
+claimed. Counter-bearing `Begin` remains closed until native current admission
+and domain apply/finalization are implemented.

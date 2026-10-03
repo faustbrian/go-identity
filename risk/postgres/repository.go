@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"strconv"
+	"time"
 
 	identity "github.com/faustbrian/go-identity"
 	identitypostgres "github.com/faustbrian/go-identity/postgres"
@@ -25,6 +26,10 @@ type Config struct {
 	EvidenceKeys       []risk.EvidenceKey
 	EnvelopeKeys       map[string][]byte
 	CurrentEnvelopeKey string
+	// CommandCounters optionally enables only native protected command counters.
+	// Nil preserves issuance-only setup. All retained keys are copied; removal
+	// requires durable retirement, which this initial profile does not yet expose.
+	CommandCounters *risk.CommandCounterPolicyConfig
 }
 
 // Format redacts copied and caller-owned key material in all diagnostics.
@@ -41,12 +46,15 @@ func (Config) MarshalText() ([]byte, error) { return nil, risk.ErrSensitiveSeria
 // safe for concurrent independent invocations; Work remains serial-use only.
 // Zero is invalid. Initiation reservation/rebind use the sole coordinator;
 // consuming recovery and terminal release use that coordinator as well.
-// Domain apply/finalize, CAPTCHA, counters and pruning remain unsupported.
+// Protected counter reservation is opt-in. Domain apply/finalize, CAPTCHA,
+// lockout/override policy, counter retirement and pruning remain unsupported.
 type Repository struct {
-	schema string
-	policy uint64
-	keys   []risk.EvidenceKey
-	cipher recordCipher
+	schema        string
+	policy        uint64
+	keys          []risk.EvidenceKey
+	cipher        recordCipher
+	counters      *risk.CommandCounterPolicyConfig
+	counterPolicy risk.CommandCounterPolicy
 }
 
 // Format hides runtime custody configuration and retained key material.
@@ -83,7 +91,30 @@ func NewRepository(c Config) (*Repository, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Repository{schema: pgx.Identifier{c.Schema}.Sanitize(), policy: c.PolicyVersion, keys: append([]risk.EvidenceKey(nil), c.EvidenceKeys...), cipher: cipher}, nil
+	r := &Repository{schema: pgx.Identifier{c.Schema}.Sanitize(), policy: c.PolicyVersion, keys: append([]risk.EvidenceKey(nil), c.EvidenceKeys...), cipher: cipher}
+	if c.CommandCounters != nil {
+		copy := *c.CommandCounters
+		copy.Keys = append([]risk.CounterDigestKey(nil), copy.Keys...)
+		p, err := risk.NewCommandCounterPolicy(copy)
+		if err != nil {
+			return nil, err
+		}
+		admission, err := copy.Policy.Admit("identity.profile.update")
+		if err != nil || admission.PolicyVersion != c.PolicyVersion {
+			return nil, risk.ErrInvalidPolicy
+		}
+		// Work persists fixed-window boundaries at PostgreSQL microsecond
+		// precision. Reject unsupported intervals before any reservation can
+		// truncate a duration or fail halfway through charging its dimensions.
+		for _, action := range []risk.Action{"identity.password.change", "identity.admin.user-ban"} {
+			protected, err := copy.Policy.Admit(action)
+			if err != nil || protected.Profile.Window%time.Microsecond != 0 {
+				return nil, risk.ErrInvalidPolicy
+			}
+		}
+		r.counters, r.counterPolicy = &copy, p
+	}
+	return r, nil
 }
 
 // Descriptor identifies the native store, not current registration or authority.
@@ -182,6 +213,9 @@ func (r *Repository) RecoverParticipant(ctx context.Context, w identitypostgres.
 	}
 	if ctx == nil || r == nil || r.schema == "" {
 		return unknown()
+	}
+	if b, e := w.CommandCounterBinding(r); e == nil {
+		return r.recoverCommandCounter(ctx, w, b)
 	}
 	if scope, err := w.Scope(); err == nil && scope.OperationID == "identity.phone.password-reset-request" {
 		return r.recoverRiskEvidence(ctx, w)

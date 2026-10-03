@@ -970,5 +970,6 @@ func TestIssuedEvidenceSameWorkIntegration(t *testing.T) {
 			t.Fatal(err)
 		}
 		testNativeRiskReservation(t, ctx, pool, repo, newExecutor(t, repo, issuanceQueryPolicy{}))
+		t.Run("protected counters", func(t *testing.T) { testNativeProtectedCounters(t, ctx, pool) })
 	})
 }

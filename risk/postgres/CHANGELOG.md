@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Add opt-in native protected-command counters with primary-time fixed windows,
+  saturating counts, retained-key rotation continuity and original command-linked
+  snapshots. Replay and exact owner takeover never charge again; denied attempts
+  remain charged with their failure audit and receipt. Charge linkage supports
+  noncommit reconciliation without claiming a domain commit. Install the additive
+  `CounterMigrationSource` after evidence reservation history. Domain admission,
+  lockout policy, key retirement and bounded pruning remain pending.
+
 - Reconcile native initiation reservations and terminally release them only
   after unanimous authoritative noncommit proof through the shared coordinator.
   Exact historical custody survives policy changes and expiry without granting

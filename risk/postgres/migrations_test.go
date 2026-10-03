@@ -83,3 +83,34 @@ func TestReservationMigrationPreservesPermanentHistory(t *testing.T) {
 		t.Fatal("lost cancellation")
 	}
 }
+
+func TestCounterMigrationPreservesPermanentHistory(t *testing.T) {
+	base := ReservationMigrationSource{Base: IssuanceIDMigrationSource{Base: MigrationSource{Schema: "risk_store", Version: 20}, Version: 21}, Version: 22}
+	original, e := base.Load(context.Background())
+	if e != nil {
+		t.Fatal(e)
+	}
+	s := CounterMigrationSource{Base: base, Version: 23}
+	history, e := s.Load(context.Background())
+	if e != nil || len(history) != 4 || history[3].Version() != 23 || history[3].DownSQL() != "" || history[3].TransactionMode() != migrations.TransactionModeDefault {
+		t.Fatal("invalid counter history", e)
+	}
+	for i, m := range original {
+		if history[i] != m {
+			t.Fatal("installed migration changed")
+		}
+	}
+	for _, v := range []migrations.Version{0, 20, 21, 22, ^migrations.Version(0)} {
+		if h, e := (CounterMigrationSource{Base: base, Version: v}).Load(context.Background()); e == nil || h != nil {
+			t.Fatal("invalid allocation admitted")
+		}
+	}
+	if h, e := s.Load(nil); e == nil || h != nil {
+		t.Fatal("nil context admitted")
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if h, e := s.Load(ctx); !errors.Is(e, context.Canceled) || h != nil {
+		t.Fatal("lost cancellation")
+	}
+}
