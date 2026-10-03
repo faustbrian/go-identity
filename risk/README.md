@@ -1,8 +1,8 @@
 # Identity risk policy
 
 This Go 1.27 module implements the first risk-core behavior: immutable canonical
-operation admission, deterministic scoped assessment and bounded server-source
-orchestration.
+operation admission, deterministic scoped assessment, bounded server-source
+orchestration and phase-bound counter dispatch.
 It is **not yet the complete risk service**. Durable counters, audit/journal
 ownership, CAPTCHA/HIBP orchestration, overrides, lockout/recovery and one-use
 RiskEvidence/CaptchaEvidence issuance remain required implementation work.
@@ -57,6 +57,34 @@ required audit or evidence issuance. It must not be used as complete middleware
 or as permission to execute the selected operation. The later official adapter
 composition must implement those owners; consumers must not supply private
 domain stores or replacement workflow orchestration.
+
+### Phase-bound counter dispatch
+
+`NewCounterCoordinator` binds one owned ephemeral `CounterStore`, the policy,
+a server clock, a bounded timeout and one to four newest-first versioned HMAC
+keys. `Prepare` freezes exactly the selected operation's dimensions and phase
+without storage access. Full IPv4/IPv6 addresses are canonicalized before
+derivation; mapped IPv4 representations converge. Raw addresses, identifiers,
+devices and secret keys are not included in storage keys. Returned bindings
+are independent adapter projections, not dispatch or credential authority.
+
+`Mutate` dispatches once. Only a complete same-command post-mutation snapshot
+can produce a usable velocity signal. N permits N attempts; N+1 applies the
+selected threshold. Noncommit, ambiguity, storage errors and foreign results
+are unavailable; no automatic retry occurs. A known commit remains committed
+after cancellation, timeout or stale evidence but yields no usable facts.
+Original authoritative observation times and window boundaries survive replay;
+the earliest observation expiry or window expiry bounds the returned signal.
+
+Retained digest versions are aliases for one logical counter, not independent
+windows. The adapter must prove rotation/epoch continuity and reject unsafe
+retirement; supplying aliases is not that proof. This coordinator does not
+implement a rate algorithm, cardinality eviction, durable lockout, journal
+recovery, audit, evidence issuance or an administrative override. Protected
+`reserve_with_owning_command` phases deliberately reject here until shared
+transaction participation is implemented. No current workflow consumer uses
+this partial path. Official PostgreSQL/Valkey adapters remain required; consumers
+must not implement replacement domain stores to fill those gaps.
 
 ## Security and ownership
 

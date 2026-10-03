@@ -2,6 +2,8 @@ package risk_test
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"time"
 
@@ -18,6 +20,39 @@ func ExampleNewPolicy() {
 	}
 	fmt.Println(assessment.Decision.Action)
 	// Output: deny
+}
+
+// unavailableCounterStore is a demonstration of an unavailable boundary, not
+// an application-provided replacement for the required official durable adapters.
+type unavailableCounterStore struct{}
+
+func (unavailableCounterStore) Mutate(_ context.Context, command risk.CounterCommand) (risk.CounterResult, error) {
+	return risk.NewCounterResult(command, risk.CounterNotCommitted, nil)
+}
+
+func ExampleNewCounterCoordinator() {
+	// Example-only material; deployments provide independently managed secrets.
+	key, err := risk.NewCounterDigestKey(1, make([]byte, 32))
+	if err != nil {
+		panic("invalid key")
+	}
+	coordinator, err := risk.NewCounterCoordinator(risk.CounterCoordinatorConfig{
+		Policy: examplePolicy(), Store: unavailableCounterStore{}, Keys: []risk.CounterDigestKey{key}, Clock: time.Now, Timeout: time.Second,
+	})
+	if err != nil {
+		panic("invalid counter configuration")
+	}
+	identifier := sha256.Sum256([]byte("example-normalized-identifier"))
+	command, err := coordinator.Prepare(risk.Context{Tenant: "example-tenant", Operation: "identity.password.signin", Attempt: "example-attempt"}, risk.Subject{Network: "192.0.2.1", Device: "example-device", IdentifierDigest: hex.EncodeToString(identifier[:])}, risk.BeforeCredential)
+	if err != nil {
+		panic("invalid counter binding")
+	}
+	result, err := coordinator.Mutate(context.Background(), command)
+	if err != nil {
+		panic("invalid dispatch")
+	}
+	fmt.Println(result.Outcome == risk.CounterNotCommitted, result.Signal.State == risk.SignalUnavailable)
+	// Output: true true
 }
 
 func examplePolicy() risk.Policy {
