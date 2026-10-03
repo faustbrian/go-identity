@@ -4,6 +4,28 @@
   "go_version": "1.27.0",
   "modules": [
     {
+      "directory": "risk/hibp",
+      "module_path": "github.com/faustbrian/go-identity/risk/hibp",
+      "go_version": "1.27.0",
+      "packages": [{"module_directory":"risk/hibp","directory":".","name":"hibp","import_path":"github.com/faustbrian/go-identity/risk/hibp","kind":"public","production":true,"executable":true,"coverage_required":true,"build_required":true,"build_tags":[]}],
+      "purpose": "Privacy-preserving Pwned Passwords range parsing and local candidate derivation; checker and risk integration in development.",
+      "lifecycle": "experimental",
+      "kind": "public library",
+      "releasable": true,
+      "family": "service-edge",
+      "version": "0.0.0",
+      "tag_prefix": "risk/hibp/v",
+      "owned_dependencies": ["github.com/faustbrian/go-password"],
+      "reverse_owned_dependencies": [],
+      "external_runtime_dependencies": [],
+      "required_services": [],
+      "build_tags": [],
+      "test_tags": [],
+      "interoperability_tools": [],
+      "specifications": [],
+      "conformance_corpora": []
+    },
+    {
       "directory": "risk/postgres",
       "module_path": "github.com/faustbrian/go-identity/risk/postgres",
       "go_version": "1.27.0",
