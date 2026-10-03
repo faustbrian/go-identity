@@ -144,6 +144,16 @@ one-use issuance, recovery or real-adapter interoperability.
 
 ## Security and ownership
 
+Ephemeral counter adapters authenticate an opaque command with
+`CounterCommand.ValidateConfiguration(policy, retainedKeys)` before inspecting
+its storage projection. Construct the adapter and coordinator with the same
+immutable `Policy`; an independently reconstructed equivalent value is not the
+same authority. The complete newest-first key list must match every version and
+secret, including older aliases. `CounterDigestKey.Version()` exposes only
+non-secret rotation metadata. Neither version equality nor this pure comparison
+establishes epoch health, mutation, commitment or current-counter freshness.
+Protected command-owned counters remain disjoint and fail this comparison.
+
 ### Phone evidence issuer
 
 `NewPhoneEvidenceIssuer(PhoneEvidenceIssuerConfig)` composes the complete counted

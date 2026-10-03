@@ -59,6 +59,11 @@ func NewCounterDigestKey(version uint32, secret []byte) (CounterDigestKey, error
 	}
 	return CounterDigestKey{version: version, secret: slices.Clone(secret)}, nil
 }
+
+// Version returns non-secret rotation metadata, or zero for the invalid key.
+// Version equality alone does not authenticate key custody or a counter scope.
+func (k CounterDigestKey) Version() uint32 { return k.version }
+
 func (CounterDigestKey) Format(s fmt.State, _ rune) {
 	_, _ = io.WriteString(s, "risk.CounterDigestKey(redacted)")
 }
@@ -125,6 +130,28 @@ func (CounterCommand) Format(s fmt.State, _ rune) {
 }
 func (CounterCommand) MarshalJSON() ([]byte, error) { return nil, ErrSensitiveSerialization }
 func (CounterCommand) MarshalText() ([]byte, error) { return nil, ErrSensitiveSerialization }
+
+// ValidateConfiguration authenticates this opaque ephemeral command against a
+// store's exact immutable Policy and complete newest-first retained key custody.
+// Use the same Policy value when constructing the store and its coordinator;
+// independently constructed equivalent policy values are distinct authorities.
+// Every retained key's version and secret must match, including older aliases.
+// Zero, protected commands and foreign/incomplete custody fail redacted with
+// ErrInvalidCounterCommand. This bounded pure check dispatches no store, clock,
+// callback or IO and retains no inputs. Inputs must not be mutated concurrently.
+// Matching configuration grants no mutation, commit, epoch-health or freshness
+// proof; those checks remain the ephemeral adapter's responsibility.
+func (c CounterCommand) ValidateConfiguration(policy Policy, keys []CounterDigestKey) error {
+	if c.state == nil || c.state.owner == nil || c.state.commandOwner != nil || policy.state == nil || c.state.owner.policy.state != policy.state || len(keys) != len(c.state.owner.keys) {
+		return ErrInvalidCounterCommand
+	}
+	for i, expected := range c.state.owner.keys {
+		if keys[i].version != expected.version || !hmac.Equal(keys[i].secret, expected.secret) {
+			return ErrInvalidCounterCommand
+		}
+	}
+	return nil
+}
 
 // Bindings returns independent slice projections for the named storage adapter.
 // Zero returns an empty invalid projection; projection is never authority.

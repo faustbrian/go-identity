@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Authenticate ephemeral commands against an adapter's exact immutable policy
+  and complete retained key custody without clock or store dispatch. Foreign,
+  incomplete and protected command custody denies; non-secret key versions are
+  available for adapter rotation metadata. Existing dispatch APIs are unchanged.
+
 - Validate native evidence-use startup custody against the issuer's exact
   policy and complete retained integrity/linkage key set without callbacks or
   time sampling. Matching configuration grants no reservation or use authority.
