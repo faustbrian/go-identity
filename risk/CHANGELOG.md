@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Validate native evidence-use startup custody against the issuer's exact
+  policy and complete retained integrity/linkage key set without callbacks or
+  time sampling. Matching configuration grants no reservation or use authority.
+
 - Prepare command-owned protected counter scopes from explicit policy and
   primary time without callbacks, with separate keyed authority and exact
   current-scope validation. Ephemeral dispatch remains unchanged and rejects

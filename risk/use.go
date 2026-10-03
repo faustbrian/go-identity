@@ -40,6 +40,33 @@ type evidenceUse struct {
 	checkedAt time.Time
 }
 
+// ValidateUseConfiguration checks a native adapter's immutable startup custody
+// against this issuer before installing RecheckUse. PolicyVersion must equal
+// the issuer's risk/carrier policy; keys must equal its complete retained set,
+// including both independent secret lanes. Order is irrelevant. Zero, missing,
+// duplicate or foreign configuration returns redacted ErrInvalidPolicy.
+// This bounded local comparison invokes no callbacks, clock, provider, store or
+// cryptography; it retains no caller slice and grants no evidence-use authority.
+// Configuration must not be modified concurrently with this call.
+func (s PhoneEvidenceIssuer) ValidateUseConfiguration(policyVersion uint64, keys []EvidenceKey) error {
+	if s.state == nil || policyVersion != s.state.evaluation.state.policy.state.version || len(keys) != len(s.state.keys) {
+		return ErrInvalidPolicy
+	}
+	for _, expected := range s.state.keys {
+		found := false
+		for _, key := range keys {
+			if key == expected {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return ErrInvalidPolicy
+		}
+	}
+	return nil
+}
+
 func (EvidenceUse) Format(s fmt.State, _ rune) {
 	_, _ = io.WriteString(s, "risk.EvidenceUse(redacted)")
 }

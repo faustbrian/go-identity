@@ -274,6 +274,14 @@ required; this API is not an application-written recovery workflow. Stored
 evidence/journal mappings must derive bounded keyed phone linkage rather than
 persisting the raw trusted number in this in-memory input.
 
+Native adapters installing the pure `PhoneEvidenceIssuer.RecheckUse` must first
+use `ValidateUseConfiguration` at setup to match the issuer's policy and entire
+retained key set, including both independent secret lanes. Key order is
+irrelevant; missing, duplicate, changed or foreign lanes deny with
+`ErrInvalidPolicy`. This comparison performs no IO, callback or time sampling,
+retains no input slice, and grants no evidence-use or domain authority. Native
+current-state, journal/counter and atomic-finalization checks remain required.
+
 Neither `ServerVerified`, `IndependentFactor`, timestamps nor these structural
 values prove provenance. They may only be supplied by owned trusted server
 orchestration, not request fields. No assessment grants authentication,
