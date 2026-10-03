@@ -46,7 +46,7 @@ func (Config) MarshalText() ([]byte, error) { return nil, risk.ErrSensitiveSeria
 // safe for concurrent independent invocations; Work remains serial-use only.
 // Zero is invalid. Initiation reservation/rebind use the sole coordinator;
 // consuming recovery and terminal release use that coordinator as well.
-// Protected counter reservation is opt-in. Domain apply/finalize, CAPTCHA,
+// Protected counter reservation/current checks are opt-in. Evidence domain apply/finalize, CAPTCHA,
 // lockout/override policy, counter retirement and pruning remain unsupported.
 type Repository struct {
 	schema        string

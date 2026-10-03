@@ -45,6 +45,20 @@ func protectedCommand(t *testing.T, tenant string) identity.Command {
 	}
 	return c
 }
+
+func TestNativeCounterAdmissionRejectsZeroWork(t *testing.T) {
+	r, e := NewRepository(protectedConfig(t))
+	if e != nil {
+		t.Fatal(e)
+	}
+	phase, ok := any(r).(identitypostgres.CommandCounterAdmissionContributor)
+	if !ok {
+		t.Fatal("native current admission missing")
+	}
+	if e := phase.CheckCommandCounters(context.Background(), identitypostgres.CommandCounterAdmissionWork{}); e == nil {
+		t.Fatal("unowned current check admitted")
+	}
+}
 func TestNativeProtectedCounterScope(t *testing.T) {
 	cfg := protectedConfig(t)
 	r, err := NewRepository(cfg)

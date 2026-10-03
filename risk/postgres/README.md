@@ -182,5 +182,22 @@ Native PostgreSQL tests exercise threshold denial, hot-key contention, replay,
 takeover, rotation, missing retained keys, preparation expiry, window expiry,
 saturation, failed snapshot rollback and charged noncommit reconciliation. The
 feature owner in these tests is a seam; no password mutation or login journey is
-claimed. Counter-bearing `Begin` remains closed until native current admission
-and domain apply/finalization are implemented.
+claimed. Native current fixed-counter admission now implements the coordinator's
+opt-in `CommandCounterAdmissionContributor`. It locks the original current-
+generation charge, validates all original snapshots and retained key history,
+then locks each current logical window. Only afterward does it sample primary
+time and validate the original preparation and earliest window expiry. Both
+pre-mutation and pre-commit checks use the same domain Work; no counts, aliases,
+key history, observation times or expiry are changed by a current check.
+Missing original aliases, divergent roots, changed windows or excess current
+counts deny. New retained keys may coexist with the original aliases without
+recharging a takeover. A delayed domain operation that outlives its original
+evidence rolls back all provisional domain effects but retains its charged
+attempt and classified failure receipt.
+
+This is current fixed-counter allowance, not a complete risk verdict or domain
+authorization. The native feature owner must check its current user, credential,
+factor and organization authority. No lockout/override policy is supported by
+this configuration; those remain required implementation work. RiskEvidence
+consumption/apply/finalize, real password/session workflows and release gates
+remain pending. Tests use a SQL effect seam, not a production password adapter.

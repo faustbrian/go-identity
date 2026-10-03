@@ -21,7 +21,7 @@ import (
 
 // Only the protected feature owner is a seam; native counter policy, SQL,
 // migrations and coordinator reservations are real. No password mutation runs.
-type counterFeature struct{}
+type counterFeature struct{ delay time.Duration }
 
 func (*counterFeature) Descriptor() identitypostgres.ContributorDescriptor {
 	return identitypostgres.ContributorDescriptor{Owner: "identity/password/postgres", ContractID: "identity.password", Version: 1}
@@ -32,8 +32,22 @@ func (*counterFeature) FeatureOperations() []identity.FeatureOperation {
 func (*counterFeature) ValidateFeatureCommand(identity.Command, identitypostgres.CommandPlan) error {
 	return nil
 }
-func (*counterFeature) ApplyFeature(context.Context, identitypostgres.Work, identity.Command) (identity.FeatureReceipt, error) {
-	return identity.FeatureReceipt{}, identity.UnavailableError{}
+func (f *counterFeature) ApplyFeature(ctx context.Context, w identitypostgres.Work, c identity.Command) (identity.FeatureReceipt, error) {
+	b, registration, _, e := w.FeatureScope(f)
+	if e != nil {
+		return identity.FeatureReceipt{}, e
+	}
+	if _, e := w.Exec(ctx, `INSERT INTO public.native_counter_effect(command_id,tenant_id) VALUES($1,$2)`, string(b.CommandID), string(b.TenantID)); e != nil {
+		return identity.FeatureReceipt{}, e
+	}
+	if f.delay > 0 {
+		// Deliberately outlive the selected original evidence interval while
+		// staying within Work's lease; this tests the final native check.
+		if _, e := w.Exec(ctx, `SELECT pg_sleep($1)`, f.delay.Seconds()); e != nil {
+			return identity.FeatureReceipt{}, e
+		}
+	}
+	return identity.FeatureReceipt{Operation: registration.Operation, AfterVersion: 1}, nil
 }
 func (*counterFeature) RecoverParticipant(context.Context, identitypostgres.RecoveryWork) (identitypostgres.RecoveryStatus, error) {
 	return identitypostgres.RecoveryNotCommitted, nil
@@ -47,6 +61,9 @@ func testNativeProtectedCounters(t *testing.T, ctx context.Context, pool *databa
 	if _, e = pool.Raw().Exec(ctx, history[3].UpSQL()); e != nil {
 		t.Fatal(e)
 	}
+	if _, e = pool.Raw().Exec(ctx, `CREATE TABLE public.native_counter_effect(command_id text PRIMARY KEY,tenant_id text NOT NULL)`); e != nil {
+		t.Fatal(e)
+	}
 	old, _ := risk.NewCounterDigestKey(7, bytes.Repeat([]byte{0x31}, 32))
 	newer, _ := risk.NewCounterDigestKey(8, bytes.Repeat([]byte{0x32}, 32))
 	cfg := protectedConfig(t, old)
@@ -54,7 +71,11 @@ func testNativeProtectedCounters(t *testing.T, ctx context.Context, pool *databa
 	if e != nil {
 		t.Fatal(e)
 	}
-	prepare := func(r *Repository, tenant string, at ...time.Time) (*identitypostgres.Coordinator, identity.CommandBinding, identity.Command, identitypostgres.CommandPlan) {
+	type originalInput struct {
+		command  identity.Command
+		counters identitypostgres.CommandCounterPlan
+	}
+	prepareWithFeature := func(r *Repository, tenant string, feature *counterFeature, original *originalInput, at ...time.Time) (*identitypostgres.Coordinator, identity.CommandBinding, identity.Command, identitypostgres.CommandPlan) {
 		t.Helper()
 		c := protectedCommand(t, tenant)
 		preparedAt := time.Now().UTC().Truncate(time.Microsecond)
@@ -65,13 +86,15 @@ func testNativeProtectedCounters(t *testing.T, ctx context.Context, pool *databa
 		if e != nil {
 			t.Fatal(e)
 		}
+		if original != nil {
+			c, cp = original.command, original.counters
+		}
 		s, _ := c.Feature()
 		b := s.Binding
 		kernel, e := identitypostgres.NewRepository(pool, identitypostgres.Config{MaximumDuration: time.Second})
 		if e != nil {
 			t.Fatal(e)
 		}
-		feature := &counterFeature{}
 		registry, e := identitypostgres.NewContributorRegistry([]identitypostgres.Contributor{kernel, &issuanceAudit{}, &issuanceOutbox{}, feature, r})
 		if e != nil {
 			t.Fatal(e)
@@ -95,6 +118,161 @@ func testNativeProtectedCounters(t *testing.T, ctx context.Context, pool *databa
 		}
 		return coord, b, c, p
 	}
+	prepare := func(r *Repository, tenant string, at ...time.Time) (*identitypostgres.Coordinator, identity.CommandBinding, identity.Command, identitypostgres.CommandPlan) {
+		return prepareWithFeature(r, tenant, &counterFeature{}, nil, at...)
+	}
+	t.Run("original-evidence-expires-before-commit", func(t *testing.T) {
+		shortConfig := protectedConfig(t, old)
+		policyConfig := risk.PolicyConfig{Version: 3, Limits: risk.VelocityLimits{MaxDimensions: 4, MaxCounters: 16, MaxWindow: time.Hour, MaxLimit: 120, KeyBytes: 64, RetryAfterMax: time.Hour}}
+		for _, action := range []risk.Action{"identity.password.signin", "identity.password.change", "identity.admin.user-ban", "identity.profile.get"} {
+			a, e := shortConfig.CommandCounters.Policy.Admit(action)
+			if e != nil {
+				t.Fatal(e)
+			}
+			profile := a.Profile
+			if profile.Class == risk.CredentialMutation {
+				profile.EvidenceTTL = 500 * time.Millisecond
+			}
+			policyConfig.Profiles = append(policyConfig.Profiles, profile)
+		}
+		shortConfig.CommandCounters.Policy, e = risk.NewPolicy(policyConfig)
+		if e != nil {
+			t.Fatal(e)
+		}
+		short, e := NewRepository(shortConfig)
+		if e != nil {
+			t.Fatal(e)
+		}
+		coord, b, command, p := prepareWithFeature(short, "native-late-expiry", &counterFeature{delay: 650 * time.Millisecond}, nil)
+		r, _, e := coord.ReserveCommand(ctx, b, command, p)
+		if e != nil {
+			t.Fatal(e)
+		}
+		w, e := coord.Begin(ctx, r)
+		if e != nil {
+			t.Fatal(e)
+		}
+		defer coord.Abort(w, identity.UnavailableError{})
+		result, e := coord.ApplyFeature(ctx, w, command)
+		if e != nil {
+			t.Fatal("positive original interval failed before mutation", e)
+		}
+		result, e = coord.Commit(w, result)
+		var forbidden identity.ForbiddenError
+		if !errors.As(e, &forbidden) || result.Outcome != identity.CommitOutcomeNotCommitted {
+			t.Fatal("expired original evidence renewed at final commit", e, result.Outcome)
+		}
+		var effects, outbox, audits, charges int
+		if e := pool.Raw().QueryRow(ctx, `SELECT (SELECT count(*) FROM public.native_counter_effect WHERE command_id=$1),(SELECT count(*) FROM public.risk_outbox WHERE command_id=$1),(SELECT count(*) FROM public.risk_audit WHERE command_id=$1),(SELECT count(*) FROM risk_store.counter_charges WHERE tenant_id=$2)`, string(b.CommandID), string(b.TenantID)).Scan(&effects, &outbox, &audits, &charges); e != nil || effects != 0 || outbox != 0 || audits != 1 || charges != 1 {
+			t.Fatal("late denial lost rollback or charge custody", e, effects, outbox, audits, charges)
+		}
+	})
+	t.Run("current-native-admission", func(t *testing.T) {
+		for _, mode := range []string{"allow", "takeover", "rotation-takeover", "missing-original-alias", "denied-current-window", "missing-charge", "missing-window", "changed-key-history", "missing-snapshot"} {
+			t.Run(mode, func(t *testing.T) {
+				tenant := "native-admission-" + mode
+				coord, b, c, p := prepare(native, tenant)
+				r, result, e := coord.ReserveCommand(ctx, b, c, p)
+				if e != nil || result.Outcome != identity.CommitOutcomeInProgress {
+					t.Fatal("reserve native attempt", e)
+				}
+				raw, _ := base64.RawURLEncoding.DecodeString(string(b.CommandID))
+				switch mode {
+				case "rotation-takeover", "missing-original-alias":
+					rotated, e := NewRepository(protectedConfig(t, newer, old))
+					if e != nil {
+						t.Fatal(e)
+					}
+					if mode == "missing-original-alias" {
+						other, ob, oc, op := prepare(rotated, tenant)
+						if _, _, e := other.ReserveCommand(ctx, ob, oc, op); e != nil {
+							t.Fatal(e)
+						}
+						if _, e := pool.Raw().Exec(ctx, `DELETE FROM risk_store.counter_aliases WHERE tenant_id=$1 AND key_version=7`, tenant); e != nil {
+							t.Fatal(e)
+						}
+					}
+					if _, e := pool.Raw().Exec(ctx, `UPDATE identity.commands SET lease_until=clock_timestamp()-interval '1 second' WHERE command_id=$1`, raw); e != nil {
+						t.Fatal(e)
+					}
+					coord, b, c, p = prepareWithFeature(rotated, tenant, &counterFeature{}, &originalInput{c, *p.CommandCounters})
+					r, result, e = coord.ReserveCommand(ctx, b, c, p)
+					if e != nil {
+						t.Fatal(e)
+					}
+				case "takeover":
+					if _, e := pool.Raw().Exec(ctx, `UPDATE identity.commands SET lease_until=clock_timestamp()-interval '1 second' WHERE command_id=$1`, raw); e != nil {
+						t.Fatal(e)
+					}
+					r, result, e = coord.ReserveCommand(ctx, b, c, p)
+					if e != nil {
+						t.Fatal(e)
+					}
+				case "denied-current-window":
+					for range 5 {
+						other, ob, oc, op := prepare(native, tenant)
+						_, _, _ = other.ReserveCommand(ctx, ob, oc, op)
+					}
+				case "missing-charge":
+					if _, e := pool.Raw().Exec(ctx, `DELETE FROM risk_store.counter_snapshots WHERE command_id=$1;`, raw); e != nil {
+						t.Fatal(e)
+					}
+					if _, e := pool.Raw().Exec(ctx, `DELETE FROM risk_store.counter_charges WHERE command_id=$1`, raw); e != nil {
+						t.Fatal(e)
+					}
+				case "missing-window":
+					if _, e := pool.Raw().Exec(ctx, `DELETE FROM risk_store.counter_aliases WHERE tenant_id=$1`, tenant); e != nil {
+						t.Fatal(e)
+					}
+				case "changed-key-history":
+					if _, e := pool.Raw().Exec(ctx, `UPDATE risk_store.counter_key_history SET tenant_key=$2 WHERE tenant_id=$1`, tenant, "rc1:7:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"); e != nil {
+						t.Fatal(e)
+					}
+				case "missing-snapshot":
+					if _, e := pool.Raw().Exec(ctx, `DELETE FROM risk_store.counter_snapshots WHERE command_id=$1 AND dimension='session'`, raw); e != nil {
+						t.Fatal(e)
+					}
+				}
+				w, e := coord.Begin(ctx, r)
+				if e != nil {
+					t.Fatal("native current admission cannot enter domain", e)
+				}
+				defer coord.Abort(w, identity.UnavailableError{})
+				result, e = coord.ApplyFeature(ctx, w, c)
+				if mode == "allow" || mode == "takeover" || mode == "rotation-takeover" {
+					if e != nil {
+						t.Fatal("native current admission denied matching charge", e)
+					}
+					result, e = coord.Commit(w, result)
+					if e != nil || result.Outcome != identity.CommitOutcomeCommitted {
+						t.Fatal("native guarded commit", e)
+					}
+				} else {
+					if e == nil {
+						t.Fatal("invalid current authority allowed domain mutation")
+					}
+					result, _ = coord.Abort(w, e)
+					if result.Outcome != identity.CommitOutcomeNotCommitted {
+						t.Fatal("native denied rollback unresolved", result.Outcome)
+					}
+				}
+				var effects, outbox, audits int
+				if e := pool.Raw().QueryRow(ctx, `SELECT (SELECT count(*) FROM public.native_counter_effect WHERE command_id=$1),(SELECT count(*) FROM public.risk_outbox WHERE command_id=$1),(SELECT count(*) FROM public.risk_audit WHERE command_id=$1)`, string(b.CommandID)).Scan(&effects, &outbox, &audits); e != nil {
+					t.Fatal(e)
+				}
+				if mode == "allow" || mode == "takeover" || mode == "rotation-takeover" {
+					if effects != 1 || outbox != 1 {
+						t.Fatal("native mutation/receipt not atomic", effects, outbox)
+					}
+				} else if effects != 0 || outbox != 0 {
+					t.Fatal("native denial leaked domain prefix", effects, outbox)
+				}
+				if audits != 1 {
+					t.Fatal("missing native classified audit", audits)
+				}
+			})
+		}
+	})
 	var firstB identity.CommandBinding
 	var firstC identity.Command
 	var firstP identitypostgres.CommandPlan

@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Recheck original protected-counter charge custody and locked current windows
+  before domain mutation and final commit. Expired original evidence, missing
+  snapshots, changed key history or missing original aliases deny without a new
+  charge or allowance reset. Exact takeover and retained-key rotation preserve
+  current admission. Lockout/override policy remains separate unsupported work.
+
 - Add opt-in native protected-command counters with primary-time fixed windows,
   saturating counts, retained-key rotation continuity and original command-linked
   snapshots. Replay and exact owner takeover never charge again; denied attempts
