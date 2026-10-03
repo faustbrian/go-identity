@@ -147,6 +147,10 @@ reference, purpose, original timestamps and `MaxUses=1`. Failed, denied, unknown
 late and cancelled outcomes release nothing. `Recover` only resolves primary
 state, including when missing; it never runs providers or counters. Exact replay
 may return an already expired historical artifact without extending its times.
+If another exact submission wins after the initial absence read, a response
+that differs from this call's fresh preparation requires another authorized
+primary resolution of the identical retained record. Missing, denied, failed,
+unknown or inconsistent resolution releases nothing and never restarts providers.
 Possession, structural parsing, MAC success and provisional materialization grant
 **no recovery authority**: the durable issued row, one-use reservation and atomic
 protected-command consumption remain mandatory.

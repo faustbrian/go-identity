@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Reconcile concurrent exact evidence retries through authorized original-result
+  resolution when another submission wins after the initial absence read.
+  Replay retains the original reference and expiry; fresh-result proof checks
+  remain enforced and unconfirmed or unavailable responses disclose nothing.
+
 - Add phone-only evidence issuance orchestration with complete counted risk and
   owned carrier evaluation, exact phase-derived purpose, original-freshness
   bounds, signed typed native command reconstruction and versioned opaque

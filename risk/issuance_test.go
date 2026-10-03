@@ -134,6 +134,103 @@ func TestEvidenceReplayReturnsOriginalWithoutAnyProviderOrCounterWork(t *testing
 	}
 }
 
+// The stale absence read and subsequent winner model the interleaving between
+// two exact submissions. This proves core disclosure, not database exclusion.
+func TestEvidenceConcurrentWinnerRequiresAuthoritativeOriginalResolution(t *testing.T) {
+	cases := []struct {
+		outcome EvidenceOutcome
+		variant string
+	}{
+		{EvidenceCommitted, "original"}, {EvidenceMissing, "missing"},
+		{EvidenceDenied, "denied"}, {EvidenceFailed, "failed"}, {EvidenceUnknown, "unknown"},
+		{EvidenceCommitted, "rotation"}, {EvidenceCommitted, "expired"},
+		{EvidenceCommitted, "different"}, {EvidenceCommitted, "error"},
+		{EvidenceCommitted, "cancelled"}, {EvidenceCommitted, "late"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.variant, func(t *testing.T) {
+			now := testContext().Now
+			var original, different EvidenceRecord
+			first := evidenceExecutor{resolve: missingEvidence, execute: func(_ context.Context, issue EvidenceIssue) (EvidenceExecution, error) {
+				var err error
+				original, err = issue.Materialize(now)
+				if err != nil {
+					t.Fatal(err)
+				}
+				different, err = issue.Materialize(now.Add(time.Microsecond))
+				if err != nil {
+					t.Fatal(err)
+				}
+				return NewEvidenceExecution(issue.Intent(), EvidenceCommitted, original)
+			}}
+			issuer, err := NewPhoneEvidenceIssuer(issuerConfig(t, &now, first))
+			if err != nil {
+				t.Fatal(err)
+			}
+			winner, err := issuer.Evaluate(context.Background(), issuanceRequest())
+			if err != nil {
+				t.Fatal(err)
+			}
+			now = now.Add(time.Second)
+			if tc.variant == "expired" {
+				now = now.Add(time.Minute)
+			}
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			resolutions, executions := 0, 0
+			loser := evidenceExecutor{resolve: func(_ context.Context, intent EvidenceIntent) (EvidenceExecution, error) {
+				resolutions++
+				if resolutions == 1 {
+					return missingEvidence(context.Background(), intent)
+				}
+				switch tc.variant {
+				case "error":
+					return EvidenceExecution{}, errors.New("private diagnostic")
+				case "cancelled":
+					cancel()
+				case "late":
+					now = now.Add(11 * time.Second)
+				case "different":
+					return NewEvidenceExecution(intent, EvidenceCommitted, different)
+				}
+				if tc.outcome == EvidenceCommitted {
+					return NewEvidenceExecution(intent, tc.outcome, original)
+				}
+				return NewEvidenceExecution(intent, tc.outcome, EvidenceRecord{})
+			}, execute: func(_ context.Context, issue EvidenceIssue) (EvidenceExecution, error) {
+				executions++
+				if issue.Prepared().ProofDigest == original.ProofDigest {
+					t.Fatal("fixture did not prepare a distinct evaluation")
+				}
+				return NewEvidenceExecution(issue.Intent(), EvidenceCommitted, original)
+			}}
+			cfg := issuerConfig(t, &now, loser)
+			if tc.variant == "rotation" {
+				key, keyErr := NewEvidenceKey(2, bytes.Repeat([]byte{0x51}, 32), bytes.Repeat([]byte{0x52}, 32))
+				if keyErr != nil {
+					t.Fatal(keyErr)
+				}
+				cfg.Keys = append(cfg.Keys, key)
+			}
+			issuer, err = NewPhoneEvidenceIssuer(cfg)
+			if err != nil {
+				t.Fatal(err)
+			}
+			got, err := issuer.Evaluate(ctx, issuanceRequest())
+			if tc.variant == "original" || tc.variant == "rotation" || tc.variant == "expired" {
+				if err != nil || got.Outcome != EvidenceCommitted || got.Evidence != winner.Evidence {
+					t.Fatal("original concurrent winner rejected or renewed", err)
+				}
+			} else if err == nil || got.Outcome != EvidenceUnknown || got.Evidence != (RiskEvidence{}) {
+				t.Fatal("unconfirmed substituted result disclosed", err)
+			}
+			if resolutions != 2 || executions != 1 {
+				t.Fatalf("resolution/execution counts: %d/%d", resolutions, executions)
+			}
+		})
+	}
+}
+
 func TestEvidenceUnknownAndFailedNeverDiscloseProvisionalReferenceOrRetry(t *testing.T) {
 	for _, outcome := range []EvidenceOutcome{EvidenceUnknown, EvidenceFailed} {
 		now := testContext().Now

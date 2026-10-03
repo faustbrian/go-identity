@@ -573,7 +573,19 @@ func (s PhoneEvidenceIssuer) Evaluate(ctx context.Context, r PhoneEvidenceReques
 	if result.Outcome == EvidenceCommitted {
 		record := executed.state.record
 		if record.KeyVersion != s.state.current.version || record.ProofDigest != issue.state.proof || !record.ExpiresAt.Equal(issue.state.expiresAt) || record.IssuedAt.Before(issue.state.preparedAt) {
-			return PhoneEvidenceResult{Outcome: EvidenceUnknown}, ErrInvalidEvidenceExecution
+			// Another exact submission may have committed after our absence read.
+			// Integrity alone cannot distinguish its original response from a
+			// substituted fresh result: require primary-authorized resolution of
+			// that same retained record, under the original total deadline.
+			replayed, resolveErr := s.state.executor.Resolve(bounded, intent)
+			if resolveErr != nil || bounded.Err() != nil || evaluationTime(s.state.clock(), now, start, s.state.timeout) != nil {
+				return unknownEvidence()
+			}
+			original, replayErr := executionResult(intent, replayed)
+			if replayErr != nil || original.Outcome != EvidenceCommitted || replayed.state.record != record {
+				return PhoneEvidenceResult{Outcome: EvidenceUnknown}, ErrInvalidEvidenceExecution
+			}
+			return original, nil
 		}
 	}
 	return result, nil
