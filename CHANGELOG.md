@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add exact credential eligibility checks and a narrow consistent-primary read
+  contract. Keep per-credential versions separate from the user-wide credential
+  epoch and aggregate CAS; blocked, disabled, expired or mismatched references
+  deny without resetting authority. Checking metadata is not proof validation
+  or session issuance.
+
 - Add an explicit safe structural feature receipt branch to CommandResult,
   retaining exact operation/schema policy and outcome-specific primary-record
   versions without credential-bearing payloads. Preserve historical kernel

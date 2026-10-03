@@ -16,6 +16,14 @@ Suspend/ban and restore/unban use versioned commands with distinct user authorit
 versions, exact required-consumer manifests and pending cascade admission.
 Account reads expose scoped permission-filtered metadata; the shared final-access
 check excludes the removed link, expired/disabled methods and API keys.
+`CheckCredentialAuthority` separately fences the exact credential record version
+and tenant/user credential epoch against one current primary observation. It
+denies inactive users, disabled references, wrong ownership and exclusive expiry;
+ordinary user aggregate versions are not security epochs. The narrow
+`CredentialAuthorityRepository` is an owned primary-read contract, not an
+application-provided verifier. These metadata checks do not establish proof
+provenance, consume a proof, refresh validity, or replace the other authority
+dimensions required for session issuance. Its durable adapter remains pending.
 Account linking and identifier changes have exact signed-intent command
 admission/recovery; the platform-owned durable adapters and real feature proof
 ceremonies remain required before these become complete public workflows.
