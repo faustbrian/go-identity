@@ -64,6 +64,10 @@ type SecurityProviderProfile string
 
 const SecurityHIBPRange SecurityProviderProfile = "hibp.range.padded.v1"
 
+// SecurityHIBPRangeUnpadded identifies explicit range checking without response
+// padding. It must never attest the recommended padded privacy profile.
+const SecurityHIBPRangeUnpadded SecurityProviderProfile = "hibp.range.unpadded.v1"
+
 // SecurityProviderResult describes evidence, not password acceptance or storage.
 type SecurityProviderResult string
 
@@ -186,7 +190,7 @@ func validSecurityInput(i SecurityEventInput) bool {
 		return false
 	}
 	p := i.Provider
-	if p.Kind != SecurityProviderHIBP || p.Profile != SecurityHIBPRange || p.Version == 0 {
+	if p.Kind != SecurityProviderHIBP || (p.Profile != SecurityHIBPRange && p.Profile != SecurityHIBPRangeUnpadded) || p.Version == 0 {
 		return false
 	}
 	switch p.Result {

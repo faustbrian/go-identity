@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Register an explicit unpadded HIBP security profile while preserving the
+  existing padded profile and rejecting unknown privacy-profile identifiers.
+
 - Preserve canonical prior audit event IDs as security-event causation, allowing
   correctly linked query and match/rejection records without fabricated IDs.
 

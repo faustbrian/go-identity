@@ -9,6 +9,8 @@ development and targets Go 1.27.
 builder. `Build(context.Context, SecurityEventInput)` returns the existing
 `audit.Record`, not a new envelope, using exact 16 KiB/256-byte profile limits,
 secure record IDs, canonical numeric versions and explicit primitive redaction.
+Registered HIBP profiles distinguish padded and explicitly unpadded checking;
+unknown profile identifiers are rejected rather than asserted as padded.
 Initial supported actions are HIBP query, match detection and range rejection;
 unsupported action contracts reject. Retention is protected and changes are
 explicitly absent. Outcome and provider evidence remain separate classifications.

@@ -49,6 +49,43 @@ func TestSecurityProfileCanonicalConstructionAndOwnership(t *testing.T) {
 	}
 }
 
+func TestSecurityProfilePreservesRegisteredPaddingVariants(t *testing.T) {
+	b, err := NewIdentitySecurityEventV1(testWall(time.Now().UTC()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, profile := range []SecurityProviderProfile{SecurityHIBPRange, "hibp.range.unpadded.v1"} {
+		for _, action := range []SecurityAction{SecurityHIBPQueryRange, SecurityHIBPDetectMatch, SecurityHIBPRejectRange} {
+			input := securityInput(t)
+			input.Provider.Profile, input.Action = profile, action
+			record, err := b.Build(context.Background(), input)
+			if err != nil {
+				t.Fatal("registered profile rejected", err)
+			}
+			raw, err := audit.CanonicalJSON(record)
+			if err != nil {
+				t.Fatal(err)
+			}
+			parsed, err := audit.ParseCanonicalJSON(raw, audit.DefaultLimits())
+			if err != nil || parsed.Attributes()["provider.profile"] != string(profile) || parsed.Attributes()["retention.class"] != "protected" || parsed.Action() != string(action) {
+				t.Fatal("canonical profile rewritten", err)
+			}
+		}
+	}
+	for _, profile := range []SecurityProviderProfile{"hibp.range.arbitrary.v1", "hibp.range.unpadded.v2"} {
+		input := securityInput(t)
+		input.Provider.Profile = profile
+		if _, err := b.Build(context.Background(), input); !errors.Is(err, ErrInvalidSecurityEvent) {
+			t.Fatal("unregistered privacy profile accepted", err)
+		}
+	}
+	input := securityInput(t)
+	input.Provider.Profile, input.Provider.Version = SecurityHIBPRangeUnpadded, 0
+	if _, err := b.Build(context.Background(), input); !errors.Is(err, ErrInvalidSecurityEvent) {
+		t.Fatal("zero unpadded provider version accepted", err)
+	}
+}
+
 type testWall time.Time
 
 func TestSecurityProfileAttemptCannotBeIdentifierDigest(t *testing.T) {
