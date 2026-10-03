@@ -34,7 +34,31 @@ The protocol basis is the official [Pwned Passwords range and padding
 documentation](https://haveibeenpwned.com/API/v3#PwnedPasswords), consulted
 2026-10-03. Synthetic local tests are not provider interoperability evidence.
 
-## Scoped checker
+## Neutral risk composition
+
+`NewSignalProvider(*Client, risk.Policy)` borrows an owned checker without adding
+resources or transferring shutdown ownership. Construction rejects disabled
+screening or incompatible provider-cache TTL. Provider profile string versions
+and risk decision numeric versions are distinct authorities. `Assess` accepts
+the original exact-byte borrowed request, validates all seven result bindings,
+and maps its ReplayID exactly to the risk attempt identity. Unsupported or
+unselected operations reject before provider work.
+
+The adapter returns clean, positive or unavailable facts; `risk.Policy.Assess`
+owns the decision. It discards success-looking data alongside errors, retains
+only bounded failure classifications and never exposes upstream diagnostics.
+Failures may return a classified unavailable signal plus a safe error; caller
+cancellation returns no signal and retains cancellation identity. Successful
+provider CheckedAt remains original observation, ProviderValidUntil is unchanged
+observation plus cache TTL, and the adapter samples a separate trusted local
+comparison time. Derived expiry is capped by both original provider validity
+and the consuming operation's assessment TTL; cached provider age is not reset.
+
+This is provider-to-policy composition, not password-workflow completion or
+permission to perform a mutation. Full purpose/subject/workflow custody, required
+security events, telemetry and release gates remain unfinished.
+
+## Checker lifecycle
 
 `New(Config, *httpclient.Client, clock.Clock)` returns a concurrent `Checker`
 whose concrete type is `*Client`. The borrowed primitive transport must verify

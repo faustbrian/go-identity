@@ -7,7 +7,7 @@ require (
 	github.com/faustbrian/go-clock v1.0.0
 	github.com/faustbrian/go-http-client v1.0.1-0.20260913110751-02502a99b967
 	github.com/faustbrian/go-identity v0.0.0-20261003072728-f87c5148578c
-	github.com/faustbrian/go-identity/risk v0.0.0-20261003165213-6b3ec24fe992
+	github.com/faustbrian/go-identity/risk v0.0.0-20261003211139-2cf10477cf08
 )
 
 require golang.org/x/text v0.41.0 // indirect

@@ -94,6 +94,9 @@ type CheckResult struct {
 	Outcome       Outcome
 	BreachCount   uint64
 	CheckedAt     time.Time
+	// ProviderValidUntil is the original observation plus immutable CacheTTL.
+	// It is unchanged on cache hits and zero on failures.
+	ProviderValidUntil time.Time
 }
 
 // Checker is safe for concurrent use. Check has no automatic retry and makes no
@@ -290,6 +293,7 @@ func (c *Client) Check(ctx context.Context, request CheckRequest) (CheckResult, 
 				return failure(r, e)
 			}
 			r.CheckedAt = cached.at
+			r.ProviderValidUntil = cached.at.Add(c.config.CacheTTL)
 			return matched(r, cached.data, derived.suffix), nil
 		}
 		c.evict(element)
@@ -322,6 +326,7 @@ func (c *Client) Check(ctx context.Context, request CheckRequest) (CheckResult, 
 			return failure(r, f.err)
 		}
 		r.CheckedAt = f.at
+		r.ProviderValidUntil = f.at.Add(c.config.CacheTTL)
 		return matched(r, f.data, derived.suffix), nil
 	}
 }
