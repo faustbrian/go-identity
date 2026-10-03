@@ -74,10 +74,15 @@ without providers. A commit error initially discloses no reference. No result
 grants one-use consumption authority. Pools/adapters remain caller-owned; no
 background goroutine or Close method is introduced.
 
+The PostgreSQL integration suite withholds an actual successful domain COMMIT
+acknowledgement at the socket boundary for both phone-reset purposes. The initial
+result stays reference-free Unknown; a new primary executor recovers the original
+reference and timestamps without provider work or duplicate effects.
+
 ## Remaining work
 
-Lost successful commit-acknowledgement fault proof and production effect-adapter
-interoperability; reservation/finalization/release; durable lockouts/counters; CAPTCHA participants;
+Production effect-adapter interoperability; reservation/finalization/release;
+durable lockouts/counters; CAPTCHA participants;
 investigation, retention and anonymization; complete
 public examples/API baseline and package/release verification remain pending.
 There is no supported login or phone recovery workflow from this module yet.

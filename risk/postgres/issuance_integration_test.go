@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/base64"
 	"errors"
+	"net"
 	"os"
 	"strconv"
 	"sync/atomic"
@@ -491,6 +492,78 @@ func TestIssuedEvidenceSameWorkIntegration(t *testing.T) {
 			}
 		}
 		counts(t, identity.CommandBinding{CommandID: id}, 1, 1, 1)
+	})
+	t.Run("official-executor-lost-successful-commit-ack", func(t *testing.T) {
+		for _, phase := range []risk.IssuancePhase{risk.PhoneResetInitiation, risk.PhoneResetCompletion} {
+			id, err := identity.NewCommandID()
+			if err != nil {
+				t.Fatal(err)
+			}
+			raw, _ := base64.RawURLEncoding.DecodeString(string(id))
+			fault := &commitAckFault{command: raw}
+			faultPool, err := database.Connect(ctx, database.Config{DSN: dsn, MaxConns: 2, Configure: func(c *database.PoolConfig) error {
+				c.ConnConfig.Database = name
+				c.ConnConfig.TLSConfig = nil
+				c.ConnConfig.Fallbacks = nil
+				c.ConnConfig.RuntimeParams["synchronous_commit"] = "on"
+				c.ConnConfig.Tracer = fault
+				c.ConnConfig.DialFunc = func(ctx context.Context, network, address string) (net.Conn, error) {
+					conn, err := (&net.Dialer{}).DialContext(ctx, network, address)
+					if err != nil {
+						return nil, err
+					}
+					return &commitAckConn{Conn: conn, fault: fault}, nil
+				}
+				return nil
+			}})
+			if err != nil {
+				t.Fatal("fault pool", err)
+			}
+			func() {
+				defer func() {
+					cleanup, stop := context.WithTimeout(context.Background(), 3*time.Second)
+					defer stop()
+					if err := faultPool.Close(cleanup); err != nil {
+						t.Error("fault pool cleanup")
+					}
+				}()
+				c := executorConfig(repo, issuanceQueryPolicy{})
+				c.Pool = faultPool
+				executor, err := NewExecutor(c)
+				if err != nil {
+					t.Fatal(err)
+				}
+				at := time.Now().UTC().Truncate(time.Microsecond).Add(-100 * time.Millisecond)
+				issuer, request, _ := issuanceFixture(t, phase, at, string(id), executor, false, nil)
+				uncertain, err := issuer.Evaluate(ctx, request)
+				if fault.hits.Load() != 1 || err != nil || uncertain.Outcome != risk.EvidenceUnknown || uncertain.Evidence != (risk.RiskEvidence{}) {
+					t.Fatal("lost successful acknowledgement disclosed or guessed outcome", err)
+				}
+				counts(t, identity.CommandBinding{CommandID: id}, 1, 1, 1)
+				var state string
+				var issued, expires time.Time
+				if err = db.QueryRowContext(ctx, `SELECT c.state,e.issued_at,e.expires_at FROM identity.commands c JOIN risk_store.issued_evidence e USING(command_id,tenant_id) WHERE c.command_id=$1`, raw).Scan(&state, &issued, &expires); err != nil || state != "committed" {
+					t.Fatal("commit not durable", err)
+				}
+				// New non-faulted primary executor, with provider/counter work forbidden.
+				replay, original, _ := issuanceFixture(t, phase, at.Add(time.Minute), string(id), newExecutor(t, repo, issuanceQueryPolicy{}), true, nil)
+				recovered, err := replay.Recover(ctx, original)
+				if err != nil || recovered.Outcome != risk.EvidenceCommitted || recovered.Evidence.Reference.Reveal() == "" || !recovered.Evidence.IssuedAt.Equal(issued) || !recovered.Evidence.ExpiresAt.Equal(expires) {
+					t.Fatal("committed original not recovered", err)
+				}
+				for range 2 {
+					again, err := replay.Recover(ctx, original)
+					if err != nil || again != recovered {
+						t.Fatal("recovery replaced original", err)
+					}
+				}
+				again, err := replay.Evaluate(ctx, original)
+				if err != nil || again != recovered {
+					t.Fatal("matching evaluation replaced original", err)
+				}
+				counts(t, identity.CommandBinding{CommandID: id}, 1, 1, 1)
+			}()
+		}
 	})
 	t.Run("official-executor-denial-before-providers", func(t *testing.T) {
 		id, err := identity.NewCommandID()
