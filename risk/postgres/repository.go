@@ -40,7 +40,8 @@ func (Config) MarshalText() ([]byte, error) { return nil, risk.ErrSensitiveSeria
 // It has no transaction, connection or bearer-read API. It is immutable and
 // safe for concurrent independent invocations; Work remains serial-use only.
 // Zero is invalid. Initiation reservation/rebind use the sole coordinator;
-// domain consumption, CAPTCHA, counters and pruning remain unsupported.
+// consuming recovery and terminal release use that coordinator as well.
+// Domain apply/finalize, CAPTCHA, counters and pruning remain unsupported.
 type Repository struct {
 	schema string
 	policy uint64
@@ -172,12 +173,18 @@ func (r *Repository) ApplyFeature(ctx context.Context, w identitypostgres.Work, 
 // positive evidence, never a reconstructed successful receipt. Absence is
 // negative only here: issuance is same-Work atomic and this profile never prunes
 // rows. Corrupt or foreign linkage is unknown. Expiry is not rollback proof.
+// For initiation consumption, only exact reserved historical custody supplies
+// noncommit evidence for this participant; every other participant must supply
+// its own evidence before the coordinator grants terminal release authority.
 func (r *Repository) RecoverParticipant(ctx context.Context, w identitypostgres.RecoveryWork) (identitypostgres.RecoveryStatus, error) {
 	unknown := func() (identitypostgres.RecoveryStatus, error) {
 		return identitypostgres.RecoveryUnknown, risk.ErrEvidenceUnavailable
 	}
 	if ctx == nil || r == nil || r.schema == "" {
 		return unknown()
+	}
+	if scope, err := w.Scope(); err == nil && scope.OperationID == "identity.phone.password-reset-request" {
+		return r.recoverRiskEvidence(ctx, w)
 	}
 	b, feature, transition, err := w.FeatureScope(r)
 	if err != nil || feature.Contributor != r.Descriptor() || feature.Operation != IssueOperation() || !issueTransition(transition) {

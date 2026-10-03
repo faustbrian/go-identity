@@ -36,6 +36,14 @@ func TestNativeRiskUseAuthenticationAndInvalidWork(t *testing.T) {
 	if err != nil || claim.Prepared() != use.Prepared() || claim.Validate(at) != nil || claim.Validate(record.ExpiresAt) == nil {
 		t.Fatal("native projection lost authenticated original scope", err)
 	}
+	r.policy++
+	if _, err := r.restoreUse(b); err == nil {
+		t.Fatal("historical policy granted new use")
+	}
+	if historical, err := r.restoreHistoricalUse(b); err != nil || historical.Prepared() != claim.Prepared() {
+		t.Fatal("policy revision blocked historical integrity", err)
+	}
+	r.policy--
 	for _, change := range []func(*identitypostgres.RiskEvidencePlan){
 		func(p *identitypostgres.RiskEvidencePlan) { p.IssuanceCommandID = p.ConsumerCommandID },
 		func(p *identitypostgres.RiskEvidencePlan) { p.Tenant += "x" },
@@ -61,10 +69,13 @@ func TestNativeRiskUseAuthenticationAndInvalidWork(t *testing.T) {
 		if _, err := r.restoreUse(changed); err == nil {
 			t.Fatal("tampered signed field restored")
 		}
+		if _, err := r.restoreHistoricalUse(changed); err == nil {
+			t.Fatal("tampered historical field restored")
+		}
 	}
 	for _, native := range []*Repository{nil, {}, r} {
 		for _, ctx := range []context.Context{nil, context.Background()} {
-			if native.ReserveRiskEvidence(ctx, identitypostgres.RiskReservationWork{}) == nil || native.RebindRiskEvidence(ctx, identitypostgres.RiskReservationWork{}) == nil {
+			if native.ReserveRiskEvidence(ctx, identitypostgres.RiskReservationWork{}) == nil || native.RebindRiskEvidence(ctx, identitypostgres.RiskReservationWork{}) == nil || native.ReleaseRiskEvidence(ctx, identitypostgres.RiskReleaseWork{}) == nil {
 				t.Fatal("invalid invocation granted reservation")
 			}
 		}

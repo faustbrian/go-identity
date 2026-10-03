@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Reconcile native initiation reservations and terminally release them only
+  after unanimous authoritative noncommit proof through the shared coordinator.
+  Exact historical custody survives policy changes and expiry without granting
+  new use; unknown or mismatched evidence stays reserved. Release, failure audit
+  and aborted receipt commit together. Upgrade the coordinator dependency before
+  enabling recovery; domain apply/finalize and phone orchestration remain pending.
+
 - Add native initiation reservation and exact-generation takeover through the
   sole identity coordinator. Signed use, current risk policy, complete stored
   linkage and post-lock primary expiry are checked before ownership; missing or

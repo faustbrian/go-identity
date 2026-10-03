@@ -22,7 +22,7 @@ import (
 // The test-only phone participant never applies a domain mutation. Native risk
 // issuance/reservation and coordinator SQL are real; this proves neither the
 // phone workflow nor its eventual OTP/capability/domain phases.
-type nativeReservationPhone struct{}
+type nativeReservationPhone struct{ noncommit bool }
 
 func (*nativeReservationPhone) Descriptor() identitypostgres.ContributorDescriptor {
 	return identitypostgres.ContributorDescriptor{Owner: "identity/phone/postgres", ContractID: "identity.phone", Version: 1}
@@ -40,8 +40,28 @@ func (*nativeReservationPhone) ValidateFeatureCommand(c identity.Command, p iden
 func (*nativeReservationPhone) ApplyFeature(context.Context, identitypostgres.Work, identity.Command) (identity.FeatureReceipt, error) {
 	return identity.FeatureReceipt{}, identity.UnavailableError{}
 }
-func (*nativeReservationPhone) RecoverParticipant(context.Context, identitypostgres.RecoveryWork) (identitypostgres.RecoveryStatus, error) {
+func (p *nativeReservationPhone) RecoverParticipant(context.Context, identitypostgres.RecoveryWork) (identitypostgres.RecoveryStatus, error) {
+	if p.noncommit {
+		return identitypostgres.RecoveryNotCommitted, nil
+	}
 	return identitypostgres.RecoveryUnknown, nil
+}
+
+func nativeRecoveryCoordinator(t *testing.T, pool *database.Pool, native *Repository, phone *nativeReservationPhone, auditing *issuanceAudit) *identitypostgres.Coordinator {
+	t.Helper()
+	domain, err := identitypostgres.NewRepository(pool, identitypostgres.Config{MaximumDuration: 2 * time.Second})
+	if err != nil {
+		t.Fatal(err)
+	}
+	registry, err := identitypostgres.NewContributorRegistry([]identitypostgres.Contributor{domain, auditing, &issuanceOutbox{}, phone, native})
+	if err != nil {
+		t.Fatal(err)
+	}
+	c, err := identitypostgres.NewCoordinator(pool, registry, identitypostgres.CoordinatorConfig{MaximumDuration: 4 * time.Second, LeaseDuration: 5 * time.Second, CurrentFingerprintKeyVersion: 1, RetainedFingerprintKeys: map[uint32][32]byte{1: {1}}, QueryPolicy: &identitypostgres.CommandQueryPolicy{Clock: clock.System{}, PolicyVersion: 1, Authorization: issuanceQueryPolicy{}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return c
 }
 
 func testNativeRiskReservation(t *testing.T, ctx context.Context, pool *database.Pool, repo *Repository, executor *Executor) {
@@ -75,7 +95,7 @@ func testNativeRiskReservation(t *testing.T, ctx context.Context, pool *database
 	setup := func(t *testing.T) (risk.PhoneEvidenceIssuer, risk.PhoneEvidenceRequest, risk.EvidenceRecord) {
 		return setupAt(t, time.Now().UTC().Truncate(time.Microsecond).Add(-100*time.Millisecond))
 	}
-	prepare := func(t *testing.T, native *Repository, issuer risk.PhoneEvidenceIssuer, original risk.PhoneEvidenceRequest, record risk.EvidenceRecord) (*identitypostgres.Coordinator, identity.CommandBinding, identity.Command, identitypostgres.CommandPlan) {
+	prepare := func(t *testing.T, native *Repository, issuer risk.PhoneEvidenceIssuer, original risk.PhoneEvidenceRequest, record risk.EvidenceRecord, noncommit ...bool) (*identitypostgres.Coordinator, identity.CommandBinding, identity.Command, identitypostgres.CommandPlan) {
 		t.Helper()
 		id, _ := identity.NewCommandID()
 		use, err := issuer.PrecheckUse(ctx, original, risk.EvidenceUseRequest{CommandID: string(id), Actor: "phone-service", Recovery: original.Recovery, Reference: record.Reference}, record)
@@ -85,6 +105,9 @@ func testNativeRiskReservation(t *testing.T, ctx context.Context, pool *database
 		p := use.Prepared()
 		r := nativeUsePlan(p)
 		phone := &nativeReservationPhone{}
+		if len(noncommit) == 1 {
+			phone.noncommit = noncommit[0]
+		}
 		op := phone.FeatureOperations()[0]
 		b := identity.CommandBinding{CommandID: id, TenantID: "tenant", UserID: "subject", ActorID: "phone-service", ActorKind: authorization.SubjectServiceAccount, OperationID: op.OperationID, SchemaID: op.SchemaID, SchemaVersion: 1, PolicyID: "phone-policy", PolicyVersion: 1, RecordID: "phone-record", CorrelationID: string(id)}
 		command, err := identity.NewFeatureCommand(identity.FeatureCommandSpec{Binding: b, Operation: op, Fields: []identity.FeatureField{bytesField("risk.intent", r.IntentDigest)}})
@@ -141,6 +164,111 @@ func testNativeRiskReservation(t *testing.T, ctx context.Context, pool *database
 			t.Fatal("fixture mutation failed", err)
 		}
 	}
+	t.Run("native-terminal-release", func(t *testing.T) {
+		for _, mode := range []string{"release", "live", "expired-release", "expired-unknown", "unknown-phone", "wrong-generation", "wrong-fingerprint", "wrong-proof", "wrong-expiry", "missing", "terminal", "audit-failure", "sql-failure", "policy-change", "retired-key", "unresolved-issuance"} {
+			t.Run(mode, func(t *testing.T) {
+				var issuer risk.PhoneEvidenceIssuer
+				var original risk.PhoneEvidenceRequest
+				var record risk.EvidenceRecord
+				if mode == "expired-release" || mode == "expired-unknown" {
+					issuer, original, record = setupAt(t, time.Now().UTC().Truncate(time.Microsecond).Add(-28*time.Second))
+				} else {
+					issuer, original, record = setup(t)
+				}
+				c, b, command, p := prepare(t, repo, issuer, original, record, true)
+				if _, _, err := c.ReserveCommand(ctx, b, command, p); err != nil {
+					t.Fatal(err)
+				}
+				id, _ := base64.RawURLEncoding.DecodeString(string(b.CommandID))
+				if mode != "live" {
+					mutate(t, `UPDATE identity.commands SET lease_until=clock_timestamp()-interval '1 second' WHERE command_id=$1`, id)
+				}
+				native := repo
+				if mode == "policy-change" || mode == "retired-key" {
+					copied := *repo
+					native = &copied
+					if mode == "policy-change" {
+						native.policy++
+					} else {
+						key, _ := risk.NewEvidenceKey(2, wrappingKey(6), wrappingKey(7))
+						native.keys = []risk.EvidenceKey{key}
+					}
+				}
+				c = nativeRecoveryCoordinator(t, pool, native, &nativeReservationPhone{noncommit: mode != "unknown-phone" && mode != "expired-unknown"}, &issuanceAudit{fail: mode == "audit-failure"})
+				issuedID, _ := base64.RawURLEncoding.DecodeString(original.CommandID)
+				switch mode {
+				case "wrong-generation":
+					mutate(t, `UPDATE risk_store.issued_evidence SET reservation_generation=7 WHERE command_id=$1`, issuedID)
+				case "wrong-fingerprint":
+					mutate(t, `UPDATE risk_store.issued_evidence SET reservation_fingerprint=$2 WHERE command_id=$1`, issuedID, wrappingKey(8))
+				case "wrong-proof":
+					mutate(t, `UPDATE risk_store.issued_evidence SET proof_digest=$2 WHERE command_id=$1`, issuedID, wrappingKey(8))
+				case "wrong-expiry":
+					mutate(t, `UPDATE risk_store.issued_evidence SET expires_at=expires_at+interval '1 microsecond' WHERE command_id=$1`, issuedID)
+				case "missing":
+					mutate(t, `DELETE FROM risk_store.issued_evidence WHERE command_id=$1`, issuedID)
+				case "terminal":
+					mutate(t, `UPDATE risk_store.issued_evidence SET state='finalized' WHERE command_id=$1`, issuedID)
+				case "unresolved-issuance":
+					mutate(t, `UPDATE identity.commands SET state='pending',result_version=NULL,terminal_class=NULL,result=NULL,terminal_at=NULL WHERE command_id=$1`, issuedID)
+				case "sql-failure":
+					mutate(t, `ALTER TABLE risk_store.issued_evidence ADD CONSTRAINT test_release_failure CHECK(state<>'released') NOT VALID`)
+				}
+				if mode == "expired-release" || mode == "expired-unknown" {
+					mutate(t, `SELECT pg_sleep(GREATEST(0,EXTRACT(EPOCH FROM ($1::timestamptz-clock_timestamp())))+0.02)`, record.ExpiresAt)
+				}
+				snapshot := func() string {
+					var snap string
+					if err := pool.Raw().QueryRow(ctx, `SELECT row_to_json(c)::text||COALESCE((SELECT row_to_json(e)::text FROM risk_store.issued_evidence e WHERE evidence_digest=$2),'missing') FROM identity.commands c WHERE command_id=$1`, id, p.RiskEvidence.EvidenceDigest[:]).Scan(&snap); err != nil {
+						t.Fatal(err)
+					}
+					return snap
+				}
+				before := snapshot()
+				q := identity.RecoveryQuery{CommandID: b.CommandID, TenantID: b.TenantID, UserID: b.UserID, ActorID: b.ActorID, ActorKind: b.ActorKind, OperationID: b.OperationID, RecordID: b.RecordID}
+				caller := authorization.DecisionContext{PolicyRevision: 1, Request: authorization.Request{Tenant: authorization.TenantID(b.TenantID), Subject: authorization.Subject{ID: authorization.SubjectID(b.ActorID), Kind: b.ActorKind}, Action: authorization.Action(b.OperationID), Resource: authorization.Resource{Type: "identity.user", ID: authorization.ResourceID(b.UserID)}}}
+				result, err := c.RecoverCommand(ctx, q, caller)
+				var audits, effects int
+				if e := pool.Raw().QueryRow(ctx, `SELECT (SELECT count(*) FROM public.risk_audit WHERE command_id=$1),(SELECT count(*) FROM public.risk_outbox WHERE command_id=$1)`, string(b.CommandID)).Scan(&audits, &effects); e != nil {
+					t.Fatal(e)
+				}
+				if mode == "sql-failure" {
+					mutate(t, `ALTER TABLE risk_store.issued_evidence DROP CONSTRAINT test_release_failure`)
+				}
+				if mode != "release" && mode != "expired-release" && mode != "policy-change" {
+					if result.Outcome != identity.CommitOutcomeInProgress || snapshot() != before || audits != 0 || effects != 0 {
+						t.Fatal("unproved native recovery changed custody", err, result.Outcome, audits, effects)
+					}
+					return
+				}
+				if result.Outcome != identity.CommitOutcomeNotCommitted || audits != 1 || effects != 0 {
+					t.Fatal("native noncommit did not release", err, result.Outcome)
+				}
+				var state, generation string
+				if e := pool.Raw().QueryRow(ctx, `SELECT state,reservation_generation::text FROM risk_store.issued_evidence WHERE evidence_digest=$1`, p.RiskEvidence.EvidenceDigest[:]).Scan(&state, &generation); e != nil || state != "released" || generation != "2" {
+					t.Fatal("native release state", e, state, generation)
+				}
+				after := snapshot()
+				replayed, replayErr := c.RecoverCommand(ctx, q, caller)
+				var unavailable identity.UnavailableError
+				if !errors.As(replayErr, &unavailable) || replayed.Outcome != result.Outcome || snapshot() != after {
+					t.Fatal("terminal replay changed recovery", replayErr)
+				}
+				replayIssuer, _, _ := issuanceFixture(t, risk.PhoneResetInitiation, time.Now().UTC(), original.CommandID, executor, true, nil)
+				reissued, e := replayIssuer.Evaluate(ctx, original)
+				if e != nil || reissued.Evidence.Reference != record.Reference || !reissued.Evidence.ExpiresAt.Equal(record.ExpiresAt) {
+					t.Fatal("release broke original issuance", e)
+				}
+				if mode == "release" {
+					other, foreign, otherCommand, otherPlan := prepare(t, repo, issuer, original, record)
+					if _, _, e := other.ReserveCommand(ctx, foreign, otherCommand, otherPlan); e == nil {
+						t.Fatal("released evidence reserved again")
+					}
+					assertNoCommand(t, foreign)
+				}
+			})
+		}
+	})
 	t.Run("native-atomic-reserve-replay-takeover", func(t *testing.T) {
 		issuer, original, record := setup(t)
 		c, b, command, p := prepare(t, repo, issuer, original, record)

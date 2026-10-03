@@ -62,9 +62,23 @@ evidence and decisions. It is **not yet an executable durable risk service**.
   The immutable precheck binds omitted raw recovery scope and provider evidence;
   reservation does not re-evaluate providers or authoritative counters. Apply
   must recheck these before any protected mutation. The current coordinator
-  deliberately denies domain execution and mutating recovery for this profile
-  until complete apply/finalize/release phases exist. Completion also requires
+  deliberately denies domain execution for this profile until complete
+  apply/finalize phases exist. Completion also requires
   purpose-bound OTP and capability participants and remains unsupported.
+- `RiskReleaseContributor` implements consuming recovery and terminal release
+  for initiation. The exact-instance `RecoveryWork.RiskBinding` authenticates
+  historical signed custody and matches the committed original issuance, all
+  immutable row linkage and the reserved command/fingerprint/prior generation.
+  Missing, terminal, corrupt or foreign rows remain unknown, never noncommit
+  proof. No current-expiry check or policy change can invent reuse authority.
+  The coordinator excludes old writers and requires independent noncommit from
+  the phone, kernel, audit and lifecycle participants before invoking release.
+  Its bounded release handle CASes only `reserved` to terminal `released`, with
+  the recovery generation, in the same transaction as failure audit and aborted
+  command receipt. Original expiry, reserved time and response custody persist.
+  Unknown phone/domain outcomes and audit/SQL failures retain the reservation;
+  retries and cleanup do not reactivate it. No raw recovery/provider scope is
+  reconstructed and no domain authority is enabled by this recovery profile.
 
 ## Adoption and security
 
@@ -121,7 +135,7 @@ reference and timestamps without provider work or duplicate effects.
 
 ## Remaining work
 
-Domain apply/finalization/release and mutating recovery;
+Domain apply/finalization and completion's additional participants;
 durable lockouts/counters; CAPTCHA participants;
 investigation, retention and anonymization; complete
 public examples/API baseline and package/release verification remain pending.

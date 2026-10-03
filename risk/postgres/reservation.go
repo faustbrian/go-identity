@@ -102,9 +102,19 @@ func (r *Repository) reserveEvidence(ctx context.Context, w identitypostgres.Ris
 // scope/current risk policy. Raw recovery equality was established by core
 // PrecheckUse; apply still owns rechecking native scope, counters and policy.
 func (r *Repository) restoreUse(b identitypostgres.RiskReservationBinding) (risk.EvidenceUseClaim, error) {
+	if r == nil || b.Plan.PolicyVersion != r.policy {
+		return risk.EvidenceUseClaim{}, identity.ConflictError{}
+	}
+	return r.restoreHistoricalUse(b)
+}
+
+// Noncommit reconciliation authenticates historical custody without granting
+// current-policy use. A policy revision cannot reactivate or strand a proved
+// noncommitted reservation; expired claims may restore but are never validated.
+func (r *Repository) restoreHistoricalUse(b identitypostgres.RiskReservationBinding) (risk.EvidenceUseClaim, error) {
 	p := b.Plan
 	c := b.Command
-	if r == nil || p.PolicyVersion != r.policy || p.PolicyVersion == 0 || p.Tenant != string(c.TenantID) || p.Subject != string(c.UserID) || p.ConsumerCommandID != string(c.CommandID) || p.ConsumerActor != string(c.ActorID) || p.RecoveryOperation != c.OperationID || c.OperationID != "identity.phone.password-reset-request" || c.SchemaID != "identity.phone.password-reset-request.native-v1" || c.SchemaVersion != 1 || p.Phase != string(risk.PhoneResetInitiation) || p.Purpose != "phone-password-reset-initiate" {
+	if r == nil || p.PolicyVersion == 0 || p.Tenant != string(c.TenantID) || p.Subject != string(c.UserID) || p.ConsumerCommandID != string(c.CommandID) || p.ConsumerActor != string(c.ActorID) || p.RecoveryOperation != c.OperationID || c.OperationID != "identity.phone.password-reset-request" || c.SchemaID != "identity.phone.password-reset-request.native-v1" || c.SchemaVersion != 1 || p.Phase != string(risk.PhoneResetInitiation) || p.Purpose != "phone-password-reset-initiate" {
 		return risk.EvidenceUseClaim{}, identity.ConflictError{}
 	}
 	prepared := risk.PreparedEvidenceUse{Binding: risk.EvidenceIntentBinding{CommandID: p.IssuanceCommandID, Tenant: p.Tenant, Subject: p.Subject, Actor: p.IssuerActor, Purpose: p.Purpose, Phase: risk.IssuancePhase(p.Phase), RecoveryOperation: risk.Action(p.RecoveryOperation), PolicyVersion: p.PolicyVersion, KeyVersion: p.KeyVersion, IntentDigest: p.IntentDigest}, ConsumerCommandID: p.ConsumerCommandID, ConsumerActor: p.ConsumerActor, EvidenceDigest: p.EvidenceDigest, ProofDigest: p.ProofDigest, Signature: p.Signature, IssuedAt: p.IssuedAt, CheckedAt: p.CheckedAt, ExpiresAt: p.ExpiresAt}
