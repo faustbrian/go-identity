@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Add local phone-evidence prechecks binding the original issuance intent and
+  presented bearer to a separate proposed consuming command without renewing
+  expiry. Prechecks grant no journal, reservation or mutation authority.
+
 - Reconcile concurrent exact evidence retries through authorized original-result
   resolution when another submission wins after the initial absence read.
   Replay retains the original reference and expiry; fresh-result proof checks

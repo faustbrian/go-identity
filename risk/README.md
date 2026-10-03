@@ -155,6 +155,17 @@ Possession, structural parsing, MAC success and provisional materialization gran
 **no recovery authority**: the durable issued row, one-use reservation and atomic
 protected-command consumption remain mandatory.
 
+`PrecheckUse(ctx, original, request, record)` locally authenticates the presented
+reference against the original issuance request and current configured versions.
+`EvidenceUseRequest` binds a separate consuming command and actor and must match
+the original recovery scope. The native record is trusted adapter input, not
+transport input. No executor/provider/counter runs; original exclusive expiry
+and clock monotonicity are checked without renewal. The immutable opaque
+`EvidenceUse.Validate` rejects rebinding or stale time. Multiple consumers may
+precheck the same artifact: **this is not reservation or authority**. Journal
+existence/state, primary-time rechecking, current counters, exclusive reservation
+and atomic finalization still require the forthcoming coordinator participant.
+
 The fixed core cryptographic profile uses independent 32-byte HMAC-SHA-256
 integrity/linkage keys and a 32-byte cryptographic random nonce. Version is a
 nonzero uint32; newest configured version issues and all retained versions verify.
