@@ -5,7 +5,6 @@ import (
 	"context"
 	"crypto/hmac"
 	"crypto/rand"
-	"encoding/binary"
 	"fmt"
 	"io"
 	"math"
@@ -92,6 +91,9 @@ func NewVelocityRecovery(c VelocityRecoveryConfig) (VelocityRecovery, error) {
 // Initial cursor has zero covered progress, and no path publishes healthy state.
 // Concurrent losers, exhausted generations, corrupt state and commit ambiguity
 // return UnavailableError with no receipt. No journal outcome is modified.
+// Acquisition drains all overlapping journal writer transactions. Later writes
+// remain evidence and must be accounted for by the still-unimplemented replay
+// owner; successful acquisition is not a complete scan or stable final cursor.
 func (r VelocityRecovery) Acquire(ctx context.Context, tenant string, epoch [16]byte) (VelocityRecoveryLease, error) {
 	if r.state == nil || !velocityNamespace(tenant) || epoch == [16]byte{} {
 		return VelocityRecoveryLease{}, identity.InvalidInputError{Field: "velocity_recovery"}
@@ -237,11 +239,5 @@ func (s *velocityRecovery) bounded(ctx context.Context) (context.Context, contex
 }
 
 func (s *velocityRecovery) lock(ctx context.Context, tx pgx.Tx, tenant string) error {
-	digest := velocityMAC(s.journal.key, "identity-risk-velocity-recovery-lock-v1", string(s.journal.namespace), tenant)
-	// All 64 bits deliberately identify a PostgreSQL signed advisory-lock key.
-	key := int64(binary.BigEndian.Uint64(digest[:8]))
-	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock($1)`, key); err != nil {
-		return identity.UnavailableError{}
-	}
-	return nil
+	return s.journal.scopeLock(ctx, tx, tenant, false)
 }

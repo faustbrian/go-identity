@@ -40,6 +40,17 @@ evidence and decisions. It is **not yet an executable durable risk service**.
   replay progress and never publishes healthy state. Journal scan completeness,
   external-effect reconciliation, Valkey fencing and health publication remain
   unfinished; ownership acquisition alone cannot enable authentication.
+  Writer transactions take a shared tenant/namespace lock before allocating
+  insertion time/sequence or locking a result row. Acquisition takes that same
+  lock exclusively and cannot cross an unresolved writer commit. Lock waits
+  remain inside the journal timeout and cancellation budget. Historical reads
+  remain independent; later pending/unknown or terminal declarations are not
+  discarded. They remain replay-owner work, so acquisition alone is not cursor
+  completeness, replay closure or effect admission.
+  All participating writers must run the shared-lock implementation before
+  relying on this drain guarantee. Earlier experimental journal binaries did not
+  take that lock; stop or upgrade them first. Mixed-version writer operation is
+  not certified by this development checkpoint.
 
 - `VelocityMigrationSource{Base: counterHistory, Version: laterAllocation}` adds
   the PostgreSQL recovery journal for the separate ephemeral Valkey lane. It

@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Synchronize velocity intent/result transactions with recovery ownership using
+  one scoped database lock held through commit or rollback. Acquisition drains
+  overlapping insertions and declarations without losing later evidence or
+  renewing history. Cancellation while waiting grants no receipt. Replay scan
+  completeness and external effects remain separate unfinished work.
+  Upgrade or stop earlier experimental journal writers before relying on drain;
+  mixed-version writers do not share this guarantee.
+
 - Add primary database-time velocity recovery leases with one scoped owner,
   monotonic generation takeover, retired-boot denial and exact superseding
   renewal receipts. Initialization records no replay progress or healthy state;

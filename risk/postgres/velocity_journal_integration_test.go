@@ -188,4 +188,5 @@ func testVelocityJournal(t *testing.T, ctx context.Context, dsn, databaseName st
 	}
 	testVelocityResults(t, ctx, pool, journal, cfg, prepare, dsn, databaseName)
 	testVelocityRecovery(t, ctx, pool, journal, cfg, dsn, databaseName)
+	testVelocityWriterFence(t, ctx, pool, cfg, dsn, databaseName)
 }

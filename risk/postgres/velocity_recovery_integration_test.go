@@ -196,6 +196,11 @@ func testVelocityRecovery(t *testing.T, ctx context.Context, pool *database.Pool
 	go func() { blocked <- short.CheckLease(ctx, shortLease) }()
 	waiting := false
 	for i := 0; i < 40; i++ {
+		// PostgreSQL caches activity per transaction; each wait observation must
+		// see current backend state rather than the first poll's snapshot.
+		if _, err := blocker.Exec(ctx, `SELECT pg_stat_clear_snapshot()`); err != nil {
+			break
+		}
 		if err := blocker.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM pg_stat_activity WHERE wait_event='advisory' AND query LIKE '%pg_advisory_xact_lock%')`).Scan(&waiting); err != nil {
 			break
 		}

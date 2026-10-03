@@ -22,6 +22,9 @@ import (
 // values/freshness are never rounded or renewed. No Valkey dispatch, retry,
 // health publication or recovery proof is granted. Database/commit ambiguity
 // returns UnavailableError and must not be interpreted as external noncommit.
+// Its shared scope lock precedes attempt-row locks and remains until transaction
+// resolution. Recovery acquisition drains overlapping declarations but does not
+// discard later evidence or turn an explicit declaration into external truth.
 func (j VelocityJournal) RecordResult(ctx context.Context, a VelocityAttempt, outcome risk.CounterOutcome, snapshot []risk.Counter) error {
 	if j.state == nil || a.state == nil || a.state.owner != j.state || a.state.command.ValidateConfiguration(j.state.policy, j.state.keys) != nil {
 		return risk.ErrInvalidCounterCommand
@@ -52,6 +55,9 @@ func (j VelocityJournal) RecordResult(ctx context.Context, a VelocityAttempt, ou
 		return identity.UnavailableError{}
 	}
 	defer velocityRollback(tx)
+	if err := s.scopeLock(bounded, tx, b.Tenant, true); err != nil {
+		return err
+	}
 	sequence, state, stored, err := s.velocityRead(bounded, tx, c, true)
 	if err != nil {
 		return err

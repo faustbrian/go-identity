@@ -132,6 +132,9 @@ func velocityMAC(key []byte, domain string, fields ...string) []byte {
 // fail with ErrInvalidCounterCommand. Neither expiry nor replay permits another
 // dispatch. Every database/commit failure returns a redacted UnavailableError
 // without a receipt, including commit ambiguity; callers must not retry effects.
+// A shared scoped transaction lock precedes time/sequence allocation and lasts
+// through commit, so recovery acquisition cannot pass an unresolved insertion.
+// Journal recording remains evidence only, including while an epoch is replaying.
 func (j VelocityJournal) RecordAttempt(ctx context.Context, c risk.CounterCommand) (VelocityAttempt, error) {
 	if j.state == nil || c.ValidateConfiguration(j.state.policy, j.state.keys) != nil {
 		return VelocityAttempt{}, risk.ErrInvalidCounterCommand
@@ -167,6 +170,9 @@ func (j VelocityJournal) RecordAttempt(ctx context.Context, c risk.CounterComman
 		defer done()
 		_ = tx.Rollback(cleanup)
 	}()
+	if err := s.scopeLock(bounded, tx, b.Tenant, true); err != nil {
+		return VelocityAttempt{}, err
+	}
 	var now time.Time
 	if err = tx.QueryRow(bounded, `SELECT clock_timestamp()`).Scan(&now); err != nil {
 		return VelocityAttempt{}, identity.UnavailableError{}
