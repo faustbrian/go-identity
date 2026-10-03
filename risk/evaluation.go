@@ -32,7 +32,10 @@ const (
 // name and trust. Errors are normalized to unavailable without disclosure or
 // automatic retry. Expensive permits skipping only after a verified deny.
 type Source struct {
-	Name      string
+	Name string
+	// Version is a pinned source/configuration identity, required by evidence
+	// issuance. Empty remains compatible for non-issuing assessment only.
+	Version   string
 	Timeout   time.Duration
 	Expensive bool
 	Read      func(context.Context, Context) (Signal, error)
@@ -104,6 +107,9 @@ func NewEvaluator(c EvaluatorConfig) (Evaluator, error) {
 		s.counters = *c.Counters
 	}
 	for _, source := range c.Sources {
+		if source.Version != "" && (!scopeID(source.Version) || len(source.Version) > 64) {
+			return Evaluator{}, ErrInvalidPolicy
+		}
 		if !signalName(source.Name) || !required[source.Name] || source.Read == nil || source.Timeout <= 0 || source.Timeout > c.Timeout {
 			return Evaluator{}, ErrInvalidPolicy
 		}
@@ -139,6 +145,15 @@ type EvaluateResult struct {
 	PolicyVersion uint64
 	assessment    Assessment
 	counter       *CounterEvaluation
+	provenance    *evaluationProvenance
+}
+
+// Only a successful owned evaluation can populate issuing provenance. Public
+// decision fields and caller-created Assessment values cannot recreate it.
+type evaluationProvenance struct {
+	owner   *evaluatorState
+	context Context
+	signals []Signal
 }
 
 // Format omits private correlated source and counter state.
@@ -338,7 +353,9 @@ func (e Evaluator) Evaluate(ctx context.Context, request EvaluateRequest) (resul
 	if err != nil {
 		return evaluationFailure(err)
 	}
-	return safeEvaluation(assessment), nil
+	result = safeEvaluation(assessment)
+	result.provenance = &evaluationProvenance{owner: e.state, context: c, signals: signals}
+	return result, nil
 }
 
 func safeEvaluation(a Assessment) EvaluateResult {

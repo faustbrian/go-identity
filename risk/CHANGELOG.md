@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Add phone-only evidence issuance orchestration with complete counted risk and
+  owned carrier evaluation, exact phase-derived purpose, original-freshness
+  bounds, signed typed native command reconstruction and versioned opaque
+  references. Prior command resolution precedes provider work; failed/unknown
+  outcomes disclose no artifact and committed replay preserves the original.
+  Source versions are required for issuance; non-issuing APIs remain compatible.
+  The durable PostgreSQL executor, consumption and full risk Service are pending.
+
 - Add opt-in counted source evaluation with one frozen velocity owner and
   exact policy-bound mutation phases. Threshold decisions use complete
   post-state; later cancellation or expired provider work cannot renew counter

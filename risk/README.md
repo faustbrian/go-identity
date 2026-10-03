@@ -117,6 +117,60 @@ one-use issuance, recovery or real-adapter interoperability.
 
 ## Security and ownership
 
+### Phone evidence issuer
+
+`NewPhoneEvidenceIssuer(PhoneEvidenceIssuerConfig)` composes the complete counted
+`Evaluator`, an enabled `CarrierEvaluator` under the same policy version,
+version-pinned generic sources, explicit total timeout and the native
+`EvidenceExecutor`. `Evaluate(PhoneEvidenceRequest)` first resolves the exact
+authorized command/actor/phone-flow intent on primary. A proven missing command
+alone runs the parent phone-reset operation's risk profile and mandatory carrier
+readers; it never exempts `identity.risk.evaluate` from the closed risk matrix.
+The request has no purpose, decision or provider-fact override. Unknown state
+cannot restart evaluation, increment counters or issue a replacement.
+
+The native adapter maps `EvidenceIssue.Prepared()` into the existing typed
+coordinator command. `EvidenceKey.RestoreIssue` verifies the signed bounded
+projection from copied startup keys, so adapter construction needs no back-link
+to a not-yet-constructed issuer. The issuer-level variant additionally checks
+its configured policy version; the adapter must check that same version and its
+exact Work binding during apply. Native execution needs no consumer glue, raw phone/network storage, private
+unit of work or second command ledger. `Materialize` is core-owned construction
+at authoritative database UTC microsecond time inside that shared Work. Source
+expiry is never renewed: the earliest original source/carrier expiry and
+two-minute observation cap win. Prepared time rounds up and expiry rounds down,
+so database precision cannot expand validity. Native record/reference custody
+must be envelope-encrypted atomically with the issued row and command receipt.
+
+Only a proven committed native outcome releases `RiskEvidence` with opaque
+reference, purpose, original timestamps and `MaxUses=1`. Failed, denied, unknown,
+late and cancelled outcomes release nothing. `Recover` only resolves primary
+state, including when missing; it never runs providers or counters. Exact replay
+may return an already expired historical artifact without extending its times.
+Possession, structural parsing, MAC success and provisional materialization grant
+**no recovery authority**: the durable issued row, one-use reservation and atomic
+protected-command consumption remain mandatory.
+
+The fixed core cryptographic profile uses independent 32-byte HMAC-SHA-256
+integrity/linkage keys and a 32-byte cryptographic random nonce. Version is a
+nonzero uint32; newest configured version issues and all retained versions verify.
+The opaque wire form is `re1.<version>.<base64url-nonce>.<base64url-MAC>` with no
+embedded claim payload. Integrity binds exact keyed intent/proof and original
+issued/expiry instants. Domain-separated linkage/proof/prepared/bearer MACs use
+an ASCII domain plus NUL and uint64-big-endian length-prefixed fields, preventing
+ambiguous concatenation. Domains are `identity-risk-evidence-intent-v1`,
+`identity-risk-evidence-proof-v1`, `identity-risk-evidence-prepared-v1`,
+`identity-risk-evidence-bearer-v1` and `identity-risk-evidence-lookup-v1`.
+Phone/network/preauth/attempt values enter scoped keyed intent only, not journal
+columns. Key retirement requires the future adapter's retained tombstone and
+pending-command checks; removing keys early is not supported rotation.
+
+**Development boundary:** core execution/outcome tests use a native boundary
+double, not PostgreSQL proof. The real `risk/postgres` executor, complete canonical
+Service/catalog reconciliation, provider interoperability, audit/retention and
+durable reservation/consumption are still unfinished. Do not deploy this partial
+module or supply an application-written executor as a substitute.
+
 ### Phone-recovery carrier subset
 
 `NewCarrierEvaluator` is disabled with zero startup configuration. Explicit
