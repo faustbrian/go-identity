@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Provide an executable public observed-screening example and adoption guidance
+  for borrowed password custody, bounded audit delivery and explicit shutdown.
+
 - Allow core callers to select unpadded range checking explicitly. Padding
   remains recommended and required by the reference profile; opting out loses
   response-size privacy. Separate clients never share cache or in-flight data.

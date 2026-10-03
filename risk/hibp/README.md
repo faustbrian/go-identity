@@ -4,6 +4,30 @@ Experimental, Go 1.27. Scoped password screening is implemented; complete
 identity-risk/password workflow integration remains unfinished.
 There is no public prefix-input API or password acceptance decision.
 
+## Quick start and API reference
+
+The [executable public example](example_test.go) constructs a bounded padded
+client, supplies an explicitly selected audit policy, borrows an owned password,
+binds trusted workflow attribution and closes resources in ownership order.
+Its offline transport and acknowledgement sink are examples only, not production
+provider or durable-store implementations. Production supplies a trusted HTTPS
+transport and an operated Golib audit adapter; no identity repository or private
+workflow implementation is required to use this checker.
+
+| Public entry point | Contract |
+| --- | --- |
+| `New(Config, *httpclient.Client, clock.Clock)` | Copy an explicit immutable provider profile; borrow the transport and clock. Returns `Checker`, concretely `*Client`. |
+| `Checker.Check(ctx, CheckRequest)` | Borrow the candidate, derive the prefix internally, return caller-bound provider evidence or a classified failure. |
+| `(*Client).Close(ctx)` | Reject new work, cancel and drain owned provider work; does not close borrowed dependencies. |
+| `NewObservedChecker(*Client, ObservationConfig)` | Select required per-caller security events and optional instrumentation without transferring shutdown ownership. |
+| `NewSignalProvider(*Client, risk.Policy)` / `NewObservedSignalProvider(*ObservedChecker, risk.Policy)` | Normalize provider facts with unchanged original validity; never decide password acceptance. |
+| `NewTelemetry(metric.Meter, trace.Tracer)` | Borrow host instrumentation with a closed vocabulary; nil configuration explicitly disables instrumentation. |
+| `EventDelivery.Records`, `.Disposition`, `.AppendOutcome` | Retain immutable audit records, acknowledgement class and reconciliation custody separately from password evidence. |
+
+Do not serialize `CheckRequest` or retain borrowed password bytes. Inspect errors
+before using any result; no error-accompanied breach count or validity is usable.
+Use the same retained records, not a repeated check, for audit reconciliation.
+
 ## Observed screening
 
 `NewObservedChecker(*Client, ObservationConfig)` selects security emission.
@@ -174,3 +198,26 @@ The password dependency pins committed Secret ownership at `c5746af64a6f`.
 Local development uses disposable external workspace wiring; no permanent
 replace directive is included. Publication, clean-consumer/API, exact coverage,
 mutation, interoperability and other release gates remain pending.
+
+## Tradeoffs and FAQ
+
+**Does no match mean the password is acceptable?** No. It is one provider fact;
+the owned risk/password workflow also applies its policy and other evidence.
+The reference create/change/reset workflows deny when HIBP evidence is unavailable.
+
+**Can I omit padding or use a different endpoint?** Core callers may select
+unpadded checking with the documented response-size privacy tradeoff. The
+reference profile requires padding. The endpoint is fixed and cannot be replaced
+by caller-supplied prefix, URL or a complete-hash lookup.
+
+**Are the cache and buffer durable?** HIBP caches validated ranges only in bounded
+process memory. Audit buffering is a separately operated borrowed durable adapter;
+an in-memory test acknowledgement is not crash-durability evidence.
+
+**Why retain events on failure?** Required audit acknowledgement can be unknown
+after submission. Keeping original canonical records allows the existing adapter
+to reconcile without inventing new event IDs or pretending password work succeeded.
+
+**Who shuts down telemetry and audit?** The host. Stop and wait for calling
+goroutines before shutting those dependencies down; HIBP owns only its provider
+work and bounded synchronous composition, not host exporters or stores.

@@ -123,12 +123,25 @@ func (r *cancelRangeReader) Read(b []byte) (int, error) {
 }
 
 func BenchmarkRangeBounded(b *testing.B) {
-	body := strings.Repeat(strings.Repeat("A", 35)+":1\n", 1024)
-	b.ReportAllocs()
-	for b.Loop() {
-		if _, e := parseRange(context.Background(), strings.NewReader(body), rangeLimits{bytes: 1 << 20, count: 1_000_000_000}); e != nil {
-			b.Fatal("range failed")
-		}
+	for _, name := range []string{"unique", "duplicate"} {
+		b.Run(name, func(b *testing.B) {
+			var corpus strings.Builder
+			for i := 0; i < 1024; i++ {
+				suffix := i
+				if name == "duplicate" {
+					suffix = 0
+				}
+				fmt.Fprintf(&corpus, "%035X:1\n", suffix)
+			}
+			body := corpus.String()
+			b.ReportAllocs()
+			b.SetBytes(int64(len(body)))
+			for b.Loop() {
+				if _, err := parseRange(context.Background(), strings.NewReader(body), rangeLimits{bytes: 1 << 20, count: 1_000_000_000}); err != nil {
+					b.Fatal("range failed")
+				}
+			}
+		})
 	}
 }
 
@@ -146,22 +159,14 @@ func (r *brokenRangeReader) Read(b []byte) (int, error) {
 func FuzzRange(f *testing.F) {
 	f.Add(strings.Repeat("A", 35) + ":1\r\n")
 	f.Add(strings.Repeat("B", 35) + ":0\n")
+	f.Add(strings.Repeat("a", 35) + ":1000000000")
+	f.Add(strings.Repeat("A", 35) + ":00000000000\n")
+	f.Add(strings.Repeat("A", 35) + ":1\n" + strings.Repeat("a", 35) + ":2\n")
 	f.Add(":invalid")
 	f.Fuzz(func(t *testing.T, body string) {
 		if len(body) > 4097 {
 			t.Skip()
 		}
-		r, e := parseRange(context.Background(), strings.NewReader(body), rangeLimits{bytes: 4096, count: 1_000_000_000})
-		if e != nil && len(r.entries) != 0 {
-			t.Fatal("failure exposed evidence")
-		}
-		if len(r.entries) > 4096/37 {
-			t.Fatal("unbounded rows")
-		}
-		for _, entry := range r.entries {
-			if entry.count > 1_000_000_000 {
-				t.Fatal("unbounded count")
-			}
-		}
+		assertRangeOracle(t, body, 4096, 1_000_000_000)
 	})
 }
