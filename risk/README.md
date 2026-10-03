@@ -28,6 +28,37 @@ the decision is order-independent: deny, step-up, throttle, allow. Deliberate
 skipping is retained only beside another verified irreversible deny. Unknown
 results never invent retry-after metadata. Cancellation returns no assessment.
 
+### Neutral password observations
+
+Select `PolicyConfig.HIBP` explicitly with the provider's immutable CacheTTL
+(1 hour..7 days) and the supported canonical password-creating Operations. The
+zero configuration retains existing policies. Selected operations add mandatory
+`hibp` without removing any other source; unrelated signin/read operations do
+not inherit screening. Reference composition must select every supported password
+create/set/change/reset operation. A subset is development/non-reference scope.
+Neither callers nor observations select the operation list or failure policy.
+
+`PasswordSignal` normalizes a trusted `PasswordObservation`, not a decision.
+Zero-count/no-match becomes `SignalClean`; a bounded positive count becomes the
+new `SignalPositive` fact. Existing state numbers are preserved. `Assess` owns
+the consequent denial, even when another factor exists. Provider failures remain
+unavailable with closed safe classifications retained in internal summaries.
+Raw provider errors, suffixes and hashes have no representation in these facts.
+
+Provider ObservedAt and ValidUntil remain original. CheckedAt records the local
+candidate comparison, not a provider reread. Assessment expiry cannot exceed
+either CheckedAt plus the consuming profile's EvidenceTTL or original provider
+ValidUntil. The original provider interval must equal the configured cache TTL;
+expired/future/inconsistent observations reject. This scoped long-lived provider
+fact contract never exempts counter/carrier or credential-authority evidence
+from their original freshness limits. Generic source errors cannot turn apparent
+positive output into clean facts; only validated unavailable classifications
+survive. Phone evidence still requires its independent all-clean two-minute
+observation interval and cannot be minted from a positive breach fact.
+
+The HIBP checker-to-signal adapter and password workflow custody remain separate
+implementation work; pure signals/assessments grant no protected effect.
+
 ### Server-source evaluation
 
 `NewEvaluator(EvaluatorConfig)` binds the policy to exactly one configured

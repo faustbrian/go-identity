@@ -93,6 +93,9 @@ func NewEvaluator(c EvaluatorConfig) (Evaluator, error) {
 			return Evaluator{}, ErrInvalidPolicy
 		}
 	}
+	if len(c.Policy.state.hibpOperations) > 0 {
+		required["hibp"] = true
+	}
 	if c.Counters != nil {
 		if c.Counters.state == nil || c.Counters.state.policy.state != c.Policy.state {
 			return Evaluator{}, ErrInvalidPolicy
@@ -310,16 +313,29 @@ func (e Evaluator) Evaluate(ctx context.Context, request EvaluateRequest) (resul
 			return evaluationFailure(err)
 		}
 		last, c.Now = now, now
-		if readErr != nil || childErr != nil || !now.Before(sourceStart.Add(source.Timeout)) {
-			signal = Signal{Tenant: c.Tenant, Operation: c.Operation, Attempt: c.Attempt, Name: name, State: SignalUnavailable, Trust: ServerVerified}
+		ttl := time.Duration(0)
+		if e.state.policy.state.hibpOperations[c.Operation] {
+			ttl = e.state.policy.state.hibpTTL
 		}
-		if signal.Name != name || !validSignal(signal, c, a.Profile, e.state.policy.state.limits) {
+		if readErr != nil || childErr != nil || !now.Before(sourceStart.Add(source.Timeout)) {
+			// Preserve only validated safe source classification; never retain a
+			// positive fact supplied alongside an error or a late result.
+			failure := ProviderFailure(0)
+			if name == "hibp" && ttl != 0 {
+				failure = ProviderUnavailable
+				if readErr != nil && childErr == nil && now.Before(sourceStart.Add(source.Timeout)) && signal.Name == name && signal.State == SignalUnavailable && signal.Trust == ServerVerified && validSignal(signal, c, a.Profile, e.state.policy.state.limits, ttl) {
+					failure = signal.Failure
+				}
+			}
+			signal = Signal{Tenant: c.Tenant, Operation: c.Operation, Attempt: c.Attempt, Name: name, State: SignalUnavailable, Trust: ServerVerified, Failure: failure}
+		}
+		if signal.Name != name || !validSignal(signal, c, a.Profile, e.state.policy.state.limits, ttl) {
 			return evaluationFailure(ErrInvalidSignal)
 		}
 		if signal.State == SignalSkipped {
 			return evaluationFailure(ErrInvalidSignal)
 		}
-		if signal.State == SignalDeny && signal.Trust == ServerVerified {
+		if irreversibleDeny(signal) {
 			denied = true
 		}
 		signals = append(signals, signal)

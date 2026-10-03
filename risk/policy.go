@@ -127,15 +127,18 @@ type PolicyConfig struct {
 	Version  uint64
 	Limits   VelocityLimits
 	Profiles []Profile
+	HIBP     HIBPPolicy
 }
 
 // Policy is immutable, resource-free and safe for concurrent reads. Zero is
 // invalid. It owns no store, clock or provider and never issues evidence.
 type Policy struct{ state *policyState }
 type policyState struct {
-	version  uint64
-	limits   VelocityLimits
-	profiles map[ProfileClass]Profile
+	version        uint64
+	limits         VelocityLimits
+	profiles       map[ProfileClass]Profile
+	hibpTTL        time.Duration
+	hibpOperations map[Action]bool
 }
 
 type profileBounds struct {
@@ -162,6 +165,25 @@ func NewPolicy(c PolicyConfig) (Policy, error) {
 		p.Dimensions = slices.Clone(p.Dimensions)
 		p.RequiredSignals = slices.Clone(p.RequiredSignals)
 		s.profiles[p.Class] = p
+	}
+	if len(c.HIBP.Operations) == 0 {
+		if c.HIBP.CacheTTL != 0 {
+			return Policy{}, ErrInvalidPolicy
+		}
+	} else {
+		if len(c.HIBP.Operations) > 8 || c.HIBP.CacheTTL < time.Hour || c.HIBP.CacheTTL > 7*24*time.Hour {
+			return Policy{}, ErrInvalidPolicy
+		}
+		s.hibpTTL = c.HIBP.CacheTTL
+		s.hibpOperations = make(map[Action]bool, len(c.HIBP.Operations))
+		for _, operation := range c.HIBP.Operations {
+			class, known := canonicalOperations[operation]
+			profile := s.profiles[class]
+			if !known || !passwordCreating(operation) || s.hibpOperations[operation] || len(profile.RequiredSignals) >= 32 || slices.Contains(profile.RequiredSignals, "hibp") {
+				return Policy{}, ErrInvalidPolicy
+			}
+			s.hibpOperations[operation] = true
+		}
 	}
 	return Policy{state: s}, nil
 }
@@ -235,6 +257,9 @@ func (p Policy) Admit(action Action) (Admission, error) {
 	a.Profile = p.state.profiles[class]
 	a.Profile.Dimensions = slices.Clone(a.Profile.Dimensions)
 	a.Profile.RequiredSignals = slices.Clone(a.Profile.RequiredSignals)
+	if p.state.hibpOperations[action] {
+		a.Profile.RequiredSignals = append(a.Profile.RequiredSignals, "hibp")
+	}
 	return a, nil
 }
 
@@ -264,6 +289,10 @@ const (
 	SignalUnavailable
 	SignalUnknown
 	SignalSkipped
+	// SignalPositive is a normalized positive risk fact, not a deny decision.
+	// Existing state numeric identities are unchanged. This initial fact profile
+	// admits only scoped HIBP breach observations; policy owns their consequences.
+	SignalPositive
 )
 
 // SignalTrust distinguishes configured server sources from spoofable hints.
@@ -275,18 +304,23 @@ const (
 	RequestHint
 )
 
-// Signal is normalized bounded trusted-source output. No raw provider, network,
-// identifier or credential facts belong here. Positive decisions require exact
-// scope and a live original interval; unknown/unavailable may omit both times.
-// Skipped entries can only accompany an independent irreversible deny.
+// Signal is normalized bounded trusted-source output. Raw provider payloads,
+// hashes, network identifiers and credentials never belong here. Selected HIBP
+// observations retain bounded BreachCount/Failure, original ObservedAt and
+// ProviderValidUntil, plus a separate local CheckedAt and derived ExpiresAt.
+// Other sources retain the original short-lived interval contract. Skipped
+// entries can only accompany an independently established irreversible deny.
 type Signal struct {
-	Tenant                string
-	Operation             Action
-	Attempt, Name         string
-	State                 SignalState
-	Trust                 SignalTrust
-	ObservedAt, ExpiresAt time.Time
-	RetryAfter            time.Duration
+	Tenant                        string
+	Operation                     Action
+	Attempt, Name                 string
+	State                         SignalState
+	Trust                         SignalTrust
+	ObservedAt, ExpiresAt         time.Time
+	RetryAfter                    time.Duration
+	BreachCount                   uint64
+	Failure                       ProviderFailure
+	ProviderValidUntil, CheckedAt time.Time
 }
 
 // Format redacts all correlation metadata.
@@ -294,8 +328,10 @@ func (Signal) Format(s fmt.State, _ rune) { _, _ = io.WriteString(s, "risk.Signa
 
 // SignalSummary records normalized outcome only, not a provider payload or key.
 type SignalSummary struct {
-	Name  string
-	State SignalState
+	Name        string
+	State       SignalState
+	BreachCount uint64
+	Failure     ProviderFailure
 }
 
 // Decision is a closed pure assessment output. RetryAfter is present only for
@@ -350,11 +386,15 @@ func (p Policy) Assess(ctx context.Context, c Context, input []Signal) (Assessme
 		if !signalName(s.Name) {
 			return Assessment{}, ErrInvalidSignal
 		}
-		if _, duplicate := provided[s.Name]; duplicate || !slices.Contains(a.Profile.RequiredSignals, s.Name) || !validSignal(s, c, a.Profile, p.state.limits) {
+		ttl := time.Duration(0)
+		if p.state.hibpOperations[c.Operation] {
+			ttl = p.state.hibpTTL
+		}
+		if _, duplicate := provided[s.Name]; duplicate || !slices.Contains(a.Profile.RequiredSignals, s.Name) || !validSignal(s, c, a.Profile, p.state.limits, ttl) {
 			return Assessment{}, ErrInvalidSignal
 		}
 		provided[s.Name] = s
-		if s.State == SignalDeny && s.Trust == ServerVerified {
+		if irreversibleDeny(s) {
 			explicitDeny = true
 		}
 	}
@@ -370,10 +410,15 @@ func (p Policy) Assess(ctx context.Context, c Context, input []Signal) (Assessme
 		if state == SignalSkipped && !explicitDeny {
 			return Assessment{}, ErrInvalidSignal
 		}
-		result.Signals = append(result.Signals, SignalSummary{Name: name, State: state})
+		summary := SignalSummary{Name: name, State: state}
+		if exists && s.Trust == ServerVerified {
+			summary.BreachCount = s.BreachCount
+			summary.Failure = s.Failure
+		}
+		result.Signals = append(result.Signals, summary)
 		decision := Allow
 		switch state {
-		case SignalDeny:
+		case SignalDeny, SignalPositive:
 			decision = Deny
 		case SignalThrottle:
 			decision = Throttle
@@ -395,8 +440,14 @@ func (p Policy) Assess(ctx context.Context, c Context, input []Signal) (Assessme
 	return result, nil
 }
 
-func validSignal(s Signal, c Context, p Profile, l VelocityLimits) bool {
-	if s.Tenant != c.Tenant || s.Operation != c.Operation || s.Attempt != c.Attempt || s.State < SignalClean || s.State > SignalSkipped || s.Trust < ServerVerified || s.Trust > RequestHint || s.RetryAfter < 0 || s.RetryAfter > l.RetryAfterMax || s.RetryAfter > p.Window || (s.State != SignalThrottle && s.RetryAfter != 0) || (s.State == SignalThrottle && s.RetryAfter == 0) {
+func validSignal(s Signal, c Context, p Profile, l VelocityLimits, hibpTTL time.Duration) bool {
+	if s.Tenant != c.Tenant || s.Operation != c.Operation || s.Attempt != c.Attempt || s.State < SignalClean || s.State > SignalPositive || s.Trust < ServerVerified || s.Trust > RequestHint || s.RetryAfter < 0 || s.RetryAfter > l.RetryAfterMax || s.RetryAfter > p.Window || (s.State != SignalThrottle && s.RetryAfter != 0) || (s.State == SignalThrottle && s.RetryAfter == 0) {
+		return false
+	}
+	if s.Name == "hibp" && hibpTTL != 0 {
+		return validPasswordSignal(s, c, p, hibpTTL)
+	}
+	if s.State == SignalPositive || s.BreachCount != 0 || s.Failure != 0 || !s.ProviderValidUntil.IsZero() || !s.CheckedAt.IsZero() {
 		return false
 	}
 	if (s.State == SignalUnknown || s.State == SignalUnavailable || s.State == SignalSkipped) && s.ObservedAt.IsZero() && s.ExpiresAt.IsZero() {

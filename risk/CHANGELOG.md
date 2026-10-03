@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add opt-in operation-bound HIBP facts with bounded breach counts and safe
+  failure classifications. Risk policy owns positive-fact and outage denial;
+  provider cache age remains distinct from short-lived local assessment validity.
+  Existing counter/carrier observation bounds and signal numeric identities stay
+  unchanged. Provider and password-workflow adapters remain separate composition.
+
 - Authenticate ephemeral commands against an adapter's exact immutable policy
   and complete retained key custody without clock or store dispatch. Foreign,
   incomplete and protected command custody denies; non-secret key versions are
