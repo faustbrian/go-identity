@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Prepare command-owned protected counter scopes from explicit policy and
+  primary time without callbacks, with separate keyed authority and exact
+  current-scope validation. Ephemeral dispatch remains unchanged and rejects
+  these commands; native durable mutation and outcome recovery remain required.
+
 - Recheck signed evidence-use projections against complete original recovery
   and subject inputs and current provider configuration using primary time,
   without callbacks or renewal of the original validity interval. Journal and

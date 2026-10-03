@@ -83,10 +83,37 @@ windows. The adapter must prove rotation/epoch continuity and reject unsafe
 retirement; supplying aliases is not that proof. This coordinator does not
 implement a rate algorithm, cardinality eviction, durable lockout, journal
 recovery, audit, evidence issuance or an administrative override. Protected
-`reserve_with_owning_command` phases deliberately reject here until shared
+`reserve_with_owning_command` phases deliberately reject in the ephemeral
+coordinator until shared
 transaction participation is implemented. No current workflow consumer uses
 this partial path. Official PostgreSQL/Valkey adapters remain required; consumers
 must not implement replacement domain stores to fill those gaps.
+
+### Protected command counters
+
+`NewCommandCounterPolicy` takes an existing `Policy` and 1..4 retained,
+newest-first `CounterDigestKey` values, with no store or clock. Its `Prepare`
+accepts only the credential-mutation and privileged operation profiles, their
+exact trusted dimensions, and supplied primary UTC microsecond time. Limits,
+windows and evidence lifetime remain explicit deployment policy; no lockout
+algorithm or duration is inferred from the velocity profile.
+
+`Validate` reconstructs every target under that exact policy instance and
+checks the original exclusive evidence interval without refreshing preparation
+time. Durable keys use `rc1` and separate HMAC domains; ephemeral `rv1` state
+cannot become the same authority even with the same retained keys. Returned
+bindings own their slices, contain no raw dimensions, and confer no permission.
+Every ephemeral coordinator rejects command-owned values before clock/store
+access. `ExampleNewCommandCounterPolicy` demonstrates this pure API.
+
+The native PostgreSQL reservation participant must still prove its exact
+coordinator command scope, current rows, rotation continuity and outcome. It
+must persist each logical attempt once, including a threshold-denied attempt,
+through the existing owning-command transaction; it cannot let domain rollback
+silently erase those attempts. SQL in open Work is provisional, not
+`CounterCommitted`. Native mutation/reconciliation and current durable lockout
+checks are still being implemented; this preparation API does not enable
+protected evaluation or phone recovery by itself.
 
 ### Counted source evaluation
 

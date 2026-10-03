@@ -55,6 +55,29 @@ func ExampleNewCounterCoordinator() {
 	// Output: true true
 }
 
+func ExampleNewCommandCounterPolicy() {
+	// Example-only material; production uses managed retained digest keys.
+	key, err := risk.NewCounterDigestKey(1, make([]byte, 32))
+	if err != nil {
+		panic("invalid key")
+	}
+	policy, err := risk.NewCommandCounterPolicy(risk.CommandCounterPolicyConfig{Policy: examplePolicy(), Keys: []risk.CounterDigestKey{key}})
+	if err != nil {
+		panic("invalid protected policy")
+	}
+	scope := risk.Context{Tenant: "example-tenant", Operation: "identity.password.change", Attempt: "example-attempt"}
+	subject := risk.Subject{User: "example-user", Session: "example-session", Network: "192.0.2.1"}
+	// Production supplies the sole coordinator's primary database time.
+	now := time.Date(2026, 10, 3, 0, 0, 0, 0, time.UTC)
+	command, err := policy.Prepare(scope, subject, now)
+	if err != nil {
+		panic("invalid protected scope")
+	}
+	fmt.Println(policy.Validate(command, scope, subject, now) == nil)
+	// No counter has been mutated and no durable outcome is asserted.
+	// Output: true
+}
+
 func ExampleNewCarrierEvaluator() {
 	// Zero startup configuration explicitly leaves phone recovery disabled.
 	// Applications cannot enable it by providing request facts or a phase alone.

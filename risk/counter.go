@@ -108,14 +108,16 @@ func (CounterBinding) Format(s fmt.State, _ rune) {
 	_, _ = io.WriteString(s, "risk.CounterBinding(redacted)")
 }
 
-// CounterCommand is opaque, immutable and bound to its preparing coordinator.
-// Only Prepare constructs one; storage projections cannot confer dispatch
-// authority. It declares exactly one attempt, not an arbitrary increment.
+// CounterCommand is opaque, immutable and bound to its preparing ephemeral
+// coordinator or command-owned policy. These authority lanes are disjoint;
+// storage projections cannot confer dispatch authority. It declares exactly
+// one attempt, not an arbitrary increment.
 type CounterCommand struct{ state *counterCommand }
 type counterCommand struct {
-	owner   *counterCoordinator
-	binding CounterBinding
-	profile Profile
+	owner        *counterCoordinator
+	commandOwner *commandCounterPolicy
+	binding      CounterBinding
+	profile      Profile
 }
 
 func (CounterCommand) Format(s fmt.State, _ rune) {
@@ -178,6 +180,8 @@ func (CounterResult) Format(s fmt.State, _ rune) {
 // explicit noncommit/unknown result with no snapshot. Duplicate, missing,
 // foreign kinds and invalid window bounds return zero and a redacted error.
 // Current freshness is checked separately when the result is consumed.
+// For command-owned counters, open-Work SQL is provisional: the native adapter
+// may declare CounterCommitted only after the owning coordinator proves commit.
 func NewCounterResult(command CounterCommand, outcome CounterOutcome, snapshot []Counter) (CounterResult, error) {
 	if command.state == nil || outcome < CounterCommitted || outcome > CounterUnknown {
 		return CounterResult{}, ErrInvalidCounterResult
@@ -308,16 +312,29 @@ func (c CounterCoordinator) admitScope(scope Context, phase Phase) (Admission, e
 }
 
 func (c CounterCoordinator) prepareAdmitted(scope Context, subject Subject, phase Phase, a Admission, now time.Time) (CounterCommand, error) {
+	command, err := prepareCounter(scope, subject, phase, a, now, c.state.keys, false)
+	if err != nil {
+		return CounterCommand{}, err
+	}
+	command.state.owner = c.state
+	return command, nil
+}
+
+func prepareCounter(scope Context, subject Subject, phase Phase, a Admission, now time.Time, keys []CounterDigestKey, protected bool) (CounterCommand, error) {
 	values, err := counterDimensions(subject, scope.Tenant, a.Profile.Dimensions)
 	if err != nil {
 		return CounterCommand{}, err
 	}
 	b := CounterBinding{Tenant: scope.Tenant, Operation: scope.Operation, Attempt: scope.Attempt, Phase: phase, PolicyVersion: a.PolicyVersion, PreparedAt: now, Window: a.Profile.Window, Limit: a.Profile.Limit}
+	keyDomain, commandDomain, prefix := "identity-risk-counter-key-v1", "identity-risk-counter-command-v1", "rv1:"
+	if protected {
+		keyDomain, commandDomain, prefix = "identity-risk-command-counter-key-v1", "identity-risk-command-counter-command-v1", "rc1:"
+	}
 	for _, dimension := range a.Profile.Dimensions {
 		target := CounterTarget{Dimension: dimension}
-		for _, key := range c.state.keys {
-			digest := counterMAC(key, "identity-risk-counter-key-v1", []string{strconv.FormatUint(uint64(key.version), 10), scope.Tenant, string(scope.Operation), string(dimension), values[dimension]})
-			target.Keys = append(target.Keys, CounterKey{Version: key.version, Encoded: "rv1:" + strconv.FormatUint(uint64(key.version), 10) + ":" + base64.RawURLEncoding.EncodeToString(digest)})
+		for _, key := range keys {
+			digest := counterMAC(key, keyDomain, []string{strconv.FormatUint(uint64(key.version), 10), scope.Tenant, string(scope.Operation), string(dimension), values[dimension]})
+			target.Keys = append(target.Keys, CounterKey{Version: key.version, Encoded: prefix + strconv.FormatUint(uint64(key.version), 10) + ":" + base64.RawURLEncoding.EncodeToString(digest)})
 		}
 		b.Targets = append(b.Targets, target)
 	}
@@ -328,8 +345,8 @@ func (c CounterCoordinator) prepareAdmitted(scope Context, subject Subject, phas
 			fields = append(fields, key.Encoded)
 		}
 	}
-	b.Fingerprint = hex.EncodeToString(counterMAC(c.state.keys[0], "identity-risk-counter-command-v1", fields))
-	return CounterCommand{state: &counterCommand{owner: c.state, binding: b, profile: a.Profile}}, nil
+	b.Fingerprint = hex.EncodeToString(counterMAC(keys[0], commandDomain, fields))
+	return CounterCommand{state: &counterCommand{binding: b, profile: a.Profile}}, nil
 }
 
 func counterDimensions(s Subject, tenant string, dimensions []Dimension) (map[Dimension]string, error) {
@@ -420,7 +437,7 @@ func (c CounterCoordinator) Mutate(ctx context.Context, command CounterCommand) 
 	if c.state == nil {
 		return CounterEvaluation{}, ErrInvalidPolicy
 	}
-	if ctx == nil || command.state == nil || command.state.owner != c.state {
+	if ctx == nil || command.state == nil || command.state.commandOwner != nil || command.state.owner != c.state {
 		return CounterEvaluation{}, ErrInvalidCounterCommand
 	}
 	if err := ctx.Err(); err != nil {
