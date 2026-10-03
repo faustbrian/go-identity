@@ -5,6 +5,20 @@ evidence and decisions. It is **not yet an executable durable risk service**.
 
 ## Implemented boundary
 
+- Optional `Config.UseIssuer` installs pure use preparation only after matching
+  the issuer's exact current policy and entire retained signing/linkage key set.
+  `PrepareEvidenceUse` accepts a core precheck, original trusted request and
+  native phone initiation feature spec. It freezes the exact phone, pre-auth,
+  attempt and subject dimensions inside the opaque in-memory command; the
+  returned signed plan and durable journal contain no raw scope or bearer.
+  Caller-selected `risk.intent`/`risk.use.*` fields deny. Non-risk fields remain
+  the phone owner's responsibility, including equality with its domain target.
+  `ValidateRiskEvidenceCommand` reconstructs the original intent under installed
+  provider configuration without callbacks or IO. It uses the signed historical
+  check time, rounded upward to microseconds, without rewriting that time or
+  expiry; it does not establish current validity. Nil preserves existing setup.
+  Native current counters, same-domain row checks and finalization remain
+  required; this partial method does not enable `RiskExecutionContributor`.
 - `MapIssue` accepts only an opaque successful core evaluation and matching
   trusted identity binding. `IssueOperation` fixes its closed native schema.
 - The native decoder verifies every signed field and current configured policy.

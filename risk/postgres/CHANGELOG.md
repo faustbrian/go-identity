@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Add opt-in native consuming-command preparation authenticated against the
+  installed issuer's complete original recovery scope and provider configuration.
+  Mismatched policy or retained signing/linkage keys fail setup. Raw scope remains
+  only in the opaque in-memory command, not the signed plan or journal; historical
+  check times and expiry are preserved. This does not activate domain execution;
+  current-counter checks and atomic journal finalization remain required.
+
 - Recheck original protected-counter charge custody and locked current windows
   before domain mutation and final commit. Expired original evidence, missing
   snapshots, changed key history or missing original aliases deny without a new

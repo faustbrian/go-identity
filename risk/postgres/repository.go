@@ -30,6 +30,11 @@ type Config struct {
 	// Nil preserves issuance-only setup. All retained keys are copied; removal
 	// requires durable retirement, which this initial profile does not yet expose.
 	CommandCounters *risk.CommandCounterPolicyConfig
+	// UseIssuer optionally installs pure original-scope authentication for native
+	// use preparation. It must match PolicyVersion and every retained EvidenceKey.
+	// The issuer value is copied; nil preserves reservation-only setup. This
+	// does not enable domain execution or supply current counter authority.
+	UseIssuer *risk.PhoneEvidenceIssuer
 }
 
 // Format redacts copied and caller-owned key material in all diagnostics.
@@ -55,6 +60,7 @@ type Repository struct {
 	cipher        recordCipher
 	counters      *risk.CommandCounterPolicyConfig
 	counterPolicy risk.CommandCounterPolicy
+	useIssuer     *risk.PhoneEvidenceIssuer
 }
 
 // Format hides runtime custody configuration and retained key material.
@@ -92,6 +98,13 @@ func NewRepository(c Config) (*Repository, error) {
 		return nil, err
 	}
 	r := &Repository{schema: pgx.Identifier{c.Schema}.Sanitize(), policy: c.PolicyVersion, keys: append([]risk.EvidenceKey(nil), c.EvidenceKeys...), cipher: cipher}
+	if c.UseIssuer != nil {
+		issuer := *c.UseIssuer
+		if issuer.ValidateUseConfiguration(c.PolicyVersion, c.EvidenceKeys) != nil {
+			return nil, risk.ErrInvalidPolicy
+		}
+		r.useIssuer = &issuer
+	}
 	if c.CommandCounters != nil {
 		copy := *c.CommandCounters
 		copy.Keys = append([]risk.CounterDigestKey(nil), copy.Keys...)
