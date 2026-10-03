@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Add bounded authenticated velocity change pages under exact live recovery
+  custody. Late lower-sequence declarations and post-empty insertions remain
+  discoverable without renewing original history or claiming effects/health.
+  Install the forward replay migration before upgrading all writers; original
+  authenticated history receives bounded native position initialization while
+  unsealed legacy history remains unavailable. Renewal preserves continuation
+  with its new lease; stale, foreign and takeover custody deny.
+
 - Authenticate complete native velocity intent and terminal history atomically,
   retaining original windows and values and rejecting altered or missing seals
   before readback or replay. Install the new forward integrity migration before

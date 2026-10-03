@@ -19,10 +19,19 @@ func (s *velocityJournal) sealVelocity(ctx context.Context, tx pgx.Tx, sequence 
 	if err != nil {
 		return err
 	}
-	if _, err := tx.Exec(ctx, `UPDATE `+s.schema+`.velocity_attempts SET replay_seal=$2 WHERE sequence=$1`, sequence, expected); err != nil {
+	var position int64
+	if err := tx.QueryRow(ctx, `SELECT nextval($1::regclass)`, s.schema+`.velocity_replay_position`).Scan(&position); err != nil || position <= 0 {
+		return identity.UnavailableError{}
+	}
+	positionSeal := s.velocityPositionSeal(sequence, position, expected)
+	if _, err := tx.Exec(ctx, `UPDATE `+s.schema+`.velocity_attempts SET replay_seal=$2,replay_position=$3,position_seal=$4 WHERE sequence=$1`, sequence, expected, position, positionSeal); err != nil {
 		return identity.UnavailableError{}
 	}
 	return nil
+}
+
+func (s *velocityJournal) velocityPositionSeal(sequence, position int64, seal []byte) []byte {
+	return velocityMAC(s.key, "identity-risk-velocity-position-v1", strconv.FormatInt(sequence, 10), strconv.FormatInt(position, 10), hex.EncodeToString(seal))
 }
 
 func (s *velocityJournal) checkVelocitySeal(ctx context.Context, tx pgx.Tx, sequence int64) error {

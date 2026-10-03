@@ -74,7 +74,7 @@ func (VelocityRecoveryLease) MarshalText() ([]byte, error) {
 }
 
 // NewVelocityRecovery validates configuration without IO. Journal must already
-// use VelocityIntegrityMigrationSource. Unsupported windows and lease bounds fail
+// use VelocityReplayMigrationSource. Unsupported windows and lease bounds fail
 // redacted with ErrInvalidPolicy; construction grants no external authority.
 func NewVelocityRecovery(c VelocityRecoveryConfig) (VelocityRecovery, error) {
 	if c.Journal.state == nil || c.MaximumWindow != time.Hour || c.LeaseDuration <= 0 || c.LeaseDuration > time.Minute || c.LeaseDuration%time.Microsecond != 0 {
@@ -201,17 +201,11 @@ func (r VelocityRecovery) lease(ctx context.Context, lease VelocityRecoveryLease
 	if err := s.lock(bounded, tx, l.tenant); err != nil {
 		return VelocityRecoveryLease{}, err
 	}
-	var token []byte
-	var expires time.Time
-	var window int64
-	err = tx.QueryRow(bounded, `SELECT lease_owner,lease_expires_at,maximum_window_us FROM `+s.journal.schema+`.velocity_epochs WHERE tenant_id=$1 AND namespace_digest=$2 AND epoch=$3 AND generation=$4::numeric AND state='replaying' FOR UPDATE`, l.tenant, s.journal.namespace, l.epoch[:], strconv.FormatUint(l.generation, 10)).Scan(&token, &expires, &window)
-	if err != nil || !hmac.Equal(token, l.token[:]) || !expires.Equal(l.expires) || window != s.maximumWindow.Microseconds() {
-		return VelocityRecoveryLease{}, identity.UnavailableError{}
+	now, err := s.liveLease(bounded, tx, l)
+	if err != nil {
+		return VelocityRecoveryLease{}, err
 	}
-	var now time.Time
-	if err := tx.QueryRow(bounded, `SELECT clock_timestamp()`).Scan(&now); err != nil || !now.Before(expires) {
-		return VelocityRecoveryLease{}, identity.UnavailableError{}
-	}
+	expires := l.expires
 	if renew {
 		expires = now.Add(s.leaseDuration)
 		if !expires.After(l.expires) {
@@ -225,6 +219,21 @@ func (r VelocityRecovery) lease(ctx context.Context, lease VelocityRecoveryLease
 		return VelocityRecoveryLease{}, identity.UnavailableError{}
 	}
 	return VelocityRecoveryLease{state: &velocityRecoveryLease{owner: s, tenant: l.tenant, epoch: l.epoch, token: l.token, generation: l.generation, expires: expires}}, nil
+}
+
+func (s *velocityRecovery) liveLease(ctx context.Context, tx pgx.Tx, l *velocityRecoveryLease) (time.Time, error) {
+	var token []byte
+	var expires time.Time
+	var window int64
+	err := tx.QueryRow(ctx, `SELECT lease_owner,lease_expires_at,maximum_window_us FROM `+s.journal.schema+`.velocity_epochs WHERE tenant_id=$1 AND namespace_digest=$2 AND epoch=$3 AND generation=$4::numeric AND state='replaying' FOR UPDATE`, l.tenant, s.journal.namespace, l.epoch[:], strconv.FormatUint(l.generation, 10)).Scan(&token, &expires, &window)
+	if err != nil || !hmac.Equal(token, l.token[:]) || !expires.Equal(l.expires) || window != s.maximumWindow.Microseconds() {
+		return time.Time{}, identity.UnavailableError{}
+	}
+	var now time.Time
+	if err := tx.QueryRow(ctx, `SELECT clock_timestamp()`).Scan(&now); err != nil || !now.Before(expires) {
+		return time.Time{}, identity.UnavailableError{}
+	}
+	return now, nil
 }
 
 func (s *velocityRecovery) bounded(ctx context.Context) (context.Context, context.CancelFunc, error) {

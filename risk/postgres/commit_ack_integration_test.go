@@ -24,6 +24,7 @@ type commitAckFault struct {
 	hits             atomic.Int32
 	velocitySequence atomic.Int64
 	velocityEpoch    atomic.Pointer[[16]byte]
+	velocityReplay   atomic.Int64
 }
 
 type ackTargetKey struct{}
@@ -76,6 +77,11 @@ func (f *commitAckFault) TraceQueryStart(ctx context.Context, conn *pgx.Conn, da
 	if f.velocitySequence.Load() > 0 && strings.Contains(data.SQL, ".velocity_attempts SET outcome=$1 WHERE sequence=$2") && len(data.Args) == 2 {
 		sequence, ok := data.Args[1].(int64)
 		if ok && sequence == f.velocitySequence.Load() && data.Args[0] == "committed" {
+			return context.WithValue(ctx, ackTargetKey{}, true)
+		}
+	}
+	if sequence := f.velocityReplay.Load(); sequence > 0 && strings.Contains(data.SQL, ".velocity_attempts SET replay_seal=$2,replay_position=$3,position_seal=$4") && len(data.Args) == 4 {
+		if value, ok := data.Args[0].(int64); ok && value == sequence {
 			return context.WithValue(ctx, ackTargetKey{}, true)
 		}
 	}

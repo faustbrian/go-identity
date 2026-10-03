@@ -80,6 +80,28 @@ evidence and decisions. It is **not yet an executable durable risk service**.
   Record integrity is not external-result truth, rollback-resistant storage,
   replay completeness, Valkey effect authority or healthy publication.
 
+- Install `VelocityReplayMigrationSource{Base: integrityHistory,
+  Version: laterAllocation}` before current writers. Native insertion and first
+  terminal declaration atomically assign an indexed, separately authenticated
+  change position. Terminal idempotent replay creates no new position. All
+  original signed facts remain unchanged; valid pre-position history receives
+  bounded native bookkeeping only after its original seal verifies. Migration
+  does not sign old records; unverifiable legacy history remains unavailable.
+  `recovery.ReadPage(ctx, lease, cursor, batch)` accepts batches 1..1000
+  (reference 100), starts at zero cursor, and returns copied immutable records
+  plus `page.Next()`. Pages drain overlapping writers and validate exact live
+  custody before and after the bounded read in the same primary transaction.
+  Renewal accepts the continuation with the new lease; superseded leases and
+  foreign/takeover cursors deny. Reads include all retained history, not a
+  storage-time cutoff, and preserve expired snapshots without renewing windows.
+  Use the returned cursor to observe insertions or declarations after an empty
+  page. Records are redacted/nonserializable owned-adapter projections, never
+  `CounterCommand`, dispatch, effect application, or positive validity proof.
+  Initialization can persist traversal bookkeeping but does not rewrite original
+  history or epoch progress. Failures and ambiguous acknowledgements return no
+  page/cursor. Current pagination is not applied replay closure, external-result
+  reconciliation, Valkey fencing or healthy publication; those remain unfinished.
+
 - Optional `Config.UseIssuer` installs pure use preparation only after matching
   the issuer's exact current policy and entire retained signing/linkage key set.
   `PrepareEvidenceUse` accepts a core precheck, original trusted request and

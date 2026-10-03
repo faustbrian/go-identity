@@ -20,7 +20,7 @@ import (
 )
 
 // VelocityJournalConfig selects a caller-owned primary pool and migrated risk
-// schema with VelocityIntegrityMigrationSource. Namespace identifies a stable
+// schema with VelocityReplayMigrationSource. Namespace identifies a stable
 // deployment/projection, not a request.
 // JournalKey is a separately retained 32..128-byte HMAC key; replacing it would
 // lose replay identity and is not supported. Policy and complete newest-first
@@ -84,7 +84,7 @@ func (VelocityAttempt) MarshalJSON() ([]byte, error) { return nil, risk.ErrSensi
 func (VelocityAttempt) MarshalText() ([]byte, error) { return nil, risk.ErrSensitiveSerialization }
 
 // NewVelocityJournal validates copied local custody without pool access. The
-// schema must include VelocityIntegrityMigrationSource. No store is enabled by
+// schema must include VelocityReplayMigrationSource. No store is enabled by
 // successful construction; mismatches fail with redacted ErrInvalidPolicy.
 func NewVelocityJournal(c VelocityJournalConfig) (VelocityJournal, error) {
 	if c.Pool == nil || c.Pool.Raw() == nil || !validSchema(c.Schema) || !velocityNamespace(c.Namespace) || len(c.JournalKey) < 32 || len(c.JournalKey) > 128 || bytes.Equal(c.JournalKey, make([]byte, len(c.JournalKey))) || c.Timeout <= 0 || c.Timeout > time.Minute || len(c.Keys) == 0 || len(c.Keys) > 4 {
