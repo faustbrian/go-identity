@@ -23,8 +23,23 @@ evidence and decisions. It is **not yet an executable durable risk service**.
   times. Pending or corrupt history is unavailable; unknown never becomes
   noncommit. Exact full windows and microsecond-representable snapshots are
   required; no freshness is rounded forward. These methods do not authenticate
-  external results or authorize effects. Lost-ack reconciliation, fenced recovery
-  and Valkey execution remain pending.
+  external results or authorize effects. External-result reconciliation, fenced
+  replay and Valkey execution remain pending.
+
+- `NewVelocityRecovery(VelocityRecoveryConfig{Journal: journal,
+  MaximumWindow: time.Hour, LeaseDuration: leaseBound})` owns scoped primary
+  recovery leases. `Acquire` accepts the trusted projection's nonzero random
+  128-bit boot epoch, not request data. Independent processes have one live owner
+  per tenant/namespace. Database time is sampled after locking; authoritative
+  expiry alone allows monotonic takeover. New boots retire prior epochs, which
+  cannot resurrect. `Renew` returns a superseding opaque receipt; old receipts
+  and old generations fail `CheckLease`. Checks prove point-in-time ownership,
+  not effect permission. Missing/ambiguous acknowledgements return no receipt.
+  The supported maximum window is one hour; explicit leases are positive,
+  microsecond-representable and at most one minute. Initialization records zero
+  replay progress and never publishes healthy state. Journal scan completeness,
+  external-effect reconciliation, Valkey fencing and health publication remain
+  unfinished; ownership acquisition alone cannot enable authentication.
 
 - `VelocityMigrationSource{Base: counterHistory, Version: laterAllocation}` adds
   the PostgreSQL recovery journal for the separate ephemeral Valkey lane. It

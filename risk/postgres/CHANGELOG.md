@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add primary database-time velocity recovery leases with one scoped owner,
+  monotonic generation takeover, retired-boot denial and exact superseding
+  renewal receipts. Initialization records no replay progress or healthy state;
+  ambiguous commits grant no custody. Native replay completeness and Valkey
+  effect/health publication remain unfinished.
+
 - Atomically retain complete original velocity results and reconstruct historical
   terminal outcomes through `RecordResult` and `ReadResult`. Exact receipt custody,
   persisted scope and every retained alias are rechecked. Conflicting terminal

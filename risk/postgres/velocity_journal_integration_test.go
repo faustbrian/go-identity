@@ -187,4 +187,5 @@ func testVelocityJournal(t *testing.T, ctx context.Context, dsn, databaseName st
 		t.Fatal("partial intent survived rollback", err)
 	}
 	testVelocityResults(t, ctx, pool, journal, cfg, prepare, dsn, databaseName)
+	testVelocityRecovery(t, ctx, pool, journal, cfg, dsn, databaseName)
 }
