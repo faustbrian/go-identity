@@ -88,6 +88,36 @@ must not implement replacement domain stores to fill those gaps.
 
 ## Security and ownership
 
+### Phone-recovery carrier subset
+
+`NewCarrierEvaluator` is disabled with zero startup configuration. Explicit
+enablement requires one version-pinned owner for each of SIM-swap, number
+recycling and carrier checks, a trusted clock, a positive policy version,
+bounded deadlines and a selected lifetime of at most two minutes. Construction
+does not read providers. Request input contains no carrier facts or purpose.
+
+`Assess` checks complete trusted tenant/subject/number/preauth/attempt/policy
+scope and the exact issuing-phase/parent-operation pair before any reader.
+`PhoneRecoveryScope` and `CarrierObservation` are preparatory helper contracts,
+not replacements for the canonical Service's `PhoneRecoveryBinding` and
+aggregate `CarrierFact`. The carrier owner uses the canonical `carrier-risk`
+tag; SIM-swap and number recycling retain distinct mandatory owner tags.
+Initiation derives `phone-password-reset-initiate`; completion derives
+`phone-password-reset-complete`. It evaluates all three readers once and denies
+positive, unknown, unavailable, malformed, foreign or failed results. Every
+original interval is rechecked after the last reader. Earliest original expiry
+wins, and metadata copies cannot extend it. Provider configuration versions
+must match the configured owners; refresh/replay cannot restart observation.
+
+The opaque assessment must be validated against the issuer's expected evaluator
+and exact binding, with exclusive expiry. It is **only the carrier subset**:
+no durable row, bearer or RiskEvidence is issued, and it cannot replace full
+risk/counter policy, OTP/capability, independent factors or transactional one-use
+consumption. Official carrier readers and provider interoperability remain
+required; this API is not an application-written recovery workflow. Stored
+evidence/journal mappings must derive bounded keyed phone linkage rather than
+persisting the raw trusted number in this in-memory input.
+
 Neither `ServerVerified`, `IndependentFactor`, timestamps nor these structural
 values prove provenance. They may only be supplied by owned trusted server
 orchestration, not request fields. No assessment grants authentication,

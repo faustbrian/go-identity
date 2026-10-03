@@ -55,6 +55,18 @@ func ExampleNewCounterCoordinator() {
 	// Output: true true
 }
 
+func ExampleNewCarrierEvaluator() {
+	// Zero startup configuration explicitly leaves phone recovery disabled.
+	// Applications cannot enable it by providing request facts or a phase alone.
+	evaluator, err := risk.NewCarrierEvaluator(risk.CarrierEvaluatorConfig{})
+	if err != nil {
+		panic("invalid startup configuration")
+	}
+	_, err = evaluator.Assess(context.Background(), risk.CarrierRequest{})
+	fmt.Println(err == risk.ErrCarrierRecoveryDisabled)
+	// Output: true
+}
+
 func examplePolicy() risk.Policy {
 	// Values come from the selected deployment profile, not package defaults.
 	profiles := []risk.Profile{

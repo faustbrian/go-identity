@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add disabled-by-default mandatory carrier-risk evaluation for both phone-reset
+  phases, with exact parent-operation binding, version-pinned source ownership,
+  original two-minute freshness ceilings and denied adverse/ambiguous facts.
+  Opaque evaluator-bound assessments are preparation inputs, not durable
+  RiskEvidence or recovery permission; issuance/consumption remains unfinished.
+
 - Add exact phase-bound counter command preparation with scoped versioned HMAC
   keys and bounded single-dispatch post-state normalization. Original observation
   freshness survives replay; cancellation and ambiguity cannot invent usable
