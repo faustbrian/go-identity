@@ -29,6 +29,9 @@ func encodeFeaturePlan(binding identity.CommandBinding, fingerprint [32]byte, p 
 	if p.Feature == nil || fingerprint == ([32]byte{}) || binding.ValidateFor(p.Feature.Operation) != nil || p.Feature.Contributor.Owner != p.Feature.Operation.Owner+"/postgres" || !validContributorDescriptor(p.Feature.Contributor) || p.Capability != nil || len(p.Contributors) != 4 || len(p.Audits) == 0 || len(p.Audits) > 64 || p.Lifecycle == nil || !featureEventName(p.Lifecycle.EventType) {
 		return nil, invalidPlan()
 	}
+	if p.SubjectType != "" && !auditName(p.SubjectType) {
+		return nil, invalidPlan()
+	}
 	l := p.Lifecycle
 	if p.Feature.Operation.RecordRequirement == identity.FeatureRecordRequired {
 		if l.BeforeVersion == ^uint64(0) || l.AfterVersion != l.BeforeVersion+1 {
@@ -64,14 +67,25 @@ func encodeFeaturePlan(binding identity.CommandBinding, fingerprint [32]byte, p 
 	}
 	events := make([][]byte, len(p.Audits))
 	for i, a := range p.Audits {
+		if p.SubjectType == "" && a.RetentionClass != "" || p.SubjectType != "" && a.RetentionClass != "standard" && a.RetentionClass != "protected" {
+			return nil, invalidPlan()
+		}
 		if !featureEventName(a.EventType) || a.SchemaVersion != 1 || a.BindingDigest == ([32]byte{}) || a.RetentionPolicyVersion == 0 || a.RequiredRecordCount != 1 || !a.Required || a.MaxRecordBytes == 0 || a.MaxRecordBytes > 16384 || a.MaxAggregateBytes < a.MaxRecordBytes || a.MaxAggregateBytes > 16384 || i > 0 && p.Audits[i-1].EventIndex >= a.EventIndex {
 			return nil, invalidPlan()
 		}
 		events[i] = cborMap(map[string][]byte{"event_type": cborText(a.EventType), "schema_version": cborUint(uint64(a.SchemaVersion)), "event_index": cborUint(uint64(a.EventIndex)), "binding_digest": cborBytes(a.BindingDigest[:]), "retention_policy_version": cborUint(a.RetentionPolicyVersion), "required_record_count": cborUint(uint64(a.RequiredRecordCount)), "max_record_bytes": cborUint(uint64(a.MaxRecordBytes)), "max_aggregate_bytes": cborUint(uint64(a.MaxAggregateBytes)), "required": cborBool(a.Required)})
+		if p.SubjectType != "" {
+			events[i] = cborMap(map[string][]byte{"event_type": cborText(a.EventType), "schema_version": cborUint(uint64(a.SchemaVersion)), "event_index": cborUint(uint64(a.EventIndex)), "binding_digest": cborBytes(a.BindingDigest[:]), "retention_policy_version": cborUint(a.RetentionPolicyVersion), "retention_class": cborText(a.RetentionClass), "required_record_count": cborUint(uint64(a.RequiredRecordCount)), "max_record_bytes": cborUint(uint64(a.MaxRecordBytes)), "max_aggregate_bytes": cborUint(uint64(a.MaxAggregateBytes)), "required": cborBool(a.Required)})
+		}
 	}
 	d := p.Feature.Operation
 	feature := cborMap(map[string][]byte{"owner": cborText(d.Owner), "operation_id": cborText(d.OperationID), "schema_id": cborText(d.SchemaID), "schema_version": cborUint(uint64(d.SchemaVersion)), "record_requirement": cborUint(uint64(d.RecordRequirement)), "contributor": cborMap(map[string][]byte{"owner": cborText(p.Feature.Contributor.Owner), "contract_id": cborText(p.Feature.Contributor.ContractID), "version": cborUint(uint64(p.Feature.Contributor.Version))})})
-	return cborMap(map[string][]byte{"profile": cborText("identity-feature-plan-v1"), "binding": cborMap(commandScope(binding)), "fingerprint": cborBytes(fingerprint[:]), "contributors": cborArray(entries), "audits": cborArray(events), "feature": feature, "lifecycle": cborMap(map[string][]byte{"event_type": cborText(l.EventType), "event_index": cborUint(uint64(l.EventIndex)), "before_version": cborUint(l.BeforeVersion), "after_version": cborUint(l.AfterVersion)})}), nil
+	fields := map[string][]byte{"profile": cborText("identity-feature-plan-v1"), "binding": cborMap(commandScope(binding)), "fingerprint": cborBytes(fingerprint[:]), "contributors": cborArray(entries), "audits": cborArray(events), "feature": feature, "lifecycle": cborMap(map[string][]byte{"event_type": cborText(l.EventType), "event_index": cborUint(uint64(l.EventIndex)), "before_version": cborUint(l.BeforeVersion), "after_version": cborUint(l.AfterVersion)})}
+	if p.SubjectType != "" {
+		fields["profile"] = cborText("identity-feature-plan-v2")
+		fields["subject_type"] = cborText(p.SubjectType)
+	}
+	return cborMap(fields), nil
 }
 
 func featureEventName(s string) bool {
@@ -116,7 +130,7 @@ func (c *Coordinator) prepareFeature(binding identity.CommandBinding, command id
 	if err != nil || !validClaim(q, c.keys) || !bytes.Equal(q.safeFields, commandSafeFields(binding, &spec.Operation)) {
 		return fail()
 	}
-	snapshot := CommandPlan{Contributors: append([]ContributorDescriptor(nil), p.Contributors...), Audits: append([]AuditPlan(nil), p.Audits...), Capability: p.Capability}
+	snapshot := CommandPlan{Contributors: append([]ContributorDescriptor(nil), p.Contributors...), Audits: append([]AuditPlan(nil), p.Audits...), Capability: p.Capability, SubjectType: p.SubjectType}
 	feature := *p.Feature
 	snapshot.Feature = &feature
 	if p.Lifecycle != nil {
@@ -127,6 +141,18 @@ func (c *Coordinator) prepareFeature(binding identity.CommandBinding, command id
 	if err != nil {
 		return fail()
 	}
-	// No admitted execution handle exists until native feature phases are owned.
-	return q, snapshot, nil, nil
+	if snapshot.SubjectType == "" {
+		return q, snapshot, nil, nil
+	}
+	admitted, err := c.registry.admitFeaturePlan(binding, claimFingerprint(c.keys.retained[c.keys.current], q.canonical), snapshot)
+	if err != nil {
+		return fail()
+	}
+	entry, _ := c.registry.selectFeatureOperation(*snapshot.Feature)
+	// Pure native schema/policy validation must precede every transaction. The
+	// adapter receives an owned snapshot, not the coordinator's frozen slices.
+	if err := validateFeatureCommand(entry.contributor.(FeatureExecutionContributor), command, admitted.snapshot()); err != nil {
+		return fail()
+	}
+	return q, snapshot, admitted, nil
 }

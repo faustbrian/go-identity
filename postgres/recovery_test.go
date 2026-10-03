@@ -35,6 +35,20 @@ func TestRecoveryWorkHasInvocationScopedDeclarations(t *testing.T) {
 	if again, _ := rw.AuditPlan(); again != ap {
 		t.Fatal("declaration alias escaped")
 	}
+	second := ap
+	second.EventIndex++
+	plan.audits = append(plan.audits, second)
+	plans, err := rw.AuditPlans()
+	if err != nil || len(plans) != 2 || plans[0] != ap || plans[1] != second {
+		t.Fatal("complete frozen audit slots lost", err)
+	}
+	plans[0].RetentionPolicyVersion++
+	if again, _ := rw.AuditPlans(); again[0] != ap {
+		t.Fatal("audit slot slice alias escaped")
+	}
+	if _, err := rw.AuditPlan(); err == nil {
+		t.Fatal("singular getter hid multiple slots")
+	}
 	if _, err := rw.LifecyclePlan(); err == nil {
 		t.Fatal("foreign declaration exposed")
 	}
@@ -45,6 +59,9 @@ func TestRecoveryWorkHasInvocationScopedDeclarations(t *testing.T) {
 	if _, err := rw.AuditPlan(); err == nil {
 		t.Fatal("foreign audit exposed")
 	}
+	if _, err := rw.AuditPlans(); err == nil {
+		t.Fatal("foreign audit slots exposed")
+	}
 	s.active = false
 	if _, err := rw.Scope(); err == nil {
 		t.Fatal("invocation alias survived")
@@ -54,6 +71,9 @@ func TestRecoveryWorkHasInvocationScopedDeclarations(t *testing.T) {
 	}
 	if _, err := rw.AuditPlan(); err == nil {
 		t.Fatal("expired audit exposed")
+	}
+	if _, err := rw.AuditPlans(); err == nil {
+		t.Fatal("expired audit slots exposed")
 	}
 	if _, err := rw.LifecyclePlan(); err == nil {
 		t.Fatal("expired lifecycle exposed")

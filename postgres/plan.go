@@ -27,10 +27,15 @@ type CommandPlan struct {
 	// Capability declares a typed one-use participant input. Identifier reservation
 	// requires its registered reservation contributor; domain execution is disabled.
 	Capability *CapabilityPlan
-	// Feature declares one exact registered feature schema for preparation only.
-	// Kernel digests reject it; feature reservation/execution remains disabled.
+	// Feature declares one exact registered feature schema. Kernel digests reject
+	// it; native execution additionally requires SubjectType and typed phases.
 	Feature *FeatureRegistration
-	Digest  [32]byte
+	// SubjectType fixes the feature audit/lifecycle primary target kind. Empty
+	// retains the historical structural-only v1 profile; native execution needs
+	// a canonical lowercase audit kind and the registered typed feature phases.
+	// Kernel plans reject it. It is copied and bound in the v2 feature digest.
+	SubjectType string
+	Digest      [32]byte
 }
 
 // KernelPlanDigest returns a domain-separated SHA-256 digest of the current
@@ -60,7 +65,7 @@ func KernelPlanDigest(binding identity.CommandBinding, fingerprint [32]byte, pla
 // The journal freezes the exact digest input, not a second serialization that
 // can disagree with admission or omit a participant field.
 func encodeKernelPlan(binding identity.CommandBinding, fingerprint [32]byte, plan CommandPlan) ([]byte, error) {
-	if plan.Feature != nil {
+	if plan.Feature != nil || plan.SubjectType != "" {
 		return nil, invalidPlan()
 	}
 	probe := identity.CommandResult{Binding: binding, Outcome: identity.CommitOutcomeInProgress, RetryAfter: time.Microsecond}
@@ -138,6 +143,8 @@ type admittedKernelPlan struct {
 	lifecycle    *LifecyclePlan
 	capability   *CapabilityPlan
 	fingerprint  [32]byte
+	feature      *FeatureRegistration
+	subjectType  string
 }
 
 func (r *ContributorRegistry) admitKernelPlan(binding identity.CommandBinding, fingerprint [32]byte, p CommandPlan) (*admittedKernelPlan, error) {
@@ -193,6 +200,7 @@ func (p *admittedKernelPlan) bindWork(w Work) error {
 	if p == nil || p.registry == nil || p.registry != w.state.registry || p.binding != w.state.binding {
 		return invalidPlan()
 	}
+	w.state.feature, w.state.subjectType = p.feature, p.subjectType
 	if err := bindAuditPlans(w, p.audits); err != nil {
 		return err
 	}

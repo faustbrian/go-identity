@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"github.com/faustbrian/go-audit"
+	identity "github.com/faustbrian/go-identity"
 )
 
 // AuditContributor is the open, versioned durable audit phase implemented by
@@ -23,6 +24,11 @@ type AuditContributor interface {
 type StagedAudit struct {
 	Plan   AuditPlan
 	Record audit.Record
+	// Feature and SubjectType are the owned frozen native scope needed by
+	// audit/postgres to recompute FeatureAuditBindingDigest. Both are zero for
+	// kernel commands; this projection is not current authority or a receipt.
+	Feature     identity.FeatureOperation
+	SubjectType string
 }
 
 // StagedAudits returns an owned snapshot only after every declared index has
@@ -40,6 +46,10 @@ func (w Work) StagedAudits() ([]StagedAudit, error) {
 	result := make([]StagedAudit, len(a.plans))
 	for i, p := range a.plans {
 		result[i] = StagedAudit{Plan: p, Record: a.records[i]}
+		if w.state.feature != nil {
+			result[i].Feature = w.state.feature.Operation
+			result[i].SubjectType = w.state.subjectType
+		}
 	}
 	return result, nil
 }

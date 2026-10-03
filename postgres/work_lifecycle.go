@@ -78,7 +78,18 @@ func bindLifecyclePlan(w Work, plan *LifecyclePlan) error {
 	if err := w.usable(); err != nil {
 		return err
 	}
-	if w.state.lifecycle != nil || w.state.sqlStarted || plan == nil || validateLifecyclePlan(w.state.binding, plan) != nil {
+	valid := plan != nil
+	if valid && w.state.feature == nil {
+		valid = validateLifecyclePlan(w.state.binding, plan) == nil
+	} else if valid {
+		valid = featureEventName(plan.EventType) && auditName(w.state.subjectType)
+		if w.state.feature.Operation.RecordRequirement == identity.FeatureRecordRequired {
+			valid = valid && plan.BeforeVersion != ^uint64(0) && plan.AfterVersion == plan.BeforeVersion+1
+		} else {
+			valid = valid && plan.BeforeVersion == 0 && plan.AfterVersion == 0
+		}
+	}
+	if w.state.lifecycle != nil || w.state.sqlStarted || !valid {
 		return invalidLifecycle()
 	}
 	w.state.lifecycle = &workLifecycle{plan: *plan}
@@ -102,7 +113,12 @@ func (w Work) StageLifecycle(index uint16, occurredAt time.Time) error {
 	}
 	b := w.state.binding
 	kind, target := "user", string(b.UserID)
-	if b.RecordID != "" {
+	if w.state.feature != nil {
+		kind = w.state.subjectType
+		if b.RecordID != "" {
+			target = b.RecordID
+		}
+	} else if b.RecordID != "" {
 		target = b.RecordID
 		switch kernelCommandAudit(b.OperationID) {
 		case "identity.account.link", "identity.account.unlink":

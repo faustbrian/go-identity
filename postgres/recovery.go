@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"errors"
+	"github.com/faustbrian/go-audit"
 	"time"
 
 	"github.com/faustbrian/go-authorization"
@@ -102,15 +103,23 @@ func (c *Coordinator) recoverCommandReceipt(ctx context.Context, q identity.Reco
 	if observed.until.After(observed.now) {
 		return result, nil
 	}
-	if q.OperationID != "identity.user.create" && q.OperationID != "identity.profile.update" && q.OperationID != "identity.user.update-admin" && q.OperationID != "identity.identifier.attach" {
+	if result.Feature == nil && q.OperationID != "identity.user.create" && q.OperationID != "identity.profile.update" && q.OperationID != "identity.user.update-admin" && q.OperationID != "identity.identifier.attach" {
 		return result, identity.UnavailableError{}
 	}
 	fingerprint := [32]byte(observed.fingerprint)
 	plan, e := decodeKernelPlan(result.Binding, fingerprint, observed.plan)
+	if result.Feature != nil {
+		plan, e = decodeFeaturePlan(result.Binding, fingerprint, observed.plan)
+	}
 	if e != nil {
 		return result, e
 	}
-	admitted, e := c.registry.admitKernelPlan(result.Binding, fingerprint, plan)
+	var admitted *admittedKernelPlan
+	if result.Feature != nil {
+		admitted, e = c.registry.admitFeaturePlan(result.Binding, fingerprint, plan)
+	} else {
+		admitted, e = c.registry.admitKernelPlan(result.Binding, fingerprint, plan)
+	}
 	if e != nil {
 		return result, identity.UnavailableError{}
 	}
@@ -134,6 +143,10 @@ func (c *Coordinator) recoverCommandReceipt(ctx context.Context, q identity.Reco
 		return result, identity.UnavailableError{}
 	}
 	request := claimRequest{commandID: q.CommandID, tenant: q.TenantID, purpose: q.OperationID, safeFields: observed.scope}
+	if result.Feature != nil {
+		operation := result.Feature.Operation
+		request.feature = &operation
+	}
 	journal, e := reserveJournal(bounded, tx, request, claimReplay, owner, c.leaseDuration)
 	if e != nil {
 		return result, e
@@ -180,12 +193,21 @@ func (c *Coordinator) recoverCommandReceipt(ctx context.Context, q identity.Reco
 	if e != nil {
 		return result, e
 	}
-	record, e := kernelMutationAudit(bounded, result.Binding, admitted.lifecycle.BeforeVersion, now, "dependency-failure")
+	var records []audit.Record
+	if admitted.feature != nil {
+		records, e = featureMutationAudits(bounded, admitted, now, "dependency-failure")
+	} else {
+		var record audit.Record
+		record, e = kernelMutationAudit(bounded, result.Binding, admitted.lifecycle.BeforeVersion, now, "dependency-failure")
+		records = []audit.Record{record}
+	}
 	if e != nil {
 		return result, e
 	}
-	if e = work.StageAudit(admitted.audits[0].EventIndex, record); e != nil {
-		return result, e
+	for i, record := range records {
+		if e = work.StageAudit(admitted.audits[i].EventIndex, record); e != nil {
+			return result, e
+		}
 	}
 	if e = c.persistAuditPhase(work); e != nil {
 		return result, identity.UnavailableError{}
@@ -197,7 +219,7 @@ func (c *Coordinator) recoverCommandReceipt(ctx context.Context, q identity.Reco
 	if e = work.usable(); e != nil {
 		return result, e
 	}
-	aborted := identity.CommandResult{Binding: result.Binding, Outcome: identity.CommitOutcomeNotCommitted}
+	aborted := featureOutcome(result.Binding, request.feature, identity.CommitOutcomeNotCommitted, 0)
 	if e = terminalizeJournal(work.state.ctx, tx, request, journal, owner, aborted, "dependency-failure"); e != nil {
 		return result, e
 	}
@@ -207,7 +229,7 @@ func (c *Coordinator) recoverCommandReceipt(ctx context.Context, q identity.Reco
 	invalidateWork(work)
 	closed = true
 	if e = tx.Commit(commit); e != nil {
-		return identity.CommandResult{Binding: result.Binding, Outcome: identity.CommitOutcomeUnknown}, readFailure(commit, e)
+		return featureOutcome(result.Binding, request.feature, identity.CommitOutcomeUnknown, 0), readFailure(commit, e)
 	}
 	return aborted, identity.UnavailableError{}
 }

@@ -21,7 +21,10 @@ func decodeFeaturePlan(binding identity.CommandBinding, fingerprint [32]byte, en
 		return fail()
 	}
 	r := planReader{attributeReader: attributeReader{data: encoded}, ok: true}
-	r.expect(5, 7)
+	fields, ok := r.head(5)
+	if !ok || fields != 7 && fields != 8 {
+		return fail()
+	}
 	r.key("audits")
 	count, ok := r.head(4)
 	// Check the untrusted array count before allocating or narrowing it.
@@ -31,7 +34,11 @@ func decodeFeaturePlan(binding identity.CommandBinding, fingerprint [32]byte, en
 	p := CommandPlan{Audits: make([]AuditPlan, int(count))}
 	for i := range p.Audits {
 		a := &p.Audits[i]
-		r.expect(5, 9)
+		if fields == 8 {
+			r.expect(5, 10)
+		} else {
+			r.expect(5, 9)
+		}
 		r.key("required")
 		r.consume(cborBool(true))
 		a.Required = true
@@ -43,6 +50,10 @@ func decodeFeaturePlan(binding identity.CommandBinding, fingerprint [32]byte, en
 		r.digest(&a.BindingDigest)
 		r.key("schema_version")
 		a.SchemaVersion = uint32(r.number(math.MaxUint32))
+		if fields == 8 {
+			r.key("retention_class")
+			a.RetentionClass = r.string(9)
+		}
 		r.key("max_record_bytes")
 		a.MaxRecordBytes = uint32(r.number(math.MaxUint32))
 		r.key("max_aggregate_bytes")
@@ -71,7 +82,11 @@ func decodeFeaturePlan(binding identity.CommandBinding, fingerprint [32]byte, en
 	f.Operation.RecordRequirement = identity.FeatureRecordRequirement(r.number(math.MaxUint8))
 	p.Feature = f
 	r.key("profile")
-	r.consume(cborText("identity-feature-plan-v1"))
+	if fields == 8 {
+		r.consume(cborText("identity-feature-plan-v2"))
+	} else {
+		r.consume(cborText("identity-feature-plan-v1"))
+	}
 	r.key("lifecycle")
 	r.expect(5, 4)
 	l := &LifecyclePlan{}
@@ -90,6 +105,13 @@ func decodeFeaturePlan(binding identity.CommandBinding, fingerprint [32]byte, en
 	r.expect(4, 4)
 	for range 4 {
 		p.Contributors = append(p.Contributors, readFeaturePlanContributor(&r))
+	}
+	if fields == 8 {
+		r.key("subject_type")
+		p.SubjectType = r.string(96)
+		if p.SubjectType == "" {
+			return fail()
+		}
 	}
 	if !r.ok || len(r.data) != 0 {
 		return fail()

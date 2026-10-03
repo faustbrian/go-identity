@@ -182,6 +182,9 @@ func cloneStoredProfile(p identity.UserProfile) identity.UserProfile {
 }
 
 func matchesDomainResult(w Work, result identity.CommandResult) bool {
+	if w.state.feature != nil {
+		return w.state.featureReceipt != nil && result.Feature != nil && *result.Feature == *w.state.featureReceipt && w.state.creation == nil && w.state.profile == nil && w.state.update == nil
+	}
 	if w.state.update != nil {
 		return w.state.creation == nil && w.state.profile == nil && result.Profile == nil && result.Binding.OperationID == "identity.user.update-admin" && result.User == *w.state.update && result.ExpectedVersion == w.state.lifecycle.plan.BeforeVersion
 	}

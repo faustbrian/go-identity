@@ -284,6 +284,13 @@ func FuzzDecodeFeaturePlan(f *testing.F) {
 		f.Fatal(err)
 	}
 	f.Add(wire)
+	p.SubjectType = "session"
+	p.Audits[0].RetentionClass = "standard"
+	wire, err = encodeFeaturePlan(s.Binding, [32]byte{1}, p)
+	if err != nil {
+		f.Fatal(err)
+	}
+	f.Add(wire)
 	f.Add([]byte{0xbf})
 	f.Add([]byte{})
 	f.Fuzz(func(t *testing.T, input []byte) {

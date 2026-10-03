@@ -30,6 +30,10 @@ type AuditPlan struct {
 	MaxRecordBytes         uint32
 	MaxAggregateBytes      uint32
 	Required               bool
+	// RetentionClass is required by native v2 feature plans: standard or
+	// protected, selected by the owning native policy. Kernel/v1 plans leave
+	// it empty and preserve their established action-to-retention mapping.
+	RetentionClass string
 }
 
 type workAudits struct {
@@ -52,18 +56,6 @@ func securityAuditLimits() audit.Limits {
 // The current kernel profile accepts redacted/no-change records only; broader
 // feature profiles and typed event construction remain under development.
 func AuditBindingDigest(binding identity.CommandBinding, record audit.Record) ([32]byte, error) {
-	probe := identity.CommandResult{Binding: binding, Outcome: identity.CommitOutcomeInProgress, RetryAfter: time.Microsecond}
-	attrs := record.Attributes()
-	actor := record.Actor()
-	if probe.Validate() != nil || record.Context().TenantID() != string(binding.TenantID) || record.Context().CorrelationID() != binding.CorrelationID || attrs["command.id"] != string(binding.CommandID) || record.Policy().PolicyID != binding.PolicyID || record.Policy().Version != strconv.FormatUint(binding.PolicyVersion, 10) || actor.ID() != string(binding.ActorID) || actor.DelegatedBy() != (audit.Actor{}) {
-		return [32]byte{}, invalidAudit()
-	}
-	if binding.ActorKind == authorization.SubjectUser && actor.Kind() != audit.ActorHuman || binding.ActorKind == authorization.SubjectServiceAccount && actor.Kind() != audit.ActorService || binding.ActorKind != authorization.SubjectUser && binding.ActorKind != authorization.SubjectServiceAccount {
-		return [32]byte{}, invalidAudit()
-	}
-	if !auditSafeID(record.Subject().ID()) || !auditName(record.Subject().Type()) {
-		return [32]byte{}, invalidAudit()
-	}
 	target, kind := string(binding.UserID), "user"
 	if binding.RecordID != "" {
 		target = binding.RecordID
@@ -75,14 +67,59 @@ func AuditBindingDigest(binding identity.CommandBinding, record audit.Record) ([
 			return [32]byte{}, invalidAudit()
 		}
 	}
+	return securityAuditBindingDigest(binding, nil, kind, target, record)
+}
+
+// FeatureAuditBindingDigest binds a native feature audit's exact registered
+// owner/schema/record policy, actor and primary target kind. It grants neither
+// authentication nor registration. The native adapter must validate subjectType
+// and every required action before admission. API-key principals use audit's
+// service actor representation; their distinct kind remains in command scope.
+// Invalid/mismatched bindings return redacted InvalidInputError; no IO occurs.
+func FeatureAuditBindingDigest(binding identity.CommandBinding, operation identity.FeatureOperation, subjectType string, record audit.Record) ([32]byte, error) {
+	if binding.ValidateFor(operation) != nil || !auditName(subjectType) {
+		return [32]byte{}, invalidAudit()
+	}
+	target := string(binding.UserID)
+	if binding.RecordID != "" {
+		target = binding.RecordID
+	}
+	return securityAuditBindingDigest(binding, &operation, subjectType, target, record)
+}
+
+func securityAuditBindingDigest(binding identity.CommandBinding, feature *identity.FeatureOperation, kind, target string, record audit.Record) ([32]byte, error) {
+	probe := identity.CommandResult{Binding: binding, Outcome: identity.CommitOutcomeInProgress, RetryAfter: time.Microsecond}
+	if feature != nil {
+		probe.Feature = &identity.FeatureReceipt{Operation: *feature}
+	}
+	attrs := record.Attributes()
+	actor := record.Actor()
+	if probe.Validate() != nil || record.Context().TenantID() != string(binding.TenantID) || record.Context().CorrelationID() != binding.CorrelationID || attrs["command.id"] != string(binding.CommandID) || record.Policy().PolicyID != binding.PolicyID || record.Policy().Version != strconv.FormatUint(binding.PolicyVersion, 10) || actor.ID() != string(binding.ActorID) || actor.DelegatedBy() != (audit.Actor{}) {
+		return [32]byte{}, invalidAudit()
+	}
+	service := binding.ActorKind == authorization.SubjectServiceAccount || feature != nil && binding.ActorKind == authorization.SubjectAPIKey
+	if binding.ActorKind == authorization.SubjectUser && actor.Kind() != audit.ActorHuman || service && actor.Kind() != audit.ActorService || binding.ActorKind != authorization.SubjectUser && !service {
+		return [32]byte{}, invalidAudit()
+	}
+	if !auditSafeID(record.Subject().ID()) || !auditName(record.Subject().Type()) {
+		return [32]byte{}, invalidAudit()
+	}
 	if attrs["aggregate.id"] != target || attrs["aggregate.type"] != kind || attrs["aggregate.before_version"] == "" || attrs["aggregate.after_version"] == "" || record.Subject().Type() != kind || record.Subject().ID() != target {
 		return [32]byte{}, invalidAudit()
 	}
 	if (strings.HasPrefix(binding.OperationID, "identity.admin.") || binding.OperationID == "identity.user.update-admin" || binding.LinkMode == identity.AccountLinkAdministrative) && attrs["retention.class"] != "protected" {
 		return [32]byte{}, invalidAudit()
 	}
-	encoded := cborMap(map[string][]byte{"domain": cborText("identity-audit-binding-v1"), "command": cborMap(commandScope(binding)), "actor_kind": cborUint(uint64(actor.Kind())), "actor_id": cborText(actor.ID()), "subject_type": cborText(record.Subject().Type()), "subject_id": cborText(record.Subject().ID())})
-	return sha256.Sum256(encoded), nil
+	domain := "identity-audit-binding-v1"
+	if feature != nil {
+		domain = "identity-feature-audit-binding-v1"
+	}
+	return securityAuditScopeDigest(binding, feature, kind, target, actor.Kind(), domain), nil
+}
+
+func securityAuditScopeDigest(binding identity.CommandBinding, feature *identity.FeatureOperation, kind, target string, actorKind audit.ActorKind, domain string) [32]byte {
+	encoded := cborMap(map[string][]byte{"domain": cborText(domain), "command": commandSafeFields(binding, feature), "actor_kind": cborUint(uint64(actorKind)), "actor_id": cborText(string(binding.ActorID)), "subject_type": cborText(kind), "subject_id": cborText(target)})
+	return sha256.Sum256(encoded)
 }
 
 // bindAuditPlans is coordinator-private and must precede any SQL or staging.
@@ -97,10 +134,25 @@ func bindAuditPlans(w Work, plans []AuditPlan) error {
 	if w.state.audits != nil || w.state.sqlStarted {
 		return invalidAudit()
 	}
-	if err := validateKernelAuditPlans(w.state.binding, plans); err != nil {
+	if err := validateWorkAuditPlans(w, plans); err != nil {
 		return err
 	}
 	w.state.audits = &workAudits{plans: append([]AuditPlan(nil), plans...), records: make([]audit.Record, len(plans)), staged: make([]bool, len(plans)), ids: make(map[string]struct{})}
+	return nil
+}
+
+func validateWorkAuditPlans(w Work, plans []AuditPlan) error {
+	if w.state.feature == nil {
+		return validateKernelAuditPlans(w.state.binding, plans)
+	}
+	if !auditName(w.state.subjectType) || len(plans) == 0 || len(plans) > 64 {
+		return invalidAudit()
+	}
+	for i, p := range plans {
+		if !featureEventName(p.EventType) || p.RetentionClass != "standard" && p.RetentionClass != "protected" || p.SchemaVersion != 1 || p.BindingDigest == ([32]byte{}) || p.RetentionPolicyVersion == 0 || p.RequiredRecordCount != 1 || !p.Required || p.MaxRecordBytes == 0 || p.MaxRecordBytes > 16384 || p.MaxAggregateBytes < p.MaxRecordBytes || p.MaxAggregateBytes > 16384 || i > 0 && plans[i-1].EventIndex >= p.EventIndex {
+			return invalidAudit()
+		}
+	}
 	return nil
 }
 
@@ -109,7 +161,7 @@ func validateKernelAuditPlans(binding identity.CommandBinding, plans []AuditPlan
 		return invalidAudit()
 	}
 	for i, p := range plans {
-		if !kernelAuditAction(p.EventType) || p.EventType != kernelCommandAudit(binding.OperationID) || p.SchemaVersion != 1 || p.BindingDigest == ([32]byte{}) || p.RetentionPolicyVersion == 0 || p.RequiredRecordCount != 1 || !p.Required || p.MaxRecordBytes == 0 || p.MaxRecordBytes > 16384 || p.MaxAggregateBytes < p.MaxRecordBytes || p.MaxAggregateBytes > 16384 || i > 0 && plans[i-1].EventIndex >= p.EventIndex {
+		if p.RetentionClass != "" || !kernelAuditAction(p.EventType) || p.EventType != kernelCommandAudit(binding.OperationID) || p.SchemaVersion != 1 || p.BindingDigest == ([32]byte{}) || p.RetentionPolicyVersion == 0 || p.RequiredRecordCount != 1 || !p.Required || p.MaxRecordBytes == 0 || p.MaxRecordBytes > 16384 || p.MaxAggregateBytes < p.MaxRecordBytes || p.MaxAggregateBytes > 16384 || i > 0 && plans[i-1].EventIndex >= p.EventIndex {
 			return invalidAudit()
 		}
 	}
@@ -144,13 +196,19 @@ func (w Work) StageAudit(index uint16, record audit.Record) error {
 		return deny()
 	}
 	p := a.plans[position]
+	if w.state.feature != nil && record.Attributes()["retention.class"] != p.RetentionClass {
+		return deny()
+	}
 	if _, exists := a.ids[record.ID()]; exists {
 		return deny()
 	}
-	if record.Action() != p.EventType || !validKernelAuditRecord(record) {
+	if record.Action() != p.EventType || !validSecurityAuditRecord(record, w.state.subjectType) {
 		return deny()
 	}
 	digest, err := AuditBindingDigest(w.state.binding, record)
+	if w.state.feature != nil {
+		digest, err = FeatureAuditBindingDigest(w.state.binding, w.state.feature.Operation, w.state.subjectType, record)
+	}
 	if err != nil || digest != p.BindingDigest {
 		return deny()
 	}
@@ -187,6 +245,10 @@ func completeAudits(w Work) error {
 }
 
 func validKernelAuditRecord(r audit.Record) bool {
+	return validSecurityAuditRecord(r, "")
+}
+
+func validSecurityAuditRecord(r audit.Record, featureSubject string) bool {
 	if !r.RedactionApplied() || r.Description() != "" || !kernelAuditContext(r.Context()) || !randomAuditID(r.ID()) || !auditOutcomeReason(r.Outcome(), r.ReasonCode()) {
 		return false
 	}
@@ -206,7 +268,7 @@ func validKernelAuditRecord(r audit.Record) bool {
 				return false
 			}
 		case "aggregate.type":
-			if value != "user" && value != "account" && value != "identifier" {
+			if value != "user" && value != "account" && value != "identifier" && (featureSubject == "" || value != featureSubject) {
 				return false
 			}
 		case "aggregate.before_version", "aggregate.after_version":

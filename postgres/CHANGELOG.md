@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- Execute typed native non-one-time feature mutations through the sole command
+  coordinator, atomically persisting domain effects, every required audit slot,
+  lifecycle and exact replay receipt. Bind subject type and explicit retention
+  into a new canonical plan profile; preserve kernel and historical v1 bytes.
+  Forged receipts, callback failures and cancellation cannot commit a domain
+  prefix. Abandoned recovery requires unanimous retained non-commit evidence;
+  ambiguous commits remain unknown. Expose owned multi-slot audit declarations
+  only during audit recovery. Production session issuing and one-use proof
+  consumption remain separate unfinished phases.
+
 - Observe feature-owned historical command receipts through authorized primary
   queries, preserving their exact owner, schema and record policy while exposing
   no native payload. Reject scope/plan/receipt substitution and malformed history.

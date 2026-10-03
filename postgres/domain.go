@@ -23,7 +23,8 @@ type domainExecution struct {
 	cancel      context.CancelFunc
 	// Only the owned service bridge supplies prebuilt failure records. They
 	// never unpoison Work or permit more domain SQL; Abort stages after rollback.
-	abortAudits map[string]audit.Record
+	abortAudits        map[string]audit.Record
+	featureAbortAudits map[string][]audit.Record
 }
 
 // Begin opens one bounded primary domain transaction after rechecking the
@@ -118,6 +119,10 @@ func (p *admittedKernelPlan) snapshot() CommandPlan {
 	if p.capability != nil {
 		copy := *p.capability
 		result.Capability = &copy
+	}
+	if p.feature != nil {
+		copy := *p.feature
+		result.Feature, result.SubjectType = &copy, p.subjectType
 	}
 	return result
 }
@@ -220,11 +225,12 @@ func (c *Coordinator) Commit(w Work, result identity.CommandResult) (identity.Co
 	if err := completeAudits(w); err != nil {
 		return c.Abort(w, err)
 	}
-	record := w.state.audits.records[0]
-	attrs := record.Attributes()
-	before := w.state.execution.reservation.plan.lifecycle.BeforeVersion
-	if record.ID() != result.AuditEventID || record.Outcome() != audit.OutcomeSucceeded || record.ReasonCode() != "completed" || !record.Changes().Redacted() || attrs["aggregate.before_version"] != strconv.FormatUint(before, 10) || attrs["aggregate.after_version"] != strconv.FormatUint(before+1, 10) {
-		return c.Abort(w, invalidAudit())
+	lifecycle := w.state.execution.reservation.plan.lifecycle
+	for i, record := range w.state.audits.records {
+		attrs := record.Attributes()
+		if i == 0 && record.ID() != result.AuditEventID || record.Outcome() != audit.OutcomeSucceeded || record.ReasonCode() != "completed" || !record.Changes().Redacted() || attrs["aggregate.before_version"] != strconv.FormatUint(lifecycle.BeforeVersion, 10) || attrs["aggregate.after_version"] != strconv.FormatUint(lifecycle.AfterVersion, 10) {
+			return c.Abort(w, invalidAudit())
+		}
 	}
 	if _, err := w.StagedLifecycle(); err != nil {
 		return c.Abort(w, err)
@@ -255,7 +261,7 @@ func (c *Coordinator) Commit(w Work, result identity.CommandResult) (identity.Co
 	invalidateWork(w)
 	defer execution.cancel()
 	if err := w.state.tx.Commit(commit); err != nil {
-		return identity.CommandResult{Binding: w.state.binding, Outcome: identity.CommitOutcomeUnknown}, readFailure(commit, err)
+		return featureOutcome(w.state.binding, r.request.feature, identity.CommitOutcomeUnknown, 0), readFailure(commit, err)
 	}
 	return result, nil
 }
@@ -266,8 +272,9 @@ func (c *Coordinator) Commit(w Work, result identity.CommandResult) (identity.Co
 // recovery. The terminal audit and receipt commit together. Lease loss, failed
 // rollback or ambiguous terminalization is Unknown. Caller cancellation cannot
 // prevent bounded detached cleanup. Errors are classified/redacted, never
-// returned verbatim. Creation has no one-time participants to release; feature
-// profiles and classified retry bookkeeping remain unsupported, not omitted.
+// returned verbatim. Native non-one-time features use coordinator-prebuilt
+// classified failure records; one-time feature participants and classified
+// retry bookkeeping remain unsupported, not omitted.
 func (c *Coordinator) Abort(w Work, cause error) (identity.CommandResult, error) {
 	if !c.owns(w) || w.state.closed || cause == nil {
 		return identity.CommandResult{}, invalidWork()
@@ -275,23 +282,39 @@ func (c *Coordinator) Abort(w Work, cause error) (identity.CommandResult, error)
 	execution := w.state.execution
 	r := execution.reservation
 	class, reason, outcome, safeCause := abortClassification(cause)
-	var record audit.Record
-	complete := w.state.audits != nil && len(w.state.audits.records) == 1 && w.state.audits.staged[0]
-	if candidate, exists := execution.abortAudits[class]; exists {
-		record, complete = candidate, true
-	} else if complete {
-		record = w.state.audits.records[0]
-	}
+	var records []audit.Record
+	// Previously validated immutable staging survives a poisoned/cancelled
+	// domain handle; detached terminalization must revalidate it under its fence.
+	complete := w.state.audits != nil && len(w.state.audits.records) > 0
 	if complete {
-		attrs := record.Attributes()
+		for _, staged := range w.state.audits.staged {
+			complete = complete && staged
+		}
+	}
+	if w.state.feature != nil {
+		if candidates, exists := execution.featureAbortAudits[class]; exists {
+			records, complete = candidates, true
+		} else if complete {
+			records = w.state.audits.records
+		}
+	} else if candidate, exists := execution.abortAudits[class]; exists {
+		records, complete = []audit.Record{candidate}, true
+	} else if complete {
+		records = w.state.audits.records
+	}
+	complete = complete && len(records) == len(r.plan.audits)
+	if complete {
 		before := strconv.FormatUint(r.plan.lifecycle.BeforeVersion, 10)
-		complete = record.Outcome() == outcome && record.ReasonCode() == reason && record.Changes().NoChange() && attrs["aggregate.before_version"] == before && attrs["aggregate.after_version"] == before
+		for _, record := range records {
+			attrs := record.Attributes()
+			complete = complete && record.Outcome() == outcome && record.ReasonCode() == reason && record.Changes().NoChange() && attrs["aggregate.before_version"] == before && attrs["aggregate.after_version"] == before
+		}
 	}
 	invalidateWork(w)
 	cleanup, cancel := context.WithTimeout(context.Background(), c.maximumDuration)
 	defer cancel()
 	defer execution.cancel()
-	unknown := identity.CommandResult{Binding: w.state.binding, Outcome: identity.CommitOutcomeUnknown}
+	unknown := featureOutcome(w.state.binding, r.request.feature, identity.CommitOutcomeUnknown, 0)
 	if err := w.state.tx.Rollback(cleanup); err != nil {
 		return unknown, identity.UnavailableError{}
 	}
@@ -330,13 +353,15 @@ func (c *Coordinator) Abort(w Work, cause error) (identity.CommandResult, error)
 	if err := r.plan.bindWork(terminal); err != nil {
 		return fail(err)
 	}
-	if err := terminal.StageAudit(r.plan.audits[0].EventIndex, record); err != nil {
-		return fail(err)
+	for i, record := range records {
+		if err := terminal.StageAudit(r.plan.audits[i].EventIndex, record); err != nil {
+			return fail(err)
+		}
 	}
 	if err := c.persistAuditPhase(terminal); err != nil {
 		return fail(identity.UnavailableError{})
 	}
-	result := identity.CommandResult{Binding: w.state.binding, Outcome: identity.CommitOutcomeNotCommitted}
+	result := featureOutcome(w.state.binding, r.request.feature, identity.CommitOutcomeNotCommitted, 0)
 	if err := terminalizeJournal(terminal.state.ctx, tx, r.request, r.journal, r.owner, result, class); err != nil {
 		return fail(err)
 	}

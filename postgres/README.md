@@ -25,8 +25,8 @@ feature contributor and 1024 total. Legacy contributors need no new methods.
 `ContributorRegistry.FeatureOperations` returns an owned scalar projection for
 trusted composition; it performs no callbacks. This is **not** enabled-feature
 discovery, registration of codecs, authorization or execution readiness.
-Kernel command plans remain closed; feature reservation, native schema/action
-mapping, apply/finalize/recovery and session issuance remain in development.
+Kernel command plans remain closed. Native non-one-time feature execution uses
+the same coordinator; production session issuance remains in development.
 Do not advertise routes from these declarations or substitute private journals.
 
 The existing private command codec also maps immutable `identity.Command`
@@ -48,8 +48,24 @@ one checked successor; record-free declarations keep both zero. Feature-owned
 adapters remain responsible for exhaustive native schemas and action policy.
 Feature capability/cascade inputs fail rather than being silently discarded.
 
-This metadata preparation produces no execution handle. `ReserveCommand` still
-rejects features before SQL; no feature journal or lifecycle execution is enabled.
+An empty `CommandPlan.SubjectType` retains the historical v1 structural-only
+profile and cannot reserve. For native execution, select a valid subject type
+and explicit `AuditPlan.RetentionClass` (`standard` or `protected`) for every
+slot. These fields are bound into canonical feature-plan-v2 bytes. The native
+adapter must implement `FeatureExecutionContributor`, exhaustively validate the
+immutable command and full security plan before reservation, and inspect retained
+effects during recovery. Every selected participant must implement recovery.
+
+Use `FeatureAuditBindingDigest` for exact feature scope, subject and actor binding.
+Then `PrepareCommandPlan`, `ReserveCommand`, `Begin`, `ApplyFeature` and `Commit`
+execute through the sole coordinator-owned transaction; always defer `Abort`
+after a successful `Begin`. The native phase owns current authority checks and
+its domain mutation, never kernel-table writes, audit/lifecycle staging, external
+IO or transaction closure. The coordinator binds the provisional receipt to the
+frozen transition and stages all audit/lifecycle effects. Only a successful
+`Commit` proves durability; ambiguous commits return unknown and never locally
+retry or reveal a bearer. Exact replay returns the original safe receipt.
+
 Historical feature plans and command scopes are decoded as bounded, canonical
 records. Authorized `QueryCommand` returns an owned `CommandRecord.Feature`
 descriptor for feature history; it remains nil for kernel history. The stored
@@ -58,10 +74,15 @@ and record policy. Observation does not consult today's contributor registry,
 replay commands, renew authority or expose native response/credential payloads.
 Missing, wrong-scope and denied callers retain the same policy/read shape.
 
-`RecoverCommand` can observe live or terminal feature history, but expired
-pending feature execution remains unsupported: it returns pending with a
-redacted unavailable error, does not take a new generation and cannot invent a
-rollback or successful result. Native apply/recovery phases remain required.
+`RecoverCommand` observes live/terminal history. Expired native v2 commands can
+take a new generation only with the exact frozen typed participants. Unanimous
+retained non-commit evidence permits failure auditing and an aborted receipt in
+one transaction. Unknown/conflicting evidence stays pending; success is never
+reconstructed from current rows. Audit recovery can obtain an owned copy of all
+slots through invocation-scoped `RecoveryWork.AuditPlans`; the existing singular
+getter still rejects multi-slot plans. Historical v1 remains observation-only
+and never takes over. Capability, risk and OTP-consuming profiles remain disabled
+until their atomic typed phases exist; this is not a working session issuer.
 Kernel digest bytes and the kernel-only scope decoder remain unchanged.
 
 ## Stable status-filtered listing

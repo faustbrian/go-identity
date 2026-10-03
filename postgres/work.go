@@ -22,29 +22,36 @@ import (
 type Work struct{ state *workState }
 
 type workState struct {
-	tx         pgx.Tx
-	ctx        context.Context
-	cancel     context.CancelFunc
-	binding    identity.CommandBinding
-	generation uint64
-	closed     bool
-	failed     error
-	rows       *WorkRows
-	audits     *workAudits
-	lifecycle  *workLifecycle
-	registry   *contributorRegistryState
-	sqlStarted bool
-	execution  *domainExecution
-	creation   *identity.User
-	profile    *identity.UserProfile
-	update     *identity.User
+	tx               pgx.Tx
+	ctx              context.Context
+	cancel           context.CancelFunc
+	binding          identity.CommandBinding
+	generation       uint64
+	closed           bool
+	failed           error
+	rows             *WorkRows
+	audits           *workAudits
+	lifecycle        *workLifecycle
+	registry         *contributorRegistryState
+	sqlStarted       bool
+	execution        *domainExecution
+	creation         *identity.User
+	profile          *identity.UserProfile
+	update           *identity.User
+	feature          *FeatureRegistration
+	subjectType      string
+	featureAttempted bool
+	featureReceipt   *identity.FeatureReceipt
 }
 
 // newWork is private: only the sole coordinator may call it after verifying
 // the complete plan/participants and beginJournal in this exact transaction.
 func newWork(ctx context.Context, tx pgx.Tx, binding identity.CommandBinding, q claimRequest, fence journalWorkFence) (Work, error) {
 	probe := identity.CommandResult{Binding: binding, Outcome: identity.CommitOutcomeInProgress, RetryAfter: time.Microsecond}
-	if ctx == nil || tx == nil || fence.generation == 0 || fence.readStarted.IsZero() || !postgresExactTime(fence.now) || !postgresExactTime(fence.until) || !fence.until.After(fence.now) || fence.until.Sub(fence.now) > time.Minute || probe.Validate() != nil || binding.CommandID != q.commandID || binding.TenantID != q.tenant || binding.OperationID != q.purpose || !bytes.Equal(cborMap(commandScope(binding)), q.safeFields) {
+	if q.feature != nil {
+		probe.Feature = &identity.FeatureReceipt{Operation: *q.feature}
+	}
+	if ctx == nil || tx == nil || fence.generation == 0 || fence.readStarted.IsZero() || !postgresExactTime(fence.now) || !postgresExactTime(fence.until) || !fence.until.After(fence.now) || fence.until.Sub(fence.now) > time.Minute || probe.Validate() != nil || binding.CommandID != q.commandID || binding.TenantID != q.tenant || binding.OperationID != q.purpose || !bytes.Equal(commandSafeFields(binding, q.feature), q.safeFields) {
 		return Work{}, invalidWork()
 	}
 	if _, ok := ctx.Deadline(); !ok {

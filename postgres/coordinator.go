@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/base64"
 	"errors"
 	"fmt"
@@ -125,10 +126,11 @@ func (Reservation) MarshalJSON() ([]byte, error) {
 // supplies no authorization: the identity service must authorize and prepare
 // the command before calling the trusted composition adapter.
 // Feature commands can prepare their exact registered schema, ordered mandatory
-// contributors, bounded audit slots and lifecycle declaration. This is structural
-// preparation only; ReserveCommand rejects features until native schema mapping,
-// typed phases and historical recovery exist. No admitted execution handle is
-// produced. Event declarations do not prove native policy completeness.
+// contributors, bounded audit slots and lifecycle declaration. Historical v1
+// plans are structural-only. Native v2 plans additionally validate every native
+// field/security action through the typed owner before reservation; preparation
+// itself produces no execution handle. Event declarations alone do not prove
+// native policy completeness.
 // Identifier intent may prepare an exact typed capability reservation plan; other unsupported
 // one-time/cascade profiles fail before SQL. Domain Begin for capability-bearing
 // plans remains disabled until the complete workflow phases exist. Mutating
@@ -214,16 +216,17 @@ func (c *Coordinator) ReserveCommand(ctx context.Context, binding identity.Comma
 	if ctx == nil {
 		return Reservation{}, identity.CommandResult{}, coordinatorError()
 	}
-	// Structural preparation must not activate reservation before native schema,
-	// receipt/recovery and all typed lifecycle phases are implemented.
-	if isFeature(command) || plan.Feature != nil {
+	if (isFeature(command) || plan.Feature != nil) && plan.SubjectType == "" {
 		return Reservation{}, identity.CommandResult{}, invalidPlan()
 	}
-	q, snapshot, _, err := c.prepare(binding, command, plan)
+	q, snapshot, prepared, err := c.prepare(binding, command, plan)
 	if err != nil {
 		return Reservation{}, identity.CommandResult{}, err
 	}
 	if snapshot.Digest != plan.Digest {
+		return Reservation{}, identity.CommandResult{}, invalidPlan()
+	}
+	if q.feature != nil && prepared == nil {
 		return Reservation{}, identity.CommandResult{}, invalidPlan()
 	}
 	bounded, cancel := context.WithTimeout(ctx, c.maximumDuration)
@@ -247,7 +250,7 @@ func (c *Coordinator) ReserveCommand(ctx context.Context, binding identity.Comma
 		return c.failedReservation(tx, binding, identity.CommandResult{}, err)
 	}
 	if disposition == claimConflict {
-		return c.failedReservation(tx, binding, identity.CommandResult{Binding: binding, Outcome: identity.CommitOutcomeConflict}, identity.ConflictError{})
+		return c.failedReservation(tx, binding, featureOutcome(binding, q.feature, identity.CommitOutcomeConflict, 0), identity.ConflictError{})
 	}
 	journal, err := reserveJournal(bounded, tx, q, disposition, owner, c.leaseDuration)
 	if err != nil {
@@ -258,12 +261,12 @@ func (c *Coordinator) ReserveCommand(ctx context.Context, binding identity.Comma
 		result := identity.CommandResult{}
 		var conflict identity.ConflictError
 		if errors.As(err, &conflict) {
-			result = identity.CommandResult{Binding: binding, Outcome: identity.CommitOutcomeConflict}
+			result = featureOutcome(binding, q.feature, identity.CommitOutcomeConflict, 0)
 		}
 		return c.failedReservation(tx, binding, result, err)
 	}
 	if journal.disposition == journalBusy || journal.disposition == journalTerminal {
-		result := identity.CommandResult{Binding: binding, Outcome: identity.CommitOutcomeInProgress, RetryAfter: journal.retryAfter}
+		result := featureOutcome(binding, q.feature, identity.CommitOutcomeInProgress, journal.retryAfter)
 		if journal.result != nil {
 			result = *journal.result
 		}
@@ -275,10 +278,10 @@ func (c *Coordinator) ReserveCommand(ctx context.Context, binding identity.Comma
 	// Commit owns closure after it begins. Even a driver-classified failure is
 	// Unknown at this API; authoritative scoped recovery must resolve it later.
 	if err = tx.Commit(bounded); err != nil {
-		return Reservation{}, identity.CommandResult{Binding: binding, Outcome: identity.CommitOutcomeUnknown}, readFailure(bounded, err)
+		return Reservation{}, featureOutcome(binding, q.feature, identity.CommitOutcomeUnknown, 0), readFailure(bounded, err)
 	}
 	state := &reservationState{coordinator: c, request: q, plan: admitted, journal: journal, owner: owner}
-	return Reservation{state: state}, identity.CommandResult{Binding: binding, Outcome: identity.CommitOutcomeInProgress, RetryAfter: c.leaseDuration}, nil
+	return Reservation{state: state}, featureOutcome(binding, q.feature, identity.CommitOutcomeInProgress, c.leaseDuration), nil
 }
 
 func (c *Coordinator) freezePlan(ctx context.Context, tx pgx.Tx, binding identity.CommandBinding, q claimRequest, d claimDisposition, p CommandPlan) (*admittedKernelPlan, error) {
@@ -293,14 +296,19 @@ func (c *Coordinator) freezePlan(ctx context.Context, tx pgx.Tx, binding identit
 	var retained [32]byte
 	copy(retained[:], fingerprint)
 	encoded, err := encodeKernelPlan(binding, retained, p)
+	if p.Feature != nil {
+		encoded, err = encodeFeaturePlan(binding, retained, p)
+	}
 	if err != nil || len(encoded) > 65536 {
 		return nil, invalidPlan()
 	}
-	p.Digest, err = KernelPlanDigest(binding, retained, p)
-	if err != nil {
-		return nil, err
+	p.Digest = sha256.Sum256(encoded)
+	var admitted *admittedKernelPlan
+	if p.Feature != nil {
+		admitted, err = c.registry.admitFeaturePlan(binding, retained, p)
+	} else {
+		admitted, err = c.registry.admitKernelPlan(binding, retained, p)
 	}
-	admitted, err := c.registry.admitKernelPlan(binding, retained, p)
 	if err != nil {
 		return nil, err
 	}
@@ -331,7 +339,19 @@ func (c *Coordinator) failedReservation(tx pgx.Tx, binding identity.CommandBindi
 	cleanup, stop := context.WithTimeout(context.Background(), c.maximumDuration)
 	defer stop()
 	if err := tx.Rollback(cleanup); err != nil {
-		return Reservation{}, identity.CommandResult{Binding: binding, Outcome: identity.CommitOutcomeUnknown}, identity.UnavailableError{}
+		var feature *identity.FeatureOperation
+		if result.Feature != nil {
+			feature = &result.Feature.Operation
+		} else if c.registry != nil && c.registry.state != nil {
+			for _, registered := range c.registry.state.features {
+				if binding.ValidateFor(registered.Operation) == nil {
+					copy := registered.Operation
+					feature = &copy
+					break
+				}
+			}
+		}
+		return Reservation{}, featureOutcome(binding, feature, identity.CommitOutcomeUnknown, 0), identity.UnavailableError{}
 	}
 	return Reservation{}, result, cause
 }

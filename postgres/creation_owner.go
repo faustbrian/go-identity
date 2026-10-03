@@ -264,15 +264,32 @@ func creationAudit(ctx context.Context, b identity.CommandBinding, now time.Time
 }
 
 func kernelMutationAudit(ctx context.Context, b identity.CommandBinding, before uint64, now time.Time, class string) (audit.Record, error) {
+	retention := "standard"
+	if b.OperationID == "identity.user.update-admin" {
+		retention = "protected"
+	}
+	target, kind := string(b.UserID), "user"
+	if strings.HasPrefix(b.OperationID, "identity.identifier.") {
+		target, kind = b.RecordID, "identifier"
+	}
+	return securityMutationAudit(ctx, b, before, before+1, now, class, kernelCommandAudit(b.OperationID), kind, target, retention, false)
+}
+
+func securityMutationAudit(ctx context.Context, b identity.CommandBinding, before, afterVersion uint64, now time.Time, class, action, kind, target, retention string, feature bool) (audit.Record, error) {
 	actorKind := audit.ActorHuman
 	switch b.ActorKind {
 	case authorization.SubjectUser:
 	case authorization.SubjectServiceAccount:
 		actorKind = audit.ActorService
+	case authorization.SubjectAPIKey:
+		if !feature {
+			return audit.Record{}, identity.InvalidInputError{Field: "creation_actor"}
+		}
+		actorKind = audit.ActorService
 	default:
 		return audit.Record{}, identity.InvalidInputError{Field: "creation_actor"}
 	}
-	outcome, reason, changes, after := audit.OutcomeSucceeded, "completed", audit.ChangeSetInput{Redacted: true}, strconv.FormatUint(before+1, 10)
+	outcome, reason, changes, after := audit.OutcomeSucceeded, "completed", audit.ChangeSetInput{Redacted: true}, strconv.FormatUint(afterVersion, 10)
 	if class != "committed" {
 		changes, after = audit.ChangeSetInput{NoChange: true}, strconv.FormatUint(before, 10)
 		switch class {
@@ -294,15 +311,7 @@ func kernelMutationAudit(ctx context.Context, b identity.CommandBinding, before 
 	if e != nil {
 		return audit.Record{}, invalidAudit()
 	}
-	retention := "standard"
-	if b.OperationID == "identity.user.update-admin" {
-		retention = "protected"
-	}
-	target, kind := string(b.UserID), "user"
-	if strings.HasPrefix(b.OperationID, "identity.identifier.") {
-		target, kind = b.RecordID, "identifier"
-	}
-	record, e := builder.Build(audit.RecordInput{OccurredAt: now, Action: kernelCommandAudit(b.OperationID), Outcome: outcome, ReasonCode: reason, Actor: audit.ActorInput{Kind: actorKind, ID: string(b.ActorID)}, Subject: audit.SubjectInput{Type: kind, ID: target}, Context: audit.ContextInput{TenantID: string(b.TenantID), CorrelationID: b.CorrelationID}, Policy: audit.PolicyMetadata{PolicyID: b.PolicyID, Version: strconv.FormatUint(b.PolicyVersion, 10)}, Changes: changes, Attributes: map[string]string{"identity.profile": "identity.security.v1", "command.id": string(b.CommandID), "retention.class": retention, "aggregate.type": kind, "aggregate.id": target, "aggregate.before_version": strconv.FormatUint(before, 10), "aggregate.after_version": after}})
+	record, e := builder.Build(audit.RecordInput{OccurredAt: now, Action: action, Outcome: outcome, ReasonCode: reason, Actor: audit.ActorInput{Kind: actorKind, ID: string(b.ActorID)}, Subject: audit.SubjectInput{Type: kind, ID: target}, Context: audit.ContextInput{TenantID: string(b.TenantID), CorrelationID: b.CorrelationID}, Policy: audit.PolicyMetadata{PolicyID: b.PolicyID, Version: strconv.FormatUint(b.PolicyVersion, 10)}, Changes: changes, Attributes: map[string]string{"identity.profile": "identity.security.v1", "command.id": string(b.CommandID), "retention.class": retention, "aggregate.type": kind, "aggregate.id": target, "aggregate.before_version": strconv.FormatUint(before, 10), "aggregate.after_version": after}})
 	if e != nil {
 		return audit.Record{}, invalidAudit()
 	}

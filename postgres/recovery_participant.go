@@ -96,6 +96,20 @@ func (w RecoveryWork) AuditPlan() (AuditPlan, error) {
 	return w.state.plan.audits[0], nil
 }
 
+// AuditPlans returns an owned copy of every frozen audit slot, in event-index
+// order, only during audit/postgres's recovery invocation. Native feature
+// commands may require several slots; absence of any retained slot cannot
+// prove their atomic persistence. Copies do not grant authority after return.
+func (w RecoveryWork) AuditPlans() ([]AuditPlan, error) {
+	if err := w.usable(); err != nil {
+		return nil, err
+	}
+	if w.state.entry.descriptor.Owner != "audit/postgres" || len(w.state.plan.audits) == 0 {
+		return nil, invalidWork()
+	}
+	return append([]AuditPlan(nil), w.state.plan.audits...), nil
+}
+
 // LifecyclePlan returns the owned frozen declaration only to outbox/postgres.
 func (w RecoveryWork) LifecyclePlan() (LifecyclePlan, error) {
 	if err := w.usable(); err != nil {
@@ -144,6 +158,12 @@ func (r *Repository) RecoverParticipant(ctx context.Context, recovery RecoveryWo
 		return RecoveryUnknown, invalidWork()
 	}
 	b, err := recovery.Scope()
+	if err == nil && recovery.state.plan.feature != nil {
+		// Native feature phases are forbidden from mutating kernel tables. This
+		// participant supplies only the shared tenant/transaction fence; the
+		// native owner must separately prove absence of its retained effects.
+		return RecoveryNotCommitted, nil
+	}
 	if err != nil || b.OperationID != "identity.user.create" && b.OperationID != "identity.profile.update" && b.OperationID != "identity.user.update-admin" && b.OperationID != "identity.identifier.attach" {
 		return RecoveryUnknown, invalidWork()
 	}
