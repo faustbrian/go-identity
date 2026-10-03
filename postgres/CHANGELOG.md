@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add typed reset-initiation risk recovery and terminal release. Every frozen
+  participant must prove noncommit before release, failure audit and aborted
+  receipt commit together. Missing phases or unresolved custody retain pending
+  ownership; expiry alone never releases evidence. Domain consumption remains
+  unsupported until its complete native apply/finalize checks are present.
+
 - Freeze signed reset-initiation risk declarations and enlist exact native risk
   reservation/rebind phases in the command reservation transaction. Failures
   roll back ownership together; existing feature plan profiles remain unchanged.

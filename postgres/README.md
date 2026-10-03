@@ -28,11 +28,22 @@ authentication. `CheckedAt` preserves nanoseconds; compare it against returned
 primary time without rounding or passing it as a microsecond-only SQL parameter.
 No method refreshes the precheck or evidence lifetime.
 
-This reservation boundary does not yet enable phone recovery. Domain execution
-and mutating recovery remain denied until owned apply/finalize/release phases,
-OTP and capability issuance/consumption and phone orchestration exist. Read-only
-receipt observation remains available under its separate query policy. The
-official risk adapter's reservation implementation remains pending; applications
+`RiskReleaseContributor` adds native retained noncommit evidence through
+`RecoveryWork.RiskBinding(participant)` and terminal release through an
+invocation-only `RiskReleaseWork`. Recovery requires this phase before taking
+over ownership. Under the primary command and tenant fences, every frozen
+participant must prove noncommit before risk release, failure audit and aborted
+receipt commit in one transaction. Missing, mismatched or unknown native
+custody must remain unknown. Evidence expiry neither proves rollback nor
+reactivates a reservation; proved noncommit releases even expired reservations.
+Audit/release errors, panics, poisoned SQL and open rows roll back takeover,
+release and terminal receipt together. The new recovery generation never grants
+domain authority. Terminal receipt replay invokes no new participant mutation.
+
+This boundary does not yet enable phone recovery. Domain execution remains
+denied until owned apply/finalize checks, OTP and capability issuance/consumption
+and phone orchestration exist. The official risk adapter supplies reservation;
+its consuming recovery/release implementation remains pending. Applications
 must not provide their own SQL participant to substitute for that adapter.
 
 ## Trusted command admission observation

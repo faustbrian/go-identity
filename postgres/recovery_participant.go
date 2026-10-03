@@ -143,6 +143,25 @@ func (w RecoveryWork) CapabilityBinding(p CapabilityReleaseContributor) (Capabil
 	return (CapabilityReleaseWork{state: s}).Binding(p)
 }
 
+// RiskBinding returns frozen evidence custody only to the exact registered
+// release participant during recovery. It grants reads, never release rights.
+// Missing or mismatched native custody must remain unknown regardless of expiry.
+func (w RecoveryWork) RiskBinding(p RiskReleaseContributor) (RiskReservationBinding, error) {
+	if w.usable() != nil || w.state.entry.descriptor.Owner != "identity/risk/postgres" || w.state.work.state.execution == nil {
+		return RiskReservationBinding{}, invalidWork()
+	}
+	r := w.state.work.state.execution.reservation
+	if r == nil {
+		return RiskReservationBinding{}, invalidWork()
+	}
+	participant, ok := riskReservationParticipant(w.state.entry.contributor)
+	if !ok {
+		return RiskReservationBinding{}, invalidWork()
+	}
+	s := &riskReservationState{coordinator: w.state.work.state.execution.coordinator, work: w.state.work, plan: w.state.plan, previousGeneration: r.journal.previousGeneration, active: true, contributor: participant}
+	return (RiskReleaseWork{state: s}).Binding(p)
+}
+
 // RecoverParticipant proves absence of a creation target on the locked primary.
 // An existing user is not evidence that this command committed; without an
 // original command linkage that case conservatively remains unknown. No live

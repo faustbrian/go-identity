@@ -24,12 +24,20 @@ type sqlRiskReservation struct {
 	riskReservationProbe
 	mode           string
 	calls, rebinds int
+	registered     RiskReservationContributor
+}
+
+func (p *sqlRiskReservation) registeredParticipant() RiskReservationContributor {
+	if p.registered != nil {
+		return p.registered
+	}
+	return p
 }
 
 func (p *sqlRiskReservation) ReserveRiskEvidence(ctx context.Context, w RiskReservationWork) error {
 	p.calls++
 	p.retained = w
-	b, err := w.Binding(p)
+	b, err := w.Binding(p.registeredParticipant())
 	if err != nil || b.PreviousGeneration != 0 {
 		return invalidWork()
 	}
@@ -54,7 +62,7 @@ func (p *sqlRiskReservation) ReserveRiskEvidence(ctx context.Context, w RiskRese
 func (p *sqlRiskReservation) RebindRiskEvidence(ctx context.Context, w RiskReservationWork) error {
 	p.rebinds++
 	p.retained = w
-	b, err := w.Binding(p)
+	b, err := w.Binding(p.registeredParticipant())
 	if err != nil || b.PreviousGeneration == 0 {
 		return invalidWork()
 	}
@@ -114,7 +122,7 @@ func testRiskReservation(t *testing.T, ctx context.Context, pool *database.Pool)
 			t.Error(err)
 		}
 	})
-	setup := func(t *testing.T, participant *sqlRiskReservation) (*Coordinator, identity.CommandBinding, identity.Command, CommandPlan) {
+	setup := func(t *testing.T, participant Contributor) (*Coordinator, identity.CommandBinding, identity.Command, CommandPlan) {
 		t.Helper()
 		c, command, p := riskReservationFixture(t, participant)
 		s, _ := command.Feature()
@@ -166,6 +174,7 @@ func testRiskReservation(t *testing.T, ctx context.Context, pool *database.Pool)
 			t.Fatal(err)
 		}
 	}
+	t.Run("terminal recovery", func(t *testing.T) { testRiskRelease(t, ctx, pool, setup, expireLease) })
 	t.Run("atomic reserve replay and exact takeover", func(t *testing.T) {
 		participant := &sqlRiskReservation{}
 		c, b, command, p := setup(t, participant)

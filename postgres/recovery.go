@@ -25,8 +25,11 @@ import (
 // pending; no success is reconstructed. Commit-attempt failure is Unknown.
 // Identifier attachment additionally requires the typed capability release
 // phase: only unanimous non-commit proof permits terminal release in the same
-// transaction. It performs no command replay or network callbacks. Other
-// one-time profiles and recovery-deadline/operator alerting remain unfinished.
+// transaction. It performs no command replay or network callbacks.
+// Reset initiation additionally requires the typed risk release phase. Its
+// release and aborted receipt commit only after unanimous retained noncommit
+// proof; expiry alone never grants release. Other one-time profiles and
+// recovery-deadline/operator alerting remain unfinished.
 func (c *Coordinator) RecoverCommand(ctx context.Context, q identity.RecoveryQuery, caller authorization.DecisionContext) (CommandRecord, error) {
 	if c == nil || ctx == nil || c.maximumDuration <= 0 || c.maximumDuration > time.Minute {
 		return CommandRecord{}, coordinatorError()
@@ -123,11 +126,6 @@ func (c *Coordinator) recoverCommandReceipt(ctx context.Context, q identity.Reco
 	if e != nil {
 		return result, identity.UnavailableError{}
 	}
-	// Until the typed release/recovery phases exist, observation must not take
-	// ownership or terminalize a command whose evidence remains reserved.
-	if admitted.risk != nil {
-		return result, identity.UnavailableError{}
-	}
 	// An old persistence-only registration remains readable, but cannot supply
 	// evidence. No takeover or prefix callback occurs without the full phase set.
 	for _, entry := range admitted.contributors {
@@ -136,6 +134,11 @@ func (c *Coordinator) recoverCommandReceipt(ctx context.Context, q identity.Reco
 		}
 		if entry.descriptor.Owner == "capability/postgres" {
 			if _, ok := entry.contributor.(CapabilityReleaseContributor); !ok {
+				return result, identity.UnavailableError{}
+			}
+		}
+		if admitted.risk != nil && entry.descriptor.Owner == "identity/risk/postgres" {
+			if _, ok := entry.contributor.(RiskReleaseContributor); !ok {
 				return result, identity.UnavailableError{}
 			}
 		}
@@ -218,6 +221,9 @@ func (c *Coordinator) recoverCommandReceipt(ctx context.Context, q identity.Reco
 		return result, identity.UnavailableError{}
 	}
 	if e = c.releaseCapability(bounded, work, admitted, journal); e != nil {
+		return result, identity.UnavailableError{}
+	}
+	if e = c.releaseRisk(bounded, work, admitted, journal); e != nil {
 		return result, identity.UnavailableError{}
 	}
 	// Contributor return values cannot erase a latched local/SQL failure.
