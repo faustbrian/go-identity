@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add opt-in one-use risk current checks and terminal finalization in the same
+  domain transaction as protected feature, audit, lifecycle and command receipt.
+  Late denial rolls back every provisional effect before proved-noncommit
+  release; committed replay never consumes again. Reservation/release-only
+  owners remain unsupported for domain execution until native checks exist.
+
 - Add opt-in native current counter checks before protected feature mutation and
   final domain commit. Late denial rolls back domain, audit and lifecycle effects
   while preserving the independently committed charged attempt. Missing native

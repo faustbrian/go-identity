@@ -50,12 +50,34 @@ recovery without widening reservation/rebind authority. Missing failure audit,
 release phase, matching custody or live ownership retains pending/Unknown;
 errors, panic, open rows and poisoned SQL leave no durable terminal prefix.
 
-This boundary does not yet enable phone recovery. Domain execution remains
-denied until owned apply/finalize checks, OTP and capability issuance/consumption
-and phone orchestration exist. The official risk adapter supplies reservation
-and native terminal release; adopt this coordinator revision before using the
-new live-owner abort path. Applications
-must not provide their own SQL participant to substitute for that adapter.
+`RiskExecutionContributor` is the separate opt-in for domain execution. The
+exact registered owner must implement pure `ValidateRiskEvidenceCommand`,
+read-only `CheckRiskEvidence` and terminal `FinalizeRiskEvidence` in addition to
+reservation, recovery and release. Reservation/release-only owners remain
+closed at `Begin`. The coordinator compares the entire original command before
+any effect, checks risk immediately before native feature mutation, and checks
+again after provisional audit/outbox persistence. It then finalizes the exact
+reserved row in that same transaction before terminalizing the command receipt.
+The native owner must authenticate complete recovery scope, current policy and
+provider versions, original exclusive expiry, current counters and journal
+custody; finalization must recheck expiry and CAS the original generation.
+
+`RiskApplyWork` exposes bounded reads/primary time and immutable native input
+only to its exact owner. `RiskFinalizeWork` additionally permits bounded trusted
+terminal SQL. Both are invocation-only, redact diagnostics, reject serialization
+and share the domain Work's nonrenewing budget; no raw driver or transaction
+closure is exposed. A retained apply handle is already invalid when finalization
+begins. Neither copies nor late effects renew original evidence freshness.
+Errors, panic, SQL poisoning and unclosed rows roll back domain effects,
+finalization, audit/outbox and receipt together; the existing proved-noncommit
+release protocol then terminally releases custody. Unknown commit never implies
+release or reuse. Exact committed replay does not invoke the phases again.
+
+This boundary does not yet enable phone recovery. The official risk adapter
+still supplies only reservation/release, and must implement native current
+checks and finalization before adoption. OTP/capability issuance/consumption and
+phone orchestration remain required. Applications must not provide their own
+SQL participant to substitute for the owned adapters.
 
 ## Trusted command admission observation
 
@@ -77,9 +99,10 @@ The feature owner still owns current user/credential/organization/factor checks.
 Late denial rolls back all provisional domain effects and persists classified
 failure audit/aborted receipt through the ordinary proved-rollback path. Its
 original charged attempt remains committed. Errors, panics, SQL poisoning or
-unclosed rows fail closed. RiskEvidence consumption remains unsupported here;
-the native risk adapter must implement current admission before real protected
-workflow composition can use this opt-in contract.
+unclosed rows fail closed. Counter and one-use risk declarations are distinct
+closed profiles; neither substitutes for the other's authority. The native
+adapter must implement the selected current-check contract before real protected
+workflow composition can use either opt-in.
 
 Native protected-feature composition may declare `CommandPlan.CommandCounters`
 with the core's complete keyed counter fingerprint and risk-policy version.
@@ -295,8 +318,9 @@ one transaction. Unknown/conflicting evidence stays pending; success is never
 reconstructed from current rows. Audit recovery can obtain an owned copy of all
 slots through invocation-scoped `RecoveryWork.AuditPlans`; the existing singular
 getter still rejects multi-slot plans. Historical v1 remains observation-only
-and never takes over. Capability, risk and OTP-consuming profiles remain disabled
-until their atomic typed phases exist; this is not a working session issuer.
+and never takes over. Capability and OTP-consuming profiles remain disabled
+until their atomic typed phases exist; risk consumption additionally requires
+its native current-check/finalize owner. This is not a working session issuer.
 Kernel digest bytes and the kernel-only scope decoder remain unchanged.
 
 ## Stable status-filtered listing

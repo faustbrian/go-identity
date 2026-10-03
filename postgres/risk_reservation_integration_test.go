@@ -176,6 +176,7 @@ func testRiskReservation(t *testing.T, ctx context.Context, pool *database.Pool)
 	}
 	t.Run("terminal recovery", func(t *testing.T) { testRiskRelease(t, ctx, pool, setup, expireLease) })
 	t.Run("proved owner rollback", func(t *testing.T) { testRiskOwnerAbort(t, ctx, pool, setup, expireLease) })
+	t.Run("domain consumption", func(t *testing.T) { testRiskDomain(t, ctx, pool, setup, expireLease) })
 	t.Run("atomic reserve replay and exact takeover", func(t *testing.T) {
 		participant := &sqlRiskReservation{}
 		c, b, command, p := setup(t, participant)
