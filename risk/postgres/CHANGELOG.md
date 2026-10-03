@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add the forward-only reservation-state migration after the existing issuance
+  history. Populated legacy and opaque evidence retains its original encrypted
+  response and expiry; ownership is initially absent and is constrained to one
+  complete same-tenant command/fingerprint/generation binding. This provides
+  the journal schema, not executable reservation or consumption authority.
+
 - Accept the canonical production audit contributor alongside the original
   explicitly supported v1 composition identity. Foreign contracts, owners and
   versions remain rejected; production audit/outbox effects share native

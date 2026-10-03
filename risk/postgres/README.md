@@ -23,6 +23,17 @@ evidence and decisions. It is **not yet an executable durable risk service**.
   appends the opaque command-ID profile without changing the original history
   or retained legacy ciphertext/AAD. Install this complete history for new native
   issuance. Legacy digest-target rows remain retained, not silently rewritten.
+- `ReservationMigrationSource{Base: issuanceHistory, Version: laterAllocation}`
+  adds nullable, all-or-none command/fingerprint/generation ownership and the
+  six one-use journal states. It preserves installed migration bytes, legacy
+  and opaque record IDs, original expiry and encrypted response custody. Its
+  composite command foreign key binds ownership to the same tenant and exact
+  recovery phase. Allocate a new version after the issuance-ID migration; the
+  source returns the complete history and is safe to apply again. Schema
+  availability is not reservation or terminal-transition authority: the native
+  reserve/apply/finalize/release implementation remains pending. Existing
+  issuance binaries may continue inserting ownerless `issued` rows; do not
+  activate consuming participants until their replay-compatible code is present.
 - `NewRepository(Config{...})` supplies the native issuance contributor. Enlist
   that exact instance with the identity repository, audit and lifecycle adapters
   in one coordinator registry. It inserts through the coordinator's active Work,

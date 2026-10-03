@@ -57,3 +57,29 @@ func TestIssuanceIdentityMigrationPreservesOriginalHistory(t *testing.T) {
 		t.Fatal("lost cancellation")
 	}
 }
+
+func TestReservationMigrationPreservesPermanentHistory(t *testing.T) {
+	base := IssuanceIDMigrationSource{Base: MigrationSource{Schema: "risk_store", Version: 20}, Version: 21}
+	original, err := base.Load(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := ReservationMigrationSource{Base: base, Version: 22}
+	history, err := s.Load(context.Background())
+	if err != nil || len(history) != 3 || history[0] != original[0] || history[1] != original[1] || history[2].Version() != 22 || history[2].DownSQL() != "" || history[2].TransactionMode() != migrations.TransactionModeDefault {
+		t.Fatal("reservation upgrade rewrote installed history", err)
+	}
+	for _, version := range []migrations.Version{0, 20, 21, ^migrations.Version(0)} {
+		if h, err := (ReservationMigrationSource{Base: base, Version: version}).Load(context.Background()); err == nil || h != nil {
+			t.Fatal("invalid permanent allocation admitted")
+		}
+	}
+	if h, err := s.Load(nil); err == nil || h != nil {
+		t.Fatal("nil context admitted")
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if h, err := s.Load(ctx); !errors.Is(err, context.Canceled) || h != nil {
+		t.Fatal("lost cancellation")
+	}
+}
