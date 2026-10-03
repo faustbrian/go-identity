@@ -50,6 +50,9 @@ var (
 type CheckError struct {
 	Outcome Outcome
 	Cause   error
+	// Events retains immutable records on observed-checker failure, including
+	// when SignalProvider returns only neutral risk evidence and this error.
+	Events EventDelivery
 }
 
 func (e *CheckError) Error() string { return "hibp: check failed" }
@@ -66,6 +69,9 @@ type CheckRequest struct {
 	PolicyVersion string
 	ReplayID      identity.CommandID
 	Candidate     password.Secret
+	// Attribution is required only by ObservedChecker. It is trusted audit
+	// attribution, never inferred from the free-form screening scope.
+	Attribution *SecurityAttribution
 }
 
 // Format prevents request logging from revealing scope or borrowed custody.
@@ -97,6 +103,9 @@ type CheckResult struct {
 	// ProviderValidUntil is the original observation plus immutable CacheTTL.
 	// It is unchanged on cache hits and zero on failures.
 	ProviderValidUntil time.Time
+	// Events reports submission separately from provider evidence. The ordinary
+	// Client leaves it zero; ObservedChecker retains immutable reconciliation IDs.
+	Events EventDelivery
 }
 
 // Checker is safe for concurrent use. Check has no automatic retry and makes no
@@ -235,7 +244,8 @@ func failure(r CheckResult, cause error) (CheckResult, error) {
 		r.Outcome = OutcomeMalformed
 	}
 	r.BreachCount = 0
-	return r, &CheckError{Outcome: r.Outcome, Cause: cause}
+	r.ProviderValidUntil = time.Time{}
+	return r, &CheckError{Outcome: r.Outcome, Cause: cause, Events: r.Events}
 }
 
 func (c *Client) Check(ctx context.Context, request CheckRequest) (CheckResult, error) {

@@ -15,7 +15,7 @@
       "family": "service-edge",
       "version": "0.0.0",
       "tag_prefix": "risk/hibp/v",
-      "owned_dependencies": ["github.com/faustbrian/go-clock","github.com/faustbrian/go-http-client","github.com/faustbrian/go-identity","github.com/faustbrian/go-identity/risk","github.com/faustbrian/go-password"],
+      "owned_dependencies": ["github.com/faustbrian/go-audit","github.com/faustbrian/go-clock","github.com/faustbrian/go-http-client","github.com/faustbrian/go-identity","github.com/faustbrian/go-identity/risk","github.com/faustbrian/go-password"],
       "reverse_owned_dependencies": [],
       "external_runtime_dependencies": [],
       "required_services": [],

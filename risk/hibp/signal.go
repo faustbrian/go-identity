@@ -52,11 +52,11 @@ func (p *signalProvider) Assess(ctx context.Context, request CheckRequest) (risk
 	}
 	result, readErr := p.checker.Check(ctx, request)
 	if e := ctx.Err(); e != nil {
-		return risk.Signal{}, &CheckError{Outcome: OutcomeCancelled, Cause: e}
+		return risk.Signal{}, postCheckFailure(result, e, readErr)
 	}
 	now, valid = p.client.observe()
 	if !valid {
-		return risk.Signal{}, &CheckError{Outcome: OutcomeUnavailable, Cause: ErrProviderUnavailable}
+		return risk.Signal{}, postCheckFailure(result, ErrProviderUnavailable, readErr)
 	}
 	binding.Now = now
 	observation := risk.PasswordObservation{}
@@ -66,6 +66,9 @@ func (p *signalProvider) Assess(ctx context.Context, request CheckRequest) (risk
 		cause = ErrInvalidRequest
 	} else if readErr != nil {
 		observation.Failure, cause = providerFailure(readErr)
+		if errors.Is(readErr, ErrAuditUnavailable) {
+			cause = errors.Join(cause, ErrAuditUnavailable)
+		}
 	} else if (result.Outcome == OutcomeNoMatch && result.BreachCount == 0) || (result.Outcome == OutcomeMatch && result.BreachCount > 0 && result.BreachCount <= p.client.config.MaxBreachCount) {
 		observation = risk.PasswordObservation{BreachCount: result.BreachCount, ObservedAt: result.CheckedAt, ValidUntil: result.ProviderValidUntil, CheckedAt: now}
 	} else {
@@ -75,22 +78,34 @@ func (p *signalProvider) Assess(ctx context.Context, request CheckRequest) (risk
 	signal, e := p.policy.PasswordSignal(ctx, binding, observation)
 	if e != nil {
 		if errors.Is(e, context.Canceled) || errors.Is(e, context.DeadlineExceeded) {
-			return risk.Signal{}, &CheckError{Outcome: OutcomeCancelled, Cause: e}
+			return risk.Signal{}, postCheckFailure(result, e, readErr)
 		}
 		signal, e = p.policy.PasswordSignal(ctx, binding, risk.PasswordObservation{Failure: risk.ProviderInvalidBinding})
 		cause = ErrInvalidRequest
 		if e != nil {
-			return risk.Signal{}, normalizationError(e)
+			return risk.Signal{}, postCheckFailure(result, normalizationError(e).Cause, readErr)
 		}
 	}
 	if cause != nil {
-		_, safe := failure(CheckResult{}, cause)
-		return signal, safe
+		return signal, postCheckFailure(result, cause, readErr)
 	}
 	return signal, nil
 }
 
-func normalizationError(e error) error {
+// Post-check exits retain the original submission identity even when later
+// cancellation, clock validation or normalization prevents usable evidence.
+// Only closed stable classifications are copied, never a provider diagnostic.
+func postCheckFailure(result CheckResult, cause, readErr error) error {
+	for _, stable := range []error{context.Canceled, context.DeadlineExceeded, ErrMalformedRange, ErrInvalidConfiguration, ErrInvalidRequest, ErrOverloaded, ErrClosed, ErrProviderUnavailable, ErrAuditUnavailable} {
+		if errors.Is(readErr, stable) && !errors.Is(cause, stable) {
+			cause = errors.Join(cause, stable)
+		}
+	}
+	_, safe := failure(result, cause)
+	return safe
+}
+
+func normalizationError(e error) *CheckError {
 	if errors.Is(e, context.Canceled) || errors.Is(e, context.DeadlineExceeded) {
 		return &CheckError{Outcome: OutcomeCancelled, Cause: e}
 	}
@@ -103,6 +118,10 @@ func sameBinding(request CheckRequest, result CheckResult) bool {
 
 func providerFailure(e error) (risk.ProviderFailure, error) {
 	switch {
+	case errors.Is(e, context.Canceled):
+		return risk.ProviderCancelled, context.Canceled
+	case errors.Is(e, context.DeadlineExceeded):
+		return risk.ProviderCancelled, context.DeadlineExceeded
 	case errors.Is(e, ErrMalformedRange):
 		return risk.ProviderMalformed, ErrMalformedRange
 	case errors.Is(e, ErrInvalidConfiguration):
@@ -113,10 +132,6 @@ func providerFailure(e error) (risk.ProviderFailure, error) {
 		return risk.ProviderOverloaded, ErrOverloaded
 	case errors.Is(e, ErrClosed):
 		return risk.ProviderClosed, ErrClosed
-	case errors.Is(e, context.Canceled):
-		return risk.ProviderCancelled, context.Canceled
-	case errors.Is(e, context.DeadlineExceeded):
-		return risk.ProviderCancelled, context.DeadlineExceeded
 	default:
 		return risk.ProviderUnavailable, ErrProviderUnavailable
 	}

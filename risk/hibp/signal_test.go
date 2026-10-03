@@ -144,6 +144,7 @@ func TestSignalProviderFailuresCancellationAndBorrowOwnership(t *testing.T) {
 		want risk.ProviderFailure
 	}{
 		{ErrMalformedRange, risk.ProviderMalformed}, {ErrInvalidConfiguration, risk.ProviderInvalidConfiguration}, {ErrInvalidRequest, risk.ProviderInvalidBinding}, {ErrOverloaded, risk.ProviderOverloaded}, {ErrClosed, risk.ProviderClosed}, {context.Canceled, risk.ProviderCancelled}, {context.DeadlineExceeded, risk.ProviderCancelled}, {errors.New("sensitive upstream payload"), risk.ProviderUnavailable},
+		{errors.Join(ErrMalformedRange, context.Canceled), risk.ProviderCancelled},
 	} {
 		p.(*signalProvider).checker = checkFunc(func(_ context.Context, actual CheckRequest) (CheckResult, error) {
 			if e := actual.Candidate.Use(func(raw []byte) error {

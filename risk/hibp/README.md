@@ -4,6 +4,69 @@ Experimental, Go 1.27. Scoped password screening is implemented; complete
 identity-risk/password workflow integration remains unfinished.
 There is no public prefix-input API or password acceptance decision.
 
+## Observed screening
+
+`NewObservedChecker(*Client, ObservationConfig)` selects security emission.
+The original `Client` stays provider-only; the reference composition must select
+the observed checker. Each request supplies `SecurityAttribution` from trusted
+workflow state: real pre-authentication attempt, command/correlation, actor and
+numeric audit-policy version. Free-form `SubjectScope` and provider configuration
+versions are not audit identity. Inputs must not mutate during `Check`.
+
+One logical call emits `identity.hibp.query_range`, plus `detect_match` when a
+positive fact exists or `reject_range` when unusable evidence is discarded.
+Cache hits and shared network waiters retain their own caller attribution.
+Secondary records reference the actual query event ID; no event contains breach
+counts, prefixes, suffixes, cache keys, range bodies or provider diagnostics.
+Successful match detection is not password acceptance. Provider failures belong
+to the query outcome; successful rejection means discarding unusable evidence.
+
+`ObservationConfig.Delivery` uses the existing audit recorder configuration and
+explicit failure policy. Its redactor must be nil: the shared builder performs
+privacy redaction, and the recorder preserves the required profile. `AuditTimeout`
+is 1ms..5s for terminal submission, including caller cancellation. Recorder
+recovery has its own explicit bound. Borrowed sinks/buffers/alerts must honor
+contexts and be concurrency-safe. Callbacks run outside HIBP locks.
+
+`CheckResult.Events` distinguishes acknowledgement from provider evidence.
+Undelivered required events return `ErrAuditUnavailable`, discard usable match
+data and preserve the original failure. `EventDelivery.Records()` copies the
+slice of immutable records for existing audit reconciliation/idempotent retry;
+never rebuild a record to retry it. Rejected, committed-with-error, unknown and
+invalid acknowledgements remain distinct. An alerted fail-open policy surfaces
+loss but does not make missing required records into usable evidence. The host
+owns durable buffering/reconciliation; this checker owns no second queue.
+Alerted-loss receipts retain the primitive's authoritative `DeliveryAlert`
+outcome per invocation, while forwarding the actual host alert unchanged.
+
+`NewObservedSignalProvider` keeps normalization neutral and emits only through
+the checker. On failure, `CheckError.Events` retains the same records, including
+through normalization. Provider audit events do not replace the password
+mutation's atomic audit contribution or establish a state transition's commit.
+
+`NewTelemetry(metric.Meter, trace.Tracer)` borrows standard interfaces supplied
+by Golib's telemetry runtime. Optional nil telemetry is explicit. Fixed names
+and only `hibp.outcome` / `audit.delivery` dimensions permit at most 24 pairs.
+No caller identifiers, context baggage, URLs, counts or raw errors enter labels.
+Instrumentation cannot replace caller context or change evidence/delivery;
+panics are contained independently. Host providers must be bounded/nonblocking
+and own their exporters/shutdown. No globals or resource ownership change.
+Measurements describe provider/audit completion; later caller cancellation
+during synchronous observers still invalidates the returned evidence.
+
+Each observed checker limits the complete call lifetime to the client's
+`MaxWaiters`, including terminal audit recovery and telemetry. Admission is
+nonblocking: saturation returns `ErrOverloaded` before screening or event
+construction, even for an already-cancelled caller. No fallback queue grows.
+Separate wrappers have separate admission limits; the underlying client still
+owns its shared provider-work limit.
+
+The observed wrapper owns no goroutines. The underlying Client's `Close` drains
+provider work, not separately bounded synchronous audit/observer callbacks.
+The host must wait for its calling goroutines before shutting down borrowed
+audit/telemetry dependencies. Real durable integration, reference selection and
+provider interoperability remain required before release.
+
 ## Implemented privacy boundary
 
 The owned parser validates an entire bounded response before making any match
@@ -55,8 +118,8 @@ comparison time. Derived expiry is capped by both original provider validity
 and the consuming operation's assessment TTL; cached provider age is not reset.
 
 This is provider-to-policy composition, not password-workflow completion or
-permission to perform a mutation. Full purpose/subject/workflow custody, required
-security events, telemetry and release gates remain unfinished.
+permission to perform a mutation. Full purpose/subject/workflow custody, durable
+event composition, reference telemetry selection and release gates remain unfinished.
 
 ## Checker lifecycle
 
@@ -98,8 +161,8 @@ If its context expires, shutdown continues; call Close again to await completion
 
 ## Remaining integration and release evidence
 
-Normalized risk evidence, audit/telemetry and password workflow composition remain
-unfinished. Local TLS fixtures are not live-provider interoperability evidence.
+Complete password workflow, durable audit and reference telemetry composition
+remain unfinished. Local TLS fixtures are not live-provider interoperability evidence.
 Do not substitute checker success for risk allowance.
 
 The password dependency pins committed Secret ownership at `c5746af64a6f`.

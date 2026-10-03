@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+- Add opt-in per-caller query, match and range-rejection security records with
+  protected retention, independent cache/coalescing attribution and bounded
+  terminal audit delivery. Preserve record identities for unknown-delivery
+  reconciliation; missing required delivery makes evidence unusable. Bound
+  the complete observed-call lifetime, including audit and telemetry, by
+  MaxWaiters; saturation rejects before screening without queuing events.
+- Preserve delivery records and stable provider failures through observed
+  errors and neutral normalization. Cancellation takes classification
+  precedence without erasing other causes; failed evidence has no validity
+  expiry even when provider screening succeeded before terminal failure.
+  Preserve authoritative acknowledgement outcomes after fail-open alerting,
+  and honor caller cancellation during synchronous observer completion.
+- Add borrowed OpenTelemetry instrumentation with fixed privacy-safe outcome
+  and delivery dimensions. Observer failure cannot change caller cancellation,
+  screening evidence or required audit delivery. No globals are registered.
+
 - Add owned checker-to-risk composition with full attribution validation,
   neutral breach facts and safe classified failures. Preserve original provider
   expiry independently of local assessment freshness; reject incompatible
