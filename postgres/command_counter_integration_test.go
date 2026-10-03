@@ -26,15 +26,18 @@ func (*sqlCommandCounter) ValidateCommandCounters(identity.Command, CommandCount
 	return nil
 }
 func (p *sqlCommandCounter) ReserveCommandCounters(ctx context.Context, w CommandCounterWork) (CommandCounterDisposition, error) {
+	return p.reserveCounters(ctx, w, p)
+}
+func (p *sqlCommandCounter) reserveCounters(ctx context.Context, w CommandCounterWork, owner CommandCounterContributor) (CommandCounterDisposition, error) {
 	p.retained = w
-	b, err := w.Binding(p)
+	b, err := w.Binding(owner)
 	if err != nil {
 		return 0, err
 	}
 	if _, err = w.Binding(&sqlCommandCounter{}); err == nil {
 		return 0, invalidWork()
 	}
-	command, err := w.NativeCommand(p)
+	command, err := w.NativeCommand(owner)
 	if err != nil {
 		return 0, err
 	}
@@ -150,6 +153,7 @@ func testCommandCounterReservation(t *testing.T, ctx context.Context, pool *data
 	if _, err := pool.Raw().Exec(ctx, `CREATE TABLE public.identity_counter_totals(tenant_id text PRIMARY KEY,value integer NOT NULL);CREATE TABLE public.identity_counter_charges(command_id text PRIMARY KEY,fingerprint bytea NOT NULL,choice integer NOT NULL);CREATE TABLE public.identity_counter_audits(command_id text PRIMARY KEY,event_id text UNIQUE NOT NULL);CREATE TABLE public.identity_counter_commit_guard(command_id text PRIMARY KEY,target_id text REFERENCES public.identity_counter_charges(command_id) DEFERRABLE INITIALLY DEFERRED)`); err != nil {
 		t.Fatal(err)
 	}
+	t.Run("current admission", func(t *testing.T) { testCommandCounterAdmission(t, ctx, pool, repo) })
 	for _, mode := range []string{"allow-deny-replay", "takeover", "error", "panic", "rows", "poison", "zero", "audit-failure", "commit-failure"} {
 		t.Run(mode, func(t *testing.T) {
 			participant := &sqlCommandCounter{mode: mode}

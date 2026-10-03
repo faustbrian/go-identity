@@ -46,6 +46,7 @@ type workState struct {
 	featureInvocation FeatureExecutionContributor
 	credentialIntent  *CredentialCompromiseIntent
 	credentialReceipt *CredentialCompromiseReceipt
+	counterCommand    *identity.Command
 }
 
 // newWork is private: only the sole coordinator may call it after verifying
@@ -240,6 +241,7 @@ func invalidateWork(w Work) {
 		return
 	}
 	w.state.closed = true
+	w.state.counterCommand = nil
 	w.state.cancel()
 	if w.state.rows != nil {
 		w.state.rows.Close()

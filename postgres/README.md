@@ -61,6 +61,26 @@ must not provide their own SQL participant to substitute for that adapter.
 
 ### Protected counter reservation
 
+Counter-bearing domain execution additionally requires the exact registered
+owner to implement `CommandCounterAdmissionContributor`. Reservation-only
+participants still cannot open `Begin`. The new `CheckCommandCounters` phase
+receives `CommandCounterAdmissionWork` immediately before native feature mutation
+and again after audit/lifecycle persistence, before terminal commit. It must
+recheck exact current-generation charge custody, policy, original evidence expiry,
+authoritative counters and any explicitly selected lockout/override policy.
+It must not increment, refund, refresh original observations, invoke providers
+or open its own transaction. This bounded invocation exposes reads/primary time
+and the original immutable command only to that instance, then expires.
+The coordinator retains command input only in memory until Work closes.
+The feature owner still owns current user/credential/organization/factor checks.
+
+Late denial rolls back all provisional domain effects and persists classified
+failure audit/aborted receipt through the ordinary proved-rollback path. Its
+original charged attempt remains committed. Errors, panics, SQL poisoning or
+unclosed rows fail closed. RiskEvidence consumption remains unsupported here;
+the native risk adapter must implement current admission before real protected
+workflow composition can use this opt-in contract.
+
 Native protected-feature composition may declare `CommandPlan.CommandCounters`
 with the core's complete keyed counter fingerprint and risk-policy version.
 It must enlist exactly one `identity/risk/postgres` participant implementing

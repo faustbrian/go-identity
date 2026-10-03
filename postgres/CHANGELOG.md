@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add opt-in native current counter checks before protected feature mutation and
+  final domain commit. Late denial rolls back domain, audit and lifecycle effects
+  while preserving the independently committed charged attempt. Missing native
+  admission support keeps counter-bearing execution closed; phase custody and
+  original evidence cannot be retained or renewed.
+
 - Add protected-command counter reservation phases with invocation-only native
   authority. Allowed charges commit with pending command ownership; denied
   charges commit with the matching failure audit and aborted receipt, and exact

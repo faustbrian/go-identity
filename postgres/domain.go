@@ -39,8 +39,11 @@ type domainExecution struct {
 // ownership: explicit closure remains required. Constructor pools remain
 // caller-owned. Pre-observation failures are redacted; unproven rollback is
 // identity.UnknownCommitError. Creation and self-profile mutation are supported.
+// Protected feature counters additionally require the exact native current-check
+// contributor. Begin grants no counter allowance: ApplyFeature and Commit each
+// recheck under domain tenant exclusion, without recharging or renewing evidence.
 func (c *Coordinator) Begin(ctx context.Context, r Reservation) (Work, error) {
-	if ctx == nil || c == nil || c.pool == nil || c.pool.Raw() == nil || r.state == nil || r.state.coordinator != c || r.state.plan.belongsTo(c.registry) != nil || r.state.plan.capability != nil || r.state.plan.risk != nil || r.state.plan.counters != nil {
+	if ctx == nil || c == nil || c.pool == nil || c.pool.Raw() == nil || r.state == nil || r.state.coordinator != c || r.state.plan.belongsTo(c.registry) != nil || r.state.plan.capability != nil || r.state.plan.risk != nil || r.state.plan.counters != nil && counterAdmissionParticipant(r.state.plan) == nil {
 		return Work{}, invalidWork()
 	}
 	bounded, cancel := context.WithTimeout(ctx, c.maximumDuration)
@@ -264,6 +267,16 @@ func (c *Coordinator) Commit(w Work, result identity.CommandResult) (identity.Co
 	}
 	execution := w.state.execution
 	r := execution.reservation
+	if r.plan.counters != nil {
+		if w.state.counterCommand == nil {
+			return c.Abort(w, invalidWork())
+		}
+		// Effects remain provisional. A slow native/audit/outbox phase cannot
+		// substitute an earlier positive risk observation for current admission.
+		if err := c.checkCommandCounters(w.state.ctx, w, *w.state.counterCommand); err != nil {
+			return c.Abort(w, err)
+		}
+	}
 	if err := terminalizeJournal(w.state.ctx, w.state.tx, r.request, r.journal, r.owner, result, "committed"); err != nil {
 		return c.Abort(w, err)
 	}

@@ -152,7 +152,7 @@ func (r *ContributorRegistry) admitFeaturePlan(b identity.CommandBinding, finger
 // Commit succeeds; the caller must always defer Abort. Errors poison Work;
 // contributor diagnostics/panics are redacted. No local retry is performed.
 func (c *Coordinator) ApplyFeature(ctx context.Context, w Work, command identity.Command) (result identity.CommandResult, err error) {
-	if ctx == nil || !c.owns(w) || w.state.feature == nil || w.state.execution.reservation.plan.risk != nil || w.state.execution.reservation.plan.counters != nil {
+	if ctx == nil || !c.owns(w) || w.state.feature == nil || w.state.execution.reservation.plan.risk != nil {
 		return result, invalidWork()
 	}
 	if err = w.usable(); err != nil {
@@ -195,6 +195,14 @@ func (c *Coordinator) ApplyFeature(ctx context.Context, w Work, command identity
 			return result, w.fail(ctx, e)
 		}
 		w.state.execution.featureAbortAudits[class] = records
+	}
+	if e = c.checkCommandCounters(ctx, w, command); e != nil {
+		return result, e
+	}
+	if p.counters != nil {
+		// Command is opaque immutable owned input, retained only by this Work
+		// for the final current check; it never enters a durable plan or receipt.
+		w.state.counterCommand = &command
 	}
 	if credentialCompromiseOperation(p.feature.Operation) {
 		if e := prepareCredentialCompromise(ctx, w, command); e != nil {
