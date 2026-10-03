@@ -82,8 +82,13 @@ func decodeFeaturePlan(binding identity.CommandBinding, fingerprint [32]byte, en
 	f.Operation.RecordRequirement = identity.FeatureRecordRequirement(r.number(math.MaxUint8))
 	p.Feature = f
 	r.key("profile")
+	counterProfile := false
 	if fields == 9 {
-		r.consume(cborText("identity-feature-risk-plan-v1"))
+		profile := r.string(64)
+		counterProfile = profile == "identity-feature-command-counters-v1"
+		if !counterProfile && profile != "identity-feature-risk-plan-v1" {
+			return fail()
+		}
 	} else if fields == 8 {
 		r.consume(cborText("identity-feature-plan-v2"))
 	} else {
@@ -120,8 +125,18 @@ func decodeFeaturePlan(binding identity.CommandBinding, fingerprint [32]byte, en
 		}
 	}
 	if fields == 9 {
-		r.key("risk_evidence")
-		p.RiskEvidence = readRiskPlan(&r)
+		if counterProfile {
+			r.key("command_counters")
+			r.expect(5, 2)
+			p.CommandCounters = &CommandCounterPlan{}
+			r.key("fingerprint")
+			r.digest(&p.CommandCounters.Fingerprint)
+			r.key("policy_version")
+			p.CommandCounters.PolicyVersion = r.number(math.MaxUint64)
+		} else {
+			r.key("risk_evidence")
+			p.RiskEvidence = readRiskPlan(&r)
+		}
 	}
 	if !r.ok || len(r.data) != 0 {
 		return fail()

@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add protected-command counter reservation phases with invocation-only native
+  authority. Allowed charges commit with pending command ownership; denied
+  charges commit with the matching failure audit and aborted receipt, and exact
+  replay/takeover does not charge again. Native durable counter algorithms and
+  current domain admission remain pending; counter-bearing Begin stays disabled.
+
 - Release exact risk custody during proved nonretryable owner rollback in the
   same guarded transaction as its failure audit and aborted receipt. Live-owner
   release preserves generation, including after takeover; recovery still

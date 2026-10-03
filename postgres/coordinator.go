@@ -162,7 +162,7 @@ func (c *Coordinator) prepare(binding identity.CommandBinding, command identity.
 	if spec, ok := command.Feature(); ok {
 		return c.prepareFeature(binding, command, spec, plan)
 	}
-	if plan.Feature != nil || plan.RiskEvidence != nil {
+	if plan.Feature != nil || plan.RiskEvidence != nil || plan.CommandCounters != nil {
 		return claimRequest{}, CommandPlan{}, nil, invalidPlan()
 	}
 	// No proof/cascade declaration is inferred from a contributor name. Those
@@ -228,6 +228,10 @@ func (c *Coordinator) prepare(binding identity.CommandBinding, command identity.
 // or cancellation return no ownership. Invocation aliases expire before commit.
 // It grants no
 // proof that required audit/outbox effects have been written.
+// Protected counter declarations invoke their registered native reservation
+// phase. A denial commits its attempt with failure audit and an aborted receipt,
+// returns NotCommitted for the domain plus ForbiddenError, and grants no handle.
+// Matching terminal replay returns the recorded result without another charge.
 func (c *Coordinator) ReserveCommand(ctx context.Context, binding identity.CommandBinding, command identity.Command, plan CommandPlan) (Reservation, identity.CommandResult, error) {
 	if ctx == nil {
 		return Reservation{}, identity.CommandResult{}, coordinatorError()
@@ -288,6 +292,10 @@ func (c *Coordinator) ReserveCommand(ctx context.Context, binding identity.Comma
 		}
 		return c.failedReservation(tx, binding, result, nil)
 	}
+	denied, err := c.reserveCommandCounters(bounded, tx, command, q, admitted, journal, owner)
+	if err != nil {
+		return c.failedReservation(tx, binding, identity.CommandResult{}, err)
+	}
 	if err = c.reserveRisk(bounded, tx, q, admitted, journal, owner); err != nil {
 		return c.failedReservation(tx, binding, identity.CommandResult{}, err)
 	}
@@ -298,6 +306,9 @@ func (c *Coordinator) ReserveCommand(ctx context.Context, binding identity.Comma
 	// Unknown at this API; authoritative scoped recovery must resolve it later.
 	if err = tx.Commit(bounded); err != nil {
 		return Reservation{}, featureOutcome(binding, q.feature, identity.CommitOutcomeUnknown, 0), readFailure(bounded, err)
+	}
+	if denied {
+		return Reservation{}, featureOutcome(binding, q.feature, identity.CommitOutcomeNotCommitted, 0), identity.ForbiddenError{}
 	}
 	state := &reservationState{coordinator: c, request: q, plan: admitted, journal: journal, owner: owner}
 	return Reservation{state: state}, featureOutcome(binding, q.feature, identity.CommitOutcomeInProgress, c.leaseDuration), nil

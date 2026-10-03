@@ -40,7 +40,7 @@ type domainExecution struct {
 // caller-owned. Pre-observation failures are redacted; unproven rollback is
 // identity.UnknownCommitError. Creation and self-profile mutation are supported.
 func (c *Coordinator) Begin(ctx context.Context, r Reservation) (Work, error) {
-	if ctx == nil || c == nil || c.pool == nil || c.pool.Raw() == nil || r.state == nil || r.state.coordinator != c || r.state.plan.belongsTo(c.registry) != nil || r.state.plan.capability != nil || r.state.plan.risk != nil {
+	if ctx == nil || c == nil || c.pool == nil || c.pool.Raw() == nil || r.state == nil || r.state.coordinator != c || r.state.plan.belongsTo(c.registry) != nil || r.state.plan.capability != nil || r.state.plan.risk != nil || r.state.plan.counters != nil {
 		return Work{}, invalidWork()
 	}
 	bounded, cancel := context.WithTimeout(ctx, c.maximumDuration)
@@ -123,6 +123,10 @@ func (p *admittedKernelPlan) snapshot() CommandPlan {
 	if p.risk != nil {
 		copy := *p.risk
 		result.RiskEvidence = &copy
+	}
+	if p.counters != nil {
+		copy := *p.counters
+		result.CommandCounters = &copy
 	}
 	if p.feature != nil {
 		copy := *p.feature

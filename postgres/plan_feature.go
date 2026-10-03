@@ -30,8 +30,11 @@ func encodeFeaturePlan(binding identity.CommandBinding, fingerprint [32]byte, p 
 		return nil, invalidPlan()
 	}
 	count := 4
-	if p.RiskEvidence != nil {
+	if p.RiskEvidence != nil || p.CommandCounters != nil {
 		count++
+	}
+	if p.CommandCounters != nil && (p.SubjectType == "" || p.RiskEvidence != nil || p.CommandCounters.PolicyVersion == 0 || p.CommandCounters.Fingerprint == ([32]byte{})) {
+		return nil, invalidPlan()
 	}
 	if p.Feature == nil || fingerprint == ([32]byte{}) || binding.ValidateFor(p.Feature.Operation) != nil || p.Feature.Contributor.Owner != p.Feature.Operation.Owner+"/postgres" || !validContributorDescriptor(p.Feature.Contributor) || p.Capability != nil || len(p.Contributors) != count || len(p.Audits) == 0 || len(p.Audits) > 64 || p.Lifecycle == nil || !featureEventName(p.Lifecycle.EventType) || validateRiskPlan(binding, p) != nil {
 		return nil, invalidPlan()
@@ -64,14 +67,14 @@ func encodeFeaturePlan(binding identity.CommandBinding, fingerprint [32]byte, p 
 			audits++
 		case d.Owner == "outbox/postgres" && d.ContractID == "identity.lifecycle" && d.Version == 1:
 			outboxes++
-		case p.RiskEvidence != nil && d == (ContributorDescriptor{Owner: "identity/risk/postgres", ContractID: "identity.risk.store", Version: 1}):
+		case (p.RiskEvidence != nil || p.CommandCounters != nil) && d == (ContributorDescriptor{Owner: "identity/risk/postgres", ContractID: "identity.risk.store", Version: 1}):
 			risks++
 		default:
 			return nil, invalidPlan()
 		}
 		entries[i] = cborMap(map[string][]byte{"owner": cborText(d.Owner), "contract_id": cborText(d.ContractID), "version": cborUint(uint64(d.Version))})
 	}
-	if domains != 1 || audits != 1 || outboxes != 1 || features != 1 || p.RiskEvidence != nil && risks != 1 {
+	if domains != 1 || audits != 1 || outboxes != 1 || features != 1 || (p.RiskEvidence != nil || p.CommandCounters != nil) && risks != 1 {
 		return nil, invalidPlan()
 	}
 	events := make([][]byte, len(p.Audits))
@@ -97,6 +100,10 @@ func encodeFeaturePlan(binding identity.CommandBinding, fingerprint [32]byte, p 
 	if p.RiskEvidence != nil {
 		fields["profile"] = cborText("identity-feature-risk-plan-v1")
 		fields["risk_evidence"] = encodeRiskPlan(p.RiskEvidence)
+	}
+	if p.CommandCounters != nil {
+		fields["profile"] = cborText("identity-feature-command-counters-v1")
+		fields["command_counters"] = encodeCommandCounterPlan(*p.CommandCounters)
 	}
 	return cborMap(fields), nil
 }
@@ -150,6 +157,10 @@ func (c *Coordinator) prepareFeature(binding identity.CommandBinding, command id
 		risk := *p.RiskEvidence
 		snapshot.RiskEvidence = &risk
 	}
+	if p.CommandCounters != nil {
+		counters := *p.CommandCounters
+		snapshot.CommandCounters = &counters
+	}
 	if p.Lifecycle != nil {
 		lifecycle := *p.Lifecycle
 		snapshot.Lifecycle = &lifecycle
@@ -170,6 +181,13 @@ func (c *Coordinator) prepareFeature(binding identity.CommandBinding, command id
 	// adapter receives an owned snapshot, not the coordinator's frozen slices.
 	if err := validateFeatureCommand(entry.contributor.(FeatureExecutionContributor), command, admitted.snapshot()); err != nil {
 		return fail()
+	}
+	if admitted.counters != nil {
+		for _, e := range admitted.contributors {
+			if e.descriptor.Owner == "identity/risk/postgres" && validateCommandCounters(e.contributor.(CommandCounterContributor), command, *admitted.counters) != nil {
+				return fail()
+			}
+		}
 	}
 	return q, snapshot, admitted, nil
 }

@@ -30,6 +30,9 @@ type CommandPlan struct {
 	// RiskEvidence freezes a signed reset-initiation precheck. The exact registered
 	// risk reservation participant is required; domain execution remains disabled.
 	RiskEvidence *RiskEvidencePlan
+	// CommandCounters declares protected-command durable counter admission.
+	// It requires the exact native risk participant; no raw dimensions are stored.
+	CommandCounters *CommandCounterPlan
 	// Feature declares one exact registered feature schema. Kernel digests reject
 	// it; native execution additionally requires SubjectType and typed phases.
 	Feature *FeatureRegistration
@@ -68,7 +71,7 @@ func KernelPlanDigest(binding identity.CommandBinding, fingerprint [32]byte, pla
 // The journal freezes the exact digest input, not a second serialization that
 // can disagree with admission or omit a participant field.
 func encodeKernelPlan(binding identity.CommandBinding, fingerprint [32]byte, plan CommandPlan) ([]byte, error) {
-	if plan.Feature != nil || plan.SubjectType != "" || plan.RiskEvidence != nil {
+	if plan.Feature != nil || plan.SubjectType != "" || plan.RiskEvidence != nil || plan.CommandCounters != nil {
 		return nil, invalidPlan()
 	}
 	probe := identity.CommandResult{Binding: binding, Outcome: identity.CommitOutcomeInProgress, RetryAfter: time.Microsecond}
@@ -146,6 +149,7 @@ type admittedKernelPlan struct {
 	lifecycle    *LifecyclePlan
 	capability   *CapabilityPlan
 	risk         *RiskEvidencePlan
+	counters     *CommandCounterPlan
 	fingerprint  [32]byte
 	feature      *FeatureRegistration
 	subjectType  string

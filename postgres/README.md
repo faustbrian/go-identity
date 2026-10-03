@@ -59,6 +59,39 @@ must not provide their own SQL participant to substitute for that adapter.
 
 ## Trusted command admission observation
 
+### Protected counter reservation
+
+Native protected-feature composition may declare `CommandPlan.CommandCounters`
+with the core's complete keyed counter fingerprint and risk-policy version.
+It must enlist exactly one `identity/risk/postgres` participant implementing
+`CommandCounterContributor`, in addition to the native feature, kernel, audit
+and lifecycle participants. Both the feature owner and risk participant perform
+pure native validation before the first SQL write. No raw subject/network
+dimensions are serialized into the frozen plan; historical feature-plan bytes
+remain unchanged when this profile is absent.
+
+`ReserveCommand` calls that exact participant under the existing primary
+command/tenant exclusions. `CommandCounterWork` returns frozen binding and the
+immutable original native command only during its invocation; aliases and rows
+must not be retained. Allowed disposition commits the charge and its original
+snapshot with pending command ownership. Denied disposition commits the charge,
+all declared denied audit slots and the aborted command receipt together, with
+no domain mutation or successful lifecycle event. Returning an error instead
+rolls back the reservation unit; SQL before commit is provisional. A commit
+attempt error returns Unknown even when a deferred constraint rejects commit.
+
+Live/terminal replay bypasses mutation. Expired-owner takeover supplies the
+exact predecessor/current generation and must reuse the original charge, never
+increment or refund it. `RecoveryWork.CommandCounterBinding` exposes exact
+charge linkage to its registered owner for read-only reconciliation: a charged
+reservation is prerequisite evidence, not proof that the domain committed.
+
+The real risk adapter's durable counter storage/rotation/algorithm and current
+domain checks are still being implemented. Counter-bearing `Begin` and
+`ApplyFeature` therefore remain disabled. SQL integration seams prove this
+coordinator boundary, not password workflows or native risk interoperability;
+applications must not supply a replacement counter store to fill the gap.
+
 Native feature adapters may configure `CoordinatorConfig.AdmissionPolicy`
 separately from `QueryPolicy` and call `ObserveCommandAdmission(ctx, query,
 caller)` before evaluating external providers. The current policy receives owned
