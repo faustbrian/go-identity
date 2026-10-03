@@ -95,6 +95,7 @@
       "version": "0.0.0",
       "tag_prefix": "v",
       "owned_dependencies": [
+        "github.com/faustbrian/go-audit",
         "github.com/faustbrian/go-authorization",
         "github.com/faustbrian/go-clock"
       ],

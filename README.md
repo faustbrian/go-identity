@@ -2,6 +2,32 @@
 
 Composable backend identity-domain ownership for Golib. This module is under
 development and targets Go 1.27.
+
+## Security-profile construction
+
+`NewIdentitySecurityEventV1(clock.Clock)` constructs the shared typed profile
+builder. `Build(context.Context, SecurityEventInput)` returns the existing
+`audit.Record`, not a new envelope, using exact 16 KiB/256-byte profile limits,
+secure record IDs, canonical numeric versions and explicit primitive redaction.
+Initial supported actions are HIBP query, match detection and range rejection;
+unsupported action contracts reject. Retention is protected and changes are
+explicitly absent. Outcome and provider evidence remain separate classifications.
+
+Attribution must come from trusted composition, not HIBP SubjectScope or raw
+HTTP input. An authentication-attempt subject must be a real canonical
+PreAuthTransactionID; identifier digests and fabricated user IDs are invalid.
+Canonical nonzero base64url IDs, uppercase ULIDs, lowercase UUIDs and 128-bit
+hex IDs are preserved unchanged for tenant/actor/policy attribution. Syntax
+validation does not prove provenance or confer authority. No arbitrary attribute,
+description, network, breach-count or provider-payload field exists.
+
+The builder is immutable and concurrency-safe under the borrowed clock contract.
+It owns no persistence, retries, goroutines or shutdown. Persist through the
+existing audit sink/recorder or transactional contributor; building a record is
+not proof that audit delivery happened. Audit v1 is retained to preserve the
+existing durable adapters' record identity. Other security action contracts,
+provider-event integration and durable composition remain implementation work.
+
 Current implemented slices are subject/pre-authentication ID
 contracts, structural user/status-policy validation and authorized user reads
 with bounded, stable-snapshot listing, versioned typed-field preparation and

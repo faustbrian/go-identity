@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add the shared typed security-profile builder for HIBP actions, producing
+  canonical redacted audit records with protected retention and closed provider
+  fields. Reject unsafe attribution and identifier digests masquerading as
+  pre-auth attempts. Construction does not prove delivery or authorization.
+
 - Add exact credential eligibility checks and a narrow consistent-primary read
   contract. Keep per-credential versions separate from the user-wide credential
   epoch and aggregate CAS; blocked, disabled, expired or mismatched references
