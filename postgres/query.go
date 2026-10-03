@@ -270,6 +270,10 @@ func commandReceipt(q identity.RecoveryQuery, observed commandObservation, err e
 }
 
 func (c *Coordinator) authorizeCommandQuery(ctx context.Context, q identity.RecoveryQuery, caller authorization.DecisionContext) (allowed bool, err error) {
+	return authorizeCommandObservation(ctx, q, caller, c.queryPolicy, false)
+}
+
+func authorizeCommandObservation(ctx context.Context, q identity.RecoveryQuery, caller authorization.DecisionContext, policy *CommandQueryPolicy, admission bool) (allowed bool, err error) {
 	defer func() {
 		if recover() != nil {
 			allowed, err = false, identity.UnavailableError{}
@@ -279,7 +283,7 @@ func (c *Coordinator) authorizeCommandQuery(ctx context.Context, q identity.Reco
 		return false, nil
 	}
 	dc := caller.Clone()
-	now := c.queryPolicy.Clock.Now()
+	now := policy.Clock.Now()
 	if now.IsZero() {
 		return false, identity.UnavailableError{}
 	}
@@ -292,21 +296,21 @@ func (c *Coordinator) authorizeCommandQuery(ctx context.Context, q identity.Reco
 			delete(dc.Request.Resource.Attributes, name)
 		}
 	}
-	dc.Request.Resource.Attributes["identity.command.recovery"] = authorization.BoolValue(true)
-	dc.Request.Resource.Attributes["identity.command.read-admission"] = authorization.BoolValue(false)
+	dc.Request.Resource.Attributes["identity.command.recovery"] = authorization.BoolValue(!admission)
+	dc.Request.Resource.Attributes["identity.command.read-admission"] = authorization.BoolValue(admission)
 	dc.Request.Resource.Attributes["identity.command.id"] = authorization.StringValue(string(q.CommandID))
 	dc.Request.Resource.Attributes["identity.command.record-id"] = authorization.StringValue(q.RecordID)
 	dc.Request.Resource.Attributes["identity.command.link-mode"] = authorization.StringValue(strconv.FormatUint(uint64(q.LinkMode), 10))
 	if len(dc.Request.Resource.Attributes) > 128 {
 		return false, nil
 	}
-	decision, err := c.queryPolicy.Authorization.Decide(ctx, dc)
+	decision, err := policy.Authorization.Decide(ctx, dc)
 	if err != nil {
 		return false, identity.UnavailableError{}
 	}
 	r := dc.Request
-	matched := r.Subject.ID == authorization.SubjectID(q.ActorID) && r.Subject.Kind == q.ActorKind && r.Tenant == authorization.TenantID(q.TenantID) && r.Action == authorization.Action(q.OperationID) && r.Resource.Type == "identity.user" && r.Resource.ID == authorization.ResourceID(q.UserID) && dc.PolicyRevision == authorization.Revision(c.queryPolicy.PolicyVersion)
-	return matched && decision.Outcome == authorization.Allow && decision.Revision == authorization.Revision(c.queryPolicy.PolicyVersion), nil
+	matched := r.Subject.ID == authorization.SubjectID(q.ActorID) && r.Subject.Kind == q.ActorKind && r.Tenant == authorization.TenantID(q.TenantID) && r.Action == authorization.Action(q.OperationID) && r.Resource.Type == "identity.user" && r.Resource.ID == authorization.ResourceID(q.UserID) && dc.PolicyRevision == authorization.Revision(policy.PolicyVersion)
+	return matched && decision.Outcome == authorization.Allow && decision.Revision == authorization.Revision(policy.PolicyVersion), nil
 }
 
 func queryScopeText(value string) bool {

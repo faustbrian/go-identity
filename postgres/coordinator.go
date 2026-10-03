@@ -30,6 +30,10 @@ type CoordinatorConfig struct {
 	// QueryPolicy enables authorized primary receipt lookup. Nil disables it.
 	// The policy is copied; its dependencies must support concurrent calls.
 	QueryPolicy *CommandQueryPolicy
+	// AdmissionPolicy separately enables trusted pre-execution primary command
+	// observation, including authorized absence. Nil disables it. A QueryPolicy
+	// alone never enables absence disclosure; admission grants no reservation.
+	AdmissionPolicy *CommandQueryPolicy
 }
 
 // Format prevents diagnostic formatting from exposing fingerprint keys.
@@ -57,6 +61,7 @@ type Coordinator struct {
 	maximumDuration, leaseDuration time.Duration
 	keys                           claimKeys
 	queryPolicy                    *CommandQueryPolicy
+	admissionPolicy                *CommandQueryPolicy
 	commandRead                    func(context.Context, identity.CommandID) (commandObservation, error)
 }
 
@@ -88,6 +93,14 @@ func NewCoordinator(pool *database.Pool, registry *ContributorRegistry, config C
 		}
 		policy := *config.QueryPolicy
 		c.queryPolicy = &policy
+		c.commandRead = c.readCommand
+	}
+	if config.AdmissionPolicy != nil {
+		if !validCommandQueryPolicy(*config.AdmissionPolicy) {
+			return nil, coordinatorError()
+		}
+		policy := *config.AdmissionPolicy
+		c.admissionPolicy = &policy
 		c.commandRead = c.readCommand
 	}
 	return c, nil

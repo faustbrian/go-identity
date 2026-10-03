@@ -1,5 +1,29 @@
 # Identity PostgreSQL
 
+## Trusted command admission observation
+
+Native feature adapters may configure `CoordinatorConfig.AdmissionPolicy`
+separately from `QueryPolicy` and call `ObserveCommandAdmission(ctx, query,
+caller)` before evaluating external providers. The current policy receives owned
+`identity.command.read-admission=true` and `identity.command.recovery=false`
+attributes; caller, tenant, operation and `identity.user` resource must match the
+query at the configured revision. Only an authorized actual absent global claim
+returns `CommandAdmission{Absent: true}`. Denial, wrong scope, retired claims,
+orphan journals, corrupt history and outages never become absence.
+
+Existing claims return only safe `CommandRecord` history and its original
+terminal classification; expired pending commands remain pending. No command
+or participant is reserved, repaired, locked, renewed or invoked. This is a
+trusted native composition API, not a client lookup route. `QueryPolicy` alone
+does not enable admission, and `AdmissionPolicy` alone does not enable lookup.
+
+Absence is a point-in-time observation, not a reservation or proof that an
+earlier ambiguous submission rolled back. A concurrent command may appear
+immediately afterward. Native adapters must compare their own retained
+pre-evaluation intent before replaying protected results, and must still submit
+through `ReserveCommand` for the full immutable command collision fence. This
+method neither returns nor verifies native bearer/proof payloads.
+
 ## Primary credential eligibility metadata
 
 Compose `CredentialMigrationSource{Base: existingHistory, Version: allocated}`

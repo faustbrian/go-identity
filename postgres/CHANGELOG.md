@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add separately opt-in, current-authorized primary command admission
+  observation for native adapters. Only a genuinely absent global claim is
+  reported absent; ordinary lookup retains its enumeration-resistant behavior.
+  Historical metadata grants no reservation, rollback proof or native replay
+  authority. Adapters still match their retained intent and protected result.
+
 - Add an explicit denial-only credential compromise phase to the existing
   coordinator. Native verifier disablement, reference disablement, independent
   user/credential version successors, protected audit, lifecycle metadata and
