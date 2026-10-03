@@ -1,5 +1,33 @@
 # Identity PostgreSQL
 
+## Primary credential eligibility metadata
+
+Compose `CredentialMigrationSource{Base: existingHistory, Version: allocated}`
+with the owned migrations runner, after every installed kernel/session/status
+migration. It adds non-secret references and the independent tenant/user
+`credential_version`; existing status, aggregate and identifier epochs are
+unchanged. Old creation writers receive epoch 1 but no fabricated reference.
+Keep disabled references as retained state; this migration never re-enables one.
+Down SQL is unsupported. Expiry is nullable (indefinite), otherwise finite UTC
+microsecond precision, strictly after the Go zero instant and before year10000.
+
+`Repository.GetCredentialAuthority(ctx, identity.CredentialAuthorityQuery{...})`
+implements the core port with one consistent primary statement matching exact
+tenant, user and credential ID. Missing schema fails unavailable, not absent;
+missing exact references return `identity.ErrUserAbsent`. All versions preserve
+full uint64 precision, with no aggregate/security/credential substitution.
+Blocked users, disabled references and expired instants remain visible to
+`identity.CheckCredentialAuthority`, which denies them rather than repairing
+stored state. Earlier caller/configured deadlines bound reads; driver details
+and partial records do not escape failures.
+
+This is metadata eligibility, not secret verification, factor/provider status,
+authentication proof, authorization or a cache freshness lease. Credential
+reference mutations, their atomic epoch bump/audit/outbox and final proof
+consumption are still under development; applications must not supply private
+SQL callbacks to replace them. User-owned references do not represent
+organization-owned API-key authority, which belongs to its separate owner.
+
 ## Durable user-status admission
 
 Opt in with `StatusMigrationSource{Base: MigrationSource{}, Version: allocated}`

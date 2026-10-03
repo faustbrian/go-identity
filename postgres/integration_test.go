@@ -136,6 +136,31 @@ func TestPostgresIntegration(t *testing.T) {
 		}
 		testStatusLifecycle(t, ctx, pool, repo)
 	})
+	t.Run("credential primary authority", func(t *testing.T) {
+		q := identity.CredentialAuthorityQuery{TenantID: "status-migration", UserID: "active", CredentialID: "absent"}
+		if got, e := repo.GetCredentialAuthority(ctx, q); e == nil || errors.Is(e, identity.ErrUserAbsent) || got != (identity.CredentialAuthorityRecord{}) {
+			t.Fatal("uninstalled credential schema supplied absence/authority", e)
+		}
+		credentialRunner, e := migrations.NewRunner(CredentialMigrationSource{Base: StatusMigrationSource{Base: MigrationSource{}, Version: 12}, Version: 13}, backend)
+		if e != nil {
+			t.Fatal(e)
+		}
+		if _, e := credentialRunner.Up(ctx); e != nil {
+			t.Fatal("populated credential migration failed", e)
+		}
+		if _, e := credentialRunner.Up(ctx); e != nil {
+			t.Fatal("credential migration replay failed", e)
+		}
+		runner = credentialRunner
+		for _, status := range []string{"active", "suspended", "banned", "deleted", "anonymized"} {
+			var aggregate, userEpoch, identifierEpoch, credentialEpoch, storedStatus string
+			e := pool.Raw().QueryRow(ctx, `SELECT version::text,authority_version::text,identifier_version::text,credential_version::text,status FROM identity.users WHERE tenant_id='status-migration' AND user_id=$1`, status).Scan(&aggregate, &userEpoch, &identifierEpoch, &credentialEpoch, &storedStatus)
+			if e != nil || aggregate != "9223372036854775811" || userEpoch != "1" || identifierEpoch != "7" || credentialEpoch != "1" || storedStatus != status {
+				t.Fatal("populated migration altered existing dimensions", e)
+			}
+		}
+		testCredentialAuthority(t, ctx, pool, repo)
+	})
 	insert := func(tenant, user, status, version string) error {
 		_, err := pool.Raw().Exec(ctx, `INSERT INTO identity.users(tenant_id,user_id,status,version) VALUES($1,$2,$3,$4::numeric)`, tenant, user, status, version)
 		return err

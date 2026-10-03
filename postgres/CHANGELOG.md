@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Read exact credential references and independent user credential epochs from
+  one bounded primary snapshot, preserving full-width versions and blocked,
+  disabled and expired states. Explicit forward `CredentialMigrationSource`
+  retains installed history and initializes only the new epoch for old writers.
+  Adopt the committed core eligibility port; mutations and proof consumption
+  remain separate unfinished phases.
+
 - Persist suspend/ban and restore/unban through the existing coordinator, with
   a separate user-security epoch, locked owner policy, exact pending consumer
   contracts, audit, lifecycle and replay receipts. Primary `GetStatus` never
