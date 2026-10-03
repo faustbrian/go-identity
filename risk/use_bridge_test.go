@@ -1,10 +1,12 @@
 package risk
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -39,6 +41,10 @@ func TestEvidenceUseNativeBridgePreservesScopeWithoutAuthority(t *testing.T) {
 	if err != nil || claim.Prepared() != p || claim.Validate(now) != nil {
 		t.Fatal("native bridge failed", err)
 	}
+	rechecked, err := issuer.RecheckUse(original, p, now)
+	if err != nil || rechecked.Prepared() != p {
+		t.Fatal("current full-scope recheck failed", err)
+	}
 	if p.Binding.CommandID != original.CommandID || p.ConsumerCommandID != request.CommandID || p.ConsumerActor != request.Actor || p.EvidenceDigest != record.EvidenceDigest || p.ProofDigest != record.ProofDigest || !p.IssuedAt.Equal(record.IssuedAt) || !p.ExpiresAt.Equal(record.ExpiresAt) || !p.CheckedAt.Equal(now) {
 		t.Fatal("bridge changed original scope")
 	}
@@ -67,6 +73,9 @@ func TestEvidenceUseNativeBridgePreservesScopeWithoutAuthority(t *testing.T) {
 		bad, err := config.Keys[0].RestoreUse(changed)
 		if err == nil || bad.Prepared() != (PreparedEvidenceUse{}) {
 			t.Fatal("signed scalar changed")
+		}
+		if bad, err := issuer.RecheckUse(original, changed, now); err == nil || bad.Prepared() != (PreparedEvidenceUse{}) {
+			t.Fatal("current recheck accepted tampered projection")
 		}
 	}
 	if use.Prepared() != p {
@@ -144,4 +153,116 @@ func TestEvidenceUseNativeBridgePreservesScopeWithoutAuthority(t *testing.T) {
 	if _, err := zeroKey.RestoreUse(p); err == nil {
 		t.Fatal("zero key")
 	}
+	for _, mutate := range []func(*PhoneEvidenceRequest){
+		func(r *PhoneEvidenceRequest) { r.CommandID = p.ConsumerCommandID },
+		func(r *PhoneEvidenceRequest) { r.Actor += "x" },
+		func(r *PhoneEvidenceRequest) { r.Recovery.Binding.Tenant += "x" },
+		func(r *PhoneEvidenceRequest) { r.Recovery.Binding.Subject += "x" },
+		func(r *PhoneEvidenceRequest) { r.Recovery.Binding.CanonicalNumber = "+358401234568" },
+		func(r *PhoneEvidenceRequest) { r.Recovery.Binding.PreAuthTransaction += "x" },
+		func(r *PhoneEvidenceRequest) { r.Recovery.Binding.Attempt += "x" },
+		func(r *PhoneEvidenceRequest) { r.Recovery.Binding.PolicyVersion++ },
+		func(r *PhoneEvidenceRequest) { r.Recovery.Phase = PhoneResetCompletion },
+		func(r *PhoneEvidenceRequest) {
+			r.Recovery.Binding.RecoveryOperation = "identity.phone.password-reset-complete"
+		},
+		func(r *PhoneEvidenceRequest) { r.Subject.Network = "192.0.2.254" },
+		func(r *PhoneEvidenceRequest) { r.Subject.Device += "x" },
+		func(r *PhoneEvidenceRequest) { r.Subject.IdentifierDigest += "x" },
+		func(r *PhoneEvidenceRequest) { r.Subject.User += "x" },
+		func(r *PhoneEvidenceRequest) { r.Subject.Session += "x" },
+		func(r *PhoneEvidenceRequest) { r.Subject.Actor += "x" },
+		func(r *PhoneEvidenceRequest) { r.Subject.Resource += "x" },
+	} {
+		changed := original
+		mutate(&changed)
+		if bad, err := issuer.RecheckUse(changed, p, now); err == nil || bad.Prepared() != (PreparedEvidenceUse{}) {
+			t.Fatal("full raw scope changed")
+		}
+	}
+	for version := 0; version < 4; version++ {
+		other, err := NewPhoneEvidenceIssuer(issuerConfig(t, &now, executor))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if version == 0 {
+			for name, source := range other.state.evaluation.state.sources {
+				source.Version = "v2"
+				other.state.evaluation.state.sources[name] = source
+			}
+		} else {
+			other.state.carrier.state.sources[version-1].Version = "v2"
+		}
+		if _, err := other.RecheckUse(original, p, now); err == nil {
+			t.Fatal("current provider configuration drift accepted")
+		}
+	}
+	key, err := NewEvidenceKey(2, bytes.Repeat([]byte{0x61}, 32), bytes.Repeat([]byte{0x62}, 32))
+	if err != nil {
+		t.Fatal(err)
+	}
+	rotatedConfig := issuerConfig(t, &now, executor)
+	rotatedConfig.Keys = append(rotatedConfig.Keys, key)
+	rotated, err := NewPhoneEvidenceIssuer(rotatedConfig)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, err := rotated.RecheckUse(original, p, now); err != nil || got.Prepared() != p {
+		t.Fatal("retained key recheck rejected", err)
+	}
+	rotatedConfig.Keys = []EvidenceKey{key}
+	retired, err := NewPhoneEvidenceIssuer(rotatedConfig)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := retired.RecheckUse(original, p, now); err == nil {
+		t.Fatal("retired key recheck accepted")
+	}
+	for _, at := range []time.Time{time.Time{}, now.Add(-time.Microsecond), now.Add(time.Nanosecond), now.In(time.FixedZone("same", 0)), p.ExpiresAt, p.ExpiresAt.Add(time.Microsecond)} {
+		if bad, err := issuer.RecheckUse(original, p, at); err == nil || bad.Prepared() != (PreparedEvidenceUse{}) {
+			t.Fatal("primary time boundary expanded")
+		}
+	}
+	if got, err := issuer.RecheckUse(original, p, p.ExpiresAt.Add(-time.Microsecond)); err != nil || got.Prepared() != p {
+		t.Fatal("original validity interval shortened", err)
+	}
+	if _, err := (PhoneEvidenceIssuer{}).RecheckUse(original, p, now); err == nil {
+		t.Fatal("zero issuer recheck accepted")
+	}
+	// Recheck runs inside a caller-owned transaction; even clock callbacks
+	// must not execute. These traps cover every configured external boundary.
+	issuer.state.clock = func() time.Time { t.Fatal("recheck called clock"); return now }
+	issuer.state.evaluation.state.counters.state.clock = func() time.Time { t.Fatal("recheck called counter clock"); return now }
+	issuer.state.executor = evidenceExecutor{resolve: func(context.Context, EvidenceIntent) (EvidenceExecution, error) {
+		t.Fatal("recheck resolved executor")
+		return EvidenceExecution{}, nil
+	}, execute: func(context.Context, EvidenceIssue) (EvidenceExecution, error) {
+		t.Fatal("recheck executed issuance")
+		return EvidenceExecution{}, nil
+	}}
+	for name, source := range issuer.state.evaluation.state.sources {
+		source.Read = func(context.Context, Context) (Signal, error) { t.Fatal("recheck read provider"); return Signal{}, nil }
+		issuer.state.evaluation.state.sources[name] = source
+	}
+	for n := range issuer.state.carrier.state.sources {
+		issuer.state.carrier.state.sources[n].Read = func(context.Context, CarrierRequest) (CarrierObservation, error) {
+			t.Fatal("recheck read carrier")
+			return CarrierObservation{}, nil
+		}
+	}
+	issuer.state.evaluation.state.counters.state.store = counterStoreFunc(func(context.Context, CounterCommand) (CounterResult, error) {
+		t.Fatal("recheck mutated counter")
+		return CounterResult{}, nil
+	})
+	issuer.state.evaluation.state.independentFactor = func(context.Context, Context) (bool, error) { t.Fatal("recheck resolved factor"); return false, nil }
+	var readers sync.WaitGroup
+	for range 16 {
+		readers.Go(func() {
+			got, err := issuer.RecheckUse(original, p, now)
+			if err != nil || got.Prepared() != p {
+				t.Error("concurrent recheck changed original proof")
+			}
+		})
+	}
+	readers.Wait()
 }

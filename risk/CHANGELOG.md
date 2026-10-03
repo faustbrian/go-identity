@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Recheck signed evidence-use projections against complete original recovery
+  and subject inputs and current provider configuration using primary time,
+  without callbacks or renewal of the original validity interval. Journal and
+  current-counter checks remain required before protected mutations.
+
 - Bridge authenticated evidence-use prechecks into signed native-command
   projections with separate issuance/consumer identity and unchanged expiry.
   Restoration checks both retained key lanes but grants no reservation authority.

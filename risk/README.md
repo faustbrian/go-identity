@@ -179,6 +179,17 @@ match its exact coordinator command and current policy, lock the authoritative
 journal and counters, and perform atomic reservation/consumption; these phases
 remain unfinished. Projecting or restoring never runs callbacks or renews time.
 
+`PhoneEvidenceIssuer.RecheckUse(original, prepared, primaryTime)` reconstructs
+the complete original recovery and subject intent using the current immutable
+policy/provider configuration, then authenticates the signed consumer projection
+with its retained key pair. Supply authoritative primary UTC microsecond time
+from the shared transaction; the issuer invokes no clocks, providers, counters
+or executor. Changed raw scope/configuration, retired keys, backward time and
+exclusive expiry deny. The returned claim preserves every original field;
+it does not prove current counters, command authorization or reserved journal
+state. The native participant must establish those separately and finalize
+atomically with the protected mutation. This method does not enable domain use.
+
 Native use integrity signs the ordered bounded fields with the existing
 length-prefixed HMAC profile. A linkage HMAC under the retained digest key uses
 `identity-risk-evidence-use-linkage-v1`; the integrity HMAC under the paired

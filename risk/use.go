@@ -89,3 +89,39 @@ func (p EvidenceUse) Validate(request EvidenceUseRequest, now time.Time) error {
 	}
 	return nil
 }
+
+// RecheckUse authenticates the signed consuming projection against the complete
+// original trusted recovery and subject inputs under this issuer's current
+// immutable policy/provider configuration. now must be supplied by the sole
+// coordinator from primary database UTC time, with microsecond precision.
+// This local check invokes no clock, provider, counter, executor or callback;
+// retained keys are accepted only while the original interval remains valid.
+// It preserves CheckedAt and expiry and grants no reservation, current-counter,
+// authorization or mutation authority. The adapter must separately match the
+// consuming command and authoritative reserved row in that same transaction.
+// Inputs must not be mutated concurrently. Zero or mismatched input fails closed.
+func (s PhoneEvidenceIssuer) RecheckUse(original PhoneEvidenceRequest, prepared PreparedEvidenceUse, now time.Time) (EvidenceUseClaim, error) {
+	if !databaseEvidenceTime(now) {
+		return EvidenceUseClaim{}, ErrInvalidEvidenceExecution
+	}
+	intent, err := s.intent(original, now)
+	if err != nil {
+		return EvidenceUseClaim{}, ErrInvalidEvidenceExecution
+	}
+	for _, binding := range intent.Bindings() {
+		if binding != prepared.Binding {
+			continue
+		}
+		for _, key := range s.state.keys {
+			if key.version != binding.KeyVersion {
+				continue
+			}
+			claim, err := key.RestoreUse(prepared)
+			if err != nil || claim.Validate(now) != nil {
+				return EvidenceUseClaim{}, ErrInvalidEvidenceExecution
+			}
+			return claim, nil
+		}
+	}
+	return EvidenceUseClaim{}, ErrInvalidEvidenceExecution
+}

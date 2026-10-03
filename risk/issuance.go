@@ -472,8 +472,14 @@ func (s PhoneEvidenceIssuer) intent(r PhoneEvidenceRequest, now time.Time) (Evid
 	}
 	b := r.Recovery.Binding
 	c := Context{Tenant: b.Tenant, Operation: b.RecoveryOperation, Attempt: b.Attempt, Now: now}
-	// Prepare is local structural/key validation, not a store read/mutation.
-	if _, err := s.state.evaluation.state.counters.Prepare(c, r.Subject, BeforeCredential); err != nil {
+	// Reconstruction validates the same closed counter scope and dimensions
+	// without dispatch or the counter owner's clock. Supplied time belongs to
+	// the issuer precheck or the sole coordinator's authoritative primary read.
+	a, err := s.state.evaluation.state.counters.admitScope(c, BeforeCredential)
+	if err != nil {
+		return EvidenceIntent{}, ErrInvalidEvidenceRequest
+	}
+	if _, err := counterDimensions(r.Subject, c.Tenant, a.Profile.Dimensions); err != nil {
 		return EvidenceIntent{}, ErrInvalidEvidenceRequest
 	}
 	var configuration []string

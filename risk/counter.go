@@ -277,23 +277,37 @@ func NewCounterCoordinator(c CounterCoordinatorConfig) (CounterCoordinator, erro
 // the later shared-Work participant and fails closed, never an independent
 // mutation. Unsupported/extra dimensions or invalid clocks return zero.
 func (c CounterCoordinator) Prepare(scope Context, subject Subject, phase Phase) (CounterCommand, error) {
-	if c.state == nil {
-		return CounterCommand{}, ErrInvalidPolicy
-	}
-	a, err := c.state.policy.Admit(scope.Operation)
+	a, err := c.admitScope(scope, phase)
 	if err != nil {
 		return CounterCommand{}, err
-	}
-	if a.Preflight != "" || phase != a.Profile.Phase || !scopeID(scope.Tenant) || !scopeID(scope.Attempt) {
-		return CounterCommand{}, ErrInvalidCounterCommand
-	}
-	if phase == ReserveWithCommand {
-		return CounterCommand{}, ErrUnsupportedCounterPhase
 	}
 	now := c.state.clock()
 	if !validTime(now) {
 		return CounterCommand{}, ErrInvalidCounterCommand
 	}
+	return c.prepareAdmitted(scope, subject, phase, a, now)
+}
+
+// Intent reconstruction needs the same closed scope admission but must not
+// sample the independently configured mutation clock inside a transaction.
+func (c CounterCoordinator) admitScope(scope Context, phase Phase) (Admission, error) {
+	if c.state == nil {
+		return Admission{}, ErrInvalidPolicy
+	}
+	a, err := c.state.policy.Admit(scope.Operation)
+	if err != nil {
+		return Admission{}, err
+	}
+	if a.Preflight != "" || phase != a.Profile.Phase || !scopeID(scope.Tenant) || !scopeID(scope.Attempt) {
+		return Admission{}, ErrInvalidCounterCommand
+	}
+	if phase == ReserveWithCommand {
+		return Admission{}, ErrUnsupportedCounterPhase
+	}
+	return a, nil
+}
+
+func (c CounterCoordinator) prepareAdmitted(scope Context, subject Subject, phase Phase, a Admission, now time.Time) (CounterCommand, error) {
 	values, err := counterDimensions(subject, scope.Tenant, a.Profile.Dimensions)
 	if err != nil {
 		return CounterCommand{}, err
