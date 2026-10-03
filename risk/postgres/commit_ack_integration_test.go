@@ -10,7 +10,10 @@ import (
 	"net"
 	"strings"
 	"sync/atomic"
+	"testing"
+	"time"
 
+	database "github.com/faustbrian/go-postgres"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -22,6 +25,37 @@ type commitAckFault struct {
 }
 
 type ackTargetKey struct{}
+
+func newCommitAckPool(t *testing.T, ctx context.Context, dsn, name string, command []byte) (*database.Pool, *commitAckFault) {
+	t.Helper()
+	fault := &commitAckFault{command: bytes.Clone(command)}
+	pool, err := database.Connect(ctx, database.Config{DSN: dsn, MaxConns: 2, Configure: func(c *database.PoolConfig) error {
+		c.ConnConfig.Database = name
+		c.ConnConfig.TLSConfig = nil
+		c.ConnConfig.Fallbacks = nil
+		c.ConnConfig.RuntimeParams["synchronous_commit"] = "on"
+		c.ConnConfig.Tracer = fault
+		c.ConnConfig.DialFunc = func(ctx context.Context, network, address string) (net.Conn, error) {
+			conn, err := (&net.Dialer{}).DialContext(ctx, network, address)
+			if err != nil {
+				return nil, err
+			}
+			return &commitAckConn{Conn: conn, fault: fault}, nil
+		}
+		return nil
+	}})
+	if err != nil {
+		t.Fatal("fault pool", err)
+	}
+	t.Cleanup(func() {
+		cleanup, stop := context.WithTimeout(context.Background(), 3*time.Second)
+		defer stop()
+		if err := pool.Close(cleanup); err != nil {
+			t.Error("fault pool cleanup")
+		}
+	})
+	return pool, fault
+}
 
 func (f *commitAckFault) TraceQueryStart(ctx context.Context, conn *pgx.Conn, data pgx.TraceQueryStartData) context.Context {
 	c, ok := conn.PgConn().Conn().(*commitAckConn)

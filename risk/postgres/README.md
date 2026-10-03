@@ -64,6 +64,13 @@ context for the exact actor, tenant, `identity.risk.evaluate` action and
 `identity.user` resource. It is copied, not derived from request Actor text.
 Both opt-in coordinator policies must use the caller's current revision.
 
+The owned audit contributor uses `audit/postgres`, `identity.security_audit`, v1.
+The original explicit `identity.audit` v1 composition identity remains accepted
+for compatibility; other contracts, owners and versions are rejected. The owned
+outbox contributor uses `outbox/postgres`, `identity.lifecycle`, v1. Install all
+audit migrations with their fresh-install preflight and generic plus identity
+outbox migrations before use.
+
 Pass the executor to `risk.NewPhoneEvidenceIssuer`. Missing is returned only
 after authorized global claim absence. Prior pending, failed, foreign and corrupt
 commands never enable provider reevaluation. Committed replay preserves the
@@ -81,7 +88,7 @@ reference and timestamps without provider work or duplicate effects.
 
 ## Remaining work
 
-Production effect-adapter interoperability; reservation/finalization/release;
+Reservation/finalization/release;
 durable lockouts/counters; CAPTCHA participants;
 investigation, retention and anonymization; complete
 public examples/API baseline and package/release verification remain pending.

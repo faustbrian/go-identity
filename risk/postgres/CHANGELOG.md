@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Accept the canonical production audit contributor alongside the original
+  explicitly supported v1 composition identity. Foreign contracts, owners and
+  versions remain rejected; production audit/outbox effects share native
+  issuance, rollback and original-response recovery.
+
 - Add the official authenticated issuance executor and private primary original
   response resolution. Same-Work issuance, exact-intent replay and retained-key
   rotation preserve original references and expiry; conflicting, pending,

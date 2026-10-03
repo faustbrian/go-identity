@@ -7,14 +7,16 @@ import (
 	"context"
 	"encoding/base64"
 	"errors"
-	"net"
+	"io/fs"
 	"os"
 	"strconv"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/faustbrian/go-audit"
+	auditpostgres "github.com/faustbrian/go-audit/postgres"
 	"github.com/faustbrian/go-authorization"
 	"github.com/faustbrian/go-clock"
 	identity "github.com/faustbrian/go-identity"
@@ -23,6 +25,8 @@ import (
 	migrations "github.com/faustbrian/go-migrations/v3"
 	migrationdb "github.com/faustbrian/go-migrations/v3/postgres"
 	database "github.com/faustbrian/go-postgres"
+	outboxpostgres "github.com/faustbrian/go-transactional-outbox/v2/postgres"
+	identityoutbox "github.com/faustbrian/go-transactional-outbox/v2/postgres/identity"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/stdlib"
 )
@@ -120,6 +124,24 @@ func (*foreignIssuanceAudit) Descriptor() identitypostgres.ContributorDescriptor
 	return identitypostgres.ContributorDescriptor{Owner: "foreign/postgres", ContractID: "identity.audit", Version: 1}
 }
 
+type auditDescriptorVariant struct {
+	*auditpostgres.IdentityContributor
+	descriptor identitypostgres.ContributorDescriptor
+}
+
+func (a auditDescriptorVariant) Descriptor() identitypostgres.ContributorDescriptor {
+	return a.descriptor
+}
+
+type lifecycleDescriptorVariant struct {
+	*identityoutbox.Contributor
+	descriptor identitypostgres.ContributorDescriptor
+}
+
+func (l lifecycleDescriptorVariant) Descriptor() identitypostgres.ContributorDescriptor {
+	return l.descriptor
+}
+
 // Test-only interleaving boundary: both public issuers finish independent
 // evaluations before invoking the real executor. No durable outcome is faked.
 type concurrentIssuance struct {
@@ -175,11 +197,17 @@ func TestIssuedEvidenceSameWorkIntegration(t *testing.T) {
 	if _, err = admin.Exec(ctx, "CREATE DATABASE "+quoted); err != nil {
 		t.Fatal(err)
 	}
+	ownedAuditRoles := false
 	defer func() {
 		c, s := context.WithTimeout(context.Background(), 3*time.Second)
 		defer s()
 		if _, e := admin.Exec(c, "DROP DATABASE "+quoted); e != nil {
 			t.Error("database cleanup")
+		}
+		if ownedAuditRoles {
+			if _, e := admin.Exec(c, "DROP ROLE audit_writer,audit_reader,audit_retention"); e != nil {
+				t.Error("owned audit role cleanup")
+			}
 		}
 	}()
 	config.Database = name
@@ -360,6 +388,200 @@ func TestIssuedEvidenceSameWorkIntegration(t *testing.T) {
 			}
 		}
 	})
+	t.Run("official-executor-production-effects", func(t *testing.T) {
+		install, err := db.BeginTx(ctx, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer install.Rollback()
+		if _, err = install.ExecContext(ctx, auditpostgres.FreshInstallPreflightSQL()); err != nil {
+			t.Fatal("owned audit preflight", err)
+		}
+		for _, source := range []fs.FS{auditpostgres.Migrations(), outboxpostgres.Migrations(), identityoutbox.Migrations()} {
+			files, err := fs.ReadDir(source, ".")
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, file := range files {
+				contents, err := fs.ReadFile(source, file.Name())
+				if err != nil {
+					t.Fatal(err)
+				}
+				if _, err = install.ExecContext(ctx, strings.Split(string(contents), "-- +migrations Down")[0]); err != nil {
+					t.Fatal("production migration", file.Name(), err)
+				}
+			}
+		}
+		if err = install.Commit(); err != nil {
+			t.Fatal(err)
+		}
+		ownedAuditRoles = true
+		productionAudit, err := auditpostgres.NewIdentityContributor(auditpostgres.Config{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		productionOutbox, err := identityoutbox.NewContributor()
+		if err != nil {
+			t.Fatal(err)
+		}
+		c := executorConfig(repo, issuanceQueryPolicy{})
+		c.Audit, c.Lifecycle = productionAudit, productionOutbox
+		executor, err := NewExecutor(c)
+		if err != nil {
+			t.Fatal("production adapters rejected", err)
+		}
+		for _, mutate := range []func(*identitypostgres.ContributorDescriptor){
+			func(d *identitypostgres.ContributorDescriptor) { d.Owner = "foreign/postgres" },
+			func(d *identitypostgres.ContributorDescriptor) { d.ContractID = "foreign.contract" },
+			func(d *identitypostgres.ContributorDescriptor) { d.Version = 2 },
+		} {
+			for _, isAudit := range []bool{true, false} {
+				bad := c
+				if isAudit {
+					d := productionAudit.Descriptor()
+					mutate(&d)
+					bad.Audit = auditDescriptorVariant{productionAudit, d}
+				} else {
+					d := productionOutbox.Descriptor()
+					mutate(&d)
+					bad.Lifecycle = lifecycleDescriptorVariant{productionOutbox, d}
+				}
+				if _, err := NewExecutor(bad); !errors.Is(err, risk.ErrInvalidPolicy) {
+					t.Fatal("foreign production descriptor admitted", err)
+				}
+			}
+		}
+		for _, phase := range []risk.IssuancePhase{risk.PhoneResetInitiation, risk.PhoneResetCompletion} {
+			for _, lostAck := range []bool{false, true} {
+				id, err := identity.NewCommandID()
+				if err != nil {
+					t.Fatal(err)
+				}
+				raw, _ := base64.RawURLEncoding.DecodeString(string(id))
+				active := executor
+				var fault *commitAckFault
+				if lostAck {
+					faultConfig := c
+					faultConfig.Pool, fault = newCommitAckPool(t, ctx, dsn, name, raw)
+					active, err = NewExecutor(faultConfig)
+					if err != nil {
+						t.Fatal(err)
+					}
+				}
+				at := time.Now().UTC().Truncate(time.Microsecond).Add(-100 * time.Millisecond)
+				issuer, request, _ := issuanceFixture(t, phase, at, string(id), active, false, nil)
+				first, err := issuer.Evaluate(ctx, request)
+				if lostAck {
+					if err != nil || fault.hits.Load() != 1 || first.Outcome != risk.EvidenceUnknown || first.Evidence != (risk.RiskEvidence{}) {
+						t.Fatal("production uncertain commit disclosed", err)
+					}
+				} else if err != nil || first.Outcome != risk.EvidenceCommitted || first.Evidence.Reference.Reveal() == "" {
+					t.Fatal("production issuance", err)
+				}
+				var nativeCount, auditCount, auditBindings, outboxCount, outboxBindings int
+				assertEffects := func() {
+					t.Helper()
+					err := db.QueryRowContext(ctx, `SELECT (SELECT count(*) FROM risk_store.issued_evidence WHERE command_id=$1),(SELECT count(*) FROM audit.records r JOIN audit.identity_command_bindings b ON b.event_id=r.record_id WHERE b.command_id=$1),(SELECT count(*) FROM audit.identity_command_bindings WHERE command_id=$1),(SELECT count(*) FROM public.outbox_messages WHERE metadata->>'identity.command_id'=$2 AND topic='risk.evidence_issued.v1'),(SELECT count(*) FROM public.identity_outbox_bindings WHERE command_id=$1)`, raw, string(id)).Scan(&nativeCount, &auditCount, &auditBindings, &outboxCount, &outboxBindings)
+					if err != nil || nativeCount != 1 || auditCount != 1 || auditBindings != 1 || outboxCount != 1 || outboxBindings != 1 {
+						t.Fatalf("production effect cardinality %d/%d/%d/%d/%d: %v", nativeCount, auditCount, auditBindings, outboxCount, outboxBindings, err)
+					}
+				}
+				assertEffects()
+				var action, retention, subjectType, subjectID string
+				var outcome int16
+				if err = db.QueryRowContext(ctx, `SELECT r.action,r.outcome,convert_from(r.canonical_record,'UTF8')::jsonb->'attributes'->>'retention.class',convert_from(o.payload,'UTF8')::jsonb->>'subject_type',convert_from(o.payload,'UTF8')::jsonb->>'subject_id' FROM audit.records r JOIN audit.identity_command_bindings b ON b.event_id=r.record_id JOIN public.outbox_messages o ON o.metadata->>'identity.command_id'=$2 WHERE b.command_id=$1`, raw, string(id)).Scan(&action, &outcome, &retention, &subjectType, &subjectID); err != nil || action != "identity.risk.decide" || outcome != 1 || retention != "protected" || subjectType != "risk_evidence" || subjectID != string(id) {
+					t.Fatal("production effect projection", err)
+				}
+				fresh, err := NewExecutor(c)
+				if err != nil {
+					t.Fatal(err)
+				}
+				replay, original, _ := issuanceFixture(t, phase, at.Add(time.Minute), string(id), fresh, true, nil)
+				recovered, err := replay.Recover(ctx, original)
+				if lostAck {
+					first = recovered
+				}
+				if err != nil || recovered.Outcome != risk.EvidenceCommitted || recovered.Evidence.Reference.Reveal() == "" || recovered != first {
+					t.Fatal("production recovery", err)
+				}
+				var issued, expires time.Time
+				var state, purpose string
+				if err = db.QueryRowContext(ctx, `SELECT c.state,e.purpose,e.issued_at,e.expires_at FROM identity.commands c JOIN risk_store.issued_evidence e USING(command_id,tenant_id) WHERE c.command_id=$1`, raw).Scan(&state, &purpose, &issued, &expires); err != nil || state != "committed" || purpose != string(recovered.Evidence.Purpose) || !issued.Equal(recovered.Evidence.IssuedAt) || !expires.Equal(recovered.Evidence.ExpiresAt) {
+					t.Fatal("production custody changed", err)
+				}
+				again, err := replay.Evaluate(ctx, original)
+				if err != nil || again != first {
+					t.Fatal("production replay", err)
+				}
+				changed := original
+				if phase == risk.PhoneResetInitiation {
+					changed.Recovery.Phase = risk.PhoneResetCompletion
+					changed.Recovery.Binding.RecoveryOperation = "identity.phone.password-reset-complete"
+				} else {
+					changed.Recovery.Phase = risk.PhoneResetInitiation
+					changed.Recovery.Binding.RecoveryOperation = "identity.phone.password-reset-request"
+				}
+				crossed, _ := replay.Evaluate(ctx, changed)
+				if crossed.Outcome == risk.EvidenceCommitted || crossed.Outcome == risk.EvidenceMissing || crossed.Evidence != (risk.RiskEvidence{}) {
+					t.Fatal("production cross-purpose replay disclosed")
+				}
+				assertEffects()
+			}
+		}
+		noSuccessfulEffects := func(t *testing.T, id identity.CommandID) {
+			t.Helper()
+			raw, _ := base64.RawURLEncoding.DecodeString(string(id))
+			var native, audits, messages, bindings int
+			err := db.QueryRowContext(ctx, `SELECT (SELECT count(*) FROM risk_store.issued_evidence WHERE command_id=$1),(SELECT count(*) FROM audit.records r JOIN audit.identity_command_bindings b ON b.event_id=r.record_id WHERE b.command_id=$1 AND r.outcome=1),(SELECT count(*) FROM public.outbox_messages WHERE metadata->>'identity.command_id'=$2),(SELECT count(*) FROM public.identity_outbox_bindings WHERE command_id=$1)`, raw, string(id)).Scan(&native, &audits, &messages, &bindings)
+			if err != nil || native != 0 || audits != 0 || messages != 0 || bindings != 0 {
+				t.Fatalf("production rollback retained success %d/%d/%d/%d: %v", native, audits, messages, bindings, err)
+			}
+		}
+		for _, table := range []string{"audit.records", "public.outbox_messages"} {
+			t.Run("rollback-"+table, func(t *testing.T) {
+				if _, err := db.ExecContext(ctx, `CREATE FUNCTION public.risk_reject_effect() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION USING ERRCODE='23514',MESSAGE='fixture effect rejected'; END $$; CREATE TRIGGER risk_reject_effect BEFORE INSERT ON `+table+` FOR EACH ROW EXECUTE FUNCTION public.risk_reject_effect()`); err != nil {
+					t.Fatal(err)
+				}
+				defer func() {
+					if _, err := db.ExecContext(ctx, `DROP TRIGGER risk_reject_effect ON `+table+`; DROP FUNCTION public.risk_reject_effect()`); err != nil {
+						t.Error("effect fault cleanup", err)
+					}
+				}()
+				id, err := identity.NewCommandID()
+				if err != nil {
+					t.Fatal(err)
+				}
+				issuer, request, _ := issuanceFixture(t, risk.PhoneResetInitiation, time.Now().UTC().Truncate(time.Microsecond).Add(-100*time.Millisecond), string(id), executor, false, nil)
+				got, _ := issuer.Evaluate(ctx, request)
+				if got.Outcome == risk.EvidenceCommitted || got.Outcome == risk.EvidenceMissing || got.Evidence != (risk.RiskEvidence{}) {
+					t.Fatal("production failure disclosed")
+				}
+				noSuccessfulEffects(t, id)
+			})
+		}
+		t.Run("abandoned-production-reservation", func(t *testing.T) {
+			at := time.Now().UTC().Truncate(time.Microsecond).Add(-100 * time.Millisecond)
+			b, cmd, _, _ := prepare(t, risk.PhoneResetInitiation, at)
+			plan, err := executor.plan(b, cmd, at)
+			if err != nil {
+				t.Fatal(err)
+			}
+			_, result, err := executor.coordinator.ReserveCommand(ctx, b, cmd, plan)
+			if err != nil || result.Outcome != identity.CommitOutcomeInProgress {
+				t.Fatal("production reservation", err)
+			}
+			raw, _ := base64.RawURLEncoding.DecodeString(string(b.CommandID))
+			if _, err = db.ExecContext(ctx, `UPDATE identity.commands SET lease_until=clock_timestamp()-interval '1 second' WHERE command_id=$1`, raw); err != nil {
+				t.Fatal(err)
+			}
+			issuer, request, _ := issuanceFixture(t, risk.PhoneResetInitiation, at, string(b.CommandID), executor, true, nil)
+			got, err := issuer.Recover(ctx, request)
+			if err != nil || got.Outcome != risk.EvidenceFailed || got.Evidence != (risk.RiskEvidence{}) {
+				t.Fatal("production noncommit recovery", err)
+			}
+			noSuccessfulEffects(t, b.CommandID)
+		})
+	})
 	t.Run("official-executor-original-replay", func(t *testing.T) {
 		for _, phase := range []risk.IssuancePhase{risk.PhoneResetInitiation, risk.PhoneResetCompletion} {
 			id, err := identity.NewCommandID()
@@ -500,33 +722,8 @@ func TestIssuedEvidenceSameWorkIntegration(t *testing.T) {
 				t.Fatal(err)
 			}
 			raw, _ := base64.RawURLEncoding.DecodeString(string(id))
-			fault := &commitAckFault{command: raw}
-			faultPool, err := database.Connect(ctx, database.Config{DSN: dsn, MaxConns: 2, Configure: func(c *database.PoolConfig) error {
-				c.ConnConfig.Database = name
-				c.ConnConfig.TLSConfig = nil
-				c.ConnConfig.Fallbacks = nil
-				c.ConnConfig.RuntimeParams["synchronous_commit"] = "on"
-				c.ConnConfig.Tracer = fault
-				c.ConnConfig.DialFunc = func(ctx context.Context, network, address string) (net.Conn, error) {
-					conn, err := (&net.Dialer{}).DialContext(ctx, network, address)
-					if err != nil {
-						return nil, err
-					}
-					return &commitAckConn{Conn: conn, fault: fault}, nil
-				}
-				return nil
-			}})
-			if err != nil {
-				t.Fatal("fault pool", err)
-			}
+			faultPool, fault := newCommitAckPool(t, ctx, dsn, name, raw)
 			func() {
-				defer func() {
-					cleanup, stop := context.WithTimeout(context.Background(), 3*time.Second)
-					defer stop()
-					if err := faultPool.Close(cleanup); err != nil {
-						t.Error("fault pool cleanup")
-					}
-				}()
 				c := executorConfig(repo, issuanceQueryPolicy{})
 				c.Pool = faultPool
 				executor, err := NewExecutor(c)

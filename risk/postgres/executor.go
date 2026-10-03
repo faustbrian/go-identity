@@ -94,7 +94,11 @@ func NewExecutor(c ExecutorConfig) (*Executor, error) {
 		return nil, risk.ErrInvalidPolicy
 	}
 	descriptors := registry.Descriptors()
-	if descriptors[2] != (identitypostgres.ContributorDescriptor{Owner: "audit/postgres", ContractID: "identity.audit", Version: 1}) || descriptors[3] != (identitypostgres.ContributorDescriptor{Owner: "outbox/postgres", ContractID: "identity.lifecycle", Version: 1}) {
+	auditing := descriptors[2]
+	// The owned audit adapter uses identity.security_audit. Keep the original
+	// explicitly admitted v1 composition identity compatible, not arbitrary
+	// phase-compatible contracts or versions from the same owner.
+	if auditing.Owner != "audit/postgres" || auditing.Version != 1 || (auditing.ContractID != "identity.security_audit" && auditing.ContractID != "identity.audit") || descriptors[3] != (identitypostgres.ContributorDescriptor{Owner: "outbox/postgres", ContractID: "identity.lifecycle", Version: 1}) {
 		return nil, risk.ErrInvalidPolicy
 	}
 	if _, ok := c.Audit.(identitypostgres.RecoveryContributor); !ok {
