@@ -186,4 +186,5 @@ func testVelocityJournal(t *testing.T, ctx context.Context, dsn, databaseName st
 	if err := pool.Raw().QueryRow(ctx, `SELECT count(*) FROM risk_store.velocity_attempts WHERE tenant_id='native-tenant'`).Scan(&count); err != nil || count != 2 {
 		t.Fatal("partial intent survived rollback", err)
 	}
+	testVelocityResults(t, ctx, pool, journal, cfg, prepare, dsn, databaseName)
 }

@@ -47,7 +47,8 @@ func (VelocityJournalConfig) MarshalText() ([]byte, error) {
 // VelocityJournal owns durable ephemeral intent, not Valkey mutation, lockouts,
 // healthy epochs or protected identity transactions. It starts no goroutines and
 // never closes the caller's pool. Immutable configuration permits concurrent
-// calls; zero is invalid. Native completion and reconciliation remain separate.
+// calls; zero is invalid. Completion retains explicit declarations; external
+// reconciliation and fenced replay remain separate authorities.
 type VelocityJournal struct{ state *velocityJournal }
 type velocityJournal struct {
 	pool      *database.Pool

@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Atomically retain complete original velocity results and reconstruct historical
+  terminal outcomes through `RecordResult` and `ReadResult`. Exact receipt custody,
+  persisted scope and every retained alias are rechecked. Conflicting terminal
+  declarations, incomplete history and unrepresentable snapshots fail closed;
+  matching replay never refreshes observations. Unknown cannot become noncommit
+  or authorize redispatch. External-result reconciliation and Valkey replay/health
+  publication remain separate unfinished work.
+
 - Persist authenticated ephemeral attempt intent and all retained target aliases
   atomically through `VelocityJournal`. Pending replay cannot redispatch, changed
   intent cannot overwrite its journal, and unknown commits expose no receipt.

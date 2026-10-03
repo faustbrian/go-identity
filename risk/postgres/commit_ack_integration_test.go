@@ -20,8 +20,9 @@ import (
 // commitAckFault selects only the successful terminal write for one command.
 // It never fabricates a database outcome or changes executor behavior.
 type commitAckFault struct {
-	command []byte
-	hits    atomic.Int32
+	command          []byte
+	hits             atomic.Int32
+	velocitySequence atomic.Int64
 }
 
 type ackTargetKey struct{}
@@ -68,6 +69,12 @@ func (f *commitAckFault) TraceQueryStart(ctx context.Context, conn *pgx.Conn, da
 	if strings.Contains(data.SQL, "UPDATE identity.commands SET state=$4,result_version=1") && len(data.Args) == 6 {
 		id, ok := data.Args[0].([]byte)
 		if ok && bytes.Equal(id, f.command) && data.Args[3] == "committed" && data.Args[4] == "committed" {
+			return context.WithValue(ctx, ackTargetKey{}, true)
+		}
+	}
+	if f.velocitySequence.Load() > 0 && strings.Contains(data.SQL, ".velocity_attempts SET outcome=$1 WHERE sequence=$2") && len(data.Args) == 2 {
+		sequence, ok := data.Args[1].(int64)
+		if ok && sequence == f.velocitySequence.Load() && data.Args[0] == "committed" {
 			return context.WithValue(ctx, ackTargetKey{}, true)
 		}
 	}

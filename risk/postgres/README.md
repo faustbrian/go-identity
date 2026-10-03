@@ -16,7 +16,15 @@ evidence and decisions. It is **not yet an executable durable risk service**.
   never dispatch permission, allowance or counter/epoch health. Matching pending
   replay is unavailable; changed intent conflicts without overwriting history.
   Ambiguous journal commits return no receipt and do not authorize redispatch.
-  Terminal recording/resolution, recovery and Valkey execution remain pending.
+  `RecordResult` retains an explicit complete adapter declaration atomically;
+  terminal outcomes, including unknown, are immutable. Exact replay is idempotent.
+  `ReadResult` validates the complete stored binding, dimensions and retained
+  ordered aliases, preserving original uint64 values and observation/window
+  times. Pending or corrupt history is unavailable; unknown never becomes
+  noncommit. Exact full windows and microsecond-representable snapshots are
+  required; no freshness is rounded forward. These methods do not authenticate
+  external results or authorize effects. Lost-ack reconciliation, fenced recovery
+  and Valkey execution remain pending.
 
 - `VelocityMigrationSource{Base: counterHistory, Version: laterAllocation}` adds
   the PostgreSQL recovery journal for the separate ephemeral Valkey lane. It
