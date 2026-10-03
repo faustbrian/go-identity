@@ -5,6 +5,19 @@ evidence and decisions. It is **not yet an executable durable risk service**.
 
 ## Implemented boundary
 
+- `VelocityJournal` records an authenticated pending ephemeral attempt and every
+  exact keyed target/alias in one primary transaction, before external work.
+  Select a caller-owned `go-postgres.Pool`, exact coordinator policy/key custody,
+  stable deployment namespace and separately retained HMAC journal key. Replacing
+  that key is unsupported; retain it for all unresolved attempts. Install
+  `VelocityIntentMigrationSource` after velocity history: it backfills existing
+  targets and separates pending intent from post-mutation snapshots without
+  rewriting prior migration SQL. Receipt issuance proves only an intent commit,
+  never dispatch permission, allowance or counter/epoch health. Matching pending
+  replay is unavailable; changed intent conflicts without overwriting history.
+  Ambiguous journal commits return no receipt and do not authorize redispatch.
+  Terminal recording/resolution, recovery and Valkey execution remain pending.
+
 - `VelocityMigrationSource{Base: counterHistory, Version: laterAllocation}` adds
   the PostgreSQL recovery journal for the separate ephemeral Valkey lane. It
   stores scoped keyed attempt digests, original per-dimension snapshots and up

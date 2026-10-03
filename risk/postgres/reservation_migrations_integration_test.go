@@ -221,12 +221,29 @@ func TestRiskReservationPopulatedUpgrade(t *testing.T) {
 	if err := db.QueryRowContext(ctx, `SELECT jsonb_agg(to_jsonb(e) ORDER BY record_id)::text FROM risk_store.issued_evidence e`).Scan(&afterVelocity); err != nil || afterVelocity != beforeVelocity {
 		t.Fatal("velocity migration changed retained evidence", err)
 	}
+	intentSource := VelocityIntentMigrationSource{Base: VelocityMigrationSource{Base: CounterMigrationSource{Base: ReservationMigrationSource{Base: base, Version: 22}, Version: 23}, Version: 24}, Version: 25}
+	intentHistory, err := intentSource.Load(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i, previous := range velocity {
+		if intentHistory[i] != previous {
+			t.Fatal("installed velocity history rewritten")
+		}
+	}
+	install(intentHistory)
+	install(intentHistory)
+	var targets int
+	if err := db.QueryRowContext(ctx, `SELECT count(*) FROM risk_store.velocity_targets`).Scan(&targets); err != nil || targets != 6 {
+		t.Fatal("populated target custody lost", err)
+	}
+	testVelocityJournal(t, ctx, dsn, name)
 	// A fresh full history uses the same constraints, not an upgrade-only schema.
 	fresh, err := (ReservationMigrationSource{Base: IssuanceIDMigrationSource{Base: MigrationSource{Schema: "risk_fresh", Version: 30}, Version: 31}, Version: 32}).Load(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
-	install(append(append([]migrations.Migration(nil), velocity...), fresh...))
+	install(append(append([]migrations.Migration(nil), intentHistory...), fresh...))
 	if _, err := db.ExecContext(ctx, `INSERT INTO risk_fresh.issued_evidence SELECT * FROM risk_store.issued_evidence`); err != nil {
 		t.Fatal("fresh install lost issued-row compatibility", err)
 	}

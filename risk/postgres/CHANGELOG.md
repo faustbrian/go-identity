@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Persist authenticated ephemeral attempt intent and all retained target aliases
+  atomically through `VelocityJournal`. Pending replay cannot redispatch, changed
+  intent cannot overwrite its journal, and unknown commits expose no receipt.
+  Install the additive `VelocityIntentMigrationSource` and use the updated risk
+  dependency. It preserves populated velocity/evidence history without inventing
+  snapshots. This does not enable terminal completion, recovery or healthy Valkey.
+
 - Add forward-only `VelocityMigrationSource` recovery storage for keyed ephemeral
   attempts, original snapshots, retained aliases and unavailable-by-default boot
   epochs. Existing evidence and protected-counter migration history is unchanged.
