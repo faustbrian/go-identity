@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Allow core callers to select unpadded range checking explicitly. Padding
+  remains recommended and required by the reference profile; opting out loses
+  response-size privacy. Separate clients never share cache or in-flight data.
+  Observed checks retain the selected profile in canonical security records.
+
 - Add opt-in per-caller query, match and range-rejection security records with
   protected retention, independent cache/coalescing attribution and bounded
   terminal audit delivery. Preserve record identities for unknown-delivery

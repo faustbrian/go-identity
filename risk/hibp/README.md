@@ -129,7 +129,12 @@ HTTPS and cooperate with cancellation. Configure it before sharing and keep it
 alive until shutdown finishes. The checker constructs an isolated primitive
 client using only that RoundTripper, never inheriting middleware, cookies,
 headers or redirects, mutating the supplied client or closing its transport.
-The endpoint is fixed; no public prefix/URL override exists. Padding is required.
+The endpoint is fixed; no public prefix/URL override exists. `AddPadding=true`
+is recommended and mandatory in the reference configuration. Core callers may
+select `false` to omit the padding header, sacrificing response-size privacy.
+The boolean cannot distinguish an omitted value from an explicit `false`;
+all other mandatory bounds still apply and a zero `Config` is invalid.
+Each client retains its own immutable profile, cache and in-flight requests.
 
 All configuration is explicit: UserAgent, AddPadding, CacheEntries (100..100000),
 CacheTTL (1h..7d), ResponseBytes (1KiB..2MiB), MaxBreachCount (1..1 billion),

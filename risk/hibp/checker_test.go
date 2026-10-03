@@ -419,7 +419,7 @@ func TestCheckerProviderDeadlineAndPartialBody(t *testing.T) {
 func TestCheckerInvalidConfigurationAndRedaction(t *testing.T) {
 	valid := testConfig()
 	for _, mutate := range []func(*Config){
-		func(c *Config) { c.AddPadding = false }, func(c *Config) { c.ResponseBytes = 2<<20 + 1 },
+		func(c *Config) { c.ResponseBytes = 2<<20 + 1 },
 		func(c *Config) { c.CacheBytes = 0 }, func(c *Config) { c.MaxWaiters = 1025 },
 		func(c *Config) { c.Timeout = 0 }, func(c *Config) { c.UserAgent = "\n" },
 		func(c *Config) { c.PolicyVersion = "" },
@@ -445,6 +445,142 @@ func TestCheckerInvalidConfigurationAndRedaction(t *testing.T) {
 		if strings.Contains(rendered, "redaction-synthetic-secret") || strings.Contains(rendered, "/range/") {
 			t.Fatal("sensitive rendering")
 		}
+	}
+}
+
+func TestCheckerPaddingProfilesAreExplicitAndIsolated(t *testing.T) {
+	r := requestFor(t, "synthetic-padding-profile")
+	// Equal candidate bytes with independent ownership permit simultaneous Use.
+	unpaddedRequest := requestFor(t, "synthetic-padding-profile")
+	derived, e := deriveCandidate(context.Background(), r.Candidate, 1024)
+	if e != nil {
+		t.Fatal(e)
+	}
+	defer derived.clear()
+	var paddedReads, unpaddedReads atomic.Int32
+	arrived := make(chan struct{}, 2)
+	release := make(chan struct{})
+	released := false
+	defer func() {
+		if !released {
+			close(release)
+		}
+	}()
+	padded, wall := checkerFixture(t, func(w http.ResponseWriter, req *http.Request) {
+		if req.Method != http.MethodGet || req.Host != "api.pwnedpasswords.com" || req.URL.Path != "/range/"+string(derived.prefix[:]) || req.URL.RawQuery != "" || req.ContentLength != 0 || req.Header.Get("Cookie") != "" || req.Header.Get("Authorization") != "" || req.Header.Get("User-Agent") != testConfig().UserAgent {
+			t.Error("padding changed the fixed prefix-only endpoint")
+		}
+		arrived <- struct{}{}
+		select {
+		case <-release:
+		case <-req.Context().Done():
+			return
+		}
+		values := req.Header.Values("Add-Padding")
+		if len(values) == 1 && values[0] == "true" {
+			paddedReads.Add(1)
+			fmt.Fprint(w, "00000000000000000000000000000000000:0\n")
+		} else if len(values) == 0 {
+			unpaddedReads.Add(1)
+			fmt.Fprintf(w, "%s:7\n", derived.suffix[:])
+		} else {
+			t.Error("invalid padding header selection")
+		}
+	})
+	cfg := testConfig()
+	cfg.AddPadding = false
+	checker, e := New(cfg, padded.http, wall)
+	if e != nil {
+		t.Fatal("explicit unpadded profile rejected", e)
+	}
+	unpadded := checker.(*Client)
+	t.Cleanup(func() {
+		if e := unpadded.Close(context.Background()); e != nil {
+			t.Error(e)
+		}
+	})
+	type result struct {
+		value CheckResult
+		err   error
+	}
+	cleanResults, matchResults := make(chan result, 1), make(chan result, 1)
+	go func() { v, err := padded.Check(context.Background(), r); cleanResults <- result{v, err} }()
+	go func() {
+		v, err := unpadded.Check(context.Background(), unpaddedRequest)
+		matchResults <- result{v, err}
+	}()
+	receive(t, arrived)
+	receive(t, arrived)
+	close(release)
+	released = true
+	cleanFirst, matchFirst := receive(t, cleanResults), receive(t, matchResults)
+	if cleanFirst.err != nil || cleanFirst.value.Outcome != OutcomeNoMatch || matchFirst.err != nil || matchFirst.value.Outcome != OutcomeMatch || matchFirst.value.BreachCount != 7 {
+		t.Fatal("concurrent cross-profile flight substitution")
+	}
+	for range 2 {
+		clean, e := padded.Check(context.Background(), r)
+		if e != nil || clean.Outcome != OutcomeNoMatch {
+			t.Fatal("recommended padded profile changed", e)
+		}
+		match, e := unpadded.Check(context.Background(), r)
+		if e != nil || match.Outcome != OutcomeMatch || match.BreachCount != 7 {
+			t.Fatal("cross-profile provider cache substitution", e)
+		}
+	}
+	if paddedReads.Load() != 1 || unpaddedReads.Load() != 1 {
+		t.Fatal("padding profiles did not retain independent caches")
+	}
+	if err := r.Candidate.Use(func(b []byte) error {
+		if string(b) != "synthetic-padding-profile" {
+			t.Error("padding selection changed borrowed candidate")
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestUnpaddedCheckerRejectsCompleteMalformedRangeWithoutCaching(t *testing.T) {
+	for _, tail := range []string{"invalid\n", strings.Repeat("X", 1024)} {
+		t.Run(fmt.Sprintf("tail-%d", len(tail)), func(t *testing.T) {
+			r := requestFor(t, "synthetic-unpadded-malformed")
+			derived, err := deriveCandidate(context.Background(), r.Candidate, 1024)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer derived.clear()
+			var calls atomic.Int32
+			borrowed, wall := checkerFixture(t, func(w http.ResponseWriter, req *http.Request) {
+				if len(req.Header.Values("Add-Padding")) != 0 {
+					t.Error("unpadded request included padding header")
+				}
+				if calls.Add(1) == 1 {
+					fmt.Fprintf(w, "%s:7\n%s", derived.suffix[:], tail)
+					return
+				}
+				fmt.Fprint(w, "00000000000000000000000000000000000:0\n")
+			})
+			cfg := testConfig()
+			cfg.AddPadding = false
+			checker, err := New(cfg, borrowed.http, wall)
+			if err != nil {
+				t.Fatal(err)
+			}
+			client := checker.(*Client)
+			t.Cleanup(func() {
+				if err := client.Close(context.Background()); err != nil {
+					t.Error(err)
+				}
+			})
+			failed, err := client.Check(context.Background(), r)
+			if !errors.Is(err, ErrMalformedRange) || failed.Outcome != OutcomeMalformed || failed.BreachCount != 0 || !failed.ProviderValidUntil.IsZero() {
+				t.Fatal("matching prefix bypassed full unpadded range validation")
+			}
+			clean, err := client.Check(context.Background(), r)
+			if err != nil || clean.Outcome != OutcomeNoMatch || calls.Load() != 2 {
+				t.Fatal("malformed unpadded response was cached", err)
+			}
+		})
 	}
 }
 

@@ -119,7 +119,9 @@ type Checker interface {
 // CacheBytes (1KiB..128MiB) additionally bounds retained row storage, conservatively
 // charged at 48 bytes per row. Entry overhead is bounded by CacheEntries. Disabled
 // caching still coalesces concurrent work. PolicyVersion must match every request.
-// This initial profile requires padding; alternate unpadded profiles are not supported.
+// AddPadding true is recommended and required by the reference profile. False
+// omits padding and its response-size privacy protection; it is a core-only
+// alternative. Numeric bounds are still mandatory, so zero Config is invalid.
 type Config struct {
 	UserAgent           string
 	AddPadding          bool
@@ -215,7 +217,7 @@ func (c Config) valid() bool {
 			return false
 		}
 	}
-	return c.AddPadding && c.CacheEntries >= 100 && c.CacheEntries <= 100000 && c.CacheTTL >= time.Hour && c.CacheTTL <= 7*24*time.Hour &&
+	return c.CacheEntries >= 100 && c.CacheEntries <= 100000 && c.CacheTTL >= time.Hour && c.CacheTTL <= 7*24*time.Hour &&
 		c.ResponseBytes >= 1024 && c.ResponseBytes <= 2<<20 && c.MaxBreachCount > 0 && c.MaxBreachCount <= 1000000000 &&
 		c.OutboundConcurrency >= 1 && c.OutboundConcurrency <= 64 && c.Timeout >= time.Second && c.Timeout <= 30*time.Second &&
 		ascii(c.PolicyVersion, 64, false) && c.MaxWaiters >= 1 && c.MaxWaiters <= 1024 && c.MaxCandidateBytes >= 1 && c.MaxCandidateBytes <= 1<<20 &&
@@ -419,7 +421,9 @@ func (c *Client) read(ctx context.Context, prefix [5]byte) (rangeData, error) {
 		return rangeData{}, ErrProviderUnavailable
 	}
 	req.Header.Set("User-Agent", c.config.UserAgent)
-	req.Header.Set("Add-Padding", "true")
+	if c.config.AddPadding {
+		req.Header.Set("Add-Padding", "true")
+	}
 	response, e := c.http.Do(req)
 	if e != nil {
 		return rangeData{}, ErrProviderUnavailable

@@ -228,7 +228,11 @@ func (o *ObservedChecker) submitBatch(ctx context.Context, records []audit.Recor
 
 func (o *ObservedChecker) eventInput(r CheckRequest) identity.SecurityEventInput {
 	a := r.Attribution
-	return identity.SecurityEventInput{Action: identity.SecurityHIBPQueryRange, OccurredAt: o.client.clock.Now().UTC(), Outcome: audit.OutcomeSucceeded, Reason: identity.SecurityCompleted, TenantID: r.TenantID, CommandID: a.CommandID, CorrelationID: a.CorrelationID, CausationID: a.CausationID, Actor: a.Actor, Subject: identity.SecurityAuthenticationAttempt, SubjectID: string(a.AttemptID), PolicyID: a.PolicyID, PolicyVersion: a.PolicyVersion, Provider: identity.SecurityProvider{Kind: identity.SecurityProviderHIBP, Profile: identity.SecurityHIBPRange, Version: 1, Result: identity.SecurityProviderAccepted}}
+	profile := identity.SecurityHIBPRange
+	if !o.client.config.AddPadding {
+		profile = identity.SecurityHIBPRangeUnpadded
+	}
+	return identity.SecurityEventInput{Action: identity.SecurityHIBPQueryRange, OccurredAt: o.client.clock.Now().UTC(), Outcome: audit.OutcomeSucceeded, Reason: identity.SecurityCompleted, TenantID: r.TenantID, CommandID: a.CommandID, CorrelationID: a.CorrelationID, CausationID: a.CausationID, Actor: a.Actor, Subject: identity.SecurityAuthenticationAttempt, SubjectID: string(a.AttemptID), PolicyID: a.PolicyID, PolicyVersion: a.PolicyVersion, Provider: identity.SecurityProvider{Kind: identity.SecurityProviderHIBP, Profile: profile, Version: 1, Result: identity.SecurityProviderAccepted}}
 }
 func observedClassification(e error) (audit.Outcome, identity.SecurityReason, identity.SecurityProviderResult) {
 	switch {

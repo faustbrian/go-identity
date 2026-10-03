@@ -71,6 +71,114 @@ func observedFixture(t *testing.T, c *Client, sink *observationSink) *ObservedCh
 	return observed
 }
 
+func TestObservedCheckerRecordsSelectedPaddingProfile(t *testing.T) {
+	for _, padding := range []bool{true, false} {
+		t.Run(fmt.Sprintf("padding-%t", padding), func(t *testing.T) {
+			borrowed, wall := checkerFixture(t, func(w http.ResponseWriter, req *http.Request) {
+				if (req.Header.Get("Add-Padding") == "true") != padding {
+					t.Error("transport profile differed from selection")
+				}
+				fmt.Fprint(w, "00000000000000000000000000000000000:0\n")
+			})
+			cfg := testConfig()
+			cfg.AddPadding = padding
+			checker, err := New(cfg, borrowed.http, wall)
+			if err != nil {
+				t.Fatal(err)
+			}
+			client := checker.(*Client)
+			t.Cleanup(func() { _ = client.Close(context.Background()) })
+			sink := &observationSink{}
+			observed := observedFixture(t, client, sink)
+			result, err := observed.Check(context.Background(), attributedRequest(t, "synthetic-profile-audit"))
+			if err != nil || result.Outcome != OutcomeNoMatch {
+				t.Fatal("selected profile lost observed checking", err)
+			}
+			want := "hibp.range.padded.v1"
+			if !padding {
+				want = "hibp.range.unpadded.v1"
+			}
+			records := sink.snapshot()
+			if len(records) != 1 || records[0].Attributes()["provider.profile"] != want {
+				t.Fatal("security record misrepresented privacy profile")
+			}
+		})
+	}
+}
+
+func TestObservedUnpaddedProfileSurvivesSecondaryEventsAndCache(t *testing.T) {
+	for _, malformed := range []bool{false, true} {
+		t.Run(fmt.Sprintf("malformed-%t", malformed), func(t *testing.T) {
+			r := attributedRequest(t, "synthetic-unpadded-events")
+			derived, err := deriveCandidate(context.Background(), r.Candidate, 1024)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer derived.clear()
+			var calls atomic.Int32
+			borrowed, wall := checkerFixture(t, func(w http.ResponseWriter, req *http.Request) {
+				calls.Add(1)
+				if len(req.Header.Values("Add-Padding")) != 0 {
+					t.Error("unpadded event reported for padded request")
+				}
+				fmt.Fprintf(w, "%s:7\n", derived.suffix[:])
+				if malformed {
+					fmt.Fprint(w, "invalid\n")
+				}
+			})
+			cfg := testConfig()
+			cfg.AddPadding = false
+			checker, err := New(cfg, borrowed.http, wall)
+			if err != nil {
+				t.Fatal(err)
+			}
+			client := checker.(*Client)
+			t.Cleanup(func() { _ = client.Close(context.Background()) })
+			sink := &observationSink{}
+			observed := observedFixture(t, client, sink)
+			var priorID string
+			for range 2 {
+				result, err := observed.Check(context.Background(), r)
+				if malformed {
+					if !errors.Is(err, ErrMalformedRange) || result.BreachCount != 0 || !result.ProviderValidUntil.IsZero() {
+						t.Fatal("malformed evidence became usable", err)
+					}
+					assertErrorDelivery(t, result, err)
+				} else if err != nil || result.Outcome != OutcomeMatch || result.BreachCount != 7 {
+					t.Fatal("unpadded match lost evidence", err)
+				}
+				records := result.Events.Records()
+				if len(records) != 2 || records[0].ID() == priorID || records[1].Context().CausationID() != records[0].ID() {
+					t.Fatal("secondary causation or caller record identity lost")
+				}
+				priorID = records[0].ID()
+				stored := sink.snapshot()
+				stored = stored[len(stored)-2:]
+				for i, record := range records {
+					if record.Attributes()["provider.profile"] != "hibp.range.unpadded.v1" {
+						t.Fatal("secondary/cache event misrepresented privacy profile")
+					}
+					got, err := audit.CanonicalJSON(record)
+					if err != nil {
+						t.Fatal(err)
+					}
+					want, err := audit.CanonicalJSON(stored[i])
+					if err != nil || string(got) != string(want) {
+						t.Fatal("retained profile records differed from submitted bytes")
+					}
+				}
+			}
+			wantCalls := int32(1)
+			if malformed {
+				wantCalls = 2
+			}
+			if calls.Load() != wantCalls {
+				t.Fatal("profile cache retained failure or lost success")
+			}
+		})
+	}
+}
+
 func assertErrorDelivery(t *testing.T, result CheckResult, e error) {
 	t.Helper()
 	var checkErr *CheckError
