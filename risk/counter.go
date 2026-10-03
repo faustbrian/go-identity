@@ -434,7 +434,6 @@ func (c CounterCoordinator) Mutate(ctx context.Context, command CounterCommand) 
 	if bounded.Err() != nil || evaluationTime(now, start, start, c.state.timeout) != nil {
 		return result, nil
 	}
-	maxRetry := time.Duration(0)
 	exceeded := false
 	observed := now
 	expires := start.Add(p.EvidenceTTL)
@@ -453,17 +452,27 @@ func (c CounterCoordinator) Mutate(ctx context.Context, command CounterCommand) 
 		}
 		if counter.Value > b.Limit {
 			exceeded = true
-			if remaining := counter.WindowExpiresAt.Sub(now); remaining > maxRetry {
-				maxRetry = remaining
-			}
 		}
 	}
 	result.Signal.State, result.Signal.ObservedAt, result.Signal.ExpiresAt = SignalClean, observed, expires
 	if exceeded {
 		result.Signal.State = SignalDeny
 		if p.ThresholdAction == Throttle {
-			result.Signal.State, result.Signal.RetryAfter = SignalThrottle, min(maxRetry, c.state.policy.state.limits.RetryAfterMax)
+			result.Signal.State, result.Signal.RetryAfter = SignalThrottle, counterRetryAfter(raw.state.snapshot, b.Limit, now, c.state.policy.state.limits.RetryAfterMax)
 		}
 	}
 	return result, nil
+}
+
+// Retry metadata belongs to the decision instant, not the original observation.
+// Recompute from immutable exceeded windows so later source work and configured
+// clipping cannot extend a delay or renew the evidence interval.
+func counterRetryAfter(snapshot []Counter, limit uint64, now time.Time, maximum time.Duration) time.Duration {
+	remaining := time.Duration(0)
+	for _, counter := range snapshot {
+		if counter.Value > limit {
+			remaining = max(remaining, counter.WindowExpiresAt.Sub(now))
+		}
+	}
+	return min(remaining, maximum)
 }

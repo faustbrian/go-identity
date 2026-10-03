@@ -31,7 +31,8 @@ results never invent retry-after metadata. Cancellation returns no assessment.
 ### Server-source evaluation
 
 `NewEvaluator(EvaluatorConfig)` binds the policy to exactly one configured
-`Source` for every mandatory name. Sources are server-owned, transport-neutral
+`Source` for every mandatory name, except the owned `velocity` slot when
+`EvaluatorConfig.Counters` is configured. Sources are server-owned, transport-neutral
 readers; requests cannot inject facts, replace readers, select failure policy,
 set the decision clock or assert independent-factor availability. Configuration
 is copied and validated before any reader runs. The caller binds the operation,
@@ -52,8 +53,9 @@ positive fact intervals are rechecked at the final clock sample. A failed server
 factor resolver cannot enable step-up. Reader implementations must be concurrency
 safe; the evaluator owns neither their external resources nor their shutdown.
 
-This source runner performs no counter mutation, decision-journal persistence,
-required audit or evidence issuance. It must not be used as complete middleware
+Without `Counters`, this source runner performs no counter mutation. It performs
+no decision-journal persistence, required audit or evidence issuance in either
+mode. It must not be used as complete middleware
 or as permission to execute the selected operation. The later official adapter
 composition must implement those owners; consumers must not supply private
 domain stores or replacement workflow orchestration.
@@ -85,6 +87,33 @@ recovery, audit, evidence issuance or an administrative override. Protected
 transaction participation is implemented. No current workflow consumer uses
 this partial path. Official PostgreSQL/Valkey adapters remain required; consumers
 must not implement replacement domain stores to fill those gaps.
+
+### Counted source evaluation
+
+Set `EvaluatorConfig.Counters` to an existing `CounterCoordinator` using the
+exact same `Policy` value. Every class profile must include `velocity` in its
+mandatory set, and `Sources` must not declare another owner for that name.
+The evaluator copies the coordinator value; changing the configuration pointer
+later cannot replace its frozen owner. Each counted `EvaluateRequest.Subject`
+contains exactly that operation's trusted dimensions, with no extra fields.
+Source-only evaluation and closed defaults require an empty Subject.
+
+Authentication attempts mutate once before any factor/provider work. Neutral
+reads mutate once after the readers and before returning. The mandatory velocity
+slot uses only the coordinator's complete post-state; it cannot be supplied by
+a provider callback or skipped as expensive. Protected-command profiles reject
+before provider/store work until their shared-transaction participant exists.
+
+Ambiguous/noncommitted/failed mutations produce unavailable facts under the
+selected policy, never allowance or automatic retries. Later provider errors,
+cancellation or expiry do not undo an already committed attempt. The owning
+risk implementation privately retains that outcome; public non-issuing output
+does not expose counter records or correlated scope. All source and counter
+intervals are rechecked at the final assessment, without renewed freshness.
+Counter retry-after uses the original exceeded windows' remaining time at the
+final decision, with the configured cap; provider time cannot extend a delay.
+This closes core counter/source orchestration, not durable decision recording,
+one-use issuance, recovery or real-adapter interoperability.
 
 ## Security and ownership
 

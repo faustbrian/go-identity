@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Add opt-in counted source evaluation with one frozen velocity owner and
+  exact policy-bound mutation phases. Threshold decisions use complete
+  post-state; later cancellation or expired provider work cannot renew counter
+  freshness or erase a known attempt. Retry delays exclude elapsed provider
+  time while preserving configured caps. Source-only configurations remain
+  available; durable issuance and protected-command participation are pending.
+
 - Add disabled-by-default mandatory carrier-risk evaluation for both phone-reset
   phases, with exact parent-operation binding, version-pinned source ownership,
   original two-minute freshness ceilings and denied adverse/ambiguous facts.

@@ -51,6 +51,11 @@ type EvaluatorConfig struct {
 	Timeout           time.Duration
 	Sources           []Source
 	IndependentFactor func(context.Context, Context) (bool, error)
+	// Counters optionally installs the sole velocity owner. Every policy profile
+	// must require velocity, Sources must omit it, and this coordinator must use
+	// the exact same immutable Policy. The value is copied, not the pointer.
+	// Nil retains source-only assessment, not complete abuse enforcement.
+	Counters *CounterCoordinator
 }
 
 // Evaluator owns bounded server-source orchestration. It starts no goroutine,
@@ -64,25 +69,40 @@ type evaluatorState struct {
 	timeout           time.Duration
 	sources           map[string]Source
 	independentFactor func(context.Context, Context) (bool, error)
+	counters          CounterCoordinator
 }
 
 // NewEvaluator rejects missing, duplicate or extraneous mandatory-source owners,
 // invalid callbacks and unbounded timeouts with ErrInvalidPolicy. Construction
 // invokes no callback and copies the source slice into owned immutable state.
 func NewEvaluator(c EvaluatorConfig) (Evaluator, error) {
-	if c.Policy.state == nil || c.Clock == nil || c.Timeout <= 0 || c.Timeout > time.Minute || len(c.Sources) == 0 || len(c.Sources) > 128 {
+	if c.Policy.state == nil || c.Clock == nil || c.Timeout <= 0 || c.Timeout > time.Minute || (len(c.Sources) == 0 && c.Counters == nil) || len(c.Sources) > 128 {
 		return Evaluator{}, ErrInvalidPolicy
 	}
 	required := make(map[string]bool)
 	for _, profile := range c.Policy.state.profiles {
+		velocity := false
 		for _, name := range profile.RequiredSignals {
 			required[name] = true
+			velocity = velocity || name == "velocity"
 		}
+		if c.Counters != nil && !velocity {
+			return Evaluator{}, ErrInvalidPolicy
+		}
+	}
+	if c.Counters != nil {
+		if c.Counters.state == nil || c.Counters.state.policy.state != c.Policy.state {
+			return Evaluator{}, ErrInvalidPolicy
+		}
+		delete(required, "velocity")
 	}
 	if len(required) != len(c.Sources) {
 		return Evaluator{}, ErrInvalidPolicy
 	}
 	s := &evaluatorState{policy: c.Policy, clock: c.Clock, timeout: c.Timeout, sources: make(map[string]Source, len(c.Sources)), independentFactor: c.IndependentFactor}
+	if c.Counters != nil {
+		s.counters = *c.Counters
+	}
 	for _, source := range c.Sources {
 		if !signalName(source.Name) || !required[source.Name] || source.Read == nil || source.Timeout <= 0 || source.Timeout > c.Timeout {
 			return Evaluator{}, ErrInvalidPolicy
@@ -102,6 +122,9 @@ func NewEvaluator(c EvaluatorConfig) (Evaluator, error) {
 type EvaluateRequest struct {
 	Context Context
 	Phase   IssuancePhase
+	// Subject contains exact trusted profile dimensions only when Counters is
+	// configured. It must be empty for source-only evaluation and closed defaults.
+	Subject Subject
 }
 
 // Format omits all correlated request metadata.
@@ -115,6 +138,12 @@ type EvaluateResult struct {
 	Decision      Decision
 	PolicyVersion uint64
 	assessment    Assessment
+	counter       *CounterEvaluation
+}
+
+// Format omits private correlated source and counter state.
+func (EvaluateResult) Format(s fmt.State, _ rune) {
+	_, _ = io.WriteString(s, "risk.EvaluateResult(redacted)")
 }
 
 // EvaluateError classifies evaluation rejection using a stable redacted cause.
@@ -146,9 +175,16 @@ func evaluationFailure(err error) (EvaluateResult, error) {
 // A source's error or timeout becomes unavailable under the fixed action policy,
 // even if it also returns positive facts; it is not retried. A non-cooperative
 // callback cannot be forcibly interrupted, but its late result cannot allow.
-// This method does not audit, mutate counters, issue evidence or grant permission
-// to execute. Issuing phases fail before clock, factor or source access.
-func (e Evaluator) Evaluate(ctx context.Context, request EvaluateRequest) (EvaluateResult, error) {
+// With Counters configured, velocity is mutated exactly once at the selected
+// nontransactional profile phase, before provider work or before return. A
+// protected-command phase fails before store/provider work; only its future
+// shared-Work participant may mutate it. Later failure never rolls back an
+// attempt: the known outcome remains private for the owning risk service.
+// This method does not audit, issue evidence or grant permission to execute.
+// Issuing phases fail before clock, factor, counter or source access.
+func (e Evaluator) Evaluate(ctx context.Context, request EvaluateRequest) (result EvaluateResult, err error) {
+	var counted *CounterEvaluation
+	defer func() { result.counter = counted }()
 	if e.state == nil {
 		return evaluationFailure(ErrInvalidPolicy)
 	}
@@ -169,6 +205,9 @@ func (e Evaluator) Evaluate(ctx context.Context, request EvaluateRequest) (Evalu
 	if !scopeID(c.Tenant) || !scopeID(c.Attempt) {
 		return evaluationFailure(ErrInvalidContext)
 	}
+	if request.Subject != (Subject{}) && (e.state.counters.state == nil || a.Preflight != "") {
+		return evaluationFailure(ErrInvalidCounterCommand)
+	}
 	bounded, cancel := context.WithTimeout(ctx, e.state.timeout)
 	defer cancel()
 	start := e.state.clock()
@@ -183,6 +222,31 @@ func (e Evaluator) Evaluate(ctx context.Context, request EvaluateRequest) (Evalu
 			return evaluationFailure(err)
 		}
 		return safeEvaluation(assessment), nil
+	}
+	var command CounterCommand
+	if e.state.counters.state != nil {
+		command, err = e.state.counters.Prepare(c, request.Subject, a.Profile.Phase)
+		if err != nil {
+			return evaluationFailure(err)
+		}
+	}
+	mutate := func() error {
+		value, err := e.state.counters.Mutate(bounded, command)
+		counted = &value
+		if err != nil {
+			return err
+		}
+		now := e.state.clock()
+		if err := evaluationTime(now, last, start, e.state.timeout); err != nil {
+			return err
+		}
+		last, c.Now = now, now
+		return nil
+	}
+	if command.state != nil && a.Profile.Phase == BeforeCredential {
+		if err := mutate(); err != nil {
+			return evaluationFailure(err)
+		}
 	}
 	if a.Profile.Unknown == StepUpWithIndependentFactor && e.state.independentFactor != nil {
 		factor, readErr := e.state.independentFactor(bounded, c)
@@ -202,6 +266,16 @@ func (e Evaluator) Evaluate(ctx context.Context, request EvaluateRequest) (Evalu
 	for _, name := range a.Profile.RequiredSignals {
 		if err := bounded.Err(); err != nil {
 			return evaluationFailure(err)
+		}
+		if name == "velocity" && command.state != nil {
+			if counted == nil {
+				// BeforeReturn executes after all provider work. Keep the exact
+				// mandatory slot; replace it only with the owned post-state.
+				signals = append(signals, Signal{})
+			} else {
+				signals = append(signals, counted.Signal)
+			}
+			continue
 		}
 		source := e.state.sources[name]
 		if denied && source.Expensive {
@@ -235,6 +309,16 @@ func (e Evaluator) Evaluate(ctx context.Context, request EvaluateRequest) (Evalu
 		}
 		signals = append(signals, signal)
 	}
+	if command.state != nil && a.Profile.Phase == BeforeReturn {
+		if err := mutate(); err != nil {
+			return evaluationFailure(err)
+		}
+		for i, name := range a.Profile.RequiredSignals {
+			if name == "velocity" {
+				signals[i] = counted.Signal
+			}
+		}
+	}
 	if err := bounded.Err(); err != nil {
 		return evaluationFailure(err)
 	}
@@ -243,6 +327,13 @@ func (e Evaluator) Evaluate(ctx context.Context, request EvaluateRequest) (Evalu
 		return evaluationFailure(err)
 	}
 	c.Now = now
+	if counted != nil && counted.Signal.State == SignalThrottle {
+		for i, name := range a.Profile.RequiredSignals {
+			if name == "velocity" {
+				signals[i].RetryAfter = counterRetryAfter(counted.result.state.snapshot, a.Profile.Limit, now, e.state.policy.state.limits.RetryAfterMax)
+			}
+		}
+	}
 	assessment, err := e.state.policy.Assess(bounded, c, signals)
 	if err != nil {
 		return evaluationFailure(err)
