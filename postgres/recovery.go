@@ -123,6 +123,11 @@ func (c *Coordinator) recoverCommandReceipt(ctx context.Context, q identity.Reco
 	if e != nil {
 		return result, identity.UnavailableError{}
 	}
+	// Until the typed release/recovery phases exist, observation must not take
+	// ownership or terminalize a command whose evidence remains reserved.
+	if admitted.risk != nil {
+		return result, identity.UnavailableError{}
+	}
 	// An old persistence-only registration remains readable, but cannot supply
 	// evidence. No takeover or prefix callback occurs without the full phase set.
 	for _, entry := range admitted.contributors {

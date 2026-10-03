@@ -114,10 +114,23 @@ func (r *ContributorRegistry) admitFeaturePlan(b identity.CommandBinding, finger
 			if _, ok := entry.contributor.(LifecycleContributor); !ok {
 				return nil, invalidPlan()
 			}
+		case "identity/risk/postgres":
+			// The same store also owns ordinary evidence issuance as the native
+			// feature participant. Only a declared consuming role needs reservation.
+			if p.RiskEvidence != nil {
+				if _, ok := riskReservationParticipant(entry.contributor); !ok {
+					return nil, invalidPlan()
+				}
+			}
 		}
 	}
 	f, l := *p.Feature, *p.Lifecycle
-	return &admittedKernelPlan{registry: r.state, binding: b, digest: digest, contributors: entries, audits: append([]AuditPlan(nil), p.Audits...), lifecycle: &l, fingerprint: fingerprint, feature: &f, subjectType: p.SubjectType}, nil
+	var risk *RiskEvidencePlan
+	if p.RiskEvidence != nil {
+		copy := *p.RiskEvidence
+		risk = &copy
+	}
+	return &admittedKernelPlan{registry: r.state, binding: b, digest: digest, contributors: entries, audits: append([]AuditPlan(nil), p.Audits...), lifecycle: &l, risk: risk, fingerprint: fingerprint, feature: &f, subjectType: p.SubjectType}, nil
 }
 
 // ApplyFeature invokes only the frozen exact native adapter once through Work.
@@ -129,7 +142,7 @@ func (r *ContributorRegistry) admitFeaturePlan(b identity.CommandBinding, finger
 // Commit succeeds; the caller must always defer Abort. Errors poison Work;
 // contributor diagnostics/panics are redacted. No local retry is performed.
 func (c *Coordinator) ApplyFeature(ctx context.Context, w Work, command identity.Command) (result identity.CommandResult, err error) {
-	if ctx == nil || !c.owns(w) || w.state.feature == nil {
+	if ctx == nil || !c.owns(w) || w.state.feature == nil || w.state.execution.reservation.plan.risk != nil {
 		return result, invalidWork()
 	}
 	if err = w.usable(); err != nil {

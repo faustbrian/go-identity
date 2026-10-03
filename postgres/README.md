@@ -1,5 +1,40 @@
 # Identity PostgreSQL
 
+## Typed one-use risk reservation
+
+`CommandPlan.RiskEvidence` declares the scalar projection of risk's signed
+`PreparedEvidenceUse`. No bearer, provider facts or keys belong in the plan.
+Preparation owns copies and freezes every declaration field in the distinct
+`identity-feature-risk-plan-v1` profile. Existing feature v1/v2 bytes are unchanged.
+Only the exact native `identity/phone` operation
+`identity.phone.password-reset-request`, schema
+`identity.phone.password-reset-request.native-v1` version 1, required-record
+profile with subject kind `phone`, is admitted. This is not the public HTTP
+request schema. Other schemas and reset completion are rejected, not approximated.
+
+Enlist the exact `identity/risk/postgres / identity.risk.store / 1` participant
+implementing `RiskReservationContributor` alongside the identity, audit, outbox
+and native phone contributors. `ReserveCommand` invokes `ReserveRiskEvidence`
+or exact-predecessor `RebindRiskEvidence` inside its existing command reservation
+transaction. Participant failure, panic, poisoned SQL or unclosed rows rolls
+back both command and evidence ownership. A live command replay skips mutation.
+The invocation-only `RiskReservationWork.Binding(participant)` verifies the
+exact registered instance; retained copies cannot run SQL or disclose bindings.
+
+The risk adapter must authenticate the projection, compare the native command's
+complete recovery scope and current policy, then lock the already-issued row
+using primary time and original expiry. Structural preparation is not that
+authentication. `CheckedAt` preserves nanoseconds; compare it against returned
+primary time without rounding or passing it as a microsecond-only SQL parameter.
+No method refreshes the precheck or evidence lifetime.
+
+This reservation boundary does not yet enable phone recovery. Domain execution
+and mutating recovery remain denied until owned apply/finalize/release phases,
+OTP and capability issuance/consumption and phone orchestration exist. Read-only
+receipt observation remains available under its separate query policy. The
+official risk adapter's reservation implementation remains pending; applications
+must not provide their own SQL participant to substitute for that adapter.
+
 ## Trusted command admission observation
 
 Native feature adapters may configure `CoordinatorConfig.AdmissionPolicy`

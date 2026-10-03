@@ -22,7 +22,7 @@ func decodeFeaturePlan(binding identity.CommandBinding, fingerprint [32]byte, en
 	}
 	r := planReader{attributeReader: attributeReader{data: encoded}, ok: true}
 	fields, ok := r.head(5)
-	if !ok || fields != 7 && fields != 8 {
+	if !ok || fields != 7 && fields != 8 && fields != 9 {
 		return fail()
 	}
 	r.key("audits")
@@ -34,7 +34,7 @@ func decodeFeaturePlan(binding identity.CommandBinding, fingerprint [32]byte, en
 	p := CommandPlan{Audits: make([]AuditPlan, int(count))}
 	for i := range p.Audits {
 		a := &p.Audits[i]
-		if fields == 8 {
+		if fields >= 8 {
 			r.expect(5, 10)
 		} else {
 			r.expect(5, 9)
@@ -50,7 +50,7 @@ func decodeFeaturePlan(binding identity.CommandBinding, fingerprint [32]byte, en
 		r.digest(&a.BindingDigest)
 		r.key("schema_version")
 		a.SchemaVersion = uint32(r.number(math.MaxUint32))
-		if fields == 8 {
+		if fields >= 8 {
 			r.key("retention_class")
 			a.RetentionClass = r.string(9)
 		}
@@ -82,7 +82,9 @@ func decodeFeaturePlan(binding identity.CommandBinding, fingerprint [32]byte, en
 	f.Operation.RecordRequirement = identity.FeatureRecordRequirement(r.number(math.MaxUint8))
 	p.Feature = f
 	r.key("profile")
-	if fields == 8 {
+	if fields == 9 {
+		r.consume(cborText("identity-feature-risk-plan-v1"))
+	} else if fields == 8 {
 		r.consume(cborText("identity-feature-plan-v2"))
 	} else {
 		r.consume(cborText("identity-feature-plan-v1"))
@@ -102,16 +104,24 @@ func decodeFeaturePlan(binding identity.CommandBinding, fingerprint [32]byte, en
 	r.key("fingerprint")
 	r.consume(cborBytes(fingerprint[:]))
 	r.key("contributors")
-	r.expect(4, 4)
-	for range 4 {
+	contributors := 4
+	if fields == 9 {
+		contributors = 5
+	}
+	r.expect(4, uint64(contributors))
+	for range contributors {
 		p.Contributors = append(p.Contributors, readFeaturePlanContributor(&r))
 	}
-	if fields == 8 {
+	if fields >= 8 {
 		r.key("subject_type")
 		p.SubjectType = r.string(96)
 		if p.SubjectType == "" {
 			return fail()
 		}
+	}
+	if fields == 9 {
+		r.key("risk_evidence")
+		p.RiskEvidence = readRiskPlan(&r)
 	}
 	if !r.ok || len(r.data) != 0 {
 		return fail()

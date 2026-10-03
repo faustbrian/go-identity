@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Freeze signed reset-initiation risk declarations and enlist exact native risk
+  reservation/rebind phases in the command reservation transaction. Failures
+  roll back ownership together; existing feature plan profiles remain unchanged.
+  Phone domain execution and mutating recovery remain disabled until their
+  complete one-use phases are implemented.
+
 - Add separately opt-in, current-authorized primary command admission
   observation for native adapters. Only a genuinely absent global claim is
   reported absent; ordinary lookup retains its enumeration-resistant behavior.

@@ -26,7 +26,14 @@ func FeaturePlanDigest(binding identity.CommandBinding, fingerprint [32]byte, pl
 }
 
 func encodeFeaturePlan(binding identity.CommandBinding, fingerprint [32]byte, p CommandPlan) ([]byte, error) {
-	if p.Feature == nil || fingerprint == ([32]byte{}) || binding.ValidateFor(p.Feature.Operation) != nil || p.Feature.Contributor.Owner != p.Feature.Operation.Owner+"/postgres" || !validContributorDescriptor(p.Feature.Contributor) || p.Capability != nil || len(p.Contributors) != 4 || len(p.Audits) == 0 || len(p.Audits) > 64 || p.Lifecycle == nil || !featureEventName(p.Lifecycle.EventType) {
+	if p.Feature != nil && (p.Feature.Operation.OperationID == "identity.phone.password-reset-complete" || p.Feature.Operation.OperationID == "identity.phone.password-reset-request" && (!riskInitiationOperation(p.Feature.Operation) || p.RiskEvidence == nil)) {
+		return nil, invalidPlan()
+	}
+	count := 4
+	if p.RiskEvidence != nil {
+		count++
+	}
+	if p.Feature == nil || fingerprint == ([32]byte{}) || binding.ValidateFor(p.Feature.Operation) != nil || p.Feature.Contributor.Owner != p.Feature.Operation.Owner+"/postgres" || !validContributorDescriptor(p.Feature.Contributor) || p.Capability != nil || len(p.Contributors) != count || len(p.Audits) == 0 || len(p.Audits) > 64 || p.Lifecycle == nil || !featureEventName(p.Lifecycle.EventType) || validateRiskPlan(binding, p) != nil {
 		return nil, invalidPlan()
 	}
 	if p.SubjectType != "" && !auditName(p.SubjectType) {
@@ -42,7 +49,7 @@ func encodeFeaturePlan(binding identity.CommandBinding, fingerprint [32]byte, p 
 	}
 	entries := make([][]byte, len(p.Contributors))
 	seen := make(map[string]bool, len(p.Contributors))
-	domains, audits, outboxes, features := 0, 0, 0, 0
+	domains, audits, outboxes, features, risks := 0, 0, 0, 0, 0
 	for i, d := range p.Contributors {
 		if !validContributorDescriptor(d) || seen[d.ContractID] {
 			return nil, invalidPlan()
@@ -57,12 +64,14 @@ func encodeFeaturePlan(binding identity.CommandBinding, fingerprint [32]byte, p 
 			audits++
 		case d.Owner == "outbox/postgres" && d.ContractID == "identity.lifecycle" && d.Version == 1:
 			outboxes++
+		case p.RiskEvidence != nil && d == (ContributorDescriptor{Owner: "identity/risk/postgres", ContractID: "identity.risk.store", Version: 1}):
+			risks++
 		default:
 			return nil, invalidPlan()
 		}
 		entries[i] = cborMap(map[string][]byte{"owner": cborText(d.Owner), "contract_id": cborText(d.ContractID), "version": cborUint(uint64(d.Version))})
 	}
-	if domains != 1 || audits != 1 || outboxes != 1 || features != 1 {
+	if domains != 1 || audits != 1 || outboxes != 1 || features != 1 || p.RiskEvidence != nil && risks != 1 {
 		return nil, invalidPlan()
 	}
 	events := make([][]byte, len(p.Audits))
@@ -84,6 +93,10 @@ func encodeFeaturePlan(binding identity.CommandBinding, fingerprint [32]byte, p 
 	if p.SubjectType != "" {
 		fields["profile"] = cborText("identity-feature-plan-v2")
 		fields["subject_type"] = cborText(p.SubjectType)
+	}
+	if p.RiskEvidence != nil {
+		fields["profile"] = cborText("identity-feature-risk-plan-v1")
+		fields["risk_evidence"] = encodeRiskPlan(p.RiskEvidence)
 	}
 	return cborMap(fields), nil
 }
@@ -133,6 +146,10 @@ func (c *Coordinator) prepareFeature(binding identity.CommandBinding, command id
 	snapshot := CommandPlan{Contributors: append([]ContributorDescriptor(nil), p.Contributors...), Audits: append([]AuditPlan(nil), p.Audits...), Capability: p.Capability, SubjectType: p.SubjectType}
 	feature := *p.Feature
 	snapshot.Feature = &feature
+	if p.RiskEvidence != nil {
+		risk := *p.RiskEvidence
+		snapshot.RiskEvidence = &risk
+	}
 	if p.Lifecycle != nil {
 		lifecycle := *p.Lifecycle
 		snapshot.Lifecycle = &lifecycle
