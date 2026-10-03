@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add forward-only `VelocityMigrationSource` recovery storage for keyed ephemeral
+  attempts, original snapshots, retained aliases and unavailable-by-default boot
+  epochs. Existing evidence and protected-counter migration history is unchanged.
+  This is storage support only: native journaling, fenced replay and atomic Valkey
+  health publication remain required before enabling the ephemeral adapter.
+
 - Add opt-in native consuming-command preparation authenticated against the
   installed issuer's complete original recovery scope and provider configuration.
   Mismatched policy or retained signing/linkage keys fail setup. Raw scope remains

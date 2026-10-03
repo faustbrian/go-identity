@@ -5,6 +5,18 @@ evidence and decisions. It is **not yet an executable durable risk service**.
 
 ## Implemented boundary
 
+- `VelocityMigrationSource{Base: counterHistory, Version: laterAllocation}` adds
+  the PostgreSQL recovery journal for the separate ephemeral Valkey lane. It
+  stores scoped keyed attempt digests, original per-dimension snapshots and up
+  to four retained aliases, without a protected-command foreign key or raw
+  request facts. Boot epochs start unavailable; installation inserts no rows.
+  Covered interval and lease constraints are storage invariants, not proof of
+  replay or publication. Sequence positions are not commit-order evidence.
+  Native journaling, fenced reconciliation, full snapshot validation and atomic
+  Valkey healthy publication are not implemented by this migration. There is no
+  pruning or operator-bypass API. Valkey remains ephemeral mutation authority;
+  PostgreSQL is the durable recovery journal, not a second counter engine.
+
 - Optional `Config.UseIssuer` installs pure use preparation only after matching
   the issuer's exact current policy and entire retained signing/linkage key set.
   `PrepareEvidenceUse` accepts a core precheck, original trusted request and
