@@ -34,3 +34,26 @@ func TestMigrationOwnsForwardAtomicHistory(t *testing.T) {
 		t.Fatal("lost cancellation")
 	}
 }
+
+func TestIssuanceIdentityMigrationPreservesOriginalHistory(t *testing.T) {
+	base := MigrationSource{Schema: "risk_store", Version: 20}
+	original, err := base.Load(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := IssuanceIDMigrationSource{Base: base, Version: 21}
+	h, err := s.Load(context.Background())
+	if err != nil || len(h) != 2 || h[0] != original[0] || h[1].Version() != 21 || h[1].DownSQL() != "" || h[1].TransactionMode() != migrations.TransactionModeDefault {
+		t.Fatal("initial history rewritten", err)
+	}
+	for _, bad := range []IssuanceIDMigrationSource{{}, {Base: base, Version: 20}, {Base: base, Version: 19}, {Base: base, Version: ^migrations.Version(0)}, {Base: MigrationSource{Schema: "public", Version: 20}, Version: 21}} {
+		if h, err := bad.Load(context.Background()); err == nil || h != nil {
+			t.Fatal("invalid forward allocation")
+		}
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if h, err := s.Load(ctx); !errors.Is(err, context.Canceled) || h != nil {
+		t.Fatal("lost cancellation")
+	}
+}

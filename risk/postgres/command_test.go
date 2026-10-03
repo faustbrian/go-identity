@@ -3,7 +3,6 @@ package postgres
 import (
 	"bytes"
 	"context"
-	"encoding/base64"
 	"errors"
 	"strings"
 	"testing"
@@ -23,7 +22,7 @@ func TestIssueMappingBindsOriginalIntentAndRestoresOnlyAuthenticatedInput(t *tes
 		t.Fatal(err)
 	}
 	s, ok := c.Feature()
-	wantID := "rei1_1_" + base64.RawURLEncoding.EncodeToString(p.Binding.IntentDigest[:])
+	wantID := p.Binding.CommandID
 	if !ok || s.Operation != IssueOperation() || s.Binding.RecordID != wantID || len(s.Fields) != 11 {
 		t.Fatal("incomplete exact intent")
 	}
@@ -127,7 +126,7 @@ func TestIssueMappingBindsOriginalIntentAndRestoresOnlyAuthenticatedInput(t *tes
 
 func TestIssueMappingSeparatesPurposesAndUsesSafeRecordIdentity(t *testing.T) {
 	a, _ := evaluatedIssue(t, risk.PhoneResetInitiation)
-	z, _ := evaluatedIssue(t, risk.PhoneResetCompletion)
+	z, _ := evaluatedIssueAt(t, risk.PhoneResetCompletion, time.Date(2026, 10, 3, 0, 0, 0, 0, time.UTC), "AgICAgICAgICAgICAgICAg")
 	ca, err := MapIssue(a, issueBinding(a.Prepared()))
 	if err != nil {
 		t.Fatal(err)
@@ -175,7 +174,11 @@ func (fixtureCounters) Mutate(_ context.Context, c risk.CounterCommand) (risk.Co
 // boundaries are deterministic fixtures; this does not attest database commit.
 func evaluatedIssue(t *testing.T, phase risk.IssuancePhase) (risk.EvidenceIssue, risk.EvidenceKey) {
 	t.Helper()
-	now := time.Date(2026, 10, 3, 0, 0, 0, 0, time.UTC)
+	return evaluatedIssueAt(t, phase, time.Date(2026, 10, 3, 0, 0, 0, 0, time.UTC), "AQEBAQEBAQEBAQEBAQEBAQ")
+}
+
+func evaluatedIssueAt(t *testing.T, phase risk.IssuancePhase, now time.Time, commandID string) (risk.EvidenceIssue, risk.EvidenceKey) {
+	t.Helper()
 	pc := risk.PolicyConfig{Version: 3, Limits: risk.VelocityLimits{MaxDimensions: 4, MaxCounters: 16, MaxWindow: time.Hour, MaxLimit: 120, KeyBytes: 64, RetryAfterMax: time.Hour}, Profiles: []risk.Profile{
 		{Class: risk.Authentication, Phase: risk.BeforeCredential, Dimensions: []risk.Dimension{risk.TenantDimension, risk.NetworkDimension, risk.DeviceDimension, risk.IdentifierDimension}, Window: 5 * time.Minute, Limit: 10, ThresholdAction: risk.Throttle, EvidenceTTL: 5 * time.Minute, Unknown: risk.DenyUnknown, MaxCounters: 4},
 		{Class: risk.CredentialMutation, Phase: risk.ReserveWithCommand, Dimensions: []risk.Dimension{risk.TenantDimension, risk.SubjectDimension, risk.SessionDimension, risk.NetworkDimension}, Window: 15 * time.Minute, Limit: 5, ThresholdAction: risk.Deny, EvidenceTTL: 15 * time.Minute, Unknown: risk.DenyUnknown, MaxCounters: 4},
@@ -224,7 +227,7 @@ func evaluatedIssue(t *testing.T, phase risk.IssuancePhase) (risk.EvidenceIssue,
 	if phase == risk.PhoneResetCompletion {
 		op = "identity.phone.password-reset-complete"
 	}
-	request := risk.PhoneEvidenceRequest{CommandID: "AQEBAQEBAQEBAQEBAQEBAQ", Actor: "phone-service", Recovery: risk.CarrierRequest{Phase: phase, Binding: risk.PhoneRecoveryScope{Tenant: "tenant", Subject: "subject", RecoveryOperation: op, CanonicalNumber: "+358401234567", PreAuthTransaction: "preauth-transaction", Attempt: "attempt-identifier", PolicyVersion: 3}}, Subject: risk.Subject{Network: "2001:db8::1", Device: "device", IdentifierDigest: strings.Repeat("a", 64)}}
+	request := risk.PhoneEvidenceRequest{CommandID: commandID, Actor: "phone-service", Recovery: risk.CarrierRequest{Phase: phase, Binding: risk.PhoneRecoveryScope{Tenant: "tenant", Subject: "subject", RecoveryOperation: op, CanonicalNumber: "+358401234567", PreAuthTransaction: "preauth-transaction", Attempt: "attempt-identifier", PolicyVersion: 3}}, Subject: risk.Subject{Network: "2001:db8::1", Device: "device", IdentifierDigest: strings.Repeat("a", 64)}}
 	result, err := issuer.Evaluate(context.Background(), request)
 	if err != nil || result.Outcome != risk.EvidenceFailed || issue.Prepared().Binding.KeyVersion == 0 {
 		t.Fatal("core did not produce signed issue", err)

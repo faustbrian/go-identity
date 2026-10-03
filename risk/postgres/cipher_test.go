@@ -85,8 +85,16 @@ func TestOriginalResponseEncryptionBindsMetadataAndRetainsOriginalTimes(t *testi
 		t.Fatal(err)
 	}
 	os, _ := oc.Feature()
-	if _, err := cipher.open(context.Background(), os.Binding, metadata, encoded); err == nil {
+	otherMetadata, err := other.Materialize(r.IssuedAt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	otherMetadata.Reference = risk.RiskEvidenceRef{}
+	if _, err := cipher.open(context.Background(), os.Binding, otherMetadata, encoded); err == nil {
 		t.Fatal("other purpose decrypted original response")
+	}
+	if _, err := risk.NewEvidenceExecution(other.Intent(), risk.EvidenceCommitted, r); err == nil {
+		t.Fatal("other purpose admitted original bearer")
 	}
 	corrupt := bytes.Clone(encoded)
 	corrupt[len(corrupt)-1] ^= 1

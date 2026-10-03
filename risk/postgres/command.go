@@ -5,16 +5,14 @@
 package postgres
 
 import (
-	"encoding/base64"
-	"strconv"
-
 	identity "github.com/faustbrian/go-identity"
 	"github.com/faustbrian/go-identity/risk"
 )
 
-// IssueOperation is the closed native evidence-issuance schema. RecordID binds
-// the pre-provider, versioned keyed intent, allowing exact primary admission
-// without exposing raw phone, network, attempt or provider facts. This descriptor
+// IssueOperation is the closed native evidence-issuance schema. RecordID is the
+// command's opaque canonical ID, never a keyed intent digest. Authorized native
+// response resolution must additionally compare the retained private intent.
+// Prior pending/failed commands never permit fresh evaluation. This descriptor
 // conveys no authorization, durability or one-use consumption authority.
 func IssueOperation() identity.FeatureOperation {
 	return identity.FeatureOperation{Owner: "identity/risk", OperationID: "identity.risk.evaluate", SchemaID: "identity-risk-evidence-v1", SchemaVersion: 1, RecordRequirement: identity.FeatureRecordRequired}
@@ -32,7 +30,7 @@ func MapIssue(issue risk.EvidenceIssue, b identity.CommandBinding) (identity.Com
 	if n.KeyVersion == 0 || p.Signature == ([32]byte{}) || string(b.CommandID) != n.CommandID || string(b.TenantID) != n.Tenant || string(b.UserID) != n.Subject || string(b.ActorID) != n.Actor || b.PolicyVersion != n.PolicyVersion || b.RecordID != "" {
 		return identity.Command{}, risk.ErrInvalidEvidenceExecution
 	}
-	b.RecordID = intentRecordID(n)
+	b.RecordID = issueRecordID(n)
 	return identity.NewFeatureCommand(identity.FeatureCommandSpec{Binding: b, Operation: IssueOperation(), Fields: []identity.FeatureField{
 		textField("evidence.recovery-operation", string(n.RecoveryOperation)), textField("evidence.phase", string(n.Phase)), textField("evidence.purpose", n.Purpose),
 		uintField("evidence.policy-version", n.PolicyVersion), uintField("evidence.key-version", uint64(n.KeyVersion)),
@@ -42,9 +40,7 @@ func MapIssue(issue risk.EvidenceIssue, b identity.CommandBinding) (identity.Com
 	}})
 }
 
-func intentRecordID(b risk.EvidenceIntentBinding) string {
-	return "rei1_" + strconv.FormatUint(uint64(b.KeyVersion), 10) + "_" + base64.RawURLEncoding.EncodeToString(b.IntentDigest[:])
-}
+func issueRecordID(b risk.EvidenceIntentBinding) string { return b.CommandID }
 func textField(n, v string) identity.FeatureField {
 	return identity.FeatureField{Name: n, Value: identity.FeatureValue{Kind: identity.FeatureText, Text: v}}
 }
@@ -122,7 +118,7 @@ func restoreCommand(c identity.Command, keys []risk.EvidenceKey, policy uint64) 
 			return invalidIssue()
 		}
 	}
-	if b.RecordID != intentRecordID(p.Binding) {
+	if b.RecordID != issueRecordID(p.Binding) {
 		return invalidIssue()
 	}
 	for _, key := range keys {
