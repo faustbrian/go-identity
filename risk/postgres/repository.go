@@ -39,8 +39,8 @@ func (Config) MarshalText() ([]byte, error) { return nil, risk.ErrSensitiveSeria
 // Repository owns issued-evidence SQL through the sole identity coordinator.
 // It has no transaction, connection or bearer-read API. It is immutable and
 // safe for concurrent independent invocations; Work remains serial-use only.
-// Zero is invalid. This initial profile does not implement consumption,
-// reservations, CAPTCHA, counters or pruning.
+// Zero is invalid. Initiation reservation/rebind use the sole coordinator;
+// domain consumption, CAPTCHA, counters and pruning remain unsupported.
 type Repository struct {
 	schema string
 	policy uint64

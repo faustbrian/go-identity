@@ -30,10 +30,9 @@ evidence and decisions. It is **not yet an executable durable risk service**.
   composite command foreign key binds ownership to the same tenant and exact
   recovery phase. Allocate a new version after the issuance-ID migration; the
   source returns the complete history and is safe to apply again. Schema
-  availability is not reservation or terminal-transition authority: the native
-  reserve/apply/finalize/release implementation remains pending. Existing
-  issuance binaries may continue inserting ownerless `issued` rows; do not
-  activate consuming participants until their replay-compatible code is present.
+  availability is not reservation or terminal-transition authority. Existing
+  issuance binaries may continue inserting ownerless `issued` rows; consuming
+  compositions require the replay-compatible executor and native participant.
 - `NewRepository(Config{...})` supplies the native issuance contributor. Enlist
   that exact instance with the identity repository, audit and lifecycle adapters
   in one coordinator registry. It inserts through the coordinator's active Work,
@@ -49,6 +48,23 @@ evidence and decisions. It is **not yet an executable durable risk service**.
   internally enlisted alongside kernel, audit and lifecycle participants. It
   authorizes before provider admission and before execution, and privately
   compares retained intent before decrypting an original committed response.
+- The repository implements `RiskReservationContributor` for native phone-reset
+  initiation. It authenticates every signed core use field under retained key
+  pairs, matches current risk policy and consuming command scope, locks the
+  exact already-issued row, and samples primary time after any lock wait.
+  The original issuance command must be committed; retained positive linkage
+  from a foundation or unresolved history cannot confer new ownership.
+  Missing, terminal, expired and mismatched evidence returns one redacted
+  conflict. Command and evidence ownership commit in the same coordinator
+  reservation transaction. Takeover CAS requires the same command/fingerprint
+  and exact prior generation, preserving the original expiry and reservation
+  time. There are no private transactions, provider callbacks or bearer reads.
+  The immutable precheck binds omitted raw recovery scope and provider evidence;
+  reservation does not re-evaluate providers or authoritative counters. Apply
+  must recheck these before any protected mutation. The current coordinator
+  deliberately denies domain execution and mutating recovery for this profile
+  until complete apply/finalize/release phases exist. Completion also requires
+  purpose-bound OTP and capability participants and remains unsupported.
 
 ## Adoption and security
 
@@ -92,6 +108,12 @@ without providers. A commit error initially discloses no reference. No result
 grants one-use consumption authority. Pools/adapters remain caller-owned; no
 background goroutine or Close method is introduced.
 
+Original committed issuance remains replayable in all six legitimate later
+journal states while retained ciphertext is available. This preserves the same
+reference and interval, not reuse authority: native reservation independently
+rejects terminal evidence or another owner's reservation. No replay evaluates
+providers, repairs missing ciphertext or renews the original expiry.
+
 The PostgreSQL integration suite withholds an actual successful domain COMMIT
 acknowledgement at the socket boundary for both phone-reset purposes. The initial
 result stays reference-free Unknown; a new primary executor recovers the original
@@ -99,7 +121,7 @@ reference and timestamps without provider work or duplicate effects.
 
 ## Remaining work
 
-Reservation/finalization/release;
+Domain apply/finalization/release and mutating recovery;
 durable lockouts/counters; CAPTCHA participants;
 investigation, retention and anonymization; complete
 public examples/API baseline and package/release verification remain pending.

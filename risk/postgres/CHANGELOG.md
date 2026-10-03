@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Add native initiation reservation and exact-generation takeover through the
+  sole identity coordinator. Signed use, current risk policy, complete stored
+  linkage and post-lock primary expiry are checked before ownership; missing or
+  conflicting custody cannot create a journal or durable command prefix.
+  Historical issuance replay preserves its original response after legitimate
+  reservation/terminal states. Install the reservation migration and upgrade
+  the executor before enabling this profile. Protected domain execution and
+  completion's OTP/capability phases remain unsupported.
+
 - Add the forward-only reservation-state migration after the existing issuance
   history. Populated legacy and opaque evidence retains its original encrypted
   response and expiry; ownership is initially absent and is constrained to one

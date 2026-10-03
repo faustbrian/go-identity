@@ -957,4 +957,18 @@ func TestIssuedEvidenceSameWorkIntegration(t *testing.T) {
 			}
 		})
 	}
+	t.Run("official-risk-reservation", func(t *testing.T) {
+		history, err := (ReservationMigrationSource{Base: IssuanceIDMigrationSource{Base: MigrationSource{Schema: "risk_store", Version: 20}, Version: 21}, Version: 22}).Load(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		runner, err := migrations.NewRunner(issuanceHistory(append(append([]migrations.Migration(nil), kernel...), history...)), backend)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := runner.Up(ctx); err != nil {
+			t.Fatal(err)
+		}
+		testNativeRiskReservation(t, ctx, pool, repo, newExecutor(t, repo, issuanceQueryPolicy{}))
+	})
 }

@@ -340,7 +340,7 @@ func (e *Executor) original(ctx context.Context, i risk.EvidenceIntent, observed
 	var key int64
 	var binding, intent, proof, lookup, envelope []byte
 	err = e.pool.Raw().QueryRow(ctx, `SELECT purpose,policy_version::text,key_version,binding_digest,intent_digest,proof_digest,evidence_digest,issued_at,expires_at,state,response_envelope FROM `+e.repository.schema+`.issued_evidence WHERE tenant_id=$1 AND command_id=$2 AND record_id=$3 AND user_id=$4 AND command_purpose=$5`, string(b.TenantID), id, b.RecordID, string(b.UserID), b.OperationID).Scan(&purpose, &policy, &key, &binding, &intent, &proof, &lookup, &r.IssuedAt, &r.ExpiresAt, &state, &envelope)
-	if err != nil || ctx.Err() != nil || key < 1 || key > 4294967295 || len(binding) != 32 || len(intent) != 32 || len(proof) != 32 || len(lookup) != 32 || len(envelope) < 100 || len(envelope) > 1024 || state != "issued" {
+	if err != nil || ctx.Err() != nil || key < 1 || key > 4294967295 || len(binding) != 32 || len(intent) != 32 || len(proof) != 32 || len(lookup) != 32 || len(envelope) < 100 || len(envelope) > 1024 || !issuedJournalState(state) {
 		return risk.EvidenceExecution{}, risk.ErrEvidenceUnavailable
 	}
 	defer clear(envelope)
@@ -369,4 +369,16 @@ func (e *Executor) original(ctx context.Context, i risk.EvidenceIntent, observed
 		return risk.EvidenceExecution{}, risk.ErrEvidenceUnavailable
 	}
 	return risk.NewEvidenceExecution(i, risk.EvidenceCommitted, r)
+}
+
+// Subsequent one-use state never reverses historical issuance commitment.
+// Returning the original response cannot confer reservation rights; the native
+// reservation CAS independently rejects terminal, expired and foreign ownership.
+func issuedJournalState(state string) bool {
+	switch state {
+	case "issued", "reserved", "finalized", "released", "expired", "revoked":
+		return true
+	default:
+		return false
+	}
 }
