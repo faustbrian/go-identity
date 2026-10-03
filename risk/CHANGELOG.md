@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Bridge authenticated evidence-use prechecks into signed native-command
+  projections with separate issuance/consumer identity and unchanged expiry.
+  Restoration checks both retained key lanes but grants no reservation authority.
+
 - Add local phone-evidence prechecks binding the original issuance intent and
   presented bearer to a separate proposed consuming command without renewing
   expiry. Prechecks grant no journal, reservation or mutation authority.

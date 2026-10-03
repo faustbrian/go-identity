@@ -166,6 +166,26 @@ precheck the same artifact: **this is not reservation or authority**. Journal
 existence/state, primary-time rechecking, current counters, exclusive reservation
 and atomic finalization still require the forthcoming coordinator participant.
 
+`EvidenceUse.Prepared()` produces a signed scalar-only native projection, not
+an operation result or bearer payload. `EvidenceKey.RestoreUse` authenticates it
+under copied startup keys and returns an immutable `EvidenceUseClaim`; its
+`Validate(now)` checks the original exclusive interval. Restoration alone is
+integrity-only, so an expired historical projection may restore but cannot
+validate at expiry. The projection preserves original issuance identity,
+keyed intent/proof/bearer linkage and distinct proposed consumer identity.
+It cannot reconstruct omitted raw recovery facts or replace full
+`EvidenceUse.Validate` equality/current-policy checks. The native adapter must
+match its exact coordinator command and current policy, lock the authoritative
+journal and counters, and perform atomic reservation/consumption; these phases
+remain unfinished. Projecting or restoring never runs callbacks or renews time.
+
+Native use integrity signs the ordered bounded fields with the existing
+length-prefixed HMAC profile. A linkage HMAC under the retained digest key uses
+`identity-risk-evidence-use-linkage-v1`; the integrity HMAC under the paired
+signing key uses `identity-risk-evidence-use-v1` and includes that linkage MAC.
+Thus substituting either retained key lane fails restoration. No raw bearer,
+phone, network or pre-authentication data is serialized in this projection.
+
 The fixed core cryptographic profile uses independent 32-byte HMAC-SHA-256
 integrity/linkage keys and a 32-byte cryptographic random nonce. Version is a
 nonzero uint32; newest configured version issues and all retained versions verify.
