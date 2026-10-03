@@ -95,6 +95,8 @@ type SecurityProvider struct {
 // delegation is copied synchronously; callers must not mutate it during Build.
 // Initial support is the HIBP action contract with a real authentication attempt
 // subject and protected retention. Other action contracts fail closed.
+// Command and correlation use command IDs. Causation additionally admits a
+// canonical existing audit event ID carried unchanged in the named string type.
 type SecurityEventInput struct {
 	Action                                SecurityAction
 	OccurredAt                            time.Time
@@ -178,7 +180,9 @@ func validSecurityInput(i SecurityEventInput) bool {
 	if _, e := ParsePreAuthTransactionID(i.SubjectID); e != nil {
 		return false
 	}
-	if i.OccurredAt.IsZero() || i.OccurredAt.Location() != time.UTC || !securityOpaqueID(string(i.TenantID)) || !securityCommandID(i.CommandID) || !securityCommandID(i.CorrelationID) || i.CausationID != "" && !securityCommandID(i.CausationID) || i.Subject != SecurityAuthenticationAttempt || !securityOpaqueID(i.SubjectID) || !securityOpaqueID(i.PolicyID) || i.PolicyVersion == 0 || !securityActor(i.Actor, 0) {
+	// Causation may reference a prior audit event, whose canonical ID profile
+	// belongs to the audit primitive rather than the command-ID parser.
+	if i.OccurredAt.IsZero() || i.OccurredAt.Location() != time.UTC || !securityOpaqueID(string(i.TenantID)) || !securityCommandID(i.CommandID) || !securityCommandID(i.CorrelationID) || i.CausationID != "" && !securityOpaqueID(string(i.CausationID)) || i.Subject != SecurityAuthenticationAttempt || !securityOpaqueID(i.SubjectID) || !securityOpaqueID(i.PolicyID) || i.PolicyVersion == 0 || !securityActor(i.Actor, 0) {
 		return false
 	}
 	p := i.Provider

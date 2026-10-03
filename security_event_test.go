@@ -63,6 +63,24 @@ func TestSecurityProfileAttemptCannotBeIdentifierDigest(t *testing.T) {
 	}
 }
 
+func TestSecurityProfileAcceptsAnExistingEventAsCausation(t *testing.T) {
+	b, e := NewIdentitySecurityEventV1(testWall(time.Now().UTC()))
+	if e != nil {
+		t.Fatal(e)
+	}
+	input := securityInput(t)
+	query, e := b.Build(context.Background(), input)
+	if e != nil {
+		t.Fatal(e)
+	}
+	input.Action = SecurityHIBPDetectMatch
+	input.CausationID = CommandID(query.ID())
+	detected, e := b.Build(context.Background(), input)
+	if e != nil || detected.Context().CausationID() != query.ID() {
+		t.Fatal("actual query event cannot cause match detection", e)
+	}
+}
+
 func TestSecurityProfilePreservesImportedIDsAndCopiesDelegation(t *testing.T) {
 	b, e := NewIdentitySecurityEventV1(testWall(time.Now().UTC()))
 	if e != nil {

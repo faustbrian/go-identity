@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Preserve canonical prior audit event IDs as security-event causation, allowing
+  correctly linked query and match/rejection records without fabricated IDs.
+
 - Add the shared typed security-profile builder for HIBP actions, producing
   canonical redacted audit records with protected retention and closed provider
   fields. Reject unsafe attribution and identifier digests masquerading as
