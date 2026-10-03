@@ -3,8 +3,9 @@
 Experimental Go 1.27 durable adapter. Forward-only migrations and bounded
 primary `Get`/digest `Lookup` reads preserve complete native session records,
 resolved lifetime limits, original nanosecond timelines, full uint64 authority
-versions and revocation tombstones. **Issuance, shared-coordinator Apply,
-rotation, recovery, cleanup, devices and online authority enforcement are not
+versions and revocation tombstones. Native family revocation now participates
+in the sole identity PostgreSQL coordinator. **Issuance, rotation, cleanup,
+devices and online authority enforcement are not
 implemented yet. This is not a login/session-authentication service.**
 
 ## Adoption and API
@@ -21,6 +22,39 @@ and PostgreSQL backend. The kernel's `identity.users` table is a prerequisite.
 Never use independent competing ledgers, renumber applied versions or silently
 adopt an occupied schema. `public`, `identity`, `information_schema`, `pg_*`
 and noncanonical schema names are rejected. There is no destructive down SQL.
+
+To enable native revocation, use
+`RevocationMigrationSource{Base: MigrationSource{Schema: "identity_session", Version: 10}, Version: 11}`
+with an additional permanent version greater than the base in the same history. This
+forward-only migration adds retained mutation bindings without changing the
+original session install or live records. The original two-field
+`MigrationSource` remains unchanged and returns only the read-only install.
+Register the repository alongside the owned kernel, audit and outbox
+contributors. Its descriptor is `identity.session.store` version 1 and it
+declares only the implemented `identity.session.revoke-family` schema.
+
+`MapCommand(session.NewRevokeFamilyCommand(...))` maps the closed native
+command's complete expected-version intent. Prepare a native feature plan with
+subject `session_family`, security action `identity.session.revoke`, lifecycle
+`session_family.revoked.v1`, exact expected/successor versions and selected
+standard (or privileged protected) retention. The coordinator checks registry,
+budgets, digests and the native owner's mandatory declarations before reserving.
+Only its `ApplyFeature` invokes the registered repository. Direct `Apply` on a
+borrowed, foreign or returned Work fails; the constructor accepts no coordinator,
+transaction or registry. Authorization belongs to the owning service, before
+reservation. This trusted adapter is not a public revocation endpoint.
+
+Revocation changes exactly one owned active family's tombstone and version,
+never its sessions' original snapshots. Missing, stale, already-revoked and
+foreign-owner targets return redacted conflict without disclosing foreign
+existence. Exact same-command replay is handled before mutation by the sole
+coordinator. Required audit/lifecycle effects and retained mutation evidence
+commit with the transition. Errors require coordinator Abort; a failed commit
+stays Unknown until primary recovery proves its original result. Recovery reads
+retained exact command bindings, never infers success from current family state.
+No adapter cleanup prunes those bindings; their journal FK prevents premature
+command retirement. Retention/privacy retirement remains a later owned policy
+boundary, not permission to treat pruned evidence as noncommit.
 
 `Get(ctx, tenant, sessionID)` and `Lookup(ctx, tenant, session.TokenDigest)`
 return a structural `StoredSession`. Both use one joined primary query and a
@@ -58,6 +92,9 @@ Use the `integration` build tag and an explicit task-owned loopback
 fails, never skips. Unit and fuzz tests cover reconstruction; integration tests
 use the real owned migration runner and PostgreSQL. Their parent-table fixture
 does not replace eventual full-kernel/reference composition evidence.
+Native revocation tests additionally compose the actual full kernel migrations,
+populated session upgrade and real contributor/coordinator. Audit/outbox SQL
+seams prove atomic rollback and visibility, not production adapter interoperability.
 
 **Can this adapter issue or authenticate sessions?** Not yet. Reads reconstruct
 structural data only. Final proof consumption and effects must use the sole

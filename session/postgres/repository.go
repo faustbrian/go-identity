@@ -40,7 +40,8 @@ type StoredSession struct {
 // Repository owns no pool, transaction, cache or background goroutine. It reads
 // one atomic joined record from the caller-owned PRIMARY pool; never configure
 // replicas. It is safe for concurrent reads. The caller closes the pool after
-// all operations finish. Zero is invalid. Shared-coordinator writes are pending.
+// all operations finish. Zero is invalid. Native family revocation writes use
+// only the active shared-coordinator invocation; issuance and rotation are pending.
 type Repository struct {
 	pool            *database.Pool
 	schema          string

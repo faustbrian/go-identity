@@ -1,6 +1,7 @@
 // Package postgres owns durable session storage. Structural record reads do
-// not authenticate a bearer or authorize a session. Shared-coordinator issuance,
-// rotation, proof consumption and lifecycle enforcement remain in development.
+// not authenticate a bearer or authorize a session. Native family revocation
+// uses the sole coordinator. Issuance, rotation, proof consumption and online
+// lifecycle enforcement remain in development.
 package postgres
 
 import (
@@ -42,6 +43,37 @@ func (s MigrationSource) Load(ctx context.Context) ([]migrations.Migration, erro
 		return nil, identity.UnavailableError{}
 	}
 	return []migrations.Migration{m}, nil
+}
+
+// RevocationMigrationSource composes the unchanged base install and the native
+// revocation install in the composition's single migration history. Version is
+// a permanent allocation greater than Base.Version and no greater than MaxInt64.
+// Never renumber applied versions. This separate source preserves the original
+// MigrationSource contract, including positional literals. Load performs no IO
+// and is safe for concurrent callers; no destructive down migration is supplied.
+type RevocationMigrationSource struct {
+	Base    MigrationSource
+	Version migrations.Version
+}
+
+var _ migrations.Source = RevocationMigrationSource{}
+
+// Load returns the independently owned base history followed by the revocation
+// migration. Invalid allocations and nil contexts fail; cancellation is preserved.
+func (s RevocationMigrationSource) Load(ctx context.Context) ([]migrations.Migration, error) {
+	if s.Version <= s.Base.Version || s.Version > migrations.Version(math.MaxInt64) {
+		return nil, identity.InvalidInputError{Field: "session_migration"}
+	}
+	history, err := s.Base.Load(ctx)
+	if err != nil {
+		return nil, err
+	}
+	sql := strings.ReplaceAll(sessionMutationSchemaSQL, "@schema@", pgx.Identifier{s.Base.Schema}.Sanitize())
+	mutation, err := migrations.NewMigration(s.Version, "identity_session_revocations", migrations.TransactionModeDefault, sql, "")
+	if err != nil {
+		return nil, identity.UnavailableError{}
+	}
+	return append(history, mutation), nil
 }
 
 func validSchema(s string) bool {
@@ -102,4 +134,22 @@ CREATE TABLE @schema@.sessions(
 CREATE INDEX session_owner_order ON @schema@.sessions(tenant_id,user_id,session_id);
 CREATE INDEX session_family_order ON @schema@.sessions(tenant_id,family_id,session_id);
 CREATE INDEX session_expiry_order ON @schema@.sessions(expires_at,tenant_id,session_id) WHERE state='active';
+`
+
+// Retain the exact mutation binding independently of prunable session payloads.
+// No adapter cleanup deletes it. The scoped journal FK prevents its command
+// authority being retired while retained participant evidence still depends on it.
+const sessionMutationSchemaSQL = `CREATE TABLE @schema@.family_revocations(
+ tenant_id @schema@.scope_id NOT NULL,
+ command_id bytea NOT NULL CHECK(octet_length(command_id)=16),
+ purpose text COLLATE "C" NOT NULL CHECK(purpose='identity.session.revoke-family'),
+ user_id @schema@.scope_id NOT NULL,
+ family_id @schema@.scope_id NOT NULL,
+ before_version @schema@.version NOT NULL,
+ after_version @schema@.version NOT NULL,
+ binding_digest bytea NOT NULL CHECK(octet_length(binding_digest)=32),
+ PRIMARY KEY(tenant_id,command_id),
+ FOREIGN KEY(command_id,tenant_id,purpose) REFERENCES identity.commands(command_id,tenant_id,purpose),
+ CHECK(after_version=before_version+1)
+);
 `
