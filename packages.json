@@ -2,6 +2,7 @@
   "schema_version": 1,
   "repository": "github.com/faustbrian/go-identity",
   "packages": [
+    {"module_directory":"risk/postgres","directory":".","name":"postgres","import_path":"github.com/faustbrian/go-identity/risk/postgres","kind":"public","production":true,"executable":true,"coverage_required":true,"build_required":true,"build_tags":[]},
     {"module_directory":"risk","directory":".","name":"risk","import_path":"github.com/faustbrian/go-identity/risk","kind":"public","production":true,"executable":true,"coverage_required":true,"build_required":true,"build_tags":[]},
     {
       "module_directory": ".",
