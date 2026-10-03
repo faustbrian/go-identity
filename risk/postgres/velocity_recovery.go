@@ -74,7 +74,7 @@ func (VelocityRecoveryLease) MarshalText() ([]byte, error) {
 }
 
 // NewVelocityRecovery validates configuration without IO. Journal must already
-// use VelocityIntentMigrationSource. Unsupported windows and lease bounds fail
+// use VelocityIntegrityMigrationSource. Unsupported windows and lease bounds fail
 // redacted with ErrInvalidPolicy; construction grants no external authority.
 func NewVelocityRecovery(c VelocityRecoveryConfig) (VelocityRecovery, error) {
 	if c.Journal.state == nil || c.MaximumWindow != time.Hour || c.LeaseDuration <= 0 || c.LeaseDuration > time.Minute || c.LeaseDuration%time.Microsecond != 0 {

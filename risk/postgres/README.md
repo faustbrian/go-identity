@@ -64,6 +64,22 @@ evidence and decisions. It is **not yet an executable durable risk service**.
   pruning or operator-bypass API. Valkey remains ephemeral mutation authority;
   PostgreSQL is the durable recovery journal, not a second counter engine.
 
+- Install `VelocityIntegrityMigrationSource{Base: intentHistory,
+  Version: laterAllocation}` before running current journal writers. Each native
+  insertion and declaration atomically seals the complete persisted record with
+  domain-separated HMAC-SHA-256 under the retained journal key. The seal covers
+  scoped identity, sequence, fingerprint, original preparation/recording times,
+  outcome, every ordered target/alias, and full snapshots. Readback and terminal
+  replay reject missing or altered authentication without re-sealing history.
+  PostgreSQL timezone and text formatting cannot renew or change sealed times.
+  The forward migration preserves earlier experimental records unchanged and
+  unsealed; they are retained for investigation, not accepted as authenticated
+  readback/replay. Do not replace the journal key or run old writers alongside
+  the current profile. Attributable legacy recovery remains unfinished; there
+  is no automatic backfill, pruning or fail-open migration fallback.
+  Record integrity is not external-result truth, rollback-resistant storage,
+  replay completeness, Valkey effect authority or healthy publication.
+
 - Optional `Config.UseIssuer` installs pure use preparation only after matching
   the issuer's exact current policy and entire retained signing/linkage key set.
   `PrepareEvidenceUse` accepts a core precheck, original trusted request and

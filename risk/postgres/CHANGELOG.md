@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Authenticate complete native velocity intent and terminal history atomically,
+  retaining original windows and values and rejecting altered or missing seals
+  before readback or replay. Install the new forward integrity migration before
+  upgrading all writers. Earlier experimental rows remain unchanged/unsealed
+  and fail closed; no automatic backfill blesses unverifiable history. Native
+  replay traversal, external-result recovery and health publication remain pending.
+
 - Synchronize velocity intent/result transactions with recovery ownership using
   one scoped database lock held through commit or rollback. Acquisition drains
   overlapping insertions and declarations without losing later evidence or

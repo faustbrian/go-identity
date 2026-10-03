@@ -80,6 +80,9 @@ func (j VelocityJournal) RecordResult(ctx context.Context, a VelocityAttempt, ou
 	if _, err = tx.Exec(bounded, `UPDATE `+s.schema+`.velocity_attempts SET outcome=$1 WHERE sequence=$2 AND outcome='pending'`, name, sequence); err != nil {
 		return identity.UnavailableError{}
 	}
+	if err := s.sealVelocity(bounded, tx, sequence); err != nil {
+		return err
+	}
 	if err = tx.Commit(bounded); err != nil {
 		return identity.UnavailableError{}
 	}
@@ -89,7 +92,7 @@ func (j VelocityJournal) RecordResult(ctx context.Context, a VelocityAttempt, ou
 // ReadResult reconstructs an exact authenticated historical terminal result
 // from primary authority. It preserves original timestamps and classification,
 // not current positive validity; the core consumes freshness separately.
-// Pending/missing/corrupt history is unavailable. Explicit unknown remains
+// Pending/missing/corrupt/unsealed history is unavailable. Explicit unknown remains
 // unknown, never noncommit or retry permission. The transaction is bounded,
 // read-only and repeatable; no callbacks, effects or epoch mutations occur.
 func (j VelocityJournal) ReadResult(ctx context.Context, c risk.CounterCommand) (risk.CounterResult, error) {
@@ -272,6 +275,9 @@ func (s *velocityJournal) velocityRead(ctx context.Context, tx pgx.Tx, c risk.Co
 		if _, err = risk.NewCounterResult(c, velocityOutcome(state), snapshot); err != nil {
 			return 0, "", nil, identity.UnavailableError{}
 		}
+	}
+	if err := s.checkVelocitySeal(ctx, tx, sequence); err != nil {
+		return 0, "", nil, err
 	}
 	return sequence, state, snapshot, nil
 }

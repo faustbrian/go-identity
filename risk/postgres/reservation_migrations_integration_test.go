@@ -237,13 +237,23 @@ func TestRiskReservationPopulatedUpgrade(t *testing.T) {
 	if err := db.QueryRowContext(ctx, `SELECT count(*) FROM risk_store.velocity_targets`).Scan(&targets); err != nil || targets != 6 {
 		t.Fatal("populated target custody lost", err)
 	}
+	integrityHistory, err := (VelocityIntegrityMigrationSource{Base: intentSource, Version: 26}).Load(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	install(integrityHistory)
+	install(integrityHistory)
+	var legacySealed int
+	if err := db.QueryRowContext(ctx, `SELECT count(*) FROM risk_store.velocity_attempts WHERE replay_seal IS NOT NULL`).Scan(&legacySealed); err != nil || legacySealed != 0 {
+		t.Fatal("migration invented legacy authentication", err)
+	}
 	testVelocityJournal(t, ctx, dsn, name)
 	// A fresh full history uses the same constraints, not an upgrade-only schema.
 	fresh, err := (ReservationMigrationSource{Base: IssuanceIDMigrationSource{Base: MigrationSource{Schema: "risk_fresh", Version: 30}, Version: 31}, Version: 32}).Load(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
-	install(append(append([]migrations.Migration(nil), intentHistory...), fresh...))
+	install(append(append([]migrations.Migration(nil), integrityHistory...), fresh...))
 	if _, err := db.ExecContext(ctx, `INSERT INTO risk_fresh.issued_evidence SELECT * FROM risk_store.issued_evidence`); err != nil {
 		t.Fatal("fresh install lost issued-row compatibility", err)
 	}
