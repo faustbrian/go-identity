@@ -240,7 +240,13 @@ func (c *Coordinator) Commit(w Work, result identity.CommandResult) (identity.Co
 	}
 	for _, entry := range w.state.execution.reservation.plan.contributors {
 		if entry.descriptor.Owner == "outbox/postgres" {
-			if err := entry.contributor.(LifecycleContributor).PersistLifecycle(w.state.ctx, w); err != nil {
+			var err error
+			if w.state.credentialReceipt != nil {
+				err = entry.contributor.(CredentialCompromiseLifecycleContributor).PersistCredentialCompromise(w.state.ctx, w)
+			} else {
+				err = entry.contributor.(LifecycleContributor).PersistLifecycle(w.state.ctx, w)
+			}
+			if err != nil {
 				return c.Abort(w, identity.UnavailableError{})
 			}
 		}

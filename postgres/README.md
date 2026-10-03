@@ -726,6 +726,33 @@ transaction behavior with typed audit/lifecycle SQL seams, not production
 audit/outbox adapter interoperability. Do not supply application-owned identity
 transactions or stores to bridge the unfinished profile.
 
+### Denial-only credential compromise
+
+The registered password or passkey participant may implement
+`CredentialCompromiseContributor` for its closed `mark-compromised` operation.
+Its frozen command includes `CredentialCompromiseFields` plus native detection
+and authorization metadata. The coordinator locks the exact user/reference and
+checks the independent aggregate, credential-authority and reference versions
+before invoking native verifier disablement. Banned/suspended and expired
+credentials may be disabled; deleted/anonymized users and already disabled or
+stale references are rejected. No credential is enabled or restored.
+
+The existing outbox participant must also implement
+`CredentialCompromiseLifecycleContributor`. Its same-Work phase persists both
+`StagedLifecycle` and `StagedCredentialCompromise`, keeping all three version
+dimensions distinct. These provisional values grant no current authentication
+authority or cascade acknowledgement. Native mutation, kernel metadata, audit,
+outbox and the original journal receipt use the sole coordinator transaction.
+Only the shared commit establishes durability; replay preserves the original
+receipt even after later changes. Retained participant evidence cannot be
+replaced by a lookup of current credential state.
+
+Compose `CredentialCompromiseMigrationSource` after credential-reference history
+with an explicitly allocated later version; retain its evidence with command
+tombstones. This is not password set/change/reset, passkey ceremony validation,
+or production password detection. Those workflows still need their real native
+owners, proof consumption and composed adapter evidence.
+
 ### FAQ
 
 - Can I use a replica? No; the repository's primary consistency contract is

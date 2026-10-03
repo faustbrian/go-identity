@@ -38,7 +38,18 @@ func validateFeatureCommand(phase FeatureExecutionContributor, command identity.
 			err = identity.UnavailableError{}
 		}
 	}()
-	return phase.ValidateFeatureCommand(command, plan)
+	if err := phase.ValidateFeatureCommand(command, plan); err != nil {
+		return err
+	}
+	if plan.Feature != nil && credentialCompromiseOperation(plan.Feature.Operation) {
+		p, ok := phase.(CredentialCompromiseContributor)
+		if !ok {
+			return invalidCredentialCompromise()
+		}
+		_, err := compromiseCommand(p, command, plan)
+		return err
+	}
+	return nil
 }
 
 func (r *ContributorRegistry) admitFeaturePlan(b identity.CommandBinding, fingerprint [32]byte, p CommandPlan) (*admittedKernelPlan, error) {
@@ -72,6 +83,23 @@ func (r *ContributorRegistry) admitFeaturePlan(b identity.CommandBinding, finger
 	entries, err := r.selectContributors(p.Contributors)
 	if err != nil {
 		return nil, invalidPlan()
+	}
+	if credentialCompromiseOperation(p.Feature.Operation) {
+		if _, ok := feature.contributor.(CredentialCompromiseContributor); !ok {
+			return nil, invalidPlan()
+		}
+		for _, entry := range entries {
+			if entry.descriptor.Owner == "identity/postgres" {
+				if _, ok := entry.contributor.(*Repository); !ok {
+					return nil, invalidPlan()
+				}
+			}
+			if entry.descriptor.Owner == "outbox/postgres" {
+				if _, ok := entry.contributor.(CredentialCompromiseLifecycleContributor); !ok {
+					return nil, invalidPlan()
+				}
+			}
+		}
 	}
 	for _, entry := range entries {
 		if _, ok := entry.contributor.(RecoveryContributor); !ok {
@@ -145,6 +173,11 @@ func (c *Coordinator) ApplyFeature(ctx context.Context, w Work, command identity
 		}
 		w.state.execution.featureAbortAudits[class] = records
 	}
+	if credentialCompromiseOperation(p.feature.Operation) {
+		if e := prepareCredentialCompromise(ctx, w, command); e != nil {
+			return result, e
+		}
+	}
 	receipt, e := invokeFeature(phase, ctx, w, command)
 	if e != nil {
 		_, _, _, safe := abortClassification(e)
@@ -155,6 +188,11 @@ func (c *Coordinator) ApplyFeature(ctx context.Context, w Work, command identity
 	}
 	if w.state.rows != nil || receipt.Operation != p.feature.Operation || receipt.BeforeVersion != p.lifecycle.BeforeVersion || receipt.AfterVersion != p.lifecycle.AfterVersion {
 		return result, w.fail(ctx, identity.InvalidInputError{Field: "feature_receipt"})
+	}
+	if w.state.credentialIntent != nil {
+		if e := applyCredentialCompromise(ctx, w); e != nil {
+			return result, e
+		}
 	}
 	success, e := featureMutationAudits(ctx, p, now, "committed")
 	if e != nil {

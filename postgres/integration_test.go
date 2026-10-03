@@ -161,6 +161,20 @@ func TestPostgresIntegration(t *testing.T) {
 		}
 		testCredentialAuthority(t, ctx, pool, repo)
 	})
+	t.Run("credential compromise transaction", func(t *testing.T) {
+		compromiseRunner, e := migrations.NewRunner(CredentialCompromiseMigrationSource{Base: CredentialMigrationSource{Base: StatusMigrationSource{Base: MigrationSource{}, Version: 12}, Version: 13}, Version: 14}, backend)
+		if e != nil {
+			t.Fatal(e)
+		}
+		if _, e := compromiseRunner.Up(ctx); e != nil {
+			t.Fatal("compromise migration", e)
+		}
+		if _, e := compromiseRunner.Up(ctx); e != nil {
+			t.Fatal("compromise migration replay", e)
+		}
+		runner = compromiseRunner
+		testCredentialCompromise(t, ctx, pool, repo)
+	})
 	insert := func(tenant, user, status, version string) error {
 		_, err := pool.Raw().Exec(ctx, `INSERT INTO identity.users(tenant_id,user_id,status,version) VALUES($1,$2,$3,$4::numeric)`, tenant, user, status, version)
 		return err

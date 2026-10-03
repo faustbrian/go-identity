@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Add an explicit denial-only credential compromise phase to the existing
+  coordinator. Native verifier disablement, reference disablement, independent
+  user/credential version successors, protected audit, lifecycle metadata and
+  the original replay receipt commit together. An allocated forward migration
+  retains kernel recovery evidence; missing or conflicting evidence cannot prove
+  noncommit. Credential activation and password set/reset remain unsupported.
+
 - Read exact credential references and independent user credential epochs from
   one bounded primary snapshot, preserving full-width versions and blocked,
   disabled and expired states. Explicit forward `CredentialMigrationSource`

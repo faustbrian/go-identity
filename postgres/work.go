@@ -44,6 +44,8 @@ type workState struct {
 	featureAttempted  bool
 	featureReceipt    *identity.FeatureReceipt
 	featureInvocation FeatureExecutionContributor
+	credentialIntent  *CredentialCompromiseIntent
+	credentialReceipt *CredentialCompromiseReceipt
 }
 
 // newWork is private: only the sole coordinator may call it after verifying

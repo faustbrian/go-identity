@@ -187,6 +187,9 @@ func matchesDomainResult(w Work, result identity.CommandResult) bool {
 		return w.state.creation == nil && w.state.profile == nil && w.state.update == nil && w.state.feature == nil && result.User == owned.User && result.ExpectedVersion == owned.ExpectedVersion && result.Revocation != nil && owned.Revocation != nil && result.Revocation.CascadeID == owned.Revocation.CascadeID && result.Revocation.Generation == owned.Revocation.Generation && result.Revocation.AuthorityVersion == owned.Revocation.AuthorityVersion && result.Revocation.Status == owned.Revocation.Status && slices.Equal(result.Revocation.Owners, owned.Revocation.Owners) && slices.Equal(result.Revocation.ExternalLimitations, owned.Revocation.ExternalLimitations)
 	}
 	if w.state.feature != nil {
+		if credentialCompromiseOperation(w.state.feature.Operation) && (w.state.credentialReceipt == nil || w.state.credentialIntent == nil || result.Feature == nil || result.Feature.BeforeVersion != w.state.credentialReceipt.BeforeCredentialVersion || result.Feature.AfterVersion != w.state.credentialReceipt.Credential.Version) {
+			return false
+		}
 		return w.state.featureReceipt != nil && result.Feature != nil && *result.Feature == *w.state.featureReceipt && w.state.creation == nil && w.state.profile == nil && w.state.update == nil
 	}
 	if w.state.update != nil {
