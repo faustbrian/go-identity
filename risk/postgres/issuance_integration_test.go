@@ -6,8 +6,10 @@ import (
 	"bytes"
 	"context"
 	"encoding/base64"
+	"errors"
 	"os"
 	"strconv"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -103,6 +105,41 @@ type issuanceQueryPolicy struct{}
 
 func (issuanceQueryPolicy) Decide(context.Context, authorization.DecisionContext) (authorization.Decision, error) {
 	return authorization.Decision{Outcome: authorization.Allow, Revision: 1}, nil
+}
+
+type issuanceDenyPolicy struct{}
+
+func (issuanceDenyPolicy) Decide(context.Context, authorization.DecisionContext) (authorization.Decision, error) {
+	return authorization.Decision{Outcome: authorization.Deny, Revision: 1}, nil
+}
+
+type foreignIssuanceAudit struct{ issuanceAudit }
+
+func (*foreignIssuanceAudit) Descriptor() identitypostgres.ContributorDescriptor {
+	return identitypostgres.ContributorDescriptor{Owner: "foreign/postgres", ContractID: "identity.audit", Version: 1}
+}
+
+// Test-only interleaving boundary: both public issuers finish independent
+// evaluations before invoking the real executor. No durable outcome is faked.
+type concurrentIssuance struct {
+	delegate *Executor
+	arrivals atomic.Int32
+	ready    chan struct{}
+}
+
+func (c *concurrentIssuance) Resolve(ctx context.Context, i risk.EvidenceIntent) (risk.EvidenceExecution, error) {
+	return c.delegate.Resolve(ctx, i)
+}
+func (c *concurrentIssuance) Execute(ctx context.Context, i risk.EvidenceIssue) (risk.EvidenceExecution, error) {
+	if c.arrivals.Add(1) == 2 {
+		close(c.ready)
+	}
+	select {
+	case <-c.ready:
+		return c.delegate.Execute(ctx, i)
+	case <-ctx.Done():
+		return risk.EvidenceExecution{}, ctx.Err()
+	}
 }
 
 func (h issuanceHistory) Load(context.Context) ([]migrations.Migration, error) {
@@ -288,6 +325,224 @@ func TestIssuedEvidenceSameWorkIntegration(t *testing.T) {
 			t.Fatalf("atomic state %d/%d/%d: %v", i, a, o, err)
 		}
 	}
+	executorConfig := func(native *Repository, policy authorization.Service) ExecutorConfig {
+		read := &identitypostgres.CommandQueryPolicy{Clock: clock.System{}, PolicyVersion: 1, Authorization: policy}
+		return ExecutorConfig{Pool: pool, Repository: native, Audit: auditing, Lifecycle: outbox, Coordinator: identitypostgres.CoordinatorConfig{MaximumDuration: 2 * time.Second, LeaseDuration: time.Minute, CurrentFingerprintKeyVersion: 1, RetainedFingerprintKeys: map[uint32][32]byte{1: {1}}, QueryPolicy: read, AdmissionPolicy: read}, Caller: authorization.DecisionContext{PolicyRevision: 1, Request: authorization.Request{Subject: authorization.Subject{Kind: authorization.SubjectServiceAccount, ID: "phone-service"}, Tenant: "tenant", Action: "identity.risk.evaluate", Resource: authorization.Resource{Type: "identity.user", ID: "subject"}}}, PolicyID: "risk-policy", RetentionPolicyVersion: 1}
+	}
+	newExecutor := func(t *testing.T, native *Repository, policy authorization.Service) *Executor {
+		t.Helper()
+		e, err := NewExecutor(executorConfig(native, policy))
+		if err != nil {
+			t.Fatal("official executor construction", err)
+		}
+		return e
+	}
+	t.Run("official-executor-invalid-composition", func(t *testing.T) {
+		for _, change := range []func(*ExecutorConfig){
+			func(c *ExecutorConfig) { c.Audit = &foreignIssuanceAudit{} },
+			func(c *ExecutorConfig) { c.Audit = nil },
+			func(c *ExecutorConfig) { c.Lifecycle = nil },
+			func(c *ExecutorConfig) { c.Repository = &Repository{} },
+			func(c *ExecutorConfig) { c.Coordinator.AdmissionPolicy = nil },
+			func(c *ExecutorConfig) { c.Coordinator.QueryPolicy = nil },
+			func(c *ExecutorConfig) { c.Coordinator.MaximumDuration = 0 },
+			func(c *ExecutorConfig) { c.Caller.PolicyRevision = 2 },
+			func(c *ExecutorConfig) { c.Caller.Request.Subject.Kind = authorization.SubjectGroup },
+			func(c *ExecutorConfig) { c.Caller.Request.Action = "identity.user.create" },
+			func(c *ExecutorConfig) { c.RetentionPolicyVersion = 0 },
+			func(c *ExecutorConfig) { c.PolicyID = "invalid policy" },
+		} {
+			c := executorConfig(repo, issuanceQueryPolicy{})
+			change(&c)
+			if _, err := NewExecutor(c); !errors.Is(err, risk.ErrInvalidPolicy) {
+				t.Fatal("incomplete or foreign composition admitted", err)
+			}
+		}
+	})
+	t.Run("official-executor-original-replay", func(t *testing.T) {
+		for _, phase := range []risk.IssuancePhase{risk.PhoneResetInitiation, risk.PhoneResetCompletion} {
+			id, err := identity.NewCommandID()
+			if err != nil {
+				t.Fatal(err)
+			}
+			at := time.Now().UTC().Truncate(time.Microsecond).Add(-100 * time.Millisecond)
+			executor := newExecutor(t, repo, issuanceQueryPolicy{})
+			issuer, request, _ := issuanceFixture(t, phase, at, string(id), executor, false, nil)
+			first, err := issuer.Evaluate(ctx, request)
+			if err != nil || first.Outcome != risk.EvidenceCommitted || first.Evidence.Reference.Reveal() == "" || first.Evidence.MaxUses != 1 || first.Evidence.IssuedAt.Before(at) || !first.Evidence.ExpiresAt.Equal(at.Add(30*time.Second)) {
+				t.Fatal("official issuance failed", err)
+			}
+			counts(t, identity.CommandBinding{CommandID: id}, 1, 1, 1)
+			replay, original, _ := issuanceFixture(t, phase, at.Add(time.Minute), string(id), newExecutor(t, repo, issuanceQueryPolicy{}), true, nil)
+			second, err := replay.Evaluate(ctx, original)
+			if err != nil || second != first {
+				t.Fatal("original expired replay altered or renewed", err)
+			}
+			// Pre-evaluation admission is not protected-response disclosure. The
+			// two deliberately independent policies must both govern committed replay.
+			disclosureDenied := executorConfig(repo, issuanceQueryPolicy{})
+			disclosureDenied.Coordinator.QueryPolicy = &identitypostgres.CommandQueryPolicy{Clock: clock.System{}, PolicyVersion: 1, Authorization: issuanceDenyPolicy{}}
+			deniedExecutor, err := NewExecutor(disclosureDenied)
+			if err != nil {
+				t.Fatal(err)
+			}
+			deniedIssuer, deniedRequest, _ := issuanceFixture(t, phase, at.Add(time.Minute), string(id), deniedExecutor, true, nil)
+			deniedResult, err := deniedIssuer.Evaluate(ctx, deniedRequest)
+			if err != nil || deniedResult.Outcome != risk.EvidenceDenied || deniedResult.Evidence != (risk.RiskEvidence{}) {
+				t.Fatal("admission permission bypassed response disclosure policy", err)
+			}
+			deniedResult, err = deniedIssuer.Recover(ctx, deniedRequest)
+			if err != nil || deniedResult.Outcome != risk.EvidenceDenied || deniedResult.Evidence != (risk.RiskEvidence{}) {
+				t.Fatal("recovery bypassed response disclosure policy", err)
+			}
+			newKey, keyErr := risk.NewEvidenceKey(2, bytes.Repeat([]byte{0x51}, 32), bytes.Repeat([]byte{0x52}, 32))
+			if keyErr != nil {
+				t.Fatal(keyErr)
+			}
+			rotated, err := NewRepository(Config{Schema: "risk_store", PolicyVersion: 3, EvidenceKeys: []risk.EvidenceKey{key, newKey}, EnvelopeKeys: map[string][]byte{"wrapping_v1": wrappingKey(1), "wrapping_v2": wrappingKey(2)}, CurrentEnvelopeKey: "wrapping_v2"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			rotatedIssuer, rotatedRequest, _ := issuanceFixture(t, phase, at.Add(time.Minute), string(id), newExecutor(t, rotated, issuanceQueryPolicy{}), true, []risk.EvidenceKey{key, newKey})
+			rotatedResult, err := rotatedIssuer.Evaluate(ctx, rotatedRequest)
+			if err != nil || rotatedResult != first {
+				t.Fatal("rotation lost original encrypted response", err)
+			}
+			for _, change := range []func(*risk.PhoneEvidenceRequest){
+				func(r *risk.PhoneEvidenceRequest) { r.Actor = "other" },
+				func(r *risk.PhoneEvidenceRequest) { r.Recovery.Binding.Tenant = "other" },
+				func(r *risk.PhoneEvidenceRequest) { r.Recovery.Binding.Subject = "other" },
+				func(r *risk.PhoneEvidenceRequest) { r.Recovery.Binding.CanonicalNumber = "+358401234568" },
+				func(r *risk.PhoneEvidenceRequest) { r.Recovery.Binding.PreAuthTransaction = "different-preauth" },
+				func(r *risk.PhoneEvidenceRequest) { r.Recovery.Binding.Attempt = "different-attempt" },
+				func(r *risk.PhoneEvidenceRequest) { r.Subject.Device = "different-device" },
+				func(r *risk.PhoneEvidenceRequest) { r.Subject.Network = "2001:db8::2" },
+			} {
+				changed := original
+				change(&changed)
+				got, _ := replay.Evaluate(ctx, changed)
+				if got.Outcome == risk.EvidenceCommitted || got.Outcome == risk.EvidenceMissing || got.Evidence != (risk.RiskEvidence{}) {
+					t.Fatal("changed intent disclosed or reevaluated")
+				}
+			}
+			counts(t, identity.CommandBinding{CommandID: id}, 1, 1, 1)
+			var encrypted []byte
+			if err = db.QueryRowContext(ctx, `SELECT response_envelope FROM risk_store.issued_evidence WHERE record_id=$1`, string(id)).Scan(&encrypted); err != nil {
+				t.Fatal(err)
+			}
+			if bytes.Contains(encrypted, []byte(first.Evidence.Reference.Reveal())) {
+				t.Fatal("response stored in plaintext")
+			}
+			bad := bytes.Clone(encrypted)
+			bad[len(bad)-1] ^= 1
+			if _, err = db.ExecContext(ctx, `UPDATE risk_store.issued_evidence SET response_envelope=$2 WHERE record_id=$1`, string(id), bad); err != nil {
+				t.Fatal(err)
+			}
+			corrupt, err := replay.Evaluate(ctx, original)
+			if err == nil || corrupt.Outcome != risk.EvidenceUnknown || corrupt.Evidence != (risk.RiskEvidence{}) {
+				t.Fatal("corrupt original disclosed or evaluated", err)
+			}
+			if _, err = db.ExecContext(ctx, `UPDATE risk_store.issued_evidence SET response_envelope=$2 WHERE record_id=$1`, string(id), encrypted); err != nil {
+				t.Fatal(err)
+			}
+		}
+	})
+	t.Run("official-executor-concurrent-exact-command", func(t *testing.T) {
+		id, err := identity.NewCommandID()
+		if err != nil {
+			t.Fatal(err)
+		}
+		at := time.Now().UTC().Truncate(time.Microsecond).Add(-100 * time.Millisecond)
+		executor := newExecutor(t, repo, issuanceQueryPolicy{})
+		barrier := &concurrentIssuance{delegate: executor, ready: make(chan struct{})}
+		issuer, request, _ := issuanceFixture(t, risk.PhoneResetInitiation, at, string(id), barrier, false, nil)
+		type response struct {
+			result risk.PhoneEvidenceResult
+			err    error
+		}
+		// The parent owns/drains this two-result channel. Each bounded worker sends
+		// once and exits; no goroutine or channel ownership escapes this subtest.
+		responses := make(chan response, 2)
+		for range 2 {
+			go func() { result, err := issuer.Evaluate(ctx, request); responses <- response{result, err} }()
+		}
+		var first risk.PhoneEvidenceResult
+		for range 2 {
+			r := <-responses
+			if r.result.Outcome != risk.EvidenceCommitted && r.result.Outcome != risk.EvidenceUnknown {
+				t.Fatal("concurrent exact submission lost safe classification", r.err)
+			}
+			if r.result.Outcome == risk.EvidenceCommitted {
+				if first.Outcome != 0 && r.result != first {
+					t.Fatal("multiple committed references")
+				}
+				first = r.result
+			}
+		}
+		if first.Outcome != risk.EvidenceCommitted {
+			t.Fatal("no original committed winner")
+		}
+		counts(t, identity.CommandBinding{CommandID: id}, 1, 1, 1)
+		replay, original, _ := issuanceFixture(t, risk.PhoneResetInitiation, at.Add(time.Minute), string(id), executor, true, nil)
+		for range 2 {
+			recovered, err := replay.Recover(ctx, original)
+			if err != nil || recovered != first {
+				t.Fatal("exact retries did not converge to original", err)
+			}
+		}
+		counts(t, identity.CommandBinding{CommandID: id}, 1, 1, 1)
+	})
+	t.Run("official-executor-denial-before-providers", func(t *testing.T) {
+		id, err := identity.NewCommandID()
+		if err != nil {
+			t.Fatal(err)
+		}
+		issuer, request, _ := issuanceFixture(t, risk.PhoneResetInitiation, time.Now().UTC(), string(id), newExecutor(t, repo, issuanceDenyPolicy{}), true, nil)
+		got, err := issuer.Evaluate(ctx, request)
+		if err != nil || got.Outcome != risk.EvidenceDenied || got.Evidence != (risk.RiskEvidence{}) {
+			t.Fatal("denied caller evaluated or disclosed", err)
+		}
+		counts(t, identity.CommandBinding{CommandID: id}, 0, 0, 0)
+	})
+	t.Run("official-executor-pending-and-proved-failure-never-evaluate", func(t *testing.T) {
+		at := time.Now().UTC().Truncate(time.Microsecond).Add(-100 * time.Millisecond)
+		b, cmd, plan, _ := prepare(t, risk.PhoneResetInitiation, at)
+		_, result, err := coordinator.ReserveCommand(ctx, b, cmd, plan)
+		if err != nil || result.Outcome != identity.CommitOutcomeInProgress {
+			t.Fatal("reserve pending history", err)
+		}
+		issuer, request, _ := issuanceFixture(t, risk.PhoneResetInitiation, at, string(b.CommandID), newExecutor(t, repo, issuanceQueryPolicy{}), true, nil)
+		got, err := issuer.Evaluate(ctx, request)
+		if err != nil || got.Outcome != risk.EvidenceUnknown || got.Evidence != (risk.RiskEvidence{}) {
+			t.Fatal("pending allowed reevaluation", err)
+		}
+		raw, _ := base64.RawURLEncoding.DecodeString(string(b.CommandID))
+		if _, err = db.ExecContext(ctx, `UPDATE identity.commands SET lease_until=clock_timestamp()-interval '1 second' WHERE command_id=$1`, raw); err != nil {
+			t.Fatal(err)
+		}
+		got, err = issuer.Evaluate(ctx, request)
+		if err != nil || got.Outcome != risk.EvidenceFailed || got.Evidence != (risk.RiskEvidence{}) {
+			t.Fatal("proved failure permitted reevaluation", err)
+		}
+		counts(t, b, 0, 0, 0)
+	})
+	t.Run("official-executor-effect-failure-rolls-back", func(t *testing.T) {
+		for _, failAudit := range []bool{true, false} {
+			id, err := identity.NewCommandID()
+			if err != nil {
+				t.Fatal(err)
+			}
+			executor := newExecutor(t, repo, issuanceQueryPolicy{})
+			issuer, request, _ := issuanceFixture(t, risk.PhoneResetInitiation, time.Now().UTC().Truncate(time.Microsecond).Add(-100*time.Millisecond), string(id), executor, false, nil)
+			auditing.fail, outbox.fail = failAudit, !failAudit
+			got, err := issuer.Evaluate(ctx, request)
+			auditing.fail, outbox.fail = false, false
+			if got.Evidence != (risk.RiskEvidence{}) || got.Outcome == risk.EvidenceCommitted || got.Outcome == risk.EvidenceMissing {
+				t.Fatal("effect failure disclosed evidence", err)
+			}
+			counts(t, identity.CommandBinding{CommandID: id}, 0, 0, 0)
+		}
+	})
 	for _, phase := range []risk.IssuancePhase{risk.PhoneResetInitiation, risk.PhoneResetCompletion} {
 		t.Run(string(phase), func(t *testing.T) {
 			b, cmd, plan, issue := prepare(t, phase, time.Now().UTC().Truncate(time.Microsecond).Add(-time.Second))

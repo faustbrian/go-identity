@@ -33,12 +33,17 @@ evidence and decisions. It is **not yet an executable durable risk service**.
   Positive or inconsistent evidence keeps the command unresolved; native absence
   can contribute to unanimous negative evidence because this initial journal
   never prunes rows. Neither expiry nor a private pool lookup permits release.
+- `NewExecutor(ExecutorConfig{...})` implements the core `EvidenceExecutor`
+  contract through the real primary coordinator, with the exact native repository
+  internally enlisted alongside kernel, audit and lifecycle participants. It
+  authorizes before provider admission and before execution, and privately
+  compares retained intent before decrypting an original committed response.
 
 ## Adoption and security
 
-The official executor will own plan construction, authorized primary resolution
-and exact original-response replay. Application
-code must not supply a private transaction, journal or workflow substitute.
+The official executor owns plan construction, authorized primary resolution and
+exact original-response replay. Application code must not supply a private
+transaction, journal or workflow substitute.
 Mapping and encrypted bytes establish neither durability nor protected recovery
 authority. No bearer may be exposed until the sole coordinator proves commit.
 Expiry, missing metadata or a failed read never establish rollback.
@@ -48,10 +53,31 @@ input. Record IDs, digests, native commands and encrypted response material are
 internal custody data, never operation results or log fields. Retain wrapping
 keys for every retained encrypted result. Go cannot guarantee memory erasure.
 
+### Issuance composition
+
+Migrate the kernel followed by the complete `IssuanceIDMigrationSource` history.
+Construct the native repository with the issuer's retained evidence keys and
+retained local wrapping keys. Supply the caller-owned primary pool and owned
+audit/lifecycle adapters to `ExecutorConfig`; both effect adapters must support
+the coordinator's typed recovery phase. Supply a verified `Caller` decision
+context for the exact actor, tenant, `identity.risk.evaluate` action and
+`identity.user` resource. It is copied, not derived from request Actor text.
+Both opt-in coordinator policies must use the caller's current revision.
+
+Pass the executor to `risk.NewPhoneEvidenceIssuer`. Missing is returned only
+after authorized global claim absence. Prior pending, failed, foreign and corrupt
+commands never enable provider reevaluation. Committed replay preserves the
+original reference and timestamps, even after expiry and retained-key rotation.
+Independent evaluations racing under one command ID may observe Unknown while
+the winner is pending; `Recover` converges to the original committed response
+without providers. A commit error initially discloses no reference. No result
+grants one-use consumption authority. Pools/adapters remain caller-owned; no
+background goroutine or Close method is introduced.
+
 ## Remaining work
 
-Official executor and authorized primary response resolution/replay;
-reservation/finalization/release; durable lockouts/counters; CAPTCHA participants;
+Lost successful commit-acknowledgement fault proof and production effect-adapter
+interoperability; reservation/finalization/release; durable lockouts/counters; CAPTCHA participants;
 investigation, retention and anonymization; complete
 public examples/API baseline and package/release verification remain pending.
 There is no supported login or phone recovery workflow from this module yet.

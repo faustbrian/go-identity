@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add the official authenticated issuance executor and private primary original
+  response resolution. Same-Work issuance, exact-intent replay and retained-key
+  rotation preserve original references and expiry; conflicting, pending,
+  denied and corrupt histories cannot restart providers or disclose candidates.
+  Consumption and complete risk-service behavior remain unfinished.
+
 - Add the native issuance contributor: database-time issued evidence and
   encrypted original-response custody commit atomically with required protected
   audit, lifecycle and command receipt. Locked recovery preserves pending state

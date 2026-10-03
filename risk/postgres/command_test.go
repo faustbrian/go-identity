@@ -159,9 +159,12 @@ func (c captureExecutor) Execute(_ context.Context, i risk.EvidenceIssue) (risk.
 	return risk.NewEvidenceExecution(i.Intent(), risk.EvidenceFailed, risk.EvidenceRecord{})
 }
 
-type fixtureCounters struct{}
+type fixtureCounters struct{ forbidden *testing.T }
 
-func (fixtureCounters) Mutate(_ context.Context, c risk.CounterCommand) (risk.CounterResult, error) {
+func (f fixtureCounters) Mutate(_ context.Context, c risk.CounterCommand) (risk.CounterResult, error) {
+	if f.forbidden != nil {
+		f.forbidden.Fatal("replay reached counter mutation")
+	}
 	b := c.Bindings()
 	var rows []risk.Counter
 	for _, target := range b.Targets {
@@ -179,6 +182,20 @@ func evaluatedIssue(t *testing.T, phase risk.IssuancePhase) (risk.EvidenceIssue,
 
 func evaluatedIssueAt(t *testing.T, phase risk.IssuancePhase, now time.Time, commandID string) (risk.EvidenceIssue, risk.EvidenceKey) {
 	t.Helper()
+	var issue risk.EvidenceIssue
+	issuer, request, key := issuanceFixture(t, phase, now, commandID, captureExecutor{&issue}, false, nil)
+	result, err := issuer.Evaluate(context.Background(), request)
+	if err != nil || result.Outcome != risk.EvidenceFailed || issue.Prepared().Binding.KeyVersion == 0 {
+		t.Fatal("core did not produce signed issue", err)
+	}
+	if _, err := key.RestoreIssue(issue.Prepared()); errors.Is(err, risk.ErrInvalidEvidenceExecution) {
+		t.Fatal("invalid fixture signature")
+	}
+	return issue, key
+}
+
+func issuanceFixture(t *testing.T, phase risk.IssuancePhase, now time.Time, commandID string, executor risk.EvidenceExecutor, forbidden bool, keys []risk.EvidenceKey) (risk.PhoneEvidenceIssuer, risk.PhoneEvidenceRequest, risk.EvidenceKey) {
+	t.Helper()
 	pc := risk.PolicyConfig{Version: 3, Limits: risk.VelocityLimits{MaxDimensions: 4, MaxCounters: 16, MaxWindow: time.Hour, MaxLimit: 120, KeyBytes: 64, RetryAfterMax: time.Hour}, Profiles: []risk.Profile{
 		{Class: risk.Authentication, Phase: risk.BeforeCredential, Dimensions: []risk.Dimension{risk.TenantDimension, risk.NetworkDimension, risk.DeviceDimension, risk.IdentifierDimension}, Window: 5 * time.Minute, Limit: 10, ThresholdAction: risk.Throttle, EvidenceTTL: 5 * time.Minute, Unknown: risk.DenyUnknown, MaxCounters: 4},
 		{Class: risk.CredentialMutation, Phase: risk.ReserveWithCommand, Dimensions: []risk.Dimension{risk.TenantDimension, risk.SubjectDimension, risk.SessionDimension, risk.NetworkDimension}, Window: 15 * time.Minute, Limit: 5, ThresholdAction: risk.Deny, EvidenceTTL: 15 * time.Minute, Unknown: risk.DenyUnknown, MaxCounters: 4},
@@ -193,13 +210,20 @@ func evaluatedIssueAt(t *testing.T, phase risk.IssuancePhase, now time.Time, com
 		t.Fatal(err)
 	}
 	ck, _ := risk.NewCounterDigestKey(7, bytes.Repeat([]byte{0x31}, 32))
-	counters, err := risk.NewCounterCoordinator(risk.CounterCoordinatorConfig{Policy: policy, Keys: []risk.CounterDigestKey{ck}, Store: fixtureCounters{}, Clock: func() time.Time { return now }, Timeout: time.Second})
+	store := fixtureCounters{}
+	if forbidden {
+		store.forbidden = t
+	}
+	counters, err := risk.NewCounterCoordinator(risk.CounterCoordinatorConfig{Policy: policy, Keys: []risk.CounterDigestKey{ck}, Store: store, Clock: func() time.Time { return now }, Timeout: time.Second})
 	if err != nil {
 		t.Fatal(err)
 	}
 	ec := risk.EvaluatorConfig{Policy: policy, Counters: &counters, Clock: func() time.Time { return now }, Timeout: 5 * time.Second}
 	for _, name := range []string{"status", "captcha"} {
 		ec.Sources = append(ec.Sources, risk.Source{Name: name, Version: "v1", Timeout: time.Second, Read: func(_ context.Context, c risk.Context) (risk.Signal, error) {
+			if forbidden {
+				t.Fatal("replay reached risk provider")
+			}
 			return risk.Signal{Tenant: c.Tenant, Operation: c.Operation, Attempt: c.Attempt, Name: name, State: risk.SignalClean, Trust: risk.ServerVerified, ObservedAt: c.Now, ExpiresAt: c.Now.Add(30 * time.Second)}, nil
 		}})
 	}
@@ -210,6 +234,9 @@ func evaluatedIssueAt(t *testing.T, phase risk.IssuancePhase, now time.Time, com
 	cc := risk.CarrierEvaluatorConfig{Enabled: true, PolicyVersion: 3, Lifetime: 2 * time.Minute, Clock: func() time.Time { return now }, Timeout: time.Second}
 	for _, kind := range []risk.CarrierKind{risk.SIMSwap, risk.NumberRecycling, risk.Carrier} {
 		cc.Sources = append(cc.Sources, risk.CarrierSource{Kind: kind, Version: "v1", Timeout: time.Second, Read: func(_ context.Context, r risk.CarrierRequest) (risk.CarrierObservation, error) {
+			if forbidden {
+				t.Fatal("replay reached carrier provider")
+			}
 			return risk.CarrierObservation{Binding: r.Binding, Phase: r.Phase, Kind: kind, State: risk.CarrierNegative, ProviderVersion: "v1", ObservedAt: now, ExpiresAt: now.Add(2 * time.Minute)}, nil
 		}})
 	}
@@ -218,8 +245,10 @@ func evaluatedIssueAt(t *testing.T, phase risk.IssuancePhase, now time.Time, com
 		t.Fatal(err)
 	}
 	key, _ := risk.NewEvidenceKey(1, bytes.Repeat([]byte{0x41}, 32), bytes.Repeat([]byte{0x42}, 32))
-	var issue risk.EvidenceIssue
-	issuer, err := risk.NewPhoneEvidenceIssuer(risk.PhoneEvidenceIssuerConfig{Evaluation: evaluator, Carrier: carrier, Clock: func() time.Time { return now }, Timeout: 10 * time.Second, Keys: []risk.EvidenceKey{key}, Executor: captureExecutor{&issue}})
+	if len(keys) == 0 {
+		keys = []risk.EvidenceKey{key}
+	}
+	issuer, err := risk.NewPhoneEvidenceIssuer(risk.PhoneEvidenceIssuerConfig{Evaluation: evaluator, Carrier: carrier, Clock: func() time.Time { return now }, Timeout: 10 * time.Second, Keys: keys, Executor: executor})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -228,12 +257,5 @@ func evaluatedIssueAt(t *testing.T, phase risk.IssuancePhase, now time.Time, com
 		op = "identity.phone.password-reset-complete"
 	}
 	request := risk.PhoneEvidenceRequest{CommandID: commandID, Actor: "phone-service", Recovery: risk.CarrierRequest{Phase: phase, Binding: risk.PhoneRecoveryScope{Tenant: "tenant", Subject: "subject", RecoveryOperation: op, CanonicalNumber: "+358401234567", PreAuthTransaction: "preauth-transaction", Attempt: "attempt-identifier", PolicyVersion: 3}}, Subject: risk.Subject{Network: "2001:db8::1", Device: "device", IdentifierDigest: strings.Repeat("a", 64)}}
-	result, err := issuer.Evaluate(context.Background(), request)
-	if err != nil || result.Outcome != risk.EvidenceFailed || issue.Prepared().Binding.KeyVersion == 0 {
-		t.Fatal("core did not produce signed issue", err)
-	}
-	if _, err := key.RestoreIssue(issue.Prepared()); errors.Is(err, risk.ErrInvalidEvidenceExecution) {
-		t.Fatal("invalid fixture signature")
-	}
-	return issue, key
+	return issuer, request, key
 }
