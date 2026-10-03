@@ -1,7 +1,8 @@
 # Identity risk policy
 
 This Go 1.27 module implements the first risk-core behavior: immutable canonical
-operation admission and deterministic, scoped mandatory-signal assessment.
+operation admission, deterministic scoped assessment and bounded server-source
+orchestration.
 It is **not yet the complete risk service**. Durable counters, audit/journal
 ownership, CAPTCHA/HIBP orchestration, overrides, lockout/recovery and one-use
 RiskEvidence/CaptchaEvidence issuance remain required implementation work.
@@ -26,6 +27,36 @@ unavailable, not clean. Summaries remain in configured mandatory-source order;
 the decision is order-independent: deny, step-up, throttle, allow. Deliberate
 skipping is retained only beside another verified irreversible deny. Unknown
 results never invent retry-after metadata. Cancellation returns no assessment.
+
+### Server-source evaluation
+
+`NewEvaluator(EvaluatorConfig)` binds the policy to exactly one configured
+`Source` for every mandatory name. Sources are server-owned, transport-neutral
+readers; requests cannot inject facts, replace readers, select failure policy,
+set the decision clock or assert independent-factor availability. Configuration
+is copied and validated before any reader runs. The caller binds the operation,
+tenant and attempt using its owned workflow, not raw transport fields.
+
+`Evaluate` currently supports only the explicit `none` phase and returns a safe
+decision/version. Both phone-reset issuing phases reject before source work
+until real durable contributors and command recovery are implemented. There is
+no caller purpose field and no fabricated evidence reference.
+
+Evaluation has one explicit total deadline (positive, at most one minute) and
+per-source deadlines bounded by it. Readers must honor cancellation and close
+their resources; no background goroutine is used to pretend a blocked reader
+was cancelled. Errors and late results normalize to unavailable. Every mandatory
+source is evaluated unless it is configured expensive and a separately verified
+deny already exists; skipped summaries remain internally retained. All original
+positive fact intervals are rechecked at the final clock sample. A failed server
+factor resolver cannot enable step-up. Reader implementations must be concurrency
+safe; the evaluator owns neither their external resources nor their shutdown.
+
+This source runner performs no counter mutation, decision-journal persistence,
+required audit or evidence issuance. It must not be used as complete middleware
+or as permission to execute the selected operation. The later official adapter
+composition must implement those owners; consumers must not supply private
+domain stores or replacement workflow orchestration.
 
 ## Security and ownership
 
@@ -75,6 +106,6 @@ these pure tests. The API is experimental and not released.
 ### FAQ
 
 - Can an application supply a policy result instead of durable risk evidence?
-  No. Results are data and cannot substitute for the platform's one-use record.
+No. Results are data and cannot substitute for the platform's one-use record.
 - Does a deny revoke sessions? No; authorized response coordination owns that.
 - Does this implement an ML engine or authorization service? No.
