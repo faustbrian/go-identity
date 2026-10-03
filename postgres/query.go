@@ -76,6 +76,10 @@ type CommandRecord struct {
 	Binding    identity.CommandBinding
 	Outcome    identity.CommitOutcome
 	RetryAfter time.Duration
+	// Feature preserves the exact historical schema for feature-owned commands.
+	// Nil denotes a kernel command. This owned scalar copy contains no native
+	// receipt, current authority, contributor handle or feature result payload.
+	Feature *identity.FeatureOperation
 }
 
 // Validate checks the closed public observation shape, not authority or proof
@@ -83,6 +87,9 @@ type CommandRecord struct {
 // has a positive delay at most one minute. Unknown is not a primary observation.
 func (r CommandRecord) Validate() error {
 	probe := identity.CommandResult{Binding: r.Binding, Outcome: identity.CommitOutcomeNotCommitted}
+	if r.Feature != nil {
+		probe.Feature = &identity.FeatureReceipt{Operation: *r.Feature}
+	}
 	valid := probe.Validate() == nil
 	switch r.Outcome {
 	case identity.CommitOutcomeCommitted, identity.CommitOutcomeNotCommitted:
@@ -131,7 +138,16 @@ WHERE c.command_id=$1`, key).Scan(&observed.tenant, &observed.purpose, &observed
 // before I/O. Earlier caller deadlines win; driver/policy errors stay redacted.
 func (c *Coordinator) QueryCommand(ctx context.Context, q identity.RecoveryQuery, caller authorization.DecisionContext) (CommandRecord, error) {
 	receipt, err := c.queryCommandReceipt(ctx, q, caller)
-	return CommandRecord{Binding: receipt.Binding, Outcome: receipt.Outcome, RetryAfter: receipt.RetryAfter}, err
+	return commandRecord(receipt), err
+}
+
+func commandRecord(receipt identity.CommandResult) CommandRecord {
+	result := CommandRecord{Binding: receipt.Binding, Outcome: receipt.Outcome, RetryAfter: receipt.RetryAfter}
+	if receipt.Feature != nil {
+		operation := receipt.Feature.Operation
+		result.Feature = &operation
+	}
+	return result
 }
 
 // Full replay payloads are adapter-private. The owned UnitOfWork bridge must
@@ -181,7 +197,7 @@ func commandReceipt(q identity.RecoveryQuery, observed commandObservation, err e
 	if errors.Is(err, pgx.ErrNoRows) || observed.retired || observed.tenant != string(q.TenantID) || observed.purpose != q.OperationID {
 		return identity.CommandResult{}, identity.ForbiddenError{}
 	}
-	binding, decodeErr := decodeCommandScope(observed.scope)
+	binding, feature, decodeErr := decodeObservedScope(observed.scope)
 	if decodeErr != nil {
 		return identity.CommandResult{}, identity.UnavailableError{}
 	}
@@ -194,7 +210,13 @@ func commandReceipt(q identity.RecoveryQuery, observed commandObservation, err e
 	if len(observed.fingerprint) != 32 {
 		return identity.CommandResult{}, identity.UnavailableError{}
 	}
-	if _, err := decodeKernelPlan(binding, [32]byte(observed.fingerprint), observed.plan); err != nil {
+	var plan CommandPlan
+	if feature == nil {
+		plan, err = decodeKernelPlan(binding, [32]byte(observed.fingerprint), observed.plan)
+	} else {
+		plan, err = decodeFeaturePlan(binding, [32]byte(observed.fingerprint), observed.plan)
+	}
+	if err != nil || feature != nil && (plan.Feature == nil || plan.Feature.Operation != *feature) {
 		return identity.CommandResult{}, identity.UnavailableError{}
 	}
 	if *observed.state == "pending" {
@@ -207,16 +229,25 @@ func commandReceipt(q identity.RecoveryQuery, observed commandObservation, err e
 		} else if retry > time.Minute {
 			retry = time.Minute
 		}
-		return identity.CommandResult{Binding: binding, Outcome: identity.CommitOutcomeInProgress, RetryAfter: retry}, nil
+		result := identity.CommandResult{Binding: binding, Outcome: identity.CommitOutcomeInProgress, RetryAfter: retry}
+		if feature != nil {
+			result.Feature = &identity.FeatureReceipt{Operation: *feature}
+		}
+		return result, nil
 	}
 	if observed.resultVersion == nil || *observed.resultVersion != 1 || observed.class == nil || (*observed.state != "committed" && *observed.state != "aborted") {
 		return identity.CommandResult{}, identity.UnavailableError{}
 	}
-	result, err := decodeJournalResult(claimRequest{safeFields: observed.scope}, observed.result)
+	result, err := decodeJournalResult(claimRequest{safeFields: observed.scope, feature: feature}, observed.result)
 	if err != nil || (*observed.state == "committed") != (result.Outcome == identity.CommitOutcomeCommitted) {
 		return identity.CommandResult{}, identity.UnavailableError{}
 	}
 	if *observed.state == "committed" {
+		// A locally valid successor is not this command's declared transition.
+		// Compare against immutable history, never today's aggregate or registry.
+		if feature != nil && (plan.Lifecycle == nil || result.Feature.BeforeVersion != plan.Lifecycle.BeforeVersion || result.Feature.AfterVersion != plan.Lifecycle.AfterVersion) {
+			return identity.CommandResult{}, identity.UnavailableError{}
+		}
 		if *observed.class != "committed" {
 			return identity.CommandResult{}, identity.UnavailableError{}
 		}

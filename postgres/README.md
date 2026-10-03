@@ -50,11 +50,19 @@ Feature capability/cascade inputs fail rather than being silently discarded.
 
 This metadata preparation produces no execution handle. `ReserveCommand` still
 rejects features before SQL; no feature journal or lifecycle execution is enabled.
-The feature profile is not decoded for durable recovery yet. Kernel digest bytes
-remain unchanged and kernel plans reject feature declarations. Private feature
-receipt encoding/decoding requires the exact descriptor from the prepared
-command; scope alone cannot supply a historical owner. Native response and
-reveal-once material never enter the shared receipt.
+Historical feature plans and command scopes are decoded as bounded, canonical
+records. Authorized `QueryCommand` returns an owned `CommandRecord.Feature`
+descriptor for feature history; it remains nil for kernel history. The stored
+scope, frozen plan and terminal receipt must agree on owner, operation, schema
+and record policy. Observation does not consult today's contributor registry,
+replay commands, renew authority or expose native response/credential payloads.
+Missing, wrong-scope and denied callers retain the same policy/read shape.
+
+`RecoverCommand` can observe live or terminal feature history, but expired
+pending feature execution remains unsupported: it returns pending with a
+redacted unavailable error, does not take a new generation and cannot invent a
+rollback or successful result. Native apply/recovery phases remain required.
+Kernel digest bytes and the kernel-only scope decoder remain unchanged.
 
 ## Stable status-filtered listing
 

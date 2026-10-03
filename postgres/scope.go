@@ -14,21 +14,33 @@ import (
 // and requires the existing encoder's exact bytes; no alternate durable scope
 // or newly normalized identifier is accepted.
 func decodeCommandScope(encoded []byte) (identity.CommandBinding, error) {
-	invalid := func() (identity.CommandBinding, error) {
+	binding, feature, err := decodeObservedScope(encoded)
+	if err != nil || feature != nil {
 		return identity.CommandBinding{}, identity.UnavailableError{}
+	}
+	return binding, nil
+}
+
+// The feature branch conserves owner and record policy separately from the
+// binding. Its caller must also match them to the frozen plan; this parser
+// alone cannot establish ownership authenticity or current authorization.
+func decodeObservedScope(encoded []byte) (identity.CommandBinding, *identity.FeatureOperation, error) {
+	invalid := func() (identity.CommandBinding, *identity.FeatureOperation, error) {
+		return identity.CommandBinding{}, nil, identity.UnavailableError{}
 	}
 	if len(encoded) == 0 || len(encoded) > 65536 {
 		return invalid()
 	}
 	r := attributeReader{data: encoded}
 	count, ok := r.head(5)
-	if !ok || count < 12 || count > 14 {
+	if !ok || count < 12 || count > 16 {
 		return invalid()
 	}
 	var binding identity.CommandBinding
+	var feature identity.FeatureOperation
 	seen := make(map[string]bool, int(count))
 	for range count {
-		key, ok := r.text(16)
+		key, ok := r.text(18)
 		if !ok || seen[key] {
 			return invalid()
 		}
@@ -40,12 +52,17 @@ func decodeCommandScope(encoded []byte) (identity.CommandBinding, error) {
 			}
 			binding.CommandID = identity.CommandID(base64.RawURLEncoding.EncodeToString(r.data[:16]))
 			r.data = r.data[16:]
-		case "policy_version", "schema_version", "link_mode":
+		case "policy_version", "schema_version", "link_mode", "record_requirement":
 			value, ok := r.head(0)
 			if !ok {
 				return invalid()
 			}
 			switch key {
+			case "record_requirement":
+				if value > math.MaxUint8 {
+					return invalid()
+				}
+				feature.RecordRequirement = identity.FeatureRecordRequirement(value)
 			case "policy_version":
 				binding.PolicyVersion = value
 			case "schema_version":
@@ -65,6 +82,8 @@ func decodeCommandScope(encoded []byte) (identity.CommandBinding, error) {
 				return invalid()
 			}
 			switch key {
+			case "feature_owner":
+				feature.Owner = value
 			case "profile":
 				if value != "identity-command-v1" {
 					return invalid()
@@ -92,9 +111,16 @@ func decodeCommandScope(encoded []byte) (identity.CommandBinding, error) {
 			}
 		}
 	}
+	if seen["feature_owner"] || seen["record_requirement"] {
+		feature.OperationID, feature.SchemaID, feature.SchemaVersion = binding.OperationID, binding.SchemaID, binding.SchemaVersion
+		if !seen["feature_owner"] || !seen["record_requirement"] || len(r.data) != 0 || binding.ValidateFor(feature) != nil || !bytes.Equal(encoded, commandSafeFields(binding, &feature)) {
+			return invalid()
+		}
+		return binding, &feature, nil
+	}
 	probe := identity.CommandResult{Binding: binding, Outcome: identity.CommitOutcomeNotCommitted}
-	if len(r.data) != 0 || probe.Validate() != nil || !bytes.Equal(encoded, cborMap(commandScope(binding))) {
+	if len(r.data) != 0 || probe.Validate() != nil || !bytes.Equal(encoded, commandSafeFields(binding, nil)) {
 		return invalid()
 	}
-	return binding, nil
+	return binding, nil, nil
 }

@@ -98,6 +98,7 @@ func TestPostgresIntegration(t *testing.T) {
 	t.Run("capability reservation", func(t *testing.T) { testCapabilityReservation(t, ctx, pool) })
 	t.Run("populated plan upgrade", func(t *testing.T) { testCoordinatorPlanUpgrade(t, ctx, pool) })
 	t.Run("domain execution", func(t *testing.T) { testDomainExecution(t, ctx, pool, repo) })
+	t.Run("feature observation", func(t *testing.T) { testFeatureObservation(t, ctx, pool) })
 	t.Run("owned creation service", func(t *testing.T) { testCreationOwner(t, ctx, pool, repo) })
 	t.Run("command recovery", func(t *testing.T) { testCommandRecovery(t, ctx, pool, repo) })
 	t.Run("capability recovery", func(t *testing.T) { testCapabilityRecovery(t, ctx, pool, repo) })

@@ -39,7 +39,7 @@ func (c *Coordinator) RecoverCommand(ctx context.Context, q identity.RecoveryQue
 	if r.Outcome == identity.CommitOutcomeUnknown {
 		return CommandRecord{}, identity.UnknownCommitError{CommandID: q.CommandID}
 	}
-	return CommandRecord{Binding: r.Binding, Outcome: r.Outcome, RetryAfter: r.RetryAfter}, err
+	return commandRecord(r), err
 }
 
 // Trusted storage seam behind the core service's current authorization and

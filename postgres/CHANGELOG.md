@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Observe feature-owned historical command receipts through authorized primary
+  queries, preserving their exact owner, schema and record policy while exposing
+  no native payload. Reject scope/plan/receipt substitution and malformed history.
+  Kernel observations remain unchanged. Unsupported expired feature recovery
+  stays pending without takeover; this does not enable feature execution.
+
 - Reconstruct bounded canonical feature-plan history with exact binding,
   fingerprint, contributor order, audit slots and lifecycle versions. Malformed
   history fails closed without returning a partial plan. Historical decoding
