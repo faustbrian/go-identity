@@ -162,7 +162,11 @@ issuance, not a lower bound that could extend remaining lifetime.
 **Why no defaults?** All sign-in methods must share one selected policy instead
 of silently choosing different lifetimes. Resolve before MFA, not after it.
 
-**Is logout implemented?** Only deletion attributes. Durable revocation,
+**Is logout implemented?** Only deletion attributes and the closed native
+`NewRevokeFamilyCommand(binding, expectedVersion)` preparation contract.
+`RevokeFamilyOperation` targets one family, not user-wide logout; exact scope
+and a representable version successor are required. An opaque command is not
+authorization, a durable receipt or an HTTP endpoint. Durable logout workflows,
 unknown-commit recovery and lifecycle integration are pending. This batch has
-no migrations or runtime services. Mutation, public API/release gates and full
+no core migrations or runtime services. Mutation, public API/release gates and full
 session-unit acceptance remain pending. See [CHANGELOG.md](CHANGELOG.md).

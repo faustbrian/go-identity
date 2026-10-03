@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Add invocation-only feature scope checks for native adapters and recovery.
+  Matching descriptors cannot substitute another enlisted instance, and a
+  returned phase cannot reuse its scope to authorize a later native mutation.
+
 - Execute typed native non-one-time feature mutations through the sole command
   coordinator, atomically persisting domain effects, every required audit slot,
   lifecycle and exact replay receipt. Bind subject type and explicit retention

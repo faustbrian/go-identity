@@ -57,6 +57,12 @@ immutable command and full security plan before reservation, and inspect retaine
 effects during recovery. Every selected participant must implement recovery.
 
 Use `FeatureAuditBindingDigest` for exact feature scope, subject and actor binding.
+
+Native adapters call `Work.FeatureScope(themselves)` during Apply and
+`RecoveryWork.FeatureScope(themselves)` during recovery to verify the exact
+registered instance, active invocation and frozen version transition. Matching
+descriptors or a still-open Work after Apply returns are not native authority.
+The check performs no IO and returns owned scalar scope declarations.
 Then `PrepareCommandPlan`, `ReserveCommand`, `Begin`, `ApplyFeature` and `Commit`
 execute through the sole coordinator-owned transaction; always defer `Abort`
 after a successful `Begin`. The native phase owns current authority checks and

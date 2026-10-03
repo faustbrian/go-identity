@@ -8,6 +8,7 @@ import (
 	"time"
 
 	authentication "github.com/faustbrian/go-authentication"
+	"github.com/faustbrian/go-authorization"
 	identity "github.com/faustbrian/go-identity"
 )
 
@@ -24,11 +25,14 @@ type IssueCommandSpec struct {
 	Session Session
 }
 
-// SessionCommand is a closed immutable native transition. Currently only issue
-// is implemented; other transitions cannot be smuggled through operation IDs.
+// SessionCommand is a closed immutable native transition. Issue and family
+// revocation are distinct variants; other transitions cannot be smuggled in.
 // Zero is invalid, copies are concurrency safe, and formatting/serialization
 // cannot expose scope. Construction grants no issuance or execution authority.
-type SessionCommand struct{ issue *IssueCommandSpec }
+type SessionCommand struct {
+	issue        *IssueCommandSpec
+	revokeFamily *RevokeFamilyCommandSpec
+}
 
 // IssueOperation returns the exact v1 native issue mapping. This declaration
 // conveys no registered contributor or runtime readiness; core never imports
@@ -55,6 +59,12 @@ func NewIssueCommand(b identity.CommandBinding, s Session) (SessionCommand, erro
 		return SessionCommand{}, ErrInvalidSessionCommand
 	}
 	// All binding strings are bounded by upstream validation before copying.
+	b = cloneCommandBinding(b)
+	c.issue.Binding = b
+	return c, nil
+}
+
+func cloneCommandBinding(b identity.CommandBinding) identity.CommandBinding {
 	b.CommandID = identity.CommandID(strings.Clone(string(b.CommandID)))
 	b.TenantID = identity.TenantID(strings.Clone(string(b.TenantID)))
 	b.UserID = identity.UserID(strings.Clone(string(b.UserID)))
@@ -64,8 +74,8 @@ func NewIssueCommand(b identity.CommandBinding, s Session) (SessionCommand, erro
 	b.PolicyID = strings.Clone(b.PolicyID)
 	b.SchemaID = strings.Clone(b.SchemaID)
 	b.CorrelationID = strings.Clone(b.CorrelationID)
-	c.issue.Binding = b
-	return c, nil
+	b.ActorKind = authorization.SubjectKind(strings.Clone(string(b.ActorKind)))
+	return b
 }
 
 // Issue returns a caller-owned scalar projection, not an admitted transaction.

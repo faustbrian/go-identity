@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Add a closed exact-scope native family-revocation command with checked
+  full-width versions. It remains distinct from issuance and user-wide logout;
+  preparation alone grants no authorization or durable outcome.
+
 - Preserve all resolved remember-policy limits through trusted persistence
   projections and exact reconstruction. Invalid or unresolved stored values
   fail rather than applying new defaults or silently clamping lifetime limits.

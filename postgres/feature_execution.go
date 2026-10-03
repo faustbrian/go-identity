@@ -145,7 +145,7 @@ func (c *Coordinator) ApplyFeature(ctx context.Context, w Work, command identity
 		}
 		w.state.execution.featureAbortAudits[class] = records
 	}
-	receipt, e := phase.ApplyFeature(ctx, w, command)
+	receipt, e := invokeFeature(phase, ctx, w, command)
 	if e != nil {
 		_, _, _, safe := abortClassification(e)
 		return result, w.fail(ctx, safe)
@@ -175,6 +175,14 @@ func (c *Coordinator) ApplyFeature(ctx context.Context, w Work, command identity
 	stored := receipt
 	w.state.featureReceipt = &stored
 	return result, nil
+}
+
+// Restrict self-verification to the exact synchronous native phase. Clear it
+// even when the contributor panics; usable Work must not revive the invocation.
+func invokeFeature(p FeatureExecutionContributor, ctx context.Context, w Work, command identity.Command) (identity.FeatureReceipt, error) {
+	w.state.featureInvocation = p
+	defer func() { w.state.featureInvocation = nil }()
+	return p.ApplyFeature(ctx, w, command)
 }
 
 func featureMutationAudits(ctx context.Context, p *admittedKernelPlan, now time.Time, class string) ([]audit.Record, error) {

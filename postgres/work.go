@@ -22,26 +22,27 @@ import (
 type Work struct{ state *workState }
 
 type workState struct {
-	tx               pgx.Tx
-	ctx              context.Context
-	cancel           context.CancelFunc
-	binding          identity.CommandBinding
-	generation       uint64
-	closed           bool
-	failed           error
-	rows             *WorkRows
-	audits           *workAudits
-	lifecycle        *workLifecycle
-	registry         *contributorRegistryState
-	sqlStarted       bool
-	execution        *domainExecution
-	creation         *identity.User
-	profile          *identity.UserProfile
-	update           *identity.User
-	feature          *FeatureRegistration
-	subjectType      string
-	featureAttempted bool
-	featureReceipt   *identity.FeatureReceipt
+	tx                pgx.Tx
+	ctx               context.Context
+	cancel            context.CancelFunc
+	binding           identity.CommandBinding
+	generation        uint64
+	closed            bool
+	failed            error
+	rows              *WorkRows
+	audits            *workAudits
+	lifecycle         *workLifecycle
+	registry          *contributorRegistryState
+	sqlStarted        bool
+	execution         *domainExecution
+	creation          *identity.User
+	profile           *identity.UserProfile
+	update            *identity.User
+	feature           *FeatureRegistration
+	subjectType       string
+	featureAttempted  bool
+	featureReceipt    *identity.FeatureReceipt
+	featureInvocation FeatureExecutionContributor
 }
 
 // newWork is private: only the sole coordinator may call it after verifying
