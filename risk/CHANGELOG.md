@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Expose an owned sorted HIBP policy snapshot so adapters reject incompatible
+  cache validity before provider requests; disabled policies remain explicit.
+
 - Add opt-in operation-bound HIBP facts with bounded breach counts and safe
   failure classifications. Risk policy owns positive-fact and outage denial;
   provider cache age remains distinct from short-lived local assessment validity.

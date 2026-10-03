@@ -2,6 +2,7 @@ package risk
 
 import (
 	"context"
+	"slices"
 	"time"
 )
 
@@ -14,6 +15,21 @@ import (
 type HIBPPolicy struct {
 	CacheTTL   time.Duration
 	Operations []Action
+}
+
+// HIBPConfiguration returns an owned, sorted snapshot for adapter startup
+// consistency checks. Zero or disabled policies return ErrInvalidPolicy. The
+// snapshot grants no assessment, provider or mutation authority.
+func (p Policy) HIBPConfiguration() (HIBPPolicy, error) {
+	if p.state == nil || len(p.state.hibpOperations) == 0 {
+		return HIBPPolicy{}, ErrInvalidPolicy
+	}
+	c := HIBPPolicy{CacheTTL: p.state.hibpTTL}
+	for operation := range p.state.hibpOperations {
+		c.Operations = append(c.Operations, operation)
+	}
+	slices.Sort(c.Operations)
+	return c, nil
 }
 
 // ProviderFailure is bounded, non-secret provider classification, not a decision.

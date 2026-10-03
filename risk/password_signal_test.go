@@ -7,6 +7,25 @@ import (
 	"time"
 )
 
+func TestHIBPConfigurationIsOwnedAndDisabledIsExplicit(t *testing.T) {
+	p := passwordPolicy(t)
+	c, err := p.HIBPConfiguration()
+	if err != nil || c.CacheTTL != 24*time.Hour || len(c.Operations) != 3 {
+		t.Fatal("selected provider policy missing", err)
+	}
+	c.Operations[0] = "identity.password.signin"
+	copy, err := p.HIBPConfiguration()
+	if err != nil || copy.Operations[0] == c.Operations[0] {
+		t.Fatal("snapshot mutated policy")
+	}
+	if _, err := (Policy{}).HIBPConfiguration(); !errors.Is(err, ErrInvalidPolicy) {
+		t.Fatal("zero policy accepted")
+	}
+	if _, err := testPolicy(t).HIBPConfiguration(); !errors.Is(err, ErrInvalidPolicy) {
+		t.Fatal("disabled provider accepted")
+	}
+}
+
 func passwordPolicy(t *testing.T) Policy {
 	t.Helper()
 	c := testPolicyConfig()

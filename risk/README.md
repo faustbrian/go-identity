@@ -37,6 +37,8 @@ zero configuration retains existing policies. Selected operations add mandatory
 not inherit screening. Reference composition must select every supported password
 create/set/change/reset operation. A subset is development/non-reference scope.
 Neither callers nor observations select the operation list or failure policy.
+`HIBPConfiguration` returns an owned sorted snapshot for adapter startup checks;
+disabled or zero policies reject. It grants no assessment or mutation authority.
 
 `PasswordSignal` normalizes a trusted `PasswordObservation`, not a decision.
 Zero-count/no-match becomes `SignalClean`; a bounded positive count becomes the
