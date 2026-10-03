@@ -69,6 +69,19 @@ func (p *sqlRiskRelease) ReleaseRiskEvidence(ctx context.Context, w RiskReleaseW
 	if err != nil {
 		return err
 	}
+	if _, err := (RiskReservationWork{state: w.state}).Binding(p); err == nil {
+		return invalidWork()
+	}
+	for _, proof := range []riskReleaseProof{0, riskReleaseRecovery, riskReleaseRollback} {
+		if proof == w.state.releaseProof {
+			continue
+		}
+		copy := *w.state
+		copy.releaseProof = proof
+		if _, err := (RiskReleaseWork{state: &copy}).Binding(p); err == nil {
+			return invalidWork()
+		}
+	}
 	if _, err := w.Binding(&sqlRiskRelease{}); err == nil {
 		return invalidWork()
 	}

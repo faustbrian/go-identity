@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Release exact risk custody during proved nonretryable owner rollback in the
+  same guarded transaction as its failure audit and aborted receipt. Live-owner
+  release preserves generation, including after takeover; recovery still
+  requires unanimous noncommit and a successor. Failed release retains pending
+  custody without a durable audit prefix. Domain apply/finalize remains pending.
+
 - Add typed reset-initiation risk recovery and terminal release. Every frozen
   participant must prove noncommit before release, failure audit and aborted
   receipt commit together. Missing phases or unresolved custody retain pending

@@ -40,10 +40,21 @@ Audit/release errors, panics, poisoned SQL and open rows roll back takeover,
 release and terminal receipt together. The new recovery generation never grants
 domain authority. Terminal receipt replay invokes no new participant mutation.
 
+After a proved nonretryable domain rollback, `Abort` instead rechecks the same
+live owner and frozen plan, acquires the tenant exclusion, and releases custody
+in the failure-audit/aborted-receipt transaction. `RiskReleaseWork.Binding`
+returns that current generation in both generation fields; an owner that took
+over generation 2 releases generation 2, not its former predecessor. Private
+coordinator provenance distinguishes this path from successor-generation
+recovery without widening reservation/rebind authority. Missing failure audit,
+release phase, matching custody or live ownership retains pending/Unknown;
+errors, panic, open rows and poisoned SQL leave no durable terminal prefix.
+
 This boundary does not yet enable phone recovery. Domain execution remains
 denied until owned apply/finalize checks, OTP and capability issuance/consumption
-and phone orchestration exist. The official risk adapter supplies reservation;
-its consuming recovery/release implementation remains pending. Applications
+and phone orchestration exist. The official risk adapter supplies reservation
+and native terminal release; adopt this coordinator revision before using the
+new live-owner abort path. Applications
 must not provide their own SQL participant to substitute for that adapter.
 
 ## Trusted command admission observation

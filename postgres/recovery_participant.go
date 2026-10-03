@@ -158,7 +158,7 @@ func (w RecoveryWork) RiskBinding(p RiskReleaseContributor) (RiskReservationBind
 	if !ok {
 		return RiskReservationBinding{}, invalidWork()
 	}
-	s := &riskReservationState{coordinator: w.state.work.state.execution.coordinator, work: w.state.work, plan: w.state.plan, previousGeneration: r.journal.previousGeneration, active: true, contributor: participant}
+	s := &riskReservationState{coordinator: w.state.work.state.execution.coordinator, work: w.state.work, plan: w.state.plan, previousGeneration: r.journal.previousGeneration, active: true, contributor: participant, releaseProof: riskReleaseRecovery}
 	return (RiskReleaseWork{state: s}).Binding(p)
 }
 

@@ -39,6 +39,8 @@ func riskReservationParticipant(c Contributor) (RiskReservationContributor, bool
 // fingerprint. Generation is positive; PreviousGeneration is zero for first
 // reservation, otherwise the exact positive predecessor. Plan is declaration
 // metadata, not proof of current authority, scope validation or row existence.
+// Release reuses this snapshot: after proved live-owner rollback the two
+// generations are equal; recovery release requires an exact successor.
 type RiskReservationBinding struct {
 	Command                        identity.CommandBinding
 	Plan                           RiskEvidencePlan
@@ -66,6 +68,7 @@ type riskReservationState struct {
 	previousGeneration uint64
 	active             bool
 	contributor        RiskReservationContributor
+	releaseProof       riskReleaseProof
 }
 
 func (RiskReservationWork) Format(s fmt.State, _ rune) {
@@ -76,7 +79,14 @@ func (RiskReservationWork) MarshalText() ([]byte, error) { return nil, invalidWo
 
 func (w RiskReservationWork) usable() error {
 	s := w.state
-	if s == nil || !s.active || s.coordinator == nil || s.plan == nil || s.plan.risk == nil || s.plan.feature == nil || s.work.state == nil || s.plan.belongsTo(s.coordinator.registry) != nil || s.work.state.registry != s.plan.registry || s.work.state.binding != s.plan.binding || s.plan.fingerprint == ([32]byte{}) || s.work.state.generation == 0 || s.previousGeneration != 0 && (s.previousGeneration == ^uint64(0) || s.work.state.generation != s.previousGeneration+1) {
+	if s == nil || s.releaseProof != 0 || s.previousGeneration != 0 && (s.previousGeneration == ^uint64(0) || s.work.state == nil || s.work.state.generation != s.previousGeneration+1) {
+		return invalidWork()
+	}
+	return s.usable()
+}
+
+func (s *riskReservationState) usable() error {
+	if s == nil || !s.active || s.coordinator == nil || s.plan == nil || s.plan.risk == nil || s.plan.feature == nil || s.work.state == nil || s.plan.belongsTo(s.coordinator.registry) != nil || s.work.state.registry != s.plan.registry || s.work.state.binding != s.plan.binding || s.plan.fingerprint == ([32]byte{}) || s.work.state.generation == 0 {
 		return invalidWork()
 	}
 	return s.work.usable()
@@ -90,10 +100,13 @@ func (w RiskReservationWork) Binding(p RiskReservationContributor) (RiskReservat
 	if err := w.usable(); err != nil {
 		return RiskReservationBinding{}, err
 	}
-	if nilContributor(p) || !reflect.TypeOf(p).Comparable() || p != w.state.contributor {
+	return w.state.binding(p)
+}
+
+func (s *riskReservationState) binding(p RiskReservationContributor) (RiskReservationBinding, error) {
+	if nilContributor(p) || !reflect.TypeOf(p).Comparable() || p != s.contributor {
 		return RiskReservationBinding{}, invalidWork()
 	}
-	s := w.state
 	return RiskReservationBinding{Command: s.plan.binding, Plan: *s.plan.risk, Fingerprint: s.plan.fingerprint, Generation: s.work.state.generation, PreviousGeneration: s.previousGeneration}, nil
 }
 

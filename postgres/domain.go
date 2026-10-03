@@ -363,12 +363,23 @@ func (c *Coordinator) Abort(w Work, cause error) (identity.CommandResult, error)
 	if err := r.plan.bindWork(terminal); err != nil {
 		return fail(err)
 	}
+	if r.plan.risk != nil {
+		if err := configureKernelWork(cleanup, terminal); err != nil {
+			return fail(err)
+		}
+	}
 	for i, record := range records {
 		if err := terminal.StageAudit(r.plan.audits[i].EventIndex, record); err != nil {
 			return fail(err)
 		}
 	}
 	if err := c.persistAuditPhase(terminal); err != nil {
+		return fail(identity.UnavailableError{})
+	}
+	if err := c.releaseRiskAfterRollback(cleanup, terminal, r.plan, r.journal); err != nil {
+		return fail(identity.UnavailableError{})
+	}
+	if terminal.state.rows != nil || terminal.usable() != nil {
 		return fail(identity.UnavailableError{})
 	}
 	result := featureOutcome(w.state.binding, r.request.feature, identity.CommitOutcomeNotCommitted, 0)

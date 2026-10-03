@@ -6,11 +6,23 @@ import (
 	"time"
 )
 
+// Only the coordinator selects provenance after its authoritative proof.
+// Equal-generation rollback must never widen reservation/rebind authority.
+type riskReleaseProof uint8
+
+const (
+	riskReleaseRecovery riskReleaseProof = iota + 1
+	riskReleaseRollback
+)
+
 // RiskReleaseContributor supplies native noncommit evidence and terminal release.
 // The coordinator invokes release only after all frozen participants prove
-// noncommit under primary command and tenant exclusions. Release must CAS the
+// recovery noncommit, or after it proves rollback and rechecks the live owner,
+// under primary command and tenant exclusions. Release must CAS the
 // exact reserved command/fingerprint/PreviousGeneration to terminal released,
-// recording Generation. Expiry alone is never proof; expired reservations remain
+// recording Generation. Recovery advances exactly one generation; proved
+// live-owner rollback preserves generation. Expiry alone is never proof;
+// expired reservations remain
 // releasable after proof. No provider callbacks, private transactions, retained
 // handles or reactivation are permitted. Independent invocations may run
 // concurrently; their handles remain serial-use and invocation-bound.
@@ -37,30 +49,69 @@ func (RiskReleaseWork) MarshalJSON() ([]byte, error) { return nil, invalidWork()
 func (RiskReleaseWork) MarshalText() ([]byte, error) { return nil, invalidWork() }
 
 // Binding checks exact registered identity and returns original frozen custody.
-// Generation is the recovery owner; PreviousGeneration is the reserved owner.
+// PreviousGeneration is the reserved owner. Generation is the recovery
+// successor, or the same live owner after the coordinator proves rollback.
 func (w RiskReleaseWork) Binding(p RiskReleaseContributor) (RiskReservationBinding, error) {
-	if w.state == nil || w.state.previousGeneration == 0 {
-		return RiskReservationBinding{}, invalidWork()
+	if err := w.usable(); err != nil {
+		return RiskReservationBinding{}, err
 	}
-	return (RiskReservationWork{state: w.state}).Binding(p)
+	return w.state.binding(p)
+}
+
+func (w RiskReleaseWork) usable() error {
+	s := w.state
+	if s == nil || s.previousGeneration == 0 || s.usable() != nil || !s.coordinator.owns(s.work) || s.work.state.execution.reservation.plan != s.plan {
+		return invalidWork()
+	}
+	switch s.releaseProof {
+	case riskReleaseRecovery:
+		if s.previousGeneration == ^uint64(0) || s.work.state.generation != s.previousGeneration+1 {
+			return invalidWork()
+		}
+	case riskReleaseRollback:
+		if s.work.state.generation != s.previousGeneration {
+			return invalidWork()
+		}
+	default:
+		return invalidWork()
+	}
+	return nil
 }
 
 // Exec executes one bounded native release statement, never transaction closure.
 func (w RiskReleaseWork) Exec(ctx context.Context, sql string, args ...any) (int64, error) {
-	return (RiskReservationWork{state: w.state}).Exec(ctx, sql, args...)
+	if err := w.usable(); err != nil {
+		return 0, err
+	}
+	return w.state.work.Exec(ctx, sql, args...)
 }
 
 // Query returns invocation-owned bounded rows; close them before return.
 func (w RiskReleaseWork) Query(ctx context.Context, sql string, args ...any) (*WorkRows, error) {
-	return (RiskReservationWork{state: w.state}).Query(ctx, sql, args...)
+	if err := w.usable(); err != nil {
+		return nil, err
+	}
+	return w.state.work.Query(ctx, sql, args...)
 }
 
 // DatabaseTime reads primary UTC without renewing ownership or evidence expiry.
 func (w RiskReleaseWork) DatabaseTime(ctx context.Context) (time.Time, error) {
-	return (RiskReservationWork{state: w.state}).DatabaseTime(ctx)
+	if err := w.usable(); err != nil {
+		return time.Time{}, err
+	}
+	return w.state.work.DatabaseTime(ctx)
 }
 
 func (c *Coordinator) releaseRisk(ctx context.Context, work Work, p *admittedKernelPlan, j journalReservation) (err error) {
+	return c.releaseRiskWithProof(ctx, work, p, j.previousGeneration, riskReleaseRecovery)
+}
+
+// Called only after Abort proves domain rollback and rechecks live ownership.
+func (c *Coordinator) releaseRiskAfterRollback(ctx context.Context, work Work, p *admittedKernelPlan, j journalReservation) error {
+	return c.releaseRiskWithProof(ctx, work, p, j.generation, riskReleaseRollback)
+}
+
+func (c *Coordinator) releaseRiskWithProof(ctx context.Context, work Work, p *admittedKernelPlan, previous uint64, proof riskReleaseProof) (err error) {
 	if p.risk == nil {
 		return nil
 	}
@@ -72,7 +123,7 @@ func (c *Coordinator) releaseRisk(ctx context.Context, work Work, p *admittedKer
 		if !ok {
 			return invalidWork()
 		}
-		state := &riskReservationState{coordinator: c, work: work, plan: p, previousGeneration: j.previousGeneration, active: true, contributor: participant}
+		state := &riskReservationState{coordinator: c, work: work, plan: p, previousGeneration: previous, active: true, contributor: participant, releaseProof: proof}
 		defer func() {
 			state.active = false
 			if recover() != nil {
