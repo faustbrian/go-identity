@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Persist suspend/ban and restore/unban through the existing coordinator, with
+  a separate user-security epoch, locked owner policy, exact pending consumer
+  contracts, audit, lifecycle and replay receipts. Primary `GetStatus` never
+  derives security authority from profile versions or auto-restores expiry.
+  Explicit forward `StatusMigrationSource` preserves installed history and
+  initializes epoch 1 without changing existing status or aggregate versions.
+  Admission does not claim consumer acknowledgement or completed cleanup.
+
 - Add invocation-only feature scope checks for native adapters and recovery.
   Matching descriptors cannot substitute another enlisted instance, and a
   returned phase cannot reuse its scope to authorize a later native mutation.

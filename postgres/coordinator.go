@@ -160,13 +160,16 @@ func (c *Coordinator) prepare(binding identity.CommandBinding, command identity.
 	if proofReservation {
 		count++
 	}
-	if !isCreation(command) && !isProfile(command) && !isUpdate(command) && !proofReservation || plan.Capability != nil && !proofReservation || plan.Lifecycle == nil || len(plan.Contributors) != count || len(plan.Audits) != 1 || probe.Validate() != nil {
+	if !isCreation(command) && !isProfile(command) && !isUpdate(command) && !isStatus(command) && !proofReservation || plan.Capability != nil && !proofReservation || plan.Lifecycle == nil || len(plan.Contributors) != count || len(plan.Audits) != 1 || probe.Validate() != nil {
 		return claimRequest{}, CommandPlan{}, nil, invalidPlan()
 	}
 	if spec, ok := command.UpdateProfile(); ok && (plan.Lifecycle.BeforeVersion != spec.ExpectedVersion || plan.Lifecycle.AfterVersion != spec.ExpectedVersion+1) {
 		return claimRequest{}, CommandPlan{}, nil, invalidPlan()
 	}
 	if spec, ok := command.UpdateUser(); ok && (plan.Lifecycle.BeforeVersion != spec.ExpectedVersion || plan.Lifecycle.AfterVersion != spec.ExpectedVersion+1) {
+		return claimRequest{}, CommandPlan{}, nil, invalidPlan()
+	}
+	if spec, ok := command.UserStatus(); ok && (plan.Lifecycle.BeforeVersion != spec.ExpectedVersion || plan.Lifecycle.AfterVersion != spec.ExpectedVersion+1) {
 		return claimRequest{}, CommandPlan{}, nil, invalidPlan()
 	}
 	q, err := prepareClaim(command, c.keys.retained[c.keys.current])

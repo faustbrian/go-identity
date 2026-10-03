@@ -164,8 +164,23 @@ func (r *Repository) RecoverParticipant(ctx context.Context, recovery RecoveryWo
 		// native owner must separately prove absence of its retained effects.
 		return RecoveryNotCommitted, nil
 	}
-	if err != nil || b.OperationID != "identity.user.create" && b.OperationID != "identity.profile.update" && b.OperationID != "identity.user.update-admin" && b.OperationID != "identity.identifier.attach" {
+	if err != nil || b.OperationID != "identity.user.create" && b.OperationID != "identity.profile.update" && b.OperationID != "identity.user.update-admin" && b.OperationID != "identity.identifier.attach" && !statusOperation(b.OperationID) {
 		return RecoveryUnknown, invalidWork()
+	}
+	if statusOperation(b.OperationID) {
+		rows, e := recovery.Query(ctx, `SELECT EXISTS(SELECT 1 FROM identity.status_cascades WHERE command_id=$1 AND tenant_id=$2 AND user_id=$3 AND operation=$4)`, string(b.CommandID), string(b.TenantID), string(b.UserID), b.OperationID)
+		if e != nil {
+			return RecoveryUnknown, e
+		}
+		defer rows.Close()
+		var exists bool
+		if !rows.Next() || rows.Scan(&exists) != nil || rows.Next() || rows.Err() != nil {
+			return RecoveryUnknown, identity.UnavailableError{}
+		}
+		if exists {
+			return RecoveryUnknown, nil
+		}
+		return RecoveryNotCommitted, nil
 	}
 	if b.OperationID == "identity.identifier.attach" {
 		rows, e := recovery.Query(ctx, `SELECT EXISTS(SELECT 1 FROM identity.identifiers WHERE tenant_id=$1 AND identifier_id=$2)`, string(b.TenantID), b.RecordID)

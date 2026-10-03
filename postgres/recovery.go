@@ -103,7 +103,7 @@ func (c *Coordinator) recoverCommandReceipt(ctx context.Context, q identity.Reco
 	if observed.until.After(observed.now) {
 		return result, nil
 	}
-	if result.Feature == nil && q.OperationID != "identity.user.create" && q.OperationID != "identity.profile.update" && q.OperationID != "identity.user.update-admin" && q.OperationID != "identity.identifier.attach" {
+	if result.Feature == nil && q.OperationID != "identity.user.create" && q.OperationID != "identity.profile.update" && q.OperationID != "identity.user.update-admin" && q.OperationID != "identity.identifier.attach" && !statusOperation(q.OperationID) {
 		return result, identity.UnavailableError{}
 	}
 	fingerprint := [32]byte(observed.fingerprint)

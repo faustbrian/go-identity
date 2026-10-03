@@ -1,5 +1,51 @@
 # Identity PostgreSQL
 
+## Durable user-status admission
+
+Opt in with `StatusMigrationSource{Base: MigrationSource{}, Version: allocated}`
+and the owned migrations runner. Allocate its version after every composed
+kernel/session migration; do not renumber installed history. Migration defaults
+persist user-security epoch 1 and no legal hold while preserving every existing
+status, aggregate version and identifier epoch. They also keep prior creation
+and ordinary field writers compatible. A database missing this migration fails
+closed; readers never invent security versions.
+
+`Repository.GetStatus(ctx, identity.UserStatusQuery{TenantID: tenant, UserID: user})`
+implements the core primary status port. `User.Version` is aggregate CAS;
+`AuthorityVersion` is the independent user-security epoch. Profile and ordinary
+administrative field edits advance only aggregate CAS. Suspend/ban and
+restore/unban advance both, so restoring eligibility cannot restore old vectors.
+Expired restrictions remain blocked until a fresh audited restore/unban.
+
+Construct `NewStatusUnitOfWork(coordinator, repository, config)` with the exact
+enlisted repository and typed audit/outbox contributors, then pass it and the
+repository to `identity.NewUserStatusService`. That service supplies current
+authorization, policy admission and redaction; calling the adapter directly is
+not an authenticated endpoint. Configuration contains the same explicit status
+policy/reasons as the service, a positive status-policy revision, finite cascade
+deadline and reviewed version/fingerprint for every exact manifest consumer.
+These are deployment metadata, not consumer stores or callbacks. Every change
+to that configuration needs a new status-policy revision. The owner durably
+rejects conflicting definitions for an already-used tenant/revision.
+
+One shared commit persists status, reason/absolute expiry, both successors,
+random cascade ID/generation 1, exact manifest and ordered consumer contracts,
+trigger event/version, deadline, current legal-hold state, audit, lifecycle and
+original receipt. Row locks precede the final primary-time expiry check. Exact
+replay precedes current CAS and retains original IDs, timestamps and consumers,
+even after restoration or a composition change. Preserve command identity and
+use `Recover` after unknown closure; recovery never reexecutes the mutation.
+Retain cascade admission rows alongside non-reassignable command evidence;
+current user state or pruned payloads cannot substitute for retained evidence.
+
+The returned cascade is **pending**. This admission path does not acknowledge
+consumers, complete cleanup, manage legal holds, or implement cascade closure.
+Those remain distinct generation-bound phases. Nor does a primary status read
+alone establish authenticated session issuance or the shared-issuer 30-second
+cache/resource guarantee; actual proof consumption and all authority owners
+must still be composed. All epochs retain full unsigned 64-bit precision;
+exhaustion denies a successor rather than resetting or wrapping.
+
 Experimental Go 1.27 module implementing `identity.UserDirectoryRepository` using
 the owned `go-postgres` pool. Tenant and user IDs are matched exactly; lifecycle
 states and the full uint64 version range are preserved. Reads are primary-only,

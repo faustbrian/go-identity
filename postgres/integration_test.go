@@ -104,6 +104,38 @@ func TestPostgresIntegration(t *testing.T) {
 	t.Run("command recovery", func(t *testing.T) { testCommandRecovery(t, ctx, pool, repo) })
 	t.Run("capability recovery", func(t *testing.T) { testCapabilityRecovery(t, ctx, pool, repo) })
 	t.Run("identifier primary reads", func(t *testing.T) { testIdentifierReads(t, ctx, pool, repo) })
+	t.Run("status lifecycle", func(t *testing.T) {
+		for _, status := range []string{"active", "suspended", "banned", "deleted", "anonymized"} {
+			if _, e := pool.Raw().Exec(ctx, `INSERT INTO identity.users(tenant_id,user_id,status,version,identifier_version) VALUES('status-migration',$1::text,$1::text,9223372036854775811,7)`, status); e != nil {
+				t.Fatal(e)
+			}
+		}
+		statusRunner, e := migrations.NewRunner(StatusMigrationSource{Base: MigrationSource{}, Version: 12}, backend)
+		if e != nil {
+			t.Fatal(e)
+		}
+		if _, e := statusRunner.Up(ctx); e != nil {
+			t.Fatal("populated status migration failed", e)
+		}
+		if _, e := statusRunner.Up(ctx); e != nil {
+			t.Fatal("status migration retry failed", e)
+		}
+		// Subsequent replay checks use the complete installed history rather
+		// than presenting the original nine-migration prefix as a downgrade.
+		runner = statusRunner
+		for _, status := range []string{"active", "suspended", "banned", "deleted", "anonymized"} {
+			q := identity.UserStatusQuery{TenantID: "status-migration", UserID: identity.UserID(status)}
+			got, e := repo.GetStatus(ctx, q)
+			if e != nil || got.User.Status != identity.Status(status) || got.User.Version != 9223372036854775811 || got.AuthorityVersion != 1 {
+				t.Fatal("populated lifecycle state changed", e)
+			}
+			ids, e := repo.GetIdentifierState(ctx, identity.IdentifierQuery{TenantID: q.TenantID, UserID: q.UserID, MaximumIdentifiers: 1})
+			if e != nil || ids.AuthorityVersion != 7 {
+				t.Fatal("populated identifier epoch changed", e)
+			}
+		}
+		testStatusLifecycle(t, ctx, pool, repo)
+	})
 	insert := func(tenant, user, status, version string) error {
 		_, err := pool.Raw().Exec(ctx, `INSERT INTO identity.users(tenant_id,user_id,status,version) VALUES($1,$2,$3,$4::numeric)`, tenant, user, status, version)
 		return err

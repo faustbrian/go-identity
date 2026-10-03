@@ -30,6 +30,7 @@ type CreationUnitOfWork struct {
 	repository   *Repository
 	retention    uint64
 	contributors []ContributorDescriptor
+	status       *statusOwnerPolicy
 }
 
 var _ identity.UnitOfWork = (*CreationUnitOfWork)(nil)
@@ -99,7 +100,8 @@ func (o *CreationUnitOfWork) execute(ctx context.Context, command identity.Comma
 	spec, ok := command.CreateUser()
 	profile, updating := command.UpdateProfile()
 	admin, administering := command.UpdateUser()
-	if operation != "identity.user.create" && operation != "identity.profile.update" && operation != "identity.user.update-admin" || !ok && !updating && !administering || ok && spec.Binding.OperationID != operation || updating && profile.Binding.OperationID != operation || administering && admin.Binding.OperationID != operation {
+	status, changingStatus := command.UserStatus()
+	if operation != "identity.user.create" && operation != "identity.profile.update" && operation != "identity.user.update-admin" && !statusOperation(operation) || !ok && !updating && !administering && !changingStatus || ok && spec.Binding.OperationID != operation || updating && profile.Binding.OperationID != operation || administering && admin.Binding.OperationID != operation || changingStatus && (status.Binding.OperationID != operation || o.status == nil) {
 		return result, identity.InvalidInputError{Field: "creation_command"}
 	}
 	binding, before := spec.Binding, uint64(0)
@@ -113,6 +115,8 @@ func (o *CreationUnitOfWork) execute(ctx context.Context, command identity.Comma
 		if _, _, e := o.repository.prepareAdministrativeAttributes(admin); e != nil {
 			return result, e
 		}
+	} else if changingStatus {
+		binding, before = status.Binding, status.ExpectedVersion
 	} else {
 		if _, _, e := o.repository.prepareCreationAttributes(spec); e != nil {
 			return result, e
@@ -181,7 +185,11 @@ func (o *CreationUnitOfWork) execute(ctx context.Context, command identity.Comma
 	}
 	var user identity.User
 	var updated identity.UserProfile
-	if updating {
+	var statusResult identity.CommandResult
+	if changingStatus {
+		statusResult, e = o.applyStatus(bounded, work, command, now)
+		user = statusResult.User
+	} else if updating {
 		updated, e = o.repository.ApplyProfileUpdate(bounded, work, command)
 		user = identity.User{ID: binding.UserID, TenantID: binding.TenantID, Status: identity.StatusActive, Version: updated.Version}
 	} else if administering {
@@ -196,12 +204,17 @@ func (o *CreationUnitOfWork) execute(ctx context.Context, command identity.Comma
 	if e = work.StageAudit(0, success); e != nil {
 		return c.Abort(work, e)
 	}
-	if e = work.StageLifecycle(0, now); e != nil {
-		return c.Abort(work, e)
+	if !changingStatus {
+		if e = work.StageLifecycle(0, now); e != nil {
+			return c.Abort(work, e)
+		}
 	}
 	result = identity.CommandResult{Binding: binding, Outcome: identity.CommitOutcomeCommitted, User: user, AuditEventID: success.ID()}
-	if updating || administering {
+	if updating || administering || changingStatus {
 		result.ExpectedVersion = before
+	}
+	if changingStatus {
+		result.Revocation = statusResult.Revocation
 	}
 	if updating {
 		result.Profile = &updated
@@ -222,7 +235,7 @@ func (o *CreationUnitOfWork) Recover(ctx context.Context, q identity.RecoveryQue
 }
 
 func (o *CreationUnitOfWork) recover(ctx context.Context, q identity.RecoveryQuery, operation string) (identity.CommandResult, error) {
-	if o == nil || o.coordinator == nil || ctx == nil || q.OperationID != operation || operation != "identity.user.create" && operation != "identity.profile.update" && operation != "identity.user.update-admin" {
+	if o == nil || o.coordinator == nil || ctx == nil || q.OperationID != operation || operation != "identity.user.create" && operation != "identity.profile.update" && operation != "identity.user.update-admin" && !(o.status != nil && statusOperation(operation)) {
 		return identity.CommandResult{}, coordinatorError()
 	}
 	if _, e := identity.ParseCommandID(string(q.CommandID)); e != nil {
@@ -265,7 +278,7 @@ func creationAudit(ctx context.Context, b identity.CommandBinding, now time.Time
 
 func kernelMutationAudit(ctx context.Context, b identity.CommandBinding, before uint64, now time.Time, class string) (audit.Record, error) {
 	retention := "standard"
-	if b.OperationID == "identity.user.update-admin" {
+	if b.OperationID == "identity.user.update-admin" || strings.HasPrefix(b.OperationID, "identity.admin.") {
 		retention = "protected"
 	}
 	target, kind := string(b.UserID), "user"

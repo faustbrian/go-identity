@@ -38,6 +38,7 @@ type workState struct {
 	creation          *identity.User
 	profile           *identity.UserProfile
 	update            *identity.User
+	status            *identity.CommandResult
 	feature           *FeatureRegistration
 	subjectType       string
 	featureAttempted  bool
