@@ -113,6 +113,20 @@ input and preparation diagnostics are redacted and serialization is forbidden.
 
 ## Persistence and remaining implementation
 
+Select `PolicyVersion` strictly above a selected `WorkerVersion` to append the
+immutable deployment/version policy fingerprint registry. Zero preserves the
+old admission/worker history byte-for-byte. The private owned composition
+registers a copied, bounded set of retained runtime settings atomically;
+same-version reinterpretation conflicts, including changes to operation or
+lease budgets. Rotation adds versions without changing old retry decisions.
+Workers selected by retained version cannot claim, complete or renew another
+version's effect, even when the settings happen to match. Missing versions
+fail closed. Database guards reject ordinary update, delete and truncate of
+policy identities; privileged DDL/bypass is not covered by those guards.
+The complete Queue must still select and require that original registry entry
+before encrypted admission and recover its exact version during processing.
+This registry does not enable a public Queue or provider integration.
+
 The owned intent table references the original kernel command and retains its
 complete canonical non-secret AAD and confidential logical digest. Prepared
 ciphertext is authenticated locally before any SQL. Effect IDs are deterministic

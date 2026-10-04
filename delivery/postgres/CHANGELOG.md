@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add immutable retained delivery-policy registration and version-isolated
+  worker selection. Restart configuration changes cannot reinterpret an
+  installed policy; rotation retains original retry and lease settings.
+  Select the new forward policy migration after the worker extension.
+  Complete authenticated Queue admission remains under development.
+
 - Add owned prepared-enqueue orchestration through the original coordinator.
   Current exact-scope policy applies before reservation and on committed replay;
   denied callers create no command claim or delivery effect. Policy failures

@@ -21,6 +21,10 @@ type MigrationSource struct {
 	// must be strictly above Version. Neither selection exposes a usable Queue
 	// until that adapter's complete authenticated contract is implemented.
 	WorkerVersion migrations.Version
+	// PolicyVersion optionally appends immutable retained delivery-policy history.
+	// It requires WorkerVersion and must be strictly greater. Zero preserves all
+	// previously installed migration bytes and does not enable policy registration.
+	PolicyVersion migrations.Version
 }
 
 var _ migrations.Source = MigrationSource{}
@@ -50,6 +54,12 @@ func (s MigrationSource) Load(ctx context.Context) ([]migrations.Migration, erro
 			return nil, delivery.ErrInvalidInput
 		}
 	}
+	if s.PolicyVersion != 0 {
+		if s.WorkerVersion == 0 || s.PolicyVersion <= s.WorkerVersion {
+			return nil, delivery.ErrInvalidInput
+		}
+		additional++
+	}
 	if len(history) < 1 || len(history)+additional > migrations.MaxMigrationFiles {
 		return nil, delivery.ErrInvalidInput
 	}
@@ -74,6 +84,13 @@ func (s MigrationSource) Load(ctx context.Context) ([]migrations.Migration, erro
 			return nil, delivery.ErrUnavailable
 		}
 		result[len(history)+1] = worker
+	}
+	if s.PolicyVersion != 0 {
+		policy, err := migrations.NewMigration(s.PolicyVersion, "identity_delivery_policies", migrations.TransactionModeDefault, policySchemaSQL, "")
+		if err != nil {
+			return nil, delivery.ErrUnavailable
+		}
+		result[len(history)+2] = policy
 	}
 	return result, nil
 }

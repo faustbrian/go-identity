@@ -44,12 +44,20 @@ func (s *attemptStore) Renew(ctx context.Context, f leaseFence) (time.Time, erro
 	defer rollbackAttempt(tx)
 	var state string
 	var expiry time.Time
-	err = tx.QueryRow(w, `SELECT state,expires_at FROM identity.delivery_intents WHERE deployment=$1 AND tenant_id=$2 AND effect_id=$3 FOR UPDATE`, s.deployment, string(f.TenantID), string(f.IntentID)).Scan(&state, &expiry)
+	var aad []byte
+	err = tx.QueryRow(w, `SELECT state,expires_at,binding_aad FROM identity.delivery_intents WHERE deployment=$1 AND tenant_id=$2 AND effect_id=$3 FOR UPDATE`, s.deployment, string(f.TenantID), string(f.IntentID)).Scan(&state, &expiry, &aad)
 	if errors.Is(err, pgx.ErrNoRows) || err == nil && state != "submitted" {
 		return time.Time{}, delivery.ErrConflict
 	}
 	if err != nil {
 		return time.Time{}, attemptFailure(w, err)
+	}
+	b, err := decodeBinding(aad)
+	if err != nil {
+		return time.Time{}, err
+	}
+	if s.retainedVersion != 0 && b.PolicyVersion != s.retainedVersion {
+		return time.Time{}, delivery.ErrConflict
 	}
 	var lease, now time.Time
 	var digest []byte

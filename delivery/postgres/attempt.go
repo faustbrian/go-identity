@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"strconv"
 	"time"
 
 	"github.com/faustbrian/go-identity/delivery"
@@ -28,6 +29,7 @@ type attemptStore struct {
 	maximumDuration, leaseDuration time.Duration
 	attempts                       uint8
 	policyDigest                   [32]byte
+	retainedVersion                uint64
 }
 
 func (attemptStore) Format(s fmt.State, _ rune) {
@@ -200,7 +202,7 @@ func (s *attemptStore) Claim(ctx context.Context, q delivery.ClaimRequest) (deli
 	var generation int64
 	var attempt int16
 	var retainedPolicy []byte
-	err = tx.QueryRow(w, `SELECT i.binding_aad,i.effect_index,i.envelope_key_id,i.ciphertext,COALESCE(p.generation,0),COALESCE(p.attempt_number,0),p.policy_digest FROM identity.delivery_intents i LEFT JOIN identity.delivery_processing p USING(deployment,tenant_id,effect_id) WHERE i.deployment=$1 AND i.tenant_id=$2 AND NOT i.no_op AND i.expires_at>clock_timestamp() AND ((i.state='planned' AND p.generation IS NULL) OR (i.state='retry-wait' AND p.next_attempt_at<=clock_timestamp() AND p.lease_owner IS NULL)) ORDER BY i.created_at,i.effect_id LIMIT 1 FOR UPDATE OF i SKIP LOCKED`, s.deployment, string(q.TenantID)).Scan(&aad, &envelope.EffectIndex, &envelope.KeyID, &envelope.Ciphertext, &generation, &attempt, &retainedPolicy)
+	err = tx.QueryRow(w, `SELECT i.binding_aad,i.effect_index,i.envelope_key_id,i.ciphertext,COALESCE(p.generation,0),COALESCE(p.attempt_number,0),p.policy_digest FROM identity.delivery_intents i LEFT JOIN identity.delivery_processing p USING(deployment,tenant_id,effect_id) WHERE i.deployment=$1 AND i.tenant_id=$2 AND ($3::numeric=0 OR i.policy_version=$3::numeric) AND NOT i.no_op AND i.expires_at>clock_timestamp() AND ((i.state='planned' AND p.generation IS NULL) OR (i.state='retry-wait' AND p.next_attempt_at<=clock_timestamp() AND p.lease_owner IS NULL)) ORDER BY i.created_at,i.effect_id LIMIT 1 FOR UPDATE OF i SKIP LOCKED`, s.deployment, string(q.TenantID), strconv.FormatUint(s.retainedVersion, 10)).Scan(&aad, &envelope.EffectIndex, &envelope.KeyID, &envelope.Ciphertext, &generation, &attempt, &retainedPolicy)
 	if errors.Is(err, pgx.ErrNoRows) {
 		if err := tx.Commit(w); err != nil {
 			return delivery.ClaimResult{}, delivery.ErrOutcomeUnknown
@@ -216,6 +218,9 @@ func (s *attemptStore) Claim(ctx context.Context, q delivery.ClaimRequest) (deli
 		return delivery.ClaimResult{}, err
 	}
 	if b.Deployment != s.deployment || string(b.Command.TenantID) != string(q.TenantID) || generation >= 4294967295 || attempt >= int16(s.attempts) || generation > 0 && !hmac.Equal(retainedPolicy, s.policyDigest[:]) {
+		return delivery.ClaimResult{}, delivery.ErrConflict
+	}
+	if s.retainedVersion != 0 && b.PolicyVersion != s.retainedVersion {
 		return delivery.ClaimResult{}, delivery.ErrConflict
 	}
 	var now time.Time
@@ -343,6 +348,9 @@ func (s *attemptStore) Complete(ctx context.Context, q delivery.CompleteRequest)
 	b, err := decodeBinding(aad)
 	if err != nil {
 		return delivery.CompleteResult{}, err
+	}
+	if s.retainedVersion != 0 && b.PolicyVersion != s.retainedVersion {
+		return delivery.CompleteResult{}, delivery.ErrConflict
 	}
 	key, ok := s.codec.keys[b.DigestKeyVersion]
 	if !ok {
