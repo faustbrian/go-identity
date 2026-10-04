@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Recover the exact original encrypted-intent binding after process restart
+  using the installed canonical profile and retained keys. Malformed or changed
+  scope fails closed before decryption; recovery cannot renew credential expiry.
+  Durable Queue leasing and provider processing remain unfinished.
+
 - Expose immutable encrypted preparation and original-command staging through
   the public enlisted contributor, plus a migration source that extends kernel
   history without rewriting installed SQL. Foreign owners and original bindings

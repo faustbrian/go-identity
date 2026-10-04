@@ -35,6 +35,18 @@ key while ciphertext or replay evidence needs it. Missing retained keys fail
 closed; they do not authorize regeneration, altered plaintext or a new command.
 Rotation cannot change the retained template/locale snapshot or expiry.
 
+Worker recovery reconstructs the original scope from the installed 28-field
+`identity-delivery-payload-v1` AAD profile, rather than introducing a second
+command authority. The reader is bounded to 16KiB and requires the exact
+canonical field set, numeric spelling, digest and expiry. Its framing is pinned
+to `go-secret-envelope` revision `22fc4a2d925d`, `context.go`; a canonical rebuild
+through that module's public `NewContext` must match byte-for-byte. Changes to
+that upstream encoding require an explicitly versioned persistence migration,
+not reinterpretation of installed rows. Restored scope is authenticated locally
+against retained custody before decryption; parsing alone grants no authority.
+Restart and key rotation cannot renew original expiry. This recovery foundation
+does not acquire a worker lease or permit provider work.
+
 ## Public composition
 
 Construct `NewContributor(ContributorConfig, *secretenvelope.Service)` with
