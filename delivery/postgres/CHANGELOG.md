@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Expose current-policy-authorized versioned delivery snapshots in the selected
+  status-tracking profile. Read intent version and attempt metadata together
+  without consumer-written SQL, payload access or mutation; legacy profiles
+  reject versioned reads rather than fabricate a fence. Public authenticated
+  cancellation remains unfinished.
+
 - Add a forward original-command cancellation result migration and private
   native coordinator phase. Atomically retain redacted stop outcomes with
   status/generation fences, protected audit and lifecycle; downstream failure

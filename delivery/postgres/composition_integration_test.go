@@ -225,6 +225,28 @@ func testPublicComposition(t *testing.T, mode string) {
 		if err != nil || status != (delivery.StatusGetResult{State: delivery.StateQueued}) {
 			t.Fatal("public status did not observe original queue", err)
 		}
+		// Cancellation must freeze both fences from one authorized primary
+		// snapshot, then retain them on retries rather than infer a new plan.
+		if config.StateTracking {
+			snapshot, err := public.VersionedStatusGet(ctx, statusRequest, b.UserID, statusScope)
+			if err != nil || snapshot.Status != status || snapshot.StatusVersion != 1 {
+				t.Fatal("versioned status did not preserve admission snapshot", err, snapshot)
+			}
+			permit = false
+			if got, err := public.VersionedStatusGet(ctx, statusRequest, b.UserID, statusScope); !errors.Is(err, delivery.ErrForbidden) || got != (StatusSnapshot{}) {
+				t.Fatal("denied versioned status disclosed metadata", err)
+			}
+			permit = true
+			if _, err := pool.Exec(ctx, `UPDATE identity.delivery_intents SET state=state WHERE deployment='test' AND effect_id=$1`, string(first.IntentID)); err != nil {
+				t.Fatal(err)
+			}
+			updated, err := public.VersionedStatusGet(ctx, statusRequest, b.UserID, statusScope)
+			if err != nil || updated.Status != status || updated.StatusVersion != 2 || snapshot.StatusVersion != 1 {
+				t.Fatal("versioned status renewed prior snapshot or lost transition", err, updated)
+			}
+		} else if got, err := public.VersionedStatusGet(ctx, statusRequest, b.UserID, statusScope); !errors.Is(err, delivery.ErrInvalidInput) || got != (StatusSnapshot{}) {
+			t.Fatal("legacy profile fabricated a status version", err)
+		}
 		missing := statusRequest
 		prefix := "0"
 		if string(first.IntentID)[0] == '0' {
@@ -234,6 +256,11 @@ func testPublicComposition(t *testing.T, mode string) {
 		missing.IntentID = delivery.IntentID(prefix + string(first.IntentID)[1:])
 		if _, err := public.StatusGet(ctx, missing, b.UserID, statusScope); !errors.Is(err, delivery.ErrNotFound) {
 			t.Fatal("missing status target did not share foreign classification", err)
+		}
+		if config.StateTracking {
+			if got, err := public.VersionedStatusGet(ctx, missing, b.UserID, statusScope); !errors.Is(err, delivery.ErrNotFound) || got != (StatusSnapshot{}) {
+				t.Fatal("missing versioned status disclosed metadata", err)
+			}
 		}
 		otherConfig := config
 		otherConfig.Custody.Deployment = "other-deployment"
@@ -254,12 +281,22 @@ func testPublicComposition(t *testing.T, mode string) {
 		if result, err := public.StatusGet(ctx, statusRequest, "foreign-user", foreignScope); !errors.Is(err, delivery.ErrNotFound) || result != (delivery.StatusGetResult{}) {
 			t.Fatal("status crossed target owner", err)
 		}
+		if config.StateTracking {
+			if got, err := public.VersionedStatusGet(ctx, statusRequest, "foreign-user", foreignScope); !errors.Is(err, delivery.ErrNotFound) || got != (StatusSnapshot{}) {
+				t.Fatal("versioned status crossed target owner", err)
+			}
+		}
 		foreignRequest := statusRequest
 		foreignRequest.TenantID = "foreign-tenant"
 		foreignScope = statusScope.Clone()
 		foreignScope.Request.Tenant = "foreign-tenant"
 		if _, err := public.StatusGet(ctx, foreignRequest, b.UserID, foreignScope); !errors.Is(err, delivery.ErrNotFound) {
 			t.Fatal("status crossed tenant", err)
+		}
+		if config.StateTracking {
+			if got, err := public.VersionedStatusGet(ctx, foreignRequest, b.UserID, foreignScope); !errors.Is(err, delivery.ErrNotFound) || got != (StatusSnapshot{}) {
+				t.Fatal("versioned status crossed tenant", err)
+			}
 		}
 		for _, bad := range []delivery.StatusGetRequest{{}, {TenantID: statusRequest.TenantID, IntentID: "not-a-canonical-intent"}, {TenantID: statusRequest.TenantID, IntentID: delivery.IntentID(strings.Repeat("G", 64))}} {
 			if _, err := public.StatusGet(ctx, bad, b.UserID, statusScope); !errors.Is(err, delivery.ErrInvalidInput) {
@@ -459,6 +496,16 @@ func testPublicComposition(t *testing.T, mode string) {
 		}
 		if observed, err := public.StatusGet(ctx, statusRequest, b.UserID, statusScope); err != nil || observed != (delivery.StatusGetResult{State: delivery.StateAttempting, AttemptGeneration: 1}) {
 			t.Fatal("live lease did not expose attempting status", err)
+		}
+		if config.StateTracking {
+			var version uint64
+			if err := pool.QueryRow(ctx, `SELECT status_version FROM identity.delivery_intents WHERE deployment='test' AND effect_id=$1`, string(first.IntentID)).Scan(&version); err != nil {
+				t.Fatal(err)
+			}
+			got, err := public.VersionedStatusGet(ctx, statusRequest, b.UserID, statusScope)
+			if err != nil || got.StatusVersion != version || got.Status != (delivery.StatusGetResult{State: delivery.StateAttempting, AttemptGeneration: 1}) {
+				t.Fatal("versioned status lost worker generation", err, got)
+			}
 		}
 		completed, err := worker.Complete(ctx, delivery.CompleteRequest{TenantID: statusRequest.TenantID, IntentID: first.IntentID, WorkerID: "status-worker", Generation: 1, Invoked: true, Result: delivery.DeliveryResult{State: delivery.StateAccepted, ObservedAt: time.Now().UTC(), ProviderReference: "synthetic-provider-reference"}})
 		if err != nil || completed.State != delivery.StateAccepted {

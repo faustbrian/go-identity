@@ -1,11 +1,22 @@
 package postgres
 
 import (
+	"context"
 	"errors"
 	"testing"
 
+	"github.com/faustbrian/go-authorization"
 	"github.com/faustbrian/go-identity/delivery"
 )
+
+func TestVersionedStatusRejectsUnconstructedAndLegacyServices(t *testing.T) {
+	for _, service := range []*EnqueueService{nil, {}, {stateTracking: true}} {
+		got, err := service.VersionedStatusGet(context.Background(), delivery.StatusGetRequest{}, "", authorization.DecisionContext{})
+		if !errors.Is(err, delivery.ErrInvalidInput) || got != (StatusSnapshot{}) {
+			t.Fatal("invalid service fabricated a versioned snapshot", err)
+		}
+	}
+}
 
 func TestDeliveryStatusConservesDurableAndEffectiveStates(t *testing.T) {
 	accepted, bounced := int16(delivery.StateAccepted), int16(delivery.StateBounced)

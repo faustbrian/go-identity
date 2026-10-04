@@ -63,6 +63,16 @@ read. Missing and foreign targets share `ErrNotFound`; no-op intents expose the
 same queued/expired shape rather than their private custody-free cancellation.
 This method does not start workers, decrypt payloads or call a provider.
 
+With `StateTracking=true`, `VersionedStatusGet` returns `StatusSnapshot` containing
+that same metadata and its database-owned `StatusVersion` from a single primary
+statement. It uses identical current authorization and isolation; legacy profiles
+return `ErrInvalidInput`, and failures disclose no snapshot. Retain the version
+and attempt generation unchanged when forming or retrying a protected mutation.
+Do not reread and silently replace a previously frozen command's fences. The
+version is not authority or a freshness guarantee: effective expiry and lease
+classification can change without an intent update. This query is the owned
+precondition seam for cancellation, not a cancellation endpoint.
+
 ## Custody and security
 
 The private delivery-effect cancellation primitive fences exact generations,
