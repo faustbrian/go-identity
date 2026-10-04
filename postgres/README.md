@@ -11,8 +11,11 @@ template IDs are 1..128 printable non-space ASCII bytes. Purpose is a canonical
 lowercase event name; template/provider versions are positive. Expiry is an
 exclusive post-epoch microsecond-exact instant, never renewed on replay.
 
-The original trusted mutation stages prepared secret-envelope ciphertext with
-`Work.StageDelivery`; each envelope is at most 524288 bytes and total custody is
+The original owned delivery adapter stages prepared secret-envelope ciphertext
+with `Work.StageDeliveryFor` and its exact enlisted pointer. Equal descriptors
+or configuration do not allow another instance to stage its own preparation.
+The existing `Work.StageDelivery` remains a trusted low-level composition seam,
+not participant authentication. Each envelope is at most 524288 bytes and total custody is
 at most 1MiB. Encryption/provider work must happen before opening the mutation
 transaction. Only the coordinator invokes the exact enlisted
 `DeliveryContributor.PersistDelivery`. During that synchronous invocation,

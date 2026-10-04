@@ -54,6 +54,30 @@ type workDelivery struct {
 	invocation DeliveryContributor
 }
 
+// StageDeliveryFor stages ciphertext only for the exact delivery participant
+// enlisted in this original Work's frozen plan. Equal descriptors or shared
+// configuration do not confer staging ownership. A foreign owner is rejected
+// before copying custody. Otherwise StageDelivery's bounds, lifetime and poison
+// semantics apply. This is a trusted workflow seam, not recipient authorization;
+// the owning workflow must abort on any failure. Work remains serial-use.
+func (w Work) StageDeliveryFor(p DeliveryContributor, v DeliveryEnvelope) error {
+	if err := w.usable(); err != nil {
+		return err
+	}
+	if w.state.delivery == nil || w.state.execution == nil || w.state.execution.reservation == nil || w.state.execution.reservation.plan == nil {
+		return invalidWork()
+	}
+	for _, entry := range w.state.execution.reservation.plan.contributors {
+		if entry.descriptor == w.state.delivery.plan.Contributor {
+			if !sameParticipant(entry.contributor, p) {
+				return invalidWork()
+			}
+			return w.StageDelivery(v)
+		}
+	}
+	return invalidWork()
+}
+
 // StageDelivery copies one predeclared ciphertext during the original mutation.
 // Zero/failed/closed Work, undeclared/duplicate indices and unsupported bounds
 // fail closed. Each envelope is 1..524288 bytes; aggregate custody is at most

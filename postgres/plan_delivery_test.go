@@ -227,3 +227,28 @@ func TestDeliveryCustodyCopiesAndInvocationLifetime(t *testing.T) {
 		t.Fatal("closed delivery Work accepted")
 	}
 }
+
+func TestDeliveryOwnerCheckedStagingRejectsUnenlistedInstance(t *testing.T) {
+	owner, foreign := &deliveryPlanProbe{}, &deliveryPlanProbe{}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	w := Work{state: &workState{ctx: ctx, cancel: cancel,
+		delivery:  &workDelivery{plan: deliveryTestPlan(), envelopes: make(map[uint16]DeliveryEnvelope)},
+		execution: &domainExecution{reservation: &reservationState{plan: &admittedKernelPlan{contributors: []registeredContributor{{descriptor: owner.Descriptor(), contributor: owner}}}}},
+	}}
+	input := DeliveryEnvelope{KeyID: "key-a", Ciphertext: []byte{1, 2, 3}}
+	if err := w.StageDeliveryFor(foreign, input); err == nil || len(w.state.delivery.envelopes) != 0 {
+		t.Fatal("unenlisted instance acquired staging authority")
+	}
+	if err := w.StageDeliveryFor(owner, input); err != nil {
+		t.Fatal("exact original owner rejected", err)
+	}
+	input.Ciphertext[0] = 9
+	if w.state.delivery.envelopes[0].Ciphertext[0] != 1 {
+		t.Fatal("owner staging borrowed ciphertext")
+	}
+	invalidateWork(w)
+	if err := w.StageDeliveryFor(owner, input); err == nil {
+		t.Fatal("closed Work retained staging authority")
+	}
+}

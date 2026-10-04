@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Add owner-checked delivery staging under the frozen original participant.
+  Identically configured unenlisted contributors cannot stage their custody;
+  existing trusted low-level staging remains compatible.
+
 - Enlist optional encrypted delivery effects under the original mutation and
   command receipt. Frozen logical intent and exact participant identity survive
   replay and recovery; missing custody, failed persistence or expired effects
