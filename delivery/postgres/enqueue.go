@@ -78,6 +78,13 @@ func (p PreparedDelivery) EnqueueCommand() (identity.Command, error) {
 			identity.FeatureField{Name: prefix + ".template", Value: identity.FeatureValue{Kind: identity.FeatureText, Text: v.TemplateID}},
 			identity.FeatureField{Name: prefix + ".version", Value: identity.FeatureValue{Kind: identity.FeatureUint64, Uint64: uint64(v.TemplateVersion)}},
 		)
+		if len(p.state.recipients) > 0 {
+			if len(p.state.recipients) != len(p.state.plan.Intents) {
+				return identity.Command{}, delivery.ErrInvalidInput
+			}
+			r := p.state.recipients[len(fields)/11]
+			fields = append(fields, identity.FeatureField{Name: prefix + ".x-id", Value: identity.FeatureValue{Kind: identity.FeatureText, Text: string(r.id)}}, identity.FeatureField{Name: prefix + ".x-id-version", Value: identity.FeatureValue{Kind: identity.FeatureUint64, Uint64: r.version}}, identity.FeatureField{Name: prefix + ".x-version", Value: identity.FeatureValue{Kind: identity.FeatureUint64, Uint64: r.authority}})
+		}
 	}
 	return identity.NewFeatureCommand(identity.FeatureCommandSpec{Binding: p.state.binding, Operation: EnqueueOperation(), Fields: fields})
 }
@@ -162,9 +169,12 @@ func (c *EnqueueContributor) ApplyFeature(ctx context.Context, w identitypostgre
 		return identity.FeatureReceipt{}, err
 	}
 	b, feature, transition, err := w.FeatureScope(c)
-	s, _, decoded := c.decode(command)
+	s, intents, decoded := c.decode(command)
 	if err != nil || decoded != nil || b != s.Binding || feature.Contributor != c.Descriptor() || feature.Operation != EnqueueOperation() || !enqueueTransition(&transition) {
 		return identity.FeatureReceipt{}, delivery.ErrForbidden
+	}
+	if err := checkRecipients(ctx, w, s, intents); err != nil {
+		return identity.FeatureReceipt{}, err
 	}
 	return identity.FeatureReceipt{Operation: EnqueueOperation(), AfterVersion: 1}, nil
 }
@@ -212,13 +222,24 @@ func (c *EnqueueContributor) decode(command identity.Command) (identity.FeatureC
 		return fail()
 	}
 	s, ok := command.Feature()
-	if !ok || s.Operation != EnqueueOperation() || s.Binding.ValidateFor(EnqueueOperation()) != nil || len(s.Fields) < 8 || len(s.Fields) > 128 || len(s.Fields)%8 != 0 {
+	if !ok || s.Operation != EnqueueOperation() || s.Binding.ValidateFor(EnqueueOperation()) != nil || len(s.Fields) < 8 || len(s.Fields) > 128 {
 		return fail()
 	}
-	intents := make([]identitypostgres.DeliveryIntentPlan, len(s.Fields)/8)
+	stride := 8
+	fences, err := recipientFields(s)
+	if err != nil {
+		return fail()
+	}
+	if len(fences) > 0 {
+		stride = 11
+	}
+	if len(s.Fields)%stride != 0 {
+		return fail()
+	}
+	intents := make([]identitypostgres.DeliveryIntentPlan, len(s.Fields)/stride)
 	for n := range intents {
 		v := &intents[n]
-		name := s.Fields[n*8].Name
+		name := s.Fields[n*stride].Name
 		if !strings.HasPrefix(name, "delivery.intent-") || len(name) != len("delivery.intent-00000.digest") {
 			return fail()
 		}
@@ -229,7 +250,7 @@ func (c *EnqueueContributor) decode(command identity.Command) (identity.FeatureC
 		v.EffectIndex = uint16(index)
 		prefix := enqueuePrefix(v.EffectIndex)
 		for j, suffix := range []string{"digest", "effect", "expires", "provider", "purpose", "subject", "template", "version"} {
-			f := s.Fields[n*8+j]
+			f := s.Fields[n*stride+j]
 			if f.Name != prefix+"."+suffix {
 				return fail()
 			}

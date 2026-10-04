@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Select delivery recipients from the owned primary identifier directory after
+  exact-scope authorization. Freeze and transactionally fence record versions
+  so an intervening address or owner change cannot commit stale delivery custody.
+  Pending addresses are restricted to address-verification purposes.
+
 - Add scoped request-key allocation to the original enqueue command. Matching
   requests with different candidate command IDs retain one intent and receipt;
   changed confidential input conflicts. Allocation grants no execution outcome.

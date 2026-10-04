@@ -166,8 +166,12 @@ func testPublicComposition(t *testing.T, mode string) {
 		var policyCalls int
 		var requireAdmissionScope bool
 		var denyAfter int
+		var policyHook func()
 		policy := enqueueDecisionFunc(func(ctx context.Context, dc authorization.DecisionContext) (authorization.Decision, error) {
 			policyCalls++
+			if policyHook != nil {
+				policyHook()
+			}
 			if requireAdmissionScope {
 				scopes, ok := dc.Request.Resource.Attributes["delivery.recipient_scopes"].StringSet()
 				if !ok || len(scopes) != 1 || scopes[0] != input.Recipient.ScopeDigest {
@@ -375,6 +379,98 @@ func testPublicComposition(t *testing.T, mode string) {
 		var intents, effects, audits int
 		if pool.QueryRow(ctx, `SELECT (SELECT count(*) FROM identity.delivery_intents),(SELECT count(*) FROM outbox_messages),(SELECT count(*) FROM audit.identity_command_bindings)`).Scan(&intents, &effects, &audits) != nil || intents != 1 || effects != 2 || audits != 1 {
 			t.Fatal("owned enqueue replay duplicated effects", intents, effects, audits)
+		}
+		permit = true
+		requireAdmissionScope = false
+		if _, err := pool.Exec(ctx, `INSERT INTO identity.users(tenant_id,user_id,status,version) VALUES($1,$2,'active',1)`, string(b.TenantID), string(b.UserID)); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := pool.Exec(ctx, `INSERT INTO identity.identifiers(tenant_id,user_id,identifier_id,kind,canonical_value,verified,is_primary,version,verification_state,verification_version,verified_at) VALUES($1,$2,'recipient-email','email',$3,true,true,1,2,1,statement_timestamp())`, string(b.TenantID), string(b.UserID), input.Recipient.Address); err != nil {
+			t.Fatal(err)
+		}
+		directoryBinding := b
+		directoryBinding.CommandID, err = identity.NewCommandID()
+		if err != nil {
+			t.Fatal(err)
+		}
+		permit = false
+		if _, err := executor.AdmitIdentifier(ctx, directoryBinding, scope, input, repo, "recipient-email", policies, keyed, "directory-request-key"); !errors.Is(err, delivery.ErrForbidden) {
+			t.Fatal("denied directory discovery", err)
+		}
+		permit = true
+		if _, err := executor.AdmitIdentifier(ctx, directoryBinding, scope, input, repo, "missing", policies, keyed, "directory-request-key"); !errors.Is(err, delivery.ErrForbidden) {
+			t.Fatal("missing identifier leaked or guessed recipient", err)
+		}
+		claimedRecipient := input
+		claimedRecipient.Recipient.Address = "untrusted@example.test"
+		if _, err := executor.AdmitIdentifier(ctx, directoryBinding, scope, claimedRecipient, repo, "recipient-email", policies, keyed, "directory-request-key"); !errors.Is(err, delivery.ErrForbidden) {
+			t.Fatal("caller address bypassed primary discovery", err)
+		}
+		directoryResult, err := executor.AdmitIdentifier(ctx, directoryBinding, scope, input, repo, "recipient-email", policies, keyed, "directory-request-key")
+		if err != nil || directoryResult.Outcome != identity.CommitOutcomeCommitted {
+			t.Fatal("authoritative recipient did not enqueue", err)
+		}
+		var directoryAAD []byte
+		var directoryEnvelope identitypostgres.DeliveryEnvelope
+		if err := pool.QueryRow(ctx, `SELECT binding_aad,envelope_key_id,ciphertext FROM identity.delivery_intents WHERE tenant_id=$1 AND effect_id=$2`, string(directoryResult.Binding.TenantID), directoryResult.Binding.RecordID).Scan(&directoryAAD, &directoryEnvelope.KeyID, &directoryEnvelope.Ciphertext); err != nil {
+			t.Fatal(err)
+		}
+		directoryBound, err := decodeBinding(directoryAAD)
+		if err != nil {
+			t.Fatal(err)
+		}
+		directoryEnvelope.EffectIndex = directoryBound.Intent.EffectIndex
+		directoryPayload, err := contributor.store.codec.open(ctx, directoryBound, directoryEnvelope)
+		if err != nil || directoryPayload.Recipient.Address != input.Recipient.Address || directoryPayload.Recipient.ScopeDigest == input.Recipient.ScopeDigest {
+			t.Fatal("caller recipient claim replaced primary discovery", err)
+		}
+		stale := b
+		stale.CommandID, err = identity.NewCommandID()
+		if err != nil {
+			t.Fatal(err)
+		}
+		mutateAt := policyCalls + 3 // before discovery, before encryption, before reservation
+		policyHook = func() {
+			if policyCalls == mutateAt {
+				if _, err := pool.Exec(ctx, `UPDATE identity.identifiers SET canonical_value='changed@example.test',version=2 WHERE tenant_id=$1 AND user_id=$2 AND identifier_id='recipient-email'`, string(b.TenantID), string(b.UserID)); err != nil {
+					t.Fatal(err)
+				}
+			}
+		}
+		var recipientConflict identity.ConflictError
+		if _, err := executor.AdmitIdentifier(ctx, stale, scope, input, repo, "recipient-email", policies, keyed, "directory-stale-key"); !errors.As(err, &recipientConflict) {
+			t.Fatal("changed recipient committed stale discovery", err)
+		}
+		policyHook = nil
+		if pool.QueryRow(ctx, `SELECT count(*) FROM identity.delivery_intents`).Scan(&intents) != nil || intents != 2 {
+			t.Fatal("stale recipient persisted a delivery", intents)
+		}
+		// Pending addresses are not general notification destinations. Only
+		// the closed verification purposes can prepare them, never revoked ones.
+		if _, err := pool.Exec(ctx, `UPDATE identity.identifiers SET verified=false,is_primary=false,verification_state=1,verified_at=NULL WHERE tenant_id=$1 AND user_id=$2 AND identifier_id='recipient-email'`, string(b.TenantID), string(b.UserID)); err != nil {
+			t.Fatal(err)
+		}
+		pending := b
+		pending.CommandID, err = identity.NewCommandID()
+		if err != nil {
+			t.Fatal(err)
+		}
+		notification := input
+		notification.Recipient.Address = "changed@example.test"
+		notification.Purpose = "security-notification"
+		if _, err := executor.AdmitIdentifier(ctx, pending, scope, notification, repo, "recipient-email", policies, keyed, "directory-pending-key"); !errors.Is(err, delivery.ErrForbidden) {
+			t.Fatal("pending address received general notification", err)
+		}
+		pendingInput := input
+		pendingInput.Recipient.Address = "changed@example.test"
+		if _, err := executor.AdmitIdentifier(ctx, pending, scope, pendingInput, repo, "recipient-email", policies, keyed, "directory-pending-key"); err != nil {
+			t.Fatal("pending address verification denied", err)
+		}
+		if _, err := pool.Exec(ctx, `UPDATE identity.users SET status='banned' WHERE tenant_id=$1 AND user_id=$2`, string(b.TenantID), string(b.UserID)); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := executor.AdmitIdentifier(ctx, pending, scope, input, repo, "recipient-email", policies, keyed, "directory-blocked-key"); !errors.Is(err, delivery.ErrForbidden) {
+			t.Fatal("blocked owner admitted recipient", err)
 		}
 		return
 	}

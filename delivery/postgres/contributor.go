@@ -112,10 +112,11 @@ func (c *Contributor) ValidateDeliveryPlan(b identity.CommandBinding, p identity
 }
 
 type preparedDelivery struct {
-	owner     *Contributor
-	binding   identity.CommandBinding
-	plan      identitypostgres.DeliveryPlan
-	envelopes []identitypostgres.DeliveryEnvelope
+	owner      *Contributor
+	binding    identity.CommandBinding
+	plan       identitypostgres.DeliveryPlan
+	envelopes  []identitypostgres.DeliveryEnvelope
+	recipients []recipientFence
 }
 
 // PreparedDelivery is immutable encrypted invocation custody, not an enqueue

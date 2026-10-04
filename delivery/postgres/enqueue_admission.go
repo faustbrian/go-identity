@@ -18,7 +18,7 @@ import (
 // Current policy must explicitly allow the exact redacted delivery scope before
 // encryption and again before reservation, using the original bounded context.
 func (e *enqueueExecutor) Admit(ctx context.Context, b identity.CommandBinding, caller authorization.DecisionContext, inputs []IntentInput, policies *retainedPolicies) (identity.CommandResult, error) {
-	return e.admit(ctx, b, caller, inputs, policies, nil, "")
+	return e.admit(ctx, b, caller, inputs, policies, nil, "", nil)
 }
 
 // AdmitKeyed resolves matching explicit native enqueue requests to the original
@@ -28,10 +28,10 @@ func (e *enqueueExecutor) AdmitKeyed(ctx context.Context, b identity.CommandBind
 	if keyed == nil || e == nil || e.custody == nil || e.custody.store == nil || keyed.deployment != e.custody.store.deployment || len(requestKey) < 16 || !safeID(requestKey, false) {
 		return identity.CommandResult{}, delivery.ErrInvalidInput
 	}
-	return e.admit(ctx, b, caller, inputs, policies, keyed, requestKey)
+	return e.admit(ctx, b, caller, inputs, policies, keyed, requestKey, nil)
 }
 
-func (e *enqueueExecutor) admit(ctx context.Context, b identity.CommandBinding, caller authorization.DecisionContext, inputs []IntentInput, policies *retainedPolicies, keyed *keyedAdmission, requestKey string) (identity.CommandResult, error) {
+func (e *enqueueExecutor) admit(ctx context.Context, b identity.CommandBinding, caller authorization.DecisionContext, inputs []IntentInput, policies *retainedPolicies, keyed *keyedAdmission, requestKey string, recipients []recipientFence) (identity.CommandResult, error) {
 	if ctx == nil || e == nil || e.custody == nil || e.custody.store == nil || policies == nil || policies.deployment != e.custody.store.deployment || b.RecordID != "" || len(inputs) < 1 || len(inputs) > 16 {
 		return identity.CommandResult{}, delivery.ErrInvalidInput
 	}
@@ -107,5 +107,6 @@ func (e *enqueueExecutor) admit(ctx context.Context, b identity.CommandBinding, 
 	if err != nil {
 		return identity.CommandResult{}, err
 	}
+	prepared.state.recipients = slices.Clone(recipients)
 	return e.Execute(w, prepared, caller)
 }

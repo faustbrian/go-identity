@@ -123,6 +123,18 @@ input and preparation diagnostics are redacted and serialization is forbidden.
 
 ## Persistence and remaining implementation
 
+The private owned identifier-admission path authorizes before reading the owned
+primary directory, selects an exact canonical email or phone record, and derives
+its recipient scope digest. Caller addresses cannot replace that record.
+Pending identifiers are eligible only for address-verification purposes; revoked
+identifiers and inactive owners deny. The native command freezes identifier and
+authority versions, then checks them under share locks in the original kernel
+transaction before encrypted custody commits. Rename, removal and blocking
+between discovery and application cannot enqueue a stale recipient. Existing
+explicit trusted-workflow preparations retain their original encoding.
+This is not yet a public Queue or authentication endpoint; complete public
+scope acquisition, status, cancellation and provider lifecycle are still pending.
+
 Select `KeyedVersion` strictly above `PolicyVersion` to append scoped request-key
 to original-command mappings. The private owned admission path authorizes before
 allocation, then encrypts/stages under the selected original coordinator command.
