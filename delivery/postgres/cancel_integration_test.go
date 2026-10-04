@@ -54,6 +54,69 @@ func TestDurableCancellationPreventsUnsentWorkAndErasesCustody(t *testing.T) {
 	}
 }
 
+// A protected cancellation must share its owner's transaction: a later audit
+// or lifecycle failure must restore custody, scheduling and status together.
+func TestCancellationBorrowedTransactionRollsBackEveryEffect(t *testing.T) {
+	for _, submitted := range []bool{false, true} {
+		t.Run(map[bool]string{false: "unsent", true: "submitted"}[submitted], func(t *testing.T) {
+			ctx, pool, worker, _, fence := claimedLeaseFixture(t, time.Hour)
+			if _, err := pool.Exec(ctx, stateSchemaSQL); err != nil {
+				t.Fatal(err)
+			}
+			if !submitted {
+				if _, err := pool.Exec(ctx, `UPDATE identity.delivery_intents SET state='retry-wait'; UPDATE identity.delivery_processing SET next_attempt_at=clock_timestamp(),lease_owner=NULL,lease_until=NULL`); err != nil {
+					t.Fatal(err)
+				}
+			}
+			q := delivery.CancelRequest{TenantID: fence.TenantID, IntentID: fence.IntentID, ExpectedGeneration: fence.Generation, Reason: "workflow-cancel"}
+			var beforeState, beforeVersion string
+			if err := pool.QueryRow(ctx, `SELECT state,status_version::text FROM identity.delivery_intents`).Scan(&beforeState, &beforeVersion); err != nil {
+				t.Fatal(err)
+			}
+			for _, commit := range []bool{false, true} {
+				tx := beginIntentTestTransaction(t, ctx, pool)
+				got, err := worker.cancelIn(ctx, cancellationSQL{
+					scan: func(ctx context.Context, sql string, args []any, dest ...any) error {
+						return tx.QueryRow(ctx, sql, args...).Scan(dest...)
+					},
+					exec: func(ctx context.Context, sql string, args ...any) error {
+						_, err := tx.Exec(ctx, sql, args...)
+						return err
+					},
+				}, q, "user-a", true)
+				want := delivery.StateCancelled
+				if submitted {
+					want = delivery.StateOutcomeUnknown
+				}
+				if err != nil || got.State != want || !got.LocalCancelled {
+					t.Fatal("borrowed cancellation failed", err)
+				}
+				var applied bool
+				if err := tx.QueryRow(ctx, `SELECT p.cancel_requested AND p.next_attempt_at IS NULL AND (i.state='outcome-unknown' OR (i.state='cancelled' AND i.ciphertext IS NULL)) FROM identity.delivery_intents i JOIN identity.delivery_processing p USING(deployment,tenant_id,effect_id)`).Scan(&applied); err != nil || !applied {
+					t.Fatal("effects not staged in owner transaction", err)
+				}
+				if commit {
+					if err := tx.Commit(ctx); err != nil {
+						t.Fatal(err)
+					}
+				} else {
+					if err := tx.Rollback(ctx); err != nil {
+						t.Fatal(err)
+					}
+					var state, version string
+					var restored bool
+					if err := pool.QueryRow(ctx, `SELECT i.state,i.status_version::text,i.ciphertext IS NOT NULL AND NOT p.cancel_requested AND (p.next_attempt_at IS NOT NULL OR p.lease_owner IS NOT NULL) FROM identity.delivery_intents i JOIN identity.delivery_processing p USING(deployment,tenant_id,effect_id)`).Scan(&state, &version, &restored); err != nil || state != beforeState || version != beforeVersion || !restored {
+						t.Fatal("owner rollback lost custody or schedule", err)
+					}
+				}
+			}
+			if claim, err := worker.Claim(ctx, delivery.ClaimRequest{TenantID: fence.TenantID, WorkerID: "replacement"}); err != nil || claim.Claimed {
+				t.Fatal("committed stop allowed resubmission", err)
+			}
+		})
+	}
+}
+
 func TestDurableCancellationPendingPreservesAttributableCompletion(t *testing.T) {
 	for _, evidence := range []delivery.DeliveryState{delivery.StateAccepted, delivery.StateDelivered, delivery.StateRejected, delivery.StateBounced, delivery.StateTransientFailure, delivery.StateOutcomeUnknown} {
 		t.Run(fmt.Sprint(evidence), func(t *testing.T) {

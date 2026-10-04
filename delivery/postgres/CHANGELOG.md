@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Stage cancellation through borrowed transaction access so the owning command
+  can roll back custody, scheduling and status together. Private standalone
+  cancellation retains its existing commit and unknown-outcome semantics;
+  authenticated public cancellation remains unfinished.
+
 - Add an opt-in forward status-tracking profile without rewriting installed
   migration history or queued custody. Preserve old-writer monotonic versions
   and immutable no-op local-stop metadata across expiry; legacy status remains
