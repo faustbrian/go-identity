@@ -118,13 +118,23 @@ The first attempt pins the runtime retry/lease configuration digest; later
 claims/completions reject changed settings rather than reinterpret its policy.
 Admission-time retained policy registration still belongs to the unfinished
 authenticated Queue composition, not this private worker seam.
+Private heartbeat uses database time and the same intent-before-processing lock
+order as completion. It renews only the exact live worker/generation with the
+retained policy; credential expiry and the original attempt's 60-second maximum
+remain absolute bounds. It never creates another attempt or resets its start.
+Cancellation requests stop renewal. A lost renewal acknowledgement is unknown,
+not permission to keep invoking a provider. Explicit worker release records an
+uncertain invocation for reconciliation and replays its original result; it
+never schedules a retry. Proven no-invocation uses the existing completion path.
+Neither method creates a background heartbeat goroutine or replaces the generic
+workflow/outbox lease APIs. Public worker composition is still unfinished.
 Acceptance is retained as acceptance, not delivered; original expiry erases
 custody without fabricating provider failure. The private store is not an
 application-provided adapter or a usable public Queue. The generic workflow and
 outbox remain their public owners; this extension owns only delivery effects.
 
 The complete owned Queue, authenticated workflow admission,
-workflow-level idempotency scope, heartbeat/release, authenticated receipts,
+workflow-level idempotency scope, public worker lifecycle, authenticated receipts,
 reconciliation, public cancellation and final retention are unfinished.
 Real PostgreSQL owner-level tests cover transactional rollback, concurrent
 duplicate admission, randomized-custody replay, original-command FK isolation,

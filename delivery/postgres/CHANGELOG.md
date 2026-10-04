@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add private database-time worker heartbeat and conservative release.
+  Renewal preserves the original credential expiry and attempt lifetime,
+  rejects lost/foreign ownership and stops on cancellation. Release retains
+  unknown provider effects for reconciliation without blind retry. Public
+  Queue composition and authenticated lifecycle APIs remain unfinished.
+
 - Add opt-in forward worker schema and private durable delivery processing.
   Claims record a tenant-bound generation before plaintext handoff; completion
   rejects stale workers and replays exact evidence. Lost leases reconcile rather
