@@ -4,6 +4,14 @@
 
 ### Added
 
+- Explicit command-bound Queue composition: owned adapters authorize and resolve
+  recipients before rendering, carry original mutation/status/step fences and
+  signed callback evidence, and validate retained worker policy. Legacy capture
+  continues to render before admission and rejects authenticated scopes. Unknown
+  admission preserves an observed original command rather than inventing one.
+  Public request validation supports recipient-free bound input. Proven expired
+  non-admissions retain `ErrExpired` and `CommitNotCommitted` through the service.
+
 - Public bounded worker composition using the durable Queue subset. It shares
   the service's claim/send/complete policy and concurrency ceiling without
   requiring unrelated admission operations. Authorization denial is preserved

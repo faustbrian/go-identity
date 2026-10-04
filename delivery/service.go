@@ -7,8 +7,10 @@ import (
 	"log/slog"
 	"reflect"
 	"slices"
+	"strings"
 	"time"
 
+	"github.com/faustbrian/go-authorization"
 	identity "github.com/faustbrian/go-identity"
 )
 
@@ -32,7 +34,8 @@ const (
 )
 
 // EnqueueRequest binds a versioned intent to its owning kernel command. The
-// owned adapter authorizes that exact command/tenant, obtains resource/expiry
+// Scope is required for BoundQueue and forbidden for legacy capture admission.
+// The owned adapter authorizes that exact command/tenant, obtains resource/expiry
 // and provider configuration from its committed workflow binding, and enlists
 // encrypted custody, dedupe and effects in the same transaction. NoOpEquivalent
 // still requires a structurally valid message and the same public result shape.
@@ -43,7 +46,20 @@ type EnqueueRequest struct {
 	IdempotencyKey string
 	CommandID      CommandID
 	NoOpEquivalent bool
+	Scope          *EnqueueScope
 	prepared       *RenderedMessage
+}
+
+// EnqueueScope carries the frozen owning workflow binding to an owned queue.
+// It is trusted composition input, not authentication evidence. The adapter
+// must authorize the binding and resolve the identifier before rendering.
+// Callers must not mutate the scope during admission.
+type EnqueueScope struct {
+	Binding               identity.CommandBinding
+	ActorScope            authorization.DecisionContext
+	IdentifierID          identity.IdentifierID
+	ProviderConfigVersion uint64
+	ExpiresAt             time.Time
 }
 
 // Rendered returns the frozen core rendering for the owned queue's encryption
@@ -58,7 +74,16 @@ func (r EnqueueRequest) Rendered() (RenderedMessage, bool) {
 
 // Validate checks bounded shape, not command ownership or recipient existence.
 func (r EnqueueRequest) Validate() error {
-	if !printableASCII(string(r.TenantID), 1, 128) || r.Message.Validate() != nil || !printableASCII(r.IdempotencyKey, 16, 128) {
+	message := r.Message
+	if r.Scope != nil {
+		if message.Recipient != (Recipient{}) || r.Scope.Binding.CommandID != r.CommandID || r.Scope.Binding.TenantID != identity.TenantID(r.TenantID) {
+			return ErrInvalidInput
+		}
+		// Shape-only placeholder: never render or pass it to the adapter. Its
+		// primary directory supplies the actual recipient after current policy.
+		message.Recipient = Recipient{Channel: message.Channel, Address: "shape", ScopeDigest: strings.Repeat("0", 64)}
+	}
+	if !printableASCII(string(r.TenantID), 1, 128) || message.Validate() != nil || !printableASCII(r.IdempotencyKey, 16, 128) {
 		return ErrInvalidInput
 	}
 	if _, err := identity.ParseCommandID(string(r.CommandID)); err != nil {
@@ -91,10 +116,14 @@ func (AdmissionUnknownError) Unwrap() error { return ErrOutcomeUnknown }
 type StatusGetRequest struct {
 	TenantID TenantID
 	IntentID IntentID
+	Scope    *StatusScope
 }
 
 // StatusGetResult contains only redacted durable state; it reveals no payload.
+// StatusVersion is the atomic primary fence for BoundQueue mutations. Zero is
+// permitted only for legacy non-bound adapters; it cannot authorize a mutation.
 type StatusGetResult struct {
+	StatusVersion            uint64
 	State                    DeliveryState
 	AttemptGeneration        uint32
 	Terminal                 bool
@@ -109,6 +138,7 @@ type CancelRequest struct {
 	IntentID           IntentID
 	ExpectedGeneration uint32
 	Reason             string
+	Scope              *MutationScope
 }
 
 // CancelResult separates local prevention from authenticated remote evidence.
@@ -130,6 +160,8 @@ type ReceiptRecordRequest struct {
 	Status          DeliveryState
 	ObservedAt      time.Time
 	IdempotencyKey  string
+	Scope           *MutationScope
+	Callback        *SignedReceiptCallback
 }
 
 // ReceiptRecordResult reports monotonic durable application, not raw receipts.
@@ -149,6 +181,7 @@ type ReconcileRequest struct {
 	Generation     uint32
 	Checkpoint     string
 	IdempotencyKey string
+	Scope          *ReconcileScope
 }
 
 // ReconcileResult never itself permits resubmission: pinned provider idempotency
@@ -162,7 +195,8 @@ type ReconcileResult struct {
 // Queue is the trusted owned adapter seam, not a consumer-provided domain store.
 // All calls honor their bounded context. Mutations enforce authorization, audit,
 // exact scope, durable dedupe and ambiguous-commit recovery. Enqueue accepts only
-// service-prepared rendering and persists authenticated ciphertext, never these
+// service-prepared rendering in legacy mode; BoundQueue instead resolves and
+// renders after authorization. It persists authenticated ciphertext, never these
 // plaintext values. Claim returns after committing its lease and closing the
 // transaction; no queue transaction spans Send or a provider query.
 type Queue interface {
@@ -174,6 +208,15 @@ type Queue interface {
 	Reconcile(context.Context, ReconcileRequest) (ReconcileResult, error)
 	Claim(context.Context, ClaimRequest) (ClaimResult, error)
 	Complete(context.Context, CompleteRequest) (CompleteResult, error)
+}
+
+// BoundQueue selects command-bound admission with adapter-owned authorization,
+// recipient resolution and rendering. ValidateComposition must reject worker
+// settings that disagree with the adapter's retained policy before any IO.
+// Implementations remain trusted owned adapters, not consumer domain stores.
+type BoundQueue interface {
+	Queue
+	ValidateComposition(Config) error
 }
 
 // ProcessResult preserves the stable intent and durable completion observation.
@@ -198,6 +241,7 @@ type service struct {
 	renderer  Renderer
 	processor *attemptProcessor
 	timeout   time.Duration
+	bound     bool
 }
 
 func nilCollaborator(v any) bool {
@@ -214,17 +258,26 @@ func nilCollaborator(v any) bool {
 
 // New selects explicit composition; there are no defaults or memory-durability
 // fallback. Production rejects capture/missing Sender and undeclared durable
-// queue profiles. Collaborators are trusted owned implementations; profile
+// queue profiles. BoundQueue owns rendering and permits nil Renderer; legacy
+// queues require an explicit Renderer. Collaborators are trusted owners; profile
 // declaration is configuration validation, not proof of live database safety.
 func New(c Config, q Queue, r Renderer, s Sender) (Service, error) {
-	if c.Validate() != nil || nilCollaborator(q) || nilCollaborator(r) || c.Production && q.Backend() != QueueBackendPostgreSQL {
+	if c.Validate() != nil || nilCollaborator(q) || c.Production && q.Backend() != QueueBackendPostgreSQL {
+		return nil, ErrInvalidInput
+	}
+	_, bound := q.(BoundQueue)
+	if bound {
+		if err := q.(BoundQueue).ValidateComposition(c); err != nil {
+			return nil, err
+		}
+	} else if nilCollaborator(r) {
 		return nil, ErrInvalidInput
 	}
 	p, err := newAttemptProcessor(c, q, s)
 	if err != nil {
 		return nil, err
 	}
-	return &service{queue: q, renderer: r, processor: p, timeout: c.SenderTimeout}, nil
+	return &service{queue: q, renderer: r, processor: p, timeout: c.SenderTimeout, bound: bound}, nil
 }
 
 func (s *service) callContext(ctx context.Context) (context.Context, context.CancelFunc, error) {
@@ -238,10 +291,11 @@ func (s *service) callContext(ctx context.Context) (context.Context, context.Can
 	return w, stop, nil
 }
 
-// Enqueue renders exactly once before invoking the queue; Sender is never called.
+// Enqueue renders exactly once before invoking a legacy queue. BoundQueue owns
+// rendering after its authorization and recipient lookup; Sender is never called.
 // After adapter invocation, unexplained failure is unknown rather than rollback.
 func (s *service) Enqueue(ctx context.Context, r EnqueueRequest) (EnqueueResult, error) {
-	if r.Validate() != nil {
+	if s.bound != (r.Scope != nil) || r.Validate() != nil {
 		return EnqueueResult{}, ErrInvalidInput
 	}
 	w, stop, err := s.callContext(ctx)
@@ -252,20 +306,26 @@ func (s *service) Enqueue(ctx context.Context, r EnqueueRequest) (EnqueueResult,
 	r.Message.LocaleChain = slices.Clone(r.Message.LocaleChain)
 	r.Message.Variables = slices.Clone(r.Message.Variables)
 	r.prepared = nil
-	content, err := s.renderer.Render(w, r.Message)
-	if err != nil {
-		if w.Err() != nil {
-			return EnqueueResult{}, w.Err()
+	if r.Scope != nil {
+		scope := *r.Scope
+		r.Scope = &scope
+	}
+	if !s.bound {
+		content, err := s.renderer.Render(w, r.Message)
+		if err != nil {
+			if w.Err() != nil {
+				return EnqueueResult{}, w.Err()
+			}
+			return EnqueueResult{}, ErrInvalidInput
 		}
-		return EnqueueResult{}, ErrInvalidInput
+		if !validRendered(content, r.Message.Channel) {
+			return EnqueueResult{}, ErrInvalidInput
+		}
+		if err := w.Err(); err != nil {
+			return EnqueueResult{}, err
+		}
+		r.prepared = &content
 	}
-	if !validRendered(content, r.Message.Channel) {
-		return EnqueueResult{}, ErrInvalidInput
-	}
-	if err := w.Err(); err != nil {
-		return EnqueueResult{}, err
-	}
-	r.prepared = &content
 	result, err := s.queue.Enqueue(w, r)
 	if err != nil {
 		for _, class := range []error{ErrInvalidInput, ErrForbidden, ErrConflict} {
@@ -273,12 +333,31 @@ func (s *service) Enqueue(ctx context.Context, r EnqueueRequest) (EnqueueResult,
 				return EnqueueResult{}, class
 			}
 		}
+		if s.bound {
+			if errors.Is(err, ErrExpired) && result.State == CommitNotCommitted && !result.Queued {
+				result.IntentID = safeIntent(result.IntentID)
+				return result, ErrExpired
+			}
+			var original AdmissionUnknownError
+			if errors.As(err, &original) {
+				return EnqueueResult{IntentID: safeIntent(original.IntentID), State: CommitUnknown}, original
+			}
+			// A durable keyed admission may resolve a different original command.
+			// Without that observation the submitted command is not recovery proof.
+			return EnqueueResult{IntentID: safeIntent(result.IntentID), State: CommitUnknown}, ErrOutcomeUnknown
+		}
 		return EnqueueResult{IntentID: safeIntent(result.IntentID), State: CommitUnknown}, AdmissionUnknownError{CommandID: r.CommandID, IntentID: safeIntent(result.IntentID)}
 	}
 	if !validEnqueueResult(result, r) {
+		if s.bound {
+			return EnqueueResult{IntentID: safeIntent(result.IntentID), State: CommitUnknown}, ErrOutcomeUnknown
+		}
 		return EnqueueResult{IntentID: safeIntent(result.IntentID), State: CommitUnknown}, AdmissionUnknownError{CommandID: r.CommandID, IntentID: safeIntent(result.IntentID)}
 	}
 	if result.State == CommitUnknown || result.State == CommitInProgress {
+		if s.bound {
+			return result, ErrOutcomeUnknown
+		}
 		return result, AdmissionUnknownError{CommandID: r.CommandID, IntentID: result.IntentID}
 	}
 	if result.State == CommitConflict {
@@ -330,7 +409,7 @@ func stableQueueError(err error, mutation bool) error {
 }
 
 func (s *service) StatusGet(ctx context.Context, r StatusGetRequest) (StatusGetResult, error) {
-	if !validTarget(r.TenantID, r.IntentID) {
+	if !validTarget(r.TenantID, r.IntentID) || s.bound != (r.Scope != nil) {
 		return StatusGetResult{}, ErrInvalidInput
 	}
 	w, stop, err := s.callContext(ctx)
@@ -344,13 +423,13 @@ func (s *service) StatusGet(ctx context.Context, r StatusGetRequest) (StatusGetR
 	}
 	// Never-submitted intents may terminate without minting an attempt generation.
 	needsAttempt := out.State != StateQueued && out.State != StateCancelled && out.State != StateExpired && out.State != StateSuperseded
-	if !durableState(out.State) || out.Terminal != terminalState(out.State) || needsAttempt && out.AttemptGeneration == 0 {
+	if !durableState(out.State) || out.Terminal != terminalState(out.State) || needsAttempt && out.AttemptGeneration == 0 || s.bound && out.StatusVersion == 0 {
 		return StatusGetResult{}, ErrUnavailable
 	}
 	return out, nil
 }
 func (s *service) Cancel(ctx context.Context, r CancelRequest) (CancelResult, error) {
-	if !validTarget(r.TenantID, r.IntentID) || !boundedText(r.Reason, 1, 256) {
+	if !validTarget(r.TenantID, r.IntentID) || !boundedText(r.Reason, 1, 256) || s.bound != (r.Scope != nil) {
 		return CancelResult{}, ErrInvalidInput
 	}
 	w, stop, err := s.callContext(ctx)
@@ -369,7 +448,7 @@ func (s *service) Cancel(ctx context.Context, r CancelRequest) (CancelResult, er
 	return out, nil
 }
 func (s *service) ReceiptRecord(ctx context.Context, r ReceiptRecordRequest) (ReceiptRecordResult, error) {
-	if r.Validate() != nil {
+	if r.Validate() != nil || s.bound != (r.Scope != nil) || s.bound != (r.Callback != nil) {
 		return ReceiptRecordResult{}, ErrInvalidInput
 	}
 	w, stop, err := s.callContext(ctx)
@@ -387,7 +466,7 @@ func (s *service) ReceiptRecord(ctx context.Context, r ReceiptRecordRequest) (Re
 	return out, nil
 }
 func (s *service) Reconcile(ctx context.Context, r ReconcileRequest) (ReconcileResult, error) {
-	if !validTarget(r.TenantID, r.IntentID) || r.Generation == 0 || r.Checkpoint != "" && !printableASCII(r.Checkpoint, 1, 512) || !printableASCII(r.IdempotencyKey, 16, 128) {
+	if !validTarget(r.TenantID, r.IntentID) || r.Generation == 0 || r.Checkpoint != "" && !printableASCII(r.Checkpoint, 1, 512) || !printableASCII(r.IdempotencyKey, 16, 128) || s.bound != (r.Scope != nil) {
 		return ReconcileResult{}, ErrInvalidInput
 	}
 	w, stop, err := s.callContext(ctx)

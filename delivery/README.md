@@ -1,12 +1,48 @@
 # Identity delivery
 
+## Owned command-bound Queue composition
+
+The PostgreSQL adapter exposes `EnqueueService.NewQueue(WorkerConfig)`. Pass the
+result to `delivery.New(retainedConfig, queue, nil, sender)`; the owned admission
+service already owns the template renderer and primary recipient directory.
+No application-written Queue or workflow resolver is required. The worker config
+must match its retained policy exactly; the service starts no background loop.
+
+Supply `EnqueueRequest.Scope` with the authenticated workflow's `CommandBinding`,
+current `ActorScope`, exact identifier/provider version and original expiry.
+Omit `Message.Recipient`: authorization and recipient discovery precede rendering.
+Keep the command, request key, scope, expiry and message unchanged on retries.
+An `AdmissionUnknownError` retains the actual observed original command; a plain
+`ErrOutcomeUnknown` means its identity is not known and must not be fabricated.
+
+Status requests supply `StatusScope`. The returned positive `StatusVersion` and
+attempt generation are primary mutation fences, not authorization or freshness
+evidence. Freeze them and `MutationScope.Binding` for cancellation and signed
+receipts. Receipt requests also carry exact `SignedReceiptCallback` evidence;
+their normalized fields must match its authenticated body. `ReconcileScope`
+additionally freezes `ExpectedStep`; its request key equals the original query
+command ID, not the provider delivery key. The opaque checkpoint comes only from
+the previous owned query result. Never reread fences to rewrite a pending command.
+
+Legacy non-bound queues still require a renderer and reject these scopes. Their
+zero status version is not usable mutation evidence. Full PostgreSQL selection
+requires all feature migrations/configuration; isolated admission and worker
+profiles retain their existing constructors. Local tests are not provider
+interoperability or release verification.
+
+Adoption note: the new scope and status-version fields preserve keyed request
+and result literals and existing method signatures. External unkeyed literals
+must be converted to keyed literals; adding fields is not source-compatible for
+those callers. These modules remain experimental and have not been released.
+
 Experimental provider-neutral identity messaging, targeting Go 1.27. The
 current development slice validates typed intents, renders versioned plain
 text and non-active HTML, and composes bounded queue admission, redacted status,
 cancellation, receipt/reconciliation and one-attempt worker calls. The owned
-durable adapter is **not implemented yet**: these core paths do not prove
-PostgreSQL authorization, dedupe, ciphertext custody, provider authentication or
-durable recovery. No process-memory queue is a production durability boundary.
+durable adapter now composes through the public Queue, with separate real
+PostgreSQL tests for authorization, dedupe, ciphertext custody, signed callbacks
+and durable recovery. Release and provider interoperability remain unverified.
+No process-memory queue is a production durability boundary.
 
 ## Typed input
 
@@ -52,7 +88,7 @@ Apply `ReceiptDecision` atomically with durable event dedupe and the observation
 checkpoint. Even a terminal no-op requires erasure to repair legacy ciphertext.
 The decision starts no retry/query/send, owns no transaction and does not prove
 provider authentication or durable application. Unknown receipts never grant
-resubmission. Durable receipt/reconciliation composition is still unfinished.
+resubmission. The PostgreSQL Queue separately owns durable receipt/reconciliation.
 
 ## Explicit test capture
 
