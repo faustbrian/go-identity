@@ -4,6 +4,10 @@
 
 ### Added
 
+- Explicit tenant-bound test capture Sender with bounded cloned payload memory,
+  caller-owned snapshots and idempotent cleanup. It never claims real provider
+  delivery or implements a queue, and production composition rejects it.
+
 - Public bounded delivery service with pre-admission template rendering, copied
   message ownership, root command identity, unknown-command recovery, redacted
   status, local/remote cancellation distinctions, normalized receipt/query

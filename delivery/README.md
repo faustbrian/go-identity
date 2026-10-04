@@ -39,6 +39,26 @@ adapter remains responsible for authenticated provider evidence, monotonic
 transitions, generation CAS, query checkpoints and no blind resubmission.
 Queue/backend test doubles prove only core behavior, never those durable claims.
 
+## Explicit test capture
+
+`NewCaptureSender(CaptureConfig{TenantID, MaxAttempts, MaxBytes})` provides the
+owned test-only `Sender`, usable with the public Queue/Service composition. It
+adds no memory queue, authority, lease, dedupe, retry or provider engine. The
+exact tenant, 1–1024 attempts and 1–4194304 retained string bytes are mandatory;
+there are no implicit bounds. Inputs are cloned so small string substrings do
+not keep large caller allocations alive. Capturing reports `Accepted`, never
+real provider delivery, and deliberately records duplicate invocations so tests
+can detect them. A full/closed capture fails instead of silently losing content.
+
+`Snapshot(ctx)` explicitly returns a caller-owned slice of sensitive attempts.
+Changing that slice cannot change future snapshots. `Close` prevents further
+capture and clears owned payload references; it cannot erase caller snapshots
+or promise cryptographic erasure of immutable Go heap bytes. Use only synthetic
+test messages, close after assertions, and do not log snapshots. Diagnostics
+are redacted and implicit serialization is forbidden. Both production service
+and worker construction reject this implementation through the Sender interface.
+Actual PostgreSQL/ciphertext/provider and lifecycle claims remain separate tests.
+
 ```go
 variable := delivery.TemplateVariable{
     Name: "name", Kind: "text", TextValue: "display name",

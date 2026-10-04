@@ -143,8 +143,10 @@ func (r DeliveryResult) Validate() error {
 }
 
 // Sender is the bounded application/provider seam. Send must honor its context
-// deadline/cancellation, return normalized attributable evidence and never retain
-// Attempt, retry, acquire recipient authority or own durable queue policy.
+// deadline/cancellation, return normalized attributable evidence and never retry,
+// acquire recipient authority or own durable queue policy. Production senders
+// must not retain Attempt. Only the explicit test-only CaptureSender retains
+// bounded cloned inputs for assertions; production construction rejects it.
 type Sender interface {
 	Send(context.Context, Attempt) (DeliveryResult, error)
 }
