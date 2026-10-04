@@ -236,6 +236,27 @@ through `errors.Is`, including errors returned by `encoding/json`.
 
 ## Adoption and remaining work
 
+### Provider outcome queries
+
+Owned adapters can construct `NewOutcomeQueryExecutor(timeout, concurrency,
+querier)` for an optional `OutcomeQuerier` provider callback. Timeout is 1..30s;
+concurrency is 1..64. Call `Query` outside transactions and locks with the
+persisted `OutcomeQuery` generation, original provider idempotency key and
+opaque checkpoint. That key is not a reconciliation command key. Pin a real
+provider lookup contract before selecting this profile; unsupported lookup
+must fail, not resend a message. The callback must authenticate responses,
+honor its context and never submit, cancel or retry delivery.
+
+The executor starts no goroutines and queries once. Valid unknown observations
+remain unknown; errors, panics, malformed or late results return no evidence.
+No fabricated timestamp advances the observation watermark. Querying an old
+effect remains possible after its payload expires. The owned adapter still
+must enforce current authorization, monotonic evidence, generation/checkpoint
+CAS, immutable command recovery, audit and safe retry policy. This foundation
+does not yet implement durable reconciliation or provider interoperability.
+Query inputs/results redact formatting and structured logs and refuse implicit
+JSON/text persistence; cursors and provider keys require explicit custody.
+
 This is an additive development module, not a complete production messaging
 service. Durable workflow/outbox integration, encrypted payload retention,
 bounded sender callbacks,

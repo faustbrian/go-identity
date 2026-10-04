@@ -4,6 +4,11 @@
 
 ### Added
 
+- Bounded provider outcome-query execution for reconciliation: original provider
+  identity and generation binding, synchronous concurrency/deadline limits,
+  redacted cursors and attributable-only observations. Query failures never
+  fabricate timestamps or admit retries; durable checkpointing remains pending.
+
 - Monotonic receipt/reconciliation decision policy for owned adapters, with
   bounded receipt validation, exact generation fences, ordered observations,
   terminal-conflict denial and required ciphertext erasure on terminal replay.
