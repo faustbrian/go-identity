@@ -36,7 +36,7 @@ func TestPublicContributorOriginalCoordinatorComposition(t *testing.T) {
 	if _, err := rolePool.Exec(ctx, auditpostgres.FreshInstallPreflightSQL()); err != nil {
 		t.Fatal("owned audit preflight failed")
 	}
-	for _, mode := range []string{"committed", "no-op", "delivery-failure", "native-committed", "native-owned", "public-owned", "public-state", "native-compatible-custody", "native-no-op", "native-missing", "native-failure"} {
+	for _, mode := range []string{"committed", "no-op", "delivery-failure", "native-committed", "native-owned", "public-owned", "public-state", "native-compatible-custody", "native-no-op", "native-missing", "native-failure", "native-cancel", "native-cancel-noop"} {
 		t.Run(mode, func(t *testing.T) { testPublicComposition(t, mode) })
 	}
 }
@@ -124,7 +124,7 @@ func testPublicComposition(t *testing.T, mode string) {
 	// implementation of the delivery persistence contract.
 	contributor, b, input := compositionPreparation(t)
 	native := strings.HasPrefix(mode, "native-")
-	input.NoOpEquivalent = mode == "no-op" || mode == "native-no-op"
+	input.NoOpEquivalent = mode == "no-op" || mode == "native-no-op" || mode == "native-cancel-noop"
 	participants := []identitypostgres.Contributor{repo}
 	var enqueue *EnqueueContributor
 	if native {
@@ -1017,6 +1017,16 @@ func testPublicComposition(t *testing.T, mode string) {
 	}
 	if err := contributor.Stage(ctx, work, prepared); err == nil {
 		t.Fatal("closed original Work survived")
+	}
+	if strings.HasPrefix(mode, "native-cancel") {
+		cancelRunner, err := migrations.NewRunner(MigrationSource{Base: identitypostgres.MigrationSource{}, Version: 10, WorkerVersion: 11, PolicyVersion: 12, KeyedVersion: 13, StateVersion: 14, CancellationVersion: 15}, backend)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := cancelRunner.Up(ctx); err != nil {
+			t.Fatal("populated cancellation migration", err)
+		}
+		testNativeCancellation(t, ctx, pool, owned, repo, auditing, lifecycle, contributor, receipt.Binding)
 	}
 }
 

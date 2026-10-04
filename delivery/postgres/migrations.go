@@ -33,6 +33,10 @@ type MigrationSource struct {
 	// and immutable no-op local-stop checkpoints. It requires KeyedVersion and
 	// must be greater. Zero preserves all existing migration bytes/profiles.
 	StateVersion migrations.Version
+	// CancellationVersion appends immutable original-command cancellation
+	// results. It requires StateVersion and must be greater. Zero preserves
+	// installed histories; selecting it alone grants no public Queue authority.
+	CancellationVersion migrations.Version
 }
 
 var _ migrations.Source = MigrationSource{}
@@ -76,6 +80,12 @@ func (s MigrationSource) Load(ctx context.Context) ([]migrations.Migration, erro
 	}
 	if s.StateVersion != 0 {
 		if s.KeyedVersion == 0 || s.StateVersion <= s.KeyedVersion {
+			return nil, delivery.ErrInvalidInput
+		}
+		additional++
+	}
+	if s.CancellationVersion != 0 {
+		if s.StateVersion == 0 || s.CancellationVersion <= s.StateVersion {
 			return nil, delivery.ErrInvalidInput
 		}
 		additional++
@@ -125,6 +135,13 @@ func (s MigrationSource) Load(ctx context.Context) ([]migrations.Migration, erro
 			return nil, delivery.ErrUnavailable
 		}
 		result[len(history)+4] = state
+	}
+	if s.CancellationVersion != 0 {
+		cancel, err := migrations.NewMigration(s.CancellationVersion, "identity_delivery_cancellations", migrations.TransactionModeDefault, cancellationSchemaSQL, "")
+		if err != nil {
+			return nil, delivery.ErrUnavailable
+		}
+		result[len(history)+5] = cancel
 	}
 	return result, nil
 }

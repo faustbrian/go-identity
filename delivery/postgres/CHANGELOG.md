@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add a forward original-command cancellation result migration and private
+  native coordinator phase. Atomically retain redacted stop outcomes with
+  status/generation fences, protected audit and lifecycle; downstream failure
+  restores custody, and original replay does not renew status. Public
+  authenticated cancellation and complete Queue composition remain unfinished.
+
 - Stage cancellation through borrowed transaction access so the owning command
   can roll back custody, scheduling and status together. Private standalone
   cancellation retains its existing commit and unknown-outcome semantics;

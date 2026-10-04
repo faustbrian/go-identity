@@ -176,6 +176,10 @@ func (e *enqueueExecutor) allow(ctx context.Context, b identity.CommandBinding, 
 // Only scope identity is needed before execution; the kernel owns the actual
 // protected success/failure audit, its event ID and database occurrence time.
 func enqueueAuditDigest(b identity.CommandBinding) ([32]byte, error) {
+	return deliveryFeatureAuditDigest(b, EnqueueOperation())
+}
+
+func deliveryFeatureAuditDigest(b identity.CommandBinding, operation identity.FeatureOperation) ([32]byte, error) {
 	builder, err := audit.NewBuilder(audit.BuilderConfig{})
 	if err != nil {
 		return [32]byte{}, err
@@ -188,5 +192,5 @@ func enqueueAuditDigest(b identity.CommandBinding) ([32]byte, error) {
 	if err != nil {
 		return [32]byte{}, err
 	}
-	return identitypostgres.FeatureAuditBindingDigest(b, EnqueueOperation(), "delivery_intent", record)
+	return identitypostgres.FeatureAuditBindingDigest(b, operation, "delivery_intent", record)
 }

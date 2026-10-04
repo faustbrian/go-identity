@@ -88,6 +88,17 @@ a bounded table lock and validates new nullable metadata under its transaction;
 lock/statement timeout rolls it back for an exact retry, never partial success.
 This selected profile still does not expose public cancellation or a full Queue.
 
+`MigrationSource.CancellationVersion`, selected strictly after `StateVersion`,
+adds immutable, redacted cancellation results tied by foreign key to the
+original kernel command and delivery intent. Zero preserves installed history.
+The private native cancellation participant stages the stop, version CAS and
+result in that same coordinator Work; protected audit and lifecycle must commit
+with them. A lifecycle failure restores custody and status. Original replay
+returns its retained receipt without another stop or version increment.
+These retained records contain no raw operator reason or provider evidence.
+Application roles must not own DDL or trigger controls. Authenticated public
+cancellation, provider cancellation and full Queue composition remain unfinished.
+
 `PrepareEnqueue` derives the native command's primary effect ID; its
 `EnqueueCommand` freezes every safe effect field and confidential logical digest,
 without exporting ciphertext or rendered content. `NewEnqueueContributor`
