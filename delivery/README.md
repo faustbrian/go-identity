@@ -39,6 +39,21 @@ adapter remains responsible for authenticated provider evidence, monotonic
 transitions, generation CAS, query checkpoints and no blind resubmission.
 Queue/backend test doubles prove only core behavior, never those durable claims.
 
+`ReceiptRecordRequest.Validate` checks normalized shape only. The owned adapter
+can use `DecideReceipt(ReceiptSnapshot, ReceiptRecordRequest)` after authenticating
+the callback/query and locking its exact tenant/provider/effect/generation. It
+rejects stale generations, conflicting same-instant observations and newer
+conflicting terminal outcomes; earlier callbacks are no-ops. Later accepted or
+unknown observations cannot downgrade acceptance or terminal delivery, and
+cancellation confirmation requires an outcome-unknown effect. `ObservedAt` is
+the provider's authenticated observation time, not callback arrival time.
+
+Apply `ReceiptDecision` atomically with durable event dedupe and the observation
+checkpoint. Even a terminal no-op requires erasure to repair legacy ciphertext.
+The decision starts no retry/query/send, owns no transaction and does not prove
+provider authentication or durable application. Unknown receipts never grant
+resubmission. Durable receipt/reconciliation composition is still unfinished.
+
 ## Explicit test capture
 
 `NewCaptureSender(CaptureConfig{TenantID, MaxAttempts, MaxBytes})` provides the

@@ -4,6 +4,11 @@
 
 ### Added
 
+- Monotonic receipt/reconciliation decision policy for owned adapters, with
+  bounded receipt validation, exact generation fences, ordered observations,
+  terminal-conflict denial and required ciphertext erasure on terminal replay.
+  Decisions do not authenticate providers, persist events or authorize retries.
+
 - Explicit tenant-bound test capture Sender with bounded cloned payload memory,
   caller-owned snapshots and idempotent cleanup. It never claims real provider
   delivery or implements a queue, and production composition rejects it.

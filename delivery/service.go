@@ -367,12 +367,7 @@ func (s *service) Cancel(ctx context.Context, r CancelRequest) (CancelResult, er
 	return out, nil
 }
 func (s *service) ReceiptRecord(ctx context.Context, r ReceiptRecordRequest) (ReceiptRecordResult, error) {
-	if !validTarget(r.TenantID, r.IntentID) || !purposeName(r.Provider) || !printableASCII(r.ProviderEventID, 1, 256) || r.Generation == 0 || !validUTCTime(r.ObservedAt) || !printableASCII(r.IdempotencyKey, 16, 128) {
-		return ReceiptRecordResult{}, ErrInvalidInput
-	}
-	switch r.Status {
-	case StateAccepted, StateDelivered, StateRejected, StateBounced, StateCancelled, StateOutcomeUnknown:
-	default:
+	if r.Validate() != nil {
 		return ReceiptRecordResult{}, ErrInvalidInput
 	}
 	w, stop, err := s.callContext(ctx)
