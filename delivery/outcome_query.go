@@ -10,7 +10,7 @@ import (
 // OutcomeQuery binds a provider read to the original persisted submission
 // identity and exact effect generation. ProviderIdempotencyKey is the original
 // provider key, never the reconciliation command's key. Checkpoint is a bounded
-// opaque provider cursor. Neither field grants tenant authority or retry
+// opaque provider cursor; empty begins a new lookup sequence. Neither field grants tenant authority or retry
 // permission; the owned adapter authenticates and supplies this snapshot.
 // No recipient or rendered payload is needed for a status query.
 type OutcomeQuery struct {
@@ -23,7 +23,7 @@ type OutcomeQuery struct {
 
 // Validate proves shape only, not ownership, a provider profile or a CAS fence.
 func (q OutcomeQuery) Validate() error {
-	if !validTarget(q.TenantID, q.IntentID) || q.Generation == 0 || !printableASCII(q.ProviderIdempotencyKey, 16, 128) || !printableASCII(q.Checkpoint, 1, 512) {
+	if !validTarget(q.TenantID, q.IntentID) || q.Generation == 0 || !printableASCII(q.ProviderIdempotencyKey, 16, 128) || q.Checkpoint != "" && !printableASCII(q.Checkpoint, 1, 512) {
 		return ErrInvalidInput
 	}
 	return nil

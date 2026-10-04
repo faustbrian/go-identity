@@ -104,9 +104,15 @@ func (c *reconciliationContributor) ApplyFeature(ctx context.Context, w identity
 	if err != nil || decoded != nil || b != spec.Binding || f.Contributor != c.Descriptor() || f.Operation != reconciliationOperation() || l.EventType != "delivery.reconciled.v1" || l.BeforeVersion != version || l.AfterVersion != version+1 {
 		return identity.FeatureReceipt{}, delivery.ErrForbidden
 	}
-	sql := cancellationWorkSQL(w)
+	return c.applyIn(ctx, cancellationWorkSQL(w), b, q, event, evidence, version, step, before, after, reconciliationOperation())
+}
+
+// Only an exact currently invoked feature participant may borrow this phase.
+// Both schema versions share the original effect/checkpoint/result owner; no
+// helper opens a transaction, queries a provider or registers another journal.
+func (c *reconciliationContributor) applyIn(ctx context.Context, sql cancellationSQL, b identity.CommandBinding, q delivery.ReceiptRecordRequest, event, evidence [32]byte, version uint64, step int64, before, after [32]byte, operation identity.FeatureOperation) (identity.FeatureReceipt, error) {
 	var current string
-	err = sql.scan(ctx, `SELECT status_version::text FROM identity.delivery_intents WHERE deployment=$1 AND tenant_id=$2 AND effect_id=$3 AND subject_id=$4 FOR UPDATE`, []any{c.store.deployment, string(b.TenantID), b.RecordID, string(b.UserID)}, &current)
+	err := sql.scan(ctx, `SELECT status_version::text FROM identity.delivery_intents WHERE deployment=$1 AND tenant_id=$2 AND effect_id=$3 AND subject_id=$4 FOR UPDATE`, []any{c.store.deployment, string(b.TenantID), b.RecordID, string(b.UserID)}, &current)
 	if errors.Is(err, pgx.ErrNoRows) || err == nil && current != strconv.FormatUint(version, 10) {
 		return identity.FeatureReceipt{}, identity.ConflictError{}
 	}
@@ -137,7 +143,7 @@ func (c *reconciliationContributor) ApplyFeature(ctx context.Context, w identity
 	if err := sql.exec(ctx, `INSERT INTO identity.delivery_reconciliation_commands(deployment,tenant_id,command_id,command_purpose,effect_id,subject_id,binding_digest,provider,event_digest,evidence_digest,generation,step,before_version,after_version,before_digest,after_digest,result_state,advanced,deduplicated) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13::numeric,$14::numeric,$15,$16,$17,$18,$19)`, c.store.deployment, string(b.TenantID), id, b.OperationID, b.RecordID, string(b.UserID), digest[:], q.Provider, event[:], evidence[:], int64(q.Generation), step+1, strconv.FormatUint(version, 10), strconv.FormatUint(version+1, 10), before[:], after[:], int16(out.State), out.Advanced, out.Deduplicated); err != nil {
 		return identity.FeatureReceipt{}, err
 	}
-	return identity.FeatureReceipt{Operation: reconciliationOperation(), BeforeVersion: version, AfterVersion: version + 1}, nil
+	return identity.FeatureReceipt{Operation: operation, BeforeVersion: version, AfterVersion: version + 1}, nil
 }
 
 func (c *reconciliationContributor) RecoverParticipant(ctx context.Context, w identitypostgres.RecoveryWork) (identitypostgres.RecoveryStatus, error) {

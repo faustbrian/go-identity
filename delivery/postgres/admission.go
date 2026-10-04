@@ -54,6 +54,10 @@ type EnqueueConfig struct {
 	// protected receipt commands. Nil preserves legacy admission plan identity.
 	// Requires StateTracking, ReceiptVersion and ReceiptCommandVersion migrations.
 	Receipts *ReceiptAuthenticationConfig
+	// Reconciliation opts into original-key provider lookup, owned encrypted
+	// cursor custody and protected query commands. Requires StateTracking and
+	// Receipt/Reconciliation/ReconciliationCommand/ReconciliationQuery migrations.
+	Reconciliation *ReconciliationConfig
 }
 
 // EnqueueCommandRequest is trusted platform/workflow input, not HTTP JSON or
@@ -93,6 +97,7 @@ type EnqueueService struct {
 	receiptTracking bool
 	cancellation    *cancelExecutor
 	receipts        *receiptExecutor
+	reconciliation  *reconciliationExecutor
 }
 
 func (EnqueueConfig) Format(s fmt.State, _ rune) {
@@ -155,6 +160,10 @@ func NewEnqueueService(ctx context.Context, pool *database.Pool, c EnqueueConfig
 		}
 	}
 	receiptAuth, receiptClock, err := receiptConfiguration(c)
+	if err != nil {
+		return nil, err
+	}
+	reconcile, err := reconciliationConfiguration(c)
 	if err != nil {
 		return nil, err
 	}
@@ -224,6 +233,11 @@ func NewEnqueueService(ctx context.Context, pool *database.Pool, c EnqueueConfig
 			return nil, attemptFailure(w, err)
 		}
 	}
+	if reconcile != nil {
+		if _, err := pool.Raw().Exec(w, `SELECT c.binding_digest,c.before_version,c.after_version,q.request_digest,q.query_digest,k.step,k.after_digest,v.ciphertext FROM identity.delivery_receipts r,identity.delivery_reconciliation_commands c,identity.delivery_reconciliation_queries q,identity.delivery_reconciliation_checkpoints k,identity.delivery_reconciliation_cursors v WHERE false`); err != nil {
+			return nil, attemptFailure(w, err)
+		}
+	}
 	policies, err := newRetainedPolicies(w, pool.Raw(), c.Custody.Deployment, c.Policies, c.Timeout)
 	if err != nil {
 		return nil, err
@@ -232,7 +246,7 @@ func NewEnqueueService(ctx context.Context, pool *database.Pool, c EnqueueConfig
 	if err != nil {
 		return nil, err
 	}
-	s := &EnqueueService{executor: executor, repository: repo, renderer: renderer, policies: policies, keyed: keyed, stateTracking: c.StateTracking, receiptTracking: c.ReceiptTracking || receiptAuth != nil}
+	s := &EnqueueService{executor: executor, repository: repo, renderer: renderer, policies: policies, keyed: keyed, stateTracking: c.StateTracking, receiptTracking: c.ReceiptTracking || receiptAuth != nil || reconcile != nil}
 	if c.Cancellation {
 		store, err := newAttemptStore(pool.Raw(), c.Custody.Deployment, custody.store.codec, delivery.DefaultConfig(), c.Timeout)
 		if err != nil {
@@ -264,6 +278,20 @@ func NewEnqueueService(ctx context.Context, pool *database.Pool, c EnqueueConfig
 			return nil, admissionError(err)
 		}
 		s.receipts = &receiptExecutor{coordinator: receiptCoordinator, registry: receiptRegistry, native: nativeReceipt, auth: receiptAuth, clock: receiptClock}
+	}
+	if reconcile != nil {
+		reconcile.native = &reconciliationContributor{store: &receiptStore{deployment: c.Custody.Deployment, namespaceKey: c.NamespaceKey}}
+		reconcile.codec, reconcile.current, reconcile.envelopeKey = custody.store.codec, custody.current, custody.envelopeKey
+		reconcile.config, reconcile.pool = c.Coordinator, pool
+		if reconcile.config.QueryPolicy == nil {
+			reconcile.config.QueryPolicy = &identitypostgres.CommandQueryPolicy{Authorization: authorize, Clock: clock.System{}, PolicyVersion: c.PolicyVersion}
+		}
+		reconcile.contributors = []identitypostgres.Contributor{repo, audits, lifecycle}
+		reconcile.coordinator, _, _, err = reconcile.build(nil)
+		if err != nil {
+			return nil, admissionError(err)
+		}
+		s.reconciliation = reconcile
 	}
 	return s, nil
 }

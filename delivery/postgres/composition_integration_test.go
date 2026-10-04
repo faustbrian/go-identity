@@ -36,7 +36,7 @@ func TestPublicContributorOriginalCoordinatorComposition(t *testing.T) {
 	if _, err := rolePool.Exec(ctx, auditpostgres.FreshInstallPreflightSQL()); err != nil {
 		t.Fatal("owned audit preflight failed")
 	}
-	for _, mode := range []string{"committed", "no-op", "delivery-failure", "native-committed", "native-owned", "public-owned", "public-state", "public-cancel", "public-receipt", "native-compatible-custody", "native-no-op", "native-missing", "native-failure", "native-cancel", "native-cancel-noop", "native-receipt", "native-reconcile"} {
+	for _, mode := range []string{"committed", "no-op", "delivery-failure", "native-committed", "native-owned", "public-owned", "public-state", "public-cancel", "public-receipt", "public-reconcile", "native-compatible-custody", "native-no-op", "native-missing", "native-failure", "native-cancel", "native-cancel-noop", "native-receipt", "native-reconcile"} {
 		t.Run(mode, func(t *testing.T) { testPublicComposition(t, mode) })
 	}
 }
@@ -160,7 +160,7 @@ func testPublicComposition(t *testing.T, mode string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if mode == "public-owned" || mode == "public-state" || mode == "public-cancel" || mode == "public-receipt" {
+	if mode == "public-owned" || mode == "public-state" || mode == "public-cancel" || mode == "public-receipt" || mode == "public-reconcile" {
 		runner, err := migrations.NewRunner(MigrationSource{Base: identitypostgres.MigrationSource{}, Version: 10, WorkerVersion: 11, PolicyVersion: 12, KeyedVersion: 13}, backend)
 		if err != nil {
 			t.Fatal(err)
@@ -192,7 +192,7 @@ func testPublicComposition(t *testing.T, mode string) {
 		})
 		config := EnqueueConfig{Custody: ContributorConfig{Deployment: "test", CurrentDigestKeyVersion: 1, RetainedDigestKeys: map[uint32][32]byte{1: {3}}, ActiveEnvelopeKeyID: "envelope-a", PreparationTimeout: time.Second, ProviderProfiles: map[uint64]ProviderProfile{1: {Provider: "test-provider", PolicyVersion: 1}}}, Coordinator: identitypostgres.CoordinatorConfig{MaximumDuration: 2 * time.Second, LeaseDuration: time.Minute, CurrentFingerprintKeyVersion: 1, RetainedFingerprintKeys: map[uint32][32]byte{1: {1}}}, PolicyID: "policy", PolicyVersion: 1, AuditRetentionVersion: 1, Timeout: 2 * time.Second, NamespaceKey: [32]byte{7}, Policies: map[uint64]delivery.Config{1: delivery.DefaultConfig()}}
 		templates := []delivery.Template{{ID: "verify", Version: 1, Channel: delivery.ChannelEmail, Locale: "en", ContentType: "text/plain", Subject: "Verification", Body: "Code: {{.code}}", MaxRenderedBytes: 1024, RequiredVariables: []string{"code"}, VariableSchema: []delivery.VariableSchema{{Name: "code", Kind: "code", Sensitive: true}}}}
-		if mode == "public-state" || mode == "public-cancel" || mode == "public-receipt" {
+		if mode == "public-state" || mode == "public-cancel" || mode == "public-receipt" || mode == "public-reconcile" {
 			config.StateTracking = true
 			if _, err := NewEnqueueService(ctx, owned, config, contributor.store.codec.service, policy, templates); !errors.Is(err, delivery.ErrUnavailable) {
 				t.Fatal("selected tracking admitted absent migration", err)
@@ -246,11 +246,40 @@ func testPublicComposition(t *testing.T, mode string) {
 			}
 			config.Cancellation = true
 		}
+		request := EnqueueCommandRequest{Binding: b, ActorScope: authorization.DecisionContext{PolicyRevision: 1, CorrelationID: b.CorrelationID, Request: authorization.Request{Tenant: authorization.TenantID(b.TenantID), Action: authorization.Action(b.OperationID), Subject: authorization.Subject{ID: authorization.SubjectID(b.ActorID), Kind: b.ActorKind}, Resource: authorization.Resource{Type: "identity.user", ID: authorization.ResourceID(b.UserID)}}}, IdentifierID: "public-email", ProviderConfigVersion: 1, Message: delivery.Message{Purpose: "verification", Channel: delivery.ChannelEmail, TemplateID: "verify", TemplateVersion: 1, LocaleChain: []string{"en"}, Variables: []delivery.TemplateVariable{{Name: "code", Kind: "code", CodeValue: "synthetic-code", Sensitive: true}}}, IdempotencyKey: "public-request-key", ExpiresAt: input.ExpiresAt}
+		var populatedAdmission *delivery.EnqueueResult
+		var queryFixture *publicReconciliationQuerier
+		if mode == "public-reconcile" {
+			legacy, err := NewEnqueueService(ctx, owned, config, contributor.store.codec.service, policy, templates)
+			if err != nil {
+				t.Fatal(err)
+			}
+			permit = true
+			old, err := legacy.Enqueue(ctx, request)
+			if err != nil {
+				t.Fatal("pre-migration public enqueue", err)
+			}
+			populatedAdmission = &old
+			permit = false
+			queryFixture = &publicReconciliationQuerier{}
+			config.Reconciliation = &ReconciliationConfig{Timeout: time.Second, Concurrency: 2, Providers: []ReconciliationProvider{{TenantID: delivery.TenantID(b.TenantID), ProviderConfigVersion: 1, ActorID: "query-service", Querier: queryFixture}}}
+			if _, err := NewEnqueueService(ctx, owned, config, contributor.store.codec.service, policy, templates); !errors.Is(err, delivery.ErrUnavailable) {
+				t.Fatal("query enabled missing cursor/result migrations", err)
+			}
+			queries, err := migrations.NewRunner(MigrationSource{Base: identitypostgres.MigrationSource{}, Version: 10, WorkerVersion: 11, PolicyVersion: 12, KeyedVersion: 13, StateVersion: 14, CancellationVersion: 15, ReceiptVersion: 16, ReceiptCommandVersion: 17, ReconciliationVersion: 18, ReconciliationCommandVersion: 19, ReconciliationQueryVersion: 20}, backend)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := queries.Up(ctx); err != nil {
+				t.Fatal("forward query migration", err)
+			}
+			config.Cancellation = true
+			config.Receipts = &ReceiptAuthenticationConfig{MaxBodyBytes: 16384, Profiles: []ReceiptKeyProfile{{TenantID: delivery.TenantID(b.TenantID), Provider: "test-provider", ProviderConfigVersion: 1, ActorID: "provider-actor", KeyID: "callback-key", Key: [32]byte{9}, NotBefore: time.Now().UTC().Add(-time.Hour), NotAfter: time.Now().UTC().Add(time.Hour)}}}
+		}
 		public, err := NewEnqueueService(ctx, owned, config, contributor.store.codec.service, policy, templates)
 		if err != nil {
 			t.Fatal(err)
 		}
-		request := EnqueueCommandRequest{Binding: b, ActorScope: authorization.DecisionContext{PolicyRevision: 1, CorrelationID: b.CorrelationID, Request: authorization.Request{Tenant: authorization.TenantID(b.TenantID), Action: authorization.Action(b.OperationID), Subject: authorization.Subject{ID: authorization.SubjectID(b.ActorID), Kind: b.ActorKind}, Resource: authorization.Resource{Type: "identity.user", ID: authorization.ResourceID(b.UserID)}}}, IdentifierID: "public-email", ProviderConfigVersion: 1, Message: delivery.Message{Purpose: "verification", Channel: delivery.ChannelEmail, TemplateID: "verify", TemplateVersion: 1, LocaleChain: []string{"en"}, Variables: []delivery.TemplateVariable{{Name: "code", Kind: "code", CodeValue: "synthetic-code", Sensitive: true}}}, IdempotencyKey: "public-request-key", ExpiresAt: input.ExpiresAt}
 		if _, err := public.Enqueue(ctx, request); !errors.Is(err, delivery.ErrForbidden) {
 			t.Fatal("public denied caller admitted", err)
 		}
@@ -258,6 +287,13 @@ func testPublicComposition(t *testing.T, mode string) {
 		first, err := public.Enqueue(ctx, request)
 		if err != nil || first.State != delivery.CommitCommitted || !first.Queued || first.IntentID == "" {
 			t.Fatal("public admission failed", err)
+		}
+		if mode == "public-reconcile" {
+			if populatedAdmission == nil || *populatedAdmission != first {
+				t.Fatal("query migration/configuration changed original enqueue replay")
+			}
+			testPublicReconciliation(t, ctx, pool, owned, public, config, policy, templates, request, first, queryFixture, &permit)
+			return
 		}
 		if config.Cancellation {
 			legacyConfig := config

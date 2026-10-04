@@ -16,9 +16,59 @@ with receipt state/erasure, preserves original results on replay, denies active
 worker leases and stale progress. Cursor exhaustion ends a query sequence, not
 an unresolved effect: a fresh poll can restart only at the exact latest step.
 Original earlier polling requests cannot reopen it. Only keyed cursor
-digests persist in this projection. This does not yet enable public reconciliation,
-recoverable cursor custody, provider querying or safe retry admission; those
-remain implementation work under the original kernel coordinator.
+digests persist in this projection. Public reconciliation, recoverable cursor
+custody and provider querying are supplied by the separately selected feature
+below. Safe retry
+admission remains distinct from provider observation.
+
+### Opt-in provider reconciliation
+
+Install `ReconciliationCommandVersion` above `ReconciliationVersion`, then
+`ReconciliationQueryVersion` above the command extension. The latter adds
+immutable original-query commitments and separately erasable encrypted cursors;
+all earlier migration bytes remain unchanged. Set `StateTracking` and
+`Reconciliation` in `EnqueueConfig`; nil keeps this feature disabled and does
+not require its migrations. Configure one bounded `OutcomeQuerier` for each
+selected tenant/provider-version/service-account actor. The callback must
+authenticate provider evidence, support original-key lookup and honor cancellation.
+This is a provider seam, not permission to implement a domain store or workflow.
+
+Create a trusted binding from `ReconcileOperation()` and current actor policy.
+`ReconcileCommandRequest` binds the original intent, generation, observed status
+version and checkpoint step. The initial step is zero with an empty checkpoint.
+Subsequent requests use the previous opaque result checkpoint and next step;
+status versions advance once per committed observation. Never refresh fences or
+replace a command ID to retry an unknown/pending command. A new poll is a distinct
+authorized operation, not retry recovery of a previous command.
+
+`EnqueueService.Reconcile` queries exactly once outside SQL ownership and before
+kernel reservation, using the original persisted provider key rather than its
+new command ID. A restart decrypts retained cursor custody in exact scope.
+Historical exact replay returns its original result without lookup even after
+terminal erasure; current authorization is always required. Query failure,
+panic, timeout and `TransientFailure` produce no observation/progress and grant
+no resend permission. Transient settlement/retry hints are deliberately unsupported
+by this query operation rather than silently classified as rejection or dropped.
+UTC observation time is normalized to PostgreSQL microsecond precision.
+
+`RecoverReconciliation` uses the original command ID and exact authenticated
+scope, never a provider poll. Live pending remains pending; an expired reservation
+is marked not-committed only after the original coordinator's unanimous retained
+participant proof and failure audit. The selected query composition defaults
+its recovery `QueryPolicy` to the same current authorization service; an explicit
+configured policy remains authoritative. A known terminal failure record may
+accompany a classified error. Recovery never issues replacement commands or
+implicitly resets the generation/step; use exact replay to obtain a committed
+query's original domain result.
+
+Unknown observations retain uncertainty and encrypted payload/cursor custody;
+cursor exhaustion permits later polling only at the latest step. Definitive
+settlement erases cursor custody atomically, including settlement through other
+receipt/cancel paths. Retain envelope and digest keys while referenced. The
+deployment namespace key fixes opaque progress identity and cannot be rotated
+as a way to reset history. Expired message bearers do not prevent lookup of an
+unresolved provider effect. This public operation is not complete Queue worker
+composition, safe automatic retry admission or vendor interoperability evidence.
 
 `NewEnqueueService` composes the owned primary directory, renderer, native enqueue
 phase, audit, lifecycle, custody and original kernel coordinator from one borrowed

@@ -141,6 +141,8 @@ type ReceiptRecordResult struct {
 
 // ReconcileRequest binds a bounded provider query to an exact effect generation.
 // The queue must query outside transactions, then checkpoint under generation CAS.
+// Empty Checkpoint starts a lookup sequence; it does not reset durable progress
+// or grant authority to replay an older generation or resubmit the delivery.
 type ReconcileRequest struct {
 	TenantID       TenantID
 	IntentID       IntentID
@@ -385,7 +387,7 @@ func (s *service) ReceiptRecord(ctx context.Context, r ReceiptRecordRequest) (Re
 	return out, nil
 }
 func (s *service) Reconcile(ctx context.Context, r ReconcileRequest) (ReconcileResult, error) {
-	if !validTarget(r.TenantID, r.IntentID) || r.Generation == 0 || !printableASCII(r.Checkpoint, 1, 512) || !printableASCII(r.IdempotencyKey, 16, 128) {
+	if !validTarget(r.TenantID, r.IntentID) || r.Generation == 0 || r.Checkpoint != "" && !printableASCII(r.Checkpoint, 1, 512) || !printableASCII(r.IdempotencyKey, 16, 128) {
 		return ReconcileResult{}, ErrInvalidInput
 	}
 	w, stop, err := s.callContext(ctx)

@@ -208,6 +208,8 @@ func TestPublicMigrationSourcePreservesOwnedHistory(t *testing.T) {
 		}
 	}
 	for _, invalid := range []deliverypostgres.MigrationSource{
+		{Base: base, Version: 10, ReconciliationQueryVersion: 20},
+		{Base: base, Version: 10, WorkerVersion: 11, PolicyVersion: 12, KeyedVersion: 13, StateVersion: 14, ReceiptVersion: 16, ReconciliationVersion: 18, ReconciliationCommandVersion: 19, ReconciliationQueryVersion: 19},
 		{Base: base, Version: 10, ReconciliationCommandVersion: 19},
 		{Base: base, Version: 10, WorkerVersion: 11, PolicyVersion: 12, KeyedVersion: 13, StateVersion: 14, ReceiptVersion: 16, ReconciliationVersion: 18, ReconciliationCommandVersion: 18},
 		{Base: base, Version: 10, ReconciliationVersion: 18},
@@ -269,6 +271,16 @@ func TestReconciliationMigrationPreservesOptionalProfiles(t *testing.T) {
 			for n, m := range current {
 				if m.Checksum() != commands[n].Checksum() {
 					t.Fatal("reconciliation command rewrote installed history")
+				}
+			}
+			source.ReconciliationQueryVersion = 20
+			queries, err := source.Load(context.Background())
+			if err != nil || len(queries) != len(commands)+1 || queries[len(commands)].DownSQL() != "" {
+				t.Fatal("query forward profile", err)
+			}
+			for n, m := range commands {
+				if m.Checksum() != queries[n].Checksum() {
+					t.Fatal("query migration rewrote installed history")
 				}
 			}
 		}

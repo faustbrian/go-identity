@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Enable opt-in public original-key reconciliation with current service-actor
+  policy, bounded lookup outside transactions/reservations, encrypted scoped
+  restartable cursors and atomic original-command progress/status/audit/lifecycle.
+  Historical replay never queries or resubmits. Terminal observations and other
+  settlement paths erase cursor custody. Add a forward optional query migration
+  without changing installed checksums; transient query failure grants no retry.
+  Recover pending query commands through the original coordinator's current
+  policy and unanimous retained evidence without provider lookup or replay.
+
 - Add optional original-command reconciliation results and a protected local
   participant under the identity coordinator. Commit keyed progress, provider
   evidence, erasure, audit and lifecycle together; preserve historical replay

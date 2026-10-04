@@ -54,6 +54,10 @@ type MigrationSource struct {
 	// Requires ReconciliationVersion and must exceed it. Zero preserves every
 	// installed checksum; selection does not enable provider queries or Queue.
 	ReconciliationCommandVersion migrations.Version
+	// ReconciliationQueryVersion appends original-query commitments and separately
+	// erasable encrypted provider cursors. Requires ReconciliationCommandVersion
+	// and must exceed it. Zero preserves every installed migration checksum.
+	ReconciliationQueryVersion migrations.Version
 }
 
 var _ migrations.Source = MigrationSource{}
@@ -131,6 +135,12 @@ func (s MigrationSource) Load(ctx context.Context) ([]migrations.Migration, erro
 		}
 		additional++
 	}
+	if s.ReconciliationQueryVersion != 0 {
+		if s.ReconciliationCommandVersion == 0 || s.ReconciliationQueryVersion <= s.ReconciliationCommandVersion {
+			return nil, delivery.ErrInvalidInput
+		}
+		additional++
+	}
 	if len(history) < 1 || len(history)+additional > migrations.MaxMigrationFiles {
 		return nil, delivery.ErrInvalidInput
 	}
@@ -199,6 +209,9 @@ func (s MigrationSource) Load(ctx context.Context) ([]migrations.Migration, erro
 		if s.ReconciliationCommandVersion != 0 {
 			index--
 		}
+		if s.ReconciliationQueryVersion != 0 {
+			index--
+		}
 		result[index] = receipt
 	}
 	if s.ReceiptCommandVersion != 0 {
@@ -213,6 +226,9 @@ func (s MigrationSource) Load(ctx context.Context) ([]migrations.Migration, erro
 		if s.ReconciliationCommandVersion != 0 {
 			index--
 		}
+		if s.ReconciliationQueryVersion != 0 {
+			index--
+		}
 		result[index] = command
 	}
 	if s.ReconciliationVersion != 0 {
@@ -224,6 +240,9 @@ func (s MigrationSource) Load(ctx context.Context) ([]migrations.Migration, erro
 		if s.ReconciliationCommandVersion != 0 {
 			index--
 		}
+		if s.ReconciliationQueryVersion != 0 {
+			index--
+		}
 		result[index] = checkpoint
 	}
 	if s.ReconciliationCommandVersion != 0 {
@@ -231,7 +250,18 @@ func (s MigrationSource) Load(ctx context.Context) ([]migrations.Migration, erro
 		if err != nil {
 			return nil, delivery.ErrUnavailable
 		}
-		result[len(result)-1] = command
+		index := len(result) - 1
+		if s.ReconciliationQueryVersion != 0 {
+			index--
+		}
+		result[index] = command
+	}
+	if s.ReconciliationQueryVersion != 0 {
+		query, err := migrations.NewMigration(s.ReconciliationQueryVersion, "identity_delivery_reconciliation_queries", migrations.TransactionModeDefault, reconciliationQuerySchemaSQL, "")
+		if err != nil {
+			return nil, delivery.ErrUnavailable
+		}
+		result[len(result)-1] = query
 	}
 	return result, nil
 }

@@ -4,6 +4,10 @@
 
 ### Added
 
+- Reconciliation accepts an empty initial provider cursor without inventing
+  provider-specific progress. Nonempty cursors retain their ASCII/size bounds;
+  empty cursors do not reset durable fences or authorize resubmission.
+
 - Bounded provider outcome-query execution for reconciliation: original provider
   identity and generation binding, synchronous concurrency/deadline limits,
   redacted cursors and attributable-only observations. Query failures never

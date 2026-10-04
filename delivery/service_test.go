@@ -13,10 +13,11 @@ import (
 // This adapter double proves core admission only, not durable persistence,
 // authorization, CAS, encryption, provider authentication or interoperability.
 type serviceQueue struct {
-	enqueue func(context.Context, EnqueueRequest) (EnqueueResult, error)
-	backend QueueBackend
-	status  *StatusGetResult
-	cancel  *CancelResult
+	enqueue   func(context.Context, EnqueueRequest) (EnqueueResult, error)
+	backend   QueueBackend
+	status    *StatusGetResult
+	cancel    *CancelResult
+	reconcile func(context.Context, ReconcileRequest) (ReconcileResult, error)
 }
 
 func (q *serviceQueue) Backend() QueueBackend { return q.backend }
@@ -44,7 +45,10 @@ func (q *serviceQueue) Cancel(context.Context, CancelRequest) (CancelResult, err
 func (*serviceQueue) ReceiptRecord(context.Context, ReceiptRecordRequest) (ReceiptRecordResult, error) {
 	return ReceiptRecordResult{State: StateDelivered, Advanced: true}, nil
 }
-func (*serviceQueue) Reconcile(context.Context, ReconcileRequest) (ReconcileResult, error) {
+func (q *serviceQueue) Reconcile(ctx context.Context, r ReconcileRequest) (ReconcileResult, error) {
+	if q.reconcile != nil {
+		return q.reconcile(ctx, r)
+	}
 	return ReconcileResult{State: StateOutcomeUnknown}, nil
 }
 
@@ -202,6 +206,27 @@ func TestServiceOperationsRejectInvalidScopeAndGeneration(t *testing.T) {
 	processed, err := s.ProcessOne(context.Background(), ClaimRequest{TenantID: "tenant", WorkerID: "worker"})
 	if err != nil || processed.Claimed {
 		t.Fatal("empty worker claim")
+	}
+}
+
+func TestServiceReconcileStartsWithoutInventedProviderCursor(t *testing.T) {
+	r, _ := NewTemplateRenderer([]Template{plainTemplate()})
+	request := ReconcileRequest{TenantID: "tenant", IntentID: "synthetic-intent-0001", Generation: 1, IdempotencyKey: "synthetic-reconcile-0001"}
+	calls := 0
+	q := &serviceQueue{reconcile: func(ctx context.Context, got ReconcileRequest) (ReconcileResult, error) {
+		calls++
+		if got != request {
+			t.Fatal("reconciliation changed the initial snapshot")
+		}
+		if _, ok := ctx.Deadline(); !ok {
+			t.Fatal("unbounded initial reconciliation")
+		}
+		return ReconcileResult{State: StateOutcomeUnknown}, nil
+	}}
+	s, _ := New(DefaultConfig(), q, r, senderFunc(func(context.Context, Attempt) (DeliveryResult, error) { return DeliveryResult{}, nil }))
+	out, err := s.Reconcile(context.Background(), request)
+	if err != nil || calls != 1 || out.State != StateOutcomeUnknown || out.Retryable {
+		t.Fatal("initial reconciliation denied or admitted resend", err)
 	}
 }
 
