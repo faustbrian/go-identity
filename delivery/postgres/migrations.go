@@ -46,6 +46,10 @@ type MigrationSource struct {
 	// Requires ReceiptVersion and must exceed it. Zero retains installed history;
 	// it does not enable public provider authentication or Queue composition.
 	ReceiptCommandVersion migrations.Version
+	// ReconciliationVersion adds keyed immutable generation/checkpoint progress.
+	// Requires ReceiptVersion, above it and any ReceiptCommandVersion. It does
+	// not enable provider queries, cursor custody or public Queue composition.
+	ReconciliationVersion migrations.Version
 }
 
 var _ migrations.Source = MigrationSource{}
@@ -107,6 +111,12 @@ func (s MigrationSource) Load(ctx context.Context) ([]migrations.Migration, erro
 	}
 	if s.ReceiptCommandVersion != 0 {
 		if s.ReceiptVersion == 0 || s.ReceiptCommandVersion <= s.ReceiptVersion {
+			return nil, delivery.ErrInvalidInput
+		}
+		additional++
+	}
+	if s.ReconciliationVersion != 0 {
+		if s.ReceiptVersion == 0 || s.ReconciliationVersion <= s.ReceiptVersion || s.ReceiptCommandVersion != 0 && s.ReconciliationVersion <= s.ReceiptCommandVersion {
 			return nil, delivery.ErrInvalidInput
 		}
 		additional++
@@ -173,6 +183,9 @@ func (s MigrationSource) Load(ctx context.Context) ([]migrations.Migration, erro
 		if s.ReceiptCommandVersion != 0 {
 			index--
 		}
+		if s.ReconciliationVersion != 0 {
+			index--
+		}
 		result[index] = receipt
 	}
 	if s.ReceiptCommandVersion != 0 {
@@ -180,7 +193,18 @@ func (s MigrationSource) Load(ctx context.Context) ([]migrations.Migration, erro
 		if err != nil {
 			return nil, delivery.ErrUnavailable
 		}
-		result[len(result)-1] = command
+		index := len(result) - 1
+		if s.ReconciliationVersion != 0 {
+			index--
+		}
+		result[index] = command
+	}
+	if s.ReconciliationVersion != 0 {
+		checkpoint, err := migrations.NewMigration(s.ReconciliationVersion, "identity_delivery_reconciliation", migrations.TransactionModeDefault, reconciliationSchemaSQL, "")
+		if err != nil {
+			return nil, delivery.ErrUnavailable
+		}
+		result[len(result)-1] = checkpoint
 	}
 	return result, nil
 }

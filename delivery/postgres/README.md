@@ -7,6 +7,19 @@ is not a complete durable Queue or provider integration.
 
 ## Public admission
 
+The optional `MigrationSource.ReconciliationVersion` extends receipt storage
+with immutable, generation-scoped query checkpoints. It requires `ReceiptVersion`
+and a version above it and any selected `ReceiptCommandVersion`; cancellation
+and receipt-command profiles are not prerequisites. Earlier migration checksums
+remain unchanged. The private borrowed effect phase serializes checkpoint CAS
+with receipt state/erasure, preserves original results on replay, denies active
+worker leases and stale progress. Cursor exhaustion ends a query sequence, not
+an unresolved effect: a fresh poll can restart only at the exact latest step.
+Original earlier polling requests cannot reopen it. Only keyed cursor
+digests persist in this projection. This does not yet enable public reconciliation,
+recoverable cursor custody, provider querying or safe retry admission; those
+remain implementation work under the original kernel coordinator.
+
 `NewEnqueueService` composes the owned primary directory, renderer, native enqueue
 phase, audit, lifecycle, custody and original kernel coordinator from one borrowed
 PostgreSQL pool. Supply retained configuration, templates, the envelope service

@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Add optional forward reconciliation checkpoint storage and private borrowed
+  effect application. Fence original generation and keyed cursor progress,
+  commit provider evidence and terminal erasure together, and preserve original
+  query results on replay. Public query/cursor custody and retry admission remain
+  unfinished; installed migration histories remain unchanged. Cursor exhaustion
+  permits later polling of unresolved effects only at the latest checkpoint step.
+
 - Project authenticated acceptance and bounce evidence in public status,
   subsequent receipt settlement and cancellation without rewriting original
   worker results. Add opt-in metadata-only receipt tracking after callback

@@ -208,6 +208,9 @@ func TestPublicMigrationSourcePreservesOwnedHistory(t *testing.T) {
 		}
 	}
 	for _, invalid := range []deliverypostgres.MigrationSource{
+		{Base: base, Version: 10, ReconciliationVersion: 18},
+		{Base: base, Version: 10, WorkerVersion: 11, PolicyVersion: 12, KeyedVersion: 13, StateVersion: 14, ReceiptVersion: 16, ReconciliationVersion: 16},
+		{Base: base, Version: 10, WorkerVersion: 11, PolicyVersion: 12, KeyedVersion: 13, StateVersion: 14, ReceiptVersion: 16, ReceiptCommandVersion: 17, ReconciliationVersion: 17},
 		{Base: base, Version: 10, PolicyVersion: 12},
 		{Base: base, Version: 10, WorkerVersion: 11, PolicyVersion: 11},
 		{Base: base, Version: 10, WorkerVersion: 11, KeyedVersion: 13},
@@ -235,5 +238,27 @@ func TestPublicMigrationSourcePreservesOwnedHistory(t *testing.T) {
 	}
 	if _, err := (deliverypostgres.MigrationSource{}).Load(context.Background()); err == nil {
 		t.Fatal("zero migration source admitted")
+	}
+}
+
+func TestReconciliationMigrationPreservesOptionalProfiles(t *testing.T) {
+	for _, cancellation := range []migrations.Version{0, 15} {
+		for _, command := range []migrations.Version{0, 17} {
+			source := deliverypostgres.MigrationSource{Base: identitypostgres.MigrationSource{}, Version: 10, WorkerVersion: 11, PolicyVersion: 12, KeyedVersion: 13, StateVersion: 14, CancellationVersion: cancellation, ReceiptVersion: 16, ReceiptCommandVersion: command}
+			previous, err := source.Load(context.Background())
+			if err != nil {
+				t.Fatal(err)
+			}
+			source.ReconciliationVersion = 18
+			current, err := source.Load(context.Background())
+			if err != nil || len(current) != len(previous)+1 || current[len(previous)].DownSQL() != "" {
+				t.Fatal("reconciliation forward profile", err)
+			}
+			for n, m := range previous {
+				if m.Checksum() != current[n].Checksum() {
+					t.Fatal("reconciliation rewrote installed history")
+				}
+			}
+		}
 	}
 }

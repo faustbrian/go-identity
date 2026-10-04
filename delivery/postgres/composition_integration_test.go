@@ -1140,6 +1140,24 @@ func testPublicComposition(t *testing.T, mode string) {
 			t.Fatal("populated native receipt migration", err)
 		}
 		testNativeReceipt(t, ctx, pool, owned, repo, auditing, lifecycle, contributor, receipt.Binding)
+		var beforeReceipts int
+		if err := pool.QueryRow(ctx, `SELECT count(*) FROM identity.delivery_receipts`).Scan(&beforeReceipts); err != nil || beforeReceipts == 0 {
+			t.Fatal("populated receipt checkpoint fixture", err)
+		}
+		checkpointRunner, err := migrations.NewRunner(MigrationSource{Base: identitypostgres.MigrationSource{}, Version: 10, WorkerVersion: 11, PolicyVersion: 12, KeyedVersion: 13, StateVersion: 14, ReceiptVersion: 15, ReceiptCommandVersion: 16, ReconciliationVersion: 17}, backend)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := checkpointRunner.Up(ctx); err != nil {
+			t.Fatal("populated reconciliation extension", err)
+		}
+		if _, err := checkpointRunner.Up(ctx); err != nil {
+			t.Fatal("unchanged reconciliation migration replay", err)
+		}
+		var afterReceipts, checkpoints int
+		if err := pool.QueryRow(ctx, `SELECT (SELECT count(*) FROM identity.delivery_receipts),(SELECT count(*) FROM identity.delivery_reconciliation_checkpoints)`).Scan(&afterReceipts, &checkpoints); err != nil || beforeReceipts != afterReceipts || checkpoints != 0 {
+			t.Fatal("reconciliation migration rewrote existing evidence", err)
+		}
 	}
 	if strings.HasPrefix(mode, "native-cancel") {
 		cancelRunner, err := migrations.NewRunner(MigrationSource{Base: identitypostgres.MigrationSource{}, Version: 10, WorkerVersion: 11, PolicyVersion: 12, KeyedVersion: 13, StateVersion: 14, CancellationVersion: 15}, backend)
