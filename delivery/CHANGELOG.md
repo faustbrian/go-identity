@@ -4,6 +4,10 @@
 
 ### Added
 
+- Email HTML fragments with escaped text/attributes, whole-URL origin binding,
+  canonical HTML5 tokens and a non-active element/attribute profile. SMS remains
+  plain text; scripts, CSS, events and ambiguous contexts fail closed.
+
 - Immutable versioned plain-text templates with exact typed variable schemas,
   ordered channel/locale selection, explicit HTTPS origins, header-injection
   denial and bounded output. HTML and durable delivery remain in development.

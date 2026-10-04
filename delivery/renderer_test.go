@@ -128,7 +128,7 @@ func TestRendererCatalogAndZeroBounds(t *testing.T) {
 	for _, mutate := range []func(*Template){
 		func(t *Template) { t.ID = "" }, func(t *Template) { t.Version = 0 },
 		func(t *Template) { t.Channel = 0 }, func(t *Template) { t.Locale = "" },
-		func(t *Template) { t.ContentType = "text/html" }, func(t *Template) { t.Body = "" },
+		func(t *Template) { t.ContentType = "application/javascript" }, func(t *Template) { t.Body = "" },
 		func(t *Template) { t.MaxRenderedBytes = 0 }, func(t *Template) { t.MaxRenderedBytes = 262145 },
 		func(t *Template) { t.Subject = strings.Repeat("s", 999) },
 		func(t *Template) { t.RequiredVariables = []string{"name", "name"} },

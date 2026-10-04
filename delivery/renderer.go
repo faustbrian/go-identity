@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"html"
 	"log/slog"
 	"net"
 	"net/url"
@@ -22,9 +23,9 @@ type VariableSchema struct {
 }
 
 // Template is an immutable versioned channel/locale declaration. The current
-// renderer supports text/plain with literal text and {{.name}} substitutions
-// only: no functions, loops, nested lookups or dynamically selected templates.
-// HTML is deliberately rejected until its stricter context policy is implemented.
+// renderer supports text/plain and text/html with literal text and {{.name}}
+// substitutions only: no functions, loops, nested lookups or dynamic templates.
+// HTML uses a non-active email vocabulary; scripts/styles/events are rejected.
 // Sources are each bounded to262144 UTF-8 bytes (subject998); schema64, origins32.
 // MaxRenderedBytes bounds subject plus body, up to262144 bytes. URLs must use an
 // exact declared HTTPS origin, independent of whether they occur in subject/body.
@@ -64,13 +65,17 @@ type templateKey struct {
 	channel Channel
 	locale  string
 }
-type segment struct{ text, variable string }
+type segment struct {
+	text, variable string
+	escape         bool
+}
 type compiledTemplate struct {
 	key           templateKey
 	subject, body []segment
 	schema        map[string]VariableSchema
 	origins       map[string]bool
 	limit         int
+	contentType   string
 }
 
 // TemplateRenderer retains only a validated immutable catalog. Concurrent Render
@@ -89,10 +94,10 @@ func NewTemplateRenderer(templates []Template) (*TemplateRenderer, error) {
 	}
 	r := &TemplateRenderer{catalog: make(map[templateKey]compiledTemplate, len(templates))}
 	for _, t := range templates {
-		if !printableASCII(t.ID, 1, 128) || t.Version == 0 || !validChannel(t.Channel) || !localeShape(t.Locale) || t.ContentType != "text/plain" || !boundedText(t.Subject, 0, 998) || !boundedText(t.Body, 1, 262144) || t.MaxRenderedBytes == 0 || t.MaxRenderedBytes > 262144 || len(t.RequiredVariables) > 64 || len(t.VariableSchema) != len(t.RequiredVariables) || len(t.AllowedOrigins) > 32 || t.Channel == ChannelSMS && t.Subject != "" {
+		if !printableASCII(t.ID, 1, 128) || t.Version == 0 || !validChannel(t.Channel) || !localeShape(t.Locale) || (t.ContentType != "text/plain" && t.ContentType != "text/html") || !boundedText(t.Subject, 0, 998) || !boundedText(t.Body, 1, 262144) || t.MaxRenderedBytes == 0 || t.MaxRenderedBytes > 262144 || len(t.RequiredVariables) > 64 || len(t.VariableSchema) != len(t.RequiredVariables) || len(t.AllowedOrigins) > 32 || t.Channel == ChannelSMS && (t.Subject != "" || t.ContentType != "text/plain") {
 			return nil, ErrInvalidInput
 		}
-		c := compiledTemplate{key: templateKey{t.ID, t.Version, t.Channel, t.Locale}, schema: make(map[string]VariableSchema), origins: make(map[string]bool), limit: int(t.MaxRenderedBytes)}
+		c := compiledTemplate{key: templateKey{t.ID, t.Version, t.Channel, t.Locale}, schema: make(map[string]VariableSchema), origins: make(map[string]bool), limit: int(t.MaxRenderedBytes), contentType: t.ContentType}
 		if _, duplicate := r.catalog[c.key]; duplicate {
 			return nil, ErrInvalidInput
 		}
@@ -135,7 +140,12 @@ func NewTemplateRenderer(templates []Template) (*TemplateRenderer, error) {
 		if c.subject, err = compileText(t.Subject, c.schema); err != nil {
 			return nil, err
 		}
-		if c.body, err = compileText(t.Body, c.schema); err != nil {
+		if t.ContentType == "text/html" {
+			c.body, err = compileHTML(t.Body, c.schema, c.origins)
+		} else {
+			c.body, err = compileText(t.Body, c.schema)
+		}
+		if err != nil {
 			return nil, err
 		}
 		r.catalog[c.key] = c
@@ -154,6 +164,17 @@ func originKey(u *url.URL) string {
 // Only a closed non-executable subset is retained; the standard parser never
 // executes input, and its source-bearing errors never cross the public boundary.
 func compileText(source string, schema map[string]VariableSchema) ([]segment, error) {
+	out, err := compileSegments(source, schema)
+	if err != nil {
+		return nil, err
+	}
+	if err := checkPlainURLs(out, schema); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func compileSegments(source string, schema map[string]VariableSchema) ([]segment, error) {
 	t, err := template.New("message").Parse(source)
 	if err != nil || len(t.Templates()) != 1 {
 		return nil, ErrInvalidInput
@@ -179,6 +200,10 @@ func compileText(source string, schema map[string]VariableSchema) ([]segment, er
 			return nil, ErrInvalidInput
 		}
 	}
+	return out, nil
+}
+
+func checkPlainURLs(out []segment, schema map[string]VariableSchema) error {
 	// Plain-text URLs must occupy an entire whitespace-delimited token. Otherwise
 	// authorized inputs can become a different host when concatenated with either
 	// template literals or another variable, before a mail client linkifies them.
@@ -187,19 +212,20 @@ func compileText(source string, schema map[string]VariableSchema) ([]segment, er
 			continue
 		}
 		if i > 0 && (out[i-1].variable != "" || out[i-1].text == "" || !plainSpace(out[i-1].text[len(out[i-1].text)-1])) {
-			return nil, ErrInvalidInput
+			return ErrInvalidInput
 		}
 		if i+1 < len(out) && (out[i+1].variable != "" || out[i+1].text == "" || !plainSpace(out[i+1].text[0])) {
-			return nil, ErrInvalidInput
+			return ErrInvalidInput
 		}
 	}
-	return out, nil
+	return nil
 }
 
 func plainSpace(b byte) bool { return b == ' ' || b == '\t' || b == '\r' || b == '\n' }
 
 // Render validates exact schema/origins before rendering. Subject controls are
-// forbidden after substitution; body text is preserved verbatim. The combined
+// forbidden after substitution; plain body text is preserved, HTML substitutions
+// are escaped in the compiled final context. The combined
 // byte bound is checked before each append, and cancellation between segments.
 // Errors reveal no recipient, template source, variable content or availability.
 func (r *TemplateRenderer) Render(ctx context.Context, m Message) (RenderedMessage, error) {
@@ -261,7 +287,7 @@ func (r *TemplateRenderer) Render(ctx context.Context, m Message) (RenderedMessa
 	if body == "" {
 		return RenderedMessage{}, ErrInvalidInput
 	}
-	return RenderedMessage{Channel: m.Channel, Locale: c.key.locale, Subject: subject, Body: body, ContentType: "text/plain"}, nil
+	return RenderedMessage{Channel: m.Channel, Locale: c.key.locale, Subject: subject, Body: body, ContentType: c.contentType}, nil
 }
 
 func renderSegments(ctx context.Context, parts []segment, values map[string]string, limit int) (string, error) {
@@ -273,6 +299,9 @@ func renderSegments(ctx context.Context, parts []segment, values map[string]stri
 		s := part.text
 		if part.variable != "" {
 			s = values[part.variable]
+			if part.escape {
+				s = html.EscapeString(s)
+			}
 		}
 		if len(s) > limit-out.Len() {
 			return "", ErrInvalidInput

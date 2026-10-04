@@ -2,7 +2,7 @@
 
 Experimental provider-neutral identity messaging, targeting Go 1.27. The
 current development slice validates typed intents and renders versioned plain
-text with protected diagnostics. It does **not** yet render HTML, enqueue,
+text and non-active HTML with protected diagnostics. It does **not** yet enqueue,
 send, or reconcile messages. No process-memory
 queue is offered as a production durability boundary.
 
@@ -68,7 +68,36 @@ it does not authorize subdomains. Rendering performs no network requests.
 URL substitutions must occupy whole whitespace-delimited tokens; adjacent
 literals or variables cannot turn an authorized URL into a different hostname.
 Canceled contexts fail without returning partial content. Errors are redacted.
-HTML context validation/escaping remains required work, not a plain-text fallback.
+HTML never falls back to plain text.
+
+## HTML email profile
+
+Email templates may declare `text/html`; SMS remains plain text. The closed
+substitution language remains unchanged. HTML5 tokens are validated and
+re-serialized before retention, so original markup is never sent directly.
+HTML substitutions escape ampersands, angle brackets and quotes in both text
+and quoted attribute contexts. Subjects always retain plain/header behavior.
+
+The profile supports common paragraph, heading, list, table, image and inline
+formatting elements. Scripts, styles (including inline CSS), event handlers,
+SVG/MathML, forms, frames, comments, doctypes and executable/foreign contexts
+are rejected rather than sanitized or silently enabled. It is an email fragment
+profile, not an arbitrary-document or CSS rendering engine.
+
+Links are limited to `a[href]` and images to `img[src]`: each value must be a
+whole URL variable or a literal HTTPS URL at a declared origin. Concatenated,
+relative, data/javascript and multi-candidate URLs are rejected. Non-URL
+variables can appear in text and `title`, `alt`, `aria-label`; structural/layout
+attributes must remain static. Unknown attributes are rejected. HTML5 keeps
+the first duplicate attribute; only its canonical token is retained/sent,
+never the discarded attribute. A variable discarded by tokenization fails
+construction rather than losing its substitution silently.
+
+Sources retain their existing bounds; HTML has at most 65536 tokens, 32
+attributes per tag and 4096 bytes per attribute. Token buffers are capped at
+524288 bytes. Final combined output limits apply after escaping/canonicalization.
+The foundational HTML5 tokenizer is pinned to `golang.org/x/net v0.59.0`
+(BSD-3-Clause, source tag checksum in `go.sum`); it is not an auth engine.
 
 Ordinary fmt/slog output is redacted for messages, recipients and variables,
 including values marked `Sensitive=false`. JSON/text serialization refuses with
@@ -79,7 +108,7 @@ bypasses redaction. No physical memory erasure is claimed.
 
 This is an additive development module, not a complete production messaging
 service. Durable workflow/outbox integration, encrypted payload retention,
-HTML context-aware rendering, bounded sender callbacks,
+bounded sender callbacks,
 status/cancellation, authenticated receipts and reconciliation remain required.
 Applications ultimately supply only bounded sender callbacks, not replacement
 domain queues or workflow orchestration. Existing identity primitives are unchanged.
