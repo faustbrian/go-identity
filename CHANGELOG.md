@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Build protected delivery worker events through the shared typed security
+  profile, preserving original-command causation and authoritative status
+  versions without confusing local bookkeeping with provider confirmation.
+
 - Register an explicit unpadded HIBP security profile while preserving the
   existing padded profile and rejecting unknown privacy-profile identifiers.
 

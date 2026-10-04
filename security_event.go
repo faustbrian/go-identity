@@ -135,7 +135,7 @@ func NewIdentitySecurityEventV1(wall clock.Clock) (*IdentitySecurityEventV1, err
 	if e != nil {
 		return nil, ErrInvalidSecurityEvent
 	}
-	r, e := audit.NewRedactor(audit.RedactionRules{DropDescription: true, DropNetworkOrigin: true, DropUserAgent: true, AllowedAttributes: []string{"identity.profile", "command.id", "retention.class", "provider.kind", "provider.profile", "provider.version", "provider.result"}})
+	r, e := audit.NewRedactor(audit.RedactionRules{DropDescription: true, DropNetworkOrigin: true, DropUserAgent: true, AllowedAttributes: []string{"identity.profile", "command.id", "retention.class", "provider.kind", "provider.profile", "provider.version", "provider.result", "aggregate.type", "aggregate.id", "aggregate.before_version", "aggregate.after_version"}})
 	if e != nil {
 		return nil, ErrInvalidSecurityEvent
 	}
