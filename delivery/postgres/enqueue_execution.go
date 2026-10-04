@@ -108,6 +108,31 @@ func (e *enqueueExecutor) allow(ctx context.Context, b identity.CommandBinding, 
 	if b.PolicyID != e.policyID || b.PolicyVersion != e.policyVersion || dc.PolicyRevision != authorization.Revision(e.policyVersion) || dc.CorrelationID != b.CorrelationID || r.Action != authorization.Action(b.OperationID) || r.Tenant != authorization.TenantID(b.TenantID) || r.Subject.ID != authorization.SubjectID(b.ActorID) || r.Subject.Kind != b.ActorKind || r.Resource.Type != "identity.user" || r.Resource.ID != authorization.ResourceID(b.UserID) || len(r.Subject.Groups) > 32 {
 		return delivery.ErrForbidden
 	}
+	if err := boundedDecisionContext(dc); err != nil {
+		return err
+	}
+	dc = dc.Clone()
+	dc.Request.Environment.Time = time.Now().UTC()
+	decision, err := e.authorize.Decide(ctx, dc)
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+	if err != nil {
+		return delivery.ErrUnavailable
+	}
+	if decision.Outcome != authorization.Allow || decision.Revision != dc.PolicyRevision {
+		return delivery.ErrForbidden
+	}
+	return nil
+}
+
+// Shared admission bounds precede cloning at both workflow and worker policy
+// boundaries. Shape and a policy revision are never authentication evidence.
+func boundedDecisionContext(dc authorization.DecisionContext) error {
+	r := dc.Request
+	if len(r.Subject.Groups) > 32 {
+		return delivery.ErrInvalidInput
+	}
 	// Bound the entire input before Clone or dispatch. CollectionLength avoids
 	// allocating a caller-sized copy through StringSet before rejecting it.
 	remaining := 64 * 1024
@@ -157,18 +182,6 @@ func (e *enqueueExecutor) allow(ctx context.Context, b identity.CommandBinding, 
 	}
 	if dc.Validate() != nil {
 		return delivery.ErrInvalidInput
-	}
-	dc = dc.Clone()
-	dc.Request.Environment.Time = time.Now().UTC()
-	decision, err := e.authorize.Decide(ctx, dc)
-	if ctx.Err() != nil {
-		return ctx.Err()
-	}
-	if err != nil {
-		return delivery.ErrUnavailable
-	}
-	if decision.Outcome != authorization.Allow || decision.Revision != dc.PolicyRevision {
-		return delivery.ErrForbidden
 	}
 	return nil
 }

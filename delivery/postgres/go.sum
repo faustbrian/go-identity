@@ -41,6 +41,8 @@ github.com/faustbrian/go-correlation v1.0.0 h1:2Z+tlY59nNBdlGFBadPTeuDo9/029IvS/
 github.com/faustbrian/go-correlation v1.0.0/go.mod h1:upLcV0fqKC8IUUx11R6c69CVwC3DO1EeXsw2BQU2PKE=
 github.com/faustbrian/go-identifier v1.0.0 h1:5lXZbS2wK4NelWv4ekRocwOwjkWt1ch/nh7TScxsFO4=
 github.com/faustbrian/go-identifier v1.0.0/go.mod h1:Q2yS7Hk4N4i9Wd3OmPQGh657SHtA1IjvtT4PllphNlY=
+github.com/faustbrian/go-identity/delivery v0.0.0-20261004173403-e43075497ea4 h1:3sdFfj1QXD0Oy1G27ryoUgqsoUiWQnMYuMNkjCzXWRY=
+github.com/faustbrian/go-identity/delivery v0.0.0-20261004173403-e43075497ea4/go.mod h1:jCHpYW4xZjy8HHgU1zAiedMBVn91SCDy5kJqOUPpJyc=
 github.com/faustbrian/go-jsonrpc v1.0.0 h1:iQ/YxMkjKBlWyTPCYxQzuBBIV/73ImYWKNVGG7hZr8s=
 github.com/faustbrian/go-jsonrpc v1.0.0/go.mod h1:gdYA/wi8eAeptM4Lf9qwPA6eImChPa2Ng9/+/UvpOPQ=
 github.com/faustbrian/go-service v1.0.0 h1:sxfwxfsHxD2EjsDthb+u29xpp3qMtUSu/LT5lPd8e4Q=
@@ -106,10 +108,10 @@ github.com/shirou/gopsutil/v4 v4.26.5/go.mod h1:LZ6ewCSkBqUpvSOf+LsTGnRinC6iaNUN
 github.com/sirupsen/logrus v1.9.4 h1:TsZE7l11zFCLZnZ+teH4Umoq5BhEIfIzfRDZ1Uzql2w=
 github.com/sirupsen/logrus v1.9.4/go.mod h1:ftWc9WdOfJ0a92nsE2jF5u5ZwH8Bv2zdeOC42RjbV2g=
 github.com/stretchr/objx v0.1.0/go.mod h1:HFkY916IF+rwdDfMAkV7OtwuqBVzrE8GR6GFx+wExME=
-github.com/stretchr/testify v1.3.0/go.mod h1:M5WIy9Dh21IEIfnGCwXGc5bZfKNJtfHm1UVUgZn+9EI=
-github.com/stretchr/testify v1.7.0/go.mod h1:6Fq8oRcR53rry900zMqJjRRixrwX3KX962/h/Wwjteg=
 github.com/stretchr/testify v1.11.1 h1:7s2iGBzp5EwR7/aIZr8ao5+dra3wiQyKjjFuvgVKu7U=
 github.com/stretchr/testify v1.11.1/go.mod h1:wZwfW3scLgRK+23gO65QZefKpKQRnfz6sD981Nm4B6U=
+github.com/stretchr/testify v1.3.0/go.mod h1:M5WIy9Dh21IEIfnGCwXGc5bZfKNJtfHm1UVUgZn+9EI=
+github.com/stretchr/testify v1.7.0/go.mod h1:6Fq8oRcR53rry900zMqJjRRixrwX3KX962/h/Wwjteg=
 github.com/testcontainers/testcontainers-go v0.43.0 h1:oEQx5MW2DGd9z3AeEQfB2lPM0eLs7ztyaGRu75bFo5A=
 github.com/testcontainers/testcontainers-go v0.43.0/go.mod h1:+VxkT2NQnKOZPKi6praMuMKYHYyOGXr0XSBSlSMCzFo=
 github.com/testcontainers/testcontainers-go/modules/postgres v0.43.0 h1:ShNOFYAF4lKHvdIG258hi69bSxC88uXnxJkJvNs/IVs=

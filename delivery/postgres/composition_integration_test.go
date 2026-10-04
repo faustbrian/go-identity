@@ -36,7 +36,7 @@ func TestPublicContributorOriginalCoordinatorComposition(t *testing.T) {
 	if _, err := rolePool.Exec(ctx, auditpostgres.FreshInstallPreflightSQL()); err != nil {
 		t.Fatal("owned audit preflight failed")
 	}
-	for _, mode := range []string{"committed", "no-op", "delivery-failure", "native-committed", "native-owned", "public-owned", "public-state", "public-cancel", "public-receipt", "public-reconcile", "native-compatible-custody", "native-no-op", "native-missing", "native-failure", "native-cancel", "native-cancel-noop", "native-receipt", "native-reconcile"} {
+	for _, mode := range []string{"committed", "no-op", "delivery-failure", "native-committed", "native-owned", "public-owned", "public-state", "public-cancel", "public-receipt", "public-reconcile", "public-worker", "native-compatible-custody", "native-no-op", "native-missing", "native-failure", "native-cancel", "native-cancel-noop", "native-receipt", "native-reconcile"} {
 		t.Run(mode, func(t *testing.T) { testPublicComposition(t, mode) })
 	}
 }
@@ -160,7 +160,7 @@ func testPublicComposition(t *testing.T, mode string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if mode == "public-owned" || mode == "public-state" || mode == "public-cancel" || mode == "public-receipt" || mode == "public-reconcile" {
+	if mode == "public-owned" || mode == "public-state" || mode == "public-cancel" || mode == "public-receipt" || mode == "public-reconcile" || mode == "public-worker" {
 		runner, err := migrations.NewRunner(MigrationSource{Base: identitypostgres.MigrationSource{}, Version: 10, WorkerVersion: 11, PolicyVersion: 12, KeyedVersion: 13}, backend)
 		if err != nil {
 			t.Fatal(err)
@@ -192,7 +192,13 @@ func testPublicComposition(t *testing.T, mode string) {
 		})
 		config := EnqueueConfig{Custody: ContributorConfig{Deployment: "test", CurrentDigestKeyVersion: 1, RetainedDigestKeys: map[uint32][32]byte{1: {3}}, ActiveEnvelopeKeyID: "envelope-a", PreparationTimeout: time.Second, ProviderProfiles: map[uint64]ProviderProfile{1: {Provider: "test-provider", PolicyVersion: 1}}}, Coordinator: identitypostgres.CoordinatorConfig{MaximumDuration: 2 * time.Second, LeaseDuration: time.Minute, CurrentFingerprintKeyVersion: 1, RetainedFingerprintKeys: map[uint32][32]byte{1: {1}}}, PolicyID: "policy", PolicyVersion: 1, AuditRetentionVersion: 1, Timeout: 2 * time.Second, NamespaceKey: [32]byte{7}, Policies: map[uint64]delivery.Config{1: delivery.DefaultConfig()}}
 		templates := []delivery.Template{{ID: "verify", Version: 1, Channel: delivery.ChannelEmail, Locale: "en", ContentType: "text/plain", Subject: "Verification", Body: "Code: {{.code}}", MaxRenderedBytes: 1024, RequiredVariables: []string{"code"}, VariableSchema: []delivery.VariableSchema{{Name: "code", Kind: "code", Sensitive: true}}}}
-		if mode == "public-state" || mode == "public-cancel" || mode == "public-receipt" || mode == "public-reconcile" {
+		if mode == "public-worker" {
+			profile := delivery.DefaultConfig()
+			profile.Production = true
+			config.Policies[1] = profile
+			config.Custody.ProviderProfiles[2] = ProviderProfile{Provider: "other-provider", PolicyVersion: 1}
+		}
+		if mode == "public-state" || mode == "public-cancel" || mode == "public-receipt" || mode == "public-reconcile" || mode == "public-worker" {
 			config.StateTracking = true
 			if _, err := NewEnqueueService(ctx, owned, config, contributor.store.codec.service, policy, templates); !errors.Is(err, delivery.ErrUnavailable) {
 				t.Fatal("selected tracking admitted absent migration", err)
@@ -293,6 +299,10 @@ func testPublicComposition(t *testing.T, mode string) {
 				t.Fatal("query migration/configuration changed original enqueue replay")
 			}
 			testPublicReconciliation(t, ctx, pool, owned, public, config, policy, templates, request, first, queryFixture, &permit)
+			return
+		}
+		if mode == "public-worker" {
+			testPublicWorker(t, ctx, pool, public, config, request, first, &permit)
 			return
 		}
 		if config.Cancellation {

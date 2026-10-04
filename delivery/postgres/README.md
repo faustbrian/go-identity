@@ -107,6 +107,42 @@ the caller retains ownership of the pool and dependencies. Full public
 cancellation, authenticated receipt/reconciliation and worker composition remain
 under development.
 
+## Public processing
+
+Call `EnqueueService.NewWorker(WorkerConfig, Sender)` once per configured
+tenant/worker/provider profile. Supply a trusted authenticated service-account
+`Scope`, action `identity.delivery.process`, resource type
+`identity.delivery-worker` with the exact worker name as its ID, a correlation
+ID and the service's current policy revision. This is deployment composition,
+not HTTP input or permission to authenticate by an ID. Current authorization
+must explicitly permit the worker; the adapter adds reserved `delivery.provider`
+and `delivery.provider-config-version` attributes. Caller overrides are rejected.
+
+The worker uses the selected provider's **retained** retry policy, callback
+timeout and concurrency limit, not the latest policy. Multiple provider versions
+may share a retry policy but cannot claim or complete one another's effects.
+`Worker.ProcessOne(ctx)` runs at most one committed lease/send/complete cycle.
+Capacity is acquired before leasing; the Sender receives the immutable original
+rendering, expiry and effect idempotency key outside SQL transactions/locks.
+Acceptance is not delivery. Transient no-success evidence schedules a bounded
+retry; ambiguous invocation remains unknown and is never blindly resubmitted.
+
+`Worker.Claim` and `Worker.Complete` expose the same authorized direct-worker
+boundary. A direct caller owns bounded provider invocation and must retain the
+exact worker/intent/generation/evidence for completion replay. Prefer ProcessOne
+unless that explicit scheduling boundary is necessary. Missing current policy
+or uncertain completion acknowledgement is not proof of provider failure.
+
+Authorization is reevaluated before leasing, after opening committed custody
+and before completion. Denial after leasing prevents Sender and records bounded
+owned no-invocation cleanup when possible; cleanup uncertainty leaves the lease
+recoverable, not sendable. No background retry loop is created. Keep pool,
+authorization, envelope keys, retained profiles and Sender alive while using the
+worker. Production policy rejects a missing or capture Sender.
+
+This public processing composition completes an owned worker path, not the
+remaining all-method `delivery.Queue` facade or package release gates.
+
 ## Authorized status
 
 `EnqueueService.StatusGet` accepts the core status request, an exact target user

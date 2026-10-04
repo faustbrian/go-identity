@@ -8,7 +8,7 @@ require (
 	github.com/faustbrian/go-authorization v1.0.1-0.20261001103722-a74c24b38463
 	github.com/faustbrian/go-clock v1.0.0
 	github.com/faustbrian/go-identity v0.0.0-20261004031955-f4e6d916cd18
-	github.com/faustbrian/go-identity/delivery v0.0.0-20261004031955-f4e6d916cd18
+	github.com/faustbrian/go-identity/delivery v0.0.0-20261004173403-e43075497ea4
 	github.com/faustbrian/go-identity/postgres v0.0.0-20261004044757-c3d7931906e0
 	github.com/faustbrian/go-migrations/v3 v3.0.2-0.20261001014304-a461b18b6b24
 	github.com/faustbrian/go-postgres v1.1.1-0.20260912090843-61261695bcc7

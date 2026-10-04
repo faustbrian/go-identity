@@ -40,9 +40,22 @@ func TestRetainedDeliveryPolicyRestartRotationAndConflict(t *testing.T) {
 	if err := persistInTestTransaction(ctx, s, []preparedIntent{prepared}, tx); err != nil || tx.Commit(ctx) != nil {
 		t.Fatal("intent admission", err)
 	}
+	// QA4: two provider versions may share a retry policy. A worker's transport
+	// profile must still not acquire another provider's frozen effect.
+	otherProvider, err := policies.worker(1, s.codec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	otherProvider.providerVersion = 2
+	if claim, err := otherProvider.Claim(ctx, delivery.ClaimRequest{TenantID: "tenant-a", WorkerID: "worker"}); err != nil || claim.Claimed {
+		t.Fatal("other provider sharing policy acquired effect", err)
+	}
 	claim, err := original.Claim(ctx, delivery.ClaimRequest{TenantID: "tenant-a", WorkerID: "worker"})
 	if err != nil || !claim.Claimed {
 		t.Fatal("original worker claim", err)
+	}
+	if _, err := otherProvider.Complete(ctx, delivery.CompleteRequest{TenantID: "tenant-a", IntentID: claim.Attempt.IntentID, WorkerID: "worker", Generation: 1}); !errors.Is(err, delivery.ErrConflict) {
+		t.Fatal("other provider sharing policy completed effect", err)
 	}
 	changed := delivery.DefaultConfig()
 	changed.Attempts = 1

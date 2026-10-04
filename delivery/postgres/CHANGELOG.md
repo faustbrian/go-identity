@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Owned public worker composition from an existing admission service, with
+  current service-account policy before leasing, after custody opening and
+  before completion. Exact retained provider and policy versions govern sends,
+  retries and completion replay, including providers sharing a retry policy.
+  Sender runs after committed lease acquisition, outside SQL ownership; unknown
+  sends remain unretryable. Full Queue facade and release verification remain
+  in development.
+
 - Enable opt-in public original-key reconciliation with current service-actor
   policy, bounded lookup outside transactions/reservations, encrypted scoped
   restartable cursors and atomic original-command progress/status/audit/lifecycle.
