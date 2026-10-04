@@ -62,6 +62,12 @@ the complete base and an unused higher version instead. Existing kernel SQL and
 checksums are preserved. Install audit/lifecycle/outbox dependencies through
 their owned migration sources; this module supplies no destructive down SQL.
 
+Select `WorkerVersion: 11` (or an unused version above `Version`) to append the
+delivery-domain attempt extension. Zero preserves the previous admission-only
+history and its checksums. The extension creates bounded lease/generation and
+confidential outcome checkpoints; it does not activate a complete public Queue.
+Migration lock/statement budgets are 5s/30s and failure rolls back atomically.
+
 An owned authenticated workflow calls `Contributor.Prepare` before opening the
 original transaction. `PreparedDelivery.Plan` returns independent safe metadata
 for `CommandPlan.Delivery`; enlist the exact contributor pointer last. After the
@@ -103,9 +109,23 @@ currently prohibits deleting/truncating replay bindings; final retention and
 legal-hold retirement remain unfinished. Recovery does not reconstruct a
 kernel success receipt or perform provider work.
 
-The owned Queue, authenticated workflow admission,
-workflow-level idempotency scope, lease/generation fencing, attempts, authenticated
-receipts, reconciliation, cancellation and terminal erasure are unfinished.
+Private processing now claims one tenant-bound effect with database-time
+skip-locked fencing, commits its attempt before decryption and invokes no Sender
+under a transaction. Lost leases become outcome-unknown, never blind retries.
+Completion reuses the public bounded retry policy, generation-CASes scheduling
+and erasure together, and fingerprints private evidence for exact replay.
+The first attempt pins the runtime retry/lease configuration digest; later
+claims/completions reject changed settings rather than reinterpret its policy.
+Admission-time retained policy registration still belongs to the unfinished
+authenticated Queue composition, not this private worker seam.
+Acceptance is retained as acceptance, not delivered; original expiry erases
+custody without fabricating provider failure. The private store is not an
+application-provided adapter or a usable public Queue. The generic workflow and
+outbox remain their public owners; this extension owns only delivery effects.
+
+The complete owned Queue, authenticated workflow admission,
+workflow-level idempotency scope, heartbeat/release, authenticated receipts,
+reconciliation, public cancellation and final retention are unfinished.
 Real PostgreSQL owner-level tests cover transactional rollback, concurrent
 duplicate admission, randomized-custody replay, original-command FK isolation,
 outbox failure rollback and terminal erasure. They do not yet prove full public

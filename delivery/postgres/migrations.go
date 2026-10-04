@@ -16,12 +16,17 @@ import (
 type MigrationSource struct {
 	Base    migrations.Source
 	Version migrations.Version
+	// WorkerVersion optionally appends the forward delivery-attempt extension.
+	// Zero preserves the existing admission-only history; a selected version
+	// must be strictly above Version. Neither selection exposes a usable Queue
+	// until that adapter's complete authenticated contract is implemented.
+	WorkerVersion migrations.Version
 }
 
 var _ migrations.Source = MigrationSource{}
 
-// Load preserves every original base migration and appends one forward-only,
-// atomic migration. It rejects absent/unordered/oversized bases and version
+// Load preserves every original base migration and appends forward-only atomic
+// admission and optionally worker migrations. It rejects invalid bases and version
 // collisions without changing history. Context cancellation is preserved;
 // private source failures are redacted. The returned slice is independently owned.
 func (s MigrationSource) Load(ctx context.Context) ([]migrations.Migration, error) {
@@ -38,7 +43,14 @@ func (s MigrationSource) Load(ctx context.Context) ([]migrations.Migration, erro
 	if err != nil {
 		return nil, delivery.ErrUnavailable
 	}
-	if len(history) < 1 || len(history) >= migrations.MaxMigrationFiles {
+	additional := 1
+	if s.WorkerVersion != 0 {
+		additional++
+		if s.WorkerVersion <= s.Version {
+			return nil, delivery.ErrInvalidInput
+		}
+	}
+	if len(history) < 1 || len(history)+additional > migrations.MaxMigrationFiles {
 		return nil, delivery.ErrInvalidInput
 	}
 	for n, m := range history {
@@ -53,8 +65,15 @@ func (s MigrationSource) Load(ctx context.Context) ([]migrations.Migration, erro
 	if err != nil {
 		return nil, delivery.ErrUnavailable
 	}
-	result := make([]migrations.Migration, len(history)+1)
+	result := make([]migrations.Migration, len(history)+additional)
 	copy(result, history)
 	result[len(history)] = last
+	if s.WorkerVersion != 0 {
+		worker, err := migrations.NewMigration(s.WorkerVersion, "identity_delivery_attempts", migrations.TransactionModeDefault, attemptSchemaSQL, "")
+		if err != nil {
+			return nil, delivery.ErrUnavailable
+		}
+		result[len(history)+1] = worker
+	}
 	return result, nil
 }

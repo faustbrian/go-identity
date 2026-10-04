@@ -131,6 +131,21 @@ func TestPublicMigrationSourcePreservesOwnedHistory(t *testing.T) {
 	if after[len(before)].DownSQL() != "" {
 		t.Fatal("destructive rollback exposed")
 	}
+	worker, err := (deliverypostgres.MigrationSource{Base: base, Version: 10, WorkerVersion: 11}).Load(context.Background())
+	if err != nil || len(worker) != len(after)+1 {
+		t.Fatal("worker extension unavailable", err)
+	}
+	for n, m := range after {
+		if m.Checksum() != worker[n].Checksum() {
+			t.Fatal("installed delivery history rewritten")
+		}
+	}
+	if worker[len(after)].DownSQL() != "" {
+		t.Fatal("worker rollback exposed")
+	}
+	if _, err := (deliverypostgres.MigrationSource{Base: base, Version: 10, WorkerVersion: 10}).Load(context.Background()); err == nil {
+		t.Fatal("worker version collision admitted")
+	}
 	if _, err := (deliverypostgres.MigrationSource{Base: base, Version: 9}).Load(context.Background()); err == nil {
 		t.Fatal("migration version collision admitted")
 	}

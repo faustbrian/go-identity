@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Add opt-in forward worker schema and private durable delivery processing.
+  Claims record a tenant-bound generation before plaintext handoff; completion
+  rejects stale workers and replays exact evidence. Lost leases reconcile rather
+  than resubmit, bounded retries preserve original payload/identity, and expiry
+  erases custody without inventing provider failure. Public Queue integration,
+  heartbeat, receipts and authenticated cancellation remain unfinished.
+
 - Recover the exact original encrypted-intent binding after process restart
   using the installed canonical profile and retained keys. Malformed or changed
   scope fails closed before decryption; recovery cannot renew credential expiry.
