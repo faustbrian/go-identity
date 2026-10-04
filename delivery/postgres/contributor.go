@@ -153,38 +153,12 @@ func (c *Contributor) Prepare(ctx context.Context, b identity.CommandBinding, in
 	}
 	bounded, stop := context.WithTimeout(ctx, c.store.codec.timeout)
 	defer stop()
-	bindings := make([]payloadBinding, len(inputs))
-	bytes := 0
-	for n, input := range inputs {
-		if n > 0 && inputs[n-1].EffectIndex >= input.EffectIndex {
-			return PreparedDelivery{}, delivery.ErrInvalidInput
-		}
-		message := delivery.Message{Purpose: input.Purpose, Channel: input.Rendered.Channel, Recipient: input.Recipient, TemplateID: input.TemplateID, TemplateVersion: uint64(input.TemplateVersion), LocaleChain: []string{input.Rendered.Locale}}
-		if message.Validate() != nil {
-			return PreparedDelivery{}, delivery.ErrInvalidInput
-		}
-		profile, ok := c.store.profiles[input.ProviderConfigVersion]
-		if !ok {
-			return PreparedDelivery{}, delivery.ErrUnavailable
-		}
-		bound := payloadBinding{Deployment: c.store.deployment, Command: b, Intent: identitypostgres.DeliveryIntentPlan{EffectID: "pending", EffectIndex: input.EffectIndex, Purpose: input.Purpose, SubjectID: input.SubjectID, TemplateID: input.TemplateID, TemplateVersion: input.TemplateVersion, ProviderConfigVersion: input.ProviderConfigVersion, ExpiresAt: input.ExpiresAt}, Provider: profile.name, PolicyVersion: profile.policyVersion, DigestKeyVersion: c.current, NoOpEquivalent: input.NoOpEquivalent}
-		if _, err := custodyContext(bound, false); err != nil {
-			return PreparedDelivery{}, err
-		}
-		if !input.ExpiresAt.After(time.Now()) {
-			return PreparedDelivery{}, delivery.ErrExpired
-		}
-		wire, err := encodePayload(payload{Recipient: input.Recipient, Rendered: input.Rendered})
-		bytes += len(wire)
-		clear(wire)
-		if err != nil || bytes > 1<<20 {
-			return PreparedDelivery{}, delivery.ErrInvalidInput
-		}
-		bound.Intent.EffectID = deliveryEffectID(c.store.deployment, b, input.EffectIndex)
-		bindings[n] = bound
+	bindings, err := c.validateInputs(b, inputs)
+	if err != nil {
+		return PreparedDelivery{}, err
 	}
 	p := &preparedDelivery{owner: c, binding: b, plan: identitypostgres.DeliveryPlan{Contributor: c.Descriptor(), Intents: make([]identitypostgres.DeliveryIntentPlan, len(inputs))}, envelopes: make([]identitypostgres.DeliveryEnvelope, len(inputs))}
-	bytes = 0
+	bytes := 0
 	for n, input := range inputs {
 		bound, envelope, err := c.store.codec.seal(bounded, bindings[n], payload{Recipient: input.Recipient, Rendered: input.Rendered}, c.envelopeKey)
 		if err != nil {
@@ -200,6 +174,46 @@ func (c *Contributor) Prepare(ctx context.Context, b identity.CommandBinding, in
 		return PreparedDelivery{}, err
 	}
 	return PreparedDelivery{state: p}, nil
+}
+
+// validateInputs owns the shared pre-cryptographic shape and aggregate bounds.
+// It neither reads authority nor authorizes recipient custody. Admission uses
+// it before policy so callbacks cannot receive malformed or unbounded inputs.
+func (c *Contributor) validateInputs(b identity.CommandBinding, inputs []IntentInput) ([]payloadBinding, error) {
+	if c == nil || c.store == nil || len(inputs) < 1 || len(inputs) > 16 {
+		return nil, delivery.ErrInvalidInput
+	}
+	bindings := make([]payloadBinding, len(inputs))
+	bytes := 0
+	for n, input := range inputs {
+		if n > 0 && inputs[n-1].EffectIndex >= input.EffectIndex {
+			return nil, delivery.ErrInvalidInput
+		}
+		message := delivery.Message{Purpose: input.Purpose, Channel: input.Rendered.Channel, Recipient: input.Recipient, TemplateID: input.TemplateID, TemplateVersion: uint64(input.TemplateVersion), LocaleChain: []string{input.Rendered.Locale}}
+		if message.Validate() != nil {
+			return nil, delivery.ErrInvalidInput
+		}
+		profile, ok := c.store.profiles[input.ProviderConfigVersion]
+		if !ok {
+			return nil, delivery.ErrUnavailable
+		}
+		bound := payloadBinding{Deployment: c.store.deployment, Command: b, Intent: identitypostgres.DeliveryIntentPlan{EffectID: "pending", EffectIndex: input.EffectIndex, Purpose: input.Purpose, SubjectID: input.SubjectID, TemplateID: input.TemplateID, TemplateVersion: input.TemplateVersion, ProviderConfigVersion: input.ProviderConfigVersion, ExpiresAt: input.ExpiresAt}, Provider: profile.name, PolicyVersion: profile.policyVersion, DigestKeyVersion: c.current, NoOpEquivalent: input.NoOpEquivalent}
+		if _, err := custodyContext(bound, false); err != nil {
+			return nil, err
+		}
+		if !input.ExpiresAt.After(time.Now()) {
+			return nil, delivery.ErrExpired
+		}
+		wire, err := encodePayload(payload{Recipient: input.Recipient, Rendered: input.Rendered})
+		bytes += len(wire)
+		clear(wire)
+		if err != nil || bytes > 1<<20 {
+			return nil, delivery.ErrInvalidInput
+		}
+		bound.Intent.EffectID = deliveryEffectID(c.store.deployment, b, input.EffectIndex)
+		bindings[n] = bound
+	}
+	return bindings, nil
 }
 
 // Stage copies previously prepared ciphertext into the original open Work. The

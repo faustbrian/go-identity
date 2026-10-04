@@ -19,8 +19,8 @@ import (
 // supplies the same coordinator/registry and native/custody pair. It owns no
 // pool, transaction, provider, mutable configuration or generic workflow.
 // Current policy is checked before reservation, including committed replay.
-// Recipient discovery, authorization before encryption, keyed admission and
-// retained versioned delivery policy belong to the unfinished Queue admission.
+// Admit owns pre-encryption policy and retained profile selection for explicit
+// workflow inputs. Recipient discovery and keyed public Queue remain unfinished.
 type enqueueExecutor struct {
 	coordinator                     *identitypostgres.Coordinator
 	registry                        *identitypostgres.ContributorRegistry

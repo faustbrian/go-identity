@@ -33,6 +33,16 @@ provider work or automatic retries. This component accepts already-prepared
 custody; recipient discovery, authorization before encryption, scoped keyed
 admission and retained versioned policy still belong to the unfinished Queue.
 
+Its private `Admit` path now validates and snapshots explicit owning-workflow
+inputs, requires every referenced retained provider/policy, and derives bounded
+recipient-scope, purpose, exact template-version and provider-policy attributes.
+Caller attributes cannot shadow the reserved `delivery.` namespace. Current
+exact-scope authorization is required before encryption and rechecked before
+reservation, including replay. A policy change during preparation leaves no
+command claim. These explicit inputs are trusted workflow output, not client
+JSON or proof that an address belongs to a subject. Recipient discovery, scoped
+keyed deduplication and complete public Queue/result composition remain pending.
+
 The owned workflow will authorize and prepare rendering before opening the
 original identity transaction. Recipient, locale, subject, body and content
 type are encrypted through `go-secret-envelope`; this module does not implement

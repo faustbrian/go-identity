@@ -164,14 +164,25 @@ func testPublicComposition(t *testing.T, mode string) {
 		var permit bool
 		var policyMode string
 		var policyCalls int
+		var requireAdmissionScope bool
+		var denyAfter int
 		policy := enqueueDecisionFunc(func(ctx context.Context, dc authorization.DecisionContext) (authorization.Decision, error) {
 			policyCalls++
+			if requireAdmissionScope {
+				scopes, ok := dc.Request.Resource.Attributes["delivery.recipient_scopes"].StringSet()
+				if !ok || len(scopes) != 1 || scopes[0] != input.Recipient.ScopeDigest {
+					t.Fatal("admission did not bind exact recipient scope")
+				}
+			}
 			if _, bounded := ctx.Deadline(); !bounded {
 				t.Fatal("enqueue policy lacked bounded context")
 			}
 			outcome := authorization.Deny
 			if permit {
 				outcome = authorization.Allow
+			}
+			if denyAfter != 0 && policyCalls > denyAfter {
+				outcome = authorization.Deny
 			}
 			if policyMode == "panic" {
 				panic("synthetic-policy-diagnostic")
@@ -189,6 +200,38 @@ func testPublicComposition(t *testing.T, mode string) {
 			t.Fatal(err)
 		}
 		scope := authorization.DecisionContext{PolicyRevision: 1, CorrelationID: b.CorrelationID, Request: authorization.Request{Tenant: authorization.TenantID(b.TenantID), Action: "identity.delivery.enqueue", Subject: authorization.Subject{ID: authorization.SubjectID(b.ActorID), Kind: b.ActorKind}, Resource: authorization.Resource{Type: "identity.user", ID: authorization.ResourceID(b.UserID)}}}
+		if _, err := pool.Exec(ctx, policySchemaSQL); err != nil {
+			t.Fatal("retained policy migration", err)
+		}
+		policies, err := newRetainedPolicies(ctx, pool, "test", map[uint64]delivery.Config{1: delivery.DefaultConfig()}, time.Second)
+		if err != nil {
+			t.Fatal(err)
+		}
+		// A missing encryption service must not hide denied authorization: policy
+		// runs first and leaves no claim. Restore it for the real encrypted commit.
+		originalService := contributor.store.codec.service
+		contributor.store.codec.service = nil
+		requireAdmissionScope = true
+		if _, err := executor.Admit(ctx, b, scope, []IntentInput{input}, policies); !errors.Is(err, delivery.ErrForbidden) {
+			t.Fatal("denied admission performed encryption", err)
+		}
+		contributor.store.codec.service = originalService
+		requireAdmissionScope = false
+		for _, test := range []struct {
+			mutate func(*IntentInput)
+			want   error
+		}{
+			{func(v *IntentInput) { v.SubjectID = "other" }, delivery.ErrForbidden},
+			{func(v *IntentInput) { v.Rendered.Body = strings.Repeat("x", 262145) }, delivery.ErrInvalidInput},
+			{func(v *IntentInput) { v.ProviderConfigVersion = 99 }, delivery.ErrUnavailable},
+		} {
+			bad := input
+			test.mutate(&bad)
+			before := policyCalls
+			if _, err := executor.Admit(ctx, b, scope, []IntentInput{bad}, policies); !errors.Is(err, test.want) || policyCalls != before {
+				t.Fatal("invalid admission reached policy", err)
+			}
+		}
 		if _, err := executor.Execute(ctx, prepared, scope); !errors.Is(err, delivery.ErrForbidden) {
 			t.Fatal("denied enqueue reached persistence", err)
 		}
@@ -227,6 +270,15 @@ func testPublicComposition(t *testing.T, mode string) {
 			}
 		}
 		policyMode = ""
+		// Permission may change during envelope preparation. The second policy
+		// read must deny reservation, not trust the pre-encryption decision.
+		requireAdmissionScope = true
+		denyAfter = policyCalls + 1
+		if _, err := executor.Admit(ctx, b, scope, []IntentInput{input}, policies); !errors.Is(err, delivery.ErrForbidden) {
+			t.Fatal("post-encryption policy change reserved a command", err)
+		}
+		denyAfter = 0
+		requireAdmissionScope = false
 		cancelled, cancel := context.WithCancel(ctx)
 		cancel()
 		if _, err := executor.Execute(cancelled, prepared, scope); !errors.Is(err, context.Canceled) {
@@ -237,16 +289,28 @@ func testPublicComposition(t *testing.T, mode string) {
 			t.Fatal("denied enqueue reserved a command")
 		}
 		permit = true
-		first, err := executor.Execute(ctx, prepared, scope)
+		badScope := scope.Clone()
+		badScope.Request.Resource.Attributes = authorization.Attributes{"delivery.recipient_scopes": authorization.StringSetValue([]string{"caller-chosen"})}
+		if _, err := executor.Admit(ctx, b, badScope, []IntentInput{input}, policies); !errors.Is(err, delivery.ErrInvalidInput) {
+			t.Fatal("caller overrode owned delivery scope", err)
+		}
+		missingPolicy := *policies
+		missingPolicy.profiles = map[uint64]delivery.Config{2: delivery.DefaultConfig()}
+		before = policyCalls
+		if _, err := executor.Admit(ctx, b, scope, []IntentInput{input}, &missingPolicy); !errors.Is(err, delivery.ErrUnavailable) || policyCalls != before {
+			t.Fatal("unretained admission dispatched policy", err)
+		}
+		requireAdmissionScope = true
+		first, err := executor.Admit(ctx, b, scope, []IntentInput{input}, policies)
 		if err != nil || first.Outcome != identity.CommitOutcomeCommitted {
 			t.Fatal("owned enqueue did not commit", err)
 		}
-		second, err := executor.Execute(ctx, prepared, scope)
+		second, err := executor.Admit(ctx, b, scope, []IntentInput{input}, policies)
 		if err != nil || second.Outcome != identity.CommitOutcomeCommitted || second.AuditEventID != first.AuditEventID || second.Binding != first.Binding {
 			t.Fatal("owned enqueue replay did not retain original effects", err)
 		}
 		permit = false
-		if _, err := executor.Execute(ctx, prepared, scope); !errors.Is(err, delivery.ErrForbidden) {
+		if _, err := executor.Admit(ctx, b, scope, []IntentInput{input}, policies); !errors.Is(err, delivery.ErrForbidden) {
 			t.Fatal("replay bypassed current authorization", err)
 		}
 		var intents, effects, audits int

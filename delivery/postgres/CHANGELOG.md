@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Require current delivery-scope authorization before enqueue encryption and
+  again before reservation. Bind original recipient scopes, template versions
+  and retained provider policies; reject caller overrides and unavailable
+  history without claiming a command. Public Queue composition remains pending.
+
 - Add immutable retained delivery-policy registration and version-isolated
   worker selection. Restart configuration changes cannot reinterpret an
   installed policy; rotation retains original retry and lease settings.
