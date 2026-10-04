@@ -14,6 +14,7 @@ import (
 
 	identity "github.com/faustbrian/go-identity"
 	"github.com/faustbrian/go-identity/delivery"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -84,6 +85,16 @@ func (s *keyedAdmission) resolve(ctx context.Context, b identity.CommandBinding,
 // kernel command fingerprint with its retained key. The MAC authenticates this
 // selected version as well as the logical intent; unavailable keys fail closed.
 func (s *keyedAdmission) resolveVersion(ctx context.Context, b identity.CommandBinding, requestKey string, logical [32]byte, current uint32) (identity.CommandID, uint32, error) {
+	return s.resolveVersionMode(ctx, b, requestKey, logical, current, true)
+}
+
+// Observe exact historical allocation without creating a key for expired input.
+// An allocation remains correlation only; the kernel owns every outcome.
+func (s *keyedAdmission) observeVersion(ctx context.Context, b identity.CommandBinding, requestKey string, logical [32]byte, current uint32) (identity.CommandID, uint32, error) {
+	return s.resolveVersionMode(ctx, b, requestKey, logical, current, false)
+}
+
+func (s *keyedAdmission) resolveVersionMode(ctx context.Context, b identity.CommandBinding, requestKey string, logical [32]byte, current uint32, allocate bool) (identity.CommandID, uint32, error) {
 	if ctx == nil || s == nil || s.pool == nil || s.key == ([32]byte{}) || b.RecordID != "" || len(requestKey) < 16 || !safeID(requestKey, false) || logical == ([32]byte{}) || current == 0 {
 		return "", 0, delivery.ErrInvalidInput
 	}
@@ -112,17 +123,22 @@ func (s *keyedAdmission) resolveVersion(ctx context.Context, b identity.CommandB
 		return "", 0, attemptFailure(w, err)
 	}
 	defer rollbackAttempt(tx)
-	if _, err := tx.Exec(w, `INSERT INTO identity.delivery_keyed_commands(deployment,lookup_digest,intent_digest,command_id,digest_key_version) VALUES($1,$2,$3,$4,$5) ON CONFLICT(deployment,lookup_digest) DO NOTHING`, s.deployment, lookup[:], intent[:], string(b.CommandID), int64(current)); err != nil {
-		var collision *pgconn.PgError
-		if errors.As(err, &collision) && collision.Code == "23505" {
-			return "", 0, delivery.ErrConflict
+	if allocate {
+		if _, err := tx.Exec(w, `INSERT INTO identity.delivery_keyed_commands(deployment,lookup_digest,intent_digest,command_id,digest_key_version) VALUES($1,$2,$3,$4,$5) ON CONFLICT(deployment,lookup_digest) DO NOTHING`, s.deployment, lookup[:], intent[:], string(b.CommandID), int64(current)); err != nil {
+			var collision *pgconn.PgError
+			if errors.As(err, &collision) && collision.Code == "23505" {
+				return "", 0, delivery.ErrConflict
+			}
+			return "", 0, attemptFailure(w, err)
 		}
-		return "", 0, attemptFailure(w, err)
 	}
 	var original string
 	var digest []byte
 	var version int64
 	if err := tx.QueryRow(w, `SELECT command_id,intent_digest,digest_key_version FROM identity.delivery_keyed_commands WHERE deployment=$1 AND lookup_digest=$2`, s.deployment, lookup[:]).Scan(&original, &digest, &version); err != nil {
+		if !allocate && errors.Is(err, pgx.ErrNoRows) {
+			return "", 0, delivery.ErrExpired
+		}
 		return "", 0, attemptFailure(w, err)
 	}
 	if version < 1 || version > 4294967295 {

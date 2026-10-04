@@ -36,7 +36,7 @@ func TestPublicContributorOriginalCoordinatorComposition(t *testing.T) {
 	if _, err := rolePool.Exec(ctx, auditpostgres.FreshInstallPreflightSQL()); err != nil {
 		t.Fatal("owned audit preflight failed")
 	}
-	for _, mode := range []string{"committed", "no-op", "delivery-failure", "native-committed", "native-owned", "native-compatible-custody", "native-no-op", "native-missing", "native-failure"} {
+	for _, mode := range []string{"committed", "no-op", "delivery-failure", "native-committed", "native-owned", "public-owned", "native-compatible-custody", "native-no-op", "native-missing", "native-failure"} {
 		t.Run(mode, func(t *testing.T) { testPublicComposition(t, mode) })
 	}
 }
@@ -159,6 +159,172 @@ func testPublicComposition(t *testing.T, mode string) {
 	}
 	if err != nil {
 		t.Fatal(err)
+	}
+	if mode == "public-owned" {
+		runner, err := migrations.NewRunner(MigrationSource{Base: identitypostgres.MigrationSource{}, Version: 10, WorkerVersion: 11, PolicyVersion: 12, KeyedVersion: 13}, backend)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := runner.Up(ctx); err != nil {
+			t.Fatal(err)
+		}
+		op := EnqueueOperation()
+		b.OperationID, b.SchemaID, b.SchemaVersion = op.OperationID, op.SchemaID, op.SchemaVersion
+		if _, err := pool.Exec(ctx, `INSERT INTO identity.users(tenant_id,user_id,status,version) VALUES($1,$2,'active',1)`, string(b.TenantID), string(b.UserID)); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := pool.Exec(ctx, `INSERT INTO identity.identifiers(tenant_id,user_id,identifier_id,kind,canonical_value,verified,is_primary,version,verification_state,verification_version,verified_at) VALUES($1,$2,'public-email','email',$3,true,true,1,2,1,statement_timestamp())`, string(b.TenantID), string(b.UserID), input.Recipient.Address); err != nil {
+			t.Fatal(err)
+		}
+		permit := false
+		denyHistorical := false
+		policy := enqueueDecisionFunc(func(_ context.Context, dc authorization.DecisionContext) (authorization.Decision, error) {
+			outcome := authorization.Deny
+			if permit {
+				outcome = authorization.Allow
+			}
+			if value, ok := dc.Request.Resource.Attributes["identity.command.read-admission"]; ok && denyHistorical {
+				if historical, _ := value.Bool(); historical {
+					outcome = authorization.Deny
+				}
+			}
+			return authorization.Decision{Outcome: outcome, Revision: dc.PolicyRevision}, nil
+		})
+		config := EnqueueConfig{Custody: ContributorConfig{Deployment: "test", CurrentDigestKeyVersion: 1, RetainedDigestKeys: map[uint32][32]byte{1: {3}}, ActiveEnvelopeKeyID: "envelope-a", PreparationTimeout: time.Second, ProviderProfiles: map[uint64]ProviderProfile{1: {Provider: "test-provider", PolicyVersion: 1}}}, Coordinator: identitypostgres.CoordinatorConfig{MaximumDuration: 2 * time.Second, LeaseDuration: time.Minute, CurrentFingerprintKeyVersion: 1, RetainedFingerprintKeys: map[uint32][32]byte{1: {1}}}, PolicyID: "policy", PolicyVersion: 1, AuditRetentionVersion: 1, Timeout: 2 * time.Second, NamespaceKey: [32]byte{7}, Policies: map[uint64]delivery.Config{1: delivery.DefaultConfig()}}
+		templates := []delivery.Template{{ID: "verify", Version: 1, Channel: delivery.ChannelEmail, Locale: "en", ContentType: "text/plain", Subject: "Verification", Body: "Code: {{.code}}", MaxRenderedBytes: 1024, RequiredVariables: []string{"code"}, VariableSchema: []delivery.VariableSchema{{Name: "code", Kind: "code", Sensitive: true}}}}
+		public, err := NewEnqueueService(ctx, owned, config, contributor.store.codec.service, policy, templates)
+		if err != nil {
+			t.Fatal(err)
+		}
+		request := EnqueueCommandRequest{Binding: b, ActorScope: authorization.DecisionContext{PolicyRevision: 1, CorrelationID: b.CorrelationID, Request: authorization.Request{Tenant: authorization.TenantID(b.TenantID), Action: authorization.Action(b.OperationID), Subject: authorization.Subject{ID: authorization.SubjectID(b.ActorID), Kind: b.ActorKind}, Resource: authorization.Resource{Type: "identity.user", ID: authorization.ResourceID(b.UserID)}}}, IdentifierID: "public-email", ProviderConfigVersion: 1, Message: delivery.Message{Purpose: "verification", Channel: delivery.ChannelEmail, TemplateID: "verify", TemplateVersion: 1, LocaleChain: []string{"en"}, Variables: []delivery.TemplateVariable{{Name: "code", Kind: "code", CodeValue: "synthetic-code", Sensitive: true}}}, IdempotencyKey: "public-request-key", ExpiresAt: input.ExpiresAt}
+		if _, err := public.Enqueue(ctx, request); !errors.Is(err, delivery.ErrForbidden) {
+			t.Fatal("public denied caller admitted", err)
+		}
+		permit = true
+		first, err := public.Enqueue(ctx, request)
+		if err != nil || first.State != delivery.CommitCommitted || !first.Queued || first.IntentID == "" {
+			t.Fatal("public admission failed", err)
+		}
+		request.Binding.CommandID, err = identity.NewCommandID()
+		if err != nil {
+			t.Fatal(err)
+		}
+		second, err := public.Enqueue(ctx, request)
+		if err != nil || second != first {
+			t.Fatal("public duplicate changed stable result", err)
+		}
+		changed := request
+		changed.Message.Variables = append([]delivery.TemplateVariable(nil), request.Message.Variables...)
+		changed.Message.Variables[0].CodeValue = "changed-code"
+		if result, err := public.Enqueue(ctx, changed); !errors.Is(err, delivery.ErrConflict) || result.State != delivery.CommitConflict || result.Queued {
+			t.Fatal("public changed input reused key", err)
+		}
+		noop := request
+		noop.Binding.CommandID, err = identity.NewCommandID()
+		if err != nil {
+			t.Fatal(err)
+		}
+		noop.IdempotencyKey = "public-noop-request"
+		noop.NoOpEquivalent = true
+		noop.IdentifierID = ""
+		noResult, err := public.Enqueue(ctx, noop)
+		if err != nil || noResult.State != delivery.CommitCommitted || !noResult.Queued || !noResult.NoOpEquivalent {
+			t.Fatal("public no-op changed result shape", err)
+		}
+		var intents, outbox, audits, noops int
+		if err := pool.QueryRow(ctx, `SELECT (SELECT count(*) FROM identity.delivery_intents),(SELECT count(*) FROM outbox_messages),(SELECT count(*) FROM audit.identity_command_bindings),(SELECT count(*) FROM identity.delivery_intents WHERE no_op AND ciphertext IS NULL AND envelope_key_id IS NULL)`).Scan(&intents, &outbox, &audits, &noops); err != nil || intents != 2 || outbox != 4 || audits != 2 || noops != 1 {
+			t.Fatal("public composition did not own durable effects", err, intents, outbox, audits, noops)
+		}
+		cancelled, stop := context.WithCancel(ctx)
+		stop()
+		if _, err := public.Enqueue(cancelled, request); !errors.Is(err, context.Canceled) {
+			t.Fatal("public cancelled admission", err)
+		}
+		expiring := request
+		expiring.Binding.CommandID, err = identity.NewCommandID()
+		if err != nil {
+			t.Fatal(err)
+		}
+		expiring.IdempotencyKey = "public-expiring-key"
+		expiring.ExpiresAt = time.Now().UTC().Truncate(time.Microsecond).Add(time.Second)
+		original, err := public.Enqueue(ctx, expiring)
+		if err != nil || original.State != delivery.CommitCommitted {
+			t.Fatal("expiring admission failed", err)
+		}
+		// Model interruption after keyed allocation but before reservation. The
+		// allocation identifies the original command, never its execution outcome.
+		unacknowledged := expiring
+		unacknowledged.IdempotencyKey = "public-interrupted-key"
+		unacknowledged.Binding.CommandID, err = identity.NewCommandID()
+		if err != nil {
+			t.Fatal(err)
+		}
+		recipient, _, err := lookupRecipient(ctx, unacknowledged.Binding, unacknowledged.IdentifierID, "verification", public.keyed, public.repository)
+		if err != nil {
+			t.Fatal(err)
+		}
+		message := unacknowledged.Message
+		message.Recipient = recipient
+		rendered, err := public.renderer.Render(ctx, message)
+		if err != nil {
+			t.Fatal(err)
+		}
+		interruptedInput := IntentInput{Purpose: message.Purpose, SubjectID: string(b.UserID), TemplateID: message.TemplateID, TemplateVersion: uint32(message.TemplateVersion), ProviderConfigVersion: 1, ExpiresAt: unacknowledged.ExpiresAt, Recipient: recipient, Rendered: rendered}
+		checked := unacknowledged.Binding
+		checked.RecordID = "enqueue-validation"
+		bindings, err := public.executor.custody.validateInputShape(checked, []IntentInput{interruptedInput})
+		if err != nil {
+			t.Fatal(err)
+		}
+		logical, err := public.keyed.logical(bindings, []IntentInput{interruptedInput})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, _, err := public.keyed.resolveVersion(ctx, unacknowledged.Binding, unacknowledged.IdempotencyKey, logical, 1); err != nil {
+			t.Fatal(err)
+		}
+		deadline := time.NewTimer(time.Until(expiring.ExpiresAt))
+		defer deadline.Stop()
+		select {
+		case <-deadline.C:
+		case <-ctx.Done():
+			t.Fatal(ctx.Err())
+		}
+		// Also represents a lost acknowledgement: retry observes original durable
+		// history, not caller knowledge of whether the first response arrived.
+		expiring.Binding.CommandID, err = identity.NewCommandID()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if replay, err := public.Enqueue(ctx, expiring); err != nil || replay != original {
+			t.Fatal("expired committed replay lost original receipt", err, replay.State)
+		}
+		denyHistorical = true
+		if result, err := public.Enqueue(ctx, expiring); !errors.Is(err, delivery.ErrForbidden) || result.IntentID != "" || result.Queued {
+			t.Fatal("denied historical observation leaked admission identity", err)
+		}
+		denyHistorical = false
+		unknown, err := public.Enqueue(ctx, unacknowledged)
+		var unknownError delivery.AdmissionUnknownError
+		if !errors.As(err, &unknownError) || unknown.State != delivery.CommitUnknown || unknown.Queued || unknownError.CommandID != unacknowledged.Binding.CommandID {
+			t.Fatal("expired interrupted admission fabricated noncommit", err)
+		}
+		changedExpired := expiring
+		changedExpired.Message.Variables = append([]delivery.TemplateVariable(nil), expiring.Message.Variables...)
+		changedExpired.Message.Variables[0].CodeValue = "expired-changed-code"
+		if result, err := public.Enqueue(ctx, changedExpired); !errors.Is(err, delivery.ErrConflict) || result.State != delivery.CommitConflict || result.Queued {
+			t.Fatal("expired replay accepted changed content", err)
+		}
+		freshExpired := expiring
+		freshExpired.IdempotencyKey = "public-expired-new-key"
+		if result, err := public.Enqueue(ctx, freshExpired); !errors.Is(err, delivery.ErrExpired) || result.State != delivery.CommitNotCommitted || result.Queued {
+			t.Fatal("expired new admission was accepted", err)
+		}
+		var finalIntents, finalKeys int
+		if err := pool.QueryRow(ctx, `SELECT (SELECT count(*) FROM identity.delivery_intents),(SELECT count(*) FROM identity.delivery_keyed_commands)`).Scan(&finalIntents, &finalKeys); err != nil || finalIntents != 3 || finalKeys != 4 {
+			t.Fatal("expired recovery created or renewed durable effects", err, finalIntents, finalKeys)
+		}
+		return
 	}
 	if mode == "native-owned" {
 		var permit bool

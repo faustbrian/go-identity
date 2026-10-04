@@ -195,6 +195,21 @@ func (c *Contributor) prepareVersion(ctx context.Context, b identity.CommandBind
 // It neither reads authority nor authorizes recipient custody. Admission uses
 // it before policy so callbacks cannot receive malformed or unbounded inputs.
 func (c *Contributor) validateInputs(b identity.CommandBinding, inputs []IntentInput) ([]payloadBinding, error) {
+	bindings, err := c.validateInputShape(b, inputs)
+	if err != nil {
+		return nil, err
+	}
+	for _, input := range inputs {
+		if !input.ExpiresAt.After(time.Now()) {
+			return nil, delivery.ErrExpired
+		}
+	}
+	return bindings, nil
+}
+
+// Historical intent matching must retain the original expiry even after it has
+// passed. This shape-only validator never permits fresh encryption or staging.
+func (c *Contributor) validateInputShape(b identity.CommandBinding, inputs []IntentInput) ([]payloadBinding, error) {
 	if c == nil || c.store == nil || len(inputs) < 1 || len(inputs) > 16 {
 		return nil, delivery.ErrInvalidInput
 	}
@@ -215,9 +230,6 @@ func (c *Contributor) validateInputs(b identity.CommandBinding, inputs []IntentI
 		bound := payloadBinding{Deployment: c.store.deployment, Command: b, Intent: identitypostgres.DeliveryIntentPlan{EffectID: "pending", EffectIndex: input.EffectIndex, Purpose: input.Purpose, SubjectID: input.SubjectID, TemplateID: input.TemplateID, TemplateVersion: input.TemplateVersion, ProviderConfigVersion: input.ProviderConfigVersion, ExpiresAt: input.ExpiresAt}, Provider: profile.name, PolicyVersion: profile.policyVersion, DigestKeyVersion: c.current, NoOpEquivalent: input.NoOpEquivalent}
 		if _, err := custodyContext(bound, false); err != nil {
 			return nil, err
-		}
-		if !input.ExpiresAt.After(time.Now()) {
-			return nil, delivery.ErrExpired
 		}
 		wire, err := encodePayload(payload{Recipient: input.Recipient, Rendered: input.Rendered})
 		bytes += len(wire)

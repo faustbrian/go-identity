@@ -2,13 +2,16 @@ package postgres
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/faustbrian/go-authorization"
 	identity "github.com/faustbrian/go-identity"
 	"github.com/faustbrian/go-identity/delivery"
+	identitypostgres "github.com/faustbrian/go-identity/postgres"
 )
 
 // Admit is the owned pre-encryption half of native enqueue. Inputs and binding
@@ -46,7 +49,7 @@ func (e *enqueueExecutor) admit(ctx context.Context, b identity.CommandBinding, 
 		return identity.CommandResult{}, delivery.ErrInvalidInput
 	}
 	inputs = slices.Clone(inputs)
-	bindings, err := e.custody.validateInputs(checked, inputs)
+	bindings, err := e.custody.validateInputShape(checked, inputs)
 	if err != nil {
 		return identity.CommandResult{}, err
 	}
@@ -91,6 +94,43 @@ func (e *enqueueExecutor) admit(ctx context.Context, b identity.CommandBinding, 
 		return identity.CommandResult{}, err
 	}
 	version := e.custody.current
+	expired := false
+	for _, input := range inputs {
+		expired = expired || !input.ExpiresAt.After(time.Now())
+	}
+	if expired {
+		if keyed == nil {
+			return identity.CommandResult{}, delivery.ErrExpired
+		}
+		logical, err := keyed.logical(bindings, inputs)
+		if err != nil {
+			return identity.CommandResult{}, err
+		}
+		original, _, err := keyed.observeVersion(w, b, requestKey, logical, version)
+		if err != nil {
+			return identity.CommandResult{}, err
+		}
+		b.CommandID = original
+		b.RecordID = deliveryEffectID(e.custody.store.deployment, b, inputs[0].EffectIndex)
+		query := identity.RecoveryQuery{CommandID: original, TenantID: b.TenantID, UserID: b.UserID, ActorID: b.ActorID, ActorKind: b.ActorKind, OperationID: b.OperationID, RecordID: b.RecordID, LinkMode: b.LinkMode}
+		observed, err := e.coordinator.ObserveCommandAdmission(w, query, caller)
+		var denied identity.ForbiddenError
+		if errors.As(err, &denied) {
+			return identity.CommandResult{}, err
+		}
+		// An allocation alone never proves noncommit or authorizes a new send.
+		result := identity.CommandResult{Binding: b, Outcome: identity.CommitOutcomeUnknown}
+		if observed.Absent || observed.Record == (identitypostgres.CommandRecord{}) {
+			return result, delivery.ErrOutcomeUnknown
+		}
+		result.Binding, result.Outcome = observed.Record.Binding, observed.Record.Outcome
+		if observed.Record.Feature != nil {
+			// Safe historical outcome projection only; no native payload or new
+			// execution receipt is reconstructed from participant evidence.
+			result.Feature = &identity.FeatureReceipt{Operation: *observed.Record.Feature}
+		}
+		return result, err
+	}
 	if keyed != nil {
 		logical, err := keyed.logical(bindings, inputs)
 		if err != nil {

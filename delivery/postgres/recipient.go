@@ -57,18 +57,36 @@ func (e *enqueueExecutor) AdmitIdentifier(ctx context.Context, b identity.Comman
 	if err := e.allow(w, checked, caller); err != nil {
 		return identity.CommandResult{}, err
 	}
+	recipient, fence, err := lookupRecipient(w, b, id, input.Purpose, keyed, repo)
+	if err != nil {
+		return identity.CommandResult{}, err
+	}
+	if input.Recipient.Channel != recipient.Channel || input.Recipient.Address != recipient.Address {
+		return identity.CommandResult{}, delivery.ErrForbidden
+	}
+	input.Recipient = recipient
+	input.SubjectID = string(b.UserID)
+	if input.Rendered.Channel != recipient.Channel {
+		return identity.CommandResult{}, delivery.ErrInvalidInput
+	}
+	return e.admit(w, b, caller, []IntentInput{input}, policies, keyed, requestKey, []recipientFence{fence})
+}
+
+// lookupRecipient is shared owned selection after exact-scope authorization.
+// It is a primary snapshot; only native checkRecipients fences application.
+func lookupRecipient(w context.Context, b identity.CommandBinding, id identity.IdentifierID, purpose string, keyed *keyedAdmission, repo *identitypostgres.Repository) (delivery.Recipient, recipientFence, error) {
 	state, err := repo.GetIdentifierState(w, identity.IdentifierQuery{TenantID: b.TenantID, UserID: b.UserID, MaximumIdentifiers: 128})
 	if err != nil {
 		if errors.Is(err, identity.ErrUserAbsent) {
-			return identity.CommandResult{}, delivery.ErrForbidden
+			return delivery.Recipient{}, recipientFence{}, delivery.ErrForbidden
 		}
 		if w.Err() != nil {
-			return identity.CommandResult{}, w.Err()
+			return delivery.Recipient{}, recipientFence{}, w.Err()
 		}
-		return identity.CommandResult{}, delivery.ErrUnavailable
+		return delivery.Recipient{}, recipientFence{}, delivery.ErrUnavailable
 	}
 	if state.User.Status != identity.StatusActive {
-		return identity.CommandResult{}, delivery.ErrForbidden
+		return delivery.Recipient{}, recipientFence{}, delivery.ErrForbidden
 	}
 	for n, identifier := range state.Identifiers {
 		if identifier.ID != id {
@@ -78,30 +96,19 @@ func (e *enqueueExecutor) AdmitIdentifier(ctx context.Context, b identity.Comman
 		if identifier.Kind == identity.IdentifierPhone {
 			channel = delivery.ChannelSMS
 		} else if identifier.Kind != identity.IdentifierEmail {
-			return identity.CommandResult{}, delivery.ErrForbidden
+			return delivery.Recipient{}, recipientFence{}, delivery.ErrForbidden
 		}
 		verification := state.Verifications[n]
 		pending := verification.State == identity.VerificationPending
-		if verification.State != identity.VerificationVerified && !(pending && verificationPurpose(input.Purpose)) {
-			return identity.CommandResult{}, delivery.ErrForbidden
-		}
-		// This path receives already rendered trusted workflow output. Do not
-		// silently redirect that output to a changed or caller-chosen address;
-		// full Queue composition resolves the recipient before rendering.
-		if input.Recipient.Channel != channel || input.Recipient.Address != identifier.CanonicalValue {
-			return identity.CommandResult{}, delivery.ErrForbidden
+		if verification.State != identity.VerificationVerified && !(pending && verificationPurpose(purpose)) {
+			return delivery.Recipient{}, recipientFence{}, delivery.ErrForbidden
 		}
 		// Canonical recipient custody is owned here. The scope digest binds this
 		// exact tenant/user/identifier/version/channel, never a caller's claim.
 		digest := custodyMAC(keyed.key, "identity-delivery-recipient-v1", keyedFields(keyed.deployment, string(b.TenantID), string(b.UserID), string(id), strconv.FormatUint(identifier.Version, 10), strconv.FormatUint(state.AuthorityVersion, 10), strconv.Itoa(int(channel))), []byte(identifier.CanonicalValue))
-		input.Recipient = delivery.Recipient{Channel: channel, Address: identifier.CanonicalValue, ScopeDigest: hex.EncodeToString(digest[:])}
-		input.SubjectID = string(b.UserID)
-		if input.Rendered.Channel != channel {
-			return identity.CommandResult{}, delivery.ErrInvalidInput
-		}
-		return e.admit(w, b, caller, []IntentInput{input}, policies, keyed, requestKey, []recipientFence{{id: id, version: identifier.Version, authority: state.AuthorityVersion}})
+		return delivery.Recipient{Channel: channel, Address: identifier.CanonicalValue, ScopeDigest: hex.EncodeToString(digest[:])}, recipientFence{id: id, version: identifier.Version, authority: state.AuthorityVersion}, nil
 	}
-	return identity.CommandResult{}, delivery.ErrForbidden
+	return delivery.Recipient{}, recipientFence{}, delivery.ErrForbidden
 }
 
 func recipientFields(s identity.FeatureCommandSpec) ([]recipientFence, error) {

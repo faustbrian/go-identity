@@ -1,9 +1,48 @@
 # Identity delivery PostgreSQL
 
 **Under development.** This module does not yet expose a production Queue.
-It currently exposes authenticated preparation, immutable migration history and
-original-command staging through the kernel's exact enlisted delivery contributor;
-it must not be selected as a working durable store or provider integration.
+It exposes public durable admission through `NewEnqueueService`, authenticated
+preparation, immutable migration history and original-command staging. Admission
+is not a complete durable Queue or provider integration.
+
+## Public admission
+
+`NewEnqueueService` composes the owned primary directory, renderer, native enqueue
+phase, audit, lifecycle, custody and original kernel coordinator from one borrowed
+PostgreSQL pool. Supply retained configuration, templates, the envelope service
+and bounded authorization; no consumer-written domain store or transaction
+orchestration is needed. Install the public kernel, audit, outbox and delivery
+migrations through `MigrationSource.KeyedVersion` before construction.
+
+`EnqueueCommandRequest` is trusted typed workflow input, not HTTP JSON or proof
+of authentication. Supply the authenticated binding/scope, exact identifier ID,
+message with **no recipient**, retained provider version, original expiry and
+bounded idempotency key. Admission authorizes before discovering the canonical
+recipient and rendering, then rechecks policy before atomic persistence. Keep
+all logical inputs unchanged across retries; candidate command IDs may differ.
+Changed input conflicts; matching scoped keys preserve the original intent.
+Retain referenced provider/template/policy versions and custody keys.
+
+Exact retries after the original expiry observe the historical kernel outcome
+under current authorization, without allocating, encrypting or reserving a new
+send. Expired new keys are rejected. An allocation without authoritative command
+history remains unknown, not proof of noncommit. Historical observation defaults
+to the supplied authorization service, system clock and current policy version;
+an explicit `Coordinator.AdmissionPolicy` remains authoritative when supplied.
+
+Committed `Queued` means durable admission, never provider delivery. Unknown or
+in-progress outcomes require exact-request recovery, not a new key or send.
+`AdmissionUnknownError` carries only an actually known original command; allocation
+uncertainty returns `ErrOutcomeUnknown` without inventing a command identity.
+Constructor policy/namespace registration is bounded and independently committed;
+an exact retry safely resumes a partial constructor without creating an intent.
+
+Trusted enumeration-safe workflows may use `NoOpEquivalent` with no identifier.
+It preserves the queued result shape without sendable ciphertext. Never expose
+that internal bit to clients. The service starts no goroutines or sender work;
+the caller retains ownership of the pool and dependencies. Full public status,
+cancellation, authenticated receipt/reconciliation and worker composition remain
+under development.
 
 ## Custody and security
 

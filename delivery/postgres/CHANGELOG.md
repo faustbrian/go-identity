@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Add owned public message admission with authorization before primary recipient
+  discovery and versioned rendering. Compose atomic custody, audit and lifecycle
+  persistence without consumer-written stores; preserve scoped duplicate intent
+  identities and classify changed-input conflicts and ambiguous outcomes.
+  Exact retries after expiry preserve authoritative historical outcomes without
+  renewing expiry or admitting new delivery effects.
+  This admission service does not yet implement the complete Queue lifecycle.
+
 - Select delivery recipients from the owned primary identifier directory after
   exact-scope authorization. Freeze and transactionally fence record versions
   so an intervening address or owner change cannot commit stale delivery custody.
