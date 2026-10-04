@@ -4,6 +4,11 @@
 
 ### Added
 
+- Immutable public completion policy for owned durable adapters, using the
+  same generation/retry/expiry rules as the core without a duplicate policy
+  engine. Construction copies caller-owned policy; decisions honor cancellation
+  and convey no queue authority or durable commit proof.
+
 - Core one-attempt claim/send/complete execution with capacity before leasing,
   tenant/generation binding, lease-bounded sends, non-invocation evidence and
   bounded cancellation-independent outcome bookkeeping. Completion ambiguity

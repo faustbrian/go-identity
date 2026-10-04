@@ -1,6 +1,7 @@
 package delivery
 
 import (
+	"context"
 	"crypto/rand"
 	"errors"
 	"io"
@@ -16,10 +17,13 @@ var ErrConflict = errors.New("delivery: conflict")
 // It does not establish rejection, commit failure or permission to resubmit.
 var ErrUnavailable = errors.New("delivery: unavailable")
 
-// These are internal queue-policy values, not a second authority or store.
-// The durable adapter must supply database-time snapshots under a generation
-// CAS and apply state, schedule and ciphertext erasure in one transaction.
-type completionInput struct {
+// CompletionSnapshot is the owned adapter's current database-time view of one
+// recorded attempt. State must be Attempting; both generations must be positive
+// and equal, and AttemptNumber counts the already-recorded attempt (1..Attempts).
+// Now/ValidUntil must be nonzero UTC values in years1..9999. Cancellation and
+// expiry alone cannot establish the outcome of a potentially invoked provider.
+// These exported fields convey shape, never authorization, a lease or CAS proof.
+type CompletionSnapshot struct {
 	State                          DeliveryState
 	Generation, ExpectedGeneration uint32
 	AttemptNumber                  uint8
@@ -27,11 +31,57 @@ type completionInput struct {
 	Now, ValidUntil                time.Time
 }
 
-type completionPlan struct {
+// CompletionDecision contains the queue policy's proposed state, retry instant
+// (only for RetryWait) and required ciphertext erasure. Apply all components
+// atomically under the exact tenant/intent/worker/generation CAS. Expiry may
+// require erasure while State remains OutcomeUnknown; neither bit establishes
+// an external effect. An adapter must not retain plaintext or turn a decision
+// into permission to resubmit an outcome-unknown effect.
+type CompletionDecision struct {
 	State         DeliveryState
 	NextAttemptAt time.Time
 	ErasePayload  bool
 }
+
+// CompletionPolicy freezes validated delivery retry policy for owned adapters.
+// It is safe for concurrent reads and never owns a store, workflow, transaction,
+// clock, provider call or queue authority. Zero is invalid.
+type CompletionPolicy struct{ config Config }
+
+// NewCompletionPolicy validates and copies the caller-owned backoff slice.
+// The caller must not mutate Config concurrently with construction; subsequent
+// mutations do not affect this policy. There are no inferred defaults.
+func NewCompletionPolicy(c Config) (CompletionPolicy, error) {
+	if c.Validate() != nil {
+		return CompletionPolicy{}, ErrInvalidInput
+	}
+	c.BackoffCeilings = append([]time.Duration(nil), c.BackoffCeilings...)
+	return CompletionPolicy{config: c}, nil
+}
+
+// Decide reuses the core's exact completion rules with local cryptographic
+// full jitter. Cancellation is checked before and after bounded policy work;
+// nil context is invalid and cancelled calls return no usable decision.
+// Snapshot must come from an authoritative adapter read, not cached freshness.
+// The adapter owns time/precision conversion and must preserve expiry and retry
+// bounds when applying the returned instant in its atomic generation-CAS.
+func (p CompletionPolicy) Decide(ctx context.Context, current CompletionSnapshot, evidence DeliveryResult) (CompletionDecision, error) {
+	if ctx == nil {
+		return CompletionDecision{}, ErrInvalidInput
+	}
+	if err := ctx.Err(); err != nil {
+		return CompletionDecision{}, err
+	}
+	decision, err := planCompletion(p.config, current, evidence, rand.Reader)
+	if cancelled := ctx.Err(); cancelled != nil {
+		return CompletionDecision{}, cancelled
+	}
+	return decision, err
+}
+
+// Internal names retain the same implementation and focused entropy tests.
+type completionInput = CompletionSnapshot
+type completionPlan = CompletionDecision
 
 // planCompletion decides only a just-finished, recorded attempt. Authenticated
 // receipts/reconciliation have separate monotonic admission; in particular an

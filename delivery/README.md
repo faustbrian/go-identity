@@ -140,6 +140,13 @@ cancelled/expired merely because local time or cancellation changed. Expired
 bearer payload custody must still be erased while retaining unknown outcome.
 These decisions require atomic durable generation-CAS application; the policy
 function itself supplies no lease, authentication, persistence or cleanup proof.
+Owned adapters consume these same rules through `NewCompletionPolicy` and
+`CompletionPolicy.Decide(ctx, CompletionSnapshot, DeliveryResult)`. Construction
+freezes a copied policy; the immutable result is safe for concurrent reads.
+Snapshots must come from current authoritative database state. Decisions are
+proposals only: the adapter applies state, retry instant and payload erasure
+atomically under exact tenant/intent/worker/generation CAS, preserving time
+precision, expiry and throttle bounds. Cancellation returns no usable decision.
 The internal processor now connects one scoped committed claim to one sender
 invocation and one exact generation completion. Capacity is acquired before
 claiming, and the sender also stops at the absolute queue lease deadline.
