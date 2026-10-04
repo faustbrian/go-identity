@@ -8,6 +8,7 @@ require (
 	github.com/faustbrian/go-identity/delivery v0.0.0-20261004031955-f4e6d916cd18
 	github.com/faustbrian/go-identity/postgres v0.0.0-20261004031955-f4e6d916cd18
 	github.com/faustbrian/go-secret-envelope v1.0.1-0.20260913112010-22fc4a2d925d
+	github.com/faustbrian/go-transactional-outbox/v2 v2.0.0-20261002184451-72a9fe57a638
 )
 
 require (

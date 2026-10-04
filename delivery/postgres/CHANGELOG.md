@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Add original-command encrypted intent and safe-handle outbox admission under
+  the enlisted kernel transaction. Concurrent matching inputs retain one effect;
+  randomized encryption cannot duplicate admission, and terminal effects cannot
+  regain custody. Expired ambiguous effects erase payloads without fabricating
+  provider outcomes. Public Queue processing and migration installation remain
+  unfinished.
+
 - Freeze encrypted message custody under the original command and complete
   effect scope. Confidential logical identity survives randomized encryption;
   local attestation validation requires no key-provider call under transaction

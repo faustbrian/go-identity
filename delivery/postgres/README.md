@@ -1,7 +1,8 @@
 # Identity delivery PostgreSQL
 
 **Under development.** This module does not yet expose a production Queue.
-It currently implements its private authenticated payload custody boundary;
+It currently implements private authenticated payload custody and original-command
+intent/outbox admission through the kernel's exact enlisted delivery contributor;
 it must not be selected as a working durable store or provider integration.
 
 ## Custody and security
@@ -36,11 +37,36 @@ Rotation cannot change the retained template/locale snapshot or expiry.
 
 ## Remaining implementation
 
-The owned Queue, authenticated workflow admission, original-command outbox
-insertion, migrations, dedupe, lease/generation fencing, attempts, authenticated
+The owned intent table references the original kernel command and retains its
+complete canonical non-secret AAD and confidential logical digest. Prepared
+ciphertext is authenticated locally before any SQL. Effect IDs are deterministic
+under deployment, tenant, original command and class/index. The outbox writer
+is consumed through its public immutable `PrepareInsert`/`Statement` API and
+the original Work; this adapter never opens or closes a second transaction.
+Outbox messages carry only safe handles, not another copy of ciphertext.
+
+Concurrent matching admissions converge on one retained intent/outbox entry;
+new encryption randomness does not change logical identity. Changed frozen
+inputs conflict. Terminal states require ciphertext/key-reference erasure in
+the same update and cannot become sendable again. An expired submitted or
+outcome-unknown effect may erase custody without fabricating a terminal provider
+outcome. The database records an immutable erasure checkpoint, keeps replay
+evidence and denies restoring ciphertext. No-op intents are terminal
+cancelled rows without custody, with the same safe-handle admission path;
+workers must recognize these as non-sendable. Retained intent bindings, not
+prunable outbox payloads, supply contributor recovery evidence. The schema
+currently prohibits deleting/truncating replay bindings; final retention and
+legal-hold retirement remain unfinished. Recovery does not reconstruct a
+kernel success receipt or perform provider work.
+
+The owned Queue, authenticated workflow admission, public migration installation,
+workflow-level idempotency scope, lease/generation fencing, attempts, authenticated
 receipts, reconciliation, cancellation and terminal erasure are unfinished.
-No provider delivery, database durability or interoperability is claimed by
-the custody unit tests. Quick-start/API examples will accompany the usable
+Real PostgreSQL owner-level tests cover transactional rollback, concurrent
+duplicate admission, randomized-custody replay, original-command FK isolation,
+outbox failure rollback and terminal erasure. They do not yet prove full public
+Queue/coordinator composition, lease processing, recovery invocation or provider
+interoperability. Quick-start/API examples will accompany the usable
 public adapter, not ask consumers to implement its missing stores or workflow.
 
 Exact coverage/mutation, PostgreSQL composition, provider interoperability,
