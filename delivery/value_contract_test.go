@@ -180,7 +180,7 @@ func TestURLTimestampLocaleAndTextSerializationBoundaries(t *testing.T) {
 	}
 	for _, value := range []interface{ MarshalText() ([]byte, error) }{m, &m, m.Recipient, &m.Recipient, v, &v} {
 		data, err := value.MarshalText()
-		if !errors.Is(err, errors.ErrUnsupported) || len(data) != 0 {
+		if !errors.Is(err, ErrSerializationForbidden) || len(data) != 0 {
 			t.Fatal("text serialization escaped")
 		}
 	}

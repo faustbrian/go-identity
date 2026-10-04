@@ -17,6 +17,11 @@ import (
 // It never retains or describes the caller's recipient, code, URL or content.
 var ErrInvalidInput = errors.New("delivery: invalid input")
 
+// ErrSerializationForbidden refuses implicit sensitive JSON/text serialization.
+// It remains classifiable through Go1.27 JSON wrappers, unlike ErrUnsupported,
+// which legacy marshal methods are forbidden from returning in that toolchain.
+var ErrSerializationForbidden = errors.New("delivery: serialization forbidden")
+
 // Channel selects the final transport context. Zero and unknown values are invalid.
 type Channel uint8
 
@@ -244,20 +249,20 @@ func (TemplateVariable) LogValue() slog.Value { return slog.StringValue("deliver
 // LogValue redacts message diagnostics; field projections remain sensitive.
 func (Message) LogValue() slog.Value { return slog.StringValue("delivery(redacted)") }
 
-// MarshalJSON refuses implicit sensitive serialization with errors.ErrUnsupported.
-func (Recipient) MarshalJSON() ([]byte, error) { return nil, errors.ErrUnsupported }
+// MarshalJSON refuses implicit sensitive serialization with ErrSerializationForbidden.
+func (Recipient) MarshalJSON() ([]byte, error) { return nil, ErrSerializationForbidden }
 
-// MarshalText refuses implicit sensitive serialization with errors.ErrUnsupported.
-func (Recipient) MarshalText() ([]byte, error) { return nil, errors.ErrUnsupported }
+// MarshalText refuses implicit sensitive serialization with ErrSerializationForbidden.
+func (Recipient) MarshalText() ([]byte, error) { return nil, ErrSerializationForbidden }
 
-// MarshalJSON refuses implicit sensitive serialization with errors.ErrUnsupported.
-func (TemplateVariable) MarshalJSON() ([]byte, error) { return nil, errors.ErrUnsupported }
+// MarshalJSON refuses implicit sensitive serialization with ErrSerializationForbidden.
+func (TemplateVariable) MarshalJSON() ([]byte, error) { return nil, ErrSerializationForbidden }
 
-// MarshalText refuses implicit sensitive serialization with errors.ErrUnsupported.
-func (TemplateVariable) MarshalText() ([]byte, error) { return nil, errors.ErrUnsupported }
+// MarshalText refuses implicit sensitive serialization with ErrSerializationForbidden.
+func (TemplateVariable) MarshalText() ([]byte, error) { return nil, ErrSerializationForbidden }
 
-// MarshalJSON refuses implicit sensitive serialization with errors.ErrUnsupported.
-func (Message) MarshalJSON() ([]byte, error) { return nil, errors.ErrUnsupported }
+// MarshalJSON refuses implicit sensitive serialization with ErrSerializationForbidden.
+func (Message) MarshalJSON() ([]byte, error) { return nil, ErrSerializationForbidden }
 
-// MarshalText refuses implicit sensitive serialization with errors.ErrUnsupported.
-func (Message) MarshalText() ([]byte, error) { return nil, errors.ErrUnsupported }
+// MarshalText refuses implicit sensitive serialization with ErrSerializationForbidden.
+func (Message) MarshalText() ([]byte, error) { return nil, ErrSerializationForbidden }

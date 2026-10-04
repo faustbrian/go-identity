@@ -4,6 +4,15 @@
 
 ### Added
 
+- Typed rendered attempts/provider outcomes and bounded synchronous sender
+  execution with expiry, deadline, concurrency and ambiguous-outcome handling.
+  Provider callbacks do not retry or own workflow/queue policy. Durable service
+  admission and queue orchestration remain in development.
+
+- Stable `ErrSerializationForbidden` for sensitive JSON/text refusal, including
+  Go1.27 JSON error wrappers. This replaces the earlier experimental
+  `errors.ErrUnsupported` classification; content remains unavailable.
+
 - Email HTML fragments with escaped text/attributes, whole-URL origin binding,
   canonical HTML5 tokens and a non-active element/attribute profile. SMS remains
   plain text; scripts, CSS, events and ambiguous contexts fail closed.

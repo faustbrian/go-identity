@@ -2,7 +2,6 @@ package delivery
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"html"
 	"log/slog"
@@ -321,9 +320,9 @@ func (Template) LogValue() slog.Value        { return slog.StringValue("delivery
 func (RenderedMessage) LogValue() slog.Value { return slog.StringValue("delivery(redacted)") }
 
 // MarshalJSON refuses implicit content serialization; explicit queue custody is required.
-func (Template) MarshalJSON() ([]byte, error)        { return nil, errors.ErrUnsupported }
-func (RenderedMessage) MarshalJSON() ([]byte, error) { return nil, errors.ErrUnsupported }
+func (Template) MarshalJSON() ([]byte, error)        { return nil, ErrSerializationForbidden }
+func (RenderedMessage) MarshalJSON() ([]byte, error) { return nil, ErrSerializationForbidden }
 
 // MarshalText refuses implicit sensitive text serialization.
-func (Template) MarshalText() ([]byte, error)        { return nil, errors.ErrUnsupported }
-func (RenderedMessage) MarshalText() ([]byte, error) { return nil, errors.ErrUnsupported }
+func (Template) MarshalText() ([]byte, error)        { return nil, ErrSerializationForbidden }
+func (RenderedMessage) MarshalText() ([]byte, error) { return nil, ErrSerializationForbidden }

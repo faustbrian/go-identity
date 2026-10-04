@@ -101,8 +101,44 @@ The foundational HTML5 tokenizer is pinned to `golang.org/x/net v0.59.0`
 
 Ordinary fmt/slog output is redacted for messages, recipients and variables,
 including values marked `Sensitive=false`. JSON/text serialization refuses with
-`errors.ErrUnsupported`. Explicit fields remain sensitive; copying/logging them
+`ErrSerializationForbidden`. Explicit fields remain sensitive; copying/logging them
 bypasses redaction. No physical memory erasure is claimed.
+
+## Sender contract and execution policy
+
+`Sender.Send` accepts an already-rendered `Attempt`, bound to an exact tenant,
+intent, positive generation, provider idempotency key and UTC expiry. These
+fields prove shape, not lease ownership or authority; the durable queue must
+record/authorize the attempt before calling. The provider callback must honor
+its context and never retain the attempt, discover recipients, retry, or own
+workflow policy. Exported fields remain sensitive despite redacted diagnostics.
+
+`DefaultConfig` returns independent five-attempt policy values; `Validate`
+rejects zero/invalid timeout, concurrency, retention and backoff bounds. The
+reference composition will use its exact five-entry full-jitter schedule.
+The internal executor makes one synchronous invocation under the earliest
+parent/configured/effect-expiry deadline, with bounded capacity per composed
+executor. Capacity waiting is cancellable and counts against that deadline.
+No queue lock, transaction or detached goroutine spans the callback.
+
+Accepted, delivered, bounced and permanent rejection are distinct attributable
+results. `StateTransientFailure` is provider evidence only: the durable queue
+decides retry admission and timing. Callback errors, panics, malformed output
+and late success become `StateOutcomeUnknown` with a stable intent recovery
+handle; raw errors/panic payloads are discarded. No callback is automatically
+retried. Cancellation before invocation proves no call; cancellation after it
+starts cannot claim no remote effect. An arbitrary callback that ignores its
+context cannot be forcibly stopped safely; supplied callbacks must cooperate.
+
+There is intentionally no exported shortcut for sending an unrecorded attempt.
+Service admission, generation-fenced queue processing, durable completion and
+the owned capture sender remain in development. Shape/concurrency tests do not
+certify durable effects, queue authorization or production capture isolation.
+
+Serialization refusal now uses `ErrSerializationForbidden` rather than the
+earlier experimental `errors.ErrUnsupported`: Go1.27's legacy JSON/text method
+handling replaces the latter error. Consumers should classify the new error
+through `errors.Is`, including errors returned by `encoding/json`.
 
 ## Adoption and remaining work
 
