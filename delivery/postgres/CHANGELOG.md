@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Add optional original-command reconciliation results and a protected local
+  participant under the identity coordinator. Commit keyed progress, provider
+  evidence, erasure, audit and lifecycle together; preserve historical replay
+  and recover abandoned commands without a second journal. Existing migration
+  checksums are unchanged. Public query admission and cursor custody remain
+  unfinished.
+
 - Add optional forward reconciliation checkpoint storage and private borrowed
   effect application. Fence original generation and keyed cursor progress,
   commit provider evidence and terminal erasure together, and preserve original

@@ -36,7 +36,7 @@ func TestPublicContributorOriginalCoordinatorComposition(t *testing.T) {
 	if _, err := rolePool.Exec(ctx, auditpostgres.FreshInstallPreflightSQL()); err != nil {
 		t.Fatal("owned audit preflight failed")
 	}
-	for _, mode := range []string{"committed", "no-op", "delivery-failure", "native-committed", "native-owned", "public-owned", "public-state", "public-cancel", "public-receipt", "native-compatible-custody", "native-no-op", "native-missing", "native-failure", "native-cancel", "native-cancel-noop", "native-receipt"} {
+	for _, mode := range []string{"committed", "no-op", "delivery-failure", "native-committed", "native-owned", "public-owned", "public-state", "public-cancel", "public-receipt", "native-compatible-custody", "native-no-op", "native-missing", "native-failure", "native-cancel", "native-cancel-noop", "native-receipt", "native-reconcile"} {
 		t.Run(mode, func(t *testing.T) { testPublicComposition(t, mode) })
 	}
 }
@@ -1130,6 +1130,19 @@ func testPublicComposition(t *testing.T, mode string) {
 	}
 	if err := contributor.Stage(ctx, work, prepared); err == nil {
 		t.Fatal("closed original Work survived")
+	}
+	if mode == "native-reconcile" {
+		runner, err := migrations.NewRunner(MigrationSource{Base: identitypostgres.MigrationSource{}, Version: 10, WorkerVersion: 11, PolicyVersion: 12, KeyedVersion: 13, StateVersion: 14, ReceiptVersion: 15, ReconciliationVersion: 16, ReconciliationCommandVersion: 17}, backend)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := runner.Up(ctx); err != nil {
+			t.Fatal("populated native reconciliation migration", err)
+		}
+		if _, err := runner.Up(ctx); err != nil {
+			t.Fatal("native reconciliation migration replay", err)
+		}
+		testNativeReconciliation(t, ctx, pool, owned, repo, auditing, lifecycle, contributor, receipt.Binding)
 	}
 	if mode == "native-receipt" {
 		receiptRunner, err := migrations.NewRunner(MigrationSource{Base: identitypostgres.MigrationSource{}, Version: 10, WorkerVersion: 11, PolicyVersion: 12, KeyedVersion: 13, StateVersion: 14, ReceiptVersion: 15, ReceiptCommandVersion: 16}, backend)

@@ -19,13 +19,25 @@ import (
 // query outside transactions. This phase never queries a provider, grants retry
 // permission, closes a transaction or supplies a second reservation authority.
 func (s *receiptStore) reconcileIn(ctx context.Context, sql cancellationSQL, q delivery.ReceiptRecordRequest, subject string, expectedStep int64, before, after [32]byte) (delivery.ReceiptRecordResult, error) {
+	if s == nil || q.Validate() != nil {
+		return delivery.ReceiptRecordResult{}, delivery.ErrInvalidInput
+	}
+	event, evidence := s.digests(q)
+	return s.reconcileEvidenceIn(ctx, sql, q, subject, expectedStep, before, after, event, evidence)
+}
+
+// Protected commands carry original keyed evidence, never raw provider events.
+// Do not rehash the redacted placeholder produced by the command decoder.
+func (s *receiptStore) reconcileEvidenceIn(ctx context.Context, sql cancellationSQL, q delivery.ReceiptRecordRequest, subject string, expectedStep int64, before, after, event, evidence [32]byte) (delivery.ReceiptRecordResult, error) {
 	if ctx == nil || s == nil || !safeID(s.deployment, false) || s.namespaceKey == ([32]byte{}) || sql.scan == nil || sql.exec == nil || q.Validate() != nil || !safeID(subject, false) || expectedStep < 0 || expectedStep == 9223372036854775807 {
+		return delivery.ReceiptRecordResult{}, delivery.ErrInvalidInput
+	}
+	if event == ([32]byte{}) || evidence == ([32]byte{}) {
 		return delivery.ReceiptRecordResult{}, delivery.ErrInvalidInput
 	}
 	if err := ctx.Err(); err != nil {
 		return delivery.ReceiptRecordResult{}, err
 	}
-	event, _ := s.digests(q)
 	var state, provider string
 	err := sql.scan(ctx, `SELECT state,provider FROM identity.delivery_intents WHERE deployment=$1 AND tenant_id=$2 AND effect_id=$3 AND subject_id=$4 FOR UPDATE`, []any{s.deployment, string(q.TenantID), string(q.IntentID), subject}, &state, &provider)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -46,7 +58,7 @@ func (s *receiptStore) reconcileIn(ctx context.Context, sql cancellationSQL, q d
 			return delivery.ReceiptRecordResult{}, delivery.ErrConflict
 		}
 		// Existing receipt evidence owns immutable result and changed-input denial.
-		return s.recordIn(ctx, sql, q, subject)
+		return s.recordEvidenceIn(ctx, sql, q, subject, event, evidence)
 	}
 	if !errors.Is(err, pgx.ErrNoRows) {
 		return delivery.ReceiptRecordResult{}, attemptFailure(ctx, err)
@@ -75,7 +87,7 @@ func (s *receiptStore) reconcileIn(ctx context.Context, sql cancellationSQL, q d
 	} else if step < 1 || step != expectedStep || len(latest) != 32 || !hmac.Equal(latest, before[:]) {
 		return delivery.ReceiptRecordResult{}, delivery.ErrConflict
 	}
-	out, err := s.recordIn(ctx, sql, q, subject)
+	out, err := s.recordEvidenceIn(ctx, sql, q, subject, event, evidence)
 	if err != nil {
 		return delivery.ReceiptRecordResult{}, err
 	}

@@ -473,3 +473,14 @@ public adapter, not ask consumers to implement its missing stores or workflow.
 
 Exact coverage/mutation, complete PostgreSQL composition, provider interoperability,
 clean-consumer and remaining release checks are pending.
+
+`MigrationSource.ReconciliationCommandVersion` optionally extends
+`ReconciliationVersion` with immutable original-command results. It must be
+strictly greater; zero retains every installed checksum. The private protected
+participant applies already-authenticated evidence under the sole identity
+coordinator, with generation/step/status fencing and atomic receipt, progress,
+erasure, audit and `delivery.reconciled.v1` lifecycle effects. Exact kernel replay
+returns its historical result; abandoned command recovery consults primary
+participant evidence. This is not a public reconciliation endpoint or an
+independent journal. Provider querying, recoverable raw-cursor custody and
+authenticated public Queue composition remain unfinished.
