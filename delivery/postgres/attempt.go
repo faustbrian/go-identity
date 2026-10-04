@@ -395,9 +395,10 @@ func (s *attemptStore) Complete(ctx context.Context, q delivery.CompleteRequest)
 		return delivery.CompleteResult{}, attemptFailure(w, err)
 	}
 	now = now.UTC()
-	// Local cancellation marks uncertainty but must not discard attributable
-	// evidence from the original live invocation. No takeover/renewal is allowed.
-	canComplete := state == "submitted" || state == "outcome-unknown" && cancelRequested && outcome == nil
+	// Cancellation or an unknown receipt marks uncertainty without discarding
+	// evidence from the original live invocation. The unchanged generation,
+	// owner, deadline and uncompleted history below forbid takeover/renewal.
+	canComplete := state == "submitted" || state == "outcome-unknown" && outcome == nil
 	if !canComplete || generation != int64(q.Generation) || worker == nil || *worker != q.WorkerID || lease == nil || !lease.After(now) || !hmac.Equal(retainedPolicy, s.policyDigest[:]) {
 		return delivery.CompleteResult{}, delivery.ErrConflict
 	}

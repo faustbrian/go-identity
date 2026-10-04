@@ -15,6 +15,7 @@ import (
 	"github.com/faustbrian/go-identity/delivery"
 	deliverypostgres "github.com/faustbrian/go-identity/delivery/postgres"
 	identitypostgres "github.com/faustbrian/go-identity/postgres"
+	migrations "github.com/faustbrian/go-migrations/v3"
 	secretenvelope "github.com/faustbrian/go-secret-envelope"
 	"github.com/faustbrian/go-secret-envelope/adapters/keyring"
 )
@@ -179,6 +180,23 @@ func TestPublicMigrationSourcePreservesOwnedHistory(t *testing.T) {
 			t.Fatal("installed state history rewritten")
 		}
 	}
+	for _, cancellation := range []migrations.Version{0, 15} {
+		source := deliverypostgres.MigrationSource{Base: base, Version: 10, WorkerVersion: 11, PolicyVersion: 12, KeyedVersion: 13, StateVersion: 14, CancellationVersion: cancellation}
+		previous, err := source.Load(context.Background())
+		if err != nil {
+			t.Fatal(err)
+		}
+		source.ReceiptVersion = 16
+		receipts, err := source.Load(context.Background())
+		if err != nil || len(receipts) != len(previous)+1 || receipts[len(previous)].DownSQL() != "" {
+			t.Fatal("receipt forward extension", err)
+		}
+		for n, m := range previous {
+			if m.Checksum() != receipts[n].Checksum() {
+				t.Fatal("receipt migration rewrote installed history")
+			}
+		}
+	}
 	for _, invalid := range []deliverypostgres.MigrationSource{
 		{Base: base, Version: 10, PolicyVersion: 12},
 		{Base: base, Version: 10, WorkerVersion: 11, PolicyVersion: 11},
@@ -189,6 +207,9 @@ func TestPublicMigrationSourcePreservesOwnedHistory(t *testing.T) {
 		{Base: base, Version: 10, WorkerVersion: 11, PolicyVersion: 12, KeyedVersion: 13, StateVersion: 13},
 		{Base: base, Version: 10, CancellationVersion: 15},
 		{Base: base, Version: 10, WorkerVersion: 11, PolicyVersion: 12, KeyedVersion: 13, StateVersion: 14, CancellationVersion: 14},
+		{Base: base, Version: 10, ReceiptVersion: 16},
+		{Base: base, Version: 10, WorkerVersion: 11, PolicyVersion: 12, KeyedVersion: 13, StateVersion: 14, ReceiptVersion: 14},
+		{Base: base, Version: 10, WorkerVersion: 11, PolicyVersion: 12, KeyedVersion: 13, StateVersion: 14, CancellationVersion: 15, ReceiptVersion: 15},
 	} {
 		if _, err := invalid.Load(context.Background()); err == nil {
 			t.Fatal("invalid policy migration order admitted")

@@ -132,9 +132,43 @@ The private native cancellation participant stages the stop, version CAS and
 result in that same coordinator Work; protected audit and lifecycle must commit
 with them. A lifecycle failure restores custody and status. Original replay
 returns its retained receipt without another stop or version increment.
-These retained records contain no raw operator reason or provider evidence.
-Application roles must not own DDL or trigger controls. Authenticated public
-cancellation, provider cancellation and full Queue composition remain unfinished.
+These cancellation records contain no raw operator reason or provider evidence.
+Application roles must not own DDL or trigger controls. Public local cancellation
+is explicitly selected through `EnqueueConfig.Cancellation`; provider cancellation
+and full Queue composition remain unfinished.
+
+### Provider-receipt persistence foundation
+
+`MigrationSource.ReceiptVersion` optionally appends immutable redacted provider
+event checkpoints after `StateVersion` and any selected `CancellationVersion`.
+Cancellation is not a prerequisite; zero preserves all installed migration
+bytes. The migration creates a provider-bound unique index on populated intents
+and a bounded evidence table with attempt/effect foreign keys. It takes schema
+locks and scans the existing intent index under 5s lock/30s statement timeouts;
+plan an appropriate migration window. It performs no custody backfill and has
+no destructive down migration. Application roles must not own DDL or disable
+its immutability triggers.
+
+The private borrowed effect phase uses the deployment's existing immutable
+namespace key, HMAC event/evidence identities, and intent-before-processing
+locks. It applies the core receipt policy atomically with erasure and an
+immutable event result. Identical events under another kernel command replay
+their original redacted state, not the later current delivery state. Changed
+evidence conflicts. No raw event ID, callback body, recipient or provider
+reference is retained. Evidence fingerprints preserve exact authenticated
+timestamps; comparisons normalize to PostgreSQL microseconds. Conflicting
+states within one microsecond fail closed rather than invent an event order.
+
+Definitive acceptance/terminal observations fence competing workers; unknown
+observations retain the unchanged live owner so its attributable completion
+can still settle the effect. Neither path renews leases or resubmits work.
+Recorded worker completion replay remains unchanged after later receipts.
+
+This is not yet a public authenticated receipt endpoint or full Queue. Current
+policy, callback authentication, audit/original kernel command composition,
+public status projection, reconciliation and retention/role/release proofs
+remain required before exposing it. Checkpoints cannot presently be deleted;
+retention/lifecycle completion must be resolved before production adoption.
 
 `PrepareEnqueue` derives the native command's primary effect ID; its
 `EnqueueCommand` freezes every safe effect field and confidential logical digest,

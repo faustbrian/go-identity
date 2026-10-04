@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Forward optional provider-receipt schema and borrowed receipt effect phase:
+  scoped keyed event dedupe, immutable evidence/results, generation fencing,
+  monotonic provider observations and atomic terminal ciphertext erasure.
+  Unknown observations preserve the original live worker's completion fence;
+  definitive provider evidence fences late competing completion. Public callback
+  authentication/coordinator composition and reconciliation remain unfinished.
+
 - Add opt-in authenticated local cancellation through the original kernel
   command authority. Freeze version/generation, retain keyed confidential reason
   identity, and atomically persist protected audit, lifecycle and exact replay

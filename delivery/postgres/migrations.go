@@ -37,6 +37,11 @@ type MigrationSource struct {
 	// results. It requires StateVersion and must be greater. Zero preserves
 	// installed histories; selecting it alone grants no public Queue authority.
 	CancellationVersion migrations.Version
+	// ReceiptVersion appends redacted immutable provider-event checkpoints.
+	// It requires StateVersion and must exceed it and any CancellationVersion.
+	// Cancellation is not a prerequisite. Zero preserves installed histories;
+	// schema selection does not expose authenticated callbacks or a full Queue.
+	ReceiptVersion migrations.Version
 }
 
 var _ migrations.Source = MigrationSource{}
@@ -86,6 +91,12 @@ func (s MigrationSource) Load(ctx context.Context) ([]migrations.Migration, erro
 	}
 	if s.CancellationVersion != 0 {
 		if s.StateVersion == 0 || s.CancellationVersion <= s.StateVersion {
+			return nil, delivery.ErrInvalidInput
+		}
+		additional++
+	}
+	if s.ReceiptVersion != 0 {
+		if s.StateVersion == 0 || s.ReceiptVersion <= s.StateVersion || s.CancellationVersion != 0 && s.ReceiptVersion <= s.CancellationVersion {
 			return nil, delivery.ErrInvalidInput
 		}
 		additional++
@@ -142,6 +153,13 @@ func (s MigrationSource) Load(ctx context.Context) ([]migrations.Migration, erro
 			return nil, delivery.ErrUnavailable
 		}
 		result[len(history)+5] = cancel
+	}
+	if s.ReceiptVersion != 0 {
+		receipt, err := migrations.NewMigration(s.ReceiptVersion, "identity_delivery_receipts", migrations.TransactionModeDefault, receiptSchemaSQL, "")
+		if err != nil {
+			return nil, delivery.ErrUnavailable
+		}
+		result[len(result)-1] = receipt
 	}
 	return result, nil
 }
