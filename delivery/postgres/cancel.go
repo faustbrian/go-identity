@@ -19,6 +19,17 @@ import (
 // fence so attributable in-flight completion can still settle the outcome;
 // it cannot renew that fence or authorize another invocation.
 func (s *attemptStore) cancel(ctx context.Context, q delivery.CancelRequest, subject string) (delivery.CancelResult, error) {
+	return s.cancelMode(ctx, q, subject, false)
+}
+
+// The selected forward profile preserves a no-op's exact local-stop result.
+// Public policy/audit/original-command composition remains the caller's owner;
+// neither private variant is an authenticated endpoint or full Queue.Cancel.
+func (s *attemptStore) cancelTracked(ctx context.Context, q delivery.CancelRequest, subject string) (delivery.CancelResult, error) {
+	return s.cancelMode(ctx, q, subject, true)
+}
+
+func (s *attemptStore) cancelMode(ctx context.Context, q delivery.CancelRequest, subject string, tracked bool) (delivery.CancelResult, error) {
 	if !safeID(string(q.TenantID), false) || !safeID(subject, false) || len(q.IntentID) != 64 || len(q.Reason) < 1 || len(q.Reason) > 256 || !utf8.ValidString(q.Reason) {
 		return delivery.CancelResult{}, delivery.ErrInvalidInput
 	}
@@ -38,7 +49,11 @@ func (s *attemptStore) cancel(ctx context.Context, q delivery.CancelRequest, sub
 	defer rollbackAttempt(tx)
 	var snapshot deliveryStatus
 	var aad []byte
-	err = tx.QueryRow(w, `SELECT state,no_op,expires_at<=clock_timestamp(),binding_aad FROM identity.delivery_intents WHERE deployment=$1 AND tenant_id=$2 AND effect_id=$3 AND subject_id=$4 FOR UPDATE`, s.deployment, string(q.TenantID), string(q.IntentID), subject).Scan(&snapshot.state, &snapshot.noop, &snapshot.expired, &aad)
+	stopColumn := "NULL::text"
+	if tracked {
+		stopColumn = "local_stop_state"
+	}
+	err = tx.QueryRow(w, `SELECT state,no_op,expires_at<=clock_timestamp(),binding_aad,`+stopColumn+` FROM identity.delivery_intents WHERE deployment=$1 AND tenant_id=$2 AND effect_id=$3 AND subject_id=$4 FOR UPDATE`, s.deployment, string(q.TenantID), string(q.IntentID), subject).Scan(&snapshot.state, &snapshot.noop, &snapshot.expired, &aad, &snapshot.localStop)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return delivery.CancelResult{}, delivery.ErrNotFound
 	}
@@ -99,6 +114,13 @@ func (s *attemptStore) cancel(ctx context.Context, q delivery.CancelRequest, sub
 		if snapshot.noop && snapshot.expired {
 			out = delivery.CancelResult{State: delivery.StateExpired}
 		}
+		if snapshot.localStop != nil {
+			observed, err := snapshot.result()
+			if err != nil {
+				return delivery.CancelResult{}, err
+			}
+			out = delivery.CancelResult{State: observed.State, LocalCancelled: observed.State == delivery.StateCancelled}
+		}
 	default:
 		observed, err := snapshot.result()
 		if err != nil || !observed.Terminal {
@@ -113,6 +135,15 @@ func (s *attemptStore) cancel(ctx context.Context, q delivery.CancelRequest, sub
 	}
 	if snapshot.generation > 0 && (out.LocalCancelled || erase) {
 		if _, err := tx.Exec(w, `UPDATE identity.delivery_processing SET cancel_requested=true,next_attempt_at=NULL WHERE deployment=$1 AND tenant_id=$2 AND effect_id=$3 AND generation=$4`, s.deployment, string(q.TenantID), string(q.IntentID), snapshot.generation); err != nil {
+			return delivery.CancelResult{}, attemptFailure(w, err)
+		}
+	}
+	if tracked && snapshot.noop && snapshot.localStop == nil {
+		checkpoint := "cancelled"
+		if out.State == delivery.StateExpired {
+			checkpoint = "expired"
+		}
+		if _, err := tx.Exec(w, `UPDATE identity.delivery_intents SET local_stop_state=$4,local_stop_at=clock_timestamp() WHERE deployment=$1 AND tenant_id=$2 AND effect_id=$3`, s.deployment, string(q.TenantID), string(q.IntentID), checkpoint); err != nil {
 			return delivery.CancelResult{}, attemptFailure(w, err)
 		}
 	}

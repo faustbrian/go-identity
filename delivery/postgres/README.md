@@ -72,6 +72,22 @@ replacement invocation. This is not public `Queue.Cancel`: current policy,
 protected original-command audit/replay and no-op cancellation checkpoint
 composition are still required before exposing cancellation to consumers.
 
+Select `MigrationSource.StateVersion` strictly after `KeyedVersion` and set
+`EnqueueConfig.StateTracking=true` to read immutable no-op local-stop checkpoints.
+The constructor rejects an absent selected schema before policy/key registration;
+it does not install migrations. False preserves legacy admission/status behavior.
+The forward migration leaves all installed checksums and queued custody intact.
+Every intent UPDATE, including old-worker writes and metadata-only updates,
+advances its database-owned uint64 status version atomically; clients cannot
+assign a different version. Version exhaustion fails closed. A no-op local-stop
+checkpoint is write-once with database occurrence time, preserving cancelled or
+expired status across retries and later expiry without exposing recipient state.
+Application roles must not own tables/triggers or DDL; this invariant does not
+protect against a privileged operator disabling enforcement. The migration takes
+a bounded table lock and validates new nullable metadata under its transaction;
+lock/statement timeout rolls it back for an exact retry, never partial success.
+This selected profile still does not expose public cancellation or a full Queue.
+
 `PrepareEnqueue` derives the native command's primary effect ID; its
 `EnqueueCommand` freezes every safe effect field and confidential logical digest,
 without exporting ciphertext or rendered content. `NewEnqueueContributor`

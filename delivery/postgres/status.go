@@ -56,13 +56,17 @@ func (s *EnqueueService) StatusGet(ctx context.Context, q delivery.StatusGetRequ
 		return delivery.StatusGetResult{}, err
 	}
 	var snapshot deliveryStatus
+	stopColumn := "NULL::text"
+	if s.stateTracking {
+		stopColumn = "i.local_stop_state"
+	}
 	err = s.keyed.pool.QueryRow(w, `SELECT i.state,COALESCE(p.generation,0),h.outcome,
 p.lease_owner IS NOT NULL AND p.lease_until>clock_timestamp(),
-h.provider_reference_digest IS NOT NULL,i.no_op,i.expires_at<=clock_timestamp()
+h.provider_reference_digest IS NOT NULL,i.no_op,i.expires_at<=clock_timestamp(),`+stopColumn+`
 FROM identity.delivery_intents i
 LEFT JOIN identity.delivery_processing p USING(deployment,tenant_id,effect_id)
 LEFT JOIN identity.delivery_attempt_history h ON h.deployment=p.deployment AND h.tenant_id=p.tenant_id AND h.effect_id=p.effect_id AND h.generation=p.generation
-WHERE i.deployment=$1 AND i.tenant_id=$2 AND i.effect_id=$3 AND i.subject_id=$4`, s.keyed.deployment, string(q.TenantID), string(q.IntentID), string(user)).Scan(&snapshot.state, &snapshot.generation, &snapshot.outcome, &snapshot.live, &snapshot.reference, &snapshot.noop, &snapshot.expired)
+WHERE i.deployment=$1 AND i.tenant_id=$2 AND i.effect_id=$3 AND i.subject_id=$4`, s.keyed.deployment, string(q.TenantID), string(q.IntentID), string(user)).Scan(&snapshot.state, &snapshot.generation, &snapshot.outcome, &snapshot.live, &snapshot.reference, &snapshot.noop, &snapshot.expired, &snapshot.localStop)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return delivery.StatusGetResult{}, delivery.ErrNotFound
 	}
@@ -79,6 +83,7 @@ type deliveryStatus struct {
 	generation                     int64
 	outcome                        *int16
 	live, reference, noop, expired bool
+	localStop                      *string
 }
 
 func (s deliveryStatus) result() (delivery.StatusGetResult, error) {
@@ -86,9 +91,24 @@ func (s deliveryStatus) result() (delivery.StatusGetResult, error) {
 		return delivery.StatusGetResult{}, delivery.ErrUnavailable
 	}
 	out := delivery.StatusGetResult{AttemptGeneration: uint32(s.generation), ProviderReferencePresent: s.reference}
+	if !s.noop && s.localStop != nil {
+		return delivery.StatusGetResult{}, delivery.ErrUnavailable
+	}
 	if s.noop {
 		if s.state != "cancelled" || s.generation != 0 || s.outcome != nil || s.live || s.reference {
 			return delivery.StatusGetResult{}, delivery.ErrUnavailable
+		}
+		if s.localStop != nil {
+			switch *s.localStop {
+			case "cancelled":
+				out.State = delivery.StateCancelled
+			case "expired":
+				out.State = delivery.StateExpired
+			default:
+				return delivery.StatusGetResult{}, delivery.ErrUnavailable
+			}
+			out.Terminal = true
+			return out, nil
 		}
 		out.State = delivery.StateQueued
 		if s.expired {

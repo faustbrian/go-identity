@@ -29,6 +29,10 @@ type MigrationSource struct {
 	// It requires PolicyVersion and must be strictly greater. Zero preserves
 	// the installed history and does not expose a complete public Queue.
 	KeyedVersion migrations.Version
+	// StateVersion optionally appends database-owned monotonic status versions
+	// and immutable no-op local-stop checkpoints. It requires KeyedVersion and
+	// must be greater. Zero preserves all existing migration bytes/profiles.
+	StateVersion migrations.Version
 }
 
 var _ migrations.Source = MigrationSource{}
@@ -66,6 +70,12 @@ func (s MigrationSource) Load(ctx context.Context) ([]migrations.Migration, erro
 	}
 	if s.KeyedVersion != 0 {
 		if s.PolicyVersion == 0 || s.KeyedVersion <= s.PolicyVersion {
+			return nil, delivery.ErrInvalidInput
+		}
+		additional++
+	}
+	if s.StateVersion != 0 {
+		if s.KeyedVersion == 0 || s.StateVersion <= s.KeyedVersion {
 			return nil, delivery.ErrInvalidInput
 		}
 		additional++
@@ -108,6 +118,13 @@ func (s MigrationSource) Load(ctx context.Context) ([]migrations.Migration, erro
 			return nil, delivery.ErrUnavailable
 		}
 		result[len(history)+3] = keyed
+	}
+	if s.StateVersion != 0 {
+		state, err := migrations.NewMigration(s.StateVersion, "identity_delivery_status", migrations.TransactionModeDefault, stateSchemaSQL, "")
+		if err != nil {
+			return nil, delivery.ErrUnavailable
+		}
+		result[len(history)+4] = state
 	}
 	return result, nil
 }

@@ -37,6 +37,11 @@ type EnqueueConfig struct {
 	Timeout               time.Duration
 	NamespaceKey          [32]byte
 	Policies              map[uint64]delivery.Config
+	// StateTracking explicitly selects the StateVersion migration profile for
+	// no-op local-stop status. False retains the legacy admission/status schema.
+	// True fails closed if the forward migration is absent; it does not enable
+	// public cancellation, provider callbacks or full Queue composition.
+	StateTracking bool
 }
 
 // EnqueueCommandRequest is trusted platform/workflow input, not HTTP JSON or
@@ -66,11 +71,12 @@ type EnqueueCommandRequest struct {
 // Concurrent calls are supported; no goroutines/background work are started.
 // Zero is invalid. Applications do not supply domain stores or orchestration.
 type EnqueueService struct {
-	executor   *enqueueExecutor
-	repository *identitypostgres.Repository
-	renderer   *delivery.TemplateRenderer
-	policies   *retainedPolicies
-	keyed      *keyedAdmission
+	executor      *enqueueExecutor
+	repository    *identitypostgres.Repository
+	renderer      *delivery.TemplateRenderer
+	policies      *retainedPolicies
+	keyed         *keyedAdmission
+	stateTracking bool
 }
 
 func (EnqueueConfig) Format(s fmt.State, _ rune) {
@@ -174,6 +180,13 @@ func NewEnqueueService(ctx context.Context, pool *database.Pool, c EnqueueConfig
 	}
 	w, stop := context.WithTimeout(ctx, c.Timeout)
 	defer stop()
+	if c.StateTracking {
+		// Resolve the selected columns before any policy/namespace registration.
+		// This reads no rows or ciphertext and never applies migrations silently.
+		if _, err := pool.Raw().Exec(w, `SELECT status_version,local_stop_state,local_stop_at FROM identity.delivery_intents WHERE false`); err != nil {
+			return nil, attemptFailure(w, err)
+		}
+	}
 	policies, err := newRetainedPolicies(w, pool.Raw(), c.Custody.Deployment, c.Policies, c.Timeout)
 	if err != nil {
 		return nil, err
@@ -182,7 +195,7 @@ func NewEnqueueService(ctx context.Context, pool *database.Pool, c EnqueueConfig
 	if err != nil {
 		return nil, err
 	}
-	return &EnqueueService{executor, repo, renderer, policies, keyed}, nil
+	return &EnqueueService{executor, repo, renderer, policies, keyed, c.StateTracking}, nil
 }
 
 // Enqueue authorizes exact scope before primary recipient discovery and owned

@@ -36,7 +36,7 @@ func TestPublicContributorOriginalCoordinatorComposition(t *testing.T) {
 	if _, err := rolePool.Exec(ctx, auditpostgres.FreshInstallPreflightSQL()); err != nil {
 		t.Fatal("owned audit preflight failed")
 	}
-	for _, mode := range []string{"committed", "no-op", "delivery-failure", "native-committed", "native-owned", "public-owned", "native-compatible-custody", "native-no-op", "native-missing", "native-failure"} {
+	for _, mode := range []string{"committed", "no-op", "delivery-failure", "native-committed", "native-owned", "public-owned", "public-state", "native-compatible-custody", "native-no-op", "native-missing", "native-failure"} {
 		t.Run(mode, func(t *testing.T) { testPublicComposition(t, mode) })
 	}
 }
@@ -160,7 +160,7 @@ func testPublicComposition(t *testing.T, mode string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if mode == "public-owned" {
+	if mode == "public-owned" || mode == "public-state" {
 		runner, err := migrations.NewRunner(MigrationSource{Base: identitypostgres.MigrationSource{}, Version: 10, WorkerVersion: 11, PolicyVersion: 12, KeyedVersion: 13}, backend)
 		if err != nil {
 			t.Fatal(err)
@@ -192,6 +192,19 @@ func testPublicComposition(t *testing.T, mode string) {
 		})
 		config := EnqueueConfig{Custody: ContributorConfig{Deployment: "test", CurrentDigestKeyVersion: 1, RetainedDigestKeys: map[uint32][32]byte{1: {3}}, ActiveEnvelopeKeyID: "envelope-a", PreparationTimeout: time.Second, ProviderProfiles: map[uint64]ProviderProfile{1: {Provider: "test-provider", PolicyVersion: 1}}}, Coordinator: identitypostgres.CoordinatorConfig{MaximumDuration: 2 * time.Second, LeaseDuration: time.Minute, CurrentFingerprintKeyVersion: 1, RetainedFingerprintKeys: map[uint32][32]byte{1: {1}}}, PolicyID: "policy", PolicyVersion: 1, AuditRetentionVersion: 1, Timeout: 2 * time.Second, NamespaceKey: [32]byte{7}, Policies: map[uint64]delivery.Config{1: delivery.DefaultConfig()}}
 		templates := []delivery.Template{{ID: "verify", Version: 1, Channel: delivery.ChannelEmail, Locale: "en", ContentType: "text/plain", Subject: "Verification", Body: "Code: {{.code}}", MaxRenderedBytes: 1024, RequiredVariables: []string{"code"}, VariableSchema: []delivery.VariableSchema{{Name: "code", Kind: "code", Sensitive: true}}}}
+		if mode == "public-state" {
+			config.StateTracking = true
+			if _, err := NewEnqueueService(ctx, owned, config, contributor.store.codec.service, policy, templates); !errors.Is(err, delivery.ErrUnavailable) {
+				t.Fatal("selected tracking admitted absent migration", err)
+			}
+			tracked, err := migrations.NewRunner(MigrationSource{Base: identitypostgres.MigrationSource{}, Version: 10, WorkerVersion: 11, PolicyVersion: 12, KeyedVersion: 13, StateVersion: 14}, backend)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := tracked.Up(ctx); err != nil {
+				t.Fatal("selected state migration", err)
+			}
+		}
 		public, err := NewEnqueueService(ctx, owned, config, contributor.store.codec.service, policy, templates)
 		if err != nil {
 			t.Fatal(err)
@@ -490,6 +503,31 @@ func testPublicComposition(t *testing.T, mode string) {
 				var unfinished bool
 				if err := pool.QueryRow(ctx, `SELECT i.state,h.outcome IS NULL FROM identity.delivery_intents i JOIN identity.delivery_attempt_history h USING(deployment,tenant_id,effect_id) WHERE i.deployment='test' AND i.tenant_id=$1 AND i.effect_id=$2`, string(b.TenantID), string(admitted.IntentID)).Scan(&state, &unfinished); err != nil || state != "submitted" || !unfinished {
 					t.Fatal("status read mutated an unknown attempt", err)
+				}
+			}
+		}
+		if public.stateTracking {
+			for _, noop := range []bool{false, true} {
+				fresh := request
+				fresh.Binding.CommandID, err = identity.NewCommandID()
+				if err != nil {
+					t.Fatal(err)
+				}
+				fresh.IdempotencyKey = fmt.Sprintf("public-stop-%t", noop)
+				fresh.NoOpEquivalent = noop
+				if noop {
+					fresh.IdentifierID = ""
+				}
+				intent, err := public.Enqueue(ctx, fresh)
+				if err != nil {
+					t.Fatal("state admission", err)
+				}
+				if _, err := worker.cancelTracked(ctx, delivery.CancelRequest{TenantID: statusRequest.TenantID, IntentID: intent.IntentID, Reason: "workflow-cancel"}, string(b.UserID)); err != nil {
+					t.Fatal("state stop", err)
+				}
+				observed, err := public.StatusGet(ctx, delivery.StatusGetRequest{TenantID: statusRequest.TenantID, IntentID: intent.IntentID}, b.UserID, statusScope)
+				if err != nil || observed != (delivery.StatusGetResult{State: delivery.StateCancelled, Terminal: true}) {
+					t.Fatal("state stop exposed no-op custody", err, observed)
 				}
 			}
 		}

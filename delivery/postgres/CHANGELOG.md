@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add an opt-in forward status-tracking profile without rewriting installed
+  migration history or queued custody. Preserve old-writer monotonic versions
+  and immutable no-op local-stop metadata across expiry; legacy status remains
+  supported, and selecting absent tracking schema fails closed.
+
 - Preserve live, attributable worker completion across local cancellation
   fences while preventing lease renewal and retry. Add the private atomic
   cancellation foundation; authenticated public cancellation remains unfinished.
