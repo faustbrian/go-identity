@@ -4,6 +4,12 @@
 
 ### Added
 
+- Core one-attempt claim/send/complete execution with capacity before leasing,
+  tenant/generation binding, lease-bounded sends, non-invocation evidence and
+  bounded cancellation-independent outcome bookkeeping. Completion ambiguity
+  retains the stable intent handle and never automatically resubmits. Durable
+  service construction, admission and adapters remain in development.
+
 - Queue completion policy with generation checks, attributable-only retries,
   bounded full jitter, provider throttling floors and expiry/cancellation/
   exhaustion decisions. Unknown outcomes never become automatic retries;

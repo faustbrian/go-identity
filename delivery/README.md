@@ -140,6 +140,18 @@ cancelled/expired merely because local time or cancellation changed. Expired
 bearer payload custody must still be erased while retaining unknown outcome.
 These decisions require atomic durable generation-CAS application; the policy
 function itself supplies no lease, authentication, persistence or cleanup proof.
+The internal processor now connects one scoped committed claim to one sender
+invocation and one exact generation completion. Capacity is acquired before
+claiming, and the sender also stops at the absolute queue lease deadline.
+Queue calls must return outside their database transaction; this core contains
+no database locks, queue store, background goroutine or automatic send retry.
+Cancellation before invocation is reported separately from an ambiguous call.
+After claiming, completion runs synchronously despite caller cancellation,
+within one additional SenderTimeout budget; it cannot renew authorization,
+lease or generation. Failed/malformed/ambiguous completion retains the stable
+intent for recovery, even if the provider claimed success. Transfer values
+refuse implicit serialization and redact diagnostics. Queue doubles establish
+this handshake only, not a live lease, durable CAS or actual payload erasure.
 Service admission, generation-fenced queue processing, durable completion and
 the owned capture sender remain in development. Shape/concurrency tests do not
 certify durable effects, queue authorization or production capture isolation.
