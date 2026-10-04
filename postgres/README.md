@@ -1,5 +1,26 @@
 # Identity PostgreSQL
 
+## Locked credential eligibility
+
+During its synchronous native feature invocation, a registered participant can
+call `Work.RequireActiveCredential` with its exact instance and a frozen
+`CredentialAdmission`. The native command must bind all expected fields before
+reservation: credential reference/version plus independent user-authority,
+identifier and user-wide credential epochs. The aggregate user version is not
+a security epoch. Existing participants need not opt in.
+
+The helper checks the current kernel rows under share locks retained until the
+coordinator commits or aborts, then samples primary time for exclusive expiry.
+Absent, blocked, disabled or stale credentials deny uniformly; an ignored
+denial poisons Work and prevents commit, including earlier provisional writes.
+No callbacks, external services or separate transactions run in this helper.
+
+This is only kernel eligibility, not session issuance or bearer authentication.
+Native issuers must additionally establish private proof provenance, current
+global/tenant/authorization and optional-owner authority, and atomic one-time
+finalization. The returned time is not a renewable validity lease. Real-primary
+coordinator tests use a synthetic participant, not a completed session issuer.
+
 ## Original-command encrypted delivery
 
 `CommandPlan.Delivery` optionally declares 1..16 required effects and the exact

@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add active-participant credential admission under the existing coordinator.
+  Exact credential and independent user, identifier and credential epochs are
+  checked under primary row locks, with expiry sampled after lock acquisition.
+  Denial invalidates the work; this prerequisite neither issues sessions nor
+  replaces proof consumption or other owners' current-authority checks.
+
 - Add owner-checked delivery staging under the frozen original participant.
   Identically configured unenlisted contributors cannot stage their custody;
   existing trusted low-level staging remains compatible.

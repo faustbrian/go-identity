@@ -24,6 +24,10 @@ type featureExecutionPhase struct {
 	fail, wrongReceipt, panicApply, unknownRecovery bool
 	panicValidate                                   bool
 	calls                                           int
+	admission                                       *CredentialAdmission
+	beforeAdmission                                 func(context.Context, Work) error
+	ignoreAdmissionDenial                           bool
+	afterAdmission                                  func(context.Context, Work) error
 }
 
 func (*featureExecutionPhase) Descriptor() ContributorDescriptor {
@@ -79,6 +83,24 @@ func (*featureExecutionAuditPhase) RecoverParticipant(ctx context.Context, w Rec
 }
 func (p *featureExecutionPhase) ApplyFeature(ctx context.Context, w Work, command identity.Command) (identity.FeatureReceipt, error) {
 	p.calls++
+	if p.admission != nil {
+		if p.beforeAdmission != nil {
+			if err := p.beforeAdmission(ctx, w); err != nil {
+				return identity.FeatureReceipt{}, err
+			}
+		}
+		if _, err := w.RequireActiveCredential(ctx, p, *p.admission); err != nil {
+			if p.ignoreAdmissionDenial {
+				return identity.FeatureReceipt{}, nil
+			}
+			return identity.FeatureReceipt{}, err
+		}
+		if p.afterAdmission != nil {
+			if err := p.afterAdmission(ctx, w); err != nil {
+				return identity.FeatureReceipt{}, err
+			}
+		}
+	}
 	s, _ := command.Feature()
 	n, err := w.Exec(ctx, `INSERT INTO public.identity_test_feature(tenant_id,record_id,command_id,value) VALUES($1,$2,$3,$4) ON CONFLICT DO NOTHING`, string(s.Binding.TenantID), s.Binding.RecordID, string(s.Binding.CommandID), s.Fields[0].Value.Text)
 	if err != nil {
