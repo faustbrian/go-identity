@@ -131,6 +131,15 @@ starts cannot claim no remote effect. An arbitrary callback that ignores its
 context cannot be forcibly stopped safely; supplied callbacks must cooperate.
 
 There is intentionally no exported shortcut for sending an unrecorded attempt.
+The internal queue completion policy rejects stale generations and schedules
+only attributable transient failures. Full jitter uses the next attempt's
+configured ceiling with the provider RetryAfter as a floor; entropy work is
+bounded and fails closed. Known unsuccessful attempts stop on cancellation,
+expiry or exhaustion. Unknown outcomes never automatically retry or become
+cancelled/expired merely because local time or cancellation changed. Expired
+bearer payload custody must still be erased while retaining unknown outcome.
+These decisions require atomic durable generation-CAS application; the policy
+function itself supplies no lease, authentication, persistence or cleanup proof.
 Service admission, generation-fenced queue processing, durable completion and
 the owned capture sender remain in development. Shape/concurrency tests do not
 certify durable effects, queue authorization or production capture isolation.

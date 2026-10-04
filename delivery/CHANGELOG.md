@@ -4,6 +4,12 @@
 
 ### Added
 
+- Queue completion policy with generation checks, attributable-only retries,
+  bounded full jitter, provider throttling floors and expiry/cancellation/
+  exhaustion decisions. Unknown outcomes never become automatic retries;
+  expired bearer payloads are erased without claiming the provider failed.
+  Durable transactional application remains in development.
+
 - Typed rendered attempts/provider outcomes and bounded synchronous sender
   execution with expiry, deadline, concurrency and ambiguous-outcome handling.
   Provider callbacks do not retry or own workflow/queue policy. Durable service
