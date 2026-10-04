@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Add opt-in authenticated local cancellation through the original kernel
+  command authority. Freeze version/generation, retain keyed confidential reason
+  identity, and atomically persist protected audit, lifecycle and exact replay
+  outcomes. Target-retained policy fences survive configuration rotation;
+  submitted sends remain unknown and keep attributable worker completion.
+  Requires status and cancellation migrations; full Queue remains unfinished.
+
 - Expose current-policy-authorized versioned delivery snapshots in the selected
   status-tracking profile. Read intent version and attempt metadata together
   without consumer-written SQL, payload access or mutation; legacy profiles

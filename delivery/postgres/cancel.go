@@ -119,12 +119,22 @@ func (s *attemptStore) cancelIn(w context.Context, sql cancellationSQL, q delive
 		return delivery.CancelResult{}, delivery.ErrConflict
 	}
 	if snapshot.generation > 0 {
-		err = sql.scan(w, `SELECT outcome,provider_reference_digest IS NOT NULL FROM identity.delivery_attempt_history WHERE deployment=$1 AND tenant_id=$2 AND effect_id=$3 AND generation=$4`, []any{s.deployment, string(q.TenantID), string(q.IntentID), snapshot.generation}, &snapshot.outcome, &snapshot.reference)
+		// Borrowed Work has a closed nullable-int64 scan profile, not nullable
+		// int16. Preserve null outcome and bound conversion before classification.
+		var outcome *int64
+		err = sql.scan(w, `SELECT outcome::bigint,provider_reference_digest IS NOT NULL FROM identity.delivery_attempt_history WHERE deployment=$1 AND tenant_id=$2 AND effect_id=$3 AND generation=$4`, []any{s.deployment, string(q.TenantID), string(q.IntentID), snapshot.generation}, &outcome, &snapshot.reference)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return delivery.CancelResult{}, delivery.ErrConflict
 		}
 		if err != nil {
 			return delivery.CancelResult{}, attemptFailure(w, err)
+		}
+		if outcome != nil {
+			if *outcome < 1 || *outcome > 12 {
+				return delivery.CancelResult{}, delivery.ErrUnavailable
+			}
+			bounded := int16(*outcome)
+			snapshot.outcome = &bounded
 		}
 	}
 	// Submitted may have a still-live invocation or acknowledged acceptance;

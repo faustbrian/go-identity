@@ -29,6 +29,10 @@ func TestPublicAdmissionRejectsZeroDependencies(t *testing.T) {
 			if !errors.Is(err, delivery.ErrInvalidInput) || status != (delivery.StatusGetResult{}) {
 				t.Fatal("invalid service fabricated status", err)
 			}
+			cancelled, err := service.Cancel(ctx, deliverypostgres.CancelCommandRequest{})
+			if !errors.Is(err, delivery.ErrInvalidInput) || cancelled != (delivery.CancelResult{}) {
+				t.Fatal("invalid service fabricated cancellation", err)
+			}
 		}
 	}
 }
@@ -36,7 +40,8 @@ func TestPublicAdmissionRejectsZeroDependencies(t *testing.T) {
 func TestPublicAdmissionDiagnosticsRedactSensitiveInput(t *testing.T) {
 	request := deliverypostgres.EnqueueCommandRequest{IdempotencyKey: "private-request-key", Message: delivery.Message{Variables: []delivery.TemplateVariable{{Name: "code", CodeValue: "private-template-value"}}}}
 	config := deliverypostgres.EnqueueConfig{Custody: deliverypostgres.ContributorConfig{Deployment: "private-deployment"}, NamespaceKey: [32]byte{7}}
-	for _, value := range []any{request, &request, config, &config, deliverypostgres.EnqueueService{}, &deliverypostgres.EnqueueService{}} {
+	cancellation := deliverypostgres.CancelCommandRequest{Request: delivery.CancelRequest{Reason: "private-template-value"}}
+	for _, value := range []any{request, &request, cancellation, &cancellation, config, &config, deliverypostgres.EnqueueService{}, &deliverypostgres.EnqueueService{}} {
 		for _, verb := range []string{"%v", "%+v", "%#v", "%s"} {
 			assertAdmissionRedacted(t, fmt.Sprintf(verb, value))
 		}

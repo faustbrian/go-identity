@@ -17,7 +17,10 @@ import (
 // This native phase is private owned composition, not an authenticated endpoint.
 // Its immutable result row belongs to the original command; it has no separate
 // reservation, lease, replay state machine or execution authority.
-type cancelContributor struct{ store *attemptStore }
+type cancelContributor struct {
+	store    *attemptStore
+	policies *retainedPolicies
+}
 
 var _ identitypostgres.FeatureExecutionContributor = (*cancelContributor)(nil)
 
@@ -85,8 +88,8 @@ func (c *cancelContributor) ApplyFeature(ctx context.Context, w identitypostgres
 		return identity.FeatureReceipt{}, delivery.ErrForbidden
 	}
 	sql := cancellationWorkSQL(w)
-	var current string
-	if err := sql.scan(ctx, `SELECT status_version::text FROM identity.delivery_intents WHERE deployment=$1 AND tenant_id=$2 AND effect_id=$3 AND subject_id=$4 FOR UPDATE`, []any{c.store.deployment, string(b.TenantID), b.RecordID, string(b.UserID)}, &current); err != nil {
+	var current, policyVersion string
+	if err := sql.scan(ctx, `SELECT status_version::text,policy_version::text FROM identity.delivery_intents WHERE deployment=$1 AND tenant_id=$2 AND effect_id=$3 AND subject_id=$4 FOR UPDATE`, []any{c.store.deployment, string(b.TenantID), b.RecordID, string(b.UserID)}, &current, &policyVersion); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return identity.FeatureReceipt{}, identity.ConflictError{}
 		}
@@ -95,7 +98,18 @@ func (c *cancelContributor) ApplyFeature(ctx context.Context, w identitypostgres
 	if current != strconv.FormatUint(version, 10) {
 		return identity.FeatureReceipt{}, identity.ConflictError{}
 	}
-	out, err := c.store.cancelIn(ctx, sql, delivery.CancelRequest{TenantID: delivery.TenantID(b.TenantID), IntentID: delivery.IntentID(b.RecordID), ExpectedGeneration: generation, Reason: "protected-command"}, string(b.UserID), true)
+	store := c.store
+	if c.policies != nil {
+		retained, err := strconv.ParseUint(policyVersion, 10, 64)
+		if err != nil || retained == 0 {
+			return identity.FeatureReceipt{}, delivery.ErrUnavailable
+		}
+		store, err = c.policies.worker(retained, c.store.codec)
+		if err != nil {
+			return identity.FeatureReceipt{}, err
+		}
+	}
+	out, err := store.cancelIn(ctx, sql, delivery.CancelRequest{TenantID: delivery.TenantID(b.TenantID), IntentID: delivery.IntentID(b.RecordID), ExpectedGeneration: generation, Reason: "protected-command"}, string(b.UserID), true)
 	if err != nil {
 		if errors.Is(err, delivery.ErrConflict) || errors.Is(err, delivery.ErrNotFound) {
 			return identity.FeatureReceipt{}, identity.ConflictError{}

@@ -75,12 +75,39 @@ precondition seam for cancellation, not a cancellation endpoint.
 
 ## Custody and security
 
-The private delivery-effect cancellation primitive fences exact generations,
-erases unsent/retry custody and preserves uncertainty for prior invocations.
-It retains a live original worker's completion fence, but forbids renewal and
-replacement invocation. This is not public `Queue.Cancel`: current policy,
-protected original-command audit/replay and no-op cancellation checkpoint
-composition are still required before exposing cancellation to consumers.
+Select `EnqueueConfig.Cancellation=true` with `StateTracking=true` and install
+`MigrationSource.CancellationVersion` after `StateVersion` to enable
+`EnqueueService.Cancel`. The constructor checks selected schema before policy or
+namespace registration. Default false preserves existing admission/status use.
+This is trusted workflow composition, not client-decoded authentication input.
+
+Build a `CancelCommandRequest` with a fresh kernel command ID, exact cancel
+operation/schema binding and current authenticated actor policy targeting the
+owner. Use `Request.TenantID`/`IntentID` matching the binding, and freeze both
+generation and `ExpectedStatusVersion` from `VersionedStatusGet`. Keep all input,
+including command ID and bounded non-PII reason, unchanged on every retry. IDs
+and snapshots grant no authority. Caller `delivery.*` attributes are forbidden;
+the service supplies the target attribute to policy. Reasons are never persisted
+or serialized, only domain-separated HMACed under the retained namespace key.
+
+Cancellation stages through the existing kernel coordinator, with protected
+audit/lifecycle and immutable original-command result in the same transaction.
+It selects the target's retained policy under its intent lock. Separate operation
+registries keep installed enqueue plan identities unchanged when enabled; both
+handles share the same kernel journal and authority, not independent workflows.
+Unsent/retry custody is erased; no-op stops preserve the same public result.
+Submitted sends remain outcome-unknown, with local cancellation preventing resend
+but preserving live attributable completion. No provider is called or remote
+cancellation claimed. Exact committed replay returns the original cancellation
+result even after later delivery evidence changes current status.
+
+`ErrOutcomeUnknown` (including live pending) requires retrying the exact command,
+never generating a replacement to bypass uncertainty. A changed input conflicts;
+a stale snapshot needs a deliberate new command only after the previous command's
+terminal outcome is established. Current authorization precedes reservation and
+result disclosure. Errors return no fabricated stop result; a post-commit denial
+or failed read does not roll back a durable cancellation. Full core Queue
+composition and provider cancellation/reconciliation remain unfinished.
 
 Select `MigrationSource.StateVersion` strictly after `KeyedVersion` and set
 `EnqueueConfig.StateTracking=true` to read immutable no-op local-stop checkpoints.
@@ -96,7 +123,7 @@ Application roles must not own tables/triggers or DDL; this invariant does not
 protect against a privileged operator disabling enforcement. The migration takes
 a bounded table lock and validates new nullable metadata under its transaction;
 lock/statement timeout rolls it back for an exact retry, never partial success.
-This selected profile still does not expose public cancellation or a full Queue.
+State tracking alone does not enable cancellation or a full Queue.
 
 `MigrationSource.CancellationVersion`, selected strictly after `StateVersion`,
 adds immutable, redacted cancellation results tied by foreign key to the

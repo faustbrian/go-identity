@@ -36,7 +36,7 @@ func TestPublicContributorOriginalCoordinatorComposition(t *testing.T) {
 	if _, err := rolePool.Exec(ctx, auditpostgres.FreshInstallPreflightSQL()); err != nil {
 		t.Fatal("owned audit preflight failed")
 	}
-	for _, mode := range []string{"committed", "no-op", "delivery-failure", "native-committed", "native-owned", "public-owned", "public-state", "native-compatible-custody", "native-no-op", "native-missing", "native-failure", "native-cancel", "native-cancel-noop"} {
+	for _, mode := range []string{"committed", "no-op", "delivery-failure", "native-committed", "native-owned", "public-owned", "public-state", "public-cancel", "native-compatible-custody", "native-no-op", "native-missing", "native-failure", "native-cancel", "native-cancel-noop"} {
 		t.Run(mode, func(t *testing.T) { testPublicComposition(t, mode) })
 	}
 }
@@ -160,7 +160,7 @@ func testPublicComposition(t *testing.T, mode string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if mode == "public-owned" || mode == "public-state" {
+	if mode == "public-owned" || mode == "public-state" || mode == "public-cancel" {
 		runner, err := migrations.NewRunner(MigrationSource{Base: identitypostgres.MigrationSource{}, Version: 10, WorkerVersion: 11, PolicyVersion: 12, KeyedVersion: 13}, backend)
 		if err != nil {
 			t.Fatal(err)
@@ -192,7 +192,7 @@ func testPublicComposition(t *testing.T, mode string) {
 		})
 		config := EnqueueConfig{Custody: ContributorConfig{Deployment: "test", CurrentDigestKeyVersion: 1, RetainedDigestKeys: map[uint32][32]byte{1: {3}}, ActiveEnvelopeKeyID: "envelope-a", PreparationTimeout: time.Second, ProviderProfiles: map[uint64]ProviderProfile{1: {Provider: "test-provider", PolicyVersion: 1}}}, Coordinator: identitypostgres.CoordinatorConfig{MaximumDuration: 2 * time.Second, LeaseDuration: time.Minute, CurrentFingerprintKeyVersion: 1, RetainedFingerprintKeys: map[uint32][32]byte{1: {1}}}, PolicyID: "policy", PolicyVersion: 1, AuditRetentionVersion: 1, Timeout: 2 * time.Second, NamespaceKey: [32]byte{7}, Policies: map[uint64]delivery.Config{1: delivery.DefaultConfig()}}
 		templates := []delivery.Template{{ID: "verify", Version: 1, Channel: delivery.ChannelEmail, Locale: "en", ContentType: "text/plain", Subject: "Verification", Body: "Code: {{.code}}", MaxRenderedBytes: 1024, RequiredVariables: []string{"code"}, VariableSchema: []delivery.VariableSchema{{Name: "code", Kind: "code", Sensitive: true}}}}
-		if mode == "public-state" {
+		if mode == "public-state" || mode == "public-cancel" {
 			config.StateTracking = true
 			if _, err := NewEnqueueService(ctx, owned, config, contributor.store.codec.service, policy, templates); !errors.Is(err, delivery.ErrUnavailable) {
 				t.Fatal("selected tracking admitted absent migration", err)
@@ -203,6 +203,23 @@ func testPublicComposition(t *testing.T, mode string) {
 			}
 			if _, err := tracked.Up(ctx); err != nil {
 				t.Fatal("selected state migration", err)
+			}
+			if mode == "public-cancel" {
+				second := delivery.DefaultConfig()
+				second.SenderTimeout += time.Second
+				config.Policies[2] = second
+				config.Custody.ProviderProfiles[2] = ProviderProfile{Provider: "test-provider", PolicyVersion: 2}
+				config.Cancellation = true
+				if _, err := NewEnqueueService(ctx, owned, config, contributor.store.codec.service, policy, templates); !errors.Is(err, delivery.ErrUnavailable) {
+					t.Fatal("selected cancellation admitted absent result migration", err)
+				}
+				cancelMigration, err := migrations.NewRunner(MigrationSource{Base: identitypostgres.MigrationSource{}, Version: 10, WorkerVersion: 11, PolicyVersion: 12, KeyedVersion: 13, StateVersion: 14, CancellationVersion: 15}, backend)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if _, err := cancelMigration.Up(ctx); err != nil {
+					t.Fatal(err)
+				}
 			}
 		}
 		public, err := NewEnqueueService(ctx, owned, config, contributor.store.codec.service, policy, templates)
@@ -217,6 +234,17 @@ func testPublicComposition(t *testing.T, mode string) {
 		first, err := public.Enqueue(ctx, request)
 		if err != nil || first.State != delivery.CommitCommitted || !first.Queued || first.IntentID == "" {
 			t.Fatal("public admission failed", err)
+		}
+		if config.Cancellation {
+			legacyConfig := config
+			legacyConfig.Cancellation = false
+			legacy, err := NewEnqueueService(ctx, owned, legacyConfig, contributor.store.codec.service, policy, templates)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if replay, err := legacy.Enqueue(ctx, request); err != nil || replay != first {
+				t.Fatal("cancellation feature changed installed enqueue plan identity", err)
+			}
 		}
 		statusScope := request.ActorScope.Clone()
 		statusScope.Request.Action = "identity.delivery.status-get"
@@ -577,6 +605,10 @@ func testPublicComposition(t *testing.T, mode string) {
 					t.Fatal("state stop exposed no-op custody", err, observed)
 				}
 			}
+		}
+		if mode == "public-cancel" {
+			testAuthenticatedCancellation(t, ctx, pool, public, request, &permit)
+			testSubmittedCancellation(t, ctx, pool, public, request)
 		}
 		return
 	}

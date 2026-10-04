@@ -42,6 +42,10 @@ type EnqueueConfig struct {
 	// True fails closed if the forward migration is absent; it does not enable
 	// public cancellation, provider callbacks or full Queue composition.
 	StateTracking bool
+	// Cancellation explicitly enables authenticated original-command local
+	// cancellation. Requires StateTracking and CancellationVersion migration.
+	// False preserves existing enqueue plan identity and status-only composition.
+	Cancellation bool
 }
 
 // EnqueueCommandRequest is trusted platform/workflow input, not HTTP JSON or
@@ -64,7 +68,8 @@ type EnqueueCommandRequest struct {
 	NoOpEquivalent        bool
 }
 
-// EnqueueService owns usable durable message admission and authorized status,
+// EnqueueService owns usable durable admission, authorized status and opt-in
+// authenticated local cancellation,
 // not the complete Queue lifecycle. It composes participants and performs no provider
 // invocation, retry, credential issuance or identity mutation. The caller owns
 // the borrowed primary pool, authorization dependency and envelope service.
@@ -77,6 +82,7 @@ type EnqueueService struct {
 	policies      *retainedPolicies
 	keyed         *keyedAdmission
 	stateTracking bool
+	cancellation  *cancelExecutor
 }
 
 func (EnqueueConfig) Format(s fmt.State, _ rune) {
@@ -112,7 +118,8 @@ func (EnqueueService) MarshalJSON() ([]byte, error) { return nil, delivery.ErrSe
 // NewEnqueueService constructs owned repository, renderer, native command,
 // protected audit, lifecycle, ciphertext and sole kernel-coordinator composition
 // from one borrowed primary pool. Install the public kernel/audit/outbox and
-// delivery migrations through KeyedVersion first; this does not run migrations.
+// delivery migrations through KeyedVersion first; select StateVersion and
+// CancellationVersion for their respective features. It never runs migrations.
 // Pure validation precedes bounded idempotent policy/namespace registration.
 // Registrations commit independently and survive a later constructor failure;
 // neither is a business command or enqueue receipt. A lost acknowledgement is
@@ -120,7 +127,7 @@ func (EnqueueService) MarshalJSON() ([]byte, error) { return nil, delivery.ErrSe
 // If Coordinator.AdmissionPolicy is nil, historical observation uses authorize,
 // the system clock and PolicyVersion; an explicit observation policy is retained.
 func NewEnqueueService(ctx context.Context, pool *database.Pool, c EnqueueConfig, service *secretenvelope.Service, authorize authorization.Service, templates []delivery.Template) (*EnqueueService, error) {
-	if ctx == nil || pool == nil || pool.Raw() == nil || c.Timeout < time.Second || c.Timeout > 5*time.Second || c.NamespaceKey == ([32]byte{}) || !safeID(c.PolicyID, false) || c.PolicyVersion == 0 || c.AuditRetentionVersion == 0 || len(c.Policies) < 1 || len(c.Policies) > 32 {
+	if ctx == nil || pool == nil || pool.Raw() == nil || c.Timeout < time.Second || c.Timeout > 5*time.Second || c.NamespaceKey == ([32]byte{}) || !safeID(c.PolicyID, false) || c.PolicyVersion == 0 || c.AuditRetentionVersion == 0 || len(c.Policies) < 1 || len(c.Policies) > 32 || c.Cancellation && !c.StateTracking {
 		return nil, delivery.ErrInvalidInput
 	}
 	if err := ctx.Err(); err != nil {
@@ -187,6 +194,11 @@ func NewEnqueueService(ctx context.Context, pool *database.Pool, c EnqueueConfig
 			return nil, attemptFailure(w, err)
 		}
 	}
+	if c.Cancellation {
+		if _, err := pool.Raw().Exec(w, `SELECT binding_digest,generation,before_version,after_version,result_state,local_cancelled FROM identity.delivery_cancellations WHERE false`); err != nil {
+			return nil, attemptFailure(w, err)
+		}
+	}
 	policies, err := newRetainedPolicies(w, pool.Raw(), c.Custody.Deployment, c.Policies, c.Timeout)
 	if err != nil {
 		return nil, err
@@ -195,7 +207,27 @@ func NewEnqueueService(ctx context.Context, pool *database.Pool, c EnqueueConfig
 	if err != nil {
 		return nil, err
 	}
-	return &EnqueueService{executor, repo, renderer, policies, keyed, c.StateTracking}, nil
+	s := &EnqueueService{executor: executor, repository: repo, renderer: renderer, policies: policies, keyed: keyed, stateTracking: c.StateTracking}
+	if c.Cancellation {
+		store, err := newAttemptStore(pool.Raw(), c.Custody.Deployment, custody.store.codec, delivery.DefaultConfig(), c.Timeout)
+		if err != nil {
+			return nil, err
+		}
+		nativeCancel := &cancelContributor{store: store, policies: policies}
+		// Both handles use the sole kernel command authority. Separate operation
+		// registries keep installed enqueue plan fingerprints byte-identical when
+		// cancellation is enabled; there is no second journal or transaction owner.
+		cancelRegistry, err := identitypostgres.NewContributorRegistry([]identitypostgres.Contributor{repo, nativeCancel, audits, lifecycle})
+		if err != nil {
+			return nil, admissionError(err)
+		}
+		cancelCoordinator, err := identitypostgres.NewCoordinator(pool, cancelRegistry, c.Coordinator)
+		if err != nil {
+			return nil, admissionError(err)
+		}
+		s.cancellation = &cancelExecutor{cancelCoordinator, cancelRegistry, nativeCancel}
+	}
+	return s, nil
 }
 
 // Enqueue authorizes exact scope before primary recipient discovery and owned
