@@ -1,12 +1,43 @@
 # Identity delivery
 
 Experimental provider-neutral identity messaging, targeting Go 1.27. The
-current development slice validates typed intents and renders versioned plain
-text and non-active HTML with protected diagnostics. It does **not** yet enqueue,
-send, or reconcile messages. No process-memory
-queue is offered as a production durability boundary.
+current development slice validates typed intents, renders versioned plain
+text and non-active HTML, and composes bounded queue admission, redacted status,
+cancellation, receipt/reconciliation and one-attempt worker calls. The owned
+durable adapter is **not implemented yet**: these core paths do not prove
+PostgreSQL authorization, dedupe, ciphertext custody, provider authentication or
+durable recovery. No process-memory queue is a production durability boundary.
 
 ## Typed input
+
+`New(Config, Queue, Renderer, Sender)` rejects absent/typed-nil collaborators;
+production rejects capture senders and any backend declaration except the owned
+PostgreSQL profile. A backend declaration is trusted composition metadata, not
+a durability or authorization proof. Applications must select the owned adapter,
+not implement their own identity store. Admission and administration calls use
+the earlier caller deadline or configured sender timeout. After a worker claim,
+`ProcessOne` permits one additional sender-timeout budget for synchronous outcome
+bookkeeping even when the caller cancels; it never renews effect authority.
+Collaborators must honor their context. No background workers or retry loops start.
+
+`Enqueue` validates the root `identity.CommandID` (delivery aliases it), clones
+message slices and renders before queue admission. The adapter reads the prepared
+content through `EnqueueRequest.Rendered()` and must authorize the exact command,
+tenant, resource, expiry and provider binding, then enlist authenticated encrypted
+custody and durable dedupe under the existing coordinator. Prepared content is
+memory-only and never grants command authority. Queue success reports admission,
+not provider delivery, and never calls Sender. Unexplained admission failures
+retain the original command in `AdmissionUnknownError`: recover it rather than
+enqueueing a replacement. No-op-equivalent admission retains the same result
+shape; its internal marker must not be exposed as recipient existence.
+
+`ProcessOne` performs one scoped claim/send/complete without a hidden retry.
+`StatusGet` exposes only bounded durable state and generation. `Cancel` separates
+local prevention from remote confirmation; pending external outcomes stay unknown.
+`ReceiptRecord` and `Reconcile` validate bounded normalized inputs but their owned
+adapter remains responsible for authenticated provider evidence, monotonic
+transitions, generation CAS, query checkpoints and no blind resubmission.
+Queue/backend test doubles prove only core behavior, never those durable claims.
 
 ```go
 variable := delivery.TemplateVariable{

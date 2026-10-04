@@ -4,6 +4,13 @@
 
 ### Added
 
+- Public bounded delivery service with pre-admission template rendering, copied
+  message ownership, root command identity, unknown-command recovery, redacted
+  status, local/remote cancellation distinctions, normalized receipt/query
+  boundaries and explicit one-attempt processing. Production configuration
+  rejects missing/capture collaborators; the owned durable adapter remains
+  in development and backend declarations are not durability proofs.
+
 - Immutable public completion policy for owned durable adapters, using the
   same generation/retry/expiry rules as the core without a duplicate policy
   engine. Construction copies caller-owned policy; decisions honor cancellation
