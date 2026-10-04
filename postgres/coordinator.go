@@ -159,6 +159,10 @@ func (c *Coordinator) prepare(binding identity.CommandBinding, command identity.
 	if c == nil || c.registry == nil || c.registry.state == nil || c.keys.current == 0 {
 		return claimRequest{}, CommandPlan{}, nil, coordinatorError()
 	}
+	// Bound new caller-owned custody declarations before snapshot allocation.
+	if plan.Delivery != nil && !validDeliveryPlan(plan.Delivery) {
+		return claimRequest{}, CommandPlan{}, nil, invalidPlan()
+	}
 	if spec, ok := command.Feature(); ok {
 		return c.prepareFeature(binding, command, spec, plan)
 	}
@@ -171,6 +175,9 @@ func (c *Coordinator) prepare(binding identity.CommandBinding, command identity.
 	proofReservation := capabilityReservationCommand(command, plan)
 	count := 3
 	if proofReservation {
+		count++
+	}
+	if plan.Delivery != nil {
 		count++
 	}
 	if !isCreation(command) && !isProfile(command) && !isUpdate(command) && !isStatus(command) && !proofReservation || plan.Capability != nil && !proofReservation || plan.Lifecycle == nil || len(plan.Contributors) != count || len(plan.Audits) != 1 || probe.Validate() != nil {
@@ -193,6 +200,7 @@ func (c *Coordinator) prepare(binding identity.CommandBinding, command identity.
 		return claimRequest{}, CommandPlan{}, nil, invalidPlan()
 	}
 	snapshot := CommandPlan{Contributors: append([]ContributorDescriptor(nil), plan.Contributors...), Audits: append([]AuditPlan(nil), plan.Audits...)}
+	snapshot.Delivery = cloneDeliveryPlan(plan.Delivery)
 	lifecycle := *plan.Lifecycle
 	snapshot.Lifecycle = &lifecycle
 	if plan.Capability != nil {

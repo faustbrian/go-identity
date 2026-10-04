@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Enlist optional encrypted delivery effects under the original mutation and
+  command receipt. Frozen logical intent and exact participant identity survive
+  replay and recovery; missing custody, failed persistence or expired effects
+  roll back the mutation. Historical no-delivery plan bytes remain unchanged.
+  The production queue, sender processing and envelope verification belong to
+  the separate delivery adapter and remain in development.
+
 - Add opt-in one-use risk current checks and terminal finalization in the same
   domain transaction as protected feature, audit, lifecycle and command receipt.
   Late denial rolls back every provisional effect before proved-noncommit

@@ -117,6 +117,7 @@ func (p *admittedKernelPlan) snapshot() CommandPlan {
 		descriptors[i] = entry.descriptor
 	}
 	result := CommandPlan{Contributors: descriptors, Audits: append([]AuditPlan(nil), p.audits...), Digest: p.digest}
+	result.Delivery = cloneDeliveryPlan(p.delivery)
 	if p.lifecycle != nil {
 		copy := *p.lifecycle
 		result.Lifecycle = &copy
@@ -248,6 +249,9 @@ func (c *Coordinator) Commit(w Work, result identity.CommandResult) (identity.Co
 	if _, err := w.StagedLifecycle(); err != nil {
 		return c.Abort(w, err)
 	}
+	if err := c.persistDelivery(w); err != nil {
+		return c.Abort(w, err)
+	}
 	if err := c.persistAuditPhase(w); err != nil {
 		return c.Abort(w, identity.UnavailableError{})
 	}
@@ -289,6 +293,9 @@ func (c *Coordinator) Commit(w Work, result identity.CommandResult) (identity.Co
 		if err := c.runRiskExecution(w.state.ctx, w, *w.state.riskCommand, true); err != nil {
 			return c.Abort(w, err)
 		}
+	}
+	if err := deliveryFresh(w); err != nil {
+		return c.Abort(w, err)
 	}
 	if err := terminalizeJournal(w.state.ctx, w.state.tx, r.request, r.journal, r.owner, result, "committed"); err != nil {
 		return c.Abort(w, err)

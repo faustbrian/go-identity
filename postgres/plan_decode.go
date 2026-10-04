@@ -13,6 +13,9 @@ import (
 // Historical observation validates frozen bytes, not today's registry. It
 // grants neither participant ownership nor authority to resume execution.
 func decodeKernelPlan(binding identity.CommandBinding, fingerprint [32]byte, encoded []byte) (CommandPlan, error) {
+	if len(encoded) > 0 && encoded[0] == 0xa3 {
+		return decodeDeliveryWrappedPlan(binding, fingerprint, encoded, decodeKernelPlan, encodeKernelPlan)
+	}
 	fail := func() (CommandPlan, error) { return CommandPlan{}, identity.UnavailableError{} }
 	if len(encoded) == 0 || len(encoded) > 65536 || fingerprint == ([32]byte{}) {
 		return fail()

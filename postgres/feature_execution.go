@@ -85,6 +85,9 @@ func (r *ContributorRegistry) admitFeaturePlan(b identity.CommandBinding, finger
 	if err != nil {
 		return nil, invalidPlan()
 	}
+	if validateDeliveryContributor(b, p.Delivery, entries) != nil {
+		return nil, invalidPlan()
+	}
 	if credentialCompromiseOperation(p.Feature.Operation) {
 		if _, ok := feature.contributor.(CredentialCompromiseContributor); !ok {
 			return nil, invalidPlan()
@@ -141,7 +144,7 @@ func (r *ContributorRegistry) admitFeaturePlan(b identity.CommandBinding, finger
 		copy := *p.CommandCounters
 		counters = &copy
 	}
-	return &admittedKernelPlan{registry: r.state, binding: b, digest: digest, contributors: entries, audits: append([]AuditPlan(nil), p.Audits...), lifecycle: &l, risk: risk, counters: counters, fingerprint: fingerprint, feature: &f, subjectType: p.SubjectType}, nil
+	return &admittedKernelPlan{registry: r.state, binding: b, digest: digest, contributors: entries, audits: append([]AuditPlan(nil), p.Audits...), lifecycle: &l, risk: risk, counters: counters, fingerprint: fingerprint, feature: &f, subjectType: p.SubjectType, delivery: cloneDeliveryPlan(p.Delivery)}, nil
 }
 
 // ApplyFeature invokes only the frozen exact native adapter once through Work.

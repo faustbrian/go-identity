@@ -24,6 +24,9 @@ type CommandPlan struct {
 	Contributors []ContributorDescriptor
 	Audits       []AuditPlan
 	Lifecycle    *LifecyclePlan
+	// Delivery enlists encrypted effects under this original command, never
+	// an independently committable enqueue operation. Nil leaves bytes unchanged.
+	Delivery *DeliveryPlan
 	// Capability declares a typed one-use participant input. Identifier reservation
 	// requires its registered reservation contributor; domain execution is disabled.
 	Capability *CapabilityPlan
@@ -71,6 +74,9 @@ func KernelPlanDigest(binding identity.CommandBinding, fingerprint [32]byte, pla
 // The journal freezes the exact digest input, not a second serialization that
 // can disagree with admission or omit a participant field.
 func encodeKernelPlan(binding identity.CommandBinding, fingerprint [32]byte, plan CommandPlan) ([]byte, error) {
+	if plan.Delivery != nil {
+		return encodeDeliveryWrappedPlan(binding, fingerprint, plan, encodeKernelPlan)
+	}
 	if plan.Feature != nil || plan.SubjectType != "" || plan.RiskEvidence != nil || plan.CommandCounters != nil {
 		return nil, invalidPlan()
 	}
@@ -153,6 +159,7 @@ type admittedKernelPlan struct {
 	fingerprint  [32]byte
 	feature      *FeatureRegistration
 	subjectType  string
+	delivery     *DeliveryPlan
 }
 
 func (r *ContributorRegistry) admitKernelPlan(binding identity.CommandBinding, fingerprint [32]byte, p CommandPlan) (*admittedKernelPlan, error) {
@@ -162,6 +169,9 @@ func (r *ContributorRegistry) admitKernelPlan(binding identity.CommandBinding, f
 	}
 	entries, err := r.selectContributors(p.Contributors)
 	if err != nil {
+		return nil, invalidPlan()
+	}
+	if validateDeliveryContributor(binding, p.Delivery, entries) != nil {
 		return nil, invalidPlan()
 	}
 	for _, entry := range entries {
@@ -191,7 +201,7 @@ func (r *ContributorRegistry) admitKernelPlan(binding identity.CommandBinding, f
 		snapshot := *p.Capability
 		capability = &snapshot
 	}
-	return &admittedKernelPlan{registry: r.state, binding: binding, digest: digest, contributors: entries, audits: append([]AuditPlan(nil), p.Audits...), lifecycle: lifecycle, capability: capability, fingerprint: fingerprint}, nil
+	return &admittedKernelPlan{registry: r.state, binding: binding, digest: digest, contributors: entries, audits: append([]AuditPlan(nil), p.Audits...), lifecycle: lifecycle, capability: capability, fingerprint: fingerprint, delivery: cloneDeliveryPlan(p.Delivery)}, nil
 }
 
 func (p *admittedKernelPlan) belongsTo(r *ContributorRegistry) error {
@@ -209,6 +219,9 @@ func (p *admittedKernelPlan) bindWork(w Work) error {
 		return invalidPlan()
 	}
 	w.state.feature, w.state.subjectType = p.feature, p.subjectType
+	if p.delivery != nil {
+		w.state.delivery = &workDelivery{plan: cloneDeliveryPlan(p.delivery), envelopes: make(map[uint16]DeliveryEnvelope)}
+	}
 	if err := bindAuditPlans(w, p.audits); err != nil {
 		return err
 	}

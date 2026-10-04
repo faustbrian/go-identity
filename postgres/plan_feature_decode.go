@@ -11,6 +11,9 @@ import (
 // Historical decoding conserves a frozen declaration. It does not consult the
 // current registry or grant permission to reserve, execute or recover a feature.
 func decodeFeaturePlan(binding identity.CommandBinding, fingerprint [32]byte, encoded []byte) (CommandPlan, error) {
+	if len(encoded) > 0 && encoded[0] == 0xa3 {
+		return decodeDeliveryWrappedPlan(binding, fingerprint, encoded, decodeFeaturePlan, encodeFeaturePlan)
+	}
 	fail := func() (CommandPlan, error) { return CommandPlan{}, identity.UnavailableError{} }
 	if len(encoded) == 0 || len(encoded) > 65536 || fingerprint == ([32]byte{}) {
 		return fail()

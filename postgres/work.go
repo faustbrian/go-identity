@@ -44,6 +44,7 @@ type workState struct {
 	featureAttempted  bool
 	featureReceipt    *identity.FeatureReceipt
 	featureInvocation FeatureExecutionContributor
+	delivery          *workDelivery
 	credentialIntent  *CredentialCompromiseIntent
 	credentialReceipt *CredentialCompromiseReceipt
 	counterCommand    *identity.Command
@@ -242,6 +243,11 @@ func invalidateWork(w Work) {
 		return
 	}
 	w.state.closed = true
+	if w.state.delivery != nil {
+		clear(w.state.delivery.envelopes)
+		w.state.delivery.invocation = nil
+		w.state.delivery.bytes = 0
+	}
 	w.state.counterCommand = nil
 	w.state.riskCommand = nil
 	w.state.cancel()

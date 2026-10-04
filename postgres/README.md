@@ -1,5 +1,40 @@
 # Identity PostgreSQL
 
+## Original-command encrypted delivery
+
+`CommandPlan.Delivery` optionally declares 1..16 required effects and the exact
+last contributor `identity/delivery/postgres`, contract
+`identity.delivery.effects`, version 1. Its logical `IntentDigest` must bind all
+behavior-affecting inputs using the owning workflow's confidential fingerprint;
+randomized ciphertext is not logical replay identity. Safe effect/resource and
+template IDs are 1..128 printable non-space ASCII bytes. Purpose is a canonical
+lowercase event name; template/provider versions are positive. Expiry is an
+exclusive post-epoch microsecond-exact instant, never renewed on replay.
+
+The original trusted mutation stages prepared secret-envelope ciphertext with
+`Work.StageDelivery`; each envelope is at most 524288 bytes and total custody is
+at most 1MiB. Encryption/provider work must happen before opening the mutation
+transaction. Only the coordinator invokes the exact enlisted
+`DeliveryContributor.PersistDelivery`. During that synchronous invocation,
+`DeliveryScope` exposes an owned original-command declaration and
+`StagedDelivery` returns copied ciphertext. The owner must verify complete AAD
+and confidential logical input, and persist custody plus outbox admission via
+this Work. Neither a descriptor nor this plan authenticates an HTTP caller.
+
+Missing staging, persistence error/panic, later audit/lifecycle failure, or
+expiry before terminalization rolls back the original mutation and delivery.
+Recovery invokes every frozen participant; `RecoveryWork.DeliveryScope` allows
+only the exact enlisted owner to inspect its original declaration. Unknown or
+conflicting delivery evidence cannot prove noncommit. No second enqueue command,
+transaction, sender invocation, or workflow engine exists here. The optional
+versioned plan envelope conserves historical base-plan bytes and excludes
+ciphertext from command journals. Closed Work drops custody references; this
+does not promise secure erasure of Go heap bytes or caller-owned copies.
+
+Coordinator integration tests use a deliberate owned SQL seam. They are not
+production queue/envelope/provider interoperability proof: those remain part of
+the separate, unfinished `identity/delivery/postgres` implementation.
+
 ## Typed one-use risk reservation
 
 `CommandPlan.RiskEvidence` declares the scalar projection of risk's signed
