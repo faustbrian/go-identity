@@ -258,7 +258,7 @@ func (s *attemptStore) Claim(ctx context.Context, q delivery.ClaimRequest) (deli
 		return delivery.ClaimResult{}, err
 	}
 	var live bool
-	err = s.pool.QueryRow(w, `SELECT EXISTS(SELECT 1 FROM identity.delivery_processing WHERE deployment=$1 AND tenant_id=$2 AND effect_id=$3 AND generation=$4 AND lease_owner=$5 AND lease_until>clock_timestamp())`, s.deployment, string(q.TenantID), b.Intent.EffectID, generation, q.WorkerID).Scan(&live)
+	err = s.pool.QueryRow(w, `SELECT EXISTS(SELECT 1 FROM identity.delivery_processing WHERE deployment=$1 AND tenant_id=$2 AND effect_id=$3 AND generation=$4 AND lease_owner=$5 AND lease_until>clock_timestamp() AND NOT cancel_requested)`, s.deployment, string(q.TenantID), b.Intent.EffectID, generation, q.WorkerID).Scan(&live)
 	if err != nil {
 		return delivery.ClaimResult{}, attemptFailure(w, err)
 	}
@@ -395,7 +395,10 @@ func (s *attemptStore) Complete(ctx context.Context, q delivery.CompleteRequest)
 		return delivery.CompleteResult{}, attemptFailure(w, err)
 	}
 	now = now.UTC()
-	if state != "submitted" || generation != int64(q.Generation) || worker == nil || *worker != q.WorkerID || lease == nil || !lease.After(now) || !hmac.Equal(retainedPolicy, s.policyDigest[:]) {
+	// Local cancellation marks uncertainty but must not discard attributable
+	// evidence from the original live invocation. No takeover/renewal is allowed.
+	canComplete := state == "submitted" || state == "outcome-unknown" && cancelRequested && outcome == nil
+	if !canComplete || generation != int64(q.Generation) || worker == nil || *worker != q.WorkerID || lease == nil || !lease.After(now) || !hmac.Equal(retainedPolicy, s.policyDigest[:]) {
 		return delivery.CompleteResult{}, delivery.ErrConflict
 	}
 	evidence := q.Result

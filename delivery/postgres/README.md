@@ -65,6 +65,13 @@ This method does not start workers, decrypt payloads or call a provider.
 
 ## Custody and security
 
+The private delivery-effect cancellation primitive fences exact generations,
+erases unsent/retry custody and preserves uncertainty for prior invocations.
+It retains a live original worker's completion fence, but forbids renewal and
+replacement invocation. This is not public `Queue.Cancel`: current policy,
+protected original-command audit/replay and no-op cancellation checkpoint
+composition are still required before exposing cancellation to consumers.
+
 `PrepareEnqueue` derives the native command's primary effect ID; its
 `EnqueueCommand` freezes every safe effect field and confidential logical digest,
 without exporting ciphertext or rendered content. `NewEnqueueContributor`

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Preserve live, attributable worker completion across local cancellation
+  fences while preventing lease renewal and retry. Add the private atomic
+  cancellation foundation; authenticated public cancellation remains unfinished.
+
 - Add current-policy-authorized primary delivery status with exact tenant and
   target-user isolation. Preserve attempting, accepted and unknown distinctions
   without exposing payloads or provider references. No-op intents retain the
