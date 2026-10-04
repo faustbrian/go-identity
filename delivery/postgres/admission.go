@@ -46,6 +46,10 @@ type EnqueueConfig struct {
 	// cancellation. Requires StateTracking and CancellationVersion migration.
 	// False preserves existing enqueue plan identity and status-only composition.
 	Cancellation bool
+	// Receipts explicitly enables owned signed-callback authentication and
+	// protected receipt commands. Nil preserves legacy admission plan identity.
+	// Requires StateTracking, ReceiptVersion and ReceiptCommandVersion migrations.
+	Receipts *ReceiptAuthenticationConfig
 }
 
 // EnqueueCommandRequest is trusted platform/workflow input, not HTTP JSON or
@@ -69,7 +73,7 @@ type EnqueueCommandRequest struct {
 }
 
 // EnqueueService owns usable durable admission, authorized status and opt-in
-// authenticated local cancellation,
+// authenticated local cancellation and signed provider receipts,
 // not the complete Queue lifecycle. It composes participants and performs no provider
 // invocation, retry, credential issuance or identity mutation. The caller owns
 // the borrowed primary pool, authorization dependency and envelope service.
@@ -83,6 +87,7 @@ type EnqueueService struct {
 	keyed         *keyedAdmission
 	stateTracking bool
 	cancellation  *cancelExecutor
+	receipts      *receiptExecutor
 }
 
 func (EnqueueConfig) Format(s fmt.State, _ rune) {
@@ -119,7 +124,8 @@ func (EnqueueService) MarshalJSON() ([]byte, error) { return nil, delivery.ErrSe
 // protected audit, lifecycle, ciphertext and sole kernel-coordinator composition
 // from one borrowed primary pool. Install the public kernel/audit/outbox and
 // delivery migrations through KeyedVersion first; select StateVersion and
-// CancellationVersion for their respective features. It never runs migrations.
+// CancellationVersion for their respective features. Receipts also requires
+// ReceiptVersion and ReceiptCommandVersion. It never runs migrations.
 // Pure validation precedes bounded idempotent policy/namespace registration.
 // Registrations commit independently and survive a later constructor failure;
 // neither is a business command or enqueue receipt. A lost acknowledgement is
@@ -142,6 +148,10 @@ func NewEnqueueService(ctx context.Context, pool *database.Pool, c EnqueueConfig
 		if _, ok := c.Policies[profile.PolicyVersion]; !ok {
 			return nil, delivery.ErrInvalidInput
 		}
+	}
+	receiptAuth, receiptClock, err := receiptConfiguration(c)
+	if err != nil {
+		return nil, err
 	}
 	custody, err := NewContributor(c.Custody, service)
 	if err != nil {
@@ -199,6 +209,11 @@ func NewEnqueueService(ctx context.Context, pool *database.Pool, c EnqueueConfig
 			return nil, attemptFailure(w, err)
 		}
 	}
+	if receiptAuth != nil {
+		if _, err := pool.Raw().Exec(w, `SELECT r.event_digest,r.evidence_digest,r.observed_at,c.binding_digest,c.generation,c.before_version,c.after_version,c.result_state,c.advanced,c.deduplicated FROM identity.delivery_receipts r,identity.delivery_receipt_commands c WHERE false`); err != nil {
+			return nil, attemptFailure(w, err)
+		}
+	}
 	policies, err := newRetainedPolicies(w, pool.Raw(), c.Custody.Deployment, c.Policies, c.Timeout)
 	if err != nil {
 		return nil, err
@@ -226,6 +241,18 @@ func NewEnqueueService(ctx context.Context, pool *database.Pool, c EnqueueConfig
 			return nil, admissionError(err)
 		}
 		s.cancellation = &cancelExecutor{cancelCoordinator, cancelRegistry, nativeCancel}
+	}
+	if receiptAuth != nil {
+		nativeReceipt := &receiptContributor{store: &receiptStore{deployment: c.Custody.Deployment, namespaceKey: c.NamespaceKey}}
+		receiptRegistry, err := identitypostgres.NewContributorRegistry([]identitypostgres.Contributor{repo, nativeReceipt, audits, lifecycle})
+		if err != nil {
+			return nil, admissionError(err)
+		}
+		receiptCoordinator, err := identitypostgres.NewCoordinator(pool, receiptRegistry, c.Coordinator)
+		if err != nil {
+			return nil, admissionError(err)
+		}
+		s.receipts = &receiptExecutor{coordinator: receiptCoordinator, registry: receiptRegistry, native: nativeReceipt, auth: receiptAuth, clock: receiptClock}
 	}
 	return s, nil
 }

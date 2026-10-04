@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Enable opt-in authenticated provider receipts through owned key configuration
+  and the original kernel coordinator. Enforce current provider actor/tenant/
+  version policy before reservation and disclosure; commit event, erasure, audit
+  and lifecycle atomically. Exact retries recover immutable original results
+  without renewed fences. Requires both receipt migrations and state tracking;
+  disabled configuration preserves installed enqueue plans. Complete Queue and
+  provider-specific interoperability remain unfinished.
+
 - Add the private owned signed-receipt authentication foundation: bounded
   deployment/tenant/provider/version-scoped HMAC-SHA256 envelopes, explicit key
   validity/rotation, fresh signatures for delayed observations and strict closed

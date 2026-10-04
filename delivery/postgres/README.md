@@ -139,7 +139,7 @@ and full Queue composition remain unfinished.
 
 ### Provider-receipt persistence foundation
 
-The private authentication foundation implements an explicit Golib callback
+The opt-in receipt operation implements an explicit Golib callback
 profile, not a vendor-signature compatibility layer. Immutable configuration
 binds each 32-byte nonzero HMAC key and key ID to deployment, tenant, provider,
 positive provider configuration version and provider actor, with mandatory
@@ -159,8 +159,35 @@ of configured maximum; exact closed scalar fields are `tenant_id`, `provider`,
 unknown, missing or case-aliased fields and trailing JSON are rejected; status
 uses the core receipt classifications and observation time is canonical UTC
 RFC3339Nano. No callback idempotency field owns kernel command identity.
-This remains a private phase: public callback configuration, current-policy
-admission and original-result disclosure checks are not enabled yet.
+Select `EnqueueConfig.Receipts` with `ReceiptAuthenticationConfig` and enable
+`StateTracking`; install `ReceiptVersion` and `ReceiptCommandVersion` first.
+Nil leaves callbacks disabled and preserves installed enqueue plan identity.
+Selected missing schema or a key profile absent from the retained custody
+provider versions fails closed before deployment registration. Configuration
+copies credentials, supports overlapping keys, and needs no consumer verifier.
+
+`EnqueueService.RecordReceipt` accepts `ReceiptCommandRequest`: trusted binding
+and current actor policy plus untrusted `SignedReceiptCallback` and the original
+status-version fence. The signature selects the configured provider service
+account, not arbitrary human authority. Tenant/effect/user, retained provider
+version and current policy must match before kernel reservation. Caller
+`delivery.*` attributes are rejected; owned provider/version/generation/intent
+attributes reach policy. Receipt effects, protected audit and lifecycle commit
+atomically under the existing kernel coordinator. No Sender or provider query
+runs in this operation.
+
+Retain command identity, body and fences on retry. A freshly signed identical
+body can recover the same original result; signing time/key rotation is not
+another domain event. Raw callback/signature/event IDs never persist in the
+command journal. Changed evidence conflicts. Exact committed replay returns
+the immutable original result, not a later provider state, after current key
+and policy checks. Unknown/in-progress returns `ErrOutcomeUnknown`, never
+permission to fabricate another command. A post-commit authentication/policy
+denial returns no result; retry the same command after authority is restored.
+The 1..5-second service timeout covers the whole operation; the caller's earlier
+deadline wins. Public configuration/callback/request diagnostics are redacted
+and JSON serialization is rejected. This is not yet complete Queue processing
+or provider-specific callback interoperability.
 
 `MigrationSource.ReceiptVersion` optionally appends immutable redacted provider
 event checkpoints after `StateVersion` and any selected `CancellationVersion`.
@@ -199,10 +226,10 @@ exact kernel-command replay never reruns that transition. Recovery inspects the
 immutable original-command binding, not current delivery state. Result records
 have neither a lease nor independent execution/replay authority.
 
-This is not yet a public authenticated receipt endpoint or full Queue. Current
-policy, callback authentication, public status projection, reconciliation
-and retention/role/release proofs
-remain required before exposing it. Checkpoints cannot presently be deleted;
+The native participant is not itself a public endpoint; `RecordReceipt` owns
+authentication, current policy and original-result disclosure. Receipt-aware
+public status projection, reconciliation and retention/role/release proofs
+remain unfinished. Checkpoints cannot presently be deleted;
 retention/lifecycle completion must be resolved before production adoption.
 
 `PrepareEnqueue` derives the native command's primary effect ID; its
@@ -411,8 +438,8 @@ application-provided adapter or a usable public Queue. The generic workflow and
 outbox remain their public owners; this extension owns only delivery effects.
 
 The complete owned Queue, authenticated workflow admission,
-workflow-level idempotency scope, public worker lifecycle, authenticated receipts,
-reconciliation, public cancellation and final retention are unfinished.
+workflow-level idempotency scope, public worker lifecycle, receipt-aware status,
+reconciliation, complete Queue cancellation and final retention are unfinished.
 Real PostgreSQL owner-level tests cover transactional rollback, concurrent
 duplicate admission, randomized-custody replay, original-command FK isolation,
 outbox failure rollback and terminal erasure. They do not yet prove full public
