@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Add scoped request-key allocation to the original enqueue command. Matching
+  requests with different candidate command IDs retain one intent and receipt;
+  changed confidential input conflicts. Allocation grants no execution outcome.
+  Install the additive keyed migration after retained policy history.
+  Preserve the original custody fingerprint key across rotation and fail closed
+  when its retained key is unavailable, without duplicating committed effects.
+
 - Require current delivery-scope authorization before enqueue encryption and
   again before reservation. Bind original recipient scopes, template versions
   and retained provider policies; reject caller overrides and unavailable

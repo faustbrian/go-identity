@@ -18,6 +18,20 @@ import (
 // Current policy must explicitly allow the exact redacted delivery scope before
 // encryption and again before reservation, using the original bounded context.
 func (e *enqueueExecutor) Admit(ctx context.Context, b identity.CommandBinding, caller authorization.DecisionContext, inputs []IntentInput, policies *retainedPolicies) (identity.CommandResult, error) {
+	return e.admit(ctx, b, caller, inputs, policies, nil, "")
+}
+
+// AdmitKeyed resolves matching explicit native enqueue requests to the original
+// kernel command only after current scope authorization. The mapping is not
+// execution evidence; prepared custody still commits under that sole command.
+func (e *enqueueExecutor) AdmitKeyed(ctx context.Context, b identity.CommandBinding, caller authorization.DecisionContext, inputs []IntentInput, policies *retainedPolicies, keyed *keyedAdmission, requestKey string) (identity.CommandResult, error) {
+	if keyed == nil || e == nil || e.custody == nil || e.custody.store == nil || keyed.deployment != e.custody.store.deployment || len(requestKey) < 16 || !safeID(requestKey, false) {
+		return identity.CommandResult{}, delivery.ErrInvalidInput
+	}
+	return e.admit(ctx, b, caller, inputs, policies, keyed, requestKey)
+}
+
+func (e *enqueueExecutor) admit(ctx context.Context, b identity.CommandBinding, caller authorization.DecisionContext, inputs []IntentInput, policies *retainedPolicies, keyed *keyedAdmission, requestKey string) (identity.CommandResult, error) {
 	if ctx == nil || e == nil || e.custody == nil || e.custody.store == nil || policies == nil || policies.deployment != e.custody.store.deployment || b.RecordID != "" || len(inputs) < 1 || len(inputs) > 16 {
 		return identity.CommandResult{}, delivery.ErrInvalidInput
 	}
@@ -76,7 +90,20 @@ func (e *enqueueExecutor) Admit(ctx context.Context, b identity.CommandBinding, 
 	if err := e.allow(w, checked, caller); err != nil {
 		return identity.CommandResult{}, err
 	}
-	prepared, err := e.custody.PrepareEnqueue(w, b, inputs)
+	version := e.custody.current
+	if keyed != nil {
+		logical, err := keyed.logical(bindings, inputs)
+		if err != nil {
+			return identity.CommandResult{}, err
+		}
+		original, retainedVersion, err := keyed.resolveVersion(w, b, requestKey, logical, version)
+		if err != nil {
+			return identity.CommandResult{}, err
+		}
+		b.CommandID = original
+		version = retainedVersion
+	}
+	prepared, err := e.custody.prepareEnqueueVersion(w, b, inputs, version)
 	if err != nil {
 		return identity.CommandResult{}, err
 	}

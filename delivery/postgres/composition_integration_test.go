@@ -301,16 +301,75 @@ func testPublicComposition(t *testing.T, mode string) {
 			t.Fatal("unretained admission dispatched policy", err)
 		}
 		requireAdmissionScope = true
-		first, err := executor.Admit(ctx, b, scope, []IntentInput{input}, policies)
+		if _, err := pool.Exec(ctx, keyedSchemaSQL); err != nil {
+			t.Fatal("keyed migration", err)
+		}
+		keyed, err := newKeyedAdmission(ctx, pool, "test", [32]byte{7}, time.Second)
+		if err != nil {
+			t.Fatal(err)
+		}
+		permit = false
+		if _, err := executor.AdmitKeyed(ctx, b, scope, []IntentInput{input}, policies, keyed, "synthetic-request-key"); !errors.Is(err, delivery.ErrForbidden) {
+			t.Fatal("denied keyed admission proceeded", err)
+		}
+		var allocations int
+		if err := pool.QueryRow(ctx, `SELECT count(*) FROM identity.delivery_keyed_commands`).Scan(&allocations); err != nil || allocations != 0 {
+			t.Fatal("denied caller allocated original command", err)
+		}
+		permit = true
+		first, err := executor.AdmitKeyed(ctx, b, scope, []IntentInput{input}, policies, keyed, "synthetic-request-key")
 		if err != nil || first.Outcome != identity.CommitOutcomeCommitted {
 			t.Fatal("owned enqueue did not commit", err)
 		}
-		second, err := executor.Admit(ctx, b, scope, []IntentInput{input}, policies)
+		repeat := b
+		repeat.CommandID, err = identity.NewCommandID()
+		if err != nil {
+			t.Fatal(err)
+		}
+		second, err := executor.AdmitKeyed(ctx, repeat, scope, []IntentInput{input}, policies, keyed, "synthetic-request-key")
 		if err != nil || second.Outcome != identity.CommitOutcomeCommitted || second.AuditEventID != first.AuditEventID || second.Binding != first.Binding {
 			t.Fatal("owned enqueue replay did not retain original effects", err)
 		}
+		// Restart with a new current custody fingerprint key, keeping the old
+		// key available. Admission must preserve both the allocated command and
+		// its original confidential fingerprint, not reinterpret the request.
+		rotated, err := NewContributor(ContributorConfig{Deployment: "test", CurrentDigestKeyVersion: 2, RetainedDigestKeys: map[uint32][32]byte{1: {3}, 2: {4}}, ActiveEnvelopeKeyID: "envelope-a", PreparationTimeout: time.Second, ProviderProfiles: map[uint64]ProviderProfile{1: {Provider: "test-provider", PolicyVersion: 1}}}, originalService)
+		if err != nil {
+			t.Fatal(err)
+		}
+		rotatedNative, err := NewEnqueueContributor(rotated)
+		if err != nil {
+			t.Fatal(err)
+		}
+		rotatedRegistry, err := identitypostgres.NewContributorRegistry([]identitypostgres.Contributor{repo, rotatedNative, auditing, lifecycle, rotated})
+		if err != nil {
+			t.Fatal(err)
+		}
+		rotatedCoordinator, err := identitypostgres.NewCoordinator(owned, rotatedRegistry, identitypostgres.CoordinatorConfig{MaximumDuration: 2 * time.Second, LeaseDuration: time.Minute, CurrentFingerprintKeyVersion: 1, RetainedFingerprintKeys: map[uint32][32]byte{1: {1}}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		rotatedExecutor, err := newEnqueueExecutor(rotatedCoordinator, rotatedRegistry, rotatedNative, rotated, policy, "policy", 1, 1, 2*time.Second)
+		if err != nil {
+			t.Fatal(err)
+		}
+		rotatedResult, err := rotatedExecutor.AdmitKeyed(ctx, repeat, scope, []IntentInput{input}, policies, keyed, "synthetic-request-key")
+		if err != nil || rotatedResult.Outcome != identity.CommitOutcomeCommitted || rotatedResult.Binding != first.Binding || rotatedResult.AuditEventID != first.AuditEventID {
+			t.Fatal("custody rotation broke original keyed replay", err)
+		}
+		retainedKey := rotated.store.codec.keys[1]
+		delete(rotated.store.codec.keys, 1)
+		if _, err := rotatedExecutor.AdmitKeyed(ctx, repeat, scope, []IntentInput{input}, policies, keyed, "synthetic-request-key"); !errors.Is(err, delivery.ErrUnavailable) {
+			t.Fatal("missing original custody key reinterpreted replay", err)
+		}
+		rotated.store.codec.keys[1] = retainedKey
+		changed := input
+		changed.Rendered.Body += "-changed"
+		if _, err := rotatedExecutor.AdmitKeyed(ctx, repeat, scope, []IntentInput{changed}, policies, keyed, "synthetic-request-key"); !errors.Is(err, delivery.ErrConflict) {
+			t.Fatal("same key changed confidential queued content", err)
+		}
 		permit = false
-		if _, err := executor.Admit(ctx, b, scope, []IntentInput{input}, policies); !errors.Is(err, delivery.ErrForbidden) {
+		if _, err := executor.AdmitKeyed(ctx, repeat, scope, []IntentInput{input}, policies, keyed, "synthetic-request-key"); !errors.Is(err, delivery.ErrForbidden) {
 			t.Fatal("replay bypassed current authorization", err)
 		}
 		var intents, effects, audits int

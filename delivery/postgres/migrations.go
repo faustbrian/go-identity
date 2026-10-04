@@ -25,6 +25,10 @@ type MigrationSource struct {
 	// It requires WorkerVersion and must be strictly greater. Zero preserves all
 	// previously installed migration bytes and does not enable policy registration.
 	PolicyVersion migrations.Version
+	// KeyedVersion optionally appends original-command request-key mappings.
+	// It requires PolicyVersion and must be strictly greater. Zero preserves
+	// the installed history and does not expose a complete public Queue.
+	KeyedVersion migrations.Version
 }
 
 var _ migrations.Source = MigrationSource{}
@@ -60,6 +64,12 @@ func (s MigrationSource) Load(ctx context.Context) ([]migrations.Migration, erro
 		}
 		additional++
 	}
+	if s.KeyedVersion != 0 {
+		if s.PolicyVersion == 0 || s.KeyedVersion <= s.PolicyVersion {
+			return nil, delivery.ErrInvalidInput
+		}
+		additional++
+	}
 	if len(history) < 1 || len(history)+additional > migrations.MaxMigrationFiles {
 		return nil, delivery.ErrInvalidInput
 	}
@@ -91,6 +101,13 @@ func (s MigrationSource) Load(ctx context.Context) ([]migrations.Migration, erro
 			return nil, delivery.ErrUnavailable
 		}
 		result[len(history)+2] = policy
+	}
+	if s.KeyedVersion != 0 {
+		keyed, err := migrations.NewMigration(s.KeyedVersion, "identity_delivery_keyed_commands", migrations.TransactionModeDefault, keyedSchemaSQL, "")
+		if err != nil {
+			return nil, delivery.ErrUnavailable
+		}
+		result[len(history)+3] = keyed
 	}
 	return result, nil
 }

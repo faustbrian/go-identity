@@ -25,6 +25,13 @@ func EnqueueOperation() identity.FeatureOperation {
 // are Prepare's unchanged contract. Neither preparation nor command mapping
 // supplies authorization, idempotency admission, a transaction or queue success.
 func (c *Contributor) PrepareEnqueue(ctx context.Context, b identity.CommandBinding, inputs []IntentInput) (PreparedDelivery, error) {
+	if c == nil {
+		return PreparedDelivery{}, delivery.ErrInvalidInput
+	}
+	return c.prepareEnqueueVersion(ctx, b, inputs, c.current)
+}
+
+func (c *Contributor) prepareEnqueueVersion(ctx context.Context, b identity.CommandBinding, inputs []IntentInput, version uint32) (PreparedDelivery, error) {
 	if c == nil || c.store == nil || ctx == nil {
 		return PreparedDelivery{}, delivery.ErrInvalidInput
 	}
@@ -45,7 +52,7 @@ func (c *Contributor) PrepareEnqueue(ctx context.Context, b identity.CommandBind
 	if b.ValidateFor(EnqueueOperation()) != nil {
 		return PreparedDelivery{}, delivery.ErrInvalidInput
 	}
-	return c.Prepare(ctx, b, inputs)
+	return c.prepareVersion(ctx, b, inputs, version)
 }
 
 // EnqueueCommand returns an immutable core command containing confidential

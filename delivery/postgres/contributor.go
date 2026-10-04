@@ -145,11 +145,24 @@ func (p PreparedDelivery) Plan() (identitypostgres.DeliveryPlan, error) {
 // wins. Failure returns no usable prefix and never issues or renews a credential.
 // It does not discover/authorize recipients or infer authority from binding IDs.
 func (c *Contributor) Prepare(ctx context.Context, b identity.CommandBinding, inputs []IntentInput) (PreparedDelivery, error) {
+	if c == nil {
+		return PreparedDelivery{}, delivery.ErrInvalidInput
+	}
+	return c.prepareVersion(ctx, b, inputs, c.current)
+}
+
+// prepareVersion is owned keyed replay selection, not caller-selected crypto
+// policy. Keep the enlisted pointer as custody owner while using the allocation's
+// original retained fingerprint key. The active envelope key may rotate freely.
+func (c *Contributor) prepareVersion(ctx context.Context, b identity.CommandBinding, inputs []IntentInput, version uint32) (PreparedDelivery, error) {
 	if c == nil || c.store == nil || ctx == nil || len(inputs) < 1 || len(inputs) > 16 {
 		return PreparedDelivery{}, delivery.ErrInvalidInput
 	}
 	if err := ctx.Err(); err != nil {
 		return PreparedDelivery{}, err
+	}
+	if c.store.codec.keys[version] == ([32]byte{}) {
+		return PreparedDelivery{}, delivery.ErrUnavailable
 	}
 	bounded, stop := context.WithTimeout(ctx, c.store.codec.timeout)
 	defer stop()
@@ -160,6 +173,7 @@ func (c *Contributor) Prepare(ctx context.Context, b identity.CommandBinding, in
 	p := &preparedDelivery{owner: c, binding: b, plan: identitypostgres.DeliveryPlan{Contributor: c.Descriptor(), Intents: make([]identitypostgres.DeliveryIntentPlan, len(inputs))}, envelopes: make([]identitypostgres.DeliveryEnvelope, len(inputs))}
 	bytes := 0
 	for n, input := range inputs {
+		bindings[n].DigestKeyVersion = version
 		bound, envelope, err := c.store.codec.seal(bounded, bindings[n], payload{Recipient: input.Recipient, Rendered: input.Rendered}, c.envelopeKey)
 		if err != nil {
 			return PreparedDelivery{}, err

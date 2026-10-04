@@ -123,6 +123,23 @@ input and preparation diagnostics are redacted and serialization is forbidden.
 
 ## Persistence and remaining implementation
 
+Select `KeyedVersion` strictly above `PolicyVersion` to append scoped request-key
+to original-command mappings. The private owned admission path authorizes before
+allocation, then encrypts/stages under the selected original coordinator command.
+Concurrent matching candidates and restarts retain one command; changed content,
+scope metadata, expiry or correlation conflicts instead of creating a second
+delivery. Mapping allocation is not an enqueue receipt or execution evidence.
+Only digests and safe random command IDs are stored; no raw key, recipient or
+body is indexed. Lost allocation acknowledgement is unknown and resolves using
+the same key. The immutable deployment lookup-key identity rejects settings
+that would split the namespace. Online namespace-key rotation and retention
+retirement remain pending; envelope and existing confidential custody keys keep
+their separate rotation contract. Allocation MAC-binds the original custody
+fingerprint-key version: restart with a new current version uses the retained
+original key for coordinator replay; a missing original key fails closed rather
+than changing the command fingerprint. Recipient discovery and full public Queue
+composition are still unfinished, not application-written store responsibilities.
+
 Select `PolicyVersion` strictly above a selected `WorkerVersion` to append the
 immutable deployment/version policy fingerprint registry. Zero preserves the
 old admission/worker history byte-for-byte. The private owned composition
