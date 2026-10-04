@@ -243,11 +243,15 @@ func readRetained(ctx context.Context, w identitypostgres.Work, query string, ar
 }
 
 func (s *intentStore) PersistDelivery(ctx context.Context, w identitypostgres.Work) error {
-	b, plan, err := w.DeliveryScope(s)
+	return s.persistWork(ctx, w, s)
+}
+
+func (s *intentStore) persistWork(ctx context.Context, w identitypostgres.Work, owner identitypostgres.DeliveryContributor) error {
+	b, plan, err := w.DeliveryScope(owner)
 	if err != nil {
 		return err
 	}
-	envelopes, err := w.StagedDelivery(s)
+	envelopes, err := w.StagedDelivery(owner)
 	if err != nil {
 		return err
 	}
@@ -265,7 +269,11 @@ func (s *intentStore) PersistDelivery(ctx context.Context, w identitypostgres.Wo
 }
 
 func (s *intentStore) RecoverParticipant(ctx context.Context, w identitypostgres.RecoveryWork) (identitypostgres.RecoveryStatus, error) {
-	b, plan, err := w.DeliveryScope(s)
+	return s.recoverWork(ctx, w, s)
+}
+
+func (s *intentStore) recoverWork(ctx context.Context, w identitypostgres.RecoveryWork, owner identitypostgres.DeliveryContributor) (identitypostgres.RecoveryStatus, error) {
+	b, plan, err := w.DeliveryScope(owner)
 	if err != nil {
 		return identitypostgres.RecoveryUnknown, err
 	}

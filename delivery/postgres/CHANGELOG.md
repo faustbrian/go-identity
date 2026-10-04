@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Expose immutable encrypted preparation and original-command staging through
+  the public enlisted contributor, plus a migration source that extends kernel
+  history without rewriting installed SQL. Foreign owners and original bindings
+  cannot stage preparations; no-op admission retains no sendable custody.
+  Complete Queue processing and authenticated feature workflows remain unfinished.
+
 - Add original-command encrypted intent and safe-handle outbox admission under
   the enlisted kernel transaction. Concurrent matching inputs retain one effect;
   randomized encryption cannot duplicate admission, and terminal effects cannot

@@ -26,6 +26,12 @@ import (
 // These real-PostgreSQL checks exercise this owner's SQL and outbox bridge.
 // They do not claim public Queue, command admission, lease or provider proof.
 func intentDatabase(t *testing.T) (context.Context, *pgxpool.Pool) {
+	ctx, pool := emptyIntentDatabase(t)
+	installIntentFoundation(t, ctx, pool)
+	return ctx, pool
+}
+
+func emptyIntentDatabase(t *testing.T) (context.Context, *pgxpool.Pool) {
 	t.Helper()
 	config, err := pgxpool.ParseConfig(os.Getenv("IDENTITY_TEST_POSTGRES_DSN"))
 	if err != nil || config.ConnConfig.Host != "127.0.0.1" || config.ConnConfig.Database != "identity_test" {
@@ -64,6 +70,11 @@ func intentDatabase(t *testing.T) (context.Context, *pgxpool.Pool) {
 	if err != nil {
 		t.Fatal("test database connection failed")
 	}
+	return ctx, pool
+}
+
+func installIntentFoundation(t *testing.T, ctx context.Context, pool *pgxpool.Pool) {
+	t.Helper()
 	history, err := (identitypostgres.MigrationSource{}).Load(ctx)
 	if err != nil {
 		t.Fatal("kernel migration load failed")
@@ -86,7 +97,6 @@ func intentDatabase(t *testing.T) (context.Context, *pgxpool.Pool) {
 	if _, err := pool.Exec(ctx, intentSchemaSQL); err != nil {
 		t.Fatal("delivery migration install failed")
 	}
-	return ctx, pool
 }
 
 func seedIntentCommand(t *testing.T, ctx context.Context, pool *pgxpool.Pool, p preparedIntent) {

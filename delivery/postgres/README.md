@@ -1,8 +1,8 @@
 # Identity delivery PostgreSQL
 
 **Under development.** This module does not yet expose a production Queue.
-It currently implements private authenticated payload custody and original-command
-intent/outbox admission through the kernel's exact enlisted delivery contributor;
+It currently exposes authenticated preparation, immutable migration history and
+original-command staging through the kernel's exact enlisted delivery contributor;
 it must not be selected as a working durable store or provider integration.
 
 ## Custody and security
@@ -35,7 +35,39 @@ key while ciphertext or replay evidence needs it. Missing retained keys fail
 closed; they do not authorize regeneration, altered plaintext or a new command.
 Rotation cannot change the retained template/locale snapshot or expiry.
 
-## Remaining implementation
+## Public composition
+
+Construct `NewContributor(ContributorConfig, *secretenvelope.Service)` with
+retained nonzero fingerprint keys, the active envelope key, a bounded preparation
+timeout and retained provider/policy profiles. The contributor borrows the
+secret-envelope service; callers own its lifetime. Configuration is copied,
+concurrent preparation is supported, and each original Work remains serial-use.
+
+Install `MigrationSource{Base: identitypostgres.MigrationSource{}, Version: 10}`
+through the public go-migrations Runner/PostgreSQL backend in the kernel's same
+migration ledger. If other owned migrations already extend that history, supply
+the complete base and an unused higher version instead. Existing kernel SQL and
+checksums are preserved. Install audit/lifecycle/outbox dependencies through
+their owned migration sources; this module supplies no destructive down SQL.
+
+An owned authenticated workflow calls `Contributor.Prepare` before opening the
+original transaction. `PreparedDelivery.Plan` returns independent safe metadata
+for `CommandPlan.Delivery`; enlist the exact contributor pointer last. After the
+coordinator begins the original Work, `Contributor.Stage` copies frozen ciphertext
+into it. Commit invokes this participant and persists intents and safe outbox
+handles atomically with the original domain mutation, audit and lifecycle effect.
+On any staging failure, the workflow must abort rather than commit a prefix.
+
+Preparation accepts 1..16 strictly increasing effect indices, validates the whole
+batch before key-provider work and enforces a 1MiB aggregate budget. The earlier
+caller deadline, configured timeout or original expiry wins. Preparation does
+not authorize a caller/recipient, discover an address, render a template or issue
+a token. These remain owned feature-workflow responsibilities, not consumer-written
+stores. Foreign preparation owners or original bindings are rejected; a successful
+Stage is provisional, not an enqueue receipt or provider outcome. Public config,
+input and preparation diagnostics are redacted and serialization is forbidden.
+
+## Persistence and remaining implementation
 
 The owned intent table references the original kernel command and retains its
 complete canonical non-secret AAD and confidential logical digest. Prepared
@@ -59,15 +91,17 @@ currently prohibits deleting/truncating replay bindings; final retention and
 legal-hold retirement remain unfinished. Recovery does not reconstruct a
 kernel success receipt or perform provider work.
 
-The owned Queue, authenticated workflow admission, public migration installation,
+The owned Queue, authenticated workflow admission,
 workflow-level idempotency scope, lease/generation fencing, attempts, authenticated
 receipts, reconciliation, cancellation and terminal erasure are unfinished.
 Real PostgreSQL owner-level tests cover transactional rollback, concurrent
 duplicate admission, randomized-custody replay, original-command FK isolation,
 outbox failure rollback and terminal erasure. They do not yet prove full public
-Queue/coordinator composition, lease processing, recovery invocation or provider
-interoperability. Quick-start/API examples will accompany the usable
+Queue processing, recovery invocation or provider interoperability. Real public
+coordinator tests additionally cover installed-history replay, atomic commit,
+no-op custody erasure, foreign binding denial and delivery-failure rollback with
+the actual owned audit/lifecycle adapters. Quick-start/API examples will accompany the usable
 public adapter, not ask consumers to implement its missing stores or workflow.
 
-Exact coverage/mutation, PostgreSQL composition, provider interoperability,
+Exact coverage/mutation, complete PostgreSQL composition, provider interoperability,
 clean-consumer and remaining release checks are pending.
