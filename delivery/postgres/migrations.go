@@ -42,6 +42,10 @@ type MigrationSource struct {
 	// Cancellation is not a prerequisite. Zero preserves installed histories;
 	// schema selection does not expose authenticated callbacks or a full Queue.
 	ReceiptVersion migrations.Version
+	// ReceiptCommandVersion adds immutable original-command receipt results.
+	// Requires ReceiptVersion and must exceed it. Zero retains installed history;
+	// it does not enable public provider authentication or Queue composition.
+	ReceiptCommandVersion migrations.Version
 }
 
 var _ migrations.Source = MigrationSource{}
@@ -97,6 +101,12 @@ func (s MigrationSource) Load(ctx context.Context) ([]migrations.Migration, erro
 	}
 	if s.ReceiptVersion != 0 {
 		if s.StateVersion == 0 || s.ReceiptVersion <= s.StateVersion || s.CancellationVersion != 0 && s.ReceiptVersion <= s.CancellationVersion {
+			return nil, delivery.ErrInvalidInput
+		}
+		additional++
+	}
+	if s.ReceiptCommandVersion != 0 {
+		if s.ReceiptVersion == 0 || s.ReceiptCommandVersion <= s.ReceiptVersion {
 			return nil, delivery.ErrInvalidInput
 		}
 		additional++
@@ -159,7 +169,18 @@ func (s MigrationSource) Load(ctx context.Context) ([]migrations.Migration, erro
 		if err != nil {
 			return nil, delivery.ErrUnavailable
 		}
-		result[len(result)-1] = receipt
+		index := len(result) - 1
+		if s.ReceiptCommandVersion != 0 {
+			index--
+		}
+		result[index] = receipt
+	}
+	if s.ReceiptCommandVersion != 0 {
+		command, err := migrations.NewMigration(s.ReceiptCommandVersion, "identity_delivery_receipt_commands", migrations.TransactionModeDefault, receiptCommandSchemaSQL, "")
+		if err != nil {
+			return nil, delivery.ErrUnavailable
+		}
+		result[len(result)-1] = command
 	}
 	return result, nil
 }

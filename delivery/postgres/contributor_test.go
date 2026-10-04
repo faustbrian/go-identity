@@ -196,6 +196,16 @@ func TestPublicMigrationSourcePreservesOwnedHistory(t *testing.T) {
 				t.Fatal("receipt migration rewrote installed history")
 			}
 		}
+		source.ReceiptCommandVersion = 17
+		commands, err := source.Load(context.Background())
+		if err != nil || len(commands) != len(receipts)+1 || commands[len(receipts)].DownSQL() != "" {
+			t.Fatal("receipt command forward extension", err)
+		}
+		for n, m := range receipts {
+			if m.Checksum() != commands[n].Checksum() {
+				t.Fatal("native receipt migration rewrote installed history")
+			}
+		}
 	}
 	for _, invalid := range []deliverypostgres.MigrationSource{
 		{Base: base, Version: 10, PolicyVersion: 12},
@@ -208,6 +218,8 @@ func TestPublicMigrationSourcePreservesOwnedHistory(t *testing.T) {
 		{Base: base, Version: 10, CancellationVersion: 15},
 		{Base: base, Version: 10, WorkerVersion: 11, PolicyVersion: 12, KeyedVersion: 13, StateVersion: 14, CancellationVersion: 14},
 		{Base: base, Version: 10, ReceiptVersion: 16},
+		{Base: base, Version: 10, ReceiptCommandVersion: 17},
+		{Base: base, Version: 10, WorkerVersion: 11, PolicyVersion: 12, KeyedVersion: 13, StateVersion: 14, ReceiptVersion: 16, ReceiptCommandVersion: 16},
 		{Base: base, Version: 10, WorkerVersion: 11, PolicyVersion: 12, KeyedVersion: 13, StateVersion: 14, ReceiptVersion: 14},
 		{Base: base, Version: 10, WorkerVersion: 11, PolicyVersion: 12, KeyedVersion: 13, StateVersion: 14, CancellationVersion: 15, ReceiptVersion: 15},
 	} {

@@ -37,7 +37,17 @@ func (s *receiptStore) digests(q delivery.ReceiptRecordRequest) ([32]byte, [32]b
 }
 
 func (s *receiptStore) recordIn(ctx context.Context, sql cancellationSQL, q delivery.ReceiptRecordRequest, subject string) (delivery.ReceiptRecordResult, error) {
-	if ctx == nil || s == nil || !safeID(s.deployment, false) || s.namespaceKey == ([32]byte{}) || sql.scan == nil || sql.exec == nil || q.Validate() != nil || validateCancellation(delivery.CancelRequest{TenantID: q.TenantID, IntentID: q.IntentID, Reason: "provider-receipt"}, subject) != nil {
+	if s == nil || q.Validate() != nil {
+		return delivery.ReceiptRecordResult{}, delivery.ErrInvalidInput
+	}
+	event, evidence := s.digests(q)
+	return s.recordEvidenceIn(ctx, sql, q, subject, event, evidence)
+}
+
+// Only owned command decoding supplies precomputed evidence digests. Raw
+// callback identities must never become kernel-journal fields.
+func (s *receiptStore) recordEvidenceIn(ctx context.Context, sql cancellationSQL, q delivery.ReceiptRecordRequest, subject string, event, evidence [32]byte) (delivery.ReceiptRecordResult, error) {
+	if ctx == nil || s == nil || !safeID(s.deployment, false) || s.namespaceKey == ([32]byte{}) || event == ([32]byte{}) || evidence == ([32]byte{}) || sql.scan == nil || sql.exec == nil || q.Validate() != nil || validateCancellation(delivery.CancelRequest{TenantID: q.TenantID, IntentID: q.IntentID, Reason: "provider-receipt"}, subject) != nil {
 		return delivery.ReceiptRecordResult{}, delivery.ErrInvalidInput
 	}
 	if err := ctx.Err(); err != nil {
@@ -55,7 +65,6 @@ func (s *receiptStore) recordIn(ctx context.Context, sql cancellationSQL, q deli
 	if provider != q.Provider || current.noop {
 		return delivery.ReceiptRecordResult{}, delivery.ErrForbidden
 	}
-	event, evidence := s.digests(q)
 	var prior []byte
 	var recordedState int64
 	err = sql.scan(ctx, `SELECT evidence_digest,result_state::bigint FROM identity.delivery_receipts WHERE deployment=$1 AND tenant_id=$2 AND provider=$3 AND event_digest=$4`, []any{s.deployment, string(q.TenantID), q.Provider, event[:]}, &prior, &recordedState)

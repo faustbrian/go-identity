@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Add forward receipt-command results and a private native receipt participant
+  under the original kernel coordinator. Bind redacted keyed evidence and exact
+  version/generation fences; commit event result, custody erasure, protected
+  audit and lifecycle together. Exact replay preserves the original result;
+  downstream failure restores all effects. Public callback authentication and
+  current-policy admission remain unfinished.
+
 - Forward optional provider-receipt schema and borrowed receipt effect phase:
   scoped keyed event dedupe, immutable evidence/results, generation fencing,
   monotonic provider observations and atomic terminal ciphertext erasure.

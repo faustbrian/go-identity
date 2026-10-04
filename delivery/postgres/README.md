@@ -164,9 +164,21 @@ observations retain the unchanged live owner so its attributable completion
 can still settle the effect. Neither path renews leases or resubmits work.
 Recorded worker completion replay remains unchanged after later receipts.
 
+`MigrationSource.ReceiptCommandVersion` adds original-command result projections
+after a selected `ReceiptVersion`; cancellation remains optional. It does not
+rewrite earlier migration bytes or queued custody, and has no destructive down
+migration. The private native participant binds event/evidence HMACs, provider,
+generation, normalized observation and status version in a closed kernel command.
+Raw callback IDs never enter that command. Its result, event checkpoint,
+protected audit, lifecycle, worker fencing and custody erasure commit together.
+Earlier or duplicate observations still record one protected version transition;
+exact kernel-command replay never reruns that transition. Recovery inspects the
+immutable original-command binding, not current delivery state. Result records
+have neither a lease nor independent execution/replay authority.
+
 This is not yet a public authenticated receipt endpoint or full Queue. Current
-policy, callback authentication, audit/original kernel command composition,
-public status projection, reconciliation and retention/role/release proofs
+policy, callback authentication, public status projection, reconciliation
+and retention/role/release proofs
 remain required before exposing it. Checkpoints cannot presently be deleted;
 retention/lifecycle completion must be resolved before production adoption.
 
