@@ -2,6 +2,7 @@
   "schema_version": 1,
   "repository": "github.com/faustbrian/go-identity",
   "packages": [
+    {"module_directory":"delivery/postgres","directory":".","name":"postgres","import_path":"github.com/faustbrian/go-identity/delivery/postgres","kind":"public","production":true,"executable":true,"coverage_required":true,"build_required":true,"build_tags":[]},
     {"module_directory":"delivery","directory":".","name":"delivery","import_path":"github.com/faustbrian/go-identity/delivery","kind":"public","production":true,"executable":true,"coverage_required":true,"build_required":true,"build_tags":[]},
     {"module_directory":"risk/hibp","directory":".","name":"hibp","import_path":"github.com/faustbrian/go-identity/risk/hibp","kind":"public","production":true,"executable":true,"coverage_required":true,"build_required":true,"build_tags":[]},
     {"module_directory":"risk/postgres","directory":".","name":"postgres","import_path":"github.com/faustbrian/go-identity/risk/postgres","kind":"public","production":true,"executable":true,"coverage_required":true,"build_required":true,"build_tags":[]},
