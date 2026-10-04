@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add owned prepared-enqueue orchestration through the original coordinator.
+  Current exact-scope policy applies before reservation and on committed replay;
+  denied callers create no command claim or delivery effect. Policy failures
+  are redacted and fail closed. Complete public Queue admission, including
+  pre-encryption authorization and scoped keyed dedupe, remains unfinished.
+
 - Add native enqueue command preparation and an exact enlisted execution phase.
   Commands freeze every prepared effect under the original coordinator; absent
   or failed ciphertext persistence rolls back delivery and lifecycle effects,

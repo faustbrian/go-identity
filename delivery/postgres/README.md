@@ -23,6 +23,16 @@ successful enqueue audit. This trusted composition seam does not authenticate
 callers or implement Queue admission; the eventual owned Queue must supply that
 orchestration rather than require consumer-written workflows.
 
+The private owned enqueue executor now builds that protected declaration,
+reserves the original command, invokes the native phase, stages custody and
+commits through the same coordinator. It requires current authorization for
+the exact actor, tenant, user resource, action and configured policy revision
+before any reservation, including committed replay. Policy failures and panics
+fail closed without leaking diagnostics or reserving a command. It starts no
+provider work or automatic retries. This component accepts already-prepared
+custody; recipient discovery, authorization before encryption, scoped keyed
+admission and retained versioned policy still belong to the unfinished Queue.
+
 The owned workflow will authorize and prepare rendering before opening the
 original identity transaction. Recipient, locale, subject, body and content
 type are encrypted through `go-secret-envelope`; this module does not implement

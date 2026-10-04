@@ -4,6 +4,8 @@ package postgres
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"io/fs"
 	"net/url"
 	"strings"
@@ -12,6 +14,7 @@ import (
 
 	"github.com/faustbrian/go-audit"
 	auditpostgres "github.com/faustbrian/go-audit/postgres"
+	"github.com/faustbrian/go-authorization"
 	identity "github.com/faustbrian/go-identity"
 	"github.com/faustbrian/go-identity/delivery"
 	identitypostgres "github.com/faustbrian/go-identity/postgres"
@@ -33,7 +36,7 @@ func TestPublicContributorOriginalCoordinatorComposition(t *testing.T) {
 	if _, err := rolePool.Exec(ctx, auditpostgres.FreshInstallPreflightSQL()); err != nil {
 		t.Fatal("owned audit preflight failed")
 	}
-	for _, mode := range []string{"committed", "no-op", "delivery-failure", "native-committed", "native-compatible-custody", "native-no-op", "native-missing", "native-failure"} {
+	for _, mode := range []string{"committed", "no-op", "delivery-failure", "native-committed", "native-owned", "native-compatible-custody", "native-no-op", "native-missing", "native-failure"} {
 		t.Run(mode, func(t *testing.T) { testPublicComposition(t, mode) })
 	}
 }
@@ -156,6 +159,101 @@ func testPublicComposition(t *testing.T, mode string) {
 	}
 	if err != nil {
 		t.Fatal(err)
+	}
+	if mode == "native-owned" {
+		var permit bool
+		var policyMode string
+		var policyCalls int
+		policy := enqueueDecisionFunc(func(ctx context.Context, dc authorization.DecisionContext) (authorization.Decision, error) {
+			policyCalls++
+			if _, bounded := ctx.Deadline(); !bounded {
+				t.Fatal("enqueue policy lacked bounded context")
+			}
+			outcome := authorization.Deny
+			if permit {
+				outcome = authorization.Allow
+			}
+			if policyMode == "panic" {
+				panic("synthetic-policy-diagnostic")
+			}
+			if policyMode == "error" {
+				return authorization.Decision{}, errors.New("synthetic-policy-diagnostic")
+			}
+			if policyMode == "stale" {
+				return authorization.Decision{Outcome: outcome, Revision: dc.PolicyRevision + 1}, nil
+			}
+			return authorization.Decision{Outcome: outcome, Revision: dc.PolicyRevision}, nil
+		})
+		executor, err := newEnqueueExecutor(coordinator, registry, enqueue, contributor, policy, "policy", 1, 1, 2*time.Second)
+		if err != nil {
+			t.Fatal(err)
+		}
+		scope := authorization.DecisionContext{PolicyRevision: 1, CorrelationID: b.CorrelationID, Request: authorization.Request{Tenant: authorization.TenantID(b.TenantID), Action: "identity.delivery.enqueue", Subject: authorization.Subject{ID: authorization.SubjectID(b.ActorID), Kind: b.ActorKind}, Resource: authorization.Resource{Type: "identity.user", ID: authorization.ResourceID(b.UserID)}}}
+		if _, err := executor.Execute(ctx, prepared, scope); !errors.Is(err, delivery.ErrForbidden) {
+			t.Fatal("denied enqueue reached persistence", err)
+		}
+		permit = true
+		oversized := scope.Clone()
+		members := make([]string, 65)
+		for i := range members {
+			members[i] = fmt.Sprint(i)
+		}
+		oversized.Request.Attributes = authorization.Attributes{"custom": authorization.StringSetValue(members)}
+		before := policyCalls
+		if _, err := executor.Execute(ctx, prepared, oversized); !errors.Is(err, delivery.ErrInvalidInput) || policyCalls != before {
+			t.Fatal("oversized enqueue input reached policy", err)
+		}
+		for _, mutate := range []func(*authorization.DecisionContext){
+			func(dc *authorization.DecisionContext) { dc.Request.Tenant = "other" },
+			func(dc *authorization.DecisionContext) { dc.Request.Subject.ID = "other" },
+			func(dc *authorization.DecisionContext) { dc.Request.Resource.ID = "other" },
+			func(dc *authorization.DecisionContext) { dc.Request.Action = "other" },
+			func(dc *authorization.DecisionContext) { dc.PolicyRevision++ },
+			func(dc *authorization.DecisionContext) { dc.CorrelationID = "other" },
+		} {
+			changed := scope.Clone()
+			mutate(&changed)
+			if _, err := executor.Execute(ctx, prepared, changed); !errors.Is(err, delivery.ErrForbidden) {
+				t.Fatal("foreign enqueue scope accepted", err)
+			}
+		}
+		for _, policyMode = range []string{"panic", "error", "stale"} {
+			want := delivery.ErrUnavailable
+			if policyMode == "stale" {
+				want = delivery.ErrForbidden
+			}
+			if _, err := executor.Execute(ctx, prepared, scope); !errors.Is(err, want) {
+				t.Fatal("invalid policy output accepted", err)
+			}
+		}
+		policyMode = ""
+		cancelled, cancel := context.WithCancel(ctx)
+		cancel()
+		if _, err := executor.Execute(cancelled, prepared, scope); !errors.Is(err, context.Canceled) {
+			t.Fatal("cancelled enqueue started admission", err)
+		}
+		var claimed int
+		if pool.QueryRow(ctx, `SELECT count(*) FROM identity.commands`).Scan(&claimed) != nil || claimed != 0 {
+			t.Fatal("denied enqueue reserved a command")
+		}
+		permit = true
+		first, err := executor.Execute(ctx, prepared, scope)
+		if err != nil || first.Outcome != identity.CommitOutcomeCommitted {
+			t.Fatal("owned enqueue did not commit", err)
+		}
+		second, err := executor.Execute(ctx, prepared, scope)
+		if err != nil || second.Outcome != identity.CommitOutcomeCommitted || second.AuditEventID != first.AuditEventID || second.Binding != first.Binding {
+			t.Fatal("owned enqueue replay did not retain original effects", err)
+		}
+		permit = false
+		if _, err := executor.Execute(ctx, prepared, scope); !errors.Is(err, delivery.ErrForbidden) {
+			t.Fatal("replay bypassed current authorization", err)
+		}
+		var intents, effects, audits int
+		if pool.QueryRow(ctx, `SELECT (SELECT count(*) FROM identity.delivery_intents),(SELECT count(*) FROM outbox_messages),(SELECT count(*) FROM audit.identity_command_bindings)`).Scan(&intents, &effects, &audits) != nil || intents != 1 || effects != 2 || audits != 1 {
+			t.Fatal("owned enqueue replay duplicated effects", intents, effects, audits)
+		}
+		return
 	}
 	deliveryPlan, err := prepared.Plan()
 	if err != nil {
@@ -328,6 +426,12 @@ func testPublicComposition(t *testing.T, mode string) {
 	if err := contributor.Stage(ctx, work, prepared); err == nil {
 		t.Fatal("closed original Work survived")
 	}
+}
+
+type enqueueDecisionFunc func(context.Context, authorization.DecisionContext) (authorization.Decision, error)
+
+func (f enqueueDecisionFunc) Decide(ctx context.Context, dc authorization.DecisionContext) (authorization.Decision, error) {
+	return f(ctx, dc)
 }
 
 func compositionEnqueueRecord(t *testing.T, b identity.CommandBinding) audit.Record {
