@@ -55,6 +55,19 @@ var _ delivery.WorkerQueue = (*workerQueue)(nil)
 // current policy before touching custody. Production rejects nil/capture Sender.
 // Keep the worker alive to preserve its concurrency ceiling across calls.
 func (s *EnqueueService) NewWorker(c WorkerConfig, sender delivery.Sender) (*Worker, error) {
+	q, err := s.newWorkerQueue(c)
+	if err != nil {
+		return nil, err
+	}
+	profile := s.executor.custody.store.profiles[c.ProviderConfigVersion]
+	processor, err := delivery.NewWorker(s.policies.profiles[profile.policyVersion], q, sender)
+	if err != nil {
+		return nil, err
+	}
+	return &Worker{queue: q, processor: processor}, nil
+}
+
+func (s *EnqueueService) newWorkerQueue(c WorkerConfig) (*workerQueue, error) {
 	if s == nil || s.executor == nil || s.executor.custody == nil || s.policies == nil || !s.stateTracking || c.ProviderConfigVersion == 0 || boundedDecisionContext(c.Scope) != nil {
 		return nil, delivery.ErrInvalidInput
 	}
@@ -83,11 +96,7 @@ func (s *EnqueueService) NewWorker(c WorkerConfig, sender delivery.Sender) (*Wor
 	store.providerVersion, store.receiptTracking = c.ProviderConfigVersion, s.receiptTracking
 	store.audit = &workerAudit{actor: string(r.Subject.ID), correlation: c.Scope.CorrelationID, policy: s.executor.policyID, policyVersion: s.executor.policyVersion}
 	q := &workerQueue{store: store, service: s.executor, scope: c.Scope.Clone(), request: delivery.ClaimRequest{TenantID: delivery.TenantID(r.Tenant), WorkerID: string(r.Resource.ID)}, provider: profile.name}
-	processor, err := delivery.NewWorker(s.policies.profiles[profile.policyVersion], q, sender)
-	if err != nil {
-		return nil, err
-	}
-	return &Worker{queue: q, processor: processor}, nil
+	return q, nil
 }
 
 func (*workerQueue) Backend() delivery.QueueBackend { return delivery.QueueBackendPostgreSQL }

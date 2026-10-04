@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- `EnqueueService.NewQueue` composes every public delivery Queue operation with
+  the existing command, policy, custody and worker owners. Full composition
+  explicitly selects status tracking, cancellation, signed receipts and provider
+  reconciliation; legacy admission and worker profiles remain available. Core
+  service configuration must match the retained worker profile. Normalized
+  receipts cannot substitute authenticated callback fields; mutation replay
+  retains original command and fences without requerying or resending.
+
 - Public workers require status tracking and atomically stage protected audit
   for claims, completion, no-invocation release, lease-loss uncertainty and
   expiry/erasure. Audit failure rolls back state, custody and history; exact

@@ -81,9 +81,10 @@ type EnqueueCommandRequest struct {
 }
 
 // EnqueueService owns usable durable admission, authorized status and opt-in
-// authenticated local cancellation and signed provider receipts,
-// not the complete Queue lifecycle. It composes participants and performs no provider
-// invocation, retry, credential issuance or identity mutation. The caller owns
+// authenticated local cancellation, signed provider receipts and reconciliation.
+// NewQueue composes these owners with its retained worker profile. Admission
+// performs no provider invocation, retry, credential issuance or identity
+// mutation. The caller owns
 // the borrowed primary pool, authorization dependency and envelope service.
 // Concurrent calls are supported; no goroutines/background work are started.
 // Zero is invalid. Applications do not supply domain stores or orchestration.

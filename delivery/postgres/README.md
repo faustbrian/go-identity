@@ -1,9 +1,36 @@
 # Identity delivery PostgreSQL
 
-**Under development.** This module does not yet expose a production Queue.
-It exposes public durable admission through `NewEnqueueService`, authenticated
-preparation, immutable migration history and original-command staging. Admission
-is not a complete durable Queue or provider integration.
+**Under development; release verification is pending.** This module exposes
+owned durable admission and an all-method public Queue; neither queue admission
+nor local composition tests claim provider delivery or interoperability.
+
+## Full public Queue
+
+Select `StateTracking`, `Cancellation`, `Receipts` and `Reconciliation` on
+`EnqueueConfig`, with all corresponding forward migrations installed. Construct
+the existing `NewEnqueueService` with the owned PostgreSQL primary pool, envelope,
+authorization service and templates. Then call `service.NewQueue(workerConfig)`
+and `delivery.New(retainedConfig, queue, nil, sender)`. `NewQueue` does no IO and
+requires this complete selected profile; it creates no second transaction owner
+or sender processor. `delivery.New` rejects policy drift before any worker IO.
+
+Admission carries `delivery.EnqueueScope` and omits the recipient. Status carries
+`delivery.StatusScope`; its atomic positive status-version and attempt generation
+are retained unchanged in subsequent `MutationScope` requests. All authority
+comes from current exact policy and original kernel bindings, never IDs alone.
+Receipt requests additionally carry the exact signed envelope and a matching
+normalized projection, including SHA-256 hex of the provider event ID as the
+receipt idempotency key. Reconciliation uses `ReconcileScope`, freezes step and
+opaque checkpoint, and binds its request key to the original query command ID.
+Provider lookup still uses the original intent's provider idempotency key.
+
+Every method delegates to the same existing admission, cancellation, callback,
+query or worker owner. Sender and provider lookup run outside SQL ownership;
+historical mutation replay does not requery or resend. Partial deployments retain
+`NewEnqueueService` and `NewWorker` rather than silently enabling absent features.
+Explicit scopes are trusted platform composition, not transport authentication.
+Do not mutate them or callback bytes during calls. The borrowed primary pool and
+provider callbacks remain caller-owned; Queue owns no goroutine or shutdown.
 
 ## Public admission
 
@@ -220,8 +247,8 @@ never generating a replacement to bypass uncertainty. A changed input conflicts;
 a stale snapshot needs a deliberate new command only after the previous command's
 terminal outcome is established. Current authorization precedes reservation and
 result disclosure. Errors return no fabricated stop result; a post-commit denial
-or failed read does not roll back a durable cancellation. Full core Queue
-composition and provider cancellation/reconciliation remain unfinished.
+or failed read does not roll back a durable cancellation. Full Queue delegates
+to this owner; provider-side cancellation is unsupported, not approximated.
 
 Select `MigrationSource.StateVersion` strictly after `KeyedVersion` and set
 `EnqueueConfig.StateTracking=true` to read immutable no-op local-stop checkpoints.
@@ -249,7 +276,7 @@ returns its retained receipt without another stop or version increment.
 These cancellation records contain no raw operator reason or provider evidence.
 Application roles must not own DDL or trigger controls. Public local cancellation
 is explicitly selected through `EnqueueConfig.Cancellation`; provider cancellation
-and full Queue composition remain unfinished.
+remains unsupported; full Queue composition delegates to these local owners.
 
 ### Provider-receipt persistence foundation
 
@@ -309,8 +336,8 @@ permission to fabricate another command. A post-commit authentication/policy
 denial returns no result; retry the same command after authority is restored.
 The 1..5-second service timeout covers the whole operation; the caller's earlier
 deadline wins. Public configuration/callback/request diagnostics are redacted
-and JSON serialization is rejected. This is not yet complete Queue processing
-or provider-specific callback interoperability.
+and JSON serialization is rejected. Full Queue delegates authenticated callbacks
+to this owner; provider-specific callback interoperability is not claimed.
 
 `MigrationSource.ReceiptVersion` optionally appends immutable redacted provider
 event checkpoints after `StateVersion` and any selected `CancellationVersion`.
@@ -389,7 +416,8 @@ exact-scope authorization is required before encryption and rechecked before
 reservation, including replay. A policy change during preparation leaves no
 command claim. These explicit inputs are trusted workflow output, not client
 JSON or proof that an address belongs to a subject. Recipient discovery, scoped
-keyed deduplication and complete public Queue/result composition remain pending.
+keyed deduplication and complete Queue composition belong to the owned public
+service described above, not this low-level preparation seam.
 
 The owned workflow will authorize and prepare rendering before opening the
 original identity transaction. Recipient, locale, subject, body and content
@@ -480,8 +508,8 @@ authority versions, then checks them under share locks in the original kernel
 transaction before encrypted custody commits. Rename, removal and blocking
 between discovery and application cannot enqueue a stale recipient. Existing
 explicit trusted-workflow preparations retain their original encoding.
-This is not yet a public Queue or authentication endpoint; complete public
-scope acquisition, status, cancellation and provider lifecycle are still pending.
+This directory foundation is not an authentication endpoint. The public Queue
+uses its current authorization and primary fencing rather than caller addresses.
 
 Select `KeyedVersion` strictly above `PolicyVersion` to append scoped request-key
 to original-command mappings. The private owned admission path authorizes before
