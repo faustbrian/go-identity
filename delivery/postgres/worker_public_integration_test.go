@@ -5,12 +5,15 @@ package postgres
 import (
 	"context"
 	"errors"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/faustbrian/go-audit"
 	"github.com/faustbrian/go-authorization"
+	identity "github.com/faustbrian/go-identity"
 	"github.com/faustbrian/go-identity/delivery"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -23,6 +26,7 @@ func testPublicWorker(t *testing.T, ctx context.Context, pool *pgxpool.Pool, ser
 	var calls atomic.Int32
 	sender := attemptTestSender(func(call context.Context, attempt delivery.Attempt) (delivery.DeliveryResult, error) {
 		calls.Add(1)
+		assertWorkerAudit(t, call, pool, attempt.IntentID, "identity.delivery.attempt", 1, 2)
 		if attempt.IntentID != first.IntentID || attempt.IdempotencyKey != string(first.IntentID) || attempt.TenantID != delivery.TenantID(admission.Binding.TenantID) || attempt.Body != "Code: synthetic-code" || attempt.Subject != "Verification" || !attempt.ValidUntil.Equal(admission.ExpiresAt) || attempt.Generation != 1 {
 			t.Error("public worker changed frozen effect or provider key")
 		}
@@ -91,6 +95,7 @@ func testPublicWorker(t *testing.T, ctx context.Context, pool *pgxpool.Pool, ser
 	if calls.Load() != 1 || claimed.Load() != 1 {
 		t.Fatal("concurrent public workers duplicated effect")
 	}
+	assertWorkerAudit(t, ctx, pool, first.IntentID, "identity.delivery.attempt", 2, 3)
 	// Unknown invocation must never be made available for automatic resend.
 	request := admission
 	request.Binding.CommandID = "AgICAgICAgICAgICAgICAg"
@@ -152,14 +157,219 @@ func testPublicWorker(t *testing.T, ctx context.Context, pool *pgxpool.Pool, ser
 	if err != nil || result.State != delivery.StateDelivered || result.Commit != delivery.CommitCommitted {
 		t.Fatal("public direct completion", err)
 	}
+	event := assertWorkerAudit(t, ctx, pool, third.IntentID, "identity.delivery.confirm", 4, 5)
 	if replay, err := worker.Complete(ctx, completion); err != nil || replay != result {
 		t.Fatal("public completion replay changed", err)
+	}
+	if replayEvent := assertWorkerAudit(t, ctx, pool, third.IntentID, "identity.delivery.confirm", 4, 5); replayEvent != event {
+		t.Fatal("worker replay emitted another success audit")
 	}
 	var erased bool
 	if err := pool.QueryRow(ctx, `SELECT ciphertext IS NULL AND envelope_key_id IS NULL FROM identity.delivery_intents WHERE effect_id=$1`, string(third.IntentID)).Scan(&erased); err != nil || !erased {
 		t.Fatal("public terminal completion retained payload", err)
 	}
 	testPublicWorkerRevocation(t, ctx, pool, service, admission, scope, permit)
+	testPublicWorkerAuditRollbackAndSweeps(t, ctx, pool, service, admission, scope)
+}
+
+func testPublicWorkerAuditRollbackAndSweeps(t *testing.T, ctx context.Context, pool *pgxpool.Pool, service *EnqueueService, admission EnqueueCommandRequest, scope authorization.DecisionContext) {
+	t.Helper()
+	request := admission
+	request.Binding.CommandID = "DQ0NDQ0NDQ0NDQ0NDQ0NDQ"
+	request.IdempotencyKey = "worker-audit-rollback-key"
+	intent, err := service.Enqueue(ctx, request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	calls := 0
+	worker, err := service.NewWorker(WorkerConfig{Scope: scope, ProviderConfigVersion: 1}, attemptTestSender(func(context.Context, delivery.Attempt) (delivery.DeliveryResult, error) {
+		calls++
+		return delivery.DeliveryResult{State: delivery.StateDelivered, ObservedAt: time.Now().UTC()}, nil
+	}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, `CREATE FUNCTION audit.fail_worker_test() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.action IN ('identity.delivery.attempt','identity.delivery.confirm','identity.delivery.mark_unknown') THEN RAISE EXCEPTION 'synthetic audit failure' USING ERRCODE='23514'; END IF; RETURN NEW; END $$; CREATE TRIGGER fail_worker_test BEFORE INSERT ON audit.records FOR EACH ROW EXECUTE FUNCTION audit.fail_worker_test()`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := worker.ProcessOne(ctx); !errors.Is(err, delivery.ErrUnavailable) || calls != 0 {
+		t.Fatal("audit failure did not prevent provider invocation", err)
+	}
+	var intact bool
+	if err := pool.QueryRow(ctx, `SELECT state='planned' AND ciphertext IS NOT NULL AND NOT EXISTS(SELECT 1 FROM identity.delivery_attempt_history h WHERE h.effect_id=i.effect_id) FROM identity.delivery_intents i WHERE effect_id=$1`, string(intent.IntentID)).Scan(&intact); err != nil || !intact {
+		t.Fatal("failed audit committed lease/history", err)
+	}
+	if _, err := pool.Exec(ctx, `ALTER TABLE audit.records DISABLE TRIGGER fail_worker_test`); err != nil {
+		t.Fatal(err)
+	}
+	claim, err := worker.Claim(ctx)
+	if err != nil || !claim.Claimed || claim.Attempt.IntentID != intent.IntentID {
+		t.Fatal("audit rollback lost retryable claim", err)
+	}
+	completion := delivery.CompleteRequest{TenantID: claim.Attempt.TenantID, IntentID: intent.IntentID, WorkerID: "worker-a", Generation: claim.Attempt.Generation, Invoked: true, Result: delivery.DeliveryResult{State: delivery.StateDelivered, ObservedAt: time.Now().UTC()}}
+	if _, err := pool.Exec(ctx, `ALTER TABLE audit.records ENABLE TRIGGER fail_worker_test`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := worker.Complete(ctx, completion); !errors.Is(err, delivery.ErrUnavailable) {
+		t.Fatal("missing terminal audit accepted completion", err)
+	}
+	if err := pool.QueryRow(ctx, `SELECT i.state='submitted' AND i.ciphertext IS NOT NULL AND h.completion_digest IS NULL AND p.lease_owner='worker-a' FROM identity.delivery_intents i JOIN identity.delivery_processing p USING(deployment,tenant_id,effect_id) JOIN identity.delivery_attempt_history h USING(deployment,tenant_id,effect_id) WHERE i.effect_id=$1`, string(intent.IntentID)).Scan(&intact); err != nil || !intact {
+		t.Fatal("audit failure split terminal transition/erasure/history", err)
+	}
+	if _, err := pool.Exec(ctx, `DROP TRIGGER fail_worker_test ON audit.records; DROP FUNCTION audit.fail_worker_test()`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := worker.Complete(ctx, completion); err != nil {
+		t.Fatal(err)
+	}
+	assertWorkerAudit(t, ctx, pool, intent.IntentID, "identity.delivery.confirm", 2, 3)
+
+	// Exhaustion is local retry-policy evidence. Neither invoked nor uninvoked
+	// completion may manufacture a provider observation from that classification.
+	for index, invoked := range []bool{false, true} {
+		request.Binding.CommandID = identity.CommandID([]string{"EREREREREREREREREREREQ", "EhISEhISEhISEhISEhISEg"}[index])
+		request.IdempotencyKey = []string{"worker-audit-uninvoked-exhaustion", "worker-audit-invoked-exhaustion"}[index]
+		last, err := service.Enqueue(ctx, request)
+		if err != nil {
+			t.Fatal(err)
+		}
+		limit := int(service.policies.profiles[1].Attempts)
+		for attempt := 1; attempt <= limit; attempt++ {
+			claim, err := worker.Claim(ctx)
+			if err != nil || !claim.Claimed || claim.Attempt.IntentID != last.IntentID {
+				t.Fatal("exhaustion claim", err)
+			}
+			completion := delivery.CompleteRequest{TenantID: claim.Attempt.TenantID, IntentID: last.IntentID, WorkerID: "worker-a", Generation: claim.Attempt.Generation, Invoked: invoked}
+			if invoked {
+				completion.Result = delivery.DeliveryResult{State: delivery.StateTransientFailure, ObservedAt: time.Now().UTC()}
+			}
+			out, err := worker.Complete(ctx, completion)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if attempt < limit {
+				if out.State != delivery.StateRetryWait {
+					t.Fatal("retry exhausted early")
+				}
+				// Advance only the task fixture's retry clock; all leases, histories
+				// and completions still pass through the public worker.
+				if _, err := pool.Exec(ctx, `UPDATE identity.delivery_processing SET next_attempt_at=clock_timestamp() WHERE effect_id=$1`, string(last.IntentID)); err != nil {
+					t.Fatal(err)
+				}
+			} else if out.State != delivery.StateExhausted {
+				t.Fatal("final attempt did not exhaust")
+			}
+		}
+		if err := pool.QueryRow(ctx, `SELECT state='exhausted' AND ciphertext IS NULL FROM identity.delivery_intents WHERE effect_id=$1`, string(last.IntentID)).Scan(&intact); err != nil || !intact {
+			t.Fatal("exhaustion retained custody", err)
+		}
+		event := assertWorkerAudit(t, ctx, pool, last.IntentID, "identity.delivery.attempt", uint64(2*limit), uint64(2*limit+1))
+		var raw []byte
+		if err := pool.QueryRow(ctx, `SELECT canonical_record FROM audit.records WHERE record_id=$1`, event).Scan(&raw); err != nil {
+			t.Fatal(err)
+		}
+		record, err := audit.ParseCanonicalJSON(raw, audit.DefaultLimits())
+		if err != nil || record.Attributes()["provider.result"] != "" || record.Context().CausationID() != string(request.Binding.CommandID) {
+			t.Fatal("local exhaustion invented provider evidence or changed original command", err)
+		}
+	}
+
+	// A lost invocation lease is uncertainty, not rejection or resend.
+	request.Binding.CommandID = "Dg4ODg4ODg4ODg4ODg4ODg"
+	request.IdempotencyKey = "worker-audit-lost-lease-key"
+	lost, err := service.Enqueue(ctx, request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	claim, err = worker.Claim(ctx)
+	if err != nil || !claim.Claimed || claim.Attempt.IntentID != lost.IntentID {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, `UPDATE identity.delivery_processing SET lease_until=clock_timestamp()-interval '1 microsecond' WHERE effect_id=$1`, string(lost.IntentID)); err != nil {
+		t.Fatal(err)
+	}
+	if out, err := worker.Claim(ctx); err != nil || out.Claimed {
+		t.Fatal("lost lease became resendable", err)
+	}
+	lostEvent := assertWorkerAudit(t, ctx, pool, lost.IntentID, "identity.delivery.mark_unknown", 2, 3)
+	var lostRaw []byte
+	if err := pool.QueryRow(ctx, `SELECT canonical_record FROM audit.records WHERE record_id=$1`, lostEvent).Scan(&lostRaw); err != nil {
+		t.Fatal(err)
+	}
+	lostRecord, err := audit.ParseCanonicalJSON(lostRaw, audit.DefaultLimits())
+	if err != nil || lostRecord.Attributes()["provider.result"] != "" || lostRecord.Context().CausationID() != string(request.Binding.CommandID) {
+		t.Fatal("lease loss invented provider observation", err)
+	}
+
+	// Cleanup may only mutate this selected provider's effects.
+	request.Binding.CommandID = "Dw8PDw8PDw8PDw8PDw8PDw"
+	request.IdempotencyKey = "worker-audit-expiry-key"
+	request.ExpiresAt = time.Now().UTC().Truncate(time.Microsecond).Add(time.Second)
+	expired, err := service.Enqueue(ctx, request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request.Binding.CommandID = "EBAQEBAQEBAQEBAQEBAQEA"
+	request.IdempotencyKey = "worker-audit-foreign-expiry-key"
+	request.ProviderConfigVersion = 2
+	foreign, err := service.Enqueue(ctx, request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(1100 * time.Millisecond)
+	if out, err := worker.Claim(ctx); err != nil || out.Claimed {
+		t.Fatal(err)
+	}
+	assertWorkerAudit(t, ctx, pool, expired.IntentID, "identity.delivery.attempt", 1, 2)
+	if err := pool.QueryRow(ctx, `SELECT state='planned' AND ciphertext IS NOT NULL FROM identity.delivery_intents WHERE effect_id=$1`, string(foreign.IntentID)).Scan(&intact); err != nil || !intact {
+		t.Fatal("worker cleanup crossed provider authority", err)
+	}
+	other, err := service.NewWorker(WorkerConfig{Scope: scope, ProviderConfigVersion: 2}, attemptTestSender(func(context.Context, delivery.Attempt) (delivery.DeliveryResult, error) {
+		t.Fatal("expired provider invoked")
+		return delivery.DeliveryResult{}, nil
+	}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out, err := other.Claim(ctx); err != nil || out.Claimed {
+		t.Fatal(err)
+	}
+	var erased bool
+	if err := pool.QueryRow(ctx, `SELECT state='expired' AND ciphertext IS NULL FROM identity.delivery_intents WHERE effect_id=$1`, string(foreign.IntentID)).Scan(&erased); err != nil || !erased {
+		t.Fatal("selected provider did not erase expired custody", err)
+	}
+}
+
+func assertWorkerAudit(t *testing.T, ctx context.Context, pool *pgxpool.Pool, intent delivery.IntentID, action string, before, after uint64) string {
+	t.Helper()
+	rows, err := pool.Query(ctx, `SELECT canonical_record FROM audit.records WHERE action=$1 AND subject_id=$2`, action, string(intent))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+	var match string
+	for rows.Next() {
+		var raw []byte
+		if err := rows.Scan(&raw); err != nil {
+			t.Fatal(err)
+		}
+		record, err := audit.ParseCanonicalJSON(raw, audit.DefaultLimits())
+		if err != nil {
+			t.Fatal("worker audit not canonical", err)
+		}
+		attrs := record.Attributes()
+		if attrs["aggregate.before_version"] != strconv.FormatUint(before, 10) || attrs["aggregate.after_version"] != strconv.FormatUint(after, 10) {
+			continue
+		}
+		if match != "" || record.Actor().Kind() != audit.ActorSystem || record.Actor().ID() != "worker-service" || record.Outcome() != audit.OutcomeSucceeded || attrs["retention.class"] != "protected" || attrs["identity.profile"] != "identity.security.v1" || attrs["provider.version"] != "1" || record.Policy().Version != "1" || record.Context().CausationID() != attrs["command.id"] || !record.Changes().Redacted() {
+			t.Fatal("worker audit missing or duplicated protected attribution")
+		}
+		match = record.ID()
+	}
+	if rows.Err() != nil || match == "" {
+		t.Fatal("worker transition committed without protected audit", rows.Err())
+	}
+	return match
 }
 
 // QA3/QA9: policy can be revoked across IO even after pre-claim permission.

@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Public workers require status tracking and atomically stage protected audit
+  for claims, completion, no-invocation release, lease-loss uncertainty and
+  expiry/erasure. Audit failure rolls back state, custody and history; exact
+  completion replay retains its event. Cleanup respects the selected provider.
+  Worker actor, tenant, correlation and policy attribution now require 1–64
+  ASCII letters, digits, underscores or hyphens and fail at construction rather
+  than after leasing. Local exhaustion does not assert provider unavailability.
+
 - Owned public worker composition from an existing admission service, with
   current service-account policy before leasing, after custody opening and
   before completion. Exact retained provider and policy versions govern sends,

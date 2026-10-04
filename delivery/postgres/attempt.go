@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"time"
 
+	identity "github.com/faustbrian/go-identity"
 	"github.com/faustbrian/go-identity/delivery"
 	identitypostgres "github.com/faustbrian/go-identity/postgres"
 	"github.com/jackc/pgx/v5"
@@ -32,6 +33,7 @@ type attemptStore struct {
 	policyDigest                   [32]byte
 	retainedVersion                uint64
 	providerVersion                uint64
+	audit                          *workerAudit
 }
 
 func (attemptStore) Format(s fmt.State, _ rune) {
@@ -98,7 +100,7 @@ func rollbackAttempt(tx pgx.Tx) {
 // Expiry erases bearer custody without asserting a provider outcome. Only
 // never-submitted/authoritatively retryable effects become locally expired.
 func (s *attemptStore) sweepExpired(ctx context.Context, tx pgx.Tx, tenant delivery.TenantID) error {
-	rows, err := tx.Query(ctx, `WITH due AS (SELECT effect_id FROM identity.delivery_intents WHERE deployment=$1 AND tenant_id=$2 AND ciphertext IS NOT NULL AND expires_at<=clock_timestamp() AND state IN ('planned','retry-wait','submitted','outcome-unknown') ORDER BY expires_at,effect_id LIMIT 100 FOR UPDATE SKIP LOCKED) UPDATE identity.delivery_intents i SET state=CASE WHEN i.state IN ('planned','retry-wait') THEN 'expired' ELSE i.state END,ciphertext=NULL,envelope_key_id=NULL,payload_erased_at=clock_timestamp() FROM due WHERE i.deployment=$1 AND i.tenant_id=$2 AND i.effect_id=due.effect_id RETURNING i.effect_id`, s.deployment, string(tenant))
+	rows, err := tx.Query(ctx, `WITH due AS (SELECT effect_id FROM identity.delivery_intents WHERE deployment=$1 AND tenant_id=$2 AND ($3::numeric=0 OR provider_version=$3::numeric) AND ciphertext IS NOT NULL AND expires_at<=clock_timestamp() AND state IN ('planned','retry-wait','submitted','outcome-unknown') ORDER BY expires_at,effect_id LIMIT 100 FOR UPDATE SKIP LOCKED) UPDATE identity.delivery_intents i SET state=CASE WHEN i.state IN ('planned','retry-wait') THEN 'expired' ELSE i.state END,ciphertext=NULL,envelope_key_id=NULL,payload_erased_at=clock_timestamp() FROM due WHERE i.deployment=$1 AND i.tenant_id=$2 AND i.effect_id=due.effect_id RETURNING i.effect_id`, s.deployment, string(tenant), strconv.FormatUint(s.providerVersion, 10))
 	if err != nil {
 		return err
 	}
@@ -120,6 +122,9 @@ func (s *attemptStore) sweepExpired(ctx context.Context, tx pgx.Tx, tenant deliv
 		if _, err := tx.Exec(ctx, `UPDATE identity.delivery_processing SET next_attempt_at=NULL WHERE deployment=$1 AND tenant_id=$2 AND effect_id=$3`, s.deployment, string(tenant), id); err != nil {
 			return err
 		}
+		if err := s.stageCleanupAudit(ctx, tx, tenant, id, identity.DeliverySecurityExpired); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -128,7 +133,7 @@ func (s *attemptStore) sweepExpired(ctx context.Context, tx pgx.Tx, tenant deliv
 // failed. It never returns them to retry admission. Lock intent before its
 // processing row, the same order used by Claim and Complete.
 func (s *attemptStore) sweepLost(ctx context.Context, tx pgx.Tx, tenant delivery.TenantID) error {
-	rows, err := tx.Query(ctx, `SELECT i.effect_id,p.generation FROM identity.delivery_intents i JOIN identity.delivery_processing p USING(deployment,tenant_id,effect_id) WHERE i.deployment=$1 AND i.tenant_id=$2 AND i.state='submitted' AND p.lease_until<=clock_timestamp() ORDER BY p.lease_until,i.effect_id LIMIT 100 FOR UPDATE OF i SKIP LOCKED`, s.deployment, string(tenant))
+	rows, err := tx.Query(ctx, `SELECT i.effect_id,p.generation FROM identity.delivery_intents i JOIN identity.delivery_processing p USING(deployment,tenant_id,effect_id) WHERE i.deployment=$1 AND i.tenant_id=$2 AND ($3::numeric=0 OR i.provider_version=$3::numeric) AND i.state='submitted' AND p.lease_until<=clock_timestamp() ORDER BY p.lease_until,i.effect_id LIMIT 100 FOR UPDATE OF i SKIP LOCKED`, s.deployment, string(tenant), strconv.FormatUint(s.providerVersion, 10))
 	if err != nil {
 		return err
 	}
@@ -170,6 +175,9 @@ func (s *attemptStore) sweepLost(ctx context.Context, tx pgx.Tx, tenant delivery
 			return err
 		}
 		if _, err := tx.Exec(ctx, `UPDATE identity.delivery_attempt_history SET outcome=$5,completed_at=clock_timestamp() WHERE deployment=$1 AND tenant_id=$2 AND effect_id=$3 AND generation=$4 AND outcome IS NULL`, s.deployment, string(tenant), f.id, f.generation, int16(delivery.StateOutcomeUnknown)); err != nil {
+			return err
+		}
+		if err := s.stageCleanupAudit(ctx, tx, tenant, f.id, identity.DeliverySecurityLeaseLost); err != nil {
 			return err
 		}
 	}
@@ -251,6 +259,9 @@ func (s *attemptStore) Claim(ctx context.Context, q delivery.ClaimRequest) (deli
 	}
 	if tag.RowsAffected() != 1 {
 		return delivery.ClaimResult{}, delivery.ErrExpired
+	}
+	if err := s.stageWorkerAudit(w, tx, b, identity.DeliverySecurityAttempt); err != nil {
+		return delivery.ClaimResult{}, err
 	}
 	if err := tx.Commit(w); err != nil {
 		return delivery.ClaimResult{}, delivery.ErrOutcomeUnknown
@@ -450,6 +461,9 @@ func (s *attemptStore) Complete(ctx context.Context, q delivery.CompleteRequest)
 		return delivery.CompleteResult{}, attemptFailure(w, err)
 	}
 	result := delivery.CompleteResult{State: decision.State, Commit: delivery.CommitCommitted}
+	if err := s.stageWorkerAudit(w, tx, b, workerCompletionTransition(q, decision.State)); err != nil {
+		return delivery.CompleteResult{}, err
+	}
 	if err := tx.Commit(w); err != nil {
 		result.Commit = delivery.CommitUnknown
 		return result, delivery.ErrOutcomeUnknown

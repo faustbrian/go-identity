@@ -103,9 +103,9 @@ an exact retry safely resumes a partial constructor without creating an intent.
 Trusted enumeration-safe workflows may use `NoOpEquivalent` with no identifier.
 It preserves the queued result shape without sendable ciphertext. Never expose
 that internal bit to clients. The service starts no goroutines or sender work;
-the caller retains ownership of the pool and dependencies. Full public
-cancellation, authenticated receipt/reconciliation and worker composition remain
-under development.
+the caller retains ownership of the pool and dependencies. The public operations
+below are available individually; their full all-method `delivery.Queue`
+composition remains under development.
 
 ## Public processing
 
@@ -117,6 +117,21 @@ ID and the service's current policy revision. This is deployment composition,
 not HTTP input or permission to authenticate by an ID. Current authorization
 must explicitly permit the worker; the adapter adds reserved `delivery.provider`
 and `delivery.provider-config-version` attributes. Caller overrides are rejected.
+
+Public workers require the enqueue service's `StateTracking` selection and the
+installed audit PostgreSQL schema. Every claim, completion, lost-lease and expiry
+cleanup transition stages a protected `identity.security.v1` record in its
+existing database transaction. Audit failure rolls back state and history;
+completion replay returns the original result without another record. Records
+retain the original command causation, authenticated service-account actor,
+provider/policy versions and adjacent status versions, without recipient,
+message or provider-reference contents. Cleanup is restricted to the worker's
+selected provider version. Payload erasure does not invent a provider outcome.
+Worker actor, tenant, correlation and policy IDs must be 1–64 ASCII letters,
+digits, underscores or hyphens; unauditable attribution is rejected at worker
+construction, before database processing. This narrows the generic admission
+ID grammar for the protected worker profile. Canonical UUIDs and ULIDs fit this
+grammar. Exhaustion records local policy termination, not provider availability.
 
 The worker uses the selected provider's **retained** retry policy, callback
 timeout and concurrency limit, not the latest policy. Multiple provider versions

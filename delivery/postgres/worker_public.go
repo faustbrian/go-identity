@@ -16,6 +16,8 @@ import (
 // version. Scope is trusted composition input, not transport JSON: service-account
 // subject, exact tenant, action identity.delivery.process, resource type
 // identity.delivery-worker and resource ID equal to the worker name are required.
+// Actor, tenant, correlation and policy IDs use the protected audit profile's
+// 1..64 ASCII letters/digits/underscore/hyphen grammar, not generic printable IDs.
 // PolicyRevision matches the admission service's current revision. The current
 // authorization service reevaluates it for every lease and completion; IDs and
 // previously allowed policy do not grant authority. Configuration is copied.
@@ -46,15 +48,20 @@ type workerQueue struct {
 var _ delivery.WorkerQueue = (*workerQueue)(nil)
 
 // NewWorker selects the exact retained provider's delivery policy, timeout,
-// concurrency and retry limits, never the newest policy or a fallback. It does
+// concurrency and retry limits, never the newest policy or a fallback.
+// StateTracking must be selected: every worker transition stages protected
+// audit with its database-owned status versions in the same transaction. It does
 // no IO and does not authenticate the supplied scope; every operation checks
 // current policy before touching custody. Production rejects nil/capture Sender.
 // Keep the worker alive to preserve its concurrency ceiling across calls.
 func (s *EnqueueService) NewWorker(c WorkerConfig, sender delivery.Sender) (*Worker, error) {
-	if s == nil || s.executor == nil || s.executor.custody == nil || s.policies == nil || c.ProviderConfigVersion == 0 || boundedDecisionContext(c.Scope) != nil {
+	if s == nil || s.executor == nil || s.executor.custody == nil || s.policies == nil || !s.stateTracking || c.ProviderConfigVersion == 0 || boundedDecisionContext(c.Scope) != nil {
 		return nil, delivery.ErrInvalidInput
 	}
 	r := c.Scope.Request
+	if !workerAuditToken(string(r.Subject.ID)) || !workerAuditToken(string(r.Tenant)) || !workerAuditToken(c.Scope.CorrelationID) || !workerAuditToken(s.executor.policyID) {
+		return nil, delivery.ErrInvalidInput
+	}
 	if r.Subject.Kind != authorization.SubjectServiceAccount || !safeID(string(r.Subject.ID), false) || !safeID(string(r.Tenant), false) || r.Action != "identity.delivery.process" || r.Resource.Type != "identity.delivery-worker" || !safeID(string(r.Resource.ID), false) || c.Scope.PolicyRevision != authorization.Revision(s.executor.policyVersion) || !safeID(c.Scope.CorrelationID, false) {
 		return nil, delivery.ErrForbidden
 	}
@@ -74,6 +81,7 @@ func (s *EnqueueService) NewWorker(c WorkerConfig, sender delivery.Sender) (*Wor
 		return nil, err
 	}
 	store.providerVersion, store.receiptTracking = c.ProviderConfigVersion, s.receiptTracking
+	store.audit = &workerAudit{actor: string(r.Subject.ID), correlation: c.Scope.CorrelationID, policy: s.executor.policyID, policyVersion: s.executor.policyVersion}
 	q := &workerQueue{store: store, service: s.executor, scope: c.Scope.Clone(), request: delivery.ClaimRequest{TenantID: delivery.TenantID(r.Tenant), WorkerID: string(r.Resource.ID)}, provider: profile.name}
 	processor, err := delivery.NewWorker(s.policies.profiles[profile.policyVersion], q, sender)
 	if err != nil {

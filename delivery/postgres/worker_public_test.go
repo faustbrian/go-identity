@@ -34,7 +34,7 @@ func TestPublicWorkerScopeSnapshotAndPolicyFailure(t *testing.T) {
 	profile.Production = true
 	scope := authorization.DecisionContext{PolicyRevision: 1, CorrelationID: "worker-correlation", Request: authorization.Request{Tenant: "tenant-a", Action: "identity.delivery.process", Subject: authorization.Subject{ID: "worker-service", Kind: authorization.SubjectServiceAccount}, Resource: authorization.Resource{Type: "identity.delivery-worker", ID: "worker", Attributes: authorization.Attributes{"region": authorization.StringValue("original")}}}}
 	custody := &Contributor{store: &intentStore{codec: codec, profiles: map[uint64]providerProfile{1: {name: "provider", policyVersion: 1}}}}
-	s := &EnqueueService{executor: &enqueueExecutor{custody: custody, policyVersion: 1}, policies: &retainedPolicies{pool: &pgxpool.Pool{}, deployment: "test", profiles: map[uint64]delivery.Config{1: profile}, timeout: time.Second}}
+	s := &EnqueueService{stateTracking: true, executor: &enqueueExecutor{custody: custody, policyID: "policy", policyVersion: 1}, policies: &retainedPolicies{pool: &pgxpool.Pool{}, deployment: "test", profiles: map[uint64]delivery.Config{1: profile}, timeout: time.Second}}
 	called := 0
 	s.executor.authorize = workerPolicyFunc(func(ctx context.Context, dc authorization.DecisionContext) (authorization.Decision, error) {
 		called++
@@ -54,6 +54,11 @@ func TestPublicWorkerScopeSnapshotAndPolicyFailure(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	s.stateTracking = false
+	if _, err := s.NewWorker(WorkerConfig{Scope: scope, ProviderConfigVersion: 1}, sender); !errors.Is(err, delivery.ErrInvalidInput) {
+		t.Fatal("unaudited legacy worker composition admitted", err)
+	}
+	s.stateTracking = true
 	scope.Request.Resource.Attributes["region"] = authorization.StringValue("caller-private-change")
 	for range 2 {
 		if err := w.queue.allow(context.Background()); err != nil {
@@ -68,6 +73,9 @@ func TestPublicWorkerScopeSnapshotAndPolicyFailure(t *testing.T) {
 		func(dc *authorization.DecisionContext) { dc.Request.Action = "identity.delivery.enqueue" },
 		func(dc *authorization.DecisionContext) { dc.Request.Resource.Type = "identity.user" },
 		func(dc *authorization.DecisionContext) { dc.PolicyRevision = 2 },
+		func(dc *authorization.DecisionContext) { dc.CorrelationID = "worker.correlation" },
+		func(dc *authorization.DecisionContext) { dc.Request.Subject.ID = "worker.service" },
+		func(dc *authorization.DecisionContext) { dc.Request.Tenant = "tenant.a" },
 		func(dc *authorization.DecisionContext) {
 			dc.Request.Resource.Attributes["delivery.provider"] = authorization.StringValue("spoofed")
 		},
@@ -78,6 +86,11 @@ func TestPublicWorkerScopeSnapshotAndPolicyFailure(t *testing.T) {
 			t.Fatal("spoofed worker scope accepted")
 		}
 	}
+	s.executor.policyID = "policy.name"
+	if _, err := s.NewWorker(WorkerConfig{Scope: scope, ProviderConfigVersion: 1}, sender); !errors.Is(err, delivery.ErrInvalidInput) {
+		t.Fatal("unauditable policy admitted at worker construction", err)
+	}
+	s.executor.policyID = "policy"
 	cancelled, stop := context.WithCancel(context.Background())
 	stop()
 	if _, err := w.Claim(cancelled); !errors.Is(err, context.Canceled) || called != 2 {
