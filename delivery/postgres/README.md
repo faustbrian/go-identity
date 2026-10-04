@@ -7,6 +7,22 @@ it must not be selected as a working durable store or provider integration.
 
 ## Custody and security
 
+`PrepareEnqueue` derives the native command's primary effect ID; its
+`EnqueueCommand` freezes every safe effect field and confidential logical digest,
+without exporting ciphertext or rendered content. `NewEnqueueContributor`
+supplies the native execution phase. Enlist it before audit and lifecycle,
+and enlist its exact borrowed ciphertext `Contributor` separately and last.
+Both phases use the same kernel coordinator Work. Stage the original preparation
+through the exact registered ciphertext contributor before commit: missing
+custody rolls back all delivery and lifecycle effects. The native phase validates
+its borrowed descriptor/profile, not cross-phase pointer identity; a distinct
+configuration-compatible custody instance is accepted by this trusted seam.
+The eventual Queue must construct both phases with the same custody instance.
+The kernel retains a classified failure audit after proven rollback, never a
+successful enqueue audit. This trusted composition seam does not authenticate
+callers or implement Queue admission; the eventual owned Queue must supply that
+orchestration rather than require consumer-written workflows.
+
 The owned workflow will authorize and prepare rendering before opening the
 original identity transaction. Recipient, locale, subject, body and content
 type are encrypted through `go-secret-envelope`; this module does not implement

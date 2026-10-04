@@ -33,7 +33,7 @@ func TestPublicContributorOriginalCoordinatorComposition(t *testing.T) {
 	if _, err := rolePool.Exec(ctx, auditpostgres.FreshInstallPreflightSQL()); err != nil {
 		t.Fatal("owned audit preflight failed")
 	}
-	for _, mode := range []string{"committed", "no-op", "delivery-failure"} {
+	for _, mode := range []string{"committed", "no-op", "delivery-failure", "native-committed", "native-compatible-custody", "native-no-op", "native-missing", "native-failure"} {
 		t.Run(mode, func(t *testing.T) { testPublicComposition(t, mode) })
 	}
 }
@@ -120,8 +120,27 @@ func testPublicComposition(t *testing.T, mode string) {
 	// This fixture uses the new public constructor rather than an application
 	// implementation of the delivery persistence contract.
 	contributor, b, input := compositionPreparation(t)
-	input.NoOpEquivalent = mode == "no-op"
-	registry, err := identitypostgres.NewContributorRegistry([]identitypostgres.Contributor{repo, auditing, lifecycle, contributor})
+	native := strings.HasPrefix(mode, "native-")
+	input.NoOpEquivalent = mode == "no-op" || mode == "native-no-op"
+	participants := []identitypostgres.Contributor{repo}
+	var enqueue *EnqueueContributor
+	if native {
+		op := EnqueueOperation()
+		b.OperationID, b.SchemaID, b.SchemaVersion = op.OperationID, op.SchemaID, op.SchemaVersion
+		nativeCustody := contributor
+		if mode == "native-compatible-custody" {
+			// Native declarations validate retained profiles, not cross-phase
+			// pointer identity. Staging still requires the registered owner.
+			nativeCustody, _, _ = compositionPreparation(t)
+		}
+		enqueue, err = NewEnqueueContributor(nativeCustody)
+		if err != nil {
+			t.Fatal(err)
+		}
+		participants = append(participants, enqueue)
+	}
+	participants = append(participants, auditing, lifecycle, contributor)
+	registry, err := identitypostgres.NewContributorRegistry(participants)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -129,7 +148,12 @@ func testPublicComposition(t *testing.T, mode string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	prepared, err := contributor.Prepare(ctx, b, []IntentInput{input})
+	var prepared PreparedDelivery
+	if native {
+		prepared, err = contributor.PrepareEnqueue(ctx, b, []IntentInput{input})
+	} else {
+		prepared, err = contributor.Prepare(ctx, b, []IntentInput{input})
+	}
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -137,16 +161,44 @@ func testPublicComposition(t *testing.T, mode string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	command, err := identity.NewUserCreationCommand(identity.CreateUserCommand{Binding: b, Status: identity.StatusActive})
+	var command identity.Command
+	if native {
+		command, err = prepared.EnqueueCommand()
+		spec, _ := command.Feature()
+		b = spec.Binding
+	} else {
+		command, err = identity.NewUserCreationCommand(identity.CreateUserCommand{Binding: b, Status: identity.StatusActive})
+	}
 	if err != nil {
 		t.Fatal(err)
 	}
 	record := compositionRecord(t, ctx, b, time.Now().UTC().Truncate(time.Microsecond))
-	digest, err := identitypostgres.AuditBindingDigest(b, record)
+	var digest [32]byte
+	if native {
+		record = compositionEnqueueRecord(t, b)
+		digest, err = identitypostgres.FeatureAuditBindingDigest(b, EnqueueOperation(), "delivery_intent", record)
+	} else {
+		digest, err = identitypostgres.AuditBindingDigest(b, record)
+	}
 	if err != nil {
 		t.Fatal(err)
 	}
-	plan, err := coordinator.PrepareCommandPlan(b, command, identitypostgres.CommandPlan{Contributors: registry.Descriptors(), Audits: []identitypostgres.AuditPlan{{EventType: b.OperationID, SchemaVersion: 1, BindingDigest: digest, RetentionPolicyVersion: 1, RequiredRecordCount: 1, MaxRecordBytes: 16384, MaxAggregateBytes: 16384, Required: true}}, Lifecycle: &identitypostgres.LifecyclePlan{EventType: "identity.created.v1", AfterVersion: 1}, Delivery: &deliveryPlan})
+	declaration := identitypostgres.CommandPlan{Contributors: registry.Descriptors(), Audits: []identitypostgres.AuditPlan{{EventType: b.OperationID, SchemaVersion: 1, BindingDigest: digest, RetentionPolicyVersion: 1, RequiredRecordCount: 1, MaxRecordBytes: 16384, MaxAggregateBytes: 16384, Required: true}}, Lifecycle: &identitypostgres.LifecyclePlan{EventType: "identity.created.v1", AfterVersion: 1}, Delivery: &deliveryPlan}
+	if native {
+		declaration.SubjectType = "delivery_intent"
+		declaration.Feature = &identitypostgres.FeatureRegistration{Contributor: enqueue.Descriptor(), Operation: EnqueueOperation()}
+		declaration.Audits[0].RetentionClass = "protected"
+		declaration.Lifecycle.EventType = "delivery.enqueued.v1"
+		changed := declaration
+		changedPlan := deliveryPlan
+		changedPlan.Intents = append([]identitypostgres.DeliveryIntentPlan(nil), deliveryPlan.Intents...)
+		changedPlan.Intents[0].TemplateVersion++
+		changed.Delivery = &changedPlan
+		if _, err := coordinator.PrepareCommandPlan(b, command, changed); err == nil {
+			t.Fatal("native command admitted changed frozen rendering declaration")
+		}
+	}
+	plan, err := coordinator.PrepareCommandPlan(b, command, declaration)
 	if err != nil {
 		t.Fatal("public declaration not admitted", err)
 	}
@@ -159,17 +211,29 @@ func testPublicComposition(t *testing.T, mode string) {
 		t.Fatal(err)
 	}
 	defer coordinator.Abort(work, identity.UnavailableError{})
-	user, err := repo.ApplyUserCreation(ctx, work, command)
-	if err != nil {
-		t.Fatal(err)
-	}
-	now, err := work.DatabaseTime(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
-	record = compositionRecord(t, ctx, b, now)
-	if work.StageAudit(0, record) != nil || work.StageLifecycle(0, now) != nil {
-		t.Fatal("original audit/lifecycle staging failed")
+	var provisional identity.CommandResult
+	if native {
+		if _, err := enqueue.ApplyFeature(ctx, work, command); err == nil {
+			t.Fatal("native contributor entered outside exact coordinator invocation")
+		}
+		provisional, err = coordinator.ApplyFeature(ctx, work, command)
+		if err != nil {
+			t.Fatal("native enqueue apply failed", err)
+		}
+	} else {
+		user, err := repo.ApplyUserCreation(ctx, work, command)
+		if err != nil {
+			t.Fatal(err)
+		}
+		now, err := work.DatabaseTime(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		record = compositionRecord(t, ctx, b, now)
+		if work.StageAudit(0, record) != nil || work.StageLifecycle(0, now) != nil {
+			t.Fatal("original audit/lifecycle staging failed")
+		}
+		provisional = identity.CommandResult{Binding: b, Outcome: identity.CommitOutcomeCommitted, User: user, AuditEventID: record.ID()}
 	}
 	foreign, foreignBinding, foreignInput := compositionPreparation(t)
 	foreignPrepared, err := foreign.Prepare(ctx, foreignBinding, []IntentInput{foreignInput})
@@ -198,26 +262,45 @@ func testPublicComposition(t *testing.T, mode string) {
 	if err := contributor.Stage(ctx, work, changedPrepared); err != delivery.ErrForbidden {
 		t.Fatal("other original command staged")
 	}
-	if err := contributor.Stage(ctx, work, prepared); err != nil {
-		t.Fatal("original delivery staging failed", err)
+	if mode != "native-missing" {
+		if err := contributor.Stage(ctx, work, prepared); err != nil {
+			t.Fatal("original delivery staging failed", err)
+		}
 	}
 	var visible int
 	if pool.QueryRow(ctx, `SELECT count(*) FROM identity.delivery_intents`).Scan(&visible) != nil || visible != 0 {
 		t.Fatal("delivery visible before original commit")
 	}
-	if mode == "delivery-failure" {
+	if mode == "delivery-failure" || mode == "native-failure" {
 		if _, err := pool.Exec(ctx, `ALTER TABLE identity.delivery_intents ADD CONSTRAINT test_delivery_deny CHECK (false)`); err != nil {
 			t.Fatal("delivery failure setup failed")
 		}
 	}
-	receipt, err := coordinator.Commit(work, identity.CommandResult{Binding: b, Outcome: identity.CommitOutcomeCommitted, User: user, AuditEventID: record.ID()})
-	if mode == "delivery-failure" {
+	receipt, err := coordinator.Commit(work, provisional)
+	if mode == "delivery-failure" || mode == "native-failure" || mode == "native-missing" {
 		if err == nil || receipt.Outcome == identity.CommitOutcomeCommitted {
 			t.Fatal("denied delivery became committed")
 		}
 		var users, intents, effects, audits int
-		if pool.QueryRow(ctx, `SELECT (SELECT count(*) FROM identity.users),(SELECT count(*) FROM identity.delivery_intents),(SELECT count(*) FROM outbox_messages),(SELECT count(*) FROM audit.identity_command_bindings)`).Scan(&users, &intents, &effects, &audits) != nil || users != 0 || intents != 0 || effects != 0 || audits != 0 {
-			t.Fatal("delivery failure retained an original mutation prefix")
+		wantAudits := 0
+		if native {
+			// Native execution prebuilds classified failure evidence. Abort first
+			// rolls back domain effects, then durably records that failure only.
+			wantAudits = 1
+			if receipt.Outcome != identity.CommitOutcomeNotCommitted || receipt.Validate() != nil {
+				t.Fatal("native rollback did not retain a valid failure receipt")
+			}
+		}
+		queryErr := pool.QueryRow(ctx, `SELECT (SELECT count(*) FROM identity.users),(SELECT count(*) FROM identity.delivery_intents),(SELECT count(*) FROM outbox_messages),(SELECT count(*) FROM audit.identity_command_bindings)`).Scan(&users, &intents, &effects, &audits)
+		if queryErr != nil || users != 0 || intents != 0 || effects != 0 || audits != wantAudits {
+			t.Fatal("delivery failure retained an original mutation prefix", queryErr, users, intents, effects, audits)
+		}
+		if native {
+			var outcome int
+			auditErr := pool.QueryRow(ctx, `SELECT r.outcome FROM audit.records r JOIN audit.identity_command_bindings b ON b.event_id=r.record_id WHERE b.tenant_id=$1 AND rtrim(translate(encode(b.command_id,'base64'),'+/','-_'),'=')=$2`, string(b.TenantID), string(b.CommandID)).Scan(&outcome)
+			if auditErr != nil || outcome != int(audit.OutcomeFailed) {
+				t.Fatal("native rollback retained success rather than failure evidence", auditErr, outcome)
+			}
 		}
 		return
 	}
@@ -225,10 +308,14 @@ func testPublicComposition(t *testing.T, mode string) {
 		t.Fatal("owned original composition did not commit", err)
 	}
 	var users, intents, effects, audits int
-	if pool.QueryRow(ctx, `SELECT (SELECT count(*) FROM identity.users),(SELECT count(*) FROM identity.delivery_intents),(SELECT count(*) FROM outbox_messages),(SELECT count(*) FROM audit.identity_command_bindings)`).Scan(&users, &intents, &effects, &audits) != nil || users != 1 || intents != 1 || effects != 2 || audits != 1 {
+	wantUsers := 1
+	if native {
+		wantUsers = 0
+	}
+	if pool.QueryRow(ctx, `SELECT (SELECT count(*) FROM identity.users),(SELECT count(*) FROM identity.delivery_intents),(SELECT count(*) FROM outbox_messages),(SELECT count(*) FROM audit.identity_command_bindings)`).Scan(&users, &intents, &effects, &audits) != nil || users != wantUsers || intents != 1 || effects != 2 || audits != 1 {
 		t.Fatal("original committed owners disagree", users, intents, effects, audits)
 	}
-	if mode == "no-op" {
+	if mode == "no-op" || mode == "native-no-op" {
 		var erased bool
 		if pool.QueryRow(ctx, `SELECT state='cancelled' AND ciphertext IS NULL AND envelope_key_id IS NULL AND payload_erased_at IS NOT NULL FROM identity.delivery_intents`).Scan(&erased) != nil || !erased {
 			t.Fatal("no-op retained sendable custody")
@@ -241,6 +328,19 @@ func testPublicComposition(t *testing.T, mode string) {
 	if err := contributor.Stage(ctx, work, prepared); err == nil {
 		t.Fatal("closed original Work survived")
 	}
+}
+
+func compositionEnqueueRecord(t *testing.T, b identity.CommandBinding) audit.Record {
+	t.Helper()
+	builder, err := audit.NewBuilder(audit.BuilderConfig{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	record, err := builder.Build(audit.RecordInput{OccurredAt: time.Now().UTC().Truncate(time.Microsecond), Action: "identity.delivery.enqueue", Outcome: audit.OutcomeSucceeded, Actor: audit.ActorInput{Kind: audit.ActorHuman, ID: string(b.ActorID)}, Subject: audit.SubjectInput{Type: "delivery_intent", ID: b.RecordID}, Context: audit.ContextInput{TenantID: string(b.TenantID), CorrelationID: b.CorrelationID}, Policy: audit.PolicyMetadata{PolicyID: b.PolicyID, Version: "1"}, Changes: audit.ChangeSetInput{Redacted: true}, Attributes: map[string]string{"command.id": string(b.CommandID), "aggregate.type": "delivery_intent", "aggregate.id": b.RecordID, "aggregate.before_version": "0", "aggregate.after_version": "1", "retention.class": "protected"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return record
 }
 
 func compositionPreparation(t *testing.T) (*Contributor, identity.CommandBinding, IntentInput) {

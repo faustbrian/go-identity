@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add native enqueue command preparation and an exact enlisted execution phase.
+  Commands freeze every prepared effect under the original coordinator; absent
+  or failed ciphertext persistence rolls back delivery and lifecycle effects,
+  retaining only classified failure evidence. Authenticated Queue admission
+  and complete public worker orchestration remain unfinished.
+
 - Add private database-time worker heartbeat and conservative release.
   Renewal preserves the original credential expiry and attempt lifetime,
   rejects lost/foreign ownership and stops on cancellation. Release retains
