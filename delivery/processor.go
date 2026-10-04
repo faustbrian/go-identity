@@ -173,7 +173,7 @@ func (p *attemptProcessor) processOne(ctx context.Context, request ClaimRequest)
 	}
 	claim, err := p.queue.Claim(work, request)
 	if err != nil {
-		for _, class := range []error{ErrOutcomeUnknown, ErrConflict, ErrInvalidInput} {
+		for _, class := range []error{ErrOutcomeUnknown, ErrConflict, ErrInvalidInput, ErrForbidden} {
 			if errors.Is(err, class) {
 				return processResult{}, class
 			}

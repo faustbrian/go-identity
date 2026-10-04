@@ -4,6 +4,11 @@
 
 ### Added
 
+- Public bounded worker composition using the durable Queue subset. It shares
+  the service's claim/send/complete policy and concurrency ceiling without
+  requiring unrelated admission operations. Authorization denial is preserved
+  as `ErrForbidden`; production still rejects missing/capture collaborators.
+
 - Reconciliation accepts an empty initial provider cursor without inventing
   provider-specific progress. Nonempty cursors retain their ASCII/size bounds;
   empty cursors do not reset durable fences or authorize resubmission.
