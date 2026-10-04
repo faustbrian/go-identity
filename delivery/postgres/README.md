@@ -139,6 +139,29 @@ and full Queue composition remain unfinished.
 
 ### Provider-receipt persistence foundation
 
+The private authentication foundation implements an explicit Golib callback
+profile, not a vendor-signature compatibility layer. Immutable configuration
+binds each 32-byte nonzero HMAC key and key ID to deployment, tenant, provider,
+positive provider configuration version and provider actor, with mandatory
+UTC validity intervals. Both signing time and current verification time must
+fall in that half-open interval. Envelopes expire after five minutes and allow
+at most thirty seconds of future signing skew; a fresh signature can report a
+delayed observation without extending a retired credential's validity.
+
+The v1 signature is HMAC-SHA256 over the literal domain
+`identity-delivery-receipt-hmac-sha256-v1`, an eight-byte big-endian length and
+UTF-8 string array encoded by Go's `encoding/json.Marshal` (including HTML
+escaping), `[deployment,tenant,provider,decimalVersion,keyID,signedAtRFC3339Nano]`,
+then an eight-byte big-endian body length and exact raw
+body bytes. Authentication precedes parsing. Body limits are 256..65536 bytes
+of configured maximum; exact closed scalar fields are `tenant_id`, `provider`,
+`event_id`, `intent_id`, `generation`, `status`, and `observed_at`. Duplicate,
+unknown, missing or case-aliased fields and trailing JSON are rejected; status
+uses the core receipt classifications and observation time is canonical UTC
+RFC3339Nano. No callback idempotency field owns kernel command identity.
+This remains a private phase: public callback configuration, current-policy
+admission and original-result disclosure checks are not enabled yet.
+
 `MigrationSource.ReceiptVersion` optionally appends immutable redacted provider
 event checkpoints after `StateVersion` and any selected `CancellationVersion`.
 Cancellation is not a prerequisite; zero preserves all installed migration

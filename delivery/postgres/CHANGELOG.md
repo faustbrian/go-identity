@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add the private owned signed-receipt authentication foundation: bounded
+  deployment/tenant/provider/version-scoped HMAC-SHA256 envelopes, explicit key
+  validity/rotation, fresh signatures for delayed observations and strict closed
+  JSON decoding. This does not yet enable public callbacks or claim vendor
+  signature interoperability; protected admission remains unfinished.
+
 - Add forward receipt-command results and a private native receipt participant
   under the original kernel coordinator. Bind redacted keyed evidence and exact
   version/generation fences; commit event result, custody erasure, protected
