@@ -166,6 +166,15 @@ Selected missing schema or a key profile absent from the retained custody
 provider versions fails closed before deployment registration. Configuration
 copies credentials, supports overlapping keys, and needs no consumer verifier.
 
+Callbacks automatically select receipt-aware status. To retire callback keys
+while continuing to read retained acceptance/bounce evidence, set `Receipts`
+to nil and `ReceiptTracking` to true. This metadata-only selection requires
+`StateTracking` and `ReceiptVersion`, grants no callback authority, and fails
+closed before registration when the schema is absent. Status and its version
+come from one database snapshot; generation-scoped evidence does not rewrite
+original worker completion results or override later durable terminal states.
+Nil callbacks with tracking disabled retain legacy schema requirements.
+
 `EnqueueService.RecordReceipt` accepts `ReceiptCommandRequest`: trusted binding
 and current actor policy plus untrusted `SignedReceiptCallback` and the original
 status-version fence. The signature selects the configured provider service

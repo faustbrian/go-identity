@@ -107,29 +107,15 @@ func (s *receiptStore) recordEvidenceIn(ctx context.Context, sql cancellationSQL
 		value := int16(*outcome)
 		current.outcome = &value
 	}
+	observed, err := loadReceiptProjection(ctx, sql, s.deployment, q.TenantID, q.IntentID, &current)
+	if err != nil {
+		return delivery.ReceiptRecordResult{}, err
+	}
 	status, err := current.result()
 	if err != nil {
 		return delivery.ReceiptRecordResult{}, err
 	}
-	snapshot := delivery.ReceiptSnapshot{State: status.State, Generation: q.Generation}
-	var observed *time.Time
-	var receiptState int64
-	err = sql.scan(ctx, `SELECT result_state::bigint,observed_at FROM identity.delivery_receipts WHERE deployment=$1 AND tenant_id=$2 AND effect_id=$3 AND generation=$4 ORDER BY observed_at DESC NULLS LAST,event_digest LIMIT 1`, []any{s.deployment, string(q.TenantID), string(q.IntentID), current.generation}, &receiptState, &observed)
-	if err == nil {
-		if receiptState < 2 || receiptState > 12 {
-			return delivery.ReceiptRecordResult{}, delivery.ErrUnavailable
-		}
-		if observed != nil {
-			snapshot.ObservedAt = observed.UTC()
-		}
-		// Do not overwrite a worker's newer terminal state or cancellation's
-		// unknown checkpoint with an earlier accepted receipt projection.
-		if current.state == "submitted" && receiptState == int64(delivery.StateAccepted) || current.state == "rejected" && receiptState == int64(delivery.StateBounced) {
-			snapshot.State = delivery.DeliveryState(receiptState)
-		}
-	} else if !errors.Is(err, pgx.ErrNoRows) {
-		return delivery.ReceiptRecordResult{}, attemptFailure(ctx, err)
-	}
+	snapshot := delivery.ReceiptSnapshot{State: status.State, Generation: q.Generation, ObservedAt: observed}
 	// PostgreSQL's microsecond timestamp profile must own comparison precision,
 	// not accidentally round two provider observations into a different order.
 	// Keep the exact authenticated time in the fingerprint, but fail closed on
@@ -171,4 +157,32 @@ func (s *receiptStore) recordEvidenceIn(ctx context.Context, sql cancellationSQL
 		return delivery.ReceiptRecordResult{}, attemptFailure(ctx, err)
 	}
 	return delivery.ReceiptRecordResult{Advanced: decision.Advanced, State: decision.State}, nil
+}
+
+// The caller owns the locked intent/generation and has selected ReceiptVersion.
+// Use the same classification as public single-statement status, without
+// rewriting original worker outcomes or allowing a stale receipt to overwrite
+// a newer terminal effect. Borrowed Work supports nullable int64, not int16.
+func loadReceiptProjection(ctx context.Context, sql cancellationSQL, deployment string, tenant delivery.TenantID, intent delivery.IntentID, current *deliveryStatus) (time.Time, error) {
+	if ctx == nil || sql.scan == nil || current == nil || current.generation < 1 || current.generation > 4294967295 {
+		return time.Time{}, delivery.ErrInvalidInput
+	}
+	var observed *time.Time
+	var state int64
+	err := sql.scan(ctx, `SELECT result_state::bigint,observed_at FROM identity.delivery_receipts WHERE deployment=$1 AND tenant_id=$2 AND effect_id=$3 AND generation=$4 ORDER BY observed_at DESC NULLS LAST,event_digest LIMIT 1`, []any{deployment, string(tenant), string(intent), current.generation}, &state, &observed)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return time.Time{}, nil
+	}
+	if err != nil {
+		return time.Time{}, attemptFailure(ctx, err)
+	}
+	if state < 2 || state > 12 {
+		return time.Time{}, delivery.ErrUnavailable
+	}
+	bounded := int16(state)
+	current.receipt = &bounded
+	if observed != nil {
+		return observed.UTC(), nil
+	}
+	return time.Time{}, nil
 }

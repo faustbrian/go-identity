@@ -22,6 +22,7 @@ import (
 // authority; it never closes the pool or invokes a provider. All mutable state
 // is owned by PostgreSQL row locks, not this concurrently readable holder.
 type attemptStore struct {
+	receiptTracking                bool
 	pool                           *pgxpool.Pool
 	deployment                     string
 	codec                          *payloadCodec

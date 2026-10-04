@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Project authenticated acceptance and bounce evidence in public status,
+  subsequent receipt settlement and cancellation without rewriting original
+  worker results. Add opt-in metadata-only receipt tracking after callback
+  credentials are retired; legacy compositions remain unchanged.
+
 - Enable opt-in authenticated provider receipts through owned key configuration
   and the original kernel coordinator. Enforce current provider actor/tenant/
   version policy before reservation and disclosure; commit event, erasure, audit

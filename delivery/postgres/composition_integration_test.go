@@ -232,13 +232,19 @@ func testPublicComposition(t *testing.T, mode string) {
 			if _, err := NewEnqueueService(ctx, owned, config, contributor.store.codec.service, policy, templates); !errors.Is(err, delivery.ErrUnavailable) {
 				t.Fatal("callback feature admitted absent receipt migrations", err)
 			}
-			receipts, err := migrations.NewRunner(MigrationSource{Base: identitypostgres.MigrationSource{}, Version: 10, WorkerVersion: 11, PolicyVersion: 12, KeyedVersion: 13, StateVersion: 14, ReceiptVersion: 15, ReceiptCommandVersion: 16}, backend)
+			metadataOnly := config
+			metadataOnly.Receipts, metadataOnly.ReceiptTracking = nil, true
+			if _, err := NewEnqueueService(ctx, owned, metadataOnly, contributor.store.codec.service, policy, templates); !errors.Is(err, delivery.ErrUnavailable) {
+				t.Fatal("receipt tracking admitted absent metadata migration", err)
+			}
+			receipts, err := migrations.NewRunner(MigrationSource{Base: identitypostgres.MigrationSource{}, Version: 10, WorkerVersion: 11, PolicyVersion: 12, KeyedVersion: 13, StateVersion: 14, CancellationVersion: 15, ReceiptVersion: 16, ReceiptCommandVersion: 17}, backend)
 			if err != nil {
 				t.Fatal(err)
 			}
 			if _, err := receipts.Up(ctx); err != nil {
 				t.Fatal(err)
 			}
+			config.Cancellation = true
 		}
 		public, err := NewEnqueueService(ctx, owned, config, contributor.store.codec.service, policy, templates)
 		if err != nil {
@@ -630,6 +636,13 @@ func testPublicComposition(t *testing.T, mode string) {
 		}
 		if mode == "public-receipt" {
 			testAuthenticatedReceipts(t, ctx, pool, public, request, &permit)
+			retiredConfig := config
+			retiredConfig.Receipts, retiredConfig.ReceiptTracking = nil, true
+			retired, err := NewEnqueueService(ctx, owned, retiredConfig, contributor.store.codec.service, policy, templates)
+			if err != nil {
+				t.Fatal("metadata-only receipt composition", err)
+			}
+			testReceiptAwareStatus(t, ctx, pool, public, retired, request, &permit)
 		}
 		return
 	}

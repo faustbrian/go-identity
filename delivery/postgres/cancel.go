@@ -136,6 +136,11 @@ func (s *attemptStore) cancelIn(w context.Context, sql cancellationSQL, q delive
 			bounded := int16(*outcome)
 			snapshot.outcome = &bounded
 		}
+		if s.receiptTracking {
+			if _, err := loadReceiptProjection(w, sql, s.deployment, q.TenantID, q.IntentID, &snapshot); err != nil {
+				return delivery.CancelResult{}, err
+			}
+		}
 	}
 	// Submitted may have a still-live invocation or acknowledged acceptance;
 	// either requires provider reconciliation, never local remote-success claims.

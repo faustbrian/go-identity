@@ -35,6 +35,9 @@ func TestDeliveryStatusConservesDurableAndEffectiveStates(t *testing.T) {
 		{"attempting", deliveryStatus{state: "submitted", generation: 1, live: true}, delivery.StatusGetResult{State: delivery.StateAttempting, AttemptGeneration: 1}},
 		{"lost-lease", deliveryStatus{state: "submitted", generation: 1}, delivery.StatusGetResult{State: delivery.StateOutcomeUnknown, AttemptGeneration: 1}},
 		{"accepted", deliveryStatus{state: "submitted", generation: 1, outcome: &accepted, reference: true}, delivery.StatusGetResult{State: delivery.StateAccepted, AttemptGeneration: 1, ProviderReferencePresent: true}},
+		{"receipt-accepted", deliveryStatus{state: "submitted", generation: 1, receipt: &accepted}, delivery.StatusGetResult{State: delivery.StateAccepted, AttemptGeneration: 1}},
+		{"receipt-bounced", deliveryStatus{state: "rejected", generation: 1, receipt: &bounced}, delivery.StatusGetResult{State: delivery.StateBounced, AttemptGeneration: 1, Terminal: true}},
+		{"worker-terminal-after-accepted", deliveryStatus{state: "confirmed", generation: 1, receipt: &accepted}, delivery.StatusGetResult{State: delivery.StateDelivered, AttemptGeneration: 1, Terminal: true}},
 		{"retry-wait", deliveryStatus{state: "retry-wait", generation: 1}, delivery.StatusGetResult{State: delivery.StateRetryWait, AttemptGeneration: 1}},
 		{"retry-expired", deliveryStatus{state: "retry-wait", generation: 1, expired: true}, delivery.StatusGetResult{State: delivery.StateExpired, AttemptGeneration: 1, Terminal: true}},
 		{"unknown", deliveryStatus{state: "outcome-unknown", generation: 1}, delivery.StatusGetResult{State: delivery.StateOutcomeUnknown, AttemptGeneration: 1}},
@@ -57,6 +60,7 @@ func TestDeliveryStatusConservesDurableAndEffectiveStates(t *testing.T) {
 
 func TestDeliveryStatusRejectsUnattributableMetadata(t *testing.T) {
 	rejected := int16(delivery.StateRejected)
+	accepted, badReceipt := int16(delivery.StateAccepted), int16(13)
 	unsupported := "unsupported"
 	for _, snapshot := range []deliveryStatus{
 		{}, {state: "unsupported"}, {state: "planned", generation: -1}, {state: "planned", generation: 4294967296},
@@ -65,6 +69,8 @@ func TestDeliveryStatusRejectsUnattributableMetadata(t *testing.T) {
 		{state: "cancelled", noop: true, live: true}, {state: "cancelled", noop: true, reference: true},
 		{state: "submitted"}, {state: "submitted", generation: 1, outcome: &rejected}, {state: "submitted", generation: 1, outcome: &rejected, live: true},
 		{state: "planned", localStop: &unsupported}, {state: "cancelled", noop: true, localStop: &unsupported},
+		{state: "planned", receipt: &accepted}, {state: "cancelled", noop: true, receipt: &accepted},
+		{state: "submitted", generation: 1, live: true, receipt: &accepted}, {state: "confirmed", generation: 1, receipt: &badReceipt},
 	} {
 		got, err := snapshot.result()
 		if !errors.Is(err, delivery.ErrUnavailable) || got != (delivery.StatusGetResult{}) {

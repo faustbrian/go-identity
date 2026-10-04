@@ -108,6 +108,9 @@ func (c *cancelContributor) ApplyFeature(ctx context.Context, w identitypostgres
 		if err != nil {
 			return identity.FeatureReceipt{}, err
 		}
+		// Policy selection creates a fresh worker; retain the composition's
+		// schema selection so terminal receipt evidence is not discarded.
+		store.receiptTracking = c.store.receiptTracking
 	}
 	out, err := store.cancelIn(ctx, sql, delivery.CancelRequest{TenantID: delivery.TenantID(b.TenantID), IntentID: delivery.IntentID(b.RecordID), ExpectedGeneration: generation, Reason: "protected-command"}, string(b.UserID), true)
 	if err != nil {

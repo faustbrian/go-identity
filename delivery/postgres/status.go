@@ -95,13 +95,26 @@ func (s *EnqueueService) observeStatus(ctx context.Context, q delivery.StatusGet
 		versionColumn = "i.status_version::text"
 	}
 	var version *string
+	receiptColumn, receiptJoin := "NULL::smallint", ""
+	if s.receiptTracking {
+		receiptColumn = "r.result_state"
+		// The installed observation index supplies one generation-scoped row.
+		// No event identity, body, provider reference or custody is loaded.
+		receiptJoin = `LEFT JOIN LATERAL (
+SELECT result_state FROM identity.delivery_receipts r
+WHERE r.deployment=i.deployment AND r.tenant_id=i.tenant_id
+AND r.effect_id=i.effect_id AND r.provider=i.provider AND r.generation=p.generation
+ORDER BY observed_at DESC NULLS LAST,event_digest LIMIT 1
+) r ON true
+`
+	}
 	err = s.keyed.pool.QueryRow(w, `SELECT i.state,COALESCE(p.generation,0),h.outcome,
 p.lease_owner IS NOT NULL AND p.lease_until>clock_timestamp(),
-h.provider_reference_digest IS NOT NULL,i.no_op,i.expires_at<=clock_timestamp(),`+stopColumn+`,`+versionColumn+`
+h.provider_reference_digest IS NOT NULL,i.no_op,i.expires_at<=clock_timestamp(),`+stopColumn+`,`+versionColumn+`,`+receiptColumn+`
 FROM identity.delivery_intents i
 LEFT JOIN identity.delivery_processing p USING(deployment,tenant_id,effect_id)
 LEFT JOIN identity.delivery_attempt_history h ON h.deployment=p.deployment AND h.tenant_id=p.tenant_id AND h.effect_id=p.effect_id AND h.generation=p.generation
-WHERE i.deployment=$1 AND i.tenant_id=$2 AND i.effect_id=$3 AND i.subject_id=$4`, s.keyed.deployment, string(q.TenantID), string(q.IntentID), string(user)).Scan(&snapshot.state, &snapshot.generation, &snapshot.outcome, &snapshot.live, &snapshot.reference, &snapshot.noop, &snapshot.expired, &snapshot.localStop, &version)
+`+receiptJoin+`WHERE i.deployment=$1 AND i.tenant_id=$2 AND i.effect_id=$3 AND i.subject_id=$4`, s.keyed.deployment, string(q.TenantID), string(q.IntentID), string(user)).Scan(&snapshot.state, &snapshot.generation, &snapshot.outcome, &snapshot.live, &snapshot.reference, &snapshot.noop, &snapshot.expired, &snapshot.localStop, &version, &snapshot.receipt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return StatusSnapshot{}, delivery.ErrNotFound
 	}
@@ -131,6 +144,7 @@ type deliveryStatus struct {
 	state                          string
 	generation                     int64
 	outcome                        *int16
+	receipt                        *int16
 	live, reference, noop, expired bool
 	localStop                      *string
 }
@@ -140,6 +154,9 @@ func (s deliveryStatus) result() (delivery.StatusGetResult, error) {
 		return delivery.StatusGetResult{}, delivery.ErrUnavailable
 	}
 	out := delivery.StatusGetResult{AttemptGeneration: uint32(s.generation), ProviderReferencePresent: s.reference}
+	if s.receipt != nil && (*s.receipt < 2 || *s.receipt > 12 || s.generation == 0 || s.noop || s.state == "planned") {
+		return delivery.StatusGetResult{}, delivery.ErrUnavailable
+	}
 	if !s.noop && s.localStop != nil {
 		return delivery.StatusGetResult{}, delivery.ErrUnavailable
 	}
@@ -175,7 +192,14 @@ func (s deliveryStatus) result() (delivery.StatusGetResult, error) {
 			out.State, out.Terminal = delivery.StateExpired, true
 		}
 	case "submitted":
-		if s.outcome != nil {
+		if s.receipt != nil && delivery.DeliveryState(*s.receipt) == delivery.StateAccepted {
+			// Definitive receipt settlement fences the worker but intentionally
+			// retains its original unknown/transient completion for exact replay.
+			if s.live {
+				return delivery.StatusGetResult{}, delivery.ErrUnavailable
+			}
+			out.State = delivery.StateAccepted
+		} else if s.outcome != nil {
 			if delivery.DeliveryState(*s.outcome) != delivery.StateAccepted || s.live {
 				return delivery.StatusGetResult{}, delivery.ErrUnavailable
 			}
@@ -196,7 +220,7 @@ func (s deliveryStatus) result() (delivery.StatusGetResult, error) {
 		out.State, out.Terminal = delivery.StateDelivered, true
 	case "rejected":
 		out.State, out.Terminal = delivery.StateRejected, true
-		if s.outcome != nil && delivery.DeliveryState(*s.outcome) == delivery.StateBounced {
+		if s.outcome != nil && delivery.DeliveryState(*s.outcome) == delivery.StateBounced || s.receipt != nil && delivery.DeliveryState(*s.receipt) == delivery.StateBounced {
 			out.State = delivery.StateBounced
 		}
 	case "cancelled":

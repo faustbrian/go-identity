@@ -42,6 +42,10 @@ type EnqueueConfig struct {
 	// True fails closed if the forward migration is absent; it does not enable
 	// public cancellation, provider callbacks or full Queue composition.
 	StateTracking bool
+	// ReceiptTracking reads installed ReceiptVersion metadata without enabling
+	// callbacks or retaining their credentials. Requires StateTracking. Receipts
+	// implies this selection; false with nil Receipts preserves legacy queries.
+	ReceiptTracking bool
 	// Cancellation explicitly enables authenticated original-command local
 	// cancellation. Requires StateTracking and CancellationVersion migration.
 	// False preserves existing enqueue plan identity and status-only composition.
@@ -80,14 +84,15 @@ type EnqueueCommandRequest struct {
 // Concurrent calls are supported; no goroutines/background work are started.
 // Zero is invalid. Applications do not supply domain stores or orchestration.
 type EnqueueService struct {
-	executor      *enqueueExecutor
-	repository    *identitypostgres.Repository
-	renderer      *delivery.TemplateRenderer
-	policies      *retainedPolicies
-	keyed         *keyedAdmission
-	stateTracking bool
-	cancellation  *cancelExecutor
-	receipts      *receiptExecutor
+	executor        *enqueueExecutor
+	repository      *identitypostgres.Repository
+	renderer        *delivery.TemplateRenderer
+	policies        *retainedPolicies
+	keyed           *keyedAdmission
+	stateTracking   bool
+	receiptTracking bool
+	cancellation    *cancelExecutor
+	receipts        *receiptExecutor
 }
 
 func (EnqueueConfig) Format(s fmt.State, _ rune) {
@@ -133,7 +138,7 @@ func (EnqueueService) MarshalJSON() ([]byte, error) { return nil, delivery.ErrSe
 // If Coordinator.AdmissionPolicy is nil, historical observation uses authorize,
 // the system clock and PolicyVersion; an explicit observation policy is retained.
 func NewEnqueueService(ctx context.Context, pool *database.Pool, c EnqueueConfig, service *secretenvelope.Service, authorize authorization.Service, templates []delivery.Template) (*EnqueueService, error) {
-	if ctx == nil || pool == nil || pool.Raw() == nil || c.Timeout < time.Second || c.Timeout > 5*time.Second || c.NamespaceKey == ([32]byte{}) || !safeID(c.PolicyID, false) || c.PolicyVersion == 0 || c.AuditRetentionVersion == 0 || len(c.Policies) < 1 || len(c.Policies) > 32 || c.Cancellation && !c.StateTracking {
+	if ctx == nil || pool == nil || pool.Raw() == nil || c.Timeout < time.Second || c.Timeout > 5*time.Second || c.NamespaceKey == ([32]byte{}) || !safeID(c.PolicyID, false) || c.PolicyVersion == 0 || c.AuditRetentionVersion == 0 || len(c.Policies) < 1 || len(c.Policies) > 32 || (c.Cancellation || c.ReceiptTracking) && !c.StateTracking {
 		return nil, delivery.ErrInvalidInput
 	}
 	if err := ctx.Err(); err != nil {
@@ -214,6 +219,11 @@ func NewEnqueueService(ctx context.Context, pool *database.Pool, c EnqueueConfig
 			return nil, attemptFailure(w, err)
 		}
 	}
+	if c.ReceiptTracking {
+		if _, err := pool.Raw().Exec(w, `SELECT result_state,observed_at,generation FROM identity.delivery_receipts WHERE false`); err != nil {
+			return nil, attemptFailure(w, err)
+		}
+	}
 	policies, err := newRetainedPolicies(w, pool.Raw(), c.Custody.Deployment, c.Policies, c.Timeout)
 	if err != nil {
 		return nil, err
@@ -222,12 +232,13 @@ func NewEnqueueService(ctx context.Context, pool *database.Pool, c EnqueueConfig
 	if err != nil {
 		return nil, err
 	}
-	s := &EnqueueService{executor: executor, repository: repo, renderer: renderer, policies: policies, keyed: keyed, stateTracking: c.StateTracking}
+	s := &EnqueueService{executor: executor, repository: repo, renderer: renderer, policies: policies, keyed: keyed, stateTracking: c.StateTracking, receiptTracking: c.ReceiptTracking || receiptAuth != nil}
 	if c.Cancellation {
 		store, err := newAttemptStore(pool.Raw(), c.Custody.Deployment, custody.store.codec, delivery.DefaultConfig(), c.Timeout)
 		if err != nil {
 			return nil, err
 		}
+		store.receiptTracking = s.receiptTracking
 		nativeCancel := &cancelContributor{store: store, policies: policies}
 		// Both handles use the sole kernel command authority. Separate operation
 		// registries keep installed enqueue plan fingerprints byte-identical when
