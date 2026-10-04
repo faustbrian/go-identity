@@ -59,8 +59,8 @@ type EnqueueCommandRequest struct {
 	NoOpEquivalent        bool
 }
 
-// EnqueueService owns usable durable message admission, not the complete Queue
-// lifecycle. It composes all platform participants and performs no provider
+// EnqueueService owns usable durable message admission and authorized status,
+// not the complete Queue lifecycle. It composes participants and performs no provider
 // invocation, retry, credential issuance or identity mutation. The caller owns
 // the borrowed primary pool, authorization dependency and envelope service.
 // Concurrent calls are supported; no goroutines/background work are started.

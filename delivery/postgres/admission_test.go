@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/faustbrian/go-authorization"
 	"github.com/faustbrian/go-identity/delivery"
 	deliverypostgres "github.com/faustbrian/go-identity/delivery/postgres"
 )
@@ -23,6 +24,10 @@ func TestPublicAdmissionRejectsZeroDependencies(t *testing.T) {
 			result, err := service.Enqueue(ctx, deliverypostgres.EnqueueCommandRequest{})
 			if !errors.Is(err, delivery.ErrInvalidInput) || result.State != delivery.CommitNotCommitted || result.Queued || result.IntentID != "" {
 				t.Fatal("invalid service fabricated admission", err)
+			}
+			status, err := service.StatusGet(ctx, delivery.StatusGetRequest{}, "", authorization.DecisionContext{})
+			if !errors.Is(err, delivery.ErrInvalidInput) || status != (delivery.StatusGetResult{}) {
+				t.Fatal("invalid service fabricated status", err)
 			}
 		}
 	}

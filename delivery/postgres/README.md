@@ -40,9 +40,28 @@ an exact retry safely resumes a partial constructor without creating an intent.
 Trusted enumeration-safe workflows may use `NoOpEquivalent` with no identifier.
 It preserves the queued result shape without sendable ciphertext. Never expose
 that internal bit to clients. The service starts no goroutines or sender work;
-the caller retains ownership of the pool and dependencies. Full public status,
+the caller retains ownership of the pool and dependencies. Full public
 cancellation, authenticated receipt/reconciliation and worker composition remain
 under development.
+
+## Authorized status
+
+`EnqueueService.StatusGet` accepts the core status request, an exact target user
+and trusted authenticated authorization context. Use action
+`identity.delivery.status-get`, the configured current policy revision and
+`identity.user` resource targeting that user. The service binds the requested
+intent as a reserved `delivery.intent` resource attribute before policy, then
+reads exact deployment/tenant/intent/owner metadata from the primary database.
+Caller-supplied `delivery.*` attributes are rejected; IDs are not authority.
+
+Results contain only state, generation, terminal classification and whether the
+latest attempt has a provider reference. No recipient, message, reference bytes
+or receipt body is loaded or returned. A live lease is attempting; provider
+acceptance is not delivery; a lost lease is unknown, not retry authorization.
+Queued expiry is effective expiration, without mutating/erasing custody in a
+read. Missing and foreign targets share `ErrNotFound`; no-op intents expose the
+same queued/expired shape rather than their private custody-free cancellation.
+This method does not start workers, decrypt payloads or call a provider.
 
 ## Custody and security
 

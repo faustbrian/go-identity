@@ -205,6 +205,74 @@ func testPublicComposition(t *testing.T, mode string) {
 		if err != nil || first.State != delivery.CommitCommitted || !first.Queued || first.IntentID == "" {
 			t.Fatal("public admission failed", err)
 		}
+		statusScope := request.ActorScope.Clone()
+		statusScope.Request.Action = "identity.delivery.status-get"
+		statusRequest := delivery.StatusGetRequest{TenantID: delivery.TenantID(b.TenantID), IntentID: first.IntentID}
+		status, err := public.StatusGet(ctx, statusRequest, b.UserID, statusScope)
+		if err != nil || status != (delivery.StatusGetResult{State: delivery.StateQueued}) {
+			t.Fatal("public status did not observe original queue", err)
+		}
+		missing := statusRequest
+		prefix := "0"
+		if string(first.IntentID)[0] == '0' {
+			prefix = "1"
+		}
+		// Exactly one intent exists here; this canonical ID differs from it.
+		missing.IntentID = delivery.IntentID(prefix + string(first.IntentID)[1:])
+		if _, err := public.StatusGet(ctx, missing, b.UserID, statusScope); !errors.Is(err, delivery.ErrNotFound) {
+			t.Fatal("missing status target did not share foreign classification", err)
+		}
+		otherConfig := config
+		otherConfig.Custody.Deployment = "other-deployment"
+		other, err := NewEnqueueService(ctx, owned, otherConfig, contributor.store.codec.service, policy, templates)
+		if err != nil {
+			t.Fatal("other deployment construction", err)
+		}
+		if _, err := other.StatusGet(ctx, statusRequest, b.UserID, statusScope); !errors.Is(err, delivery.ErrNotFound) {
+			t.Fatal("status crossed deployment", err)
+		}
+		permit = false
+		if result, err := public.StatusGet(ctx, statusRequest, b.UserID, statusScope); !errors.Is(err, delivery.ErrForbidden) || result != (delivery.StatusGetResult{}) {
+			t.Fatal("denied status disclosed metadata", err)
+		}
+		permit = true
+		foreignScope := statusScope.Clone()
+		foreignScope.Request.Resource.ID = "foreign-user"
+		if result, err := public.StatusGet(ctx, statusRequest, "foreign-user", foreignScope); !errors.Is(err, delivery.ErrNotFound) || result != (delivery.StatusGetResult{}) {
+			t.Fatal("status crossed target owner", err)
+		}
+		foreignRequest := statusRequest
+		foreignRequest.TenantID = "foreign-tenant"
+		foreignScope = statusScope.Clone()
+		foreignScope.Request.Tenant = "foreign-tenant"
+		if _, err := public.StatusGet(ctx, foreignRequest, b.UserID, foreignScope); !errors.Is(err, delivery.ErrNotFound) {
+			t.Fatal("status crossed tenant", err)
+		}
+		for _, bad := range []delivery.StatusGetRequest{{}, {TenantID: statusRequest.TenantID, IntentID: "not-a-canonical-intent"}, {TenantID: statusRequest.TenantID, IntentID: delivery.IntentID(strings.Repeat("G", 64))}} {
+			if _, err := public.StatusGet(ctx, bad, b.UserID, statusScope); !errors.Is(err, delivery.ErrInvalidInput) {
+				t.Fatal("malformed status target accepted", err)
+			}
+		}
+		for _, attributes := range []func(*authorization.DecisionContext){
+			func(dc *authorization.DecisionContext) {
+				dc.Request.Subject.Attributes = authorization.Attributes{"delivery.intent": authorization.StringValue(string(first.IntentID))}
+			},
+			func(dc *authorization.DecisionContext) {
+				dc.Request.Resource.Attributes = authorization.Attributes{"delivery.intent": authorization.StringValue(string(first.IntentID))}
+			},
+			func(dc *authorization.DecisionContext) {
+				dc.Request.Environment.Attributes = authorization.Attributes{"delivery.intent": authorization.StringValue(string(first.IntentID))}
+			},
+			func(dc *authorization.DecisionContext) {
+				dc.Request.Attributes = authorization.Attributes{"delivery.intent": authorization.StringValue(string(first.IntentID))}
+			},
+		} {
+			shadow := statusScope.Clone()
+			attributes(&shadow)
+			if _, err := public.StatusGet(ctx, statusRequest, b.UserID, shadow); !errors.Is(err, delivery.ErrInvalidInput) {
+				t.Fatal("caller shadowed owned status scope", err)
+			}
+		}
 		request.Binding.CommandID, err = identity.NewCommandID()
 		if err != nil {
 			t.Fatal(err)
@@ -231,6 +299,10 @@ func testPublicComposition(t *testing.T, mode string) {
 		if err != nil || noResult.State != delivery.CommitCommitted || !noResult.Queued || !noResult.NoOpEquivalent {
 			t.Fatal("public no-op changed result shape", err)
 		}
+		noStatus, err := public.StatusGet(ctx, delivery.StatusGetRequest{TenantID: statusRequest.TenantID, IntentID: noResult.IntentID}, b.UserID, statusScope)
+		if err != nil || noStatus != status {
+			t.Fatal("no-op status disclosed recipient existence", err)
+		}
 		var intents, outbox, audits, noops int
 		if err := pool.QueryRow(ctx, `SELECT (SELECT count(*) FROM identity.delivery_intents),(SELECT count(*) FROM outbox_messages),(SELECT count(*) FROM audit.identity_command_bindings),(SELECT count(*) FROM identity.delivery_intents WHERE no_op AND ciphertext IS NULL AND envelope_key_id IS NULL)`).Scan(&intents, &outbox, &audits, &noops); err != nil || intents != 2 || outbox != 4 || audits != 2 || noops != 1 {
 			t.Fatal("public composition did not own durable effects", err, intents, outbox, audits, noops)
@@ -239,6 +311,9 @@ func testPublicComposition(t *testing.T, mode string) {
 		stop()
 		if _, err := public.Enqueue(cancelled, request); !errors.Is(err, context.Canceled) {
 			t.Fatal("public cancelled admission", err)
+		}
+		if _, err := public.StatusGet(cancelled, statusRequest, b.UserID, statusScope); !errors.Is(err, context.Canceled) {
+			t.Fatal("cancelled status read", err)
 		}
 		expiring := request
 		expiring.Binding.CommandID, err = identity.NewCommandID()
@@ -250,6 +325,17 @@ func testPublicComposition(t *testing.T, mode string) {
 		original, err := public.Enqueue(ctx, expiring)
 		if err != nil || original.State != delivery.CommitCommitted {
 			t.Fatal("expiring admission failed", err)
+		}
+		expiringNoop := expiring
+		expiringNoop.Binding.CommandID, err = identity.NewCommandID()
+		if err != nil {
+			t.Fatal(err)
+		}
+		expiringNoop.IdempotencyKey = "public-expiring-noop"
+		expiringNoop.NoOpEquivalent, expiringNoop.IdentifierID = true, ""
+		expiredNoopIntent, err := public.Enqueue(ctx, expiringNoop)
+		if err != nil {
+			t.Fatal("expiring no-op admission", err)
 		}
 		// Model interruption after keyed allocation but before reservation. The
 		// allocation identifies the original command, never its execution outcome.
@@ -290,6 +376,25 @@ func testPublicComposition(t *testing.T, mode string) {
 		case <-ctx.Done():
 			t.Fatal(ctx.Err())
 		}
+		// Status uses authoritative database time, not the caller's host clock.
+		// Wait for that boundary too; VM clock skew must not shape the oracle.
+		for {
+			var now time.Time
+			if err := pool.QueryRow(ctx, `SELECT clock_timestamp()`).Scan(&now); err != nil {
+				t.Fatal(err)
+			}
+			if !now.Before(expiring.ExpiresAt) {
+				break
+			}
+			ready := time.NewTimer(expiring.ExpiresAt.Sub(now))
+			select {
+			case <-ready.C:
+			case <-ctx.Done():
+				ready.Stop()
+				t.Fatal(ctx.Err())
+			}
+			ready.Stop()
+		}
 		// Also represents a lost acknowledgement: retry observes original durable
 		// history, not caller knowledge of whether the first response arrived.
 		expiring.Binding.CommandID, err = identity.NewCommandID()
@@ -298,6 +403,13 @@ func testPublicComposition(t *testing.T, mode string) {
 		}
 		if replay, err := public.Enqueue(ctx, expiring); err != nil || replay != original {
 			t.Fatal("expired committed replay lost original receipt", err, replay.State)
+		}
+		expiredStatus, err := public.StatusGet(ctx, delivery.StatusGetRequest{TenantID: statusRequest.TenantID, IntentID: original.IntentID}, b.UserID, statusScope)
+		if err != nil || expiredStatus != (delivery.StatusGetResult{State: delivery.StateExpired, Terminal: true}) {
+			t.Fatal("queued expiry status", err, expiredStatus.State, expiredStatus.AttemptGeneration)
+		}
+		if noStatus, err := public.StatusGet(ctx, delivery.StatusGetRequest{TenantID: statusRequest.TenantID, IntentID: expiredNoopIntent.IntentID}, b.UserID, statusScope); err != nil || noStatus != expiredStatus {
+			t.Fatal("expired no-op status disclosed existence", err)
 		}
 		denyHistorical = true
 		if result, err := public.Enqueue(ctx, expiring); !errors.Is(err, delivery.ErrForbidden) || result.IntentID != "" || result.Queued {
@@ -321,8 +433,65 @@ func testPublicComposition(t *testing.T, mode string) {
 			t.Fatal("expired new admission was accepted", err)
 		}
 		var finalIntents, finalKeys int
-		if err := pool.QueryRow(ctx, `SELECT (SELECT count(*) FROM identity.delivery_intents),(SELECT count(*) FROM identity.delivery_keyed_commands)`).Scan(&finalIntents, &finalKeys); err != nil || finalIntents != 3 || finalKeys != 4 {
+		if err := pool.QueryRow(ctx, `SELECT (SELECT count(*) FROM identity.delivery_intents),(SELECT count(*) FROM identity.delivery_keyed_commands)`).Scan(&finalIntents, &finalKeys); err != nil || finalIntents != 4 || finalKeys != 5 {
 			t.Fatal("expired recovery created or renewed durable effects", err, finalIntents, finalKeys)
+		}
+		worker, err := public.policies.worker(1, public.executor.custody.store.codec)
+		if err != nil {
+			t.Fatal(err)
+		}
+		claim, err := worker.Claim(ctx, delivery.ClaimRequest{TenantID: statusRequest.TenantID, WorkerID: "status-worker"})
+		if err != nil || !claim.Claimed || claim.Attempt.IntentID != first.IntentID {
+			t.Fatal("status worker did not claim original intent", err)
+		}
+		if observed, err := public.StatusGet(ctx, statusRequest, b.UserID, statusScope); err != nil || observed != (delivery.StatusGetResult{State: delivery.StateAttempting, AttemptGeneration: 1}) {
+			t.Fatal("live lease did not expose attempting status", err)
+		}
+		completed, err := worker.Complete(ctx, delivery.CompleteRequest{TenantID: statusRequest.TenantID, IntentID: first.IntentID, WorkerID: "status-worker", Generation: 1, Invoked: true, Result: delivery.DeliveryResult{State: delivery.StateAccepted, ObservedAt: time.Now().UTC(), ProviderReference: "synthetic-provider-reference"}})
+		if err != nil || completed.State != delivery.StateAccepted {
+			t.Fatal("accepted completion failed", err)
+		}
+		if observed, err := public.StatusGet(ctx, statusRequest, b.UserID, statusScope); err != nil || observed != (delivery.StatusGetResult{State: delivery.StateAccepted, AttemptGeneration: 1, ProviderReferencePresent: true}) {
+			t.Fatal("accepted status claimed delivery or exposed reference", err)
+		}
+		for _, mode := range []string{"delivered", "lost"} {
+			fresh := request
+			fresh.Binding.CommandID, err = identity.NewCommandID()
+			if err != nil {
+				t.Fatal(err)
+			}
+			fresh.IdempotencyKey = "public-status-" + mode
+			admitted, err := public.Enqueue(ctx, fresh)
+			if err != nil {
+				t.Fatal("status intent admission", err)
+			}
+			claim, err := worker.Claim(ctx, delivery.ClaimRequest{TenantID: statusRequest.TenantID, WorkerID: "status-worker"})
+			if err != nil || !claim.Claimed || claim.Attempt.IntentID != admitted.IntentID {
+				t.Fatal("status intent claim", err)
+			}
+			want := delivery.StatusGetResult{State: delivery.StateOutcomeUnknown, AttemptGeneration: 1}
+			if mode == "delivered" {
+				if _, err := worker.Complete(ctx, delivery.CompleteRequest{TenantID: statusRequest.TenantID, IntentID: admitted.IntentID, WorkerID: "status-worker", Generation: 1, Invoked: true, Result: delivery.DeliveryResult{State: delivery.StateDelivered, ObservedAt: time.Now().UTC(), ProviderReference: "synthetic-delivery-reference"}}); err != nil {
+					t.Fatal("delivery completion", err)
+				}
+				want = delivery.StatusGetResult{State: delivery.StateDelivered, AttemptGeneration: 1, Terminal: true, ProviderReferencePresent: true}
+			} else {
+				// Advance the lease fence, not the immutable original message expiry.
+				if _, err := pool.Exec(ctx, `UPDATE identity.delivery_processing SET lease_until=clock_timestamp()-INTERVAL '1 second' WHERE deployment='test' AND tenant_id=$1 AND effect_id=$2`, string(b.TenantID), string(admitted.IntentID)); err != nil {
+					t.Fatal("expire owned test lease", err)
+				}
+			}
+			observed, err := public.StatusGet(ctx, delivery.StatusGetRequest{TenantID: statusRequest.TenantID, IntentID: admitted.IntentID}, b.UserID, statusScope)
+			if err != nil || observed != want {
+				t.Fatal("attributable status lost provider or lease semantics", err, mode)
+			}
+			if mode == "lost" {
+				var state string
+				var unfinished bool
+				if err := pool.QueryRow(ctx, `SELECT i.state,h.outcome IS NULL FROM identity.delivery_intents i JOIN identity.delivery_attempt_history h USING(deployment,tenant_id,effect_id) WHERE i.deployment='test' AND i.tenant_id=$1 AND i.effect_id=$2`, string(b.TenantID), string(admitted.IntentID)).Scan(&state, &unfinished); err != nil || state != "submitted" || !unfinished {
+					t.Fatal("status read mutated an unknown attempt", err)
+				}
+			}
 		}
 		return
 	}

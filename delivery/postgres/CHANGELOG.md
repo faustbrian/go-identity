@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add current-policy-authorized primary delivery status with exact tenant and
+  target-user isolation. Preserve attempting, accepted and unknown distinctions
+  without exposing payloads or provider references. No-op intents retain the
+  same queued/expired status shape; reads never mutate or retry delivery.
+
 - Add owned public message admission with authorization before primary recipient
   discovery and versioned rendering. Compose atomic custody, audit and lifecycle
   persistence without consumer-written stores; preserve scoped duplicate intent
