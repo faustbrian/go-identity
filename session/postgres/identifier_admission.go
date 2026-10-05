@@ -132,11 +132,15 @@ func (r *Repository) CheckIdentifier(ctx context.Context, h kernel.IdentifierAdm
 }
 
 func readIdentifierSession[R SessionRows](ctx context.Context, q SessionQueryer[R], c Config, command identity.IdentifierCommand) (session.Session, error) {
-	if ctx == nil || nilSessionHandle(q) || !validSchema(c.Schema) || !scopeID(string(command.Binding.TenantID)) || !scopeID(string(command.Binding.UserID)) || !scopeID(command.SessionID) || command.SessionVersion == 0 {
+	return readBoundSession(ctx, q, c, command.Binding, command.SessionID, command.SessionVersion)
+}
+
+func readBoundSession[R SessionRows](ctx context.Context, q SessionQueryer[R], c Config, binding identity.CommandBinding, sessionID string, version uint64) (session.Session, error) {
+	if ctx == nil || nilSessionHandle(q) || !validSchema(c.Schema) || !scopeID(string(binding.TenantID)) || !scopeID(string(binding.UserID)) || !scopeID(sessionID) || version == 0 {
 		return session.Session{}, identity.InvalidInputError{Field: "session_identifier"}
 	}
 	// Config comes from the already bounded native invocation. No pool fallback.
-	rows, err := q.Query(ctx, `SELECT record::text FROM `+pgx.Identifier{c.Schema}.Sanitize()+`.sessions WHERE tenant_id=$1 AND user_id=$2 AND session_id=$3 AND version=$4::numeric AND state='active'`, string(command.Binding.TenantID), string(command.Binding.UserID), command.SessionID, strconv.FormatUint(command.SessionVersion, 10))
+	rows, err := q.Query(ctx, `SELECT record::text FROM `+pgx.Identifier{c.Schema}.Sanitize()+`.sessions WHERE tenant_id=$1 AND user_id=$2 AND session_id=$3 AND version=$4::numeric AND state='active'`, string(binding.TenantID), string(binding.UserID), sessionID, strconv.FormatUint(version, 10))
 	if err != nil {
 		return session.Session{}, readError(ctx, err)
 	}
@@ -154,13 +158,34 @@ func readIdentifierSession[R SessionRows](ctx context.Context, q SessionQueryer[
 		return session.Session{}, identity.UnavailableError{}
 	}
 	s, err := record.Bindings()
-	if err != nil || s.TenantID != command.Binding.TenantID || s.UserID != command.Binding.UserID || s.SessionID != command.SessionID || s.Version != command.SessionVersion {
+	if err != nil || s.TenantID != binding.TenantID || s.UserID != binding.UserID || s.SessionID != sessionID || s.Version != version {
 		return session.Session{}, identity.ForbiddenError{}
 	}
 	return record, nil
 }
 
 func identifierSessionBindings(c IdentifierAdmissionConfig, record session.Session, command identity.IdentifierCommand, epoch uint64, final bool) (kernel.DirectoryAuthorityAdmission, kernel.CredentialAdmission, kernel.UserAuthorizationAdmission, error) {
+	directory, credential, policy, err := sessionAdmissionBindings(c, record, command.Binding, command.SessionID, command.SessionVersion)
+	if err != nil || credential.IdentifierAuthorityVersion != command.Change.ExpectedAuthorityVersion {
+		return kernel.DirectoryAuthorityAdmission{}, kernel.CredentialAdmission{}, kernel.UserAuthorizationAdmission{}, identity.ForbiddenError{}
+	}
+	expected := command.Change.ExpectedAuthorityVersion
+	if final {
+		if expected == ^uint64(0) {
+			return kernel.DirectoryAuthorityAdmission{}, kernel.CredentialAdmission{}, kernel.UserAuthorizationAdmission{}, identity.ForbiddenError{}
+		}
+		expected++
+	}
+	if epoch == 0 || epoch != expected {
+		return kernel.DirectoryAuthorityAdmission{}, kernel.CredentialAdmission{}, kernel.UserAuthorizationAdmission{}, identity.ForbiddenError{}
+	}
+	credential.IdentifierAuthorityVersion = epoch
+	return directory, credential, policy, nil
+}
+
+// Both workflows derive owner keys from the same original session projection.
+// Workflow-specific version transitions are validated by their owning wrappers.
+func sessionAdmissionBindings(c IdentifierAdmissionConfig, record session.Session, binding identity.CommandBinding, sessionID string, version uint64) (kernel.DirectoryAuthorityAdmission, kernel.CredentialAdmission, kernel.UserAuthorizationAdmission, error) {
 	deny := func() (kernel.DirectoryAuthorityAdmission, kernel.CredentialAdmission, kernel.UserAuthorizationAdmission, error) {
 		return kernel.DirectoryAuthorityAdmission{}, kernel.CredentialAdmission{}, kernel.UserAuthorizationAdmission{}, identity.ForbiddenError{}
 	}
@@ -172,17 +197,7 @@ func identifierSessionBindings(c IdentifierAdmissionConfig, record session.Sessi
 	if err != nil {
 		return deny()
 	}
-	if s.TenantID != command.Binding.TenantID || s.UserID != command.Binding.UserID || string(command.Binding.ActorID) != string(s.UserID) || command.Binding.ActorKind != authorization.SubjectUser || s.SessionID != command.SessionID || s.Version != command.SessionVersion || s.Audience != c.Audience || s.Authentication.Kind != session.AuthenticationVerified || s.Authentication.Proof.Method != c.AuthenticationMethod || s.Authentication.Proof.Assurance != authentication.AssuranceSingleFactor || c.CredentialKind == identity.CredentialPasskey || a.Organization.Present || a.Factor.Present || a.Passkey.Present || a.Identifier.Version != command.Change.ExpectedAuthorityVersion {
-		return deny()
-	}
-	expected := command.Change.ExpectedAuthorityVersion
-	if final {
-		if expected == ^uint64(0) {
-			return deny()
-		}
-		expected++
-	}
-	if epoch == 0 || epoch != expected {
+	if s.TenantID != binding.TenantID || s.UserID != binding.UserID || string(binding.ActorID) != string(s.UserID) || binding.ActorKind != authorization.SubjectUser || s.SessionID != sessionID || s.Version != version || s.Audience != c.Audience || s.Authentication.Kind != session.AuthenticationVerified || s.Authentication.Proof.Method != c.AuthenticationMethod || s.Authentication.Proof.Assurance != authentication.AssuranceSingleFactor || c.CredentialKind == identity.CredentialPasskey || a.Organization.Present || a.Factor.Present || a.Passkey.Present {
 		return deny()
 	}
 	query := kernel.DirectoryAuthorityQuery{GlobalAuthorityID: c.GlobalAuthorityID, TenantID: s.TenantID}
@@ -206,5 +221,5 @@ func identifierSessionBindings(c IdentifierAdmissionConfig, record session.Sessi
 	if ref.Validate(s.TenantID, s.UserID) != nil {
 		return deny()
 	}
-	return kernel.DirectoryAuthorityAdmission{Query: query, GlobalVersion: a.Global.Version, TenantVersion: a.Tenant.Version}, kernel.CredentialAdmission{Credential: ref, UserAuthorityVersion: a.User.Version, IdentifierAuthorityVersion: epoch, CredentialAuthorityVersion: a.Credential.Version}, kernel.UserAuthorizationAdmission{Scope: scope, Version: a.Authorization.Version}, nil
+	return kernel.DirectoryAuthorityAdmission{Query: query, GlobalVersion: a.Global.Version, TenantVersion: a.Tenant.Version}, kernel.CredentialAdmission{Credential: ref, UserAuthorityVersion: a.User.Version, IdentifierAuthorityVersion: a.Identifier.Version, CredentialAuthorityVersion: a.Credential.Version}, kernel.UserAuthorizationAdmission{Scope: scope, Version: a.Authorization.Version}, nil
 }

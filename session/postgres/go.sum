@@ -1,0 +1,4 @@
+github.com/faustbrian/go-identity v0.0.0-20261005110325-777b1288ba1f h1:L4kRlRZvVHG4vWosQ92qtSh3MhRHt2smrhadqXLpBQw=
+github.com/faustbrian/go-identity v0.0.0-20261005110325-777b1288ba1f/go.mod h1:6kFtTRF+LJ8gpJoU7jCGrZnjnv6ziIow8AN2ajMh7g8=
+github.com/faustbrian/go-identity/postgres v0.0.0-20261005115415-8b84c012d238 h1:cv13Is66l8R6IypiJEf+XMmkOr6tmKNsykNoM55GpMY=
+github.com/faustbrian/go-identity/postgres v0.0.0-20261005115415-8b84c012d238/go.mod h1:yWYHWyRJQdPGU0/7Pxysc54jVqZrOjtGRS7h2v+9irQ=

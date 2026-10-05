@@ -129,6 +129,29 @@ defaults or clamping.
 
 See `CHANGELOG.md`. Complete mutation, coverage, API/catalog, clean-consumer,
 kernel/reference composition and release gates remain pending.
+## Native privacy eligibility
+
+`NewRepositoryWithPrivacyExportAdmission(pool, config, profile)` explicitly
+opts the same store into `identitypostgres.PrivacyExportAdmissionContributor`.
+Use trusted deployment, policy namespace, audience and method/kind/owner fields
+as for identifier eligibility below. Existing constructors remain opted out of
+privacy; this constructor does not enable identifier admission.
+
+`CheckPrivacyExport` reads only the exact selected live invocation. It derives
+all applicable primary owner keys from the original session and compares the
+request's expected **user security authority version**, not the identifier or
+aggregate identity version. Initial and final checks keep the same original
+session, credential linkage and authority versions; privacy allocation cannot
+refresh them. Directory, user/credential and authorization checks precede the
+complete session/family share locks and primary-time expiry check. There is no
+pool fallback, independent transaction, write, bearer issuance or policy engine.
+
+The current native profile denies organization, factor and passkey applicability
+rather than omit their owners. Complete multi-owner platform support is still
+required. Eligibility alone is not fresh reauthentication, one-time proof
+consumption or queued export admission. Public privacy execution remains closed
+until native proof, all contributor cuts, effects and recovery are composed.
+
 # Native identifier eligibility
 
 `NewRepositoryWithIdentifierAdmission` explicitly enables the same repository

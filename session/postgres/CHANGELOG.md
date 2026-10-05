@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add opt-in native privacy session eligibility on the original coordinator
+  transaction. Checks retain original user/credential/identifier authority,
+  exact owner keys, session/family locks and primary expiry without renewing
+  proof metadata. Unsupported optional owners deny. Adopt the committed kernel
+  invocation contract; complete privacy admission and export remain pending.
+
 - Add explicit native identifier admission using the original coordinator
   transaction and existing kernel/authorization owners. Exact session scope,
   credential linkage and owner-derived keys are checked without rewriting

@@ -47,6 +47,7 @@ type Repository struct {
 	schema              string
 	maximumDuration     time.Duration
 	identifierAdmission *IdentifierAdmissionConfig
+	privacyAdmission    *PrivacyExportAdmissionConfig
 }
 
 // NewRepository validates configuration without IO. The database must already

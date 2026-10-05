@@ -153,6 +153,7 @@ func TestSessionPostgresIntegration(t *testing.T) {
 	}
 	t.Run("borrowed session admission", func(t *testing.T) { testSessionAdmission(t, ctx, pool, native) })
 	t.Run("native identifier session projection", func(t *testing.T) { testIdentifierSessionProjection(t, ctx, pool) })
+	t.Run("native privacy session projection", func(t *testing.T) { testPrivacySessionProjection(t, ctx, pool) })
 	canceled, stop := context.WithCancel(ctx)
 	stop()
 	var cancelled identity.CancelledError
