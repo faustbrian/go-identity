@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Add forward-only final-authentication proof-use tombstones and private
+  same-Work staging. Conserve original versions and nanosecond expiry; deny
+  proof reuse across commands, tenants and versions, including expiry during
+  uniqueness-lock waits. Provisional use rolls back with protected effects.
+  Public session issuance remains disabled pending complete native admission,
+  session effects and recovery.
+
 - Reject privacy command receipts that differ from the retained original request
   during journal persistence and request-bearing replay. Preserve scope-only
   observation for separate retained-key integrity verification; replay does not

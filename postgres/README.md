@@ -1,5 +1,29 @@
 # Identity PostgreSQL
 
+## Final-authentication proof-use storage
+
+`SignInProofUseMigrationSource{Base, Version}` appends bounded proof-use
+tombstones after the complete existing history. Existing IDs, status and
+versions are unchanged; no destructive downgrade or pruning is provided.
+Proof IDs are unique within a stable trusted authentication-source namespace,
+across tenants and versions. Changing that namespace must not bypass prior use.
+The original full-width proof version and nanosecond expiry remain exact.
+
+The private staging phase writes through the original Work only. A unique
+command cannot acquire another proof; concurrent commands cannot commit use of
+the same proof. Rollback discards provisional use with every other effect.
+Primary time is checked after the uniqueness lock, so a proof expiring during
+a wait cannot leave usable Work. A denied or ambiguous attempt must follow the
+coordinator's existing abort/recovery path, never guess rollback or mint another
+proof or bearer. Session deletion cannot make a committed proof reusable.
+
+This is **not authenticated issuance**. The private storage phase neither
+authenticates its metadata nor checks current authority or creates a session.
+The native issuer still needs configured opaque-proof validation, immutable
+command binding, current locked eligibility, session/family effects, final
+temporal checks, audit/lifecycle and terminal recovery. No ordinary feature or
+public session issuance is activated by this migration or storage phase.
+
 ## Privacy admission storage
 
 The native private command codec now binds the complete closed privacy request
