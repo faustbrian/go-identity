@@ -14,7 +14,7 @@ import (
 const maxJournalResultBytes = 8 << 20
 
 func encodeJournalResult(q claimRequest, r identity.CommandResult) ([]byte, error) {
-	if r.Validate() != nil || (r.Outcome != identity.CommitOutcomeCommitted && r.Outcome != identity.CommitOutcomeNotCommitted) || !matchesResultFeature(q, r) || !bytes.Equal(q.safeFields, commandSafeFields(r.Binding, q.feature)) {
+	if r.Validate() != nil || (r.Outcome != identity.CommitOutcomeCommitted && r.Outcome != identity.CommitOutcomeNotCommitted) || !matchesResultFeature(q, r) || !matchesPrivacyResultIntent(q, r) || !bytes.Equal(q.safeFields, commandSafeFields(r.Binding, q.feature)) {
 		return nil, identity.InvalidInputError{Field: "command_result"}
 	}
 	if r.Profile != nil {
@@ -45,6 +45,31 @@ func matchesResultFeature(q claimRequest, r identity.CommandResult) bool {
 		return r.Feature == nil
 	}
 	return r.Feature != nil && r.Feature.Operation == *q.feature
+}
+
+// Request-bearing admission/replay retains the exact intent, not just its
+// public scope. Scope-only journal observation stays structural: the service
+// separately verifies the recorded snapshot MAC against its retained key.
+// This comparison must not require a live proof or renew its lifetime.
+func matchesPrivacyResultIntent(q claimRequest, r identity.CommandResult) bool {
+	if r.PrivacyExport == nil || q.source == nil {
+		return true
+	}
+	c, ok := q.source.RequestPrivacyExport()
+	if !ok {
+		return false
+	}
+	p := r.PrivacyExport
+	digest, err := identity.PrivacyExportIntentDigest(c)
+	if err != nil || r.Binding != c.Binding || p.IntentDigest != digest || p.ExpectedAuthorityVersion != c.ExpectedAuthorityVersion || p.ExpectedPrivacyEpoch != c.ExpectedPrivacyEpoch || p.Snapshot.IdentityVersion != c.ExpectedIdentityVersion || p.MaximumBytes != c.MaximumBytes || p.ArtifactTTL != c.ArtifactTTL || len(p.Snapshot.Contributors) != len(c.Projections) {
+		return false
+	}
+	for i, projection := range c.Projections {
+		if p.Snapshot.Contributors[i].ContributorID != projection.ContributorID || p.Snapshot.Contributors[i].ProjectionID != projection.ProjectionID {
+			return false
+		}
+	}
+	return true
 }
 
 func decodeJournalResult(q claimRequest, b []byte) (identity.CommandResult, error) {

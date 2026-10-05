@@ -18,6 +18,14 @@ consume a one-time use nor expose public privacy reservation/execution. Full
 native proof consumption, all cuts, audit/lifecycle and terminal recovery must
 still be composed under the sole coordinator.
 
+Journal persistence and request-bearing replay also compare the queued receipt
+against the retained original intent: identity/authority/privacy versions,
+artifact policy and every contributor projection must match. A structurally
+valid receipt from a changed session or policy cannot replace the original.
+Scope-only observation remains structural and preserves the stored bytes for
+the service's separate retained-key snapshot verification. Neither path proves
+cut provenance or authorizes new execution, and neither needs a live proof.
+
 `PrivacyExportAdmissionContributor` is the native session owner's read-only
 eligibility role. The private invocation selects the already registered exact
 `identity/session/postgres` participant; registration alone cannot enable it

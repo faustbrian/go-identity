@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Reject privacy command receipts that differ from the retained original request
+  during journal persistence and request-bearing replay. Preserve scope-only
+  observation for separate retained-key integrity verification; replay does not
+  renew expired proof authority or alter recorded snapshots.
+
 - Bind privacy command claims to the complete original intent and opaque proof
   envelope through retained-key fingerprints. Exact replay survives key rotation;
   changed scope, session, versions, projection choices or proof cannot acquire
