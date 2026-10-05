@@ -31,12 +31,32 @@ and fresh human/session checks. `NewPrivacyExportRequestCommand` checks the
 verified grant's exact metadata and copies inputs; it does not establish issuer
 trust, time validity, freshness or consume anything.
 
-This command currently has **no execution mapping or accepted result branch**.
-`CommandResult.Validate` rejects this operation until dedicated queued snapshot
-receipts and actual service/durable admission are implemented. The constructor
-cannot fabricate original opaque proof custody. Snapshot V1 wire IDs remain
+This command currently has **no execution mapping or admission service**.
+The constructor cannot fabricate original opaque proof custody. Snapshot V1 wire IDs remain
 strictly canonical 128-bit; imported directory ID mapping is an unfinished
 admission prerequisite, not permission to rewrite imported identity IDs.
+
+## Queued admission receipts
+
+`CommandResult.PrivacyExport` is the exclusive committed request receipt branch;
+nil is omitted from JSON to preserve every prior receipt representation. It
+retains the complete snapshot record so JSON replay does not lose the opaque
+snapshot's data. `CommandResult.Validate` checks the exact request binding,
+complete structural snapshot, positive authority version, overflow-safe next
+privacy epoch, bounded artifact policy and nonzero intent/integrity digests.
+It rejects other kernel/feature payloads and any request status except queued.
+The immutable request result must never become ready when a worker later finishes.
+
+`ValidatePrivacyExportRequest` additionally matches every request binding,
+captured identity version, authority/privacy fences, artifact policy, projection
+profile and intent digest, then verifies the snapshot with its retained evidence
+key. Its returned snapshot owns copied metadata. Known not-committed, conflict,
+unknown and in-progress outcomes return no snapshot and do not need an unused
+evidence key; they still require exact binding and a clean outcome shape.
+Grant verification is not repeated here: recovery matches the original intent
+after proof expiry without consuming it. No caller may treat either validation
+method as proof of authorization, actual commit, cut provenance or publication.
+Those facts still require the platform-owned service and locked durable adapter.
 
 ## Adoption
 

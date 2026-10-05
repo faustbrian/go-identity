@@ -184,6 +184,10 @@ type CommandResult struct {
 	// from JSON to preserve every historical kernel receipt byte. It never carries
 	// credentials or feature-native response payloads. Treat it as immutable.
 	Feature *FeatureReceipt `json:",omitempty"`
+	// PrivacyExport is exclusive committed queued snapshot admission metadata.
+	// Nil omission preserves historical receipt bytes. It is not a ready export
+	// or current authority; verify retained intent and the recorded evidence key.
+	PrivacyExport *PrivacyExportRequestReceipt `json:",omitempty"`
 }
 
 // Validate checks the closed receipt shape, immutable operation binding,
@@ -241,10 +245,8 @@ func cloneUpdates(updates []AttributeUpdate) []AttributeUpdate {
 }
 
 func (r CommandResult) valid() bool {
-	// Queued export receipts require a dedicated exact snapshot branch. Until
-	// that branch is implemented, never accept a generic user-update receipt.
-	if r.Binding.OperationID == privacyExportRequestOperation {
-		return false
+	if r.PrivacyExport != nil || r.Binding.OperationID == privacyExportRequestOperation {
+		return validPrivacyExportResult(r)
 	}
 	if r.Feature != nil {
 		return validFeatureResult(r)

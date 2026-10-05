@@ -22,7 +22,7 @@ type FeatureReceipt struct {
 
 func validFeatureResult(r CommandResult) bool {
 	f := *r.Feature
-	if r.Binding.ValidateFor(f.Operation) != nil || r.User != (User{}) || r.ExpectedVersion != 0 || r.Profile != nil || r.Revocation != nil || r.Unlink != nil || r.Link != nil || r.Identifier != nil {
+	if r.Binding.ValidateFor(f.Operation) != nil || r.User != (User{}) || r.ExpectedVersion != 0 || r.Profile != nil || r.Revocation != nil || r.Unlink != nil || r.Link != nil || r.Identifier != nil || r.PrivacyExport != nil {
 		return false
 	}
 	switch r.Outcome {

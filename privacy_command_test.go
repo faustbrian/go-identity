@@ -174,14 +174,8 @@ func TestPrivacyCommandClosedUnionAndReceiptDenial(t *testing.T) {
 	if _, ok := (Command{}).RequestPrivacyExport(); ok {
 		t.Fatal("zero command accepted")
 	}
-	for outcome := CommitOutcomeNotCommitted; outcome <= CommitOutcomeInProgress; outcome++ {
-		r := CommandResult{Binding: c.Binding, Outcome: outcome}
-		if outcome == CommitOutcomeInProgress {
-			r.RetryAfter = time.Second
-		}
-		if err := r.Validate(); err == nil {
-			t.Fatal("premature export receipt accepted")
-		}
+	if err := (CommandResult{Binding: c.Binding, Outcome: CommitOutcomeCommitted}).Validate(); err == nil {
+		t.Fatal("premature export receipt accepted")
 	}
 }
 

@@ -8,7 +8,6 @@ import (
 	"slices"
 	"time"
 
-	"github.com/faustbrian/go-authorization"
 	"github.com/faustbrian/go-capability"
 )
 
@@ -45,16 +44,7 @@ type PrivacyExportRequestCommand struct {
 }
 
 func validPrivacyExportRequest(c PrivacyExportRequestCommand) bool {
-	b := c.Binding
-	if !validCommandBinding(b) || b.OperationID != privacyExportRequestOperation || b.SchemaID != "identity-privacy-export" || b.SchemaVersion != 1 || b.ActorKind != authorization.SubjectUser || string(b.ActorID) != string(b.UserID) || c.ExpectedIdentityVersion == 0 || c.ExpectedAuthorityVersion == 0 || !unlinkVersion(c.ExpectedPrivacyEpoch) || !validDirectoryID(c.SessionID) || c.SessionVersion == 0 || c.MaximumBytes < 1<<20 || c.MaximumBytes > 1<<30 || c.ArtifactTTL < 15*time.Minute || c.ArtifactTTL > 7*24*time.Hour || c.ArtifactTTL%time.Second != 0 {
-		return false
-	}
-	// Snapshot V1 IDs are stricter than the existing directory profile. Do not
-	// silently convert imported IDs: durable admission needs an explicit mapping.
-	if _, ok := decodeID(string(b.TenantID)); !ok {
-		return false
-	}
-	if _, ok := decodeID(string(b.UserID)); !ok {
+	if !validPrivacyExportRequestBinding(c.Binding) || c.ExpectedIdentityVersion == 0 || c.ExpectedAuthorityVersion == 0 || !unlinkVersion(c.ExpectedPrivacyEpoch) || !validDirectoryID(c.SessionID) || c.SessionVersion == 0 || !validPrivacyArtifactPolicy(c.MaximumBytes, c.ArtifactTTL) {
 		return false
 	}
 	owners := PrivacyExportContributorsV1()

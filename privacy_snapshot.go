@@ -218,23 +218,11 @@ func (k PrivacyExportEvidenceKey) SealSnapshotV1(spec PrivacyExportSnapshotSpecV
 // Missing members, unknown versions, changed checkpoints or any MAC mismatch
 // return zero. It never repairs, reorders, defaults, upgrades or renews evidence.
 func (k PrivacyExportEvidenceKey) VerifySnapshotV1(r PrivacyExportSnapshotRecordV1) (PrivacyExportSnapshotV1, error) {
-	if !k.valid() || r.SchemaMajor != 1 || r.SchemaMinor != 0 || r.ManifestVersion != 1 || r.EvidenceKeyVersion != k.version || len(r.Contributors) != 23 {
+	if !k.valid() || r.EvidenceKeyVersion != k.version || !validPrivacySnapshotRecordV1(r) {
 		return PrivacyExportSnapshotV1{}, ErrInvalidPrivacyExportSnapshot
 	}
-	spec := PrivacyExportSnapshotSpecV1{
-		ExportID: r.ExportID, TenantID: r.TenantID, SubjectID: r.SubjectID, CommandID: r.CommandID,
-		IdentityVersion: r.IdentityVersion, PrivacyEpoch: r.PrivacyEpoch,
-		LifecycleSequence: r.LifecycleSequence, RequestedAtMicroseconds: r.RequestedAtMicroseconds,
-	}
-	if !validPrivacySnapshotScope(spec) {
-		return PrivacyExportSnapshotV1{}, ErrInvalidPrivacyExportSnapshot
-	}
-	for i, id := range PrivacyExportContributorsV1() {
-		b := r.Contributors[i]
-		if b.ContributorID != id || b.ContractMajor != 1 || b.ContractMinor != 0 || !validPrivacyProjection(b.ProjectionID) || b.Checkpoint.Major != 1 || b.Checkpoint.Minor != 0 || b.Checkpoint.Position == 0 {
-			return PrivacyExportSnapshotV1{}, ErrInvalidPrivacyExportSnapshot
-		}
-		want := k.scopeDigest(r.TenantID, r.SubjectID, id)
+	for _, b := range r.Contributors {
+		want := k.scopeDigest(r.TenantID, r.SubjectID, b.ContributorID)
 		if !hmac.Equal(want[:], b.ScopeKeyDigest[:]) {
 			return PrivacyExportSnapshotV1{}, ErrInvalidPrivacyExportSnapshot
 		}
@@ -245,6 +233,29 @@ func (k PrivacyExportEvidenceKey) VerifySnapshotV1(r PrivacyExportSnapshotRecord
 	}
 	r.Contributors = slices.Clone(r.Contributors)
 	return PrivacyExportSnapshotV1{record: &r}, nil
+}
+
+// Structure is shared by receipt decoding and MAC verification, never used to
+// attest integrity or cut provenance. MAC/scope-key comparison stays key-owned.
+func validPrivacySnapshotRecordV1(r PrivacyExportSnapshotRecordV1) bool {
+	if r.SchemaMajor != 1 || r.SchemaMinor != 0 || r.ManifestVersion != 1 || r.EvidenceKeyVersion == 0 || len(r.Contributors) != 23 {
+		return false
+	}
+	spec := PrivacyExportSnapshotSpecV1{
+		ExportID: r.ExportID, TenantID: r.TenantID, SubjectID: r.SubjectID, CommandID: r.CommandID,
+		IdentityVersion: r.IdentityVersion, PrivacyEpoch: r.PrivacyEpoch,
+		LifecycleSequence: r.LifecycleSequence, RequestedAtMicroseconds: r.RequestedAtMicroseconds,
+	}
+	if !validPrivacySnapshotScope(spec) {
+		return false
+	}
+	for i, id := range PrivacyExportContributorsV1() {
+		b := r.Contributors[i]
+		if b.ContributorID != id || b.ContractMajor != 1 || b.ContractMinor != 0 || !validPrivacyProjection(b.ProjectionID) || b.Checkpoint.Major != 1 || b.Checkpoint.Minor != 0 || b.Checkpoint.Position == 0 {
+			return false
+		}
+	}
+	return true
 }
 
 func validPrivacySnapshotScope(s PrivacyExportSnapshotSpecV1) bool {

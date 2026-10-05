@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add exclusive queued privacy-export command receipts with full snapshot
+  replay, retained-key verification and exact request-intent matching. Preserve
+  existing receipt JSON and known command outcomes; ready publication still
+  requires its worker and durable lifecycle checks.
+
 - Add signed, immutable full-subject privacy-export request commands with exact
   contributor profiles and bounded artifact policy. Construction does not
   enable durable export execution; admission and dedicated receipts remain pending.
