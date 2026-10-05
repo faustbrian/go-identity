@@ -4,8 +4,10 @@ Experimental Go 1.27 session policy module. This first batch implements shared
 remember-policy resolution, lifetime evaluation, secure host-cookie attributes
 and opaque token/key custody with tenant-bound lookups. Authenticated cookie
 issuance orchestration is available through `SessionIssuer`; owned durable
-executor composition remains in development. **Session authentication, rotation,
-revocation and transfers are not yet implemented.** Complete authority-vector
+executor composition is available in the PostgreSQL adapter. Stateful opaque
+`SessionService.Get` validation is available against its trusted owned-reader
+contract. **The primary authentication reader, rotation, complete revocation
+services and transfers remain unfinished; this is not a usable login service.** Complete authority-vector
 construction and exact comparison are available, but do not read primary
 authority or prove activity/freshness.
 
@@ -31,6 +33,47 @@ Check `err`, resolve once before issuing an authentication continuation, and
 carry the returned immutable policy unchanged through every factor. The
 executable example demonstrates lifetime/cookie composition without inventing
 authentication or persistence. Reference defaults belong to deployment.
+
+### Stateful opaque validation
+
+`NewSessionService(reader, ServiceConfig{...})` requires an owned `SessionReader`,
+explicit `StorageStatefulOpaque`, configured audience, trusted clock, 1ms..5s
+maximum duration, 1ms..5s clock uncertainty and 1..4 retained independent digest
+keys with distinct versions. Selection is copied; key retirement removes only
+that version's lookup support. Other storage profiles currently fail construction
+rather than silently emulate their revocation guarantees. The primary reader
+implementation is still required; structural repository `Get`/`Lookup` must not
+be passed off as an authoritative reader or replaced by consumer-written glue.
+
+`NewCredential(CredentialCookie, parsedToken)` or `CredentialBearer` selects
+exactly one transport. HTTP owns extraction, ambiguity rejection and browser
+origin/CSRF policy. Both paths authenticate the same opaque session, not an OAuth
+access token. `Get(ctx, GetRequest{TenantID: tenant, Credential: credential})`
+sends bounded tenant/key-bound digests, never plaintext, to the reader. It checks
+the returned tenant, audience, digest, verified-authentication discriminator,
+complete unchanged authority vector and original absolute/idle lifetime. The
+reader must independently establish every applicable authority's active state,
+exact owner-derived scope, authenticating credential ID/version and native
+session/family status; a structurally reconstructed record does not establish
+any of those facts. No activity update, refresh, token issue or policy Allow runs.
+
+Positive validity is bounded by the earliest source read plus at most 20 seconds,
+the original source deadline, the start of this operation and session expiry,
+with clock uncertainty deducted. Copies, cache promotion and delayed reads
+cannot restart freshness. `GetResult.ValidUntil()` returns that original exclusive
+deadline. Call `ValidateAt(trustedCurrentTime)` before reuse; the public
+`Authenticated` flag and historical `Session` alone cannot authorize. Public
+result reconstruction or field substitution cannot produce private admission
+custody. Refresh eligibility is advisory and does not renew activity or authority.
+
+Inactive, stale, absent and mismatched credentials return an empty result with
+no error. Invalid input is `ErrInvalidInput`; incomplete authority, clock or
+dependency failures are redacted `ErrUnavailable`. Cancellation/deadline retain
+typed identity classifications. There is no stale fallback or automatic cache.
+Anonymous state is not elevated to authenticated identity. All protected actions
+still require the existing authorization service. Tests of the core reader seam
+do not prove real primary, cache or provider interoperability; those adapter and
+release checks remain pending.
 
 - `LifetimeConfig` requires explicit durations and an explicit default.
 - `RememberPolicy.Bindings` exports the explicit choice and all four resolved

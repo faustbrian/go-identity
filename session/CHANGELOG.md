@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Add explicit stateful opaque credential validation with bounded retained-key
+  lookup, exact active authority-vector and lifetime admission. Preserve original
+  source freshness within 20 seconds, deduct clock uncertainty, reject stale
+  fallback and retain cancellation/error classification. Positive result copies
+  cannot renew validity or authenticate through public-field reconstruction.
+  Cookie/bearer transport uses one token profile without OAuth token semantics.
+  The owned primary reader and other storage profiles remain required work.
+
 - Add owned authenticated cookie issuance orchestration with private original
   token preparation, exact durable receipt/record matching, unchanged remember
   policy and commit-gated reveal-once delivery. Replays, recovery, unknown
