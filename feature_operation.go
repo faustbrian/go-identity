@@ -93,5 +93,5 @@ func validFeatureName(s string, separator byte) bool {
 }
 
 func kernelOperationID(op string) bool {
-	return op == "identity.user.create" || op == "identity.user.update-admin" || op == "identity.profile.update" || op == "identity.account.unlink" || op == "identity.account.link-token" || statusTarget(op).Valid() || identifierAction(op) != 0
+	return op == "identity.user.create" || op == "identity.user.update-admin" || op == "identity.profile.update" || op == "identity.account.unlink" || op == "identity.account.link-token" || op == privacyExportRequestOperation || statusTarget(op).Valid() || identifierAction(op) != 0
 }

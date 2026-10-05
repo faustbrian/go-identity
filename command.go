@@ -103,6 +103,7 @@ type Command struct {
 	identifier      *IdentifierCommand
 	identifierProof *capability.Proof
 	feature         *featureCommandState
+	privacy         *PrivacyExportRequestCommand
 }
 
 // NewUserCreationCommand validates and snapshots a creation's structural input.
@@ -135,7 +136,7 @@ func NewUserCreationCommand(spec CreateUserCommand) (Command, error) {
 // CreateUser returns a private copy and false for an invalid/zero command.
 // Returned contents are for trusted adapters, never diagnostics or snapshots.
 func (c Command) CreateUser() (CreateUserCommand, bool) {
-	if c.create == nil || c.update != nil || c.profile != nil || c.status != nil || c.unlink != nil || c.link != nil || c.identifier != nil || c.feature != nil {
+	if c.create == nil || c.update != nil || c.profile != nil || c.status != nil || c.unlink != nil || c.link != nil || c.identifier != nil || c.feature != nil || c.privacy != nil {
 		return CreateUserCommand{}, false
 	}
 	spec := *c.create
@@ -240,6 +241,11 @@ func cloneUpdates(updates []AttributeUpdate) []AttributeUpdate {
 }
 
 func (r CommandResult) valid() bool {
+	// Queued export receipts require a dedicated exact snapshot branch. Until
+	// that branch is implemented, never accept a generic user-update receipt.
+	if r.Binding.OperationID == privacyExportRequestOperation {
+		return false
+	}
 	if r.Feature != nil {
 		return validFeatureResult(r)
 	}

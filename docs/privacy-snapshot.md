@@ -4,6 +4,40 @@ This profile implements the snapshot/fragment integrity requirements of the
 identity-platform lifecycle specification. It is not a portable export server.
 Source snapshots are immutable integrity evidence, not current eligibility.
 
+## Signed request intent
+
+`PrivacyExportRequestCommand` is the distinct kernel command for full-subject
+`identity-portable-json-v1` admission. It freezes all 23 ordered contributor
+projection declarations, expected identity/authority/privacy versions, exact
+human/session binding, policy/schema/correlation and artifact limits. It accepts
+1 MiB..1 GiB and whole-second TTLs of 15 minutes..7 days. No caller checkpoints,
+export ID, custom scope or format are accepted: the locked durable owner must
+allocate the export and next privacy epoch and capture the cuts.
+
+`PrivacyExportIntentDigest` hashes the domain
+`identity-privacy-export-request-v1`, zero byte and a definite CBOR array of 20
+items: command/tenant/user/actor IDs, actor kind, operation, policy ID/version,
+schema ID/version, correlation ID, expected identity/authority/privacy versions,
+session ID/version, maximum bytes, artifact TTL seconds, fixed format, and an
+array of `[contributor ID, projection ID]` pairs. Integers use shortest unsigned
+encoding; strings use definite UTF-8 text. Record ID and link mode must be empty.
+
+`BuildPrivacyExportProofPayload` prepares, but does not sign or authorize, a
+non-bearer one-use capability with exactly one audience and one caveat,
+`intent_digest` in lowercase hexadecimal. Subject/resource are the exact user;
+tenant/operation are literal bindings. Its whole-second validity interval is
+at most five minutes. Only trusted composition may issue after current policy
+and fresh human/session checks. `NewPrivacyExportRequestCommand` checks the
+verified grant's exact metadata and copies inputs; it does not establish issuer
+trust, time validity, freshness or consume anything.
+
+This command currently has **no execution mapping or accepted result branch**.
+`CommandResult.Validate` rejects this operation until dedicated queued snapshot
+receipts and actual service/durable admission are implemented. The constructor
+cannot fabricate original opaque proof custody. Snapshot V1 wire IDs remain
+strictly canonical 128-bit; imported directory ID mapping is an unfinished
+admission prerequisite, not permission to rewrite imported identity IDs.
+
 ## Adoption
 
 Trusted secret composition supplies `NewPrivacyExportEvidenceKey(version,

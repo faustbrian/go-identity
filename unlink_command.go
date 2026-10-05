@@ -76,7 +76,7 @@ func NewAccountUnlinkCommand(s AccountUnlinkCommand) (Command, error) {
 
 // UnlinkAccount returns an immutable adapter value copy for this variant only.
 func (c Command) UnlinkAccount() (AccountUnlinkCommand, bool) {
-	if c.unlink == nil || c.create != nil || c.update != nil || c.profile != nil || c.status != nil || c.link != nil || c.identifier != nil || c.feature != nil {
+	if c.unlink == nil || c.create != nil || c.update != nil || c.profile != nil || c.status != nil || c.link != nil || c.identifier != nil || c.feature != nil || c.privacy != nil {
 		return AccountUnlinkCommand{}, false
 	}
 	return *c.unlink, true

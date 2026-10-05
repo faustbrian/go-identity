@@ -159,7 +159,7 @@ func NewUserStatusCommand(spec UserStatusCommand) (Command, error) {
 
 // UserStatus returns a value copy, or false for another/invalid command variant.
 func (c Command) UserStatus() (UserStatusCommand, bool) {
-	if c.status == nil || c.create != nil || c.update != nil || c.profile != nil || c.unlink != nil || c.link != nil || c.identifier != nil || c.feature != nil {
+	if c.status == nil || c.create != nil || c.update != nil || c.profile != nil || c.unlink != nil || c.link != nil || c.identifier != nil || c.feature != nil || c.privacy != nil {
 		return UserStatusCommand{}, false
 	}
 	return *c.status, true

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Add signed, immutable full-subject privacy-export request commands with exact
+  contributor profiles and bounded artifact policy. Construction does not
+  enable durable export execution; admission and dedicated receipts remain pending.
+
 - Add immutable version-1 privacy snapshot integrity and exact contributor/
   fragment binding. Reject missing contributors, changed cuts and cross-scope
   metadata without confusing authenticated metadata with durable admission.

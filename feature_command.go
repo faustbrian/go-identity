@@ -113,7 +113,7 @@ func NewFeatureCommand(spec FeatureCommandSpec) (Command, error) {
 // safe for concurrent reads. The projection must never become a log, snapshot,
 // public response or authentication decision. No callbacks or I/O run.
 func (c Command) Feature() (FeatureCommandSpec, bool) {
-	if c.feature == nil || c.create != nil || c.update != nil || c.profile != nil || c.status != nil || c.unlink != nil || c.link != nil || c.identifier != nil {
+	if c.feature == nil || c.create != nil || c.update != nil || c.profile != nil || c.status != nil || c.unlink != nil || c.link != nil || c.identifier != nil || c.privacy != nil {
 		return FeatureCommandSpec{}, false
 	}
 	return cloneFeatureSpec(c.feature.spec), true
