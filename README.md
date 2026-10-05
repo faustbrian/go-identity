@@ -3,6 +3,24 @@
 Composable backend identity-domain ownership for Golib. This module is under
 development and targets Go 1.27.
 
+## Privacy snapshot integrity
+
+`PrivacyExportSnapshotV1` captures the complete 23-contributor version-1 manifest
+and exact subject-scoped journal or transaction-staged cuts. Immutable copies
+retain unsigned counters, signed PostgreSQL UTC microseconds, contract/schema
+versions, scope digests and the retained evidence-key version. Its key owner
+seals or verifies domain-separated deterministic-CBOR HMAC-SHA-256 metadata;
+the key is never exposed by formatting or retained in snapshot projections.
+`Record` returns an owned copy for durable persistence/reconstruction.
+
+This is integrity, **not authorization or evidence of a primary read**. The
+actual identity command must lock the identity, reject pending destructive
+state, capture every cut and persist the entire record atomically before making
+an export runnable. Publication must subsequently recheck current authority and
+privacy epoch. No worker, download, erasure or lifecycle completion is inferred.
+Those owned workflows and adapters remain implementation work. See
+[the profile](docs/privacy-snapshot.md) for exact tuples and adoption limits.
+
 ## Security-profile construction
 
 `NewIdentitySecurityEventV1(clock.Clock)` constructs the shared typed profile

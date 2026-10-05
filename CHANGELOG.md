@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Add immutable version-1 privacy snapshot integrity and exact contributor/
+  fragment binding. Reject missing contributors, changed cuts and cross-scope
+  metadata without confusing authenticated metadata with durable admission.
+
 - Add the pure identifier final-access decision: conserve exact credential-to-
   identifier dependencies across removal, replacement and primary switching,
   preserving independent human methods without counting API keys as login.

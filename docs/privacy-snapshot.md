@@ -1,0 +1,119 @@
+# Privacy snapshot V1
+
+This profile implements the snapshot/fragment integrity requirements of the
+identity-platform lifecycle specification. It is not a portable export server.
+Source snapshots are immutable integrity evidence, not current eligibility.
+
+## Adoption
+
+Trusted secret composition supplies `NewPrivacyExportEvidenceKey(version,
+material)` with an independent random 32-byte key and positive version. The
+constructor copies bytes, rejects all-zero material, and does not prove entropy
+or provenance. Keys are redacted, immutable and concurrent-safe. Their retention
+owner must retain old versions for every surviving snapshot/evidence record;
+never re-sign an old snapshot during rotation. Go cannot guarantee zeroization
+of all copies; this API makes no such promise.
+
+The identity command's primary-authority transaction must construct the entire
+`PrivacyExportSnapshotSpecV1`: exact scope, random export/command IDs, positive
+identity version/privacy epoch/lifecycle sequence, UTC Unix microseconds and
+every ordered contributor cut. `SealSnapshotV1` validates, copies and authenticates
+it. It performs no IO or authorization and cannot prove the caller captured
+the cuts correctly. Persist its `Record` in that same transaction; a commit
+whose outcome is unknown must not start an export or allocate a replacement ID.
+Reconstruction uses `VerifySnapshotV1` with the **recorded** retained key version;
+unknown keys or any modified metadata deny, not default or upgrade.
+
+V1's lifecycle wire profile requires canonical nonzero 128-bit IDs encoded in
+22 unpadded base64url characters for export, tenant, subject and command.
+This restriction does not rewrite or normalize imported canonical directory IDs.
+The imported-ID/export-scope reconciliation remains required before enabling
+privacy export for a directory profile outside this wire representation.
+No existing directory API is restricted by this additive construction API.
+
+## Registered closed cuts
+
+`PrivacyExportContributorsV1` returns all 23 semantic owners in ASCII order,
+including `identity/i18n`. Storage adapters are not additional contributors.
+The entire set is required even when a contributor has no data. Missing/extra/
+duplicate/out-of-order members fail before evidence construction.
+
+Contract, checkpoint and fragment schemas are fixed at 1.0; manifest is 1.
+`subject-journal-v1` names a contributor-owned append-only full-subject cut;
+`staged-subject-fragment-v1` names an immutable full-subject fragment staged in
+the request transaction. These are storage-neutral registered enums, not SQL
+names. Each projection commits an initial empty position **1**, then advances
+monotonically with its subject-scoped authoritative mutations. Zero is invalid.
+No timestamp, aggregate CAS, replica position or current read substitutes for
+the checkpoint. Each contributor must implement its chosen projection and
+exact-cut visibility/retention before composing runnable export admission.
+
+The V1 closed scope selector is `["subject"]` for every contributor; the tuple
+also explicitly binds tenant, subject and semantic contributor. It selects all
+exportable subject data in that contributor, not an arbitrary named resource.
+New selectors/projection semantics require an explicit versioned profile change.
+
+## Canonical bytes
+
+The codec implements only these closed tuples, not a general CBOR parser. It
+uses RFC 8949 definite arrays, shortest integers/lengths, UTF-8 text for canonical
+IDs/enums and byte strings for fixed digests. No maps, floats, tags or arbitrary
+fields are admitted. Tuple order is fixed and meaningful.
+
+Scope HMAC input is ASCII `identity-privacy-export-scope-v1`, one zero byte and
+CBOR `[tenant_id, subject_id, contributor_id, ["subject"]]`.
+
+Snapshot HMAC input is ASCII `identity-privacy-export-snapshot-v1`, one zero byte
+and the 13-item CBOR tuple:
+
+```
+[schema_major, schema_minor, export_id, tenant_id, subject_id, command_id,
+ identity_version, privacy_epoch, lifecycle_sequence, manifest_version,
+ requested_at_unix_microseconds, contributor_bindings, evidence_key_version]
+```
+
+Each binding is the exact eight-item array:
+
+```
+[contributor_id, contract_major, contract_minor, projection_id,
+ scope_key_digest, checkpoint_major, checkpoint_minor, checkpoint_position]
+```
+
+The snapshot digest itself is omitted from MAC input. Verification checks all
+versions, IDs, positions and recomputed scope digests before the snapshot MAC;
+MAC comparisons use `crypto/hmac.Equal`. Metadata is under 4 KiB for this closed
+profile. Caller mutation during a call is forbidden; afterward every snapshot
+and returned record is independently owned. There are no locks or goroutines.
+
+## Fragment boundary
+
+`ValidateFragment` requires the same export/tenant/subject/command, privacy epoch,
+key version, snapshot digest, contributor/contract, projection/scope digest,
+requested and observed checkpoint, fragment schema, classification, actual byte
+length and SHA-256 of actual canonical content. The explicit byte maximum must
+be positive and at most 1 GiB; bounds precede synchronous hashing. Callers own
+the bounded bytes and must not mutate them concurrently. This pure function
+does not perform streaming IO and does not hide retries or cancellation work.
+
+`data` requires nonempty content. `not-applicable` requires exactly zero bytes
+and SHA-256(empty), but remains an assertion requiring the contributor's exact-
+cut absence proof. Silence, missing keys, timeout or unavailable projections
+cannot be converted into absence. Metadata/digest checks do not prove canonical
+JSON, content schema, redaction or actual checkpoint visibility; each registered
+contributor and composed coordinator must prove those independent obligations.
+
+Typed snapshot/spec/record/fragment/key formatting is redacted. Exported metadata
+is pseudonymous personal data intended for controlled persistence and must not
+be logged. The final artifact is still the specified bounded uncompressed
+redacted UTF-8 JSON, never this CBOR integrity tuple.
+
+## Verification and remaining scope
+
+Tests exercise complete manifest admission, tampering, copied storage, numeric/
+timestamp boundaries, official RFC integer/length examples, an independently
+encoded scope tuple, exact fragment metadata/content and absence classification.
+Fuzz tests exercise hostile scope/cut reconstruction. This does not certify
+general CBOR interoperability, durable reads, atomic admission, final epoch
+rechecks, contributor privacy schemas, object encryption, downloads, erasure,
+retention/holds or composed lifecycle closure. Their implementation and exact
+release/coverage/mutation gates remain required.
