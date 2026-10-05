@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Publish stable owner-derived global, tenant, user, identifier and aggregate
+  credential scope keys for exact session-vector comparison. Framed keys avoid
+  delimiter aliases; historical custom scope keys are not silently replaced.
+
 - Bind an optional read-only session admission role into protected identifier
   plans without treating it as a durable recovery participant. Invocation-only
   checks borrow existing kernel authority queries; ignored denials prevent

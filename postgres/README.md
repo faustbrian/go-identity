@@ -1,5 +1,11 @@
 # Identity PostgreSQL
 
+`KernelAuthorityKeys` derives canonical version-one keys for kernel-owned
+global, tenant and user lifecycle dimensions. Session admission must compare
+these exact keys as well as current positive versions. They are correlation
+values, not authentication evidence; do not log them. Existing custom keys
+require explicit adoption and cannot be silently refreshed into this profile.
+
 ## Protected identifier admission
 
 `CommandPlan.IdentifierAdmission` selects the exact registered
