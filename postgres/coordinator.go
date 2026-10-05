@@ -163,6 +163,9 @@ func (c *Coordinator) prepare(binding identity.CommandBinding, command identity.
 	if plan.Delivery != nil && !validDeliveryPlan(plan.Delivery) {
 		return claimRequest{}, CommandPlan{}, nil, invalidPlan()
 	}
+	if plan.CapabilityIssuance != nil && !validCapabilityIssuancePlan(plan.CapabilityIssuance) {
+		return claimRequest{}, CommandPlan{}, nil, invalidPlan()
+	}
 	if spec, ok := command.Feature(); ok {
 		return c.prepareFeature(binding, command, spec, plan)
 	}
@@ -178,6 +181,9 @@ func (c *Coordinator) prepare(binding identity.CommandBinding, command identity.
 		count++
 	}
 	if plan.Delivery != nil {
+		count++
+	}
+	if plan.CapabilityIssuance != nil {
 		count++
 	}
 	if !isCreation(command) && !isProfile(command) && !isUpdate(command) && !isStatus(command) && !proofReservation || plan.Capability != nil && !proofReservation || plan.Lifecycle == nil || len(plan.Contributors) != count || len(plan.Audits) != 1 || probe.Validate() != nil {
@@ -201,6 +207,7 @@ func (c *Coordinator) prepare(binding identity.CommandBinding, command identity.
 	}
 	snapshot := CommandPlan{Contributors: append([]ContributorDescriptor(nil), plan.Contributors...), Audits: append([]AuditPlan(nil), plan.Audits...)}
 	snapshot.Delivery = cloneDeliveryPlan(plan.Delivery)
+	snapshot.CapabilityIssuance = cloneCapabilityIssuancePlan(plan.CapabilityIssuance)
 	lifecycle := *plan.Lifecycle
 	snapshot.Lifecycle = &lifecycle
 	if plan.Capability != nil {

@@ -46,6 +46,7 @@ type workState struct {
 	featureReceipt    *identity.FeatureReceipt
 	featureInvocation FeatureExecutionContributor
 	delivery          *workDelivery
+	issuance          *workIssuance
 	credentialIntent  *CredentialCompromiseIntent
 	credentialReceipt *CredentialCompromiseReceipt
 	counterCommand    *identity.Command
@@ -244,6 +245,10 @@ func invalidateWork(w Work) {
 		return
 	}
 	w.state.closed = true
+	if w.state.issuance != nil {
+		clear(w.state.issuance.grants)
+		w.state.issuance.invocation = nil
+	}
 	if w.state.delivery != nil {
 		clear(w.state.delivery.envelopes)
 		w.state.delivery.invocation = nil

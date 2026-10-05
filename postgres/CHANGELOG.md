@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Enlist optional subject-bound capability issuance under the original command,
+  with frozen metadata, exact-owner staging and invocation-only persistence and
+  recovery custody. Issuance, domain mutation, audit, lifecycle and command result
+  share one commit; missing grants, phase failures and late expiry roll back.
+  Historical no-issuance plan bytes and consuming-token phases remain unchanged.
+  Native capability persistence and end-user issuance workflows remain separate.
+
 - Preserve required authorization APIs under Go minimal version selection and
   consume the committed identity kernel contracts used by the current adapter.
   Dependency archives use canonical Go module checksums.

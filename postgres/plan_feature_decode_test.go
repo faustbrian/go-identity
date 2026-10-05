@@ -292,6 +292,14 @@ func FuzzDecodeFeaturePlan(f *testing.F) {
 	}
 	f.Add(wire)
 	f.Add([]byte{0xbf})
+	p.CapabilityIssuance = issuanceTestPlan()
+	p.Delivery = deliveryTestPlan()
+	p.Contributors = append(p.Contributors, p.CapabilityIssuance.Contributor, p.Delivery.Contributor)
+	wire, err = encodeFeaturePlan(s.Binding, [32]byte{1}, p)
+	if err != nil {
+		f.Fatal(err)
+	}
+	f.Add(wire)
 	f.Add([]byte{})
 	f.Fuzz(func(t *testing.T, input []byte) {
 		got, err := decodeFeaturePlan(s.Binding, [32]byte{1}, input)

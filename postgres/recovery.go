@@ -132,7 +132,7 @@ func (c *Coordinator) recoverCommandReceipt(ctx context.Context, q identity.Reco
 		if _, ok := entry.contributor.(RecoveryContributor); !ok {
 			return result, identity.UnavailableError{}
 		}
-		if entry.descriptor.Owner == "capability/postgres" {
+		if entry.descriptor.Owner == "capability/postgres" && entry.descriptor.ContractID == "capability.one-use" {
 			if _, ok := entry.contributor.(CapabilityReleaseContributor); !ok {
 				return result, identity.UnavailableError{}
 			}

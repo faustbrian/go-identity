@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"time"
 
+	"github.com/faustbrian/go-capability"
 	identity "github.com/faustbrian/go-identity"
 )
 
@@ -27,6 +28,9 @@ type CommandPlan struct {
 	// Delivery enlists encrypted effects under this original command, never
 	// an independently committable enqueue operation. Nil leaves bytes unchanged.
 	Delivery *DeliveryPlan
+	// CapabilityIssuance declares original-command production, independently
+	// from consuming an existing one-use capability. Nil preserves history.
+	CapabilityIssuance *CapabilityIssuancePlan
 	// Capability declares a typed one-use participant input. Identifier reservation
 	// requires its registered reservation contributor; domain execution is disabled.
 	Capability *CapabilityPlan
@@ -76,6 +80,9 @@ func KernelPlanDigest(binding identity.CommandBinding, fingerprint [32]byte, pla
 func encodeKernelPlan(binding identity.CommandBinding, fingerprint [32]byte, plan CommandPlan) ([]byte, error) {
 	if plan.Delivery != nil {
 		return encodeDeliveryWrappedPlan(binding, fingerprint, plan, encodeKernelPlan)
+	}
+	if plan.CapabilityIssuance != nil {
+		return encodeIssuanceWrappedPlan(binding, fingerprint, plan, encodeKernelPlan)
 	}
 	if plan.Feature != nil || plan.SubjectType != "" || plan.RiskEvidence != nil || plan.CommandCounters != nil {
 		return nil, invalidPlan()
@@ -160,6 +167,7 @@ type admittedKernelPlan struct {
 	feature      *FeatureRegistration
 	subjectType  string
 	delivery     *DeliveryPlan
+	issuance     *CapabilityIssuancePlan
 }
 
 func (r *ContributorRegistry) admitKernelPlan(binding identity.CommandBinding, fingerprint [32]byte, p CommandPlan) (*admittedKernelPlan, error) {
@@ -174,6 +182,9 @@ func (r *ContributorRegistry) admitKernelPlan(binding identity.CommandBinding, f
 	if validateDeliveryContributor(binding, p.Delivery, entries) != nil {
 		return nil, invalidPlan()
 	}
+	if validateIssuanceContributor(binding, p.CapabilityIssuance, entries) != nil {
+		return nil, invalidPlan()
+	}
 	for _, entry := range entries {
 		if entry.descriptor.Owner == "audit/postgres" {
 			if _, ok := entry.contributor.(AuditContributor); !ok {
@@ -185,7 +196,7 @@ func (r *ContributorRegistry) admitKernelPlan(binding identity.CommandBinding, f
 				return nil, invalidPlan()
 			}
 		}
-		if entry.descriptor.Owner == "capability/postgres" {
+		if entry.descriptor.Owner == "capability/postgres" && entry.descriptor.ContractID == "capability.one-use" {
 			if _, ok := capabilityReservationParticipant(entry.contributor); !ok {
 				return nil, invalidPlan()
 			}
@@ -201,7 +212,7 @@ func (r *ContributorRegistry) admitKernelPlan(binding identity.CommandBinding, f
 		snapshot := *p.Capability
 		capability = &snapshot
 	}
-	return &admittedKernelPlan{registry: r.state, binding: binding, digest: digest, contributors: entries, audits: append([]AuditPlan(nil), p.Audits...), lifecycle: lifecycle, capability: capability, fingerprint: fingerprint, delivery: cloneDeliveryPlan(p.Delivery)}, nil
+	return &admittedKernelPlan{registry: r.state, binding: binding, digest: digest, contributors: entries, audits: append([]AuditPlan(nil), p.Audits...), lifecycle: lifecycle, capability: capability, fingerprint: fingerprint, delivery: cloneDeliveryPlan(p.Delivery), issuance: cloneCapabilityIssuancePlan(p.CapabilityIssuance)}, nil
 }
 
 func (p *admittedKernelPlan) belongsTo(r *ContributorRegistry) error {
@@ -219,6 +230,9 @@ func (p *admittedKernelPlan) bindWork(w Work) error {
 		return invalidPlan()
 	}
 	w.state.feature, w.state.subjectType = p.feature, p.subjectType
+	if p.issuance != nil {
+		w.state.issuance = &workIssuance{plan: cloneCapabilityIssuancePlan(p.issuance), grants: make([]capability.Grant, len(p.issuance.Grants)), staged: make([]bool, len(p.issuance.Grants))}
+	}
 	if p.delivery != nil {
 		w.state.delivery = &workDelivery{plan: cloneDeliveryPlan(p.delivery), envelopes: make(map[uint16]DeliveryEnvelope)}
 	}

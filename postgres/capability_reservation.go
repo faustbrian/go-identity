@@ -137,7 +137,7 @@ func (c *Coordinator) reserveCapability(ctx context.Context, tx pgx.Tx, q claimR
 	}
 	var contributor CapabilityReservationContributor
 	for _, entry := range p.contributors {
-		if entry.descriptor.Owner == "capability/postgres" {
+		if entry.descriptor.Owner == "capability/postgres" && entry.descriptor.ContractID == "capability.one-use" {
 			contributor, _ = capabilityReservationParticipant(entry.contributor)
 		}
 	}

@@ -100,6 +100,7 @@ func TestPostgresIntegration(t *testing.T) {
 	t.Run("populated plan upgrade", func(t *testing.T) { testCoordinatorPlanUpgrade(t, ctx, pool) })
 	t.Run("domain execution", func(t *testing.T) { testDomainExecution(t, ctx, pool, repo) })
 	t.Run("delivery execution", func(t *testing.T) { testDeliveryExecution(t, ctx, pool, repo) })
+	t.Run("issuance execution", func(t *testing.T) { testIssuanceExecution(t, ctx, pool, repo) })
 	t.Run("feature observation", func(t *testing.T) { testFeatureObservation(t, ctx, pool) })
 	t.Run("command admission", func(t *testing.T) { testCommandAdmissionPrimary(t, ctx, pool) })
 	t.Run("feature execution", func(t *testing.T) { testFeatureExecution(t, ctx, pool, repo) })

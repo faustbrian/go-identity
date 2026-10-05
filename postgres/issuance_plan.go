@@ -1,0 +1,141 @@
+package postgres
+
+import (
+	"bytes"
+	"crypto/sha256"
+	"math"
+	"time"
+
+	"github.com/faustbrian/go-capability"
+	identity "github.com/faustbrian/go-identity"
+)
+
+// CapabilityIssuancePlan declares 1..16 original-command one-use issuance
+// effects. Grants contain only immutable signed-envelope/replay metadata, not
+// bearer bytes or authority. Their purposes select future protected operations,
+// not the originating command operation. The exact capability.issuance v1 owner
+// must follow the base participants and precede optional delivery. Nil preserves
+// historical plan bytes. The owner must authenticate each staged Grant against
+// its original envelope fingerprint and independently keyed replay digest.
+type CapabilityIssuancePlan struct {
+	Contributor ContributorDescriptor
+	Grants      []CapabilityPlan
+}
+
+func cloneCapabilityIssuancePlan(p *CapabilityIssuancePlan) *CapabilityIssuancePlan {
+	if p == nil {
+		return nil
+	}
+	copy := *p
+	copy.Grants = append([]CapabilityPlan(nil), p.Grants...)
+	return &copy
+}
+
+func validCapabilityIssuancePlan(p *CapabilityIssuancePlan) bool {
+	if p == nil || p.Contributor != (ContributorDescriptor{Owner: "capability/postgres", ContractID: "capability.issuance", Version: 1}) || len(p.Grants) == 0 || len(p.Grants) > 16 {
+		return false
+	}
+	for i, v := range p.Grants {
+		if v.MaxUses != 1 || v.ReplayKeyVersion == 0 || v.ProofFingerprint == ([32]byte{}) || !postgresExactTime(v.ExpiresAt) || v.ExpiresAt.Unix() <= 0 || v.ExpiresAt.Nanosecond() != 0 {
+			return false
+		}
+		if _, err := capability.NewReference(v.CapabilityID, v.Purpose, v.ReplayDigest, v.ExpiresAt); err != nil {
+			return false
+		}
+		for _, prior := range p.Grants[:i] {
+			if prior.CapabilityID == v.CapabilityID || prior.ReplayKeyVersion == v.ReplayKeyVersion && prior.ReplayDigest == v.ReplayDigest {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+// The four-field optional envelope is distinct from the existing three-field
+// delivery envelope. Delivery remains outermost; a nested issuer envelope is
+// forbidden. No second journal or alternative history authority is introduced.
+func encodeIssuanceWrappedPlan(b identity.CommandBinding, fp [32]byte, p CommandPlan, encode func(identity.CommandBinding, [32]byte, CommandPlan) ([]byte, error)) ([]byte, error) {
+	if !validCapabilityIssuancePlan(p.CapabilityIssuance) || p.Lifecycle == nil || len(p.Contributors) == 0 || p.Contributors[len(p.Contributors)-1] != p.CapabilityIssuance.Contributor {
+		return nil, invalidPlan()
+	}
+	base := p
+	base.Contributors = p.Contributors[:len(p.Contributors)-1]
+	base.CapabilityIssuance = nil
+	wire, err := encode(b, fp, base)
+	if err != nil {
+		return nil, err
+	}
+	grants := make([][]byte, len(p.CapabilityIssuance.Grants))
+	for i := range grants {
+		grants[i] = encodeCapabilityPlan(&p.CapabilityIssuance.Grants[i])
+	}
+	d := p.CapabilityIssuance.Contributor
+	issuance := cborMap(map[string][]byte{"grants": cborArray(grants), "contributor": cborMap(map[string][]byte{"owner": cborText(d.Owner), "contract_id": cborText(d.ContractID), "version": cborUint(uint64(d.Version))})})
+	result := cborMap(map[string][]byte{"base": cborBytes(wire), "profile": cborText("identity-capability-issuance-v1"), "issuance": issuance, "version": cborUint(1)})
+	if len(result) > 65536 {
+		return nil, invalidPlan()
+	}
+	return result, nil
+}
+
+func decodeIssuanceWrappedPlan(b identity.CommandBinding, fp [32]byte, data []byte, decode func(identity.CommandBinding, [32]byte, []byte) (CommandPlan, error), encode func(identity.CommandBinding, [32]byte, CommandPlan) ([]byte, error)) (CommandPlan, error) {
+	fail := func() (CommandPlan, error) { return CommandPlan{}, identity.UnavailableError{} }
+	if len(data) == 0 || len(data) > 65536 {
+		return fail()
+	}
+	r := planReader{attributeReader: attributeReader{data: data}, ok: true}
+	r.expect(5, 4)
+	r.key("base")
+	n, ok := r.head(2)
+	if !r.ok || !ok || n == 0 || n > 65536 || n > uint64(len(r.data)) || r.data[0] == 0xa3 || r.data[0] == 0xa4 {
+		return fail()
+	}
+	base, err := decode(b, fp, r.data[:int(n)])
+	if err != nil {
+		return fail()
+	}
+	r.data = r.data[int(n):]
+	r.key("profile")
+	r.consume(cborText("identity-capability-issuance-v1"))
+	r.key("version")
+	r.consume(cborUint(1))
+	r.key("issuance")
+	r.expect(5, 2)
+	r.key("grants")
+	count, ok := r.head(4)
+	if !r.ok || !ok || count == 0 || count > 16 {
+		return fail()
+	}
+	p := &CapabilityIssuancePlan{Grants: make([]CapabilityPlan, int(count))}
+	for i := range p.Grants {
+		v := &p.Grants[i]
+		r.expect(5, 7)
+		r.key("purpose")
+		v.Purpose = capability.Purpose(r.string(128))
+		r.key("max_uses")
+		v.MaxUses = uint32(r.number(math.MaxUint32))
+		r.key("expires_at")
+		v.ExpiresAt = time.Unix(int64(r.number(253402300799)), 0).UTC()
+		r.key("capability_id")
+		v.CapabilityID = r.string(128)
+		r.key("replay_digest")
+		r.digest(&v.ReplayDigest)
+		r.key("proof_fingerprint")
+		r.digest(&v.ProofFingerprint)
+		r.key("replay_key_version")
+		v.ReplayKeyVersion = uint32(r.number(math.MaxUint32))
+	}
+	r.key("contributor")
+	p.Contributor = readFeaturePlanContributor(&r)
+	if !r.ok || len(r.data) != 0 {
+		return fail()
+	}
+	base.CapabilityIssuance = p
+	base.Contributors = append(base.Contributors, p.Contributor)
+	canonical, err := encode(b, fp, base)
+	if err != nil || !bytes.Equal(canonical, data) {
+		return fail()
+	}
+	base.Digest = sha256.Sum256(data)
+	return base, nil
+}

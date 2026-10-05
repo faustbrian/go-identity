@@ -159,7 +159,7 @@ func (c *Coordinator) runCapabilityExecution(ctx context.Context, w Work, finali
 	}
 	var participant CapabilityExecutionContributor
 	for _, entry := range plan.contributors {
-		if entry.descriptor.Owner == "capability/postgres" {
+		if entry.descriptor.Owner == "capability/postgres" && entry.descriptor.ContractID == "capability.one-use" {
 			participant, _ = entry.contributor.(CapabilityExecutionContributor)
 		}
 	}

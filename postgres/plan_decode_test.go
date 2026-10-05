@@ -131,6 +131,18 @@ func TestDecodeKernelPlanRejectsInvalidFieldsAndNarrowing(t *testing.T) {
 func FuzzDecodeKernelPlan(f *testing.F) {
 	b := codecBinding()
 	f.Add(queryFrozenPlan(f, b))
+	p, err := decodeKernelPlan(b, [32]byte{1}, queryFrozenPlan(f, b))
+	if err != nil {
+		f.Fatal(err)
+	}
+	p.Lifecycle = &LifecyclePlan{EventType: kernelLifecycleEvent(b.OperationID), AfterVersion: 1}
+	p.CapabilityIssuance = issuanceTestPlan()
+	p.Contributors = append(p.Contributors, ContributorDescriptor{Owner: "outbox/postgres", ContractID: "identity.lifecycle", Version: 1}, p.CapabilityIssuance.Contributor)
+	seed, err := encodeKernelPlan(b, [32]byte{1}, p)
+	if err != nil {
+		f.Fatal(err)
+	}
+	f.Add(seed)
 	f.Add([]byte{1})
 	f.Add([]byte{0xbf})
 	f.Fuzz(func(t *testing.T, wire []byte) {

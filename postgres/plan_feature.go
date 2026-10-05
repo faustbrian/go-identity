@@ -29,6 +29,9 @@ func encodeFeaturePlan(binding identity.CommandBinding, fingerprint [32]byte, p 
 	if p.Delivery != nil {
 		return encodeDeliveryWrappedPlan(binding, fingerprint, p, encodeFeaturePlan)
 	}
+	if p.CapabilityIssuance != nil {
+		return encodeIssuanceWrappedPlan(binding, fingerprint, p, encodeFeaturePlan)
+	}
 	if p.Feature != nil && (p.Feature.Operation.OperationID == "identity.phone.password-reset-complete" || p.Feature.Operation.OperationID == "identity.phone.password-reset-request" && (!riskInitiationOperation(p.Feature.Operation) || p.RiskEvidence == nil)) {
 		return nil, invalidPlan()
 	}
@@ -155,6 +158,7 @@ func (c *Coordinator) prepareFeature(binding identity.CommandBinding, command id
 	}
 	snapshot := CommandPlan{Contributors: append([]ContributorDescriptor(nil), p.Contributors...), Audits: append([]AuditPlan(nil), p.Audits...), Capability: p.Capability, SubjectType: p.SubjectType}
 	snapshot.Delivery = cloneDeliveryPlan(p.Delivery)
+	snapshot.CapabilityIssuance = cloneCapabilityIssuancePlan(p.CapabilityIssuance)
 	feature := *p.Feature
 	snapshot.Feature = &feature
 	if p.RiskEvidence != nil {

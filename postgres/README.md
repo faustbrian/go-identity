@@ -79,6 +79,43 @@ global/tenant/authorization and optional-owner authority, and atomic one-time
 finalization. The returned time is not a renewable validity lease. Real-primary
 coordinator tests use a synthetic participant, not a completed session issuer.
 
+## Original-command capability issuance
+
+`CommandPlan.CapabilityIssuance` declares 1..16 one-use grants and the exact
+`capability/postgres` owner, contract `capability.issuance`, version 1. This
+participant follows the base contributors and precedes optional delivery.
+Its purposes name future protected operations, not the originating mutation.
+Only immutable IDs, signed expiry/maximum, original-envelope fingerprints and
+independently keyed replay metadata enter the journal. Nil retains historical
+kernel, feature and delivery plan bytes.
+
+The trusted issuing adapter stages authenticated `capability.Grant` values with
+`Work.StageCapabilityIssuanceFor`. Every grant must match its plan position,
+tenant, command user, purpose, ID, whole-second expiry and single-use maximum.
+This profile requires subject-bound grants, not subjectless bearer authority.
+Descriptor equality does not allow a foreign instance to stage custody.
+The exact owner receives `CapabilityIssuanceWork` only during coordinator-owned
+persistence; its aliases and SQL authority expire on return, including panic.
+The owner must verify original-envelope and keyed replay provenance, insert
+absent issued state and retain originating command/fingerprint/generation
+separately from subsequent consuming-command identity. It must never resurrect
+terminal records, open a transaction, sign, call providers, or retain the handle.
+
+Issuance runs after the actual mutation and before delivery/audit/lifecycle and
+the sole commit. Missing staging, failure/panic, later phase failure and expiry
+before terminalization roll back the original mutation and issued records.
+`RecoveryWork.CapabilityIssuanceBinding` exposes frozen metadata only to the
+exact registered issuer; recovery never signs or reveals replacement tokens.
+The optional versioned envelope composes with encrypted delivery and bounded
+historical decoding, without a second ledger or coordinator.
+
+No bearer bytes are staged or returned by this adapter. Queued credentials must
+use independently authenticated encrypted delivery custody; synchronous custody
+must not be revealed before a proven commit. Coordinator tests use an owned SQL
+phase to prove transaction and lifetime semantics, not the unfinished native
+capability producer, encrypted-delivery interoperability or end-user workflow.
+Consuming capability-bearing domain execution remains disabled.
+
 ## Original-command encrypted delivery
 
 `CommandPlan.Delivery` optionally declares 1..16 required effects and the exact

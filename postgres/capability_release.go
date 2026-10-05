@@ -64,7 +64,7 @@ func (c *Coordinator) releaseCapability(ctx context.Context, work Work, p *admit
 		return nil
 	}
 	for _, entry := range p.contributors {
-		if entry.descriptor.Owner != "capability/postgres" {
+		if entry.descriptor.Owner != "capability/postgres" || entry.descriptor.ContractID != "capability.one-use" {
 			continue
 		}
 		participant, ok := entry.contributor.(CapabilityReleaseContributor)
