@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Atomically terminal-release reserved capability custody with the failure
+  audit and aborted receipt after proven domain rollback and a live-owner
+  recheck. Preserve that owner's generation, including takeover, without
+  widening reservation authority. Failed release leaves pending/unknown
+  custody; protected identifier workflow activation remains unfinished.
+  Audit persistence panics now return redacted failure rather than escaping
+  the coordinator; provisional audit writes roll back with terminal release.
+
 - Reject protected identifier reservation plans whose proof fingerprint differs
   from the exact verified capability envelope, including another signature of
   the same payload. Historical command fingerprints and frozen plan decoding

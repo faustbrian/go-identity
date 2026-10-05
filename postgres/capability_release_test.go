@@ -32,3 +32,44 @@ func TestCapabilityReleaseAuthorityCannotBeConstructed(t *testing.T) {
 		t.Fatal("release authority serialized")
 	}
 }
+
+func TestCapabilityReleaseProvenanceDoesNotWidenReservation(t *testing.T) {
+	for _, proof := range []capabilityReleaseProof{capabilityReleaseRecovery, capabilityReleaseRollback} {
+		p := &capabilityExecutionProbe{}
+		c, work := capabilityDomainFixture(t, p)
+		previous := uint64(2)
+		if proof == capabilityReleaseRollback {
+			previous = 3
+		}
+		state := &capabilityReservationState{coordinator: c, work: work, plan: work.state.execution.reservation.plan, previousGeneration: previous, active: true, contributor: p, releaseProof: proof}
+		handle := CapabilityReleaseWork{state: state}
+		binding, err := handle.Binding(p)
+		if err != nil || binding.Generation != 3 || binding.PreviousGeneration != previous {
+			t.Fatal("exact release custody rejected", err)
+		}
+		if _, err := handle.Binding(&capabilityExecutionProbe{}); err == nil {
+			t.Fatal("foreign owner admitted")
+		}
+		reservation := CapabilityReservationWork{state: state}
+		if _, err := reservation.Binding(p); err == nil {
+			t.Fatal("release widened reservation authority")
+		}
+		if _, err := reservation.Exec(context.Background(), "SELECT 1"); err == nil {
+			t.Fatal("release widened reservation SQL")
+		}
+		state.previousGeneration++
+		if _, err := handle.Binding(p); err == nil {
+			t.Fatal("wrong previous generation admitted")
+		}
+		state.previousGeneration = previous
+		state.releaseProof = 0
+		if _, err := handle.Binding(p); err == nil {
+			t.Fatal("unproven release admitted")
+		}
+		state.releaseProof = proof
+		state.active = false
+		if _, err := handle.Binding(p); err == nil {
+			t.Fatal("expired invocation admitted")
+		}
+	}
+}

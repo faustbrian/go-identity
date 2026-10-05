@@ -248,6 +248,16 @@ recovery without widening reservation/rebind authority. Missing failure audit,
 release phase, matching custody or live ownership retains pending/Unknown;
 errors, panic, open rows and poisoned SQL leave no durable terminal prefix.
 
+The same proven-rollback rule applies to `CapabilityReleaseWork`: Abort
+terminal-releases the exact reserved capability under the current generation
+only after rollback, live-owner/frozen-plan rechecks and tenant exclusion.
+Release, failure audit and aborted receipt commit together; a missing phase,
+wrong custody, failed rollback, lost owner or callback failure leaves Unknown
+and no terminal prefix. Recovery release still advances exactly one generation.
+Private release provenance cannot be reused as reserve/rebind authority.
+Release is terminal, not permission to reuse the proof, and does not enable
+the still-incomplete protected identifier workflow.
+
 `RiskExecutionContributor` is the separate opt-in for domain execution. The
 exact registered owner must implement pure `ValidateRiskEvidenceCommand`,
 read-only `CheckRiskEvidence` and terminal `FinalizeRiskEvidence` in addition to

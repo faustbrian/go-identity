@@ -134,7 +134,7 @@ func (w RecoveryWork) CapabilityBinding(p CapabilityReleaseContributor) (Capabil
 	if r == nil {
 		return CapabilityReservationBinding{}, invalidWork()
 	}
-	s := &capabilityReservationState{coordinator: w.state.work.state.execution.coordinator, work: w.state.work, plan: w.state.plan, previousGeneration: r.journal.previousGeneration, active: true}
+	s := &capabilityReservationState{coordinator: w.state.work.state.execution.coordinator, work: w.state.work, plan: w.state.plan, previousGeneration: r.journal.previousGeneration, active: true, releaseProof: capabilityReleaseRecovery}
 	var ok bool
 	s.contributor, ok = capabilityReservationParticipant(w.state.entry.contributor)
 	if !ok {

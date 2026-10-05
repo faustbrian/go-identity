@@ -21,12 +21,16 @@ import (
 type recoveryAuditPhase struct {
 	domainAuditPhase
 	panicStatus    bool
+	panicPersist   bool
 	swallowFailure bool
 	retained       RecoveryWork
 }
 
 func (p *recoveryAuditPhase) PersistAudits(ctx context.Context, w Work) error {
 	err := p.domainAuditPhase.PersistAudits(ctx, w)
+	if err == nil && p.panicPersist {
+		panic("private audit diagnostic")
+	}
 	if err == nil && p.swallowFailure {
 		// Local parameter rejection poisons Work without aborting the SQL tx.
 		// An adapter must not erase that failure by returning nil.

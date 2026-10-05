@@ -40,6 +40,8 @@ func capabilityReservationParticipant(c Contributor) (CapabilityReservationContr
 // for Reserve; Rebind requires its exact positive predecessor. Plan is the
 // frozen capability input, never a proof of current authorization. No bearer
 // bytes or cryptographic key material are included. Diagnostics are redacted.
+// Release also uses this snapshot: proven live-owner rollback preserves the
+// generation; recovery release requires the exact successor generation.
 type CapabilityReservationBinding struct {
 	Command                        identity.CommandBinding
 	Plan                           CapabilityPlan
@@ -69,6 +71,7 @@ type capabilityReservationState struct {
 	previousGeneration uint64
 	active             bool
 	contributor        CapabilityReservationContributor
+	releaseProof       capabilityReleaseProof
 }
 
 // Format hides the retained transaction and participant state.
@@ -81,7 +84,14 @@ func (CapabilityReservationWork) MarshalJSON() ([]byte, error) { return nil, inv
 
 func (w CapabilityReservationWork) usable() error {
 	s := w.state
-	if s == nil || !s.active || s.coordinator == nil || s.plan == nil || s.plan.capability == nil || s.work.state == nil || s.plan.belongsTo(s.coordinator.registry) != nil || s.work.state.registry != s.plan.registry || s.work.state.binding != s.plan.binding || s.plan.fingerprint == ([32]byte{}) || s.work.state.generation == 0 || s.previousGeneration != 0 && (s.previousGeneration == ^uint64(0) || s.work.state.generation != s.previousGeneration+1) {
+	if s == nil || s.releaseProof != 0 || s.previousGeneration != 0 && (s.previousGeneration == ^uint64(0) || s.work.state == nil || s.work.state.generation != s.previousGeneration+1) {
+		return invalidWork()
+	}
+	return s.usable()
+}
+
+func (s *capabilityReservationState) usable() error {
+	if s == nil || !s.active || s.coordinator == nil || s.plan == nil || s.plan.capability == nil || s.work.state == nil || s.plan.belongsTo(s.coordinator.registry) != nil || s.work.state.registry != s.plan.registry || s.work.state.binding != s.plan.binding || s.plan.fingerprint == ([32]byte{}) || s.work.state.generation == 0 {
 		return invalidWork()
 	}
 	return s.work.usable()
@@ -95,12 +105,15 @@ func (w CapabilityReservationWork) Binding(contributor CapabilityReservationCont
 	if err := w.usable(); err != nil {
 		return CapabilityReservationBinding{}, err
 	}
+	return w.state.binding(contributor)
+}
+
+func (s *capabilityReservationState) binding(contributor CapabilityReservationContributor) (CapabilityReservationBinding, error) {
 	// Comparable values have stable value identity; pointers retain instance
 	// identity. Noncomparable implementations cannot prove identity and fail closed.
-	if nilContributor(contributor) || !reflect.TypeOf(contributor).Comparable() || contributor != w.state.contributor {
+	if nilContributor(contributor) || !reflect.TypeOf(contributor).Comparable() || contributor != s.contributor {
 		return CapabilityReservationBinding{}, invalidWork()
 	}
-	s := w.state
 	return CapabilityReservationBinding{Command: s.plan.binding, Plan: *s.plan.capability, Fingerprint: s.plan.fingerprint, Generation: s.work.state.generation, PreviousGeneration: s.previousGeneration}, nil
 }
 

@@ -414,7 +414,7 @@ func (c *Coordinator) Abort(w Work, cause error) (identity.CommandResult, error)
 	if err := r.plan.bindWork(terminal); err != nil {
 		return fail(err)
 	}
-	if r.plan.risk != nil {
+	if r.plan.risk != nil || r.plan.capability != nil {
 		if err := configureKernelWork(cleanup, terminal); err != nil {
 			return fail(err)
 		}
@@ -425,6 +425,9 @@ func (c *Coordinator) Abort(w Work, cause error) (identity.CommandResult, error)
 		}
 	}
 	if err := c.persistAuditPhase(terminal); err != nil {
+		return fail(identity.UnavailableError{})
+	}
+	if err := c.releaseCapabilityAfterRollback(cleanup, terminal, r.plan, r.journal); err != nil {
 		return fail(identity.UnavailableError{})
 	}
 	if err := c.releaseRiskAfterRollback(cleanup, terminal, r.plan, r.journal); err != nil {
@@ -452,7 +455,12 @@ func (c *Coordinator) owns(w Work) bool {
 	return c != nil && c.registry != nil && w.state != nil && w.state.execution != nil && w.state.execution.coordinator == c && w.state.execution.reservation != nil && w.state.registry == c.registry.state
 }
 
-func (c *Coordinator) persistAuditPhase(w Work) error {
+func (c *Coordinator) persistAuditPhase(w Work) (err error) {
+	defer func() {
+		if recover() != nil {
+			err = w.fail(w.state.ctx, identity.UnavailableError{})
+		}
+	}()
 	for _, entry := range w.state.execution.reservation.plan.contributors {
 		if entry.descriptor.Owner == "audit/postgres" {
 			return entry.contributor.(AuditContributor).PersistAudits(w.state.ctx, w)
