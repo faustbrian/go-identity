@@ -4,13 +4,30 @@ go 1.27.0
 
 require (
 	github.com/faustbrian/go-audit v1.0.0
+	github.com/faustbrian/go-audit/postgres v1.0.1-0.20261003012155-21ad3d11d3b2
 	github.com/faustbrian/go-authentication v1.2.2-0.20261002230834-3467aab01d0c
 	github.com/faustbrian/go-authorization v1.1.1-0.20261005011349-60ed4b3229d8
 	github.com/faustbrian/go-clock v1.0.0
 	github.com/faustbrian/go-identity v0.0.0-20261005110325-777b1288ba1f
-	github.com/faustbrian/go-identity/postgres v0.0.0-20261005141556-bc8b938e9ac8
-	github.com/faustbrian/go-identity/session v0.0.0-20261005055413-cec006e6a541
+	github.com/faustbrian/go-identity/postgres v0.0.0-20261005152944-2d5a89d37b28
+	github.com/faustbrian/go-identity/session v0.0.0-20261005150518-e0d3d1e4b506
 	github.com/faustbrian/go-migrations/v3 v3.0.2-0.20261001014304-a461b18b6b24
 	github.com/faustbrian/go-postgres v1.1.1-0.20260912090843-61261695bcc7
+	github.com/faustbrian/go-transactional-outbox/v2 v2.0.0-20261002184451-72a9fe57a638
+	github.com/faustbrian/go-transactional-outbox/v2/postgres/identity v0.0.0-20261002184451-72a9fe57a638
 	github.com/jackc/pgx/v5 v5.10.0
+)
+
+require (
+	github.com/faustbrian/go-capability v1.0.1-0.20261005033429-2985d8ea8700 // indirect
+	github.com/faustbrian/go-migrations v1.0.0 // indirect
+	github.com/jackc/pgpassfile v1.0.0 // indirect
+	github.com/jackc/pgservicefile v0.0.0-20240606120523-5a60cdf6a761 // indirect
+	github.com/jackc/puddle/v2 v2.2.2 // indirect
+	github.com/mfridman/interpolate v0.0.2 // indirect
+	github.com/pressly/goose/v3 v3.27.1 // indirect
+	github.com/sethvargo/go-retry v0.3.0 // indirect
+	go.uber.org/multierr v1.11.0 // indirect
+	golang.org/x/sync v0.22.0 // indirect
+	golang.org/x/text v0.41.0 // indirect
 )

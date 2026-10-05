@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Add owned authenticated cookie-issuance execution and original-request
+  recovery using the kernel command owner and production audit/outbox adapters.
+  Bind current self-service access and atomically persist the original session,
+  proof use and mandatory effects; core token custody reveals only after a new
+  committed result. Historical replay/recovery never reveals a credential.
+  Consume the committed core issuer and exact-input recovery contracts.
+  Process-restart recovery, browser-container policy, rotation and complete
+  login/session authentication remain unfinished.
+
 - Add explicitly configured authenticated session issuance through the existing
   protected coordinator. Preserve the complete original record, remember policy,
   proof/credential linkage and authority vector; compare native current owners

@@ -8,13 +8,21 @@ import (
 	"crypto/rand"
 	"errors"
 	"github.com/faustbrian/go-audit"
+	auditpostgres "github.com/faustbrian/go-audit/postgres"
 	authentication "github.com/faustbrian/go-authentication"
+	authorization "github.com/faustbrian/go-authorization"
 	policyStore "github.com/faustbrian/go-authorization/postgres"
 	"github.com/faustbrian/go-clock"
 	identity "github.com/faustbrian/go-identity"
 	kernel "github.com/faustbrian/go-identity/postgres"
 	"github.com/faustbrian/go-identity/session"
 	database "github.com/faustbrian/go-postgres"
+	outboxpostgres "github.com/faustbrian/go-transactional-outbox/v2/postgres"
+	identityoutbox "github.com/faustbrian/go-transactional-outbox/v2/postgres/identity"
+	"io/fs"
+	"net/http"
+	"reflect"
+	"strings"
 	"testing"
 	"time"
 )
@@ -265,4 +273,182 @@ func testNativeIssueIntegration(t *testing.T, ctx context.Context, pool *databas
 			}
 		})
 	}
+	t.Run("owned executor with real audit and lifecycle", func(t *testing.T) {
+		install, e := pool.Raw().Begin(ctx)
+		if e != nil {
+			t.Fatal(e)
+		}
+		defer install.Rollback(ctx)
+		if _, e = install.Exec(ctx, auditpostgres.FreshInstallPreflightSQL()); e != nil {
+			t.Fatal("audit preflight", e)
+		}
+		for _, files := range []fs.FS{auditpostgres.Migrations(), outboxpostgres.Migrations(), identityoutbox.Migrations()} {
+			entries, e := fs.ReadDir(files, ".")
+			if e != nil {
+				t.Fatal(e)
+			}
+			for _, entry := range entries {
+				data, e := fs.ReadFile(files, entry.Name())
+				if e != nil {
+					t.Fatal(e)
+				}
+				if _, e = install.Exec(ctx, strings.Split(string(data), "-- +migrations Down")[0]); e != nil {
+					t.Fatal("dependency migration", entry.Name(), e)
+				}
+			}
+		}
+		if e = install.Commit(ctx); e != nil {
+			t.Fatal(e)
+		}
+		ownedConfig := IssueExecutorConfig{Repository: Config{Schema: "session_store", MaximumDuration: time.Second}, Profile: *native.issueAdmission, Coordinator: kernel.CoordinatorConfig{MaximumDuration: 2 * time.Second, LeaseDuration: time.Minute, CurrentFingerprintKeyVersion: 1, RetainedFingerprintKeys: map[uint32][32]byte{1: {1}}, FinalAuthentication: &kernel.FinalAuthenticationConfig{Authority: authority, Namespace: "native-session"}}, Authorization: revokeQueryPolicy{}, Clock: clock.System{}, PolicyID: revokeBinding().PolicyID, PolicyVersion: 1, AuditRetentionVersion: 1}
+		executor, e := NewIssueExecutor(pool, ownedConfig)
+		if e != nil {
+			t.Fatal("owned constructor", e)
+		}
+		candidate := prepare(t)
+		command, e := session.NewIssueCommand(candidate.binding, candidate.record)
+		if e != nil {
+			t.Fatal(e)
+		}
+		request, e := session.NewAuthenticatedIssueRequest(command, candidate.proof)
+		if e != nil {
+			t.Fatal(e)
+		}
+		outcome, e := executor.ExecuteIssue(ctx, request)
+		if e != nil || outcome.Receipt.Outcome != identity.CommitOutcomeCommitted || outcome.Replayed || outcome.Session == (session.Session{}) {
+			t.Fatal("owned execution", e, outcome.Receipt.Outcome)
+		}
+		counts(t, candidate, 1, 1, 1, 1)
+		var auditRows, lifecycleRows int
+		id := mustCommandBytes(t, candidate.binding.CommandID)
+		if e = pool.Raw().QueryRow(ctx, `SELECT (SELECT count(*) FROM audit.identity_command_bindings WHERE command_id=$1),(SELECT count(*) FROM public.identity_outbox_bindings WHERE command_id=$1)`, id).Scan(&auditRows, &lifecycleRows); e != nil || auditRows != 1 || lifecycleRows != 1 {
+			t.Fatal("real protected effects", e, auditRows, lifecycleRows)
+		}
+		for _, run := range []func(context.Context, session.IssueRequest) (session.IssueExecution, error){executor.ExecuteIssue, executor.RecoverIssue} {
+			observed, e := run(ctx, request)
+			if e != nil || !observed.Replayed || observed.Receipt.AuditEventID != outcome.Receipt.AuditEventID || observed.Receipt.Outcome != identity.CommitOutcomeCommitted {
+				t.Fatal("owned historical observation", e)
+			}
+			counts(t, candidate, 1, 1, 1, 1)
+		}
+		t.Run("current denial suppresses execution and historical disclosure", func(t *testing.T) {
+			deniedConfig := ownedConfig
+			deniedConfig.Authorization = issueDecision(func(context.Context, authorization.DecisionContext) (authorization.Decision, error) {
+				return authorization.Decision{Outcome: authorization.Deny, Revision: 1}, nil
+			})
+			denied, e := NewIssueExecutor(pool, deniedConfig)
+			if e != nil {
+				t.Fatal(e)
+			}
+			for _, run := range []func(context.Context, session.IssueRequest) (session.IssueExecution, error){denied.ExecuteIssue, denied.RecoverIssue} {
+				observed, e := run(ctx, request)
+				var forbidden identity.ForbiddenError
+				if !errors.As(e, &forbidden) || observed.Receipt.Outcome != identity.CommitOutcomeInvalid || observed.Session != (session.Session{}) {
+					t.Fatal("denied historical disclosure")
+				}
+			}
+			counts(t, candidate, 1, 1, 1, 1)
+		})
+		for _, mode := range []string{"missing recovery", "cancelled", "blocked user", "audit rollback"} {
+			t.Run(mode, func(t *testing.T) {
+				input := prepare(t)
+				native, e := session.NewIssueCommand(input.binding, input.record)
+				if e != nil {
+					t.Fatal(e)
+				}
+				r, e := session.NewAuthenticatedIssueRequest(native, input.proof)
+				if e != nil {
+					t.Fatal(e)
+				}
+				workCtx := ctx
+				switch mode {
+				case "cancelled":
+					var cancel context.CancelFunc
+					workCtx, cancel = context.WithCancel(ctx)
+					cancel()
+				case "blocked user":
+					if _, e = pool.Raw().Exec(ctx, `UPDATE identity.users SET status='suspended' WHERE tenant_id='issue'`); e != nil {
+						t.Fatal(e)
+					}
+					defer func() {
+						if _, e := pool.Raw().Exec(ctx, `UPDATE identity.users SET status='active' WHERE tenant_id='issue'`); e != nil {
+							t.Error("user fixture restoration failed")
+						}
+					}()
+				case "audit rollback":
+					if _, e = pool.Raw().Exec(ctx, `CREATE FUNCTION public.reject_owned_audit() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'test rejection'; END $$; CREATE TRIGGER reject_owned_audit BEFORE INSERT ON audit.identity_command_bindings FOR EACH ROW EXECUTE FUNCTION public.reject_owned_audit()`); e != nil {
+						t.Fatal(e)
+					}
+					defer func() {
+						if _, e := pool.Raw().Exec(ctx, `DROP TRIGGER reject_owned_audit ON audit.identity_command_bindings; DROP FUNCTION public.reject_owned_audit()`); e != nil {
+							t.Error("audit fixture restoration failed")
+						}
+					}()
+				}
+				var observed session.IssueExecution
+				if mode == "missing recovery" {
+					observed, e = executor.RecoverIssue(workCtx, r)
+				} else {
+					observed, e = executor.ExecuteIssue(workCtx, r)
+				}
+				if e == nil || observed.Receipt.Outcome == identity.CommitOutcomeCommitted || observed.Session != (session.Session{}) {
+					t.Fatal("unproved session escaped", mode)
+				}
+				counts(t, input, 0, 0, 0, 0)
+				if mode == "missing recovery" || mode == "cancelled" {
+					var claims int
+					if e = pool.Raw().QueryRow(ctx, `SELECT count(*) FROM identity.identity_command_id_claims WHERE command_id=$1`, mustCommandBytes(t, input.binding.CommandID)).Scan(&claims); e != nil || claims != 0 {
+						t.Fatal("unattempted command reserved")
+					}
+				}
+			})
+		}
+		t.Run("core issuer delivers only after native commit", func(t *testing.T) {
+			candidate := prepare(t)
+			spec, _ := candidate.record.Bindings()
+			spec.Lookup = session.TokenDigest{}
+			keyBytes := make([]byte, 32)
+			if _, e := rand.Read(keyBytes); e != nil {
+				t.Fatal(e)
+			}
+			key, e := session.NewDigestKey(1, keyBytes)
+			if e != nil {
+				t.Fatal(e)
+			}
+			cookie, e := session.NewCookiePolicy(session.CookieConfig{Name: "__Host-session", SameSite: http.SameSiteStrictMode})
+			if e != nil {
+				t.Fatal(e)
+			}
+			core, e := session.NewSessionIssuer(executor, session.IssuerConfig{Authority: authority, Clock: clock.System{}, MaximumDuration: 2 * time.Second, LookupKey: key, TokenSize: 32, Cookie: cookie})
+			if e != nil {
+				t.Fatal(e)
+			}
+			prepared, e := core.Prepare(candidate.binding, spec, candidate.proof)
+			if e != nil {
+				t.Fatal(e)
+			}
+			result, e := core.Issue(ctx, prepared)
+			if e != nil || result.CommitOutcome != identity.CommitOutcomeCommitted {
+				t.Fatal("core native issuance", e)
+			}
+			if _, e = result.Token.Reveal(); e != nil {
+				t.Fatal("committed token withheld")
+			}
+			if !result.Cookie.Secure || !result.Cookie.HttpOnly || result.Cookie.Value != "" || result.Cookie.Name != "__Host-session" {
+				t.Fatal("unsafe committed cookie")
+			}
+			counts(t, candidate, 1, 1, 1, 1)
+			request, ok := prepared.Request()
+			if !ok {
+				t.Fatal("original request lost")
+			}
+			observed, e := core.Recover(ctx, request)
+			if e != nil || observed.CommitOutcome != identity.CommitOutcomeCommitted {
+				t.Fatal("core native recovery", e)
+			}
+			if _, e = observed.Token.Reveal(); e == nil || !reflect.DeepEqual(observed.Cookie, http.Cookie{}) {
+				t.Fatal("recovery disclosed credential")
+			}
+		})
+	})
 }

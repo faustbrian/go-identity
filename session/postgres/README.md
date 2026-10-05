@@ -6,7 +6,9 @@ resolved lifetime limits, original nanosecond timelines, full uint64 authority
 versions and revocation tombstones. Native family revocation now participates
 in the sole identity PostgreSQL coordinator. Explicitly configured native
 authenticated issuance now checks current owners and atomically stages records
-and original proof use. **Complete bearer delivery, browser-container policy,
+and original proof use. Owned authenticated cookie issuance now composes real
+audit/outbox effects with the core's commit-gated token custody.
+**General bearer issuance, browser-container policy,
 rotation, cleanup, devices and session authentication remain unfinished.
 This is not yet a usable login/session-authentication service.**
 
@@ -69,6 +71,53 @@ container policy, not a replacement for that unfinished service. Integration
 checks use the production session repository and real PostgreSQL; test-owned
 audit/outbox contributors prove transaction atomicity, not complete production
 delivery composition. Full coverage, mutation and release gates remain pending.
+
+### Owned authenticated cookie issuance
+
+`NewIssueExecutor(pool, IssueExecutorConfig{...})` owns composition of the native
+repository, kernel coordinator and production audit/outbox contributors. Supply
+the primary pool, `Repository` configuration, trusted `Profile`, retained
+`Coordinator` keys/final-authentication namespace, existing `Authorization`
+service, trusted `Clock`, `PolicyID`, positive `PolicyVersion` and
+`AuditRetentionVersion`. Execution work uses the coordinator's 1ms..30s
+maximum duration or any earlier caller deadline. Synchronous detached kernel
+cleanup may outlive that deadline; each cleanup phase has its own bounded
+coordinator budget, rather than one whole-call return deadline. Dependencies are
+borrowed, immutable and concurrency-safe; construction performs no IO and
+never runs migrations. Apply the kernel proof-use, directory/status/credential,
+authorization-authority, native session/issuance, audit and generic/identity
+outbox migrations first. Missing storage fails closed.
+
+Pass this executor to `session.NewSessionIssuer` with the **same** trusted
+authenticator, independent session digest key, explicit cookie policy, token
+size and duration. The core generates and privately retains the original token
+in `Prepare`; the adapter receives only its opaque `IssueRequest` and exact
+digest-bound native record. Applications supply neither stores, transactions,
+registries nor workflow orchestration. Current self-service identity and policy
+are derived from the original authenticated command, not request-selected
+decision attributes. Issuance currently supports the configured single-factor
+profile; organization, factor, passkey and anonymous variants remain unavailable.
+
+The executor checks current access before reservation. The native participant
+checks all selected authority dimensions under the protected transaction before
+effects and again before commit. Session, family, proof consumption, retained
+issuance evidence, audit and lifecycle notification commit together. Core
+delivery reveals the token only after a new exact committed result; cookie
+attributes have an empty value until an explicitly authorized transport combines
+them with that token. `ExecuteIssue` historical replay and `RecoverIssue` never
+deliver credentials. Recovery compares complete original input and current
+access, uses only the existing primary journal/recovery owner and cannot reserve
+missing input, renew live leases or refresh original proof authority.
+
+Retain the original safe request/proof, fingerprint keys and policy versions
+while an outcome may require reconciliation. Never prepare a new token to retry
+an uncertain command. Request-bearing recovery is implemented; general
+process-restart recovery from command identity remains unfinished. Structural
+historical sessions are not current authentication evidence. Browser maximum
+session/container policy, rotation, session authentication and complete login
+composition remain required future work. Real PostgreSQL integration covers the
+owned executor and production audit/outbox path, unlike the contributor-only
+transaction fixture above. Full release coverage/mutation gates remain pending.
 
 `MapCommand(session.NewRevokeFamilyCommand(...))` maps the closed native
 command's complete expected-version intent. Prepare a native feature plan with
