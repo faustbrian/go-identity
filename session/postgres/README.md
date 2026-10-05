@@ -109,10 +109,18 @@ deliver credentials. Recovery compares complete original input and current
 access, uses only the existing primary journal/recovery owner and cannot reserve
 missing input, renew live leases or refresh original proof authority.
 
-Retain the original safe request/proof, fingerprint keys and policy versions
-while an outcome may require reconciliation. Never prepare a new token to retry
-an uncertain command. Request-bearing recovery is implemented; general
-process-restart recovery from command identity remains unfinished. Structural
+Retain the original safe request/proof for exact-input recovery and fingerprint
+keys/policy versions while an outcome may require reconciliation. Never prepare
+a new token to retry an uncertain command. After a process restart,
+`RecoverIssueCommand(ctx, exactRecoveryQuery, trustedCurrentCaller)` returns
+historical command metadata without original proof or token custody. Supply all
+original safe scope fields and the independently authenticated current caller,
+not request-selected actor/tenant overrides. Current policy governs disclosure.
+Missing/denied commands are indistinguishable; recovery never reserves them.
+Live pending remains observational; expired pending uses the kernel's frozen
+participant reconciliation, and missing/conflicting evidence remains unresolved.
+Successful reconciliation does not return a session or any bearer/cookie and
+does not authorize retrying issuance. Structural
 historical sessions are not current authentication evidence. Browser maximum
 session/container policy, rotation, session authentication and complete login
 composition remain required future work. Real PostgreSQL integration covers the

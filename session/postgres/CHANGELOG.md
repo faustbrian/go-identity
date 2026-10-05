@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add restart-safe issuance reconciliation from exact historical scope and
+  trusted current caller, without retaining original authentication proof or
+  bearer custody. Return only command metadata under current policy; preserve
+  live leases and reconcile expired intent through the existing kernel owner.
+  Missing or conflicting participant evidence cannot prove rollback or success.
+
 - Add owned authenticated cookie-issuance execution and original-request
   recovery using the kernel command owner and production audit/outbox adapters.
   Bind current self-service access and atomically persist the original session,

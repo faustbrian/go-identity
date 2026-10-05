@@ -144,7 +144,7 @@ func (e *IssueExecutor) ExecuteIssue(ctx context.Context, request session.IssueR
 // under current policy. Original expired proof provenance is historical only.
 // It never reserves missing commands, renews leases, executes a session or
 // reveals a bearer. This request-bearing path requires original opaque custody;
-// general process-restart recovery by command identity remains separate work.
+// use RecoverIssueCommand for restart-safe historical metadata reconciliation.
 func (e *IssueExecutor) RecoverIssue(ctx context.Context, request session.IssueRequest) (session.IssueExecution, error) {
 	if ctx == nil || e == nil || e.coordinator == nil {
 		return session.IssueExecution{}, session.ErrInvalidIssuance
@@ -158,6 +158,35 @@ func (e *IssueExecutor) RecoverIssue(ctx context.Context, request session.IssueR
 	proof, _ := request.AuthenticatedProof()
 	result, err := e.coordinator.RecoverAuthenticatedCommand(bounded, b, command, proof, plan, caller)
 	return issueExecution(result, record, true), err
+}
+
+// RecoverIssueCommand reconciles issuance after process restart without the
+// original proof or bearer. Query must retain every original safe scope field;
+// caller comes from trusted current authentication, never decoded client
+// identity. The configured current policy independently authorizes disclosure.
+// Only historical command metadata is returned, never a session, credential,
+// current validity or permission to retry issuance. Missing/denied scope cannot
+// reserve a command. Live pending does not renew its lease; expired pending
+// reconciles only the frozen participants under the sole kernel recovery owner.
+// Incomplete/conflicting evidence fails closed without reconstructing success.
+// Execution work and detached cleanup have the same budgets as ExecuteIssue.
+func (e *IssueExecutor) RecoverIssueCommand(ctx context.Context, query identity.RecoveryQuery, caller authorization.DecisionContext) (kernel.CommandRecord, error) {
+	if ctx == nil || e == nil || e.coordinator == nil {
+		return kernel.CommandRecord{}, session.ErrInvalidIssuance
+	}
+	if query.OperationID != session.IssueOperation().OperationID || !scopeID(query.RecordID) || query.LinkMode != 0 || query.ActorKind != authorization.SubjectUser || string(query.ActorID) != string(query.UserID) {
+		return kernel.CommandRecord{}, identity.ForbiddenError{}
+	}
+	bounded, stop := context.WithTimeout(ctx, e.maximumDuration)
+	defer stop()
+	result, err := e.coordinator.RecoverCommand(bounded, query, caller)
+	if result.Binding.CommandID == "" {
+		return result, err
+	}
+	if result.Feature == nil || *result.Feature != session.IssueOperation() {
+		return kernel.CommandRecord{}, identity.UnavailableError{}
+	}
+	return result, err
 }
 
 func issueExecution(receipt identity.CommandResult, original session.Session, replay bool) session.IssueExecution {

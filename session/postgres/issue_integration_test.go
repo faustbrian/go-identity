@@ -331,6 +331,126 @@ func testNativeIssueIntegration(t *testing.T, ctx context.Context, pool *databas
 			}
 			counts(t, candidate, 1, 1, 1, 1)
 		}
+		recoveryScope := func(b identity.CommandBinding) (identity.RecoveryQuery, authorization.DecisionContext) {
+			q := identity.RecoveryQuery{CommandID: b.CommandID, TenantID: b.TenantID, UserID: b.UserID, ActorID: b.ActorID, ActorKind: b.ActorKind, OperationID: b.OperationID, RecordID: b.RecordID, LinkMode: b.LinkMode}
+			caller := authorization.DecisionContext{PolicyRevision: 1, Request: authorization.Request{Subject: authorization.Subject{ID: authorization.SubjectID(b.ActorID), Kind: b.ActorKind}, Tenant: authorization.TenantID(b.TenantID), Action: authorization.Action(b.OperationID), Resource: authorization.Resource{Type: "identity.user", ID: authorization.ResourceID(b.UserID)}}}
+			return q, caller
+		}
+		t.Run("restart recovery without original proof or bearer", func(t *testing.T) {
+			restarted, e := NewIssueExecutor(pool, ownedConfig)
+			if e != nil {
+				t.Fatal(e)
+			}
+			q, caller := recoveryScope(candidate.binding)
+			observed, e := restarted.RecoverIssueCommand(ctx, q, caller)
+			if e != nil || observed.Outcome != identity.CommitOutcomeCommitted || observed.Binding != candidate.binding || observed.Feature == nil || *observed.Feature != session.IssueOperation() || observed.Validate() != nil {
+				t.Fatal("restart historical outcome lost", e)
+			}
+			counts(t, candidate, 1, 1, 1, 1)
+			for _, mode := range []string{"wrong record", "wrong tenant", "foreign caller", "wrong operation", "missing", "cancelled"} {
+				t.Run(mode, func(t *testing.T) {
+					q, caller := recoveryScope(candidate.binding)
+					workCtx := ctx
+					switch mode {
+					case "wrong record":
+						q.RecordID = "absent"
+					case "wrong tenant":
+						q.TenantID = "absent"
+					case "foreign caller":
+						caller.Request.Subject.ID = "absent"
+					case "wrong operation":
+						q.OperationID = "identity.session.revoke-family"
+					case "missing":
+						q.CommandID, e = identity.NewCommandID()
+						if e != nil {
+							t.Fatal(e)
+						}
+					case "cancelled":
+						var cancel context.CancelFunc
+						workCtx, cancel = context.WithCancel(ctx)
+						cancel()
+					}
+					observed, e := restarted.RecoverIssueCommand(workCtx, q, caller)
+					if e == nil || observed.Binding.CommandID != "" || observed.Outcome != identity.CommitOutcomeInvalid {
+						t.Fatal("invalid recovery disclosed command", mode)
+					}
+					if mode == "missing" {
+						var claims int
+						if e = pool.Raw().QueryRow(ctx, `SELECT count(*) FROM identity.identity_command_id_claims WHERE command_id=$1`, mustCommandBytes(t, q.CommandID)).Scan(&claims); e != nil || claims != 0 {
+							t.Fatal("restart recovery reserved missing command")
+						}
+					}
+					counts(t, candidate, 1, 1, 1, 1)
+				})
+			}
+		})
+		t.Run("restart recovery preserves live lease and reconciles expired intent", func(t *testing.T) {
+			input := prepare(t)
+			native, e := session.NewIssueCommand(input.binding, input.record)
+			if e != nil {
+				t.Fatal(e)
+			}
+			r, e := session.NewAuthenticatedIssueRequest(native, input.proof)
+			if e != nil {
+				t.Fatal(e)
+			}
+			b, command, plan, _, _, e := executor.prepare(r)
+			if e != nil {
+				t.Fatal(e)
+			}
+			if _, observed, e := executor.coordinator.ReserveAuthenticatedCommand(ctx, b, command, input.proof, plan); e != nil || observed.Outcome != identity.CommitOutcomeInProgress {
+				t.Fatal("pending fixture", e)
+			}
+			restarted, e := NewIssueExecutor(pool, ownedConfig)
+			if e != nil {
+				t.Fatal(e)
+			}
+			q, caller := recoveryScope(b)
+			observed, e := restarted.RecoverIssueCommand(ctx, q, caller)
+			if e != nil || observed.Outcome != identity.CommitOutcomeInProgress || observed.RetryAfter <= 0 || observed.Binding != b {
+				t.Fatal("live pending lost", e)
+			}
+			var generation int64
+			id := mustCommandBytes(t, b.CommandID)
+			if e = pool.Raw().QueryRow(ctx, `SELECT generation FROM identity.commands WHERE command_id=$1`, id).Scan(&generation); e != nil || generation != 1 {
+				t.Fatal("live recovery took ownership", e)
+			}
+			if _, e = pool.Raw().Exec(ctx, `UPDATE identity.commands SET lease_until=clock_timestamp()-interval '1 second' WHERE command_id=$1`, id); e != nil {
+				t.Fatal(e)
+			}
+			t.Run("missing retained evidence never proves rollback", func(t *testing.T) {
+				if _, e := pool.Raw().Exec(ctx, `ALTER TABLE session_store.session_issuances RENAME TO hidden_session_issuances`); e != nil {
+					t.Fatal(e)
+				}
+				defer func() {
+					if _, e := pool.Raw().Exec(ctx, `ALTER TABLE session_store.hidden_session_issuances RENAME TO session_issuances`); e != nil {
+						t.Error("retained evidence fixture restoration failed")
+					}
+				}()
+				observed, e := restarted.RecoverIssueCommand(ctx, q, caller)
+				if e == nil || observed.Outcome != identity.CommitOutcomeInProgress || observed.Binding != b {
+					t.Fatal("missing recovery owner evidence became terminal", e)
+				}
+				var state string
+				if e = pool.Raw().QueryRow(ctx, `SELECT state,generation FROM identity.commands WHERE command_id=$1`, id).Scan(&state, &generation); e != nil || state != "pending" || generation != 1 {
+					t.Fatal("failed reconciliation changed durable ownership", e)
+				}
+			})
+			observed, e = restarted.RecoverIssueCommand(ctx, q, caller)
+			if e == nil || observed.Outcome != identity.CommitOutcomeNotCommitted || observed.Binding != b || observed.Feature == nil || *observed.Feature != session.IssueOperation() {
+				t.Fatal("expired negative evidence not reconciled", e, observed.Outcome)
+			}
+			counts(t, input, 0, 0, 0, 0)
+			var auditRows, lifecycleRows int
+			if e = pool.Raw().QueryRow(ctx, `SELECT (SELECT count(*) FROM audit.identity_command_bindings WHERE command_id=$1),(SELECT count(*) FROM public.identity_outbox_bindings WHERE command_id=$1)`, id).Scan(&auditRows, &lifecycleRows); e != nil || auditRows != 1 || lifecycleRows != 0 {
+				t.Fatal("negative recovery effects", e)
+			}
+			observed, e = restarted.RecoverIssueCommand(ctx, q, caller)
+			if e == nil || observed.Outcome != identity.CommitOutcomeNotCommitted || observed.Binding != b {
+				t.Fatal("aborted restart history lost", e)
+			}
+			counts(t, input, 0, 0, 0, 0)
+		})
 		t.Run("current denial suppresses execution and historical disclosure", func(t *testing.T) {
 			deniedConfig := ownedConfig
 			deniedConfig.Authorization = issueDecision(func(context.Context, authorization.DecisionContext) (authorization.Decision, error) {
@@ -348,6 +468,10 @@ func testNativeIssueIntegration(t *testing.T, ctx context.Context, pool *databas
 				}
 			}
 			counts(t, candidate, 1, 1, 1, 1)
+			q, caller := recoveryScope(candidate.binding)
+			if observed, e := denied.RecoverIssueCommand(ctx, q, caller); e == nil || observed.Binding.CommandID != "" || observed.Outcome != identity.CommitOutcomeInvalid {
+				t.Fatal("current denial disclosed restart history")
+			}
 		})
 		for _, mode := range []string{"missing recovery", "cancelled", "blocked user", "audit rollback"} {
 			t.Run(mode, func(t *testing.T) {

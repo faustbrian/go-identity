@@ -24,6 +24,14 @@ func TestOwnedIssueExecutorRejectsIncompleteComposition(t *testing.T) {
 	}
 }
 
+func TestOwnedIssueRestartRecoveryRejectsZero(t *testing.T) {
+	var executor *IssueExecutor
+	result, err := executor.RecoverIssueCommand(context.Background(), identity.RecoveryQuery{}, authorization.DecisionContext{})
+	if err == nil || result.Binding.CommandID != "" || result.Outcome != identity.CommitOutcomeInvalid {
+		t.Fatal("zero recovery gained historical authority")
+	}
+}
+
 func TestOwnedIssueExecutorRejectsTypedNilDependencies(t *testing.T) {
 	var policy issueDecision
 	var pointer *IssueExecutor
