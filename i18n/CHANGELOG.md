@@ -10,3 +10,8 @@
   copied parameter schemas, bounded wrapper traversal and redacted fail-closed
   resolution. Values retain their declared final-output context without escaping;
   unknown errors are not classified by message text.
+
+- Add immutable versioned catalogs with compatible translated schemas,
+  bounded literal/value/plural/select rendering and atomic expected-version
+  replacement. Results retain typed contexts and value boundaries; previews
+  are not context-escaped transport output.

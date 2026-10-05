@@ -233,6 +233,9 @@ func checkedParameters(schema []ParameterSpec, input []SafeParameter) ([]SafePar
 	}
 	byName := make(map[string]SafeParameter, len(input))
 	for _, value := range input {
+		if !stableName(value.Name, false) {
+			return nil, false
+		}
 		if _, exists := byName[value.Name]; exists || !validScalar(value.Value) {
 			return nil, false
 		}

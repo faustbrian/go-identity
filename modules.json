@@ -8,7 +8,7 @@
       "module_path": "github.com/faustbrian/go-identity/i18n",
       "go_version": "1.27.0",
       "packages": [{"module_directory":"i18n","directory":".","name":"i18n","import_path":"github.com/faustbrian/go-identity/i18n","kind":"public","production":true,"executable":true,"coverage_required":true,"build_required":true,"build_tags":[]}],
-      "purpose": "Bounded canonical locale negotiation; catalogs, error rendering and preference lifecycle in development.",
+      "purpose": "Bounded locale matching, typed error registration and catalog rendering; resolver and preference lifecycle in development.",
       "lifecycle": "experimental",
       "kind": "public library",
       "releasable": true,

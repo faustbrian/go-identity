@@ -1,7 +1,7 @@
 # Identity localization
 
 Go 1.27 transport-neutral locale negotiation. This experimental module currently
-implements matching and typed error registration; message catalogs, original-error
+implements matching, typed error registration and catalog rendering. Original-error
 translation, locale precedence and durable preference lifecycle are not yet implemented.
 
 ```go
@@ -94,6 +94,61 @@ Registry resolution currently returns message identity and parameters, not a
 localized error wrapper: preservation through rendering remains resolver work.
 
 See the compiled `ExampleErrorRegistry_Resolve` for an external-package example.
+
+## Catalog authoring and publication
+
+`NewCatalogStore([]Catalog)` validates and freezes a snapshot of 1..256 canonical
+locales, all with one positive version. Each locale has 1..10000 unique messages;
+the whole snapshot permits at most 10000 messages and 8 MiB template source.
+Templates are UTF-8, 1..8192 bytes and at most 256 compiled parts. Message IDs
+have `MessageID` syntax; schemas have `ParameterSchema` bounds. Placeholder
+sets, kinds and contexts for the same ID must agree across translations;
+declaration order may differ. Every declared placeholder must be used.
+
+The restricted Go-template action grammar is:
+
+```text
+{{value "name" "plain-text"}}
+{{plural "count" "=0" "none" "one" "attempt" "other" "attempts"}}
+{{select "mode" "fast" "Fast" "other" "Standard"}}
+```
+
+All arguments must be constant quoted strings. `value` requires an exact
+declared name and context (`plain-text`, `url`, `header`, `json` or `html`).
+`plural` requires int64, with exact canonical `=integer` choices and/or CLDR
+`zero`, `one`, `two`, `few`, `many`, `other` categories. Exact choices precede
+categories; cardinal categories use pinned upstream x/text rules, including
+full-width signed integers without float conversion. `select` requires string
+or bool (bool keys are `true`/`false`). Choices are literal text, not recursively
+parsed templates. Each choice operation permits at most 16 unique keys and must
+include `other`. This is a documented restricted language, not ICU MessageFormat
+or unrestricted Go-template execution. Pipelines, dot/method/variable access,
+control-flow nodes, template calls and associated/root-redefined templates are
+unsupported; no template is executed. The standard-library parser produces
+an AST that is compiled only into closed scalar operations.
+
+`Render(ctx, locale, messageID, []Parameter)` performs exact lookup without
+fallback and returns one snapshot's `RenderedMessage`. Missing pairs and invalid
+parameters are classified errors; cancellation and empty/oversized output return
+no partial result. Output is bounded to 8192 bytes. Strings remain unescaped,
+integers use decimal, booleans use `true`/`false`, and times use UTC RFC3339Nano.
+`Parts` retain literal/value boundaries and each value's declared context;
+`Parameters` retain exact typed values. The `Message` string is an unescaped
+preview, **not** safe HTML, a header, URL or serialized JSON. Final-output owners
+must validate actual placement and escape per context exactly once; declaration
+matching here does not infer final transport syntax or authorize unsafe placement.
+
+`Replace(expectedVersion, completeCatalogs)` compiles before atomically publishing
+a strictly greater version. Concurrent publishers at one expected version have
+at most one winner. Failed compilation/CAS leaves the previous snapshot intact;
+no automatic retry or merging occurs. `Locales()` returns a copied list and
+version. Do not copy stores or mutate construction/render inputs during calls.
+Readers see one complete old/new snapshot, never a mixed version. Removed locale
+or message pairs become absent; error resolver fallback remains separate work.
+See compiled `ExampleCatalogStore_Render` for adoption. Update catalogs with
+unchanged schemas or an explicit coordinated registry/schema migration, advance
+the version, and exercise every translation and final-output adapter before
+publication. Formatting rendered results/parts/parameters redacts personal data.
 
 ## FAQ and updates
 
