@@ -678,9 +678,29 @@ future or otherwise inconsistent verification timestamps and preserve uint64
 versions without signed-bigint truncation. Neither snapshots nor structural
 validation grant authorization or prove a challenge.
 
-This is the storage foundation, not a complete identifier workflow. Use the
-existing `IdentifierService` for admission once coordinated identifier writes,
-atomic capability/risk participants and retirement tombstones are implemented.
+`IdentifierMutationMigrationSource{Base: source, Version: allocatedVersion}`
+appends forward-only retirement history after all migrations in `source`.
+Allocate a unique version greater than every installed/composed Base version;
+do not replace or renumber existing migrations. The new table retains tenant,
+user and identifier IDs, exact retired record/verification versions, original
+retirement and reuse-expiry instants, and a keyed digest rather than retired
+canonical/display values. ID history remains necessary after a value cooldown
+expires; this source intentionally supplies no deletion or downgrade policy.
+Run it through the same bounded migration Runner in a reviewed DDL window.
+
+Native provisional writes now implement all five identifier transitions under
+the existing Work transaction. They lock the complete bounded partition,
+preserve original verification instants, demote the old primary before promotion
+and atomically persist retirement history with exact optimistic version fences.
+Stored value-cooldown expiry is not renewed by key/policy changes; missing keys
+for still-active history deny, while expired history does not require those
+keys forever. Retired IDs cannot be attached anew even after value expiry.
+
+This remains a storage foundation, not a complete identifier workflow. The
+writer is private and public capability-bearing Begin remains disabled. Use the
+existing `IdentifierService` for admission once native current-authority,
+challenge/final-access checks, atomic capability/risk consumption, audit,
+lifecycle, complete commit receipts and recovery composition are implemented.
 Do not supply application-owned SQL or transactions to bypass those requirements.
 
 `MigrationSource{}` owns `identity.users` with `tenant_id`, `user_id`, `status`

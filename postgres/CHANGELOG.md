@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Add an explicitly allocated forward identifier-retirement migration and
+  native provisional persistence for attach, verify, primary switch, replace
+  and remove. Record and verification fences, keyed reuse cooldowns and
+  permanent retired-ID history share the protected transaction. Public
+  identifier execution remains disabled pending complete current-authority,
+  proof consumption, audit and recovery composition.
+
 - Add distinct invocation-only capability apply and finalize custody for the
   exact registered participant and current coordinator generation. Retained,
   foreign and wrong-phase handles fail; callback failures poison domain work.
