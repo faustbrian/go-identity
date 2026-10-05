@@ -19,6 +19,14 @@ or opens a transaction, reserves a proof, writes a record or reveals a token.
 
 ## Quick start and API
 
+`NewRevokeOneCommand(binding, record)` prepares a single-session transition
+with the complete original target and a representable version successor.
+Its tenant, user and session ID must exactly match the command binding.
+`RevokeOne()` exposes a copy; formatting and serialization remain redacted.
+This command does not revoke a family, authenticate a caller or execute logout.
+The PostgreSQL adapter does not yet execute this variant and rejects it;
+the owned revocation service and durable transition are still required.
+
 ```go
 policy, err := session.ResolveRememberPolicy(session.BrowserSession, session.LifetimeConfig{
     Default: session.PersistentSession,

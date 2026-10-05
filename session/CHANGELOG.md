@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add an immutable exact-target one-session revocation command preserving the
+  original authority snapshot and checked version successor. It cannot project
+  as issuance or family revocation. Execution and idempotent logout remain
+  pending; construction alone does not authenticate or authorize a caller.
+
 - Add explicit stateful opaque credential validation with bounded retained-key
   lookup, exact active authority-vector and lifetime admission. Preserve original
   source freshness within 20 seconds, deduct clock uncertainty, reject stale
