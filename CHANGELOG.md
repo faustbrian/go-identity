@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Keep additive authorization contracts selected when consumers also depend on
+  the released v1.1.0 API, using the unchanged source with a compatible higher
+  pseudo-version and canonical module checksums.
+
 - Adopt the additive scoped authorization authority owner while retaining the
   existing policy engine and Go 1.27 support.
 

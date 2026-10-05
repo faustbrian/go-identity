@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Preserve required authorization APIs under Go minimal version selection and
+  consume the committed identity kernel contracts used by the current adapter.
+  Dependency archives use canonical Go module checksums.
+
 - Add an explicitly allocated forward identifier-retirement migration and
   native provisional persistence for attach, verify, primary switch, replace
   and remove. Record and verification fences, keyed reuse cooldowns and
