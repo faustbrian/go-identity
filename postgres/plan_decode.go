@@ -25,7 +25,7 @@ func decodeKernelPlan(binding identity.CommandBinding, fingerprint [32]byte, enc
 	}
 	r := planReader{attributeReader: attributeReader{data: encoded}, ok: true}
 	fields, ok := r.head(5)
-	if !ok || (fields != 5 && fields != 6 && fields != 7) {
+	if !ok || (fields != 5 && fields != 6 && fields != 7 && fields != 8) {
 		return fail()
 	}
 	r.key("audits")
@@ -76,7 +76,7 @@ func decodeKernelPlan(binding identity.CommandBinding, fingerprint [32]byte, enc
 		p.BeforeVersion = r.number(math.MaxUint64)
 		plan.Lifecycle = p
 	}
-	if fields == 7 {
+	if fields >= 7 {
 		r.key("capability")
 		r.expect(5, 7)
 		p := &CapabilityPlan{}
@@ -103,7 +103,7 @@ func decodeKernelPlan(binding identity.CommandBinding, fingerprint [32]byte, enc
 	if fields >= 6 {
 		count = 3
 	}
-	if fields == 7 {
+	if fields >= 7 {
 		count = 4
 	}
 	r.expect(4, count)
@@ -117,6 +117,17 @@ func decodeKernelPlan(binding identity.CommandBinding, fingerprint [32]byte, enc
 		r.key("contract_id")
 		d.ContractID = r.string(256)
 		plan.Contributors = append(plan.Contributors, d)
+	}
+	if fields == 8 {
+		r.key("identifier_admission")
+		r.expect(5, 3)
+		r.key("owner")
+		d := &ContributorDescriptor{Owner: r.string(128)}
+		r.key("version")
+		d.Version = uint32(r.number(math.MaxUint32))
+		r.key("contract_id")
+		d.ContractID = r.string(256)
+		plan.IdentifierAdmission = d
 	}
 	if !r.ok || len(r.data) != 0 {
 		return fail()

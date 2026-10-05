@@ -1,5 +1,23 @@
 # Identity PostgreSQL
 
+## Protected identifier admission
+
+`CommandPlan.IdentifierAdmission` selects the exact registered
+`identity/session/postgres` checker through `IdentifierAdmissionContributor`.
+This role is frozen into the journal, separately from mutation contributors:
+it cannot claim a durable recovery outcome. Nil retains historical plan bytes.
+
+`IdentifierAdmissionWork` is available only during the coordinator's check
+callback. Its complete command and initial/final phase are available only to
+the selected instance. Bounded queries and existing credential, directory and
+user-authorization checks share the original transaction and lock lifetime;
+there is no write or transaction-closure method. Ignored denial poisons Work.
+Close all rows before returning; do not retain the handle or perform network
+callbacks. These checks alone do not authorize mutation, consume proof, or
+establish credential-specific reauthentication. Public identifier `Begin`
+remains disabled until complete native session, access policy and recovery
+composition exists.
+
 ## Scoped user authorization authority
 
 Native participants can call `Work.RequireActiveUserAuthorization` with their

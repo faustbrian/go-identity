@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Bind an optional read-only session admission role into protected identifier
+  plans without treating it as a durable recovery participant. Invocation-only
+  checks borrow existing kernel authority queries; ignored denials prevent
+  commit. Historical role-free plans retain their bytes. Public identifier
+  execution remains disabled pending complete native workflow composition.
+
 - Couple provisional identifier writes to the enlisted capability consumption
   phase and exact owned receipt; finalize consumption before terminal receipt
   persistence in the sole transaction. Public identifier execution remains

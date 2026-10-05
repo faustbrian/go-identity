@@ -22,9 +22,13 @@ import (
 // admission profile; it is not sufficient for a future successful mutation
 // commit, which must require its lifecycle and full effect declarations.
 type CommandPlan struct {
-	Contributors []ContributorDescriptor
-	Audits       []AuditPlan
-	Lifecycle    *LifecyclePlan
+	// IdentifierAdmission selects an exact read-only session checker, not a
+	// durable effect participant. Nil preserves historical plan bytes. Public
+	// identifier execution remains disabled until native composition is complete.
+	IdentifierAdmission *ContributorDescriptor
+	Contributors        []ContributorDescriptor
+	Audits              []AuditPlan
+	Lifecycle           *LifecyclePlan
 	// Delivery enlists encrypted effects under this original command, never
 	// an independently committable enqueue operation. Nil leaves bytes unchanged.
 	Delivery *DeliveryPlan
@@ -148,26 +152,33 @@ func encodeKernelPlan(binding identity.CommandBinding, fingerprint [32]byte, pla
 	if plan.Capability != nil {
 		fields["capability"] = encodeCapabilityPlan(plan.Capability)
 	}
+	if d := plan.IdentifierAdmission; d != nil {
+		if plan.Capability == nil || *d != identifierAdmissionDescriptor() {
+			return nil, invalidPlan()
+		}
+		fields["identifier_admission"] = cborMap(map[string][]byte{"owner": cborText(d.Owner), "contract_id": cborText(d.ContractID), "version": cborUint(uint64(d.Version))})
+	}
 	return cborMap(fields), nil
 }
 
 // admittedKernelPlan never escapes the coordinator boundary. It freezes only
 // the supported kernel profile, not arbitrary callbacks or opaque input blobs.
 type admittedKernelPlan struct {
-	registry     *contributorRegistryState
-	binding      identity.CommandBinding
-	digest       [32]byte
-	contributors []registeredContributor
-	audits       []AuditPlan
-	lifecycle    *LifecyclePlan
-	capability   *CapabilityPlan
-	risk         *RiskEvidencePlan
-	counters     *CommandCounterPlan
-	fingerprint  [32]byte
-	feature      *FeatureRegistration
-	subjectType  string
-	delivery     *DeliveryPlan
-	issuance     *CapabilityIssuancePlan
+	identifierAdmission *registeredContributor
+	registry            *contributorRegistryState
+	binding             identity.CommandBinding
+	digest              [32]byte
+	contributors        []registeredContributor
+	audits              []AuditPlan
+	lifecycle           *LifecyclePlan
+	capability          *CapabilityPlan
+	risk                *RiskEvidencePlan
+	counters            *CommandCounterPlan
+	fingerprint         [32]byte
+	feature             *FeatureRegistration
+	subjectType         string
+	delivery            *DeliveryPlan
+	issuance            *CapabilityIssuancePlan
 }
 
 func (r *ContributorRegistry) admitKernelPlan(binding identity.CommandBinding, fingerprint [32]byte, p CommandPlan) (*admittedKernelPlan, error) {
@@ -203,6 +214,18 @@ func (r *ContributorRegistry) admitKernelPlan(binding identity.CommandBinding, f
 		}
 	}
 	var lifecycle *LifecyclePlan
+	var checker *registeredContributor
+	if p.IdentifierAdmission != nil {
+		selected, err := r.selectContributors([]ContributorDescriptor{*p.IdentifierAdmission})
+		if err != nil || len(selected) != 1 {
+			return nil, invalidPlan()
+		}
+		participant, ok := selected[0].contributor.(IdentifierAdmissionContributor)
+		if !ok || nilContributor(participant) || !sameParticipant(participant, participant) {
+			return nil, invalidPlan()
+		}
+		checker = &selected[0]
+	}
 	if p.Lifecycle != nil {
 		snapshot := *p.Lifecycle
 		lifecycle = &snapshot
@@ -212,7 +235,7 @@ func (r *ContributorRegistry) admitKernelPlan(binding identity.CommandBinding, f
 		snapshot := *p.Capability
 		capability = &snapshot
 	}
-	return &admittedKernelPlan{registry: r.state, binding: binding, digest: digest, contributors: entries, audits: append([]AuditPlan(nil), p.Audits...), lifecycle: lifecycle, capability: capability, fingerprint: fingerprint, delivery: cloneDeliveryPlan(p.Delivery), issuance: cloneCapabilityIssuancePlan(p.CapabilityIssuance)}, nil
+	return &admittedKernelPlan{identifierAdmission: checker, registry: r.state, binding: binding, digest: digest, contributors: entries, audits: append([]AuditPlan(nil), p.Audits...), lifecycle: lifecycle, capability: capability, fingerprint: fingerprint, delivery: cloneDeliveryPlan(p.Delivery), issuance: cloneCapabilityIssuancePlan(p.CapabilityIssuance)}, nil
 }
 
 func (p *admittedKernelPlan) belongsTo(r *ContributorRegistry) error {

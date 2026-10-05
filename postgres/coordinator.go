@@ -167,6 +167,9 @@ func (c *Coordinator) prepare(binding identity.CommandBinding, command identity.
 		return claimRequest{}, CommandPlan{}, nil, invalidPlan()
 	}
 	if spec, ok := command.Feature(); ok {
+		if plan.IdentifierAdmission != nil {
+			return claimRequest{}, CommandPlan{}, nil, invalidPlan()
+		}
 		return c.prepareFeature(binding, command, spec, plan)
 	}
 	if plan.Feature != nil || plan.RiskEvidence != nil || plan.CommandCounters != nil {
@@ -206,6 +209,10 @@ func (c *Coordinator) prepare(binding identity.CommandBinding, command identity.
 		return claimRequest{}, CommandPlan{}, nil, invalidPlan()
 	}
 	snapshot := CommandPlan{Contributors: append([]ContributorDescriptor(nil), plan.Contributors...), Audits: append([]AuditPlan(nil), plan.Audits...)}
+	if plan.IdentifierAdmission != nil {
+		d := *plan.IdentifierAdmission
+		snapshot.IdentifierAdmission = &d
+	}
 	snapshot.Delivery = cloneDeliveryPlan(plan.Delivery)
 	snapshot.CapabilityIssuance = cloneCapabilityIssuancePlan(plan.CapabilityIssuance)
 	lifecycle := *plan.Lifecycle

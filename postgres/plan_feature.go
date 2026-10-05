@@ -26,6 +26,9 @@ func FeaturePlanDigest(binding identity.CommandBinding, fingerprint [32]byte, pl
 }
 
 func encodeFeaturePlan(binding identity.CommandBinding, fingerprint [32]byte, p CommandPlan) ([]byte, error) {
+	if p.IdentifierAdmission != nil {
+		return nil, invalidPlan()
+	}
 	if p.Delivery != nil {
 		return encodeDeliveryWrappedPlan(binding, fingerprint, p, encodeFeaturePlan)
 	}

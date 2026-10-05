@@ -117,6 +117,10 @@ func (p *admittedKernelPlan) snapshot() CommandPlan {
 		descriptors[i] = entry.descriptor
 	}
 	result := CommandPlan{Contributors: descriptors, Audits: append([]AuditPlan(nil), p.audits...), Digest: p.digest}
+	if p.identifierAdmission != nil {
+		d := p.identifierAdmission.descriptor
+		result.IdentifierAdmission = &d
+	}
 	result.Delivery = cloneDeliveryPlan(p.delivery)
 	result.CapabilityIssuance = cloneCapabilityIssuancePlan(p.issuance)
 	if p.lifecycle != nil {

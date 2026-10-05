@@ -126,6 +126,10 @@ func (w Work) RequireActiveDirectoryAuthority(ctx context.Context, p FeatureExec
 	if err != nil || ctx == nil {
 		return invalidWork()
 	}
+	return w.requireActiveDirectoryAuthority(ctx, b, expected)
+}
+
+func (w Work) requireActiveDirectoryAuthority(ctx context.Context, b identity.CommandBinding, expected DirectoryAuthorityAdmission) error {
 	if expected.Query.Validate() != nil || expected.Query.TenantID != b.TenantID || expected.GlobalVersion == 0 || expected.TenantVersion == 0 {
 		return w.fail(ctx, invalidWork())
 	}

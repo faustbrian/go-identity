@@ -49,6 +49,10 @@ func (w Work) RequireActiveCredential(ctx context.Context, p FeatureExecutionCon
 	if err != nil || ctx == nil {
 		return time.Time{}, invalidWork()
 	}
+	return w.requireActiveCredential(ctx, b, expected)
+}
+
+func (w Work) requireActiveCredential(ctx context.Context, b identity.CommandBinding, expected CredentialAdmission) (time.Time, error) {
 	c := expected.Credential
 	if c.Validate(b.TenantID, b.UserID) != nil || expected.UserAuthorityVersion == 0 || expected.IdentifierAuthorityVersion == 0 || expected.CredentialAuthorityVersion == 0 {
 		return time.Time{}, w.fail(ctx, invalidWork())

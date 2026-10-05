@@ -52,12 +52,19 @@ func (w Work) RequireActiveUserAuthorization(ctx context.Context, p FeatureExecu
 		return w.fail(w.state.ctx, invalidWork())
 	}
 	binding, _, _, err := w.FeatureScope(p)
-	if err != nil || expected.Scope.Validate() != nil || expected.Version == 0 || string(expected.Scope.TenantID) != string(binding.TenantID) || string(expected.Scope.SubjectID) != string(binding.UserID) {
+	if err != nil {
+		return w.fail(ctx, invalidWork())
+	}
+	return w.requireActiveUserAuthorization(ctx, binding, expected)
+}
+
+func (w Work) requireActiveUserAuthorization(ctx context.Context, binding identity.CommandBinding, expected UserAuthorizationAdmission) error {
+	if expected.Scope.Validate() != nil || expected.Version == 0 || string(expected.Scope.TenantID) != string(binding.TenantID) || string(expected.Scope.SubjectID) != string(binding.UserID) {
 		return w.fail(ctx, invalidWork())
 	}
 	// The existing owner consumes the generation-bound cursor directly; no raw
 	// connection, duplicate owner SQL or independent transaction is introduced.
-	err = authority.RequireAuthority(ctx, w, expected.Scope, expected.Version, time.Minute)
+	err := authority.RequireAuthority(ctx, w, expected.Scope, expected.Version, time.Minute)
 	if err == nil {
 		return nil
 	}
