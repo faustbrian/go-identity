@@ -3,11 +3,13 @@
 package postgres
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
 	"errors"
 	"sync"
 	"testing"
+	"time"
 
 	identity "github.com/faustbrian/go-identity"
 	database "github.com/faustbrian/go-postgres"
@@ -87,6 +89,13 @@ SELECT command_id,tenant_id,purpose FROM identity.identity_command_id_claims WHE
 				}
 			}, nil)
 		},
+		func(changed bool) identity.Command {
+			return recordPrivacy(t, func(s *identity.PrivacyExportRequestCommand) {
+				if changed {
+					s.ExpectedPrivacyEpoch++
+				}
+			}, nil, "privacy-key")
+		},
 	} {
 		q, err := prepareClaim(build(false), keys.retained[keys.current])
 		if err != nil {
@@ -112,6 +121,64 @@ SELECT command_id,tenant_id,purpose FROM identity.identity_command_id_claims WHE
 	}
 	if got, err := execute(request, rotated, true); err != nil || got != claimReplay {
 		t.Fatal("retained-key replay failed")
+	}
+	// Denied substitutions cannot replace the original privacy claim or add a
+	// scoped journal. Key rotation must preserve its original fingerprint key.
+	privacyCommand := recordPrivacy(t, nil, nil, "privacy-key")
+	privacy, err := prepareClaim(privacyCommand, keys.retained[1])
+	if err != nil {
+		t.Fatal(err)
+	}
+	privacyID, _ := base64.RawURLEncoding.DecodeString(string(privacy.commandID))
+	var before, after []byte
+	var keyVersion int64
+	if err := pool.Raw().QueryRow(ctx, `SELECT fingerprint,fingerprint_key_version FROM identity.identity_command_id_claims WHERE command_id=$1`, privacyID).Scan(&before, &keyVersion); err != nil || keyVersion != 1 || len(before) != 32 {
+		t.Fatal("original privacy claim missing", err)
+	}
+	for _, change := range []func(*identity.PrivacyExportRequestCommand){
+		func(c *identity.PrivacyExportRequestCommand) { c.SessionID = "other-session" },
+		func(c *identity.PrivacyExportRequestCommand) { c.SessionVersion++ },
+		func(c *identity.PrivacyExportRequestCommand) { c.ExpectedIdentityVersion++ },
+		func(c *identity.PrivacyExportRequestCommand) { c.ExpectedAuthorityVersion++ },
+		func(c *identity.PrivacyExportRequestCommand) { c.Binding.TenantID = "AgICAgICAgICAgICAgICAg" },
+		func(c *identity.PrivacyExportRequestCommand) {
+			c.Binding.UserID = "AgICAgICAgICAgICAgICAg"
+			c.Binding.ActorID = "AgICAgICAgICAgICAgICAg"
+		},
+		func(c *identity.PrivacyExportRequestCommand) { c.MaximumBytes++ },
+		func(c *identity.PrivacyExportRequestCommand) { c.ArtifactTTL += time.Second },
+		func(c *identity.PrivacyExportRequestCommand) {
+			c.Projections[0].ProjectionID = identity.PrivacyExportStagedSubjectV1
+		},
+	} {
+		changed, err := prepareClaim(recordPrivacy(t, change, nil, "privacy-key"), rotated.retained[2])
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got, err := execute(changed, rotated, true); err != nil || got != claimConflict {
+			t.Fatal("privacy scope/intent substituted", err)
+		}
+	}
+	substituted, err := prepareClaim(recordPrivacy(t, nil, nil, "other-privacy-key"), rotated.retained[2])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, err := execute(substituted, rotated, true); err != nil || got != claimConflict {
+		t.Fatal("privacy proof substituted", err)
+	}
+	privacy, err = prepareClaim(privacyCommand, rotated.retained[2])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, err := execute(privacy, rotated, true); err != nil || got != claimReplay {
+		t.Fatal("denied substitution destroyed original replay", err)
+	}
+	if err := pool.Raw().QueryRow(ctx, `SELECT fingerprint,fingerprint_key_version FROM identity.identity_command_id_claims WHERE command_id=$1`, privacyID).Scan(&after, &keyVersion); err != nil || keyVersion != 1 || !bytes.Equal(before, after) {
+		t.Fatal("retained fingerprint rewritten", err)
+	}
+	var count int
+	if err := pool.Raw().QueryRow(ctx, `SELECT count(*) FROM identity.commands WHERE command_id=$1`, privacyID).Scan(&count); err != nil || count != 1 {
+		t.Fatal("privacy replay duplicated journal", err)
 	}
 	for _, change := range []func(*claimRequest){
 		func(q *claimRequest) { q.tenant = "tenant-b" },

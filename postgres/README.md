@@ -2,6 +2,22 @@
 
 ## Privacy admission storage
 
+The native private command codec now binds the complete closed privacy request
+and its original authenticated proof to the existing global command claim.
+It reuses the core's deterministic intent digest, wrapping it and the exact
+opaque proof-envelope digest in separate framed, retained-key HMAC domains.
+Proof header/payload validation retains the existing bounded capability codec.
+Session IDs, projection choices and proof correlation fields do not enter
+persisted collision fields. Historical non-privacy command bytes are unchanged.
+
+Exact replay regenerates the original fingerprint under its stored key version;
+it never re-signs the proof, changes its lifetime or promotes a changed session
+or privacy epoch. Even another valid signature over identical proof metadata
+is distinct submitted custody. This encoding and private claim check neither
+consume a one-time use nor expose public privacy reservation/execution. Full
+native proof consumption, all cuts, audit/lifecycle and terminal recovery must
+still be composed under the sole coordinator.
+
 `PrivacyExportAdmissionContributor` is the native session owner's read-only
 eligibility role. The private invocation selects the already registered exact
 `identity/session/postgres` participant; registration alone cannot enable it
@@ -867,7 +883,7 @@ or missing scoped rows fail closed. Retired IDs conflict permanently. The owned
 retirement policy and scoped recovery still require implementation; the later
 migrations provide leases, terminal receipts and frozen plans.
 
-The private codec maps all seven current core command variants, including
+The private codec maps core commands, including privacy requests,
 account link/unlink and all identifier actions, through typed accessors. It uses the closed
 `identity-command-v1` deterministic encoding profile, framed HMAC-SHA-256
 digests for all private fields, and stored-key regeneration on rotated-key

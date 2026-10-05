@@ -98,6 +98,14 @@ func prepareClaim(c identity.Command, key [32]byte) (claimRequest, error) {
 		if err != nil {
 			return claimRequest{}, err
 		}
+	case isPrivacy(c):
+		s, _ := c.RequestPrivacyExport()
+		binding = s.Binding
+		var err error
+		payload, err = encodePrivacy(s, key)
+		if err != nil {
+			return claimRequest{}, err
+		}
 	case isFeature(c):
 		s, _ := c.Feature()
 		binding = s.Binding
@@ -158,6 +166,7 @@ func isStatus(c identity.Command) bool     { _, ok := c.UserStatus(); return ok 
 func isLink(c identity.Command) bool       { _, ok := c.LinkAccount(); return ok }
 func isUnlink(c identity.Command) bool     { _, ok := c.UnlinkAccount(); return ok }
 func isIdentifier(c identity.Command) bool { _, ok := c.ChangeIdentifier(); return ok }
+func isPrivacy(c identity.Command) bool    { _, ok := c.RequestPrivacyExport(); return ok }
 func isFeature(c identity.Command) bool    { _, ok := c.Feature(); return ok }
 
 func commandScope(b identity.CommandBinding) map[string][]byte {

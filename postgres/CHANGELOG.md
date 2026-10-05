@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Bind privacy command claims to the complete original intent and opaque proof
+  envelope through retained-key fingerprints. Exact replay survives key rotation;
+  changed scope, session, versions, projection choices or proof cannot acquire
+  the original command ID. Encoding consumes no proof and renews no authority;
+  public privacy execution stays closed pending protected composition.
+
 - Add transaction-bound native privacy session-admission invocations with exact
   registered-owner custody, copied original intent and ordered initial/final
   checks. Denied, retained, substituted or repeated phases cannot leave usable
