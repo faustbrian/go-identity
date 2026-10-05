@@ -527,6 +527,45 @@ func testNativeIssueIntegration(t *testing.T, ctx context.Context, pool *databas
 				}
 			})
 		}
+		t.Run("single session revocation", func(t *testing.T) {
+			makeIssued := func(t *testing.T, family string) session.Session {
+				t.Helper()
+				input := prepare(t)
+				if family != "" {
+					s, _ := input.record.Bindings()
+					s.FamilyID = family
+					keys, e := SessionAuthorityKeys(s.TenantID, s.UserID, s.FamilyID, s.SessionID)
+					if e != nil {
+						t.Fatal(e)
+					}
+					a, _ := s.Authority.Bindings()
+					a.SessionFamily.ScopeKey = keys.Family
+					a.Session.ScopeKey = keys.Session
+					s.Authority, e = session.NewAuthoritySnapshot(a)
+					if e != nil {
+						t.Fatal(e)
+					}
+					input.record, e = session.NewSession(s)
+					if e != nil {
+						t.Fatal(e)
+					}
+				}
+				command, e := session.NewIssueCommand(input.binding, input.record)
+				if e != nil {
+					t.Fatal(e)
+				}
+				request, e := session.NewAuthenticatedIssueRequest(command, input.proof)
+				if e != nil {
+					t.Fatal(e)
+				}
+				outcome, e := executor.ExecuteIssue(ctx, request)
+				if e != nil || outcome.Receipt.Outcome != identity.CommitOutcomeCommitted {
+					t.Fatal("native issuance fixture", e)
+				}
+				return outcome.Session
+			}
+			testNativeSingleRevocation(t, ctx, pool, executor, makeIssued)
+		})
 		t.Run("core issuer delivers only after native commit", func(t *testing.T) {
 			candidate := prepare(t)
 			spec, _ := candidate.record.Bindings()

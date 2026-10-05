@@ -69,4 +69,20 @@ func TestMigrationHistoryOwnsExplicitSchemaAndVersion(t *testing.T) {
 	if rows, err := (IssueMigrationSource{Base: upgrade, Version: 12}).Load(ctx); !errors.Is(err, context.Canceled) || rows != nil {
 		t.Fatal("issue cancellation lost")
 	}
+	one := RevokeOneMigrationSource{Base: upgrade, Version: 18}
+	single, err := one.Load(context.Background())
+	if err != nil || len(single) != 3 || single[0] != original || single[1] != upgraded[1] || single[2].Version() != 18 || single[2].DownSQL() != "" {
+		t.Fatal("single revocation rewrote history", err)
+	}
+	for _, v := range []migrations.Version{0, 10, 11, ^migrations.Version(0)} {
+		if rows, err := (RevokeOneMigrationSource{Base: upgrade, Version: v}).Load(context.Background()); err == nil || rows != nil {
+			t.Fatal("invalid single allocation admitted")
+		}
+	}
+	if rows, err := one.Load(nil); err == nil || rows != nil {
+		t.Fatal("nil single context admitted")
+	}
+	if rows, err := one.Load(ctx); !errors.Is(err, context.Canceled) || rows != nil {
+		t.Fatal("single cancellation lost")
+	}
 }

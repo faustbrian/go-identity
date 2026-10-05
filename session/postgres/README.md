@@ -13,6 +13,30 @@ rotation, cleanup, devices and complete session profiles remain unfinished.
 Single-factor stateful opaque validation now has owned primary composition;
 this is not yet a complete login service.**
 
+## Single-session native revocation
+
+The explicitly configured `NewRepositoryWithIssueAdmission` contributor also
+supports the closed `session.NewRevokeOneCommand` variant. Install the additive
+`RevokeOneMigrationSource` at a permanent version after the family history,
+merging it with issuance and kernel migrations in the existing single history.
+It does not rewrite historical SQL or populated session records.
+
+Mapping retains the complete original record, policy and authority vector.
+The sole coordinator checks the exact registered invocation; the adapter locks
+current directory, credential, authorization, target and family state before
+mutating only the target. The physical record/version remains its original
+snapshot; `session_revocations` retains the terminal version successor and
+command binding independently of payload cleanup. Audit and lifecycle effects
+share that transaction. Missing infrastructure and ambiguous/corrupt recovery
+evidence never prove noncommit or authorize another transition.
+
+This currently supports active single-factor self-service targets with the
+configured owner profile, not anonymous/factor/passkey or administrative
+variants. Construction and structural mapping do not authenticate a caller:
+the owned public revocation service must still supply opaque current caller
+admission and policy before reservation. Public idempotent signout and revoked
+or expired-target management remain required work. No bearer is issued here.
+
 ## Owned stateful authentication
 
 `NewSessionService(pool, SessionServiceConfig{Repository: ..., Profile: ...,

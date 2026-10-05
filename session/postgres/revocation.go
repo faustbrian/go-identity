@@ -27,7 +27,7 @@ func (*Repository) Descriptor() identitypostgres.ContributorDescriptor {
 func (r *Repository) FeatureOperations() []identity.FeatureOperation {
 	ops := []identity.FeatureOperation{session.RevokeFamilyOperation()}
 	if r != nil && r.issueAdmission != nil {
-		ops = append(ops, session.IssueOperation())
+		ops = append(ops, session.IssueOperation(), session.RevokeOneOperation())
 	}
 	return ops
 }
@@ -41,6 +41,9 @@ func (r *Repository) FeatureOperations() []identity.FeatureOperation {
 func MapCommand(c session.SessionCommand) (identity.Command, error) {
 	if s, ok := c.Issue(); ok {
 		return mapIssue(s)
+	}
+	if s, ok := c.RevokeOne(); ok {
+		return mapSessionRecord(s.Binding, session.RevokeOneOperation(), s.Session)
 	}
 	s, ok := c.RevokeFamily()
 	if !ok {
@@ -64,6 +67,9 @@ func nativeRevocation(c identity.Command) (session.SessionCommand, error) {
 // policy; privileged callers require protected retention. This pure method
 // neither authorizes a caller nor reads current family state.
 func (r *Repository) ValidateFeatureCommand(c identity.Command, p identitypostgres.CommandPlan) error {
+	if s, ok := c.Feature(); ok && s.Operation == session.RevokeOneOperation() {
+		return r.validateRevokeOnePlan(c, p)
+	}
 	if s, ok := c.Feature(); ok && s.Operation == session.IssueOperation() {
 		return r.validateIssuePlan(c, p)
 	}
@@ -86,6 +92,13 @@ func (r *Repository) ValidateFeatureCommand(c identity.Command, p identitypostgr
 // closed native command, then delegates to Apply. No audit/lifecycle is staged
 // here: the coordinator owns their exact required phases and terminal receipt.
 func (r *Repository) ApplyFeature(ctx context.Context, w identitypostgres.Work, c identity.Command) (identity.FeatureReceipt, error) {
+	if s, ok := c.Feature(); ok && s.Operation == session.RevokeOneOperation() {
+		native, err := nativeRevokeOne(c)
+		if err != nil {
+			return identity.FeatureReceipt{}, err
+		}
+		return r.Apply(ctx, w, native)
+	}
 	if s, ok := c.Feature(); ok && s.Operation == session.IssueOperation() {
 		native, err := nativeIssue(c)
 		if err != nil {
@@ -119,6 +132,9 @@ func (r *Repository) Apply(ctx context.Context, w identitypostgres.Work, c sessi
 	}
 	if issue, ok := c.Issue(); ok {
 		return r.applyIssue(ctx, w, issue)
+	}
+	if one, ok := c.RevokeOne(); ok {
+		return r.applyRevokeOne(ctx, w, one)
 	}
 	s, ok := c.RevokeFamily()
 	if !ok {
@@ -158,6 +174,9 @@ func (r *Repository) RecoverParticipant(ctx context.Context, w identitypostgres.
 	}
 	if _, feature, _, err := w.FeatureScope(r); err == nil && feature.Operation == session.IssueOperation() {
 		return r.recoverIssue(ctx, w)
+	}
+	if _, feature, _, err := w.FeatureScope(r); err == nil && feature.Operation == session.RevokeOneOperation() {
+		return r.recoverRevokeOne(ctx, w)
 	}
 	b, feature, transition, err := w.FeatureScope(r)
 	if err != nil || feature.Operation != session.RevokeFamilyOperation() || transition.BeforeVersion == 0 || transition.BeforeVersion == ^uint64(0) || transition.AfterVersion != transition.BeforeVersion+1 {

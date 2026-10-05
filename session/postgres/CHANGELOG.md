@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- Add exact single-session revocation through the existing coordinator with
+  complete original-record mapping, locked directory/credential/policy/session
+  admission, target-only CAS and retained terminal successor evidence. Sibling
+  records, family authority and original snapshots remain unchanged. Install
+  `RevokeOneMigrationSource` alongside the selected issuance history before
+  using this configured native operation. Caller authentication and public
+  idempotent logout orchestration remain unfinished.
+- Permit later independently issued sessions in an existing active family
+  while retaining its original creation timestamp. A session cannot predate
+  its family; corrupt or future family timestamps still fail closed.
+
 - Add owned single-factor stateful session validation using the committed core
   service and native primary directory, user, identifier, exact credential,
   authorization and session/family owners. Deny ambiguous retained-key lookup,

@@ -9,6 +9,7 @@ import (
 	"github.com/faustbrian/go-identity/session"
 	database "github.com/faustbrian/go-postgres"
 	"strings"
+	"time"
 )
 
 // IssueAdmissionConfig freezes the single-factor self-service issuance profile.
@@ -144,7 +145,13 @@ func (r *Repository) requireIssueFamily(ctx context.Context, w kernel.Work, s se
 	if rows.Next() || rows.Err() != nil {
 		return identity.UnavailableError{}
 	}
-	if user != string(s.UserID) || state != "active" || version != fmt.Sprint(s.FamilyVersion) || issued != s.IssuedAt.UTC().Format(storedTimeLayout) {
+	familyIssued, err := time.Parse(storedTimeLayout, issued)
+	if err != nil || familyIssued.UTC().Format(storedTimeLayout) != issued {
+		return identity.UnavailableError{}
+	}
+	// A family retains its original creation time across independently issued
+	// siblings. Requiring equality would reject every later session in it.
+	if user != string(s.UserID) || state != "active" || version != fmt.Sprint(s.FamilyVersion) || familyIssued.After(s.IssuedAt) {
 		return identity.ForbiddenError{}
 	}
 	return nil

@@ -12,7 +12,14 @@ import (
 // shared codec. Exact nanosecond times use canonical UTC text because the
 // shared FeatureTime profile is microsecond-only.
 func mapIssue(issue session.IssueCommandSpec) (identity.Command, error) {
-	s, err := issue.Session.Bindings()
+	return mapSessionRecord(issue.Binding, session.IssueOperation(), issue.Session)
+}
+
+// Both native operations bind the same complete immutable record, without an
+// opaque JSON escape or a second authority vocabulary. Issuance and revocation
+// apply their own version, purpose and temporal requirements after decoding.
+func mapSessionRecord(b identity.CommandBinding, operation identity.FeatureOperation, record session.Session) (identity.Command, error) {
+	s, err := record.Bindings()
 	if err != nil || s.Authentication.Kind != session.AuthenticationVerified {
 		return identity.Command{}, session.ErrInvalidSessionCommand
 	}
@@ -79,15 +86,26 @@ func mapIssue(issue session.IssueCommandSpec) (identity.Command, error) {
 	optional("authority.organization", authority.Organization)
 	optional("authority.factor", authority.Factor)
 	optional("authority.passkey", authority.Passkey)
-	return identity.NewFeatureCommand(identity.FeatureCommandSpec{Binding: issue.Binding, Operation: session.IssueOperation(), Fields: fields})
+	return identity.NewFeatureCommand(identity.FeatureCommandSpec{Binding: b, Operation: operation, Fields: fields})
 }
 
 // Reconstruction is structural only. Private proof provenance, current owner
 // checks, original one-time use and transaction ownership are separate phases.
 func nativeIssue(command identity.Command) (session.SessionCommand, error) {
+	b, record, err := nativeSessionRecord(command, session.IssueOperation())
+	if err != nil {
+		return session.SessionCommand{}, err
+	}
+	return session.NewIssueCommand(b, record)
+}
+
+func nativeSessionRecord(command identity.Command, operation identity.FeatureOperation) (identity.CommandBinding, session.Session, error) {
+	fail := func() (identity.CommandBinding, session.Session, error) {
+		return identity.CommandBinding{}, session.Session{}, session.ErrInvalidSessionCommand
+	}
 	projection, ok := command.Feature()
-	if !ok || projection.Operation != session.IssueOperation() {
-		return session.SessionCommand{}, session.ErrInvalidSessionCommand
+	if !ok || projection.Operation != operation {
+		return fail()
 	}
 	values := make(map[string]identity.FeatureValue, len(projection.Fields))
 	for _, field := range projection.Fields {
@@ -145,20 +163,20 @@ func nativeIssue(command identity.Command) (session.SessionCommand, error) {
 	s.IssuedAt, s.LastActivityAt = instant("session.issued"), instant("session.activity")
 	authority := session.AuthoritySnapshotSpec{Global: binding("authority.global"), Tenant: binding("authority.tenant"), User: binding("authority.user"), Identifier: binding("authority.identifier"), Credential: binding("authority.credential"), SessionFamily: binding("authority.family"), Session: binding("authority.session"), Authorization: binding("authority.authorization"), ActiveOrganizationID: text("authority.organization.id"), Organization: optional("authority.organization"), Factor: optional("authority.factor"), Passkey: optional("authority.passkey")}
 	if !valid || len(values) != 0 || s.Authentication.Kind != session.AuthenticationVerified {
-		return session.SessionCommand{}, session.ErrInvalidSessionCommand
+		return fail()
 	}
 	var err error
 	s.Remember, err = session.NewRememberPolicy(remember)
 	if err != nil {
-		return session.SessionCommand{}, session.ErrInvalidSessionCommand
+		return fail()
 	}
 	s.Authority, err = session.NewAuthoritySnapshot(authority)
 	if err != nil {
-		return session.SessionCommand{}, session.ErrInvalidSessionCommand
+		return fail()
 	}
 	record, err := session.NewSession(s)
 	if err != nil {
-		return session.SessionCommand{}, session.ErrInvalidSessionCommand
+		return fail()
 	}
-	return session.NewIssueCommand(projection.Binding, record)
+	return projection.Binding, record, nil
 }

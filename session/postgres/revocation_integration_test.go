@@ -597,6 +597,26 @@ func TestNativeFamilyRevocationIntegration(t *testing.T) {
 		if _, e = runner.Up(ctx); e != nil {
 			t.Fatal(e)
 		}
+		oldHistory, e := status.Load(ctx)
+		if e != nil {
+			t.Fatal(e)
+		}
+		oneHistory, e := (RevokeOneMigrationSource{Base: RevocationMigrationSource{Base: MigrationSource{Schema: "session_store", Version: 10}, Version: 11}, Version: 18}).Load(ctx)
+		if e != nil {
+			t.Fatal(e)
+		}
+		var beforeMigration string
+		if e = db.QueryRowContext(ctx, `SELECT jsonb_agg(record ORDER BY tenant_id,session_id)::text FROM session_store.sessions`).Scan(&beforeMigration); e != nil {
+			t.Fatal(e)
+		}
+		migrate(append(oldHistory, oneHistory[len(oneHistory)-1]))
+		migrate(append(oldHistory, oneHistory[len(oneHistory)-1]))
+		// Populated active/revoked records and all older migration checksums
+		// survive the additive single-session installation byte-for-byte.
+		var afterMigration string
+		if e = db.QueryRowContext(ctx, `SELECT jsonb_agg(record ORDER BY tenant_id,session_id)::text FROM session_store.sessions`).Scan(&afterMigration); e != nil || afterMigration != beforeMigration {
+			t.Fatal("populated snapshot changed", e)
+		}
 		testNativeIssueIntegration(t, ctx, pool)
 		t.Run("native session authentication", func(t *testing.T) { testNativeSessionAuthentication(t, ctx, pool) })
 	})
