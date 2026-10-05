@@ -4,9 +4,11 @@ Experimental Go 1.27 durable adapter. Forward-only migrations and bounded
 primary `Get`/digest `Lookup` reads preserve complete native session records,
 resolved lifetime limits, original nanosecond timelines, full uint64 authority
 versions and revocation tombstones. Native family revocation now participates
-in the sole identity PostgreSQL coordinator. **Issuance, rotation, cleanup,
-devices and online authority enforcement are not
-implemented yet. This is not a login/session-authentication service.**
+in the sole identity PostgreSQL coordinator. Explicitly configured native
+authenticated issuance now checks current owners and atomically stages records
+and original proof use. **Complete bearer delivery, browser-container policy,
+rotation, cleanup, devices and session authentication remain unfinished.
+This is not yet a usable login/session-authentication service.**
 
 ## Adoption and API
 
@@ -31,7 +33,42 @@ original session install or live records. The original two-field
 `MigrationSource` remains unchanged and returns only the read-only install.
 Register the repository alongside the owned kernel, audit and outbox
 contributors. Its descriptor is `identity.session.store` version 1 and it
-declares only the implemented `identity.session.revoke-family` schema.
+declares `identity.session.revoke-family`; the default constructor does not
+register issuance.
+
+## Protected native issuance
+
+`NewRepositoryWithIssueAdmission(pool, config, IssueAdmissionConfig{...})`
+freezes a trusted single-factor self-service profile: deployment authority,
+authorization namespace, audience, authentication method and credential
+kind/owner. Configure the coordinator's trusted final-authentication authority
+and namespace separately. Neither profile comes from request input.
+Organization, factor and passkey profiles deny until their native owners are
+composed; no applicable authority is dropped from the original record.
+
+Compose `IssueMigrationSource{Base: RevocationMigrationSource{...}, Version: ...}`
+with kernel proof-use, directory, status/credential and authorization-authority
+migrations in one ordered permanent history. Issuance evidence survives session
+payload cleanup and cannot be silently pruned during command reconciliation.
+
+Map the closed `session.SessionCommand` with `MapCommand`, then use the
+coordinator's `PrepareAuthenticatedCommandPlan`/`ReserveAuthenticatedCommand`
+with the same original opaque final-authentication proof. Ordinary reservation
+rejects issuance even when its structural command is valid. The adapter compares
+every original proof field and complete snapshot, locks current native owners,
+preserves original family issuance time and denies absent/stale/revoked families.
+A genuinely new family requires version1; concurrent uniqueness waits cannot
+overwrite a retained family or reset its authority. The same Work persists
+family, session, proof use, native issuance evidence, audit and lifecycle.
+Final comparison includes the complete stored session and primary expiry.
+
+No raw bearer is generated, stored or returned by these adapter methods.
+Replay returns retained command metadata, not another credential. This native
+path is a prerequisite for the core issuer's reveal-once bearer custody and
+container policy, not a replacement for that unfinished service. Integration
+checks use the production session repository and real PostgreSQL; test-owned
+audit/outbox contributors prove transaction atomicity, not complete production
+delivery composition. Full coverage, mutation and release gates remain pending.
 
 `MapCommand(session.NewRevokeFamilyCommand(...))` maps the closed native
 command's complete expected-version intent. Prepare a native feature plan with

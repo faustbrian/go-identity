@@ -3,10 +3,12 @@
 package postgres
 
 import (
+	"cmp"
 	"context"
 	"encoding/base64"
 	"errors"
 	"os"
+	"slices"
 	"strconv"
 	"sync"
 	"testing"
@@ -14,6 +16,7 @@ import (
 
 	"github.com/faustbrian/go-audit"
 	"github.com/faustbrian/go-authorization"
+	policyStore "github.com/faustbrian/go-authorization/postgres"
 	"github.com/faustbrian/go-clock"
 	identity "github.com/faustbrian/go-identity"
 	identitypostgres "github.com/faustbrian/go-identity/postgres"
@@ -563,6 +566,38 @@ func TestNativeFamilyRevocationIntegration(t *testing.T) {
 			t.Fatal("ambiguous noncommit was not recovered", e, recovered.Outcome)
 		}
 		familyState(t, "family-ambiguous", "active", "7")
+	})
+	t.Run("authenticated issuance", func(t *testing.T) {
+		proofHistory, e := (identitypostgres.SignInProofUseMigrationSource{Base: identitypostgres.MigrationSource{}, Version: 12}).Load(ctx)
+		if e != nil {
+			t.Fatal(e)
+		}
+		sessionHistory, e := (IssueMigrationSource{Base: RevocationMigrationSource{Base: MigrationSource{Schema: "session_store", Version: 10}, Version: 11}, Version: 13}).Load(ctx)
+		if e != nil {
+			t.Fatal(e)
+		}
+		policySQL, e := policyStore.AuthoritySchemaMigration(14)
+		if e != nil {
+			t.Fatal(e)
+		}
+		policyMigration, e := migrations.NewMigration(14, policySQL.Name, migrations.TransactionModeDefault, policySQL.Up, policySQL.Down)
+		if e != nil {
+			t.Fatal(e)
+		}
+		combined := append(proofHistory, sessionHistory...)
+		combined = append(combined, policyMigration)
+		slices.SortFunc(combined, func(a, b migrations.Migration) int { return cmp.Compare(a.Version(), b.Version()) })
+		directory := identitypostgres.DirectoryAuthorityMigrationSource{Base: fixtureSource(combined), Version: 15, GlobalAuthorityID: "deployment-issue", TenantIDs: []identity.TenantID{"issue"}}
+		credential := identitypostgres.CredentialMigrationSource{Base: directory, Version: 16}
+		status := identitypostgres.StatusMigrationSource{Base: credential, Version: 17}
+		runner, e := migrations.NewRunner(status, backend)
+		if e != nil {
+			t.Fatal(e)
+		}
+		if _, e = runner.Up(ctx); e != nil {
+			t.Fatal(e)
+		}
+		testNativeIssueIntegration(t, ctx, pool)
 	})
 }
 

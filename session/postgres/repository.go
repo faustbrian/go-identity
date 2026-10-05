@@ -41,13 +41,16 @@ type StoredSession struct {
 // one atomic joined record from the caller-owned PRIMARY pool; never configure
 // replicas. It is safe for concurrent reads. The caller closes the pool after
 // all operations finish. Zero is invalid. Native family revocation writes use
-// only the active shared-coordinator invocation; issuance and rotation are pending.
+// only the active shared-coordinator invocation. Explicitly configured native
+// issuance checks current owners and uses the protected proof-bearing profile;
+// complete bearer delivery and rotation remain pending.
 type Repository struct {
 	pool                *database.Pool
 	schema              string
 	maximumDuration     time.Duration
 	identifierAdmission *IdentifierAdmissionConfig
 	privacyAdmission    *PrivacyExportAdmissionConfig
+	issueAdmission      *IssueAdmissionConfig
 }
 
 // NewRepository validates configuration without IO. The database must already

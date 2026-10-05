@@ -54,4 +54,19 @@ func TestMigrationHistoryOwnsExplicitSchemaAndVersion(t *testing.T) {
 	if rows, err := (RevocationMigrationSource{Version: 11}).Load(context.Background()); err == nil || rows != nil {
 		t.Fatal("invalid base install admitted")
 	}
+	issued, err := (IssueMigrationSource{Base: upgrade, Version: 12}).Load(context.Background())
+	if err != nil || len(issued) != 3 || issued[0] != original || issued[1] != upgraded[1] || issued[2].Version() != 12 || issued[2].DownSQL() != "" {
+		t.Fatal("issuance rewrote historical source", err)
+	}
+	for _, v := range []migrations.Version{0, 10, 11, ^migrations.Version(0)} {
+		if rows, err := (IssueMigrationSource{Base: upgrade, Version: v}).Load(context.Background()); err == nil || rows != nil {
+			t.Fatal("invalid issue allocation accepted")
+		}
+	}
+	if rows, err := (IssueMigrationSource{Base: upgrade, Version: 12}).Load(nil); err == nil || rows != nil {
+		t.Fatal("nil issue context accepted")
+	}
+	if rows, err := (IssueMigrationSource{Base: upgrade, Version: 12}).Load(ctx); !errors.Is(err, context.Canceled) || rows != nil {
+		t.Fatal("issue cancellation lost")
+	}
 }

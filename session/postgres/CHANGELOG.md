@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Add explicitly configured authenticated session issuance through the existing
+  protected coordinator. Preserve the complete original record, remember policy,
+  proof/credential linkage and authority vector; compare native current owners
+  before effects and terminalization. Session, family, proof use and issuance
+  evidence roll back together. New forward-only issuance migrations preserve
+  installed history. Existing constructors remain opted out; complete bearer
+  delivery, container policy, rotation and composed login remain pending.
+
 - Add opt-in native privacy session eligibility on the original coordinator
   transaction. Checks retain original user/credential/identifier authority,
   exact owner keys, session/family locks and primary expiry without renewing

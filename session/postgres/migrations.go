@@ -1,7 +1,7 @@
 // Package postgres owns durable session storage. Structural record reads do
 // not authenticate a bearer or authorize a session. Native family revocation
-// uses the sole coordinator. Issuance, rotation, proof consumption and online
-// lifecycle enforcement remain in development.
+// and explicitly configured authenticated issuance use the sole coordinator.
+// Complete bearer delivery, rotation and session authentication remain in development.
 package postgres
 
 import (
