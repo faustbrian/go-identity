@@ -54,6 +54,7 @@ type workState struct {
 	riskCommand         *identity.Command
 	privacyAllocation   *privacyAllocation
 	privacyReceipt      *identity.PrivacyExportRequestReceipt
+	privacyAdmission    *privacyAdmissionProgress
 }
 
 // newWork is private: only the sole coordinator may call it after verifying

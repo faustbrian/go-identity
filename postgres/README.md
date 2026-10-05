@@ -2,6 +2,20 @@
 
 ## Privacy admission storage
 
+`PrivacyExportAdmissionContributor` is the native session owner's read-only
+eligibility role. The private invocation selects the already registered exact
+`identity/session/postgres` participant; registration alone cannot enable it
+as a public command. Its `PrivacyExportAdmissionWork` has no constructor or
+write/transaction-closure methods. Initial checks precede allocation; terminal
+checks require the same Work's stored allocation/snapshot and frozen request.
+The role borrows existing kernel credential, directory and authorization checks
+and bounded primary reads without defining another policy owner. Every ignored
+denial poisons Work, handles expire when the invocation returns, and repeated or
+reentrant phases cannot renew authority. Session/proof freshness remains the
+original authority owner's responsibility, never a new lease from this handle.
+The actual native session adapter must implement these checks; this invocation
+plumbing is not proof of session validity or complete queued admission.
+
 Compose `PrivacyExportJobMigrationSource{Base, Version}` after the privacy
 epoch migration to add bounded immutable request/snapshot metadata and the
 closed six-state job profile. Existing applied migrations are unchanged.

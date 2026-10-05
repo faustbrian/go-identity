@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add transaction-bound native privacy session-admission invocations with exact
+  registered-owner custody, copied original intent and ordered initial/final
+  checks. Denied, retained, substituted or repeated phases cannot leave usable
+  Work or renew session/proof freshness. Public export execution remains closed
+  pending complete native session/proof/cut/effect and recovery composition.
+
 - Add bounded native privacy job/snapshot persistence tied to the same Work's
   allocation and frozen intent. Preserve sealed bytes, retained key version and
   full-width cuts; reject stale eligibility, duplicate staging and command-ID
