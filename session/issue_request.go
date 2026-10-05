@@ -79,6 +79,18 @@ func (r IssueRequest) Command() (SessionCommand, bool) {
 	return r.state.command, true
 }
 
+// AuthenticatedProof returns the original upstream opaque proof for the owned
+// durable adapter's protected command admission. Zero returns false. It exposes
+// no bearer or fabrication capability; the configured authority must still
+// validate its private provenance and exact scope inside the authoritative
+// transaction. Bindings or Command projections cannot substitute this value.
+func (r IssueRequest) AuthenticatedProof() (authentication.AuthenticatedProof, bool) {
+	if r.state == nil {
+		return authentication.AuthenticatedProof{}, false
+	}
+	return r.state.proof, true
+}
+
 // Format redacts command scope and authentication linkage for every fmt verb.
 func (IssueRequest) Format(s fmt.State, _ rune) { io.WriteString(s, "session.IssueRequest(redacted)") }
 

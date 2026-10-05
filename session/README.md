@@ -2,8 +2,9 @@
 
 Experimental Go 1.27 session policy module. This first batch implements shared
 remember-policy resolution, lifetime evaluation, secure host-cookie attributes
-and opaque token/key custody with tenant-bound lookups. **Session issuance,
-authentication, persistence, rotation,
+and opaque token/key custody with tenant-bound lookups. Authenticated cookie
+issuance orchestration is available through `SessionIssuer`; owned durable
+executor composition remains in development. **Session authentication, rotation,
 revocation and transfers are not yet implemented.** Complete authority-vector
 construction and exact comparison are available, but do not read primary
 authority or prove activity/freshness.
@@ -11,7 +12,7 @@ authority or prove activity/freshness.
 Immutable complete session records and exact-bound native issue commands are
 also available for trusted storage/adapters. They are **not** session issuance:
 caller-created `authentication.Proof` metadata and `AuthenticationVerified`
-cannot establish authentication authority. No command in this module executes
+cannot establish authentication authority. No command by itself executes
 or opens a transaction, reserves a proof, writes a record or reveals a token.
 
 ## Quick start and API
@@ -83,6 +84,47 @@ authentication or persistence. Reference defaults belong to deployment.
   `identity/postgres` coordinator. This command cannot activate that adapter.
 
 ## Adoption, security and tradeoffs
+
+### Commit-gated authenticated cookie issuance
+
+`NewSessionIssuer` freezes the configured proof authority, trusted clock,
+bounded execution duration, independent lookup key, token size and host-cookie
+policy. `IssueExecutor` is a storage-neutral boundary for the platform's owned
+durable execution service, not an invitation to supply an application domain
+store or another journal. The native PostgreSQL repository now implements
+session effects; the public owned execution-service composition is the next
+adapter batch. This core contract alone is not a usable login service.
+
+`Prepare` accepts the original command binding, complete session projection,
+resolved `RememberPolicy` and final opaque authenticated proof. The projection's
+lookup must be zero. Preparation validates before generating one random token,
+then binds that exact token's tenant/key-version digest into the native command.
+`PreparedIssuance` exposes only its safe `Request`; it never exposes token bytes.
+Retain that original preparation rather than preparing again on a retry.
+
+`Issue` makes one bounded attempt across all copies of a preparation. It accepts
+only an exact valid creation receipt and native record: original digest, family,
+authority vector, authentication, remember policy and times cannot be replaced.
+Only fresh non-replayed committed execution without dependency error or
+cancellation returns a `Token` and credential-free cookie attributes. The cookie
+uses the original absolute deadline, not a renewed TTL. Explicitly reveal once
+at the authorized response boundary; automatic serialization is forbidden.
+
+Malformed output or a panic during durable execution is `Unknown`, not assumed
+rollback. A valid exact receipt preserves its known outcome even if subsequent
+delivery fails. `Recover` queries the original command through the primary
+executor and returns safe historical metadata only, never a replacement bearer
+or new session. Proof expiry does not erase historical outcome recovery; the
+adapter still enforces current result-access policy. Process-restart recovery
+requires retaining the original safe command/proof bindings through owned
+durable composition; this in-memory preparation is not a persistence system.
+
+The original opaque proof is available through `IssueRequest.AuthenticatedProof`
+for the owned adapter's protected coordinator admission. It cannot be fabricated
+from public metadata and must still be checked against the configured private
+authority and current lifecycle under the sole transaction owner. Anonymous,
+bearer-continuation, session-container limits and rotations remain separate
+unfinished contracts; this cookie issuer does not approximate those profiles.
 
 `NewAuthenticatedIssueRequest` binds a closed `SessionCommand` to the upstream
 opaque `authentication.AuthenticatedProof`, including its original proof and

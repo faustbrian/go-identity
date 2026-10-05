@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Add owned authenticated cookie issuance orchestration with private original
+  token preparation, exact durable receipt/record matching, unchanged remember
+  policy and commit-gated reveal-once delivery. Replays, recovery, unknown
+  outcomes and failed delivery never return a bearer. The storage-neutral
+  executor's public owned PostgreSQL composition remains in development.
+  Add access to the original opaque request proof for protected native adapter
+  admission without admitting structural metadata as authentication.
+
 - Add a closed exact-scope native family-revocation command with checked
   full-width versions. It remains distinct from issuance and user-wide logout;
   preparation alone grants no authorization or durable outcome.
