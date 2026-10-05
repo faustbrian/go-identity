@@ -165,6 +165,23 @@ lifetime; admission and the accessor neither transfer nor consume it. The
 structural `NewIdentifierCommand` constructor carries grant metadata only.
 Bearer custody is never part of durable command encoding or recovery.
 
+`CheckIdentifierAccess` additionally computes the pure transition against a
+complete `IdentifierAccessSnapshot`. Each `IdentifierLoginMethod` records an
+owner-evaluated login path and an optional exact identifier/verification-version
+dependency. Different identifier paths may share one exact credential. Removing
+a dependency, replacing its canonical value, or losing required verified/primary
+state eliminates that path. Independent passkeys/provider methods may preserve
+access; expired/disabled methods and API keys never count. The returned count
+is surviving paths, not distinct credentials. An orphaning change returns
+`FinalAccessError` and no provisional mutation; malformed/stale views fail closed.
+
+This helper performs no authority reads or authentication. Trusted credential,
+factor and provider owners must establish method eligibility, and the durable
+owner must read and lock the complete snapshot and enforce the decision in the
+same protected transaction. That native composition remains pending; constructing
+the public snapshot or setting `Usable` is never permission. Pre-auth registration
+uses a separate workflow before any human login method exists.
+
 `IdentifierIntentDigest` uses SHA-256 over the UTF-8 domain
 `identity-identifier-change-v1` plus a NUL, followed by eleven exact UTF-8
 fields, each prefixed by its four-byte big-endian byte length:

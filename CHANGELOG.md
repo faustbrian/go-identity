@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Add the pure identifier final-access decision: conserve exact credential-to-
+  identifier dependencies across removal, replacement and primary switching,
+  preserving independent human methods without counting API keys as login.
+
 - Preserve original opaque identifier proof custody through admitted command
   execution for native configured reverification, without persisting bearer
   material or transferring or consuming the proof during admission.
