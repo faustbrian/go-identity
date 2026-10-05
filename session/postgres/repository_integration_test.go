@@ -151,6 +151,7 @@ func TestSessionPostgresIntegration(t *testing.T) {
 	if _, err = repo.Get(ctx, "tenant-a", "session-a"); err != nil {
 		t.Fatal("ID reconstruction failed", err)
 	}
+	t.Run("borrowed session admission", func(t *testing.T) { testSessionAdmission(t, ctx, pool, native) })
 	canceled, stop := context.WithCancel(ctx)
 	stop()
 	var cancelled identity.CancelledError

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Add bounded borrowed-primary `RequireSession` admission: exact immutable
+  record, active session/family versions, share locks and database-time expiry.
+  It supplies only session-owned checks, not full authority or authentication.
+
 - Add native transactional family revocation through the sole identity
   coordinator, with exact owner/tenant/version checks, retained command evidence
   and mandatory audit/lifecycle declarations. Original session snapshots are

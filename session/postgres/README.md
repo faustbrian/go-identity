@@ -61,6 +61,26 @@ return a structural `StoredSession`. Both use one joined primary query and a
 finite read budget. Earlier deadlines win; cancellation, deadline, absence and
 unavailability are redacted. No SQL diagnostic or partial record escapes.
 
+`RequireSession(ctx, work, Config{Schema: "identity_session", MaximumDuration:
+time.Second}, frozenSession)` borrows the owning transaction's query cursor
+(`identitypostgres.Work` or a trusted primary `pgx.Tx`). Freeze the exact original
+session in the owning command before reservation. The native query compares
+physical indexes, complete stored snapshot, authentication linkage and lifetime
+without replacing any field. It requires active session/family state and exact
+versions, takes share locks on both, and checks database time **after** acquiring
+those locks. Earlier caller/Work deadlines win; rows close before return and
+locks remain until the original coordinator commits or aborts.
+
+This is only session-owned admission, not full session authentication. Native
+participants must still check current global/tenant/user/identifier/credential,
+authorization and every applicable organization/factor/passkey authority, plus
+authentic proof and final temporal validity. Passing a pool/autocommit queryer
+cannot prove protected admission. The owning native participant must fence
+scope/lifetime and poison/abort Work on every failure, including ignored denial.
+No bearer, authority lease, policy decision, refresh or new session is returned.
+Missing/revoked/expired/unequal rows deny uniformly with `identity.ForbiddenError`;
+invalid inputs and storage/corrupt rows retain redacted typed classifications.
+
 ## Security and tradeoffs
 
 - These are trusted storage APIs, not unauthenticated public endpoints.
