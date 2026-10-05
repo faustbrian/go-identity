@@ -31,10 +31,54 @@ and fresh human/session checks. `NewPrivacyExportRequestCommand` checks the
 verified grant's exact metadata and copies inputs; it does not establish issuer
 trust, time validity, freshness or consume anything.
 
-This command currently has **no execution mapping or admission service**.
-The constructor cannot fabricate original opaque proof custody. Snapshot V1 wire IDs remain
+This command currently has **no PostgreSQL execution mapping**.
+The metadata constructor cannot fabricate original opaque proof custody. Snapshot V1 wire IDs remain
 strictly canonical 128-bit; imported directory ID mapping is an unfinished
 admission prerequisite, not permission to rewrite imported identity IDs.
+
+## Configured request and recovery service
+
+`NewPrivacyExportService` composes the existing `UnitOfWork`, exact upstream
+authorization service, bounded query/redaction policy, capability service and
+one to 32 retained evidence keys. No domain-store callback, transaction handle,
+second command journal or worker registration is introduced. The configuration
+and projection inputs are copied; dependencies must be concurrent-safe and
+honor context deadlines. Methods own no background work or resource lifetime.
+
+`Request` takes unsigned `Intent`, the original opaque `Proof` and authenticated
+`ActorScope`. Only the same current human may request their own export. The exact
+binding must match configured policy/schema/operation, and configured issuer,
+audience, purpose and exclusive proof age are checked without rewriting intent.
+`Command.PrivacyExportProof` retains original request-memory custody for the
+durable owner to reverify and atomically reserve/consume. It does not transfer,
+consume or serialize bearer material. A metadata-only command lacks that custody.
+
+`Recover` takes the original unsigned intent and current actor context, not an
+expired proof. It queries only the same scoped command through `UnitOfWork`,
+then validates exact retained intent and the snapshot's recorded key version.
+Neither a new export nor a mutation is performed. An unauthorized or malformed
+observation cannot claim that the prior operation rolled back. Bad/unverifiable
+receipts stay outcome-unknown. Known committed/not-committed/conflict/in-progress
+outcomes survive dependency errors, cancellation and disclosure failures.
+
+Only queued `ExportID` and `Status` are projected, through a second current
+authorization decision and the registered redaction policy for the
+`identity.privacy-export` resource (`export_id`, `status` fields). Integrity
+records and contributor cuts are not public service results. Error details are
+redacted. Denied disclosure cannot turn a known commit into rollback.
+Disclosure authorization runs after owner and redaction work. Each operation
+samples the configured clock once; final decision time advances that trusted
+sample by process-local monotonic elapsed time, not wall-clock subtraction or
+a new validity-evidence sample. Proof issuance and snapshot timestamps remain
+unchanged. Runtime service formatting is redacted and serialization forbidden.
+
+The platform-owned PostgreSQL mapping must still enforce current active user,
+authority/privacy fences, actual fresh session, destructive-state/legal policy,
+original proof and complete cuts under locks; it must atomically consume proof,
+capture the snapshot and persist queued admission. Replay/recovery must recheck
+current observation eligibility. Root service tests use a deliberate UnitOfWork
+boundary owner and **do not prove those PostgreSQL invariants**. Workers,
+publication, download, status/cancel and privacy lifecycle remain unfinished.
 
 ## Queued admission receipts
 

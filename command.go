@@ -104,6 +104,7 @@ type Command struct {
 	identifierProof *capability.Proof
 	feature         *featureCommandState
 	privacy         *PrivacyExportRequestCommand
+	privacyProof    *capability.Proof
 }
 
 // NewUserCreationCommand validates and snapshots a creation's structural input.

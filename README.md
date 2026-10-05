@@ -21,6 +21,13 @@ privacy epoch. No worker, download, erasure or lifecycle completion is inferred.
 Those owned workflows and adapters remain implementation work. See
 [the profile](docs/privacy-snapshot.md) for exact tuples and adoption limits.
 
+`PrivacyExportService` now admits configured human-only request proofs through
+the existing `UnitOfWork` and recovers exact intent without an expired bearer.
+It preserves known commit outcomes, verifies recorded evidence-key versions and
+discloses only redaction-approved queued job metadata. Its PostgreSQL execution
+mapping and actual export workflow remain unfinished; it is not yet a usable
+end-to-end export feature.
+
 ## Security-profile construction
 
 `NewIdentitySecurityEventV1(clock.Clock)` constructs the shared typed profile

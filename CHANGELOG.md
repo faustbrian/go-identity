@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add configured human-only privacy-export request/recovery admission, original
+  opaque proof custody and retained-key receipt verification. Preserve known
+  command outcomes on transport, cancellation and denied disclosure; durable
+  PostgreSQL admission and export publication remain separate prerequisites.
+
 - Add exclusive queued privacy-export command receipts with full snapshot
   replay, retained-key verification and exact request-intent matching. Preserve
   existing receipt JSON and known command outcomes; ready publication still
