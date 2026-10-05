@@ -57,11 +57,15 @@ func identifierReuseDigest(key [32]byte, tenant identity.TenantID, kind identity
 type identifierWorkResult struct {
 	user    identity.User
 	receipt identity.IdentifierReceipt
+	// These are invocation completion facts, not current session or policy
+	// authority. Only this storage path and the coordinator set them.
+	proofConsumed, proofFinalized bool
 }
 
 // applyIdentifierMutation is provisional native storage, deliberately private.
-// It grants no current policy/session/challenge/final-access authority and does
-// not consume proof, stage audit/lifecycle or close the transaction. Public Begin
+// It grants no current policy/session/challenge/final-access authority. It
+// consumes the enlisted proof provisionally but does not stage audit/lifecycle
+// or close the transaction. Public Begin
 // remains disabled for this profile until those owners and Commit are complete.
 func (r *Repository) applyIdentifierMutation(ctx context.Context, w Work, command identity.Command, policy identifierMutationPolicy) (identity.IdentifierMutation, error) {
 	zero := identity.IdentifierMutation{}
@@ -106,6 +110,11 @@ func (r *Repository) applyIdentifierMutation(ctx context.Context, w Work, comman
 		if err = checkIdentifierReuse(ctx, w, spec.Change, policy, now); err != nil {
 			return zero, err
 		}
+	}
+	// Domain and proof effects share this Work. Failure after this phase must
+	// roll back consumption as well as the identifier/retirement prefix.
+	if err = c.runCapabilityExecution(ctx, w, false); err != nil {
+		return zero, err
 	}
 	if mutation.Retired != nil {
 		retired := mutation.Retired
@@ -180,8 +189,32 @@ func (r *Repository) applyIdentifierMutation(ctx context.Context, w Work, comman
 		return zero, w.fail(ctx, err)
 	}
 	digest, _ := identity.IdentifierIntentDigest(spec.Change)
-	w.state.identifier = &identifierWorkResult{user: mutation.State.User, receipt: identity.IdentifierReceipt{IdentifierID: spec.Change.ID, Action: spec.Change.Action, ExpectedAuthorityVersion: state.AuthorityVersion, AuthorityVersion: mutation.State.AuthorityVersion, IntentDigest: digest}}
+	w.state.identifier = &identifierWorkResult{user: mutation.State.User, receipt: identity.IdentifierReceipt{IdentifierID: spec.Change.ID, Action: spec.Change.Action, ExpectedAuthorityVersion: state.AuthorityVersion, AuthorityVersion: mutation.State.AuthorityVersion, IntentDigest: digest}, proofConsumed: true}
 	return mutation, nil
+}
+
+// Finalization follows every provisional domain/audit/outbox effect and must
+// succeed before terminal receipt persistence. It never permits a missing apply
+// or retries a failed phase. The native participant rechecks primary expiry.
+func (c *Coordinator) finalizeIdentifierCapability(w Work) error {
+	if !c.owns(w) {
+		return invalidWork()
+	}
+	if err := w.usable(); err != nil {
+		return err
+	}
+	if w.state.identifier == nil {
+		return nil
+	}
+	owned := w.state.identifier
+	if !owned.proofConsumed || owned.proofFinalized {
+		return w.fail(w.state.ctx, invalidWork())
+	}
+	if err := c.runCapabilityExecution(w.state.ctx, w, true); err != nil {
+		return err
+	}
+	owned.proofFinalized = true
+	return nil
 }
 
 func lockIdentifierPartition(ctx context.Context, w Work, change identity.IdentifierChange) (identity.IdentifierState, time.Time, error) {

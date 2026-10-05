@@ -304,6 +304,9 @@ func (c *Coordinator) Commit(w Work, result identity.CommandResult) (identity.Co
 	if err := issuanceFresh(w); err != nil {
 		return c.Abort(w, err)
 	}
+	if err := c.finalizeIdentifierCapability(w); err != nil {
+		return c.Abort(w, err)
+	}
 	if err := terminalizeJournal(w.state.ctx, w.state.tx, r.request, r.journal, r.owner, result, "committed"); err != nil {
 		return c.Abort(w, err)
 	}

@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Couple provisional identifier writes to the enlisted capability consumption
+  phase and exact owned receipt; finalize consumption before terminal receipt
+  persistence in the sole transaction. Public identifier execution remains
+  disabled pending complete session/current-authority and recovery composition.
+
 - Enlist optional subject-bound capability issuance under the original command,
   with frozen metadata, exact-owner staging and invocation-only persistence and
   recovery custody. Issuance, domain mutation, audit, lifecycle and command result

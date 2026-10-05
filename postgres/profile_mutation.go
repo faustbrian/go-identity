@@ -182,6 +182,11 @@ func cloneStoredProfile(p identity.UserProfile) identity.UserProfile {
 }
 
 func matchesDomainResult(w Work, result identity.CommandResult) bool {
+	if owned := w.state.identifier; owned != nil {
+		// Only the native storage result supplies a receipt. The record lifecycle
+		// version is distinct from the user aggregate's predecessor version.
+		return w.state.creation == nil && w.state.profile == nil && w.state.update == nil && w.state.status == nil && w.state.feature == nil && result.Binding == w.state.binding && result.Identifier != nil && *result.Identifier == owned.receipt && result.User == owned.user && owned.user.Version > 1 && result.ExpectedVersion == owned.user.Version-1
+	}
 	if w.state.status != nil {
 		owned := w.state.status
 		return w.state.creation == nil && w.state.profile == nil && w.state.update == nil && w.state.feature == nil && result.User == owned.User && result.ExpectedVersion == owned.ExpectedVersion && result.Revocation != nil && owned.Revocation != nil && result.Revocation.CascadeID == owned.Revocation.CascadeID && result.Revocation.Generation == owned.Revocation.Generation && result.Revocation.AuthorityVersion == owned.Revocation.AuthorityVersion && result.Revocation.Status == owned.Revocation.Status && slices.Equal(result.Revocation.Owners, owned.Revocation.Owners) && slices.Equal(result.Revocation.ExternalLimitations, owned.Revocation.ExternalLimitations)

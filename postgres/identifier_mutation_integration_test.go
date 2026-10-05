@@ -149,7 +149,7 @@ func TestIdentifierMutationIntegration(t *testing.T) {
 	}
 	prepare := func(t *testing.T, cmd identity.Command) (Work, pgx.Tx) {
 		t.Helper()
-		probe := &capabilityReservationProbe{}
+		probe := &capabilityExecutionProbe{}
 		c, _, plan := reservationPlanFixture(t, probe)
 		entries := make([]Contributor, len(c.registry.state.entries))
 		for i, e := range c.registry.state.entries {
@@ -215,6 +215,15 @@ func TestIdentifierMutationIntegration(t *testing.T) {
 		if e != nil {
 			t.Fatal("apply", e)
 		}
+		var consumed bool
+		for _, entry := range w.state.execution.reservation.plan.contributors {
+			if p, ok := entry.contributor.(*capabilityExecutionProbe); ok {
+				consumed = p.apply.state != nil
+			}
+		}
+		if !consumed {
+			t.Fatal("identifier write omitted provisional proof consumption")
+		}
 		invalidateWork(w)
 		if e = tx.Commit(ctx); e != nil {
 			t.Fatal(e)
@@ -241,6 +250,30 @@ func TestIdentifierMutationIntegration(t *testing.T) {
 			t.Fatal("denial left prefix")
 		}
 	}
+	t.Run("proof phase failure preserves identifier state", func(t *testing.T) {
+		for _, panics := range []bool{false, true} {
+			cmd := command(t, identity.IdentifierAttach, "proof-failure", "proof-failure@example.test")
+			before := read(t, "tenant-a", "user-a")
+			w, tx := open(t, cmd)
+			for _, entry := range w.state.execution.reservation.plan.contributors {
+				if p, ok := entry.contributor.(*capabilityExecutionProbe); ok {
+					p.failure = identity.ConflictError{}
+					p.panicPhase = panics
+				}
+			}
+			if _, err := repo.applyIdentifierMutation(ctx, w, cmd, policy); err == nil || w.usable() == nil || w.state.identifier != nil {
+				t.Fatal("proof failure accepted", err)
+			}
+			invalidateWork(w)
+			if err := tx.Rollback(ctx); err != nil {
+				t.Fatal(err)
+			}
+			after := read(t, "tenant-a", "user-a")
+			if before.User != after.User || before.AuthorityVersion != after.AuthorityVersion || len(before.Identifiers) != len(after.Identifiers) {
+				t.Fatal("proof failure left mutation prefix")
+			}
+		}
+	})
 	t.Run("all transitions and preserved verification", func(t *testing.T) {
 		apply(t, command(t, identity.IdentifierAttach, "a", "first@example.test"))
 		state := read(t, "tenant-a", "user-a")

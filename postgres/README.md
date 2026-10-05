@@ -1106,6 +1106,16 @@ owners, proof consumption and composed adapter evidence.
 
 ## Integration testing
 
+The private identifier storage path provisionally consumes its enlisted
+capability through the same Work after locked state/cooldown checks and before
+identifier writes. Only the owned exact identifier receipt can reach Commit;
+the coordinator finalizes consumption after provisional audit/outbox effects
+and before its terminal receipt. Phase failures poison Work and require Abort.
+Public identifier Begin remains disabled until native session, current policy,
+challenge, final-access and recovery composition is complete. Private tests
+use a phase probe to prove invocation and storage rollback, not native
+capability-store interoperability or an executable verification endpoint.
+
 `go test -tags integration ./...` requires `IDENTITY_POSTGRES_TEST_DSN` pointing
 to an explicitly disposable loopback PostgreSQL cluster with database
 `identity_test` and database-creation permission. Each invocation creates and
