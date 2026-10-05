@@ -147,9 +147,20 @@ func testSessionAdmission(t *testing.T, ctx context.Context, pool *database.Pool
 		t.Fatal(err)
 	}
 	for _, table := range []string{"sessions", "families"} {
+		// An autocommit statement can complete server-side after the client
+		// times out and the blocking lock is released. Own the writer's
+		// transaction so this lock probe can never persist revocation.
+		writer, e := pool.Raw().Begin(ctx)
+		if e != nil {
+			t.Fatal(e)
+		}
 		blocked, cancel := context.WithTimeout(ctx, 100*time.Millisecond)
-		_, e := pool.Raw().Exec(blocked, `UPDATE session_store.`+table+` SET state='revoked' WHERE tenant_id='tenant-a'`)
+		_, e = writer.Exec(blocked, `UPDATE session_store.`+table+` SET state='revoked' WHERE tenant_id='tenant-a'`)
 		cancel()
+		connection := writer.Conn()
+		if cleanup := writer.Rollback(ctx); cleanup != nil && !connection.IsClosed() {
+			t.Fatal("lock probe transaction cleanup")
+		}
 		if e == nil || !errors.Is(e, context.DeadlineExceeded) {
 			t.Fatal("share lock absent", table, e)
 		}

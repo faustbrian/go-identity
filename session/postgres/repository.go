@@ -43,9 +43,10 @@ type StoredSession struct {
 // all operations finish. Zero is invalid. Native family revocation writes use
 // only the active shared-coordinator invocation; issuance and rotation are pending.
 type Repository struct {
-	pool            *database.Pool
-	schema          string
-	maximumDuration time.Duration
+	pool                *database.Pool
+	schema              string
+	maximumDuration     time.Duration
+	identifierAdmission *IdentifierAdmissionConfig
 }
 
 // NewRepository validates configuration without IO. The database must already

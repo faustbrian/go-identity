@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+- Add explicit native identifier admission using the original coordinator
+  transaction and existing kernel/authorization owners. Exact session scope,
+  credential linkage and owner-derived keys are checked without rewriting
+  metadata or renewing freshness; only the proven identifier successor changes
+  the final comparison. Unsupported organization, factor and passkey profiles
+  deny. Existing repository construction stays opted out; complete protected
+  workflow activation remains pending.
+
+- Publish framed session/family authority keys and consume the committed kernel
+  admission contracts. Historical custom snapshot keys require an explicit
+  migration or replacement session; they are not silently upgraded.
+
 - Add bounded borrowed-primary `RequireSession` admission: exact immutable
   record, active session/family versions, share locks and database-time expiry.
   It supplies only session-owned checks, not full authority or authentication.

@@ -129,3 +129,49 @@ defaults or clamping.
 
 See `CHANGELOG.md`. Complete mutation, coverage, API/catalog, clean-consumer,
 kernel/reference composition and release gates remain pending.
+# Native identifier eligibility
+
+`NewRepositoryWithIdentifierAdmission` explicitly enables the same repository
+as `identitypostgres.IdentifierAdmissionContributor`. Existing `NewRepository`
+remains opted out. Register the same instance for the store descriptor and the
+plan's separate read-only role; do not register a second duplicate store owner.
+The constructor accepts only the primary pool, existing schema/read budget and
+trusted deployment/authorization/audience/credential profile, never Work,
+coordinator, registry, callbacks or an application-written domain store.
+
+`Repository.CheckIdentifier` can run only under the selected live coordinator
+invocation. It reads the exact command-bound session ID/version, checks every
+required scope key, then uses the existing global/tenant, user/credential and
+authorization owners before locking and rechecking the exact session/family
+record and primary-clock expiry. Owner locks remain until the original Work
+closes. Session projection reads acquire no locks before those owners; the
+complete post-lock comparison rejects intervening changes. No replica,
+autocommit fallback, independent transaction or network callback is used.
+
+Initial comparison uses the original snapshot. Final comparison changes only
+the identifier epoch supplied by the kernel's exact Work-owned mutation receipt;
+the stored snapshot, credential ID/version, original proof metadata, issued time
+and accepted activity stay unchanged. Reading a record does not authenticate its
+bearer or manufacture fresh reauthentication. This eligibility check is not a
+policy Allow, one-time proof consumption or complete workflow authorization.
+Public protected identifier execution remains disabled pending those phases and
+durable recovery composition.
+
+`SessionAuthorityKeys` uses visible-ASCII canonical IDs under the session
+owner's existing profile. Family keys bind tenant/user/family; session keys add
+session ID. Versioned, length-framed SHA-256/base64url avoids delimiter aliases.
+Compare these keys together with `identitypostgres.KernelAuthorityKeys` and
+authorization's `AuthorityScope.Key`. Keys contain no versions or positive
+validity evidence and must not be logged. Historical custom keys are rejected
+by this profile, never silently transformed or adopted from a newer epoch.
+
+Configure the exact authentication method and credential kind/owner used by the
+issuer. Currently only single-factor sessions without organization/factor/
+passkey applicability are eligible. Anonymous, multifactor and passkey-owned
+sessions deny even if optional dimensions were omitted. Present unsupported
+dimensions also deny; they are not skipped. Full support remains required in
+the platform and needs the actual corresponding owners, not a configuration
+override. Zero/malformed profile and missing pool/configuration are InvalidInput;
+foreign, stale, revoked and unsupported sessions deny uniformly as Forbidden;
+corrupt storage and unavailable primary reads are redacted Unavailable. Earlier
+caller/Work deadlines win, and cancellation/deadline classifications remain.

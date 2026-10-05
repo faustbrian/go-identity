@@ -18,3 +18,13 @@ func ExampleMigrationSource_Load() {
 	fmt.Println(len(history), history[0].Version(), history[0].DownSQL() == "")
 	// Output: 1 10 true
 }
+
+func ExampleSessionAuthorityKeys() {
+	keys, err := postgres.SessionAuthorityKeys("tenant-a", "user-a", "family-a", "session-a")
+	if err != nil {
+		panic(err)
+	}
+	// Do not log the correlation keys. Derivation alone proves no authority.
+	fmt.Println(keys.Family != keys.Session)
+	// Output: true
+}
