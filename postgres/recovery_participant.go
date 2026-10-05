@@ -178,6 +178,9 @@ func (r *Repository) RecoverParticipant(ctx context.Context, recovery RecoveryWo
 	}
 	b, err := recovery.Scope()
 	if err == nil && recovery.state.plan.feature != nil {
+		if authenticatedOperation(b) {
+			return recoverSignInProofUse(ctx, recovery)
+		}
 		if credentialCompromiseOperation(recovery.state.plan.feature.Operation) {
 			return recoverCredentialCompromise(ctx, recovery)
 		}

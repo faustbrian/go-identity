@@ -23,7 +23,7 @@ func (c *featureRegistryContributor) FeatureOperations() []identity.FeatureOpera
 func featureRegistryInput() *featureRegistryContributor {
 	return &featureRegistryContributor{
 		descriptor: ContributorDescriptor{Owner: "identity/session/postgres", ContractID: "identity.session", Version: 1},
-		operations: []identity.FeatureOperation{{Owner: "identity/session", OperationID: "identity.session.issue", SchemaID: "session-issue", SchemaVersion: 1, RecordRequirement: identity.FeatureRecordRequired}},
+		operations: []identity.FeatureOperation{{Owner: "identity/session", OperationID: "identity.session.fixture", SchemaID: "session-issue", SchemaVersion: 1, RecordRequirement: identity.FeatureRecordRequired}},
 	}
 }
 

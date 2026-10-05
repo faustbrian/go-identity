@@ -22,39 +22,40 @@ import (
 type Work struct{ state *workState }
 
 type workState struct {
-	tx                  pgx.Tx
-	ctx                 context.Context
-	cancel              context.CancelFunc
-	binding             identity.CommandBinding
-	generation          uint64
-	closed              bool
-	failed              error
-	rows                *WorkRows
-	audits              *workAudits
-	lifecycle           *workLifecycle
-	registry            *contributorRegistryState
-	sqlStarted          bool
-	execution           *domainExecution
-	creation            *identity.User
-	profile             *identity.UserProfile
-	update              *identity.User
-	status              *identity.CommandResult
-	identifier          *identifierWorkResult
-	identifierAdmission *identifierAdmissionProgress
-	feature             *FeatureRegistration
-	subjectType         string
-	featureAttempted    bool
-	featureReceipt      *identity.FeatureReceipt
-	featureInvocation   FeatureExecutionContributor
-	delivery            *workDelivery
-	issuance            *workIssuance
-	credentialIntent    *CredentialCompromiseIntent
-	credentialReceipt   *CredentialCompromiseReceipt
-	counterCommand      *identity.Command
-	riskCommand         *identity.Command
-	privacyAllocation   *privacyAllocation
-	privacyReceipt      *identity.PrivacyExportRequestReceipt
-	privacyAdmission    *privacyAdmissionProgress
+	tx                    pgx.Tx
+	ctx                   context.Context
+	cancel                context.CancelFunc
+	binding               identity.CommandBinding
+	generation            uint64
+	closed                bool
+	failed                error
+	rows                  *WorkRows
+	audits                *workAudits
+	lifecycle             *workLifecycle
+	registry              *contributorRegistryState
+	sqlStarted            bool
+	execution             *domainExecution
+	creation              *identity.User
+	profile               *identity.UserProfile
+	update                *identity.User
+	status                *identity.CommandResult
+	identifier            *identifierWorkResult
+	identifierAdmission   *identifierAdmissionProgress
+	feature               *FeatureRegistration
+	subjectType           string
+	featureAttempted      bool
+	authenticationChecked bool
+	featureReceipt        *identity.FeatureReceipt
+	featureInvocation     FeatureExecutionContributor
+	delivery              *workDelivery
+	issuance              *workIssuance
+	credentialIntent      *CredentialCompromiseIntent
+	credentialReceipt     *CredentialCompromiseReceipt
+	counterCommand        *identity.Command
+	riskCommand           *identity.Command
+	privacyAllocation     *privacyAllocation
+	privacyReceipt        *identity.PrivacyExportRequestReceipt
+	privacyAdmission      *privacyAdmissionProgress
 }
 
 // newWork is private: only the sole coordinator may call it after verifying

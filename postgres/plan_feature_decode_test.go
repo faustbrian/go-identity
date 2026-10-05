@@ -218,7 +218,9 @@ func TestDecodeFeaturePlanPinnedHistory(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	got, err := decodeFeaturePlan(featureCodecSpec().Binding, [32]byte{1}, wire)
+	historicalBinding := featureCodecSpec().Binding
+	historicalBinding.OperationID = "identity.session.issue"
+	got, err := decodeFeaturePlan(historicalBinding, [32]byte{1}, wire)
 	if err != nil {
 		t.Fatal(err)
 	}

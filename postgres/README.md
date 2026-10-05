@@ -967,6 +967,37 @@ validates bounded core values before allocation; decode rejects bodies over
 8 MiB. Required audit/participant staging and public scoped recovery are not yet
 implemented, so private terminal SQL is not a conforming composed mutation API.
 
+### Final-authentication coordinator admission
+
+Configure `CoordinatorConfig.FinalAuthentication` with an explicit trusted
+`authentication.AuthorityAuthenticator` and a stable durable namespace. Do not
+derive either from request data or change the namespace while proof-use
+tombstones exist. An exact registered `AuthenticatedFeatureContributor` owns
+exhaustive native-command mapping and initial/final current-authority checks.
+Its checks run inside the coordinator-owned Work and must not write, perform
+network IO, consume proofs, renew freshness, or retain transaction authority.
+
+Use `PrepareAuthenticatedCommandPlan` and `ReserveAuthenticatedCommand` with
+the same original opaque proof and native command. The existing retained-key
+fingerprint binds the original namespace, credential/proof IDs and versions,
+scope, method, assurance, and exact original timestamps without exposing raw
+correlations in canonical intent. Ordinary `ReserveCommand` cannot execute
+`identity.session.issue`. Preparation validates provenance, not current
+eligibility; reservation does not consume the proof.
+
+Initial admission stages the proof-use tombstone in the same transaction as
+native effects, audit, lifecycle and the terminal journal. Final admission
+rechecks original proof expiry and native current authority. Failure rolls back
+provisional effects and consumption. Exact replay returns historical metadata,
+never a new bearer or refreshed authority; retained fingerprint-key rotation
+preserves replay identity. Pending recovery cannot classify the kernel as
+effect-free when a proof-use tombstone exists.
+
+This is coordinator admission, not a session service: complete native
+session/family issuance, their authority checks and recovery, bearer custody,
+and composed login remain unfinished. The integration fixture's synthetic
+feature proves coordinator atomicity only, not production session behavior.
+
 ### Domain begin admission
 
 Private domain-begin admission now revalidates the retained-key global claim,

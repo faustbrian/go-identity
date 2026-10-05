@@ -29,6 +29,7 @@ type claimRequest struct {
 	tenant                identity.TenantID
 	purpose               string
 	canonical, safeFields []byte
+	authentication        *authenticatedCommand
 	// Only the owned typed codec populates source. Replays must regenerate its
 	// secret digests under the stored key, not the newest issuance key.
 	source *identity.Command
@@ -99,6 +100,13 @@ FROM identity.identity_command_id_claims WHERE command_id=$1 FOR UPDATE`, id).Sc
 			return claimInvalid, err
 		}
 		canonical = prepared.canonical
+		if q.authentication != nil {
+			prepared, err = bindAuthenticationClaim(prepared, q.authentication, key)
+			if err != nil {
+				return claimConflict, err
+			}
+			canonical = prepared.canonical
+		}
 	}
 	expected := claimFingerprint(key, canonical)
 	if !hmac.Equal(fingerprint, expected[:]) {

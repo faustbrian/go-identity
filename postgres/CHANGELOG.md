@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Add proof-bound final-authentication command preparation and reservation with
+  an explicitly configured trusted authenticator. Ordinary reservations reject
+  authenticated session issuance. Preserve original credential/proof metadata
+  across retained-key replay, check current native eligibility before effects
+  and terminalization, and consume proof atomically with protected effects.
+  Native session issuance remains pending; this does not expose a login service.
+
 - Add forward-only final-authentication proof-use tombstones and private
   same-Work staging. Conserve original versions and nanosecond expiry; deny
   proof reuse across commands, tenants and versions, including expiry during

@@ -14,7 +14,7 @@ import (
 
 func featureCodecSpec() identity.FeatureCommandSpec {
 	b := codecBinding()
-	b.OperationID, b.SchemaID, b.RecordID = "identity.session.issue", "session-issue", "session-a"
+	b.OperationID, b.SchemaID, b.RecordID = "identity.session.fixture", "session-issue", "session-a"
 	return identity.FeatureCommandSpec{Binding: b, Operation: identity.FeatureOperation{Owner: "identity/session", OperationID: b.OperationID, SchemaID: b.SchemaID, SchemaVersion: 1, RecordRequirement: identity.FeatureRecordRequired}, Fields: []identity.FeatureField{
 		{Name: "authority", Value: identity.FeatureValue{Kind: identity.FeatureUint64, Uint64: math.MaxUint64}},
 		{Name: "context", Value: identity.FeatureValue{Kind: identity.FeatureText, Text: "synthetic-private-context"}},

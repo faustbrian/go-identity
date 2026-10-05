@@ -34,6 +34,10 @@ type CoordinatorConfig struct {
 	// observation, including authorized absence. Nil disables it. A QueryPolicy
 	// alone never enables absence disclosure; admission grants no reservation.
 	AdmissionPolicy *CommandQueryPolicy
+	// FinalAuthentication enables the protected final-signin command profile.
+	// Nil disables it. The copied trusted authority and namespace are never
+	// selected by a request; native owner checks remain mandatory.
+	FinalAuthentication *FinalAuthenticationConfig
 }
 
 // Format prevents diagnostic formatting from exposing fingerprint keys.
@@ -63,6 +67,7 @@ type Coordinator struct {
 	queryPolicy                    *CommandQueryPolicy
 	admissionPolicy                *CommandQueryPolicy
 	commandRead                    func(context.Context, identity.CommandID) (commandObservation, error)
+	finalAuthentication            *FinalAuthenticationConfig
 }
 
 // Format prevents diagnostics from exposing retained keys and pool settings.
@@ -87,6 +92,13 @@ func NewCoordinator(pool *database.Pool, registry *ContributorRegistry, config C
 		keys.retained[version] = key
 	}
 	c := &Coordinator{pool: pool, registry: &ContributorRegistry{state: registry.state}, maximumDuration: config.MaximumDuration, leaseDuration: config.LeaseDuration, keys: keys}
+	if config.FinalAuthentication != nil {
+		if config.FinalAuthentication.Authority == nil || !queryScopeText(config.FinalAuthentication.Namespace) {
+			return nil, coordinatorError()
+		}
+		copy := *config.FinalAuthentication
+		c.finalAuthentication = &copy
+	}
 	if config.QueryPolicy != nil {
 		if !validCommandQueryPolicy(*config.QueryPolicy) {
 			return nil, coordinatorError()
@@ -115,12 +127,13 @@ func NewCoordinator(pool *database.Pool, registry *ContributorRegistry, config C
 type Reservation struct{ state *reservationState }
 
 type reservationState struct {
-	coordinator *Coordinator
-	request     claimRequest
-	plan        *admittedKernelPlan
-	journal     journalReservation
-	owner       [16]byte
-	started     atomic.Bool
+	coordinator    *Coordinator
+	request        claimRequest
+	plan           *admittedKernelPlan
+	journal        journalReservation
+	owner          [16]byte
+	started        atomic.Bool
+	authentication *authenticatedCommand
 }
 
 // Format hides command, tenant, lease owner and retained private command data.
@@ -258,6 +271,9 @@ func (c *Coordinator) ReserveCommand(ctx context.Context, binding identity.Comma
 	if ctx == nil {
 		return Reservation{}, identity.CommandResult{}, coordinatorError()
 	}
+	if authenticatedOperation(binding) {
+		return Reservation{}, identity.CommandResult{}, invalidPlan()
+	}
 	if (isFeature(command) || plan.Feature != nil) && plan.SubjectType == "" {
 		return Reservation{}, identity.CommandResult{}, invalidPlan()
 	}
@@ -271,6 +287,10 @@ func (c *Coordinator) ReserveCommand(ctx context.Context, binding identity.Comma
 	if q.feature != nil && prepared == nil {
 		return Reservation{}, identity.CommandResult{}, invalidPlan()
 	}
+	return c.reservePreparedCommand(ctx, binding, command, q, snapshot, prepared, nil)
+}
+
+func (c *Coordinator) reservePreparedCommand(ctx context.Context, binding identity.CommandBinding, command identity.Command, q claimRequest, snapshot CommandPlan, prepared *admittedKernelPlan, authentication *authenticatedCommand) (Reservation, identity.CommandResult, error) {
 	bounded, cancel := context.WithTimeout(ctx, c.maximumDuration)
 	defer cancel()
 	if err := bounded.Err(); err != nil {
@@ -280,7 +300,7 @@ func (c *Coordinator) ReserveCommand(ctx context.Context, binding identity.Comma
 		return Reservation{}, identity.CommandResult{}, coordinatorError()
 	}
 	var owner [16]byte
-	if _, err = rand.Read(owner[:]); err != nil || owner == ([16]byte{}) {
+	if _, err := rand.Read(owner[:]); err != nil || owner == ([16]byte{}) {
 		return Reservation{}, identity.CommandResult{}, identity.UnavailableError{}
 	}
 	tx, err := c.pool.Raw().BeginTx(bounded, pgx.TxOptions{IsoLevel: pgx.ReadCommitted})
@@ -314,6 +334,15 @@ func (c *Coordinator) ReserveCommand(ctx context.Context, binding identity.Comma
 		}
 		return c.failedReservation(tx, binding, result, nil)
 	}
+	if authentication != nil {
+		var now time.Time
+		if err := tx.QueryRow(bounded, "SELECT clock_timestamp()").Scan(&now); err != nil {
+			return c.failedReservation(tx, binding, identity.CommandResult{}, readFailure(bounded, err))
+		}
+		if err := c.validateOriginalAuthentication(binding, authentication, now); err != nil {
+			return c.failedReservation(tx, binding, identity.CommandResult{}, err)
+		}
+	}
 	denied, err := c.reserveCommandCounters(bounded, tx, command, q, admitted, journal, owner)
 	if err != nil {
 		return c.failedReservation(tx, binding, identity.CommandResult{}, err)
@@ -332,7 +361,7 @@ func (c *Coordinator) ReserveCommand(ctx context.Context, binding identity.Comma
 	if denied {
 		return Reservation{}, featureOutcome(binding, q.feature, identity.CommitOutcomeNotCommitted, 0), identity.ForbiddenError{}
 	}
-	state := &reservationState{coordinator: c, request: q, plan: admitted, journal: journal, owner: owner}
+	state := &reservationState{coordinator: c, request: q, plan: admitted, journal: journal, owner: owner, authentication: authentication}
 	return Reservation{state: state}, featureOutcome(binding, q.feature, identity.CommitOutcomeInProgress, c.leaseDuration), nil
 }
 

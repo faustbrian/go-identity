@@ -169,6 +169,9 @@ func (c *Coordinator) ApplyFeature(ctx context.Context, w Work, command identity
 		return result, w.fail(ctx, identity.ConflictError{})
 	}
 	q, e := prepareClaim(command, c.keys.retained[c.keys.current])
+	if e == nil && w.state.execution.reservation.authentication != nil {
+		q, e = bindAuthenticationClaim(q, w.state.execution.reservation.authentication, c.keys.retained[c.keys.current])
+	}
 	if e != nil || !bytes.Equal(q.canonical, w.state.execution.reservation.request.canonical) {
 		return result, w.fail(ctx, identity.ConflictError{})
 	}
@@ -216,6 +219,9 @@ func (c *Coordinator) ApplyFeature(ctx context.Context, w Work, command identity
 	}
 	if p.risk != nil {
 		w.state.riskCommand = &command
+	}
+	if e = c.checkAuthenticatedCommand(ctx, w, false); e != nil {
+		return result, e
 	}
 	if credentialCompromiseOperation(p.feature.Operation) {
 		if e := prepareCredentialCompromise(ctx, w, command); e != nil {

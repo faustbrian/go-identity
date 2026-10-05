@@ -319,4 +319,5 @@ func TestSignInProofUseIntegration(t *testing.T) {
 			t.Fatal("expired provisional prefix survived", err)
 		}
 	})
+	t.Run("authenticated commands", func(t *testing.T) { testAuthenticatedCommandIntegration(t, ctx, pool) })
 }
