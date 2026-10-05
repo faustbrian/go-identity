@@ -1,2 +1,4 @@
 github.com/faustbrian/go-audit v1.0.0 h1:wVUkuXXBZIBj/6ORTZEgbbBPw2ymIaXnnTDrhBVn/N4=
 github.com/faustbrian/go-audit v1.0.0/go.mod h1:IrR+KzmsdkEizekCStgGor5Mqj4OfAj25REXAqDJ540=
+github.com/faustbrian/go-authorization v1.0.1-0.20261005011349-60ed4b3229d8 h1:Pb8YyndjyljUIGw4b0d3cAc5LUmtRECDsfVAtU0rLeo=
+github.com/faustbrian/go-authorization v1.0.1-0.20261005011349-60ed4b3229d8/go.mod h1:olSJuKpr+mn2XOecIOpburSaTpWiRL153ZQUwvLhMkg=

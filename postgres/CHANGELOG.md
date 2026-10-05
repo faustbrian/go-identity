@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add effective-user authorization epoch admission under the original native
+  participant and coordinator transaction. Missing/stale authority and ignored
+  invalid input prevent commit; actor or workload identity cannot substitute
+  for the command user. The additive authorization owner remains responsible
+  for storage and locks. This does not activate session issuance.
+
 - Add opt-in explicit deployment/tenant authority bootstrap and bounded primary
   reads. Native participants can compare exact epochs under coordinator-owned
   row locks; missing, disabled or stale tenant authority denies without default

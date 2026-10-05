@@ -166,6 +166,7 @@ func TestPostgresIntegration(t *testing.T) {
 		testCredentialAuthority(t, ctx, pool, repo)
 	})
 	t.Run("locked credential admission", func(t *testing.T) { testLockedCredentialAdmission(t, ctx, pool, repo) })
+	t.Run("user authorization admission", func(t *testing.T) { testUserAuthorizationAdmission(t, ctx, pool, repo) })
 	t.Run("credential compromise transaction", func(t *testing.T) {
 		compromiseRunner, e := migrations.NewRunner(CredentialCompromiseMigrationSource{Base: CredentialMigrationSource{Base: StatusMigrationSource{Base: MigrationSource{}, Version: 12}, Version: 13}, Version: 14}, backend)
 		if e != nil {

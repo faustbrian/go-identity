@@ -1,5 +1,30 @@
 # Identity PostgreSQL
 
+## Scoped user authorization authority
+
+Native participants can call `Work.RequireActiveUserAuthorization` with their
+exact instance and a frozen `UserAuthorizationAdmission`. Bind all three
+`authorization/postgres.AuthorityScope` fields and the expected positive epoch
+into the native keyed command before reservation; compare that frozen intent
+at execution. The namespace is trusted native configuration owning user-ID
+uniqueness, not a request-selected subject kind. Subject must match the command's
+effective `UserID`, not its separate actor or calling workload. Organization
+and impersonation profiles require their own explicit authority contracts;
+this user-only helper cannot approximate them.
+
+The existing authorization owner performs its exact primary lookup through the
+generation-bound `WorkRows`, retaining a share lock until the sole coordinator
+commits or aborts. Missing or unequal epochs deny without creating defaults.
+Malformed input, foreign invocation, cancellation and storage failures poison
+live Work even if ignored. Earlier deadlines win and no freshness is renewed.
+Use the owner's separately allocated forward-only authority migration through
+the owned migration composition; do not copy its SQL or bootstrap during login.
+
+This is a lifecycle epoch check, not policy `Allow`, authentication proof or a
+completed session issuer. The existing policy engine, every other contributing
+authority owner and atomic one-time proof finalization remain mandatory. These
+admission checks are opt-in and existing participants remain compatible.
+
 ## Deployment and tenant authority
 
 Compose `DirectoryAuthorityMigrationSource` into the single owned migration

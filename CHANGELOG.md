@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Adopt the additive scoped authorization authority owner while retaining the
+  existing policy engine and Go 1.27 support.
+
 - Build protected delivery worker events through the shared typed security
   profile, preserving original-command causation and authoritative status
   versions without confusing local bookkeeping with provider confirmation.
