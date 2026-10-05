@@ -1,5 +1,30 @@
 # Identity PostgreSQL
 
+## Privacy admission storage
+
+`PrivacyExportMigrationSource{Base, Version}` appends authoritative `privacy_epoch`
+and `privacy_disposition` fields to existing user rows. Compose Base with
+`StatusMigrationSource` first and allocate Version after every Base version.
+The migration preserves existing IDs, user/authority versions and blocked state;
+defaults keep explicit-column old creation/read paths compatible. No destructive
+down is supported. Resetting the epoch would resurrect prior export authority.
+
+The private native allocation phase locks the exact user row, rejects blocked,
+pending-anonymization/deletion, stale or overflowing authority, samples primary
+time after locking, generates a random export ID and advances only privacy epoch
+inside the existing Work. All failures poison that Work. No transaction is opened
+or closed by allocation; rollback removes its entire provisional prefix.
+
+This is **not queued admission**. Allocation does not prove session freshness,
+configured authorization, original proof consumption or cut provenance, and
+cannot make an export runnable. Public privacy execution remains disabled until
+the protected owner captures every contributor cut and persists the immutable
+snapshot, job, proof consumption, audit/lifecycle and command result atomically.
+Pending destructive lifecycle owners must set the disposition under the same
+user lock before initiating cascades. The initial wire profile still rejects
+unmapped imported directory IDs rather than rewriting them; profile reconciliation
+is unfinished. Worker, publication, download and recovery composition remain work.
+
 `KernelAuthorityKeys` derives canonical version-one keys for kernel-owned
 global, tenant and user lifecycle dimensions. Session admission must compare
 these exact keys as well as current positive versions. They are correlation

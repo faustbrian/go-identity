@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Add forward-only privacy epoch and pending-destructive-state fences, with
+  private same-Work export allocation under the exact user lock. Preserve
+  aggregate/security versions, imported IDs and full-width counters; rollback
+  discards the provisional epoch. Public privacy execution remains disabled
+  pending native session/proof checks, complete cuts and queued admission.
+
+- Adopt the committed identity privacy request/recovery and integrity contracts
+  without downgrading the PostgreSQL adapter's capability dependency.
+
 - Atomically terminal-release reserved capability custody with the failure
   audit and aborted receipt after proven domain rollback and a live-owner
   recheck. Preserve that owner's generation, including takeover, without

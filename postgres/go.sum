@@ -49,8 +49,8 @@ github.com/faustbrian/go-correlation v1.0.0 h1:2Z+tlY59nNBdlGFBadPTeuDo9/029IvS/
 github.com/faustbrian/go-correlation v1.0.0/go.mod h1:upLcV0fqKC8IUUx11R6c69CVwC3DO1EeXsw2BQU2PKE=
 github.com/faustbrian/go-identifier v1.0.0 h1:5lXZbS2wK4NelWv4ekRocwOwjkWt1ch/nh7TScxsFO4=
 github.com/faustbrian/go-identifier v1.0.0/go.mod h1:Q2yS7Hk4N4i9Wd3OmPQGh657SHtA1IjvtT4PllphNlY=
-github.com/faustbrian/go-identity v0.0.0-20261005023533-40f733e179f1 h1:4iBRas9deM8aZePeM7wGUsoxjwzgHVob5SbFLGBhPYY=
-github.com/faustbrian/go-identity v0.0.0-20261005023533-40f733e179f1/go.mod h1:17IuW//mZjwK47gESQeTBQz/iH+VZB5q2IzAkCcwVQk=
+github.com/faustbrian/go-identity v0.0.0-20261005110325-777b1288ba1f h1:L4kRlRZvVHG4vWosQ92qtSh3MhRHt2smrhadqXLpBQw=
+github.com/faustbrian/go-identity v0.0.0-20261005110325-777b1288ba1f/go.mod h1:6kFtTRF+LJ8gpJoU7jCGrZnjnv6ziIow8AN2ajMh7g8=
 github.com/faustbrian/go-jsonrpc v1.0.0 h1:iQ/YxMkjKBlWyTPCYxQzuBBIV/73ImYWKNVGG7hZr8s=
 github.com/faustbrian/go-jsonrpc v1.0.0/go.mod h1:gdYA/wi8eAeptM4Lf9qwPA6eImChPa2Ng9/+/UvpOPQ=
 github.com/faustbrian/go-migrations v1.0.0 h1:rVxTxID5tFdvK0GCcZarrCl4JDNCYx2HkYqoNZfQUVg=
