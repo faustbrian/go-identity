@@ -598,6 +598,7 @@ func TestNativeFamilyRevocationIntegration(t *testing.T) {
 			t.Fatal(e)
 		}
 		testNativeIssueIntegration(t, ctx, pool)
+		t.Run("native session authentication", func(t *testing.T) { testNativeSessionAuthentication(t, ctx, pool) })
 	})
 }
 

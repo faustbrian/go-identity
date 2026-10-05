@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Add owned single-factor stateful session validation using the committed core
+  service and native primary directory, user, identifier, exact credential,
+  authorization and session/family owners. Deny ambiguous retained-key lookup,
+  revoked or stale authority and unsupported dimensions without cache fallback.
+  Preserve original read-start freshness and exclusive credential/session
+  expiry. Construction borrows the primary pool and requires existing migrations;
+  remaining profiles, rotation and complete login remain under development.
+
 - Add restart-safe issuance reconciliation from exact historical scope and
   trusted current caller, without retaining original authentication proof or
   bearer custody. Return only command metadata under current policy; preserve

@@ -9,8 +9,44 @@ authenticated issuance now checks current owners and atomically stages records
 and original proof use. Owned authenticated cookie issuance now composes real
 audit/outbox effects with the core's commit-gated token custody.
 **General bearer issuance, browser-container policy,
-rotation, cleanup, devices and session authentication remain unfinished.
-This is not yet a usable login/session-authentication service.**
+rotation, cleanup, devices and complete session profiles remain unfinished.
+Single-factor stateful opaque validation now has owned primary composition;
+this is not yet a complete login service.**
+
+## Owned stateful authentication
+
+`NewSessionService(pool, SessionServiceConfig{Repository: ..., Profile: ...,
+Validation: ...})` returns the core service with the owned primary reader.
+Select `session.StorageStatefulOpaque`, audience, retained digest keys, trusted
+clock and explicit bounded read/clock budgets. The profile is the same trusted
+single-factor deployment/method/credential-owner profile as native admission.
+Repository's budget cannot exceed validation's. Construction has no IO.
+
+`Get` performs exact tenant/digest lookup across at most four retained key
+versions and denies ambiguity. It checks live session/family tombstones, exact
+owner-derived scope keys, directory status/epochs, user security and identifier
+epochs, exact credential ID/kind/owner/version/expiry and current authorization
+epoch through public owner APIs. It never substitutes aggregate CAS versions,
+original authentication metadata or a stored record for current authority.
+Identifier projection uses its owner's finite 128-record bound; incomplete or
+corrupt owner state denies rather than becoming a partial positive result.
+
+The earliest read-start sample precedes token lookup. Evidence lasts at most
+20 seconds from that sample, capped by credential and session expiry and the
+core uncertainty deduction. Copies and delayed responses do not renew it.
+Missing infrastructure fails closed; there is no stale cache fallback.
+Authentication does not grant authorization, update activity, refresh a token,
+consume a proof or perform any durable mutation. Reuse requires the core
+result's private-custody `ValidateAt` with trusted current time.
+
+Apply kernel directory/status/identifier/credential, authorization-authority
+and session migrations first; this constructor does not bootstrap them.
+Borrow the primary pool until all calls finish. The service starts no
+goroutines and supports concurrent calls. Organization, factor, passkey and
+anonymous profiles explicitly deny until their separate owners compose.
+Browser credential extraction, CSRF and container policy remain HTTP/core
+responsibilities. Full native rotation, remaining profiles and release gates
+remain pending.
 
 ## Adoption and API
 
