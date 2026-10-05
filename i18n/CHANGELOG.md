@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Add typed error-preserving locale resolution with explicit/session/cookie/
+  header/default precedence, single-snapshot rendering, bounded custom matching
+  and registry/schema admission that constrains later catalog publication.
+
 - Add bounded canonical locale negotiation with weighted basic language ranges,
   exact aliases, progressive region/extension fallback and explicit exclusions.
   Matching does not persist preferences or render localized errors.

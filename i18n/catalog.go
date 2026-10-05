@@ -6,6 +6,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"text/template"
 	"text/template/parse"
@@ -117,7 +118,10 @@ type catalogSnapshot struct {
 // pointer. It has no goroutines or IO. Zero is invalid; do not copy a store.
 // Concurrent Render/Locales/Replace calls are safe with immutable call inputs.
 type CatalogStore struct {
-	snapshot atomic.Pointer[catalogSnapshot]
+	snapshot        atomic.Pointer[catalogSnapshot]
+	publishMu       sync.Mutex // Owns publication and resolver admission constraints.
+	admitted        map[MessageID][]ParameterSpec
+	requiredLocales map[Locale]bool
 }
 
 // NewCatalogStore validates/copies 1..256 distinct canonical locales with one
@@ -149,6 +153,11 @@ func (s *CatalogStore) Replace(expected uint64, catalogs []Catalog) error {
 	after, err := compileCatalogs(catalogs)
 	if err != nil {
 		return err
+	}
+	s.publishMu.Lock()
+	defer s.publishMu.Unlock()
+	if !validAdmission(after, s.admitted, s.requiredLocales) {
+		return CatalogConflictError{}
 	}
 	if after.version <= expected || !s.snapshot.CompareAndSwap(before, after) {
 		return CatalogConflictError{}
@@ -186,6 +195,11 @@ func (s *CatalogStore) Render(ctx context.Context, locale Locale, id MessageID, 
 	if v == nil {
 		return RenderedMessage{}, CatalogConflictError{}
 	}
+	return renderSnapshot(ctx, v, locale, id, parameters)
+}
+
+// One already captured snapshot owns both resolver negotiation and rendering.
+func renderSnapshot(ctx context.Context, v *catalogSnapshot, locale Locale, id MessageID, parameters []Parameter) (RenderedMessage, error) {
 	// Validate caller-defined casts before hashing lookup keys, not merely
 	// after failing to find them in the configured catalog.
 	canonical, err := CanonicalLocale(string(locale))

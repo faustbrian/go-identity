@@ -1,8 +1,8 @@
 # Identity localization
 
 Go 1.27 transport-neutral locale negotiation. This experimental module currently
-implements matching, typed error registration and catalog rendering. Original-error
-translation, locale precedence and durable preference lifecycle are not yet implemented.
+implements matching, typed error registration, catalog rendering and original-error
+resolution with locale precedence. Durable preference lifecycle is not yet implemented.
 
 ```go
 locale, err := (i18n.DefaultMatcher{}).Match(i18n.MatchInput{
@@ -144,11 +144,61 @@ at most one winner. Failed compilation/CAS leaves the previous snapshot intact;
 no automatic retry or merging occurs. `Locales()` returns a copied list and
 version. Do not copy stores or mutate construction/render inputs during calls.
 Readers see one complete old/new snapshot, never a mixed version. Removed locale
-or message pairs become absent; error resolver fallback remains separate work.
+or message pairs become absent unless resolver admission constrains their removal.
 See compiled `ExampleCatalogStore_Render` for adoption. Update catalogs with
 unchanged schemas or an explicit coordinated registry/schema migration, advance
 the version, and exercise every translation and final-output adapter before
 publication. Formatting rendered results/parts/parameters redacts personal data.
+
+## Typed error resolution
+
+`NewConfiguredResolver(ResolverConfig{Registry: registry, Catalogs: catalogs})` admits
+registered message/schema pairs and seals the registry on success. Every
+registered message needs at least one translation; every present translation
+must match its typed schema. A failed constructor leaves an unsealed registry
+open. Admitted catalog updates must retain those schemas and at least one
+translation per message; configured alias targets cannot be removed. This
+shares the existing catalog publication lock, not a second update mechanism.
+
+`Resolve(ctx, ResolveInput{Explicit: "fi-FI", Default: "en", Error: original})`
+selects explicit preference, authenticated stored session preference, trusted
+cookie, header, then default. Unsupported preferences fall through. Regional
+preferences progressively match available translations; a higher supported
+preference overrides lower header exclusions. All input syntax is validated,
+even lower-priority sources. The default must be canonical and have this message;
+absence fails rather than translating an unrelated message or guessing English.
+Translation availability is evaluated from the same immutable snapshot used
+to render, even if a callback publishes a replacement during selection.
+
+Transport owners authenticate stored/cookie preferences and extract the header.
+This API does not infer trust, persist fallback locales, inspect error strings,
+call custom `As`, or replace the originating typed error. `LocalizedError`
+retains `Cause`, stable `Code`, `MessageID`, original typed parameter values,
+selected `Locale`, preview `Message`, typed `Parts`, and `CatalogVersion`.
+`errors.Is`/`errors.As` follow its original causal chain. Diagnostic `Error()`
+and formatting are constant/redacted; use the explicit `Message` field for
+public rendering and final-owner escaping. Failures return no partial localized
+result and a `ResolutionError` unwrapping both the classified reason and original
+error, including cancellation. Unknown/malformed owners are never guessed.
+
+An optional `Matcher` receives copied bounded inputs. It must be bounded,
+concurrent-safe and honor `MatchInput` negotiation semantics, including zero
+weights. Exact configured aliases resolve before upstream full-tag
+canonicalization; progressive parents are then derived from that canonical
+identity, never from raw grandfathered spellings or parent-only aliases.
+Matcher inputs have aliases already resolved. Preference calls contain
+positive progressive parents plus `*;q=0`
+to suppress automatic fallback; `NoAcceptableLocaleError` advances to the next
+source. Header/default calls preserve original weights on normalized ranges. The resolver
+rejects unavailable output keys and redacts callback errors/panics; cancellation
+is checked before/after calls. It cannot interrupt arbitrary caller code and
+does not create a goroutine to conceal that limitation.
+
+This configured constructor is additive composition for the implemented resolver
+core. The specified `NewResolver(catalogs, fallbacks, registry, preferences)`
+entry point, bounded configured fallback chain, preference policy and durable
+preference lifecycle are still pending; this batch does not substitute a
+different signature for that reserved public contract.
 
 ## FAQ and updates
 

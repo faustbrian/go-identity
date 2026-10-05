@@ -124,7 +124,8 @@ func (r *ErrorRegistry) Register(id ErrorIdentity, message MessageID, schema Par
 // SealErrorRegistry freezes the shared registry lifetime, idempotently. It
 // cannot be reopened. Resolve before sealing returns false; sealing an invalid
 // zero/nil registry fails. This also supports typed registry consumers without
-// requiring catalog rendering; the resolver constructor will use the same seal.
+// requiring catalog rendering; NewConfiguredResolver seals the same lifetime after
+// validating catalog/schema admission.
 func SealErrorRegistry(r *ErrorRegistry) error {
 	if r == nil || r.state == nil {
 		return RegistryConflictError{}
@@ -145,19 +146,26 @@ func SealErrorRegistry(r *ErrorRegistry) error {
 // A callback must obey LocalizableError's bounded-work contract; this function
 // cannot cancel arbitrary caller code and creates no background goroutines.
 func (r *ErrorRegistry) Resolve(err error) (message MessageID, parameters []SafeParameter, ok bool) {
+	_, message, parameters, ok = r.resolveRegistered(err)
+	return
+}
+
+// resolveRegistered captures the owning identity in the same traversal as the
+// parameters; rendering must not call a mutable domain callback twice.
+func (r *ErrorRegistry) resolveRegistered(err error) (id ErrorIdentity, message MessageID, parameters []SafeParameter, ok bool) {
 	defer func() {
 		if recover() != nil {
-			message, parameters, ok = "", nil, false
+			id, message, parameters, ok = "", "", nil, false
 		}
 	}()
 	if r == nil || r.state == nil || err == nil {
-		return "", nil, false
+		return "", "", nil, false
 	}
 	r.state.mu.RLock()
 	sealed := r.state.sealed
 	r.state.mu.RUnlock()
 	if !sealed {
-		return "", nil, false
+		return "", "", nil, false
 	}
 	stack := []error{err}
 	for visits := 0; len(stack) != 0 && visits < 32; visits++ {
@@ -168,23 +176,26 @@ func (r *ErrorRegistry) Resolve(err error) (message MessageID, parameters []Safe
 		}
 		if typed, found := current.(LocalizableError); found {
 			id := typed.ErrorIdentity()
+			if !stableName(string(id), true) {
+				return "", "", nil, false
+			}
 			r.state.mu.RLock()
 			registration, registered := r.state.entries[id]
 			r.state.mu.RUnlock()
 			if !registered {
-				return "", nil, false
+				return "", "", nil, false
 			}
 			values, valid := checkedParameters(registration.schema, typed.SafeParameters())
 			if !valid {
-				return "", nil, false
+				return "", "", nil, false
 			}
-			return registration.message, values, true
+			return id, registration.message, values, true
 		}
 		switch wrapped := current.(type) {
 		case interface{ Unwrap() []error }:
 			children := wrapped.Unwrap()
 			if len(children) > 32-len(stack)-visits-1 {
-				return "", nil, false
+				return "", "", nil, false
 			}
 			for i := len(children) - 1; i >= 0; i-- {
 				stack = append(stack, children[i])
@@ -193,7 +204,7 @@ func (r *ErrorRegistry) Resolve(err error) (message MessageID, parameters []Safe
 			stack = append(stack, wrapped.Unwrap())
 		}
 	}
-	return "", nil, false
+	return "", "", nil, false
 }
 
 func stableName(name string, punctuation bool) bool {
