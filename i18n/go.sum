@@ -1,2 +1,12 @@
+github.com/faustbrian/go-audit v1.0.0 h1:wVUkuXXBZIBj/6ORTZEgbbBPw2ymIaXnnTDrhBVn/N4=
+github.com/faustbrian/go-audit v1.0.0/go.mod h1:IrR+KzmsdkEizekCStgGor5Mqj4OfAj25REXAqDJ540=
+github.com/faustbrian/go-authorization v1.1.1-0.20261005011349-60ed4b3229d8 h1:6vgBmDJSZSpA5TCxaCySm/rvxkWxflu+btr1zKOTVUg=
+github.com/faustbrian/go-authorization v1.1.1-0.20261005011349-60ed4b3229d8/go.mod h1:olSJuKpr+mn2XOecIOpburSaTpWiRL153ZQUwvLhMkg=
+github.com/faustbrian/go-capability v1.0.1-0.20261002040645-174b128867a4 h1:ETYvtnrzgprM74djP4W1okumk9Rqmluorl/VdOvSdsg=
+github.com/faustbrian/go-capability v1.0.1-0.20261002040645-174b128867a4/go.mod h1:W33r26ntFpto2D1ejgqu36KwyDEofO4YdtFOkWwgo9k=
+github.com/faustbrian/go-clock v1.0.0 h1:F7YEouU94Zu2mExFBep7JWEa8nMz7WzWi/SPrDz2yJY=
+github.com/faustbrian/go-clock v1.0.0/go.mod h1:WKZ5p79IKGNTZGDp2L81cYjbsEjv3+9U0be7uwS8t6Y=
+github.com/faustbrian/go-identity v0.0.0-20261005023533-40f733e179f1 h1:4iBRas9deM8aZePeM7wGUsoxjwzgHVob5SbFLGBhPYY=
+github.com/faustbrian/go-identity v0.0.0-20261005023533-40f733e179f1/go.mod h1:17IuW//mZjwK47gESQeTBQz/iH+VZB5q2IzAkCcwVQk=
 golang.org/x/text v0.41.0 h1:vz/seA0lnX87Othu2f/0L24RcgrXD9/YFTSuGjj3rH8=
 golang.org/x/text v0.41.0/go.mod h1:jvf1O8ajNzZqhSrQBPbutR/EB83Cc0CFrezNQIwbb5M=

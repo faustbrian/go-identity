@@ -1,8 +1,8 @@
 # Identity localization
 
 Go 1.27 transport-neutral locale negotiation. This experimental module currently
-implements matching only; message catalogs, original-error translation, locale
-precedence and durable preference lifecycle are not yet implemented.
+implements matching and typed error registration; message catalogs, original-error
+translation, locale precedence and durable preference lifecycle are not yet implemented.
 
 ```go
 locale, err := (i18n.DefaultMatcher{}).Match(i18n.MatchInput{
@@ -58,6 +58,42 @@ will retain their separate owners; matching alone cannot acknowledge either.
 
 No rendered strings or escaping are provided by this matcher. Final delivery
 and HTTP context owners must perform context-specific escaping exactly once.
+
+## Typed error registration
+
+Construct `NewErrorRegistry()`, register each domain-owned `ErrorIdentity` once
+using `Register(identity, messageID, ParameterSchema)`, then call
+`SealErrorRegistry(registry)` before `Resolve(error)`. Zero/nil registries and
+unsealed resolution fail closed. Sealing is idempotent, shared across copies,
+and irreversible; registration after sealing or duplicate ownership is an error.
+At most 10000 identities can be registered. Registration is synchronized, but
+the caller must not mutate a schema during its call; schemas are copied.
+
+`LocalizableError` exposes only `ErrorIdentity()` and `SafeParameters()`. Registry
+lookup never calls `Error()` or custom `As()` and never guesses identity from
+text. Wrapped/joined errors are visited depth-first, left-to-right, bounded to
+32 nodes. The first typed owner controls resolution; unknown/invalid typed
+wrappers cannot bypass into an inner translation. Cycles, excessive wrapper
+fan-out and callback panics fail closed without leaking diagnostics. Callback
+implementations must themselves obey a bounded-work contract; the registry
+does not start goroutines or claim it can cancel arbitrary caller code.
+
+Schemas declare at most 32 uniquely named string/bool/int64/time scalars and
+their final plain-text, URL, header, JSON or HTML contexts. Strings are UTF-8 and
+at most 4096 bytes; only the selected scalar arm may be populated. List/float/
+arbitrary-object values are rejected. Missing, extra, duplicate, wrong-kind or
+wrong-context values return zero/false, never a partial translation. Returned
+values are copied in schema order, not escaped or rendered. Empty string,
+false and integer zero remain present values; time must be nonzero.
+
+The owning package must register only public-safe values. Schema validation
+does not detect secrets hidden in an otherwise valid string. `SafeParameter`
+formatting is redacted even for public-safe personal data. Unknown errors
+remain untranslated; the original typed error is neither altered nor replaced.
+Registry resolution currently returns message identity and parameters, not a
+localized error wrapper: preservation through rendering remains resolver work.
+
+See the compiled `ExampleErrorRegistry_Resolve` for an external-package example.
 
 ## FAQ and updates
 
