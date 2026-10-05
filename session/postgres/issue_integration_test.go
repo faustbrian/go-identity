@@ -555,13 +555,85 @@ func testNativeIssueIntegration(t *testing.T, ctx context.Context, pool *databas
 			if e != nil || result.CommitOutcome != identity.CommitOutcomeCommitted {
 				t.Fatal("core native issuance", e)
 			}
-			if _, e = result.Token.Reveal(); e != nil {
+			wire, e := result.Token.Reveal()
+			if e != nil {
 				t.Fatal("committed token withheld")
 			}
 			if !result.Cookie.Secure || !result.Cookie.HttpOnly || result.Cookie.Value != "" || result.Cookie.Name != "__Host-session" {
 				t.Fatal("unsafe committed cookie")
 			}
 			counts(t, candidate, 1, 1, 1, 1)
+			t.Run("issued cookie authenticates through owned primary", func(t *testing.T) {
+				parsed, e := session.ParseToken(wire)
+				if e != nil {
+					t.Fatal("issued credential not canonical")
+				}
+				credential, e := session.NewCredential(session.CredentialCookie, parsed)
+				if e != nil {
+					t.Fatal(e)
+				}
+				config := SessionServiceConfig{Repository: ownedConfig.Repository, Profile: IdentifierAdmissionConfig(ownedConfig.Profile), Validation: session.ServiceConfig{Profile: session.StorageStatefulOpaque, Audience: spec.Audience, Clock: clock.System{}, MaximumDuration: time.Second, ClockUncertainty: time.Millisecond, LookupKeys: []session.DigestKey{key}}}
+				reader, e := NewSessionService(pool, config)
+				if e != nil {
+					t.Fatal("public primary composition", e)
+				}
+				input := session.GetRequest{TenantID: spec.TenantID, Credential: credential}
+				get, e := reader.Get(ctx, input)
+				if e != nil || !get.Authenticated || get.ValidateAt(time.Now()) != nil {
+					t.Fatal("committed cookie not authenticated", e)
+				}
+				issued, _ := result.Session.Bindings()
+				current, _ := get.Session.Bindings()
+				issuedAuthority, _ := issued.Authority.Bindings()
+				currentAuthority, _ := current.Authority.Bindings()
+				issuedPolicy, _ := issued.Remember.Bindings()
+				currentPolicy, _ := current.Remember.Bindings()
+				if current.SessionID != issued.SessionID || current.FamilyID != issued.FamilyID || current.TenantID != issued.TenantID || current.UserID != issued.UserID || current.Lookup != issued.Lookup || current.Authentication != issued.Authentication || currentAuthority != issuedAuthority || currentPolicy != issuedPolicy || !current.IssuedAt.Equal(issued.IssuedAt) || !current.LastActivityAt.Equal(issued.LastActivityAt) {
+					t.Fatal("issued record changed during authentication")
+				}
+				// A separately constructed reader after process restart consumes only
+				// the delivered cookie and durable rows, not the issuer's preparation.
+				restarted, e := NewSessionService(pool, config)
+				if e != nil {
+					t.Fatal(e)
+				}
+				if got, e := restarted.Get(ctx, input); e != nil || !got.Authenticated {
+					t.Fatal("restart could not authenticate original cookie", e)
+				}
+				other := input
+				other.TenantID = "foreign"
+				if got, e := restarted.Get(ctx, other); e != nil || got.Authenticated {
+					t.Fatal("issued cookie crossed tenant", e)
+				}
+				wrongToken, e := session.NewToken(32)
+				if e != nil {
+					t.Fatal(e)
+				}
+				other = input
+				other.Credential, e = session.NewCredential(session.CredentialCookie, wrongToken)
+				if e != nil {
+					t.Fatal(e)
+				}
+				if got, e := restarted.Get(ctx, other); e != nil || got.Authenticated {
+					t.Fatal("different cookie authenticated", e)
+				}
+				// Current lifecycle state wins over original sign-in proof metadata.
+				if _, e = pool.Raw().Exec(ctx, `UPDATE identity.credential_references SET enabled=false WHERE tenant_id='issue' AND user_id='issue-user' AND credential_id='password'`); e != nil {
+					t.Fatal(e)
+				}
+				defer func() {
+					if _, e := pool.Raw().Exec(ctx, `UPDATE identity.credential_references SET enabled=true WHERE tenant_id='issue' AND user_id='issue-user' AND credential_id='password'`); e != nil {
+						t.Error("fixture restoration failed")
+					}
+				}()
+				if got, e := restarted.Get(ctx, input); e != nil || got.Authenticated {
+					t.Fatal("revoked issued credential authenticated", e)
+				}
+				if get.ValidateAt(get.ValidUntil()) == nil {
+					t.Fatal("copied admission outlived original deadline")
+				}
+				counts(t, candidate, 1, 1, 1, 1)
+			})
 			request, ok := prepared.Request()
 			if !ok {
 				t.Fatal("original request lost")
