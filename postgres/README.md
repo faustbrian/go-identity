@@ -19,7 +19,20 @@ the selected instance. Bounded queries and existing credential, directory and
 user-authorization checks share the original transaction and lock lifetime;
 there is no write or transaction-closure method. Ignored denial poisons Work.
 Close all rows before returning; do not retain the handle or perform network
-callbacks. These checks alone do not authorize mutation, consume proof, or
+callbacks. The private persistence pipeline invokes initial admission before
+locking/mutating the identifier partition or consuming its proof. Final
+admission runs after provisional effects and before proof finalization and
+terminal journal persistence. Each phase runs once; reentrant, duplicate,
+out-of-order or failed checks poison the same Work.
+
+`IdentifierAuthorityVersion` returns the original expected epoch initially.
+At final admission it returns only the exact successor from this Work's owned
+mutation receipt, with matching subject, intent, record, action and predecessor.
+It does not replace the original session snapshot or renew its freshness.
+Historical role-free provisional plans are unchanged; this optional role is
+not sufficient to activate public execution.
+
+These checks alone do not authorize mutation, consume proof, or
 establish credential-specific reauthentication. Public identifier `Begin`
 remains disabled until complete native session, access policy and recovery
 composition exists.

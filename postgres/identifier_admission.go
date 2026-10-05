@@ -31,6 +31,12 @@ type identifierAdmissionState struct {
 	final, active bool
 }
 
+// Completion facts belong to this Work, never to a reusable validity lease.
+type identifierAdmissionProgress struct {
+	command                        identity.Command
+	initialDone, finalDone, active bool
+}
+
 // IdentifierAdmissionWork borrows the sole coordinator's transaction only for
 // an exact registered check invocation. It permits bounded queries and current
 // kernel eligibility checks, but no Exec or transaction closure. Copies share
@@ -74,6 +80,37 @@ func (h IdentifierAdmissionWork) Command(p IdentifierAdmissionContributor) (iden
 		return identity.IdentifierCommand{}, false, h.deny()
 	}
 	return h.state.command, h.state.final, nil
+}
+
+// IdentifierAuthorityVersion returns the original command's identifier epoch
+// during initial admission and only this transaction's persisted successor at
+// the final check. It does not renew the original session snapshot or authorize
+// adopting a newer external epoch. Only the selected live participant may call.
+func (h IdentifierAdmissionWork) IdentifierAuthorityVersion(p IdentifierAdmissionContributor) (uint64, error) {
+	c, final, err := h.Command(p)
+	if err != nil {
+		return 0, err
+	}
+	if !final {
+		return c.Change.ExpectedAuthorityVersion, nil
+	}
+	if !identifierAdmissionSuccessor(h.state.work, c) {
+		return 0, h.deny()
+	}
+	return h.state.work.state.identifier.receipt.AuthorityVersion, nil
+}
+
+func identifierAdmissionSuccessor(w Work, spec identity.IdentifierCommand) bool {
+	r := w.state.identifier
+	if r == nil || !r.proofConsumed || r.proofFinalized {
+		return false
+	}
+	digest, err := identity.IdentifierIntentDigest(spec.Change)
+	return err == nil && r.user.TenantID == spec.Binding.TenantID && r.user.ID == spec.Binding.UserID && r.user.Status == identity.StatusActive &&
+		r.user.Version == spec.Change.ExpectedUserVersion+1 &&
+		r.receipt.IdentifierID == spec.Change.ID && r.receipt.Action == spec.Change.Action &&
+		r.receipt.ExpectedAuthorityVersion == spec.Change.ExpectedAuthorityVersion &&
+		r.receipt.AuthorityVersion == spec.Change.ExpectedAuthorityVersion+1 && r.receipt.IntentDigest == digest
 }
 
 // Query executes a bounded trusted primary query. Rows must close before the
@@ -176,9 +213,23 @@ func (c *Coordinator) runIdentifierAdmission(ctx context.Context, w Work, comman
 	if !ok || !sameParticipant(participant, participant) {
 		return w.fail(ctx, invalidPlan())
 	}
+	progress := w.state.identifierAdmission
+	if final {
+		if progress == nil || !progress.initialDone || progress.finalDone || progress.active || !identifierAdmissionSuccessor(w, spec) {
+			return w.fail(ctx, invalidWork())
+		}
+	} else {
+		if progress != nil || w.state.identifier != nil {
+			return w.fail(ctx, invalidWork())
+		}
+		progress = &identifierAdmissionProgress{command: command}
+		w.state.identifierAdmission = progress
+	}
+	progress.active = true
 	s := &identifierAdmissionState{work: w, participant: participant, command: spec, final: final, active: true}
 	defer func() {
 		s.active = false
+		progress.active = false
 		if recover() != nil {
 			err = w.fail(ctx, identity.UnavailableError{})
 		}
@@ -194,5 +245,13 @@ func (c *Coordinator) runIdentifierAdmission(ctx context.Context, w Work, comman
 	if w.state.rows != nil {
 		return w.fail(ctx, identity.UnavailableError{})
 	}
-	return w.usable()
+	if err = w.usable(); err != nil {
+		return err
+	}
+	if final {
+		progress.finalDone = true
+	} else {
+		progress.initialDone = true
+	}
+	return nil
 }

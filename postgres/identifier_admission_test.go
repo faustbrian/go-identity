@@ -67,6 +67,12 @@ func TestIdentifierAdmissionInvocationOwnsExactCommandAndLifetime(t *testing.T) 
 		p := &identifierAdmissionProbe{}
 		c, w, command := identifierAdmissionFixture(t, p)
 		spec, _ := command.ChangeIdentifier()
+		if final {
+			if err := c.runIdentifierAdmission(w.state.ctx, w, command, false); err != nil {
+				t.Fatal(err)
+			}
+			w.state.identifier = identifierOwnedAdmissionResult(t, command)
+		}
 		p.inspect = func(handle IdentifierAdmissionWork) error {
 			got, phase, err := handle.Command(p)
 			if err != nil || phase != final || got.Binding != spec.Binding || got.Change != spec.Change || got.SessionID != spec.SessionID || got.SessionVersion != spec.SessionVersion || !reflect.DeepEqual(got.Proof, spec.Proof) {

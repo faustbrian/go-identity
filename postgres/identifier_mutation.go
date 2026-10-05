@@ -98,6 +98,11 @@ func (r *Repository) applyIdentifierMutation(ctx context.Context, w Work, comman
 	if err != nil || !bytes.Equal(q.canonical, p.request.canonical) {
 		return fail(identity.ConflictError{})
 	}
+	if p.plan.identifierAdmission != nil {
+		if err = c.runIdentifierAdmission(ctx, w, command, false); err != nil {
+			return zero, err
+		}
+	}
 	state, now, err := lockIdentifierPartition(ctx, w, spec.Change)
 	if err != nil {
 		return zero, err
@@ -209,6 +214,15 @@ func (c *Coordinator) finalizeIdentifierCapability(w Work) error {
 	owned := w.state.identifier
 	if !owned.proofConsumed || owned.proofFinalized {
 		return w.fail(w.state.ctx, invalidWork())
+	}
+	if w.state.execution.reservation.plan.identifierAdmission != nil {
+		progress := w.state.identifierAdmission
+		if progress == nil {
+			return w.fail(w.state.ctx, invalidWork())
+		}
+		if err := c.runIdentifierAdmission(w.state.ctx, w, progress.command, true); err != nil {
+			return err
+		}
 	}
 	if err := c.runCapabilityExecution(w.state.ctx, w, true); err != nil {
 		return err

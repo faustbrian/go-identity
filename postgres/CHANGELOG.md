@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Bracket provisional identifier persistence with initial and final session
+  admission, denying duplicate or out-of-order checks. Final comparison exposes
+  only the exact transaction-owned identifier epoch successor; denial prevents
+  proof finalization and commit without renewing session freshness. Public
+  execution remains disabled pending complete native workflow composition.
+
 - Publish stable owner-derived global, tenant, user, identifier and aggregate
   credential scope keys for exact session-vector comparison. Framed keys avoid
   delimiter aliases; historical custom scope keys are not silently replaced.

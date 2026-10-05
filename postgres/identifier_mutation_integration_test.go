@@ -147,6 +147,7 @@ func TestIdentifierMutationIntegration(t *testing.T) {
 			}
 		}, nil)
 	}
+	var admission *identifierAdmissionProbe
 	prepare := func(t *testing.T, cmd identity.Command) (Work, pgx.Tx) {
 		t.Helper()
 		probe := &capabilityExecutionProbe{}
@@ -156,6 +157,11 @@ func TestIdentifierMutationIntegration(t *testing.T) {
 			entries[i] = e.contributor
 		}
 		entries[0] = repo
+		if admission != nil {
+			entries = append(entries, admission)
+			d := admission.Descriptor()
+			plan.IdentifierAdmission = &d
+		}
 		registry, e := NewContributorRegistry(entries)
 		if e != nil {
 			t.Fatal(e)
@@ -250,6 +256,95 @@ func TestIdentifierMutationIntegration(t *testing.T) {
 			t.Fatal("denial left prefix")
 		}
 	}
+	t.Run("admission brackets mutation and denial rolls back", func(t *testing.T) {
+		defer func() { admission = nil }()
+		for _, denial := range []string{"initial", "final", "none"} {
+			t.Run(denial, func(t *testing.T) {
+				before := read(t, "tenant-a", "user-a")
+				cmd := command(t, identity.IdentifierAttach, "admission-"+denial, denial+"@example.test")
+				initial, final := false, false
+				admission = &identifierAdmissionProbe{}
+				admission.inspect = func(h IdentifierAdmissionWork) error {
+					spec, terminal, err := h.Command(admission)
+					if err != nil {
+						return err
+					}
+					version, err := h.IdentifierAuthorityVersion(admission)
+					if err != nil {
+						return err
+					}
+					if terminal {
+						final = true
+						if !initial || version != before.AuthorityVersion+1 {
+							t.Fatal("final did not own successor")
+						}
+					} else {
+						initial = true
+						if version != before.AuthorityVersion || h.state.work.state.identifier != nil {
+							t.Fatal("initial ran after mutation")
+						}
+					}
+					rows, err := h.Query(ctx, `SELECT identifier_version::text FROM identity.users WHERE tenant_id=$1 AND user_id=$2`, string(spec.Binding.TenantID), string(spec.Binding.UserID))
+					if err != nil {
+						return err
+					}
+					var stored string
+					if !rows.Next() || rows.Scan(&stored) != nil {
+						rows.Close()
+						t.Fatal("missing primary epoch")
+					}
+					rows.Close()
+					if stored != fmt.Sprint(version) {
+						t.Fatal("epoch not persisted in borrowed transaction")
+					}
+					if denial == "initial" && !terminal || denial == "final" && terminal {
+						return identity.ForbiddenError{}
+					}
+					return nil
+				}
+				w, tx := open(t, cmd)
+				_, err := repo.applyIdentifierMutation(ctx, w, cmd, policy)
+				if denial == "initial" {
+					if err == nil || w.usable() == nil || !initial || final || w.state.identifier != nil {
+						t.Fatal("initial denial bypassed")
+					}
+					for _, e := range w.state.execution.reservation.plan.contributors {
+						if p, ok := e.contributor.(*capabilityExecutionProbe); ok && p.apply.state != nil {
+							t.Fatal("denied initial consumed proof")
+						}
+					}
+				} else {
+					if err != nil {
+						t.Fatal(err)
+					}
+					err = w.state.execution.coordinator.finalizeIdentifierCapability(w)
+					if !initial || !final {
+						t.Fatal("pipeline omitted admission")
+					}
+					if denial == "final" {
+						if err == nil || w.usable() == nil || w.state.identifier.proofFinalized {
+							t.Fatal("final denial bypassed")
+						}
+						for _, e := range w.state.execution.reservation.plan.contributors {
+							if p, ok := e.contributor.(*capabilityExecutionProbe); ok && p.finalize.state != nil {
+								t.Fatal("denied final finalized proof")
+							}
+						}
+					} else if err != nil || !w.state.identifier.proofFinalized {
+						t.Fatal("successful finalization denied", err)
+					}
+				}
+				invalidateWork(w)
+				if tx.Rollback(ctx) != nil {
+					t.Fatal("rollback")
+				}
+				after := read(t, "tenant-a", "user-a")
+				if after.User != before.User || after.AuthorityVersion != before.AuthorityVersion || len(after.Identifiers) != len(before.Identifiers) {
+					t.Fatal("admission left durable prefix")
+				}
+			})
+		}
+	})
 	t.Run("proof phase failure preserves identifier state", func(t *testing.T) {
 		for _, panics := range []bool{false, true} {
 			cmd := command(t, identity.IdentifierAttach, "proof-failure", "proof-failure@example.test")
