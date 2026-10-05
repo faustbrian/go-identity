@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add opt-in explicit deployment/tenant authority bootstrap and bounded primary
+  reads. Native participants can compare exact epochs under coordinator-owned
+  row locks; missing, disabled or stale tenant authority denies without default
+  creation. Existing migration bytes and ordinary user writers are unchanged.
+  This prerequisite does not enable sessions or provide lifecycle mutation APIs.
+
 - Add active-participant credential admission under the existing coordinator.
   Exact credential and independent user, identifier and credential epochs are
   checked under primary row locks, with expiry sampled after lock acquisition.

@@ -1,5 +1,38 @@
 # Identity PostgreSQL
 
+## Deployment and tenant authority
+
+Compose `DirectoryAuthorityMigrationSource` into the single owned migration
+history after its complete existing source. Allocate a permanent later version,
+one explicit `GlobalAuthorityID`, and up to 256 exact initial `TenantIDs` from
+trusted bootstrap configuration. The source creates independent full-width
+epochs at version 1; it does not discover tenants from users, create missing
+authority during authentication or modify user/credential versions. An empty
+tenant set deliberately enables none. Tenant order is canonicalized; duplicate
+IDs fail. Never edit the source configuration after its version is applied.
+
+`Repository.GetDirectoryAuthority` returns a bounded structural primary
+projection, including disabled tenant state. It is not authentication, an
+authorization decision or renewable validity evidence. Missing exact scope
+returns redacted `identity.ForbiddenError`; corrupt/unavailable storage fails
+closed. No replica/cache fallback exists.
+
+An exact active native participant can call
+`Work.RequireActiveDirectoryAuthority` with `DirectoryAuthorityAdmission`.
+Bind the deployment/tenant IDs and both expected epochs into the native command
+before reservation, deriving deployment identity from trusted composition.
+The helper retains share locks until the original coordinator terminalizes
+Work. Missing, disabled or changed epochs poison the transaction, including
+when a participant ignores denial after provisional writes. Earlier deadlines
+still win; driver cancellation may leave `Unknown`, requiring existing command
+recovery, never another command or an invented rollback acknowledgement.
+
+These are current kernel checks only. Credential admission, scoped existing
+authorization-owner checks, optional owners and one-time proof finalization
+remain required before session issuance. Public tenant onboarding/transitions
+and global-compromise lifecycle/cascade acknowledgements remain in development;
+consumers must not replace them with SQL callbacks or mutate migration history.
+
 ## Locked credential eligibility
 
 During its synchronous native feature invocation, a registered participant can

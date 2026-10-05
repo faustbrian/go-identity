@@ -180,6 +180,17 @@ func TestPostgresIntegration(t *testing.T) {
 		runner = compromiseRunner
 		testCredentialCompromise(t, ctx, pool, repo)
 	})
+	t.Run("directory authority", func(t *testing.T) {
+		authorityRunner, e := migrations.NewRunner(DirectoryAuthorityMigrationSource{Base: CredentialCompromiseMigrationSource{Base: CredentialMigrationSource{Base: StatusMigrationSource{Base: MigrationSource{}, Version: 12}, Version: 13}, Version: 14}, Version: 15, GlobalAuthorityID: "deployment'\\opaque", TenantIDs: []identity.TenantID{"directory"}}, backend)
+		if e != nil {
+			t.Fatal(e)
+		}
+		if _, e = authorityRunner.Up(ctx); e != nil {
+			t.Fatal("directory bootstrap migration", e)
+		}
+		runner = authorityRunner
+		testDirectoryAuthority(t, ctx, pool, repo)
+	})
 	insert := func(tenant, user, status, version string) error {
 		_, err := pool.Raw().Exec(ctx, `INSERT INTO identity.users(tenant_id,user_id,status,version) VALUES($1,$2,$3,$4::numeric)`, tenant, user, status, version)
 		return err
