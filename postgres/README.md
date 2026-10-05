@@ -1,5 +1,30 @@
 # Identity PostgreSQL
 
+## Exact original final-authentication outcome recovery
+
+`QueryAuthenticatedCommand` is a read-only bridge for the owned authenticated
+session adapter. Supply the original mapped command, opaque final proof,
+prepared plan and trusted current actor context. The configured `QueryPolicy`
+must allow disclosure. The bridge compares the complete original input using
+the global claim's exact retained fingerprint-key version, original proof
+namespace and frozen plan before returning the safe feature receipt and audit
+event ID. Generic `QueryCommand` remains metadata-only.
+
+Expired proof metadata is historical: the bridge validates original private
+provenance at the original issuance instant; it cannot renew authentication,
+authorize a session, consume a proof or return a credential. Wrong input/plan
+conflicts; missing, retired, malformed or unavailable evidence fails closed.
+Absence never becomes rollback proof or an implicit reservation.
+
+`RecoverAuthenticatedCommand` first establishes that same original input and
+current access policy, then uses the existing sole reconciliation owner only
+for an already observed pending command. It repeats exact-input lookup after
+reconciliation. Live leases remain pending, and unresolved effects remain
+unknown. It never reserves missing input, executes a session transition or
+reveals a bearer. Retain original safe request/proof custody and old keys for
+this request-bearing path; general restart recovery from command identity and
+the complete public session execution service remain unfinished.
+
 ## Final-authentication proof-use storage
 
 `SignInProofUseMigrationSource{Base, Version}` appends bounded proof-use

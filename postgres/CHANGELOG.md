@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add current-policy authorized original-input final-authentication receipt
+  query and recovery. Match exact retained-key command/proof intent and frozen
+  plan without renewing expired proof authority, reserving missing commands
+  or disclosing credentials. Preserve generic metadata-only command lookup.
+
 - Add proof-bound final-authentication command preparation and reservation with
   an explicitly configured trusted authenticator. Ordinary reservations reject
   authenticated session issuance. Preserve original credential/proof metadata

@@ -54,16 +54,17 @@ func nilQueryDependency(value any) bool {
 }
 
 type commandObservation struct {
-	tenant, purpose string
-	scope           []byte
-	fingerprint     []byte
-	retired         bool
-	state           *string
-	until           *time.Time
-	now             time.Time
-	resultVersion   *int32
-	class           *string
-	result, plan    []byte
+	tenant, purpose       string
+	scope                 []byte
+	fingerprint           []byte
+	fingerprintKeyVersion int64
+	retired               bool
+	state                 *string
+	until                 *time.Time
+	now                   time.Time
+	resultVersion         *int32
+	class                 *string
+	result, plan          []byte
 }
 
 // CommandRecord is a safe historical command observation. It contains scope,
@@ -109,10 +110,10 @@ func (c *Coordinator) readCommand(ctx context.Context, id identity.CommandID) (c
 	key, _ := base64.RawURLEncoding.DecodeString(string(id))
 	var observed commandObservation
 	err := c.pool.Raw().QueryRow(ctx, `SELECT coalesce(c.tenant_id::text,''),coalesce(c.purpose,''),c.safe_fields,c.retired,
-j.state,j.lease_until,clock_timestamp(),j.result_version,j.terminal_class,j.result,j.command_plan,c.fingerprint
+j.state,j.lease_until,clock_timestamp(),j.result_version,j.terminal_class,j.result,j.command_plan,c.fingerprint,coalesce(c.fingerprint_key_version,0)
 FROM identity.identity_command_id_claims c LEFT JOIN identity.commands j
 ON j.command_id=c.command_id AND j.tenant_id=c.tenant_id AND j.purpose=c.purpose
-WHERE c.command_id=$1`, key).Scan(&observed.tenant, &observed.purpose, &observed.scope, &observed.retired, &observed.state, &observed.until, &observed.now, &observed.resultVersion, &observed.class, &observed.result, &observed.plan, &observed.fingerprint)
+WHERE c.command_id=$1`, key).Scan(&observed.tenant, &observed.purpose, &observed.scope, &observed.retired, &observed.state, &observed.until, &observed.now, &observed.resultVersion, &observed.class, &observed.result, &observed.plan, &observed.fingerprint, &observed.fingerprintKeyVersion)
 	return observed, err
 }
 

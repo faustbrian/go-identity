@@ -10,6 +10,8 @@ import (
 	"time"
 
 	authentication "github.com/faustbrian/go-authentication"
+	authorization "github.com/faustbrian/go-authorization"
+	"github.com/faustbrian/go-clock"
 	identity "github.com/faustbrian/go-identity"
 	database "github.com/faustbrian/go-postgres"
 )
@@ -77,6 +79,9 @@ func testAuthenticatedCommandIntegration(t *testing.T, ctx context.Context, pool
 	binding.OperationID, binding.SchemaID, binding.RecordID = "identity.session.issue", "session-issue", "new-session"
 	authority, mint, original := finalProofFactory(t, binding)
 	config := CoordinatorConfig{MaximumDuration: 2 * time.Second, LeaseDuration: time.Minute, CurrentFingerprintKeyVersion: 1, RetainedFingerprintKeys: map[uint32][32]byte{1: {1}}, FinalAuthentication: &FinalAuthenticationConfig{Authority: authority, Namespace: "original-authentication"}}
+	config.QueryPolicy = &CommandQueryPolicy{Clock: clock.System{}, PolicyVersion: 9, Authorization: queryDecision(func(context.Context, authorization.DecisionContext) (authorization.Decision, error) {
+		return authorization.Decision{Outcome: authorization.Allow, Revision: 9}, nil
+	})}
 	c, err := NewCoordinator(pool, registry, config)
 	if err != nil {
 		t.Fatal(err)
@@ -145,6 +150,16 @@ func testAuthenticatedCommandIntegration(t *testing.T, ctx context.Context, pool
 		t.Fatal("commit", err)
 	}
 	counts(b, 1, 1, 1, 1)
+	_, caller := queryInputs(b)
+	observed, queryErr := c.QueryAuthenticatedCommand(ctx, b, command, proof, p, caller)
+	if queryErr != nil || observed.AuditEventID != result.AuditEventID || observed.Outcome != identity.CommitOutcomeCommitted {
+		t.Fatal("exact primary receipt lookup", queryErr)
+	}
+	observed, queryErr = c.RecoverAuthenticatedCommand(ctx, b, command, proof, p, caller)
+	if queryErr != nil || observed.AuditEventID != result.AuditEventID || observed.Outcome != identity.CommitOutcomeCommitted {
+		t.Fatal("exact primary receipt recovery", queryErr)
+	}
+	counts(b, 1, 1, 1, 1)
 	if len(owner.checks) != 2 || owner.checks[0] || !owner.checks[1] {
 		t.Fatal("initial/final checks missing")
 	}
@@ -168,6 +183,10 @@ func testAuthenticatedCommandIntegration(t *testing.T, ctx context.Context, pool
 	if err != nil || r.state != nil || replay.AuditEventID != result.AuditEventID {
 		t.Fatal("retained-key replay changed", err)
 	}
+	observed, queryErr = next.QueryAuthenticatedCommand(ctx, b, command, proof, nextPlan, caller)
+	if queryErr != nil || observed.AuditEventID != result.AuditEventID {
+		t.Fatal("retained-key historical query changed", queryErr)
+	}
 	modified := original
 	modified.ProofVersion--
 	changedProof := mint(modified)
@@ -176,6 +195,9 @@ func testAuthenticatedCommandIntegration(t *testing.T, ctx context.Context, pool
 		t.Fatal(err)
 	}
 	var conflict identity.ConflictError
+	if queryResult, queryErr := c.QueryAuthenticatedCommand(ctx, b, command, changedProof, changedPlan, caller); !errors.As(queryErr, &conflict) || queryResult.Outcome != identity.CommitOutcomeConflict {
+		t.Fatal("changed proof disclosed original receipt", queryErr)
+	}
 	if _, result, err := c.ReserveAuthenticatedCommand(ctx, b, command, changedProof, changedPlan); !errors.As(err, &conflict) || result.Outcome != identity.CommitOutcomeConflict {
 		t.Fatal("changed proof reassigned command", err)
 	}
@@ -184,6 +206,40 @@ func testAuthenticatedCommandIntegration(t *testing.T, ctx context.Context, pool
 		t.Fatal("proof reused by another command", err)
 	}
 	counts(duplicate, 0, 0, 1, 0)
+	t.Run("recovery never reserves missing input", func(t *testing.T) {
+		missing, missingCommand, missingPlan := prepare(proof)
+		_, currentCaller := queryInputs(missing)
+		if receipt, e := c.RecoverAuthenticatedCommand(ctx, missing, missingCommand, proof, missingPlan, currentCaller); e == nil || receipt.Outcome != identity.CommitOutcomeInvalid {
+			t.Fatal("missing recovery gained outcome")
+		}
+		counts(missing, 0, 0, 0, 0)
+		var claims int
+		id, _ := base64.RawURLEncoding.DecodeString(string(missing.CommandID))
+		if e := pool.Raw().QueryRow(ctx, "SELECT count(*) FROM identity.identity_command_id_claims WHERE command_id=$1", id).Scan(&claims); e != nil || claims != 0 {
+			t.Fatal("recovery reserved missing command", e)
+		}
+	})
+	t.Run("live pending recovery does not renew", func(t *testing.T) {
+		candidate := original
+		candidate.Proof.ID = "pendingpendingpendingxx"
+		pendingProof := mint(candidate)
+		pending, pendingCommand, pendingPlan := prepare(pendingProof)
+		reservation, receipt, e := c.ReserveAuthenticatedCommand(ctx, pending, pendingCommand, pendingProof, pendingPlan)
+		if e != nil || reservation.state == nil || receipt.Outcome != identity.CommitOutcomeInProgress {
+			t.Fatal("pending reservation", e)
+		}
+		_, currentCaller := queryInputs(pending)
+		receipt, e = c.RecoverAuthenticatedCommand(ctx, pending, pendingCommand, pendingProof, pendingPlan, currentCaller)
+		if e != nil || receipt.Outcome != identity.CommitOutcomeInProgress {
+			t.Fatal("live lease recovery", e)
+		}
+		counts(pending, 0, 0, 0, 0)
+		id, _ := base64.RawURLEncoding.DecodeString(string(pending.CommandID))
+		var generation string
+		if e = pool.Raw().QueryRow(ctx, "SELECT generation::text FROM identity.commands WHERE command_id=$1", id).Scan(&generation); e != nil || generation != "1" {
+			t.Fatal("recovery renewed live generation", e)
+		}
+	})
 	t.Run("kernel recovery conserves proof use", func(t *testing.T) {
 		for _, candidate := range []struct {
 			binding identity.CommandBinding
