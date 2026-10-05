@@ -166,6 +166,7 @@ type GetResult struct {
 }
 
 type sessionAdmission struct {
+	owner                       *SessionService
 	session                     Session
 	refresh                     bool
 	eligible, acceptedAt, until time.Time
@@ -294,7 +295,7 @@ func (s *SessionService) Get(ctx context.Context, request GetRequest) (out GetRe
 	if bounded.Err() != nil {
 		return GetResult{}, sessionReadFailure(bounded)
 	}
-	out = GetResult{Authenticated: true, Session: observed.Session, NeedsRefresh: lifetime.RefreshDue, RefreshEligibleAt: eligible, validity: &sessionAdmission{session: observed.Session, refresh: lifetime.RefreshDue, eligible: eligible, acceptedAt: now.UTC(), until: until.UTC()}}
+	out = GetResult{Authenticated: true, Session: observed.Session, NeedsRefresh: lifetime.RefreshDue, RefreshEligibleAt: eligible, validity: &sessionAdmission{owner: s, session: observed.Session, refresh: lifetime.RefreshDue, eligible: eligible, acceptedAt: now.UTC(), until: until.UTC()}}
 	return out, nil
 }
 

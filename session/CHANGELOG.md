@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Add one-session request preparation bound to the configured authenticated
+  reader's opaque caller custody and original exclusive validity. Retain the
+  independent complete target while rejecting fabricated callers, foreign
+  composition, cross-owner targets and same-ID record substitution. This does
+  not require fresh login, execute revocation or replace transactional policy
+  and current-owner checks; public idempotent logout remains in development.
+
 - Add an immutable exact-target one-session revocation command preserving the
   original authority snapshot and checked version successor. It cannot project
   as issuance or family revocation. Execution and idempotent logout remain

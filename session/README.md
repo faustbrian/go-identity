@@ -24,8 +24,19 @@ with the complete original target and a representable version successor.
 Its tenant, user and session ID must exactly match the command binding.
 `RevokeOne()` exposes a copy; formatting and serialization remain redacted.
 This command does not revoke a family, authenticate a caller or execute logout.
-The PostgreSQL adapter does not yet execute this variant and rejects it;
-the owned revocation service and durable transition are still required.
+The PostgreSQL contributor executes this variant atomically with audit and
+lifecycle effects; the public owned revocation service remains required.
+
+`service.PrepareRevokeOne(getResult, command)` retains opaque caller admission
+from that exact configured `SessionService`, the original exclusive deadline,
+and the independent complete target command. A public reconstructed result,
+another configured reader, wrong owner/tenant/audience or a substituted same-ID
+record is rejected. Ordinary logout needs no fresh login. The owned executor
+must validate the request against its trusted service/time before reservation
+and final commit, recheck source and target active owners and current policy,
+and handle absent/revoked targets idempotently. `Caller()` and `Command()` are
+structural projections only; neither can replace original opaque custody.
+Preparation performs no transaction, mutation, validity refresh or logout.
 
 ```go
 policy, err := session.ResolveRememberPolicy(session.BrowserSession, session.LifetimeConfig{
