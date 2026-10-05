@@ -118,10 +118,11 @@ type catalogSnapshot struct {
 // pointer. It has no goroutines or IO. Zero is invalid; do not copy a store.
 // Concurrent Render/Locales/Replace calls are safe with immutable call inputs.
 type CatalogStore struct {
-	snapshot        atomic.Pointer[catalogSnapshot]
-	publishMu       sync.Mutex // Owns publication and resolver admission constraints.
-	admitted        map[MessageID][]ParameterSpec
-	requiredLocales map[Locale]bool
+	snapshot             atomic.Pointer[catalogSnapshot]
+	publishMu            sync.Mutex // Owns publication and resolver admission constraints.
+	admitted             map[MessageID][]ParameterSpec
+	requiredLocales      map[Locale]bool
+	requiredTranslations map[Locale]map[MessageID]bool
 }
 
 // NewCatalogStore validates/copies 1..256 distinct canonical locales with one
@@ -156,7 +157,7 @@ func (s *CatalogStore) Replace(expected uint64, catalogs []Catalog) error {
 	}
 	s.publishMu.Lock()
 	defer s.publishMu.Unlock()
-	if !validAdmission(after, s.admitted, s.requiredLocales) {
+	if !validAdmission(after, s.admitted, s.requiredLocales, s.requiredTranslations) {
 		return CatalogConflictError{}
 	}
 	if after.version <= expected || !s.snapshot.CompareAndSwap(before, after) {

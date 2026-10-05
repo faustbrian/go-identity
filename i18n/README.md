@@ -2,7 +2,8 @@
 
 Go 1.27 transport-neutral locale negotiation. This experimental module currently
 implements matching, typed error registration, catalog rendering and original-error
-resolution with locale precedence. Durable preference lifecycle is not yet implemented.
+resolution with locale precedence, configured fallbacks and preference policy.
+Durable preference persistence and lifecycle/export are not yet implemented.
 
 ```go
 locale, err := (i18n.DefaultMatcher{}).Match(i18n.MatchInput{
@@ -194,11 +195,62 @@ rejects unavailable output keys and redacts callback errors/panics; cancellation
 is checked before/after calls. It cannot interrupt arbitrary caller code and
 does not create a goroutine to conceal that limitation.
 
-This configured constructor is additive composition for the implemented resolver
-core. The specified `NewResolver(catalogs, fallbacks, registry, preferences)`
-entry point, bounded configured fallback chain, preference policy and durable
-preference lifecycle are still pending; this batch does not substitute a
-different signature for that reserved public contract.
+`NewCatalog(locale, messages)` validates/canonicalizes a locale and copies
+bounded messages/schemas into an explicit initial version-1 catalog.
+`NewResolver(catalogs, fallbacks, registry, preferences)` implements the specified
+constructor and returns `Resolver`, also implementing `PreferenceResolver` for
+explicit validated `GetPreference`/`SetPreference` and `LocalizationService`.
+Construction performs no IO. The injected durable store is required, including
+typed-nil rejection; there is no ignored or fabricated store argument.
+
+Configured fallbacks are 1..16 unique canonical supported tags. Every registered
+message needs at least one configured fallback translation. A call's `Default`
+must belong to that chain; if its translation is absent, the first available
+configured fallback is selected. Header exclusions remain effective, and chain
+order controls excluded-default fallback before other supported translations.
+`ResolverConfig.Fallbacks` adds the same behavior to shared-store composition;
+when omitted, its original per-call default behavior remains unchanged. Admission
+pins all fallback locales and each registered message's first initially available
+fallback pair; publishing cannot silently remove those pairs. Change those
+constraints by constructing a new coordinated composition. Templates may still
+be replaced atomically under the existing immutable-schema constraints.
+
+## Preference policy and privacy
+
+`PreferenceKey` binds exact tenant and personal-data subject. Commands bind
+canonical accepted locale, expected version (zero=create), positive accepted
+notice version and a canonical stable `identity.CommandID`. `NewPreferencePolicy`
+copies a fixed 1..256 supported-locale policy and requires a callback timeout
+greater than zero and no more than 30 seconds. Canonical `NewResolver` composition
+uses its catalog locales and a documented five-second timeout. Policy updates
+and catalog migrations must explicitly reconcile stored preferences; reads and
+resolution never store a negotiated fallback or raw header/cookie contents.
+
+The policy validates structural inputs and exact returned tenant/subject/locale/
+version/notice projections. It does **not** grant authorization, prove consent,
+normalize canonical IDs, or substitute for lifecycle fencing. Its caller must
+already hold authenticated authorized scope. The durable operation owner must
+enforce canonical-ID and accepted-notice authority, optimistic/idempotent
+transactions, deleted-subject tombstones and privacy generations. The reference
+server must bind those real authorities before exposing preference methods.
+
+`PreferenceStore` exposes exactly two methods. Reads return explicit
+`PreferenceNotFoundError` for absence, never inferred defaults. Writes must
+atomically persist command identity and its result; identical replays return
+the original result and changed same-command input conflicts. The policy invokes
+at most one bounded store operation. Panic, unclassified failure or invalid
+write projection returns `PreferenceOutcomeUnknownError` with the original
+command ID: reconcile that command, never mint a replacement ID or infer rollback
+from cancellation. Explicit no-write conflict/denial remains classified. An exact
+committed result is retained even when cancellation arrives late. Callback
+diagnostics are not exposed. All preference projections format redacted.
+
+Locale is personal data. The notice version must describe purpose and retention;
+the durable adapter and reference profile own retention/deletion enforcement.
+Session/HTTP caches and integrity-protected cookies are projections, not durable
+authority. They expire/invalidate under their respective lifecycle consumers.
+Exact-snapshot export, anonymization/deletion acknowledgements, unknown-outcome
+reconciliation and a concrete downstream preference adapter remain pending.
 
 ## FAQ and updates
 

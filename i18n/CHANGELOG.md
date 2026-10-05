@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Add canonical catalog/resolver constructors, configured fallback chains and
+  bounded preference policy with tenant/version/notice validation and explicit
+  unknown-write outcomes. No fallback is persisted by reads or resolution.
+
 - Add typed error-preserving locale resolution with explicit/session/cookie/
   header/default precedence, single-snapshot rendering, bounded custom matching
   and registry/schema admission that constrains later catalog publication.

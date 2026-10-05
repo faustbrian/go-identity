@@ -10,7 +10,8 @@ import (
 // ResolveInput contains bounded caller-owned locale sources and the original
 // typed error. Session is authenticated stored preference, Cookie is already
 // integrity-checked by its transport owner; the resolver does not authenticate
-// either. Default must be a canonical available translation for this message.
+// either. Default must be canonical and supported. Without a configured chain
+// it needs this message; with a chain, the next configured translation may apply.
 // Preference strings are at most 64 bytes; AcceptLanguage at most 4096 bytes.
 type ResolveInput struct {
 	Explicit       string
@@ -88,16 +89,20 @@ type ResolverConfig struct {
 	Catalogs *CatalogStore
 	Matcher  Matcher
 	Aliases  []LocaleAlias
+	// Fallbacks optionally fixes a 1..16 canonical supported fallback chain.
+	// If absent, Resolve retains its original per-call Default behavior.
+	Fallbacks []Locale
 }
 
 // DefaultResolver owns immutable composition; registry construction is sealed
 // on successful admission. Concurrent Resolve calls and catalog updates are
 // safe. Zero/nil is invalid. It owns no persistence, IO or goroutines.
 type DefaultResolver struct {
-	registry *ErrorRegistry
-	catalogs *CatalogStore
-	matcher  Matcher
-	aliases  []LocaleAlias
+	registry  *ErrorRegistry
+	catalogs  *CatalogStore
+	matcher   Matcher
+	aliases   []LocaleAlias
+	fallbacks []Locale
 }
 
 var _ Resolver = (*DefaultResolver)(nil)
@@ -107,9 +112,12 @@ var _ Resolver = (*DefaultResolver)(nil)
 // installs publication constraints and seals the registry. Failure does not
 // seal an unsealed registry or change store constraints. Subsequent Replace
 // cannot remove every admitted translation, change its schema, or remove an
-// alias target. Missing translations in other locales are permitted.
+// alias target. A configured fallback chain additionally pins each message's
+// first available fallback translation and all fallback locales. Missing
+// translations in other locales are permitted; changing pinned pairs requires
+// constructing a new composition, not mutating the admitted contract.
 func NewConfiguredResolver(config ResolverConfig) (*DefaultResolver, error) {
-	if config.Registry == nil || config.Registry.state == nil || config.Catalogs == nil || len(config.Aliases) > 256 {
+	if config.Registry == nil || config.Registry.state == nil || config.Catalogs == nil || len(config.Aliases) > 256 || len(config.Fallbacks) > 16 {
 		return nil, RegistryConflictError{}
 	}
 	store, state := config.Catalogs, config.Registry.state
@@ -145,7 +153,41 @@ func NewConfiguredResolver(config ResolverConfig) (*DefaultResolver, error) {
 	for _, alias := range aliases {
 		required[alias.Locale] = true
 	}
-	if !validAdmission(snapshot, admitted, required) {
+	fallbacks := slices.Clone(config.Fallbacks)
+	translations := make(map[Locale]map[MessageID]bool, len(store.requiredTranslations))
+	for locale, messages := range store.requiredTranslations {
+		copy := make(map[MessageID]bool, len(messages))
+		for id := range messages {
+			copy[id] = true
+		}
+		translations[locale] = copy
+	}
+	for i, locale := range fallbacks {
+		canonical, err := CanonicalLocale(string(locale))
+		if err != nil || canonical != locale || snapshot.messages[locale] == nil || slices.Contains(fallbacks[:i], locale) {
+			return nil, InvalidLocaleError{}
+		}
+		required[locale] = true
+	}
+	if len(fallbacks) > 0 {
+		for _, entry := range state.entries {
+			var selected Locale
+			for _, locale := range fallbacks {
+				if _, exists := snapshot.messages[locale][entry.message]; exists {
+					selected = locale
+					break
+				}
+			}
+			if selected == "" {
+				return nil, MissingMessageError{}
+			}
+			if translations[selected] == nil {
+				translations[selected] = make(map[MessageID]bool)
+			}
+			translations[selected][entry.message] = true
+		}
+	}
+	if !validAdmission(snapshot, admitted, required, translations) {
 		return nil, CatalogConflictError{}
 	}
 	matcher := config.Matcher
@@ -153,8 +195,9 @@ func NewConfiguredResolver(config ResolverConfig) (*DefaultResolver, error) {
 		matcher = DefaultMatcher{}
 	}
 	store.admitted, store.requiredLocales = admitted, required
+	store.requiredTranslations = translations
 	state.sealed = true
-	return &DefaultResolver{registry: &ErrorRegistry{state: state}, catalogs: store, matcher: matcher, aliases: aliases}, nil
+	return &DefaultResolver{registry: &ErrorRegistry{state: state}, catalogs: store, matcher: matcher, aliases: aliases, fallbacks: fallbacks}, nil
 }
 
 func orderedSchema(schema []ParameterSpec) []ParameterSpec {
@@ -163,7 +206,14 @@ func orderedSchema(schema []ParameterSpec) []ParameterSpec {
 	return ordered
 }
 
-func validAdmission(snapshot *catalogSnapshot, admitted map[MessageID][]ParameterSpec, required map[Locale]bool) bool {
+func validAdmission(snapshot *catalogSnapshot, admitted map[MessageID][]ParameterSpec, required map[Locale]bool, translations map[Locale]map[MessageID]bool) bool {
+	for locale, messages := range translations {
+		for id := range messages {
+			if _, exists := snapshot.messages[locale][id]; !exists {
+				return false
+			}
+		}
+	}
 	for locale := range required {
 		if snapshot.messages[locale] == nil {
 			return false
@@ -229,6 +279,9 @@ func (r *DefaultResolver) Resolve(ctx context.Context, input ResolveInput) (Loca
 	if err != nil || string(fallback) != input.Default {
 		return fail(InvalidLocaleError{})
 	}
+	if len(r.fallbacks) > 0 && !slices.Contains(r.fallbacks, fallback) {
+		return fail(InvalidLocaleError{})
+	}
 	header, err := ParseAcceptLanguage(input.AcceptLanguage)
 	if err != nil {
 		return fail(err)
@@ -252,8 +305,19 @@ func (r *DefaultResolver) Resolve(ctx context.Context, input ResolveInput) (Loca
 		return fail(err)
 	}
 	supported := make([]Locale, 0, len(snapshot.locales))
+	if len(r.fallbacks) > 0 {
+		for _, locale := range append([]Locale{fallback}, r.fallbacks...) {
+			if _, exists := snapshot.messages[locale][id]; exists && !slices.Contains(supported, locale) {
+				supported = append(supported, locale)
+			}
+		}
+		if len(supported) == 0 {
+			return fail(MissingMessageError{})
+		}
+		fallback = supported[0]
+	}
 	for _, locale := range snapshot.locales {
-		if _, exists := snapshot.messages[locale][id]; exists {
+		if _, exists := snapshot.messages[locale][id]; exists && !slices.Contains(supported, locale) {
 			supported = append(supported, locale)
 		}
 	}
