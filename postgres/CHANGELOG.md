@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Reject protected identifier reservation plans whose proof fingerprint differs
+  from the exact verified capability envelope, including another signature of
+  the same payload. Historical command fingerprints and frozen plan decoding
+  retain their original representation.
+
 - Bracket provisional identifier persistence with initial and final session
   admission, denying duplicate or out-of-order checks. Final comparison exposes
   only the exact transaction-owned identifier epoch successor; denial prevents

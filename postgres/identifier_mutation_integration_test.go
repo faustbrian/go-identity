@@ -173,6 +173,7 @@ func TestIdentifierMutationIntegration(t *testing.T) {
 		plan.Capability.CapabilityID = payload.ID
 		plan.Capability.ExpiresAt = payload.ExpiresAt
 		plan.Capability.Purpose = capability.Purpose(spec.Binding.OperationID)
+		plan.Capability.ProofFingerprint = spec.Proof.EnvelopeDigest()
 		plan.Lifecycle.EventType = kernelLifecycleEvent(spec.Binding.OperationID)
 		plan.Lifecycle.BeforeVersion = spec.Change.ExpectedIdentifierVersion
 		plan.Lifecycle.AfterVersion = spec.Change.ExpectedIdentifierVersion + 1

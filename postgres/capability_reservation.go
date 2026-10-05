@@ -188,6 +188,10 @@ func capabilityReservationCommand(command identity.Command, plan CommandPlan) bo
 		return false
 	}
 	proof := spec.Proof.Payload()
+	envelope := spec.Proof.EnvelopeDigest()
 	p := plan.Capability
-	return p.CapabilityID == proof.ID && p.MaxUses == proof.MaxUses && p.ExpiresAt == proof.ExpiresAt && plan.Lifecycle.BeforeVersion == spec.Change.ExpectedIdentifierVersion && spec.Change.ExpectedIdentifierVersion != ^uint64(0) && plan.Lifecycle.AfterVersion == spec.Change.ExpectedIdentifierVersion+1
+	// The declared storage fingerprint must name this authenticated envelope,
+	// not another issued artifact with identical payload identity/use bounds.
+	// Historical plan decoding remains structural and preserves original bytes.
+	return envelope != ([32]byte{}) && p.ProofFingerprint == envelope && p.CapabilityID == proof.ID && p.MaxUses == proof.MaxUses && p.ExpiresAt == proof.ExpiresAt && plan.Lifecycle.BeforeVersion == spec.Change.ExpectedIdentifierVersion && spec.Change.ExpectedIdentifierVersion != ^uint64(0) && plan.Lifecycle.AfterVersion == spec.Change.ExpectedIdentifierVersion+1
 }

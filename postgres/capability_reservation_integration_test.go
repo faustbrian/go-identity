@@ -116,6 +116,7 @@ func liveCapabilityReservation(t *testing.T, p Contributor) (*Coordinator, ident
 	}
 	plan.Capability.CapabilityID = payload.ID
 	plan.Capability.ExpiresAt = payload.ExpiresAt
+	plan.Capability.ProofFingerprint = spec.Proof.EnvelopeDigest()
 	return c, command, plan
 }
 
@@ -148,6 +149,34 @@ func testCapabilityReservation(t *testing.T, ctx context.Context, pool *database
 		}
 		return c, command, plan
 	}
+	t.Run("foreign envelope never reserves", func(t *testing.T) {
+		participant := &sqlCapabilityReservation{}
+		c, command, plan := setup(t, participant)
+		spec, _ := command.ChangeIdentifier()
+		plan.Capability.ProofFingerprint = [32]byte{42}
+		q, err := prepareClaim(command, c.keys.retained[c.keys.current])
+		if err != nil {
+			t.Fatal(err)
+		}
+		fingerprint := claimFingerprint(c.keys.retained[c.keys.current], q.canonical)
+		plan.Digest, err = KernelPlanDigest(spec.Binding, fingerprint, plan)
+		if err != nil {
+			t.Fatal(err)
+		}
+		reservation, result, err := c.ReserveCommand(ctx, spec.Binding, command, plan)
+		if err == nil || reservation.state != nil || result.Outcome != identity.CommitOutcomeInvalid {
+			t.Fatal("foreign envelope produced reservation or outcome")
+		}
+		id, _ := base64.RawURLEncoding.DecodeString(string(spec.Binding.CommandID))
+		var claims, journals int
+		var state string
+		if err = pool.Raw().QueryRow(ctx, `SELECT (SELECT count(*) FROM identity.identity_command_id_claims WHERE command_id=$1),(SELECT count(*) FROM identity.commands WHERE command_id=$1)`, id).Scan(&claims, &journals); err != nil || claims != 0 || journals != 0 {
+			t.Fatal("foreign envelope persisted command prefix", err)
+		}
+		if err = pool.Raw().QueryRow(ctx, `SELECT state FROM identity.capability_reservation_fixture WHERE capability_id=$1`, plan.Capability.CapabilityID).Scan(&state); err != nil || state != "issued" || participant.calls != 0 {
+			t.Fatal("foreign envelope changed capability custody", err)
+		}
+	})
 	t.Run("atomic reserve and takeover", func(t *testing.T) {
 		participant := &sqlCapabilityReservation{}
 		c, command, plan := setup(t, participant)

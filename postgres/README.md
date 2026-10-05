@@ -8,6 +8,13 @@ require explicit adoption and cannot be silently refreshed into this profile.
 
 ## Protected identifier admission
 
+Identifier reservation requires `CapabilityPlan.ProofFingerprint` to equal the
+submitted verified `Grant.EnvelopeDigest()`. Equal ID, expiry and use limits
+alone cannot substitute another signed envelope. The capability owner derives
+keyed replay metadata; callers must not invent it. This comparison changes no
+historical command encoding or frozen-plan decoding and grants no authentication
+or execution authority.
+
 `CommandPlan.IdentifierAdmission` selects the exact registered
 `identity/session/postgres` checker through `IdentifierAdmissionContributor`.
 This role is frozen into the journal, separately from mutation contributors:

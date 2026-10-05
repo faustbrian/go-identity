@@ -35,7 +35,7 @@ func reservationPlanFixture(t *testing.T, extra Contributor) (*Coordinator, iden
 	command := recordIdentifier(t, identity.IdentifierAttach, nil, nil)
 	spec, _ := command.ChangeIdentifier()
 	b := spec.Binding
-	cp := CapabilityPlan{CapabilityID: spec.Proof.Payload().ID, Purpose: capability.Purpose(b.OperationID), ReplayDigest: [32]byte{3}, ReplayKeyVersion: 1, ProofFingerprint: [32]byte{4}, ExpiresAt: spec.Proof.Payload().ExpiresAt, MaxUses: 1}
+	cp := CapabilityPlan{CapabilityID: spec.Proof.Payload().ID, Purpose: capability.Purpose(b.OperationID), ReplayDigest: [32]byte{3}, ReplayKeyVersion: 1, ProofFingerprint: spec.Proof.EnvelopeDigest(), ExpiresAt: spec.Proof.Payload().ExpiresAt, MaxUses: 1}
 	wire := queryFrozenPlan(t, b)
 	p, err := decodeKernelPlan(b, [32]byte{1}, wire)
 	if err != nil {
@@ -95,6 +95,65 @@ func TestCapabilityReservationPrepareOwnsExactInput(t *testing.T) {
 	r := Reservation{state: &reservationState{coordinator: c, plan: admitted}}
 	if _, err := c.Begin(context.Background(), r); err == nil || r.state.started.Load() {
 		t.Fatal("incomplete workflow activated")
+	}
+}
+
+func TestIdentifierReservationBindsExactAuthenticatedEnvelope(t *testing.T) {
+	c, command, plan := reservationPlanFixture(t, &capabilityReservationProbe{})
+	spec, _ := command.ChangeIdentifier()
+	if spec.Proof.EnvelopeDigest() == ([32]byte{}) {
+		t.Fatal("verified fixture lacks envelope identity")
+	}
+	if _, err := c.PrepareCommandPlan(spec.Binding, command, plan); err != nil {
+		t.Fatal("exact signed envelope rejected", err)
+	}
+	for name, digest := range map[string][32]byte{
+		"zero": {}, "foreign": {42},
+	} {
+		t.Run(name, func(t *testing.T) {
+			copy := *plan.Capability
+			copy.ProofFingerprint = digest
+			changed := plan
+			changed.Capability = &copy
+			if _, err := c.PrepareCommandPlan(spec.Binding, command, changed); err == nil {
+				t.Fatal("substituted envelope admitted")
+			}
+		})
+	}
+	// Re-signing preserves every payload field (including ID/use/expiry) while
+	// producing a different authenticated envelope. No private token is logged.
+	substituted := spec
+	substituted.Proof = recordGrant(t, spec.Proof.Payload(), "other-proof-key")
+	other, err := identity.NewIdentifierCommand(substituted)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = c.PrepareCommandPlan(spec.Binding, other, plan); err == nil {
+		t.Fatal("another verified envelope reserved the original proof plan")
+	}
+	// Frozen history remains decodable. It never becomes current admission just
+	// because its retained nonzero fingerprint has the expected structural shape.
+	prepared, err := c.PrepareCommandPlan(spec.Binding, command, plan)
+	if err != nil {
+		t.Fatal(err)
+	}
+	prepared.Capability.ProofFingerprint = [32]byte{42}
+	q, err := prepareClaim(command, c.keys.retained[c.keys.current])
+	if err != nil {
+		t.Fatal(err)
+	}
+	fingerprint := claimFingerprint(c.keys.retained[c.keys.current], q.canonical)
+	prepared.Digest, err = KernelPlanDigest(spec.Binding, fingerprint, prepared)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wire, err := encodeKernelPlan(spec.Binding, fingerprint, prepared)
+	if err != nil {
+		t.Fatal(err)
+	}
+	decoded, err := decodeKernelPlan(spec.Binding, fingerprint, wire)
+	if err != nil || decoded.Capability.ProofFingerprint != ([32]byte{42}) {
+		t.Fatal("historical envelope metadata rewritten", err)
 	}
 }
 
