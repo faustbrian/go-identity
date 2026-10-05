@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/faustbrian/go-authorization"
+	"github.com/faustbrian/go-capability"
 )
 
 // CommandID is a canonical nonzero random 128-bit command identity. It is not
@@ -93,14 +94,15 @@ type CreateUserCommand struct {
 // bounded named typed input for exhaustive feature-adapter schema mapping. It
 // grants no generic callback, transaction, receipt or execution authority.
 type Command struct {
-	create     *CreateUserCommand
-	update     *UpdateUserCommand
-	profile    *ProfileUpdateCommand
-	status     *UserStatusCommand
-	unlink     *AccountUnlinkCommand
-	link       *AccountLinkCommand
-	identifier *IdentifierCommand
-	feature    *featureCommandState
+	create          *CreateUserCommand
+	update          *UpdateUserCommand
+	profile         *ProfileUpdateCommand
+	status          *UserStatusCommand
+	unlink          *AccountUnlinkCommand
+	link            *AccountLinkCommand
+	identifier      *IdentifierCommand
+	identifierProof *capability.Proof
+	feature         *featureCommandState
 }
 
 // NewUserCreationCommand validates and snapshots a creation's structural input.

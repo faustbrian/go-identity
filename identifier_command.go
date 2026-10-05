@@ -125,6 +125,20 @@ func (c Command) ChangeIdentifier() (IdentifierCommand, bool) {
 	return *c.identifier, true
 }
 
+// IdentifierProof returns optional request-memory custody of the original opaque
+// proof attached by IdentifierService after admission. The boolean indicates
+// presence, not validity or authorization. The transaction owner must reverify
+// it with its configured capability service and reserve/consume atomically.
+// Copies share the original proof's one-transfer lifetime; neither this accessor
+// nor admission transfers or consumes it. NewIdentifierCommand constructs only
+// metadata and does not attach custody. Never persist this proof.
+func (c Command) IdentifierProof() (capability.Proof, bool) {
+	if _, ok := c.ChangeIdentifier(); !ok || c.identifierProof == nil {
+		return capability.Proof{}, false
+	}
+	return *c.identifierProof, true
+}
+
 // Format redacts canonical/display values and the proof envelope.
 func (IdentifierCommand) Format(s fmt.State, verb rune) {
 	_, _ = io.WriteString(s, "identity.IdentifierCommand(redacted)")
@@ -342,6 +356,9 @@ func (s *IdentifierService) IdentifierChange(ctx context.Context, r IdentifierCh
 	}
 	attempted = true
 	out.CommitOutcome = CommitOutcomeUnknown
+	// Keep original shared custody available for configured native reverification;
+	// Grant metadata alone cannot establish signed-envelope identity.
+	command.identifierProof = &r.Proof
 	receipt, e := s.uow.Execute(ctx, command)
 	digest, _ := IdentifierIntentDigest(r.Change)
 	if !receipt.valid() || receipt.Binding != b || receipt.Outcome == CommitOutcomeCommitted && (receipt.ExpectedVersion != r.Change.ExpectedUserVersion || receipt.Identifier.IdentifierID != r.Change.ID || receipt.Identifier.Action != r.Change.Action || receipt.Identifier.ExpectedAuthorityVersion != r.Change.ExpectedAuthorityVersion || receipt.Identifier.IntentDigest != digest) {

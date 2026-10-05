@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Preserve original opaque identifier proof custody through admitted command
+  execution for native configured reverification, without persisting bearer
+  material or transferring or consuming the proof during admission.
+
 - Keep additive authorization contracts selected when consumers also depend on
   the released v1.1.0 API, using the unchanged source with a compatible higher
   pseudo-version and canonical module checksums.

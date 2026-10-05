@@ -157,6 +157,14 @@ exclusive expiry, and at most five-minute lifetime/age (configuration may
 shorten it). Verify is read-only: only the owning protected transaction may
 reserve/consume/finalize it atomically with risk, state and other participants.
 
+After admission, `Command.IdentifierProof` exposes optional request-memory
+custody of the original opaque proof to the transaction owner. Its boolean
+reports presence only: the owner must reverify using its configured capability
+service before preparing consumption. Copies share the original one-transfer
+lifetime; admission and the accessor neither transfer nor consume it. The
+structural `NewIdentifierCommand` constructor carries grant metadata only.
+Bearer custody is never part of durable command encoding or recovery.
+
 `IdentifierIntentDigest` uses SHA-256 over the UTF-8 domain
 `identity-identifier-change-v1` plus a NUL, followed by eleven exact UTF-8
 fields, each prefixed by its four-byte big-endian byte length:
