@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add distinct invocation-only capability apply and finalize custody for the
+  exact registered participant and current coordinator generation. Retained,
+  foreign and wrong-phase handles fail; callback failures poison domain work.
+  Capability-bearing domain execution remains disabled until its native
+  identifier mutation and complete transactional owner are implemented.
+
 - Add effective-user authorization epoch admission under the original native
   participant and coordinator transaction. Missing/stale authority and ignored
   invalid input prevent commit; actor or workload identity cannot substitute

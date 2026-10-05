@@ -880,6 +880,15 @@ versions, and invokes Reserve or exact-predecessor Rebind under the same claim,
 journal and tenant locks. Failure, panic or unfinished rows rolls back every
 prefix; returned invocation handles and rows cannot outlive the phase. Retained
 fingerprint keys remain authoritative on replay. Contributors never own closure.
+The additive `CapabilityExecutionContributor` seam provides separate
+`CapabilityApplyWork` and `CapabilityFinalizeWork` invocations. Their bindings
+select the original frozen input and current generation, never predecessor
+release authority. Only the exact registered instance can inspect them; wrong
+phase, foreign registry and retained copies fail. SQL uses the existing bounded
+Work, with no pool, transaction closure or raw driver escape. Callback errors,
+panic and unfinished rows poison the underlying work. These custody contracts
+do not yet provide a production consumption algorithm or native identifier
+mutation, and cannot consume an `authentication.AuthenticatedProof`.
 `Begin` still rejects these reservations before consuming their opaque handle:
 domain/session/risk/apply/finalize phases and the production
 capability store are pending. No capability use or complete workflow is claimed
