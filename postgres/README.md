@@ -2,6 +2,20 @@
 
 ## Privacy admission storage
 
+Compose `PrivacyExportJobMigrationSource{Base, Version}` after the privacy
+epoch migration to add bounded immutable request/snapshot metadata and the
+closed six-state job profile. Existing applied migrations are unchanged.
+The private persistence phase uses the same Work's allocation and frozen intent,
+verifies the retained evidence key, rejects changed scope/time/projections and
+rechecks active identity, authority and privacy fences at its write. Command ID,
+export ID and per-subject epoch uniqueness prevent metadata rebinding; no upsert
+or snapshot re-signing is used. Exact JSON bytes retain full unsigned counters
+without JSONB coercion; the deterministic-CBOR MAC remains key-owned.
+Returned receipts are copied, provisional and not publication evidence. The
+metadata includes personal scope correlations, so restrict database access and
+apply the eventual legal-hold/erasure owner; do not log it. No worker or public
+admission API is activated by this migration or storage phase.
+
 `PrivacyExportMigrationSource{Base, Version}` appends authoritative `privacy_epoch`
 and `privacy_disposition` fields to existing user rows. Compose Base with
 `StatusMigrationSource` first and allocate Version after every Base version.

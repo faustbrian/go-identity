@@ -18,6 +18,7 @@ type privacyAllocation struct {
 	exportID                                        identity.PrivacyExportJobID
 	identityVersion, authorityVersion, privacyEpoch uint64
 	requestedAtMicroseconds                         int64
+	intentDigest                                    [32]byte
 }
 
 func (privacyAllocation) Format(s fmt.State, verb rune) {
@@ -36,10 +37,11 @@ func allocatePrivacyExport(ctx context.Context, w Work, c identity.PrivacyExport
 		return zero, err
 	}
 	fail := func(err error) (privacyAllocation, error) { return zero, w.fail(w.state.ctx, err) }
-	if ctx == nil || c.Binding != w.state.binding {
+	if ctx == nil || c.Binding != w.state.binding || w.state.privacyAllocation != nil {
 		return fail(invalidWork())
 	}
-	if _, err := identity.PrivacyExportIntentDigest(c); err != nil {
+	digest, err := identity.PrivacyExportIntentDigest(c)
+	if err != nil {
 		return fail(invalidWork())
 	}
 	rows, err := w.Query(ctx, `SELECT tenant_id,user_id,status,version::text,authority_version::text,privacy_epoch::text,privacy_disposition
@@ -104,5 +106,7 @@ func allocatePrivacyExport(ctx context.Context, w Work, c identity.PrivacyExport
 	if changed != 1 {
 		return fail(identity.ConflictError{})
 	}
-	return privacyAllocation{exportID: id, identityVersion: v, authorityVersion: a, privacyEpoch: p + 1, requestedAtMicroseconds: now.UnixMicro()}, nil
+	result := privacyAllocation{exportID: id, identityVersion: v, authorityVersion: a, privacyEpoch: p + 1, requestedAtMicroseconds: now.UnixMicro(), intentDigest: digest}
+	w.state.privacyAllocation = &result
+	return result, nil
 }

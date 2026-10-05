@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add bounded native privacy job/snapshot persistence tied to the same Work's
+  allocation and frozen intent. Preserve sealed bytes, retained key version and
+  full-width cuts; reject stale eligibility, duplicate staging and command-ID
+  rebinding. Epoch and metadata roll back together. Public admission, workers
+  and downloads remain disabled pending the complete protected composition.
+
 - Add forward-only privacy epoch and pending-destructive-state fences, with
   private same-Work export allocation under the exact user lock. Preserve
   aggregate/security versions, imported IDs and full-width counters; rollback

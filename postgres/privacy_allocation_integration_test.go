@@ -4,6 +4,7 @@ package postgres
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"math"
 	"os"
@@ -77,7 +78,7 @@ func TestPrivacyAllocationIntegration(t *testing.T) {
 	if _, err := db.ExecContext(ctx, `INSERT INTO identity.users(tenant_id,user_id,status,version,authority_version) VALUES($1,$1,'active',3,4),('imported','01ARZ3NDEKTSV4RRFFQ69G5FAV','banned',18446744073709551615,18446744073709551615)`, canonical); err != nil {
 		t.Fatal(err)
 	}
-	next, err := migrations.NewRunner(PrivacyExportMigrationSource{Base: base, Version: 11}, backend)
+	next, err := migrations.NewRunner(PrivacyExportJobMigrationSource{Base: PrivacyExportMigrationSource{Base: base, Version: 11}, Version: 12}, backend)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -139,6 +140,155 @@ func TestPrivacyAllocationIntegration(t *testing.T) {
 		}
 		return got
 	}
+	seal := func(t *testing.T, c identity.PrivacyExportRequestCommand, a privacyAllocation, change func(*identity.PrivacyExportSnapshotSpecV1)) (identity.PrivacyExportSnapshotV1, identity.PrivacyExportEvidenceKey) {
+		t.Helper()
+		key, err := identity.NewPrivacyExportEvidenceKey(7, [32]byte{1})
+		if err != nil {
+			t.Fatal(err)
+		}
+		spec := identity.PrivacyExportSnapshotSpecV1{ExportID: a.exportID, TenantID: c.Binding.TenantID, SubjectID: c.Binding.UserID, CommandID: c.Binding.CommandID, IdentityVersion: a.identityVersion, PrivacyEpoch: a.privacyEpoch, LifecycleSequence: 9, RequestedAtMicroseconds: a.requestedAtMicroseconds}
+		// Synthetic cuts test storage integrity only, never owner cut provenance.
+		for _, projection := range c.Projections {
+			spec.Cuts = append(spec.Cuts, identity.PrivacyExportContributorCutV1{ContributorID: projection.ContributorID, ProjectionID: projection.ProjectionID, CheckpointPosition: math.MaxUint64})
+		}
+		if change != nil {
+			change(&spec)
+		}
+		snapshot, err := key.SealSnapshotV1(spec)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return snapshot, key
+	}
+	t.Run("snapshot and epoch roll back together", func(t *testing.T) {
+		reset()
+		c := request()
+		w, tx := open(t, c)
+		a, err := allocatePrivacyExport(ctx, w, c)
+		if err != nil {
+			t.Fatal(err)
+		}
+		snapshot, key := seal(t, c, a, nil)
+		receipt, err := persistPrivacyExportAllocation(ctx, w, c, snapshot, key)
+		if err != nil || receipt.Status != identity.PrivacyExportQueued || receipt.Snapshot.PrivacyEpoch != 2 {
+			t.Fatal("snapshot not persisted", err)
+		}
+		if err := tx.Rollback(ctx); err != nil {
+			t.Fatal(err)
+		}
+		var count int
+		if err := pool.Raw().QueryRow(ctx, `SELECT count(*) FROM identity.privacy_export_jobs`).Scan(&count); err != nil || count != 0 || readEpoch() != "1" {
+			t.Fatal("rollback left job or epoch", err)
+		}
+	})
+	for _, name := range []string{"no allocation", "wrong key", "changed command", "changed timestamp", "changed projection", "changed intent", "duplicate", "changed identity", "changed authority", "changed epoch", "destruction after allocation"} {
+		t.Run("storage denies "+name, func(t *testing.T) {
+			reset()
+			c := request()
+			w, tx := open(t, c)
+			a, err := allocatePrivacyExport(ctx, w, c)
+			if err != nil {
+				t.Fatal(err)
+			}
+			change := func(spec *identity.PrivacyExportSnapshotSpecV1) {
+				switch name {
+				case "changed command":
+					spec.CommandID = "AgICAgICAgICAgICAgICAg"
+				case "changed timestamp":
+					spec.RequestedAtMicroseconds++
+				case "changed projection":
+					spec.Cuts[0].ProjectionID = identity.PrivacyExportSubjectJournalV1
+				}
+			}
+			snapshot, key := seal(t, c, a, change)
+			if name == "no allocation" {
+				w.state.privacyAllocation = nil
+			}
+			if name == "wrong key" {
+				key, _ = identity.NewPrivacyExportEvidenceKey(7, [32]byte{2})
+			}
+			if name == "changed intent" {
+				c.MaximumBytes++
+			}
+			changes := map[string]string{
+				"changed identity":             "version=4",
+				"changed authority":            "authority_version=5",
+				"changed epoch":                "privacy_epoch=3",
+				"destruction after allocation": "privacy_disposition='deletion-pending'",
+			}
+			if change := changes[name]; change != "" {
+				if _, err := w.Exec(ctx, "UPDATE identity.users SET "+change+" WHERE tenant_id=$1", canonical); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if name == "duplicate" {
+				if _, err := persistPrivacyExportAllocation(ctx, w, c, snapshot, key); err != nil {
+					t.Fatal(err)
+				}
+			}
+			got, err := persistPrivacyExportAllocation(ctx, w, c, snapshot, key)
+			if err == nil || got.Status != "" || w.usable() == nil {
+				t.Fatal("invalid storage left usable Work")
+			}
+			if err := tx.Rollback(ctx); err != nil {
+				t.Fatal(err)
+			}
+			if readEpoch() != "1" {
+				t.Fatal("failed storage advanced epoch")
+			}
+		})
+	}
+	t.Run("committed bytes reconstruct without changing snapshot", func(t *testing.T) {
+		reset()
+		c := request()
+		w, tx := open(t, c)
+		a, err := allocatePrivacyExport(ctx, w, c)
+		if err != nil {
+			t.Fatal(err)
+		}
+		snapshot, key := seal(t, c, a, nil)
+		want, err := persistPrivacyExportAllocation(ctx, w, c, snapshot, key)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := tx.Commit(ctx); err != nil {
+			t.Fatal(err)
+		}
+		defer func() {
+			if _, err := pool.Raw().Exec(ctx, `DELETE FROM identity.privacy_export_jobs`); err != nil {
+				t.Error(err)
+			}
+		}()
+		var wire, digest []byte
+		var storedEpoch, status string
+		if err := pool.Raw().QueryRow(ctx, `SELECT receipt,snapshot_digest,privacy_epoch::text,status FROM identity.privacy_export_jobs WHERE tenant_id=$1 AND user_id=$1 AND export_id=$2`, canonical, string(a.exportID)).Scan(&wire, &digest, &storedEpoch, &status); err != nil {
+			t.Fatal(err)
+		}
+		var got identity.PrivacyExportRequestReceipt
+		if json.Unmarshal(wire, &got) != nil || got.Snapshot.Digest != want.Snapshot.Digest || string(digest) != string(want.Snapshot.Digest[:]) || storedEpoch != "2" || status != "queued" {
+			t.Fatal("snapshot changed in storage")
+		}
+		verified, err := key.VerifySnapshotV1(got.Snapshot)
+		if err != nil || !verified.Valid() || got.Snapshot.Contributors[0].Checkpoint.Position != math.MaxUint64 || got.Snapshot.EvidenceKeyVersion != 7 || readEpoch() != "2" {
+			t.Fatal("stored snapshot cannot be reconstructed", err)
+		}
+		c.ExpectedPrivacyEpoch = 2
+		w, tx = open(t, c)
+		a, err = allocatePrivacyExport(ctx, w, c)
+		if err != nil {
+			t.Fatal(err)
+		}
+		snapshot, key = seal(t, c, a, nil)
+		if got, err := persistPrivacyExportAllocation(ctx, w, c, snapshot, key); err == nil || got.Status != "" || w.usable() == nil {
+			t.Fatal("command ID rebound to a second job")
+		}
+		if err := tx.Rollback(ctx); err != nil {
+			t.Fatal(err)
+		}
+		if readEpoch() != "2" {
+			t.Fatal("duplicate command advanced epoch")
+		}
+	})
 	t.Run("active cursor failure poisons work after cursor closes", func(t *testing.T) {
 		reset()
 		c := request()

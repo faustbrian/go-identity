@@ -52,6 +52,8 @@ type workState struct {
 	credentialReceipt   *CredentialCompromiseReceipt
 	counterCommand      *identity.Command
 	riskCommand         *identity.Command
+	privacyAllocation   *privacyAllocation
+	privacyReceipt      *identity.PrivacyExportRequestReceipt
 }
 
 // newWork is private: only the sole coordinator may call it after verifying
