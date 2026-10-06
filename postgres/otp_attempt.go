@@ -178,7 +178,8 @@ func validateOTPAttempt(owner OTPAttemptContributor, command identity.Command, p
 
 // PrepareOTPAttemptPlan freezes a native counted-denial declaration without
 // IO or authority. Ordinary PrepareCommandPlan/ReserveCommand still reject OTP;
-// this seam admits only RecordOTPAttemptDenial, not consuming or domain work.
+// this seam admits RecordOTPAttemptDenial, not domain work. Consuming reserve
+// additionally requires PrepareOTPReservationPlan's complete reservation owner.
 // Native configuration authenticates the complete immutable submission before
 // any transaction. Returned projections are owned copies; do not mutate input
 // concurrently. Digest is replaced by the authoritative current-key mapping.

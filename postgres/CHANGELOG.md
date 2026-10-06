@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add native consuming OTP reservation and exact predecessor rebind in the
+  existing command transaction. Preserve live replay without another comparison
+  and roll back failed participant prefixes. Domain execution and release stay
+  disabled until current-check/finalize/recovery phases exist.
+
 - Add frozen OTP attempt plans and coordinator-owned counted-denial transactions.
   Wrong-attempt charges, denial audits and aborted commands commit atomically;
   retries preserve exact attempt identity without another comparison. Code-free

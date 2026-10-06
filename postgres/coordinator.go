@@ -373,6 +373,11 @@ func (c *Coordinator) reservePreparedCommand(ctx context.Context, binding identi
 	if err = c.reserveCapability(bounded, tx, q, admitted, journal, owner); err != nil {
 		return c.failedReservation(tx, binding, identity.CommandResult{}, err)
 	}
+	if !denied {
+		if err = c.reserveOTP(bounded, tx, command, q, admitted, journal, owner); err != nil {
+			return c.failedReservation(tx, binding, identity.CommandResult{}, err)
+		}
+	}
 	// Commit owns closure after it begins. Even a driver-classified failure is
 	// Unknown at this API; authoritative scoped recovery must resolve it later.
 	if err = tx.Commit(bounded); err != nil {

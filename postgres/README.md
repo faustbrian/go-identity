@@ -710,6 +710,17 @@ it never authorizes a replacement submission, takeover or challenge release.
 Consuming reservation/current/finalize/release and the production OTP adapter
 are still required before adopting a complete OTP workflow.
 
+`OTPReservationContributor` additionally enables `PrepareOTPReservationPlan`
+and `ReserveOTPCommand` for consuming mode only. Its reserve callback runs last
+after the existing one-use participants inside their shared claim/journal
+transaction. Native failure rolls back every prefix; a commit-attempt error
+returns Unknown and no ownership. A live same-command retry does not compare
+again. Expired-owner takeover invokes only exact predecessor CAS rebind, never
+reserve/comparison, and cannot transfer another command or generation. Returned
+reservation handles still cannot enter `Begin`: native current checks,
+finalization and proof-bound terminal release are not implemented yet. Do not
+treat this reservation checkpoint as a complete consuming OTP workflow.
+
 `CommandPlan.Feature` selects one exact frozen registration. Public
 `PrepareCommandPlan` copies the matching contributor order, 1..64 strictly
 ordered required audit slots and lifecycle declaration, and computes
