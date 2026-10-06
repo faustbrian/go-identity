@@ -76,7 +76,9 @@ source successor. A survivor must retain its original bearer, lifetime and
 authentication timestamps with its matching session-version binding. Unknown
 or in-progress outcomes retain exact scoped recovery; do not mint a replacement
 command. Cancellation or expiry after a known commit preserves its outcome but
-withholds counts/disposition. HTTP clears only the selected transport after
+withholds counts/disposition. A failed retained-metadata read likewise preserves
+the exact known commit with a redacted error and zero success metadata; use
+scoped recovery rather than issuing another mutation. HTTP clears only the selected transport after
 successful `CurrentSessionRevoked`; this core service emits no cookie itself.
 
 ### Idempotent self-signout

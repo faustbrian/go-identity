@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Preserve exact known bulk-revocation commitment when ancillary retained
+  metadata cannot be read. Return a redacted error and no count/version/source
+  disposition; malformed receipts or partial metadata still fail closed.
+
 - Add fresh authenticated revoke-other/all orchestration with explicit source
   preservation, bounded whole-set commands and opaque original caller custody.
   Receipt versions and recovery bind the authenticating session; the user CAS

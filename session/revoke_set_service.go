@@ -28,6 +28,8 @@ type RevokeSetExecutor interface {
 // SubjectVersion is the unchanged current user-authority CAS version and
 // CurrentSessionRevoked matches the explicit disposition. Receipt versions
 // describe the source session's successor, never a new user-wide authority.
+// If an error prevents retained metadata retrieval after a known commit, all
+// three metadata fields are zero; the exact committed receipt remains intact.
 // On other outcomes those metadata fields must all be zero. No credentials or
 // refreshed authentication are returned. Treat this as historical metadata only.
 type RevokeSetExecutionResult struct {
@@ -216,7 +218,17 @@ func (s *SetRevocationService) revoke(ctx context.Context, r RevokeOtherInput, a
 		return out, identity.UnknownCommitError{CommandID: r.CommandID}
 	}
 	if receipt.Outcome == identity.CommitOutcomeCommitted {
-		if receipt.Feature.BeforeVersion != spec.Version || receipt.Feature.AfterVersion != spec.Version+1 || result.RevokedCount > s.config.MaximumSessions || result.SubjectVersion != vector.User.Version || result.CurrentSessionRevoked != include || include && result.RevokedCount == 0 {
+		if receipt.Feature.BeforeVersion != spec.Version || receipt.Feature.AfterVersion != spec.Version+1 {
+			return out, identity.UnknownCommitError{CommandID: r.CommandID}
+		}
+		// Count retrieval is ancillary to an already proven command commit.
+		// Preserve that outcome without inventing unavailable metadata or
+		// allowing a malformed/partial projection to become successful output.
+		if dependencyErr != nil && result.RevokedCount == 0 && result.SubjectVersion == 0 && !result.CurrentSessionRevoked {
+			out.CommitOutcome = identity.CommitOutcomeCommitted
+			return out, setRevocationError(dependencyErr)
+		}
+		if result.RevokedCount > s.config.MaximumSessions || result.SubjectVersion != vector.User.Version || result.CurrentSessionRevoked != include || include && result.RevokedCount == 0 {
 			return out, identity.UnknownCommitError{CommandID: r.CommandID}
 		}
 	} else if result.RevokedCount != 0 || result.SubjectVersion != 0 || result.CurrentSessionRevoked {

@@ -41,6 +41,38 @@ func TestRevokeSetReceiptTargetsVersionedSourceNotUser(t *testing.T) {
 	}
 }
 
+func TestRevokeSetPreservesKnownCommitWhenMetadataReadFails(t *testing.T) {
+	for _, mode := range []string{"other", "all-preserve", "all-include"} {
+		t.Run(mode, func(t *testing.T) {
+			reader, input, _, observed, _, _ := validationFixture(t)
+			spec, _ := observed.Session.Bindings()
+			vector, _ := spec.Authority.Bindings()
+			all := mode != "other"
+			b := setBinding(spec, all)
+			op := session.RevokeOtherOperation()
+			if all {
+				op = session.RevokeAllOperation()
+			}
+			executor := setExecutor(func(context.Context, session.RevokeSetRequest) (session.RevokeSetExecutionResult, error) {
+				return session.RevokeSetExecutionResult{Receipt: identity.CommandResult{Binding: b, Outcome: identity.CommitOutcomeCommitted, AuditEventID: "audit", Feature: &identity.FeatureReceipt{Operation: op, BeforeVersion: spec.Version, AfterVersion: spec.Version + 1}}}, errors.New("private retained metadata read failure")
+			})
+			service, err := session.NewSetRevocationService(reader, executor, session.SetRevocationConfig{PolicyID: b.PolicyID, PolicyVersion: b.PolicyVersion, MaximumSessions: 100, MaximumDuration: time.Second})
+			if err != nil {
+				t.Fatal(err)
+			}
+			var out session.RevokeSetResult
+			if all {
+				out, err = service.RevokeAll(context.Background(), session.RevokeAllInput{TenantID: input.TenantID, Credential: input.Credential, CommandID: b.CommandID, CorrelationID: b.CorrelationID, ExpectedSubjectVersion: vector.User.Version, IncludeCurrent: mode == "all-include"})
+			} else {
+				out, err = service.RevokeOther(context.Background(), session.RevokeOtherInput{TenantID: input.TenantID, Credential: input.Credential, CommandID: b.CommandID, CorrelationID: b.CorrelationID})
+			}
+			if !errors.Is(err, session.ErrUnavailable) || out.CommitOutcome != identity.CommitOutcomeCommitted || out.RevokedCount != 0 || out.SubjectVersion != 0 || out.SessionVersion != 0 || out.CurrentSessionRevoked || out.Recovery.RecordID != spec.SessionID || strings.Contains(err.Error(), "private") {
+				t.Fatal("known commit lost or success metadata manufactured", out.CommitOutcome, err)
+			}
+		})
+	}
+}
+
 func TestRevokeSetServiceAuthenticatesDerivesSourceAndConservesExactReceipt(t *testing.T) {
 	for _, mode := range []string{"other", "all-preserve", "all-include"} {
 		t.Run(mode, func(t *testing.T) {
@@ -85,7 +117,7 @@ func TestRevokeSetServiceAuthenticatesDerivesSourceAndConservesExactReceipt(t *t
 }
 
 func TestRevokeSetServiceRejectsMalformedOrUnknownExecutionWithoutSuccess(t *testing.T) {
-	for _, mode := range []string{"receipt-absent", "wrong-binding", "wrong-operation", "wrong-version", "count", "subject", "disposition", "unknown", "panic", "cancel"} {
+	for _, mode := range []string{"receipt-absent", "wrong-binding", "wrong-operation", "wrong-version", "count", "subject", "disposition", "unknown", "panic", "cancel", "missing-metadata", "partial-metadata-error", "missing-metadata-error-wrong-version"} {
 		t.Run(mode, func(t *testing.T) {
 			reader, input, _, observed, _, _ := validationFixture(t)
 			spec, _ := observed.Session.Bindings()
@@ -95,6 +127,7 @@ func TestRevokeSetServiceRejectsMalformedOrUnknownExecutionWithoutSuccess(t *tes
 			defer stop()
 			executor := setExecutor(func(context.Context, session.RevokeSetRequest) (session.RevokeSetExecutionResult, error) {
 				r := session.RevokeSetExecutionResult{Receipt: identity.CommandResult{Binding: b, Outcome: identity.CommitOutcomeCommitted, AuditEventID: "audit", Feature: &identity.FeatureReceipt{Operation: session.RevokeOtherOperation(), BeforeVersion: spec.Version, AfterVersion: spec.Version + 1}}, RevokedCount: 2, SubjectVersion: v.User.Version}
+				var cause error
 				switch mode {
 				case "receipt-absent":
 					r.Receipt = identity.CommandResult{}
@@ -117,8 +150,18 @@ func TestRevokeSetServiceRejectsMalformedOrUnknownExecutionWithoutSuccess(t *tes
 					panic("dependency")
 				case "cancel":
 					stop()
+				case "missing-metadata":
+					r.RevokedCount, r.SubjectVersion = 0, 0
+				case "partial-metadata-error":
+					r.SubjectVersion = 0
+					cause = errors.New("metadata failed")
+				case "missing-metadata-error-wrong-version":
+					r.RevokedCount, r.SubjectVersion = 0, 0
+					r.Receipt.Feature.BeforeVersion++
+					r.Receipt.Feature.AfterVersion++
+					cause = errors.New("metadata failed")
 				}
-				return r, nil
+				return r, cause
 			})
 			service, e := session.NewSetRevocationService(reader, executor, session.SetRevocationConfig{PolicyID: b.PolicyID, PolicyVersion: b.PolicyVersion, MaximumSessions: 100, MaximumDuration: time.Second})
 			if e != nil {
