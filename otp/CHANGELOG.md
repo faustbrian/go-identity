@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add command-bound OTP submission preparation with complete structural
+  command scope and code-free command/attempt recovery. Tenant, subject and
+  required target mismatches fail closed; legacy preparation retains its exact
+  fingerprint profile. Preparation does not grant durable dispatch authority.
+
 - Add immutable primary challenge snapshots and bounded attempt policy
   evaluation. Non-consuming checks have their own cap while all admitted
   comparisons share the profile's total budget, including successful checks;

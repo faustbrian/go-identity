@@ -64,6 +64,9 @@ func (AttemptFingerprint) MarshalText() ([]byte, error) { return nil, ErrSensiti
 // the ID/fingerprint pair binds one immutable logical submission. This value
 // alone cannot dispatch an attempt or authorize a protected mutation.
 type AttemptBindings struct {
+	// CommandID is present only for PrepareForCommand. Unbound preparation
+	// cannot be dispatched by a durable command adapter.
+	CommandID             identity.CommandID
 	AttemptID             AttemptID
 	Fingerprint           AttemptFingerprint
 	FingerprintKeyVersion uint32
@@ -84,6 +87,9 @@ func (AttemptBindings) MarshalText() ([]byte, error) { return nil, ErrSensitiveS
 // alone does not prove not-committed while the original transaction is live.
 // This correlation data grants no mutation or authentication authority.
 type AttemptRecoveryIdentity struct {
+	// CommandID retains the original bound command; empty means legacy unbound
+	// preparation and is invalid for durable command recovery.
+	CommandID             identity.CommandID
 	TenantID              identity.TenantID
 	AttemptID             AttemptID
 	Fingerprint           AttemptFingerprint
@@ -105,6 +111,7 @@ type AttemptCommand struct{ state *attemptState }
 type attemptState struct {
 	bindings AttemptBindings
 	code     auth.OneTimeCode
+	command  *attemptCommandScope
 }
 
 // Bindings returns code-free immutable metadata for the trusted adapter. Zero
@@ -135,7 +142,7 @@ func (a AttemptCommand) Recovery() (AttemptRecoveryIdentity, error) {
 		return AttemptRecoveryIdentity{}, e
 	}
 	c, _ := b.Continuation.Bindings()
-	return AttemptRecoveryIdentity{TenantID: identity.TenantID(c.Scope.TenantID), AttemptID: b.AttemptID, Fingerprint: b.Fingerprint, FingerprintKeyVersion: b.FingerprintKeyVersion}, nil
+	return AttemptRecoveryIdentity{CommandID: b.CommandID, TenantID: identity.TenantID(c.Scope.TenantID), AttemptID: b.AttemptID, Fingerprint: b.Fingerprint, FingerprintKeyVersion: b.FingerprintKeyVersion}, nil
 }
 func (AttemptCommand) Format(s fmt.State, _ rune) {
 	_, _ = io.WriteString(s, "otp.AttemptCommand(redacted)")
@@ -184,6 +191,10 @@ func (i AttemptIssuer) Prepare(ctx context.Context, c Continuation, mode Attempt
 }
 
 func (i AttemptIssuer) prepare(ctx context.Context, entropy io.Reader, c Continuation, mode AttemptMode, expectedVersion uint64, code auth.OneTimeCode) (AttemptCommand, error) {
+	return i.prepareWithCommand(ctx, entropy, c, mode, expectedVersion, code, nil)
+}
+
+func (i AttemptIssuer) prepareWithCommand(ctx context.Context, entropy io.Reader, c Continuation, mode AttemptMode, expectedVersion uint64, code auth.OneTimeCode, command *attemptCommandScope) (AttemptCommand, error) {
 	if ctx == nil || entropy == nil || i.version == 0 || c.state == nil || expectedVersion == 0 || (mode != AttemptModeCheck && mode != AttemptModeConsume) {
 		return AttemptCommand{}, ErrInvalidAttempt
 	}
@@ -193,11 +204,17 @@ func (i AttemptIssuer) prepare(ctx context.Context, entropy io.Reader, c Continu
 		return AttemptCommand{}, e
 	}
 	b := []byte("identity-otp-attempt-fingerprint-v1\x00")
+	if command != nil {
+		b = []byte("identity-otp-command-attempt-fingerprint-v1\x00")
+	}
 	b = binary.BigEndian.AppendUint32(b, uint32(len(c.state.scope.binding)))
 	b = append(b, c.state.scope.binding...)
 	b = append(b, byte(mode))
 	b = binary.BigEndian.AppendUint64(b, expectedVersion)
 	b = binary.BigEndian.AppendUint32(b, i.version)
+	if command != nil {
+		b = append(b, command.digest[:]...)
+	}
 	defer clear(b)
 	fingerprint, e := code.KeyedDigest(i.key, b)
 	if e != nil {
@@ -214,5 +231,8 @@ func (i AttemptIssuer) prepare(ctx context.Context, entropy io.Reader, c Continu
 		return AttemptCommand{}, ErrAttemptUnavailable
 	}
 	bindings := AttemptBindings{AttemptID: AttemptID(base64.RawURLEncoding.EncodeToString(id[:])), Fingerprint: AttemptFingerprint(base64.RawURLEncoding.EncodeToString(fingerprint[:])), FingerprintKeyVersion: i.version, Continuation: c, Mode: mode, ExpectedVersion: expectedVersion}
-	return AttemptCommand{state: &attemptState{bindings: bindings, code: code}}, nil
+	if command != nil {
+		bindings.CommandID = command.binding.CommandID
+	}
+	return AttemptCommand{state: &attemptState{bindings: bindings, code: code, command: command}}, nil
 }

@@ -66,6 +66,22 @@ Check and Consume are explicit disjoint modes; neither preparation mode grants
 authentication or creates a reservation. OS random reads cannot be forcibly
 interrupted; preparation has a five-second context cap with checks around work.
 
+`PrepareForCommand` additionally freezes the root-validated consuming command
+binding and trusted operation descriptor. Tenant, user namespace and required
+record target must match the continuation. Anonymous-flow schemas explicitly
+require an empty pre-account subject. The independent actor remains distinct
+from that subject. Its domain-separated keyed fingerprint includes all command
+metadata, and code-free recovery retains the original command ID as well as
+the attempt ID. `CommandBinding()` rejects zero and legacy unbound preparations;
+returned projections cannot mutate the original submission. Legacy `Prepare`
+keeps its existing exact fingerprint profile.
+
+This structural binding is not the coordinator's command fingerprint, operation
+registration, primary authorization or a dispatch capability. The owning native
+adapter must enforce operation-purpose semantics and original pre-auth/session
+provenance; generic feature execution must not bypass the pending typed OTP
+transaction phases. No durable command dispatch is implemented by preparation.
+
 Use the same `AttemptCommand` across dispatch retries. The code remains opaque
 through `Code()` for the authoritative bounded comparison, and `Bindings()` is
 code-free. Never persist the whole command. Release all command/code copies on
