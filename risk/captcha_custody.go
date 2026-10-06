@@ -1,6 +1,9 @@
 package risk
 
 import (
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/binary"
 	"fmt"
 	"io"
 )
@@ -14,6 +17,71 @@ import (
 // is invalid. Signature/configuration success never proves current authority,
 // replay ownership, commitment, freshness or protected-use permission.
 type CaptchaEvidenceCustody struct{ state *captchaEvidenceIssuerState }
+
+// CaptchaReplayKeyIdentity is native-only retention metadata. Commitment is
+// HMAC-SHA-256 keyed by the replay secret over the literal domain
+// "identity-captcha-replay-key-identity-v1", NUL, and the four-byte big-endian
+// version. It authenticates version-to-secret continuity, not a provider token,
+// permission or issuance. Version is nonzero; commitments must stay out of
+// public responses, logs, metrics and generic serialization.
+type CaptchaReplayKeyIdentity struct {
+	Version    uint32
+	Commitment [32]byte
+}
+
+// CaptchaReplayKeyCustody is an independently owned adapter projection of one
+// exact provider/site/profile/configuration and its 1..16 newest-first key
+// identities. It contains no raw secret, token or token alias. Mutation cannot
+// alter startup custody. Zero is invalid; durable owners must retain referenced
+// identities and deny omission or replacement rather than infer key retirement.
+type CaptchaReplayKeyCustody struct {
+	Provider, Site, APIProfile, ConfigurationVersion string
+	Keys                                             []CaptchaReplayKeyIdentity
+}
+
+// ReplayKeyCustody derives bounded domain-separated key identities without
+// callbacks, IO or time. Zero returns ErrInvalidPolicy. This projection lets
+// durable adapters reject replacing a retained secret under the same version;
+// it grants no replay, command, migration or disclosure authority by itself.
+func (c CaptchaEvidenceCustody) ReplayKeyCustody() (CaptchaReplayKeyCustody, error) {
+	if c.state == nil {
+		return CaptchaReplayKeyCustody{}, ErrInvalidPolicy
+	}
+	config := c.state.config.Replay.state.config
+	out := CaptchaReplayKeyCustody{Provider: config.Provider, Site: config.Site, APIProfile: config.APIProfile, ConfigurationVersion: config.ConfigurationVersion, Keys: make([]CaptchaReplayKeyIdentity, len(config.Keys))}
+	for i, key := range config.Keys {
+		mac := hmac.New(sha256.New, key.secret)
+		_, _ = mac.Write([]byte("identity-captcha-replay-key-identity-v1\x00"))
+		var version [4]byte
+		binary.BigEndian.PutUint32(version[:], key.version)
+		_, _ = mac.Write(version[:])
+		out.Keys[i].Version = key.version
+		copy(out.Keys[i].Commitment[:], mac.Sum(nil))
+	}
+	return out, nil
+}
+
+// Format redacts restricted replay-key linkage.
+func (CaptchaReplayKeyIdentity) Format(s fmt.State, _ rune) {
+	_, _ = io.WriteString(s, "risk.CaptchaReplayKeyIdentity(redacted)")
+}
+
+// MarshalJSON rejects exporting restricted replay-key linkage.
+func (CaptchaReplayKeyIdentity) MarshalJSON() ([]byte, error) { return nil, ErrSensitiveSerialization }
+
+// MarshalText rejects exporting restricted replay-key linkage.
+func (CaptchaReplayKeyIdentity) MarshalText() ([]byte, error) { return nil, ErrSensitiveSerialization }
+
+// Format redacts restricted replay-key configuration.
+func (CaptchaReplayKeyCustody) Format(s fmt.State, _ rune) {
+	_, _ = io.WriteString(s, "risk.CaptchaReplayKeyCustody(redacted)")
+}
+
+// MarshalJSON rejects exporting restricted replay-key configuration.
+func (CaptchaReplayKeyCustody) MarshalJSON() ([]byte, error) { return nil, ErrSensitiveSerialization }
+
+// MarshalText rejects exporting restricted replay-key configuration.
+func (CaptchaReplayKeyCustody) MarshalText() ([]byte, error) { return nil, ErrSensitiveSerialization }
 
 // NewCaptchaEvidenceCustody validates the same static configuration as the
 // executable issuer and owns copies of its slices/score policy. Clock, Verify

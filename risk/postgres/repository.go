@@ -45,6 +45,13 @@ type Config struct {
 	// The issuer value is copied; nil preserves reservation-only setup. This
 	// does not enable domain execution or supply current counter authority.
 	UseIssuer *risk.PhoneEvidenceIssuer
+	// CaptchaCustody selects 1..32 immutable current verifier profiles for native
+	// CAPTCHA issuance. Nil preserves existing setup. Every profile must match
+	// PolicyVersion and the complete retained EvidenceKeys. Install the separately
+	// allocated CaptchaMigrationSource and CaptchaScopeMigrationSource before
+	// execution; no provider callbacks
+	// are retained or invoked by this durable owner.
+	CaptchaCustody []risk.CaptchaEvidenceCustody
 }
 
 // Format redacts copied and caller-owned key material in all diagnostics.
@@ -61,9 +68,10 @@ func (Config) MarshalText() ([]byte, error) { return nil, risk.ErrSensitiveSeria
 // safe for concurrent independent invocations; Work remains serial-use only.
 // Zero is invalid. Initiation reservation/rebind use the sole coordinator;
 // consuming recovery and terminal release use that coordinator as well.
-// Protected counters and authorized native lockout transitions are opt-in.
-// Evidence domain apply/finalize, CAPTCHA, counter retirement and pruning
-// remain unsupported. Selection is not a complete consumer workflow service.
+// Protected counters, authorized native lockout transitions and native CAPTCHA
+// issuance custody are opt-in. Evidence consumption, CAPTCHA protected use,
+// counter retirement and pruning remain unsupported. Selection is not a
+// complete consumer workflow service.
 type Repository struct {
 	schema          string
 	policy          uint64
@@ -74,6 +82,7 @@ type Repository struct {
 	useIssuer       *risk.PhoneEvidenceIssuer
 	lockouts        bool
 	lockoutMutation *lockoutMutationState
+	captcha         []risk.CaptchaEvidenceCustody
 }
 
 // Format hides runtime custody configuration and retained key material.
@@ -114,6 +123,15 @@ func NewRepository(c Config) (*Repository, error) {
 		return nil, err
 	}
 	r := &Repository{schema: pgx.Identifier{c.Schema}.Sanitize(), policy: c.PolicyVersion, keys: append([]risk.EvidenceKey(nil), c.EvidenceKeys...), cipher: cipher, lockouts: c.EnforceLockouts}
+	if len(c.CaptchaCustody) > 32 {
+		return nil, risk.ErrInvalidPolicy
+	}
+	for _, custody := range c.CaptchaCustody {
+		if custody.ValidateConfiguration(c.PolicyVersion, c.EvidenceKeys) != nil {
+			return nil, risk.ErrInvalidPolicy
+		}
+	}
+	r.captcha = append([]risk.CaptchaEvidenceCustody(nil), c.CaptchaCustody...)
 	if c.UseIssuer != nil {
 		issuer := *c.UseIssuer
 		if issuer.ValidateUseConfiguration(c.PolicyVersion, c.EvidenceKeys) != nil {
@@ -165,6 +183,9 @@ func (*Repository) Descriptor() identitypostgres.ContributorDescriptor {
 // declarations. It does not grant caller authority or register global state.
 func (r *Repository) FeatureOperations() []identity.FeatureOperation {
 	operations := []identity.FeatureOperation{IssueOperation()}
+	if r != nil && len(r.captcha) != 0 {
+		operations = append(operations, CaptchaIssueOperation(identity.FeatureSubjectUser), CaptchaIssueOperation(identity.FeatureSubjectAnonymousFlow))
+	}
 	if r != nil && r.lockoutMutation != nil {
 		operations = append(operations, LockoutOperation(risk.StartLockout), LockoutOperation(risk.EndLockout))
 	}
@@ -177,6 +198,9 @@ func (r *Repository) FeatureOperations() []identity.FeatureOperation {
 func (r *Repository) ValidateFeatureCommand(c identity.Command, p identitypostgres.CommandPlan) error {
 	if r == nil || r.schema == "" {
 		return risk.ErrInvalidEvidenceExecution
+	}
+	if s, ok := c.Feature(); ok && isCaptchaOperation(s.Operation) {
+		return r.validateCaptchaFeature(c, p)
 	}
 	if s, ok := c.Feature(); ok && isLockoutOperation(s.Operation) {
 		return r.validateLockoutFeature(c, p)
@@ -207,6 +231,9 @@ func issueTransition(l identitypostgres.LifecyclePlan) bool {
 func (r *Repository) ApplyFeature(ctx context.Context, w identitypostgres.Work, c identity.Command) (identity.FeatureReceipt, error) {
 	if ctx == nil || r == nil || r.schema == "" {
 		return identity.FeatureReceipt{}, risk.ErrInvalidEvidenceExecution
+	}
+	if s, ok := c.Feature(); ok && isCaptchaOperation(s.Operation) {
+		return r.applyCaptcha(ctx, w, c)
 	}
 	if s, ok := c.Feature(); ok && isLockoutOperation(s.Operation) {
 		return r.applyLockout(ctx, w, c)
@@ -271,6 +298,9 @@ func (r *Repository) RecoverParticipant(ctx context.Context, w identitypostgres.
 		return r.recoverRiskEvidence(ctx, w)
 	}
 	b, feature, transition, err := w.FeatureScope(r)
+	if err == nil && isCaptchaOperation(feature.Operation) {
+		return r.recoverCaptcha(ctx, w, b, feature, transition)
+	}
 	if err == nil && isLockoutOperation(feature.Operation) {
 		return r.recoverLockout(ctx, w, b, feature, transition)
 	}

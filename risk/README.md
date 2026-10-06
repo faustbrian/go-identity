@@ -458,6 +458,20 @@ Service/catalog reconciliation, provider interoperability, audit/retention and
 durable reservation/consumption are still unfinished. Do not deploy this partial
 module or supply an application-written executor as a substitute.
 
+### Native CAPTCHA replay-key continuity
+
+`CaptchaEvidenceCustody.ReplayKeyCustody()` supplies bounded, copied native
+provider-scope key commitments, never secrets or issuance authority. The durable
+adapter must serialize scope retention and compare both version and commitment;
+neither a new fingerprint nor a key-version label proves safe key rotation.
+New native configuration commitments bind the originally referenced replay-key
+secrets. Adding retained keys preserves original signed aliases and validity.
+Historical v1 signed configuration remains readable without rewriting its bytes;
+the adapter's populated-state upgrade requires the original reviewed retained
+key configuration, which cannot be inferred from token-free history. Early
+retirement or replacing a retained secret under its old version is unsupported.
+Automatic formatting redacts both projections and serialization is denied.
+
 ### Phone-recovery carrier subset
 
 `NewCarrierEvaluator` is disabled with zero startup configuration. Explicit

@@ -5,6 +5,29 @@ evidence and decisions. It is **not yet an executable durable risk service**.
 
 ## Implemented boundary
 
+- `Config.CaptchaCustody` selects bounded immutable core verifier profiles with
+  the exact risk policy and retained evidence-key set. Empty preserves existing
+  setup. The native participant authenticates signed input against a selected
+  profile before reservation, claims all token aliases in the coordinator's
+  reservation transaction and transfers only the exact predecessor generation.
+  Domain work rechecks sealed current ownership and every alias, samples primary
+  time after locks, then inserts encrypted evidence in the same Work as command,
+  audit and lifecycle commitment. Participant recovery classifies only exact
+  primary custody; missing owners or corrupt response encryption remain unknown.
+  Public issuer execution/recovery, complete rotation/key-retirement safeguards,
+  protected consumption and the canonical risk service are still unfinished.
+
+- `CaptchaScopeMigrationSource{Schema, Version, Custody}` must follow the CAPTCHA custody
+  migration before selected native reservation. Its forward upgrade backfills
+  exact provider-scope key retention without rewriting prior history. First
+  claims lock that scope before checking at most seventeen indexed key rows;
+  omission or secret replacement of any referenced version denies. For populated
+  histories, supply the original reviewed retained core custody for every
+  installed scope; token-free old aliases cannot infer their original secrets.
+  Missing or conflicting custody fails the upgrade atomically. Freeze those
+  migration inputs permanently along with the allocated history version.
+  Historical owner takeover can use a newer complete retained profile without
+  expanding its original aliases or expiry. No retirement API is supplied yet.
 - `CaptchaMigrationSource{Schema, Version}` independently installs replay
   winners, scoped aliases, referenced key versions and native evidence storage
   after the kernel and existing risk namespace. Allocate its permanent version
@@ -23,9 +46,9 @@ evidence and decisions. It is **not yet an executable durable risk service**.
   evidence. Strict native restoration retains original aliases, configuration
   commitment and exclusive validity without creating new authority. Original
   response encryption uses a separate CAPTCHA profile and authenticates exact
-  command scope and retained record metadata. The owned durable CAPTCHA store,
-  executor and protected-use phases remain unfinished and are not enabled by
-  these preparation contracts.
+  command scope and retained record metadata. Mapping alone does not enable
+  durable execution; explicitly selected native custody is separate from these
+  preparation contracts. Public executor and protected-use phases remain open.
 
 - `Config.EnforceLockouts` selects current durable restriction enforcement for
   protected command counters. Install `LockoutMigrationSource` after counter

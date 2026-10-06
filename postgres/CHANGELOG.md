@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Expose sealed current CAPTCHA replay fingerprint/generation linkage only to
+  the active declared native feature or recovery participant. Foreign, returned
+  and undeclared handles fail closed; linkage does not grant replay ownership,
+  current authorization, commitment or predecessor-transfer authority.
+  Primary recovery separately exposes the exact previous participant generation
+  being reconciled; a new recovery owner cannot falsely require an old replay
+  winner to have already transferred ownership.
+
 - Add explicitly declared native CAPTCHA replay reservation and exact-generation
   rebind through the sole coordinator before domain work. Preserve historical
   plan bytes when unselected and keep user/anonymous-flow namespaces distinct.

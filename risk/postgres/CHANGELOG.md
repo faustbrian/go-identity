@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+- Add an independently allocated forward CAPTCHA scope-custody upgrade. Preserve
+  populated aliases and serialize new reservations against retained key versions,
+  denying omitted keys and disjoint-key races without scanning token history.
+  Referenced versions cannot be deleted while retained aliases depend on them.
+  Pin version-to-secret commitments and require original reviewed retained
+  custody for populated upgrades; omission or same-version secret substitution
+  fails closed. Conserve original pending ownership across retained-key additions.
+
+- Add selected immutable CAPTCHA profile authentication, durable all-alias
+  reservation and exact-generation rebind, same-Work encrypted issuance and
+  primary participant recovery. Preserve replay ownership across domain rollback
+  and original database-bound validity. The public issuance executor, complete
+  rotation/retirement policy and protected-use workflow remain unfinished.
+
 - Add a separately selected forward CAPTCHA custody migration. Preserve
   committed replay winners, all retained fingerprint aliases/key versions and
   distinct user/anonymous evidence storage independently of payload erasure.

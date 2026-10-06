@@ -972,4 +972,21 @@ func TestIssuedEvidenceSameWorkIntegration(t *testing.T) {
 		testNativeRiskReservation(t, ctx, pool, repo, newExecutor(t, repo, issuanceQueryPolicy{}))
 		t.Run("protected counters", func(t *testing.T) { testNativeProtectedCounters(t, ctx, pool) })
 	})
+	t.Run("native-captcha", func(t *testing.T) {
+		history, err := (CaptchaMigrationSource{Schema: "risk_store", Version: 40}).Load(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := pool.Raw().Exec(ctx, history[0].UpSQL()); err != nil {
+			t.Fatal("native CAPTCHA schema", err)
+		}
+		scopeHistory, err := (CaptchaScopeMigrationSource{Schema: "risk_store", Version: 41}).Load(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := pool.Raw().Exec(ctx, scopeHistory[0].UpSQL()); err != nil {
+			t.Fatal("native CAPTCHA scope upgrade", err)
+		}
+		testNativeCaptchaReplay(t, ctx, pool)
+	})
 }

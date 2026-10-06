@@ -51,7 +51,7 @@ func (i CaptchaEvidenceIssue) Prepared() PreparedCaptchaEvidence {
 		}
 	}
 	p := PreparedCaptchaEvidence{Binding: binding, ProofDigest: s.proof, Nonce: s.nonce, Hostname: s.hostname, PreparedAt: s.preparedAt, ExpiresAt: s.expiresAt}
-	p.ConfigurationDigest = evidenceMAC(s.key.digest, "identity-captcha-configuration-v1", captchaIntentFields(s.intent.state))
+	p.ConfigurationDigest = captchaConfigurationCommitment(s.key, s.intent.state)
 	p.Signature = preparedCaptchaSignature(s.key, p)
 	return p
 }
@@ -124,13 +124,36 @@ func (s CaptchaEvidenceIssuer) RestoreCaptchaIssue(p PreparedCaptchaEvidence) (C
 				return CaptchaEvidenceIssue{}, ErrInvalidEvidenceExecution
 			}
 		}
-		want := evidenceMAC(k.digest, "identity-captcha-configuration-v1", captchaIntentFields(i.state))
+		want := captchaConfigurationCommitment(k, i.state)
 		if !hmac.Equal(want[:], p.ConfigurationDigest[:]) {
-			return CaptchaEvidenceIssue{}, ErrInvalidEvidenceExecution
+			// The original profile predates key-identity commitments. Preserve
+			// its signed bytes for historical recovery; durable adapters must
+			// separately pin the original retained keys during their upgrade.
+			legacy := evidenceMAC(k.digest, "identity-captcha-configuration-v1", captchaIntentFields(i.state))
+			if !hmac.Equal(legacy[:], p.ConfigurationDigest[:]) {
+				return CaptchaEvidenceIssue{}, ErrInvalidEvidenceExecution
+			}
 		}
 		return issue, nil
 	}
 	return CaptchaEvidenceIssue{}, ErrInvalidEvidenceExecution
+}
+
+// Bind only the originally referenced versions. Adding newer retained keys
+// must not rewrite or reject an existing signed command; replacing one of its
+// original secrets must not authenticate a fresh alias under the same version.
+func captchaConfigurationCommitment(key EvidenceKey, intent *captchaEvidenceIntentState) [32]byte {
+	fields := captchaIntentFields(intent)
+	projection, _ := (CaptchaEvidenceCustody{state: intent.owner}).ReplayKeyCustody()
+	for _, alias := range intent.replay.state.binding.Keys {
+		for _, retained := range projection.Keys {
+			if retained.Version == alias.Version {
+				fields = append(fields, strconv.FormatUint(uint64(retained.Version), 10), base64.RawURLEncoding.EncodeToString(retained.Commitment[:]))
+				break
+			}
+		}
+	}
+	return evidenceMAC(key.digest, "identity-captcha-configuration-v2", fields)
 }
 
 func captchaNativeIssue(i CaptchaEvidenceIntent) CaptchaEvidenceIssue {

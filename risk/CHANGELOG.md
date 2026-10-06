@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add restricted replay-key identity projections for durable CAPTCHA rotation
+  custody. Newly prepared native configuration commitments bind original replay
+  secrets as well as versions; replacing a secret cannot authenticate a new
+  alias under an old version. Retain historical signed configuration and response
+  recovery without changing original aliases or expiry.
+
 - Add immutable callback-free CAPTCHA custody configuration for native adapters.
   Authenticate original signed commands under the exact selected verifier,
   policy and retained keys without dummy executors or constructor cycles.

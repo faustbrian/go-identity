@@ -26,7 +26,32 @@ func (c *captchaCapture) Execute(_ context.Context, i risk.CaptchaEvidenceIssue)
 // A real public core issuer creates native custody. This boundary only captures
 // provisional input and cannot attest SQL commitment or provider interoperability.
 func captchaIssueFixture(t *testing.T, flow risk.FlowContextInput) (risk.CaptchaEvidenceIssue, risk.EvidenceKey) {
+	i, k, _ := captchaConfiguredFixture(t, flow, time.Date(2026, 10, 6, 12, 0, 0, 0, time.UTC))
+	return i, k
+}
+
+func captchaConfiguredFixture(t *testing.T, flow risk.FlowContextInput, now time.Time, versions ...uint32) (risk.CaptchaEvidenceIssue, risk.EvidenceKey, risk.CaptchaEvidenceIssuerConfig) {
 	t.Helper()
+	if len(versions) == 0 {
+		versions = []uint32{1}
+	}
+	var keys []risk.CaptchaReplayKey
+	for _, version := range versions {
+		key, err := risk.NewCaptchaReplayKey(version, bytes.Repeat([]byte{byte(0x20 + version)}, 32))
+		if err != nil {
+			t.Fatal(err)
+		}
+		keys = append(keys, key)
+	}
+	return captchaConfiguredKeyFixture(t, flow, now, keys)
+}
+
+func captchaConfiguredKeyFixture(t *testing.T, flow risk.FlowContextInput, now time.Time, replayKeys []risk.CaptchaReplayKey, sites ...string) (risk.CaptchaEvidenceIssue, risk.EvidenceKey, risk.CaptchaEvidenceIssuerConfig) {
+	t.Helper()
+	site := "fixture-site"
+	if len(sites) > 0 {
+		site = sites[0]
+	}
 	pc := risk.PolicyConfig{Version: 3, Limits: risk.VelocityLimits{MaxDimensions: 4, MaxCounters: 16, MaxWindow: time.Hour, MaxLimit: 120, KeyBytes: 64, RetryAfterMax: time.Hour}, Profiles: []risk.Profile{
 		{Class: risk.Authentication, Phase: risk.BeforeCredential, Dimensions: []risk.Dimension{risk.TenantDimension, risk.NetworkDimension, risk.DeviceDimension, risk.IdentifierDimension}, Window: 5 * time.Minute, Limit: 10, ThresholdAction: risk.Throttle, EvidenceTTL: 5 * time.Minute, Unknown: risk.DenyUnknown, MaxCounters: 4},
 		{Class: risk.CredentialMutation, Phase: risk.ReserveWithCommand, Dimensions: []risk.Dimension{risk.TenantDimension, risk.SubjectDimension, risk.SessionDimension, risk.NetworkDimension}, Window: 15 * time.Minute, Limit: 5, ThresholdAction: risk.Deny, EvidenceTTL: 15 * time.Minute, Unknown: risk.DenyUnknown, MaxCounters: 4},
@@ -40,11 +65,7 @@ func captchaIssueFixture(t *testing.T, flow risk.FlowContextInput) (risk.Captcha
 	if err != nil {
 		t.Fatal(err)
 	}
-	replayKey, err := risk.NewCaptchaReplayKey(1, bytes.Repeat([]byte{0x21}, 32))
-	if err != nil {
-		t.Fatal(err)
-	}
-	replay, err := risk.NewCaptchaReplayPolicy(risk.CaptchaReplayPolicyConfig{Policy: policy, Provider: "turnstile", Site: "fixture-site", APIProfile: "siteverify/v0", ConfigurationVersion: "fixture-v1", MaxTokenBytes: 8192, Keys: []risk.CaptchaReplayKey{replayKey}})
+	replay, err := risk.NewCaptchaReplayPolicy(risk.CaptchaReplayPolicyConfig{Policy: policy, Provider: "turnstile", Site: site, APIProfile: "siteverify/v0", ConfigurationVersion: "fixture-v1", MaxTokenBytes: 8192, Keys: replayKeys})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -52,11 +73,11 @@ func captchaIssueFixture(t *testing.T, flow risk.FlowContextInput) (risk.Captcha
 	if err != nil {
 		t.Fatal(err)
 	}
-	now := time.Date(2026, 10, 6, 12, 0, 0, 0, time.UTC)
 	capture := &captchaCapture{}
-	issuer, err := risk.NewCaptchaEvidenceIssuer(risk.CaptchaEvidenceIssuerConfig{Replay: replay, API: "siteverify", Version: "v0", Tier: "free", Capabilities: risk.CaptchaCapabilities{Hostname: true}, Hostnames: []string{"example.com"}, Lifetime: time.Minute, Timeout: 5 * time.Second, Clock: func() time.Time { return now }, Keys: []risk.EvidenceKey{key}, Executor: capture, Verify: func(_ context.Context, req risk.CaptchaVerificationRequest) (risk.CaptchaObservation, error) {
-		return risk.CaptchaObservation{Flow: req.Flow, CommandID: req.CommandID, Provider: "turnstile", Site: "fixture-site", APIProfile: "siteverify/v0", ConfigurationVersion: "fixture-v1", API: "siteverify", Version: "v0", Tier: "free", Outcome: risk.CaptchaSolved, Hostname: risk.CaptchaString{Available: true, Value: "example.com"}, ObservedAt: now, ExpiresAt: now.Add(time.Minute)}, nil
-	}})
+	cfg := risk.CaptchaEvidenceIssuerConfig{Replay: replay, API: "siteverify", Version: "v0", Tier: "free", Capabilities: risk.CaptchaCapabilities{Hostname: true}, Hostnames: []string{"example.com"}, Lifetime: time.Minute, Timeout: 5 * time.Second, Clock: func() time.Time { return now }, Keys: []risk.EvidenceKey{key}, Executor: capture, Verify: func(_ context.Context, req risk.CaptchaVerificationRequest) (risk.CaptchaObservation, error) {
+		return risk.CaptchaObservation{Flow: req.Flow, CommandID: req.CommandID, Provider: "turnstile", Site: site, APIProfile: "siteverify/v0", ConfigurationVersion: "fixture-v1", API: "siteverify", Version: "v0", Tier: "free", Outcome: risk.CaptchaSolved, Hostname: risk.CaptchaString{Available: true, Value: "example.com"}, ObservedAt: now, ExpiresAt: now.Add(time.Minute)}, nil
+	}}
+	issuer, err := risk.NewCaptchaEvidenceIssuer(cfg)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -73,7 +94,7 @@ func captchaIssueFixture(t *testing.T, flow risk.FlowContextInput) (risk.Captcha
 	if err != nil || result.Outcome != risk.EvidenceFailed || capture.issue.Prepared().Binding.KeyVersion == 0 {
 		t.Fatal("native fixture did not produce custody", err)
 	}
-	return capture.issue, key
+	return capture.issue, key, cfg
 }
 
 func captchaFlowFixture() risk.FlowContextInput {

@@ -11,7 +11,12 @@ import (
 	identity "github.com/faustbrian/go-identity"
 )
 
-type captchaReservationProbe struct{ riskIssuanceAdmissionProbe }
+// Nonzero size makes distinct test principals have distinct pointer identity;
+// Go may coalesce addresses of zero-sized values.
+type captchaReservationProbe struct {
+	riskIssuanceAdmissionProbe
+	identity byte
+}
 
 func (*captchaReservationProbe) FeatureOperations() []identity.FeatureOperation {
 	return []identity.FeatureOperation{{Owner: "identity/risk", OperationID: "identity.risk.captcha-issue", SchemaID: "identity-captcha-evidence-user-v1", SchemaVersion: 1, RecordRequirement: identity.FeatureRecordRequired}, {Owner: "identity/risk", OperationID: "identity.risk.captcha-issue", SchemaID: "identity-captcha-evidence-flow-v1", SchemaVersion: 1, RecordRequirement: identity.FeatureRecordRequired, SubjectRequirement: identity.FeatureSubjectAnonymousFlow}}

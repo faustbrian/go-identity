@@ -3,6 +3,9 @@ package risk
 import (
 	"bytes"
 	"context"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/binary"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -11,6 +14,88 @@ import (
 	"testing"
 	"time"
 )
+
+func TestCaptchaReplayKeyCustodyConservesVersionSecretIdentity(t *testing.T) {
+	c, prepared, _ := captchaNativeFixture(t, captchaFlowInput())
+	custody, err := NewCaptchaEvidenceCustody(c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	projection, err := custody.ReplayKeyCustody()
+	if err != nil || len(projection.Keys) != len(c.Replay.state.config.Keys) {
+		t.Fatal("missing replay-key custody", err)
+	}
+	configured := c.Replay.state.config
+	if projection.Provider != configured.Provider || projection.Site != configured.Site || projection.APIProfile != configured.APIProfile || projection.ConfigurationVersion != configured.ConfigurationVersion {
+		t.Fatal("replay key scope lost")
+	}
+	for i, key := range configured.Keys {
+		oracle := hmac.New(sha256.New, key.secret)
+		oracle.Write([]byte("identity-captcha-replay-key-identity-v1\x00"))
+		var version [4]byte
+		binary.BigEndian.PutUint32(version[:], key.version)
+		oracle.Write(version[:])
+		if projection.Keys[i].Version != key.version || !bytes.Equal(projection.Keys[i].Commitment[:], oracle.Sum(nil)) {
+			t.Fatal("wrong key commitment")
+		}
+	}
+	original := projection.Keys[0]
+	projection.Keys[0].Commitment[0] ^= 1
+	again, _ := custody.ReplayKeyCustody()
+	if again.Keys[0] != original {
+		t.Fatal("caller altered replay-key custody")
+	}
+	changed := configured
+	replacement, err := NewCaptchaReplayKey(changed.Keys[0].version, bytes.Repeat([]byte{0x75}, 32))
+	if err != nil {
+		t.Fatal(err)
+	}
+	changed.Keys = append([]CaptchaReplayKey(nil), changed.Keys...)
+	changed.Keys[0] = replacement
+	c.Replay, err = NewCaptchaReplayPolicy(changed)
+	if err != nil {
+		t.Fatal(err)
+	}
+	other, err := NewCaptchaEvidenceCustody(c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	otherProjection, _ := other.ReplayKeyCustody()
+	if otherProjection.Keys[0].Commitment == original.Commitment {
+		t.Fatal("same-version replacement secret conflated")
+	}
+	if _, err := other.RestoreCaptchaIssue(prepared); !errors.Is(err, ErrInvalidEvidenceExecution) {
+		t.Fatal("changed replay secret restored current signed custody")
+	}
+	if _, err := (CaptchaEvidenceCustody{}).ReplayKeyCustody(); !errors.Is(err, ErrInvalidPolicy) {
+		t.Fatal("zero custody admitted")
+	}
+	if _, err := json.Marshal(again); !errors.Is(err, ErrSensitiveSerialization) {
+		t.Fatal("key metadata serialized")
+	}
+}
+
+func TestCaptchaCustodyPreservesLegacyConfigurationCommitment(t *testing.T) {
+	c, prepared, record := captchaNativeFixture(t, captchaFlowInput())
+	custody, err := NewCaptchaEvidenceCustody(c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	issue, err := custody.RestoreCaptchaIssue(prepared)
+	if err != nil {
+		t.Fatal(err)
+	}
+	key := issue.state.key
+	prepared.ConfigurationDigest = evidenceMAC(key.digest, "identity-captcha-configuration-v1", captchaIntentFields(issue.state.intent.state))
+	prepared.Signature = preparedCaptchaSignature(key, prepared)
+	historical, err := custody.RestoreCaptchaIssue(prepared)
+	if err != nil || !reflect.DeepEqual(historical.Prepared(), prepared) {
+		t.Fatal("legacy signed custody rewritten", err)
+	}
+	if restored, err := historical.Materialize(record.IssuedAt); err != nil || restored != record {
+		t.Fatal("legacy original response changed", err)
+	}
+}
 
 func TestCaptchaCustodyChecksSelectedConfigurationWithoutExecutor(t *testing.T) {
 	c, p, record := captchaNativeFixture(t, captchaFlowInput())
