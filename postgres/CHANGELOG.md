@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Expose existing primary directory, credential and user-authorization checks
+  to sealed OTP denial, reservation, protected-use and finalization handles.
+  Bind checks to the exact live owner and original command; ignored failures
+  poison the transaction. Proven noncommit release remains possible after
+  revocation. Native session/pre-auth orchestration remains unfinished.
+
 - Add OTP current checks, same-transaction terminal finalization and proof-bound
   release for the exact native reservation owner. Keep submitted codes out of
   domain/recovery handles, recheck before commit without another attempt charge,

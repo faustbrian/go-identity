@@ -1,5 +1,22 @@
 # Identity PostgreSQL
 
+## OTP current-authority checks
+
+`OTPAttemptWork`, `OTPReservationWork`, `OTPApplyWork` and `OTPFinalizeWork`
+expose `RequireActiveDirectoryAuthority`, `RequireActiveCredential` and
+`RequireActiveUserAuthorization` to their exact registered OTP owner. These
+reuse primary kernel and authorization-owner checks in the original transaction,
+with unchanged frozen expectations, locks and bounded deadlines. A live failure
+poisons Work even if ignored; a returned handle cannot affect a later phase.
+
+Expected epochs and scope must be authenticated parts of the original native
+command, not values adopted from a current read. Success checks only the named
+dimension: it does not authenticate a code, establish current session/pre-auth
+authority, decide policy, renew validity, issue a session or consume proof.
+`OTPReleaseWork` deliberately has no current-authority admission gate, because
+coordinator-proven noncommit must permit terminal release after revocation.
+Production OTP session/pre-auth orchestration remains under development.
+
 ## CAPTCHA consuming declaration
 
 `CommandPlan.CaptchaEvidence` carries bounded signed consuming custody,
