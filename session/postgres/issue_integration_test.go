@@ -688,21 +688,27 @@ func testNativeIssueIntegration(t *testing.T, ctx context.Context, pool *databas
 					return current
 				})
 				// Current lifecycle state wins over original sign-in proof metadata.
-				if _, e = pool.Raw().Exec(ctx, `UPDATE identity.credential_references SET enabled=false WHERE tenant_id='issue' AND user_id='issue-user' AND credential_id='password'`); e != nil {
-					t.Fatal(e)
-				}
-				defer func() {
-					if _, e := pool.Raw().Exec(ctx, `UPDATE identity.credential_references SET enabled=true WHERE tenant_id='issue' AND user_id='issue-user' AND credential_id='password'`); e != nil {
-						t.Error("fixture restoration failed")
+				t.Run("current credential lifecycle denies active cookie", func(t *testing.T) {
+					if got, e := restarted.Get(ctx, input); e != nil || !got.Authenticated {
+						t.Fatal("credential lifecycle probe lacks an active cookie", e)
 					}
-				}()
-				if got, e := restarted.Get(ctx, input); e != nil || got.Authenticated {
-					t.Fatal("revoked issued credential authenticated", e)
-				}
-				if get.ValidateAt(get.ValidUntil()) == nil {
-					t.Fatal("copied admission outlived original deadline")
-				}
-				counts(t, candidate, 1, 1, 1, 1)
+					if _, e = pool.Raw().Exec(ctx, `UPDATE identity.credential_references SET enabled=false WHERE tenant_id='issue' AND user_id='issue-user' AND credential_id='password'`); e != nil {
+						t.Fatal(e)
+					}
+					defer func() {
+						if _, e := pool.Raw().Exec(ctx, `UPDATE identity.credential_references SET enabled=true WHERE tenant_id='issue' AND user_id='issue-user' AND credential_id='password'`); e != nil {
+							t.Error("fixture restoration failed")
+						}
+					}()
+					if got, e := restarted.Get(ctx, input); e != nil || got.Authenticated {
+						t.Fatal("revoked issued credential authenticated", e)
+					}
+					if get.ValidateAt(get.ValidUntil()) == nil {
+						t.Fatal("copied admission outlived original deadline")
+					}
+					counts(t, candidate, 1, 1, 1, 1)
+				})
+				testPublicSignOut(t, ctx, pool, input, get.Session, ownedConfig, config.Validation, cookie)
 			})
 			request, ok := prepared.Request()
 			if !ok {

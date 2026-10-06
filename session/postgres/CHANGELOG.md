@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Compose public idempotent self-logout through `NewSignOutService` with the
+  owned primary reader and native transactional executor. One execution profile
+  selects schema, authority, clock and policy; no application stores or fresh
+  login are required. Clear only the selected transport after committed or
+  already-inactive success; operational failure never becomes cookie deletion.
+  Historical recovery remains on the native executor. Full session lifecycle
+  and release verification remain unfinished.
+
 - Add owned single-session execution using original opaque caller admission,
   current policy and same-transaction source/target owner checks. Freeze both
   records and original validity in command intent, order session locks to avoid

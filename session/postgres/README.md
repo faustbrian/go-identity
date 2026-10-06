@@ -1,5 +1,28 @@
 # PostgreSQL session storage
 
+### Owned self-logout
+
+`NewSignOutService(pool, SignOutServiceConfig{Execution: execution,
+Validation: validation, Cookie: cookie, MaximumDuration: budget})` composes
+the primary reader, native executor and core service without application stores.
+Set `validation.Clock` to nil: `execution.Clock` owns both phases. Its schema,
+authority profile and policy are shared; existing validation key/audience and
+read-budget rules still apply. Install the selected kernel, authorization,
+session/issuance, revocation, audit and outbox migrations before calls. Final
+signin proof issuance is not a mandatory dependency of ordinary logout.
+
+Pass a canonical host-generated command ID, correlation, tenant and explicit
+cookie/bearer transport to `SignOut`; the credential may be absent. Successful
+cookie results provide secure deletion metadata, not another token. Never clear
+transport state on an error or unknown outcome. Retain the returned recovery
+scope and use `RevokeOneExecutor.RecoverRevokeOneCommand` with current result
+access policy before attempting a replacement for an ambiguous command.
+The native executor can be reconstructed with the same pool/execution profile
+and an owned `NewSessionService` reader; historical recovery never requires
+the revoked credential or its expired private admission. The HTTP owner must
+still enforce canonical parsing, mixed-source rejection and origin/CSRF policy.
+Full session lifecycle and release verification remain pending.
+
 Experimental Go 1.27 durable adapter. Forward-only migrations and bounded
 primary `Get`/digest `Lookup` reads preserve complete native session records,
 resolved lifetime limits, original nanosecond timelines, full uint64 authority
