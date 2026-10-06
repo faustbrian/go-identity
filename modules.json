@@ -4,6 +4,28 @@
   "go_version": "1.27.0",
   "modules": [
     {
+      "directory": "otp/postgres",
+      "module_path": "github.com/faustbrian/go-identity/otp/postgres",
+      "go_version": "1.27.0",
+      "packages": [{"module_directory":"otp/postgres","directory":".","name":"postgres","import_path":"github.com/faustbrian/go-identity/otp/postgres","kind":"public","production":true,"executable":true,"coverage_required":true,"build_required":true,"build_tags":[]}],
+      "purpose": "Native immutable OTP challenge storage and migrations; issuance and transactional participant workflows in development.",
+      "lifecycle": "experimental",
+      "kind": "public library",
+      "releasable": true,
+      "family": "storage",
+      "version": "0.0.0",
+      "tag_prefix": "otp/postgres/v",
+      "owned_dependencies": ["github.com/faustbrian/go-identity","github.com/faustbrian/go-identity/postgres","github.com/faustbrian/go-migrations/v3"],
+      "reverse_owned_dependencies": [],
+      "external_runtime_dependencies": ["postgresql"],
+      "required_services": ["postgresql"],
+      "build_tags": [],
+      "test_tags": ["integration"],
+      "interoperability_tools": [],
+      "specifications": [],
+      "conformance_corpora": []
+    },
+    {
       "directory": "otp",
       "module_path": "github.com/faustbrian/go-identity/otp",
       "go_version": "1.27.0",
