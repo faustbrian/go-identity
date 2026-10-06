@@ -59,6 +59,11 @@ func (s *attemptStore) Renew(ctx context.Context, f leaseFence) (time.Time, erro
 	if s.retainedVersion != 0 && b.PolicyVersion != s.retainedVersion {
 		return time.Time{}, delivery.ErrConflict
 	}
+	// Distinct retained providers may share one retry policy. A policy digest
+	// therefore cannot authorize heartbeating another provider's invocation.
+	if s.providerVersion != 0 && b.Intent.ProviderConfigVersion != s.providerVersion {
+		return time.Time{}, delivery.ErrConflict
+	}
 	var lease, now time.Time
 	var digest []byte
 	err = tx.QueryRow(w, `SELECT lease_until,clock_timestamp(),policy_digest FROM identity.delivery_processing WHERE deployment=$1 AND tenant_id=$2 AND effect_id=$3 AND generation=$4 AND lease_owner=$5 AND NOT cancel_requested FOR UPDATE`, s.deployment, string(f.TenantID), string(f.IntentID), int64(f.Generation), f.WorkerID).Scan(&lease, &now, &digest)

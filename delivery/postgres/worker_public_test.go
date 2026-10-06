@@ -96,6 +96,29 @@ func TestPublicWorkerScopeSnapshotAndPolicyFailure(t *testing.T) {
 	if _, err := w.Claim(cancelled); !errors.Is(err, context.Canceled) || called != 2 {
 		t.Fatal("pre-cancelled worker reached policy or database", err)
 	}
+	for _, ctx := range []context.Context{nil, cancelled} {
+		expected := delivery.ErrInvalidInput
+		if ctx != nil {
+			expected = context.Canceled
+		}
+		if until, err := w.RenewLease(ctx, "synthetic-intent-0001", 1); !errors.Is(err, expected) || !until.IsZero() || called != 2 {
+			t.Fatal("invalid context heartbeat reached policy or database", err)
+		}
+		if out, err := w.ReleaseLease(ctx, "synthetic-intent-0001", 1); !errors.Is(err, expected) || out != (delivery.CompleteResult{}) || called != 2 {
+			t.Fatal("invalid context release reached policy or database", err)
+		}
+	}
+	for _, input := range []struct {
+		intent     delivery.IntentID
+		generation uint32
+	}{{"short", 1}, {"synthetic-intent-0001", 0}} {
+		if _, err := w.RenewLease(context.Background(), input.intent, input.generation); !errors.Is(err, delivery.ErrInvalidInput) || called != 2 {
+			t.Fatal("invalid lease heartbeat reached IO", err)
+		}
+		if _, err := w.ReleaseLease(context.Background(), input.intent, input.generation); !errors.Is(err, delivery.ErrInvalidInput) || called != 2 {
+			t.Fatal("invalid lease release reached IO", err)
+		}
+	}
 	if _, err := w.Complete(context.Background(), delivery.CompleteRequest{TenantID: "other", WorkerID: "worker"}); !errors.Is(err, delivery.ErrForbidden) || called != 2 {
 		t.Fatal("cross-tenant completion reached IO", err)
 	}
@@ -113,6 +136,12 @@ func TestPublicWorkerScopeSnapshotAndPolicyFailure(t *testing.T) {
 		s.executor.authorize = policy
 		if err := w.queue.allow(context.Background()); err == nil || strings.Contains(err.Error(), "private") {
 			t.Fatal("policy failure leaked or granted", err)
+		}
+		if until, err := w.RenewLease(context.Background(), "synthetic-intent-0001", 1); err == nil || !until.IsZero() || strings.Contains(err.Error(), "private") {
+			t.Fatal("heartbeat policy failure leaked or granted", err)
+		}
+		if out, err := w.ReleaseLease(context.Background(), "synthetic-intent-0001", 1); err == nil || out != (delivery.CompleteResult{}) || strings.Contains(err.Error(), "private") {
+			t.Fatal("release policy failure leaked or granted", err)
 		}
 	}
 	for _, value := range []any{WorkerConfig{Scope: scope, ProviderConfigVersion: 1}, *w} {

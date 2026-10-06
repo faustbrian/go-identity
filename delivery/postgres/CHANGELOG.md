@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Public `Worker` and full `Queue` now expose scoped `RenewLease` and
+  `ReleaseLease` for explicitly scheduled workers. Renewal retains the original
+  attempt lifetime and enforces provider identity even when profiles share retry
+  policy. Release atomically records audited outcome-unknown, preserves custody
+  for reconciliation and denies blind resubmission; exact replay is unchanged.
+  Existing core interfaces and synchronous processing remain unchanged.
+
 - `EnqueueService.NewQueue` composes every public delivery Queue operation with
   the existing command, policy, custody and worker owners. Full composition
   explicitly selects status tracking, cancellation, signed receipts and provider

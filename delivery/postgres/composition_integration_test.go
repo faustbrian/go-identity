@@ -36,13 +36,19 @@ func TestPublicContributorOriginalCoordinatorComposition(t *testing.T) {
 	if _, err := rolePool.Exec(ctx, auditpostgres.FreshInstallPreflightSQL()); err != nil {
 		t.Fatal("owned audit preflight failed")
 	}
-	for _, mode := range []string{"committed", "no-op", "delivery-failure", "native-committed", "native-owned", "public-owned", "public-state", "public-cancel", "public-receipt", "public-reconcile", "public-worker", "public-queue", "native-compatible-custody", "native-no-op", "native-missing", "native-failure", "native-cancel", "native-cancel-noop", "native-receipt", "native-reconcile"} {
+	for _, mode := range []string{"committed", "no-op", "delivery-failure", "native-committed", "native-owned", "public-owned", "public-state", "public-cancel", "public-receipt", "public-reconcile", "public-worker", "public-queue", "public-worker-lease", "public-queue-lease", "native-compatible-custody", "native-no-op", "native-missing", "native-failure", "native-cancel", "native-cancel-noop", "native-receipt", "native-reconcile"} {
 		t.Run(mode, func(t *testing.T) { testPublicComposition(t, mode) })
 	}
 }
 
 func testPublicComposition(t *testing.T, mode string) {
 	t.Helper()
+	leaseProfile := mode == "public-worker-lease" || mode == "public-queue-lease"
+	if mode == "public-worker-lease" {
+		mode = "public-worker"
+	} else if mode == "public-queue-lease" {
+		mode = "public-queue"
+	}
 	ctx, pool := emptyIntentDatabase(t)
 	install := beginIntentTestTransaction(t, ctx, pool)
 	apply := func(source fs.FS) {
@@ -315,10 +321,18 @@ func testPublicComposition(t *testing.T, mode string) {
 			return
 		}
 		if mode == "public-worker" {
+			if leaseProfile {
+				testPublicLeaseMaintenance(t, ctx, pool, public, request, first, &permit, false)
+				return
+			}
 			testPublicWorker(t, ctx, pool, public, config, request, first, &permit)
 			return
 		}
 		if mode == "public-queue" {
+			if leaseProfile {
+				testPublicLeaseMaintenance(t, ctx, pool, public, request, first, &permit, true)
+				return
+			}
 			testFullPublicQueue(t, ctx, pool, public, config, request, first, queryFixture, &permit)
 			return
 		}

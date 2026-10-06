@@ -175,6 +175,26 @@ exact worker/intent/generation/evidence for completion replay. Prefer ProcessOne
 unless that explicit scheduling boundary is necessary. Missing current policy
 or uncertain completion acknowledgement is not proof of provider failure.
 
+For manually scheduled work, `Worker.RenewLease(ctx, intentID, generation)` and
+`Worker.ReleaseLease(ctx, intentID, generation)` are also available on the concrete
+full `Queue`. Both use the configured tenant, worker, service actor and retained
+provider version; IDs alone grant no ownership. Current policy is reevaluated on
+every call, including release replay. There is no automatic heartbeat loop.
+Heartbeat changes only operational lease deadlines and their history, not the
+intent status/version, generation, original attempt start, credential validity
+or provider outcome. It emits no new attempt event. The last acknowledged
+database deadline remains the provider-call limit, capped by original start plus
+one minute and original message expiry. Failure returns no renewed deadline;
+an unknown commit is not permission to keep sending.
+
+Release conservatively treats a possibly invoked effect as outcome-unknown and
+atomically clears ownership with protected completion audit. Exact replay returns
+the retained outcome without another audit or provider call. It preserves
+reconciliation custody and never permits blind retry, nor proves remote
+cancellation. If no provider invocation is positively known, use the distinct
+`Complete` path with `Invoked=false` instead. Late, foreign, cancelled or replaced
+claims cannot heartbeat; release cannot overwrite a definitive completion.
+
 Authorization is reevaluated before leasing, after opening committed custody
 and before completion. Denial after leasing prevents Sender and records bounded
 owned no-invocation cleanup when possible; cleanup uncertainty leaves the lease
