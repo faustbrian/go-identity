@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Document and exercise public CAPTCHA issuance/recovery with the real audit
+  and lifecycle PostgreSQL contributors, including anonymous/admin scopes,
+  ambiguous acknowledgement, original response conservation and atomic
+  rollback after effect writes. No application-owned effect stores are needed.
+
 - Execute native CAPTCHA current-use checks and atomic terminal finalization in
   the protected coordinator transaction. Reject expired, altered or foreign
   evidence before mutation and commitment. Release only after rollback or

@@ -518,3 +518,21 @@ Retain original intent and all referenced signing keys. Changed intent denies;
 retained-key rotation neither changes original state nor renews its validity.
 Unknown results expose no snapshot and require same-request recovery, not an
 unproved replacement command. Existing issuance workflows remain separate.
+
+## Production effect composition
+
+Use `audit/postgres.NewIdentityContributor` and
+`transactional-outbox/v2/postgres/identity.NewContributor` for `ExecutorConfig`
+Audit and Lifecycle. Install their owned migrations (including command/effect
+bindings) before use; audit fresh-install preflight must precede audit migrations.
+They write through the same coordinator Work, without owning another transaction.
+Do not replace these phases with application SQL stores or treat a successful
+phase callback as commitment.
+
+The real PostgreSQL public CAPTCHA integration composes both adapters across
+pre-auth subject/anonymous, authenticated and administrator flow variants.
+Lost commit acknowledgement reveals no candidate and recovers the exact original
+without another provider verification. Effect failures after actual writes roll
+back evidence and success effects. Recorded audit/outbox payloads exclude the
+provider token and opaque evidence bearer. Remote provider interoperability and
+complete protected login journeys remain separate, unfinished acceptance work.

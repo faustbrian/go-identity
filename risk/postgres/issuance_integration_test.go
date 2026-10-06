@@ -7,10 +7,8 @@ import (
 	"context"
 	"encoding/base64"
 	"errors"
-	"io/fs"
 	"os"
 	"strconv"
-	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -25,7 +23,6 @@ import (
 	migrations "github.com/faustbrian/go-migrations/v3"
 	migrationdb "github.com/faustbrian/go-migrations/v3/postgres"
 	database "github.com/faustbrian/go-postgres"
-	outboxpostgres "github.com/faustbrian/go-transactional-outbox/v2/postgres"
 	identityoutbox "github.com/faustbrian/go-transactional-outbox/v2/postgres/identity"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/stdlib"
@@ -389,41 +386,7 @@ func TestIssuedEvidenceSameWorkIntegration(t *testing.T) {
 		}
 	})
 	t.Run("official-executor-production-effects", func(t *testing.T) {
-		install, err := db.BeginTx(ctx, nil)
-		if err != nil {
-			t.Fatal(err)
-		}
-		defer install.Rollback()
-		if _, err = install.ExecContext(ctx, auditpostgres.FreshInstallPreflightSQL()); err != nil {
-			t.Fatal("owned audit preflight", err)
-		}
-		for _, source := range []fs.FS{auditpostgres.Migrations(), outboxpostgres.Migrations(), identityoutbox.Migrations()} {
-			files, err := fs.ReadDir(source, ".")
-			if err != nil {
-				t.Fatal(err)
-			}
-			for _, file := range files {
-				contents, err := fs.ReadFile(source, file.Name())
-				if err != nil {
-					t.Fatal(err)
-				}
-				if _, err = install.ExecContext(ctx, strings.Split(string(contents), "-- +migrations Down")[0]); err != nil {
-					t.Fatal("production migration", file.Name(), err)
-				}
-			}
-		}
-		if err = install.Commit(); err != nil {
-			t.Fatal(err)
-		}
-		ownedAuditRoles = true
-		productionAudit, err := auditpostgres.NewIdentityContributor(auditpostgres.Config{})
-		if err != nil {
-			t.Fatal(err)
-		}
-		productionOutbox, err := identityoutbox.NewContributor()
-		if err != nil {
-			t.Fatal(err)
-		}
+		productionAudit, productionOutbox := productionRiskEffects(t, ctx, db, &ownedAuditRoles)
 		c := executorConfig(repo, issuanceQueryPolicy{})
 		c.Audit, c.Lifecycle = productionAudit, productionOutbox
 		executor, err := NewExecutor(c)
@@ -996,5 +959,9 @@ func TestIssuedEvidenceSameWorkIntegration(t *testing.T) {
 		}
 		testNativeCaptchaReplay(t, ctx, pool)
 		t.Run("public-executor", func(t *testing.T) { testPublicCaptchaExecutor(t, ctx, pool, dsn, name) })
+		t.Run("public-production-effects", func(t *testing.T) {
+			a, o := productionRiskEffects(t, ctx, db, &ownedAuditRoles)
+			testPublicCaptchaExecutor(t, ctx, pool, dsn, name, captchaProductionEffects{audit: a, lifecycle: o})
+		})
 	})
 }

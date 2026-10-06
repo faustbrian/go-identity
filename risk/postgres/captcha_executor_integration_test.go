@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/base64"
 	"strconv"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -61,11 +62,15 @@ func (p *captchaFlowPolicy) Decide(_ context.Context, dc authorization.DecisionC
 	return authorization.Decision{Outcome: outcome, Revision: 1}, nil
 }
 
-func testPublicCaptchaExecutor(t *testing.T, ctx context.Context, pool *database.Pool, dsn, databaseName string) {
-	for _, variant := range []string{"pre-auth-anonymous", "pre-auth-subject", "authenticated", "admin-subject", "admin-anonymous", "admin-session", "lost-ack", "audit-rollback"} {
+func testPublicCaptchaExecutor(t *testing.T, ctx context.Context, pool *database.Pool, dsn, databaseName string, production ...captchaProductionEffects) {
+	prefix := ""
+	if len(production) == 1 {
+		prefix = "production-"
+	}
+	for _, variant := range []string{"pre-auth-anonymous", "pre-auth-subject", "authenticated", "admin-subject", "admin-anonymous", "admin-session", "lost-ack", "audit-rollback", "outbox-rollback"} {
 		t.Run(variant, func(t *testing.T) {
 			flow := captchaFlowFixture()
-			flow.ChallengeID = "public-" + variant
+			flow.ChallengeID = "public-" + prefix + variant
 			if variant == "pre-auth-subject" {
 				flow.Subject, flow.AnonymousFlow = "subject", ""
 			}
@@ -110,6 +115,16 @@ func testPublicCaptchaExecutor(t *testing.T, ctx context.Context, pool *database
 			// Conflicting supplied values must be replaced by trusted composition.
 			caller.Request.Attributes = authorization.Attributes{"identity.captcha.operation": authorization.StringValue("forged-operation"), "identity.captcha.session": authorization.StringValue("forged-session")}
 			cfg := CaptchaExecutorConfig{Flow: flow, Executor: ExecutorConfig{Pool: pool, Repository: repo, Audit: &issuanceAudit{fail: variant == "audit-rollback"}, Lifecycle: &issuanceOutbox{}, Coordinator: identitypostgres.CoordinatorConfig{MaximumDuration: 2 * time.Second, LeaseDuration: time.Minute, CurrentFingerprintKeyVersion: 1, RetainedFingerprintKeys: map[uint32][32]byte{1: {1}}, QueryPolicy: read, AdmissionPolicy: admit}, Caller: caller, PolicyID: "captcha-policy", RetentionPolicyVersion: 1}}
+			cfg.Executor.Lifecycle = &issuanceOutbox{fail: variant == "outbox-rollback"}
+			if len(production) == 1 {
+				cfg.Executor.Audit, cfg.Executor.Lifecycle = production[0].audit, production[0].lifecycle
+				if variant == "audit-rollback" {
+					cfg.Executor.Audit = captchaProductionAuditFailure{cfg.Executor.Audit}
+				}
+				if variant == "outbox-rollback" {
+					cfg.Executor.Lifecycle = captchaProductionOutboxFailure{cfg.Executor.Lifecycle}
+				}
+			}
 			var fault *commitAckFault
 			if variant == "lost-ack" {
 				cfg.Executor.Pool, fault = newCommitAckPool(t, ctx, dsn, databaseName, raw)
@@ -152,7 +167,7 @@ func testPublicCaptchaExecutor(t *testing.T, ctx context.Context, pool *database
 					if err != nil {
 						t.Fatal(err)
 					}
-					boundaryToken := []byte("synthetic-exact-policy-limit-token")
+					boundaryToken := []byte("synthetic-" + prefix + "exact-policy-limit-token")
 					boundaryIntent, err := boundaryIssuer.Prepare(risk.CaptchaEvidenceRequest{CommandID: string(boundaryID), Flow: boundaryFlow}, boundaryToken)
 					if err != nil {
 						t.Fatal(err)
@@ -180,7 +195,7 @@ func testPublicCaptchaExecutor(t *testing.T, ctx context.Context, pool *database
 			if err != nil {
 				t.Fatal(err)
 			}
-			token := []byte("synthetic-public-captcha-" + variant)
+			token := []byte("synthetic-public-captcha-" + prefix + variant)
 			intent, err := issuer.Prepare(risk.CaptchaEvidenceRequest{CommandID: string(id), Flow: trusted}, token)
 			if err != nil {
 				t.Fatal(err)
@@ -190,7 +205,7 @@ func testPublicCaptchaExecutor(t *testing.T, ctx context.Context, pool *database
 				if result.Outcome != risk.EvidenceUnknown || result.Evidence.Reference.Reveal() != "" || fault.hits.Load() != 1 {
 					t.Fatal("lost acknowledgement leaked or did not exercise actual commit", issueErr)
 				}
-			} else if variant == "audit-rollback" {
+			} else if variant == "audit-rollback" || variant == "outbox-rollback" {
 				if result.Outcome == risk.EvidenceCommitted || result.Evidence.Reference.Reveal() != "" {
 					t.Fatal("rolled back evidence disclosed", issueErr)
 				}
@@ -198,17 +213,33 @@ func testPublicCaptchaExecutor(t *testing.T, ctx context.Context, pool *database
 				t.Fatal("public issuance not committed", issueErr)
 			}
 			var evidence, audits, lifecycle int
-			if err := pool.Raw().QueryRow(ctx, `SELECT (SELECT count(*) FROM risk_store.captcha_issued_evidence WHERE command_id=$1),(SELECT count(*) FROM public.risk_audit WHERE command_id=$2 AND record->>'outcome'='1'),(SELECT count(*) FROM public.risk_outbox WHERE command_id=$2)`, raw, string(id)).Scan(&evidence, &audits, &lifecycle); err != nil {
+			query := `SELECT (SELECT count(*) FROM risk_store.captcha_issued_evidence WHERE command_id=$1),(SELECT count(*) FROM public.risk_audit WHERE command_id=$2 AND record->>'outcome'='1'),(SELECT count(*) FROM public.risk_outbox WHERE command_id=$2)`
+			if len(production) == 1 {
+				query = `SELECT (SELECT count(*) FROM risk_store.captcha_issued_evidence WHERE command_id=$1),(SELECT count(*) FROM audit.records r JOIN audit.identity_command_bindings b ON b.event_id=r.record_id WHERE b.command_id=$1 AND r.outcome=1),(SELECT count(*) FROM public.outbox_messages m JOIN public.identity_outbox_bindings b ON b.effect_id=m.id WHERE b.command_id=$1 AND m.metadata->>'identity.command_id'=$2)`
+			}
+			if err := pool.Raw().QueryRow(ctx, query, raw, string(id)).Scan(&evidence, &audits, &lifecycle); err != nil {
 				t.Fatal(err)
 			}
-			if variant == "audit-rollback" {
+			if variant == "audit-rollback" || variant == "outbox-rollback" {
 				if evidence != 0 || audits != 0 || lifecycle != 0 {
 					t.Fatal("rollback leaked atomic effects")
+				}
+				if len(production) == 1 {
+					var bindings int
+					if err := pool.Raw().QueryRow(ctx, `SELECT count(*) FROM public.identity_outbox_bindings WHERE command_id=$1`, raw).Scan(&bindings); err != nil || bindings != 0 {
+						t.Fatal("rollback retained lifecycle binding", err, bindings)
+					}
 				}
 				return
 			}
 			if evidence != 1 || audits != 1 || lifecycle != 1 {
 				t.Fatal("issuance effects were not atomic")
+			}
+			if len(production) == 1 {
+				var auditBindings, outboxBindings int
+				if err := pool.Raw().QueryRow(ctx, `SELECT (SELECT count(*) FROM audit.identity_command_bindings WHERE command_id=$1),(SELECT count(*) FROM public.identity_outbox_bindings WHERE command_id=$1)`, raw).Scan(&auditBindings, &outboxBindings); err != nil || auditBindings != 1 || outboxBindings != 1 {
+					t.Fatal("production binding cardinality", err, auditBindings, outboxBindings)
+				}
 			}
 			recovered, err := issuer.Recover(ctx, intent)
 			if err != nil || recovered.Outcome != risk.EvidenceCommitted || verifications != 1 {
@@ -219,6 +250,19 @@ func testPublicCaptchaExecutor(t *testing.T, ctx context.Context, pool *database
 			}
 			if variant != "lost-ack" && recovered != result {
 				t.Fatal("original response changed")
+			}
+			if len(production) == 1 {
+				var auditPayload, outboxPayload string
+				// bytea is hexadecimal in row JSON. Inspect decoded canonical
+				// payloads too, or a bearer inside them would evade this oracle.
+				if err := pool.Raw().QueryRow(ctx, `SELECT (SELECT row_to_json(r)::text || convert_from(r.canonical_record,'UTF8') FROM audit.records r JOIN audit.identity_command_bindings b ON b.event_id=r.record_id WHERE b.command_id=$1),(SELECT row_to_json(m)::text || convert_from(m.payload,'UTF8') FROM public.outbox_messages m JOIN public.identity_outbox_bindings b ON b.effect_id=m.id WHERE b.command_id=$1)`, raw).Scan(&auditPayload, &outboxPayload); err != nil {
+					t.Fatal(err)
+				}
+				for _, payload := range []string{auditPayload, outboxPayload} {
+					if strings.Contains(payload, string(token)) || strings.Contains(payload, recovered.Evidence.Reference.Reveal()) {
+						t.Fatal("production projection disclosed bearer or provider input")
+					}
+				}
 			}
 			// Replaying the exact command does not call the provider again.
 			replayed, err := issuer.Issue(ctx, intent, token)
