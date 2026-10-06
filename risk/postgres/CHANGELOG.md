@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Preserve signed CAPTCHA consuming custody alongside protected feature
+  target/version fields through `MapCaptchaUse`. Authenticate exact native
+  plans under selected current verifier configuration without invoking callbacks
+  or conflating risk and authorization policies. This construction/admission
+  boundary grants no durable consumption or protected-mutation authority.
+
 - Add an opt-in forward CAPTCHA consuming-custody migration preserving issued
   evidence and encrypted responses. Reserved and terminal consuming states
   require complete journal-bound ownership and original-expiry constraints;

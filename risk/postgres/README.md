@@ -5,6 +5,17 @@ evidence and decisions. It is **not yet an executable durable risk service**.
 
 ## Implemented boundary
 
+- `MapCaptchaUse(use, protectedSpec)` preserves the protected feature schema,
+  binding and all domain target/version fields, appending closed token-free
+  consuming custody. The verified actor, command, tenant, subject/anonymous flow
+  and action must match the original precheck. Feature owners reserve the
+  `captcha` field namespace and include the returned `CaptchaEvidencePlan` in
+  their shared coordinator plan. Risk and authorization policy versions remain
+  separate. `Repository.ValidateCaptchaUseCommand` authenticates that exact
+  declaration under selected current verifier configuration without callbacks
+  or IO. These pure boundaries grant no durable use or mutation permission;
+  the production consuming reservation and domain/recovery phases are unfinished.
+
 - `CaptchaUseMigrationSource{Schema, Version}` adds consuming-command custody
   after the existing CAPTCHA journal, with a permanently allocated forward
   migration version. It preserves original issuance, aliases, expiry and
