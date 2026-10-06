@@ -3,7 +3,8 @@
 Go 1.27 native storage for purpose-bound OTPs, sharing the identity coordinator's
 PostgreSQL transaction domain. Experimental and incomplete: this initial batch
 implements challenge storage/migrations, **not** a usable issuance or verification
-service. Installing it never proves a code, grants a reservation or authorizes a
+service, plus encrypted original-attempt command custody. Installing it never
+proves a code, grants a reservation or authorizes a
 workflow. Do not implement a consumer-written store to fill the remaining gaps.
 
 ## Quick start and API
@@ -24,6 +25,28 @@ instead of being silently adopted. Reuse installed history via the migration
 runner, never by executing installation SQL again.
 
 ## Storage and security
+
+`NewAttemptCodec` copies trusted local wrapping, attempt-issuer and code-digest
+keyrings. `Map(ctx, attempt, retainedDigestVersion, featureSpec)` returns the
+owning feature command and exact coordinator OTP plan. It requires the original
+core `AttemptIssuer.PrepareForCommand` submission and matching structural scope.
+The `otp.*` field namespace is reserved. Mapping performs no SQL or challenge
+comparison; native restoration is private, not an online verification oracle.
+
+Map once and keep the returned command/plan for retries. Encryption is randomized;
+remapping changes command intent and cannot replace an ambiguous original attempt.
+Retain original wrapping, issuer and digest-key versions while dependent command
+history remains. Changing bytes under an existing version is not key rotation.
+All keys are copied and concurrent codec use is safe. Configuration formatting
+is redacted and serialization is denied. No provider callback is injectable.
+
+Private destination and explicit flow/remember policy are encrypted and bound to
+the exact command structure and selected digest version. The raw submitted code
+remains only in opaque command custody, never in the encrypted record. Decrypted
+byte buffers are cleared; Go cannot guarantee erasure of immutable reconstructed
+strings. Cancellation/deadlines are checked before and after local cryptography;
+OS entropy and crypto calls cannot be interrupted mid-call. No late success is
+returned. Mapping is not proof of current session, challenge or account authority.
 
 - Only versioned keyed code/scope digests are stored, never codes, destinations,
   key bytes or flow/session bearers. Key metadata has no secret material.
@@ -51,7 +74,7 @@ runner, never by executing installation SQL again.
 ## Adoption, tradeoffs and FAQ
 
 **Can I use this for login?** Not yet. Native issuance/send windows, original
-attempt restoration, atomic counted denial/check/reservation, live authority,
+atomic counted denial/check/reservation, live authority,
 finalization/release/recovery and bounded cleanup remain in development. There
 is intentionally no public raw SQL/pool/store workaround.
 
