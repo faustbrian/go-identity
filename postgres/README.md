@@ -581,7 +581,17 @@ Cancellation and deadline classifications remain observable.
 Durable feature adapters may implement `FeatureContributor` alongside the
 existing `Contributor`. The same immutable registry snapshots their compile-time
 `identity.FeatureOperation` descriptors once, including all supported schemas,
-explicit record policy and exact adapter owner. Each core owner maps to its
+explicit record policy and exact adapter owner.
+An explicit `SubjectRequirement` also freezes the user or anonymous-flow
+namespace. Anonymous feature scope persists `AnonymousFlowID`, never a fake
+`UserID`; current-policy admission/query/recovery must use the exact
+`identity.anonymous-flow` resource and retain the separately verified actor.
+Record-free audit/lifecycle targets use that flow ID. User-only descriptors
+retain their existing canonical command/plan bytes and JSON receipt shape.
+This uses existing command claims/journals; no extra replay owner or schema
+migration is introduced. Concrete CAPTCHA persistence remains separate work.
+
+Each core owner maps to its
 `<owner>/postgres` adapter; each operation belongs to one exact contributor
 across schema versions. Duplicate/conflicting schemas and foreign ownership
 fail construction before any transaction opens. Limits are 64 declarations per

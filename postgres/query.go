@@ -120,7 +120,8 @@ WHERE c.command_id=$1`, key).Scan(&observed.tenant, &observed.purpose, &observed
 // QueryCommand performs one bounded, uncached primary observation and one
 // current authorization decision. Caller is trusted authenticated composition,
 // never a client-decoded identity override; it must bind actor, tenant, original
-// operation and identity.user resource to query.UserID at the configured policy
+// operation and identity.user resource to query.UserID (or the exact
+// identity.anonymous-flow resource to query.AnonymousFlowID) at the configured policy
 // revision. Command possession is not authorization. The policy receives copied
 // bounded inputs, trusted current time and recovery/read-admission attributes.
 //
@@ -160,7 +161,10 @@ func (c *Coordinator) queryCommandReceipt(ctx context.Context, q identity.Recove
 	if _, err := identity.ParseCommandID(string(q.CommandID)); err != nil {
 		return identity.CommandResult{}, identity.InvalidInputError{Field: "command_id"}
 	}
-	for _, value := range []string{string(q.TenantID), string(q.UserID), string(q.ActorID), string(q.ActorKind), q.OperationID} {
+	if !validQuerySubject(q) {
+		return identity.CommandResult{}, identity.InvalidInputError{Field: "command_query"}
+	}
+	for _, value := range []string{string(q.TenantID), string(q.ActorID), string(q.ActorKind), q.OperationID} {
 		if !queryScopeText(value) {
 			return identity.CommandResult{}, identity.InvalidInputError{Field: "command_query"}
 		}
@@ -202,7 +206,7 @@ func commandReceipt(q identity.RecoveryQuery, observed commandObservation, err e
 	if decodeErr != nil {
 		return identity.CommandResult{}, identity.UnavailableError{}
 	}
-	if binding.CommandID != q.CommandID || binding.TenantID != q.TenantID || binding.UserID != q.UserID || binding.ActorID != q.ActorID || binding.ActorKind != q.ActorKind || binding.OperationID != q.OperationID || binding.RecordID != q.RecordID || binding.LinkMode != q.LinkMode {
+	if binding.CommandID != q.CommandID || binding.TenantID != q.TenantID || binding.UserID != q.UserID || binding.AnonymousFlowID != q.AnonymousFlowID || binding.ActorID != q.ActorID || binding.ActorKind != q.ActorKind || binding.OperationID != q.OperationID || binding.RecordID != q.RecordID || binding.LinkMode != q.LinkMode {
 		return identity.CommandResult{}, identity.ForbiddenError{}
 	}
 	if observed.state == nil || observed.until == nil || !postgresExactTime(*observed.until) || !postgresExactTime(observed.now) || len(observed.plan) == 0 || len(observed.plan) > 65536 {
@@ -310,8 +314,19 @@ func authorizeCommandObservation(ctx context.Context, q identity.RecoveryQuery, 
 		return false, identity.UnavailableError{}
 	}
 	r := dc.Request
-	matched := r.Subject.ID == authorization.SubjectID(q.ActorID) && r.Subject.Kind == q.ActorKind && r.Tenant == authorization.TenantID(q.TenantID) && r.Action == authorization.Action(q.OperationID) && r.Resource.Type == "identity.user" && r.Resource.ID == authorization.ResourceID(q.UserID) && dc.PolicyRevision == authorization.Revision(policy.PolicyVersion)
+	resourceType, resourceID := authorization.ResourceType("identity.user"), string(q.UserID)
+	if q.AnonymousFlowID != "" {
+		resourceType, resourceID = "identity.anonymous-flow", q.AnonymousFlowID
+	}
+	matched := r.Subject.ID == authorization.SubjectID(q.ActorID) && r.Subject.Kind == q.ActorKind && r.Tenant == authorization.TenantID(q.TenantID) && r.Action == authorization.Action(q.OperationID) && r.Resource.Type == resourceType && r.Resource.ID == authorization.ResourceID(resourceID) && dc.PolicyRevision == authorization.Revision(policy.PolicyVersion)
 	return matched && decision.Outcome == authorization.Allow && decision.Revision == authorization.Revision(policy.PolicyVersion), nil
+}
+
+func validQuerySubject(q identity.RecoveryQuery) bool {
+	if q.AnonymousFlowID != "" {
+		return q.UserID == "" && queryScopeText(q.AnonymousFlowID)
+	}
+	return queryScopeText(string(q.UserID))
 }
 
 func queryScopeText(value string) bool {

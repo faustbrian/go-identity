@@ -115,9 +115,7 @@ func (w Work) StageLifecycle(index uint16, occurredAt time.Time) error {
 	kind, target := "user", string(b.UserID)
 	if w.state.feature != nil {
 		kind = w.state.subjectType
-		if b.RecordID != "" {
-			target = b.RecordID
-		}
+		target = featureTargetID(b)
 	} else if b.RecordID != "" {
 		target = b.RecordID
 		switch kernelCommandAudit(b.OperationID) {

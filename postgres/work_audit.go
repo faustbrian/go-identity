@@ -80,11 +80,20 @@ func FeatureAuditBindingDigest(binding identity.CommandBinding, operation identi
 	if binding.ValidateFor(operation) != nil || !auditName(subjectType) {
 		return [32]byte{}, invalidAudit()
 	}
-	target := string(binding.UserID)
-	if binding.RecordID != "" {
-		target = binding.RecordID
-	}
+	target := featureTargetID(binding)
 	return securityAuditBindingDigest(binding, &operation, subjectType, target, record)
+}
+
+// featureTargetID preserves the descriptor-selected subject namespace when a
+// feature has no separate record. Anonymous flow IDs are never user IDs.
+func featureTargetID(binding identity.CommandBinding) string {
+	if binding.RecordID != "" {
+		return binding.RecordID
+	}
+	if binding.UserID != "" {
+		return string(binding.UserID)
+	}
+	return binding.AnonymousFlowID
 }
 
 func securityAuditBindingDigest(binding identity.CommandBinding, feature *identity.FeatureOperation, kind, target string, record audit.Record) ([32]byte, error) {

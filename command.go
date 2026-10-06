@@ -56,17 +56,22 @@ const (
 // kind is the exact upstream kind, not a caller role or administrator flag.
 // CorrelationID is safe correlation only; it grants no continuation authority.
 type CommandBinding struct {
-	CommandID     CommandID
-	TenantID      TenantID
-	UserID        UserID
-	ActorID       ActorID
-	ActorKind     authorization.SubjectKind
-	OperationID   string
-	PolicyID      string
-	PolicyVersion uint64
-	SchemaID      string
-	SchemaVersion uint32
-	CorrelationID string
+	CommandID CommandID
+	TenantID  TenantID
+	UserID    UserID
+	// AnonymousFlowID is used only by an explicitly anonymous-targeted feature
+	// schema, mutually exclusive with UserID. It is a canonical flow identity,
+	// not an authenticated actor, user, command ID or continuation credential.
+	// Kernel commands forbid it; durable adapters must explicitly support it.
+	AnonymousFlowID string `json:",omitempty"`
+	ActorID         ActorID
+	ActorKind       authorization.SubjectKind
+	OperationID     string
+	PolicyID        string
+	PolicyVersion   uint64
+	SchemaID        string
+	SchemaVersion   uint32
+	CorrelationID   string
 	// RecordID is the exact account/identifier target for kernel record commands,
 	// including every noncommitted receipt; other kernel operations omit it.
 	// Feature bindings follow their FeatureOperation.RecordRequirement instead.
@@ -209,14 +214,17 @@ func (r CommandResult) Validate() error {
 // Non-record operations omit RecordID/LinkMode. A command ID alone never permits public lookup.
 // No fields, alternate command IDs, callbacks or transaction handles are accepted.
 type RecoveryQuery struct {
-	CommandID   CommandID
-	TenantID    TenantID
-	UserID      UserID
-	ActorID     ActorID
-	ActorKind   authorization.SubjectKind
-	OperationID string
-	RecordID    string
-	LinkMode    AccountLinkMode
+	CommandID CommandID
+	TenantID  TenantID
+	UserID    UserID
+	// AnonymousFlowID selects the explicit anonymous-flow namespace, mutually
+	// exclusive with UserID. Possession is never recovery authority.
+	AnonymousFlowID string `json:",omitempty"`
+	ActorID         ActorID
+	ActorKind       authorization.SubjectKind
+	OperationID     string
+	RecordID        string
+	LinkMode        AccountLinkMode
 }
 
 func validCommandBinding(b CommandBinding) bool {
@@ -224,7 +232,7 @@ func validCommandBinding(b CommandBinding) bool {
 		return false
 	}
 	_, validID := decodeID(string(b.CommandID))
-	return validID && validDirectoryID(string(b.TenantID)) && validDirectoryID(string(b.UserID)) && validDirectoryID(string(b.ActorID)) && (b.ActorKind == authorization.SubjectUser || b.ActorKind == authorization.SubjectAPIKey || b.ActorKind == authorization.SubjectServiceAccount) && kernelOperationID(b.OperationID) && validDirectoryID(b.PolicyID) && b.PolicyVersion > 0 && validDirectoryID(b.SchemaID) && b.SchemaVersion > 0 && validDirectoryID(b.CorrelationID)
+	return validID && b.AnonymousFlowID == "" && validDirectoryID(string(b.TenantID)) && validDirectoryID(string(b.UserID)) && validDirectoryID(string(b.ActorID)) && (b.ActorKind == authorization.SubjectUser || b.ActorKind == authorization.SubjectAPIKey || b.ActorKind == authorization.SubjectServiceAccount) && kernelOperationID(b.OperationID) && validDirectoryID(b.PolicyID) && b.PolicyVersion > 0 && validDirectoryID(b.SchemaID) && b.SchemaVersion > 0 && validDirectoryID(b.CorrelationID)
 }
 
 func validCommandRecordBinding(b CommandBinding) bool {

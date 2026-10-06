@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Persist and recover explicit anonymous-flow feature scope through the existing
+  coordinator, with current-policy authorization against its own resource
+  namespace and exact actor/scope matching. Preserve legacy user command and
+  plan encodings; record-free audits and lifecycle events retain the flow target.
+
 - Add current-policy authorized historical feature-command recovery with exact
   retained transition versions and audit metadata. Reuse the sole primary
   reconciliation owner without reserving missing commands, exposing kernel

@@ -100,7 +100,11 @@ func encodeFeaturePlan(binding identity.CommandBinding, fingerprint [32]byte, p 
 		}
 	}
 	d := p.Feature.Operation
-	feature := cborMap(map[string][]byte{"owner": cborText(d.Owner), "operation_id": cborText(d.OperationID), "schema_id": cborText(d.SchemaID), "schema_version": cborUint(uint64(d.SchemaVersion)), "record_requirement": cborUint(uint64(d.RecordRequirement)), "contributor": cborMap(map[string][]byte{"owner": cborText(p.Feature.Contributor.Owner), "contract_id": cborText(p.Feature.Contributor.ContractID), "version": cborUint(uint64(p.Feature.Contributor.Version))})})
+	featureFields := map[string][]byte{"owner": cborText(d.Owner), "operation_id": cborText(d.OperationID), "schema_id": cborText(d.SchemaID), "schema_version": cborUint(uint64(d.SchemaVersion)), "record_requirement": cborUint(uint64(d.RecordRequirement)), "contributor": cborMap(map[string][]byte{"owner": cborText(p.Feature.Contributor.Owner), "contract_id": cborText(p.Feature.Contributor.ContractID), "version": cborUint(uint64(p.Feature.Contributor.Version))})}
+	if d.SubjectRequirement != identity.FeatureSubjectUser {
+		featureFields["subject_requirement"] = cborUint(uint64(d.SubjectRequirement))
+	}
+	feature := cborMap(featureFields)
 	fields := map[string][]byte{"profile": cborText("identity-feature-plan-v1"), "binding": cborMap(commandScope(binding)), "fingerprint": cborBytes(fingerprint[:]), "contributors": cborArray(entries), "audits": cborArray(events), "feature": feature, "lifecycle": cborMap(map[string][]byte{"event_type": cborText(l.EventType), "event_index": cborUint(uint64(l.EventIndex)), "before_version": cborUint(l.BeforeVersion), "after_version": cborUint(l.AfterVersion)})}
 	if p.SubjectType != "" {
 		fields["profile"] = cborText("identity-feature-plan-v2")

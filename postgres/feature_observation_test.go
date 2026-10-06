@@ -15,9 +15,23 @@ import (
 // Native feature observations retain only schema/scope metadata. No current
 // registry is needed to read immutable history, and no history grants execution.
 func TestFeatureCommandObservationPreservesExactHistoricalProfile(t *testing.T) {
+	for _, anonymous := range []bool{false, true} {
+		t.Run(map[bool]string{false: "user", true: "anonymous-flow"}[anonymous], func(t *testing.T) {
+			testFeatureCommandObservation(t, anonymous)
+		})
+	}
+}
+
+func testFeatureCommandObservation(t *testing.T, anonymous bool) {
 	for _, state := range []string{"pending", "committed", "aborted"} {
 		c, command, p := featurePlanFixture(t)
 		spec, _ := command.Feature()
+		if anonymous {
+			spec.Operation.SubjectRequirement = identity.FeatureSubjectAnonymousFlow
+			spec.Binding.UserID, spec.Binding.AnonymousFlowID = "", "anonymous-flow"
+			command = featureCodecCommand(t, spec)
+			p.Feature.Operation = spec.Operation
+		}
 		claim, err := prepareClaim(command, [32]byte{1})
 		if err != nil {
 			t.Fatal(err)
@@ -89,6 +103,21 @@ func TestFeatureCommandObservationPreservesExactHistoricalProfile(t *testing.T) 
 		full, fullErr := c.RecoverFeatureCommand(context.Background(), changed, callerForQuery(caller, changed))
 		if !errors.As(fullErr, &forbidden) || full.Feature != nil || full.Binding.CommandID != "" || reads != beforeReads+1 || decisions != beforeDecisions+1 {
 			t.Fatal("full receipt changed wrong-scope read shape", fullErr)
+		}
+		if anonymous {
+			for _, other := range []identity.RecoveryQuery{
+				func() identity.RecoveryQuery { other := q; other.AnonymousFlowID = "other-flow"; return other }(),
+				func() identity.RecoveryQuery {
+					other := q
+					other.UserID, other.AnonymousFlowID = "anonymous-flow", ""
+					return other
+				}(),
+			} {
+				full, fullErr := c.RecoverFeatureCommand(context.Background(), other, callerForQuery(caller, other))
+				if !errors.As(fullErr, &forbidden) || full.Feature != nil || full.Binding.CommandID != "" {
+					t.Fatal("flow or user namespace substitution disclosed historical result", fullErr)
+				}
+			}
 		}
 		for _, policyFailure := range []string{"denied", "error", "panic"} {
 			c.queryPolicy.Authorization = queryDecision(func(context.Context, authorization.DecisionContext) (authorization.Decision, error) {
@@ -217,6 +246,8 @@ func TestFeatureCommandRecordValidation(t *testing.T) {
 func FuzzObservedCommandScope(f *testing.F) {
 	s := featureCodecSpec()
 	f.Add(commandSafeFields(s.Binding, &s.Operation))
+	anon := anonymousFeatureCodecSpec()
+	f.Add(commandSafeFields(anon.Binding, &anon.Operation))
 	f.Add(commandSafeFields(codecBinding(), nil))
 	f.Add([]byte{0xbf})
 	f.Fuzz(func(t *testing.T, b []byte) {

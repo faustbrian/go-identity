@@ -33,14 +33,14 @@ func decodeObservedScope(encoded []byte) (identity.CommandBinding, *identity.Fea
 	}
 	r := attributeReader{data: encoded}
 	count, ok := r.head(5)
-	if !ok || count < 12 || count > 16 {
+	if !ok || count < 12 || count > 18 {
 		return invalid()
 	}
 	var binding identity.CommandBinding
 	var feature identity.FeatureOperation
 	seen := make(map[string]bool, int(count))
 	for range count {
-		key, ok := r.text(18)
+		key, ok := r.text(19)
 		if !ok || seen[key] {
 			return invalid()
 		}
@@ -52,12 +52,17 @@ func decodeObservedScope(encoded []byte) (identity.CommandBinding, *identity.Fea
 			}
 			binding.CommandID = identity.CommandID(base64.RawURLEncoding.EncodeToString(r.data[:16]))
 			r.data = r.data[16:]
-		case "policy_version", "schema_version", "link_mode", "record_requirement":
+		case "policy_version", "schema_version", "link_mode", "record_requirement", "subject_requirement":
 			value, ok := r.head(0)
 			if !ok {
 				return invalid()
 			}
 			switch key {
+			case "subject_requirement":
+				if value != uint64(identity.FeatureSubjectAnonymousFlow) {
+					return invalid()
+				}
+				feature.SubjectRequirement = identity.FeatureSubjectAnonymousFlow
 			case "record_requirement":
 				if value > math.MaxUint8 {
 					return invalid()
@@ -92,6 +97,8 @@ func decodeObservedScope(encoded []byte) (identity.CommandBinding, *identity.Fea
 				binding.TenantID = identity.TenantID(value)
 			case "user_id":
 				binding.UserID = identity.UserID(value)
+			case "anonymous_flow_id":
+				binding.AnonymousFlowID = value
 			case "actor_id":
 				binding.ActorID = identity.ActorID(value)
 			case "actor_kind":
@@ -111,7 +118,7 @@ func decodeObservedScope(encoded []byte) (identity.CommandBinding, *identity.Fea
 			}
 		}
 	}
-	if seen["feature_owner"] || seen["record_requirement"] {
+	if seen["feature_owner"] || seen["record_requirement"] || seen["subject_requirement"] {
 		feature.OperationID, feature.SchemaID, feature.SchemaVersion = binding.OperationID, binding.SchemaID, binding.SchemaVersion
 		if !seen["feature_owner"] || !seen["record_requirement"] || len(r.data) != 0 || binding.ValidateFor(feature) != nil || !bytes.Equal(encoded, commandSafeFields(binding, &feature)) {
 			return invalid()

@@ -97,6 +97,11 @@ ceremonies remain required before these become complete public workflows.
 Feature adapters can structurally match common command scope to a trusted
 `FeatureOperation` with `CommandBinding.ValidateFor`: exact operation/schema,
 safe identities, positive policy version and explicit required/omitted record.
+The default subject policy remains user-only. A trusted descriptor can instead
+select `FeatureSubjectAnonymousFlow`: `AnonymousFlowID` is required and `UserID`
+must be empty. The actual verified user/API-key/service actor stays separate;
+neither a flow ID nor a descriptor authenticates that actor. Kernel commands
+reject anonymous-flow targets. Legacy user receipt JSON retains its shape.
 This does not authorize or register a feature, enable execution or open the
 existing kernel command/receipt union. Coordinator feature phases remain in
 development; adapters must not substitute private transactions or journals.

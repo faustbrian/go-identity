@@ -52,12 +52,15 @@ func TestQueryCommandDoesNotExposeReplayPayload(t *testing.T) {
 }
 
 func queryInputs(b identity.CommandBinding) (identity.RecoveryQuery, authorization.DecisionContext) {
-	q := identity.RecoveryQuery{CommandID: b.CommandID, TenantID: b.TenantID, UserID: b.UserID, ActorID: b.ActorID, ActorKind: b.ActorKind, OperationID: b.OperationID, RecordID: b.RecordID, LinkMode: b.LinkMode}
+	q := identity.RecoveryQuery{CommandID: b.CommandID, TenantID: b.TenantID, UserID: b.UserID, AnonymousFlowID: b.AnonymousFlowID, ActorID: b.ActorID, ActorKind: b.ActorKind, OperationID: b.OperationID, RecordID: b.RecordID, LinkMode: b.LinkMode}
 	dc := authorization.DecisionContext{PolicyRevision: 9, Request: authorization.Request{
 		Subject: authorization.Subject{ID: authorization.SubjectID(b.ActorID), Kind: b.ActorKind},
 		Tenant:  authorization.TenantID(b.TenantID), Action: authorization.Action(b.OperationID),
 		Resource: authorization.Resource{Type: "identity.user", ID: authorization.ResourceID(b.UserID)},
 	}}
+	if b.AnonymousFlowID != "" {
+		dc.Request.Resource.Type, dc.Request.Resource.ID = "identity.anonymous-flow", authorization.ResourceID(b.AnonymousFlowID)
+	}
 	return q, dc
 }
 
@@ -67,6 +70,10 @@ func callerForQuery(caller authorization.DecisionContext, q identity.RecoveryQue
 	caller.Request.Tenant = authorization.TenantID(q.TenantID)
 	caller.Request.Action = authorization.Action(q.OperationID)
 	caller.Request.Resource.ID = authorization.ResourceID(q.UserID)
+	caller.Request.Resource.Type = "identity.user"
+	if q.AnonymousFlowID != "" {
+		caller.Request.Resource.Type, caller.Request.Resource.ID = "identity.anonymous-flow", authorization.ResourceID(q.AnonymousFlowID)
+	}
 	return caller
 }
 

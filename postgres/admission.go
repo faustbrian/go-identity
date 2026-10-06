@@ -44,8 +44,9 @@ func (a CommandAdmission) Validate() error {
 // AdmissionPolicy is a separate opt-in from QueryPolicy. Its owned attributes
 // set identity.command.read-admission=true and identity.command.recovery=false.
 // The caller must be trusted authenticated composition bound to exact actor,
-// tenant, operation and identity.user resource at the current configured policy
-// revision, never a client-supplied override. This is not a public lookup route.
+// tenant, operation and the exact identity.user or identity.anonymous-flow
+// resource at the current configured policy revision, never a client-supplied
+// override. This is not a public lookup route.
 // Native adapters own further exact retained-intent matching and protected
 // native-result recovery. Absence cannot substitute for ReserveCommand's atomic
 // complete-intent fence or provide rollback proof after an ambiguous submission.
@@ -56,7 +57,10 @@ func (c *Coordinator) ObserveCommandAdmission(ctx context.Context, q identity.Re
 	if _, err := identity.ParseCommandID(string(q.CommandID)); err != nil {
 		return CommandAdmission{}, identity.InvalidInputError{Field: "command_id"}
 	}
-	for _, value := range []string{string(q.TenantID), string(q.UserID), string(q.ActorID), string(q.ActorKind), q.OperationID} {
+	if !validQuerySubject(q) {
+		return CommandAdmission{}, identity.InvalidInputError{Field: "command_query"}
+	}
+	for _, value := range []string{string(q.TenantID), string(q.ActorID), string(q.ActorKind), q.OperationID} {
 		if !queryScopeText(value) {
 			return CommandAdmission{}, identity.InvalidInputError{Field: "command_query"}
 		}

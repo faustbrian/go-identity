@@ -14,6 +14,20 @@ const (
 	FeatureRecordRequired
 )
 
+// FeatureSubjectRequirement fixes an operation's target identity namespace at
+// trusted composition. The default preserves existing user-targeted schemas.
+// Anonymous-flow targeting is explicit and never substitutes a flow for UserID.
+// This does not authenticate a flow or grant execution/recovery authority.
+type FeatureSubjectRequirement uint8
+
+const (
+	// FeatureSubjectUser requires UserID and forbids AnonymousFlowID.
+	FeatureSubjectUser FeatureSubjectRequirement = iota
+	// FeatureSubjectAnonymousFlow requires AnonymousFlowID and an empty UserID.
+	// The actor remains a separately verified user, API key or service account.
+	FeatureSubjectAnonymousFlow
+)
+
 // FeatureOperation identifies one storage-neutral feature-owned operation.
 // Trusted composition supplies a compile-time descriptor, never request data.
 // Owner is a canonical lowercase slash-separated module label; OperationID is
@@ -30,6 +44,9 @@ type FeatureOperation struct {
 	SchemaID          string
 	SchemaVersion     uint32
 	RecordRequirement FeatureRecordRequirement
+	// SubjectRequirement is frozen schema policy, not selected by request data.
+	// Zero retains the original user-only contract and serialized shape.
+	SubjectRequirement FeatureSubjectRequirement `json:",omitempty"`
 }
 
 // Validate checks structural descriptor identity, not ownership authenticity.
@@ -38,7 +55,7 @@ type FeatureOperation struct {
 // before admission. Names alone never enable an execution phase. Invalid input
 // returns a redacted InvalidInputError; zero is invalid.
 func (d FeatureOperation) Validate() error {
-	if !validFeatureName(d.Owner, '/') || d.Owner == "identity" || !validFeatureName(d.OperationID, '.') || kernelOperationID(d.OperationID) || !validDirectoryID(d.SchemaID) || d.SchemaVersion == 0 || (d.RecordRequirement != FeatureRecordOmitted && d.RecordRequirement != FeatureRecordRequired) {
+	if !validFeatureName(d.Owner, '/') || d.Owner == "identity" || !validFeatureName(d.OperationID, '.') || kernelOperationID(d.OperationID) || !validDirectoryID(d.SchemaID) || d.SchemaVersion == 0 || (d.RecordRequirement != FeatureRecordOmitted && d.RecordRequirement != FeatureRecordRequired) || d.SubjectRequirement > FeatureSubjectAnonymousFlow {
 		return InvalidInputError{Field: "feature_operation"}
 	}
 	return nil
@@ -56,10 +73,17 @@ func (d FeatureOperation) Validate() error {
 // invalid input returns redacted InvalidInputError. No I/O or callbacks run.
 func (b CommandBinding) ValidateFor(d FeatureOperation) error {
 	_, validID := decodeID(string(b.CommandID))
-	if d.Validate() != nil || !validID || !validDirectoryID(string(b.TenantID)) || !validDirectoryID(string(b.UserID)) || !validDirectoryID(string(b.ActorID)) || !featureActorKind(b.ActorKind) || b.OperationID != d.OperationID || !validDirectoryID(b.PolicyID) || b.PolicyVersion == 0 || b.SchemaID != d.SchemaID || b.SchemaVersion != d.SchemaVersion || !validDirectoryID(b.CorrelationID) || b.LinkMode != 0 || (d.RecordRequirement == FeatureRecordOmitted && b.RecordID != "") || (d.RecordRequirement == FeatureRecordRequired && !validDirectoryID(b.RecordID)) {
+	if d.Validate() != nil || !validID || !validDirectoryID(string(b.TenantID)) || !validFeatureSubject(b, d) || !validDirectoryID(string(b.ActorID)) || !featureActorKind(b.ActorKind) || b.OperationID != d.OperationID || !validDirectoryID(b.PolicyID) || b.PolicyVersion == 0 || b.SchemaID != d.SchemaID || b.SchemaVersion != d.SchemaVersion || !validDirectoryID(b.CorrelationID) || b.LinkMode != 0 || (d.RecordRequirement == FeatureRecordOmitted && b.RecordID != "") || (d.RecordRequirement == FeatureRecordRequired && !validDirectoryID(b.RecordID)) {
 		return InvalidInputError{Field: "feature_command_binding"}
 	}
 	return nil
+}
+
+func validFeatureSubject(b CommandBinding, d FeatureOperation) bool {
+	if d.SubjectRequirement == FeatureSubjectAnonymousFlow {
+		return b.UserID == "" && validDirectoryID(b.AnonymousFlowID)
+	}
+	return b.AnonymousFlowID == "" && validDirectoryID(string(b.UserID))
 }
 
 func featureActorKind(kind authorization.SubjectKind) bool {

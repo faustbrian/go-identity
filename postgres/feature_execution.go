@@ -65,10 +65,7 @@ func (r *ContributorRegistry) admitFeaturePlan(b identity.CommandBinding, finger
 	if _, ok := feature.contributor.(FeatureExecutionContributor); !ok {
 		return nil, invalidPlan()
 	}
-	target, actorKind := string(b.UserID), audit.ActorService
-	if b.RecordID != "" {
-		target = b.RecordID
-	}
+	target, actorKind := featureTargetID(b), audit.ActorService
 	if b.ActorKind == authorization.SubjectUser {
 		actorKind = audit.ActorHuman
 	}
@@ -275,10 +272,7 @@ func invokeFeature(p FeatureExecutionContributor, ctx context.Context, w Work, c
 
 func featureMutationAudits(ctx context.Context, p *admittedKernelPlan, now time.Time, class string) ([]audit.Record, error) {
 	records := make([]audit.Record, len(p.audits))
-	target := string(p.binding.UserID)
-	if p.binding.RecordID != "" {
-		target = p.binding.RecordID
-	}
+	target := featureTargetID(p.binding)
 	for i, a := range p.audits {
 		record, err := securityMutationAudit(ctx, p.binding, p.lifecycle.BeforeVersion, p.lifecycle.AfterVersion, now, class, a.EventType, p.subjectType, target, a.RetentionClass, true)
 		if err != nil {

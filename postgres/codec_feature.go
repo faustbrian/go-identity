@@ -24,11 +24,15 @@ func encodeFeature(s identity.FeatureCommandSpec, key [32]byte) (map[string][]by
 			"kind": cborUint(uint64(field.Value.Kind)), "value": cborBytes(digest),
 		})
 	}
-	return map[string][]byte{
+	result := map[string][]byte{
 		"feature_owner":      cborText(s.Operation.Owner),
 		"record_requirement": cborUint(uint64(s.Operation.RecordRequirement)),
 		"fields":             cborMap(fields),
-	}, nil
+	}
+	if s.Operation.SubjectRequirement != identity.FeatureSubjectUser {
+		result["subject_requirement"] = cborUint(uint64(s.Operation.SubjectRequirement))
+	}
+	return result, nil
 }
 
 func encodeFeatureValue(v identity.FeatureValue) ([]byte, error) {

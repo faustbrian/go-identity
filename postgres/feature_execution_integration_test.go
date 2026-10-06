@@ -21,6 +21,7 @@ import (
 // negative recovery and conflicting retained evidence. Typed SQL seams prove
 // the coordinator, not a real session issuer or production adapter composition.
 type featureExecutionPhase struct {
+	anonymous                                       bool
 	fail, wrongReceipt, panicApply, unknownRecovery bool
 	panicValidate                                   bool
 	calls                                           int
@@ -33,15 +34,19 @@ type featureExecutionPhase struct {
 func (*featureExecutionPhase) Descriptor() ContributorDescriptor {
 	return ContributorDescriptor{Owner: "identity/session/postgres", ContractID: "identity.session", Version: 1}
 }
-func (*featureExecutionPhase) FeatureOperations() []identity.FeatureOperation {
-	return featureRegistryInput().operations
+func (phase *featureExecutionPhase) FeatureOperations() []identity.FeatureOperation {
+	operations := featureRegistryInput().operations
+	if phase.anonymous {
+		operations[0].SubjectRequirement = identity.FeatureSubjectAnonymousFlow
+	}
+	return operations
 }
 func (phase *featureExecutionPhase) ValidateFeatureCommand(command identity.Command, p CommandPlan) error {
 	if phase.panicValidate {
 		panic("private validation diagnostic")
 	}
 	s, ok := command.Feature()
-	if !ok || s.Operation != featureRegistryInput().operations[0] || len(s.Fields) != 1 || s.Fields[0].Name != "value" || s.Fields[0].Value.Kind != identity.FeatureText || s.Fields[0].Value.Text == "" || p.SubjectType != "session" || len(p.Audits) < 1 || len(p.Audits) > 2 || p.Audits[0].EventType != "session.issue" || p.Lifecycle == nil || p.Lifecycle.EventType != "session.created.v1" || p.Lifecycle.BeforeVersion != 0 || p.Lifecycle.AfterVersion != 1 {
+	if !ok || s.Operation != phase.FeatureOperations()[0] || len(s.Fields) != 1 || s.Fields[0].Name != "value" || s.Fields[0].Value.Kind != identity.FeatureText || s.Fields[0].Value.Text == "" || p.SubjectType != "session" || len(p.Audits) < 1 || len(p.Audits) > 2 || p.Audits[0].EventType != "session.issue" || p.Lifecycle == nil || p.Lifecycle.EventType != "session.created.v1" || p.Lifecycle.BeforeVersion != 0 || p.Lifecycle.AfterVersion != 1 {
 		return invalidPlan()
 	}
 	if len(p.Audits) == 2 && (p.Audits[1].EventType != "session.authority" || p.Audits[1].RetentionClass != "protected") {
@@ -52,7 +57,7 @@ func (phase *featureExecutionPhase) ValidateFeatureCommand(command identity.Comm
 
 // This seam records every slot and selected retention class on the real primary;
 // it does not replace the production audit adapter's interoperability gate.
-type featureExecutionAuditPhase struct{ fail bool }
+type featureExecutionAuditPhase struct{ fail, anonymous bool }
 
 func (*featureExecutionAuditPhase) Descriptor() ContributorDescriptor {
 	return (&domainAuditPhase{}).Descriptor()
@@ -63,7 +68,7 @@ func (p *featureExecutionAuditPhase) PersistAudits(ctx context.Context, w Work) 
 		return err
 	}
 	for _, record := range records {
-		if record.Feature != featureRegistryInput().operations[0] || record.SubjectType != "session" {
+		if record.Feature != (&featureExecutionPhase{anonymous: p.anonymous}).FeatureOperations()[0] || record.SubjectType != "session" {
 			return identity.InvalidInputError{Field: "staged_feature_scope"}
 		}
 		if _, err := w.Exec(ctx, `INSERT INTO public.identity_test_feature_audits(event_id,command_id,event_index,retention_class) VALUES($1,$2,$3,$4)`, record.Record.ID(), string(w.state.binding.CommandID), int64(record.Plan.EventIndex), record.Record.Attributes()["retention.class"]); err != nil {
@@ -147,6 +152,10 @@ func testFeatureExecution(t *testing.T, ctx context.Context, pool *database.Pool
 	prepare := func(t *testing.T) (identity.CommandBinding, identity.Command, CommandPlan) {
 		t.Helper()
 		s := featureCodecSpec()
+		s.Operation = phase.FeatureOperations()[0]
+		if phase.anonymous {
+			s.Binding.UserID, s.Binding.AnonymousFlowID = "", "anonymous-flow"
+		}
 		s.Binding.CommandID, err = identity.NewCommandID()
 		if err != nil {
 			t.Fatal(err)
@@ -239,34 +248,56 @@ func testFeatureExecution(t *testing.T, ctx context.Context, pool *database.Pool
 			}
 		}
 	})
-	t.Run("commit and exact replay", func(t *testing.T) {
-		b, command, p := prepare(t)
-		r := reserve(t, b, command, p)
-		w, e := c.Begin(ctx, r)
-		if e != nil {
-			t.Fatal(e)
-		}
-		defer c.Abort(w, identity.UnavailableError{})
-		provisional, e := c.ApplyFeature(ctx, w, command)
-		if e != nil {
-			t.Fatal(e)
-		}
-		result, e := c.Commit(w, provisional)
-		if e != nil || result.Validate() != nil || result.Outcome != identity.CommitOutcomeCommitted {
-			t.Fatal("feature commit", e)
-		}
-		counts(t, b, 1, 1, 1)
-		before := phase.calls
-		copy, replay, e := c.ReserveCommand(ctx, b, command, p)
-		if e != nil || copy.state != nil || replay.AuditEventID != result.AuditEventID || replay.Feature == nil || *replay.Feature != *result.Feature || phase.calls != before {
-			t.Fatal("feature replay reminted or changed receipt", e)
-		}
-		query, caller := queryInputs(b)
-		observed, e := c.QueryCommand(ctx, query, caller)
-		if e != nil || observed.Validate() != nil || observed.Outcome != identity.CommitOutcomeCommitted {
-			t.Fatal("committed feature query", e)
-		}
-	})
+	for _, anonymous := range []bool{false, true} {
+		t.Run(map[bool]string{false: "commit and exact replay", true: "anonymous commit and exact replay"}[anonymous], func(t *testing.T) {
+			originalRegistry := c.registry
+			phase.anonymous, auditing.anonymous = anonymous, anonymous
+			defer func() { c.registry = originalRegistry; phase.anonymous, auditing.anonymous = false, false }()
+			var e error
+			c.registry, e = NewContributorRegistry([]Contributor{repo, auditing, lifecycle, phase})
+			if e != nil {
+				t.Fatal(e)
+			}
+			b, command, p := prepare(t)
+			r := reserve(t, b, command, p)
+			w, e := c.Begin(ctx, r)
+			if e != nil {
+				t.Fatal(e)
+			}
+			defer c.Abort(w, identity.UnavailableError{})
+			provisional, e := c.ApplyFeature(ctx, w, command)
+			if e != nil {
+				t.Fatal(e)
+			}
+			result, e := c.Commit(w, provisional)
+			if e != nil || result.Validate() != nil || result.Outcome != identity.CommitOutcomeCommitted {
+				t.Fatal("feature commit", e)
+			}
+			counts(t, b, 1, 1, 1)
+			before := phase.calls
+			copy, replay, e := c.ReserveCommand(ctx, b, command, p)
+			if e != nil || copy.state != nil || replay.AuditEventID != result.AuditEventID || replay.Feature == nil || *replay.Feature != *result.Feature || phase.calls != before {
+				t.Fatal("feature replay reminted or changed receipt", e)
+			}
+			query, caller := queryInputs(b)
+			observed, e := c.QueryCommand(ctx, query, caller)
+			if e != nil || observed.Validate() != nil || observed.Outcome != identity.CommitOutcomeCommitted {
+				t.Fatal("committed feature query", e)
+			}
+			full, e := c.RecoverFeatureCommand(ctx, query, caller)
+			if e != nil || full.Binding != b || full.Feature == nil || *full.Feature != *result.Feature || full.AuditEventID != result.AuditEventID {
+				t.Fatal("primary recovery lost original feature scope/receipt", e)
+			}
+			if anonymous {
+				query.UserID, query.AnonymousFlowID = identity.UserID(b.AnonymousFlowID), ""
+				wrong, e := c.RecoverFeatureCommand(ctx, query, callerForQuery(caller, query))
+				var forbidden identity.ForbiddenError
+				if !errors.As(e, &forbidden) || wrong.Binding.CommandID != "" || wrong.Feature != nil {
+					t.Fatal("user namespace disclosed anonymous result", e)
+				}
+			}
+		})
+	}
 	t.Run("validator panic before reservation", func(t *testing.T) {
 		b, command, p := prepare(t)
 		phase.panicValidate = true

@@ -140,6 +140,9 @@ func prepareClaim(c identity.Command, key [32]byte) (claimRequest, error) {
 	if feature != nil {
 		scope["feature_owner"] = cborText(feature.Owner)
 		scope["record_requirement"] = cborUint(uint64(feature.RecordRequirement))
+		if feature.SubjectRequirement != identity.FeatureSubjectUser {
+			scope["subject_requirement"] = cborUint(uint64(feature.SubjectRequirement))
+		}
 	}
 	safe := cborMap(scope)
 	scope["payload"] = cborMap(payload)
@@ -155,6 +158,9 @@ func commandSafeFields(b identity.CommandBinding, feature *identity.FeatureOpera
 	if feature != nil {
 		scope["feature_owner"] = cborText(feature.Owner)
 		scope["record_requirement"] = cborUint(uint64(feature.RecordRequirement))
+		if feature.SubjectRequirement != identity.FeatureSubjectUser {
+			scope["subject_requirement"] = cborUint(uint64(feature.SubjectRequirement))
+		}
 	}
 	return cborMap(scope)
 }
@@ -181,6 +187,9 @@ func commandScope(b identity.CommandBinding) map[string][]byte {
 	}
 	if b.RecordID != "" {
 		scope["record_id"] = cborText(b.RecordID)
+	}
+	if b.AnonymousFlowID != "" {
+		scope["anonymous_flow_id"] = cborText(b.AnonymousFlowID)
 	}
 	if b.LinkMode != 0 {
 		scope["link_mode"] = cborUint(uint64(b.LinkMode))

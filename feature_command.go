@@ -124,6 +124,7 @@ func cloneFeatureSpec(s FeatureCommandSpec) FeatureCommandSpec {
 	b.CommandID = CommandID(strings.Clone(string(b.CommandID)))
 	b.TenantID = TenantID(strings.Clone(string(b.TenantID)))
 	b.UserID = UserID(strings.Clone(string(b.UserID)))
+	b.AnonymousFlowID = strings.Clone(b.AnonymousFlowID)
 	b.ActorID = ActorID(strings.Clone(string(b.ActorID)))
 	b.ActorKind = authorization.SubjectKind(strings.Clone(string(b.ActorKind)))
 	b.OperationID, b.PolicyID, b.SchemaID = strings.Clone(b.OperationID), strings.Clone(b.PolicyID), strings.Clone(b.SchemaID)

@@ -23,7 +23,7 @@ func decodeFeaturePlan(binding identity.CommandBinding, fingerprint [32]byte, en
 	}
 	// Supplied observation scope is also untrusted. Bound it before constructing
 	// the expected CBOR map; the exact feature policy is checked after decoding.
-	if len(binding.CommandID) > 22 || len(binding.TenantID) > 128 || len(binding.UserID) > 128 || len(binding.ActorID) > 128 || len(binding.ActorKind) > 128 || len(binding.OperationID) > 128 || len(binding.RecordID) > 128 || len(binding.PolicyID) > 128 || len(binding.SchemaID) > 128 || len(binding.CorrelationID) > 128 {
+	if len(binding.CommandID) > 22 || len(binding.TenantID) > 128 || len(binding.UserID) > 128 || len(binding.AnonymousFlowID) > 128 || len(binding.ActorID) > 128 || len(binding.ActorKind) > 128 || len(binding.OperationID) > 128 || len(binding.RecordID) > 128 || len(binding.PolicyID) > 128 || len(binding.SchemaID) > 128 || len(binding.CorrelationID) > 128 {
 		return fail()
 	}
 	r := planReader{attributeReader: attributeReader{data: encoded}, ok: true}
@@ -72,7 +72,10 @@ func decodeFeaturePlan(binding identity.CommandBinding, fingerprint [32]byte, en
 	r.key("binding")
 	r.consume(cborMap(commandScope(binding)))
 	r.key("feature")
-	r.expect(5, 6)
+	featureFields, featureOK := r.head(5)
+	if !featureOK || featureFields != 6 && featureFields != 7 {
+		return fail()
+	}
 	f := &FeatureRegistration{}
 	r.key("owner")
 	f.Operation.Owner = r.string(128)
@@ -86,6 +89,10 @@ func decodeFeaturePlan(binding identity.CommandBinding, fingerprint [32]byte, en
 	f.Operation.SchemaVersion = uint32(r.number(math.MaxUint32))
 	r.key("record_requirement")
 	f.Operation.RecordRequirement = identity.FeatureRecordRequirement(r.number(math.MaxUint8))
+	if featureFields == 7 {
+		r.key("subject_requirement")
+		f.Operation.SubjectRequirement = identity.FeatureSubjectRequirement(r.number(math.MaxUint8))
+	}
 	p.Feature = f
 	r.key("profile")
 	counterProfile := false

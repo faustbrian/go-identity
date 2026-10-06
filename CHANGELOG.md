@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add explicitly anonymous-flow-targeted feature commands and recovery scope.
+  Keep flows separate from user identities and actual actors; preserve the
+  default user-only contract and legacy receipt JSON shape. Kernel commands
+  continue to require a user target.
+
 - Construct protected risk-decision audit records with closed allow/deny/
   throttle/step-up classification, genuine attempt or user subjects and
   preserved impersonation attribution, without fabricating provider evidence.
