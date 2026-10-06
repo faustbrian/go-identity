@@ -85,6 +85,18 @@ func testFeatureObservation(t *testing.T, ctx context.Context, pool *database.Po
 				t.Fatal(err)
 			}
 			query, caller := queryInputs(spec.Binding)
+			full, fullErr := reader.RecoverFeatureCommand(ctx, query, caller)
+			if state == "committed" {
+				if fullErr != nil || full.Outcome != identity.CommitOutcomeCommitted || full.AuditEventID != "historical-audit" || full.Feature == nil || full.Feature.Operation != spec.Operation || full.Feature.BeforeVersion != 0 || full.Feature.AfterVersion != 1 || full.Validate() != nil {
+					t.Fatal("exact historical feature receipt unavailable", fullErr)
+				}
+			} else if state == "pending" {
+				if fullErr != nil || full.Outcome != identity.CommitOutcomeInProgress || full.RetryAfter <= 0 || full.Feature == nil {
+					t.Fatal("live feature lease changed", fullErr)
+				}
+			} else if fullErr == nil {
+				t.Fatal("invalid or denied historical receipt disclosed")
+			}
 			record, err := reader.QueryCommand(ctx, query, caller)
 			var forbidden identity.ForbiddenError
 			if state == "mismatched lifecycle" {
@@ -108,6 +120,13 @@ func testFeatureObservation(t *testing.T, ctx context.Context, pool *database.Po
 				if err = pool.Raw().QueryRow(ctx, `SELECT generation::text FROM identity.commands WHERE command_id=$1`, id).Scan(&generation); err != nil || generation != "1" {
 					t.Fatal("observation took recovery ownership", err)
 				}
+				full, err = reader.RecoverFeatureCommand(ctx, query, caller)
+				if !errors.As(err, &unavailable) || full.Outcome != identity.CommitOutcomeInProgress || full.Feature == nil {
+					t.Fatal("full feature recovery fabricated terminal result", err)
+				}
+				if err = pool.Raw().QueryRow(ctx, `SELECT generation::text FROM identity.commands WHERE command_id=$1`, id).Scan(&generation); err != nil || generation != "1" {
+					t.Fatal("unsupported full recovery changed generation", err)
+				}
 			}
 			wrong := query
 			wrong.TenantID = "foreign"
@@ -115,6 +134,22 @@ func testFeatureObservation(t *testing.T, ctx context.Context, pool *database.Po
 			record, err = reader.QueryCommand(ctx, wrong, callerForQuery(caller, wrong))
 			if !errors.As(err, &forbidden) || record != (CommandRecord{}) || decisions != before+1 {
 				t.Fatal("cross-tenant historical disclosure", err)
+			}
+			if full, err := reader.RecoverFeatureCommand(ctx, wrong, callerForQuery(caller, wrong)); !errors.As(err, &forbidden) || full.Binding.CommandID != "" || full.Feature != nil {
+				t.Fatal("cross-tenant full receipt disclosed", err)
+			}
+			missing := query
+			missing.CommandID, err = identity.NewCommandID()
+			if err != nil {
+				t.Fatal(err)
+			}
+			if full, err := reader.RecoverFeatureCommand(ctx, missing, callerForQuery(caller, missing)); !errors.As(err, &forbidden) || full.Binding.CommandID != "" {
+				t.Fatal("missing feature receipt fabricated", err)
+			}
+			var claims int
+			missingBytes, _ := base64.RawURLEncoding.DecodeString(string(missing.CommandID))
+			if err = pool.Raw().QueryRow(ctx, `SELECT count(*) FROM identity.identity_command_id_claims WHERE command_id=$1`, missingBytes).Scan(&claims); err != nil || claims != 0 {
+				t.Fatal("missing historical lookup reserved a command", err)
 			}
 		})
 	}

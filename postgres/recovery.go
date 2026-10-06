@@ -46,6 +46,49 @@ func (c *Coordinator) RecoverCommand(ctx context.Context, q identity.RecoveryQue
 	return commandRecord(r), err
 }
 
+// RecoverFeatureCommand authorizes historical feature-receipt disclosure with
+// the current QueryPolicy and reconciles pending commands through the same
+// primary recovery owner as RecoverCommand. It returns the exact retained
+// feature transition and audit metadata, never a user/profile payload, session,
+// proof or credential. The receipt grants no current authority or permission
+// to execute effects or reveal a credential.
+//
+// Missing, wrong-scope and denied queries perform the same bounded primary read
+// and never reserve a command. Non-feature commands are forbidden before any
+// reconciliation. Live leases remain observational; expired leases require the
+// existing frozen recovery participants. Unknown commits retain their binding
+// and return UnknownCommitError; terminal failures retain their classification.
+// Earlier caller deadlines win. Concurrent calls share the primary journal's
+// generation fence; returned receipts are independently owned values.
+func (c *Coordinator) RecoverFeatureCommand(ctx context.Context, q identity.RecoveryQuery, caller authorization.DecisionContext) (identity.CommandResult, error) {
+	if c == nil || ctx == nil || c.maximumDuration <= 0 || c.maximumDuration > time.Minute {
+		return identity.CommandResult{}, coordinatorError()
+	}
+	bounded, cancel := context.WithTimeout(ctx, c.maximumDuration)
+	defer cancel()
+	r, err := c.queryCommandReceipt(bounded, q, caller)
+	if r.Feature == nil {
+		if err != nil {
+			return identity.CommandResult{}, err
+		}
+		return identity.CommandResult{}, identity.ForbiddenError{}
+	}
+	if err == nil && r.Outcome == identity.CommitOutcomeInProgress {
+		observed := r
+		r, err = c.recoverCommandReceipt(bounded, q)
+		if r.Outcome == identity.CommitOutcomeInvalid || r.Outcome == identity.CommitOutcomeUnknown {
+			// A failed reconciliation cannot erase already observed history or
+			// prove rollback. Preserve the exact feature branch even when primary
+			// cleanup could retain only a binding and unknown classification.
+			r = featureOutcome(observed.Binding, &observed.Feature.Operation, identity.CommitOutcomeUnknown, 0)
+		}
+	}
+	if r.Outcome == identity.CommitOutcomeUnknown {
+		return r, identity.UnknownCommitError{CommandID: q.CommandID}
+	}
+	return r, err
+}
+
 // Trusted storage seam behind the core service's current authorization and
 // redaction; unlike public RecoverCommand it must not manufacture a caller.
 func (c *Coordinator) recoverCommandReceipt(ctx context.Context, q identity.RecoveryQuery) (result identity.CommandResult, err error) {

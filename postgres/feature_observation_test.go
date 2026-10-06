@@ -62,6 +62,17 @@ func TestFeatureCommandObservationPreservesExactHistoricalProfile(t *testing.T) 
 		if reads != 1 || decisions != 1 {
 			t.Fatal("observation skipped policy/read")
 		}
+		if state != "pending" {
+			full, fullErr := c.RecoverFeatureCommand(context.Background(), q, caller)
+			if full.Outcome != expected || full.Feature == nil || full.Feature.Operation != spec.Operation || full.Validate() != nil || state == "committed" && (fullErr != nil || full.AuditEventID != "audit-a" || full.Feature.AfterVersion != 1) || state == "aborted" && !errors.As(fullErr, &forbidden) {
+				t.Fatal("exact terminal feature receipt lost", fullErr)
+			}
+			full.Feature.Operation.SchemaVersion++
+			full, _ = c.RecoverFeatureCommand(context.Background(), q, caller)
+			if full.Feature == nil || full.Feature.Operation != spec.Operation {
+				t.Fatal("full receipt mutated history")
+			}
+		}
 		got.Feature.SchemaVersion++
 		again, _ := c.QueryCommand(context.Background(), q, caller)
 		if again.Feature == nil || *again.Feature != spec.Operation {
@@ -73,6 +84,29 @@ func TestFeatureCommandObservationPreservesExactHistoricalProfile(t *testing.T) 
 		bad, err := c.QueryCommand(context.Background(), changed, callerForQuery(caller, changed))
 		if !errors.As(err, &forbidden) || bad != (CommandRecord{}) || reads != beforeReads+1 || decisions != beforeDecisions+1 {
 			t.Fatal("wrong feature scope disclosed result or changed read shape")
+		}
+		beforeReads, beforeDecisions = reads, decisions
+		full, fullErr := c.RecoverFeatureCommand(context.Background(), changed, callerForQuery(caller, changed))
+		if !errors.As(fullErr, &forbidden) || full.Feature != nil || full.Binding.CommandID != "" || reads != beforeReads+1 || decisions != beforeDecisions+1 {
+			t.Fatal("full receipt changed wrong-scope read shape", fullErr)
+		}
+		for _, policyFailure := range []string{"denied", "error", "panic"} {
+			c.queryPolicy.Authorization = queryDecision(func(context.Context, authorization.DecisionContext) (authorization.Decision, error) {
+				decisions++
+				if policyFailure == "panic" {
+					panic("private-policy-diagnostic")
+				}
+				if policyFailure == "error" {
+					return authorization.Decision{}, errors.New("private-policy-diagnostic")
+				}
+				return authorization.Decision{Outcome: authorization.Deny, Revision: 9}, nil
+			})
+			beforeReads, beforeDecisions = reads, decisions
+			full, fullErr := c.RecoverFeatureCommand(context.Background(), q, caller)
+			var unavailable identity.UnavailableError
+			if full.Feature != nil || full.Binding.CommandID != "" || reads != beforeReads+1 || decisions != beforeDecisions+1 || policyFailure == "denied" && !errors.As(fullErr, &forbidden) || policyFailure != "denied" && !errors.As(fullErr, &unavailable) {
+				t.Fatal("full receipt disclosed after failed current policy", policyFailure, fullErr)
+			}
 		}
 	}
 }
@@ -152,6 +186,9 @@ func TestFeatureObservationRejectsScopePlanAndReceiptSubstitution(t *testing.T) 
 		var unavailable identity.UnavailableError
 		if !errors.As(err, &unavailable) || got != (CommandRecord{}) {
 			t.Fatal("substituted historical feature was disclosed")
+		}
+		if full, err := c.RecoverFeatureCommand(context.Background(), q, caller); !errors.As(err, &unavailable) || full.Feature != nil || full.Binding.CommandID != "" {
+			t.Fatal("full receipt disclosed substituted history", err)
 		}
 	}
 }

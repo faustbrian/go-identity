@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add current-policy authorized historical feature-command recovery with exact
+  retained transition versions and audit metadata. Reuse the sole primary
+  reconciliation owner without reserving missing commands, exposing kernel
+  payloads or granting fresh credential authority; generic lookup is unchanged.
+
 - Add current-policy authorized original-input final-authentication receipt
   query and recovery. Match exact retained-key command/proof intent and frozen
   plan without renewing expired proof authority, reserving missing commands

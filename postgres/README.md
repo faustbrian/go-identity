@@ -837,6 +837,19 @@ only scope, bounded evidence queries and the participant's frozen declaration,
 and cannot stage mutations or close transactions. Contributors read retained
 bindings even when payloads have been pruned. QueryCommand remains observational.
 
+`RecoverFeatureCommand(ctx, query, caller)` uses that same current disclosure
+policy and recovery owner, but returns the full **safe feature receipt**:
+original binding/operation, terminal audit ID and declared before/after versions,
+or pending retry metadata. Kernel user/profile commands are forbidden before
+reconciliation; generic `RecoverCommand` remains metadata-only. Missing commands
+are never reserved. Unsupported expired participants leave pending evidence
+unchanged; ambiguous commits return `UnknownCommitError` without credentials.
+Feature receipts carry no session, proof or native response and grant neither
+current authority nor credential reveal permission. Native feature adapters must
+match their own exact retained intent/evidence and enforce current result-access
+policy before composing recovery. Original frozen participants, not today's
+domain state, determine the historical outcome.
+
 ### Primary command lookup
 
 `CoordinatorConfig.QueryPolicy` optionally enables `QueryCommand(ctx, query,
