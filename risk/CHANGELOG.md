@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Admit exact-flow, profile-bound CAPTCHA verification through a core-owned
+  evidence issuer with bounded callbacks, explicit bindings and score policy.
+  Preserve original validity, token-bound command identity, retained-key
+  recovery and committed-only opaque disclosure; unknown outcomes reveal
+  nothing. Provisional signed candidates remain subject to native atomic
+  issuance and later protected-use reservation, not bearer-only authority.
+
 - Derive CAPTCHA replay identities in the risk core using the pinned provider-
   scope HMAC framing and unchanged raw token bytes. Opaque preparation binds
   closed trusted flows separately from command-independent replay lookup,

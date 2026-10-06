@@ -9,6 +9,55 @@ RiskEvidence/CaptchaEvidence issuance remain required implementation work.
 
 ## Adoption and API
 
+### CAPTCHA evidence admission and custody
+
+`NewCaptchaEvidenceIssuer` composes the replay owner, exact configured
+API/version/tier capabilities, canonical hostname/origin/action bindings,
+optional score threshold, original validity limits, retained independent
+integrity/linkage keys and bounded verification/execution callbacks. The
+official verifier must establish the declared provider capabilities; selecting
+them here does not prove that an external provider supports them. The core
+accepts only its bounded normalized projection, not arbitrary provider payloads.
+Present-empty, unavailable and unsupported facts remain distinct and cannot
+become a successful binding. Hostnames are lowercase ASCII DNS names, origins
+are canonical HTTPS authorities, and matching is exact, never wildcard-based.
+
+`Prepare(request, token)` derives immutable command/replay custody without
+retaining the token. `Issue(ctx, intent, token)` checks that custody and resolves
+the same command before verification. Only proven absence allows one bounded
+provider verification. The core rejects foreign flow/profile facts, mismatched
+bindings, unsupported fabricated fields, invalid/below-threshold scores and
+expired observations. Evidence expiry also cannot exceed the core verification
+invocation time plus the configured lifetime, even if a callback reports its
+completion as the observation time. Any earlier provider or challenge expiry
+still wins. Preparation is not authentication, authorization or full
+risk evaluation: the protected workflow still owns every other mandatory risk
+signal and independently configured low-risk step-up policy.
+
+Successful facts produce only an opaque provisional `CaptchaEvidenceIssue`.
+Its `Materialize(primaryTime)` creates a signed native candidate with the
+original exclusive expiry; it does not establish a durable row. Only a validated
+committed executor outcome reveals `CaptchaEvidence` and safe original times.
+The native record may retain the configured hostname, but never score, provider
+payloads, raw token or remote address. A separate scoped token commitment binds
+the command intent while prescribed replay aliases retain their independent
+rotation semantics. Changing a token cannot reuse the old command result.
+
+`Recover(ctx, intent)` needs no raw token and cannot verify or issue. Unknown
+and late/failed acknowledgements return no bearer; recover the original command,
+never create a replacement. Retained keys preserve the exact historical result
+even after expiry without renewing it or implying present-use authority. An
+unexpected concurrent winner must be reconciled as that exact original record.
+Configuration, intent projections and bearer custody reject automatic
+serialization and redact diagnostics; only `Reference.Reveal()` transfers it.
+
+This is development composition, not an application-provided store contract.
+The actual provider-neutral closed native-evidence union, official provider
+adapters, signed native command bridge, PostgreSQL single-winner issuance,
+reserve/apply/finalize, canonical audit/failure attribution and full Service
+composition are still required. The boundary doubles prove core result
+conservation, not provider truth, database atomicity or durable one-use behavior.
+
 ### CAPTCHA replay preparation
 
 `NewFlowContext(FlowContextInput)` freezes one trusted pre-auth, authenticated
