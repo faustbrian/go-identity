@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- Add code-free keyed scope correlation under an explicit retained digest-key
+  version, permitting private native lookup without plaintext destinations or
+  unkeyed address hashes. Rotation does not remap historical scope bindings.
+
+- Add authenticated code-free storage projections for original command-bound
+  server attempts. Restore the same submitted code and recovery identity without
+  a new ID or renewed validity, and reject changed record fields or retired keys.
+  Current authority, counted challenge verification and durable replay remain
+  the native transaction owner's responsibility.
+
 - Add command-bound OTP submission preparation with complete structural
   command scope and code-free command/attempt recovery. Tenant, subject and
   required target mismatches fail closed; legacy preparation retains its exact

@@ -22,6 +22,34 @@ executable example demonstrates this lifecycle without displaying a code.
 
 ## API and security
 
+### Restoring native command attempts
+
+`AttemptIssuer.SealForCommand` produces a code-free `CommandAttemptRecord` from
+one immutable `PrepareForCommand` submission. Its domain-separated MAC binds
+the server's random attempt ID, complete continuation, operation/command scope,
+mode, expected version and original submitted-code fingerprint. Keep the
+original issuer key/version through dependent history retention. Native adapters
+own bounded private encoding; automatic JSON/text export is rejected because
+the projection includes PII. Never send it to clients or accept request-selected
+attempt IDs, keys or projections.
+
+`Verifier.ScopeDigest` provides a code-free keyed private lookup binding over
+the same complete scope under an explicitly selected retained code-digest key
+version. Native storage can match scope without plaintext destinations or an
+unkeyed address dictionary. Rotation preserves original bytes; retired versions
+deny rather than silently switching to the current key. It grants no proof,
+challenge comparison, attempt allowance or primary freshness.
+
+`VerifyCommandRecord` authenticates that historical declaration without code
+access or comparison. `RestoreForCommand` additionally authenticates the same
+opaque original submission, preserving its exact recovery identity without
+entropy, new IDs, policy changes or renewed expiry. Neither checks a stored
+challenge, current authority or durable replay. The owning PostgreSQL adapter
+must still check primary replay/authority and compare inside its counted denial
+or reservation transaction, with effects and terminal state committed together.
+Restoration is not a public unmetered code-check or signin endpoint. Existing
+legacy unbound `Prepare` attempts cannot be sealed for command dispatch.
+
 - `NewCodeProfile` validates all explicit fields; zero policy is invalid. The
   alphabet is unique visible ASCII, length is 4..128 and code space is at least
   one million. Six decimal digits match the reference profile. Other policy

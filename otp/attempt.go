@@ -203,22 +203,9 @@ func (i AttemptIssuer) prepareWithCommand(ctx context.Context, entropy io.Reader
 	if e := ctx.Err(); e != nil {
 		return AttemptCommand{}, e
 	}
-	b := []byte("identity-otp-attempt-fingerprint-v1\x00")
-	if command != nil {
-		b = []byte("identity-otp-command-attempt-fingerprint-v1\x00")
-	}
-	b = binary.BigEndian.AppendUint32(b, uint32(len(c.state.scope.binding)))
-	b = append(b, c.state.scope.binding...)
-	b = append(b, byte(mode))
-	b = binary.BigEndian.AppendUint64(b, expectedVersion)
-	b = binary.BigEndian.AppendUint32(b, i.version)
-	if command != nil {
-		b = append(b, command.digest[:]...)
-	}
-	defer clear(b)
-	fingerprint, e := code.KeyedDigest(i.key, b)
+	fingerprint, e := i.fingerprint(c, mode, expectedVersion, code, command)
 	if e != nil {
-		return AttemptCommand{}, ErrInvalidAttempt
+		return AttemptCommand{}, e
 	}
 	defer clear(fingerprint[:])
 	var id [16]byte
@@ -235,4 +222,25 @@ func (i AttemptIssuer) prepareWithCommand(ctx context.Context, entropy io.Reader
 		bindings.CommandID = command.binding.CommandID
 	}
 	return AttemptCommand{state: &attemptState{bindings: bindings, code: code, command: command}}, nil
+}
+
+func (i AttemptIssuer) fingerprint(c Continuation, mode AttemptMode, expectedVersion uint64, code auth.OneTimeCode, command *attemptCommandScope) ([32]byte, error) {
+	b := []byte("identity-otp-attempt-fingerprint-v1\x00")
+	if command != nil {
+		b = []byte("identity-otp-command-attempt-fingerprint-v1\x00")
+	}
+	b = binary.BigEndian.AppendUint32(b, uint32(len(c.state.scope.binding)))
+	b = append(b, c.state.scope.binding...)
+	b = append(b, byte(mode))
+	b = binary.BigEndian.AppendUint64(b, expectedVersion)
+	b = binary.BigEndian.AppendUint32(b, i.version)
+	if command != nil {
+		b = append(b, command.digest[:]...)
+	}
+	defer clear(b)
+	fingerprint, e := code.KeyedDigest(i.key, b)
+	if e != nil {
+		return [32]byte{}, ErrInvalidAttempt
+	}
+	return fingerprint, nil
 }
