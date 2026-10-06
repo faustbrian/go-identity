@@ -81,6 +81,23 @@ returned. Mapping is not proof of current session, challenge or account authorit
 
 ## Adoption, tradeoffs and FAQ
 
+`LockoutMigrationSource` installs a separately versioned forward-only extension
+after challenge custody. Private shared lockout identities use a dedicated HMAC
+key over tenant/subject and tenant/channel/canonical destination, never plaintext
+PII. Purpose, challenge, flow and rotating code-key versions cannot reset them.
+Pre-account flows retain destination exclusion without inventing a subject.
+The dedicated lockout key is pinned by an immutable digest binding; absent or
+changed key configuration fails closed. Its future explicit migration must
+preserve live lockouts, not initialize another empty namespace.
+
+Future issuance must precreate these unique scope rows before exposing a
+challenge. Native verification locks destination then subject before challenge
+comparison, samples primary time after lock waits and denies active lockouts.
+Only newly counted wrong exhaustion may extend them in the same coordinator
+denial transaction as counters, audit and stable result; correct checks cannot.
+The private SQL primitives do not yet activate these public workflows or replace
+current session/pre-auth authority. No caller-owned lockout store is supported.
+
 Private consuming persistence now projects one provisional correct comparison
 into the coordinator-owned transaction, preserving exact original command,
 attempt and generation custody. Exact successor takeover does not compare again,

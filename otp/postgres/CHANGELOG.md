@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add forward-only shared OTP lockout storage and private keyed subject/channel
+  destination projections. Reissued challenges and purpose changes retain the
+  same exclusion; deployment key mismatches fail closed, and wrong exhaustion
+  can extend both scopes atomically with the owning denial transaction. Public
+  issuance, flow authority and coordinator composition remain pending.
 - Add private native consuming custody persistence, exact-generation takeover
   and transactional finalization/release projections. Reservations retain their
   original attempt, scope, expiry and comparison allowance; live writes recheck
