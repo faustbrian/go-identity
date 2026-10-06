@@ -22,6 +22,7 @@ type sqlOTPReservation struct {
 	mode           string
 	calls, rebinds atomic.Int32
 	retained       OTPReservationWork
+	registered     OTPReservationContributor
 }
 
 func (p *sqlOTPReservation) ReserveOTP(ctx context.Context, w OTPReservationWork) error {
@@ -34,14 +35,18 @@ func (p *sqlOTPReservation) RebindOTP(ctx context.Context, w OTPReservationWork)
 }
 func (p *sqlOTPReservation) apply(ctx context.Context, w OTPReservationWork, rebind bool) error {
 	p.retained = w
-	b, err := w.Binding(p)
+	owner := p.registered
+	if owner == nil {
+		owner = p
+	}
+	b, err := w.Binding(owner)
 	if err != nil || (b.PreviousGeneration != 0) != rebind {
 		return invalidWork()
 	}
 	if _, err := w.Binding(&sqlOTPReservation{}); err == nil {
 		return invalidWork()
 	}
-	command, err := w.NativeCommand(p)
+	command, err := w.NativeCommand(owner)
 	s, ok := command.Feature()
 	if err != nil || !ok || s.Binding != b.Command {
 		return invalidWork()

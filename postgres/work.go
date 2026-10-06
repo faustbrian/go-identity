@@ -54,6 +54,7 @@ type workState struct {
 	counterCommand        *identity.Command
 	riskCommand           *identity.Command
 	captchaCommand        *identity.Command
+	otpCommand            *identity.Command
 	privacyAllocation     *privacyAllocation
 	privacyReceipt        *identity.PrivacyExportRequestReceipt
 	privacyAdmission      *privacyAdmissionProgress
@@ -263,6 +264,7 @@ func invalidateWork(w Work) {
 	w.state.counterCommand = nil
 	w.state.riskCommand = nil
 	w.state.captchaCommand = nil
+	w.state.otpCommand = nil
 	w.state.cancel()
 	if w.state.rows != nil {
 		w.state.rows.Close()

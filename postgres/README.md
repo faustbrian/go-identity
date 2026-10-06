@@ -688,7 +688,7 @@ attempt ID, keyed attempt fingerprint and version, challenge/scope digest,
 digest-key version, expected challenge version and check/consume mode. It is
 private correlation, not proof or current authority. Historical decoding binds
 all fields and supports optional CAPTCHA/risk declarations without creating a
-second journal. Generic feature admission and consuming OTP remain closed.
+second journal. Generic feature admission remains closed to OTP custody.
 
 For a native `OTPAttemptContributor`, `PrepareOTPAttemptPlan` authenticates the
 original opaque submission through that exact registered owner before SQL.
@@ -707,8 +707,8 @@ attempt identity; `RecoverOTPAttemptDenial` uses the configured current
 historical denied result is NotCommitted plus Forbidden. Changed attempt fields
 return no history. Pending remains InProgress, including after lease expiry;
 it never authorizes a replacement submission, takeover or challenge release.
-Consuming reservation/current/finalize/release and the production OTP adapter
-are still required before adopting a complete OTP workflow.
+The production OTP adapter and composed protected workflow remain required
+before adopting a complete OTP workflow.
 
 `OTPReservationContributor` additionally enables `PrepareOTPReservationPlan`
 and `ReserveOTPCommand` for consuming mode only. Its reserve callback runs last
@@ -717,9 +717,24 @@ transaction. Native failure rolls back every prefix; a commit-attempt error
 returns Unknown and no ownership. A live same-command retry does not compare
 again. Expired-owner takeover invokes only exact predecessor CAS rebind, never
 reserve/comparison, and cannot transfer another command or generation. Returned
-reservation handles still cannot enter `Begin`: native current checks,
-finalization and proof-bound terminal release are not implemented yet. Do not
-treat this reservation checkpoint as a complete consuming OTP workflow.
+reservation handles enter `Begin` only when the same exact registered owner
+implements `OTPExecutionContributor`. Current checks run before protected
+mutation and again before finalization, without another code comparison or
+attempt charge. `OTPApplyWork` permits only primary reads; apply/finalize
+`CommandSpec` returns code-free feature scope. `OTPFinalizeWork` terminal CAS,
+domain effects, audits, outbox and original receipt commit together. Returned,
+foreign and wrong-phase handles deny. Callback failure, panic, unfinished rows
+or poisoned SQL roll back all provisional domain/finalization effects.
+
+`OTPReleaseWork` runs only after proven domain rollback or unanimous retained
+primary noncommit evidence. `RecoveryWork.OTPBinding` exposes exact frozen
+challenge/attempt/command linkage to that native owner, never submitted code or
+release rights. Missing/divergent evidence, ambiguous commit and expired leases
+do not release a challenge. Release is terminal: a new challenge is required,
+not reuse of the released OTP. Release failure retains reserved custody and a
+pending journal. These coordinator phases are tested with native SQL fixtures;
+the production OTP store, cryptography and authenticated final-login admission
+remain required. They are not an adoptable complete OTP workflow.
 
 `CommandPlan.Feature` selects one exact frozen registration. Public
 `PrepareCommandPlan` copies the matching contributor order, 1..64 strictly

@@ -239,6 +239,12 @@ func (c *Coordinator) ApplyFeature(ctx context.Context, w Work, command identity
 	if p.captchaUse != nil {
 		w.state.captchaCommand = &command
 	}
+	if e = c.runOTPExecution(ctx, w, command, otpCheck); e != nil {
+		return result, e
+	}
+	if p.otp != nil {
+		w.state.otpCommand = &command
+	}
 	if e = c.checkAuthenticatedCommand(ctx, w, false); e != nil {
 		return result, e
 	}

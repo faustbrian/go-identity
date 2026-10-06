@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add OTP current checks, same-transaction terminal finalization and proof-bound
+  release for the exact native reservation owner. Keep submitted codes out of
+  domain/recovery handles, recheck before commit without another attempt charge,
+  and retain reserved custody when noncommit cannot be proven. Production OTP
+  storage and authenticated final-login composition remain unfinished.
+
 - Add native consuming OTP reservation and exact predecessor rebind in the
   existing command transaction. Preserve live replay without another comparison
   and roll back failed participant prefixes. Domain execution and release stay

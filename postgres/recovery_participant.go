@@ -178,6 +178,22 @@ func (w RecoveryWork) CaptchaBinding(p CaptchaUseReservationContributor) (Captch
 	return (CaptchaReleaseWork{state: s}).Binding(p)
 }
 
+// OTPBinding returns frozen consuming custody only to the exact registered OTP
+// owner during primary recovery. It grants evidence reads, not release rights.
+// Missing, divergent or terminal challenge evidence must remain unknown.
+func (w RecoveryWork) OTPBinding(p OTPReservationContributor) (OTPReservationBinding, error) {
+	if w.usable() != nil || w.state.entry.descriptor != otpDescriptor() || w.state.work.state.execution == nil {
+		return OTPReservationBinding{}, invalidWork()
+	}
+	r := w.state.work.state.execution.reservation
+	owner, ok := w.state.entry.contributor.(OTPReservationContributor)
+	if r == nil || !ok {
+		return OTPReservationBinding{}, invalidWork()
+	}
+	s := &otpExecutionState{reservation: otpReservationState{coordinator: w.state.work.state.execution.coordinator, work: w.state.work, plan: w.state.plan, previous: r.journal.previousGeneration, owner: owner, active: true}, phase: otpRelease, proof: riskReleaseRecovery}
+	return (OTPReleaseWork{state: s}).Binding(p)
+}
+
 // RecoverParticipant proves absence of a creation target on the locked primary.
 // An existing user is not evidence that this command committed; without an
 // original command linkage that case conservatively remains unknown. No live

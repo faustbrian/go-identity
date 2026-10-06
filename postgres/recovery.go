@@ -169,7 +169,7 @@ func (c *Coordinator) recoverCommandReceipt(ctx context.Context, q identity.Reco
 	if e != nil {
 		return result, identity.UnavailableError{}
 	}
-	if admitted.otp != nil {
+	if admitted.otp != nil && otpExecutionOwner(admitted) == nil {
 		return result, identity.UnavailableError{}
 	}
 	// No expiry-based release: reservation-only owners cannot supply the complete
@@ -278,6 +278,9 @@ func (c *Coordinator) recoverCommandReceipt(ctx context.Context, q identity.Reco
 		return result, identity.UnavailableError{}
 	}
 	if e = c.releaseCaptcha(bounded, work, admitted, journal.previousGeneration, riskReleaseRecovery); e != nil {
+		return result, identity.UnavailableError{}
+	}
+	if e = c.releaseOTP(bounded, work, admitted, journal.previousGeneration, riskReleaseRecovery); e != nil {
 		return result, identity.UnavailableError{}
 	}
 	// Contributor return values cannot erase a latched local/SQL failure.

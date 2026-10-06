@@ -45,7 +45,7 @@ type domainExecution struct {
 // contributor. Begin grants no counter allowance: ApplyFeature and Commit each
 // recheck under domain tenant exclusion, without recharging or renewing evidence.
 func (c *Coordinator) Begin(ctx context.Context, r Reservation) (Work, error) {
-	if r.state != nil && r.state.plan != nil && r.state.plan.otp != nil {
+	if r.state != nil && r.state.plan != nil && r.state.plan.otp != nil && otpExecutionOwner(r.state.plan) == nil {
 		return Work{}, invalidWork()
 	}
 	// Reservation is not consumption authority. Require the complete current,
@@ -323,6 +323,17 @@ func (c *Coordinator) Commit(w Work, result identity.CommandResult) (identity.Co
 			return c.Abort(w, err)
 		}
 	}
+	if r.plan.otp != nil {
+		if w.state.otpCommand == nil {
+			return c.Abort(w, invalidWork())
+		}
+		if err := c.runOTPExecution(w.state.ctx, w, *w.state.otpCommand, otpCheck); err != nil {
+			return c.Abort(w, err)
+		}
+		if err := c.runOTPExecution(w.state.ctx, w, *w.state.otpCommand, otpFinalize); err != nil {
+			return c.Abort(w, err)
+		}
+	}
 	if err := deliveryFresh(w); err != nil {
 		return c.Abort(w, err)
 	}
@@ -438,7 +449,7 @@ func (c *Coordinator) Abort(w Work, cause error) (identity.CommandResult, error)
 	if err := r.plan.bindWork(terminal); err != nil {
 		return fail(err)
 	}
-	if r.plan.risk != nil || r.plan.capability != nil || r.plan.captchaUse != nil {
+	if r.plan.risk != nil || r.plan.capability != nil || r.plan.captchaUse != nil || r.plan.otp != nil {
 		if err := configureKernelWork(cleanup, terminal); err != nil {
 			return fail(err)
 		}
@@ -458,6 +469,9 @@ func (c *Coordinator) Abort(w Work, cause error) (identity.CommandResult, error)
 		return fail(identity.UnavailableError{})
 	}
 	if err := c.releaseCaptcha(cleanup, terminal, r.plan, r.journal.generation, riskReleaseRollback); err != nil {
+		return fail(identity.UnavailableError{})
+	}
+	if err := c.releaseOTP(cleanup, terminal, r.plan, r.journal.generation, riskReleaseRollback); err != nil {
 		return fail(identity.UnavailableError{})
 	}
 	if terminal.state.rows != nil || terminal.usable() != nil {
