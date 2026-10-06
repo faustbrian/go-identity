@@ -332,3 +332,24 @@ factor and organization authority. No lockout/override policy is supported by
 this configuration; those remain required implementation work. RiskEvidence
 consumption/apply/finalize, real password/session workflows and release gates
 remain pending. Tests use a SQL effect seam, not a production password adapter.
+
+### Forward lockout transition storage
+
+`LockoutStateMigrationSource` appends one atomic migration after
+`LockoutMigrationSource`, preserving every installed checksum and every populated
+restriction's version, original interval and keyed root. Allocate its version
+permanently and separately from any selected velocity history. New nullable
+custody fields deliberately remain empty for legacy rows; the upgrade does not
+invent administrative permission, a command, an event or an ended restriction.
+
+The storage represents an explicit end without deleting CAS history or
+shortening the original expiry. Complete native linkage needs a canonical opaque
+record ID, binding digest and existing same-tenant command with the exact
+start/end operation; inconsistent or partial linkage is rejected. These fields
+are latest domain-state linkage, not a second command/replay journal.
+
+This is storage readiness only. Native authorized start/end/CAS, canonical
+audit/lifecycle, same-command recovery and ended-state admission remain required
+implementation work. Existing interval-only admission deliberately remains
+unchanged and must not be treated as honoring an administrative end. Direct SQL
+in the populated upgrade test is a schema fixture, not a production mutation API.

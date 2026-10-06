@@ -230,6 +230,9 @@ func testDurableLockoutAdmission(t *testing.T, ctx context.Context, pool *databa
 			}
 		}
 	})
+	t.Run("populated-state-upgrade", func(t *testing.T) {
+		testLockoutStatePopulatedUpgrade(t, ctx, pool)
+	})
 }
 
 func boolCount(b bool) int {

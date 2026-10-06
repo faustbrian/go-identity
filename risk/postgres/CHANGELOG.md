@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Add forward-only lockout transition storage preserving populated restriction
+  versions, original intervals and keyed roots. Native linkage requires a
+  canonical opaque record ID and an exact same-tenant start/end command;
+  partial custody and inconsistent end state fail. Installation grants no
+  transition authority. Native start/end execution and ended-state admission
+  remain unfinished; existing interval-only admission stays unchanged.
+
 - Add opt-in current durable lockout enforcement under protected-command locks.
   Active restrictions survive retained-key rotation and counter-window reset;
   unavailable state denies and expiry uses original exclusive primary time.
