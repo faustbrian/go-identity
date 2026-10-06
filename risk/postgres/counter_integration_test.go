@@ -121,6 +121,9 @@ func testNativeProtectedCounters(t *testing.T, ctx context.Context, pool *databa
 	prepare := func(r *Repository, tenant string, at ...time.Time) (*identitypostgres.Coordinator, identity.CommandBinding, identity.Command, identitypostgres.CommandPlan) {
 		return prepareWithFeature(r, tenant, &counterFeature{}, nil, at...)
 	}
+	t.Run("durable-lockout-admission", func(t *testing.T) {
+		testDurableLockoutAdmission(t, ctx, pool, prepare, old, newer)
+	})
 	t.Run("original-evidence-expires-before-commit", func(t *testing.T) {
 		shortConfig := protectedConfig(t, old)
 		policyConfig := risk.PolicyConfig{Version: 3, Limits: risk.VelocityLimits{MaxDimensions: 4, MaxCounters: 16, MaxWindow: time.Hour, MaxLimit: 120, KeyBytes: 64, RetryAfterMax: time.Hour}}

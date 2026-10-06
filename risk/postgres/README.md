@@ -5,6 +5,26 @@ evidence and decisions. It is **not yet an executable durable risk service**.
 
 ## Implemented boundary
 
+- `Config.EnforceLockouts` selects current durable restriction enforcement for
+  protected command counters. Install `LockoutMigrationSource` after counter
+  history. Admission reads restrictions on the original logical keyed roots
+  under the owning domain transaction; retained-key rotation and window resets
+  cannot erase an active restriction. Counter locks fence a concurrent new row
+  through its immediate foreign key; existing restriction rows are share-locked
+  until domain commit/abort. Primary time is sampled after all locks. Expiry is
+  exclusive, future-start or unavailable authority denies, and older policy
+  versions do not reset a restriction. No retry-after or account-existence
+  metadata is returned. Missing migration fails closed when selected.
+  False retains the earlier counter-only development profile. Selection requires
+  native command counters; it does not enable ephemeral or authentication-only
+  evaluation. This read boundary never creates, extends, deletes or caches state,
+  infers a trigger/duration from velocity, or permits identifier-only attempts
+  to lock an account. Authorized start/end/override commands, lifecycle/audit,
+  durable mutation recovery and safe recovery-route policy remain required
+  implementation work through the existing coordinator. Consumers must not
+  supply their own lockout mutations or SQL. Full canonical Service remains
+  unfinished; this profile is not production risk-service permission.
+
 - `VelocityJournal` records an authenticated pending ephemeral attempt and every
   exact keyed target/alias in one primary transaction, before external work.
   Select a caller-owned `go-postgres.Pool`, exact coordinator policy/key custody,

@@ -23,8 +23,10 @@ var _ identitypostgres.CommandCounterAdmissionContributor = (*Repository)(nil)
 // incomplete evidence requires a new command, not an allowance reset. No counter,
 // journal, alias or key-history mutation occurs here. Success grants no domain
 // authorization or full risk verdict; the feature owner checks its own current
-// authority. This profile does not support lockout/override policy, which remains
-// separate implementation work. Zero/disabled/foreign Work fails redacted.
+// authority. Selected durable lockouts are read under these same locks; their
+// original intervals survive counter-window resets and retained-key rotation.
+// Lockout mutation and overrides remain separate implementation work.
+// Zero/disabled/foreign Work fails redacted.
 func (r *Repository) CheckCommandCounters(ctx context.Context, w identitypostgres.CommandCounterAdmissionWork) error {
 	deny := func() error { return identity.ForbiddenError{} }
 	if ctx == nil || r == nil || r.counters == nil {
@@ -102,6 +104,7 @@ func (r *Repository) CheckCommandCounters(ctx context.Context, w identitypostgre
 		return deny()
 	}
 	current := make([]risk.Counter, 0, len(native.current.Targets))
+	var restrictions []nativeLockout
 	for _, target := range native.current.Targets {
 		old, ok := snapshots[string(target.Dimension)]
 		if !ok {
@@ -121,7 +124,16 @@ func (r *Repository) CheckCommandCounters(ctx context.Context, w identitypostgre
 		if s.Value < old.Value || !s.WindowStartedAt.Equal(old.WindowStartedAt) || !s.WindowExpiresAt.Equal(old.WindowExpiresAt) {
 			return deny()
 		}
-		current = append(current, s)
+		current = append(current, s.Counter)
+		if r.lockouts {
+			lockout, e := r.readCurrentLockout(ctx, w, native.current, target, s.root)
+			if e != nil {
+				return e
+			}
+			if lockout != nil {
+				restrictions = append(restrictions, *lockout)
+			}
+		}
 	}
 	now, e := w.DatabaseTime(ctx)
 	if e != nil {
@@ -132,6 +144,13 @@ func (r *Repository) CheckCommandCounters(ctx context.Context, w identitypostgre
 	}
 	for _, s := range current {
 		if s.Value > original.Limit || now.Before(observed) || now.Before(s.WindowStartedAt) || !now.Before(s.WindowExpiresAt) {
+			return deny()
+		}
+	}
+	for _, restriction := range restrictions {
+		// Future start is invalid authority, not permission. A selected durable
+		// restriction ends exactly at its exclusive database-time boundary.
+		if restriction.denies(now) {
 			return deny()
 		}
 	}
@@ -195,8 +214,13 @@ func (r *Repository) validateCurrentCounterKeys(ctx context.Context, w counterRe
 	return nil
 }
 
-func (r *Repository) readCurrentCounter(ctx context.Context, w counterReadWork, b risk.CounterBinding, target risk.CounterTarget, originalKeys []risk.CounterKey) (risk.Counter, error) {
-	deny := func() (risk.Counter, error) { return risk.Counter{}, identity.ForbiddenError{} }
+type currentCounter struct {
+	risk.Counter
+	root string
+}
+
+func (r *Repository) readCurrentCounter(ctx context.Context, w counterReadWork, b risk.CounterBinding, target risk.CounterTarget, originalKeys []risk.CounterKey) (currentCounter, error) {
+	deny := func() (currentCounter, error) { return currentCounter{}, identity.ForbiddenError{} }
 	args := []any{b.Tenant, string(b.Operation), string(target.Dimension)}
 	placeholders := make([]string, len(target.Keys))
 	for i, k := range target.Keys {
@@ -205,7 +229,7 @@ func (r *Repository) readCurrentCounter(ctx context.Context, w counterReadWork, 
 	}
 	rows, e := w.Query(ctx, `SELECT key_version,key_id,counter_id FROM `+r.schema+`.counter_aliases WHERE tenant_id=$1 AND operation=$2 AND dimension=$3 AND key_id IN (`+strings.Join(placeholders, ",")+`) LIMIT 5`, args...)
 	if e != nil {
-		return risk.Counter{}, e
+		return currentCounter{}, e
 	}
 	root, count := "", 0
 	found := make(map[uint32]bool, 4)
@@ -233,7 +257,7 @@ func (r *Repository) readCurrentCounter(ctx context.Context, w counterReadWork, 
 	e = rows.Err()
 	rows.Close()
 	if e != nil {
-		return risk.Counter{}, e
+		return currentCounter{}, e
 	}
 	if root == "" || count > 4 {
 		return deny()
@@ -245,7 +269,7 @@ func (r *Repository) readCurrentCounter(ctx context.Context, w counterReadWork, 
 	}
 	rows, e = w.Query(ctx, `SELECT value::text,window_us,started_at,expires_at FROM `+r.schema+`.counter_windows WHERE tenant_id=$1 AND operation=$2 AND dimension=$3 AND counter_id=$4 FOR UPDATE`, b.Tenant, string(b.Operation), string(target.Dimension), root)
 	if e != nil {
-		return risk.Counter{}, e
+		return currentCounter{}, e
 	}
 	var s risk.Counter
 	var decimal string
@@ -260,5 +284,5 @@ func (r *Repository) readCurrentCounter(ctx context.Context, w counterReadWork, 
 	if !valid || e != nil || s.Value == 0 || window != int64(b.Window/time.Microsecond) || s.WindowExpiresAt.Sub(s.WindowStartedAt) != b.Window {
 		return deny()
 	}
-	return s, nil
+	return currentCounter{Counter: s, root: root}, nil
 }

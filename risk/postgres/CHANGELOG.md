@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Add opt-in current durable lockout enforcement under protected-command locks.
+  Active restrictions survive retained-key rotation and counter-window reset;
+  unavailable state denies and expiry uses original exclusive primary time.
+  Install the forward lockout migration before selecting `EnforceLockouts`.
+  Existing counter-only development setup is unchanged. Authorized mutation,
+  overrides, recovery routes and complete risk-service composition remain pending.
+
 - Add bounded authenticated velocity change pages under exact live recovery
   custody. Late lower-sequence declarations and post-empty insertions remain
   discoverable without renewing original history or claiming effects/health.

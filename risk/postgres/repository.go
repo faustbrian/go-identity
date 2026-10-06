@@ -30,6 +30,11 @@ type Config struct {
 	// Nil preserves issuance-only setup. All retained keys are copied; removal
 	// requires durable retirement, which this initial profile does not yet expose.
 	CommandCounters *risk.CommandCounterPolicyConfig
+	// EnforceLockouts selects current durable lockout admission for protected
+	// command counters. Install LockoutMigrationSource first. False preserves the
+	// earlier counter-only development profile, not complete risk enforcement.
+	// It cannot start/end a lockout, select a duration or bypass safe recovery.
+	EnforceLockouts bool
 	// UseIssuer optionally installs pure original-scope authentication for native
 	// use preparation. It must match PolicyVersion and every retained EvidenceKey.
 	// The issuer value is copied; nil preserves reservation-only setup. This
@@ -52,7 +57,7 @@ func (Config) MarshalText() ([]byte, error) { return nil, risk.ErrSensitiveSeria
 // Zero is invalid. Initiation reservation/rebind use the sole coordinator;
 // consuming recovery and terminal release use that coordinator as well.
 // Protected counter reservation/current checks are opt-in. Evidence domain apply/finalize, CAPTCHA,
-// lockout/override policy, counter retirement and pruning remain unsupported.
+// lockout mutation/override policy, counter retirement and pruning remain unsupported.
 type Repository struct {
 	schema        string
 	policy        uint64
@@ -61,6 +66,7 @@ type Repository struct {
 	counters      *risk.CommandCounterPolicyConfig
 	counterPolicy risk.CommandCounterPolicy
 	useIssuer     *risk.PhoneEvidenceIssuer
+	lockouts      bool
 }
 
 // Format hides runtime custody configuration and retained key material.
@@ -80,6 +86,9 @@ var _ identitypostgres.FeatureExecutionContributor = (*Repository)(nil)
 // The returned instance must be enlisted in the same coordinator registry used
 // by execution and recovery; matching descriptor names do not confer authority.
 func NewRepository(c Config) (*Repository, error) {
+	if c.EnforceLockouts && c.CommandCounters == nil {
+		return nil, risk.ErrInvalidPolicy
+	}
 	if !validSchema(c.Schema) || c.PolicyVersion == 0 || len(c.EvidenceKeys) == 0 || len(c.EvidenceKeys) > 16 {
 		return nil, risk.ErrInvalidPolicy
 	}
@@ -97,7 +106,7 @@ func NewRepository(c Config) (*Repository, error) {
 	if err != nil {
 		return nil, err
 	}
-	r := &Repository{schema: pgx.Identifier{c.Schema}.Sanitize(), policy: c.PolicyVersion, keys: append([]risk.EvidenceKey(nil), c.EvidenceKeys...), cipher: cipher}
+	r := &Repository{schema: pgx.Identifier{c.Schema}.Sanitize(), policy: c.PolicyVersion, keys: append([]risk.EvidenceKey(nil), c.EvidenceKeys...), cipher: cipher, lockouts: c.EnforceLockouts}
 	if c.UseIssuer != nil {
 		issuer := *c.UseIssuer
 		if issuer.ValidateUseConfiguration(c.PolicyVersion, c.EvidenceKeys) != nil {
