@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add immutable primary challenge snapshots and bounded attempt policy
+  evaluation. Non-consuming checks have their own cap while all admitted
+  comparisons share the profile's total budget, including successful checks;
+  exact expiry, scope and versions fail closed.
+  Evaluation is provisional and grants no proof or durable reservation.
+
 - Add explicit disjoint session/pre-auth OTP continuations, preserving resolved
   session remember policy without persistence upgrades. Add server-issued
   attempt identities and keyed exact-submission fingerprints with code-free

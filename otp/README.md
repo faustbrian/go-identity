@@ -87,6 +87,42 @@ Root ID parsing and remember policy are consumed from the reviewed identity
 and session modules at `aa3c66f5c5aa41d7a2fab11b301974db72aed52a`; no new session
 policy engine or identifier parser is introduced.
 
+### Locked challenge policy
+
+`NewAttemptPolicy(profile, checks)` derives the shared total-attempt bound from
+the frozen code profile; there is no independent override. Checks are explicitly
+enabled with a separate 1..10 total cap, or disabled with a zero cap. Every
+admitted precheck uses that separate budget; all admitted comparisons, including
+correct checks and consuming success, use the profile's total budget. Lockout is
+a positive microsecond-exact duration at most
+24 hours; the durable owner must enforce it across replacement challenges.
+
+`NewChallenge` validates a digest-only primary snapshot with immutable complete
+continuation, original policy, positive version, counters and closed state.
+Issue/expiry times are exact PostgreSQL UTC instants; expiry cannot exceed the
+profile's original TTL. Earlier-expiring challenges are supported, never renewed.
+
+`Verifier.EvaluateAttempt` is a **trusted transaction policy seam**, not a
+verification endpoint or a store. Check the original attempt replay record and
+current primary authorization first, then invoke it once under the primary row
+lock with database time. It proposes exact counters, state and next version:
+every admitted comparison decrements the shared allowance once; checks never reserve; only
+correct Consume proposes Reserved. Terminal or already-reserved state cannot
+be revived, expired or released by evaluation. At exact expiry only Issued may
+become Expired. Foreign scope never charges another row; stale/maximum versions
+deny. Retired keys fail without a charge or fallback.
+Correct Check on the final allowance returns Checked but leaves the challenge
+Exhausted with no wrong-code lockout. Correct Consume on the final allowance can
+still propose Reserved. Separate UsedAttempts/FailedAttempts counters preserve
+that distinction; successful checks cannot create extra future verification.
+
+The proposal creates no proof, handle, SQL, durable attempt result or current
+authority. The forthcoming adapter must commit it atomically with its command
+record and required effects, serialize concurrent attempts, and reconcile
+ambiguity without re-comparison. Never expose private outcomes/counters to a
+client. The service must normalize them to enumeration-safe responses. These
+remaining durable requirements are not implemented by these pure policy APIs.
+
 ### Keyed digest storage
 
 `NewDestinationInput` copies bounded raw channel input without normalizing it.
