@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add opaque one-time-code custody to structural feature commands without
+  placing secrets in scalar metadata or projections. Preserve ordinary command
+  construction; verification, atomic consumption and durable admission remain
+  native adapter responsibilities.
+
 - Add explicitly anonymous-flow-targeted feature commands and recovery scope.
   Keep flows separate from user identities and actual actors; preserve the
   default user-only contract and legacy receipt JSON shape. Kernel commands

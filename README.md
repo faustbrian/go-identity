@@ -114,6 +114,13 @@ schemas; applications do not implement that workflow. Raw credential/bearer
 secrets are forbidden. Opaque commands redact formatting and deny JSON; trusted
 returned projections are never responses, logs or evidence snapshots. Existing
 kernel receipts and PostgreSQL admission remain closed to this new branch.
+`NewFeatureOneTimeCodeCommand` additionally retains an authentication-owned
+opaque submission outside the scalar payload. `Command.OneTimeCode` borrows
+only that immutable opaque value; `Feature` remains code-free. Construction
+does not verify or consume a code, issue a proof or enable durable execution.
+The native coordinator must fingerprint the exact code with its retained key
+and reject unsupported one-time phases before admission. Discard command and
+code copies after terminal outcomes; ambiguous recovery uses code-free intent.
 `CommandResult.Feature` carries only an exact structural feature descriptor and
 safe primary-record before/after versions, never a bearer or native response.
 Every outcome retains its descriptor; only committed record mutations have one

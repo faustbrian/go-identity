@@ -1,6 +1,10 @@
 package identity
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/faustbrian/go-authentication"
+)
 
 func TestFeatureCommandMixedUnionIsInvalid(t *testing.T) {
 	for _, add := range []func(*Command){
@@ -27,5 +31,13 @@ func TestFeatureCommandMixedUnionIsInvalid(t *testing.T) {
 		if feature || create || update || profile || status || unlink || link || identifier {
 			t.Fatal("mixed command accepted")
 		}
+	}
+}
+
+func TestFeatureOneTimeCodeMixedVariantDenied(t *testing.T) {
+	code, _ := authentication.NewOneTimeCode("123456")
+	c := Command{feature: &featureCommandState{code: &code}, create: &CreateUserCommand{}}
+	if _, ok := c.OneTimeCode(); ok {
+		t.Fatal("mixed command disclosed custody")
 	}
 }

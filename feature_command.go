@@ -6,6 +6,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/faustbrian/go-authentication"
 	"github.com/faustbrian/go-authorization"
 )
 
@@ -72,7 +73,10 @@ type FeatureCommandSpec struct {
 	Fields    []FeatureField
 }
 
-type featureCommandState struct{ spec FeatureCommandSpec }
+type featureCommandState struct {
+	spec FeatureCommandSpec
+	code *authentication.OneTimeCode
+}
 
 // NewFeatureCommand validates and freezes structural feature input, copying
 // every field and binary value. It conveys no authentication, authorization,
