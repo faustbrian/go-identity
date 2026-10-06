@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add immutable administrative lockout-intent preparation with exact CAS
+  versions, explicit duration ceilings and operation-specific keyed subjects.
+  Preparation rejects authentication/recovery and broad tenant/network targets;
+  it grants no authorization or durable mutation and preserves original TTL.
+
 - Add opt-in required canonical decision audit to non-issuing evaluation.
   Audit loss suppresses Allow without erasing committed counter outcomes;
   original record identity and validity remain unchanged during recovery.

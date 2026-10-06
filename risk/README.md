@@ -9,6 +9,37 @@ RiskEvidence/CaptchaEvidence issuance remain required implementation work.
 
 ## Adoption and API
 
+### Administrative lockout intent
+
+`NewLockoutPolicy(LockoutPolicyConfig)` composes an existing
+`CommandCounterPolicy` with an explicit positive microsecond-exact
+`MaximumDuration`. There is no default duration or automatic velocity trigger.
+`Prepare(LockoutRequest, primaryTime)` freezes StartLockout or EndLockout,
+the independently authenticated administrator, the exact expected restriction
+version, and a trusted credential-mutation subject. Start selects a positive
+duration at or below the configured ceiling; End requires a positive expected
+version and zero duration. Version overflow rejects. Primary time is UTC at
+microsecond precision; out-of-range resulting dates reject.
+
+Only the operation-specific keyed subject is a restriction target. Tenant,
+network, session, unauthenticated identifier hints, privileged resources and
+authentication/recovery operations are not targets in this profile. Thus a
+password-change restriction does not imply an account-wide recovery ban.
+Factor-proof, recovery-code and administrative factor-recovery operations are
+also excluded even where the canonical risk matrix classifies them as credential
+mutations. Their existing counters and risk assessments remain unchanged.
+Other lockout profiles remain required platform work, not implicit fallback.
+`Context.Now` and `IndependentFactor` are rejected, not treated as bypass flags.
+
+`Validate` requires the exact original policy and request and the existing
+counter policy's exclusive preparation TTL. It never resets freshness.
+`Bindings` supplies an owned adapter-only keyed projection; automatic formatting
+redacts it and serialization rejects. Neither construction nor validation checks
+current administrator permissions, durable CAS state or commitment. The native
+PostgreSQL participant must implement those checks, mutations, canonical audit
+and same-command recovery through the existing identity coordinator. That
+participant integration is unfinished; consumers must not supply mutation SQL.
+
 Construct `Policy` with `NewPolicy(PolicyConfig)` using the selected reference
 configuration authority, a positive policy version, explicit velocity limits
 and all four class profiles. No numeric defaults are applied. Class phases,
