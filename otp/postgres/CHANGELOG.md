@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add private native consuming custody persistence, exact-generation takeover
+  and transactional finalization/release projections. Reservations retain their
+  original attempt, scope, expiry and comparison allowance; live writes recheck
+  database expiry and preserve terminal version capacity. Public coordinator
+  participant dispatch and current-authority/recovery proof remain pending.
 - Add private primary challenge reconstruction and counted denial/check/expiry
   persistence with exact keyed scope, committed issuance, full-width version
   CAS and exclusive database expiry. Public counted workflows remain pending

@@ -81,6 +81,21 @@ returned. Mapping is not proof of current session, challenge or account authorit
 
 ## Adoption, tradeoffs and FAQ
 
+Private consuming persistence now projects one provisional correct comparison
+into the coordinator-owned transaction, preserving exact original command,
+attempt and generation custody. Exact successor takeover does not compare again,
+renew times or charge another attempt. Finalization can commit atomically with a
+protected domain effect; rollback removes both. Finalization and takeover enforce
+exclusive primary database expiry even if the sampled decision time was earlier.
+Reservation/takeover preserve a row-version increment for eventual terminalization.
+
+Release persistence accepts unchanged rollback ownership or one exact recovery
+successor, including after original expiry, without decrypting submitted codes.
+These private helpers are not admission or noncommit proof: public sealed native
+participant callbacks, current flow/lockout checks, command replay/audit and the
+coordinator's authoritative recovery composition remain pending. No public raw
+transaction or binding-to-release shortcut is exposed.
+
 **Can I use this for login?** Not yet. Native issuance/send windows, original
 atomic counted denial/check/reservation, live authority,
 finalization/release/recovery and bounded cleanup remain in development. There

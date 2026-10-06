@@ -5,7 +5,9 @@ import (
 	"strconv"
 	"time"
 
+	identity "github.com/faustbrian/go-identity"
 	"github.com/faustbrian/go-identity/otp"
+	identitypostgres "github.com/faustbrian/go-identity/postgres"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -28,6 +30,8 @@ type lockedChallenge struct {
 	schema, tenant, id string
 	keyVersion         uint32
 	scopeDigest        [32]byte
+	command            identity.CommandBinding
+	plan               identitypostgres.OTPAttemptPlan
 }
 
 // loadChallenge reconstructs the frozen primary snapshot from an authenticated
@@ -128,7 +132,7 @@ func (c *AttemptCodec) loadChallenge(ctx context.Context, query challengeQuery, 
 	if err := ctx.Err(); err != nil {
 		return bad(err)
 	}
-	return lockedChallenge{challenge: challenge, schema: quoted, tenant: scope.TenantID, id: scope.ChallengeID, keyVersion: version, scopeDigest: plan.ScopeDigest}, nil
+	return lockedChallenge{challenge: challenge, schema: quoted, tenant: scope.TenantID, id: scope.ChallengeID, keyVersion: version, scopeDigest: plan.ScopeDigest, command: r.Binding, plan: plan}, nil
 }
 
 func challengeState(state string) otp.ChallengeState {
