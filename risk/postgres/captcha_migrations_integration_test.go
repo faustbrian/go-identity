@@ -184,6 +184,7 @@ func TestCaptchaMigrationSQL(t *testing.T) {
 	if _, err := db.Exec(ctx, insertEvidence, command, "", "flow", digest, bytes.Repeat([]byte{5}, 100)); err != nil {
 		t.Fatal("anonymous evidence storage", err)
 	}
+	testCaptchaUseMigrationSQL(t, ctx, db, command, digest)
 	if _, err := db.Exec(ctx, `DELETE FROM risk_store.captcha_issued_evidence WHERE tenant_id='tenant' AND command_id=$1`, command); err != nil {
 		t.Fatal(err)
 	}

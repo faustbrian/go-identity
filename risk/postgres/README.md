@@ -5,6 +5,17 @@ evidence and decisions. It is **not yet an executable durable risk service**.
 
 ## Implemented boundary
 
+- `CaptchaUseMigrationSource{Schema, Version}` adds consuming-command custody
+  after the existing CAPTCHA journal, with a permanently allocated forward
+  migration version. It preserves original issuance, aliases, expiry and
+  encrypted responses. Consuming states require complete same-tenant journal
+  linkage, distinct command identity, full-width positive generation, signed
+  binding, and original exclusive expiry. Unknown legacy consuming states fail
+  the atomic upgrade rather than being reset or assigned invented ownership.
+  Erasing a terminal response does not erase consuming custody. These storage
+  constraints do not grant permission, prove noncommit or enforce transitions;
+  native coordinator reservation/apply/finalization/recovery remains unfinished.
+
 - `NewCaptchaExecutor(CaptchaExecutorConfig{Executor: composition, Flow: flow})`
   supplies the real `risk.CaptchaEvidenceExecutor`. Compose immutable
   `CaptchaEvidenceCustody` first, select it in `Config.CaptchaCustody`, construct

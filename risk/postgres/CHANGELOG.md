@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add an opt-in forward CAPTCHA consuming-custody migration preserving issued
+  evidence and encrypted responses. Reserved and terminal consuming states
+  require complete journal-bound ownership and original-expiry constraints;
+  unresolved legacy consuming history fails the upgrade instead of being reset.
+  Runtime protected consumption remains under development.
+
 - Add owned public CAPTCHA execution and independently current-authorized
   original-response recovery through the shared coordinator. Bind immutable
   trusted pre-auth, authenticated or administrator flow to the verified caller;
