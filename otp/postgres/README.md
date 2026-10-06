@@ -26,6 +26,14 @@ runner, never by executing installation SQL again.
 
 ## Storage and security
 
+Native private primary reads now lock the exact keyed scope from committed
+issuance and reconstruct the original core profile, counters and full-width
+version. Denial/check/expiry writes use optimistic CAS plus a final database-time
+expiry fence. Correct consumption is rejected by that separate counter writer.
+These helpers are not exposed as a raw store or online verification API. Current
+flow/lockout authority, command replay/result/audit and consuming participant
+composition remain mandatory before a public attempt workflow is enabled.
+
 `NewAttemptCodec` copies trusted local wrapping, attempt-issuer and code-digest
 keyrings. `Map(ctx, attempt, retainedDigestVersion, featureSpec)` returns the
 owning feature command and exact coordinator OTP plan. It requires the original

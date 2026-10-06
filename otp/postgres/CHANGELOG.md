@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Add private primary challenge reconstruction and counted denial/check/expiry
+  persistence with exact keyed scope, committed issuance, full-width version
+  CAS and exclusive database expiry. Public counted workflows remain pending
+  current flow/lockout authority and command result/audit composition.
 - Add bounded local encrypted original-attempt mapping with retained issuer and
   code-key versions. Custody survives process restart without storing codes,
   regenerating attempt IDs or renewing authorization/remember policy. This is
