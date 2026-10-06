@@ -141,6 +141,38 @@ func (e *RotationExecutor) RecoverRotation(ctx context.Context, request session.
 	return e.rotationResult(bounded, request, receipt, true, err)
 }
 
+// RecoverRotationCommand recovers historical rotation receipts after restart
+// without the original opaque request, authentication admission or bearer.
+// Query must retain every original safe scope field. Caller must come from
+// trusted current authentication; client-selected actor or tenant overrides
+// grant no access. The configured current policy governs disclosure.
+//
+// Only command, version and audit metadata are returned, never a session or
+// credential. This result is not current authentication or permission to retry
+// rotation. Missing/denied queries never reserve commands. Live pending leases
+// remain observational; expired pending uses the existing frozen participants
+// and primary recovery owner. Missing/conflicting evidence stays unresolved.
+// Earlier caller deadlines win; detached kernel cleanup retains its own bounded
+// budgets. Borrowed dependencies and concurrency semantics match ExecuteRotation.
+func (e *RotationExecutor) RecoverRotationCommand(ctx context.Context, query identity.RecoveryQuery, caller authorization.DecisionContext) (identity.CommandResult, error) {
+	if ctx == nil || e == nil || e.owned == nil || e.owned.coordinator == nil {
+		return identity.CommandResult{}, session.ErrInvalidInput
+	}
+	if query.OperationID != session.RotateOperation().OperationID || !scopeID(query.RecordID) || query.LinkMode != 0 || query.ActorKind != authorization.SubjectUser || string(query.ActorID) != string(query.UserID) {
+		return identity.CommandResult{}, identity.ForbiddenError{}
+	}
+	bounded, stop := context.WithTimeout(ctx, e.owned.maximumDuration)
+	defer stop()
+	result, err := e.owned.coordinator.RecoverFeatureCommand(bounded, query, caller)
+	if result.Binding.CommandID == "" {
+		return result, err
+	}
+	if result.Feature == nil || result.Feature.Operation != session.RotateOperation() {
+		return identity.CommandResult{}, session.ErrUnavailable
+	}
+	return result, err
+}
+
 func unknownRotation(b identity.CommandBinding) identity.CommandResult {
 	return identity.CommandResult{Binding: b, Outcome: identity.CommitOutcomeUnknown, Feature: &identity.FeatureReceipt{Operation: session.RotateOperation()}}
 }

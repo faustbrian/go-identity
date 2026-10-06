@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/faustbrian/go-authorization"
+	identity "github.com/faustbrian/go-identity"
 	"github.com/faustbrian/go-identity/session"
 )
 
@@ -20,6 +22,9 @@ func TestRotationExecutorRejectsZeroCompositionAndRequest(t *testing.T) {
 		}
 		if out, err := executor.RecoverRotation(context.Background(), session.RotationRequest{}); err == nil || out.Session != (session.Session{}) || out.Receipt.Binding.CommandID != "" {
 			t.Fatal("zero recovery admitted")
+		}
+		if out, err := executor.RecoverRotationCommand(context.Background(), identity.RecoveryQuery{}, authorization.DecisionContext{}); err == nil || out.Binding.CommandID != "" || out.Feature != nil {
+			t.Fatal("zero restart recovery admitted")
 		}
 	}
 	for _, value := range []any{RotationExecutor{}, RotationExecutorConfig{Execution: IssueExecutorConfig{PolicyID: "private-policy"}}} {

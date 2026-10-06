@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add restart-safe rotation receipt recovery using the original safe command
+  scope and current access policy. Preserve historical version/audit metadata
+  without original authentication admission or live session payloads; never
+  return a session or credential, renew live leases or reserve missing commands.
+
 - Add owned source-bound session rotation with atomic digest retirement,
   successor persistence and audit/lifecycle effects. Preserve absolute lifetime,
   original authentication and every non-session authority. Reveal credentials

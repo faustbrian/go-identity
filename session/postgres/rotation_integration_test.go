@@ -315,8 +315,51 @@ func testNativeSessionRotation(t *testing.T, ctx context.Context, pool *database
 				if out.Receipt.Outcome != identity.CommitOutcomeUnknown {
 					t.Fatal("commit failure falsely proves rollback")
 				}
+				restarted, err := NewRotationExecutor(pool, RotationExecutorConfig{Execution: execution, Sessions: reader})
+				if err != nil {
+					t.Fatal(err)
+				}
+				q := identity.RecoveryQuery{CommandID: b.CommandID, TenantID: b.TenantID, UserID: b.UserID, ActorID: b.ActorID, ActorKind: b.ActorKind, OperationID: b.OperationID, RecordID: b.RecordID}
+				trustedCaller := executor.rotationCaller(b)
+				observed, err := restarted.RecoverRotationCommand(ctx, q, trustedCaller)
+				if err != nil || observed.Outcome != identity.CommitOutcomeInProgress || observed.RetryAfter <= 0 || observed.Binding != b {
+					t.Fatal("live restart lost original pending outcome", err)
+				}
+				var generation int64
+				var leaseBefore, leaseAfter time.Time
+				if err = pool.Raw().QueryRow(ctx, `SELECT generation,lease_until FROM identity.commands WHERE command_id=$1`, mustCommandBytes(t, b.CommandID)).Scan(&generation, &leaseBefore); err != nil || generation != 1 {
+					t.Fatal("live recovery took ownership", err)
+				}
+				if _, err = restarted.RecoverRotationCommand(ctx, q, trustedCaller); err != nil {
+					t.Fatal(err)
+				}
+				if err = pool.Raw().QueryRow(ctx, `SELECT generation,lease_until FROM identity.commands WHERE command_id=$1`, mustCommandBytes(t, b.CommandID)).Scan(&generation, &leaseAfter); err != nil || generation != 1 || !leaseBefore.Equal(leaseAfter) {
+					t.Fatal("live recovery renewed custody", err)
+				}
 				if _, err = pool.Raw().Exec(ctx, `UPDATE identity.commands SET lease_until=clock_timestamp()-interval '1 second' WHERE command_id=$1`, mustCommandBytes(t, b.CommandID)); err != nil {
 					t.Fatal(err)
+				}
+				t.Run("missing rotation evidence cannot prove rollback", func(t *testing.T) {
+					if _, err := pool.Raw().Exec(ctx, `ALTER TABLE session_store.session_rotations RENAME TO hidden_session_rotations`); err != nil {
+						t.Fatal(err)
+					}
+					defer func() {
+						if _, err := pool.Raw().Exec(ctx, `ALTER TABLE session_store.hidden_session_rotations RENAME TO session_rotations`); err != nil {
+							t.Error("restore rotation evidence", err)
+						}
+					}()
+					got, err := restarted.RecoverRotationCommand(ctx, q, trustedCaller)
+					if err == nil || got.Binding != b || (got.Outcome != identity.CommitOutcomeInProgress && got.Outcome != identity.CommitOutcomeUnknown) {
+						t.Fatal("missing evidence falsely terminalized command", err)
+					}
+					var state string
+					if err = pool.Raw().QueryRow(ctx, `SELECT state,generation FROM identity.commands WHERE command_id=$1`, mustCommandBytes(t, b.CommandID)).Scan(&state, &generation); err != nil || state != "pending" || generation != 1 {
+						t.Fatal("failed recovery changed durable ownership", err)
+					}
+				})
+				observed, err = restarted.RecoverRotationCommand(ctx, q, trustedCaller)
+				if err == nil || observed.Binding != b || observed.Outcome != identity.CommitOutcomeNotCommitted || observed.Feature == nil || observed.Feature.Operation != session.RotateOperation() {
+					t.Fatal("restart did not reconcile proven negative evidence", err)
 				}
 				recovered, err := executor.RecoverRotation(ctx, request)
 				if err == nil || recovered.Receipt.Outcome != identity.CommitOutcomeNotCommitted || recovered.Session != (session.Session{}) {
@@ -417,6 +460,7 @@ func testNativeSessionRotation(t *testing.T, ctx context.Context, pool *database
 		if _, err = recovered.Token.Reveal(); !errors.Is(err, session.ErrInvalidToken) {
 			t.Fatal("recovery redelivered credential")
 		}
+		testRotationRestartRecovery(t, ctx, pool, execution, validation, transition.Binding, replayed.Receipt)
 		for _, column := range []string{"source_digest", "successor_digest", "intent_digest"} {
 			var saved []byte
 			if err = pool.Raw().QueryRow(ctx, `SELECT `+column+` FROM session_store.session_rotations WHERE tenant_id=$1 AND command_id=$2`, string(input.TenantID), mustCommandBytes(t, id)).Scan(&saved); err != nil {

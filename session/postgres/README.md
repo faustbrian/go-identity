@@ -38,8 +38,20 @@ returns historical receipt/session metadata only. Corrupt or missing ancillary
 evidence fails closed without erasing known commitment. Core replay/recovery
 never deliver a token/cookie; only a new error-free commit can reveal once.
 
+After process restart, `RecoverRotationCommand(ctx, exactRecoveryQuery,
+trustedCurrentCaller)` returns the exact historical command/version/audit
+receipt without the original request, admission, reader instance or bearer.
+Reconstruct the public reader/executor configuration; do not manufacture a new
+rotation request. Supply every original safe query scope field and an
+independently authenticated current caller. Current policy governs disclosure.
+Missing/denied queries return no history and never reserve a command. Live
+pending does not renew its lease; expired pending reconciles through the sole
+kernel owner and frozen participants. Missing/conflicting evidence cannot prove
+rollback. Pruning live payloads does not erase committed receipts. No session,
+credential, current authority or permission to retry is returned.
+
 Retired-token denial is implemented. Automatic family revocation on retired-token
-reuse, restart-only metadata recovery API, selected organization/factor/passkey
+reuse, selected organization/factor/passkey
 profiles, complete cleanup/privacy handling and whole-unit release gates remain
 unfinished; ordinary rotation is not a claim of full session lifecycle parity.
 
@@ -437,9 +449,10 @@ Native revocation tests additionally compose the actual full kernel migrations,
 populated session upgrade and real contributor/coordinator. Audit/outbox SQL
 seams prove atomic rollback and visibility, not production adapter interoperability.
 
-**Can this adapter issue or authenticate sessions?** Not yet. Reads reconstruct
-structural data only. Final proof consumption and effects must use the sole
-identity PostgreSQL coordinator; no private issuance transaction is supplied.
+**Can this adapter issue or authenticate sessions?** The configured owned issuer
+and primary reader support the documented single-factor profile. Raw repository
+reads reconstruct structural data only. Final proof consumption and effects use
+the sole identity PostgreSQL coordinator, never a private issuance transaction.
 
 **Can a revoked session become active on reload?** No: retained record and family
 tombstones are returned explicitly. Reading them never alters state or authority.
