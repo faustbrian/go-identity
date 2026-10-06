@@ -12,10 +12,22 @@ cannot substitute for them or authenticate its own inputs. Risk policy is
 separate from authorization policy. CAPTCHA, phone evidence and counters share
 one exact risk-store contributor and must agree on risk-policy version.
 
-Existing plan bytes are unchanged when this declaration is absent. Structural
-encoding/decoding supports the new profile, but executable preparation and
-reservation reject it until native reservation, current checks, finalization
-and release/recovery are wired. Do not use its digest as a protected-action gate.
+Existing plan bytes are unchanged when this declaration is absent. Preparation
+requires the exact registered `CaptchaUseReservationContributor` and its pure
+native validation before SQL. `ReserveCommand` invokes reserve or exact
+predecessor rebind through `CaptchaUseReservationWork` inside the same primary
+command reservation transaction as every other declared participant. Errors,
+panic, unfinished rows, poisoned SQL or cancellation roll back that whole unit.
+Live/terminal replay invokes no new evidence reservation. Callback return
+expires every handle and native-input alias; copies cannot renew ownership.
+
+Current consuming checks, finalization and proof-bound release/recovery remain
+unimplemented: `Begin` rejects this profile without consuming its reservation,
+and pending primary recovery cannot terminalize or release it. Do not enable
+protected-action use or treat elapsed expiry/lease time as noncommit proof.
+The native risk adapter has not yet implemented this reservation interface;
+SQL integration fixtures prove coordinator atomicity, not production CAPTCHA
+authentication, protected workflows or final consumption.
 
 ## Native CAPTCHA replay reservation
 

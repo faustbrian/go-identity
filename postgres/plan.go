@@ -42,9 +42,10 @@ type CommandPlan struct {
 	// risk reservation participant is required; domain execution remains disabled.
 	RiskEvidence *RiskEvidencePlan
 	// CaptchaEvidence declares consuming custody, not issuance replay. It shares
-	// the exact risk owner with counters/phone evidence where declared. Structural
-	// encoding is supported; executable admission remains closed until native
-	// reservation, current checks, finalization and release/recovery are complete.
+	// the exact risk owner with counters/phone evidence where declared. Preparation
+	// and reservation require its typed native validation/reservation contributor.
+	// Domain execution and pending release/recovery remain closed until their
+	// current-check, finalization and proof-bound release phases are complete.
 	CaptchaEvidence *CaptchaEvidencePlan
 	// CommandCounters declares protected-command durable counter admission.
 	// It requires the exact native risk participant; no raw dimensions are stored.
@@ -185,6 +186,7 @@ type admittedKernelPlan struct {
 	risk                *RiskEvidencePlan
 	counters            *CommandCounterPlan
 	captchaReplay       bool
+	captchaUse          *CaptchaEvidencePlan
 	fingerprint         [32]byte
 	feature             *FeatureRegistration
 	subjectType         string

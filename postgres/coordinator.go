@@ -353,6 +353,13 @@ func (c *Coordinator) reservePreparedCommand(ctx context.Context, binding identi
 	if err = c.reserveCaptchaReplay(bounded, tx, command, q, admitted, journal, owner); err != nil {
 		return c.failedReservation(tx, binding, identity.CommandResult{}, err)
 	}
+	// Counter denial already staged its charge/audit and terminal receipt.
+	// Never reserve one-use evidence after that terminal decision.
+	if !denied {
+		if err = c.reserveCaptchaUse(bounded, tx, command, q, admitted, journal, owner); err != nil {
+			return c.failedReservation(tx, binding, identity.CommandResult{}, err)
+		}
+	}
 	if err = c.reserveCapability(bounded, tx, q, admitted, journal, owner); err != nil {
 		return c.failedReservation(tx, binding, identity.CommandResult{}, err)
 	}

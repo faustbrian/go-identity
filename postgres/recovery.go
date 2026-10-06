@@ -169,6 +169,11 @@ func (c *Coordinator) recoverCommandReceipt(ctx context.Context, q identity.Reco
 	if e != nil {
 		return result, identity.UnavailableError{}
 	}
+	// No expiry-based release: retain unresolved protected-use custody until
+	// the native proof-bound release protocol exists.
+	if admitted.captchaUse != nil {
+		return result, identity.UnavailableError{}
+	}
 	// An old persistence-only registration remains readable, but cannot supply
 	// evidence. No takeover or prefix callback occurs without the full phase set.
 	for _, entry := range admitted.contributors {

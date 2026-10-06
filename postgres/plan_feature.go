@@ -216,5 +216,11 @@ func (c *Coordinator) prepareFeature(binding identity.CommandBinding, command id
 			}
 		}
 	}
+	if admitted.captchaUse != nil {
+		owner := captchaUseParticipant(admitted)
+		if owner == nil || validateCaptchaUseCommand(owner, command, *admitted.captchaUse) != nil {
+			return fail()
+		}
+	}
 	return q, snapshot, admitted, nil
 }

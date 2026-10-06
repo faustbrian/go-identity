@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add invocation-bound CAPTCHA evidence reservation and exact predecessor
+  rebind in the shared command transaction. Native scope validation precedes
+  SQL; failed participant prefixes roll back together. Domain consumption and
+  pending release/recovery remain unavailable until their typed phases exist.
+
 - Add typed CAPTCHA consuming-plan custody with exact signed linkage, original
   validity and risk-policy version, separate from issuance replay reservation.
   Historical encoding binds every declared role and shares one risk owner with

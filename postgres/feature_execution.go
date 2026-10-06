@@ -54,11 +54,6 @@ func validateFeatureCommand(phase FeatureExecutionContributor, command identity.
 }
 
 func (r *ContributorRegistry) admitFeaturePlan(b identity.CommandBinding, fingerprint [32]byte, p CommandPlan) (*admittedKernelPlan, error) {
-	// A conserved declaration is not a one-use execution contract. Reject before
-	// any journal/reservation write until all typed consuming phases are wired.
-	if p.CaptchaEvidence != nil {
-		return nil, invalidPlan()
-	}
 	digest, err := FeaturePlanDigest(b, fingerprint, p)
 	if err != nil || digest != p.Digest || p.SubjectType == "" {
 		return nil, invalidPlan()
@@ -124,6 +119,11 @@ func (r *ContributorRegistry) admitFeaturePlan(b identity.CommandBinding, finger
 				return nil, invalidPlan()
 			}
 		case "identity/risk/postgres":
+			if p.CaptchaEvidence != nil {
+				if _, ok := captchaUseReservationParticipant(entry.contributor); !ok {
+					return nil, invalidPlan()
+				}
+			}
 			if p.CaptchaReplayReservation {
 				if _, ok := captchaReplayParticipant(entry.contributor); !ok {
 					return nil, invalidPlan()
@@ -154,7 +154,7 @@ func (r *ContributorRegistry) admitFeaturePlan(b identity.CommandBinding, finger
 		copy := *p.CommandCounters
 		counters = &copy
 	}
-	return &admittedKernelPlan{registry: r.state, binding: b, digest: digest, contributors: entries, audits: append([]AuditPlan(nil), p.Audits...), lifecycle: &l, risk: risk, counters: counters, captchaReplay: p.CaptchaReplayReservation, fingerprint: fingerprint, feature: &f, subjectType: p.SubjectType, delivery: cloneDeliveryPlan(p.Delivery), issuance: cloneCapabilityIssuancePlan(p.CapabilityIssuance)}, nil
+	return &admittedKernelPlan{registry: r.state, binding: b, digest: digest, contributors: entries, audits: append([]AuditPlan(nil), p.Audits...), lifecycle: &l, risk: risk, counters: counters, captchaReplay: p.CaptchaReplayReservation, captchaUse: cloneCaptchaEvidencePlan(p.CaptchaEvidence), fingerprint: fingerprint, feature: &f, subjectType: p.SubjectType, delivery: cloneDeliveryPlan(p.Delivery), issuance: cloneCapabilityIssuancePlan(p.CapabilityIssuance)}, nil
 }
 
 // ApplyFeature invokes only the frozen exact native adapter once through Work.
