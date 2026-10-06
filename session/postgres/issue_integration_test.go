@@ -717,6 +717,7 @@ func testNativeIssueIntegration(t *testing.T, ctx context.Context, pool *databas
 				t.Run("public bounded session listing", func(t *testing.T) { testPublicSessionList(t, ctx, pool, input, get.Session, config) })
 				testPublicSignOut(t, ctx, pool, input, get.Session, ownedConfig, config.Validation, cookie)
 				testPublicSetRevocation(t, ctx, pool, ownedConfig, config.Validation, reader, makeIssuedCookie)
+				testNativeSessionRotation(t, ctx, pool, ownedConfig, config.Validation, reader, makeIssuedCookie)
 			})
 			request, ok := prepared.Request()
 			if !ok {

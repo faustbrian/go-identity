@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- Add owned source-bound session rotation with atomic digest retirement,
+  successor persistence and audit/lifecycle effects. Preserve absolute lifetime,
+  original authentication and every non-session authority. Reveal credentials
+  only through the core rotator after a new successful commit; replay/recovery
+  never redeliver them. Install `RotationMigrationSource` after existing history;
+  its populated-row backfill and digest guards cover old/direct session writers.
+  Retained exact-intent evidence supports historical recovery without live
+  session payloads. Retired-token family-replay revocation and other remaining
+  session profiles still require implementation before full lifecycle completion.
+
 - Compose public credential-based bulk session revocation through the owned
   primary reader, native command executor and core service. Original admission
   bounds final commit; retained counts/disposition replay without new mutations.

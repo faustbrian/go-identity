@@ -1,5 +1,48 @@
 # PostgreSQL session storage
 
+### Owned source-bound rotation
+
+Compose `NewRotationExecutor(pool, RotationExecutorConfig{Execution: nativeConfig,
+Sessions: authenticatingReader})` with the core `session.NewSessionRotator`.
+The reader must be the exact trusted service that authenticated the original
+cookie/bearer. Core preparation privately generates the successor; native
+execution compares current primary owners, locks the original source and commits
+its one-version successor, old-digest retirement, required audit/lifecycle and
+command receipt together. The absolute caller deadline also bounds commit.
+Rotation preserves original issuance/authentication/remember policy, family and
+every non-session authority. It cannot repair or renew a stale authority vector.
+
+Install `RotationMigrationSource{Schema: schema, Version: permanentVersion}`
+after the existing base/issuance/revocation history, through the sole migration
+runner. Its transaction takes a session-table write lock, backfills one token
+claim per populated session and installs invoker-only writer guards. Budget the
+complete populated installation in a reviewed maintenance window; this is not
+an online chunked backfill. Existing session payloads and older checksums remain
+unchanged. Guards prevent digest reassignment and irreversible retired-digest
+resurrection even through older binaries/direct writers. Deleting a payload also
+terminally retires its digest. Runtime
+writer roles must not have `TRUNCATE`, trigger-disable or schema-alter privileges;
+these guards are not a security boundary against a privileged database owner.
+No destructive downgrade
+or retirement/evidence deletion is supported. Terminal claims and retained
+rotation metadata outlive prunable live payloads; privacy retention obligations
+remain part of the unfinished full lifecycle implementation.
+
+`ExecuteRotation` accepts only the original opaque request. `MapRotationRequest`
+is an exact structural projection, not substitute authentication; raw
+`MapCommand`/`Apply` rotation remains forbidden because it lacks that admission.
+`RecoverRotation` uses current result-access policy and exact retained complete
+intent, including original deadline and transport. It works without a live old
+session/admission, never reserves a missing command or replays effects, and
+returns historical receipt/session metadata only. Corrupt or missing ancillary
+evidence fails closed without erasing known commitment. Core replay/recovery
+never deliver a token/cookie; only a new error-free commit can reveal once.
+
+Retired-token denial is implemented. Automatic family revocation on retired-token
+reuse, restart-only metadata recovery API, selected organization/factor/passkey
+profiles, complete cleanup/privacy handling and whole-unit release gates remain
+unfinished; ordinary rotation is not a claim of full session lifecycle parity.
+
 ### Owned session listing
 
 `NewListService(pool, ListServiceConfig{Sessions: primaryConfig,
@@ -58,7 +101,7 @@ authenticated issuance now checks current owners and atomically stages records
 and original proof use. Owned authenticated cookie issuance now composes real
 audit/outbox effects with the core's commit-gated token custody.
 **General bearer issuance, browser-container policy,
-rotation, cleanup, devices and complete session profiles remain unfinished.
+family-replay revocation, cleanup, devices and complete session profiles remain unfinished.
 Single-factor stateful opaque validation now has owned primary composition;
 this is not yet a complete login service.**
 
@@ -193,7 +236,7 @@ Borrow the primary pool until all calls finish. The service starts no
 goroutines and supports concurrent calls. Organization, factor, passkey and
 anonymous profiles explicitly deny until their separate owners compose.
 Browser credential extraction, CSRF and container policy remain HTTP/core
-responsibilities. Full native rotation, remaining profiles and release gates
+responsibilities. Retired-token family-replay revocation, remaining profiles and release gates
 remain pending.
 
 ## Adoption and API
@@ -306,7 +349,7 @@ participant reconciliation, and missing/conflicting evidence remains unresolved.
 Successful reconciliation does not return a session or any bearer/cookie and
 does not authorize retrying issuance. Structural
 historical sessions are not current authentication evidence. Browser maximum
-session/container policy, rotation, session authentication and complete login
+session/container policy, family-replay revocation and complete login
 composition remain required future work. Real PostgreSQL integration covers the
 owned executor and production audit/outbox path, unlike the contributor-only
 transaction fixture above. Full release coverage/mutation gates remain pending.
