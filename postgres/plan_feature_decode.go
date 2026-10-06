@@ -28,7 +28,7 @@ func decodeFeaturePlan(binding identity.CommandBinding, fingerprint [32]byte, en
 	}
 	r := planReader{attributeReader: attributeReader{data: encoded}, ok: true}
 	fields, ok := r.head(5)
-	if !ok || fields != 7 && fields != 8 && fields != 9 && fields != 10 {
+	if !ok || fields != 7 && fields != 8 && fields != 9 && fields != 10 && fields != 11 {
 		return fail()
 	}
 	r.key("audits")
@@ -98,12 +98,14 @@ func decodeFeaturePlan(binding identity.CommandBinding, fingerprint [32]byte, en
 	counterProfile := false
 	captchaProfile := false
 	captchaUseProfile := false
+	otpProfile := false
 	if fields >= 9 {
 		profile := r.string(64)
 		counterProfile = profile == "identity-feature-command-counters-v1"
 		captchaProfile = profile == "identity-feature-captcha-replay-v1"
 		captchaUseProfile = profile == "identity-feature-captcha-use-v1"
-		if !counterProfile && !captchaProfile && !captchaUseProfile && profile != "identity-feature-risk-plan-v1" || fields == 10 && !captchaUseProfile {
+		otpProfile = profile == "identity-feature-otp-attempt-v1"
+		if !counterProfile && !captchaProfile && !captchaUseProfile && !otpProfile && profile != "identity-feature-risk-plan-v1" || fields == 10 && !captchaUseProfile && !otpProfile || fields == 11 && !otpProfile {
 			return fail()
 		}
 	} else if fields == 8 {
@@ -125,9 +127,20 @@ func decodeFeaturePlan(binding identity.CommandBinding, fingerprint [32]byte, en
 	p.Lifecycle = l
 	r.key("fingerprint")
 	r.consume(cborBytes(fingerprint[:]))
+	if otpProfile {
+		r.key("otp_attempt")
+		p.OTP = readOTPPlan(&r)
+	}
 	r.key("contributors")
 	contributors := 4
-	if fields >= 9 && !captchaProfile {
+	if otpProfile {
+		if p.Feature.Contributor != otpDescriptor() {
+			contributors++
+		}
+		if fields >= 10 {
+			contributors++
+		}
+	} else if fields >= 9 && !captchaProfile {
 		contributors = 5
 	}
 	r.expect(4, uint64(contributors))
@@ -141,8 +154,12 @@ func decodeFeaturePlan(binding identity.CommandBinding, fingerprint [32]byte, en
 			return fail()
 		}
 	}
-	if captchaUseProfile {
-		for range fields - 8 {
+	if captchaUseProfile || otpProfile {
+		tail := fields - 8
+		if otpProfile {
+			tail--
+		}
+		for range tail {
 			switch r.string(32) {
 			case "captcha_evidence":
 				if p.CaptchaEvidence != nil {
@@ -150,12 +167,12 @@ func decodeFeaturePlan(binding identity.CommandBinding, fingerprint [32]byte, en
 				}
 				p.CaptchaEvidence = readCaptchaEvidencePlan(&r)
 			case "risk_evidence":
-				if fields != 10 || p.RiskEvidence != nil {
+				if !otpProfile && fields != 10 || p.RiskEvidence != nil {
 					return fail()
 				}
 				p.RiskEvidence = readRiskPlan(&r)
 			case "command_counters":
-				if fields != 10 || p.CommandCounters != nil {
+				if !otpProfile && fields != 10 || p.CommandCounters != nil {
 					return fail()
 				}
 				r.expect(5, 2)
@@ -168,7 +185,7 @@ func decodeFeaturePlan(binding identity.CommandBinding, fingerprint [32]byte, en
 				return fail()
 			}
 		}
-		if p.CaptchaEvidence == nil {
+		if captchaUseProfile && p.CaptchaEvidence == nil {
 			return fail()
 		}
 	} else if fields == 9 {

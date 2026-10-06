@@ -45,6 +45,9 @@ type domainExecution struct {
 // contributor. Begin grants no counter allowance: ApplyFeature and Commit each
 // recheck under domain tenant exclusion, without recharging or renewing evidence.
 func (c *Coordinator) Begin(ctx context.Context, r Reservation) (Work, error) {
+	if r.state != nil && r.state.plan != nil && r.state.plan.otp != nil {
+		return Work{}, invalidWork()
+	}
 	// Reservation is not consumption authority. Require the complete current,
 	// finalization and proof-bound release phase set before opening this profile.
 	if r.state != nil && r.state.plan != nil && r.state.plan.captchaUse != nil && captchaExecutionParticipant(r.state.plan) == nil {
@@ -129,6 +132,7 @@ func (p *admittedKernelPlan) snapshot() CommandPlan {
 	result.Delivery = cloneDeliveryPlan(p.delivery)
 	result.CapabilityIssuance = cloneCapabilityIssuancePlan(p.issuance)
 	result.CaptchaEvidence = cloneCaptchaEvidencePlan(p.captchaUse)
+	result.OTP = cloneOTPPlan(p.otp)
 	if p.lifecycle != nil {
 		copy := *p.lifecycle
 		result.Lifecycle = &copy

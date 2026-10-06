@@ -155,6 +155,12 @@ func commandRecord(receipt identity.CommandResult) CommandRecord {
 // Full replay payloads are adapter-private. The owned UnitOfWork bridge must
 // route them through the core's current field redaction, never public lookup.
 func (c *Coordinator) queryCommandReceipt(ctx context.Context, q identity.RecoveryQuery, caller authorization.DecisionContext) (identity.CommandResult, error) {
+	return c.queryCommandReceiptChecked(ctx, q, caller, nil)
+}
+
+// The optional owned check narrows disclosure after the shared authorization,
+// primary read and complete historical validation. It never grants authority.
+func (c *Coordinator) queryCommandReceiptChecked(ctx context.Context, q identity.RecoveryQuery, caller authorization.DecisionContext, check func(commandObservation) error) (identity.CommandResult, error) {
 	if ctx == nil || c == nil || c.commandRead == nil || c.queryPolicy == nil || c.maximumDuration <= 0 || c.maximumDuration > time.Minute {
 		return identity.CommandResult{}, coordinatorError()
 	}
@@ -190,7 +196,13 @@ func (c *Coordinator) queryCommandReceipt(ctx context.Context, q identity.Recove
 	if !allowed {
 		return identity.CommandResult{}, identity.ForbiddenError{}
 	}
-	return commandReceipt(q, observed, err)
+	result, receiptErr := commandReceipt(q, observed, err)
+	if result.Outcome != identity.CommitOutcomeInvalid && check != nil {
+		if err := check(observed); err != nil {
+			return identity.CommandResult{}, err
+		}
+	}
+	return result, receiptErr
 }
 
 // Both owned recovery and authorized public metadata lookup share the same

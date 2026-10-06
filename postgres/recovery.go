@@ -169,6 +169,9 @@ func (c *Coordinator) recoverCommandReceipt(ctx context.Context, q identity.Reco
 	if e != nil {
 		return result, identity.UnavailableError{}
 	}
+	if admitted.otp != nil {
+		return result, identity.UnavailableError{}
+	}
 	// No expiry-based release: reservation-only owners cannot supply the complete
 	// proof-bound consuming protocol, so their unresolved custody stays reserved.
 	if admitted.captchaUse != nil && captchaExecutionParticipant(admitted) == nil {

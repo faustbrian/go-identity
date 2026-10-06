@@ -38,6 +38,10 @@ type CommandPlan struct {
 	// Capability declares a typed one-use participant input. Identifier reservation
 	// requires its registered reservation contributor; domain execution is disabled.
 	Capability *CapabilityPlan
+	// OTP freezes one server-issued submission and its native scope versions.
+	// Declaration alone cannot enable reservation, counted denial or execution.
+	// Nil preserves historical plan bytes; the full native phases are required.
+	OTP *OTPAttemptPlan
 	// RiskEvidence freezes a signed reset-initiation precheck. The exact registered
 	// risk reservation participant is required; domain execution remains disabled.
 	RiskEvidence *RiskEvidencePlan
@@ -99,7 +103,7 @@ func encodeKernelPlan(binding identity.CommandBinding, fingerprint [32]byte, pla
 	if plan.CapabilityIssuance != nil {
 		return encodeIssuanceWrappedPlan(binding, fingerprint, plan, encodeKernelPlan)
 	}
-	if plan.Feature != nil || plan.SubjectType != "" || plan.RiskEvidence != nil || plan.CaptchaEvidence != nil || plan.CommandCounters != nil || plan.CaptchaReplayReservation {
+	if plan.Feature != nil || plan.SubjectType != "" || plan.RiskEvidence != nil || plan.CaptchaEvidence != nil || plan.CommandCounters != nil || plan.CaptchaReplayReservation || plan.OTP != nil {
 		return nil, invalidPlan()
 	}
 	probe := identity.CommandResult{Binding: binding, Outcome: identity.CommitOutcomeInProgress, RetryAfter: time.Microsecond}
@@ -187,6 +191,7 @@ type admittedKernelPlan struct {
 	counters            *CommandCounterPlan
 	captchaReplay       bool
 	captchaUse          *CaptchaEvidencePlan
+	otp                 *OTPAttemptPlan
 	fingerprint         [32]byte
 	feature             *FeatureRegistration
 	subjectType         string

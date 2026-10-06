@@ -172,6 +172,9 @@ func (c *Coordinator) prepare(binding identity.CommandBinding, command identity.
 	if c == nil || c.registry == nil || c.registry.state == nil || c.keys.current == 0 {
 		return claimRequest{}, CommandPlan{}, nil, coordinatorError()
 	}
+	if plan.OTP != nil {
+		return claimRequest{}, CommandPlan{}, nil, invalidPlan()
+	}
 	// Generic execution cannot count attempts, reserve or atomically consume
 	// opaque codes. Keep every admission route closed until native OTP phases
 	// own those transitions; mere structural contributor registration is not

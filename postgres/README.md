@@ -683,6 +683,33 @@ The central preparation path rejects these commands before generic feature
 admission. Fingerprinting alone does not count attempts or consume challenges;
 native OTP reservation/current/finalize/recovery phases remain required.
 
+`CommandPlan.OTP` freezes the complete server-issued attempt projection: random
+attempt ID, keyed attempt fingerprint and version, challenge/scope digest,
+digest-key version, expected challenge version and check/consume mode. It is
+private correlation, not proof or current authority. Historical decoding binds
+all fields and supports optional CAPTCHA/risk declarations without creating a
+second journal. Generic feature admission and consuming OTP remain closed.
+
+For a native `OTPAttemptContributor`, `PrepareOTPAttemptPlan` authenticates the
+original opaque submission through that exact registered owner before SQL.
+`RecordOTPAttemptDenial` then locks the existing command before the owner's
+bounded challenge comparison. The owner proposes the wrong-attempt charge and
+exhaustion; the coordinator commits these with required denial audits and the
+aborted command in one transaction. No risk, CAPTCHA, capability or session
+reservation runs on this narrow path. Exact retries return history without
+another comparison; changed code or attempt conflicts. `OTPAttemptUnchanged`
+rolls back provisional effects and grants no successful precheck or reservation.
+Returned callback handles cannot access SQL or opaque custody.
+
+Any commit-attempt error is Unknown. Keep the original command and complete
+attempt identity; `RecoverOTPAttemptDenial` uses the configured current
+`QueryPolicy` and one primary read without code, comparison or mutation. A
+historical denied result is NotCommitted plus Forbidden. Changed attempt fields
+return no history. Pending remains InProgress, including after lease expiry;
+it never authorizes a replacement submission, takeover or challenge release.
+Consuming reservation/current/finalize/release and the production OTP adapter
+are still required before adopting a complete OTP workflow.
+
 `CommandPlan.Feature` selects one exact frozen registration. Public
 `PrepareCommandPlan` copies the matching contributor order, 1..64 strictly
 ordered required audit slots and lifecycle declaration, and computes

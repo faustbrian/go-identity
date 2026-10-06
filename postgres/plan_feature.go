@@ -26,7 +26,7 @@ func FeaturePlanDigest(binding identity.CommandBinding, fingerprint [32]byte, pl
 }
 
 func encodeFeaturePlan(binding identity.CommandBinding, fingerprint [32]byte, p CommandPlan) ([]byte, error) {
-	if validateCaptchaReplayPlan(binding, p) != nil || validateCaptchaEvidencePlan(binding, p) != nil {
+	if validateCaptchaReplayPlan(binding, p) != nil || validateCaptchaEvidencePlan(binding, p) != nil || validateOTPPlan(p) != nil {
 		return nil, invalidPlan()
 	}
 	if p.IdentifierAdmission != nil {
@@ -42,6 +42,9 @@ func encodeFeaturePlan(binding identity.CommandBinding, fingerprint [32]byte, p 
 		return nil, invalidPlan()
 	}
 	count := 4
+	if p.OTP != nil && p.Feature.Contributor != otpDescriptor() {
+		count++
+	}
 	if p.RiskEvidence != nil || p.CommandCounters != nil || p.CaptchaEvidence != nil {
 		count++
 	}
@@ -64,7 +67,7 @@ func encodeFeaturePlan(binding identity.CommandBinding, fingerprint [32]byte, p 
 	}
 	entries := make([][]byte, len(p.Contributors))
 	seen := make(map[string]bool, len(p.Contributors))
-	domains, audits, outboxes, features, risks := 0, 0, 0, 0, 0
+	domains, audits, outboxes, features, risks, otps := 0, 0, 0, 0, 0, 0
 	for i, d := range p.Contributors {
 		if !validContributorDescriptor(d) || seen[d.ContractID] {
 			return nil, invalidPlan()
@@ -73,6 +76,11 @@ func encodeFeaturePlan(binding identity.CommandBinding, fingerprint [32]byte, p 
 		switch {
 		case d == p.Feature.Contributor:
 			features++
+			if d == otpDescriptor() {
+				otps++
+			}
+		case p.OTP != nil && d == otpDescriptor():
+			otps++
 		case d.Owner == "identity/postgres":
 			domains++
 		case d.Owner == "audit/postgres":
@@ -86,7 +94,7 @@ func encodeFeaturePlan(binding identity.CommandBinding, fingerprint [32]byte, p 
 		}
 		entries[i] = cborMap(map[string][]byte{"owner": cborText(d.Owner), "contract_id": cborText(d.ContractID), "version": cborUint(uint64(d.Version))})
 	}
-	if domains != 1 || audits != 1 || outboxes != 1 || features != 1 || (p.RiskEvidence != nil || p.CommandCounters != nil || p.CaptchaEvidence != nil) && risks != 1 {
+	if domains != 1 || audits != 1 || outboxes != 1 || features != 1 || p.OTP != nil && otps != 1 || (p.RiskEvidence != nil || p.CommandCounters != nil || p.CaptchaEvidence != nil) && risks != 1 {
 		return nil, invalidPlan()
 	}
 	events := make([][]byte, len(p.Audits))
@@ -128,6 +136,10 @@ func encodeFeaturePlan(binding identity.CommandBinding, fingerprint [32]byte, p 
 	if p.CaptchaEvidence != nil {
 		fields["profile"] = cborText("identity-feature-captcha-use-v1")
 		fields["captcha_evidence"] = encodeCaptchaEvidencePlan(p.CaptchaEvidence)
+	}
+	if p.OTP != nil {
+		fields["profile"] = cborText("identity-feature-otp-attempt-v1")
+		fields["otp_attempt"] = encodeOTPPlan(p.OTP)
 	}
 	return cborMap(fields), nil
 }
@@ -178,6 +190,7 @@ func (c *Coordinator) prepareFeature(binding identity.CommandBinding, command id
 	snapshot.Delivery = cloneDeliveryPlan(p.Delivery)
 	snapshot.CapabilityIssuance = cloneCapabilityIssuancePlan(p.CapabilityIssuance)
 	snapshot.CaptchaEvidence = cloneCaptchaEvidencePlan(p.CaptchaEvidence)
+	snapshot.OTP = cloneOTPPlan(p.OTP)
 	feature := *p.Feature
 	snapshot.Feature = &feature
 	if p.RiskEvidence != nil {

@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add frozen OTP attempt plans and coordinator-owned counted-denial transactions.
+  Wrong-attempt charges, denial audits and aborted commands commit atomically;
+  retries preserve exact attempt identity without another comparison. Code-free
+  recovery requires current policy and the complete original attempt. Consuming
+  OTP phases and the production OTP adapter remain unavailable.
+
 - Bind opaque one-time submissions into retained-key canonical command intent
   without storing code bytes or changing ordinary command encodings. Reject
   generic admission until native counted OTP reservation/finalization exists.

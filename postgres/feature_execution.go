@@ -110,6 +110,12 @@ func (r *ContributorRegistry) admitFeaturePlan(b identity.CommandBinding, finger
 			return nil, invalidPlan()
 		}
 		switch entry.descriptor.Owner {
+		case "identity/otp/postgres":
+			if p.OTP != nil {
+				if _, ok := otpAttemptParticipant(entry.contributor); !ok {
+					return nil, invalidPlan()
+				}
+			}
 		case "audit/postgres":
 			if _, ok := entry.contributor.(AuditContributor); !ok {
 				return nil, invalidPlan()
@@ -154,7 +160,7 @@ func (r *ContributorRegistry) admitFeaturePlan(b identity.CommandBinding, finger
 		copy := *p.CommandCounters
 		counters = &copy
 	}
-	return &admittedKernelPlan{registry: r.state, binding: b, digest: digest, contributors: entries, audits: append([]AuditPlan(nil), p.Audits...), lifecycle: &l, risk: risk, counters: counters, captchaReplay: p.CaptchaReplayReservation, captchaUse: cloneCaptchaEvidencePlan(p.CaptchaEvidence), fingerprint: fingerprint, feature: &f, subjectType: p.SubjectType, delivery: cloneDeliveryPlan(p.Delivery), issuance: cloneCapabilityIssuancePlan(p.CapabilityIssuance)}, nil
+	return &admittedKernelPlan{registry: r.state, binding: b, digest: digest, contributors: entries, audits: append([]AuditPlan(nil), p.Audits...), lifecycle: &l, risk: risk, counters: counters, captchaReplay: p.CaptchaReplayReservation, captchaUse: cloneCaptchaEvidencePlan(p.CaptchaEvidence), otp: cloneOTPPlan(p.OTP), fingerprint: fingerprint, feature: &f, subjectType: p.SubjectType, delivery: cloneDeliveryPlan(p.Delivery), issuance: cloneCapabilityIssuancePlan(p.CapabilityIssuance)}, nil
 }
 
 // ApplyFeature invokes only the frozen exact native adapter once through Work.
