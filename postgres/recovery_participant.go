@@ -162,6 +162,22 @@ func (w RecoveryWork) RiskBinding(p RiskReleaseContributor) (RiskReservationBind
 	return (RiskReleaseWork{state: s}).Binding(p)
 }
 
+// CaptchaBinding returns frozen consuming custody only to the exact native
+// CAPTCHA owner during primary recovery. It grants evidence reads, never
+// release authority; absent/divergent/terminal evidence cannot prove noncommit.
+func (w RecoveryWork) CaptchaBinding(p CaptchaUseReservationContributor) (CaptchaUseReservationBinding, error) {
+	if w.usable() != nil || w.state.entry.descriptor != (ContributorDescriptor{Owner: "identity/risk/postgres", ContractID: "identity.risk.store", Version: 1}) || w.state.work.state.execution == nil {
+		return CaptchaUseReservationBinding{}, invalidWork()
+	}
+	r := w.state.work.state.execution.reservation
+	owner, ok := captchaUseReservationParticipant(w.state.entry.contributor)
+	if r == nil || !ok {
+		return CaptchaUseReservationBinding{}, invalidWork()
+	}
+	s := &captchaExecutionState{reservation: captchaUseReservationState{coordinator: w.state.work.state.execution.coordinator, work: w.state.work, plan: w.state.plan, previous: r.journal.previousGeneration, contributor: owner, active: true}, phase: captchaRelease, proof: riskReleaseRecovery}
+	return (CaptchaReleaseWork{state: s}).Binding(p)
+}
+
 // RecoverParticipant proves absence of a creation target on the locked primary.
 // An existing user is not evidence that this command committed; without an
 // original command linkage that case conservatively remains unknown. No live

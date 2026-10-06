@@ -169,9 +169,9 @@ func (c *Coordinator) recoverCommandReceipt(ctx context.Context, q identity.Reco
 	if e != nil {
 		return result, identity.UnavailableError{}
 	}
-	// No expiry-based release: retain unresolved protected-use custody until
-	// the native proof-bound release protocol exists.
-	if admitted.captchaUse != nil {
+	// No expiry-based release: reservation-only owners cannot supply the complete
+	// proof-bound consuming protocol, so their unresolved custody stays reserved.
+	if admitted.captchaUse != nil && captchaExecutionParticipant(admitted) == nil {
 		return result, identity.UnavailableError{}
 	}
 	// An old persistence-only registration remains readable, but cannot supply
@@ -272,6 +272,9 @@ func (c *Coordinator) recoverCommandReceipt(ctx context.Context, q identity.Reco
 		return result, identity.UnavailableError{}
 	}
 	if e = c.releaseRisk(bounded, work, admitted, journal); e != nil {
+		return result, identity.UnavailableError{}
+	}
+	if e = c.releaseCaptcha(bounded, work, admitted, journal.previousGeneration, riskReleaseRecovery); e != nil {
 		return result, identity.UnavailableError{}
 	}
 	// Contributor return values cannot erase a latched local/SQL failure.

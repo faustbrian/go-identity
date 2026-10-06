@@ -227,6 +227,12 @@ func (c *Coordinator) ApplyFeature(ctx context.Context, w Work, command identity
 	if p.risk != nil {
 		w.state.riskCommand = &command
 	}
+	if e = c.runCaptchaExecution(ctx, w, command, captchaCheck); e != nil {
+		return result, e
+	}
+	if p.captchaUse != nil {
+		w.state.captchaCommand = &command
+	}
 	if e = c.checkAuthenticatedCommand(ctx, w, false); e != nil {
 		return result, e
 	}

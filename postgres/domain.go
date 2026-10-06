@@ -45,9 +45,9 @@ type domainExecution struct {
 // contributor. Begin grants no counter allowance: ApplyFeature and Commit each
 // recheck under domain tenant exclusion, without recharging or renewing evidence.
 func (c *Coordinator) Begin(ctx context.Context, r Reservation) (Work, error) {
-	// Reservation is not consumption authority. Current checks, finalization
-	// and proof-bound terminal release must be wired before opening this profile.
-	if r.state != nil && r.state.plan != nil && r.state.plan.captchaUse != nil {
+	// Reservation is not consumption authority. Require the complete current,
+	// finalization and proof-bound release phase set before opening this profile.
+	if r.state != nil && r.state.plan != nil && r.state.plan.captchaUse != nil && captchaExecutionParticipant(r.state.plan) == nil {
 		return Work{}, invalidWork()
 	}
 	if ctx == nil || c == nil || c.pool == nil || c.pool.Raw() == nil || r.state == nil || r.state.coordinator != c || r.state.plan.belongsTo(c.registry) != nil || r.state.plan.capability != nil || r.state.plan.risk != nil && riskExecutionParticipant(r.state.plan) == nil || r.state.plan.counters != nil && counterAdmissionParticipant(r.state.plan) == nil {
@@ -308,6 +308,17 @@ func (c *Coordinator) Commit(w Work, result identity.CommandResult) (identity.Co
 			return c.Abort(w, err)
 		}
 	}
+	if r.plan.captchaUse != nil {
+		if w.state.captchaCommand == nil {
+			return c.Abort(w, invalidWork())
+		}
+		if err := c.runCaptchaExecution(w.state.ctx, w, *w.state.captchaCommand, captchaCheck); err != nil {
+			return c.Abort(w, err)
+		}
+		if err := c.runCaptchaExecution(w.state.ctx, w, *w.state.captchaCommand, captchaFinalize); err != nil {
+			return c.Abort(w, err)
+		}
+	}
 	if err := deliveryFresh(w); err != nil {
 		return c.Abort(w, err)
 	}
@@ -343,8 +354,8 @@ func (c *Coordinator) Commit(w Work, result identity.CommandResult) (identity.Co
 // rollback or ambiguous terminalization is Unknown. Caller cancellation cannot
 // prevent bounded detached cleanup. Errors are classified/redacted, never
 // returned verbatim. Native non-one-time features use coordinator-prebuilt
-// classified failure records; one-time feature participants and classified
-// retry bookkeeping remain unsupported, not omitted.
+// classified failure records. Risk/CAPTCHA one-time owners release only after
+// proven rollback; other one-time profiles and retry bookkeeping remain closed.
 func (c *Coordinator) Abort(w Work, cause error) (identity.CommandResult, error) {
 	if !c.owns(w) || w.state.closed || cause == nil {
 		return identity.CommandResult{}, invalidWork()
@@ -423,7 +434,7 @@ func (c *Coordinator) Abort(w Work, cause error) (identity.CommandResult, error)
 	if err := r.plan.bindWork(terminal); err != nil {
 		return fail(err)
 	}
-	if r.plan.risk != nil || r.plan.capability != nil {
+	if r.plan.risk != nil || r.plan.capability != nil || r.plan.captchaUse != nil {
 		if err := configureKernelWork(cleanup, terminal); err != nil {
 			return fail(err)
 		}
@@ -440,6 +451,9 @@ func (c *Coordinator) Abort(w Work, cause error) (identity.CommandResult, error)
 		return fail(identity.UnavailableError{})
 	}
 	if err := c.releaseRiskAfterRollback(cleanup, terminal, r.plan, r.journal); err != nil {
+		return fail(identity.UnavailableError{})
+	}
+	if err := c.releaseCaptcha(cleanup, terminal, r.plan, r.journal.generation, riskReleaseRollback); err != nil {
 		return fail(identity.UnavailableError{})
 	}
 	if terminal.state.rows != nil || terminal.usable() != nil {

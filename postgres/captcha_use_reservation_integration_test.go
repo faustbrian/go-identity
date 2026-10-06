@@ -26,6 +26,7 @@ type sqlCaptchaUseReservation struct {
 	retained       CaptchaUseReservationWork
 	counterDenied  bool
 	counterCalls   int
+	registered     CaptchaUseReservationContributor
 }
 
 func (*sqlCaptchaUseReservation) ValidateCommandCounters(identity.Command, CommandCounterPlan) error {
@@ -71,14 +72,18 @@ func (p *sqlCaptchaUseReservation) RebindCaptchaEvidence(ctx context.Context, w 
 }
 func (p *sqlCaptchaUseReservation) reserve(ctx context.Context, w CaptchaUseReservationWork, rebind bool) error {
 	p.retained = w
-	b, err := w.Binding(p)
+	owner := p.registered
+	if owner == nil {
+		owner = p
+	}
+	b, err := w.Binding(owner)
 	if err != nil || (b.PreviousGeneration != 0) != rebind {
 		return invalidWork()
 	}
 	if _, err := w.Binding(&sqlCaptchaUseReservation{}); err == nil {
 		return invalidWork()
 	}
-	command, err := w.NativeCommand(p)
+	command, err := w.NativeCommand(owner)
 	s, ok := command.Feature()
 	if err != nil || !ok || s.Binding != b.Command {
 		return invalidWork()
@@ -120,7 +125,7 @@ func testCaptchaUseReservation(t *testing.T, ctx context.Context, pool *database
 	if _, err := pool.Raw().Exec(ctx, `CREATE TABLE identity.captcha_counter_fixture(command_id text PRIMARY KEY); CREATE TABLE identity.captcha_counter_audit(command_id text NOT NULL,event_id text PRIMARY KEY,outcome text NOT NULL)`); err != nil {
 		t.Fatal(err)
 	}
-	setup := func(t *testing.T, owner *sqlCaptchaUseReservation) (*Coordinator, identity.CommandBinding, identity.Command, CommandPlan) {
+	setup := func(t *testing.T, owner Contributor) (*Coordinator, identity.CommandBinding, identity.Command, CommandPlan) {
 		t.Helper()
 		c, command, plan := featurePlanFixture(t)
 		s, _ := command.Feature()
@@ -154,6 +159,7 @@ func testCaptchaUseReservation(t *testing.T, ctx context.Context, pool *database
 		}
 		return c, s.Binding, command, plan
 	}
+	t.Run("domain", func(t *testing.T) { testCaptchaDomain(t, ctx, pool, setup) })
 	t.Run("combined counter denial", func(t *testing.T) {
 		p := &sqlCaptchaUseReservation{counterDenied: true}
 		c, b, command, plan := setup(t, p)

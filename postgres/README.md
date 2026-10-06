@@ -21,13 +21,28 @@ panic, unfinished rows, poisoned SQL or cancellation roll back that whole unit.
 Live/terminal replay invokes no new evidence reservation. Callback return
 expires every handle and native-input alias; copies cannot renew ownership.
 
-Current consuming checks, finalization and proof-bound release/recovery remain
-unimplemented: `Begin` rejects this profile without consuming its reservation,
-and pending primary recovery cannot terminalize or release it. Do not enable
-protected-action use or treat elapsed expiry/lease time as noncommit proof.
-The native risk adapter has not yet implemented this reservation interface;
-SQL integration fixtures prove coordinator atomicity, not production CAPTCHA
-authentication, protected workflows or final consumption.
+`Begin` additionally requires the complete `CaptchaExecutionContributor` phase
+set. Reservation-only owners remain rejected without consuming their handle.
+The coordinator invokes `CheckCaptchaEvidence` before the protected mutation and
+again after provisional effects, then `FinalizeCaptchaEvidence` in the same
+domain transaction as the mutation, audit/outbox and command result. Only the
+exact native owner receives invocation-bound `CaptchaApplyWork` reads or
+`CaptchaFinalizeWork` terminal SQL; no provider callbacks or private commits.
+Failures poison the whole Work, including ignored SQL errors and open rows.
+
+After proven domain rollback and current owner/tenant exclusion, the coordinator
+invokes `ReleaseCaptchaEvidence` through `CaptchaReleaseWork` at the unchanged
+generation. Unresolved recovery requires every frozen participant to prove
+noncommit under primary exclusion before exact predecessor release at its
+successor. Unknown/conflicting/absent proof retains the reservation. Release
+must be terminal and never grants a new reservation. `RecoveryWork.CaptchaBinding`
+supplies frozen linkage only to the exact risk owner, not release authority.
+Elapsed expiry or lease time is never noncommit proof.
+
+The native risk adapter implements consuming reservation but not yet this
+complete execution phase set. SQL integration fixtures prove the coordinator's
+atomicity, lifetime and primary noncommit protocol, not production CAPTCHA
+authentication, protected workflows or final consuming composition.
 
 ## Native CAPTCHA replay reservation
 

@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add native CAPTCHA consuming current-check/finalize and proof-bound release
+  phases in the shared coordinator. Protected effects and evidence finalize
+  atomically; denial rolls back effects and releases only after proven rollback.
+  Unknown outcomes retain reservations until unanimous primary noncommit proof.
+  Reservation-only owners remain closed to domain execution and recovery.
+
 - Add invocation-bound CAPTCHA evidence reservation and exact predecessor
   rebind in the shared command transaction. Native scope validation precedes
   SQL; failed participant prefixes roll back together. Domain consumption and
