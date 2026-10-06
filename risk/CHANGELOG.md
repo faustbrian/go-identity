@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add immutable CAPTCHA use prechecks and signed native consuming custody with
+  exact original flow, separate consuming command/actor, retained-key integrity
+  and non-renewing exclusive expiry. These local checks grant no durable use or
+  mutation authority; coordinator reservation and atomic finalization remain
+  required before protected actions can consume evidence.
+
 - Add restricted replay-key identity projections for durable CAPTCHA rotation
   custody. Newly prepared native configuration commitments bind original replay
   secrets as well as versions; replacing a secret cannot authenticate a new

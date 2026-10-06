@@ -11,6 +11,22 @@ RiskEvidence/CaptchaEvidence issuance remain required implementation work.
 
 ### CAPTCHA evidence admission and custody
 
+`CaptchaEvidenceIssuer.PrecheckUse(ctx, originalIssue, request, nativeRecord)`
+authenticates the original signed issuance, presented reference and exact trusted
+flow, while binding a distinct consuming command and actor. It invokes only the
+configured clock, never providers, executors or stores. `Prepared()` returns
+owned signed native custody without the bearer; `EvidenceKey.RestoreCaptchaUse`
+authenticates it and `CaptchaEvidenceIssuer.RecheckUse` additionally checks the
+current immutable verifier configuration at supplied primary UTC time. All
+native adapters can use callback-free `CaptchaEvidenceCustody.RecheckUse`
+instead, avoiding an executable issuer/store construction cycle. All
+copies preserve original expiry and reject exact expiry. These methods prove
+local integrity only: durable issuance, current authorization, target versions,
+reservation, finalization and primary recovery remain the protected coordinator
+and adapter's responsibility. The consuming command fingerprint must cover this
+custody and its complete target/version fields. Protected CAPTCHA consumption
+is still unimplemented; this bridge must not be used as a stand-alone gate.
+
 `NewCaptchaEvidenceCustody(config)` gives the owned native adapter the same
 immutable verifier/policy/key configuration without runtime wiring. It does not
 require or retain `Clock`, `Verify` or `Executor`; all static issuer bounds stay
