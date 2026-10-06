@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add opt-in same-process positive session-admission reuse bound to the original
+  authoritative deadline, exact service, tenant, token digest and transport.
+  Cache promotion cannot extend authority; stale or substituted entries require
+  primary validation and an outage never permits expired positive fallback.
+
 - Add schema-bound, uncached display enrichment with defensive ownership,
   bounded callback context and explicit fail/omit policy. Preserve session
   authority and lifetime; cancellation and malformed output never become

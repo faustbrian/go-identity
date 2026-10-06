@@ -23,6 +23,32 @@ or opens a transaction, reserves a proof, writes a record or reveals a token.
 
 ## Quick start and API
 
+### Bounded positive admission reuse
+
+`primarySessions.CacheAdmission(authenticatedGetResult, maximumAge)` returns an
+opaque `CachedAdmission` only for an unchanged live result minted by that exact
+service. Age is 1ms..5m but positive reuse is clipped to the original Get
+deadline (at most 20 seconds from its earliest authority read, conservatively
+reduced for clock uncertainty and session expiry). The configured trusted clock
+owns the cache observation. Copies and repeated promotion cannot renew either
+the original deadline or a previously shortened age.
+
+`primarySessions.GetCached(ctx, originalRequest, cachedAdmission)` accepts a
+warm entry only for the exact service, tenant, bearer digest and transport. It
+retains the complete original session/authority and authenticated-result
+custody; cookie admission cannot be reused as bearer admission. A zero, stale,
+foreign or substituted entry uses bounded primary Get. Failed refresh returns
+no authentication, never stale fallback. Dropped invalidation events therefore
+cannot extend the original positive-evidence window. Backward clocks and
+caller cancellation deny; explicit invalidation may discard a handle earlier.
+
+The handle owns no raw bearer, cache store, goroutine or invalidation journal.
+It is process-local and cannot be JSON/text serialized. It is **not** a signed
+or encrypted cookie, durable Valkey projection, stateless codec or new storage
+profile; those implementations remain unfinished. Consumers must not turn
+structural Session data or a public Authenticated flag into cache authority.
+Authorization is still a separate current-policy decision on every action.
+
 ### Non-authoritative display enrichment
 
 `NewEnrichmentService(callback, EnrichmentConfig{Schema: EnrichmentSchema{
