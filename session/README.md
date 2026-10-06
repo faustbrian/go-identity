@@ -432,6 +432,40 @@ requirements. A populated `http.Cookie` contains a secret: never log it.
 
 ## FAQ and operations
 
+### Encrypted admission cache
+
+`NewEncryptedCacheCodec(service, envelopeService, config)` adds explicit
+encrypted persistence to stateful opaque credential validation. Obtain an
+authentic `GetResult` through `SessionService.Get`, then `Seal(ctx, result)`.
+Persist only the returned caller-owned ciphertext. On reuse call
+`codec.Get(ctx, originalRequest, ciphertext)`; the original opaque credential
+is still required. Never log ciphertext, key references or decoded projections.
+
+Use `github.com/faustbrian/go-secret-envelope` with a concurrent-safe bounded
+key provider. The codec does not invent encryption or accept client-selected
+keys. Configure issuer, environment and a positive deployment epoch explicitly;
+changing these invalidates all prior cached custody. Rotate the active key
+reference while retaining previous read keys for their bounded lifetime.
+Removing a read key requires primary validation rather than accepting that cache.
+
+Every payload contains the complete original immutable session, remember policy,
+authority vector, transport and admission timestamps. Five-minute maximum age
+is a payload ceiling, **not** five minutes of positive authority. The original
+exclusive source deadline (at most 20 seconds, less read/clock/lifetime budget)
+wins, including after process restart or resealing. After expiry, an unavailable
+primary denies. Corrupt/foreign entries and unavailable key services use bounded
+primary validation; never stale fallback. Unknown or noncanonical projections
+never establish positive state.
+Callbacks must honor the session service's bounded context; no detached work is
+started to hide a provider that violates cancellation.
+
+The binary envelope limit is explicit and checked before parsing or crypto.
+HTTP must additionally enforce the maximum encoded cookie size and Secure,
+HttpOnly, SameSite, CSRF/origin and no-store rules. This codec is not yet cookie
+transport, a Valkey adapter or a fully stateless deployment. Existing stateful
+constructor behavior is unchanged; the other storage-profile flags still deny
+until their real composition is implemented.
+
 **Does refresh reset expiry?** No: preserve original issuance. RefreshDue is
 advisory and authorizes neither a refresh nor a new token.
 

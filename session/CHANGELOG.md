@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add encrypted complete session-admission persistence using owned envelope
+  encryption and explicit issuer/environment/deployment bindings. Restart,
+  resealing and key rotation preserve the original authority deadline; invalid
+  or stale entries and unavailable crypto require bounded primary validation.
+  Browser cookie framing, Valkey and fully stateless composition remain pending.
+
 - Add opt-in same-process positive session-admission reuse bound to the original
   authoritative deadline, exact service, tenant, token digest and transport.
   Cache promotion cannot extend authority; stale or substituted entries require
