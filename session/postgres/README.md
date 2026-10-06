@@ -96,6 +96,57 @@ credentials and enforce origin/CSRF and source/transport policy before mutation.
 This is not automatic HTTP wiring, an authentication endpoint or a new authority
 cache; these transport/composition requirements remain separate platform work.
 
+### Bounded expiry cleanup
+
+Install `CleanupMigrationSource{Schema: schema, Version: permanentVersion}` after
+the complete base/rotation history. It adds an owner/expiry index and retained
+result evidence without changing populated records or earlier checksums. The
+transactional index build can block writes; budget its installation explicitly.
+Do not give runtime roles trigger-disable, schema-alter or `TRUNCATE` privileges.
+The existing rotation deletion trigger is required to terminally retire digests.
+
+`NewCleanupService(pool, CleanupServiceConfig{Execution: nativeConfig,
+ActorID: trustedServiceActor, MaximumBatch: batchLimit})` enables maintenance
+under the configured current service policy. `MaximumBatch` is 1..10000; the
+service borrows the existing primary/kernel/audit/lifecycle dependencies and
+starts no goroutine. Default repositories/readers expose no cleanup operation.
+
+Call `CleanupExpired(ctx, CleanupCommand{TenantID: tenant, UserID: owner,
+CommandID: stableID, CorrelationID: correlation, Limit: limit})` for an explicit
+owner partition. Current policy must permit that configured service actor to
+maintain the selected owner; input cannot select the actor or clock. A limit
+above the configured maximum or any invalid scope fails before reservation.
+This is maintenance, not an authentication endpoint or a global scheduler.
+Reference-server scheduling and broader privacy erasure remain separate work.
+
+One existing-kernel transaction selects at most `Limit` indexed expired
+candidates using database time, locks and rechecks their current expiry, skips
+busy rows, and prunes live payloads with terminal digest retirement. It does
+not scan past locked candidates to fill a deletion quota. A concurrent refresh
+survives; other tenants/users and active payloads are untouched. Natural expiry
+does not increment session/family/user authority. Retained issuance, rotation,
+revocation, proof-use and command records are never removed by this operation.
+
+The same transaction records historical count/lag evidence, service audit
+`identity.session.expire` with reason `completed`, and `session.expired.v1`
+maintenance lifecycle metadata. The record-free receipt has zero before/after
+versions: it is not a new session authority. Audit failure rolls back deletion,
+tombstone changes and all effects. A zero-row pass is a committed observation,
+not proof that no locked or subsequently expired rows exist.
+
+`CleanupResult` includes the command outcome and, only after verified success,
+`Deleted`, `ObservedAt` and `RemainingLag` for that partition. Lag includes
+locked expired rows, saturates at 8760 hours, and describes the database-time
+observation—not the live backlog at the time a caller reads a historical result.
+Exact retries return the original count/lag without deleting another batch;
+changed scope/correlation/limit under the same ID conflicts. New batches need
+new IDs. Retain safe command scope for `RecoverCleanupCommand` after restart or
+uncertain acknowledgement. Current trusted service access policy governs
+disclosure; live leases are not renewed and expired pending uses existing
+frozen-participant recovery. Missing/corrupt evidence never proves rollback or
+authorizes retry. An ancillary evidence error preserves known commitment but
+returns no invented counts or timestamps.
+
 ### Owned session listing
 
 `NewListService(pool, ListServiceConfig{Sessions: primaryConfig,
@@ -154,7 +205,7 @@ authenticated issuance now checks current owners and atomically stages records
 and original proof use. Owned authenticated cookie issuance now composes real
 audit/outbox effects with the core's commit-gated token custody.
 **General bearer issuance, browser-container policy,
-cleanup, devices and complete session profiles remain unfinished.
+privacy cleanup, devices and complete session profiles remain unfinished.
 Single-factor stateful opaque validation now has owned primary composition;
 this is not yet a complete login service.**
 

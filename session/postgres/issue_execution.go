@@ -62,6 +62,10 @@ func NewIssueExecutor(pool *database.Pool, c IssueExecutorConfig) (*IssueExecuto
 }
 
 func newOwnedSessionExecution(pool *database.Pool, c IssueExecutorConfig, requireFinalAuthentication bool) (*IssueExecutor, error) {
+	return newOwnedSessionExecutionWithCleanup(pool, c, requireFinalAuthentication, 0)
+}
+
+func newOwnedSessionExecutionWithCleanup(pool *database.Pool, c IssueExecutorConfig, requireFinalAuthentication bool, cleanupBatch uint32) (*IssueExecutor, error) {
 	if pool == nil || pool.Raw() == nil || nilIssueDependency(c.Authorization) || nilIssueDependency(c.Clock) || !scopeID(c.PolicyID) || c.PolicyVersion == 0 || c.AuditRetentionVersion == 0 || requireFinalAuthentication && (c.Coordinator.FinalAuthentication == nil || c.Coordinator.FinalAuthentication.Authority == nil) || c.Coordinator.MaximumDuration < time.Millisecond || c.Coordinator.MaximumDuration > 30*time.Second {
 		return nil, session.ErrInvalidIssuer
 	}
@@ -69,6 +73,7 @@ func newOwnedSessionExecution(pool *database.Pool, c IssueExecutorConfig, requir
 	if err != nil {
 		return nil, err
 	}
+	native.cleanupBatch = cleanupBatch
 	domain, err := kernel.NewRepository(pool, kernel.Config{MaximumDuration: c.Coordinator.MaximumDuration})
 	if err != nil {
 		return nil, err

@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Add bounded, owner-scoped database-time expiry cleanup with current service
+  authorization, locked refresh-safe selection, terminal digest retirement and
+  same-commit audit/lifecycle effects. Preserve natural-expiry authority versions
+  and retained command/rotation/revocation evidence. Exact retries and restart
+  recovery return historical deletion count/lag rather than selecting another
+  batch. Install `CleanupMigrationSource` after the base/rotation history; its
+  transactional owner/expiry index installation requires a bounded write window.
+  Scheduling and general privacy erasure remain separate platform work.
+
 - Add explicit protective retired-token replay checking with current trusted
   service policy and primary lineage-derived ownership. Commit one exact family
   revocation with protected audit/lifecycle effects, preserve exact retry

@@ -51,6 +51,7 @@ type Repository struct {
 	identifierAdmission *IdentifierAdmissionConfig
 	privacyAdmission    *PrivacyExportAdmissionConfig
 	issueAdmission      *IssueAdmissionConfig
+	cleanupBatch        uint32
 }
 
 // NewRepository validates configuration without IO. The database must already
