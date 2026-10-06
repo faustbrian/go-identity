@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Add bounded self-session label update orchestration with exact source CAS,
+  selected policy and original opaque caller custody. Validate native receipts
+  and complete successors; errors never disclose apparent metadata success.
+  Preserve known commitment through cancellation and ancillary failure; recover
+  original outcomes without mutation or renewed admission. Native PostgreSQL
+  writer/list composition remains pending.
+
 - Add self-session device-label CAS preparation with opaque original caller
   custody. Bound untrusted labels and preserve credential, activity, lifetime,
   remember choice, authentication and every unrelated authority. Copies and

@@ -484,12 +484,28 @@ transport and exclusive admission deadline. Copying or retrying does not renew
 authority. Label updates do not require fresh login, rotate credentials or
 extend activity, lifetime, remember choice or authentication freshness.
 
-This preparation is not a durable update or an authorization decision. Owned
-execution must recheck current policy, primary owners and source CAS, then
-commit metadata, complete successor, audit/lifecycle and recovery receipt in
-the kernel transaction. Core orchestration, PostgreSQL writer/list integration,
-HTTP composition and their release gates remain pending. Consumers must not
-implement a private store or assume the structural successor is authenticated.
+`NewSessionUpdater(service, ownedExecutor, UpdateConfig)` freezes the selected
+policy and whole-call budget. `Prepare(caller, UpdatePreparation)` checks the
+exact authenticating session ID and positive expected version before creating
+original-custody intent. Then `Update(ctx, request)` delegates current policy,
+primary owners and atomic label/CAS/audit/lifecycle effects to the owned executor.
+Successful results expose safe historical session/device metadata, never a
+credential or a renewed Get admission. Empty labels clear display metadata.
+
+Retain the request and scoped result after ambiguity; `Recover(ctx, request)`
+authorizes current exact result access through the owner and observes the same
+command without executing or requiring expired source custody to become valid.
+Recovery returns outcome only, no session/device or apparent active-state claim.
+Known commitment survives cancellation, expiry and ancillary read failure;
+these errors withhold metadata rather than pretending rollback. Malformed
+receipts and post-entry panic are unknown; do not substitute a new command.
+Errors before owner entry return an invalid/unobserved outcome, not evidence
+that the original command is absent or rolled back. Retain its recovery scope.
+
+Preparation is not authorization or a durable update. Core creates no store,
+journal or transaction; PostgreSQL writer/list integration, HTTP composition
+and release gates remain pending. Consumers must not implement a private store
+or assume a structural successor or recovered receipt authenticates a session.
 
 ### Encrypted admission cache
 
