@@ -72,11 +72,30 @@ command result counts and adds an active-owner selection index. Existing
 records and historical checksums are unchanged; the transactional index build
 can block writes and requires explicit populated-deployment scheduling.
 
+`NewSetRevocationService(pool, SetRevocationServiceConfig{Execution: execution,
+Validation: validation, MaximumSessions: maximum, MaximumDuration: budget})`
+composes credential authentication, current policy and native atomic mutation.
+Set `validation.Clock` to nil: `execution.Clock` owns both phases. It starts no
+goroutines and accepts no application domain stores or transaction callbacks.
+Use `RevokeOther`/`RevokeAll` with actual tenant-bound cookie/bearer credentials,
+host command/correlation IDs and, for all, explicit source disposition and exact
+positive user-authority CAS. Final-signin issuance is not a bootstrap dependency.
+
 `MapRevokeSetRequest` structurally maps an original opaque core request; it
 does not authenticate or authorize execution. Raw `MapCommand` cannot supply
-the source-admission deadline. The owned bulk executor/public service factory
-and restart-safe public result projection remain under development. Do not
-substitute an application-written transaction or caller-ID workflow.
+the source-admission deadline. `NewRevokeSetExecutor` accepts the exact trusted
+reader that prepared requests and the same execution profile. Native deadline
+conversion uses primary time and cannot extend admission during audit/outbox
+persistence. Do not substitute an application transaction or caller-ID workflow.
+
+`RecoverRevokeSetCommand` on a reconstructed executor takes the exact original
+safe recovery scope plus currently trusted result-access policy context. It
+returns historical command metadata and retained count/version/disposition,
+never a bearer or permission to execute. Missing/foreign scope cannot reserve
+a command. Missing/corrupt retained metadata produces an error and zero success
+metadata, preserving a command commitment already proven by the journal.
+Payload pruning does not remove native evidence. Recover the original command
+rather than minting another ID after an unknown outcome or failed disclosure.
 
 The native effect selects all active-state sessions for the authenticated user
 within the tenant, across audiences, in bounded bytewise keyset chunks. The

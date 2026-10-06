@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Compose public credential-based bulk session revocation through the owned
+  primary reader, native command executor and core service. Original admission
+  bounds final commit; retained counts/disposition replay without new mutations.
+  Restart recovery uses current result-access policy, survives payload pruning
+  and rejects corrupt native metadata without erasing a known command outcome.
+  Install the bulk migration before use; no application domain stores or final
+  signin-proof issuer are required. Full session lifecycle remains unfinished.
+
 - Add bounded transactional revoke-other/revoke-all effects to the configured
   native contributor. Select the complete tenant/user set across audiences,
   reject over-limit sets without partial changes, and retain counts and source

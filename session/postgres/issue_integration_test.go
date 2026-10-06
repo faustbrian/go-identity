@@ -657,7 +657,7 @@ func testNativeIssueIntegration(t *testing.T, ctx context.Context, pool *databas
 				if got, e := restarted.Get(ctx, other); e != nil || got.Authenticated {
 					t.Fatal("different cookie authenticated", e)
 				}
-				testOwnedRevokeExecution(t, ctx, pool, reader, input, get, ownedConfig, config, func(t *testing.T) session.GetResult {
+				makeIssuedCookie := func(t *testing.T) (session.GetResult, session.GetRequest) {
 					t.Helper()
 					candidate := prepare(t)
 					s, _ := candidate.record.Bindings()
@@ -682,10 +682,15 @@ func testNativeIssueIntegration(t *testing.T, ctx context.Context, pool *databas
 					if e != nil {
 						t.Fatal(e)
 					}
-					current, e := reader.Get(ctx, session.GetRequest{TenantID: s.TenantID, Credential: credential})
+					input := session.GetRequest{TenantID: s.TenantID, Credential: credential}
+					current, e := reader.Get(ctx, input)
 					if e != nil || !current.Authenticated {
 						t.Fatal("issued target admission", e)
 					}
+					return current, input
+				}
+				testOwnedRevokeExecution(t, ctx, pool, reader, input, get, ownedConfig, config, func(t *testing.T) session.GetResult {
+					current, _ := makeIssuedCookie(t)
 					return current
 				})
 				// Current lifecycle state wins over original sign-in proof metadata.
@@ -711,6 +716,7 @@ func testNativeIssueIntegration(t *testing.T, ctx context.Context, pool *databas
 				})
 				t.Run("public bounded session listing", func(t *testing.T) { testPublicSessionList(t, ctx, pool, input, get.Session, config) })
 				testPublicSignOut(t, ctx, pool, input, get.Session, ownedConfig, config.Validation, cookie)
+				testPublicSetRevocation(t, ctx, pool, ownedConfig, config.Validation, reader, makeIssuedCookie)
 			})
 			request, ok := prepared.Request()
 			if !ok {
