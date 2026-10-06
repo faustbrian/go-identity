@@ -656,6 +656,37 @@ func testNativeIssueIntegration(t *testing.T, ctx context.Context, pool *databas
 				if got, e := restarted.Get(ctx, other); e != nil || got.Authenticated {
 					t.Fatal("different cookie authenticated", e)
 				}
+				testOwnedRevokeExecution(t, ctx, pool, reader, input, get, ownedConfig, config, func(t *testing.T) session.GetResult {
+					t.Helper()
+					candidate := prepare(t)
+					s, _ := candidate.record.Bindings()
+					s.Lookup = session.TokenDigest{}
+					p, e := core.Prepare(candidate.binding, s, candidate.proof)
+					if e != nil {
+						t.Fatal(e)
+					}
+					issued, e := core.Issue(ctx, p)
+					if e != nil {
+						t.Fatal(e)
+					}
+					wire, e := issued.Token.Reveal()
+					if e != nil {
+						t.Fatal(e)
+					}
+					token, e := session.ParseToken(wire)
+					if e != nil {
+						t.Fatal(e)
+					}
+					credential, e := session.NewCredential(session.CredentialCookie, token)
+					if e != nil {
+						t.Fatal(e)
+					}
+					current, e := reader.Get(ctx, session.GetRequest{TenantID: s.TenantID, Credential: credential})
+					if e != nil || !current.Authenticated {
+						t.Fatal("issued target admission", e)
+					}
+					return current
+				})
 				// Current lifecycle state wins over original sign-in proof metadata.
 				if _, e = pool.Raw().Exec(ctx, `UPDATE identity.credential_references SET enabled=false WHERE tenant_id='issue' AND user_id='issue-user' AND credential_id='password'`); e != nil {
 					t.Fatal(e)

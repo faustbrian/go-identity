@@ -58,7 +58,11 @@ var _ session.IssueExecutor = (*IssueExecutor)(nil)
 // is fixed to this same current service/clock/revision for receipt recovery.
 // Existing native repository constructors retain their contributor-only API.
 func NewIssueExecutor(pool *database.Pool, c IssueExecutorConfig) (*IssueExecutor, error) {
-	if pool == nil || pool.Raw() == nil || nilIssueDependency(c.Authorization) || nilIssueDependency(c.Clock) || !scopeID(c.PolicyID) || c.PolicyVersion == 0 || c.AuditRetentionVersion == 0 || c.Coordinator.FinalAuthentication == nil || c.Coordinator.FinalAuthentication.Authority == nil || c.Coordinator.MaximumDuration < time.Millisecond || c.Coordinator.MaximumDuration > 30*time.Second {
+	return newOwnedSessionExecution(pool, c, true)
+}
+
+func newOwnedSessionExecution(pool *database.Pool, c IssueExecutorConfig, requireFinalAuthentication bool) (*IssueExecutor, error) {
+	if pool == nil || pool.Raw() == nil || nilIssueDependency(c.Authorization) || nilIssueDependency(c.Clock) || !scopeID(c.PolicyID) || c.PolicyVersion == 0 || c.AuditRetentionVersion == 0 || requireFinalAuthentication && (c.Coordinator.FinalAuthentication == nil || c.Coordinator.FinalAuthentication.Authority == nil) || c.Coordinator.MaximumDuration < time.Millisecond || c.Coordinator.MaximumDuration > 30*time.Second {
 		return nil, session.ErrInvalidIssuer
 	}
 	native, err := NewRepositoryWithIssueAdmission(pool, c.Repository, c.Profile)

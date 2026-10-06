@@ -93,9 +93,18 @@ func (r *Repository) ValidateFeatureCommand(c identity.Command, p identitypostgr
 // here: the coordinator owns their exact required phases and terminal receipt.
 func (r *Repository) ApplyFeature(ctx context.Context, w identitypostgres.Work, c identity.Command) (identity.FeatureReceipt, error) {
 	if s, ok := c.Feature(); ok && s.Operation == session.RevokeOneOperation() {
-		native, err := nativeRevokeOne(c)
+		native, source, err := nativeRevokeIntent(c)
 		if err != nil {
 			return identity.FeatureReceipt{}, err
+		}
+		if source != nil {
+			one, _ := native.RevokeOne()
+			if r == nil || r.issueAdmission == nil {
+				return identity.FeatureReceipt{}, session.ErrInvalidSessionCommand
+			}
+			if err := r.requireRevokeSource(ctx, w, one.Binding, one.Session, source); err != nil {
+				return identity.FeatureReceipt{}, err
+			}
 		}
 		return r.Apply(ctx, w, native)
 	}

@@ -33,9 +33,31 @@ evidence never prove noncommit or authorize another transition.
 This currently supports active single-factor self-service targets with the
 configured owner profile, not anonymous/factor/passkey or administrative
 variants. Construction and structural mapping do not authenticate a caller:
-the owned public revocation service must still supply opaque current caller
-admission and policy before reservation. Public idempotent signout and revoked
+the owned execution service supplies opaque current caller admission and policy
+before reservation. Public idempotent signout and revoked
 or expired-target management remain required work. No bearer is issued here.
+
+`NewRevokeOneExecutor(pool, RevokeOneExecutorConfig{Execution: ..., Sessions:
+reader})` owns the kernel/native/audit/outbox composition. `reader` is the exact
+trusted service that returned the positive caller result. The existing execution
+configuration supplies deployment profile, bounded clock, policy revisions and
+coordinator keys; final-signin proof composition is not required for revocation.
+Use `reader.PrepareRevokeOne(caller, command)` and pass that original opaque
+request to `ExecuteRevokeOne`. Structural `MapRevokeOneRequest` is not admission.
+
+The mapped intent retains both complete caller and target records and the
+unchanged original deadline. The executor checks original custody/current
+policy before reservation, locks current source/target owners on the primary,
+orders both session locks deterministically, and checks original admission
+before commit. The transaction/commit budget cannot outlive the remaining
+original validity. Primary database time caps a monotonic deadline anchored
+before the clock query, so application-clock skew and slow audit/outbox work
+cannot extend that validity. Copies and retries do not restart that window. Exact replay
+returns the original retained receipt without another mutation or effect.
+`RecoverRevokeOneCommand` observes historical scoped metadata under current
+result-access policy, including after reconstructed executor composition; it
+does not reconstruct a bearer, authenticate the caller or authorize execution.
+Absent, expired and already-revoked public logout semantics remain unfinished.
 
 ## Owned stateful authentication
 

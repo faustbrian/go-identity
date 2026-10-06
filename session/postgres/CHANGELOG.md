@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Add owned single-session execution using original opaque caller admission,
+  current policy and same-transaction source/target owner checks. Freeze both
+  records and original validity in command intent, order session locks to avoid
+  cross-revocation deadlocks, and bound commit by primary-observed remaining
+  admission time even with application-clock skew or slow audit/outbox work.
+  Replays and scoped restart recovery retain historical outcomes without a new
+  transition. Revocation does not require final-signin proof composition;
+  public idempotent signout and absent/expired target handling remain pending.
+
 - Add exact single-session revocation through the existing coordinator with
   complete original-record mapping, locked directory/credential/policy/session
   admission, target-only CAS and retained terminal successor evidence. Sibling

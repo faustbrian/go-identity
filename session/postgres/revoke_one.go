@@ -13,23 +13,26 @@ import (
 )
 
 func nativeRevokeOne(command identity.Command) (session.SessionCommand, error) {
-	b, record, err := nativeSessionRecord(command, session.RevokeOneOperation())
-	if err != nil {
-		return session.SessionCommand{}, err
-	}
-	return session.NewRevokeOneCommand(b, record)
+	native, _, err := nativeRevokeIntent(command)
+	return native, err
 }
 
 func (r *Repository) validateRevokeOnePlan(command identity.Command, p kernel.CommandPlan) error {
 	if r == nil || r.issueAdmission == nil {
 		return session.ErrInvalidSessionCommand
 	}
-	native, err := nativeRevokeOne(command)
+	native, source, err := nativeRevokeIntent(command)
 	if err != nil {
 		return err
 	}
 	one, _ := native.RevokeOne()
 	spec, _ := one.Session.Bindings()
+	if source != nil {
+		caller, _ := source.record.Bindings()
+		if _, _, _, err = sessionAdmissionBindings(IdentifierAdmissionConfig(*r.issueAdmission), source.record, one.Binding, caller.SessionID, caller.Version); err != nil {
+			return err
+		}
+	}
 	if _, _, _, err = sessionAdmissionBindings(IdentifierAdmissionConfig(*r.issueAdmission), one.Session, one.Binding, spec.SessionID, spec.Version); err != nil {
 		return err
 	}
