@@ -40,6 +40,44 @@ executable example demonstrates this lifecycle without displaying a code.
 
 ## Adoption and tradeoffs
 
+### Keyed digest storage
+
+`NewDestinationInput` copies bounded raw channel input without normalizing it.
+The owning email/phone workflow must canonicalize and enforce uniqueness before
+using it in `NewDigestScope`. `DestinationInput.Value` is an explicit trusted
+delivery/workflow accessor, never a logging or wire representation.
+
+`NewDigestScope` binds exact tenant, closed purpose, subject (empty only before
+account creation), channel, canonical destination, challenge, workflow target,
+policy/generation and a nonzero authorization binding. The trusted workflow
+must derive that binding from the complete closed authenticated-session or
+pre-auth transaction context, including session remember policy; request data
+cannot stand in for verified authorization. The constructor validates bounds,
+not ownership, account existence, current permission or challenge validity.
+
+`NewVerifier(current, retainedKeys)` copies an explicit ring of 1..8 nonzero
+32-byte keys with positive versions. `Digest(scope, authentication.OneTimeCode)`
+uses the current key; `CodeDigest.Storage()` is an explicit digest-only durable
+projection. `Compare(scope, stored, code)` selects exactly the recorded retained
+key and compares in constant time. Rotation preserves old verification while
+the original key is retained. Removing a key returns `ErrDigestUnavailable`;
+there is no fallback, automatic migration or renewed expiry. Neither raw codes
+nor raw digest keys have accessors. Automatic formatting is redacted and
+serialization denied, including the adapter projection. Go cannot promise
+complete secret erasure; release all retained keys/codes when no longer needed.
+
+**Compare is not a login/check endpoint.** It grants no proof or reservation.
+It belongs inside the durable counted attempt transaction after locked scope,
+expiry, generation, current authorization and rate-limit checks. Wrong-code
+attempts must persist their decrement/denial exactly once; ambiguous outcomes
+must recover without a second comparison. Those workflow/store operations remain
+unfinished. Never expose an unmetered digest oracle or store unkeyed codes.
+
+The consumed authentication contract is pinned to local reviewed commit
+`303520b8d5af937e4e38ec8cb3ee8ff6f9813230`. Development verification uses an
+explicit disposable workspace composition, not a permanent module replacement.
+Publication and clean remote-consumer qualification remain release work.
+
 Borrowed callbacks make accidental secret retention less likely, not impossible:
 the callback is trusted and can copy bytes. It must not log, format or retain
 the raw code; production composition must compute a versioned scope-bound keyed
