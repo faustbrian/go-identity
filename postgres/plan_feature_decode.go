@@ -28,7 +28,7 @@ func decodeFeaturePlan(binding identity.CommandBinding, fingerprint [32]byte, en
 	}
 	r := planReader{attributeReader: attributeReader{data: encoded}, ok: true}
 	fields, ok := r.head(5)
-	if !ok || fields != 7 && fields != 8 && fields != 9 {
+	if !ok || fields != 7 && fields != 8 && fields != 9 && fields != 10 {
 		return fail()
 	}
 	r.key("audits")
@@ -97,11 +97,13 @@ func decodeFeaturePlan(binding identity.CommandBinding, fingerprint [32]byte, en
 	r.key("profile")
 	counterProfile := false
 	captchaProfile := false
-	if fields == 9 {
+	captchaUseProfile := false
+	if fields >= 9 {
 		profile := r.string(64)
 		counterProfile = profile == "identity-feature-command-counters-v1"
 		captchaProfile = profile == "identity-feature-captcha-replay-v1"
-		if !counterProfile && !captchaProfile && profile != "identity-feature-risk-plan-v1" {
+		captchaUseProfile = profile == "identity-feature-captcha-use-v1"
+		if !counterProfile && !captchaProfile && !captchaUseProfile && profile != "identity-feature-risk-plan-v1" || fields == 10 && !captchaUseProfile {
 			return fail()
 		}
 	} else if fields == 8 {
@@ -125,7 +127,7 @@ func decodeFeaturePlan(binding identity.CommandBinding, fingerprint [32]byte, en
 	r.consume(cborBytes(fingerprint[:]))
 	r.key("contributors")
 	contributors := 4
-	if fields == 9 && !captchaProfile {
+	if fields >= 9 && !captchaProfile {
 		contributors = 5
 	}
 	r.expect(4, uint64(contributors))
@@ -139,7 +141,37 @@ func decodeFeaturePlan(binding identity.CommandBinding, fingerprint [32]byte, en
 			return fail()
 		}
 	}
-	if fields == 9 {
+	if captchaUseProfile {
+		for range fields - 8 {
+			switch r.string(32) {
+			case "captcha_evidence":
+				if p.CaptchaEvidence != nil {
+					return fail()
+				}
+				p.CaptchaEvidence = readCaptchaEvidencePlan(&r)
+			case "risk_evidence":
+				if fields != 10 || p.RiskEvidence != nil {
+					return fail()
+				}
+				p.RiskEvidence = readRiskPlan(&r)
+			case "command_counters":
+				if fields != 10 || p.CommandCounters != nil {
+					return fail()
+				}
+				r.expect(5, 2)
+				p.CommandCounters = &CommandCounterPlan{}
+				r.key("fingerprint")
+				r.digest(&p.CommandCounters.Fingerprint)
+				r.key("policy_version")
+				p.CommandCounters.PolicyVersion = r.number(math.MaxUint64)
+			default:
+				return fail()
+			}
+		}
+		if p.CaptchaEvidence == nil {
+			return fail()
+		}
+	} else if fields == 9 {
 		if captchaProfile {
 			r.key("captcha_replay")
 			r.consume(cborBool(true))

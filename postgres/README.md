@@ -1,5 +1,22 @@
 # Identity PostgreSQL
 
+## CAPTCHA consuming declaration
+
+`CommandPlan.CaptchaEvidence` carries bounded signed consuming custody,
+distinct from issuance replay ownership. Its deterministic historical profile
+binds issuance identity, original signature, evidence lookup, consuming
+signature, retained key/risk-policy versions and unchanged validity interval.
+The immutable native command must additionally bind the full original trusted
+flow/configuration and all protected target/version fields; this declaration
+cannot substitute for them or authenticate its own inputs. Risk policy is
+separate from authorization policy. CAPTCHA, phone evidence and counters share
+one exact risk-store contributor and must agree on risk-policy version.
+
+Existing plan bytes are unchanged when this declaration is absent. Structural
+encoding/decoding supports the new profile, but executable preparation and
+reservation reject it until native reservation, current checks, finalization
+and release/recovery are wired. Do not use its digest as a protected-action gate.
+
 ## Native CAPTCHA replay reservation
 
 `CommandPlan.CaptchaReplayReservation` explicitly selects the native risk
@@ -14,8 +31,9 @@ original immutable command, authoritative fingerprint and owner generations.
 The registered native participant authenticates signed custody/configuration
 and enforces alias uniqueness. Callback return or panic expires every handle
 copy; takeover uses exact predecessor CAS, never a timeout-based release.
-False leaves historical plan bytes unchanged. Production risk-store CAPTCHA
-issuance, original-result recovery and protected consumption remain pending;
+False leaves historical plan bytes unchanged. The risk PostgreSQL adapter now
+supplies production issuance and original-result recovery; protected consumption
+remains pending;
 applications must not implement private replay stores to fill these gaps.
 
 ## Exact original final-authentication outcome recovery

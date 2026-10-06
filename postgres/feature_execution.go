@@ -54,6 +54,11 @@ func validateFeatureCommand(phase FeatureExecutionContributor, command identity.
 }
 
 func (r *ContributorRegistry) admitFeaturePlan(b identity.CommandBinding, fingerprint [32]byte, p CommandPlan) (*admittedKernelPlan, error) {
+	// A conserved declaration is not a one-use execution contract. Reject before
+	// any journal/reservation write until all typed consuming phases are wired.
+	if p.CaptchaEvidence != nil {
+		return nil, invalidPlan()
+	}
 	digest, err := FeaturePlanDigest(b, fingerprint, p)
 	if err != nil || digest != p.Digest || p.SubjectType == "" {
 		return nil, invalidPlan()

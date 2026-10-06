@@ -185,7 +185,7 @@ func (c *Coordinator) prepare(binding identity.CommandBinding, command identity.
 		}
 		return c.prepareFeature(binding, command, spec, plan)
 	}
-	if plan.Feature != nil || plan.RiskEvidence != nil || plan.CommandCounters != nil || plan.CaptchaReplayReservation {
+	if plan.Feature != nil || plan.RiskEvidence != nil || plan.CommandCounters != nil || plan.CaptchaEvidence != nil || plan.CaptchaReplayReservation {
 		return claimRequest{}, CommandPlan{}, nil, invalidPlan()
 	}
 	// No proof/cascade declaration is inferred from a contributor name. Those

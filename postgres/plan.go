@@ -41,6 +41,11 @@ type CommandPlan struct {
 	// RiskEvidence freezes a signed reset-initiation precheck. The exact registered
 	// risk reservation participant is required; domain execution remains disabled.
 	RiskEvidence *RiskEvidencePlan
+	// CaptchaEvidence declares consuming custody, not issuance replay. It shares
+	// the exact risk owner with counters/phone evidence where declared. Structural
+	// encoding is supported; executable admission remains closed until native
+	// reservation, current checks, finalization and release/recovery are complete.
+	CaptchaEvidence *CaptchaEvidencePlan
 	// CommandCounters declares protected-command durable counter admission.
 	// It requires the exact native risk participant; no raw dimensions are stored.
 	CommandCounters *CommandCounterPlan
@@ -93,7 +98,7 @@ func encodeKernelPlan(binding identity.CommandBinding, fingerprint [32]byte, pla
 	if plan.CapabilityIssuance != nil {
 		return encodeIssuanceWrappedPlan(binding, fingerprint, plan, encodeKernelPlan)
 	}
-	if plan.Feature != nil || plan.SubjectType != "" || plan.RiskEvidence != nil || plan.CommandCounters != nil || plan.CaptchaReplayReservation {
+	if plan.Feature != nil || plan.SubjectType != "" || plan.RiskEvidence != nil || plan.CaptchaEvidence != nil || plan.CommandCounters != nil || plan.CaptchaReplayReservation {
 		return nil, invalidPlan()
 	}
 	probe := identity.CommandResult{Binding: binding, Outcome: identity.CommitOutcomeInProgress, RetryAfter: time.Microsecond}

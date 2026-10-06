@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add typed CAPTCHA consuming-plan custody with exact signed linkage, original
+  validity and risk-policy version, separate from issuance replay reservation.
+  Historical encoding binds every declared role and shares one risk owner with
+  phone evidence or counters. Existing plan bytes are unchanged when absent;
+  executable admission remains closed until native consuming phases are wired.
+
 - Expose sealed current CAPTCHA replay fingerprint/generation linkage only to
   the active declared native feature or recovery participant. Foreign, returned
   and undeclared handles fail closed; linkage does not grant replay ownership,
