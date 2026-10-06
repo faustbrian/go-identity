@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add storage-neutral session rotation with exact original caller and transport
+  custody, retained-key compatibility, immutable successor preparation and
+  commit-gated reveal-once delivery. Preserve absolute and authentication lifetime,
+  family and unrelated authority; replay, recovery, error and ambiguity deliver
+  no credential. Native atomic rotation and reuse-family revocation remain pending.
+
 - Preserve exact known bulk-revocation commitment when ancillary retained
   metadata cannot be read. Return a redacted error and no count/version/source
   disposition; malformed receipts or partial metadata still fail closed.

@@ -23,6 +23,34 @@ or opens a transaction, reserves a proof, writes a record or reveals a token.
 
 ## Quick start and API
 
+### Commit-gated session rotation
+
+`NewSessionRotator(primarySessions, ownedExecutor, RotationConfig{...})` borrows
+the exact configured reader and durable rotation executor. The configured
+lookup key must be retained by that reader with identical version and material.
+`Prepare(originalGetResult, commandID, correlationID)` requires opaque original
+caller admission and an eligible refresh time; premature refresh returns
+`ErrRotationDeferred` without execution. Ordinary refresh requires no fresh
+login. Preparation freezes the exact source and successor without durable IO.
+
+`Rotate(ctx, preparation)` makes one bounded attempt. It changes only the
+lookup digest, accepted activity and session/authority version. Original absolute
+issuance, authentication time, family, remember policy, scope and unrelated
+authority remain unchanged: rotation cannot turn an old login into fresh
+authentication. Copies share one attempt, and only a new successful committed
+result within original admission/context limits returns a reveal-once token.
+Cookie attributes have an empty value; original bearer transport returns no
+cookie. HTTP owns extraction, CSRF/origin policy and explicit credential delivery.
+
+Retain `preparation.Request()` before execution. Replay, error, ambiguity,
+cancellation and `Recover(ctx, originalRequest)` never return a credential.
+Known commitment remains observable even when ancillary metadata is unavailable;
+recovery observes the historical command under the adapter's current exact
+result-access policy rather than executing again or renewing caller authority.
+The storage-neutral core is available; native PostgreSQL atomic digest retirement,
+reuse-family revocation and durable rotation recovery remain pending. Do not
+replace those missing effects with an application-written store or journal.
+
 ### Authenticated session listing
 
 `NewListService(primarySessions, ownedPages, ListConfig{Authorization: policy,
