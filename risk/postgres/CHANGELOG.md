@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Add owned public CAPTCHA execution and independently current-authorized
+  original-response recovery through the shared coordinator. Bind immutable
+  trusted pre-auth, authenticated or administrator flow to the verified caller;
+  conserve encrypted original responses across restart and lost acknowledgement,
+  without provider reevaluation, new bearers or renewed historical expiry.
+  Protected consumption and complete lifecycle/release profiles remain pending.
+
 - Add an independently allocated forward CAPTCHA scope-custody upgrade. Preserve
   populated aliases and serialize new reservations against retained key versions,
   denying omitted keys and disjoint-key races without scanning token history.

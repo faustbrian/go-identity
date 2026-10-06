@@ -988,5 +988,6 @@ func TestIssuedEvidenceSameWorkIntegration(t *testing.T) {
 			t.Fatal("native CAPTCHA scope upgrade", err)
 		}
 		testNativeCaptchaReplay(t, ctx, pool)
+		t.Run("public-executor", func(t *testing.T) { testPublicCaptchaExecutor(t, ctx, pool, dsn, name) })
 	})
 }

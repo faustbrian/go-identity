@@ -82,7 +82,13 @@ func (Executor) MarshalText() ([]byte, error) { return nil, risk.ErrSensitiveSer
 // The caller context is copied; services/adapters must retain their immutable
 // policy revision and support concurrent calls for the executor's lifetime.
 func NewExecutor(c ExecutorConfig) (*Executor, error) {
-	if c.Pool == nil || c.Pool.Raw() == nil || c.Repository == nil || c.Repository.schema == "" || !boundedExecutorCaller(c.Caller) || !executorID(c.PolicyID) || c.RetentionPolicyVersion == 0 || c.Coordinator.QueryPolicy == nil || c.Coordinator.AdmissionPolicy == nil || uint64(c.Caller.PolicyRevision) != c.Coordinator.QueryPolicy.PolicyVersion || uint64(c.Caller.PolicyRevision) != c.Coordinator.AdmissionPolicy.PolicyVersion {
+	return newExecutor(c, boundedExecutorCaller(c.Caller))
+}
+
+// Common owned resource/registry construction; each public constructor retains
+// its distinct exact operation and trusted-subject admission rules.
+func newExecutor(c ExecutorConfig, validCaller bool) (*Executor, error) {
+	if c.Pool == nil || c.Pool.Raw() == nil || c.Repository == nil || c.Repository.schema == "" || !validCaller || !executorID(c.PolicyID) || c.RetentionPolicyVersion == 0 || c.Coordinator.QueryPolicy == nil || c.Coordinator.AdmissionPolicy == nil || uint64(c.Caller.PolicyRevision) != c.Coordinator.QueryPolicy.PolicyVersion || uint64(c.Caller.PolicyRevision) != c.Coordinator.AdmissionPolicy.PolicyVersion {
 		return nil, risk.ErrInvalidPolicy
 	}
 	domain, err := identitypostgres.NewRepository(c.Pool, identitypostgres.Config{MaximumDuration: c.Coordinator.MaximumDuration})
@@ -281,7 +287,11 @@ func executorID(s string) bool {
 }
 
 func boundedExecutorCaller(dc authorization.DecisionContext) bool {
-	if len(dc.Request.Subject.Groups) > 32 || dc.Validate() != nil || dc.Request.Action != authorization.Action(IssueOperation().OperationID) || dc.Request.Resource.Type != "identity.user" {
+	return dc.Request.Action == authorization.Action(IssueOperation().OperationID) && dc.Request.Resource.Type == "identity.user" && boundedExecutorCallerShape(dc)
+}
+
+func boundedExecutorCallerShape(dc authorization.DecisionContext) bool {
+	if len(dc.Request.Subject.Groups) > 32 || dc.Validate() != nil {
 		return false
 	}
 	if dc.Request.Subject.Kind != authorization.SubjectUser && dc.Request.Subject.Kind != authorization.SubjectAPIKey && dc.Request.Subject.Kind != authorization.SubjectServiceAccount {

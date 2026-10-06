@@ -5,6 +5,25 @@ evidence and decisions. It is **not yet an executable durable risk service**.
 
 ## Implemented boundary
 
+- `NewCaptchaExecutor(CaptchaExecutorConfig{Executor: composition, Flow: flow})`
+  supplies the real `risk.CaptchaEvidenceExecutor`. Compose immutable
+  `CaptchaEvidenceCustody` first, select it in `Config.CaptchaCustody`, construct
+  the repository and executor, then supply the executor to
+  `risk.NewCaptchaEvidenceIssuer`. No dummy callback or consumer-written store
+  is necessary. Caller and flow come from verified server composition, never
+  decoded client metadata. The executor binds the exact tenant/target namespace
+  and administrative actor and freezes all challenge, session, pre-auth and
+  request dimensions. Changing any dimension requires a new correctly verified
+  composition. Current admission/recovery policies receive trusted
+  `identity.captcha.{flow-kind,operation,pre-auth,session,actor,challenge,request}`
+  attributes and must enforce current authority; historical permission is not
+  enough. The separately configured policies cannot be omitted.
+  Unknown commit discloses no candidate; recovery returns only the authenticated
+  original encrypted response without provider verification or expiry renewal.
+  This is issuance, not protected-use authority. Production-effect composition,
+  complete cleanup/retirement, protected consumption and release gates remain
+  unfinished for CAPTCHA.
+
 - `Config.CaptchaCustody` selects bounded immutable core verifier profiles with
   the exact risk policy and retained evidence-key set. Empty preserves existing
   setup. The native participant authenticates signed input against a selected
@@ -14,8 +33,9 @@ evidence and decisions. It is **not yet an executable durable risk service**.
   time after locks, then inserts encrypted evidence in the same Work as command,
   audit and lifecycle commitment. Participant recovery classifies only exact
   primary custody; missing owners or corrupt response encryption remain unknown.
-  Public issuer execution/recovery, complete rotation/key-retirement safeguards,
-  protected consumption and the canonical risk service are still unfinished.
+  Public issuer execution/recovery is supplied by `NewCaptchaExecutor` above.
+  Complete rotation/key-retirement safeguards, protected consumption and the
+  canonical risk service are still unfinished.
 
 - `CaptchaScopeMigrationSource{Schema, Version, Custody}` must follow the CAPTCHA custody
   migration before selected native reservation. Its forward upgrade backfills
@@ -48,7 +68,8 @@ evidence and decisions. It is **not yet an executable durable risk service**.
   response encryption uses a separate CAPTCHA profile and authenticates exact
   command scope and retained record metadata. Mapping alone does not enable
   durable execution; explicitly selected native custody is separate from these
-  preparation contracts. Public executor and protected-use phases remain open.
+  preparation contracts. `NewCaptchaExecutor` supplies public issuance and
+  recovery; protected-use phases remain open.
 
 - `Config.EnforceLockouts` selects current durable restriction enforcement for
   protected command counters. Install `LockoutMigrationSource` after counter
