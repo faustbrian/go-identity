@@ -8,8 +8,9 @@ executor composition is available in the PostgreSQL adapter. Stateful opaque
 `SessionService.Get` validation is available against its trusted owned-reader
 contract, with an owned primary reader and revocation executor in the PostgreSQL
 adapter. Public self-signout is available through `SignOutService` and the
-owned PostgreSQL factory. Authenticated `ListService` orchestration is available;
-its owned PostgreSQL page-reader composition remains pending. **Rotation, complete revocation
+owned PostgreSQL factory. Authenticated `ListService` and its owned PostgreSQL
+page-reader composition are available. Core fresh bulk-revocation orchestration
+is available; native set mutation remains pending. **Rotation, complete revocation
 services and transfers remain unfinished; this is not a usable login service.** Complete authority-vector
 construction and exact comparison are available, but do not read primary
 authority or prove activity/freshness.
@@ -31,7 +32,7 @@ tenant, credential, safe correlation, explicit `Limit` (1..100) and optional
 cursor/`IncludeInactive`; no current-session or user ID can replace a credential.
 Ordinary self-listing requires current policy, not fresh login. The reader seam
 is for the owned primary adapter, not an application-written domain store. Its
-native PostgreSQL implementation is the next composition step.
+native PostgreSQL implementation is available through its owned factory.
 
 Results contain only device display metadata, exact recorded expiry and current/
 inactive flags. Labels are bounded untrusted text, not MFA trusted devices.
@@ -44,6 +45,39 @@ Every call authenticates and authorizes anew. Keyset traversal uses exclusive
 bytewise session-ID order; concurrent inserts before the marker are not revisited.
 Cancellation, outage, corrupt pages or expired original caller admission return
 no partial metadata. HTTP owns explicit authorized DTO serialization.
+
+### Fresh self-service bulk revocation
+
+`NewSetRevocationService(primarySessions, ownedExecutor, SetRevocationConfig{...})`
+borrows the exact configured primary reader and an owned durable executor.
+Select explicit policy ID/version, a whole-set bound of 1..100000 active rows
+and a 1ms..30s whole-call budget. This is storage-neutral orchestration; the
+native PostgreSQL set executor and atomic recovery are not yet implemented.
+Consumers must not substitute application-written stores or transactions.
+
+`RevokeOther` accepts tenant, actual cookie/bearer credential and host-generated
+command/correlation IDs, never caller-selected user/session IDs. It preserves
+the authenticating session. `RevokeAll` additionally requires an explicit
+`IncludeCurrent` decision and the positive exact `ExpectedSubjectVersion` from
+the authenticated user authority. Targets span that owner's sessions in the
+same tenant across audiences; another tenant or user is never selected.
+Bulk actions require fresh authentication, unlike ordinary signout/listing.
+
+Private `PrepareRevokeSet` custody is bound to the original `Get` provenance,
+entire source record and the earlier original authority/freshness deadline.
+Copies, activity or repeated preparation cannot renew either deadline.
+The durable owner must serialize against issuance and recheck current source,
+owner and policy before applying the complete bounded set in one transaction.
+Exceeding the bound must deny without partial revocation, not truncate or page.
+
+Receipt and recovery `RecordID` bind the source session whose version advances.
+`SubjectVersion` is the unchanged user-authority CAS; `SessionVersion` is the
+source successor. A survivor must retain its original bearer, lifetime and
+authentication timestamps with its matching session-version binding. Unknown
+or in-progress outcomes retain exact scoped recovery; do not mint a replacement
+command. Cancellation or expiry after a known commit preserves its outcome but
+withholds counts/disposition. HTTP clears only the selected transport after
+successful `CurrentSessionRevoked`; this core service emits no cookie itself.
 
 ### Idempotent self-signout
 

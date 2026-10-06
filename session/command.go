@@ -26,13 +26,14 @@ type IssueCommandSpec struct {
 }
 
 // SessionCommand is a closed immutable native transition. Issue, one-session
-// and family revocation are distinct variants; other transitions cannot enter.
+// family and user-owned set revocation are distinct variants; other transitions cannot enter.
 // Zero is invalid, copies are concurrency safe, and formatting/serialization
 // cannot expose scope. Construction grants no issuance or execution authority.
 type SessionCommand struct {
 	issue        *IssueCommandSpec
 	revokeFamily *RevokeFamilyCommandSpec
 	revokeOne    *RevokeOneCommandSpec
+	revokeSet    *RevokeSetCommandSpec
 }
 
 // IssueOperation returns the exact v1 native issue mapping. This declaration

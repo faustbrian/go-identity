@@ -38,7 +38,7 @@ func NewRevokeOneCommand(b identity.CommandBinding, s Session) (SessionCommand, 
 // immutable session. False means zero or another command variant. It is never
 // evidence that revocation committed or that the caller owns the target.
 func (c SessionCommand) RevokeOne() (RevokeOneCommandSpec, bool) {
-	if c.revokeOne == nil || c.issue != nil || c.revokeFamily != nil {
+	if c.revokeOne == nil || c.issue != nil || c.revokeFamily != nil || c.revokeSet != nil {
 		return RevokeOneCommandSpec{}, false
 	}
 	return *c.revokeOne, true

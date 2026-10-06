@@ -35,7 +35,7 @@ func NewRevokeFamilyCommand(b identity.CommandBinding, expected uint64) (Session
 // command variant or zero. This projection is preparation, never proof that
 // revocation committed or that a caller can inspect or manage another account.
 func (c SessionCommand) RevokeFamily() (RevokeFamilyCommandSpec, bool) {
-	if c.revokeFamily == nil || c.issue != nil {
+	if c.revokeFamily == nil || c.issue != nil || c.revokeOne != nil || c.revokeSet != nil {
 		return RevokeFamilyCommandSpec{}, false
 	}
 	return *c.revokeFamily, true

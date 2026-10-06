@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Add fresh authenticated revoke-other/all orchestration with explicit source
+  preservation, bounded whole-set commands and opaque original caller custody.
+  Receipt versions and recovery bind the authenticating session; the user CAS
+  remains unchanged so preserving that session does not invalidate its owner.
+  Original authority and authentication freshness deadlines cannot be renewed.
+  Denial, cancellation and ambiguous outcomes expose no successful count.
+  Atomic PostgreSQL set mutation and recovery remain pending adapter work.
+
 - Add bounded authenticated self-session listing with current authorization,
   safe device projections and optional inactive records. Scope-bound keyset
   cursors traverse at most 100 raw rows per call without exposing credentials,
