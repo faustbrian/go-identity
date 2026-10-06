@@ -46,10 +46,11 @@ type Config struct {
 	// does not enable domain execution or supply current counter authority.
 	UseIssuer *risk.PhoneEvidenceIssuer
 	// CaptchaCustody selects 1..32 immutable current verifier profiles for native
-	// CAPTCHA issuance. Nil preserves existing setup. Every profile must match
+	// CAPTCHA issuance and consuming reservation. Nil preserves existing setup. Every profile must match
 	// PolicyVersion and the complete retained EvidenceKeys. Install the separately
 	// allocated CaptchaMigrationSource and CaptchaScopeMigrationSource before
-	// execution; no provider callbacks
+	// issuance; also install CaptchaUseMigrationSource for consuming reservation.
+	// No provider callbacks
 	// are retained or invoked by this durable owner.
 	CaptchaCustody []risk.CaptchaEvidenceCustody
 }
@@ -69,7 +70,7 @@ func (Config) MarshalText() ([]byte, error) { return nil, risk.ErrSensitiveSeria
 // Zero is invalid. Initiation reservation/rebind use the sole coordinator;
 // consuming recovery and terminal release use that coordinator as well.
 // Protected counters, authorized native lockout transitions and native CAPTCHA
-// issuance custody are opt-in. Evidence consumption, CAPTCHA protected use,
+// issuance/consuming reservation custody are opt-in. Evidence consumption, CAPTCHA protected use,
 // counter retirement and pruning remain unsupported. Selection is not a
 // complete consumer workflow service.
 type Repository struct {

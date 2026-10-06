@@ -14,7 +14,20 @@ evidence and decisions. It is **not yet an executable durable risk service**.
   separate. `Repository.ValidateCaptchaUseCommand` authenticates that exact
   declaration under selected current verifier configuration without callbacks
   or IO. These pure boundaries grant no durable use or mutation permission;
-  the production consuming reservation and domain/recovery phases are unfinished.
+  domain-time current authorization, finalization and release/recovery remain
+  unfinished; reservation alone is not usable login or protected-use permission.
+
+- `Repository.ReserveCaptchaEvidence` and `RebindCaptchaEvidence` implement the
+  coordinator's sealed native consuming-reservation contract. Install
+  `CaptchaUseMigrationSource` before choosing consuming plans. The owner locks
+  the exact keyed evidence from committed original issuance, compares signed
+  native facts and checks primary expiry after exclusion. First reservation
+  binds one command/fingerprint/generation; takeover conserves the original
+  interval and transfers only its exact predecessor, atomically with the command
+  and every declared participant. Missing, terminal, foreign and divergent
+  ownership deny; no provider callbacks, private transaction or time-based
+  release run. Coordinator domain execution stays closed until the remaining
+  current-check/finalization/recovery contract is implemented.
 
 - `CaptchaUseMigrationSource{Schema, Version}` adds consuming-command custody
   after the existing CAPTCHA journal, with a permanently allocated forward

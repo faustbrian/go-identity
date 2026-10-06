@@ -987,6 +987,13 @@ func TestIssuedEvidenceSameWorkIntegration(t *testing.T) {
 		if _, err := pool.Raw().Exec(ctx, scopeHistory[0].UpSQL()); err != nil {
 			t.Fatal("native CAPTCHA scope upgrade", err)
 		}
+		useHistory, err := (CaptchaUseMigrationSource{Schema: "risk_store", Version: 42}).Load(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := pool.Raw().Exec(ctx, useHistory[0].UpSQL()); err != nil {
+			t.Fatal("native CAPTCHA consuming upgrade", err)
+		}
 		testNativeCaptchaReplay(t, ctx, pool)
 		t.Run("public-executor", func(t *testing.T) { testPublicCaptchaExecutor(t, ctx, pool, dsn, name) })
 	})

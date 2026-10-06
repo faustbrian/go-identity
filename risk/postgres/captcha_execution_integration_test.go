@@ -32,6 +32,12 @@ func testNativeCaptchaReplay(t *testing.T, ctx context.Context, pool *database.P
 	if err != nil {
 		t.Fatal(err)
 	}
+	shortProfile := profile
+	shortProfile.Lifetime = 3 * time.Second
+	shortCustody, err := risk.NewCaptchaEvidenceCustody(shortProfile)
+	if err != nil {
+		t.Fatal(err)
+	}
 	_, _, disjointProfile := captchaConfiguredFixture(t, captchaFlowFixture(), at.UTC(), 2)
 	disjointCustody, err := risk.NewCaptchaEvidenceCustody(disjointProfile)
 	if err != nil {
@@ -56,7 +62,7 @@ func testNativeCaptchaReplay(t *testing.T, ctx context.Context, pool *database.P
 	if err != nil {
 		t.Fatal(err)
 	}
-	repo, err := NewRepository(Config{Schema: "risk_store", PolicyVersion: 3, EvidenceKeys: []risk.EvidenceKey{key}, EnvelopeKeys: map[string][]byte{"wrapping_v1": wrappingKey(1)}, CurrentEnvelopeKey: "wrapping_v1", CaptchaCustody: []risk.CaptchaEvidenceCustody{custody, disjointCustody, replacementCustody, overlapCustodyFirst, overlapCustodySecond}})
+	repo, err := NewRepository(Config{Schema: "risk_store", PolicyVersion: 3, EvidenceKeys: []risk.EvidenceKey{key}, EnvelopeKeys: map[string][]byte{"wrapping_v1": wrappingKey(1)}, CurrentEnvelopeKey: "wrapping_v1", CaptchaCustody: []risk.CaptchaEvidenceCustody{custody, shortCustody, disjointCustody, replacementCustody, overlapCustodyFirst, overlapCustodySecond}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -181,6 +187,53 @@ func testNativeCaptchaReplay(t *testing.T, ctx context.Context, pool *database.P
 			if _, result, err := c.ReserveCommand(ctx, other, otherCommand, otherPlan); err == nil && result.Outcome == identity.CommitOutcomeInProgress {
 				t.Fatal("different command reacquired provider token")
 			}
+		})
+	}
+	for _, test := range []string{"native-consuming", "native-consuming-expiry"} {
+		t.Run(test, func(t *testing.T) {
+			originalProfile := profile
+			defer func() { profile = originalProfile }()
+			if test == "native-consuming-expiry" {
+				var current time.Time
+				if err := pool.Raw().QueryRow(ctx, `SELECT clock_timestamp()`).Scan(&current); err != nil {
+					t.Fatal(err)
+				}
+				_, _, profile = captchaConfiguredFixture(t, captchaFlowFixture(), current.UTC())
+				profile.Lifetime = shortProfile.Lifetime
+				verify := profile.Verify
+				profile.Verify = func(ctx context.Context, request risk.CaptchaVerificationRequest) (risk.CaptchaObservation, error) {
+					observation, err := verify(ctx, request)
+					observation.ExpiresAt = observation.ObservedAt.Add(shortProfile.Lifetime)
+					return observation, err
+				}
+			}
+			b, cmd, plan, issue := prepare([]byte("synthetic-" + test + "-captcha-token"))
+			reservation, _, err := c.ReserveCommand(ctx, b, cmd, plan)
+			if err != nil {
+				t.Fatal(err)
+			}
+			work, err := c.Begin(ctx, reservation)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer c.Abort(work, identity.UnavailableError{})
+			result, err := c.ApplyFeature(ctx, work, cmd)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if result, err = c.Commit(work, result); err != nil || result.Outcome != identity.CommitOutcomeCommitted {
+				t.Fatal("source issuance did not commit", err)
+			}
+			id, _ := base64.RawURLEncoding.DecodeString(string(b.CommandID))
+			var issuedAt time.Time
+			if err := pool.Raw().QueryRow(ctx, `SELECT issued_at FROM risk_store.captcha_issued_evidence WHERE command_id=$1`, id).Scan(&issuedAt); err != nil {
+				t.Fatal(err)
+			}
+			record, err := issue.Materialize(issuedAt.UTC())
+			if err != nil {
+				t.Fatal(err)
+			}
+			testNativeCaptchaUse(t, ctx, pool, repo, profile, issue, record, test == "native-consuming-expiry")
 		})
 	}
 	t.Run("exact-generation-takeover", func(t *testing.T) {

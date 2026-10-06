@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add native CAPTCHA consuming reservation and exact-generation takeover in the
+  existing coordinator transaction. Require committed original issuance and
+  complete signed evidence/consumer linkage; conserve expiry and reservation
+  time, denying stale lock-wait prechecks and terminal/foreign ownership without
+  partially advancing command authority. Domain consumption remains unfinished.
+
 - Preserve signed CAPTCHA consuming custody alongside protected feature
   target/version fields through `MapCaptchaUse`. Authenticate exact native
   plans under selected current verifier configuration without invoking callbacks
