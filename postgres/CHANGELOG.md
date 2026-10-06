@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Bind opaque one-time submissions into retained-key canonical command intent
+  without storing code bytes or changing ordinary command encodings. Reject
+  generic admission until native counted OTP reservation/finalization exists.
+
 - Add native CAPTCHA consuming current-check/finalize and proof-bound release
   phases in the shared coordinator. Protected effects and evidence finalize
   atomically; denial rolls back effects and releases only after proven rollback.

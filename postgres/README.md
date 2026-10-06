@@ -674,6 +674,15 @@ conservatively digested before canonical encoding. Scope remains separate from
 private intent, and retained-key replay regenerates the original fingerprint.
 This is not schema validation or execution readiness.
 
+Opaque `Command.OneTimeCode` custody contributes a separate `one_time_code`
+payload digest using the fixed canonical path `one-time-code` and the existing
+`identity-command-secret-v1` profile. Raw code bytes never enter canonical
+payloads or safe collision fields. Absent custody preserves historical bytes;
+replay recomputes from the immutable submission under the stored retained key.
+The central preparation path rejects these commands before generic feature
+admission. Fingerprinting alone does not count attempts or consume challenges;
+native OTP reservation/current/finalize/recovery phases remain required.
+
 `CommandPlan.Feature` selects one exact frozen registration. Public
 `PrepareCommandPlan` copies the matching contributor order, 1..64 strictly
 ordered required audit slots and lifecycle declaration, and computes

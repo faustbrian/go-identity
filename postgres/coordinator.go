@@ -172,6 +172,13 @@ func (c *Coordinator) prepare(binding identity.CommandBinding, command identity.
 	if c == nil || c.registry == nil || c.registry.state == nil || c.keys.current == 0 {
 		return claimRequest{}, CommandPlan{}, nil, coordinatorError()
 	}
+	// Generic execution cannot count attempts, reserve or atomically consume
+	// opaque codes. Keep every admission route closed until native OTP phases
+	// own those transitions; mere structural contributor registration is not
+	// permission to discard custody or execute a one-time workflow.
+	if _, ok := command.OneTimeCode(); ok {
+		return claimRequest{}, CommandPlan{}, nil, invalidPlan()
+	}
 	// Bound new caller-owned custody declarations before snapshot allocation.
 	if plan.Delivery != nil && !validDeliveryPlan(plan.Delivery) {
 		return claimRequest{}, CommandPlan{}, nil, invalidPlan()

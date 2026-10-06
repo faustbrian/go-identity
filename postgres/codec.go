@@ -116,6 +116,16 @@ func prepareClaim(c identity.Command, key [32]byte) (claimRequest, error) {
 		if err != nil {
 			return claimRequest{}, err
 		}
+		if code, ok := c.OneTimeCode(); ok {
+			// Opaque custody is separate from scalar metadata. The fixed path
+			// cannot collide with feature.<name>; retained-key replay recomputes
+			// from the original code, never from a storage verifier digest.
+			digest, err := code.CommandDigest(key, "one-time-code")
+			if err != nil {
+				return claimRequest{}, codecError()
+			}
+			payload["one_time_code"] = cborBytes(digest[:])
+		}
 	default:
 		return claimRequest{}, codecError()
 	}
