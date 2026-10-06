@@ -23,6 +23,43 @@ or opens a transaction, reserves a proof, writes a record or reveals a token.
 
 ## Quick start and API
 
+### Encrypted companion-cookie caching
+
+Compose `NewCookieCache(encryptedCodec, CookieCacheConfig{Credential:
+originalCookiePolicy, Cache: companionCookiePolicy, MaximumCookieBytes: 3800})`.
+Both policies must be validated `__Host-` host-only root-path policies with the
+same explicit Lax/Strict choice and distinct names. Enable this composition
+explicitly; absence disables it. The codec maximum age must be 1 second through
+5 minutes. The entire emitted header, not just plaintext or binary ciphertext,
+is bounded at 512..3800 bytes, including fixed `Priority=High`. Over-limit output
+fails without truncation, chunking or weakening attributes.
+
+`cache.Put(ctx, authenticGetResult)` accepts only original same-service cookie
+admission, returning a redacted `CacheCookie`. Explicitly export its bounded
+`HeaderValue()` for the owned HTTP transport. Browser-session remember choices
+omit persistence; persistent cache cookies cannot exceed the original session
+expiry or five minutes. Encryption latency never extends the cookie deadline.
+This is a **companion** cookie, not the original credential: ciphertext alone
+cannot authenticate and never upgrades a bearer result into cookie transport.
+
+HTTP supplies `cache.Get(ctx, originalGetRequest, selectedCompanionValues)` with
+zero or one exact configured cookie values. Duplicate companion values deny
+before IO. Missing, corrupt, oversized or noncanonical values require primary
+validation; the original credential must still match tenant, digest and cookie
+transport. Positive authority retains its original exclusive deadline, including
+when `Put` is called again on a warm result. A failed refresh after expiry never
+uses stale authorization. No cache write is hidden inside Get.
+
+`cache.Deletion()` emits the exact companion scope with negative Max-Age and a
+past expiry; it neither deletes the original credential nor revokes authority.
+Cookies/header values contain correlated ciphertext and must never be logged.
+Formatting and implicit JSON/text export redact or deny. HTTP still owns origin,
+CSRF, mixed original-credential rejection, no-store headers and opt-in routes.
+Standard-library cookie/parser/jar behavior is tested; full browser-family,
+reference-server and release acceptance remain pending. This composition does
+not implement Valkey or the fully stateless profile. `NewSessionService` keeps
+its existing stateful primary profile; opt in through this explicit composition.
+
 ### Bounded positive admission reuse
 
 `primarySessions.CacheAdmission(authenticatedGetResult, maximumAge)` returns an

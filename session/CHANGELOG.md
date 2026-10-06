@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Add explicit encrypted companion-cookie caching with complete encoded size
+  bounds, host-only scope, High priority and preserved remember-me choice.
+  Require the original cookie credential; duplicate cache values deny, invalid
+  entries use bounded primary validation and resealing cannot renew authority.
+  Bearer paths never read or issue companion cache cookies. HTTP route, origin
+  and CSRF composition, Valkey and fully stateless profiles remain pending.
+
 - Add encrypted complete session-admission persistence using owned envelope
   encryption and explicit issuer/environment/deployment bindings. Restart,
   resealing and key rotation preserve the original authority deadline; invalid
