@@ -23,6 +23,36 @@ or opens a transaction, reserves a proof, writes a record or reveals a token.
 
 ## Quick start and API
 
+### Non-authoritative display enrichment
+
+`NewEnrichmentService(callback, EnrichmentConfig{Schema: EnrichmentSchema{
+Version: 1, FieldNames: []string{"label"}, MaxBytes: 1024},
+MaximumDuration: time.Second, FailurePolicy: EnrichmentFail})` freezes a bounded
+schema. The callback implements `SessionEnricher.Enrich(ctx, source, schema)` and
+returns one UTF-8 string per declared field, in schema order. The complete
+immutable session is the declared source; the callback must honor cancellation
+and be safe for concurrent calls. Earlier caller deadlines win.
+
+Call the service after independently authenticating and authorizing the source.
+A structurally valid `Session` is not proof of current activity. Enrichment is
+display-only: it never changes the principal, authority, authentication time or
+session lifetime. Output is untrusted text; transport must escape it and select
+exported fields explicitly. Implicit JSON and diagnostic export are denied.
+
+Every invocation re-evaluates the complete source without caches, store locks,
+transactions or background goroutines. Source changes cannot reuse a retained
+projection. Do not cache output independently of its complete source and any
+external inputs the callback reads. Cache-profile composition remains separate
+unfinished work. Callbacks that ignore context cannot be forcibly interrupted;
+the service does not leak detached goroutines to hide that contract violation.
+
+`EnrichmentFail` returns a redacted error on callback failure.
+`EnrichmentOmit` returns nil display values on callback error or panic only.
+Cancellation/deadline and malformed successful output always return errors,
+without partial display values. An empty individual field is valid; omission
+is not a schema-shaped success. Returned slices and callback schema copies are
+independently owned. Existing authentication and persistence APIs are unchanged.
+
 ### Commit-gated session rotation
 
 `NewSessionRotator(primarySessions, ownedExecutor, RotationConfig{...})` borrows

@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add schema-bound, uncached display enrichment with defensive ownership,
+  bounded callback context and explicit fail/omit policy. Preserve session
+  authority and lifetime; cancellation and malformed output never become
+  successful fallback, and callback diagnostics remain redacted.
+
 - Add storage-neutral session rotation with exact original caller and transport
   custody, retained-key compatibility, immutable successor preparation and
   commit-gated reveal-once delivery. Preserve absolute and authentication lifetime,
