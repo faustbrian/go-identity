@@ -1,5 +1,46 @@
 # PostgreSQL session storage
 
+### Owned self-session device labels
+
+Install `UpdateMigrationSource{Schema: "session_store", Version: allocatedSlot}`
+after the existing kernel/session migrations, through the single migration
+runner. This additive install creates separate metadata/evidence tables;
+existing positional session inserts and the closed session codec stay unchanged.
+Listing also requires this migration. The transactional install needs an
+explicit deployment window; never renumber an applied migration.
+
+Compose `NewUpdateExecutor(pool, UpdateExecutorConfig{Execution: nativeConfig,
+Sessions: authenticatingReader})` with `session.NewSessionUpdater`. The exact
+reader must have authenticated the original cookie/bearer. Prepare selects
+that session's exact current version and a label of at most128 UTF-8 bytes
+without control runes; empty clears it. A label is untrusted display text,
+not device trust, a credential, a factor or authorization. Escape it at rendering.
+
+Native execution checks current policy and every supported primary owner,
+locks the source, and commits label plus session/vector version, audit,
+lifecycle and receipt in the existing kernel transaction. It preserves bearer,
+activity, authentication, remember choice and all other authority. Exact retry
+observes the historical successor without applying again; changed intent
+conflicts. Original admission's exclusive deadline bounds the entire mutation.
+Errors never return apparent successful display metadata; commit ambiguity
+requires recovery rather than guessing rollback or issuing a different command.
+
+`RecoverUpdate` retains original request custody; `RecoverUpdateCommand`
+supports process restart with the complete safe original scope and a trusted
+current caller. Both observe historical outcomes under current access policy,
+never return a label/session, renew authentication, mutate metadata or reserve
+missing commands. Terminal evidence survives payload deletion and retains only
+the label digest; current label plaintext cascades with session deletion.
+Retained session records share the existing command-evidence retention policy;
+they are not a current authorization source or a second journal. General
+privacy retention/anonymization and remaining session profiles are still pending.
+
+Pool, reader, authorization and clock dependencies are borrowed, immutable and
+must remain alive until calls finish. Use PRIMARY only. Calls are concurrency
+safe, use bounded contexts and start no goroutines; detached kernel cleanup
+retains its documented independent bounded budget. HTTP routing, origin/CSRF
+policy and request key parsing belong to the explicit HTTP composition.
+
 ### Owned source-bound rotation
 
 Compose `NewRotationExecutor(pool, RotationExecutorConfig{Execution: nativeConfig,

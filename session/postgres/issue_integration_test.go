@@ -720,6 +720,7 @@ func testNativeIssueIntegration(t *testing.T, ctx context.Context, pool *databas
 				testPublicSignOut(t, ctx, pool, input, get.Session, ownedConfig, config.Validation, cookie)
 				testPublicSetRevocation(t, ctx, pool, ownedConfig, config.Validation, reader, makeIssuedCookie)
 				testNativeSessionRotation(t, ctx, pool, ownedConfig, config.Validation, reader, makeIssuedCookie, issuedTokens)
+				t.Run("native session metadata updates", func(t *testing.T) { testNativeSessionUpdate(t, ctx, pool, ownedConfig, reader, makeIssuedCookie) })
 				testNativeExpiryCleanup(t, ctx, pool, ownedConfig, reader, makeIssuedCookie)
 			})
 			request, ok := prepared.Request()

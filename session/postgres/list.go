@@ -3,6 +3,8 @@ package postgres
 import (
 	"context"
 	"fmt"
+	"unicode"
+	"unicode/utf8"
 
 	identity "github.com/faustbrian/go-identity"
 	"github.com/faustbrian/go-identity/session"
@@ -56,7 +58,8 @@ var _ session.SessionPageReader = (*Repository)(nil)
 // It includes tombstones and expired records; core owns exact lifetime filtering.
 // AfterSessionID is an exclusive bytewise marker, never authorization. The
 // method is structural, not a public enumeration endpoint or authentication.
-// Labels are empty until the owned device-metadata writer is implemented.
+// Labels come from the non-authoritative owned metadata table; install
+// UpdateMigrationSource even when only listing is selected. Never trust a label.
 // Corrupt rows, interrupted reads and store failures return no partial page.
 func (r *Repository) ReadSessionPage(ctx context.Context, q session.SessionPageQuery) (session.SessionPage, error) {
 	if r == nil || r.pool == nil || r.maximumDuration <= 0 || ctx == nil || !scopeID(string(q.TenantID)) || !scopeID(string(q.UserID)) || !pageAudience(q.Audience) || q.Limit < 1 || q.Limit > 100 || q.AfterSessionID != "" && !scopeID(q.AfterSessionID) {
@@ -72,7 +75,7 @@ func (r *Repository) ReadSessionPage(ctx context.Context, q session.SessionPageQ
 		return session.SessionPage{}, readError(bounded, err)
 	}
 	defer conn.Release()
-	sql := `SELECT s.record::text,s.state,f.state,f.version::text,s.expires_at,s.tenant_id,s.session_id,s.user_id,s.family_id,s.version::text,s.family_version::text,s.digest_version,s.digest FROM ` + r.schema + `.sessions s JOIN ` + r.schema + `.families f USING(tenant_id,family_id,user_id) WHERE s.tenant_id=$1 AND s.user_id=$2 AND (s.record->>'Audience') COLLATE "C"=$3 AND s.session_id>$4 ORDER BY s.session_id LIMIT $5`
+	sql := `SELECT s.record::text,s.state,f.state,f.version::text,s.expires_at,s.tenant_id,s.session_id,s.user_id,s.family_id,s.version::text,s.family_version::text,s.digest_version,s.digest,COALESCE(m.label,'') FROM ` + r.schema + `.sessions s JOIN ` + r.schema + `.families f USING(tenant_id,family_id,user_id) LEFT JOIN ` + r.schema + `.session_labels m ON m.tenant_id=s.tenant_id AND m.session_id=s.session_id WHERE s.tenant_id=$1 AND s.user_id=$2 AND (s.record->>'Audience') COLLATE "C"=$3 AND s.session_id>$4 ORDER BY s.session_id LIMIT $5`
 	rows, err := conn.Query(bounded, sql, string(q.TenantID), string(q.UserID), q.Audience, q.AfterSessionID, int(q.Limit)+1)
 	if err != nil {
 		return session.SessionPage{}, readError(bounded, err)
@@ -82,7 +85,8 @@ func (r *Repository) ReadSessionPage(ctx context.Context, q session.SessionPageQ
 	last := q.AfterSessionID
 	for rows.Next() {
 		row := primaryStoredRow{}
-		if err = row.scan(rows); err != nil {
+		var label string
+		if err = row.scan(labelRow{rows, &label}); err != nil {
 			return session.SessionPage{}, readError(bounded, err)
 		}
 		stored, e := row.decode(q.TenantID, "", nil)
@@ -90,7 +94,7 @@ func (r *Repository) ReadSessionPage(ctx context.Context, q session.SessionPageQ
 			return session.SessionPage{}, e
 		}
 		spec, e := stored.Session.Bindings()
-		if e != nil || spec.UserID != q.UserID || spec.Audience != q.Audience || spec.SessionID <= last {
+		if e != nil || spec.UserID != q.UserID || spec.Audience != q.Audience || spec.SessionID <= last || !validDeviceLabel(label) {
 			return session.SessionPage{}, ErrInvalidRecord
 		}
 		last = spec.SessionID
@@ -101,7 +105,7 @@ func (r *Repository) ReadSessionPage(ctx context.Context, q session.SessionPageQ
 			page.HasMore = true
 			continue
 		}
-		page.Entries = append(page.Entries, session.SessionListEntry{Session: stored.Session, Revoked: stored.Revoked, FamilyRevoked: stored.FamilyRevoked})
+		page.Entries = append(page.Entries, session.SessionListEntry{Session: stored.Session, Label: label, Revoked: stored.Revoked, FamilyRevoked: stored.FamilyRevoked})
 	}
 	if err = rows.Err(); err != nil {
 		return session.SessionPage{}, readError(bounded, err)
@@ -110,6 +114,24 @@ func (r *Repository) ReadSessionPage(ctx context.Context, q session.SessionPageQ
 		return session.SessionPage{}, readError(bounded, err)
 	}
 	return page, nil
+}
+
+type labelRow struct {
+	row   rotationScanner
+	label *string
+}
+
+func (r labelRow) Scan(dest ...any) error { return r.row.Scan(append(dest, r.label)...) }
+func validDeviceLabel(label string) bool {
+	if len(label) > 128 || !utf8.ValidString(label) {
+		return false
+	}
+	for _, r := range label {
+		if unicode.IsControl(r) {
+			return false
+		}
+	}
+	return true
 }
 
 func pageAudience(s string) bool {

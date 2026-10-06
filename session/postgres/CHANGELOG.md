@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Add native self-session device-label CAS with unchanged bearer, activity,
+  authentication, remember choice and unrelated authority. Commit metadata,
+  version, audit/lifecycle and receipt atomically; retain exact replay and
+  bounded outcome-only restart recovery. Install `UpdateMigrationSource` for
+  both update and list paths. The additive tables preserve older session row
+  writes/codec; current labels cascade with payload deletion and historical
+  evidence stores label digests rather than duplicating plaintext. Browser
+  transport and complete privacy/release verification remain pending.
+
 - Add bounded, owner-scoped database-time expiry cleanup with current service
   authorization, locked refresh-safe selection, terminal digest retirement and
   same-commit audit/lifecycle effects. Preserve natural-expiry authority versions

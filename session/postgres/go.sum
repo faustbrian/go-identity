@@ -33,12 +33,16 @@ github.com/faustbrian/go-identity/session v0.0.0-20261006023523-4cefb5e64153 h1:
 github.com/faustbrian/go-identity/session v0.0.0-20261006023523-4cefb5e64153/go.mod h1:RQbOt3vo2CYpzRrQpy9CMjrSnd+wc9uCNU0rytGq2J4=
 github.com/faustbrian/go-identity/session v0.0.0-20261006030046-4773e05d7b51 h1:Yuq/NnM3rFo6gCxFG+oWdkf2amUH4ZqhH3E24vy+Zik=
 github.com/faustbrian/go-identity/session v0.0.0-20261006030046-4773e05d7b51/go.mod h1:RQbOt3vo2CYpzRrQpy9CMjrSnd+wc9uCNU0rytGq2J4=
+github.com/faustbrian/go-identity/session v0.0.0-20261006054849-fc9c733674f6 h1:714yk9HhFBv/5JpOYm2RZeDYSGOovr2stdEvNRPEqHA=
+github.com/faustbrian/go-identity/session v0.0.0-20261006054849-fc9c733674f6/go.mod h1:D1p6PPJiDjtLTlk4+Nil/xTh6OYU3L3Ms+BD1CdUffw=
 github.com/faustbrian/go-migrations v1.0.0 h1:rVxTxID5tFdvK0GCcZarrCl4JDNCYx2HkYqoNZfQUVg=
 github.com/faustbrian/go-migrations v1.0.0/go.mod h1:9+6xpROUsEAOd6vP2hx0yDw3JdIujDh192d6Mp9TAtw=
 github.com/faustbrian/go-migrations/v3 v3.0.2-0.20261001014304-a461b18b6b24 h1:ufBtLbkqahtkO2u3bzLszIlXArpjfMnW9bxUs1bgdGY=
 github.com/faustbrian/go-migrations/v3 v3.0.2-0.20261001014304-a461b18b6b24/go.mod h1:EEKwnpYckLwXwt/E1lQ8TfKlYbkc3SEd/sDD/0FzUjc=
 github.com/faustbrian/go-postgres v1.1.1-0.20260912090843-61261695bcc7 h1:yYXsPBwz+mm8JMdWfl+DcTdeD52C/zlBW2H4Tb40gKk=
 github.com/faustbrian/go-postgres v1.1.1-0.20260912090843-61261695bcc7/go.mod h1:1BN8d6pyyD063irAOXCGiU6Pr1kCLILnetE1UA6hoow=
+github.com/faustbrian/go-secret-envelope v1.0.0 h1:z1AqUglQLov5f9PxlHwn9lUCeRP063AtSMlwDjq/8WI=
+github.com/faustbrian/go-secret-envelope v1.0.0/go.mod h1:mk06procHoz9QhU9QJ1eWaLw3ZPO2o59g4s/5u0/X9k=
 github.com/faustbrian/go-transactional-outbox/v2 v2.0.0-20261002184451-72a9fe57a638 h1:rGR4rEjoBo8qcykqPKAwG7euL/9BavAurapUpq8rXro=
 github.com/faustbrian/go-transactional-outbox/v2 v2.0.0-20261002184451-72a9fe57a638/go.mod h1:mmmU97FQTZFmlZ4tUZZB+fbxIVMSXfobCIHiYw4GgA8=
 github.com/faustbrian/go-transactional-outbox/v2/postgres/identity v0.0.0-20261002184451-72a9fe57a638 h1:tnVmjn2AzIab/nmyY9NtAKXTBlBSWTdPo4odzGyMR7Q=

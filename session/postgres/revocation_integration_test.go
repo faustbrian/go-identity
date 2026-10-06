@@ -630,6 +630,11 @@ func TestNativeFamilyRevocationIntegration(t *testing.T) {
 			t.Fatal(e)
 		}
 		complete = append(complete, cleanupHistory...)
+		updateHistory, e := (UpdateMigrationSource{Schema: "session_store", Version: 23}).Load(ctx)
+		if e != nil {
+			t.Fatal(e)
+		}
+		complete = append(complete, updateHistory...)
 		migrate(complete)
 		migrate(complete)
 		// Populated active/revoked records and all older migration checksums
