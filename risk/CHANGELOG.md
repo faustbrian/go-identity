@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add immutable callback-free CAPTCHA custody configuration for native adapters.
+  Authenticate original signed commands under the exact selected verifier,
+  policy and retained keys without dummy executors or constructor cycles.
+  Preserve executable issuer validation and original exclusive validity;
+  restoration grants neither commitment nor protected-use authority.
+
 - Restore signed native CAPTCHA command custody without raw tokens or provider
   calls, preserving exact flow, original aliases, nonce and exclusive validity.
   Retained keys preserve historical results; restored intents permit recovery

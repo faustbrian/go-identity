@@ -125,14 +125,22 @@ type captchaEvidenceIssuerState struct {
 // NewCaptchaEvidenceIssuer rejects incomplete/contradictory composition without
 // callbacks, clock reads or IO. All errors are redacted ErrInvalidPolicy.
 func NewCaptchaEvidenceIssuer(c CaptchaEvidenceIssuerConfig) (CaptchaEvidenceIssuer, error) {
-	if c.Replay.state == nil || !captchaASCII(c.API, 64) || !captchaASCII(c.Version, 32) || !captchaASCII(c.Tier, 32) || c.Clock == nil || c.Verify == nil || c.Executor == nil || c.Lifetime < time.Second || c.Lifetime > 2*time.Minute || c.Timeout < time.Second || c.Timeout > 15*time.Second || len(c.Keys) < 1 || len(c.Keys) > 16 || len(c.Hostnames) > 32 || len(c.Origins) > 32 || (!c.Capabilities.Hostname && !c.Capabilities.Origin) {
+	return newCaptchaEvidenceIssuer(c, true)
+}
+
+// Both executable composition and native custody use the same immutable
+// verifier/key policy. Only the executable issuer requires runtime callbacks.
+func newCaptchaEvidenceIssuer(c CaptchaEvidenceIssuerConfig, runtime bool) (CaptchaEvidenceIssuer, error) {
+	if c.Replay.state == nil || !captchaASCII(c.API, 64) || !captchaASCII(c.Version, 32) || !captchaASCII(c.Tier, 32) || runtime && (c.Clock == nil || c.Verify == nil || c.Executor == nil) || c.Lifetime < time.Second || c.Lifetime > 2*time.Minute || c.Timeout < time.Second || c.Timeout > 15*time.Second || len(c.Keys) < 1 || len(c.Keys) > 16 || len(c.Hostnames) > 32 || len(c.Origins) > 32 || (!c.Capabilities.Hostname && !c.Capabilities.Origin) {
 		return CaptchaEvidenceIssuer{}, ErrInvalidPolicy
 	}
-	v := reflect.ValueOf(c.Executor)
-	switch v.Kind() {
-	case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Pointer, reflect.Slice:
-		if v.IsNil() {
-			return CaptchaEvidenceIssuer{}, ErrInvalidPolicy
+	if runtime {
+		v := reflect.ValueOf(c.Executor)
+		switch v.Kind() {
+		case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Pointer, reflect.Slice:
+			if v.IsNil() {
+				return CaptchaEvidenceIssuer{}, ErrInvalidPolicy
+			}
 		}
 	}
 	if c.Capabilities.Hostname != (len(c.Hostnames) > 0) || c.Capabilities.Origin != (len(c.Origins) > 0) || c.Capabilities.Action != (c.ExpectedAction != "") || c.ExpectedAction != "" && !captchaASCII(c.ExpectedAction, 128) || c.Capabilities.ChallengeTime && (c.ChallengeMaxAge < time.Second || c.ChallengeMaxAge > 5*time.Minute) || !c.Capabilities.ChallengeTime && c.ChallengeMaxAge != 0 {

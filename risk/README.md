@@ -11,6 +11,17 @@ RiskEvidence/CaptchaEvidence issuance remain required implementation work.
 
 ### CAPTCHA evidence admission and custody
 
+`NewCaptchaEvidenceCustody(config)` gives the owned native adapter the same
+immutable verifier/policy/key configuration without runtime wiring. It does not
+require or retain `Clock`, `Verify` or `Executor`; all static issuer bounds stay
+mandatory. `ValidateConfiguration` checks the adapter's complete retained
+evidence-key set and policy version, order-independently. `RestoreCaptchaIssue`
+authenticates both original signed custody and the exact selected configuration,
+including retained replay-key versions, without callbacks or renewed expiry.
+Construct custody first, then the native repository/executor, then the runtime
+issuer. No dummy executor or mutable registration loop is needed. Custody has no
+prepare/verify/issue methods and never proves commitment or current authority.
+
 `NewCaptchaEvidenceIssuer` composes the replay owner, exact configured
 API/version/tier capabilities, canonical hostname/origin/action bindings,
 optional score threshold, original validity limits, retained independent
