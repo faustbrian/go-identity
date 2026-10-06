@@ -35,6 +35,11 @@ type Config struct {
 	// earlier counter-only development profile, not complete risk enforcement.
 	// It cannot start/end a lockout, select a duration or bypass safe recovery.
 	EnforceLockouts bool
+	// LockoutMutations enables native authorized start/end. Install
+	// LockoutStateMigrationSource, LockoutTransitionMigrationSource and the
+	// authorization owner's authority schema before selection. Nil preserves
+	// the interval-only development profile.
+	LockoutMutations *LockoutMutationConfig
 	// UseIssuer optionally installs pure original-scope authentication for native
 	// use preparation. It must match PolicyVersion and every retained EvidenceKey.
 	// The issuer value is copied; nil preserves reservation-only setup. This
@@ -56,17 +61,19 @@ func (Config) MarshalText() ([]byte, error) { return nil, risk.ErrSensitiveSeria
 // safe for concurrent independent invocations; Work remains serial-use only.
 // Zero is invalid. Initiation reservation/rebind use the sole coordinator;
 // consuming recovery and terminal release use that coordinator as well.
-// Protected counter reservation/current checks are opt-in. Evidence domain apply/finalize, CAPTCHA,
-// lockout mutation/override policy, counter retirement and pruning remain unsupported.
+// Protected counters and authorized native lockout transitions are opt-in.
+// Evidence domain apply/finalize, CAPTCHA, counter retirement and pruning
+// remain unsupported. Selection is not a complete consumer workflow service.
 type Repository struct {
-	schema        string
-	policy        uint64
-	keys          []risk.EvidenceKey
-	cipher        recordCipher
-	counters      *risk.CommandCounterPolicyConfig
-	counterPolicy risk.CommandCounterPolicy
-	useIssuer     *risk.PhoneEvidenceIssuer
-	lockouts      bool
+	schema          string
+	policy          uint64
+	keys            []risk.EvidenceKey
+	cipher          recordCipher
+	counters        *risk.CommandCounterPolicyConfig
+	counterPolicy   risk.CommandCounterPolicy
+	useIssuer       *risk.PhoneEvidenceIssuer
+	lockouts        bool
+	lockoutMutation *lockoutMutationState
 }
 
 // Format hides runtime custody configuration and retained key material.
@@ -136,6 +143,16 @@ func NewRepository(c Config) (*Repository, error) {
 		}
 		r.counters, r.counterPolicy = &copy, p
 	}
+	if c.LockoutMutations != nil {
+		if !c.EnforceLockouts || r.counters == nil {
+			return nil, risk.ErrInvalidPolicy
+		}
+		state, err := newLockoutMutationState(*c.LockoutMutations, r.counterPolicy)
+		if err != nil {
+			return nil, err
+		}
+		r.lockoutMutation = state
+	}
 	return r, nil
 }
 
@@ -144,9 +161,14 @@ func (*Repository) Descriptor() identitypostgres.ContributorDescriptor {
 	return identitypostgres.ContributorDescriptor{Owner: "identity/risk/postgres", ContractID: "identity.risk.store", Version: 1}
 }
 
-// FeatureOperations returns a fresh declaration of implemented issuance only.
-func (*Repository) FeatureOperations() []identity.FeatureOperation {
-	return []identity.FeatureOperation{IssueOperation()}
+// FeatureOperations returns owned issuance and explicitly selected lockout
+// declarations. It does not grant caller authority or register global state.
+func (r *Repository) FeatureOperations() []identity.FeatureOperation {
+	operations := []identity.FeatureOperation{IssueOperation()}
+	if r != nil && r.lockoutMutation != nil {
+		operations = append(operations, LockoutOperation(risk.StartLockout), LockoutOperation(risk.EndLockout))
+	}
+	return operations
 }
 
 // ValidateFeatureCommand authenticates the complete signed core projection and
@@ -155,6 +177,9 @@ func (*Repository) FeatureOperations() []identity.FeatureOperation {
 func (r *Repository) ValidateFeatureCommand(c identity.Command, p identitypostgres.CommandPlan) error {
 	if r == nil || r.schema == "" {
 		return risk.ErrInvalidEvidenceExecution
+	}
+	if s, ok := c.Feature(); ok && isLockoutOperation(s.Operation) {
+		return r.validateLockoutFeature(c, p)
 	}
 	if _, err := restoreCommand(c, r.keys, r.policy); err != nil {
 		return err
@@ -182,6 +207,9 @@ func issueTransition(l identitypostgres.LifecyclePlan) bool {
 func (r *Repository) ApplyFeature(ctx context.Context, w identitypostgres.Work, c identity.Command) (identity.FeatureReceipt, error) {
 	if ctx == nil || r == nil || r.schema == "" {
 		return identity.FeatureReceipt{}, risk.ErrInvalidEvidenceExecution
+	}
+	if s, ok := c.Feature(); ok && isLockoutOperation(s.Operation) {
+		return r.applyLockout(ctx, w, c)
 	}
 	b, feature, transition, err := w.FeatureScope(r)
 	s, ok := c.Feature()
@@ -243,6 +271,9 @@ func (r *Repository) RecoverParticipant(ctx context.Context, w identitypostgres.
 		return r.recoverRiskEvidence(ctx, w)
 	}
 	b, feature, transition, err := w.FeatureScope(r)
+	if err == nil && isLockoutOperation(feature.Operation) {
+		return r.recoverLockout(ctx, w, b, feature, transition)
+	}
 	if err != nil || feature.Contributor != r.Descriptor() || feature.Operation != IssueOperation() || !issueTransition(transition) {
 		return unknown()
 	}

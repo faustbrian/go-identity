@@ -58,3 +58,20 @@ func TestLockoutExclusiveExpiryAndForwardHistory(t *testing.T) {
 		t.Fatal("non-forward allocation")
 	}
 }
+
+func TestLockoutEndPreservesOriginalIntervalAndDeniesFutureEnd(t *testing.T) {
+	now := time.Date(2026, 10, 6, 0, 0, 0, 0, time.UTC)
+	end := now.Add(time.Minute)
+	l := nativeLockout{startedAt: now, expiresAt: now.Add(time.Hour), endedAt: &end}
+	for _, tc := range []struct {
+		at   time.Time
+		deny bool
+	}{{now.Add(-time.Microsecond), true}, {now, true}, {end.Add(-time.Microsecond), true}, {end, false}, {end.Add(time.Microsecond), false}} {
+		if l.denies(tc.at) != tc.deny {
+			t.Fatal("explicit original end boundary not enforced", tc.at)
+		}
+	}
+	if l.expiresAt != now.Add(time.Hour) {
+		t.Fatal("ending rewrote original interval")
+	}
+}

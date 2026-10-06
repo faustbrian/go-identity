@@ -19,9 +19,9 @@ evidence and decisions. It is **not yet an executable durable risk service**.
   native command counters; it does not enable ephemeral or authentication-only
   evaluation. This read boundary never creates, extends, deletes or caches state,
   infers a trigger/duration from velocity, or permits identifier-only attempts
-  to lock an account. Authorized start/end/override commands, lifecycle/audit,
-  durable mutation recovery and safe recovery-route policy remain required
-  implementation work through the existing coordinator. Consumers must not
+  to lock an account. Native start/end/CAS is separately selected through
+  `LockoutMutations`, described below, with the owned `LockoutExecutor` workflow.
+  Consumers must not
   supply their own lockout mutations or SQL. Full canonical Service remains
   unfinished; this profile is not production risk-service permission.
 
@@ -348,8 +348,59 @@ record ID, binding digest and existing same-tenant command with the exact
 start/end operation; inconsistent or partial linkage is rejected. These fields
 are latest domain-state linkage, not a second command/replay journal.
 
-This is storage readiness only. Native authorized start/end/CAS, canonical
-audit/lifecycle, same-command recovery and ended-state admission remain required
-implementation work. Existing interval-only admission deliberately remains
-unchanged and must not be treated as honoring an administrative end. Direct SQL
-in the populated upgrade test is a schema fixture, not a production mutation API.
+Existing interval-only admission deliberately remains unchanged and must not
+be treated as honoring an administrative end. Direct SQL in the populated
+upgrade test is a schema fixture, not a production mutation API.
+
+### Selected native lockout transitions
+
+`Config.LockoutMutations` adds the native start/end operations to the same
+registered risk contributor. Install `LockoutTransitionMigrationSource` after
+the state migration and the existing authorization owner's authority schema
+before selecting it. Unselected profiles acquire no new schema dependency.
+
+`PrepareLockoutCommand` checks the configured current authorization revision
+outside Work and seals the full trusted request at its original primary UTC
+microsecond read instant. Its administrative operation is distinct from the
+credential-change operation being restricted. It does not restrict password
+signin, password recovery or factor-recovery routes. Preparation and a
+provisional feature receipt are not commitment; effects run only through the
+sole identity coordinator. Applications must not implement this orchestration
+themselves; use the owned `LockoutExecutor` below.
+
+Native apply locks the existing authorization owner's actor epoch through
+commit, resolves the retained keyed subject root without charging an attempt,
+checks primary-time expiry after lock acquisition, then performs exact-version
+CAS. Starting an active restriction is a conflict, not implicit extension.
+Ending preserves the original interval and aggregate version history. Canonical
+protected audit and lifecycle effects share that transaction; failure rolls
+back the domain transition. Closed command fields and original decision
+freshness cannot be changed on replay.
+
+The selected admission profile honors an explicit end only when current state
+matches its exact immutable same-command domain version. Missing selected
+history or malformed custody fails closed. Historical domain versions retain
+original effects for the existing coordinator's recovery participant even
+after subsequent transitions. They own no command leases, retry state or
+second replay journal; no pruning is exposed. This native contributor is not
+the complete canonical risk service or release-gate completion.
+
+`NewLockoutExecutor` composes the caller-owned primary pool, selected repository,
+real audit/lifecycle adapters and the current authenticated actor/tenant/user
+scope. Choose a separate immutable executor scope for each selected start/end
+operation. Admission and historical disclosure policies are separately required;
+neither successful history nor an actor epoch is mutation permission.
+
+Pass an unchanged `LockoutExecutionRequest` to `Execute`. The executor reads the
+existing authorization owner's current actor epoch, samples original primary
+time, checks mutation policy outside Work, prepares the canonical effects and
+executes exactly once through the existing coordinator. Applications provide
+configuration and verified scope, not SQL, epoch lookup or transaction glue.
+
+Only a successful authorized primary resolution exposes `Snapshot`, the exact
+original committed post-state. `Recover` checks the current disclosure policy
+and reads the original immutable domain version, even after later starts/ends.
+Retain original intent and all referenced signing keys. Changed intent denies;
+retained-key rotation neither changes original state nor renews its validity.
+Unknown results expose no snapshot and require same-request recovery, not an
+unproved replacement command. Existing issuance workflows remain separate.

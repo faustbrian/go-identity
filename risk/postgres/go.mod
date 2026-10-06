@@ -5,7 +5,7 @@ go 1.27.0
 require (
 	github.com/faustbrian/go-audit v1.0.0
 	github.com/faustbrian/go-audit/postgres v1.0.1-0.20261003012155-21ad3d11d3b2
-	github.com/faustbrian/go-authorization v1.0.1-0.20261001103722-a74c24b38463
+	github.com/faustbrian/go-authorization v1.1.1-0.20261005011349-60ed4b3229d8
 	github.com/faustbrian/go-clock v1.0.0
 	github.com/faustbrian/go-identity v0.0.0-20261003072728-f87c5148578c
 	github.com/faustbrian/go-identity/postgres v0.0.0-20261003152748-b22dc22e6b0a

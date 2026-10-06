@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+- Add explicitly selected native administrative lockout start/end contributors
+  with current policy and actor-epoch checks, original primary-time freshness,
+  exact-version CAS and same-transaction canonical effects. End preserves the
+  original interval; selected admission requires attributable domain history.
+  Install the new forward domain-version migration and authorization authority
+  schema before enabling mutation. Existing profiles remain unchanged; the
+  owned workflow executor reads actor epochs and resolves the original committed
+  snapshot without caller-written transactions, refreshed retry permits or
+  substituting latest state. Canonical risk-service composition remains pending.
+  This selected profile requires the authorization authority contract at the
+  same revision already consumed by the kernel and core risk module.
+
 - Add forward-only lockout transition storage preserving populated restriction
   versions, original intervals and keyed roots. Native linkage requires a
   canonical opaque record ID and an exact same-tenant start/end command;

@@ -105,7 +105,7 @@ func (r *Repository) ReserveCommandCounters(ctx context.Context, w identitypostg
 // stable keyed projection attests retained secret identity independently of raw
 // subjects and mutable policy/windows. Once seen, versions cannot disappear or
 // be rebound to a different secret; new versions must be strictly newer.
-func (r *Repository) checkCounterKeys(ctx context.Context, w identitypostgres.CommandCounterWork, b risk.CounterBinding) error {
+func (r *Repository) checkCounterKeys(ctx context.Context, w counterWriteWork, b risk.CounterBinding) error {
 	var keys []risk.CounterKey
 	for _, t := range b.Targets {
 		if t.Dimension == risk.TenantDimension {
@@ -253,6 +253,11 @@ func (r *Repository) chargeCounter(ctx context.Context, w identitypostgres.Comma
 
 type counterReadWork interface {
 	Query(context.Context, string, ...any) (*identitypostgres.WorkRows, error)
+}
+
+type counterWriteWork interface {
+	counterReadWork
+	Exec(context.Context, string, ...any) (int64, error)
 }
 
 func (r *Repository) readCounterCharge(ctx context.Context, w counterReadWork, b identitypostgres.CommandCounterBinding, raw []byte) (bool, error) {
