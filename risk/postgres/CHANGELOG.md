@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Execute native CAPTCHA current-use checks and atomic terminal finalization in
+  the protected coordinator transaction. Reject expired, altered or foreign
+  evidence before mutation and commitment. Release only after rollback or
+  unanimous primary noncommit proof, including after verifier removal or
+  expiry; unresolved and divergent ownership remains retained, never reusable.
+
 - Add native CAPTCHA consuming reservation and exact-generation takeover in the
   existing coordinator transaction. Require committed original issuance and
   complete signed evidence/consumer linkage; conserve expiry and reservation

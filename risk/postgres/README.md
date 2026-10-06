@@ -14,8 +14,8 @@ evidence and decisions. It is **not yet an executable durable risk service**.
   separate. `Repository.ValidateCaptchaUseCommand` authenticates that exact
   declaration under selected current verifier configuration without callbacks
   or IO. These pure boundaries grant no durable use or mutation permission;
-  domain-time current authorization, finalization and release/recovery remain
-  unfinished; reservation alone is not usable login or protected-use permission.
+  feature owners must independently enforce domain-time current authorization;
+  reservation alone is not usable login or protected-use permission.
 
 - `Repository.ReserveCaptchaEvidence` and `RebindCaptchaEvidence` implement the
   coordinator's sealed native consuming-reservation contract. Install
@@ -26,8 +26,21 @@ evidence and decisions. It is **not yet an executable durable risk service**.
   interval and transfers only its exact predecessor, atomically with the command
   and every declared participant. Missing, terminal, foreign and divergent
   ownership deny; no provider callbacks, private transaction or time-based
-  release run. Coordinator domain execution stays closed until the remaining
-  current-check/finalization/recovery contract is implemented.
+  release run.
+
+- `Repository.CheckCaptchaEvidence` and `FinalizeCaptchaEvidence` implement the
+  sealed coordinator consuming phases. They authenticate complete admitted
+  signed input under the selected current profile, lock exact committed-original
+  and reserved consumer custody, compare original facts and recheck primary-time
+  expiry. Finalization CASes the current generation in the same transaction as
+  protected effects, audit, lifecycle and result. Native feature owners still
+  enforce their own target/user/session/factor authority. No provider runs here.
+  `ReleaseCaptchaEvidence` terminally releases only coordinator-proven rollback
+  or unanimous primary noncommit, preserving original validity and reserved time.
+  Historical cleanup works after expiry or current verifier/policy removal;
+  missing, terminal, corrupt or divergent custody remains unknown. A shared
+  native risk owner also proves every selected counter/phone role before release.
+  These phases are not a complete password/login service or provider interop.
 
 - `CaptchaUseMigrationSource{Schema, Version}` adds consuming-command custody
   after the existing CAPTCHA journal, with a permanently allocated forward
@@ -38,7 +51,7 @@ evidence and decisions. It is **not yet an executable durable risk service**.
   the atomic upgrade rather than being reset or assigned invented ownership.
   Erasing a terminal response does not erase consuming custody. These storage
   constraints do not grant permission, prove noncommit or enforce transitions;
-  native coordinator reservation/apply/finalization/recovery remains unfinished.
+  select the native coordinator phases above to enforce those transitions.
 
 - `NewCaptchaExecutor(CaptchaExecutorConfig{Executor: composition, Flow: flow})`
   supplies the real `risk.CaptchaEvidenceExecutor`. Compose immutable
@@ -56,7 +69,7 @@ evidence and decisions. It is **not yet an executable durable risk service**.
   Unknown commit discloses no candidate; recovery returns only the authenticated
   original encrypted response without provider verification or expiry renewal.
   This is issuance, not protected-use authority. Production-effect composition,
-  complete cleanup/retirement, protected consumption and release gates remain
+  complete cleanup/retirement, protected workflow composition and release gates remain
   unfinished for CAPTCHA.
 
 - `Config.CaptchaCustody` selects bounded immutable core verifier profiles with
@@ -69,7 +82,7 @@ evidence and decisions. It is **not yet an executable durable risk service**.
   audit and lifecycle commitment. Participant recovery classifies only exact
   primary custody; missing owners or corrupt response encryption remain unknown.
   Public issuer execution/recovery is supplied by `NewCaptchaExecutor` above.
-  Complete rotation/key-retirement safeguards, protected consumption and the
+  Complete rotation/key-retirement safeguards, protected workflow composition and the
   canonical risk service are still unfinished.
 
 - `CaptchaScopeMigrationSource{Schema, Version, Custody}` must follow the CAPTCHA custody
@@ -91,8 +104,8 @@ evidence and decisions. It is **not yet an executable durable risk service**.
   transaction owner. Alias uniqueness excludes key version so rotation or reuse
   of a key secret cannot create a second winner. Evidence payload deletion does
   not delete the independent replay tombstones or their key-retirement linkage.
-  This schema does not select runtime CAPTCHA execution or implement protected
-  use, cleanup or key retirement; those native phases remain unfinished.
+  This schema does not select runtime CAPTCHA execution or implement cleanup or
+  key retirement; select runtime custody separately.
 
 - `MapCaptchaIssue` maps signed core issuance custody without a raw provider
   token. `CaptchaIssueOperation` selects distinct user and anonymous-flow native
@@ -104,7 +117,7 @@ evidence and decisions. It is **not yet an executable durable risk service**.
   command scope and retained record metadata. Mapping alone does not enable
   durable execution; explicitly selected native custody is separate from these
   preparation contracts. `NewCaptchaExecutor` supplies public issuance and
-  recovery; protected-use phases remain open.
+  recovery; protected-use phases use the consuming contracts above.
 
 - `Config.EnforceLockouts` selects current durable restriction enforcement for
   protected command counters. Install `LockoutMigrationSource` after counter

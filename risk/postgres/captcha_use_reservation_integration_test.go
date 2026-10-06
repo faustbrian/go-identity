@@ -6,11 +6,13 @@ import (
 	"context"
 	"encoding/base64"
 	"errors"
+	"strings"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/faustbrian/go-audit"
+	"github.com/faustbrian/go-authorization"
 	"github.com/faustbrian/go-clock"
 	identity "github.com/faustbrian/go-identity"
 	identitypostgres "github.com/faustbrian/go-identity/postgres"
@@ -20,7 +22,10 @@ import (
 
 // Only the protected feature boundary is a seam: production risk cryptography,
 // issuance, row ownership, coordinator reservation and takeover are real.
-type nativeCaptchaProtectedFeature struct{}
+type nativeCaptchaProtectedFeature struct {
+	mode   string
+	expiry time.Time
+}
 
 func (*nativeCaptchaProtectedFeature) Descriptor() identitypostgres.ContributorDescriptor {
 	return identitypostgres.ContributorDescriptor{Owner: "identity/password/postgres", ContractID: "identity.password", Version: 1}
@@ -35,16 +40,37 @@ func (*nativeCaptchaProtectedFeature) ValidateFeatureCommand(c identity.Command,
 	}
 	return nil
 }
-func (*nativeCaptchaProtectedFeature) ApplyFeature(context.Context, identitypostgres.Work, identity.Command) (identity.FeatureReceipt, error) {
-	return identity.FeatureReceipt{}, identity.UnavailableError{}
+func (p *nativeCaptchaProtectedFeature) ApplyFeature(ctx context.Context, w identitypostgres.Work, c identity.Command) (identity.FeatureReceipt, error) {
+	if _, _, _, err := w.FeatureScope(p); err != nil {
+		return identity.FeatureReceipt{}, err
+	}
+	s, _ := c.Feature()
+	if _, err := w.Exec(ctx, `INSERT INTO risk_store.captcha_protected_fixture(command_id) VALUES($1)`, string(s.Binding.CommandID)); err != nil {
+		return identity.FeatureReceipt{}, err
+	}
+	if p.mode == "native-domain-rollback" {
+		return identity.FeatureReceipt{}, identity.UnavailableError{}
+	}
+	if p.mode == "native-domain-expiry" {
+		if _, err := w.Exec(ctx, `SELECT pg_sleep(GREATEST(0,extract(epoch FROM ($1::timestamptz-clock_timestamp()))+0.02))`, p.expiry); err != nil {
+			return identity.FeatureReceipt{}, err
+		}
+	}
+	return identity.FeatureReceipt{Operation: s.Operation, BeforeVersion: 4, AfterVersion: 5}, nil
 }
-func (*nativeCaptchaProtectedFeature) RecoverParticipant(context.Context, identitypostgres.RecoveryWork) (identitypostgres.RecoveryStatus, error) {
-	return identitypostgres.RecoveryUnknown, nil
+func (p *nativeCaptchaProtectedFeature) RecoverParticipant(ctx context.Context, w identitypostgres.RecoveryWork) (identitypostgres.RecoveryStatus, error) {
+	if p.mode == "native-domain-recover-unknown" {
+		return identitypostgres.RecoveryUnknown, nil
+	}
+	return issuanceEffect(ctx, w, "risk_store.captcha_protected_fixture")
 }
 
-func testNativeCaptchaUse(t *testing.T, ctx context.Context, pool *database.Pool, repo *Repository, cfg risk.CaptchaEvidenceIssuerConfig, issue risk.CaptchaEvidenceIssue, record risk.CaptchaEvidenceRecord, waitForExpiry bool) {
+func testNativeCaptchaUse(t *testing.T, ctx context.Context, pool *database.Pool, repo *Repository, cfg risk.CaptchaEvidenceIssuerConfig, issue risk.CaptchaEvidenceIssue, record risk.CaptchaEvidenceRecord, mode string) {
 	t.Helper()
-	native := &nativeCaptchaProtectedFeature{}
+	native := &nativeCaptchaProtectedFeature{mode: mode, expiry: record.ExpiresAt}
+	if _, err := pool.Raw().Exec(ctx, `CREATE TABLE IF NOT EXISTS risk_store.captcha_protected_fixture(command_id text PRIMARY KEY)`); err != nil {
+		t.Fatal(err)
+	}
 	domain, err := identitypostgres.NewRepository(pool, identitypostgres.Config{MaximumDuration: 2 * time.Second})
 	if err != nil {
 		t.Fatal(err)
@@ -111,7 +137,119 @@ func testNativeCaptchaUse(t *testing.T, ctx context.Context, pool *database.Pool
 			t.Fatal("failed reservation left command prefix", err, n)
 		}
 	}
-	if waitForExpiry {
+	if strings.HasPrefix(mode, "native-domain-") {
+		b, command, plan := prepare()
+		reservation, _, err := coordinator.ReserveCommand(ctx, b, command, plan)
+		if err != nil {
+			t.Fatal("native domain reservation", err)
+		}
+		raw, _ := base64.RawURLEncoding.DecodeString(string(b.CommandID))
+		wantState, wantJournal, wantGeneration, wantEffects := "released", "aborted", "1", 0
+		if strings.Contains(mode, "recover") {
+			wantGeneration = "2"
+			if mode == "native-domain-recover-profile-removed" {
+				// Restart with a changed policy and no current CAPTCHA verifier.
+				// Historical primary proof permits cleanup, never new admission.
+				replacement, err := NewRepository(Config{Schema: "risk_store", PolicyVersion: 4, EvidenceKeys: repo.keys, EnvelopeKeys: map[string][]byte{"wrapping_v1": wrappingKey(1)}, CurrentEnvelopeKey: "wrapping_v1"})
+				if err != nil {
+					t.Fatal(err)
+				}
+				if replacement.ValidateCaptchaUseCommand(command, *plan.CaptchaEvidence) == nil {
+					t.Fatal("removed current profile admitted use")
+				}
+				updated, err := identitypostgres.NewContributorRegistry([]identitypostgres.Contributor{domain, &issuanceAudit{}, &issuanceOutbox{}, native, replacement})
+				if err != nil {
+					t.Fatal(err)
+				}
+				coordinator, err = identitypostgres.NewCoordinator(pool, updated, identitypostgres.CoordinatorConfig{MaximumDuration: 6 * time.Second, LeaseDuration: time.Minute, CurrentFingerprintKeyVersion: 1, RetainedFingerprintKeys: map[uint32][32]byte{1: {1}}, QueryPolicy: &identitypostgres.CommandQueryPolicy{Clock: clock.System{}, PolicyVersion: 1, Authorization: issuanceQueryPolicy{}}})
+				if err != nil {
+					t.Fatal(err)
+				}
+			}
+			if mode == "native-domain-recover-expired" {
+				if _, err := pool.Raw().Exec(ctx, `SELECT pg_sleep(GREATEST(0,extract(epoch FROM ($1::timestamptz-clock_timestamp()))+0.02))`, record.ExpiresAt); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if mode == "native-domain-recover-divergent" {
+				if _, err := pool.Raw().Exec(ctx, `UPDATE risk_store.captcha_issued_evidence SET consumer_generation=7 WHERE consumer_command_id=$1`, raw); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if mode == "native-domain-recover-signature" {
+				if _, err := pool.Raw().Exec(ctx, `UPDATE risk_store.captcha_issued_evidence SET consumer_signature=decode(repeat('11',32),'hex') WHERE consumer_command_id=$1`, raw); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if mode == "native-domain-recover-revoked" {
+				if _, err := pool.Raw().Exec(ctx, `UPDATE risk_store.captcha_issued_evidence SET state='revoked',terminal_at=clock_timestamp() WHERE consumer_command_id=$1`, raw); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if _, err := pool.Raw().Exec(ctx, `UPDATE identity.commands SET lease_until=clock_timestamp()-interval '1 second' WHERE command_id=$1`, raw); err != nil {
+				t.Fatal(err)
+			}
+			query := identity.RecoveryQuery{CommandID: b.CommandID, TenantID: b.TenantID, UserID: b.UserID, AnonymousFlowID: b.AnonymousFlowID, ActorID: b.ActorID, ActorKind: b.ActorKind, OperationID: b.OperationID, RecordID: b.RecordID}
+			caller := authorization.DecisionContext{PolicyRevision: 1, Request: authorization.Request{Subject: authorization.Subject{ID: authorization.SubjectID(b.ActorID), Kind: b.ActorKind}, Tenant: authorization.TenantID(b.TenantID), Action: authorization.Action(b.OperationID), Resource: authorization.Resource{Type: "identity.anonymous-flow", ID: authorization.ResourceID(b.AnonymousFlowID)}}}
+			_, err = coordinator.RecoverFeatureCommand(ctx, query, caller)
+			var unavailable identity.UnavailableError
+			if !errors.As(err, &unavailable) {
+				t.Fatal("recovery fabricated success", err)
+			}
+			if mode == "native-domain-recover-unknown" || mode == "native-domain-recover-divergent" || mode == "native-domain-recover-signature" || mode == "native-domain-recover-revoked" {
+				wantState, wantJournal, wantGeneration = "reserved", "pending", "1"
+				if mode == "native-domain-recover-revoked" {
+					wantState = "revoked"
+				}
+			}
+		} else {
+			if mode == "native-domain-tamper" {
+				if _, err := pool.Raw().Exec(ctx, `UPDATE risk_store.captcha_issued_evidence SET hostname='foreign.example' WHERE consumer_command_id=$1`, raw); err != nil {
+					t.Fatal(err)
+				}
+			}
+			work, err := coordinator.Begin(ctx, reservation)
+			if err != nil {
+				t.Fatal("native domain Begin", err)
+			}
+			defer coordinator.Abort(work, identity.UnavailableError{})
+			result, applyErr := coordinator.ApplyFeature(ctx, work, command)
+			if mode == "native-domain-success" || mode == "native-domain-expiry" {
+				if applyErr != nil {
+					t.Fatal("native protected apply", applyErr)
+				}
+				result, err = coordinator.Commit(work, result)
+				if mode == "native-domain-success" {
+					if err != nil || result.Outcome != identity.CommitOutcomeCommitted {
+						t.Fatal("native atomic commit", err)
+					}
+					wantState, wantJournal, wantEffects = "finalized", "committed", 1
+				} else if err == nil || result.Outcome == identity.CommitOutcomeCommitted {
+					t.Fatal("expired native evidence committed")
+				}
+			} else {
+				if applyErr == nil {
+					t.Fatal("native failed protected apply accepted")
+				}
+				if _, err = coordinator.Abort(work, applyErr); err == nil {
+					t.Fatal("abort lost original failure")
+				}
+			}
+		}
+		var state, journal, generation string
+		var mutation, successAudit, outbox int
+		var conserved bool
+		err = pool.Raw().QueryRow(ctx, `SELECT e.state,c.state,c.generation::text,e.issued_at=$2 AND e.expires_at=$3 AND e.reserved_at>=e.issued_at AND (e.terminal_at IS NULL OR e.terminal_at>=e.reserved_at),
+ (SELECT count(*) FROM risk_store.captcha_protected_fixture WHERE command_id=$4),
+ (SELECT count(*) FROM public.risk_audit WHERE command_id=$4 AND record->>'outcome'='1'),
+ (SELECT count(*) FROM public.risk_outbox WHERE command_id=$4)
+ FROM risk_store.captcha_issued_evidence e JOIN identity.commands c ON c.command_id=e.consumer_command_id WHERE c.command_id=$1`, raw, record.IssuedAt, record.ExpiresAt, string(b.CommandID)).Scan(&state, &journal, &generation, &conserved, &mutation, &successAudit, &outbox)
+		if err != nil || state != wantState || journal != wantJournal || generation != wantGeneration || !conserved || mutation != wantEffects || successAudit != wantEffects || outbox != wantEffects {
+			t.Fatalf("native phase state=%s journal=%s gen=%s conserved=%t effects=%d/%d/%d: %v", state, journal, generation, conserved, mutation, successAudit, outbox, err)
+		}
+		return
+	}
+	if mode == "native-consuming-expiry" {
 		b, command, plan := prepare()
 		lock, err := pool.Raw().Begin(ctx)
 		if err != nil {
@@ -211,7 +349,7 @@ func testNativeCaptchaUse(t *testing.T, ctx context.Context, pool *database.Pool
 	if count != 1 {
 		t.Fatal("native evidence did not have exactly one winner", count, failures)
 	}
-	b, cmd, plan, reservation := bindings[winner], commands[winner], plans[winner], reservations[winner]
+	b, cmd, plan := bindings[winner], commands[winner], plans[winner]
 	raw, _ := base64.RawURLEncoding.DecodeString(string(b.CommandID))
 	assertOwned := func(generation string) {
 		t.Helper()
@@ -222,9 +360,6 @@ func testNativeCaptchaUse(t *testing.T, ctx context.Context, pool *database.Pool
 		}
 	}
 	assertOwned("1")
-	if _, err := coordinator.Begin(ctx, reservation); err == nil {
-		t.Fatal("reservation enabled unfinished domain phases")
-	}
 	if _, result, err := coordinator.ReserveCommand(ctx, b, cmd, plan); err != nil || result.Outcome != identity.CommitOutcomeInProgress {
 		t.Fatal("matching live replay failed", err)
 	}

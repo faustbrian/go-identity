@@ -189,11 +189,11 @@ func testNativeCaptchaReplay(t *testing.T, ctx context.Context, pool *database.P
 			}
 		})
 	}
-	for _, test := range []string{"native-consuming", "native-consuming-expiry"} {
+	for _, test := range []string{"native-consuming", "native-consuming-expiry", "native-domain-success", "native-domain-rollback", "native-domain-expiry", "native-domain-tamper", "native-domain-recover", "native-domain-recover-expired", "native-domain-recover-unknown", "native-domain-recover-divergent", "native-domain-recover-profile-removed", "native-domain-recover-signature", "native-domain-recover-revoked"} {
 		t.Run(test, func(t *testing.T) {
 			originalProfile := profile
 			defer func() { profile = originalProfile }()
-			if test == "native-consuming-expiry" {
+			if test == "native-consuming-expiry" || test == "native-domain-expiry" || test == "native-domain-recover-expired" {
 				var current time.Time
 				if err := pool.Raw().QueryRow(ctx, `SELECT clock_timestamp()`).Scan(&current); err != nil {
 					t.Fatal(err)
@@ -233,7 +233,7 @@ func testNativeCaptchaReplay(t *testing.T, ctx context.Context, pool *database.P
 			if err != nil {
 				t.Fatal(err)
 			}
-			testNativeCaptchaUse(t, ctx, pool, repo, profile, issue, record, test == "native-consuming-expiry")
+			testNativeCaptchaUse(t, ctx, pool, repo, profile, issue, record, test)
 		})
 	}
 	t.Run("exact-generation-takeover", func(t *testing.T) {

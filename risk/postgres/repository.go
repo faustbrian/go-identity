@@ -46,7 +46,8 @@ type Config struct {
 	// does not enable domain execution or supply current counter authority.
 	UseIssuer *risk.PhoneEvidenceIssuer
 	// CaptchaCustody selects 1..32 immutable current verifier profiles for native
-	// CAPTCHA issuance and consuming reservation. Nil preserves existing setup. Every profile must match
+	// CAPTCHA issuance and current consuming phases. Nil preserves existing setup.
+	// Every profile must match
 	// PolicyVersion and the complete retained EvidenceKeys. Install the separately
 	// allocated CaptchaMigrationSource and CaptchaScopeMigrationSource before
 	// issuance; also install CaptchaUseMigrationSource for consuming reservation.
@@ -70,7 +71,8 @@ func (Config) MarshalText() ([]byte, error) { return nil, risk.ErrSensitiveSeria
 // Zero is invalid. Initiation reservation/rebind use the sole coordinator;
 // consuming recovery and terminal release use that coordinator as well.
 // Protected counters, authorized native lockout transitions and native CAPTCHA
-// issuance/consuming reservation custody are opt-in. Evidence consumption, CAPTCHA protected use,
+// issuance and consuming custody are opt-in. CAPTCHA check/finalize and proven
+// terminal release run through the same coordinator; phone domain consumption,
 // counter retirement and pruning remain unsupported. Selection is not a
 // complete consumer workflow service.
 type Repository struct {
@@ -291,6 +293,24 @@ func (r *Repository) RecoverParticipant(ctx context.Context, w identitypostgres.
 	}
 	if ctx == nil || r == nil || r.schema == "" {
 		return unknown()
+	}
+	if b, e := w.CaptchaBinding(r); e == nil {
+		status, err := r.recoverCaptchaUse(ctx, w, b)
+		if err != nil || status != identitypostgres.RecoveryNotCommitted {
+			return status, err
+		}
+		// One registered owner can cover multiple selected roles. A CAPTCHA
+		// reservation is never negative proof for its counter or phone evidence.
+		if counter, e := w.CommandCounterBinding(r); e == nil {
+			status, err = r.recoverCommandCounter(ctx, w, counter)
+			if err != nil || status != identitypostgres.RecoveryNotCommitted {
+				return status, err
+			}
+		}
+		if _, e := w.RiskBinding(r); e == nil {
+			return r.recoverRiskEvidence(ctx, w)
+		}
+		return identitypostgres.RecoveryNotCommitted, nil
 	}
 	if b, e := w.CommandCounterBinding(r); e == nil {
 		return r.recoverCommandCounter(ctx, w, b)
