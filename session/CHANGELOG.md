@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add immutable canonical pre-auth binding and exclusive-expiry checks,
+  preserving exact origin/action/redirect/nonce/policy and resolved remember
+  choice. Domain-separate named-key flow-cookie lookup from session lookup.
+  Values grant no authenticated or one-use authority; durable continuation
+  reservation/finalization and HTTP issuance remain under development.
+
 - Add bounded self-session label update orchestration with exact source CAS,
   selected policy and original opaque caller custody. Validate native receipts
   and complete successors; errors never disclose apparent metadata success.

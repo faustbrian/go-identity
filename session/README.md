@@ -1,5 +1,23 @@
 # Session
 
+## Canonical pre-auth continuation
+
+`PreAuthTransaction` freezes the original ID, tenant, action, exact origin,
+callback/no-redirect choice, server nonce, selected policy, resolved remember
+policy and original issued/exclusive-expiry times. General configured TTL is
+1..10 minutes; reference initiation uses exactly five minutes. `Token.PreAuthDigest`
+uses a dedicated named key and a separate complete-binding HMAC domain, never a
+session-cookie lookup digest. Retain the original key while the flow is live;
+copies and retries must not regenerate the binding, nonce, expiry or choice.
+
+These are private structural values, not authentication or primary active-state
+proof. `Check` requires authoritative time after locks and never consumes the
+flow. Trusted initiation still owns configured origin/redirect allowlists and
+the `__Host-identity_flow` transport policy. Durable one-use reservation,
+finalization with session issuance/linking, and unknown-commit recovery remain
+under development in the owned PostgreSQL composition. No caller-written store
+or continuation-ID-only authority can substitute for that composition.
+
 Experimental Go 1.27 session policy module. This first batch implements shared
 remember-policy resolution, lifetime evaluation, secure host-cookie attributes
 and opaque token/key custody with tenant-bound lookups. Authenticated cookie
