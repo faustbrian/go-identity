@@ -5,6 +5,17 @@ evidence and decisions. It is **not yet an executable durable risk service**.
 
 ## Implemented boundary
 
+- `CaptchaMigrationSource{Schema, Version}` independently installs replay
+  winners, scoped aliases, referenced key versions and native evidence storage
+  after the kernel and existing risk namespace. Allocate its permanent version
+  after the composition's installed history; phone/counter/lockout upgrades are
+  not bootstrap dependencies. It preserves existing tables and adds no private
+  transaction owner. Alias uniqueness excludes key version so rotation or reuse
+  of a key secret cannot create a second winner. Evidence payload deletion does
+  not delete the independent replay tombstones or their key-retirement linkage.
+  This schema does not select runtime CAPTCHA execution or implement protected
+  use, cleanup or key retirement; those native phases remain unfinished.
+
 - `MapCaptchaIssue` maps signed core issuance custody without a raw provider
   token. `CaptchaIssueOperation` selects distinct user and anonymous-flow native
   schemas. Supply the separately verified command actor; administrator flows

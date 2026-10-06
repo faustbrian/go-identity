@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add a separately selected forward CAPTCHA custody migration. Preserve
+  committed replay winners, all retained fingerprint aliases/key versions and
+  distinct user/anonymous evidence storage independently of payload erasure.
+  Installation requires the existing kernel/risk namespace and does not enable
+  runtime issuance or protected consumption; native executor work remains open.
+
 - Add token-free native CAPTCHA issuance command mapping for user and anonymous
   flows, strict signed-custody restoration, and separate encrypted original
   response custody. Preserve original aliases, metadata and validity; altered
