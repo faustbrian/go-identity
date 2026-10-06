@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Add canonical pre-auth primary storage and exact locked admission, one-winner
+  reservation and same-transaction consumption. Preserve original intent,
+  remember policy, nanosecond expiry and named cookie digest; fence exact
+  command/fingerprint/generation and deny terminal replay without renewing or
+  automatically releasing state. Install additive `PreAuthMigrationSource`
+  after the base session schema. Public initiation/recovery and native workflow
+  registration remain under development.
+
 - Add native self-session device-label CAS with unchanged bearer, activity,
   authentication, remember choice and unrelated authority. Commit metadata,
   version, audit/lifecycle and receipt atomically; retain exact replay and

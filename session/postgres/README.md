@@ -1,5 +1,36 @@
 # PostgreSQL session storage
 
+### Canonical pre-auth state
+
+Install `PreAuthMigrationSource` after the base session schema in the single
+migration history. It adds a separate canonical private `bytea` record and
+digest index, retaining the complete original flow binding and nanosecond UTC
+timeline. No raw cookie or credential proof is stored. Existing session rows,
+positional inserts and migration checksums are unchanged.
+
+`InsertPreAuth`, `RequirePreAuth`, `ReservePreAuth` and `FinalizePreAuth` are
+bounded native participant operations on the **original primary transaction**,
+not public endpoints or a new command engine. The owning platform participant
+must derive `PreAuthUse` from its live sealed coordinator handle, fence current
+policy/scope and abort or poison the unit on every error. Never pass autocommit
+pools, replicas, client-supplied custody or consumer-written workflow callbacks.
+The borrowed query/write shape also accepts generation-bound `WorkRows`.
+
+Admission locks and compares the exact private record, indexed scope/version,
+cookie commitment and original exclusive expiry; primary time is sampled after
+locking. Reservation has one winner and binds exact command/fingerprint/
+generation. Finalization checks that owner and original deadline again, then
+consumes in the same transaction as protected session/link effects. Rollback
+leaves both effects uncommitted. Terminal replay denies; receipt replay belongs
+to the sole kernel journal, not these operations. No path automatically releases
+reserved state or renews its validity after timeout, retry or connection loss.
+
+These native operations do not authenticate a user, expose a cookie or constitute
+complete usable initiation. Owned issuance/recovery, proven-noncommit reservation
+rebind/release and OTP/other workflow registration remain under development.
+Retain original digest keys and terminal records until the owned retention and
+recovery policies authorize retirement; no cleanup/down migration is provided.
+
 ### Owned self-session device labels
 
 Install `UpdateMigrationSource{Schema: "session_store", Version: allocatedSlot}`

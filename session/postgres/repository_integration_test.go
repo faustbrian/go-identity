@@ -103,6 +103,11 @@ func TestSessionPostgresIntegration(t *testing.T) {
 	}
 	migrate(parent)
 	migrate(parent)
+	preAuthHistory, err := (PreAuthMigrationSource{Schema: "session_store", Version: 11}).Load(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	migrate(fixtureSource(append(all, preAuthHistory...)))
 	pool, err := database.Connect(ctx, database.Config{DSN: dsn, MaxConns: 2, Configure: func(c *database.PoolConfig) error { c.ConnConfig.Database = name; return nil }})
 	if err != nil {
 		t.Fatal("pool failed")
@@ -151,6 +156,7 @@ func TestSessionPostgresIntegration(t *testing.T) {
 	if _, err = repo.Get(ctx, "tenant-a", "session-a"); err != nil {
 		t.Fatal("ID reconstruction failed", err)
 	}
+	t.Run("canonical pre-auth", func(t *testing.T) { testNativePreAuth(t, ctx, pool) })
 	t.Run("borrowed session admission", func(t *testing.T) { testSessionAdmission(t, ctx, pool, native) })
 	t.Run("native identifier session projection", func(t *testing.T) { testIdentifierSessionProjection(t, ctx, pool) })
 	t.Run("native privacy session projection", func(t *testing.T) { testPrivacySessionProjection(t, ctx, pool) })
