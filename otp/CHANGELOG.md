@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add explicit disjoint session/pre-auth OTP continuations, preserving resolved
+  session remember policy without persistence upgrades. Add server-issued
+  attempt identities and keyed exact-submission fingerprints with code-free
+  recovery metadata. Preparation grants no authentication or consumption;
+  durable counted attempts and protected mutations remain unfinished.
+
 - Add complete exact workflow-scoped keyed code digests and constant-time
   retained-key comparison through opaque authentication codes. Unknown/retired
   versions fail closed; digest matching is not authentication or consumption.

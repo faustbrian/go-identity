@@ -40,6 +40,53 @@ executable example demonstrates this lifecycle without displaying a code.
 
 ## Adoption and tradeoffs
 
+### Continuations and logical attempts
+
+`NewFlowAuthorization` freezes a closed explicit discriminant and exactly one
+session or pre-auth transaction ID. Both members, no member, unknown kinds and
+malformed IDs fail. It never infers authentication from subject or remember
+policy and does not verify the selected session/transaction against a database.
+Session IDs use the existing session record's bounded visible ASCII contract;
+pre-auth IDs use identity's canonical nonzero random128 encoding.
+
+`NewContinuation(scope, authorization, remember)` derives its authorization
+binding instead of accepting one from a request: the input scope binding must
+be zero. Signin uses pre-auth context only, with an already-resolved session
+remember policy. Pre-auth MFA carries that same policy. Other purposes require
+zero remember policy; they cannot acquire persistence by fallback. All exact
+remember limits, including nanosecond precision, are bound unchanged. The owning
+workflow must check that they match the original primary pre-auth/session state;
+structural construction alone cannot certify provenance or renew validity.
+
+`NewAttemptIssuer(version, fingerprintKey)` receives an independent nonzero
+32-byte key, separate from challenge digest and signing keys. `Prepare` accepts
+no caller-selected attempt ID or fingerprint. It draws a canonical random128 ID
+and keys a complete scope/authorization/code/mode/expected-version fingerprint.
+Check and Consume are explicit disjoint modes; neither preparation mode grants
+authentication or creates a reservation. OS random reads cannot be forcibly
+interrupted; preparation has a five-second context cap with checks around work.
+
+Use the same `AttemptCommand` across dispatch retries. The code remains opaque
+through `Code()` for the authoritative bounded comparison, and `Bindings()` is
+code-free. Never persist the whole command. Release all command/code copies on
+a terminal result; retain only `Recovery()` metadata when the outcome is unknown.
+It must query the original ID/fingerprint/version without re-comparison or a
+second denial decrement. Key rotation changes new attempts, not an old recovery
+identity. A new Prepare call represents a new submission, **not** a recovery.
+
+These values own no transactions, current authorization, challenge expiry,
+attempt accounting or protected mutations. The pending PostgreSQL adapter must
+lock primary challenge/authorization state, decrement and record a wrong-code
+denial once, or atomically create the sole generation-fenced reservation on a
+correct consuming attempt. Successful Check must return no proof/reservation.
+Persisted absence does not prove not-committed while the original transaction
+is live. The workflow must reconcile ambiguity before selecting another action.
+Automatic formatting is redacted and JSON/text serialization denied throughout.
+
+Root ID parsing and remember policy are consumed from the reviewed identity
+and session modules at `aa3c66f5c5aa41d7a2fab11b301974db72aed52a`; no new session
+policy engine or identifier parser is introduced.
+
 ### Keyed digest storage
 
 `NewDestinationInput` copies bounded raw channel input without normalizing it.
