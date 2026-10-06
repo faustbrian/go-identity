@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Construct protected risk-decision audit records with closed allow/deny/
+  throttle/step-up classification, genuine attempt or user subjects and
+  preserved impersonation attribution, without fabricating provider evidence.
+  Construction remains distinct from required durable audit delivery.
+
 - Add configured human-only privacy-export request/recovery admission, original
   opaque proof custody and retained-key receipt verification. Preserve known
   command outcomes on transport, cancellation and denied disclosure; durable

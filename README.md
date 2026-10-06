@@ -44,6 +44,14 @@ policy and adjacent intent status versions. Both profiles use protected
 retention. Outcome describes the local committed transition; provider evidence
 is separate, so provider acceptance never asserts confirmed delivery.
 
+`BuildRiskDecision` constructs protected `identity.risk.decide` records for
+trusted allow, deny, throttle and step-up classifications. It supports genuine
+pre-auth attempts and known user subjects, preserves actor/delegation and its
+required impersonation grant, and emits no provider fields. Risk allow is not
+authentication success or permission to execute; the risk owner must still
+deliver the record under its required audit policy. This builder does not
+install that orchestration, change counters or issue one-use evidence.
+
 Attribution must come from trusted composition, not HIBP SubjectScope or raw
 HTTP input. An authentication-attempt subject must be a real canonical
 PreAuthTransactionID; identifier digests and fabricated user IDs are invalid.
