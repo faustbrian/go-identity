@@ -9,6 +9,42 @@ RiskEvidence/CaptchaEvidence issuance remain required implementation work.
 
 ## Adoption and API
 
+### CAPTCHA replay preparation
+
+`NewFlowContext(FlowContextInput)` freezes one trusted pre-auth, authenticated
+subject/session or administrator context with its tenant, canonical operation,
+subject or anonymous flow, challenge and canonical request fingerprint. Supply
+only server-resolved facts. Structural construction does not authenticate an
+actor or authorize evidence issuance.
+
+`NewCaptchaReplayPolicy(CaptchaReplayPolicyConfig)` selects the existing risk
+policy, one closed provider ID, exact site/API-profile/configuration identity,
+explicit token byte ceiling and newest-first retained `CaptchaReplayKey` values.
+`Prepare(flow, token)` accepts only an operation whose selected policy requires
+CAPTCHA. Token length and UTF-8 are checked before bounded cryptographic work;
+bytes are neither normalized nor retained.
+
+Replay HMAC uses exactly `identity-captcha-replay-v1`, NUL, four unsigned 32-bit
+big-endian length-prefixed UTF-8 fields (provider, site, API/profile, configuration
+version), then the unsigned 64-bit big-endian raw-token byte length and bytes.
+Tenant belongs to the outer durable namespace. Flow, operation, logical command
+and key version are intentionally not in those MAC bytes: changing them must
+not turn the same provider token into another issuance opportunity.
+
+The opaque result separately retains exact preparing-policy and flow provenance.
+`Validate` rejects substitution; `Bindings` returns an independently owned
+native-only projection with every retained digest version. This is not public
+HTTP metadata. Automatic formatting redacts custody; serialization rejects.
+Applications must not use these digests as authorization or supply reconstructed
+strings as core provenance.
+
+The PostgreSQL contributor must validate authoritative retained-key history and
+atomically acquire a single winner across all aliases before issuing evidence.
+Do not retire a key referenced by unresolved issuance or retained replay
+tombstones. Provider verification, safe normalized facts, durable issuance/use,
+reconciliation and canonical Service remain required implementation work;
+hash equality alone does not prove one-use behavior.
+
 ### Administrative lockout intent
 
 `NewLockoutPolicy(LockoutPolicyConfig)` composes an existing

@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Derive CAPTCHA replay identities in the risk core using the pinned provider-
+  scope HMAC framing and unchanged raw token bytes. Opaque preparation binds
+  closed trusted flows separately from command-independent replay lookup,
+  retains key-version aliases and rejects automatic custody serialization.
+  This grants no provider verification or durable one-use issuance authority;
+  native contributor and canonical service composition remain required.
+
 - Add immutable administrative lockout-intent preparation with exact CAS
   versions, explicit duration ceilings and operation-specific keyed subjects.
   Preparation rejects authentication/recovery and broad tenant/network targets;
