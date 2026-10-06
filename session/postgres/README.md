@@ -1,5 +1,31 @@
 # PostgreSQL session storage
 
+### Owned session listing
+
+`NewListService(pool, ListServiceConfig{Sessions: primaryConfig,
+Listing: session.ListConfig{Authorization: policy, PolicyRevision: revision,
+MaximumDuration: budget}})` composes the real primary authentication reader,
+existing authorization service and one bounded joined page query. No application
+domain store is required. Its explicit repository budget cannot exceed the
+whole listing budget. Native authentication retains its single-factor profile;
+unsupported authority dimensions deny rather than being ignored.
+
+Apply `ListMigrationSource{Schema: schema, Version: permanentVersion}` after
+the base session migration in the sole composition history. The new
+tenant/user/audience/session index supports bytewise exclusive keyset traversal.
+Its transactional build can block writes: size and schedule populated installs
+explicitly. It neither rewrites records nor changes historical SQL/checksums.
+
+Pass tenant, actual cookie/bearer credential, safe correlation, `Limit` 1..100
+and optional cursor/`IncludeInactive` to `List`. Current user/audience scope is
+derived from authentication, not request identifiers. The primary reader scans
+at most `Limit+1` raw rows in one statement; the service returns at most `Limit`
+safe device projections. Filtering can yield an empty page with a continuation.
+Labels remain empty until the owned metadata writer is implemented. Revoked
+family/session and exact expiry metadata are not live authentication authority.
+Cancellation, corrupt records, current-policy denial and primary outage return
+no partial page or stale fallback. The pool is borrowed until calls finish.
+
 ### Owned self-logout
 
 `NewSignOutService(pool, SignOutServiceConfig{Execution: execution,

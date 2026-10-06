@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Add owned authenticated session listing with an indexed, bounded primary
+  tenant/user/audience keyset query and safe active/inactive device projections.
+  Apply `ListMigrationSource` after the base session install at a permanent
+  history slot; it adds an index without rewriting session records or earlier
+  migrations. Construction needs no application store or command journal.
+  Device labels, remaining session profiles and complete lifecycle remain pending.
+
 - Compose public idempotent self-logout through `NewSignOutService` with the
   owned primary reader and native transactional executor. One execution profile
   selects schema, authority, clock and policy; no application stores or fresh

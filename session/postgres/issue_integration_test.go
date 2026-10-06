@@ -708,6 +708,7 @@ func testNativeIssueIntegration(t *testing.T, ctx context.Context, pool *databas
 					}
 					counts(t, candidate, 1, 1, 1, 1)
 				})
+				t.Run("public bounded session listing", func(t *testing.T) { testPublicSessionList(t, ctx, pool, input, get.Session, config) })
 				testPublicSignOut(t, ctx, pool, input, get.Session, ownedConfig, config.Validation, cookie)
 			})
 			request, ok := prepared.Request()

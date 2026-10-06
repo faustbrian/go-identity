@@ -609,8 +609,14 @@ func TestNativeFamilyRevocationIntegration(t *testing.T) {
 		if e = db.QueryRowContext(ctx, `SELECT jsonb_agg(record ORDER BY tenant_id,session_id)::text FROM session_store.sessions`).Scan(&beforeMigration); e != nil {
 			t.Fatal(e)
 		}
-		migrate(append(oldHistory, oneHistory[len(oneHistory)-1]))
-		migrate(append(oldHistory, oneHistory[len(oneHistory)-1]))
+		listHistory, e := (ListMigrationSource{Schema: "session_store", Version: 19}).Load(ctx)
+		if e != nil {
+			t.Fatal(e)
+		}
+		complete := append(oldHistory, oneHistory[len(oneHistory)-1])
+		complete = append(complete, listHistory...)
+		migrate(complete)
+		migrate(complete)
 		// Populated active/revoked records and all older migration checksums
 		// survive the additive single-session installation byte-for-byte.
 		var afterMigration string

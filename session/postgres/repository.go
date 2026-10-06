@@ -108,17 +108,31 @@ func (r *Repository) read(ctx context.Context, tenant identity.TenantID, id stri
 		sql += `s.digest_version=$2 AND s.digest=$3`
 		args = []any{string(tenant), int64(digest.KeyVersion), digest.Sum[:]}
 	}
-	var payload, storedDigest []byte
-	var state, familyState, familyCurrent, expiry, storedTenant, storedID, user, family, version, familyVersion string
-	var digestVersion int64
-	err = conn.QueryRow(bounded, sql, args...).Scan(&payload, &state, &familyState, &familyCurrent, &expiry, &storedTenant, &storedID, &user, &family, &version, &familyVersion, &digestVersion, &storedDigest)
+	row := primaryStoredRow{}
+	err = row.scan(conn.QueryRow(bounded, sql, args...))
 	if err != nil {
 		return StoredSession{}, readError(bounded, err)
 	}
 	if err = bounded.Err(); err != nil {
 		return StoredSession{}, readError(bounded, err)
 	}
-	s, err := decodeRecord(payload)
+	return row.decode(tenant, id, digest)
+}
+
+// One decoder owns all indexed-column/immutable-record consistency checks,
+// including structural page reads. A page cannot weaken digest or version checks.
+type primaryStoredRow struct {
+	payload, storedDigest                                                                                   []byte
+	state, familyState, familyCurrent, expiry, storedTenant, storedID, user, family, version, familyVersion string
+	digestVersion                                                                                           int64
+}
+
+func (r *primaryStoredRow) scan(row interface{ Scan(...any) error }) error {
+	return row.Scan(&r.payload, &r.state, &r.familyState, &r.familyCurrent, &r.expiry, &r.storedTenant, &r.storedID, &r.user, &r.family, &r.version, &r.familyVersion, &r.digestVersion, &r.storedDigest)
+}
+
+func (r primaryStoredRow) decode(tenant identity.TenantID, id string, digest *session.TokenDigest) (StoredSession, error) {
+	s, err := decodeRecord(r.payload)
 	if err != nil {
 		return StoredSession{}, ErrInvalidRecord
 	}
@@ -126,18 +140,18 @@ func (r *Repository) read(ctx context.Context, tenant identity.TenantID, id stri
 	if err != nil {
 		return StoredSession{}, ErrInvalidRecord
 	}
-	current, err := strconv.ParseUint(familyCurrent, 10, 64)
-	if err != nil || current == 0 || strconv.FormatUint(current, 10) != familyCurrent || (state != "active" && state != "revoked") || (familyState != "active" && familyState != "revoked") {
+	current, err := strconv.ParseUint(r.familyCurrent, 10, 64)
+	if err != nil || current == 0 || strconv.FormatUint(current, 10) != r.familyCurrent || (r.state != "active" && r.state != "revoked") || (r.familyState != "active" && r.familyState != "revoked") {
 		return StoredSession{}, ErrInvalidRecord
 	}
 	lifetime, err := s.Lifetime(spec.LastActivityAt)
-	if err != nil || expiry != lifetime.ExpiresAt.UTC().Format(storedTimeLayout) || storedTenant != string(tenant) || spec.TenantID != tenant || storedID != spec.SessionID || (id != "" && storedID != id) || user != string(spec.UserID) || family != spec.FamilyID || version != strconv.FormatUint(spec.Version, 10) || familyVersion != strconv.FormatUint(spec.FamilyVersion, 10) || digestVersion != int64(spec.Lookup.KeyVersion) || subtle.ConstantTimeCompare(storedDigest, spec.Lookup.Sum[:]) != 1 {
+	if err != nil || r.expiry != lifetime.ExpiresAt.UTC().Format(storedTimeLayout) || r.storedTenant != string(tenant) || spec.TenantID != tenant || r.storedID != spec.SessionID || (id != "" && r.storedID != id) || r.user != string(spec.UserID) || r.family != spec.FamilyID || r.version != strconv.FormatUint(spec.Version, 10) || r.familyVersion != strconv.FormatUint(spec.FamilyVersion, 10) || r.digestVersion != int64(spec.Lookup.KeyVersion) || subtle.ConstantTimeCompare(r.storedDigest, spec.Lookup.Sum[:]) != 1 {
 		return StoredSession{}, ErrInvalidRecord
 	}
 	if digest != nil && (digest.KeyVersion != spec.Lookup.KeyVersion || subtle.ConstantTimeCompare(digest.Sum[:], spec.Lookup.Sum[:]) != 1) {
 		return StoredSession{}, ErrInvalidRecord
 	}
-	return StoredSession{Session: s, Revoked: state == "revoked", FamilyRevoked: familyState == "revoked", CurrentFamilyVersion: current}, nil
+	return StoredSession{Session: s, Revoked: r.state == "revoked", FamilyRevoked: r.familyState == "revoked", CurrentFamilyVersion: current}, nil
 }
 
 func scopeID(s string) bool {
