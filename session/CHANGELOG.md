@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add bounded authenticated self-session listing with current authorization,
+  safe device projections and optional inactive records. Scope-bound keyset
+  cursors traverse at most 100 raw rows per call without exposing credentials,
+  digests or proof linkage; expiry and cancellation deny partial disclosure.
+  The owned PostgreSQL page-reader composition remains a separate pending step.
+
 - Add bounded public self-signout through the configured primary reader and
   owned revocation executor. Absent or primary-denied credentials succeed
   without a new mutation; active callers target only their original session.

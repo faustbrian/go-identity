@@ -7,8 +7,9 @@ issuance orchestration is available through `SessionIssuer`; owned durable
 executor composition is available in the PostgreSQL adapter. Stateful opaque
 `SessionService.Get` validation is available against its trusted owned-reader
 contract, with an owned primary reader and revocation executor in the PostgreSQL
-adapter. Public self-signout is available through `SignOutService`; its real
-PostgreSQL composed journey is still pending. **Rotation, complete revocation
+adapter. Public self-signout is available through `SignOutService` and the
+owned PostgreSQL factory. Authenticated `ListService` orchestration is available;
+its owned PostgreSQL page-reader composition remains pending. **Rotation, complete revocation
 services and transfers remain unfinished; this is not a usable login service.** Complete authority-vector
 construction and exact comparison are available, but do not read primary
 authority or prove activity/freshness.
@@ -20,6 +21,29 @@ cannot establish authentication authority. No command by itself executes
 or opens a transaction, reserves a proof, writes a record or reveals a token.
 
 ## Quick start and API
+
+### Authenticated session listing
+
+`NewListService(primarySessions, ownedPages, ListConfig{Authorization: policy,
+PolicyRevision: revision, MaximumDuration: budget})` composes the existing
+authentication and authorization owners. Each `List` request selects trusted
+tenant, credential, safe correlation, explicit `Limit` (1..100) and optional
+cursor/`IncludeInactive`; no current-session or user ID can replace a credential.
+Ordinary self-listing requires current policy, not fresh login. The reader seam
+is for the owned primary adapter, not an application-written domain store. Its
+native PostgreSQL implementation is the next composition step.
+
+Results contain only device display metadata, exact recorded expiry and current/
+inactive flags. Labels are bounded untrusted text, not MFA trusted devices.
+Inactive records are filtered by default. Work is bounded to the requested
+number of **raw** rows, so a filtered page can be empty with a continuation.
+Continue with its cursor; do not restart at the first page to fill the result.
+The cursor binds tenant/user/audience/inactive selection but is unsigned and
+non-authoritative: arbitrary markers may alter traversal, never access policy.
+Every call authenticates and authorizes anew. Keyset traversal uses exclusive
+bytewise session-ID order; concurrent inserts before the marker are not revisited.
+Cancellation, outage, corrupt pages or expired original caller admission return
+no partial metadata. HTTP owns explicit authorized DTO serialization.
 
 ### Idempotent self-signout
 
