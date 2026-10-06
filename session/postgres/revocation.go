@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"strconv"
 
+	"github.com/faustbrian/go-authorization"
 	identity "github.com/faustbrian/go-identity"
 	identitypostgres "github.com/faustbrian/go-identity/postgres"
 	"github.com/faustbrian/go-identity/session"
@@ -54,6 +55,13 @@ func MapCommand(c session.SessionCommand) (identity.Command, error) {
 
 func nativeRevocation(c identity.Command) (session.SessionCommand, error) {
 	s, ok := c.Feature()
+	if ok && s.Operation == session.RevokeFamilyOperation() && len(s.Fields) == 6 {
+		proof, err := nativeReplayEvidence(c)
+		if err != nil {
+			return session.SessionCommand{}, err
+		}
+		return session.NewRevokeFamilyCommand(s.Binding, proof.version)
+	}
 	if !ok || s.Operation != session.RevokeFamilyOperation() || len(s.Fields) != 1 || s.Fields[0].Name != "expected.version" || s.Fields[0].Value.Kind != identity.FeatureUint64 {
 		return session.SessionCommand{}, session.ErrInvalidSessionCommand
 	}
@@ -88,6 +96,9 @@ func (r *Repository) ValidateFeatureCommand(c identity.Command, p identitypostgr
 		return session.ErrInvalidSessionCommand
 	}
 	a := p.Audits[0]
+	if s.Binding.ActorKind == authorization.SubjectServiceAccount && lenFeatureFields(c) == 6 && a.RetentionClass != "protected" {
+		return session.ErrInvalidSessionCommand
+	}
 	if a.EventType != "identity.session.revoke" || a.SchemaVersion != 1 || !a.Required || a.RequiredRecordCount != 1 || a.RetentionClass != "standard" && a.RetentionClass != "protected" {
 		return session.ErrInvalidSessionCommand
 	}
@@ -144,7 +155,17 @@ func (r *Repository) ApplyFeature(ctx context.Context, w identitypostgres.Work, 
 	if err != nil {
 		return identity.FeatureReceipt{}, err
 	}
+	if lenFeatureFields(c) == 6 {
+		if err = r.requireReplayEvidence(ctx, w, c); err != nil {
+			return identity.FeatureReceipt{}, err
+		}
+	}
 	return r.Apply(ctx, w, native)
+}
+
+func lenFeatureFields(c identity.Command) int {
+	s, _ := c.Feature()
+	return len(s.Fields)
 }
 
 // Apply requires this exact repository's active coordinator feature invocation.

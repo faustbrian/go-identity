@@ -50,10 +50,51 @@ kernel owner and frozen participants. Missing/conflicting evidence cannot prove
 rollback. Pruning live payloads does not erase committed receipts. No session,
 credential, current authority or permission to retry is returned.
 
-Retired-token denial is implemented. Automatic family revocation on retired-token
-reuse, selected organization/factor/passkey
+Retired-token denial and explicitly composed family-replay revocation are
+implemented. Selected organization/factor/passkey
 profiles, complete cleanup/privacy handling and whole-unit release gates remain
 unfinished; ordinary rotation is not a claim of full session lifecycle parity.
+
+### Protective retired-token replay checking
+
+Explicitly compose `NewFamilyReplayGuard(pool, FamilyReplayGuardConfig{Execution:
+nativeConfig, LookupKeys: retainedValidationKeys, ActorID: trustedServiceActor})`.
+Use the same one to four retained HMAC keys as the primary reader and a configured
+service-account actor whose current policy permits protective family revocation.
+Install the existing family, rotation, kernel, audit and lifecycle migrations;
+the guard adds no tables or journal. Configuration borrows the primary pool and
+policy dependencies and starts no goroutines.
+
+`CheckReplay(ctx, FamilyReplayInput{TenantID: tenant, Token: parsedToken,
+CommandID: stableID, CorrelationID: correlation})` derives the owner and family
+only from exact primary retired-token lineage. The caller cannot choose them.
+It authenticates nobody: the operation is a denial-only protective mutation.
+Current service policy, original absolute expiry, locked family-version CAS,
+protected service audit and lifecycle effects govern the sole transaction.
+Concurrent distinct commands have one winner; exact retries preserve the
+original receipt and changed intent cannot borrow a previous success. Blocking
+the human owner does not disable this protective action. All retained keys,
+input tokens and guard configuration deny JSON export and diagnostic traversal.
+
+A zero result with nil error means no eligible replay was observed. Active,
+absent, foreign-tenant and absolutely expired tokens reserve no command. This
+does **not** authenticate a token or prove that an earlier command rolled back.
+Original idle expiry is not the retention cutoff: rotation extends idle activity
+while preserving absolute lifetime. Application-clock/policy latency cannot
+extend the primary expiry or final commit budget.
+
+Keep the returned safe binding whenever the outcome is uncertain. After restart
+or absolute token expiry, `RecoverReplayCommand(ctx, exactRecoveryQuery,
+trustedCurrentServiceCaller)` returns only historical command/version/audit
+metadata under current access policy, without needing the token. Live pending
+does not renew its lease; expired pending uses existing participant recovery.
+Missing or inconsistent evidence remains uncertain and never authorizes retry.
+
+Ordinary `SessionService.Get` remains read-only and still denies retired tokens.
+The explicitly enabled transport owner must invoke this guard on presented
+credentials and enforce origin/CSRF and source/transport policy before mutation.
+This is not automatic HTTP wiring, an authentication endpoint or a new authority
+cache; these transport/composition requirements remain separate platform work.
 
 ### Owned session listing
 
@@ -113,7 +154,7 @@ authenticated issuance now checks current owners and atomically stages records
 and original proof use. Owned authenticated cookie issuance now composes real
 audit/outbox effects with the core's commit-gated token custody.
 **General bearer issuance, browser-container policy,
-family-replay revocation, cleanup, devices and complete session profiles remain unfinished.
+cleanup, devices and complete session profiles remain unfinished.
 Single-factor stateful opaque validation now has owned primary composition;
 this is not yet a complete login service.**
 
@@ -248,7 +289,7 @@ Borrow the primary pool until all calls finish. The service starts no
 goroutines and supports concurrent calls. Organization, factor, passkey and
 anonymous profiles explicitly deny until their separate owners compose.
 Browser credential extraction, CSRF and container policy remain HTTP/core
-responsibilities. Retired-token family-replay revocation, remaining profiles and release gates
+responsibilities. Automatic transport replay-guard wiring, remaining profiles and release gates
 remain pending.
 
 ## Adoption and API
@@ -361,7 +402,7 @@ participant reconciliation, and missing/conflicting evidence remains unresolved.
 Successful reconciliation does not return a session or any bearer/cookie and
 does not authorize retrying issuance. Structural
 historical sessions are not current authentication evidence. Browser maximum
-session/container policy, family-replay revocation and complete login
+session/container policy, automatic transport replay-guard wiring and complete login
 composition remain required future work. Real PostgreSQL integration covers the
 owned executor and production audit/outbox path, unlike the contributor-only
 transaction fixture above. Full release coverage/mutation gates remain pending.

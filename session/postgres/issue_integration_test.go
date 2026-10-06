@@ -657,6 +657,7 @@ func testNativeIssueIntegration(t *testing.T, ctx context.Context, pool *databas
 				if got, e := restarted.Get(ctx, other); e != nil || got.Authenticated {
 					t.Fatal("different cookie authenticated", e)
 				}
+				issuedTokens := make(map[string]session.Token)
 				makeIssuedCookie := func(t *testing.T) (session.GetResult, session.GetRequest) {
 					t.Helper()
 					candidate := prepare(t)
@@ -683,6 +684,7 @@ func testNativeIssueIntegration(t *testing.T, ctx context.Context, pool *databas
 						t.Fatal(e)
 					}
 					input := session.GetRequest{TenantID: s.TenantID, Credential: credential}
+					issuedTokens[s.SessionID] = token
 					current, e := reader.Get(ctx, input)
 					if e != nil || !current.Authenticated {
 						t.Fatal("issued target admission", e)
@@ -717,7 +719,7 @@ func testNativeIssueIntegration(t *testing.T, ctx context.Context, pool *databas
 				t.Run("public bounded session listing", func(t *testing.T) { testPublicSessionList(t, ctx, pool, input, get.Session, config) })
 				testPublicSignOut(t, ctx, pool, input, get.Session, ownedConfig, config.Validation, cookie)
 				testPublicSetRevocation(t, ctx, pool, ownedConfig, config.Validation, reader, makeIssuedCookie)
-				testNativeSessionRotation(t, ctx, pool, ownedConfig, config.Validation, reader, makeIssuedCookie)
+				testNativeSessionRotation(t, ctx, pool, ownedConfig, config.Validation, reader, makeIssuedCookie, issuedTokens)
 			})
 			request, ok := prepared.Request()
 			if !ok {

@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Add explicit protective retired-token replay checking with current trusted
+  service policy and primary lineage-derived ownership. Commit one exact family
+  revocation with protected audit/lifecycle effects, preserve exact retry
+  receipts, and recover historical outcomes after restart without a bearer.
+  Active, absent, foreign and expired tokens reserve no command. Ordinary
+  session reads remain read-only; transports must explicitly enable the guard
+  and enforce origin/CSRF policy. Reuse the existing rotation/family migrations.
+
 - Add restart-safe rotation receipt recovery using the original safe command
   scope and current access policy. Preserve historical version/audit metadata
   without original authentication admission or live session payloads; never

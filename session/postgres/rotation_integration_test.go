@@ -23,8 +23,9 @@ import (
 // models a previously issued eligible session without sleeping or renewing any
 // admission. Authentication is acquired anew only after the old durable record
 // is installed. This is not an issuance workaround or an application store.
-func testNativeSessionRotation(t *testing.T, ctx context.Context, pool *database.Pool, execution IssueExecutorConfig, validation session.ServiceConfig, reader *session.SessionService, issue func(*testing.T) (session.GetResult, session.GetRequest)) {
+func testNativeSessionRotation(t *testing.T, ctx context.Context, pool *database.Pool, execution IssueExecutorConfig, validation session.ServiceConfig, reader *session.SessionService, issue func(*testing.T) (session.GetResult, session.GetRequest), issuedTokens map[string]session.Token) {
 	t.Helper()
+	successorTokens := make(map[identity.CommandID]session.Token)
 	eligible := func(t *testing.T) (session.GetResult, session.GetRequest) {
 		t.Helper()
 		caller, input := issue(t)
@@ -88,6 +89,7 @@ func testNativeSessionRotation(t *testing.T, ctx context.Context, pool *database
 		if err != nil {
 			t.Fatal(err)
 		}
+		successorTokens[id] = token
 		b := identity.CommandBinding{CommandID: id, TenantID: old.TenantID, UserID: old.UserID, ActorID: identity.ActorID(old.UserID), ActorKind: authorization.SubjectUser, OperationID: session.RotateOperation().OperationID, RecordID: old.SessionID, PolicyID: config.PolicyID, PolicyVersion: config.PolicyVersion, SchemaID: session.RotateOperation().SchemaID, SchemaVersion: 1, CorrelationID: "rotation-test"}
 		command, err := session.NewRotateCommand(b, caller.Session, successor)
 		if err != nil {
@@ -99,6 +101,52 @@ func testNativeSessionRotation(t *testing.T, ctx context.Context, pool *database
 		}
 		return executor, request, input
 	}
+	t.Run("retired credential revokes its family", func(t *testing.T) {
+		executor, request, _ := prepare(t)
+		command, _ := request.Command()
+		rotation, _ := command.Rotation()
+		source, _ := rotation.Source.Bindings()
+		if out, err := executor.ExecuteRotation(ctx, request); err != nil || out.Receipt.Outcome != identity.CommitOutcomeCommitted {
+			t.Fatal("replay source was not rotated", err)
+		}
+		_, unrelated := issue(t)
+		guard, err := NewFamilyReplayGuard(pool, FamilyReplayGuardConfig{Execution: execution, LookupKeys: validation.LookupKeys, ActorID: "session-replay-worker"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		id, err := identity.NewCommandID()
+		if err != nil {
+			t.Fatal(err)
+		}
+		input := FamilyReplayInput{TenantID: source.TenantID, Token: issuedTokens[source.SessionID], CommandID: id, CorrelationID: "replayed-token"}
+		result, err := guard.CheckReplay(ctx, input)
+		if err != nil || result.Outcome != identity.CommitOutcomeCommitted || result.Feature == nil || result.Feature.BeforeVersion != 1 || result.Feature.AfterVersion != 2 || result.Binding.ActorKind != authorization.SubjectServiceAccount || result.Binding.RecordID != source.FamilyID {
+			t.Fatal("retired token did not revoke exact family", err)
+		}
+		repeated, err := guard.CheckReplay(ctx, input)
+		if err != nil || repeated.Outcome != identity.CommitOutcomeCommitted || repeated.AuditEventID != result.AuditEventID || repeated.Binding != result.Binding {
+			t.Fatal("replay check duplicated transition", err)
+		}
+		stored, err := executor.owned.native.Get(ctx, source.TenantID, source.SessionID)
+		if err != nil || !stored.FamilyRevoked || stored.CurrentFamilyVersion != 2 {
+			t.Fatal("successor retained usable family", err)
+		}
+		credential, err := session.NewCredential(session.CredentialCookie, successorTokens[rotation.Binding.CommandID])
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got, err := reader.Get(ctx, session.GetRequest{TenantID: source.TenantID, Credential: credential}); err != nil || got.Authenticated {
+			t.Fatal("revoked successor still authenticates", err)
+		}
+		if got, err := reader.Get(ctx, unrelated); err != nil || !got.Authenticated {
+			t.Fatal("unrelated family revoked", err)
+		}
+		var audits, events, revocations int
+		if err := pool.Raw().QueryRow(ctx, `SELECT (SELECT count(*) FROM audit.identity_command_bindings WHERE command_id=$1),(SELECT count(*) FROM public.identity_outbox_bindings WHERE command_id=$1),(SELECT count(*) FROM session_store.family_revocations WHERE command_id=$1)`, mustCommandBytes(t, id)).Scan(&audits, &events, &revocations); err != nil || audits != 1 || events != 1 || revocations != 1 {
+			t.Fatal("replay revocation effects not atomic/idempotent", err)
+		}
+	})
+	testNativeFamilyReplay(t, ctx, pool, execution, validation, reader, prepare, issuedTokens, successorTokens, issue)
 	t.Run("waiting direct writer cannot restore a concurrently retired digest", func(t *testing.T) {
 		caller, _ := issue(t)
 		old, _ := caller.Session.Bindings()
