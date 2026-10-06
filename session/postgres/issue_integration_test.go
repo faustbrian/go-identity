@@ -565,6 +565,7 @@ func testNativeIssueIntegration(t *testing.T, ctx context.Context, pool *databas
 				return outcome.Session
 			}
 			testNativeSingleRevocation(t, ctx, pool, executor, makeIssued)
+			testNativeSetRevocation(t, ctx, pool, executor, makeIssued)
 		})
 		t.Run("core issuer delivers only after native commit", func(t *testing.T) {
 			candidate := prepare(t)

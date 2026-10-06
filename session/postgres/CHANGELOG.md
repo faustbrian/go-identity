@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Add bounded transactional revoke-other/revoke-all effects to the configured
+  native contributor. Select the complete tenant/user set across audiences,
+  reject over-limit sets without partial changes, and retain counts and source
+  disposition with command recovery evidence. Preserve surviving source bearer,
+  lifetime and authentication while advancing its session version; never bump
+  user-wide authority. Install `RevokeSetMigrationSource` after the base history.
+  Owned bulk execution/public factory composition remains under development.
+
 - Add owned authenticated session listing with an indexed, bounded primary
   tenant/user/audience keyset query and safe active/inactive device projections.
   Apply `ListMigrationSource` after the base session install at a permanent

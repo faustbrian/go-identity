@@ -62,6 +62,40 @@ rotation, cleanup, devices and complete session profiles remain unfinished.
 Single-factor stateful opaque validation now has owned primary composition;
 this is not yet a complete login service.**
 
+## Bulk native revocation
+
+The configured `NewRepositoryWithIssueAdmission` contributor registers
+revoke-other and revoke-all. Install `RevokeSetMigrationSource{Schema: schema,
+Version: permanentVersion}` after the base history, alongside the kernel,
+issuance and selected audit/outbox migrations. This forward migration retains
+command result counts and adds an active-owner selection index. Existing
+records and historical checksums are unchanged; the transactional index build
+can block writes and requires explicit populated-deployment scheduling.
+
+`MapRevokeSetRequest` structurally maps an original opaque core request; it
+does not authenticate or authorize execution. Raw `MapCommand` cannot supply
+the source-admission deadline. The owned bulk executor/public service factory
+and restart-safe public result projection remain under development. Do not
+substitute an application-written transaction or caller-ID workflow.
+
+The native effect selects all active-state sessions for the authenticated user
+within the tenant, across audiences, in bounded bytewise keyset chunks. The
+configured maximum counts target rows, not pages: an excess row denies the
+entire mutation rather than truncating it. Expired/family-denied active-state
+records are also tombstoned. Corrupt records or current-owner denial abort the
+complete set. The kernel's existing tenant transaction mutex serializes owned
+issuance and mutation; there is no second lock or invalidation authority.
+
+Revoke-other always preserves the source. Revoke-all has explicit source
+disposition. A preserved source retains bearer, lifetime, authentication and
+user authority, advancing only its session/snapshot version. Included sources
+and targets retain their original immutable payload behind terminal tombstones.
+Required audit, lifecycle and retained count/disposition evidence share the
+coordinator's sole transaction and rollback. Original admission remains bounded
+by the earlier freshness/expiry deadline; native checks cannot renew it.
+Retained scoped recovery evidence survives session payload cleanup, but corrupt
+or conflicting evidence never proves success or authorizes a new mutation.
+
 ## Single-session native revocation
 
 The explicitly configured `NewRepositoryWithIssueAdmission` contributor also
