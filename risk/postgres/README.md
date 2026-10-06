@@ -5,6 +5,17 @@ evidence and decisions. It is **not yet an executable durable risk service**.
 
 ## Implemented boundary
 
+- `MapCaptchaIssue` maps signed core issuance custody without a raw provider
+  token. `CaptchaIssueOperation` selects distinct user and anonymous-flow native
+  schemas. Supply the separately verified command actor; administrator flows
+  must match their signed actor. Mapping neither verifies a provider nor commits
+  evidence. Strict native restoration retains original aliases, configuration
+  commitment and exclusive validity without creating new authority. Original
+  response encryption uses a separate CAPTCHA profile and authenticates exact
+  command scope and retained record metadata. The owned durable CAPTCHA store,
+  executor and protected-use phases remain unfinished and are not enabled by
+  these preparation contracts.
+
 - `Config.EnforceLockouts` selects current durable restriction enforcement for
   protected command counters. Install `LockoutMigrationSource` after counter
   history. Admission reads restrictions on the original logical keyed roots

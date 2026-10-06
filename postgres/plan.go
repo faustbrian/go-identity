@@ -44,6 +44,11 @@ type CommandPlan struct {
 	// CommandCounters declares protected-command durable counter admission.
 	// It requires the exact native risk participant; no raw dimensions are stored.
 	CommandCounters *CommandCounterPlan
+	// CaptchaReplayReservation declares the native CAPTCHA issuance participant's
+	// durable alias reservation/rebind before domain work. False preserves old
+	// plan bytes. Only the exact CAPTCHA issuance schemas admit this phase; the
+	// immutable command carries its signed original aliases and configuration.
+	CaptchaReplayReservation bool
 	// Feature declares one exact registered feature schema. Kernel digests reject
 	// it; native execution additionally requires SubjectType and typed phases.
 	Feature *FeatureRegistration
@@ -88,7 +93,7 @@ func encodeKernelPlan(binding identity.CommandBinding, fingerprint [32]byte, pla
 	if plan.CapabilityIssuance != nil {
 		return encodeIssuanceWrappedPlan(binding, fingerprint, plan, encodeKernelPlan)
 	}
-	if plan.Feature != nil || plan.SubjectType != "" || plan.RiskEvidence != nil || plan.CommandCounters != nil {
+	if plan.Feature != nil || plan.SubjectType != "" || plan.RiskEvidence != nil || plan.CommandCounters != nil || plan.CaptchaReplayReservation {
 		return nil, invalidPlan()
 	}
 	probe := identity.CommandResult{Binding: binding, Outcome: identity.CommitOutcomeInProgress, RetryAfter: time.Microsecond}
@@ -174,6 +179,7 @@ type admittedKernelPlan struct {
 	capability          *CapabilityPlan
 	risk                *RiskEvidencePlan
 	counters            *CommandCounterPlan
+	captchaReplay       bool
 	fingerprint         [32]byte
 	feature             *FeatureRegistration
 	subjectType         string

@@ -96,10 +96,12 @@ func decodeFeaturePlan(binding identity.CommandBinding, fingerprint [32]byte, en
 	p.Feature = f
 	r.key("profile")
 	counterProfile := false
+	captchaProfile := false
 	if fields == 9 {
 		profile := r.string(64)
 		counterProfile = profile == "identity-feature-command-counters-v1"
-		if !counterProfile && profile != "identity-feature-risk-plan-v1" {
+		captchaProfile = profile == "identity-feature-captcha-replay-v1"
+		if !counterProfile && !captchaProfile && profile != "identity-feature-risk-plan-v1" {
 			return fail()
 		}
 	} else if fields == 8 {
@@ -123,7 +125,7 @@ func decodeFeaturePlan(binding identity.CommandBinding, fingerprint [32]byte, en
 	r.consume(cborBytes(fingerprint[:]))
 	r.key("contributors")
 	contributors := 4
-	if fields == 9 {
+	if fields == 9 && !captchaProfile {
 		contributors = 5
 	}
 	r.expect(4, uint64(contributors))
@@ -138,7 +140,11 @@ func decodeFeaturePlan(binding identity.CommandBinding, fingerprint [32]byte, en
 		}
 	}
 	if fields == 9 {
-		if counterProfile {
+		if captchaProfile {
+			r.key("captcha_replay")
+			r.consume(cborBool(true))
+			p.CaptchaReplayReservation = true
+		} else if counterProfile {
 			r.key("command_counters")
 			r.expect(5, 2)
 			p.CommandCounters = &CommandCounterPlan{}

@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add token-free native CAPTCHA issuance command mapping for user and anonymous
+  flows, strict signed-custody restoration, and separate encrypted original
+  response custody. Preserve original aliases, metadata and validity; altered
+  command scope or metadata cannot decrypt historical responses. These are
+  preparation contracts, not a completed durable CAPTCHA issuance executor.
+
 - Add explicitly selected native administrative lockout start/end contributors
   with current policy and actor-epoch checks, original primary-time freshness,
   exact-version CAS and same-transaction canonical effects. End preserves the

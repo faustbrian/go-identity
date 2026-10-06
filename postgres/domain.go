@@ -116,7 +116,7 @@ func (p *admittedKernelPlan) snapshot() CommandPlan {
 	for i, entry := range p.contributors {
 		descriptors[i] = entry.descriptor
 	}
-	result := CommandPlan{Contributors: descriptors, Audits: append([]AuditPlan(nil), p.audits...), Digest: p.digest}
+	result := CommandPlan{Contributors: descriptors, Audits: append([]AuditPlan(nil), p.audits...), Digest: p.digest, CaptchaReplayReservation: p.captchaReplay}
 	if p.identifierAdmission != nil {
 		d := p.identifierAdmission.descriptor
 		result.IdentifierAdmission = &d

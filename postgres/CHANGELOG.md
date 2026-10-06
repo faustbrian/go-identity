@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add explicitly declared native CAPTCHA replay reservation and exact-generation
+  rebind through the sole coordinator before domain work. Preserve historical
+  plan bytes when unselected and keep user/anonymous-flow namespaces distinct.
+  This typed phase supports durable alias custody across domain rollback;
+  production CAPTCHA storage and protected consumption remain pending.
+
 - Persist and recover explicit anonymous-flow feature scope through the existing
   coordinator, with current-policy authorization against its own resource
   namespace and exact actor/scope matching. Preserve legacy user command and

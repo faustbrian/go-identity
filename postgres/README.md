@@ -1,5 +1,23 @@
 # Identity PostgreSQL
 
+## Native CAPTCHA replay reservation
+
+`CommandPlan.CaptchaReplayReservation` explicitly selects the native risk
+store's `CaptchaReplayContributor` before domain work. Only the exact user or
+anonymous-flow CAPTCHA issuance schemas admit it; declaration alone supplies
+no authority. The existing coordinator commits the alias reservation with the
+original command reservation, then invokes domain work separately. A domain
+rollback cannot erase that independently committed replay winner.
+
+`CaptchaReservationWork` exposes only bounded SQL, primary time and the exact
+original immutable command, authoritative fingerprint and owner generations.
+The registered native participant authenticates signed custody/configuration
+and enforces alias uniqueness. Callback return or panic expires every handle
+copy; takeover uses exact predecessor CAS, never a timeout-based release.
+False leaves historical plan bytes unchanged. Production risk-store CAPTCHA
+issuance, original-result recovery and protected consumption remain pending;
+applications must not implement private replay stores to fill these gaps.
+
 ## Exact original final-authentication outcome recovery
 
 `QueryAuthenticatedCommand` is a read-only bridge for the owned authenticated

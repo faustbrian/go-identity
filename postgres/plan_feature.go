@@ -26,6 +26,9 @@ func FeaturePlanDigest(binding identity.CommandBinding, fingerprint [32]byte, pl
 }
 
 func encodeFeaturePlan(binding identity.CommandBinding, fingerprint [32]byte, p CommandPlan) ([]byte, error) {
+	if validateCaptchaReplayPlan(binding, p) != nil {
+		return nil, invalidPlan()
+	}
 	if p.IdentifierAdmission != nil {
 		return nil, invalidPlan()
 	}
@@ -118,6 +121,10 @@ func encodeFeaturePlan(binding identity.CommandBinding, fingerprint [32]byte, p 
 		fields["profile"] = cborText("identity-feature-command-counters-v1")
 		fields["command_counters"] = encodeCommandCounterPlan(*p.CommandCounters)
 	}
+	if p.CaptchaReplayReservation {
+		fields["profile"] = cborText("identity-feature-captcha-replay-v1")
+		fields["captcha_replay"] = cborBool(true)
+	}
 	return cborMap(fields), nil
 }
 
@@ -163,7 +170,7 @@ func (c *Coordinator) prepareFeature(binding identity.CommandBinding, command id
 	if err != nil || !validClaim(q, c.keys) || !bytes.Equal(q.safeFields, commandSafeFields(binding, &spec.Operation)) {
 		return fail()
 	}
-	snapshot := CommandPlan{Contributors: append([]ContributorDescriptor(nil), p.Contributors...), Audits: append([]AuditPlan(nil), p.Audits...), Capability: p.Capability, SubjectType: p.SubjectType}
+	snapshot := CommandPlan{Contributors: append([]ContributorDescriptor(nil), p.Contributors...), Audits: append([]AuditPlan(nil), p.Audits...), Capability: p.Capability, SubjectType: p.SubjectType, CaptchaReplayReservation: p.CaptchaReplayReservation}
 	snapshot.Delivery = cloneDeliveryPlan(p.Delivery)
 	snapshot.CapabilityIssuance = cloneCapabilityIssuancePlan(p.CapabilityIssuance)
 	feature := *p.Feature

@@ -185,7 +185,7 @@ func (c *Coordinator) prepare(binding identity.CommandBinding, command identity.
 		}
 		return c.prepareFeature(binding, command, spec, plan)
 	}
-	if plan.Feature != nil || plan.RiskEvidence != nil || plan.CommandCounters != nil {
+	if plan.Feature != nil || plan.RiskEvidence != nil || plan.CommandCounters != nil || plan.CaptchaReplayReservation {
 		return claimRequest{}, CommandPlan{}, nil, invalidPlan()
 	}
 	// No proof/cascade declaration is inferred from a contributor name. Those
@@ -348,6 +348,9 @@ func (c *Coordinator) reservePreparedCommand(ctx context.Context, binding identi
 		return c.failedReservation(tx, binding, identity.CommandResult{}, err)
 	}
 	if err = c.reserveRisk(bounded, tx, q, admitted, journal, owner); err != nil {
+		return c.failedReservation(tx, binding, identity.CommandResult{}, err)
+	}
+	if err = c.reserveCaptchaReplay(bounded, tx, command, q, admitted, journal, owner); err != nil {
 		return c.failedReservation(tx, binding, identity.CommandResult{}, err)
 	}
 	if err = c.reserveCapability(bounded, tx, q, admitted, journal, owner); err != nil {
