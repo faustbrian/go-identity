@@ -6,7 +6,9 @@ and opaque token/key custody with tenant-bound lookups. Authenticated cookie
 issuance orchestration is available through `SessionIssuer`; owned durable
 executor composition is available in the PostgreSQL adapter. Stateful opaque
 `SessionService.Get` validation is available against its trusted owned-reader
-contract. **The primary authentication reader, rotation, complete revocation
+contract, with an owned primary reader and revocation executor in the PostgreSQL
+adapter. Public self-signout is available through `SignOutService`; its real
+PostgreSQL composed journey is still pending. **Rotation, complete revocation
 services and transfers remain unfinished; this is not a usable login service.** Complete authority-vector
 construction and exact comparison are available, but do not read primary
 authority or prove activity/freshness.
@@ -19,13 +21,43 @@ or opens a transaction, reserves a proof, writes a record or reveals a token.
 
 ## Quick start and API
 
+### Idempotent self-signout
+
+`NewSignOutService(reader, executor, SignOutConfig{...})` borrows the exact
+configured primary `SessionService` and owned `RevokeOneExecutor`. Use the
+PostgreSQL executor configured with that same reader, explicit policy ID/version,
+1ms..30s whole-operation duration and the same host-cookie policy as issuance.
+Construction performs no IO and accepts no application domain store or callback.
+
+`SignOut(ctx, SignOutRequest{TenantID: tenant, CommandID: commandID,
+CorrelationID: correlationID, Transport: CredentialCookie, Credential: credential})`
+authenticates through `Get`, freezes the original caller as the exact target and
+executes revocation through the existing durable owner. The configured native
+adapter authorizes current policy and rechecks current owners under the sole
+transaction. No fresh login is required. Supply a canonical host-generated
+command ID even for an absent credential; this is not permission or authentication.
+HTTP must reject mixed sources and enforce origin/CSRF before invoking cookie
+signout. HTTP transport and automatic cookie writing are not provided here.
+
+Missing or primary-denied credentials return idempotent `SignedOut` without a
+second transition. Cookie transport returns `ClearCookie` and secure, empty-valued
+deletion attributes; bearer transport returns `ClearBearer` without touching a
+cookie. Other sessions and families are not selected. Outages, denial, malformed
+receipts, cancellation and unknown outcomes do not become successful logout.
+An exact receipt's `CommitOutcome` remains visible even alongside a later error;
+no outcome observation is `CommitOutcomeInvalid`, not inferred rollback.
+On ambiguity retain `CommandID` and `Recovery`, then use the owned native
+executor's scoped historical query under current result-access policy. Do not
+mint a replacement command or treat the recovery scope as authentication.
+
 `NewRevokeOneCommand(binding, record)` prepares a single-session transition
 with the complete original target and a representable version successor.
 Its tenant, user and session ID must exactly match the command binding.
 `RevokeOne()` exposes a copy; formatting and serialization remain redacted.
 This command does not revoke a family, authenticate a caller or execute logout.
 The PostgreSQL contributor executes this variant atomically with audit and
-lifecycle effects; the public owned revocation service remains required.
+lifecycle effects. `SignOutService` targets the authenticating session;
+arbitrary target management and absent/expired target semantics remain pending.
 
 `service.PrepareRevokeOne(getResult, command)` retains opaque caller admission
 from that exact configured `SessionService`, the original exclusive deadline,
@@ -60,8 +92,8 @@ explicit `StorageStatefulOpaque`, configured audience, trusted clock, 1ms..5s
 maximum duration, 1ms..5s clock uncertainty and 1..4 retained independent digest
 keys with distinct versions. Selection is copied; key retirement removes only
 that version's lookup support. Other storage profiles currently fail construction
-rather than silently emulate their revocation guarantees. The primary reader
-implementation is still required; structural repository `Get`/`Lookup` must not
+rather than silently emulate their revocation guarantees. Use the PostgreSQL
+adapter's owned primary reader; structural repository `Get`/`Lookup` must not
 be passed off as an authoritative reader or replaced by consumer-written glue.
 
 `NewCredential(CredentialCookie, parsedToken)` or `CredentialBearer` selects

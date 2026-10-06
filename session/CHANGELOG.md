@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Add bounded public self-signout through the configured primary reader and
+  owned revocation executor. Absent or primary-denied credentials succeed
+  without a new mutation; active callers target only their original session.
+  Cookie and bearer removal remain separate. Preserve durable outcomes and
+  exact recovery scope while withholding successful logout/deletion on policy
+  denial, outages, cancellation or ambiguity. Ordinary logout needs no fresh
+  login. Real PostgreSQL composition and complete session services remain
+  separate pending integration work.
+
 - Add one-session request preparation bound to the configured authenticated
   reader's opaque caller custody and original exclusive validity. Retain the
   independent complete target while rejecting fabricated callers, foreign
