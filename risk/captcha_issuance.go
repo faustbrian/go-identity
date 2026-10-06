@@ -174,15 +174,17 @@ func NewCaptchaEvidenceIssuer(c CaptchaEvidenceIssuerConfig) (CaptchaEvidenceIss
 }
 
 // CaptchaEvidenceIntent is immutable core preparation retaining no raw token.
-// Only Prepare constructs it; zero/foreign owner is invalid. Copies are safe
-// concurrent reads. It binds every retained replay alias and exact command,
-// flow, policy and verifier configuration. Preparation grants no permission.
+// Prepare and authenticated native restoration construct it. Copies are safe
+// for concurrent reads; zero is invalid. It binds original replay aliases and
+// exact command, flow, policy and verifier configuration. Restored custody is
+// recovery-only; neither form grants permission or durable commitment.
 type CaptchaEvidenceIntent struct{ state *captchaEvidenceIntentState }
 type captchaEvidenceIntentState struct {
 	owner        *captchaEvidenceIssuerState
 	request      CaptchaEvidenceRequest
 	replay       CaptchaReplayIdentity
 	tokenDigests map[uint32][32]byte
+	native       *captchaNativeIntent
 }
 
 // CaptchaIntentBinding is copied native command/lookup metadata, never HTTP
@@ -221,6 +223,9 @@ func (i CaptchaEvidenceIntent) Bindings() []CaptchaIntentBinding {
 	if i.state == nil {
 		return nil
 	}
+	if i.state.native != nil {
+		return []CaptchaIntentBinding{cloneCaptchaIntentBinding(i.state.native.prepared.Binding)}
+	}
 	s := i.state.owner
 	bindings := make([]CaptchaIntentBinding, 0, len(s.config.Keys))
 	for _, key := range s.config.Keys {
@@ -230,7 +235,21 @@ func (i CaptchaEvidenceIntent) Bindings() []CaptchaIntentBinding {
 }
 
 func captchaIntentDigest(i CaptchaEvidenceIntent, key EvidenceKey) [32]byte {
-	s, c := i.state, i.state.owner.config
+	if i.state.native != nil {
+		if key.version == i.state.native.key.version {
+			return i.state.native.prepared.Binding.IntentDigest
+		}
+		return [32]byte{}
+	}
+	fields := captchaIntentFields(i.state)
+	// Replay-key rotation must not change this independently keyed commitment.
+	tokenDigest := i.state.tokenDigests[key.version]
+	fields = append(fields, base64.RawURLEncoding.EncodeToString(tokenDigest[:]))
+	return evidenceMAC(key.digest, "identity-captcha-intent-v1", fields)
+}
+
+func captchaIntentFields(s *captchaEvidenceIntentState) []string {
+	c := s.owner.config
 	b, flow := s.replay.state.binding, s.request.Flow.state.input
 	fields := []string{s.request.CommandID, string(flow.Kind), flow.Tenant, string(flow.Operation), flow.Subject, flow.AnonymousFlow, flow.PreAuthTransaction, flow.Session, flow.Actor, flow.ChallengeID, flow.RequestFingerprint, b.Provider, b.Site, b.APIProfile, b.ConfigurationVersion, c.API, c.Version, c.Tier, strconv.FormatUint(c.Replay.state.config.Policy.state.version, 10), c.ExpectedAction, strconv.FormatInt(int64(c.Lifetime), 10), strconv.FormatInt(int64(c.ChallengeMaxAge), 10), strconv.FormatBool(c.Capabilities.Hostname), strconv.FormatBool(c.Capabilities.Origin), strconv.FormatBool(c.Capabilities.Action), strconv.FormatBool(c.Capabilities.Score), strconv.FormatBool(c.Capabilities.ChallengeTime)}
 	if c.ScoreThreshold == nil {
@@ -243,12 +262,7 @@ func captchaIntentDigest(i CaptchaEvidenceIntent, key EvidenceKey) [32]byte {
 	fields = append(fields, c.Hostnames...)
 	fields = append(fields, strconv.Itoa(len(c.Origins)))
 	fields = append(fields, c.Origins...)
-	// Token commitment uses this independently retained intent key, not the
-	// rotating replay-alias list. A new replay alias therefore preserves original
-	// command recovery while a different token cannot reuse its command identity.
-	tokenDigest := s.tokenDigests[key.version]
-	fields = append(fields, base64.RawURLEncoding.EncodeToString(tokenDigest[:]))
-	return evidenceMAC(key.digest, "identity-captcha-intent-v1", fields)
+	return fields
 }
 
 // CaptchaEvidenceRef is opaque bearer custody. Reveal is an explicit transfer
@@ -345,6 +359,10 @@ func captchaSignature(k EvidenceKey, r CaptchaEvidenceRecord, nonce string) [32]
 	return evidenceMAC(k.signing, "identity-captcha-bearer-v1", []string{strconv.FormatUint(uint64(r.KeyVersion), 10), base64.RawURLEncoding.EncodeToString(r.IntentDigest[:]), base64.RawURLEncoding.EncodeToString(r.ProofDigest[:]), r.Hostname, evidenceTime(r.IssuedAt), evidenceTime(r.ExpiresAt), nonce})
 }
 func validCaptchaRecord(i CaptchaEvidenceIntent, r CaptchaEvidenceRecord) bool {
+	if i.state != nil && i.state.native != nil {
+		want, err := captchaNativeIssue(i).Materialize(r.IssuedAt)
+		return err == nil && want == r
+	}
 	if i.state == nil || !databaseEvidenceTime(r.IssuedAt) || !databaseEvidenceTime(r.ExpiresAt) || !r.ExpiresAt.After(r.IssuedAt) || r.ExpiresAt.Sub(r.IssuedAt) > i.state.owner.config.Lifetime || r.ProofDigest == ([32]byte{}) {
 		return false
 	}
@@ -414,7 +432,7 @@ type CaptchaEvidenceExecutor interface {
 // Errors from providers never become positive facts. Executor ambiguity or late
 // acknowledgement returns Unknown with no bearer; use Recover, not a new intent.
 func (s CaptchaEvidenceIssuer) Issue(ctx context.Context, i CaptchaEvidenceIntent, token []byte) (CaptchaEvidenceResult, error) {
-	if ctx == nil || s.state == nil || i.state == nil || i.state.owner != s.state {
+	if ctx == nil || s.state == nil || i.state == nil || i.state.owner != s.state || i.state.native != nil {
 		return CaptchaEvidenceResult{}, ErrInvalidEvidenceRequest
 	}
 	if err := ctx.Err(); err != nil {

@@ -51,9 +51,25 @@ unexpected concurrent winner must be reconciled as that exact original record.
 Configuration, intent projections and bearer custody reject automatic
 serialization and redact diagnostics; only `Reference.Reveal()` transfers it.
 
+`CaptchaEvidenceIssue.Prepared()` returns a copied, signed native command
+projection. `EvidenceKey.RestoreCaptchaIssue` authenticates the complete flow,
+original replay aliases, configuration/intent commitments, proof, nonce,
+hostname and interval without raw token, callbacks, clocks or new randomness.
+At the same primary time it reproduces the exact original candidate. It grants
+no commit or consumption authority. The official adapter must still enforce
+current policy, authorization, rotation history and exact shared-Work scope.
+`CaptchaEvidenceIssuer.RestoreCaptchaIssue` additionally checks the current
+immutable verifier configuration/policy and retained key versions, returning an
+intent for `Recover` only. `Issue` rejects restored intents even with a token;
+Missing recovery is never permission to reverify or resubmit. Historical
+committed results retain the original exclusive expiry. Removing a referenced
+key or changing the verifier configuration rejects restoration; retain original
+startup profiles for their required recovery/tombstone lifetime. Newer retained
+keys coexist without rewriting original aliases or signed custody.
+
 This is development composition, not an application-provided store contract.
 The actual provider-neutral closed native-evidence union, official provider
-adapters, signed native command bridge, PostgreSQL single-winner issuance,
+adapters, PostgreSQL command mapping and single-winner issuance,
 reserve/apply/finalize, canonical audit/failure attribution and full Service
 composition are still required. The boundary doubles prove core result
 conservation, not provider truth, database atomicity or durable one-use behavior.

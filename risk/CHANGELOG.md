@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Restore signed native CAPTCHA command custody without raw tokens or provider
+  calls, preserving exact flow, original aliases, nonce and exclusive validity.
+  Retained keys preserve historical results; restored intents permit recovery
+  only and cannot start verification or issuance again. Durable execution and
+  protected consumption still require the official coordinator adapter.
+
 - Admit exact-flow, profile-bound CAPTCHA verification through a core-owned
   evidence issuer with bounded callbacks, explicit bindings and score policy.
   Preserve original validity, token-bound command identity, retained-key
