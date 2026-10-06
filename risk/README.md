@@ -86,12 +86,40 @@ positive fact intervals are rechecked at the final clock sample. A failed server
 factor resolver cannot enable step-up. Reader implementations must be concurrency
 safe; the evaluator owns neither their external resources nor their shutdown.
 
-Without `Counters`, this source runner performs no counter mutation. It performs
-no decision-journal persistence, required audit or evidence issuance in either
-mode. It must not be used as complete middleware
+Without `Counters`, this source runner performs no counter mutation. Without
+`DecisionAudit`, it remains explicitly unaudited. Neither configuration adds
+decision-journal persistence or evidence issuance. It must not be used as complete middleware
 or as permission to execute the selected operation. The later official adapter
 composition must implement those owners; consumers must not supply private
 domain stores or replacement workflow orchestration.
+
+### Required non-issuing decision audit
+
+Select `EvaluatorConfig.DecisionAudit` at startup with an immutable canonical
+policy ID, explicit timeout, existing `audit.RecorderConfig` and bounded `OnLoss`
+operational handoff. Supply trusted `EvaluateRequest.Attribution` per operation;
+attempt subjects must match the evaluation attempt. Invalid attribution rejects
+before sources or counters. Policy version, decision and event time are owned by
+the evaluator, not the caller. Caller redactors cannot remove required fields.
+
+The shared root profile emits protected `identity.risk.decide` records for all
+four classifications and closed defaults. Clean primary or durable-buffer
+acknowledgment permits returning the non-issuing decision; alert-only success
+does not. Failure suppresses Allow and private issuing provenance, preserves
+restrictive decisions and already-known counter/audit outcomes, and exposes only
+redacted errors. Original source validity and throttle windows are rechecked
+after audit acknowledgment without another counter mutation or freshness reset.
+
+`EvaluateResult.Audit` retains the exact canonical record, command and append
+classification. Recovery must resubmit that original record, not rebuild it or
+repeat evaluation. `OnLoss` receives a bounded cancellation-independent context;
+success is an operational handoff, not proof of durable reconciliation. Official
+durable recovery and full risk-service composition remain unfinished. Sink,
+buffer and observer owners must obey context and be concurrency-safe.
+
+`PhoneEvidenceIssuer` rejects an audited evaluator because its native transaction
+already owns the risk-decision event. Keep its existing evaluator configuration;
+this opt-in non-issuing delivery must not duplicate or replace native events.
 
 ### Phase-bound counter dispatch
 

@@ -59,6 +59,9 @@ type EvaluatorConfig struct {
 	// the exact same immutable Policy. The value is copied, not the pointer.
 	// Nil retains source-only assessment, not complete abuse enforcement.
 	Counters *CounterCoordinator
+	// DecisionAudit selects required canonical delivery for public non-issuing
+	// evaluation. Nil preserves the explicitly unaudited development mode.
+	DecisionAudit *DecisionAuditConfig
 }
 
 // Evaluator owns bounded server-source orchestration. It starts no goroutine,
@@ -73,11 +76,13 @@ type evaluatorState struct {
 	sources           map[string]Source
 	independentFactor func(context.Context, Context) (bool, error)
 	counters          CounterCoordinator
+	audit             *decisionAuditState
 }
 
 // NewEvaluator rejects missing, duplicate or extraneous mandatory-source owners,
 // invalid callbacks and unbounded timeouts with ErrInvalidPolicy. Construction
-// invokes no callback and copies the source slice into owned immutable state.
+// invokes no source, clock or delivery callback and copies source configuration.
+// A selected durable buffer's declared capacity is inspected at construction.
 func NewEvaluator(c EvaluatorConfig) (Evaluator, error) {
 	if c.Policy.state == nil || c.Clock == nil || c.Timeout <= 0 || c.Timeout > time.Minute || (len(c.Sources) == 0 && c.Counters == nil) || len(c.Sources) > 128 {
 		return Evaluator{}, ErrInvalidPolicy
@@ -106,6 +111,13 @@ func NewEvaluator(c EvaluatorConfig) (Evaluator, error) {
 		return Evaluator{}, ErrInvalidPolicy
 	}
 	s := &evaluatorState{policy: c.Policy, clock: c.Clock, timeout: c.Timeout, sources: make(map[string]Source, len(c.Sources)), independentFactor: c.IndependentFactor}
+	if c.DecisionAudit != nil {
+		var err error
+		s.audit, err = newDecisionAudit(*c.DecisionAudit, c.Policy, c.Clock, c.Timeout)
+		if err != nil {
+			return Evaluator{}, err
+		}
+	}
 	if c.Counters != nil {
 		s.counters = *c.Counters
 	}
@@ -134,6 +146,9 @@ type EvaluateRequest struct {
 	// Subject contains exact trusted profile dimensions only when Counters is
 	// configured. It must be empty for source-only evaluation and closed defaults.
 	Subject Subject
+	// Attribution is required only when DecisionAudit is configured. It carries
+	// trusted safe audit scope, never facts, decisions, clocks or policy versions.
+	Attribution *DecisionAttribution
 }
 
 // Format omits all correlated request metadata.
@@ -141,14 +156,18 @@ func (EvaluateRequest) Format(s fmt.State, _ rune) {
 	_, _ = io.WriteString(s, "risk.EvaluateRequest(redacted)")
 }
 
-// EvaluateResult exposes only a non-issuing decision and policy version. It
-// never exposes raw facts, provider errors or one-use evidence. Zero is invalid.
+// EvaluateResult exposes a non-issuing decision, policy version and optional
+// safe audit delivery metadata. It never exposes raw facts, provider errors or
+// one-use evidence. Zero is invalid.
 type EvaluateResult struct {
 	Decision      Decision
 	PolicyVersion uint64
-	assessment    Assessment
-	counter       *CounterEvaluation
-	provenance    *evaluationProvenance
+	// Audit retains original delivery identity/outcome, not permission or proof
+	// of durable counter/decision reconciliation. Zero is unobserved.
+	Audit      DecisionDelivery
+	assessment Assessment
+	counter    *CounterEvaluation
+	provenance *evaluationProvenance
 }
 
 // Only a successful owned evaluation can populate issuing provenance. Public
@@ -198,7 +217,9 @@ func evaluationFailure(err error) (EvaluateResult, error) {
 // protected-command phase fails before store/provider work; only its future
 // shared-Work participant may mutate it. Later failure never rolls back an
 // attempt: the known outcome remains private for the owning risk service.
-// This method does not audit, issue evidence or grant permission to execute.
+// DecisionAudit requires canonical delivery and rechecks original validity
+// before returning a decision. Nil retains unaudited development mode. Neither
+// variant issues evidence or grants permission to execute.
 // Issuing phases fail before clock, factor, counter or source access.
 func (e Evaluator) Evaluate(ctx context.Context, request EvaluateRequest) (result EvaluateResult, err error) {
 	var counted *CounterEvaluation
@@ -234,12 +255,29 @@ func (e Evaluator) Evaluate(ctx context.Context, request EvaluateRequest) (resul
 	}
 	c.Now, c.IndependentFactor = start, false
 	last := start
+	if e.state.audit != nil {
+		if err := e.state.audit.prepare(bounded, &request, start, e.state.policy.state.version); err != nil {
+			return evaluationFailure(err)
+		}
+		now := e.state.clock()
+		if err := evaluationTime(now, last, start, e.state.timeout); err != nil {
+			return evaluationFailure(err)
+		}
+		last, c.Now = now, now
+	} else if request.Attribution != nil {
+		return evaluationFailure(ErrInvalidContext)
+	}
 	if a.Preflight != "" {
 		assessment, err := e.state.policy.Assess(bounded, c, nil)
 		if err != nil {
 			return evaluationFailure(err)
 		}
-		return safeEvaluation(assessment), nil
+		result := safeEvaluation(assessment)
+		if e.state.audit != nil {
+			result.provenance = &evaluationProvenance{owner: e.state, context: c}
+			return e.finishDecisionAudit(bounded, request, result, c.Now, start)
+		}
+		return result, nil
 	}
 	var command CounterCommand
 	if e.state.counters.state != nil {
@@ -371,6 +409,10 @@ func (e Evaluator) Evaluate(ctx context.Context, request EvaluateRequest) (resul
 	}
 	result = safeEvaluation(assessment)
 	result.provenance = &evaluationProvenance{owner: e.state, context: c, signals: signals}
+	if e.state.audit != nil {
+		result.counter = counted
+		return e.finishDecisionAudit(bounded, request, result, now, start)
+	}
 	return result, nil
 }
 

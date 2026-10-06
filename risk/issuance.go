@@ -429,7 +429,7 @@ type phoneEvidenceIssuer struct {
 
 // NewPhoneEvidenceIssuer rejects incomplete/overlapping composition without IO.
 func NewPhoneEvidenceIssuer(c PhoneEvidenceIssuerConfig) (PhoneEvidenceIssuer, error) {
-	if c.Evaluation.state == nil || c.Evaluation.state.counters.state == nil || c.Carrier.state == nil || !c.Carrier.state.enabled || c.Evaluation.state.policy.state.version != c.Carrier.state.version || c.Clock == nil || c.Timeout <= 0 || c.Timeout > time.Minute || c.Evaluation.state.timeout > c.Timeout || c.Carrier.state.timeLimit > c.Timeout || c.Executor == nil || len(c.Keys) < 1 || len(c.Keys) > 16 {
+	if c.Evaluation.state == nil || c.Evaluation.state.audit != nil || c.Evaluation.state.counters.state == nil || c.Carrier.state == nil || !c.Carrier.state.enabled || c.Evaluation.state.policy.state.version != c.Carrier.state.version || c.Clock == nil || c.Timeout <= 0 || c.Timeout > time.Minute || c.Evaluation.state.timeout > c.Timeout || c.Carrier.state.timeLimit > c.Timeout || c.Executor == nil || len(c.Keys) < 1 || len(c.Keys) > 16 {
 		return PhoneEvidenceIssuer{}, ErrInvalidPolicy
 	}
 	s := &phoneEvidenceIssuer{evaluation: c.Evaluation, carrier: c.Carrier, clock: c.Clock, timeout: c.Timeout, executor: c.Executor, keys: append([]EvidenceKey(nil), c.Keys...)}

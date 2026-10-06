@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add opt-in required canonical decision audit to non-issuing evaluation.
+  Audit loss suppresses Allow without erasing committed counter outcomes;
+  original record identity and validity remain unchanged during recovery.
+  Existing unaudited development and native phone-event ownership remain
+  explicit; durable risk-service reconciliation is still required.
+
 - Expose an owned sorted HIBP policy snapshot so adapters reject incompatible
   cache validity before provider requests; disabled policies remain explicit.
 
