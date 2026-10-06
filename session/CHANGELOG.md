@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add self-session device-label CAS preparation with opaque original caller
+  custody. Bound untrusted labels and preserve credential, activity, lifetime,
+  remember choice, authentication and every unrelated authority. Copies and
+  retries cannot extend admission; safe metadata needs no fresh login. Durable
+  update orchestration and native PostgreSQL persistence remain pending.
+
 - Add explicit encrypted companion-cookie caching with complete encoded size
   bounds, host-only scope, High priority and preserved remember-me choice.
   Require the original cookie credential; duplicate cache values deny, invalid

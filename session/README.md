@@ -469,6 +469,28 @@ requirements. A populated `http.Cookie` contains a secret: never log it.
 
 ## FAQ and operations
 
+### Self-session device-label preparation
+
+`NewUpdateCommand(binding, caller.Session, label)` freezes only a label and
+checked session-version successor. Use `UpdateOperation()` for the binding;
+the source record's version is the expected CAS. Empty clears the label;
+UTF-8 text is bounded to128 bytes and excludes control runes. Treat it as
+untrusted display text and escape it when rendered, never as device trust.
+
+`service.PrepareUpdate(caller, command)` requires an unchanged authentic
+`GetResult` from that exact service and the exact authenticating session, not
+another same-user device. The opaque `UpdateCommandRequest` retains original
+transport and exclusive admission deadline. Copying or retrying does not renew
+authority. Label updates do not require fresh login, rotate credentials or
+extend activity, lifetime, remember choice or authentication freshness.
+
+This preparation is not a durable update or an authorization decision. Owned
+execution must recheck current policy, primary owners and source CAS, then
+commit metadata, complete successor, audit/lifecycle and recovery receipt in
+the kernel transaction. Core orchestration, PostgreSQL writer/list integration,
+HTTP composition and their release gates remain pending. Consumers must not
+implement a private store or assume the structural successor is authenticated.
+
 ### Encrypted admission cache
 
 `NewEncryptedCacheCodec(service, envelopeService, config)` adds explicit
