@@ -1,5 +1,38 @@
 # OTP PostgreSQL
 
+## Native counted denial
+
+`NewContributor(ContributorConfig)` now supplies the exact
+`identity.otp.store` participant for the coordinator's
+`PrepareOTPAttemptPlan` / `RecordOTPAttemptDenial` path. Enlist the returned
+pointer alongside the real domain, audit, lifecycle and owning-feature
+contributors. Configuration supplies installed OTP/session schemas, the owned
+attempt codec, explicit deployment and user-policy namespace, dedicated stable
+lockout key and exact retained pre-auth cookie keys. Construction copies keys,
+performs no IO and creates no independent transaction or replay owner.
+
+Use `MapPreAuthWithAuthority` once for the original submission. The participant
+requires complete original pre-auth custody and the separately submitted cookie;
+legacy records do not acquire fresh authority. It checks locked deployment,
+tenant and applicable user/credential/authorization authority, then the original
+session-owned flow, shared abuse exclusions and scoped challenge. Database time
+is sampled after challenge locking; original flow and applicable credential
+expiry are checked again after downstream waits. Wrong-code charging, expiry/exhaustion,
+shared lockout extension, required denial audit and stable aborted receipt commit
+atomically. Exact retry reads that receipt without comparing or charging again;
+changed intent conflicts. Callback errors and failed audit persistence roll back
+all provisional writes. Reconstruct immutable configuration on restart, retaining
+the original named key material; never replace an ambiguous command by remapping.
+
+This participant currently implements **counted denial only**: correct consuming
+codes return unchanged and roll back, not successful authentication. Successful
+checks, reservation/takeover, protected execution/finalization, historical
+participant recovery, authenticated-session custody and issuance remain pending.
+Do not enable a public login workflow or supply an application-written store to
+fill those gaps. Existing command journaling owns denial recovery; unresolved
+participant history remains unknown. Module source pins and clean-consumer,
+coverage/mutation and release verification remain pending.
+
 `MapWithAuthority` and `MapPreAuthWithAuthority` bind original primary authority
 expectations to the same encrypted original-attempt command. `AttemptAuthority`
 requires deployment/tenant epochs and, for user commands, the effective user's
@@ -13,8 +46,8 @@ and bounded authority projection. No raw bearer/code or authority lease is
 stored; existing `Map`/`MapPreAuth` framing is unchanged. Old records remain
 readable but do not acquire invented authority. Restoration validates original
 envelope and core MAC before returning expectations. This is structural custody,
-not a permission decision or live primary check. Native contributor dispatch,
-phase-by-phase epoch drift denial and end-to-end OTP login remain pending.
+not a permission decision or live primary check. Counted denial now dispatches
+through the native contributor; remaining phases and end-to-end login are pending.
 Enable authority-aware mapping only after every command reader supports v3;
 older binaries reject this new opt-in profile, while new readers retain v1/v2.
 
@@ -24,9 +57,9 @@ the session adapter's locked issued/reserved primary checks. Wrong, absent or
 retired-key cookies cannot substitute the stored commitment. Reserved admission
 requires exact command, fingerprint and current generation; primary time after
 the lock owns exclusive expiry. Admission does not charge an attempt, write a
-result or renew the flow. This is not yet dispatched by a production OTP
-contributor: current authority, lockout/challenge ordering, protected execution
-and recovery still require native composition. No public raw store is exposed.
+result or renew the flow. Counted-denial dispatch composes this admission with
+current authority and lockout/challenge ordering. Protected execution and
+recovery still require native composition. No public raw store is exposed.
 
 `AttemptCodec.MapPreAuth` explicitly maps a complete bound-flow attempt and its
 separate submitted `authentication.BearerCredential`. The bearer is retained

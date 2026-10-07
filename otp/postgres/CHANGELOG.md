@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add native pre-auth OTP counted-denial composition in the existing identity
+  coordinator. Enforce original cookie and primary authority before comparison;
+  atomically persist wrong-attempt/exhaustion charges, shared lockouts, required
+  audit and stable denial receipt. Correct codes still roll back: successful
+  consuming/check workflows and full login remain under development.
+
 - Freeze original directory, effective-user authorization and applicable
   credential epochs inside authenticated OTP command custody. Preserve existing
   mapping profiles; retries cannot substitute freshly read authority. Native
