@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add private native recovery fencing and committed-snapshot restoration.
+  Exact owner/generation and logical expiry reject stale recovery effects;
+  restoration preserves cumulative counts, original windows and replay expiry
+  without debit or healthy publication. Journal composition remains pending.
+
 - Wire the private standalone counter transport to the native client with
   verified TLS, bounded physical connections, pre-allocation response framing,
   cancellation and joined shutdown. Ambiguous outcomes never trigger resend;

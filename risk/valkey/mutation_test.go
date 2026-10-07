@@ -104,6 +104,10 @@ func (d *scriptDB) execute(plan commandPlan) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
+	return d.executeScript(mutationScript, plan.keys, args)
+}
+
+func (d *scriptDB) executeScript(script string, suppliedKeys, suppliedArgs []string) ([]string, error) {
 	l := lua.NewState(lua.Options{SkipOpenLibs: true})
 	defer l.Close()
 	lua.OpenBase(l)
@@ -114,10 +118,10 @@ func (d *scriptDB) execute(plan commandPlan) ([]string, error) {
 	defer cancel()
 	l.SetContext(ctx)
 	keys, argv := l.NewTable(), l.NewTable()
-	for _, v := range plan.keys {
+	for _, v := range suppliedKeys {
 		keys.Append(lua.LString(v))
 	}
-	for _, v := range args {
+	for _, v := range suppliedArgs {
 		argv.Append(lua.LString(v))
 	}
 	l.SetGlobal("KEYS", keys)
@@ -125,7 +129,7 @@ func (d *scriptDB) execute(plan commandPlan) ([]string, error) {
 	redis := l.NewTable()
 	redis.RawSetString("call", l.NewFunction(d.call))
 	l.SetGlobal("redis", redis)
-	if err := l.DoString("return (function()\n" + mutationScript + "\nend)()"); err != nil {
+	if err := l.DoString("return (function()\n" + script + "\nend)()"); err != nil {
 		return nil, err
 	}
 	result, ok := l.Get(-1).(*lua.LTable)

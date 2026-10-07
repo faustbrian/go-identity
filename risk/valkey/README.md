@@ -65,6 +65,33 @@ journal-fenced recovery or public store activation. Those remain required.
 
 ## Native fixed-window script
 
+### Private recovery effects
+
+Recovery now has separate fixed native scripts for fence installation/renewal
+and restoration of one known committed snapshot. A fence binds the boot epoch,
+exact uint64 generation, random owner and original microsecond expiry. Native
+server time rejects expired effects even while physical TTL rounding retains
+the key. Same-generation renewal requires exact current custody and a later
+expiry; takeover requires expiry and a strictly greater generation. Matching
+installation replay performs no write or TTL renewal.
+
+Restoration runs only under the exact live `replaying` marker. It restores
+cumulative counts with monotonic original windows rather than increments or
+summing snapshots; delayed declarations cannot roll a counter backwards.
+Expired snapshots are not resurrected. Original complete mutation replies and
+replay retention are preserved. Bounded capacity checks and all record validation
+precede writes. Partial restore failures leave the marker replaying; a later
+owned reconciliation can repeat known committed history without another debit.
+The native transport performs no automatic resend and accepts only an exact
+attributable acknowledgement within its deadline.
+
+These are private effect boundaries, not a complete recovery service. They
+do not authenticate PostgreSQL lease/history, prove applied journal progress,
+establish cross-store clock bounds or publish health. Journal-backed core
+composition, writer-fenced healthy publication and public store activation
+remain unfinished. Tests execute the exact Lua and verified TLS using offline
+boundaries; real Valkey interoperability remains unproven.
+
 The embedded production Lua now implements a single prepared multi-dimension
 debit. Its keys include health, replay, eight capacity probes and up to sixteen
 digest aliases: at most twenty-six supplied keys in one slot.

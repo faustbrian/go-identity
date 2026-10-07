@@ -136,15 +136,19 @@ func stopCallback(stop func() bool, done <-chan struct{}) {
 }
 
 func (t *nativeTransport) execute(ctx context.Context, plan commandPlan) (reply []string, err error) {
+	args, err := mutationArguments(plan)
+	if err != nil {
+		return nil, err
+	}
+	return t.executeScript(ctx, mutationScript, plan.keys, args)
+}
+
+func (t *nativeTransport) executeScript(ctx context.Context, script string, keys, args []string) (reply []string, err error) {
 	if t == nil || t.slots == nil || t.dial == nil {
 		return nil, risk.ErrInvalidPolicy
 	}
 	if ctx == nil {
 		return nil, risk.ErrInvalidContext
-	}
-	args, err := mutationArguments(plan)
-	if err != nil {
-		return nil, err
 	}
 	bounded, cancel := context.WithTimeout(ctx, t.config.timeout)
 	defer cancel()
@@ -198,8 +202,8 @@ func (t *nativeTransport) execute(ctx context.Context, plan commandPlan) (reply 
 	ioDone := make(chan struct{})
 	stopIO := context.AfterFunc(bounded, func() { _ = cell.raw.Close(); close(ioDone) })
 	defer stopCallback(stopIO, ioDone)
-	fields := []string{"EVAL", mutationScript, strconv.Itoa(len(plan.keys))}
-	fields = append(fields, plan.keys...)
+	fields := []string{"EVAL", script, strconv.Itoa(len(keys))}
+	fields = append(fields, keys...)
 	fields = append(fields, args...)
 	wire, encodeErr := encodeNativeRequests([][]string{fields})
 	if encodeErr != nil {
