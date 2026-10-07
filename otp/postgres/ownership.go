@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"time"
 
+	identity "github.com/faustbrian/go-identity"
 	"github.com/faustbrian/go-identity/otp"
 	identitypostgres "github.com/faustbrian/go-identity/postgres"
 	"github.com/jackc/pgx/v5"
@@ -52,6 +53,13 @@ func validOwnership(b identitypostgres.OTPReservationBinding) bool {
 // provisional until this sole reservation transaction commits. Same-command
 // replay must be resolved by the coordinator before reaching this new-use path.
 func persistReservation(ctx context.Context, exec challengeExec, row lockedChallenge, d otp.AttemptDecision, b identitypostgres.OTPReservationBinding, now time.Time) error {
+	return persistOriginalReservation(ctx, exec, row, d, b, now, nil)
+}
+
+// Legacy private callers retain their historical storage profile. Native
+// consuming dispatch always supplies authenticated original custody and attaches
+// it in this same counted state transition, never a second state update.
+func persistOriginalReservation(ctx context.Context, exec challengeExec, row lockedChallenge, d otp.AttemptDecision, b identitypostgres.OTPReservationBinding, now time.Time, original *identity.FeatureCommandSpec) error {
 	if ctx == nil || exec == nil || !nativeTime(now) || !validOwnership(b) || b.PreviousGeneration != 0 || row.schema == "" || row.command != b.Command || row.plan != b.Plan {
 		return ErrInvalidCommand
 	}
@@ -65,11 +73,21 @@ func persistReservation(ctx context.Context, exec challengeExec, row lockedChall
 		return ErrInvalidCommand
 	}
 	id, _ := ownershipID(string(b.Command.CommandID))
+	extra := ""
+	args := []any{row.tenant, row.id, int64(row.keyVersion), row.scopeDigest[:], strconv.FormatUint(s.Version, 10), strconv.FormatUint(d.Version, 10), int64(d.UsedAttempts), id, b.Command.OperationID, b.Fingerprint[:], strconv.FormatUint(b.Generation, 10), b.Plan.AttemptID, b.Plan.AttemptFingerprint[:], int64(b.Plan.FingerprintKeyVersion), now}
+	if original != nil {
+		wire, err := originalEnvelope(*original, b)
+		if err != nil {
+			return err
+		}
+		extra = ",consumer_envelope=$16,consumer_owner=$17,consumer_record_requirement=$18,consumer_subject_requirement=$19"
+		args = append(args, wire, original.Operation.Owner, int16(original.Operation.RecordRequirement), int16(original.Operation.SubjectRequirement))
+	}
 	count, err := exec(ctx, `UPDATE `+row.schema+`.challenges SET state='reserved',version=$6::numeric,used_attempts=$7,
  consumer_command_id=$8,consumer_purpose=$9,consumer_fingerprint=$10,consumer_generation=$11::numeric,
- consumer_attempt_id=$12,consumer_attempt_fingerprint=$13,consumer_issuer_version=$14,reserved_at=$15
+ consumer_attempt_id=$12,consumer_attempt_fingerprint=$13,consumer_issuer_version=$14,reserved_at=$15`+extra+`
  WHERE tenant_id=$1 AND challenge_id=$2 AND digest_key_version=$3 AND scope_digest=$4 AND version=$5::numeric
- AND state='issued' AND issued_at<=clock_timestamp() AND expires_at>clock_timestamp()`, row.tenant, row.id, int64(row.keyVersion), row.scopeDigest[:], strconv.FormatUint(s.Version, 10), strconv.FormatUint(d.Version, 10), int64(d.UsedAttempts), id, b.Command.OperationID, b.Fingerprint[:], strconv.FormatUint(b.Generation, 10), b.Plan.AttemptID, b.Plan.AttemptFingerprint[:], int64(b.Plan.FingerprintKeyVersion), now)
+ AND state='issued' AND issued_at<=clock_timestamp() AND expires_at>clock_timestamp()`, args...)
 	if err != nil {
 		return challengeFailure(ctx)
 	}

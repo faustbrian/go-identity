@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/faustbrian/go-authentication"
 	identity "github.com/faustbrian/go-identity"
 	kernel "github.com/faustbrian/go-identity/postgres"
 	"github.com/faustbrian/go-identity/session"
@@ -56,20 +57,24 @@ func newPreAuthProfile(config sessionpg.Config, material map[uint32][]byte) (*pr
 // digest fields or fresh primary intent. No time is synthesized and no stored
 // challenge comparison is repeated. Live primary expiry belongs to admission.
 func (c *AttemptCodec) authenticatePreAuth(ctx context.Context, p *preAuthProfile, command identity.Command, plan kernel.OTPAttemptPlan) (session.PreAuthTransaction, error) {
+	spec, ok := command.Feature()
+	cookie, present := command.PreAuthCookie()
+	if !ok || !present {
+		return session.PreAuthTransaction{}, ErrInvalidCommand
+	}
+	return c.authenticatePreAuthSpec(ctx, p, spec, plan, cookie)
+}
+
+// Protected phase handles borrow no code. Independently borrowed cookie custody
+// is authenticated against the same immutable original spec without constructing
+// a synthetic code-bearing command or adopting a primary flow projection.
+func (c *AttemptCodec) authenticatePreAuthSpec(ctx context.Context, p *preAuthProfile, spec identity.FeatureCommandSpec, plan kernel.OTPAttemptPlan, cookie authentication.BearerCredential) (session.PreAuthTransaction, error) {
 	bad := func(err error) (session.PreAuthTransaction, error) { return session.PreAuthTransaction{}, err }
 	if ctx == nil || c == nil || c.crypto == nil || p == nil || len(p.keys) == 0 {
 		return bad(ErrInvalidCommand)
 	}
 	if err := ctx.Err(); err != nil {
 		return bad(err)
-	}
-	spec, ok := command.Feature()
-	if !ok {
-		return bad(ErrInvalidCommand)
-	}
-	cookie, ok := command.PreAuthCookie()
-	if !ok {
-		return bad(ErrInvalidCommand)
 	}
 	record, err := c.restoreRecord(spec)
 	if err != nil {

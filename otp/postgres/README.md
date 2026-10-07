@@ -24,13 +24,24 @@ changed intent conflicts. Callback errors and failed audit persistence roll back
 all provisional writes. Reconstruct immutable configuration on restart, retaining
 the original named key material; never replace an ambiguous command by remapping.
 
-This participant currently implements **counted denial only**: correct consuming
-codes return unchanged and roll back, not successful authentication. Successful
-checks, reservation/takeover, protected execution/finalization, historical
-participant recovery, authenticated-session custody and issuance remain pending.
+The separate `PrepareOTPReservationPlan` / `ReserveOTPCommand` entry point now
+reserves correct pre-auth submissions. `Begin`, protected feature application
+and `Commit` consume OTP and pre-auth atomically with the domain, audit, outbox
+and command receipt. Live replay does not charge again; exact takeover preserves
+original custody and timing and rejects the previous owner. Install
+`ConsumingMigrationSource` after OTP storage and session's
+`PreAuthReleaseMigrationSource` before enabling this profile. The forward OTP
+migration retains only the bounded encrypted code/cookie-free original envelope
+inside existing challenge storage; historical reservations receive no invented
+authority. Rollback releases exact predecessors only through the coordinator's
+sealed noncommit phase. Restart recovery uses retained original custody, not the
+submitted command/code/cookie; divergent evidence leaves reservations pending.
+
+The denial entry point still returns unchanged for correct codes. Successful
+metered checks, authenticated-session custody and issuance remain pending.
 Do not enable a public login workflow or supply an application-written store to
 fill those gaps. Existing command journaling owns denial recovery; unresolved
-participant history remains unknown. Module source pins and clean-consumer,
+participant history without exact retained evidence remains unknown. Module source pins and clean-consumer,
 coverage/mutation and release verification remain pending.
 
 `MapWithAuthority` and `MapPreAuthWithAuthority` bind original primary authority
@@ -47,7 +58,8 @@ stored; existing `Map`/`MapPreAuth` framing is unchanged. Old records remain
 readable but do not acquire invented authority. Restoration validates original
 envelope and core MAC before returning expectations. This is structural custody,
 not a permission decision or live primary check. Counted denial now dispatches
-through the native contributor; remaining phases and end-to-end login are pending.
+through the native contributor alongside pre-auth consuming phases. End-to-end
+login and the remaining authenticated-session/check profiles are pending.
 Enable authority-aware mapping only after every command reader supports v3;
 older binaries reject this new opt-in profile, while new readers retain v1/v2.
 
@@ -58,8 +70,9 @@ retired-key cookies cannot substitute the stored commitment. Reserved admission
 requires exact command, fingerprint and current generation; primary time after
 the lock owns exclusive expiry. Admission does not charge an attempt, write a
 result or renew the flow. Counted-denial dispatch composes this admission with
-current authority and lockout/challenge ordering. Protected execution and
-recovery still require native composition. No public raw store is exposed.
+current authority and lockout/challenge ordering. The native consuming path
+composes protected execution and retained-original recovery through the same
+coordinator. No public raw store is exposed.
 
 `AttemptCodec.MapPreAuth` explicitly maps a complete bound-flow attempt and its
 separate submitted `authentication.BearerCredential`. The bearer is retained
@@ -70,7 +83,8 @@ cookie is still submitted intent, not proof: the native owner must derive its
 commitment under the named retained pre-auth key, then compare the complete
 canonical primary flow and current authority in the sealed phase. Map once and
 retain the command through ambiguity; credential-free recovery cannot recreate
-the bearer. Native participant activation and usable OTP login remain pending.
+the bearer. Native pre-auth consumption is available; usable OTP login remains
+pending until issuance and full owning-feature/session composition are complete.
 
 ## Complete original pre-auth custody
 
@@ -91,12 +105,13 @@ allocation and parsing; decoding itself is structural, not MAC verification.
 `restoreRecord` verifies the original core MAC and `restoreAttempt` requires
 the original opaque submitted code—custody cannot reconstruct it from storage.
 
-This profile is not active-flow or cookie-possession evidence. The forthcoming
-native participant must require it and recheck the canonical session-owned
-primary record, submitted cookie and current policy under every sealed
-coordinator phase. Legacy ID-only records may be read for compatibility but
-cannot stand in for complete-flow consuming admission. Counted denial/check,
-reservation/finalization/release and owned OTP execution still require activation.
+This profile alone is not active-flow or cookie-possession evidence. The native
+participant requires it and rechecks the canonical session-owned primary
+record, submitted cookie and current policy during active consuming phases.
+Recovery/release instead require exact original reserved predecessors and
+coordinator-proven noncommit. Legacy ID-only records may be read for compatibility
+but cannot stand in for complete-flow consuming admission. Successful metered
+checks and authenticated-session profiles remain under development.
 
 Go 1.27 native storage for purpose-bound OTPs, sharing the identity coordinator's
 PostgreSQL transaction domain. Experimental and incomplete: this initial batch
@@ -207,13 +222,13 @@ Reservation/takeover preserve a row-version increment for eventual terminalizati
 Release persistence accepts unchanged rollback ownership or one exact recovery
 successor, including after original expiry, without decrypting submitted codes.
 These private helpers are not admission or noncommit proof: public sealed native
-participant callbacks, current flow/lockout checks, command replay/audit and the
-coordinator's authoritative recovery composition remain pending. No public raw
+participant callbacks compose current flow/lockout checks and command replay/audit
+under the coordinator's authoritative recovery. No public raw
 transaction or binding-to-release shortcut is exposed.
 
 **Can I use this for login?** Not yet. Native issuance/send windows, original
-atomic counted denial/check/reservation, live authority,
-finalization/release/recovery and bounded cleanup remain in development. There
+successful metered checks, authenticated-session composition and bounded cleanup
+remain in development; pre-auth counted denial/consumption is not complete login. There
 is intentionally no public raw SQL/pool/store workaround.
 
 **Can I rotate a digest in place?** No. Existing rows keep their original retained

@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Add native pre-auth consuming reservation, exact takeover and protected
+  finalization with atomic OTP/session effects. Retain immutable encrypted
+  code/cookie-free original custody through a forward migration; restart
+  recovery and sealed rollback release require exact predecessor evidence,
+  while ambiguity retains reservations. Install the OTP consuming and session
+  pre-auth release migrations before enabling this profile. Authenticated
+  session and complete login workflows remain under development.
+
 - Add native pre-auth OTP counted-denial composition in the existing identity
   coordinator. Enforce original cookie and primary authority before comparison;
   atomically persist wrong-attempt/exhaustion charges, shared lockouts, required

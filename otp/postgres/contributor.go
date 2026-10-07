@@ -11,8 +11,8 @@ import (
 	sessionpg "github.com/faustbrian/go-identity/session/postgres"
 )
 
-// ContributorConfig is trusted composition configuration for native counted
-// denial. Schema contains installed challenge/lockout storage. Codec is an
+// ContributorConfig is trusted composition configuration for native pre-auth
+// denial and consuming execution. Schema contains challenge/lockout storage. Codec is an
 // immutable owned codec; GlobalAuthorityID and UserPolicyNamespace select the
 // actual deployment and authorization owner, not request-selected namespaces.
 // LockoutKey is dedicated and stable across code rotations. PreAuth and its
@@ -37,14 +37,14 @@ func (ContributorConfig) MarshalJSON() ([]byte, error) { return nil, otp.ErrSens
 // MarshalText denies secret configuration export.
 func (ContributorConfig) MarshalText() ([]byte, error) { return nil, otp.ErrSensitiveSerialization }
 
-// Contributor implements the coordinator-owned wrong-code transaction for
-// consuming pre-auth submissions. It owns no pool, transaction, retry, hook,
+// Contributor implements coordinator-owned counted denial, reservation,
+// protected consumption and recovery for pre-auth submissions. It owns no pool, transaction, retry, hook,
 // goroutine or independent replay log. Enlist the exact returned pointer;
 // instances are immutable and concurrent-safe, phase handles are serial-use.
 //
-// This development profile intentionally does not implement reservation or
-// protected execution interfaces yet. Correct codes return Unchanged (rollback),
-// never successful authentication. Authenticated-session and successful Check
+// The denial entry point returns Unchanged (rollback) for correct codes; only
+// the separate reservation/protected execution path can consume them atomically.
+// Authenticated-session and successful metered Check
 // profiles remain unavailable until their full original custody/result paths
 // exist. The complete consuming workflow remains under development.
 type Contributor struct {
@@ -58,8 +58,9 @@ var _ kernel.OTPAttemptContributor = (*Contributor)(nil)
 
 // NewContributor validates and copies native configuration without accessing
 // services. Invalid/zero inputs return nil and redacted ErrInvalidConfiguration.
-// Install the existing OTP and lockout migrations and exact lockout key binding
-// before use; missing storage or mismatched deployment binding fails closed.
+// Install the OTP and lockout migrations and exact lockout key binding before
+// use. Consuming execution additionally requires ConsumingMigrationSource and
+// session PreAuthReleaseMigrationSource. Missing storage or mismatched binding fails closed.
 func NewContributor(c ContributorConfig) (*Contributor, error) {
 	if !validSchema(c.Schema) || c.Codec == nil || c.Codec.crypto == nil ||
 		(kernel.DirectoryAuthorityQuery{GlobalAuthorityID: c.GlobalAuthorityID, TenantID: "validation"}).Validate() != nil ||
@@ -225,11 +226,12 @@ func (p *Contributor) RecordOTPAttemptDenial(ctx context.Context, w kernel.OTPAt
 	return kernel.OTPAttemptDenied, nil
 }
 
-// RecoverParticipant supplies no inferred noncommit from mutable counters.
-// Dedicated denial recovery uses the coordinator's atomic terminal receipt;
-// an unresolved journal remains unknown, never permission to compare again.
-// This profile owns no consuming reservation or independently recoverable
-// participant effect. Invalid/returned handles and cancellation deny.
+// RecoverParticipant authenticates retained code/cookie-free original custody
+// and exact reserved primary predecessors. Noncommit is evidence for the sole
+// coordinator, not permission to release independently or compare again.
+// Missing or divergent evidence remains unknown; expiry is not rollback proof.
+// Dedicated denial recovery uses its atomic terminal receipt. Invalid/returned
+// handles and cancellation deny.
 func (p *Contributor) RecoverParticipant(ctx context.Context, w kernel.RecoveryWork) (kernel.RecoveryStatus, error) {
 	if p == nil || ctx == nil {
 		return kernel.RecoveryUnknown, ErrInvalidCommand
@@ -240,5 +242,5 @@ func (p *Contributor) RecoverParticipant(ctx context.Context, w kernel.RecoveryW
 	if _, err := w.Scope(); err != nil {
 		return kernel.RecoveryUnknown, err
 	}
-	return kernel.RecoveryUnknown, nil
+	return p.recoverConsuming(ctx, w)
 }
