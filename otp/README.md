@@ -1,5 +1,26 @@
 # otp
 
+## Native Send preparation
+
+`NewSendPreparer(SendPreparationConfig)` fixes attempt policy, retained digest
+keys, an owned `delivery.TemplateRenderer`, template version and copied ordered
+locale fallback. Its `Prepare` method generates one code for both digest and
+rendered message, lending plaintext only to the synchronous adapter-owned
+encryption boundary. A failed or panicking seal returns no challenge and no
+secret-bearing diagnostics; cancellation is preserved. Instances retain no
+request-specific state and support concurrent use. Template selection and
+message/locale schema are checked against the real request before entropy.
+
+This is the storage-neutral native preparation seam, **not `Service.Send`**.
+The platform's native adapter must resolve/authorize the destination, perform
+current primary/risk admission, and acknowledge the original journal's start
+before calling it. On retry, it must select and restore retained encrypted
+output instead of invoking generation. Final atomic issuance must recheck
+current authority and expiry. Applications must not supply the missing store,
+journal or workflow as callbacks. The sealing callback belongs to the native
+adapter and must not retain plaintext, ignore cancellation or start background
+work. Strings and copies retained by a violating callback cannot be erased by Go.
+
 ## Complete original authenticated-session continuation
 
 `NewBoundSessionAuthorization(originalSession)` retains the complete immutable

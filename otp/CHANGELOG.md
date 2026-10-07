@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+- Expose immutable native `SendPreparer` composition with copied template/locale
+  policy and invocation-local digest/render/seal work. Callback failure, panic
+  and cancellation return no challenge or secret diagnostics. This preparation
+  grants no issuance or admission authority; the durable public Send service,
+  risk and recipient orchestration remain unfinished.
+
+- Develop owned Send preparation that generates one code for the complete-scope
+  keyed digest and versioned email/SMS rendering, preserving purpose, policy,
+  expiry and remember bindings. Require synchronous protected delivery custody
+  before returning digest-only preparation; cancellation and sealing errors
+  yield no usable challenge or secret-bearing error. This remains private work
+  toward public Send, whose admission and replay composition are unfinished.
+
 - Add explicit complete original authenticated-session custody for OTP
   continuations. Bind the exact session, family, authority vector, lookup digest,
   remember policy and original authentication timeline without renewing them.
