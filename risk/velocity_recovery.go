@@ -76,6 +76,17 @@ func (i VelocityNativeIssuer) JournalVerifier() (VelocityJournalVerifier, error)
 	return VelocityJournalVerifier{journalVerifier: i.native.journal}, nil
 }
 
+// Verifier derives only this native owner's configured read/check view. It
+// permits checking primary confirmation before native IO without accepting an
+// independently substituted verifier. It grants no issuance, effect or healthy
+// admission authority; zero returns no verifier and a redacted error.
+func (i VelocityNativeIssuer) Verifier() (VelocityNativeVerifier, error) {
+	if i.native == nil {
+		return VelocityNativeVerifier{}, ErrInvalidVelocityRecovery
+	}
+	return VelocityNativeVerifier{nativeVerifier: i.native}, nil
+}
+
 // ValidateNative rejects mismatched/zero owners before adapter construction or
 // IO. Matching capability identity proves only the intended composition pairing,
 // never an external effect, primary lease or healthy state.

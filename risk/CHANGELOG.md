@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Let a configured velocity native owner derive its own read-only verifier
+  without accepting an unrelated capability. Verification cannot grant native
+  issuance, effects or healthy admission; zero ownership denies derivation.
+
 - Carry recorded primary publication confirmation through opaque exact-chain
   custody. Revalidate original lease, covered cut and persisted confirmation
   without renewing expiry; confirmation alone cannot enable native traffic.

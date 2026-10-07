@@ -19,6 +19,12 @@ issuer only in the concrete Valkey adapter. Neither issuance capability may be
 returned in `StoreSet`, accepted as an ordinary application override, or exposed
 through operational handles. Verification views have no issuance methods.
 
+`VelocityNativeIssuer.Verifier` derives the configured native owner's read-only
+view directly. Its recovery implementation can check exact primary confirmation
+without accepting a separately supplied, unchecked native verifier. Zero owner
+denies derivation. The returned view cannot be promoted back into issuance and
+does not perform native IO or establish healthy admission.
+
 The journal issues `VelocityLease` only after primary acquisition, with a bounded
 checker for that exact original receipt. It issues `VelocityHistory` only after
 authenticating original journal facts under the current lease. The native owner

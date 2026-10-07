@@ -13,6 +13,51 @@ import (
 	"github.com/faustbrian/go-identity/risk"
 )
 
+func TestVelocityNativeIssuerDerivesOnlyConfiguredVerifier(t *testing.T) {
+	j, _, native, configured := risk.NewVelocityRecoveryAuthorities()
+	derive, ok := any(native).(interface {
+		Verifier() (risk.VelocityNativeVerifier, error)
+	})
+	if !ok {
+		t.Fatal("native owner cannot derive its configured confirmation verifier")
+	}
+	v, err := derive.Verifier()
+	if err != nil || v != configured {
+		t.Fatal("native read view changed configured pairing", err)
+	}
+	zero, ok := any(risk.VelocityNativeIssuer{}).(interface {
+		Verifier() (risk.VelocityNativeVerifier, error)
+	})
+	if !ok {
+		t.Fatal("zero native issuer lacks verifier contract")
+	}
+	if got, err := zero.Verifier(); !errors.Is(err, risk.ErrInvalidVelocityRecovery) || got != (risk.VelocityNativeVerifier{}) {
+		t.Fatal("zero owner derived authority", err)
+	}
+	lb, binding := publicationFacts()
+	l, _ := j.Lease(lb, func(context.Context) error { return nil })
+	c, _ := j.Closure(l, binding, func(context.Context) error { return nil })
+	p, _ := native.AcknowledgePublication(context.Background(), l, c)
+	k, err := j.AcknowledgeConfirmation(context.Background(), l, c, p, func(context.Context) error { return nil })
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, err := v.Confirmation(context.Background(), l, c, p, k); err != nil || got != binding {
+		t.Fatal("derived view cannot consume original confirmation", err)
+	}
+	_, _, other, _ := risk.NewVelocityRecoveryAuthorities()
+	foreign := any(other).(interface {
+		Verifier() (risk.VelocityNativeVerifier, error)
+	})
+	fv, _ := foreign.Verifier()
+	if got, err := fv.Confirmation(context.Background(), l, c, p, k); !errors.Is(err, risk.ErrInvalidVelocityRecovery) || got != (risk.VelocityClosureBinding{}) {
+		t.Fatal("derived foreign view consumed custody", err)
+	}
+	if reflect.TypeOf(v).ConvertibleTo(reflect.TypeOf(native)) {
+		t.Fatal("read view promoted into native issuance")
+	}
+}
+
 func TestVelocityConfirmationExactPrimaryCustody(t *testing.T) {
 	j, _, native, verifier := risk.NewVelocityRecoveryAuthorities()
 	lb, binding := publicationFacts()
