@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Add owned pre-auth initiation execution and restart-safe receipt recovery
+  with exact service policy, original flow, audit and lifecycle in the sole
+  kernel transaction. Preserve original metadata on replay and deny retired
+  flow-ID resurrection under new commands. Install forward
+  `PreAuthIssueMigrationSource` after the kernel/pre-auth histories; retained
+  issuance evidence survives live-payload retirement. Flow generation, cookie
+  delivery and OTP continuation composition remain under development.
+
 - Freeze complete original pre-auth initiation state in a closed native command
   vocabulary, with separate anonymous-flow target and service actor. Reject
   substituted scope, incomplete fields, narrowed versions and noncanonical

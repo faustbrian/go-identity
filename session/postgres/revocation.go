@@ -27,6 +27,9 @@ func (*Repository) Descriptor() identitypostgres.ContributorDescriptor {
 // turn structural metadata into opaque proof admission or ordinary execution.
 func (r *Repository) FeatureOperations() []identity.FeatureOperation {
 	ops := []identity.FeatureOperation{session.RevokeFamilyOperation()}
+	if r != nil && r.preAuthIssue != nil {
+		ops = append(ops, preAuthIssueOperation())
+	}
 	if r != nil && r.cleanupBatch > 0 {
 		ops = append(ops, cleanupOperation())
 	}
@@ -78,6 +81,9 @@ func nativeRevocation(c identity.Command) (session.SessionCommand, error) {
 // policy; privileged callers require protected retention. This pure method
 // neither authorizes a caller nor reads current family state.
 func (r *Repository) ValidateFeatureCommand(c identity.Command, p identitypostgres.CommandPlan) error {
+	if s, ok := c.Feature(); ok && s.Operation == preAuthIssueOperation() {
+		return r.validatePreAuthIssuePlan(c, p)
+	}
 	if s, ok := c.Feature(); ok && s.Operation == session.UpdateOperation() {
 		return r.validateUpdatePlan(c, p)
 	}
@@ -118,6 +124,9 @@ func (r *Repository) ValidateFeatureCommand(c identity.Command, p identitypostgr
 // closed native command, then delegates to Apply. No audit/lifecycle is staged
 // here: the coordinator owns their exact required phases and terminal receipt.
 func (r *Repository) ApplyFeature(ctx context.Context, w identitypostgres.Work, c identity.Command) (identity.FeatureReceipt, error) {
+	if s, ok := c.Feature(); ok && s.Operation == preAuthIssueOperation() {
+		return r.applyPreAuthIssue(ctx, w, c)
+	}
 	if s, ok := c.Feature(); ok && s.Operation == session.UpdateOperation() {
 		native, until, _, err := nativeUpdateIntent(c)
 		if err != nil {
@@ -249,6 +258,9 @@ func (r *Repository) Apply(ctx context.Context, w identitypostgres.Work, c sessi
 func (r *Repository) RecoverParticipant(ctx context.Context, w identitypostgres.RecoveryWork) (identitypostgres.RecoveryStatus, error) {
 	if ctx == nil || r == nil || r.schema == "" {
 		return identitypostgres.RecoveryUnknown, session.ErrInvalidSessionCommand
+	}
+	if _, feature, _, err := w.FeatureScope(r); err == nil && feature.Operation == preAuthIssueOperation() {
+		return r.recoverPreAuthIssue(ctx, w)
 	}
 	if _, feature, _, err := w.FeatureScope(r); err == nil && feature.Operation == session.UpdateOperation() {
 		return r.recoverUpdate(ctx, w)

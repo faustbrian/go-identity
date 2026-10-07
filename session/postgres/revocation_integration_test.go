@@ -635,6 +635,17 @@ func TestNativeFamilyRevocationIntegration(t *testing.T) {
 			t.Fatal(e)
 		}
 		complete = append(complete, updateHistory...)
+		for _, source := range []migrations.Source{
+			PreAuthMigrationSource{Schema: "session_store", Version: 24},
+			PreAuthReleaseMigrationSource{Schema: "session_store", Version: 25},
+			PreAuthIssueMigrationSource{Schema: "session_store", Version: 26},
+		} {
+			extra, e := source.Load(ctx)
+			if e != nil {
+				t.Fatal(e)
+			}
+			complete = append(complete, extra...)
+		}
 		migrate(complete)
 		migrate(complete)
 		// Populated active/revoked records and all older migration checksums

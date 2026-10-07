@@ -42,6 +42,34 @@ as closed typed scalars, including nanosecond UTC times and resolved remember
 policy. It binds the anonymous-flow namespace separately from the service actor
 and rejects inconsistent command/record scope. Structural decoding does not
 authenticate the actor, authorize initiation or persist/recover a command.
+
+Compose `NewPreAuthIssueExecutor` with a borrowed PRIMARY pool, current service
+authorization, bounded clock/coordinator configuration and one exact trusted
+action/origin/callback/policy profile. Empty callback explicitly disables
+redirection. Actor identity is fixed at configuration, not selected by a request.
+`session.PreAuthIssueCommand` carries the server-prepared original flow and stable
+command identity; the adapter alias retains the same storage-neutral value.
+Never decode it directly from HTTP input or provide a consumer-written store.
+
+Install `PreAuthIssueMigrationSource` at a later permanent history slot after
+the kernel and initial pre-auth migration. It creates retained native effect
+evidence, not another journal; it has no live-flow FK and a permanent per-tenant
+flow-ID uniqueness fence. Retain that evidence with the original command
+history. Payload retirement cannot prove rollback or permit ID resurrection.
+Existing rows and applied migration checksums stay unchanged; no down migration
+or automatic evidence pruning is provided.
+
+`ExecutePreAuthIssue` applies current configured service policy before reserving
+the exact original command. Original flow, native evidence, audit, lifecycle and
+receipt commit together. Primary locked time rejects expired originals. Exact
+replay returns historical metadata without reissuing; changed intent conflicts.
+`RecoverPreAuthIssue` observes/reconciles complete original anonymous-flow scope
+under current configured service policy, without a cookie, new reservation or
+lease renewal. Unknown requires recovery, not a new command. Detached kernel
+cleanup retains its own bounded budget and may outlive the caller deadline.
+These methods do not generate entropy, resolve remember policy, deliver cookies
+or constitute a complete browser login; owned core preparation and OTP
+continuation registration remain pending.
 Retain original digest keys and terminal records until the owned retention and
 recovery policies authorize retirement; no cleanup/down migration is provided.
 

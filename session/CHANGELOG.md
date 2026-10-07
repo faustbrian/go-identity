@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add storage-neutral pre-auth issuance and outcome-only recovery contracts,
+  retaining original immutable flow and command custody without exposing a
+  cookie or PostgreSQL handle. Redact command formatting and implicit exports;
+  complete flow generation and browser delivery remain under development.
+
 - Add immutable canonical pre-auth binding and exclusive-expiry checks,
   preserving exact origin/action/redirect/nonce/policy and resolved remember
   choice. Domain-separate named-key flow-cookie lookup from session lookup.

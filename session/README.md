@@ -18,6 +18,13 @@ finalization with session issuance/linking, and unknown-commit recovery remain
 under development in the owned PostgreSQL composition. No caller-written store
 or continuation-ID-only authority can substitute for that composition.
 
+`PreAuthIssueCommand` and `PreAuthIssueExecutor` are storage-neutral native
+initiation/recovery contracts. The server retains the same original private
+record and command ID across retries; execution and restart recovery return
+only historical command metadata, never a cookie or renewed authentication.
+The PostgreSQL adapter owns atomic execution. Complete server-side entropy,
+original-flow preparation and browser cookie delivery are still under development.
+
 Experimental Go 1.27 session policy module. This first batch implements shared
 remember-policy resolution, lifetime evaluation, secure host-cookie attributes
 and opaque token/key custody with tenant-bound lookups. Authenticated cookie
