@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Add owned original pre-auth preparation and commit-gated reveal-once flow
+  cookie delivery. Generate server ID, nonce and bound digest; preserve the
+  resolved remember choice and original short lifetime. Recover only safe
+  outcomes without credentials or reconstructed flow payload. Exact replay,
+  errors, cancellation and ambiguity never authorize delivery. Export the
+  canonical storage-neutral initiation operation for native composition.
+
 - Add explicit original-versus-historical pre-auth execution metadata for
   commit-gated cookie delivery. Preserve receipt-only executor compatibility;
   committed replay never grants delivery eligibility. Browser preparation and

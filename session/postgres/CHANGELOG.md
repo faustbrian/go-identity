@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Compose the public owned pre-auth issuer with native atomic initiation and
+  restart-safe outcome recovery. Persist the unchanged server-generated cookie
+  commitment and remember choice; only fresh commitment permits core delivery.
+  Use the core canonical operation descriptor without changing stored command
+  shapes or migration history. Native OTP continuation remains under development.
+
 - Add pre-auth issuance results distinguishing sole-reservation execution from
   replay, pending observation and conflict. Concurrent identical commands grant
   fresh-execution eligibility to only the committing owner; historical receipts

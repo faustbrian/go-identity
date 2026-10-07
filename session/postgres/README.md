@@ -75,9 +75,14 @@ original expiry and error/cancellation before revealing a credential.
 under current configured service policy, without a cookie, new reservation or
 lease renewal. Unknown requires recovery, not a new command. Detached kernel
 cleanup retains its own bounded budget and may outlive the caller deadline.
-These methods do not generate entropy, resolve remember policy, deliver cookies
-or constitute a complete browser login; owned core preparation and OTP
-continuation registration remain pending.
+These native methods do not generate entropy or deliver cookies. Compose them
+with `session.NewPreAuthIssuer` to own original ID/nonce/cookie preparation and
+commit-gated reveal-once delivery metadata. Use matching trusted profile and a
+dedicated retained flow key; pass the resolved final-session remember choice
+unchanged. Core cookies stay within original 1..10-minute flow TTL for both
+choices. Restart recovery returns only exact command outcome, never a credential
+or caller-reconstructed flow payload. Native OTP continuation registration and
+complete browser login remain pending.
 Retain original digest keys and terminal records until the owned retention and
 recovery policies authorize retirement; no cleanup/down migration is provided.
 

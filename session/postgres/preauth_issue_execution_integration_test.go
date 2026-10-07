@@ -7,6 +7,7 @@ import (
 	"context"
 	"crypto/rand"
 	"errors"
+	"net/http"
 	"reflect"
 	"sync"
 	"testing"
@@ -62,6 +63,89 @@ func testOwnedPreAuthIssue(t *testing.T, ctx context.Context, pool *database.Poo
 			t.Fatal("flow/evidence/audit/lifecycle conservation", flows, evidence, audits, events, err)
 		}
 	}
+	t.Run("core preparation and commit-gated cookie composition", func(t *testing.T) {
+		var raw [32]byte
+		if _, err := rand.Read(raw[:]); err != nil {
+			t.Fatal(err)
+		}
+		key, err := session.NewDigestKey(7, raw[:])
+		clear(raw[:])
+		if err != nil {
+			t.Fatal(err)
+		}
+		cookie, err := session.NewCookiePolicy(session.CookieConfig{Name: "__Host-identity_flow", SameSite: http.SameSiteLaxMode})
+		if err != nil {
+			t.Fatal(err)
+		}
+		issuerConfig := session.PreAuthIssuerConfig{ActorID: config.ActorID, Action: config.Action, Origin: config.Origin, CallbackURL: config.CallbackURL, PolicyID: config.PolicyID, PolicyVersion: config.PolicyVersion, Clock: config.Clock, MaximumDuration: 2 * time.Second, FlowTTL: 5 * time.Minute, LookupKey: key, TokenSize: 32, Cookie: cookie}
+		issuer, err := session.NewPreAuthIssuer(executor, issuerConfig)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, choice := range []session.RememberChoice{session.BrowserSession, session.PersistentSession} {
+			remember, err := session.ResolveRememberPolicy(choice, session.LifetimeConfig{Default: session.BrowserSession, AbsoluteTTL: time.Hour, IdleTTL: 30 * time.Minute, RefreshAfter: time.Minute, FreshFor: 15 * time.Minute})
+			if err != nil {
+				t.Fatal(err)
+			}
+			id, err := identity.NewCommandID()
+			if err != nil {
+				t.Fatal(err)
+			}
+			prepared, err := issuer.Prepare(session.PreAuthPrepareInput{CommandID: id, TenantID: "issue", CorrelationID: "preauth-core", Remember: remember})
+			if err != nil {
+				t.Fatal(err)
+			}
+			command, _ := prepared.Command()
+			spec, _ := command.Record.Bindings()
+			out, err := issuer.Issue(ctx, prepared)
+			if err != nil || out.CommitOutcome != identity.CommitOutcomeCommitted || out.Replayed {
+				t.Fatal("composed new issuance withheld delivery", err)
+			}
+			if out.Cookie.Name != "__Host-identity_flow" || out.Cookie.Value != "" || out.Cookie.MaxAge <= 0 || out.Cookie.MaxAge > 300 || out.Cookie.Expires.After(spec.Binding.ExpiresAt) || !out.Cookie.Secure || !out.Cookie.HttpOnly || out.Cookie.SameSite != http.SameSiteLaxMode {
+				t.Fatal("composed flow cookie weakened scope or original expiry")
+			}
+			wire, err := out.Token.Reveal()
+			if err != nil {
+				t.Fatal(err)
+			}
+			parsed, err := session.ParseToken(wire)
+			if err != nil {
+				t.Fatal(err)
+			}
+			digest, err := parsed.PreAuthDigest(key, spec.Binding)
+			if err != nil || digest != spec.Cookie || spec.Binding.Intent.Remember != remember {
+				t.Fatal("original cookie commitment or remember choice changed")
+			}
+			counts(t, command, 1, 1)
+			var payload []byte
+			if err = pool.Raw().QueryRow(ctx, `SELECT record FROM session_store.preauth_transactions WHERE tenant_id=$1 AND flow_id=$2`, string(spec.Binding.Intent.TenantID), string(spec.Binding.ID)).Scan(&payload); err != nil {
+				t.Fatal(err)
+			}
+			original, _ := encodePreAuth(command.Record)
+			if !bytes.Equal(payload, original) {
+				t.Fatal("native storage changed server-prepared original")
+			}
+			replayed, err := executor.ExecutePreAuthIssuance(ctx, command)
+			if err != nil || !replayed.Replayed || replayed.Receipt.Outcome != identity.CommitOutcomeCommitted {
+				t.Fatal("native replay enabled repeated cookie delivery", err)
+			}
+			restarted, err := NewPreAuthIssueExecutor(pool, config)
+			if err != nil {
+				t.Fatal(err)
+			}
+			recoveryIssuer, err := session.NewPreAuthIssuer(restarted, issuerConfig)
+			if err != nil {
+				t.Fatal(err)
+			}
+			recovered, err := recoveryIssuer.Recover(ctx, command)
+			if err != nil || recovered.CommitOutcome != identity.CommitOutcomeCommitted || !recovered.Replayed || recovered.Flow != (session.PreAuthTransaction{}) || !reflect.DeepEqual(recovered.Cookie, http.Cookie{}) {
+				t.Fatal("restart recovery changed outcome or claimed delivery", err)
+			}
+			if _, err = recovered.Token.Reveal(); !errors.Is(err, session.ErrInvalidToken) {
+				t.Fatal("restart recovery redelivered cookie")
+			}
+		}
+	})
 	t.Run("exact retry and restart do not reissue", func(t *testing.T) {
 		input := prepare(t)
 		execution, err := executor.ExecutePreAuthIssuance(ctx, input)

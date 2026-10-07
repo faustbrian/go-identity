@@ -12,18 +12,18 @@ copies and retries must not regenerate the binding, nonce, expiry or choice.
 
 These are private structural values, not authentication or primary active-state
 proof. `Check` requires authoritative time after locks and never consumes the
-flow. Trusted initiation still owns configured origin/redirect allowlists and
-the `__Host-identity_flow` transport policy. Durable one-use reservation,
-finalization with session issuance/linking, and unknown-commit recovery remain
-under development in the owned PostgreSQL composition. No caller-written store
-or continuation-ID-only authority can substitute for that composition.
+flow. Owned `PreAuthIssuer` freezes configured origin/redirect policy and the
+`__Host-identity_flow` transport policy. Durable primary reservation/finalization
+are available in PostgreSQL; complete OTP continuation registration with final
+session issuance/linking remains under development. No caller-written store or
+continuation-ID-only authority can substitute for that composition.
 
 `PreAuthIssueCommand` and `PreAuthIssueExecutor` are storage-neutral native
 initiation/recovery contracts. The server retains the same original private
 record and command ID across retries; execution and restart recovery return
 only historical command metadata, never a cookie or renewed authentication.
-The PostgreSQL adapter owns atomic execution. Complete server-side entropy,
-original-flow preparation and browser cookie delivery are still under development.
+The PostgreSQL adapter owns atomic execution; core `PreAuthIssuer` owns original
+server entropy and commit-gated reveal-once delivery metadata.
 
 `PreAuthIssuanceExecutor` adds `PreAuthIssueExecution` for future commit-gated
 delivery without changing the receipt-only interface. A committed receipt is
@@ -32,6 +32,41 @@ scope, no error/cancellation and an unexpired original flow. Only acquisition
 of the sole execution reservation clears `Replayed`; restart recovery and
 terminal observations never permit credential delivery. Formatting and implicit
 JSON/text export of execution metadata redact or deny original custody.
+
+### Owned original flow issuance
+
+Compose `NewPreAuthIssuer(ownedExecutor, PreAuthIssuerConfig{...})` with the
+owned PostgreSQL `NewPreAuthIssueExecutor`. Both configurations must select the
+same exact trusted service actor, action, origin, callback (or empty for no
+redirect), policy ID and version. Use a retained dedicated pre-auth digest key,
+trusted clock, 1ms..30s execution budget, 32..64-byte token and validated
+`__Host-identity_flow` Lax/Strict cookie policy. General flow TTL is 1..10 minutes;
+the reference choice is five minutes. No callback allowlist, actor or policy may
+be selected directly from client input. Core does not own a store or journal.
+
+`Prepare(PreAuthPrepareInput{CommandID, TenantID, CorrelationID, Remember})`
+accepts the already-resolved session choice and validates before generating the
+canonical random flow ID, 32-byte nonce and cookie commitment. It performs no
+durable work or authentication. Retain the returned preparation unchanged;
+copies share a single local attempt. `Command()` exposes safe original custody
+for recovery, never the bearer. Calling Prepare again is not a retry.
+
+`Issue(ctx, prepared)` preserves earlier deadlines, executes the exact original
+command, validates its complete receipt and returns a reveal-once `Token` plus
+credential-free cookie attributes only on new commitment. Cookie expiry uses
+whole remaining seconds rounded down within the original flow deadline for
+**both** remember choices; a persistent final session never extends the
+unauthenticated flow. HTTP explicitly reveals the token and sets Cookie.Value
+only at delivery, without logging. HTTP still owns origin/CSRF checks, mixed or
+duplicate cookie rejection, no-store response policy and opt-in routes.
+
+Replay/recovery, errors, cancellation, malformed receipt, panic, expired flow
+and subsecond remaining lifetime deliver no credential. Known commitment is
+preserved when delivery fails. Unknown requires `Recover(ctx, originalCommand)`
+under current service policy; it never reexecutes, returns flow payload, renews
+time or delivers a credential, even after original expiry. A reconstructed
+caller projection is not proof of the historical persisted payload.
+This composition does not authenticate a user or complete a browser login.
 
 Experimental Go 1.27 session policy module. This first batch implements shared
 remember-policy resolution, lifetime evaluation, secure host-cookie attributes

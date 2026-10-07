@@ -11,7 +11,7 @@ import (
 // This closed vocabulary freezes initiation in the existing command journal.
 // It is deliberately not a JSON escape, cookie bearer or execution authority.
 func preAuthIssueOperation() identity.FeatureOperation {
-	return identity.FeatureOperation{Owner: "identity/session", OperationID: "identity.session.preauth-issue", SchemaID: "session-preauth-issue-v1", SchemaVersion: 1, RecordRequirement: identity.FeatureRecordRequired, SubjectRequirement: identity.FeatureSubjectAnonymousFlow}
+	return session.PreAuthIssueOperation()
 }
 
 func mapPreAuthIssue(b identity.CommandBinding, record session.PreAuthTransaction) (identity.Command, error) {
