@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add private deterministic pre-generation Send input with the original flow,
+  policy, authority expectations and expiry but no generated challenge digest
+  or submitted bearer. Require original bearer possession without changing
+  retained issuance bytes or admitting this input as a consuming attempt.
+  Public Send and its stable preparation execution remain unfinished.
+
 - Native Send preparation can seal and restore original code-free challenge
   custody together with encrypted delivery under the original command and
   journal generation. Restoration preserves both authorization variants and

@@ -250,11 +250,35 @@ func (p *Contributor) authenticateIssuance(ctx context.Context, command identity
 		return bad(ErrInvalidCommand)
 	}
 	a := custody.authority
+	s, _ := custody.challenge.Bindings()
+	flow, err := p.authenticateSendFlow(ctx, command, s.Continuation, a)
+	if err != nil {
+		return bad(err)
+	}
+	return custody, flow, nil
+}
+
+// Original bearer possession is shared by code-free requests and generated
+// issuance. Neither path adopts newer primary state or grants live admission.
+func (p *Contributor) authenticateSendFlow(ctx context.Context, command identity.Command, continuation otp.Continuation, a AttemptAuthority) (nativeFlow, error) {
+	bad := func(err error) (nativeFlow, error) { return nativeFlow{}, err }
+	if ctx == nil || p == nil || p.codec == nil {
+		return bad(ErrInvalidCommand)
+	}
+	if err := ctx.Err(); err != nil {
+		return bad(err)
+	}
+	spec, ok := command.Feature()
+	if !ok {
+		return bad(ErrInvalidCommand)
+	}
 	if a.Directory.Query.GlobalAuthorityID != p.global || spec.Binding.UserID != "" && a.UserAuthorization.Scope.PolicyNamespace != p.namespace {
 		return bad(ErrInvalidCommand)
 	}
-	s, _ := custody.challenge.Bindings()
-	b, _ := s.Continuation.Bindings()
+	b, err := continuation.Bindings()
+	if err != nil {
+		return bad(ErrInvalidCommand)
+	}
 	var flow nativeFlow
 	if original, sessionBound := b.Authorization.AuthenticatedSession(); sessionBound {
 		bearer, present := command.SessionToken()
@@ -299,5 +323,5 @@ func (p *Contributor) authenticateIssuance(ctx context.Context, command identity
 	if err := ctx.Err(); err != nil {
 		return bad(err)
 	}
-	return custody, flow, nil
+	return flow, nil
 }

@@ -125,6 +125,15 @@ func decodeAuthorityRecord(data []byte, binding identity.CommandBinding) ([]byte
 }
 
 func decodeBoundAuthorityRecord(data []byte, binding identity.CommandBinding, issuance bool) ([]byte, *AttemptAuthority, error) {
+	profile := ""
+	if issuance {
+		profile = issuanceRecordPrefix
+	}
+	return decodeAuthorityProfile(data, binding, profile)
+}
+
+// An explicit profile never widens the legacy attempt/issuance decoders.
+func decodeAuthorityProfile(data []byte, binding identity.CommandBinding, profile string) ([]byte, *AttemptAuthority, error) {
 	if !bytes.HasPrefix(data, []byte(authorityRecordPrefix)) {
 		return data, nil, nil
 	}
@@ -155,8 +164,8 @@ func decodeBoundAuthorityRecord(data []byte, binding identity.CommandBinding, is
 		return bad()
 	}
 	validRecord := bytes.HasPrefix(record, []byte(recordPrefix)) || bytes.HasPrefix(record, []byte(boundRecordPrefix)) || bytes.HasPrefix(record, []byte(sessionRecordPrefix))
-	if issuance {
-		validRecord = bytes.HasPrefix(record, []byte(issuanceRecordPrefix))
+	if profile != "" {
+		validRecord = bytes.HasPrefix(record, []byte(profile))
 	}
 	if !r.ok || len(r.data) != 0 || a.validate(binding) != nil || !validRecord {
 		return bad()

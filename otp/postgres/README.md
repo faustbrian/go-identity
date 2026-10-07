@@ -1,5 +1,14 @@
 # OTP PostgreSQL
 
+The private pre-generation Send input now preserves the original complete
+session/pre-auth continuation, attempt policy, primary expectations and initial
+times without a fabricated challenge or digest. Mapping is deterministic and
+checks separately supplied original bearer possession. Its bounded closed
+request frame is distinct from generated issuance and submitted-attempt frames;
+existing retained issuance bytes are unchanged. This is an invocation-memory
+input, not an authority proof or a public Send endpoint. Stable preparation
+execution, risk and recipient orchestration remain under development.
+
 ## Native issuance command custody
 
 `AttemptCodec.MapIssuancePreAuth` and `MapIssuanceSession` bind an initial
