@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Owned workflows can checkpoint and restore original encrypted delivery
+  preparation across process restart. Authenticated original-generation custody
+  preserves effect identity, expiry, retained keys and recipient fences without
+  regenerating secrets or renewing authority. Automatic serialization remains
+  forbidden; checkpoints grant no queue or execution authority.
+
 - Native workflow delivery can bind an explicit anonymous flow without a
   fabricated user. A separate authenticated custody profile preserves the
   original flow through restart and worker execution; existing user custody

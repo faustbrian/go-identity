@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"sync/atomic"
 	"time"
 
 	identity "github.com/faustbrian/go-identity"
@@ -112,18 +113,24 @@ func (c *Contributor) ValidateDeliveryPlan(b identity.CommandBinding, p identity
 }
 
 type preparedDelivery struct {
-	owner      *Contributor
-	binding    identity.CommandBinding
-	plan       identitypostgres.DeliveryPlan
-	envelopes  []identitypostgres.DeliveryEnvelope
-	recipients []recipientFence
+	owner                *Contributor
+	binding              identity.CommandBinding
+	plan                 identitypostgres.DeliveryPlan
+	envelopes            []identitypostgres.DeliveryEnvelope
+	recipients           []recipientFence
+	checkpointGeneration atomic.Uint64
+	checkpointKey        uint32
 }
 
 // PreparedDelivery is immutable encrypted invocation custody, not an enqueue
-// receipt, authorization proof or provider result. Only Contributor.Prepare
-// constructs it; zero is invalid. Copies may be read concurrently and used on
+// receipt, authorization proof or provider result. Contributor.Prepare and
+// authenticated RestorePreparation construct it; zero is invalid. Copies may
+// be read concurrently and used on
 // independent original Work values. It contains no transaction handle. It must
-// never be serialized, logged as fields or retained beyond workflow lifetime.
+// never be implicitly serialized or logged as fields. An owning workflow may
+// explicitly checkpoint encrypted custody with CheckpointPreparation; restore
+// grants no execution authority. Its checkpoint generation has one atomic owner
+// shared by copies, and cannot be changed after the first successful checkpoint.
 type PreparedDelivery struct{ state *preparedDelivery }
 
 // Plan returns an owned safe declaration for the original CommandPlan. Mutating

@@ -4,7 +4,27 @@
 owned durable admission and an all-method public Queue; neither queue admission
 nor local composition tests claim provider delivery or interoperability.
 
-## Full public Queue
+## Original workflow preparation recovery
+
+Owned workflows may call `Contributor.CheckpointPreparation(ctx, prepared,
+originalGeneration)` before recording encrypted output in the existing command
+journal. The first successful checkpoint fixes the generation across copies.
+After restart, `RestorePreparation(ctx, originalBinding, originalGeneration,
+checkpoint)` authenticates that output against the complete original command
+and retained deployment, provider and digest-key profiles. Supply provenance
+read from the authoritative journal, not a request or a takeover generation.
+
+Restoration does not decrypt, rerender, regenerate, enqueue or authorize. It
+preserves the original ciphertext, effect IDs, recipient fences and expiry;
+expired custody cannot be staged. The owned workflow still performs current
+authorization and commits all effects through the original coordinator Work.
+Checkpoint records are bounded to 1 MiB including metadata, so a preparation
+that fits the staging ciphertext limit can still exceed the checkpoint limit.
+Retain their original signing keys and immutable provider profiles until the
+owning journal's retention boundary. Automatic JSON/text serialization remains
+forbidden. This seam does not yet provide public OTP Send composition.
+
+## Full public Queue composition
 
 Select `StateTracking`, `Cancellation`, `Receipts` and `Reconciliation` on
 `EnqueueConfig`, with all corresponding forward migrations installed. Construct
