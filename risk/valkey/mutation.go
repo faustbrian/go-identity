@@ -30,7 +30,7 @@ func mutationArguments(p commandPlan) ([]string, error) {
 	}
 	seen := map[string]bool{}
 	for _, key := range p.keys {
-		if len(key) > 256 || !strings.HasPrefix(key, "irv1:{"+p.slot+"}:") || seen[key] {
+		if len(key) > 256 || !strings.HasPrefix(key, "irv2:{"+p.slot+"}:") || seen[key] {
 			return nil, risk.ErrInvalidCounterCommand
 		}
 		seen[key] = true

@@ -1,7 +1,6 @@
 package valkey
 
 import (
-	"bytes"
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/base64"
@@ -24,6 +23,7 @@ type commandLayout struct {
 	secret    []byte
 	policy    risk.Policy
 	keys      []risk.CounterDigestKey
+	replay    risk.VelocityReplayIdentity
 }
 
 type commandPlan struct {
@@ -47,8 +47,12 @@ func (commandPlan) MarshalJSON() ([]byte, error)   { return nil, risk.ErrSensiti
 func (commandPlan) MarshalText() ([]byte, error)   { return nil, risk.ErrSensitiveSerialization }
 
 func newCommandLayout(namespace string, secret []byte, policy risk.Policy, keys []risk.CounterDigestKey) (commandLayout, error) {
-	if !boundedScope(namespace) || len(secret) < 32 || len(secret) > 128 || bytes.Equal(secret, make([]byte, len(secret))) || len(keys) < 1 || len(keys) > 4 {
+	if len(keys) < 1 || len(keys) > 4 {
 		return commandLayout{}, risk.ErrInvalidPolicy
+	}
+	replay, err := risk.NewVelocityReplayIdentity(namespace, secret)
+	if err != nil {
+		return commandLayout{}, err
 	}
 	if _, err := policy.Admit("identity.otp.send"); err != nil {
 		return commandLayout{}, risk.ErrInvalidPolicy
@@ -58,7 +62,7 @@ func newCommandLayout(namespace string, secret []byte, policy risk.Policy, keys 
 			return commandLayout{}, risk.ErrInvalidPolicy
 		}
 	}
-	return commandLayout{namespace: namespace, secret: slices.Clone(secret), policy: policy, keys: slices.Clone(keys)}, nil
+	return commandLayout{namespace: namespace, secret: slices.Clone(secret), policy: policy, keys: slices.Clone(keys), replay: replay}, nil
 }
 
 func (l commandLayout) prepare(command risk.CounterCommand, epoch [16]byte) (commandPlan, error) {
@@ -80,9 +84,16 @@ func (l commandLayout) prepare(command risk.CounterCommand, epoch [16]byte) (com
 	// would make a clustered multi-dimension decision inherently non-atomic.
 	// Namespace key custody is independent of rotating dimension digest keys.
 	slot := l.digest("identity-risk-valkey-slot-v1", b.Tenant)
-	base := "irv1:{" + slot + "}:"
+	// The former private layout's raw-attempt MAC cannot be reconstructed from
+	// authenticated journal history. Its health markers must not enable this
+	// shared-identity layout; activation still requires owned recovery.
+	base := "irv2:{" + slot + "}:"
 	epochText := hex.EncodeToString(epoch[:])
-	replay := l.digest("identity-risk-valkey-replay-v1", b.Tenant, string(b.Operation), b.Attempt)
+	digest, err := l.replay.Attempt(command)
+	if err != nil {
+		return commandPlan{}, err
+	}
+	replay := hex.EncodeToString(digest[:])
 	p := commandPlan{slot: slot, epoch: epochText, fingerprint: b.Fingerprint, window: b.Window, limit: b.Limit, policyVersion: b.PolicyVersion, targets: b.Targets, keys: []string{base + "health", base + epochText + ":replay:" + replay}}
 	// The freshly encoded HMAC guarantees hexadecimal syntax. Fixed bounded
 	// probes avoid a growing index and give each reservation atomic expiry.

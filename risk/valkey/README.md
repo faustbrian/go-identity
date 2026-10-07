@@ -13,9 +13,16 @@ configuration. It rejects protected-command authority and zero epochs.
 All keys of one atomic command use a single HMAC-derived tenant hash tag.
 Deployment namespace and tenant are framed separately; dimension aliases retain
 the core's versioned keyed digests. Keys contain no raw destination, network,
-device, tenant or attempt. Stable replay identity binds tenant, operation and
+device, tenant or attempt. Core `VelocityReplayIdentity` preserves PostgreSQL
+uint64-framed attempt bytes and binds tenant, operation, phase and
 attempt independently of the changing intent fingerprint, so changing input
 cannot evade conflict detection by selecting a new replay key.
+
+The private physical layout is now `irv2`, separating it from the never publicly
+activated `irv1` raw-attempt-derived layout. Old health/replay keys cannot enable
+or reconstruct this profile; there is no fallback or automatic migration.
+Both adapters must select the same stable namespace and replay key. This byte
+compatibility does not authenticate history or complete recovery composition.
 
 The dedicated namespace key must remain stable across dimension-key rotation.
 Missing retained aliases fail preparation. This check does **not** prove

@@ -3,6 +3,10 @@ package valkey
 import (
 	"bytes"
 	"context"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/binary"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -187,5 +191,90 @@ func TestCounterKeyRejectsAlternateEncoding(t *testing.T) {
 		if validCounterKey(key) {
 			t.Fatal("alternate or invalid digest admitted")
 		}
+	}
+}
+
+// Shared lookup must be reconstructible from authenticated journal digests;
+// aliases and time can change intent but cannot move the replay conflict.
+func TestCommandReplayUsesSharedIdentityAcrossRotationAndTime(t *testing.T) {
+	secret := bytes.Repeat([]byte{0x71}, 32)
+	identity, err := risk.NewVelocityReplayIdentity("private-deployment", secret)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var original commandPlan
+	for i, versions := range [][]uint32{{8}, {9, 8}} {
+		p, keys, c := commandFixture(t, versions...)
+		if i != 0 {
+			c, err = risk.NewCounterCoordinator(risk.CounterCoordinatorConfig{Policy: p, Keys: keys, Store: unusedStore{}, Clock: func() time.Time { return time.Date(2026, 10, 7, 12, 1, 0, 0, time.UTC) }, Timeout: time.Second})
+			if err != nil {
+				t.Fatal(err)
+			}
+		}
+		layout, err := newCommandLayout("private-deployment", secret, p, keys)
+		if err != nil {
+			t.Fatal(err)
+		}
+		command := prepareFixture(t, c, "private-tenant", "private-attempt", "2001:db8::1")
+		plan, err := layout.prepare(command, [16]byte{1})
+		if err != nil {
+			t.Fatal(err)
+		}
+		digest, err := identity.Attempt(command)
+		expected := replayIdentityOracle(secret, "private-deployment", command.Bindings())
+		if err != nil || hex.EncodeToString(digest[:]) != expected || !strings.HasSuffix(plan.keys[1], ":replay:"+expected) {
+			t.Fatal("native replay cannot use authenticated journal attempt digest", err)
+		}
+		if !strings.HasPrefix(plan.keys[0], "irv2:{") {
+			t.Fatal("shared replay reused incompatible private layout")
+		}
+		if i == 0 {
+			original = plan
+		} else if original.keys[1] != plan.keys[1] || original.slot != plan.slot || original.fingerprint == plan.fingerprint {
+			t.Fatal("rotation or later preparation escaped original intent conflict")
+		}
+	}
+}
+
+// Independent preserved PostgreSQL byte framing, not the native helper.
+func replayIdentityOracle(key []byte, namespace string, b risk.CounterBinding) string {
+	mac := func(fields ...string) string {
+		h := hmac.New(sha256.New, key)
+		for _, field := range fields {
+			var length [8]byte
+			binary.BigEndian.PutUint64(length[:], uint64(len(field)))
+			_, _ = h.Write(length[:])
+			_, _ = h.Write([]byte(field))
+		}
+		return hex.EncodeToString(h.Sum(nil))
+	}
+	ns := mac("identity-risk-velocity-namespace-v1", namespace)
+	return mac("identity-risk-velocity-attempt-v1", ns, b.Tenant, string(b.Operation), string(b.Phase), b.Attempt)
+}
+
+func TestCommandSharedIdentityReadLane(t *testing.T) {
+	p, keys, c := commandFixture(t, 9, 8, 7, 6)
+	secret := bytes.Repeat([]byte{0x71}, 32)
+	layout, err := newCommandLayout("private-deployment", secret, p, keys)
+	if err != nil {
+		t.Fatal(err)
+	}
+	command, err := c.Prepare(risk.Context{Tenant: "private-tenant", Operation: "identity.profile.get", Attempt: "private-attempt"}, risk.Subject{Network: "2001:db8::1"}, risk.BeforeReturn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	plan, err := layout.prepare(command, [16]byte{1})
+	if err != nil || len(plan.targets) != 2 || len(plan.keys) != 18 || !strings.HasSuffix(plan.keys[1], ":replay:"+replayIdentityOracle(secret, "private-deployment", command.Bindings())) {
+		t.Fatal("read lane lost shared bounded replay identity", err)
+	}
+}
+
+func TestCommandRejectsLegacyPhysicalLayout(t *testing.T) {
+	plan := scriptPlan(t, "layout-version", 9)
+	for i := range plan.keys {
+		plan.keys[i] = strings.Replace(plan.keys[i], "irv2:", "irv1:", 1)
+	}
+	if _, err := mutationArguments(plan); !errors.Is(err, risk.ErrInvalidCounterCommand) {
+		t.Fatal("old incompatible layout admitted")
 	}
 }

@@ -223,6 +223,36 @@ func TestNativeScriptRotationKeepsOneLogicalRoot(t *testing.T) {
 	}
 }
 
+func TestNativeSharedReplayRotationConflictPreservesState(t *testing.T) {
+	db := newScriptDB()
+	original := scriptPlan(t, "same-attempt", 8)
+	db.strings[original.keys[0]] = original.epoch
+	reply := db.run(t, original)
+	if reply[0] != "committed" {
+		t.Fatal("original debit absent")
+	}
+	rotated := scriptPlan(t, "same-attempt", 9, 8)
+	if rotated.keys[1] != original.keys[1] || rotated.fingerprint == original.fingerprint {
+		t.Fatal("rotation moved attempt or lost changed intent")
+	}
+	writes, state, expiry := db.writes, cloneScriptStrings(db.strings), cloneScriptExpiry(db.expiry)
+	if got := db.run(t, rotated); got[0] != "not_committed" || db.writes != writes || !reflect.DeepEqual(state, db.strings) || !reflect.DeepEqual(expiry, db.expiry) {
+		t.Fatal("rotated conflict changed debit, replay or expiry")
+	}
+	if got := db.run(t, original); !reflect.DeepEqual(got, reply) || db.writes != writes || !reflect.DeepEqual(expiry, db.expiry) {
+		t.Fatal("original replay lost snapshot or renewed retention")
+	}
+}
+
+func TestNativeSharedLayoutCannotUseLegacyHealth(t *testing.T) {
+	db := newScriptDB()
+	plan := scriptPlan(t, "legacy-health", 9)
+	db.strings[strings.Replace(plan.keys[0], "irv2:", "irv1:", 1)] = plan.epoch
+	if got := db.run(t, plan); got[0] != "unavailable" || db.writes != 0 {
+		t.Fatal("legacy marker activated incompatible replay layout")
+	}
+}
+
 func TestNativeScriptMaximumAliasesAndMicrosecondBoundary(t *testing.T) {
 	db := newScriptDB()
 	plan := scriptPlan(t, "first", 9, 8, 7, 6)

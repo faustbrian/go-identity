@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Use the core stable replay identity matching retained PostgreSQL attempt
+  bytes, independent of preparation time and dimension-key rotation. The new
+  private `irv2` layout rejects old markers rather than silently treating them
+  as reconstructible history. Original-intent conflicts remain non-debiting;
+  authenticated recovery composition and public activation remain unfinished.
+
 - Add private native recovery fencing and committed-snapshot restoration.
   Exact owner/generation and logical expiry reject stale recovery effects;
   restoration preserves cumulative counts, original windows and replay expiry
