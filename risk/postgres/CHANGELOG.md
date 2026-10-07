@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Export recorded velocity publication confirmation into exact configured core
+  custody without writing or refreshing the primary record. Every use rechecks
+  original lease, covered cut and recorded confirmation; stale custody denies.
+  Retained lease and coverage checks preserve caller cancellation after primary
+  IO. Export remains distinct from native continuity and healthy admission.
+
 - Record the configured native owner's exact covered-cut publication in the
   primary epoch without reopening traffic or extending the original lease.
   Matching retries reconcile commit ambiguity without refreshing confirmation;

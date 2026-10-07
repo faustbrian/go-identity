@@ -25,6 +25,12 @@ func testVelocityPublication(t *testing.T, ctx context.Context, journal Velocity
 	if !ok {
 		t.Fatal("primary cannot durably confirm original native publication")
 	}
+	exporter, ok := any(r).(interface {
+		OwnedConfirmation(context.Context, VelocityRecoveryLease, risk.VelocityLease, VelocityRecoveryClosure, risk.VelocityClosure, risk.VelocityPublication) (risk.VelocityConfirmation, error)
+	})
+	if !ok {
+		t.Fatal("primary cannot export recorded confirmation custody")
+	}
 	l, err := r.Acquire(ctx, "publication-tenant", [16]byte{101})
 	if err != nil {
 		t.Fatal(err)
@@ -57,6 +63,9 @@ func testVelocityPublication(t *testing.T, ctx context.Context, journal Velocity
 	if err := r.CheckPublication(ctx, l, owned, cut, exported, published); err == nil {
 		t.Fatal("native acknowledgement alone became primary confirmation")
 	}
+	if k, err := exporter.OwnedConfirmation(ctx, l, owned, cut, exported, published); err == nil || k != (risk.VelocityConfirmation{}) {
+		t.Fatal("publication alone exported primary confirmation")
+	}
 	if err := confirmer.ConfirmPublication(ctx, l, owned, cut, exported, published); err != nil {
 		t.Fatal("exact native publication not confirmed", err)
 	}
@@ -79,6 +88,13 @@ func testVelocityPublication(t *testing.T, ctx context.Context, journal Velocity
 		t.Fatal("confirmation changed original cut, expiry or admission state")
 	}
 	originalAt := at
+	confirmation, err := exporter.OwnedConfirmation(ctx, l, owned, cut, exported, published)
+	if err != nil {
+		t.Fatal("recorded confirmation cannot export", err)
+	}
+	if got, err := verifier.Confirmation(ctx, owned, exported, published, confirmation); err != nil || got != b {
+		t.Fatal("configured native consumer lost original confirmed cut", err)
+	}
 	if err := confirmer.ConfirmPublication(ctx, l, owned, cut, exported, published); err != nil {
 		t.Fatal("matching confirmation replay unavailable", err)
 	}
@@ -96,6 +112,13 @@ func testVelocityPublication(t *testing.T, ctx context.Context, journal Velocity
 		go func() {
 			defer wg.Done()
 			failures[i] = r.ConfirmPublication(ctx, l, owned, cut, exported, published)
+			if failures[i] == nil {
+				k, err := exporter.OwnedConfirmation(ctx, l, owned, cut, exported, published)
+				failures[i] = err
+				if err == nil {
+					_, failures[i] = verifier.Confirmation(ctx, owned, exported, published, k)
+				}
+			}
 		}()
 	}
 	wg.Wait()
@@ -128,6 +151,9 @@ func testVelocityPublication(t *testing.T, ctx context.Context, journal Velocity
 	} {
 		if err := r.ConfirmPublication(ctx, negative.lease, negative.owned, negative.cut, negative.exported, negative.publication); err == nil {
 			t.Fatal("substituted custody confirmed publication")
+		}
+		if k, err := exporter.OwnedConfirmation(ctx, negative.lease, negative.owned, negative.cut, negative.exported, negative.publication); err == nil || k != (risk.VelocityConfirmation{}) {
+			t.Fatal("substituted custody exported confirmation")
 		}
 	}
 	foreignJ, _, foreignN, _ := risk.NewVelocityRecoveryAuthorities()
@@ -171,6 +197,14 @@ func testVelocityPublication(t *testing.T, ctx context.Context, journal Velocity
 	if err := r.ConfirmPublication(nil, l, owned, cut, exported, published); err == nil {
 		t.Fatal("nil context confirmed publication")
 	}
+	for _, badCtx := range []context.Context{nil, canceled} {
+		if k, err := exporter.OwnedConfirmation(badCtx, l, owned, cut, exported, published); err == nil || k != (risk.VelocityConfirmation{}) {
+			t.Fatal("invalid context exported confirmation")
+		}
+	}
+	if k, err := exporter.OwnedConfirmation(canceled, l, owned, cut, exported, published); !errors.Is(err, context.Canceled) || k != (risk.VelocityConfirmation{}) {
+		t.Fatal("export lost cancellation", err)
+	}
 	// Waiting on the existing primary fence is bounded and returns no success.
 	blocker, err := cfg.Pool.Raw().Begin(ctx)
 	if err != nil {
@@ -186,6 +220,16 @@ func testVelocityPublication(t *testing.T, ctx context.Context, journal Velocity
 	if !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatal("blocked primary confirmation ignored deadline", err)
 	}
+	waiting, stop = context.WithTimeout(ctx, 20*time.Millisecond)
+	if k, err := exporter.OwnedConfirmation(waiting, l, owned, cut, exported, published); !errors.Is(err, context.DeadlineExceeded) || k != (risk.VelocityConfirmation{}) {
+		t.Fatal("blocked export ignored deadline", err)
+	}
+	stop()
+	waiting, stop = context.WithTimeout(ctx, 20*time.Millisecond)
+	if got, err := verifier.Confirmation(waiting, owned, exported, published, confirmation); !errors.Is(err, context.DeadlineExceeded) || got != (risk.VelocityClosureBinding{}) {
+		t.Fatal("retained custody ignored primary deadline", err)
+	}
+	stop()
 	velocityRollback(blocker)
 	// Corrupt primary confirmation cannot be replaced by replaying good custody.
 	if _, err := cfg.Pool.Raw().Exec(ctx, `UPDATE risk_store.velocity_epochs SET publication_id=$4 WHERE tenant_id=$1 AND namespace_digest=$2 AND epoch=$3`, l.state.tenant, journal.state.namespace, l.state.epoch[:], wrappingKey(8)); err != nil {
@@ -197,7 +241,33 @@ func testVelocityPublication(t *testing.T, ctx context.Context, journal Velocity
 	if err := r.CheckPublication(ctx, l, owned, cut, exported, published); err == nil {
 		t.Fatal("corrupt confirmation remained valid")
 	}
+	if got, err := verifier.Confirmation(ctx, owned, exported, published, confirmation); err == nil || got != (risk.VelocityClosureBinding{}) {
+		t.Fatal("retained confirmation bypassed corrupt primary record")
+	}
 	if _, err := cfg.Pool.Raw().Exec(ctx, `UPDATE risk_store.velocity_epochs SET publication_id=$4 WHERE tenant_id=$1 AND namespace_digest=$2 AND epoch=$3`, l.state.tenant, journal.state.namespace, l.state.epoch[:], b.ID[:]); err != nil {
+		t.Fatal(err)
+	}
+	// Removing the actual record invalidates retained custody even though the
+	// original publication and covered cut remain genuine.
+	if _, err := cfg.Pool.Raw().Exec(ctx, `UPDATE risk_store.velocity_epochs SET publication_id=NULL,publication_confirmed_at=NULL WHERE tenant_id=$1 AND namespace_digest=$2 AND epoch=$3`, l.state.tenant, journal.state.namespace, l.state.epoch[:]); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := verifier.Confirmation(ctx, owned, exported, published, confirmation); err == nil || got != (risk.VelocityClosureBinding{}) {
+		t.Fatal("missing primary confirmation admitted retained custody")
+	}
+	if k, err := exporter.OwnedConfirmation(ctx, l, owned, cut, exported, published); err == nil || k != (risk.VelocityConfirmation{}) {
+		t.Fatal("export implicitly rewrote missing confirmation")
+	}
+	if _, err := cfg.Pool.Raw().Exec(ctx, `UPDATE risk_store.velocity_epochs SET publication_id=$4,publication_confirmed_at=$5 WHERE tenant_id=$1 AND namespace_digest=$2 AND epoch=$3`, l.state.tenant, journal.state.namespace, l.state.epoch[:], b.ID[:], originalAt); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := cfg.Pool.Raw().Exec(ctx, `UPDATE risk_store.velocity_epochs SET journal_started_at=$4 WHERE tenant_id=$1 AND namespace_digest=$2 AND epoch=$3`, l.state.tenant, journal.state.namespace, l.state.epoch[:], b.ReplayThrough); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := verifier.Confirmation(ctx, owned, exported, published, confirmation); err == nil || got != (risk.VelocityClosureBinding{}) {
+		t.Fatal("lost coverage admitted retained custody")
+	}
+	if _, err := cfg.Pool.Raw().Exec(ctx, `UPDATE risk_store.velocity_epochs SET journal_started_at=$4 WHERE tenant_id=$1 AND namespace_digest=$2 AND epoch=$3`, l.state.tenant, journal.state.namespace, l.state.epoch[:], b.JournalStartedAt); err != nil {
 		t.Fatal(err)
 	}
 	// Confirmation retains closure: a late new writer cannot escape it.
@@ -235,6 +305,9 @@ func testVelocityPublication(t *testing.T, ctx context.Context, journal Velocity
 	if err := r.CheckPublication(ctx, l, owned, cut, exported, published); err == nil {
 		t.Fatal("renewal left old confirmation usable")
 	}
+	if got, err := verifier.Confirmation(ctx, owned, exported, published, confirmation); err == nil || got != (risk.VelocityClosureBinding{}) {
+		t.Fatal("renewal left exported custody usable")
+	}
 	newOwned, err := r.OwnedLease(ctx, renewed)
 	if err != nil {
 		t.Fatal(err)
@@ -254,12 +327,19 @@ func testVelocityPublication(t *testing.T, ctx context.Context, journal Velocity
 	if err := r.ConfirmPublication(ctx, renewed, newOwned, newCut, newExported, newPublication); err != nil {
 		t.Fatal("successor publication cannot confirm", err)
 	}
+	newConfirmation, err := exporter.OwnedConfirmation(ctx, renewed, newOwned, newCut, newExported, newPublication)
+	if err != nil {
+		t.Fatal("successor confirmation cannot export", err)
+	}
 	// Primary expiry, not process time, fences confirmation and takeover.
 	if _, err := cfg.Pool.Raw().Exec(ctx, `UPDATE risk_store.velocity_epochs SET lease_expires_at=clock_timestamp()-interval '1 microsecond' WHERE tenant_id=$1 AND namespace_digest=$2 AND epoch=$3`, l.state.tenant, journal.state.namespace, l.state.epoch[:]); err != nil {
 		t.Fatal(err)
 	}
 	if err := r.CheckPublication(ctx, renewed, newOwned, newCut, newExported, newPublication); err == nil {
 		t.Fatal("expired primary confirmation remained usable")
+	}
+	if got, err := verifier.Confirmation(ctx, newOwned, newExported, newPublication, newConfirmation); err == nil || got != (risk.VelocityClosureBinding{}) {
+		t.Fatal("expired retained confirmation remained usable")
 	}
 	takeover, err := r.Acquire(ctx, l.state.tenant, l.state.epoch)
 	if err != nil {
@@ -299,6 +379,9 @@ func testVelocityPublication(t *testing.T, ctx context.Context, journal Velocity
 	}
 	if err := r.ConfirmPublication(ctx, legacyRenewal, legacyOwned, legacyCut, legacyExport, legacyPublication); err == nil {
 		t.Fatal("confirmation without required migration succeeded")
+	}
+	if k, err := exporter.OwnedConfirmation(ctx, legacyRenewal, legacyOwned, legacyCut, legacyExport, legacyPublication); err == nil || k != (risk.VelocityConfirmation{}) {
+		t.Fatal("missing migration exported confirmation")
 	}
 }
 
@@ -412,6 +495,22 @@ func testVelocityPublicationAck(t *testing.T, ctx context.Context, cfg VelocityJ
 	originalAt := at
 	if err := r.CheckPublication(ctx, l, owned, cut, exported, publication); err != nil {
 		t.Fatal("committed confirmation cannot reconcile", err)
+	}
+	confirmation, err := r.OwnedConfirmation(ctx, l, owned, cut, exported, publication)
+	if err != nil {
+		t.Fatal("reconciled commit cannot export confirmation", err)
+	}
+	if got, err := verifier.Confirmation(ctx, owned, exported, publication, confirmation); err != nil || got != b {
+		t.Fatal("reconciled confirmation lost original applied cut", err)
+	}
+	if _, err := primary.Raw().Exec(ctx, `UPDATE risk_store.velocity_epochs SET applied_seal=set_byte(applied_seal,0,get_byte(applied_seal,0)#1) WHERE tenant_id=$1 AND namespace_digest=$2 AND epoch=$3`, l.state.tenant, journal.state.namespace, l.state.epoch[:]); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := verifier.Confirmation(ctx, owned, exported, publication, confirmation); err == nil || got != (risk.VelocityClosureBinding{}) {
+		t.Fatal("corrupt applied proof admitted retained confirmation")
+	}
+	if _, err := primary.Raw().Exec(ctx, `UPDATE risk_store.velocity_epochs SET applied_seal=set_byte(applied_seal,0,get_byte(applied_seal,0)#1) WHERE tenant_id=$1 AND namespace_digest=$2 AND epoch=$3`, l.state.tenant, journal.state.namespace, l.state.epoch[:]); err != nil {
+		t.Fatal(err)
 	}
 	if err := r.ConfirmPublication(ctx, l, owned, cut, exported, publication); err != nil {
 		t.Fatal("matching retry after commit-ack loss failed", err)

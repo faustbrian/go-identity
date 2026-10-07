@@ -202,6 +202,11 @@ func (r VelocityRecovery) Acquire(ctx context.Context, tenant string, epoch [16]
 // Expired, superseded, retired, foreign or ambiguous state is unavailable.
 func (r VelocityRecovery) CheckLease(ctx context.Context, lease VelocityRecoveryLease) error {
 	_, err := r.lease(ctx, lease, false)
+	// Retained core checkers must preserve caller cancellation even when a
+	// lower primary boundary has redacted the database error as unavailable.
+	if err != nil && ctx != nil && ctx.Err() != nil {
+		return ctx.Err()
+	}
 	return err
 }
 

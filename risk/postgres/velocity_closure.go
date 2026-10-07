@@ -63,6 +63,9 @@ func (r VelocityRecovery) CheckCoveredClosure(ctx context.Context, closure Veloc
 	}
 	current, err := r.primaryClosure(ctx, VelocityRecoveryLease{state: closure.state.lease}, false, true)
 	if err != nil {
+		if ctx != nil && ctx.Err() != nil {
+			return ctx.Err()
+		}
 		return err
 	}
 	c := closure.state

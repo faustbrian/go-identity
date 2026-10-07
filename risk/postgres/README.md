@@ -315,6 +315,15 @@ evidence and decisions. It is **not yet an executable durable risk service**.
   expiry; it does not establish current validity. Nil preserves existing setup.
   Native current counters, same-domain row checks and finalization remain
   required; this partial method does not enable `RiskExecutionContributor`.
+- `OwnedConfirmation` exports an already recorded exact publication through
+  the configured core `VelocityConfirmation` contract. It does not implicitly
+  confirm, reconcile by writing, or perform native IO. A single outer journal
+  timeout bounds export; retained checks authenticate original lease, coverage
+  and persisted confirmation on every use. Export and copying cannot refresh
+  original confirmation time or expiry. Primary renewal/takeover/corruption
+  invalidate the custody. Concrete native confirmation and continuity remain
+  necessary before any healthy admission.
+
 - `VelocityPublicationMigrationSource{Base: coverageSource, Version:
   nextAllocation}` adds native publication confirmation to the existing epoch
   row. Existing rows remain unconfirmed. `ConfirmPublication` requires the

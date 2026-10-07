@@ -64,6 +64,9 @@ func TestVelocityRecoveryUnconfiguredOwnedReplayDeniesBeforeIO(t *testing.T) {
 	if err := r.CheckPublication(context.Background(), l, risk.VelocityLease{}, VelocityRecoveryClosure{}, risk.VelocityClosure{}, risk.VelocityPublication{}); err == nil {
 		t.Fatal("unconfigured confirmation reached primary IO")
 	}
+	if got, err := r.OwnedConfirmation(context.Background(), l, risk.VelocityLease{}, VelocityRecoveryClosure{}, risk.VelocityClosure{}, risk.VelocityPublication{}); err == nil || got != (risk.VelocityConfirmation{}) {
+		t.Fatal("unconfigured confirmation export reached primary IO")
+	}
 }
 
 func TestVelocityClosureCustodyRedaction(t *testing.T) {

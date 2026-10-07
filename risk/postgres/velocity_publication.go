@@ -38,6 +38,34 @@ func (r VelocityRecovery) CheckPublication(ctx context.Context, lease VelocityRe
 	return r.publication(ctx, lease, owned, cut, exported, publication, false)
 }
 
+// OwnedConfirmation exports only an already recorded primary confirmation into
+// the configured recovery graph. It does not call ConfirmPublication or write
+// any record. The exact original lease, covered cut and native publication must
+// remain current; a retained checker reauthenticates the recorded confirmation
+// on every native use. Renewal, expiry, takeover or corrupt primary state denies.
+// One journal-timeout budget bounds the entire export, including nested checks.
+// Transactions end before native IO. Export neither renews timestamps nor proves
+// native continuity, changes health or grants traffic admission. Invalid owner
+// custody returns InvalidInputError; authority failures return redacted
+// UnavailableError, preserving cancellation and deadlines. Failure returns zero.
+func (r VelocityRecovery) OwnedConfirmation(ctx context.Context, lease VelocityRecoveryLease, owned risk.VelocityLease, cut VelocityRecoveryClosure, exported risk.VelocityClosure, publication risk.VelocityPublication) (risk.VelocityConfirmation, error) {
+	if r.state == nil || r.state.journalIssuer == (risk.VelocityJournalIssuer{}) || lease.state == nil || lease.state.owner != r.state || cut.state == nil || cut.state.lease != lease.state || cut.state.started.IsZero() {
+		return risk.VelocityConfirmation{}, identity.InvalidInputError{Field: "velocity_confirmation"}
+	}
+	bounded, cancel, err := r.state.bounded(ctx)
+	if err != nil {
+		return risk.VelocityConfirmation{}, err
+	}
+	defer cancel()
+	result, err := r.state.journalIssuer.AcknowledgeConfirmation(bounded, owned, exported, publication, func(checkCtx context.Context) error {
+		return r.CheckPublication(checkCtx, lease, owned, cut, exported, publication)
+	})
+	if err != nil {
+		return risk.VelocityConfirmation{}, velocityPublicationError(bounded, err)
+	}
+	return result, nil
+}
+
 func (r VelocityRecovery) publication(ctx context.Context, lease VelocityRecoveryLease, owned risk.VelocityLease, cut VelocityRecoveryClosure, exported risk.VelocityClosure, publication risk.VelocityPublication, persist bool) error {
 	if r.state == nil || r.state.journalIssuer == (risk.VelocityJournalIssuer{}) || lease.state == nil || lease.state.owner != r.state || cut.state == nil || cut.state.lease != lease.state || cut.state.started.IsZero() {
 		return identity.InvalidInputError{Field: "velocity_publication"}
