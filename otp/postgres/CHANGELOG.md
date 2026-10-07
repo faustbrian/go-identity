@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Freeze original directory, effective-user authorization and applicable
+  credential epochs inside authenticated OTP command custody. Preserve existing
+  mapping profiles; retries cannot substitute freshly read authority. Native
+  contributor activation and primary drift checks remain under development.
+
 - Add private native cookie-possession admission using exact retained pre-auth
   keys and complete original intent, followed by locked session-owned primary
   state, expiry and reservation checks. Reject stored-digest substitution,

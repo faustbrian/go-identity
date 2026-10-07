@@ -152,6 +152,10 @@ func NewAttemptCodec(config AttemptCodecConfig) (*AttemptCodec, error) {
 // deadline/cancellation is checked before and after and never returns late
 // success. Invalid input returns zero outputs and ErrInvalidCommand.
 func (c *AttemptCodec) Map(ctx context.Context, a otp.AttemptCommand, digestKeyVersion uint32, spec identity.FeatureCommandSpec) (identity.Command, identitypostgres.OTPAttemptPlan, error) {
+	return c.mapAttempt(ctx, a, digestKeyVersion, spec, nil)
+}
+
+func (c *AttemptCodec) mapAttempt(ctx context.Context, a otp.AttemptCommand, digestKeyVersion uint32, spec identity.FeatureCommandSpec, authority *AttemptAuthority) (identity.Command, identitypostgres.OTPAttemptPlan, error) {
 	fail := func(err error) (identity.Command, identitypostgres.OTPAttemptPlan, error) {
 		return identity.Command{}, identitypostgres.OTPAttemptPlan{}, err
 	}
@@ -191,6 +195,15 @@ func (c *AttemptCodec) Map(ctx context.Context, a otp.AttemptCommand, digestKeyV
 		return fail(ErrInvalidCommand)
 	}
 	plaintext := encodeAttemptRecord(record)
+	if authority != nil {
+		if authority.validate(spec.Binding) != nil {
+			clear(plaintext)
+			return fail(ErrInvalidCommand)
+		}
+		original := plaintext
+		plaintext = encodeAuthorityRecord(original, *authority)
+		clear(original)
+	}
 	defer clear(plaintext)
 	encrypted, err := c.crypto.Encrypt(bounded, envelope.EncryptRequest{Plaintext: plaintext, KeyReference: c.current, Context: aad})
 	if err != nil {
@@ -250,8 +263,18 @@ func (c *AttemptCodec) recordPlan(r otp.CommandAttemptRecord, keyVersion uint32)
 // regenerates custody, or compares a stored challenge. Domain phases use only
 // restoreRecord; counted phases additionally borrow the original opaque code.
 func (c *AttemptCodec) restoreRecord(spec identity.FeatureCommandSpec) (otp.CommandAttemptRecord, error) {
+	value, err := c.restoreCustody(spec)
+	return value.record, err
+}
+
+type nativeCustody struct {
+	record    otp.CommandAttemptRecord
+	authority *AttemptAuthority
+}
+
+func (c *AttemptCodec) restoreCustody(spec identity.FeatureCommandSpec) (nativeCustody, error) {
 	if c == nil || c.crypto == nil || spec.Binding.ValidateFor(spec.Operation) != nil || len(spec.Fields) > 128 {
-		return otp.CommandAttemptRecord{}, ErrInvalidCommand
+		return nativeCustody{}, ErrInvalidCommand
 	}
 	var wire []byte
 	var version uint32
@@ -263,50 +286,54 @@ func (c *AttemptCodec) restoreRecord(spec identity.FeatureCommandSpec) (otp.Comm
 		switch f.Name {
 		case "otp.attempt-custody":
 			if wire != nil || f.Value.Kind != identity.FeatureBytes || len(f.Value.Bytes) == 0 || len(f.Value.Bytes) > 8192 {
-				return otp.CommandAttemptRecord{}, ErrInvalidCommand
+				return nativeCustody{}, ErrInvalidCommand
 			}
 			wire = f.Value.Bytes
 			found++
 		case "otp.digest-key-version":
 			if version != 0 || f.Value.Kind != identity.FeatureUint64 || f.Value.Uint64 == 0 || f.Value.Uint64 > uint64(^uint32(0)) {
-				return otp.CommandAttemptRecord{}, ErrInvalidCommand
+				return nativeCustody{}, ErrInvalidCommand
 			}
 			version = uint32(f.Value.Uint64)
 			found++
 		default:
-			return otp.CommandAttemptRecord{}, ErrInvalidCommand
+			return nativeCustody{}, ErrInvalidCommand
 		}
 	}
 	if found != 2 {
-		return otp.CommandAttemptRecord{}, ErrInvalidCommand
+		return nativeCustody{}, ErrInvalidCommand
 	}
 	aad, err := attemptAAD(spec, version)
 	if err != nil {
-		return otp.CommandAttemptRecord{}, ErrInvalidCommand
+		return nativeCustody{}, ErrInvalidCommand
 	}
 	e, err := envelope.ParseEnvelope(wire)
 	if err != nil {
-		return otp.CommandAttemptRecord{}, ErrInvalidCommand
+		return nativeCustody{}, ErrInvalidCommand
 	}
 	ctx, stop := context.WithTimeout(context.Background(), c.maximumDuration)
 	defer stop()
 	plain, err := c.crypto.Decrypt(ctx, envelope.DecryptRequest{Envelope: e, Context: aad})
 	if err != nil {
-		return otp.CommandAttemptRecord{}, ErrInvalidCommand
+		return nativeCustody{}, ErrInvalidCommand
 	}
 	defer clear(plain)
-	r, err := decodeAttemptRecord(plain, spec.Binding, spec.Operation)
+	data, authority, err := decodeAuthorityRecord(plain, spec.Binding)
 	if err != nil {
-		return otp.CommandAttemptRecord{}, ErrInvalidCommand
+		return nativeCustody{}, ErrInvalidCommand
+	}
+	r, err := decodeAttemptRecord(data, spec.Binding, spec.Operation)
+	if err != nil {
+		return nativeCustody{}, ErrInvalidCommand
 	}
 	i, ok := c.issuers[r.Attempt.FingerprintKeyVersion]
 	if !ok || i.VerifyCommandRecord(r) != nil {
-		return otp.CommandAttemptRecord{}, ErrInvalidCommand
+		return nativeCustody{}, ErrInvalidCommand
 	}
 	if _, err := c.recordPlan(r, version); err != nil || ctx.Err() != nil {
-		return otp.CommandAttemptRecord{}, ErrInvalidCommand
+		return nativeCustody{}, ErrInvalidCommand
 	}
-	return r, nil
+	return nativeCustody{record: r, authority: authority}, nil
 }
 
 func (c *AttemptCodec) restoreAttempt(command identity.Command, plan identitypostgres.OTPAttemptPlan) (otp.AttemptCommand, error) {

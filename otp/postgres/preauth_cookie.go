@@ -27,6 +27,20 @@ import (
 // Failed mapping returns zero outputs and redacted errors. Discard all bearer
 // and code copies on terminal outcomes; Go cannot guarantee complete erasure.
 func (c *AttemptCodec) MapPreAuth(ctx context.Context, a otp.AttemptCommand, digestKeyVersion uint32, spec identity.FeatureCommandSpec, cookie auth.BearerCredential) (identity.Command, postgres.OTPAttemptPlan, error) {
+	return c.mapPreAuth(ctx, a, digestKeyVersion, spec, cookie, nil)
+}
+
+// MapPreAuthWithAuthority combines MapPreAuth's separate original bearer
+// custody with MapWithAuthority's frozen primary expectations. It preserves the
+// complete original flow and submitted code; bearer bytes never enter the
+// authority or attempt envelope. Mapping grants no current admission. Errors,
+// deadlines, retained-key policy and map-once retry requirements match those
+// methods. The original authority must be rechecked in every live native phase.
+func (c *AttemptCodec) MapPreAuthWithAuthority(ctx context.Context, a otp.AttemptCommand, digestKeyVersion uint32, spec identity.FeatureCommandSpec, cookie auth.BearerCredential, original AttemptAuthority) (identity.Command, postgres.OTPAttemptPlan, error) {
+	return c.mapPreAuth(ctx, a, digestKeyVersion, spec, cookie, &original)
+}
+
+func (c *AttemptCodec) mapPreAuth(ctx context.Context, a otp.AttemptCommand, digestKeyVersion uint32, spec identity.FeatureCommandSpec, cookie auth.BearerCredential, authority *AttemptAuthority) (identity.Command, postgres.OTPAttemptPlan, error) {
 	bad := func(err error) (identity.Command, postgres.OTPAttemptPlan, error) {
 		return identity.Command{}, postgres.OTPAttemptPlan{}, err
 	}
@@ -50,7 +64,7 @@ func (c *AttemptCodec) MapPreAuth(ctx context.Context, a otp.AttemptCommand, dig
 	if _, bound := continuation.Authorization.PreAuthTransaction(); !bound {
 		return bad(ErrInvalidCommand)
 	}
-	command, plan, err := c.Map(ctx, a, digestKeyVersion, spec)
+	command, plan, err := c.mapAttempt(ctx, a, digestKeyVersion, spec, authority)
 	if err != nil {
 		return bad(err)
 	}

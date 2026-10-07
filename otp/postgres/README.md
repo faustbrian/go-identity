@@ -1,5 +1,23 @@
 # OTP PostgreSQL
 
+`MapWithAuthority` and `MapPreAuthWithAuthority` bind original primary authority
+expectations to the same encrypted original-attempt command. `AttemptAuthority`
+requires deployment/tenant epochs and, for user commands, the effective user's
+authorization namespace/epoch and independent user/identifier/credential epochs,
+also for passwordless login. Include the credential reference whenever the
+workflow uses an existing credential. Anonymous commands cannot carry user
+authority. Capture these
+expectations through their primary owners once; never update them on retries.
+The authenticated v3 plaintext embeds the unchanged v1/v2 attempt projection
+and bounded authority projection. No raw bearer/code or authority lease is
+stored; existing `Map`/`MapPreAuth` framing is unchanged. Old records remain
+readable but do not acquire invented authority. Restoration validates original
+envelope and core MAC before returning expectations. This is structural custody,
+not a permission decision or live primary check. Native contributor dispatch,
+phase-by-phase epoch drift denial and end-to-end OTP login remain pending.
+Enable authority-aware mapping only after every command reader supports v3;
+older binaries reject this new opt-in profile, while new readers retain v1/v2.
+
 Private native pre-auth admission now recomputes the separately submitted cookie
 under its exact retained named key and authenticated original flow, then borrows
 the session adapter's locked issued/reserved primary checks. Wrong, absent or
