@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Add private bounded RESP2 framing that rejects hostile length declarations and
+  partial frames before an allocating client parser can receive their headers.
+  Native client wiring and real-server proof remain pending.
+
 - Add the private native multi-dimension fixed-window Lua debit: preserved
   logical roots across retained digest versions, original replay snapshots,
   exact window boundaries, bounded replay capacity and pending-result fencing.

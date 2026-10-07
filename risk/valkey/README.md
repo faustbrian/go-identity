@@ -81,6 +81,16 @@ Protocol references: [EVAL](https://valkey.io/commands/eval/) and
 
 ## Ownership and operations
 
+Native transport preparation also includes a private bounded RESP2 frame reader.
+It validates a whole frame before forwarding a length header to an allocating
+client parser: at most 4096 wire bytes, 128 bytes per string, 32 elements per
+array, 64 total nodes and four nested array levels. Malformed or partial input
+poisons the stream without forwarding that frame or preserving IO diagnostics.
+Only one connection reader may use it; connection deadlines and closing remain
+the connection owner's responsibility. RESP3, pushes and large management or
+discovery replies are excluded from this private profile. The reader is not yet
+wired to a native client; no connection or supported-topology claim follows.
+
 Valkey will own ephemeral windows only. `risk/postgres` retains durable intent,
 results and recovery leases/pages; it does not become a second counter store.
 There is no native transport, lifecycle event, audit or background work yet.
