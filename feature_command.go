@@ -89,28 +89,35 @@ type featureCommandState struct {
 // Invalid input returns redacted InvalidInputError; zero is invalid. Pure,
 // bounded construction performs no I/O/callbacks and starts no goroutines.
 func NewFeatureCommand(spec FeatureCommandSpec) (Command, error) {
-	if spec.Binding.ValidateFor(spec.Operation) != nil || len(spec.Fields) > 128 {
+	if spec.Binding.ValidateFor(spec.Operation) != nil || !validFeatureFields(spec.Fields) {
 		return Command{}, invalidFeatureCommand()
-	}
-	total := 0
-	for i, field := range spec.Fields {
-		if !validFeatureName(field.Name, '.') {
-			return Command{}, invalidFeatureCommand()
-		}
-		n, ok := featureValueSize(field.Value)
-		if !ok || n+len(field.Name)+1 > (256<<10)-total {
-			return Command{}, invalidFeatureCommand()
-		}
-		total += n + len(field.Name) + 1
-		for _, previous := range spec.Fields[:i] {
-			if previous.Name == field.Name {
-				return Command{}, invalidFeatureCommand()
-			}
-		}
 	}
 	spec = cloneFeatureSpec(spec)
 	slices.SortFunc(spec.Fields, func(a, b FeatureField) int { return strings.Compare(a.Name, b.Name) })
 	return Command{feature: &featureCommandState{spec: spec}}, nil
+}
+
+func validFeatureFields(fields []FeatureField) bool {
+	if len(fields) > 128 {
+		return false
+	}
+	total := 0
+	for i, field := range fields {
+		if !validFeatureName(field.Name, '.') {
+			return false
+		}
+		n, ok := featureValueSize(field.Value)
+		if !ok || n+len(field.Name)+1 > (256<<10)-total {
+			return false
+		}
+		total += n + len(field.Name) + 1
+		for _, previous := range fields[:i] {
+			if previous.Name == field.Name {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 // Feature returns an owned projection for trusted adapter schema mapping and

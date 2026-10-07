@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Freeze bounded typed request intent before generated command values, retaining
+  exact versions, explicit options and private scalar custody. This does not
+  grant command execution or implement durable request-key admission by itself.
+
+- Add opaque, bounded HTTP-token retry keys with exact-byte keyed digests and
+  redacted diagnostics. Reject ambiguous transport bytes without normalization;
+  durable correlation and HTTP source enforcement remain adapter-owned.
+
 - Add opaque pre-auth-cookie and session-token feature commands without a
   submitted OTP. Keep custody disjoint and out of projections/recovery;
   native owners still prove possession and current primary authority.
