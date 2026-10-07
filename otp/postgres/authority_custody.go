@@ -150,7 +150,7 @@ func decodeAuthorityRecord(data []byte, binding identity.CommandBinding) ([]byte
 	default:
 		return bad()
 	}
-	if !r.ok || len(r.data) != 0 || a.validate(binding) != nil || !(bytes.HasPrefix(record, []byte(recordPrefix)) || bytes.HasPrefix(record, []byte(boundRecordPrefix))) {
+	if !r.ok || len(r.data) != 0 || a.validate(binding) != nil || !(bytes.HasPrefix(record, []byte(recordPrefix)) || bytes.HasPrefix(record, []byte(boundRecordPrefix)) || bytes.HasPrefix(record, []byte(sessionRecordPrefix))) {
 		return bad()
 	}
 	return record, &a, nil

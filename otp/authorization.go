@@ -53,6 +53,7 @@ func (FlowAuthorizationSpec) MarshalText() ([]byte, error) { return nil, ErrSens
 type FlowAuthorization struct {
 	spec    FlowAuthorizationSpec
 	preAuth session.PreAuthTransaction
+	session session.Session
 }
 
 // NewBoundPreAuthAuthorization retains the complete immutable original flow,
@@ -160,6 +161,10 @@ type continuationState struct {
 // Explicit NewBoundPreAuthAuthorization uses the v2 complete-record profile:
 // tenant must match and signin/pre-auth MFA must preserve original Remember.
 // Legacy ID-only context retains exact v1 framing and grants no full-flow proof.
+// Explicit NewBoundSessionAuthorization uses the v3 complete-session profile:
+// tenant/subject must match the original verified record. Original session policy,
+// lookup digest, full authority and authentication timeline are committed without
+// renewal; this remains structural custody, not authenticated admission.
 func NewContinuation(s DigestScopeSpec, a FlowAuthorization, remember session.RememberPolicy) (Continuation, error) {
 	flow, e := a.Bindings()
 	if e != nil || s.AuthorizationBinding != ([32]byte{}) {
@@ -185,6 +190,13 @@ func NewContinuation(s DigestScopeSpec, a FlowAuthorization, remember session.Re
 			return Continuation{}, ErrInvalidAuthorization
 		}
 		b = []byte("identity-otp-authorization-v2\x00")
+	}
+	if record, bound := a.AuthenticatedSession(); bound {
+		original, err := record.Bindings()
+		if err != nil || string(original.TenantID) != s.TenantID || string(original.UserID) != s.SubjectID {
+			return Continuation{}, ErrInvalidAuthorization
+		}
+		b = []byte("identity-otp-authorization-v3\x00")
 	}
 	b = append(b, byte(flow.Kind))
 	for _, value := range []string{flow.AuthenticatedSessionID, string(flow.PreAuthTransactionID)} {
@@ -212,6 +224,9 @@ func NewContinuation(s DigestScopeSpec, a FlowAuthorization, remember session.Re
 		b = binary.BigEndian.AppendUint32(b, original.Cookie.KeyVersion)
 		b = append(b, original.Cookie.Sum[:]...)
 		b = binary.BigEndian.AppendUint64(b, original.Version)
+	}
+	if record, bound := a.AuthenticatedSession(); bound {
+		b = appendSessionAuthorization(b, record)
 	}
 	s.AuthorizationBinding = sha256.Sum256(b)
 	clear(b)

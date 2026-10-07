@@ -50,3 +50,16 @@ func TestFeaturePreAuthCookieMixedVariantDenied(t *testing.T) {
 		t.Fatal("mixed command disclosed cookie custody")
 	}
 }
+
+func TestFeatureMixedBearerCustodyDenied(t *testing.T) {
+	code, _ := authentication.NewOneTimeCode("123456")
+	token := authentication.NewBearerCredential("private-token")
+	c := Command{feature: &featureCommandState{code: &code, preAuthCookie: &token, sessionToken: &token}}
+	_, feature := c.Feature()
+	_, hasCode := c.OneTimeCode()
+	_, hasCookie := c.PreAuthCookie()
+	_, hasToken := c.SessionToken()
+	if feature || hasCode || hasCookie || hasToken {
+		t.Fatal("mixed bearer custody admitted")
+	}
+}

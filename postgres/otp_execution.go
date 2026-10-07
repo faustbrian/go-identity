@@ -106,6 +106,17 @@ func (s *otpExecutionState) preAuthCookie(owner OTPReservationContributor, phase
 	return cookie, nil
 }
 
+func (s *otpExecutionState) sessionToken(owner OTPReservationContributor, phase otpExecutionPhase) (authentication.BearerCredential, error) {
+	if _, err := s.binding(owner, phase); err != nil {
+		return authentication.BearerCredential{}, err
+	}
+	token, ok := s.reservation.command.SessionToken()
+	if !ok {
+		return authentication.BearerCredential{}, invalidWork()
+	}
+	return token, nil
+}
+
 // OTPApplyWork grants exact-owner primary reads during current checks, not
 // mutation, submitted-code access or transaction closure. Zero/foreign/returned
 // handles deny; copies share callback lifetime. Use serially and close rows.
@@ -140,6 +151,16 @@ func (w OTPApplyWork) CommandSpec(p OTPReservationContributor) (identity.Feature
 // persist or serialize the borrowed bearer. No OTP code is exposed.
 func (w OTPApplyWork) PreAuthCookie(p OTPReservationContributor) (authentication.BearerCredential, error) {
 	return w.state.preAuthCookie(p, otpCheck)
+}
+
+// SessionToken lends only the separately submitted session bearer to the exact
+// live owner. Missing, pre-auth, foreign, zero and returned handles deny. This
+// grants no authentication or validity; the owner must derive the original
+// lookup digest and check every applicable primary authority. Never retain, log,
+// persist or serialize the borrowed token. Neither code nor native Command is
+// exposed; release/recovery phases deliberately have no bearer accessor.
+func (w OTPApplyWork) SessionToken(p OTPReservationContributor) (authentication.BearerCredential, error) {
+	return w.state.sessionToken(p, otpCheck)
 }
 
 // Query grants bounded trusted primary reads; close rows before returning.
@@ -189,6 +210,13 @@ func (w OTPFinalizeWork) CommandSpec(p OTPReservationContributor) (identity.Feat
 // OTPApplyWork.PreAuthCookie; release and recovery never receive this access.
 func (w OTPFinalizeWork) PreAuthCookie(p OTPReservationContributor) (authentication.BearerCredential, error) {
 	return w.state.preAuthCookie(p, otpFinalize)
+}
+
+// SessionToken lends the separately submitted original session bearer only
+// during exact-owner finalization. Secret-handling, missing/foreign/returned
+// denial and authority limits match OTPApplyWork.SessionToken. No code is lent.
+func (w OTPFinalizeWork) SessionToken(p OTPReservationContributor) (authentication.BearerCredential, error) {
+	return w.state.sessionToken(p, otpFinalize)
 }
 
 // Query reads bounded callback-owned rows; close them before returning.

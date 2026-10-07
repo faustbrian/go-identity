@@ -3,6 +3,15 @@
 Composable backend identity-domain ownership for Golib. This module is under
 development and targets Go 1.27.
 
+`NewFeatureOneTimeCodeSessionCommand` retains the separately submitted session
+bearer beside the opaque OTP code, never in scalar metadata. `SessionToken()`
+borrows it for trusted native admission; pre-auth and session custody are
+disjoint. Canonical transport syntax is validated, not authenticated status,
+possession, current authority or permission. Native session owners must derive
+the lookup digest under the original retained key and check primary owners.
+Formatting/serialization and scalar reconstruction cannot disclose/recreate
+the bearer. Recovery receives neither submitted token nor code.
+
 `NewFeatureOneTimeCodePreAuthCommand` retains the separately submitted
 `authentication.BearerCredential` alongside an opaque OTP, outside scalar
 feature metadata. The cookie transport must be canonical unpadded base64url

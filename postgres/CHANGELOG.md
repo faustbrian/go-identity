@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Bind submitted session tokens into a distinct private OTP command fingerprint
+  domain, preserving retained-key replay and existing code/pre-auth encodings.
+  Protected OTP checks/finalization lend only the original session token to
+  the exact live owner; returned, foreign and pre-auth handles deny. Tokens and
+  codes remain absent from scalar, receipt and recovery projections.
+
 - Admit passwordless OTP users without fabricated credential references by
   locking primary status and comparing all three original security epochs.
   Keep credential-specific admission unchanged. Protected OTP apply/finalize

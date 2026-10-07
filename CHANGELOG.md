@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Retain separately submitted session tokens in opaque OTP command custody,
+  disjoint from pre-auth cookies. Keep tokens out of scalar/recovery projections
+  and preserve code-only commands. Construction grants no authentication or
+  current validity; native session owners remain responsible for admission.
+
 - Retain separately submitted pre-auth cookies in opaque OTP command custody.
   Keep bearer bytes out of scalar projections and preserve existing code-only
   commands. Construction validates syntax, not cookie possession or admission.

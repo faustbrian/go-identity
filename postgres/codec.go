@@ -138,6 +138,16 @@ func prepareClaim(c identity.Command, key [32]byte) (claimRequest, error) {
 			}
 			payload["pre_auth_cookie"] = cborBytes(digest)
 		}
+		if token, ok := c.SessionToken(); ok {
+			// Distinct from pre-auth intent even for identical bearer bytes.
+			secret := []byte(token.Token())
+			digest, err := commandSecret(key, "session-token", secret, 86)
+			clear(secret)
+			if err != nil {
+				return claimRequest{}, codecError()
+			}
+			payload["session_token"] = cborBytes(digest)
+		}
 	default:
 		return claimRequest{}, codecError()
 	}

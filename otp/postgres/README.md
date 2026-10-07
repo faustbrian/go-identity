@@ -1,5 +1,28 @@
 # OTP PostgreSQL
 
+## Original authenticated-session custody
+
+The opt-in private v4 attempt frame retains the complete session-owned original
+record inside the existing encrypted envelope. Session/family IDs and versions,
+all authority dimensions and optional-presence flags, lookup digest, resolved
+remember policy and original authentication timeline survive a fresh codec
+instance. The existing authority-envelope v3 may wrap this frame; legacy v1
+and pre-auth v2 bytes are unchanged. Parsing rejects unknown/mixed profiles,
+truncation, trailing bytes, noncanonical times and invalid owner projections.
+No raw session token or OTP code enters this record; mapping/restoration grants
+no current validity or authenticated-session admission.
+
+Native authenticated-session admission/consumption and successful metered
+checks remain unfinished. Complete structural custody is not a current lookup,
+credential-possession proof or operation permission.
+
+`MapSession` and `MapSessionWithAuthority` freeze the separately submitted
+session token in root's opaque command branch beside the code. The latter also
+retains original primary expectations. Neither stores raw token/code in its
+encrypted original-session record, renews original authentication time, performs
+SQL or grants live admission. A session token cannot become a pre-auth cookie;
+the coordinator fingerprints its intent under a distinct retained-key domain.
+
 ## Native counted denial
 
 `NewContributor(ContributorConfig)` now supplies the exact

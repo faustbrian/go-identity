@@ -1,5 +1,26 @@
 # otp
 
+## Complete original authenticated-session continuation
+
+`NewBoundSessionAuthorization(originalSession)` retains the complete immutable
+session-owned `Session` projection. `AuthenticatedSession()` returns it only
+for this explicit profile. Anonymous sessions are rejected. The constructor
+does not authenticate a caller, verify a token or grant a current validity lease.
+
+`NewContinuation` requires the original tenant and subject, rejects signin and
+requires zero continuation remember policy. Its domain-separated v3 commitment
+includes the complete session/family IDs and versions, audience, resolved
+session remember policy, lookup key version/digest, complete authority vector
+including optional presence, authentication metadata and original UTC
+nanosecond timestamps. No constructor, reconstruction or retry renews time.
+Legacy ID-only v1 and complete pre-auth v2 commitments remain unchanged.
+
+Native admission must independently authenticate submitted credential custody,
+check every applicable current authority and compare the exact original session
+and family under primary locks. Session lifetime and operation-required
+freshness must be rechecked after downstream waits. This core profile does not
+activate the still-unfinished authenticated-session PostgreSQL execution path.
+
 ## Complete original pre-auth continuation
 
 `NewBoundPreAuthAuthorization(originalSessionFlow)` explicitly retains the

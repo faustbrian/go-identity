@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Add explicit complete original authenticated-session custody for OTP
+  continuations. Bind the exact session, family, authority vector, lookup digest,
+  remember policy and original authentication timeline without renewing them.
+  Reject anonymous, cross-tenant, cross-subject and session-signin substitutions.
+  Existing ID-only and bound pre-auth profiles keep their framing. Structural
+  custody is not credential possession, active primary state or permission.
+
 - Add explicit complete original pre-auth custody for OTP continuations,
   preserving nonce, origin, callback, policy, cookie commitment, original
   timeline and remember choice in the keyed server-attempt binding. Reject

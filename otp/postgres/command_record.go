@@ -12,6 +12,7 @@ import (
 
 const recordPrefix = "identity-otp-attempt-custody-v1\x00"
 const boundRecordPrefix = "identity-otp-attempt-custody-v2\x00"
+const sessionRecordPrefix = "identity-otp-attempt-custody-v4\x00"
 
 // Only this closed private projection enters the encrypted envelope. Command
 // scope is supplied by the exact authenticated AAD and verified core MAC, not
@@ -25,6 +26,10 @@ func encodeAttemptRecord(r otp.CommandAttemptRecord) []byte {
 	fullFlow, bound := b.Authorization.PreAuthTransaction()
 	if bound {
 		out = []byte(boundRecordPrefix)
+	}
+	originalSession, sessionBound := b.Authorization.AuthenticatedSession()
+	if sessionBound {
+		out = []byte(sessionRecordPrefix)
 	}
 	for _, s := range []string{string(a.AttemptID), string(a.Fingerprint), b.Scope.TenantID, string(b.Scope.Purpose), b.Scope.SubjectID, string(b.Scope.Channel), b.Scope.Destination.Value(), b.Scope.ChallengeID, b.Scope.TargetID} {
 		out = binary.BigEndian.AppendUint16(out, uint16(len(s)))
@@ -47,6 +52,9 @@ func encodeAttemptRecord(r otp.CommandAttemptRecord) []byte {
 	if bound {
 		out = appendPreAuthRecord(out, fullFlow)
 	}
+	if sessionBound {
+		out = appendSessionRecord(out, originalSession)
+	}
 	out = append(out, r.Signature[:]...)
 	return out
 }
@@ -54,12 +62,16 @@ func encodeAttemptRecord(r otp.CommandAttemptRecord) []byte {
 func decodeAttemptRecord(data []byte, binding identity.CommandBinding, operation identity.FeatureOperation) (otp.CommandAttemptRecord, error) {
 	bad := func() (otp.CommandAttemptRecord, error) { return otp.CommandAttemptRecord{}, ErrInvalidCommand }
 	bound := bytes.HasPrefix(data, []byte(boundRecordPrefix))
-	if len(data) > 8192 || !bound && (len(data) > 4096 || !bytes.HasPrefix(data, []byte(recordPrefix))) {
+	sessionBound := bytes.HasPrefix(data, []byte(sessionRecordPrefix))
+	if len(data) > 8192 || !bound && !sessionBound && (len(data) > 4096 || !bytes.HasPrefix(data, []byte(recordPrefix))) {
 		return bad()
 	}
 	prefix := recordPrefix
 	if bound {
 		prefix = boundRecordPrefix
+	}
+	if sessionBound {
+		prefix = sessionRecordPrefix
 	}
 	r := recordReader{data: data[len(prefix):], ok: true}
 	id, fp := r.text(22), r.text(43)
@@ -78,6 +90,14 @@ func decodeAttemptRecord(data []byte, binding identity.CommandBinding, operation
 	if bound {
 		var err error
 		original, err = readPreAuthRecord(&r)
+		if err != nil {
+			return bad()
+		}
+	}
+	var originalSession session.Session
+	if sessionBound {
+		var err error
+		originalSession, err = readSessionRecord(&r)
 		if err != nil {
 			return bad()
 		}
@@ -102,6 +122,16 @@ func decodeAttemptRecord(data []byte, binding identity.CommandBinding, operation
 			return bad()
 		}
 		flow, err = otp.NewBoundPreAuthAuthorization(original)
+		if err != nil {
+			return bad()
+		}
+	}
+	if sessionBound {
+		originalSpec, _ := originalSession.Bindings()
+		if flowSpec.Kind != otp.FlowAuthorizationAuthenticatedSession || flowSpec.AuthenticatedSessionID != originalSpec.SessionID {
+			return bad()
+		}
+		flow, err = otp.NewBoundSessionAuthorization(originalSession)
 		if err != nil {
 			return bad()
 		}

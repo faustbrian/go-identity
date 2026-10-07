@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- Map separately submitted session tokens beside encrypted original-session
+  OTP custody, never inside it. Retain exact lookup-key selection and original
+  token/timeline binding; wrong, absent or retired-key submissions fail closed.
+  Mapping supplies no current primary admission or permission.
+
+- Preserve complete original authenticated-session OTP custody through native
+  encrypted command restoration without replacing session state or renewing
+  authentication time. Add an opt-in v4 private record frame; retain legacy,
+  bound pre-auth and authority-envelope encodings. Unknown, truncated or mixed
+  profiles fail closed. This does not activate native session admission yet.
+
 - Add native pre-auth consuming reservation, exact takeover and protected
   finalization with atomic OTP/session effects. Retain immutable encrypted
   code/cookie-free original custody through a forward migration; restart
