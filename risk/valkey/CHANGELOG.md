@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Wire the private standalone counter transport to the native client with
+  verified TLS, bounded physical connections, pre-allocation response framing,
+  cancellation and joined shutdown. Ambiguous outcomes never trigger resend;
+  acknowledged cancellation errors preserve outcome without leaking diagnostics.
+  Public activation, recovery and real-server interoperability remain pending.
+
 - Add private bounded RESP2 framing that rejects hostile length declarations and
   partial frames before an allocating client parser can receive their headers.
   Native client wiring and real-server proof remain pending.

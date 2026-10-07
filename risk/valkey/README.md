@@ -39,6 +39,30 @@ unhealthy-epoch response is noncommit plus unavailable, never clean admission.
 Current dispatch tests replace the
 transport boundary; they do not prove a Valkey script or real server mutation.
 
+## Private native transport
+
+The private standalone transport now sends the exact embedded EVAL through
+adapter-owned synchronous RESP2 IO. It validates a canonical `rediss` DNS endpoint,
+explicit credentials, verified TLS 1.2 or newer and caller-owned trust roots,
+then clones the TLS configuration. Construction performs no IO or health
+publication. Credential formatting is redacted and serialization is rejected.
+
+One physical connection and one command owner per slot enforce the configured
+1..200 connection bound. Capacity waiting, dialing, TLS, startup and EVAL share
+the caller's earlier deadline or the configured 100ms..10s limit. Cancellation
+closes blocked IO; shutdown permanently rejects new work, cancels active work,
+closes idle connections and joins its cancellation callbacks within its bound.
+There are no background client workers, discovery, redirects, reconnects,
+caching or automatic mutation retries. AUTH must receive exact success; HELLO 2
+must confirm RESP2 and standalone mode before any EVAL. Request encoding is
+binary-safe and bounded to 32768 bytes before allocation. The bounded RESP2
+reader protects startup and mutation replies before decoding. Complete acknowledged outcomes
+survive late cancellation, but cannot grant timely admission.
+
+Tests exercise the synchronous transport and verified TLS through memory-only `net.Pipe`
+fixtures. They do not prove a real Valkey server, replicated/cluster topology,
+journal-fenced recovery or public store activation. Those remain required.
+
 ## Native fixed-window script
 
 The embedded production Lua now implements a single prepared multi-dimension

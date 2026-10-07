@@ -2,6 +2,7 @@ package valkey
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"time"
@@ -45,7 +46,11 @@ func (d mutationDispatcher) mutate(ctx context.Context, command risk.CounterComm
 		return risk.CounterResult{}, err
 	}
 	reply, err := d.execute(bounded, plan)
-	if err != nil {
+	if errors.Is(err, context.Canceled) {
+		err = context.Canceled
+	} else if errors.Is(err, context.DeadlineExceeded) {
+		err = context.DeadlineExceeded
+	} else if err != nil {
 		// Any transport error after dispatch can hide a committed mutation. Never
 		// retain diagnostics, interpret it as noncommit or automatically resend.
 		result, _ := risk.NewCounterResult(command, risk.CounterUnknown, nil)
@@ -65,6 +70,11 @@ func (d mutationDispatcher) mutate(ctx context.Context, command risk.CounterComm
 	result, decodeErr := decodeMutationReply(command, reply)
 	if decodeErr != nil {
 		return result, decodeErr
+	}
+	// Native cancellation can be shorter than the outer dispatch deadline.
+	// A complete reply still proves its outcome, never timely admission.
+	if err != nil {
+		return result, err
 	}
 	// The adapter may have a shorter bound than the coordinator. A late reply
 	// proves commit truth, not timely admission, even if the caller is still live.

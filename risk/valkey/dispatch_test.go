@@ -4,7 +4,9 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -148,6 +150,36 @@ func TestNativeDispatchLateAcknowledgementRetainsCommitWithoutAdmission(t *testi
 	}
 	if got.Signal.State != risk.SignalUnavailable {
 		t.Fatal("late acknowledgement admitted after adapter deadline")
+	}
+}
+
+func TestNativeDispatchInternalCancellationRetainsAcknowledgementAndRedactsError(t *testing.T) {
+	p, keys, _ := commandFixture(t, 9)
+	layout, err := newCommandLayout("native-cancellation", bytes.Repeat([]byte{1}, 32), p, keys)
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Date(2026, 10, 7, 12, 0, 0, 0, time.UTC)
+	owner := mutationDispatcher{layout: layout, timeout: time.Second, execute: func(_ context.Context, plan commandPlan) ([]string, error) {
+		reply := []string{"committed", plan.fingerprint, strconv.FormatInt(now.UnixMicro(), 10)}
+		for _, target := range plan.targets {
+			reply = append(reply, string(target.Dimension), "1", strconv.FormatInt(now.UnixMicro(), 10), strconv.FormatInt(now.Add(plan.window).UnixMicro(), 10))
+		}
+		return reply, fmt.Errorf("private-credential: %w", context.Canceled)
+	}}
+	c, err := risk.NewCounterCoordinator(risk.CounterCoordinatorConfig{Policy: p, Keys: keys, Store: replyStoreFunc(func(ctx context.Context, command risk.CounterCommand) (risk.CounterResult, error) {
+		result, err := owner.mutate(ctx, command, [16]byte{1})
+		if !errors.Is(err, context.Canceled) || strings.Contains(err.Error(), "private-") {
+			t.Error("native cancellation not redacted", err)
+		}
+		return result, err
+	}), Clock: func() time.Time { return now }, Timeout: time.Second})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := c.Mutate(context.Background(), prepareFixture(t, c, "tenant", "attempt", "192.0.2.1"))
+	if err != nil || got.Outcome != risk.CounterCommitted || got.Signal.State != risk.SignalUnavailable {
+		t.Fatal("native cancellation lost acknowledged truth or admitted", err)
 	}
 }
 
