@@ -1,5 +1,15 @@
 # OTP PostgreSQL
 
+Private native pre-auth admission now recomputes the separately submitted cookie
+under its exact retained named key and authenticated original flow, then borrows
+the session adapter's locked issued/reserved primary checks. Wrong, absent or
+retired-key cookies cannot substitute the stored commitment. Reserved admission
+requires exact command, fingerprint and current generation; primary time after
+the lock owns exclusive expiry. Admission does not charge an attempt, write a
+result or renew the flow. This is not yet dispatched by a production OTP
+contributor: current authority, lockout/challenge ordering, protected execution
+and recovery still require native composition. No public raw store is exposed.
+
 `AttemptCodec.MapPreAuth` explicitly maps a complete bound-flow attempt and its
 separate submitted `authentication.BearerCredential`. The bearer is retained
 only by opaque root command custody; `Feature()` and encrypted attempt fields

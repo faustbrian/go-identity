@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add private native cookie-possession admission using exact retained pre-auth
+  keys and complete original intent, followed by locked session-owned primary
+  state, expiry and reservation checks. Reject stored-digest substitution,
+  retired-key fallback and changed ownership without charging attempts or
+  renewing flows. Production contributor dispatch remains in development.
+
 - Add explicit complete-flow attempt mapping with separate original cookie
   custody. Never persist the submitted bearer or treat its digest as a caller
   credential; current primary admission remains native execution work.

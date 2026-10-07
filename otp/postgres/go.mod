@@ -8,6 +8,7 @@ require (
 	github.com/faustbrian/go-identity/otp v0.0.0-20261006193636-84f8cd2317d7
 	github.com/faustbrian/go-identity/postgres v0.0.0-20261006193636-84f8cd2317d7
 	github.com/faustbrian/go-identity/session v0.0.0-20261006193636-84f8cd2317d7
+	github.com/faustbrian/go-identity/session/postgres v0.0.0-20261007022207-7c1bce3b5ba2
 	github.com/faustbrian/go-migrations/v3 v3.0.2-0.20261001014304-a461b18b6b24
 	github.com/faustbrian/go-secret-envelope v1.0.1-0.20260913112010-22fc4a2d925d
 	github.com/jackc/pgx/v5 v5.10.0
