@@ -164,7 +164,7 @@ func scriptPlan(t *testing.T, attempt string, versions ...uint32) commandPlan {
 func TestNativeScriptDebitsAllDimensionsAndConservesReplay(t *testing.T) {
 	db := newScriptDB()
 	first := scriptPlan(t, "first", 9)
-	db.strings[first.keys[0]] = first.epoch
+	db.strings[first.keys[0]] = confirmedHealthFixture(first, db.now)
 	reply := db.run(t, first)
 	if len(reply) != 19 || reply[0] != "committed" || reply[1] != first.fingerprint || reply[2] != strconv.FormatInt(db.now, 10) {
 		t.Fatal("missing complete native debit")
@@ -187,16 +187,24 @@ func TestNativeScriptDebitsAllDimensionsAndConservesReplay(t *testing.T) {
 		t.Fatal("replay debited or refreshed original observation/TTL")
 	}
 	db.now = time.Date(2026, 10, 7, 12, 5, 0, 0, time.UTC).UnixMicro()
+	db.strings[first.keys[0]] = confirmedHealthFixture(first, db.now)
 	boundary := db.run(t, scriptPlan(t, "boundary", 9))
 	if boundary[4] != "1" || boundary[5] != strconv.FormatInt(db.now, 10) {
 		t.Fatal("exclusive expiry did not start a new window")
 	}
 }
 
+// Only a private engine fixture: no production writer can create confirmed
+// state until paired primary confirmation/admission is implemented.
+func confirmedHealthFixture(p commandPlan, now int64) string {
+	through := now - 1
+	return "confirmed|" + p.epoch + "|1|" + strings.Repeat("a", 32) + "|" + strconv.FormatInt(now+time.Minute.Microseconds(), 10) + "|" + strings.Repeat("b", 64) + "|0|" + strconv.FormatInt(through-time.Hour.Microseconds(), 10) + "|" + strconv.FormatInt(through, 10) + "|" + strconv.FormatInt(through-time.Hour.Microseconds(), 10) + "|3600000000"
+}
+
 func TestNativeScriptRotationKeepsOneLogicalRoot(t *testing.T) {
 	db := newScriptDB()
 	old := scriptPlan(t, "old", 8)
-	db.strings[old.keys[0]] = old.epoch
+	db.strings[old.keys[0]] = confirmedHealthFixture(old, db.now)
 	original := db.run(t, old)
 	expires := original[6]
 	db.now += 1000000
@@ -226,7 +234,7 @@ func TestNativeScriptRotationKeepsOneLogicalRoot(t *testing.T) {
 func TestNativeSharedReplayRotationConflictPreservesState(t *testing.T) {
 	db := newScriptDB()
 	original := scriptPlan(t, "same-attempt", 8)
-	db.strings[original.keys[0]] = original.epoch
+	db.strings[original.keys[0]] = confirmedHealthFixture(original, db.now)
 	reply := db.run(t, original)
 	if reply[0] != "committed" {
 		t.Fatal("original debit absent")
@@ -257,7 +265,7 @@ func TestNativeScriptMaximumAliasesAndMicrosecondBoundary(t *testing.T) {
 	db := newScriptDB()
 	plan := scriptPlan(t, "first", 9, 8, 7, 6)
 	plan.window = time.Microsecond
-	db.strings[plan.keys[0]] = plan.epoch
+	db.strings[plan.keys[0]] = confirmedHealthFixture(plan, db.now)
 	original := db.run(t, plan)
 	for i := range plan.targets {
 		root := plan.keys[2+capacityProbeCount+i*4+3]
@@ -308,7 +316,7 @@ func TestNativeScriptRejectsCorruptLateTargetBeforeAnyWrite(t *testing.T) {
 		t.Run(corruption, func(t *testing.T) {
 			db := newScriptDB()
 			initial := scriptPlan(t, "initial", 9)
-			db.strings[initial.keys[0]] = initial.epoch
+			db.strings[initial.keys[0]] = confirmedHealthFixture(initial, db.now)
 			db.run(t, initial)
 			last := initial.keys[len(initial.keys)-1]
 			fields := strings.Split(db.strings[last], "|")
@@ -353,7 +361,7 @@ func TestNativeScriptMissingHealthConflictAndPendingNeverDebit(t *testing.T) {
 			t.Fatal("unhealthy epoch debited")
 		}
 	}
-	db.strings[plan.keys[0]] = plan.epoch
+	db.strings[plan.keys[0]] = confirmedHealthFixture(plan, db.now)
 	db.run(t, plan)
 	writes := db.writes
 	conflict := plan
@@ -370,7 +378,7 @@ func TestNativeScriptMissingHealthConflictAndPendingNeverDebit(t *testing.T) {
 func TestNativeScriptReplayCapacityRejectsWithoutDebit(t *testing.T) {
 	db := newScriptDB()
 	plan := scriptPlan(t, "first", 9)
-	db.strings[plan.keys[0]] = plan.epoch
+	db.strings[plan.keys[0]] = confirmedHealthFixture(plan, db.now)
 	for i := 0; i < capacityProbeCount; i++ {
 		db.strings[plan.keys[2+i]] = "foreign-replay|" + strings.Repeat("f", 64) + "|" + strconv.FormatInt(db.now+3600000000, 10)
 		db.expiry[plan.keys[2+i]] = (db.now + 3600000000) / 1000
@@ -389,7 +397,7 @@ func TestNativeScriptReplayCapacityRejectsWithoutDebit(t *testing.T) {
 func TestNativeScriptCapacityReservationExpiresWithoutReplayRenewal(t *testing.T) {
 	db := newScriptDB()
 	first := scriptPlan(t, "first", 9)
-	db.strings[first.keys[0]] = first.epoch
+	db.strings[first.keys[0]] = confirmedHealthFixture(first, db.now)
 	db.run(t, first)
 	if db.expiry[first.keys[2]] != (db.now+3600000000)/1000 {
 		t.Fatal("replay index has no bounded expiry")
@@ -406,7 +414,7 @@ func TestNativeScriptCapacityReservationExpiresWithoutReplayRenewal(t *testing.T
 func TestNativeScriptWriteFailureRetainsPendingIntent(t *testing.T) {
 	db := newScriptDB()
 	plan := scriptPlan(t, "first", 9)
-	db.strings[plan.keys[0]] = plan.epoch
+	db.strings[plan.keys[0]] = confirmedHealthFixture(plan, db.now)
 	// Fail at the second logical dimension, after the first root and its TTL.
 	db.failAfterWrites = 3
 	if _, err := db.execute(plan); err == nil {
@@ -428,7 +436,7 @@ func TestNativeScriptEarlyWriteFailureCannotLeaveImmortalRecords(t *testing.T) {
 		t.Run(strconv.Itoa(cutoff), func(t *testing.T) {
 			db := newScriptDB()
 			plan := scriptPlan(t, "first", 9)
-			db.strings[plan.keys[0]] = plan.epoch
+			db.strings[plan.keys[0]] = confirmedHealthFixture(plan, db.now)
 			db.failAfterWrites = cutoff
 			if _, err := db.execute(plan); err == nil {
 				t.Fatal("write failure was not reached")
@@ -472,7 +480,7 @@ func TestNativeScriptPostStateDrivesCoreThreshold(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		db.strings[plan.keys[0]] = plan.epoch
+		db.strings[plan.keys[0]] = confirmedHealthFixture(plan, db.now)
 		got, err := c.Mutate(context.Background(), command)
 		want := risk.SignalClean
 		if i == 11 {

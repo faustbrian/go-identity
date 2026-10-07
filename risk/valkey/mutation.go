@@ -13,7 +13,9 @@ import (
 // bytes in a Lua 5.1 VM with the Redis IO boundary replaced, not another engine.
 //
 //go:embed mutation.lua
-var mutationScript string
+var mutationScriptBody string
+
+var mutationScript = publicationProfileScript + mutationScriptBody
 
 // Fixed tenant/epoch capacity slots have atomic expiry. Probe exhaustion rejects
 // before debit; it never saturates logical counts or evicts admissible replay.

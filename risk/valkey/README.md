@@ -74,6 +74,28 @@ journal-fenced recovery or public store activation. Those remain required.
 
 ### Private recovery effects
 
+Private `ownedRecovery.publish` consumes the configured opaque covered closure,
+not projected fields or an ordinary stable cut. It verifies the original
+primary lease/cut before IO, checks the namespace, and atomically replaces only
+the exact existing replay fence with `published` custody retaining the original
+epoch, generation, owner, exclusive expiry, keyed cut ID, applied position,
+traversal bounds, continuous journal start and one-hour maximum. Empty covered
+history is valid but still requires an existing native fence. Missing/reset,
+conflicting or expired fences deny; identical publication retries return the
+same digest without writes or expiry changes. Only an attributable reply plus
+final original-primary checks exposes `VelocityPublication`. Lost or late
+acknowledgements expose none and never trigger a resend.
+
+Publication is **not primary confirmation or usable health**. Bare epochs and
+`published` markers cannot authorize mutation. The private engine recognizes
+only a bounded, non-expired `confirmed` cut representation, including when
+reading old mutation replies; no production writer of that representation or
+public healthy store exists yet. Unit fixtures supply it solely to test engine
+semantics. Joint primary confirmation, exact expected-marker admission and
+native boot/fence continuity across reset remain required before activation.
+This checkpoint proves a fenced marker transition, not survival of all earlier
+restored counters after eviction/reset or supported Valkey interoperability.
+
 Recovery now has separate fixed native scripts for fence installation/renewal
 and restoration of one known committed snapshot. A fence binds the boot epoch,
 exact uint64 generation, random owner and original microsecond expiry. Native

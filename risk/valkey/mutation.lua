@@ -29,7 +29,14 @@ for i, key in ipairs(KEYS) do
   types[i] = redis.call('TYPE', key).ok
   if types[i] ~= 'none' and types[i] ~= 'string' then return unavailable() end
 end
-if types[1] ~= 'string' or redis.call('STRLEN', KEYS[1]) ~= 32 or redis.call('GET', KEYS[1]) ~= epoch then return unavailable() end
+if types[1] ~= 'string' or redis.call('STRLEN', KEYS[1]) > 384 then return unavailable() end
+local confirmed = publicationFields(redis.call('GET', KEYS[1]), 'confirmed', epoch)
+if not confirmed then return unavailable() end
+local clock = redis.call('TIME')
+local seconds, micros = integer(clock[1]), integer(clock[2])
+if not seconds or not micros or micros > 999999 or seconds > math.floor((exact-horizon-999999)/1000000) then return unavailable() end
+local now = seconds*1000000+micros
+if tonumber(confirmed[5]) <= now or tonumber(confirmed[9]) > now then return unavailable() end
 local function record(key, limit, fields)
   if redis.call('STRLEN', key) > limit then return nil end
   local value = redis.call('GET', key)
@@ -46,10 +53,6 @@ if types[2] == 'string' then
   for i = 3, #stored do reply[#reply+1] = stored[i] end
   return reply
 end
-local clock = redis.call('TIME')
-local seconds, micros = integer(clock[1]), integer(clock[2])
-if not seconds or not micros or micros > 999999 or seconds > math.floor((exact-horizon-999999)/1000000) then return unavailable() end
-local now = seconds*1000000+micros
 local free = nil
 -- Fixed probes into 4096 tenant/epoch slots bound both work and live replay
 -- cardinality. Probe exhaustion is unavailable, not eviction or a second try.

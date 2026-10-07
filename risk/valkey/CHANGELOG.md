@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Publish exact primary-covered cuts under an existing original native replay
+  fence, preserving keyed cut identity, applied position, coverage and expiry.
+  Matching retries do not rewrite state; stale, lost or conflicting fences and
+  ambiguous effects expose no publication custody. Bare epoch and merely
+  published markers cannot debit. The private mutation engine requires a
+  structured, non-expired confirmed marker; paired primary confirmation and
+  the production writer of that marker remain unimplemented.
+
 - Reconstruct native restore plans from owned authenticated original history,
   including retained aliases and dimension-addressed snapshots, without a new
   command or raw attempt. Reject unresolved history and missing retained keys.

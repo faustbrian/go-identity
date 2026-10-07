@@ -108,7 +108,7 @@ func replayArguments(plan commandPlan, marker string, original []string) []strin
 func TestNativeRecoveryRestoresOriginalReplayWithoutDebitOrRenewal(t *testing.T) {
 	db := newScriptDB()
 	plan := scriptPlan(t, "recover", 9, 8)
-	db.strings[plan.keys[0]] = plan.epoch
+	db.strings[plan.keys[0]] = confirmedHealthFixture(plan, db.now)
 	original := db.run(t, plan)
 	originalReplayExpiry := db.expiry[plan.keys[1]]
 	db.strings = map[string]string{}
@@ -137,7 +137,7 @@ func TestNativeRecoveryRestoresOriginalReplayWithoutDebitOrRenewal(t *testing.T)
 	if got := db.run(t, plan); got[0] != "unavailable" {
 		t.Fatal("partial recovery enabled fresh mutation")
 	}
-	db.strings[plan.keys[0]] = plan.epoch
+	db.strings[plan.keys[0]] = confirmedHealthFixture(plan, db.now)
 	if got := db.run(t, plan); !reflect.DeepEqual(got, original) {
 		t.Fatal("native replay lost original acknowledged observation", got)
 	}
@@ -146,7 +146,7 @@ func TestNativeRecoveryRestoresOriginalReplayWithoutDebitOrRenewal(t *testing.T)
 func TestNativeRecoveryConservesNewerWindowsAndCumulativeSnapshots(t *testing.T) {
 	db := newScriptDB()
 	older := scriptPlan(t, "older", 8)
-	db.strings[older.keys[0]] = older.epoch
+	db.strings[older.keys[0]] = confirmedHealthFixture(older, db.now)
 	oldReply := db.run(t, older)
 	db.now += 1000000
 	newer := scriptPlan(t, "newer", 9, 8)
@@ -191,7 +191,7 @@ func TestNativeRecoveryExpiryAndForeignFenceNeverWrite(t *testing.T) {
 		t.Run(kind, func(t *testing.T) {
 			db := newScriptDB()
 			plan := scriptPlan(t, "recover", 9)
-			db.strings[plan.keys[0]] = plan.epoch
+			db.strings[plan.keys[0]] = confirmedHealthFixture(plan, db.now)
 			original := db.run(t, plan)
 			db.strings = map[string]string{}
 			db.expiry = map[string]int64{}
@@ -231,7 +231,7 @@ func TestNativeRecoveryPartialWritesAreIdempotentlyRepairable(t *testing.T) {
 		t.Run(strconv.Itoa(fault), func(t *testing.T) {
 			db := newScriptDB()
 			plan := scriptPlan(t, "recover", 9, 8)
-			db.strings[plan.keys[0]] = plan.epoch
+			db.strings[plan.keys[0]] = confirmedHealthFixture(plan, db.now)
 			original := db.run(t, plan)
 			db.strings = map[string]string{}
 			db.expiry = map[string]int64{}
@@ -279,7 +279,7 @@ func recoveredSnapshots(t *testing.T, reply []string) []risk.Counter {
 func TestNativeRecoveryTransportUsesExactScriptsAndRetainsUnavailable(t *testing.T) {
 	db := newScriptDB()
 	plan := scriptPlan(t, "recover", 9, 8, 7, 6)
-	db.strings[plan.keys[0]] = plan.epoch
+	db.strings[plan.keys[0]] = confirmedHealthFixture(plan, db.now)
 	original := db.run(t, plan)
 	db.strings = map[string]string{}
 	db.expiry = map[string]int64{}
@@ -323,7 +323,7 @@ func TestNativeRecoveryTransportUsesExactScriptsAndRetainsUnavailable(t *testing
 func TestNativeRecoveryArgumentsRejectBeforeIO(t *testing.T) {
 	db := newScriptDB()
 	plan := scriptPlan(t, "recover", 9)
-	db.strings[plan.keys[0]] = plan.epoch
+	db.strings[plan.keys[0]] = confirmedHealthFixture(plan, db.now)
 	original := db.run(t, plan)
 	transport, fixture := nativeFixture(t, func([]string) string { return "" })
 	marker := recoveryMarker(plan, "1", strings.Repeat("a", 32), db.now+1000000)
@@ -359,7 +359,7 @@ func TestNativeRecoveryLogicalExpiryDoesNotResurrectRoundedKeys(t *testing.T) {
 	db := newScriptDB()
 	plan := scriptPlan(t, "microsecond", 9, 8)
 	plan.window = time.Microsecond
-	db.strings[plan.keys[0]] = plan.epoch
+	db.strings[plan.keys[0]] = confirmedHealthFixture(plan, db.now)
 	original := db.run(t, plan)
 	db.now++
 	marker := recoveryMarker(plan, "1", strings.Repeat("a", 32), db.now+1000000)
@@ -401,7 +401,7 @@ func TestNativeRecoveryPartialNewWindowRepairsEveryAliasExpiry(t *testing.T) {
 	db.now += 997
 	old := scriptPlan(t, "old-rounded-window", 9, 8)
 	old.window = 2 * time.Microsecond
-	db.strings[old.keys[0]] = old.epoch
+	db.strings[old.keys[0]] = confirmedHealthFixture(old, db.now)
 	original := db.run(t, old)
 	oldExpiry := db.expiry[old.keys[2+capacityProbeCount]]
 	db.now += 2
@@ -442,7 +442,7 @@ func TestNativeRecoveryPartialNewWindowRepairsEveryAliasExpiry(t *testing.T) {
 func TestNativeRecoveryTransportLostAcknowledgementNeverResends(t *testing.T) {
 	db := newScriptDB()
 	plan := scriptPlan(t, "lost-recovery-ack", 9)
-	db.strings[plan.keys[0]] = plan.epoch
+	db.strings[plan.keys[0]] = confirmedHealthFixture(plan, db.now)
 	original := db.run(t, plan)
 	db.strings = map[string]string{}
 	db.expiry = map[string]int64{}

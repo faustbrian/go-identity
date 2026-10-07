@@ -2,7 +2,7 @@ module github.com/faustbrian/go-identity/risk/valkey
 
 go 1.27.0
 
-require github.com/faustbrian/go-identity/risk v0.0.0-20261007205259-5f6a68377699
+require github.com/faustbrian/go-identity/risk v0.0.0-20261007223201-23178cf078f8
 
 // Test-only Lua 5.1 execution; native Valkey remains the production runtime.
 require github.com/yuin/gopher-lua v1.1.2
