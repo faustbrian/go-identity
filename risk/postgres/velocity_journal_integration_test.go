@@ -191,4 +191,5 @@ func testVelocityJournal(t *testing.T, ctx context.Context, dsn, databaseName st
 	testVelocityWriterFence(t, ctx, pool, cfg, dsn, databaseName)
 	testVelocityIntegrity(t, ctx, journal, cfg)
 	testVelocityPage(t, ctx, journal, cfg, dsn, databaseName)
+	testVelocityOwnedHistory(t, ctx, journal, cfg)
 }

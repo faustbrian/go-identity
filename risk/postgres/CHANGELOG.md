@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- Authenticate original recovery records into issuer-bound public cross-adapter
+  custody with privately retained, separately paired issuance capabilities, and
+  checkpoint attributable terminal effects in scoped journal order. The opt-in
+  forward applied-progress migration preserves populated history and starts
+  with no applied authority. Duplicate acknowledgements are idempotent; missing,
+  unresolved, corrupt, foreign issuance and stale ownership fails closed.
+  Legacy lease/page construction remains supported without owned replay.
+  Healthy publication and
+  complete native recovery composition remain unfinished.
+
 - Preserve original authenticated velocity attempt identities and fingerprints
   in restricted recovery projections. Use the core's stable replay profile for
   journal insertion and terminal lookup without changing retained digest bytes,

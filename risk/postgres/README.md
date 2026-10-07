@@ -242,6 +242,24 @@ evidence and decisions. It is **not yet an executable durable risk service**.
   page/cursor. Current pagination is not applied replay closure, external-result
   reconciliation, Valkey fencing or healthy publication; those remain unfinished.
 
+- Owned replay additionally requires paired `JournalIssuer` and
+  `NativeVerifier` from `risk.NewVelocityRecoveryAuthorities`. Trusted
+  composition retains journal issuance only in this adapter and native issuance
+  only in the concrete projection; application-facing stores expose neither.
+  Crossed or partial ownership is rejected at construction. Omitting both
+  preserves lease/page operations but disables owned replay.
+  `OwnedLease` checks exact current primary custody. `OwnedHistory` rereads the
+  authenticated original record under a bounded writer-fenced transaction,
+  preserving original identity, aliases, counts and timestamps, then closes SQL
+  before native IO. Pending/unknown remain unresolved, not retry permission.
+  Install `VelocityAppliedMigrationSource{Base: replaySource, Version:
+  laterAllocation}` for `RecordApplied`. Only the configured native owner's
+  acknowledgement of the exact lease and original terminal history advances
+  scoped change-order progress. Duplicates are idempotent; gaps, foreign graphs,
+  stale leases and corrupt sealed checkpoints deny. The forward migration starts
+  populated epochs with no applied authority. Progress never publishes health;
+  native restore and stable writer-fenced healthy activation remain unfinished.
+
 - Optional `Config.UseIssuer` installs pure use preparation only after matching
   the issuer's exact current policy and entire retained signing/linkage key set.
   `PrepareEvidenceUse` accepts a core precheck, original trusted request and

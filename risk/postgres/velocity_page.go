@@ -53,7 +53,11 @@ type VelocityReplayProjection struct {
 // VelocityReplayRecord is immutable authenticated history from one acknowledged
 // page. It cannot be constructed or serialized, and is not effect permission.
 type VelocityReplayRecord struct{ state *velocityReplayRecord }
-type velocityReplayRecord struct{ projection VelocityReplayProjection }
+type velocityReplayRecord struct {
+	projection         VelocityReplayProjection
+	owner              *velocityRecovery
+	sequence, position int64
+}
 
 // Projection returns independent target/key/snapshot slices; zero is invalid.
 func (r VelocityReplayRecord) Projection() VelocityReplayProjection {
@@ -308,7 +312,7 @@ func (s *velocityRecovery) readReplayRecord(ctx context.Context, tx pgx.Tx, tena
 	if err != nil || !velocitySnapshotsValid(risk.CounterBinding{Window: b.Window}, b.Snapshot) || (b.Outcome == VelocityReplayCommitted && len(b.Snapshot) != len(targets)) || (b.Outcome != VelocityReplayCommitted && len(b.Snapshot) != 0) {
 		return VelocityReplayRecord{}, identity.UnavailableError{}
 	}
-	return VelocityReplayRecord{state: &velocityReplayRecord{projection: b}}, nil
+	return VelocityReplayRecord{state: &velocityReplayRecord{projection: b, owner: s, sequence: sequence, position: position}}, nil
 }
 
 func (s *velocityRecovery) readReplayTargets(ctx context.Context, tx pgx.Tx, sequence int64, phase risk.Phase, window time.Duration) ([]risk.CounterTarget, error) {

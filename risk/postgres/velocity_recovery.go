@@ -23,6 +23,11 @@ import (
 type VelocityRecoveryConfig struct {
 	Journal                      VelocityJournal
 	MaximumWindow, LeaseDuration time.Duration
+	// JournalIssuer and NativeVerifier opt into owned cross-adapter recovery.
+	// Both must belong to one private composition graph. Omit both to preserve
+	// the lease/page-only API; partial or crossed ownership is rejected.
+	JournalIssuer  risk.VelocityJournalIssuer
+	NativeVerifier risk.VelocityNativeVerifier
 }
 
 // VelocityRecovery owns PostgreSQL recovery leases, not counter mutation or
@@ -34,6 +39,9 @@ type VelocityRecovery struct{ state *velocityRecovery }
 type velocityRecovery struct {
 	journal                      *velocityJournal
 	maximumWindow, leaseDuration time.Duration
+	journalIssuer                risk.VelocityJournalIssuer
+	journalReader                risk.VelocityJournalVerifier
+	nativeVerifier               risk.VelocityNativeVerifier
 }
 
 // VelocityRecoveryLease is exact-instance custody of one acknowledged lease.
@@ -80,7 +88,11 @@ func NewVelocityRecovery(c VelocityRecoveryConfig) (VelocityRecovery, error) {
 	if c.Journal.state == nil || c.MaximumWindow != time.Hour || c.LeaseDuration <= 0 || c.LeaseDuration > time.Minute || c.LeaseDuration%time.Microsecond != 0 {
 		return VelocityRecovery{}, risk.ErrInvalidPolicy
 	}
-	return VelocityRecovery{state: &velocityRecovery{journal: c.Journal.state, maximumWindow: c.MaximumWindow, leaseDuration: c.LeaseDuration}}, nil
+	if (c.JournalIssuer != (risk.VelocityJournalIssuer{}) || c.NativeVerifier != (risk.VelocityNativeVerifier{})) && c.JournalIssuer.ValidateNative(c.NativeVerifier) != nil {
+		return VelocityRecovery{}, risk.ErrInvalidPolicy
+	}
+	reader, _ := c.JournalIssuer.Verifier()
+	return VelocityRecovery{state: &velocityRecovery{journal: c.Journal.state, maximumWindow: c.MaximumWindow, leaseDuration: c.LeaseDuration, journalIssuer: c.JournalIssuer, journalReader: reader, nativeVerifier: c.NativeVerifier}}, nil
 }
 
 // Acquire obtains one scoped replaying lease for a trusted projection boot
