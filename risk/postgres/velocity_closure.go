@@ -20,6 +20,7 @@ type velocityRecoveryClosure struct {
 	lease         *velocityRecoveryLease
 	position      int64
 	from, through time.Time
+	started       time.Time
 }
 
 func (VelocityRecoveryClosure) Format(s fmt.State, _ rune) {
@@ -41,7 +42,34 @@ func (VelocityRecoveryClosure) MarshalText() ([]byte, error) {
 // a stable journal cut only, not historical coverage or two-store health.
 // Ambiguous commit returns no custody; retry reads the same primary cut.
 func (r VelocityRecovery) PrepareClosure(ctx context.Context, lease VelocityRecoveryLease) (VelocityRecoveryClosure, error) {
-	return r.primaryClosure(ctx, lease, true)
+	return r.primaryClosure(ctx, lease, true, false)
+}
+
+// PrepareCoveredClosure requires a complete maximum-window journal lifetime in
+// addition to the applied stable cut. Install VelocityCoverageMigrationSource.
+// Missing historical provenance starts at current primary time and returns
+// unavailable; callers cannot backdate it. Initial adoption needs a full-window
+// warmup. Ordinary renewal/takeover/boot preserves continuity. All native effects
+// must use this journal before dispatch; mixed writers and incomplete restores
+// are unsupported. This remains primary custody, not native publication/health.
+func (r VelocityRecovery) PrepareCoveredClosure(ctx context.Context, lease VelocityRecoveryLease) (VelocityRecoveryClosure, error) {
+	return r.primaryClosure(ctx, lease, true, true)
+}
+
+// CheckCoveredClosure checks the retained coverage and exact closed lease.
+func (r VelocityRecovery) CheckCoveredClosure(ctx context.Context, closure VelocityRecoveryClosure) error {
+	if closure.state == nil || closure.state.started.IsZero() {
+		return identity.InvalidInputError{Field: "velocity_coverage"}
+	}
+	current, err := r.primaryClosure(ctx, VelocityRecoveryLease{state: closure.state.lease}, false, true)
+	if err != nil {
+		return err
+	}
+	c := closure.state
+	if current.state.position != c.position || !current.state.from.Equal(c.from) || !current.state.through.Equal(c.through) || !current.state.started.Equal(c.started) {
+		return identity.UnavailableError{}
+	}
+	return nil
 }
 
 // CheckClosure verifies the exact retained cut and original lease against
@@ -52,7 +80,7 @@ func (r VelocityRecovery) CheckClosure(ctx context.Context, closure VelocityReco
 		return identity.InvalidInputError{Field: "velocity_closure"}
 	}
 	c := closure.state
-	current, err := r.primaryClosure(ctx, VelocityRecoveryLease{state: c.lease}, false)
+	current, err := r.primaryClosure(ctx, VelocityRecoveryLease{state: c.lease}, false, false)
 	if err != nil {
 		return err
 	}
@@ -62,7 +90,7 @@ func (r VelocityRecovery) CheckClosure(ctx context.Context, closure VelocityReco
 	return nil
 }
 
-func (r VelocityRecovery) primaryClosure(ctx context.Context, lease VelocityRecoveryLease, prepare bool) (VelocityRecoveryClosure, error) {
+func (r VelocityRecovery) primaryClosure(ctx context.Context, lease VelocityRecoveryLease, prepare, covered bool) (VelocityRecoveryClosure, error) {
 	// Authenticate applied custody first without retaining its transaction.
 	// Recheck its seal and exact position under the final writer fence below:
 	// concurrent advancement or a newly committed tail must not be skipped.
@@ -123,11 +151,33 @@ func (r VelocityRecovery) primaryClosure(ctx context.Context, lease VelocityReco
 	if recorded != nil && recorded.After(through) {
 		return VelocityRecoveryClosure{}, identity.UnavailableError{}
 	}
+	var started time.Time
+	if covered {
+		var stored *time.Time
+		if err := tx.QueryRow(bounded, `SELECT journal_started_at FROM `+s.journal.schema+`.velocity_epochs WHERE tenant_id=$1 AND namespace_digest=$2 AND epoch=$3`, l.tenant, s.journal.namespace, l.epoch[:]).Scan(&stored); err != nil {
+			return VelocityRecoveryClosure{}, identity.UnavailableError{}
+		}
+		if stored == nil {
+			if prepare {
+				if _, err := tx.Exec(bounded, `UPDATE `+s.journal.schema+`.velocity_epochs SET journal_started_at=$4,replay_through=replay_from WHERE tenant_id=$1 AND namespace_digest=$2 AND epoch=$3`, l.tenant, s.journal.namespace, l.epoch[:], now); err != nil {
+					return VelocityRecoveryClosure{}, identity.UnavailableError{}
+				}
+				if err := tx.Commit(bounded); err != nil {
+					return VelocityRecoveryClosure{}, identity.UnavailableError{}
+				}
+			}
+			return VelocityRecoveryClosure{}, identity.UnavailableError{}
+		}
+		started = *stored
+		if started.IsZero() || started.After(through.Add(-s.maximumWindow)) {
+			return VelocityRecoveryClosure{}, identity.UnavailableError{}
+		}
+	}
 	if _, err := s.liveLease(bounded, tx, l); err != nil {
 		return VelocityRecoveryClosure{}, err
 	}
 	if err := tx.Commit(bounded); err != nil {
 		return VelocityRecoveryClosure{}, identity.UnavailableError{}
 	}
-	return VelocityRecoveryClosure{state: &velocityRecoveryClosure{lease: l, position: position, from: from, through: through}}, nil
+	return VelocityRecoveryClosure{state: &velocityRecoveryClosure{lease: l, position: position, from: from, through: through, started: started}}, nil
 }

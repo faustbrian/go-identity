@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Add primary full-window coverage checks to recovery closure. The forward
+  coverage migration records journal lifetime in the existing epoch owner;
+  unknown historical provenance requires a full-window warmup, while renewal,
+  takeover and a new projection boot preserve established continuity. Stable
+  cuts alone remain insufficient for native health. Legacy lease/page APIs do
+  not require the optional coverage migration.
+
 - Prepare an opaque durable recovery closure in the existing epoch owner after
   all retained changes are applied. Its writer fence rejects new same-scope
   evidence while preserving unchanged terminal replay; renewal or expiry

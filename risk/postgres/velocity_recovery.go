@@ -132,7 +132,10 @@ func (r VelocityRecovery) Acquire(ctx context.Context, tenant string, epoch [16]
 	var generationText, state string
 	var window int64
 	var leaseExpires *time.Time
-	err = tx.QueryRow(bounded, `SELECT epoch,generation::text,maximum_window_us,state,lease_expires_at FROM `+s.journal.schema+`.velocity_epochs WHERE tenant_id=$1 AND namespace_digest=$2 AND state<>'retired' FOR UPDATE`, tenant, s.journal.namespace).Scan(&previous, &generationText, &window, &state, &leaseExpires)
+	var journalStarted *time.Time
+	// JSON field lookup preserves lease/page compatibility with schemas predating
+	// optional coverage metadata. Missing metadata never grants coverage.
+	err = tx.QueryRow(bounded, `SELECT epoch,generation::text,maximum_window_us,state,lease_expires_at,(to_jsonb(velocity_epochs)->>'journal_started_at')::timestamptz FROM `+s.journal.schema+`.velocity_epochs WHERE tenant_id=$1 AND namespace_digest=$2 AND state<>'retired' FOR UPDATE`, tenant, s.journal.namespace).Scan(&previous, &generationText, &window, &state, &leaseExpires, &journalStarted)
 	missing := err == pgx.ErrNoRows
 	if err != nil && !missing {
 		return VelocityRecoveryLease{}, identity.UnavailableError{}
@@ -142,6 +145,9 @@ func (r VelocityRecovery) Acquire(ctx context.Context, tenant string, epoch [16]
 		return VelocityRecoveryLease{}, identity.UnavailableError{}
 	}
 	generation := uint64(1)
+	if journalStarted != nil && journalStarted.After(now) {
+		return VelocityRecoveryLease{}, identity.UnavailableError{}
+	}
 	if !missing {
 		old, err := strconv.ParseUint(generationText, 10, 64)
 		if err != nil || old == 0 || old == math.MaxUint64 || len(previous) != 16 || bytes.Equal(previous, make([]byte, 16)) || window != s.maximumWindow.Microseconds() || leaseExpires != nil && now.Before(*leaseExpires) || state == "healthy" && bytes.Equal(previous, epoch[:]) {
@@ -171,6 +177,13 @@ func (r VelocityRecovery) Acquire(ctx context.Context, tenant string, epoch [16]
 	}
 	if err != nil {
 		return VelocityRecoveryLease{}, identity.UnavailableError{}
+	}
+	if missing && journalStarted != nil {
+		// Carry the journal's lifetime across boot changes; recovery ownership is
+		// replaced, but durable journal continuity is not restarted.
+		if _, err := tx.Exec(bounded, `UPDATE `+s.journal.schema+`.velocity_epochs SET journal_started_at=$4 WHERE tenant_id=$1 AND namespace_digest=$2 AND epoch=$3`, tenant, s.journal.namespace, epoch[:], *journalStarted); err != nil {
+			return VelocityRecoveryLease{}, identity.UnavailableError{}
+		}
 	}
 	if err := tx.Commit(bounded); err != nil {
 		return VelocityRecoveryLease{}, identity.UnavailableError{}

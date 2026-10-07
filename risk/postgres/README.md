@@ -277,6 +277,18 @@ evidence and decisions. It is **not yet an executable durable risk service**.
   health. Native publication, primary confirmation and admission must still
   agree before a concrete store can enable traffic. Do not treat a captured
   interval, empty page or successful closure as healthy readiness.
+  Install `VelocityCoverageMigrationSource{Base: appliedSource, Version:
+  laterAllocation}` to opt into `PrepareCoveredClosure` and
+  `CheckCoveredClosure`. The existing epoch stores the primary journal start;
+  fresh scopes start at insertion, migrated unknown scopes start at their first
+  covered preparation. Neither is backdated. One full maximum-window warmup is
+  required before initial eligibility; renewal, takeover and a new native boot
+  retain established continuity. Exact-boundary coverage qualifies, shorter
+  coverage denies. Every native effect must follow a committed journal intent;
+  mixed/unparticipating writers or incomplete restored history are unsupported
+  and must never adopt this metadata as proof. Covered closure remains primary
+  custody, not native publication or healthy admission. The original lease/page
+  APIs remain usable on schemas without this optional migration.
 
 - Optional `Config.UseIssuer` installs pure use preparation only after matching
   the issuer's exact current policy and entire retained signing/linkage key set.
