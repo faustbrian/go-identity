@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Add terminal pre-auth release through the exact owner's sealed coordinator
+  noncommit callback, including expired reservations. Preserve original flow
+  intent and cookie while fencing rollback/recovery generations and terminal
+  replay. Install forward `PreAuthReleaseMigrationSource` after the initial
+  pre-auth migration during a bounded constraint-update window; existing rows
+  and applied migration checksums are unchanged.
+
 - Add structural primary pre-auth loading, exact reserved-owner admission and
   predecessor-only generation transfer. Preserve the original cookie, intent,
   remember policy and expiry across takeover; stale owners and terminal flows

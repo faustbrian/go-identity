@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"strconv"
 	"testing"
 	"time"
 
@@ -313,6 +314,63 @@ func testNativePreAuth(t *testing.T, ctx context.Context, pool *database.Pool) {
 			t.Fatal(commitErr)
 		}
 		denied(loserErr)
+	})
+	t.Run("proven noncommit release is terminal even after expiry", func(t *testing.T) {
+		begin := func() preAuthTestTx { return begin(t) }
+		fixture := func(at time.Time) (session.PreAuthTransaction, PreAuthUse) { return fixture(t, at) }
+		insert := func(r session.PreAuthTransaction) { insert(t, r) }
+		denied := func(err error) { denied(t, err) }
+		for _, successor := range []uint64{1, 2} {
+			r, use := fixture(time.Now().UTC().Add(-5*time.Minute + time.Second))
+			insert(r)
+			q := begin()
+			if err := ReservePreAuth(ctx, q, config, r, use); err != nil {
+				t.Fatal(err)
+			}
+			if err := q.Commit(ctx); err != nil {
+				t.Fatal(err)
+			}
+			s, _ := r.Bindings()
+			q = begin()
+			if _, err := q.Exec(ctx, `SELECT pg_sleep(GREATEST(0,EXTRACT(EPOCH FROM($1::timestamptz-clock_timestamp())))+0.02)`, s.Binding.ExpiresAt); err != nil {
+				t.Fatal(err)
+			}
+			denied(RequireReservedPreAuth(ctx, q, config, r, use))
+			changed := use
+			changed.Fingerprint[0]++
+			denied(releasePreAuth(ctx, q, config, r, changed, successor))
+			var invalid identity.InvalidInputError
+			if err := releasePreAuth(ctx, q, config, r, use, 3); !errors.As(err, &invalid) {
+				t.Fatal("skipped release generation accepted", err)
+			}
+			if err := releasePreAuth(ctx, q, config, r, use, successor); err != nil {
+				t.Fatal("expired reserved state cannot release", err)
+			}
+			denied(releasePreAuth(ctx, q, config, r, use, successor))
+			if err := q.Rollback(ctx); err != nil {
+				t.Fatal(err)
+			}
+			q = begin()
+			if err := releasePreAuth(ctx, q, config, r, use, successor); err != nil {
+				t.Fatal("rollback terminalized release", err)
+			}
+			if err := q.Commit(ctx); err != nil {
+				t.Fatal(err)
+			}
+			q = begin()
+			denied(ReservePreAuth(ctx, q, config, r, use))
+			denied(FinalizePreAuth(ctx, q, config, r, use))
+			denied(releasePreAuth(ctx, q, config, r, use, successor))
+			var state, generation, version string
+			var payload []byte
+			if err := q.QueryRow(ctx, `SELECT state,generation::text,version::text,record FROM session_store.preauth_transactions WHERE flow_id=$1`, string(s.Binding.ID)).Scan(&state, &generation, &version, &payload); err != nil || state != "released" || generation != strconv.FormatUint(successor, 10) || version != "3" {
+				t.Fatal("release state not terminal", err)
+			}
+			want, _ := encodePreAuth(r)
+			if !bytes.Equal(want, payload) {
+				t.Fatal("release changed original flow")
+			}
+		}
 	})
 	t.Run("database time after lock wait", func(t *testing.T) {
 		begin := func() preAuthTestTx { return begin(t) }

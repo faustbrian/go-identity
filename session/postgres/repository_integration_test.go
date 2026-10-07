@@ -108,6 +108,13 @@ func TestSessionPostgresIntegration(t *testing.T) {
 		t.Fatal(err)
 	}
 	migrate(fixtureSource(append(all, preAuthHistory...)))
+	checkPreAuthUpgrade := seedPreAuthReleaseUpgrade(t, ctx, db)
+	releaseHistory, err := (PreAuthReleaseMigrationSource{Schema: "session_store", Version: 12}).Load(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	migrate(fixtureSource(append(append(all, preAuthHistory...), releaseHistory...)))
+	checkPreAuthUpgrade()
 	pool, err := database.Connect(ctx, database.Config{DSN: dsn, MaxConns: 2, Configure: func(c *database.PoolConfig) error { c.ConnConfig.Database = name; return nil }})
 	if err != nil {
 		t.Fatal("pool failed")

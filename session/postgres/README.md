@@ -36,9 +36,25 @@ operations must use the same borrowed primary transaction as other participants.
 
 These native operations do not authenticate a user, expose a cookie or constitute
 complete usable initiation. Owned issuance/recovery, proven-noncommit reservation
-release and OTP/other workflow registration remain under development.
+coordination and OTP/other workflow registration remain under development.
 Retain original digest keys and terminal records until the owned retention and
 recovery policies authorize retirement; no cleanup/down migration is provided.
+
+Install `PreAuthReleaseMigrationSource` in a later allocated history slot after
+`PreAuthMigrationSource`. This forward transactional constraint replacement adds
+distinct `released` terminal state, scans existing rows and requires a bounded
+maintenance window. Existing issued, reserved and consumed rows stay unchanged.
+Never rewrite the applied initial migration or renumber either history slot.
+
+`ReleasePreAuth` accepts only the registered owner's live sealed
+`identitypostgres.OTPReleaseWork`. The existing coordinator supplies rollback
+or unanimous primary noncommit authority; neither scalar custody nor timeout
+does. Release preserves the original record and terminalizes the exact previous
+reservation, even after original flow expiry. It permits the unchanged rollback
+generation or coordinator's immediate recovery successor only. It does not
+reissue/reactivate a flow, reveal a cookie, authenticate a user or register a
+native OTP workflow. The callback must abort on any error and cannot retain its
+handle. Receipt replay and ambiguity remain the sole coordinator's responsibility.
 
 ### Owned self-session device labels
 

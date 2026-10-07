@@ -165,6 +165,35 @@ func preAuthWriteResult(ctx context.Context, count int64, err error) error {
 }
 
 func lockPreAuth[R SessionRows](ctx context.Context, q SessionQueryer[R], c Config, record session.PreAuthTransaction, s session.PreAuthTransactionSpec, canonical []byte, use *PreAuthUse, update bool) error {
+	if err := lockPreAuthRecord(ctx, q, c, s, canonical, use, update); err != nil {
+		return err
+	}
+	clockRows, err := q.Query(ctx, `SELECT clock_timestamp()`)
+	if err != nil {
+		return readError(ctx, err)
+	}
+	if nilSessionHandle(clockRows) {
+		return identity.UnavailableError{}
+	}
+	var now time.Time
+	err = readSessionAdmission(clockRows, &now)
+	clockRows.Close()
+	if err != nil {
+		return admissionError(ctx, err)
+	}
+	if ctx.Err() != nil {
+		return readError(ctx, ctx.Err())
+	}
+	if record.Check(now, s.Binding, s.Cookie) != nil {
+		return identity.ForbiddenError{}
+	}
+	return nil
+}
+
+// Original record exclusion is shared by live admission and proven-noncommit
+// release. Only live admission checks expiry: expiry cannot strand an owner
+// after its protected transaction is authoritatively proven not to have committed.
+func lockPreAuthRecord[R SessionRows](ctx context.Context, q SessionQueryer[R], c Config, s session.PreAuthTransactionSpec, canonical []byte, use *PreAuthUse, update bool) error {
 	state, version, lock := "issued", s.Version, "SHARE"
 	if use != nil {
 		state, version = "reserved", s.Version+1
@@ -198,24 +227,8 @@ func lockPreAuth[R SessionRows](ctx context.Context, q SessionQueryer[R], c Conf
 	if !bytes.Equal(canonical, payload) {
 		return identity.ForbiddenError{}
 	}
-	clockRows, err := q.Query(ctx, `SELECT clock_timestamp()`)
-	if err != nil {
-		return readError(ctx, err)
-	}
-	if nilSessionHandle(clockRows) {
-		return identity.UnavailableError{}
-	}
-	var now time.Time
-	err = readSessionAdmission(clockRows, &now)
-	clockRows.Close()
-	if err != nil {
-		return admissionError(ctx, err)
-	}
 	if ctx.Err() != nil {
 		return readError(ctx, ctx.Err())
-	}
-	if record.Check(now, s.Binding, s.Cookie) != nil {
-		return identity.ForbiddenError{}
 	}
 	return nil
 }
