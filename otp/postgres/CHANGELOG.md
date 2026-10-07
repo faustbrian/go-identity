@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Freeze native Send initiation through the existing kernel request-key mapping.
+  Preserve primary flow, authority and recipient/suppression state across
+  restart without repeating preparation or allowing later recipient appearance
+  to change the original choice. Bind complete request/configuration and a
+  dedicated bearer commitment; separate bearer verification remains mandatory.
+  Preparation causes no OTP, delivery, counter or journal effects. Public Send
+  and owned authentication-risk orchestration remain under development.
+
 - Authenticate original Send input against the kernel's retained request-key
   provenance and immutable native configuration. Preserve original risk
   dimensions, command attempt, recipient/suppression choice, flow, authority

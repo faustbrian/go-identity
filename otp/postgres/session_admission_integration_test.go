@@ -18,6 +18,7 @@ import (
 	authoritypg "github.com/faustbrian/go-authorization/postgres"
 	"github.com/faustbrian/go-clock"
 	identity "github.com/faustbrian/go-identity"
+	deliverycore "github.com/faustbrian/go-identity/delivery"
 	"github.com/faustbrian/go-identity/otp"
 	kernel "github.com/faustbrian/go-identity/postgres"
 	sessionpg "github.com/faustbrian/go-identity/session/postgres"
@@ -28,7 +29,7 @@ import (
 // The protected email and audit/outbox effects are existing deliberate SQL
 // seams. Session/credential authority, OTP and coordinator execution are real.
 func TestNativeSessionOTPPrimaryComposition(t *testing.T) {
-	for _, mode := range []string{"metered-correct", "metered-wrong", "metered-cap", "metered-concurrent-first", "metered-concurrent-replay", "metered-final-correct", "metered-final-wrong", "metered-disabled", "metered-audit-failure", "consume", "wrong-denial", "takeover", "rollback", "recovery-revoked", "recovery-unknown", "session-revoked", "family-revoked", "user-blocked", "credential-disabled", "stale-authorization", "stale-directory", "user-epoch", "identifier-epoch", "credential-epoch", "credential-version", "session-expired", "freshness-expired", "freshness-lock-expiry", "credential-lock-expiry"} {
+	for _, mode := range []string{"metered-correct", "metered-wrong", "metered-cap", "metered-concurrent-first", "metered-concurrent-replay", "metered-final-correct", "metered-final-wrong", "metered-disabled", "metered-audit-failure", "consume", "wrong-denial", "takeover", "rollback", "recovery-revoked", "recovery-unknown", "session-revoked", "family-revoked", "user-blocked", "credential-disabled", "stale-authorization", "stale-directory", "user-epoch", "identifier-epoch", "credential-epoch", "credential-version", "session-expired", "freshness-expired", "freshness-lock-expiry", "credential-lock-expiry", "initiation", "initiation-revoked", "initiation-expired", "initiation-near-expiry"} {
 		t.Run(mode, func(t *testing.T) {
 			ctx, db, peer := otpDatabase(t)
 			directory := kernel.DirectoryAuthorityMigrationSource{Base: kernel.CredentialMigrationSource{Base: kernel.StatusMigrationSource{Base: kernel.MigrationSource{}, Version: 12}, Version: 13}, Version: 14, GlobalAuthorityID: "deployment", TenantIDs: []identity.TenantID{"tenant"}}
@@ -54,11 +55,14 @@ func TestNativeSessionOTPPrimaryComposition(t *testing.T) {
 				t.Fatal(err)
 			}
 			config, command, attempt, original := nativeSessionFixture(t)
-			if mode == "session-expired" {
+			if mode == "session-expired" || mode == "initiation-expired" {
 				config, command, attempt, original = nativeSessionFixture(t, 2*time.Hour)
 			}
 			if mode == "freshness-expired" {
 				config.Session.FreshnessLimit = time.Nanosecond
+			}
+			if mode == "initiation-near-expiry" {
+				config.Session.FreshnessLimit = time.Minute + 30*time.Second
 			}
 			if mode == "freshness-lock-expiry" {
 				config.Session.FreshnessLimit = time.Minute + time.Second
@@ -153,6 +157,7 @@ func TestNativeSessionOTPPrimaryComposition(t *testing.T) {
 				t.Fatal(err)
 			}
 			changes := map[string]string{"session-revoked": `UPDATE session_store.sessions SET state='revoked'`, "family-revoked": `UPDATE session_store.families SET state='revoked'`, "user-blocked": `UPDATE identity.users SET status='banned'`, "credential-disabled": `UPDATE identity.credential_references SET enabled=false`, "stale-authorization": `UPDATE authorization_subject_authorities SET version=10`, "stale-directory": `UPDATE identity.tenant_authorities SET version=4`, "user-epoch": `UPDATE identity.users SET authority_version=5`, "identifier-epoch": `UPDATE identity.users SET identifier_version=6`, "credential-epoch": `UPDATE identity.users SET credential_version=7`, "credential-version": `UPDATE identity.credential_references SET version=15`}
+			changes["initiation-revoked"] = changes["session-revoked"]
 			if strings.HasPrefix(mode, "metered-final-") {
 				// One prior check and one wrong consume share the total budget.
 				if _, err := db.Exec(ctx, `UPDATE otp_store.challenges SET used_attempts=1,checks=1,version=2; UPDATE otp_store.challenges SET used_attempts=2,failed_attempts=1,version=3`); err != nil {
@@ -175,6 +180,99 @@ func TestNativeSessionOTPPrimaryComposition(t *testing.T) {
 			})
 			repo, _ := kernel.NewRepository(pool, kernel.Config{MaximumDuration: time.Second})
 			spec, _ := command.Feature()
+			if strings.HasPrefix(mode, "initiation") {
+				migrations, err := (kernel.RequestKeyPreparationMigrationSource{Base: kernel.RequestKeyMigrationSource{Base: kernel.MigrationSource{}, Version: 20}, Version: 21}).Load(ctx)
+				if err != nil {
+					t.Fatal(err)
+				}
+				for _, migration := range migrations {
+					if migration.Version() >= 20 {
+						if _, err := db.Exec(ctx, migration.UpSQL()); err != nil {
+							t.Fatal(err)
+						}
+					}
+				}
+				if _, err := db.Exec(ctx, `INSERT INTO identity.identifiers(tenant_id,user_id,identifier_id,kind,canonical_value,verified,is_primary,version,verification_state,verification_version,verified_at) VALUES('tenant','user','recipient','email',$1,true,true,1,2,1,clock_timestamp())`, cb.Scope.Destination.Value()); err != nil {
+					t.Fatal(err)
+				}
+				profile, err := otp.NewCodeProfile(otp.CodeProfileSpec{Purpose: otp.PurposeEmailVerification, Alphabet: "0123456789", Length: 6, TTL: time.Minute, ResendInterval: 30 * time.Second, MaximumSends: 3, Attempts: 3, Replacement: otp.ReplacePrevious})
+				if err != nil {
+					t.Fatal(err)
+				}
+				policy, err := otp.NewAttemptPolicy(profile, otp.CheckPolicySpec{Enabled: true, MaximumChecks: 2, LockoutAfter: time.Minute})
+				if err != nil {
+					t.Fatal(err)
+				}
+				owner := issuanceDeliveryOwner(t)
+				renderer, err := deliverycore.NewTemplateRenderer(preparedSendTemplates("{{.code}}"))
+				if err != nil {
+					t.Fatal(err)
+				}
+				p, err = newPreparedSendContributor(p, owner, preparedSendConfig{preparation: otp.SendPreparationConfig{Policy: policy, Renderer: renderer, TemplateID: "otp-code", TemplateVersion: 1, LocaleChain: []string{"en"}}, provider: 1, contributors: []kernel.ContributorDescriptor{repo.Descriptor(), p.Descriptor(), owner.Descriptor()}, templates: preparedSendTemplates("{{.code}}")})
+				if err != nil {
+					t.Fatal(err)
+				}
+				p, err = newSendInitiationContributor(p, pool, sendInitiationConfig{policyID: spec.Binding.PolicyID, policyVersion: spec.Binding.PolicyVersion, preAuthAction: "identity.email.verify", intentKey: [32]byte{0x67}, identifierKey: [32]byte{0x68}, maximumDuration: time.Second})
+				if err != nil {
+					t.Fatal(err)
+				}
+				registry, err := kernel.NewContributorRegistry([]kernel.Contributor{repo, p, owner})
+				if err != nil {
+					t.Fatal(err)
+				}
+				keys, err := kernel.NewRequestKeyConfig("environment", [32]byte{0x69}, kernel.CommandQueryPolicy{Authorization: contributorQueryPolicy{}, Clock: clock.System{}, PolicyVersion: 9})
+				if err != nil {
+					t.Fatal(err)
+				}
+				coordinator, err := kernel.NewCoordinatorWithRequestKeys(pool, registry, kernel.CoordinatorConfig{MaximumDuration: 2 * time.Second, LeaseDuration: 3 * time.Second, CurrentFingerprintKeyVersion: 1, RetainedFingerprintKeys: map[uint32][32]byte{1: {1}}}, keys)
+				if err != nil {
+					t.Fatal(err)
+				}
+				op := issuanceOperation(identity.FeatureSubjectUser)
+				token, _ := command.SessionToken()
+				intent, err := p.sendRequestIntent(sendInitiatingRequest{userID: "user", flowKind: otp.FlowAuthorizationAuthenticatedSession, flowID: s.SessionID, purpose: otp.PurposeEmailVerification, channel: otp.ChannelEmail, destination: cb.Scope.Destination, target: cb.Scope.TargetID, network: "192.0.2.8", device: "device-original"}, token)
+				if err != nil {
+					t.Fatal(err)
+				}
+				scope := kernel.RequestKeyScope{TenantID: "tenant", ActorID: "user", ActorKind: "user", Method: "POST", RouteID: op.OperationID}
+				caller := authorization.DecisionContext{PolicyRevision: 9, Request: authorization.Request{Subject: authorization.Subject{ID: "user", Kind: "user"}, Tenant: "tenant", Action: authorization.Action(op.OperationID), Resource: authorization.Resource{Type: "identity.request-admission", ID: authorization.ResourceID(op.OperationID)}}}
+				key, _ := identity.NewIdempotencyKey([]byte("native-session-send"))
+				feature := kernel.FeatureRegistration{Contributor: p.Descriptor(), Operation: op}
+				binding, wire, err := coordinator.ResolvePreparedRequestKey(ctx, scope, key, intent, caller, feature, p)
+				if mode != "initiation" && mode != "initiation-near-expiry" {
+					if err == nil || binding != (kernel.RequestKeyPreparationBinding{}) || len(wire) != 0 {
+						t.Fatal("revoked or expired session produced initiating custody")
+					}
+					return
+				}
+				if err != nil {
+					t.Fatal("native session initiating request", err)
+				}
+				retained, err := p.restoreSendInitiation(ctx, binding, wire, token)
+				if err != nil || retained.suppressed {
+					t.Fatal("native session original restoration", err)
+				}
+				flow, _ := retained.request.continuation.Bindings()
+				bound, ok := flow.Authorization.AuthenticatedSession()
+				originalBinding, e := bound.Bindings()
+				if !ok || e != nil || !originalBinding.IssuedAt.Equal(s.IssuedAt) || !originalBinding.Authentication.Proof.IssuedAt.Equal(s.Authentication.Proof.IssuedAt) || originalBinding.Remember != s.Remember || originalBinding.Lookup != s.Lookup || retained.request.authority.UserAuthorityVersion != 4 || !retained.request.expiresAt.Before(s.IssuedAt.Add(remember.AbsoluteTTL)) {
+					t.Fatal("session original timeline or authority renewed")
+				}
+				if mode == "initiation-near-expiry" && (retained.request.expiresAt.After(s.Authentication.Proof.IssuedAt.Add(config.Session.FreshnessLimit)) || retained.request.expiresAt.Sub(retained.request.issuedAt) >= time.Minute) {
+					t.Fatal("near-expiry session gained new freshness")
+				}
+				if _, err := db.Exec(ctx, `UPDATE identity.users SET authority_version=10`); err != nil {
+					t.Fatal(err)
+				}
+				got, data, err := coordinator.ResolvePreparedRequestKey(ctx, scope, key, intent, caller, feature, p)
+				if err != nil || got != binding || !bytes.Equal(data, wire) {
+					t.Fatal("session retry recaptured current authority", err)
+				}
+				if _, err := p.restoreSendInitiation(ctx, binding, wire, auth.BearerCredential{}); err == nil {
+					t.Fatal("stored session became bearer possession")
+				}
+				return
+			}
 			participants := []kernel.Contributor{repo, &contributorAudit{}, &contributorLifecycle{apply: true}, &contributorFeature{op: spec.Operation, apply: true, fail: mode == "rollback"}, p}
 			if strings.HasPrefix(mode, "metered-") {
 				participants = []kernel.Contributor{repo, &contributorAudit{fail: mode == "metered-audit-failure"}, &contributorLifecycle{}, p}

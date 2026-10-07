@@ -54,6 +54,7 @@ type Contributor struct {
 	preauth                   *preAuthProfile
 	session                   *sessionAdmissionProfile
 	send                      *preparedSendProfile
+	initiation                *sendInitiationProfile
 }
 
 var _ kernel.OTPAttemptContributor = (*Contributor)(nil)

@@ -95,6 +95,9 @@ func (p *Contributor) sendInitiationAAD(b kernel.RequestKeyPreparationBinding) (
 	frame = binary.BigEndian.AppendUint64(frame, b.PolicyVersion)
 	frame = append(frame, b.IntentDigest[:]...)
 	frame = append(frame, p.send.configuration[:]...)
+	if p.initiation != nil {
+		frame = append(frame, p.initiation.configuration[:]...)
+	}
 	digest := sha256.Sum256(frame)
 	clear(frame)
 	return envelope.NewContext(map[string]string{"profile": "identity-otp-initiation-v1", "binding": base64.RawURLEncoding.EncodeToString(digest[:])})
@@ -191,7 +194,13 @@ func (p *Contributor) sealSendInitiation(parent context.Context, b kernel.Reques
 	if !initiationBindingMatches(spec.Binding, b) {
 		return nil, ErrInvalidCommand
 	}
-	plain, err := encodeSendInitiation(request, spec.Binding, risk, suppressed)
+	return p.sealSendInitiationRecord(ctx, aad, request, spec.Binding, risk, suppressed)
+}
+
+// Request-key preparation has structural primary input, not a raw bearer.
+// Keep its encryption path separate from authenticated command restoration.
+func (p *Contributor) sealSendInitiationRecord(ctx context.Context, aad envelope.Context, request sendRequestRecord, binding identity.CommandBinding, risk sendInitiationRisk, suppressed bool) ([]byte, error) {
+	plain, err := encodeSendInitiation(request, binding, risk, suppressed)
 	if err != nil {
 		return nil, err
 	}

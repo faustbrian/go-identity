@@ -1,14 +1,28 @@
 # OTP PostgreSQL
 
+Private native request-key preparation now composes primary kernel, session and
+authorization readers. A closed initiating request binds explicit user/flow,
+purpose, channel, canonical destination, workflow target, network/device input,
+dedicated keyed bearer commitment and immutable configuration. It retains the
+original full flow, authority epochs, recipient/suppression decision and
+database-owned issue/expiry times in the kernel's existing request-key mapping.
+Matching restart skips preparation reads, competing candidates return the same
+persisted winner, and a later recipient cannot replace original suppression.
+Install `RequestKeyPreparationMigrationSource` after `RequestKeyMigrationSource`
+and register the exact native owner pointer. Preparation performs no risk
+assessment, OTP generation, counter charge, reservation, delivery or journal
+execution. It cannot prove bearer possession or current permission.
+
 The private Send initiation envelope authenticates the kernel's complete
 `RequestKeyPreparationBinding` and immutable native configuration. It retains
 the original flow, recipient or suppression branch, authority, times and
 authentication-lane identifier/network/device dimensions. Its attempt identity
 is the original server-issued command ID. Restoration requires separate bearer
 possession and never renews authority, freshness or expiry. Suppressed originals
-cannot become ordinary issuance commands. This codec does not itself implement
-native request-key preparation, current risk admission or a public Send service;
-those remain implementation work. Existing custody profiles are unchanged.
+cannot become ordinary issuance commands. The codec is distinct from native
+primary preparation and grants no current risk admission or public Send service.
+Those public workflows remain implementation work. Existing custody profiles
+are unchanged.
 
 Native Send can retain an identity-owned recipient snapshot separately from
 the original authenticated subject or anonymous flow. Its new request profile
@@ -42,8 +56,8 @@ together; terminal replay does not generate again. Install the kernel's optional
 `PreparationMigrationSource` and every retained digest-key metadata version.
 
 This remains private platform composition, not a public Send endpoint or a
-caller-supplied recipient/risk clearance seam. Native recipient resolution,
-identifier/IP/device risk admission, enumeration-safe no-op selection and the
+caller-supplied recipient/risk clearance seam. Identifier/IP/device risk
+admission, complete enumeration-safe no-op execution and the
 public Send service remain unfinished. Do not activate these private phases from
 application request handlers. Full release/composition gates remain pending.
 

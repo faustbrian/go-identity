@@ -19,6 +19,7 @@ import (
 	auth "github.com/faustbrian/go-authentication"
 	"github.com/faustbrian/go-authorization"
 	authoritypg "github.com/faustbrian/go-authorization/postgres"
+	"github.com/faustbrian/go-clock"
 	identity "github.com/faustbrian/go-identity"
 	deliverycore "github.com/faustbrian/go-identity/delivery"
 	deliverypg "github.com/faustbrian/go-identity/delivery/postgres"
@@ -33,11 +34,14 @@ import (
 )
 
 func TestNativeIssuanceCoordinatorAtomicity(t *testing.T) {
-	for _, mode := range []string{"committed", "anonymous-committed", "anonymous-delivery-rollback", "audit-rollback", "delivery-rollback", "blocked", "user-epoch", "identifier-epoch", "credential-epoch", "authorization-epoch", "directory-epoch", "missing-flow", "prepared-committed", "prepared-anonymous-committed", "prepared-delivery-rollback", "prepared-audit-rollback", "prepared-blocked", "prepared-missing-flow", "prepared-recipient-committed", "prepared-recipient-stale", "prepared-anonymous-recipient-committed", "recipient-committed", "recipient-stale", "anonymous-recipient-committed"} {
+	for _, mode := range []string{"committed", "anonymous-committed", "anonymous-delivery-rollback", "audit-rollback", "delivery-rollback", "blocked", "user-epoch", "identifier-epoch", "credential-epoch", "authorization-epoch", "directory-epoch", "missing-flow", "prepared-committed", "prepared-anonymous-committed", "prepared-delivery-rollback", "prepared-audit-rollback", "prepared-blocked", "prepared-missing-flow", "prepared-recipient-committed", "prepared-recipient-stale", "prepared-anonymous-recipient-committed", "recipient-committed", "recipient-stale", "anonymous-recipient-committed", "initiated-prepared-recipient-committed", "initiated-prepared-recipient-stale", "initiated-prepared-anonymous-recipient-committed", "initiated-prepared-recipient-suppressed", "initiated-prepared-anonymous-recipient-suppressed"} {
 		t.Run(mode, func(t *testing.T) {
+			initiated := strings.HasPrefix(mode, "initiated-")
+			mode = strings.TrimPrefix(mode, "initiated-")
 			preparedMode := strings.HasPrefix(mode, "prepared-")
 			baseMode := strings.TrimPrefix(mode, "prepared-")
 			recipientMode := strings.Contains(baseMode, "recipient-")
+			suppressedMode := strings.HasSuffix(baseMode, "suppressed")
 			committed := baseMode == "committed" || baseMode == "anonymous-committed" || baseMode == "recipient-committed" || baseMode == "anonymous-recipient-committed"
 			ctx, db, _, preauth := admissionDatabase(t)
 			directory := kernel.DirectoryAuthorityMigrationSource{Base: kernel.CredentialMigrationSource{Base: kernel.StatusMigrationSource{Base: kernel.MigrationSource{}, Version: 12}, Version: 13}, Version: 14, GlobalAuthorityID: "deployment", TenantIDs: []identity.TenantID{"tenant"}}
@@ -169,7 +173,7 @@ func TestNativeIssuanceCoordinatorAtomicity(t *testing.T) {
 			auditOwner := &contributorAudit{fail: baseMode == "audit-rollback"}
 			lifecycleOwner := &contributorLifecycle{apply: true}
 			var selected *kernel.RecipientRecord
-			if recipientMode {
+			if recipientMode && !suppressedMode {
 				flow, _ := ab.Continuation.Bindings()
 				if _, err := db.Exec(ctx, `INSERT INTO identity.identifiers(tenant_id,user_id,identifier_id,kind,canonical_value,verified,is_primary,version,verification_state,verification_version,verified_at) VALUES('tenant','user','recipient','email',$1,true,true,1,2,1,clock_timestamp())`, flow.Scope.Destination.Value()); err != nil {
 					t.Fatal(err)
@@ -202,7 +206,7 @@ func TestNativeIssuanceCoordinatorAtomicity(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				if recipientMode {
+				if recipientMode && !suppressedMode {
 					// Reconstruct a fresh owner from authenticated original input before
 					// native generation. Later primary drift must still deny admission.
 					binding := kernel.RequestKeyPreparationBinding{Namespace: "environment", Scope: kernel.RequestKeyScope{TenantID: spec.Binding.TenantID, ActorID: spec.Binding.ActorID, ActorKind: spec.Binding.ActorKind, Method: "POST", RouteID: spec.Operation.OperationID}, Admission: kernel.RequestKeyAdmission{CommandID: spec.Binding.CommandID, FingerprintKeyVersion: 1}, Feature: kernel.FeatureRegistration{Contributor: store.Descriptor(), Operation: spec.Operation}, PolicyVersion: 9, IntentDigest: [32]byte{0x17}}
@@ -225,6 +229,25 @@ func TestNativeIssuanceCoordinatorAtomicity(t *testing.T) {
 					store, command, participant = &fresh, restored.original, &fresh
 				}
 			}
+			if initiated {
+				originalFlow, _ := original.Bindings()
+				store, err = newSendInitiationContributor(store, pool, sendInitiationConfig{policyID: spec.Binding.PolicyID, policyVersion: spec.Binding.PolicyVersion, preAuthAction: originalFlow.Binding.Intent.Action, intentKey: [32]byte{0x67}, identifierKey: [32]byte{0x68}, maximumDuration: time.Second})
+				if err != nil {
+					t.Fatal(err)
+				}
+				participant = store
+				ms, err := (kernel.RequestKeyPreparationMigrationSource{Base: kernel.RequestKeyMigrationSource{Base: kernel.MigrationSource{}, Version: 20}, Version: 21}).Load(ctx)
+				if err != nil {
+					t.Fatal(err)
+				}
+				for _, m := range ms {
+					if m.Version() >= 20 {
+						if _, err := db.Exec(ctx, m.UpSQL()); err != nil {
+							t.Fatal(err)
+						}
+					}
+				}
+			}
 			registry, err := kernel.NewContributorRegistry([]kernel.Contributor{repo, auditOwner, lifecycleOwner, participant, delivery})
 			if err != nil {
 				t.Fatal(err)
@@ -232,6 +255,136 @@ func TestNativeIssuanceCoordinatorAtomicity(t *testing.T) {
 			coordinator, err := kernel.NewCoordinator(pool, registry, kernel.CoordinatorConfig{MaximumDuration: 2 * time.Second, LeaseDuration: 3 * time.Second, CurrentFingerprintKeyVersion: 1, RetainedFingerprintKeys: map[uint32][32]byte{1: {1}}})
 			if err != nil {
 				t.Fatal(err)
+			}
+			if initiated {
+				policy := kernel.CommandQueryPolicy{Authorization: contributorQueryPolicy{}, Clock: clock.System{}, PolicyVersion: 9}
+				keys, err := kernel.NewRequestKeyConfig("environment", [32]byte{0x69}, policy)
+				if err != nil {
+					t.Fatal(err)
+				}
+				coordinator, err = kernel.NewCoordinatorWithRequestKeys(pool, registry, kernel.CoordinatorConfig{MaximumDuration: 2 * time.Second, LeaseDuration: 3 * time.Second, CurrentFingerprintKeyVersion: 1, RetainedFingerprintKeys: map[uint32][32]byte{1: {1}}}, keys)
+				if err != nil {
+					t.Fatal(err)
+				}
+				flow, _ := ab.Continuation.Bindings()
+				originalFlow, _ := original.Bindings()
+				input := sendInitiatingRequest{userID: spec.Binding.UserID, flowKind: otp.FlowAuthorizationPreAuthTransaction, flowID: string(originalFlow.Binding.ID), purpose: otp.PurposeSignin, channel: otp.ChannelEmail, destination: flow.Scope.Destination, target: flow.Scope.TargetID, network: "192.0.2.8", device: "device-original"}
+				intent, err := store.sendRequestIntent(input, cookie)
+				if err != nil {
+					t.Fatal(err)
+				}
+				scope := kernel.RequestKeyScope{TenantID: spec.Binding.TenantID, ActorID: spec.Binding.ActorID, ActorKind: spec.Binding.ActorKind, Method: "POST", RouteID: spec.Operation.OperationID}
+				caller := authorization.DecisionContext{PolicyRevision: 9, Request: authorization.Request{Subject: authorization.Subject{ID: authorization.SubjectID(scope.ActorID), Kind: scope.ActorKind}, Tenant: authorization.TenantID(scope.TenantID), Action: authorization.Action(scope.RouteID), Resource: authorization.Resource{Type: "identity.request-admission", ID: authorization.ResourceID(scope.RouteID)}}}
+				key, _ := identity.NewIdempotencyKey([]byte("native-original-send"))
+				feature := kernel.FeatureRegistration{Contributor: store.Descriptor(), Operation: spec.Operation}
+				type candidate struct {
+					binding kernel.RequestKeyPreparationBinding
+					wire    []byte
+					err     error
+				}
+				results := make(chan candidate, 4)
+				start := make(chan struct{})
+				for range 4 {
+					go func() {
+						<-start
+						b, w, e := coordinator.ResolvePreparedRequestKey(ctx, scope, key, intent, caller, feature, store)
+						results <- candidate{b, w, e}
+					}()
+				}
+				close(start)
+				candidates := make([]candidate, 4)
+				for i := range candidates {
+					candidates[i] = <-results
+				}
+				winner := candidates[0]
+				if winner.err != nil {
+					t.Fatal("native initiating request", winner.err)
+				}
+				binding, wire := winner.binding, winner.wire
+				for _, got := range candidates[1:] {
+					if got.err != nil || got.binding != binding || !bytes.Equal(got.wire, wire) {
+						t.Fatal("competing candidate did not restore sole winner", got.err)
+					}
+				}
+				restored, err := store.restoreSendInitiation(ctx, binding, wire, cookie)
+				if err != nil || restored.suppressed != suppressedMode || restored.attempt != string(binding.Admission.CommandID) {
+					t.Fatal("native original restoration", err)
+				}
+				if !suppressedMode {
+					command = restored.original
+					spec, _ = command.Feature()
+				}
+				// Matching correlation must not need any native preparation reads.
+				if _, err := db.Exec(ctx, `ALTER TABLE identity.identifiers RENAME TO native_identifiers_unavailable`); err != nil {
+					t.Fatal(err)
+				}
+				fresh, err := newSendInitiationContributor(store, pool, sendInitiationConfig{policyID: spec.Binding.PolicyID, policyVersion: spec.Binding.PolicyVersion, preAuthAction: originalFlow.Binding.Intent.Action, intentKey: [32]byte{0x67}, identifierKey: [32]byte{0x68}, maximumDuration: time.Second})
+				if err != nil {
+					t.Fatal(err)
+				}
+				freshRegistry, err := kernel.NewContributorRegistry([]kernel.Contributor{repo, auditOwner, lifecycleOwner, fresh, delivery})
+				if err != nil {
+					t.Fatal(err)
+				}
+				freshCoordinator, err := kernel.NewCoordinatorWithRequestKeys(pool, freshRegistry, kernel.CoordinatorConfig{MaximumDuration: 2 * time.Second, LeaseDuration: 3 * time.Second, CurrentFingerprintKeyVersion: 1, RetainedFingerprintKeys: map[uint32][32]byte{1: {1}}}, keys)
+				if err != nil {
+					t.Fatal(err)
+				}
+				retryBinding, retryWire, err := freshCoordinator.ResolvePreparedRequestKey(ctx, scope, key, intent, caller, feature, fresh)
+				if err != nil || retryBinding != binding || !bytes.Equal(retryWire, wire) {
+					t.Fatal("matching restart repeated native reads or changed original", err)
+				}
+				if _, err := fresh.restoreSendInitiation(ctx, retryBinding, retryWire, auth.BearerCredential{}); err == nil {
+					t.Fatal("stored original became bearer possession")
+				}
+				coldKey, _ := identity.NewIdempotencyKey([]byte("cold-preparation-needs-primary"))
+				if got, data, err := freshCoordinator.ResolvePreparedRequestKey(ctx, scope, coldKey, intent, caller, feature, fresh); err == nil || got != (kernel.RequestKeyPreparationBinding{}) || len(data) != 0 {
+					t.Fatal("cold preparation ignored failed primary reads")
+				}
+				cancelled, cancel := context.WithCancel(ctx)
+				cancel()
+				if got, data, err := freshCoordinator.ResolvePreparedRequestKey(cancelled, scope, coldKey, intent, caller, feature, fresh); err == nil || got != (kernel.RequestKeyPreparationBinding{}) || len(data) != 0 {
+					t.Fatal("cancelled preparation returned original custody")
+				}
+				input.device = "changed-device"
+				changedIntent, err := fresh.sendRequestIntent(input, cookie)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if got, data, err := freshCoordinator.ResolvePreparedRequestKey(ctx, scope, key, changedIntent, caller, feature, fresh); err == nil || got != (kernel.RequestKeyPreparationBinding{}) || len(data) != 0 {
+					t.Fatal("changed initiating request adopted old original")
+				}
+				if _, err := db.Exec(ctx, `ALTER TABLE identity.native_identifiers_unavailable RENAME TO identifiers`); err != nil {
+					t.Fatal(err)
+				}
+				var preparedEffects int
+				if err := db.QueryRow(ctx, `SELECT (SELECT count(*) FROM otp_store.challenges)+(SELECT count(*) FROM otp_store.send_families)+(SELECT count(*) FROM identity.delivery_intents)+(SELECT count(*) FROM identity.commands)`).Scan(&preparedEffects); err != nil || preparedEffects != 0 {
+					t.Fatal("request-key preparation caused domain or journal effects", err)
+				}
+				if suppressedMode {
+					if _, ok := restored.original.Feature(); ok || restored.request.recipient != nil {
+						t.Fatal("suppressed request retained executable issuance")
+					}
+					if _, err := db.Exec(ctx, `INSERT INTO identity.identifiers(tenant_id,user_id,identifier_id,kind,canonical_value,verified,is_primary,version,verification_state,verification_version,verified_at) VALUES('tenant','user','recipient','email',$1,true,true,1,2,1,clock_timestamp())`, flow.Scope.Destination.Value()); err != nil {
+						t.Fatal(err)
+					}
+					got, data, err := freshCoordinator.ResolvePreparedRequestKey(ctx, scope, key, intent, caller, feature, fresh)
+					if err != nil || got != binding || !bytes.Equal(data, wire) {
+						t.Fatal("recipient appearance replaced original suppression", err)
+					}
+					retained, err := fresh.restoreSendInitiation(ctx, got, data, cookie)
+					if _, ok := retained.original.Feature(); err != nil || !retained.suppressed || ok || retained.request.recipient != nil {
+						t.Fatal("suppressed retry became executable", err)
+					}
+					return
+				}
+				oldSpec, _ := attemptCommand.Feature()
+				issuer, _ := otp.NewAttemptIssuer(7, [32]byte{0x31})
+				attempt, err = issuer.PrepareForCommand(ctx, oldSpec.Binding, oldSpec.Operation, restored.request.continuation, ab.Mode, ab.ExpectedVersion, code)
+				if err != nil {
+					t.Fatal(err)
+				}
+				ab, _ = attempt.Bindings()
 			}
 			declaration := issuanceExecutionPlan(t, spec, registry, prepared)
 			if preparedMode {
