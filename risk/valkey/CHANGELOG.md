@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Confirm only an exact existing published native cut after configured primary
+  recorded-confirmation checks. Preserve every original field, counter and
+  exclusive expiry; matching retries do not write and missing markers are not
+  repaired. Ambiguous effects never trigger resend. This private checkpoint
+  does not establish all-counter continuity, public activation or readiness.
+
 - Publish exact primary-covered cuts under an existing original native replay
   fence, preserving keyed cut identity, applied position, coverage and expiry.
   Matching retries do not rewrite state; stale, lost or conflicting fences and

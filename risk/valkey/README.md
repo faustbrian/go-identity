@@ -89,9 +89,16 @@ acknowledgements expose none and never trigger a resend.
 Publication is **not primary confirmation or usable health**. Bare epochs and
 `published` markers cannot authorize mutation. The private engine recognizes
 only a bounded, non-expired `confirmed` cut representation, including when
-reading old mutation replies; no production writer of that representation or
-public healthy store exists yet. Unit fixtures supply it solely to test engine
-semantics. Joint primary confirmation, exact expected-marker admission and
+reading old mutation replies. Private `ownedRecovery.confirm` now writes that
+representation only from current exact primary confirmation and the matching
+existing published marker. It uses its native issuer's own derived verifier,
+checks primary custody before and after IO, preserves every cut field and the
+original logical/physical expiry, and never repairs a missing marker. Exact
+explicit retries are read-only; ambiguous effects never trigger a resend.
+No public healthy store exists. This marker makes the private mutation engine's
+structural predicate eligible, not safe public admission: confirmed marker
+syntax alone does not establish surviving counters or primary healthy state.
+Exact expected-marker admission and
 native boot/fence continuity across reset remain required before activation.
 This checkpoint proves a fenced marker transition, not survival of all earlier
 restored counters after eviction/reset or supported Valkey interoperability.

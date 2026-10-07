@@ -39,11 +39,17 @@ func (r ownedRecovery) publish(ctx context.Context, lease risk.VelocityLease, cl
 	if err != nil {
 		return risk.VelocityPublication{}, err
 	}
-	candidate := "published" + original[len("replaying"):] + "|" + hex.EncodeToString(b.ID[:]) + "|" + strconv.FormatInt(b.Position, 10) + "|" + strconv.FormatInt(b.ReplayFrom.UnixMicro(), 10) + "|" + strconv.FormatInt(b.ReplayThrough.UnixMicro(), 10) + "|" + strconv.FormatInt(b.JournalStartedAt.UnixMicro(), 10) + "|" + strconv.FormatInt(b.MaximumWindow.Microseconds(), 10)
+	candidate := coveredPublicationMarker(original, b, "published")
 	key := "irv2:{" + r.layout.digest("identity-risk-valkey-slot-v1", lb.Tenant) + "}:health"
 	reply, err := r.transport.executeScript(bounded, publicationScript, []string{key}, []string{original, candidate})
 	if err := recoveryAcknowledgement(reply, err, "published", hex.EncodeToString(b.ID[:])); err != nil {
 		return risk.VelocityPublication{}, err
 	}
 	return r.issuer.AcknowledgePublication(bounded, lease, closure)
+}
+
+// Callers supply only a validated ownedRecoveryMarker and checked core facts.
+// Publication and confirmation must encode every original cut field identically.
+func coveredPublicationMarker(original string, b risk.VelocityClosureBinding, state string) string {
+	return state + original[len("replaying"):] + "|" + hex.EncodeToString(b.ID[:]) + "|" + strconv.FormatInt(b.Position, 10) + "|" + strconv.FormatInt(b.ReplayFrom.UnixMicro(), 10) + "|" + strconv.FormatInt(b.ReplayThrough.UnixMicro(), 10) + "|" + strconv.FormatInt(b.JournalStartedAt.UnixMicro(), 10) + "|" + strconv.FormatInt(b.MaximumWindow.Microseconds(), 10)
 }
