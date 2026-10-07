@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add exact tenant-scoped email/phone recipient lookup and native transaction
+  fencing of the original identifier, verification and user security epochs.
+  Ineligible recipients are uniformly suppressed; infrastructure failures are
+  not absence. Install existing identifier/status/credential migrations first.
+  This does not authenticate callers or provide a public OTP Send workflow.
+
 - Let the exact registered prepared-feature owner read its original retained
   ciphertext and output generation during final execution. Owned copies retain
   restart/takeover provenance without shared per-request state or new command

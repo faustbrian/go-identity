@@ -117,6 +117,25 @@ Fingerprinting is not active-flow admission. Generic execution still rejects
 all opaque OTP submissions; native counted and consuming phases must own their
 primary checks. No storage or migration change is introduced by this framing.
 
+## Workflow recipient selection
+
+`Repository.ResolveRecipient` selects an exact owner-canonical email or phone
+identifier within one tenant. It never normalizes addresses. Supply `UserID`
+for an original known subject; omit it only for trusted discovery, keeping the
+resolved user separate from the anonymous command binding. Signin/reset require
+`RecipientVerified`; verification/change may use `RecipientPendingOrVerified`.
+Missing, inactive, foreign-subject and ineligible records return `Suppressed`
+without a selected identity. Infrastructure errors remain errors.
+
+Freeze the selected record into original workflow custody. The exact native
+feature invocation calls `Work.RequireRecipient` before staging delivery:
+primary user and identifier locks fence original versions until commit/abort,
+and an ignored denial poisons Work. A suppressed record cannot authorize real
+delivery. Records are snapshots, not authentication, risk evidence or renewable
+validity leases; callers must not log or serialize them. Install the existing
+identifier, status and credential-authority migrations before using this port.
+Public OTP Send orchestration remains under development.
+
 ## OTP current-authority checks
 
 The generic native feature invocation also exposes
