@@ -259,6 +259,13 @@ evidence and decisions. It is **not yet an executable durable risk service**.
   stale leases and corrupt sealed checkpoints deny. The forward migration starts
   populated epochs with no applied authority. Progress never publishes health;
   native restore and stable writer-fenced healthy activation remain unfinished.
+  `ResumeApplied(ctx, lease)` returns a bounded primary-authenticated cursor
+  for `ReadPage`, skipping only durable acknowledged effects rather than scanned
+  pages. Same-owner renewal preserves progress; takeover or a new epoch replays
+  retained history from zero. Current-generation seal and original terminal
+  anchor must authenticate; corruption, stale ownership or ambiguous commit
+  returns no cursor. Unresolved suffix history remains visible. This cursor is
+  traversal custody, not proof of complete replay or permission to publish health.
 
 - Optional `Config.UseIssuer` installs pure use preparation only after matching
   the issuer's exact current policy and entire retained signing/linkage key set.

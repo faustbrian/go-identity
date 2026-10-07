@@ -50,6 +50,14 @@ func testVelocityOwnedHistory(t *testing.T, ctx context.Context, journal Velocit
 	if err != nil {
 		t.Fatal(err)
 	}
+	start, err := recovery.ResumeApplied(ctx, lease)
+	if err != nil {
+		t.Fatal("fresh applied resume unavailable", err)
+	}
+	initial, err := recovery.ReadPage(ctx, lease, start, 100)
+	if err != nil || len(initial.Records()) != 1 {
+		t.Fatal("fresh resume skipped original history", err)
+	}
 	page, err := recovery.ReadPage(ctx, lease, VelocityReplayCursor{}, 100)
 	if err != nil || len(page.Records()) != 1 {
 		t.Fatal("owned history unavailable", err)
@@ -74,6 +82,36 @@ func testVelocityOwnedHistory(t *testing.T, ctx context.Context, journal Velocit
 	}
 	if err := recovery.RecordApplied(ctx, lease, owned, ack); err != nil {
 		t.Fatal("duplicate restore checkpoint not idempotent", err)
+	}
+	resume, err := recovery.ResumeApplied(ctx, lease)
+	if err != nil {
+		t.Fatal("acknowledged progress not resumable", err)
+	}
+	remaining, err := recovery.ReadPage(ctx, lease, resume, 100)
+	if err != nil || len(remaining.Records()) != 0 {
+		t.Fatal("resume repeated acknowledged original effect", err)
+	}
+	canceled, cancel := context.WithCancel(ctx)
+	cancel()
+	if cursor, err := recovery.ResumeApplied(canceled, lease); !errors.Is(err, context.Canceled) || cursor != (VelocityReplayCursor{}) {
+		t.Fatal("canceled resume exposed progress", err)
+	}
+	other, err := NewVelocityRecovery(VelocityRecoveryConfig{Journal: journal, MaximumWindow: time.Hour, LeaseDuration: 5 * time.Second, JournalIssuer: issuer, NativeVerifier: verifier})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cursor, err := other.ResumeApplied(ctx, lease); err == nil || cursor != (VelocityReplayCursor{}) {
+		t.Fatal("foreign recovery owner resumed progress")
+	}
+	// A sealed checkpoint cannot replace authentication of its retained anchor.
+	if _, err := cfg.Pool.Raw().Exec(ctx, `UPDATE risk_store.velocity_attempts SET counter_fingerprint=set_byte(counter_fingerprint,0,get_byte(counter_fingerprint,0)#1) WHERE sequence=$1`, attempt.state.sequence); err != nil {
+		t.Fatal(err)
+	}
+	if cursor, err := recovery.ResumeApplied(ctx, lease); err == nil || cursor != (VelocityReplayCursor{}) {
+		t.Fatal("corrupt applied anchor exposed progress")
+	}
+	if _, err := cfg.Pool.Raw().Exec(ctx, `UPDATE risk_store.velocity_attempts SET counter_fingerprint=set_byte(counter_fingerprint,0,get_byte(counter_fingerprint,0)#1) WHERE sequence=$1`, attempt.state.sequence); err != nil {
+		t.Fatal(err)
 	}
 	var applied int64
 	if err := cfg.Pool.Raw().QueryRow(ctx, `SELECT applied_position FROM risk_store.velocity_epochs WHERE tenant_id=$1 AND namespace_digest=$2 AND epoch=$3`, b.Tenant, journal.state.namespace, lease.state.epoch[:]).Scan(&applied); err != nil || applied != facts.Position {
@@ -119,6 +157,9 @@ func testVelocityOwnedHistory(t *testing.T, ctx context.Context, journal Velocit
 	if err := recovery.RecordApplied(ctx, lease, owned, ack); err == nil {
 		t.Fatal("altered durable progress admitted")
 	}
+	if cursor, err := recovery.ResumeApplied(ctx, lease); err == nil || cursor != (VelocityReplayCursor{}) {
+		t.Fatal("tampered progress exposed resume cursor")
+	}
 	if _, err := cfg.Pool.Raw().Exec(ctx, `UPDATE risk_store.velocity_epochs SET applied_position=applied_position-1 WHERE tenant_id=$1 AND namespace_digest=$2 AND epoch=$3`, b.Tenant, journal.state.namespace, lease.state.epoch[:]); err != nil {
 		t.Fatal(err)
 	}
@@ -157,9 +198,17 @@ func testVelocityOwnedHistory(t *testing.T, ctx context.Context, journal Velocit
 	if err := recovery.RecordApplied(ctx, lease, owned, laterAcks[1]); err == nil {
 		t.Fatal("gap skipped unapplied history")
 	}
-	for _, a := range laterAcks {
+	for i, a := range laterAcks {
 		if err := recovery.RecordApplied(ctx, lease, owned, a); err != nil {
 			t.Fatal("ordered history checkpoint failed", err)
+		}
+		cursor, err := recovery.ResumeApplied(ctx, lease)
+		if err != nil {
+			t.Fatal(err)
+		}
+		remaining, err := recovery.ReadPage(ctx, lease, cursor, 100)
+		if err != nil || len(remaining.Records()) != len(laterAcks)-i-1 {
+			t.Fatal("partial checkpoint skipped unapplied history", err)
 		}
 	}
 	// Pending and unknown facts remain recoverable history, never no-effect
@@ -222,5 +271,46 @@ func testVelocityOwnedHistory(t *testing.T, ctx context.Context, journal Velocit
 	}
 	if err := recovery.RecordApplied(ctx, renewed, owned, ack); err == nil {
 		t.Fatal("stale native acknowledgement advanced progress")
+	}
+	if cursor, err := recovery.ResumeApplied(ctx, lease); err == nil || cursor != (VelocityReplayCursor{}) {
+		t.Fatal("superseded lease resumed applied progress")
+	}
+	resume, err = recovery.ResumeApplied(ctx, renewed)
+	if err != nil {
+		t.Fatal("renewal discarded same-owner progress", err)
+	}
+	remaining, err = recovery.ReadPage(ctx, renewed, resume, 100)
+	if err != nil || len(remaining.Records()) != 2 {
+		t.Fatal("renewed resume skipped unresolved or replayed applied history", err)
+	}
+	if _, err := cfg.Pool.Raw().Exec(ctx, `UPDATE risk_store.velocity_epochs SET lease_expires_at=clock_timestamp()-interval '1 microsecond' WHERE tenant_id=$1 AND namespace_digest=$2 AND epoch=$3`, b.Tenant, journal.state.namespace, lease.state.epoch[:]); err != nil {
+		t.Fatal(err)
+	}
+	takeover, err := recovery.Acquire(ctx, b.Tenant, lease.state.epoch)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resume, err = recovery.ResumeApplied(ctx, takeover)
+	if err != nil {
+		t.Fatal("takeover resume unavailable", err)
+	}
+	remaining, err = recovery.ReadPage(ctx, takeover, resume, 100)
+	if err != nil || len(remaining.Records()) != 5 {
+		t.Fatal("takeover trusted previous owner's applied authority", err)
+	}
+	if _, err := cfg.Pool.Raw().Exec(ctx, `UPDATE risk_store.velocity_epochs SET lease_expires_at=clock_timestamp()-interval '1 microsecond' WHERE tenant_id=$1 AND namespace_digest=$2 AND epoch=$3`, b.Tenant, journal.state.namespace, takeover.state.epoch[:]); err != nil {
+		t.Fatal(err)
+	}
+	newEpoch, err := recovery.Acquire(ctx, b.Tenant, [16]byte{72})
+	if err != nil {
+		t.Fatal(err)
+	}
+	resume, err = recovery.ResumeApplied(ctx, newEpoch)
+	if err != nil {
+		t.Fatal("new epoch resume unavailable", err)
+	}
+	remaining, err = recovery.ReadPage(ctx, newEpoch, resume, 100)
+	if err != nil || len(remaining.Records()) != 5 {
+		t.Fatal("new epoch skipped retained history", err)
 	}
 }

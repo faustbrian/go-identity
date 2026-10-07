@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Resume velocity replay from authenticated durable applied progress, preserving
+  same-owner renewal while replaying from zero after takeover or a new epoch.
+  Corrupt anchors, stale leases and ambiguous commits disclose no cursor;
+  unresolved suffix history remains discoverable. Resumption grants no health
+  or native-effect authority and requires the applied-progress migration.
+
 - Authenticate original recovery records into issuer-bound public cross-adapter
   custody with privately retained, separately paired issuance capabilities, and
   checkpoint attributable terminal effects in scoped journal order. The opt-in
