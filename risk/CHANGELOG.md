@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add stable shared velocity replay identities preserving existing PostgreSQL
+  journal digest bytes. Lookup remains unchanged through policy/dimension-key
+  rotation or later preparation, so changed intent conflicts at the original
+  attempt. Copied digests grant no mutation, replay or epoch-health authority;
+  adapter consumption and restart reconstruction remain required.
+
 - Add immutable CAPTCHA use prechecks and signed native consuming custody with
   exact original flow, separate consuming command/actor, retained-key integrity
   and non-renewing exclusive expiry. These local checks grant no durable use or

@@ -9,6 +9,23 @@ RiskEvidence/CaptchaEvidence issuance remain required implementation work.
 
 ## Adoption and API
 
+### Stable velocity replay identity
+
+`NewVelocityReplayIdentity(namespace, key)` owns the immutable shared lookup
+profile for the durable velocity journal and ephemeral adapter. `Namespace()`
+and `Attempt(command)` return copied 32-byte keyed digests preserving the
+existing PostgreSQL domains and eight-byte length framing. Both adapters must
+select the same stable namespace/key, independent of rotating dimension keys.
+Changing policy, aliases, preparation time or fingerprint does not create a new
+attempt lookup: storage must compare the original fingerprint to reject changed
+intent. Zero and protected-transaction commands fail closed.
+
+These restricted adapter projections grant no debit, retry, journal authenticity
+or health authority and reject automatic custody serialization. Adapters must
+still validate exact command configuration and authenticate retained history.
+Native adapter consumption, restart reconstruction and safe public activation
+remain unfinished; this contract alone is not a usable counter store.
+
 ### CAPTCHA evidence admission and custody
 
 `CaptchaEvidenceIssuer.PrecheckUse(ctx, originalIssue, request, nativeRecord)`
