@@ -1,5 +1,41 @@
 # OTP PostgreSQL
 
+## Native issuance storage
+
+Install `IssuanceMigrationSource` after `SendFamilyMigrationSource`, using the
+same dedicated schema and a separately allocated forward migration version.
+It preserves populated challenge custody and adds an immutable keyed family
+binding plus bounded active-family lookup indexes. Older unbound issuance
+writes fail closed after installation; existing consumption and recovery
+remain compatible. Do not activate the new writer before installing both
+extensions across its selected database.
+
+The private writer commits a proposed send-history append, replace-policy
+revocation and a new digest-only challenge in its caller's original transaction.
+Retain-policy predecessors keep their original times, versions and counters.
+Reserved predecessors cannot be replaced; unknown reservations require their
+existing owning-command recovery. A duplicate command/challenge or failed
+insert requires rollback of the whole proposal, preserving predecessors and
+allowances. Stored issuance fingerprints come from the sole kernel claim,
+not caller-selected bytes. Replacement is represented by terminal `revoked`.
+
+Legacy populated challenges have no reversible destination/family identity.
+Migration does not guess or attach one. A live unbound challenge blocks new
+issuance for its subject/purpose until its existing owner terminalizes it.
+Already terminal legacy custody remains unchanged. New family bindings cannot
+be detached or rewritten, including during an otherwise valid attempt update.
+Expired unreserved challenges, including legacy rows, retain their tombstones
+without occupying the live predecessor bound. Unresolved reserved challenges
+remain exclusions even after expiry. Separate bounded indexed live/reserved
+candidate lanes prevent old retained history from becoming a lifetime quota.
+
+This is native storage, not a public Send endpoint or a complete workflow.
+The owning adapter must still enforce original-flow/current authority and
+risk, generate/render once, stage encrypted delivery and commit audit/journal
+through the existing coordinator. No application-written store, separate
+transaction or guessed unknown outcome is supported. Native issuance dispatch,
+encrypted delivery composition, cleanup and complete login remain in progress.
+
 ## Original authenticated-session custody
 
 The opt-in private v4 attempt frame retains the complete session-owned original

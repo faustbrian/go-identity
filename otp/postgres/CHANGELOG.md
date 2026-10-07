@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- Add forward-only immutable challenge-to-send-family storage and native
+  digest-only insertion with atomic send counts and replacement/retention.
+  Reserved predecessors and live unmapped legacy challenges deny replacement;
+  failed inserts or duplicate command/challenge identities roll back the entire
+  proposal. Install after send-family storage. Older unbound issuance writers
+  fail closed; existing populated custody and consuming profiles are retained.
+  Native public Send and encrypted delivery composition remain in development.
+  Expired unreserved tombstones do not consume live predecessor capacity;
+  unresolved reservations still deny replacement after expiry.
+
 - Add a forward-only send-family storage extension for atomic rolling-hour
   quotas and resend cooldowns. Family identities survive challenge, flow and
   code-key changes; guarded histories cannot reset live allowance. Install
