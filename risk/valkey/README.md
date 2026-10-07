@@ -28,12 +28,24 @@ original server observation. It never samples a new clock. Malformed, foreign,
 partial or imprecise numeric replies return `ErrOutcomeUnknown` without positive
 facts; only a complete explicit noncommit declaration returns noncommit.
 
+The private dispatch boundary rejects invalid/cancelled inputs before IO,
+derives a 100ms..10s bound without extending the caller's earlier deadline,
+and sends one prepared plan exactly once. Transport errors and incomplete
+acknowledgements are unknown, with redacted diagnostics and no retry. A complete
+acknowledged commit remains committed after cancellation or expiry of the
+adapter's own deadline; the accompanying error prevents clean admission even
+when the caller's longer deadline is still live. A complete pre-write
+unhealthy-epoch response is noncommit plus unavailable, never clean admission.
+Current dispatch tests replace the
+transport boundary; they do not prove a Valkey script or real server mutation.
+
 ## Ownership and operations
 
 Valkey will own ephemeral windows only. `risk/postgres` retains durable intent,
 results and recovery leases/pages; it does not become a second counter store.
-Current helpers perform no IO, mutation, expiry, lifecycle event, audit or
-background work, and establish no health or replay-publication authority.
+There is no native transport, server mutation, expiry, lifecycle event, audit or
+background work yet. Private dispatch invokes its bounded execution seam but
+establishes no health or replay-publication authority.
 
 The planned native transport is the existing foundational Valkey client, not
 cache or rate-limit single-key admission composed into non-atomic operations.
