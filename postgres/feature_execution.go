@@ -185,7 +185,11 @@ func (c *Coordinator) ApplyFeature(ctx context.Context, w Work, command identity
 	if e == nil && w.state.execution.reservation.authentication != nil {
 		q, e = bindAuthenticationClaim(q, w.state.execution.reservation.authentication, c.keys.retained[c.keys.current])
 	}
-	if e != nil || !bytes.Equal(q.canonical, w.state.execution.reservation.request.canonical) {
+	expected := w.state.execution.reservation.request
+	if w.state.execution.reservation.executionRequest != nil {
+		expected = *w.state.execution.reservation.executionRequest
+	}
+	if e != nil || !bytes.Equal(q.canonical, expected.canonical) {
 		return result, w.fail(ctx, identity.ConflictError{})
 	}
 	p := w.state.execution.reservation.plan

@@ -56,7 +56,7 @@ FROM identity.commands WHERE command_id=$1 AND tenant_id=$2 AND purpose=$3 FOR U
 	if err != nil {
 		return preparationReservation{}, readFailure(ctx, err)
 	}
-	if profile == nil || *profile != 1 || plan != nil || !postgresExactTime(until) {
+	if profile == nil || *profile != 1 || plan != nil && output == nil || !postgresExactTime(until) {
 		return preparationReservation{}, identity.ConflictError{}
 	}
 	gen, err := strconv.ParseUint(generation, 10, 64)

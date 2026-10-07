@@ -106,6 +106,7 @@ func TestPostgresIntegration(t *testing.T) {
 	t.Run("feature observation", func(t *testing.T) { testFeatureObservation(t, ctx, pool) })
 	t.Run("command admission", func(t *testing.T) { testCommandAdmissionPrimary(t, ctx, pool) })
 	t.Run("feature execution", func(t *testing.T) { testFeatureExecution(t, ctx, pool, repo) })
+	t.Run("prepared feature", func(t *testing.T) { testPreparedFeature(t, ctx, pool, repo) })
 	t.Run("command counters", func(t *testing.T) { testCommandCounterReservation(t, ctx, pool, repo) })
 	t.Run("OTP attempt denial", func(t *testing.T) { testOTPAttemptDenial(t, ctx, pool, repo) })
 	t.Run("OTP reservation", func(t *testing.T) { testOTPReservation(t, ctx, pool, repo) })

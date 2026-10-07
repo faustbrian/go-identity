@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Add opt-in native generated-feature execution through the original command
+  journal. Current primary admission precedes acknowledged generation start;
+  matching retries conserve retained output and its original generation.
+  Final execution binds generated custody separately without replacing caller
+  intent, commits effects atomically, and returns original terminal replay.
+  Install the existing preparation extension before enabling this profile.
+  One-use/protected-counter preparation profiles remain closed; public OTP
+  Send composition remains under development.
+
 - Add optional immutable preparation custody to the existing command journal.
   Native preparation can fence generation before entropy and retain the original
   encrypted output across lease takeover. A missing output after a committed

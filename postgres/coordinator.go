@@ -70,6 +70,7 @@ type Coordinator struct {
 	finalAuthentication            *FinalAuthenticationConfig
 	requestKeys                    *RequestKeyConfig
 	requestKeyBegin                func(context.Context) (pgx.Tx, error)
+	preparationCommit              func(context.Context, pgx.Tx) error
 }
 
 // Format prevents diagnostics from exposing retained keys and pool settings.
@@ -147,13 +148,14 @@ func NewCoordinatorWithRequestKeys(pool *database.Pool, registry *ContributorReg
 type Reservation struct{ state *reservationState }
 
 type reservationState struct {
-	coordinator    *Coordinator
-	request        claimRequest
-	plan           *admittedKernelPlan
-	journal        journalReservation
-	owner          [16]byte
-	started        atomic.Bool
-	authentication *authenticatedCommand
+	coordinator      *Coordinator
+	request          claimRequest
+	executionRequest *claimRequest
+	plan             *admittedKernelPlan
+	journal          journalReservation
+	owner            [16]byte
+	started          atomic.Bool
+	authentication   *authenticatedCommand
 }
 
 // Format hides command, tenant, lease owner and retained private command data.

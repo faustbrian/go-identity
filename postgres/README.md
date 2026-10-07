@@ -43,7 +43,7 @@ retention is therefore an explicit tradeoff, not an implicit cleanup policy.
 Existing immutable migrations and default-disabled coordinator behavior remain
 unchanged; unsupported destructive downgrade must not remove retry identity.
 
-### Pre-generation journal custody (native composition in progress)
+### Pre-generation journal custody
 
 `PreparationMigrationSource{Base, Version}` adds optional columns to the same
 `identity.commands` journal; it does not create another workflow authority or
@@ -61,10 +61,35 @@ The native feature codec must authenticate and bind that encrypted output;
 the journal does not interpret or decrypt it. A lost start-commit acknowledgement
 cannot authorize entropy. No SQL transaction is held across generation callbacks.
 
-Installing these columns alone enables no public workflow. Public OTP Send,
-authenticated prepared-output decoding, attachment of the final execution plan,
-and composed delivery/recovery remain unfinished. Ordinary coordinator commands
-and all historical migration bytes are unchanged.
+Installing these columns alone enables no public workflow. An opt-in stable
+native `FeaturePreparationContributor` can use `ExecutePreparedFeature` to
+consume the journal preparation and final execution path. Its original request
+is schema-validated and primary-admitted before committing the start marker.
+The owner generates bounded authenticated ciphertext outside SQL, then restores
+the exact original generated command and plan from retained output. The final
+plan preserves the initial feature, subject, mandatory audits and lifecycle;
+only original encrypted delivery may be added. The coordinator preserves the
+caller-request fingerprint, separately binds reconstructed execution fields,
+and executes through its existing atomic Begin/Apply/Commit owner.
+
+Use one immutable comparable native owner across all phases, with per-invocation
+state; never replace the registry after generation or share mutable prepared
+delivery between requests. `AdmitFeaturePreparation` borrows Work only for
+current checks, not generation, effect staging or domain mutation. It can reuse
+existing exact-owner directory/user/credential/authorization helpers. Every
+final execution must recheck current admission after waits. Restore authenticates
+the complete original request/generation and separately submitted bearer; it
+cannot remap output, manufacture authority or renew expiry.
+
+Terminal matching replay returns the original receipt without another native
+generation/restore invocation. Started-but-unretained output stays in progress
+after lease expiry. Lost start acknowledgement runs no generation; lost retained
+output acknowledgement returns unknown and retry can recover the original bytes.
+One-use/protected-counter preparation profiles are explicitly rejected until
+their preparation admission/rebind contracts are supported, not skipped.
+These are trusted compile-time adapter phases, not consumer workflow callbacks
+or a public authentication endpoint. Public OTP Send and its real native
+composition remain unfinished. Ordinary command and migration bytes are unchanged.
 
 Code-free `identity.NewFeaturePreAuthCommand` and
 `identity.NewFeatureSessionCommand` use these same private fingerprint domains,
