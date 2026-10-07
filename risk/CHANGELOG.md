@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add public opaque velocity recovery custody with separate journal and native
+  issuance capabilities. Genuine history holders and foreign authority graphs
+  cannot fabricate configured native acknowledgements. Preserve original
+  snapshots, unresolved outcomes and exact primary lease checks; concrete IO,
+  durable applied progress and healthy activation remain adapter-owned.
+
 - Add stable shared velocity replay identities preserving existing PostgreSQL
   journal digest bytes. Lookup remains unchanged through policy/dimension-key
   rotation or later preparation, so changed intent conflicts at the original

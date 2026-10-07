@@ -9,6 +9,42 @@ RiskEvidence/CaptchaEvidence issuance remain required implementation work.
 
 ## Adoption and API
 
+### Owned velocity recovery custody
+
+`NewVelocityRecoveryAuthorities` creates an isolated journal issuer/verifier and
+native issuer/verifier pair. This is a trusted composition primitive, not a
+counter store or a public application recovery workflow. The owned reference
+composition must retain the journal issuer only in PostgreSQL and the native
+issuer only in the concrete Valkey adapter. Neither issuance capability may be
+returned in `StoreSet`, accepted as an ordinary application override, or exposed
+through operational handles. Verification views have no issuance methods.
+
+The journal issues `VelocityLease` only after primary acquisition, with a bounded
+checker for that exact original receipt. It issues `VelocityHistory` only after
+authenticating original journal facts under the current lease. The native owner
+checks configured journal custody, reconstructs original aliases and windows,
+executes the fenced effect, and calls its private issuer's `Acknowledge` only
+after an exact attributable response. A genuine lease/history holder cannot
+recover that native issuer; a separately constructed graph remains foreign.
+The types deliberately prohibit Go struct conversion between capability roles.
+
+`VelocityNativeVerifier.Applied` verifies the configured native issuer and
+rechecks original primary ownership before returning copied facts. PostgreSQL
+must still independently authenticate current journal facts and persist ordered
+progress atomically. Pending/unknown cannot be acknowledged as noncommit, and
+neither acknowledgement nor applied progress publishes health or permits debit.
+Cancellation/deadlines survive; other authority-check errors are redacted.
+
+These capabilities are immutable, safe to copy/read concurrently, and reject
+automatic formatting/serialization disclosure. Original counts, observation
+times, expiry and nested aliases are copied without renewal. The primary
+checker must itself be concurrent-safe and bounded by context; no SQL locks may
+span native IO. A configurator deliberately retaining the native issuer can
+misdeclare effects, just as it can replace deployment resources: this API is not
+attestation of malicious configuration. Production composition must own that
+trust boundary. Concrete recovery wiring and complete healthy activation remain
+under development; constructors alone confer no usable counter authority.
+
 ### Stable velocity replay identity
 
 `NewVelocityReplayIdentity(namespace, key)` owns the immutable shared lookup
