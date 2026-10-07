@@ -38,7 +38,7 @@ func TestNativeDispatchConservesTruthAndNeverRetries(t *testing.T) {
 				if _, ok := bounded.Deadline(); !ok {
 					t.Fatal("unbounded native dispatch")
 				}
-				if len(plan.keys) != 6 || plan.epoch == "" {
+				if len(plan.keys) != 14 || plan.epoch == "" {
 					t.Fatal("missing atomic selection")
 				}
 				if tc.transportError {

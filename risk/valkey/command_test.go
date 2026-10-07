@@ -65,7 +65,7 @@ func TestCommandPlanAtomicScopeAndPrivateKeys(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(plan.keys) != 18 || len(plan.targets) != 4 {
+	if len(plan.keys) != 26 || len(plan.targets) != 4 {
 		t.Fatal("incomplete atomic key set")
 	}
 	seen := map[string]bool{}

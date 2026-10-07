@@ -84,6 +84,12 @@ func (l commandLayout) prepare(command risk.CounterCommand, epoch [16]byte) (com
 	epochText := hex.EncodeToString(epoch[:])
 	replay := l.digest("identity-risk-valkey-replay-v1", b.Tenant, string(b.Operation), b.Attempt)
 	p := commandPlan{slot: slot, epoch: epochText, fingerprint: b.Fingerprint, window: b.Window, limit: b.Limit, policyVersion: b.PolicyVersion, targets: b.Targets, keys: []string{base + "health", base + epochText + ":replay:" + replay}}
+	// The freshly encoded HMAC guarantees hexadecimal syntax. Fixed bounded
+	// probes avoid a growing index and give each reservation atomic expiry.
+	seed, _ := strconv.ParseUint(replay[:4], 16, 16)
+	for i := uint64(0); i < capacityProbeCount; i++ {
+		p.keys = append(p.keys, base+epochText+":capacity:"+strconv.FormatUint((seed+i)%maximumReplayEntries, 10))
+	}
 	seen := make(map[string]bool, len(b.Targets)*len(l.keys))
 	for i, target := range b.Targets {
 		if target.Dimension != a.Profile.Dimensions[i] || len(target.Keys) != len(l.keys) {

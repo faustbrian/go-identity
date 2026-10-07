@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add the private native multi-dimension fixed-window Lua debit: preserved
+  logical roots across retained digest versions, original replay snapshots,
+  exact window boundaries, bounded replay capacity and pending-result fencing.
+  Offline script execution is covered; real Valkey and recovery remain pending.
+
 - Add private bounded dispatch classification: no retry after ambiguous transport
   outcomes, preserved commit truth after cancellation, and no positive admission
   from unhealthy epochs. Real Valkey transport and mutation remain unfinished.

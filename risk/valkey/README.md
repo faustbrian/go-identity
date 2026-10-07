@@ -39,18 +39,58 @@ unhealthy-epoch response is noncommit plus unavailable, never clean admission.
 Current dispatch tests replace the
 transport boundary; they do not prove a Valkey script or real server mutation.
 
+## Native fixed-window script
+
+The embedded production Lua now implements a single prepared multi-dimension
+debit. Its keys include health, replay, eight capacity probes and up to sixteen
+digest aliases: at most twenty-six supplied keys in one slot.
+Each dimension has one logical root. New versions point to its oldest retained
+root; old and new writers increment the same count without summing aliases or
+sliding the window. Conflicting roots and unproven retirement fail closed.
+
+Server `TIME` controls microsecond `[start, expiry)` windows; physical TTLs round
+up to milliseconds without extending the logical boundary. Matching replay
+returns the original complete snapshot and observation without writes or TTL
+renewal. Changed fingerprints cannot charge the same replay identity again.
+All existing types, bounded fields and logical roots are checked before debit.
+A capacity reservation or pending replay fence prevents another debit after a
+script error with partial effects; such an error is unknown, not rollback. Every
+allocation uses a single `SET PXAT`, so even failure before the following command
+cannot leave a new record without expiry.
+
+The private profile caps active replay entries at **4096 per tenant/epoch** and
+retains each for **one hour**. Each attempt has eight fixed probes into those
+slots. Probe exhaustion rejects before mutation and can occur before all 4096
+slots are occupied; there is no hidden retry or alternative attempt ID. Expiry
+needs no scan or growing index. Duplicate replay never refreshes a reservation.
+Active entries are never evicted, and counts are never saturated. After retention,
+the existing PostgreSQL journal must still prevent redispatch of old attempts.
+The script does not independently grant that authority or publish health.
+
+Offline tests execute the exact embedded Lua with only Redis commands replaced.
+The test-only Lua 5.1 VM is `github.com/yuin/gopher-lua` v1.1.2, MIT licensed,
+upstream revision `b87eac29661715e48e1a2868d76b853e0e757c4c`, pinned by `go.sum`.
+It is not imported by production code or a substitute Valkey engine. Update it
+only after upstream/license review and rerunning the script assertions. Tests
+do not certify native timing, concurrency, replication, cluster routing or OOM
+behavior. Real Valkey and full recovery/public activation remain unfinished.
+
+Protocol references: [EVAL](https://valkey.io/commands/eval/) and
+[TIME](https://valkey.io/commands/time/). Every accessed key is supplied in
+`KEYS`; script source is fixed rather than generated per command.
+
 ## Ownership and operations
 
 Valkey will own ephemeral windows only. `risk/postgres` retains durable intent,
 results and recovery leases/pages; it does not become a second counter store.
-There is no native transport, server mutation, expiry, lifecycle event, audit or
-background work yet. Private dispatch invokes its bounded execution seam but
+There is no native transport, lifecycle event, audit or background work yet.
+Private dispatch invokes its bounded execution seam but
 establishes no health or replay-publication authority.
 
 The planned native transport is the existing foundational Valkey client, not
 cache or rate-limit single-key admission composed into non-atomic operations.
-Server time, exact TTL ownership, cardinality limits, no hidden retries,
-`noeviction` readiness and journal-fenced healthy publication remain required.
+Live server-time/TTL/cardinality evidence, no hidden retries, `noeviction`
+readiness and journal-fenced healthy publication remain required.
 No standalone, replicated or cluster runtime support is claimed at this stage.
 
 ## Adoption, examples and FAQ
