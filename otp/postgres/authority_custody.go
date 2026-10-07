@@ -121,6 +121,10 @@ func encodeAuthorityRecord(record []byte, a AttemptAuthority) []byte {
 }
 
 func decodeAuthorityRecord(data []byte, binding identity.CommandBinding) ([]byte, *AttemptAuthority, error) {
+	return decodeBoundAuthorityRecord(data, binding, false)
+}
+
+func decodeBoundAuthorityRecord(data []byte, binding identity.CommandBinding, issuance bool) ([]byte, *AttemptAuthority, error) {
 	if !bytes.HasPrefix(data, []byte(authorityRecordPrefix)) {
 		return data, nil, nil
 	}
@@ -150,7 +154,11 @@ func decodeAuthorityRecord(data []byte, binding identity.CommandBinding) ([]byte
 	default:
 		return bad()
 	}
-	if !r.ok || len(r.data) != 0 || a.validate(binding) != nil || !(bytes.HasPrefix(record, []byte(recordPrefix)) || bytes.HasPrefix(record, []byte(boundRecordPrefix)) || bytes.HasPrefix(record, []byte(sessionRecordPrefix))) {
+	validRecord := bytes.HasPrefix(record, []byte(recordPrefix)) || bytes.HasPrefix(record, []byte(boundRecordPrefix)) || bytes.HasPrefix(record, []byte(sessionRecordPrefix))
+	if issuance {
+		validRecord = bytes.HasPrefix(record, []byte(issuanceRecordPrefix))
+	}
+	if !r.ok || len(r.data) != 0 || a.validate(binding) != nil || !validRecord {
 		return bad()
 	}
 	return record, &a, nil

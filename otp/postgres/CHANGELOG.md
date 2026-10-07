@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Add code-free native issuance command custody for distinct original pre-auth
+  and authenticated-session flows. Preserve initial digest, policy, remember
+  choice and original authority/times across restart without storing a code or
+  bearer. Require exact retained keys and separately submitted bearer possession;
+  encrypted scope commitments reject same-version code-key byte replacement.
+  Advance the root dependency to the additive code-free bearer constructors.
+  mapping grants no current-state admission or issuance. Native Send transaction
+  and encrypted delivery composition remain in development.
+
 - Add forward-only immutable challenge-to-send-family storage and native
   digest-only insertion with atomic send counts and replacement/retention.
   Reserved predecessors and live unmapped legacy challenges deny replacement;

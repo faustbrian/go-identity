@@ -1,5 +1,41 @@
 # OTP PostgreSQL
 
+## Native issuance command custody
+
+`AttemptCodec.MapIssuancePreAuth` and `MapIssuanceSession` bind an initial
+digest-only `otp.Challenge`, original server command and `AttemptAuthority`
+expectations into a separate versioned encrypted issuance profile. The complete
+original session/pre-auth record, purpose, destination, workflow target, policy,
+remember choice and initial times survive restart. No submitted code is invented;
+code and cookie/token bytes have no field in the closed frame. The submitted
+bearer remains separately held by the root command. Keep this custody private.
+
+The native send descriptor is owner `identity/otp`, operation `identity.otp.send`,
+version 1 and required record target equal to the new challenge ID. Its schema
+is `identity-otp-send` for a user target or `identity-otp-send-preauth` for an
+explicit anonymous-flow target. Both use code-free command construction. The
+anonymous namespace must equal the original pre-auth transaction ID. These
+descriptors do not yet enable executable native Send registration.
+
+Map once per logical server request and retain the original immutable command
+through retries or ambiguity. Re-encryption changes command intent. Retain exact
+named wrapping/code/session keys until dependent history retires; key rotation
+never substitutes a newer key or changes an earlier policy/time. Invalid input
+returns a zero command and redacted error, preserving caller cancellation.
+The encrypted issuance frame retains its original keyed scope commitment;
+changing code-key bytes under the same version is rejected, not silently
+reinterpreted. The root dependency is pinned to the committed code-free bearer
+constructor baseline. Publication and standalone release evidence remain pending.
+
+The adapter's private possession check compares the separately submitted bearer
+against the exact original commitment under the retained named session key. It
+does not adopt a current row or authenticate from a supplied digest. Wrong,
+absent or cross-variant bearers deny. This proves possession only: current
+primary authority, flow state, operation permission, risk and after-lock time
+checks must still precede issuance in the owning transaction. Mapping and local
+custody restoration do not generate codes, persist a challenge, consume a flow
+or enqueue delivery. Native Send/delivery composition remains under development.
+
 ## Native issuance storage
 
 Install `IssuanceMigrationSource` after `SendFamilyMigrationSource`, using the

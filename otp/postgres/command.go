@@ -370,11 +370,15 @@ func (c *AttemptCodec) restoreAttempt(command identity.Command, plan identitypos
 }
 
 func attemptAAD(s identity.FeatureCommandSpec, version uint32) (envelope.Context, error) {
+	return commandCustodyAAD(s, version, "identity-otp-command-envelope-binding-v1\x00", "identity-otp-command-custody-v1")
+}
+
+func commandCustodyAAD(s identity.FeatureCommandSpec, version uint32, domain, profile string) (envelope.Context, error) {
 	if s.Binding.ValidateFor(s.Operation) != nil || version == 0 {
 		return envelope.Context{}, ErrInvalidCommand
 	}
 	b, d := s.Binding, s.Operation
-	frame := []byte("identity-otp-command-envelope-binding-v1\x00")
+	frame := []byte(domain)
 	for _, v := range []string{string(b.CommandID), string(b.TenantID), string(b.UserID), b.AnonymousFlowID, string(b.ActorID), string(b.ActorKind), b.OperationID, b.PolicyID, b.SchemaID, b.CorrelationID, b.RecordID, d.Owner, d.OperationID, d.SchemaID} {
 		frame = binary.BigEndian.AppendUint16(frame, uint16(len(v)))
 		frame = append(frame, v...)
@@ -387,5 +391,5 @@ func attemptAAD(s identity.FeatureCommandSpec, version uint32) (envelope.Context
 	frame = binary.BigEndian.AppendUint32(frame, version)
 	digest := sha256.Sum256(frame)
 	clear(frame)
-	return envelope.NewContext(map[string]string{"profile": "identity-otp-command-custody-v1", "binding": base64.RawURLEncoding.EncodeToString(digest[:])})
+	return envelope.NewContext(map[string]string{"profile": profile, "binding": base64.RawURLEncoding.EncodeToString(digest[:])})
 }
