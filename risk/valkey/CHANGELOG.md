@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+- Reconstruct native restore plans from owned authenticated original history,
+  including retained aliases and dimension-addressed snapshots, without a new
+  command or raw attempt. Reject unresolved history and missing retained keys.
+  Read through the configured public journal verifier rather than a private
+  cross-module import; foreign, unconfigured and stale ownership exposes no plan.
+  Private native recovery retains its own issuance, derives the matching journal
+  verifier, and acknowledges committed history only after exact fenced restore
+  and a final primary ownership check. Failed effects expose no acknowledgement.
+  Explicit noncommit requires fenced native absence: conflicting/unresolved
+  attempt roots or retained directory linkage deny without writes or TTL renewal.
+  Public activation and joint primary/native healthy publication remain pending.
+
 - Use the core stable replay identity matching retained PostgreSQL attempt
   bytes, independent of preparation time and dimension-key rotation. The new
   private `irv2` layout rejects old markers rather than silently treating them

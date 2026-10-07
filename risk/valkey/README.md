@@ -92,10 +92,23 @@ owned reconciliation can repeat known committed history without another debit.
 The native transport performs no automatic resend and accepts only an exact
 attributable acknowledgement within its deadline.
 
-These are private effect boundaries, not a complete recovery service. They
-do not authenticate PostgreSQL lease/history, prove applied journal progress,
-establish cross-store clock bounds or publish health. Journal-backed core
-composition, writer-fenced healthy publication and public store activation
+Private owned recovery now consumes the core's issuer-bound lease/history
+contract. Trusted composition retains native issuance separately and derives
+its journal verifier from that issuer. Original tenant, namespace, attempt,
+aliases, policy and dimension-addressed snapshots are reconstructed without
+preparing a fresh command or recovering raw identifiers. Pending/unknown,
+foreign ownership and missing retained aliases never reach native IO.
+After exact fenced native restoration, current primary ownership is rechecked
+before issuing an acknowledgement of that original history. Explicit primary
+noncommit additionally requires a read-only fenced native absence proof: any
+retained attempt root or matching directory entry denies, including conflicting,
+unresolved or corrupt state. This proof neither clears state nor refreshes TTL.
+Failed, late or ambiguous effects expose no acknowledgement and are not resent.
+
+These are private effect boundaries, not a complete recovery service. They do
+not persist applied journal progress, establish cross-store clock bounds or
+publish health. Journal-backed concrete composition, writer-fenced healthy
+publication and public store activation
 remain unfinished. Tests execute the exact Lua and verified TLS using offline
 boundaries; real Valkey interoperability remains unproven.
 

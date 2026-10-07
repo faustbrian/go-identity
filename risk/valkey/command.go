@@ -80,6 +80,26 @@ func (l commandLayout) prepare(command risk.CounterCommand, epoch [16]byte) (com
 	if err != nil || a.PolicyVersion != b.PolicyVersion || b.Phase != a.Profile.Phase || b.Phase == risk.ReserveWithCommand || b.Window != a.Profile.Window || b.Limit != a.Profile.Limit || len(b.Targets) != len(a.Profile.Dimensions) || len(b.Targets) > 4 {
 		return commandPlan{}, risk.ErrInvalidCounterCommand
 	}
+	for i, target := range b.Targets {
+		if target.Dimension != a.Profile.Dimensions[i] || len(target.Keys) != len(l.keys) {
+			return commandPlan{}, risk.ErrInvalidCounterCommand
+		}
+		for rank, key := range target.Keys {
+			if key.Version != l.keys[rank].Version() {
+				return commandPlan{}, risk.ErrInvalidCounterCommand
+			}
+		}
+	}
+	digest, err := l.replay.Attempt(command)
+	if err != nil {
+		return commandPlan{}, err
+	}
+	return l.plan(b, epoch, digest)
+}
+
+// plan only addresses bounded original facts. Callers establish either live
+// command custody or authenticated history; it cannot mint either authority.
+func (l commandLayout) plan(b risk.CounterBinding, epoch [16]byte, digest [32]byte) (commandPlan, error) {
 	// All four dimensions share one tenant partition. Hashing by dimension
 	// would make a clustered multi-dimension decision inherently non-atomic.
 	// Namespace key custody is independent of rotating dimension digest keys.
@@ -89,10 +109,6 @@ func (l commandLayout) prepare(command risk.CounterCommand, epoch [16]byte) (com
 	// shared-identity layout; activation still requires owned recovery.
 	base := "irv2:{" + slot + "}:"
 	epochText := hex.EncodeToString(epoch[:])
-	digest, err := l.replay.Attempt(command)
-	if err != nil {
-		return commandPlan{}, err
-	}
 	replay := hex.EncodeToString(digest[:])
 	p := commandPlan{slot: slot, epoch: epochText, fingerprint: b.Fingerprint, window: b.Window, limit: b.Limit, policyVersion: b.PolicyVersion, targets: b.Targets, keys: []string{base + "health", base + epochText + ":replay:" + replay}}
 	// The freshly encoded HMAC guarantees hexadecimal syntax. Fixed bounded
@@ -102,12 +118,12 @@ func (l commandLayout) prepare(command risk.CounterCommand, epoch [16]byte) (com
 		p.keys = append(p.keys, base+epochText+":capacity:"+strconv.FormatUint((seed+i)%maximumReplayEntries, 10))
 	}
 	seen := make(map[string]bool, len(b.Targets)*len(l.keys))
-	for i, target := range b.Targets {
-		if target.Dimension != a.Profile.Dimensions[i] || len(target.Keys) != len(l.keys) {
+	for _, target := range b.Targets {
+		if len(target.Keys) < 1 || len(target.Keys) > 4 {
 			return commandPlan{}, risk.ErrInvalidCounterCommand
 		}
-		for rank, key := range target.Keys {
-			if key.Version != l.keys[rank].Version() || !validCounterKey(key) || seen[key.Encoded] {
+		for _, key := range target.Keys {
+			if !validCounterKey(key) || seen[key.Encoded] {
 				return commandPlan{}, risk.ErrInvalidCounterCommand
 			}
 			seen[key.Encoded] = true

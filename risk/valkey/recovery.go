@@ -21,6 +21,9 @@ var recoveryFenceScript string
 //go:embed recovery_replay.lua
 var recoveryReplayScript string
 
+//go:embed recovery_noncommit.lua
+var recoveryNoncommitScript string
+
 // This bounded wire projection is private. A matching native marker proves
 // only effect fencing; the primary journal must still authorize ownership.
 func recoveryFenceFields(value, epoch string) ([]string, bool) {
@@ -94,6 +97,17 @@ func (t *nativeTransport) restore(ctx context.Context, p commandPlan, marker str
 	}
 	reply, err := t.executeScript(ctx, recoveryReplayScript, p.keys, args)
 	return recoveryAcknowledgement(reply, err, "restored", p.fingerprint)
+}
+
+func (t *nativeTransport) confirmNoncommit(ctx context.Context, p commandPlan, marker string) error {
+	if _, err := mutationArguments(p); err != nil {
+		return err
+	}
+	if _, ok := recoveryFenceFields(marker, p.epoch); !ok {
+		return risk.ErrInvalidCounterCommand
+	}
+	reply, err := t.executeScript(ctx, recoveryNoncommitScript, p.keys[:10], []string{marker, p.fingerprint})
+	return recoveryAcknowledgement(reply, err, "not_committed", p.fingerprint)
 }
 
 // No recovery IO error authorizes progress or an automatic resend. Even an
