@@ -91,6 +91,10 @@ func (r VelocityRecovery) CheckClosure(ctx context.Context, closure VelocityReco
 }
 
 func (r VelocityRecovery) primaryClosure(ctx context.Context, lease VelocityRecoveryLease, prepare, covered bool) (VelocityRecoveryClosure, error) {
+	return r.primaryPublicationClosure(ctx, lease, prepare, covered, nil)
+}
+
+func (r VelocityRecovery) primaryPublicationClosure(ctx context.Context, lease VelocityRecoveryLease, prepare, covered bool, confirmation *velocityPublicationCheck) (VelocityRecoveryClosure, error) {
 	// Authenticate applied custody first without retaining its transaction.
 	// Recheck its seal and exact position under the final writer fence below:
 	// concurrent advancement or a newly committed tail must not be skipped.
@@ -173,11 +177,21 @@ func (r VelocityRecovery) primaryClosure(ctx context.Context, lease VelocityReco
 			return VelocityRecoveryClosure{}, identity.UnavailableError{}
 		}
 	}
-	if _, err := s.liveLease(bounded, tx, l); err != nil {
+	now, err = s.liveLease(bounded, tx, l)
+	if err != nil {
 		return VelocityRecoveryClosure{}, err
+	}
+	result := &velocityRecoveryClosure{lease: l, position: position, from: from, through: through, started: started}
+	if confirmation != nil {
+		if err := s.confirmPublication(bounded, tx, l, result, confirmation, now); err != nil {
+			return VelocityRecoveryClosure{}, err
+		}
+		if _, err := s.liveLease(bounded, tx, l); err != nil {
+			return VelocityRecoveryClosure{}, err
+		}
 	}
 	if err := tx.Commit(bounded); err != nil {
 		return VelocityRecoveryClosure{}, identity.UnavailableError{}
 	}
-	return VelocityRecoveryClosure{state: &velocityRecoveryClosure{lease: l, position: position, from: from, through: through, started: started}}, nil
+	return VelocityRecoveryClosure{state: result}, nil
 }

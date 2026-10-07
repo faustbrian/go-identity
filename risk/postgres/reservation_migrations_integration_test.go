@@ -265,13 +265,23 @@ func TestRiskReservationPopulatedUpgrade(t *testing.T) {
 	}
 	install(coverageHistory)
 	install(coverageHistory)
-	testVelocityJournal(t, ctx, dsn, name)
-	// A fresh full history uses the same constraints, not an upgrade-only schema.
-	fresh, err := (ReservationMigrationSource{Base: IssuanceIDMigrationSource{Base: MigrationSource{Schema: "risk_fresh", Version: 30}, Version: 31}, Version: 32}).Load(ctx)
+	publicationHistory, err := (VelocityPublicationMigrationSource{Base: VelocityCoverageMigrationSource{Base: VelocityAppliedMigrationSource{Base: VelocityReplayMigrationSource{Base: VelocityIntegrityMigrationSource{Base: intentSource, Version: 26}, Version: 27}, Version: 28}, Version: 29}, Version: 30}).Load(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
-	install(append(append([]migrations.Migration(nil), coverageHistory...), fresh...))
+	install(publicationHistory)
+	install(publicationHistory)
+	var manufactured int
+	if err := db.QueryRowContext(ctx, `SELECT count(*) FROM risk_store.velocity_epochs WHERE publication_id IS NOT NULL OR publication_confirmed_at IS NOT NULL`).Scan(&manufactured); err != nil || manufactured != 0 {
+		t.Fatal("publication migration invented confirmation", err)
+	}
+	testVelocityJournal(t, ctx, dsn, name)
+	// A fresh full history uses the same constraints, not an upgrade-only schema.
+	fresh, err := (ReservationMigrationSource{Base: IssuanceIDMigrationSource{Base: MigrationSource{Schema: "risk_fresh", Version: 31}, Version: 32}, Version: 33}).Load(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	install(append(append([]migrations.Migration(nil), publicationHistory...), fresh...))
 	if _, err := db.ExecContext(ctx, `INSERT INTO risk_fresh.issued_evidence SELECT * FROM risk_store.issued_evidence`); err != nil {
 		t.Fatal("fresh install lost issued-row compatibility", err)
 	}

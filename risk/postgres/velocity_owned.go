@@ -32,13 +32,17 @@ func (r VelocityRecovery) OwnedClosure(ctx context.Context, lease VelocityRecove
 	if err := r.CheckCoveredClosure(ctx, closure); err != nil {
 		return risk.VelocityClosure{}, err
 	}
-	var id [32]byte
-	copy(id[:], velocityMAC(s.journal.key, "identity-risk-velocity-closure-v1", l.tenant, string(namespace[:]), string(l.epoch[:]), strconv.FormatUint(l.generation, 10), string(l.token[:]), velocitySealTime(l.expires), strconv.FormatInt(c.position, 10), velocitySealTime(c.from), velocitySealTime(c.through), velocitySealTime(c.started), strconv.FormatInt(s.maximumWindow.Microseconds(), 10)))
-	result, err := s.journalIssuer.Closure(owned, risk.VelocityClosureBinding{ID: id, Position: c.position, ReplayFrom: c.from, ReplayThrough: c.through, JournalStartedAt: c.started, MaximumWindow: s.maximumWindow}, func(ctx context.Context) error { return r.CheckCoveredClosure(ctx, closure) })
+	result, err := s.journalIssuer.Closure(owned, s.closureBinding(l, c), func(ctx context.Context) error { return r.CheckCoveredClosure(ctx, closure) })
 	if err != nil {
 		return risk.VelocityClosure{}, identity.UnavailableError{}
 	}
 	return result, nil
+}
+
+func (s *velocityRecovery) closureBinding(l *velocityRecoveryLease, c *velocityRecoveryClosure) risk.VelocityClosureBinding {
+	var id [32]byte
+	copy(id[:], velocityMAC(s.journal.key, "identity-risk-velocity-closure-v1", l.tenant, string(s.journal.namespace), string(l.epoch[:]), strconv.FormatUint(l.generation, 10), string(l.token[:]), velocitySealTime(l.expires), strconv.FormatInt(c.position, 10), velocitySealTime(c.from), velocitySealTime(c.through), velocitySealTime(c.started), strconv.FormatInt(s.maximumWindow.Microseconds(), 10)))
+	return risk.VelocityClosureBinding{ID: id, Position: c.position, ReplayFrom: c.from, ReplayThrough: c.through, JournalStartedAt: c.started, MaximumWindow: s.maximumWindow}
 }
 
 // OwnedLease supplies cross-adapter custody after checking the exact

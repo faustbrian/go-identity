@@ -58,6 +58,12 @@ func TestVelocityRecoveryUnconfiguredOwnedReplayDeniesBeforeIO(t *testing.T) {
 	if err := r.CheckClosure(context.Background(), VelocityRecoveryClosure{}); err == nil {
 		t.Fatal("zero closure reached primary IO")
 	}
+	if err := r.ConfirmPublication(context.Background(), l, risk.VelocityLease{}, VelocityRecoveryClosure{}, risk.VelocityClosure{}, risk.VelocityPublication{}); err == nil {
+		t.Fatal("unconfigured publication reached primary IO")
+	}
+	if err := r.CheckPublication(context.Background(), l, risk.VelocityLease{}, VelocityRecoveryClosure{}, risk.VelocityClosure{}, risk.VelocityPublication{}); err == nil {
+		t.Fatal("unconfigured confirmation reached primary IO")
+	}
 }
 
 func TestVelocityClosureCustodyRedaction(t *testing.T) {

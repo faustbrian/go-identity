@@ -315,6 +315,20 @@ evidence and decisions. It is **not yet an executable durable risk service**.
   expiry; it does not establish current validity. Nil preserves existing setup.
   Native current counters, same-domain row checks and finalization remain
   required; this partial method does not enable `RiskExecutionContributor`.
+- `VelocityPublicationMigrationSource{Base: coverageSource, Version:
+  nextAllocation}` adds native publication confirmation to the existing epoch
+  row. Existing rows remain unconfirmed. `ConfirmPublication` requires the
+  original primary lease, owned lease, covered cut, its exact exported custody
+  and the configured native owner's publication acknowledgement. It rechecks
+  applied progress and coverage under the existing writer fence before commit.
+  `CheckPublication` rereads that same record without changing its time. A lost
+  commit acknowledgement returns unavailable; retry only the same custody to
+  reconcile the original primary record, not native IO. Renewal/takeover clear
+  obsolete confirmation without requiring the migration for lease/page-only
+  use. Both methods keep the epoch replaying and traffic fenced: primary
+  confirmation does not prove current native marker/counter continuity, write
+  a confirmed native marker or expose a public counter store. Paired admission
+  and reference activation remain unfinished. No SQL lock spans native IO.
 - `MapIssue` accepts only an opaque successful core evaluation and matching
   trusted identity binding. `IssueOperation` fixes its closed native schema.
 - The native decoder verifies every signed field and current configured policy.

@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Record the configured native owner's exact covered-cut publication in the
+  primary epoch without reopening traffic or extending the original lease.
+  Matching retries reconcile commit ambiguity without refreshing confirmation;
+  renewal and takeover clear superseded records. Install the additive
+  publication migration for confirmation; existing lease/page APIs remain
+  usable without it. Confirmation is not proof of present native continuity.
+
 - Export primary-authenticated covered velocity closure through the configured
   recovery graph without renewing its lease or cut. Stable keyed identity binds
   original scope, applied progress and continuous coverage; stale or uncovered

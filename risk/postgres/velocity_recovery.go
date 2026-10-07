@@ -185,6 +185,11 @@ func (r VelocityRecovery) Acquire(ctx context.Context, tenant string, epoch [16]
 			return VelocityRecoveryLease{}, identity.UnavailableError{}
 		}
 	}
+	if !missing {
+		if err := s.clearPublication(bounded, tx, tenant, epoch); err != nil {
+			return VelocityRecoveryLease{}, err
+		}
+	}
 	if err := tx.Commit(bounded); err != nil {
 		return VelocityRecoveryLease{}, identity.UnavailableError{}
 	}
@@ -239,6 +244,9 @@ func (r VelocityRecovery) lease(ctx context.Context, lease VelocityRecoveryLease
 		}
 		if _, err := tx.Exec(bounded, `UPDATE `+s.journal.schema+`.velocity_epochs SET lease_expires_at=$4,replay_through=replay_from WHERE tenant_id=$1 AND namespace_digest=$2 AND epoch=$3`, l.tenant, s.journal.namespace, l.epoch[:], expires); err != nil {
 			return VelocityRecoveryLease{}, identity.UnavailableError{}
+		}
+		if err := s.clearPublication(bounded, tx, l.tenant, l.epoch); err != nil {
+			return VelocityRecoveryLease{}, err
 		}
 	}
 	if err := tx.Commit(bounded); err != nil {

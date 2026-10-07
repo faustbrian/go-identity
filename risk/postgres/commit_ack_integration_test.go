@@ -20,14 +20,15 @@ import (
 // commitAckFault selects only the successful terminal write for one command.
 // It never fabricates a database outcome or changes executor behavior.
 type commitAckFault struct {
-	command          []byte
-	hits             atomic.Int32
-	velocitySequence atomic.Int64
-	velocityEpoch    atomic.Pointer[[16]byte]
-	velocityReplay   atomic.Int64
-	velocityApplied  atomic.Int64
-	velocityResume   atomic.Pointer[[16]byte]
-	velocityClosure  atomic.Pointer[[16]byte]
+	command             []byte
+	hits                atomic.Int32
+	velocitySequence    atomic.Int64
+	velocityEpoch       atomic.Pointer[[16]byte]
+	velocityReplay      atomic.Int64
+	velocityApplied     atomic.Int64
+	velocityResume      atomic.Pointer[[16]byte]
+	velocityClosure     atomic.Pointer[[16]byte]
+	velocityPublication atomic.Pointer[[16]byte]
 }
 
 type ackTargetKey struct{}
@@ -105,6 +106,11 @@ func (f *commitAckFault) TraceQueryStart(ctx context.Context, conn *pgx.Conn, da
 		}
 	}
 	if epoch := f.velocityClosure.Load(); epoch != nil && strings.Contains(data.SQL, ".velocity_epochs SET replay_through=$4 WHERE ") && len(data.Args) == 4 {
+		if value, ok := data.Args[2].([]byte); ok && bytes.Equal(value, epoch[:]) {
+			return context.WithValue(ctx, ackTargetKey{}, true)
+		}
+	}
+	if epoch := f.velocityPublication.Load(); epoch != nil && strings.Contains(data.SQL, ".velocity_epochs SET publication_id=$4,publication_confirmed_at=$5 WHERE ") && len(data.Args) == 5 {
 		if value, ok := data.Args[2].([]byte); ok && bytes.Equal(value, epoch[:]) {
 			return context.WithValue(ctx, ackTargetKey{}, true)
 		}
