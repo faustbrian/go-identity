@@ -270,10 +270,32 @@ participant callbacks compose current flow/lockout checks and command replay/aud
 under the coordinator's authoritative recovery. No public raw
 transaction or binding-to-release shortcut is exposed.
 
-**Can I use this for login?** Not yet. Native issuance/send windows, original
-successful metered checks, authenticated-session composition and bounded cleanup
-remain in development; pre-auth counted denial/consumption is not complete login. There
+**Can I use this for login?** Not yet. Native issuance/send windows and bounded
+cleanup remain in development. Native original pre-auth/authenticated-session
+checks and consuming composition are not complete login. There
 is intentionally no public raw SQL/pool/store workaround.
+
+**Does a successful check authenticate?** No. Register the native contributor
+and explicitly select `Coordinator.RecordOTPMeteredCheck` with its exact
+record-free `identity.otp.check` declaration and original check-mode command.
+The original separately submitted cookie/session bearer, frozen authority and
+current primary admission are required before comparison. Each new admitted
+check charges both the separate check allowance and shared total allowance,
+including correct checks; disabled or exhausted allowances do not charge.
+Wrong final exhaustion may extend shared lockouts; correct final exhaustion
+cannot. Counters, required audit and the existing journal receipt commit
+atomically, without reservations, session changes, domain application or
+lifecycle delivery. An audit failure rolls back the charge.
+
+Exact retries preserve the result without another comparison. A correct check's
+`CommitOutcomeCommitted` means only that its metering receipt committed, never
+proof or permission to perform a protected action. Wrong checks return retained
+`CommitOutcomeNotCommitted`; the first submission reports denial, while ordinary
+exact replay returns the retained receipt. `RecoverOTPMeteredCheck` requires
+current query authorization and the original scalar attempt plan, not the code
+or bearer; it recovers historical classification without renewing authority.
+`ApplyFeature` always denies: generic domain execution cannot run this operation.
+
 
 **Can I rotate a digest in place?** No. Existing rows keep their original retained
 key version and digest. Future issuance selects the modern active profile;

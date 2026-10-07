@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Add native non-consuming OTP checks under original pre-auth or authenticated
+  session custody. Persist bounded check/total counters, required audit and
+  stable replay/recovery atomically; checks grant no authentication proof,
+  reservation or protected mutation. Wrong exhaustion extends shared lockouts;
+  correct checks never do. Existing consuming contributor contracts remain
+  compatible; full issuance and login workflows remain under development.
+
 - Add explicit opt-in native authenticated-session OTP denial, reservation,
   takeover and atomic consumption. Check original bearer custody and current
   primary authority without renewing freshness; preserve the session during

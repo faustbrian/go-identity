@@ -37,16 +37,16 @@ func (ContributorConfig) MarshalJSON() ([]byte, error) { return nil, otp.ErrSens
 // MarshalText denies secret configuration export.
 func (ContributorConfig) MarshalText() ([]byte, error) { return nil, otp.ErrSensitiveSerialization }
 
-// Contributor implements coordinator-owned counted denial, reservation,
-// protected consumption and recovery for pre-auth submissions. It owns no pool, transaction, retry, hook,
+// Contributor implements coordinator-owned metered checks, counted denial,
+// reservation, protected consumption and recovery. It owns no pool, transaction, retry, hook,
 // goroutine or independent replay log. Enlist the exact returned pointer;
 // instances are immutable and concurrent-safe, phase handles are serial-use.
 //
 // The denial entry point returns Unchanged (rollback) for correct codes; only
 // the separate reservation/protected execution path can consume them atomically.
 // Authenticated-session execution requires explicit NewContributorWithSession
-// configuration. Successful metered Check and complete login composition remain
-// under development.
+// configuration. Metered checks grant no authentication proof; complete login
+// composition remains under development.
 type Contributor struct {
 	schema, global, namespace string
 	codec                     *AttemptCodec
@@ -108,9 +108,9 @@ func (*Contributor) Descriptor() kernel.ContributorDescriptor {
 
 // ValidateOTPAttemptCommand authenticates original command/code binding and
 // frozen authority locally, without SQL or a challenge comparison. This profile
-// requires consuming mode and complete original custody with its separate
+// requires consuming mode or the exact native check schema and original custody with its separate
 // bearer under an explicitly configured pre-auth or session profile.
-// Legacy/ID-only/check profiles deny rather than borrow fresh authority.
+// Legacy/ID-only and unrelated check profiles deny rather than borrow fresh authority.
 func (p *Contributor) ValidateOTPAttemptCommand(command identity.Command, plan kernel.OTPAttemptPlan) error {
 	_, _, err := p.original(command, plan)
 	return err
@@ -120,11 +120,14 @@ func (p *Contributor) original(command identity.Command, plan kernel.OTPAttemptP
 	bad := func() (otp.AttemptCommand, AttemptAuthority, error) {
 		return otp.AttemptCommand{}, AttemptAuthority{}, ErrInvalidCommand
 	}
-	if p == nil || p.codec == nil || plan.Mode != kernel.OTPConsume {
+	if p == nil || p.codec == nil || plan.Mode != kernel.OTPConsume && plan.Mode != kernel.OTPCheck {
 		return bad()
 	}
 	spec, ok := command.Feature()
 	if !ok {
+		return bad()
+	}
+	if plan.Mode == kernel.OTPCheck && spec.Operation != checkOperation(spec.Operation.SubjectRequirement) {
 		return bad()
 	}
 	authority, err := p.codec.restoreAuthority(spec)
@@ -160,12 +163,27 @@ func (p *Contributor) original(command identity.Command, plan kernel.OTPAttemptP
 // roll back all provisional SQL. No code is logged, stored or compared twice.
 // Caller cancellation and bounded Work errors abort; no local retry occurs.
 func (p *Contributor) RecordOTPAttemptDenial(ctx context.Context, w kernel.OTPAttemptWork) (kernel.OTPAttemptDisposition, error) {
+	return p.recordCountedAttempt(ctx, w, false)
+}
+
+// RecordOTPMeteredCheck runs only within the coordinator's explicit check phase.
+// It charges both check and total budgets for each new admitted comparison and
+// proposes durable checked/denied history. It neither reserves OTP nor changes
+// pre-auth/session state. The coordinator owns audit, replay and the sole commit.
+func (p *Contributor) RecordOTPMeteredCheck(ctx context.Context, w kernel.OTPAttemptWork) (kernel.OTPAttemptDisposition, error) {
+	return p.recordCountedAttempt(ctx, w, true)
+}
+
+func (p *Contributor) recordCountedAttempt(ctx context.Context, w kernel.OTPAttemptWork, metered bool) (kernel.OTPAttemptDisposition, error) {
 	if ctx == nil || p == nil {
 		return 0, ErrInvalidCommand
 	}
 	b, err := w.Binding(p)
 	if err != nil {
 		return 0, err
+	}
+	if metered && b.Plan.Mode != kernel.OTPCheck || !metered && b.Plan.Mode != kernel.OTPConsume {
+		return 0, ErrInvalidCommand
 	}
 	command, err := w.NativeCommand(p)
 	if err != nil {
@@ -235,7 +253,7 @@ func (p *Contributor) RecordOTPAttemptDenial(ctx context.Context, w kernel.OTPAt
 		return 0, ErrInvalidCommand
 	}
 	snapshot, _ := row.challenge.Bindings()
-	if d.Outcome == otp.AttemptReserved || d.Outcome == otp.AttemptChecked || d.Version == snapshot.Version {
+	if d.Outcome == otp.AttemptReserved || !metered && d.Outcome == otp.AttemptChecked || d.Version == snapshot.Version {
 		return kernel.OTPAttemptUnchanged, nil
 	}
 	if err = persistCount(ctx, w.Exec, row, d, now); err != nil {
@@ -245,6 +263,9 @@ func (p *Contributor) RecordOTPAttemptDenial(ctx context.Context, w kernel.OTPAt
 		if err = extendLockouts(ctx, w.Exec, locked, now, d.LockoutAfter); err != nil {
 			return 0, err
 		}
+	}
+	if d.Outcome == otp.AttemptChecked {
+		return kernel.OTPAttemptChecked, nil
 	}
 	return kernel.OTPAttemptDenied, nil
 }

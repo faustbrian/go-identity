@@ -8,6 +8,8 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"os"
+	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -26,7 +28,7 @@ import (
 // The protected email and audit/outbox effects are existing deliberate SQL
 // seams. Session/credential authority, OTP and coordinator execution are real.
 func TestNativeSessionOTPPrimaryComposition(t *testing.T) {
-	for _, mode := range []string{"consume", "wrong-denial", "takeover", "rollback", "recovery-revoked", "recovery-unknown", "session-revoked", "family-revoked", "user-blocked", "credential-disabled", "stale-authorization", "stale-directory", "user-epoch", "identifier-epoch", "credential-epoch", "credential-version", "session-expired", "freshness-expired", "freshness-lock-expiry", "credential-lock-expiry"} {
+	for _, mode := range []string{"metered-correct", "metered-wrong", "metered-cap", "metered-concurrent-first", "metered-concurrent-replay", "metered-final-correct", "metered-final-wrong", "metered-disabled", "metered-audit-failure", "consume", "wrong-denial", "takeover", "rollback", "recovery-revoked", "recovery-unknown", "session-revoked", "family-revoked", "user-blocked", "credential-disabled", "stale-authorization", "stale-directory", "user-epoch", "identifier-epoch", "credential-epoch", "credential-version", "session-expired", "freshness-expired", "freshness-lock-expiry", "credential-lock-expiry"} {
 		t.Run(mode, func(t *testing.T) {
 			ctx, db, peer := otpDatabase(t)
 			directory := kernel.DirectoryAuthorityMigrationSource{Base: kernel.CredentialMigrationSource{Base: kernel.StatusMigrationSource{Base: kernel.MigrationSource{}, Version: 12}, Version: 13}, Version: 14, GlobalAuthorityID: "deployment", TenantIDs: []identity.TenantID{"tenant"}}
@@ -90,6 +92,17 @@ func TestNativeSessionOTPPrimaryComposition(t *testing.T) {
 				t.Fatal(err)
 			}
 			s, _ := original.Bindings()
+			if strings.HasPrefix(mode, "metered-") {
+				submitted := "123456"
+				if mode == "metered-wrong" || mode == "metered-final-wrong" {
+					submitted = "654321"
+				}
+				version := uint64(1)
+				if strings.HasPrefix(mode, "metered-final-") {
+					version = 3
+				}
+				command, attempt = meteredCheckCommand(t, p, command, attempt, submitted, version)
+			}
 			remember, _ := s.Remember.Bindings()
 			vector, _ := s.Authority.Bindings()
 			payload, err := json.Marshal(map[string]any{"Schema": 1, "SessionID": s.SessionID, "FamilyID": s.FamilyID, "TenantID": s.TenantID, "UserID": s.UserID, "Audience": s.Audience, "Version": s.Version, "FamilyVersion": s.FamilyVersion, "Remember": remember, "Authority": vector, "Lookup": s.Lookup, "Authentication": s.Authentication, "IssuedAt": s.IssuedAt, "LastActivityAt": s.LastActivityAt})
@@ -132,10 +145,20 @@ func TestNativeSessionOTPPrimaryComposition(t *testing.T) {
 			if _, err := db.Exec(ctx, `WITH instant AS MATERIALIZED(SELECT clock_timestamp() AS now) UPDATE identity.commands SET state='committed',generation=1,attempt=1,lease_owner=$2,lease_until=instant.now,heartbeat_at=instant.now,created_at=instant.now,updated_at=instant.now,result_version=1,terminal_class='committed',result=$2,terminal_at=instant.now FROM instant WHERE command_id=$1`, issue, bytes.Repeat([]byte{77}, 16)); err != nil {
 				t.Fatal(err)
 			}
-			if _, err := db.Exec(ctx, `INSERT INTO otp_store.challenges(tenant_id,challenge_id,subject_id,purpose,issue_command_id,issue_command_purpose,issue_fingerprint,digest_key_version,code_digest,scope_digest,policy_version,scope_generation,alphabet,code_length,ttl_us,resend_interval_us,maximum_sends,attempt_limit,replacement,checks_enabled,check_limit,lockout_us,issued_at,expires_at,state,version) VALUES('tenant','challenge','user','email-verification',$1,'identity.otp.send',$2,3,$3,$4,11,12,'0123456789',6,60000000,30000000,3,3,'retain',true,2,60000000,statement_timestamp(),statement_timestamp()+interval '60 seconds','issued',1)`, issue, bytes.Repeat([]byte{77}, 32), stored.Value[:], sd.Value[:]); err != nil {
+			checksEnabled, checkLimit := true, 2
+			if mode == "metered-disabled" {
+				checksEnabled, checkLimit = false, 0
+			}
+			if _, err := db.Exec(ctx, `INSERT INTO otp_store.challenges(tenant_id,challenge_id,subject_id,purpose,issue_command_id,issue_command_purpose,issue_fingerprint,digest_key_version,code_digest,scope_digest,policy_version,scope_generation,alphabet,code_length,ttl_us,resend_interval_us,maximum_sends,attempt_limit,replacement,checks_enabled,check_limit,lockout_us,issued_at,expires_at,state,version) VALUES('tenant','challenge','user','email-verification',$1,'identity.otp.send',$2,3,$3,$4,11,12,'0123456789',6,60000000,30000000,3,3,'retain',$5,$6,60000000,statement_timestamp(),statement_timestamp()+interval '60 seconds','issued',1)`, issue, bytes.Repeat([]byte{77}, 32), stored.Value[:], sd.Value[:], checksEnabled, checkLimit); err != nil {
 				t.Fatal(err)
 			}
 			changes := map[string]string{"session-revoked": `UPDATE session_store.sessions SET state='revoked'`, "family-revoked": `UPDATE session_store.families SET state='revoked'`, "user-blocked": `UPDATE identity.users SET status='banned'`, "credential-disabled": `UPDATE identity.credential_references SET enabled=false`, "stale-authorization": `UPDATE authorization_subject_authorities SET version=10`, "stale-directory": `UPDATE identity.tenant_authorities SET version=4`, "user-epoch": `UPDATE identity.users SET authority_version=5`, "identifier-epoch": `UPDATE identity.users SET identifier_version=6`, "credential-epoch": `UPDATE identity.users SET credential_version=7`, "credential-version": `UPDATE identity.credential_references SET version=15`}
+			if strings.HasPrefix(mode, "metered-final-") {
+				// One prior check and one wrong consume share the total budget.
+				if _, err := db.Exec(ctx, `UPDATE otp_store.challenges SET used_attempts=1,checks=1,version=2; UPDATE otp_store.challenges SET used_attempts=2,failed_attempts=1,version=3`); err != nil {
+					t.Fatal(err)
+				}
+			}
 			if sql := changes[mode]; sql != "" {
 				if _, err := db.Exec(ctx, sql); err != nil {
 					t.Fatal(err)
@@ -152,13 +175,169 @@ func TestNativeSessionOTPPrimaryComposition(t *testing.T) {
 			})
 			repo, _ := kernel.NewRepository(pool, kernel.Config{MaximumDuration: time.Second})
 			spec, _ := command.Feature()
-			registry, err := kernel.NewContributorRegistry([]kernel.Contributor{repo, &contributorAudit{}, &contributorLifecycle{apply: true}, &contributorFeature{op: spec.Operation, apply: true, fail: mode == "rollback"}, p})
+			participants := []kernel.Contributor{repo, &contributorAudit{}, &contributorLifecycle{apply: true}, &contributorFeature{op: spec.Operation, apply: true, fail: mode == "rollback"}, p}
+			if strings.HasPrefix(mode, "metered-") {
+				participants = []kernel.Contributor{repo, &contributorAudit{fail: mode == "metered-audit-failure"}, &contributorLifecycle{}, p}
+			}
+			registry, err := kernel.NewContributorRegistry(participants)
 			if err != nil {
 				t.Fatal(err)
 			}
 			coordinator, err := kernel.NewCoordinator(pool, registry, kernel.CoordinatorConfig{MaximumDuration: 2 * time.Second, LeaseDuration: time.Second, CurrentFingerprintKeyVersion: 1, RetainedFingerprintKeys: map[uint32][32]byte{1: {1}}})
 			if err != nil {
 				t.Fatal(err)
+			}
+			if strings.HasPrefix(mode, "metered-") {
+				plan, err := coordinator.PrepareOTPAttemptPlan(spec.Binding, command, contributorPlan(t, registry, command, attempt))
+				if err != nil {
+					t.Fatal("metered preparation", err)
+				}
+				var result identity.CommandResult
+				if mode == "metered-concurrent-first" {
+					type response struct {
+						result identity.CommandResult
+						err    error
+					}
+					responses := make(chan response, 8)
+					start := make(chan struct{})
+					var wg sync.WaitGroup
+					for range 8 {
+						wg.Add(1)
+						go func() {
+							defer wg.Done()
+							<-start
+							r, e := coordinator.RecordOTPMeteredCheck(ctx, spec.Binding, command, plan)
+							responses <- response{r, e}
+						}()
+					}
+					close(start)
+					wg.Wait()
+					close(responses)
+					for response := range responses {
+						if response.err != nil || response.result.Outcome != identity.CommitOutcomeCommitted || result.AuditEventID != "" && response.result.AuditEventID != result.AuditEventID {
+							t.Fatal("concurrent first check did not converge", response.result.Outcome, response.err)
+						}
+						result = response.result
+					}
+				} else {
+					result, err = coordinator.RecordOTPMeteredCheck(ctx, spec.Binding, command, plan)
+				}
+				if mode == "metered-disabled" || mode == "metered-audit-failure" {
+					if err == nil || result.Outcome == identity.CommitOutcomeCommitted {
+						t.Fatal("unavailable check committed", result.Outcome, err)
+					}
+					var used, checks, audits, effects int
+					if err := db.QueryRow(ctx, `SELECT (SELECT used_attempts FROM otp_store.challenges),(SELECT checks FROM otp_store.challenges),(SELECT count(*) FROM public.native_otp_audits),(SELECT count(*) FROM public.native_otp_domain)+(SELECT count(*) FROM public.native_otp_lifecycle)`).Scan(&used, &checks, &audits, &effects); err != nil {
+						t.Fatal(err)
+					}
+					if used != 0 || checks != 0 || audits != 0 || effects != 0 {
+						t.Fatal("failed check leaked provisional effects", used, checks, audits, effects)
+					}
+					return
+				}
+				want := identity.CommitOutcomeCommitted
+				failed := 0
+				if mode == "metered-wrong" || mode == "metered-final-wrong" {
+					want, failed = identity.CommitOutcomeNotCommitted, 1
+				}
+				if result.Outcome != want || want == identity.CommitOutcomeCommitted && err != nil || want == identity.CommitOutcomeNotCommitted && err == nil {
+					t.Fatal("metered result", result.Outcome, err)
+				}
+				replay, err := coordinator.RecordOTPMeteredCheck(ctx, spec.Binding, command, plan)
+				if err != nil || replay.Outcome != result.Outcome || replay.AuditEventID != result.AuditEventID {
+					t.Fatal("metered replay", replay.Outcome, err)
+				}
+				if mode == "metered-concurrent-replay" {
+					var wg sync.WaitGroup
+					for range 8 {
+						wg.Add(1)
+						go func() {
+							defer wg.Done()
+							r, err := coordinator.RecordOTPMeteredCheck(ctx, spec.Binding, command, plan)
+							if err != nil || r.Outcome != result.Outcome || r.AuditEventID != result.AuditEventID {
+								t.Error("concurrent replay changed retained result", r.Outcome, err)
+							}
+						}()
+					}
+					wg.Wait()
+				}
+				if mode == "metered-cap" {
+					second, declared := meteredCheckCommand(t, p, command, attempt, "123456", 2)
+					secondSpec, _ := second.Feature()
+					secondPlan, err := coordinator.PrepareOTPAttemptPlan(secondSpec.Binding, second, contributorPlan(t, registry, second, declared))
+					if err != nil {
+						t.Fatal(err)
+					}
+					if r, err := coordinator.RecordOTPMeteredCheck(ctx, secondSpec.Binding, second, secondPlan); err != nil || r.Outcome != identity.CommitOutcomeCommitted {
+						t.Fatal("last allowed check denied", r.Outcome, err)
+					}
+					third, declared := meteredCheckCommand(t, p, second, declared, "123456", 3)
+					thirdSpec, _ := third.Feature()
+					thirdPlan, err := coordinator.PrepareOTPAttemptPlan(thirdSpec.Binding, third, contributorPlan(t, registry, third, declared))
+					if err != nil {
+						t.Fatal(err)
+					}
+					if r, err := coordinator.RecordOTPMeteredCheck(ctx, thirdSpec.Binding, third, thirdPlan); err == nil || r.Outcome == identity.CommitOutcomeCommitted {
+						t.Fatal("check-specific cap bypassed", r.Outcome, err)
+					}
+				}
+				freshCodec, err := NewAttemptCodec(codecConfig())
+				if err != nil {
+					t.Fatal(err)
+				}
+				config.Codec = freshCodec
+				fresh, err := NewContributorWithSession(config.ContributorConfig, *config.Session)
+				if err != nil {
+					t.Fatal(err)
+				}
+				r, err := kernel.NewContributorRegistry([]kernel.Contributor{repo, &contributorAudit{}, &contributorLifecycle{}, fresh})
+				if err != nil {
+					t.Fatal(err)
+				}
+				restarted, err := kernel.NewCoordinator(pool, r, kernel.CoordinatorConfig{MaximumDuration: 2 * time.Second, LeaseDuration: time.Second, CurrentFingerprintKeyVersion: 1, RetainedFingerprintKeys: map[uint32][32]byte{1: {1}}, QueryPolicy: &kernel.CommandQueryPolicy{Clock: clock.System{}, PolicyVersion: 9, Authorization: contributorQueryPolicy{}}})
+				if err != nil {
+					t.Fatal(err)
+				}
+				b := spec.Binding
+				q := identity.RecoveryQuery{CommandID: b.CommandID, TenantID: b.TenantID, UserID: b.UserID, ActorID: b.ActorID, ActorKind: b.ActorKind, OperationID: b.OperationID}
+				caller := authorization.DecisionContext{PolicyRevision: 9, Request: authorization.Request{Subject: authorization.Subject{ID: authorization.SubjectID(b.ActorID), Kind: b.ActorKind}, Tenant: authorization.TenantID(b.TenantID), Action: authorization.Action(b.OperationID), Resource: authorization.Resource{Type: "identity.user", ID: authorization.ResourceID(b.UserID)}}}
+				command = identity.Command{}
+				recovered, err := restarted.RecoverOTPMeteredCheck(ctx, q, attempt, caller)
+				if recovered.Outcome != want || recovered.AuditEventID != result.AuditEventID || want == identity.CommitOutcomeCommitted && err != nil || want == identity.CommitOutcomeNotCommitted && err == nil {
+					t.Fatal("metered restart recovery", recovered.Outcome, err)
+				}
+				changed := attempt
+				changed.ExpectedVersion++
+				if _, err := restarted.RecoverOTPMeteredCheck(ctx, q, changed, caller); err == nil {
+					t.Fatal("changed attempt recovered")
+				}
+				var state, sessionState string
+				var used, checks, actualFailed, domains, events, audits int
+				if err := db.QueryRow(ctx, `SELECT (SELECT state FROM otp_store.challenges),(SELECT state FROM session_store.sessions),(SELECT used_attempts FROM otp_store.challenges),(SELECT checks FROM otp_store.challenges),(SELECT failed_attempts FROM otp_store.challenges),(SELECT count(*) FROM public.native_otp_domain),(SELECT count(*) FROM public.native_otp_lifecycle),(SELECT count(*) FROM public.native_otp_audits)`).Scan(&state, &sessionState, &used, &checks, &actualFailed, &domains, &events, &audits); err != nil {
+					t.Fatal(err)
+				}
+				wantState, wantUsed, wantChecks, wantAudits := "issued", 1, 1, 1
+				if mode == "metered-cap" {
+					wantUsed, wantChecks, wantAudits = 2, 2, 2
+				}
+				if strings.HasPrefix(mode, "metered-final-") {
+					wantState, wantUsed, wantChecks, failed = "exhausted", 3, 2, failed+1
+				}
+				if state != wantState || sessionState != "active" || used != wantUsed || checks != wantChecks || actualFailed != failed || domains != 0 || events != 0 || audits != wantAudits {
+					t.Fatal("metering not atomic or consumed", state, sessionState, used, checks, actualFailed, domains, events, audits)
+				}
+				var blocked int
+				if err := db.QueryRow(ctx, `SELECT count(*) FROM otp_store.lockouts WHERE blocked_until IS NOT NULL`).Scan(&blocked); err != nil {
+					t.Fatal(err)
+				}
+				wantBlocked := 0
+				if mode == "metered-final-wrong" {
+					wantBlocked = 2
+				}
+				if blocked != wantBlocked {
+					t.Fatal("only wrong exhaustion may extend shared lockouts", blocked)
+				}
+				return
 			}
 			plan, err := coordinator.PrepareOTPReservationPlan(spec.Binding, command, contributorPlan(t, registry, command, attempt))
 			if err != nil {

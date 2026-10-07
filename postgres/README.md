@@ -739,6 +739,22 @@ another comparison; changed code or attempt conflicts. `OTPAttemptUnchanged`
 rolls back provisional effects and grants no successful precheck or reservation.
 Returned callback handles cannot access SQL or opaque custody.
 
+Native metered checks use the additive `OTPMeteredCheckContributor`, the same
+OTP owner as the declared record-free feature, and an exact `OTPCheck` plan.
+`RecordOTPMeteredCheck` uses the existing transaction and journal to commit
+check/total counters with required audit and a redacted check receipt. It does
+not invoke domain application, risk/capability consumption, lifecycle delivery
+or session effects. `OTPAttemptChecked` is accepted only on this explicit path;
+the existing denial path cannot turn a correct check into success.
+
+For correct checks, `CommitOutcomeCommitted` describes committed metering only,
+not authentication proof, reservation or protected mutation. Wrong checks retain
+the denial outcome; disabled/exhausted checks roll back unchanged. Exact replay
+does not compare or charge again. `RecoverOTPMeteredCheck` binds the original
+attempt plan and current query authorization to retained check history without
+needing a bearer/code or granting current authority. Commit ambiguity remains
+Unknown and must be resolved through the original command, not a new attempt.
+
 Any commit-attempt error is Unknown. Keep the original command and complete
 attempt identity; `RecoverOTPAttemptDenial` uses the configured current
 `QueryPolicy` and one primary read without code, comparison or mutation. A

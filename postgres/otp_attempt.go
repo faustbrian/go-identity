@@ -12,7 +12,7 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// OTPAttemptDisposition is a provisional denial-phase decision, never proof of
+// OTPAttemptDisposition is a provisional counted-attempt decision, never proof of
 // successful verification or commitment. Unknown/zero values abort the unit.
 type OTPAttemptDisposition uint8
 
@@ -24,6 +24,9 @@ const (
 	// charge/result proposal. The coordinator commits it with the aborted command
 	// and required audits. Cross-scope/unknown denials must not charge another row.
 	OTPAttemptDenied
+	// OTPAttemptChecked proposes a persisted non-consuming metered-check result.
+	// Only the explicit check phase accepts it; it grants no proof or reservation.
+	OTPAttemptChecked
 )
 
 // OTPAttemptContributor owns the native pre-reservation wrong-code phase. Pure
@@ -46,8 +49,19 @@ type OTPAttemptContributor interface {
 	RecordOTPAttemptDenial(context.Context, OTPAttemptWork) (OTPAttemptDisposition, error)
 }
 
+// OTPMeteredCheckContributor is an explicit additive non-consuming profile.
+// The same registered native owner must authenticate complete original custody,
+// charge both check and total budgets, and persist the proposal within Work.
+// Existing denial-only contributors do not acquire this capability. The
+// coordinator owns audit, stable receipt, replay and the sole commit. A checked
+// result cannot reserve OTP, invoke protected domain work or change a session.
+type OTPMeteredCheckContributor interface {
+	OTPAttemptContributor
+	RecordOTPMeteredCheck(context.Context, OTPAttemptWork) (OTPAttemptDisposition, error)
+}
+
 // OTPAttemptBinding exposes exact frozen linkage and authoritative complete
-// command fingerprint. Generation is positive and this denial phase permits
+// command fingerprint. Generation is positive and this counted phase permits
 // only a first owner, never takeover of an unresolved one-time reservation.
 // Copies are owned scalars, not authority, proof or public response data.
 type OTPAttemptBinding struct {
@@ -68,7 +82,7 @@ func (OTPAttemptBinding) MarshalJSON() ([]byte, error) { return nil, invalidWork
 // MarshalText rejects implicit conversion of private attempt custody.
 func (OTPAttemptBinding) MarshalText() ([]byte, error) { return nil, invalidWork() }
 
-// OTPAttemptWork grants bounded SQL only within one coordinator-owned denial
+// OTPAttemptWork grants bounded SQL only within one coordinator-owned counted
 // callback. Zero, foreign and returned handles deny. Copies share cancellation,
 // row/SQL budgets and callback lifetime. Close rows before return, use serially,
 // and never treat database time as renewal. There is no driver, transaction,
@@ -222,11 +236,41 @@ func (c *Coordinator) prepareOTPAttempt(b identity.CommandBinding, command ident
 // Earlier deadlines win; no local retry, callbacks under caller control, secret
 // disclosure or private transaction ownership are exposed.
 func (c *Coordinator) RecordOTPAttemptDenial(ctx context.Context, b identity.CommandBinding, command identity.Command, p CommandPlan) (identity.CommandResult, error) {
+	return c.recordOTPAttemptCommand(ctx, b, command, p, false)
+}
+
+// RecordOTPMeteredCheck commits only the separately limited identity.otp.check
+// operation. Committed means that metering, check observation and required audit
+// are durable, never that an account workflow committed or authentication was
+// granted. Correct and incorrect comparisons charge the shared total budget
+// and separate check budget exactly once. No proof, reservation, domain work,
+// lifecycle event or session effect is produced. Exact replay returns retained
+// history before comparison. Unknown commits require original-command recovery;
+// never replace or remap an ambiguous submission. Context and resource budgets,
+// current primary authority and original bearer requirements match denial.
+func (c *Coordinator) RecordOTPMeteredCheck(ctx context.Context, b identity.CommandBinding, command identity.Command, p CommandPlan) (identity.CommandResult, error) {
+	return c.recordOTPAttemptCommand(ctx, b, command, p, true)
+}
+
+func meteredCheckPlan(p *admittedKernelPlan) bool {
+	if p == nil || p.otp == nil || p.feature == nil || p.otp.Mode != OTPCheck {
+		return false
+	}
+	f := p.feature.Operation
+	_, capable := otpAttemptOwner(p).(OTPMeteredCheckContributor)
+	schema := "identity-otp-check"
+	if f.SubjectRequirement == identity.FeatureSubjectAnonymousFlow {
+		schema = "identity-otp-check-preauth"
+	}
+	return capable && p.feature.Contributor == otpDescriptor() && f.Owner == "identity/otp" && f.OperationID == "identity.otp.check" && f.SchemaID == schema && f.SchemaVersion == 1 && f.RecordRequirement == identity.FeatureRecordOmitted
+}
+
+func (c *Coordinator) recordOTPAttemptCommand(ctx context.Context, b identity.CommandBinding, command identity.Command, p CommandPlan, metered bool) (identity.CommandResult, error) {
 	if ctx == nil {
 		return identity.CommandResult{}, invalidPlan()
 	}
-	q, snapshot, _, err := c.prepareOTPAttempt(b, command, p)
-	if err != nil || snapshot.Digest != p.Digest {
+	q, snapshot, declared, err := c.prepareOTPAttempt(b, command, p)
+	if err != nil || snapshot.Digest != p.Digest || metered && !meteredCheckPlan(declared) || !metered && (declared == nil || declared.otp.Mode != OTPConsume) {
 		return identity.CommandResult{}, invalidPlan()
 	}
 	bounded, cancel := context.WithTimeout(ctx, c.maximumDuration)
@@ -275,31 +319,34 @@ func (c *Coordinator) RecordOTPAttemptDenial(ctx context.Context, b identity.Com
 	if j.previousGeneration != 0 {
 		return fail(featureOutcome(b, q.feature, identity.CommitOutcomeUnknown, 0), identity.UnavailableError{})
 	}
-	denied, err := c.recordOTPDenial(bounded, tx, command, q, admitted, j, owner)
+	choice, result, err := c.recordOTPCountedAttempt(bounded, tx, command, q, admitted, j, owner, metered)
 	if err != nil {
 		return fail(identity.CommandResult{}, err)
 	}
-	if !denied {
+	if choice == OTPAttemptUnchanged {
 		return fail(featureOutcome(b, q.feature, identity.CommitOutcomeConflict, 0), identity.ConflictError{})
 	}
 	if err := tx.Commit(bounded); err != nil {
 		return featureOutcome(b, q.feature, identity.CommitOutcomeUnknown, 0), readFailure(bounded, err)
 	}
-	return featureOutcome(b, q.feature, identity.CommitOutcomeNotCommitted, 0), identity.ForbiddenError{}
+	if choice == OTPAttemptChecked {
+		return result, nil
+	}
+	return result, identity.ForbiddenError{}
 }
 
-func (c *Coordinator) recordOTPDenial(ctx context.Context, tx pgx.Tx, command identity.Command, q claimRequest, p *admittedKernelPlan, j journalReservation, owner [16]byte) (denied bool, err error) {
+func (c *Coordinator) recordOTPCountedAttempt(ctx context.Context, tx pgx.Tx, command identity.Command, q claimRequest, p *admittedKernelPlan, j journalReservation, owner [16]byte, metered bool) (choice OTPAttemptDisposition, result identity.CommandResult, err error) {
 	participant := otpAttemptOwner(p)
 	if participant == nil || p.belongsTo(c.registry) != nil || j.disposition != journalOwned || j.previousGeneration != 0 {
-		return false, invalidPlan()
+		return 0, result, invalidPlan()
 	}
 	fence, err := beginJournal(ctx, tx, q, c.keys, j, owner)
 	if err != nil {
-		return false, err
+		return 0, result, err
 	}
 	work, err := newWork(ctx, tx, p.binding, q, fence)
 	if err != nil {
-		return false, err
+		return 0, result, err
 	}
 	work.state.registry = c.registry.state
 	r := &reservationState{coordinator: c, request: q, plan: p, journal: j, owner: owner}
@@ -309,45 +356,67 @@ func (c *Coordinator) recordOTPDenial(ctx context.Context, tx pgx.Tx, command id
 		s.active, s.command = false, identity.Command{}
 		invalidateWork(work)
 		if recover() != nil {
-			denied, err = false, identity.UnavailableError{}
+			choice, result, err = 0, identity.CommandResult{}, identity.UnavailableError{}
 		}
 	}()
 	if err = p.bindWork(work); err != nil {
-		return false, err
+		return 0, result, err
 	}
 	if err = configureKernelWork(ctx, work); err != nil {
-		return false, err
+		return 0, result, err
 	}
-	choice, err := participant.RecordOTPAttemptDenial(ctx, OTPAttemptWork{state: s})
+	if metered {
+		if !meteredCheckPlan(p) {
+			return 0, result, invalidPlan()
+		}
+		choice, err = participant.(OTPMeteredCheckContributor).RecordOTPMeteredCheck(ctx, OTPAttemptWork{state: s})
+	} else {
+		choice, err = participant.RecordOTPAttemptDenial(ctx, OTPAttemptWork{state: s})
+	}
 	if err != nil {
-		return false, identity.UnavailableError{}
+		return 0, result, identity.UnavailableError{}
 	}
-	if work.state.rows != nil || work.usable() != nil || choice != OTPAttemptUnchanged && choice != OTPAttemptDenied {
-		return false, invalidWork()
+	if work.state.rows != nil || work.usable() != nil || choice != OTPAttemptUnchanged && choice != OTPAttemptDenied && (!metered || choice != OTPAttemptChecked) {
+		return 0, result, invalidWork()
 	}
 	s.active = false
 	if choice == OTPAttemptUnchanged {
-		return false, nil
+		return choice, result, nil
 	}
 	now, err := work.DatabaseTime(ctx)
 	if err != nil {
-		return false, err
+		return 0, result, err
 	}
-	records, err := featureMutationAudits(ctx, p, now, "denied")
+	class := "denied"
+	if choice == OTPAttemptChecked {
+		class = "committed"
+	}
+	auditPlan := *p
+	if metered {
+		// Only metering changes. Do not describe an owning workflow transition.
+		auditPlan.lifecycle = &LifecyclePlan{EventType: p.lifecycle.EventType}
+	}
+	records, err := featureMutationAudits(ctx, &auditPlan, now, class)
 	if err != nil {
-		return false, err
+		return 0, result, err
 	}
 	for i, record := range records {
 		if err = work.StageAudit(p.audits[i].EventIndex, record); err != nil {
-			return false, err
+			return 0, result, err
 		}
 	}
 	if err = c.persistAuditPhase(work); err != nil || work.state.rows != nil || work.usable() != nil {
-		return false, identity.UnavailableError{}
+		return 0, result, identity.UnavailableError{}
 	}
-	result := featureOutcome(p.binding, &p.feature.Operation, identity.CommitOutcomeNotCommitted, 0)
-	if err = terminalizeJournal(ctx, tx, q, j, owner, result, "denied"); err != nil {
-		return false, err
+	result = featureOutcome(p.binding, &p.feature.Operation, identity.CommitOutcomeNotCommitted, 0)
+	if choice == OTPAttemptChecked {
+		if len(records) == 0 {
+			return 0, identity.CommandResult{}, invalidPlan()
+		}
+		result.Outcome, result.AuditEventID = identity.CommitOutcomeCommitted, records[0].ID()
 	}
-	return true, nil
+	if err = terminalizeJournal(ctx, tx, q, j, owner, result, class); err != nil {
+		return 0, identity.CommandResult{}, err
+	}
+	return choice, result, nil
 }

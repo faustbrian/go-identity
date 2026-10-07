@@ -226,6 +226,16 @@ func contributorPlan(t *testing.T, r *kernel.ContributorRegistry, command identi
 	t.Helper()
 	s, _ := command.Feature()
 	b := s.Binding
+	target, action, kind, event, after := b.RecordID, "session.issue", "session", "session.created.v1", uint64(1)
+	if s.Operation.RecordRequirement == identity.FeatureRecordOmitted {
+		target, after = string(b.UserID), 0
+		if target == "" {
+			target = b.AnonymousFlowID
+		}
+	}
+	if s.Operation.OperationID == "identity.otp.check" {
+		action, kind, event = "otp.check", "otp_check", "otp.checked.v1"
+	}
 	actorKind := audit.ActorService
 	if b.ActorKind == authorization.SubjectUser {
 		actorKind = audit.ActorHuman
@@ -234,20 +244,28 @@ func contributorPlan(t *testing.T, r *kernel.ContributorRegistry, command identi
 	if err != nil {
 		t.Fatal(err)
 	}
-	record, err := builder.Build(audit.RecordInput{OccurredAt: time.Now().UTC(), Action: "session.issue", Outcome: audit.OutcomeSucceeded, ReasonCode: "completed", Actor: audit.ActorInput{Kind: actorKind, ID: string(b.ActorID)}, Subject: audit.SubjectInput{Type: "session", ID: b.RecordID}, Context: audit.ContextInput{TenantID: string(b.TenantID), CorrelationID: b.CorrelationID}, Policy: audit.PolicyMetadata{PolicyID: b.PolicyID, Version: "1"}, Changes: audit.ChangeSetInput{NoChange: true}, Attributes: map[string]string{"identity.profile": "identity.security.v1", "command.id": string(b.CommandID), "aggregate.type": "session", "aggregate.id": b.RecordID, "aggregate.before_version": "0", "aggregate.after_version": "1", "retention.class": "protected"}})
+	record, err := builder.Build(audit.RecordInput{OccurredAt: time.Now().UTC(), Action: action, Outcome: audit.OutcomeSucceeded, ReasonCode: "completed", Actor: audit.ActorInput{Kind: actorKind, ID: string(b.ActorID)}, Subject: audit.SubjectInput{Type: kind, ID: target}, Context: audit.ContextInput{TenantID: string(b.TenantID), CorrelationID: b.CorrelationID}, Policy: audit.PolicyMetadata{PolicyID: b.PolicyID, Version: "1"}, Changes: audit.ChangeSetInput{NoChange: true}, Attributes: map[string]string{"identity.profile": "identity.security.v1", "command.id": string(b.CommandID), "aggregate.type": kind, "aggregate.id": target, "aggregate.before_version": "0", "aggregate.after_version": strconv.FormatUint(after, 10), "retention.class": "protected"}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	d, err := kernel.FeatureAuditBindingDigest(b, s.Operation, "session", record)
+	d, err := kernel.FeatureAuditBindingDigest(b, s.Operation, kind, record)
 	if err != nil {
 		t.Fatal(err)
 	}
-	f := r.FeatureOperations()[0]
-	return kernel.CommandPlan{Feature: &f, SubjectType: "session", Contributors: r.Descriptors(), OTP: &attempt, Lifecycle: &kernel.LifecyclePlan{EventType: "session.created.v1", AfterVersion: 1}, Audits: []kernel.AuditPlan{{EventType: "session.issue", SchemaVersion: 1, BindingDigest: d, RetentionPolicyVersion: 1, RequiredRecordCount: 1, MaxRecordBytes: 16384, MaxAggregateBytes: 16384, Required: true, RetentionClass: "protected"}}}
+	var f kernel.FeatureRegistration
+	for _, declared := range r.FeatureOperations() {
+		if declared.Operation == s.Operation {
+			f = declared
+		}
+	}
+	if f.Operation != s.Operation {
+		t.Fatal("native feature not registered")
+	}
+	return kernel.CommandPlan{Feature: &f, SubjectType: kind, Contributors: r.Descriptors(), OTP: &attempt, Lifecycle: &kernel.LifecyclePlan{EventType: event, AfterVersion: after}, Audits: []kernel.AuditPlan{{EventType: action, SchemaVersion: 1, BindingDigest: d, RetentionPolicyVersion: 1, RequiredRecordCount: 1, MaxRecordBytes: 16384, MaxAggregateBytes: 16384, Required: true, RetentionClass: "protected"}}}
 }
 
 func TestContributorNativeDenialComposition(t *testing.T) {
-	for _, mode := range []string{"native-reserve", "native-consume", "native-takeover", "native-rollback", "native-stale-directory", "native-flow-lock-expiry", "native-credential-lock-expiry", "native-recovery", "native-recovery-unknown", "wrong-replay", "correct-rollback", "audit-rollback", "stale-directory", "missing-flow", "expired-flow", "flow-lock-expiry", "exhaustion", "user-valid", "user-blocked", "user-epoch", "user-identifier-epoch", "user-credential-epoch", "user-authorization-epoch", "credential-valid", "credential-stale", "credential-disabled", "credential-lock-expiry"} {
+	for _, mode := range []string{"metered-correct", "metered-wrong", "native-reserve", "native-consume", "native-takeover", "native-rollback", "native-stale-directory", "native-flow-lock-expiry", "native-credential-lock-expiry", "native-recovery", "native-recovery-unknown", "wrong-replay", "correct-rollback", "audit-rollback", "stale-directory", "missing-flow", "expired-flow", "flow-lock-expiry", "exhaustion", "user-valid", "user-blocked", "user-epoch", "user-identifier-epoch", "user-credential-epoch", "user-authorization-epoch", "credential-valid", "credential-stale", "credential-disabled", "credential-lock-expiry"} {
 		t.Run(mode, func(t *testing.T) {
 			ctx, db, peer, preauth := admissionDatabase(t)
 			base := kernel.StatusMigrationSource{Base: kernel.MigrationSource{}, Version: 12}
@@ -393,8 +411,19 @@ func TestContributorNativeDenialComposition(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+			if strings.HasPrefix(mode, "metered-") {
+				submitted := "123456"
+				if mode == "metered-wrong" {
+					submitted = "654321"
+				}
+				command, attempt = meteredCheckCommand(t, p, command, attempt, submitted, 1)
+			}
 			spec, _ := command.Feature()
-			registry, err := kernel.NewContributorRegistry([]kernel.Contributor{repo, &contributorAudit{fail: mode == "audit-rollback"}, &contributorLifecycle{apply: strings.HasPrefix(mode, "native-")}, &contributorFeature{op: spec.Operation, apply: strings.HasPrefix(mode, "native-"), fail: mode == "native-rollback"}, p})
+			participants := []kernel.Contributor{repo, &contributorAudit{fail: mode == "audit-rollback"}, &contributorLifecycle{apply: strings.HasPrefix(mode, "native-")}, &contributorFeature{op: spec.Operation, apply: strings.HasPrefix(mode, "native-"), fail: mode == "native-rollback"}, p}
+			if strings.HasPrefix(mode, "metered-") {
+				participants = []kernel.Contributor{repo, &contributorAudit{}, &contributorLifecycle{}, p}
+			}
+			registry, err := kernel.NewContributorRegistry(participants)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -411,6 +440,29 @@ func TestContributorNativeDenialComposition(t *testing.T) {
 			plan, err := coordinator.PrepareOTPAttemptPlan(spec.Binding, command, contributorPlan(t, registry, command, attempt))
 			if err != nil {
 				t.Fatal("prepare", err)
+			}
+			if strings.HasPrefix(mode, "metered-") {
+				result, err := coordinator.RecordOTPMeteredCheck(ctx, spec.Binding, command, plan)
+				want, failed := identity.CommitOutcomeCommitted, 0
+				if mode == "metered-wrong" {
+					want, failed = identity.CommitOutcomeNotCommitted, 1
+				}
+				if result.Outcome != want || mode == "metered-correct" && err != nil || mode == "metered-wrong" && err == nil {
+					t.Fatal("preauth metered result", result.Outcome, err)
+				}
+				replay, err := coordinator.RecordOTPMeteredCheck(ctx, spec.Binding, command, plan)
+				if err != nil || replay.Outcome != want || replay.AuditEventID != result.AuditEventID {
+					t.Fatal("preauth metered replay", replay.Outcome, err)
+				}
+				var state, flowState string
+				var used, checks, actualFailed, domains, events, audits int
+				if err := db.QueryRow(ctx, `SELECT (SELECT state FROM otp_store.challenges),(SELECT state FROM session_store.preauth_transactions),(SELECT used_attempts FROM otp_store.challenges),(SELECT checks FROM otp_store.challenges),(SELECT failed_attempts FROM otp_store.challenges),(SELECT count(*) FROM public.native_otp_domain),(SELECT count(*) FROM public.native_otp_lifecycle),(SELECT count(*) FROM public.native_otp_audits)`).Scan(&state, &flowState, &used, &checks, &actualFailed, &domains, &events, &audits); err != nil {
+					t.Fatal(err)
+				}
+				if state != "issued" || flowState != "issued" || used != 1 || checks != 1 || actualFailed != failed || domains != 0 || events != 0 || audits != 1 {
+					t.Fatal("preauth check consumed or not metered", state, flowState, used, checks, actualFailed, domains, events, audits)
+				}
+				return
 			}
 			if strings.HasPrefix(mode, "native-") {
 				plan, err = coordinator.PrepareOTPReservationPlan(spec.Binding, command, contributorPlan(t, registry, command, attempt))

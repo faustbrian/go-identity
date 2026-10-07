@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Add explicit native metered OTP check execution and authorized historical
+  recovery through the existing command journal. Correct checks commit only
+  metering and a redacted receipt, not authentication or domain/session effects;
+  wrong checks retain denial classification. Exact retry does not compare or
+  charge again. Existing denial and consuming participant interfaces are
+  unchanged; implementations opt in through the additive check interface.
+
 - Bind submitted session tokens into a distinct private OTP command fingerprint
   domain, preserving retained-key replay and existing code/pre-auth encodings.
   Protected OTP checks/finalization lend only the original session token to
