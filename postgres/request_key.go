@@ -102,6 +102,10 @@ type RequestKeyAdmission struct {
 // and zero admission, never execution permission. Retry the same key/intent.
 // No provider callbacks, goroutines or command journal/domain writes occur.
 func (c *Coordinator) ResolveRequestKey(ctx context.Context, scope RequestKeyScope, key identity.IdempotencyKey, intent identity.RequestIntent, caller authorization.DecisionContext) (RequestKeyAdmission, error) {
+	return c.resolveRequestKey(ctx, scope, key, intent, caller, nil)
+}
+
+func (c *Coordinator) resolveRequestKey(ctx context.Context, scope RequestKeyScope, key identity.IdempotencyKey, intent identity.RequestIntent, caller authorization.DecisionContext, preparation *requestKeyPreparation) (RequestKeyAdmission, error) {
 	if ctx == nil || c == nil || c.pool == nil || c.pool.Raw() == nil || c.requestKeys == nil || !validRequestKeyConfig(*c.requestKeys) || !validRequestKeyScope(scope) || c.maximumDuration <= 0 || c.keys.current == 0 {
 		return RequestKeyAdmission{}, invalidRequestKey()
 	}
@@ -157,7 +161,14 @@ func (c *Coordinator) ResolveRequestKey(ctx context.Context, scope RequestKeySco
 	read := func() (RequestKeyAdmission, []byte, []byte, error) {
 		var raw, digest, safe []byte
 		var version int64
-		err := tx.QueryRow(w, `SELECT command_id,fingerprint,fingerprint_key_version,safe_fields FROM identity.request_key_mappings WHERE namespace=$1 AND tenant_id=$2 AND actor_id=$3 AND actor_kind=$4 AND method=$5 AND route_id=$6 AND key_digest=$7`, args...).Scan(&raw, &digest, &version, &safe)
+		query := `SELECT command_id,fingerprint,fingerprint_key_version,safe_fields`
+		values := []any{&raw, &digest, &version, &safe}
+		if preparation != nil {
+			query += `,request_preparation_identity,request_preparation_ciphertext`
+			values = append(values, &preparation.storedIdentity, &preparation.storedCiphertext)
+		}
+		query += ` FROM identity.request_key_mappings WHERE namespace=$1 AND tenant_id=$2 AND actor_id=$3 AND actor_kind=$4 AND method=$5 AND route_id=$6 AND key_digest=$7`
+		err := tx.QueryRow(w, query, args...).Scan(values...)
 		if err != nil {
 			return RequestKeyAdmission{}, nil, nil, err
 		}
@@ -173,17 +184,48 @@ func (c *Coordinator) ResolveRequestKey(ctx context.Context, scope RequestKeySco
 		if fingerprintErr != nil {
 			return RequestKeyAdmission{}, fingerprintErr
 		}
-		candidate, entropyErr := identity.NewCommandID()
-		if entropyErr != nil {
-			return RequestKeyAdmission{}, identity.UnavailableError{}
+		var candidate identity.CommandID
+		if preparation != nil {
+			candidate = preparation.candidate.CommandID
+		}
+		if candidate == "" {
+			var entropyErr error
+			candidate, entropyErr = identity.NewCommandID()
+			if entropyErr != nil {
+				return RequestKeyAdmission{}, identity.UnavailableError{}
+			}
+		}
+		if preparation != nil {
+			if preparation.candidate.CommandID == "" {
+				// No native callback executes while correlation holds a transaction.
+				if err := tx.Rollback(w); err != nil {
+					return RequestKeyAdmission{}, listFailure(w, err)
+				}
+				preparation.candidate = RequestKeyAdmission{CommandID: candidate, FingerprintKeyVersion: c.keys.current}
+				binding := c.requestPreparationBinding(scope, preparation.candidate, preparation.feature, digest)
+				wire, err := generateRequestPreparation(w, preparation.owner, binding, intent)
+				if err != nil {
+					return RequestKeyAdmission{}, err
+				}
+				preparation.ciphertext = wire
+				return c.resolveRequestKey(w, scope, key, intent, caller, preparation)
+			}
+			candidate = preparation.candidate.CommandID
 		}
 		raw, _ := base64.RawURLEncoding.DecodeString(string(candidate))
 		insert := append(append([]any(nil), args...), raw, digest[:], int64(c.keys.current), safe)
 		// Existing global execution claims are never adopted as fresh allocation.
 		// A collision fails rather than granting an unrelated historical command.
-		_, err = tx.Exec(w, `INSERT INTO identity.request_key_mappings(namespace,tenant_id,actor_id,actor_kind,method,route_id,key_digest,command_id,fingerprint,fingerprint_key_version,safe_fields)
- SELECT $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11 WHERE NOT EXISTS(SELECT 1 FROM identity.identity_command_id_claims WHERE command_id=$8)
- ON CONFLICT(namespace,tenant_id,actor_id,actor_kind,method,route_id,key_digest) DO NOTHING`, insert...)
+		query := `INSERT INTO identity.request_key_mappings(namespace,tenant_id,actor_id,actor_kind,method,route_id,key_digest,command_id,fingerprint,fingerprint_key_version,safe_fields`
+		selection := ` SELECT $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11`
+		if preparation != nil {
+			query += `,request_preparation_identity,request_preparation_ciphertext`
+			selection += `,$12,$13`
+			insert = append(insert, preparation.identity[:], preparation.ciphertext)
+		}
+		query += `)` + selection + ` WHERE NOT EXISTS(SELECT 1 FROM identity.identity_command_id_claims WHERE command_id=$8)
+ ON CONFLICT(namespace,tenant_id,actor_id,actor_kind,method,route_id,key_digest) DO NOTHING`
+		_, err = tx.Exec(w, query, insert...)
 		if err != nil {
 			var collision *pgconn.PgError
 			if errors.As(err, &collision) && collision.Code == "23505" {
@@ -206,6 +248,12 @@ func (c *Coordinator) ResolveRequestKey(ctx context.Context, scope RequestKeySco
 	}
 	if !hmac.Equal(storedDigest, expected[:]) || !bytes.Equal(storedSafe, safe) {
 		return RequestKeyAdmission{}, identity.ConflictError{}
+	}
+	if preparation != nil {
+		if !hmac.Equal(preparation.storedIdentity, preparation.identity[:]) || len(preparation.storedCiphertext) == 0 || len(preparation.storedCiphertext) > maximumPreparationCiphertext {
+			return RequestKeyAdmission{}, identity.ConflictError{}
+		}
+		preparation.binding = c.requestPreparationBinding(scope, admission, preparation.feature, expected)
 	}
 	if err := tx.Commit(w); err != nil {
 		return RequestKeyAdmission{}, identity.UnknownCommitError{CommandID: admission.CommandID}

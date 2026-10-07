@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Retain code-free native preparation input atomically with request-key
+  correlation. Matching restart recovers original encrypted input; races cannot
+  overwrite it and legacy mappings are not enrolled. Install the optional
+  forward request-key preparation migration. Existing APIs remain unchanged.
+
 - Add exact tenant-scoped email/phone recipient lookup and native transaction
   fencing of the original identifier, verification and user security epochs.
   Ineligible recipients are uniformly suppressed; infrastructure failures are

@@ -3,6 +3,7 @@
 package postgres
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
 	"errors"
@@ -419,6 +420,170 @@ func TestRequestKeyIntegration(t *testing.T) {
 	if _, err := pool.Raw().Exec(ctx, `UPDATE identity.request_key_mappings SET created_at=clock_timestamp()`); err == nil {
 		t.Fatal("replay age reset permitted")
 	}
+	t.Run("prepared original restart", func(t *testing.T) {
+		source := RequestKeyPreparationMigrationSource{Base: RequestKeyMigrationSource{Base: MigrationSource{}, Version: 10}, Version: 11}
+		upgrade, err := migrations.NewRunner(source, backend)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := upgrade.Up(ctx); err != nil {
+			t.Fatal("populated original-input upgrade", err)
+		}
+		if _, err := upgrade.Up(ctx); err != nil {
+			t.Fatal("upgrade replay", err)
+		}
+		// Kernel tests only opaque byte retention; the OTP owner must separately
+		// prove authenticated encryption and typed original-input restoration.
+		_, command, plan := featurePlanFixture(t)
+		spec, _ := command.Feature()
+		preparedScope := scope
+		preparedScope.RouteID = spec.Operation.OperationID
+		calls := 0
+		original := []byte{0x91, 0x82, 0x73}
+		owner := &requestPreparationParticipant{scopeFeatureParticipant: scopeFeatureParticipant{operations: []identity.FeatureOperation{spec.Operation}}, prepare: func(callback context.Context, b RequestKeyPreparationBinding, _ identity.RequestIntent) ([]byte, error) {
+			calls++
+			if _, bounded := callback.Deadline(); !bounded || b.Admission.CommandID == "" || b.IntentDigest == ([32]byte{}) || b.Scope != preparedScope {
+				t.Fatal("unbounded or unbound preparation")
+			}
+			return original, nil
+		}}
+		registry, err := NewContributorRegistry([]Contributor{owner})
+		if err != nil {
+			t.Fatal(err)
+		}
+		feature := *plan.Feature
+		feature.Contributor = owner.Descriptor()
+		prepared, err := NewCoordinatorWithRequestKeys(pool, registry, conf, requestKeys)
+		if err != nil {
+			t.Fatal(err)
+		}
+		preparedCaller := requestKeyCaller(preparedScope)
+		binding, wire, err := prepared.ResolvePreparedRequestKey(ctx, preparedScope, keyFor("prepared_original"), intent, preparedCaller, feature, owner)
+		if err != nil || !bytes.Equal(wire, original) || calls != 1 {
+			t.Fatal("original input not retained", err)
+		}
+		wire[0] ^= 1
+		freshOwner := &requestPreparationParticipant{scopeFeatureParticipant: owner.scopeFeatureParticipant, prepare: func(context.Context, RequestKeyPreparationBinding, identity.RequestIntent) ([]byte, error) {
+			t.Fatal("restart prepared original again")
+			return nil, nil
+		}}
+		freshRegistry, err := NewContributorRegistry([]Contributor{freshOwner})
+		if err != nil {
+			t.Fatal(err)
+		}
+		restarted, err := NewCoordinatorWithRequestKeys(pool, freshRegistry, conf, requestKeys)
+		if err != nil {
+			t.Fatal(err)
+		}
+		again, stored, err := restarted.ResolvePreparedRequestKey(ctx, preparedScope, keyFor("prepared_original"), intent, preparedCaller, feature, freshOwner)
+		if err != nil || again != binding || !bytes.Equal(stored, original) {
+			t.Fatal("restart lost original provenance", err)
+		}
+		if b, out, err := restarted.ResolvePreparedRequestKey(ctx, preparedScope, keyFor("prepared_original"), changed, preparedCaller, feature, freshOwner); !errors.As(err, &conflict) || out != nil || b != (RequestKeyPreparationBinding{}) {
+			t.Fatal("changed intent recovered custody", err)
+		}
+		legacyKey := keyFor("prepared_legacy")
+		if _, err := prepared.ResolveRequestKey(ctx, preparedScope, legacyKey, intent, preparedCaller); err != nil {
+			t.Fatal(err)
+		}
+		if b, out, err := restarted.ResolvePreparedRequestKey(ctx, preparedScope, legacyKey, intent, preparedCaller, feature, freshOwner); !errors.As(err, &conflict) || out != nil || b != (RequestKeyPreparationBinding{}) {
+			t.Fatal("legacy input manufactured", err)
+		}
+		if got, err := prepared.ResolveRequestKey(ctx, scope, key, intent, caller); err != nil || got != first {
+			t.Fatal("upgrade changed legacy admission", err)
+		}
+		if _, err := pool.Raw().Exec(ctx, `UPDATE identity.request_key_mappings SET request_preparation_ciphertext=decode('ff','hex') WHERE request_preparation_ciphertext IS NOT NULL`); err == nil {
+			t.Fatal("original ciphertext mutable")
+		}
+		for _, committed := range []bool{false, true} {
+			faulted, err := NewCoordinatorWithRequestKeys(pool, registry, conf, requestKeys)
+			if err != nil {
+				t.Fatal(err)
+			}
+			faulted.requestKeyBegin = func(ctx context.Context) (pgx.Tx, error) {
+				tx, e := pool.Raw().Begin(ctx)
+				if e != nil {
+					return nil, e
+				}
+				return requestKeyCommitFault{Tx: tx, committed: committed}, nil
+			}
+			faultKey := keyFor("prepared_rolledback")
+			if committed {
+				faultKey = keyFor("prepared_ack_lost")
+			}
+			b, out, err := faulted.ResolvePreparedRequestKey(ctx, preparedScope, faultKey, intent, preparedCaller, feature, owner)
+			var unknown identity.UnknownCommitError
+			if !errors.As(err, &unknown) || out != nil || b != (RequestKeyPreparationBinding{}) {
+				t.Fatal("uncertain retention gave usable input", err)
+			}
+			var rows int
+			digest, _ := faultKey.Digest(lookupKey)
+			if err := pool.Raw().QueryRow(ctx, `SELECT count(*) FROM identity.request_key_mappings WHERE key_digest=$1`, digest[:]).Scan(&rows); err != nil {
+				t.Fatal(err)
+			}
+			if (committed && rows != 1) || (!committed && rows != 0) {
+				t.Fatal("wrong authoritative fault state")
+			}
+			recoveryOwner := owner
+			recovery := prepared
+			if committed {
+				recoveryOwner = freshOwner
+				recovery = restarted
+			}
+			b, out, err = recovery.ResolvePreparedRequestKey(ctx, preparedScope, faultKey, intent, preparedCaller, feature, recoveryOwner)
+			if err != nil || !bytes.Equal(out, original) || (committed && b.Admission.CommandID != unknown.CommandID) || (!committed && b.Admission.CommandID == unknown.CommandID) {
+				t.Fatal("uncertain retention recovery changed winner", err)
+			}
+		}
+		t.Run("matching candidates race", func(t *testing.T) {
+			entered := make(chan struct{}, 2)
+			release := make(chan struct{})
+			raceOwner := &requestPreparationParticipant{scopeFeatureParticipant: owner.scopeFeatureParticipant, prepare: func(ctx context.Context, b RequestKeyPreparationBinding, _ identity.RequestIntent) ([]byte, error) {
+				// A held namespace row lock would prevent the second callback
+				// reaching this barrier, proving preparation is outside SQL.
+				entered <- struct{}{}
+				select {
+				case <-release:
+					return []byte(b.Admission.CommandID), nil
+				case <-ctx.Done():
+					return nil, ctx.Err()
+				}
+			}}
+			raceRegistry, err := NewContributorRegistry([]Contributor{raceOwner})
+			if err != nil {
+				t.Fatal(err)
+			}
+			raceCoordinator, err := NewCoordinatorWithRequestKeys(pool, raceRegistry, conf, requestKeys)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var bindings [2]RequestKeyPreparationBinding
+			var outputs [2][]byte
+			var failures [2]error
+			var wg sync.WaitGroup
+			for i := 0; i < 2; i++ {
+				wg.Add(1)
+				go func(i int) {
+					defer wg.Done()
+					bindings[i], outputs[i], failures[i] = raceCoordinator.ResolvePreparedRequestKey(ctx, preparedScope, keyFor("prepared_race"), intent, preparedCaller, feature, raceOwner)
+				}(i)
+			}
+			for i := 0; i < 2; i++ {
+				select {
+				case <-entered:
+				case <-ctx.Done():
+					close(release)
+					wg.Wait()
+					t.Fatal("callback held transaction or stalled")
+				}
+			}
+			close(release)
+			wg.Wait()
+			if failures[0] != nil || failures[1] != nil || bindings[0] != bindings[1] || !bytes.Equal(outputs[0], outputs[1]) || !bytes.Equal(outputs[0], []byte(bindings[0].Admission.CommandID)) {
+				t.Fatal("racing candidates did not recover one winner", failures)
+			}
+		})
+	})
 }
 
 func requestKeyCaller(s RequestKeyScope) authorization.DecisionContext {

@@ -2,6 +2,21 @@
 
 ## Request-key correlation before command preparation
 
+Native generated workflows can opt into `ResolvePreparedRequestKey` after
+installing `RequestKeyPreparationMigrationSource{Base, Version}` over the
+original request-key history. The exact registered feature owner prepares
+bounded authenticated **code-free** input outside SQL. The allocated command ID
+and ciphertext commit together in the existing immutable mapping; matching
+retries recover the original input without reselecting recipients or renewing
+times. Race losers recover the winner, and legacy mappings cannot be backfilled.
+Preparation may perform bounded reads/encryption, not risk charges, domain
+writes, delivery or OTP generation. Those follow acknowledged custody through
+the existing journal. Authenticate the complete returned binding and immutable
+configuration; include configuration in the initiating intent. Restore original
+input without treating it as current authority, and verify bearer possession
+separately. Unknown acknowledgement returns no usable input. This kernel seam
+does not itself implement the public OTP Send service.
+
 Compose `RequestKeyMigrationSource{Base, Version}` after kernel history and use
 `NewCoordinatorWithRequestKeys` with a separate `RequestKeyConfig`. Existing
 `CoordinatorConfig` and `NewCoordinator` remain unchanged; the ordinary
