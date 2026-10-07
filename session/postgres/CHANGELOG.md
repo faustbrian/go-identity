@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add structural primary pre-auth loading, exact reserved-owner admission and
+  predecessor-only generation transfer. Preserve the original cookie, intent,
+  remember policy and expiry across takeover; stale owners and terminal flows
+  cannot transfer or finalize. Transfer requires live coordinator authority,
+  not elapsed time or a caller-supplied generation.
+
 - Add canonical pre-auth primary storage and exact locked admission, one-winner
   reservation and same-transaction consumption. Preserve original intent,
   remember policy, nanosecond expiry and named cookie digest; fence exact

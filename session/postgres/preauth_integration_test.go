@@ -3,6 +3,7 @@
 package postgres
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"testing"
@@ -172,6 +173,124 @@ func testNativePreAuth(t *testing.T, ctx context.Context, pool *database.Pool) {
 		var effects int
 		if err := q.QueryRow(ctx, `SELECT state,version::text,(SELECT count(*) FROM session_store.preauth_effects WHERE flow_id=$1) FROM session_store.preauth_transactions WHERE flow_id=$1`, string(s.Binding.ID)).Scan(&state, &version, &effects); err != nil || state != "consumed" || version != "3" || effects != 1 {
 			t.Fatal("effects not atomic", err)
+		}
+	})
+	t.Run("reserved owner transfer preserves original flow", func(t *testing.T) {
+		begin := func() preAuthTestTx { return begin(t) }
+		fixture := func(at time.Time) (session.PreAuthTransaction, PreAuthUse) { return fixture(t, at) }
+		insert := func(r session.PreAuthTransaction) { insert(t, r) }
+		denied := func(err error) { denied(t, err) }
+		r, first := fixture(time.Now().UTC())
+		insert(r)
+		s, _ := r.Bindings()
+		q := begin()
+		loaded, err := ReadPreAuth(ctx, q, config, s.Binding.Intent.TenantID, s.Binding.ID)
+		want, _ := encodePreAuth(r)
+		got, _ := encodePreAuth(loaded)
+		if err != nil || !bytes.Equal(want, got) {
+			t.Fatal("primary flow changed", err)
+		}
+		if _, err = ReadPreAuth(ctx, q, config, "tenant-b", s.Binding.ID); err == nil {
+			t.Fatal("foreign flow loaded")
+		}
+		if err = ReservePreAuth(ctx, q, config, r, first); err != nil {
+			t.Fatal(err)
+		}
+		if err = q.Commit(ctx); err != nil {
+			t.Fatal(err)
+		}
+		q = begin()
+		if err = RequireReservedPreAuth(ctx, q, config, r, first); err != nil {
+			t.Fatal("owner denied", err)
+		}
+		var invalid identity.InvalidInputError
+		for _, next := range []uint64{0, 1, 3, ^uint64(0)} {
+			if err = RebindPreAuth(ctx, q, config, r, first, next); !errors.As(err, &invalid) {
+				t.Fatal("skipped generation accepted", err)
+			}
+		}
+		changed := first
+		changed.Fingerprint[0]++
+		denied(RebindPreAuth(ctx, q, config, r, changed, 2))
+		if err = RebindPreAuth(ctx, q, config, r, first, 2); err != nil {
+			t.Fatal(err)
+		}
+		second := first
+		second.Generation = 2
+		denied(RequireReservedPreAuth(ctx, q, config, r, first))
+		if err = RequireReservedPreAuth(ctx, q, config, r, second); err != nil {
+			t.Fatal(err)
+		}
+		if err = q.Rollback(ctx); err != nil {
+			t.Fatal(err)
+		}
+		q = begin()
+		if err = RequireReservedPreAuth(ctx, q, config, r, first); err != nil {
+			t.Fatal("rollback transferred ownership", err)
+		}
+		if err = RebindPreAuth(ctx, q, config, r, first, 2); err != nil {
+			t.Fatal(err)
+		}
+		if err = q.Commit(ctx); err != nil {
+			t.Fatal(err)
+		}
+		q = begin()
+		loaded, err = ReadPreAuth(ctx, q, config, s.Binding.Intent.TenantID, s.Binding.ID)
+		got, _ = encodePreAuth(loaded)
+		if err != nil || !bytes.Equal(want, got) {
+			t.Fatal("takeover renewed original state", err)
+		}
+		denied(RebindPreAuth(ctx, q, config, r, first, 2))
+		denied(FinalizePreAuth(ctx, q, config, r, first))
+		if err = FinalizePreAuth(ctx, q, config, r, second); err != nil {
+			t.Fatal("successor cannot finalize", err)
+		}
+		denied(RebindPreAuth(ctx, q, config, r, second, 3))
+	})
+	t.Run("reserved read locks exclude takeover", func(t *testing.T) {
+		begin := func() preAuthTestTx { return begin(t) }
+		fixture := func(at time.Time) (session.PreAuthTransaction, PreAuthUse) { return fixture(t, at) }
+		insert := func(r session.PreAuthTransaction) { insert(t, r) }
+		r, use := fixture(time.Now().UTC())
+		insert(r)
+		q := begin()
+		if err := ReservePreAuth(ctx, q, config, r, use); err != nil {
+			t.Fatal(err)
+		}
+		if err := q.Commit(ctx); err != nil {
+			t.Fatal(err)
+		}
+		q = begin()
+		if err := RequireReservedPreAuth(ctx, q, config, r, use); err != nil {
+			t.Fatal(err)
+		}
+		writer := begin()
+		bounded, stop := context.WithTimeout(ctx, 100*time.Millisecond)
+		err := RebindPreAuth(bounded, writer, config, r, use, 2)
+		stop()
+		var deadline identity.DeadlineExceededError
+		if !errors.As(err, &deadline) {
+			t.Fatal("share lock absent", err)
+		}
+		_ = writer.Rollback(ctx)
+		if err = q.Rollback(ctx); err != nil {
+			t.Fatal(err)
+		}
+	})
+	t.Run("primary load denies indexed drift", func(t *testing.T) {
+		begin := func() preAuthTestTx { return begin(t) }
+		fixture := func(at time.Time) (session.PreAuthTransaction, PreAuthUse) { return fixture(t, at) }
+		insert := func(r session.PreAuthTransaction) { insert(t, r) }
+		r, _ := fixture(time.Now().UTC())
+		insert(r)
+		s, _ := r.Bindings()
+		q := begin()
+		if _, err := q.Exec(ctx, `UPDATE session_store.preauth_transactions SET digest_version=digest_version-1 WHERE flow_id=$1`, string(s.Binding.ID)); err != nil {
+			t.Fatal(err)
+		}
+		var unavailable identity.UnavailableError
+		if _, err := ReadPreAuth(ctx, q, config, s.Binding.Intent.TenantID, s.Binding.ID); !errors.As(err, &unavailable) {
+			t.Fatal("indexed drift admitted", err)
 		}
 	})
 	t.Run("one reservation winner", func(t *testing.T) {

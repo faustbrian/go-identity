@@ -25,9 +25,18 @@ leaves both effects uncommitted. Terminal replay denies; receipt replay belongs
 to the sole kernel journal, not these operations. No path automatically releases
 reserved state or renews its validity after timeout, retry or connection loss.
 
+`ReadPreAuth` restores the exact original record and checks its physical indexes;
+it does not authenticate a flow or admit expired, reserved or terminal state.
+`RequireReservedPreAuth` locks and checks the exact reserved owner for apply.
+`RebindPreAuth` changes only the generation from an exact predecessor to its
+immediate successor, using the coordinator's live sealed takeover invocation.
+Neither elapsed time nor connection failure authorizes transfer. The original
+deadline still applies, and rollback restores predecessor ownership. These
+operations must use the same borrowed primary transaction as other participants.
+
 These native operations do not authenticate a user, expose a cookie or constitute
 complete usable initiation. Owned issuance/recovery, proven-noncommit reservation
-rebind/release and OTP/other workflow registration remain under development.
+release and OTP/other workflow registration remain under development.
 Retain original digest keys and terminal records until the owned retention and
 recovery policies authorize retirement; no cleanup/down migration is provided.
 

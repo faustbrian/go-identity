@@ -87,6 +87,25 @@ func TestPreAuthNativeInvalidInput(t *testing.T) {
 	}
 }
 
+func TestPreAuthReservedNativeContract(t *testing.T) {
+	ctx := context.Background()
+	c := Config{Schema: "session_store", MaximumDuration: time.Second}
+	record := testPreAuth(t, time.Now().UTC())
+	var invalid identity.InvalidInputError
+	if _, err := ReadPreAuth(ctx, kernel.Work{}, c, "tenant-a", "invalid"); !errors.As(err, &invalid) {
+		t.Fatal("invalid flow ID accepted", err)
+	}
+	if err := RequireReservedPreAuth(ctx, kernel.Work{}, c, record, PreAuthUse{}); !errors.As(err, &invalid) {
+		t.Fatal("zero reserved custody accepted", err)
+	}
+	if err := RebindPreAuth(ctx, kernel.Work{}, c, record, PreAuthUse{}, 2); !errors.As(err, &invalid) {
+		t.Fatal("zero predecessor accepted", err)
+	}
+	if _, err := ReadPreAuth(nil, kernel.Work{}, c, "tenant-a", "AQEBAQEBAQEBAQEBAQEBAQ"); !errors.As(err, &invalid) {
+		t.Fatal("nil context accepted", err)
+	}
+}
+
 func FuzzPreAuthStoredRecord(f *testing.F) {
 	b, err := encodePreAuth(testPreAuth(f, time.Date(2026, 10, 7, 0, 0, 0, 1, time.UTC)))
 	if err != nil {
