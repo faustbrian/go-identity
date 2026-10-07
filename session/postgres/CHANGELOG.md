@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add pre-auth issuance results distinguishing sole-reservation execution from
+  replay, pending observation and conflict. Concurrent identical commands grant
+  fresh-execution eligibility to only the committing owner; historical receipts
+  never permit cookie delivery. Existing receipt-only calls remain compatible.
+
 - Add owned pre-auth initiation execution and restart-safe receipt recovery
   with exact service policy, original flow, audit and lifecycle in the sole
   kernel transaction. Preserve original metadata on replay and deny retired

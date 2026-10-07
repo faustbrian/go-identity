@@ -63,6 +63,14 @@ or automatic evidence pruning is provided.
 the exact original command. Original flow, native evidence, audit, lifecycle and
 receipt commit together. Primary locked time rejects expired originals. Exact
 replay returns historical metadata without reissuing; changed intent conflicts.
+`ExecutePreAuthIssuance` runs that same owned path and additionally returns
+`session.PreAuthIssueExecution`: only the acquired coordinator reservation
+clears `Replayed`. Pending observations, conflict, terminal replay and
+pre-reservation failure cannot claim original execution. Concurrent identical
+commands have one newly committed result, even when other callers observe the
+same historical committed receipt. This metadata contains no cookie and alone
+is not delivery authority; core issuance must validate the exact receipt,
+original expiry and error/cancellation before revealing a credential.
 `RecoverPreAuthIssue` observes/reconciles complete original anonymous-flow scope
 under current configured service policy, without a cookie, new reservation or
 lease renewal. Unknown requires recovery, not a new command. Detached kernel

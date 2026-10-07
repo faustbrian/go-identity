@@ -25,6 +25,14 @@ only historical command metadata, never a cookie or renewed authentication.
 The PostgreSQL adapter owns atomic execution. Complete server-side entropy,
 original-flow preparation and browser cookie delivery are still under development.
 
+`PreAuthIssuanceExecutor` adds `PreAuthIssueExecution` for future commit-gated
+delivery without changing the receipt-only interface. A committed receipt is
+not sufficient: the issuer must also require `Replayed == false`, exact original
+scope, no error/cancellation and an unexpired original flow. Only acquisition
+of the sole execution reservation clears `Replayed`; restart recovery and
+terminal observations never permit credential delivery. Formatting and implicit
+JSON/text export of execution metadata redact or deny original custody.
+
 Experimental Go 1.27 session policy module. This first batch implements shared
 remember-policy resolution, lifetime evaluation, secure host-cookie attributes
 and opaque token/key custody with tenant-bound lookups. Authenticated cookie

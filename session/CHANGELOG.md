@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add explicit original-versus-historical pre-auth execution metadata for
+  commit-gated cookie delivery. Preserve receipt-only executor compatibility;
+  committed replay never grants delivery eligibility. Browser preparation and
+  delivery remain under development.
+
 - Add storage-neutral pre-auth issuance and outcome-only recovery contracts,
   retaining original immutable flow and command custody without exposing a
   cookie or PostgreSQL handle. Redact command formatting and implicit exports;

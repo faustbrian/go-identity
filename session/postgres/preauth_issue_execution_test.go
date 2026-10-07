@@ -18,6 +18,9 @@ func TestPreAuthIssueExecutorRejectsZeroComposition(t *testing.T) {
 	if r, err := e.ExecutePreAuthIssue(context.Background(), PreAuthIssueCommand{}); err == nil || r.Outcome != identity.CommitOutcomeInvalid {
 		t.Fatal("zero executor gained outcome")
 	}
+	if r, err := e.ExecutePreAuthIssuance(context.Background(), PreAuthIssueCommand{}); err == nil || r.Receipt.Outcome != identity.CommitOutcomeInvalid || !r.Replayed {
+		t.Fatal("zero executor gained original delivery eligibility")
+	}
 	if r, err := e.RecoverPreAuthIssue(context.Background(), identity.RecoveryQuery{}); err == nil || r.Outcome != identity.CommitOutcomeInvalid {
 		t.Fatal("zero recovery gained outcome")
 	}

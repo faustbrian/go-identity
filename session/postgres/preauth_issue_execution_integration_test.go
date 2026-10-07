@@ -64,7 +64,11 @@ func testOwnedPreAuthIssue(t *testing.T, ctx context.Context, pool *database.Poo
 	}
 	t.Run("exact retry and restart do not reissue", func(t *testing.T) {
 		input := prepare(t)
-		result, err := executor.ExecutePreAuthIssue(ctx, input)
+		execution, err := executor.ExecutePreAuthIssuance(ctx, input)
+		result := execution.Receipt
+		if execution.Replayed {
+			t.Fatal("new execution withheld original delivery eligibility")
+		}
 		if err != nil || result.Outcome != identity.CommitOutcomeCommitted || result.Binding.UserID != "" || result.Binding.ActorID != config.ActorID || result.Feature == nil || result.Feature.AfterVersion != 1 {
 			t.Fatal("native anonymous initiation", err, result.Outcome)
 		}
@@ -80,6 +84,9 @@ func testOwnedPreAuthIssue(t *testing.T, ctx context.Context, pool *database.Poo
 		}
 		if replay, err := executor.ExecutePreAuthIssue(ctx, input); err != nil || !reflect.DeepEqual(replay, result) {
 			t.Fatal("exact replay changed receipt", err)
+		}
+		if replay, err := executor.ExecutePreAuthIssuance(ctx, input); err != nil || !replay.Replayed || !reflect.DeepEqual(replay.Receipt, result) {
+			t.Fatal("historical replay gained original delivery eligibility", err)
 		}
 		changed := input
 		s.Binding.Intent.CallbackURL = "https://app.test/other"
@@ -101,6 +108,9 @@ func testOwnedPreAuthIssue(t *testing.T, ctx context.Context, pool *database.Poo
 		if got, err := executor.ExecutePreAuthIssue(ctx, changed); err == nil || got.Outcome != identity.CommitOutcomeConflict {
 			t.Fatal("changed original intent did not conflict", err, got.Outcome)
 		}
+		if got, err := executor.ExecutePreAuthIssuance(ctx, changed); err == nil || !got.Replayed || got.Receipt.Outcome != identity.CommitOutcomeConflict {
+			t.Fatal("conflicting input gained execution custody", err)
+		}
 		restarted, err := NewPreAuthIssueExecutor(pool, config)
 		if err != nil {
 			t.Fatal(err)
@@ -118,6 +128,9 @@ func testOwnedPreAuthIssue(t *testing.T, ctx context.Context, pool *database.Poo
 		}
 		if got, err := restarted.ExecutePreAuthIssue(ctx, input); err != nil || !reflect.DeepEqual(got, result) {
 			t.Fatal("terminal replay reactivated flow", err)
+		}
+		if got, err := restarted.ExecutePreAuthIssuance(ctx, input); err != nil || !got.Replayed || !reflect.DeepEqual(got.Receipt, result) {
+			t.Fatal("retired flow replay gained delivery eligibility", err)
 		}
 		var rows int
 		if err = pool.Raw().QueryRow(ctx, `SELECT count(*) FROM session_store.preauth_transactions WHERE flow_id=$1`, string(s.Binding.ID)).Scan(&rows); err != nil || rows != 0 {
@@ -149,6 +162,9 @@ func testOwnedPreAuthIssue(t *testing.T, ctx context.Context, pool *database.Poo
 		}
 		if got, err := executor.RecoverPreAuthIssue(ctx, query(b)); err != nil || got.Outcome != identity.CommitOutcomeInProgress {
 			t.Fatal("live receipt lease lost", err)
+		}
+		if got, err := executor.ExecutePreAuthIssuance(ctx, input); err != nil || !got.Replayed || got.Receipt.Outcome != identity.CommitOutcomeInProgress {
+			t.Fatal("live pending observation gained execution custody", err)
 		}
 		work, err := executor.owned.coordinator.Begin(ctx, reservation)
 		if err != nil {
@@ -231,7 +247,7 @@ func testOwnedPreAuthIssue(t *testing.T, ctx context.Context, pool *database.Poo
 	t.Run("concurrent identical commands issue once", func(t *testing.T) {
 		input := prepare(t)
 		type observed struct {
-			result identity.CommandResult
+			result session.PreAuthIssueExecution
 			err    error
 		}
 		out := make(chan observed, 8)
@@ -240,21 +256,23 @@ func testOwnedPreAuthIssue(t *testing.T, ctx context.Context, pool *database.Poo
 			group.Add(1)
 			go func() {
 				defer group.Done()
-				r, err := executor.ExecutePreAuthIssue(ctx, input)
+				r, err := executor.ExecutePreAuthIssuance(ctx, input)
 				out <- observed{r, err}
 			}()
 		}
 		group.Wait()
 		close(out)
-		committed := false
+		newlyCommitted := 0
 		for value := range out {
-			if value.err != nil || value.result.Outcome != identity.CommitOutcomeCommitted && value.result.Outcome != identity.CommitOutcomeInProgress {
-				t.Fatal("concurrent original command changed outcome", value.err, value.result.Outcome)
+			if value.err != nil || value.result.Receipt.Outcome != identity.CommitOutcomeCommitted && value.result.Receipt.Outcome != identity.CommitOutcomeInProgress {
+				t.Fatal("concurrent original command changed outcome", value.err, value.result.Receipt.Outcome)
 			}
-			committed = committed || value.result.Outcome == identity.CommitOutcomeCommitted
+			if value.result.Receipt.Outcome == identity.CommitOutcomeCommitted && !value.result.Replayed {
+				newlyCommitted++
+			}
 		}
-		if !committed {
-			t.Fatal("no original command committed")
+		if newlyCommitted != 1 {
+			t.Fatal("delivery eligibility must have exactly one winner", newlyCommitted)
 		}
 		counts(t, input, 1, 1)
 	})

@@ -50,6 +50,7 @@ type PreAuthIssueCommand = session.PreAuthIssueCommand
 type PreAuthIssueExecutor struct{ owned *IssueExecutor }
 
 var _ session.PreAuthIssueExecutor = (*PreAuthIssueExecutor)(nil)
+var _ session.PreAuthIssuanceExecutor = (*PreAuthIssueExecutor)(nil)
 
 // NewPreAuthIssueExecutor freezes one profile and native participants without
 // IO. It does not authenticate a user, mint a cookie, apply migrations or grant
@@ -143,14 +144,27 @@ func (e *PreAuthIssueExecutor) preAuthPlan(b identity.CommandBinding, command id
 // Changed intent conflicts; cancellation/failed acknowledgement cannot prove
 // rollback. Recover the exact original command after Unknown. Earlier deadlines
 // win; kernel detached cleanup retains its independently bounded budget.
-func (e *PreAuthIssueExecutor) ExecutePreAuthIssue(ctx context.Context, input PreAuthIssueCommand) (out identity.CommandResult, err error) {
+func (e *PreAuthIssueExecutor) ExecutePreAuthIssue(ctx context.Context, input PreAuthIssueCommand) (identity.CommandResult, error) {
+	out, err := e.ExecutePreAuthIssuance(ctx, input)
+	return out.Receipt, err
+}
+
+// ExecutePreAuthIssuance preserves ExecutePreAuthIssue's atomic execution and
+// adds explicit original-versus-historical metadata. Only acquisition of the
+// sole coordinator reservation clears Replayed; observing a committed receipt
+// never does. Replayed remains true on conflicts, pending observations and
+// pre-reservation failures. Cookie delivery also requires exact newly committed
+// receipt validation, no error/cancellation and an unexpired original flow.
+// Earlier deadlines and detached cleanup budgets match ExecutePreAuthIssue.
+func (e *PreAuthIssueExecutor) ExecutePreAuthIssuance(ctx context.Context, input PreAuthIssueCommand) (out session.PreAuthIssueExecution, err error) {
+	out.Replayed = true
 	entered := false
 	var b identity.CommandBinding
 	defer func() {
 		if recover() != nil {
 			err = session.ErrUnavailable
 			if entered {
-				out = unknownPreAuthIssue(b)
+				out.Receipt = unknownPreAuthIssue(b)
 				err = identity.UnknownCommitError{CommandID: b.CommandID}
 			}
 		}
@@ -172,20 +186,25 @@ func (e *PreAuthIssueExecutor) ExecutePreAuthIssue(ctx context.Context, input Pr
 		return out, err
 	}
 	entered = true
-	reservation, out, err := e.owned.coordinator.ReserveCommand(bounded, b, command, plan)
+	reservation, receipt, err := e.owned.coordinator.ReserveCommand(bounded, b, command, plan)
+	out.Receipt = receipt
 	if err != nil || reservation == (kernel.Reservation{}) {
 		return out, err
 	}
+	out.Replayed = false
 	work, err := e.owned.coordinator.Begin(bounded, reservation)
 	if err != nil {
-		return unknownPreAuthIssue(b), err
+		out.Receipt = unknownPreAuthIssue(b)
+		return out, err
 	}
 	defer e.owned.coordinator.Abort(work, identity.UnavailableError{})
 	provisional, err := e.owned.coordinator.ApplyFeature(bounded, work, command)
 	if err != nil {
-		return e.owned.coordinator.Abort(work, err)
+		out.Receipt, err = e.owned.coordinator.Abort(work, err)
+		return out, err
 	}
-	return e.owned.coordinator.Commit(work, provisional)
+	out.Receipt, err = e.owned.coordinator.Commit(work, provisional)
+	return out, err
 }
 
 func unknownPreAuthIssue(b identity.CommandBinding) identity.CommandResult {

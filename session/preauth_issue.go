@@ -34,6 +34,41 @@ type PreAuthIssueExecutor interface {
 	RecoverPreAuthIssue(context.Context, identity.RecoveryQuery) (identity.CommandResult, error)
 }
 
+// PreAuthIssueExecution distinguishes original execution from a historical
+// receipt. Replayed is true unless this call acquired the sole coordinator's
+// execution reservation. A committed receipt alone never permits cookie
+// delivery: an issuer must also require !Replayed, no error and exact original
+// scope and unexpired lifetime. This value contains no credential or current
+// authentication. Public reconstruction is structural, not authority; only
+// the trusted executor establishes the observation. Do not mutate concurrently.
+type PreAuthIssueExecution struct {
+	Receipt  identity.CommandResult
+	Replayed bool
+}
+
+// PreAuthIssuanceExecutor extends owned initiation with explicit replay
+// metadata for commit-gated delivery. It is separate from PreAuthIssueExecutor
+// to preserve existing receipt-only implementations. ExecutePreAuthIssuance
+// returns Replayed for terminal observations and any call that did not acquire
+// execution custody; errors, cancellation and Unknown never authorize delivery.
+// RecoverPreAuthIssue remains outcome-only and never permits credential
+// delivery. Calls must be bounded, cancellation-aware and concurrency-safe.
+type PreAuthIssuanceExecutor interface {
+	ExecutePreAuthIssuance(context.Context, PreAuthIssueCommand) (PreAuthIssueExecution, error)
+	RecoverPreAuthIssue(context.Context, identity.RecoveryQuery) (identity.CommandResult, error)
+}
+
+// Format redacts original scope and retained receipt metadata.
+func (PreAuthIssueExecution) Format(s fmt.State, _ rune) {
+	io.WriteString(s, "session.PreAuthIssueExecution(redacted)")
+}
+
+// MarshalJSON denies implicit receipt or original flow disclosure.
+func (PreAuthIssueExecution) MarshalJSON() ([]byte, error) { return nil, ErrSecretSerialization }
+
+// MarshalText denies implicit receipt disclosure, including map keys.
+func (PreAuthIssueExecution) MarshalText() ([]byte, error) { return nil, ErrSecretSerialization }
+
 // Format redacts flow custody and correlation for every formatting verb.
 func (PreAuthIssueCommand) Format(s fmt.State, _ rune) {
 	io.WriteString(s, "session.PreAuthIssueCommand(redacted)")
