@@ -212,12 +212,16 @@ func (s *EnqueueService) RecordReceipt(ctx context.Context, r ReceiptCommandRequ
 	}
 	var provider, version string
 	var noop bool
-	err = s.keyed.pool.QueryRow(work, `SELECT provider,provider_version::text,no_op FROM identity.delivery_intents WHERE deployment=$1 AND tenant_id=$2 AND effect_id=$3 AND subject_id=$4`, s.keyed.deployment, string(r.Binding.TenantID), r.Binding.RecordID, string(r.Binding.UserID)).Scan(&provider, &version, &noop)
+	var aad []byte
+	err = s.keyed.pool.QueryRow(work, `SELECT provider,provider_version::text,no_op,binding_aad FROM identity.delivery_intents WHERE deployment=$1 AND tenant_id=$2 AND effect_id=$3 AND subject_id=$4`, s.keyed.deployment, string(r.Binding.TenantID), r.Binding.RecordID, string(r.Binding.UserID)).Scan(&provider, &version, &noop, &aad)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return delivery.ReceiptRecordResult{}, delivery.ErrNotFound
 	}
 	if err != nil {
 		return delivery.ReceiptRecordResult{}, attemptFailure(work, err)
+	}
+	if _, err := decodeUserBinding(aad, s.keyed.deployment, string(r.Binding.TenantID), r.Binding.RecordID, string(r.Binding.UserID)); err != nil {
+		return delivery.ReceiptRecordResult{}, err
 	}
 	// The selected target's provider/configuration binding is immutable. Checking
 	// it before reserve cannot be raced by ordinary intent-state writers.

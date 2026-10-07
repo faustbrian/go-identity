@@ -12,7 +12,53 @@ import (
 	"time"
 
 	"github.com/faustbrian/go-identity/delivery"
+	kernel "github.com/faustbrian/go-identity/postgres"
 )
+
+func TestUserCancellationCannotSelectAnonymousFlowWithSameText(t *testing.T) {
+	ctx, pool := intentDatabase(t)
+	if _, err := pool.Exec(ctx, attemptSchemaSQL); err != nil {
+		t.Fatal(err)
+	}
+	codec, binding, payload := custodyFixture(t)
+	binding.Command.UserID = ""
+	binding.Command.AnonymousFlowID = "user-a"
+	binding.Command.OperationID = "identity.otp.send"
+	binding.Intent.SubjectID = "user-a"
+	binding.Intent.EffectID = deliveryEffectID(binding.Deployment, binding.Command, 0)
+	frozen, envelope, err := codec.seal(ctx, binding, payload, "envelope-a")
+	if err != nil {
+		t.Fatal(err)
+	}
+	store, err := newIntentStore("test", codec, map[uint64]providerProfile{1: {name: "test-provider", policyVersion: 1}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	prepared, err := store.prepare(binding.Command, kernel.DeliveryPlan{Contributor: store.Descriptor(), Intents: []kernel.DeliveryIntentPlan{frozen.Intent}}, []kernel.DeliveryEnvelope{envelope})
+	if err != nil {
+		t.Fatal(err)
+	}
+	seedIntentCommand(t, ctx, pool, prepared[0])
+	tx := beginIntentTestTransaction(t, ctx, pool)
+	if err := persistInTestTransaction(ctx, store, prepared, tx); err != nil {
+		t.Fatal(err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		t.Fatal(err)
+	}
+	worker, err := newAttemptStore(pool, "test", codec, delivery.DefaultConfig(), time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = worker.cancel(ctx, delivery.CancelRequest{TenantID: "tenant-a", IntentID: delivery.IntentID(frozen.Intent.EffectID), Reason: "user-cancel"}, "user-a")
+	if !errors.Is(err, delivery.ErrNotFound) {
+		t.Fatal("user selected anonymous namespace by equal ID text", err)
+	}
+	var unchanged bool
+	if err := pool.QueryRow(ctx, `SELECT state='planned' AND ciphertext IS NOT NULL FROM identity.delivery_intents`).Scan(&unchanged); err != nil || !unchanged {
+		t.Fatal("anonymous effect changed through user cancellation", err)
+	}
+}
 
 func TestDurableCancellationPreventsUnsentWorkAndErasesCustody(t *testing.T) {
 	for _, noop := range []bool{false, true} {

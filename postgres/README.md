@@ -19,6 +19,15 @@ primary checks. No storage or migration change is introduced by this framing.
 
 ## OTP current-authority checks
 
+The generic native feature invocation also exposes
+`Work.RequireActiveUserAuthority(ctx, participant, UserAuthorityAdmission)`.
+Only its exact live `FeatureExecutionContributor` may compare the active primary
+user and all three original security epochs. No credential is fabricated for
+passwordless issuance, and aggregate user versions remain separate. The lock
+lasts until commit or abort; a live failure poisons Work, while returned or
+foreign invocations cannot borrow it. This does not replace directory, policy,
+flow or credential-specific admission.
+
 `OTPAttemptWork`, `OTPReservationWork`, `OTPApplyWork` and `OTPFinalizeWork`
 expose `RequireActiveDirectoryAuthority`, `RequireActiveCredential` and
 `RequireActiveUserAuthorization` to their exact registered OTP owner. They also

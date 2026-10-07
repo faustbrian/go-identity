@@ -39,12 +39,16 @@ func (s *receiptStore) reconcileEvidenceIn(ctx context.Context, sql cancellation
 		return delivery.ReceiptRecordResult{}, err
 	}
 	var state, provider string
-	err := sql.scan(ctx, `SELECT state,provider FROM identity.delivery_intents WHERE deployment=$1 AND tenant_id=$2 AND effect_id=$3 AND subject_id=$4 FOR UPDATE`, []any{s.deployment, string(q.TenantID), string(q.IntentID), subject}, &state, &provider)
+	var bindingAAD []byte
+	err := sql.scan(ctx, `SELECT state,provider,binding_aad FROM identity.delivery_intents WHERE deployment=$1 AND tenant_id=$2 AND effect_id=$3 AND subject_id=$4 FOR UPDATE`, []any{s.deployment, string(q.TenantID), string(q.IntentID), subject}, &state, &provider, &bindingAAD)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return delivery.ReceiptRecordResult{}, delivery.ErrNotFound
 	}
 	if err != nil {
 		return delivery.ReceiptRecordResult{}, attemptFailure(ctx, err)
+	}
+	if _, err := decodeUserBinding(bindingAAD, s.deployment, string(q.TenantID), string(q.IntentID), subject); err != nil {
+		return delivery.ReceiptRecordResult{}, err
 	}
 	if provider != q.Provider {
 		return delivery.ReceiptRecordResult{}, delivery.ErrForbidden

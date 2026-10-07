@@ -103,7 +103,7 @@ func (s *attemptStore) cancelIn(w context.Context, sql cancellationSQL, q delive
 	if err != nil {
 		return delivery.CancelResult{}, attemptFailure(w, err)
 	}
-	b, err := decodeBinding(aad)
+	b, err := decodeUserBinding(aad, s.deployment, string(q.TenantID), string(q.IntentID), subject)
 	if err != nil {
 		return delivery.CancelResult{}, err
 	}

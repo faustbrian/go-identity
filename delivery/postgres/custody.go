@@ -100,10 +100,20 @@ func safeID(s string, optional bool) bool {
 
 func custodyContext(b payloadBinding, includeDigest bool) (secretenvelope.Context, error) {
 	c, i := b.Command, b.Intent
+	anonymous := c.AnonymousFlowID != ""
+	// The namespace is authenticated, not inferred from the subject's text.
+	// Keep the installed user profile byte-for-byte unchanged for retained data.
+	if anonymous {
+		if c.UserID != "" || !safeID(c.AnonymousFlowID, false) || c.LinkMode != 0 || i.SubjectID != c.AnonymousFlowID {
+			return secretenvelope.Context{}, delivery.ErrInvalidInput
+		}
+	} else if !safeID(string(c.UserID), false) {
+		return secretenvelope.Context{}, delivery.ErrInvalidInput
+	}
 	if _, err := identity.ParseCommandID(string(c.CommandID)); err != nil {
 		return secretenvelope.Context{}, delivery.ErrInvalidInput
 	}
-	if !safeID(b.Deployment, false) || !safeID(string(c.TenantID), false) || !safeID(string(c.UserID), false) || !safeID(string(c.ActorID), false) || !safeID(c.OperationID, false) || !safeID(c.PolicyID, false) || !safeID(c.SchemaID, false) || !safeID(c.CorrelationID, false) || !safeID(c.RecordID, true) || c.PolicyVersion == 0 || c.SchemaVersion == 0 || c.LinkMode > identity.AccountLinkAdministrative || (c.ActorKind != authorization.SubjectUser && c.ActorKind != authorization.SubjectAPIKey && c.ActorKind != authorization.SubjectServiceAccount) || !safeID(i.EffectID, false) || !safeID(i.Purpose, false) || !safeID(i.SubjectID, false) || !safeID(i.TemplateID, false) || !safeID(b.Provider, false) || i.TemplateVersion == 0 || i.ProviderConfigVersion == 0 || b.PolicyVersion == 0 || b.DigestKeyVersion == 0 || i.ExpiresAt.UnixMicro() <= 0 || i.ExpiresAt.Year() > 9999 || i.ExpiresAt.Nanosecond()%1000 != 0 || includeDigest && i.IntentDigest == ([32]byte{}) {
+	if !safeID(b.Deployment, false) || !safeID(string(c.TenantID), false) || !safeID(string(c.ActorID), false) || !safeID(c.OperationID, false) || !safeID(c.PolicyID, false) || !safeID(c.SchemaID, false) || !safeID(c.CorrelationID, false) || !safeID(c.RecordID, true) || c.PolicyVersion == 0 || c.SchemaVersion == 0 || c.LinkMode > identity.AccountLinkAdministrative || (c.ActorKind != authorization.SubjectUser && c.ActorKind != authorization.SubjectAPIKey && c.ActorKind != authorization.SubjectServiceAccount) || !safeID(i.EffectID, false) || !safeID(i.Purpose, false) || !safeID(i.SubjectID, false) || !safeID(i.TemplateID, false) || !safeID(b.Provider, false) || i.TemplateVersion == 0 || i.ProviderConfigVersion == 0 || b.PolicyVersion == 0 || b.DigestKeyVersion == 0 || i.ExpiresAt.UnixMicro() <= 0 || i.ExpiresAt.Year() > 9999 || i.ExpiresAt.Nanosecond()%1000 != 0 || includeDigest && i.IntentDigest == ([32]byte{}) {
 		return secretenvelope.Context{}, delivery.ErrInvalidInput
 	}
 	values := map[string]string{
@@ -111,6 +121,10 @@ func custodyContext(b payloadBinding, includeDigest bool) (secretenvelope.Contex
 		"command": string(c.CommandID), "tenant": string(c.TenantID), "user": string(c.UserID), "actor": string(c.ActorID), "actor_kind": string(c.ActorKind),
 		"operation": c.OperationID, "command_policy": c.PolicyID, "command_policy_version": strconv.FormatUint(c.PolicyVersion, 10), "command_schema": c.SchemaID, "command_schema_version": strconv.FormatUint(uint64(c.SchemaVersion), 10), "correlation": c.CorrelationID, "record": c.RecordID, "link_mode": strconv.FormatUint(uint64(c.LinkMode), 10),
 		"effect": i.EffectID, "effect_index": strconv.FormatUint(uint64(i.EffectIndex), 10), "purpose": i.Purpose, "subject": i.SubjectID, "template": i.TemplateID, "template_version": strconv.FormatUint(uint64(i.TemplateVersion), 10), "provider": b.Provider, "provider_version": strconv.FormatUint(i.ProviderConfigVersion, 10), "delivery_policy": strconv.FormatUint(b.PolicyVersion, 10), "expiry": strconv.FormatInt(i.ExpiresAt.UnixMicro(), 10), "digest_key_version": strconv.FormatUint(uint64(b.DigestKeyVersion), 10), "no_op": strconv.FormatBool(b.NoOpEquivalent),
+	}
+	if anonymous {
+		values["profile"] = "identity-delivery-payload-anonymous-v1"
+		values["anonymous_flow"] = c.AnonymousFlowID
 	}
 	if includeDigest {
 		values["intent_digest"] = hex.EncodeToString(i.IntentDigest[:])

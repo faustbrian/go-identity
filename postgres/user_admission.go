@@ -24,6 +24,32 @@ func (UserAuthorityAdmission) Format(s fmt.State, _ rune) {
 // MarshalJSON rejects accidental export of correlated admission input.
 func (UserAuthorityAdmission) MarshalJSON() ([]byte, error) { return nil, invalidWork() }
 
+// RequireActiveUserAuthority compares the command-bound user's active status
+// and all three original security epochs without requiring a credential. Only
+// the exact native feature participant's live invocation may call it. The
+// primary share lock lasts until coordinator commit or abort; aggregate user
+// version is deliberately not an authority epoch. Missing, inactive or stale
+// state denies uniformly and every live failure poisons Work, even if ignored.
+// A returned invocation cannot poison a later invocation sharing its Work.
+// This does not decide policy, authenticate a bearer, renew original authority,
+// or replace credential-specific admission when a credential is present.
+func (w Work) RequireActiveUserAuthority(ctx context.Context, p FeatureExecutionContributor, expected UserAuthorityAdmission) error {
+	if w.state == nil || w.state.featureInvocation == nil {
+		return invalidWork()
+	}
+	if ctx == nil {
+		return w.fail(w.state.ctx, invalidWork())
+	}
+	b, _, _, err := w.FeatureScope(p)
+	if err != nil {
+		return w.fail(ctx, invalidWork())
+	}
+	if err := ctx.Err(); err != nil {
+		return w.fail(ctx, err)
+	}
+	return otpAuthorityFailure(ctx, w, w.requireActiveUserAuthority(ctx, b, expected))
+}
+
 func (w Work) requireActiveUserAuthority(ctx context.Context, b identity.CommandBinding, expected UserAuthorityAdmission) error {
 	if !queryScopeText(string(b.TenantID)) || !queryScopeText(string(b.UserID)) || expected.UserAuthorityVersion == 0 || expected.IdentifierAuthorityVersion == 0 || expected.CredentialAuthorityVersion == 0 {
 		return w.fail(ctx, invalidWork())

@@ -33,9 +33,7 @@ func TestPublicContributorOriginalCoordinatorComposition(t *testing.T) {
 	// Audit roles are cluster-wide, while every child owns an isolated database.
 	// Reserve the roles once in this disposable cluster, never in a shared one.
 	ctx, rolePool := emptyIntentDatabase(t)
-	if _, err := rolePool.Exec(ctx, auditpostgres.FreshInstallPreflightSQL()); err != nil {
-		t.Fatal("owned audit preflight failed")
-	}
+	reserveIntentAuditRoles(t, ctx, rolePool)
 	for _, mode := range []string{"committed", "no-op", "delivery-failure", "native-committed", "native-owned", "public-owned", "public-state", "public-cancel", "public-receipt", "public-reconcile", "public-worker", "public-queue", "public-worker-lease", "public-queue-lease", "native-compatible-custody", "native-no-op", "native-missing", "native-failure", "native-cancel", "native-cancel-noop", "native-receipt", "native-reconcile"} {
 		t.Run(mode, func(t *testing.T) { testPublicComposition(t, mode) })
 	}

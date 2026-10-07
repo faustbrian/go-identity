@@ -447,6 +447,19 @@ command, tenant, human/service actor, user/resource, command schema/policy,
 effect/index/purpose, template version, provider configuration, delivery policy,
 original expiry, no-op classification and retained fingerprint-key version.
 
+Native feature composition may instead select `CommandBinding.AnonymousFlowID`
+with an empty `UserID`, no account-link mode and the same flow as the intent's
+subject. This selects the separate 29-field
+`identity-delivery-payload-anonymous-v1` profile, authenticating both the namespace
+and exact flow. An anonymous flow is a target, not actor or authentication
+authority. Existing user-profile bytes and logical fingerprints remain unchanged.
+Public enqueue, status, cancellation, receipt and reconciliation management
+remain user-only: equal user/flow ID text cannot select anonymous effects. The
+service-account worker can process the original retained anonymous payload.
+Upgrade all custody readers and workers before enabling anonymous writes. Older
+versions reject the anonymous profile; rolling back readers requires first
+draining or disabling anonymous delivery, not rewriting retained custody.
+
 A domain-separated HMAC binds the confidential logical payload independently
 of randomized ciphertext. A separate HMAC domain attests the exact envelope
 and frozen scope, allowing the enlisted persistence phase to validate prepared
@@ -468,7 +481,7 @@ closed; they do not authorize regeneration, altered plaintext or a new command.
 Rotation cannot change the retained template/locale snapshot or expiry.
 
 Worker recovery reconstructs the original scope from the installed 28-field
-`identity-delivery-payload-v1` AAD profile, rather than introducing a second
+user or 29-field anonymous AAD profile, rather than introducing a second
 command authority. The reader is bounded to 16KiB and requires the exact
 canonical field set, numeric spelling, digest and expiry. Its framing is pinned
 to `go-secret-envelope` revision `22fc4a2d925d`, `context.go`; a canonical rebuild

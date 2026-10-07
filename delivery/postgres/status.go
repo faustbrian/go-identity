@@ -95,6 +95,7 @@ func (s *EnqueueService) observeStatus(ctx context.Context, q delivery.StatusGet
 		versionColumn = "i.status_version::text"
 	}
 	var version *string
+	var bindingAAD []byte
 	receiptColumn, receiptJoin := "NULL::smallint", ""
 	if s.receiptTracking {
 		receiptColumn = "r.result_state"
@@ -110,16 +111,19 @@ ORDER BY observed_at DESC NULLS LAST,event_digest LIMIT 1
 	}
 	err = s.keyed.pool.QueryRow(w, `SELECT i.state,COALESCE(p.generation,0),h.outcome,
 p.lease_owner IS NOT NULL AND p.lease_until>clock_timestamp(),
-h.provider_reference_digest IS NOT NULL,i.no_op,i.expires_at<=clock_timestamp(),`+stopColumn+`,`+versionColumn+`,`+receiptColumn+`
+h.provider_reference_digest IS NOT NULL,i.no_op,i.expires_at<=clock_timestamp(),`+stopColumn+`,`+versionColumn+`,`+receiptColumn+`,i.binding_aad
 FROM identity.delivery_intents i
 LEFT JOIN identity.delivery_processing p USING(deployment,tenant_id,effect_id)
 LEFT JOIN identity.delivery_attempt_history h ON h.deployment=p.deployment AND h.tenant_id=p.tenant_id AND h.effect_id=p.effect_id AND h.generation=p.generation
-`+receiptJoin+`WHERE i.deployment=$1 AND i.tenant_id=$2 AND i.effect_id=$3 AND i.subject_id=$4`, s.keyed.deployment, string(q.TenantID), string(q.IntentID), string(user)).Scan(&snapshot.state, &snapshot.generation, &snapshot.outcome, &snapshot.live, &snapshot.reference, &snapshot.noop, &snapshot.expired, &snapshot.localStop, &version, &snapshot.receipt)
+`+receiptJoin+`WHERE i.deployment=$1 AND i.tenant_id=$2 AND i.effect_id=$3 AND i.subject_id=$4`, s.keyed.deployment, string(q.TenantID), string(q.IntentID), string(user)).Scan(&snapshot.state, &snapshot.generation, &snapshot.outcome, &snapshot.live, &snapshot.reference, &snapshot.noop, &snapshot.expired, &snapshot.localStop, &version, &snapshot.receipt, &bindingAAD)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return StatusSnapshot{}, delivery.ErrNotFound
 	}
 	if err != nil {
 		return StatusSnapshot{}, attemptFailure(w, err)
+	}
+	if _, err := decodeUserBinding(bindingAAD, s.keyed.deployment, string(q.TenantID), string(q.IntentID), string(user)); err != nil {
+		return StatusSnapshot{}, err
 	}
 	status, err := snapshot.result()
 	if err != nil {

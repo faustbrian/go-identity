@@ -28,8 +28,8 @@ func (c *payloadCodec) restore(wire []byte, envelope identitypostgres.DeliveryEn
 	return b, nil
 }
 
-// decodeBinding reads the installed identity-delivery-payload-v1 persistence
-// profile. Framing comes from the pinned secret-envelope Context.AdditionalData
+// decodeBinding reads the installed user and explicit anonymous persistence
+// profiles. Framing comes from the pinned secret-envelope Context.AdditionalData
 // contract (22fc4a2d925d, context.go): sorted UTF-8 key/value pairs, uint32 BE
 // lengths, no count prefix. This is not an envelope or cryptographic parser.
 // Rebuilding through custodyContext verifies both the exact owned field set and
@@ -40,11 +40,11 @@ func decodeBinding(wire []byte) (payloadBinding, error) {
 	if len(wire) == 0 || len(wire) > 16384 {
 		return b, delivery.ErrInvalidInput
 	}
-	values := make(map[string]string, 28)
+	values := make(map[string]string, 29)
 	remaining := wire
 	previous := ""
 	for len(remaining) != 0 {
-		if len(values) == 28 {
+		if len(values) == 29 {
 			return payloadBinding{}, delivery.ErrInvalidInput
 		}
 		key, rest, ok := bindingField(remaining, 256)
@@ -58,7 +58,17 @@ func decodeBinding(wire []byte) (payloadBinding, error) {
 		values[key] = value
 		remaining, previous = rest, key
 	}
-	if len(values) != 28 || values["profile"] != "identity-delivery-payload-v1" {
+	switch values["profile"] {
+	case "identity-delivery-payload-v1":
+		if len(values) != 28 {
+			return payloadBinding{}, delivery.ErrInvalidInput
+		}
+	case "identity-delivery-payload-anonymous-v1":
+		if len(values) != 29 || values["anonymous_flow"] == "" || values["user"] != "" {
+			return payloadBinding{}, delivery.ErrInvalidInput
+		}
+		b.Command.AnonymousFlowID = values["anonymous_flow"]
+	default:
 		return payloadBinding{}, delivery.ErrInvalidInput
 	}
 	b.Deployment = values["deployment"]
@@ -132,4 +142,18 @@ func bindingField(wire []byte, limit uint32) (string, []byte, bool) {
 	}
 	end := 4 + int(size)
 	return string(wire[4:end]), wire[end:], true
+}
+
+// Management is intentionally user-only. SQL subject text is not a namespace:
+// an anonymous flow can have the same spelling as an unrelated user. Check the
+// immutable installed binding before disclosing state or applying an effect.
+func decodeUserBinding(wire []byte, deployment, tenant, effect, user string) (payloadBinding, error) {
+	b, err := decodeBinding(wire)
+	if err != nil {
+		return payloadBinding{}, delivery.ErrUnavailable
+	}
+	if b.Command.AnonymousFlowID != "" || string(b.Command.UserID) != user || b.Deployment != deployment || string(b.Command.TenantID) != tenant || b.Intent.EffectID != effect || b.Intent.SubjectID != user {
+		return payloadBinding{}, delivery.ErrNotFound
+	}
+	return b, nil
 }

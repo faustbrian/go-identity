@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Native workflow delivery can bind an explicit anonymous flow without a
+  fabricated user. A separate authenticated custody profile preserves the
+  original flow through restart and worker execution; existing user custody
+  bytes remain unchanged. User-only management rejects anonymous effects even
+  when the flow and user IDs have identical text.
+
 - Public `Worker` and full `Queue` now expose scoped `RenewLease` and
   `ReleaseLease` for explicitly scheduled workers. Renewal retains the original
   attempt lifetime and enforces provider identity even when profiles share retry

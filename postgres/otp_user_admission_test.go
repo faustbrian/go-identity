@@ -7,9 +7,29 @@ import (
 
 func otpUserCheck(t *testing.T, ctx context.Context, phase, mode string) (Work, func(context.Context, UserAuthorityAdmission) error, func()) {
 	t.Helper()
-	w, _, _ := otpAuthorityFixture(t, ctx, phase, "")
+	fixturePhase := phase
+	if phase == "feature" {
+		fixturePhase = "attempt"
+	}
+	w, _, _ := otpAuthorityFixture(t, ctx, fixturePhase, "")
 	plan := w.state.execution.reservation.plan
 	owner := otpExecutionOwner(plan)
+	if phase == "feature" {
+		native := &scopeFeatureParticipant{}
+		var selected FeatureExecutionContributor = native
+		if mode == "foreign" {
+			selected = &scopeFeatureParticipant{}
+		}
+		if mode == "nil-owner" {
+			selected = nil
+		}
+		w.state.feature = &FeatureRegistration{}
+		w.state.lifecycle = &workLifecycle{}
+		w.state.featureInvocation = native
+		return w, func(ctx context.Context, expected UserAuthorityAdmission) error {
+			return w.RequireActiveUserAuthority(ctx, selected, expected)
+		}, func() { w.state.featureInvocation = nil }
+	}
 	selected := owner
 	if mode == "foreign" {
 		selected = &otpExecutionProbe{}
@@ -46,7 +66,7 @@ func otpUserCheck(t *testing.T, ctx context.Context, phase, mode string) (Work, 
 }
 
 func TestOTPUserAuthorityRejectsUnownedAndMalformed(t *testing.T) {
-	for _, phase := range []string{"attempt", "reservation", "apply", "finalize"} {
+	for _, phase := range []string{"attempt", "reservation", "apply", "finalize", "feature"} {
 		for _, mode := range []string{"zero-epoch", "foreign", "nil-owner", "nil-context", "canceled", "returned", "open-cursor"} {
 			t.Run(phase+"/"+mode, func(t *testing.T) {
 				w, check, deactivate := otpUserCheck(t, context.Background(), phase, mode)

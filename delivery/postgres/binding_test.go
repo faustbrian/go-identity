@@ -8,9 +8,68 @@ import (
 	"reflect"
 	"testing"
 
+	identity "github.com/faustbrian/go-identity"
 	"github.com/faustbrian/go-identity/delivery"
 	secretenvelope "github.com/faustbrian/go-secret-envelope"
 )
+
+func TestAnonymousBindingReopensOnlyOriginalFlow(t *testing.T) {
+	c, b, p := custodyFixture(t)
+	b.Command.UserID = ""
+	b.Command.AnonymousFlowID = "flow-a"
+	b.Command.OperationID = "identity.otp.send"
+	b.Intent.SubjectID = b.Command.AnonymousFlowID
+	frozen, envelope, err := c.seal(context.Background(), b, p, "envelope-a")
+	if err != nil {
+		t.Fatal("anonymous custody unavailable", err)
+	}
+	ctx, err := custodyContext(frozen, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	restored, err := c.restore(ctx.AdditionalData(), envelope)
+	if err != nil || !reflect.DeepEqual(restored, frozen) {
+		t.Fatal("original anonymous binding lost on restart", err)
+	}
+	opened, err := c.open(context.Background(), restored, envelope)
+	if err != nil || !reflect.DeepEqual(opened, p) {
+		t.Fatal("original anonymous payload lost on restart", err)
+	}
+	for _, change := range []func(*payloadBinding){
+		func(v *payloadBinding) { v.Command.AnonymousFlowID = "flow-other"; v.Intent.SubjectID = "flow-other" },
+		func(v *payloadBinding) {
+			v.Command.UserID = identity.UserID(v.Command.AnonymousFlowID)
+			v.Command.AnonymousFlowID = ""
+		},
+		func(v *payloadBinding) { v.Command.TenantID = "tenant-other" },
+	} {
+		other := frozen
+		change(&other)
+		aad, err := custodyContext(other, true)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := c.restore(aad.AdditionalData(), envelope); !errors.Is(err, delivery.ErrForbidden) {
+			t.Fatal("changed flow or namespace authenticated retained ciphertext", err)
+		}
+	}
+	for _, change := range []func(map[string]string){
+		func(v map[string]string) { delete(v, "anonymous_flow") },
+		func(v map[string]string) { v["user"] = "flow-a" },
+		func(v map[string]string) { v["profile"] = "identity-delivery-payload-v1" },
+		func(v map[string]string) { v["anonymous_flow"] = "" },
+	} {
+		values := ctx.Values()
+		change(values)
+		aad, err := secretenvelope.NewContext(values)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := decodeBinding(aad.AdditionalData()); !errors.Is(err, delivery.ErrInvalidInput) {
+			t.Fatal("malformed anonymous profile accepted", err)
+		}
+	}
+}
 
 func TestPersistedBindingReopensOriginalCustody(t *testing.T) {
 	c, b, p := custodyFixture(t)
@@ -126,6 +185,19 @@ func FuzzPersistedBinding(f *testing.F) {
 		f.Fatal(err)
 	}
 	f.Add(ctx.AdditionalData())
+	b.Command.UserID = ""
+	b.Command.AnonymousFlowID = "flow-a"
+	b.Command.OperationID = "identity.otp.send"
+	b.Intent.SubjectID = "flow-a"
+	anonymous, _, err := c.seal(context.Background(), b, p, "envelope-a")
+	if err != nil {
+		f.Fatal(err)
+	}
+	anonymousContext, err := custodyContext(anonymous, true)
+	if err != nil {
+		f.Fatal(err)
+	}
+	f.Add(anonymousContext.AdditionalData())
 	f.Add([]byte{})
 	f.Add([]byte{255, 255, 255, 255})
 	f.Fuzz(func(t *testing.T, wire []byte) {

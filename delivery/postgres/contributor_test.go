@@ -113,6 +113,40 @@ func TestPublicPreparationPreservesCancellationBoundsAndExpiry(t *testing.T) {
 	}
 }
 
+func TestPublicPreparationSupportsExplicitAnonymousFlow(t *testing.T) {
+	c, _, b, input := publicStagingFixture(t)
+	b.UserID = ""
+	b.AnonymousFlowID = "flow-a"
+	b.OperationID = "identity.otp.send"
+	input.SubjectID = b.AnonymousFlowID
+	prepared, err := c.Prepare(context.Background(), b, []deliverypostgres.IntentInput{input})
+	if err != nil {
+		t.Fatal("anonymous OTP delivery cannot freeze original payload", err)
+	}
+	plan, err := prepared.Plan()
+	if err != nil || len(plan.Intents) != 1 || plan.Intents[0].SubjectID != b.AnonymousFlowID {
+		t.Fatal("anonymous subject lost from frozen intent", err)
+	}
+	for _, change := range []func(*identity.CommandBinding, *deliverypostgres.IntentInput){
+		func(b *identity.CommandBinding, _ *deliverypostgres.IntentInput) { b.AnonymousFlowID = "" },
+		func(b *identity.CommandBinding, _ *deliverypostgres.IntentInput) { b.UserID = "user-a" },
+		func(b *identity.CommandBinding, _ *deliverypostgres.IntentInput) {
+			b.AnonymousFlowID = strings.Repeat("a", 129)
+		},
+		func(b *identity.CommandBinding, _ *deliverypostgres.IntentInput) { b.AnonymousFlowID = "flow\nother" },
+		func(b *identity.CommandBinding, _ *deliverypostgres.IntentInput) {
+			b.LinkMode = identity.AccountLinkExplicit
+		},
+		func(_ *identity.CommandBinding, i *deliverypostgres.IntentInput) { i.SubjectID = "flow-other" },
+	} {
+		badBinding, badInput := b, input
+		change(&badBinding, &badInput)
+		if _, err := c.Prepare(context.Background(), badBinding, []deliverypostgres.IntentInput{badInput}); !errors.Is(err, delivery.ErrInvalidInput) {
+			t.Fatal("invalid anonymous subject admitted", err)
+		}
+	}
+}
+
 func TestPublicMigrationSourcePreservesOwnedHistory(t *testing.T) {
 	base := identitypostgres.MigrationSource{}
 	before, err := base.Load(context.Background())

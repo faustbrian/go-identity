@@ -20,7 +20,7 @@ func testOTPUserAuthority(t *testing.T, ctx context.Context, pool *database.Pool
 	if _, err := pool.Raw().Exec(ctx, `DELETE FROM identity.credential_references WHERE tenant_id=$1 AND user_id=$2`, string(b.TenantID), string(b.UserID)); err != nil {
 		t.Fatal(err)
 	}
-	for _, phase := range []string{"attempt", "reservation", "apply", "finalize"} {
+	for _, phase := range []string{"attempt", "reservation", "apply", "finalize", "feature"} {
 		for _, mode := range []string{"exact", "aggregate-only", "user-stale", "identifier-stale", "credential-stale", "blocked", "absent", "full-width", "lock-deadline", "retained-lock", "open-cursor"} {
 			t.Run("passwordless/"+phase+"/"+mode, func(t *testing.T) {
 				_, err := pool.Raw().Exec(ctx, `UPDATE identity.users SET status='active',version=101,authority_version=13,identifier_version=17,credential_version=19 WHERE tenant_id=$1 AND user_id=$2`, string(b.TenantID), string(b.UserID))

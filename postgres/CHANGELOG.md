@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Native feature participants can admit a passwordless user's active primary
+  status and original security epochs through the live transaction, without
+  inventing a credential reference. Returned or foreign invocations cannot
+  borrow admission; credential-specific checks remain unchanged.
+
 - Bind code-free pre-auth-cookie and session-token feature custody into the
   existing private command fingerprint domains without storing bearer bytes.
   Code-free custody cannot enter OTP comparison or reservation phases;

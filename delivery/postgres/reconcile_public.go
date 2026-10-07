@@ -178,12 +178,16 @@ func (s *EnqueueService) Reconcile(ctx context.Context, r ReconcileCommandReques
 	}
 	var provider, profile string
 	var noop bool
-	err = s.keyed.pool.QueryRow(work, `SELECT provider,provider_version::text,no_op FROM identity.delivery_intents WHERE deployment=$1 AND tenant_id=$2 AND effect_id=$3 AND subject_id=$4`, s.keyed.deployment, string(r.Binding.TenantID), r.Binding.RecordID, string(r.Binding.UserID)).Scan(&provider, &profile, &noop)
+	var bindingAAD []byte
+	err = s.keyed.pool.QueryRow(work, `SELECT provider,provider_version::text,no_op,binding_aad FROM identity.delivery_intents WHERE deployment=$1 AND tenant_id=$2 AND effect_id=$3 AND subject_id=$4`, s.keyed.deployment, string(r.Binding.TenantID), r.Binding.RecordID, string(r.Binding.UserID)).Scan(&provider, &profile, &noop, &bindingAAD)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return delivery.ReconcileResult{}, delivery.ErrNotFound
 	}
 	if err != nil {
 		return delivery.ReconcileResult{}, attemptFailure(work, err)
+	}
+	if _, err := decodeUserBinding(bindingAAD, s.keyed.deployment, string(r.Binding.TenantID), r.Binding.RecordID, string(r.Binding.UserID)); err != nil {
+		return delivery.ReconcileResult{}, err
 	}
 	version, err := strconv.ParseUint(profile, 10, 64)
 	if err != nil || noop {
