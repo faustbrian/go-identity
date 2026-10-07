@@ -126,6 +126,18 @@ func prepareClaim(c identity.Command, key [32]byte) (claimRequest, error) {
 			}
 			payload["one_time_code"] = cborBytes(digest[:])
 		}
+		if cookie, ok := c.PreAuthCookie(); ok {
+			// A changed submitted cookie is different command intent, even when
+			// scalar flow metadata/code match. Only a keyed binding is retained;
+			// native phases must still independently admit the original bearer.
+			secret := []byte(cookie.Token())
+			digest, err := commandSecret(key, "pre-auth-cookie", secret, 86)
+			clear(secret)
+			if err != nil {
+				return claimRequest{}, codecError()
+			}
+			payload["pre_auth_cookie"] = cborBytes(digest)
+		}
 	default:
 		return claimRequest{}, codecError()
 	}

@@ -1,5 +1,14 @@
 # Identity PostgreSQL
 
+Separate opaque pre-auth cookies use the existing `identity-command-secret-v1`
+framing under the exact field path `pre-auth-cookie`; its HMAC enters private
+canonical intent as `pre_auth_cookie`. Different submitted cookies cannot reuse
+the same command fingerprint. Safe collision fields contain no bearer or cookie
+digest. Cookie-free and code-only commands retain their exact historical bytes.
+Fingerprinting is not active-flow admission. Generic execution still rejects
+all opaque OTP submissions; native counted and consuming phases must own their
+primary checks. No storage or migration change is introduced by this framing.
+
 ## OTP current-authority checks
 
 `OTPAttemptWork`, `OTPReservationWork`, `OTPApplyWork` and `OTPFinalizeWork`

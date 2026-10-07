@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Add explicit complete-flow attempt mapping with separate original cookie
+  custody. Never persist the submitted bearer or treat its digest as a caller
+  credential; current primary admission remains native execution work.
+
 - Preserve complete original pre-auth binding in versioned encrypted attempt
   custody across restart, without storing a bearer or submitted code. Retain
   exact legacy v1 bytes; bound v2 records reject mixed IDs, malformed timelines,

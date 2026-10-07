@@ -41,3 +41,12 @@ func TestFeatureOneTimeCodeMixedVariantDenied(t *testing.T) {
 		t.Fatal("mixed command disclosed custody")
 	}
 }
+
+func TestFeaturePreAuthCookieMixedVariantDenied(t *testing.T) {
+	code, _ := authentication.NewOneTimeCode("123456")
+	cookie := authentication.NewBearerCredential("private-cookie")
+	c := Command{feature: &featureCommandState{code: &code, preAuthCookie: &cookie}, create: &CreateUserCommand{}}
+	if _, ok := c.PreAuthCookie(); ok {
+		t.Fatal("mixed command disclosed cookie custody")
+	}
+}

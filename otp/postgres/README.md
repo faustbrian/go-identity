@@ -1,5 +1,16 @@
 # OTP PostgreSQL
 
+`AttemptCodec.MapPreAuth` explicitly maps a complete bound-flow attempt and its
+separate submitted `authentication.BearerCredential`. The bearer is retained
+only by opaque root command custody; `Feature()` and encrypted attempt fields
+never contain it. ID-only legacy continuation or malformed token syntax deny.
+The original code and attempt remain unchanged. A syntactically valid wrong
+cookie is still submitted intent, not proof: the native owner must derive its
+commitment under the named retained pre-auth key, then compare the complete
+canonical primary flow and current authority in the sealed phase. Map once and
+retain the command through ambiguity; credential-free recovery cannot recreate
+the bearer. Native participant activation and usable OTP login remain pending.
+
 ## Complete original pre-auth custody
 
 Mapping an attempt prepared with `otp.NewBoundPreAuthAuthorization` retains

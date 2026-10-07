@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Bind separately submitted pre-auth cookies into versioned private command
+  fingerprints without persisting bearer bytes or changing existing command
+  encodings. Different cookies cannot borrow a code-only command's replay.
+
 - Expose existing primary directory, credential and user-authorization checks
   to sealed OTP denial, reservation, protected-use and finalization handles.
   Bind checks to the exact live owner and original command; ignored failures

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Retain separately submitted pre-auth cookies in opaque OTP command custody.
+  Keep bearer bytes out of scalar projections and preserve existing code-only
+  commands. Construction validates syntax, not cookie possession or admission.
+
 - Add opaque one-time-code custody to structural feature commands without
   placing secrets in scalar metadata or projections. Preserve ordinary command
   construction; verification, atomic consumption and durable admission remain

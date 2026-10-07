@@ -74,8 +74,9 @@ type FeatureCommandSpec struct {
 }
 
 type featureCommandState struct {
-	spec FeatureCommandSpec
-	code *authentication.OneTimeCode
+	spec          FeatureCommandSpec
+	code          *authentication.OneTimeCode
+	preAuthCookie *authentication.BearerCredential
 }
 
 // NewFeatureCommand validates and freezes structural feature input, copying

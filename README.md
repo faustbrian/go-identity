@@ -3,6 +3,17 @@
 Composable backend identity-domain ownership for Golib. This module is under
 development and targets Go 1.27.
 
+`NewFeatureOneTimeCodePreAuthCommand` retains the separately submitted
+`authentication.BearerCredential` alongside an opaque OTP, outside scalar
+feature metadata. The cookie transport must be canonical unpadded base64url
+encoding of 32..64 bytes. `PreAuthCookie()` is a trusted native-owner borrow;
+never log, serialize or persist its `Token()`. Existing code-only constructors
+remain unchanged. Neither constructor proves current flow state, authorization
+or successful OTP verification. Native owners must derive the named commitment
+from the actual cookie and admit the original primary flow in every applicable
+sealed phase. Discard secret copies on terminal outcomes; recovery uses
+credential-free metadata.
+
 ## Privacy snapshot integrity
 
 `PrivacyExportSnapshotV1` captures the complete 23-contributor version-1 manifest
