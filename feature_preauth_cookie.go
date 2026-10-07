@@ -40,12 +40,14 @@ func NewFeatureOneTimeCodePreAuthCommand(spec FeatureCommandSpec, code authentic
 
 // PreAuthCookie lends the exact submitted bearer only to trusted native owners
 // for independently derived flow-cookie comparison. It never returns a caller
-// digest or grants authentication/one-use authority. Zero, ordinary, code-only
+// digest or grants authentication/one-use authority. Code-free issuance custody
+// and code-bearing submissions share this borrow; neither fabricates the other.
+// Zero, ordinary, code-only
 // and mixed commands return zero/false. Feature projections contain neither
 // bearer nor code, and cannot reconstruct them. Discard borrowed copies after
 // use; never log, serialize, persist or disclose Token. No IO or callbacks run.
 func (c Command) PreAuthCookie() (authentication.BearerCredential, bool) {
-	if c.feature == nil || c.feature.preAuthCookie == nil || c.feature.code == nil {
+	if c.feature == nil || c.feature.preAuthCookie == nil {
 		return authentication.BearerCredential{}, false
 	}
 	if _, ok := c.Feature(); !ok {

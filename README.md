@@ -3,6 +3,15 @@
 Composable backend identity-domain ownership for Golib. This module is under
 development and targets Go 1.27.
 
+`NewFeaturePreAuthCommand` and `NewFeatureSessionCommand` retain only the
+original submitted cookie or token for workflows such as OTP sending that
+have no submitted code. `OneTimeCode()` remains absent. Their trusted-owner
+borrows, canonical transport bounds, disjoint custody, redaction and primary
+admission obligations are the same as the code-bearing variants below.
+Construction and keyed command intent are not authentication or permission.
+Applications do not use these structural commands as an identity endpoint;
+the owned feature workflow must authenticate and authorize their execution.
+
 `NewFeatureOneTimeCodeSessionCommand` retains the separately submitted session
 bearer beside the opaque OTP code, never in scalar metadata. `SessionToken()`
 borrows it for trusted native admission; pre-auth and session custody are

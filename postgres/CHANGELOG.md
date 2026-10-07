@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Bind code-free pre-auth-cookie and session-token feature custody into the
+  existing private command fingerprint domains without storing bearer bytes.
+  Code-free custody cannot enter OTP comparison or reservation phases;
+  current original-flow admission remains the native workflow's obligation.
+
 - Add explicit native metered OTP check execution and authorized historical
   recovery through the existing command journal. Correct checks commit only
   metering and a redacted receipt, not authentication or domain/session effects;

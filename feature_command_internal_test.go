@@ -63,3 +63,20 @@ func TestFeatureMixedBearerCustodyDenied(t *testing.T) {
 		t.Fatal("mixed bearer custody admitted")
 	}
 }
+
+func TestFeatureCodeFreeMixedBearerCustodyDenied(t *testing.T) {
+	token := authentication.NewBearerCredential("private-token")
+	for _, command := range []Command{
+		{feature: &featureCommandState{preAuthCookie: &token, sessionToken: &token}},
+		{feature: &featureCommandState{preAuthCookie: &token}, create: &CreateUserCommand{}},
+		{feature: &featureCommandState{sessionToken: &token}, create: &CreateUserCommand{}},
+	} {
+		_, feature := command.Feature()
+		_, code := command.OneTimeCode()
+		_, cookie := command.PreAuthCookie()
+		_, session := command.SessionToken()
+		if feature || code || cookie || session {
+			t.Fatal("mixed no-code custody disclosed")
+		}
+	}
+}

@@ -40,13 +40,14 @@ func NewFeatureOneTimeCodeSessionCommand(spec FeatureCommandSpec, code authentic
 }
 
 // SessionToken lends the exact submitted session bearer to trusted native
-// owners. It returns zero/false for zero, ordinary, code-only, pre-auth or mixed
+// owners for code-free issuance or code-bearing submissions without fabricating
+// the other. It returns zero/false for zero, ordinary, code-only, pre-auth or mixed
 // commands. A scalar projection cannot reconstruct this custody. Possession,
 // current activity and authorization must be checked independently; this method
 // grants none. Discard borrowed copies after bounded use, never log, persist or
 // serialize Token. No code or bearer enters Feature projections or recovery.
 func (c Command) SessionToken() (authentication.BearerCredential, bool) {
-	if c.feature == nil || c.feature.sessionToken == nil || c.feature.code == nil {
+	if c.feature == nil || c.feature.sessionToken == nil {
 		return authentication.BearerCredential{}, false
 	}
 	if _, ok := c.Feature(); !ok {

@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add opaque pre-auth-cookie and session-token feature commands without a
+  submitted OTP. Keep custody disjoint and out of projections/recovery;
+  native owners still prove possession and current primary authority.
+  Existing code-bearing commands retain their behavior and command intent.
+
 - Retain separately submitted session tokens in opaque OTP command custody,
   disjoint from pre-auth cookies. Keep tokens out of scalar/recovery projections
   and preserve code-only commands. Construction grants no authentication or

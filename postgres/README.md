@@ -1,5 +1,13 @@
 # Identity PostgreSQL
 
+Code-free `identity.NewFeaturePreAuthCommand` and
+`identity.NewFeatureSessionCommand` use these same private fingerprint domains,
+without an OTP entry. Identical scalar scope with changed bearer bytes or a
+different custody variant cannot reuse the original command intent. Retained-key
+replay retains original custody. This does not bypass native authorization or
+enable OTP comparison/reservation without a code. The owned issuance workflow
+must still authenticate the actual submitted bearer and original primary state.
+
 Separate opaque pre-auth cookies use the existing `identity-command-secret-v1`
 framing under the exact field path `pre-auth-cookie`; its HMAC enters private
 canonical intent as `pre_auth_cookie`. Different submitted cookies cannot reuse
