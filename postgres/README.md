@@ -43,6 +43,29 @@ retention is therefore an explicit tradeoff, not an implicit cleanup policy.
 Existing immutable migrations and default-disabled coordinator behavior remain
 unchanged; unsupported destructive downgrade must not remove retry identity.
 
+### Pre-generation journal custody (native composition in progress)
+
+`PreparationMigrationSource{Base, Version}` adds optional columns to the same
+`identity.commands` journal; it does not create another workflow authority or
+enroll historical commands. The private preparation phases match the original
+immutable claim, acquire its journal lease, and commit a generation-start marker
+before any entropy, rendering or sealing outside the transaction. A competing
+caller cannot generate. An abandoned lease without a start marker can transfer;
+a start marker with missing ciphertext remains uncertain and cannot regenerate.
+
+The original live generation can retain one bounded encrypted output. Exact
+byte retries are idempotent, replacement and erasure are fenced, and takeover
+receives the original ciphertext with its original generation—not permission to
+generate a new code. Lease checks use primary time after acquiring the row lock.
+The native feature codec must authenticate and bind that encrypted output;
+the journal does not interpret or decrypt it. A lost start-commit acknowledgement
+cannot authorize entropy. No SQL transaction is held across generation callbacks.
+
+Installing these columns alone enables no public workflow. Public OTP Send,
+authenticated prepared-output decoding, attachment of the final execution plan,
+and composed delivery/recovery remain unfinished. Ordinary coordinator commands
+and all historical migration bytes are unchanged.
+
 Code-free `identity.NewFeaturePreAuthCommand` and
 `identity.NewFeatureSessionCommand` use these same private fingerprint domains,
 without an OTP entry. Identical scalar scope with changed bearer bytes or a

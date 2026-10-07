@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Add optional immutable preparation custody to the existing command journal.
+  Native preparation can fence generation before entropy and retain the original
+  encrypted output across lease takeover. A missing output after a committed
+  generation marker remains uncertain and cannot authorize a replacement.
+  Historical command and migration profiles remain unchanged. Public OTP Send
+  composition and authenticated output recovery are still under development.
+
 - Add opt-in, current-policy-authorized retry-key correlation before generated
   command preparation. Matching scoped retries retain one random command ID
   across fingerprint-key rotation and ambiguous commits; changed intent denies.
