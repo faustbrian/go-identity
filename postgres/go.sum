@@ -53,6 +53,8 @@ github.com/faustbrian/go-identifier v1.0.0 h1:5lXZbS2wK4NelWv4ekRocwOwjkWt1ch/nh
 github.com/faustbrian/go-identifier v1.0.0/go.mod h1:Q2yS7Hk4N4i9Wd3OmPQGh657SHtA1IjvtT4PllphNlY=
 github.com/faustbrian/go-identity v0.0.0-20261005110325-777b1288ba1f h1:L4kRlRZvVHG4vWosQ92qtSh3MhRHt2smrhadqXLpBQw=
 github.com/faustbrian/go-identity v0.0.0-20261005110325-777b1288ba1f/go.mod h1:6kFtTRF+LJ8gpJoU7jCGrZnjnv6ziIow8AN2ajMh7g8=
+github.com/faustbrian/go-identity v0.0.0-20261007092517-8969d596e5c8 h1:AApQmaU5JFvc13b+4mdaDqRir6EYx3l6iktclvbNh0Q=
+github.com/faustbrian/go-identity v0.0.0-20261007092517-8969d596e5c8/go.mod h1:rHAtpXhH0sJOnWJcOB7rlrknYQkpRBh3D+MmRpc7+lw=
 github.com/faustbrian/go-jsonrpc v1.0.0 h1:iQ/YxMkjKBlWyTPCYxQzuBBIV/73ImYWKNVGG7hZr8s=
 github.com/faustbrian/go-jsonrpc v1.0.0/go.mod h1:gdYA/wi8eAeptM4Lf9qwPA6eImChPa2Ng9/+/UvpOPQ=
 github.com/faustbrian/go-migrations v1.0.0 h1:rVxTxID5tFdvK0GCcZarrCl4JDNCYx2HkYqoNZfQUVg=

@@ -68,6 +68,8 @@ type Coordinator struct {
 	admissionPolicy                *CommandQueryPolicy
 	commandRead                    func(context.Context, identity.CommandID) (commandObservation, error)
 	finalAuthentication            *FinalAuthenticationConfig
+	requestKeys                    *RequestKeyConfig
+	requestKeyBegin                func(context.Context) (pgx.Tx, error)
 }
 
 // Format prevents diagnostics from exposing retained keys and pool settings.
@@ -115,6 +117,24 @@ func NewCoordinator(pool *database.Pool, registry *ContributorRegistry, config C
 		c.admissionPolicy = &policy
 		c.commandRead = c.readCommand
 	}
+	return c, nil
+}
+
+// NewCoordinatorWithRequestKeys opts into pre-preparation retry correlation
+// without changing the existing CoordinatorConfig contract. It validates and
+// copies both configurations without I/O or callbacks. The pool remains caller
+// owned; dependencies must support concurrent bounded calls. Install the optional
+// request-key migration before ResolveRequestKey. Invalid configuration returns
+// a redacted error. NewCoordinator alone keeps request correlation disabled.
+func NewCoordinatorWithRequestKeys(pool *database.Pool, registry *ContributorRegistry, config CoordinatorConfig, requestKeys RequestKeyConfig) (*Coordinator, error) {
+	if !validRequestKeyConfig(requestKeys) {
+		return nil, coordinatorError()
+	}
+	c, err := NewCoordinator(pool, registry, config)
+	if err != nil {
+		return nil, err
+	}
+	c.requestKeys = &requestKeys
 	return c, nil
 }
 

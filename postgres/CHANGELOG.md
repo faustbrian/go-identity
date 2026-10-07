@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- Add opt-in, current-policy-authorized retry-key correlation before generated
+  command preparation. Matching scoped retries retain one random command ID
+  across fingerprint-key rotation and ambiguous commits; changed intent denies.
+  Immutable forward-only storage never expires or reassigns unknown work.
+  This is correlation only, not reservation, execution or an OTP Send service.
+  Compose through a separate opt-in constructor, preserving the existing
+  coordinator configuration and default-disabled behavior.
+  Construct request configuration with opaque lookup-key custody to prevent
+  disclosure through nested diagnostics as well as direct formatting.
+
 - Native feature participants can admit a passwordless user's active primary
   status and original security epochs through the live transaction, without
   inventing a credential reference. Returned or foreign invocations cannot

@@ -1,5 +1,48 @@
 # Identity PostgreSQL
 
+## Request-key correlation before command preparation
+
+Compose `RequestKeyMigrationSource{Base, Version}` after kernel history and use
+`NewCoordinatorWithRequestKeys` with a separate `RequestKeyConfig`. Existing
+`CoordinatorConfig` and `NewCoordinator` remain unchanged; the ordinary
+constructor leaves request correlation disabled. Construction performs no SQL.
+Use `NewRequestKeyConfig(namespace, lookupKey, policy)` to copy the nonzero
+32-byte key into opaque custody; there is no raw key projection and nested
+configuration diagnostics cannot traverse its bytes.
+The first authorized resolve pins the configured random lookup key to its
+trusted deployment namespace; changing that key fails closed. Keep it secret
+and stable. Command-fingerprint keys rotate separately; retain every version
+referenced by a mapping. Stage new keys in both old/new processes before changing
+the current issuance version, so overlapping processes can verify the winner.
+
+`ResolveRequestKey` accepts `identity.IdempotencyKey`, a trusted canonical
+`RequestKeyScope` and a complete immutable `identity.RequestIntent`. The lookup
+is namespace plus tenant, actual actor (ID/kind), method, canonical route ID and
+keyed client-key digest. Body, target user, purpose and options are **not** lookup
+dimensions: they belong in the independently keyed intent. Feature owners map
+every behavior-affecting field, including policy/schema and expected versions;
+applications do not supply private fingerprints, SQL or workflow callbacks.
+
+The separate configured policy must authorize the current actor/tenant,
+route-ID action and resource `identity.request-admission` with that route ID.
+Owned resource attributes `identity.request.admission`, `.method` and
+`.namespace` replace caller overrides. Earlier cancellation/deadlines win.
+Policy decisions run outside transactions; database errors and panic are redacted.
+
+Matching retries return the original random command and stored fingerprint-key
+version; different intent returns conflict without an ID. A lost commit
+acknowledgement returns unknown with no usable admission: retry the same key and
+intent, not a new key or namespace. Mapping never grants execution or a result.
+Recover the original command journal/native prepared state **before** generating
+another credential or provider effect. OTP Send composition is still pending.
+
+Rows retain correlation indefinitely, including absent/pending/unknown journal
+state and retired command tombstones; there is no 24-hour reassignment. Immutable
+database fences reject updates, deletes and truncation. Operational storage
+retention is therefore an explicit tradeoff, not an implicit cleanup policy.
+Existing immutable migrations and default-disabled coordinator behavior remain
+unchanged; unsupported destructive downgrade must not remove retry identity.
+
 Code-free `identity.NewFeaturePreAuthCommand` and
 `identity.NewFeatureSessionCommand` use these same private fingerprint domains,
 without an OTP entry. Identical scalar scope with changed bearer bytes or a

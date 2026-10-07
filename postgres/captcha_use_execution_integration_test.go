@@ -176,7 +176,7 @@ func (p *captchaDomainFeature) ApplyFeature(ctx context.Context, w Work, c ident
 		return identity.FeatureReceipt{}, err
 	}
 	s, _ := c.Feature()
-	if _, err := w.Exec(ctx, `INSERT INTO identity.captcha_domain_fixture(command_id) VALUES($1)`, string(s.Binding.CommandID)); err != nil {
+	if _, err := w.Exec(ctx, `INSERT INTO identity.captcha_use_domain_fixture(command_id) VALUES($1)`, string(s.Binding.CommandID)); err != nil {
 		return identity.FeatureReceipt{}, err
 	}
 	if p.delay {
@@ -187,7 +187,7 @@ func (p *captchaDomainFeature) ApplyFeature(ctx context.Context, w Work, c ident
 	return identity.FeatureReceipt{Operation: s.Operation, AfterVersion: 1}, nil
 }
 func (*captchaDomainFeature) RecoverParticipant(ctx context.Context, w RecoveryWork) (RecoveryStatus, error) {
-	return recoveryTestEvidence(ctx, w, "identity.captcha_domain_fixture")
+	return recoveryTestEvidence(ctx, w, "identity.captcha_use_domain_fixture")
 }
 
 type captchaDomainAudit struct{ featureExecutionAuditPhase }
@@ -227,7 +227,7 @@ func (*captchaDomainOutbox) RecoverParticipant(ctx context.Context, w RecoveryWo
 }
 
 func testCaptchaDomain(t *testing.T, ctx context.Context, pool *database.Pool, setup func(*testing.T, Contributor) (*Coordinator, identity.CommandBinding, identity.Command, CommandPlan)) {
-	if _, err := pool.Raw().Exec(ctx, `CREATE TABLE identity.captcha_domain_fixture(command_id text PRIMARY KEY); CREATE TABLE identity.captcha_domain_audit(command_id text NOT NULL,event_id text PRIMARY KEY,outcome text NOT NULL); CREATE TABLE identity.captcha_domain_outbox(command_id text PRIMARY KEY,event_id text NOT NULL)`); err != nil {
+	if _, err := pool.Raw().Exec(ctx, `CREATE TABLE identity.captcha_use_domain_fixture(command_id text PRIMARY KEY); CREATE TABLE identity.captcha_domain_audit(command_id text NOT NULL,event_id text PRIMARY KEY,outcome text NOT NULL); CREATE TABLE identity.captcha_domain_outbox(command_id text PRIMARY KEY,event_id text NOT NULL)`); err != nil {
 		t.Fatal(err)
 	}
 	for _, mode := range []string{"allow", "deny-apply", "deny-final", "expiry", "panic", "rows", "poison", "finalize-error", "finalize-panic", "finalize-rows", "finalize-poison", "release-error", "release-panic", "release-rows", "recover", "unknown", "divergent-recovery"} {
@@ -315,7 +315,7 @@ func testCaptchaDomain(t *testing.T, ctx context.Context, pool *database.Pool, s
 			}
 			var evidence, state string
 			var domain, audits, outbox int
-			if err := pool.Raw().QueryRow(ctx, `SELECT e.state,c.state,(SELECT count(*) FROM identity.captcha_domain_fixture WHERE command_id=$3),(SELECT count(*) FROM identity.captcha_domain_audit WHERE command_id=$3),(SELECT count(*) FROM identity.captcha_domain_outbox WHERE command_id=$3) FROM identity.captcha_use_fixture e JOIN identity.commands c ON c.command_id=$1 WHERE e.digest=$2`, raw, plan.CaptchaEvidence.EvidenceDigest[:], string(b.CommandID)).Scan(&evidence, &state, &domain, &audits, &outbox); err != nil {
+			if err := pool.Raw().QueryRow(ctx, `SELECT e.state,c.state,(SELECT count(*) FROM identity.captcha_use_domain_fixture WHERE command_id=$3),(SELECT count(*) FROM identity.captcha_domain_audit WHERE command_id=$3),(SELECT count(*) FROM identity.captcha_domain_outbox WHERE command_id=$3) FROM identity.captcha_use_fixture e JOIN identity.commands c ON c.command_id=$1 WHERE e.digest=$2`, raw, plan.CaptchaEvidence.EvidenceDigest[:], string(b.CommandID)).Scan(&evidence, &state, &domain, &audits, &outbox); err != nil {
 				t.Fatal(err)
 			}
 			if mode == "allow" {
