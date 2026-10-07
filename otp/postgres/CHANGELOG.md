@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Native Send preparation can seal and restore original code-free challenge
+  custody together with encrypted delivery under the original command and
+  journal generation. Restoration preserves both authorization variants and
+  requires the separately supplied original bearer; it neither remaps a command
+  nor renews its credential or delivery expiry. Public Send remains unfinished.
+
 - Compose native issuance with original primary user/directory/flow admission,
   send-family metering, digest-only challenge storage and encrypted delivery in
   the sole coordinator transaction. Failed effects roll back together; replay

@@ -16,7 +16,7 @@ import (
 	"github.com/faustbrian/go-secret-envelope/adapters/keyring"
 )
 
-func issuanceDeliveryFixture(t *testing.T, codec *AttemptCodec, challenge otp.Challenge, spec identity.FeatureCommandSpec) (*deliverypg.Contributor, deliverypg.PreparedDelivery) {
+func issuanceDeliveryOwner(t *testing.T) *deliverypg.Contributor {
 	t.Helper()
 	keys, err := keyring.New(map[string][]byte{"issue-envelope": bytes.Repeat([]byte{0x71}, 32)})
 	if err != nil {
@@ -30,6 +30,12 @@ func issuanceDeliveryFixture(t *testing.T, codec *AttemptCodec, challenge otp.Ch
 	if err != nil {
 		t.Fatal(err)
 	}
+	return c
+}
+
+func issuanceDeliveryFixture(t *testing.T, codec *AttemptCodec, challenge otp.Challenge, spec identity.FeatureCommandSpec) (*deliverypg.Contributor, deliverypg.PreparedDelivery) {
+	t.Helper()
+	c := issuanceDeliveryOwner(t)
 	s, _ := challenge.Bindings()
 	b, _ := s.Continuation.Bindings()
 	scope, _ := s.Continuation.DigestScope()
