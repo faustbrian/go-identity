@@ -53,6 +53,7 @@ type Contributor struct {
 	lockout                   lockoutProfile
 	preauth                   *preAuthProfile
 	session                   *sessionAdmissionProfile
+	send                      *preparedSendProfile
 }
 
 var _ kernel.OTPAttemptContributor = (*Contributor)(nil)
@@ -285,6 +286,9 @@ func (p *Contributor) RecoverParticipant(ctx context.Context, w kernel.RecoveryW
 	}
 	if _, err := w.Scope(); err != nil {
 		return kernel.RecoveryUnknown, err
+	}
+	if _, registration, _, err := w.FeatureScope(p); err == nil && p.send != nil && registration.Operation == issuanceOperation(registration.Operation.SubjectRequirement) {
+		return (&issuanceContributor{store: p}).recoverIssuance(ctx, w, p)
 	}
 	return p.recoverConsuming(ctx, w)
 }

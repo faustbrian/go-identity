@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Connect private native Send generation, retained-output restoration and atomic
+  issuance to one stable registered OTP owner. Bind actual selected template
+  contents and original request; preserve encrypted delivery, bearer possession,
+  initial expiry and output generation across restart. Existing check/consume
+  composition and retained issuance/output profiles remain compatible. Public
+  recipient/risk orchestration and release verification remain unfinished.
+
 - Add private deterministic pre-generation Send input with the original flow,
   policy, authority expectations and expiry but no generated challenge digest
   or submitted bearer. Require original bearer possession without changing

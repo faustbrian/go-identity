@@ -77,11 +77,16 @@ func (p *issuanceContributor) ValidateFeatureCommand(command identity.Command, p
 }
 
 func (p *issuanceContributor) ApplyFeature(ctx context.Context, w kernel.Work, command identity.Command) (identity.FeatureReceipt, error) {
+	return p.applyIssuance(ctx, w, command, p)
+}
+
+// Invocation custody is local; all Work authorization uses the stable owner.
+func (p *issuanceContributor) applyIssuance(ctx context.Context, w kernel.Work, command identity.Command, owner kernel.FeatureExecutionContributor) (identity.FeatureReceipt, error) {
 	bad := func(err error) (identity.FeatureReceipt, error) { return identity.FeatureReceipt{}, err }
 	if p == nil || p.store == nil || ctx == nil {
 		return bad(ErrInvalidCommand)
 	}
-	binding, registration, transition, err := w.FeatureScope(p)
+	binding, registration, transition, err := w.FeatureScope(owner)
 	if err != nil {
 		return bad(err)
 	}
@@ -94,20 +99,20 @@ func (p *issuanceContributor) ApplyFeature(ctx context.Context, w kernel.Work, c
 		return bad(err)
 	}
 	a := custody.authority
-	if err := w.RequireActiveDirectoryAuthority(ctx, p, a.Directory); err != nil {
+	if err := w.RequireActiveDirectoryAuthority(ctx, owner, a.Directory); err != nil {
 		return bad(err)
 	}
 	if binding.UserID != "" {
 		expected := kernel.UserAuthorityAdmission{UserAuthorityVersion: a.UserAuthorityVersion, IdentifierAuthorityVersion: a.IdentifierAuthorityVersion, CredentialAuthorityVersion: a.CredentialAuthorityVersion}
-		if err := w.RequireActiveUserAuthority(ctx, p, expected); err != nil {
+		if err := w.RequireActiveUserAuthority(ctx, owner, expected); err != nil {
 			return bad(err)
 		}
 		if a.Credential != (identity.CredentialRef{}) {
-			if _, err := w.RequireActiveCredential(ctx, p, issuanceCredential(a)); err != nil {
+			if _, err := w.RequireActiveCredential(ctx, owner, issuanceCredential(a)); err != nil {
 				return bad(err)
 			}
 		}
-		if err := w.RequireActiveUserAuthorization(ctx, p, a.UserAuthorization); err != nil {
+		if err := w.RequireActiveUserAuthorization(ctx, owner, a.UserAuthorization); err != nil {
 			return bad(err)
 		}
 	}
@@ -134,7 +139,7 @@ func (p *issuanceContributor) ApplyFeature(ctx context.Context, w kernel.Work, c
 	if err != nil {
 		return bad(err)
 	}
-	now, err := p.currentTime(ctx, w, a, flow, s)
+	now, err := p.currentTime(ctx, w, a, flow, s, owner)
 	if err != nil {
 		return bad(err)
 	}
@@ -144,7 +149,7 @@ func (p *issuanceContributor) ApplyFeature(ctx context.Context, w kernel.Work, c
 	// Predecessor locking can wait too. Earlier successful reads and locks
 	// preserve identities, not expiry or freshness; a late denial rolls back
 	// the family append, replacement and new challenge in the same Work.
-	if _, err := p.currentTime(ctx, w, a, flow, s); err != nil {
+	if _, err := p.currentTime(ctx, w, a, flow, s, owner); err != nil {
 		return bad(err)
 	}
 	if err := p.delivery.Stage(ctx, w, p.prepared); err != nil {
@@ -157,13 +162,13 @@ func issuanceCredential(a AttemptAuthority) kernel.CredentialAdmission {
 	return kernel.CredentialAdmission{Credential: a.Credential, UserAuthorityVersion: a.UserAuthorityVersion, IdentifierAuthorityVersion: a.IdentifierAuthorityVersion, CredentialAuthorityVersion: a.CredentialAuthorityVersion}
 }
 
-func (p *issuanceContributor) currentTime(ctx context.Context, w kernel.Work, a AttemptAuthority, flow nativeFlow, challenge otp.ChallengeSpec) (time.Time, error) {
+func (p *issuanceContributor) currentTime(ctx context.Context, w kernel.Work, a AttemptAuthority, flow nativeFlow, challenge otp.ChallengeSpec, owner kernel.FeatureExecutionContributor) (time.Time, error) {
 	now, err := w.DatabaseTime(ctx)
 	if err != nil {
 		return time.Time{}, err
 	}
 	if a.Credential != (identity.CredentialRef{}) {
-		now, err = w.RequireActiveCredential(ctx, p, issuanceCredential(a))
+		now, err = w.RequireActiveCredential(ctx, owner, issuanceCredential(a))
 		if err != nil {
 			return time.Time{}, err
 		}
@@ -175,10 +180,14 @@ func (p *issuanceContributor) currentTime(ctx context.Context, w kernel.Work, a 
 }
 
 func (p *issuanceContributor) RecoverParticipant(ctx context.Context, w kernel.RecoveryWork) (kernel.RecoveryStatus, error) {
+	return p.recoverIssuance(ctx, w, p)
+}
+
+func (p *issuanceContributor) recoverIssuance(ctx context.Context, w kernel.RecoveryWork, owner kernel.FeatureExecutionContributor) (kernel.RecoveryStatus, error) {
 	if p == nil || p.store == nil || ctx == nil {
 		return kernel.RecoveryUnknown, ErrInvalidCommand
 	}
-	b, registration, _, err := w.FeatureScope(p)
+	b, registration, _, err := w.FeatureScope(owner)
 	if err != nil || registration.Operation != issuanceOperation(registration.Operation.SubjectRequirement) {
 		return kernel.RecoveryUnknown, ErrInvalidCommand
 	}

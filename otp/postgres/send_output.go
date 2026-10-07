@@ -33,6 +33,15 @@ func sendOutputAAD(spec identity.FeatureCommandSpec, generation uint64) (envelop
 }
 
 func (p *issuanceContributor) sealSendOutput(ctx context.Context, command identity.Command, generation uint64) ([]byte, error) {
+	spec, _ := command.Feature()
+	aad, err := sendOutputAAD(spec, generation)
+	if err != nil {
+		return nil, err
+	}
+	return p.sealSendOutputContext(ctx, command, generation, aad)
+}
+
+func (p *issuanceContributor) sealSendOutputContext(ctx context.Context, command identity.Command, generation uint64, aad envelope.Context) ([]byte, error) {
 	if ctx == nil || p == nil || p.store == nil || p.store.codec == nil || p.delivery == nil {
 		return nil, ErrInvalidCommand
 	}
@@ -50,10 +59,6 @@ func (p *issuanceContributor) sealSendOutput(ctx context.Context, command identi
 		return nil, ErrInvalidCommand
 	}
 	if err := p.validateSendOutput(command); err != nil {
-		return nil, err
-	}
-	aad, err := sendOutputAAD(spec, generation)
-	if err != nil {
 		return nil, err
 	}
 	var issue []byte
@@ -102,6 +107,18 @@ func (p *issuanceContributor) sealSendOutput(ctx context.Context, command identi
 }
 
 func restoreSendOutput(ctx context.Context, store *Contributor, delivery *deliverypg.Contributor, binding identity.CommandBinding, generation uint64, bearer auth.BearerCredential, wire []byte) (*issuanceContributor, identity.Command, error) {
+	subject := identity.FeatureSubjectUser
+	if binding.UserID == "" {
+		subject = identity.FeatureSubjectAnonymousFlow
+	}
+	aad, err := sendOutputAAD(identity.FeatureCommandSpec{Binding: binding, Operation: issuanceOperation(subject)}, generation)
+	if err != nil {
+		return nil, identity.Command{}, ErrInvalidCommand
+	}
+	return restoreSendOutputContext(ctx, store, delivery, binding, generation, bearer, wire, aad)
+}
+
+func restoreSendOutputContext(ctx context.Context, store *Contributor, delivery *deliverypg.Contributor, binding identity.CommandBinding, generation uint64, bearer auth.BearerCredential, wire []byte, aad envelope.Context) (*issuanceContributor, identity.Command, error) {
 	bad := func(err error) (*issuanceContributor, identity.Command, error) { return nil, identity.Command{}, err }
 	if ctx == nil || store == nil || store.codec == nil || delivery == nil || len(wire) < 1 || len(wire) > maximumSendOutput {
 		return bad(ErrInvalidCommand)
@@ -116,10 +133,6 @@ func restoreSendOutput(ctx context.Context, store *Contributor, delivery *delive
 		subject = identity.FeatureSubjectAnonymousFlow
 	}
 	spec := identity.FeatureCommandSpec{Binding: binding, Operation: issuanceOperation(subject)}
-	aad, err := sendOutputAAD(spec, generation)
-	if err != nil {
-		return bad(ErrInvalidCommand)
-	}
 	sealed, err := envelope.ParseEnvelope(wire)
 	if err != nil {
 		return bad(ErrInvalidCommand)

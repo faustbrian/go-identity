@@ -6,8 +6,26 @@ times without a fabricated challenge or digest. Mapping is deterministic and
 checks separately supplied original bearer possession. Its bounded closed
 request frame is distinct from generated issuance and submitted-attempt frames;
 existing retained issuance bytes are unchanged. This is an invocation-memory
-input, not an authority proof or a public Send endpoint. Stable preparation
-execution, risk and recipient orchestration remain under development.
+input, not an authority proof or a public Send endpoint.
+
+Private native composition now enables prepared Send on one immutable registered
+OTP contributor, preserving its existing check/consume behavior. The existing
+coordinator admits original primary authority before its durable generation
+marker; the owned core generates one code for the digest and versioned template,
+then the adapter retains authenticated encrypted challenge/delivery custody.
+Restoration conserves original request, configuration, bearer variant, times and
+output generation. It rejects changed same-version template contents as well as
+changed bindings. Final execution restores invocation-local delivery through the
+stable owner's Work identity and atomically stages challenge, send count,
+replacement, encrypted delivery, audit and lifecycle. Failed effects roll back
+together; terminal replay does not generate again. Install the kernel's optional
+`PreparationMigrationSource` and every retained digest-key metadata version.
+
+This remains private platform composition, not a public Send endpoint or a
+caller-supplied recipient/risk clearance seam. Native recipient resolution,
+identifier/IP/device risk admission, enumeration-safe no-op selection and the
+public Send service remain unfinished. Do not activate these private phases from
+application request handlers. Full release/composition gates remain pending.
 
 ## Native issuance command custody
 
@@ -24,7 +42,8 @@ version 1 and required record target equal to the new challenge ID. Its schema
 is `identity-otp-send` for a user target or `identity-otp-send-preauth` for an
 explicit anonymous-flow target. Both use code-free command construction. The
 anonymous namespace must equal the original pre-auth transaction ID. These
-descriptors do not yet enable executable native Send registration.
+descriptors are enabled only by the private prepared-Send composition; ordinary
+contributor constructors continue to expose only the existing check schemas.
 
 Map once per logical server request and retain the original immutable command
 through retries or ambiguity. Re-encryption changes command intent. Retain exact
