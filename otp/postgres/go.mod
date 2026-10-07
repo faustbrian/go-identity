@@ -6,8 +6,10 @@ require (
 	github.com/faustbrian/go-authentication v1.2.2-0.20261006180804-0f9f7eac1f1d
 	github.com/faustbrian/go-authorization v1.1.1-0.20261005011349-60ed4b3229d8
 	github.com/faustbrian/go-identity v0.0.0-20261007061102-93d9eaf592ae
+	github.com/faustbrian/go-identity/delivery v0.0.0-20261004192212-c70512ebfb31
+	github.com/faustbrian/go-identity/delivery/postgres v0.0.0-20261007080438-6c695b5703b6
 	github.com/faustbrian/go-identity/otp v0.0.0-20261006193636-84f8cd2317d7
-	github.com/faustbrian/go-identity/postgres v0.0.0-20261006193636-84f8cd2317d7
+	github.com/faustbrian/go-identity/postgres v0.0.0-20261007080438-6c695b5703b6
 	github.com/faustbrian/go-identity/session v0.0.0-20261006193636-84f8cd2317d7
 	github.com/faustbrian/go-identity/session/postgres v0.0.0-20261007022207-7c1bce3b5ba2
 	github.com/faustbrian/go-migrations/v3 v3.0.2-0.20261001014304-a461b18b6b24

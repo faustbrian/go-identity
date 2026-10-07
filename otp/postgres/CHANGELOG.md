@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Compose native issuance with original primary user/directory/flow admission,
+  send-family metering, digest-only challenge storage and encrypted delivery in
+  the sole coordinator transaction. Failed effects roll back together; replay
+  retains the original command. Send history uses bounded scalar SQL without
+  expanding the coordinator codec. Public Send risk, recipient resolution and
+  same-code generation remain under development; this execution phase is private.
+
 - Add code-free native issuance command custody for distinct original pre-auth
   and authenticated-session flows. Preserve initial digest, policy, remember
   choice and original authority/times across restart without storing a code or

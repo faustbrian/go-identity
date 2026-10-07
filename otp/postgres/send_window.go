@@ -117,7 +117,9 @@ func (p lockoutProfile) loadSendFamily(ctx context.Context, query challengeQuery
 	if err := p.requireKey(ctx, query, quoted); err != nil {
 		return lockedSendFamily{}, err
 	}
-	rows, err := query(ctx, `SELECT version::text,sent_at FROM `+quoted+`.send_families WHERE tenant_id=$1 AND scope_digest=$2 FOR UPDATE`, scope.TenantID, digest[:])
+	// Work deliberately admits only bounded scalar SQL values. Retain the
+	// family lock while projecting its bounded history in ordinal order.
+	rows, err := query(ctx, `SELECT f.version::text,s.at FROM (SELECT version,sent_at FROM `+quoted+`.send_families WHERE tenant_id=$1 AND scope_digest=$2 FOR UPDATE) f LEFT JOIN LATERAL unnest(f.sent_at) WITH ORDINALITY AS s(at,n) ON true ORDER BY s.n`, scope.TenantID, digest[:])
 	if err != nil {
 		return lockedSendFamily{}, challengeFailure(ctx)
 	}
@@ -133,7 +135,23 @@ func (p lockoutProfile) loadSendFamily(ctx context.Context, query challengeQuery
 		}
 		return lockedSendFamily{}, ErrInvalidCommand
 	}
-	if rows.Scan(&version, &sent) != nil || rows.Next() || rows.Err() != nil || len(sent) > 10 {
+	for {
+		var current string
+		var at *time.Time
+		if rows.Scan(&current, &at) != nil || version != "" && current != version || len(sent) >= 10 {
+			return lockedSendFamily{}, challengeFailure(ctx)
+		}
+		version = current
+		if at != nil {
+			sent = append(sent, *at)
+		} else if len(sent) != 0 {
+			return lockedSendFamily{}, ErrUnavailable
+		}
+		if !rows.Next() {
+			break
+		}
+	}
+	if rows.Err() != nil {
 		return lockedSendFamily{}, challengeFailure(ctx)
 	}
 	v, err := strconv.ParseUint(version, 10, 64)
@@ -162,7 +180,17 @@ func persistSendWindow(ctx context.Context, exec challengeExec, row lockedSendFa
 	if err != nil {
 		return err
 	}
-	n, err := exec(ctx, `UPDATE `+row.schema+`.send_families SET sent_at=$4,version=$5::numeric WHERE tenant_id=$1 AND scope_digest=$2 AND version=$3::numeric AND $6::timestamptz<=clock_timestamp() AND (cardinality(sent_at)=0 OR sent_at[cardinality(sent_at)]+$7::bigint*interval '1 microsecond'<=clock_timestamp())`, row.tenant, row.digest[:], strconv.FormatUint(row.version, 10), next, strconv.FormatUint(row.version+1, 10), now, p.ResendInterval.Microseconds())
+	args := []any{row.tenant, row.digest[:], strconv.FormatUint(row.version, 10), strconv.FormatUint(row.version+1, 10), now, p.ResendInterval.Microseconds()}
+	history := "ARRAY["
+	for i, at := range next {
+		if i != 0 {
+			history += ","
+		}
+		history += "$" + strconv.Itoa(len(args)+1) + "::timestamptz"
+		args = append(args, at)
+	}
+	history += "]"
+	n, err := exec(ctx, `UPDATE `+row.schema+`.send_families SET sent_at=`+history+`,version=$4::numeric WHERE tenant_id=$1 AND scope_digest=$2 AND version=$3::numeric AND $5::timestamptz<=clock_timestamp() AND (cardinality(sent_at)=0 OR sent_at[cardinality(sent_at)]+$6::bigint*interval '1 microsecond'<=clock_timestamp())`, args...)
 	if err != nil {
 		return challengeFailure(ctx)
 	}

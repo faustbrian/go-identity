@@ -69,8 +69,21 @@ This is native storage, not a public Send endpoint or a complete workflow.
 The owning adapter must still enforce original-flow/current authority and
 risk, generate/render once, stage encrypted delivery and commit audit/journal
 through the existing coordinator. No application-written store, separate
-transaction or guessed unknown outcome is supported. Native issuance dispatch,
-encrypted delivery composition, cleanup and complete login remain in progress.
+transaction or guessed unknown outcome is supported.
+
+The private native execution phase now admits the original user or anonymous
+flow, locks shared abuse and send-family state, and stages the frozen challenge
+and encrypted delivery in the same kernel Work. User security epochs, optional
+credential authority, directory and authorization authority remain original;
+expiry is rechecked after lock waits. Delivery or audit failure rolls back
+challenge, send allowance, replacement and protected effects together. Retained
+challenge tombstones prevent a negative recovery vote; recovery never generates
+a replacement code or guesses that missing delivery payload means rollback.
+
+This phase is deliberately not a public constructor or usable Send workflow.
+Owned risk admission, recipient resolution, same-code generation/rendering,
+cleanup and complete login remain in progress. Consumers must not supply their
+own orchestration to bypass those pending platform responsibilities.
 
 ## Original authenticated-session custody
 
