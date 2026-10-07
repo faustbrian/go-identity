@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Preserve complete original pre-auth binding in versioned encrypted attempt
+  custody across restart, without storing a bearer or submitted code. Retain
+  exact legacy v1 bytes; bound v2 records reject mixed IDs, malformed timelines,
+  truncation and trailing fields. Native primary admission and sealed OTP
+  participant activation remain under development.
+
 - Add forward-only shared OTP lockout storage and private keyed subject/channel
   destination projections. Reissued challenges and purpose changes retain the
   same exclusion; deployment key mismatches fail closed, and wrong exhaustion

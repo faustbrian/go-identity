@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"time"
 
 	identity "github.com/faustbrian/go-identity"
 	"github.com/faustbrian/go-identity/session"
@@ -45,10 +46,41 @@ func (FlowAuthorizationSpec) Format(s fmt.State, _ rune) {
 func (FlowAuthorizationSpec) MarshalJSON() ([]byte, error) { return nil, ErrSensitiveSerialization }
 func (FlowAuthorizationSpec) MarshalText() ([]byte, error) { return nil, ErrSensitiveSerialization }
 
-// FlowAuthorization freezes the validated discriminant and selected ID.
+// FlowAuthorization freezes the validated discriminant and selected ID, plus
+// complete original flow custody when explicitly bound.
 // Zero is invalid; immutable copies are safe for concurrent reads. Construction
 // does not look up a session, verify authentication or reserve a pre-auth flow.
-type FlowAuthorization struct{ spec FlowAuthorizationSpec }
+type FlowAuthorization struct {
+	spec    FlowAuthorizationSpec
+	preAuth session.PreAuthTransaction
+}
+
+// NewBoundPreAuthAuthorization retains the complete immutable original flow,
+// not just its ID. It grants no authentication, cookie-possession, current
+// primary-state or one-use authority. The native owner must independently
+// derive the submitted cookie digest and compare the full original record after
+// primary locking at every consuming phase. Zero is invalid; no IO occurs.
+// Legacy NewFlowAuthorization remains unchanged and never fabricates this data.
+func NewBoundPreAuthAuthorization(record session.PreAuthTransaction) (FlowAuthorization, error) {
+	spec, err := record.Bindings()
+	if err != nil {
+		return FlowAuthorization{}, ErrInvalidAuthorization
+	}
+	flow, err := NewFlowAuthorization(FlowAuthorizationSpec{Kind: FlowAuthorizationPreAuthTransaction, PreAuthTransactionID: spec.Binding.ID})
+	if err != nil {
+		return FlowAuthorization{}, err
+	}
+	flow.preAuth = record
+	return flow, nil
+}
+
+// PreAuthTransaction returns the immutable original private projection and
+// true only for the explicit complete-binding profile. Legacy ID-only and
+// authenticated-session contexts return zero/false. It never proves active
+// state, cookie possession or a reservation; never log or export the projection.
+func (a FlowAuthorization) PreAuthTransaction() (session.PreAuthTransaction, bool) {
+	return a.preAuth, a.preAuth != (session.PreAuthTransaction{})
+}
 
 // NewFlowAuthorization validates before copying and never infers Kind from
 // subject, remember policy or a nonzero nullable member. No IO is performed.
@@ -125,6 +157,9 @@ type continuationState struct {
 // by fallback. Authenticated-session signin is forbidden. The owning workflow
 // must verify the original context/policy against primary state; this constructor
 // cannot certify provenance. No defaults, timestamps or lifetimes are renewed.
+// Explicit NewBoundPreAuthAuthorization uses the v2 complete-record profile:
+// tenant must match and signin/pre-auth MFA must preserve original Remember.
+// Legacy ID-only context retains exact v1 framing and grants no full-flow proof.
 func NewContinuation(s DigestScopeSpec, a FlowAuthorization, remember session.RememberPolicy) (Continuation, error) {
 	flow, e := a.Bindings()
 	if e != nil || s.AuthorizationBinding != ([32]byte{}) {
@@ -144,6 +179,13 @@ func NewContinuation(s DigestScopeSpec, a FlowAuthorization, remember session.Re
 		return Continuation{}, ErrInvalidAuthorization
 	}
 	b := []byte("identity-otp-authorization-v1\x00")
+	if record, bound := a.PreAuthTransaction(); bound {
+		original, err := record.Bindings()
+		if err != nil || original.Binding.Intent.TenantID != identity.TenantID(s.TenantID) || needsRemember && original.Binding.Intent.Remember != remember {
+			return Continuation{}, ErrInvalidAuthorization
+		}
+		b = []byte("identity-otp-authorization-v2\x00")
+	}
 	b = append(b, byte(flow.Kind))
 	for _, value := range []string{flow.AuthenticatedSessionID, string(flow.PreAuthTransactionID)} {
 		b = binary.BigEndian.AppendUint16(b, uint16(len(value)))
@@ -152,6 +194,24 @@ func NewContinuation(s DigestScopeSpec, a FlowAuthorization, remember session.Re
 	b = append(b, byte(policy.Choice))
 	for _, duration := range []int64{int64(policy.AbsoluteTTL), int64(policy.IdleTTL), int64(policy.RefreshAfter), int64(policy.FreshFor)} {
 		b = binary.BigEndian.AppendUint64(b, uint64(duration))
+	}
+	if record, bound := a.PreAuthTransaction(); bound {
+		original, _ := record.Bindings()
+		i := original.Binding.Intent
+		for _, value := range []string{string(original.Binding.ID), string(i.TenantID), i.Action, i.Origin, i.CallbackURL, i.PolicyID, original.Binding.IssuedAt.UTC().Format(time.RFC3339Nano), original.Binding.ExpiresAt.UTC().Format(time.RFC3339Nano)} {
+			b = binary.BigEndian.AppendUint16(b, uint16(len(value)))
+			b = append(b, value...)
+		}
+		b = append(b, i.Nonce[:]...)
+		b = binary.BigEndian.AppendUint64(b, i.PolicyVersion)
+		resolved, _ := i.Remember.Bindings()
+		b = append(b, byte(resolved.Choice))
+		for _, duration := range []time.Duration{resolved.AbsoluteTTL, resolved.IdleTTL, resolved.RefreshAfter, resolved.FreshFor} {
+			b = binary.BigEndian.AppendUint64(b, uint64(duration))
+		}
+		b = binary.BigEndian.AppendUint32(b, original.Cookie.KeyVersion)
+		b = append(b, original.Cookie.Sum[:]...)
+		b = binary.BigEndian.AppendUint64(b, original.Version)
 	}
 	s.AuthorizationBinding = sha256.Sum256(b)
 	clear(b)

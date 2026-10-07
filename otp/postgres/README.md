@@ -1,5 +1,31 @@
 # OTP PostgreSQL
 
+## Complete original pre-auth custody
+
+Mapping an attempt prepared with `otp.NewBoundPreAuthAuthorization` retains
+the complete immutable session-owned flow inside the authenticated encrypted
+command envelope. The code-free plaintext has explicit
+`identity-otp-attempt-custody-v2` + NUL framing, appending the bounded full-flow
+projection before the existing core command-record MAC. Legacy contexts retain
+exact v1 framing, bounds and bytes. No schema migration, raw bearer, new flow
+store, journal or transaction owner is introduced.
+
+Restoration preserves canonical nanosecond UTC times, original nonce, exact
+intent/policy, resolved remember choice, named cookie commitment and version;
+mixed IDs, invalid fields, truncation, trailing data or changed core MAC deny.
+The v2 plaintext limit is 8192 bytes; the existing encrypted wire limit remains
+8192. Old v1 plaintext remains limited to 4096 bytes. Inputs are bounded before
+allocation and parsing; decoding itself is structural, not MAC verification.
+`restoreRecord` verifies the original core MAC and `restoreAttempt` requires
+the original opaque submitted code—custody cannot reconstruct it from storage.
+
+This profile is not active-flow or cookie-possession evidence. The forthcoming
+native participant must require it and recheck the canonical session-owned
+primary record, submitted cookie and current policy under every sealed
+coordinator phase. Legacy ID-only records may be read for compatibility but
+cannot stand in for complete-flow consuming admission. Counted denial/check,
+reservation/finalization/release and owned OTP execution still require activation.
+
 Go 1.27 native storage for purpose-bound OTPs, sharing the identity coordinator's
 PostgreSQL transaction domain. Experimental and incomplete: this initial batch
 implements challenge storage/migrations, **not** a usable issuance or verification

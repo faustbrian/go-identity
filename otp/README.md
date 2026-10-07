@@ -1,5 +1,35 @@
 # otp
 
+## Complete original pre-auth continuation
+
+`NewBoundPreAuthAuthorization(originalSessionFlow)` explicitly retains the
+immutable session-owned `PreAuthTransaction`. `PreAuthTransaction()` returns
+that private projection only for this profile; legacy ID-only and authenticated
+session contexts return zero/false. The existing `FlowAuthorizationSpec` and
+its constructor are unchanged, so existing ID-only values do not silently
+become complete-flow evidence.
+
+`NewContinuation` requires matching tenant and preserves original remember
+policy for signin/pre-auth MFA. Its domain-separated v2 binding includes the
+explicit authorization kind/IDs and selected remember policy, then the complete
+original ID, tenant, action, origin, callback/no-redirect, policy ID, UTC
+RFC3339Nano issued/expiry, nonce, policy version, original remember policy,
+cookie key version/digest and record version. Strings are uint16-length-prefixed;
+versions/durations use big-endian integers, with uint32 cookie key version and
+uint64 policy/record versions and durations. The original remember choice is
+uint8. The binding is SHA-256 under `identity-otp-authorization-v2` plus NUL,
+then incorporated into the existing keyed exact-submission fingerprint/MAC.
+Legacy context retains its exact v1 bytes and domain.
+
+Bound anonymous commands must select the same original pre-auth ID; command
+preparation rejects namespace substitution. No constructor authenticates a
+user, proves cookie possession, reads primary state or reserves a flow. Native
+consuming owners must require the complete profile, independently derive the
+submitted cookie digest under retained keys, and recheck full original intent,
+current primary state, expiry and exact reservation in the sole transaction.
+ID-only compatibility never substitutes for that admission. Native phase
+activation and a usable OTP login remain unfinished.
+
 Purpose-bound OTP policy and code generation for Go 1.27. The durable challenge,
 attempt, delivery, reservation and owning-workflow services are **unfinished**.
 Do not use generation as login, verification, issuance or replay protection.

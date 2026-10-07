@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Add explicit complete original pre-auth custody for OTP continuations,
+  preserving nonce, origin, callback, policy, cookie commitment, original
+  timeline and remember choice in the keyed server-attempt binding. Reject
+  cross-tenant, changed remember and anonymous namespace substitution. Legacy
+  ID-only constructors and v1 framing stay unchanged; structural custody is
+  not cookie possession, primary activity or one-use admission.
+
 - Add code-free keyed scope correlation under an explicit retained digest-key
   version, permitting private native lookup without plaintext destinations or
   unkeyed address hashes. Rotation does not remap historical scope bindings.

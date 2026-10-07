@@ -44,6 +44,12 @@ func (i AttemptIssuer) PrepareForCommand(ctx context.Context, b identity.Command
 	if string(b.TenantID) != scope.TenantID || string(b.UserID) != scope.SubjectID || operation.RecordRequirement == identity.FeatureRecordRequired && b.RecordID != scope.TargetID {
 		return AttemptCommand{}, ErrInvalidAttempt
 	}
+	if record, bound := c.state.bindings.Authorization.PreAuthTransaction(); bound && b.AnonymousFlowID != "" {
+		original, _ := record.Bindings()
+		if b.AnonymousFlowID != string(original.Binding.ID) {
+			return AttemptCommand{}, ErrInvalidAttempt
+		}
+	}
 	s := &attemptCommandScope{binding: b, operation: operation, digest: attemptCommandDigest(b, operation)}
 	return i.prepareWithCommand(ctx, rand.Reader, c, mode, expectedVersion, code, s)
 }
