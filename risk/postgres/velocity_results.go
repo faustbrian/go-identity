@@ -193,7 +193,10 @@ func velocitySnapshotsEqual(a, b []risk.Counter) bool {
 // are bounded independently; constraints alone do not establish completeness.
 func (s *velocityJournal) velocityRead(ctx context.Context, tx pgx.Tx, c risk.CounterCommand, lock bool) (int64, string, []risk.Counter, error) {
 	b := c.Bindings()
-	digest := velocityMAC(s.key, "identity-risk-velocity-attempt-v1", hex.EncodeToString(s.namespace), b.Tenant, string(b.Operation), string(b.Phase), b.Attempt)
+	digest, err := s.replay.Attempt(c)
+	if err != nil {
+		return 0, "", nil, err
+	}
 	query := `SELECT sequence,outcome,counter_fingerprint FROM ` + s.schema + `.velocity_attempts WHERE tenant_id=$1 AND namespace_digest=$2 AND operation=$3 AND phase=$4 AND policy_version=$5::numeric AND attempt_digest=$6 AND window_us=$7 AND attempt_limit=$8`
 	if lock {
 		query += ` FOR UPDATE`
@@ -201,7 +204,7 @@ func (s *velocityJournal) velocityRead(ctx context.Context, tx pgx.Tx, c risk.Co
 	var sequence int64
 	var state string
 	var fingerprint []byte
-	if err := tx.QueryRow(ctx, query, b.Tenant, s.namespace, string(b.Operation), string(b.Phase), strconv.FormatUint(b.PolicyVersion, 10), digest, b.Window.Microseconds(), int64(b.Limit)).Scan(&sequence, &state, &fingerprint); err != nil {
+	if err := tx.QueryRow(ctx, query, b.Tenant, s.namespace, string(b.Operation), string(b.Phase), strconv.FormatUint(b.PolicyVersion, 10), digest[:], b.Window.Microseconds(), int64(b.Limit)).Scan(&sequence, &state, &fingerprint); err != nil {
 		return 0, "", nil, identity.UnavailableError{}
 	}
 	expected, _ := hex.DecodeString(b.Fingerprint)

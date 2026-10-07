@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Preserve original authenticated velocity attempt identities and fingerprints
+  in restricted recovery projections. Use the core's stable replay profile for
+  journal insertion and terminal lookup without changing retained digest bytes,
+  seals, outcomes or window times. Corrupt history returns no partial page;
+  projection grants no counter mutation or healthy-epoch permission.
+
 - Document and exercise public CAPTCHA issuance/recovery with the real audit
   and lifecycle PostgreSQL contributors, including anonymous/admin scopes,
   ambiguous acknowledgement, original response conservation and atomic

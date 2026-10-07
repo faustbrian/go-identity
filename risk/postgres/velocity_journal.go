@@ -1,7 +1,6 @@
 package postgres
 
 import (
-	"bytes"
 	"context"
 	"crypto/hmac"
 	"crypto/sha256"
@@ -59,6 +58,7 @@ type velocityJournal struct {
 	policy    risk.Policy
 	keys      []risk.CounterDigestKey
 	timeout   time.Duration
+	replay    risk.VelocityReplayIdentity
 }
 
 func (VelocityJournal) Format(s fmt.State, _ rune) {
@@ -87,8 +87,12 @@ func (VelocityAttempt) MarshalText() ([]byte, error) { return nil, risk.ErrSensi
 // schema must include VelocityReplayMigrationSource. No store is enabled by
 // successful construction; mismatches fail with redacted ErrInvalidPolicy.
 func NewVelocityJournal(c VelocityJournalConfig) (VelocityJournal, error) {
-	if c.Pool == nil || c.Pool.Raw() == nil || !validSchema(c.Schema) || !velocityNamespace(c.Namespace) || len(c.JournalKey) < 32 || len(c.JournalKey) > 128 || bytes.Equal(c.JournalKey, make([]byte, len(c.JournalKey))) || c.Timeout <= 0 || c.Timeout > time.Minute || len(c.Keys) == 0 || len(c.Keys) > 4 {
+	if c.Pool == nil || c.Pool.Raw() == nil || !validSchema(c.Schema) || c.Timeout <= 0 || c.Timeout > time.Minute || len(c.Keys) == 0 || len(c.Keys) > 4 {
 		return VelocityJournal{}, risk.ErrInvalidPolicy
+	}
+	replay, err := risk.NewVelocityReplayIdentity(c.Namespace, c.JournalKey)
+	if err != nil {
+		return VelocityJournal{}, err
 	}
 	if _, err := c.Policy.Admit("identity.password.signin"); err != nil {
 		return VelocityJournal{}, risk.ErrInvalidPolicy
@@ -99,7 +103,8 @@ func NewVelocityJournal(c VelocityJournalConfig) (VelocityJournal, error) {
 		}
 	}
 	key := slices.Clone(c.JournalKey)
-	return VelocityJournal{state: &velocityJournal{pool: c.Pool, schema: pgx.Identifier{c.Schema}.Sanitize(), namespace: velocityMAC(key, "identity-risk-velocity-namespace-v1", c.Namespace), key: key, policy: c.Policy, keys: slices.Clone(c.Keys), timeout: c.Timeout}}, nil
+	namespace := replay.Namespace()
+	return VelocityJournal{state: &velocityJournal{pool: c.Pool, schema: pgx.Identifier{c.Schema}.Sanitize(), namespace: namespace[:], key: key, policy: c.Policy, keys: slices.Clone(c.Keys), timeout: c.Timeout, replay: replay}}, nil
 }
 
 func velocityNamespace(s string) bool {
@@ -159,7 +164,10 @@ func (j VelocityJournal) RecordAttempt(ctx context.Context, c risk.CounterComman
 	if prepared.Before(b.PreparedAt) {
 		prepared = prepared.Add(time.Microsecond)
 	}
-	digest := velocityMAC(s.key, "identity-risk-velocity-attempt-v1", hex.EncodeToString(s.namespace), b.Tenant, string(b.Operation), string(b.Phase), b.Attempt)
+	digest, err := s.replay.Attempt(c)
+	if err != nil {
+		return VelocityAttempt{}, err
+	}
 	bounded, cancel := context.WithTimeout(ctx, s.timeout)
 	defer cancel()
 	tx, err := s.pool.Raw().BeginTx(bounded, pgx.TxOptions{})
@@ -182,10 +190,10 @@ func (j VelocityJournal) RecordAttempt(ctx context.Context, c risk.CounterComman
 		return VelocityAttempt{}, risk.ErrInvalidCounterCommand
 	}
 	var sequence int64
-	err = tx.QueryRow(bounded, `INSERT INTO `+s.schema+`.velocity_attempts(tenant_id,namespace_digest,operation,phase,policy_version,attempt_digest,counter_fingerprint,prepared_at,recorded_at,window_us,attempt_limit,outcome) VALUES($1,$2,$3,$4,$5::numeric,$6,$7,$8,$9,$10,$11,'pending') ON CONFLICT(tenant_id,namespace_digest,operation,phase,attempt_digest) DO NOTHING RETURNING sequence`, b.Tenant, s.namespace, string(b.Operation), string(b.Phase), strconv.FormatUint(b.PolicyVersion, 10), digest, fingerprint, prepared, now, b.Window.Microseconds(), int64(b.Limit)).Scan(&sequence)
+	err = tx.QueryRow(bounded, `INSERT INTO `+s.schema+`.velocity_attempts(tenant_id,namespace_digest,operation,phase,policy_version,attempt_digest,counter_fingerprint,prepared_at,recorded_at,window_us,attempt_limit,outcome) VALUES($1,$2,$3,$4,$5::numeric,$6,$7,$8,$9,$10,$11,'pending') ON CONFLICT(tenant_id,namespace_digest,operation,phase,attempt_digest) DO NOTHING RETURNING sequence`, b.Tenant, s.namespace, string(b.Operation), string(b.Phase), strconv.FormatUint(b.PolicyVersion, 10), digest[:], fingerprint, prepared, now, b.Window.Microseconds(), int64(b.Limit)).Scan(&sequence)
 	if err == pgx.ErrNoRows {
 		var previous []byte
-		if err = tx.QueryRow(bounded, `SELECT counter_fingerprint FROM `+s.schema+`.velocity_attempts WHERE tenant_id=$1 AND namespace_digest=$2 AND operation=$3 AND phase=$4 AND attempt_digest=$5`, b.Tenant, s.namespace, string(b.Operation), string(b.Phase), digest).Scan(&previous); err != nil {
+		if err = tx.QueryRow(bounded, `SELECT counter_fingerprint FROM `+s.schema+`.velocity_attempts WHERE tenant_id=$1 AND namespace_digest=$2 AND operation=$3 AND phase=$4 AND attempt_digest=$5`, b.Tenant, s.namespace, string(b.Operation), string(b.Phase), digest[:]).Scan(&previous); err != nil {
 			return VelocityAttempt{}, identity.UnavailableError{}
 		}
 		if !hmac.Equal(previous, fingerprint) {

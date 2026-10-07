@@ -4,6 +4,7 @@ package postgres
 
 import (
 	"context"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"math"
@@ -37,7 +38,8 @@ func testVelocityPage(t *testing.T, ctx context.Context, journal VelocityJournal
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := journal.RecordAttempt(ctx, prepare("second")); err != nil {
+	secondReceipt, err := journal.RecordAttempt(ctx, prepare("second"))
+	if err != nil {
 		t.Fatal(err)
 	}
 	recovery, err := NewVelocityRecovery(VelocityRecoveryConfig{Journal: journal, MaximumWindow: time.Hour, LeaseDuration: 2 * time.Second})
@@ -61,6 +63,29 @@ func testVelocityPage(t *testing.T, ctx context.Context, journal VelocityJournal
 		t.Fatal("page advanced epoch/progress", err)
 	}
 	original := page.Records()[0].Projection()
+	// PG-ID-01/PG-PROJ-01: recovery retains the original authenticated lookup,
+	// not a new command, sequence identity or freshly derived fingerprint.
+	profile, err := risk.NewVelocityReplayIdentity(cfg.Namespace, cfg.JournalKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	attemptDigest, err := profile.Attempt(first)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var storedAttempt, storedFingerprint, storedNamespace []byte
+	if err := cfg.Pool.Raw().QueryRow(ctx, `SELECT attempt_digest,counter_fingerprint,namespace_digest FROM risk_store.velocity_attempts WHERE sequence=$1`, receipt.state.sequence).Scan(&storedAttempt, &storedFingerprint, &storedNamespace); err != nil {
+		t.Fatal(err)
+	}
+	if original.Tenant != "page-tenant" || original.Namespace != profile.Namespace() || original.AttemptDigest != attemptDigest || original.Fingerprint != first.Bindings().Fingerprint || hex.EncodeToString(storedAttempt) != hex.EncodeToString(original.AttemptDigest[:]) || hex.EncodeToString(storedFingerprint) != original.Fingerprint || hex.EncodeToString(storedNamespace) != hex.EncodeToString(original.Namespace[:]) {
+		t.Fatal("original authenticated replay binding unavailable")
+	}
+	legacyNamespace := velocityMAC(cfg.JournalKey, "identity-risk-velocity-namespace-v1", cfg.Namespace)
+	binding := first.Bindings()
+	legacyAttempt := velocityMAC(cfg.JournalKey, "identity-risk-velocity-attempt-v1", hex.EncodeToString(legacyNamespace), binding.Tenant, string(binding.Operation), string(binding.Phase), binding.Attempt)
+	if hex.EncodeToString(storedNamespace) != hex.EncodeToString(legacyNamespace) || hex.EncodeToString(storedAttempt) != hex.EncodeToString(legacyAttempt) {
+		t.Fatal("existing journal digest framing changed")
+	}
 	if original.Outcome != VelocityReplayPending || len(original.Targets) != 2 || len(original.Snapshot) != 0 || original.ID == "" {
 		t.Fatal("pending facts changed")
 	}
@@ -82,7 +107,7 @@ func testVelocityPage(t *testing.T, ctx context.Context, journal VelocityJournal
 		t.Fatal("lower late declaration lost", err)
 	}
 	late := page.Records()[0].Projection()
-	if late.ID != original.ID || late.Outcome != VelocityReplayUnknown || !late.PreparedAt.Equal(original.PreparedAt) || !late.RecordedAt.Equal(original.RecordedAt) {
+	if late.ID != original.ID || late.Outcome != VelocityReplayUnknown || !late.PreparedAt.Equal(original.PreparedAt) || !late.RecordedAt.Equal(original.RecordedAt) || late.AttemptDigest != original.AttemptDigest || late.Fingerprint != original.Fingerprint || late.Tenant != original.Tenant || late.Namespace != original.Namespace {
 		t.Fatal("late declaration changed original identity/time")
 	}
 	if _, err := journal.RecordAttempt(ctx, prepare("after-empty")); err != nil {
@@ -152,6 +177,20 @@ func testVelocityPage(t *testing.T, ctx context.Context, journal VelocityJournal
 			t.Fatal("corrupt change granted partial page", err)
 		}
 		if _, err := cfg.Pool.Raw().Exec(ctx, change.restore, receipt.state.sequence); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// PG-AUTH-01: a valid preceding record must not escape when a later
+	// record's newly projected original binding no longer matches its seal.
+	for _, field := range []string{"attempt_digest", "counter_fingerprint"} {
+		query := `UPDATE risk_store.velocity_attempts SET ` + field + `=set_byte(` + field + `,0,get_byte(` + field + `,0)#1) WHERE sequence=$1`
+		if _, err := cfg.Pool.Raw().Exec(ctx, query, secondReceipt.state.sequence); err != nil {
+			t.Fatal(err)
+		}
+		if got, err := recovery.ReadPage(ctx, lease, VelocityReplayCursor{}, 100); !errors.As(err, &unavailable) || got.state != nil {
+			t.Fatal("unauthenticated replay binding leaked a partial page", err)
+		}
+		if _, err := cfg.Pool.Raw().Exec(ctx, query, secondReceipt.state.sequence); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -485,6 +524,14 @@ func testVelocityPageWide(t *testing.T, ctx context.Context, cfg VelocityJournal
 		t.Fatal("wide record lost", err)
 	}
 	b := page.Records()[0].Projection()
+	profile, err := risk.NewVelocityReplayIdentity(cfg.Namespace, cfg.JournalKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	attemptDigest, err := profile.Attempt(command)
+	if err != nil || b.Namespace != profile.Namespace() || b.AttemptDigest != attemptDigest || b.Tenant != "page-wide" || b.Fingerprint != command.Bindings().Fingerprint {
+		t.Fatal("committed wide binding changed", err)
+	}
 	if b.Outcome != VelocityReplayCommitted || len(b.Targets) != 4 || len(b.Snapshot) != 4 {
 		t.Fatal("wide record incomplete")
 	}

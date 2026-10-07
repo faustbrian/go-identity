@@ -229,7 +229,13 @@ evidence and decisions. It is **not yet an executable durable risk service**.
   foreign/takeover cursors deny. Reads include all retained history, not a
   storage-time cutoff, and preserve expired snapshots without renewing windows.
   Use the returned cursor to observe insertions or declarations after an empty
-  page. Records are redacted/nonserializable owned-adapter projections, never
+  page. Original tenant, namespace digest, attempt digest and fingerprint are
+  copied from authenticated retained facts. Attempt identity uses the core
+  `VelocityReplayIdentity` profile, preserving existing journal bytes; the
+  sequence-derived record ID remains separate. No raw attempt is stored, and
+  projection does not mint a new command. Both native adapters must select the
+  same stable namespace/key independently of rotating dimension aliases.
+  Records are redacted/nonserializable owned-adapter projections, never
   `CounterCommand`, dispatch, effect application, or positive validity proof.
   Initialization can persist traversal bookkeeping but does not rewrite original
   history or epoch progress. Failures and ambiguous acknowledgements return no

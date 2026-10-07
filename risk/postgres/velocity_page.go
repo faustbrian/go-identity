@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/hmac"
 	"encoding/base64"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"slices"
@@ -28,19 +29,25 @@ const (
 
 // VelocityReplayProjection is a copied owned-adapter view, never HTTP data or
 // CounterCommand authority. ID is a stable keyed opaque logical-record identity;
-// it reveals neither raw attempt nor stored fingerprint. Targets retain all
+// it is separate from AttemptDigest, the original keyed attempt lookup identity.
+// Tenant, Namespace, AttemptDigest and Fingerprint retain authenticated stored
+// binding for owned recovery composition, never raw attempt or subject facts.
+// They grant no dispatch, retry or healthy-epoch permission. Targets retain all
 // original ordered aliases; Snapshot retains original values and windows.
 type VelocityReplayProjection struct {
-	ID                     string
-	Operation              risk.Action
-	Phase                  risk.Phase
-	PolicyVersion          uint64
-	PreparedAt, RecordedAt time.Time
-	Window                 time.Duration
-	Limit                  uint64
-	Outcome                VelocityReplayOutcome
-	Targets                []risk.CounterTarget
-	Snapshot               []risk.Counter
+	ID                       string
+	Tenant                   string
+	Namespace, AttemptDigest [32]byte
+	Fingerprint              string
+	Operation                risk.Action
+	Phase                    risk.Phase
+	PolicyVersion            uint64
+	PreparedAt, RecordedAt   time.Time
+	Window                   time.Duration
+	Limit                    uint64
+	Outcome                  VelocityReplayOutcome
+	Targets                  []risk.CounterTarget
+	Snapshot                 []risk.Counter
 }
 
 // VelocityReplayRecord is immutable authenticated history from one acknowledged
@@ -234,11 +241,14 @@ func (s *velocityRecovery) readReplayRecord(ctx context.Context, tx pgx.Tx, tena
 	var b VelocityReplayProjection
 	var phase, policy, limit, outcome string
 	var window int64
-	var seal, positionSeal []byte
-	err := tx.QueryRow(ctx, `SELECT operation,phase,policy_version::text,prepared_at,recorded_at,window_us,attempt_limit::text,outcome,replay_seal,position_seal FROM `+s.journal.schema+`.velocity_attempts WHERE tenant_id=$1 AND namespace_digest=$2 AND sequence=$3 AND replay_position=$4`, tenant, s.journal.namespace, sequence, position).Scan(&b.Operation, &phase, &policy, &b.PreparedAt, &b.RecordedAt, &window, &limit, &outcome, &seal, &positionSeal)
-	if err != nil || !hmac.Equal(positionSeal, s.journal.velocityPositionSeal(sequence, position, seal)) {
+	var seal, positionSeal, namespace, attempt, fingerprint []byte
+	err := tx.QueryRow(ctx, `SELECT operation,phase,policy_version::text,prepared_at,recorded_at,window_us,attempt_limit::text,outcome,replay_seal,position_seal,tenant_id,namespace_digest,attempt_digest,counter_fingerprint FROM `+s.journal.schema+`.velocity_attempts WHERE tenant_id=$1 AND namespace_digest=$2 AND sequence=$3 AND replay_position=$4`, tenant, s.journal.namespace, sequence, position).Scan(&b.Operation, &phase, &policy, &b.PreparedAt, &b.RecordedAt, &window, &limit, &outcome, &seal, &positionSeal, &b.Tenant, &namespace, &attempt, &fingerprint)
+	if err != nil || !hmac.Equal(positionSeal, s.journal.velocityPositionSeal(sequence, position, seal)) || b.Tenant != tenant || len(namespace) != 32 || !hmac.Equal(namespace, s.journal.namespace) || len(attempt) != 32 || len(fingerprint) != 32 {
 		return VelocityReplayRecord{}, identity.UnavailableError{}
 	}
+	copy(b.Namespace[:], namespace)
+	copy(b.AttemptDigest[:], attempt)
+	b.Fingerprint = hex.EncodeToString(fingerprint)
 	b.PolicyVersion, err = strconv.ParseUint(policy, 10, 64)
 	if err != nil || b.PolicyVersion == 0 || window <= 0 || window > time.Hour.Microseconds() {
 		return VelocityReplayRecord{}, identity.UnavailableError{}
