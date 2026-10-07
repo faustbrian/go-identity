@@ -311,5 +311,23 @@ recovery, complete adapter coverage/mutation or release evidence.
 
 ## Release notes
 
+`SendFamilyMigrationSource` installs rolling-hour send history after challenge
+and lockout storage using a separately allocated migration version. It leaves
+existing challenges untouched. Histories contain at most ten database-time
+instants and a keyed family digest, never a destination, code or flow bearer.
+The stable pinned abuse key has a separate send-family HMAC domain over tenant,
+purpose, subject and channel/destination. A new challenge, target, flow, policy
+version or rotating code key cannot refill the allowance.
+
+Private issuance persistence requires original-flow admission, shared abuse
+locks, then a family lock and a new primary-time sample. The rolling window is
+`(now - one hour, now]`; resend equality is allowed. Schema guards reject
+history erasure, deletion, identity changes, backward/future time and omitted
+live sends. Counters must commit with challenge/replacement, required audit,
+encrypted delivery and the existing command journal, or roll back together.
+The extension does not yet expose public Send, perform generation/delivery,
+resolve enumeration-safe account lookup or implement challenge replacement.
+Existing consuming/check APIs are unchanged.
+
 See [CHANGELOG.md](CHANGELOG.md). No stable release or production-readiness claim
 is made for this development checkpoint.

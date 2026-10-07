@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add a forward-only send-family storage extension for atomic rolling-hour
+  quotas and resend cooldowns. Family identities survive challenge, flow and
+  code-key changes; guarded histories cannot reset live allowance. Install
+  after challenge and lockout storage. This is private issuance persistence,
+  not a public Send service or a separately committed issuance transaction.
+
 - Add native non-consuming OTP checks under original pre-auth or authenticated
   session custody. Persist bounded check/total counters, required audit and
   stable replay/recovery atomically; checks grant no authentication proof,
