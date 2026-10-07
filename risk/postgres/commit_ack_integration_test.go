@@ -25,6 +25,8 @@ type commitAckFault struct {
 	velocitySequence atomic.Int64
 	velocityEpoch    atomic.Pointer[[16]byte]
 	velocityReplay   atomic.Int64
+	velocityApplied  atomic.Int64
+	velocityResume   atomic.Pointer[[16]byte]
 }
 
 type ackTargetKey struct{}
@@ -88,6 +90,16 @@ func (f *commitAckFault) TraceQueryStart(ctx context.Context, conn *pgx.Conn, da
 	if epoch := f.velocityEpoch.Load(); epoch != nil && strings.Contains(data.SQL, ".velocity_epochs(tenant_id,namespace_digest,epoch,") && len(data.Args) == 8 {
 		value, ok := data.Args[2].([]byte)
 		if ok && bytes.Equal(value, epoch[:]) {
+			return context.WithValue(ctx, ackTargetKey{}, true)
+		}
+	}
+	if position := f.velocityApplied.Load(); position > 0 && strings.Contains(data.SQL, ".velocity_epochs SET applied_generation=$4::numeric,applied_position=$5,applied_seal=$6") && len(data.Args) == 6 {
+		if value, ok := data.Args[4].(int64); ok && value == position {
+			return context.WithValue(ctx, ackTargetKey{}, true)
+		}
+	}
+	if epoch := f.velocityResume.Load(); epoch != nil && strings.HasPrefix(data.SQL, "SELECT applied_generation::text,applied_position,applied_seal FROM ") && len(data.Args) == 3 {
+		if value, ok := data.Args[2].([]byte); ok && bytes.Equal(value, epoch[:]) {
 			return context.WithValue(ctx, ackTargetKey{}, true)
 		}
 	}
