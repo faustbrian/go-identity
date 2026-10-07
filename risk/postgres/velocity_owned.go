@@ -2,11 +2,44 @@ package postgres
 
 import (
 	"context"
+	"strconv"
 
 	identity "github.com/faustbrian/go-identity"
 	"github.com/faustbrian/go-identity/risk"
 	"github.com/jackc/pgx/v5"
 )
+
+// OwnedClosure exports only acknowledged covered primary custody into the
+// configured graph. The exact original PostgreSQL lease and full owned lease
+// binding must match. The cut identity is a stable domain-separated keyed digest
+// of that lease and original cut, never a newly sampled time or application ID.
+// The retained checker reauthenticates the original covered cut on every use;
+// renewal, expiry, coverage loss or applied-state corruption deny. Transactions
+// end before native IO. Export performs no preparation, renewal, native effect
+// or health mutation. Invalid custody returns InvalidInputError; failed primary
+// checks return no custody and their redacted error, preserving cancellation.
+func (r VelocityRecovery) OwnedClosure(ctx context.Context, lease VelocityRecoveryLease, owned risk.VelocityLease, closure VelocityRecoveryClosure) (risk.VelocityClosure, error) {
+	if r.state == nil || r.state.journalIssuer == (risk.VelocityJournalIssuer{}) || lease.state == nil || lease.state.owner != r.state || closure.state == nil || closure.state.lease != lease.state || closure.state.started.IsZero() {
+		return risk.VelocityClosure{}, identity.InvalidInputError{Field: "velocity_closure"}
+	}
+	s, l, c := r.state, lease.state, closure.state
+	lb, err := s.journalReader.Lease(owned)
+	var namespace [32]byte
+	copy(namespace[:], s.journal.namespace)
+	if err != nil || lb.Tenant != l.tenant || lb.Namespace != namespace || lb.Epoch != l.epoch || lb.Owner != l.token || lb.Generation != l.generation || !lb.ExpiresAt.Equal(l.expires) {
+		return risk.VelocityClosure{}, identity.InvalidInputError{Field: "velocity_closure"}
+	}
+	if err := r.CheckCoveredClosure(ctx, closure); err != nil {
+		return risk.VelocityClosure{}, err
+	}
+	var id [32]byte
+	copy(id[:], velocityMAC(s.journal.key, "identity-risk-velocity-closure-v1", l.tenant, string(namespace[:]), string(l.epoch[:]), strconv.FormatUint(l.generation, 10), string(l.token[:]), velocitySealTime(l.expires), strconv.FormatInt(c.position, 10), velocitySealTime(c.from), velocitySealTime(c.through), velocitySealTime(c.started), strconv.FormatInt(s.maximumWindow.Microseconds(), 10)))
+	result, err := s.journalIssuer.Closure(owned, risk.VelocityClosureBinding{ID: id, Position: c.position, ReplayFrom: c.from, ReplayThrough: c.through, JournalStartedAt: c.started, MaximumWindow: s.maximumWindow}, func(ctx context.Context) error { return r.CheckCoveredClosure(ctx, closure) })
+	if err != nil {
+		return risk.VelocityClosure{}, identity.UnavailableError{}
+	}
+	return result, nil
+}
 
 // OwnedLease supplies cross-adapter custody after checking the exact
 // acknowledged primary lease. Only configured issuance can mint this custody;

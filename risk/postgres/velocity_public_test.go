@@ -46,6 +46,9 @@ func TestVelocityRecoveryUnconfiguredOwnedReplayDeniesBeforeIO(t *testing.T) {
 	if got, err := r.OwnedHistory(context.Background(), l, risk.VelocityLease{}, VelocityReplayRecord{state: &velocityReplayRecord{owner: r.state}}); err == nil || got != (risk.VelocityHistory{}) {
 		t.Fatal("unconfigured history reached primary IO")
 	}
+	if got, err := r.OwnedClosure(context.Background(), l, risk.VelocityLease{}, VelocityRecoveryClosure{}); err == nil || got != (risk.VelocityClosure{}) {
+		t.Fatal("unconfigured closure export reached primary IO")
+	}
 	if err := r.RecordApplied(context.Background(), l, risk.VelocityLease{}, risk.VelocityAcknowledgement{}); err == nil {
 		t.Fatal("unconfigured effect reached primary IO")
 	}

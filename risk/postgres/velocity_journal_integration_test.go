@@ -195,4 +195,5 @@ func testVelocityJournal(t *testing.T, ctx context.Context, dsn, databaseName st
 	testVelocityAppliedAck(t, ctx, journal, cfg, dsn, databaseName)
 	testVelocityClosure(t, ctx, journal, cfg)
 	testVelocityCoverage(t, ctx, journal, cfg)
+	testVelocityOwnedClosure(t, ctx, journal, cfg)
 }

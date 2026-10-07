@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Export primary-authenticated covered velocity closure through the configured
+  recovery graph without renewing its lease or cut. Stable keyed identity binds
+  original scope, applied progress and continuous coverage; stale or uncovered
+  custody cannot reach the native consumer. Export is not healthy admission.
+
 - Add primary full-window coverage checks to recovery closure. The forward
   coverage migration records journal lifetime in the existing epoch owner;
   unknown historical provenance requires a full-window warmup, while renewal,

@@ -248,6 +248,17 @@ evidence and decisions. It is **not yet an executable durable risk service**.
   only in the concrete projection; application-facing stores expose neither.
   Crossed or partial ownership is rejected at construction. Omitting both
   preserves lease/page operations but disables owned replay.
+
+  `OwnedClosure(ctx, originalLease, ownedLease, coveredClosure)` exports only a
+  previously acknowledged `PrepareCoveredClosure` result. An ordinary stable
+  cut is ineligible. The configured graph and every original lease field must
+  match; core custody binds the exact supplied owned-lease instance. The stable
+  keyed cut identity includes original scope, lease expiry, applied position,
+  replay bounds, continuous journal start and maximum window. Matching exports
+  preserve it, and every read reauthenticates the retained original covered cut
+  and lease on primary storage. Export does not prepare a new cut, backdate
+  provenance, renew expiry, publish native state or mark health. Native fenced
+  publication, paired primary confirmation and healthy admission remain pending.
   `OwnedLease` checks exact current primary custody. `OwnedHistory` rereads the
   authenticated original record under a bounded writer-fenced transaction,
   preserving original identity, aliases, counts and timestamps, then closes SQL

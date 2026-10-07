@@ -28,7 +28,7 @@ func testVelocityClosure(t *testing.T, ctx context.Context, journal VelocityJour
 		}
 		return command
 	}
-	issuer, _, native, verifier := risk.NewVelocityRecoveryAuthorities()
+	issuer, reader, native, verifier := risk.NewVelocityRecoveryAuthorities()
 	recovery, err := NewVelocityRecovery(VelocityRecoveryConfig{Journal: journal, MaximumWindow: time.Hour, LeaseDuration: 5 * time.Second, JournalIssuer: issuer, NativeVerifier: verifier})
 	if err != nil {
 		t.Fatal(err)
@@ -77,6 +77,20 @@ func testVelocityClosure(t *testing.T, ctx context.Context, journal VelocityJour
 	if err := recovery.CheckClosure(ctx, closure); err != nil {
 		t.Fatal("acknowledged closure not current", err)
 	}
+	if _, err := cfg.Pool.Raw().Exec(ctx, `UPDATE risk_store.velocity_epochs SET journal_started_at=$4 WHERE tenant_id=$1 AND namespace_digest=$2 AND epoch=$3`, lease.state.tenant, journal.state.namespace, lease.state.epoch[:], closure.state.through.Add(-time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+	covered, err := recovery.PrepareCoveredClosure(ctx, lease)
+	if err != nil {
+		t.Fatal(err)
+	}
+	exported, err := recovery.OwnedClosure(ctx, lease, owned, covered)
+	if err != nil {
+		t.Fatal("applied covered cut not exported", err)
+	}
+	if got, err := reader.Closure(ctx, owned, exported); err != nil || got.Position != page.Records()[0].state.position || got.Position <= 0 || !got.JournalStartedAt.Equal(covered.state.started) || !got.ReplayThrough.Equal(closure.state.through) {
+		t.Fatal("export dropped applied progress or original cut", err)
+	}
 	canceled, cancel := context.WithCancel(ctx)
 	cancel()
 	if err := recovery.CheckClosure(canceled, closure); !errors.Is(err, context.Canceled) {
@@ -94,6 +108,12 @@ func testVelocityClosure(t *testing.T, ctx context.Context, journal VelocityJour
 	}
 	if err := recovery.CheckClosure(ctx, closure); err == nil {
 		t.Fatal("corrupt applied custody accepted closure")
+	}
+	if got, err := reader.Closure(ctx, owned, exported); err == nil || got != (risk.VelocityClosureBinding{}) {
+		t.Fatal("corrupt applied seal retained exported cut", err)
+	}
+	if got, err := recovery.OwnedClosure(ctx, lease, owned, covered); err == nil || got != (risk.VelocityClosure{}) {
+		t.Fatal("corrupt applied seal exported cut", err)
 	}
 	if _, err := cfg.Pool.Raw().Exec(ctx, `UPDATE risk_store.velocity_epochs SET applied_seal=set_byte(applied_seal,0,get_byte(applied_seal,0)#1) WHERE tenant_id=$1 AND namespace_digest=$2 AND epoch=$3`, lease.state.tenant, journal.state.namespace, lease.state.epoch[:]); err != nil {
 		t.Fatal(err)
