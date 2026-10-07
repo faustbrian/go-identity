@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Freeze complete original pre-auth initiation state in a closed native command
+  vocabulary, with separate anonymous-flow target and service actor. Reject
+  substituted scope, incomplete fields, narrowed versions and noncanonical
+  timelines without changing remember policy or cookie commitment. Public
+  issuance and command-recovery composition remain under development.
+
 - Add terminal pre-auth release through the exact owner's sealed coordinator
   noncommit callback, including expired reservations. Preserve original flow
   intent and cookie while fencing rollback/recovery generations and terminal

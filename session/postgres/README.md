@@ -37,6 +37,11 @@ operations must use the same borrowed primary transaction as other participants.
 These native operations do not authenticate a user, expose a cookie or constitute
 complete usable initiation. Owned issuance/recovery, proven-noncommit reservation
 coordination and OTP/other workflow registration remain under development.
+The internal initiation command vocabulary freezes every original record field
+as closed typed scalars, including nanosecond UTC times and resolved remember
+policy. It binds the anonymous-flow namespace separately from the service actor
+and rejects inconsistent command/record scope. Structural decoding does not
+authenticate the actor, authorize initiation or persist/recover a command.
 Retain original digest keys and terminal records until the owned retention and
 recovery policies authorize retirement; no cleanup/down migration is provided.
 
