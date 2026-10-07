@@ -206,6 +206,7 @@
       "module_path": "github.com/faustbrian/go-identity",
       "go_version": "1.27.0",
       "packages": [
+        {"module_directory":".","directory":"internal/velocity","name":"velocity","import_path":"github.com/faustbrian/go-identity/internal/velocity","kind":"internal","production":true,"executable":true,"coverage_required":true,"build_required":true,"build_tags":[]},
         {
           "module_directory": ".",
           "directory": ".",

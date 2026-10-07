@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add private immutable recovery custody for owned journal/projection adapters.
+  Preserve authenticated original history and reject unresolved acknowledgements,
+  foreign ownership and superseded leases. This does not expose application
+  constructors, grant counter authority or publish a healthy projection.
+
 - Freeze bounded typed request intent before generated command values, retaining
   exact versions, explicit options and private scalar custody. This does not
   grant command execution or implement durable request-key admission by itself.
