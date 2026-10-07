@@ -137,13 +137,20 @@ func (v VelocityJournalVerifier) Check(ctx context.Context, l VelocityLease) err
 }
 
 func checkVelocityLease(ctx context.Context, l VelocityLease) error {
-	if ctx == nil || l.state == nil {
+	if l.state == nil {
+		return ErrInvalidVelocityRecovery
+	}
+	return checkVelocityAuthority(ctx, l.state.check)
+}
+
+func checkVelocityAuthority(ctx context.Context, check func(context.Context) error) error {
+	if ctx == nil || check == nil {
 		return ErrInvalidVelocityRecovery
 	}
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	if err := l.state.check(ctx); err != nil {
+	if err := check(ctx); err != nil {
 		if errors.Is(err, context.Canceled) {
 			return context.Canceled
 		}

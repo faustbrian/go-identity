@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Bind covered velocity closure and native publication acknowledgement to the
+  existing separated authority graph, preserving the original primary cut,
+  continuous journal provenance and lease expiry. Foreign, substituted or stale
+  custody cannot qualify; publication acknowledgement remains distinct from
+  replay progress and primary healthy admission. Concrete adapter activation
+  and native IO remain required.
+
 - Add public opaque velocity recovery custody with separate journal and native
   issuance capabilities. Genuine history holders and foreign authority graphs
   cannot fabricate configured native acknowledgements. Preserve original

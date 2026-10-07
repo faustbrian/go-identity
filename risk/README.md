@@ -45,6 +45,26 @@ attestation of malicious configuration. Production composition must own that
 trust boundary. Concrete recovery wiring and complete healthy activation remain
 under development; constructors alone confer no usable counter authority.
 
+`VelocityJournalIssuer.Closure` records only an already acknowledged **covered**
+primary cut. It retains the stable keyed cut ID, applied position (including
+zero for covered empty history), original replay origin/through, journal start
+and one-hour maximum window. The original traversal origin may precede journal
+provenance; that does not claim coverage before the journal start. Both must
+reach the full final window. The concrete primary checker must verify that
+exact retained covered cut and original lease; ordinary stable closure is not
+eligible. Issuance is pure and cannot itself prove storage or historical facts.
+
+After exact fenced native publication IO, the privately retained native issuer
+calls `AcknowledgePublication`. Its distinct `VelocityPublication` binds the
+exact closure object and configured owner, rechecking primary custody without
+renewing any timestamp. `VelocityNativeVerifier.Publication` returns original
+facts only for that exact acknowledgement/closure/lease. Equal projected fields,
+reconstructed foreign graphs and replacement lease handles cannot substitute.
+These APIs perform no native IO or primary health mutation. PostgreSQL must
+independently authenticate and atomically confirm publication; subsequent debit
+must also require the exact current native marker. Complete concrete healthy
+activation remains under development.
+
 ### Stable velocity replay identity
 
 `NewVelocityReplayIdentity(namespace, key)` owns the immutable shared lookup
