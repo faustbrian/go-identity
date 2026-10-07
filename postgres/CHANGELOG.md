@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Admit passwordless OTP users without fabricated credential references by
+  locking primary status and comparing all three original security epochs.
+  Keep credential-specific admission unchanged. Protected OTP apply/finalize
+  now lend the separately submitted pre-auth cookie to the exact live owner
+  without exposing the code; returned handles lose access. Native workflow
+  composition remains under development.
+
 - Bind separately submitted pre-auth cookies into versioned private command
   fingerprints without persisting bearer bytes or changing existing command
   encodings. Different cookies cannot borrow a code-only command's replay.

@@ -81,6 +81,7 @@ func TestOTPAuthorityPostgresIntegration(t *testing.T) {
 		}
 	}()
 	testOTPCurrentAuthority(t, ctx, pool)
+	testOTPUserAuthority(t, ctx, pool)
 }
 
 // Exercise real authority SQL through each sealed handle, not OTP cryptography

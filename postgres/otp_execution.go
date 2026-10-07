@@ -6,6 +6,7 @@ import (
 	"reflect"
 	"time"
 
+	authentication "github.com/faustbrian/go-authentication"
 	identity "github.com/faustbrian/go-identity"
 )
 
@@ -94,6 +95,17 @@ func (s *otpExecutionState) commandSpec(owner OTPReservationContributor, phase o
 	return spec, nil
 }
 
+func (s *otpExecutionState) preAuthCookie(owner OTPReservationContributor, phase otpExecutionPhase) (authentication.BearerCredential, error) {
+	if _, err := s.binding(owner, phase); err != nil {
+		return authentication.BearerCredential{}, err
+	}
+	cookie, ok := s.reservation.command.PreAuthCookie()
+	if !ok {
+		return authentication.BearerCredential{}, invalidWork()
+	}
+	return cookie, nil
+}
+
 // OTPApplyWork grants exact-owner primary reads during current checks, not
 // mutation, submitted-code access or transaction closure. Zero/foreign/returned
 // handles deny; copies share callback lifetime. Use serially and close rows.
@@ -118,6 +130,16 @@ func (w OTPApplyWork) Binding(p OTPReservationContributor) (OTPReservationBindin
 // CommandSpec returns code-free original feature scope to the exact owner.
 func (w OTPApplyWork) CommandSpec(p OTPReservationContributor) (identity.FeatureCommandSpec, error) {
 	return w.state.commandSpec(p, otpCheck)
+}
+
+// PreAuthCookie lends only the actual submitted pre-auth bearer to the exact
+// live owner, independently of the code-free CommandSpec. It grants neither
+// cookie possession proof nor authentication; the owner must derive and check
+// the original flow commitment against primary session state. Missing, foreign,
+// zero and returned handles return zero and InvalidInput. Do not retain, log,
+// persist or serialize the borrowed bearer. No OTP code is exposed.
+func (w OTPApplyWork) PreAuthCookie(p OTPReservationContributor) (authentication.BearerCredential, error) {
+	return w.state.preAuthCookie(p, otpCheck)
 }
 
 // Query grants bounded trusted primary reads; close rows before returning.
@@ -160,6 +182,13 @@ func (w OTPFinalizeWork) Binding(p OTPReservationContributor) (OTPReservationBin
 // CommandSpec returns code-free immutable scope, never the submitted code.
 func (w OTPFinalizeWork) CommandSpec(p OTPReservationContributor) (identity.FeatureCommandSpec, error) {
 	return w.state.commandSpec(p, otpFinalize)
+}
+
+// PreAuthCookie lends the separately submitted original bearer only during
+// exact-owner finalization. Semantics and secret-handling requirements match
+// OTPApplyWork.PreAuthCookie; release and recovery never receive this access.
+func (w OTPFinalizeWork) PreAuthCookie(p OTPReservationContributor) (authentication.BearerCredential, error) {
+	return w.state.preAuthCookie(p, otpFinalize)
 }
 
 // Query reads bounded callback-owned rows; close them before returning.

@@ -13,7 +13,12 @@ primary checks. No storage or migration change is introduced by this framing.
 
 `OTPAttemptWork`, `OTPReservationWork`, `OTPApplyWork` and `OTPFinalizeWork`
 expose `RequireActiveDirectoryAuthority`, `RequireActiveCredential` and
-`RequireActiveUserAuthorization` to their exact registered OTP owner. These
+`RequireActiveUserAuthorization` to their exact registered OTP owner. They also
+expose `RequireActiveUserAuthority` for passwordless users without credential
+references: compare original user, identifier and credential-security epochs
+and active status under a primary user share lock. Aggregate `User.Version` is
+not an authority epoch. Credential-bearing workflows still require their exact
+credential check, including eligibility and expiry. These
 reuse primary kernel and authorization-owner checks in the original transaction,
 with unchanged frozen expectations, locks and bounded deadlines. A live failure
 poisons Work even if ignored; a returned handle cannot affect a later phase.
@@ -25,6 +30,13 @@ authority, decide policy, renew validity, issue a session or consume proof.
 `OTPReleaseWork` deliberately has no current-authority admission gate, because
 coordinator-proven noncommit must permit terminal release after revocation.
 Production OTP session/pre-auth orchestration remains under development.
+
+Protected apply/finalize handles lend the separately submitted bearer through
+`PreAuthCookie` to the exact live owner, without exposing the OTP code or full
+command. Missing or returned custody denies. The owner must independently
+authenticate the original cookie commitment and admit current session-owned
+flow state; access itself grants no authority. Never retain or disclose the
+borrowed bearer. Recovery/release have no cookie accessor.
 
 ## CAPTCHA consuming declaration
 

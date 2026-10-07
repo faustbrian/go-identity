@@ -215,3 +215,49 @@ func (h OTPFinalizeWork) RequireActiveUserAuthorization(ctx context.Context, p O
 	}
 	return w.requireActiveUserAuthorization(ctx, b, expected)
 }
+
+// RequireActiveUserAuthority locks the command-bound primary user and compares
+// active status and all three original security epochs without requiring a
+// credential reference. Only the exact live owner may call; denial poisons Work
+// even if ignored. It never refreshes intent or grants authentication authority.
+// Credential-bearing workflows must additionally check their exact credential.
+func (h OTPAttemptWork) RequireActiveUserAuthority(ctx context.Context, p OTPAttemptContributor, expected UserAuthorityAdmission) error {
+	w, b, err := h.authorityScope(ctx, p)
+	if err != nil {
+		return err
+	}
+	return otpAuthorityFailure(ctx, w, w.requireActiveUserAuthority(ctx, b, expected))
+}
+
+// RequireActiveUserAuthority checks original user security epochs during exact
+// owner reserve/rebind. Semantics match OTPAttemptWork; takeover cannot renew
+// expectations. Locks last until transaction end and live denial poisons Work.
+func (h OTPReservationWork) RequireActiveUserAuthority(ctx context.Context, p OTPReservationContributor, expected UserAuthorityAdmission) error {
+	w, b, err := h.authorityScope(ctx, p)
+	if err != nil {
+		return err
+	}
+	return otpAuthorityFailure(ctx, w, w.requireActiveUserAuthority(ctx, b, expected))
+}
+
+// RequireActiveUserAuthority checks original user security epochs under primary
+// locks in the protected transaction without a credential reference. Live
+// denial poisons Work. Success alone neither authenticates nor consumes OTP.
+func (h OTPApplyWork) RequireActiveUserAuthority(ctx context.Context, p OTPReservationContributor, expected UserAuthorityAdmission) error {
+	w, b, err := h.authorityScope(ctx, p)
+	if err != nil {
+		return err
+	}
+	return otpAuthorityFailure(ctx, w, w.requireActiveUserAuthority(ctx, b, expected))
+}
+
+// RequireActiveUserAuthority rechecks original user security epochs before
+// finalization; live denial poisons Work. Returned handles cannot poison later
+// invocations. Proven noncommit release intentionally has no such live gate.
+func (h OTPFinalizeWork) RequireActiveUserAuthority(ctx context.Context, p OTPReservationContributor, expected UserAuthorityAdmission) error {
+	w, b, err := h.authorityScope(ctx, p)
+	if err != nil {
+		return err
+	}
+	return otpAuthorityFailure(ctx, w, w.requireActiveUserAuthority(ctx, b, expected))
+}
