@@ -129,7 +129,11 @@ func decodeBoundAuthorityRecord(data []byte, binding identity.CommandBinding, is
 	if issuance {
 		profile = issuanceRecordPrefix
 	}
-	return decodeAuthorityProfile(data, binding, profile)
+	record, authority, err := decodeAuthorityProfile(data, binding, profile)
+	if issuance && err != nil {
+		return decodeAuthorityProfile(data, binding, issuanceRecipientRecordPrefix)
+	}
+	return record, authority, err
 }
 
 // An explicit profile never widens the legacy attempt/issuance decoders.

@@ -7,6 +7,7 @@ import (
 	auth "github.com/faustbrian/go-authentication"
 	identity "github.com/faustbrian/go-identity"
 	"github.com/faustbrian/go-identity/otp"
+	kernel "github.com/faustbrian/go-identity/postgres"
 	"github.com/faustbrian/go-identity/session"
 	envelope "github.com/faustbrian/go-secret-envelope"
 )
@@ -47,6 +48,7 @@ func (c *AttemptCodec) MapIssuanceSession(ctx context.Context, challenge otp.Cha
 type issuanceCustody struct {
 	challenge otp.Challenge
 	authority AttemptAuthority
+	recipient *kernel.RecipientRecord
 }
 
 func validIssuance(challenge otp.Challenge, spec identity.FeatureCommandSpec) bool {
@@ -67,7 +69,7 @@ func validIssuance(challenge otp.Challenge, spec identity.FeatureCommandSpec) bo
 	return ok && spec.Binding.UserID != ""
 }
 
-func (c *AttemptCodec) mapIssuance(ctx context.Context, challenge otp.Challenge, spec identity.FeatureCommandSpec, bearer auth.BearerCredential, original AttemptAuthority, authenticated bool) (identity.Command, error) {
+func (c *AttemptCodec) mapIssuance(ctx context.Context, challenge otp.Challenge, spec identity.FeatureCommandSpec, bearer auth.BearerCredential, original AttemptAuthority, authenticated bool, recipient ...kernel.RecipientRecord) (identity.Command, error) {
 	bad := func(err error) (identity.Command, error) { return identity.Command{}, err }
 	if ctx == nil || c == nil || c.crypto == nil || len(spec.Fields) > 126 {
 		return bad(ErrInvalidCommand)
@@ -106,6 +108,21 @@ func (c *AttemptCodec) mapIssuance(ctx context.Context, challenge otp.Challenge,
 		return bad(ErrInvalidCommand)
 	}
 	record := encodeIssuanceRecord(challenge)
+	if len(recipient) > 1 {
+		clear(record)
+		return bad(ErrInvalidCommand)
+	}
+	if len(recipient) == 1 {
+		if validateSendRecipient(recipient[0], b.Scope, spec.Binding) != nil {
+			clear(record)
+			return bad(ErrInvalidCommand)
+		}
+		selected := appendSendRecipient(nil, recipient[0])
+		wrapped := appendAuthorityText([]byte(issuanceRecipientRecordPrefix), string(record))
+		clear(record)
+		record = appendAuthorityText(wrapped, string(selected))
+		clear(selected)
+	}
 	// Preserve the original key-dependent scope commitment inside authenticated
 	// ciphertext. A retained version number alone cannot detect changed key
 	// material or prevent later persistence from reinterpreting its scope.
@@ -207,11 +224,21 @@ func (c *AttemptCodec) restoreIssuanceContext(parent context.Context, spec ident
 		return bad()
 	}
 	committedScope := record[len(record)-32:]
-	challenge, err := decodeIssuanceRecord(record[:len(record)-32])
+	issuance, recipient, err := unwrapRecipientIssuance(record[:len(record)-32])
+	if err != nil {
+		return bad()
+	}
+	challenge, err := decodeIssuanceRecord(issuance)
 	if err != nil || !validIssuance(challenge, spec) {
 		return bad()
 	}
 	s, _ := challenge.Bindings()
+	if recipient != nil {
+		b, _ := s.Continuation.Bindings()
+		if validateSendRecipient(*recipient, b.Scope, spec.Binding) != nil {
+			return bad()
+		}
+	}
 	scope, _ := s.Continuation.DigestScope()
 	if s.Digest.KeyVersion != version {
 		return bad()
@@ -220,7 +247,7 @@ func (c *AttemptCodec) restoreIssuanceContext(parent context.Context, spec ident
 	if err != nil || !hmac.Equal(scopeDigest.Value[:], committedScope) || ctx.Err() != nil {
 		return bad()
 	}
-	return issuanceCustody{challenge: challenge, authority: *authority}, nil
+	return issuanceCustody{challenge: challenge, authority: *authority, recipient: recipient}, nil
 }
 
 // Possession is checked against original frozen commitments, never against

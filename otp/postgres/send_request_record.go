@@ -8,9 +8,11 @@ import (
 
 	identity "github.com/faustbrian/go-identity"
 	"github.com/faustbrian/go-identity/otp"
+	kernel "github.com/faustbrian/go-identity/postgres"
 )
 
 const sendRequestRecordPrefix = "identity-otp-send-request-v1\x00"
+const sendRecipientRequestPrefix = "identity-otp-send-request-v2\x00"
 
 // Original declaration before entropy. This invocation-memory profile has no
 // challenge digest, submitted bearer or generated delivery. The coordinator
@@ -22,6 +24,7 @@ type sendRequestRecord struct {
 	authority    AttemptAuthority
 	issuedAt     time.Time
 	expiresAt    time.Time
+	recipient    *kernel.RecipientRecord
 }
 
 func (sendRequestRecord) Format(s fmt.State, _ rune) {
@@ -43,6 +46,9 @@ func (s sendRequestRecord) validate(binding identity.CommandBinding) error {
 		!s.expiresAt.After(s.issuedAt) || s.expiresAt.Sub(s.issuedAt) > p.TTL || p.TTL%time.Microsecond != 0 || p.ResendInterval%time.Microsecond != 0 {
 		return ErrInvalidCommand
 	}
+	if s.recipient != nil && validateSendRecipient(*s.recipient, b.Scope, binding) != nil {
+		return ErrInvalidCommand
+	}
 	if original, ok := b.Authorization.PreAuthTransaction(); ok {
 		flow, err := original.Bindings()
 		if err != nil || binding.UserID == "" && binding.AnonymousFlowID != string(flow.Binding.ID) {
@@ -60,7 +66,11 @@ func encodeSendRequestRecord(s sendRequestRecord, binding identity.CommandBindin
 	if err := s.validate(binding); err != nil {
 		return nil, err
 	}
-	out := appendSendContinuation([]byte(sendRequestRecordPrefix), s.continuation)
+	prefix := sendRequestRecordPrefix
+	if s.recipient != nil {
+		prefix = sendRecipientRequestPrefix
+	}
+	out := appendSendContinuation([]byte(prefix), s.continuation)
 	p, checks, _ := s.policy.Bindings()
 	out = appendAuthorityText(out, p.Alphabet)
 	out = binary.BigEndian.AppendUint32(out, uint32(p.Length))
@@ -78,6 +88,9 @@ func encodeSendRequestRecord(s sendRequestRecord, binding identity.CommandBindin
 	}
 	out = appendAuthorityText(out, s.issuedAt.UTC().Format(time.RFC3339Nano))
 	out = appendAuthorityText(out, s.expiresAt.UTC().Format(time.RFC3339Nano))
+	if s.recipient != nil {
+		out = appendSendRecipient(out, *s.recipient)
+	}
 	wire := encodeAuthorityRecord(out, s.authority)
 	clear(out)
 	if len(wire) > 8192 {
@@ -92,11 +105,16 @@ func decodeSendRequestRecord(wire []byte, binding identity.CommandBinding) (send
 	if len(wire) == 0 || len(wire) > 8192 {
 		return bad()
 	}
-	data, authority, err := decodeAuthorityProfile(wire, binding, sendRequestRecordPrefix)
-	if err != nil || authority == nil || !bytes.HasPrefix(data, []byte(sendRequestRecordPrefix)) {
+	prefix := sendRequestRecordPrefix
+	data, authority, err := decodeAuthorityProfile(wire, binding, prefix)
+	if err != nil {
+		prefix = sendRecipientRequestPrefix
+		data, authority, err = decodeAuthorityProfile(wire, binding, prefix)
+	}
+	if err != nil || authority == nil || !bytes.HasPrefix(data, []byte(prefix)) {
 		return bad()
 	}
-	r := recordReader{data: data[len(sendRequestRecordPrefix):], ok: true}
+	r := recordReader{data: data[len(prefix):], ok: true}
 	continuation, err := readSendContinuation(&r)
 	if err != nil {
 		return bad()
@@ -120,6 +138,14 @@ func decodeSendRequestRecord(wire []byte, binding identity.CommandBinding) (send
 	issued, expires := r.text(35), r.text(35)
 	issuedAt, e1 := time.Parse(time.RFC3339Nano, issued)
 	expiresAt, e2 := time.Parse(time.RFC3339Nano, expires)
+	var recipient *kernel.RecipientRecord
+	if prefix == sendRecipientRequestPrefix {
+		selected, err := readSendRecipient(&r)
+		if err != nil {
+			return bad()
+		}
+		recipient = &selected
+	}
 	if !r.ok || len(r.data) != 0 || e1 != nil || e2 != nil || issuedAt.UTC().Format(time.RFC3339Nano) != issued || expiresAt.UTC().Format(time.RFC3339Nano) != expires {
 		return bad()
 	}
@@ -131,7 +157,7 @@ func decodeSendRequestRecord(wire []byte, binding identity.CommandBinding) (send
 	if err != nil {
 		return bad()
 	}
-	s := sendRequestRecord{continuation: continuation, policy: policy, authority: *authority, issuedAt: issuedAt, expiresAt: expiresAt}
+	s := sendRequestRecord{continuation: continuation, policy: policy, authority: *authority, issuedAt: issuedAt, expiresAt: expiresAt, recipient: recipient}
 	if s.validate(binding) != nil {
 		return bad()
 	}

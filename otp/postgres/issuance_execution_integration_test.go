@@ -33,11 +33,12 @@ import (
 )
 
 func TestNativeIssuanceCoordinatorAtomicity(t *testing.T) {
-	for _, mode := range []string{"committed", "anonymous-committed", "anonymous-delivery-rollback", "audit-rollback", "delivery-rollback", "blocked", "user-epoch", "identifier-epoch", "credential-epoch", "authorization-epoch", "directory-epoch", "missing-flow", "prepared-committed", "prepared-anonymous-committed", "prepared-delivery-rollback", "prepared-audit-rollback", "prepared-blocked", "prepared-missing-flow"} {
+	for _, mode := range []string{"committed", "anonymous-committed", "anonymous-delivery-rollback", "audit-rollback", "delivery-rollback", "blocked", "user-epoch", "identifier-epoch", "credential-epoch", "authorization-epoch", "directory-epoch", "missing-flow", "prepared-committed", "prepared-anonymous-committed", "prepared-delivery-rollback", "prepared-audit-rollback", "prepared-blocked", "prepared-missing-flow", "prepared-recipient-committed", "prepared-recipient-stale", "prepared-anonymous-recipient-committed", "recipient-committed", "recipient-stale", "anonymous-recipient-committed"} {
 		t.Run(mode, func(t *testing.T) {
 			preparedMode := strings.HasPrefix(mode, "prepared-")
 			baseMode := strings.TrimPrefix(mode, "prepared-")
-			committed := baseMode == "committed" || baseMode == "anonymous-committed"
+			recipientMode := strings.Contains(baseMode, "recipient-")
+			committed := baseMode == "committed" || baseMode == "anonymous-committed" || baseMode == "recipient-committed" || baseMode == "anonymous-recipient-committed"
 			ctx, db, _, preauth := admissionDatabase(t)
 			directory := kernel.DirectoryAuthorityMigrationSource{Base: kernel.CredentialMigrationSource{Base: kernel.StatusMigrationSource{Base: kernel.MigrationSource{}, Version: 12}, Version: 13}, Version: 14, GlobalAuthorityID: "deployment", TenantIDs: []identity.TenantID{"tenant"}}
 			for _, source := range []migrations.Source{directory, MigrationSource{Schema: "otp_store", Version: 100}, LockoutMigrationSource{Schema: "otp_store", Version: 101}, SendFamilyMigrationSource{Schema: "otp_store", Version: 102}, IssuanceMigrationSource{Schema: "otp_store", Version: 103}, deliverypg.MigrationSource{Base: kernel.MigrationSource{}, Version: 250}} {
@@ -167,6 +168,24 @@ func TestNativeIssuanceCoordinatorAtomicity(t *testing.T) {
 			}
 			auditOwner := &contributorAudit{fail: baseMode == "audit-rollback"}
 			lifecycleOwner := &contributorLifecycle{apply: true}
+			var selected *kernel.RecipientRecord
+			if recipientMode {
+				flow, _ := ab.Continuation.Bindings()
+				if _, err := db.Exec(ctx, `INSERT INTO identity.identifiers(tenant_id,user_id,identifier_id,kind,canonical_value,verified,is_primary,version,verification_state,verification_version,verified_at) VALUES('tenant','user','recipient','email',$1,true,true,1,2,1,clock_timestamp())`, flow.Scope.Destination.Value()); err != nil {
+					t.Fatal(err)
+				}
+				r, err := repo.ResolveRecipient(ctx, kernel.RecipientQuery{TenantID: spec.Binding.TenantID, UserID: spec.Binding.UserID, Kind: identity.IdentifierEmail, CanonicalValue: flow.Scope.Destination.Value(), Eligibility: kernel.RecipientVerified})
+				if err != nil || r.Suppressed {
+					t.Fatal("recipient selection", err)
+				}
+				selected = &r
+				if !preparedMode {
+					command, err = store.codec.mapIssuance(ctx, challenge, spec, cookie, authority, false, r)
+					if err != nil {
+						t.Fatal(err)
+					}
+				}
+			}
 			var participant kernel.Contributor = phase
 			if preparedMode {
 				renderer, err := deliverycore.NewTemplateRenderer([]deliverycore.Template{{ID: "otp-code", Version: 1, Channel: deliverycore.ChannelEmail, Locale: "en", RequiredVariables: []string{"code"}, VariableSchema: []deliverycore.VariableSchema{{Name: "code", Kind: "code", Sensitive: true}}, MaxRenderedBytes: 128, Subject: "verification", Body: "{{.code}}", ContentType: "text/plain"}})
@@ -178,7 +197,8 @@ func TestNativeIssuanceCoordinatorAtomicity(t *testing.T) {
 					t.Fatal(err)
 				}
 				participant = store
-				command, err = store.mapPreparedSendRequest(ctx, sendRequestRecord{continuation: ab.Continuation, policy: policy, authority: authority, issuedAt: now, expiresAt: now.Add(time.Minute)}, spec.Binding, cookie)
+				request := sendRequestRecord{continuation: ab.Continuation, policy: policy, authority: authority, issuedAt: now, expiresAt: now.Add(time.Minute), recipient: selected}
+				command, err = store.mapPreparedSendRequest(ctx, request, spec.Binding, cookie)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -207,6 +227,7 @@ func TestNativeIssuanceCoordinatorAtomicity(t *testing.T) {
 			}
 			changes := map[string]string{"blocked": `UPDATE identity.users SET status='banned'`, "user-epoch": `UPDATE identity.users SET authority_version=12`, "identifier-epoch": `UPDATE identity.users SET identifier_version=14`, "credential-epoch": `UPDATE identity.users SET credential_version=18`, "directory-epoch": `UPDATE identity.tenant_authorities SET version=4`, "missing-flow": `DELETE FROM session_store.preauth_transactions`, "delivery-rollback": `ALTER TABLE identity.delivery_intents ADD CONSTRAINT native_issue_reject CHECK(false)`}
 			changes["anonymous-delivery-rollback"] = changes["delivery-rollback"]
+			changes["recipient-stale"] = `UPDATE identity.identifiers SET version=version+1 WHERE identifier_id='recipient'`
 			if sql := changes[baseMode]; sql != "" {
 				if _, err := db.Exec(ctx, sql); err != nil {
 					t.Fatal(err)
@@ -261,7 +282,7 @@ func TestNativeIssuanceCoordinatorAtomicity(t *testing.T) {
 			if baseMode == "audit-rollback" {
 				auditWant = 0
 			}
-			if preparedMode && (baseMode == "blocked" || baseMode == "missing-flow") {
+			if preparedMode && (baseMode == "blocked" || baseMode == "missing-flow" || baseMode == "recipient-stale") {
 				// Read-only pre-generation denial rolls back the initial claim;
 				// it has not entered the protected feature's abort-audit phase.
 				auditWant = 0

@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Preserve the selected recipient's exact identifier, verification and user
+  security versions through native Send preparation, encrypted output and
+  restart. Fence that selection before generation and again in the protected
+  issuance transaction without retargeting anonymous flows. Existing retained
+  request and issuance profiles remain readable. Public Send and owned risk
+  composition are still under development.
+
 - Connect private native Send generation, retained-output restoration and atomic
   issuance to one stable registered OTP owner. Bind actual selected template
   contents and original request; preserve encrypted delivery, bearer possession,

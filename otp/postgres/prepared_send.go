@@ -318,6 +318,11 @@ func (p *Contributor) AdmitFeaturePreparation(ctx context.Context, w kernel.Work
 	if err := requireNativeFlow(ctx, w, p, flow, nil); err != nil {
 		return err
 	}
+	if r.recipient != nil {
+		if err := w.RequireRecipient(ctx, p, *r.recipient); err != nil {
+			return err
+		}
+	}
 	now, err := w.DatabaseTime(ctx)
 	if err != nil {
 		return err
@@ -376,11 +381,11 @@ func (p *Contributor) GenerateFeaturePreparation(ctx context.Context, original i
 	_, err = p.send.preparer.Prepare(ctx, r.continuation, r.issuedAt, r.expiresAt, func(ctx context.Context, challenge otp.Challenge, recipient delivery.Recipient, message delivery.RenderedMessage) error {
 		var generated identity.Command
 		var err error
-		if sessionBound {
-			generated, err = p.codec.MapIssuanceSession(ctx, challenge, spec, bearer, r.authority)
-		} else {
-			generated, err = p.codec.MapIssuancePreAuth(ctx, challenge, spec, bearer, r.authority)
+		var selected []kernel.RecipientRecord
+		if r.recipient != nil {
+			selected = []kernel.RecipientRecord{*r.recipient}
 		}
+		generated, err = p.codec.mapIssuance(ctx, challenge, spec, bearer, r.authority, sessionBound, selected...)
 		if err != nil {
 			return err
 		}
@@ -430,7 +435,7 @@ func (p *Contributor) restorePreparedSend(ctx context.Context, original identity
 		return nil, identity.Command{}, err
 	}
 	s, _ := custody.challenge.Bindings()
-	restored := sendRequestRecord{continuation: s.Continuation, policy: s.Policy, authority: custody.authority, issuedAt: s.IssuedAt, expiresAt: s.ExpiresAt}
+	restored := sendRequestRecord{continuation: s.Continuation, policy: s.Policy, authority: custody.authority, issuedAt: s.IssuedAt, expiresAt: s.ExpiresAt, recipient: custody.recipient}
 	expected, e := encodeSendRequestRecord(r, spec.Binding)
 	actual, a := encodeSendRequestRecord(restored, spec.Binding)
 	defer clear(expected)
@@ -467,7 +472,7 @@ func (p *Contributor) originalFromGenerated(ctx context.Context, command identit
 	if _, ok := command.SessionToken(); !ok {
 		bearer, _ = command.PreAuthCookie()
 	}
-	return p.mapPreparedSendRequest(ctx, sendRequestRecord{continuation: s.Continuation, policy: s.Policy, authority: custody.authority, issuedAt: s.IssuedAt, expiresAt: s.ExpiresAt}, spec.Binding, bearer)
+	return p.mapPreparedSendRequest(ctx, sendRequestRecord{continuation: s.Continuation, policy: s.Policy, authority: custody.authority, issuedAt: s.IssuedAt, expiresAt: s.ExpiresAt, recipient: custody.recipient}, spec.Binding, bearer)
 }
 
 func (p *Contributor) validatePreparedSendExecution(command identity.Command, plan kernel.CommandPlan) error {

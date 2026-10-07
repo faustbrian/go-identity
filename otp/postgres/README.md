@@ -1,5 +1,15 @@
 # OTP PostgreSQL
 
+Native Send can retain an identity-owned recipient snapshot separately from
+the original authenticated subject or anonymous flow. Its new request profile
+and authenticated issuance wrapper preserve the original identifier,
+verification, security versions and observation time through restart. Primary
+recipient locks and comparisons run before generation and again in the sole
+issuance transaction. The legacy no-recipient profiles remain readable;
+anonymous discovery never grants a user subject to the command. Public Send
+must compose this with owned recipient resolution and Authentication-lane risk
+admission; that public composition is not yet available.
+
 The private pre-generation Send input now preserves the original complete
 session/pre-auth continuation, attempt policy, primary expectations and initial
 times without a fabricated challenge or digest. Mapping is deterministic and

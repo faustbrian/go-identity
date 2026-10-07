@@ -121,6 +121,11 @@ func (p *issuanceContributor) applyIssuance(ctx context.Context, w kernel.Work, 
 	if err := requireNativeFlow(ctx, w, p.store, flow, nil); err != nil {
 		return bad(err)
 	}
+	if custody.recipient != nil {
+		if err := w.RequireRecipient(ctx, owner, *custody.recipient); err != nil {
+			return bad(err)
+		}
+	}
 	s, _ := custody.challenge.Bindings()
 	continuation, _ := s.Continuation.Bindings()
 	query := func(ctx context.Context, sql string, args ...any) (challengeRows, error) {
