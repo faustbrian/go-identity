@@ -4,6 +4,28 @@
   "go_version": "1.27.0",
   "modules": [
     {
+      "directory": "risk/valkey",
+      "module_path": "github.com/faustbrian/go-identity/risk/valkey",
+      "go_version": "1.27.0",
+      "packages": [{"module_directory":"risk/valkey","directory":".","name":"valkey","import_path":"github.com/faustbrian/go-identity/risk/valkey","kind":"public","production":true,"executable":true,"coverage_required":true,"build_required":true,"build_tags":[]}],
+      "purpose": "Bounded native ephemeral risk command planning and reply validation; mutation and journal-fenced recovery in development.",
+      "lifecycle": "experimental",
+      "kind": "public library",
+      "releasable": true,
+      "family": "storage",
+      "version": "0.0.0",
+      "tag_prefix": "risk/valkey/v",
+      "owned_dependencies": ["github.com/faustbrian/go-identity/risk"],
+      "reverse_owned_dependencies": [],
+      "external_runtime_dependencies": ["valkey"],
+      "required_services": ["valkey"],
+      "build_tags": [],
+      "test_tags": [],
+      "interoperability_tools": [],
+      "specifications": [],
+      "conformance_corpora": []
+    },
+    {
       "directory": "otp/postgres",
       "module_path": "github.com/faustbrian/go-identity/otp/postgres",
       "go_version": "1.27.0",
