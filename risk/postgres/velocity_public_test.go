@@ -2,6 +2,9 @@ package postgres
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -45,5 +48,24 @@ func TestVelocityRecoveryUnconfiguredOwnedReplayDeniesBeforeIO(t *testing.T) {
 	}
 	if err := r.RecordApplied(context.Background(), l, risk.VelocityLease{}, risk.VelocityAcknowledgement{}); err == nil {
 		t.Fatal("unconfigured effect reached primary IO")
+	}
+	if got, err := r.PrepareClosure(context.Background(), l); err == nil || got != (VelocityRecoveryClosure{}) {
+		t.Fatal("unconfigured closure reached primary IO")
+	}
+	if err := r.CheckClosure(context.Background(), VelocityRecoveryClosure{}); err == nil {
+		t.Fatal("zero closure reached primary IO")
+	}
+}
+
+func TestVelocityClosureCustodyRedaction(t *testing.T) {
+	c := VelocityRecoveryClosure{state: &velocityRecoveryClosure{lease: &velocityRecoveryLease{tenant: "private-fixture-value"}, position: 123}}
+	if strings.Contains(fmt.Sprintf("%v %#v %s", c, c, c), "private-fixture-value") {
+		t.Fatal("closure formatting disclosed private custody")
+	}
+	if _, err := json.Marshal(c); err == nil {
+		t.Fatal("closure JSON serialization admitted")
+	}
+	if _, err := c.MarshalText(); err == nil {
+		t.Fatal("closure text serialization admitted")
 	}
 }

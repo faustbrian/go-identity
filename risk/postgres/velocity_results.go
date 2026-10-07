@@ -25,6 +25,8 @@ import (
 // Its shared scope lock precedes attempt-row locks and remains until transaction
 // resolution. Recovery acquisition drains overlapping declarations but does not
 // discard later evidence or turn an explicit declaration into external truth.
+// A live prepared closure denies a new declaration but preserves identical
+// terminal replay. Renewal or expiry reopens evidence admission, not health.
 func (j VelocityJournal) RecordResult(ctx context.Context, a VelocityAttempt, outcome risk.CounterOutcome, snapshot []risk.Counter) error {
 	if j.state == nil || a.state == nil || a.state.owner != j.state || a.state.command.ValidateConfiguration(j.state.policy, j.state.keys) != nil {
 		return risk.ErrInvalidCounterCommand
@@ -71,6 +73,9 @@ func (j VelocityJournal) RecordResult(ctx context.Context, a VelocityAttempt, ou
 			return risk.ErrInvalidCounterResult
 		}
 		return nil
+	}
+	if err := s.writerOpen(bounded, tx, b.Tenant); err != nil {
+		return err
 	}
 	for _, counter := range snapshot {
 		if _, err = tx.Exec(bounded, `INSERT INTO `+s.schema+`.velocity_snapshots(sequence,phase,window_us,dimension,value,observed_at,started_at,expires_at) VALUES($1,$2,$3,$4,$5::numeric,$6,$7,$8)`, sequence, string(b.Phase), b.Window.Microseconds(), counter.Kind, strconv.FormatUint(counter.Value, 10), counter.ObservedAt, counter.WindowStartedAt, counter.WindowExpiresAt); err != nil {

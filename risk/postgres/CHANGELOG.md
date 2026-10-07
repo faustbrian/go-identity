@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Prepare an opaque durable recovery closure in the existing epoch owner after
+  all retained changes are applied. Its writer fence rejects new same-scope
+  evidence while preserving unchanged terminal replay; renewal or expiry
+  invalidates the closure and reopens evidence admission. Matching retries
+  recover the original cut after commit ambiguity. Closure grants neither
+  historical-coverage proof nor native publication or healthy admission.
+
 - Resume velocity replay from authenticated durable applied progress, preserving
   same-owner renewal while replaying from zero after takeover or a new epoch.
   Corrupt anchors, stale leases and ambiguous commits disclose no cursor;

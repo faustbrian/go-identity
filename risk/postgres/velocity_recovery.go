@@ -191,6 +191,7 @@ func (r VelocityRecovery) CheckLease(ctx context.Context, lease VelocityRecovery
 // superseding receipt after acknowledged commit. Concurrent renewal has one
 // winner. Expired leases cannot renew or use local time to regain ownership.
 // No cursor, history, generation, external result or epoch health is changed.
+// A prepared closure is invalidated and journal evidence admission reopens.
 func (r VelocityRecovery) Renew(ctx context.Context, lease VelocityRecoveryLease) (VelocityRecoveryLease, error) {
 	return r.lease(ctx, lease, true)
 }
@@ -223,7 +224,7 @@ func (r VelocityRecovery) lease(ctx context.Context, lease VelocityRecoveryLease
 		if !expires.After(l.expires) {
 			return VelocityRecoveryLease{}, identity.UnavailableError{}
 		}
-		if _, err := tx.Exec(bounded, `UPDATE `+s.journal.schema+`.velocity_epochs SET lease_expires_at=$4 WHERE tenant_id=$1 AND namespace_digest=$2 AND epoch=$3`, l.tenant, s.journal.namespace, l.epoch[:], expires); err != nil {
+		if _, err := tx.Exec(bounded, `UPDATE `+s.journal.schema+`.velocity_epochs SET lease_expires_at=$4,replay_through=replay_from WHERE tenant_id=$1 AND namespace_digest=$2 AND epoch=$3`, l.tenant, s.journal.namespace, l.epoch[:], expires); err != nil {
 			return VelocityRecoveryLease{}, identity.UnavailableError{}
 		}
 	}

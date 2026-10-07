@@ -26,3 +26,14 @@ func (s *velocityJournal) scopeLock(ctx context.Context, tx pgx.Tx, tenant strin
 	}
 	return nil
 }
+
+// Called under the shared scope lock before new history is written. A durable
+// closed cut fences writers without holding a SQL transaction across native IO.
+// Expiry cannot grant health; it only allows evidence to accumulate for recovery.
+func (s *velocityJournal) writerOpen(ctx context.Context, tx pgx.Tx, tenant string) error {
+	var closed bool
+	if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM `+s.schema+`.velocity_epochs WHERE tenant_id=$1 AND namespace_digest=$2 AND state='replaying' AND replay_through>replay_from AND lease_expires_at>clock_timestamp())`, tenant, s.namespace).Scan(&closed); err != nil || closed {
+		return identity.UnavailableError{}
+	}
+	return nil
+}

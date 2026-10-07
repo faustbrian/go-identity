@@ -266,6 +266,17 @@ evidence and decisions. It is **not yet an executable durable risk service**.
   anchor must authenticate; corruption, stale ownership or ambiguous commit
   returns no cursor. Unresolved suffix history remains visible. This cursor is
   traversal custody, not proof of complete replay or permission to publish health.
+  `PrepareClosure(ctx, lease)` establishes a stable primary journal cut after
+  every retained change is applied. Pending, unknown, unpositioned or unapplied
+  history denies. The existing epoch's `replay_through > replay_from` fences
+  new same-scope journal writes until renewal or expiry; unchanged terminal
+  replay remains idempotent. Locks end before the method returns. Matching
+  retry recovers the same cut after a lost commit acknowledgement.
+  `CheckClosure` verifies exact retained custody under primary time. Neither
+  method proves historical temporal coverage, performs native IO or publishes
+  health. Native publication, primary confirmation and admission must still
+  agree before a concrete store can enable traffic. Do not treat a captured
+  interval, empty page or successful closure as healthy readiness.
 
 - Optional `Config.UseIssuer` installs pure use preparation only after matching
   the issuer's exact current policy and entire retained signing/linkage key set.

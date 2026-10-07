@@ -141,6 +141,7 @@ func velocityMAC(key []byte, domain string, fields ...string) []byte {
 // A shared scoped transaction lock precedes time/sequence allocation and lasts
 // through commit, so recovery acquisition cannot pass an unresolved insertion.
 // Journal recording remains evidence only, including while an epoch is replaying.
+// A live prepared closure denies new evidence until renewal or expiry.
 func (j VelocityJournal) RecordAttempt(ctx context.Context, c risk.CounterCommand) (VelocityAttempt, error) {
 	if j.state == nil || c.ValidateConfiguration(j.state.policy, j.state.keys) != nil {
 		return VelocityAttempt{}, risk.ErrInvalidCounterCommand
@@ -180,6 +181,9 @@ func (j VelocityJournal) RecordAttempt(ctx context.Context, c risk.CounterComman
 		_ = tx.Rollback(cleanup)
 	}()
 	if err := s.scopeLock(bounded, tx, b.Tenant, true); err != nil {
+		return VelocityAttempt{}, err
+	}
+	if err := s.writerOpen(bounded, tx, b.Tenant); err != nil {
 		return VelocityAttempt{}, err
 	}
 	var now time.Time

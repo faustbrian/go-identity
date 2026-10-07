@@ -193,4 +193,5 @@ func testVelocityJournal(t *testing.T, ctx context.Context, dsn, databaseName st
 	testVelocityPage(t, ctx, journal, cfg, dsn, databaseName)
 	testVelocityOwnedHistory(t, ctx, journal, cfg)
 	testVelocityAppliedAck(t, ctx, journal, cfg, dsn, databaseName)
+	testVelocityClosure(t, ctx, journal, cfg)
 }

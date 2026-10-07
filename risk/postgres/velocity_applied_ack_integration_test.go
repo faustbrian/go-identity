@@ -113,4 +113,21 @@ func testVelocityAppliedAck(t *testing.T, ctx context.Context, journal VelocityJ
 	if err := recovery.RecordApplied(ctx, lease, owned, ack); err != nil {
 		t.Fatal("duplicate acknowledgement after recovery not idempotent", err)
 	}
+	fault.velocityResume.Store(nil)
+	fault.hits.Store(0)
+	fault.velocityClosure.Store(&lease.state.epoch)
+	if closure, err := recovery.PrepareClosure(ctx, lease); !errors.As(err, &unavailable) || closure != (VelocityRecoveryClosure{}) || fault.hits.Load() != 1 {
+		t.Fatal("lost closure acknowledgement exposed custody", err)
+	}
+	var from, through time.Time
+	if err := journal.state.pool.Raw().QueryRow(ctx, `SELECT replay_from,replay_through FROM risk_store.velocity_epochs WHERE tenant_id=$1 AND namespace_digest=$2 AND epoch=$3`, lease.state.tenant, journal.state.namespace, lease.state.epoch[:]).Scan(&from, &through); err != nil || !through.After(from) {
+		t.Fatal("fault did not commit durable closure", err)
+	}
+	closure, err := recovery.PrepareClosure(ctx, lease)
+	if err != nil || !closure.state.through.Equal(through) {
+		t.Fatal("lost closure acknowledgement replaced primary cut", err)
+	}
+	if err := recovery.CheckClosure(ctx, closure); err != nil {
+		t.Fatal("recovered closure not current", err)
+	}
 }
