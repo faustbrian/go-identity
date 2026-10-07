@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Authenticate original Send input against the kernel's retained request-key
+  provenance and immutable native configuration. Preserve original risk
+  dimensions, command attempt, recipient/suppression choice, flow, authority
+  and expiry through restart; separately submitted bearer possession remains
+  required. Suppression cannot restore an executable issuance command. Advance
+  the kernel dependency to its committed retained-input contract. Public Send
+  and owned authentication-risk orchestration remain under development.
+
 - Preserve the selected recipient's exact identifier, verification and user
   security versions through native Send preparation, encrypted output and
   restart. Fence that selection before generation and again in the protected

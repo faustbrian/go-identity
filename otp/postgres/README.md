@@ -1,5 +1,15 @@
 # OTP PostgreSQL
 
+The private Send initiation envelope authenticates the kernel's complete
+`RequestKeyPreparationBinding` and immutable native configuration. It retains
+the original flow, recipient or suppression branch, authority, times and
+authentication-lane identifier/network/device dimensions. Its attempt identity
+is the original server-issued command ID. Restoration requires separate bearer
+possession and never renews authority, freshness or expiry. Suppressed originals
+cannot become ordinary issuance commands. This codec does not itself implement
+native request-key preparation, current risk admission or a public Send service;
+those remain implementation work. Existing custody profiles are unchanged.
+
 Native Send can retain an identity-owned recipient snapshot separately from
 the original authenticated subject or anonymous flow. Its new request profile
 and authenticated issuance wrapper preserve the original identifier,

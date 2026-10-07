@@ -202,6 +202,28 @@ func TestNativeIssuanceCoordinatorAtomicity(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
+				if recipientMode {
+					// Reconstruct a fresh owner from authenticated original input before
+					// native generation. Later primary drift must still deny admission.
+					binding := kernel.RequestKeyPreparationBinding{Namespace: "environment", Scope: kernel.RequestKeyScope{TenantID: spec.Binding.TenantID, ActorID: spec.Binding.ActorID, ActorKind: spec.Binding.ActorKind, Method: "POST", RouteID: spec.Operation.OperationID}, Admission: kernel.RequestKeyAdmission{CommandID: spec.Binding.CommandID, FingerprintKeyVersion: 1}, Feature: kernel.FeatureRegistration{Contributor: store.Descriptor(), Operation: spec.Operation}, PolicyVersion: 9, IntentDigest: [32]byte{0x17}}
+					risk := sendInitiationRisk{network: "192.0.2.8", device: "original-device", identifierDigest: strings.Repeat("a", 64)}
+					wire, err := store.sealSendInitiation(ctx, binding, command, risk, false)
+					if err != nil {
+						t.Fatal("seal native original", err)
+					}
+					fresh := *store
+					fresh.codec, err = NewAttemptCodec(codecConfig())
+					if err != nil {
+						t.Fatal(err)
+					}
+					restored, err := fresh.restoreSendInitiation(ctx, binding, wire, cookie)
+					before, beforeErr := encodeSendRequestRecord(request, spec.Binding)
+					after, afterErr := encodeSendRequestRecord(restored.request, spec.Binding)
+					if err != nil || beforeErr != nil || afterErr != nil || restored.risk != risk || restored.suppressed || !bytes.Equal(before, after) {
+						t.Fatal("restart changed native original", err)
+					}
+					store, command, participant = &fresh, restored.original, &fresh
+				}
 			}
 			registry, err := kernel.NewContributorRegistry([]kernel.Contributor{repo, auditOwner, lifecycleOwner, participant, delivery})
 			if err != nil {
