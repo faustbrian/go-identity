@@ -1,5 +1,15 @@
 # PostgreSQL session storage
 
+## Original-session admission expectations
+
+`IdentifierAdmissionConfig.Validate` checks the configured owner profile.
+`OriginalSessionAdmission` derives exact directory, credential and user
+authorization expectations from a frozen session and command binding. It
+preserves original keys and epochs, rejects unsupported optional authority
+dimensions and performs no IO. It neither authenticates a bearer nor grants
+permission. Native participants must separately authenticate possession, use
+primary `RequireSession` checks, and recheck original freshness after waits.
+
 ### Canonical pre-auth state
 
 Install `PreAuthMigrationSource` after the base session schema in the single

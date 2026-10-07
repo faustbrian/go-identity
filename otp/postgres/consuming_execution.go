@@ -17,9 +17,9 @@ import (
 
 var _ kernel.OTPExecutionContributor = (*Contributor)(nil)
 
-// CheckOTP admits only the exact reserved original pre-auth command under the
+// CheckOTP admits only the exact reserved original command under the
 // coordinator's protected transaction. It authenticates the separately borrowed
-// cookie and original authority, rechecks primary validity after downstream
+// context-specific bearer and original authority, rechecks validity after downstream
 // waits, and never borrows, compares, charges or persists the submitted code.
 func (p *Contributor) CheckOTP(ctx context.Context, w kernel.OTPApplyWork) error {
 	if ctx == nil || p == nil {
@@ -35,13 +35,16 @@ func (p *Contributor) CheckOTP(ctx context.Context, w kernel.OTPApplyWork) error
 	}
 	cookie, err := w.PreAuthCookie(p)
 	if err != nil {
+		cookie, err = w.SessionToken(p)
+	}
+	if err != nil {
 		return err
 	}
 	_, _, _, err = p.checkConsuming(ctx, w, b, spec, cookie)
 	return err
 }
 
-// FinalizeOTP rechecks original current authority and finalizes OTP and pre-auth
+// FinalizeOTP rechecks current authority and finalizes OTP and any pre-auth flow
 // in the same transaction as the protected domain, audits, outbox and receipt.
 // Any prefix is provisional; coordinator failure rolls it back atomically.
 func (p *Contributor) FinalizeOTP(ctx context.Context, w kernel.OTPFinalizeWork) error {
@@ -58,21 +61,26 @@ func (p *Contributor) FinalizeOTP(ctx context.Context, w kernel.OTPFinalizeWork)
 	}
 	cookie, err := w.PreAuthCookie(p)
 	if err != nil {
+		cookie, err = w.SessionToken(p)
+	}
+	if err != nil {
 		return err
 	}
 	row, flow, now, err := p.checkConsuming(ctx, w, b, spec, cookie)
 	if err != nil {
 		return err
 	}
-	if err = sessionpg.FinalizePreAuth(ctx, w, p.preauth.config, flow, sessionpg.PreAuthUse{Command: b.Command, Fingerprint: b.Fingerprint, Generation: b.Generation}); err != nil {
-		return err
+	if flow.preauth != (session.PreAuthTransaction{}) {
+		if err = sessionpg.FinalizePreAuth(ctx, w, p.preauth.config, flow.preauth, sessionpg.PreAuthUse{Command: b.Command, Fingerprint: b.Fingerprint, Generation: b.Generation}); err != nil {
+			return err
+		}
 	}
 	return terminalReservation(ctx, w.Exec, row, b, reservationFinalized, now)
 }
 
-func (p *Contributor) checkConsuming(ctx context.Context, w consumingWork, b kernel.OTPReservationBinding, spec identity.FeatureCommandSpec, cookie auth.BearerCredential) (lockedReservation, session.PreAuthTransaction, time.Time, error) {
-	bad := func(err error) (lockedReservation, session.PreAuthTransaction, time.Time, error) {
-		return lockedReservation{}, session.PreAuthTransaction{}, time.Time{}, err
+func (p *Contributor) checkConsuming(ctx context.Context, w consumingWork, b kernel.OTPReservationBinding, spec identity.FeatureCommandSpec, cookie auth.BearerCredential) (lockedReservation, nativeFlow, time.Time, error) {
+	bad := func(err error) (lockedReservation, nativeFlow, time.Time, error) {
+		return lockedReservation{}, nativeFlow{}, time.Time{}, err
 	}
 	if b.PreviousGeneration != 0 || !validOwnership(b) || spec.Binding != b.Command {
 		return bad(ErrInvalidCommand)
@@ -81,14 +89,14 @@ func (p *Contributor) checkConsuming(ctx context.Context, w consumingWork, b ker
 	if err != nil || c.authority == nil || c.authority.Directory.Query.GlobalAuthorityID != p.global || b.Command.UserID != "" && c.authority.UserAuthorization.Scope.PolicyNamespace != p.namespace {
 		return bad(ErrInvalidCommand)
 	}
-	flow, err := p.codec.authenticatePreAuthSpec(ctx, p.preauth, spec, b.Plan, cookie)
+	flow, err := p.authenticateFlowSpec(ctx, spec, b.Plan, cookie)
 	if err != nil {
 		return bad(err)
 	}
 	if err = p.requireConsumingAuthority(ctx, w, b, *c.authority); err != nil {
 		return bad(err)
 	}
-	if err = sessionpg.RequireReservedPreAuth(ctx, w, p.preauth.config, flow, sessionpg.PreAuthUse{Command: b.Command, Fingerprint: b.Fingerprint, Generation: b.Generation}); err != nil {
+	if err = requireNativeFlow(ctx, w, p, flow, &sessionpg.PreAuthUse{Command: b.Command, Fingerprint: b.Fingerprint, Generation: b.Generation}); err != nil {
 		return bad(err)
 	}
 	continuation, _ := c.record.Attempt.Continuation.Bindings()
@@ -120,21 +128,10 @@ func (p *Contributor) checkConsuming(ctx context.Context, w consumingWork, b ker
 	return row, flow, now, nil
 }
 
-func retainedFlow(c nativeCustody) (session.PreAuthTransaction, error) {
-	b, err := c.record.Attempt.Continuation.Bindings()
-	if err != nil {
-		return session.PreAuthTransaction{}, ErrInvalidCommand
-	}
-	flow, ok := b.Authorization.PreAuthTransaction()
-	if !ok {
-		return session.PreAuthTransaction{}, ErrInvalidCommand
-	}
-	return flow, nil
-}
-
 // ReleaseOTP requires the live coordinator-proven noncommit phase. It restores
-// original code/cookie-free custody from the existing participant and terminally
-// releases both exact predecessor reservations. Expiry, revoked live authority
+// original code/bearer-free custody from the existing participant and terminally
+// releases exact OTP and, when applicable, pre-auth reservations. Authenticated
+// sessions are never reserved or released. Expiry, revoked live authority
 // or lease loss cannot authorize this method and do not strand proven rollback.
 // Missing/divergent custody aborts release; no independently exposed proof API,
 // pool, journal, retry or transaction owner is created. Install the session
@@ -154,14 +151,21 @@ func (p *Contributor) ReleaseOTP(ctx context.Context, w kernel.OTPReleaseWork) e
 	if err != nil {
 		return err
 	}
-	flow, err := retainedFlow(c)
+	flow, err := retainedNativeFlow(c)
 	if err != nil {
 		return err
 	}
 	// Keep the original flow-before-challenge exclusion order. Release receives
 	// sealed noncommit authority, never an expired original bearer submission.
-	if err = sessionpg.ReleasePreAuth(ctx, w, p, p.preauth.config, flow); err != nil {
-		return err
+	if flow.preauth != (session.PreAuthTransaction{}) {
+		if p.preauth == nil {
+			return ErrInvalidCommand
+		}
+		if err = sessionpg.ReleasePreAuth(ctx, w, p, p.preauth.config, flow.preauth); err != nil {
+			return err
+		}
+	} else if p.sessionAuthority(flow.session, b.Command, *c.authority) != nil {
+		return ErrInvalidCommand
 	}
 	row, err := loadReservation(ctx, query, p.schema, b, b.PreviousGeneration)
 	if err != nil {
@@ -186,11 +190,29 @@ func (p *Contributor) recoverConsuming(ctx context.Context, w kernel.RecoveryWor
 	if err != nil {
 		return kernel.RecoveryUnknown, err
 	}
-	flow, err := retainedFlow(c)
+	flow, err := retainedNativeFlow(c)
 	if err != nil {
 		return kernel.RecoveryUnknown, err
 	}
-	original, err := flow.Bindings()
+	if flow.session != (session.Session{}) {
+		if p.sessionAuthority(flow.session, b.Command, *c.authority) != nil {
+			return kernel.RecoveryUnknown, ErrInvalidCommand
+		}
+		_, err := loadReservation(ctx, query, p.schema, b, b.PreviousGeneration)
+		if err != nil {
+			if errors.Is(err, ErrInvalidCommand) {
+				return kernel.RecoveryUnknown, nil
+			}
+			return kernel.RecoveryUnknown, err
+		}
+		// The session is not a one-time participant. Exact OTP reserved custody,
+		// not session expiry/revocation, supplies this owner's noncommit evidence.
+		return kernel.RecoveryNotCommitted, nil
+	}
+	if p.preauth == nil {
+		return kernel.RecoveryUnknown, ErrInvalidCommand
+	}
+	original, err := flow.preauth.Bindings()
 	if err != nil {
 		return kernel.RecoveryUnknown, err
 	}

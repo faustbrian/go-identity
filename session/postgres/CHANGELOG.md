@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Add identifier-admission profile validation and original-session authority
+  derivation for native participants. Preserve exact owner expectations without
+  IO, refreshing epochs, authenticating a bearer or granting permission.
+
 - Compose the public owned pre-auth issuer with native atomic initiation and
   restart-safe outcome recovery. Persist the unchanged server-generated cookie
   commitment and remember choice; only fresh commitment permits core delivery.

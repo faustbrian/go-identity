@@ -8,8 +8,6 @@ import (
 	identity "github.com/faustbrian/go-identity"
 	"github.com/faustbrian/go-identity/otp"
 	kernel "github.com/faustbrian/go-identity/postgres"
-	"github.com/faustbrian/go-identity/session"
-	sessionpg "github.com/faustbrian/go-identity/session/postgres"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -82,7 +80,7 @@ func credentialAdmission(a AttemptAuthority) kernel.CredentialAdmission {
 	return kernel.CredentialAdmission{Credential: a.Credential, UserAuthorityVersion: a.UserAuthorityVersion, IdentifierAuthorityVersion: a.IdentifierAuthorityVersion, CredentialAuthorityVersion: a.CredentialAuthorityVersion}
 }
 
-func (p *Contributor) consumingTime(ctx context.Context, w consumingWork, a AttemptAuthority, flow session.PreAuthTransaction) (time.Time, error) {
+func (p *Contributor) consumingTime(ctx context.Context, w consumingWork, a AttemptAuthority, flow nativeFlow) (time.Time, error) {
 	now, err := w.DatabaseTime(ctx)
 	if err != nil {
 		return time.Time{}, err
@@ -93,8 +91,7 @@ func (p *Contributor) consumingTime(ctx context.Context, w consumingWork, a Atte
 			return time.Time{}, err
 		}
 	}
-	s, err := flow.Bindings()
-	if err != nil || flow.Check(now, s.Binding, s.Cookie) != nil {
+	if p.flowTime(flow, now) != nil {
 		return time.Time{}, ErrInvalidCommand
 	}
 	return now, nil
@@ -123,13 +120,14 @@ func (p *Contributor) ReserveOTP(ctx context.Context, w kernel.OTPReservationWor
 	if err = p.requireConsumingAuthority(ctx, w, b, a); err != nil {
 		return err
 	}
-	flow, err := p.codec.authenticatePreAuth(ctx, p.preauth, command, b.Plan)
+	flow, err := p.authenticateFlow(ctx, command, b.Plan)
 	if err != nil {
 		return err
 	}
-	// Acquire original flow's update lock before downstream exclusions. A
-	// share-lock followed by upgrade could deadlock competing submissions.
-	if err = sessionpg.ReservePreAuth(ctx, w, p.preauth.config, flow, sessionpg.PreAuthUse{Command: b.Command, Fingerprint: b.Fingerprint, Generation: b.Generation}); err != nil {
+	// Lock original flow before downstream exclusions. Pre-auth acquires its
+	// update lock directly to avoid share-lock upgrades between submissions;
+	// authenticated sessions are checked read-only and are never reserved.
+	if err = reserveNativeFlow(ctx, w, p, flow, b); err != nil {
 		return err
 	}
 	ab, _ := attempt.Bindings()
@@ -178,11 +176,11 @@ func (p *Contributor) RebindOTP(ctx context.Context, w kernel.OTPReservationWork
 	if err = p.requireConsumingAuthority(ctx, w, b, a); err != nil {
 		return err
 	}
-	flow, err := p.codec.authenticatePreAuth(ctx, p.preauth, command, b.Plan)
+	flow, err := p.authenticateFlow(ctx, command, b.Plan)
 	if err != nil {
 		return err
 	}
-	if err = sessionpg.RebindPreAuth(ctx, w, p.preauth.config, flow, sessionpg.PreAuthUse{Command: b.Command, Fingerprint: b.Fingerprint, Generation: b.PreviousGeneration}, b.Generation); err != nil {
+	if err = reserveNativeFlow(ctx, w, p, flow, b); err != nil {
 		return err
 	}
 	query := func(ctx context.Context, sql string, args ...any) (challengeRows, error) {

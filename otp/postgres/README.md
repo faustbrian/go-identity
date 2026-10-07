@@ -12,9 +12,30 @@ truncation, trailing bytes, noncanonical times and invalid owner projections.
 No raw session token or OTP code enters this record; mapping/restoration grants
 no current validity or authenticated-session admission.
 
-Native authenticated-session admission/consumption and successful metered
-checks remain unfinished. Complete structural custody is not a current lookup,
-credential-possession proof or operation permission.
+Structural custody alone is not a current lookup, credential-possession proof
+or operation permission. Native admission is explicitly enabled separately.
+
+## Native authenticated-session execution
+
+Use `NewContributorWithSession` with a separate `SessionAdmissionConfig` to
+enable authenticated-session denial and consumption. The existing
+`ContributorConfig` and pre-auth-only `NewContributor` remain compatible.
+A session-only installation may omit pre-auth configuration; installations
+supporting both contexts must configure both retained-key profiles.
+
+Configure the session owner's identifier admission profile, retained token
+keys and a positive freshness limit. The participant authenticates the separate
+bearer against complete original custody, checks current primary directory,
+credential, authorization, session and family authority, and denies unsupported
+optional authority dimensions. It rechecks original freshness and credential
+expiry after lock waits; retries cannot renew either deadline.
+
+Reservation, exact generation takeover and protected finalization consume OTP
+atomically with domain, audit and lifecycle effects. An authenticated session
+is not itself a one-time reservation and remains unchanged. Sealed rollback
+and restart recovery use retained OTP predecessor evidence without recovering
+the bearer; ambiguous evidence retains the reservation. This is not an
+operation-permission decision, risk grant or complete login workflow.
 
 `MapSession` and `MapSessionWithAuthority` freeze the separately submitted
 session token in root's opaque command branch beside the code. The latter also
@@ -61,7 +82,7 @@ sealed noncommit phase. Restart recovery uses retained original custody, not the
 submitted command/code/cookie; divergent evidence leaves reservations pending.
 
 The denial entry point still returns unchanged for correct codes. Successful
-metered checks, authenticated-session custody and issuance remain pending.
+metered checks and issuance remain pending.
 Do not enable a public login workflow or supply an application-written store to
 fill those gaps. Existing command journaling owns denial recovery; unresolved
 participant history without exact retained evidence remains unknown. Module source pins and clean-consumer,
@@ -82,7 +103,7 @@ readable but do not acquire invented authority. Restoration validates original
 envelope and core MAC before returning expectations. This is structural custody,
 not a permission decision or live primary check. Counted denial now dispatches
 through the native contributor alongside pre-auth consuming phases. End-to-end
-login and the remaining authenticated-session/check profiles are pending.
+login and successful metered-check profiles are pending.
 Enable authority-aware mapping only after every command reader supports v3;
 older binaries reject this new opt-in profile, while new readers retain v1/v2.
 

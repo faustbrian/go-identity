@@ -44,14 +44,15 @@ func (ContributorConfig) MarshalText() ([]byte, error) { return nil, otp.ErrSens
 //
 // The denial entry point returns Unchanged (rollback) for correct codes; only
 // the separate reservation/protected execution path can consume them atomically.
-// Authenticated-session and successful metered Check
-// profiles remain unavailable until their full original custody/result paths
-// exist. The complete consuming workflow remains under development.
+// Authenticated-session execution requires explicit NewContributorWithSession
+// configuration. Successful metered Check and complete login composition remain
+// under development.
 type Contributor struct {
 	schema, global, namespace string
 	codec                     *AttemptCodec
 	lockout                   lockoutProfile
 	preauth                   *preAuthProfile
+	session                   *sessionAdmissionProfile
 }
 
 var _ kernel.OTPAttemptContributor = (*Contributor)(nil)
@@ -62,6 +63,10 @@ var _ kernel.OTPAttemptContributor = (*Contributor)(nil)
 // use. Consuming execution additionally requires ConsumingMigrationSource and
 // session PreAuthReleaseMigrationSource. Missing storage or mismatched binding fails closed.
 func NewContributor(c ContributorConfig) (*Contributor, error) {
+	return newContributor(c, nil)
+}
+
+func newContributor(c ContributorConfig, sessionConfig *SessionAdmissionConfig) (*Contributor, error) {
 	if !validSchema(c.Schema) || c.Codec == nil || c.Codec.crypto == nil ||
 		(kernel.DirectoryAuthorityQuery{GlobalAuthorityID: c.GlobalAuthorityID, TenantID: "validation"}).Validate() != nil ||
 		(authoritypg.AuthorityScope{TenantID: "validation", SubjectID: "validation", PolicyNamespace: c.UserPolicyNamespace}).Validate() != nil {
@@ -71,11 +76,18 @@ func NewContributor(c ContributorConfig) (*Contributor, error) {
 	if err != nil {
 		return nil, err
 	}
-	p, err := newPreAuthProfile(c.PreAuth, c.PreAuthCookieKeys)
+	s, err := newSessionAdmissionProfile(sessionConfig, c.GlobalAuthorityID, c.UserPolicyNamespace)
 	if err != nil {
 		return nil, err
 	}
-	return &Contributor{schema: c.Schema, global: c.GlobalAuthorityID, namespace: c.UserPolicyNamespace, codec: c.Codec, lockout: l, preauth: p}, nil
+	var p *preAuthProfile
+	if c.PreAuth != (sessionpg.Config{}) || len(c.PreAuthCookieKeys) != 0 || s == nil {
+		p, err = newPreAuthProfile(c.PreAuth, c.PreAuthCookieKeys)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return &Contributor{schema: c.Schema, global: c.GlobalAuthorityID, namespace: c.UserPolicyNamespace, codec: c.Codec, lockout: l, preauth: p, session: s}, nil
 }
 
 // Format redacts retained secret configuration, including nil receivers.
@@ -96,8 +108,9 @@ func (*Contributor) Descriptor() kernel.ContributorDescriptor {
 
 // ValidateOTPAttemptCommand authenticates original command/code binding and
 // frozen authority locally, without SQL or a challenge comparison. This profile
-// requires consuming mode and complete original pre-auth plus actual cookie;
-// legacy/ID-only/session/check profiles deny rather than borrow fresh authority.
+// requires consuming mode and complete original custody with its separate
+// bearer under an explicitly configured pre-auth or session profile.
+// Legacy/ID-only/check profiles deny rather than borrow fresh authority.
 func (p *Contributor) ValidateOTPAttemptCommand(command identity.Command, plan kernel.OTPAttemptPlan) error {
 	_, _, err := p.original(command, plan)
 	return err
@@ -107,7 +120,7 @@ func (p *Contributor) original(command identity.Command, plan kernel.OTPAttemptP
 	bad := func() (otp.AttemptCommand, AttemptAuthority, error) {
 		return otp.AttemptCommand{}, AttemptAuthority{}, ErrInvalidCommand
 	}
-	if p == nil || p.codec == nil || p.preauth == nil || plan.Mode != kernel.OTPConsume {
+	if p == nil || p.codec == nil || plan.Mode != kernel.OTPConsume {
 		return bad()
 	}
 	spec, ok := command.Feature()
@@ -124,7 +137,15 @@ func (p *Contributor) original(command identity.Command, plan kernel.OTPAttemptP
 	}
 	ctx, stop := context.WithTimeout(context.Background(), p.codec.maximumDuration)
 	defer stop()
-	if _, err = p.codec.authenticatePreAuth(ctx, p.preauth, command, plan); err != nil {
+	if _, present := command.SessionToken(); present {
+		if p.session == nil {
+			return bad()
+		}
+		original, e := p.codec.authenticateSession(ctx, p.session.keys, command, plan)
+		if e != nil || p.sessionAuthority(original, spec.Binding, authority) != nil {
+			return bad()
+		}
+	} else if _, err = p.codec.authenticatePreAuth(ctx, p.preauth, command, plan); err != nil {
 		return bad()
 	}
 	return a, authority, nil
@@ -171,8 +192,11 @@ func (p *Contributor) RecordOTPAttemptDenial(ctx context.Context, w kernel.OTPAt
 			return 0, err
 		}
 	}
-	flow, err := admitPreAuth(ctx, w, p.preauth, p.codec, command, b.Plan, nil)
+	flow, err := p.authenticateFlow(ctx, command, b.Plan)
 	if err != nil {
+		return 0, err
+	}
+	if err = requireNativeFlow(ctx, w, p, flow, nil); err != nil {
 		return 0, err
 	}
 	bindings, _ := a.Bindings()
@@ -203,8 +227,7 @@ func (p *Contributor) RecordOTPAttemptDenial(ctx context.Context, w kernel.OTPAt
 			return 0, err
 		}
 	}
-	original, err := flow.Bindings()
-	if err != nil || flow.Check(now, original.Binding, original.Cookie) != nil {
+	if p.flowTime(flow, now) != nil {
 		return 0, ErrInvalidCommand
 	}
 	d, err := p.codec.verifier.EvaluateAttempt(row.challenge, a, now)

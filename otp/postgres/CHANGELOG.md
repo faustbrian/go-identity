@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Add explicit opt-in native authenticated-session OTP denial, reservation,
+  takeover and atomic consumption. Check original bearer custody and current
+  primary authority without renewing freshness; preserve the session during
+  rollback and restart recovery. Existing contributor configuration and
+  pre-auth construction remain compatible. Complete login and metered checks
+  remain under development.
+
 - Map separately submitted session tokens beside encrypted original-session
   OTP custody, never inside it. Retain exact lookup-key selection and original
   token/timeline binding; wrong, absent or retired-key submissions fail closed.

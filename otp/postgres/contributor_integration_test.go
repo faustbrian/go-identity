@@ -226,11 +226,15 @@ func contributorPlan(t *testing.T, r *kernel.ContributorRegistry, command identi
 	t.Helper()
 	s, _ := command.Feature()
 	b := s.Binding
+	actorKind := audit.ActorService
+	if b.ActorKind == authorization.SubjectUser {
+		actorKind = audit.ActorHuman
+	}
 	builder, err := audit.NewBuilder(audit.BuilderConfig{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	record, err := builder.Build(audit.RecordInput{OccurredAt: time.Now().UTC(), Action: "session.issue", Outcome: audit.OutcomeSucceeded, ReasonCode: "completed", Actor: audit.ActorInput{Kind: audit.ActorService, ID: string(b.ActorID)}, Subject: audit.SubjectInput{Type: "session", ID: b.RecordID}, Context: audit.ContextInput{TenantID: string(b.TenantID), CorrelationID: b.CorrelationID}, Policy: audit.PolicyMetadata{PolicyID: b.PolicyID, Version: "1"}, Changes: audit.ChangeSetInput{NoChange: true}, Attributes: map[string]string{"identity.profile": "identity.security.v1", "command.id": string(b.CommandID), "aggregate.type": "session", "aggregate.id": b.RecordID, "aggregate.before_version": "0", "aggregate.after_version": "1", "retention.class": "protected"}})
+	record, err := builder.Build(audit.RecordInput{OccurredAt: time.Now().UTC(), Action: "session.issue", Outcome: audit.OutcomeSucceeded, ReasonCode: "completed", Actor: audit.ActorInput{Kind: actorKind, ID: string(b.ActorID)}, Subject: audit.SubjectInput{Type: "session", ID: b.RecordID}, Context: audit.ContextInput{TenantID: string(b.TenantID), CorrelationID: b.CorrelationID}, Policy: audit.PolicyMetadata{PolicyID: b.PolicyID, Version: "1"}, Changes: audit.ChangeSetInput{NoChange: true}, Attributes: map[string]string{"identity.profile": "identity.security.v1", "command.id": string(b.CommandID), "aggregate.type": "session", "aggregate.id": b.RecordID, "aggregate.before_version": "0", "aggregate.after_version": "1", "retention.class": "protected"}})
 	if err != nil {
 		t.Fatal(err)
 	}
