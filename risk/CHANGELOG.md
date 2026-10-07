@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Carry recorded primary publication confirmation through opaque exact-chain
+  custody. Revalidate original lease, covered cut and persisted confirmation
+  without renewing expiry; confirmation alone cannot enable native traffic.
+
 - Bind covered velocity closure and native publication acknowledgement to the
   existing separated authority graph, preserving the original primary cut,
   continuous journal provenance and lease expiry. Foreign, substituted or stale

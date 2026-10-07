@@ -65,6 +65,18 @@ independently authenticate and atomically confirm publication; subsequent debit
 must also require the exact current native marker. Complete concrete healthy
 activation remains under development.
 
+After its publication confirmation is durably acknowledged or authoritatively
+reconciled, PostgreSQL may call `VelocityJournalIssuer.AcknowledgeConfirmation`
+with a bounded checker of that exact persisted confirmation. The resulting
+`VelocityConfirmation` retains the original publication object, not just its
+projected identity. `VelocityNativeVerifier.Confirmation` independently checks
+original lease, covered cut and primary confirmation; it returns unchanged cut
+facts only for the exact chain. Neither checking nor copying renews any time.
+The retained recovery checks remain recovery-only, not healthy-state admission.
+Concrete adapter export, native confirmation and present continuity are still
+required before traffic can be admitted. A publication acknowledgement or an
+ordinary covered cut cannot substitute for recorded primary confirmation.
+
 ### Stable velocity replay identity
 
 `NewVelocityReplayIdentity(namespace, key)` owns the immutable shared lookup
