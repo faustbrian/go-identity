@@ -72,6 +72,15 @@ only original encrypted delivery may be added. The coordinator preserves the
 caller-request fingerprint, separately binds reconstructed execution fields,
 and executes through its existing atomic Begin/Apply/Commit owner.
 
+During final `ApplyFeature`, that exact registered preparation owner can read
+`Work.FeaturePreparationOutput` to restore invocation-local custody. It returns
+an owned ciphertext copy and the original output generation, even after a later
+lease generation takes over. Admission, ordinary execution, recovery, foreign
+instances and returned/closed handles have no access. This avoids shared
+per-request state and does not expand generic command-field size limits. The
+adapter must still authenticate its existing envelope, separately verify bearer
+possession and recheck current authority and expiry before staging effects.
+
 Use one immutable comparable native owner across all phases, with per-invocation
 state; never replace the registry after generation or share mutable prepared
 delivery between requests. `AdmitFeaturePreparation` borrows Work only for

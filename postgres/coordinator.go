@@ -151,6 +151,7 @@ type reservationState struct {
 	coordinator      *Coordinator
 	request          claimRequest
 	executionRequest *claimRequest
+	preparation      *retainedFeaturePreparation
 	plan             *admittedKernelPlan
 	journal          journalReservation
 	owner            [16]byte

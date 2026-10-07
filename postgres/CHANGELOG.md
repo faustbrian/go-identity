@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Let the exact registered prepared-feature owner read its original retained
+  ciphertext and output generation during final execution. Owned copies retain
+  restart/takeover provenance without shared per-request state or new command
+  encodings. Ordinary, admission, foreign and expired invocations deny access.
+
 - Add opt-in native generated-feature execution through the original command
   journal. Current primary admission precedes acknowledged generation start;
   matching retries conserve retained output and its original generation.

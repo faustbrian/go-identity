@@ -35,6 +35,45 @@ type FeaturePreparationContributor interface {
 	RestoreFeaturePreparation(context.Context, identity.Command, uint64, []byte) (identity.Command, CommandPlan, error)
 }
 
+// Invocation-local custody is carried by the existing reservation, not by the
+// shared registered owner or generic command fields. Provenance remains the
+// original output generation when a later journal generation takes over.
+type retainedFeaturePreparation struct {
+	ciphertext []byte
+	generation uint64
+}
+
+// FeaturePreparationOutput returns an owned copy of the original retained
+// ciphertext and its original generation to the exact registered preparation
+// owner during its synchronous final ApplyFeature invocation. This lets a
+// stable native owner restore invocation-local custody without retaining shared
+// request state or embedding ciphertext in smaller generic command fields.
+//
+// Ordinary execution, pre-generation admission, recovery, foreign participants,
+// returned invocations, and unusable Work cannot read it. Ciphertext is not
+// bearer possession, current authority or renewed expiry; the native owner must
+// authenticate its existing envelope and separately recheck current admission.
+// No SQL, encryption, callbacks or goroutines run. Use Work serially and do not
+// retain it. Invalid access returns no bytes or generation and a redacted error.
+func (w Work) FeaturePreparationOutput(p FeaturePreparationContributor) ([]byte, uint64, error) {
+	if _, _, _, err := w.FeatureScope(p); err != nil || !w.state.featureAttempted || w.state.execution == nil {
+		return nil, 0, invalidWork()
+	}
+	e := w.state.execution
+	if !e.coordinator.owns(w) || e.reservation.coordinator != e.coordinator {
+		return nil, 0, invalidWork()
+	}
+	r := e.reservation
+	if r.executionRequest == nil || r.preparation == nil || r.plan == nil || r.plan.registry != w.state.registry || r.plan.binding != w.state.binding || r.plan.feature == nil || *r.plan.feature != *w.state.feature {
+		return nil, 0, invalidWork()
+	}
+	entry, err := e.coordinator.registry.selectFeatureOperation(*w.state.feature)
+	if err != nil || !sameParticipant(entry.contributor, p) || r.preparation.generation == 0 || len(r.preparation.ciphertext) == 0 || len(r.preparation.ciphertext) > maximumPreparationCiphertext {
+		return nil, 0, invalidWork()
+	}
+	return bytes.Clone(r.preparation.ciphertext), r.preparation.generation, nil
+}
+
 // ExecutePreparedFeature executes a native generated-output feature under its
 // original code-free caller intent, using the existing claim/journal owner.
 // declaration fixes feature, subject, mandatory audits and lifecycle before
@@ -312,7 +351,7 @@ func (c *Coordinator) attachFeaturePreparation(ctx context.Context, original, ge
 	if err := c.commitPreparation(ctx, tx); err != nil {
 		return Reservation{}, err
 	}
-	return Reservation{state: &reservationState{coordinator: c, request: original, executionRequest: &generated, plan: admitted, journal: r.journal, owner: owner}}, nil
+	return Reservation{state: &reservationState{coordinator: c, request: original, executionRequest: &generated, preparation: &retainedFeaturePreparation{ciphertext: bytes.Clone(wire), generation: r.outputGeneration}, plan: admitted, journal: r.journal, owner: owner}}, nil
 }
 
 // No acknowledgement error is interpreted as rollback. Rollback is cleanup
