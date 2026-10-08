@@ -391,9 +391,6 @@ func (t *nativeTransport) close(ctx context.Context) error {
 	}
 	bounded, cancel := context.WithTimeout(ctx, t.config.timeout)
 	defer cancel()
-	if err := bounded.Err(); err != nil {
-		return err
-	}
 	t.mu.Lock()
 	first := !t.closed
 	var idle []*nativeConnection
@@ -421,6 +418,13 @@ func (t *nativeTransport) close(ctx context.Context) error {
 			close(t.drained)
 		}
 		t.mu.Unlock()
+	}
+	// A valid Close consumes ownership even when the caller can no longer
+	// wait. Applying its deadline before cancellation would leave previously
+	// issued handles live. Preserve attribution deterministically when both
+	// the completed drain and the canceled context are ready.
+	if err := bounded.Err(); err != nil {
+		return err
 	}
 	select {
 	case <-t.drained:

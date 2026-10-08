@@ -256,6 +256,8 @@ func (r VelocityRecovery) OwnedCounterStore(ctx context.Context, journal velocit
 // connections and joins cleanup within the caller/adapter timeout. Repetition
 // is safe. A deadline error leaves closing permanent; another call may wait for
 // cleanup. The primary pool remains caller-owned and is never closed here.
+// An already-canceled/expired nonnil context still permanently stops admission
+// and initiates cancellation/idle cleanup; it bounds joining, not ownership.
 func (r VelocityRecovery) Close(ctx context.Context) error {
 	if r.state == nil {
 		return risk.ErrInvalidVelocityRecovery

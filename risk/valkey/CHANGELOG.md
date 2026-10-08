@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Permanently stop native admission and cancel owned work even when shutdown
+  starts with an already-canceled or expired context. Previously issued counter
+  handles cannot continue mutation after that shutdown. The original context
+  error remains attributable; a later bounded Close can finish joining cleanup.
+
 - Add an owned standalone TLS recovery owner and journal-fenced counter factory.
   Credentials and trust are copied; native issuance stays private in one core
   graph per transport lifetime. Replacements cannot adopt old activation.
