@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Validate genuine counted, audited Authentication admission against its
+  original operation, tenant, attempt and keyed subject dimensions. Rechecking
+  preserves the earliest original expiry without another provider or counter
+  call; fabricated, foreign, restrictive and unaudited results deny. This does
+  not replace current identity authority or transaction-owned one-time use.
+
 - Bind the private native connection to its original activated primary chain
   and exact journal owner. Reject foreign graphs and substituted journal
   connections before composition instead of relying on namespace equality.

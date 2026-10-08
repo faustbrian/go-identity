@@ -383,6 +383,23 @@ or as permission to execute the selected operation. The later official adapter
 composition must implement those owners; consumers must not supply private
 domain stores or replacement workflow orchestration.
 
+### Authentication workflow admission
+
+After an owned workflow calls `Evaluate`, it may call
+`Evaluator.RequireAuthenticationAdmission(ctx, result, scope, subject)` before
+credential work. This accepts only this exact evaluator's counted, audited
+Authentication-lane Allow with the original trusted operation, tenant, attempt
+and canonical subject dimensions. Literal or JSON-restored decisions do not
+qualify. Source-only and unaudited development modes never qualify.
+
+The check uses the configured clock and original facts, denying at the earliest
+exclusive expiry or on a backward clock. It performs no IO, counter mutation,
+retry, audit delivery or expiry renewal. It is abuse admission only, not a
+current account/session check, native-health assertion, authorization grant or
+one-use artifact. The platform-owned workflow must retain those authorities and
+its existing atomic transaction/replay protocol. Public OTP Send composition
+is still under development; consumers must not build replacement workflows.
+
 ### Required non-issuing decision audit
 
 Select `EvaluatorConfig.DecisionAudit` at startup with an immutable canonical
