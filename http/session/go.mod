@@ -3,6 +3,7 @@ module github.com/faustbrian/go-identity/http/session
 go 1.27.0
 
 require (
+	github.com/faustbrian/go-authorization v1.1.1-0.20261005011349-60ed4b3229d8
 	github.com/faustbrian/go-authentication v1.2.2-0.20261006180804-0f9f7eac1f1d
 	github.com/faustbrian/go-identity v0.0.0-20261008214110-7edf5958801c
 	github.com/faustbrian/go-identity/http v0.0.0-20261008215938-e964bf5ddfe6
