@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Pin the committed session pre-auth transaction contract already consumed by
+  OTP authorization; the earlier session revision did not contain that API.
+
 - Add the storage-neutral public Send service contract, explicit disjoint
   pre-auth/session possession and bounded trusted request input. Results retain
   server-owned command identity and enumeration-safe outcome without revealing
