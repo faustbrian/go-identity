@@ -1,10 +1,11 @@
 # Identity HTTP transport
 
 **Development checkpoint, not a complete identity HTTP product.** Go 1.27.
-This independently versioned module currently owns server lifecycle only. It
+This independently versioned module currently owns server lifecycle and separate
+health/readiness probe handlers. It
 imports the standard library, no feature implementation or reference server.
 Routes, parsers, authentication/authorization, cookies/CSRF/CORS, trusted
-network/tenant resolution, rate controls, hooks, probes and OpenAPI composition
+network/tenant resolution, rate controls, hooks and OpenAPI composition
 remain required subsequent work. Do not deploy an identity endpoint from this
 checkpoint without those transport controls.
 
@@ -54,6 +55,41 @@ handler introspection is performed. Supplied listeners must implement prompt
 Close/Accept interruption; callers retain rejected listeners. Deployment owns
 TLS credentials and protocol negotiation; no TLS or outbound provider policy
 is inferred here.
+
+## Health and readiness
+
+`NewProbeHandlers(ProbeConfig{State: server.State, Readiness: provider,
+Timeout: time.Second})` returns separate handlers. Register them only at
+`/healthz` and `/readyz` on a private mux before starting the server, as shown
+in the executable example. Construction never calls the provider or lifecycle
+callback. Timeout is explicit, positive and at most two seconds; earlier
+request deadlines win. Callbacks must be prompt/concurrent-safe and readiness
+work must cooperate with cancellation. No goroutine is detached to impose a
+timeout on code that ignores cancellation.
+
+Only exact GET requests are accepted: no implicit HEAD, escaped/trailing-slash
+aliases, query strings, bodies, trailers or `Idempotency-Key`. Wrong paths
+return 404; wrong methods return 405 and `Allow: GET`; nonempty requests return
+400. Every response has `Content-Type: application/json`, `Cache-Control:
+no-store` and `X-Content-Type-Options: nosniff`. HEAD rejection has no body.
+
+Liveness returns 200 and `{"status":"alive"}` without consulting state or
+dependencies. Readiness returns 200 and `{"ready":true}` only when the server
+is running before and after an affirmative composed check, with no blocking
+codes, errors or expired context. All other readiness outcomes return 503 and
+`{"ready":false}`. Fixed bodies end in a newline. Error bodies are the fixed
+`{"error":"not_found"}`, `{"error":"method_not_allowed"}` or
+`{"error":"invalid_request"}`; request/callback values are never reflected.
+
+Composition owns actual dependency/migration/key checks; do not substitute
+listener acquisition or an unconditional true callback in a real deployment.
+The callback's internal codes and errors are never serialized. Optional-provider
+degradation does not block readiness unless composition makes it mandatory.
+No readiness result is a future lease. During drain the server may refuse
+network admission or close its listener even though process liveness itself
+does not depend on readiness. The handlers add no routes or global registry.
+They do not yet implement canonical direct operations, route rate policy,
+endpoint-manifest/OpenAPI bijection or complete reference readiness.
 
 ## Tradeoffs and FAQ
 

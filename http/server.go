@@ -1,5 +1,5 @@
 // Package identityhttp owns opt-in identity HTTP transport. The current
-// development surface provides server lifecycle, not domain routes or deployment
+// development surface provides server lifecycle and probes, not domain routes or deployment
 // composition. Handlers must honor cancellation and own their bounded callbacks.
 package identityhttp
 
