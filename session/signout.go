@@ -21,6 +21,9 @@ import (
 // be concurrency-safe. A zero receipt conveys no authoritative observation;
 // panic, unavailable or malformed responses never prove rollback. Historical
 // recovery belongs to that same durable owner, not a second command journal.
+// Requests carrying CSRFToken require the executor's own trusted named-key
+// selection and exact original-primary CSRF admission in that same transaction;
+// an executor lacking that profile must reject them before reservation.
 type RevokeOneExecutor interface {
 	ExecuteRevokeOne(context.Context, RevokeOneRequest) (identity.CommandResult, error)
 }
@@ -108,6 +111,10 @@ type SignOutResult struct {
 // preserves original caller validity through commit; this service never renews
 // it. No raw credential is revealed or stored. All dependency errors are redacted.
 func (s *SignOutService) SignOut(ctx context.Context, r SignOutRequest) (out SignOutResult, err error) {
+	return s.signOut(ctx, r, CSRFToken{}, nil)
+}
+
+func (s *SignOutService) signOut(ctx context.Context, r SignOutRequest, csrf CSRFToken, keys []CSRFKey) (out SignOutResult, err error) {
 	entered := false
 	defer func() {
 		if recover() != nil {
@@ -122,6 +129,10 @@ func (s *SignOutService) SignOut(ctx context.Context, r SignOutRequest) (out Sig
 		}
 	}()
 	if s == nil || ctx == nil || s.sessions == nil || issuerNil(s.executor) || (r.Transport != CredentialCookie && r.Transport != CredentialBearer) || (r.Credential != (Credential{}) && (r.Credential.token.state == nil || r.Credential.kind != r.Transport)) {
+		return out, ErrInvalidInput
+	}
+	strict, strictProfile := s.executor.(CSRFRevokeOneExecutor)
+	if len(keys) > 0 && (!strictProfile || issuerNil(strict)) {
 		return out, ErrInvalidInput
 	}
 	b := signOutBinding(r, s.config, "validation", "validation")
@@ -156,7 +167,23 @@ func (s *SignOutService) SignOut(ctx context.Context, r SignOutRequest) (out Sig
 	if err != nil {
 		return out, signOutError(err)
 	}
-	request, err := s.sessions.PrepareRevokeOne(caller, command)
+	var request RevokeOneRequest
+	if len(keys) == 0 {
+		request, err = s.sessions.PrepareRevokeOne(caller, command)
+	} else {
+		state, stateErr := caller.Session.CSRFState().Bindings()
+		if stateErr != nil {
+			return out, ErrCSRFDenied
+		}
+		var selected CSRFKey
+		for _, key := range keys {
+			if key.Version() == state.KeyVersion {
+				selected = key
+				break
+			}
+		}
+		request, err = s.sessions.PrepareRevokeOneWithCSRF(caller, command, csrf, selected)
+	}
 	if err != nil {
 		return out, signOutError(err)
 	}
@@ -166,7 +193,13 @@ func (s *SignOutService) SignOut(ctx context.Context, r SignOutRequest) (out Sig
 	}
 	entered = true
 	out.CommitOutcome = identity.CommitOutcomeUnknown
-	receipt, dependencyErr := s.executor.ExecuteRevokeOne(ctx, request)
+	var receipt identity.CommandResult
+	var dependencyErr error
+	if len(keys) > 0 {
+		receipt, dependencyErr = strict.ExecuteRevokeOneWithCSRF(ctx, request)
+	} else {
+		receipt, dependencyErr = s.executor.ExecuteRevokeOne(ctx, request)
+	}
 	// A typed denial with no receipt is the adapter's pre-reservation rejection,
 	// not a rollback claim. Other missing or inconsistent replies remain Unknown.
 	var forbidden identity.ForbiddenError
@@ -232,6 +265,8 @@ func signOutError(err error) error {
 		return ErrUnauthenticated
 	case errors.Is(err, ErrInvalidInput):
 		return ErrInvalidInput
+	case errors.Is(err, ErrCSRFDenied):
+		return ErrCSRFDenied
 	default:
 		return ErrUnavailable
 	}

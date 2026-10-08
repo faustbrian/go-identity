@@ -19,6 +19,7 @@ type RevokeOneRequest struct{ state *revokeOneRequestState }
 type revokeOneRequestState struct {
 	command SessionCommand
 	caller  GetResult
+	csrf    CSRFToken
 }
 
 // PrepareRevokeOne freezes a target command with a positive Get result from
@@ -52,6 +53,38 @@ func (s *SessionService) PrepareRevokeOne(caller GetResult, command SessionComma
 		return out, ErrUnauthenticated
 	}
 	return RevokeOneRequest{state: &revokeOneRequestState{command: command, caller: caller}}, nil
+}
+
+// PrepareRevokeOneWithCSRF additionally retains synchronizer-token custody for
+// the original cookie-authenticated caller. The key must be the exact eligible
+// state-named key from trusted deployment policy. This structural check performs
+// no IO and does not replace primary admission. The owned executor must select
+// its own trusted key, recheck the token against this frozen original on its
+// original protected transaction after acquiring mutation fences, and abort on
+// error. No raw token/key may enter command intents, audit or recovery records.
+// Existing PrepareRevokeOne remains the trusted direct/bearer profile.
+func (s *SessionService) PrepareRevokeOneWithCSRF(caller GetResult, command SessionCommand, token CSRFToken, key CSRFKey) (RevokeOneRequest, error) {
+	request, err := s.PrepareRevokeOne(caller, command)
+	if err != nil {
+		return RevokeOneRequest{}, err
+	}
+	spec, _ := caller.Session.Bindings()
+	if caller.validity.transport != CredentialCookie || caller.Session.CSRFState().Check(CSRFBinding{TenantID: spec.TenantID, SessionID: spec.SessionID, SessionVersion: spec.Version}, token, key) != nil {
+		return RevokeOneRequest{}, ErrCSRFDenied
+	}
+	request.state.csrf = token
+	return request, nil
+}
+
+// CSRFToken returns optional opaque input custody for trusted native admission,
+// not a validity proof or serialization projection. Zero and legacy direct
+// requests return zero,false. Copies share original reveal custody; admission
+// must never Reveal it. Key selection remains the executor's trusted policy.
+func (r RevokeOneRequest) CSRFToken() (CSRFToken, bool) {
+	if r.state == nil || r.state.csrf.token.state == nil {
+		return CSRFToken{}, false
+	}
+	return r.state.csrf, true
 }
 
 // Validate checks private caller provenance against trusted configured service

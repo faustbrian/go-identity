@@ -1,5 +1,39 @@
 # Session
 
+## Cookie-CSRF signout composition prerequisite
+
+`NewCookieSignOutService(base, eligibleKeys)` selects a strict cookie-only
+variant of the existing self-signout workflow. Supply 1..4 independent dedicated
+CSRF keys with distinct positive versions; the constructor copies the slice.
+The deployment owns eligibility and retirement of current/retained keys.
+`CSRFKey.Version()` exposes only rotation metadata, never key material.
+Construction rejects an executor without the explicit `CSRFRevokeOneExecutor`
+contract; strict execution invokes `ExecuteRevokeOneWithCSRF`, never its legacy
+method. Merely accepting the new request type cannot enable browser protection.
+
+Call `SignOut(ctx, request, csrfToken)` after HTTP has enforced trusted origin,
+strict cookie extraction and one canonical token channel. The request retains
+the existing `SignOutRequest` shape and must select `CredentialCookie`.
+An active session requires the exact state-named eligible key and matching
+token. Absent/inactive credentials retain idempotent success without an
+impossible active-state check. Bearer transport cannot enter this variant.
+Existing `SignOutService.SignOut` remains the trusted direct/bearer API; it is
+not by itself a browser CSRF enforcement layer.
+
+`PrepareRevokeOneWithCSRF` retains the original private caller admission and
+opaque token without renewing its deadline. Trusted executors inspect optional
+`RevokeOneRequest.CSRFToken()` custody without revealing it. They must choose
+their own trusted named key and recheck against the exact original active
+primary session under the original protected transaction's mutation fences.
+An executor lacking that profile must reject before reservation. The raw token
+and key must never enter durable command intent, audit, recovery or errors.
+Prechecking is not a substitute for transactional admission.
+
+This core prerequisite is not yet qualified against the native executor or
+an HTTP endpoint. The owned native factory/enforcement is the next integration
+step; do not wire a legacy executor and claim browser protection. No new store,
+transaction coordinator, crypto engine or recovery journal is introduced.
+
 ## Synchronizer CSRF state prerequisite
 
 `CSRFToken` holds exactly 32 random bytes, not a session bearer or a signed

@@ -87,6 +87,16 @@ func NewCSRFKey(version uint32, material []byte) (CSRFKey, error) {
 	return CSRFKey{key: k}, nil
 }
 
+// Version returns the immutable non-secret rotation identifier; zero returns
+// zero. Select only the exact state-named eligible key from trusted deployment
+// policy, never try alternate keys or treat a matching version as authority.
+func (k CSRFKey) Version() uint32 {
+	if k.key.state == nil {
+		return 0
+	}
+	return k.key.state.version
+}
+
 // Format redacts all key formatting.
 func (CSRFKey) Format(f fmt.State, _ rune) { io.WriteString(f, "[REDACTED]") }
 

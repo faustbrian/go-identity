@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Add explicit cookie-CSRF signout composition with immutable eligible-key
+  selection and opaque token custody on the original revocation request.
+  Active sessions deny missing, wrong or unknown-key tokens; absent/inactive
+  logout remains idempotent. Preserve existing direct APIs and struct shapes.
+  Require explicit transactional CSRF executor selection rather than silently
+  dispatching strict cookie requests through a legacy executor.
+  Native transaction enforcement and HTTP endpoint wiring remain pending.
+
 - Add exact session-bound synchronizer reconstruction and opt-in cookie-session
   issuance/rotation with original commit-gated CSRF delivery. Preserve existing
   public struct shapes; complete storage combines base and CSRF projections.
