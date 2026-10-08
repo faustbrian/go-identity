@@ -9,7 +9,8 @@ import (
 
 // NewBoundSessionAuthorization freezes the complete original verified-session
 // projection, including its lookup digest, authority vector and authentication
-// timestamps. Anonymous and zero records return ErrInvalidAuthorization.
+// timestamps, and separate digest-only synchronizer CSRF state when present.
+// Anonymous and zero records return ErrInvalidAuthorization.
 // Construction performs no IO and proves neither possession nor authentication,
 // freshness, active status or permission. Native admission must independently
 // authenticate the submitted credential and compare every applicable primary
@@ -71,6 +72,13 @@ func appendSessionAuthorization(out []byte, record session.Session) []byte {
 		}
 		out = append(out, present)
 		out = appendSessionAuthority(out, optional.Binding)
+	}
+	if state, err := record.CSRFState().Bindings(); err == nil {
+		// The session constructor binds the CSRF tuple to tenant/session/version
+		// already encoded above. The distinct v4 domain plus this fixed-width
+		// suffix commits presence, named key and digest without altering v3.
+		out = binary.BigEndian.AppendUint32(out, state.KeyVersion)
+		out = append(out, state.Digest[:]...)
 	}
 	return out
 }

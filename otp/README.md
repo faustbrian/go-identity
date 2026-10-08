@@ -1,5 +1,26 @@
 # otp
 
+## Original-session synchronizer binding
+
+`NewBoundSessionAuthorization` retains both immutable session projections:
+the base record and separate digest-only `CSRFState`. `NewContinuation` commits
+the latter's presence, named key version and digest under
+`identity-otp-authorization-v4` when present. The original tenant/session/version
+are already committed in the base frame and must match the CSRF tuple through
+the session owner's constructor. No raw CSRF token or key enters OTP custody.
+
+Tokenless complete-session v3, complete-preauth v2 and legacy ID-only v1 frames
+remain byte-for-byte unchanged. Changing or stripping CSRF state changes the
+code digest, server-attempt fingerprint and sealed-record signature. No
+authentication time, remember choice, authority epoch or validity is renewed.
+
+This is cryptographic binding, not primary admission or HTTP CSRF enforcement.
+The durable OTP adapter must preserve the full original state during recovery;
+that adapter integration and protected token/origin handling remain unfinished.
+Upgrade the adapter before enabling CSRF-bearing OTP continuations. An adapter
+that drops state fails restored verification; do not replace the frozen original
+with a fresh lookup to make a retry pass.
+
 ## Native Send preparation
 
 `NewSendPreparer(SendPreparationConfig)` fixes attempt policy, retained digest

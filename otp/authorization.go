@@ -161,7 +161,8 @@ type continuationState struct {
 // Explicit NewBoundPreAuthAuthorization uses the v2 complete-record profile:
 // tenant must match and signin/pre-auth MFA must preserve original Remember.
 // Legacy ID-only context retains exact v1 framing and grants no full-flow proof.
-// Explicit NewBoundSessionAuthorization uses the v3 complete-session profile:
+// Explicit NewBoundSessionAuthorization uses the v3 tokenless-session profile
+// or v4 when the original session carries synchronizer CSRF state:
 // tenant/subject must match the original verified record. Original session policy,
 // lookup digest, full authority and authentication timeline are committed without
 // renewal; this remains structural custody, not authenticated admission.
@@ -197,6 +198,9 @@ func NewContinuation(s DigestScopeSpec, a FlowAuthorization, remember session.Re
 			return Continuation{}, ErrInvalidAuthorization
 		}
 		b = []byte("identity-otp-authorization-v3\x00")
+		if _, err := record.CSRFState().Bindings(); err == nil {
+			b = []byte("identity-otp-authorization-v4\x00")
+		}
 	}
 	b = append(b, byte(flow.Kind))
 	for _, value := range []string{flow.AuthenticatedSessionID, string(flow.PreAuthTransactionID)} {

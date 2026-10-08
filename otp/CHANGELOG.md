@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Bind complete original synchronizer CSRF state into authenticated-session
+  OTP continuations, code digests, attempt fingerprints and sealed records.
+  Tokenless historical bindings remain unchanged. Durable adapter custody and
+  protected HTTP token/origin enforcement remain under development.
+
 - Pin the committed session pre-auth transaction contract already consumed by
   OTP authorization; the earlier session revision did not contain that API.
 
