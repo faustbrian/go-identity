@@ -33,9 +33,33 @@ func testVelocityJournalConnection(t *testing.T, ctx context.Context, journal Ve
 	if err != nil {
 		t.Fatal(err)
 	}
+	checkChain := func(j velocity.Journal) {
+		t.Helper()
+		chain, err := velocity.Current(ctx, j, f.native)
+		if err != nil {
+			t.Fatal("concrete primary connection lacks original activated chain", err)
+		}
+		if chain.Lease != f.owned || chain.Closure != f.closed || chain.Publication != f.published || chain.Confirmation != f.confirmed || chain.Native != f.ack {
+			t.Fatal("primary connection substituted original activation receipts")
+		}
+		_, _, foreign, _ := risk.NewVelocityRecoveryAuthorities()
+		if _, err := velocity.Current(ctx, j, foreign); err == nil {
+			t.Fatal("foreign native graph accepted primary connection")
+		}
+	}
+	checkChain(owned)
+	reconciled, err := f.activate(ctx)
+	if err != nil || !reconciled.state.activated.Equal(health.state.activated) {
+		t.Fatal("matching activation changed original time", err)
+	}
+	again, err := factory.OwnedJournal(ctx, reconciled)
+	if err != nil {
+		t.Fatal(err)
+	}
+	checkChain(again)
 	var effects atomic.Int32
 	mode := risk.CounterCommitted
-	native, err := velocity.BindNative(journal.state.replay.Namespace(), func(c risk.CounterCommand) error { return c.ValidateConfiguration(cfg.Policy, cfg.Keys) }, func(context.Context, risk.CounterCommand) error { return nil }, func(effectCtx context.Context, c risk.CounterCommand) (risk.CounterResult, error) {
+	native, err := velocity.BindCurrentNative(ctx, owned, f.native, func(c risk.CounterCommand) error { return c.ValidateConfiguration(cfg.Policy, cfg.Keys) }, func(context.Context, risk.CounterCommand) error { return nil }, func(effectCtx context.Context, c risk.CounterCommand) (risk.CounterResult, error) {
 		// A separate primary transaction sees acknowledged intent and all
 		// aliases, and obtains an exclusive fence: no journal lock spans IO.
 		digest, err := journal.state.replay.Attempt(c)
@@ -202,6 +226,14 @@ func testVelocityJournalConnection(t *testing.T, ctx context.Context, journal Ve
 		if _, err := factory.OwnedJournal(ctx, bad); err == nil {
 			t.Fatal("invalid health bound")
 		}
+	}
+	partial := *health.state
+	partial.chain.Native = risk.VelocityNativeConfirmation{}
+	if _, err := factory.OwnedJournal(ctx, VelocityHealthy{state: &partial}); err == nil {
+		t.Fatal("partial activation chain bound")
+	}
+	if _, err := factory.OwnedJournal(nil, health); err == nil {
+		t.Fatal("nil factory context accepted")
 	}
 	canceled, stop := context.WithCancel(ctx)
 	stop()

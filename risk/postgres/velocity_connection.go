@@ -19,11 +19,21 @@ import (
 // and concurrent-safe; the caller retains pool ownership. Invalid custody returns
 // InvalidInputError; primary failures are redacted, and cancellation is preserved.
 // This connection neither publishes native health nor renews original expiry.
+// It retains the original native-confirmed activation chain internally, with
+// eligibility issued from this same primary owner. Callers cannot substitute a
+// separately selected chain or journal. One outer journal timeout bounds export.
 func (r VelocityRecovery) OwnedJournal(ctx context.Context, healthy VelocityHealthy) (velocity.Journal, error) {
 	if r.state == nil || healthy.state == nil || healthy.state.owner != r.state || healthy.state.activated.IsZero() || healthy.state.lease == nil || healthy.state.cut == nil || healthy.state.cut.lease != healthy.state.lease {
 		return velocity.Journal{}, identity.InvalidInputError{Field: "velocity_journal"}
 	}
-	if err := r.CheckHealthy(ctx, healthy); err != nil {
+	bounded, cancel, err := r.state.bounded(ctx)
+	if err != nil {
+		return velocity.Journal{}, err
+	}
+	defer cancel()
+	chain := healthy.state.chain
+	chain.Eligibility, err = r.OwnedEligibility(bounded, healthy, chain.Lease, chain.Closure, chain.Publication, chain.Confirmation, chain.Native)
+	if err != nil {
 		return velocity.Journal{}, err
 	}
 	j := VelocityJournal{state: r.state.journal}
@@ -33,7 +43,7 @@ func (r VelocityRecovery) OwnedJournal(ctx context.Context, healthy VelocityHeal
 		}
 		return nil
 	}
-	return velocity.BindJournal(j.state.replay.Namespace(), validate,
+	bound, err := velocity.BindJournal(j.state.replay.Namespace(), validate,
 		func(checkCtx context.Context, _ risk.CounterCommand) error {
 			return r.CheckHealthy(checkCtx, healthy)
 		},
@@ -50,4 +60,8 @@ func (r VelocityRecovery) OwnedJournal(ctx context.Context, healthy VelocityHeal
 				return j.RecordResult(resultCtx, a, outcome, snapshot)
 			})
 		}, j.ReadResult)
+	if err != nil {
+		return velocity.Journal{}, err
+	}
+	return velocity.BindCurrentJournal(bounded, bound, r.state.journalReader, r.state.nativeVerifier, chain)
 }

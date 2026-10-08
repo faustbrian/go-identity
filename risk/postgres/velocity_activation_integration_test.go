@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/faustbrian/go-identity/risk"
+	"github.com/faustbrian/go-identity/risk/internal/velocity"
 )
 
 func testVelocityActivation(t *testing.T, ctx context.Context, journal VelocityJournal, cfg VelocityJournalConfig) {
@@ -304,6 +305,7 @@ func testVelocityActivation(t *testing.T, ctx context.Context, journal VelocityJ
 
 type velocityActivationCase struct {
 	r         VelocityRecovery
+	native    risk.VelocityNativeIssuer // Test-only simulated native owner.
 	l         VelocityRecoveryLease
 	owned     risk.VelocityLease
 	cut       VelocityRecoveryClosure
@@ -325,7 +327,7 @@ func prepareEmptyVelocityActivation(t *testing.T, ctx context.Context, journal V
 
 func prepareEmptyVelocityActivationWithOwner(t *testing.T, ctx context.Context, r VelocityRecovery, native risk.VelocityNativeIssuer, tenant string, epoch [16]byte) velocityActivationCase {
 	t.Helper()
-	f := velocityActivationCase{r: r}
+	f := velocityActivationCase{r: r, native: native}
 	journal := VelocityJournal{state: r.state.journal}
 	var err error
 	f.l, err = f.r.Acquire(ctx, tenant, epoch)
@@ -400,6 +402,14 @@ func testVelocityActivationCommitAndExpiry(t *testing.T, ctx context.Context, jo
 	if err != nil || !h.state.activated.Equal(originalAt) {
 		t.Fatal("lost-ack activation did not reconcile original primary timestamp", err)
 	}
+	connection, err := f.r.OwnedJournal(ctx, h)
+	if err != nil {
+		t.Fatal("reconciled activation lost concrete journal", err)
+	}
+	chain, err := velocity.Current(ctx, connection, f.native)
+	if err != nil || chain.Lease != f.owned || chain.Closure != f.closed || chain.Publication != f.published || chain.Confirmation != f.confirmed || chain.Native != f.ack {
+		t.Fatal("lost-ack reconciliation substituted original activation chain", err)
+	}
 	// The transport drops one successful response per armed target. Start a
 	// separate fault observation for invalidation, not a second implicit retry.
 	fault.hits.Store(0)
@@ -410,6 +420,9 @@ func testVelocityActivationCommitAndExpiry(t *testing.T, ctx context.Context, jo
 	fault.velocityInvalidate.Store(nil)
 	if err := f.r.CheckHealthy(ctx, h); err == nil {
 		t.Fatal("lost-ack invalidation did not actually deny")
+	}
+	if _, err := velocity.Current(ctx, connection, f.native); err == nil {
+		t.Fatal("copied connection retained allowance after lost invalidation acknowledgement")
 	}
 	if err := f.r.InvalidateHealthy(ctx, h); err != nil {
 		t.Fatal("lost-ack invalidation failed reconciliation", err)

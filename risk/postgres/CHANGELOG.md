@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Retain the original native-confirmed activation chain across matching and
+  ambiguous-commit reconciliation. Owned journal export binds that chain and
+  current eligibility to the same concrete primary owner under one outer
+  timeout. Partial custody and invalidated copies deny without renewing expiry.
+  The owned native public factory and live composition remain unfinished.
+
 - Bind activated velocity custody to the concrete primary journal through an
   opaque owned connection. Persist acknowledged intent before native work,
   conserve original terminal declarations and deny stale or foreign admission

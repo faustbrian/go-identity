@@ -392,6 +392,10 @@ evidence and decisions. It is **not yet an executable durable risk service**.
   permission. Primary transactions finish before native work, and copied
   connections cannot cache allowance or renew expiry. The native public factory
   and complete live PostgreSQL/Valkey crossing remain unfinished.
+  Initial activation and successful-commit reconciliation retain the original
+  native-confirmed chain internally. Export derives current eligibility from
+  this same primary owner, under one outer timeout, and binds its own journal
+  reader; callers cannot select a separate chain or primary connection.
 - `MapIssue` accepts only an opaque successful core evaluation and matching
   trusted identity binding. `IssueOperation` fixes its closed native schema.
 - The native decoder verifies every signed field and current configured policy.

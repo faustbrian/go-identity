@@ -10,6 +10,7 @@ import (
 
 	identity "github.com/faustbrian/go-identity"
 	"github.com/faustbrian/go-identity/risk"
+	"github.com/faustbrian/go-identity/risk/internal/velocity"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -25,6 +26,7 @@ type velocityHealthy struct {
 	lease     *velocityRecoveryLease
 	cut       *velocityRecoveryClosure
 	activated time.Time
+	chain     velocity.CurrentChain
 }
 
 func (VelocityHealthy) Format(s fmt.State, _ rune) {
@@ -63,7 +65,9 @@ func (r VelocityRecovery) Activate(ctx context.Context, lease VelocityRecoveryLe
 	if err != nil || b != s.closureBinding(l, cut.state) {
 		return VelocityHealthy{}, identity.InvalidInputError{Field: "velocity_activation"}
 	}
-	candidate := &velocityHealthy{owner: s, lease: l, cut: cut.state}
+	candidate := &velocityHealthy{owner: s, lease: l, cut: cut.state, chain: velocity.CurrentChain{
+		Lease: owned, Closure: exported, Publication: publication, Confirmation: confirmation, Native: native,
+	}}
 	h, healthy, err := r.readHealthy(bounded, candidate, velocityHealthReconcile)
 	if err != nil {
 		return VelocityHealthy{}, velocityPublicationError(bounded, err)
@@ -80,7 +84,7 @@ func (r VelocityRecovery) Activate(ctx context.Context, lease VelocityRecoveryLe
 	if err != nil {
 		return VelocityHealthy{}, velocityPublicationError(bounded, err)
 	}
-	return VelocityHealthy{state: &velocityHealthy{owner: s, lease: l, cut: cut.state, activated: activated.state.activated}}, nil
+	return VelocityHealthy{state: &velocityHealthy{owner: s, lease: l, cut: cut.state, activated: activated.state.activated, chain: candidate.chain}}, nil
 }
 
 // CheckHealthy rechecks exact generation/owner, original cut, sealed applied
@@ -195,5 +199,5 @@ func (r VelocityRecovery) healthyRecord(ctx context.Context, tx pgx.Tx, h *veloc
 	if err := tx.QueryRow(ctx, `SELECT clock_timestamp()`).Scan(&now); err != nil || activated.After(now) || mode != velocityHealthInvalidate && !now.Before(l.expires) {
 		return VelocityHealthy{}, false, identity.UnavailableError{}
 	}
-	return VelocityHealthy{state: &velocityHealthy{owner: s, lease: l, cut: c, activated: *activated}}, state == "healthy", nil
+	return VelocityHealthy{state: &velocityHealthy{owner: s, lease: l, cut: c, activated: *activated, chain: h.chain}}, state == "healthy", nil
 }
