@@ -181,6 +181,7 @@ func TestSessionPostgresIntegration(t *testing.T) {
 	t.Run("canonical pre-auth", func(t *testing.T) { testNativePreAuth(t, ctx, pool) })
 	t.Run("borrowed session admission", func(t *testing.T) { testSessionAdmission(t, ctx, pool, native) })
 	t.Run("complete CSRF primary record", func(t *testing.T) { testCSRFPrimaryRecord(t, ctx, pool, native) })
+	t.Run("transactional CSRF enforcement", func(t *testing.T) { testCSRFFencedMutation(t, ctx, pool, native) })
 	t.Run("native identifier session projection", func(t *testing.T) { testIdentifierSessionProjection(t, ctx, pool) })
 	t.Run("native privacy session projection", func(t *testing.T) { testPrivacySessionProjection(t, ctx, pool) })
 	canceled, stop := context.WithCancel(ctx)

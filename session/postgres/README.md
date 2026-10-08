@@ -1,5 +1,20 @@
 # PostgreSQL session storage
 
+## Transactional synchronizer-token admission
+
+`RequireCSRF` composes the core token/key check with `RequireSession` on the
+borrowed original primary transaction. It compares the complete frozen record,
+locks the active session/family until transaction closure, and checks database
+time after locking. Legacy tokenless state cannot bypass token protection.
+The helper creates no transaction, validity lease or authorization decision.
+
+Trusted native participants must abort or poison the owner transaction on every
+error, preserve directory/credential/policy checks, and recheck temporal validity
+at their existing terminal boundary. Acquire any session write fence before
+admission; do not upgrade shared locks afterwards. Never call through a replica,
+cache or autocommit pool. HTTP token-channel/origin checks, pre-auth one-time
+state and integration into protected native executors remain required separately.
+
 ## Synchronizer CSRF storage
 
 Apply `CSRFMigrationSource{Schema: "session_store", Version: allocatedVersion}`

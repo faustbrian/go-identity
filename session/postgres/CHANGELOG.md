@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add borrowed-transaction synchronizer-token admission against the exact
+  primary session and active family, retaining invalidation fences through
+  protected work. Callers must abort on denial and preserve other authority
+  and terminal-time checks. Native workflow and HTTP wiring remain pending.
+
 - Preserve session synchronizer CSRF state in stored records, native command
   projections and rotation recovery. Keep tokenless historical bytes unchanged.
   Add a forward-only CSRF record migration; apply it and upgrade relevant
