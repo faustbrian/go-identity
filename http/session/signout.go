@@ -83,10 +83,10 @@ func NewSignOutHandler(c SignOutConfig) (http.Handler, error) {
 		return nil, err
 	}
 	if c.Transport == session.CredentialCookie {
-		if c.CookieSignOut == nil || c.BearerSignOut != nil {
+		if !c.CookieSignOut.Configured() || c.BearerSignOut != nil {
 			return nil, identityhttp.ErrInvalidInput
 		}
-	} else if c.BearerSignOut == nil || c.CookieSignOut != nil || len(c.TrustedOrigins) != 0 {
+	} else if !c.BearerSignOut.Configured() || c.CookieSignOut != nil || len(c.TrustedOrigins) != 0 {
 		return nil, identityhttp.ErrInvalidInput
 	}
 	network, _ := identityhttp.NewNetworkResolver(c.Network)

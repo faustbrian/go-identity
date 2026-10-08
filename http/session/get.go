@@ -74,7 +74,7 @@ type Session struct {
 // a goroutine. The server retains body/connection cleanup and bounded writes.
 // This handler alone is not full feature/router/OpenAPI or browser qualification.
 func NewGetHandler(c GetConfig) (http.Handler, error) {
-	if c.Sessions == nil || c.Rate == nil || c.Now == nil || c.MaximumDuration < time.Millisecond || c.MaximumDuration > 30*time.Second || (c.Transport != session.CredentialCookie && c.Transport != session.CredentialBearer) {
+	if !c.Sessions.Configured() || !c.Rate.Configured() || c.Now == nil || c.MaximumDuration < time.Millisecond || c.MaximumDuration > 30*time.Second || (c.Transport != session.CredentialCookie && c.Transport != session.CredentialBearer) {
 		return nil, identityhttp.ErrInvalidInput
 	}
 	cookie, err := c.Cookie.DeletionAttributes()

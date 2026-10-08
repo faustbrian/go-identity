@@ -1,0 +1,43 @@
+package sessionhttp
+
+import (
+	identityhttp "github.com/faustbrian/go-identity/http"
+	"github.com/faustbrian/go-identity/session"
+)
+
+// NewFeature constructs the currently implemented session get/self-signout
+// contribution from real typed owner services, without IO or registration.
+// It requires one consistent explicit GetConfig/SignOutConfig; nil/zero/closed
+// owners deny atomically. Only those two operations are contributed, not future
+// session capabilities. Cookie uses exact origin and active primary synchronizer
+// state, with no independent token-age claim; bearer contributes CSRFNone and
+// never borrows cookie authority. Disabled means omit this feature entirely.
+//
+// Pass the returned immutable contribution to FeatureServices and
+// NewSelectedHandler. Base HTTP never imports this integration. Domain stores,
+// transactions, authentication, CSRF and rate remain owned by the configured
+// handlers/services. Construction copies metadata; borrowed dependencies must
+// outlive concurrent requests. Direct-contract summaries are not wire OpenAPI.
+func NewFeature(c SignOutConfig) (identityhttp.Feature, error) {
+	get, err := NewGetHandler(c.GetConfig)
+	if err != nil {
+		return identityhttp.Feature{}, err
+	}
+	signout, err := NewSignOutHandler(c)
+	if err != nil {
+		return identityhttp.Feature{}, err
+	}
+	csrf := identityhttp.CSRFPolicy{Mode: identityhttp.CSRFNone}
+	if c.Transport == session.CredentialCookie {
+		csrf = identityhttp.CSRFPolicy{Mode: identityhttp.CSRFSessionState, TokenHeader: "X-CSRF-Token", RefererFallback: identityhttp.RefererFallbackDeny}
+	}
+	read, err := identityhttp.NewCanonicalOperation(identityhttp.CanonicalOperationConfig{Owner: "identity/session", OperationID: "identity.session.get", Handler: get, CSRF: identityhttp.CSRFPolicy{Mode: identityhttp.CSRFNone}, MaximumSerializedBytes: 16384})
+	if err != nil {
+		return identityhttp.Feature{}, err
+	}
+	logout, err := identityhttp.NewCanonicalOperation(identityhttp.CanonicalOperationConfig{Owner: "identity/session", OperationID: "identity.session.signout", Handler: signout, CSRF: csrf, MaximumSerializedBytes: 16384})
+	if err != nil {
+		return identityhttp.Feature{}, err
+	}
+	return identityhttp.NewFeature(identityhttp.FeatureConfig{ID: "identity/session", Operations: []identityhttp.OperationDescriptor{read, logout}})
+}

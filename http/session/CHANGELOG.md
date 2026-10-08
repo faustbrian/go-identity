@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add typed opt-in selection of the real session read and self-signout
+  handlers, with canonical owner/policy/schema bindings and explicit cookie
+  versus bearer CSRF metadata. Reject zero-value services before exposing
+  either route. Full wire OpenAPI and reference/browser qualification remain
+  in development.
+
 - Add opt-in `POST /v1/session/signout` with explicit cookie/bearer selection,
   exact trusted origin, bounded canonical token channels, primary transactional
   CSRF and safe-route admission before mutation. Clear only the selected

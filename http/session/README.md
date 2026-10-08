@@ -7,6 +7,18 @@ release-qualified backend platform.
 
 ## Quick start and ownership
 
+For both implemented routes, call `NewFeature(SignOutConfig{...})`, then pass
+the contribution in `identityhttp.FeatureServices.Features` to
+`identityhttp.NewSelectedHandler`. No application-written handlers or route
+registration are needed. The selected snapshot contains exactly session get
+and self-signout; omitting the feature exposes neither route nor their selected
+metadata. Probes may be selected independently. The factory constructs both
+real handlers without calling stores, clocks or policy callbacks, and rejects
+nil/zero services and closed rate owners atomically. Configuration inspection
+does not certify backend health; compose the same primary and policy owners and
+retain their lifetime responsibility. This remains root-mounted exact dispatch,
+not the full wire-OpenAPI/security-router implementation.
+
 Call `NewGetHandler(GetConfig{...})` with a real owner-constructed
 `*session.SessionService`, one shared `*identityhttp.SafeRateLimiter`, explicit
 `session.CredentialCookie` or `session.CredentialBearer`, valid cookie policy,
