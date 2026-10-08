@@ -55,6 +55,33 @@ func ExampleNewCounterCoordinator() {
 	// Output: true true
 }
 
+func ExampleCounterResult_Declaration() {
+	// Example-only store and key: production uses the configured owned adapters.
+	key, err := risk.NewCounterDigestKey(1, make([]byte, 32))
+	if err != nil {
+		panic("invalid key")
+	}
+	coordinator, err := risk.NewCounterCoordinator(risk.CounterCoordinatorConfig{
+		Policy: examplePolicy(), Store: unavailableCounterStore{}, Keys: []risk.CounterDigestKey{key}, Clock: time.Now, Timeout: time.Second,
+	})
+	if err != nil {
+		panic("invalid counter configuration")
+	}
+	command, err := coordinator.Prepare(risk.Context{Tenant: "example-tenant", Operation: "identity.profile.get", Attempt: "example-attempt"}, risk.Subject{User: "example-user"}, risk.BeforeReturn)
+	if err != nil {
+		panic("invalid counter binding")
+	}
+	declaration, err := risk.NewCounterResult(command, risk.CounterUnknown, nil)
+	if err != nil {
+		panic("invalid declaration")
+	}
+	outcome, snapshot, err := declaration.Declaration(command)
+	// Journal conservation cannot turn ambiguity into noncommit or retry rights.
+	// Actual native IO and durable recording remain the adapters' responsibility.
+	fmt.Println(outcome == risk.CounterUnknown, len(snapshot), err == nil)
+	// Output: true 0 true
+}
+
 func ExampleNewCommandCounterPolicy() {
 	// Example-only material; production uses managed retained digest keys.
 	key, err := risk.NewCounterDigestKey(1, make([]byte, 32))

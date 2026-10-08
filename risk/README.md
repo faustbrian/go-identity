@@ -414,6 +414,15 @@ follows the first local start, later replay cannot change the absolute horizon.
 The local deadline still bounds execution, and preparation TTL still limits
 whether a command may be dispatched; neither becomes new source freshness.
 
+`CounterResult.Declaration(command)` supplies the configured journal with the
+original declared outcome and a cloned snapshot for the matching logical
+fingerprint. Zero/mismatched values return no facts. A later preparation cannot
+replace the original timestamps, and historical expiry does not erase commit
+truth. The accessor is pure and does not authenticate the store, validate
+primary/native health, permit retries or grant positive admission. The durable
+owner must still validate its acknowledged original intent/configuration before
+recording; public journal/native composition remains unfinished.
+
 Retained digest versions are aliases for one logical counter, not independent
 windows. The adapter must prove rotation/epoch continuity and reject unsafe
 retirement; supplying aliases is not that proof. This coordinator does not

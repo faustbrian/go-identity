@@ -203,6 +203,25 @@ func (CounterResult) Format(s fmt.State, _ rune) {
 	_, _ = io.WriteString(s, "risk.CounterResult(redacted)")
 }
 
+// Declaration returns this adapter's original outcome and an independent
+// snapshot copy only for a matching logical command fingerprint. Zero or
+// mismatched values return no facts and ErrInvalidCounterResult. Repreparing
+// the same logical command may change PreparedAt, but cannot change the
+// declaration's original observation or window timestamps.
+//
+// This pure, concurrent-safe projection is for the configured owned journal,
+// not HTTP output or dispatch/health authority. It samples no clock, performs
+// no IO and does not authenticate the supplying adapter. Even expired results
+// must retain commit truth for durable conservation; the journal must validate
+// its original attempt/configuration, and admission must separately recheck
+// current primary/native eligibility and original evidence freshness.
+func (r CounterResult) Declaration(command CounterCommand) (CounterOutcome, []Counter, error) {
+	if r.state == nil || command.state == nil || r.state.fingerprint != command.state.binding.Fingerprint {
+		return 0, nil, ErrInvalidCounterResult
+	}
+	return r.state.outcome, slices.Clone(r.state.snapshot), nil
+}
+
 // NewCounterResult admits the exact complete post-mutation snapshot, or an
 // explicit noncommit/unknown result with no snapshot. Duplicate, missing,
 // foreign kinds and invalid window bounds return zero and a redacted error.

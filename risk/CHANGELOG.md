@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Let the configured journal read an opaque counter result's original
+  declaration through its matching logical command. Snapshot copies preserve
+  outcome and timestamps even after expiry; projection grants neither dispatch
+  authority nor positive admission and does not authenticate the adapter.
+
 - Derive counter-signal freshness from original authoritative observations and
   window bounds, not each invocation's local dispatch start. Native latency
   can no longer let matching replay increase the absolute evidence expiry;
