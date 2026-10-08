@@ -39,34 +39,52 @@ func (keyedAdmission) Format(s fmt.State, _ rune) {
 func (keyedAdmission) LogValue() slog.Value { return slog.StringValue("delivery.postgres(redacted)") }
 
 func newKeyedAdmission(ctx context.Context, pool *pgxpool.Pool, deployment string, key [32]byte, timeout time.Duration) (*keyedAdmission, error) {
-	if ctx == nil || pool == nil || !safeID(deployment, false) || key == ([32]byte{}) || timeout < time.Second || timeout > 5*time.Second {
+	if ctx == nil {
 		return nil, delivery.ErrInvalidInput
 	}
-	w, cancel := context.WithTimeout(ctx, timeout)
-	defer cancel()
-	if err := w.Err(); err != nil {
+	s, err := prepareKeyedAdmission(pool, deployment, key, timeout)
+	if err != nil {
 		return nil, err
 	}
-	identity := custodyMAC(key, "identity-delivery-admission-namespace-v1", []byte(deployment), nil)
-	tx, err := pool.Begin(w)
-	if err != nil {
-		return nil, attemptFailure(w, err)
+	if err := s.initialize(ctx); err != nil {
+		return nil, err
 	}
-	defer rollbackAttempt(tx)
-	if _, err := tx.Exec(w, `INSERT INTO identity.delivery_admission_namespaces(deployment,key_identity) VALUES($1,$2) ON CONFLICT(deployment) DO NOTHING`, deployment, identity[:]); err != nil {
-		return nil, attemptFailure(w, err)
-	}
-	var installed []byte
-	if err := tx.QueryRow(w, `SELECT key_identity FROM identity.delivery_admission_namespaces WHERE deployment=$1`, deployment).Scan(&installed); err != nil {
-		return nil, attemptFailure(w, err)
-	}
-	if !hmac.Equal(installed, identity[:]) {
-		return nil, delivery.ErrConflict
-	}
-	if err := tx.Commit(w); err != nil {
-		return nil, delivery.ErrOutcomeUnknown
+	return s, nil
+}
+
+func prepareKeyedAdmission(pool *pgxpool.Pool, deployment string, key [32]byte, timeout time.Duration) (*keyedAdmission, error) {
+	if pool == nil || !safeID(deployment, false) || key == ([32]byte{}) || timeout < time.Second || timeout > 5*time.Second {
+		return nil, delivery.ErrInvalidInput
 	}
 	return &keyedAdmission{pool, deployment, key, timeout}, nil
+}
+
+func (s *keyedAdmission) initialize(ctx context.Context) error {
+	w, cancel := context.WithTimeout(ctx, s.timeout)
+	defer cancel()
+	if err := w.Err(); err != nil {
+		return err
+	}
+	identity := custodyMAC(s.key, "identity-delivery-admission-namespace-v1", []byte(s.deployment), nil)
+	tx, err := s.pool.Begin(w)
+	if err != nil {
+		return attemptFailure(w, err)
+	}
+	defer rollbackAttempt(tx)
+	if _, err := tx.Exec(w, `INSERT INTO identity.delivery_admission_namespaces(deployment,key_identity) VALUES($1,$2) ON CONFLICT(deployment) DO NOTHING`, s.deployment, identity[:]); err != nil {
+		return attemptFailure(w, err)
+	}
+	var installed []byte
+	if err := tx.QueryRow(w, `SELECT key_identity FROM identity.delivery_admission_namespaces WHERE deployment=$1`, s.deployment).Scan(&installed); err != nil {
+		return attemptFailure(w, err)
+	}
+	if !hmac.Equal(installed, identity[:]) {
+		return delivery.ErrConflict
+	}
+	if err := tx.Commit(w); err != nil {
+		return delivery.ErrOutcomeUnknown
+	}
+	return nil
 }
 
 // resolve accepts a complete confidential logical-intent digest from owned

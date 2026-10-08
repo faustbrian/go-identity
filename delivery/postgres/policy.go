@@ -23,52 +23,72 @@ type retainedPolicies struct {
 }
 
 func newRetainedPolicies(ctx context.Context, pool *pgxpool.Pool, deployment string, profiles map[uint64]delivery.Config, timeout time.Duration) (*retainedPolicies, error) {
-	if ctx == nil || pool == nil || !safeID(deployment, false) || len(profiles) < 1 || len(profiles) > 32 || timeout < time.Second || timeout > 30*time.Second {
+	if ctx == nil {
 		return nil, delivery.ErrInvalidInput
 	}
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
+	p, err := prepareRetainedPolicies(pool, deployment, profiles, timeout)
+	if err != nil {
+		return nil, err
+	}
+	if err := p.initialize(ctx); err != nil {
+		return nil, err
+	}
+	return p, nil
+}
+
+func prepareRetainedPolicies(pool *pgxpool.Pool, deployment string, profiles map[uint64]delivery.Config, timeout time.Duration) (*retainedPolicies, error) {
+	if pool == nil || !safeID(deployment, false) || len(profiles) < 1 || len(profiles) > 32 || timeout < time.Second || timeout > 30*time.Second {
+		return nil, delivery.ErrInvalidInput
+	}
 	owned := make(map[uint64]delivery.Config, len(profiles))
-	versions := make([]uint64, 0, len(profiles))
 	for version, config := range profiles {
 		if version == 0 || config.Validate() != nil {
 			return nil, delivery.ErrInvalidInput
 		}
 		config.BackoffCeilings = slices.Clone(config.BackoffCeilings)
 		owned[version] = config
+	}
+	return &retainedPolicies{pool, deployment, owned, timeout}, nil
+}
+
+func (p *retainedPolicies) initialize(ctx context.Context) error {
+	versions := make([]uint64, 0, len(p.profiles))
+	for version := range p.profiles {
 		versions = append(versions, version)
 	}
 	// Consistent insertion order prevents opposite configuration maps taking
 	// uniqueness locks in opposite order during concurrent rolling restarts.
 	slices.Sort(versions)
-	w, stop := context.WithTimeout(ctx, timeout)
+	w, stop := context.WithTimeout(ctx, p.timeout)
 	defer stop()
-	tx, err := pool.Begin(w)
+	tx, err := p.pool.Begin(w)
 	if err != nil {
-		return nil, attemptFailure(w, err)
+		return attemptFailure(w, err)
 	}
 	defer rollbackAttempt(tx)
 	for _, version := range versions {
 		key := strconv.FormatUint(version, 10)
-		digest := attemptPolicyDigest(owned[version], timeout)
-		if _, err := tx.Exec(w, `INSERT INTO identity.delivery_policy_profiles(deployment,policy_version,config_digest) VALUES($1,$2,$3) ON CONFLICT(deployment,policy_version) DO NOTHING`, deployment, key, digest[:]); err != nil {
-			return nil, attemptFailure(w, err)
+		digest := attemptPolicyDigest(p.profiles[version], p.timeout)
+		if _, err := tx.Exec(w, `INSERT INTO identity.delivery_policy_profiles(deployment,policy_version,config_digest) VALUES($1,$2,$3) ON CONFLICT(deployment,policy_version) DO NOTHING`, p.deployment, key, digest[:]); err != nil {
+			return attemptFailure(w, err)
 		}
 		var installed []byte
-		if err := tx.QueryRow(w, `SELECT config_digest FROM identity.delivery_policy_profiles WHERE deployment=$1 AND policy_version=$2`, deployment, key).Scan(&installed); err != nil {
-			return nil, attemptFailure(w, err)
+		if err := tx.QueryRow(w, `SELECT config_digest FROM identity.delivery_policy_profiles WHERE deployment=$1 AND policy_version=$2`, p.deployment, key).Scan(&installed); err != nil {
+			return attemptFailure(w, err)
 		}
 		if !hmac.Equal(installed, digest[:]) {
-			return nil, delivery.ErrConflict
+			return delivery.ErrConflict
 		}
 	}
 	if err := tx.Commit(w); err != nil {
 		// Re-registering this exact snapshot is safe, but a lost acknowledgement
 		// cannot be reported as successful configuration installation.
-		return nil, delivery.ErrOutcomeUnknown
+		return delivery.ErrOutcomeUnknown
 	}
-	return &retainedPolicies{pool, deployment, owned, timeout}, nil
+	return nil
 }
 
 func (p *retainedPolicies) worker(version uint64, codec *payloadCodec) (*attemptStore, error) {

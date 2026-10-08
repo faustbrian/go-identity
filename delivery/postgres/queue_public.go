@@ -22,8 +22,9 @@ type Queue struct {
 var _ delivery.BoundQueue = (*Queue)(nil)
 
 // NewQueue selects full public composition without IO. Cancellation, signed
-// receipts, reconciliation and StateTracking must already be selected and their
-// migrations checked by NewEnqueueService. Legacy admission and NewWorker remain
+// receipts, reconciliation and StateTracking must already be selected. Their
+// migrations are checked by Initialize before any operation. The Queue may be
+// constructed before initialization. Legacy admission and NewWorker remain
 // available without selecting this full profile. Worker scope is copied; current
 // authorization is checked on every operation. Call delivery.New with the exact
 // retained worker Config and a bounded Sender; no additional Renderer is needed.
@@ -84,6 +85,9 @@ func (q *Queue) Cancel(ctx context.Context, r delivery.CancelRequest) (delivery.
 func (q *Queue) ReceiptRecord(ctx context.Context, r delivery.ReceiptRecordRequest) (delivery.ReceiptRecordResult, error) {
 	if ctx == nil || q == nil || q.owner == nil || q.owner.receipts == nil || r.Scope == nil || r.Callback == nil {
 		return delivery.ReceiptRecordResult{}, delivery.ErrInvalidInput
+	}
+	if err := q.owner.startupCheck(ctx); err != nil {
+		return delivery.ReceiptRecordResult{}, err
 	}
 	work, stop := context.WithTimeout(ctx, q.owner.executor.timeout)
 	defer stop()

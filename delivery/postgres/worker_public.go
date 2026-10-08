@@ -38,6 +38,7 @@ type Worker struct {
 }
 
 type workerQueue struct {
+	startup  *enqueueStartup
 	store    *attemptStore
 	service  *enqueueExecutor
 	scope    authorization.DecisionContext
@@ -95,7 +96,7 @@ func (s *EnqueueService) newWorkerQueue(c WorkerConfig) (*workerQueue, error) {
 	}
 	store.providerVersion, store.receiptTracking = c.ProviderConfigVersion, s.receiptTracking
 	store.audit = &workerAudit{actor: string(r.Subject.ID), correlation: c.Scope.CorrelationID, policy: s.executor.policyID, policyVersion: s.executor.policyVersion}
-	q := &workerQueue{store: store, service: s.executor, scope: c.Scope.Clone(), request: delivery.ClaimRequest{TenantID: delivery.TenantID(r.Tenant), WorkerID: string(r.Resource.ID)}, provider: profile.name}
+	q := &workerQueue{startup: s.startup, store: store, service: s.executor, scope: c.Scope.Clone(), request: delivery.ClaimRequest{TenantID: delivery.TenantID(r.Tenant), WorkerID: string(r.Resource.ID)}, provider: profile.name}
 	return q, nil
 }
 
@@ -107,6 +108,9 @@ func (q *workerQueue) allow(ctx context.Context) (err error) {
 	}
 	if err := ctx.Err(); err != nil {
 		return err
+	}
+	if q.startup != nil && !q.startup.ready.Load() {
+		return delivery.ErrUnavailable
 	}
 	defer func() {
 		if recover() != nil {

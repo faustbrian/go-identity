@@ -26,6 +26,24 @@ forbidden. This seam does not yet provide public OTP Send composition.
 
 ## Full public Queue composition
 
+For side-effect-free deployment assembly, use
+`NewUninitializedEnqueueService(pool, config, envelope, authorization, templates)`.
+It copies configuration and composes the real owners without querying schemas,
+registering policies, starting workers or taking ownership of the borrowed pool.
+Compose `NewWorker` or `NewQueue` before startup if needed. Install the selected
+migrations explicitly, then call `service.Initialize(ctx)` before any operation.
+Admission, observation, mutation and worker handles fail closed until that exact
+service is initialized successfully; even durable historical replay is unavailable.
+
+Initialization checks selected schema columns before independently registering
+retained policy and namespace identities. The whole attempt uses the configured
+timeout or earlier caller deadline. Cancellation, conflict or uncertain commit
+does not enable the service. Retry the same construction-time configuration;
+policy registration can survive a later namespace failure. Concurrent startup
+attempts return unavailable without waiting. Successful repeat calls do no IO;
+they are not ongoing health checks. The existing `NewEnqueueService(ctx, ...)`
+continues to initialize before returning a usable service.
+
 Select `StateTracking`, `Cancellation`, `Receipts` and `Reconciliation` on
 `EnqueueConfig`, with all corresponding forward migrations installed. Construct
 the existing `NewEnqueueService` with the owned PostgreSQL primary pool, envelope,

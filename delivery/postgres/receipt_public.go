@@ -188,6 +188,9 @@ func (e *receiptExecutor) authenticate(ctx context.Context, callback SignedRecei
 // never reread fences to manufacture a replacement. Whole call uses Timeout;
 // an earlier caller deadline wins. Concurrent calls are supported without workers.
 func (s *EnqueueService) RecordReceipt(ctx context.Context, r ReceiptCommandRequest) (delivery.ReceiptRecordResult, error) {
+	if err := s.startupCheck(ctx); err != nil {
+		return delivery.ReceiptRecordResult{}, err
+	}
 	if ctx == nil || s == nil || s.executor == nil || s.keyed == nil || s.keyed.pool == nil || s.receipts == nil || r.Binding.ValidateFor(receiptOperation()) != nil || r.ExpectedStatusVersion == 0 || r.ExpectedStatusVersion == ^uint64(0) {
 		return delivery.ReceiptRecordResult{}, delivery.ErrInvalidInput
 	}

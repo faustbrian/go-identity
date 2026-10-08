@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"maps"
 	"slices"
 	"strconv"
 	"strings"
@@ -89,6 +90,7 @@ type EnqueueCommandRequest struct {
 // Concurrent calls are supported; no goroutines/background work are started.
 // Zero is invalid. Applications do not supply domain stores or orchestration.
 type EnqueueService struct {
+	startup         *enqueueStartup
 	executor        *enqueueExecutor
 	repository      *identitypostgres.Repository
 	renderer        *delivery.TemplateRenderer
@@ -144,11 +146,53 @@ func (EnqueueService) MarshalJSON() ([]byte, error) { return nil, delivery.ErrSe
 // If Coordinator.AdmissionPolicy is nil, historical observation uses authorize,
 // the system clock and PolicyVersion; an explicit observation policy is retained.
 func NewEnqueueService(ctx context.Context, pool *database.Pool, c EnqueueConfig, service *secretenvelope.Service, authorize authorization.Service, templates []delivery.Template) (*EnqueueService, error) {
-	if ctx == nil || pool == nil || pool.Raw() == nil || c.Timeout < time.Second || c.Timeout > 5*time.Second || c.NamespaceKey == ([32]byte{}) || !safeID(c.PolicyID, false) || c.PolicyVersion == 0 || c.AuditRetentionVersion == 0 || len(c.Policies) < 1 || len(c.Policies) > 32 || (c.Cancellation || c.ReceiptTracking) && !c.StateTracking {
+	if ctx == nil || !validEnqueueConfigShape(pool, c) {
 		return nil, delivery.ErrInvalidInput
 	}
 	if err := ctx.Err(); err != nil {
 		return nil, err
+	}
+	s, err := NewUninitializedEnqueueService(pool, c, service, authorize, templates)
+	if err != nil {
+		return nil, err
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if err := s.Initialize(ctx); err != nil {
+		return nil, err
+	}
+	return s, nil
+}
+
+// NewUninitializedEnqueueService constructs the same real owned delivery graph
+// as NewEnqueueService without IO, entropy, migrations or callbacks. It copies
+// configuration; callers must not mutate inputs during construction. Borrowed
+// pool, envelope and authorization owners remain caller-owned. NewWorker and
+// NewQueue may be composed before startup, but every operation fails closed
+// until Initialize succeeds. Install the selected migrations explicitly first.
+// It starts no goroutines and creates no alternate queue or command authority.
+func NewUninitializedEnqueueService(pool *database.Pool, c EnqueueConfig, service *secretenvelope.Service, authorize authorization.Service, templates []delivery.Template) (*EnqueueService, error) {
+	if !validEnqueueConfigShape(pool, c) {
+		return nil, delivery.ErrInvalidInput
+	}
+	if len(c.Coordinator.RetainedFingerprintKeys) < 1 || len(c.Coordinator.RetainedFingerprintKeys) > 32 {
+		return nil, delivery.ErrInvalidInput
+	}
+	// Reconciliation builds later coordinators from this retained profile, so
+	// its future construction must not observe caller map or pointer mutation.
+	c.Coordinator.RetainedFingerprintKeys = maps.Clone(c.Coordinator.RetainedFingerprintKeys)
+	if p := c.Coordinator.QueryPolicy; p != nil {
+		copy := *p
+		c.Coordinator.QueryPolicy = &copy
+	}
+	if p := c.Coordinator.AdmissionPolicy; p != nil {
+		copy := *p
+		c.Coordinator.AdmissionPolicy = &copy
+	}
+	if p := c.Coordinator.FinalAuthentication; p != nil {
+		copy := *p
+		c.Coordinator.FinalAuthentication = &copy
 	}
 	for version, policy := range c.Policies {
 		if version == 0 || policy.Validate() != nil {
@@ -210,44 +254,15 @@ func NewEnqueueService(ctx context.Context, pool *database.Pool, c EnqueueConfig
 	if err != nil {
 		return nil, err
 	}
-	w, stop := context.WithTimeout(ctx, c.Timeout)
-	defer stop()
-	if c.StateTracking {
-		// Resolve the selected columns before any policy/namespace registration.
-		// This reads no rows or ciphertext and never applies migrations silently.
-		if _, err := pool.Raw().Exec(w, `SELECT status_version,local_stop_state,local_stop_at FROM identity.delivery_intents WHERE false`); err != nil {
-			return nil, attemptFailure(w, err)
-		}
-	}
-	if c.Cancellation {
-		if _, err := pool.Raw().Exec(w, `SELECT binding_digest,generation,before_version,after_version,result_state,local_cancelled FROM identity.delivery_cancellations WHERE false`); err != nil {
-			return nil, attemptFailure(w, err)
-		}
-	}
-	if receiptAuth != nil {
-		if _, err := pool.Raw().Exec(w, `SELECT r.event_digest,r.evidence_digest,r.observed_at,c.binding_digest,c.generation,c.before_version,c.after_version,c.result_state,c.advanced,c.deduplicated FROM identity.delivery_receipts r,identity.delivery_receipt_commands c WHERE false`); err != nil {
-			return nil, attemptFailure(w, err)
-		}
-	}
-	if c.ReceiptTracking {
-		if _, err := pool.Raw().Exec(w, `SELECT result_state,observed_at,generation FROM identity.delivery_receipts WHERE false`); err != nil {
-			return nil, attemptFailure(w, err)
-		}
-	}
-	if reconcile != nil {
-		if _, err := pool.Raw().Exec(w, `SELECT c.binding_digest,c.before_version,c.after_version,q.request_digest,q.query_digest,k.step,k.after_digest,v.ciphertext FROM identity.delivery_receipts r,identity.delivery_reconciliation_commands c,identity.delivery_reconciliation_queries q,identity.delivery_reconciliation_checkpoints k,identity.delivery_reconciliation_cursors v WHERE false`); err != nil {
-			return nil, attemptFailure(w, err)
-		}
-	}
-	policies, err := newRetainedPolicies(w, pool.Raw(), c.Custody.Deployment, c.Policies, c.Timeout)
+	policies, err := prepareRetainedPolicies(pool.Raw(), c.Custody.Deployment, c.Policies, c.Timeout)
 	if err != nil {
 		return nil, err
 	}
-	keyed, err := newKeyedAdmission(w, pool.Raw(), c.Custody.Deployment, c.NamespaceKey, c.Timeout)
+	keyed, err := prepareKeyedAdmission(pool.Raw(), c.Custody.Deployment, c.NamespaceKey, c.Timeout)
 	if err != nil {
 		return nil, err
 	}
-	s := &EnqueueService{executor: executor, repository: repo, renderer: renderer, policies: policies, keyed: keyed, stateTracking: c.StateTracking, receiptTracking: c.ReceiptTracking || receiptAuth != nil || reconcile != nil}
+	s := &EnqueueService{startup: &enqueueStartup{receiptTracking: c.ReceiptTracking}, executor: executor, repository: repo, renderer: renderer, policies: policies, keyed: keyed, stateTracking: c.StateTracking, receiptTracking: c.ReceiptTracking || receiptAuth != nil || reconcile != nil}
 	if c.Cancellation {
 		store, err := newAttemptStore(pool.Raw(), c.Custody.Deployment, custody.store.codec, delivery.DefaultConfig(), c.Timeout)
 		if err != nil {
@@ -297,6 +312,10 @@ func NewEnqueueService(ctx context.Context, pool *database.Pool, c EnqueueConfig
 	return s, nil
 }
 
+func validEnqueueConfigShape(pool *database.Pool, c EnqueueConfig) bool {
+	return pool != nil && pool.Raw() != nil && c.Timeout >= time.Second && c.Timeout <= 5*time.Second && c.NamespaceKey != ([32]byte{}) && safeID(c.PolicyID, false) && c.PolicyVersion != 0 && c.AuditRetentionVersion != 0 && len(c.Policies) >= 1 && len(c.Policies) <= 32 && (!(c.Cancellation || c.ReceiptTracking) || c.StateTracking)
+}
+
 // Enqueue authorizes exact scope before primary recipient discovery and owned
 // versioned rendering, then rechecks policy before the original coordinator
 // reserves/commits. Queued means durable admission only, never provider delivery.
@@ -310,6 +329,9 @@ func NewEnqueueService(ctx context.Context, pool *database.Pool, c EnqueueConfig
 // under current policy but cannot allocate, encrypt, reserve or renew a send.
 func (s *EnqueueService) Enqueue(ctx context.Context, r EnqueueCommandRequest) (delivery.EnqueueResult, error) {
 	out := delivery.EnqueueResult{State: delivery.CommitNotCommitted, NoOpEquivalent: r.NoOpEquivalent}
+	if err := s.startupCheck(ctx); err != nil {
+		return out, err
+	}
 	if ctx == nil || s == nil || s.executor == nil || r.Binding.RecordID != "" || r.Message.Recipient != (delivery.Recipient{}) || len(r.IdempotencyKey) < 16 || !safeID(r.IdempotencyKey, false) || r.ProviderConfigVersion == 0 || r.Message.TemplateVersion > 4294967295 || r.ExpiresAt.IsZero() || r.ExpiresAt.Year() > 9999 || r.ExpiresAt.Nanosecond()%1000 != 0 {
 		return out, delivery.ErrInvalidInput
 	}

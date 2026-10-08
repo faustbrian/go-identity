@@ -34,13 +34,15 @@ func TestPublicContributorOriginalCoordinatorComposition(t *testing.T) {
 	// Reserve the roles once in this disposable cluster, never in a shared one.
 	ctx, rolePool := emptyIntentDatabase(t)
 	reserveIntentAuditRoles(t, ctx, rolePool)
-	for _, mode := range []string{"committed", "no-op", "delivery-failure", "native-committed", "native-owned", "public-owned", "public-state", "public-cancel", "public-receipt", "public-reconcile", "public-worker", "public-queue", "public-worker-lease", "public-queue-lease", "native-compatible-custody", "native-no-op", "native-missing", "native-failure", "native-cancel", "native-cancel-noop", "native-receipt", "native-reconcile"} {
+	for _, mode := range []string{"committed", "no-op", "delivery-failure", "native-committed", "native-owned", "public-owned", "public-state", "public-cancel", "public-receipt", "public-reconcile", "public-worker", "public-queue", "public-owned-deferred", "public-queue-deferred", "public-worker-lease", "public-queue-lease", "native-compatible-custody", "native-no-op", "native-missing", "native-failure", "native-cancel", "native-cancel-noop", "native-receipt", "native-reconcile"} {
 		t.Run(mode, func(t *testing.T) { testPublicComposition(t, mode) })
 	}
 }
 
 func testPublicComposition(t *testing.T, mode string) {
 	t.Helper()
+	deferredStartup := strings.HasSuffix(mode, "-deferred")
+	mode = strings.TrimSuffix(mode, "-deferred")
 	leaseProfile := mode == "public-worker-lease" || mode == "public-queue-lease"
 	if mode == "public-worker-lease" {
 		mode = "public-worker"
@@ -207,6 +209,7 @@ func testPublicComposition(t *testing.T, mode string) {
 			if _, err := NewEnqueueService(ctx, owned, config, contributor.store.codec.service, policy, templates); !errors.Is(err, delivery.ErrUnavailable) {
 				t.Fatal("selected tracking admitted absent migration", err)
 			}
+			testMissingStartupSchema(t, ctx, owned, config, contributor.store.codec.service, policy, templates)
 			tracked, err := migrations.NewRunner(MigrationSource{Base: identitypostgres.MigrationSource{}, Version: 10, WorkerVersion: 11, PolicyVersion: 12, KeyedVersion: 13, StateVersion: 14}, backend)
 			if err != nil {
 				t.Fatal(err)
@@ -223,6 +226,7 @@ func testPublicComposition(t *testing.T, mode string) {
 				if _, err := NewEnqueueService(ctx, owned, config, contributor.store.codec.service, policy, templates); !errors.Is(err, delivery.ErrUnavailable) {
 					t.Fatal("selected cancellation admitted absent result migration", err)
 				}
+				testMissingStartupSchema(t, ctx, owned, config, contributor.store.codec.service, policy, templates)
 				cancelMigration, err := migrations.NewRunner(MigrationSource{Base: identitypostgres.MigrationSource{}, Version: 10, WorkerVersion: 11, PolicyVersion: 12, KeyedVersion: 13, StateVersion: 14, CancellationVersion: 15}, backend)
 				if err != nil {
 					t.Fatal(err)
@@ -242,11 +246,13 @@ func testPublicComposition(t *testing.T, mode string) {
 			if _, err := NewEnqueueService(ctx, owned, config, contributor.store.codec.service, policy, templates); !errors.Is(err, delivery.ErrUnavailable) {
 				t.Fatal("callback feature admitted absent receipt migrations", err)
 			}
+			testMissingStartupSchema(t, ctx, owned, config, contributor.store.codec.service, policy, templates)
 			metadataOnly := config
 			metadataOnly.Receipts, metadataOnly.ReceiptTracking = nil, true
 			if _, err := NewEnqueueService(ctx, owned, metadataOnly, contributor.store.codec.service, policy, templates); !errors.Is(err, delivery.ErrUnavailable) {
 				t.Fatal("receipt tracking admitted absent metadata migration", err)
 			}
+			testMissingStartupSchema(t, ctx, owned, metadataOnly, contributor.store.codec.service, policy, templates)
 			receipts, err := migrations.NewRunner(MigrationSource{Base: identitypostgres.MigrationSource{}, Version: 10, WorkerVersion: 11, PolicyVersion: 12, KeyedVersion: 13, StateVersion: 14, CancellationVersion: 15, ReceiptVersion: 16, ReceiptCommandVersion: 17}, backend)
 			if err != nil {
 				t.Fatal(err)
@@ -289,6 +295,7 @@ func testPublicComposition(t *testing.T, mode string) {
 			if _, err := NewEnqueueService(ctx, owned, config, contributor.store.codec.service, policy, templates); !errors.Is(err, delivery.ErrUnavailable) {
 				t.Fatal("query enabled missing cursor/result migrations", err)
 			}
+			testMissingStartupSchema(t, ctx, owned, config, contributor.store.codec.service, policy, templates)
 			queries, err := migrations.NewRunner(MigrationSource{Base: identitypostgres.MigrationSource{}, Version: 10, WorkerVersion: 11, PolicyVersion: 12, KeyedVersion: 13, StateVersion: 14, CancellationVersion: 15, ReceiptVersion: 16, ReceiptCommandVersion: 17, ReconciliationVersion: 18, ReconciliationCommandVersion: 19, ReconciliationQueryVersion: 20}, backend)
 			if err != nil {
 				t.Fatal(err)
@@ -299,9 +306,38 @@ func testPublicComposition(t *testing.T, mode string) {
 			config.Cancellation = true
 			config.Receipts = &ReceiptAuthenticationConfig{MaxBodyBytes: 16384, Profiles: []ReceiptKeyProfile{{TenantID: delivery.TenantID(b.TenantID), Provider: "test-provider", ProviderConfigVersion: 1, ActorID: "provider-actor", KeyID: "callback-key", Key: [32]byte{9}, NotBefore: time.Now().UTC().Add(-time.Hour), NotAfter: time.Now().UTC().Add(time.Hour)}}}
 		}
-		public, err := NewEnqueueService(ctx, owned, config, contributor.store.codec.service, policy, templates)
+		var public *EnqueueService
+		if deferredStartup {
+			// Exhaust the borrowed pool while composing: no SQL acquisition is
+			// permissible in this construction graph, even for schema probing.
+			held := holdStartupPool(t, ctx, owned)
+			public, err = NewUninitializedEnqueueService(owned, config, contributor.store.codec.service, policy, templates)
+			for _, connection := range held {
+				connection.Release()
+			}
+		} else {
+			public, err = NewEnqueueService(ctx, owned, config, contributor.store.codec.service, policy, templates)
+		}
 		if err != nil {
 			t.Fatal(err)
+		}
+		if deferredStartup {
+			var policies, namespaces int
+			if pool.QueryRow(ctx, `SELECT count(*) FROM identity.delivery_policy_profiles`).Scan(&policies) != nil || pool.QueryRow(ctx, `SELECT count(*) FROM identity.delivery_admission_namespaces`).Scan(&namespaces) != nil {
+				t.Fatal("startup registration observation failed")
+			}
+			if policies != 0 || namespaces != 0 {
+				t.Fatal("pure construction wrote startup registration", policies, namespaces)
+			}
+			permit = true
+			if result, err := public.Enqueue(ctx, request); !errors.Is(err, delivery.ErrUnavailable) || result.State != delivery.CommitNotCommitted || result.Queued || result.IntentID != "" {
+				t.Fatal("uninitialized graph admitted business work", err)
+			}
+			testDeferredStartup(t, ctx, pool, public, config, templates, request)
+			permit = false
+			if err := public.Initialize(ctx); err != nil {
+				t.Fatal("exact startup replay failed", err)
+			}
 		}
 		if _, err := public.Enqueue(ctx, request); !errors.Is(err, delivery.ErrForbidden) {
 			t.Fatal("public denied caller admitted", err)
@@ -310,6 +346,33 @@ func testPublicComposition(t *testing.T, mode string) {
 		first, err := public.Enqueue(ctx, request)
 		if err != nil || first.State != delivery.CommitCommitted || !first.Queued || first.IntentID == "" {
 			t.Fatal("public admission failed", err)
+		}
+		if deferredStartup {
+			restart, err := NewUninitializedEnqueueService(owned, config, contributor.store.codec.service, policy, templates)
+			if err != nil {
+				t.Fatal("pure restart construction failed", err)
+			}
+			if result, err := restart.Enqueue(ctx, request); !errors.Is(err, delivery.ErrUnavailable) || result.State != delivery.CommitNotCommitted || result.Queued {
+				t.Fatal("uninitialized restart exposed a durable result", err)
+			}
+			if err := restart.Initialize(ctx); err != nil {
+				t.Fatal("exact restart initialization failed", err)
+			}
+			if replay, err := restart.Enqueue(ctx, request); err != nil || replay != first {
+				t.Fatal("explicit startup changed original replay", err)
+			}
+			conflicting := config
+			conflicting.NamespaceKey[0] ^= 1
+			failed, err := NewUninitializedEnqueueService(owned, conflicting, contributor.store.codec.service, policy, templates)
+			if err != nil {
+				t.Fatal("conflicting startup failed pure validation", err)
+			}
+			if err := failed.Initialize(ctx); !errors.Is(err, delivery.ErrConflict) {
+				t.Fatal("startup reinterpreted namespace identity", err)
+			}
+			if result, err := failed.Enqueue(ctx, request); !errors.Is(err, delivery.ErrUnavailable) || result.Queued {
+				t.Fatal("conflicted startup exposed business work", err)
+			}
 		}
 		if mode == "public-reconcile" {
 			if populatedAdmission == nil || *populatedAdmission != first {

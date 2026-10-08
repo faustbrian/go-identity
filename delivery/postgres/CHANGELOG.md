@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- `NewUninitializedEnqueueService` supports side-effect-free deployment
+  composition followed by explicit bounded `Initialize`. Retained policy and
+  namespace registration remain immutable; failed or uncertain startup enables
+  no admission, observation, mutation or worker operation. Pre-start Worker/Queue
+  handles share the same readiness owner. The existing constructor still returns
+  an initialized service, and borrowed resources remain caller-owned.
+
 - Owned workflows can checkpoint and restore original encrypted delivery
   preparation across process restart. Authenticated original-generation custody
   preserves effect identity, expiry, retained keys and recipient fences without

@@ -157,6 +157,9 @@ func (e *reconciliationExecutor) build(p *reconciliationPrepared) (*identitypost
 // Original payload expiry does not prevent lookup. Times normalize to UTC
 // microseconds; raw cursors are recoverably encrypted and erased on settlement.
 func (s *EnqueueService) Reconcile(ctx context.Context, r ReconcileCommandRequest) (delivery.ReconcileResult, error) {
+	if err := s.startupCheck(ctx); err != nil {
+		return delivery.ReconcileResult{}, err
+	}
 	if ctx == nil || s == nil || s.executor == nil || s.keyed == nil || s.keyed.pool == nil || s.reconciliation == nil || r.Binding.ValidateFor(ReconcileOperation()) != nil || r.ExpectedStatusVersion == 0 || r.ExpectedStatusVersion == math.MaxUint64 || r.ExpectedStep >= math.MaxInt64-1 || r.Generation == 0 || len(r.Checkpoint) > 43 {
 		return delivery.ReconcileResult{}, delivery.ErrInvalidInput
 	}

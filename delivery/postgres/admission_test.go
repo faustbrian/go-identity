@@ -16,11 +16,17 @@ import (
 )
 
 func TestPublicAdmissionRejectsZeroDependencies(t *testing.T) {
+	if service, err := deliverypostgres.NewUninitializedEnqueueService(nil, deliverypostgres.EnqueueConfig{}, nil, nil, nil); service != nil || !errors.Is(err, delivery.ErrInvalidInput) {
+		t.Fatal("invalid pure composition accepted", err)
+	}
 	for _, ctx := range []context.Context{nil, context.Background()} {
 		if service, err := deliverypostgres.NewEnqueueService(ctx, nil, deliverypostgres.EnqueueConfig{}, nil, nil, nil); service != nil || !errors.Is(err, delivery.ErrInvalidInput) {
 			t.Fatal("invalid composition accepted", err)
 		}
 		for _, service := range []*deliverypostgres.EnqueueService{nil, {}} {
+			if err := service.Initialize(ctx); !errors.Is(err, delivery.ErrInvalidInput) {
+				t.Fatal("invalid service initialized", err)
+			}
 			result, err := service.Enqueue(ctx, deliverypostgres.EnqueueCommandRequest{})
 			if !errors.Is(err, delivery.ErrInvalidInput) || result.State != delivery.CommitNotCommitted || result.Queued || result.IntentID != "" {
 				t.Fatal("invalid service fabricated admission", err)

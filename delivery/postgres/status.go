@@ -53,6 +53,9 @@ func (s *EnqueueService) StatusGet(ctx context.Context, q delivery.StatusGetRequ
 }
 
 func (s *EnqueueService) observeStatus(ctx context.Context, q delivery.StatusGetRequest, user identity.UserID, caller authorization.DecisionContext, versioned bool) (StatusSnapshot, error) {
+	if err := s.startupCheck(ctx); err != nil {
+		return StatusSnapshot{}, err
+	}
 	if ctx == nil || s == nil || s.executor == nil || s.keyed == nil || s.keyed.pool == nil || !safeID(string(q.TenantID), false) || !safeID(string(user), false) || len(q.IntentID) != 64 {
 		return StatusSnapshot{}, delivery.ErrInvalidInput
 	}

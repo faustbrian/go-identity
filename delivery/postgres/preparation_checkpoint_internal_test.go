@@ -11,7 +11,7 @@ import (
 	identitypostgres "github.com/faustbrian/go-identity/postgres"
 )
 
-func checkpointFixture(t testing.TB, noOp bool) (*Contributor, PreparedDelivery, payloadBinding, payload) {
+func preparationCheckpointFixture(t testing.TB, noOp bool) (*Contributor, PreparedDelivery, payloadBinding, payload) {
 	t.Helper()
 	codec, b, message := custodyFixture(t)
 	b.NoOpEquivalent = noOp
@@ -34,7 +34,7 @@ func checkpointFixture(t testing.TB, noOp bool) (*Contributor, PreparedDelivery,
 }
 
 func FuzzPreparationCheckpoint(f *testing.F) {
-	c, p, b, _ := checkpointFixture(f, false)
+	c, p, b, _ := preparationCheckpointFixture(f, false)
 	wire, err := c.CheckpointPreparation(context.Background(), p, 1)
 	if err != nil {
 		f.Fatal(err)
@@ -58,7 +58,7 @@ func FuzzPreparationCheckpoint(f *testing.F) {
 
 func TestPreparationCheckpointConservesPayloadAndFences(t *testing.T) {
 	for _, noOp := range []bool{false, true} {
-		c, p, b, message := checkpointFixture(t, noOp)
+		c, p, b, message := preparationCheckpointFixture(t, noOp)
 		wire, err := c.CheckpointPreparation(context.Background(), p, 1)
 		if err != nil {
 			t.Fatal(err)
@@ -83,7 +83,7 @@ func TestPreparationCheckpointConservesPayloadAndFences(t *testing.T) {
 }
 
 func TestPreparationCheckpointAuthenticatedMalformedFrames(t *testing.T) {
-	c, p, b, _ := checkpointFixture(t, false)
+	c, p, b, _ := preparationCheckpointFixture(t, false)
 	wire, err := c.CheckpointPreparation(context.Background(), p, 1)
 	if err != nil {
 		t.Fatal(err)

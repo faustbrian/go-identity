@@ -24,6 +24,9 @@ import (
 // an explicit Coordinator.QueryPolicy is retained. The borrowed dependencies
 // and whole-call timeout are the same as Reconcile. Concurrent calls are safe.
 func (s *EnqueueService) RecoverReconciliation(ctx context.Context, q identity.RecoveryQuery, caller authorization.DecisionContext) (identitypostgres.CommandRecord, error) {
+	if err := s.startupCheck(ctx); err != nil {
+		return identitypostgres.CommandRecord{}, err
+	}
 	if ctx == nil || s == nil || s.executor == nil || s.keyed == nil || s.keyed.pool == nil || s.reconciliation == nil || s.reconciliation.coordinator == nil {
 		return identitypostgres.CommandRecord{}, delivery.ErrInvalidInput
 	}

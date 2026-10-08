@@ -64,6 +64,9 @@ type cancelExecutor struct {
 // another command. Earlier caller deadline wins over the whole-call timeout.
 // This authenticated operation does not yet implement the complete core Queue.
 func (s *EnqueueService) Cancel(ctx context.Context, r CancelCommandRequest) (delivery.CancelResult, error) {
+	if err := s.startupCheck(ctx); err != nil {
+		return delivery.CancelResult{}, err
+	}
 	if ctx == nil || s == nil || s.executor == nil || s.keyed == nil || s.keyed.pool == nil || s.cancellation == nil || r.Binding.ValidateFor(cancelOperation()) != nil || r.Binding.TenantID != identity.TenantID(r.Request.TenantID) || r.Binding.RecordID != string(r.Request.IntentID) || validateCancellation(r.Request, string(r.Binding.UserID)) != nil || r.ExpectedStatusVersion == 0 || r.ExpectedStatusVersion == ^uint64(0) {
 		return delivery.CancelResult{}, delivery.ErrInvalidInput
 	}
