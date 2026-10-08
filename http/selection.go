@@ -133,6 +133,9 @@ type OperationDescriptor struct {
 	Route   Route
 	Handler http.Handler
 	Schemas []OpenAPISchema
+	// Wire is separate from canonical direct-contract summaries. Nil retains
+	// compatibility for undisclosed routes but cannot enter documented composition.
+	Wire *WireOperation
 }
 
 // FeatureConfig supplies one feature-owned integration's actual handlers.
@@ -186,8 +189,13 @@ func NewFeature(config FeatureConfig) (Feature, error) {
 		deps[id] = true
 	}
 	catalog := readCatalog()
+	wireBytes := 0
 	for _, op := range config.Operations {
-		if !validOperation(config.ID, op, catalog) {
+		if !validWireBounds(op.Wire) {
+			return Feature{}, ErrInvalidInput
+		}
+		wireBytes += wireSize(op.Wire)
+		if !validOperation(config.ID, op, catalog) || wireBytes > 4<<20 {
 			return Feature{}, ErrInvalidInput
 		}
 	}
@@ -217,7 +225,7 @@ func NewOperationDescriptors(services FeatureServices) ([]OperationDescriptor, e
 		return nil, ErrInvalidInput
 	}
 	features := make(map[ModuleID]Feature, len(services.Features))
-	count, schemas := 0, 0
+	count, schemas, wireBytes := 0, 0, 0
 	for _, f := range services.Features {
 		if f.id == "" {
 			return nil, ErrInvalidInput
@@ -229,8 +237,9 @@ func NewOperationDescriptors(services FeatureServices) ([]OperationDescriptor, e
 		count += len(f.operations)
 		for _, op := range f.operations {
 			schemas += len(op.Schemas)
+			wireBytes += wireSize(op.Wire)
 		}
-		if count > 1024 || schemas > 4096 {
+		if count > 1024 || schemas > 4096 || wireBytes > 16<<20 {
 			return nil, ErrInvalidInput
 		}
 	}
@@ -276,8 +285,8 @@ func NewOperationDescriptors(services FeatureServices) ([]OperationDescriptor, e
 // NewProbeFeature is the owned opt-in probe contribution. It invokes no checks,
 // selects no domain features and retains reference's accountable readiness
 // ownership. Canonical schema summaries describe direct public contracts; the
-// probe wire projection remains the fixed safe response documented by the
-// handlers, not a claim of rendered OpenAPI compatibility.
+// separate Wire contribution describes the fixed safe handler projection for
+// NewDocumentedHandler. Direct summaries never become response schemas.
 func NewProbeFeature(config ProbeConfig) (Feature, error) {
 	live, ready, err := NewProbeHandlers(config)
 	if err != nil {
@@ -299,7 +308,7 @@ func NewProbeFeature(config ProbeConfig) (Feature, error) {
 		for j, schema := range []TypedSchema{r.RequestSchema, r.ResultSchema, r.ErrorSchema} {
 			components = append(components, OpenAPISchema{Name: strings.ReplaceAll(id, ".", "_") + []string{"_request", "_result", "_error"}[j], Schema: schema, MaximumSerializedBytes: 16384})
 		}
-		ops = append(ops, OperationDescriptor{Record: r, Route: Route{Method: r.Method, Path: r.Path, Authorization: r.Authorization, CSRF: r.CSRFOrigin, RatePolicy: r.RatePolicy}, Handler: handler, Schemas: components})
+		ops = append(ops, OperationDescriptor{Record: r, Route: Route{Method: r.Method, Path: r.Path, Authorization: r.Authorization, CSRF: r.CSRFOrigin, RatePolicy: r.RatePolicy}, Handler: handler, Schemas: components, Wire: probeWire(id)})
 	}
 	return NewFeature(FeatureConfig{ID: "identity/http.probes", Operations: ops})
 }
@@ -319,6 +328,7 @@ func cloneOperations(input []OperationDescriptor) []OperationDescriptor {
 	for i, op := range input {
 		op.Record.Owners = slices.Clone(op.Record.Owners)
 		op.Schemas = slices.Clone(op.Schemas)
+		op.Wire = cloneWire(op.Wire)
 		result[i] = op
 	}
 	return result

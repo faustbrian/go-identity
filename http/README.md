@@ -130,6 +130,28 @@ endpoint-manifest/OpenAPI bijection or complete reference readiness.
 
 ## Explicit feature selection
 
+`NewDocumentedHandler(ctx, DocumentConfig{Title: "Identity", Version: "1"},
+selection)` returns exact selected dispatch and immutable OpenAPI 3.1.1 from
+the same snapshot. `document.JSON()` and `document.Operations()` return detached
+exports. Empty selection advertises no routes or components. The real probe and
+optional session factories supply separate `WireOperation` definitions; a
+direct-contract summary alone is rejected. No document route is enabled
+implicitly. The complete security-policy router and explicit metadata endpoint
+remain separate required work.
+
+Trusted extension factories may attach bounded `WireOperation` JSON and unique
+schema/security components. The builder rejects malformed/duplicate JSON,
+colliding components, unresolved/external references, invalid schemas and
+missing definitions before returning a handler. Internal JSON pointers only
+are supported: `$id`, `$dynamicRef` and external examples are excluded from this
+self-contained profile. Schema compilation and normative validation use the
+pinned Golib OpenAPI owner, with no network access. Construction has a five-second
+budget that never extends the caller's deadline; no runtime dependency executes.
+Canonical dotted operation IDs are deliberately preserved despite the owner's
+programming-identifier portability advisory; client generators must map them.
+All other diagnostics and saturated reports deny. This is not release or
+generated-client qualification.
+
 `NewSelectedHandler(FeatureServices{Features: selected})` freezes exact dispatch
 of validated selected features. Empty selection returns 404 and advertises
 nothing. There are no redirects, path cleaning, implicit HEAD/OPTIONS, prefix

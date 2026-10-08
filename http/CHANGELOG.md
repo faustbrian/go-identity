@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Export concrete selected OpenAPI 3.1.1 alongside exact dispatch, using separate
+  bounded wire contributions and owned schema/document validation. Preserve
+  exact integers, reject unresolved/external references and schema collisions,
+  and detach document/operation exports. Probe definitions describe only safe
+  public responses. Canonical dotted operation IDs remain stable; generated
+  clients must map their programming names. No metadata route is auto-enabled.
+
 - Add opt-in exact selected-feature dispatch and owned canonical descriptor
   construction. Disabled routes remain absent; no path cleaning, redirects,
   implicit HEAD, second authentication or rate debit occurs. Schema summaries

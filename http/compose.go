@@ -76,6 +76,10 @@ func NewSelectedHandler(services FeatureServices) (http.Handler, error) {
 	if err != nil {
 		return nil, err
 	}
+	return selectedHandler(ops)
+}
+
+func selectedHandler(ops []OperationDescriptor) (http.Handler, error) {
 	type selectedPath struct {
 		methods map[string]http.Handler
 		allow   string
