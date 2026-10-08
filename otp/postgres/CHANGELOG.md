@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Add private opt-in counted Authentication admission before native Send
+  generation. Retain signed original risk facts and dimensions inside the
+  existing encrypted preparation journal; restoration neither repeats external
+  evaluation nor renews freshness. Legacy native owners remain unchanged.
+  Remapping preserves the original initiation ciphertext rather than generating
+  a new command fingerprint on retry.
+  Install the kernel's admission-preparation extension before opting in. The
+  public Send service and complete durable risk composition remain unfinished.
+
 - Freeze native Send initiation through the existing kernel request-key mapping.
   Preserve primary flow, authority and recipient/suppression state across
   restart without repeating preparation or allowing later recipient appearance

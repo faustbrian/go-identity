@@ -32,12 +32,14 @@ func (sendInitiationRisk) Format(s fmt.State, _ rune) {
 }
 
 type sendInitiationCustody struct {
-	original   identity.Command
-	request    sendRequestRecord
-	binding    identity.CommandBinding
-	risk       sendInitiationRisk
-	attempt    string
-	suppressed bool
+	original        identity.Command
+	request         sendRequestRecord
+	binding         identity.CommandBinding
+	risk            sendInitiationRisk
+	attempt         string
+	suppressed      bool
+	retainedBinding kernel.RequestKeyPreparationBinding
+	retainedWire    []byte
 }
 
 func (sendInitiationCustody) Format(s fmt.State, _ rune) {
@@ -256,5 +258,7 @@ func (p *Contributor) restoreSendInitiation(parent context.Context, b kernel.Req
 	if !input.suppressed {
 		input.original = command
 	}
+	input.retainedBinding = b
+	input.retainedWire = bytes.Clone(wire)
 	return input, nil
 }

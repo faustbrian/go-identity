@@ -9,7 +9,8 @@ require (
 	github.com/faustbrian/go-identity/delivery v0.0.0-20261004192212-c70512ebfb31
 	github.com/faustbrian/go-identity/delivery/postgres v0.0.0-20261007103133-8316d8af9fd7
 	github.com/faustbrian/go-identity/otp v0.0.0-20261006193636-84f8cd2317d7
-	github.com/faustbrian/go-identity/postgres v0.0.0-20261007144413-aefe87a017d3
+	github.com/faustbrian/go-identity/postgres v0.0.0-20261008065127-3f34e21c705d
+	github.com/faustbrian/go-identity/risk v0.0.0-20261008072308-b2d88e4d68db
 	github.com/faustbrian/go-identity/session v0.0.0-20261006193636-84f8cd2317d7
 	github.com/faustbrian/go-identity/session/postgres v0.0.0-20261007022207-7c1bce3b5ba2
 	github.com/faustbrian/go-migrations/v3 v3.0.2-0.20261001014304-a461b18b6b24

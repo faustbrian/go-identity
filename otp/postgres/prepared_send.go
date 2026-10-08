@@ -288,30 +288,36 @@ func (p *Contributor) ValidateFeaturePreparation(command identity.Command, plan 
 // Rechecks original primary authority/flow and DB expiry after lock waits;
 // generation and all domain effects remain outside this admission transaction.
 func (p *Contributor) AdmitFeaturePreparation(ctx context.Context, w kernel.Work, command identity.Command) error {
+	return p.admitFeaturePreparation(ctx, w, command, p)
+}
+
+// The opt-in authentication owner remains the exact registered participant;
+// descriptor equality must never substitute for invocation ownership.
+func (p *Contributor) admitFeaturePreparation(ctx context.Context, w kernel.Work, command identity.Command, owner kernel.FeatureExecutionContributor) error {
 	r, flow, err := p.originalPreparedSend(ctx, command)
 	if err != nil {
 		return err
 	}
-	b, registration, _, err := w.FeatureScope(p)
+	b, registration, _, err := w.FeatureScope(owner)
 	spec, _ := command.Feature()
 	if err != nil || b != spec.Binding || registration.Operation != spec.Operation {
 		return ErrInvalidCommand
 	}
 	a := r.authority
-	if err := w.RequireActiveDirectoryAuthority(ctx, p, a.Directory); err != nil {
+	if err := w.RequireActiveDirectoryAuthority(ctx, owner, a.Directory); err != nil {
 		return err
 	}
 	if b.UserID != "" {
 		expected := kernel.UserAuthorityAdmission{UserAuthorityVersion: a.UserAuthorityVersion, IdentifierAuthorityVersion: a.IdentifierAuthorityVersion, CredentialAuthorityVersion: a.CredentialAuthorityVersion}
-		if err := w.RequireActiveUserAuthority(ctx, p, expected); err != nil {
+		if err := w.RequireActiveUserAuthority(ctx, owner, expected); err != nil {
 			return err
 		}
 		if a.Credential != (identity.CredentialRef{}) {
-			if _, err := w.RequireActiveCredential(ctx, p, issuanceCredential(a)); err != nil {
+			if _, err := w.RequireActiveCredential(ctx, owner, issuanceCredential(a)); err != nil {
 				return err
 			}
 		}
-		if err := w.RequireActiveUserAuthorization(ctx, p, a.UserAuthorization); err != nil {
+		if err := w.RequireActiveUserAuthorization(ctx, owner, a.UserAuthorization); err != nil {
 			return err
 		}
 	}
@@ -319,7 +325,7 @@ func (p *Contributor) AdmitFeaturePreparation(ctx context.Context, w kernel.Work
 		return err
 	}
 	if r.recipient != nil {
-		if err := w.RequireRecipient(ctx, p, *r.recipient); err != nil {
+		if err := w.RequireRecipient(ctx, owner, *r.recipient); err != nil {
 			return err
 		}
 	}
@@ -328,7 +334,7 @@ func (p *Contributor) AdmitFeaturePreparation(ctx context.Context, w kernel.Work
 		return err
 	}
 	if a.Credential != (identity.CredentialRef{}) {
-		now, err = w.RequireActiveCredential(ctx, p, issuanceCredential(a))
+		now, err = w.RequireActiveCredential(ctx, owner, issuanceCredential(a))
 		if err != nil {
 			return err
 		}

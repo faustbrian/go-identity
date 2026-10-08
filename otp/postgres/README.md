@@ -1,5 +1,21 @@
 # OTP PostgreSQL
 
+Private opt-in Send composition now consumes the original initiating request's
+network, device and keyed identifier dimensions through counted, audited
+Authentication evaluation before generation. Only a genuine Allow can create
+invocation-local admission. The existing kernel preparation journal retains
+signed original risk facts inside encrypted output, not a second risk journal.
+Remapping reuses the original initiation ciphertext and its authenticated
+provenance, preserving the canonical command across separately constructed owners.
+Restoration performs no provider, counter or decision-audit work and cannot
+renew original validity. The kernel rechecks the same admission after SQL waits
+and immediately before committing the atomic domain effects. Suppressed input
+cannot become ordinary issuance. Legacy contributor interface behavior and
+retained profiles remain unchanged. This opt-in owner requires the kernel's
+`AdmissionPreparationMigrationSource` after `PreparationMigrationSource`.
+The public Send service and complete durable risk/provider composition are
+still unfinished; no application request handler should use the private seam.
+
 Private native request-key preparation now composes primary kernel, session and
 authorization readers. A closed initiating request binds explicit user/flow,
 purpose, channel, canonical destination, workflow target, network/device input,
