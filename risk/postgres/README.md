@@ -169,6 +169,17 @@ evidence and decisions. It is **not yet an executable durable risk service**.
   cannot resurrect. `Renew` returns a superseding opaque receipt; old receipts
   and old generations fail `CheckLease`. Checks prove point-in-time ownership,
   not effect permission. Missing/ambiguous acknowledgements return no receipt.
+  `Restart(ctx, lease)` lets the exact live replay owner abandon lost projection
+  progress. It advances generation and replaces ownership without extending
+  the original expiry or moving the history origin. Applied progress, closure
+  and publication are cleared together; journal lifetime and attempt outcomes
+  remain unchanged. Install the applied and publication migrations first.
+  Matching retries of the original receipt reconcile the same live successor,
+  including a lost successful commit response, without clearing successor
+  progress. Renewal or later generations invalidate that reconciliation.
+  Restart neither performs native IO nor publishes healthy state: the owned
+  bridge must fence the successor and traverse history from zero before any
+  subsequent coverage/publication/activation checks.
   The supported maximum window is one hour; explicit leases are positive,
   microsecond-representable and at most one minute. Initialization records zero
   replay progress and never publishes healthy state. Journal scan completeness,

@@ -196,5 +196,6 @@ func testVelocityJournal(t *testing.T, ctx context.Context, dsn, databaseName st
 	testVelocityClosure(t, ctx, journal, cfg)
 	testVelocityCoverage(t, ctx, journal, cfg)
 	testVelocityOwnedClosure(t, ctx, journal, cfg)
+	testVelocityRestart(t, ctx, journal, cfg, dsn, databaseName)
 	testVelocityPublication(t, ctx, journal, cfg, dsn, databaseName)
 }

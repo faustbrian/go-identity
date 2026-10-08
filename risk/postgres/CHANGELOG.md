@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Restart a live velocity recovery traversal after projection loss with new
+  generation-bound custody and zero applied progress. Preserve the original
+  expiry, history origin and journal lifetime; stale closure and publication
+  cannot survive. Matching retries reconcile successful commit ambiguity
+  without erasing successor progress. The applied and publication migrations
+  are required. Restart does not activate traffic or authorize native effects.
+
 - Export recorded velocity publication confirmation into exact configured core
   custody without writing or refreshing the primary record. Every use rechecks
   original lease, covered cut and recorded confirmation; stale custody denies.

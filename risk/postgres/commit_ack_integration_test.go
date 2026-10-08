@@ -29,6 +29,7 @@ type commitAckFault struct {
 	velocityResume      atomic.Pointer[[16]byte]
 	velocityClosure     atomic.Pointer[[16]byte]
 	velocityPublication atomic.Pointer[[16]byte]
+	velocityRestart     atomic.Pointer[[16]byte]
 }
 
 type ackTargetKey struct{}
@@ -111,6 +112,11 @@ func (f *commitAckFault) TraceQueryStart(ctx context.Context, conn *pgx.Conn, da
 		}
 	}
 	if epoch := f.velocityPublication.Load(); epoch != nil && strings.Contains(data.SQL, ".velocity_epochs SET publication_id=$4,publication_confirmed_at=$5 WHERE ") && len(data.Args) == 5 {
+		if value, ok := data.Args[2].([]byte); ok && bytes.Equal(value, epoch[:]) {
+			return context.WithValue(ctx, ackTargetKey{}, true)
+		}
+	}
+	if epoch := f.velocityRestart.Load(); epoch != nil && strings.Contains(data.SQL, ".velocity_epochs SET generation=$4::numeric,lease_owner=$5,replay_through=replay_from,applied_generation=NULL") && len(data.Args) == 5 {
 		if value, ok := data.Args[2].([]byte); ok && bytes.Equal(value, epoch[:]) {
 			return context.WithValue(ctx, ackTargetKey{}, true)
 		}
