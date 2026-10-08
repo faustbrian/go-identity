@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Bind the private native connection to its original activated primary chain
+  and exact journal owner. Reject foreign graphs and substituted journal
+  connections before composition instead of relying on namespace equality.
+  Current checks preserve original custody and never revive replay callbacks;
+  concrete public factories and live composition remain under development.
+
 - Add a private owned-adapter connection for journal-before-native execution
   and original-result conservation. Unresolved intent or terminal ambiguity
   never permits redispatch. Concrete adapter factories and live composition

@@ -20,6 +20,7 @@ import (
 type Journal struct{ state *journal }
 type journal struct {
 	namespace [32]byte
+	current   *currentChain
 	validate  func(risk.CounterCommand) error
 	check     func(context.Context, risk.CounterCommand) error
 	record    func(context.Context, risk.CounterCommand) (Attempt, error)
@@ -34,6 +35,7 @@ type journal struct {
 type Native struct{ state *native }
 type native struct {
 	namespace [32]byte
+	journal   *journal
 	validate  func(risk.CounterCommand) error
 	check     func(context.Context, risk.CounterCommand) error
 	mutate    func(context.Context, risk.CounterCommand) (risk.CounterResult, error)
@@ -54,7 +56,7 @@ func BindJournal(namespace [32]byte, validate func(risk.CounterCommand) error, c
 	if namespace == [32]byte{} || validate == nil || check == nil || record == nil || replay == nil {
 		return Journal{}, risk.ErrInvalidVelocityRecovery
 	}
-	return Journal{&journal{namespace, validate, check, record, replay}}, nil
+	return Journal{&journal{namespace: namespace, validate: validate, check: check, record: record, replay: replay}}, nil
 }
 
 // BindNative retains only concrete owned adapter functions. Its namespace must
@@ -64,7 +66,7 @@ func BindNative(namespace [32]byte, validate func(risk.CounterCommand) error, ch
 	if namespace == [32]byte{} || validate == nil || check == nil || mutate == nil {
 		return Native{}, risk.ErrInvalidVelocityRecovery
 	}
-	return Native{&native{namespace, validate, check, mutate}}, nil
+	return Native{&native{namespace: namespace, validate: validate, check: check, mutate: mutate}}, nil
 }
 
 // BindAttempt is called only after the concrete journal acknowledges its
@@ -91,8 +93,14 @@ type store struct {
 // NewStore connects already configured owned handles without IO or activation.
 // It cannot select an epoch, forge health or grant retry permission. One outer
 // deadline bounds the entire crossing, not a fresh timeout for each stage.
+// Current-bound handles must retain the same exact journal connection, not
+// merely an equal namespace or graph. Unbound handles serve the internal
+// sequencing primitive only; public factories must supply current-bound handles.
 func NewStore(j Journal, n Native, timeout time.Duration) (Store, error) {
 	if j.state == nil || n.state == nil || j.state.namespace != n.state.namespace || timeout <= 0 || timeout > time.Minute {
+		return Store{}, risk.ErrInvalidVelocityRecovery
+	}
+	if (j.state.current != nil || n.state.journal != nil) && n.state.journal != j.state {
 		return Store{}, risk.ErrInvalidVelocityRecovery
 	}
 	return Store{&store{j, n, timeout}}, nil

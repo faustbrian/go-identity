@@ -21,6 +21,16 @@ its functions; application holders of opaque adapter outputs cannot invoke a
 bare native effect. Concrete factories and real primary/native composition are
 still unfinished, so this private connection does not enable public traffic.
 
+The private connection can retain the original activated chain and read-only
+journal verifier. Native binding authenticates its configured graph against
+that retained chain and rechecks current primary state without replay callbacks.
+The composite rejects a separately substituted journal connection even when
+namespace and graph match. No issuer is returned and no application may extract
+the chain or supply binding callbacks. Concrete factories must originate chain
+and journal functions in the same primary owner; that factory wiring and live
+composition remain unfinished. Unbound internal sequencing handles are not a
+public traffic profile.
+
 `VelocityJournalIssuer.AcknowledgeEligibility` retains an already acknowledged
 primary activation of the exact native-confirmed chain with its bounded current
 primary checker. `VelocityNativeVerifier.Eligibility` authenticates that chain
