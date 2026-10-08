@@ -23,6 +23,7 @@ type scriptDB struct {
 	expiry          map[string]int64
 	writes          int
 	failAfterWrites int
+	info            string
 }
 
 func newScriptDB() *scriptDB {
@@ -44,6 +45,12 @@ func (d *scriptDB) call(l *lua.LState) int {
 	pushString := func(s string) int { l.Push(lua.LString(s)); return 1 }
 	pushNumber := func(n int64) int { l.Push(lua.LNumber(n)); return 1 }
 	switch command {
+	case "INFO":
+		if l.GetTop() != 5 || l.CheckString(2) != "server" || l.CheckString(3) != "memory" || l.CheckString(4) != "replication" || l.CheckString(5) != "stats" {
+			l.RaiseError("unexpected profile scope")
+			return 0
+		}
+		return pushString(d.info)
 	case "TIME":
 		v := l.NewTable()
 		v.Append(lua.LString(strconv.FormatInt(d.now/1000000, 10)))
@@ -100,6 +107,12 @@ func (d *scriptDB) run(t *testing.T, plan commandPlan) []string {
 }
 
 func (d *scriptDB) execute(plan commandPlan) ([]string, error) {
+	// Window/rotation fixtures select their current marker as configured input.
+	// Exact-custody regressions use executeScript with independent expected bytes.
+	plan.expected = d.strings[plan.keys[0]]
+	if !strings.HasPrefix(plan.expected, "confirmed|") {
+		plan.expected = confirmedHealthFixture(plan, d.now)
+	}
 	args, err := mutationArguments(plan)
 	if err != nil {
 		return nil, err
@@ -158,6 +171,7 @@ func scriptPlan(t *testing.T, attempt string, versions ...uint32) commandPlan {
 	if err != nil {
 		t.Fatal(err)
 	}
+	plan.expected = confirmedHealthFixture(plan, newScriptDB().now)
 	return plan
 }
 
@@ -291,7 +305,7 @@ func TestNativeScriptMaximumAliasesAndMicrosecondBoundary(t *testing.T) {
 func TestMutationArgumentsRejectUnboundedOrCrossSlotPlans(t *testing.T) {
 	plan := scriptPlan(t, "first", 9, 8, 7, 6)
 	args, err := mutationArguments(plan)
-	if err != nil || len(args) != 9 || args[0] != plan.epoch || args[1] != plan.fingerprint || args[3] != "4" || args[4] != "4" || len(plan.keys) != 26 {
+	if err != nil || len(args) != 10 || args[0] != plan.epoch || args[1] != plan.fingerprint || args[3] != "4" || args[4] != "4" || args[9] != plan.expected || len(plan.keys) != 26 {
 		t.Fatal("incomplete native arguments", err)
 	}
 	invalid := []commandPlan{{}, plan, plan, plan, plan, plan, plan, plan}
@@ -469,7 +483,7 @@ func TestNativeScriptPostStateDrivesCoreThreshold(t *testing.T) {
 	}
 	owner := mutationDispatcher{layout: layout, timeout: time.Second, execute: func(_ context.Context, plan commandPlan) ([]string, error) { return db.run(t, plan), nil }}
 	c, err := risk.NewCounterCoordinator(risk.CounterCoordinatorConfig{Policy: p, Keys: keys, Store: replyStoreFunc(func(ctx context.Context, command risk.CounterCommand) (risk.CounterResult, error) {
-		return owner.mutate(ctx, command, [16]byte{1})
+		return owner.mutate(ctx, command, [16]byte{1}, dispatchFixtureMarker())
 	}), Clock: func() time.Time { return time.UnixMicro(db.now).UTC() }, Timeout: time.Second})
 	if err != nil {
 		t.Fatal(err)

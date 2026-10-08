@@ -25,7 +25,7 @@ func (mutationDispatcher) Format(s fmt.State, _ rune) {
 func (mutationDispatcher) MarshalJSON() ([]byte, error) { return nil, risk.ErrSensitiveSerialization }
 func (mutationDispatcher) MarshalText() ([]byte, error) { return nil, risk.ErrSensitiveSerialization }
 
-func (d mutationDispatcher) mutate(ctx context.Context, command risk.CounterCommand, epoch [16]byte) (risk.CounterResult, error) {
+func (d mutationDispatcher) mutate(ctx context.Context, command risk.CounterCommand, epoch [16]byte, expected string) (risk.CounterResult, error) {
 	if d.execute == nil || d.timeout < 100*time.Millisecond || d.timeout > 10*time.Second {
 		return risk.CounterResult{}, risk.ErrInvalidPolicy
 	}
@@ -39,6 +39,10 @@ func (d mutationDispatcher) mutate(ctx context.Context, command risk.CounterComm
 	if err != nil {
 		return risk.CounterResult{}, err
 	}
+	plan.expected = expected
+	if _, err := mutationArguments(plan); err != nil {
+		return risk.CounterResult{}, err
+	}
 	bounded, cancel := context.WithTimeout(ctx, d.timeout)
 	defer cancel()
 	// Cancellation racing preparation still precedes the external boundary.
@@ -50,7 +54,7 @@ func (d mutationDispatcher) mutate(ctx context.Context, command risk.CounterComm
 		err = context.Canceled
 	} else if errors.Is(err, context.DeadlineExceeded) {
 		err = context.DeadlineExceeded
-	} else if err != nil {
+	} else if err != nil && !errors.Is(err, errNativeContinuity) {
 		// Any transport error after dispatch can hide a committed mutation. Never
 		// retain diagnostics, interpret it as noncommit or automatically resend.
 		result, _ := risk.NewCounterResult(command, risk.CounterUnknown, nil)

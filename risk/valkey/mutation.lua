@@ -19,7 +19,7 @@ local epoch, fingerprint = ARGV[1], ARGV[2]
 if type(epoch) ~= 'string' or #epoch ~= 32 or not string.match(epoch, '^[0-9a-f]+$') or type(fingerprint) ~= 'string' or #fingerprint ~= 64 or not string.match(fingerprint, '^[0-9a-f]+$') then return {'unknown', ''} end
 local function unavailable() return {'unavailable', fingerprint} end
 local window, dimensions, aliases = integer(ARGV[3]), integer(ARGV[4]), integer(ARGV[5])
-if not window or window < 1 or window > horizon or not dimensions or dimensions < 1 or dimensions > 4 or not aliases or aliases < 1 or aliases > 4 or #KEYS ~= 2+probes+dimensions*aliases or #ARGV ~= 5+dimensions then return unavailable() end
+if not window or window < 1 or window > horizon or not dimensions or dimensions < 1 or dimensions > 4 or not aliases or aliases < 1 or aliases > 4 or #KEYS ~= 2+probes+dimensions*aliases or #ARGV ~= 6+dimensions then return unavailable() end
 for i = 1, dimensions do
   if type(ARGV[5+i]) ~= 'string' or #ARGV[5+i] < 1 or #ARGV[5+i] > 64 or string.find(ARGV[5+i], '|', 1, true) then return unavailable() end
 end
@@ -30,7 +30,9 @@ for i, key in ipairs(KEYS) do
   if types[i] ~= 'none' and types[i] ~= 'string' then return unavailable() end
 end
 if types[1] ~= 'string' or redis.call('STRLEN', KEYS[1]) > 384 then return unavailable() end
-local confirmed = publicationFields(redis.call('GET', KEYS[1]), 'confirmed', epoch)
+local current = redis.call('GET', KEYS[1])
+if current ~= ARGV[6+dimensions] then return unavailable() end
+local confirmed = publicationFields(current, 'confirmed', epoch)
 if not confirmed then return unavailable() end
 local clock = redis.call('TIME')
 local seconds, micros = integer(clock[1]), integer(clock[2])
@@ -43,7 +45,7 @@ local function record(key, limit, fields)
   if not value then return nil end
   return split(value, fields)
 end
--- Replay data and its expiry are written in one SET PXAT, never two commands.
+-- Replay and expiry share one SET PXAT.
 if types[2] == 'string' then
   local stored = record(KEYS[2], 2508, 3+dimensions*4+2)
   if not stored or #stored < 2 then return {'unknown', fingerprint} end
@@ -54,8 +56,7 @@ if types[2] == 'string' then
   return reply
 end
 local free = nil
--- Fixed probes into 4096 tenant/epoch slots bound both work and live replay
--- cardinality. Probe exhaustion is unavailable, not eviction or a second try.
+-- Fixed probes bound live replay cardinality; exhaustion denies.
 for i = 3, 2+probes do
   if types[i] == 'none' then
     if not free then free = KEYS[i] end

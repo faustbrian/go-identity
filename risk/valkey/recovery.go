@@ -43,7 +43,7 @@ func recoveryFenceFields(value, epoch string) ([]string, bool) {
 }
 
 func recoveryArguments(p commandPlan, marker string, snapshots []risk.Counter) ([]string, error) {
-	if _, err := mutationArguments(p); err != nil {
+	if _, err := commandArguments(p); err != nil {
 		return nil, err
 	}
 	if _, ok := recoveryFenceFields(marker, p.epoch); !ok || len(snapshots) != len(p.targets) || len(snapshots) == 0 {
@@ -68,7 +68,7 @@ func recoveryArguments(p commandPlan, marker string, snapshots []risk.Counter) (
 }
 
 func (t *nativeTransport) recoverFence(ctx context.Context, p commandPlan, previous, current string) error {
-	if _, err := mutationArguments(p); err != nil {
+	if _, err := commandArguments(p); err != nil {
 		return err
 	}
 	if _, ok := recoveryFenceFields(current, p.epoch); !ok {
@@ -100,7 +100,7 @@ func (t *nativeTransport) restore(ctx context.Context, p commandPlan, marker str
 }
 
 func (t *nativeTransport) confirmNoncommit(ctx context.Context, p commandPlan, marker string) error {
-	if _, err := mutationArguments(p); err != nil {
+	if _, err := commandArguments(p); err != nil {
 		return err
 	}
 	if _, ok := recoveryFenceFields(marker, p.epoch); !ok {

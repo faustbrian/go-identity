@@ -37,7 +37,10 @@ facts; only a complete explicit noncommit declaration returns noncommit.
 
 The private dispatch boundary rejects invalid/cancelled inputs before IO,
 derives a 100ms..10s bound without extending the caller's earlier deadline,
-and sends one prepared plan exactly once. Transport errors and incomplete
+requires an independently retained exact confirmed marker, and sends one
+prepared mutation plan exactly once. The atomic script compares the complete
+marker before returning even an old replay; epoch-only requests are rejected.
+This private input is not a public authority constructor. Transport errors and incomplete
 acknowledgements are unknown, with redacted diagnostics and no retry. A complete
 acknowledged commit remains committed after cancellation or expiry of the
 adapter's own deadline; the accompanying error prevents clean admission even
@@ -65,6 +68,27 @@ must confirm RESP2 and standalone mode before any EVAL. Request encoding is
 binary-safe and bounded to 32768 bytes before allocation. The bounded RESP2
 reader protects startup and mutation replies before decoding. Complete acknowledged outcomes
 survive late cancellation, but cannot grant timely admission.
+
+Each effect is bracketed by two bounded read-only profile EVALs on that same
+owned connection. The script reads selected `INFO` sections and requires a
+primary with no connected replicas, `noeviction`, a nonzero server run ID and
+a canonical eviction counter. Credentials therefore also need permission for
+`INFO`; inability to read the profile fails closed. The first eligible run ID
+and eviction count remain fixed for the transport's lifetime. Reconnects and
+old metadata returning cannot replace the baseline. Once acquired, any observed
+profile uncertainty/loss is terminal for that transport. In-flight operations
+recheck this shared condition after cleanup. An attributable mutation reply
+survives a later profile failure, but the error prevents clean admission.
+These are three EVALs total (two read-only and one effect), never a mutation
+retry, all under the original operation deadline.
+
+The protocol fields follow [Valkey INFO](https://valkey.io/commands/info/) and
+the [8.0.0 command definition](https://github.com/valkey-io/valkey/blob/8.0.0/src/commands/info.json).
+The profile reads are **not atomic with the effect**. They do not attest
+selective deletion, flush/fence reinstatement, statistics laundering or every
+possible loss between reads. A new transport alone cannot confer health; full
+recovery and current PostgreSQL healthy eligibility still require owned
+composition before public activation.
 
 Tests exercise the synchronous transport and verified TLS through memory-only `net.Pipe`
 fixtures. They do not prove a real Valkey server, replicated/cluster topology,
@@ -96,9 +120,10 @@ checks primary custody before and after IO, preserves every cut field and the
 original logical/physical expiry, and never repairs a missing marker. Exact
 explicit retries are read-only; ambiguous effects never trigger a resend.
 No public healthy store exists. This marker makes the private mutation engine's
-structural predicate eligible, not safe public admission: confirmed marker
-syntax alone does not establish surviving counters or primary healthy state.
-Exact expected-marker admission and
+exact-match predicate eligible, not safe public admission: confirmed marker
+syntax or equality alone does not establish surviving counters or primary
+healthy state. The script's expected-marker check is now implemented; joint
+primary healthy eligibility and
 native boot/fence continuity across reset remain required before activation.
 This checkpoint proves a fenced marker transition, not survival of all earlier
 restored counters after eviction/reset or supported Valkey interoperability.

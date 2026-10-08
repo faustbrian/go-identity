@@ -28,6 +28,7 @@ type commandLayout struct {
 
 type commandPlan struct {
 	slot, fingerprint, epoch string
+	expected                 string
 	keys                     []string
 	targets                  []risk.CounterTarget
 	window                   time.Duration

@@ -23,6 +23,21 @@ const maximumReplayEntries = 4096
 const capacityProbeCount = 8
 
 func mutationArguments(p commandPlan) ([]string, error) {
+	args, err := commandArguments(p)
+	if err != nil {
+		return nil, err
+	}
+	// Only an independently retained exact marker may authorize the atomic
+	// engine. Its remaining canonical fields are checked by the server parser.
+	if len(p.expected) > 384 || !strings.HasPrefix(p.expected, "confirmed|"+p.epoch+"|") {
+		return nil, risk.ErrInvalidCounterCommand
+	}
+	return append(args, p.expected), nil
+}
+
+// Recovery validates the same bounded command layout without granting debit
+// authority: its own exact replay fence replaces the healthy admission marker.
+func commandArguments(p commandPlan) ([]string, error) {
 	if !lowerHex(p.epoch, 32) || !lowerHex(p.fingerprint, 64) || !lowerHex(p.slot, 64) || p.window <= 0 || p.window > time.Hour || p.window%time.Microsecond != 0 || len(p.targets) < 1 || len(p.targets) > 4 {
 		return nil, risk.ErrInvalidCounterCommand
 	}

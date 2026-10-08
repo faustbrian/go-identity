@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Require the exact independently retained confirmed marker before native
+  debit or replay; reject historical epoch-only requests. Bracket each effect
+  with bounded read-only primary/noeviction/run-identity checks, retaining the
+  original eviction baseline and denying after observed profile loss even if
+  old metadata returns. Preserve attributable committed outcomes on later
+  profile failure while denying admission. Credentials now require INFO.
+  These private checks do not complete reset continuity or public activation.
+
 - Confirm only an exact existing published native cut after configured primary
   recorded-confirmation checks. Preserve every original field, counter and
   exclusive expiry; matching retries do not write and missing markers are not

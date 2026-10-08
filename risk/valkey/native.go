@@ -3,6 +3,7 @@ package valkey
 import (
 	"context"
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -64,6 +65,9 @@ type nativeTransport struct {
 	cancel                  context.CancelFunc
 	mu                      sync.Mutex
 	active                  int
+	boot                    string
+	evictions               uint64
+	continuityLost          bool
 	closed, cleanupComplete bool
 	drained                 chan struct{}
 }
@@ -170,8 +174,27 @@ func (t *nativeTransport) executeScript(ctx context.Context, script string, keys
 		t.finishExecution(bounded, cell, held, err != nil, stopLife, lifeDone)
 		// Cleanup can itself cross the native deadline. Preserve the complete
 		// acknowledgement, but never let a longer outer context grant admission.
+		if err == nil || errors.Is(err, errNativeContinuity) {
+			contextErr := bounded.Err()
+			if contextErr == nil {
+				contextErr = ctx.Err()
+			}
+			// Socket deadlines can fire before the context timer publishes Err.
+			// Both enforce this same monotonic deadline, not separate budgets.
+			if deadline, ok := bounded.Deadline(); contextErr == nil && ok && !time.Now().Before(deadline) {
+				contextErr = context.DeadlineExceeded
+			}
+			if contextErr != nil {
+				err = contextErr
+			}
+		}
 		if err == nil {
-			err = bounded.Err()
+			t.mu.Lock()
+			lost := t.continuityLost
+			t.mu.Unlock()
+			if lost {
+				err = errNativeContinuity
+			}
 		}
 	}()
 	select {
@@ -202,6 +225,28 @@ func (t *nativeTransport) executeScript(ctx context.Context, script string, keys
 	ioDone := make(chan struct{})
 	stopIO := context.AfterFunc(bounded, func() { _ = cell.raw.Close(); close(ioDone) })
 	defer stopCallback(stopIO, ioDone)
+	if err := t.checkProfile(cell); err != nil {
+		if contextErr := bounded.Err(); contextErr != nil {
+			return nil, contextErr
+		}
+		return nil, err
+	}
+	values, evalErr := cell.eval(script, keys, args)
+	if evalErr != nil {
+		return nil, evalErr
+	}
+	// A late profile failure cannot rewrite an acknowledged native effect into
+	// noncommit. The dispatcher preserves that effect while denying admission.
+	if err := t.checkProfile(cell); err != nil {
+		if contextErr := bounded.Err(); contextErr != nil {
+			return values, contextErr
+		}
+		return values, err
+	}
+	return values, bounded.Err()
+}
+
+func (cell *nativeConnection) eval(script string, keys, args []string) ([]string, error) {
 	fields := []string{"EVAL", script, strconv.Itoa(len(keys))}
 	fields = append(fields, keys...)
 	fields = append(fields, args...)
@@ -222,7 +267,7 @@ func (t *nativeTransport) executeScript(ctx context.Context, script string, keys
 	if decodeErr != nil || len(values) < 2 || len(values) > 19 {
 		return nil, ErrOutcomeUnknown
 	}
-	return values, bounded.Err()
+	return values, nil
 }
 
 // Drainage belongs to the execution owner, including its cancellation callback.
@@ -230,7 +275,10 @@ func (t *nativeTransport) executeScript(ctx context.Context, script string, keys
 // owner; callbacks and socket closing never run under that lock.
 func (t *nativeTransport) finishExecution(ctx context.Context, cell *nativeConnection, held, discard bool, stopLife func() bool, lifeDone <-chan struct{}) {
 	stopCallback(stopLife, lifeDone)
-	if discard || ctx.Err() != nil {
+	t.mu.Lock()
+	lost := t.continuityLost
+	t.mu.Unlock()
+	if discard || ctx.Err() != nil || lost {
 		if cell != nil {
 			cell.close()
 		}

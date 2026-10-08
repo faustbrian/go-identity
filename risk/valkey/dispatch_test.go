@@ -13,6 +13,10 @@ import (
 	"github.com/faustbrian/go-identity/risk"
 )
 
+func dispatchFixtureMarker() string {
+	return confirmedHealthFixture(commandPlan{epoch: "01" + strings.Repeat("0", 30)}, newScriptDB().now)
+}
+
 func TestNativeDispatchConservesTruthAndNeverRetries(t *testing.T) {
 	for _, tc := range []struct {
 		name                                                   string
@@ -63,7 +67,7 @@ func TestNativeDispatchConservesTruthAndNeverRetries(t *testing.T) {
 				return reply, nil
 			}}
 			c, err := risk.NewCounterCoordinator(risk.CounterCoordinatorConfig{Policy: p, Keys: keys, Store: replyStoreFunc(func(ctx context.Context, command risk.CounterCommand) (risk.CounterResult, error) {
-				result, dispatchError := owner.mutate(ctx, command, [16]byte{1})
+				result, dispatchError := owner.mutate(ctx, command, [16]byte{1}, dispatchFixtureMarker())
 				if !errors.Is(dispatchError, tc.wantError) {
 					t.Fatal("wrong dispatch error", dispatchError)
 				}
@@ -101,20 +105,20 @@ func TestNativeDispatchRejectsBeforeIO(t *testing.T) {
 	command := prepareFixture(t, c, "tenant", "attempt", "192.0.2.1")
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	if _, err = owner.mutate(ctx, command, [16]byte{1}); !errors.Is(err, context.Canceled) {
+	if _, err = owner.mutate(ctx, command, [16]byte{1}, dispatchFixtureMarker()); !errors.Is(err, context.Canceled) {
 		t.Fatal("cancel lost")
 	}
-	if _, err = owner.mutate(nil, command, [16]byte{1}); err == nil {
+	if _, err = owner.mutate(nil, command, [16]byte{1}, dispatchFixtureMarker()); err == nil {
 		t.Fatal("nil context admitted")
 	}
-	if _, err = owner.mutate(context.Background(), risk.CounterCommand{}, [16]byte{1}); !errors.Is(err, risk.ErrInvalidCounterCommand) {
+	if _, err = owner.mutate(context.Background(), risk.CounterCommand{}, [16]byte{1}, dispatchFixtureMarker()); !errors.Is(err, risk.ErrInvalidCounterCommand) {
 		t.Fatal("zero command admitted")
 	}
-	if _, err = owner.mutate(context.Background(), command, [16]byte{}); !errors.Is(err, risk.ErrInvalidCounterCommand) {
+	if _, err = owner.mutate(context.Background(), command, [16]byte{}, dispatchFixtureMarker()); !errors.Is(err, risk.ErrInvalidCounterCommand) {
 		t.Fatal("zero epoch admitted")
 	}
 	var zero mutationDispatcher
-	if _, err = zero.mutate(context.Background(), command, [16]byte{1}); err == nil {
+	if _, err = zero.mutate(context.Background(), command, [16]byte{1}, dispatchFixtureMarker()); err == nil {
 		t.Fatal("zero dispatcher admitted")
 	}
 }
@@ -137,7 +141,7 @@ func TestNativeDispatchLateAcknowledgementRetainsCommitWithoutAdmission(t *testi
 		return reply, nil
 	}}
 	c, err := risk.NewCounterCoordinator(risk.CounterCoordinatorConfig{Policy: p, Keys: keys, Store: replyStoreFunc(func(ctx context.Context, command risk.CounterCommand) (risk.CounterResult, error) {
-		return owner.mutate(ctx, command, [16]byte{1})
+		return owner.mutate(ctx, command, [16]byte{1}, dispatchFixtureMarker())
 	}), Clock: func() time.Time { return now }, Timeout: time.Second})
 	if err != nil {
 		t.Fatal(err)
@@ -168,7 +172,7 @@ func TestNativeDispatchInternalCancellationRetainsAcknowledgementAndRedactsError
 		return reply, fmt.Errorf("private-credential: %w", context.Canceled)
 	}}
 	c, err := risk.NewCounterCoordinator(risk.CounterCoordinatorConfig{Policy: p, Keys: keys, Store: replyStoreFunc(func(ctx context.Context, command risk.CounterCommand) (risk.CounterResult, error) {
-		result, err := owner.mutate(ctx, command, [16]byte{1})
+		result, err := owner.mutate(ctx, command, [16]byte{1}, dispatchFixtureMarker())
 		if !errors.Is(err, context.Canceled) || strings.Contains(err.Error(), "private-") {
 			t.Error("native cancellation not redacted", err)
 		}
@@ -200,13 +204,13 @@ func TestNativeDispatchKeepsEarlierDeadlineAndRedactsErrors(t *testing.T) {
 		return nil, errors.New("private diagnostic")
 	}}
 	command := prepareFixture(t, c, "tenant", "attempt", "192.0.2.1")
-	if _, err = owner.mutate(ctx, command, [16]byte{1}); err != ErrOutcomeUnknown || err.Error() != "risk/valkey: outcome unknown" {
+	if _, err = owner.mutate(ctx, command, [16]byte{1}, dispatchFixtureMarker()); err != ErrOutcomeUnknown || err.Error() != "risk/valkey: outcome unknown" {
 		t.Fatal("upstream diagnostic leaked")
 	}
 	for _, timeout := range []time.Duration{0, 99 * time.Millisecond, 10*time.Second + time.Nanosecond} {
 		invalid := owner
 		invalid.timeout = timeout
-		if _, err = invalid.mutate(ctx, command, [16]byte{1}); !errors.Is(err, risk.ErrInvalidPolicy) {
+		if _, err = invalid.mutate(ctx, command, [16]byte{1}, dispatchFixtureMarker()); !errors.Is(err, risk.ErrInvalidPolicy) {
 			t.Fatal("invalid bound admitted")
 		}
 	}

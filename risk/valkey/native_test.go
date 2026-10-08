@@ -31,6 +31,8 @@ import (
 type nativeWireFixture struct {
 	mu           sync.Mutex
 	requests     [][]string
+	profiles     int
+	profileReply func() string
 	dials        int
 	failures     []error
 	reply        func([]string) string
@@ -72,6 +74,7 @@ func nativeFixture(t *testing.T, reply func([]string) string) (*nativeTransport,
 		t.Fatal(err)
 	}
 	fixture := &nativeWireFixture{reply: reply, startupReply: "+OK\r\n*6\r\n$7\r\nversion\r\n$5\r\n8.0.0\r\n$5\r\nproto\r\n:2\r\n$4\r\nmode\r\n$10\r\nstandalone\r\n"}
+	fixture.profileReply = func() string { return nativeArray([]string{strings.Repeat("b", 40), "0"}) }
 	transport.dial = func(ctx context.Context, address string) (net.Conn, error) {
 		if address != "valkey.test:6379" {
 			return nil, errors.New("unexpected endpoint")
@@ -115,6 +118,16 @@ func nativeFixture(t *testing.T, reply func([]string) string) (*nativeTransport,
 				}
 				if len(request) == 1 && request[0] == "PING" {
 					if _, err := io.WriteString(secured, "+PONG\r\n"); err != nil {
+						return
+					}
+					continue
+				}
+				if len(request) == 3 && request[0] == "EVAL" && request[2] == "0" {
+					fixture.mu.Lock()
+					fixture.profiles++
+					profile := fixture.profileReply
+					fixture.mu.Unlock()
+					if _, err := io.WriteString(secured, profile()); err != nil {
 						return
 					}
 					continue
@@ -200,6 +213,7 @@ func nativePlan(t *testing.T) (commandPlan, mutationDispatcher, risk.CounterCoor
 	if err != nil {
 		t.Fatal(err)
 	}
+	plan.expected = confirmedHealthFixture(plan, newScriptDB().now)
 	return plan, mutationDispatcher{layout: layout, timeout: time.Second}, c
 }
 
@@ -372,7 +386,7 @@ func TestNativeTransportAcknowledgementReachesCore(t *testing.T) {
 		count, _ := strconv.Atoi(request[2])
 		args := request[3+count:]
 		fields := []string{"committed", args[1], strconv.FormatInt(now.UnixMicro(), 10)}
-		for _, kind := range args[5:] {
+		for _, kind := range args[5 : len(args)-1] {
 			fields = append(fields, kind, "11", strconv.FormatInt(now.UnixMicro(), 10), strconv.FormatInt(now.Add(5*time.Minute).UnixMicro(), 10))
 		}
 		return nativeArray(fields)
@@ -380,7 +394,7 @@ func TestNativeTransportAcknowledgementReachesCore(t *testing.T) {
 	dispatcher.execute = transport.execute
 	p, keys := dispatcher.layout.policy, dispatcher.layout.keys
 	c, err := risk.NewCounterCoordinator(risk.CounterCoordinatorConfig{Policy: p, Keys: keys, Store: replyStoreFunc(func(ctx context.Context, cmd risk.CounterCommand) (risk.CounterResult, error) {
-		return dispatcher.mutate(ctx, cmd, [16]byte{1})
+		return dispatcher.mutate(ctx, cmd, [16]byte{1}, dispatchFixtureMarker())
 	}), Clock: func() time.Time { return now }, Timeout: time.Second})
 	if err != nil {
 		t.Fatal(err)
@@ -580,7 +594,7 @@ func TestNativeTransportDeadlineDuringCleanupCannotGrantAdmission(t *testing.T) 
 		count, _ := strconv.Atoi(request[2])
 		args := request[3+count:]
 		fields := []string{"committed", args[1], strconv.FormatInt(now.UnixMicro(), 10)}
-		for _, kind := range args[5:] {
+		for _, kind := range args[5 : len(args)-1] {
 			fields = append(fields, kind, "1", strconv.FormatInt(now.UnixMicro(), 10), strconv.FormatInt(now.Add(5*time.Minute).UnixMicro(), 10))
 		}
 		return nativeArray(fields)
@@ -602,7 +616,7 @@ func TestNativeTransportDeadlineDuringCleanupCannotGrantAdmission(t *testing.T) 
 	dispatcher.execute = transport.execute
 	var storeError error
 	core, err := risk.NewCounterCoordinator(risk.CounterCoordinatorConfig{Policy: dispatcher.layout.policy, Keys: dispatcher.layout.keys, Store: replyStoreFunc(func(ctx context.Context, cmd risk.CounterCommand) (risk.CounterResult, error) {
-		result, err := dispatcher.mutate(ctx, cmd, [16]byte{1})
+		result, err := dispatcher.mutate(ctx, cmd, [16]byte{1}, dispatchFixtureMarker())
 		storeError = err
 		return result, err
 	}), Clock: func() time.Time { return now }, Timeout: 3 * time.Second})
