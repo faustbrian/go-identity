@@ -30,6 +30,14 @@ type CookieSignOutService struct {
 	keys []CSRFKey
 }
 
+// Configured reports immutable strict cookie composition without IO, key
+// disclosure or authentication. Nil/zero owners are false. It is not current
+// key eligibility, health or CSRF admission; SignOut retains those checks.
+// Safe concurrently with independent calls.
+func (s *CookieSignOutService) Configured() bool {
+	return s != nil && s.base.Configured() && len(s.keys) > 0
+}
+
 // NewCookieSignOutService validates explicit cookie composition without IO.
 // Keys have distinct positive versions; their current/retained eligibility is
 // trusted deployment policy. Caller slice changes cannot alter selection. The

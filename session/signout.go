@@ -51,6 +51,13 @@ type SignOutService struct {
 	config   SignOutConfig
 }
 
+// Configured reports immutable owner composition without calling dependencies
+// or reading state. Nil/zero owners are false; true is not health, permission,
+// current session validity or a future execution guarantee. Safe concurrently.
+func (s *SignOutService) Configured() bool {
+	return s != nil && s.sessions.Configured() && !issuerNil(s.executor)
+}
+
 // NewSignOutService validates immutable composition without IO. Use the owned
 // primary SessionService and native executor configured for that exact reader;
 // structural records or consumer-written repositories are not authentication.

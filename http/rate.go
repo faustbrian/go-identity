@@ -70,6 +70,14 @@ type SafeRateLimiter struct {
 	operations         map[string]bool
 }
 
+// Configured reports constructor validity and observed nonterminal local
+// ownership without IO or callbacks. Nil/zero/closed owners are false. Close
+// may race immediately afterward; true is not health, admission or a lease.
+// Independent inspections, Admit and Close are concurrency-safe.
+func (l *SafeRateLimiter) Configured() bool {
+	return l != nil && l.shared != nil && l.store != nil && l.closed != nil && !l.closed.Load()
+}
+
 // NewSafeRateLimiter validates and freezes policy without storage IO. Shared
 // must actually provide strong consistency; the primitive enforces the selected
 // policy on each operation. The emergency store is deliberately process-local,

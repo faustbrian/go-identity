@@ -130,6 +130,29 @@ endpoint-manifest/OpenAPI bijection or complete reference readiness.
 
 ## Explicit feature selection
 
+`NewSelectedHandler(FeatureServices{Features: selected})` freezes exact dispatch
+of validated selected features. Empty selection returns 404 and advertises
+nothing. There are no redirects, path cleaning, implicit HEAD/OPTIONS, prefix
+matches or escaped aliases. Unsupported methods return 405 with a sorted Allow;
+HEAD errors have no body. Selection/collision failures return no partial handler.
+This root-mounted dispatcher preserves each feature's parsing, authentication,
+CSRF, rate and outcomes; it does not repeat those checks or debit counters twice.
+Use real owned feature factories or trusted extensions implementing their full
+declared controls. `NewSelectedHandler` is not the planned complete
+`NewRouter`/middleware/wire-OpenAPI builder. The server still owns bounded IO.
+
+Owned optional factories use `NewCanonicalOperation(CanonicalOperationConfig)`
+to bind real handlers to the embedded catalog without maintaining policy or
+digest copies. Unknown/nonrouted operations and incompatible owner/policy/schema
+bounds deny. Returned schema summaries describe direct Go contracts, not HTTP
+wire schemas. For self-signout, `CSRFNone` means an explicitly selected bearer
+handler; `CSRFSessionState` means exact cookie Origin and active-session token,
+with absent/inactive origin-only success. The latter binds token lifetime to
+active stored session state and claims no independent maximum-age enforcement.
+Factories retain responsibility for selecting and enforcing the matching mode.
+`SafeRateLimiter.Configured()` rejects nil/zero/closed owners without IO; true
+is not backend health or future admission and may race with Close.
+
 `NewOperationDescriptors(FeatureServices{})` returns no operations. Nothing is
 enabled by importing this module. `NewProbeFeature` contributes the two real
 probe handlers; pass the resulting feature in `FeatureServices.Features` to

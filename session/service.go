@@ -123,6 +123,14 @@ type SessionService struct {
 	config ServiceConfig
 }
 
+// Configured reports immutable constructor validity without IO, clock calls or
+// authentication. Nil/zero owners are false. This is not dependency health,
+// readiness, authority or a lease; Get must still admit each credential.
+// Valid immutable services may be inspected concurrently with Get.
+func (s *SessionService) Configured() bool {
+	return s != nil && !issuerNil(s.reader) && !issuerNil(s.config.Clock)
+}
+
 // NewSessionService freezes validation composition without IO. Use the owned
 // primary adapter; structural Repository.Get/Lookup alone is not a SessionReader.
 func NewSessionService(reader SessionReader, config ServiceConfig) (*SessionService, error) {

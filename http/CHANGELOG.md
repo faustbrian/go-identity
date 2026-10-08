@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Add opt-in exact selected-feature dispatch and owned canonical descriptor
+  construction. Disabled routes remain absent; no path cleaning, redirects,
+  implicit HEAD, second authentication or rate debit occurs. Schema summaries
+  remain direct-contract metadata, not rendered wire OpenAPI. Distinguish
+  stored session CSRF lifetime from an independently age-bounded token, and
+  allow explicit bearer self-signout without cookie-CSRF metadata. Reject
+  nil, zero-value or closed rate owners through non-IO configuration inspection.
+
 - Add canonical `rate.safe` admission through Golib's strict rate primitive:
   continuously refilled trusted-IP 100/minute and tenant/user 300/minute;
   known outages use a bounded local IP 20/minute budget with a required

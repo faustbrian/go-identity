@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Expose side-effect-free `Configured` inspection on session validation and
+  direct/strict-cookie signout owners. Optional transport can reject nil or
+  zero-value dependencies before advertising routes, without treating
+  configuration as health, authentication or authority.
+
 - Preserve deterministic CSRF denial when a cookie logout executor rejects its
   key before reserving a command; do not report an unknown commit or clear the
   cookie. Existing receipts still determine commit uncertainty.

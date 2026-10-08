@@ -36,6 +36,11 @@ const (
 	CSRFSessionOriginAndToken
 	CSRFConditionalPreAuthSession
 	CSRFBoundOrigin
+	// CSRFSessionState requires exact origin for cookie-mode requests and the
+	// current session-bound synchronizer token for active sessions. Absent or
+	// inactive self-signout needs origin only. Token lifetime follows active
+	// session state; no independent token-age bound is claimed.
+	CSRFSessionState
 )
 
 // RefererFallbackPolicy is explicit when a CSRF variant uses origin protection.
@@ -46,9 +51,11 @@ const (
 	RefererFallbackSameOriginHTTPS
 )
 
-// CSRFPolicy is a closed discriminated policy. TokenHeader (1..128 HTTP-token
-// bytes) and TokenMaximumAge (positive, at most 24h) occur only in the two token
-// modes. RefererFallback is required except for None, where it must be zero.
+// CSRFPolicy is a closed discriminated policy. SessionOriginAndToken and
+// ConditionalPreAuthSession require TokenHeader (1..128 HTTP-token bytes) and
+// TokenMaximumAge (positive, at most 24h). SessionState requires TokenHeader but
+// zero TokenMaximumAge, binding lifetime to active session state instead.
+// RefererFallback is required except for None, where it must be zero.
 type CSRFPolicy struct {
 	Mode            CSRFMode
 	TokenHeader     string
@@ -384,7 +391,14 @@ func validOperation(owner ModuleID, op OperationDescriptor, catalog map[string]c
 		if r.RequestSchema.Digest != schemaSummary(row.RequestSchema, row.RequestDigest).Digest || r.ResultSchema.Digest != schemaSummary(row.ResultSchema, row.ResultDigest).Digest || r.ErrorSchema.Digest != schemaSummary(row.ErrorSchema, row.ErrorDigest).Digest {
 			return false
 		}
-		if r.Exposure != want.Exposure || !slices.Equal(r.Owners, want.Owners) || r.Access != want.Access || r.Authorization != want.Authorization || r.CSRFOrigin.Mode != want.CSRFOrigin.Mode || r.RiskClass != want.RiskClass || r.RatePolicy != want.RatePolicy || r.Idempotency != want.Idempotency || r.EventSemantics != want.EventSemantics || r.HandlerOwner != want.HandlerOwner || r.Method != want.Method || r.Path != want.Path || r.OpenAPIOperationID != want.OpenAPIOperationID || r.RequestSchema.ID != row.RequestSchema || r.ResultSchema.ID != row.ResultSchema || r.ErrorSchema.ID != row.ErrorSchema {
+		csrfMatches := r.CSRFOrigin.Mode == want.CSRFOrigin.Mode
+		// Canonical signout CSRF is conditional on the explicitly selected
+		// credential profile and active session. Bearer never borrows cookie
+		// authority; the stored synchronizer profile claims no independent age.
+		if r.OperationID == "identity.session.signout" && (r.CSRFOrigin.Mode == CSRFNone || r.CSRFOrigin.Mode == CSRFSessionState) {
+			csrfMatches = true
+		}
+		if r.Exposure != want.Exposure || !slices.Equal(r.Owners, want.Owners) || r.Access != want.Access || r.Authorization != want.Authorization || !csrfMatches || r.RiskClass != want.RiskClass || r.RatePolicy != want.RatePolicy || r.Idempotency != want.Idempotency || r.EventSemantics != want.EventSemantics || r.HandlerOwner != want.HandlerOwner || r.Method != want.Method || r.Path != want.Path || r.OpenAPIOperationID != want.OpenAPIOperationID || r.RequestSchema.ID != row.RequestSchema || r.ResultSchema.ID != row.ResultSchema || r.ErrorSchema.ID != row.ErrorSchema {
 			return false
 		}
 		return owner == r.Owners[0] || (owner == "identity/http.probes" && (r.OperationID == "identity.health" || r.OperationID == "identity.readiness"))
@@ -447,7 +461,7 @@ func validPath(p string) bool {
 	return ascii(p, 2048, false) && p[0] == '/' && !strings.ContainsAny(p, "%?#\\") && !strings.Contains(p, "//") && !strings.Contains(p+"/", "/./") && !strings.Contains(p+"/", "/../")
 }
 func validCSRF(p CSRFPolicy) bool {
-	if p.Mode < CSRFNone || p.Mode > CSRFBoundOrigin {
+	if p.Mode < CSRFNone || p.Mode > CSRFSessionState {
 		return false
 	}
 	if p.Mode == CSRFNone {
@@ -456,10 +470,10 @@ func validCSRF(p CSRFPolicy) bool {
 	if p.RefererFallback != RefererFallbackDeny && p.RefererFallback != RefererFallbackSameOriginHTTPS {
 		return false
 	}
-	if p.Mode != CSRFSessionOriginAndToken && p.Mode != CSRFConditionalPreAuthSession {
+	if p.Mode != CSRFSessionOriginAndToken && p.Mode != CSRFConditionalPreAuthSession && p.Mode != CSRFSessionState {
 		return p.TokenHeader == "" && p.TokenMaximumAge == 0
 	}
-	if len(p.TokenHeader) == 0 || len(p.TokenHeader) > 128 || p.TokenMaximumAge <= 0 || p.TokenMaximumAge > 24*time.Hour {
+	if len(p.TokenHeader) == 0 || len(p.TokenHeader) > 128 || p.TokenMaximumAge > 24*time.Hour || (p.Mode == CSRFSessionState && p.TokenMaximumAge != 0) || (p.Mode != CSRFSessionState && p.TokenMaximumAge <= 0) {
 		return false
 	}
 	for i := range p.TokenHeader {
