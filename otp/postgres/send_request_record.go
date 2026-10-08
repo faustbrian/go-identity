@@ -13,6 +13,8 @@ import (
 
 const sendRequestRecordPrefix = "identity-otp-send-request-v1\x00"
 const sendRecipientRequestPrefix = "identity-otp-send-request-v2\x00"
+const csrfSendRequestPrefix = "identity-otp-send-request-v3\x00"
+const csrfSendRecipientRequestPrefix = "identity-otp-send-request-v4\x00"
 
 // Original declaration before entropy. This invocation-memory profile has no
 // challenge digest, submitted bearer or generated delivery. The coordinator
@@ -70,6 +72,12 @@ func encodeSendRequestRecord(s sendRequestRecord, binding identity.CommandBindin
 	if s.recipient != nil {
 		prefix = sendRecipientRequestPrefix
 	}
+	if continuationHasCSRF(s.continuation) {
+		prefix = csrfSendRequestPrefix
+		if s.recipient != nil {
+			prefix = csrfSendRecipientRequestPrefix
+		}
+	}
 	out := appendSendContinuation([]byte(prefix), s.continuation)
 	p, checks, _ := s.policy.Bindings()
 	out = appendAuthorityText(out, p.Alphabet)
@@ -111,11 +119,19 @@ func decodeSendRequestRecord(wire []byte, binding identity.CommandBinding) (send
 		prefix = sendRecipientRequestPrefix
 		data, authority, err = decodeAuthorityProfile(wire, binding, prefix)
 	}
+	if err != nil {
+		prefix = csrfSendRequestPrefix
+		data, authority, err = decodeAuthorityProfile(wire, binding, prefix)
+	}
+	if err != nil {
+		prefix = csrfSendRecipientRequestPrefix
+		data, authority, err = decodeAuthorityProfile(wire, binding, prefix)
+	}
 	if err != nil || authority == nil || !bytes.HasPrefix(data, []byte(prefix)) {
 		return bad()
 	}
 	r := recordReader{data: data[len(prefix):], ok: true}
-	continuation, err := readSendContinuation(&r)
+	continuation, err := readSendContinuation(&r, prefix == csrfSendRequestPrefix || prefix == csrfSendRecipientRequestPrefix)
 	if err != nil {
 		return bad()
 	}
@@ -139,7 +155,7 @@ func decodeSendRequestRecord(wire []byte, binding identity.CommandBinding) (send
 	issuedAt, e1 := time.Parse(time.RFC3339Nano, issued)
 	expiresAt, e2 := time.Parse(time.RFC3339Nano, expires)
 	var recipient *kernel.RecipientRecord
-	if prefix == sendRecipientRequestPrefix {
+	if prefix == sendRecipientRequestPrefix || prefix == csrfSendRecipientRequestPrefix {
 		selected, err := readSendRecipient(&r)
 		if err != nil {
 			return bad()

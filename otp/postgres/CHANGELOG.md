@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Preserve the original session's CSRF digest and named key through encrypted
+  attempt, issuance and pre-generation Send custody. New versioned private
+  profiles retain existing tokenless bytes and never renew session authority.
+  Upgrade readers before enabling CSRF-bearing continuations; old binaries
+  reject their new profiles. Browser-origin and token-channel enforcement remain
+  separate HTTP responsibilities.
+
 - Apply native cooldown and maximum-send limits equally to suppressed requests;
   fresh idempotency keys cannot reveal recipient existence. Public command audits
   emit the canonical OTP request action and retention, preserving older profiles.

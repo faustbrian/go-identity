@@ -42,6 +42,12 @@ func appendSessionRecord(out []byte, record session.Session) []byte {
 		out = append(out, present)
 		out = appendSessionAuthorityRecord(out, o.Binding)
 	}
+	// The outer custody profile selects this extension; tokenless bytes remain
+	// identical. The constructor binds its tuple to the base session above.
+	if csrf, err := record.CSRFState().Bindings(); err == nil {
+		out = binary.BigEndian.AppendUint32(out, csrf.KeyVersion)
+		out = append(out, csrf.Digest[:]...)
+	}
 	return out
 }
 
@@ -50,7 +56,7 @@ func appendSessionAuthorityRecord(out []byte, b session.AuthorityBinding) []byte
 	return binary.BigEndian.AppendUint64(out, b.Version)
 }
 
-func readSessionRecord(r *recordReader) (session.Session, error) {
+func readSessionRecord(r *recordReader, csrfBound bool) (session.Session, error) {
 	s := session.SessionSpec{}
 	a := session.AuthoritySnapshotSpec{}
 	m := &s.Authentication
@@ -97,7 +103,18 @@ func readSessionRecord(r *recordReader) (session.Session, error) {
 	if err != nil {
 		return session.Session{}, ErrInvalidCommand
 	}
-	record, err := session.NewSession(s)
+	var record session.Session
+	if csrfBound {
+		csrf := session.CSRFStateSpec{Binding: session.CSRFBinding{TenantID: s.TenantID, SessionID: s.SessionID, SessionVersion: s.Version}, KeyVersion: r.u32()}
+		copy(csrf.Digest[:], r.take(32))
+		state, stateErr := session.NewCSRFState(csrf)
+		if !r.ok || stateErr != nil {
+			return session.Session{}, ErrInvalidCommand
+		}
+		record, err = session.NewSessionWithCSRF(s, state)
+	} else {
+		record, err = session.NewSession(s)
+	}
 	if err != nil {
 		return session.Session{}, ErrInvalidCommand
 	}

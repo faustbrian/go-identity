@@ -10,13 +10,25 @@ import (
 )
 
 const issuanceRecordPrefix = "identity-otp-issuance-record-v1\x00"
+const csrfIssuanceRecordPrefix = "identity-otp-issuance-record-v2\x00"
+
+func continuationHasCSRF(c otp.Continuation) bool {
+	b, _ := c.Bindings()
+	s, ok := b.Authorization.AuthenticatedSession()
+	_, err := s.CSRFState().Bindings()
+	return ok && err == nil
+}
 
 // Only initial digest-only custody is encoded. Codes and submitted bearers have
 // no field in this closed frame. Recovery must not synthesize or renew them.
 func encodeIssuanceRecord(challenge otp.Challenge) []byte {
 	s, _ := challenge.Bindings()
 	p, checks, _ := s.Policy.Bindings()
-	out := appendSendContinuation([]byte(issuanceRecordPrefix), s.Continuation)
+	prefix := issuanceRecordPrefix
+	if continuationHasCSRF(s.Continuation) {
+		prefix = csrfIssuanceRecordPrefix
+	}
+	out := appendSendContinuation([]byte(prefix), s.Continuation)
 	out = appendAuthorityText(out, p.Alphabet)
 	out = binary.BigEndian.AppendUint32(out, uint32(p.Length))
 	for _, d := range []time.Duration{p.TTL, p.ResendInterval, checks.LockoutAfter} {
@@ -63,11 +75,16 @@ func appendSendContinuation(out []byte, continuation otp.Continuation) []byte {
 
 func decodeIssuanceRecord(data []byte) (otp.Challenge, error) {
 	bad := func() (otp.Challenge, error) { return otp.Challenge{}, ErrInvalidCommand }
-	if len(data) > 8192 || !bytes.HasPrefix(data, []byte(issuanceRecordPrefix)) {
+	csrfBound := bytes.HasPrefix(data, []byte(csrfIssuanceRecordPrefix))
+	if len(data) > 8192 || !csrfBound && !bytes.HasPrefix(data, []byte(issuanceRecordPrefix)) {
 		return bad()
 	}
-	r := recordReader{data: data[len(issuanceRecordPrefix):], ok: true}
-	continuation, err := readSendContinuation(&r)
+	prefix := issuanceRecordPrefix
+	if csrfBound {
+		prefix = csrfIssuanceRecordPrefix
+	}
+	r := recordReader{data: data[len(prefix):], ok: true}
+	continuation, err := readSendContinuation(&r, csrfBound)
 	if err != nil {
 		return bad()
 	}
@@ -110,7 +127,7 @@ func decodeIssuanceRecord(data []byte) (otp.Challenge, error) {
 	return challenge, nil
 }
 
-func readSendContinuation(r *recordReader) (otp.Continuation, error) {
+func readSendContinuation(r *recordReader, csrfBound bool) (otp.Continuation, error) {
 	bad := func() (otp.Continuation, error) { return otp.Continuation{}, ErrInvalidCommand }
 	scope := otp.DigestScopeSpec{TenantID: r.text(256), Purpose: otp.Purpose(r.text(32)), SubjectID: r.text(256), Channel: otp.Channel(r.text(5))}
 	destination, err := otp.NewDestinationInput(r.text(320))
@@ -130,13 +147,16 @@ func readSendContinuation(r *recordReader) (otp.Continuation, error) {
 	var flow otp.FlowAuthorization
 	switch otp.FlowAuthorizationKind(r.u8()) {
 	case otp.FlowAuthorizationPreAuthTransaction:
+		if csrfBound {
+			return bad()
+		}
 		original, e := readPreAuthRecord(r)
 		if e != nil {
 			return bad()
 		}
 		flow, err = otp.NewBoundPreAuthAuthorization(original)
 	case otp.FlowAuthorizationAuthenticatedSession:
-		original, e := readSessionRecord(r)
+		original, e := readSessionRecord(r, csrfBound)
 		if e != nil {
 			return bad()
 		}

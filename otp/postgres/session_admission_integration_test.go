@@ -29,7 +29,7 @@ import (
 // The protected email and audit/outbox effects are existing deliberate SQL
 // seams. Session/credential authority, OTP and coordinator execution are real.
 func TestNativeSessionOTPPrimaryComposition(t *testing.T) {
-	for _, mode := range []string{"metered-correct", "metered-wrong", "metered-cap", "metered-concurrent-first", "metered-concurrent-replay", "metered-final-correct", "metered-final-wrong", "metered-disabled", "metered-audit-failure", "consume", "wrong-denial", "takeover", "rollback", "recovery-revoked", "recovery-unknown", "session-revoked", "family-revoked", "user-blocked", "credential-disabled", "stale-authorization", "stale-directory", "user-epoch", "identifier-epoch", "credential-epoch", "credential-version", "session-expired", "freshness-expired", "freshness-lock-expiry", "credential-lock-expiry", "initiation", "initiation-revoked", "initiation-expired", "initiation-near-expiry"} {
+	for _, mode := range []string{"csrf-current", "csrf-changed", "csrf-stripped", "metered-correct", "metered-wrong", "metered-cap", "metered-concurrent-first", "metered-concurrent-replay", "metered-final-correct", "metered-final-wrong", "metered-disabled", "metered-audit-failure", "consume", "wrong-denial", "takeover", "rollback", "recovery-revoked", "recovery-unknown", "session-revoked", "family-revoked", "user-blocked", "credential-disabled", "stale-authorization", "stale-directory", "user-epoch", "identifier-epoch", "credential-epoch", "credential-version", "session-expired", "freshness-expired", "freshness-lock-expiry", "credential-lock-expiry", "initiation", "initiation-revoked", "initiation-expired", "initiation-near-expiry"} {
 		t.Run(mode, func(t *testing.T) {
 			ctx, db, peer := otpDatabase(t)
 			directory := kernel.DirectoryAuthorityMigrationSource{Base: kernel.CredentialMigrationSource{Base: kernel.StatusMigrationSource{Base: kernel.MigrationSource{}, Version: 12}, Version: 13}, Version: 14, GlobalAuthorityID: "deployment", TenantIDs: []identity.TenantID{"tenant"}}
@@ -48,6 +48,17 @@ func TestNativeSessionOTPPrimaryComposition(t *testing.T) {
 				}
 			}
 			m, _ := authoritypg.AuthoritySchemaMigration(300)
+			if strings.HasPrefix(mode, "csrf-") {
+				h, err := (sessionpg.CSRFMigrationSource{Schema: "session_store", Version: 201}).Load(ctx)
+				if err != nil {
+					t.Fatal(err)
+				}
+				for _, migration := range h {
+					if _, err := db.Exec(ctx, migration.UpSQL()); err != nil {
+						t.Fatal(err)
+					}
+				}
+			}
 			if _, err := db.Exec(ctx, m.Up); err != nil {
 				t.Fatal(err)
 			}
@@ -91,6 +102,33 @@ func TestNativeSessionOTPPrimaryComposition(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
+			if strings.HasPrefix(mode, "csrf-") {
+				a, err := config.Codec.restoreAttempt(command, attempt)
+				if err != nil {
+					t.Fatal(err)
+				}
+				ab, _ := a.Bindings()
+				continuation := csrfContinuation(t, ab.Continuation)
+				cb, _ := continuation.Bindings()
+				original, _ = cb.Authorization.AuthenticatedSession()
+				spec, _ := command.Feature()
+				authority, err := config.Codec.restoreAuthority(spec)
+				if err != nil {
+					t.Fatal(err)
+				}
+				spec.Fields = []identity.FeatureField{{Name: "feature.flag", Value: identity.FeatureValue{Kind: identity.FeatureBool, Bool: true}}}
+				issuer, _ := otp.NewAttemptIssuer(7, [32]byte{0x31})
+				code, _ := command.OneTimeCode()
+				a, err = issuer.PrepareForCommand(ctx, spec.Binding, spec.Operation, continuation, ab.Mode, ab.ExpectedVersion, code)
+				if err != nil {
+					t.Fatal(err)
+				}
+				token, _ := command.SessionToken()
+				command, attempt, err = config.Codec.MapSessionWithAuthority(ctx, a, 3, spec, token, authority)
+				if err != nil {
+					t.Fatal(err)
+				}
+			}
 			p, err := NewContributorWithSession(config.ContributorConfig, *config.Session)
 			if err != nil {
 				t.Fatal(err)
@@ -114,6 +152,18 @@ func TestNativeSessionOTPPrimaryComposition(t *testing.T) {
 				t.Fatal(err)
 			}
 			lifetime, _ := original.Lifetime(s.LastActivityAt)
+			if strings.HasPrefix(mode, "csrf-") {
+				var stored map[string]any
+				if err := json.Unmarshal(payload, &stored); err != nil {
+					t.Fatal(err)
+				}
+				csrf, _ := original.CSRFState().Bindings()
+				stored["Schema"], stored["CSRF"] = 2, csrf
+				payload, err = json.Marshal(stored)
+				if err != nil {
+					t.Fatal(err)
+				}
+			}
 			const instant = "2006-01-02T15:04:05.000000000Z"
 			if _, err := db.Exec(ctx, `INSERT INTO session_store.families VALUES('tenant','family','user',7,'active',$1)`, s.IssuedAt.Format(instant)); err != nil {
 				t.Fatal(err)
@@ -158,6 +208,8 @@ func TestNativeSessionOTPPrimaryComposition(t *testing.T) {
 			}
 			changes := map[string]string{"session-revoked": `UPDATE session_store.sessions SET state='revoked'`, "family-revoked": `UPDATE session_store.families SET state='revoked'`, "user-blocked": `UPDATE identity.users SET status='banned'`, "credential-disabled": `UPDATE identity.credential_references SET enabled=false`, "stale-authorization": `UPDATE authorization_subject_authorities SET version=10`, "stale-directory": `UPDATE identity.tenant_authorities SET version=4`, "user-epoch": `UPDATE identity.users SET authority_version=5`, "identifier-epoch": `UPDATE identity.users SET identifier_version=6`, "credential-epoch": `UPDATE identity.users SET credential_version=7`, "credential-version": `UPDATE identity.credential_references SET version=15`}
 			changes["initiation-revoked"] = changes["session-revoked"]
+			changes["csrf-changed"] = `UPDATE session_store.sessions SET record=jsonb_set(record,'{CSRF,KeyVersion}','8'::jsonb)`
+			changes["csrf-stripped"] = `UPDATE session_store.sessions SET record=jsonb_set(record-'CSRF','{Schema}','1'::jsonb)`
 			if strings.HasPrefix(mode, "metered-final-") {
 				// One prior check and one wrong consume share the total budget.
 				if _, err := db.Exec(ctx, `UPDATE otp_store.challenges SET used_attempts=1,checks=1,version=2; UPDATE otp_store.challenges SET used_attempts=2,failed_attempts=1,version=3`); err != nil {
@@ -503,6 +555,13 @@ func TestNativeSessionOTPPrimaryComposition(t *testing.T) {
 				}
 				if state != "issued" || used != 0 || failed != 0 {
 					t.Fatal("denial charged challenge", state, used, failed)
+				}
+				var effects int
+				if err := db.QueryRow(ctx, `SELECT (SELECT count(*) FROM public.native_otp_domain)+(SELECT count(*) FROM public.native_otp_lifecycle)`).Scan(&effects); err != nil {
+					t.Fatal(err)
+				}
+				if effects != 0 {
+					t.Fatal("denied primary produced protected effects")
 				}
 				return
 			}

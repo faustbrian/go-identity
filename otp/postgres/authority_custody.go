@@ -131,7 +131,10 @@ func decodeBoundAuthorityRecord(data []byte, binding identity.CommandBinding, is
 	}
 	record, authority, err := decodeAuthorityProfile(data, binding, profile)
 	if issuance && err != nil {
-		return decodeAuthorityProfile(data, binding, issuanceRecipientRecordPrefix)
+		record, authority, err = decodeAuthorityProfile(data, binding, csrfIssuanceRecordPrefix)
+		if err != nil {
+			return decodeAuthorityProfile(data, binding, issuanceRecipientRecordPrefix)
+		}
 	}
 	return record, authority, err
 }
@@ -167,7 +170,7 @@ func decodeAuthorityProfile(data []byte, binding identity.CommandBinding, profil
 	default:
 		return bad()
 	}
-	validRecord := bytes.HasPrefix(record, []byte(recordPrefix)) || bytes.HasPrefix(record, []byte(boundRecordPrefix)) || bytes.HasPrefix(record, []byte(sessionRecordPrefix))
+	validRecord := bytes.HasPrefix(record, []byte(recordPrefix)) || bytes.HasPrefix(record, []byte(boundRecordPrefix)) || bytes.HasPrefix(record, []byte(sessionRecordPrefix)) || bytes.HasPrefix(record, []byte(csrfSessionRecordPrefix))
 	if profile != "" {
 		validRecord = bytes.HasPrefix(record, []byte(profile))
 	}

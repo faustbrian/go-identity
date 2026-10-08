@@ -12,11 +12,11 @@ require (
 	github.com/faustbrian/go-identity v0.0.0-20261007092517-8969d596e5c8
 	github.com/faustbrian/go-identity/delivery v0.0.0-20261004192212-c70512ebfb31
 	github.com/faustbrian/go-identity/delivery/postgres v0.0.0-20261007103133-8316d8af9fd7
-	github.com/faustbrian/go-identity/otp v0.0.0-20261008094051-d50abac5521a
+	github.com/faustbrian/go-identity/otp v0.0.0-20261008203226-3220edb15e43
 	github.com/faustbrian/go-identity/postgres v0.0.0-20261008065127-3f34e21c705d
 	github.com/faustbrian/go-identity/risk v0.0.0-20261008072308-b2d88e4d68db
-	github.com/faustbrian/go-identity/session v0.0.0-20261006211905-771638a6f6d4
-	github.com/faustbrian/go-identity/session/postgres v0.0.0-20261007045948-bbdea0265ae7
+	github.com/faustbrian/go-identity/session v0.0.0-20261008195308-9e9b25864d55
+	github.com/faustbrian/go-identity/session/postgres v0.0.0-20261008202327-7a2bc6e3a5d0
 	github.com/faustbrian/go-migrations/v3 v3.0.2-0.20261001014304-a461b18b6b24
 	github.com/faustbrian/go-secret-envelope v1.0.1-0.20260913112010-22fc4a2d925d
 	github.com/jackc/pgx/v5 v5.10.0

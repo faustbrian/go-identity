@@ -13,7 +13,7 @@ import (
 const issuanceRecipientRecordPrefix = "identity-otp-recipient-issuance-v1\x00"
 
 func unwrapRecipientIssuance(data []byte) ([]byte, *kernel.RecipientRecord, error) {
-	if bytes.HasPrefix(data, []byte(issuanceRecordPrefix)) {
+	if bytes.HasPrefix(data, []byte(issuanceRecordPrefix)) || bytes.HasPrefix(data, []byte(csrfIssuanceRecordPrefix)) {
 		return data, nil, nil
 	}
 	if !bytes.HasPrefix(data, []byte(issuanceRecipientRecordPrefix)) || len(data) > 8192 {

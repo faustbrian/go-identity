@@ -122,6 +122,9 @@ func FuzzBoundSessionRecord(f *testing.F) {
 	issuer, _ := otp.NewAttemptIssuer(7, [32]byte{0x31})
 	sealed, _ := issuer.SealForCommand(attempt)
 	f.Add(encodeAttemptRecord(sealed))
+	csrfAttempt, _, _ := csrfSessionCustodyFixture(f)
+	csrfSealed, _ := issuer.SealForCommand(csrfAttempt)
+	f.Add(encodeAttemptRecord(csrfSealed))
 	f.Add([]byte{})
 	f.Fuzz(func(t *testing.T, data []byte) {
 		if len(data) > 8193 {

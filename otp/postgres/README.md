@@ -230,6 +230,15 @@ no current validity or authenticated-session admission.
 Structural custody alone is not a current lookup, credential-possession proof
 or operation permission. Native admission is explicitly enabled separately.
 
+CSRF-bearing originals select attempt v5, issuance v2, and Send v3 (without
+recipient) or v4 (with recipient). Each carries the original named CSRF key
+version and digest, with tenant/session/version derived from the exact retained
+session tuple. Tokenless profiles retain their original bytes. Upgrade readers
+before enabling these continuations: older binaries reject the new profiles.
+Restoration never looks up a replacement original or renews freshness. Custody
+does not enforce browser Origin, submission channel or synchronizer-token
+possession; the transport and native admission still own those checks.
+
 ## Native authenticated-session execution
 
 Use `NewContributorWithSession` with a separate `SessionAdmissionConfig` to
