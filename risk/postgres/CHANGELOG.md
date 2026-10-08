@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Export activated velocity eligibility through this adapter's concrete current
+  primary health check. Foreign, expired, invalidated or changed custody denies;
+  no caller health callback, cached allowance or timestamp renewal is accepted.
+  Native continuity and journaled public-store execution remain required.
+
 - Activate an exact covered, primary-confirmed and native-confirmed velocity
   snapshot under the existing primary writer fence. Retain original cut and
   expiry; record actual activation time separately. Current eligibility checks

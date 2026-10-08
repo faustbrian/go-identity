@@ -375,6 +375,14 @@ evidence and decisions. It is **not yet an executable durable risk service**.
   establish present native continuity or public traffic admission: the owned
   store must enforce the exact native marker, continuity and durable intent/
   result conservation at each effect boundary. That composition remains pending.
+- `OwnedEligibility` exports an acknowledged `VelocityHealthy` through the
+  configured exact original lease/native-confirmed cut, using only this
+  adapter's concrete `CheckHealthy`. It accepts no application health callback.
+  Every core eligibility read rechecks current primary state and original expiry
+  with bounded context; export/repetition do not write or renew timestamps.
+  Primary corruption, invalidation, expiry, takeover or unavailability denies
+  copied custody. Export does not establish native continuity or execute a
+  counter effect; the owned native/store composition remains required.
 - `MapIssue` accepts only an opaque successful core evaluation and matching
   trusted identity binding. `IssueOperation` fixes its closed native schema.
 - The native decoder verifies every signed field and current configured policy.

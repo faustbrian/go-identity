@@ -101,6 +101,94 @@ func testVelocityActivation(t *testing.T, ctx context.Context, journal VelocityJ
 	if err := r.CheckHealthy(ctx, h); err != nil {
 		t.Fatal("activated primary eligibility unavailable", err)
 	}
+	// This entire alternative chain is genuine and uses the same configured
+	// authority graph, but belongs to another primary tenant/lease/cut. Core
+	// identity authentication alone cannot bind it to this healthy receipt.
+	alternative := prepareEmptyVelocityActivationWithOwner(t, ctx, r, native, "activation-other-tenant", [16]byte{118})
+	if _, err := verifier.NativeConfirmation(alternative.owned, alternative.closed, alternative.published, alternative.confirmed, alternative.ack); err != nil {
+		t.Fatal("alternative chain is not coherent configured custody", err)
+	}
+	if got, err := r.OwnedEligibility(ctx, h, alternative.owned, alternative.closed, alternative.published, alternative.confirmed, alternative.ack); err == nil || got != (risk.VelocityEligibility{}) {
+		t.Fatal("healthy receipt admitted another coherent primary chain", err)
+	}
+	var beforeExport string
+	if err := cfg.Pool.Raw().QueryRow(ctx, `SELECT to_jsonb(e)::text FROM risk_store.velocity_epochs e WHERE tenant_id=$1 AND namespace_digest=$2 AND epoch=$3`, l.state.tenant, journal.state.namespace, l.state.epoch[:]).Scan(&beforeExport); err != nil {
+		t.Fatal(err)
+	}
+	eligibility, err := r.OwnedEligibility(ctx, h, owned, closed, published, confirmed, ack)
+	if err != nil {
+		t.Fatal("actual primary health did not export configured eligibility", err)
+	}
+	if got, err := verifier.Eligibility(ctx, owned, closed, published, confirmed, ack, eligibility); err != nil || got != r.state.closureBinding(l.state, cut.state) {
+		t.Fatal("concrete current health crossing lost original cut", err)
+	}
+	if _, err := r.OwnedEligibility(ctx, h, owned, closed, published, confirmed, ack); err != nil {
+		t.Fatal("repeated export cannot read current health", err)
+	}
+	var afterExport string
+	if err := cfg.Pool.Raw().QueryRow(ctx, `SELECT to_jsonb(e)::text FROM risk_store.velocity_epochs e WHERE tenant_id=$1 AND namespace_digest=$2 AND epoch=$3`, l.state.tenant, journal.state.namespace, l.state.epoch[:]).Scan(&afterExport); err != nil || afterExport != beforeExport {
+		t.Fatal("eligibility export rewrote primary custody or timestamps", err)
+	}
+	for _, invoke := range []func() (risk.VelocityEligibility, error){
+		func() (risk.VelocityEligibility, error) {
+			return r.OwnedEligibility(ctx, VelocityHealthy{}, owned, closed, published, confirmed, ack)
+		},
+		func() (risk.VelocityEligibility, error) {
+			return (VelocityRecovery{}).OwnedEligibility(ctx, h, owned, closed, published, confirmed, ack)
+		},
+		func() (risk.VelocityEligibility, error) {
+			return r.OwnedEligibility(ctx, h, risk.VelocityLease{}, closed, published, confirmed, ack)
+		},
+		func() (risk.VelocityEligibility, error) {
+			return r.OwnedEligibility(ctx, h, owned, risk.VelocityClosure{}, published, confirmed, ack)
+		},
+		func() (risk.VelocityEligibility, error) {
+			return r.OwnedEligibility(ctx, h, owned, closed, risk.VelocityPublication{}, confirmed, ack)
+		},
+		func() (risk.VelocityEligibility, error) {
+			return r.OwnedEligibility(ctx, h, owned, closed, published, risk.VelocityConfirmation{}, ack)
+		},
+		func() (risk.VelocityEligibility, error) {
+			return r.OwnedEligibility(ctx, h, owned, closed, published, confirmed, risk.VelocityNativeConfirmation{})
+		},
+	} {
+		if got, err := invoke(); err == nil || got != (risk.VelocityEligibility{}) {
+			t.Fatal("invalid eligibility custody exported", err)
+		}
+	}
+	if got, err := r.OwnedEligibility(nil, h, owned, closed, published, confirmed, ack); err == nil || got != (risk.VelocityEligibility{}) {
+		t.Fatal("nil export context exposed eligibility")
+	}
+	exportCanceled, exportCancel := context.WithCancel(ctx)
+	exportCancel()
+	if got, err := r.OwnedEligibility(exportCanceled, h, owned, closed, published, confirmed, ack); !errors.Is(err, context.Canceled) || got != (risk.VelocityEligibility{}) {
+		t.Fatal("canceled export exposed eligibility", err)
+	}
+	// Hold the actual primary fence: both export and retained validation must
+	// respect caller deadlines rather than use historical healthy allowance.
+	held, err := cfg.Pool.Raw().Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer velocityRollback(held)
+	if err := r.state.lock(ctx, held, l.state.tenant); err != nil {
+		t.Fatal(err)
+	}
+	blocked, stopBlocked := context.WithTimeout(ctx, 50*time.Millisecond)
+	gotBlocked, blockedErr := r.OwnedEligibility(blocked, h, owned, closed, published, confirmed, ack)
+	stopBlocked()
+	if !errors.Is(blockedErr, context.DeadlineExceeded) || gotBlocked != (risk.VelocityEligibility{}) {
+		t.Fatal("blocked primary export ignored deadline", blockedErr)
+	}
+	blocked, stopBlocked = context.WithTimeout(ctx, 50*time.Millisecond)
+	cutBlocked, blockedErr := verifier.Eligibility(blocked, owned, closed, published, confirmed, ack, eligibility)
+	stopBlocked()
+	if !errors.Is(blockedErr, context.DeadlineExceeded) || cutBlocked != (risk.VelocityClosureBinding{}) {
+		t.Fatal("blocked primary used cached eligibility", blockedErr)
+	}
+	if err := held.Rollback(ctx); err != nil {
+		t.Fatal(err)
+	}
 	if err := r.CheckLease(ctx, l); err == nil {
 		t.Fatal("healthy traffic widened replay custody")
 	}
@@ -144,6 +232,9 @@ func testVelocityActivation(t *testing.T, ctx context.Context, journal VelocityJ
 	if err := foreign.CheckHealthy(ctx, h); err == nil {
 		t.Fatal("foreign instance accepted health")
 	}
+	if got, err := foreign.OwnedEligibility(ctx, h, owned, closed, published, confirmed, ack); err == nil || got != (risk.VelocityEligibility{}) {
+		t.Fatal("foreign instance exported health")
+	}
 	if err := r.CheckHealthy(ctx, VelocityHealthy{}); err == nil {
 		t.Fatal("zero health accepted")
 	}
@@ -158,6 +249,9 @@ func testVelocityActivation(t *testing.T, ctx context.Context, journal VelocityJ
 	}
 	if err := r.CheckHealthy(ctx, h); err == nil {
 		t.Fatal("corrupt applied progress remained healthy")
+	}
+	if got, err := verifier.Eligibility(ctx, owned, closed, published, confirmed, ack, eligibility); err == nil || got != (risk.VelocityClosureBinding{}) {
+		t.Fatal("exported eligibility cached corrupt primary health")
 	}
 	if _, err := cfg.Pool.Raw().Exec(ctx, `UPDATE risk_store.velocity_epochs SET applied_seal=set_byte(applied_seal,0,get_byte(applied_seal,0)#1) WHERE tenant_id=$1 AND namespace_digest=$2 AND epoch=$3`, l.state.tenant, journal.state.namespace, l.state.epoch[:]); err != nil {
 		t.Fatal(err)
@@ -185,6 +279,9 @@ func testVelocityActivation(t *testing.T, ctx context.Context, journal VelocityJ
 	if err := r.CheckHealthy(ctx, h); err != nil {
 		t.Fatal("new retained history changed current epoch eligibility", err)
 	}
+	if got, err := verifier.Eligibility(ctx, owned, closed, published, confirmed, ack, eligibility); err != nil || got != r.state.closureBinding(l.state, cut.state) {
+		t.Fatal("exported eligibility lost current health after journal growth", err)
+	}
 	if err := r.InvalidateHealthy(ctx, h); err != nil {
 		t.Fatal(err)
 	}
@@ -193,6 +290,12 @@ func testVelocityActivation(t *testing.T, ctx context.Context, journal VelocityJ
 	}
 	if err := r.CheckHealthy(ctx, h); err == nil {
 		t.Fatal("invalidated primary remained healthy")
+	}
+	if got, err := verifier.Eligibility(ctx, owned, closed, published, confirmed, ack, eligibility); err == nil || got != (risk.VelocityClosureBinding{}) {
+		t.Fatal("exported eligibility survived primary invalidation")
+	}
+	if got, err := r.OwnedEligibility(ctx, h, owned, closed, published, confirmed, ack); err == nil || got != (risk.VelocityEligibility{}) {
+		t.Fatal("invalidated primary exported new eligibility")
 	}
 	if got, err := r.Activate(ctx, l, owned, cut, closed, published, confirmed, ack); err == nil || got.state != nil {
 		t.Fatal("historical native acknowledgement resurrected invalidated health")
@@ -213,12 +316,18 @@ type velocityActivationCase struct {
 func prepareEmptyVelocityActivation(t *testing.T, ctx context.Context, journal VelocityJournal, tenant string, epoch [16]byte, duration time.Duration) velocityActivationCase {
 	t.Helper()
 	j, _, native, verifier := risk.NewVelocityRecoveryAuthorities()
-	f := velocityActivationCase{}
-	var err error
-	f.r, err = NewVelocityRecovery(VelocityRecoveryConfig{Journal: journal, MaximumWindow: time.Hour, LeaseDuration: duration, JournalIssuer: j, NativeVerifier: verifier})
+	r, err := NewVelocityRecovery(VelocityRecoveryConfig{Journal: journal, MaximumWindow: time.Hour, LeaseDuration: duration, JournalIssuer: j, NativeVerifier: verifier})
 	if err != nil {
 		t.Fatal(err)
 	}
+	return prepareEmptyVelocityActivationWithOwner(t, ctx, r, native, tenant, epoch)
+}
+
+func prepareEmptyVelocityActivationWithOwner(t *testing.T, ctx context.Context, r VelocityRecovery, native risk.VelocityNativeIssuer, tenant string, epoch [16]byte) velocityActivationCase {
+	t.Helper()
+	f := velocityActivationCase{r: r}
+	journal := VelocityJournal{state: r.state.journal}
+	var err error
 	f.l, err = f.r.Acquire(ctx, tenant, epoch)
 	if err != nil {
 		t.Fatal(err)
@@ -310,11 +419,21 @@ func testVelocityActivationCommitAndExpiry(t *testing.T, ctx context.Context, jo
 	if err != nil {
 		t.Fatal(err)
 	}
+	expiresEligibility, err := f.r.OwnedEligibility(ctx, h, f.owned, f.closed, f.published, f.confirmed, f.ack)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if _, err := cfg.Pool.Raw().Exec(ctx, `SELECT pg_sleep(GREATEST(0,EXTRACT(EPOCH FROM ($1::timestamptz-clock_timestamp())))+0.005)`, f.l.state.expires); err != nil {
 		t.Fatal(err)
 	}
 	if err := f.r.CheckHealthy(ctx, h); err == nil {
 		t.Fatal("expired original health admitted")
+	}
+	if got, err := f.r.state.nativeVerifier.Eligibility(ctx, f.owned, f.closed, f.published, f.confirmed, f.ack, expiresEligibility); err == nil || got != (risk.VelocityClosureBinding{}) {
+		t.Fatal("copied export renewed expired primary eligibility")
+	}
+	if got, err := f.r.OwnedEligibility(ctx, h, f.owned, f.closed, f.published, f.confirmed, f.ack); err == nil || got != (risk.VelocityEligibility{}) {
+		t.Fatal("expired primary exported new eligibility")
 	}
 	if got, err := f.activate(ctx); err == nil || got.state != nil {
 		t.Fatal("retry refreshed expired health")
@@ -328,5 +447,8 @@ func testVelocityActivationCommitAndExpiry(t *testing.T, ctx context.Context, jo
 	}
 	if err := f.r.InvalidateHealthy(ctx, h); err == nil {
 		t.Fatal("old health invalidated successor")
+	}
+	if got, err := f.r.state.nativeVerifier.Eligibility(ctx, f.owned, f.closed, f.published, f.confirmed, f.ack, expiresEligibility); err == nil || got != (risk.VelocityClosureBinding{}) {
+		t.Fatal("old export admitted after successor takeover")
 	}
 }
