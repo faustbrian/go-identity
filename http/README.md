@@ -351,6 +351,43 @@ checks and construct their responses. Never send even an OAuth error redirect
 to a denied target. This HTTPS foundation does not implement native-application
 or loopback HTTP exceptions, browser redirect journeys or full secure routing.
 
+## Cookie-mutation CSRF input
+
+Construct `NewCSRFDecoder(CSRFDecoderConfig{Origins: origins, FormField:
+"csrf_token"})` with an explicit immutable origin guard and form-field name.
+There is no default field. Names are lowercase ASCII identifiers, 1..64 bytes,
+starting with a letter; idempotency-key names are reserved. The fixed header is
+`X-CSRF-Token`. This profile is selected by trusted cookie-route composition,
+not by inspecting an inbound Authorization header or Cookie.
+
+The opt-in session feature calls `DecodeCSRF(decoder, request,
+session.ParseCSRFToken)`. Base HTTP does not import session. The parser is a
+trusted synchronous, bounded, no-IO credential constructor, not an arbitrary
+authentication callback. Errors return no credential or form data; parser
+diagnostics and token values are never reflected. Cancellation is preserved.
+
+Only exact POST, PUT, PATCH and DELETE are supported. Origin admission and
+bounded envelope/query decoding precede token parsing. Exactly one canonical
+43-byte unpadded base64url token must arrive through the fixed header or the
+configured URL-encoded form field. Duplicate/case-alias/query channels and
+header/form coexistence deny even when values agree. Cached Form/PostForm are
+ignored. Forms are read under the configured limits even with a header; success
+returns remaining form fields without the token. JSON requires the header and
+remains unread for the owning strict typed decoder, which must reject undeclared
+body credential fields before any domain work. Multipart is not supported.
+Body interruption and borrowed ownership follow `RequestDecoder.Form`; this
+helper does not close or drain the body or start background work.
+
+Successful input admission is **not** authentication or a session-validity lease.
+The feature must pass the opaque token to session PostgreSQL `RequireCSRF` with
+the frozen original session in the protected transaction, retaining primary
+fences through protected work. Token age metadata is not enforced here; no
+timestamp, freshness or authority is invented. Safe methods, bearer-only routes,
+pre-authentication, origin-only and bound-origin flows use separate profiles.
+This helper does not install routes or replace that feature-owned integration.
+The external consumer fixture in `testdata/sessioncsrf/composition_test.go`
+exercises the public HTTP/session seam without adding a base-module dependency.
+
 ## Tradeoffs and FAQ
 
 **Why is Start blocking?** Startup/bind errors and the final serving outcome have

@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add bounded cookie-mutation CSRF input admission with exact origin policy,
+  one canonical header or explicitly named form token, ambiguous-channel denial
+  and opaque owner-parser composition. Preserve unread JSON and remaining form
+  input without adding a mandatory session dependency. Protected transactional
+  session admission, token-age policy and endpoint wiring remain separate.
+
 - Add exact-route, explicit credential-mode CORS admission around Golib's Fetch
   engine. Preflights perform no handler/body work; response commitment retains
   approved grants, Vary dimensions and bearer no-store despite downstream
