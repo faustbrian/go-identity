@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Carry the configured native owner's acknowledgement of exact marker
+  confirmation separately from primary confirmation and current eligibility.
+  Issuance rechecks original recovery authority; pure historical identity reads
+  do not renew or restore it. Primary activation and native continuity remain
+  independently required before traffic admission.
+
 - Let a configured velocity native owner derive its own read-only verifier
   without accepting an unrelated capability. Verification cannot grant native
   issuance, effects or healthy admission; zero ownership denies derivation.

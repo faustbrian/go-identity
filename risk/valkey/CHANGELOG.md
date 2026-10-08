@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Retain an opaque configured-native acknowledgement only after exact marker
+  confirmation, bounded transport continuity and final primary checks. Lost,
+  late or substituted IO exposes no acknowledgement and never resends. This
+  checkpoint does not activate the public counter store or publish primary
+  healthy state.
+
 - Separate explicit recovery fence initialization/renewal from per-record
   restoration. A disappeared live fence now denies restoration without writes
   or acknowledgement instead of silently reinstalling it. Initialization

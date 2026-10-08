@@ -110,6 +110,13 @@ same digest without writes or expiry changes. Only an attributable reply plus
 final original-primary checks exposes `VelocityPublication`. Lost or late
 acknowledgements expose none and never trigger a resend.
 
+The private native confirmation path now retains an opaque acknowledgement of
+its exact successful marker transition after final primary checks, under one
+unchanged deadline. A lost/late acknowledgement or observed continuity loss
+returns no custody and is never implicitly retried. Its historical facts can
+be consumed by the primary activation owner, but cannot certify current
+eligibility or bypass the exact-marker/native-continuity debit checks.
+
 Publication is **not primary confirmation or usable health**. Bare epochs and
 `published` markers cannot authorize mutation. The private engine recognizes
 only a bounded, non-expired `confirmed` cut representation, including when

@@ -83,6 +83,17 @@ Concrete adapter export, native confirmation and present continuity are still
 required before traffic can be admitted. A publication acknowledgement or an
 ordinary covered cut cannot substitute for recorded primary confirmation.
 
+After exact native confirmation IO, the configured native owner calls
+`AcknowledgeNativeConfirmation` under the same bounded deadline. The resulting
+`VelocityNativeConfirmation` binds that exact confirmation chain and exposes no
+issuer. `NativeConfirmation` is deliberately a pure historical identity read:
+it does not run replaying-only checkers or establish current validity. This lets
+the primary independently recheck and reconcile its own eventual healthy
+transition after replay custody has become invalid. Expired or superseded
+history may still match identity; it cannot authorize mutation, renew expiry,
+prove native continuity or permit traffic. The primary's locked state/expiry
+checks and the native effect boundary remain mandatory and unfinished here.
+
 ### Stable velocity replay identity
 
 `NewVelocityReplayIdentity(namespace, key)` owns the immutable shared lookup

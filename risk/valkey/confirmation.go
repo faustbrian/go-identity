@@ -20,6 +20,28 @@ var confirmationScript = publicationProfileScript + confirmationScriptBody
 // private checkpoint does not establish whole-counter continuity or public
 // healthy admission. The concrete public store remains unactivated.
 func (r ownedRecovery) confirm(ctx context.Context, lease risk.VelocityLease, closure risk.VelocityClosure, publication risk.VelocityPublication, confirmation risk.VelocityConfirmation) error {
+	_, err := r.confirmed(ctx, lease, closure, publication, confirmation)
+	return err
+}
+
+// confirmed retains the native owner's attributable exact transition after
+// the final primary and transport-continuity checks. The enclosing deadline
+// covers both marker IO and receipt issuance; issuance cannot reset its budget.
+// This historical acknowledgement is consumed by the primary activation owner,
+// not by ordinary mutation dispatch. It grants no traffic authority itself.
+func (r ownedRecovery) confirmed(ctx context.Context, lease risk.VelocityLease, closure risk.VelocityClosure, publication risk.VelocityPublication, confirmation risk.VelocityConfirmation) (risk.VelocityNativeConfirmation, error) {
+	if ctx == nil || r.transport == nil {
+		return risk.VelocityNativeConfirmation{}, risk.ErrInvalidVelocityRecovery
+	}
+	bounded, cancel := context.WithTimeout(ctx, r.transport.config.timeout)
+	defer cancel()
+	if err := r.confirmMarker(bounded, lease, closure, publication, confirmation); err != nil {
+		return risk.VelocityNativeConfirmation{}, err
+	}
+	return r.issuer.AcknowledgeNativeConfirmation(bounded, lease, closure, publication, confirmation)
+}
+
+func (r ownedRecovery) confirmMarker(ctx context.Context, lease risk.VelocityLease, closure risk.VelocityClosure, publication risk.VelocityPublication, confirmation risk.VelocityConfirmation) error {
 	if ctx == nil || r.transport == nil {
 		return risk.ErrInvalidVelocityRecovery
 	}
