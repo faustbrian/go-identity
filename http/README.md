@@ -187,8 +187,8 @@ the decoder is not a replacement for wire-level server framing validation.
 Header accounting includes each represented name, colon/space, value and CRLF,
 final CRLF and the separately represented Host. URL accounting covers the
 represented origin-form request URI and rejects conflicting RequestURI/URL.
-Trusted host/proxy semantics require the network resolver below; origin admission
-and CSRF/CORS enforcement remain separate, unfinished transport controls.
+Trusted host/proxy semantics require the network resolver below. Origin admission
+is separate; token-bound CSRF/CORS and router enforcement remain unfinished.
 
 Bodies are borrowed: the server or direct caller closes them. Reads consume at
 most the applicable raw or declared-length bound plus one byte, and do not
@@ -248,8 +248,40 @@ Resolve once for each owned request before tenant-scoped work. Facts are neither
 authentication proof nor a reusable authority lease. Server composition owns
 RemoteAddr/Host/TLS/header custody: arbitrary in-process requests or mutating
 middleware cannot establish provenance. Reload by replacing a newly validated
-resolver, not mutating configuration. Routing, rate enforcement, exact-origin
-admission, cookies and CSRF/CORS integration remain required subsequent work.
+resolver, not mutating configuration. Routing, rate enforcement, cookies and
+token-bound CSRF/CORS integration remain required subsequent work.
+
+## HTTPS origin admission
+
+`NewOriginGuard(OriginGuardConfig{...})` borrows the immutable network resolver
+and copies 1..128 distinct trusted origins. This profile requires canonical
+HTTPS origins: lowercase ASCII/IDNA hosts, no default port, path, query,
+fragment, userinfo or wildcard. Configuration and Origin header values are
+rejected rather than repaired when noncanonical. Nondefault ports are distinct.
+Extension and local-HTTP deployment profiles are not yet supported.
+
+`Check(request)` resolves the current network facts and requires one exact
+allowlisted Origin. A present empty, malformed, duplicate or untrusted Origin
+never falls back to Referer. Zero fallback and `RefererFallbackDeny` both deny
+an absent Origin. Only explicit `RefererFallbackSameOriginHTTPS` admits one
+absolute HTTPS Referer with an origin equal to the current trusted effective
+origin **and** the allowlist. Referer path/query is permitted; userinfo and
+fragments reject. Referer origins normalize ASCII host case/default ports through
+the same fixed identifier policy, never by suffix or cross-origin trust.
+Referer path/query bytes must satisfy RFC 3986 URI grammar; raw characters such
+as `|` and malformed percent escapes deny, while encoded equivalents remain valid.
+
+`CheckBound(request, initiatingOrigin)` additionally compares the exact validated
+origin to the workflow's stored binding. It does not validate or consume that
+workflow's state, nonce, PKCE, continuation or one-time token. Both methods
+return an empty origin on failure, retain cancellation/network classifications,
+and never read/close the body or mutate the request. Invalid origin evidence
+returns redacted `OriginError`; envelope errors retain `DecodeError`.
+
+Admission alone is not complete CSRF protection, authentication or authorization.
+Cookie mutations still require session-bound tokens. CORS, redirect policy and
+secure router integration remain separate work; consumers must not expose
+unprotected operation handlers directly.
 
 ## Tradeoffs and FAQ
 

@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add immutable HTTPS exact-origin admission with default-deny Referer fallback,
+  explicit same-effective-origin fallback and initiating-origin binding checks.
+  Ambiguous or invalid Origin cannot fall back. This foundation does not replace
+  session-bound CSRF tokens, protocol bindings or secure router enforcement.
+
 - Add immutable trusted-network resolution and exact public/tenant host mapping
   using fixed Unicode 15.1 IDNA. Select client, host and scheme from one trusted
   Forwarded boundary, ignore spoofed forwarding from untrusted peers, and deny
