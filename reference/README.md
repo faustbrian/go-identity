@@ -3,8 +3,9 @@
 **Development checkpoint:** this module currently implements only the
 PostgreSQL-journaled, TLS Valkey velocity store graph and optional native OTP
 Send/delivery composition. The complete reference server, HTTP features,
-readiness, migration
-Check/Plan/Apply workflow and identity journeys remain unimplemented here.
+readiness and identity journeys remain unimplemented here. Selected-module
+migration Check/Plan/Apply and durable native command resume are available as
+explicit store operations, not automatic startup behavior.
 
 ## Quick start
 
@@ -35,7 +36,8 @@ returned `MigrationSource()` using the existing `go-migrations/v3` PostgreSQL
 backend and runner before recovery. No private SQL runner or copied migration
 history is provided. Kernel versions remain 1–9; reference velocity uses the
 permanent allocation 1000–1011. Do not silently adopt a differently allocated
-existing ledger. Full reference migration planning remains future work.
+existing ledger. Prefer the explicit Check/Plan/Apply operations below for
+complete selected-owner migration coordination.
 
 Call `stores.RecoverVelocity(ctx, tenant)` explicitly. It returns no counter
 store until the actual primary journal has a full hour of coverage, all original
@@ -134,16 +136,62 @@ big-endian uint64 numbers/counts, length-prefixed strings and fixed 32-byte
 digests. No SQL, process identity or observation time is exposed. Returned
 collections belong to the caller; mutation invalidates the digest and never
 changes future results. Different ledgers are separately discovered snapshots,
-not a global atomic snapshot. Future Apply must rediscover under ownership and
+not a global atomic snapshot. Apply rediscovers under ownership and
 validate the complete value before writing, including no-op plans.
 
-**Migration limitation:** operational Apply, command-resume and
-startup/readiness integration remain unimplemented. The public OTP integration
-now upgrades the original recovery prefix through the actual selected native
-source and installs independent owner histories through native APIs, including
-atomic audit preflight. This proves conditional native adoption, not a complete
-consumer-facing migration coordinator or deployable reference server. Do not
-substitute consumer-written migration orchestration for those missing APIs.
+### Explicit operator Apply and recovery
+
+Set `StoreConfiguration.Migrations` to a `MigrationApplyPolicy` containing
+trusted deployment `TenantID`/`ActorID`, a stable nonzero 32-byte `LookupKey`,
+and a positive `CleanupTimeout` at most one minute. `LockTimeout` defaults to
+30 seconds, with explicit values from one second to five minutes. The velocity
+profile's `PrimaryTimeout` also bounds the entire operation, including lock
+acquisition; a longer lock budget cannot extend that outer deadline. Nil policy
+keeps Apply disabled without affecting read-only Check/Plan. Do not expose the
+operator policy or operation as an unauthenticated HTTP endpoint.
+
+Supply the complete unchanged plan, globally unique command ID (16–128 ASCII
+letters/digits/underscore/hyphen) and an owned `identity.IdempotencyKey`:
+
+```go
+result, err := stores.ReferenceMigrationApply(ctx,
+    reference.ReferenceMigrationApplyRequest{
+        CommandID: commandID, Plan: planned.Plan, IdempotencyKey: retryKey,
+    })
+```
+
+One native advisory ownership interval and physical connection cover every
+participating namespace. Before any command, ledger or schema write, Apply
+checks all participating native histories, unowned-object guards and the exact
+rebuilt plan, including self-consistent but truncated/reordered submissions.
+Each native batch commits SQL, its original ledger rows and command attribution
+together. Fresh audit preflight and its whole history share one transaction.
+No migration SQL is copied or executed by a reference-owned runner.
+
+Inspect `result.Result.State()` and the safe typed `MigrationError`; dirty,
+incompatible, locked, pending and unknown are not success. Only `MigrationApplied`
+proves complete current command attribution. `Receipts()` returns a detached
+sorted contributor prefix; a no-op has no applied-step receipts. A later failure
+does not erase earlier durable work, and a partial result is not a usable
+readiness claim.
+
+Persist the **original complete plan**, command ID and retry key in the operator
+deployment workflow. Retry exactly those values to resume through a newly
+constructed StoreSet. Native receipts—not matching schema or a clean external
+suffix—are the sole progress authority. An ambiguous commit returns
+`identity.UnknownCommitError` with that original command ID. An exact retry
+reconciles authoritative native evidence under ownership before continuing;
+an unavailable authority cannot prove success or rollback. Do not generate a
+replacement command, infer completion from schema, advance the plan base or
+delete unresolved command records. Records have no automatic expiration and
+must be retained throughout the reconciliation window. Changing operator scope,
+key or policy cannot rebind an old command. Retain the original policy during
+recovery. Caller retry keys are never stored in plaintext.
+
+Close cancels and drains active migration operations with finite independent
+cleanup, without closing the borrowed PostgreSQL pool. Startup/readiness and
+the complete ReferenceService/server facade remain unimplemented. These
+operations alone do not make the reference profile deployable.
 
 Once selected schemas exist, `features.Initialize(ctx)` registers native
 metadata without warming risk or sending messages. Obtain the public Send
@@ -174,6 +222,10 @@ APIs and full reference acceptance remain outstanding.
   compatibility, bounded by the store lifetime; no partial statuses on failure.
 - `StoreSet.ReferenceMigrationPlan`: deterministic read-only plan with complete
   participating source/history binding; no usable plan on failure.
+- `MigrationApplyPolicy`: explicit copied operator scope, keyed retry binding
+  and finite ownership/cleanup policy. Nil disables Apply.
+- `StoreSet.ReferenceMigrationApply`: exact original plan execution and native
+  same-command reconciliation/resume, with immutable bounded receipts.
 - `StoreSet.RecoverVelocity`: one bounded, fail-closed recovery/activation.
 - `StoreSet.Close`: permanent cancellation and bounded joining; repeated calls
   are safe, and a deadline does not reopen ownership.
@@ -221,8 +273,10 @@ actual one-hour lane can prove genuine fresh warmup.
 
 ## Verification and release notes
 
-Integration tests require isolated loopback PostgreSQL and authenticated TLS
-Valkey. They reject missing fixture inputs. The actual warmup test requires
+Integration tests require isolated loopback PostgreSQL and explicit native TLS
+configuration. Apply/Plan/Check do not connect to Valkey; risk/OTP runtime tests
+additionally require authenticated TLS Valkey. Missing fixture inputs fail.
+The actual warmup test requires
 `IDENTITY_REFERENCE_REAL_WARMUP=1` and a timeout exceeding one hour. No tests
 contact existing application services. Exact coverage, mutation, interoperability,
 clean-consumer and complete reference acceptance gates remain release requirements.

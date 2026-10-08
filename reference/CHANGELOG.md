@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Add opt-in operator migration Apply with complete-plan revalidation before
+  writes, keyed operator-scoped retry binding and native atomic attribution.
+  Original command requests resume across reconstructed owners and independent
+  histories without replaying completed steps or adopting external progress.
+  Dirty, incompatible, locked and unknown outcomes remain distinct; ambiguous
+  commits retain their command identity for authoritative reconciliation.
+  Check/Plan remain read-only. Automatic startup/server integration is pending.
+
 - Add deterministic read-only selected-module migration planning, binding the
   complete participating native sources, ownership guards and ledger metadata.
   Pending prerequisites require explicit selection; completed prerequisites

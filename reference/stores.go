@@ -42,6 +42,8 @@ type StoreConfiguration struct {
 	// the recovery-only profile. No caller evaluator or domain store is accepted.
 	OTP      *OTPSendConfiguration
 	Delivery *DeliveryConfiguration
+	// Migrations enables explicit operator Apply; nil keeps Check/Plan only.
+	Migrations *MigrationApplyPolicy
 }
 
 // VelocityStoreConfiguration selects one primary/native recovery pair. Native
@@ -71,20 +73,21 @@ type VelocityStoreConfiguration struct {
 type StoreSet struct{ state *storeState }
 
 type storeState struct {
-	pool     *database.Pool
-	mu       sync.Mutex
-	closed   bool
-	active   int
-	drained  chan struct{}
-	lifetime context.Context
-	cancel   context.CancelFunc
-	tenants  map[string]*tenantRecovery
-	native   riskvalkey.VelocityRecovery
-	primary  riskpostgres.VelocityRecovery
-	config   VelocityStoreConfiguration
-	policy   risk.Policy
-	keys     []risk.CounterDigestKey
-	features *featureState
+	pool       *database.Pool
+	mu         sync.Mutex
+	closed     bool
+	active     int
+	drained    chan struct{}
+	lifetime   context.Context
+	cancel     context.CancelFunc
+	tenants    map[string]*tenantRecovery
+	native     riskvalkey.VelocityRecovery
+	primary    riskpostgres.VelocityRecovery
+	config     VelocityStoreConfiguration
+	policy     risk.Policy
+	keys       []risk.CounterDigestKey
+	features   *featureState
+	migrations *MigrationApplyPolicy
 }
 
 type tenantRecovery struct {
@@ -99,6 +102,10 @@ type tenantRecovery struct {
 // It does not enable traffic: RecoverVelocity must establish real covered
 // journal history and native-confirmed activation. Invalid input is redacted.
 func ComposeStores(c StoreConfiguration, d ReferenceDependencies) (StoreSet, error) {
+	migrationPolicy, err := copyMigrationApplyPolicy(c.Migrations)
+	if err != nil {
+		return StoreSet{}, err
+	}
 	v := c.Velocity
 	if len(v.Tenants) < 1 || len(v.Tenants) > 128 || v.Batch < 1 || v.Batch > 1000 || v.MaxRecords < 1 || v.MaxRecords > 100000 || v.RecoveryTimeout <= 0 || v.RecoveryTimeout >= v.LeaseDuration {
 		return StoreSet{}, risk.ErrInvalidPolicy
@@ -139,7 +146,7 @@ func ComposeStores(c StoreConfiguration, d ReferenceDependencies) (StoreSet, err
 	// Resource owners already copied the sensitive configuration. Retain only
 	// traversal bounds; no caller TLS objects, secret slices or tenant slices.
 	retained := VelocityStoreConfiguration{Schema: v.Schema, Batch: v.Batch, MaxRecords: v.MaxRecords, RecoveryTimeout: v.RecoveryTimeout, PrimaryTimeout: v.PrimaryTimeout}
-	state := &storeState{pool: d.PostgreSQL, drained: drained, lifetime: lifetime, cancel: cancel, tenants: tenants, native: native, primary: primary, config: retained, policy: v.Native.Policy, keys: slices.Clone(v.Native.Keys)}
+	state := &storeState{pool: d.PostgreSQL, drained: drained, lifetime: lifetime, cancel: cancel, tenants: tenants, native: native, primary: primary, config: retained, policy: v.Native.Policy, keys: slices.Clone(v.Native.Keys), migrations: migrationPolicy}
 	if err := state.composeFeatureStores(c, d); err != nil {
 		cancel()
 		return StoreSet{}, err
