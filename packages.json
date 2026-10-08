@@ -2,6 +2,7 @@
   "schema_version": 1,
   "repository": "github.com/faustbrian/go-identity",
   "packages": [
+    {"module_directory":"risk","directory":"internal/velocity","name":"velocity","import_path":"github.com/faustbrian/go-identity/risk/internal/velocity","kind":"internal","production":true,"executable":true,"coverage_required":true,"build_required":true,"build_tags":[]},
     {"module_directory":".","directory":"internal/velocity","name":"velocity","import_path":"github.com/faustbrian/go-identity/internal/velocity","kind":"internal","production":true,"executable":true,"coverage_required":true,"build_required":true,"build_tags":[]},
     {"module_directory":"risk/valkey","directory":".","name":"valkey","import_path":"github.com/faustbrian/go-identity/risk/valkey","kind":"public","production":true,"executable":true,"coverage_required":true,"build_required":true,"build_tags":[]},
     {"module_directory":"otp/postgres","directory":".","name":"postgres","import_path":"github.com/faustbrian/go-identity/otp/postgres","kind":"public","production":true,"executable":true,"coverage_required":true,"build_required":true,"build_tags":[]},

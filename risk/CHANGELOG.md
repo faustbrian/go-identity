@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add a private owned-adapter connection for journal-before-native execution
+  and original-result conservation. Unresolved intent or terminal ambiguity
+  never permits redispatch. Concrete adapter factories and live composition
+  remain under development; no application callback or new authority is added.
+
 - Let the configured journal read an opaque counter result's original
   declaration through its matching logical command. Snapshot copies preserve
   outcome and timestamps even after expiry; projection grants neither dispatch

@@ -183,7 +183,7 @@
       "directory": "risk",
       "module_path": "github.com/faustbrian/go-identity/risk",
       "go_version": "1.27.0",
-      "packages": [{"module_directory":"risk","directory":".","name":"risk","import_path":"github.com/faustbrian/go-identity/risk","kind":"public","production":true,"executable":true,"coverage_required":true,"build_required":true,"build_tags":[]}],
+      "packages": [{"module_directory":"risk","directory":".","name":"risk","import_path":"github.com/faustbrian/go-identity/risk","kind":"public","production":true,"executable":true,"coverage_required":true,"build_required":true,"build_tags":[]},{"module_directory":"risk","directory":"internal/velocity","name":"velocity","import_path":"github.com/faustbrian/go-identity/risk/internal/velocity","kind":"internal","production":true,"executable":true,"coverage_required":true,"build_required":true,"build_tags":[]}],
       "purpose": "Canonical risk policy admission and scoped deterministic assessment; durable service and evidence issuance in development.",
       "lifecycle": "experimental",
       "kind": "public library",

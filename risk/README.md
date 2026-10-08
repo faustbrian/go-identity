@@ -11,6 +11,16 @@ RiskEvidence/CaptchaEvidence issuance remain required implementation work.
 
 ### Owned velocity recovery custody
 
+The private `risk/internal/velocity` connection orders owned adapter calls:
+acknowledged original intent precedes a single native invocation, and the
+original result is retained through that receipt. Matching retries use terminal
+primary readback, never redispatch unresolved attempts. An error accompanying a
+known commit denies admission without erasing the outcome. The connection adds
+no journal, health cache, epoch or authority graph. Only owned adapters can bind
+its functions; application holders of opaque adapter outputs cannot invoke a
+bare native effect. Concrete factories and real primary/native composition are
+still unfinished, so this private connection does not enable public traffic.
+
 `VelocityJournalIssuer.AcknowledgeEligibility` retains an already acknowledged
 primary activation of the exact native-confirmed chain with its bounded current
 primary checker. `VelocityNativeVerifier.Eligibility` authenticates that chain
