@@ -3,10 +3,11 @@
 **Development checkpoint, not a complete identity HTTP product.** Go 1.27.
 This independently versioned module currently owns server lifecycle, separate
 health/readiness probe handlers, typed opt-in operation selection and bounded
-ordinary request parsing. Credential binding imports only identity kernel and
-authentication contracts, no feature implementation or reference server.
-Routes, protocol parsers, authentication/authorization, cookies/CSRF/CORS, trusted
-network/tenant resolution, rate controls, hooks and OpenAPI composition
+ordinary request parsing, credential binding and trusted-network/tenant admission.
+Dependencies are identity kernel, authentication and stable identifier contracts,
+not feature implementations or the reference server.
+Routes, protocol parsers, authentication/authorization, cookies/CSRF/CORS,
+rate controls, hooks and OpenAPI composition
 remain required subsequent work. Do not deploy an identity endpoint from this
 checkpoint without those transport controls.
 
@@ -186,7 +187,8 @@ the decoder is not a replacement for wire-level server framing validation.
 Header accounting includes each represented name, colon/space, value and CRLF,
 final CRLF and the separately represented Host. URL accounting covers the
 represented origin-form request URI and rejects conflicting RequestURI/URL.
-Trusted host/proxy/origin semantics remain the future resolver's responsibility.
+Trusted host/proxy semantics require the network resolver below; origin admission
+and CSRF/CORS enforcement remain separate, unfinished transport controls.
 
 Bodies are borrowed: the server or direct caller closes them. Reads consume at
 most the applicable raw or declared-length bound plus one byte, and do not
@@ -196,6 +198,58 @@ this synchronous API. Returned `DecodeError` retains no raw input or reader
 diagnostic. No parser authenticates a credential or performs domain work.
 Trusted credential routing, protocol-specific and multipart decoding, router
 status/error integration and complete endpoint verification remain pending.
+
+## Trusted network and exact tenant admission
+
+`NewNetworkResolver(NetworkConfig{...})` copies one immutable deployment policy.
+Supply explicit decoder limits, 1..16 maximum forwarding elements (reference 8),
+at most 128 canonical masked proxy prefixes and 1..1024 total exact host bindings.
+Empty proxy prefixes trust none. Duplicate or IPv4-mapped prefixes reject;
+overlapping prefixes are an explicit set union. Tenant/public hosts cannot overlap.
+Configuration hosts must already be canonical and port-free; Unicode request
+hosts use the identifier owner's fixed Unicode 15.1 nontransitional UTS46 tables.
+DNS names are lowercase ASCII, IPv4 dotted decimal and IPv6 bracketed canonical
+text. Wildcards, trailing dots (including mapped Unicode dots), unknown hosts
+and suffix-derived tenants deny. Numeric/hex-looking final DNS labels also deny
+to avoid browser legacy-IPv4 reinterpretation; use canonical IP literals instead.
+
+`Resolve(request)` returns opaque `NetworkFacts` or zero facts with an error.
+An untrusted socket peer ignores forwarding semantics and uses its actual IP,
+request Host and TLS state. A trusted socket peer requires exactly one
+`Forwarded` map key and value. The selected closed RFC 7239 subset requires:
+
+- At most the configured elements and 16 parameters per element; no empty
+  elements/pairs, duplicate case-insensitive names, or whitespace around `=`.
+- A concrete unicast `for` address in every element; optional `by` must also
+  be concrete. Unknown/obfuscated identifiers and ports, zones, unspecified
+  and multicast addresses deny. Quoted IPv6/IP-with-port syntax is supported.
+- All chain syntax is validated, including attacker-controlled prefixes. Walk
+  right-to-left through trusted senders to the first untrusted `for` address.
+  That element alone must supply both valid `host` and `proto=http|https`.
+  Never borrow earlier host/proto or fall back to the proxy/direct host.
+- Unknown extension parameters are syntax-checked but supply no authority.
+  Quoted separators and escaped quote/backslash are handled as data.
+
+All `X-Forwarded-*` semantics are ignored, not combined with `Forwarded`.
+Missing, malformed, duplicate or exhausted trusted chains return sanitized
+`ErrUnavailable`; invalid envelope/host or an unmapped host returns `DecodeError`.
+Cancellation preserves its context error. Parsed header limits still apply to
+ignored fields. No DNS, body reads, goroutines, stores or domain callbacks occur.
+
+`ClientIP()` returns the full canonical unicast address, unmapping IPv4-mapped
+IPv6 with no subnet aggregation. `Host()` is the exact port-free map key;
+`Authority()` preserves a validated explicit decimal port. `Origin()` omits
+only the scheme's default port. `Realm()` explicitly distinguishes `RealmPublic`
+from `RealmTenant`; only the latter has a `TenantID()`. A query/body/header tenant
+cannot override that binding. Facts are redacted in ordinary diagnostics and
+cannot serialize implicitly; getters deliberately disclose metadata to trusted code.
+
+Resolve once for each owned request before tenant-scoped work. Facts are neither
+authentication proof nor a reusable authority lease. Server composition owns
+RemoteAddr/Host/TLS/header custody: arbitrary in-process requests or mutating
+middleware cannot establish provenance. Reload by replacing a newly validated
+resolver, not mutating configuration. Routing, rate enforcement, exact-origin
+admission, cookies and CSRF/CORS integration remain required subsequent work.
 
 ## Tradeoffs and FAQ
 

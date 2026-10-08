@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add immutable trusted-network resolution and exact public/tenant host mapping
+  using fixed Unicode 15.1 IDNA. Select client, host and scheme from one trusted
+  Forwarded boundary, ignore spoofed forwarding from untrusted peers, and deny
+  malformed/exhausted chains or unknown hosts without partial authority. Origin
+  ports are preserved; routing and origin/CSRF/CORS enforcement remain pending.
+
 - Add explicit required, optional-protocol and forbidden header binding into
   existing opaque idempotency-key and bearer credential contracts. Reject
   ambiguous headers and alternative key channels without reading the body or

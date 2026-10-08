@@ -15,7 +15,7 @@
       "family": "service-edge",
       "version": "0.0.0",
       "tag_prefix": "http/v",
-      "owned_dependencies": ["github.com/faustbrian/go-authentication","github.com/faustbrian/go-identity"],
+      "owned_dependencies": ["github.com/faustbrian/go-authentication","github.com/faustbrian/go-identifier","github.com/faustbrian/go-identity"],
       "reverse_owned_dependencies": [],
       "external_runtime_dependencies": [],
       "required_services": [],
