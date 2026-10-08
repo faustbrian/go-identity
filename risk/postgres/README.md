@@ -383,6 +383,15 @@ evidence and decisions. It is **not yet an executable durable risk service**.
   Primary corruption, invalidation, expiry, takeover or unavailability denies
   copied custody. Export does not establish native continuity or execute a
   counter effect; the owned native/store composition remains required.
+- `OwnedJournal` binds the same original activation to this owner's concrete
+  primary journal. Pass its opaque output to the owned native factory; callers
+  cannot name the internal connection type or supply journal/effect callbacks.
+  Every use checks current primary eligibility and exact configured tenant,
+  policy and keys. An acknowledged intent retains its original receipt through
+  terminal recording; replay reads immutable primary history without retry
+  permission. Primary transactions finish before native work, and copied
+  connections cannot cache allowance or renew expiry. The native public factory
+  and complete live PostgreSQL/Valkey crossing remain unfinished.
 - `MapIssue` accepts only an opaque successful core evaluation and matching
   trusted identity binding. `IssueOperation` fixes its closed native schema.
 - The native decoder verifies every signed field and current configured policy.

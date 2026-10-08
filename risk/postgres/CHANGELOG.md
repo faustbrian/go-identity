@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Bind activated velocity custody to the concrete primary journal through an
+  opaque owned connection. Persist acknowledged intent before native work,
+  conserve original terminal declarations and deny stale or foreign admission
+  without callbacks or cached health. The native public factory and complete
+  live composition remain required; this does not activate public traffic.
+
 - Export activated velocity eligibility through this adapter's concrete current
   primary health check. Foreign, expired, invalidated or changed custody denies;
   no caller health callback, cached allowance or timestamp renewal is accepted.

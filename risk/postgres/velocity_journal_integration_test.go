@@ -198,6 +198,7 @@ func testVelocityJournal(t *testing.T, ctx context.Context, dsn, databaseName st
 	testVelocityOwnedClosure(t, ctx, journal, cfg)
 	testVelocityRestart(t, ctx, journal, cfg, dsn, databaseName)
 	testVelocityActivation(t, ctx, journal, cfg)
+	testVelocityJournalConnection(t, ctx, journal, cfg)
 	testVelocityActivationCommitAndExpiry(t, ctx, journal, cfg, dsn, databaseName)
 	testVelocityPublication(t, ctx, journal, cfg, dsn, databaseName)
 }
