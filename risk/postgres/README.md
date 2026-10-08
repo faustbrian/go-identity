@@ -349,6 +349,32 @@ evidence and decisions. It is **not yet an executable durable risk service**.
   confirmation does not prove current native marker/counter continuity, write
   a confirmed native marker or expose a public counter store. Paired admission
   and reference activation remain unfinished. No SQL lock spans native IO.
+- `VelocityActivationMigrationSource{Base: publicationSource, Version:
+  nextAllocation}` adds actual `activated_at` to the existing epoch authority.
+  `healthy_at` remains the original covered snapshot watermark; neither cut nor
+  lease expiry is rewritten to pretend it was observed at activation time.
+  Existing healthy rows lack the required native activation provenance and
+  become unavailable while retaining windows, lockouts, history and lease
+  expiry. Replay rows and confirmations are not promoted. Coordinate all
+  participants before relying on joint admission; old experimental binaries
+  that bypass current primary eligibility are not a supported mixed profile.
+- `Activate` requires the original lease/covered cut and exact configured
+  primary/publication/native-confirmation custody. It drains journal writers,
+  reauthenticates primary progress/history/coverage and recorded confirmation,
+  records eligibility and then reopens writers. Its opaque `VelocityHealthy`
+  is not cached permission: `CheckHealthy` rereads exact current primary state
+  and original expiry. Replay-only lease/closure/publication checks still deny
+  after activation. Matching healthy retries reconcile the original timestamp;
+  overlapping attempts may return unavailable and require explicit retry.
+  Unknown commits expose no receipt, never native resend permission.
+- `InvalidateHealthy` makes only the unchanged activation unavailable. Retained
+  metadata permits exact idempotent reconciliation without resurrecting health,
+  clearing counters/lockouts or shortening custody. The current owner can
+  invalidate after expiry; stale owners cannot affect successors. New recovery
+  still waits for authoritative lease expiry. Primary eligibility does not
+  establish present native continuity or public traffic admission: the owned
+  store must enforce the exact native marker, continuity and durable intent/
+  result conservation at each effect boundary. That composition remains pending.
 - `MapIssue` accepts only an opaque successful core evaluation and matching
   trusted identity binding. `IssueOperation` fixes its closed native schema.
 - The native decoder verifies every signed field and current configured policy.

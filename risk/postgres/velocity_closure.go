@@ -21,6 +21,7 @@ type velocityRecoveryClosure struct {
 	position      int64
 	from, through time.Time
 	started       time.Time
+	activated     time.Time
 }
 
 func (VelocityRecoveryClosure) Format(s fmt.State, _ rune) {
@@ -189,8 +190,17 @@ func (r VelocityRecovery) primaryPublicationClosure(ctx context.Context, lease V
 		if err := s.confirmPublication(bounded, tx, l, result, confirmation, now); err != nil {
 			return VelocityRecoveryClosure{}, err
 		}
-		if _, err := s.liveLease(bounded, tx, l); err != nil {
+		now, err = s.liveLease(bounded, tx, l)
+		if err != nil {
 			return VelocityRecoveryClosure{}, err
+		}
+		if confirmation.activate {
+			// Keep the native-confirmed snapshot watermark unchanged. Actual
+			// activation time is separate and cannot launder cut freshness.
+			if _, err := tx.Exec(bounded, `UPDATE `+s.journal.schema+`.velocity_epochs SET state='healthy',healthy_at=replay_through,activated_at=$4 WHERE tenant_id=$1 AND namespace_digest=$2 AND epoch=$3`, l.tenant, s.journal.namespace, l.epoch[:], now); err != nil {
+				return VelocityRecoveryClosure{}, identity.UnavailableError{}
+			}
+			result.activated = now
 		}
 	}
 	if err := tx.Commit(bounded); err != nil {

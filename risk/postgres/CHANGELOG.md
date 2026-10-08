@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- Activate an exact covered, primary-confirmed and native-confirmed velocity
+  snapshot under the existing primary writer fence. Retain original cut and
+  expiry; record actual activation time separately. Current eligibility checks
+  do not widen replay custody, and matching retries preserve all timestamps.
+  Invalidation is terminal for that activation and reconciles ambiguous commits
+  without clearing counters or lockouts. Install the forward activation
+  migration: legacy healthy rows without activation provenance become
+  unavailable while their retained facts and windows remain intact. Native
+  continuity and owned public-store execution are still required for traffic.
+
 - Restart a live velocity recovery traversal after projection loss with new
   generation-bound custody and zero applied progress. Preserve the original
   expiry, history origin and journal lifetime; stale closure and publication

@@ -12,9 +12,10 @@ import (
 )
 
 type velocityPublicationCheck struct {
-	cut     *velocityRecoveryClosure
-	id      [32]byte
-	persist bool
+	cut      *velocityRecoveryClosure
+	id       [32]byte
+	persist  bool
+	activate bool
 }
 
 // ConfirmPublication durably records the configured native owner's exact

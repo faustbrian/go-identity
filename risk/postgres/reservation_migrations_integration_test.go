@@ -275,13 +275,33 @@ func TestRiskReservationPopulatedUpgrade(t *testing.T) {
 	if err := db.QueryRowContext(ctx, `SELECT count(*) FROM risk_store.velocity_epochs WHERE publication_id IS NOT NULL OR publication_confirmed_at IS NOT NULL`).Scan(&manufactured); err != nil || manufactured != 0 {
 		t.Fatal("publication migration invented confirmation", err)
 	}
-	testVelocityJournal(t, ctx, dsn, name)
-	// A fresh full history uses the same constraints, not an upgrade-only schema.
-	fresh, err := (ReservationMigrationSource{Base: IssuanceIDMigrationSource{Base: MigrationSource{Schema: "risk_fresh", Version: 31}, Version: 32}, Version: 33}).Load(ctx)
+	// Legacy health has no native activation provenance. Upgrade must deny it
+	// without discarding its original lease, retained windows or journal facts.
+	if _, err := db.ExecContext(ctx, `INSERT INTO risk_store.velocity_epochs(tenant_id,namespace_digest,epoch,generation,maximum_window_us,state,lease_owner,lease_expires_at,replay_from,replay_through,healthy_at) SELECT 'migration-healthy',$1,$2,1,3600000000,'healthy',$3,n+interval '20 seconds',n-interval '1 hour 1 second',n,n FROM (SELECT clock_timestamp() AS n) clock`, wrappingKey(9), []byte{114, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, []byte{115, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}); err != nil {
+		t.Fatal(err)
+	}
+	var legacyBefore string
+	if err := db.QueryRowContext(ctx, `SELECT (to_jsonb(e)-'state'-'healthy_at')::text FROM risk_store.velocity_epochs e WHERE tenant_id='migration-healthy'`).Scan(&legacyBefore); err != nil {
+		t.Fatal(err)
+	}
+	activationHistory, err := (VelocityActivationMigrationSource{Base: VelocityPublicationMigrationSource{Base: VelocityCoverageMigrationSource{Base: VelocityAppliedMigrationSource{Base: VelocityReplayMigrationSource{Base: VelocityIntegrityMigrationSource{Base: intentSource, Version: 26}, Version: 27}, Version: 28}, Version: 29}, Version: 30}, Version: 31}).Load(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
-	install(append(append([]migrations.Migration(nil), publicationHistory...), fresh...))
+	install(activationHistory)
+	install(activationHistory)
+	var legacyAfter, legacyState string
+	var legacySnapshot, legacyActivated *time.Time
+	if err := db.QueryRowContext(ctx, `SELECT (to_jsonb(e)-'state'-'healthy_at'-'activated_at')::text,state,healthy_at,activated_at FROM risk_store.velocity_epochs e WHERE tenant_id='migration-healthy'`).Scan(&legacyAfter, &legacyState, &legacySnapshot, &legacyActivated); err != nil || legacyAfter != legacyBefore || legacyState != "unavailable" || legacySnapshot != nil || legacyActivated != nil {
+		t.Fatal("activation upgrade lost legacy facts or blessed health", err)
+	}
+	testVelocityJournal(t, ctx, dsn, name)
+	// A fresh full history uses the same constraints, not an upgrade-only schema.
+	fresh, err := (ReservationMigrationSource{Base: IssuanceIDMigrationSource{Base: MigrationSource{Schema: "risk_fresh", Version: 32}, Version: 33}, Version: 34}).Load(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	install(append(append([]migrations.Migration(nil), activationHistory...), fresh...))
 	if _, err := db.ExecContext(ctx, `INSERT INTO risk_fresh.issued_evidence SELECT * FROM risk_store.issued_evidence`); err != nil {
 		t.Fatal("fresh install lost issued-row compatibility", err)
 	}
