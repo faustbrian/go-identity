@@ -157,7 +157,7 @@ func TestCookieSignOutInactiveSuccessAndNoTransportDowngrade(t *testing.T) {
 }
 
 func TestCookieSignOutNeverClearsOnFailedExecution(t *testing.T) {
-	for _, mode := range []string{"unknown", "denied", "cancelled", "committed-error"} {
+	for _, mode := range []string{"unknown", "denied", "csrf-denied", "csrf-denied-with-receipt", "cancelled", "committed-error"} {
 		t.Run(mode, func(t *testing.T) {
 			reader, get, _, observation, token, key := cookieSignOutFixture(t)
 			spec, _ := observation.Session.Bindings()
@@ -167,6 +167,10 @@ func TestCookieSignOutNeverClearsOnFailedExecution(t *testing.T) {
 			defer cancel()
 			base, _ := session.NewSignOutService(reader, csrfRevokeExecutor{revokeExecutor(func(_ context.Context, r session.RevokeOneRequest) (identity.CommandResult, error) {
 				switch mode {
+				case "csrf-denied":
+					return identity.CommandResult{}, session.ErrCSRFDenied
+				case "csrf-denied-with-receipt":
+					return signOutReceipt(t, r, identity.CommitOutcomeUnknown), session.ErrCSRFDenied
 				case "denied":
 					return identity.CommandResult{}, identity.ForbiddenError{}
 				case "cancelled":
@@ -188,6 +192,12 @@ func TestCookieSignOutNeverClearsOnFailedExecution(t *testing.T) {
 			}
 			if mode == "unknown" && result.CommitOutcome != identity.CommitOutcomeUnknown {
 				t.Fatal("unknown outcome rewritten")
+			}
+			if mode == "csrf-denied" && (!errors.Is(err, session.ErrCSRFDenied) || result.CommitOutcome != identity.CommitOutcomeInvalid) {
+				t.Fatal("pre-reservation CSRF denial reported as ambiguous", err)
+			}
+			if mode == "csrf-denied-with-receipt" && result.CommitOutcome != identity.CommitOutcomeUnknown {
+				t.Fatal("CSRF error erased an existing unknown receipt")
 			}
 		})
 	}

@@ -203,7 +203,7 @@ func (s *SignOutService) signOut(ctx context.Context, r SignOutRequest, csrf CSR
 	// A typed denial with no receipt is the adapter's pre-reservation rejection,
 	// not a rollback claim. Other missing or inconsistent replies remain Unknown.
 	var forbidden identity.ForbiddenError
-	if receipt == (identity.CommandResult{}) && dependencyErr != nil && (errors.As(dependencyErr, &forbidden) || errors.Is(dependencyErr, ErrUnauthenticated) || errors.Is(dependencyErr, ErrInvalidInput)) {
+	if receipt == (identity.CommandResult{}) && dependencyErr != nil && (errors.As(dependencyErr, &forbidden) || errors.Is(dependencyErr, ErrUnauthenticated) || errors.Is(dependencyErr, ErrInvalidInput) || errors.Is(dependencyErr, ErrCSRFDenied)) {
 		out.CommitOutcome = identity.CommitOutcomeInvalid
 		return out, signOutError(dependencyErr)
 	}

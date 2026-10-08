@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Preserve deterministic CSRF denial when a cookie logout executor rejects its
+  key before reserving a command; do not report an unknown commit or clear the
+  cookie. Existing receipts still determine commit uncertainty.
+
 - Add explicit cookie-CSRF signout composition with immutable eligible-key
   selection and opaque token custody on the original revocation request.
   Active sessions deny missing, wrong or unknown-key tokens; absent/inactive
