@@ -36,6 +36,10 @@ type liveStores struct {
 }
 
 func newLiveStores(t *testing.T, ctx context.Context) liveStores {
+	return newLiveStoresProfile(t, ctx, true)
+}
+
+func newLiveStoresProfile(t *testing.T, ctx context.Context, install bool) liveStores {
 	t.Helper()
 	port := func(name string) string {
 		value := os.Getenv(name)
@@ -142,8 +146,10 @@ func newLiveStores(t *testing.T, ctx context.Context) liveStores {
 	if err != nil {
 		t.Fatal("cannot compose owned migrations")
 	}
-	if _, err := runner.Up(ctx); err != nil {
-		t.Fatal("owned upstream migrations failed", err)
+	if install {
+		if _, err := runner.Up(ctx); err != nil {
+			t.Fatal("owned upstream migrations failed", err)
+		}
 	}
 	return liveStores{stores: stores, pool: pool, config: c}
 }

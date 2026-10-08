@@ -71,6 +71,7 @@ type VelocityStoreConfiguration struct {
 type StoreSet struct{ state *storeState }
 
 type storeState struct {
+	pool     *database.Pool
 	mu       sync.Mutex
 	closed   bool
 	active   int
@@ -138,7 +139,7 @@ func ComposeStores(c StoreConfiguration, d ReferenceDependencies) (StoreSet, err
 	// Resource owners already copied the sensitive configuration. Retain only
 	// traversal bounds; no caller TLS objects, secret slices or tenant slices.
 	retained := VelocityStoreConfiguration{Schema: v.Schema, Batch: v.Batch, MaxRecords: v.MaxRecords, RecoveryTimeout: v.RecoveryTimeout, PrimaryTimeout: v.PrimaryTimeout}
-	state := &storeState{drained: drained, lifetime: lifetime, cancel: cancel, tenants: tenants, native: native, primary: primary, config: retained, policy: v.Native.Policy, keys: slices.Clone(v.Native.Keys)}
+	state := &storeState{pool: d.PostgreSQL, drained: drained, lifetime: lifetime, cancel: cancel, tenants: tenants, native: native, primary: primary, config: retained, policy: v.Native.Policy, keys: slices.Clone(v.Native.Keys)}
 	if err := state.composeFeatureStores(c, d); err != nil {
 		cancel()
 		return StoreSet{}, err

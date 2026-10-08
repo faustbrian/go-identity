@@ -5,6 +5,7 @@ package reference_test
 import (
 	"bytes"
 	"context"
+	"io"
 	"io/fs"
 	"strings"
 	"testing"
@@ -13,7 +14,6 @@ import (
 	auditpg "github.com/faustbrian/go-audit/postgres"
 	auth "github.com/faustbrian/go-authentication"
 	"github.com/faustbrian/go-authorization"
-	authoritypg "github.com/faustbrian/go-authorization/postgres"
 	"github.com/faustbrian/go-clock"
 	identity "github.com/faustbrian/go-identity"
 	"github.com/faustbrian/go-identity/delivery"
@@ -26,10 +26,12 @@ import (
 	"github.com/faustbrian/go-identity/session"
 	sessionpg "github.com/faustbrian/go-identity/session/postgres"
 	migrations "github.com/faustbrian/go-migrations/v3"
+	migrationdb "github.com/faustbrian/go-migrations/v3/postgres"
 	"github.com/faustbrian/go-secret-envelope/adapters/keyring"
 	outboxpg "github.com/faustbrian/go-transactional-outbox/v2/postgres"
 	lifecyclepg "github.com/faustbrian/go-transactional-outbox/v2/postgres/identity"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/stdlib"
 )
 
 const otpTenant = "AAAAAAAAAAAAAAAAAAAAAQ"
@@ -75,9 +77,10 @@ func otpGraphConfiguration(t *testing.T, c reference.StoreConfiguration) (refere
 	}
 	coordinator := kernel.CoordinatorConfig{MaximumDuration: 3 * time.Second, LeaseDuration: 4 * time.Second, CurrentFingerprintKeyVersion: 1, RetainedFingerprintKeys: map[uint32][32]byte{1: {1}}}
 	c.OTP = &reference.OTPSendConfiguration{
-		Store:       otppg.ContributorConfig{Schema: "otp_store", GlobalAuthorityID: "deployment", UserPolicyNamespace: "users", LockoutKey: [32]byte{0x61}, PreAuth: sessionpg.Config{Schema: "session_store", MaximumDuration: time.Second}, PreAuthCookieKeys: map[uint32][]byte{3: bytes.Repeat([]byte{0x57}, 32)}},
-		Codec:       otppg.AttemptCodecConfig{WrappingKeys: map[string][]byte{"wrap-1": bytes.Repeat([]byte{0x21}, 32)}, CurrentWrappingKey: "wrap-1", AttemptKeys: map[uint32][32]byte{7: {0x31}}, CodeKeys: map[uint32][32]byte{3: {0x41}, 4: {0x42}}, CurrentCodeKeyVersion: 4, MaximumDuration: time.Second},
-		Coordinator: coordinator, RequestKeys: requestKeys, Policy: policy, TemplateID: "otp-code", TemplateVersion: 1, LocaleChain: []string{"en"}, ProviderVersion: 1, PolicyID: "otp-policy", PolicyVersion: 7, PreAuthAction: "identity.otp.signin", IntentKey: [32]byte{0x67}, IdentifierKey: [32]byte{0x68}, Timeout: 3 * time.Second, RiskTimeout: 2 * time.Second, AuditTimeout: time.Second, RiskPolicyID: otpTenant, ConfigurationID: "otp-reference-v1", RiskKeys: []risk.EvidenceKey{riskKey},
+		BootstrapTenantIDs: []identity.TenantID{otpTenant},
+		Store:              otppg.ContributorConfig{Schema: "otp_store", GlobalAuthorityID: "deployment", UserPolicyNamespace: "users", LockoutKey: [32]byte{0x61}, PreAuth: sessionpg.Config{Schema: "session_store", MaximumDuration: time.Second}, PreAuthCookieKeys: map[uint32][]byte{3: bytes.Repeat([]byte{0x57}, 32)}},
+		Codec:              otppg.AttemptCodecConfig{WrappingKeys: map[string][]byte{"wrap-1": bytes.Repeat([]byte{0x21}, 32)}, CurrentWrappingKey: "wrap-1", AttemptKeys: map[uint32][32]byte{7: {0x31}}, CodeKeys: map[uint32][32]byte{3: {0x41}, 4: {0x42}}, CurrentCodeKeyVersion: 4, MaximumDuration: time.Second},
+		Coordinator:        coordinator, RequestKeys: requestKeys, Policy: policy, TemplateID: "otp-code", TemplateVersion: 1, LocaleChain: []string{"en"}, ProviderVersion: 1, PolicyID: "otp-policy", PolicyVersion: 7, PreAuthAction: "identity.otp.signin", IntentKey: [32]byte{0x67}, IdentifierKey: [32]byte{0x68}, Timeout: 3 * time.Second, RiskTimeout: 2 * time.Second, AuditTimeout: time.Second, RiskPolicyID: otpTenant, ConfigurationID: "otp-reference-v1", RiskKeys: []risk.EvidenceKey{riskKey},
 	}
 	deliveryPolicy := delivery.DefaultConfig()
 	deliveryPolicy.Production = true
@@ -154,7 +157,7 @@ func TestReferencePublicOTPCountsNativeIssuanceSuppressionAndReplay(t *testing.T
 	if _, err := service.Send(ctx, otp.SendRequest{}); err == nil {
 		t.Fatal("uninitialized graph admitted workflow")
 	}
-	installOTPGraphFixture(t, ctx, f)
+	installOTPGraphFixture(t, ctx, f, stores)
 	if err := features.Initialize(ctx); err != nil {
 		t.Fatal("native startup", err)
 	}
@@ -282,62 +285,203 @@ func TestReferencePublicOTPCountsNativeIssuanceSuppressionAndReplay(t *testing.T
 	}
 }
 
-func installOTPGraphFixture(t *testing.T, ctx context.Context, f liveStores) {
+func installOTPGraphFixture(t *testing.T, ctx context.Context, f liveStores, stores reference.StoreSet) {
 	t.Helper()
-	directory := kernel.DirectoryAuthorityMigrationSource{Base: kernel.CredentialMigrationSource{Base: kernel.StatusMigrationSource{Base: kernel.MigrationSource{}, Version: 12}, Version: 13}, Version: 14, GlobalAuthorityID: "deployment", TenantIDs: []identity.TenantID{otpTenant}}
-	preparation := kernel.AdmissionPreparationMigrationSource{Base: kernel.PreparationMigrationSource{Base: kernel.MigrationSource{}, Version: 10}, Version: 11}
-	keyed := kernel.RequestKeyPreparationMigrationSource{Base: kernel.RequestKeyMigrationSource{Base: kernel.MigrationSource{}, Version: 15}, Version: 16}
-	for _, source := range []migrations.Source{preparation, directory, keyed, otppg.MigrationSource{Schema: "otp_store", Version: 100}, otppg.LockoutMigrationSource{Schema: "otp_store", Version: 101}, otppg.SendFamilyMigrationSource{Schema: "otp_store", Version: 102}, otppg.IssuanceMigrationSource{Schema: "otp_store", Version: 103}, sessionpg.MigrationSource{Schema: "session_store", Version: 200}, sessionpg.PreAuthMigrationSource{Schema: "session_store", Version: 201}, deliverypg.MigrationSource{Base: kernel.MigrationSource{}, Version: 250, WorkerVersion: 251, PolicyVersion: 252, KeyedVersion: 253, StateVersion: 254}} {
+	pending := reference.ReferenceMigrationCheckRequest{Modules: []reference.ModuleID{"identity/otp/postgres", "audit/postgres", "outbox/postgres/identity"}}
+	before, err := stores.ReferenceMigrationCheck(ctx, pending)
+	if err != nil || len(before.Statuses) != 3 {
+		t.Fatal("pending selected discovery", err)
+	}
+	for _, status := range before.Statuses {
+		if status.CurrentVersion != 0 || status.Compatibility != reference.MigrationRequired {
+			t.Fatal("pending selected authority misclassified", status)
+		}
+	}
+	if _, err := f.pool.Raw().Exec(ctx, "CREATE SCHEMA otp_store"); err != nil {
+		t.Fatal(err)
+	}
+	unmanaged, err := stores.ReferenceMigrationCheck(ctx, reference.ReferenceMigrationCheckRequest{Modules: []reference.ModuleID{"identity/otp/postgres"}})
+	if err != nil || len(unmanaged.Statuses) != 1 || unmanaged.Statuses[0].Compatibility != reference.MigrationIncompatible {
+		t.Fatal("unmanaged optional schema adopted", err)
+	}
+	if _, err := f.pool.Raw().Exec(ctx, "DROP SCHEMA otp_store"); err != nil {
+		t.Fatal(err)
+	}
+	db := stdlib.OpenDBFromPool(f.pool.Raw())
+	defer db.Close()
+	backend, err := migrationdb.New(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	runner, err := migrations.NewRunner(stores.MigrationSource(), backend)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := runner.Up(ctx); err != nil {
+		t.Fatal("selected native source upgrade", err)
+	}
+	for _, owner := range []struct {
+		namespace string
+		files     fs.FS
+		preflight string
+	}{
+		{"audit", auditpg.Migrations(), auditpg.FreshInstallPreflightSQL()},
+		{"outbox", outboxpg.Migrations(), ""},
+		{"identity_outbox", lifecyclepg.Migrations(), ""},
+	} {
+		source, err := migrations.NewFSSource(fixtureMigrationFiles{owner.files}, ".")
+		if err != nil {
+			t.Fatal(err)
+		}
 		history, err := source.Load(ctx)
 		if err != nil {
 			t.Fatal(err)
 		}
-		for _, m := range history {
-			if m.Version() >= 10 {
-				if _, err := f.pool.Raw().Exec(ctx, m.UpSQL()); err != nil {
-					t.Fatal("owned fixture migrations", err)
+		owned, err := backend.ForNamespace(owner.namespace)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if owner.namespace == "audit" {
+			failure, err := migrations.NewMigration(history[len(history)-1].Version()+1, "fixture_late_failure", migrations.TransactionModeDefault, "SELECT 1/0", "")
+			if err != nil {
+				t.Fatal(err)
+			}
+			broken := append(append([]migrations.Migration(nil), history...), failure)
+			if records, err := owned.InstallFresh(ctx, broken, owner.preflight); err == nil || len(records) != 0 {
+				t.Fatal("late audit failure succeeded")
+			}
+			var rolledBack bool
+			if err := f.pool.Raw().QueryRow(ctx, `SELECT to_regclass('audit.records') IS NULL AND to_regclass('public.golib_migrations_audit') IS NULL AND NOT EXISTS(SELECT 1 FROM pg_catalog.pg_roles WHERE rolname IN('audit_writer','audit_reader','audit_retention'))`).Scan(&rolledBack); err != nil || !rolledBack {
+				t.Fatal("audit preflight escaped installation transaction", err)
+			}
+		}
+		installHistory := history
+		if owner.namespace == "audit" {
+			installHistory = history[:1]
+		}
+		if _, err := owned.InstallFresh(ctx, installHistory, owner.preflight); err != nil {
+			t.Fatal("original independent owner installation", err)
+		}
+		if owner.namespace == "audit" {
+			for _, table := range []string{"records", "retention_events"} {
+				if _, err := f.pool.Raw().Exec(ctx, "ALTER TABLE audit."+table+" ADD COLUMN accepted_order bigint"); err != nil {
+					t.Fatal(err)
+				}
+				result, err := stores.ReferenceMigrationCheck(ctx, reference.ReferenceMigrationCheckRequest{Modules: []reference.ModuleID{"audit/postgres"}})
+				if err != nil || len(result.Statuses) != 1 || result.Statuses[0].Compatibility != reference.MigrationIncompatible {
+					t.Fatal("unmanaged independent column adopted", table, result, err)
+				}
+				if _, err := f.pool.Raw().Exec(ctx, "ALTER TABLE audit."+table+" DROP COLUMN accepted_order"); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if _, err := f.pool.Raw().Exec(ctx, "CREATE TABLE audit.record_identities(unmanaged boolean)"); err != nil {
+				t.Fatal(err)
+			}
+			result, err := stores.ReferenceMigrationCheck(ctx, reference.ReferenceMigrationCheckRequest{Modules: []reference.ModuleID{"audit/postgres"}})
+			if err != nil || len(result.Statuses) != 1 || result.Statuses[0].Compatibility != reference.MigrationIncompatible {
+				t.Fatal("unmanaged later independent object adopted", result, err)
+			}
+			if _, err := f.pool.Raw().Exec(ctx, "DROP TABLE audit.record_identities"); err != nil {
+				t.Fatal(err)
+			}
+			upgrade, err := migrations.NewRunner(source, owned)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := upgrade.Up(ctx); err != nil {
+				t.Fatal("native independent owner upgrade", err)
+			}
+		}
+		records, err := owned.ReadLedger(ctx)
+		if err != nil || len(records) != len(history) {
+			t.Fatal("independent owner history", err)
+		}
+		for i, step := range history {
+			if records[i].Version() != step.Version() || records[i].Name() != step.Name() || records[i].Checksum() != step.Checksum() || records[i].Dirty() {
+				t.Fatal("native adoption rewrote original owner identity")
+			}
+		}
+		if _, err := owned.InstallFresh(ctx, history, owner.preflight); err == nil {
+			t.Fatal("nonempty owner history was silently reinstalled")
+		}
+		if owner.namespace == "audit" {
+			mixed, err := stores.ReferenceMigrationCheck(ctx, reference.ReferenceMigrationCheckRequest{Modules: []reference.ModuleID{"audit/postgres", "outbox/postgres", "outbox/postgres/identity"}})
+			if err != nil || len(mixed.Statuses) != 3 {
+				t.Fatal("independent mixed-state discovery", err)
+			}
+			for _, status := range mixed.Statuses {
+				if status.Module == "audit/postgres" {
+					if status.Compatibility != reference.MigrationCompatible || status.CurrentVersion != uint64(history[len(history)-1].Version()) {
+						t.Fatal("installed audit identity lost")
+					}
+				} else if status.Compatibility != reference.MigrationRequired || status.CurrentVersion != 0 {
+					t.Fatal("audit history satisfied another owner")
 				}
 			}
 		}
 	}
-	var roles int
-	if err := f.pool.Raw().QueryRow(ctx, "SELECT count(*) FROM pg_roles WHERE rolname IN('audit_writer','audit_reader','audit_retention')").Scan(&roles); err != nil {
-		t.Fatal(err)
+	check, err := stores.ReferenceMigrationCheck(ctx, reference.ReferenceMigrationCheckRequest{Modules: []reference.ModuleID{"identity/postgres", "identity/risk/postgres", "identity/otp/postgres", "identity/session/postgres", "identity/delivery/postgres", "authorization/postgres", "audit/postgres", "outbox/postgres", "outbox/postgres/identity"}})
+	if err != nil || len(check.Statuses) != 9 {
+		t.Fatal("native selected compatibility discovery", err)
 	}
-	if roles == 0 {
-		if _, err := f.pool.Raw().Exec(ctx, auditpg.FreshInstallPreflightSQL()); err != nil {
-			t.Fatal(err)
+	for _, status := range check.Statuses {
+		if status.Compatibility != reference.MigrationCompatible || status.CurrentVersion != status.RequiredVersion {
+			t.Fatal("installed selected owner incompatible", status.Module, status.Compatibility)
 		}
-	} else if roles != 3 {
-		t.Fatal("partial fixture audit roles")
-	}
-	for _, source := range []fs.FS{auditpg.Migrations(), outboxpg.Migrations(), lifecyclepg.Migrations()} {
-		entries, err := fs.ReadDir(source, ".")
-		if err != nil {
-			t.Fatal(err)
-		}
-		for _, entry := range entries {
-			wire, err := fs.ReadFile(source, entry.Name())
-			if err != nil {
-				t.Fatal(err)
-			}
-			if _, err := f.pool.Raw().Exec(ctx, strings.Split(string(wire), "-- +migrations Down")[0]); err != nil {
-				t.Fatal("owned fixture effects migrations", err)
-			}
-		}
-	}
-	authority, err := authoritypg.AuthoritySchemaMigration(300)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := f.pool.Raw().Exec(ctx, authority.Up); err != nil {
-		t.Fatal(err)
 	}
 	if _, err := f.pool.Raw().Exec(ctx, `INSERT INTO identity.users(tenant_id,user_id,status,version,authority_version,identifier_version,credential_version) VALUES('AAAAAAAAAAAAAAAAAAAAAQ','AAAAAAAAAAAAAAAAAAAAAg','active',1,1,1,1);
 INSERT INTO authorization_subject_authorities VALUES('AAAAAAAAAAAAAAAAAAAAAQ','users','AAAAAAAAAAAAAAAAAAAAAg',1);
 INSERT INTO identity.identifiers(tenant_id,user_id,identifier_id,kind,canonical_value,verified,is_primary,version,verification_state,verification_version,verified_at) VALUES('AAAAAAAAAAAAAAAAAAAAAQ','AAAAAAAAAAAAAAAAAAAAAg','email','email','recipient@example.invalid',true,true,1,2,1,clock_timestamp())`); err != nil {
 		t.Fatal("owned identity fixture", err)
 	}
+}
+
+// The test adapter borrows only immutable upstream embedded files. Native
+// FSSource owns parsing and validation; there is no test SQL runner.
+type fixtureMigrationFiles struct{ files fs.FS }
+
+func (f fixtureMigrationFiles) ReadDir(ctx context.Context, root string, limits migrations.SourceDirectoryLimits) ([]migrations.SourceEntry, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	entries, err := fs.ReadDir(f.files, root)
+	if err != nil {
+		return nil, err
+	}
+	if len(entries) > limits.MaxEntries {
+		return nil, migrations.ErrSourceLimit
+	}
+	result := make([]migrations.SourceEntry, 0, len(entries))
+	total := 0
+	for _, entry := range entries {
+		name := entry.Name()
+		if len(name) > limits.MaxNameBytes || len(name) > limits.MaxTotalNameBytes-total {
+			return nil, migrations.ErrSourceLimit
+		}
+		total += len(name)
+		result = append(result, migrations.SourceEntry{Name: name, Directory: entry.IsDir()})
+	}
+	return result, ctx.Err()
+}
+
+func (f fixtureMigrationFiles) ReadFile(ctx context.Context, name string, limit int) ([]byte, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	file, err := f.files.Open(name)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+	wire, err := io.ReadAll(io.LimitReader(file, int64(limit)+1))
+	if err != nil {
+		return nil, err
+	}
+	if len(wire) > limit {
+		return nil, migrations.ErrSourceLimit
+	}
+	return wire, ctx.Err()
 }
 
 type otpFixtureTx struct{ pgx.Tx }

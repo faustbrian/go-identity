@@ -98,12 +98,31 @@ apply; later tenant onboarding uses owned lifecycle APIs. Bootstrap tenants are
 copied explicitly and are not inferred from velocity scopes. An empty set grants
 no bootstrap tenant authority.
 
-**Migration limitation:** independent audit/outbox histories and the complete
-Check/Plan/Apply coordinator remain unimplemented. The joint integration fixture
-still installs upstream schemas explicitly; its runtime evidence does not prove
-consumer adoption of this source. Do not deploy this partial profile or substitute
-consumer-written migration glue. Existing fixture-installed objects without
-matching native records are unmanaged state, not permission to baseline them.
+`stores.ReferenceMigrationCheck(ctx, ReferenceMigrationCheckRequest{Modules:
+[]ModuleID{"identity/postgres", "identity/risk/postgres"}})` performs bounded
+read-only discovery. It never prepares a ledger or acquires apply ownership.
+Statuses contain current/required versions and compatible, required, dirty or
+incompatible state. Only selected canonical IDs are accepted; caller current
+versions are forbidden. Each requested owner's complete physical history is
+validated. Missing records with owned objects, including empty schemas, are
+unmanaged/incompatible rather than permission to baseline them.
+
+Selected OTP/delivery also includes `identity/otp/postgres`,
+`identity/session/postgres`, `identity/delivery/postgres`,
+`authorization/postgres`, `audit/postgres`, `outbox/postgres` and
+`outbox/postgres/identity`. The last three retain their original independent
+histories in native namespaces `audit`, `outbox` and `identity_outbox`
+(`public.golib_migrations_<namespace>`). Audit fresh-role preflight must share
+its history's native `InstallFresh` transaction; existing role collisions are
+not ownership proof or permission for adoption.
+
+**Migration limitation:** complete operational Plan/Apply, command-resume and
+startup/readiness integration remain unimplemented. The public OTP integration
+now upgrades the original recovery prefix through the actual selected native
+source and installs independent owner histories through native APIs, including
+atomic audit preflight. This proves conditional native adoption, not a complete
+consumer-facing migration coordinator or deployable reference server. Do not
+substitute consumer-written migration orchestration for those missing APIs.
 
 Once selected schemas exist, `features.Initialize(ctx)` registers native
 metadata without warming risk or sending messages. Obtain the public Send
@@ -130,6 +149,8 @@ APIs and full reference acceptance remain outstanding.
 - `ComposeStores`: the sole store construction entry point; validates without IO.
 - `StoreSet`: sealed shared-lifetime result, not caller-constructible.
 - `StoreSet.MigrationSource`: pure upstream-owned migration contributions.
+- `StoreSet.ReferenceMigrationCheck`: authoritative read-only selected-owner
+  compatibility, bounded by the store lifetime; no partial statuses on failure.
 - `StoreSet.RecoverVelocity`: one bounded, fail-closed recovery/activation.
 - `StoreSet.Close`: permanent cancellation and bounded joining; repeated calls
   are safe, and a deadline does not reopen ownership.

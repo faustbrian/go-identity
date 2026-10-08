@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Add bounded read-only selected-module migration checks through native ledger
+  discovery, retaining dirty/incompatible states and rejecting unmanaged schema
+  adoption. Independent audit/outbox histories keep their original identities.
+  The native migration backend pin now supports independent owner namespaces
+  and atomic audit-role installation. Operational Plan/Apply and command-resume
+  remain pending; this is not a complete migration service.
+
 - Extend the selected OTP/delivery migration source with its public owners'
   kernel, OTP, session, delivery and authorization prerequisites. New permanent
   allocations follow the unchanged kernel/velocity prefix, allowing populated
