@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Retain successful native counter activation under the reference store owner.
+  Internal deferred routing rejects unrecovered, foreign-policy, foreign-tenant,
+  recovering and closed owners, and drains active mutations during shutdown.
+  It preserves original counter outcomes without retry or freshness renewal.
+
 - Add sealed, resource-only composition of the concrete PostgreSQL velocity
   journal and TLS Valkey recovery owner. Explicit bounded recovery restores
   original terminal history and enables counters only after covered primary

@@ -54,6 +54,13 @@ connections. Close the caller-owned primary pool separately, after its users
 have finished. No handler, health/readiness endpoint or background worker is
 created by this development slice.
 
+Successful recovery also retains that exact counter owner for the forthcoming
+feature-composition path. Its internal deferred connection rejects requests
+before recovery, during a new recovery generation and after shutdown. A failed
+new generation cannot fall back to the previous activation. Routing adds no
+retry or renewal and preserves the native owner's original outcome declaration.
+This connection is not yet exposed as a public OTP composition API.
+
 ## API reference
 
 - `StoreConfiguration`: one immutable selected configuration input; copied at

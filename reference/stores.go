@@ -8,6 +8,7 @@ import (
 	"crypto/rand"
 	"fmt"
 	"io"
+	"slices"
 	"sync"
 	"time"
 
@@ -70,11 +71,14 @@ type storeState struct {
 	native   riskvalkey.VelocityRecovery
 	primary  riskpostgres.VelocityRecovery
 	config   VelocityStoreConfiguration
+	policy   risk.Policy
+	keys     []risk.CounterDigestKey
 }
 
 type tenantRecovery struct {
 	busy     bool
 	previous risk.VelocityLease
+	counter  risk.CounterStore
 }
 
 // ComposeStores validates/copies deployment configuration without network IO,
@@ -122,8 +126,8 @@ func ComposeStores(c StoreConfiguration, d ReferenceDependencies) (StoreSet, err
 	close(drained)
 	// Resource owners already copied the sensitive configuration. Retain only
 	// traversal bounds; no caller TLS objects, secret slices or tenant slices.
-	retained := VelocityStoreConfiguration{Schema: v.Schema, Batch: v.Batch, MaxRecords: v.MaxRecords, RecoveryTimeout: v.RecoveryTimeout}
-	return StoreSet{state: &storeState{drained: drained, lifetime: lifetime, cancel: cancel, tenants: tenants, native: native, primary: primary, config: retained}}, nil
+	retained := VelocityStoreConfiguration{Schema: v.Schema, Batch: v.Batch, MaxRecords: v.MaxRecords, RecoveryTimeout: v.RecoveryTimeout, PrimaryTimeout: v.PrimaryTimeout}
+	return StoreSet{state: &storeState{drained: drained, lifetime: lifetime, cancel: cancel, tenants: tenants, native: native, primary: primary, config: retained, policy: v.Native.Policy, keys: slices.Clone(v.Native.Keys)}}, nil
 }
 
 // RecoverVelocity performs one explicit bounded recovery, never background
@@ -156,6 +160,9 @@ func (s StoreSet) RecoverVelocity(ctx context.Context, tenant string) (store ris
 	}
 	state.active++
 	t.busy = true
+	// A new recovery generation may fence the old owner even when it fails.
+	// Never fall back to a previously installed activation after that attempt.
+	t.counter = nil
 	state.mu.Unlock()
 	defer func() {
 		state.mu.Lock()
@@ -172,9 +179,7 @@ func (s StoreSet) RecoverVelocity(ctx context.Context, tenant string) (store ris
 		// Primary adapters redact SQL errors. The composition owns the outer
 		// lifetime and must preserve its cancellation/deadline, not expose an
 		// unavailable substitute or a store activated after shutdown.
-		if lifetimeErr := bounded.Err(); lifetimeErr != nil {
-			store, err = nil, lifetimeErr
-		}
+		store, err = state.finishVelocityRecovery(bounded, t, store, err)
 		stop()
 		cancel()
 	}()
@@ -261,7 +266,27 @@ func (s StoreSet) RecoverVelocity(ctx context.Context, tenant string) (store ris
 	if err != nil {
 		return nil, err
 	}
-	return state.native.OwnedCounterStore(bounded, journal)
+	store, err = state.native.OwnedCounterStore(bounded, journal)
+	return store, err
+}
+
+// finishVelocityRecovery publishes the returned handle and deferred routing
+// together at one lifetime-checked synchronization point, before busy clears.
+func (s *storeState) finishVelocityRecovery(ctx context.Context, t *tenantRecovery, store risk.CounterStore, err error) (risk.CounterStore, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	t.counter = nil
+	if lifetimeErr := ctx.Err(); lifetimeErr != nil {
+		return nil, lifetimeErr
+	}
+	if s.closed {
+		return nil, identity.UnavailableError{}
+	}
+	if err != nil {
+		return nil, err
+	}
+	t.counter = store
+	return store, nil
 }
 
 // Close permanently denies new recovery, cancels active primary/native work,
