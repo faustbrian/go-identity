@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add exact-route, explicit credential-mode CORS admission around Golib's Fetch
+  engine. Preflights perform no handler/body work; response commitment retains
+  approved grants, Vary dimensions and bearer no-store despite downstream
+  header changes. Empty origin policies disable CORS without pretending to
+  enforce authentication, token-bound CSRF or complete secure routing.
+
 - Add immutable byte-exact HTTPS redirect allowlists with bounded, canonical
   configuration and redacted denials. Approved URL path/query bytes remain
   unchanged; admission does not replace client/tenant/flow binding, construct

@@ -279,9 +279,53 @@ and never read/close the body or mutate the request. Invalid origin evidence
 returns redacted `OriginError`; envelope errors retain `DecodeError`.
 
 Admission alone is not complete CSRF protection, authentication or authorization.
-Cookie mutations still require session-bound tokens. CORS and
+Cookie mutations still require session-bound tokens. Token-bound CSRF and
 secure router integration remain separate work; consumers must not expose
 unprotected operation handlers directly.
+
+## Exact-route CORS admission
+
+`NewCORSHandler(CORSConfig{Network: network, Routes: policies}, next)` validates
+and copies up to 1024 distinct exact method/path policies. Each route explicitly
+selects `CORSNoCredentials`, `CORSCookieCredentials` or `CORSBearerCredentials`;
+incoming cookies never select or widen the mode. Empty origins disable CORS
+for a route, requiring empty header/exposure lists and zero max age. Empty
+Routes disables cross-origin access entirely. Configured origins follow the
+same canonical HTTPS profile as `OriginGuard`, without Referer fallback.
+
+Enabled routes require 1..128 exact origins, up to 64 distinct case-insensitive
+allowed/exposed header tokens each (128 bytes per token), and whole-second max
+age in 0..24 hours. Wildcards and exposed Set-Cookie/Set-Cookie2 reject. The
+reference composition retains its narrower fixed origin/header profile.
+There is no global method grant: preflight selects the requested exact route
+and uses only its origin, method, header and credential policy. Missing or
+ambiguous control fields, private-network requests and unsupported headers deny
+without handler, authentication, quota/state consumption or body reads/closes.
+
+Ordinary requests without Origin or from the current effective origin remain
+usable even with CORS disabled, but receive no grants unless explicitly allowed.
+Cross-origin requests require exact method/path and origin membership; unknown
+routes deny. This behavior is not CSRF proof. The wrapper resolves current
+network facts itself, never using cached/caller-submitted facts or arbitrary Host.
+It passes the original borrowed request to `next`, using a detached bounded
+header map only for the existing generic Fetch CORS engine.
+
+Response controls remove all case aliases of downstream CORS grants and restore
+only the approved snapshot before ordinary status/write/flush/ReaderFrom paths
+and after header-only return. Vary preserves initial and downstream dimensions
+plus Origin; preflights additionally vary by requested method and headers.
+Bearer-mode responses and all preflight/denial responses force no-store, even
+without Origin. Denials return a fixed bounded redacted response with no redirect
+target. Cancellation denies before handler admission. The wrapper starts no
+goroutines, does no IO and does not buffer response bodies. Trusted downstream
+code must not unwrap/hijack the writer to bypass transport controls.
+
+This exact-path standalone foundation is not the secure router. Actual descriptor
+binding, parameterized route selection, authentication/authorization, cookie and
+token CSRF, protocol flows and browser journeys remain required integration work.
+Do not treat CORS grants as permission to expose unprotected domain handlers.
+`ExampleNewCORSHandler` demonstrates separate cookie/bearer policy and preflight
+without invoking the supplied handler.
 
 ## Exact HTTPS redirects
 
