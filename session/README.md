@@ -1,5 +1,34 @@
 # Session
 
+## Synchronizer CSRF state prerequisite
+
+`CSRFToken` holds exactly 32 random bytes, not a session bearer or a signed
+stateless token. `NewCSRFKey` copies dedicated 32..64-byte material and a positive
+version; never reuse session-lookup or other credential keys. Explicitly select
+the newest issuance key and retain named old keys only during configured overlap.
+Key-ring selection and overlap policy are not implemented by these values.
+
+`token.Digest(key, CSRFBinding{TenantID, SessionID, SessionVersion})` produces
+immutable digest-only `CSRFState`. Its documented HMAC framing uses the domain
+`identity-csrf-v1` followed by NUL, length-prefixed exact canonical tenant and
+session IDs, big-endian session version and the 32 raw token bytes. Lengths
+prevent ambiguous concatenation of different identifier pairs. Persist only
+`Bindings()`' complete scope/key-version/digest projection, never the raw token.
+`NewCSRFState` rejects incomplete state; zero state denies every check.
+
+`Check` compares the exact binding and named-key digest without consuming the
+token or renewing authority. It is **structural agreement, not authentication**:
+the durable owner must read/fence current active state with the protected
+mutation. A cached session, caller-supplied projection or prior successful check
+cannot establish current validity. Formatting/automatic serialization redact
+or deny; copies share one reveal permission. The original issuance owner must
+withhold delivery until its exact new commit, including on recovery or ambiguity.
+
+This is a core prerequisite, not complete CSRF protection. Session issuance and
+rotation custody, primary storage/atomic lifecycle invalidation, legacy record
+and cache integration, configured key overlap, and HTTP origin/channel checks
+remain pending. Consumers must not implement private stores to bridge those gaps.
+
 ## Canonical pre-auth continuation
 
 `PreAuthTransaction` freezes the original ID, tenant, action, exact origin,

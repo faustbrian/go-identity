@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add dedicated 32-byte reveal-once CSRF tokens, versioned key custody and
+  immutable tenant/session/version-bound synchronizer digest state. Structural
+  comparison grants no session authority. Atomic storage, issuance delivery and
+  HTTP enforcement remain pending integration work.
+
 - Add owned original pre-auth preparation and commit-gated reveal-once flow
   cookie delivery. Generate server ID, nonce and bound digest; preserve the
   resolved remember choice and original short lifetime. Recover only safe
