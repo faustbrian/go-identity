@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Contribute real session GET/logout wire schemas to selected OpenAPI 3.1.1,
+  preserving optional credentials, cookie/bearer separation, conditional CSRF,
+  exact success clearing, structured recovery errors and dispatcher denials.
+  Domain opaque credentials and runtime configuration are never schemas.
+
 - Add typed opt-in selection of the real session read and self-signout
   handlers, with canonical owner/policy/schema bindings and explicit cookie
   versus bearer CSRF metadata. Reject zero-value services before exposing

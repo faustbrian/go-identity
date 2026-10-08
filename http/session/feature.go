@@ -17,7 +17,9 @@ import (
 // NewSelectedHandler. Base HTTP never imports this integration. Domain stores,
 // transactions, authentication, CSRF and rate remain owned by the configured
 // handlers/services. Construction copies metadata; borrowed dependencies must
-// outlive concurrent requests. Direct-contract summaries are not wire OpenAPI.
+// outlive concurrent requests. Separate owned Wire contributions describe the
+// actual selected JSON, credential and CSRF profile for NewDocumentedHandler;
+// direct-contract summaries never become wire response schemas.
 func NewFeature(c SignOutConfig) (identityhttp.Feature, error) {
 	get, err := NewGetHandler(c.GetConfig)
 	if err != nil {
@@ -39,5 +41,7 @@ func NewFeature(c SignOutConfig) (identityhttp.Feature, error) {
 	if err != nil {
 		return identityhttp.Feature{}, err
 	}
+	read.Wire = sessionWire(c, false)
+	logout.Wire = sessionWire(c, true)
 	return identityhttp.NewFeature(identityhttp.FeatureConfig{ID: "identity/session", Operations: []identityhttp.OperationDescriptor{read, logout}})
 }

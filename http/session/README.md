@@ -7,6 +7,18 @@ release-qualified backend platform.
 
 ## Quick start and ownership
 
+Pass the same feature selection to `identityhttp.NewDocumentedHandler` for
+concrete OpenAPI 3.1.1 and its matching handler snapshot. The feature owns the
+real HTTP schemas separately from opaque direct contracts: optional cookie or
+bearer credentials, no GET body/query, strict JSON/form logout, conditional
+cookie CSRF, credential-free session metadata, exact clearing instructions and
+original recovery outcomes. Structured logout failures and generic dispatcher
+errors are both represented. `actorKind` serializes as an upstream string;
+optional `linkMode` remains a numeric identity enum. No trusted origin, tenant,
+host mapping, key or provider configuration enters the document. The full
+security router, metadata endpoint and generated-client/browser qualification
+remain required, not inferred from document export.
+
 For both implemented routes, call `NewFeature(SignOutConfig{...})`, then pass
 the contribution in `identityhttp.FeatureServices.Features` to
 `identityhttp.NewSelectedHandler`. No application-written handlers or route
