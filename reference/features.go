@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"slices"
 	"time"
 
 	"github.com/faustbrian/go-audit"
@@ -27,6 +28,11 @@ import (
 // inside risk and risk inside Timeout. Only velocity-only profiles are supported
 // in this development composition; no missing source gets an allow-all default.
 type OTPSendConfiguration struct {
+	// BootstrapTenantIDs is the explicit immutable 0..256-entry directory set.
+	// Empty bootstraps no tenants and grants no tenant authority. It is never
+	// inferred from velocity scopes or users. Retain it after migration apply;
+	// later onboarding uses the owning lifecycle APIs, not edited migrations.
+	BootstrapTenantIDs            []identity.TenantID
 	Store                         otppg.ContributorConfig
 	Codec                         otppg.AttemptCodecConfig
 	Session                       *otppg.SessionAdmissionConfig
@@ -63,6 +69,7 @@ type DeliveryConfiguration struct {
 // featureState is immutable after construction except the fields explicitly
 // protected by storeState.mu. Startup and all requests share StoreSet's lifetime.
 type featureState struct {
+	migrations      featureMigrationConfig
 	otp             *otppg.SendService
 	delivery        *deliverypg.EnqueueService
 	sender          delivery.Sender
@@ -87,6 +94,24 @@ func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDepen
 		}
 	}
 	o := *c.OTP
+	if len(o.BootstrapTenantIDs) > 256 {
+		return identity.InvalidInputError{Field: "reference_bootstrap_tenants"}
+	}
+	migrationConfig := featureMigrationConfig{otpSchema: o.Store.Schema, sessionSchema: o.Store.PreAuth.Schema, global: o.Store.GlobalAuthorityID, tenants: slices.Clone(o.BootstrapTenantIDs)}
+	migrationConfig.cancellation = c.Delivery.Enqueue.Cancellation
+	migrationConfig.receiptTracking = c.Delivery.Enqueue.ReceiptTracking
+	migrationConfig.receipts = c.Delivery.Enqueue.Receipts != nil
+	migrationConfig.reconciliation = c.Delivery.Enqueue.Reconciliation != nil
+	if o.Session != nil {
+		migrationConfig.authenticatedSchema = o.Session.Store.Schema
+	}
+	if err := migrationConfig.validateNamespaces(c.Velocity.Schema); err != nil {
+		return err
+	}
+	// Validate explicit bootstrap inputs without IO before retaining the graph.
+	if _, err := (kernel.DirectoryAuthorityMigrationSource{Base: kernel.MigrationSource{}, Version: 1016, GlobalAuthorityID: migrationConfig.global, TenantIDs: migrationConfig.tenants}).Load(context.Background()); err != nil {
+		return err
+	}
 	if o.RiskTimeout < time.Millisecond || o.RiskTimeout > 5*time.Second || o.RiskTimeout > o.Timeout || o.AuditTimeout < time.Millisecond || o.AuditTimeout > o.RiskTimeout {
 		return identity.InvalidInputError{Field: "reference_risk"}
 	}
@@ -137,7 +162,7 @@ func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDepen
 			capacity = policy.SenderConcurrency
 		}
 	}
-	s.features = &featureState{otp: otpOwner, delivery: deliveryOwner, sender: d.DeliverySender, timeout: o.Timeout, provider: o.ProviderVersion, deliverySlots: make(chan struct{}, int(capacity))}
+	s.features = &featureState{migrations: migrationConfig, otp: otpOwner, delivery: deliveryOwner, sender: d.DeliverySender, timeout: o.Timeout, provider: o.ProviderVersion, deliverySlots: make(chan struct{}, int(capacity))}
 	return nil
 }
 

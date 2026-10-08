@@ -82,12 +82,28 @@ All workers share the strictest retained sender-concurrency ceiling before
 claiming. Dedicate the sender instance to this graph; unrelated graphs or direct
 callers require their own shared capacity control.
 
-**Migration limitation:** `StoreSet.MigrationSource()` still contains only the
-recovery profile. The selected OTP, session, delivery, audit, lifecycle and
-authorization histories are not yet exposed by the reference migration owner.
-The joint integration fixture installs their upstream histories explicitly;
-this is conditional runtime evidence, not complete consumer adoption. Do not
-deploy this partial profile or substitute consumer-written migration glue.
+`StoreSet.MigrationSource()` preserves kernel 1–9 and risk 1000–1011 exactly.
+Selecting OTP/delivery appends owner-produced kernel 1012–1018, OTP 1100–1103,
+pre-auth session 1200–1201, distinct authenticated session 1210, delivery
+1250–1254 and authorization authority 1300. Selected delivery cancellation uses
+1255, receipt metadata uses 1256, authenticated receipt commands use 1257, and
+reconciliation uses 1258–1260. Receipt metadata is included whenever receipt
+tracking, authenticated receipts or reconciliation needs it; unselected
+extensions remain absent. Shared session schemas reuse one base; OTP, session
+and risk owners must otherwise use distinct schemas. Unselected profiles
+contribute no schema. These are
+new permanent reference allocations, not changes to applied history. Keep the
+selected schemas, global authority and `OTP.BootstrapTenantIDs` unchanged after
+apply; later tenant onboarding uses owned lifecycle APIs. Bootstrap tenants are
+copied explicitly and are not inferred from velocity scopes. An empty set grants
+no bootstrap tenant authority.
+
+**Migration limitation:** independent audit/outbox histories and the complete
+Check/Plan/Apply coordinator remain unimplemented. The joint integration fixture
+still installs upstream schemas explicitly; its runtime evidence does not prove
+consumer adoption of this source. Do not deploy this partial profile or substitute
+consumer-written migration glue. Existing fixture-installed objects without
+matching native records are unmanaged state, not permission to baseline them.
 
 Once selected schemas exist, `features.Initialize(ctx)` registers native
 metadata without warming risk or sending messages. Obtain the public Send

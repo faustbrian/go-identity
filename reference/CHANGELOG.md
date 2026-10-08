@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- Extend the selected OTP/delivery migration source with its public owners'
+  kernel, OTP, session, delivery and authorization prerequisites. New permanent
+  allocations follow the unchanged kernel/velocity prefix, allowing populated
+  native histories to plan upgrades without renumbering applied migrations.
+  Directory bootstrap tenants are explicit copied configuration, never inferred
+  from users or risk scopes. Selected delivery cancellation, receipt tracking,
+  authenticated receipts and reconciliation include their owned prerequisites.
+  Cross-owner schema collisions are rejected before exporting history.
+  Audit/outbox installation and complete operational
+  Check/Plan/Apply remain pending; this is not deployment readiness.
+
 - Add opt-in sealed OTP Send and delivery composition using the existing native
   adapters, shared risk policy and counter activation. Startup and processing
   are explicit and bounded; retained handles deny after shutdown. Selected

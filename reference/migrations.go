@@ -3,9 +3,13 @@ package reference
 import (
 	"context"
 
+	authoritypostgres "github.com/faustbrian/go-authorization/postgres"
 	identity "github.com/faustbrian/go-identity"
+	deliverypostgres "github.com/faustbrian/go-identity/delivery/postgres"
+	otppostgres "github.com/faustbrian/go-identity/otp/postgres"
 	identitypostgres "github.com/faustbrian/go-identity/postgres"
 	riskpostgres "github.com/faustbrian/go-identity/risk/postgres"
+	sessionpostgres "github.com/faustbrian/go-identity/session/postgres"
 	migrations "github.com/faustbrian/go-migrations/v3"
 )
 
@@ -15,6 +19,13 @@ import (
 // the velocity authority chain. Existing adapter deployments using other
 // allocations are not silently adopted. This partial development profile does
 // not implement the complete reference Check/Plan/Apply migration coordinator.
+// Selected OTP/delivery appends permanent allocations after that existing
+// prefix: kernel 1012..1018, OTP 1100..1103, pre-auth sessions 1200..1201,
+// distinct authenticated sessions 1210, delivery 1250..1260 and authorization
+// authority 1300. All SQL is supplied by its owner. Shared session schemas
+// reuse the same base; unselected profiles contribute no schema.
+// Audit and outbox independent histories are not part of this shared source;
+// their installation remains required before enabling the selected workflow.
 func (s StoreSet) MigrationSource() migrations.Source {
 	return storeMigrationSource{state: s.state}
 }
@@ -44,5 +55,108 @@ func (s storeMigrationSource) Load(ctx context.Context) ([]migrations.Migration,
 	if err != nil {
 		return nil, err
 	}
-	return append(kernel, history...), nil
+	legacy := append(kernel, history...)
+	if s.state.features == nil {
+		return legacy, nil
+	}
+	if err := s.state.features.migrations.validateNamespaces(s.state.config.Schema); err != nil {
+		return nil, err
+	}
+	return s.state.features.migrations.load(ctx, fixedMigrationSource(legacy))
+}
+
+// This source stores only immutable upstream values, never copied SQL literals.
+type fixedMigrationSource []migrations.Migration
+
+func (s fixedMigrationSource) Load(ctx context.Context) ([]migrations.Migration, error) {
+	if ctx == nil {
+		return nil, identity.InvalidInputError{Field: "reference_migrations"}
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	return append([]migrations.Migration(nil), s...), nil
+}
+
+type featureMigrationConfig struct {
+	otpSchema, sessionSchema, global                        string
+	authenticatedSchema                                     string
+	tenants                                                 []identity.TenantID
+	cancellation, receiptTracking, receipts, reconciliation bool
+}
+
+// Different storage owners create their own namespaces. Only the two session
+// profiles may share a base schema; accepting other overlaps exports DDL that
+// can be planned but cannot be installed.
+func (c featureMigrationConfig) validateNamespaces(riskSchema string) error {
+	if c.otpSchema == riskSchema || c.sessionSchema != "" && (c.sessionSchema == riskSchema || c.sessionSchema == c.otpSchema) || c.authenticatedSchema != "" && (c.authenticatedSchema == riskSchema || c.authenticatedSchema == c.otpSchema) {
+		return identity.InvalidInputError{Field: "reference_schema_ownership"}
+	}
+	return nil
+}
+
+func (c featureMigrationConfig) load(ctx context.Context, base migrations.Source) ([]migrations.Migration, error) {
+	if c.sessionSchema == "" && c.authenticatedSchema == "" {
+		return nil, identity.InvalidInputError{Field: "reference_session_migrations"}
+	}
+	prepared := identitypostgres.PreparationMigrationSource{Base: base, Version: 1012}
+	admitted := identitypostgres.AdmissionPreparationMigrationSource{Base: prepared, Version: 1013}
+	status := identitypostgres.StatusMigrationSource{Base: admitted, Version: 1014}
+	credentials := identitypostgres.CredentialMigrationSource{Base: status, Version: 1015}
+	directory := identitypostgres.DirectoryAuthorityMigrationSource{Base: credentials, Version: 1016, GlobalAuthorityID: c.global, TenantIDs: c.tenants}
+	keyed := identitypostgres.RequestKeyMigrationSource{Base: directory, Version: 1017}
+	complete := identitypostgres.RequestKeyPreparationMigrationSource{Base: keyed, Version: 1018}
+	history, err := complete.Load(ctx)
+	if err != nil {
+		return nil, err
+	}
+	sources := []migrations.Source{
+		otppostgres.MigrationSource{Schema: c.otpSchema, Version: 1100},
+		otppostgres.LockoutMigrationSource{Schema: c.otpSchema, Version: 1101},
+		otppostgres.SendFamilyMigrationSource{Schema: c.otpSchema, Version: 1102},
+		otppostgres.IssuanceMigrationSource{Schema: c.otpSchema, Version: 1103},
+	}
+	if c.sessionSchema != "" {
+		sources = append(sources, sessionpostgres.MigrationSource{Schema: c.sessionSchema, Version: 1200}, sessionpostgres.PreAuthMigrationSource{Schema: c.sessionSchema, Version: 1201})
+	}
+	if c.authenticatedSchema != "" && c.authenticatedSchema != c.sessionSchema {
+		sources = append(sources, sessionpostgres.MigrationSource{Schema: c.authenticatedSchema, Version: 1210})
+	}
+	for _, source := range sources {
+		next, err := source.Load(ctx)
+		if err != nil {
+			return nil, err
+		}
+		history = append(history, next...)
+	}
+	deliverySource := deliverypostgres.MigrationSource{Base: fixedMigrationSource(history), Version: 1250, WorkerVersion: 1251, PolicyVersion: 1252, KeyedVersion: 1253, StateVersion: 1254}
+	if c.cancellation {
+		deliverySource.CancellationVersion = 1255
+	}
+	if c.receiptTracking || c.receipts || c.reconciliation {
+		deliverySource.ReceiptVersion = 1256
+	}
+	if c.receipts {
+		deliverySource.ReceiptCommandVersion = 1257
+	}
+	if c.reconciliation {
+		deliverySource.ReconciliationVersion = 1258
+		deliverySource.ReconciliationCommandVersion = 1259
+		deliverySource.ReconciliationQueryVersion = 1260
+	}
+	history, err = deliverySource.Load(ctx)
+	if err != nil {
+		return nil, err
+	}
+	// The authority owner exposes a version-neutral SQL value as well as its
+	// older migrations-module adapter. Adapt that value, not a copied schema.
+	authority, err := authoritypostgres.AuthoritySchemaMigration(1300)
+	if err != nil {
+		return nil, err
+	}
+	next, err := migrations.NewMigration(migrations.Version(authority.Version), authority.Name, migrations.TransactionModeDefault, authority.Up, authority.Down)
+	if err != nil {
+		return nil, err
+	}
+	return append(history, next), nil
 }
