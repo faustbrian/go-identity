@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Add opt-in sealed OTP Send and delivery composition using the existing native
+  adapters, shared risk policy and counter activation. Startup and processing
+  are explicit and bounded; retained handles deny after shutdown. Selected
+  delivery profiles require production policy and active-provider worker coverage.
+  All selected workers share one conservative sender-capacity bound before claim.
+  This partial profile still lacks selected-feature migration ownership and
+  complete failure-recovery acceptance; it is not deployable reference composition.
+
 - Retain successful native counter activation under the reference store owner.
   Internal deferred routing rejects unrecovered, foreign-policy, foreign-tenant,
   recovering and closed owners, and drains active mutations during shutdown.

@@ -1,6 +1,6 @@
 // Package reference owns deployment composition for the identity platform.
-// This development slice composes only PostgreSQL-journaled Valkey velocity
-// recovery. It is not the complete reference server or a readiness assertion.
+// This development slice composes PostgreSQL-journaled Valkey velocity recovery
+// and optional native OTP Send/delivery. It is not the complete reference server.
 package reference
 
 import (
@@ -13,25 +13,35 @@ import (
 	"time"
 
 	identity "github.com/faustbrian/go-identity"
+	"github.com/faustbrian/go-identity/delivery"
 	"github.com/faustbrian/go-identity/risk"
 	riskpostgres "github.com/faustbrian/go-identity/risk/postgres"
 	riskvalkey "github.com/faustbrian/go-identity/risk/valkey"
 	database "github.com/faustbrian/go-postgres"
+	envelope "github.com/faustbrian/go-secret-envelope"
 )
 
 // ReferenceDependencies supplies deployment resources, never domain stores or
 // workflow callbacks. PostgreSQL remains caller-owned, including after Close.
 // Its pool configuration and callbacks must satisfy go-postgres's contract.
-// Additional reference-server dependencies are not implemented in this slice.
+// EnvelopeKeys and DeliverySender are required only for selected OTP/delivery.
+// They remain caller-owned, cooperative bounded, concurrency-safe dependencies.
 type ReferenceDependencies struct {
-	PostgreSQL *database.Pool
+	PostgreSQL     *database.Pool
+	EnvelopeKeys   envelope.KeyProvider
+	DeliverySender delivery.Sender
 }
 
 // StoreConfiguration contains selected adapter configuration exactly once.
-// Currently only Velocity is supported; zero is invalid. Construction copies
-// configuration. Concurrent input mutation during construction is forbidden.
+// Velocity is required; OTP and Delivery must be selected together. Zero is
+// invalid. Construction copies configuration. Concurrent input mutation during
+// construction is forbidden. No optional feature is silently enabled.
 type StoreConfiguration struct {
 	Velocity VelocityStoreConfiguration
+	// OTP selects public Send and its mandatory delivery owner. Nil preserves
+	// the recovery-only profile. No caller evaluator or domain store is accepted.
+	OTP      *OTPSendConfiguration
+	Delivery *DeliveryConfiguration
 }
 
 // VelocityStoreConfiguration selects one primary/native recovery pair. Native
@@ -73,6 +83,7 @@ type storeState struct {
 	config   VelocityStoreConfiguration
 	policy   risk.Policy
 	keys     []risk.CounterDigestKey
+	features *featureState
 }
 
 type tenantRecovery struct {
@@ -127,7 +138,12 @@ func ComposeStores(c StoreConfiguration, d ReferenceDependencies) (StoreSet, err
 	// Resource owners already copied the sensitive configuration. Retain only
 	// traversal bounds; no caller TLS objects, secret slices or tenant slices.
 	retained := VelocityStoreConfiguration{Schema: v.Schema, Batch: v.Batch, MaxRecords: v.MaxRecords, RecoveryTimeout: v.RecoveryTimeout, PrimaryTimeout: v.PrimaryTimeout}
-	return StoreSet{state: &storeState{drained: drained, lifetime: lifetime, cancel: cancel, tenants: tenants, native: native, primary: primary, config: retained, policy: v.Native.Policy, keys: slices.Clone(v.Native.Keys)}}, nil
+	state := &storeState{drained: drained, lifetime: lifetime, cancel: cancel, tenants: tenants, native: native, primary: primary, config: retained, policy: v.Native.Policy, keys: slices.Clone(v.Native.Keys)}
+	if err := state.composeFeatureStores(c, d); err != nil {
+		cancel()
+		return StoreSet{}, err
+	}
+	return StoreSet{state: state}, nil
 }
 
 // RecoverVelocity performs one explicit bounded recovery, never background

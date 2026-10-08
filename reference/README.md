@@ -1,8 +1,9 @@
 # Identity reference composition
 
 **Development checkpoint:** this module currently implements only the
-PostgreSQL-journaled, TLS Valkey velocity store graph. The complete reference
-server, HTTP features, provider/worker composition, readiness, migration
+PostgreSQL-journaled, TLS Valkey velocity store graph and optional native OTP
+Send/delivery composition. The complete reference server, HTTP features,
+readiness, migration
 Check/Plan/Apply workflow and identity journeys remain unimplemented here.
 
 ## Quick start
@@ -59,7 +60,48 @@ feature-composition path. Its internal deferred connection rejects requests
 before recovery, during a new recovery generation and after shutdown. A failed
 new generation cannot fall back to the previous activation. Routing adds no
 retry or renewal and preserves the native owner's original outcome declaration.
-This connection is not yet exposed as a public OTP composition API.
+The optional OTP profile uses this connection internally; it does not accept a
+caller-written risk evaluator or counter store.
+
+## Optional OTP Send composition
+
+Select both `StoreConfiguration.OTP` and `StoreConfiguration.Delivery`, with
+deployment envelope keys and a bounded sender in `ReferenceDependencies`.
+The delivery profile must enable state tracking and use production policies.
+Risk uses the velocity graph's exact policy and retained keys. This checkpoint
+supports velocity-only admission: required unsupported signals fail composition
+rather than receiving permissive stand-ins.
+
+Compose in order with `ComposeProviders(stores)`,
+`ComposeWorkers(stores, providers, workerConfigs...)`, then
+`ComposeFeatures(stores, providers, workers)`. These stages perform no network
+IO and start no goroutines. Every selected tenant needs a real delivery worker
+for the selected OTP provider version. All handles share the store lifetime;
+foreign, reused or incomplete graphs are rejected.
+All workers share the strictest retained sender-concurrency ceiling before
+claiming. Dedicate the sender instance to this graph; unrelated graphs or direct
+callers require their own shared capacity control.
+
+**Migration limitation:** `StoreSet.MigrationSource()` still contains only the
+recovery profile. The selected OTP, session, delivery, audit, lifecycle and
+authorization histories are not yet exposed by the reference migration owner.
+The joint integration fixture installs their upstream histories explicitly;
+this is conditional runtime evidence, not complete consumer adoption. Do not
+deploy this partial profile or substitute consumer-written migration glue.
+
+Once selected schemas exist, `features.Initialize(ctx)` registers native
+metadata without warming risk or sending messages. Obtain the public Send
+interface with `features.OTP()`. Calls before initialization, before valid risk
+activation, for unselected tenants or after closure deny. Exact committed
+receipts can replay through a reconstructed initialized graph without a fresh
+counter debit; fresh requests still require activation. `workers.ProcessDeliveryOne`
+performs one explicit bounded native step; callers supply scheduling, not a
+replacement delivery workflow. Queue acceptance does not prove provider delivery.
+
+Audit delivery fails closed. A lost decision gets one idempotent retry of its
+original immutable event; durable audit-outage handoff remains unimplemented.
+Authenticated-session parity, joint unknown-outcome recovery, complete operator
+APIs and full reference acceptance remain outstanding.
 
 ## API reference
 
@@ -67,13 +109,17 @@ This connection is not yet exposed as a public OTP composition API.
   composition and never retained as caller-owned TLS/secret slices.
 - `VelocityStoreConfiguration`: explicit transport, custody, scopes and
   traversal bounds. Zero does not select defaults.
-- `ReferenceDependencies`: deployment resources only; currently PostgreSQL.
+- `ReferenceDependencies`: borrowed PostgreSQL and selected envelope/sender resources.
+- `OTPSendConfiguration`, `DeliveryConfiguration`: explicit native workflow profiles.
 - `ComposeStores`: the sole store construction entry point; validates without IO.
 - `StoreSet`: sealed shared-lifetime result, not caller-constructible.
 - `StoreSet.MigrationSource`: pure upstream-owned migration contributions.
 - `StoreSet.RecoverVelocity`: one bounded, fail-closed recovery/activation.
 - `StoreSet.Close`: permanent cancellation and bounded joining; repeated calls
   are safe, and a deadline does not reopen ownership.
+- `ComposeProviders`, `ComposeWorkers`, `ComposeFeatures`: one sealed selected graph.
+- `FeatureSet.Initialize`, `FeatureSet.OTP`: explicit startup and public Send access.
+- `WorkerSet.ProcessDeliveryOne`: one explicit native delivery step, without polling.
 
 Formatting is redacted and JSON/text serialization is denied for composition
 inputs and handles. See Go documentation for exact errors and lifetime semantics.
