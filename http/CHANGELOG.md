@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add immutable byte-exact HTTPS redirect allowlists with bounded, canonical
+  configuration and redacted denials. Approved URL path/query bytes remain
+  unchanged; admission does not replace client/tenant/flow binding, construct
+  protocol responses or enable native HTTP redirect exceptions.
+
 - Add immutable HTTPS exact-origin admission with default-deny Referer fallback,
   explicit same-effective-origin fallback and initiating-origin binding checks.
   Ambiguous or invalid Origin cannot fall back. This foundation does not replace

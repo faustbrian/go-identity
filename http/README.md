@@ -279,9 +279,33 @@ and never read/close the body or mutate the request. Invalid origin evidence
 returns redacted `OriginError`; envelope errors retain `DecodeError`.
 
 Admission alone is not complete CSRF protection, authentication or authorization.
-Cookie mutations still require session-bound tokens. CORS, redirect policy and
+Cookie mutations still require session-bound tokens. CORS and
 secure router integration remain separate work; consumers must not expose
 unprotected operation handlers directly.
+
+## Exact HTTPS redirects
+
+`NewRedirectGuard(RedirectGuardConfig{Network: network, Targets: targets})`
+copies 1..128 distinct full HTTPS URLs, each at most 2048 bytes. The immutable
+network owner supplies fixed host syntax only; redirect destinations need not
+be served hosts. Scheme and authority must already be canonical, without an
+explicit default port. Wildcards, fragments, userinfo, backslashes, malformed
+escapes and non-URI raw characters reject during construction.
+
+`Check(ctx, target)` returns the original target bytes only on full equality.
+Path, percent-escape spelling, query order and empty-query markers are distinct;
+the guard never repairs, resolves or serializes a URL to obtain a match. It
+never consults request headers, emits Location or appends response parameters.
+Denial returns an empty string and redacted `OriginError`; cancelled contexts
+retain their error. Invalid guard/context returns `ErrInvalidInput`.
+
+Construct a guard per registered policy owner. A union of clients' redirect sets
+is not client-specific registration validation. Admission does not establish
+tenant, client or initiating-flow binding, consume state/nonce/PKCE or authorize
+arbitrary parameter appends. Owning protocol workflows still perform those
+checks and construct their responses. Never send even an OAuth error redirect
+to a denied target. This HTTPS foundation does not implement native-application
+or loopback HTTP exceptions, browser redirect journeys or full secure routing.
 
 ## Tradeoffs and FAQ
 
