@@ -54,6 +54,25 @@ type SessionRotator struct {
 	sessions *SessionService
 	executor RotationExecutor
 	config   RotationConfig
+	csrfKey  CSRFKey
+}
+
+// NewSessionRotatorWithCSRF selects fresh synchronizer state for cookie
+// successors with a dedicated current issuance key. Bearer rotation explicitly
+// clears synchronizer state and delivers no CSRF credential or cookie. The
+// executor must atomically persist complete source/successor state. Do not use
+// legacy lossy adapters. Original credential delivery retains all native gates;
+// retrieve CSRF custody from PreparedRotation.CSRFToken after successful Rotate.
+func NewSessionRotatorWithCSRF(sessions *SessionService, executor RotationExecutor, c RotationConfig, key CSRFKey) (*SessionRotator, error) {
+	if key.key.state == nil {
+		return nil, ErrInvalidInput
+	}
+	s, e := NewSessionRotator(sessions, executor, c)
+	if e != nil {
+		return nil, e
+	}
+	s.csrfKey = key
+	return s, nil
 }
 
 // NewSessionRotator freezes validated composition without IO. The issuance key
@@ -77,7 +96,7 @@ func NewSessionRotator(sessions *SessionService, executor RotationExecutor, c Ro
 		return nil, ErrInvalidInput
 	}
 	c.PolicyID = strings.Clone(c.PolicyID)
-	return &SessionRotator{sessions, executor, c}, nil
+	return &SessionRotator{sessions: sessions, executor: executor, config: c}, nil
 }
 func rotationBinding(tenant identity.TenantID, user identity.UserID, record string, command identity.CommandID, correlation string, c RotationConfig) identity.CommandBinding {
 	b := setServiceBinding(tenant, user, command, correlation, SetRevocationConfig{PolicyID: c.PolicyID, PolicyVersion: c.PolicyVersion}, RotateOperation())
@@ -94,6 +113,20 @@ type preparedRotationState struct {
 	request   RotationRequest
 	token     Token
 	attempted atomic.Bool
+	csrf      CSRFToken
+	csrfReady atomic.Bool
+}
+
+// CSRFToken returns original reveal-once cookie-CSRF custody only after an
+// exact new error-free Rotate within original delivery bounds. Zero, precommit,
+// recovery-only, tokenless and bearer paths deny. Copies share reveal permission;
+// an earlier successful delivery is not retracted by a later rejected attempt.
+// This token never proves current primary authority or renews validity.
+func (p PreparedRotation) CSRFToken() (CSRFToken, error) {
+	if p.state == nil || !p.state.csrfReady.Load() || p.state.csrf.token.state == nil {
+		return CSRFToken{}, ErrInvalidCSRF
+	}
+	return p.state.csrf, nil
 }
 
 // Request returns the original safe immutable request, never the raw successor.
@@ -123,6 +156,9 @@ func (s *SessionRotator) Prepare(caller GetResult, command identity.CommandID, c
 		return out, err
 	}
 	old, _ := caller.Session.Bindings()
+	if caller.validity.transport == CredentialCookie && caller.Session.CSRFState().state != nil && s.csrfKey.key.state == nil {
+		return out, ErrInvalidInput
+	}
 	b := rotationBinding(old.TenantID, old.UserID, old.SessionID, command, correlation, s.config)
 	if b.ValidateFor(RotateOperation()) != nil || old.Version == ^uint64(0) {
 		return out, ErrInvalidSessionCommand
@@ -155,6 +191,13 @@ func (s *SessionRotator) Prepare(caller GetResult, command identity.CommandID, c
 	if err != nil {
 		return out, err
 	}
+	var csrf CSRFToken
+	if caller.validity.transport == CredentialCookie && s.csrfKey.key.state != nil {
+		csrf, successor, err = prepareCSRFRecord(successor, s.csrfKey)
+		if err != nil {
+			return out, err
+		}
+	}
 	native, err := NewRotateCommand(b, caller.Session, successor)
 	if err != nil {
 		return out, err
@@ -163,7 +206,7 @@ func (s *SessionRotator) Prepare(caller GetResult, command identity.CommandID, c
 	if err != nil {
 		return out, err
 	}
-	return PreparedRotation{state: &preparedRotationState{owner: s, request: request, token: token}}, nil
+	return PreparedRotation{state: &preparedRotationState{owner: s, request: request, token: token, csrf: csrf}}, nil
 }
 
 // RotationResult retains exact durable outcome/recovery and historical
@@ -247,6 +290,7 @@ func (s *SessionRotator) Rotate(ctx context.Context, p PreparedRotation) (out Ro
 		return out, sessionReadFailure(bounded)
 	}
 	out.Token = p.state.token
+	p.state.csrfReady.Store(true)
 	return out, nil
 }
 

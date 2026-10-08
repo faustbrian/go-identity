@@ -33,6 +33,9 @@ func UpdateOperation() identity.FeatureOperation {
 // the actor. A checked version successor invalidates old session projections;
 // lookup, activity, authentication, remember policy and all unrelated authority
 // remain unchanged. It performs no IO and cannot authenticate a caller. The
+// separately bound synchronizer state is cleared, never carried into the new
+// version or replaced without original credential-delivery ownership. Protected
+// cookie work must deny until an owned authorized flow issues replacement state.
 // source's version is the expected CAS; overflow, malformed labels, foreign
 // scope and zero fail with ErrInvalidSessionCommand before copying input.
 func NewUpdateCommand(b identity.CommandBinding, source Session, label string) (SessionCommand, error) {

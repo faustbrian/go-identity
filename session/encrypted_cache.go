@@ -86,6 +86,10 @@ func (c *EncryptedCacheCodec) Seal(ctx context.Context, result GetResult) (out [
 	remember, _ := spec.Remember.Bindings()
 	authority, _ := spec.Authority.Bindings()
 	record := cacheRecord{Schema: 1, Session: cacheSession{spec.SessionID, spec.FamilyID, spec.TenantID, spec.UserID, spec.Audience, spec.Version, spec.FamilyVersion, remember, authority, spec.Lookup, spec.Authentication, spec.IssuedAt.UTC(), spec.LastActivityAt.UTC()}, Transport: p.transport, NeedsRefresh: p.refresh, Eligible: p.eligible.UTC(), AcceptedAt: p.acceptedAt.UTC(), Until: p.until.UTC(), StoredAt: storedAt.UTC()}
+	if state := result.Session.CSRFState(); state.state != nil {
+		value := state.state.spec
+		record.Schema, record.CSRF = 2, &value
+	}
 	record.Session.Authentication.Proof.IssuedAt = record.Session.Authentication.Proof.IssuedAt.UTC()
 	record.Session.Authentication.Proof.ExpiresAt = record.Session.Authentication.Proof.ExpiresAt.UTC()
 	record.Session.Authentication.AnonymousAt = record.Session.Authentication.AnonymousAt.UTC()
@@ -194,6 +198,7 @@ type cacheRecord struct {
 	Transport                             CredentialKind
 	NeedsRefresh                          bool
 	Eligible, AcceptedAt, Until, StoredAt time.Time
+	CSRF                                  *CSRFStateSpec `json:",omitempty"`
 }
 
 func (c *EncryptedCacheCodec) restore(plaintext []byte, tenant identity.TenantID) CachedAdmission {
@@ -211,7 +216,7 @@ func (c *EncryptedCacheCodec) restore(plaintext []byte, tenant identity.TenantID
 		return CachedAdmission{}
 	}
 	defer clear(canonical)
-	if !bytes.Equal(plaintext, canonical) || r.Schema != 1 || r.Session.TenantID != tenant || r.Session.Audience != c.service.config.Audience || r.Session.Authentication.Kind != AuthenticationVerified || (r.Transport != CredentialCookie && r.Transport != CredentialBearer) || !validTime(r.AcceptedAt) || !validTime(r.Until) || !validTime(r.StoredAt) || r.StoredAt.Before(r.AcceptedAt) || !r.Until.After(r.StoredAt) || r.Until.After(r.AcceptedAt.Add(20*time.Second)) {
+	if !bytes.Equal(plaintext, canonical) || (r.Schema != 1 && r.Schema != 2) || (r.Schema == 1 && r.CSRF != nil) || (r.Schema == 2 && r.CSRF == nil) || r.Session.TenantID != tenant || r.Session.Audience != c.service.config.Audience || r.Session.Authentication.Kind != AuthenticationVerified || (r.Transport != CredentialCookie && r.Transport != CredentialBearer) || !validTime(r.AcceptedAt) || !validTime(r.Until) || !validTime(r.StoredAt) || r.StoredAt.Before(r.AcceptedAt) || !r.Until.After(r.StoredAt) || r.Until.After(r.AcceptedAt.Add(20*time.Second)) {
 		return CachedAdmission{}
 	}
 	remember, e := NewRememberPolicy(r.Session.Remember)
@@ -226,6 +231,17 @@ func (c *EncryptedCacheCodec) restore(plaintext []byte, tenant identity.TenantID
 	record, e := NewSession(SessionSpec{s.SessionID, s.FamilyID, s.TenantID, s.UserID, s.Audience, s.Version, s.FamilyVersion, remember, authority, s.Lookup, s.Authentication, s.IssuedAt, s.LastActivityAt})
 	if e != nil || !r.Eligible.Equal(s.LastActivityAt.Add(remember.refresh)) {
 		return CachedAdmission{}
+	}
+	if r.CSRF != nil {
+		state, e := NewCSRFState(*r.CSRF)
+		if e != nil {
+			return CachedAdmission{}
+		}
+		spec, _ := record.Bindings()
+		record, e = NewSessionWithCSRF(spec, state)
+		if e != nil {
+			return CachedAdmission{}
+		}
 	}
 	if cap := r.StoredAt.Add(c.config.MaximumAge); cap.Before(r.Until) {
 		r.Until = cap

@@ -44,7 +44,9 @@ type AuthenticationMetadata struct {
 	AnonymousAt       time.Time
 }
 
-// SessionSpec is a complete bounded persistence projection with no raw token.
+// SessionSpec is the original bounded base projection with no raw token.
+// Synchronizer state is separately projected by Session.CSRFState to preserve
+// this public struct's shape. Complete storage must persist both projections.
 // Remember must already be resolved; Authority is the sole complete vector.
 // Session/family versions must equal that vector's corresponding versions.
 // IDs are canonical 1..128 visible ASCII bytes, Audience at most256. Constructors
@@ -73,7 +75,10 @@ type SessionSpec struct {
 // adapters own active status, exact scope derivation, proof validation and live
 // authority comparisons, including original bounded validity evidence.
 type Session struct{ state *sessionState }
-type sessionState struct{ spec SessionSpec }
+type sessionState struct {
+	spec SessionSpec
+	csrf CSRFState
+}
 
 // NewSession validates and freezes a complete record without IO or callbacks.
 // Authentication proof expiry is historical metadata here; admission uses the
@@ -127,7 +132,9 @@ func (m AuthenticationMetadata) at() time.Time {
 	return m.Proof.IssuedAt
 }
 
-// Bindings returns an owned non-secret scalar projection for trusted adapters.
+// Bindings returns the original owned base projection for trusted adapters.
+// Complete serialization/equality must also retain CSRFState; rebuilding from
+// Bindings alone deliberately produces a legacy tokenless record.
 // Scope and lookup values correlate people/activity; never log them. Returned
 // Remember and Authority values retain immutable state, not renewed freshness.
 func (s Session) Bindings() (SessionSpec, error) {
@@ -135,6 +142,41 @@ func (s Session) Bindings() (SessionSpec, error) {
 		return SessionSpec{}, ErrInvalidSession
 	}
 	return s.state.spec, nil
+}
+
+// NewSessionWithCSRF freezes a base record and exact synchronizer state without
+// changing SessionSpec's compatibility shape. The state must bind its exact
+// tenant, session and positive version; zero is invalid. Use NewSession for
+// explicitly tokenless legacy/bearer profiles. This grants no authentication,
+// primary liveness or storage/transaction guarantee. Adapters must persist both
+// Bindings and CSRFState; lossy reconstruction is not an equivalent session.
+func NewSessionWithCSRF(spec SessionSpec, state CSRFState) (Session, error) {
+	s, e := NewSession(spec)
+	if e != nil || state.state == nil || state.state.spec.Binding != (CSRFBinding{TenantID: spec.TenantID, SessionID: spec.SessionID, SessionVersion: spec.Version}) {
+		return Session{}, ErrInvalidSession
+	}
+	s.state.csrf = state
+	return s, nil
+}
+
+// CSRFState returns immutable digest-only synchronizer state. Zero session and
+// explicitly tokenless records return zero state, which denies every check.
+// This is a structural projection, never current primary authority; do not
+// authorize a mutation from cached or historical state. Complete storage must
+// retain this together with Bindings, never raw CSRF or bearer credentials.
+func (s Session) CSRFState() CSRFState {
+	if s.state == nil {
+		return CSRFState{}
+	}
+	return s.state.csrf
+}
+
+func csrfSpec(s Session) CSRFStateSpec {
+	state := s.CSRFState()
+	if state.state == nil {
+		return CSRFStateSpec{}
+	}
+	return state.state.spec
 }
 
 // Lifetime evaluates only recorded timestamps and immutable lifetime policy.

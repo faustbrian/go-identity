@@ -77,6 +77,26 @@ type IssuerConfig struct {
 type SessionIssuer struct {
 	executor IssueExecutor
 	config   IssuerConfig
+	csrfKey  CSRFKey
+}
+
+// NewSessionIssuerWithCSRF selects the synchronizer profile with a dedicated
+// current issuance key. All original configuration/receipt/lifetime rules still
+// apply. The owned executor MUST persist the complete Session, including its
+// separate CSRFState, in the issuance transaction; legacy lossy adapters cannot
+// be composed with this profile. Retain named verification keys for overlap.
+// Original CSRF delivery is retrieved from PreparedIssuance.CSRFToken only after
+// successful new Issue. No public configuration/result struct shape changes.
+func NewSessionIssuerWithCSRF(executor IssueExecutor, c IssuerConfig, key CSRFKey) (*SessionIssuer, error) {
+	if key.key.state == nil {
+		return nil, ErrInvalidIssuer
+	}
+	s, e := NewSessionIssuer(executor, c)
+	if e != nil {
+		return nil, e
+	}
+	s.csrfKey = key
+	return s, nil
 }
 
 // NewSessionIssuer validates and freezes trusted composition without IO. Use
@@ -111,6 +131,8 @@ type preparedIssuanceState struct {
 	request   IssueRequest
 	token     Token
 	attempted atomic.Bool
+	csrf      CSRFToken
+	csrfReady atomic.Bool
 }
 
 // Prepare validates the resolved policy, complete original authentication and
@@ -158,6 +180,13 @@ func (s *SessionIssuer) Prepare(binding identity.CommandBinding, spec SessionSpe
 	if e != nil {
 		return out, e
 	}
+	var csrf CSRFToken
+	if s.csrfKey.key.state != nil {
+		csrf, record, e = prepareCSRFRecord(record, s.csrfKey)
+		if e != nil {
+			return out, e
+		}
+	}
 	command, e = NewIssueCommand(binding, record)
 	if e != nil {
 		return out, e
@@ -166,7 +195,21 @@ func (s *SessionIssuer) Prepare(binding identity.CommandBinding, spec SessionSpe
 	if e != nil {
 		return out, e
 	}
-	return PreparedIssuance{state: &preparedIssuanceState{owner: s, request: request, token: token}}, nil
+	return PreparedIssuance{state: &preparedIssuanceState{owner: s, request: request, token: token, csrf: csrf}}, nil
+}
+
+// CSRFToken returns the original reveal-once token only after this preparation
+// completes an exact new error-free Issue within delivery bounds. Before that,
+// after recovery-only observations, and for tokenless profiles it denies. Copies
+// share the same reveal permission; repeated access does not create a new token.
+// Holding a returned token does not certify current session authority. An
+// earlier successful delivery remains owned even if a later retry is rejected,
+// just as an already returned bearer cannot be retracted from its recipient.
+func (p PreparedIssuance) CSRFToken() (CSRFToken, error) {
+	if p.state == nil || !p.state.csrfReady.Load() || p.state.csrf.token.state == nil {
+		return CSRFToken{}, ErrInvalidCSRF
+	}
+	return p.state.csrf, nil
 }
 
 // Request returns the original immutable safe command/proof for durable
@@ -277,6 +320,7 @@ func (s *SessionIssuer) Issue(ctx context.Context, p PreparedIssuance) (out Issu
 	}
 	out.Cookie = cookie
 	out.Token = p.state.token
+	p.state.csrfReady.Store(true)
 	return out, nil
 }
 
@@ -353,7 +397,7 @@ func sameIssuedSession(a, b Session) bool {
 		return false
 	}
 	y, e := b.Bindings()
-	if e != nil || x.Authority.CompareCurrent(y.Authority) != nil {
+	if e != nil || x.Authority.CompareCurrent(y.Authority) != nil || csrfSpec(a) != csrfSpec(b) {
 		return false
 	}
 	x.Authority = AuthoritySnapshot{}

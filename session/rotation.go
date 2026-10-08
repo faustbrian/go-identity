@@ -14,7 +14,7 @@ import (
 var ErrRotationDeferred = errors.New("session: rotation deferred")
 
 // RotationCommandSpec fixes an original record and one exact successor.
-// Only lookup digest, accepted activity and session version may change. Family,
+// Only lookup digest, synchronizer state, activity and session version may change. Family,
 // owner, authentication, remember policy and all other authority are preserved.
 // These are structural projections, never proof of authentication or commitment.
 type RotationCommandSpec struct {
@@ -57,6 +57,12 @@ func NewRotateCommand(b identity.CommandBinding, source, successor Session) (Ses
 		return SessionCommand{}, ErrInvalidSessionCommand
 	}
 	record, err := NewSession(expected)
+	if successor.CSRFState().state != nil {
+		if source.CSRFState().state != nil && csrfSpec(source).Digest == csrfSpec(successor).Digest {
+			return SessionCommand{}, ErrInvalidSessionCommand
+		}
+		record, err = NewSessionWithCSRF(expected, successor.CSRFState())
+	}
 	if err != nil || !sameIssuedSession(record, successor) {
 		return SessionCommand{}, ErrInvalidSessionCommand
 	}

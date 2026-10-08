@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Add exact session-bound synchronizer reconstruction and opt-in cookie-session
+  issuance/rotation with original commit-gated CSRF delivery. Preserve existing
+  public struct shapes; complete storage combines base and CSRF projections.
+  Compare reconstructed state semantically, clear it on metadata-version changes
+  and bearer rotation, and preserve it in versioned encrypted cache without
+  renewing authority. Primary/OTP persistence and HTTP enforcement remain pending.
+
 - Add dedicated 32-byte reveal-once CSRF tokens, versioned key custody and
   immutable tenant/session/version-bound synchronizer digest state. Structural
   comparison grants no session authority. Atomic storage, issuance delivery and

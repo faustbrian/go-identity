@@ -24,10 +24,42 @@ cannot establish current validity. Formatting/automatic serialization redact
 or deny; copies share one reveal permission. The original issuance owner must
 withhold delivery until its exact new commit, including on recovery or ambiguity.
 
-This is a core prerequisite, not complete CSRF protection. Session issuance and
-rotation custody, primary storage/atomic lifecycle invalidation, legacy record
-and cache integration, configured key overlap, and HTTP origin/channel checks
-remain pending. Consumers must not implement private stores to bridge those gaps.
+### Native record and original delivery
+
+`NewSessionWithCSRF(baseSpec, state)` rejects state bound to a different tenant,
+session or version. Existing `SessionSpec`, configurations and result structs
+retain their shapes. `Session.Bindings()` retains the original base projection;
+complete storage must also persist `Session.CSRFState().Bindings()`. Rebuilding
+only the base creates an explicitly tokenless legacy record, not an equivalent
+CSRF-bearing session. Native equality compares both projections semantically,
+including independently reconstructed immutable state.
+
+Select `NewSessionIssuerWithCSRF(executor, config, newestKey)` for cookie
+issuance. `Prepare` generates separate bearer and CSRF custody and freezes only
+their digests in the command. After the exact new error-free `Issue`, retrieve
+the original `prepared.CSRFToken()` and explicitly reveal it at approved
+no-store HTTP delivery. Precommit, replay, recovery-only, error, cancellation,
+expired or unknown execution grants no CSRF delivery. Repeated access shares
+the original reveal permission; a later rejected retry cannot retract custody
+already obtained from the original successful execution.
+
+`NewSessionRotatorWithCSRF` replaces cookie synchronizer state at the new
+session version, with the same delivery gates through `PreparedRotation`.
+Bearer rotation clears state and emits no CSRF credential or cookie. A legacy
+rotator cannot silently downgrade a CSRF-bearing cookie session. Metadata
+updates advance session version and clear state without issuing a new token;
+the source remains immutable. Future protected cookie mutations then deny until
+an owned authorized flow issues replacement state.
+
+Encrypted-cache schema 2 preserves digest-only state and the original admission
+deadline. Schema 1 remains unchanged and tokenless; unknown, partial or misbound
+state falls back to bounded primary validation, never synthetic CSRF validity.
+A warm restored state still cannot prove current primary CSRF authorization.
+
+This is not complete CSRF protection. Primary/OTP codecs, atomic lifecycle
+invalidation, configured key overlap, and HTTP origin/channel enforcement
+remain pending. Do not compose this opt-in profile with legacy lossy adapters;
+consumers must not implement private stores to bridge those gaps.
 
 ## Canonical pre-auth continuation
 

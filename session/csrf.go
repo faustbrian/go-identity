@@ -195,3 +195,23 @@ func (CSRFState) MarshalJSON() ([]byte, error) { return nil, ErrSecretSerializat
 
 // MarshalText rejects implicit text or map-key export.
 func (CSRFState) MarshalText() ([]byte, error) { return nil, ErrSecretSerialization }
+
+func prepareCSRFRecord(record Session, key CSRFKey) (CSRFToken, Session, error) {
+	spec, e := record.Bindings()
+	if e != nil {
+		return CSRFToken{}, Session{}, e
+	}
+	token, e := NewCSRFToken()
+	if e != nil {
+		return CSRFToken{}, Session{}, e
+	}
+	state, e := token.Digest(key, CSRFBinding{TenantID: spec.TenantID, SessionID: spec.SessionID, SessionVersion: spec.Version})
+	if e != nil {
+		return CSRFToken{}, Session{}, e
+	}
+	next, e := NewSessionWithCSRF(spec, state)
+	if e != nil {
+		return CSRFToken{}, Session{}, e
+	}
+	return token, next, nil
+}
