@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Separate explicit recovery fence initialization/renewal from per-record
+  restoration. A disappeared live fence now denies restoration without writes
+  or acknowledgement instead of silently reinstalling it. Initialization
+  retains configured scope and current primary checks before and after IO;
+  it does not authorize resumed applied progress or public activation.
+
 - Require the exact independently retained confirmed marker before native
   debit or replay; reject historical epoch-only requests. Bracket each effect
   with bounded read-only primary/noeviction/run-identity checks, retaining the

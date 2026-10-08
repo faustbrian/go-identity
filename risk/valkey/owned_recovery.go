@@ -35,11 +35,53 @@ func newOwnedRecovery(layout commandLayout, transport *nativeTransport, issuer r
 	return ownedRecovery{layout: layout, transport: transport, issuer: issuer, reader: reader}, nil
 }
 
-// restore closes primary checks before IO and rechecks primary custody before
+// fence explicitly initializes or renews the recovery fence before traversal.
+// The composition owner must start from zero when native continuity is lost;
+// this operation alone cannot preserve or authorize previously applied progress.
+// It is never called implicitly by restore, publication or confirmation.
+func (r ownedRecovery) fence(ctx context.Context, lease, previous risk.VelocityLease) error {
+	if ctx == nil || r.transport == nil {
+		return risk.ErrInvalidVelocityRecovery
+	}
+	bounded, cancel := context.WithTimeout(ctx, r.transport.config.timeout)
+	defer cancel()
+	if err := r.reader.Check(bounded, lease); err != nil {
+		return err
+	}
+	current, err := r.reader.Lease(lease)
+	if err != nil || current.Namespace != r.layout.replay.Namespace() || !boundedScope(current.Tenant) {
+		return risk.ErrInvalidVelocityRecovery
+	}
+	marker, err := ownedRecoveryMarker(current)
+	if err != nil {
+		return err
+	}
+	oldMarker := ""
+	if previous != (risk.VelocityLease{}) {
+		old, err := r.reader.Lease(previous)
+		if err != nil || old.Tenant != current.Tenant || old.Namespace != current.Namespace {
+			return risk.ErrInvalidVelocityRecovery
+		}
+		oldMarker, err = ownedRecoveryMarker(old)
+		if err != nil {
+			return err
+		}
+	}
+	key := "irv2:{" + r.layout.digest("identity-risk-valkey-slot-v1", current.Tenant) + "}:health"
+	reply, err := r.transport.executeScript(bounded, recoveryFenceScript, []string{key}, []string{oldMarker, marker})
+	if err := recoveryAcknowledgement(reply, err, "fenced", marker); err != nil {
+		return err
+	}
+	return r.reader.Check(bounded, lease)
+}
+
+// restore requires an already installed exact live fence; it never creates or
+// renews a fence, even for a matching retry after native reset. It closes
+// primary checks before IO and rechecks primary custody before
 // returning the native acknowledgement. Exact Lua fencing enforces generation
 // and original expiry at the effect boundary. Lost/late acknowledgements expose
 // no applied custody and never trigger an implicit resend.
-func (r ownedRecovery) restore(ctx context.Context, lease risk.VelocityLease, history risk.VelocityHistory, previous risk.VelocityLease) (risk.VelocityAcknowledgement, error) {
+func (r ownedRecovery) restore(ctx context.Context, lease risk.VelocityLease, history risk.VelocityHistory) (risk.VelocityAcknowledgement, error) {
 	if ctx == nil || r.transport == nil {
 		return risk.VelocityAcknowledgement{}, risk.ErrInvalidVelocityRecovery
 	}
@@ -55,20 +97,6 @@ func (r ownedRecovery) restore(ctx context.Context, lease risk.VelocityLease, hi
 	}
 	marker, err := ownedRecoveryMarker(current)
 	if err != nil {
-		return risk.VelocityAcknowledgement{}, err
-	}
-	oldMarker := ""
-	if previous != (risk.VelocityLease{}) {
-		old, err := r.reader.Lease(previous)
-		if err != nil || old.Tenant != current.Tenant || old.Namespace != current.Namespace {
-			return risk.VelocityAcknowledgement{}, risk.ErrInvalidVelocityRecovery
-		}
-		oldMarker, err = ownedRecoveryMarker(old)
-		if err != nil {
-			return risk.VelocityAcknowledgement{}, err
-		}
-	}
-	if err := r.transport.recoverFence(bounded, plan, oldMarker, marker); err != nil {
 		return risk.VelocityAcknowledgement{}, err
 	}
 	// Primary noncommit cannot override conflicting native attempt state. Its

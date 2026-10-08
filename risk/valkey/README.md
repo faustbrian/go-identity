@@ -129,7 +129,14 @@ This checkpoint proves a fenced marker transition, not survival of all earlier
 restored counters after eviction/reset or supported Valkey interoperability.
 
 Recovery now has separate fixed native scripts for fence installation/renewal
-and restoration of one known committed snapshot. A fence binds the boot epoch,
+and restoration. The owned recovery boundary initializes/renews its fence
+explicitly before traversal. Per-record restoration never invokes fence
+installation: a disappeared live fence denies without repairing the marker or
+any counters, including matching replay. Initialization is not permission to
+resume old applied progress after loss; the complete composition must restart
+recovery from primary-owned zero progress before a new projection can activate.
+
+A fence binds the boot epoch,
 exact uint64 generation, random owner and original microsecond expiry. Native
 server time rejects expired effects even while physical TTL rounding retains
 the key. Same-generation renewal requires exact current custody and a later

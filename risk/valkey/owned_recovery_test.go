@@ -38,7 +38,10 @@ func TestOwnedNativeRecoveryAcknowledgesOnlyExactEffect(t *testing.T) {
 		t.Fatal(err)
 	}
 	_, _, _, verifier := risk.NewVelocityRecoveryAuthorities()
-	ack, err := owner.restore(context.Background(), lease, history, risk.VelocityLease{})
+	if err := owner.fence(context.Background(), lease, risk.VelocityLease{}); err != nil {
+		t.Fatal("initial native fence failed", err)
+	}
+	ack, err := owner.restore(context.Background(), lease, history)
 	if err != nil {
 		t.Fatal("exact native effect not acknowledged", err)
 	}
@@ -49,20 +52,20 @@ func TestOwnedNativeRecoveryAcknowledgesOnlyExactEffect(t *testing.T) {
 		t.Fatal("configured native acknowledgement lost original identity", err)
 	}
 	writes := db.writes
-	if _, err := owner.restore(context.Background(), lease, history, risk.VelocityLease{}); err != nil || db.writes != writes {
+	if _, err := owner.restore(context.Background(), lease, history); err != nil || db.writes != writes {
 		t.Fatal("duplicate restoration changed original state", err)
 	}
 	if _, ok := db.strings[plan.keys[1]]; !ok {
 		t.Fatal("original replay not restored")
 	}
 	fail = true
-	if ack, err := owner.restore(context.Background(), lease, history, risk.VelocityLease{}); err == nil || ack != (risk.VelocityAcknowledgement{}) {
+	if ack, err := owner.restore(context.Background(), lease, history); err == nil || ack != (risk.VelocityAcknowledgement{}) {
 		t.Fatal("failed native effect acknowledged")
 	}
 	fixture.mu.Lock()
 	requests := len(fixture.requests)
 	fixture.mu.Unlock()
-	if requests != 5 {
+	if requests != 4 {
 		t.Fatal("hidden native resend", requests)
 	}
 }
@@ -84,7 +87,7 @@ func TestOwnedNativeRecoveryUnresolvedAndForeignNeverDispatch(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if ack, err := owner.restore(context.Background(), lease, h, risk.VelocityLease{}); !errors.Is(err, ErrUnavailable) || ack != (risk.VelocityAcknowledgement{}) {
+		if ack, err := owner.restore(context.Background(), lease, h); !errors.Is(err, ErrUnavailable) || ack != (risk.VelocityAcknowledgement{}) {
 			t.Fatal("unresolved history dispatched", err)
 		}
 	}
@@ -93,12 +96,12 @@ func TestOwnedNativeRecoveryUnresolvedAndForeignNeverDispatch(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if ack, err := wrong.restore(context.Background(), lease, history, risk.VelocityLease{}); !errors.Is(err, risk.ErrInvalidVelocityRecovery) || ack != (risk.VelocityAcknowledgement{}) {
+	if ack, err := wrong.restore(context.Background(), lease, history); !errors.Is(err, risk.ErrInvalidVelocityRecovery) || ack != (risk.VelocityAcknowledgement{}) {
 		t.Fatal("foreign owner dispatched", err)
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	if ack, err := owner.restore(ctx, lease, history, risk.VelocityLease{}); !errors.Is(err, context.Canceled) || ack != (risk.VelocityAcknowledgement{}) {
+	if ack, err := owner.restore(ctx, lease, history); !errors.Is(err, context.Canceled) || ack != (risk.VelocityAcknowledgement{}) {
 		t.Fatal("cancelled owner dispatched", err)
 	}
 	fixture.mu.Lock()
@@ -163,7 +166,15 @@ func TestOwnedNativeRecoveryAppliedEffectCannotOverrideFailure(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			ack, err := owner.restore(context.Background(), lease, history, risk.VelocityLease{})
+			fenceErr := owner.fence(context.Background(), lease, risk.VelocityLease{})
+			if mode != "expired" && fenceErr != nil {
+				t.Fatal("initial native fence failed", fenceErr)
+			}
+			var ack risk.VelocityAcknowledgement
+			err = fenceErr
+			if err == nil {
+				ack, err = owner.restore(context.Background(), lease, history)
+			}
 			if err == nil || ack != (risk.VelocityAcknowledgement{}) {
 				t.Fatal("failed recovery exposed applied custody")
 			}
@@ -220,7 +231,10 @@ func TestOwnedNativeNoncommitRejectsConflictingAttempt(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			ack, err := owner.restore(context.Background(), lease, history, risk.VelocityLease{})
+			if err := owner.fence(context.Background(), lease, risk.VelocityLease{}); err != nil {
+				t.Fatal("initial native fence failed", err)
+			}
+			ack, err := owner.restore(context.Background(), lease, history)
 			if state == "" {
 				if err != nil {
 					t.Fatal("proved native noncommit unavailable", err)
