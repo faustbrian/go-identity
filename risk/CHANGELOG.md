@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Carry exact activated recovery custody through a separate current-primary
+  eligibility check without widening replay callbacks or renewing expiry.
+  Copies cannot cache an allowance; native continuity, exact-marker enforcement
+  and journaled execution remain independently required before traffic.
+
 - Carry the configured native owner's acknowledgement of exact marker
   confirmation separately from primary confirmation and current eligibility.
   Issuance rechecks original recovery authority; pure historical identity reads

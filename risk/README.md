@@ -11,6 +11,15 @@ RiskEvidence/CaptchaEvidence issuance remain required implementation work.
 
 ### Owned velocity recovery custody
 
+`VelocityJournalIssuer.AcknowledgeEligibility` retains an already acknowledged
+primary activation of the exact native-confirmed chain with its bounded current
+primary checker. `VelocityNativeVerifier.Eligibility` authenticates that chain
+and invokes the current checker, never invalidated replay callbacks. Copies and
+reads preserve original expiry and cannot cache an allowance. The concrete
+PostgreSQL owner must supply its actual `CheckHealthy`, not consumer-written
+health assertions. Native continuity, exact-marker enforcement and journaled
+intent/result conservation still must be composed before public traffic.
+
 `NewVelocityRecoveryAuthorities` creates an isolated journal issuer/verifier and
 native issuer/verifier pair. This is a trusted composition primitive, not a
 counter store or a public application recovery workflow. The owned reference
