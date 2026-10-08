@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Derive counter-signal freshness from original authoritative observations and
+  window bounds, not each invocation's local dispatch start. Native latency
+  can no longer let matching replay increase the absolute evidence expiry;
+  execution deadlines and command preparation limits remain independent.
+
 - Carry exact activated recovery custody through a separate current-primary
   eligibility check without widening replay callbacks or renewing expiry.
   Copies cannot cache an allowance; native continuity, exact-marker enforcement

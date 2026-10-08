@@ -49,6 +49,17 @@ unhealthy-epoch response is noncommit plus unavailable, never clean admission.
 Current dispatch tests replace the
 transport boundary; they do not prove a Valkey script or real server mutation.
 
+The private owned current-admission crossing authenticates a genuine core
+command against its configured layout and the exact tenant/namespace recovery
+chain. It checks the distinct current-primary eligibility before native IO,
+derives the original confirmed marker without caller-selected time or epoch,
+and rechecks primary eligibility after the effect. It invokes no replay-only
+checks after activation. A later primary failure preserves any acknowledged
+effect while denying admission; it never retries or renews custody. This is not
+a public store: the composition owner must durably journal intent before this
+crossing and conserve its returned result afterward. That ownership and public
+composition remain unfinished.
+
 ## Private native transport
 
 The private standalone transport now sends the exact embedded EVAL through
@@ -90,8 +101,13 @@ possible loss between reads. A new transport alone cannot confer health; full
 recovery and current PostgreSQL healthy eligibility still require owned
 composition before public activation.
 
-Tests exercise the synchronous transport and verified TLS through memory-only `net.Pipe`
-fixtures. They do not prove a real Valkey server, replicated/cluster topology,
+Offline tests exercise the synchronous transport and verified TLS through
+memory-only `net.Pipe` fixtures. The integration-tagged
+`TestOwnedCurrentAdmissionLiveValkey` also exercises a disposable TLS Valkey
+8.0.0 standalone server: recovery-marker transitions, matching replay with
+unchanged payloads and absolute expiries, concurrent debits, current-primary
+denial and missing-marker denial. It uses simulated primary custody; it does
+not prove PostgreSQL/Valkey composition, replicated/cluster topology,
 journal-fenced recovery or public store activation. Those remain required.
 
 ## Native fixed-window script

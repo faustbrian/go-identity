@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Bind private native debit to configured current-primary eligibility and the
+  exact original confirmed marker. Recheck primary eligibility after the effect;
+  later failure denies admission while preserving acknowledged commit truth.
+  The journal-fenced public store remains unfinished.
+
+- Exercise the private admission path against a real TLS standalone Valkey
+  server, including immutable replay, concurrent debits and missing-marker
+  denial. Primary custody is simulated; public composition is not activated.
+
 - Retain an opaque configured-native acknowledgement only after exact marker
   confirmation, bounded transport continuity and final primary checks. Lost,
   late or substituted IO exposes no acknowledgement and never resends. This

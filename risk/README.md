@@ -408,6 +408,11 @@ are unavailable; no automatic retry occurs. A known commit remains committed
 after cancellation, timeout or stale evidence but yields no usable facts.
 Original authoritative observation times and window boundaries survive replay;
 the earliest observation expiry or window expiry bounds the returned signal.
+Authoritative observation begins at the store's read/effect boundary (Valkey
+script `TIME`), not the client's transport start. Even when that timestamp
+follows the first local start, later replay cannot change the absolute horizon.
+The local deadline still bounds execution, and preparation TTL still limits
+whether a command may be dispatched; neither becomes new source freshness.
 
 Retained digest versions are aliases for one logical counter, not independent
 windows. The adapter must prove rotation/epoch continuity and reject unsafe

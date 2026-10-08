@@ -494,7 +494,10 @@ func (c CounterCoordinator) Mutate(ctx context.Context, command CounterCommand) 
 	}
 	exceeded := false
 	observed := now
-	expires := start.Add(p.EvidenceTTL)
+	// Valid snapshots cannot be observed after now; every original observation
+	// below therefore supplies a replay-stable cap. A per-call start cap would
+	// grow on replay when native TIME follows the first transport start.
+	expires := now.Add(p.EvidenceTTL)
 	for _, counter := range raw.state.snapshot {
 		if counter.ObservedAt.After(now) || !counter.ObservedAt.Add(p.EvidenceTTL).After(now) || counter.WindowStartedAt.After(now) || !counter.WindowExpiresAt.After(now) {
 			return result, nil

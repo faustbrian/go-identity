@@ -20,7 +20,7 @@
       "external_runtime_dependencies": ["valkey"],
       "required_services": ["valkey"],
       "build_tags": [],
-      "test_tags": [],
+      "test_tags": ["integration"],
       "interoperability_tools": [],
       "specifications": [],
       "conformance_corpora": []
