@@ -349,6 +349,9 @@ func (c *Coordinator) Commit(w Work, result identity.CommandResult) (identity.Co
 	if err := terminalizeJournal(w.state.ctx, w.state.tx, r.request, r.journal, r.owner, result, "committed"); err != nil {
 		return c.Abort(w, err)
 	}
+	if err := c.checkPreparedAdmission(w); err != nil {
+		return c.Abort(w, err)
+	}
 	// Closing aliases cancels their context, not the commit. Preserve its
 	// original lease deadline in a separately cancellable child of the caller.
 	deadline, _ := w.state.ctx.Deadline()

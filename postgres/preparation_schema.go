@@ -22,13 +22,17 @@ type PreparationMigrationSource struct {
 // Load returns independent immutable forward history, without I/O. Nil inputs,
 // empty history and a non-successor version fail; cancellation is preserved.
 func (s PreparationMigrationSource) Load(ctx context.Context) ([]migrations.Migration, error) {
-	if ctx == nil || nilStatusSource(s.Base) || s.Version == 0 || s.Version > migrations.Version(math.MaxInt64) {
+	return appendPreparationMigration(ctx, s.Base, s.Version, "identity_command_preparation", preparationSchemaSQL)
+}
+
+func appendPreparationMigration(ctx context.Context, base migrations.Source, version migrations.Version, name, sql string) ([]migrations.Migration, error) {
+	if ctx == nil || nilStatusSource(base) || version == 0 || version > migrations.Version(math.MaxInt64) {
 		return nil, invalidPreparation()
 	}
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	history, err := s.Base.Load(ctx)
+	history, err := base.Load(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -36,11 +40,11 @@ func (s PreparationMigrationSource) Load(ctx context.Context) ([]migrations.Migr
 		return nil, invalidPreparation()
 	}
 	for _, m := range history {
-		if m.Version() >= s.Version {
+		if m.Version() >= version {
 			return nil, invalidPreparation()
 		}
 	}
-	next, err := migrations.NewMigration(s.Version, "identity_command_preparation", migrations.TransactionModeDefault, preparationSchemaSQL, "")
+	next, err := migrations.NewMigration(version, name, migrations.TransactionModeDefault, sql, "")
 	if err != nil {
 		return nil, identity.UnavailableError{}
 	}

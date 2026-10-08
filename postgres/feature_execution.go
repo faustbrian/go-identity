@@ -257,6 +257,9 @@ func (c *Coordinator) ApplyFeature(ctx context.Context, w Work, command identity
 			return result, e
 		}
 	}
+	if e := c.checkPreparedAdmission(w); e != nil {
+		return result, w.fail(ctx, e)
+	}
 	receipt, e := invokeFeature(phase, ctx, w, command)
 	if e != nil {
 		_, _, _, safe := abortClassification(e)

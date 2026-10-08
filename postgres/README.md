@@ -87,6 +87,35 @@ only original encrypted delivery may be added. The coordinator preserves the
 caller-request fingerprint, separately binds reconstructed execution fields,
 and executes through its existing atomic Begin/Apply/Commit owner.
 
+An optional `FeatureAdmissionPreparationContributor` can assess external facts
+before generation. Install `AdmissionPreparationMigrationSource` after the
+existing preparation source, with a later explicit version, before selecting
+this owner. The coordinator acknowledges its existing lease reservation and
+closes SQL before `PrepareFeatureAdmission`. It then reacquires that same
+generation/owner, repeats current primary admission, checks original local
+facts and commits the start marker. Admission is checked again after that
+acknowledgement before calling its invocation-local `Generate`.
+
+`FeaturePreparationAdmission.Check` is strictly bounded and IO-free. The
+returned invocation captures the original request and admission, not shared
+request state. Its generated authenticated ciphertext must retain original
+admission custody; `RestoreFeatureAdmission` reconstructs a local check from
+that unchanged output/generation without provider, counter or generation IO.
+The coordinator checks local admission again after final Begin waits and just
+before commit. Current account/flow authority remains the native owner's job;
+this seam does not supply risk facts, authentication or a one-use artifact.
+
+Busy, terminal and started-without-output replay never assesses externally.
+Retained output calls only IO-free restoration. Failed external admission
+leaves its acknowledged pending lease but no generation marker; retry remains
+under the existing journal and native risk owner's original-attempt replay
+rules. Nil/failed admission denies; provider diagnostics are redacted and
+cancellation/deadlines remain attributable. Unknown start acknowledgements
+cannot generate. Immutable profile 2 rejects legacy/profile-1 takeover rather
+than silently bypassing admission; historical profile 1 is not enrolled or
+reinterpreted. This is native composition support, not public OTP Send or
+proof of real risk/provider integration.
+
 During final `ApplyFeature`, that exact registered preparation owner can read
 `Work.FeaturePreparationOutput` to restore invocation-local custody. It returns
 an owned ciphertext copy and the original output generation, even after a later

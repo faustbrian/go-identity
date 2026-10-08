@@ -8,6 +8,8 @@ import (
 	"encoding/base64"
 	"encoding/binary"
 	"errors"
+	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -21,11 +23,20 @@ import (
 // A trusted test participant exercises the kernel's transaction/identity seam,
 // not production OTP encryption or session admission interoperability.
 type preparedFeaturePhase struct {
+	owner          FeaturePreparationContributor
 	generated      atomic.Int64
 	restored       atomic.Int64
 	deny, fail     bool
 	declaration    CommandPlan
 	beforeGenerate func(context.Context, identity.Command, uint64) error
+	afterApply     func()
+}
+
+func (p *preparedFeaturePhase) preparationOwner() FeaturePreparationContributor {
+	if p.owner != nil {
+		return p.owner
+	}
+	return p
 }
 
 func (*preparedFeaturePhase) Descriptor() ContributorDescriptor {
@@ -41,11 +52,11 @@ func (*preparedFeaturePhase) ValidateFeaturePreparation(c identity.Command, p Co
 	return (&featureExecutionPhase{}).ValidateFeatureCommand(c, p)
 }
 func (p *preparedFeaturePhase) AdmitFeaturePreparation(ctx context.Context, w Work, c identity.Command) error {
-	if wire, generation, err := w.FeaturePreparationOutput(p); err == nil || wire != nil || generation != 0 {
+	if wire, generation, err := w.FeaturePreparationOutput(p.preparationOwner()); err == nil || wire != nil || generation != 0 {
 		return invalidWork()
 	}
 	s, _ := c.Feature()
-	b, _, _, err := w.FeatureScope(p)
+	b, _, _, err := w.FeatureScope(p.preparationOwner())
 	if err != nil || b != s.Binding {
 		return invalidWork()
 	}
@@ -96,7 +107,7 @@ func (p *preparedFeaturePhase) RestoreFeaturePreparation(ctx context.Context, c 
 	return command, final, err
 }
 func (p *preparedFeaturePhase) ApplyFeature(ctx context.Context, w Work, c identity.Command) (identity.FeatureReceipt, error) {
-	if _, _, _, err := w.FeatureScope(p); err != nil {
+	if _, _, _, err := w.FeatureScope(p.preparationOwner()); err != nil {
 		return identity.FeatureReceipt{}, err
 	}
 	s, _ := c.Feature()
@@ -117,12 +128,12 @@ func (p *preparedFeaturePhase) ApplyFeature(ctx context.Context, w Work, c ident
 		return identity.FeatureReceipt{}, err
 	}
 	fp := claimFingerprint([32]byte{1}, q.canonical)
-	wire, generation, err := w.FeaturePreparationOutput(p)
+	wire, generation, err := w.FeaturePreparationOutput(p.preparationOwner())
 	if err != nil || len(wire) != 17000 || generation == 0 || binary.BigEndian.Uint64(wire[:8]) != generation || !bytes.Equal(wire[8:40], fp[:]) || !bytes.Equal(wire[40:], make([]byte, 16960)) {
 		return identity.FeatureReceipt{}, invalidPreparation()
 	}
 	wire[0] ^= 1
-	fresh, provenance, err := w.FeaturePreparationOutput(p)
+	fresh, provenance, err := w.FeaturePreparationOutput(p.preparationOwner())
 	if err != nil || provenance != generation || binary.BigEndian.Uint64(fresh[:8]) != generation || !bytes.Equal(fresh[8:40], fp[:]) || !bytes.Equal(fresh[40:], make([]byte, 16960)) {
 		return identity.FeatureReceipt{}, invalidPreparation()
 	}
@@ -130,13 +141,16 @@ func (p *preparedFeaturePhase) ApplyFeature(ctx context.Context, w Work, c ident
 		return identity.FeatureReceipt{}, invalidWork()
 	}
 	_, err = w.Exec(ctx, `INSERT INTO public.identity_test_feature(tenant_id,record_id,command_id,value) VALUES($1,$2,$3,$4)`, string(s.Binding.TenantID), s.Binding.RecordID, string(s.Binding.CommandID), s.Fields[0].Value.Text)
+	if p.afterApply != nil {
+		p.afterApply()
+	}
 	if p.fail {
 		return identity.FeatureReceipt{}, identity.ForbiddenError{}
 	}
 	return identity.FeatureReceipt{Operation: s.Operation, AfterVersion: 1}, err
 }
 func (p *preparedFeaturePhase) RecoverParticipant(ctx context.Context, w RecoveryWork) (RecoveryStatus, error) {
-	if _, _, _, err := w.FeatureScope(p); err != nil {
+	if _, _, _, err := w.FeatureScope(p.preparationOwner()); err != nil {
 		return RecoveryUnknown, err
 	}
 	return recoveryTestEvidence(ctx, w, "public.identity_test_feature")
@@ -149,10 +163,15 @@ func testPreparedFeature(t *testing.T, ctx context.Context, pool *database.Pool,
 	if _, err := pool.Raw().Exec(ctx, `CREATE TABLE IF NOT EXISTS public.identity_test_feature_audits(event_id text PRIMARY KEY,command_id text NOT NULL,event_index integer NOT NULL,retention_class text NOT NULL,UNIQUE(command_id,event_index));CREATE TABLE IF NOT EXISTS public.identity_test_lifecycle(event_id text PRIMARY KEY,command_id text NOT NULL UNIQUE);CREATE TABLE IF NOT EXISTS public.identity_test_feature(tenant_id text,record_id text,command_id text UNIQUE,value text,PRIMARY KEY(tenant_id,record_id));`); err != nil {
 		t.Fatal(err)
 	}
-	newCase := func(t *testing.T) (*Coordinator, *preparedFeaturePhase, identity.Command, CommandPlan) {
+	newCase := func(t *testing.T, wrap ...func(*preparedFeaturePhase) FeaturePreparationContributor) (*Coordinator, *preparedFeaturePhase, identity.Command, CommandPlan) {
 		t.Helper()
 		phase := &preparedFeaturePhase{}
-		registry, err := NewContributorRegistry([]Contributor{repo, &featureExecutionAuditPhase{}, &recoveryLifecyclePhase{}, phase})
+		var registered FeaturePreparationContributor = phase
+		if len(wrap) != 0 {
+			registered = wrap[0](phase)
+			phase.owner = registered
+		}
+		registry, err := NewContributorRegistry([]Contributor{repo, &featureExecutionAuditPhase{}, &recoveryLifecyclePhase{}, registered})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -196,6 +215,401 @@ func testPreparedFeature(t *testing.T, ctx context.Context, pool *database.Pool,
 			t.Fatal(err)
 		}
 	}
+	// Upgrade populated profile-1 history; admission must not reinterpret it.
+	legacyCoordinator, legacyPhase, legacyCommand, legacyPlan := newCase(t)
+	legacyResult, err := legacyCoordinator.ExecutePreparedFeature(ctx, legacyCommand, legacyPlan)
+	if err != nil || legacyResult.Outcome != identity.CommitOutcomeCommitted {
+		t.Fatal("legacy preparation", err)
+	}
+	if _, err := pool.Raw().Exec(ctx, admissionPreparationSchemaSQL); err != nil {
+		t.Fatal("admission upgrade", err)
+	}
+	legacyReplay, err := legacyCoordinator.ExecutePreparedFeature(ctx, legacyCommand, legacyPlan)
+	if err != nil || legacyReplay.Outcome != identity.CommitOutcomeCommitted || legacyPhase.generated.Load() != 1 {
+		t.Fatal("upgrade rewrote legacy preparation", err)
+	}
+	newGatedCase := func(t *testing.T) (*Coordinator, *preparedFeaturePhase, identity.Command, CommandPlan, *gatedPreparedFeaturePhase) {
+		var gated *gatedPreparedFeaturePhase
+		c, p, command, plan := newCase(t, func(p *preparedFeaturePhase) FeaturePreparationContributor {
+			gated = &gatedPreparedFeaturePhase{preparedFeaturePhase: p}
+			return gated
+		})
+		gated.prepare = func(_ context.Context, original identity.Command) (FeaturePreparationAdmission, error) {
+			return &testPreparationAdmission{phase: p, original: original}, nil
+		}
+		gated.restore = func(_ context.Context, original identity.Command, _ uint64, _ []byte) (FeaturePreparationAdmission, error) {
+			return &testPreparationAdmission{phase: p, original: original}, nil
+		}
+		return c, p, command, plan, gated
+	}
+	t.Run("external failure never marks generation", func(t *testing.T) {
+		for _, kind := range []string{"deny", "unavailable", "nil", "panic", "canceled", "deadline"} {
+			t.Run(kind, func(t *testing.T) {
+				c, p, command, plan, g := newGatedCase(t)
+				call, cancel := context.WithTimeout(ctx, time.Second)
+				defer cancel()
+				if kind == "deadline" {
+					cancel()
+					call, cancel = context.WithTimeout(ctx, 100*time.Millisecond)
+					defer cancel()
+				}
+				g.prepare = func(ctx context.Context, _ identity.Command) (FeaturePreparationAdmission, error) {
+					switch kind {
+					case "deny":
+						return nil, identity.ForbiddenError{}
+					case "unavailable":
+						return nil, errors.New("private external diagnostic")
+					case "nil":
+						return nil, nil
+					case "panic":
+						panic("private external diagnostic")
+					case "canceled":
+						cancel()
+						return nil, ctx.Err()
+					default:
+						<-ctx.Done()
+						return nil, ctx.Err()
+					}
+				}
+				_, err := c.ExecutePreparedFeature(call, command, plan)
+				if err == nil || strings.Contains(err.Error(), "private") || p.generated.Load() != 0 {
+					t.Fatal("failed external admission generated or disclosed", err)
+				}
+				if kind == "canceled" && !errors.Is(err, context.Canceled) {
+					t.Fatal("cancellation attribution lost", err)
+				}
+				if kind == "deadline" && !errors.Is(err, context.DeadlineExceeded) {
+					t.Fatal("deadline attribution lost", err)
+				}
+				spec, _ := command.Feature()
+				id, _ := base64.RawURLEncoding.DecodeString(string(spec.Binding.CommandID))
+				var marked *string
+				if err := pool.Raw().QueryRow(ctx, `SELECT preparation_started_generation::text FROM identity.commands WHERE command_id=$1`, id).Scan(&marked); err != nil || marked != nil {
+					t.Fatal("failed external admission retained a start marker", err)
+				}
+			})
+		}
+	})
+	t.Run("gated lost start acknowledgement stays unresolved", func(t *testing.T) {
+		c, p, command, plan, g := newGatedCase(t)
+		commits := 0
+		c.preparationCommit = func(ctx context.Context, tx pgx.Tx) error {
+			commits++
+			if err := tx.Commit(ctx); err != nil {
+				return err
+			}
+			if commits == 2 {
+				return identity.UnavailableError{}
+			}
+			return nil
+		}
+		_, err := c.ExecutePreparedFeature(ctx, command, plan)
+		var unknown identity.UnknownCommitError
+		if !errors.As(err, &unknown) || p.generated.Load() != 0 {
+			t.Fatal("unacknowledged gated start generated", err)
+		}
+		c.preparationCommit = nil
+		expire(command)
+		g.prepare = func(context.Context, identity.Command) (FeaturePreparationAdmission, error) {
+			t.Fatal("uncertain start assessed again")
+			return nil, identity.UnavailableError{}
+		}
+		result, err := c.ExecutePreparedFeature(ctx, command, plan)
+		if err != nil || result.Outcome != identity.CommitOutcomeInProgress || p.generated.Load() != 0 {
+			t.Fatal("uncertain start resumed generation", err)
+		}
+	})
+	t.Run("retained admitted output cannot downgrade", func(t *testing.T) {
+		c, p, command, plan, g := newGatedCase(t)
+		commits := 0
+		c.preparationCommit = func(ctx context.Context, tx pgx.Tx) error {
+			commits++
+			if err := tx.Commit(ctx); err != nil {
+				return err
+			}
+			if commits == 3 {
+				return identity.UnavailableError{}
+			}
+			return nil
+		}
+		_, err := c.ExecutePreparedFeature(ctx, command, plan)
+		var unknown identity.UnknownCommitError
+		if !errors.As(err, &unknown) || p.generated.Load() != 1 {
+			t.Fatal("retention failure fixture", err)
+		}
+		expire(command)
+		fresh := *c
+		fresh.preparationCommit = nil
+		legacy := &preparedFeaturePhase{declaration: plan}
+		registry, err := NewContributorRegistry([]Contributor{repo, &featureExecutionAuditPhase{}, &recoveryLifecyclePhase{}, legacy})
+		if err != nil {
+			t.Fatal(err)
+		}
+		fresh.registry = registry
+		_, err = fresh.ExecutePreparedFeature(ctx, command, plan)
+		var conflict identity.ConflictError
+		if !errors.As(err, &conflict) || legacy.generated.Load() != 0 || legacy.restored.Load() != 0 {
+			t.Fatal("admitted output silently downgraded", err)
+		}
+		fresh.registry = c.registry
+		g.prepare = func(context.Context, identity.Command) (FeaturePreparationAdmission, error) {
+			t.Fatal("retained output assessed again")
+			return nil, identity.UnavailableError{}
+		}
+		result, err := fresh.ExecutePreparedFeature(ctx, command, plan)
+		if err != nil || result.Outcome != identity.CommitOutcomeCommitted || p.generated.Load() != 1 {
+			t.Fatal("retained output did not restore without external IO", err)
+		}
+	})
+	t.Run("expired admission rolls back generated effects", func(t *testing.T) {
+		c, p, command, plan, g := newGatedCase(t)
+		var expired atomic.Bool
+		g.prepare = func(_ context.Context, original identity.Command) (FeaturePreparationAdmission, error) {
+			return &testPreparationAdmission{phase: p, original: original, check: func(context.Context) error {
+				if expired.Load() {
+					return identity.ForbiddenError{}
+				}
+				return nil
+			}}, nil
+		}
+		p.beforeGenerate = func(context.Context, identity.Command, uint64) error { expired.Store(true); return nil }
+		result, err := c.ExecutePreparedFeature(ctx, command, plan)
+		var denied identity.ForbiddenError
+		if !errors.As(err, &denied) || result.Outcome != identity.CommitOutcomeNotCommitted || p.generated.Load() != 1 {
+			t.Fatal("expired generated admission committed", result.Outcome, err)
+		}
+		spec, _ := command.Feature()
+		var effects int
+		if err := pool.Raw().QueryRow(ctx, `SELECT count(*) FROM public.identity_test_feature WHERE command_id=$1`, string(spec.Binding.CommandID)).Scan(&effects); err != nil || effects != 0 {
+			t.Fatal("expired admission left effects", err)
+		}
+	})
+	t.Run("expiry after domain write rolls back before commit", func(t *testing.T) {
+		c, p, command, plan, g := newGatedCase(t)
+		var expired atomic.Bool
+		g.prepare = func(_ context.Context, original identity.Command) (FeaturePreparationAdmission, error) {
+			return &testPreparationAdmission{phase: p, original: original, check: func(context.Context) error {
+				if expired.Load() {
+					return identity.ForbiddenError{}
+				}
+				return nil
+			}}, nil
+		}
+		p.afterApply = func() { expired.Store(true) }
+		result, err := c.ExecutePreparedFeature(ctx, command, plan)
+		var denied identity.ForbiddenError
+		if !errors.As(err, &denied) || result.Outcome != identity.CommitOutcomeNotCommitted || p.generated.Load() != 1 {
+			t.Fatal("expiry after domain write was committed", result.Outcome, err)
+		}
+		spec, _ := command.Feature()
+		var effects, lifecycle int
+		if err := pool.Raw().QueryRow(ctx, `SELECT (SELECT count(*) FROM public.identity_test_feature WHERE command_id=$1),(SELECT count(*) FROM public.identity_test_lifecycle WHERE command_id=$1)`, string(spec.Binding.CommandID)).Scan(&effects, &lifecycle); err != nil || effects != 0 || lifecycle != 0 {
+			t.Fatal("expired admission retained atomic success effects", err)
+		}
+	})
+	t.Run("expired lease during external work cannot mark", func(t *testing.T) {
+		c, p, command, plan, g := newGatedCase(t)
+		g.prepare = func(_ context.Context, original identity.Command) (FeaturePreparationAdmission, error) {
+			expire(command)
+			return &testPreparationAdmission{phase: p, original: original}, nil
+		}
+		_, err := c.ExecutePreparedFeature(ctx, command, plan)
+		if err == nil || p.generated.Load() != 0 {
+			t.Fatal("lost preparation lease generated", err)
+		}
+	})
+	t.Run("expiry after start acknowledgement never generates", func(t *testing.T) {
+		c, p, command, plan, g := newGatedCase(t)
+		var expired atomic.Bool
+		g.prepare = func(_ context.Context, original identity.Command) (FeaturePreparationAdmission, error) {
+			return &testPreparationAdmission{phase: p, original: original, check: func(context.Context) error {
+				if expired.Load() {
+					return identity.ForbiddenError{}
+				}
+				return nil
+			}}, nil
+		}
+		commits := 0
+		c.preparationCommit = func(ctx context.Context, tx pgx.Tx) error {
+			commits++
+			err := tx.Commit(ctx)
+			if commits == 2 {
+				expired.Store(true)
+			}
+			return err
+		}
+		result, err := c.ExecutePreparedFeature(ctx, command, plan)
+		var unknown identity.UnknownCommitError
+		if !errors.As(err, &unknown) || result.Outcome != identity.CommitOutcomeUnknown || p.generated.Load() != 0 {
+			t.Fatal("late acknowledgement admitted expired generation", result.Outcome, err)
+		}
+	})
+	t.Run("external admission excludes matching concurrent work", func(t *testing.T) {
+		c, p, command, plan, g := newGatedCase(t)
+		entered, release := make(chan struct{}), make(chan struct{})
+		var once sync.Once
+		unblock := func() { once.Do(func() { close(release) }) }
+		defer unblock()
+		g.prepare = func(ctx context.Context, original identity.Command) (FeaturePreparationAdmission, error) {
+			close(entered)
+			select {
+			case <-release:
+				return &testPreparationAdmission{phase: p, original: original}, nil
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			}
+		}
+		type outcome struct {
+			result identity.CommandResult
+			err    error
+		}
+		finished := make(chan outcome, 1)
+		var worker sync.WaitGroup
+		worker.Add(1)
+		defer func() { unblock(); worker.Wait() }()
+		go func() {
+			defer worker.Done()
+			result, err := c.ExecutePreparedFeature(ctx, command, plan)
+			finished <- outcome{result, err}
+		}()
+		select {
+		case <-entered:
+		case <-ctx.Done():
+			t.Fatal("external admission did not start")
+		}
+		concurrent, err := c.ExecutePreparedFeature(ctx, command, plan)
+		unblock()
+		first := <-finished
+		if err != nil || concurrent.Outcome != identity.CommitOutcomeInProgress || first.err != nil || first.result.Outcome != identity.CommitOutcomeCommitted || p.generated.Load() != 1 {
+			t.Fatal("matching external admission duplicated work", err, first.err)
+		}
+	})
+	t.Run("original admission expiry is rechecked after SQL wait", func(t *testing.T) {
+		for _, instant := range []int64{9, 10, 11} {
+			t.Run(strconv.FormatInt(instant, 10), func(t *testing.T) {
+				c, p, command, plan, g := newGatedCase(t)
+				connection, err := pgx.ConnectConfig(ctx, pool.Raw().Config().ConnConfig.Copy())
+				if err != nil {
+					t.Fatal(err)
+				}
+				defer connection.Close(ctx)
+				blocker, err := connection.Begin(ctx)
+				if err != nil {
+					t.Fatal(err)
+				}
+				defer blocker.Rollback(ctx)
+				var clock atomic.Int64
+				clock.Store(1)
+				entered := make(chan struct{})
+				g.prepare = func(ctx context.Context, original identity.Command) (FeaturePreparationAdmission, error) {
+					spec, _ := original.Feature()
+					id, _ := base64.RawURLEncoding.DecodeString(string(spec.Binding.CommandID))
+					if _, err := blocker.Exec(ctx, `SELECT command_id FROM identity.commands WHERE command_id=$1 FOR UPDATE`, id); err != nil {
+						return nil, err
+					}
+					close(entered)
+					return &testPreparationAdmission{phase: p, original: original, check: func(context.Context) error {
+						if clock.Load() >= 10 {
+							return identity.ForbiddenError{}
+						}
+						return nil
+					}}, nil
+				}
+				type outcome struct {
+					result identity.CommandResult
+					err    error
+				}
+				finished := make(chan outcome, 1)
+				var worker sync.WaitGroup
+				worker.Add(1)
+				defer func() { blocker.Rollback(ctx); worker.Wait() }()
+				go func() {
+					defer worker.Done()
+					result, err := c.ExecutePreparedFeature(ctx, command, plan)
+					finished <- outcome{result, err}
+				}()
+				select {
+				case <-entered:
+				case <-ctx.Done():
+					t.Fatal("admission never entered")
+				}
+				ticker := time.NewTicker(time.Millisecond)
+				defer ticker.Stop()
+				for {
+					var waiting bool
+					if err := pool.Raw().QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM pg_stat_activity WHERE datname=current_database() AND wait_event_type='Lock' AND query LIKE '%identity.commands%')`).Scan(&waiting); err != nil {
+						t.Fatal(err)
+					}
+					if waiting {
+						break
+					}
+					select {
+					case <-ticker.C:
+					case <-ctx.Done():
+						t.Fatal("authoritative SQL wait not observed")
+					}
+				}
+				clock.Store(instant)
+				if err := blocker.Rollback(ctx); err != nil {
+					t.Fatal(err)
+				}
+				got := <-finished
+				if instant < 10 {
+					if got.err != nil || got.result.Outcome != identity.CommitOutcomeCommitted || p.generated.Load() != 1 {
+						t.Fatal("fresh admission rejected after wait", got.err)
+					}
+				} else {
+					if got.err == nil || p.generated.Load() != 0 {
+						t.Fatal("expired admission passed SQL wait", got.err)
+					}
+				}
+			})
+		}
+	})
+	t.Run("external admission closes SQL before generation", func(t *testing.T) {
+		var assessed atomic.Int64
+		var gated *gatedPreparedFeaturePhase
+		c, phase, command, plan := newCase(t, func(p *preparedFeaturePhase) FeaturePreparationContributor {
+			gated = &gatedPreparedFeaturePhase{preparedFeaturePhase: p}
+			return gated
+		})
+		gated.prepare = func(ctx context.Context, original identity.Command) (FeaturePreparationAdmission, error) {
+			assessed.Add(1)
+			if _, bounded := ctx.Deadline(); !bounded {
+				t.Fatal("unbounded external admission")
+			}
+			spec, _ := original.Feature()
+			id, _ := base64.RawURLEncoding.DecodeString(string(spec.Binding.CommandID))
+			tx, err := pool.Raw().Begin(ctx)
+			if err != nil {
+				return nil, err
+			}
+			defer tx.Rollback(ctx)
+			var marked *string
+			if err := tx.QueryRow(ctx, `SELECT preparation_started_generation::text FROM identity.commands WHERE command_id=$1 FOR UPDATE NOWAIT`, id).Scan(&marked); err != nil {
+				return nil, err
+			}
+			if marked != nil {
+				t.Fatal("external admission followed generation marker")
+			}
+			if _, err := tx.Exec(ctx, `SELECT command_id FROM identity.identity_command_id_claims WHERE command_id=$1 FOR UPDATE NOWAIT`, id); err != nil {
+				return nil, err
+			}
+			return &testPreparationAdmission{phase: phase, original: original}, nil
+		}
+		result, err := c.ExecutePreparedFeature(ctx, command, plan)
+		if err != nil || result.Outcome != identity.CommitOutcomeCommitted || assessed.Load() != 1 || phase.generated.Load() != 1 {
+			t.Fatal("external admission absent or ran under SQL", result.Outcome, err)
+		}
+		gated.prepare = func(context.Context, identity.Command) (FeaturePreparationAdmission, error) {
+			t.Fatal("terminal replay assessed again")
+			return nil, identity.UnavailableError{}
+		}
+		replay, err := c.ExecutePreparedFeature(ctx, command, plan)
+		if err != nil || replay.Outcome != result.Outcome || phase.generated.Load() != 1 {
+			t.Fatal("terminal replay repeated work", err)
+		}
+	})
 	t.Run("original intent commits generated effects and replays", func(t *testing.T) {
 		c, phase, command, p := newCase(t)
 		s, _ := command.Feature()

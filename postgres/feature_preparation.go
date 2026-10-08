@@ -35,12 +35,41 @@ type FeaturePreparationContributor interface {
 	RestoreFeaturePreparation(context.Context, identity.Command, uint64, []byte) (identity.Command, CommandPlan, error)
 }
 
+// FeaturePreparationAdmission is invocation-local state returned only by the
+// exact registered native owner. Check is a bounded IO-free current validation
+// of original admission facts; it must not renew them, call providers/stores,
+// mutate state, or retain Work. Generate owns the original admitted request and
+// embeds authenticated admission custody in its bounded encrypted output so a
+// later native restore can recheck it without repeating external work. It runs
+// outside SQL only after an acknowledged generation marker. Methods must obey
+// cancellation; the owner must not share mutable invocation state across calls.
+// This interface is neither an independently issued permission nor a journal.
+type FeaturePreparationAdmission interface {
+	Check(context.Context) error
+	Generate(context.Context, uint64) ([]byte, error)
+}
+
+// FeatureAdmissionPreparationContributor opts a registered preparation owner
+// into external admission. Prepare runs outside SQL only for journal-owned,
+// never-started generation. It receives bounded context and the immutable
+// original command; nil admission denies. Restore is bounded, IO-free native
+// authentication of original retained ciphertext/generation, not provider or
+// counter work, generation, or renewed admission. Both return independent
+// invocation state for the original request. Busy, started-without-output and
+// terminal replays call neither method. Legacy preparation owners are unchanged.
+type FeatureAdmissionPreparationContributor interface {
+	FeaturePreparationContributor
+	PrepareFeatureAdmission(context.Context, identity.Command) (FeaturePreparationAdmission, error)
+	RestoreFeatureAdmission(context.Context, identity.Command, uint64, []byte) (FeaturePreparationAdmission, error)
+}
+
 // Invocation-local custody is carried by the existing reservation, not by the
 // shared registered owner or generic command fields. Provenance remains the
 // original output generation when a later journal generation takes over.
 type retainedFeaturePreparation struct {
 	ciphertext []byte
 	generation uint64
+	admission  FeaturePreparationAdmission
 }
 
 // FeaturePreparationOutput returns an owned copy of the original retained
@@ -119,14 +148,40 @@ func (c *Coordinator) ExecutePreparedFeature(ctx context.Context, original ident
 	if _, err := rand.Read(owner[:]); err != nil || owner == ([16]byte{}) {
 		return result, identity.UnavailableError{}
 	}
-	r, result, err := c.startFeaturePreparation(ctx, original, q, admitted, phase, owner)
+	external, gated := phase.(FeatureAdmissionPreparationContributor)
+	r, result, err := c.startFeaturePreparation(ctx, original, q, admitted, phase, owner, gated)
 	if err != nil || r.journal.disposition != journalOwned {
 		return result, err
 	}
 	started = true
 	wire := r.output
+	if gated {
+		if r.generate {
+			r.admission, err = external.PrepareFeatureAdmission(ctx, original)
+		} else {
+			r.admission, err = external.RestoreFeatureAdmission(ctx, original, r.outputGeneration, bytes.Clone(wire))
+		}
+		if err != nil || r.admission == nil || ctx.Err() != nil {
+			return identity.CommandResult{}, preparationAdmissionError(ctx, err)
+		}
+		if err := checkPreparationAdmission(ctx, r.admission); err != nil {
+			return identity.CommandResult{}, err
+		}
+		if r.generate {
+			if err := c.markAdmittedPreparation(ctx, original, q, admitted, phase, r, owner); err != nil {
+				return identity.CommandResult{}, err
+			}
+		}
+	}
 	if r.generate {
-		wire, err = phase.GenerateFeaturePreparation(ctx, original, r.journal.generation)
+		if gated {
+			if err := checkPreparationAdmission(ctx, r.admission); err != nil {
+				return featureOutcome(b, q.feature, identity.CommitOutcomeUnknown, 0), identity.UnknownCommitError{CommandID: b.CommandID}
+			}
+			wire, err = r.admission.Generate(ctx, r.journal.generation)
+		} else {
+			wire, err = phase.GenerateFeaturePreparation(ctx, original, r.journal.generation)
+		}
 		if err != nil || ctx.Err() != nil || len(wire) == 0 || len(wire) > maximumPreparationCiphertext {
 			return featureOutcome(b, q.feature, identity.CommitOutcomeUnknown, 0), identity.UnknownCommitError{CommandID: b.CommandID}
 		}
@@ -226,7 +281,7 @@ func preparationFinalDeclaration(original, final CommandPlan) bool {
 	return j == len(original.Contributors)
 }
 
-func (c *Coordinator) startFeaturePreparation(ctx context.Context, original identity.Command, q claimRequest, p *admittedKernelPlan, phase FeaturePreparationContributor, owner [16]byte) (r preparationReservation, result identity.CommandResult, err error) {
+func (c *Coordinator) startFeaturePreparation(ctx context.Context, original identity.Command, q claimRequest, p *admittedKernelPlan, phase FeaturePreparationContributor, owner [16]byte, external bool) (r preparationReservation, result identity.CommandResult, err error) {
 	tx, err := c.pool.Raw().BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.ReadCommitted})
 	if err != nil {
 		return r, result, readFailure(ctx, err)
@@ -244,7 +299,11 @@ func (c *Coordinator) startFeaturePreparation(ctx context.Context, original iden
 	if d == claimConflict {
 		return r, featureOutcome(p.binding, q.feature, identity.CommitOutcomeConflict, 0), identity.ConflictError{}
 	}
-	r, err = reservePreparationJournal(ctx, tx, q, d, owner, c.leaseDuration)
+	profile := int16(1)
+	if external {
+		profile = 2
+	}
+	r, err = reservePreparationJournal(ctx, tx, q, d, owner, c.leaseDuration, profile)
 	if err != nil {
 		return r, result, err
 	}
@@ -259,8 +318,10 @@ func (c *Coordinator) startFeaturePreparation(ctx context.Context, original iden
 		if err := c.admitFeaturePreparation(ctx, tx, original, q, p, phase, r.journal, owner); err != nil {
 			return preparationReservation{}, result, err
 		}
-		if err := startJournalPreparation(ctx, tx, q, r.journal, owner); err != nil {
-			return preparationReservation{}, result, err
+		if !external {
+			if err := startJournalPreparation(ctx, tx, q, r.journal, owner); err != nil {
+				return preparationReservation{}, result, err
+			}
 		}
 	}
 	if err := c.commitPreparation(ctx, tx); err != nil {
@@ -351,7 +412,84 @@ func (c *Coordinator) attachFeaturePreparation(ctx context.Context, original, ge
 	if err := c.commitPreparation(ctx, tx); err != nil {
 		return Reservation{}, err
 	}
-	return Reservation{state: &reservationState{coordinator: c, request: original, executionRequest: &generated, preparation: &retainedFeaturePreparation{ciphertext: bytes.Clone(wire), generation: r.outputGeneration}, plan: admitted, journal: r.journal, owner: owner}}, nil
+	return Reservation{state: &reservationState{coordinator: c, request: original, executionRequest: &generated, preparation: &retainedFeaturePreparation{ciphertext: bytes.Clone(wire), generation: r.outputGeneration, admission: r.admission}, plan: admitted, journal: r.journal, owner: owner}}, nil
+}
+
+// External work sees an acknowledged existing journal lease, never SQL locks.
+// Reacquire and check that same owner and current native authority afterwards.
+func (c *Coordinator) markAdmittedPreparation(ctx context.Context, original identity.Command, q claimRequest, p *admittedKernelPlan, phase FeaturePreparationContributor, r preparationReservation, owner [16]byte) (err error) {
+	tx, err := c.pool.Raw().BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.ReadCommitted})
+	if err != nil {
+		return readFailure(ctx, err)
+	}
+	defer func() {
+		if e := rollbackPreparation(tx); e != nil && !errors.Is(e, pgx.ErrTxClosed) {
+			err = identity.UnknownCommitError{CommandID: q.commandID}
+		}
+	}()
+	d, err := lockCommandClaim(ctx, tx, q, c.keys)
+	if err != nil {
+		return err
+	}
+	if d != claimReplay {
+		return identity.ConflictError{}
+	}
+	if err := c.admitFeaturePreparation(ctx, tx, original, q, p, phase, r.journal, owner); err != nil {
+		return err
+	}
+	if err := startJournalPreparation(ctx, tx, q, r.journal, owner); err != nil {
+		return err
+	}
+	if err := checkPreparationAdmission(ctx, r.admission); err != nil {
+		return err
+	}
+	if err := c.commitPreparation(ctx, tx); err != nil {
+		return identity.UnknownCommitError{CommandID: q.commandID}
+	}
+	return nil
+}
+
+func preparationAdmissionError(ctx context.Context, err error) error {
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+	if err == nil {
+		return identity.UnavailableError{}
+	}
+	_, _, _, safe := abortClassification(err)
+	return safe
+}
+
+func checkPreparationAdmission(ctx context.Context, a FeaturePreparationAdmission) (err error) {
+	if ctx == nil {
+		return invalidPreparation()
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if a == nil {
+		return identity.UnavailableError{}
+	}
+	defer func() {
+		if recover() != nil {
+			err = preparationAdmissionError(ctx, identity.UnavailableError{})
+		}
+	}()
+	if err := a.Check(ctx); err != nil {
+		return preparationAdmissionError(ctx, err)
+	}
+	return ctx.Err()
+}
+
+func (c *Coordinator) checkPreparedAdmission(w Work) error {
+	if !c.owns(w) || w.state.execution == nil {
+		return invalidWork()
+	}
+	p := w.state.execution.reservation.preparation
+	if p == nil || p.admission == nil {
+		return nil
+	}
+	return checkPreparationAdmission(w.state.ctx, p.admission)
 }
 
 // No acknowledgement error is interpreted as rollback. Rollback is cleanup

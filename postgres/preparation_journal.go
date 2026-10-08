@@ -17,6 +17,7 @@ import (
 // The feature owns authenticated encryption/opening of output. This layer
 // retains only its bounded ciphertext and original generation provenance.
 type preparationReservation struct {
+	admission        FeaturePreparationAdmission
 	journal          journalReservation
 	generate         bool
 	output           []byte
@@ -27,7 +28,17 @@ type preparationReservation struct {
 // All closure remains with the coordinator. No callbacks or network work run
 // while the journal lock is held. An expired lease can transfer ownership,
 // but can never infer that randomness was not used from absent ciphertext.
-func reservePreparationJournal(ctx context.Context, tx pgx.Tx, q claimRequest, d claimDisposition, owner [16]byte, lease time.Duration) (preparationReservation, error) {
+func reservePreparationJournal(ctx context.Context, tx pgx.Tx, q claimRequest, d claimDisposition, owner [16]byte, lease time.Duration, selected ...int16) (preparationReservation, error) {
+	expectedProfile := int16(1)
+	if len(selected) > 1 {
+		return preparationReservation{}, invalidPreparation()
+	}
+	if len(selected) == 1 {
+		expectedProfile = selected[0]
+	}
+	if expectedProfile != 1 && expectedProfile != 2 {
+		return preparationReservation{}, invalidPreparation()
+	}
 	if !validJournalInput(ctx, tx, q, owner, lease) || (d != claimNew && d != claimReplay) {
 		return preparationReservation{}, invalidPreparation()
 	}
@@ -37,7 +48,7 @@ func reservePreparationJournal(ctx context.Context, tx pgx.Tx, q claimRequest, d
 		if err != nil {
 			return preparationReservation{}, err
 		}
-		tag, err := tx.Exec(ctx, `UPDATE identity.commands SET preparation_profile=1 WHERE command_id=$1 AND tenant_id=$2 AND purpose=$3 AND preparation_profile IS NULL AND command_plan IS NULL`, id, string(q.tenant), q.purpose)
+		tag, err := tx.Exec(ctx, `UPDATE identity.commands SET preparation_profile=$4 WHERE command_id=$1 AND tenant_id=$2 AND purpose=$3 AND preparation_profile IS NULL AND command_plan IS NULL`, id, string(q.tenant), q.purpose, expectedProfile)
 		if err != nil {
 			return preparationReservation{}, readFailure(ctx, err)
 		}
@@ -56,7 +67,7 @@ FROM identity.commands WHERE command_id=$1 AND tenant_id=$2 AND purpose=$3 FOR U
 	if err != nil {
 		return preparationReservation{}, readFailure(ctx, err)
 	}
-	if profile == nil || *profile != 1 || plan != nil && output == nil || !postgresExactTime(until) {
+	if profile == nil || *profile != expectedProfile || plan != nil && output == nil || !postgresExactTime(until) {
 		return preparationReservation{}, identity.ConflictError{}
 	}
 	gen, err := strconv.ParseUint(generation, 10, 64)
@@ -167,7 +178,7 @@ func lockPreparationOwner(ctx context.Context, tx pgx.Tx, q claimRequest, r jour
 	var matched bool
 	var until time.Time
 	// Read time after the row lock, never before a competing transaction wait.
-	err := tx.QueryRow(ctx, `SELECT state='pending' AND generation=$4::numeric AND lease_owner=$5 AND preparation_profile=1 AND command_plan IS NULL,lease_until FROM identity.commands WHERE command_id=$1 AND tenant_id=$2 AND purpose=$3 FOR UPDATE`, id, string(q.tenant), q.purpose, strconv.FormatUint(r.generation, 10), owner[:]).Scan(&matched, &until)
+	err := tx.QueryRow(ctx, `SELECT state='pending' AND generation=$4::numeric AND lease_owner=$5 AND preparation_profile IN (1,2) AND command_plan IS NULL,lease_until FROM identity.commands WHERE command_id=$1 AND tenant_id=$2 AND purpose=$3 FOR UPDATE`, id, string(q.tenant), q.purpose, strconv.FormatUint(r.generation, 10), owner[:]).Scan(&matched, &until)
 	if err != nil {
 		return readFailure(ctx, err)
 	}

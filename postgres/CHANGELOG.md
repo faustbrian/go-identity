@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Add opt-in external preparation admission through the existing command
+  journal, outside SQL and before acknowledged generation. Recheck original
+  local facts after waits and before final commit; matching replay conserves
+  output without provider work. Install AdmissionPreparationMigrationSource
+  after preparation history before selecting this profile. Its immutable
+  profile prevents legacy admission bypass; existing profile-1 history and
+  APIs are unchanged. Concrete public OTP Send remains under development.
+
 - Retain code-free native preparation input atomically with request-key
   correlation. Matching restart recovers original encrypted input; races cannot
   overwrite it and legacy mappings are not enrolled. Install the optional
