@@ -4,6 +4,28 @@
   "go_version": "1.27.0",
   "modules": [
     {
+      "directory": "http/session",
+      "module_path": "github.com/faustbrian/go-identity/http/session",
+      "go_version": "1.27.0",
+      "packages": [{"module_directory":"http/session","directory":".","name":"sessionhttp","import_path":"github.com/faustbrian/go-identity/http/session","kind":"public","production":true,"executable":true,"coverage_required":true,"build_required":true,"build_tags":[]}],
+      "purpose": "Opt-in real session HTTP handlers; feature/router/OpenAPI and complete transport qualification in development.",
+      "lifecycle": "experimental",
+      "kind": "public library",
+      "releasable": true,
+      "family": "service-edge",
+      "version": "0.0.0",
+      "tag_prefix": "http/session/v",
+      "owned_dependencies": ["github.com/faustbrian/go-identity","github.com/faustbrian/go-identity/http","github.com/faustbrian/go-identity/session"],
+      "reverse_owned_dependencies": [],
+      "external_runtime_dependencies": [],
+      "required_services": [],
+      "build_tags": [],
+      "test_tags": [],
+      "interoperability_tools": [],
+      "specifications": [],
+      "conformance_corpora": []
+    },
+    {
       "directory": "http",
       "module_path": "github.com/faustbrian/go-identity/http",
       "go_version": "1.27.0",
