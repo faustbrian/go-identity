@@ -13,12 +13,13 @@ import (
 
 // ownedRecovery retains native issuance separately from primary verification.
 // It reconstructs and applies original facts, never live debit or health. The
-// concrete composition owner remains private until joint activation is ready.
+// public recovery owner retains this concrete transport and custody graph.
 type ownedRecovery struct {
 	layout    commandLayout
 	transport *nativeTransport
 	issuer    risk.VelocityNativeIssuer
 	reader    risk.VelocityJournalVerifier
+	primary   risk.VelocityJournalIssuer
 }
 
 func (ownedRecovery) Format(s fmt.State, _ rune) {

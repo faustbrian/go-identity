@@ -7,18 +7,19 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/tls"
-	"crypto/x509"
 	"encoding/hex"
 	"errors"
 	"os"
 	"reflect"
 	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/faustbrian/go-identity/risk"
+	"github.com/faustbrian/go-identity/risk/internal/velocity"
 )
 
 // Live service is deliberately separate from the simulated primary authority.
@@ -40,38 +41,35 @@ func TestOwnedCurrentAdmissionLiveValkey(t *testing.T) {
 		}
 		return data
 	}
-	roots := x509.NewCertPool()
-	if !roots.AppendCertsFromPEM(readFile("IDENTITY_RISK_VALKEY_TEST_CA")) {
-		t.Fatal("test trust root required")
-	}
-	credential, err := newNativeCredential("default", bytes.TrimSpace(readFile("IDENTITY_RISK_VALKEY_TEST_PASSWORD_FILE")))
+	trust := readFile("IDENTITY_RISK_VALKEY_TEST_CA")
+	credential, err := NewCredential("default", bytes.TrimSpace(readFile("IDENTITY_RISK_VALKEY_TEST_PASSWORD_FILE")))
 	if err != nil {
 		t.Fatal("invalid test credential")
 	}
-	transport, err := newNativeTransport(nativeTransportConfig{endpoint: endpoint, tls: &tls.Config{RootCAs: roots, ServerName: "localhost", MinVersion: tls.VersionTLS12}, credential: credential, timeout: 2 * time.Second, poolSize: 2, topology: "standalone"})
+	var unique [16]byte
+	if _, err := rand.Read(unique[:]); err != nil {
+		t.Fatal(err)
+	}
+	policy, keys, _ := commandFixture(t, 9, 8)
+	public, err := NewVelocityRecovery(VelocityRecoveryConfig{Namespace: "live-" + hex.EncodeToString(unique[:]), ReplaySecret: bytes.Repeat([]byte{7}, 32), Policy: policy, Keys: keys, Endpoint: endpoint, TLS: &tls.Config{ServerName: "localhost", MinVersion: tls.VersionTLS12}, TrustPEM: trust, Credential: credential, Timeout: 2 * time.Second, PoolSize: 2, Topology: "standalone"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 		defer cancel()
-		if err := transport.close(ctx); err != nil {
+		if err := public.Close(ctx); err != nil {
 			t.Error("live native transport did not close", err)
 		}
 	})
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
-	var unique [16]byte
-	if _, err := rand.Read(unique[:]); err != nil {
-		t.Fatal(err)
-	}
-	policy, keys, _ := commandFixture(t, 9, 8)
-	layout, err := newCommandLayout("live-"+hex.EncodeToString(unique[:]), bytes.Repeat([]byte{7}, 32), policy, keys)
+	transport, layout, owner := public.state.transport, public.state.layout, *public.state
+	journal, nativeVerifier, err := public.PrimaryAuthorities()
 	if err != nil {
 		t.Fatal(err)
 	}
-	journal, reader, native, _ := risk.NewVelocityRecoveryAuthorities()
-	owner, err := newOwnedRecovery(layout, transport, native)
+	reader, err := journal.Verifier()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -87,15 +85,42 @@ func TestOwnedCurrentAdmissionLiveValkey(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	cut := risk.VelocityClosureBinding{ID: [32]byte{1}, Position: 0, ReplayFrom: now.Add(-time.Hour), ReplayThrough: now, JournalStartedAt: now.Add(-time.Hour), MaximumWindow: time.Hour}
+	cut := risk.VelocityClosureBinding{ID: [32]byte{1}, Position: 1, ReplayFrom: now.Add(-time.Hour), ReplayThrough: now, JournalStartedAt: now.Add(-time.Hour), MaximumWindow: time.Hour}
 	closure, err := journal.Closure(lease, cut, replayCheck)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := owner.fence(ctx, lease, risk.VelocityLease{}); err != nil {
+	if err := public.Fence(ctx, lease, risk.VelocityLease{}); err != nil {
 		t.Fatal("live recovery fence failed", err)
 	}
-	publication, err := owner.publish(ctx, lease, closure)
+	// Synthetic primary history supplies original facts; real native restoration
+	// must preserve those facts rather than invent a new observation/window.
+	originalCoordinator, err := risk.NewCounterCoordinator(risk.CounterCoordinatorConfig{Policy: policy, Keys: keys, Store: unusedStore{}, Clock: func() time.Time { return now.Add(-time.Minute) }, Timeout: time.Second})
+	if err != nil {
+		t.Fatal(err)
+	}
+	originalCommand := prepareFixture(t, originalCoordinator, "tenant", "restored-original", "192.0.2.1")
+	originalBinding := originalCommand.Bindings()
+	digest, err := layout.replay.Attempt(originalCommand)
+	if err != nil {
+		t.Fatal(err)
+	}
+	facts := risk.VelocityHistoryBinding{ID: strings.Repeat("A", 43), Position: 1, Tenant: originalBinding.Tenant, Namespace: layout.replay.Namespace(), Attempt: digest, Fingerprint: originalBinding.Fingerprint, Operation: originalBinding.Operation, Phase: originalBinding.Phase, PolicyVersion: originalBinding.PolicyVersion, PreparedAt: originalBinding.PreparedAt, RecordedAt: now, Window: originalBinding.Window, Limit: originalBinding.Limit, Outcome: risk.VelocityHistoryCommitted, Targets: originalBinding.Targets}
+	for _, target := range originalBinding.Targets {
+		facts.Snapshot = append(facts.Snapshot, risk.Counter{Kind: string(target.Dimension), Value: 1, ObservedAt: originalBinding.PreparedAt, WindowStartedAt: originalBinding.PreparedAt, WindowExpiresAt: originalBinding.PreparedAt.Add(originalBinding.Window)})
+	}
+	history, err := journal.History(lease, facts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	applied, err := public.Restore(ctx, lease, history)
+	if err != nil {
+		t.Fatal("live public original restoration failed", err)
+	}
+	if got, err := nativeVerifier.Applied(ctx, lease, applied); err != nil || got.Position != facts.Position || !reflect.DeepEqual(got.Snapshot, facts.Snapshot) {
+		t.Fatal("public restoration lost original facts", err)
+	}
+	publication, err := public.Publish(ctx, lease, closure)
 	if err != nil {
 		t.Fatal("live covered publication failed", err)
 	}
@@ -103,7 +128,7 @@ func TestOwnedCurrentAdmissionLiveValkey(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ack, err := owner.confirmed(ctx, lease, closure, publication, confirmation)
+	ack, err := public.Confirm(ctx, lease, closure, publication, confirmation)
 	if err != nil {
 		t.Fatal("live native confirmation failed", err)
 	}
@@ -117,9 +142,48 @@ func TestOwnedCurrentAdmissionLiveValkey(t *testing.T) {
 		t.Fatal(err)
 	}
 	replayClosed.Store(true)
-	coordinator, err := risk.NewCounterCoordinator(risk.CounterCoordinatorConfig{Policy: policy, Keys: keys, Clock: func() time.Time { return time.Now().UTC().Truncate(time.Microsecond) }, Timeout: 3 * time.Second, Store: replyStoreFunc(func(ctx context.Context, command risk.CounterCommand) (risk.CounterResult, error) {
-		return owner.mutateCurrent(ctx, command, lease, closure, publication, confirmation, ack, health)
-	})})
+	// Deliberate primary double, not PostgreSQL persistence evidence. This
+	// isolates the public native constructor/factory against the real server.
+	var primaryMu sync.Mutex
+	terminal := map[string]risk.CounterResult{}
+	connection, err := velocity.BindJournal(layout.replay.Namespace(), func(c risk.CounterCommand) error { return c.ValidateConfiguration(policy, keys) }, func(context.Context, risk.CounterCommand) error { return nil }, func(_ context.Context, c risk.CounterCommand) (velocity.Attempt, error) {
+		attempt := c.Bindings().Attempt
+		primaryMu.Lock()
+		_, exists := terminal[attempt]
+		if !exists {
+			terminal[attempt] = risk.CounterResult{}
+		}
+		primaryMu.Unlock()
+		if exists {
+			return velocity.Attempt{}, errors.New("simulated original intent exists")
+		}
+		return velocity.BindAttempt(c, func(_ context.Context, result risk.CounterResult) error {
+			primaryMu.Lock()
+			defer primaryMu.Unlock()
+			terminal[attempt] = result
+			return nil
+		})
+	}, func(_ context.Context, c risk.CounterCommand) (risk.CounterResult, error) {
+		primaryMu.Lock()
+		defer primaryMu.Unlock()
+		result := terminal[c.Bindings().Attempt]
+		if _, _, err := result.Declaration(c); err != nil {
+			return risk.CounterResult{}, err
+		}
+		return result, nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	connection, err = velocity.BindCurrentJournal(ctx, connection, reader, nativeVerifier, velocity.CurrentChain{Lease: lease, Closure: closure, Publication: publication, Confirmation: confirmation, Native: ack, Eligibility: health})
+	if err != nil {
+		t.Fatal(err)
+	}
+	store, err := public.OwnedCounterStore(ctx, connection)
+	if err != nil {
+		t.Fatal("live public native factory denied", err)
+	}
+	coordinator, err := risk.NewCounterCoordinator(risk.CounterCoordinatorConfig{Policy: policy, Keys: keys, Clock: func() time.Time { return time.Now().UTC().Truncate(time.Microsecond) }, Timeout: 3 * time.Second, Store: store})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -182,7 +246,7 @@ func TestOwnedCurrentAdmissionLiveValkey(t *testing.T) {
 	}
 	root := plan.keys[2+capacityProbeCount+len(keys)-1]
 	count, err := transport.executeScript(ctx, `local v=redis.call('GET',KEYS[1]) or ''; return {string.match(v,'^[^|]+|[^|]+|([^|]+)|') or '','count'}`, []string{root}, nil)
-	if err != nil || len(count) != 2 || count[0] != "16" {
+	if err != nil || len(count) != 2 || count[0] != "17" {
 		t.Fatal("live concurrent debit lost a counter update")
 	}
 	retainedRoot := read(root)

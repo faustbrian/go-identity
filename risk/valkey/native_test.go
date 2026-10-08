@@ -11,6 +11,7 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/json"
+	"encoding/pem"
 	"errors"
 	"fmt"
 	"io"
@@ -29,6 +30,7 @@ import (
 // This fixture runs verified TLS and native RESP over memory-only net.Pipe.
 // It implements just the deliberate server IO boundary, not Valkey counters.
 type nativeWireFixture struct {
+	trustPEM     []byte
 	mu           sync.Mutex
 	requests     [][]string
 	profiles     int
@@ -74,6 +76,7 @@ func nativeFixture(t *testing.T, reply func([]string) string) (*nativeTransport,
 		t.Fatal(err)
 	}
 	fixture := &nativeWireFixture{reply: reply, startupReply: "+OK\r\n*6\r\n$7\r\nversion\r\n$5\r\n8.0.0\r\n$5\r\nproto\r\n:2\r\n$4\r\nmode\r\n$10\r\nstandalone\r\n"}
+	fixture.trustPEM = pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: serverTLS.Certificates[0].Certificate[0]})
 	fixture.profileReply = func() string { return nativeArray([]string{strings.Repeat("b", 40), "0"}) }
 	transport.dial = func(ctx context.Context, address string) (net.Conn, error) {
 		if address != "valkey.test:6379" {

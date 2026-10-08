@@ -8,6 +8,7 @@ import (
 	"io"
 	"net"
 	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -16,7 +17,7 @@ import (
 	"github.com/faustbrian/go-identity/risk"
 )
 
-// Native configuration stays private until journal-fenced activation exists.
+// Native configuration is retained only by the owned public recovery boundary.
 // A credential handle is copied at construction; no connection or health is
 // granted by constructing the transport. Rotation requires a new transport.
 type nativeCredential struct{ username, password string }
@@ -96,11 +97,13 @@ func newNativeTransport(c nativeTransportConfig) (*nativeTransport, error) {
 	if err != nil || portErr != nil || number == 0 || strconv.FormatUint(number, 10) != port || !nativeHostname(host) || u.Hostname() != host || c.endpoint != "rediss://"+u.Host {
 		return nil, risk.ErrInvalidPolicy
 	}
-	if c.tls.ServerName != host || c.tls.RootCAs == nil || len(c.tls.RootCAs.Subjects()) == 0 || c.tls.InsecureSkipVerify || c.tls.MinVersion < tls.VersionTLS12 || c.tls.MinVersion > tls.VersionTLS13 || c.tls.MaxVersion != 0 && c.tls.MaxVersion < c.tls.MinVersion || c.tls.VerifyConnection != nil || c.tls.VerifyPeerCertificate != nil || c.tls.GetClientCertificate != nil || c.tls.KeyLogWriter != nil || c.tls.Renegotiation != tls.RenegotiateNever {
+	if c.tls.ServerName != host || !supportedNativeTLS(c.tls) {
 		return nil, risk.ErrInvalidPolicy
 	}
 	c.tls = c.tls.Clone()
 	c.tls.RootCAs = c.tls.RootCAs.Clone()
+	c.tls.CipherSuites = slices.Clone(c.tls.CipherSuites)
+	c.tls.CurvePreferences = slices.Clone(c.tls.CurvePreferences)
 	c.tls.SessionTicketsDisabled = true
 	c.tls.ClientSessionCache = nil
 	lifetime, cancel := context.WithCancel(context.Background())
@@ -112,6 +115,20 @@ func newNativeTransport(c nativeTransportConfig) (*nativeTransport, error) {
 		return (&net.Dialer{Timeout: c.timeout, KeepAlive: -1}).DialContext(ctx, "tcp", address)
 	}
 	return owner, nil
+}
+
+// TLS authentication is server trust plus native credentials, not arbitrary
+// caller work hidden in a handshake. Unsupported certificate, clock, entropy,
+// ALPN/ECH and session callbacks are rejected. The remaining caller-owned
+// preference slices are bounded here and cloned before the owner is exposed.
+func supportedNativeTLS(c *tls.Config) bool {
+	if c.RootCAs == nil || len(c.RootCAs.Subjects()) == 0 || c.InsecureSkipVerify || c.MinVersion < tls.VersionTLS12 || c.MinVersion > tls.VersionTLS13 || c.MaxVersion != 0 && c.MaxVersion < c.MinVersion || c.Renegotiation != tls.RenegotiateNever {
+		return false
+	}
+	if c.VerifyConnection != nil || c.VerifyPeerCertificate != nil || c.GetClientCertificate != nil || c.GetCertificate != nil || c.GetConfigForClient != nil || c.KeyLogWriter != nil || c.Time != nil || c.Rand != nil || c.WrapSession != nil || c.UnwrapSession != nil || c.EncryptedClientHelloRejectionVerify != nil {
+		return false
+	}
+	return len(c.CipherSuites) <= 16 && len(c.CurvePreferences) <= 8 && len(c.NextProtos) == 0 && len(c.Certificates) == 0 && len(c.NameToCertificate) == 0 && c.ClientCAs == nil && c.ClientAuth == tls.NoClientCert && len(c.EncryptedClientHelloConfigList) == 0
 }
 
 func nativeHostname(host string) bool {

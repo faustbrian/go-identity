@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+- Add an owned standalone TLS recovery owner and journal-fenced counter factory.
+  Credentials and trust are copied; native issuance stays private in one core
+  graph per transport lifetime. Replacements cannot adopt old activation.
+  Original primary custody supplies every current check and journal result;
+  errors preserve committed outcomes while denying admission. Explicit shutdown
+  cancels all copies without closing primary resources. Joint PostgreSQL/native
+  composition, other topology profiles and release verification remain pending.
+  Clone bounded TLS cipher/curve preferences and reject unsupported callback,
+  certificate, ALPN and ECH inputs so post-construction caller mutation cannot
+  change native handshake policy.
+  Require bounded serialized PEM trust instead of opaque caller trust pools,
+  excluding retained certificate references and unbounded pool constraints.
+
 - Check current-primary eligibility and exact native confirmed custody without
   counter writes, marker repair or expiry renewal. This private check denies
   primary terminal replay after marker loss; concrete public composition remains

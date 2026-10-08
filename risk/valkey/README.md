@@ -1,8 +1,56 @@
 # Ephemeral identity risk — Valkey
 
-**Development checkpoint, not an executable counter store.** The module targets
+**Development checkpoint, not a release-complete risk adapter.** The module targets
 Go 1.27. The owned Authentication risk prerequisite and public OTP Send are not
-complete. There is no public store constructor, mutation API or healthy default.
+complete. An owned journal-fenced store is available; there is no healthy default.
+Joint real PostgreSQL/native recovery and full release verification remain pending.
+
+## Owned public composition
+
+`NewCredential` copies bounded native authentication input. Construct
+`NewVelocityRecovery(VelocityRecoveryConfig{...})` with explicit canonical DNS
+`rediss` endpoint, verified TLS trust, namespace/replay key, policy/digest keys,
+100ms–10s timeout, 1–200 slots and `Topology: "standalone"`. Configuration and
+credentials are redacted, immutable after copying and non-serializable. No
+network IO or native health is established by construction. Other topology
+profiles are rejected, not approximated.
+The supported TLS client profile copies trust and bounded cipher/curve
+preferences. It rejects custom clock/entropy, verification, certificate and
+session callbacks, client certificates, ALPN and ECH rather than retaining
+caller-owned work or allowing later caller mutation to change a handshake.
+Supply `TrustPEM` (1–65536 bytes, at most 32 header-free CERTIFICATE blocks,
+with only whitespace between blocks); `TLS.RootCAs` must be nil. Parsed trust
+roots are fully owned, with no opaque pool constraints or caller certificate
+references. Certificate syntax is validated at construction; TLS enforces
+chain and hostname validity. Changing trust requires a replacement owner.
+
+The owner creates exactly one existing core custody graph and retains its native
+issuance capability privately. `PrimaryAuthorities` returns only that graph's
+journal issuer and native verifier for concrete PostgreSQL recovery configuration.
+Copies share the same transport and shutdown lifetime; a replacement constructor
+creates a different graph and cannot adopt its predecessor's activated connection.
+The same owner performs `Fence`, `Restore`, `Publish` and `Confirm`; these wrap
+the existing bounded native operations without application effect/checker callbacks.
+The primary adapter still owns acquisition, history, coverage, confirmation and
+activation. This public surface is not replacement application-written orchestration;
+the complete reference recovery workflow remains platform work.
+
+After primary activation, pass its inferred opaque `OwnedJournal(ctx, healthy)`
+output to `native.OwnedCounterStore(ctx, connection)`. Applications cannot name
+the internal binder or substitute a separately selected chain. The factory
+derives the exact original chain through its own verifier and binds only its
+configured command validation, read-only current check and atomic native effect.
+One outer timeout bounds each composed store operation. Construction does not
+inspect/debit native counters or promise health; every operation checks current
+primary eligibility, original expiry, exact confirmed marker and continuity.
+
+Acknowledged intent precedes any effect. Original receipt callbacks conserve
+terminal outcomes, and terminal replay never redispatches. Pending/unknown or
+changed original intent denies without retries; an acknowledged commit survives
+later errors, which still deny positive admission. Primary transactions finish
+before native IO. Call `Close(ctx)` on the recovery owner even after later
+composition fails: it cancels all copies, closes idle connections and joins
+active cleanup under the caller/adapter bound. It never closes the primary pool.
 
 ## Current behavior
 
@@ -12,7 +60,7 @@ marker under bounded server-time and transport-continuity checks, and rechecks
 current primary eligibility afterward. Missing, altered, expired or merely
 published markers deny; the check never repairs state or renews expiry. This is
 the required native check for journal terminal readback, not permission to resend
-pending/unknown attempts or an activated public store. Atomic debit independently
+pending/unknown attempts. Atomic debit independently
 rechecks the exact marker at its effect boundary.
 
 Private command preparation accepts only authentic core ephemeral commands
@@ -65,9 +113,9 @@ derives the original confirmed marker without caller-selected time or epoch,
 and rechecks primary eligibility after the effect. It invokes no replay-only
 checks after activation. A later primary failure preserves any acknowledged
 effect while denying admission; it never retries or renews custody. This is not
-a public store: the composition owner must durably journal intent before this
-crossing and conserve its returned result afterward. That ownership and public
-composition remain unfinished.
+a standalone public store: the owned factory binds this crossing to the primary
+journal and conserves its original result afterward. Full concrete joint recovery
+and reference composition remain unfinished.
 
 ## Private native transport
 
@@ -151,8 +199,8 @@ existing published marker. It uses its native issuer's own derived verifier,
 checks primary custody before and after IO, preserves every cut field and the
 original logical/physical expiry, and never repairs a missing marker. Exact
 explicit retries are read-only; ambiguous effects never trigger a resend.
-No public healthy store exists. This marker makes the private mutation engine's
-exact-match predicate eligible, not safe public admission: confirmed marker
+This marker makes the mutation engine's exact-match predicate eligible, not safe
+public admission by itself: confirmed marker
 syntax or equality alone does not establish surviving counters or primary
 healthy state. The script's expected-marker check is now implemented; joint
 primary healthy eligibility and
@@ -237,7 +285,10 @@ upstream revision `b87eac29661715e48e1a2868d76b853e0e757c4c`, pinned by `go.sum`
 It is not imported by production code or a substitute Valkey engine. Update it
 only after upstream/license review and rerunning the script assertions. Tests
 do not certify native timing, concurrency, replication, cluster routing or OOM
-behavior. Real Valkey and full recovery/public activation remain unfinished.
+behavior. Separate integration tests use the public native constructor and
+factory against real TLS standalone Valkey with simulated primary callbacks.
+They do not establish concrete PostgreSQL composition; full recovery/reference
+activation, replicated/cluster profiles and release verification remain pending.
 
 Protocol references: [EVAL](https://valkey.io/commands/eval/) and
 [TIME](https://valkey.io/commands/time/). Every accessed key is supplied in
