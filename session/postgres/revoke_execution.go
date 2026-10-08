@@ -58,6 +58,13 @@ func NewRevokeOneExecutor(pool *database.Pool, c RevokeOneExecutorConfig) (*Revo
 // never a new transition. Panic, cancellation or lost commit acknowledgement do
 // not prove rollback. Detached coordinator cleanup has its own bounded budget.
 func (e *RevokeOneExecutor) ExecuteRevokeOne(ctx context.Context, request session.RevokeOneRequest) (result identity.CommandResult, err error) {
+	return e.executeRevokeOne(ctx, request, nil)
+}
+
+// Eligible keys are supplied only by the strict owned factory on a fresh,
+// invocation-private repository. The shared legacy executor cannot acquire
+// token custody or silently turn a browser request into direct execution.
+func (e *RevokeOneExecutor) executeRevokeOne(ctx context.Context, request session.RevokeOneRequest, keys []session.CSRFKey) (result identity.CommandResult, err error) {
 	entered := false
 	var b identity.CommandBinding
 	defer func() {
@@ -74,9 +81,20 @@ func (e *RevokeOneExecutor) ExecuteRevokeOne(ctx context.Context, request sessio
 	if ctx == nil || e == nil || e.owned == nil || e.sessions == nil {
 		return result, session.ErrInvalidInput
 	}
+	token, csrf := request.CSRFToken()
+	if csrf != (len(keys) > 0) {
+		return result, session.ErrCSRFDenied
+	}
 	now := e.owned.clock.Now()
 	if err = request.Validate(e.sessions, now); err != nil {
 		return result, err
+	}
+	if csrf {
+		key, err := selectRevokeCSRFKey(request.Caller(), token, keys)
+		if err != nil {
+			return result, err
+		}
+		e.owned.native.cookieRevoke = &revokeCSRFInput{token: token, key: key}
 	}
 	remaining := request.ValidUntil().Sub(now)
 	budget := e.owned.maximumDuration

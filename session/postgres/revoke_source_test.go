@@ -16,6 +16,11 @@ func (r revokeTestReader) ObserveSession(context.Context, session.SessionLookup)
 }
 
 func revokeRequestFixture(t *testing.T) (session.RevokeOneRequest, *session.SessionService) {
+	request, service, _, _ := revokeCSRFRequestFixture(t, false)
+	return request, service
+}
+
+func revokeCSRFRequestFixture(t *testing.T, csrf bool) (session.RevokeOneRequest, *session.SessionService, session.CSRFToken, session.CSRFKey) {
 	t.Helper()
 	original, _, _ := identifierSessionFixture(t)
 	spec, _ := original.Bindings()
@@ -25,6 +30,11 @@ func revokeRequestFixture(t *testing.T) (session.RevokeOneRequest, *session.Sess
 	source, err := session.NewSession(spec)
 	if err != nil {
 		t.Fatal(err)
+	}
+	var csrfToken session.CSRFToken
+	var csrfKey session.CSRFKey
+	if csrf {
+		source, csrfToken, csrfKey = csrfAdmissionFixture(t, source)
 	}
 	now := spec.IssuedAt.Add(time.Second)
 	reader := revokeTestReader{session.SessionObservation{Session: source, Current: spec.Authority, Active: true, ReadStartedAt: now, ValidUntil: now.Add(20 * time.Second)}}
@@ -44,11 +54,53 @@ func revokeRequestFixture(t *testing.T) (session.RevokeOneRequest, *session.Sess
 	if err != nil {
 		t.Fatal(err)
 	}
-	request, err := service.PrepareRevokeOne(caller, command)
+	var request session.RevokeOneRequest
+	if csrf {
+		request, err = service.PrepareRevokeOneWithCSRF(caller, command, csrfToken, csrfKey)
+	} else {
+		request, err = service.PrepareRevokeOne(caller, command)
+	}
 	if err != nil {
 		t.Fatal(err)
 	}
-	return request, service
+	return request, service, csrfToken, csrfKey
+}
+
+func TestNativeRevokeSourceMappingRetainsStrictCSRFProfile(t *testing.T) {
+	request, _, _, _ := revokeCSRFRequestFixture(t, true)
+	mapped, err := MapRevokeOneRequest(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	projection, _ := mapped.Feature()
+	found := false
+	for _, field := range projection.Fields {
+		if field.Name == "caller.csrf-required" {
+			found = field.Value.Kind == identity.FeatureBool && field.Value.Bool
+		}
+	}
+	if !found {
+		t.Fatal("strict CSRF requirement lost from durable intent")
+	}
+	if _, source, e := nativeRevokeIntent(mapped); e != nil || source == nil {
+		t.Fatal("strict command cannot reconstruct digest-only source", e)
+	}
+	for _, value := range []identity.FeatureValue{{Kind: identity.FeatureBool}, {Kind: identity.FeatureText, Text: "true"}} {
+		bad := projection
+		bad.Fields = append([]identity.FeatureField(nil), projection.Fields...)
+		for i, field := range bad.Fields {
+			if field.Name == "caller.csrf-required" {
+				bad.Fields[i].Value = value
+			}
+		}
+		command, e := identity.NewFeatureCommand(bad)
+		if e != nil {
+			t.Fatal(e)
+		}
+		if _, _, e := nativeRevokeIntent(command); e == nil {
+			t.Fatal("malformed strict discriminator downgraded to legacy")
+		}
+	}
 }
 
 func TestNativeRevokeSourceMappingRetainsOriginalAdmission(t *testing.T) {

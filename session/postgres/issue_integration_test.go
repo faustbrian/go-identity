@@ -696,6 +696,45 @@ func testNativeIssueIntegration(t *testing.T, ctx context.Context, pool *databas
 					current, _ := makeIssuedCookie(t)
 					return current
 				})
+				t.Run("strict cookie logout", func(t *testing.T) {
+					csrfKey, e := session.NewCSRFKey(7, []byte("independent-test-csrf-material-32bytes"))
+					if e != nil {
+						t.Fatal(e)
+					}
+					strictIssuer, e := session.NewSessionIssuerWithCSRF(executor, session.IssuerConfig{Authority: authority, Clock: clock.System{}, MaximumDuration: 2 * time.Second, LookupKey: key, TokenSize: 32, Cookie: cookie}, csrfKey)
+					if e != nil {
+						t.Fatal(e)
+					}
+					makeStrict := func(t *testing.T) (session.GetRequest, session.GetResult, session.CSRFToken) {
+						t.Helper()
+						candidate := prepare(t)
+						spec, _ := candidate.record.Bindings()
+						spec.Lookup = session.TokenDigest{}
+						prepared, e := strictIssuer.Prepare(candidate.binding, spec, candidate.proof)
+						if e != nil {
+							t.Fatal(e)
+						}
+						issued, e := strictIssuer.Issue(ctx, prepared)
+						if e != nil || issued.CommitOutcome != identity.CommitOutcomeCommitted {
+							t.Fatal("strict issuance", e)
+						}
+						token, e := prepared.CSRFToken()
+						if e != nil {
+							t.Fatal(e)
+						}
+						credential, e := session.NewCredential(session.CredentialCookie, issued.Token)
+						if e != nil {
+							t.Fatal(e)
+						}
+						input := session.GetRequest{TenantID: spec.TenantID, Credential: credential}
+						current, e := reader.Get(ctx, input)
+						if e != nil || !current.Authenticated {
+							t.Fatal("strict primary caller", e)
+						}
+						return input, current, token
+					}
+					testOwnedCookieRevoke(t, ctx, pool, reader, ownedConfig, cookie, csrfKey, makeStrict)
+				})
 				// Current lifecycle state wins over original sign-in proof metadata.
 				t.Run("current credential lifecycle denies active cookie", func(t *testing.T) {
 					if got, e := restarted.Get(ctx, input); e != nil || !got.Authenticated {

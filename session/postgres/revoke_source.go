@@ -15,6 +15,7 @@ import (
 type revokeSource struct {
 	record session.Session
 	until  time.Time
+	csrf   bool
 }
 
 // MapRevokeOneRequest freezes both original caller and target, including the
@@ -43,6 +44,9 @@ func MapRevokeOneRequest(request session.RevokeOneRequest) (identity.Command, er
 		projection.Fields = append(projection.Fields, f)
 	}
 	projection.Fields = append(projection.Fields, identity.FeatureField{Name: "caller.valid-until", Value: identity.FeatureValue{Kind: identity.FeatureText, Text: request.ValidUntil().UTC().Format(storedTimeLayout)}})
+	if _, strict := request.CSRFToken(); strict {
+		projection.Fields = append(projection.Fields, identity.FeatureField{Name: "caller.csrf-required", Value: identity.FeatureValue{Kind: identity.FeatureBool, Bool: true}})
+	}
 	return identity.NewFeatureCommand(projection)
 }
 
@@ -62,8 +66,14 @@ func nativeRevokeIntent(command identity.Command) (session.SessionCommand, *revo
 	caller.Fields = nil
 	var until time.Time
 	hasUntil := false
+	csrf := false
 	for _, f := range projection.Fields {
-		if f.Name == "caller.valid-until" {
+		if f.Name == "caller.csrf-required" {
+			if f.Value.Kind != identity.FeatureBool || !f.Value.Bool {
+				return fail()
+			}
+			csrf = true
+		} else if f.Name == "caller.valid-until" {
 			if f.Value.Kind != identity.FeatureText {
 				return fail()
 			}
@@ -93,6 +103,9 @@ func nativeRevokeIntent(command identity.Command) (session.SessionCommand, *revo
 		return fail()
 	}
 	if len(caller.Fields) == 0 && !hasUntil {
+		if csrf {
+			return fail()
+		}
 		return native, nil, nil
 	}
 	if !hasUntil {
@@ -122,7 +135,12 @@ func nativeRevokeIntent(command identity.Command) (session.SessionCommand, *revo
 	if err != nil || !until.After(spec.LastActivityAt) || until.After(life.ExpiresAt) {
 		return fail()
 	}
-	return native, &revokeSource{source, until}, nil
+	if csrf {
+		if _, err := source.CSRFState().Bindings(); err != nil {
+			return fail()
+		}
+	}
+	return native, &revokeSource{record: source, until: until, csrf: csrf}, nil
 }
 
 func (r *Repository) requireRevokeSource(ctx context.Context, w kernel.Work, b identity.CommandBinding, target session.Session, source *revokeSource) error {

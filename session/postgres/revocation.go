@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"strconv"
+	"strings"
 
 	"github.com/faustbrian/go-authorization"
 	identity "github.com/faustbrian/go-identity"
@@ -170,8 +171,16 @@ func (r *Repository) ApplyFeature(ctx context.Context, w identitypostgres.Work, 
 			if r == nil || r.issueAdmission == nil {
 				return identity.FeatureReceipt{}, session.ErrInvalidSessionCommand
 			}
+			if source.csrf != (r.cookieRevoke != nil) {
+				return identity.FeatureReceipt{}, identity.ForbiddenError{}
+			}
 			if err := r.requireRevokeSource(ctx, w, one.Binding, one.Session, source); err != nil {
 				return identity.FeatureReceipt{}, err
+			}
+			if source.csrf {
+				if err := RequireCSRF(ctx, w, Config{Schema: strings.Trim(r.schema, "\""), MaximumDuration: r.maximumDuration}, source.record, r.cookieRevoke.token, r.cookieRevoke.key); err != nil {
+					return identity.FeatureReceipt{}, err
+				}
 			}
 		}
 		return r.Apply(ctx, w, native)

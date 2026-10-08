@@ -53,6 +53,7 @@ type Repository struct {
 	issueAdmission      *IssueAdmissionConfig
 	cleanupBatch        uint32
 	preAuthIssue        *preAuthIssueProfile
+	cookieRevoke        *revokeCSRFInput
 }
 
 // NewRepository validates configuration without IO. The database must already

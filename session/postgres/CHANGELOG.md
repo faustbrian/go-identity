@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Add an explicit owned cookie-logout executor with named-key selection and
+  CSRF checks inside the original primary mutation transaction. Keep raw tokens
+  ephemeral, retain a strict-profile command discriminator, and reject legacy
+  dispatch rather than downgrade protection. Existing direct execution remains
+  compatible for requests without CSRF custody. Apply the existing CSRF migration
+  before selecting this profile; HTTP/browser enforcement remains pending.
+
 - Add borrowed-transaction synchronizer-token admission against the exact
   primary session and active family, retaining invalidation fences through
   protected work. Callers must abort on denial and preserve other authority

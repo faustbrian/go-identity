@@ -639,6 +639,7 @@ func TestNativeFamilyRevocationIntegration(t *testing.T) {
 			PreAuthMigrationSource{Schema: "session_store", Version: 24},
 			PreAuthReleaseMigrationSource{Schema: "session_store", Version: 25},
 			PreAuthIssueMigrationSource{Schema: "session_store", Version: 26},
+			CSRFMigrationSource{Schema: "session_store", Version: 27},
 		} {
 			extra, e := source.Load(ctx)
 			if e != nil {

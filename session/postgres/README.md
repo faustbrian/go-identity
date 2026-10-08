@@ -1,5 +1,36 @@
 # PostgreSQL session storage
 
+## Owned cookie logout
+
+Use `NewCookieRevokeOneExecutor(pool, configuration, eligibleCSRFKeys)` with
+the exact owned primary `SessionService`. Pass that executor to the existing
+`session.NewSignOutService`, then select `session.NewCookieSignOutService`
+with the same eligible dedicated keys. Construction performs no IO, copies
+mutable configuration and accepts no application store or transaction callback.
+Apply the existing kernel/authorization/session/revocation/audit/outbox histories,
+including `CSRFMigrationSource`, before selecting this profile.
+
+The strict executor checks original opaque caller custody and selects only the
+state-named trusted key. It carries the token in an invocation-private native
+participant, never a shared request map, context payload or durable command
+field. The command retains only a strict-profile discriminator and the existing
+digest-only session projection. Within the original coordinator invocation,
+ordered source/target write fences precede `RequireCSRF`, then mutation, audit
+and lifecycle commit atomically. Failure audits are retained on denied commands;
+successful revocation/lifecycle effects roll back. Original primary deadlines
+are not refreshed. Concurrent calls do not share ephemeral token custody.
+
+`ExecuteRevokeOneWithCSRF` is the explicit strict dispatch. Direct
+`ExecuteRevokeOne` on this strict executor always denies. The existing
+`NewRevokeOneExecutor` remains available for trusted direct calls and rejects
+CSRF-bearing requests before reservation rather than silently downgrading them.
+Historical recovery returns only the original outcome under current access
+policy; it cannot issue a credential, renew authority or authorize execution.
+
+HTTP must still enforce trusted origin, canonical cookie extraction and one
+CSRF channel before invoking the strict service. These endpoint/browser
+boundaries and full release qualification remain unfinished.
+
 ## Transactional synchronizer-token admission
 
 `RequireCSRF` composes the core token/key check with `RequireSession` on the
