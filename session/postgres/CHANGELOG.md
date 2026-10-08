@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Preserve session synchronizer CSRF state in stored records, native command
+  projections and rotation recovery. Keep tokenless historical bytes unchanged.
+  Add a forward-only CSRF record migration; apply it and upgrade relevant
+  readers/writers before enabling the new profile. Old binaries fail closed on
+  CSRF-bearing records. HTTP token/origin enforcement remains in development.
+
 - Add identifier-admission profile validation and original-session authority
   derivation for native participants. Preserve exact owner expectations without
   IO, refreshing epochs, authenticating a bearer or granting permission.

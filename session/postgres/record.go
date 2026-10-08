@@ -32,6 +32,7 @@ type storedRecord struct {
 	Lookup                   session.TokenDigest
 	Authentication           session.AuthenticationMetadata
 	IssuedAt, LastActivityAt time.Time
+	CSRF                     *session.CSRFStateSpec `json:",omitempty"`
 }
 
 func encodeRecord(s session.Session) ([]byte, string, error) {
@@ -54,7 +55,11 @@ func encodeRecord(s session.Session) ([]byte, string, error) {
 	spec.Authentication.Proof.IssuedAt = spec.Authentication.Proof.IssuedAt.UTC()
 	spec.Authentication.Proof.ExpiresAt = spec.Authentication.Proof.ExpiresAt.UTC()
 	spec.Authentication.AnonymousAt = spec.Authentication.AnonymousAt.UTC()
-	b, err := json.Marshal(storedRecord{1, spec.SessionID, spec.FamilyID, spec.TenantID, spec.UserID, spec.Audience, spec.Version, spec.FamilyVersion, remember, authority, spec.Lookup, spec.Authentication, spec.IssuedAt.UTC(), spec.LastActivityAt.UTC()})
+	record := storedRecord{Schema: 1, SessionID: spec.SessionID, FamilyID: spec.FamilyID, TenantID: spec.TenantID, UserID: spec.UserID, Audience: spec.Audience, Version: spec.Version, FamilyVersion: spec.FamilyVersion, Remember: remember, Authority: authority, Lookup: spec.Lookup, Authentication: spec.Authentication, IssuedAt: spec.IssuedAt.UTC(), LastActivityAt: spec.LastActivityAt.UTC()}
+	if state, e := s.CSRFState().Bindings(); e == nil {
+		record.Schema, record.CSRF = 2, &state
+	}
+	b, err := json.Marshal(record)
 	if err != nil || len(b) > maximumRecordBytes {
 		return nil, "", ErrInvalidRecord
 	}
@@ -66,7 +71,16 @@ func decodeRecord(b []byte) (session.Session, error) {
 	if len(b) == 0 || len(b) > maximumRecordBytes {
 		return invalid()
 	}
-	top, ok := exactObject(b, "Schema", "SessionID", "FamilyID", "TenantID", "UserID", "Audience", "Version", "FamilyVersion", "Remember", "Authority", "Lookup", "Authentication", "IssuedAt", "LastActivityAt")
+	keys := []string{"Schema", "SessionID", "FamilyID", "TenantID", "UserID", "Audience", "Version", "FamilyVersion", "Remember", "Authority", "Lookup", "Authentication", "IssuedAt", "LastActivityAt"}
+	var envelope map[string]json.RawMessage
+	if json.Unmarshal(b, &envelope) != nil {
+		return invalid()
+	}
+	_, hasCSRF := envelope["CSRF"]
+	if hasCSRF {
+		keys = append(keys, "CSRF")
+	}
+	top, ok := exactObject(b, keys...)
 	if !ok {
 		return invalid()
 	}
@@ -87,6 +101,24 @@ func decodeRecord(b []byte) (session.Session, error) {
 	for _, b := range sum {
 		if b == nil {
 			return invalid()
+		}
+	}
+	if hasCSRF {
+		state, valid := exactObject(top["CSRF"], "Binding", "KeyVersion", "Digest")
+		if !valid {
+			return invalid()
+		}
+		if _, valid = exactObject(state["Binding"], "TenantID", "SessionID", "SessionVersion"); !valid {
+			return invalid()
+		}
+		var digest []*uint8
+		if json.Unmarshal(state["Digest"], &digest) != nil || len(digest) != 32 {
+			return invalid()
+		}
+		for _, value := range digest {
+			if value == nil {
+				return invalid()
+			}
 		}
 	}
 	authority, ok := exactObject(top["Authority"], "Global", "Tenant", "User", "Identifier", "Credential", "SessionFamily", "Session", "Authorization", "ActiveOrganizationID", "Organization", "Factor", "Passkey")
@@ -117,7 +149,7 @@ func decodeRecord(b []byte) (session.Session, error) {
 	var record storedRecord
 	decoder := json.NewDecoder(bytes.NewReader(b))
 	decoder.DisallowUnknownFields()
-	if decoder.Decode(&record) != nil || record.Schema != 1 {
+	if decoder.Decode(&record) != nil || (!hasCSRF && record.Schema != 1) || (hasCSRF && record.Schema != 2) {
 		return invalid()
 	}
 	if decoder.Decode(new(any)) != io.EOF {
@@ -135,6 +167,17 @@ func decodeRecord(b []byte) (session.Session, error) {
 	if err != nil {
 		return invalid()
 	}
+	if hasCSRF {
+		state, e := session.NewCSRFState(*record.CSRF)
+		if e != nil {
+			return invalid()
+		}
+		base, _ := result.Bindings()
+		result, e = session.NewSessionWithCSRF(base, state)
+		if e != nil {
+			return invalid()
+		}
+	}
 	return result, nil
 }
 
@@ -142,8 +185,31 @@ func decodeRecord(b []byte) (session.Session, error) {
 // field, including explicit optional absence, must still be present/non-null.
 // No map values are converted through float64, preserving all uint64 versions.
 func exactObject(b []byte, keys ...string) (map[string]json.RawMessage, bool) {
-	var object map[string]json.RawMessage
-	if json.Unmarshal(b, &object) != nil || len(object) != len(keys) {
+	decoder := json.NewDecoder(bytes.NewReader(b))
+	start, err := decoder.Token()
+	if err != nil || start != json.Delim('{') {
+		return nil, false
+	}
+	object := make(map[string]json.RawMessage, len(keys))
+	for decoder.More() {
+		key, e := decoder.Token()
+		name, valid := key.(string)
+		if e != nil || !valid {
+			return nil, false
+		}
+		if _, duplicate := object[name]; duplicate {
+			return nil, false
+		}
+		var value json.RawMessage
+		if decoder.Decode(&value) != nil {
+			return nil, false
+		}
+		object[name] = value
+	}
+	if end, e := decoder.Token(); e != nil || end != json.Delim('}') {
+		return nil, false
+	}
+	if decoder.Decode(new(any)) != io.EOF || len(object) != len(keys) {
 		return nil, false
 	}
 	for _, key := range keys {

@@ -163,8 +163,24 @@ func TestSessionPostgresIntegration(t *testing.T) {
 	if _, err = repo.Get(ctx, "tenant-a", "session-a"); err != nil {
 		t.Fatal("ID reconstruction failed", err)
 	}
+	csrfHistory, err := (CSRFMigrationSource{Schema: "session_store", Version: 13}).Load(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fullHistory := append(append(append(append([]migrations.Migration(nil), all...), preAuthHistory...), releaseHistory...), csrfHistory...)
+	migrate(fixtureSource(fullHistory))
+	migrate(fixtureSource(fullHistory))
+	upgradedRecord, err := repo.Get(ctx, "tenant-a", "session-a")
+	if err != nil {
+		t.Fatal("populated legacy record lost during CSRF upgrade", err)
+	}
+	upgradedPayload, _, err := encodeRecord(upgradedRecord.Session)
+	if err != nil || string(upgradedPayload) != string(payload) {
+		t.Fatal("upgrade rewrote legacy recovery bytes", err)
+	}
 	t.Run("canonical pre-auth", func(t *testing.T) { testNativePreAuth(t, ctx, pool) })
 	t.Run("borrowed session admission", func(t *testing.T) { testSessionAdmission(t, ctx, pool, native) })
+	t.Run("complete CSRF primary record", func(t *testing.T) { testCSRFPrimaryRecord(t, ctx, pool, native) })
 	t.Run("native identifier session projection", func(t *testing.T) { testIdentifierSessionProjection(t, ctx, pool) })
 	t.Run("native privacy session projection", func(t *testing.T) { testPrivacySessionProjection(t, ctx, pool) })
 	canceled, stop := context.WithCancel(ctx)

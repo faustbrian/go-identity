@@ -35,6 +35,7 @@ func MapRotationRequest(request session.RotationRequest) (identity.Command, erro
 		identity.FeatureField{Name: "caller.valid-until", Value: identity.FeatureValue{Kind: identity.FeatureText, Text: request.ValidUntil().UTC().Format(storedTimeLayout)}},
 		identity.FeatureField{Name: "caller.transport", Value: identity.FeatureValue{Kind: identity.FeatureUint64, Uint64: uint64(request.Transport())}},
 	)
+	projection.Fields = appendCSRFFields(projection.Fields, "successor.", r.Successor)
 	result, err := identity.NewFeatureCommand(projection)
 	if err != nil {
 		return identity.Command{}, err
@@ -110,7 +111,7 @@ func nativeRotationIntent(command identity.Command) (session.SessionCommand, tim
 	if kind != uint64(session.CredentialCookie) && kind != uint64(session.CredentialBearer) {
 		valid = false
 	}
-	if !valid || len(deltas) != 0 || !until.After(next.LastActivityAt) || until.After(next.LastActivityAt.Add(20*time.Second)) {
+	if !valid || !until.After(next.LastActivityAt) || until.After(next.LastActivityAt.Add(20*time.Second)) {
 		return fail()
 	}
 	vector, _ := next.Authority.Bindings()
@@ -119,8 +120,8 @@ func nativeRotationIntent(command identity.Command) (session.SessionCommand, tim
 	if err != nil {
 		return fail()
 	}
-	successor, err := session.NewSession(next)
-	if err != nil {
+	successor, err := sessionFromCSRFFields(deltas, "successor.", next)
+	if err != nil || len(deltas) != 0 {
 		return fail()
 	}
 	native, err := session.NewRotateCommand(b, original, successor)

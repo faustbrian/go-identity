@@ -86,6 +86,7 @@ func mapSessionRecord(b identity.CommandBinding, operation identity.FeatureOpera
 	optional("authority.organization", authority.Organization)
 	optional("authority.factor", authority.Factor)
 	optional("authority.passkey", authority.Passkey)
+	fields = appendCSRFFields(fields, "", record)
 	return identity.NewFeatureCommand(identity.FeatureCommandSpec{Binding: b, Operation: operation, Fields: fields})
 }
 
@@ -162,7 +163,7 @@ func nativeSessionRecord(command identity.Command, operation identity.FeatureOpe
 	s.Authentication.Proof = p
 	s.IssuedAt, s.LastActivityAt = instant("session.issued"), instant("session.activity")
 	authority := session.AuthoritySnapshotSpec{Global: binding("authority.global"), Tenant: binding("authority.tenant"), User: binding("authority.user"), Identifier: binding("authority.identifier"), Credential: binding("authority.credential"), SessionFamily: binding("authority.family"), Session: binding("authority.session"), Authorization: binding("authority.authorization"), ActiveOrganizationID: text("authority.organization.id"), Organization: optional("authority.organization"), Factor: optional("authority.factor"), Passkey: optional("authority.passkey")}
-	if !valid || len(values) != 0 || s.Authentication.Kind != session.AuthenticationVerified {
+	if !valid || s.Authentication.Kind != session.AuthenticationVerified {
 		return fail()
 	}
 	var err error
@@ -174,8 +175,8 @@ func nativeSessionRecord(command identity.Command, operation identity.FeatureOpe
 	if err != nil {
 		return fail()
 	}
-	record, err := session.NewSession(s)
-	if err != nil {
+	record, err := sessionFromCSRFFields(values, "", s)
+	if err != nil || len(values) != 0 {
 		return fail()
 	}
 	return projection.Binding, record, nil

@@ -93,6 +93,10 @@ func TestRotationPlanRequiresExactLifecycleAndAudit(t *testing.T) {
 }
 
 func rotationMappingFixture(t *testing.T) session.RotationRequest {
+	return rotationMappingCSRFFixture(t, false, false)
+}
+
+func rotationMappingCSRFFixture(t *testing.T, sourceCSRF, successorCSRF bool) session.RotationRequest {
 	t.Helper()
 	source, _, _ := identifierSessionFixture(t)
 	spec, _ := source.Bindings()
@@ -106,12 +110,19 @@ func rotationMappingFixture(t *testing.T) session.RotationRequest {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if sourceCSRF {
+		source = withCSRFState(t, source, 9)
+	}
 	now := spec.LastActivityAt.Add(2 * time.Minute)
 	reader, err := session.NewSessionService(rotationObservation{Session: source, Current: spec.Authority, Active: true, ReadStartedAt: now, ValidUntil: now.Add(20 * time.Second)}, session.ServiceConfig{Profile: session.StorageStatefulOpaque, Audience: spec.Audience, Clock: sessionReadClock(func() time.Time { return now }), MaximumDuration: time.Second, ClockUncertainty: time.Millisecond, LookupKeys: []session.DigestKey{key}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	credential, _ := session.NewCredential(session.CredentialBearer, token)
+	kind := session.CredentialBearer
+	if successorCSRF {
+		kind = session.CredentialCookie
+	}
+	credential, _ := session.NewCredential(kind, token)
 	caller, err := reader.Get(context.Background(), session.GetRequest{TenantID: spec.TenantID, Credential: credential})
 	if err != nil || !caller.Authenticated {
 		t.Fatal("original admission", err)
@@ -126,6 +137,9 @@ func rotationMappingFixture(t *testing.T) session.RotationRequest {
 	successor, err := session.NewSession(next)
 	if err != nil {
 		t.Fatal(err)
+	}
+	if successorCSRF {
+		successor = withCSRFState(t, successor, 10)
 	}
 	b := revokeBinding()
 	op := session.RotateOperation()

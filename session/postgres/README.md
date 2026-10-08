@@ -1,5 +1,25 @@
 # PostgreSQL session storage
 
+## Synchronizer CSRF storage
+
+Apply `CSRFMigrationSource{Schema: "session_store", Version: allocatedVersion}`
+after the base session migration through the existing migrations Runner. It
+extends the record constraint in place without changing historical migration
+checksums, tokenless record bytes or retained command identities. Upgrade all
+relevant readers/writers before opting into native CSRF issuance: old binaries
+can still handle tokenless schema-1 records but reject CSRF-bearing schema-2
+records. Rollback requires disabling new issuance, not dropping state.
+
+Stored records and closed native command projections preserve the separate
+`Session.CSRFState()` alongside the original `Session.Bindings()`. Rotation
+preserves exact source/successor state; bearer rotation and version-changing
+metadata invalidation clear it according to the core lifecycle. Retained
+digest-only history is not current authorization. `RequireSession` fences and
+compares the complete active primary record, including this state; it does not
+validate a browser CSRF token or its Origin. Protected-work token enforcement,
+OTP custody and HTTP composition remain in development. Do not substitute a
+cached structural token check for those missing boundaries.
+
 ## Original-session admission expectations
 
 `IdentifierAdmissionConfig.Validate` checks the configured owner profile.
