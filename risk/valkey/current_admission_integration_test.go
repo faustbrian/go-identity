@@ -138,6 +138,12 @@ func TestOwnedCurrentAdmissionLiveValkey(t *testing.T) {
 		return got
 	}
 	before := read(plan.keys[0])
+	if err := owner.checkCurrent(ctx, command, lease, closure, publication, confirmation, ack, health); err != nil {
+		t.Fatal("live read-only current check denied", err)
+	}
+	if !reflect.DeepEqual(before, read(plan.keys[0])) {
+		t.Fatal("live current check changed marker or expiry")
+	}
 	first, err := coordinator.Mutate(ctx, command)
 	if err != nil || first.Outcome != risk.CounterCommitted || first.Signal.State != risk.SignalClean {
 		t.Fatal("live debit denied", err, first.Outcome)
@@ -148,6 +154,9 @@ func TestOwnedCurrentAdmissionLiveValkey(t *testing.T) {
 	}
 	if !reflect.DeepEqual(before, state[0]) {
 		t.Fatal("live debit renewed original health")
+	}
+	if err := owner.checkCurrent(ctx, command, lease, closure, publication, confirmation, ack, health); err != nil {
+		t.Fatal("live existing-attempt current check denied", err)
 	}
 	second, err := coordinator.Mutate(ctx, command)
 	if err != nil || second.Outcome != risk.CounterCommitted || !second.Signal.ObservedAt.Equal(first.Signal.ObservedAt) || !second.Signal.ExpiresAt.Equal(first.Signal.ExpiresAt) {
@@ -185,6 +194,9 @@ func TestOwnedCurrentAdmissionLiveValkey(t *testing.T) {
 			}
 		}
 		blocked, err := coordinator.Mutate(ctx, command)
+		if err := owner.checkCurrent(ctx, command, lease, closure, publication, confirmation, ack, health); err == nil {
+			t.Fatal("live current check admitted lost authority or missing marker")
+		}
 		if err != nil || blocked.Signal.State != risk.SignalUnavailable {
 			t.Fatal("lost current authority admitted even matching replay", err)
 		}

@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Check current-primary eligibility and exact native confirmed custody without
+  counter writes, marker repair or expiry renewal. This private check denies
+  primary terminal replay after marker loss; concrete public composition remains
+  unfinished.
+
 - Bind private native debit to configured current-primary eligibility and the
   exact original confirmed marker. Recheck primary eligibility after the effect;
   later failure denies admission while preserving acknowledged commit truth.

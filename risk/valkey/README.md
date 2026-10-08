@@ -6,6 +6,15 @@ complete. There is no public store constructor, mutation API or healthy default.
 
 ## Current behavior
 
+The native owner can check current eligibility without dispatching a debit.
+It authenticates the existing healthy custody, reads only the exact confirmed
+marker under bounded server-time and transport-continuity checks, and rechecks
+current primary eligibility afterward. Missing, altered, expired or merely
+published markers deny; the check never repairs state or renews expiry. This is
+the required native check for journal terminal readback, not permission to resend
+pending/unknown attempts or an activated public store. Atomic debit independently
+rechecks the exact marker at its effect boundary.
+
 Private command preparation accepts only authentic core ephemeral commands
 whose immutable policy identity and every retained digest key match the local
 configuration. It rejects protected-command authority and zero epochs.
