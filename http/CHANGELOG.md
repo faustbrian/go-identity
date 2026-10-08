@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Add canonical `rate.safe` admission through Golib's strict rate primitive:
+  continuously refilled trusted-IP 100/minute and tenant/user 300/minute;
+  known outages use a bounded local IP 20/minute budget with a required
+  degradation event. Ambiguous replies deny. Saturation cannot evict active
+  emergency counters; expired idle counters may be reclaimed. Endpoint wiring
+  and provider/release qualification remain separate.
+
 - Add bounded cookie-mutation CSRF input admission with exact origin policy,
   one canonical header or explicitly named form token, ambiguous-channel denial
   and opaque owner-parser composition. Preserve unread JSON and remaining form

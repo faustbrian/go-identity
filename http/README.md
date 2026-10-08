@@ -11,6 +11,41 @@ rate controls, hooks and OpenAPI composition
 remain required subsequent work. Do not deploy an identity endpoint from this
 checkpoint without those transport controls.
 
+## Safe-route admission
+
+`NewSafeRateLimiter(SafeRateConfig{...})` selects the fixed `rate.safe` catalog
+policy, not arbitrary caller-supplied numeric overrides. Supply a borrowed
+strong `rate-limit/v2.StrictBackend`, deployment key namespace, trusted clock,
+bounded degradation recorder, positive 1ms..2s duration and bounded emergency
+cardinality. Use one limiter per process/deployment namespace across all safe
+routes. Close it after draining handlers; it closes only its local store, never
+the borrowed backend. Copies share that store and terminal closure state.
+
+Call `Admit(ctx, facts, operationID, authenticatedUserID)` with facts from
+`NetworkResolver` and the user only from current session-owner admission. Empty
+user means unauthenticated. Client input cannot select tenant, IP, user or policy.
+The normalized full IP is limited to 100/minute in shared storage; authenticated
+tenant/user is additionally limited to 300/minute. Atomic token buckets refill
+continuously, without wall-clock window resets. Counters span canonical safe operations. An IP
+debit is not refunded when a later subject decision denies or becomes unknown.
+
+Only known shared unavailability enables the process-local 20/minute IP budget.
+Unknown dispatch never becomes fallback permission. Every decided fallback
+requires a bounded degradation event attributed to the operation; recorder
+failure denies admission. The event's Allowed flag describes the counter
+decision, not successful domain execution. Saturation fails closed rather than
+evicting live budgets; on saturation, only counters idle for a full minute may
+be reclaimed through the primitive. Earlier request deadlines remain effective.
+Callbacks are synchronous and must honor their context; none run detached.
+
+Proceed only on nil error and Allowed. `ErrRateLimited` carries a positive
+`RetryAfter`; `ErrRateUnavailable` discloses no backend detail. An admission is
+not authentication, authorization or a reusable lease. Exact HTTP status/header
+mapping and session-handler integration remain pending. This checkpoint uses
+committed primitive security revision `72dfa13dd0a6`, not released `v2.0.0`,
+whose memory store can evict live counters. Published dependency resolution and
+full release qualification are not established by local archive-backed tests.
+
 ## Start and stop
 
 Construct `NewHTTPServer(ServerConfig{...}, handler)` with explicit address,
