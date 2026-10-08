@@ -49,3 +49,33 @@ func ExampleHTTPServer() {
 	fmt.Println(server.State() == identityhttp.ServerStopped)
 	// Output: true
 }
+
+func ExampleNewOperationDescriptors() {
+	operations, err := identityhttp.NewOperationDescriptors(identityhttp.FeatureServices{})
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println(len(operations))
+	probes, err := identityhttp.NewProbeFeature(identityhttp.ProbeConfig{
+		State:   func() identityhttp.ServerState { return identityhttp.ServerStarting },
+		Timeout: time.Second,
+		Readiness: identityhttp.ReadinessProvider{Check: func(ctx context.Context) (identityhttp.ReadinessSnapshot, error) {
+			// No dependencies are selected in this construction-only example.
+			return identityhttp.ReadinessSnapshot{Ready: true}, ctx.Err()
+		}},
+	})
+	if err != nil {
+		panic(err)
+	}
+	operations, err = identityhttp.NewOperationDescriptors(identityhttp.FeatureServices{Features: []identityhttp.Feature{probes}})
+	if err != nil {
+		panic(err)
+	}
+	for _, operation := range operations {
+		fmt.Println(operation.Record.OperationID, operation.Route.Path)
+	}
+	// Output:
+	// 0
+	// identity.health /healthz
+	// identity.readiness /readyz
+}

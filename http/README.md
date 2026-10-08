@@ -1,8 +1,8 @@
 # Identity HTTP transport
 
 **Development checkpoint, not a complete identity HTTP product.** Go 1.27.
-This independently versioned module currently owns server lifecycle and separate
-health/readiness probe handlers. It
+This independently versioned module currently owns server lifecycle, separate
+health/readiness probe handlers and typed opt-in operation selection. It
 imports the standard library, no feature implementation or reference server.
 Routes, parsers, authentication/authorization, cookies/CSRF/CORS, trusted
 network/tenant resolution, rate controls, hooks and OpenAPI composition
@@ -90,6 +90,43 @@ network admission or close its listener even though process liveness itself
 does not depend on readiness. The handlers add no routes or global registry.
 They do not yet implement canonical direct operations, route rate policy,
 endpoint-manifest/OpenAPI bijection or complete reference readiness.
+
+## Explicit feature selection
+
+`NewOperationDescriptors(FeatureServices{})` returns no operations. Nothing is
+enabled by importing this module. `NewProbeFeature` contributes the two real
+probe handlers; pass the resulting feature in `FeatureServices.Features` to
+select them. Other feature owners contribute handlers with `NewFeature`.
+This constructor validates metadata; it does not supply missing domain handlers.
+
+Feature dependencies must all be selected, in any order. Missing dependencies,
+cycles, duplicate feature/operation IDs, exact method/path collisions, and
+component-name or schema-ID collisions reject the entire selection with
+`ErrInvalidInput`, without partial output. Canonical operations must retain
+their catalog ownership, transport policies and public-contract content digests.
+Custom operations use `extension.<owner, replacing slash with dot>.<suffix>`.
+Direct-only and middleware operations cannot become routes through this API.
+
+Input and output metadata are detached snapshots, sorted by operation ID;
+mutating a returned slice does not change the feature. Handlers are borrowed,
+not cloned: their owner must supply valid, concurrent-safe implementations.
+Construction performs no IO or handler calls. Limits are 64 selected features,
+1024 operations, 4096 components overall, and 64 components per operation.
+See the public type documentation for individual field bounds.
+
+`RatePolicyID` identifies a complete canonical policy, including multi-bucket
+requirements; selection does **not** enforce it. `TypedSchema` binds a declared
+contract and digest, not a rendered JSON Schema. Selected descriptor summaries
+are not an OpenAPI document or proof of route security. The secure router,
+shared-token-route dispatch, OpenAPI renderer and domain feature contributions
+remain required subsequent work. The embedded canonical catalog is a validation
+input, not an advertised list of implemented endpoints. Regenerate it from the
+active planning snapshot with `scripts/generate-http-catalog.rb`; the generator
+records source provenance and does not claim handler completion.
+Contract digests use recursively key-sorted compact JSON followed by one LF;
+they do not depend on a pretty printer's empty-collection formatting. Run
+`ruby scripts/generate-http-catalog_test.rb` from the repository root for the
+fixed empty-collection digest oracle.
 
 ## Tradeoffs and FAQ
 
