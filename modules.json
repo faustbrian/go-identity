@@ -81,7 +81,7 @@
       "family": "service-edge",
       "version": "0.0.0",
       "tag_prefix": "otp/v",
-      "owned_dependencies": ["github.com/faustbrian/go-authentication","github.com/faustbrian/go-identity","github.com/faustbrian/go-identity/session"],
+      "owned_dependencies": ["github.com/faustbrian/go-authentication","github.com/faustbrian/go-authorization","github.com/faustbrian/go-identity","github.com/faustbrian/go-identity/session"],
       "reverse_owned_dependencies": [],
       "external_runtime_dependencies": [],
       "required_services": [],

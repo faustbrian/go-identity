@@ -303,3 +303,23 @@ store, attempts, delivery, session/remember policy and public workflow contracts
 remain in progress. Coverage/mutation/release and composed acceptance are pending.
 
 See [CHANGELOG.md](CHANGELOG.md) for release notes.
+# Public Send contract
+
+`Service.Send` owns a complete Send workflow; `otp/postgres.NewSendService`
+provides its native implementation. Direct callers supply trusted caller
+context, a canonical destination, bounded trusted network/device dimensions,
+one explicit `NewPreAuthSendFlow` or `NewSessionSendFlow`, the selected purpose,
+workflow target and an exact `identity.IdempotencyKey`. They do not supply a
+command ID, risk decision/digest, prepared command or domain store.
+
+`SendResult` exposes only the original server-owned command ID, outcome and
+in-progress retry delay. Committed means accepted, not delivered or authenticated.
+Suppressed and issued requests have the same public result shape. Replay retains
+the original selected flow, recipient/suppression, policy and expiry; changed
+intent conflicts. Send does not consume pre-auth or issue/rotate a session.
+
+Possession constructors perform no authentication or IO; IDs alone grant nothing.
+Never serialize or log their private bearer bindings. HTTP proxy/origin/CSRF
+admission remains the transport owner's responsibility, not this direct API.
+Complete public check/consume/login orchestration, real risk-store composition
+and package release gates remain in development.

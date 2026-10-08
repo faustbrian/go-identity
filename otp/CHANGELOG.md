@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add the storage-neutral public Send service contract, explicit disjoint
+  pre-auth/session possession and bounded trusted request input. Results retain
+  server-owned command identity and enumeration-safe outcome without revealing
+  recipient existence, challenge issuance or message delivery. No caller can
+  select risk clearance or allocate its own Send command identity.
+
 - Expose immutable native `SendPreparer` composition with copied template/locale
   policy and invocation-local digest/render/seal work. Callback failure, panic
   and cancellation return no challenge or secret diagnostics. This preparation
