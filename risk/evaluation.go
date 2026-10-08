@@ -176,6 +176,7 @@ type evaluationProvenance struct {
 	owner   *evaluatorState
 	context Context
 	signals []Signal
+	audit   DecisionDelivery
 }
 
 // Format omits private correlated source and counter state.

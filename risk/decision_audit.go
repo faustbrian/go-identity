@@ -269,5 +269,6 @@ func (e Evaluator) finishDecisionAudit(ctx context.Context, r EvaluateRequest, r
 		}
 		return result, &EvaluateError{cause: errors.Join(err, ctx.Err())}
 	}
+	result.provenance.audit = d
 	return result, nil
 }

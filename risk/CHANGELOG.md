@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Retain genuine counted/audited Authentication admission in signed native
+  custody under existing risk keys. Restart rechecks the original facts and
+  exclusive expiry without provider, counter or audit IO; configuration,
+  scope and custody tampering deny. Pin source versions and a startup callback
+  configuration identity. Store the native projection only in the owning
+  encrypted preparation output. Public OTP Send integration remains pending.
+
 - Validate genuine counted, audited Authentication admission against its
   original operation, tenant, attempt and keyed subject dimensions. Rechecking
   preserves the earliest original expiry without another provider or counter

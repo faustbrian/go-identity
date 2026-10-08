@@ -9,6 +9,40 @@ RiskEvidence/CaptchaEvidence issuance remain required implementation work.
 
 ## Adoption and API
 
+### Original Authentication admission across restart
+
+`NewAuthenticationAdmissionCustody` selects an existing counted, audited
+evaluator, retained `EvidenceKey` versions and an explicit startup
+`ConfigurationID`. All source versions must be pinned. Change the identity
+whenever callback, counter-store or audit-delivery semantics change; function
+identity cannot be inferred. Actual policy values, source versions/budgets,
+counter keys and audit policy also bind the retained configuration. A change
+denies existing admission rather than silently renewing or reinterpreting it.
+Adding a new integrity key retains old-key restoration; retiring the original
+key denies. A counter-key/configuration rotation requires fresh admission.
+
+`Prepare` accepts only genuine original counted/audited Authentication Allow
+from that exact evaluator and trusted scope/dimensions. Its opaque result's
+`Prepared` method returns an owned signed native projection. The native workflow
+must encode it only inside its existing authenticated encrypted preparation
+output, binding the original request and generation; never expose it as a public
+operation result or persist another admission table. Generic JSON/text
+serialization is rejected. Native adapters encode the bounded typed fields.
+
+`Restore` can use a newly constructed evaluator with the same configuration and
+retained key. It authenticates original normalized facts, factor state, counted
+scope and audit provenance before returning opaque current admission. `Check`
+uses the trusted clock and original signal intervals, including the earliest
+exclusive expiry; copies, retries, caller clocks and restoration cannot renew
+them. Both avoid source, counter and audit IO. Original counter/audit identity
+is retained in a keyed digest, not replayed as a new mutation.
+
+This is non-issuing abuse admission, **not** phone/CAPTCHA one-use evidence,
+caller authentication, current account/flow/recipient authority, native store
+health or a public OTP Send service. The owning workflow must still recheck its
+applicable primary authority and commit effects through its existing atomic
+journal. Native OTP composition and full release proof remain unfinished.
+
 ### Owned velocity recovery custody
 
 The private `risk/internal/velocity` connection orders owned adapter calls:
