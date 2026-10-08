@@ -2,9 +2,10 @@
 
 **Development checkpoint, not a complete identity HTTP product.** Go 1.27.
 This independently versioned module currently owns server lifecycle, separate
-health/readiness probe handlers and typed opt-in operation selection. It
-imports the standard library, no feature implementation or reference server.
-Routes, parsers, authentication/authorization, cookies/CSRF/CORS, trusted
+health/readiness probe handlers, typed opt-in operation selection and bounded
+ordinary request parsing. Credential binding imports only identity kernel and
+authentication contracts, no feature implementation or reference server.
+Routes, protocol parsers, authentication/authorization, cookies/CSRF/CORS, trusted
 network/tenant resolution, rate controls, hooks and OpenAPI composition
 remain required subsequent work. Do not deploy an identity endpoint from this
 checkpoint without those transport controls.
@@ -127,6 +128,74 @@ Contract digests use recursively key-sorted compact JSON followed by one LF;
 they do not depend on a pretty printer's empty-collection formatting. Run
 `ruby scripts/generate-http-catalog_test.rb` from the repository root for the
 fixed empty-collection digest oracle.
+
+## Bounded ordinary request parsing
+
+Construct one `NewRequestDecoder(Limits{...})` with every bound explicit.
+`DecodeJSON[T]` accepts one JSON object, validates its structural/resource
+boundary, then decodes into the chosen public or feature-owned input type.
+Duplicate and case-alias member names, escaped aliases, invalid UTF-8 or
+unpaired surrogates, trailing values and unknown typed fields deny without
+returning a partially populated value. JSON's standard field matching otherwise
+applies. Caller-supplied custom unmarshaling is trusted code and must cooperate
+with cancellation; it runs only after structural validation.
+
+Root nesting depth is one. Field budgets count object members and array elements
+across the entire document. Decoded byte budgets include unescaped UTF-8 keys,
+string values and scalar lexical bytes, not punctuation or whitespace. Raw
+bytes have a separate ceiling. `Form` parses only the urlencoded body; `Query`
+parses only `URL.RawQuery`; neither merges cached request forms or the other
+channel. Empty form/query is valid, a missing equals sign means an empty value,
+and empty names/segments, bare semicolons, invalid percent encoding or UTF-8,
+duplicate/case-alias names and idempotency-key alternatives deny atomically.
+
+## Credential header binding
+
+`RequestDecoder.IdempotencyKey` returns the existing opaque kernel key and a
+presence flag. It preserves exact header bytes under the generic 1..256-byte
+HTTP-token grammar, without normalization, hashing or retry-state management.
+`HeaderRequired` is for keyed commands; `HeaderOptional` preserves explicitly
+optional protocol extensions; `HeaderForbidden` (zero) rejects even empty
+header presence. Unknown policy values reject as configuration errors.
+
+`RequestDecoder.Bearer` returns the existing authentication credential, not a
+verified principal. Its selected grammar is case-insensitive `Bearer`, exactly
+one space, and 1..8192 ASCII letters/digits or `-._~+/`, with optional trailing
+`=` padding and at least one non-padding byte. The envelope limit may impose
+a smaller ceiling. Session token parsing remains the session owner's stricter
+profile. Forbidden mode supports bearer issuance rejecting Authorization.
+
+Both helpers reject duplicate/case-alias headers, enforce the envelope and
+never read or close the body. Query/cookie/trailer retry-key alternatives deny;
+bearer query alternatives and Proxy-Authorization deny. Ambient cookies never
+provide bearer authority. Call the appropriate body decoder as well: header
+extraction alone cannot prove absence of body alternatives. Multipart/protocol
+codecs, route-derived policy, trusted proxy provenance, prevention of middleware
+credential injection and full routing remain subsequent work. A syntactically
+valid header cannot reveal whether an upstream proxy replaced it.
+
+## Envelope and body ownership
+
+Media types are explicit `application/json` or
+`application/x-www-form-urlencoded`, optionally with only UTF-8 charset.
+Compression is absent or explicitly identity, never implicitly decompressed.
+Duplicate sensitive headers, inconsistent lengths, unsupported transfer
+metadata, trailers, and oversized represented headers/URLs reject before body
+reads. Chunked bodies are supported through net/http's parsed transfer metadata;
+the decoder is not a replacement for wire-level server framing validation.
+Header accounting includes each represented name, colon/space, value and CRLF,
+final CRLF and the separately represented Host. URL accounting covers the
+represented origin-form request URI and rejects conflicting RequestURI/URL.
+Trusted host/proxy/origin semantics remain the future resolver's responsibility.
+
+Bodies are borrowed: the server or direct caller closes them. Reads consume at
+most the applicable raw or declared-length bound plus one byte, and do not
+drain excess input. Earlier request cancellation wins; an arbitrary caller body
+that blocks without honoring server deadlines cannot be forcibly interrupted by
+this synchronous API. Returned `DecodeError` retains no raw input or reader
+diagnostic. No parser authenticates a credential or performs domain work.
+Trusted credential routing, protocol-specific and multipart decoding, router
+status/error integration and complete endpoint verification remain pending.
 
 ## Tradeoffs and FAQ
 

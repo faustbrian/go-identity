@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- Add explicit required, optional-protocol and forbidden header binding into
+  existing opaque idempotency-key and bearer credential contracts. Reject
+  ambiguous headers and alternative key channels without reading the body or
+  performing authentication; trusted routing/proxy integration remains pending.
+
+- Add bounded ordinary JSON/form/query decoding with strict duplicate and
+  Unicode rejection, separate raw/decoded budgets, framing/media checks and
+  atomic typed results. Query/body inputs are never implicitly merged, and
+  body ownership remains with the server or direct caller. Complete transport
+  integration remains in development.
+
 - Add explicit typed feature selection with dependency and collision rejection,
   detached metadata snapshots and canonical policy/schema bindings. Empty
   selection exposes no operations; probe selection supplies the real handlers.
