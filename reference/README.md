@@ -116,7 +116,28 @@ histories in native namespaces `audit`, `outbox` and `identity_outbox`
 its history's native `InstallFresh` transaction; existing role collisions are
 not ownership proof or permission for adoption.
 
-**Migration limitation:** complete operational Plan/Apply, command-resume and
+`stores.ReferenceMigrationPlan(ctx, ReferenceMigrationPlanRequest{Modules:
+[]ModuleID{"identity/postgres", "identity/risk/postgres"}})` returns a detached
+canonical plan without writes or apply locks. Modules contain sorted current
+versions; steps retain native order and owner-local previous versions. A valid
+zero-step plan has a nonzero digest; any error returns no usable plan. Pending
+prerequisites must be explicitly selected, while completed prerequisites need
+not be selected. In particular, the interleaved shared kernel/risk history
+cannot be reordered or filtered into an invalid suffix. Lifecycle outbox
+planning also discovers the root outbox prerequisite and rejects an unselected
+pending root. Independent histories follow shared, audit, outbox, lifecycle
+order; later unselected shared owners are not implicitly appended.
+
+Plans bind whole participating native sources, ownership guards, audit fresh
+preflight and persisted ledger metadata. V1 uses domain-separated SHA-256 with
+big-endian uint64 numbers/counts, length-prefixed strings and fixed 32-byte
+digests. No SQL, process identity or observation time is exposed. Returned
+collections belong to the caller; mutation invalidates the digest and never
+changes future results. Different ledgers are separately discovered snapshots,
+not a global atomic snapshot. Future Apply must rediscover under ownership and
+validate the complete value before writing, including no-op plans.
+
+**Migration limitation:** operational Apply, command-resume and
 startup/readiness integration remain unimplemented. The public OTP integration
 now upgrades the original recovery prefix through the actual selected native
 source and installs independent owner histories through native APIs, including
@@ -151,6 +172,8 @@ APIs and full reference acceptance remain outstanding.
 - `StoreSet.MigrationSource`: pure upstream-owned migration contributions.
 - `StoreSet.ReferenceMigrationCheck`: authoritative read-only selected-owner
   compatibility, bounded by the store lifetime; no partial statuses on failure.
+- `StoreSet.ReferenceMigrationPlan`: deterministic read-only plan with complete
+  participating source/history binding; no usable plan on failure.
 - `StoreSet.RecoverVelocity`: one bounded, fail-closed recovery/activation.
 - `StoreSet.Close`: permanent cancellation and bounded joining; repeated calls
   are safe, and a deadline does not reopen ownership.

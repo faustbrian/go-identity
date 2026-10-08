@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Add deterministic read-only selected-module migration planning, binding the
+  complete participating native sources, ownership guards and ledger metadata.
+  Pending prerequisites require explicit selection; completed prerequisites
+  remain discoverable without adding unrelated work. Plans are detached
+  caller-owned snapshots, not execution authority. Apply and durable command
+  recovery remain pending.
+
 - Add bounded read-only selected-module migration checks through native ledger
   discovery, retaining dirty/incompatible states and rejecting unmanaged schema
   adoption. Independent audit/outbox histories keep their original identities.

@@ -19,6 +19,7 @@ type migrationHistory struct {
 	history   []migrations.Migration
 	owners    map[migrations.Version]ModuleID
 	guards    []migrationGuard
+	preflight string // native fresh-install policy; never exposed as executable SQL
 }
 
 type migrationGuard struct {
@@ -99,6 +100,7 @@ func (s StoreSet) migrationCatalog(ctx context.Context) ([]migrationHistory, err
 		}
 		owned := migrationHistory{namespace: source.namespace, history: steps, owners: make(map[migrations.Version]ModuleID), guards: []migrationGuard{source.guard}}
 		if source.owner == "audit/postgres" {
+			owned.preflight = auditpg.FreshInstallPreflightSQL()
 			owned.guards = append(owned.guards,
 				migrationGuard{version: 2, schema: "audit", tables: []string{"records_accepted_order_idx", "retention_events_record_order_idx"}, columns: []string{"records.accepted_order", "retention_events.accepted_order"}},
 				migrationGuard{version: 4, schema: "audit", tables: []string{"record_identities"}, functions: []string{"reject_record_identity_change", "canonical_json_string", "canonical_timestamp", "canonical_string_map", "canonical_actor", "canonical_record", "validate_record", "capture_record_identity"}},

@@ -59,26 +59,60 @@ type ReferenceMigrationCheckResult struct{ Statuses []ModuleMigrationStatus }
 // no partial statuses; errors redact database diagnostics. A discovered dirty
 // or incompatible history returns explicit status, not healthy readiness.
 // This store operation supports the future ReferenceService/server facade; it
-// does not implement the complete service, Plan, Apply or command recovery.
+// does not implement the complete service, Apply or command recovery.
 func (s StoreSet) ReferenceMigrationCheck(ctx context.Context, req ReferenceMigrationCheckRequest) (ReferenceMigrationCheckResult, error) {
-	if ctx == nil || s.state == nil || len(req.Modules) == 0 || len(req.Modules) > 128 {
-		return ReferenceMigrationCheckResult{}, identity.InvalidInputError{Field: "reference_migrations"}
-	}
-	if err := ctx.Err(); err != nil {
+	bounded, ids, finish, err := s.beginMigrationOperation(ctx, req.Modules)
+	if err != nil {
 		return ReferenceMigrationCheckResult{}, err
 	}
-	ids := slices.Clone(req.Modules)
+	defer finish()
+	snapshots, err := s.discoverMigrations(bounded, ids)
+	if err != nil {
+		return ReferenceMigrationCheckResult{}, err
+	}
+	statuses := make(map[ModuleID]ModuleMigrationStatus)
+	for _, snapshot := range snapshots {
+		for owner, status := range snapshot.statuses {
+			statuses[owner] = status
+		}
+	}
+	result := ReferenceMigrationCheckResult{Statuses: make([]ModuleMigrationStatus, 0, len(ids))}
+	for _, id := range ids {
+		result.Statuses = append(result.Statuses, statuses[id])
+	}
+	if err := bounded.Err(); err != nil {
+		return ReferenceMigrationCheckResult{}, err
+	}
+	return result, nil
+}
+
+// Check and Plan share one discovery/lifetime boundary. Returned snapshots are
+// operation-local; they never authorize writes or survive into stored authority.
+type migrationSnapshot struct {
+	history  migrationHistory
+	records  []migrations.Record
+	statuses map[ModuleID]ModuleMigrationStatus
+}
+
+func (s StoreSet) beginMigrationOperation(ctx context.Context, modules []ModuleID) (context.Context, []ModuleID, func(), error) {
+	if ctx == nil || s.state == nil || len(modules) == 0 || len(modules) > 128 {
+		return nil, nil, nil, identity.InvalidInputError{Field: "reference_migrations"}
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, nil, nil, err
+	}
+	ids := slices.Clone(modules)
 	slices.Sort(ids)
 	for i, id := range ids {
 		if len(id) == 0 || len(id) > 128 || i > 0 && ids[i-1] == id {
-			return ReferenceMigrationCheckResult{}, identity.InvalidInputError{Field: "reference_modules"}
+			return nil, nil, nil, identity.InvalidInputError{Field: "reference_modules"}
 		}
 	}
 	state := s.state
 	state.mu.Lock()
 	if state.closed || state.pool == nil || state.pool.Raw() == nil {
 		state.mu.Unlock()
-		return ReferenceMigrationCheckResult{}, identity.UnavailableError{}
+		return nil, nil, nil, identity.UnavailableError{}
 	}
 	if state.active == 0 {
 		state.drained = make(chan struct{})
@@ -87,7 +121,7 @@ func (s StoreSet) ReferenceMigrationCheck(ctx context.Context, req ReferenceMigr
 	state.mu.Unlock()
 	bounded, cancel := context.WithTimeout(ctx, state.config.PrimaryTimeout)
 	stop := context.AfterFunc(state.lifetime, cancel)
-	defer func() {
+	finish := func() {
 		stop()
 		cancel()
 		state.mu.Lock()
@@ -96,10 +130,14 @@ func (s StoreSet) ReferenceMigrationCheck(ctx context.Context, req ReferenceMigr
 			close(state.drained)
 		}
 		state.mu.Unlock()
-	}()
-	catalog, err := s.migrationCatalog(bounded)
+	}
+	return bounded, ids, finish, nil
+}
+
+func (s StoreSet) discoverMigrations(ctx context.Context, ids []ModuleID) ([]migrationSnapshot, error) {
+	catalog, err := s.migrationCatalog(ctx)
 	if err != nil {
-		return ReferenceMigrationCheckResult{}, checkFailure(bounded, err)
+		return nil, checkFailure(ctx, err)
 	}
 	selected := make(map[ModuleID]bool)
 	for _, h := range catalog {
@@ -109,19 +147,19 @@ func (s StoreSet) ReferenceMigrationCheck(ctx context.Context, req ReferenceMigr
 	}
 	for _, id := range ids {
 		if !selected[id] {
-			return ReferenceMigrationCheckResult{}, identity.InvalidInputError{Field: "reference_modules"}
+			return nil, identity.InvalidInputError{Field: "reference_modules"}
 		}
 	}
 	// The bridge is operation-owned, not a construction-time goroutine/resource.
 	// Closing it releases connections, never the borrowed pgx pool.
-	db := stdlib.OpenDBFromPool(state.pool.Raw())
+	db := stdlib.OpenDBFromPool(s.state.pool.Raw())
 	defer db.Close()
 	db.SetMaxOpenConns(1)
 	backend, err := migrationdb.New(db)
 	if err != nil {
-		return ReferenceMigrationCheckResult{}, checkFailure(bounded, err)
+		return nil, checkFailure(ctx, err)
 	}
-	statuses := make(map[ModuleID]ModuleMigrationStatus)
+	snapshots := make([]migrationSnapshot, 0, len(catalog))
 	for _, h := range catalog {
 		requested := false
 		for _, id := range ids {
@@ -136,13 +174,13 @@ func (s StoreSet) ReferenceMigrationCheck(ctx context.Context, req ReferenceMigr
 		if h.namespace != "" {
 			owned, err = backend.ForNamespace(h.namespace)
 			if err != nil {
-				return ReferenceMigrationCheckResult{}, checkFailure(bounded, err)
+				return nil, checkFailure(ctx, err)
 			}
 		}
-		records, readErr := owned.ReadLedger(bounded)
+		records, readErr := owned.ReadLedger(ctx)
 		foreign := errors.Is(readErr, migrationdb.ErrLedgerConflict)
 		if readErr != nil && !foreign {
-			return ReferenceMigrationCheckResult{}, checkFailure(bounded, readErr)
+			return nil, checkFailure(ctx, readErr)
 		}
 		projection := h.project(records)
 		unmanaged := false
@@ -158,9 +196,9 @@ func (s StoreSet) ReferenceMigrationCheck(ctx context.Context, req ReferenceMigr
 				}
 			}
 			if !applied {
-				exists, err := guard.exists(bounded, state)
+				exists, err := guard.exists(ctx, s.state)
 				if err != nil {
-					return ReferenceMigrationCheckResult{}, checkFailure(bounded, err)
+					return nil, checkFailure(ctx, err)
 				}
 				unmanaged = unmanaged || exists
 			}
@@ -169,17 +207,14 @@ func (s StoreSet) ReferenceMigrationCheck(ctx context.Context, req ReferenceMigr
 			if foreign || unmanaged {
 				status.Compatibility = MigrationIncompatible
 			}
-			statuses[owner] = status
+			projection[owner] = status
 		}
+		snapshots = append(snapshots, migrationSnapshot{history: h, records: records, statuses: projection})
 	}
-	if err := bounded.Err(); err != nil {
-		return ReferenceMigrationCheckResult{}, err
+	if err := ctx.Err(); err != nil {
+		return nil, err
 	}
-	result := ReferenceMigrationCheckResult{Statuses: make([]ModuleMigrationStatus, 0, len(ids))}
-	for _, id := range ids {
-		result.Statuses = append(result.Statuses, statuses[id])
-	}
-	return result, nil
+	return snapshots, nil
 }
 
 func checkFailure(ctx context.Context, _ error) error {
