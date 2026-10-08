@@ -1,5 +1,56 @@
 # OTP PostgreSQL
 
+## Public Send
+
+Construct `NewSendService(primaryPool, SendConfig, envelopeService)` once. It
+owns the native registry, coordinator, directory/session/authorization readers,
+mandatory audit/lifecycle participants and encrypted delivery contributor.
+Construction is pure and starts no goroutine; the borrowed owners remain yours.
+Supply deployment/key/policy configuration, versioned templates and an existing
+counted/audited `risk.Evaluator`, not workflow stores or private participants.
+The evaluator's source/counter/audit dependencies must honor bounded contexts
+and support concurrency. A source-only or unaudited evaluator is rejected.
+
+Install the kernel base, status, credential and directory authority migrations;
+request-key plus retained-input preparation; generation preparation plus
+admission preparation; all audit and root/identity-outbox migrations; OTP
+challenge, lockout, send-family and issuance migrations; delivery migration;
+and the selected session/pre-auth migrations. Use their public migration sources
+and deployment-owned version/tenant settings. Construction never migrates or
+registers schema. Then call `service.Initialize(ctx)` to bind the stable lockout
+key and register retained digest versions. Retry identical startup after unknown
+registration; changing installed key bytes fails closed. Preserve custody and
+configuration throughout retained command history.
+
+`SendConfig.Store.Codec` must be nil: `Codec` builds copied owned custody. Select
+pre-auth through `Store.PreAuth` and its dedicated retained cookie keys, session
+through `Session`, or both. `Policy`, template ID/version, source templates and
+locale chain fix one purpose's generation policy. Recipient eligibility and
+canonical identifier abuse digests come from the native owner. Direct caller
+tenant/actor context and network/device provenance are trusted inputs; never
+derive them from unverified body fields or forwarding headers.
+
+Call `Send(ctx, otp.SendRequest{...})` with one explicit submitted bearer flow
+and an opaque client idempotency key. The kernel allocates the sole original
+command. Matching retries restore original inputs and terminal outcomes without
+recounting or generating another OTP. Changed input conflicts. Suppression is
+challenge-free and durable; it cannot later become issuance. Both branches
+atomically charge the same native destination/purpose send-family cooldown and
+maximum-send policy, so fresh-key retry results cannot reveal recipient existence.
+Public command audits use `identity.otp.request` and standard retention; unknown
+recipients retain the original opaque pre-auth subject. Older private contributor
+audit profiles remain unchanged. All accepted requests
+expose the same bounded result shape, without challenge or recipient metadata.
+Unknown/in-progress results authorize no redispatch or replacement generation:
+retry the exact original request through this same public method. Accepted never
+means delivered, authenticated, pre-auth consumed or session created.
+
+Public PostgreSQL tests cover both bearer variants, issuance/suppression, actual
+audit/lifecycle/encrypted delivery and reconstructed-owner terminal replay.
+Their counter/source seams are explicit doubles. Durable counter/Valkey, provider
+interoperability, nonterminal crash/acknowledgement cases, public login/reference
+composition and complete package release gates remain pending.
+
 Private opt-in Send composition now consumes the original initiating request's
 network, device and keyed identifier dimensions through counted, audited
 Authentication evaluation before generation. Only a genuine Allow can create
@@ -13,8 +64,9 @@ and immediately before committing the atomic domain effects. Suppressed input
 cannot become ordinary issuance. Legacy contributor interface behavior and
 retained profiles remain unchanged. This opt-in owner requires the kernel's
 `AdmissionPreparationMigrationSource` after `PreparationMigrationSource`.
-The public Send service and complete durable risk/provider composition are
-still unfinished; no application request handler should use the private seam.
+The public Send service owns this private seam; complete durable risk/provider
+and consuming-login composition remain unfinished. Applications must use the
+public service rather than assemble these private phases.
 
 Private native request-key preparation now composes primary kernel, session and
 authorization readers. A closed initiating request binds explicit user/flow,
@@ -37,8 +89,8 @@ is the original server-issued command ID. Restoration requires separate bearer
 possession and never renews authority, freshness or expiry. Suppressed originals
 cannot become ordinary issuance commands. The codec is distinct from native
 primary preparation and grants no current risk admission or public Send service.
-Those public workflows remain implementation work. Existing custody profiles
-are unchanged.
+The public Send service above owns this private initiation seam. Consuming
+login workflows remain implementation work. Existing custody profiles are unchanged.
 
 Native Send can retain an identity-owned recipient snapshot separately from
 the original authenticated subject or anonymous flow. Its new request profile
@@ -47,8 +99,8 @@ verification, security versions and observation time through restart. Primary
 recipient locks and comparisons run before generation and again in the sole
 issuance transaction. The legacy no-recipient profiles remain readable;
 anonymous discovery never grants a user subject to the command. Public Send
-must compose this with owned recipient resolution and Authentication-lane risk
-admission; that public composition is not yet available.
+composes this with owned recipient resolution and Authentication-lane risk
+admission through the public Send service above.
 
 The private pre-generation Send input now preserves the original complete
 session/pre-auth continuation, attempt policy, primary expectations and initial
@@ -71,11 +123,11 @@ replacement, encrypted delivery, audit and lifecycle. Failed effects roll back
 together; terminal replay does not generate again. Install the kernel's optional
 `PreparationMigrationSource` and every retained digest-key metadata version.
 
-This remains private platform composition, not a public Send endpoint or a
-caller-supplied recipient/risk clearance seam. Identifier/IP/device risk
-admission, complete enumeration-safe no-op execution and the
-public Send service remain unfinished. Do not activate these private phases from
-application request handlers. Full release/composition gates remain pending.
+These phases remain private platform composition, not caller-supplied
+recipient/risk clearance seams. The public Send service above owns their
+identifier/IP/device risk admission and enumeration-safe suppression. Do not
+activate private phases from application request handlers. Full release and
+consuming-login composition gates remain pending.
 
 ## Native issuance command custody
 

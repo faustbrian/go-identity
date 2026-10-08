@@ -30,6 +30,7 @@ type preparedSendConfig struct {
 	provider     uint64
 	contributors []kernel.ContributorDescriptor
 	templates    []delivery.Template
+	publicAudit  bool
 }
 
 type preparedSendProfile struct {
@@ -43,6 +44,7 @@ type preparedSendProfile struct {
 	configuration   [32]byte
 	renderer        *delivery.TemplateRenderer
 	locales         []string
+	publicAudit     bool
 }
 
 // A new immutable contributor preserves the existing check/consume owner. It
@@ -111,8 +113,13 @@ func newPreparedSendContributor(store *Contributor, d *deliverypg.Contributor, c
 		frame = appendAuthorityText(frame, descriptor.ContractID)
 		frame = binary.BigEndian.AppendUint32(frame, descriptor.Version)
 	}
+	// This opt-in profile cannot be confused with retained private/legacy
+	// configuration whose security event action and retention remain unchanged.
+	if c.publicAudit {
+		frame = append(frame, []byte("public-send-audit-v1\x00")...)
+	}
 	copyOfStore := *store
-	copyOfStore.send = &preparedSendProfile{preparer: preparer, delivery: d, policy: c.preparation.Policy, template: c.preparation.TemplateID, templateVersion: c.preparation.TemplateVersion, provider: c.provider, contributors: append([]kernel.ContributorDescriptor(nil), c.contributors...), configuration: sha256.Sum256(frame), renderer: renderer, locales: append([]string(nil), c.preparation.LocaleChain...)}
+	copyOfStore.send = &preparedSendProfile{preparer: preparer, delivery: d, policy: c.preparation.Policy, template: c.preparation.TemplateID, templateVersion: c.preparation.TemplateVersion, provider: c.provider, contributors: append([]kernel.ContributorDescriptor(nil), c.contributors...), configuration: sha256.Sum256(frame), renderer: renderer, locales: append([]string(nil), c.preparation.LocaleChain...), publicAudit: c.publicAudit}
 	return &copyOfStore, nil
 }
 
@@ -234,14 +241,36 @@ func (p *Contributor) sendConfiguration(ctx context.Context, r sendRequestRecord
 // The probe exists only to derive the existing safe audit scope digest. It is
 // never persisted and uses no entropy/clock callback from application code.
 func (p *Contributor) preparedSendPlan(command identity.Command, effect *kernel.DeliveryPlan) (kernel.CommandPlan, error) {
+	return p.sendPlan(command, effect, false)
+}
+
+func (p *Contributor) sendPlan(command identity.Command, effect *kernel.DeliveryPlan, suppressed bool) (kernel.CommandPlan, error) {
 	if p == nil || p.send == nil {
 		return kernel.CommandPlan{}, ErrInvalidCommand
 	}
 	spec, ok := command.Feature()
-	if !ok || spec.Operation != issuanceOperation(spec.Operation.SubjectRequirement) {
+	expectedOperation := issuanceOperation(spec.Operation.SubjectRequirement)
+	subjectType, eventType, target, afterVersion := "otp_challenge", "otp.sent.v1", spec.Binding.RecordID, uint64(1)
+	if suppressed {
+		expectedOperation = suppressedSendOperation(spec.Operation.SubjectRequirement)
+		subjectType, eventType, afterVersion = "otp_request", "otp.send.accepted.v1", 0
+		target = string(spec.Binding.UserID)
+		if target == "" {
+			target = spec.Binding.AnonymousFlowID
+		}
+	}
+	if !ok || spec.Operation != expectedOperation || suppressed && effect != nil {
 		return kernel.CommandPlan{}, ErrInvalidCommand
 	}
 	b := spec.Binding
+	action, retention := "otp.send", "protected"
+	if p.send.publicAudit {
+		action, retention = "identity.otp.request", "standard"
+		subjectType = "authentication_attempt"
+		if suppressed && b.UserID != "" {
+			subjectType = "user"
+		}
+	}
 	when := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 	builder, err := audit.NewBuilder(audit.BuilderConfig{Clock: func() time.Time { return when }, IDGenerator: func() (string, error) { return "otp-binding-probe", nil }})
 	if err != nil {
@@ -251,11 +280,11 @@ func (p *Contributor) preparedSendPlan(command identity.Command, effect *kernel.
 	if b.ActorKind == authorization.SubjectUser {
 		kind = audit.ActorHuman
 	}
-	record, err := builder.Build(audit.RecordInput{OccurredAt: when, Action: "otp.send", Outcome: audit.OutcomeSucceeded, ReasonCode: "completed", Actor: audit.ActorInput{Kind: kind, ID: string(b.ActorID)}, Subject: audit.SubjectInput{Type: "otp_challenge", ID: b.RecordID}, Context: audit.ContextInput{TenantID: string(b.TenantID), CorrelationID: b.CorrelationID}, Policy: audit.PolicyMetadata{PolicyID: b.PolicyID, Version: strconv.FormatUint(b.PolicyVersion, 10)}, Changes: audit.ChangeSetInput{NoChange: true}, Attributes: map[string]string{"identity.profile": "identity.security.v1", "command.id": string(b.CommandID), "aggregate.type": "otp_challenge", "aggregate.id": b.RecordID, "aggregate.before_version": "0", "aggregate.after_version": "1", "retention.class": "protected"}})
+	record, err := builder.Build(audit.RecordInput{OccurredAt: when, Action: action, Outcome: audit.OutcomeSucceeded, ReasonCode: "completed", Actor: audit.ActorInput{Kind: kind, ID: string(b.ActorID)}, Subject: audit.SubjectInput{Type: subjectType, ID: target}, Context: audit.ContextInput{TenantID: string(b.TenantID), CorrelationID: b.CorrelationID}, Policy: audit.PolicyMetadata{PolicyID: b.PolicyID, Version: strconv.FormatUint(b.PolicyVersion, 10)}, Changes: audit.ChangeSetInput{NoChange: true}, Attributes: map[string]string{"identity.profile": "identity.security.v1", "command.id": string(b.CommandID), "aggregate.type": subjectType, "aggregate.id": target, "aggregate.before_version": "0", "aggregate.after_version": strconv.FormatUint(afterVersion, 10), "retention.class": retention}})
 	if err != nil {
 		return kernel.CommandPlan{}, ErrInvalidCommand
 	}
-	digest, err := kernel.FeatureAuditBindingDigest(b, spec.Operation, "otp_challenge", record)
+	digest, err := kernel.FeatureAuditBindingDigest(b, spec.Operation, subjectType, record)
 	if err != nil {
 		return kernel.CommandPlan{}, ErrInvalidCommand
 	}
@@ -265,7 +294,7 @@ func (p *Contributor) preparedSendPlan(command identity.Command, effect *kernel.
 			contributors = append(contributors, d)
 		}
 	}
-	return kernel.CommandPlan{Contributors: contributors, SubjectType: "otp_challenge", Feature: &kernel.FeatureRegistration{Contributor: p.Descriptor(), Operation: spec.Operation}, Lifecycle: &kernel.LifecyclePlan{EventType: "otp.sent.v1", AfterVersion: 1}, Audits: []kernel.AuditPlan{{EventType: "otp.send", SchemaVersion: 1, BindingDigest: digest, Required: true, RequiredRecordCount: 1, MaxRecordBytes: 16384, MaxAggregateBytes: 16384, RetentionPolicyVersion: 1, RetentionClass: "protected"}}, Delivery: effect}, nil
+	return kernel.CommandPlan{Contributors: contributors, SubjectType: subjectType, Feature: &kernel.FeatureRegistration{Contributor: p.Descriptor(), Operation: spec.Operation}, Lifecycle: &kernel.LifecyclePlan{EventType: eventType, AfterVersion: afterVersion}, Audits: []kernel.AuditPlan{{EventType: action, SchemaVersion: 1, BindingDigest: digest, Required: true, RequiredRecordCount: 1, MaxRecordBytes: 16384, MaxAggregateBytes: 16384, RetentionPolicyVersion: 1, RetentionClass: retention}}, Delivery: effect}, nil
 }
 
 // ValidateFeaturePreparation performs bounded original-input and exact plan
@@ -303,6 +332,10 @@ func (p *Contributor) admitFeaturePreparation(ctx context.Context, w kernel.Work
 	if err != nil || b != spec.Binding || registration.Operation != spec.Operation {
 		return ErrInvalidCommand
 	}
+	return p.admitSendPrimary(ctx, w, r, flow, b, owner)
+}
+
+func (p *Contributor) admitSendPrimary(ctx context.Context, w kernel.Work, r sendRequestRecord, flow nativeFlow, b identity.CommandBinding, owner kernel.FeatureExecutionContributor) error {
 	a := r.authority
 	if err := w.RequireActiveDirectoryAuthority(ctx, owner, a.Directory); err != nil {
 		return err

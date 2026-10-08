@@ -44,16 +44,9 @@ func (p lockoutProfile) persistIssuance(ctx context.Context, query challengeQuer
 	if err != nil {
 		return ErrInvalidCommand
 	}
-	predecessors, err := lockIssuancePredecessors(ctx, query, row, scope, now)
+	predecessors, err := admitSendPredecessors(ctx, query, row, scope, profile, now)
 	if err != nil {
 		return err
-	}
-	if profile.Replacement == otp.ReplacePrevious {
-		for _, old := range predecessors {
-			if old.state != "issued" || old.version == ^uint64(0) || now.Before(old.issuedAt) {
-				return ErrInvalidCommand
-			}
-		}
 	}
 	// Family history and predecessor transitions remain provisional until the
 	// caller commits challenge, encrypted delivery, audit and journal together.
@@ -112,6 +105,24 @@ type issuancePredecessor struct {
 	id, state string
 	version   uint64
 	issuedAt  time.Time
+}
+
+// Both issued and suppressed requests share denial admission for unresolved
+// legacy or reserved predecessors. Only issuance may mutate these challenges;
+// suppression cannot disclose their presence by skipping this check.
+func admitSendPredecessors(ctx context.Context, query challengeQuery, row lockedSendFamily, scope otp.DigestScopeSpec, profile otp.CodeProfileSpec, now time.Time) ([]issuancePredecessor, error) {
+	predecessors, err := lockIssuancePredecessors(ctx, query, row, scope, now)
+	if err != nil {
+		return nil, err
+	}
+	if profile.Replacement == otp.ReplacePrevious {
+		for _, old := range predecessors {
+			if old.state != "issued" || old.version == ^uint64(0) || now.Before(old.issuedAt) {
+				return nil, ErrInvalidCommand
+			}
+		}
+	}
+	return predecessors, nil
 }
 
 func lockIssuancePredecessors(ctx context.Context, query challengeQuery, row lockedSendFamily, scope otp.DigestScopeSpec, now time.Time) ([]issuancePredecessor, error) {

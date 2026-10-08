@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+- Apply native cooldown and maximum-send limits equally to suppressed requests;
+  fresh idempotency keys cannot reveal recipient existence. Public command audits
+  emit the canonical OTP request action and retention, preserving older profiles.
+
+- Add public `NewSendService`, startup key registration and `Send` over owned
+  kernel, audit, lifecycle and encrypted delivery adapters. Both flow variants
+  preserve original keyed admission and counted Authentication facts through
+  replay. Suppressed recipients receive a durable record-free accepted command,
+  without challenge, code generation or sendable delivery. Install existing
+  selected owner and preparation migrations first. Durable risk-store and
+  complete login/reference composition verification remain pending.
+
 - Add private opt-in counted Authentication admission before native Send
   generation. Retain signed original risk facts and dimensions inside the
   existing encrypted preparation journal; restoration neither repeats external

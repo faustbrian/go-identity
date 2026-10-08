@@ -55,7 +55,7 @@ func (p *authenticationSendContributor) Descriptor() kernel.ContributorDescripto
 	return (*Contributor)(nil).Descriptor()
 }
 func (p *authenticationSendContributor) FeatureOperations() []identity.FeatureOperation {
-	return []identity.FeatureOperation{issuanceOperation(identity.FeatureSubjectUser), issuanceOperation(identity.FeatureSubjectAnonymousFlow)}
+	return []identity.FeatureOperation{issuanceOperation(identity.FeatureSubjectUser), issuanceOperation(identity.FeatureSubjectAnonymousFlow), suppressedSendOperation(identity.FeatureSubjectUser), suppressedSendOperation(identity.FeatureSubjectAnonymousFlow)}
 }
 
 func sendCommandWithFields(original identity.Command, fields []identity.FeatureField) (identity.Command, error) {
@@ -69,6 +69,9 @@ func sendCommandWithFields(original identity.Command, fields []identity.FeatureF
 
 func (p *authenticationSendContributor) aad(original identity.Command, generation uint64, kind string) (envelope.Context, error) {
 	base, err := preparedSendAAD(original, generation)
+	if isSuppressedSend(original) {
+		base, err = suppressedSendAAD(original, generation)
+	}
 	if err != nil {
 		return envelope.Context{}, err
 	}
@@ -142,6 +145,13 @@ func (p *authenticationSendContributor) mapInitiatedSend(ctx context.Context, in
 }
 
 func (p *authenticationSendContributor) original(ctx context.Context, command identity.Command) (identity.Command, sendInitiationRisk, error) {
+	if isSuppressedSend(command) {
+		input, _, err := p.suppressedInput(ctx, command)
+		if err != nil {
+			return identity.Command{}, sendInitiationRisk{}, err
+		}
+		return command, input.risk, nil
+	}
 	bad := func() (identity.Command, sendInitiationRisk, error) {
 		return identity.Command{}, sendInitiationRisk{}, ErrInvalidCommand
 	}
@@ -300,7 +310,11 @@ func (a *authenticationSendAdmission) Generate(ctx context.Context, generation u
 	if err := a.Check(ctx); err != nil {
 		return nil, err
 	}
-	inner, err := a.owner.store.GenerateFeaturePreparation(ctx, a.original, generation)
+	inner := []byte("IOAS1")
+	var err error
+	if !isSuppressedSend(a.original) {
+		inner, err = a.owner.store.GenerateFeaturePreparation(ctx, a.original, generation)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -358,6 +372,9 @@ func (p *authenticationSendContributor) RestoreFeatureAdmission(ctx context.Cont
 func (p *authenticationSendContributor) ValidateFeaturePreparation(command identity.Command, plan kernel.CommandPlan) error {
 	ctx, stop := context.WithTimeout(context.Background(), p.store.codec.maximumDuration)
 	defer stop()
+	if isSuppressedSend(command) {
+		return p.validateSuppressedSend(ctx, command, plan)
+	}
 	base, _, err := p.original(ctx, command)
 	if err != nil {
 		return err
@@ -365,6 +382,9 @@ func (p *authenticationSendContributor) ValidateFeaturePreparation(command ident
 	return p.store.ValidateFeaturePreparation(base, plan)
 }
 func (p *authenticationSendContributor) AdmitFeaturePreparation(ctx context.Context, w kernel.Work, command identity.Command) error {
+	if isSuppressedSend(command) {
+		return p.admitSuppressedSend(ctx, w, command)
+	}
 	base, _, err := p.original(ctx, command)
 	if err != nil {
 		return err
@@ -394,12 +414,27 @@ func (p *authenticationSendContributor) RestoreFeaturePreparation(ctx context.Co
 	if a.dimensions != dims {
 		return identity.Command{}, kernel.CommandPlan{}, ErrInvalidCommand
 	}
+	if isSuppressedSend(command) {
+		if !bytes.Equal(inner, []byte("IOAS1")) {
+			return identity.Command{}, kernel.CommandPlan{}, ErrInvalidCommand
+		}
+		plan, err := p.suppressedSendPlan(command)
+		return command, plan, err
+	}
 	return p.store.RestoreFeaturePreparation(ctx, base, generation, inner)
 }
 func (p *authenticationSendContributor) ValidateFeatureCommand(command identity.Command, plan kernel.CommandPlan) error {
+	if isSuppressedSend(command) {
+		ctx, stop := context.WithTimeout(context.Background(), p.store.codec.maximumDuration)
+		defer stop()
+		return p.validateSuppressedSend(ctx, command, plan)
+	}
 	return p.store.validatePreparedSendExecution(command, plan)
 }
 func (p *authenticationSendContributor) ApplyFeature(ctx context.Context, w kernel.Work, command identity.Command) (identity.FeatureReceipt, error) {
+	if isSuppressedSend(command) {
+		return p.applySuppressedSend(ctx, w, command)
+	}
 	original, err := p.store.originalFromGenerated(ctx, command)
 	if err != nil {
 		return identity.FeatureReceipt{}, err
@@ -434,7 +469,18 @@ func (p *authenticationSendContributor) ApplyFeature(ctx context.Context, w kern
 var _ kernel.FeatureAdmissionPreparationContributor = (*authenticationSendContributor)(nil)
 
 func (p *authenticationSendContributor) RecoverParticipant(ctx context.Context, w kernel.RecoveryWork) (kernel.RecoveryStatus, error) {
+	_, registration, _, err := w.FeatureScope(p)
+	if err != nil {
+		return kernel.RecoveryUnknown, err
+	}
+	if registration.Operation == suppressedSendOperation(registration.Operation.SubjectRequirement) {
+		return kernel.RecoveryNotCommitted, nil
+	}
 	return (&issuanceContributor{store: p.store}).recoverIssuance(ctx, w, p)
+}
+
+func (p *authenticationSendContributor) PrepareRequestKey(ctx context.Context, b kernel.RequestKeyPreparationBinding, intent identity.RequestIntent) ([]byte, error) {
+	return p.store.PrepareRequestKey(ctx, b, intent)
 }
 
 func appendSendRisk(out []byte, d sendInitiationRisk) []byte {
