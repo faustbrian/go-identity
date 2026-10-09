@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Expose typed execution phases on the real session-read handler through
+  `NewGetHandlerWithMiddleware`, with opaque credential-free principal access,
+  single owner authentication/rate admission and original validity checks after
+  hooks. Response protections also cover hook short circuits and attempted
+  header removal. Existing constructors retain their transport and response
+  contracts.
+
 - Contribute real session GET/logout wire schemas to selected OpenAPI 3.1.1,
   preserving optional credentials, cookie/bearer separation, conditional CSRF,
   exact success clearing, structured recovery errors and dispatcher denials.

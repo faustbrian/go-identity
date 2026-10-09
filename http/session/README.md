@@ -47,6 +47,26 @@ middleware. No hidden registration, default transport or global state exists.
 
 ## API and security
 
+`NewGetHandlerWithMiddleware(config, middleware)` adds trusted synchronous
+hooks at the real before-auth, after-auth, before-handler and after-handler
+boundaries. `NewGetHandler` uses the same pipeline without hooks. After-auth
+and later hooks may call `identityhttp.PipelineValue[sessionhttp.GetState](r)`
+and `state.Principal()` for detached credential-free metadata; neither the
+value nor that metadata is a reusable authority proof. Before-auth has no
+principal. Trusted hooks still receive original credential-bearing request
+headers in their detached view: never log, serialize or retain those headers.
+Only the typed state is credential-free. Middleware cannot replace the original
+tenant/credential inputs,
+read a body or repeat authentication/admission by calling next twice. Original
+validity is checked after admission and again after before-handler hooks;
+hooks cannot renew it. After-handler is read-only and observes an attempted
+read, not a transaction commit. Short circuits suppress later stages. Borrowed
+hooks must honor context, avoid retaining state and support concurrent requests.
+The read handler enforces no-store/nosniff, JSON media type and no Set-Cookie at
+response commit even for short circuits and attempted header removal. Hooks own
+their bounded JSON denial bodies. Self-signout hook adoption and the full
+security router remain in development.
+
 Only exact `GET /v1/session/get` is accepted. Requests have no body, query or
 Idempotency-Key. Tenant comes only from an exact trusted HTTPS host binding.
 Unknown/public hosts return 421 before tenant-state access. Malformed requests
