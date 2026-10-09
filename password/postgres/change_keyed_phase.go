@@ -14,6 +14,7 @@ import (
 	password "github.com/faustbrian/go-identity/password"
 	kernel "github.com/faustbrian/go-identity/postgres"
 	"github.com/faustbrian/go-identity/risk"
+	"github.com/faustbrian/go-identity/session"
 	sessionpg "github.com/faustbrian/go-identity/session/postgres"
 	primitive "github.com/faustbrian/go-password"
 	envelope "github.com/faustbrian/go-secret-envelope"
@@ -23,13 +24,14 @@ import (
 // Request and recovered input are frozen before execution, never shared with
 // another request. Closures keep borrowed secret custody out of reflection.
 type keyedPasswordChangePhase struct {
-	service  *KeyedPasswordChangeService
-	request  func() PasswordChangeRequest
-	input    func() keyedPasswordChangeInput
-	command  identity.Command
-	plan     kernel.CommandPlan
-	retained func() keyedPasswordChangeRetained
-	arm      func(time.Time) error
+	service   *KeyedPasswordChangeService
+	request   func() PasswordChangeRequest
+	input     func() keyedPasswordChangeInput
+	command   identity.Command
+	plan      kernel.CommandPlan
+	retained  func() keyedPasswordChangeRetained
+	arm       func(time.Time) error
+	csrfToken func() session.CSRFToken
 }
 
 type keyedPasswordChangeRetained struct {
@@ -63,6 +65,9 @@ func (p *keyedPasswordChangePhase) PrepareRequestKey(ctx context.Context, k kern
 	original, err := native.source.lookup(ctx, r.TenantID, r.Session)
 	if err != nil {
 		return nil, err
+	}
+	if p.service.csrf != nil && p.service.csrf().checkSession(original, p.csrfToken()) != nil {
+		return nil, identity.ForbiddenError{}
 	}
 	spec, err := original.Bindings()
 	if err != nil || k.Scope.ActorID != identity.ActorID(spec.UserID) || k.Scope.TenantID != spec.TenantID || spec.UserID != identity.UserID(r.Caller.Request.Subject.ID) {
@@ -236,6 +241,11 @@ func (p *keyedPasswordChangePhase) AdmitFeaturePreparation(ctx context.Context, 
 	}
 	if err := sessionpg.RequireSession(ctx, w, p.service.native.source.c.Session, original); err != nil {
 		return err
+	}
+	if phase.csrfCheck != nil {
+		if err := phase.csrfCheck(original); err != nil {
+			return err
+		}
 	}
 	now, err := w.DatabaseTime(ctx)
 	use := p.service.proofUse(p.request(), now)

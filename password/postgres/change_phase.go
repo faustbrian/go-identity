@@ -21,16 +21,17 @@ import (
 // Invocation-only custody cannot be obtained from a caller-built command. The
 // kernel independently decodes all predecessor fields before locking authority.
 type passwordChangePhase struct {
-	owner    kernel.CredentialReplacementContributor
-	service  *PasswordChangeService
-	original session.Session
-	material password.CredentialSnapshot
-	record   auth.SignedReauthenticationRecord
-	facts    []risk.Signal
-	scope    risk.Context
-	use      auth.ReauthenticationUse
-	intent   kernel.CredentialReplacementIntent
-	expected identity.Command
+	owner     kernel.CredentialReplacementContributor
+	service   *PasswordChangeService
+	original  session.Session
+	material  password.CredentialSnapshot
+	record    auth.SignedReauthenticationRecord
+	facts     []risk.Signal
+	scope     risk.Context
+	use       auth.ReauthenticationUse
+	intent    kernel.CredentialReplacementIntent
+	expected  identity.Command
+	csrfCheck func(session.Session) error
 }
 
 // Retained preparation reconstructs a private invocation, but every Work check
@@ -124,6 +125,11 @@ func (p *passwordChangePhase) ApplyFeature(ctx context.Context, w kernel.Work, c
 	}
 	if err = sessionpg.RequireSession(ctx, w, source.c.Session, p.original); err != nil {
 		return identity.FeatureReceipt{}, err
+	}
+	if p.csrfCheck != nil {
+		if err = p.csrfCheck(p.original); err != nil {
+			return identity.FeatureReceipt{}, err
+		}
 	}
 	if err = p.checkTime(ctx, w); err != nil {
 		return identity.FeatureReceipt{}, err

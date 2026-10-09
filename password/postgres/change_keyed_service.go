@@ -16,6 +16,7 @@ import (
 	password "github.com/faustbrian/go-identity/password"
 	kernel "github.com/faustbrian/go-identity/postgres"
 	"github.com/faustbrian/go-identity/risk"
+	"github.com/faustbrian/go-identity/session"
 	envelope "github.com/faustbrian/go-secret-envelope"
 	"github.com/faustbrian/go-secret-envelope/adapters/keyring"
 )
@@ -58,6 +59,7 @@ type KeyedPasswordChangeService struct {
 	crypto   *envelope.Service
 	config   func() KeyedPasswordChangeConfig
 	identity [32]byte
+	csrf     func() passwordChangeCSRF
 }
 
 // NewKeyedPasswordChangeService validates additive keyed composition. Existing
@@ -143,6 +145,13 @@ func (s *KeyedPasswordChangeService) coordinator(p *keyedPasswordChangePhase) (*
 // the existing code-free PasswordChangeService.Recover contract. Destroy Password
 // after return. Earlier deadlines win; secret errors and panics are redacted.
 func (s *KeyedPasswordChangeService) Change(ctx context.Context, r PasswordChangeRequest, key identity.IdempotencyKey) (result PasswordChangeResult, err error) {
+	if s != nil && s.csrf != nil {
+		return result, password.ErrPasswordWork
+	}
+	return s.change(ctx, r, key, session.CSRFToken{})
+}
+
+func (s *KeyedPasswordChangeService) change(ctx context.Context, r PasswordChangeRequest, key identity.IdempotencyKey, token session.CSRFToken) (result PasswordChangeResult, err error) {
 	if ctx == nil || s == nil || s.native == nil || s.config == nil {
 		return result, password.ErrPasswordWork
 	}
@@ -167,11 +176,11 @@ func (s *KeyedPasswordChangeService) Change(ctx context.Context, r PasswordChang
 			result.CredentialVersion, result.AuthorityInvalidated = 0, false
 		}
 	}()
-	intent, err := s.requestIntent(ctx, r)
+	intent, err := s.requestIntent(ctx, r, token)
 	if err != nil {
 		return result, err
 	}
-	p := &keyedPasswordChangePhase{service: s, request: func() PasswordChangeRequest { return r }}
+	p := &keyedPasswordChangePhase{service: s, request: func() PasswordChangeRequest { return r }, csrfToken: func() session.CSRFToken { return token }}
 	coordinator, registry, err := s.coordinator(p)
 	if err != nil {
 		return result, password.ErrPasswordWork
@@ -233,7 +242,7 @@ func (s *KeyedPasswordChangeService) Change(ctx context.Context, r PasswordChang
 	return result, err
 }
 
-func (s *KeyedPasswordChangeService) requestIntent(ctx context.Context, r PasswordChangeRequest) (identity.RequestIntent, error) {
+func (s *KeyedPasswordChangeService) requestIntent(ctx context.Context, r PasswordChangeRequest, token session.CSRFToken) (identity.RequestIntent, error) {
 	if ctx.Err() != nil {
 		return identity.RequestIntent{}, ctx.Err()
 	}
@@ -268,13 +277,27 @@ func (s *KeyedPasswordChangeService) requestIntent(ctx context.Context, r Passwo
 	}); err != nil {
 		return identity.RequestIntent{}, password.ErrPasswordWork
 	}
-	return identity.NewRequestIntent([]identity.FeatureField{
+	fields := []identity.FeatureField{
 		{Name: "profile", Value: identity.FeatureValue{Kind: identity.FeatureBytes, Bytes: s.identity[:]}},
 		{Name: "password", Value: identity.FeatureValue{Kind: identity.FeatureBytes, Bytes: candidate}},
 		{Name: "bearer", Value: identity.FeatureValue{Kind: identity.FeatureBytes, Bytes: digest("bearer", []byte(r.Session.Token()))}},
 		{Name: "proof", Value: identity.FeatureValue{Kind: identity.FeatureBytes, Bytes: digest("proof", proof)}},
 		{Name: "network", Value: identity.FeatureValue{Kind: identity.FeatureText, Text: r.Network}},
-	})
+	}
+	if s.csrf != nil {
+		// A fixed non-authoritative binding provides stable purpose-specific token
+		// correlation across CSRF key rotation. This digest is never admission.
+		state, err := token.Digest(s.csrf().intent, session.CSRFBinding{TenantID: r.TenantID, SessionID: "password-cookie-intent", SessionVersion: 1})
+		if err != nil {
+			return identity.RequestIntent{}, identity.ForbiddenError{}
+		}
+		spec, err := state.Bindings()
+		if err != nil {
+			return identity.RequestIntent{}, identity.ForbiddenError{}
+		}
+		fields = append(fields, identity.FeatureField{Name: "csrf", Value: identity.FeatureValue{Kind: identity.FeatureBytes, Bytes: spec.Digest[:]}})
+	}
+	return identity.NewRequestIntent(fields)
 }
 
 func (s *KeyedPasswordChangeService) proofUse(r PasswordChangeRequest, now time.Time) auth.ReauthenticationUse {

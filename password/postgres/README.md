@@ -284,3 +284,28 @@ legacy migrations, backup/restore, exact coverage/mutation, production-shaped
 benchmarks, clean consumer and release qualification remain pending.
 
 See [CHANGELOG.md](CHANGELOG.md).
+
+### Strict cookie password-change composition
+
+Select `NewCookieKeyedPasswordChangeService` over a configured native keyed
+service and 1..4 distinct eligible session CSRF keys. The constructor copies
+the selection and does not change the original bearer service. Submit one
+`CookiePasswordChangeRequest` containing the native input, exactly one
+`IdempotencyKey` and an opaque `session.CSRFToken`. The selected transport must
+also enforce exact trusted origin, strict cookies and one canonical CSRF
+channel; the native service does not interpret HTTP requests.
+
+Tokenless sessions and absent/foreign tokens deny. The session owner checks the
+exact original named-key state both before preparation and under the existing
+primary session fence before protected admission/mutation. A primary rotation
+after observation denies even when the old token initially matched. No raw
+CSRF bytes are stored or revealed. The session digest engine also supplies
+domain-separated stable token intent; this correlation is not admission and
+does not renew original evidence. Retain eligible old keys while their sessions
+are supported. Removing an original key fails closed; bearer and cookie intents
+cannot silently share an original outcome under the same retry key.
+
+Native cookie success/restart qualification, portable cookie composition and
+the optional HTTP endpoint remain in development; this checkpoint proves local
+named-key denial and real-primary rotation rollback, not a complete browser
+password-change journey.

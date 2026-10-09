@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Add an explicit keyed cookie password-change profile with required opaque
+  session CSRF custody. Validate exact synchronizer state under the existing
+  primary fences before preparation admission and mutation; rotation between
+  observation and execution denies without consuming the proof. Cookie and
+  bearer request intents are separated, and CSRF bytes are never persisted.
+  Existing bearer/unkeyed APIs remain unchanged. Portable cookie/HTTP wiring
+  and full lifecycle/release qualification remain in development.
+
 - Bind the native keyed password-change workflow to the portable password
   Change/Recover port without changing existing direct service signatures.
   The request's required retry key reaches the original journal unchanged;

@@ -124,7 +124,7 @@ func (p *keyedPasswordChangePhase) restoreInput(ctx context.Context, k kernel.Re
 		return bad(password.ErrPasswordWork)
 	}
 	r := p.request()
-	intent, err := p.service.requestIntent(ctx, r)
+	intent, err := p.service.requestIntent(ctx, r, p.csrfToken())
 	fields, ok := intent.Fields()
 	stored, e := identity.NewRequestIntent(input.RequestInput)
 	storedFields, storedOK := stored.Fields()
@@ -165,6 +165,13 @@ func (p *keyedPasswordChangePhase) invocation(input keyedPasswordChangeInput, fa
 	if !matched || input.Authority.Credential.Version != record.CredentialVersion {
 		return nil, session.Session{}, auth.SignedReauthenticationRecord{}, identity.ForbiddenError{}
 	}
+	// Original replay custody still requires currently eligible named keys.
+	// The kernel may return a busy or terminal journal before transactional
+	// admission runs. This local check renews no state or mutation authority;
+	// fresh execution retains its separate exact-primary fence below.
+	if p.service.csrf != nil && p.service.csrf().checkSession(original, p.csrfToken()) != nil {
+		return nil, session.Session{}, auth.SignedReauthenticationRecord{}, identity.ForbiddenError{}
+	}
 	hash, err := primitive.ParseEncodedHash(input.Hash, p.service.native.source.repository.limits)
 	if err != nil {
 		return nil, session.Session{}, auth.SignedReauthenticationRecord{}, password.ErrPasswordWork
@@ -174,5 +181,8 @@ func (p *keyedPasswordChangePhase) invocation(input keyedPasswordChangeInput, fa
 		return nil, session.Session{}, auth.SignedReauthenticationRecord{}, password.ErrPasswordWork
 	}
 	phase := &passwordChangePhase{owner: p, service: p.service.native, original: original, material: material, record: record, facts: facts, scope: risk.Context{Tenant: string(input.Binding.TenantID), Operation: risk.Action(replacementOperation().OperationID), Attempt: string(input.Binding.CommandID)}, use: p.service.proofUse(r, time.Time{}), intent: kernel.CredentialReplacementIntent{Credential: input.Authority.Credential, ExpectedUserVersion: input.Authority.User.Version, ExpectedAuthorityVersion: input.Authority.AuthorityVersion}, expected: expected}
+	if p.service.csrf != nil {
+		phase.csrfCheck = func(original session.Session) error { return p.service.csrf().checkSession(original, p.csrfToken()) }
+	}
 	return phase, original, record, nil
 }

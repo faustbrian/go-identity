@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"slices"
 	"sync"
@@ -19,6 +20,7 @@ import (
 	passworddb "github.com/faustbrian/go-identity/password/postgres"
 	kernel "github.com/faustbrian/go-identity/postgres"
 	"github.com/faustbrian/go-identity/risk"
+	"github.com/faustbrian/go-identity/session"
 	migrations "github.com/faustbrian/go-migrations/v3"
 	primitive "github.com/faustbrian/go-password"
 	database "github.com/faustbrian/go-postgres"
@@ -60,6 +62,9 @@ func testNativeKeyedPasswordChange(t *testing.T, ctx context.Context, pool *data
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Run("cookie-original-state-fence", func(t *testing.T) {
+		testCookiePasswordChangeFence(t, ctx, pool, source, sourceConfig, policy, config, keys, request, calls)
+	})
 	t.Run("keyed-original-signal-deadline", func(t *testing.T) {
 		testKeyedPasswordSignalDeadline(t, ctx, pool, source, policy, config, keys, request, calls)
 	})
@@ -264,6 +269,103 @@ func testNativeKeyedPasswordChange(t *testing.T, ctx context.Context, pool *data
 		})
 	}
 	return result
+}
+
+// Rotate the primary synchronizer after original admission but before mutation.
+// A prechecked token must not survive the existing transaction's source fence.
+func testCookiePasswordChangeFence(t *testing.T, ctx context.Context, pool *database.Pool, source *passworddb.ReauthenticationService, sourceConfig passworddb.ReauthenticationConfig, policy passworddb.PasswordChangeConfig, config passworddb.KeyedPasswordChangeConfig, keys *keyring.Provider, request passworddb.PasswordChangeRequest, calls *atomic.Int64) {
+	t.Helper()
+	var original []byte
+	if err := pool.Raw().QueryRow(ctx, `SELECT record FROM reauth_sessions.sessions WHERE session_id=$1`, request.Proof.SessionID).Scan(&original); err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		cleanup, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
+		if _, err := pool.Raw().Exec(cleanup, `UPDATE reauth_sessions.sessions SET record=$2::jsonb WHERE session_id=$1`, request.Proof.SessionID, original); err != nil {
+			t.Error("cookie fixture cleanup failed", err)
+		}
+	}()
+	token, _ := session.ParseCSRFToken(base64.RawURLEncoding.EncodeToString(bytes.Repeat([]byte{71}, 32)))
+	foreign, _ := session.ParseCSRFToken(base64.RawURLEncoding.EncodeToString(bytes.Repeat([]byte{72}, 32)))
+	csrfKey, _ := session.NewCSRFKey(1, bytes.Repeat([]byte{73}, 32))
+	binding := session.CSRFBinding{TenantID: request.TenantID, SessionID: request.Proof.SessionID, SessionVersion: request.Proof.SessionVersion}
+	install := func(token session.CSRFToken) error {
+		state, err := token.Digest(csrfKey, binding)
+		if err != nil {
+			return err
+		}
+		spec, err := state.Bindings()
+		if err != nil {
+			return err
+		}
+		wire, err := json.Marshal(spec)
+		if err != nil {
+			return err
+		}
+		// Preserve existing continuation/OTP schema bits; adding the first
+		// synchronizer advances the tokenless schema by one, not back to two.
+		_, err = pool.Raw().Exec(ctx, `UPDATE reauth_sessions.sessions SET record=jsonb_set(jsonb_set(record,'{Schema}',to_jsonb((record->>'Schema')::integer + CASE WHEN record ? 'CSRF' THEN 0 ELSE 1 END)),'{CSRF}',$2::jsonb) WHERE session_id=$1`, request.Proof.SessionID, wire)
+		return err
+	}
+	if err := install(token); err != nil {
+		t.Fatal(err)
+	}
+	collect := policy.Screening.Collect
+	policy.Screening.Collect = func(ctx context.Context, scope risk.Context, candidate primitive.Secret) ([]risk.Signal, error) {
+		facts, err := collect(ctx, scope, candidate)
+		if err == nil {
+			err = install(foreign)
+		}
+		return facts, err
+	}
+	base, err := passworddb.NewKeyedPasswordChangeService(source, policy, config, keys)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cookie, err := passworddb.NewCookieKeyedPasswordChangeService(base, []session.CSRFKey{csrfKey})
+	if err != nil {
+		t.Fatal(err)
+	}
+	key, _ := identity.NewIdempotencyKey([]byte("password-cookie-fence"))
+	before := calls.Load()
+	for _, candidate := range []session.CSRFToken{{}, foreign} {
+		out, err := cookie.Change(ctx, passworddb.CookiePasswordChangeRequest{Request: request, IdempotencyKey: key, CSRFToken: candidate})
+		if err == nil || out.CredentialVersion != 0 || calls.Load() != before {
+			t.Fatal("absent/foreign cookie token admitted work", err)
+		}
+	}
+	out, err := cookie.Change(ctx, passworddb.CookiePasswordChangeRequest{Request: request, IdempotencyKey: key, CSRFToken: token})
+	if err == nil || out.Outcome == identity.CommitOutcomeCommitted || out.CredentialVersion != 0 || calls.Load() != before+1 {
+		t.Fatal("rotated token survived primary fence", err)
+	}
+	var consumed bool
+	var version string
+	if err := pool.Raw().QueryRow(ctx, `SELECT p.consumed_command_id IS NOT NULL,c.version::text FROM identity_password.reauthentication_records p JOIN identity_password.credentials c USING(tenant_id,user_id) WHERE p.proof_id=$1`, string(request.Proof.Proof.ID)).Scan(&consumed, &version); err != nil || consumed || version != "9" {
+		t.Fatal("cookie fence leaked protected effects", err)
+	}
+	// The original prepared journal remains pending after the denied mutation.
+	// Named-key eligibility must be checked before its early busy disclosure too;
+	// current primary rotation cannot renew/rewrite original replay custody.
+	retained, err := passworddb.NewCookieKeyedPasswordChangeService(base, []session.CSRFKey{csrfKey})
+	if err != nil {
+		t.Fatal(err)
+	}
+	replayRequest := passworddb.CookiePasswordChangeRequest{Request: request, IdempotencyKey: key, CSRFToken: token}
+	replayed, err := retained.Change(ctx, replayRequest)
+	if err != nil || replayed.Outcome != identity.CommitOutcomeInProgress || replayed.CommandID != out.CommandID || replayed.CredentialVersion != 0 || replayed.AuthorityInvalidated || calls.Load() != before+1 {
+		t.Fatal("retained-key replay changed original pending journal", err)
+	}
+	newKey, _ := session.NewCSRFKey(2, bytes.Repeat([]byte{74}, 32))
+	retired, err := passworddb.NewCookieKeyedPasswordChangeService(base, []session.CSRFKey{newKey})
+	if err != nil {
+		t.Fatal(err)
+	}
+	denied, err := retired.Change(ctx, replayRequest)
+	var forbidden identity.ForbiddenError
+	if !errors.As(err, &forbidden) || denied.CredentialVersion != 0 || denied.AuthorityInvalidated || calls.Load() != before+1 {
+		t.Fatal("retired CSRF key disclosed original replay", err)
+	}
 }
 
 func nativePortableResult(result password.ChangeResult) passworddb.PasswordChangeResult {
