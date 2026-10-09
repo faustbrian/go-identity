@@ -107,7 +107,7 @@ func prepareClaim(c identity.Command, key [32]byte) (claimRequest, error) {
 			return claimRequest{}, err
 		}
 	case isFeature(c):
-		s, _ := c.Feature()
+		s, _ := commandFeature(c)
 		binding = s.Binding
 		operation := s.Operation
 		feature = &operation
@@ -147,6 +147,17 @@ func prepareClaim(c identity.Command, key [32]byte) (claimRequest, error) {
 				return claimRequest{}, codecError()
 			}
 			payload["session_token"] = cborBytes(digest)
+		}
+		if hash, ok := c.PasswordHash(); ok {
+			// Keep original verifier intent distinct from scalar fields. Neither
+			// the journal nor its safe collision scope retains the verifier.
+			secret := []byte(hash)
+			digest, err := commandSecret(key, "password-hash", secret, 16384)
+			clear(secret)
+			if err != nil {
+				return claimRequest{}, codecError()
+			}
+			payload["password_hash"] = cborBytes(digest)
 		}
 	default:
 		return claimRequest{}, codecError()
@@ -205,7 +216,20 @@ func isLink(c identity.Command) bool       { _, ok := c.LinkAccount(); return ok
 func isUnlink(c identity.Command) bool     { _, ok := c.UnlinkAccount(); return ok }
 func isIdentifier(c identity.Command) bool { _, ok := c.ChangeIdentifier(); return ok }
 func isPrivacy(c identity.Command) bool    { _, ok := c.RequestPrivacyExport(); return ok }
-func isFeature(c identity.Command) bool    { _, ok := c.Feature(); return ok }
+func isFeature(c identity.Command) bool    { _, ok := commandFeature(c); return ok }
+
+// Explicit native selection is necessary: the legacy Feature accessor denies
+// password custody so older coordinators cannot silently omit its fingerprint.
+func commandFeature(c identity.Command) (identity.FeatureCommandSpec, bool) {
+	if s, ok := c.Feature(); ok {
+		return s, true
+	}
+	s, ok := c.PasswordHashFeature()
+	if !ok || !credentialReplacementOperation(s.Operation) {
+		return identity.FeatureCommandSpec{}, false
+	}
+	return s, true
+}
 
 func commandScope(b identity.CommandBinding) map[string][]byte {
 	id, _ := base64.RawURLEncoding.DecodeString(string(b.CommandID))

@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Bind opaque password-hash change intent with the retained command key, without
+  retaining verifier bytes in journal metadata. Require the exact native
+  replacement participant; changed material cannot replay an original result.
+  Existing hash-free command encodings remain unchanged.
+
 - Add a typed kernel-owned existing-password change effect through the original
   coordinator. Lock exact primary predecessors and commit independent user,
   credential-authority and reference successors with native material, audit,

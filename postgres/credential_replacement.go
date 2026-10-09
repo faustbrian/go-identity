@@ -87,7 +87,7 @@ func decodeCredentialReplacement(s identity.FeatureCommandSpec) (CredentialRepla
 }
 
 func replacementCommand(p CredentialReplacementContributor, c identity.Command, plan CommandPlan) (CredentialReplacementIntent, error) {
-	s, ok := c.Feature()
+	s, ok := commandFeature(c)
 	if !ok || plan.Feature == nil || plan.Feature.Operation != s.Operation || plan.SubjectType != "credential" || plan.Capability != nil || plan.Lifecycle == nil || !credentialReplacementOperation(s.Operation) {
 		return CredentialReplacementIntent{}, invalidCredentialReplacement()
 	}

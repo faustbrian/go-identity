@@ -20,6 +20,9 @@ import (
 // real shared transaction, not password/proof policy or production outbox wiring.
 type replacementNativePhase struct{ fail, wrongReceipt bool }
 
+// Structurally native but deliberately without the kernel replacement trait.
+type replacementGenericPhase struct{ FeatureExecutionContributor }
+
 func (*replacementNativePhase) Descriptor() ContributorDescriptor {
 	return ContributorDescriptor{Owner: "identity/password/postgres", ContractID: "identity.password", Version: 1}
 }
@@ -27,21 +30,21 @@ func (*replacementNativePhase) FeatureOperations() []identity.FeatureOperation {
 	return []identity.FeatureOperation{{Owner: "identity/password", OperationID: "identity.password.change", SchemaID: "password-change", SchemaVersion: 1, RecordRequirement: identity.FeatureRecordRequired}}
 }
 func (*replacementNativePhase) CredentialReplacement(c identity.Command) (CredentialReplacementIntent, error) {
-	s, ok := c.Feature()
+	s, ok := commandFeature(c)
 	if !ok {
 		return CredentialReplacementIntent{}, invalidCredentialReplacement()
 	}
 	return decodeCredentialReplacement(s)
 }
 func (p *replacementNativePhase) ValidateFeatureCommand(c identity.Command, plan CommandPlan) error {
-	s, ok := c.Feature()
+	s, ok := commandFeature(c)
 	if !ok || s.Operation != p.FeatureOperations()[0] || len(s.Fields) != 8 || len(plan.Audits) != 1 || plan.Audits[0].EventType != "identity.password.change" {
 		return invalidPlan()
 	}
 	return nil
 }
 func (p *replacementNativePhase) ApplyFeature(ctx context.Context, w Work, c identity.Command) (identity.FeatureReceipt, error) {
-	s, _ := c.Feature()
+	s, _ := commandFeature(c)
 	intent, err := p.CredentialReplacement(c)
 	if err != nil {
 		return identity.FeatureReceipt{}, err
@@ -143,7 +146,11 @@ func testCredentialReplacement(t *testing.T, ctx context.Context, pool *database
 			if e != nil {
 				t.Fatal(e)
 			}
-			command := featureCodecCommand(t, identity.FeatureCommandSpec{Binding: b, Operation: op, Fields: fields})
+			spec := identity.FeatureCommandSpec{Binding: b, Operation: op, Fields: fields}
+			command, e := identity.NewFeaturePasswordHashCommand(spec, "$argon2id$synthetic-command-custody")
+			if e != nil {
+				t.Fatal(e)
+			}
 			_, _, plan := featurePlanFixture(t)
 			plan.Contributors, plan.SubjectType, plan.Feature = registry.Descriptors(), "credential", &FeatureRegistration{Contributor: native.Descriptor(), Operation: op}
 			plan.Audits[0].EventType, plan.Audits[0].RetentionClass = "identity.password.change", "protected"
@@ -155,6 +162,17 @@ func testCredentialReplacement(t *testing.T, ctx context.Context, pool *database
 			plan.Audits[0].BindingDigest, e = FeatureAuditBindingDigest(b, op, "credential", seed)
 			if e != nil {
 				t.Fatal(e)
+			}
+			if scenario == "commit" {
+				genericRegistry, e := NewContributorRegistry([]Contributor{repo, auditing, outbox, replacementGenericPhase{native}})
+				if e != nil {
+					t.Fatal(e)
+				}
+				generic := *c
+				generic.registry = genericRegistry
+				if prepared, e := generic.PrepareCommandPlan(b, command, plan); e == nil || prepared.Digest != ([32]byte{}) {
+					t.Fatal("hash admitted without native replacement trait")
+				}
 			}
 			plan, e = c.PrepareCommandPlan(b, command, plan)
 			if e != nil {
@@ -240,6 +258,19 @@ func testCredentialReplacement(t *testing.T, ctx context.Context, pool *database
 				_, replay, e := c.ReserveCommand(ctx, b, command, plan)
 				if e != nil || replay.Outcome != identity.CommitOutcomeCommitted || replay.Feature == nil || *replay.Feature != *result.Feature {
 					t.Fatal("replacement original receipt replay", e)
+				}
+				changed, e := identity.NewFeaturePasswordHashCommand(spec, "$argon2id$different-command-custody")
+				if e != nil {
+					t.Fatal(e)
+				}
+				changedPlan, e := c.PrepareCommandPlan(b, changed, plan)
+				if e != nil {
+					t.Fatal(e)
+				}
+				_, changedReplay, e := c.ReserveCommand(ctx, b, changed, changedPlan)
+				var conflict identity.ConflictError
+				if !errors.As(e, &conflict) || changedReplay.Outcome == identity.CommitOutcomeCommitted {
+					t.Fatal("changed hash replay disclosed original commit", e)
 				}
 			}
 		})

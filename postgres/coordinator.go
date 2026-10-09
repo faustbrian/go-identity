@@ -212,7 +212,7 @@ func (c *Coordinator) prepare(binding identity.CommandBinding, command identity.
 	if plan.CapabilityIssuance != nil && !validCapabilityIssuancePlan(plan.CapabilityIssuance) {
 		return claimRequest{}, CommandPlan{}, nil, invalidPlan()
 	}
-	if spec, ok := command.Feature(); ok {
+	if spec, ok := commandFeature(command); ok {
 		if plan.IdentifierAdmission != nil {
 			return claimRequest{}, CommandPlan{}, nil, invalidPlan()
 		}

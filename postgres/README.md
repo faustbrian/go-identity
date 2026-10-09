@@ -1729,6 +1729,12 @@ owners, proof consumption and composed adapter evidence.
 `CredentialReplacementContributor` enlists the kernel-owned effect for
 `identity.password.change`. Its complete frozen command carries
 `CredentialReplacementFields` and the native workflow's original policy intent.
+For verifier writes use `identity.NewFeaturePasswordHashCommand`; native owners
+select `PasswordHashFeature` and explicitly borrow `PasswordHash` for parsing
+and SQL-driver storage. The coordinator binds exact hash bytes with the command
+fingerprint key, never raw journal metadata. Changed verifier bytes conflict
+with the original command ID, including terminal replay. Legacy hash-free
+commands keep their encoding but cannot supply material through this custody.
 The coordinator matches the native mapping, locks the primary user and password
 reference, and checks active status, enabled state, expiry and all three exact
 predecessors. Native hash replacement runs in the same `Work`; the kernel then
