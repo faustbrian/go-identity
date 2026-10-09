@@ -107,7 +107,9 @@ func (w Work) FeaturePreparationOutput(p FeaturePreparationContributor) ([]byte,
 // original code-free caller intent, using the existing claim/journal owner.
 // declaration fixes feature, subject, mandatory audits and lifecycle before
 // generation; the authenticated final plan may additionally enlist Delivery.
-// One-use/protected-counter profiles are rejected, not silently omitted.
+// One-use profiles are rejected, not silently omitted. Explicit protected
+// counters require CounterPreparationMigrationSource and a native current-check
+// owner; their charge commits before generation and survives final rollback.
 // Install PreparationMigrationSource before enabling this opt-in composition.
 //
 // Current native admission precedes the committed start marker. Entropy never
@@ -250,15 +252,24 @@ func (c *Coordinator) prepareFeaturePreparation(original identity.Command, p Com
 	if e != nil || phase.ValidateFeaturePreparation(original, admitted.snapshot()) != nil {
 		return q, nil, nil, invalidPreparation()
 	}
+	if admitted.counters != nil {
+		counter := counterAdmissionParticipant(admitted)
+		if counter == nil || validateCommandCounters(counter, original, *admitted.counters) != nil {
+			return q, nil, nil, invalidPreparation()
+		}
+	}
 	return q, admitted, phase, nil
 }
 
 func preparationProtected(p CommandPlan) bool {
-	return p.IdentifierAdmission != nil || p.Capability != nil || p.CapabilityIssuance != nil || p.OTP != nil || p.RiskEvidence != nil || p.CommandCounters != nil || p.CaptchaEvidence != nil || p.CaptchaReplayReservation
+	return p.IdentifierAdmission != nil || p.Capability != nil || p.CapabilityIssuance != nil || p.OTP != nil || p.RiskEvidence != nil || p.CaptchaEvidence != nil || p.CaptchaReplayReservation
 }
 
 func preparationFinalDeclaration(original, final CommandPlan) bool {
 	if final.Feature == nil || final.Lifecycle == nil || preparationProtected(final) || *original.Feature != *final.Feature || *original.Lifecycle != *final.Lifecycle || original.SubjectType != final.SubjectType || len(original.Audits) != len(final.Audits) {
+		return false
+	}
+	if (original.CommandCounters == nil) != (final.CommandCounters == nil) || original.CommandCounters != nil && *original.CommandCounters != *final.CommandCounters {
 		return false
 	}
 	for i, a := range original.Audits {
@@ -303,9 +314,18 @@ func (c *Coordinator) startFeaturePreparation(ctx context.Context, original iden
 	if external {
 		profile = 2
 	}
+	if p.counters != nil {
+		profile += 2
+	}
 	r, err = reservePreparationJournal(ctx, tx, q, d, owner, c.leaseDuration, profile)
 	if err != nil {
 		return r, result, err
+	}
+	if p.counters != nil {
+		p, err = c.freezePreparationCounters(ctx, tx, q, p)
+		if err != nil {
+			return preparationReservation{}, result, err
+		}
 	}
 	if r.journal.disposition != journalOwned {
 		result = featureOutcome(p.binding, q.feature, identity.CommitOutcomeInProgress, r.journal.retryAfter)
@@ -318,14 +338,28 @@ func (c *Coordinator) startFeaturePreparation(ctx context.Context, original iden
 		if err := c.admitFeaturePreparation(ctx, tx, original, q, p, phase, r.journal, owner); err != nil {
 			return preparationReservation{}, result, err
 		}
-		if !external {
-			if err := startJournalPreparation(ctx, tx, q, r.journal, owner); err != nil {
-				return preparationReservation{}, result, err
-			}
+	}
+	denied, err := c.reserveCommandCounters(ctx, tx, original, q, p, r.journal, owner)
+	if err != nil {
+		return preparationReservation{}, result, err
+	}
+	if denied {
+		// A denied attempt has no generated command. Persist its original frozen
+		// plan so ordinary receipt queries and recovery retain complete evidence.
+		if _, err := c.freezePlan(ctx, tx, p.binding, q, claimNew, p.snapshot()); err != nil {
+			return preparationReservation{}, result, err
+		}
+	}
+	if r.generate && !external && !denied {
+		if err := startJournalPreparation(ctx, tx, q, r.journal, owner); err != nil {
+			return preparationReservation{}, result, err
 		}
 	}
 	if err := c.commitPreparation(ctx, tx); err != nil {
 		return preparationReservation{}, featureOutcome(p.binding, q.feature, identity.CommitOutcomeUnknown, 0), identity.UnknownCommitError{CommandID: p.binding.CommandID}
+	}
+	if denied {
+		return preparationReservation{}, featureOutcome(p.binding, q.feature, identity.CommitOutcomeNotCommitted, 0), identity.ForbiddenError{}
 	}
 	return r, featureOutcome(p.binding, q.feature, identity.CommitOutcomeInProgress, c.leaseDuration), nil
 }

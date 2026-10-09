@@ -154,6 +154,7 @@ func testCommandCounterReservation(t *testing.T, ctx context.Context, pool *data
 		t.Fatal(err)
 	}
 	t.Run("current admission", func(t *testing.T) { testCommandCounterAdmission(t, ctx, pool, repo) })
+	t.Run("prepared generation", func(t *testing.T) { testPreparedCommandCounters(t, ctx, pool, repo) })
 	for _, mode := range []string{"allow-deny-replay", "takeover", "error", "panic", "rows", "poison", "zero", "audit-failure", "commit-failure"} {
 		t.Run(mode, func(t *testing.T) {
 			participant := &sqlCommandCounter{mode: mode}

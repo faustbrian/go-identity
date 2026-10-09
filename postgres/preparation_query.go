@@ -73,6 +73,7 @@ func (c *Coordinator) QueryPreparedFeature(ctx context.Context, q identity.Recov
 	ctx, stop := context.WithTimeout(ctx, c.maximumDuration)
 	defer stop()
 	var original commandObservation
+	var protectedCounters bool
 	receipt, err := c.queryCommandReceiptChecked(ctx, q, caller, func(observed commandObservation) error {
 		b, op, err := decodeObservedScope(observed.scope)
 		if err != nil || op == nil || *op != feature.Operation || len(observed.fingerprint) != 32 {
@@ -83,6 +84,7 @@ func (c *Coordinator) QueryPreparedFeature(ctx context.Context, q identity.Recov
 			return identity.ForbiddenError{}
 		}
 		original = observed
+		protectedCounters = plan.CommandCounters != nil
 		return nil
 	})
 	if err != nil {
@@ -112,7 +114,8 @@ AND NOT c.retired AND c.safe_fields=$7 AND c.fingerprint=$8 AND j.command_plan=$
 	expectedNamespace := requestNamespaceIdentity(c.requestKeys.Namespace, c.requestKeys.lookupKey())
 	version, e := strconv.ParseUint(generation, 10, 64)
 	currentVersion, currentError := strconv.ParseUint(current, 10, 64)
-	if e != nil || version == 0 || generation != started || currentError != nil || currentVersion < version || profile != 1 && profile != 2 || keyVersion < 1 || keyVersion > math.MaxUint32 || len(digest) != 32 || len(input) == 0 || len(output) == 0 || !hmac.Equal(expectedIdentity[:], preparationIdentity) || !hmac.Equal(expectedNamespace[:], namespaceBinding) {
+	validProfile := !protectedCounters && (profile == 1 || profile == 2) || protectedCounters && (profile == 3 || profile == 4)
+	if e != nil || version == 0 || generation != started || currentError != nil || currentVersion < version || !validProfile || keyVersion < 1 || keyVersion > math.MaxUint32 || len(digest) != 32 || len(input) == 0 || len(output) == 0 || !hmac.Equal(expectedIdentity[:], preparationIdentity) || !hmac.Equal(expectedNamespace[:], namespaceBinding) {
 		return zero, identity.UnavailableError{}
 	}
 	if key, ok := c.keys.retained[uint32(keyVersion)]; !ok || key == ([32]byte{}) {

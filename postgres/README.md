@@ -181,8 +181,21 @@ Terminal matching replay returns the original receipt without another native
 generation/restore invocation. Started-but-unretained output stays in progress
 after lease expiry. Lost start acknowledgement runs no generation; lost retained
 output acknowledgement returns unknown and retry can recover the original bytes.
-One-use/protected-counter preparation profiles are explicitly rejected until
-their preparation admission/rebind contracts are supported, not skipped.
+One-use preparation profiles remain rejected, not skipped. Protected counters
+are an explicit opt-in: install `CounterPreparationMigrationSource` after
+admission preparation history, with a later version, and register the exact
+native `CommandCounterAdmissionContributor`. Profiles 3/4 freeze the complete
+code-free declaration in the existing journal before charging. The charge and
+generation-start marker commit before generation; externally admitted profile 4
+charges before external admission and commits its start marker afterwards.
+Denied charges retain their audit and original terminal receipt without output.
+Final restoration must preserve the exact counter scope, and final Apply/Commit
+still recheck current counter authority; an allowed reservation is not permission
+to mutate. Lease takeover transfers the original charge without recounting or
+renewing its observation. Lost start acknowledgements cannot generate, and lost
+retention acknowledgements resume the original output. A changed declaration
+conflicts, including after fingerprint-key rotation. Old readers reject the new
+profiles rather than bypass their charge; legacy profile 1/2 history is unchanged.
 These are trusted compile-time adapter phases, not consumer workflow callbacks
 or a public authentication endpoint. Public OTP Send and its real native
 composition remain unfinished. Ordinary command and migration bytes are unchanged.

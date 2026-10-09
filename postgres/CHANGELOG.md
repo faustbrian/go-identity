@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Support explicit protected counters in native prepared feature execution.
+  Commit the original charge before generation, conserve it across restart and
+  retained-key rotation, and keep final current-authority checks. Denied attempts
+  retain their audit/result without generating output. Install the additive
+  CounterPreparationMigrationSource after admission preparation history before
+  enabling this profile; old readers fail closed and existing history is unchanged.
+
 - Bind authenticated password-change hash, source bearer and complete upstream
   proof to separate retained-key command intent. Preserve original nanoseconds
   and full versions without journaling raw custody. Existing hash-only intent

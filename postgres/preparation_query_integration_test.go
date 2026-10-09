@@ -20,10 +20,12 @@ func (*preparedFeaturePhase) PrepareRequestKey(context.Context, RequestKeyPrepar
 	return nil, identity.UnavailableError{}
 }
 
-func testPreparedFeatureQuery(t *testing.T, ctx context.Context, c *Coordinator, phase *preparedFeaturePhase, command identity.Command, plan CommandPlan) {
+func testPreparedFeatureQuery(t *testing.T, ctx context.Context, c *Coordinator, phase *preparedFeaturePhase, command identity.Command, plan CommandPlan, installed ...bool) {
 	t.Helper()
-	if _, err := c.pool.Raw().Exec(ctx, requestKeySQL+requestKeyPreparationSQL); err != nil {
-		t.Fatal(err)
+	if len(installed) == 0 || !installed[0] {
+		if _, err := c.pool.Raw().Exec(ctx, requestKeySQL+requestKeyPreparationSQL); err != nil {
+			t.Fatal(err)
+		}
 	}
 	policy := CommandQueryPolicy{Clock: clock.System{}, PolicyVersion: 9, Authorization: queryDecision(func(context.Context, authorization.DecisionContext) (authorization.Decision, error) {
 		return authorization.Decision{Outcome: authorization.Allow, Revision: 9}, nil
@@ -53,7 +55,7 @@ func testPreparedFeatureQuery(t *testing.T, ctx context.Context, c *Coordinator,
 	id, _ := base64.RawURLEncoding.DecodeString(string(q.CommandID))
 	namespace := requestNamespaceIdentity("original", [32]byte{2})
 	identityDigest := requestPreparationIdentity(*plan.Feature)
-	if _, err := c.pool.Raw().Exec(ctx, `INSERT INTO identity.request_key_namespaces VALUES('original',$1)`, namespace[:]); err != nil {
+	if _, err := c.pool.Raw().Exec(ctx, `INSERT INTO identity.request_key_namespaces VALUES('original',$1) ON CONFLICT DO NOTHING`, namespace[:]); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := c.pool.Raw().Exec(ctx, `INSERT INTO identity.request_key_mappings(namespace,tenant_id,actor_id,actor_kind,method,route_id,key_digest,command_id,fingerprint,fingerprint_key_version,safe_fields,request_preparation_identity,request_preparation_ciphertext) VALUES('original',$1,$2,$3,'POST',$4,$5,$6,$7,1,$8,$9,$10)`, string(scope.TenantID), string(scope.ActorID), string(scope.ActorKind), scope.RouteID, bytes.Repeat([]byte{2}, 32), id, digest[:], safe, identityDigest[:], input); err != nil {
