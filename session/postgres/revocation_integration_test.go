@@ -652,6 +652,7 @@ func TestNativeFamilyRevocationIntegration(t *testing.T) {
 			CSRFMigrationSource{Schema: "session_store", Version: 27},
 			OTPMigrationSource{Schema: "session_store", Version: 28},
 			OTPIssueMigrationSource{Schema: "session_store", Version: 29},
+			CredentialContinuationMigrationSource{Schema: "session_store", Version: 30},
 		} {
 			extra, e := source.Load(ctx)
 			if e != nil {
@@ -659,6 +660,15 @@ func TestNativeFamilyRevocationIntegration(t *testing.T) {
 			}
 			complete = append(complete, extra...)
 		}
+		complete, e = (identitypostgres.CredentialReplacementMigrationSource{Base: fixtureSource(complete), Version: 31}).Load(ctx)
+		if e != nil {
+			t.Fatal(e)
+		}
+		passwordHistory, e := (PasswordChangeMigrationSource{Schema: "session_store", Version: 32}).Load(ctx)
+		if e != nil {
+			t.Fatal(e)
+		}
+		complete = append(complete, passwordHistory...)
 		migrate(complete)
 		migrate(complete)
 		var afterIssuances string
@@ -675,6 +685,7 @@ func TestNativeFamilyRevocationIntegration(t *testing.T) {
 		t.Run("native session authentication", func(t *testing.T) { testNativeSessionAuthentication(t, ctx, pool) })
 		t.Run("native OTP session authentication", func(t *testing.T) { testNativeOTPSessionAuthentication(t, ctx, pool) })
 		t.Run("native OTP session effect", func(t *testing.T) { testNativeOTPSessionEffect(t, ctx, pool) })
+		t.Run("native password session effect", func(t *testing.T) { testNativePasswordSessionEffect(t, ctx, pool) })
 	})
 }
 

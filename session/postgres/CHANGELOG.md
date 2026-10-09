@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Add native bounded password-change session effects in the original consuming
+  transaction, with exact current-owner admission, selected continuation or
+  revocation and retained command-linked recovery after payload cleanup. Install
+  the additive password-session migration after continuation and kernel
+  replacement histories. Mixed unsupported preservation profiles deny rather
+  than drop authority checks. Public password-service integration remains pending.
+
 - Add explicit bounded password-change session-disposition mapping. Freeze the
   complete original session and preserve/revoke-other/revoke-all choice into
   the original command without renewing authentication or unrelated authority.

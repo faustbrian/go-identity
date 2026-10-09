@@ -20,11 +20,10 @@ Fresh credential-proof issuance rejects continuation, including direct scalar
 commands: an old unused login proof cannot select a newer effective credential
 version by supplying continuation metadata.
 
-This storage support does not yet compose selective continuation into the native
-password-change transaction. That consuming workflow must freeze its session
-disposition, compare every current owner and stage all selected/revoked session
-effects in the existing same-Work mutation. Do not implement this with a separate
-application transaction or refresh a stale session from current authority.
+The native session effect below stages selective continuation in the original
+password transaction. Its consuming public password service is not yet wired.
+Do not implement this with a separate application transaction or refresh a stale
+session from current authority.
 
 `PasswordChangeSessionFields(original, disposition, maximum)` freezes that
 selection alongside `CredentialReplacementFields` before command reservation.
@@ -35,7 +34,45 @@ This initial profile admits only single-factor password sources without selected
 organization, factor or passkey dimensions. Mapping owns its returned fields and
 preserves historical authentication, effective credential linkage, remember and
 CSRF custody. It performs no SQL and cannot authorize or complete session effects.
-The consuming native effect and password-service integration are still pending.
+The consuming password-service integration is still pending.
+
+## Native password-change session effect
+
+Install `PasswordChangeMigrationSource` at a permanently allocated version after
+the credential-continuation and kernel credential-replacement histories. It adds
+command-linked retained session evidence without changing prior migration bytes
+or live records. Retain this evidence with command tombstones; session payload
+cleanup must not delete it. The existing owner-order index supports the bounded
+selection; no new coordinator, journal, background worker or index is introduced.
+
+Construct `NewPasswordChangeEffect(sessionConfig, passwordAdmissionProfile)` at
+trusted composition. The exact registered password contributor calls
+`effect.Apply(ctx, originalWork, itself, originalCommand)` during its native
+feature invocation, before the kernel advances credential epochs. Its constructor
+accepts no pool, coordinator or application-written store. The password owner must
+verify bearer possession, fresh credential-specific reauthentication, HIBP/reuse
+and one-use proof consumption in this same transaction. Propagate every error so
+the coordinator aborts; the returned receipt is provisional, not commit evidence.
+
+The effect compares current directory, user, identifier, credential and policy
+authority, locks the source/family, and selects all active-state rows for the exact
+tenant/user in bytewise keyset pages of 16. The original whole-set cap includes
+expired and stale rows; exceeding it rolls back all staged changes. Preservation
+continues supported current password rows without changing their session version,
+historical authentication, lifetime, activity, remember, lookup or CSRF state.
+Stale/expired/family-denied supported rows are revoked, never promoted. Already
+revoked rows remain unchanged. Preservation of a different credential or optional
+organization/factor/passkey profile denies until those real owners are composed;
+revoke-other/all may terminally revoke them without granting authority.
+
+The password owner's `RecoverParticipant` calls
+`effect.Recover(ctx, originalRecoveryWork, itself)` and reconciles that result with
+its other retained effects. Only the original coordinator can conclude the whole
+command outcome. Recovery uses original binding, selection, predecessor, source
+and ordered-result commitments rather than live payloads or present authority.
+Absent effects support negative recovery only through that coordinator; corrupt
+evidence or missing infrastructure remains unknown. It neither authenticates
+current access nor reveals a replacement session or bearer.
 
 ## Original-session admission mapping
 
