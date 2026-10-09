@@ -138,22 +138,11 @@ func PipelineValue[T any](r *http.Request) (T, bool) {
 // a partial response or overwriting committed bytes. An intentional ErrAbortHandler
 // is preserved in either state; no raw panic value escapes to server diagnostics.
 func NewOperationPipeline[T any](c OperationPipelineConfig[T]) (handler http.Handler, err error) {
-	if c.MaximumDuration < time.Millisecond || c.MaximumDuration > 30*time.Second || len(c.Middleware) > 64 || c.Decode == nil || c.Authenticate == nil || c.Admit == nil || c.Handle == nil || c.Reject == nil {
+	if c.MaximumDuration < time.Millisecond || c.MaximumDuration > 30*time.Second || !validMiddleware(c.Middleware) || c.Decode == nil || c.Authenticate == nil || c.Admit == nil || c.Handle == nil || c.Reject == nil {
 		return nil, ErrInvalidInput
 	}
 	middleware := slices.Clone(c.Middleware)
 	c.Middleware = middleware
-	names := make(map[string]bool)
-	orders := make(map[[2]uint32]bool)
-	for _, d := range middleware {
-		m := d.Middleware
-		key := string(d.Owner) + "\x00" + m.Name
-		order := [2]uint32{uint32(m.Phase), m.Order}
-		if !moduleID(d.Owner) || !identifier(m.Name, 128) || m.Phase < MiddlewareBeforeAuth || m.Phase > MiddlewareAfterHandler || m.Order < 1 || m.Order > 10000 || m.Handler == nil || names[key] || orders[order] {
-			return nil, ErrInvalidInput
-		}
-		names[key], orders[order] = true, true
-	}
 	slices.SortFunc(middleware, func(a, b MiddlewareDescriptor) int {
 		if a.Middleware.Phase != b.Middleware.Phase {
 			return int(a.Middleware.Phase) - int(b.Middleware.Phase)

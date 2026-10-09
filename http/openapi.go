@@ -111,16 +111,22 @@ func (d OpenAPIDocument) Schemas() []WireComponent {
 // concurrent use. This does not replace the complete NewRouter/security-policy
 // builder: existing real feature handlers retain enforcement and bounded IO.
 func NewDocumentedHandler(ctx context.Context, config DocumentConfig, services FeatureServices) (http.Handler, OpenAPIDocument, error) {
+	ops, err := NewOperationDescriptors(services)
+	if err != nil {
+		return nil, OpenAPIDocument{}, err
+	}
+	return documentedOperations(ctx, config, ops)
+}
+
+// The caller supplies an already validated, owned operation snapshot. Both
+// constructors use this path so export cannot reconstruct a different graph.
+func documentedOperations(ctx context.Context, config DocumentConfig, ops []OperationDescriptor) (http.Handler, OpenAPIDocument, error) {
 	if ctx == nil || !ascii(config.Title, 128, true) || !ascii(config.Version, 64, true) {
 		return nil, OpenAPIDocument{}, ErrInvalidInput
 	}
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 	if err := ctx.Err(); err != nil {
-		return nil, OpenAPIDocument{}, err
-	}
-	ops, err := NewOperationDescriptors(services)
-	if err != nil {
 		return nil, OpenAPIDocument{}, err
 	}
 	paths, schemas, security := map[string]any{}, map[string]any{}, map[string]any{}

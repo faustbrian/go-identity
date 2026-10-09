@@ -210,6 +210,19 @@ func (n *NetworkResolver) addHost(raw string, binding networkBinding) bool {
 // RemoteAddr/Host/TLS/header custody belongs to server/trusted composition:
 // arbitrary in-process requests or middleware mutations cannot prove provenance.
 func (n *NetworkResolver) Resolve(r *http.Request) (NetworkFacts, error) {
+	facts, err := n.resolve(r)
+	if err != nil {
+		return NetworkFacts{}, err
+	}
+	if facts.binding.realm == 0 {
+		return NetworkFacts{}, DecodeError{}
+	}
+	return facts, nil
+}
+
+// Preserve unknown-host classification for the router without changing
+// Resolve's public zero-facts/DecodeError contract or repeating proxy parsing.
+func (n *NetworkResolver) resolve(r *http.Request) (NetworkFacts, error) {
 	var zero NetworkFacts
 	if n == nil || n.decoder == nil || r == nil {
 		return zero, ErrInvalidInput
@@ -257,11 +270,7 @@ func (n *NetworkResolver) Resolve(r *http.Request) (NetworkFacts, error) {
 			return zero, DecodeError{}
 		}
 	}
-	var admitted bool
-	facts.binding, admitted = n.hosts[facts.host]
-	if !admitted {
-		return zero, DecodeError{}
-	}
+	facts.binding = n.hosts[facts.host]
 	if err := r.Context().Err(); err != nil {
 		return zero, err
 	}

@@ -6,10 +6,48 @@ health/readiness probe handlers, typed opt-in operation selection and bounded
 ordinary request parsing, credential binding and trusted-network/tenant admission.
 Dependencies are identity kernel, authentication and stable identifier contracts,
 not feature implementations or the reference server.
-Routes, protocol parsers, authentication/authorization, cookies/CSRF/CORS,
-rate controls, hooks and OpenAPI composition
-remain required subsequent work. Do not deploy an identity endpoint from this
-checkpoint without those transport controls.
+Selected secure routing, CORS, real owner phase hooks and OpenAPI composition
+are available. Complete domain/protocol handlers and their authentication,
+authorization, cookie/CSRF and rate profiles remain required feature work.
+This checkpoint is not a release-qualified complete identity endpoint platform.
+
+## Selected secure router
+
+Use `NewOperationDescriptors(FeatureServices{Features: selected})`, then
+`NewRouter(TransportPolicy{Network: networkConfig, CORS: routePolicies,
+HandlerTimeout: timeout, Document: DocumentConfig{Title: title, Version: version}},
+operations, middleware)`. The returned handler and OpenAPI document share one
+validated immutable operation snapshot. Empty selection exposes nothing;
+metadata and probes are never implicit. The network policy includes all limits,
+exact tenant/public host bindings, proxy prefixes and forwarding-hop bounds.
+HTTPS is required; unknown hosts return 421. There is no route-prefix rewrite:
+canonical, protocol and probe paths remain exact and root-mounted.
+
+The router composes envelope/network admission, raw-body bounds, route-specific
+CORS, exact dispatch and real feature-owned stages. It does not authenticate,
+debit a rate bucket, serialize cookies or consume CSRF proofs a second time.
+Use the same network configuration and shared domain/rate owners in selected
+feature factories. Those factories must enforce their advertised controls;
+metadata cannot certify an arbitrary supplied handler. CORS policy for an
+unselected method/path is rejected. Preflight does no owner or hook work.
+
+Nonempty middleware requires each selected handler to implement
+`OperationMiddlewareBinder`; opaque handlers are rejected rather than receiving
+invented authentication phases. All policy, descriptor and wire validation
+precedes wrapper factories. Individual frozen-owner binding conflicts can still
+fail construction; no partial router/document is returned. Probes currently
+use opaque handlers, so compose them without global phase hooks.
+
+Responses retain `Cache-Control: no-store`, `X-Content-Type-Options: nosniff`
+and `Referrer-Policy: no-referrer`, including streaming and hook short circuits.
+An unknown-length body overflow denies before a later response can claim success;
+feature decoders must still validate body results before authentication/mutation.
+The 1ms..30s whole-handler context never extends an inbound deadline. Use
+`NewHTTPServer` for raw IO/write deadlines and connection/body ownership;
+cooperative cancellation cannot terminate arbitrary caller code or prove rollback.
+Precommit panics produce redacted 503; postcommit failures abort the response.
+This selected-router checkpoint does not complete all feature handlers, protected
+metadata, protocol/provider/browser journeys or release qualification.
 
 ## Explicit public metadata
 

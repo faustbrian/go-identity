@@ -79,3 +79,23 @@ func ExampleNewOperationDescriptors() {
 	// identity.health /healthz
 	// identity.readiness /readyz
 }
+
+func ExampleNewRouter() {
+	operations, err := identityhttp.NewOperationDescriptors(identityhttp.FeatureServices{})
+	if err != nil {
+		panic(err)
+	}
+	handler, document, err := identityhttp.NewRouter(identityhttp.TransportPolicy{
+		Network: identityhttp.NetworkConfig{PublicHosts: []string{"login.example"}, MaximumForwardedHops: 8,
+			Limits: identityhttp.Limits{MaximumHeaderBytes: 32768, MaximumURLBytes: 4096, MaximumBodyBytes: 65536,
+				MaximumDecodedBytes: 65536, MaximumFields: 128, MaximumDepth: 16}},
+		HandlerTimeout: time.Second, Document: identityhttp.DocumentConfig{Title: "Identity", Version: "1"},
+	}, operations, nil)
+	if err != nil {
+		panic(err)
+	}
+	// Empty selection exposes no routes, probes or metadata endpoint. Real
+	// applications explicitly select owned features before constructing a server.
+	fmt.Println(handler != nil, document.Version(), len(document.Operations()))
+	// Output: true 3.1.1 0
+}

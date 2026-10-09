@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add `NewRouter` with one immutable selected handler/OpenAPI snapshot, exact
+  HTTPS host/proxy admission, shared input bounds and deadlines, route-bound
+  opt-in CORS, real feature phase binding and response-header custody. Preserve
+  feature-owned authentication, rate, cookies and transactional CSRF without
+  duplicating admission. Unknown hosts return 421; disabled routes remain absent.
+
 - Allow selected composition to append middleware to frozen operation pipelines
   through `WithOperationMiddleware`, retaining the real owner phases, existing
   hooks and independent handlers. Reject opaque handlers and combined wrapper
