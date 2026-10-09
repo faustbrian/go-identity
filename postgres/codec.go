@@ -159,6 +159,11 @@ func prepareClaim(c identity.Command, key [32]byte) (claimRequest, error) {
 			}
 			payload["password_hash"] = cborBytes(digest)
 		}
+		if _, ok := c.PasswordChangeFeature(); ok {
+			if err := encodePasswordChangeCustody(c, key, payload); err != nil {
+				return claimRequest{}, err
+			}
+		}
 	default:
 		return claimRequest{}, codecError()
 	}
@@ -220,8 +225,13 @@ func isFeature(c identity.Command) bool    { _, ok := commandFeature(c); return 
 
 // Explicit native selection is necessary: the legacy Feature accessor denies
 // password custody so older coordinators cannot silently omit its fingerprint.
+// The authenticated variant additionally binds every original hash/bearer/proof
+// field; this selection does not replace native policy validation/consumption.
 func commandFeature(c identity.Command) (identity.FeatureCommandSpec, bool) {
 	if s, ok := c.Feature(); ok {
+		return s, true
+	}
+	if s, ok := c.PasswordChangeFeature(); ok {
 		return s, true
 	}
 	s, ok := c.PasswordHashFeature()

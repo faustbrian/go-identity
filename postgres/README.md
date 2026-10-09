@@ -1,5 +1,23 @@
 # Identity PostgreSQL
 
+## Authenticated password-change intent
+
+The coordinator explicitly selects `identity.NewFeaturePasswordChangeCommand`
+and fingerprints its original encoded hash, source bearer and complete upstream
+reauthentication proof under separate retained-key domains. Seconds and
+nanoseconds remain separate: timestamp rounding cannot make two proofs the same
+intent. Original versions retain all 64 bits. Equivalent time zones encode the
+same instant. Neither journal intent nor safe collision metadata retains raw
+verifier, bearer or proof values, and key rotation rebinds the original custody
+under the claim's retained key. Existing hash-only command encodings are unchanged.
+
+This is structural mapping, not authentication or proof consumption. Execution
+still requires the exact registered native replacement participant, complete
+policy checks and the existing protected effect plan. The existing hash-only
+password repository rejects the authenticated variant. Native signed-proof and
+current-source validation, atomic consumption and the public password-change
+workflow remain under development; adding custody alone does not enable them.
+
 ## Exact consuming OTP recovery
 
 `RecoverOTPFeatureCommand` is the native consuming counterpart to metered-check

@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Bind authenticated password-change hash, source bearer and complete upstream
+  proof to separate retained-key command intent. Preserve original nanoseconds
+  and full versions without journaling raw custody. Existing hash-only intent
+  stays unchanged; native policy validation and atomic proof consumption remain
+  required before an authenticated password-change workflow can execute.
+
 - Bind opaque password-hash change intent with the retained command key, without
   retaining verifier bytes in journal metadata. Require the exact native
   replacement participant; changed material cannot replay an original result.
