@@ -142,6 +142,7 @@ func NewOperationPipeline[T any](c OperationPipelineConfig[T]) (handler http.Han
 		return nil, ErrInvalidInput
 	}
 	middleware := slices.Clone(c.Middleware)
+	c.Middleware = middleware
 	names := make(map[string]bool)
 	orders := make(map[[2]uint32]bool)
 	for _, d := range middleware {
@@ -229,7 +230,7 @@ func NewOperationPipeline[T any](c OperationPipelineConfig[T]) (handler http.Han
 			}
 		}
 	}
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	run := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r == nil || r.URL == nil {
 			c.Reject(w, r, ErrInvalidInput)
 			return
@@ -284,7 +285,8 @@ func NewOperationPipeline[T any](c OperationPipelineConfig[T]) (handler http.Han
 		frame := &pipelineFrame[T]{owner: owner, request: owned, value: value}
 		defer frame.ready.Store(false)
 		phases[0].ServeHTTP(writer, pipelineRequest(frame, 0))
-	}), nil
+	})
+	return &operationPipeline[T]{handler: run, config: c}, nil
 }
 
 type pipelineObservation struct{ header http.Header }

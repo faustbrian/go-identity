@@ -530,6 +530,17 @@ Precommit panics use the feature's safe error mapper; once output or streaming
 has begun, panics abort the HTTP response rather than successfully completing a
 partial result. No raw panic diagnostic is exposed. Neither path proves rollback.
 
+`WithOperationMiddleware(handler, hooks)` appends selected router hooks through
+`OperationMiddlewareBinder` at those same real phases. Pipelines retain frozen
+callbacks/policy and copy the combined wrapper list; existing handlers remain
+unchanged. Combined duplicate owner/name or phase/order fails before factories
+run. Each new binding constructs its own wrappers, including existing ones, so
+factory callbacks must remain side-effect-free and returned handlers must be
+concurrency-safe. An empty hook list returns the original nonnil handler.
+Opaque handlers reject nonempty binding; wrapping them outside cannot fabricate
+an after-auth phase. Trusted integrations must preserve their response guards
+around the bound pipeline. Binding is not full `NewRouter` qualification.
+
 The pipeline does not itself resolve hosts, parse credentials, authenticate,
 authorize or register routes. Existing direct feature handlers remain unchanged;
 their adoption and the complete `NewRouter` policy binding are pending. Do not

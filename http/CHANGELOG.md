@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Allow selected composition to append middleware to frozen operation pipelines
+  through `WithOperationMiddleware`, retaining the real owner phases, existing
+  hooks and independent handlers. Reject opaque handlers and combined wrapper
+  conflicts instead of inventing authentication boundaries.
+
 - Add a typed feature-owned operation pipeline with real post-authentication
   and pre-operation middleware boundaries. Decode, authentication, admission
   and protected invocation run once; middleware receives detached request
