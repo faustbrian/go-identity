@@ -44,6 +44,17 @@ One outer timeout bounds each composed store operation. Construction does not
 inspect/debit native counters or promise health; every operation checks current
 primary eligibility, original expiry, exact confirmed marker and continuity.
 
+For a momentary readiness observation, pass that same opaque connection to
+`native.CheckCurrent(ctx, connection)`. One outer native timeout bounds original
+graph/namespace authentication, current primary eligibility and read-only
+confirmed-marker/server-time/transport-continuity checking. Current primary
+eligibility is checked again after native IO. Nil/canceled contexts, zero or
+foreign journals, closure, lost markers and expired original custody deny.
+The operation prepares no counter command and performs no intent, replay or
+counter access, marker repair, TTL renewal or evidence issuance. Do not cache
+success as traffic authority; native mutation independently checks its effect
+boundary. A positive observation is not full reference-server readiness.
+
 Acknowledged intent precedes any effect. Original receipt callbacks conserve
 terminal outcomes, and terminal replay never redispatches. Pending/unknown or
 changed original intent denies without retries; an acknowledged commit survives

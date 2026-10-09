@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Expose read-only current health for the original activated primary journal.
+  Checks require exact native confirmed custody, server time and transport
+  continuity, with fresh primary eligibility around native IO. No counter
+  command, intent, marker repair or expiry renewal occurs; the observation is
+  momentary and cannot replace per-effect admission. Lost, foreign, expired or
+  closed custody denies without granting recovery or retry authority.
+
 - Permanently stop native admission and cancel owned work even when shutdown
   starts with an already-canceled or expired context. Previously issued counter
   handles cannot continue mutation after that shutdown. The original context

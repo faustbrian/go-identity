@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 
 	"github.com/faustbrian/go-identity/risk"
+	"github.com/faustbrian/go-identity/risk/internal/velocity"
 )
 
 //go:embed current_check.lua
@@ -40,7 +41,13 @@ func (r ownedRecovery) checkCurrent(ctx context.Context, command risk.CounterCom
 	if _, err := r.layout.prepare(command, lb.Epoch); err != nil {
 		return err
 	}
-	b, err := verifier.Eligibility(bounded, lease, closure, publication, confirmation, native, healthy)
+	return r.checkCurrentMarker(bounded, verifier, lb, velocity.CurrentChain{Lease: lease, Closure: closure, Publication: publication, Confirmation: confirmation, Native: native, Eligibility: healthy})
+}
+
+// Callers authenticate original journal/command custody and bound context
+// before entering this shared, strictly read-only marker crossing.
+func (r ownedRecovery) checkCurrentMarker(ctx context.Context, verifier risk.VelocityNativeVerifier, lb risk.VelocityLeaseBinding, chain velocity.CurrentChain) error {
+	b, err := verifier.Eligibility(ctx, chain.Lease, chain.Closure, chain.Publication, chain.Confirmation, chain.Native, chain.Eligibility)
 	if err != nil {
 		return err
 	}
@@ -50,10 +57,10 @@ func (r ownedRecovery) checkCurrent(ctx context.Context, command risk.CounterCom
 	}
 	expected := coveredPublicationMarker(original, b, "confirmed")
 	key := "irv2:{" + r.layout.digest("identity-risk-valkey-slot-v1", lb.Tenant) + "}:health"
-	reply, err := r.transport.executeScript(bounded, currentCheckScript, []string{key}, []string{expected})
+	reply, err := r.transport.executeScript(ctx, currentCheckScript, []string{key}, []string{expected})
 	if err := recoveryAcknowledgement(reply, err, "current", hex.EncodeToString(b.ID[:])); err != nil {
 		return err
 	}
-	_, err = verifier.Eligibility(bounded, lease, closure, publication, confirmation, native, healthy)
+	_, err = verifier.Eligibility(ctx, chain.Lease, chain.Closure, chain.Publication, chain.Confirmation, chain.Native, chain.Eligibility)
 	return err
 }

@@ -202,6 +202,15 @@ func TestOwnedCurrentAdmissionLiveValkey(t *testing.T) {
 		return got
 	}
 	before := read(plan.keys[0])
+	if err := public.CheckCurrent(ctx, connection); err != nil {
+		t.Fatal("public read-only current health denied", err)
+	}
+	if err := public.CheckCurrent(ctx, connection); err != nil {
+		t.Fatal("public read-only current health repeat denied", err)
+	}
+	if !reflect.DeepEqual(before, read(plan.keys[0])) {
+		t.Fatal("public health check changed marker or expiry")
+	}
 	if err := owner.checkCurrent(ctx, command, lease, closure, publication, confirmation, ack, health); err != nil {
 		t.Fatal("live read-only current check denied", err)
 	}
@@ -258,6 +267,9 @@ func TestOwnedCurrentAdmissionLiveValkey(t *testing.T) {
 			}
 		}
 		blocked, err := coordinator.Mutate(ctx, command)
+		if err := public.CheckCurrent(ctx, connection); err == nil {
+			t.Fatal("public health admitted lost authority or missing marker")
+		}
 		if err := owner.checkCurrent(ctx, command, lease, closure, publication, confirmation, ack, health); err == nil {
 			t.Fatal("live current check admitted lost authority or missing marker")
 		}

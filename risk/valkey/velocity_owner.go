@@ -252,6 +252,47 @@ func (r VelocityRecovery) OwnedCounterStore(ctx context.Context, journal velocit
 	return store, nil
 }
 
+// CheckCurrent checks this owner's original activated primary journal and exact
+// confirmed native marker/server-time under one outer Timeout. Pass the opaque
+// connection returned by the concrete primary owner's OwnedJournal; no caller
+// callback, replacement chain or counter command is accepted. Current primary
+// eligibility brackets native IO and transport continuity remains mandatory.
+// No intent, replay, counter, marker, TTL or evidence is created or renewed.
+// Success is a momentary readiness observation, never cached traffic authority;
+// later mutations independently recheck their effect boundary. Zero, foreign,
+// closed, lost or expired custody fails closed with redacted errors. Nil context
+// is invalid; cancellation/deadlines are preserved. Concurrent calls are safe.
+func (r VelocityRecovery) CheckCurrent(ctx context.Context, journal velocity.Journal) error {
+	if r.state == nil || r.state.transport == nil || ctx == nil {
+		return risk.ErrInvalidVelocityRecovery
+	}
+	s := r.state
+	bounded, cancel := context.WithTimeout(ctx, s.transport.config.timeout)
+	defer cancel()
+	if err := bounded.Err(); err != nil {
+		return err
+	}
+	s.transport.mu.Lock()
+	closed := s.transport.closed
+	s.transport.mu.Unlock()
+	if closed {
+		return risk.ErrInvalidVelocityRecovery
+	}
+	chain, err := velocity.Current(bounded, journal, s.issuer)
+	if err != nil {
+		return err
+	}
+	verifier, err := s.issuer.Verifier()
+	if err != nil {
+		return err
+	}
+	lb, err := s.reader.Lease(chain.Lease)
+	if err != nil || lb.Namespace != s.layout.replay.Namespace() {
+		return risk.ErrInvalidVelocityRecovery
+	}
+	return s.checkCurrentMarker(bounded, verifier, lb, chain)
+}
+
 // Close permanently rejects new native work, cancels active IO, closes idle
 // connections and joins cleanup within the caller/adapter timeout. Repetition
 // is safe. A deadline error leaves closing permanent; another call may wait for
