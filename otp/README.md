@@ -1,5 +1,31 @@
 # otp
 
+## Consuming sign-in contract
+
+`SigninService` is optional and independent of Send-only `Service` and
+non-consuming `CheckService`. `SigninRequest` selects the original Send command,
+same explicit pre-auth flow and cookie possession, and submitted opaque code.
+It accepts no new remember choice, recipient, attempt ID or challenge version.
+The native adapter must restore these from original custody and atomically
+commit OTP/pre-auth consumption, the exact session, audit/outbox and receipt.
+
+Every `Signin` invocation is a new submission. Preserve returned `Recovery`
+after preparation and call `RecoverSignin` after ambiguity, not `Signin` again.
+Recovery carries no code; its immutable projection is correlation, not
+authentication. Historical disclosure requires original possession and current
+policy, without requiring an already consumed/expired pre-auth flow to become
+executable again. It must never charge, compare, regenerate or redeliver.
+
+`SigninResult.Issuance` uses the session owner's outcome and reveal-once bearer.
+Only fresh committed success can deliver bearer/CSRF tokens. The cookie policy
+has an empty value; trusted transport explicitly reveals the original bearer.
+The historical session record does not prove current validity. Request/result
+diagnostics redact all fields and implicit JSON/text export is rejected.
+
+This is the core contract, not a working login implementation. The native
+PostgreSQL consuming service and MFA continuation profile remain unfinished;
+an adapter must deny a single-factor login when additional factors are required.
+
 ## Optional metered checks and recovery
 
 `CheckService` is independent of the existing Send-only `Service`. Its native

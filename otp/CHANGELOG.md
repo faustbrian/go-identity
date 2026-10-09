@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add optional pre-auth-only `SigninService` and immutable code-free consuming
+  recovery contracts. Preserve Send-only implementers and reuse session-owned
+  reveal-once issuance/CSRF custody. Native consuming orchestration and MFA
+  continuation remain under development; this contract alone cannot log in.
+
 - Add independent non-consuming `CheckService` and code-free original-attempt
   recovery contracts without expanding the existing Send-only interface.
   Checks accept no caller-selected attempt or idempotency identity and grant
