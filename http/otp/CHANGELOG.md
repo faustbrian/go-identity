@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add explicitly selected email-signin Send transport and optional combined
+  Send/signin/recovery feature. Original flow/device custody and header-only
+  idempotency remain mandatory; safe acceptance never reveals recipient or
+  delivery state. Other purpose/channel/MFA profiles remain in development.
+
 - Add explicit recovery-only and combined signin/recovery feature selection
   with concrete original-correlation OpenAPI schemas and one shared flow scheme.
   Disabled recovery contributes no route or metadata; historical results never

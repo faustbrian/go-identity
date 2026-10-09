@@ -1,5 +1,35 @@
 # OTP HTTP transport
 
+## Email-signin Send
+
+`NewEmailSigninSendHandler(EmailSigninSendConfig)` selects only
+`POST /v1/otp/send` with closed JSON `flowID` and `email`, exactly one original
+flow cookie, one valid existing device cookie, exact initiating HTTPS Origin
+and one `Idempotency-Key` header. The trusted host mapping, actor, policy,
+target, IP, purpose and channel cannot be overridden by JSON. Use the same
+device policy as selected initiation. Missing/invalid custody denies; Send
+never creates replacement flow/device cookies. Email owns normalization; the
+native Send owner retains primary authentication, counted risk, durable
+issuance/suppression and replay, not consumer callbacks.
+
+Share the retained transport rate owner across requests. A 202 response with
+`accepted:true` means native acceptance committed, not that an account exists,
+a challenge was created or a message was delivered. Ambiguous outcomes remain
+503 with safe original command status, never automatic replacement/retry.
+Explicit native replay resolution retains the original key and exact input.
+No destination, code, device, cookie or session authority appears in responses.
+Typed middleware observes detached `SendState.Attempt` metadata and cannot
+forge cookie/CSRF output, including trailers.
+
+`NewEmailSigninSendFeature` selects only this handler and concrete wire schema.
+`NewEmailSigninFeature(send, signin, recovery)` selects all three operations
+under one OTP owner without duplicate flow components. Missing dependencies
+fail without partial selection or owner IO. Existing signin/recovery factories
+remain unchanged. This is not full multi-purpose Send or a browser-login proof;
+SMS, session/MFA purpose profiles and complete runtime/release gates remain.
+
+## Consuming signin
+
 Explicitly opt-in integration: importing base `identity/http` does not require
 OTP. `NewSigninHandler(SigninConfig)` constructs only `POST /v1/otp/signin`.
 The configuration borrows the selected native OTP signin/source owner and the
@@ -84,7 +114,8 @@ Omitting recovery exposes neither its route nor metadata. The wire advertises
 historical outcomes without cookie/CSRF response headers; runtime scope checks
 remain mandatory even when JSON shape validates.
 
-This remains a development checkpoint, not a complete server. Send HTTP transport,
+This remains a development checkpoint, not a complete server. Remaining Send
+purpose/channel profiles,
 composed native browser login, exact coverage/mutation,
 clean-consumer and release qualification remain pending. The single-factor
 profile must deny when further factors are required; complete MFA continuation
