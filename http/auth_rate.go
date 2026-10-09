@@ -19,7 +19,7 @@ import (
 	ratelimit "github.com/faustbrian/go-rate-limit/v2"
 )
 
-// AuthRateConfig selects the fixed canonical rate.signin and rate.delivery
+// AuthRateConfig selects the fixed original-flow, rate.signin and rate.delivery
 // policies, not caller-defined capacities. Shared must be a borrowed strong
 // backend; Now must be a trusted prompt concurrency-safe clock. IdentifierKey
 // is a stable nonzero deployment HMAC key, independent of credential keys.
@@ -98,6 +98,40 @@ func (l *AuthRateLimiter) Configured() bool {
 	return l != nil && l.shared != nil && l.closed != nil && !l.closed.Load()
 }
 
+// AdmitOriginalFlow applies rate.auth's IP-only 20/10m token bucket before a
+// tenant-bound browser flow exists. No identifier or challenge exists at this
+// stage; this method is not suitable for operations that already have either.
+// Full normalized IP budgets span tenants and owners sharing the namespace,
+// independently of signin/delivery. Call before entropy or durable flow work.
+// The caller still owns HTTPS, origin and all other operation admission.
+// Outage, ambiguity, panic and cancellation fail closed without fallback;
+// an earlier caller deadline wins. Admission is not a reusable clearance.
+func (l *AuthRateLimiter) AdmitOriginalFlow(ctx context.Context, facts NetworkFacts) (out AuthRateResult, err error) {
+	defer func() {
+		if recover() != nil {
+			out, err = AuthRateResult{}, ErrRateUnavailable
+		}
+	}()
+	if !l.Configured() || ctx == nil || !facts.Valid() || facts.Realm() != RealmTenant {
+		return out, ErrInvalidInput
+	}
+	ctx, cancel := context.WithTimeout(ctx, l.config.MaximumDuration)
+	defer cancel()
+	if ctx.Err() != nil {
+		return out, ErrRateUnavailable
+	}
+	now := l.config.Now()
+	if now.IsZero() {
+		return out, ErrRateUnavailable
+	}
+	key, keyErr := rateKey(l.config.Namespace, "auth-ip", facts.ClientIP().String())
+	policy, policyErr := ratelimit.NewPolicy(ratelimit.PolicySpec{ID: "identity-http-auth-ip", Revision: "identity-http-auth-1", Algorithm: ratelimit.TokenBucket, Capacity: 20, Period: 10 * time.Minute, Consistency: ratelimit.ConsistencyStrong})
+	if keyErr != nil || policyErr != nil {
+		return out, ErrInvalidInput
+	}
+	return l.admitRequests(ctx, []ratelimit.Request{{Policy: policy, Key: key, Cost: 1, Now: now}})
+}
+
 // Admit checks all selected buckets under one bounded context and trusted clock
 // observation. Unknown operations, missing dimensions and malformed inputs deny
 // before any backend work. Known exhaustion evaluates remaining buckets to retain
@@ -147,8 +181,15 @@ func (l *AuthRateLimiter) Admit(ctx context.Context, facts NetworkFacts, r AuthR
 		}
 		requests[i] = ratelimit.Request{Policy: policy, Key: key, Cost: 1, Now: now}
 	}
+	return l.admitRequests(ctx, requests)
+}
+
+func (l *AuthRateLimiter) admitRequests(ctx context.Context, requests []ratelimit.Request) (out AuthRateResult, err error) {
 	var retry time.Duration
 	for _, request := range requests {
+		if ctx.Err() != nil || l.closed.Load() {
+			return out, ErrRateUnavailable
+		}
 		decision, err := l.shared.Admit(ctx, request)
 		if ctx.Err() != nil || l.closed.Load() {
 			return AuthRateResult{}, ErrRateUnavailable

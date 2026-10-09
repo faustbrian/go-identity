@@ -113,13 +113,22 @@ committed primitive security revision `72dfa13dd0a6`, not released `v2.0.0`,
 whose memory store can evict live counters. Published dependency resolution and
 full release qualification are not established by local archive-backed tests.
 
-### Sign-in and delivery policies
+### Original-flow, sign-in and delivery policies
 
 `NewAuthRateLimiter(AuthRateConfig{...})` selects canonical `rate.signin` and
 `rate.delivery` operations from the same catalog. Supply a strong borrowed
 backend, stable deployment namespace, independent nonzero 32-byte identifier
 HMAC key, trusted clock and a 1ms..2s maximum duration. No emergency store or
 degradation callback is used: outages and unknown outcomes fail closed.
+
+Before starting a new tenant-bound browser flow, call
+`AdmitOriginalFlow(ctx, facts)`: this applies the IP-only `rate.auth` bucket of
+20/10m, shared across tenant hosts and owner instances in the same namespace.
+There is no identifier or challenge yet. Do not use this method for an existing
+flow or any operation with those dimensions; their applicable buckets remain
+required. HTTPS/origin admission belongs to the handler, and rate admission
+must precede flow entropy or durable writes. Original-flow, signin and delivery
+budgets are independent. This method does not register or advertise a route.
 
 Call `Admit(ctx, facts, AuthRateRequest{OperationID: operationID,
 Identifier: canonicalIdentifier, UserID: authenticatedUserID})`. Identifiers

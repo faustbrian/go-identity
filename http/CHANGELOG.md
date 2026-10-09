@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add fail-closed original browser-flow initiation admission with a shared
+  trusted-IP 20/10m bucket, independently of signin and delivery budgets.
+  It applies before a flow, identifier or challenge exists; transport origin
+  admission and existing-flow conditional dimensions remain separately owned.
+
 - Add shared strict cookie credential acquisition for selected session and
   pre-auth transport. Exact cookie names and original bytes are preserved;
   malformed/duplicate/quoted credentials, ambiguous fallback channels and
