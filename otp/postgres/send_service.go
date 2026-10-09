@@ -69,6 +69,8 @@ type SendService struct {
 	pool                 *database.Pool
 	owner                *authenticationSendContributor
 	coordinator          *kernel.Coordinator
+	registry             *kernel.ContributorRegistry
+	requestKeys          kernel.RequestKeyConfig
 	timeout              time.Duration
 	requestPolicyVersion uint64
 	digestVersions       []uint32
@@ -139,7 +141,7 @@ func NewSendService(pool *database.Pool, c SendConfig, crypto *envelope.Service)
 		versions = append(versions, version)
 	}
 	slices.Sort(versions)
-	return &SendService{pool: pool, owner: owner, coordinator: coordinator, timeout: c.Timeout, requestPolicyVersion: c.RequestKeys.Policy.PolicyVersion, digestVersions: versions}, nil
+	return &SendService{pool: pool, owner: owner, coordinator: coordinator, registry: registry, requestKeys: c.RequestKeys, timeout: c.Timeout, requestPolicyVersion: c.RequestKeys.Policy.PolicyVersion, digestVersions: versions}, nil
 }
 
 // Initialize installs only the configured stable lockout-key binding and

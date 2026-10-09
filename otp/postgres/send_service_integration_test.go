@@ -48,6 +48,10 @@ func TestPublicSendPostgresIssuanceSuppressionAndRestart(t *testing.T) {
 	testPublicSendPostgres(t, false, false)
 }
 
+func TestPublicSendPreAuthUserChecks(t *testing.T) {
+	testPublicSendPostgres(t, false, false, true)
+}
+
 func TestPublicSendPostgresMaximumSendsIsEnumerationSafe(t *testing.T) {
 	testPublicSendPostgres(t, true, false)
 }
@@ -56,7 +60,7 @@ func TestPublicSendPostgresLegacyPredecessorIsEnumerationSafe(t *testing.T) {
 	testPublicSendPostgres(t, false, true)
 }
 
-func testPublicSendPostgres(t *testing.T, exhausted, legacy bool) {
+func testPublicSendPostgres(t *testing.T, exhausted, legacy bool, preAuthUser ...bool) {
 	ctx, db, _ := otpDatabase(t)
 	store, original, _ := canonicalAuthenticationSendFixture(t)
 	r, _, err := store.originalPreparedSend(ctx, original)
@@ -251,6 +255,9 @@ INSERT INTO authorization_subject_authorities VALUES('AAAAAAAAAAAAAAAAAAAAAQ','u
 				key, _ = identity.NewIdempotencyKey([]byte("suppressed"))
 			}
 			request := otp.SendRequest{TenantID: s.TenantID, UserID: s.UserID, Caller: caller, Flow: flow, Channel: otp.ChannelEmail, Destination: destination, Purpose: cb.Scope.Purpose, TargetID: cb.Scope.TargetID, Network: "192.0.2.8", Device: "public-device", IdempotencyKey: key}
+			if len(preAuthUser) == 1 && preAuthUser[0] {
+				request.Flow = preAuthFlow
+			}
 			if anonymous {
 				request.UserID, request.Flow = "", preAuthFlow
 				request.Caller = caller.Clone()
@@ -415,6 +422,11 @@ INSERT INTO authorization_subject_authorities VALUES('AAAAAAAAAAAAAAAAAAAAAQ','u
 		var unavailable identity.UnavailableError
 		if !errors.As(err, &unavailable) || denied.Outcome != identity.CommitOutcomeNotCommitted || *calls != before+1 {
 			t.Errorf("recipient-dependent cooldown result outcome=%v error=%T counted=%d", denied.Outcome, err, *calls-before)
+		}
+	}
+	for _, request := range acceptedRequests {
+		if request.Destination == cb.Scope.Destination {
+			testPublicCheckAndRecovery(t, ctx, db, service, config, request)
 		}
 	}
 }

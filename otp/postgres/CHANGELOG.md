@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Add public non-consuming Check and original-attempt recovery over public
+  Send custody and the existing kernel journal. Correct and wrong checks are
+  metered atomically with their audit and retained result, without reservation
+  or session effects. Require distinct Check permission, original bearer and
+  current primary authority; recovery never compares or charges again.
+  Adopt the committed core Check API and kernel original-custody reader.
+
 - Preserve the original session's CSRF digest and named key through encrypted
   attempt, issuance and pre-generation Send custody. New versioned private
   profiles retain existing tokenless bytes and never renew session authority.

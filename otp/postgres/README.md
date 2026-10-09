@@ -1,5 +1,44 @@
 # OTP PostgreSQL
 
+## Public non-consuming Check
+
+After constructing and initializing the native Send service, opt into
+`NewCheckService(sender, CheckConfig{Coordinator: ..., CurrentAttemptKeyVersion: ...})`.
+Select a retained attempt key from the sender's codec. The coordinator must
+enable a bounded current `QueryPolicy`; this authorizes original Send custody
+and historical Check disclosure. `AdmissionPolicy` separately authorizes new
+Check submissions; when omitted it uses the supplied query policy. Allowing
+the Send read alone does not authorize Check. Preserve original fingerprint,
+wrapping, digest, request-namespace and deployment configuration across restart.
+Construction performs no IO and installs no route, store or migration.
+
+Pass the original `SendResult.CommandID`, actual submitted code, same explicit
+session/pre-auth flow and fresh trusted caller through `otp.CheckRequest`.
+The service restores authenticated original issuance; suppression never becomes
+a challenge. It selects the current challenge version itself and allocates the
+new unpredictable command/attempt. Concurrent stale-version submissions fail
+closed rather than comparing against adopted state; callers must not use a new
+submission to recover an unresolved original one.
+
+Correct and wrong admitted comparisons consume both Check and total attempt
+budgets. A Check-only cap does not consume remaining total allowance. Check
+never reserves/consumes OTP or pre-auth, finalizes a workflow, changes a session,
+or produces a proof. Its retained audit and result share the kernel transaction.
+The existing Send-only `otp.Service` and native Send registry remain unchanged.
+
+On Unknown/InProgress retain `result.Recovery` and call `RecoverCheck` with the
+original bearer and current caller, **without a code**. The exact original plan
+is checked against retained history. Recovery checks current directory, user,
+identifier, credential and authorization epochs, actual primary flow state and
+original time bounds, before and after lookup. It does not recompare, charge,
+renew validity or take over. Challenge revocation does not rewrite a historical
+Check result; that result still grants no current authority. Revoked/expired
+flows, blocked users, stale epochs, missing keys and denied current policy deny
+disclosure. All work is uncached, bounded by the sender timeout and caller deadline.
+
+HTTP exposure, full consuming login workflows, ambiguous-acknowledgement
+qualification and package release gates remain separate pending obligations.
+
 ## Public Send
 
 Construct `NewSendService(primaryPool, SendConfig, envelopeService)` once. It

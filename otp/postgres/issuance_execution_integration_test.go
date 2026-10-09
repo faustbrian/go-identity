@@ -524,13 +524,19 @@ func TestNativeIssuanceCoordinatorAtomicity(t *testing.T) {
 // payload stays in test memory and is never included in assertion diagnostics.
 func persistedSendMessage(t *testing.T, ctx context.Context, db interface {
 	QueryRow(context.Context, string, ...any) pgx.Row
-}) struct {
+}, commandID ...[]byte) struct {
 	Channel               deliverycore.Channel
 	Address, Locale, Body string
 } {
 	t.Helper()
 	var aad, wire []byte
-	if err := db.QueryRow(ctx, `SELECT binding_aad,ciphertext FROM identity.delivery_intents`).Scan(&aad, &wire); err != nil {
+	query := `SELECT binding_aad,ciphertext FROM identity.delivery_intents`
+	var args []any
+	if len(commandID) == 1 {
+		query += ` WHERE command_id=$1`
+		args = []any{commandID[0]}
+	}
+	if err := db.QueryRow(ctx, query, args...).Scan(&aad, &wire); err != nil {
 		t.Fatal(err)
 	}
 	values := map[string]string{}
