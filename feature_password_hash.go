@@ -44,7 +44,7 @@ func passwordHashOperation(op FeatureOperation) bool {
 }
 
 func (c Command) validPasswordHashVariant() bool {
-	return c.validFeatureVariant() && c.feature.passwordHash != nil && c.feature.code == nil && c.feature.preAuthCookie == nil && c.feature.sessionToken == nil && passwordHashOperation(c.feature.spec.Operation)
+	return c.validFeatureVariant() && c.feature.passwordHash != nil && c.feature.passwordChange == nil && c.feature.code == nil && c.feature.preAuthCookie == nil && c.feature.sessionToken == nil && passwordHashOperation(c.feature.spec.Operation)
 }
 
 // PasswordHashFeature returns owned hash-free metadata only for the explicit

@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add disjoint authenticated password-change command custody for the original
+  session bearer, upstream proof and encoded hash. Preserve complete versions
+  and timestamps; older feature/hash-only execution paths fail closed rather
+  than dropping authentication evidence. Native atomic admission remains
+  required and is not granted by command construction.
+
 - Add bounded opaque encoded-hash custody for existing-password change commands.
   Preserve exact verifier bytes outside metadata and diagnostics; legacy
   feature admission rejects this variant instead of discarding its material.

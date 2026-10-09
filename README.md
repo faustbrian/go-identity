@@ -156,6 +156,18 @@ profile; signup/reset/rehash and mixed OTP/bearer input remain unsupported here.
 This adds no password engine dependency to the kernel. Discard secret-bearing
 command copies after bounded use; immutable Go strings cannot be fully erased.
 
+`NewFeaturePasswordChangeCommand` is the separate authenticated change variant:
+it freezes the exact hash, original session bearer and upstream
+`authentication.ReauthenticationProof` together. `PasswordChangeFeature` returns
+owned metadata; `PasswordChangeCustody` borrows all three original values for
+trusted native intent fingerprinting. Every legacy feature/hash/session accessor
+rejects this variant, so an older executor cannot silently omit authentication
+custody. Structural proof checks use the upstream contract at original issuance,
+not a current clock: this grants no freshness or signed provenance. Native
+execution must still verify the signed original/current session and consume the
+proof atomically with password and session effects. Existing durable executors
+remain closed to this variant until that explicit admission is implemented.
+
 `NewFeatureOneTimeCodeCommand` additionally retains an authentication-owned
 opaque submission outside the scalar payload. `Command.OneTimeCode` borrows
 only that immutable opaque value; `Feature` remains code-free. Construction
