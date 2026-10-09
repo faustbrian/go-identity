@@ -65,7 +65,7 @@ func newLiveStoresProfile(t *testing.T, ctx context.Context, install bool) liveS
 	if len(password) != 44 || strings.ContainsAny(password, "'\\\n\r") {
 		t.Fatal("generated base64 fixture credential required")
 	}
-	dsn := "host=127.0.0.1 port=" + port("IDENTITY_REFERENCE_POSTGRES_PORT") + " user=postgres password='" + password + "' dbname=identity_test sslmode=disable"
+	dsn := "host=127.0.0.1 port=" + port("IDENTITY_REFERENCE_POSTGRES_PORT") + " user=postgres password='" + password + "' dbname=identity_test sslmode=disable search_path=public"
 	admin, err := pgx.Connect(ctx, dsn)
 	if err != nil {
 		t.Fatal("cannot connect disposable primary")
