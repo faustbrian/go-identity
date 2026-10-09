@@ -16,7 +16,8 @@ reference version and user-wide credential epoch. Ordinary user aggregate
 version changes do not invalidate an otherwise eligible credential.
 
 The repository must join kernel authority and owned hash material consistently;
-the concrete password PostgreSQL implementation is still pending. Do not wire
+the native password PostgreSQL adapter provides that reader and single-factor
+reauthentication composition. Do not wire
 independent kernel/hash reads or a cached positive fallback into this port.
 The comparison result is not a lease, proof or session: the owning signin
 workflow still must apply risk, verification, MFA, remember policy and atomic
@@ -40,6 +41,24 @@ provider call, cache promotion or freshness reset. Missing/unavailable signals,
 breaches, foreign bindings, step-up and throttle cannot yield a usable hash.
 Concrete HIBP provider collection, atomic risk consumption and password workflow
 composition still need to be connected; structural facts are not source proof.
+
+`NewHashPreparer(HashPreparationConfig)` makes that existing screened path
+available to native workflow composition without importing a persistence or
+provider adapter. Construction requires the real primitive, exact policy dummy
+hash, explicit inclusive byte bounds, a timeout up to ten seconds, trusted clock,
+HIBP-enabled risk policy and bounded owned signal collector. It performs no IO.
+`Prepare(ctx, candidate, binding)` returns the primitive's opaque encoded hash
+and an internal assessment only after complete Allow screening and unchanged
+original-fact rechecks. Unselected creating actions cannot reach the provider.
+The assessment is not authorization or transactional risk evidence. Complete
+reference composition must wire real provider provenance; this public helper
+does not establish provenance from caller-built structural facts.
+
+Run preparation before opening the protected transaction. Never log or return
+`EncodedHash.String()`; borrow it only for owned command/persistence work and
+discard copies afterward. The caller destroys the password after the call and
+retains provider/primitive shutdown ownership. No retry, store or goroutine is
+introduced. Earlier deadlines win; cancellation survives and errors/panics redact.
 
 ## Quick start
 

@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Expose the shared pre-transaction hash preparer through explicit bounded
+  composition. HIBP must be enabled for each supported creating operation;
+  incomplete, unavailable, breached, foreign or stale facts disclose no hash.
+  Original screening facts are not renewed after crypto. This grants no
+  credential authority and does not replace atomic risk/proof consumption.
+
 - Add bounded canonical-account password comparison with current-policy dummy
   work and a primary authority/material recheck before returning a match.
   Account blocking, credential changes, expiry and stale versions deny neutrally.
