@@ -504,6 +504,37 @@ possibly committed mutation before retrying; transport errors cannot decide it.
 
 ## API and verification boundary
 
+`NewOperationPipeline[T]` is the feature integration seam for actual middleware
+phases. A feature supplies its existing bounded decoder, authentication owner,
+admission (authorization/rate/CSRF), domain handler and safe error mapper through
+`OperationPipelineConfig[T]`. All five callbacks are explicit, including public
+operations' no-auth decisions; no authentication or rate engine is added here.
+
+Execution is decode → before-auth wrappers → authentication → after-auth wrappers
+→ admission → before-handler wrappers → domain handler → after-handler observers.
+Within a phase, unique numeric order fixes entry order and reverse unwind order.
+Short circuit or error stops later stages; repeated `next` calls cannot repeat
+the protected operation. `PipelineValue[T]` exposes the owner's typed state only
+after authentication and only during the request. This is not a reusable proof.
+
+Middleware receives detached metadata, no TLS/associated-response pointers and
+no readable body. Feature callbacks
+retain the original bounded snapshot, so middleware cannot rewrite the host or
+credential inputs seen by those callbacks. After-handler wrappers run only after
+normal, uncanceled handler return, with a read-only response facade: they observe an attempt,
+not a guarantee of transaction commit. They cannot emit or replace a response.
+Callbacks/wrappers are trusted synchronous code and must not retain requests,
+spawn detached work, unwrap/hijack writers or ignore deadlines. Constructor callbacks
+must do no IO. The server still owns raw IO and streaming bounds.
+Precommit panics use the feature's safe error mapper; once output or streaming
+has begun, panics abort the HTTP response rather than successfully completing a
+partial result. No raw panic diagnostic is exposed. Neither path proves rollback.
+
+The pipeline does not itself resolve hosts, parse credentials, authenticate,
+authorize or register routes. Existing direct feature handlers remain unchanged;
+their adoption and the complete `NewRouter` policy binding are pending. Do not
+wrap an already complete feature handler with a second authentication pipeline.
+
 See Go documentation for `ServerConfig`, `HTTPServer`, lifecycle states and
 classifiable errors. `ExampleHTTPServer` is an executable public adoption example.
 Unit/network tests exercise timeout, listener ownership, graceful/forced drain,

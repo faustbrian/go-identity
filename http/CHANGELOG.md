@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add a typed feature-owned operation pipeline with real post-authentication
+  and pre-operation middleware boundaries. Decode, authentication, admission
+  and protected invocation run once; middleware receives detached request
+  metadata without body custody. After-operation observers cannot change the
+  response. Real feature/router adoption remains in development.
+
 - Add explicit public HTTPS `/openapi.json` selection with trusted-host and
   shared safe-rate enforcement; existing constructors remain metadata-off.
   Serve the exact self-describing immutable document and expose separate
