@@ -99,8 +99,19 @@ type SigninResponse struct {
 // Responses are no-store/nosniff JSON: 200 success, 400 input, 403 origin,
 // 404 path, 405 method, 421 host, 429 rate and 503 unavailable/generic denial.
 // This handler alone does not advertise an optional feature or establish the
-// complete Send, recovery, middleware, OpenAPI or reference-login acceptance.
+// complete Send, recovery, OpenAPI or reference-login acceptance.
 func NewSigninHandler(c SigninConfig) (http.Handler, error) {
+	return NewSigninHandlerWithMiddleware(c, nil)
+}
+
+// NewSigninHandlerWithMiddleware retains original signin security with real
+// typed execution phases. Decode acquires bounded immutable input; Authenticate
+// admits trusted IP and discovers original native custody; Admit debits only the
+// canonical identifier; Handle makes the sole consuming call. Hooks cannot
+// replace private input or manufacture session/CSRF delivery. After-handler
+// observes attempts, not an assertion of commitment. Detached request headers
+// remain sensitive; hooks must not log or retain them.
+func NewSigninHandlerWithMiddleware(c SigninConfig, middleware []identityhttp.MiddlewareDescriptor) (http.Handler, error) {
 	if nilOwner(c.Service) || nilOwner(c.Source) || !c.Rate.Configured() || c.Now == nil || c.MaximumDuration < time.Millisecond || c.MaximumDuration > 30*time.Second || c.Audience == "" {
 		return nil, identityhttp.ErrInvalidInput
 	}
@@ -130,207 +141,201 @@ func NewSigninHandler(c SigninConfig) (http.Handler, error) {
 	if caller("configuration").Validate() != nil || len(c.Audience) > 256 {
 		return nil, identityhttp.ErrInvalidInput
 	}
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		out := SigninResponse{CommitOutcome: "none"}
-		respond := func(status int, code string) {
-			out.Error = code
-			w.Header().Del("Set-Cookie")
-			w.Header().Del("X-CSRF-Token")
+
+	reject := func(w http.ResponseWriter, r *http.Request, err error) {
+		a := signinAttemptFor(r)
+		a.cookie, a.csrf = "", ""
+		a.out.SignedIn = false
+		failure := signinFailure{status: 503, code: "unavailable"}
+		if errors.Is(err, identityhttp.ErrInvalidInput) {
+			failure = signinFailure{status: 400, code: "invalid_request"}
+		}
+		var specific signinFailure
+		if errors.As(err, &specific) {
+			failure = specific
+		}
+		if failure.status == 405 {
+			w.Header().Set("Allow", http.MethodPost)
+		}
+		if failure.retry > 0 {
+			w.Header().Set("Retry-After", strconv.FormatInt(int64((min(max(failure.retry, time.Second), time.Hour)+time.Second-1)/time.Second), 10))
+		}
+		signinResponse(w, a, failure.status, failure.code)
+	}
+	pipeline, err := identityhttp.NewOperationPipeline(identityhttp.OperationPipelineConfig[SigninState]{
+		MaximumDuration: c.MaximumDuration, Middleware: middleware, Reject: reject,
+		Decode: func(r *http.Request) (SigninState, error) {
+			s := SigninState{attempt: signinAttemptFor(r)}
+			ctx := r.Context()
+			if r.URL.Path != "/v1/otp/signin" || r.URL.EscapedPath() != r.URL.Path {
+				return s, signinFailure{status: 404, code: "not_found"}
+			}
+			if r.Method != http.MethodPost {
+				return s, signinFailure{status: 405, code: "method_not_allowed"}
+			}
+			if r.URL.RawQuery != "" || r.URL.ForceQuery || len(r.Trailer) != 0 {
+				return s, signinFailure{status: 400, code: "invalid_request"}
+			}
+			if _, _, err := decoder.IdempotencyKey(r, identityhttp.HeaderForbidden); err != nil {
+				return s, signinFailure{status: 400, code: "invalid_request"}
+			}
+			facts, err := network.Resolve(r)
+			if err != nil || facts.Realm() != identityhttp.RealmTenant {
+				return s, signinFailure{status: 421, code: "misdirected_request"}
+			}
+			if facts.Scheme() != "https" {
+				return s, signinFailure{status: 400, code: "invalid_request"}
+			}
+			if _, err := origin.Check(r); err != nil {
+				return s, signinFailure{status: 403, code: "origin_denied"}
+			}
+			bearer, present, err := decoder.CookieBearer(r, flowCookie.Name, identityhttp.HeaderRequired)
+			if err != nil || !present {
+				return s, signinFailure{status: 400, code: "invalid_request"}
+			}
+			input, err := identityhttp.DecodeJSON[map[string]json.RawMessage](decoder, r)
+			if err != nil {
+				if ctx.Err() != nil || errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+					return s, identityhttp.ErrUnavailable
+				}
+				return s, identityhttp.ErrInvalidInput
+			}
+			if len(input) != 3 {
+				return s, signinFailure{status: 400, code: "invalid_request"}
+			}
+			var flowID, commandID, code string
+			for key, dst := range map[string]*string{"flowID": &flowID, "sendCommandID": &commandID, "code": &code} {
+				raw, ok := input[key]
+				if !ok || string(raw) == "null" || json.Unmarshal(raw, dst) != nil {
+					return s, signinFailure{status: 400, code: "invalid_request"}
+				}
+			}
+			id, err := identity.ParsePreAuthTransactionID(flowID)
+			if err != nil {
+				return s, signinFailure{status: 400, code: "invalid_request"}
+			}
+			command, err := identity.ParseCommandID(commandID)
+			if err != nil {
+				return s, signinFailure{status: 400, code: "invalid_request"}
+			}
+			flow, err := otp.NewPreAuthSendFlow(id, bearer)
+			if err != nil {
+				return s, signinFailure{status: 400, code: "invalid_request"}
+			}
+			opaqueCode, err := auth.NewOneTimeCode(code)
+			if err != nil {
+				return s, signinFailure{status: 400, code: "invalid_request"}
+			}
+			s.request = otp.SigninRequest{TenantID: facts.TenantID(), Caller: caller(facts.TenantID()), Flow: flow, SendCommandID: command, Code: opaqueCode}
+			if s.request.Validate() != nil {
+				return s, signinFailure{status: 400, code: "invalid_request"}
+			}
+
+			s.facts = facts
+			return s, nil
+		},
+		Authenticate: func(r *http.Request, s SigninState) (SigninState, error) {
+			if err := signinRateError(c.Rate.AdmitSigninIP(r.Context(), s.facts, "identity.otp.signin")); err != nil {
+				return s, err
+			}
+			request := s.request
+			source, err := c.Source.ResolveSigninSource(r.Context(), otp.SigninSourceRequest{TenantID: request.TenantID, Caller: request.Caller, Flow: request.Flow, SendCommandID: request.SendCommandID})
+			binding, e := source.Bindings()
+			if err != nil || e != nil || r.Context().Err() != nil || binding.TenantID != request.TenantID || binding.SendCommandID != request.SendCommandID {
+				return s, identityhttp.ErrUnavailable
+			}
+			s.identifier = binding.Destination.Value()
+			return s, nil
+		},
+		Admit: func(r *http.Request, s SigninState) error {
+			return signinRateError(c.Rate.AdmitSigninIdentifier(r.Context(), s.facts, identityhttp.AuthRateRequest{OperationID: "identity.otp.signin", Identifier: s.identifier}))
+		},
+		Handle: func(w http.ResponseWriter, r *http.Request, s SigninState) {
+			a := s.attempt
+			a.attempted = true
+			a.ctx = r.Context()
+			out := &a.out
+			ctx := r.Context()
+			request := s.request
+			command := request.SendCommandID
+			respond := func(status int, code string) {
+				a.cookie, a.csrf = "", ""
+				a.out.SignedIn = false
+				signinResponse(w, a, status, code)
+			}
+			out.CommitOutcome = "unknown"
+			result, err := c.Service.Signin(ctx, request)
+			if _, e := identity.ParseCommandID(string(result.Issuance.CommandID)); e == nil {
+				out.CommandID = result.Issuance.CommandID
+				out.CommitOutcome = outcome(result.Issuance.CommitOutcome)
+			}
+			if b, e := result.Recovery.Bindings(); e == nil && b.SendCommandID == command && b.Attempt.TenantID == request.TenantID && (result.Issuance.CommandID == "" || b.Attempt.CommandID == result.Issuance.CommandID) {
+				if result.Issuance.CommandID == "" {
+					out.CommandID = b.Attempt.CommandID
+					out.CommitOutcome = "none"
+				}
+				out.Recovery = &SigninRecovery{SendCommandID: b.SendCommandID, Attempt: SigninAttempt{CommandID: b.Attempt.CommandID, TenantID: b.Attempt.TenantID, AttemptID: string(b.Attempt.AttemptID), Fingerprint: string(b.Attempt.Fingerprint), FingerprintKeyVersion: b.Attempt.FingerprintKeyVersion}, ExpectedVersion: b.ExpectedVersion, DigestKeyVersion: b.DigestKeyVersion, ScopeDigest: b.ScopeDigest}
+			}
+			if err != nil || ctx.Err() != nil || out.CommandID == "" || result.Issuance.CommandID != out.CommandID || out.Recovery == nil || result.Issuance.CommitOutcome != identity.CommitOutcomeCommitted || result.Issuance.Replayed {
+				respond(503, "unavailable")
+				return
+			}
+			spec, e := result.Issuance.Session.Bindings()
+			now := c.Now()
+			if e != nil || spec.TenantID != request.TenantID || spec.Audience != c.Audience || spec.SessionID != result.SessionID || spec.IssuedAt.After(now) || !now.Before(spec.IssuedAt.Add(spec.Remember.AbsoluteTTL())) || result.Issuance.Cookie.Value != "" {
+				respond(503, "unavailable")
+				return
+			}
+			metadata, e := result.Issuance.Session.OTPAuthentication().Bindings()
+			csrfState, csrfErr := result.Issuance.Session.CSRFState().Bindings()
+			if e != nil || metadata.CommandID != out.CommandID || metadata.SendCommandID != command || !now.Before(metadata.ValidUntil) || csrfErr != nil || csrfState.Binding != (session.CSRFBinding{TenantID: request.TenantID, SessionID: result.SessionID, SessionVersion: spec.Version}) {
+				respond(503, "unavailable")
+				return
+			}
+			if _, e = spec.Remember.Evaluate(now, spec.IssuedAt, spec.LastActivityAt, metadata.AuthenticatedAt); e != nil {
+				respond(503, "unavailable")
+				return
+			}
+			attributes, e := c.SessionCookie.Attributes(spec.Remember, now, spec.IssuedAt.Add(spec.Remember.AbsoluteTTL()))
+			issuedCookie := result.Issuance.Cookie
+			// Match the fixed scope/security tuple, then serialize the selected
+			// policy at delivery time. Native persistence attributes may be older;
+			// recomputing only remaining lifetime cannot extend original expiry.
+			if e != nil || issuedCookie.Name != attributes.Name || issuedCookie.Path != attributes.Path || issuedCookie.Domain != "" || !issuedCookie.Secure || !issuedCookie.HttpOnly || issuedCookie.SameSite != attributes.SameSite || issuedCookie.Partitioned || len(issuedCookie.Unparsed) != 0 || issuedCookie.Raw != "" || issuedCookie.RawExpires != "" || (attributes.MaxAge == 0 && (issuedCookie.MaxAge != 0 || !issuedCookie.Expires.IsZero())) || (attributes.MaxAge > 0 && (issuedCookie.MaxAge <= 0 || issuedCookie.Expires.IsZero() || issuedCookie.Expires.After(spec.IssuedAt.Add(spec.Remember.AbsoluteTTL())))) {
+				respond(503, "unavailable")
+				return
+			}
+			csrf, e := result.CSRFToken.Reveal()
+			if e != nil {
+				respond(503, "unavailable")
+				return
+			}
+			wire, e := result.Issuance.Token.Reveal()
+			if e != nil {
+				respond(503, "unavailable")
+				return
+			}
+			if _, e = session.ParseToken(wire); e != nil || ctx.Err() != nil {
+				respond(503, "unavailable")
+				return
+			}
+			attributes.Value = wire
+			out.SignedIn = true
+			out.SessionID = result.SessionID
 			w.Header().Set("Content-Type", "application/json")
 			w.Header().Set("Cache-Control", "no-store")
 			w.Header().Set("X-Content-Type-Options", "nosniff")
-			w.WriteHeader(status)
+			a.cookie = attributes.String()
+			a.csrf = csrf
+			w.WriteHeader(200)
 			json.NewEncoder(w).Encode(out)
-		}
-		defer func() {
-			if recover() != nil {
-				out.SignedIn = false
-				respond(503, "unavailable")
-			}
-		}()
-		if r == nil {
-			respond(400, "invalid_request")
-			return
-		}
-		ctx, cancel := context.WithTimeout(r.Context(), c.MaximumDuration)
-		defer cancel()
-		r = r.WithContext(ctx)
-		if ctx.Err() != nil {
-			respond(503, "unavailable")
-			return
-		}
-		if r.URL.Path != "/v1/otp/signin" || r.URL.EscapedPath() != r.URL.Path {
-			respond(404, "not_found")
-			return
-		}
-		if r.Method != http.MethodPost {
-			w.Header().Set("Allow", http.MethodPost)
-			respond(405, "method_not_allowed")
-			return
-		}
-		if r.URL.RawQuery != "" || r.URL.ForceQuery || len(r.Trailer) != 0 {
-			respond(400, "invalid_request")
-			return
-		}
-		if _, _, err := decoder.IdempotencyKey(r, identityhttp.HeaderForbidden); err != nil {
-			respond(400, "invalid_request")
-			return
-		}
-		facts, err := network.Resolve(r)
-		if err != nil || facts.Realm() != identityhttp.RealmTenant {
-			respond(421, "misdirected_request")
-			return
-		}
-		if facts.Scheme() != "https" {
-			respond(400, "invalid_request")
-			return
-		}
-		if _, err := origin.Check(r); err != nil {
-			respond(403, "origin_denied")
-			return
-		}
-		bearer, present, err := decoder.CookieBearer(r, flowCookie.Name, identityhttp.HeaderRequired)
-		if err != nil || !present {
-			respond(400, "invalid_request")
-			return
-		}
-		input, err := identityhttp.DecodeJSON[map[string]json.RawMessage](decoder, r)
-		if err != nil {
-			if ctx.Err() != nil {
-				respond(503, "unavailable")
-			} else {
-				respond(400, "invalid_request")
-			}
-			return
-		}
-		if len(input) != 3 {
-			respond(400, "invalid_request")
-			return
-		}
-		var flowID, commandID, code string
-		for key, dst := range map[string]*string{"flowID": &flowID, "sendCommandID": &commandID, "code": &code} {
-			raw, ok := input[key]
-			if !ok || string(raw) == "null" || json.Unmarshal(raw, dst) != nil {
-				respond(400, "invalid_request")
-				return
-			}
-		}
-		id, err := identity.ParsePreAuthTransactionID(flowID)
-		if err != nil {
-			respond(400, "invalid_request")
-			return
-		}
-		command, err := identity.ParseCommandID(commandID)
-		if err != nil {
-			respond(400, "invalid_request")
-			return
-		}
-		flow, err := otp.NewPreAuthSendFlow(id, bearer)
-		if err != nil {
-			respond(400, "invalid_request")
-			return
-		}
-		opaqueCode, err := auth.NewOneTimeCode(code)
-		if err != nil {
-			respond(400, "invalid_request")
-			return
-		}
-		request := otp.SigninRequest{TenantID: facts.TenantID(), Caller: caller(facts.TenantID()), Flow: flow, SendCommandID: command, Code: opaqueCode}
-		if request.Validate() != nil {
-			respond(400, "invalid_request")
-			return
-		}
-		admitted := func(rate identityhttp.AuthRateResult, err error) bool {
-			if errors.Is(err, identityhttp.ErrRateLimited) {
-				w.Header().Set("Retry-After", strconv.FormatInt(int64((min(max(rate.RetryAfter, time.Second), time.Hour)+time.Second-1)/time.Second), 10))
-				respond(429, "rate_limited")
-				return false
-			}
-			if err != nil || !rate.Allowed || ctx.Err() != nil {
-				respond(503, "unavailable")
-				return false
-			}
-			return true
-		}
-		if !admitted(c.Rate.AdmitSigninIP(ctx, facts, "identity.otp.signin")) {
-			return
-		}
-		source, err := c.Source.ResolveSigninSource(ctx, otp.SigninSourceRequest{TenantID: request.TenantID, Caller: request.Caller, Flow: flow, SendCommandID: command})
-		binding, e := source.Bindings()
-		if err != nil || e != nil || ctx.Err() != nil || binding.TenantID != request.TenantID || binding.SendCommandID != command {
-			respond(503, "unavailable")
-			return
-		}
-		if !admitted(c.Rate.AdmitSigninIdentifier(ctx, facts, identityhttp.AuthRateRequest{OperationID: "identity.otp.signin", Identifier: binding.Destination.Value()})) {
-			return
-		}
-		out.CommitOutcome = "unknown"
-		result, err := c.Service.Signin(ctx, request)
-		if _, e := identity.ParseCommandID(string(result.Issuance.CommandID)); e == nil {
-			out.CommandID = result.Issuance.CommandID
-			out.CommitOutcome = outcome(result.Issuance.CommitOutcome)
-		}
-		if b, e := result.Recovery.Bindings(); e == nil && b.SendCommandID == command && b.Attempt.TenantID == request.TenantID && (result.Issuance.CommandID == "" || b.Attempt.CommandID == result.Issuance.CommandID) {
-			if result.Issuance.CommandID == "" {
-				out.CommandID = b.Attempt.CommandID
-				out.CommitOutcome = "none"
-			}
-			out.Recovery = &SigninRecovery{SendCommandID: b.SendCommandID, Attempt: SigninAttempt{CommandID: b.Attempt.CommandID, TenantID: b.Attempt.TenantID, AttemptID: string(b.Attempt.AttemptID), Fingerprint: string(b.Attempt.Fingerprint), FingerprintKeyVersion: b.Attempt.FingerprintKeyVersion}, ExpectedVersion: b.ExpectedVersion, DigestKeyVersion: b.DigestKeyVersion, ScopeDigest: b.ScopeDigest}
-		}
-		if err != nil || ctx.Err() != nil || out.CommandID == "" || result.Issuance.CommandID != out.CommandID || out.Recovery == nil || result.Issuance.CommitOutcome != identity.CommitOutcomeCommitted || result.Issuance.Replayed {
-			respond(503, "unavailable")
-			return
-		}
-		spec, e := result.Issuance.Session.Bindings()
-		now := c.Now()
-		if e != nil || spec.TenantID != request.TenantID || spec.Audience != c.Audience || spec.SessionID != result.SessionID || spec.IssuedAt.After(now) || !now.Before(spec.IssuedAt.Add(spec.Remember.AbsoluteTTL())) || result.Issuance.Cookie.Value != "" {
-			respond(503, "unavailable")
-			return
-		}
-		metadata, e := result.Issuance.Session.OTPAuthentication().Bindings()
-		csrfState, csrfErr := result.Issuance.Session.CSRFState().Bindings()
-		if e != nil || metadata.CommandID != out.CommandID || metadata.SendCommandID != command || !now.Before(metadata.ValidUntil) || csrfErr != nil || csrfState.Binding != (session.CSRFBinding{TenantID: request.TenantID, SessionID: result.SessionID, SessionVersion: spec.Version}) {
-			respond(503, "unavailable")
-			return
-		}
-		if _, e = spec.Remember.Evaluate(now, spec.IssuedAt, spec.LastActivityAt, metadata.AuthenticatedAt); e != nil {
-			respond(503, "unavailable")
-			return
-		}
-		attributes, e := c.SessionCookie.Attributes(spec.Remember, now, spec.IssuedAt.Add(spec.Remember.AbsoluteTTL()))
-		issuedCookie := result.Issuance.Cookie
-		// Match the fixed scope/security tuple, then serialize the selected
-		// policy at delivery time. Native persistence attributes may be older;
-		// recomputing only remaining lifetime cannot extend original expiry.
-		if e != nil || issuedCookie.Name != attributes.Name || issuedCookie.Path != attributes.Path || issuedCookie.Domain != "" || !issuedCookie.Secure || !issuedCookie.HttpOnly || issuedCookie.SameSite != attributes.SameSite || issuedCookie.Partitioned || len(issuedCookie.Unparsed) != 0 || issuedCookie.Raw != "" || issuedCookie.RawExpires != "" || (attributes.MaxAge == 0 && (issuedCookie.MaxAge != 0 || !issuedCookie.Expires.IsZero())) || (attributes.MaxAge > 0 && (issuedCookie.MaxAge <= 0 || issuedCookie.Expires.IsZero() || issuedCookie.Expires.After(spec.IssuedAt.Add(spec.Remember.AbsoluteTTL())))) {
-			respond(503, "unavailable")
-			return
-		}
-		csrf, e := result.CSRFToken.Reveal()
-		if e != nil {
-			respond(503, "unavailable")
-			return
-		}
-		wire, e := result.Issuance.Token.Reveal()
-		if e != nil {
-			respond(503, "unavailable")
-			return
-		}
-		if _, e = session.ParseToken(wire); e != nil || ctx.Err() != nil {
-			respond(503, "unavailable")
-			return
-		}
-		attributes.Value = wire
-		out.SignedIn = true
-		out.SessionID = result.SessionID
-		w.Header().Set("Content-Type", "application/json")
-		w.Header().Set("Cache-Control", "no-store")
-		w.Header().Set("X-Content-Type-Options", "nosniff")
-		w.Header().Set("Set-Cookie", attributes.String())
-		w.Header().Set("X-CSRF-Token", csrf)
-		w.WriteHeader(200)
-		json.NewEncoder(w).Encode(out)
-	}), nil
+
+		},
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &signinPipeline{pipeline: pipeline}, nil
 }
 
 func nilOwner(v any) bool {

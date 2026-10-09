@@ -29,9 +29,25 @@ not rollback or permission to resubmit.
 
 ## Status and tradeoffs
 
-This development checkpoint provides a standalone handler, not a complete
-feature/server. Send HTTP transport, HTTP recovery, typed middleware, feature
-registration and concrete OpenAPI remain pending, as do composed native browser
+`NewSigninHandlerWithMiddleware` exposes the shared typed operation pipeline.
+Hooks run before authentication, after authentication, before handling and after
+handling. Authentication here means original-flow possession, not user login.
+After authentication, `PipelineValue[SigninState]` exposes only detached,
+credential-free attempt metadata through `Attempt`; private request input cannot
+be replaced. An attempted result is not proof that credentials reached the browser.
+Do not retain pipeline state beyond the request. Implicit serialization is denied.
+
+Router middleware rebinding retains the same credential-delivery owner. Hooks may
+deny or observe a request, but cannot supply session cookies or synchronizers,
+replace original input, or run the native consuming owner twice by repeating
+`next`. Cancellation before handling prevents consumption; cancellation after
+execution preserves the known outcome without delivering fresh credentials.
+This fixed JSON response profile permits no trailers, including credential fields
+added during hook unwind.
+
+This development checkpoint provides a standalone typed handler, not a complete
+feature/server. Send HTTP transport, HTTP recovery, feature registration and
+concrete OpenAPI remain pending, as do composed native browser
 login, exact coverage/mutation, clean-consumer and release qualification. It
 advertises no feature metadata. No production memory fallback exists.
 

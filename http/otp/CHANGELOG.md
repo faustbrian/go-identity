@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add typed signin middleware and router rebinding with opaque request-local
+  state, detached outcome observation, and retained session/CSRF response custody.
+  Short circuits, cancellation and repeated continuation cannot bypass native
+  admission or forge credentials.
+- Reject middleware response trailers, including credential fields injected
+  during unwind; fresh credentials remain confined to owned response headers.
 - Add opt-in original-flow OTP signin HTTP handling with exact-origin/cookie
   possession, closed request grammar, source-bound shared rate admission, and
   reveal-once secure session/CSRF delivery only on fresh native commitment.
