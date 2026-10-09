@@ -22,6 +22,8 @@ var (
 	// ErrIssuanceAlreadyAttempted requires scoped recovery of the same command;
 	// it does not assert that the previous attempt committed or rolled back.
 	ErrIssuanceAlreadyAttempted = errors.New("session: issuance already attempted")
+	// ErrIssuanceAlreadyBound rejects a second bind of original OTP custody.
+	ErrIssuanceAlreadyBound = errors.New("session: issuance already bound")
 	// ErrIssuerUnavailable redacts a dependency failure before durable execution.
 	ErrIssuerUnavailable = errors.New("session: issuer unavailable")
 )
@@ -32,8 +34,9 @@ type IssuerClock interface{ Now() time.Time }
 
 // IssueExecutor is the storage-neutral boundary implemented by the owned
 // durable adapter, not an application workflow or another command journal.
-// ExecuteIssue must validate the original opaque proof, current lifecycle and
-// policy, consume required one-time proofs and persist the exact session plus
+// ExecuteIssue must validate the selected profile's original opaque proof or
+// OTP code/pre-auth custody, current lifecycle and policy, consume required
+// one-time proofs and persist the exact session plus
 // required audit/outbox effects under the sole authoritative command owner.
 // Replayed is true for any historical terminal observation. RecoverIssue must
 // authorize exact scope and read that same command on the primary; it must
@@ -56,11 +59,12 @@ type IssueExecution struct {
 }
 
 // IssuerConfig freezes cookie issuance composition. Authority is the configured
-// private proof authority. MaximumDuration is 1ms..30s; dependencies must honor
+// private proof authority for NewSessionIssuer; it must be nil for the explicit
+// OTP issuer profile. MaximumDuration is 1ms..30s; dependencies must honor
 // it. TokenSize is 32..64 bytes. LookupKey is independent session-lookup custody.
-// Cookie is the validated host-only transport profile. This first owned issuer
-// supports authenticated cookie issuance; anonymous and bearer continuations
-// require separate native admission and are not silently approximated here.
+// Cookie is the validated host-only transport profile. OTP pre-auth flows may
+// retain anonymous command scope while the native effect resolves the final
+// user. Anonymous sessions and bearer continuations require separate admission.
 type IssuerConfig struct {
 	Authority       *authentication.AuthorityAuthenticator
 	Clock           IssuerClock
@@ -78,6 +82,7 @@ type SessionIssuer struct {
 	executor IssueExecutor
 	config   IssuerConfig
 	csrfKey  CSRFKey
+	otp      bool
 }
 
 // NewSessionIssuerWithCSRF selects the synchronizer profile with a dedicated
@@ -102,10 +107,14 @@ func NewSessionIssuerWithCSRF(executor IssueExecutor, c IssuerConfig, key CSRFKe
 // NewSessionIssuer validates and freezes trusted composition without IO. Use
 // the owned PostgreSQL execution service, not a consumer-written domain store.
 func NewSessionIssuer(executor IssueExecutor, c IssuerConfig) (*SessionIssuer, error) {
-	if issuerNil(executor) || issuerNil(c.Clock) || c.Authority == nil || c.MaximumDuration < time.Millisecond || c.MaximumDuration > 30*time.Second || c.LookupKey.state == nil || c.TokenSize < 32 || c.TokenSize > 64 || c.Cookie.name == "" {
+	return newSessionIssuer(executor, c, false)
+}
+
+func newSessionIssuer(executor IssueExecutor, c IssuerConfig, otp bool) (*SessionIssuer, error) {
+	if issuerNil(executor) || issuerNil(c.Clock) || (!otp && c.Authority == nil) || c.MaximumDuration < time.Millisecond || c.MaximumDuration > 30*time.Second || c.LookupKey.state == nil || c.TokenSize < 32 || c.TokenSize > 64 || c.Cookie.name == "" {
 		return nil, ErrInvalidIssuer
 	}
-	return &SessionIssuer{executor: executor, config: c}, nil
+	return &SessionIssuer{executor: executor, config: c, otp: otp}, nil
 }
 
 func issuerNil(v any) bool {
@@ -124,7 +133,8 @@ func issuerNil(v any) bool {
 // and proof. Zero is invalid. It can be copied concurrently; no public operation
 // reveals its bearer. One atomic attempt is shared across all copies. It is not
 // a durable receipt, a replay store or a replacement for executor idempotency.
-// Retain Request for recovery; do not Prepare again to retry an unknown command.
+// Retain Request for proof-route recovery; OTP recovery must use separate
+// code-free native correlation. Do not Prepare again to retry an unknown command.
 type PreparedIssuance struct{ state *preparedIssuanceState }
 type preparedIssuanceState struct {
 	owner     *SessionIssuer
@@ -133,6 +143,7 @@ type preparedIssuanceState struct {
 	attempted atomic.Bool
 	csrf      CSRFToken
 	csrfReady atomic.Bool
+	otp       *otpPreparationState
 }
 
 // Prepare validates the resolved policy, complete original authentication and
@@ -148,7 +159,7 @@ func (s *SessionIssuer) Prepare(binding identity.CommandBinding, spec SessionSpe
 			err = ErrIssuerUnavailable
 		}
 	}()
-	if s == nil || spec.Lookup != (TokenDigest{}) {
+	if s == nil || s.otp || spec.Lookup != (TokenDigest{}) {
 		return out, ErrInvalidIssuance
 	}
 	// Validate the full structural/proof input before allocating credential bytes.
@@ -168,24 +179,9 @@ func (s *SessionIssuer) Prepare(binding identity.CommandBinding, spec SessionSpe
 	if e = request.Validate(s.config.Authority, s.config.Clock.Now()); e != nil {
 		return out, e
 	}
-	token, e := NewToken(s.config.TokenSize)
+	token, record, csrf, e := s.prepareTokenRecord(record)
 	if e != nil {
 		return out, e
-	}
-	spec.Lookup, e = token.Digest(s.config.LookupKey, string(spec.TenantID))
-	if e != nil {
-		return out, e
-	}
-	record, e = NewSession(spec)
-	if e != nil {
-		return out, e
-	}
-	var csrf CSRFToken
-	if s.csrfKey.key.state != nil {
-		csrf, record, e = prepareCSRFRecord(record, s.csrfKey)
-		if e != nil {
-			return out, e
-		}
 	}
 	command, e = NewIssueCommand(binding, record)
 	if e != nil {
@@ -196,6 +192,34 @@ func (s *SessionIssuer) Prepare(binding identity.CommandBinding, spec SessionSpe
 		return out, e
 	}
 	return PreparedIssuance{state: &preparedIssuanceState{owner: s, request: request, token: token, csrf: csrf}}, nil
+}
+
+func (s *SessionIssuer) prepareTokenRecord(record Session) (Token, Session, CSRFToken, error) {
+	fail := func(e error) (Token, Session, CSRFToken, error) { return Token{}, Session{}, CSRFToken{}, e }
+	spec, e := record.Bindings()
+	if e != nil {
+		return fail(e)
+	}
+	token, e := NewToken(s.config.TokenSize)
+	if e != nil {
+		return fail(e)
+	}
+	spec.Lookup, e = token.Digest(s.config.LookupKey, string(spec.TenantID))
+	if e != nil {
+		return fail(e)
+	}
+	record, e = newSession(spec, record.OTPAuthentication())
+	if e != nil {
+		return fail(e)
+	}
+	var csrf CSRFToken
+	if s.csrfKey.key.state != nil {
+		csrf, record, e = prepareCSRFRecord(record, s.csrfKey)
+		if e != nil {
+			return fail(e)
+		}
+	}
+	return token, record, csrf, nil
 }
 
 // CSRFToken returns the original reveal-once token only after this preparation
@@ -212,10 +236,11 @@ func (p PreparedIssuance) CSRFToken() (CSRFToken, error) {
 	return p.state.csrf, nil
 }
 
-// Request returns the original immutable safe command/proof for durable
-// recovery, without granting access to bearer bytes. Zero returns false.
+// Request returns the original proof-route command/proof for durable recovery,
+// without bearer bytes. Zero and all OTP preparations return false: code-bearing
+// consuming commands must never be advertised as safe recovery input.
 func (p PreparedIssuance) Request() (IssueRequest, bool) {
-	if p.state == nil {
+	if p.state == nil || p.state.otp != nil {
 		return IssueRequest{}, false
 	}
 	return p.state.request, true
@@ -281,15 +306,17 @@ func (s *SessionIssuer) Issue(ctx context.Context, p PreparedIssuance) (out Issu
 	if s == nil || ctx == nil || p.state == nil || p.state.owner != s {
 		return out, ErrInvalidIssuance
 	}
-	command, _ := p.state.request.Command()
-	issue, _ := command.Issue()
-	out.CommandID = issue.Binding.CommandID
+	binding, _, _, ok := p.state.request.issuanceScope()
+	if !ok {
+		return out, ErrInvalidIssuance
+	}
+	out.CommandID = binding.CommandID
 	ctx, cancel := context.WithTimeout(ctx, s.config.MaximumDuration)
 	defer cancel()
 	if e := ctx.Err(); e != nil {
 		return out, e
 	}
-	if e := p.state.request.Validate(s.config.Authority, s.config.Clock.Now()); e != nil {
+	if e := s.validateRequestAt(p.state.request, s.config.Clock.Now()); e != nil {
 		return out, e
 	}
 	if e := ctx.Err(); e != nil {
@@ -306,6 +333,11 @@ func (s *SessionIssuer) Issue(ctx context.Context, p PreparedIssuance) (out Issu
 		return out, err
 	}
 	now := s.config.Clock.Now()
+	if s.otp {
+		if e := validateOTPIssuanceAt(out.Session, now); e != nil {
+			return out, e
+		}
+	}
 	life, e := out.Session.Lifetime(now)
 	if e != nil {
 		return out, e
@@ -328,6 +360,8 @@ func (s *SessionIssuer) Issue(ctx context.Context, p PreparedIssuance) (out Issu
 // original request. Proof expiry does not prohibit historical recovery; current
 // result-access policy belongs to the executor. It never executes, regenerates,
 // reveals or redelivers a credential, even when recovery proves Committed.
+// This is proof-profile recovery only. OTP code-bearing requests are rejected;
+// consuming native composition must provide separate code-free correlation.
 func (s *SessionIssuer) Recover(ctx context.Context, r IssueRequest) (out IssueResult, err error) {
 	attempted := false
 	defer func() {
@@ -341,7 +375,7 @@ func (s *SessionIssuer) Recover(ctx context.Context, r IssueRequest) (out IssueR
 			}
 		}
 	}()
-	if s == nil || ctx == nil || r.state == nil {
+	if s == nil || s.otp || ctx == nil || r.state == nil || r.state.otp != nil {
 		return out, ErrInvalidIssuance
 	}
 	issue, _ := r.state.command.Issue()
@@ -360,11 +394,15 @@ func (s *SessionIssuer) Recover(ctx context.Context, r IssueRequest) (out IssueR
 }
 
 func (s *SessionIssuer) finish(ctx context.Context, r IssueRequest, e IssueExecution, dependencyErr error) (out IssueResult, err error) {
-	issue, _ := r.state.command.Issue()
-	out.CommandID = issue.Binding.CommandID
+	binding, operation, record, _ := r.issuanceScope()
+	out.CommandID = binding.CommandID
 	out.CommitOutcome = identity.CommitOutcomeUnknown
 	receipt := e.Receipt
-	if receipt.Validate() != nil || receipt.Binding != issue.Binding || receipt.Feature == nil || receipt.Feature.Operation != IssueOperation() || (receipt.Outcome == identity.CommitOutcomeCommitted && (receipt.Feature.BeforeVersion != 0 || receipt.Feature.AfterVersion != 1 || !sameIssuedSession(e.Session, issue.Session))) || (receipt.Outcome != identity.CommitOutcomeCommitted && e.Session != (Session{})) {
+	after := uint64(0)
+	if operation.RecordRequirement == identity.FeatureRecordRequired {
+		after = 1
+	}
+	if receipt.Validate() != nil || receipt.Binding != binding || receipt.Feature == nil || receipt.Feature.Operation != operation || (receipt.Outcome == identity.CommitOutcomeCommitted && (receipt.Feature.BeforeVersion != 0 || receipt.Feature.AfterVersion != after || !sameIssuedSession(e.Session, record))) || (receipt.Outcome != identity.CommitOutcomeCommitted && e.Session != (Session{})) {
 		return out, identity.UnknownCommitError{CommandID: out.CommandID}
 	}
 	out.CommitOutcome = receipt.Outcome

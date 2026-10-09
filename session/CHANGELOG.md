@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Add explicit two-phase consuming OTP session preparation and native command
+  binding, preserving original token, flow identity, remember choice and optional
+  CSRF custody. Reuse exact commit-gated delivery without fabricating credential
+  proofs; expiry, replay, errors and cancellation withhold credentials. Existing
+  proof issuance is unchanged. Native atomic signin, authoritative admission and
+  code-free outcome/session recovery remain pending integration work.
+
 - Add explicit historical OTP session provenance without fabricating a
   persistent credential or changing existing public struct shapes. Preserve
   original authentication time through update/rotation and versioned encrypted

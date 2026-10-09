@@ -26,9 +26,10 @@ Metadata updates and rotation preserve OTP provenance; version changes clear or
 replace exact-version CSRF state. The existing credential-proof issuance route
 rejects OTP metadata rather than treating it as authentication authority.
 
-This is a core prerequisite, not complete OTP signin. The native PostgreSQL OTP
-record codec, opt-in authoritative reader and atomic OTP-to-session effect are
-still required; existing proof-only native profiles fail closed for OTP.
+This is a core prerequisite, not complete OTP signin. The PostgreSQL OTP record
+codec is available through its explicit forward migration. The opt-in
+authoritative reader and atomic OTP-to-session effect are still required;
+existing proof-only native profiles fail closed for OTP.
 Do not supply consumer-written credential rows or a second transaction to bridge
 that gap. No store, coordinator or replay journal is added by this projection.
 
@@ -554,6 +555,43 @@ release checks remain pending.
   `identity/postgres` coordinator. This command cannot activate that adapter.
 
 ## Adoption, security and tradeoffs
+
+### Consuming OTP cookie issuance prerequisite
+
+`NewOTPSessionIssuer(executor, config)` selects OTP without fabricating a
+credential proof; `config.Authority` must be nil. Select
+`NewOTPSessionIssuerWithCSRF` for independent synchronizer custody. Both profiles
+reuse the same duration, lookup-key, cookie, outcome and reveal-once rules.
+
+The owned native adapter performs two-phase preparation before any reservation:
+
+1. Call `PrepareOTP(binding, spec, originalMetadata)` with zero lookup, creation
+   version1 and original issuance/activity. It generates the bearer/digest and
+   optional CSRF exactly once, but cannot execute yet.
+2. Map `prepared.Session()` completely into the native consuming intent,
+   retaining original OTP provenance, remember choice, digest and CSRF state.
+   Bind that final opaque code/pre-auth command with `BindOTP` before the kernel
+   fingerprints or reserves it. Only one bind succeeds across preparation copies.
+3. Call `Issue` on the returned bound preparation once. The native executor uses
+   `IssueRequest.OTPCommand()` to obtain original custody and the exact session.
+   It must authenticate the original recipient and flow, recheck current
+   authority and atomically consume OTP/pre-auth with session/audit/outbox.
+
+The closed v1 `identity.otp.signin` descriptor is record-free: its feature
+receipt is0→0, while session creation is an independently bound atomic effect.
+User-bound scope must match the final user. Anonymous scope remains anonymous;
+it cannot be promoted or trusted to choose a user. The native effect resolves
+the eligible recipient from the original protected continuation. Actor and
+session owner remain distinct. No callback, second store or journal bridges
+this transaction.
+
+Exact new committed execution alone permits delivery, still bounded by the
+original OTP issuance deadline. Errors, cancellation, ambiguity and replay
+never disclose bearer or CSRF custody. `Request()` returns false for OTP, and
+core `Recover` rejects it: submitted codes are not restart-recovery inputs.
+Code-free recovery of original outcome/session identity, native atomic Signin
+and authoritative reader composition remain pending. This core seam is not a
+usable login endpoint and does not authorize application-written workflows.
 
 ### Commit-gated authenticated cookie issuance
 
