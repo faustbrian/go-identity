@@ -173,6 +173,26 @@ func TestAddressPolicyInvalidZeroAndDiagnostics(t *testing.T) {
 	}
 }
 
+func TestAddressUnexportedConsumerCustodyDoesNotLeak(t *testing.T) {
+	p, err := email.NewAddressParser(addressPolicy(t, false))
+	if err != nil {
+		t.Fatal(err)
+	}
+	a, err := p.Parse("sensitive@example.invalid")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, value := range []any{struct{ address email.Address }{a}, struct {
+		nested struct{ address email.Address }
+	}{struct{ address email.Address }{a}}} {
+		for _, verb := range []string{"%v", "%+v", "%#v"} {
+			if strings.Contains(fmt.Sprintf(verb, value), "sensitive") {
+				t.Fatal("nested address custody leaked")
+			}
+		}
+	}
+}
+
 func FuzzAddressPolicyBoundedFixedPoints(f *testing.F) {
 	profile, _ := identifier.NewNormalizationProfile(identifier.NormalizationProfileSpec{ID: "email-fuzz", Version: 1, Unicode: identifier.UnicodeNormalizationNFC, MaximumBytes: 4096})
 	p, _ := email.NewAddressParser(email.AddressPolicy{MaximumBytes: 4096, Canonicalization: profile})

@@ -25,7 +25,9 @@ var ErrSensitiveSerialization = errors.New("identity.email.sensitive_serializati
 
 // AddressInput is sensitive unnormalized UTF-8 input, at most 4096 bytes.
 // Direct conversions are revalidated by Parse. Explicit string conversion
-// reveals it; normal formatting/logging redact and serialization fails closed.
+// reveals it; direct formatting/logging redact and serialization fails closed.
+// As a raw string scalar, private enclosing fields can bypass these methods;
+// never put raw input into diagnostic objects. Parsed Address has opaque custody.
 type AddressInput string
 
 // AddressPolicy is copied by NewAddressParser. MaximumBytes bounds input and
@@ -51,7 +53,11 @@ type AddressParser struct {
 // Address is an immutable admitted mailbox, not proof of address ownership.
 // Its zero is invalid; Parse is its only construction path. Ordinary diagnostics
 // redact. Explicit Canonical and Display projections remain sensitive.
-type Address struct {
+type Address struct{ state *addressState }
+
+// Pointer custody prevents inline disclosure when fmt bypasses Format on a
+// consumer's unexported enclosing field. State never changes after Parse.
+type addressState struct {
 	canonical identifier.Canonical
 	display   string
 }
@@ -141,22 +147,32 @@ func (p AddressParser) Parse(input AddressInput) (Address, error) {
 	if err != nil || canonical.Record().Value != value {
 		return Address{}, ErrInvalidAddress
 	}
-	a := Address{canonical: canonical}
+	s := &addressState{canonical: canonical}
 	if p.policy.PreserveDisplay {
-		a.display = strings.Clone(string(input))
+		s.display = strings.Clone(string(input))
 	}
-	return a, nil
+	return Address{state: s}, nil
 }
 
 // Canonical explicitly exposes the complete sensitive comparison identity and
 // policy binding. Zero returns an invalid identifier.Canonical. Equality is not
 // address ownership or authorization; persistence must enforce scoped uniqueness.
-func (a Address) Canonical() identifier.Canonical { return a.canonical }
+func (a Address) Canonical() identifier.Canonical {
+	if a.state == nil {
+		return identifier.Canonical{}
+	}
+	return a.state.canonical
+}
 
 // Display explicitly reveals the original accepted input only when enabled.
 // Empty means display retention was disabled or the address is invalid. It must
 // not be used for lookup, authorization or unescaped rendering.
-func (a Address) Display() string { return a.display }
+func (a Address) Display() string {
+	if a.state == nil {
+		return ""
+	}
+	return a.state.display
+}
 
 // Format redacts unnormalized input for every formatting verb.
 func (AddressInput) Format(s fmt.State, _ rune) { io.WriteString(s, "email.AddressInput(redacted)") }

@@ -64,6 +64,12 @@ SMTP server behavior. Display text is not safe HTML and must never select a
 lookup key or authority. Canonical equality proves neither uniqueness nor
 ownership; tenant-scoped persistence and verified proof remain separate owners.
 Keep explicit projections out of logs, diagnostics and public errors.
+Parsed `Address` uses immutable pointer custody so formatting a consumer's
+private enclosing field cannot traverse its retained canonical/display bytes.
+`AddressInput` deliberately remains the required raw string scalar: direct
+formatters redact, but Go can bypass them in private enclosing fields. Never
+log raw input or put it in diagnostic objects. Explicit canonical records,
+display strings and string conversions are equally sensitive projections.
 
 Full lifecycle workflows, privacy contributors, real-adapter/reference journeys,
 provider qualification, exact coverage/mutation, clean published consumers and
