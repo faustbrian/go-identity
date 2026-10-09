@@ -45,11 +45,19 @@ execution preserves the known outcome without delivering fresh credentials.
 This fixed JSON response profile permits no trailers, including credential fields
 added during hook unwind.
 
-This development checkpoint provides a standalone typed handler, not a complete
-feature/server. Send HTTP transport, HTTP recovery, feature registration and
-concrete OpenAPI remain pending, as do composed native browser
-login, exact coverage/mutation, clean-consumer and release qualification. It
-advertises no feature metadata. No production memory fallback exists.
+`NewSigninFeature` and `NewSigninFeatureWithMiddleware` explicitly contribute
+only the real signin route and its concrete OpenAPI 3.1.1 wire schema. Pass the
+returned feature to the base HTTP selected-handler/router constructors. Omit it
+to expose neither the route nor its metadata. Construction performs no native
+owner IO. The schema describes closed original-flow JSON and credential-free
+results; fresh credentials are delivered only through selected response headers.
+Shared router HTTPS/origin denials retain their actual JSON/plaintext media.
+
+This remains a development checkpoint, not a complete server. Send HTTP transport,
+HTTP recovery, composed native browser login, exact coverage/mutation,
+clean-consumer and release qualification remain pending. The single-factor
+profile must deny when further factors are required; complete MFA continuation
+composition remains required. No production memory fallback exists.
 
 Domain owners must honor contexts and be concurrency-safe. The handler owns no
 goroutines or resources and never closes borrowed dependencies. The enclosing
