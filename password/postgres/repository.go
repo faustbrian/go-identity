@@ -1,5 +1,6 @@
 // Package passwordpostgres owns durable password material and primary reads.
-// Coordinated mutation, history and lifecycle participants remain in development.
+// Existing-password material replacement participates in the kernel transaction;
+// complete password workflows, history and lifecycle remain in development.
 package passwordpostgres
 
 import (
@@ -17,24 +18,26 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-// Config fixes explicit read budgets and primitive-owned parsing limits.
+// Config fixes explicit read/write budgets and primitive-owned parsing policy.
 // MaximumDuration is in (0,10s]. HashPolicy is the owning workflow's constructed
 // primitive policy, not an adapter-selected password policy. Its verification
 // limits admit supported legacy algorithms; the reader does not require hashes
-// to use the current issuance profile. Zero is invalid. Values are immutable.
+// to use the current issuance profile. New material writes require the exact
+// selected issuance algorithm and its parameters. Zero is invalid and copied.
 type Config struct {
 	MaximumDuration time.Duration
 	HashPolicy      primitive.Policy
 }
 
 // Repository borrows a caller-owned primary-only pool, never closes it and owns
-// no goroutines, locks, cache or authority lease. Calls are concurrency-safe;
-// zero denies. Close the pool only after in-flight reads finish. The fixed
+// no goroutines, process locks, cache or authority lease. Calls are concurrency-
+// safe; zero denies. Close the pool only after in-flight calls finish. The fixed
 // identity_password schema is installed after the kernel credential history.
 type Repository struct {
 	pool            *database.Pool
 	maximumDuration time.Duration
 	limits          primitive.Limits
+	policy          primitive.Policy
 }
 
 // Format redacts pool configuration from direct diagnostics.
@@ -51,7 +54,7 @@ func NewRepository(pool *database.Pool, config Config) (*Repository, error) {
 	if pool == nil || pool.Raw() == nil || config.MaximumDuration <= 0 || config.MaximumDuration > 10*time.Second || config.HashPolicy.Algorithm() == "" {
 		return nil, password.ErrPasswordWork
 	}
-	return &Repository{pool: pool, maximumDuration: config.MaximumDuration, limits: config.HashPolicy.Limits()}, nil
+	return &Repository{pool: pool, maximumDuration: config.MaximumDuration, limits: config.HashPolicy.Limits(), policy: config.HashPolicy}, nil
 }
 
 // ReadPasswordCredential joins owned material and kernel reference/user state

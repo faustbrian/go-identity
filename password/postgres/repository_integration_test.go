@@ -44,7 +44,7 @@ func TestPrimaryPasswordCredentialIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatal("migration backend unavailable")
 	}
-	base := kernel.CredentialMigrationSource{Base: kernel.StatusMigrationSource{Base: kernel.MigrationSource{}, Version: 10}, Version: 11}
+	base := kernel.CredentialReplacementMigrationSource{Base: kernel.CredentialMigrationSource{Base: kernel.StatusMigrationSource{Base: kernel.MigrationSource{}, Version: 10}, Version: 11}, Version: 12}
 	runner, err := migrations.NewRunner(base, backend)
 	if err != nil {
 		t.Fatal("kernel history unavailable")
@@ -56,7 +56,7 @@ func TestPrimaryPasswordCredentialIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatal("password history unavailable")
 	}
-	runner, err = migrations.NewRunner(passworddb.MigrationSource{}, owned)
+	runner, err = migrations.NewRunner(passwordMaterialHistory{}, owned)
 	if err != nil {
 		t.Fatal("password history unavailable")
 	}
@@ -99,6 +99,18 @@ INSERT INTO identity.credential_references(tenant_id,user_id,credential_id,kind,
 	if err != nil {
 		t.Fatal("password fixture failed")
 	}
+	// Upgrade installed version1 with populated material. Its checksum and
+	// credential bytes must survive the additive retained-effect history.
+	runner, err = migrations.NewRunner(passworddb.MigrationSource{}, owned)
+	if err != nil {
+		t.Fatal("password upgrade history unavailable")
+	}
+	if _, err = runner.Up(ctx); err != nil {
+		t.Fatal("populated password upgrade failed")
+	}
+	if _, err = runner.Up(ctx); err != nil {
+		t.Fatal("password upgrade replay failed")
+	}
 	repo, err := passworddb.NewRepository(pool, passworddb.Config{MaximumDuration: time.Second, HashPolicy: policy})
 	if err != nil {
 		t.Fatal("password reader unavailable")
@@ -123,6 +135,7 @@ INSERT INTO identity.credential_references(tenant_id,user_id,credential_id,kind,
 	if err != nil || result.Matched {
 		t.Fatal("blocked foreign tenant authenticated")
 	}
+	testNativePasswordReplacement(t, ctx, pool, policy, hash)
 	_, err = repo.ReadPasswordCredential(ctx, password.CredentialKey{TenantID: "absent", SubjectID: key.SubjectID})
 	if !errors.Is(err, password.ErrCredentialAbsent) {
 		t.Fatal("missing scope not classified")
@@ -250,4 +263,14 @@ INSERT INTO identity.credential_references(tenant_id,user_id,credential_id,kind,
 	if _, err = repo.ReadPasswordCredential(ctx, key); err != nil {
 		t.Fatal("reader failed after lock rollback")
 	}
+}
+
+type passwordMaterialHistory struct{}
+
+func (passwordMaterialHistory) Load(ctx context.Context) ([]migrations.Migration, error) {
+	all, err := (passworddb.MigrationSource{}).Load(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return all[:1], nil
 }

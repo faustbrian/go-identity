@@ -1,8 +1,9 @@
 # Password PostgreSQL adapter
 
 Development checkpoint: owned forward-only password material storage and a
-consistent primary credential reader. Coordinated registration, changes,
-rehash, reset, history and deletion/recovery participants remain unimplemented.
+consistent primary credential reader plus native existing-password material
+replacement/recovery. Registration, authenticated change composition, rehash,
+reset, history and deletion remain unimplemented.
 There is deliberately no independent setter or application-written workflow.
 
 ## Composition
@@ -11,7 +12,10 @@ There is deliberately no independent setter or application-written workflow.
 2. Install `MigrationSource{}` through the owned `go-migrations/v3` Runner and
    PostgreSQL backend, using the permanent `identity_password` ledger namespace.
    Existing unmanaged schema objects fail rather than being adopted. History is
-   forward-only; keep version 1 unchanged across upgrades.
+   forward-only; keep installed version 1 unchanged across upgrades. Version 2
+   adds retained, hash-free replacement-effect bindings and supports populated
+   version-1 upgrades. Install kernel `CredentialReplacementMigrationSource`
+   before enabling the native replacement profile.
 3. Construct the reader using an existing caller-owned **primary-only**
    `go-postgres.Pool` and the password owner's constructed primitive policy:
 
@@ -56,6 +60,44 @@ The material table's tenant/account primary key supplies lookup and uniqueness;
 its FK retains the kernel reference. No extra covering index or performance
 improvement is claimed. Deletion needs the future coordinated participant rather
 than an independent delete or cascading loss of credential state.
+
+## Existing-password material replacement
+
+Register this exact repository as the `identity/password/postgres` contributor
+in the kernel coordinator. Its sole current `FeatureOperations` declaration is
+the existing-password change storage profile, schema `password-change` version
+1. Construct `identity.NewFeaturePasswordHashCommand` with the eight exact
+`kernel.CredentialReplacementFields`, original binding and the already generated
+verifier. Scalar hashes, hash-free commands and undeclared fields are rejected.
+Select the original protected audit, credential subject and `password.changed.v1`
+lifecycle with exact reference predecessor/successor. The existing outbox owner
+must implement `kernel.CredentialReplacementLifecycleContributor` and persist
+both staged lifecycle and the independently owned replacement successors.
+
+The repository's pure `ValidateFeatureCommand`/`CredentialReplacement` methods
+enforce the configured current issuance algorithm and selected work parameters.
+`ApplyFeature` runs only during this exact instance's native coordinator
+invocation, after the kernel has locked active user/reference authority. It
+locks owned material, bounds transfer before allocation, checks the full-width
+material/reference predecessor and parses existing material under legacy read
+limits. One CAS changes version, exact verifier bytes, algorithm and monotonic
+update time, then inserts original-command evidence in the same `Work`. It does
+not write kernel tables, perform cryptographic work, invoke a policy callback,
+begin/close a transaction or retry. Earlier deadlines win; cancellation survives.
+
+Only the coordinator commits the provisional receipt together with kernel
+versions, audit and outbox. Retained material effects complement its journal,
+not a second success authority. Recovery matches original scope/transition;
+missing effects prove native noncommit, while conflicting/missing infrastructure
+is unknown. A later password replacement cannot erase the original effect or
+receipt. Do not prune effects independently of command-owner retention, deletion
+and legal-hold rules; that lifecycle remains pending.
+
+This is a **trusted persistence seam, not an authenticated password-change
+endpoint**. Reauthentication/proof consumption, HIBP/reuse, session invalidation,
+durable generated-hash preparation and browser transport still need the real
+password workflow composition. Do not provide application-written stores or
+workflows to bridge those unfinished contracts.
 
 ## Native verification and remaining work
 

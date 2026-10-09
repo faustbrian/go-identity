@@ -30,8 +30,27 @@ func (MigrationSource) Load(ctx context.Context) ([]migrations.Migration, error)
 	if err != nil {
 		return nil, password.ErrPasswordWork
 	}
-	return []migrations.Migration{migration}, nil
+	replacement, err := migrations.NewMigration(2, "identity_password_replacement_effects", migrations.TransactionModeDefault, replacementSchemaSQL, "")
+	if err != nil {
+		return nil, password.ErrPasswordWork
+	}
+	return []migrations.Migration{migration, replacement}, nil
 }
+
+const replacementSchemaSQL = `CREATE TABLE identity_password.replacements (
+ tenant_id identity.directory_id NOT NULL,
+ command_id bytea NOT NULL CHECK(octet_length(command_id)=16),
+ purpose text COLLATE "C" NOT NULL CHECK(purpose='identity.password.change'),
+ user_id identity.directory_id NOT NULL,
+ credential_id identity.directory_id NOT NULL,
+ before_version identity.version NOT NULL,
+ after_version identity.version NOT NULL,
+ binding_digest bytea NOT NULL CHECK(octet_length(binding_digest)=32),
+ PRIMARY KEY(tenant_id,command_id),
+ FOREIGN KEY(tenant_id,purpose,command_id) REFERENCES identity.commands(tenant_id,purpose,command_id),
+ CHECK(after_version=before_version+1)
+);
+`
 
 const schemaSQL = `CREATE SCHEMA identity_password;
 CREATE TABLE identity_password.credentials (
