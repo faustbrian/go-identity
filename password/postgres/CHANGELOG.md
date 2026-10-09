@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Bind the native keyed password-change workflow to the portable password
+  Change/Recover port without changing existing direct service signatures.
+  The request's required retry key reaches the original journal unchanged;
+  keyless input cannot select an unkeyed fallback. Original unknown, committed
+  and recovered outcomes retain their native meanings. Optional HTTP can now
+  consume the core contract without importing this adapter.
+
 - Add opt-in keyed authenticated password change on the existing kernel journal.
   Matching retries retain the original encrypted preparation and credential
   outcome; changed password, proof or network intent conflicts without repeating

@@ -15,6 +15,7 @@ import (
 
 	"github.com/faustbrian/go-authorization"
 	identity "github.com/faustbrian/go-identity"
+	password "github.com/faustbrian/go-identity/password"
 	passworddb "github.com/faustbrian/go-identity/password/postgres"
 	kernel "github.com/faustbrian/go-identity/postgres"
 	"github.com/faustbrian/go-identity/risk"
@@ -104,6 +105,17 @@ func testNativeKeyedPasswordChange(t *testing.T, ctx context.Context, pool *data
 	if err != nil {
 		t.Fatal(err)
 	}
+	workflow, err := passworddb.NewChangeWorkflow(service)
+	if err != nil {
+		t.Fatal("portable native workflow unavailable", err)
+	}
+	var port password.ChangeService = workflow
+	caller := request.Caller.Clone()
+	caller.PolicyRevision = authorization.Revision(requestKeys.Policy.PolicyVersion)
+	caller.Request.Tenant = authorization.TenantID(request.TenantID)
+	caller.Request.Action = "identity.password.change"
+	caller.Request.Resource = authorization.Resource{Type: "identity.request-admission", ID: "identity.password.change"}
+	portable := password.ChangeRequest{TenantID: request.TenantID, Session: request.Session, Proof: request.Proof, Password: request.Password, Caller: caller, Network: request.Network, IdempotencyKey: key}
 	before := calls.Load()
 	type completion struct {
 		result passworddb.PasswordChangeResult
@@ -114,8 +126,8 @@ func testNativeKeyedPasswordChange(t *testing.T, ctx context.Context, pool *data
 	workerCtx, stopWorker := context.WithCancel(ctx)
 	go func() {
 		defer close(finished)
-		result, err := service.Change(workerCtx, request, key)
-		done <- completion{result, err}
+		result, err := port.Change(workerCtx, portable)
+		done <- completion{nativePortableResult(result), err}
 	}()
 	defer func() {
 		releaseOnce.Do(func() { close(release) })
@@ -166,6 +178,24 @@ func testNativeKeyedPasswordChange(t *testing.T, ctx context.Context, pool *data
 	replay, err := restarted.Change(ctx, request, key)
 	if err != nil || replay != result || calls.Load() != before+1 {
 		t.Fatal("matching retry regenerated or lost original outcome", err)
+	}
+	restartedWorkflow, err := passworddb.NewChangeWorkflow(restarted)
+	if err != nil {
+		t.Fatal(err)
+	}
+	portableReplay, err := restartedWorkflow.Change(ctx, portable)
+	if err != nil || nativePortableResult(portableReplay) != result || calls.Load() != before+1 {
+		t.Fatal("portable restart changed original result", err)
+	}
+	portableRecovery, err := restartedWorkflow.Recover(ctx, query, request.Caller)
+	if err != nil || portableRecovery != portableReplay || calls.Load() != before+1 {
+		t.Fatal("portable code-free recovery changed original result", err)
+	}
+	keyless := portable
+	keyless.IdempotencyKey = identity.IdempotencyKey{}
+	keylessResult, err := restartedWorkflow.Change(ctx, keyless)
+	if err == nil || keylessResult.CommandID != "" || keylessResult.Outcome != 0 || calls.Load() != before+1 {
+		t.Fatal("portable keyless request fell back to native unkeyed command")
 	}
 	rotatedKeys, err := keyring.New(map[string][]byte{"password-change": bytes.Repeat([]byte{61}, 32), "password-change-next": bytes.Repeat([]byte{64}, 32)})
 	if err != nil {
@@ -234,6 +264,10 @@ func testNativeKeyedPasswordChange(t *testing.T, ctx context.Context, pool *data
 		})
 	}
 	return result
+}
+
+func nativePortableResult(result password.ChangeResult) passworddb.PasswordChangeResult {
+	return passworddb.PasswordChangeResult{CommandID: result.CommandID, Outcome: result.Outcome, CredentialVersion: result.CredentialVersion, AuthorityInvalidated: result.AuthorityInvalidated}
 }
 
 // A real outbox statement waits behind a task-owned advisory lock. Expiry must

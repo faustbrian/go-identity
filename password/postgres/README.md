@@ -229,6 +229,17 @@ stores or workflows to bridge those unfinished contracts.
 
 ### Keyed authenticated password change
 
+For adapter-neutral composition, call `NewChangeWorkflow(keyedService)` and
+pass the returned owner as `password.ChangeService`. Its `Change` accepts the
+core `password.ChangeRequest`, including the sole required `IdempotencyKey`;
+its `Recover` accepts original code-free correlation and current trusted caller
+policy. The native service still owns the entire execution and recovery. This
+binding adds no transactions, retry, provider call, mutation authority or store.
+It borrows the existing service and must be drained before borrowed owners close.
+Zero/missing owners and keyless inputs deny. Earlier caller cancellation is
+preserved without entering native work. Existing direct keyed and unkeyed
+service APIs remain available unchanged; optional HTTP wiring remains pending.
+
 Use `NewKeyedPasswordChangeConfig` with a kernel-constructed `RequestKeyConfig`,
 a dedicated nonzero intent HMAC key and the active encryption key ID. Compose
 `NewKeyedPasswordChangeService` with the existing native reauthentication source,
