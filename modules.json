@@ -15,7 +15,7 @@
       "family": "service-edge",
       "version": "0.0.0",
       "tag_prefix": "password/v",
-      "owned_dependencies": ["github.com/faustbrian/go-password"],
+      "owned_dependencies": ["github.com/faustbrian/go-identity/risk", "github.com/faustbrian/go-password"],
       "reverse_owned_dependencies": [],
       "external_runtime_dependencies": [],
       "required_services": [],

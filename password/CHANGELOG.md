@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Gate password hash creation through the existing risk policy's mandatory
+  HIBP assessment for every selected creating operation, including recovery and
+  administrative paths. Recheck unchanged facts after hashing; stale, foreign,
+  unavailable and non-allow results cannot produce a usable hash.
+
 - Add the private shared credential execution path for upcoming workflows:
   require completed screening before hashing, perform real dummy verification
   for unknown accounts, and discard output on cancellation or custody loss.

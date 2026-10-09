@@ -12,6 +12,14 @@ discards output. Existing short passwords are not rejected by the signup minimum
 This is not a wall-clock constant-time claim across legacy hash algorithms or
 storage, and the HIBP provider and durable workflows are not yet connected here.
 
+The shared screening path now delegates complete decisions to `risk.Policy`,
+requiring explicitly selected HIBP for each creating action. It freezes bounded
+provider facts and reassesses their original age after hashing, without another
+provider call, cache promotion or freshness reset. Missing/unavailable signals,
+breaches, foreign bindings, step-up and throttle cannot yield a usable hash.
+Concrete HIBP provider collection, atomic risk consumption and password workflow
+composition still need to be connected; structural facts are not source proof.
+
 ## Quick start
 
 ```go
