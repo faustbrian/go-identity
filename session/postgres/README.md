@@ -1,5 +1,28 @@
 # PostgreSQL session storage
 
+## Original-session admission mapping
+
+Native feature adapters use `OriginalSessionFields(original)` to bind the
+complete original session into their command's `source-session.*` fields.
+Select only that namespace and pass it to
+`OriginalSessionFromFields(tenant, user, fields)` during execution. Each native
+feature must exhaustively validate its other fields; this mapper does not
+validate an entire foreign command. Field order is irrelevant, but missing,
+duplicate, unknown and noncanonical tagged-union values deny.
+
+Credential and OTP authentication retain distinct complete historical
+metadata. Remember policy, exact times/versions, lookup commitment, every
+authority dimension and optional CSRF state round-trip through the existing
+session-owned codec. Anonymous sessions use a different admission profile and
+are rejected. Returned slices are owned copies; these correlated projections
+must not be logged or exposed as transport credentials.
+
+Mapping is not authentication or authorization. Native workflows must prove
+the separate submitted bearer, compare every current authority under the
+original coordinator transaction, and call `RequireSession` with the same
+frozen record. Do not replace the record with a newer observation, refresh its
+timestamps or accept its metadata as a reauthentication proof.
+
 ## Retained OTP sign-in identity
 
 `Repository.ReadOTPSigninIdentity(ctx, originalBinding)` reads the original

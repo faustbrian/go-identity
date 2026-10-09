@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add closed original-session admission mapping for native cross-module
+  workflows. Preserve credential or OTP authentication, complete authority,
+  remember and CSRF state without copying the session codec into other owners.
+  Malformed or incomplete fields deny; mapping grants no authentication.
+
 - Add bounded primary inspection of the retained OTP sign-in user/session/family
   identity, including after live session payload deletion. Validate the original
   command and record commitment without reconstructing a session or credential;
