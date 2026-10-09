@@ -104,6 +104,12 @@ the owned exact deletion tuple after successful selected cookie logout. Bearer,
 denied, ambiguous and short-circuit responses clear no cookies. Hooks must not
 log/retain credential-bearing headers, retain state or start detached work.
 
+Both handlers support base HTTP's `WithOperationMiddleware` binding after
+feature construction. It preserves the frozen network/origin policy and
+borrows the same domain owners, appends rather than replaces existing hooks,
+and keeps response protection outside every hook. Original handlers remain
+usable; binding never reconstructs them from mutable caller configuration.
+
 Call `NewSignOutHandler(SignOutConfig{...})` with the same `GetConfig` and
 exactly the selected `CookieSignOut` or `BearerSignOut` owner. Cookie mode uses
 the strict `*session.CookieSignOutService`, composed with the owned native

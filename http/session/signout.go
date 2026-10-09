@@ -338,13 +338,13 @@ func NewSignOutHandlerWithMiddleware(c SignOutConfig, middleware []identityhttp.
 	if err != nil {
 		return nil, err
 	}
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return &protectedPipeline{pipeline: handler, serve: func(handler http.Handler, w http.ResponseWriter, r *http.Request) {
 		attempt := &signOutAttempt{out: SignOutResponse{CommitOutcome: "none"}}
 		if r != nil {
 			r = r.WithContext(context.WithValue(r.Context(), signOutAttemptKey{}, attempt))
 		}
 		serveSessionResponse(handler, w, r, func() string { return attempt.cookie })
-	}), nil
+	}}, nil
 }
 
 func sendSignOut(w http.ResponseWriter, attempt *signOutAttempt, status int, code string) {

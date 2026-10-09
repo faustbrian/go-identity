@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Preserve real phase and response ownership when selected composition appends
+  middleware to existing session handlers. Frozen network/origin policy and
+  borrowed domain owners are reused; no extra authentication, rate admission
+  or caller-config reconstruction is introduced.
+
 - Add real typed self-signout stages and opt-in feature middleware composition.
   Preserve primary revalidation, atomic CSRF, single rate admission and original
   command/outcome/recovery; hooks can observe detached attempted results but

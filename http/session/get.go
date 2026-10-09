@@ -267,9 +267,9 @@ func NewGetHandlerWithMiddleware(c GetConfig, middleware []identityhttp.Middlewa
 	if err != nil {
 		return nil, err
 	}
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return &protectedPipeline{pipeline: handler, serve: func(handler http.Handler, w http.ResponseWriter, r *http.Request) {
 		serveSessionResponse(handler, w, r, func() string { return "" })
-	}), nil
+	}}, nil
 }
 
 func authenticateSession(c GetConfig, r *http.Request, state GetState) (GetState, error) {
