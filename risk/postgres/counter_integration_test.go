@@ -20,14 +20,16 @@ import (
 )
 
 // Only the protected feature owner is a seam; native counter policy, SQL,
-// migrations and coordinator reservations are real. No password mutation runs.
+// migrations and coordinator reservations are real. The username-update test
+// profile exercises CredentialMutation without pretending to replace password
+// material or implementing the kernel's required credential-replacement trait.
 type counterFeature struct{ delay time.Duration }
 
 func (*counterFeature) Descriptor() identitypostgres.ContributorDescriptor {
-	return identitypostgres.ContributorDescriptor{Owner: "identity/password/postgres", ContractID: "identity.password", Version: 1}
+	return identitypostgres.ContributorDescriptor{Owner: "identity/username/postgres", ContractID: "identity.username", Version: 1}
 }
 func (*counterFeature) FeatureOperations() []identity.FeatureOperation {
-	return []identity.FeatureOperation{{Owner: "identity/password", OperationID: "identity.password.change", SchemaID: "password-change-test-v1", SchemaVersion: 1, RecordRequirement: identity.FeatureRecordRequired}}
+	return []identity.FeatureOperation{{Owner: "identity/username", OperationID: "identity.username.update", SchemaID: "username-update-test-v1", SchemaVersion: 1, RecordRequirement: identity.FeatureRecordRequired}}
 }
 func (*counterFeature) ValidateFeatureCommand(identity.Command, identitypostgres.CommandPlan) error {
 	return nil
@@ -78,6 +80,14 @@ func testNativeProtectedCounters(t *testing.T, ctx context.Context, pool *databa
 	prepareWithFeature := func(r *Repository, tenant string, feature *counterFeature, original *originalInput, at ...time.Time) (*identitypostgres.Coordinator, identity.CommandBinding, identity.Command, identitypostgres.CommandPlan) {
 		t.Helper()
 		c := protectedCommand(t, tenant)
+		metadata, _ := c.Feature()
+		metadata.Operation = feature.FeatureOperations()[0]
+		metadata.Binding.OperationID = metadata.Operation.OperationID
+		metadata.Binding.SchemaID = metadata.Operation.SchemaID
+		c, e = identity.NewFeatureCommand(metadata)
+		if e != nil {
+			t.Fatal(e)
+		}
 		preparedAt := time.Now().UTC().Truncate(time.Microsecond)
 		if len(at) == 1 {
 			preparedAt = at[0]

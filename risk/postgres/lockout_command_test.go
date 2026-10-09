@@ -52,7 +52,9 @@ func lockoutInput(t *testing.T, mode risk.LockoutMode, version uint64) LockoutCo
 	op := LockoutOperation(mode)
 	b := identity.CommandBinding{CommandID: id, TenantID: "native-lockout", UserID: "subject", ActorID: "administrator", ActorKind: authorization.SubjectUser, RecordID: string(id), OperationID: op.OperationID, SchemaID: op.SchemaID, SchemaVersion: 1, PolicyID: "risk-policy", PolicyVersion: 3, CorrelationID: string(id)}
 	dc := authorization.DecisionContext{PolicyRevision: 9, CorrelationID: b.CorrelationID, Request: authorization.Request{Tenant: "native-lockout", Action: authorization.Action(op.OperationID), Subject: authorization.Subject{ID: "administrator", Kind: authorization.SubjectUser}, Resource: authorization.Resource{Type: "identity.user", ID: "subject"}}}
-	r := LockoutCommandRequest{Binding: b, Scope: dc, Request: risk.LockoutRequest{Scope: risk.Context{Tenant: "native-lockout", Operation: "identity.password.change", Attempt: string(id)}, Subject: risk.Subject{User: "subject", Session: "session", Network: "2001:db8::1"}, Actor: "administrator", Mode: mode, ExpectedVersion: version}, AuthorityVersion: 1}
+	// Match the counter-only protected integration profile. Lockout digests bind
+	// the concrete operation as well as its CredentialMutation policy class.
+	r := LockoutCommandRequest{Binding: b, Scope: dc, Request: risk.LockoutRequest{Scope: risk.Context{Tenant: "native-lockout", Operation: "identity.username.update", Attempt: string(id)}, Subject: risk.Subject{User: "subject", Session: "session", Network: "2001:db8::1"}, Actor: "administrator", Mode: mode, ExpectedVersion: version}, AuthorityVersion: 1}
 	if mode == risk.StartLockout {
 		r.Request.Duration = time.Minute
 	}

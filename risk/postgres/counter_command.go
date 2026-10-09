@@ -23,7 +23,7 @@ func (r *Repository) PrepareCommandCounters(c identity.Command, subject risk.Sub
 	fail := func() (identity.Command, identitypostgres.CommandCounterPlan, error) {
 		return identity.Command{}, identitypostgres.CommandCounterPlan{}, risk.ErrInvalidCounterCommand
 	}
-	s, ok := c.Feature()
+	s, ok := counterCommandFeature(c)
 	if !ok || r == nil || r.counters == nil {
 		return fail()
 	}
@@ -53,7 +53,15 @@ func (r *Repository) PrepareCommandCounters(c identity.Command, subject risk.Sub
 		binary.BigEndian.PutUint32(versions[i*4:], k.Version)
 	}
 	s.Fields = append(s.Fields, textField("counter.network", subject.Network), textField("counter.session", subject.Session), identity.FeatureField{Name: "counter.prepared-at", Value: identity.FeatureValue{Kind: identity.FeatureTime, Time: primaryTime}}, identity.FeatureField{Name: "counter.key-versions", Value: identity.FeatureValue{Kind: identity.FeatureBytes, Bytes: versions}})
-	mapped, e := identity.NewFeatureCommand(s)
+	var mapped identity.Command
+	if hash, bearer, proof, authenticated := c.PasswordChangeCustody(); authenticated {
+		// Rebuild the disjoint variant without dropping or renewing any original
+		// custody. Counter preparation itself authenticates neither the bearer
+		// nor the proof; the protected native feature remains their authority.
+		mapped, e = identity.NewFeaturePasswordChangeCommand(s, hash, bearer, proof)
+	} else {
+		mapped, e = identity.NewFeatureCommand(s)
+	}
 	if e != nil {
 		return fail()
 	}
@@ -62,6 +70,15 @@ func (r *Repository) PrepareCommandCounters(c identity.Command, subject risk.Sub
 		return fail()
 	}
 	return mapped, plan, nil
+}
+
+// Preserve existing Feature admission and add only the explicit authenticated
+// change profile. The separate hash-only profile remains closed.
+func counterCommandFeature(c identity.Command) (identity.FeatureCommandSpec, bool) {
+	if s, ok := c.Feature(); ok {
+		return s, true
+	}
+	return c.PasswordChangeFeature()
 }
 func counterPlan(b risk.CounterBinding) (identitypostgres.CommandCounterPlan, error) {
 	raw, e := hex.DecodeString(b.Fingerprint)
@@ -90,7 +107,7 @@ func (r *Repository) ValidateCommandCounters(c identity.Command, p identitypostg
 }
 func (r *Repository) restoreCounter(c identity.Command, p identitypostgres.CommandCounterPlan) (restoredCounter, error) {
 	fail := func() (restoredCounter, error) { return restoredCounter{}, risk.ErrInvalidCounterCommand }
-	s, ok := c.Feature()
+	s, ok := counterCommandFeature(c)
 	if !ok || r == nil || r.counters == nil || p.PolicyVersion != r.policy {
 		return fail()
 	}

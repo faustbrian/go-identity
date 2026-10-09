@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Preserve authenticated password-change hash, session and proof custody through
+  protected counter preparation and restoration without renewing its original
+  timestamps. Hash-only commands remain rejected; counter preparation does not
+  authenticate the proof or grant password-change permission.
+
 - Retain the original native-confirmed activation chain across matching and
   ambiguous-commit reconciliation. Owned journal export binds that chain and
   current eligibility to the same concrete primary owner under one outer

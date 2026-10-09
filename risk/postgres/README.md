@@ -551,6 +551,13 @@ session/network dimensions, policy bounds and original retained-key projection
 before SQL. Raw network/session inputs stay in the in-memory opaque command;
 only bounded keyed projections and structural command linkage persist.
 
+Authenticated password-change commands retain their exact original hash, session
+bearer and reauthentication proof while counter fields are appended. The adapter
+explicitly preserves that disjoint command variant; generic and hash-only
+borrowers remain closed to it. Counter preparation grants no proof verification
+or password-change authority. The native password owner must verify and consume
+the proof in its protected transaction. Hash-only commands remain unsupported.
+
 `ReserveCommandCounters` is invoked only under coordinator ownership. A fixed
 window begins at primary time, resets at exclusive expiry, and never wraps its
 uint64 count. All retained digest aliases share one logical window. Durable
