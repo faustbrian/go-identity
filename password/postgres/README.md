@@ -24,12 +24,55 @@ and freshness validation; this reader does not authenticate signatures or check
 current credential/session authorities. An expired original remains historical
 data, not renewed permission.
 
-Native issuance and protected atomic consumption are still under development.
-No public writer, automatic cleanup, replay framework or application-written
+The native service below issues originals; protected atomic consumption remains
+under development. No independent writer, automatic cleanup, replay framework or application-written
 proof store is introduced. Lifecycle/retention must be coordinated before this
 profile is released; original records cannot be removed independently of their
 command history. The native SQL fixtures prove retrieval and installed schema
-constraints, not completed credential verification or one-use issuance.
+constraints. One-use protected mutation remains separate from verification.
+
+## Native password reauthentication
+
+`NewReauthenticationService(pool, config)` composes the real password verifier,
+primary session lookup, kernel coordinator, authorization engine, risk admission,
+security audit and lifecycle outbox. Install their owned migration histories,
+including password migration 3, before use. The configuration is trusted startup
+input: select the password single-factor session profile, independent lookup,
+identifier/risk and Ed25519 evidence keys, bounded verifier/dummy-hash policy,
+current authorization/query policies and an exact target allowlist. The constructor
+does no IO and never creates schema or starts background work.
+
+`Verify(ctx, request)` accepts opaque source bearer/password custody, a trusted
+tenant and human caller, trusted network/device provenance and an allowed target.
+It derives the account abuse dimension rather than accepting a client-selected
+digest. Authentication counting and audit precede real password comparison.
+Wrong, blocked or changed credentials return a neutral result with no proof.
+Protected execution locks and rechecks original directory, credential,
+authorization, session/family and material authority through the sole kernel
+transaction. The original signed proof, mandatory audit and lifecycle event
+commit together. Verification neither extends the source session nor consumes
+the proof. Unsupported organization, factor and source-method profiles deny.
+
+The result's sole `authentication.ReauthenticationProof` is released only after
+a new known commit and final freshness checks. TTL is positive and at most 15
+minutes, capped by original session and credential lifetime. Destroy the caller's
+password after the call. Never serialize or log requests, configuration, keys,
+raw driver errors, bearer values or verifier material.
+
+When an outcome is unknown, retain its server-generated command ID and use
+`Recover(ctx, tenant, commandID, caller)` under current disclosure policy.
+Recovery accepts no password/bearer and reports original outcomes without
+reissuing proof, renewing freshness, recharging risk or retrying the mutation.
+A failed protected transaction leaves no proof or lifecycle event; a known
+rollback includes its required terminal failure audit. An audit outage can
+prevent terminalization and therefore remains unknown rather than being called
+successful or certainly aborted. Do not automatically resubmit the password.
+
+The pool and callbacks remain caller-owned and must support concurrent use.
+Earlier caller deadlines win; the service owns no goroutine or retry loop and
+never closes the pool. This backend composition is not an HTTP endpoint or a
+completed password-change/reset workflow. Retention, all-factor composition and
+release qualification remain pending.
 
 ## Composition
 

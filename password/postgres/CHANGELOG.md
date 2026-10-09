@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- Add native single-factor password reauthentication using the original bearer,
+  counted/audited abuse admission and current locked primary owners. Commit the
+  original signed proof, required audit and lifecycle event together without
+  creating or extending sessions. Exact configured targets and capped original
+  lifetime deny scope expansion. Code-free outcome recovery never redelivers a
+  proof; unknown outcomes must not be automatically retried. Install password
+  migration 3 and the selected kernel/session/authorization/audit/outbox histories.
+  Protected atomic consumption, other factor profiles and complete password
+  lifecycle/release qualification remain in development.
+
 - Add bounded primary retrieval of original signed password reauthentication
   records through authentication's public source contract. Pending, aborted,
   absent, foreign and malformed records expose no partial proof or renewed
