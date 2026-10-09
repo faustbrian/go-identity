@@ -1,5 +1,72 @@
 # OTP PostgreSQL
 
+## Public consuming Signin
+
+Opt into `NewSigninService(sender, SigninConfig{...})` over an initialized
+native Send service configured for `otp.PurposeSignin` and pre-auth transactions.
+Existing Send-only and Check composition is unchanged. The service borrows the
+sender's primary pool, keys and deployment configuration; it starts no goroutine,
+installs no route and performs no automatic migration.
+
+Supply the coordinator's bounded current `QueryPolicy` and `AdmissionPolicy`
+(the latter defaults to QueryPolicy), a retained `CurrentAttemptKeyVersion`,
+session PostgreSQL `Session` configuration, `Profile` with the sender's exact
+global authority and authorization namespace plus the selected audience, and
+session-owned `Issuer` configuration and a dedicated `CSRFKey`. Install consuming
+OTP, session revocation/issuance, pre-auth release, CSRF, OTP-record and OTP-issuance
+migrations after their respective bases. Permanently allocate composition-wide
+migration versions; do not rewrite already installed history.
+
+Pass `otp.SigninRequest` with the original public Send command ID, same explicit
+pre-auth flow/bearer, trusted tenant/user/caller and actual submitted code.
+The service restores original issuance and recipient custody. It chooses the
+attempt/command/session/family IDs and current challenge version itself. The
+caller cannot replace the identifier, recipient, remember policy or expiry.
+Anonymous command scope remains anonymous; the actual selected user's authority
+is checked independently and does not replace the initiating actor.
+
+The existing authorization engine evaluates that actual user with service-owned
+`identity.authentication.method=otp`, `profile=single-factor`, `phase=proposed`
+and `factor-count=1` attributes. Reserved authentication attributes from caller
+subject/environment/request maps are removed. **The admission policy must
+authoritatively deny this proposed profile when additional factors are required.**
+This is a single-factor composition, not MFA continuation issuance; the required
+MFA continuation profile remains separate implementation work. Permissive policy
+does not discover or satisfy a user's factor requirements automatically.
+
+Correct sign-in consumes OTP and pre-auth atomically with session/family/CSRF,
+current authority, audit, lifecycle and receipt through the sole native kernel
+coordinator. Wrong-code denial charges exactly once with its retained result.
+The original browser/persistent remember policy and earliest challenge/pre-auth
+validity deadline remain unchanged. Authority changes and expiry during policy
+IO cannot be adopted as fresh authorization. Competing correct submissions
+produce at most one credential-bearing winner; provisional SQL failures roll
+back protected effects.
+
+Only a newly committed successful result carries reveal-once bearer and CSRF
+custody. `Issuance.Cookie.Value` is empty: trusted transport explicitly reveals
+the bearer and applies the session owner's cookie metadata. Error, replay,
+unknown and recovery paths never deliver credentials. `SessionID` describes the
+original committed identity, not current authentication or session validity.
+
+Retain `result.Recovery` after submission, especially Unknown/InProgress, and
+call `RecoverSignin` with original pre-auth possession and fresh trusted caller,
+**without the code**. Do not resubmit Signin to retry an unresolved attempt.
+Recovery matches the original consuming correlation through the same journal,
+uses current QueryPolicy independently of login admission, and never compares,
+charges, generates or delivers credentials. Consumed/expired pre-auth and erased
+live session payloads do not erase authorized historical outcomes. Retained
+session identity remains available without fabricating a partial session object.
+Preserve original wrapping, digest, attempt, request-namespace and deployment
+configuration throughout retained history.
+
+Real PostgreSQL tests exercise user/anonymous and browser/persistent flows,
+actual delivered codes and reconstructed session validation, concurrent winners,
+MFA denial, wrong-code metering/recovery, rollback, authority/expiry interleaving,
+hostile history correlation and lost commit acknowledgments. Provider delivery,
+durable risk counters, MFA continuation, HTTP/reference composition and complete
+package release gates remain pending; these tests do not certify them.
+
 ## Public non-consuming Check
 
 After constructing and initializing the native Send service, opt into
@@ -36,8 +103,8 @@ Check result; that result still grants no current authority. Revoked/expired
 flows, blocked users, stale epochs, missing keys and denied current policy deny
 disclosure. All work is uncached, bounded by the sender timeout and caller deadline.
 
-HTTP exposure, full consuming login workflows, ambiguous-acknowledgement
-qualification and package release gates remain separate pending obligations.
+HTTP exposure, remaining consuming workflow profiles, Check-specific ambiguous
+acknowledgment qualification and package release gates remain pending obligations.
 
 ## Public Send
 

@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Add opt-in public single-factor OTP Signin and code-free recovery over original
+  public Send custody. Atomically consume OTP/pre-auth with native session,
+  CSRF, audit, lifecycle and receipt; preserve original recipient, actor and
+  remember policy. Require actual-user admission and independent current history
+  authorization. Additional-factor policy denies rather than issuing a session.
+  Unknown/replayed/recovered results never reveal credentials; historical session
+  identity survives live payload cleanup. Install consuming OTP and session
+  issuance, revocation, pre-auth release, CSRF and OTP migrations before enabling.
+
 - Add public non-consuming Check and original-attempt recovery over public
   Send custody and the existing kernel journal. Correct and wrong checks are
   metered atomically with their audit and retained result, without reservation

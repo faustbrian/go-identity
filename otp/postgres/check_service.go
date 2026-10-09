@@ -366,6 +366,10 @@ func (s *CheckService) requireCurrent(ctx context.Context, b identity.CommandBin
 }
 
 func (s *CheckService) checkPlan(command identity.Command, attempt kernel.OTPAttemptPlan) (kernel.CommandPlan, error) {
+	return otpFeaturePlan(s.registry, s.sender.owner.store, command, attempt, "otp_check", "otp.check", "otp.checked.v1")
+}
+
+func otpFeaturePlan(registry *kernel.ContributorRegistry, owner *Contributor, command identity.Command, attempt kernel.OTPAttemptPlan, subject, action, event string) (kernel.CommandPlan, error) {
 	spec, ok := command.Feature()
 	if !ok {
 		return kernel.CommandPlan{}, ErrInvalidCommand
@@ -386,15 +390,15 @@ func (s *CheckService) checkPlan(command identity.Command, attempt kernel.OTPAtt
 	if err != nil {
 		return kernel.CommandPlan{}, ErrInvalidCommand
 	}
-	record, err := builder.Build(audit.RecordInput{OccurredAt: when, Action: "otp.check", Outcome: audit.OutcomeSucceeded, ReasonCode: "completed", Actor: audit.ActorInput{Kind: kind, ID: string(b.ActorID)}, Subject: audit.SubjectInput{Type: "otp_check", ID: target}, Context: audit.ContextInput{TenantID: string(b.TenantID), CorrelationID: b.CorrelationID}, Policy: audit.PolicyMetadata{PolicyID: b.PolicyID, Version: strconv.FormatUint(b.PolicyVersion, 10)}, Changes: audit.ChangeSetInput{NoChange: true}, Attributes: map[string]string{"identity.profile": "identity.security.v1", "command.id": string(b.CommandID), "aggregate.type": "otp_check", "aggregate.id": target, "aggregate.before_version": "0", "aggregate.after_version": "0", "retention.class": "protected"}})
+	record, err := builder.Build(audit.RecordInput{OccurredAt: when, Action: action, Outcome: audit.OutcomeSucceeded, ReasonCode: "completed", Actor: audit.ActorInput{Kind: kind, ID: string(b.ActorID)}, Subject: audit.SubjectInput{Type: subject, ID: target}, Context: audit.ContextInput{TenantID: string(b.TenantID), CorrelationID: b.CorrelationID}, Policy: audit.PolicyMetadata{PolicyID: b.PolicyID, Version: strconv.FormatUint(b.PolicyVersion, 10)}, Changes: audit.ChangeSetInput{NoChange: true}, Attributes: map[string]string{"identity.profile": "identity.security.v1", "command.id": string(b.CommandID), "aggregate.type": subject, "aggregate.id": target, "aggregate.before_version": "0", "aggregate.after_version": "0", "retention.class": "protected"}})
 	if err != nil {
 		return kernel.CommandPlan{}, ErrInvalidCommand
 	}
-	digest, err := kernel.FeatureAuditBindingDigest(b, spec.Operation, "otp_check", record)
+	digest, err := kernel.FeatureAuditBindingDigest(b, spec.Operation, subject, record)
 	if err != nil {
 		return kernel.CommandPlan{}, err
 	}
-	return kernel.CommandPlan{Contributors: s.registry.Descriptors(), Feature: &kernel.FeatureRegistration{Contributor: s.sender.owner.store.Descriptor(), Operation: spec.Operation}, SubjectType: "otp_check", OTP: &attempt, Lifecycle: &kernel.LifecyclePlan{EventType: "otp.checked.v1"}, Audits: []kernel.AuditPlan{{EventType: "otp.check", SchemaVersion: 1, BindingDigest: digest, Required: true, RequiredRecordCount: 1, MaxRecordBytes: 16384, MaxAggregateBytes: 16384, RetentionPolicyVersion: 1, RetentionClass: "protected"}}}, nil
+	return kernel.CommandPlan{Contributors: registry.Descriptors(), Feature: &kernel.FeatureRegistration{Contributor: owner.Descriptor(), Operation: spec.Operation}, SubjectType: subject, OTP: &attempt, Lifecycle: &kernel.LifecyclePlan{EventType: event}, Audits: []kernel.AuditPlan{{EventType: action, SchemaVersion: 1, BindingDigest: digest, Required: true, RequiredRecordCount: 1, MaxRecordBytes: 16384, MaxAggregateBytes: 16384, RetentionPolicyVersion: 1, RetentionClass: "protected"}}}, nil
 }
 
 func (CheckConfig) Format(s fmt.State, _ rune) {

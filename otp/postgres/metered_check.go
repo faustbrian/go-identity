@@ -29,16 +29,22 @@ func (p *Contributor) FeatureOperations() []identity.FeatureOperation {
 	if p.send != nil {
 		ops = append(ops, issuanceOperation(identity.FeatureSubjectUser), issuanceOperation(identity.FeatureSubjectAnonymousFlow))
 	}
+	if p.signin != nil {
+		ops = append(ops, signinOperation(identity.FeatureSubjectUser), signinOperation(identity.FeatureSubjectAnonymousFlow))
+	}
 	return ops
 }
 
-// ValidateFeatureCommand validates the native check's exact closed vocabulary,
-// original submission and metering-only plan, or a privately configured Send's
-// generated custody and final declaration, without IO. Unrelated participant
-// effects, fields, schemas, consuming mode and domain version changes deny.
-// Validation proves no current primary authority or durable check result.
+// ValidateFeatureCommand validates the exact closed vocabulary and plan of a
+// native Check or privately configured Send or Signin, without IO. Signin also
+// binds original issuance custody to its consuming attempt and session effect.
+// Unrelated effects, fields, schemas and domain version changes deny.
+// Validation proves no current primary authority or durable outcome.
 func (p *Contributor) ValidateFeatureCommand(command identity.Command, plan kernel.CommandPlan) error {
 	spec, ok := command.Feature()
+	if p != nil && p.signin != nil && ok && spec.Operation == signinOperation(spec.Operation.SubjectRequirement) {
+		return p.validateSigninCommand(command, plan)
+	}
 	if p != nil && p.send != nil && ok && spec.Operation == issuanceOperation(spec.Operation.SubjectRequirement) {
 		return p.validatePreparedSendExecution(command, plan)
 	}
@@ -53,9 +59,12 @@ func (p *Contributor) ValidateFeatureCommand(command identity.Command, plan kern
 	return p.ValidateOTPAttemptCommand(command, *plan.OTP)
 }
 
-// ApplyFeature runs prepared Send only for its exact coordinator-owned final
-// invocation. Checks remain exclusive to the coordinator's metered phase.
+// ApplyFeature runs a privately configured Send or consuming Signin only in its
+// coordinator-owned transaction. Checks remain exclusive to the metered phase.
 func (p *Contributor) ApplyFeature(ctx context.Context, w kernel.Work, command identity.Command) (identity.FeatureReceipt, error) {
+	if spec, ok := command.Feature(); p != nil && p.signin != nil && ok && spec.Operation == signinOperation(spec.Operation.SubjectRequirement) {
+		return p.applySignin(ctx, w, command)
+	}
 	if p != nil && p.send != nil {
 		return p.applyPreparedSend(ctx, w, command)
 	}

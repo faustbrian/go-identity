@@ -55,6 +55,7 @@ type Contributor struct {
 	session                   *sessionAdmissionProfile
 	send                      *preparedSendProfile
 	initiation                *sendInitiationProfile
+	signin                    *signinProfile
 }
 
 var _ kernel.OTPAttemptContributor = (*Contributor)(nil)
@@ -290,6 +291,9 @@ func (p *Contributor) RecoverParticipant(ctx context.Context, w kernel.RecoveryW
 	}
 	if _, registration, _, err := w.FeatureScope(p); err == nil && p.send != nil && registration.Operation == issuanceOperation(registration.Operation.SubjectRequirement) {
 		return (&issuanceContributor{store: p}).recoverIssuance(ctx, w, p)
+	}
+	if _, registration, _, err := w.FeatureScope(p); err == nil && p.signin != nil && registration.Operation == signinOperation(registration.Operation.SubjectRequirement) {
+		return p.recoverSignin(ctx, w)
 	}
 	return p.recoverConsuming(ctx, w)
 }

@@ -61,6 +61,10 @@ func TestPublicSendPostgresLegacyPredecessorIsEnumerationSafe(t *testing.T) {
 }
 
 func testPublicSendPostgres(t *testing.T, exhausted, legacy bool, preAuthUser ...bool) {
+	testPublicSendPostgresScenario(t, exhausted, legacy, nil, preAuthUser...)
+}
+
+func testPublicSendPostgresScenario(t *testing.T, exhausted, legacy bool, signin *publicSigninScenario, preAuthUser ...bool) {
 	ctx, db, _ := otpDatabase(t)
 	store, original, _ := canonicalAuthenticationSendFixture(t)
 	r, _, err := store.originalPreparedSend(ctx, original)
@@ -137,7 +141,13 @@ func testPublicSendPostgres(t *testing.T, exhausted, legacy bool, preAuthUser ..
 	if _, err := db.Exec(ctx, migration.Up); err != nil {
 		t.Fatal(err)
 	}
-	pool, err := database.New(ctx, database.Config{DSN: os.Getenv("IDENTITY_OTP_POSTGRES_TEST_DSN"), Configure: func(c *database.PoolConfig) error { c.ConnConfig.Database = db.Config().Database; return nil }})
+	pool, err := database.New(ctx, database.Config{DSN: os.Getenv("IDENTITY_OTP_POSTGRES_TEST_DSN"), Configure: func(c *database.PoolConfig) error {
+		c.ConnConfig.Database = db.Config().Database
+		if signin != nil && signin.commitFault != nil {
+			c.ConnConfig.DialFunc = signin.commitFault.dial
+		}
+		return nil
+	}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -195,6 +205,21 @@ INSERT INTO authorization_subject_authorities VALUES('AAAAAAAAAAAAAAAAAAAAAQ','u
 	config := SendConfig{Store: native.ContributorConfig, Codec: codecConfig(), Session: native.Session,
 		Delivery:    deliverypg.ContributorConfig{Deployment: "deployment", CurrentDigestKeyVersion: 1, RetainedDigestKeys: map[uint32][32]byte{1: {0x72}}, ActiveEnvelopeKeyID: "issue-envelope", PreparationTimeout: time.Second, ProviderProfiles: map[uint64]deliverypg.ProviderProfile{1: {Provider: "test-sender", PolicyVersion: 1}}},
 		Coordinator: kernel.CoordinatorConfig{MaximumDuration: 3 * time.Second, LeaseDuration: 4 * time.Second, CurrentFingerprintKeyVersion: 1, RetainedFingerprintKeys: map[uint32][32]byte{1: {1}}}, RequestKeys: requestKeys, Risk: riskConfig, Policy: store.send.policy, TemplateID: store.send.template, TemplateVersion: store.send.templateVersion, LocaleChain: store.send.locales, Templates: preparedSendTemplates("{{.code}}"), ProviderVersion: 1, PolicyID: "otp-policy", PolicyVersion: 7, PreAuthAction: "identity.otp.signin", IntentKey: [32]byte{0x67}, IdentifierKey: [32]byte{0x68}, Timeout: 3 * time.Second}
+	if signin != nil {
+		profile, checks, err := config.Policy.Bindings()
+		if err != nil {
+			t.Fatal(err)
+		}
+		profile.Purpose = otp.PurposeSignin
+		codeProfile, err := otp.NewCodeProfile(profile)
+		if err != nil {
+			t.Fatal(err)
+		}
+		config.Policy, err = otp.NewAttemptPolicy(codeProfile, checks)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
 	service, err := NewSendService(pool, config, crypto)
 	if err != nil {
 		t.Fatal("public composition", err)
@@ -214,6 +239,23 @@ INSERT INTO authorization_subject_authorities VALUES('AAAAAAAAAAAAAAAAAAAAAQ','u
 	}
 	now := time.Now().UTC().Truncate(time.Microsecond)
 	preAuthBinding := session.PreAuthBinding{ID: preAuthID, Intent: session.PreAuthIntent{TenantID: s.TenantID, Action: config.PreAuthAction, Origin: "https://identity.example.invalid", Nonce: [32]byte{1}, Remember: s.Remember, PolicyID: config.PolicyID, PolicyVersion: config.PolicyVersion}, IssuedAt: now, ExpiresAt: now.Add(5 * time.Minute)}
+	if signin != nil {
+		remember, _ := s.Remember.Bindings()
+		remember.Choice = session.BrowserSession
+		if signin.persistent {
+			remember.Choice = session.PersistentSession
+		}
+		preAuthBinding.Intent.Remember, err = session.NewRememberPolicy(remember)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if signin.expiryWait {
+			// Valid one-minute pre-auth lifetime already in progress. Leave
+			// enough time for Send, then cross its real expiry in policy IO.
+			preAuthBinding.ExpiresAt = now.Add(2 * time.Second)
+			preAuthBinding.IssuedAt = preAuthBinding.ExpiresAt.Add(-time.Minute)
+		}
+	}
 	token, err := session.ParseToken(bearer.Token())
 	if err != nil {
 		t.Fatal(err)
@@ -238,6 +280,21 @@ INSERT INTO authorization_subject_authorities VALUES('AAAAAAAAAAAAAAAAAAAAAQ','u
 	preAuthFlow, err := otp.NewPreAuthSendFlow(preAuthID, bearer)
 	if err != nil {
 		t.Fatal(err)
+	}
+	if signin != nil {
+		key, err := identity.NewIdempotencyKey([]byte("actual-public-signin"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		request := otp.SendRequest{TenantID: s.TenantID, UserID: s.UserID, Caller: caller, Flow: preAuthFlow, Channel: otp.ChannelEmail, Destination: cb.Scope.Destination, Purpose: otp.PurposeSignin, TargetID: cb.Scope.TargetID, Network: "192.0.2.8", Device: "public-device", IdempotencyKey: key}
+		if signin.anonymous {
+			request.UserID = ""
+			request.Caller = caller.Clone()
+			request.Caller.Request.Subject.Kind = authorization.SubjectServiceAccount
+			request.Caller.Request.Subject.ID = "AAAAAAAAAAAAAAAAAAAAAw"
+		}
+		testPublicSigninAndRecovery(t, ctx, db, service, config, request, preAuthBinding.Intent.Remember, *signin)
+		return
 	}
 	expectedChallenges, expectedAudits, expectedLifecycle := 0, 0, 0
 	var acceptedRequests []otp.SendRequest
