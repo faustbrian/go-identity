@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add explicit server-issued browser-device correlation cookies with dedicated
+  retained HMAC keys, tenant/origin/environment binding and original expiry.
+  They confer no session or MFA trust; IP/identifier abuse controls remain
+  required. Reuse the existing secure host-cookie policy and pin the kernel
+  contract already consumed by native OTP/pre-auth session code.
+
 - Add explicit two-phase consuming OTP session preparation and native command
   binding, preserving original token, flow identity, remember choice and optional
   CSRF custody. Reuse exact commit-gated delivery without fabricating credential

@@ -1,5 +1,46 @@
 # Session
 
+## Browser-device correlation for abuse control
+
+`NewBrowserDeviceCodec(BrowserDeviceConfig)` freezes explicit dedicated key
+versions, deployment/environment namespace, whole-second lifetime (1 hour to
+7 days), and `__Host-identity_device` host-cookie policy. Use independently
+generated `NewBrowserDeviceKey` material; the greatest eligible version issues
+new cookies, and retained versions verify old ones. Never reuse key versions
+for different material. Retain old keys for the entire original cookie lifetime,
+or deliberately invalidate that version. Namespace changes invalidate cookies.
+
+After HTTPS host/origin and IP admission, `Issue` generates one browser-random
+correlation cookie. Deliver its sensitive `CookieHeader()` through Set-Cookie,
+never JSON, redirects, logs or cacheable responses. On subsequent requests,
+strictly acquire exactly one cookie value, then `Resolve` with current resolved
+tenant/origin and trusted time. Reuse valid custody across new login flows;
+Resolve returns no cookie header and never renews the original expiry. Absent
+custody may initialize a fresh browser during explicit flow initiation; malformed,
+duplicate, mismatched or expired cookies must not silently fall back in Send.
+Transport integration is still pending; the codec alone exposes no route.
+
+`DeviceID()` is only tenant/origin/environment-scoped abuse correlation—not
+login, session, human identity, physical device, browser fingerprint or MFA trust.
+Clearing or copying cookies evades/shares this signal. Independent network and
+identifier controls remain mandatory; do not use this cookie to recover an
+account, skip a factor or authorize any protected operation. The cookie reveals
+only a random nonce, key version and timeline under a domain-separated MAC.
+No account, contact, user-agent or IP is stored in it. Original expiry bounds
+retention; privacy-disabled deployments must not issue it. Existing session
+revocation is independent, and this signal cannot outlive or bypass authority.
+
+The fixed v1 wire profile is 85 bytes, canonical unpadded base64url (114 bytes):
+version byte1, big-endian uint32 key version, uint64 issued/expiry Unix seconds,
+32-byte CSPRNG nonce, then HMAC-SHA-256. MAC input is
+`golib.browser-device.cookie.v1\x00`, uint16-length-framed namespace/tenant/origin,
+and the first53 bytes. Stable signal is SHA-256 over the distinct
+`golib.browser-device.signal.v1\x00` domain, the same scope frame and nonce.
+Unknown format/key, noncanonical encoding, unsigned timestamp overflow,
+future issuance, exact expiry and lifetimes beyond current policy deny uniformly.
+Methods are concurrent-safe and own no stores, callbacks, goroutines or services.
+Full browser/reference, coverage/mutation and release qualification remain pending.
+
 ## OTP authentication provenance prerequisite
 
 OTP is not a password/provider credential. `AuthenticationOTP` therefore has
