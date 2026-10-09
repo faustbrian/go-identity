@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Align the canonical OTP signin descriptor with original Send/pre-auth custody,
+  server-owned attempt allocation, native issuance and code-free recovery.
+  The optional integration owns real signin; metadata alone exposes no route.
+
 - Add split signin IP/identifier admission for original-custody workflows.
   Trusted IP admission precedes native source lookup; canonical identifier
   admission follows it without double-debiting IP. Both share existing signin
