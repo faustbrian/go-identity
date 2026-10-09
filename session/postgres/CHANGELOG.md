@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add bounded primary inspection of the retained OTP sign-in user/session/family
+  identity, including after live session payload deletion. Validate the original
+  command and record commitment without reconstructing a session or credential;
+  historical inspection remains separate from disclosure authorization.
+
 - Add the native consuming OTP session effect within the original coordinator
   transaction, preserving verified recipient, authority, remember and CSRF state
   and denying stale owners or expired authentication. Retained recovery binds

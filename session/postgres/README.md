@@ -1,5 +1,21 @@
 # PostgreSQL session storage
 
+## Retained OTP sign-in identity
+
+`Repository.ReadOTPSigninIdentity(ctx, originalBinding)` reads the original
+user/session/family tuple from existing retained issuance evidence. It works
+after live payload cleanup, including anonymous flows whose command user is
+empty. Every binding field and the original record commitment must match.
+Missing evidence returns `ErrRecordAbsent`; corrupt evidence returns
+`ErrInvalidRecord`; operational failures are redacted typed identity errors.
+
+This is trusted structural inspection like `Get`, not a public endpoint or
+authentication/recovery authority. The native OTP service must first authenticate
+original possession, authorize historical disclosure and reconcile the original
+consuming command. The tuple contains no bearer, digest or partial session and
+cannot enable credential redelivery. Formatting is redacted; implicit JSON/text
+export is refused. No new schema or recovery journal is introduced.
+
 ## OTP sign-in command mapping
 
 The native OTP owner includes `OTPSigninSessionFields(originalSession)` alongside

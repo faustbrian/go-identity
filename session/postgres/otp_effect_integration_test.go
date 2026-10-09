@@ -5,6 +5,7 @@ package postgres
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"testing"
 	"time"
@@ -334,14 +335,62 @@ func testRetainedOTPIssuance(t *testing.T, ctx context.Context, pool *database.P
 	t.Helper()
 	f, _ := command.Feature()
 	b := f.Binding
+	native, err := NewRepository(pool, Config{Schema: "session_store", MaximumDuration: time.Second})
+	if err != nil {
+		t.Fatal(err)
+	}
 	read := func(want kernel.RecoveryStatus) {
 		t.Helper()
 		got, err := recoverOTPIssuance(ctx, pool.Raw(), `"session_store"`, b, kernel.LifecyclePlan{})
 		if err != nil || got != want {
 			t.Fatalf("retained OTP issuance status=%v want=%v: %v", got, want, err)
 		}
+		projection, projectionErr := native.ReadOTPSigninIdentity(ctx, b)
+		switch want {
+		case kernel.RecoveryCommitted:
+			if projectionErr != nil || projection.UserID != s.UserID || projection.SessionID != s.SessionID || projection.FamilyID != s.FamilyID {
+				t.Fatal("original historical identity lost", projectionErr)
+			}
+		case kernel.RecoveryNotCommitted:
+			if !errors.Is(projectionErr, ErrRecordAbsent) || projection != (OTPSigninIdentity{}) {
+				t.Fatal("missing issuance fabricated identity", projectionErr)
+			}
+		case kernel.RecoveryUnknown:
+			if !errors.Is(projectionErr, ErrInvalidRecord) || projection != (OTPSigninIdentity{}) {
+				t.Fatal("corrupt commitment disclosed identity", projectionErr)
+			}
+		}
 	}
 	read(kernel.RecoveryCommitted)
+	for _, expired := range []bool{false, true} {
+		bounded, cancel := context.WithCancel(ctx)
+		if expired {
+			cancel()
+			bounded, cancel = context.WithDeadline(ctx, time.Now().Add(-time.Second))
+		} else {
+			cancel()
+		}
+		got, err := native.ReadOTPSigninIdentity(bounded, b)
+		cancel()
+		var cancelled identity.CancelledError
+		var deadline identity.DeadlineExceededError
+		if got != (OTPSigninIdentity{}) || (!expired && !errors.As(err, &cancelled)) || (expired && !errors.As(err, &deadline)) {
+			t.Fatal("historical read lost cancellation/deadline classification", err)
+		}
+	}
+	for _, changed := range []func(*identity.CommandBinding){
+		func(b *identity.CommandBinding) { b.TenantID = "other-tenant" },
+		func(b *identity.CommandBinding) { b.ActorID = "other-actor" },
+		func(b *identity.CommandBinding) { b.CorrelationID = "other-correlation" },
+		func(b *identity.CommandBinding) { b.PolicyVersion++ },
+		func(b *identity.CommandBinding) { b.OperationID = "identity.session.issue" },
+	} {
+		other := b
+		changed(&other)
+		if got, err := native.ReadOTPSigninIdentity(ctx, other); err == nil || got != (OTPSigninIdentity{}) {
+			t.Fatal("changed historical scope disclosed identity")
+		}
+	}
 	// Retiring the live payload must not turn a historical commit into rollback.
 	if _, err := pool.Raw().Exec(ctx, `DELETE FROM session_store.sessions WHERE tenant_id=$1 AND session_id=$2`, string(s.TenantID), s.SessionID); err != nil {
 		t.Fatal(err)

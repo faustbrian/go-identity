@@ -155,31 +155,38 @@ func (e *OTPSigninEffect) Recover(ctx context.Context, w kernel.RecoveryWork, ow
 // The public entry point supplies only invocation-fenced RecoveryWork. Keeping
 // decoding separate does not introduce another authority or recovery journal.
 func recoverOTPIssuance[R SessionRows](ctx context.Context, q SessionQueryer[R], schema string, b identity.CommandBinding, transition kernel.LifecyclePlan) (kernel.RecoveryStatus, error) {
+	_, status, err := readOTPIssuanceIdentity(ctx, q, schema, b, transition)
+	return status, err
+}
+
+// One retained decoder serves both sealed recovery and trusted primary
+// inspection; neither path depends on a live payload or reconstructs a session.
+func readOTPIssuanceIdentity[R SessionRows](ctx context.Context, q SessionQueryer[R], schema string, b identity.CommandBinding, transition kernel.LifecyclePlan) (OTPSigninIdentity, kernel.RecoveryStatus, error) {
 	id, bindingDigest := revocationEvidence(b, transition)
 	rows, err := q.Query(ctx, `SELECT purpose,user_id,session_id,family_id,binding_digest,record_digest FROM `+schema+`.session_issuances WHERE tenant_id=$1 AND command_id=$2`, string(b.TenantID), id)
 	if err != nil {
-		return kernel.RecoveryUnknown, err
+		return OTPSigninIdentity{}, kernel.RecoveryUnknown, err
 	}
 	defer rows.Close()
 	if !rows.Next() {
 		if err := rows.Err(); err != nil {
-			return kernel.RecoveryUnknown, err
+			return OTPSigninIdentity{}, kernel.RecoveryUnknown, err
 		}
-		return kernel.RecoveryNotCommitted, nil
+		return OTPSigninIdentity{}, kernel.RecoveryNotCommitted, nil
 	}
 	var purpose, user, idSession, family string
 	var stored, record []byte
 	if err := rows.Scan(&purpose, &user, &idSession, &family, &stored, &record); err != nil {
-		return kernel.RecoveryUnknown, err
+		return OTPSigninIdentity{}, kernel.RecoveryUnknown, err
 	}
 	if rows.Next() || rows.Err() != nil {
-		return kernel.RecoveryUnknown, identity.UnavailableError{}
+		return OTPSigninIdentity{}, kernel.RecoveryUnknown, identity.UnavailableError{}
 	}
 	digest := otpIssuanceDigest(bindingDigest, user, idSession, family, record)
 	if purpose != b.OperationID || !scopeID(user) || (b.UserID != "" && user != string(b.UserID)) || !scopeID(idSession) || !scopeID(family) || subtle.ConstantTimeCompare(stored, digest[:]) != 1 || len(record) != sha256.Size || subtle.ConstantTimeCompare(record, make([]byte, sha256.Size)) == 1 {
-		return kernel.RecoveryUnknown, nil
+		return OTPSigninIdentity{}, kernel.RecoveryUnknown, nil
 	}
-	return kernel.RecoveryCommitted, nil
+	return OTPSigninIdentity{UserID: identity.UserID(user), SessionID: idSession, FamilyID: family}, kernel.RecoveryCommitted, nil
 }
 
 // Record-free anonymous commands cannot identify the selected session in their
