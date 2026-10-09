@@ -136,6 +136,7 @@ INSERT INTO identity.credential_references(tenant_id,user_id,credential_id,kind,
 		t.Fatal("blocked foreign tenant authenticated")
 	}
 	testNativePasswordReplacement(t, ctx, pool, policy, hash)
+	testNativeReauthenticationRead(t, ctx, pool, repo)
 	_, err = repo.ReadPasswordCredential(ctx, password.CredentialKey{TenantID: "absent", SubjectID: key.SubjectID})
 	if !errors.Is(err, password.ErrCredentialAbsent) {
 		t.Fatal("missing scope not classified")

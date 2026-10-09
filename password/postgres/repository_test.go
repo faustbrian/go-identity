@@ -96,11 +96,11 @@ func TestReaderAndMigrationZeroValuesFailClosed(t *testing.T) {
 		t.Fatal("migration cancellation lost")
 	}
 	first, err := source.Load(context.Background())
-	if err != nil || len(first) != 2 {
+	if err != nil || len(first) != 3 {
 		t.Fatal("migration history missing")
 	}
 	second, err := source.Load(context.Background())
-	if err != nil || len(second) != 2 || first[0].Version() != second[0].Version() || first[0].Checksum() != second[0].Checksum() || first[1].Version() != 2 {
+	if err != nil || len(second) != 3 || first[0].Version() != second[0].Version() || first[0].Checksum() != second[0].Checksum() || first[1].Version() != 2 || first[2].Version() != 3 {
 		t.Fatal("migration history unstable")
 	}
 }

@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add bounded primary retrieval of original signed password reauthentication
+  records through authentication's public source contract. Pending, aborted,
+  absent, foreign and malformed records expose no partial proof or renewed
+  freshness. Install additive password migration 3; native issuance, current
+  authority checks, atomic consumption and retention remain in development.
+
 - Add native existing-password material replacement through the original
   coordinator transaction. Require exact current issuance parameters, lock and
   CAS the owned predecessor, and retain hash-free original-command evidence.

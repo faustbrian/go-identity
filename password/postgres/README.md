@@ -6,6 +6,31 @@ replacement/recovery. Registration, authenticated change composition, rehash,
 reset, history and deletion remain unimplemented.
 There is deliberately no independent setter or application-written workflow.
 
+## Original reauthentication records
+
+Migration 3 adds immutable original signed password-verification storage, bound
+to the original kernel command. `Repository.Reauthentication(ctx, proofID)`
+implements `authentication.ReauthenticationSource` using a bounded primary-only
+read. The globally unique proof ID supplies the lookup key; indexed tenant/user
+must match the complete upstream record. Pending, aborted and absent commands
+return `authentication.ErrInvalidProof`, never a provisional original.
+
+Signature bytes, full-width versions and original nanosecond timestamps retain
+their exact values. Closed canonical bytes reject duplicate/unknown fields,
+foreign scope and corrupt or oversized payloads. No private signing key, raw
+password, hash, session bearer or renewable validity lease belongs in this table.
+The upstream authenticator owns configured evidence-key verification, exact-use
+and freshness validation; this reader does not authenticate signatures or check
+current credential/session authorities. An expired original remains historical
+data, not renewed permission.
+
+Native issuance and protected atomic consumption are still under development.
+No public writer, automatic cleanup, replay framework or application-written
+proof store is introduced. Lifecycle/retention must be coordinated before this
+profile is released; original records cannot be removed independently of their
+command history. The native SQL fixtures prove retrieval and installed schema
+constraints, not completed credential verification or one-use issuance.
+
 ## Composition
 
 1. Install the identity kernel and its credential-reference migration history.
