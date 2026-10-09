@@ -32,6 +32,8 @@ const (
 
 // ModuleMigrationStatus contains only public owner/version metadata. It is a
 // discovery snapshot, not permission to apply or a guarantee of future health.
+// Versions are maxima across selected native histories. Compatibility, not
+// numeric equality, establishes completeness of a multi-history owner.
 type ModuleMigrationStatus struct {
 	Module          string
 	CurrentVersion  uint64
@@ -73,7 +75,7 @@ func (s StoreSet) ReferenceMigrationCheck(ctx context.Context, req ReferenceMigr
 	statuses := make(map[ModuleID]ModuleMigrationStatus)
 	for _, snapshot := range snapshots {
 		for owner, status := range snapshot.statuses {
-			statuses[owner] = status
+			statuses[owner] = mergeMigrationStatus(statuses[owner], status)
 		}
 	}
 	result := ReferenceMigrationCheckResult{Statuses: make([]ModuleMigrationStatus, 0, len(ids))}
@@ -84,6 +86,10 @@ func (s StoreSet) ReferenceMigrationCheck(ctx context.Context, req ReferenceMigr
 		return ReferenceMigrationCheckResult{}, err
 	}
 	return result, nil
+}
+
+func mergeMigrationStatus(a, b ModuleMigrationStatus) ModuleMigrationStatus {
+	return ModuleMigrationStatus{Module: b.Module, CurrentVersion: max(a.CurrentVersion, b.CurrentVersion), RequiredVersion: max(a.RequiredVersion, b.RequiredVersion), Compatibility: max(a.Compatibility, b.Compatibility)}
 }
 
 // Check and Plan share one discovery/lifetime boundary. Returned snapshots are

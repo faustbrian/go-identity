@@ -103,6 +103,26 @@ The native adapter owns atomic challenge/pre-auth consumption, session issuance,
 audit and lifecycle effects. Consumers supply configuration and bounded policy,
 not domain workflow callbacks or stores.
 
+Select `OTP.PreAuth` to obtain `features.PreAuth()` for original flow initiation.
+Its fixed deployment origin/callback/service actor and retained cookie key
+version are explicit configuration; action, policy and native namespace are
+derived from the same OTP owner. Resolve the shared `session.RememberPolicy`
+before `Prepare(ctx, input)`, retain the preparation's unchanged `Command`, then
+call `Issue`. Only a fresh successful commitment delivers a reveal-once token
+and credential-free secure cookie metadata. Recovery returns historical outcome,
+never another token or renewed lifetime. The graph must be initialized; unknown
+tenants and closed graphs deny. No SQL, workflow callback or HTTP route is
+consumer-owned. Nil leaves initiation absent. Compose transport separately.
+
+Initiation adds the owner-produced version 1420 to the permanently named native
+`identity_preauth` ledger, not the shared `MigrationSource`. Install through
+the existing reference Check/Plan/Apply APIs selecting `identity/session/postgres`
+after its shared prerequisites. The existing native global command/lock owner
+coordinates both histories. This permits later sign-in selection without an
+earlier pending gap. Module numeric versions summarize maxima; only compatible
+status proves every participating history is complete. Plan step `FromVersion`
+belongs to its `SourceDigest` history. Existing deployment histories are unchanged.
+
 `StoreSet.MigrationSource()` preserves kernel 1–9 and risk 1000–1011 exactly.
 Selecting OTP/delivery appends owner-produced kernel 1012–1018, OTP 1100–1103,
 pre-auth session 1200–1201, distinct authenticated session 1210, delivery

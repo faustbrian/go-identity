@@ -16,6 +16,7 @@ import (
 	otppg "github.com/faustbrian/go-identity/otp/postgres"
 	kernel "github.com/faustbrian/go-identity/postgres"
 	"github.com/faustbrian/go-identity/risk"
+	"github.com/faustbrian/go-identity/session"
 	envelope "github.com/faustbrian/go-secret-envelope"
 )
 
@@ -57,6 +58,9 @@ type OTPSendConfiguration struct {
 	// selected session namespace may share the pre-auth or authenticated store.
 	// Additional-factor policy must deny until the MFA profile is composed.
 	Signin *otppg.SigninConfig
+	// PreAuth explicitly enables original flow initiation. Nil preserves the
+	// existing externally initiated Send profile without exposing an issuer.
+	PreAuth *OTPPreAuthConfiguration
 }
 
 // DeliveryConfiguration owns delivery custody, retained policies and templates
@@ -78,6 +82,7 @@ type featureState struct {
 	migrations      featureMigrationConfig
 	otp             *otppg.SendService
 	signin          *otppg.SigninService
+	preauth         *session.PreAuthIssuer
 	delivery        *deliverypg.EnqueueService
 	sender          delivery.Sender
 	timeout         time.Duration
@@ -119,6 +124,11 @@ func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDepen
 		}
 		migrationConfig.signinSchema = o.Signin.Session.Schema
 	}
+	preauthOwner, err := composeOTPPreAuth(d.PostgreSQL, o)
+	if err != nil {
+		return err
+	}
+	migrationConfig.preauthIssue = preauthOwner != nil
 	if err := migrationConfig.validateNamespaces(c.Velocity.Schema); err != nil {
 		return err
 	}
@@ -183,7 +193,7 @@ func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDepen
 			capacity = policy.SenderConcurrency
 		}
 	}
-	s.features = &featureState{migrations: migrationConfig, otp: otpOwner, signin: signinOwner, delivery: deliveryOwner, sender: d.DeliverySender, timeout: o.Timeout, provider: o.ProviderVersion, deliverySlots: make(chan struct{}, int(capacity))}
+	s.features = &featureState{migrations: migrationConfig, otp: otpOwner, signin: signinOwner, preauth: preauthOwner, delivery: deliveryOwner, sender: d.DeliverySender, timeout: o.Timeout, provider: o.ProviderVersion, deliverySlots: make(chan struct{}, int(capacity))}
 	return nil
 }
 
@@ -268,7 +278,8 @@ func ComposeWorkers(stores StoreSet, providers ProviderSet, configs ...deliveryp
 }
 
 // FeatureSet exposes public workflow interfaces, never concrete adapter stores.
-// This development profile contains OTP Send and optional single-factor Signin,
+// This development profile contains OTP Send, optional original-flow initiation
+// and optional single-factor Signin,
 // not HTTP or a complete server.
 // Initialize and RecoverVelocity remain explicit, separate startup operations.
 type FeatureSet struct{ state *storeState }

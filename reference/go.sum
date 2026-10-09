@@ -8,3 +8,5 @@ github.com/faustbrian/go-identity/session v0.0.0-20261009071219-4c72c6799f37 h1:
 github.com/faustbrian/go-identity/session v0.0.0-20261009071219-4c72c6799f37/go.mod h1:D1p6PPJiDjtLTlk4+Nil/xTh6OYU3L3Ms+BD1CdUffw=
 github.com/faustbrian/go-identity/session/postgres v0.0.0-20261009070814-7ba9f9167bf4 h1:tfnVvaJq5jh1Hv9NiJkqPPVo2xwbUpsiKVIpH3z2nfU=
 github.com/faustbrian/go-identity/session/postgres v0.0.0-20261009070814-7ba9f9167bf4/go.mod h1:cBnGDxGbgf/r9PsPbINt/QpN6vCc4plI+pRAwKdp9Dc=
+github.com/faustbrian/go-clock v1.0.0 h1:F7YEouU94Zu2mExFBep7JWEa8nMz7WzWi/SPrDz2yJY=
+github.com/faustbrian/go-clock v1.0.0/go.mod h1:WKZ5p79IKGNTZGDp2L81cYjbsEjv3+9U0be7uwS8t6Y=

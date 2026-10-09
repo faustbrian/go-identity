@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Add opt-in native original-flow initiation and outcome-only recovery to the
+  OTP composition, with fixed deployment origin/action/policy, retained cookie
+  key selection and graph lifetime/tenant admission. Initiation migrations use
+  a selected independent native history so enabling initiation and consuming
+  sign-in in either order preserves applied shared history. Multi-history owner
+  checks retain every compatibility failure and plan steps bind their physical
+  source rather than borrowing another history's version.
+
 - Add opt-in single-factor OTP sign-in and code-free recovery through the sealed
   native composition. Startup, tenant selection and shutdown guard retained
   handles; new commitment reveals session/CSRF credentials once, while recovery

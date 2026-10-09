@@ -21,8 +21,9 @@ type ModuleVersion struct {
 }
 
 // MigrationStep identifies one native forward migration without exposing SQL.
-// FromVersion is the owner's preceding version, not another owner's version in
-// a shared ledger. SourceDigest binds the complete participating physical source.
+// FromVersion is the owner's preceding version within the physical history
+// identified by SourceDigest, not another owner or another independent history.
+// SourceDigest binds the complete participating physical source.
 type MigrationStep struct {
 	Owner        ModuleID
 	ID           string
@@ -94,7 +95,7 @@ func buildMigrationPlan(snapshots []migrationSnapshot, ids []ModuleID) (Migratio
 			if status.Compatibility != MigrationCompatible && status.Compatibility != MigrationRequired {
 				return MigrationPlan{}, identity.ConflictError{}
 			}
-			current[owner] = status.CurrentVersion
+			current[owner] = max(current[owner], status.CurrentVersion)
 			// Lifecycle bindings cannot be installed before the root outbox,
 			// even though the two owners have independent native namespaces.
 			if owner == "outbox/postgres" && selected["outbox/postgres/identity"] && !selected[owner] && status.Compatibility != MigrationCompatible {
@@ -110,6 +111,10 @@ func buildMigrationPlan(snapshots []migrationSnapshot, ids []ModuleID) (Migratio
 	ledger.number(uint64(len(snapshots)))
 	for _, snapshot := range snapshots {
 		h := snapshot.history
+		localCurrent := make(map[ModuleID]uint64, len(snapshot.statuses))
+		for owner, status := range snapshot.statuses {
+			localCurrent[owner] = status.CurrentVersion
+		}
 		sourceDigest := migrationSourceDigest(h)
 		catalog.string(h.namespace)
 		catalog.digest(sourceDigest)
@@ -152,10 +157,10 @@ func buildMigrationPlan(snapshots []migrationSnapshot, ids []ModuleID) (Migratio
 			if len(id) > 128 {
 				return MigrationPlan{}, identity.InvalidInputError{Field: "reference_plan_step_id"}
 			}
-			step := MigrationStep{Owner: owner, ID: id, FromVersion: current[owner], ToVersion: uint64(m.Version()), SourceDigest: sourceDigest}
+			step := MigrationStep{Owner: owner, ID: id, FromVersion: localCurrent[owner], ToVersion: uint64(m.Version()), SourceDigest: sourceDigest}
 			step.StepDigest = migrationStepDigest(step)
 			plan.Steps = append(plan.Steps, step)
-			current[owner] = step.ToVersion
+			localCurrent[owner] = step.ToVersion
 		}
 	}
 	plan.CatalogDigest, plan.BaseLedgerDigest = catalog.sum(), ledger.sum()

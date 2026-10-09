@@ -42,6 +42,9 @@ type otpGraphPolicy struct{}
 
 func (otpGraphPolicy) Decide(_ context.Context, c authorization.DecisionContext) (authorization.Decision, error) {
 	outcome := authorization.Deny
+	if string(c.Request.Tenant) == otpTenant && c.PolicyRevision == 7 && c.Request.Action == "identity.session.preauth-issue" && c.Request.Subject.ID == "preauth-service" && c.Request.Subject.Kind == authorization.SubjectServiceAccount {
+		return authorization.Decision{Outcome: authorization.Allow, Revision: 7}, nil
+	}
 	if string(c.Request.Tenant) == otpTenant && c.PolicyRevision == 9 && (c.Request.Action == "identity.otp.send" || c.Request.Action == "identity.delivery.process") {
 		outcome = authorization.Allow
 	}
@@ -130,6 +133,7 @@ func testReferencePublicOTP(t *testing.T, signin bool) {
 	if signin {
 		codes = make(chan auth.OneTimeCode, 1)
 		configureReferenceSignin(t, &c)
+		configureReferencePreAuth(t, &c)
 		deps.DeliverySender = otpSigninCapture{codes: codes}
 	}
 	// A retained older provider must not satisfy the current OTP provider's
@@ -177,6 +181,7 @@ func testReferencePublicOTP(t *testing.T, signin bool) {
 		legacyConfig := c
 		legacyOTP := *c.OTP
 		legacyOTP.Signin = nil
+		legacyOTP.PreAuth = nil
 		legacyConfig.OTP = &legacyOTP
 		legacy, err := reference.ComposeStores(legacyConfig, deps)
 		if err != nil {
@@ -202,6 +207,19 @@ func testReferencePublicOTP(t *testing.T, signin bool) {
 		}
 		if _, err := runner.Up(ctx); err != nil {
 			t.Fatal("populated Send-only to consuming Signin upgrade", err)
+		}
+		plan, err := stores.ReferenceMigrationPlan(ctx, reference.ReferenceMigrationPlanRequest{Modules: []reference.ModuleID{"identity/session/postgres"}})
+		if err != nil || len(plan.Plan.Steps) != 1 || plan.Plan.Steps[0].ToVersion != 1420 || plan.Plan.Steps[0].FromVersion != 0 {
+			t.Fatal("independent initiation migration plan", err)
+		}
+		initiationKey, _ := identity.NewIdempotencyKey([]byte("original-initiation-upgrade"))
+		applyRequest := reference.ReferenceMigrationApplyRequest{CommandID: "original_initiation_upgrade", Plan: plan.Plan, IdempotencyKey: initiationKey}
+		applied, err := stores.ReferenceMigrationApply(ctx, applyRequest)
+		if err != nil || applied.Result.State() != reference.MigrationApplied {
+			t.Fatal("native initiation migration apply", err)
+		}
+		if replay, err := stores.ReferenceMigrationApply(ctx, applyRequest); err != nil || replay.Result.State() != reference.MigrationApplied {
+			t.Fatal("same-command initiation migration replay", err)
 		}
 		check, err := stores.ReferenceMigrationCheck(ctx, reference.ReferenceMigrationCheckRequest{Modules: []reference.ModuleID{"identity/otp/postgres", "identity/session/postgres"}})
 		if err != nil || len(check.Statuses) != 2 {
@@ -229,7 +247,12 @@ func testReferencePublicOTP(t *testing.T, signin bool) {
 	if store, err := stores.RecoverVelocity(ctx, otpTenant); err != nil || store == nil {
 		t.Fatal("historical covered activation", err)
 	}
-	flow := insertOTPGraphPreAuth(t, ctx, f, c)
+	var flow otp.SendFlow
+	if signin {
+		flow = issueOTPGraphPreAuth(t, ctx, features)
+	} else {
+		flow = insertOTPGraphPreAuth(t, ctx, f, c)
+	}
 	destination, _ := otp.NewDestinationInput("recipient@example.invalid")
 	key, _ := identity.NewIdempotencyKey([]byte("first"))
 	request := otp.SendRequest{TenantID: otpTenant, Caller: authorization.DecisionContext{PolicyRevision: 9, Request: authorization.Request{Subject: authorization.Subject{Kind: authorization.SubjectServiceAccount, ID: "AAAAAAAAAAAAAAAAAAAAAw"}, Tenant: otpTenant, Action: "identity.otp.send", Resource: authorization.Resource{Type: "identity.request-admission", ID: "identity.otp.send"}}}, Flow: flow, Channel: otp.ChannelEmail, Destination: destination, Purpose: otp.PurposeSignin, TargetID: "login", Network: "192.0.2.8", Device: "reference-device", IdempotencyKey: key}
@@ -237,7 +260,11 @@ func testReferencePublicOTP(t *testing.T, signin bool) {
 	if err != nil || first.Outcome != identity.CommitOutcomeCommitted || first.CommandID == "" {
 		t.Fatal("native-counted public issuance", err)
 	}
-	assertOTPGraphCounts(t, ctx, f, 1, 1, 1, 2, 1)
+	if signin {
+		assertOTPGraphCounts(t, ctx, f, 1, 1, 1, 3, 2)
+	} else {
+		assertOTPGraphCounts(t, ctx, f, 1, 1, 1, 2, 1)
+	}
 	if signin {
 		proveReferenceSignin(t, ctx, stores, features, workers, f, request, first, codes)
 		return

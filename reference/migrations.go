@@ -26,6 +26,8 @@ import (
 // reuse the same base; unselected profiles contribute no schema.
 // Optional consuming Signin appends OTP 1400 and session 1411..1416, plus 1410
 // only when its session schema is distinct from the selected session bases.
+// Selected original-flow initiation contributes its independent identity_preauth
+// history through reference Check/Plan/Apply, not this shared source.
 // Audit and outbox independent histories are not part of this shared source;
 // their installation remains required before enabling the selected workflow.
 func (s StoreSet) MigrationSource() migrations.Source {
@@ -84,6 +86,7 @@ type featureMigrationConfig struct {
 	otpSchema, sessionSchema, global                        string
 	authenticatedSchema                                     string
 	signinSchema                                            string
+	preauthIssue                                            bool
 	tenants                                                 []identity.TenantID
 	cancellation, receiptTracking, receipts, reconciliation bool
 }

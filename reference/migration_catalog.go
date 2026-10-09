@@ -7,6 +7,7 @@ import (
 
 	auditpg "github.com/faustbrian/go-audit/postgres"
 	identity "github.com/faustbrian/go-identity"
+	sessionpg "github.com/faustbrian/go-identity/session/postgres"
 	migrations "github.com/faustbrian/go-migrations/v3"
 	outboxpg "github.com/faustbrian/go-transactional-outbox/v2/postgres"
 	lifecyclepg "github.com/faustbrian/go-transactional-outbox/v2/postgres/identity"
@@ -66,6 +67,19 @@ func (s StoreSet) migrationCatalog(ctx context.Context) ([]migrationHistory, err
 		return catalog, nil
 	}
 	c := s.state.features.migrations
+	if c.preauthIssue {
+		// Initiation and consuming Signin are independently selectable. A later
+		// shared-ledger allocation would prevent enabling earlier Signin steps
+		// on an initiation-first deployment. Native namespaces retain one global
+		// command/lock owner without rewriting the original shared history.
+		steps, err := (sessionpg.PreAuthIssueMigrationSource{Schema: c.sessionSchema, Version: 1420}).Load(ctx)
+		if err != nil {
+			return nil, err
+		}
+		catalog = append(catalog, migrationHistory{namespace: "identity_preauth", history: steps,
+			owners: map[migrations.Version]ModuleID{1420: "identity/session/postgres"},
+			guards: []migrationGuard{{version: 1420, schema: c.sessionSchema, tables: []string{"preauth_issuances"}}}})
+	}
 	catalog[0].guards = append(catalog[0].guards, migrationGuard{version: 1100, schema: c.otpSchema},
 		migrationGuard{version: 1250, schema: "identity", tables: []string{"delivery_intents"}},
 		migrationGuard{version: 1300, schema: "public", tables: []string{"authorization_subject_authorities"}})

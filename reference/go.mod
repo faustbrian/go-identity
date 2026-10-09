@@ -6,6 +6,7 @@ require (
 	github.com/faustbrian/go-audit v1.0.0
 	github.com/faustbrian/go-audit/postgres v1.0.1-0.20261003012155-21ad3d11d3b2
 	github.com/faustbrian/go-authorization v1.1.1-0.20261005011349-60ed4b3229d8
+	github.com/faustbrian/go-clock v1.0.0
 	github.com/faustbrian/go-identity v0.0.0-20261008042339-43e4efec5c10
 	github.com/faustbrian/go-identity/delivery v0.0.0-20261004192212-c70512ebfb31
 	github.com/faustbrian/go-identity/delivery/postgres v0.0.0-20261008115606-21b7473e6dc1

@@ -108,8 +108,9 @@ const (
 )
 
 // MigrationContributorReceipt is public progress metadata, never execution
-// authority. Version is the latest command-attributed original native version
-// for this owner, not a merged sequence. No SQL, key or private digest escapes.
+// authority. Version is the maximum command-attributed original native version
+// across this owner's participating histories, not a merged sequence. Native
+// namespace-qualified receipts remain authority. No private digest escapes.
 type MigrationContributorReceipt struct {
 	Module  ModuleID
 	Version uint64
@@ -442,7 +443,7 @@ func migrationCommand(req ReferenceMigrationApplyRequest, snapshots []migrationS
 		var selected []migrations.Migration
 		for position < len(req.Plan.Steps) {
 			step := req.Plan.Steps[position]
-			if h.owners[migrations.Version(step.ToVersion)] != step.Owner {
+			if step.SourceDigest != migrationSourceDigest(h) || h.owners[migrations.Version(step.ToVersion)] != step.Owner {
 				break
 			}
 			found := false
@@ -484,7 +485,7 @@ func contributorReceipts(p migrationdb.CommandProgress, histories []migrationHis
 		for _, h := range histories {
 			if h.namespace == r.Namespace {
 				owner := h.owners[r.Record.Version()]
-				versions[owner] = uint64(r.Record.Version())
+				versions[owner] = max(versions[owner], uint64(r.Record.Version()))
 			}
 		}
 	}
