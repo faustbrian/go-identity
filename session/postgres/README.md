@@ -26,6 +26,17 @@ disposition, compare every current owner and stage all selected/revoked session
 effects in the existing same-Work mutation. Do not implement this with a separate
 application transaction or refresh a stale session from current authority.
 
+`PasswordChangeSessionFields(original, disposition, maximum)` freezes that
+selection alongside `CredentialReplacementFields` before command reservation.
+Choose `PasswordChangePreserveSessions`, `PasswordChangeRevokeOtherSessions`,
+or `PasswordChangeRevokeAllSessions` explicitly; zero is invalid. The whole-set
+bound is 1–100000 active-state rows, including stale/expired rows, not a page size.
+This initial profile admits only single-factor password sources without selected
+organization, factor or passkey dimensions. Mapping owns its returned fields and
+preserves historical authentication, effective credential linkage, remember and
+CSRF custody. It performs no SQL and cannot authorize or complete session effects.
+The consuming native effect and password-service integration are still pending.
+
 ## Original-session admission mapping
 
 Native feature adapters use `OriginalSessionFields(original)` to bind the

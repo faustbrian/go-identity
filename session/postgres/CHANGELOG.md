@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add explicit bounded password-change session-disposition mapping. Freeze the
+  complete original session and preserve/revoke-other/revoke-all choice into
+  the original command without renewing authentication or unrelated authority.
+  Mapping is structural only; same-transaction execution remains in development.
+
 - Preserve password credential continuation through durable reconstruction,
   native command mappings, rotation and revoking other sessions. Current
   admission uses the effective credential version without rewriting original
