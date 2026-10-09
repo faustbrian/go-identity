@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Align selected original-flow composition dependencies with the opt-in session
+  HTTP feature and strict PostgreSQL rate authority. The reference server and
+  production rate-migration contributor remain pending.
+
 - Expose optional original OTP sign-in source discovery through the same selected
   native owner and sealed graph lifetime. Trusted transport obtains the original
   identifier for rate admission without an application reader or attempt debit;

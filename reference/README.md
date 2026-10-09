@@ -121,6 +121,15 @@ never another token or renewed lifetime. The graph must be initialized; unknown
 tenants and closed graphs deny. No SQL, workflow callback or HTTP route is
 consumer-owned. Nil leaves initiation absent. Compose transport separately.
 
+The integration suite composes this selected handle with the public
+`http/session.NewPreAuthFeature` and `http.NewRouter` over real HTTPS. It checks
+original committed PostgreSQL flow identity/timestamps, secure cookie custody,
+startup/shutdown denial, and independently constructed HTTP owners sharing a
+strict PostgreSQL IP budget. Its rate-schema installation and owner selector
+are test fixtures, not a production reference constructor or migration
+contributor. Final `NewServer` composition and the complete OTP browser login
+journey remain pending.
+
 Initiation adds the owner-produced version 1420 to the permanently named native
 `identity_preauth` ledger, not the shared `MigrationSource`. Install through
 the existing reference Check/Plan/Apply APIs selecting `identity/session/postgres`
