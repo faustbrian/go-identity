@@ -1,5 +1,18 @@
 # Identity PostgreSQL
 
+## Exact consuming OTP recovery
+
+`RecoverOTPFeatureCommand` is the native consuming counterpart to metered-check
+and counted-denial recovery. Supply the exact original code-free `OTPAttemptPlan`
+and historical query scope under current `QueryPolicy`. It matches every attempt,
+fingerprint, scope, challenge and version field before disclosure and under the
+existing command locks before pending reconciliation. It does not compare a
+code, charge again, require the consumed pre-auth to remain executable, or return
+a session/bearer. Native orchestration must separately authenticate original
+possession and current disclosure scope. Historical outcomes grant no authority
+or credential redelivery; unavailable reconciliation preserves Unknown rather
+than inferring rollback. Existing recovery profiles remain separate.
+
 ## Request-key correlation before command preparation
 
 Native feature adapters can use `QueryPreparedFeature` to restore an existing

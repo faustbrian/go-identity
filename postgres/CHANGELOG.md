@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add code-free consuming OTP feature recovery that matches the full original
+  attempt before disclosure and again under recovery locks. Preserve committed
+  and classified aborted outcomes without comparing codes or charging again;
+  unavailable reconciliation remains unknown. Existing recovery APIs retain
+  their profiles. Public OTP sign-in composition remains under development.
+
 - Expose checked OTP consumption scope only inside the exact protected feature
   invocation, so composed session effects can bind to the original reservation
   without a separate authentication commit. The projection contains no code or

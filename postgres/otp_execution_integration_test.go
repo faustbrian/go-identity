@@ -12,6 +12,8 @@ import (
 	"time"
 
 	"github.com/faustbrian/go-audit"
+	"github.com/faustbrian/go-authorization"
+	"github.com/faustbrian/go-clock"
 	identity "github.com/faustbrian/go-identity"
 	database "github.com/faustbrian/go-postgres"
 )
@@ -242,7 +244,10 @@ func testOTPExecution(t *testing.T, ctx context.Context, pool *database.Pool, re
 			if err != nil {
 				t.Fatal(err)
 			}
-			c, err := NewCoordinator(pool, r, CoordinatorConfig{MaximumDuration: 2 * time.Second, LeaseDuration: time.Second, CurrentFingerprintKeyVersion: 1, RetainedFingerprintKeys: map[uint32][32]byte{1: {1}}})
+			policy := &CommandQueryPolicy{Clock: clock.System{}, PolicyVersion: 9, Authorization: queryDecision(func(context.Context, authorization.DecisionContext) (authorization.Decision, error) {
+				return authorization.Decision{Outcome: authorization.Allow, Revision: 9}, nil
+			})}
+			c, err := NewCoordinator(pool, r, CoordinatorConfig{MaximumDuration: 2 * time.Second, LeaseDuration: time.Second, CurrentFingerprintKeyVersion: 1, RetainedFingerprintKeys: map[uint32][32]byte{1: {1}}, QueryPolicy: policy})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -273,7 +278,8 @@ func testOTPExecution(t *testing.T, ctx context.Context, pool *database.Pool, re
 				if _, err := pool.Raw().Exec(ctx, `UPDATE identity.commands SET lease_until=clock_timestamp()-interval '1 second' WHERE command_id=$1`, raw); err != nil {
 					t.Fatal(err)
 				}
-				result, err = c.recoverCommandReceipt(ctx, identity.RecoveryQuery{CommandID: b.CommandID, TenantID: b.TenantID, OperationID: b.OperationID, UserID: b.UserID, ActorID: b.ActorID, ActorKind: b.ActorKind, RecordID: b.RecordID})
+				q, caller := queryInputs(b)
+				result, err = c.RecoverOTPFeatureCommand(ctx, q, *plan.OTP, caller)
 				if mode == "recover" && (err == nil || result.Outcome != identity.CommitOutcomeNotCommitted) {
 					t.Fatal("noncommit not released", err, result.Outcome)
 				}
@@ -324,6 +330,44 @@ func testOTPExecution(t *testing.T, ctx context.Context, pool *database.Pool, re
 			}
 			if owner.calls.Load() != 1 {
 				t.Fatal("verification repeated")
+			}
+			if mode == "allow" || mode == "recover" || mode == "unknown" {
+				q, caller := queryInputs(b)
+				got, recoveryErr := c.RecoverOTPFeatureCommand(ctx, q, *plan.OTP, caller)
+				if got.Binding != b || got.Outcome != result.Outcome || (recoveryErr == nil) != (mode == "allow") || owner.calls.Load() != 1 {
+					t.Fatal("public consuming recovery changed original outcome or compared again", got.Outcome, recoveryErr)
+				}
+				other := *plan.OTP
+				other.AttemptFingerprint[0]++
+				got, recoveryErr = c.RecoverOTPFeatureCommand(ctx, q, other, caller)
+				var denied identity.ForbiddenError
+				if got.Binding.CommandID != "" || !errors.As(recoveryErr, &denied) {
+					t.Fatal("changed consuming correlation disclosed primary history", recoveryErr)
+				}
+				if mode == "allow" {
+					// Simulate a stale preliminary primary observation with another
+					// valid plan. The real locked row still holds the original plan.
+					// A preflight-only check would incorrectly disclose its receipt.
+					read := c.commandRead
+					original, readErr := read(ctx, b.CommandID)
+					if readErr != nil {
+						t.Fatal(readErr)
+					}
+					pending := "pending"
+					original.state, original.resultVersion, original.class, original.result = &pending, nil, nil, nil
+					changed := plan
+					changed.OTP = &other
+					original.plan, readErr = encodeFeaturePlan(b, [32]byte(original.fingerprint), changed)
+					if readErr != nil {
+						t.Fatal(readErr)
+					}
+					c.commandRead = func(context.Context, identity.CommandID) (commandObservation, error) { return original, nil }
+					got, recoveryErr = c.RecoverOTPFeatureCommand(ctx, q, other, caller)
+					c.commandRead = read
+					if got.Binding.CommandID != "" || !errors.As(recoveryErr, &denied) || owner.calls.Load() != 1 {
+						t.Fatal("locked original plan was not rechecked", recoveryErr)
+					}
+				}
 			}
 			if got, err := feature.work.OTPConsumption(feature); err == nil || got != (OTPReservationBinding{}) {
 				t.Fatal("returned feature handle retained consumption access")

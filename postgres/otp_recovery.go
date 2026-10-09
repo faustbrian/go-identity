@@ -2,10 +2,71 @@ package postgres
 
 import (
 	"context"
+	"errors"
+	"time"
 
 	"github.com/faustbrian/go-authorization"
 	identity "github.com/faustbrian/go-identity"
 )
+
+// RecoverOTPFeatureCommand authorizes historical disclosure and matches every
+// field of the original consuming OTP plan before observing or reconciling its
+// feature outcome. It accepts no code or credential and never performs a new
+// comparison, charge, reservation or protected mutation. Pending recovery uses
+// the existing frozen participants and sole journal owner; exact correlation is
+// checked again under the command locks before any recovery ownership change.
+// The original pre-auth transaction need not remain executable. Native callers
+// must separately authenticate original possession and current disclosure scope.
+//
+// Both committed and classified aborted results remain historical, not current
+// session authority or credential-delivery permission. No session or bearer is
+// returned. Changed correlation returns zero plus ForbiddenError without taking
+// ownership. Unavailable reconciliation preserves the original scope as Unknown;
+// absence or expiry never proves rollback. QueryPolicy is required; the complete
+// call shares one MaximumDuration bound and earlier caller deadlines win.
+func (c *Coordinator) RecoverOTPFeatureCommand(ctx context.Context, q identity.RecoveryQuery, expected OTPAttemptPlan, caller authorization.DecisionContext) (identity.CommandResult, error) {
+	if expected.Mode != OTPConsume || validateOTPPlan(CommandPlan{OTP: &expected, Feature: &FeatureRegistration{}, SubjectType: "attempt"}) != nil {
+		return identity.CommandResult{}, invalidPlan()
+	}
+	if c == nil || ctx == nil || c.maximumDuration <= 0 || c.maximumDuration > time.Minute {
+		return identity.CommandResult{}, coordinatorError()
+	}
+	ctx, cancel := context.WithTimeout(ctx, c.maximumDuration)
+	defer cancel()
+	check := func(o commandObservation) error {
+		b, feature, err := decodeObservedScope(o.scope)
+		if err != nil || feature == nil || len(o.fingerprint) != 32 {
+			return identity.ForbiddenError{}
+		}
+		p, err := decodeFeaturePlan(b, [32]byte(o.fingerprint), o.plan)
+		if err != nil || p.Feature == nil {
+			return identity.UnavailableError{}
+		}
+		if p.OTP == nil || *p.OTP != expected {
+			return identity.ForbiddenError{}
+		}
+		return nil
+	}
+	r, err := c.queryCommandReceiptChecked(ctx, q, caller, check)
+	if r.Feature == nil {
+		return identity.CommandResult{}, err
+	}
+	if err == nil && r.Outcome == identity.CommitOutcomeInProgress {
+		observed := r
+		r, err = c.recoverCommandReceiptChecked(ctx, q, check)
+		var denied identity.ForbiddenError
+		if r.Outcome == identity.CommitOutcomeInvalid && errors.As(err, &denied) {
+			return identity.CommandResult{}, err
+		}
+		if r.Outcome == identity.CommitOutcomeInvalid || r.Outcome == identity.CommitOutcomeUnknown {
+			r = featureOutcome(observed.Binding, &observed.Feature.Operation, identity.CommitOutcomeUnknown, 0)
+		}
+	}
+	if r.Outcome == identity.CommitOutcomeUnknown {
+		return r, identity.UnknownCommitError{CommandID: q.CommandID}
+	}
+	return r, err
+}
 
 // RecoverOTPAttemptDenial observes the original command AND server-issued
 // attempt without submitted code, comparison, charge, mutation or takeover.

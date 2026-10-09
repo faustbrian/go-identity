@@ -92,6 +92,13 @@ func (c *Coordinator) RecoverFeatureCommand(ctx context.Context, q identity.Reco
 // Trusted storage seam behind the core service's current authorization and
 // redaction; unlike public RecoverCommand it must not manufacture a caller.
 func (c *Coordinator) recoverCommandReceipt(ctx context.Context, q identity.RecoveryQuery) (result identity.CommandResult, err error) {
+	return c.recoverCommandReceiptChecked(ctx, q, nil)
+}
+
+// A native correlation check is pure owned decoding, never a caller callback.
+// Recheck under both historical locks so a preliminary observation cannot
+// authorize recovery of a different retained plan after waiting for ownership.
+func (c *Coordinator) recoverCommandReceiptChecked(ctx context.Context, q identity.RecoveryQuery, check func(commandObservation) error) (result identity.CommandResult, err error) {
 	if c == nil || ctx == nil || c.pool == nil || c.pool.Raw() == nil || c.registry == nil || c.maximumDuration <= 0 {
 		return result, coordinatorError()
 	}
@@ -133,6 +140,11 @@ func (c *Coordinator) recoverCommandReceipt(ctx context.Context, q identity.Reco
 	}
 	observed, e := readRecoveryObservation(bounded, tx, id)
 	result, err = commandReceipt(q, observed, e)
+	if result.Outcome != identity.CommitOutcomeInvalid && check != nil {
+		if e := check(observed); e != nil {
+			return identity.CommandResult{}, e
+		}
+	}
 	if err != nil || result.Outcome != identity.CommitOutcomeInProgress {
 		return result, err
 	}
@@ -143,6 +155,11 @@ func (c *Coordinator) recoverCommandReceipt(ctx context.Context, q identity.Reco
 	}
 	observed, e = readRecoveryObservation(bounded, tx, id)
 	result, err = commandReceipt(q, observed, e)
+	if result.Outcome != identity.CommitOutcomeInvalid && check != nil {
+		if e := check(observed); e != nil {
+			return identity.CommandResult{}, e
+		}
+	}
 	if err != nil || result.Outcome != identity.CommitOutcomeInProgress {
 		return result, err
 	}
