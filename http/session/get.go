@@ -264,9 +264,13 @@ func newSessionReadDecoder(c GetConfig, path string) (func(*http.Request) (GetSt
 				wire = bearer.Token()
 			}
 		} else {
-			wire, err = cookieToken(r.Header, cookie.Name)
+			cookieBearer, found, cookieErr := decoder.CookieBearer(r, cookie.Name, identityhttp.HeaderOptional)
+			err = cookieErr
 			if err != nil {
 				return state, identityhttp.ErrInvalidInput
+			}
+			if found {
+				wire = cookieBearer.Token()
 			}
 		}
 		state.facts = facts
@@ -347,62 +351,4 @@ func response(w http.ResponseWriter, status int, body string) {
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.WriteHeader(status)
 	w.Write([]byte(body + "\n"))
-}
-
-func cookieToken(headers http.Header, name string) (string, error) {
-	count, total := 0, 0
-	selected := ""
-	found := false
-	for key, values := range headers {
-		if !strings.EqualFold(key, "Cookie") {
-			continue
-		}
-		for _, raw := range values {
-			total += len(raw)
-			if total > 16384 || raw == "" {
-				return "", identityhttp.DecodeError{}
-			}
-			for _, part := range strings.Split(raw, ";") {
-				count++
-				if count > 32 {
-					return "", identityhttp.DecodeError{}
-				}
-				part = strings.Trim(part, " \t")
-				n, v, ok := strings.Cut(part, "=")
-				if !ok || !cookieName(n) {
-					return "", identityhttp.DecodeError{}
-				}
-				quoted := len(v) >= 2 && v[0] == '"' && v[len(v)-1] == '"'
-				if quoted {
-					v = v[1 : len(v)-1]
-				}
-				for i := range len(v) {
-					b := v[i]
-					if !(b == 0x21 || b >= 0x23 && b <= 0x2b || b >= 0x2d && b <= 0x3a || b >= 0x3c && b <= 0x5b || b >= 0x5d && b <= 0x7e) {
-						return "", identityhttp.DecodeError{}
-					}
-				}
-				if n == name {
-					if found || quoted || len(v) == 0 || len(part) > 3800 {
-						return "", identityhttp.DecodeError{}
-					}
-					found, selected = true, v
-				}
-			}
-		}
-	}
-	return selected, nil
-}
-
-func cookieName(s string) bool {
-	if s == "" {
-		return false
-	}
-	for i := range len(s) {
-		b := s[i]
-		if b <= 32 || b >= 127 || strings.ContainsRune("()<>@,;:\\\"/[]?={}", rune(b)) {
-			return false
-		}
-	}
-	return true
 }

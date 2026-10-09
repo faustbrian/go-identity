@@ -7,6 +7,11 @@ release-qualified backend platform.
 
 ## Quick start and ownership
 
+Cookie acquisition uses the base transport's shared strict decoder. Trailing
+SP/HTAB in either the selected cookie value or an unrelated cookie value denies
+before session lookup; values are not repaired into valid credentials. Token
+format validation remains session-owned, and bearer mode still ignores cookies.
+
 For protected opt-in `GET /openapi.json`, call `NewMetadataRouter(ctx,
 identityhttp.DocumentConfig{Title: title, Version: version}, MetadataConfig{
 Read: getConfig, Authorization: authorizer, PolicyRevision: revision,

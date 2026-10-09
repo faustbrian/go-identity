@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Use the shared strict cookie decoder for session reads, metadata and
+  self-signout. Credential values and malformed sibling values are no longer
+  silently whitespace-normalized; they deny before owner access. Existing
+  selected token validation, bearer isolation and success-only clearing remain.
+
 - Adopt owned public probe middleware composition so protected metadata and
   selected liveness/readiness routes share hooks without sharing session
   authority, exposing credentials or weakening fixed readiness responses.

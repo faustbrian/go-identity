@@ -244,7 +244,11 @@ func NewSignOutHandlerWithMiddleware(c SignOutConfig, middleware []identityhttp.
 			}
 			wire := ""
 			if c.Transport == session.CredentialCookie {
-				wire, err = cookieToken(r.Header, cookie.Name)
+				cookieBearer, found, cookieErr := decoder.CookieBearer(r, cookie.Name, identityhttp.HeaderOptional)
+				err = cookieErr
+				if found {
+					wire = cookieBearer.Token()
+				}
 			} else if present {
 				wire = bearer.Token()
 			}

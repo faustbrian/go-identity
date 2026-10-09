@@ -255,6 +255,27 @@ func TestGetHTTPCookieCardinalityAndByteBounds(t *testing.T) {
 	}
 }
 
+func TestSessionCookieTransportNeverNormalizesCredentialValues(t *testing.T) {
+	for _, suffix := range []string{" ", "\t", " ; other=safe", "\t; other=safe", "; other=bad ", "; other=bad\t"} {
+		t.Run("read", func(t *testing.T) {
+			f := newFixture(t, session.CredentialCookie)
+			r := request(f, true)
+			r.Header.Set("Cookie", r.Header.Get("Cookie")+suffix)
+			if w := serve(t, f, r); w.Code != 400 || f.calls.Load() != 0 {
+				t.Fatal("malformed cookie reached session reader")
+			}
+		})
+		t.Run("signout", func(t *testing.T) {
+			f := newLogout(t, session.CredentialCookie)
+			r := logoutRequest(f, true)
+			r.Header.Set("Cookie", r.Header.Get("Cookie")+suffix)
+			if w := logoutServe(t, f, r); w.Code != 400 || f.calls.Load() != 0 || f.executions != 0 || len(w.Header().Values("Set-Cookie")) != 0 {
+				t.Fatal("malformed cookie reached session owner or cleared transport")
+			}
+		})
+	}
+}
+
 func TestGetHTTPDoesNotRenewEvidenceAfterRateWork(t *testing.T) {
 	f := newFixture(t, session.CredentialCookie)
 	now := f.config.Now()
