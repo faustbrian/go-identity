@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add closed scalar OTP sign-in session mapping, preserving anonymous command
+  scope separately from the selected user and retaining exact authentication,
+  remember policy, authority and optional CSRF state before reservation.
+  Existing proof-based mappings remain unchanged. Mapping is structural only;
+  consuming session effects and public sign-in remain under development.
+
 - Add an explicit owned OTP session reader using the exact verified identifier
   and current primary authority without requiring a persistent credential.
   Preserve original authentication and bounded evidence deadlines; historical

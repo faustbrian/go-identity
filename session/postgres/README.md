@@ -1,5 +1,22 @@
 # PostgreSQL session storage
 
+## OTP sign-in command mapping
+
+The native OTP owner includes `OTPSigninSessionFields(originalSession)` alongside
+its own closed fields before fingerprinting and reserving the consuming command.
+`OTPSigninSession(command)` decodes the session-owned `session.result.*` fields
+for the exact record-free v1 `identity.otp.signin` operation. Unknown, missing,
+wrong-kind or noncanonical owned scalars deny. Other fields must be exhaustively
+validated by the OTP owner; this decoder does not validate its entire command.
+
+The mapping retains the selected user independently of an anonymous command's
+flow scope, exact nanosecond times and uint64 versions, original remember policy,
+the full authority vector and optional synchronizer digest. It contains no raw
+code or bearer and grants no authentication, consumption or issuance authority.
+Existing proof-based issue/revocation command mappings remain unchanged. Native
+atomic session effects and public sign-in/recovery are still being implemented;
+applications must not bridge them with separate transactions or custom stores.
+
 ## Explicit OTP session authentication
 
 `NewOTPSessionService(pool, OTPSessionServiceConfig{...})` selects the owned

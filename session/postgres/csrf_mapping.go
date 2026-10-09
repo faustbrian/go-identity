@@ -21,11 +21,18 @@ func appendCSRFFields(fields []identity.FeatureField, prefix string, record sess
 // Consume both extension fields or neither. Partial/unknown extensions cannot
 // downgrade to legacy; the enclosing closed decoder rejects leftover fields.
 func sessionFromCSRFFields(values map[string]identity.FeatureValue, prefix string, base session.SessionSpec) (session.Session, error) {
+	return sessionFromCSRFFieldsWithOTP(values, prefix, base, session.OTPAuthentication{})
+}
+
+func sessionFromCSRFFieldsWithOTP(values map[string]identity.FeatureValue, prefix string, base session.SessionSpec, metadata session.OTPAuthentication) (session.Session, error) {
 	key, hasKey := values[prefix+"csrf.key-version"]
 	digest, hasDigest := values[prefix+"csrf.digest"]
 	delete(values, prefix+"csrf.key-version")
 	delete(values, prefix+"csrf.digest")
 	if !hasKey && !hasDigest {
+		if base.Authentication.Kind == session.AuthenticationOTP {
+			return session.NewSessionWithOTP(base, metadata)
+		}
 		return session.NewSession(base)
 	}
 	if !hasKey || !hasDigest || key.Kind != identity.FeatureUint64 || key.Uint64 == 0 || key.Uint64 > uint64(^uint32(0)) || digest.Kind != identity.FeatureBytes || len(digest.Bytes) != 32 {
@@ -36,6 +43,9 @@ func sessionFromCSRFFields(values map[string]identity.FeatureValue, prefix strin
 	state, err := session.NewCSRFState(spec)
 	if err != nil {
 		return session.Session{}, session.ErrInvalidSessionCommand
+	}
+	if base.Authentication.Kind == session.AuthenticationOTP {
+		return session.NewSessionWithOTPAndCSRF(base, metadata, state)
 	}
 	return session.NewSessionWithCSRF(base, state)
 }
