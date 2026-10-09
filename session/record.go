@@ -80,9 +80,10 @@ type SessionSpec struct {
 // authority comparisons, including original bounded validity evidence.
 type Session struct{ state *sessionState }
 type sessionState struct {
-	spec SessionSpec
-	csrf CSRFState
-	otp  OTPAuthentication
+	spec         SessionSpec
+	csrf         CSRFState
+	otp          OTPAuthentication
+	continuation *CredentialContinuationSpec
 }
 
 // NewSession validates and freezes a complete record without IO or callbacks.

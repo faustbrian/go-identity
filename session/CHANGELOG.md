@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Add explicit password-session credential continuation without rewriting
+  original login proof, freshness, activity, remember choice or CSRF state.
+  Preserve the separate effective credential linkage through structural
+  reconstruction, metadata update/rotation and versioned encrypted caches;
+  cached authority deadlines cannot restart. Native atomic session-selection
+  wiring is still pending; these structural values grant no authority.
+  Pin compatible authentication and authorization contracts already consumed
+  transitively by the identity kernel.
+
 - Add explicit server-issued browser-device correlation cookies with dedicated
   retained HMAC keys, tenant/origin/environment binding and original expiry.
   They confer no session or MFA trust; IP/identifier abuse controls remain

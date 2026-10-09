@@ -815,6 +815,28 @@ transport, a Valkey adapter or a fully stateless deployment. Existing stateful
 constructor behavior is unchanged; the other storage-profile flags still deny
 until their real composition is implemented.
 
+### Continuing sessions over password replacement
+
+`ContinuePasswordSession` is a pure mapping for the session adapter inside a
+password-change transaction. Supply the original command ID and exact current
+credential-authority and credential-reference predecessors. Both advance by
+one; user authority, all other authority dimensions, original authentication
+proof/time/version, session/family versions, remember choice, activity, lookup
+and synchronizer state stay unchanged. It does not prove that any row is active,
+that the command committed or that the caller is authorized.
+
+`EffectiveCredentialVersion` is the separate successor linkage; the base
+authentication metadata continues to describe the original login. Trusted
+storage must retain `CredentialContinuation` together with `Bindings` and
+`CSRFState` and reconstruct through `NewContinuedPasswordSession`. Reconstructing
+only base bindings is lossy. Update/rotation retain continuation; encrypted
+cache schemas 5/6 preserve it without renewing the original validity deadline.
+Older cache schemas and ordinary session constructors remain unchanged.
+
+The current continuation supports verified password provenance. Native
+PostgreSQL session-selection/revocation wiring and other authentication profiles
+remain pending; cache promotion is not a credential-continuation mechanism.
+
 **Does refresh reset expiry?** No: preserve original issuance. RefreshDue is
 advisory and authorizes neither a refresh nor a new token.
 

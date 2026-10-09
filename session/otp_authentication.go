@@ -127,6 +127,9 @@ func (s Session) authenticatedAt() time.Time {
 // rebuildSession retains method provenance while the caller explicitly selects
 // synchronizer state. Version changes must never copy an obsolete CSRF binding.
 func rebuildSession(spec SessionSpec, source Session, csrf CSRFState) (Session, error) {
+	if c, ok := source.CredentialContinuation(); ok {
+		return NewContinuedPasswordSession(spec, csrf, c)
+	}
 	s, e := newSession(spec, source.OTPAuthentication())
 	if e != nil {
 		return Session{}, e
