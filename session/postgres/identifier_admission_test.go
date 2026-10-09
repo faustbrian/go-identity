@@ -52,7 +52,7 @@ func TestSessionAuthorityKeysAreOwnedAndFramed(t *testing.T) {
 	}
 }
 
-func identifierSessionFixture(t *testing.T) (session.Session, identity.IdentifierCommand, IdentifierAdmissionConfig) {
+func identifierSessionFixture(t testing.TB) (session.Session, identity.IdentifierCommand, IdentifierAdmissionConfig) {
 	t.Helper()
 	profile := IdentifierAdmissionConfig{GlobalAuthorityID: "deployment-a", PolicyNamespace: "users", Audience: "service-a", AuthenticationMethod: "password", CredentialKind: identity.CredentialPassword, CredentialOwner: "identity/password"}
 	spec, _ := testSession(t).Bindings()

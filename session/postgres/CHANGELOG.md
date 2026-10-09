@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Preserve password credential continuation through durable reconstruction,
+  native command mappings, rotation and revoking other sessions. Current
+  admission uses the effective credential version without rewriting original
+  authentication or advancing unrelated authority. Install the additive
+  credential-continuation migration after OTP history and upgrade relevant
+  readers/writers before selecting the new stored profile.
+  Fresh credential-proof issuance rejects continuation rather than allowing
+  historical proof linkage to substitute for the current credential version.
+
 - Add closed original-session admission mapping for native cross-module
   workflows. Preserve credential or OTP authentication, complete authority,
   remember and CSRF state without copying the session codec into other owners.

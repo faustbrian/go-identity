@@ -217,7 +217,7 @@ func sessionAdmissionBindings(c IdentifierAdmissionConfig, record session.Sessio
 	if a.Global.ScopeKey != keys.Global || a.Tenant.ScopeKey != keys.Tenant || a.User.ScopeKey != keys.User || a.Identifier.ScopeKey != keys.Identifier || a.Credential.ScopeKey != keys.Credential || a.SessionFamily.ScopeKey != sessionKeys.Family || a.Session.ScopeKey != sessionKeys.Session || a.Authorization.ScopeKey != policyKey {
 		return deny()
 	}
-	ref := identity.CredentialRef{ID: identity.CredentialID(s.Authentication.CredentialID), TenantID: s.TenantID, UserID: s.UserID, Kind: c.CredentialKind, Owner: c.CredentialOwner, Version: s.Authentication.CredentialVersion}
+	ref := identity.CredentialRef{ID: identity.CredentialID(s.Authentication.CredentialID), TenantID: s.TenantID, UserID: s.UserID, Kind: c.CredentialKind, Owner: c.CredentialOwner, Version: record.EffectiveCredentialVersion()}
 	if ref.Validate(s.TenantID, s.UserID) != nil {
 		return deny()
 	}

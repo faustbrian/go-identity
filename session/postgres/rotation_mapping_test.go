@@ -97,8 +97,15 @@ func rotationMappingFixture(t *testing.T) session.RotationRequest {
 }
 
 func rotationMappingCSRFFixture(t *testing.T, sourceCSRF, successorCSRF bool) session.RotationRequest {
+	return rotationMappingProfileFixture(t, sourceCSRF, successorCSRF, false)
+}
+
+func rotationMappingProfileFixture(t *testing.T, sourceCSRF, successorCSRF, continued bool) session.RotationRequest {
 	t.Helper()
 	source, _, _ := identifierSessionFixture(t)
+	if continued {
+		source = continuedRecordFixture(t, false)
+	}
 	spec, _ := source.Bindings()
 	key, _ := session.NewDigestKey(1, make([]byte, 32))
 	token, err := session.NewToken(32)
@@ -106,12 +113,25 @@ func rotationMappingCSRFFixture(t *testing.T, sourceCSRF, successorCSRF bool) se
 		t.Fatal(err)
 	}
 	spec.Lookup, _ = token.Digest(key, string(spec.TenantID))
-	source, err = session.NewSession(spec)
+	continuation, hasContinuation := source.CredentialContinuation()
+	if hasContinuation {
+		source, err = session.NewContinuedPasswordSession(spec, session.CSRFState{}, continuation)
+	} else {
+		source, err = session.NewSession(spec)
+	}
 	if err != nil {
 		t.Fatal(err)
 	}
 	if sourceCSRF {
-		source = withCSRFState(t, source, 9)
+		stateful := withCSRFState(t, source, 9)
+		if hasContinuation {
+			source, err = session.NewContinuedPasswordSession(spec, stateful.CSRFState(), continuation)
+			if err != nil {
+				t.Fatal(err)
+			}
+		} else {
+			source = stateful
+		}
 	}
 	now := spec.LastActivityAt.Add(2 * time.Minute)
 	reader, err := session.NewSessionService(rotationObservation{Session: source, Current: spec.Authority, Active: true, ReadStartedAt: now, ValidUntil: now.Add(20 * time.Second)}, session.ServiceConfig{Profile: session.StorageStatefulOpaque, Audience: spec.Audience, Clock: sessionReadClock(func() time.Time { return now }), MaximumDuration: time.Second, ClockUncertainty: time.Millisecond, LookupKeys: []session.DigestKey{key}})
@@ -134,12 +154,25 @@ func rotationMappingCSRFFixture(t *testing.T, sourceCSRF, successorCSRF bool) se
 	vector, _ := spec.Authority.Bindings()
 	vector.Session.Version = next.Version
 	next.Authority, _ = session.NewAuthoritySnapshot(vector)
-	successor, err := session.NewSession(next)
+	var successor session.Session
+	if hasContinuation {
+		successor, err = session.NewContinuedPasswordSession(next, session.CSRFState{}, continuation)
+	} else {
+		successor, err = session.NewSession(next)
+	}
 	if err != nil {
 		t.Fatal(err)
 	}
 	if successorCSRF {
-		successor = withCSRFState(t, successor, 10)
+		stateful := withCSRFState(t, successor, 10)
+		if hasContinuation {
+			successor, err = session.NewContinuedPasswordSession(next, stateful.CSRFState(), continuation)
+			if err != nil {
+				t.Fatal(err)
+			}
+		} else {
+			successor = stateful
+		}
 	}
 	b := revokeBinding()
 	op := session.RotateOperation()

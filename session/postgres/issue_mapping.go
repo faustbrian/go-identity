@@ -12,6 +12,9 @@ import (
 // shared codec. Exact nanosecond times use canonical UTC text because the
 // shared FeatureTime profile is microsecond-only.
 func mapIssue(issue session.IssueCommandSpec) (identity.Command, error) {
+	if _, continued := issue.Session.CredentialContinuation(); continued {
+		return identity.Command{}, session.ErrInvalidSessionCommand
+	}
 	return mapSessionRecord(issue.Binding, session.IssueOperation(), issue.Session)
 }
 
@@ -123,6 +126,12 @@ func nativeIssue(command identity.Command) (session.SessionCommand, error) {
 	b, record, err := nativeSessionRecord(command, session.IssueOperation())
 	if err != nil {
 		return session.SessionCommand{}, err
+	}
+	// Continuation is trusted storage linkage for an existing selected session,
+	// not fresh proof custody. Allowing it here would compare an old proof to
+	// historical metadata but check current owners against a supplied successor.
+	if _, continued := record.CredentialContinuation(); continued {
+		return session.SessionCommand{}, session.ErrInvalidSessionCommand
 	}
 	return session.NewIssueCommand(b, record)
 }

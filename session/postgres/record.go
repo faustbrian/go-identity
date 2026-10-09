@@ -32,8 +32,9 @@ type storedRecord struct {
 	Lookup                   session.TokenDigest
 	Authentication           session.AuthenticationMetadata
 	IssuedAt, LastActivityAt time.Time
-	CSRF                     *session.CSRFStateSpec         `json:",omitempty"`
-	OTP                      *session.OTPAuthenticationSpec `json:",omitempty"`
+	CSRF                     *session.CSRFStateSpec              `json:",omitempty"`
+	OTP                      *session.OTPAuthenticationSpec      `json:",omitempty"`
+	Continuation             *session.CredentialContinuationSpec `json:",omitempty"`
 }
 
 func encodeRecord(s session.Session) ([]byte, string, error) {
@@ -64,6 +65,10 @@ func encodeRecord(s session.Session) ([]byte, string, error) {
 		record.Schema += 2
 		record.OTP = &metadata
 	}
+	if continuation, ok := s.CredentialContinuation(); ok {
+		record.Schema += 4
+		record.Continuation = &continuation
+	}
 	b, err := json.Marshal(record)
 	if err != nil || len(b) > maximumRecordBytes {
 		return nil, "", ErrInvalidRecord
@@ -83,15 +88,27 @@ func decodeRecord(b []byte) (session.Session, error) {
 	}
 	_, hasCSRF := envelope["CSRF"]
 	_, hasOTP := envelope["OTP"]
+	_, hasContinuation := envelope["Continuation"]
 	if hasCSRF {
 		keys = append(keys, "CSRF")
 	}
 	if hasOTP {
 		keys = append(keys, "OTP")
 	}
+	if hasContinuation {
+		keys = append(keys, "Continuation")
+	}
 	top, ok := exactObject(b, keys...)
 	if !ok {
 		return invalid()
+	}
+	if hasContinuation {
+		if hasOTP {
+			return invalid()
+		}
+		if _, ok := exactObject(top["Continuation"], "CommandID", "BeforeAuthorityVersion", "BeforeCredentialVersion"); !ok {
+			return invalid()
+		}
 	}
 	if hasOTP {
 		if _, ok := exactObject(top["OTP"], "CommandID", "SendCommandID", "ChallengeID", "AttemptID", "IdentifierID", "IdentifierKind", "IdentifierVersion", "VerificationVersion", "AuthenticatedAt", "ValidUntil"); !ok {
@@ -175,6 +192,9 @@ func decodeRecord(b []byte) (session.Session, error) {
 	if hasOTP {
 		expectedSchema += 2
 	}
+	if hasContinuation {
+		expectedSchema += 4
+	}
 	if record.Schema != expectedSchema || hasOTP != (record.Authentication.Kind == session.AuthenticationOTP) {
 		return invalid()
 	}
@@ -198,7 +218,9 @@ func decodeRecord(b []byte) (session.Session, error) {
 		}
 	}
 	var result session.Session
-	if hasOTP {
+	if hasContinuation {
+		result, err = session.NewContinuedPasswordSession(spec, state, *record.Continuation)
+	} else if hasOTP {
 		metadata, e := session.NewOTPAuthentication(*record.OTP)
 		if e != nil {
 			return invalid()

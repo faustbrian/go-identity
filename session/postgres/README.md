@@ -1,5 +1,31 @@
 # PostgreSQL session storage
 
+## Continued password-session records
+
+Install `CredentialContinuationMigrationSource{Schema: "session_store",
+Version: allocatedVersion}` after `OTPMigrationSource`, using the same migration
+runner and a permanent version. It validates populated rows transactionally and
+changes no existing payload, receipt or applied migration. Upgrade all relevant
+readers and writers before enabling continuation: older binaries reject the new
+schemas 5/6, while schemas 1–4 retain their original representation.
+
+Durable records and native command mappings preserve the original password
+authentication independently of `EffectiveCredentialVersion()`. Current admission
+uses that effective credential reference and the continued credential-authority
+epoch; it does not advance user authority or refresh login time, lifetime,
+remember policy or freshness. Rotation, metadata updates and revoking other
+sessions preserve this linkage. Neither stored metadata nor reconstruction
+certifies that a password change committed or substitutes for current owner checks.
+Fresh credential-proof issuance rejects continuation, including direct scalar
+commands: an old unused login proof cannot select a newer effective credential
+version by supplying continuation metadata.
+
+This storage support does not yet compose selective continuation into the native
+password-change transaction. That consuming workflow must freeze its session
+disposition, compare every current owner and stage all selected/revoked session
+effects in the existing same-Work mutation. Do not implement this with a separate
+application transaction or refresh a stale session from current authority.
+
 ## Original-session admission mapping
 
 Native feature adapters use `OriginalSessionFields(original)` to bind the

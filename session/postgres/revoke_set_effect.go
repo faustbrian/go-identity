@@ -161,18 +161,11 @@ func (r *Repository) applyRevokeSet(ctx context.Context, w kernel.Work, set sess
 		}
 	}
 	if !set.IncludeCurrent {
-		successor := spec
-		successor.Version++
-		vector, _ := spec.Authority.Bindings()
-		vector.Session.Version = successor.Version
-		successor.Authority, err = session.NewAuthoritySnapshot(vector)
+		record, err := revokeSetSuccessor(set.Caller)
 		if err != nil {
 			return identity.FeatureReceipt{}, err
 		}
-		record, err := session.NewSession(successor)
-		if err != nil {
-			return identity.FeatureReceipt{}, err
-		}
+		successor, _ := record.Bindings()
 		payload, _, err := encodeRecord(record)
 		if err != nil {
 			return identity.FeatureReceipt{}, err
@@ -199,6 +192,41 @@ func (r *Repository) applyRevokeSet(ctx context.Context, w kernel.Work, set sess
 		return identity.FeatureReceipt{}, err
 	}
 	return identity.FeatureReceipt{Operation: op, BeforeVersion: spec.Version, AfterVersion: spec.Version + 1}, nil
+}
+
+// Revoking other sessions advances only this source's session version. Keep
+// historical authentication and its separately continued credential linkage;
+// rebuilding from Bindings alone would silently restore the login-era version.
+func revokeSetSuccessor(source session.Session) (session.Session, error) {
+	spec, err := source.Bindings()
+	if err != nil || spec.Version == ^uint64(0) {
+		return session.Session{}, session.ErrInvalidSessionCommand
+	}
+	spec.Version++
+	vector, err := spec.Authority.Bindings()
+	if err != nil {
+		return session.Session{}, err
+	}
+	vector.Session.Version = spec.Version
+	spec.Authority, err = session.NewAuthoritySnapshot(vector)
+	if err != nil {
+		return session.Session{}, err
+	}
+	var csrf session.CSRFState
+	if state, e := source.CSRFState().Bindings(); e == nil {
+		state.Binding.SessionVersion = spec.Version
+		csrf, err = session.NewCSRFState(state)
+		if err != nil {
+			return session.Session{}, err
+		}
+	}
+	if continuation, ok := source.CredentialContinuation(); ok {
+		return session.NewContinuedPasswordSession(spec, csrf, continuation)
+	}
+	if csrf != (session.CSRFState{}) {
+		return session.NewSessionWithCSRF(spec, csrf)
+	}
+	return session.NewSession(spec)
 }
 
 func checkSetDeadline(ctx context.Context, w kernel.Work, caller session.Session, until time.Time) error {
