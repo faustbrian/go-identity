@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"io"
 	"net/http"
 	"strconv"
 	"strings"
@@ -79,6 +81,72 @@ type SignOutResponse struct {
 // the server retains bounded body/read/write cleanup. This is not full feature,
 // OpenAPI, native HTTP/browser or release qualification.
 func NewSignOutHandler(c SignOutConfig) (http.Handler, error) {
+	return NewSignOutHandlerWithMiddleware(c, nil)
+}
+
+type signOutAttempt struct {
+	out       SignOutResponse
+	attempted bool
+	cookie    string
+}
+type signOutAttemptKey struct{}
+
+// SignOutState is opaque request-local owner state. Principal describes the
+// original preliminary subject read, not reusable authorization. The protected
+// signout service still revalidates primary authority and atomically checks CSRF.
+// The owner alone updates attempted result state; no hook can change it. Zero is
+// unauthenticated and unattempted. State must not be retained beyond a request.
+type SignOutState struct {
+	read    GetState
+	csrf    session.CSRFToken
+	attempt *signOutAttempt
+}
+
+// Principal returns detached metadata from the preliminary session owner read.
+// It is neither fresh-login evidence nor authority for a future operation.
+func (s SignOutState) Principal() (Principal, bool) { return s.read.Principal() }
+
+// Attempt returns a detached copy of the original operation's response state.
+// The boolean means Handle entered, not that a transaction committed. Before
+// Handle it is false; a true result may have outcome none/unknown or an error.
+// After-handler observes normally returned attempts; cancellation/panic can
+// suppress that phase. Recovery is a locator, never a retry or access grant.
+func (s SignOutState) Attempt() (SignOutResponse, bool) {
+	if s.attempt == nil {
+		return SignOutResponse{CommitOutcome: "none"}, false
+	}
+	out := s.attempt.out
+	if out.Recovery != nil {
+		recovery := *out.Recovery
+		out.Recovery = &recovery
+	}
+	return out, s.attempt.attempted
+}
+
+// Format redacts private credential, CSRF and historical owner custody.
+func (SignOutState) Format(s fmt.State, _ rune) {
+	io.WriteString(s, "sessionhttp.SignOutState(redacted)")
+}
+
+// MarshalJSON rejects implicit export of request-local owner custody.
+func (SignOutState) MarshalJSON() ([]byte, error) { return nil, session.ErrSecretSerialization }
+
+// MarshalText rejects implicit text/map-key export of request-local state.
+func (SignOutState) MarshalText() ([]byte, error) { return nil, session.ErrSecretSerialization }
+
+// NewSignOutHandlerWithMiddleware preserves NewSignOutHandler's security and
+// recovery contract with real typed hook phases. Decode owns original network,
+// origin, body and credential acquisition; Authenticate performs preliminary
+// subject discovery once; Admit debits safe-route limits once; Handle delegates
+// primary revalidation and transactional CSRF/mutation to the same domain owner.
+// Original preliminary validity is checked after hooks, never renewed by them.
+// After-handler observes the actual attempted outcome, not assumed success.
+// Trusted hooks retain original credential-bearing detached headers: do not
+// log, serialize or retain them. Typed state is opaque/redacted; its getters
+// expose only credential-free detached metadata. Hooks own bounded JSON denial
+// bodies; no hook can clear cookies without confirmed owner success. Shared
+// response policy preserves no-store/nosniff/JSON even on short circuits.
+func NewSignOutHandlerWithMiddleware(c SignOutConfig, middleware []identityhttp.MiddlewareDescriptor) (http.Handler, error) {
 	if _, err := NewGetHandler(c.GetConfig); err != nil {
 		return nil, err
 	}
@@ -100,181 +168,194 @@ func NewSignOutHandler(c SignOutConfig) (http.Handler, error) {
 			return nil, err
 		}
 	}
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		out := SignOutResponse{CommitOutcome: "none"}
-		send := func(status int, code string) {
-			out.Error = code
-			body, err := json.Marshal(out)
+	reject := func(w http.ResponseWriter, r *http.Request, err error) {
+		attempt := &signOutAttempt{out: SignOutResponse{CommitOutcome: "none"}}
+		if r != nil {
+			if owned, ok := r.Context().Value(signOutAttemptKey{}).(*signOutAttempt); ok {
+				attempt = owned
+			}
+		}
+		attempt.cookie = ""
+		attempt.out.SignedOut, attempt.out.ClearBearer = false, false
+		failure := getFailure{status: 503, code: "unavailable"}
+		if errors.Is(err, identityhttp.ErrInvalidInput) {
+			failure = getFailure{status: 400, code: "invalid_request"}
+		}
+		var specific getFailure
+		if errors.As(err, &specific) {
+			failure = specific
+		}
+		if failure.allow != "" {
+			w.Header().Set("Allow", failure.allow)
+		}
+		if failure.retry > 0 {
+			w.Header().Set("Retry-After", strconv.FormatInt(int64((failure.retry+time.Second-1)/time.Second), 10))
+		}
+		sendSignOut(w, attempt, failure.status, failure.code)
+	}
+	handler, err := identityhttp.NewOperationPipeline(identityhttp.OperationPipelineConfig[SignOutState]{
+		MaximumDuration: c.MaximumDuration,
+		Middleware:      middleware,
+		Reject:          reject,
+		Decode: func(r *http.Request) (SignOutState, error) {
+			state := SignOutState{attempt: r.Context().Value(signOutAttemptKey{}).(*signOutAttempt)}
+			if r.URL.Path != "/v1/session/signout" || r.URL.EscapedPath() != "/v1/session/signout" {
+				return state, getFailure{status: 404, code: "not_found"}
+			}
+			if r.Method != http.MethodPost {
+				return state, getFailure{status: 405, code: "method_not_allowed", allow: http.MethodPost}
+			}
+			if _, _, err := decoder.IdempotencyKey(r, identityhttp.HeaderForbidden); err != nil || r.URL.RawQuery != "" || r.URL.ForceQuery || len(r.Trailer) != 0 {
+				return state, identityhttp.ErrInvalidInput
+			}
+			facts, err := network.Resolve(r)
 			if err != nil {
-				response(w, 503, `{"error":"unavailable"}`)
+				var invalid identityhttp.DecodeError
+				if errors.As(err, &invalid) {
+					return state, getFailure{status: 421, code: "misdirected_request"}
+				}
+				return state, identityhttp.ErrUnavailable
+			}
+			if facts.Realm() != identityhttp.RealmTenant {
+				return state, getFailure{status: 421, code: "misdirected_request"}
+			}
+			if facts.Scheme() != "https" {
+				return state, identityhttp.ErrInvalidInput
+			}
+			if origins != nil {
+				if _, err := origins.Check(r); err != nil {
+					return state, getFailure{status: 403, code: "origin_denied"}
+				}
+			}
+			csrf, err := logoutInput(decoder, r, c.Transport)
+			if err != nil {
+				if r.Context().Err() != nil {
+					return state, identityhttp.ErrUnavailable
+				}
+				return state, identityhttp.ErrInvalidInput
+			}
+			requirement := identityhttp.HeaderForbidden
+			if c.Transport == session.CredentialBearer {
+				requirement = identityhttp.HeaderOptional
+			}
+			bearer, present, err := decoder.Bearer(r, requirement)
+			if err != nil {
+				return state, identityhttp.ErrInvalidInput
+			}
+			wire := ""
+			if c.Transport == session.CredentialCookie {
+				wire, err = cookieToken(r.Header, cookie.Name)
+			} else if present {
+				wire = bearer.Token()
+			}
+			if err != nil {
+				return state, identityhttp.ErrInvalidInput
+			}
+			state.read.facts, state.csrf = facts, csrf
+			if wire != "" {
+				token, err := session.ParseToken(wire)
+				if err != nil {
+					return state, identityhttp.ErrInvalidInput
+				}
+				state.read.credential, _ = session.NewCredential(c.Transport, token)
+				state.read.present = true
+			}
+			return state, nil
+		},
+		Authenticate: func(r *http.Request, state SignOutState) (SignOutState, error) {
+			var err error
+			state.read, err = authenticateSession(c.GetConfig, r, state.read)
+			return state, err
+		},
+		Admit: func(r *http.Request, state SignOutState) error {
+			admitted, err := c.Rate.Admit(r.Context(), state.read.facts, "identity.session.signout", state.read.principal.UserID)
+			if errors.Is(err, identityhttp.ErrRateLimited) {
+				return getFailure{status: 429, code: "rate_limited", retry: admitted.RetryAfter}
+			}
+			if err != nil || !admitted.Allowed || r.Context().Err() != nil || (state.read.result.Authenticated && state.read.result.ValidateAt(c.Now()) != nil) {
+				return identityhttp.ErrUnavailable
+			}
+			return nil
+		},
+		Handle: func(w http.ResponseWriter, r *http.Request, state SignOutState) {
+			state.attempt.attempted = true
+			if state.read.result.Authenticated && state.read.result.ValidateAt(c.Now()) != nil {
+				reject(w, r, identityhttp.ErrUnavailable)
 				return
 			}
-			response(w, status, string(body))
-		}
-		defer func() {
-			if recover() != nil {
-				out.SignedOut = false
-				out.ClearBearer = false
+			out := &state.attempt.out
+			send := func(status int, code string) { sendSignOut(w, state.attempt, status, code) }
+			id, err := identity.NewCommandID()
+			if err != nil {
 				send(503, "unavailable")
+				return
 			}
-		}()
-		if r == nil || r.URL == nil {
-			send(400, "invalid_request")
-			return
-		}
-		if r.URL.Path != "/v1/session/signout" || r.URL.EscapedPath() != "/v1/session/signout" {
-			send(404, "not_found")
-			return
-		}
-		if r.Method != http.MethodPost {
-			w.Header().Set("Allow", http.MethodPost)
-			send(405, "method_not_allowed")
-			return
-		}
-		ctx, cancel := context.WithTimeout(r.Context(), c.MaximumDuration)
-		defer cancel()
-		r = r.WithContext(ctx)
-		if ctx.Err() != nil {
-			send(503, "unavailable")
-			return
-		}
-		if _, _, err := decoder.IdempotencyKey(r, identityhttp.HeaderForbidden); err != nil || r.URL.RawQuery != "" || r.URL.ForceQuery || len(r.Trailer) != 0 {
-			send(400, "invalid_request")
-			return
-		}
-		facts, err := network.Resolve(r)
-		if err != nil {
-			var invalid identityhttp.DecodeError
-			if errors.As(err, &invalid) {
-				send(421, "misdirected_request")
+			out.CommandID = id
+			request := session.SignOutRequest{TenantID: state.read.facts.TenantID(), CommandID: id, CorrelationID: string(id), Transport: c.Transport, Credential: state.read.credential}
+			ctx := r.Context()
+			var result session.SignOutResult
+			if c.Transport == session.CredentialCookie {
+				result, err = c.CookieSignOut.SignOut(ctx, request, state.csrf)
 			} else {
-				send(503, "unavailable")
+				result, err = c.BearerSignOut.SignOut(ctx, request)
 			}
-			return
-		}
-		if facts.Realm() != identityhttp.RealmTenant {
-			send(421, "misdirected_request")
-			return
-		}
-		if facts.Scheme() != "https" {
-			send(400, "invalid_request")
-			return
-		}
-		if origins != nil {
-			if _, err := origins.Check(r); err != nil {
-				send(403, "origin_denied")
+			out.CommitOutcome = logoutOutcome(result.CommitOutcome)
+			if q := result.Recovery; q.CommandID != "" {
+				out.Recovery = &SignOutRecovery{CommandID: q.CommandID, TenantID: q.TenantID, UserID: q.UserID, AnonymousFlowID: q.AnonymousFlowID, ActorID: q.ActorID, ActorKind: q.ActorKind, OperationID: q.OperationID, RecordID: q.RecordID, LinkMode: q.LinkMode}
+			}
+			if err != nil || ctx.Err() != nil || !result.SignedOut || result.CommandID != id {
+				var forbidden identity.ForbiddenError
+				switch {
+				case errors.Is(err, session.ErrCSRFDenied), errors.Is(err, session.ErrUnauthenticated), errors.As(err, &forbidden):
+					send(403, "denied")
+				case result.CommitOutcome == identity.CommitOutcomeConflict:
+					send(409, "conflict")
+				case result.CommitOutcome == identity.CommitOutcomeInProgress:
+					w.Header().Set("Retry-After", strconv.FormatInt(int64((result.RetryAfter+time.Second-1)/time.Second), 10))
+					send(409, "in_progress")
+				default:
+					send(503, "unavailable")
+				}
 				return
 			}
-		}
-		csrf, err := logoutInput(decoder, r, c.Transport)
-		if err != nil {
-			if ctx.Err() != nil {
-				send(503, "unavailable")
-			} else {
-				send(400, "invalid_request")
-			}
-			return
-		}
-		requirement := identityhttp.HeaderForbidden
-		if c.Transport == session.CredentialBearer {
-			requirement = identityhttp.HeaderOptional
-		}
-		bearer, present, err := decoder.Bearer(r, requirement)
-		if err != nil {
-			send(400, "invalid_request")
-			return
-		}
-		wire := ""
-		if c.Transport == session.CredentialCookie {
-			wire, err = cookieToken(r.Header, cookie.Name)
-		} else if present {
-			wire = bearer.Token()
-		}
-		if err != nil {
-			send(400, "invalid_request")
-			return
-		}
-		var credential session.Credential
-		var user identity.UserID
-		if wire != "" {
-			token, err := session.ParseToken(wire)
-			if err != nil {
-				send(400, "invalid_request")
-				return
-			}
-			credential, _ = session.NewCredential(c.Transport, token)
-			caller, err := c.Sessions.Get(ctx, session.GetRequest{TenantID: facts.TenantID(), Credential: credential})
-			if err != nil {
-				send(503, "unavailable")
-				return
-			}
-			if caller.Authenticated {
-				b, err := caller.Session.Bindings()
-				if err != nil || b.TenantID != facts.TenantID() || caller.ValidateAt(c.Now()) != nil {
+			if c.Transport == session.CredentialCookie {
+				if !result.ClearCookie || result.ClearBearer || result.Cookie.String() != cookie.String() {
 					send(503, "unavailable")
 					return
 				}
-				user = b.UserID
+				state.attempt.cookie = cookie.String()
+			} else {
+				if !result.ClearBearer || result.ClearCookie {
+					send(503, "unavailable")
+					return
+				}
+				out.ClearBearer = true
 			}
+			out.SignedOut = true
+			send(200, "")
+		},
+	})
+	if err != nil {
+		return nil, err
+	}
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		attempt := &signOutAttempt{out: SignOutResponse{CommitOutcome: "none"}}
+		if r != nil {
+			r = r.WithContext(context.WithValue(r.Context(), signOutAttemptKey{}, attempt))
 		}
-		admitted, err := c.Rate.Admit(ctx, facts, "identity.session.signout", user)
-		if errors.Is(err, identityhttp.ErrRateLimited) {
-			w.Header().Set("Retry-After", strconv.FormatInt(int64((admitted.RetryAfter+time.Second-1)/time.Second), 10))
-			send(429, "rate_limited")
-			return
-		}
-		if err != nil || !admitted.Allowed || ctx.Err() != nil {
-			send(503, "unavailable")
-			return
-		}
-		id, err := identity.NewCommandID()
-		if err != nil {
-			send(503, "unavailable")
-			return
-		}
-		out.CommandID = id
-		request := session.SignOutRequest{TenantID: facts.TenantID(), CommandID: id, CorrelationID: string(id), Transport: c.Transport, Credential: credential}
-		var result session.SignOutResult
-		if c.Transport == session.CredentialCookie {
-			result, err = c.CookieSignOut.SignOut(ctx, request, csrf)
-		} else {
-			result, err = c.BearerSignOut.SignOut(ctx, request)
-		}
-		out.CommitOutcome = logoutOutcome(result.CommitOutcome)
-		if q := result.Recovery; q.CommandID != "" {
-			out.Recovery = &SignOutRecovery{CommandID: q.CommandID, TenantID: q.TenantID, UserID: q.UserID, AnonymousFlowID: q.AnonymousFlowID, ActorID: q.ActorID, ActorKind: q.ActorKind, OperationID: q.OperationID, RecordID: q.RecordID, LinkMode: q.LinkMode}
-		}
-		if err != nil || ctx.Err() != nil || !result.SignedOut || result.CommandID != id {
-			var forbidden identity.ForbiddenError
-			switch {
-			case errors.Is(err, session.ErrCSRFDenied), errors.Is(err, session.ErrUnauthenticated), errors.As(err, &forbidden):
-				send(403, "denied")
-			case result.CommitOutcome == identity.CommitOutcomeConflict:
-				send(409, "conflict")
-			case result.CommitOutcome == identity.CommitOutcomeInProgress:
-				w.Header().Set("Retry-After", strconv.FormatInt(int64((result.RetryAfter+time.Second-1)/time.Second), 10))
-				send(409, "in_progress")
-			default:
-				send(503, "unavailable")
-			}
-			return
-		}
-		if c.Transport == session.CredentialCookie {
-			if !result.ClearCookie || result.ClearBearer || result.Cookie.String() != cookie.String() {
-				send(503, "unavailable")
-				return
-			}
-			http.SetCookie(w, &cookie)
-		} else {
-			if !result.ClearBearer || result.ClearCookie {
-				send(503, "unavailable")
-				return
-			}
-			out.ClearBearer = true
-		}
-		out.SignedOut = true
-		send(200, "")
+		serveSessionResponse(handler, w, r, func() string { return attempt.cookie })
 	}), nil
+}
+
+func sendSignOut(w http.ResponseWriter, attempt *signOutAttempt, status int, code string) {
+	attempt.out.Error = code
+	body, err := json.Marshal(attempt.out)
+	if err != nil {
+		attempt.cookie = ""
+		response(w, 503, `{"error":"unavailable"}`)
+		return
+	}
+	response(w, status, string(body))
 }
 
 // Optional syntax is workflow-specific: absence is not CSRF admission. Only the

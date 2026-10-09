@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add real typed self-signout stages and opt-in feature middleware composition.
+  Preserve primary revalidation, atomic CSRF, single rate admission and original
+  command/outcome/recovery; hooks can observe detached attempted results but
+  cannot clear cookies on denial or replace owner inputs. Share the existing
+  response guard without changing cookie serialization or direct constructors.
+
 - Expose typed execution phases on the real session-read handler through
   `NewGetHandlerWithMiddleware`, with opaque credential-free principal access,
   single owner authentication/rate admission and original validity checks after

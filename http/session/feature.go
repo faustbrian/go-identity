@@ -21,11 +21,22 @@ import (
 // actual selected JSON, credential and CSRF profile for NewDocumentedHandler;
 // direct-contract summaries never become wire response schemas.
 func NewFeature(c SignOutConfig) (identityhttp.Feature, error) {
-	get, err := NewGetHandler(c.GetConfig)
+	return NewFeatureWithMiddleware(c, nil)
+}
+
+// NewFeatureWithMiddleware contributes the same two real operations with the
+// selected trusted middleware applied independently at their owned phases.
+// After-auth hooks obtain either GetState or SignOutState through PipelineValue;
+// no shared global principal or duplicate authentication/rate owner is added.
+// All selected dependencies are validated before wrapper construction. Hooks
+// may be constructed once per operation and must support concurrent requests.
+// The factory returns no partial feature on failure; it performs no owner IO.
+func NewFeatureWithMiddleware(c SignOutConfig, middleware []identityhttp.MiddlewareDescriptor) (identityhttp.Feature, error) {
+	signout, err := NewSignOutHandlerWithMiddleware(c, middleware)
 	if err != nil {
 		return identityhttp.Feature{}, err
 	}
-	signout, err := NewSignOutHandler(c)
+	get, err := NewGetHandlerWithMiddleware(c.GetConfig, middleware)
 	if err != nil {
 		return identityhttp.Feature{}, err
 	}

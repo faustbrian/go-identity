@@ -223,24 +223,7 @@ func NewGetHandlerWithMiddleware(c GetConfig, middleware []identityhttp.Middlewa
 			return state, nil
 		},
 		Authenticate: func(r *http.Request, state GetState) (GetState, error) {
-			if state.present {
-				var err error
-				state.result, err = c.Sessions.Get(r.Context(), session.GetRequest{TenantID: state.facts.TenantID(), Credential: state.credential})
-				if err != nil {
-					return state, identityhttp.ErrUnavailable
-				}
-			}
-			if state.result.Authenticated {
-				if state.result.ValidateAt(c.Now()) != nil {
-					return state, identityhttp.ErrUnavailable
-				}
-				spec, bindingErr := state.result.Session.Bindings()
-				if bindingErr != nil || spec.TenantID != state.facts.TenantID() {
-					return state, identityhttp.ErrUnavailable
-				}
-				state.principal = Principal{TenantID: spec.TenantID, UserID: spec.UserID}
-			}
-			return state, nil
+			return authenticateSession(c, r, state)
 		},
 		Admit: func(r *http.Request, state GetState) error {
 			admitted, err := c.Rate.Admit(r.Context(), state.facts, "identity.session.get", state.principal.UserID)
@@ -285,36 +268,67 @@ func NewGetHandlerWithMiddleware(c GetConfig, middleware []identityhttp.Middlewa
 		return nil, err
 	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		protect := func() {
-			// Header maps permit noncanonical keys. Remove every spelling before
-			// establishing the single reviewed policy at the actual commit edge.
-			for name := range w.Header() {
-				if strings.EqualFold(name, "Content-Type") || strings.EqualFold(name, "Cache-Control") || strings.EqualFold(name, "X-Content-Type-Options") || strings.EqualFold(name, "Set-Cookie") {
-					delete(w.Header(), name)
-				}
-			}
-			w.Header().Set("Content-Type", "application/json")
-			w.Header().Set("Cache-Control", "no-store")
-			w.Header().Set("X-Content-Type-Options", "nosniff")
-		}
-		protect()
-		// Preserve the underlying writer's optional interfaces, including flush
-		// and ReaderFrom commit paths, without transferring response ownership.
-		writer := httpsnoop.Wrap(w, httpsnoop.Hooks{
-			WriteHeader: func(next httpsnoop.WriteHeaderFunc) httpsnoop.WriteHeaderFunc {
-				return func(status int) { protect(); next(status) }
-			},
-			Write: func(next httpsnoop.WriteFunc) httpsnoop.WriteFunc {
-				return func(body []byte) (int, error) { protect(); return next(body) }
-			},
-			Flush: func(next httpsnoop.FlushFunc) httpsnoop.FlushFunc { return func() { protect(); next() } },
-			ReadFrom: func(next httpsnoop.ReadFromFunc) httpsnoop.ReadFromFunc {
-				return func(body io.Reader) (int64, error) { protect(); return next(body) }
-			},
-		})
-		defer protect()
-		handler.ServeHTTP(writer, r)
+		serveSessionResponse(handler, w, r, func() string { return "" })
 	}), nil
+}
+
+func authenticateSession(c GetConfig, r *http.Request, state GetState) (GetState, error) {
+	if state.present {
+		var err error
+		state.result, err = c.Sessions.Get(r.Context(), session.GetRequest{TenantID: state.facts.TenantID(), Credential: state.credential})
+		if err != nil {
+			return state, identityhttp.ErrUnavailable
+		}
+	}
+	if state.result.Authenticated {
+		if state.result.ValidateAt(c.Now()) != nil {
+			return state, identityhttp.ErrUnavailable
+		}
+		spec, err := state.result.Session.Bindings()
+		if err != nil || spec.TenantID != state.facts.TenantID() {
+			return state, identityhttp.ErrUnavailable
+		}
+		state.principal = Principal{TenantID: spec.TenantID, UserID: spec.UserID}
+	}
+	return state, nil
+}
+
+// allowedCookie is private request-local owner output, never a request header or
+// hook-supplied value. GET supplies empty; logout permits only its owned exact
+// deletion tuple after confirmed successful completion.
+func serveSessionResponse(handler http.Handler, w http.ResponseWriter, r *http.Request, allowedCookie func() string) {
+	protect := func() {
+		// Header maps permit noncanonical keys. Remove every spelling before
+		// establishing the single reviewed policy at the actual commit edge.
+		for name := range w.Header() {
+			if strings.EqualFold(name, "Content-Type") || strings.EqualFold(name, "Cache-Control") || strings.EqualFold(name, "X-Content-Type-Options") || strings.EqualFold(name, "Set-Cookie") {
+				delete(w.Header(), name)
+			}
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Cache-Control", "no-store")
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		if cookie := allowedCookie(); cookie != "" {
+			w.Header().Set("Set-Cookie", cookie)
+		}
+	}
+	protect()
+	// Preserve the underlying writer's optional interfaces, including flush
+	// and ReaderFrom commit paths, without transferring response ownership.
+	writer := httpsnoop.Wrap(w, httpsnoop.Hooks{
+		WriteHeader: func(next httpsnoop.WriteHeaderFunc) httpsnoop.WriteHeaderFunc {
+			return func(status int) { protect(); next(status) }
+		},
+		Write: func(next httpsnoop.WriteFunc) httpsnoop.WriteFunc {
+			return func(body []byte) (int, error) { protect(); return next(body) }
+		},
+		Flush: func(next httpsnoop.FlushFunc) httpsnoop.FlushFunc { return func() { protect(); next() } },
+		ReadFrom: func(next httpsnoop.ReadFromFunc) httpsnoop.ReadFromFunc {
+			return func(body io.Reader) (int64, error) { protect(); return next(body) }
+		},
+	})
+	defer protect()
+	handler.ServeHTTP(writer, r)
 }
 
 func response(w http.ResponseWriter, status int, body string) {

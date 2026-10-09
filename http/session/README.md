@@ -64,8 +64,7 @@ read, not a transaction commit. Short circuits suppress later stages. Borrowed
 hooks must honor context, avoid retaining state and support concurrent requests.
 The read handler enforces no-store/nosniff, JSON media type and no Set-Cookie at
 response commit even for short circuits and attempted header removal. Hooks own
-their bounded JSON denial bodies. Self-signout hook adoption and the full
-security router remain in development.
+their bounded JSON denial bodies. The full security router remains in development.
 
 Only exact `GET /v1/session/get` is accepted. Requests have no body, query or
 Idempotency-Key. Tenant comes only from an exact trusted HTTPS host binding.
@@ -88,6 +87,22 @@ freshness. Unauthenticated is `{"authenticated":false,"needsRefresh":false}`.
 Reading does not rotate, update activity, clear cookies or refresh authority.
 
 ## Self-signout
+
+`NewSignOutHandlerWithMiddleware` exposes the same four real phases for logout;
+`NewFeatureWithMiddleware` applies a selected list independently to both real
+routes. Existing constructors use those pipelines without hooks. Authenticate
+discovers the original subject once, then the signout domain service performs
+its existing required primary revalidation and protected transactional CSRF.
+No extra router authentication or rate debit is introduced. `SignOutState`
+provides credential-free `Principal()` and detached `Attempt()` projections.
+An attempted result may be unknown, denied or unavailable; it does not assert a
+commit. Copies of recovery metadata cannot change the original command. Only
+normally returned uncanceled Handle attempts reach after-handler observation.
+The original preliminary validity is rechecked after hooks, never extended.
+The shared response guard suppresses every hook-created cookie and permits only
+the owned exact deletion tuple after successful selected cookie logout. Bearer,
+denied, ambiguous and short-circuit responses clear no cookies. Hooks must not
+log/retain credential-bearing headers, retain state or start detached work.
 
 Call `NewSignOutHandler(SignOutConfig{...})` with the same `GetConfig` and
 exactly the selected `CookieSignOut` or `BearerSignOut` owner. Cookie mode uses
