@@ -215,6 +215,10 @@ func testPreparedFeature(t *testing.T, ctx context.Context, pool *database.Pool,
 			t.Fatal(err)
 		}
 	}
+	t.Run("original custody query", func(t *testing.T) {
+		c, phase, command, plan := newCase(t)
+		testPreparedFeatureQuery(t, ctx, c, phase, command, plan)
+	})
 	// Upgrade populated profile-1 history; admission must not reinterpret it.
 	legacyCoordinator, legacyPhase, legacyCommand, legacyPlan := newCase(t)
 	legacyResult, err := legacyCoordinator.ExecutePreparedFeature(ctx, legacyCommand, legacyPlan)

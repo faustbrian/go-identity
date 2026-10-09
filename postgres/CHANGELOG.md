@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Let the exact native preparation owner select committed encrypted input and
+  output by the original server command ID under current query authorization.
+  Preserve original policy/key versions and output generation; never allocate,
+  regenerate or take over work during lookup. Missing or incompatible custody
+  fails closed. Existing metadata-only command queries remain unchanged.
+
 - Add opt-in external preparation admission through the existing command
   journal, outside SQL and before acknowledged generation. Recheck original
   local facts after waits and before final commit; matching replay conserves

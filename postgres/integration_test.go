@@ -72,7 +72,7 @@ func TestPostgresIntegration(t *testing.T) {
 	}
 	result, err := runner.Up(ctx)
 	if err != nil || len(result.Records()) != 9 {
-		t.Fatal("empty install failed")
+		t.Fatalf("empty install failed: %v (records=%d)", err, len(result.Records()))
 	}
 	pool, err := database.Connect(ctx, database.Config{DSN: dsn, MaxConns: 2, Configure: func(native *database.PoolConfig) error { native.ConnConfig.Database = name; return nil }})
 	if err != nil {

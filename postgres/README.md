@@ -2,6 +2,18 @@
 
 ## Request-key correlation before command preparation
 
+Native feature adapters can use `QueryPreparedFeature` to restore an existing
+committed workflow by its server-issued command ID without a new initiating key
+or caller-written store. The exact registered request/preparation owner and
+current `CommandQueryPolicy` must authorize the complete historical scope.
+The result contains independently owned encrypted input/output and their
+original binding/generation. Both envelopes still require native authentication,
+separate bearer possession and current authority checks; historical custody is
+not renewed authority. Missing, retired, pending, aborted or legacy incomplete
+history returns no custody. Lookup never recovers, generates, mutates or charges
+anything. Install the existing request-key and feature-preparation migrations;
+no additional schema is required. Generic `QueryCommand` remains metadata-only.
+
 Native generated workflows can opt into `ResolvePreparedRequestKey` after
 installing `RequestKeyPreparationMigrationSource{Base, Version}` over the
 original request-key history. The exact registered feature owner prepares
