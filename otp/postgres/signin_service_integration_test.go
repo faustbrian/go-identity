@@ -41,16 +41,74 @@ func TestPublicSigninPostgresCompetingCorrectAndIncorrect(t *testing.T) {
 	}
 }
 
+func TestPublicSigninSourcePostgresCurrentAuthority(t *testing.T) {
+	for _, anonymous := range []bool{false, true} {
+		for name, change := range map[string]string{
+			"blocked-recipient": `UPDATE identity.users SET status='banned'`,
+			"identifier-epoch":  `UPDATE identity.users SET identifier_version=identifier_version+1`,
+			"missing-flow":      `DELETE FROM session_store.preauth_transactions`,
+		} {
+			t.Run(map[bool]string{false: "user", true: "anonymous"}[anonymous]+"/"+name, func(t *testing.T) {
+				testPublicSendPostgresScenario(t, false, false, &publicSigninScenario{anonymous: anonymous, sourceDenialSQL: change})
+			})
+		}
+	}
+}
+
 // Actual public Send and captured delivered code feed public Signin. No test
 // challenge, attempt, recipient, proof or session is injected into the login.
 func TestPublicSigninPostgresRollback(t *testing.T) {
 	testPublicSendPostgresScenario(t, false, false, &publicSigninScenario{rollback: true})
 }
 
+func proveSigninSourceDiscovery(t *testing.T, ctx context.Context, db *pgx.Conn, service *SigninService, request otp.SendRequest, command identity.CommandID) {
+	t.Helper()
+	snapshot := func() [4]int {
+		t.Helper()
+		var state [4]int
+		if err := db.QueryRow(ctx, `SELECT used_attempts,failed_attempts,(SELECT count(*) FROM identity.commands),(SELECT count(*) FROM session_store.session_issuances) FROM otp_store.challenges WHERE tenant_id=$1 AND challenge_id=$2`, string(request.TenantID), string(command)).Scan(&state[0], &state[1], &state[2], &state[3]); err != nil {
+			t.Fatal(err)
+		}
+		return state
+	}
+	before := snapshot()
+	r := otp.SigninSourceRequest{TenantID: request.TenantID, UserID: request.UserID, Caller: request.Caller, Flow: request.Flow, SendCommandID: command}
+	for range 2 {
+		source, err := service.ResolveSigninSource(ctx, r)
+		b, bindingErr := source.Bindings()
+		if err != nil || bindingErr != nil || b.TenantID != request.TenantID || b.SendCommandID != command || b.Channel != request.Channel || b.Destination.Value() != request.Destination.Value() {
+			t.Fatal("native original source changed or unavailable", err, bindingErr)
+		}
+	}
+	bad := r
+	bad.SendCommandID, _ = identity.NewCommandID()
+	if source, err := service.ResolveSigninSource(ctx, bad); err == nil || source != (otp.SigninSource{}) {
+		t.Fatal("unknown Send disclosed source")
+	}
+	kind, id, _, _ := r.Flow.Bindings()
+	if kind != otp.FlowAuthorizationPreAuthTransaction {
+		t.Fatal("signin fixture lacks pre-auth variant")
+	}
+	bad = r
+	bad.Flow, _ = otp.NewPreAuthSendFlow(identity.PreAuthTransactionID(id), auth.NewBearerCredential(strings.Repeat("Z", 42)+"A"))
+	if source, err := service.ResolveSigninSource(ctx, bad); err == nil || source != (otp.SigninSource{}) {
+		t.Fatal("foreign bearer disclosed original destination")
+	}
+	cancelled, stop := context.WithCancel(ctx)
+	stop()
+	if source, err := service.ResolveSigninSource(cancelled, r); err == nil || source != (otp.SigninSource{}) {
+		t.Fatal("cancelled discovery disclosed source")
+	}
+	if after := snapshot(); after != before {
+		t.Fatal("source discovery mutated attempts, commands or sessions")
+	}
+}
+
 type publicSigninScenario struct {
 	anonymous, persistent, rollback, expiryWait, authorityChange bool
 	mixedRace                                                    bool
 	commitFault                                                  *signinCommitFault
+	sourceDenialSQL                                              string
 }
 
 func TestPublicSigninPostgresLostCommitAcknowledgment(t *testing.T) {
@@ -109,6 +167,21 @@ func testPublicSigninAndRecovery(t *testing.T, ctx context.Context, db *pgx.Conn
 	sent, err := sender.Send(ctx, request)
 	if err != nil || sent.Outcome != identity.CommitOutcomeCommitted {
 		t.Fatal("actual Send", err)
+	}
+	proveSigninSourceDiscovery(t, ctx, db, service, request, sent.CommandID)
+	if scenario.sourceDenialSQL != "" {
+		if _, err := db.Exec(ctx, scenario.sourceDenialSQL); err != nil {
+			t.Fatal(err)
+		}
+		source, err := service.ResolveSigninSource(ctx, otp.SigninSourceRequest{TenantID: request.TenantID, UserID: request.UserID, Caller: request.Caller, Flow: request.Flow, SendCommandID: sent.CommandID})
+		if err == nil || source != (otp.SigninSource{}) {
+			t.Fatal("changed primary authority disclosed original source")
+		}
+		var used, failed, sessions int
+		if err := db.QueryRow(ctx, `SELECT used_attempts,failed_attempts,(SELECT count(*) FROM session_store.session_issuances) FROM otp_store.challenges WHERE tenant_id=$1 AND challenge_id=$2`, string(request.TenantID), string(sent.CommandID)).Scan(&used, &failed, &sessions); err != nil || used != 0 || failed != 0 || sessions != 0 {
+			t.Fatal("source rejection mutated attempts or sessions", err)
+		}
+		return
 	}
 	rawSendID, _ := base64.RawURLEncoding.DecodeString(string(sent.CommandID))
 	message := persistedSendMessage(t, ctx, db, rawSendID)
@@ -207,6 +280,9 @@ func testPublicSigninAndRecovery(t *testing.T, ctx context.Context, db *pgx.Conn
 	spoofedCaller := request.Caller.Clone()
 	spoofedCaller.Request.Subject.Attributes = authorization.Attributes{"identity.authentication.profile": authorization.StringValue("mfa")}
 	spoofedCaller.Request.Environment.Attributes = authorization.Attributes{"identity.authentication.factor-count": authorization.IntValue(2)}
+	if source, err := mfaService.ResolveSigninSource(ctx, otp.SigninSourceRequest{TenantID: request.TenantID, UserID: request.UserID, Caller: spoofedCaller, Flow: request.Flow, SendCommandID: sent.CommandID}); err == nil || source != (otp.SigninSource{}) || !mfaPolicy.observed {
+		t.Fatal("source disclosure bypassed single-factor policy", err)
+	}
 	if denied, err := mfaService.Signin(ctx, otp.SigninRequest{TenantID: request.TenantID, UserID: request.UserID, Caller: spoofedCaller, Flow: request.Flow, SendCommandID: sent.CommandID, Code: code}); err == nil || denied.SessionID != "" || !mfaPolicy.observed {
 		t.Fatal("single-factor login bypassed actual-user MFA policy", err)
 	}

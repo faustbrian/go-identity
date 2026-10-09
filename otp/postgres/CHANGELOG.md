@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Resolve original sign-in identifiers through authenticated public Send custody
+  and current pre-auth, policy and recipient authority. Code-free discovery
+  makes no attempt debit, command or session and grants no login clearance;
+  transport can meter the original identifier without trusting a replacement.
+
 - Add opt-in public single-factor OTP Signin and code-free recovery over original
   public Send custody. Atomically consume OTP/pre-auth with native session,
   CSRF, audit, lifecycle and receipt; preserve original recipient, actor and

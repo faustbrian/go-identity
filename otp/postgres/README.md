@@ -1,5 +1,21 @@
 # OTP PostgreSQL
 
+## Original sign-in source for rate admission
+
+The selected `SigninService` also implements
+`otp.SigninSourceService.ResolveSigninSource`. Supply original Send command,
+same pre-auth possession and trusted caller with no submitted code or replacement
+identifier. It authenticates retained encrypted custody and current flow,
+directory, proposed single-factor policy and original recipient before returning
+the exact original canonical destination for trusted transport rate composition.
+Never expose that sensitive projection as an HTTP discovery endpoint.
+
+Discovery compares no code, creates no command/session and debits no attempts.
+Its result is not clearance: the later Signin independently enforces current
+authority and atomic consumption. Caller/sender deadlines bound all reads;
+suppressed, replaced, inactive and foreign selections deny. Existing Send/Signin
+APIs, stores and migrations are unchanged. HTTP integration remains pending.
+
 ## Public consuming Signin
 
 Opt into `NewSigninService(sender, SigninConfig{...})` over an initialized
