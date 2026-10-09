@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Add explicit original browser-flow initiation through the selected session
+  issuer, with strict HTTPS/origin/input admission and shared IP rate limiting
+  before preparation. Preserve the once-resolved remember policy, original
+  five-minute timeline and native outcome on lost delivery. Replay, ambiguity,
+  failed delivery and malformed cookie attributes cannot emit a flow cookie.
+  Selected feature/OpenAPI and complete runtime qualification remain pending.
+
 - Use the shared strict cookie decoder for session reads, metadata and
   self-signout. Credential values and malformed sibling values are no longer
   silently whitespace-normalized; they deny before owner access. Existing

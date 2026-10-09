@@ -7,6 +7,35 @@ release-qualified backend platform.
 
 ## Quick start and ownership
 
+For an original browser login flow, construct `NewPreAuthHandler(PreAuthConfig{
+Network: network, Service: preAuthService, Rate: authRate, Cookie: flowCookie,
+Lifetime: sessionLifetime, Origin: trustedOrigin, Action: trustedAction,
+CallbackURL: trustedCallback, PolicyID: policyID, PolicyVersion: policyVersion,
+Now: trustedClock, MaximumDuration: handlerBudget})`. The selected reference
+`FeatureSet.PreAuth()` handle satisfies the borrowed service interface; do not
+write another flow store or issuance workflow. Use the secure
+`__Host-identity_flow` Lax/Strict cookie policy and the same configured issuer
+action/origin/callback/policy. Empty callback explicitly disables redirects.
+
+Only `POST /v1/session/preauth-issue` accepts bounded JSON `{}` or an optional
+boolean `remember`. Null, extra/duplicate fields, query, trailers, Authorization
+and Idempotency-Key deny. The request needs the exact configured HTTPS Origin
+and host-mapped tenant. Ambient cookies are not authentication for initiation.
+IP-only shared `rate.auth` admission precedes command/flow entropy and persistence.
+Each deliberate fresh start is independent; the handler never retries an unknown
+outcome or prepares another command as recovery. Subsequent OTP Send must use
+the returned original flow ID/cookie and its own keyed contract.
+
+The native issuer resolves the original five-minute flow independently of final
+session persistence. Remember is resolved once through Lifetime before Prepare
+and checked unchanged in the original command. Only an exact fresh committed,
+error-free result delivers the cookie; replay, expiry, failure and cancellation
+emit none while preserving known native outcome and safe original locators.
+The response contains no nonce, digest or bearer. Native recovery requires its
+current policy and never delivers or renews a cookie. This handler is opt-in and
+is not yet contributed by `NewFeature`; canonical selected metadata/OpenAPI and
+the complete PostgreSQL/browser journey remain in development.
+
 Cookie acquisition uses the base transport's shared strict decoder. Trailing
 SP/HTAB in either the selected cookie value or an unrelated cookie value denies
 before session lookup; values are not repaired into valid credentials. Token
