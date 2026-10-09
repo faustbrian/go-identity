@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Add explicit recovery-only and combined signin/recovery feature selection
+  with concrete original-correlation OpenAPI schemas and one shared flow scheme.
+  Disabled recovery contributes no route or metadata; historical results never
+  advertise live authentication or credential delivery.
 - Add explicit original-flow signin recovery HTTP handling and typed middleware.
   Recovery is code-free historical observation, shares strict IP admission, and
   never repeats consumption or delivers session/CSRF credentials.

@@ -74,8 +74,18 @@ the native owner supplies it. Rate denial returns 429 and bounded Retry-After.
 Typed middleware uses `PipelineValue[SigninRecoveryState]` and detached `Attempt`
 metadata; response custody prevents cookie/CSRF injection, including trailers.
 
+`NewSigninRecoveryFeature` selects only this real handler and concrete recovery
+schemas. `NewSigninFeatureWithRecovery` selects signin plus recovery under one
+OTP owner, declaring their shared flow-cookie security scheme once. Middleware
+variants retain each operation's distinct typed state. Do not supply separate
+signin and recovery contributions with the same owner to one router. Constructors
+perform no native IO and return no partial feature for missing dependencies.
+Omitting recovery exposes neither its route nor metadata. The wire advertises
+historical outcomes without cookie/CSRF response headers; runtime scope checks
+remain mandatory even when JSON shape validates.
+
 This remains a development checkpoint, not a complete server. Send HTTP transport,
-recovery feature metadata, composed native browser login, exact coverage/mutation,
+composed native browser login, exact coverage/mutation,
 clean-consumer and release qualification remain pending. The single-factor
 profile must deny when further factors are required; complete MFA continuation
 composition remains required. No production memory fallback exists.
