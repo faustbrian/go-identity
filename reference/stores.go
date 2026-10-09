@@ -44,6 +44,9 @@ type StoreConfiguration struct {
 	Delivery *DeliveryConfiguration
 	// Migrations enables explicit operator Apply; nil keeps Check/Plan only.
 	Migrations *MigrationApplyPolicy
+	// HTTPRate selects the owned strong HTTP admission backend and its native
+	// migration history. Nil leaves both disabled without changing legacy history.
+	HTTPRate *HTTPRateConfiguration
 }
 
 // VelocityStoreConfiguration selects one primary/native recovery pair. Native
@@ -88,6 +91,7 @@ type storeState struct {
 	keys       []risk.CounterDigestKey
 	features   *featureState
 	migrations *MigrationApplyPolicy
+	httpRate   *httpRateState
 }
 
 type tenantRecovery struct {
@@ -103,6 +107,10 @@ type tenantRecovery struct {
 // journal history and native-confirmed activation. Invalid input is redacted.
 func ComposeStores(c StoreConfiguration, d ReferenceDependencies) (StoreSet, error) {
 	migrationPolicy, err := copyMigrationApplyPolicy(c.Migrations)
+	if err != nil {
+		return StoreSet{}, err
+	}
+	httpRate, err := composeHTTPRate(c.HTTPRate, d.PostgreSQL)
 	if err != nil {
 		return StoreSet{}, err
 	}
@@ -146,7 +154,7 @@ func ComposeStores(c StoreConfiguration, d ReferenceDependencies) (StoreSet, err
 	// Resource owners already copied the sensitive configuration. Retain only
 	// traversal bounds; no caller TLS objects, secret slices or tenant slices.
 	retained := VelocityStoreConfiguration{Schema: v.Schema, Batch: v.Batch, MaxRecords: v.MaxRecords, RecoveryTimeout: v.RecoveryTimeout, PrimaryTimeout: v.PrimaryTimeout}
-	state := &storeState{pool: d.PostgreSQL, drained: drained, lifetime: lifetime, cancel: cancel, tenants: tenants, native: native, primary: primary, config: retained, policy: v.Native.Policy, keys: slices.Clone(v.Native.Keys), migrations: migrationPolicy}
+	state := &storeState{pool: d.PostgreSQL, drained: drained, lifetime: lifetime, cancel: cancel, tenants: tenants, native: native, primary: primary, config: retained, policy: v.Native.Policy, keys: slices.Clone(v.Native.Keys), migrations: migrationPolicy, httpRate: httpRate}
 	if err := state.composeFeatureStores(c, d); err != nil {
 		cancel()
 		return StoreSet{}, err
@@ -328,6 +336,9 @@ func (s StoreSet) Close(ctx context.Context) error {
 	state.mu.Lock()
 	state.closed = true
 	state.cancel()
+	if state.httpRate != nil {
+		state.httpRate.limiter.Close()
+	}
 	drained := state.drained
 	state.mu.Unlock()
 	if err := state.native.Close(ctx); err != nil {

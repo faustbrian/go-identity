@@ -28,6 +28,8 @@ import (
 // only when its session schema is distinct from the selected session bases.
 // Selected original-flow initiation contributes its independent identity_preauth
 // history through reference Check/Plan/Apply, not this shared source.
+// Selected HTTP rate admission likewise contributes the native rate-limit
+// identity_http_rate history through Check/Plan/Apply, not this shared source.
 // Audit and outbox independent histories are not part of this shared source;
 // their installation remains required before enabling the selected workflow.
 func (s StoreSet) MigrationSource() migrations.Source {

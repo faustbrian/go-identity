@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add opt-in graph-owned PostgreSQL strong HTTP rate admission and its native
+  independently namespaced migration contribution. Explicit budgets and a
+  public-only pool search path are required; construction performs no IO and
+  graph shutdown permanently closes admission without closing the caller pool.
+  Full server construction and browser integration remain pending.
+
 - Align selected original-flow composition dependencies with the opt-in session
   HTTP feature and strict PostgreSQL rate authority. The reference server and
   production rate-migration contributor remain pending.

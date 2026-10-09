@@ -68,6 +68,27 @@ caller-written risk evaluator or counter store.
 
 ## Optional OTP Send composition
 
+### Optional HTTP rate storage
+
+`StoreConfiguration.HTTPRate` selects one native strict PostgreSQL backend and
+the HTTP owner's fixed authentication/delivery policies. Supply a namespace,
+nonzero 32-byte identifier key and explicit duration bounds: each of maximum
+duration, timeout, lock timeout and rollback timeout is 1ms–2s; timeout must not
+exceed maximum duration, and lock/rollback must not exceed timeout. Configure
+the caller pool with `search_path=public`: the native adapter owns unqualified
+SQL and cannot safely share an ambiguous search path. Callbacks that change
+connection search paths violate this deployment requirement.
+
+Construction freezes configuration without database IO or schema installation.
+Check/Plan/Apply includes the native version-one migration in the independent
+`identity_http_rate` history; `MigrationSource()`'s existing shared prefix is
+unchanged. Nil selects neither the backend nor its migration. Graph shutdown
+permanently denies later admission but leaves the caller pool owned by the
+caller. This prerequisite does not yet expose a complete server constructor,
+HTTP readiness, or a composed browser-login journey.
+
+### OTP and delivery selection
+
 Select both `StoreConfiguration.OTP` and `StoreConfiguration.Delivery`, with
 deployment envelope keys and a bounded sender in `ReferenceDependencies`.
 The delivery profile must enable state tracking and use production policies.

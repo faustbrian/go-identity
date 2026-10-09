@@ -9,6 +9,7 @@ import (
 	identity "github.com/faustbrian/go-identity"
 	sessionpg "github.com/faustbrian/go-identity/session/postgres"
 	migrations "github.com/faustbrian/go-migrations/v3"
+	ratepg "github.com/faustbrian/go-rate-limit/v2/postgres"
 	outboxpg "github.com/faustbrian/go-transactional-outbox/v2/postgres"
 	lifecyclepg "github.com/faustbrian/go-transactional-outbox/v2/postgres/identity"
 )
@@ -63,6 +64,16 @@ func (s StoreSet) migrationCatalog(ctx context.Context) ([]migrationHistory, err
 		shared.owners[v] = owner
 	}
 	catalog := []migrationHistory{shared}
+	if s.state.httpRate != nil {
+		// Keep the native owner's version/SQL and an independent ledger. Enabling
+		// admission later must not rewrite an already-applied identity prefix.
+		native := ratepg.SchemaMigration()
+		step, err := migrations.NewMigration(migrations.Version(native.Version), native.Name, migrations.TransactionModeDefault, native.Up, native.Down)
+		if err != nil {
+			return nil, err
+		}
+		catalog = append(catalog, migrationHistory{namespace: "identity_http_rate", history: []migrations.Migration{step}, owners: map[migrations.Version]ModuleID{step.Version(): "rate-limit/postgres"}, guards: []migrationGuard{{version: step.Version(), schema: "public", tables: []string{"rate_limit_states", "rate_limit_states_expires_at_idx"}}}})
+	}
 	if s.state.features == nil {
 		return catalog, nil
 	}
