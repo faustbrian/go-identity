@@ -59,7 +59,12 @@ type TransportPolicy struct {
 // context deadlines never extend upstream bounds. Server raw read/write and
 // connection deadlines remain required: use NewHTTPServer. Arbitrary callbacks
 // ignoring cancellation cannot be forcibly terminated; no detached work is
-// started. Returned snapshots are concurrent-safe when borrowed handlers are.
+// started. Before any response commitment, a canceled owner may synchronously
+// return one explicit 503 outcome of at most 16KiB; only content type, retry and
+// CORS headers survive, never credentials or trailers. Other canceled writes
+// deny; already committed responses abort. This preserves known command status
+// without retrying work or asserting that a disconnected client received it.
+// Returned snapshots are concurrent-safe when borrowed handlers are.
 func NewRouter(policy TransportPolicy, operations []OperationDescriptor, middleware []MiddlewareDescriptor) (http.Handler, OpenAPIDocument, error) {
 	if policy.HandlerTimeout < time.Millisecond || policy.HandlerTimeout > 30*time.Second || len(operations) > 1024 || !validMiddleware(middleware) {
 		return nil, OpenAPIDocument{}, ErrInvalidInput
@@ -183,10 +188,13 @@ func (h *routerHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	owned.GetBody = nil
 	committed := false
 	invalidEnvelopeSent := false
+	canceledFailure := false
+	canceledBytes := 0
+	canceledOverflow := false
 	before := func() error {
 		routerHeaders(w.Header())
-		if err := ctx.Err(); err != nil {
-			return err
+		if ctx.Err() != nil {
+			routerCanceledHeaders(w.Header())
 		}
 		if body != nil && body.exceeded {
 			if !committed {
@@ -196,12 +204,23 @@ func (h *routerHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			}
 			return DecodeError{}
 		}
+		if err := ctx.Err(); err != nil {
+			if !canceledFailure || canceledOverflow {
+				return err
+			}
+		}
 		return nil
 	}
 	var writer http.ResponseWriter
 	writer = httpsnoop.Wrap(w, httpsnoop.Hooks{
 		WriteHeader: func(next httpsnoop.WriteHeaderFunc) httpsnoop.WriteHeaderFunc {
 			return func(status int) {
+				if ctx.Err() != nil && !committed && status == http.StatusServiceUnavailable {
+					canceledFailure = true
+				}
+				if canceledFailure && status != http.StatusServiceUnavailable {
+					return
+				}
 				if before() == nil {
 					if status >= 200 {
 						committed = true
@@ -214,6 +233,13 @@ func (h *routerHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return func(p []byte) (int, error) {
 				if err := before(); err != nil {
 					return 0, err
+				}
+				if canceledFailure {
+					if len(p) > 16384-canceledBytes {
+						canceledOverflow = true
+						return 0, ErrUnavailable
+					}
+					canceledBytes += len(p)
 				}
 				committed = true
 				return next(p)
@@ -244,11 +270,17 @@ func (h *routerHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			if p == http.ErrAbortHandler || committed {
 				panic(http.ErrAbortHandler)
 			}
+			if ctx.Err() != nil {
+				routerCanceledHeaders(w.Header())
+			}
 			routerDeny(w, r, http.StatusServiceUnavailable, "unavailable")
 		}
 	}()
 	h.next.ServeHTTP(writer, owned)
 	routerHeaders(w.Header())
+	if ctx.Err() != nil {
+		routerCanceledHeaders(w.Header())
+	}
 	if body != nil && body.exceeded && !invalidEnvelopeSent {
 		if committed {
 			panic(http.ErrAbortHandler)
@@ -257,11 +289,28 @@ func (h *routerHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if ctx.Err() != nil {
+		if canceledFailure && committed && !canceledOverflow {
+			return
+		}
 		if committed {
 			panic(http.ErrAbortHandler)
 		}
 		routerDeny(w, r, http.StatusServiceUnavailable, "unavailable")
 	}
+}
+
+// On cancellation, headers retained by a failed or late callback cannot become
+// credential delivery through either the owned outcome or generic fallback.
+// Preserve only transport-owned grants and non-credential failure metadata.
+func routerCanceledHeaders(header http.Header) {
+	for name := range header {
+		switch strings.ToLower(name) {
+		case "content-type", "retry-after", "access-control-allow-origin", "access-control-allow-credentials", "access-control-expose-headers", "vary":
+		default:
+			delete(header, name)
+		}
+	}
+	routerHeaders(header)
 }
 
 // Body reads remain synchronous and feature-owned. Detect an unknown-length

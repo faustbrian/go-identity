@@ -593,6 +593,14 @@ one explicit return owner. A caller choosing concurrency must retain and join it
 **Can a stopped instance restart?** No. Construct a new owner so terminal cleanup
 and shutdown results cannot be confused with another listener generation.
 
+Canceled requests cannot emit successful responses or credentials. Before any
+response commitment, an owner may synchronously return one explicit 503 with
+its safe original command status, bounded to 16KiB. Only content type, retry
+and transport-owned CORS headers survive; cookies, CSRF fields and trailers do
+not. Oversized canceled outcomes and cancellation after response commitment
+abort the connection. This does not retry work, extend deadlines or guarantee
+delivery to a disconnected client; retain the original recovery correlation.
+
 **Does cancellation undo a command?** No. The domain owner must reconcile any
 possibly committed mutation before retrying; transport errors cannot decide it.
 

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Preserve bounded owner-written 503 command outcomes after cancellation before
+  response commitment, without cookie/CSRF/trailer delivery or automatic retry.
+  Canceled successful or oversized responses remain denied or aborted.
+
 - Permit explicit pre-auth-only exact-origin selection on conditional
   pre-auth/session canonical rows without claiming an unused session-token
   profile. Session-only rows and full conditional protection are unchanged.
