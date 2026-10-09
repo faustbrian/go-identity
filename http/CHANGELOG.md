@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add fixed sign-in and delivery rate policies through the existing strong rate
+  primitive. Budgets span operations within each profile, identifiers and
+  subjects use tenant-scoped HMAC keys, and outages/ambiguous decisions deny
+  without emergency fallback. Retry delays are bounded before rounding.
+  OTP route adoption and remaining policy profiles are still in development.
+
 - Allow owned health/readiness probes in selected routers with global operation
   hooks. Preserve public/no-auth custody, fixed safe output, original readiness
   bounds and final lifecycle checks; hooks receive no ambient credentials and

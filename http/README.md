@@ -113,6 +113,32 @@ committed primitive security revision `72dfa13dd0a6`, not released `v2.0.0`,
 whose memory store can evict live counters. Published dependency resolution and
 full release qualification are not established by local archive-backed tests.
 
+### Sign-in and delivery policies
+
+`NewAuthRateLimiter(AuthRateConfig{...})` selects canonical `rate.signin` and
+`rate.delivery` operations from the same catalog. Supply a strong borrowed
+backend, stable deployment namespace, independent nonzero 32-byte identifier
+HMAC key, trusted clock and a 1ms..2s maximum duration. No emergency store or
+degradation callback is used: outages and unknown outcomes fail closed.
+
+Call `Admit(ctx, facts, AuthRateRequest{OperationID: operationID,
+Identifier: canonicalIdentifier, UserID: authenticatedUserID})`. Identifiers
+must come from the owning workflow's canonical input or authenticated original
+challenge custody. A client-claimed identifier unrelated to the challenge is
+not suitable. The rate owner neither normalizes identifiers nor authenticates
+subjects. HMAC key derivation length-frames profile, dimension, tenant and value;
+raw identifiers and subjects never become backend keys or diagnostics.
+
+Sign-in uses shared IP20/10m and tenant/identifier10/10m. Delivery uses shared
+IP10/h, tenant/identifier5/h and authenticated tenant/subject10/h. All operations
+in one profile share these continuously refilled budgets. Admission requires
+every applicable bucket to allow. Per-bucket debits are atomic, but not one
+cross-bucket transaction: earlier debits remain after later failure. Known
+exhaustion checks remaining buckets for the longest retry delay, rounded up and
+clamped to 1s..1h. No result is reusable authorization. Close after draining;
+copies share terminal closure, and the borrowed backend is never closed here.
+Other canonical rate profiles and actual OTP HTTP handlers remain pending.
+
 ## Start and stop
 
 Construct `NewHTTPServer(ServerConfig{...}, handler)` with explicit address,
