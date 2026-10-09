@@ -315,7 +315,7 @@ func (s *PasswordChangeService) Change(ctx context.Context, r PasswordChangeRequ
 	return result, err
 }
 
-func (s *PasswordChangeService) coordinator(phase *passwordChangePhase) (*kernel.Coordinator, *kernel.ContributorRegistry, error) {
+func (s *PasswordChangeService) coordinator(phase kernel.FeatureExecutionContributor) (*kernel.Coordinator, *kernel.ContributorRegistry, error) {
 	domain, err := kernel.NewRepository(s.source.pool, kernel.Config{MaximumDuration: s.source.c.Repository.MaximumDuration})
 	if err != nil {
 		return nil, nil, err

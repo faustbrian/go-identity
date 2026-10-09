@@ -21,6 +21,7 @@ import (
 // Invocation-only custody cannot be obtained from a caller-built command. The
 // kernel independently decodes all predecessor fields before locking authority.
 type passwordChangePhase struct {
+	owner    kernel.CredentialReplacementContributor
 	service  *PasswordChangeService
 	original session.Session
 	material password.CredentialSnapshot
@@ -30,6 +31,15 @@ type passwordChangePhase struct {
 	use      auth.ReauthenticationUse
 	intent   kernel.CredentialReplacementIntent
 	expected identity.Command
+}
+
+// Retained preparation reconstructs a private invocation, but every Work check
+// remains owned by the exact participant registered with that coordinator.
+func (p *passwordChangePhase) participant() kernel.CredentialReplacementContributor {
+	if p.owner != nil {
+		return p.owner
+	}
+	return p
 }
 
 var _ kernel.CredentialReplacementContributor = (*passwordChangePhase)(nil)
@@ -94,7 +104,7 @@ func (p *passwordChangePhase) ApplyFeature(ctx context.Context, w kernel.Work, c
 		return identity.FeatureReceipt{}, password.ErrPasswordWork
 	}
 	spec, _ := c.PasswordChangeFeature()
-	b, feature, _, err := w.FeatureScope(p)
+	b, feature, _, err := w.FeatureScope(p.participant())
 	if err != nil || b != spec.Binding || feature.Operation != replacementOperation() {
 		return identity.FeatureReceipt{}, password.ErrPasswordWork
 	}
@@ -103,13 +113,13 @@ func (p *passwordChangePhase) ApplyFeature(ctx context.Context, w kernel.Work, c
 	if err != nil || credential.Credential != p.intent.Credential || credential.CredentialAuthorityVersion != p.intent.ExpectedAuthorityVersion {
 		return identity.FeatureReceipt{}, identity.ForbiddenError{}
 	}
-	if err = w.RequireActiveDirectoryAuthority(ctx, p, directory); err != nil {
+	if err = w.RequireActiveDirectoryAuthority(ctx, p.participant(), directory); err != nil {
 		return identity.FeatureReceipt{}, err
 	}
-	if _, err = w.RequireActiveCredential(ctx, p, credential); err != nil {
+	if _, err = w.RequireActiveCredential(ctx, p.participant(), credential); err != nil {
 		return identity.FeatureReceipt{}, err
 	}
-	if err = w.RequireActiveUserAuthorization(ctx, p, policy); err != nil {
+	if err = w.RequireActiveUserAuthorization(ctx, p.participant(), policy); err != nil {
 		return identity.FeatureReceipt{}, err
 	}
 	if err = sessionpg.RequireSession(ctx, w, source.c.Session, p.original); err != nil {
@@ -136,11 +146,11 @@ func (p *passwordChangePhase) ApplyFeature(ctx context.Context, w kernel.Work, c
 	if err != nil {
 		return identity.FeatureReceipt{}, err
 	}
-	receipt, err := source.repository.applyReplacement(ctx, w, p, identity.FeatureCommandSpec{Binding: b, Operation: replacementOperation(), Fields: fields}, i, encoded)
+	receipt, err := source.repository.applyReplacement(ctx, w, p.participant(), identity.FeatureCommandSpec{Binding: b, Operation: replacementOperation(), Fields: fields}, i, encoded)
 	if err != nil {
 		return identity.FeatureReceipt{}, err
 	}
-	if _, err = p.service.sessions.Apply(ctx, w, p, c); err != nil {
+	if _, err = p.service.sessions.Apply(ctx, w, p.participant(), c); err != nil {
 		return identity.FeatureReceipt{}, err
 	}
 	if err = p.checkTime(ctx, w); err != nil {
@@ -206,15 +216,15 @@ func (p *passwordChangePhase) RecoverParticipant(ctx context.Context, w kernel.R
 	if p == nil || p.service == nil || ctx == nil {
 		return kernel.RecoveryUnknown, password.ErrPasswordWork
 	}
-	material, err := p.service.source.repository.recoverReplacement(ctx, w, p)
+	material, err := p.service.source.repository.recoverReplacement(ctx, w, p.participant())
 	if err != nil {
 		return kernel.RecoveryUnknown, err
 	}
-	sessions, err := p.service.sessions.Recover(ctx, w, p)
+	sessions, err := p.service.sessions.Recover(ctx, w, p.participant())
 	if err != nil || sessions != material {
 		return kernel.RecoveryUnknown, err
 	}
-	b, _, _, err := w.FeatureScope(p)
+	b, _, _, err := w.FeatureScope(p.participant())
 	if err != nil {
 		return kernel.RecoveryUnknown, err
 	}

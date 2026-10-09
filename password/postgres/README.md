@@ -227,6 +227,42 @@ stores or workflows to bridge those unfinished contracts.
 
 ## Native verification and remaining work
 
+### Keyed authenticated password change
+
+Use `NewKeyedPasswordChangeConfig` with a kernel-constructed `RequestKeyConfig`,
+a dedicated nonzero intent HMAC key and the active encryption key ID. Compose
+`NewKeyedPasswordChangeService` with the existing native reauthentication source,
+password-change policy and a borrowed local `keyring.Provider`. Pass one
+`identity.IdempotencyKey` to `Change` alongside the native request. This is an
+additive service: the existing unkeyed `NewPasswordChangeService` is unchanged.
+Public retry-capable endpoints must explicitly choose the keyed service; it
+does not silently fall back when keyed custody is unavailable.
+
+Install the kernel's request-key, request-key-preparation, preparation,
+admission-preparation and counter-preparation migration sources in that order
+after the credential-replacement history, using your selected monotonic migration
+versions. Existing password, session, risk, audit and outbox prerequisites still
+apply. Missing histories fail rather than creating application-owned stores.
+
+Matching retries restore original encrypted custody before current-material
+lookup, hashing or external screening. They return the original command's
+outcome, including after its source bearer has been revoked. Different password,
+proof or network input conflicts under the same key. Busy and unknown outcomes
+are not permission to submit a new key: use `Recover` for authorized code-free
+original-outcome reconciliation. Neither recovery nor matching terminal replay
+extends proof or risk freshness or recharges the original counters.
+
+Keep the namespace, lookup/intent keys and behavior configuration stable while
+their mappings are retained. Active envelope-key rotation is supported only
+while original decrypting keys remain in the borrowed local keyring. This
+profile intentionally excludes network/KMS providers so restoring custody never
+introduces network work inside a protected transaction. Passwords, bearer bytes
+and retry keys are never stored in the encrypted preparation; the original
+predecessor verifier is sensitive retained encrypted material. Destroy the
+caller-owned password secret after the call, and keep borrowed owners alive
+until all calls finish. Earlier caller, proof and original risk-signal deadlines
+win. Provider failures and expiry deny rather than renew observations.
+
 The integration lane requires a task-owned disposable loopback PostgreSQL 18.4
 cluster and fails when absent; it never silently skips. It installs real kernel
 and password histories and exercises the public core against the real reader.

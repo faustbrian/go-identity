@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- Add opt-in keyed authenticated password change on the existing kernel journal.
+  Matching retries retain the original encrypted preparation and credential
+  outcome; changed password, proof or network intent conflicts without repeating
+  screening or charging counters. Original risk/proof expiry bounds blocked
+  work, and ambiguous commits use code-free recovery. Retain namespace/HMAC
+  configuration and decrypting local keyring keys; install kernel request-key,
+  preparation, admission-preparation and counter-preparation histories. The
+  existing unkeyed service remains supported; HTTP and full password lifecycle
+  and release qualification remain in development.
+
 - Compose native password-change session preservation, revoke-other and
   revoke-all in the original protected transaction. Freeze trusted choice and
   whole-set cap in each command; zero configuration retains strict revoke-all.
