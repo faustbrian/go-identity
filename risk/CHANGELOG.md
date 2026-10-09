@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Apply the canonical Authentication abuse profile to password verification:
+  count and audit the exact `identity.password.verify` attempt before password
+  work instead of unconditionally denying the operation. Required signals,
+  throttling and unavailable-state denial still apply; admission is not a
+  credential check or permission to issue a proof. Refresh catalog provenance
+  and retain closed denial for newly cataloged recovery/pre-auth operations.
+
 - Retain genuine counted/audited Authentication admission in signed native
   custody under existing risk keys. Restart rechecks the original facts and
   exclusive expiry without provider, counter or audit IO; configuration,

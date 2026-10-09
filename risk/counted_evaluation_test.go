@@ -50,7 +50,7 @@ func countedRequest(action Action) EvaluateRequest {
 }
 
 func TestCountedEvaluationMutatesAtOwnedPhaseAndUsesPostState(t *testing.T) {
-	for _, action := range []Action{"identity.password.signin", "identity.profile.get"} {
+	for _, action := range []Action{"identity.password.signin", "identity.password.verify", "identity.profile.get"} {
 		for _, exceeded := range []bool{false, true} {
 			now := testContext().Now
 			var order []string
