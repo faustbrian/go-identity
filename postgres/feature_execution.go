@@ -301,7 +301,11 @@ func (c *Coordinator) ApplyFeature(ctx context.Context, w Work, command identity
 // even when the contributor panics; usable Work must not revive the invocation.
 func invokeFeature(p FeatureExecutionContributor, ctx context.Context, w Work, command identity.Command) (identity.FeatureReceipt, error) {
 	w.state.featureInvocation = p
-	defer func() { w.state.featureInvocation = nil }()
+	w.state.featureApplying = true
+	defer func() {
+		w.state.featureApplying = false
+		w.state.featureInvocation = nil
+	}()
 	return p.ApplyFeature(ctx, w, command)
 }
 

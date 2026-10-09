@@ -47,6 +47,7 @@ type workState struct {
 	authenticationChecked bool
 	featureReceipt        *identity.FeatureReceipt
 	featureInvocation     FeatureExecutionContributor
+	featureApplying       bool
 	delivery              *workDelivery
 	issuance              *workIssuance
 	credentialIntent      *CredentialCompromiseIntent

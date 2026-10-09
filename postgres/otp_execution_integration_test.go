@@ -156,7 +156,9 @@ func (p *sqlOTPDomain) RecoverParticipant(ctx context.Context, w RecoveryWork) (
 
 type otpDomainFeature struct {
 	scopeFeatureParticipant
-	expire bool
+	expire      bool
+	work        Work
+	consumption OTPReservationBinding
 }
 
 func (p *otpDomainFeature) ApplyFeature(ctx context.Context, w Work, c identity.Command) (identity.FeatureReceipt, error) {
@@ -164,6 +166,14 @@ func (p *otpDomainFeature) ApplyFeature(ctx context.Context, w Work, c identity.
 		return identity.FeatureReceipt{}, err
 	}
 	s, _ := c.Feature()
+	b, err := w.OTPConsumption(p)
+	if err != nil || b.Command != s.Binding || b.Generation == 0 || b.PreviousGeneration != 0 || b.Plan.Mode != OTPConsume || b.Fingerprint == ([32]byte{}) {
+		return identity.FeatureReceipt{}, invalidWork()
+	}
+	if _, err := w.OTPConsumption(&otpDomainFeature{}); err == nil {
+		return identity.FeatureReceipt{}, invalidWork()
+	}
+	p.work, p.consumption = w, b
 	if _, err := w.Exec(ctx, `INSERT INTO identity.otp_domain_fixture(command_id) VALUES($1)`, string(s.Binding.CommandID)); err != nil {
 		return identity.FeatureReceipt{}, err
 	}
@@ -302,6 +312,9 @@ func testOTPExecution(t *testing.T, ctx context.Context, pool *database.Pool, re
 				if challenge != "finalized" || journal != "committed" || domain != 1 || audits != 1 || outbox != 1 {
 					t.Fatal("success not atomic", challenge, journal, domain, audits, outbox)
 				}
+				if feature.consumption.Command != b || feature.consumption.Plan != *plan.OTP || feature.consumption.Generation != 1 {
+					t.Fatal("protected effect lost original consuming binding")
+				}
 			} else if mode == "unknown" || mode == "divergent-recovery" || strings.HasPrefix(mode, "release-") {
 				if challenge != "reserved" || journal != "pending" || domain != 0 || audits != 0 || outbox != 0 {
 					t.Fatal("unknown lost custody", challenge, journal, domain, audits, outbox)
@@ -311,6 +324,9 @@ func testOTPExecution(t *testing.T, ctx context.Context, pool *database.Pool, re
 			}
 			if owner.calls.Load() != 1 {
 				t.Fatal("verification repeated")
+			}
+			if got, err := feature.work.OTPConsumption(feature); err == nil || got != (OTPReservationBinding{}) {
+				t.Fatal("returned feature handle retained consumption access")
 			}
 			for _, binding := range []func(OTPReservationContributor) (OTPReservationBinding, error){owner.apply.Binding, owner.finalize.Binding, owner.release.Binding} {
 				if _, err := binding(owner); err == nil {

@@ -192,6 +192,16 @@ validity leases; callers must not log or serialize them. Install the existing
 identifier, status and credential-authority migrations before using this port.
 Public OTP Send orchestration remains under development.
 
+## Protected OTP effect binding
+
+Inside its registered `ApplyFeature` callback, a native feature can call
+`work.OTPConsumption(theExactFeatureOwner)` to obtain a scalar copy of the
+original checked consuming reservation. Bind composed effects to its command,
+attempt, generation and fingerprint; it is not a completed proof or a commit.
+Unchecked reservations, non-consuming checks, foreign owners and returned Work
+deny access. This performs no comparison, mutation or token delivery. Session
+issuance still needs its own complete native effect and commit-gated delivery.
+
 ## OTP current-authority checks
 
 The generic native feature invocation also exposes

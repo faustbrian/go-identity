@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Expose checked OTP consumption scope only inside the exact protected feature
+  invocation, so composed session effects can bind to the original reservation
+  without a separate authentication commit. The projection contains no code or
+  bearer and never authorizes credential delivery before commit.
+
 - Let the exact native preparation owner select committed encrypted input and
   output by the original server command ID under current query authorization.
   Preserve original policy/key versions and output generation; never allocate,
