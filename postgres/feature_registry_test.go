@@ -139,6 +139,7 @@ func TestFeatureRegistrySelectionRequiresEveryFrozenField(t *testing.T) {
 		func(p *FeatureRegistration) { p.Operation.SchemaID += "-other" },
 		func(p *FeatureRegistration) { p.Operation.SchemaVersion++ },
 		func(p *FeatureRegistration) { p.Operation.RecordRequirement = identity.FeatureRecordOmitted },
+		func(p *FeatureRegistration) { p.Operation.SubjectRequirement = identity.FeatureSubjectAnonymousFlow },
 	} {
 		bad := want
 		change(&bad)
@@ -160,6 +161,50 @@ func TestFeatureRegistrySelectionRequiresEveryFrozenField(t *testing.T) {
 	}
 	if _, e := plain.selectFeatureOperation(want); e == nil {
 		t.Fatal("undeclared feature selected")
+	}
+}
+
+func TestFeatureRegistrySameSchemaSubjectNamespaces(t *testing.T) {
+	c := featureRegistryInput()
+	anonymous := c.operations[0]
+	anonymous.SubjectRequirement = identity.FeatureSubjectAnonymousFlow
+	c.operations = append(c.operations, anonymous)
+	r, err := NewContributorRegistry([]Contributor{c})
+	if err != nil {
+		t.Fatal("same-schema user and anonymous operations cannot compose", err)
+	}
+	registrations := r.FeatureOperations()
+	if len(registrations) != 2 {
+		t.Fatal("subject namespace lost")
+	}
+	for i, registration := range registrations {
+		if registration.Operation != c.operations[i] {
+			t.Fatal("subject descriptor changed")
+		}
+		entry, err := r.selectFeatureOperation(registration)
+		if err != nil || entry.contributor != c || entry.registry != r.state {
+			t.Fatal("subject selected a different owner", err)
+		}
+	}
+	for _, subject := range []identity.FeatureSubjectRequirement{identity.FeatureSubjectUser, identity.FeatureSubjectAnonymousFlow} {
+		for _, conflict := range []bool{false, true} {
+			input := featureRegistryInput()
+			input.operations[0].SubjectRequirement = subject
+			duplicate := input.operations[0]
+			if conflict {
+				duplicate.RecordRequirement = identity.FeatureRecordOmitted
+			}
+			input.operations = append(input.operations, duplicate)
+			if got, err := NewContributorRegistry([]Contributor{input}); got != nil || err == nil {
+				t.Fatal("duplicate or conflicting policy accepted within subject namespace")
+			}
+		}
+	}
+	a, b := featureRegistryInput(), featureRegistryInput()
+	b.descriptor.ContractID += ".other"
+	b.operations[0].SubjectRequirement = identity.FeatureSubjectAnonymousFlow
+	if got, err := NewContributorRegistry([]Contributor{a, b}); got != nil || err == nil {
+		t.Fatal("subject namespaces split operation ownership")
 	}
 }
 

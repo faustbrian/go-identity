@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Allow one feature owner to compose user and anonymous-flow variants of the
+  same schema/version. Preserve exact descriptor selection and reject duplicate
+  or conflicting policies within each subject namespace. Existing command and
+  stored-plan encodings remain unchanged.
+
 - Add code-free consuming OTP feature recovery that matches the full original
   attempt before disclosure and again under recovery locks. Preserve committed
   and classified aborted outcomes without comparing codes or charging again;

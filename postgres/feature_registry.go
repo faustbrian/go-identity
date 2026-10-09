@@ -8,7 +8,9 @@ import identity "github.com/faustbrian/go-identity"
 // runtime-generated request identities are allowed. Construction reads it once
 // and owns a copy. Each descriptor's Owner plus "/postgres" must exactly equal
 // the contributor's adapter Owner. All supported schema versions of an operation
-// belong to one exact contributor identity. Declaration is not authorization,
+// belong to one exact contributor identity. A schema may declare distinct user
+// and anonymous-flow subjects; duplicates within either namespace are invalid.
+// Declaration is not authorization,
 // an executable command codec, transaction authority or a phase implementation.
 // Phase capabilities remain separately typed and coordinator-owned.
 type FeatureContributor interface {
@@ -30,10 +32,11 @@ type FeatureRegistration struct {
 type featureOperationKey struct {
 	operation, schema string
 	version           uint32
+	subject           identity.FeatureSubjectRequirement
 }
 
 func featureKey(d identity.FeatureOperation) featureOperationKey {
-	return featureOperationKey{operation: d.OperationID, schema: d.SchemaID, version: d.SchemaVersion}
+	return featureOperationKey{operation: d.OperationID, schema: d.SchemaID, version: d.SchemaVersion, subject: d.SubjectRequirement}
 }
 
 // FeatureOperations returns an owned copy in contributor/declaration order.

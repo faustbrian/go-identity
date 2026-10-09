@@ -909,7 +909,9 @@ migration is introduced. Concrete CAPTCHA persistence remains separate work.
 
 Each core owner maps to its
 `<owner>/postgres` adapter; each operation belongs to one exact contributor
-across schema versions. Duplicate/conflicting schemas and foreign ownership
+across schema versions and subject namespaces. A schema/version may declare
+both user and anonymous-flow subjects; selection still matches the complete
+descriptor. Duplicate/conflicting schemas within a subject and foreign ownership
 fail construction before any transaction opens. Limits are 64 declarations per
 feature contributor and 1024 total. Legacy contributors need no new methods.
 
