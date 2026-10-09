@@ -5,6 +5,13 @@ implemented. Transactional signup/signin, hash upgrades, change/set/reset,
 reauthentication and administrative workflows remain required and unimplemented.
 These helpers do not authorize persistence or session issuance.
 
+The private execution path now performs bounded primitive work: new hashes
+require successful owned screening first, unknown identities use a current-policy
+dummy hash and never return a match, and late cancellation or secret destruction
+discards output. Existing short passwords are not rejected by the signup minimum.
+This is not a wall-clock constant-time claim across legacy hash algorithms or
+storage, and the HIBP provider and durable workflows are not yet connected here.
+
 ## Quick start
 
 ```go
