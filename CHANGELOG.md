@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Add bounded opaque encoded-hash custody for existing-password change commands.
+  Preserve exact verifier bytes outside metadata and diagnostics; legacy
+  feature admission rejects this variant instead of discarding its material.
+  Native owners must explicitly select the new accessors and bind material to
+  the coordinator fingerprint. Hash policy, proof and complete password-change
+  workflow composition remain with their owners and under development.
+
 - Add private immutable recovery custody for owned journal/projection adapters.
   Preserve authenticated original history and reject unresolved acknowledgements,
   foreign ownership and superseded leases. This does not expose application

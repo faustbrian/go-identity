@@ -80,3 +80,33 @@ func TestFeatureCodeFreeMixedBearerCustodyDenied(t *testing.T) {
 		}
 	}
 }
+
+func TestFeaturePasswordHashMixedVariantsDenyEveryAccessor(t *testing.T) {
+	code, _ := authentication.NewOneTimeCode("123456")
+	bearer := authentication.NewBearerCredential("private-token")
+	for _, mutate := range []func(*Command){
+		func(c *Command) { c.create = &CreateUserCommand{} },
+		func(c *Command) { c.update = &UpdateUserCommand{} },
+		func(c *Command) { c.profile = &ProfileUpdateCommand{} },
+		func(c *Command) { c.status = &UserStatusCommand{} },
+		func(c *Command) { c.link = &AccountLinkCommand{} },
+		func(c *Command) { c.unlink = &AccountUnlinkCommand{} },
+		func(c *Command) { c.identifier = &IdentifierCommand{} },
+		func(c *Command) { c.privacy = &PrivacyExportRequestCommand{} },
+		func(c *Command) { c.feature.code = &code },
+		func(c *Command) { c.feature.preAuthCookie = &bearer },
+		func(c *Command) { c.feature.sessionToken = &bearer },
+	} {
+		c := Command{feature: &featureCommandState{spec: FeatureCommandSpec{Operation: FeatureOperation{Owner: "identity/password", OperationID: "identity.password.change", RecordRequirement: FeatureRecordRequired}}, passwordHash: func() string { return "synthetic" }}}
+		mutate(&c)
+		_, feature := c.Feature()
+		_, material := c.PasswordHash()
+		_, metadata := c.PasswordHashFeature()
+		_, hasCode := c.OneTimeCode()
+		_, hasCookie := c.PreAuthCookie()
+		_, hasSession := c.SessionToken()
+		if feature || material || metadata || hasCode || hasCookie || hasSession {
+			t.Fatal("mixed hash variant disclosed custody or intent")
+		}
+	}
+}

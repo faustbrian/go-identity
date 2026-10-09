@@ -78,6 +78,7 @@ type featureCommandState struct {
 	code          *authentication.OneTimeCode
 	preAuthCookie *authentication.BearerCredential
 	sessionToken  *authentication.BearerCredential
+	passwordHash  func() string
 }
 
 // NewFeatureCommand validates and freezes structural feature input, copying
@@ -121,15 +122,21 @@ func validFeatureFields(fields []FeatureField) bool {
 }
 
 // Feature returns an owned projection for trusted adapter schema mapping and
-// false for zero, kernel or mixed commands. Mutating returned fields or Bytes
+// false for zero, kernel, mixed or password-hash commands. Hash-bearing native
+// owners must explicitly use PasswordHashFeature instead; older coordinators
+// cannot silently omit verifier material. Mutating returned fields or Bytes
 // cannot change retained command intent. Copies of Command are immutable and
 // safe for concurrent reads. The projection must never become a log, snapshot,
 // public response or authentication decision. No callbacks or I/O run.
 func (c Command) Feature() (FeatureCommandSpec, bool) {
-	if c.feature == nil || c.create != nil || c.update != nil || c.profile != nil || c.status != nil || c.unlink != nil || c.link != nil || c.identifier != nil || c.privacy != nil || c.feature.preAuthCookie != nil && c.feature.sessionToken != nil {
+	if !c.validFeatureVariant() || c.feature.passwordHash != nil {
 		return FeatureCommandSpec{}, false
 	}
 	return cloneFeatureSpec(c.feature.spec), true
+}
+
+func (c Command) validFeatureVariant() bool {
+	return c.feature != nil && c.create == nil && c.update == nil && c.profile == nil && c.status == nil && c.unlink == nil && c.link == nil && c.identifier == nil && c.privacy == nil && !(c.feature.preAuthCookie != nil && c.feature.sessionToken != nil)
 }
 
 func cloneFeatureSpec(s FeatureCommandSpec) FeatureCommandSpec {

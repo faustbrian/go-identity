@@ -143,6 +143,19 @@ schemas; applications do not implement that workflow. Raw credential/bearer
 secrets are forbidden. Opaque commands redact formatting and deny JSON; trusted
 returned projections are never responses, logs or evidence snapshots. Existing
 kernel receipts and PostgreSQL admission remain closed to this new branch.
+`NewFeaturePasswordHashCommand` freezes existing-password change intent with
+separate encoded-hash custody. The legacy `Feature` accessor rejects this
+variant; native owners explicitly use `PasswordHashFeature` for owned, hash-free
+metadata and `PasswordHash` only for bounded keyed fingerprinting, primitive
+parsing and driver persistence. Transport accepts 1..16384 visible ASCII bytes
+without normalization; it does **not** validate an algorithm or password policy.
+Never provide plaintext or log the borrowed verifier. The password owner still
+must supply HIBP, reauthentication/proof consumption, reuse/session policy and
+the complete durable workflow. Existing-password change is the only selected
+profile; signup/reset/rehash and mixed OTP/bearer input remain unsupported here.
+This adds no password engine dependency to the kernel. Discard secret-bearing
+command copies after bounded use; immutable Go strings cannot be fully erased.
+
 `NewFeatureOneTimeCodeCommand` additionally retains an authentication-owned
 opaque submission outside the scalar payload. `Command.OneTimeCode` borrows
 only that immutable opaque value; `Feature` remains code-free. Construction
