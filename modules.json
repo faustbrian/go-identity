@@ -4,6 +4,28 @@
   "go_version": "1.27.0",
   "modules": [
     {
+      "directory": "http/otp",
+      "module_path": "github.com/faustbrian/go-identity/http/otp",
+      "go_version": "1.27.0",
+      "packages": [{"module_directory":"http/otp","directory":".","name":"otphttp","import_path":"github.com/faustbrian/go-identity/http/otp","kind":"public","production":true,"executable":true,"coverage_required":true,"build_required":true,"build_tags":[]}],
+      "purpose": "Opt-in original-flow OTP signin transport; full feature and release qualification in development.",
+      "lifecycle": "experimental",
+      "kind": "public library",
+      "releasable": true,
+      "family": "service-edge",
+      "version": "0.0.0",
+      "tag_prefix": "http/otp/v",
+      "owned_dependencies": ["github.com/faustbrian/go-authentication","github.com/faustbrian/go-authorization","github.com/faustbrian/go-identity","github.com/faustbrian/go-identity/http","github.com/faustbrian/go-identity/otp","github.com/faustbrian/go-identity/session","github.com/faustbrian/go-rate-limit/v2"],
+      "reverse_owned_dependencies": [],
+      "external_runtime_dependencies": [],
+      "required_services": [],
+      "build_tags": [],
+      "test_tags": [],
+      "interoperability_tools": [],
+      "specifications": [],
+      "conformance_corpora": []
+    },
+    {
       "directory": "http/session",
       "module_path": "github.com/faustbrian/go-identity/http/session",
       "go_version": "1.27.0",

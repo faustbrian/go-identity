@@ -2,6 +2,7 @@
   "schema_version": 1,
   "repository": "github.com/faustbrian/go-identity",
   "packages": [
+    {"module_directory":"http/otp","directory":".","name":"otphttp","import_path":"github.com/faustbrian/go-identity/http/otp","kind":"public","production":true,"executable":true,"coverage_required":true,"build_required":true,"build_tags":[]},
     {"module_directory":"http/session","directory":".","name":"sessionhttp","import_path":"github.com/faustbrian/go-identity/http/session","kind":"public","production":true,"executable":true,"coverage_required":true,"build_required":true,"build_tags":[]},
     {"module_directory":"http","directory":".","name":"identityhttp","import_path":"github.com/faustbrian/go-identity/http","kind":"public","production":true,"executable":true,"coverage_required":true,"build_required":true,"build_tags":[]},
     {"module_directory":"reference","directory":".","name":"reference","import_path":"github.com/faustbrian/go-identity/reference","kind":"public","production":true,"executable":true,"coverage_required":true,"build_required":true,"build_tags":[]},
