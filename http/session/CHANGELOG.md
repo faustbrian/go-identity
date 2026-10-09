@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Adopt owned public probe middleware composition so protected metadata and
+  selected liveness/readiness routes share hooks without sharing session
+  authority, exposing credentials or weakening fixed readiness responses.
+
 - Add explicitly selected protected OpenAPI routing through real session reads
   and revision-fenced administrator authorization, retaining cookie/bearer
   separation, original authority expiry, shared rate budgets and exact immutable

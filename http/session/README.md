@@ -28,6 +28,14 @@ The exact immutable OpenAPI snapshot includes protected metadata once and no
 unselected routes; no credentials, cookies or runtime host details are exported.
 Global middleware sees real `GetState` and cannot replace original custody.
 
+Select `identityhttp.NewProbeFeature` in the same `FeatureServices` to add
+public `/healthz` and `/readyz` alongside protected metadata, including with
+nonempty shared middleware. Those hooks receive no session principal or ambient
+credentials on probes; probe output remains fixed and readiness remains owned
+by the supplied lifecycle/dependency checks. Probe selection never grants
+metadata access or implicitly enables session routes. Omitting the probe
+feature omits both probe routes and their document entries.
+
 This profile supports tenant-host administration and disables CORS grants.
 The shared transport rejects plaintext with JSON `https_required` (403).
 Cross-origin rejection is fixed `text/plain` `identity.http.origin_denied`
