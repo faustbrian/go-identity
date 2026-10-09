@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Add the native consuming OTP session effect within the original coordinator
+  transaction, preserving verified recipient, authority, remember and CSRF state
+  and denying stale owners or expired authentication. Retained recovery binds
+  actual user/session/family and record identity after live-payload cleanup.
+  Install `OTPIssueMigrationSource` after existing issuance/OTP record history;
+  old proof-based evidence remains unchanged. Public OTP sign-in and recovery
+  composition remain under development.
+
 - Add closed scalar OTP sign-in session mapping, preserving anonymous command
   scope separately from the selected user and retaining exact authentication,
   remember policy, authority and optional CSRF state before reservation.

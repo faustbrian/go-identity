@@ -13,9 +13,38 @@ The mapping retains the selected user independently of an anonymous command's
 flow scope, exact nanosecond times and uint64 versions, original remember policy,
 the full authority vector and optional synchronizer digest. It contains no raw
 code or bearer and grants no authentication, consumption or issuance authority.
-Existing proof-based issue/revocation command mappings remain unchanged. Native
-atomic session effects and public sign-in/recovery are still being implemented;
+Existing proof-based issue/revocation command mappings remain unchanged. Public
+sign-in/recovery is still being implemented;
 applications must not bridge them with separate transactions or custom stores.
+
+## Native consuming OTP session effect
+
+`NewOTPSigninEffect(Config{...}, OTPAdmissionConfig{...})` creates the immutable
+session-owned effect used by the native OTP feature. It performs no IO and owns
+no pool or coordinator. Install `OTPIssueMigrationSource{Schema: "session_store",
+Version: allocatedVersion}` after the existing issuance and OTP record histories
+before enabling this profile. The forward migration extends the purpose
+constraint under the migration runner's table lock; old rows and digests remain
+unchanged. Allocate a permanent version; do not rewrite applied history.
+
+The registered OTP feature must lend its exact consuming `Work`, original
+command and original verified recipient to `Apply`. The OTP owner exhaustively
+validates Send/pre-auth/remember custody and finalizes those owners in the same
+transaction. The effect checks the checked consuming scope, original authority,
+current directory/recipient/authorization, session/family state and database-time
+expiry after downstream waits. The complete session, family and issuance
+evidence are provisional until the sole coordinator commits; propagate every
+error so it aborts. Never register another session command or independently
+commit a session. Unsupported organization/factor/passkey profiles deny.
+
+`Recover` accepts only the owning feature's original sealed `RecoveryWork`.
+It verifies retained command and selected user/session/family/record commitments
+even after live session payload deletion. It returns participant evidence only,
+not a session, bearer, current authentication or disclosure permission. Missing
+evidence is not a public rollback decision: the coordinator must reconcile all
+participants. The native public OTP service remains responsible for code-free,
+currently authorized outcome/session-identity recovery; that composition is not
+yet available. Applications must not supply that orchestration themselves.
 
 ## Explicit OTP session authentication
 
@@ -44,8 +73,8 @@ remain explicitly unsupported. The existing factory stays proof-only; selecting
 the OTP factory does not implicitly enable proof credentials or a combined
 multi-method deployment profile.
 
-This is authoritative reader composition, not OTP issuance. Native atomic
-consumption/session effects, public consuming Signin and code-free recovery of
+This is authoritative reader composition, not OTP issuance. Public atomic
+consumption/Signin and code-free recovery of
 original outcome/session identity remain pending. Applications must not fill
 those gaps with their own stores or separate transactions.
 

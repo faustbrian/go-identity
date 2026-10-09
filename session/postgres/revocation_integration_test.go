@@ -597,6 +597,16 @@ func TestNativeFamilyRevocationIntegration(t *testing.T) {
 		if _, e = runner.Up(ctx); e != nil {
 			t.Fatal(e)
 		}
+		// Retained proof-issuance evidence may outlive its pruned session. The
+		// OTP extension must preserve these original rows and digests exactly.
+		if _, e = db.ExecContext(ctx, `INSERT INTO session_store.session_issuances(tenant_id,command_id,purpose,user_id,session_id,family_id,binding_digest,record_digest)
+ VALUES('tenant-a',decode('11111111111111111111111111111111','hex'),'identity.session.issue','user-a','pre-otp-evidence','pre-otp-family',decode(repeat('22',32),'hex'),decode(repeat('33',32),'hex'))`); e != nil {
+			t.Fatal(e)
+		}
+		var beforeIssuances string
+		if e = db.QueryRowContext(ctx, `SELECT jsonb_agg(to_jsonb(i) ORDER BY command_id)::text FROM session_store.session_issuances i`).Scan(&beforeIssuances); e != nil {
+			t.Fatal(e)
+		}
 		oldHistory, e := status.Load(ctx)
 		if e != nil {
 			t.Fatal(e)
@@ -641,6 +651,7 @@ func TestNativeFamilyRevocationIntegration(t *testing.T) {
 			PreAuthIssueMigrationSource{Schema: "session_store", Version: 26},
 			CSRFMigrationSource{Schema: "session_store", Version: 27},
 			OTPMigrationSource{Schema: "session_store", Version: 28},
+			OTPIssueMigrationSource{Schema: "session_store", Version: 29},
 		} {
 			extra, e := source.Load(ctx)
 			if e != nil {
@@ -650,6 +661,10 @@ func TestNativeFamilyRevocationIntegration(t *testing.T) {
 		}
 		migrate(complete)
 		migrate(complete)
+		var afterIssuances string
+		if e = db.QueryRowContext(ctx, `SELECT jsonb_agg(to_jsonb(i) ORDER BY command_id)::text FROM session_store.session_issuances i`).Scan(&afterIssuances); e != nil || beforeIssuances != afterIssuances {
+			t.Fatal("retained issuance evidence changed", e)
+		}
 		// Populated active/revoked records and all older migration checksums
 		// survive the additive single-session installation byte-for-byte.
 		var afterMigration string
@@ -659,6 +674,7 @@ func TestNativeFamilyRevocationIntegration(t *testing.T) {
 		testNativeIssueIntegration(t, ctx, pool)
 		t.Run("native session authentication", func(t *testing.T) { testNativeSessionAuthentication(t, ctx, pool) })
 		t.Run("native OTP session authentication", func(t *testing.T) { testNativeOTPSessionAuthentication(t, ctx, pool) })
+		t.Run("native OTP session effect", func(t *testing.T) { testNativeOTPSessionEffect(t, ctx, pool) })
 	})
 }
 

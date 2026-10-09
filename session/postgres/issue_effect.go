@@ -47,37 +47,50 @@ func (r *Repository) applyIssue(ctx context.Context, w kernel.Work, issue sessio
 	if err != nil {
 		return identity.FeatureReceipt{}, err
 	}
-	payload, expiry, err := encodeRecord(issue.Session)
-	if err != nil {
+	if err := r.writeIssuedSession(ctx, w, b, transition, issue.Session, s); err != nil {
 		return identity.FeatureReceipt{}, err
+	}
+	return identity.FeatureReceipt{Operation: feature.Operation, AfterVersion: 1}, nil
+}
+
+// Both authentication owners persist the same immutable session projection and
+// retained evidence. The enclosing owner supplies its exact original transition;
+// anonymous command scope must never replace the selected session user.
+func (r *Repository) writeIssuedSession(ctx context.Context, w kernel.Work, b identity.CommandBinding, transition kernel.LifecyclePlan, record session.Session, s session.SessionSpec) error {
+	payload, expiry, err := encodeRecord(record)
+	if err != nil {
+		return err
 	}
 	// Conflicting family creation cannot revive or overwrite retained authority.
 	// The exact family is checked again after uniqueness waits, under this Work.
 	if s.FamilyVersion == 1 {
 		if _, err = w.Exec(ctx, `INSERT INTO `+r.schema+`.families(tenant_id,family_id,user_id,version,state,issued_at) VALUES($1,$2,$3,1,'active',$4) ON CONFLICT DO NOTHING`, string(s.TenantID), s.FamilyID, string(s.UserID), s.IssuedAt.UTC().Format(storedTimeLayout)); err != nil {
-			return identity.FeatureReceipt{}, err
+			return err
 		}
 	}
 	if err = r.requireIssueFamily(ctx, w, s, true); err != nil {
-		return identity.FeatureReceipt{}, err
+		return err
 	}
 	n, err := w.Exec(ctx, `INSERT INTO `+r.schema+`.sessions(tenant_id,session_id,user_id,family_id,version,family_version,state,digest_version,digest,expires_at,record) VALUES($1,$2,$3,$4,1,$5::numeric,'active',$6,$7,$8,$9::jsonb) ON CONFLICT DO NOTHING`, string(s.TenantID), s.SessionID, string(s.UserID), s.FamilyID, strconv.FormatUint(s.FamilyVersion, 10), int64(s.Lookup.KeyVersion), s.Lookup.Sum[:], expiry, string(payload))
 	if err != nil {
-		return identity.FeatureReceipt{}, err
+		return err
 	}
 	if n != 1 {
-		return identity.FeatureReceipt{}, identity.ConflictError{}
+		return identity.ConflictError{}
 	}
 	id, digest := revocationEvidence(b, transition)
 	recordDigest := sha256.Sum256(payload)
-	n, err = w.Exec(ctx, `INSERT INTO `+r.schema+`.session_issuances(tenant_id,command_id,purpose,user_id,session_id,family_id,binding_digest,record_digest) VALUES($1,$2,$3,$4,$5,$6,$7,$8)`, string(b.TenantID), id, b.OperationID, string(b.UserID), s.SessionID, s.FamilyID, digest[:], recordDigest[:])
+	if b.OperationID == "identity.otp.signin" {
+		digest = otpIssuanceDigest(digest, string(s.UserID), s.SessionID, s.FamilyID, recordDigest[:])
+	}
+	n, err = w.Exec(ctx, `INSERT INTO `+r.schema+`.session_issuances(tenant_id,command_id,purpose,user_id,session_id,family_id,binding_digest,record_digest) VALUES($1,$2,$3,$4,$5,$6,$7,$8)`, string(b.TenantID), id, b.OperationID, string(s.UserID), s.SessionID, s.FamilyID, digest[:], recordDigest[:])
 	if err != nil {
-		return identity.FeatureReceipt{}, err
+		return err
 	}
 	if n != 1 {
-		return identity.FeatureReceipt{}, identity.ConflictError{}
+		return identity.ConflictError{}
 	}
-	return identity.FeatureReceipt{Operation: feature.Operation, AfterVersion: 1}, nil
+	return nil
 }
 
 // This retained evidence complements the keyed journal; it never reconstructs

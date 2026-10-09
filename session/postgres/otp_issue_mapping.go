@@ -36,11 +36,7 @@ func OTPSigninSession(command identity.Command) (session.Session, error) {
 	if !ok {
 		return session.Session{}, session.ErrInvalidSessionCommand
 	}
-	op := identity.FeatureOperation{Owner: "identity/otp", OperationID: "identity.otp.signin", SchemaID: "identity-otp-signin", SchemaVersion: 1, RecordRequirement: identity.FeatureRecordOmitted}
-	if p.Binding.AnonymousFlowID != "" {
-		op.SubjectRequirement = identity.FeatureSubjectAnonymousFlow
-	}
-	if p.Operation != op {
+	if p.Operation != otpSessionOperation(p.Binding) {
 		return session.Session{}, session.ErrInvalidSessionCommand
 	}
 	values := make(map[string]identity.FeatureValue)
@@ -50,4 +46,12 @@ func OTPSigninSession(command identity.Command) (session.Session, error) {
 		}
 	}
 	return sessionRecordFromFields(p.Binding, values, true)
+}
+
+func otpSessionOperation(b identity.CommandBinding) identity.FeatureOperation {
+	op := identity.FeatureOperation{Owner: "identity/otp", OperationID: "identity.otp.signin", SchemaID: "identity-otp-signin", SchemaVersion: 1, RecordRequirement: identity.FeatureRecordOmitted}
+	if b.AnonymousFlowID != "" {
+		op.SubjectRequirement = identity.FeatureSubjectAnonymousFlow
+	}
+	return op
 }
