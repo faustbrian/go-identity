@@ -1,5 +1,20 @@
 # otp
 
+## Original sign-in source for rate admission
+
+The optional `SigninSourceService.ResolveSigninSource(ctx, request)` selects
+the original Send using the same pre-auth possession and trusted caller, with
+no code or replacement identifier. The native owner must authenticate retained
+custody and current primary authority. Its immutable `SigninSource.Bindings()`
+returns the original tenant, command, channel and canonical destination only
+for trusted transport rate composition. Never return this projection to clients.
+
+The reader performs no code comparison, attempt debit or protected mutation;
+its result is not a reusable proof or clearance. After rate admission, invoke
+the actual `SigninService`, which still owns fresh authority checks and atomic
+consumption. Existing Send/Signin implementers are unchanged. This core API
+does not install a reader, store or HTTP endpoint; native implementation follows.
+
 ## Consuming sign-in contract
 
 `SigninService` is optional and independent of Send-only `Service` and

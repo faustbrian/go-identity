@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add an optional code-free sign-in source reader contract for original
+  identifier rate admission. Preserve existing Send/Signin interfaces and
+  immutable redacted source scope; discovery grants no login authority and
+  must not compare codes, debit attempts or deliver credentials. Native
+  source verification and transport integration remain under development.
+
 - Preserve the original committed session ID independently of the full session
   payload in sign-in results. Authorized historical recovery can report that ID
   after payload cleanup without fabricating a session or redelivering tokens.
