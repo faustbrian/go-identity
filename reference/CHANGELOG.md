@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Add the side-effect-free sole server constructor over the sealed composition
+  graph, exact complete policy callbacks, immutable transport selection and
+  process probes. Opt-in original-flow HTTP initiation uses graph-owned native
+  PostgreSQL rate and issuer custody. Bounded tenant resolution must match the
+  trusted host before workflow admission; conflicts, cancellation and callback
+  failure deny safely. Server and device configuration diagnostics are redacted.
+  Complete login transport, positive native readiness and remaining deployment
+  profiles are still pending; this checkpoint must not advertise ready traffic.
+
 - Add opt-in graph-owned PostgreSQL strong HTTP rate admission and its native
   independently namespaced migration contribution. Explicit budgets and a
   public-only pool search path are required; construction performs no IO and

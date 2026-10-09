@@ -2,9 +2,10 @@
 
 **Development checkpoint:** this module currently implements only the
 PostgreSQL-journaled, TLS Valkey velocity store graph and optional native OTP
-Send/delivery composition with opt-in single-factor OTP sign-in. The complete
-reference server, HTTP features,
-readiness and identity journeys remain unimplemented here. Selected-module
+Send/delivery composition with opt-in single-factor OTP sign-in. An IO-free
+`NewServer` now exposes exact health/readiness probes and opt-in original-flow
+HTTP initiation over that same graph. Positive dependency readiness, remaining
+HTTP features and complete identity journeys remain unimplemented. Selected-module
 migration Check/Plan/Apply and durable native command resume are available as
 explicit store operations, not automatic startup behavior.
 
@@ -84,8 +85,55 @@ Check/Plan/Apply includes the native version-one migration in the independent
 `identity_http_rate` history; `MigrationSource()`'s existing shared prefix is
 unchanged. Nil selects neither the backend nor its migration. Graph shutdown
 permanently denies later admission but leaves the caller pool owned by the
-caller. This prerequisite does not yet expose a complete server constructor,
-HTTP readiness, or a composed browser-login journey.
+caller. This prerequisite does not by itself prove HTTP readiness or a complete
+browser-login journey.
+
+### Selected server construction
+
+After `ComposeStores`, `ComposeProviders`, `ComposeWorkers` and
+`ComposeFeatures`, call `NewServer(config, dependencies, features)` with the
+same caller-owned PostgreSQL pool. Construction performs no IO, callbacks,
+migrations, startup or goroutine creation. Supply the exact complete upstream
+`identity.PolicySet`: authorization must be the same comparable service handle
+bound into the graph, and all four identity callbacks are required. No member
+is replaced or defaulted. For noncomparable service implementations, supply a
+pointer handle consistently to both configuration stages.
+
+The current profile accepts only `PostgresWithValkey`, explicit transport
+limits/hosts, a non-nil bounded tenant resolver, and disabled bootstrap and
+startup migration application. Migration lock timeout is 1ms–5m and command
+retention 1h–87600h; worker concurrency is 1–1024, lease/drain bounds 1s–1h.
+Enabled provider entries are rejected until their native selection is composed,
+rather than silently omitted. The required PostgreSQL-only deployment profile
+and complete worker/server lifecycle remain future implementation work.
+
+`StoreConfiguration.HTTPPreAuth` opts into `/v1/session/preauth-issue` and its
+OpenAPI operation. It requires selected OTP original-flow issuance and
+`HTTPRate`; nil contributes neither route nor metadata. Supply the shared
+eventual-session lifetime policy; optional browser-device configuration selects
+the existing non-authenticating correlation codec. Native issuer configuration
+owns origin, cookie, callback, action and policy. No application handler, rate
+backend or domain-store override is accepted.
+Selected HTTP initiation requires the canonical five-minute `OTP.PreAuth.FlowTTL`;
+other lifetimes are rejected during composition, before rate admission or native
+preparation. Direct native issuance retains its existing 1–10-minute profile.
+
+The tenant resolver runs synchronously with a bounded request context after
+trusted network resolution and before a workflow. Its nonempty result must
+equal the tenant bound to the exact configured host; errors, panics,
+cancellation, missing tenants and conflicts deny without credentials or raw
+callback errors. Resolvers must honor cancellation and be concurrency-safe.
+The router freezes host policy and OpenAPI metadata at construction.
+
+`Handler()` returns the owned standard-library handler. `OpenAPI()` exposes
+detached native document snapshots. Only `GET /healthz` and `GET /readyz` are
+probes; no `/v1` aliases exist. Health is process liveness, not store readiness.
+Readiness currently denies before initialization and also remains fail-closed
+after initialization until fresh mandatory native health is fully composed.
+Do not use this development checkpoint to advertise ready production traffic.
+Initialize features and deploy migrations explicitly; graph closure prevents
+later workflow admission without taking ownership of the caller pool.
+This constructor is not a completed login/reference-server milestone.
 
 ### OTP and delivery selection
 

@@ -47,6 +47,8 @@ type StoreConfiguration struct {
 	// HTTPRate selects the owned strong HTTP admission backend and its native
 	// migration history. Nil leaves both disabled without changing legacy history.
 	HTTPRate *HTTPRateConfiguration
+	// HTTPPreAuth explicitly selects the original-flow route for NewServer.
+	HTTPPreAuth *HTTPPreAuthConfiguration
 }
 
 // VelocityStoreConfiguration selects one primary/native recovery pair. Native

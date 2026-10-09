@@ -9,6 +9,7 @@ import (
 
 	"github.com/faustbrian/go-audit"
 	auditpg "github.com/faustbrian/go-audit/postgres"
+	"github.com/faustbrian/go-authorization"
 	identity "github.com/faustbrian/go-identity"
 	"github.com/faustbrian/go-identity/delivery"
 	deliverypg "github.com/faustbrian/go-identity/delivery/postgres"
@@ -89,11 +90,17 @@ type featureState struct {
 	provider        uint64
 	deliveryWorkers []*deliverypg.Worker
 	deliverySlots   chan struct{}
+	authorize       authorization.Service
+	httpPreAuth     *preAuthHTTPState
 	// mu-protected graph progression and startup state.
 	providers, workers, composed, initializing, ready bool
 }
 
 func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDependencies) error {
+	httpPreAuth, err := composePreAuthHTTP(c)
+	if err != nil {
+		return err
+	}
 	if c.OTP == nil && c.Delivery == nil {
 		return nil
 	}
@@ -193,7 +200,7 @@ func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDepen
 			capacity = policy.SenderConcurrency
 		}
 	}
-	s.features = &featureState{migrations: migrationConfig, otp: otpOwner, signin: signinOwner, preauth: preauthOwner, delivery: deliveryOwner, sender: d.DeliverySender, timeout: o.Timeout, provider: o.ProviderVersion, deliverySlots: make(chan struct{}, int(capacity))}
+	s.features = &featureState{migrations: migrationConfig, otp: otpOwner, signin: signinOwner, preauth: preauthOwner, delivery: deliveryOwner, sender: d.DeliverySender, timeout: o.Timeout, provider: o.ProviderVersion, deliverySlots: make(chan struct{}, int(capacity)), authorize: o.RequestKeys.Policy.Authorization, httpPreAuth: httpPreAuth}
 	return nil
 }
 
