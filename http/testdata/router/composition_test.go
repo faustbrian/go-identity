@@ -47,7 +47,14 @@ func TestSelectedRouterPublicComposition(t *testing.T) {
 		Limits:               identityhttp.Limits{MaximumHeaderBytes: 4096, MaximumURLBytes: 1024, MaximumBodyBytes: 1024, MaximumDecodedBytes: 1024, MaximumFields: 32, MaximumDepth: 4},
 		MaximumForwardedHops: 1, TrustedProxyCIDRs: []netip.Prefix{netip.MustParsePrefix("127.0.0.0/8")}, PublicHosts: []string{"login.example"},
 	}}
-	h, doc, err := identityhttp.NewRouter(policy, ops, nil)
+	var observed atomic.Int32
+	hooks := []identityhttp.MiddlewareDescriptor{{Owner: "consumer", Middleware: identityhttp.Middleware{Name: "probe-observation", Phase: identityhttp.MiddlewareAfterAuth, Order: 1, Handler: func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			observed.Add(1)
+			next.ServeHTTP(w, r)
+		})
+	}}}}
+	h, doc, err := identityhttp.NewRouter(policy, ops, hooks)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -71,6 +78,9 @@ func TestSelectedRouterPublicComposition(t *testing.T) {
 	h.ServeHTTP(w, r)
 	if w.Code != 503 || checks.Load() != 0 {
 		t.Fatal("ready before startup")
+	}
+	if observed.Load() != 1 {
+		t.Fatal("selected public probe hook missing")
 	}
 	server, err = identityhttp.NewHTTPServer(identityhttp.ServerConfig{Address: "127.0.0.1:0", ReadHeaderTimeout: time.Second, ReadTimeout: time.Second, WriteTimeout: time.Second, IdleTimeout: time.Second, HandlerTimeout: time.Second, ShutdownDrain: time.Second, MaximumHeaderBytes: 4096}, h)
 	if err != nil {

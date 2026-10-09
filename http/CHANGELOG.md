@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Allow owned health/readiness probes in selected routers with global operation
+  hooks. Preserve public/no-auth custody, fixed safe output, original readiness
+  bounds and final lifecycle checks; hooks receive no ambient credentials and
+  cannot manufacture healthy responses or repeat readiness work.
+
 - Add `NewRouter` with one immutable selected handler/OpenAPI snapshot, exact
   HTTPS host/proxy admission, shared input bounds and deadlines, route-bound
   opt-in CORS, real feature phase binding and response-header custody. Preserve

@@ -57,6 +57,16 @@ type ProbeConfig struct {
 // 503. A final state check denies callbacks finishing during drain. Like every
 // instantaneous probe, success describes its final observation, not a lease.
 //
+// The returned handlers support OperationMiddlewareBinder. Bound hooks observe
+// explicit public/no-auth stages after input validation, with Authorization,
+// proxy credentials and cookies removed from detached request views. They
+// receive no principal. Their response writer discards output: short circuits
+// deny with fixed503 rather than invent readiness; only the probe owns output.
+// Original unbound handlers remain unchanged. Bound hooks share a whole-call
+// budget of max(Timeout,1ms); readiness retains its original narrower bound.
+// Rebinding appends hooks without changing owners; cancellation and final drain
+// are checked again after hook unwind. No response or readiness is cached.
+//
 // Register these handlers at their exact paths on a private mux before serving.
 // They do not register domain routes or implement the full transport rate policy,
 // direct operation API, endpoint manifest or OpenAPI contract. A draining/closed
@@ -88,6 +98,8 @@ func NewProbeHandlers(config ProbeConfig) (liveness, readiness http.Handler, err
 		}
 		probeResponse(w, http.StatusServiceUnavailable, "{\"ready\":false}\n")
 	})
+	liveness = &probeHandler{handler: liveness, config: config, path: "/healthz"}
+	readiness = &probeHandler{handler: readiness, config: config, path: "/readyz"}
 	return liveness, readiness, nil
 }
 

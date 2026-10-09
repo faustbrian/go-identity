@@ -35,8 +35,14 @@ Nonempty middleware requires each selected handler to implement
 `OperationMiddlewareBinder`; opaque handlers are rejected rather than receiving
 invented authentication phases. All policy, descriptor and wire validation
 precedes wrapper factories. Individual frozen-owner binding conflicts can still
-fail construction; no partial router/document is returned. Probes currently
-use opaque handlers, so compose them without global phase hooks.
+fail construction; no partial router/document is returned. Owned probes support
+global hooks at explicit public/no-auth boundaries without a principal or
+ambient credential headers. Probe hook writers discard output: short circuits
+produce fixed unavailable responses, never invented health/readiness. The real
+readiness check runs at most once and original standalone handlers stay usable.
+Bound hooks share `max(ProbeConfig.Timeout, 1ms)` as a whole-call budget while
+readiness retains its original 1ns..2s bound; cancellation and drain are checked
+again after hook unwind. No provider result or response is cached.
 
 Responses retain `Cache-Control: no-store`, `X-Content-Type-Options: nosniff`
 and `Referrer-Policy: no-referrer`, including streaming and hook short circuits.
