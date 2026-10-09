@@ -7,6 +7,15 @@ release-qualified backend platform.
 
 ## Quick start and ownership
 
+For shared secure transport, obtain descriptors with
+`identityhttp.NewOperationDescriptors` and pass them to `identityhttp.NewRouter`
+with `TransportPolicy.Network` equal to the feature network configuration,
+explicit handler timeout/document identity and selected route CORS policies.
+Router middleware binds into the actual GET/self-signout owner phases, retaining
+one credential acquisition and one rate admission. Cookie serialization, CSRF,
+primary revalidation and unknown-outcome recovery remain feature-owned. This is
+selected composition, not all-session/browser/release qualification.
+
 Pass the same feature selection to `identityhttp.NewDocumentedHandler` for
 concrete OpenAPI 3.1.1 and its matching handler snapshot. The feature owns the
 real HTTP schemas separately from opaque direct contracts: optional cookie or

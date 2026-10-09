@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Qualify the real GET/self-signout feature through the shared secure router,
+  retaining cookie/bearer separation, owner-produced hook state, transactional
+  logout and the canonical single rate admission.
+
 - Preserve real phase and response ownership when selected composition appends
   middleware to existing session handlers. Frozen network/origin policy and
   borrowed domain owners are reused; no extra authentication, rate admission
