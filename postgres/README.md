@@ -130,6 +130,14 @@ only original encrypted delivery may be added. The coordinator preserves the
 caller-request fingerprint, separately binds reconstructed execution fields,
 and executes through its existing atomic Begin/Apply/Commit owner.
 
+Generated password hash/authenticated-change commands retain their disjoint
+native custody variant when the coordinator attaches the final plan. The
+legacy `Feature` accessor stays closed to those variants; native selection and
+the existing complete keyed hash/bearer/proof intent remain mandatory. The
+registered password owner still authenticates retained output and the original
+proof, checks current source authority, and owns atomic proof consumption.
+This is not a public password endpoint or a substitute for its native policy.
+
 An optional `FeatureAdmissionPreparationContributor` can assess external facts
 before generation. Install `AdmissionPreparationMigrationSource` after the
 existing preparation source, with a later explicit version, before selecting

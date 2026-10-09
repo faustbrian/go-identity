@@ -95,7 +95,10 @@ func testCredentialReplacement(t *testing.T, ctx context.Context, pool *database
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, scenario := range []string{"commit", "native-failure", "receipt-failure", "audit-failure", "outbox-failure", "stale-user", "stale-epoch", "stale-record", "banned", "deleted", "suspended", "anonymized", "disabled", "expired", "full-width", "recovery-negative", "recovery-retained", "recovery-missing"} {
+	// Plan: generated hash-only and authenticated-custody variants must use the
+	// same binding, native replacement, audit/outbox and original replay result.
+	// Their deliberately closed legacy Feature accessor must not erase scope.
+	for _, scenario := range []string{"commit", "prepared-hash", "prepared-authenticated", "native-failure", "receipt-failure", "audit-failure", "outbox-failure", "stale-user", "stale-epoch", "stale-record", "banned", "deleted", "suspended", "anonymized", "disabled", "expired", "full-width", "recovery-negative", "recovery-retained", "recovery-missing"} {
 		t.Run(scenario, func(t *testing.T) {
 			native.fail, native.wrongReceipt = scenario == "native-failure", scenario == "receipt-failure"
 			auditing.fail, outbox.fail = scenario == "audit-failure", scenario == "outbox-failure"
@@ -162,6 +165,33 @@ func testCredentialReplacement(t *testing.T, ctx context.Context, pool *database
 			plan.Audits[0].BindingDigest, e = FeatureAuditBindingDigest(b, op, "credential", seed)
 			if e != nil {
 				t.Fatal(e)
+			}
+			if scenario == "prepared-hash" || scenario == "prepared-authenticated" {
+				generated := command
+				if scenario == "prepared-authenticated" {
+					generated = passwordChangeCodecCommand(t, spec, "$argon2id$synthetic-command-custody", base64.RawURLEncoding.EncodeToString(make([]byte, 32)), passwordChangeCodecProof(spec))
+				}
+				phase := &preparedReplacementPhase{replacementNativePhase: native, command: generated, plan: plan}
+				preparedRegistry, err := NewContributorRegistry([]Contributor{repo, auditing, outbox, phase})
+				if err != nil {
+					t.Fatal(err)
+				}
+				prepared := *c
+				prepared.registry = preparedRegistry
+				original := featureCodecCommand(t, spec)
+				result, err := prepared.ExecutePreparedFeature(ctx, original, plan)
+				if err != nil || result.Outcome != identity.CommitOutcomeCommitted || result.Feature == nil || result.Feature.BeforeVersion != 7 || result.Feature.AfterVersion != 8 {
+					t.Fatal("generated password custody lost its binding", result.Outcome, err)
+				}
+				got, err := repo.GetCredentialAuthority(ctx, identity.CredentialAuthorityQuery{TenantID: b.TenantID, UserID: b.UserID, CredentialID: intent.Credential.ID})
+				if err != nil || got.User.Version != 12 || got.AuthorityVersion != 14 || got.Credential.Version != 8 {
+					t.Fatal("prepared replacement effects missing", err)
+				}
+				replay, err := prepared.ExecutePreparedFeature(ctx, original, plan)
+				if err != nil || replay.Outcome != identity.CommitOutcomeCommitted || *replay.Feature != *result.Feature || phase.generated != 1 || phase.restored != 1 {
+					t.Fatal("prepared replacement replay changed output", err)
+				}
+				return
 			}
 			if scenario == "commit" {
 				genericRegistry, e := NewContributorRegistry([]Contributor{repo, auditing, outbox, replacementGenericPhase{native}})

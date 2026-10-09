@@ -438,7 +438,15 @@ func (c *Coordinator) attachFeaturePreparation(ctx context.Context, original, ge
 	if plan == nil {
 		d = claimNew
 	}
-	s, _ := generated.source.Feature()
+	// The legacy accessor deliberately rejects password custody. Preserve the
+	// explicitly admitted native variant instead of freezing a zero binding.
+	if generated.source == nil {
+		return Reservation{}, invalidPreparation()
+	}
+	s, ok := commandFeature(*generated.source)
+	if !ok {
+		return Reservation{}, invalidPreparation()
+	}
 	admitted, err := c.freezePlan(ctx, tx, s.Binding, original, d, final)
 	if err != nil {
 		return Reservation{}, err

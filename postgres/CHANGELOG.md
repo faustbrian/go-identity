@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Preserve the explicitly admitted password-custody command variant when
+  attaching prepared output to its final transaction. Generated hash-only and
+  authenticated password changes retain their scope and original replay result;
+  legacy accessors stay closed and native proof policy remains required.
+
 - Support explicit protected counters in native prepared feature execution.
   Commit the original charge before generation, conserve it across restart and
   retained-key rotation, and keep final current-authority checks. Denied attempts
