@@ -402,6 +402,13 @@ func validOperation(owner ModuleID, op OperationDescriptor, catalog map[string]c
 			return false
 		}
 		csrfMatches := r.CSRFOrigin.Mode == want.CSRFOrigin.Mode
+		// A selected pre-auth-only integration may narrow the canonical union.
+		// It must reject authenticated-session/MFA variants rather than treating
+		// their ambient credentials as pre-auth authority. Never downgrade a
+		// session-only row, or claim a token header the handler does not consume.
+		if want.CSRFOrigin.Mode == CSRFConditionalPreAuthSession && r.CSRFOrigin.Mode == CSRFExactOrigin && r.CSRFOrigin.RefererFallback == RefererFallbackDeny {
+			csrfMatches = true
+		}
 		// Canonical signout CSRF is conditional on the explicitly selected
 		// credential profile and active session. Bearer never borrows cookie
 		// authority; the stored synchronizer profile claims no independent age.

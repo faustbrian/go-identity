@@ -10,8 +10,10 @@ import (
 // CanonicalOperationConfig binds one trusted feature-owned handler to the
 // embedded canonical direct-contract record. Owner must be accountable for the
 // operation. CSRF selects an actually enforced profile, not a request-selected
-// fallback; only self-signout additionally admits None (explicit bearer) or
-// SessionState (cookie origin plus active-state token). MaximumSerializedBytes
+// fallback. Conditional pre-auth/session rows additionally admit ExactOrigin
+// with denied Referer fallback for pre-auth-only handlers that reject session
+// and MFA variants. Only self-signout additionally admits None (explicit bearer)
+// or SessionState (cookie origin plus active-state token). MaximumSerializedBytes
 // bounds each schema summary (1..16MiB); it is not response-size enforcement.
 // Handler must be usable/concurrency-safe and own its declared security. Nil
 // handlers and typed-nil HandlerFunc are invalid. No callback is invoked here.

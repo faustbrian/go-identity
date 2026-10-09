@@ -274,6 +274,12 @@ handler; `CSRFSessionState` means exact cookie Origin and active-session token,
 with absent/inactive origin-only success. The latter binds token lifetime to
 active stored session state and claims no independent maximum-age enforcement.
 Factories retain responsibility for selecting and enforcing the matching mode.
+Conditional pre-auth/session canonical rows also permit an explicit
+`CSRFExactOrigin` with denied Referer fallback for a pre-auth-only selected
+handler. That handler must reject session/MFA variants, never infer pre-auth
+authority from ambient session credentials, and describe its restricted wire
+profile. Session-only rows cannot select this narrowing. Full conditional
+selection and its token requirements remain unchanged.
 `SafeRateLimiter.Configured()` rejects nil/zero/closed owners without IO; true
 is not backend health or future admission and may race with Close.
 

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Permit explicit pre-auth-only exact-origin selection on conditional
+  pre-auth/session canonical rows without claiming an unused session-token
+  profile. Session-only rows and full conditional protection are unchanged.
+
 - Recognize the explicit code-free OTP signin recovery operation and its native
   historical contract. Recognition alone exposes no handler or metadata.
 - Align the canonical OTP signin descriptor with original Send/pre-auth custody,
