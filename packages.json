@@ -2,6 +2,7 @@
   "schema_version": 1,
   "repository": "github.com/faustbrian/go-identity",
   "packages": [
+    {"module_directory":"password/postgres","directory":".","name":"passwordpostgres","import_path":"github.com/faustbrian/go-identity/password/postgres","kind":"public","production":true,"executable":true,"coverage_required":true,"build_required":true,"build_tags":[]},
     {"module_directory":"password","directory":".","name":"password","import_path":"github.com/faustbrian/go-identity/password","kind":"public","production":true,"executable":true,"coverage_required":true,"build_required":true,"build_tags":[]},
     {"module_directory":"email","directory":".","name":"email","import_path":"github.com/faustbrian/go-identity/email","kind":"public","production":true,"executable":true,"coverage_required":true,"build_required":true,"build_tags":[]},
     {"module_directory":"http/otp","directory":".","name":"otphttp","import_path":"github.com/faustbrian/go-identity/http/otp","kind":"public","production":true,"executable":true,"coverage_required":true,"build_required":true,"build_tags":[]},
