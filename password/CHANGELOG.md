@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add adapter-neutral keyed password-change request/result and workflow ports.
+  Require the original retry key, bounded trusted caller/tenant scope and live
+  borrowed password custody without inventing a second proof type or default
+  mutation policy. Implicit input serialization denies. Native adapter binding
+  and HTTP composition are subsequent development work, not completed endpoints.
+
 - Expose the shared pre-transaction hash preparer through explicit bounded
   composition. HIBP must be enabled for each supported creating operation;
   incomplete, unavailable, breached, foreign or stale facts disclose no hash.

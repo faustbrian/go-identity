@@ -1,9 +1,11 @@
 # Identity password workflows
 
-**Development checkpoint:** input policy, bounded credential work and canonical
-account comparison are implemented. Transactional signup/signin, hash upgrades, change/set/reset,
-reauthentication and administrative workflows remain required and unimplemented.
-These helpers do not authorize persistence or session issuance.
+**Development checkpoint:** input policy, bounded credential work, canonical
+account comparison and portable keyed change contracts are implemented. The
+native PostgreSQL adapter has single-factor reauthentication and authenticated
+change composition; this core does not yet connect its portable change port.
+Complete signup/signin, upgrades, set/reset, administrative workflows and HTTP
+remain required. These helpers do not authorize persistence or session issuance.
 
 `NewPasswordVerifier` freezes a real primitive service, exact current-policy
 dummy hash, explicit byte/time bounds, trusted clock and platform-owned
@@ -80,6 +82,32 @@ configured HIBP/risk, account status, verification and transactional authority
 before hashing or committing. This checkpoint cannot replace those workflows.
 
 ## API and ownership
+
+`ChangeRequest` is the adapter-neutral authenticated change input. Direct
+callers set its sole required `identity.IdempotencyKey`; HTTP must acquire that
+key only from exactly one `Idempotency-Key` header. The request carries the
+original upstream `authentication.ReauthenticationProof` and bearer, a borrowed
+primitive password secret, and trusted tenant/caller/network provenance. It
+exposes no request-selectable clock, assurance or revocation policy.
+
+`Validate` checks only intrinsic bounds, key presence, live secret length and
+caller/tenant consistency. It neither authenticates a proof nor establishes
+freshness, risk eligibility or permission to mutate. A structurally valid
+request with a zero, expired or foreign proof must still be denied by the native
+signed-proof owner. Deployment byte limits are separate. Values must not be
+mutated during a call; destroy the secret only after work returns. Formatting
+and slog redact, JSON/text serialization deny, and explicit field access remains
+sensitive. Do not put raw input into private diagnostic wrappers.
+
+`ChangeService` defines the native `Change` and code-free
+`Recover` workflow boundary without importing persistence or
+providers. Select the real platform adapter, not application-written stores or
+workflow callbacks. `ChangeResult` conserves original command/outcome and exposes
+no credential material. Zero outcome is absence of authoritative observation,
+not rollback; busy/unknown does not permit a new key or automatic retry. Only
+error-free known commitment can expose the credential successor and predecessor
+invalidation. Native binding and opt-in HTTP composition are subsequent work;
+these port declarations alone are not a working endpoint or lifecycle claim.
 
 `RegistrationPolicy.Validate` requires explicit inclusive raw byte bounds in
 1..1,048,576, with maximum at least minimum. The reference deployment separately
