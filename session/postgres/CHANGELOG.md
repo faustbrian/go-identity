@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Add an explicit owned OTP session reader using the exact verified identifier
+  and current primary authority without requiring a persistent credential.
+  Preserve original authentication and bounded evidence deadlines; historical
+  OTP expiry does not expire an issued live session. Existing proof-only
+  composition stays unchanged. Apply the OTP record migration before selecting
+  this profile; native consuming signin and restart recovery remain pending.
+
 - Preserve original OTP authentication provenance in durable session schemas
   3/4, including optional synchronizer state, without changing historical
   schemas 1/2 or renewing authentication time. Apply `OTPMigrationSource` after

@@ -1,5 +1,37 @@
 # PostgreSQL session storage
 
+## Explicit OTP session authentication
+
+`NewOTPSessionService(pool, OTPSessionServiceConfig{...})` selects the owned
+primary reader for single-factor email/phone OTP sessions. Configure the trusted
+deployment, authorization namespace and audience through `OTPAdmissionConfig`;
+repository and validation budgets/keys retain `NewSessionService` semantics.
+Apply directory, user security, identifier, authorization and OTP-capable session
+migrations first, including `OTPMigrationSource` after the installed CSRF history.
+The borrowed primary pool remains caller-owned. Construction performs no IO.
+
+The reader checks the exact original verified identifier and verification
+versions, active user/directory, all three user security epochs, authorization
+epoch and session/family state. It reuses the identity owner's bounded identifier
+and recipient queries, requiring the session's actual user, not an address-only
+lookup or fabricated password credential. Removing/reassigning the identifier,
+blocking the user, changing any authority or revoking the session denies use.
+The 128-identifier limit fails closed on incomplete projections. Database failures
+never become positive fallback or suppressed successful authentication.
+
+Positive evidence expires within20 seconds of the original read beginning;
+later owner reads and response delay cannot restart it. Original OTP continuation
+expiry is historical provenance: it does not expire an already issued live
+session or renew its authentication time. Organization, MFA and passkey profiles
+remain explicitly unsupported. The existing factory stays proof-only; selecting
+the OTP factory does not implicitly enable proof credentials or a combined
+multi-method deployment profile.
+
+This is authoritative reader composition, not OTP issuance. Native atomic
+consumption/session effects, public consuming Signin and code-free recovery of
+original outcome/session identity remain pending. Applications must not fill
+those gaps with their own stores or separate transactions.
+
 ## Owned cookie logout
 
 Use `NewCookieRevokeOneExecutor(pool, configuration, eligibleCSRFKeys)` with

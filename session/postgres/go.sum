@@ -5,6 +5,8 @@ github.com/faustbrian/go-audit/postgres v1.0.1-0.20261003012155-21ad3d11d3b2 h1:
 github.com/faustbrian/go-audit/postgres v1.0.1-0.20261003012155-21ad3d11d3b2/go.mod h1:godrWwSIzczaZMKgEyv9b+P4jyFv5J41AMGv7n34JSQ=
 github.com/faustbrian/go-authentication v1.2.2-0.20261002230834-3467aab01d0c h1:UNjVAzIyWfklX5umgp3hLtovLD37zp2Kg6mvOFWA+Rc=
 github.com/faustbrian/go-authentication v1.2.2-0.20261002230834-3467aab01d0c/go.mod h1:nDioddd06agADXVzLYlUu3npMN73+IhrN8b8I4BcEss=
+github.com/faustbrian/go-authentication v1.2.2-0.20261006180804-0f9f7eac1f1d h1:XDRfrzPCSDgu5o7CfL4S0iMJO5qxmfkX2S98dVD2qfI=
+github.com/faustbrian/go-authentication v1.2.2-0.20261006180804-0f9f7eac1f1d/go.mod h1:nDioddd06agADXVzLYlUu3npMN73+IhrN8b8I4BcEss=
 github.com/faustbrian/go-authorization v1.1.1-0.20261005011349-60ed4b3229d8 h1:6vgBmDJSZSpA5TCxaCySm/rvxkWxflu+btr1zKOTVUg=
 github.com/faustbrian/go-authorization v1.1.1-0.20261005011349-60ed4b3229d8/go.mod h1:olSJuKpr+mn2XOecIOpburSaTpWiRL153ZQUwvLhMkg=
 github.com/faustbrian/go-capability v1.0.1-0.20261005033429-2985d8ea8700 h1:wQTr6W/8zCQyZuNuR9Vp25LAvN9dmJUS8GcKJaAD10E=
@@ -13,6 +15,8 @@ github.com/faustbrian/go-clock v1.0.0 h1:F7YEouU94Zu2mExFBep7JWEa8nMz7WzWi/SPrDz
 github.com/faustbrian/go-clock v1.0.0/go.mod h1:WKZ5p79IKGNTZGDp2L81cYjbsEjv3+9U0be7uwS8t6Y=
 github.com/faustbrian/go-identity v0.0.0-20261005110325-777b1288ba1f h1:L4kRlRZvVHG4vWosQ92qtSh3MhRHt2smrhadqXLpBQw=
 github.com/faustbrian/go-identity v0.0.0-20261005110325-777b1288ba1f/go.mod h1:6kFtTRF+LJ8gpJoU7jCGrZnjnv6ziIow8AN2ajMh7g8=
+github.com/faustbrian/go-identity v0.0.0-20261007092517-8969d596e5c8 h1:AApQmaU5JFvc13b+4mdaDqRir6EYx3l6iktclvbNh0Q=
+github.com/faustbrian/go-identity v0.0.0-20261007092517-8969d596e5c8/go.mod h1:rHAtpXhH0sJOnWJcOB7rlrknYQkpRBh3D+MmRpc7+lw=
 github.com/faustbrian/go-identity/postgres v0.0.0-20261005115415-8b84c012d238 h1:cv13Is66l8R6IypiJEf+XMmkOr6tmKNsykNoM55GpMY=
 github.com/faustbrian/go-identity/postgres v0.0.0-20261005115415-8b84c012d238/go.mod h1:yWYHWyRJQdPGU0/7Pxysc54jVqZrOjtGRS7h2v+9irQ=
 github.com/faustbrian/go-identity/postgres v0.0.0-20261005141556-bc8b938e9ac8 h1:Esk1qkxsGz4h++anoOmY1bZKXwBCut7oi121GeQHHag=
@@ -21,6 +25,8 @@ github.com/faustbrian/go-identity/postgres v0.0.0-20261005152944-2d5a89d37b28 h1
 github.com/faustbrian/go-identity/postgres v0.0.0-20261005152944-2d5a89d37b28/go.mod h1:XsZ5szjBoHgSviPilF97aZD6YE6xpwIzIqwU95RmA1c=
 github.com/faustbrian/go-identity/postgres v0.0.0-20261006032624-704a1a40bc87 h1:tOH0zh24TMqL6RV13PuGsgM20Q6F5dr3OpzjckaShc4=
 github.com/faustbrian/go-identity/postgres v0.0.0-20261006032624-704a1a40bc87/go.mod h1:XsZ5szjBoHgSviPilF97aZD6YE6xpwIzIqwU95RmA1c=
+github.com/faustbrian/go-identity/postgres v0.0.0-20261009052745-72987ba7d5fa h1:FxnRnveo5TBhd4Fe/9oyKA4RZUux0iBrpVTcLsrj3JA=
+github.com/faustbrian/go-identity/postgres v0.0.0-20261009052745-72987ba7d5fa/go.mod h1:EFCM7V75T3tnV5JmbrwCMjqYMm25pXBEkzjh+QXGSks=
 github.com/faustbrian/go-identity/session v0.0.0-20261005171433-7a228e7e02e7 h1:VkSjT2gKTD0ZiCAZYJFYkRBeDkjRGpuFtpkC+rfbeYA=
 github.com/faustbrian/go-identity/session v0.0.0-20261005171433-7a228e7e02e7/go.mod h1:RQbOt3vo2CYpzRrQpy9CMjrSnd+wc9uCNU0rytGq2J4=
 github.com/faustbrian/go-identity/session v0.0.0-20261006010041-a2385a2db3b4 h1:CteiekKWxJb9f6UzWOUp5PsXzm0myV3r0tSq6msbv5U=
@@ -35,6 +41,8 @@ github.com/faustbrian/go-identity/session v0.0.0-20261006030046-4773e05d7b51 h1:
 github.com/faustbrian/go-identity/session v0.0.0-20261006030046-4773e05d7b51/go.mod h1:RQbOt3vo2CYpzRrQpy9CMjrSnd+wc9uCNU0rytGq2J4=
 github.com/faustbrian/go-identity/session v0.0.0-20261006054849-fc9c733674f6 h1:714yk9HhFBv/5JpOYm2RZeDYSGOovr2stdEvNRPEqHA=
 github.com/faustbrian/go-identity/session v0.0.0-20261006054849-fc9c733674f6/go.mod h1:D1p6PPJiDjtLTlk4+Nil/xTh6OYU3L3Ms+BD1CdUffw=
+github.com/faustbrian/go-identity/session v0.0.0-20261009045856-696d6a8316f0 h1:koixyMWY4aUNfYS8TqWVKqYOb56cTvgsusSlo3SHo/0=
+github.com/faustbrian/go-identity/session v0.0.0-20261009045856-696d6a8316f0/go.mod h1:D1p6PPJiDjtLTlk4+Nil/xTh6OYU3L3Ms+BD1CdUffw=
 github.com/faustbrian/go-migrations v1.0.0 h1:rVxTxID5tFdvK0GCcZarrCl4JDNCYx2HkYqoNZfQUVg=
 github.com/faustbrian/go-migrations v1.0.0/go.mod h1:9+6xpROUsEAOd6vP2hx0yDw3JdIujDh192d6Mp9TAtw=
 github.com/faustbrian/go-migrations/v3 v3.0.2-0.20261001014304-a461b18b6b24 h1:ufBtLbkqahtkO2u3bzLszIlXArpjfMnW9bxUs1bgdGY=

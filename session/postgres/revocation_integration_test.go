@@ -640,6 +640,7 @@ func TestNativeFamilyRevocationIntegration(t *testing.T) {
 			PreAuthReleaseMigrationSource{Schema: "session_store", Version: 25},
 			PreAuthIssueMigrationSource{Schema: "session_store", Version: 26},
 			CSRFMigrationSource{Schema: "session_store", Version: 27},
+			OTPMigrationSource{Schema: "session_store", Version: 28},
 		} {
 			extra, e := source.Load(ctx)
 			if e != nil {
@@ -657,6 +658,7 @@ func TestNativeFamilyRevocationIntegration(t *testing.T) {
 		}
 		testNativeIssueIntegration(t, ctx, pool)
 		t.Run("native session authentication", func(t *testing.T) { testNativeSessionAuthentication(t, ctx, pool) })
+		t.Run("native OTP session authentication", func(t *testing.T) { testNativeOTPSessionAuthentication(t, ctx, pool) })
 	})
 }
 

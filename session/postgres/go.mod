@@ -5,11 +5,11 @@ go 1.27.0
 require (
 	github.com/faustbrian/go-audit v1.0.0
 	github.com/faustbrian/go-audit/postgres v1.0.1-0.20261003012155-21ad3d11d3b2
-	github.com/faustbrian/go-authentication v1.2.2-0.20261002230834-3467aab01d0c
+	github.com/faustbrian/go-authentication v1.2.2-0.20261006180804-0f9f7eac1f1d
 	github.com/faustbrian/go-authorization v1.1.1-0.20261005011349-60ed4b3229d8
 	github.com/faustbrian/go-clock v1.0.0
-	github.com/faustbrian/go-identity v0.0.0-20261005110325-777b1288ba1f
-	github.com/faustbrian/go-identity/postgres v0.0.0-20261006032624-704a1a40bc87
+	github.com/faustbrian/go-identity v0.0.0-20261007092517-8969d596e5c8
+	github.com/faustbrian/go-identity/postgres v0.0.0-20261009052745-72987ba7d5fa
 	github.com/faustbrian/go-identity/session v0.0.0-20261009045856-696d6a8316f0
 	github.com/faustbrian/go-migrations/v3 v3.0.2-0.20261001014304-a461b18b6b24
 	github.com/faustbrian/go-postgres v1.1.1-0.20260912090843-61261695bcc7

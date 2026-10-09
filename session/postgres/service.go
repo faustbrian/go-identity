@@ -62,7 +62,7 @@ func NewSessionService(pool *database.Pool, c SessionServiceConfig) (*session.Se
 	profile.Audience = strings.Clone(profile.Audience)
 	profile.AuthenticationMethod = strings.Clone(profile.AuthenticationMethod)
 	profile.CredentialOwner = strings.Clone(profile.CredentialOwner)
-	return session.NewSessionService(&primarySessionReader{native, domain, policy, profile, c.Validation.Clock}, c.Validation)
+	return session.NewSessionService(&primarySessionReader{native: native, domain: domain, policy: policy, profile: profile, clock: c.Validation.Clock}, c.Validation)
 }
 
 // Kept private: consumers configure the factory, not arbitrary owner readers.
@@ -72,6 +72,7 @@ type primarySessionReader struct {
 	policy  *authority.AuthorityStore
 	profile IdentifierAdmissionConfig
 	clock   session.IssuerClock
+	otp     *OTPAdmissionConfig
 }
 
 var _ session.SessionReader = (*primarySessionReader)(nil)
@@ -119,6 +120,9 @@ func (r *primarySessionReader) ObserveSession(ctx context.Context, lookup sessio
 	spec, err := stored.Session.Bindings()
 	if err != nil {
 		return session.SessionObservation{}, session.ErrUnavailable
+	}
+	if r.otp != nil {
+		return r.observeOTP(bounded, stored, start)
 	}
 	binding := identity.CommandBinding{TenantID: spec.TenantID, UserID: spec.UserID, ActorID: identity.ActorID(spec.UserID), ActorKind: authorization.SubjectUser}
 	directory, credential, policy, err := sessionAdmissionBindings(r.profile, stored.Session, binding, spec.SessionID, spec.Version)
