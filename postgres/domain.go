@@ -278,6 +278,8 @@ func (c *Coordinator) Commit(w Work, result identity.CommandResult) (identity.Co
 			var err error
 			if w.state.credentialReceipt != nil {
 				err = entry.contributor.(CredentialCompromiseLifecycleContributor).PersistCredentialCompromise(w.state.ctx, w)
+			} else if w.state.replacementReceipt != nil {
+				err = entry.contributor.(CredentialReplacementLifecycleContributor).PersistCredentialReplacement(w.state.ctx, w)
 			} else {
 				err = entry.contributor.(LifecycleContributor).PersistLifecycle(w.state.ctx, w)
 			}

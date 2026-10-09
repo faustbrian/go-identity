@@ -216,6 +216,9 @@ func (r *Repository) RecoverParticipant(ctx context.Context, recovery RecoveryWo
 		if credentialCompromiseOperation(recovery.state.plan.feature.Operation) {
 			return recoverCredentialCompromise(ctx, recovery)
 		}
+		if credentialReplacementOperation(recovery.state.plan.feature.Operation) {
+			return recoverCredentialReplacement(ctx, recovery)
+		}
 		// Native feature phases are forbidden from mutating kernel tables. This
 		// participant supplies only the shared tenant/transaction fence; the
 		// native owner must separately prove absence of its retained effects.

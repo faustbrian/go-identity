@@ -50,6 +50,14 @@ func validateFeatureCommand(phase FeatureExecutionContributor, command identity.
 		_, err := compromiseCommand(p, command, plan)
 		return err
 	}
+	if plan.Feature != nil && credentialReplacementOperation(plan.Feature.Operation) {
+		p, ok := phase.(CredentialReplacementContributor)
+		if !ok {
+			return invalidCredentialReplacement()
+		}
+		_, err := replacementCommand(p, command, plan)
+		return err
+	}
 	return nil
 }
 
@@ -100,6 +108,23 @@ func (r *ContributorRegistry) admitFeaturePlan(b identity.CommandBinding, finger
 			}
 			if entry.descriptor.Owner == "outbox/postgres" {
 				if _, ok := entry.contributor.(CredentialCompromiseLifecycleContributor); !ok {
+					return nil, invalidPlan()
+				}
+			}
+		}
+	}
+	if credentialReplacementOperation(p.Feature.Operation) {
+		if _, ok := feature.contributor.(CredentialReplacementContributor); !ok {
+			return nil, invalidPlan()
+		}
+		for _, entry := range entries {
+			if entry.descriptor.Owner == "identity/postgres" {
+				if _, ok := entry.contributor.(*Repository); !ok {
+					return nil, invalidPlan()
+				}
+			}
+			if entry.descriptor.Owner == "outbox/postgres" {
+				if _, ok := entry.contributor.(CredentialReplacementLifecycleContributor); !ok {
 					return nil, invalidPlan()
 				}
 			}
@@ -257,6 +282,11 @@ func (c *Coordinator) ApplyFeature(ctx context.Context, w Work, command identity
 			return result, e
 		}
 	}
+	if credentialReplacementOperation(p.feature.Operation) {
+		if e := prepareCredentialReplacement(ctx, w, command); e != nil {
+			return result, e
+		}
+	}
 	if e := c.checkPreparedAdmission(w); e != nil {
 		return result, w.fail(ctx, e)
 	}
@@ -273,6 +303,11 @@ func (c *Coordinator) ApplyFeature(ctx context.Context, w Work, command identity
 	}
 	if w.state.credentialIntent != nil {
 		if e := applyCredentialCompromise(ctx, w); e != nil {
+			return result, e
+		}
+	}
+	if w.state.replacementIntent != nil {
+		if e := applyCredentialReplacement(ctx, w); e != nil {
 			return result, e
 		}
 	}

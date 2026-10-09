@@ -1724,6 +1724,33 @@ tombstones. This is not password set/change/reset, passkey ceremony validation,
 or production password detection. Those workflows still need their real native
 owners, proof consumption and composed adapter evidence.
 
+### Existing-password replacement
+
+`CredentialReplacementContributor` enlists the kernel-owned effect for
+`identity.password.change`. Its complete frozen command carries
+`CredentialReplacementFields` and the native workflow's original policy intent.
+The coordinator matches the native mapping, locks the primary user and password
+reference, and checks active status, enabled state, expiry and all three exact
+predecessors. Native hash replacement runs in the same `Work`; the kernel then
+advances the user aggregate, credential authority epoch and reference version.
+The credential's owner, identity, enabled state and expiry do not change.
+
+Install `CredentialReplacementMigrationSource` after credential history with an
+explicitly allocated later version. The existing outbox participant also needs
+`CredentialReplacementLifecycleContributor`; persist `StagedLifecycle` and
+`StagedCredentialReplacement` without conflating their version dimensions.
+Native material, kernel metadata, audit, outbox and the original command result
+share one recoverable transaction. Any failed phase rolls back all effects.
+Pending-journal recovery treats retained effects as unknown, not success inferred
+from the current credential. Exact terminal replay returns the original receipt.
+
+This is a trusted persistence seam, **not an authenticated password-change
+endpoint**. Native workflow composition must still own reauthentication proof
+validation/consumption, HIBP, reuse policy, secret custody and session policy.
+Do not supply application-written stores to bridge those unfinished workflows.
+Registration, provider-only set, reset/recovery and hash-only rehash remain
+separate pending profiles; this effect cannot enable or restore credentials.
+
 ### FAQ
 
 - Can I use a replica? No; the repository's primary consistency contract is

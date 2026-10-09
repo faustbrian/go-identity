@@ -344,6 +344,20 @@ func TestPostgresIntegration(t *testing.T) {
 			t.Fatal("repository closed caller-owned pool")
 		}
 	})
+	t.Run("credential replacement transaction", func(t *testing.T) {
+		base := DirectoryAuthorityMigrationSource{Base: CredentialCompromiseMigrationSource{Base: CredentialMigrationSource{Base: StatusMigrationSource{Base: MigrationSource{}, Version: 12}, Version: 13}, Version: 14}, Version: 15, GlobalAuthorityID: "deployment'\\opaque", TenantIDs: []identity.TenantID{"directory"}}
+		replacementRunner, e := migrations.NewRunner(CredentialReplacementMigrationSource{Base: base, Version: 16}, backend)
+		if e != nil {
+			t.Fatal(e)
+		}
+		if _, e = replacementRunner.Up(ctx); e != nil {
+			t.Fatal("replacement migration", e)
+		}
+		if _, e = replacementRunner.Up(ctx); e != nil {
+			t.Fatal("replacement migration replay", e)
+		}
+		testCredentialReplacement(t, ctx, pool, repo)
+	})
 }
 
 // This test policy selects the existing upstream authorization.Service seam;

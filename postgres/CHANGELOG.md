@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Add a typed kernel-owned existing-password change effect through the original
+  coordinator. Lock exact primary predecessors and commit independent user,
+  credential-authority and reference successors with native material, audit,
+  outbox and retained recovery evidence. Install the additive replacement
+  migration and select the native replacement/outbox traits. Existing history
+  and denial-only compromise APIs stay unchanged; complete password workflows
+  and their proof/session policy composition remain under development.
+
 - Allow one feature owner to compose user and anonymous-flow variants of the
   same schema/version. Preserve exact descriptor selection and reject duplicate
   or conflicting policies within each subject namespace. Existing command and

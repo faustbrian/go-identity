@@ -52,6 +52,8 @@ type workState struct {
 	issuance              *workIssuance
 	credentialIntent      *CredentialCompromiseIntent
 	credentialReceipt     *CredentialCompromiseReceipt
+	replacementIntent     *CredentialReplacementIntent
+	replacementReceipt    *CredentialReplacementReceipt
 	counterCommand        *identity.Command
 	riskCommand           *identity.Command
 	captchaCommand        *identity.Command
