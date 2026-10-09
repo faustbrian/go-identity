@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Recognize the canonical original browser-flow issuance operation for typed
+  opt-in composition. Catalog recognition alone selects no handler or route;
+  the session integration owns its real initiation service and wire profile.
+
 - Add fail-closed original browser-flow initiation admission with a shared
   trusted-IP 20/10m bucket, independently of signin and delivery budgets.
   It applies before a flow, identifier or challenge exists; transport origin

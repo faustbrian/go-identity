@@ -174,7 +174,7 @@ func TestMetadataSelectedSnapshotAndCoverageAreDeterministicAndConcurrent(t *tes
 			}
 		}
 	}
-	if selected != 4 || len(d.Coverage()) != 330 {
+	if selected != 4 || len(d.Coverage()) != 331 {
 		t.Fatal("selection report mismatched", selected)
 	}
 	w := httptest.NewRecorder()
