@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add independent non-consuming `CheckService` and code-free original-attempt
+  recovery contracts without expanding the existing Send-only interface.
+  Checks accept no caller-selected attempt or idempotency identity and grant
+  no proof, reservation, session or protected workflow authority.
+
 - Bind complete original synchronizer CSRF state into authenticated-session
   OTP continuations, code digests, attempt fingerprints and sealed records.
   Tokenless historical bindings remain unchanged. Durable adapter custody and

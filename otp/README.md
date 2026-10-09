@@ -1,5 +1,34 @@
 # otp
 
+## Optional metered checks and recovery
+
+`CheckService` is independent of the existing Send-only `Service`. Its native
+adapter owns the complete orchestration; applications do not construct attempts,
+select challenge versions or provide stores. `CheckRequest.SendCommandID`
+references the original accepted Send. The same explicit `SendFlow` possession
+and current trusted caller are required; command possession alone grants nothing.
+
+Every `Check` call is a **new** metered submission, with a server-generated
+command and attempt identity. Correct and wrong submissions consume the separate
+Check allowance and shared total attempt budget. Correct results leave the
+challenge unconsumed and grant no authentication proof, session or permission
+to perform an account change. Owning mutations must still use atomic consuming
+workflows. There is no caller idempotency key or remaining-attempt disclosure.
+
+After `Unknown` or `InProgress`, retain `CheckResult.Recovery` unchanged and call
+`RecoverCheck` with fresh caller context and original bearer possession, not
+another `Check`. Recovery accepts no code and must not compare or charge again.
+`Valid` is meaningful only with a committed result; false under an unresolved
+outcome is not proof of a wrong code. Retained results are historical and confer
+no current authority. Recovery must still deny revoked/expired flows and stale
+primary authority, even when the historical check succeeded.
+
+`CheckRecovery.Bindings` is an explicit code-free native transport projection;
+its constructor validates shape, never authenticity. Default serialization and
+diagnostics redact it. Adapters must match every field to original retained
+history. HTTP integration remains opt-in and must reject Idempotency-Key on
+the GET check endpoint; this direct-platform API does not install any route.
+
 ## Original-session synchronizer binding
 
 `NewBoundSessionAuthorization` retains both immutable session projections:
