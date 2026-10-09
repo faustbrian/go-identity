@@ -293,7 +293,7 @@ func (s *ReauthenticationService) Verify(ctx context.Context, r Reauthentication
 	if err != nil {
 		return result, password.ErrPasswordWork
 	}
-	comparison, err := verifier.VerifyPassword(ctx, password.VerifyPasswordRequest{TenantID: b.TenantID, SubjectID: b.UserID, Password: r.Password, ExpectedVersion: spec.Authentication.CredentialVersion})
+	comparison, err := verifier.VerifyPassword(ctx, password.VerifyPasswordRequest{TenantID: b.TenantID, SubjectID: b.UserID, Password: r.Password, ExpectedVersion: original.EffectiveCredentialVersion()})
 	if err != nil {
 		return result, err
 	}

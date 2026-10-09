@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"sync"
 	"sync/atomic"
@@ -18,6 +19,9 @@ import (
 	passworddb "github.com/faustbrian/go-identity/password/postgres"
 	"github.com/faustbrian/go-identity/risk"
 	riskpg "github.com/faustbrian/go-identity/risk/postgres"
+	"github.com/faustbrian/go-identity/session"
+	sessionpg "github.com/faustbrian/go-identity/session/postgres"
+	migrations "github.com/faustbrian/go-migrations/v3"
 	primitive "github.com/faustbrian/go-password"
 	database "github.com/faustbrian/go-postgres"
 )
@@ -27,6 +31,68 @@ import (
 // are a deliberate external HIBP seam; this is not live-provider interoperability.
 func testNativePasswordChange(t *testing.T, ctx context.Context, pool *database.Pool, sourceConfig passworddb.ReauthenticationConfig, source *passworddb.ReauthenticationService, verification passworddb.ReauthenticationRequest) {
 	t.Helper()
+	// Risk plan: public possession/proof consumption, exact effective versions,
+	// all three session choices, cap rollback, original-history preservation,
+	// repeat changes through a preserved bearer, and original recovery after
+	// restart. Existing ambiguity/cancellation/audit/outbox tests remain active.
+	for _, migration := range []migrations.Source{
+		sessionpg.CSRFMigrationSource{Schema: sourceConfig.Session.Schema, Version: 2},
+		sessionpg.OTPMigrationSource{Schema: sourceConfig.Session.Schema, Version: 3},
+		sessionpg.CredentialContinuationMigrationSource{Schema: sourceConfig.Session.Schema, Version: 4},
+		sessionpg.PasswordChangeMigrationSource{Schema: sourceConfig.Session.Schema, Version: 5},
+	} {
+		items, e := migration.Load(ctx)
+		if e != nil {
+			t.Fatal(e)
+		}
+		for _, item := range items {
+			if _, e = pool.Raw().Exec(ctx, item.UpSQL()); e != nil {
+				t.Fatal("password session migration", e)
+			}
+		}
+	}
+	sessions, err := sessionpg.NewRepository(pool, sourceConfig.Session)
+	if err != nil {
+		t.Fatal(err)
+	}
+	initial, err := sessions.Get(ctx, verification.TenantID, "reauth-session")
+	if err != nil {
+		t.Fatal(err)
+	}
+	initialSpec, _ := initial.Session.Bindings()
+	// A second eligible password session shares the existing family, but has
+	// independent bearer and session scope. Only synthetic test custody is stored.
+	otherSpec := initialSpec
+	otherSpec.SessionID = "reauth-other-session"
+	token, _ := session.ParseToken(base64.RawURLEncoding.EncodeToString(bytes.Repeat([]byte{47}, 32)))
+	otherSpec.Lookup, err = token.Digest(sourceConfig.LookupKeys[0], string(verification.TenantID))
+	if err != nil {
+		t.Fatal(err)
+	}
+	vector, _ := otherSpec.Authority.Bindings()
+	keys, _ := sessionpg.SessionAuthorityKeys(otherSpec.TenantID, otherSpec.UserID, otherSpec.FamilyID, otherSpec.SessionID)
+	vector.Session.ScopeKey = keys.Session
+	otherSpec.Authority, err = session.NewAuthoritySnapshot(vector)
+	if err != nil {
+		t.Fatal(err)
+	}
+	other, err := session.NewSession(otherSpec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	remember, _ := otherSpec.Remember.Bindings()
+	encoded, err := json.Marshal(map[string]any{"Schema": 1, "SessionID": otherSpec.SessionID, "FamilyID": otherSpec.FamilyID, "TenantID": otherSpec.TenantID, "UserID": otherSpec.UserID, "Audience": otherSpec.Audience, "Version": otherSpec.Version, "FamilyVersion": otherSpec.FamilyVersion, "Remember": remember, "Authority": vector, "Lookup": otherSpec.Lookup, "Authentication": otherSpec.Authentication, "IssuedAt": otherSpec.IssuedAt, "LastActivityAt": otherSpec.LastActivityAt})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Existing physical column constraints and public reconstruction validate
+	// the fixture before any consuming password operation.
+	if _, err = pool.Raw().Exec(ctx, `INSERT INTO reauth_sessions.sessions SELECT tenant_id,$1,user_id,family_id,version,family_version,'active',$2,$3,expires_at,$4::jsonb FROM reauth_sessions.sessions WHERE session_id='reauth-session'`, otherSpec.SessionID, otherSpec.Lookup.KeyVersion, otherSpec.Lookup.Sum[:], encoded); err != nil {
+		t.Fatal("other session fixture", err)
+	}
+	if got, e := sessions.Get(ctx, verification.TenantID, otherSpec.SessionID); e != nil || got.Session.EffectiveCredentialVersion() != other.EffectiveCredentialVersion() {
+		t.Fatal("other session reconstruction", e)
+	}
 	history, err := (riskpg.CounterMigrationSource{Base: riskpg.ReservationMigrationSource{Base: riskpg.IssuanceIDMigrationSource{Base: riskpg.MigrationSource{Schema: "password_risk", Version: 20}, Version: 21}, Version: 22}, Version: 23}).Load(ctx)
 	if err != nil {
 		t.Fatal(err)
@@ -78,6 +144,10 @@ func testNativePasswordChange(t *testing.T, ctx context.Context, pool *database.
 		}
 		return []risk.Signal{{Tenant: c.Tenant, Operation: c.Operation, Attempt: c.Attempt, Name: "status", State: risk.SignalClean, Trust: risk.ServerVerified, ObservedAt: c.Now, ExpiresAt: c.Now.Add(time.Minute)}, hibp}, nil
 	}}}
+	// The public service must compose the native effect, not merely invalidate
+	// the independent credential epoch and leave preservation to application SQL.
+	config.SessionDisposition = sessionpg.PasswordChangePreserveSessions
+	config.MaximumSessions = 16
 	change, err := passworddb.NewPasswordChangeService(source, config)
 	if err != nil {
 		t.Fatal("native change composition failed", err)
@@ -295,8 +365,8 @@ func testNativePasswordChange(t *testing.T, ctx context.Context, pool *database.
 		t.Fatal("provider preparation repeated")
 	}
 	id, _ := base64.RawURLEncoding.Strict().DecodeString(string(committed.CommandID))
-	var proofRows, materialRows, audits, outboxes int
-	if err = pool.Raw().QueryRow(ctx, `SELECT (SELECT count(*) FROM identity_password.reauthentication_records WHERE consumed_command_id=$1),(SELECT count(*) FROM identity_password.replacements WHERE command_id=$1),(SELECT count(*) FROM audit.identity_command_bindings WHERE command_id=$1),(SELECT count(*) FROM public.identity_outbox_bindings WHERE command_id=$1)`, id).Scan(&proofRows, &materialRows, &audits, &outboxes); err != nil || proofRows != 1 || materialRows != 1 || audits != 1 || outboxes != 1 {
+	var proofRows, materialRows, audits, outboxes, sessionEffects int
+	if err = pool.Raw().QueryRow(ctx, `SELECT (SELECT count(*) FROM identity_password.reauthentication_records WHERE consumed_command_id=$1),(SELECT count(*) FROM identity_password.replacements WHERE command_id=$1),(SELECT count(*) FROM audit.identity_command_bindings WHERE command_id=$1),(SELECT count(*) FROM public.identity_outbox_bindings WHERE command_id=$1),(SELECT count(*) FROM reauth_sessions.password_changes WHERE command_id=$1 AND disposition=1 AND preserved_count=2 AND revoked_count=0)`, id).Scan(&proofRows, &materialRows, &audits, &outboxes, &sessionEffects); err != nil || proofRows != 1 || materialRows != 1 || audits != 1 || outboxes != 1 || sessionEffects != 1 {
 		t.Fatal("protected effects not atomic", err)
 	}
 	var profile, beforeUser, afterUser, beforeAuthority, afterAuthority, beforeCredential, afterCredential string
@@ -316,8 +386,18 @@ func testNativePasswordChange(t *testing.T, ctx context.Context, pool *database.
 	if !errors.Is(err, primitive.ErrMismatch) || match.Match() {
 		t.Fatal("old password still usable", err)
 	}
-	// The original source vector is no longer authoritative. Verification stays
-	// read-only; protected use checks current primary credential epoch/ref again.
+	// Preserved sessions keep historical proof/version and timing, but must use
+	// the exact new effective reference and epoch for future protected use.
+	for _, id := range []string{initialSpec.SessionID, otherSpec.SessionID} {
+		stored, e := sessions.Get(ctx, verification.TenantID, id)
+		if e != nil || stored.Revoked || stored.Session.EffectiveCredentialVersion() != 8 {
+			t.Fatal("configured preservation lost current session authority", e)
+		}
+		spec, _ := stored.Session.Bindings()
+		if spec.Authentication != initialSpec.Authentication || spec.IssuedAt != initialSpec.IssuedAt || spec.LastActivityAt != initialSpec.LastActivityAt || spec.Version != initialSpec.Version || spec.FamilyVersion != initialSpec.FamilyVersion {
+			t.Fatal("continuation manufactured fresh login history")
+		}
+	}
 	denied, e := source.Verify(ctx, verification)
 	if e == nil && denied.Proof.Proof.ID != "" {
 		t.Fatal("old source session issued a new proof")
@@ -341,6 +421,101 @@ func testNativePasswordChange(t *testing.T, ctx context.Context, pool *database.
 	deniedRecovery, err := restarted.Recover(cancelled, q, request.Caller)
 	if !errors.Is(err, context.Canceled) || deniedRecovery.CredentialVersion != 0 || deniedRecovery.AuthorityInvalidated || calls.Load() != before {
 		t.Fatal("cancelled recovery disclosed authority or renewed provider work", err)
+	}
+	if repeated.Load() {
+		t.Fatal("provider collection repeated within one attempt")
+	}
+	// A new proof over the unchanged bearer and new password must bind effective
+	// version8, not historical login version7. Cap failure leaves it unconsumed.
+	// Put only the synthetic current windows in an expired fixture state; retain
+	// every original charge/snapshot. This is not a risk refund or timing oracle.
+	// Otherwise the preceding deliberate failure attempts exhaust the real limit
+	// before the independently targeted session-cap behavior is reached.
+	if _, e := pool.Raw().Exec(ctx, `UPDATE password_risk.counter_windows SET started_at=started_at-interval '15 minutes',expires_at=expires_at-interval '15 minutes' WHERE tenant_id=$1 AND operation='identity.password.change'`, string(request.TenantID)); e != nil {
+		t.Fatal("expired risk-window fixture", e)
+	}
+	verification.Password = secret
+	fresh, e := source.Verify(ctx, verification)
+	if e != nil || fresh.Proof.Proof.ID == "" {
+		t.Fatal("continued bearer could not reauthenticate", e)
+	}
+	secondSecret, _ := primitive.NewSecret([]byte("second-synthetic-test-password"))
+	defer secondSecret.Destroy()
+	second := request
+	second.Password, second.Proof = secondSecret, fresh.Proof
+	limited := config
+	limited.MaximumSessions = 1
+	limitedService, e := passworddb.NewPasswordChangeService(source, limited)
+	if e != nil {
+		t.Fatal(e)
+	}
+	limitResult, limitError := limitedService.Change(ctx, second)
+	if limitError == nil || limitResult.Outcome != identity.CommitOutcomeNotCommitted || limitResult.CredentialVersion != 0 || limitResult.CommandID == "" {
+		t.Fatal("whole-set limit did not deny public password change", limitError)
+	}
+	limitID, _ := base64.RawURLEncoding.Strict().DecodeString(string(limitResult.CommandID))
+	var admittedCounters int
+	if e := pool.Raw().QueryRow(ctx, `SELECT count(*) FROM password_risk.counter_snapshots WHERE command_id=$1 AND value=1`, limitID).Scan(&admittedCounters); e != nil || admittedCounters != 4 {
+		t.Fatal("session-cap test did not reach admitted native Work", e)
+	}
+	for _, id := range []string{initialSpec.SessionID, otherSpec.SessionID} {
+		stored, e := sessions.Get(ctx, verification.TenantID, id)
+		if e != nil || stored.Revoked || stored.Session.EffectiveCredentialVersion() != 8 {
+			t.Fatal("limit failure left a partial session effect", e)
+		}
+	}
+	config.SessionDisposition = sessionpg.PasswordChangeRevokeOtherSessions
+	otherService, e := passworddb.NewPasswordChangeService(source, config)
+	if e != nil {
+		t.Fatal(e)
+	}
+	changed, e := otherService.Change(ctx, second)
+	if e != nil || changed.Outcome != identity.CommitOutcomeCommitted || changed.CredentialVersion != 9 {
+		t.Fatal("same proof could not survive whole-set rollback", e)
+	}
+	kept, e := sessions.Get(ctx, verification.TenantID, initialSpec.SessionID)
+	if e != nil || kept.Revoked || kept.Session.EffectiveCredentialVersion() != 9 {
+		t.Fatal("revoke-other lost original source", e)
+	}
+	revoked, e := sessions.Get(ctx, verification.TenantID, otherSpec.SessionID)
+	if e != nil || !revoked.Revoked || revoked.Session.EffectiveCredentialVersion() != 8 {
+		t.Fatal("revoke-other preserved a competing session", e)
+	}
+	verification.Password = secondSecret
+	lastProof, e := source.Verify(ctx, verification)
+	if e != nil || lastProof.Proof.Proof.ID == "" {
+		t.Fatal("twice-continued bearer could not reauthenticate", e)
+	}
+	lastSecret, _ := primitive.NewSecret([]byte("third-synthetic-test-password"))
+	defer lastSecret.Destroy()
+	last := request
+	last.Proof, last.Password = lastProof.Proof, lastSecret
+	// Zero configuration selects strict revoke-all, not implicit preservation.
+	config.SessionDisposition, config.MaximumSessions = 0, 0
+	allService, e := passworddb.NewPasswordChangeService(source, config)
+	if e != nil {
+		t.Fatal(e)
+	}
+	lastResult, e := allService.Change(ctx, last)
+	if e != nil || lastResult.Outcome != identity.CommitOutcomeCommitted || lastResult.CredentialVersion != 10 {
+		t.Fatal("default strict password change failed", e)
+	}
+	kept, e = sessions.Get(ctx, verification.TenantID, initialSpec.SessionID)
+	if e != nil || !kept.Revoked || kept.Session.EffectiveCredentialVersion() != 9 {
+		t.Fatal("default failed to terminally revoke source", e)
+	}
+	verification.Password = lastSecret
+	if out, e := source.Verify(ctx, verification); e == nil || out.Proof.Proof.ID != "" {
+		t.Fatal("revoked bearer issued a new proof", e)
+	}
+	// Outcome disclosure follows the original command, not the new startup choice
+	// or current material/session state. Payload pruning must not erase custody.
+	if _, e := pool.Raw().Exec(ctx, `DELETE FROM reauth_sessions.sessions WHERE tenant_id=$1 AND user_id=$2`, string(request.TenantID), string(initialSpec.UserID)); e != nil {
+		t.Fatal("synthetic payload cleanup", e)
+	}
+	before = calls.Load()
+	if out, e := allService.Recover(ctx, q, request.Caller); e != nil || out.Outcome != identity.CommitOutcomeCommitted || out.CredentialVersion != 8 || calls.Load() != before {
+		t.Fatal("original outcome depended on current session policy/payload", e)
 	}
 	if repeated.Load() {
 		t.Fatal("provider collection repeated within one attempt")

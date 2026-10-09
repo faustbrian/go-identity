@@ -26,14 +26,17 @@ import (
 // match an explicitly allowlisted password verification target on Source.
 // MaximumAge is positive and at most 15 minutes. Screening uses Source's exact
 // primitive and trusted clock. History is disabled; current-password reuse is
-// always denied. The initial profile invalidates all prior credential authority,
-// including the source session, with the kernel/outbox version transition.
-// Selective session preservation and administrator/reset paths are not enabled.
+// always denied. SessionDisposition and MaximumSessions freeze trusted startup
+// policy in each original command; they are not request-selectable. Zero selects
+// revoke-all and a whole-set cap of 100000, preserving strict invalidation.
+// Explicit preservation supports the source's single-factor password profile.
 type PasswordChangeConfig struct {
-	Audience   string
-	MaximumAge time.Duration
-	Screening  password.HashPreparationConfig
-	Counters   *riskpg.Repository
+	Audience           string
+	MaximumAge         time.Duration
+	Screening          password.HashPreparationConfig
+	Counters           *riskpg.Repository
+	SessionDisposition sessionpg.PasswordChangeSessionDisposition
+	MaximumSessions    uint32
 }
 
 // PasswordChangeRequest borrows the original bearer, issued password-specific
@@ -51,7 +54,9 @@ type PasswordChangeRequest struct {
 
 // PasswordChangeResult reports the original journal outcome, never hash/proof
 // material. A nonzero credential successor and AuthorityInvalidated are exposed
-// only after known commit. Unknown is not permission to resubmit a password;
+// only after known commit. AuthorityInvalidated refers to the predecessor
+// credential authority; eligible sessions may continue against its successor.
+// Unknown is not permission to resubmit a password;
 // use Recover with the original command's exact non-secret scope.
 type PasswordChangeResult struct {
 	CommandID            identity.CommandID
@@ -63,11 +68,13 @@ type PasswordChangeResult struct {
 // PasswordChangeService composes native password change over an immutable
 // reauthentication source. It borrows its primary pool and owns no goroutines,
 // retry loop or private transaction. Calls are concurrent-safe under configured
-// dependencies. Install password migration4 and native counter migrations first.
+// dependencies. Install password migration4, native counter migrations and the
+// session CSRF/OTP/credential-continuation/password-change histories first.
 type PasswordChangeService struct {
 	source    *ReauthenticationService
 	c         PasswordChangeConfig
 	validator *auth.AuthorityAuthenticator
+	sessions  *sessionpg.PasswordChangeEffect
 }
 
 // NewPasswordChangeService validates trusted composition without IO or crypto.
@@ -82,6 +89,14 @@ func NewPasswordChangeService(source *ReauthenticationService, c PasswordChangeC
 	if !slices.Contains(source.c.Targets, target) {
 		return nil, password.ErrPasswordWork
 	}
+	c, err := passwordChangeSessionPolicy(c)
+	if err != nil {
+		return nil, err
+	}
+	sessions, err := sessionpg.NewPasswordChangeEffect(source.c.Session, source.c.Profile)
+	if err != nil {
+		return nil, password.ErrPasswordWork
+	}
 	c.Screening.Now = source.c.Verifier.Now
 	if _, err := password.NewHashPreparer(c.Screening); err != nil {
 		return nil, password.ErrPasswordWork
@@ -94,7 +109,20 @@ func NewPasswordChangeService(source *ReauthenticationService, c PasswordChangeC
 	if err != nil {
 		return nil, password.ErrPasswordWork
 	}
-	return &PasswordChangeService{source: source, c: c, validator: validator}, nil
+	return &PasswordChangeService{source: source, c: c, validator: validator, sessions: sessions}, nil
+}
+
+func passwordChangeSessionPolicy(c PasswordChangeConfig) (PasswordChangeConfig, error) {
+	if c.SessionDisposition == 0 {
+		c.SessionDisposition = sessionpg.PasswordChangeRevokeAllSessions
+	}
+	if c.MaximumSessions == 0 {
+		c.MaximumSessions = 100000
+	}
+	if c.SessionDisposition < sessionpg.PasswordChangePreserveSessions || c.SessionDisposition > sessionpg.PasswordChangeRevokeAllSessions || c.MaximumSessions > 100000 {
+		return PasswordChangeConfig{}, password.ErrPasswordWork
+	}
+	return c, nil
 }
 
 // Only the existing password source is selectable. Unused authority methods
@@ -170,7 +198,7 @@ func (s *PasswordChangeService) Change(ctx context.Context, r PasswordChangeRequ
 		return result, identity.ForbiddenError{}
 	}
 	record, err := s.source.repository.Reauthentication(ctx, r.Proof.Proof.ID)
-	if err != nil || record.Proof != r.Proof || record.Issuer != s.source.c.Issuer || record.Environment != s.source.c.Environment || record.CredentialID != b.RecordID || record.CredentialVersion != bindings.Authentication.CredentialVersion {
+	if err != nil || record.Proof != r.Proof || record.Issuer != s.source.c.Issuer || record.Environment != s.source.c.Environment || record.CredentialID != b.RecordID || record.CredentialVersion != original.EffectiveCredentialVersion() {
 		return result, identity.ForbiddenError{}
 	}
 	material, err := s.source.repository.ReadPasswordCredential(ctx, password.CredentialKey{TenantID: b.TenantID, SubjectID: b.UserID})
@@ -234,7 +262,7 @@ func (s *PasswordChangeService) Change(ctx context.Context, r PasswordChangeRequ
 	if err != nil {
 		return result, password.ErrPasswordWork
 	}
-	sessionFields, err := sessionpg.OriginalSessionFields(original)
+	sessionFields, err := sessionpg.PasswordChangeSessionFields(original, s.c.SessionDisposition, s.c.MaximumSessions)
 	if err != nil {
 		return result, err
 	}

@@ -7,14 +7,15 @@ require (
 	github.com/faustbrian/go-audit/postgres v1.0.1-0.20261003012155-21ad3d11d3b2
 	github.com/faustbrian/go-authentication v1.2.2-0.20261009190006-7fc797d91317
 	github.com/faustbrian/go-authorization v1.1.1-0.20261005011349-60ed4b3229d8
+	github.com/faustbrian/go-capability v1.0.1-0.20261005033429-2985d8ea8700 // indirect
 	github.com/faustbrian/go-clock v1.0.0
 	github.com/faustbrian/go-identity v0.0.0-20261009202749-c26bd4f61ca6
 	github.com/faustbrian/go-identity/password v0.0.0-20261009201757-6cfced9fa0c0
 	github.com/faustbrian/go-identity/postgres v0.0.0-20261009203540-d67346d93fef
 	github.com/faustbrian/go-identity/risk v0.0.0-20261009195709-e1506b3d6dd9
 	github.com/faustbrian/go-identity/risk/postgres v0.0.0-20261009204947-23f01e4c8f36
-	github.com/faustbrian/go-identity/session v0.0.0-20261009192813-c310037a0399
-	github.com/faustbrian/go-identity/session/postgres v0.0.0-20261009192813-c310037a0399
+	github.com/faustbrian/go-identity/session v0.0.0-20261009213959-5635323137bb
+	github.com/faustbrian/go-identity/session/postgres v0.0.0-20261009222152-dce6a0028d63
 	github.com/faustbrian/go-migrations/v3 v3.0.2-0.20261008154303-7eabbeb156f8
 	github.com/faustbrian/go-password v1.0.1-0.20261001082808-a3dbd862340c
 	github.com/faustbrian/go-postgres v1.1.1-0.20260912090843-61261695bcc7

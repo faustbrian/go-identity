@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- Compose native password-change session preservation, revoke-other and
+  revoke-all in the original protected transaction. Freeze trusted choice and
+  whole-set cap in each command; zero configuration retains strict revoke-all.
+  Continued bearers use current credential versions for fresh reauthentication
+  without rewriting historical login, freshness, lifetime or CSRF custody.
+  Reconcile retained session effects alongside password/proof recovery. Install
+  the session CSRF/OTP/credential-continuation/password-change histories before
+  enabling this service. Other-factor preservation and full lifecycle/release
+  qualification remain in development.
+
 - Add native authenticated password change with original signed-proof validation,
   HIBP screening, current-password reuse denial and protected counter admission.
   Consume the proof with password material, credential authority, audit and

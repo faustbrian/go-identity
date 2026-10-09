@@ -140,6 +140,9 @@ func (p *passwordChangePhase) ApplyFeature(ctx context.Context, w kernel.Work, c
 	if err != nil {
 		return identity.FeatureReceipt{}, err
 	}
+	if _, err = p.service.sessions.Apply(ctx, w, p, c); err != nil {
+		return identity.FeatureReceipt{}, err
+	}
 	if err = p.checkTime(ctx, w); err != nil {
 		return identity.FeatureReceipt{}, err
 	}
@@ -205,6 +208,10 @@ func (p *passwordChangePhase) RecoverParticipant(ctx context.Context, w kernel.R
 	}
 	material, err := p.service.source.repository.recoverReplacement(ctx, w, p)
 	if err != nil {
+		return kernel.RecoveryUnknown, err
+	}
+	sessions, err := p.service.sessions.Recover(ctx, w, p)
+	if err != nil || sessions != material {
 		return kernel.RecoveryUnknown, err
 	}
 	b, _, _, err := w.FeatureScope(p)

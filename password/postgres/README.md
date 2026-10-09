@@ -79,7 +79,13 @@ release qualification remain pending.
 `NewPasswordChangeService(source, config)` borrows a configured native
 reauthentication source and composes the upstream signed-proof validator, core
 password screening/preparation and native protected counters. Install additive
-password migration 4 and the selected risk counter migrations. The source must
+password migration 4 and the selected risk counter migrations. In the source's
+session namespace install the unchanged base history, then
+`CSRFMigrationSource`, `OTPMigrationSource`,
+`CredentialContinuationMigrationSource` and `PasswordChangeMigrationSource`
+in permanent forward-only migration slots. Upgrade relevant session readers
+before enabling continuation; older readers reject its stored profiles.
+The source must
 allow the exact purpose `identity.password.verify`, action
 `identity.password.change` and configured audience. Select explicit HIBP policy,
 bounded provider collection and the source's existing password primitive.
@@ -96,9 +102,28 @@ The sole kernel transaction consumes the original proof exactly once, updates
 password material and credential/user authority, and writes mandatory audit and
 lifecycle outbox effects. Rollback restores proof availability and material;
 the protected risk attempt is not refunded. Original signed record bytes remain
-unchanged. This strict initial profile invalidates **all prior credential
-authority, including the source session**. It does not preserve selected sessions
-or implement administrative/reset replacement, history or other-factor flows.
+unchanged. Startup `SessionDisposition` selects preserve, revoke-other or
+revoke-all; `MaximumSessions` limits the complete active-state set, not each page.
+Zero values select **revoke-all**, including the source, and a cap of 100000.
+Requests cannot override policy. The original command freezes the selection and
+limit; exceeding the cap rolls back all effects, including proof consumption.
+
+Preservation continues eligible single-factor password sessions against the
+exact successor reference and credential epoch without changing historical
+authentication, login freshness, activity/lifetime, remember policy, bearer
+lookup, session/family versions or CSRF state. Stale/expired/family-denied
+supported sessions revoke; an unsupported preservation profile denies the whole
+transaction rather than manufacturing authority. Revoke-other keeps the source
+and terminally revokes others; revoke-all also revokes the source. Fresh password
+reauthentication over a continued bearer uses its effective credential version,
+not the original login version. `AuthorityInvalidated` describes predecessor
+credential authority, not revocation of every continued session.
+
+Session effects and their original-command recovery evidence share the existing
+password transaction; applications supply neither a session store nor a second
+transaction. Retained evidence survives live session cleanup. Administrative/
+reset replacement, history, other-factor preservation and complete lifecycle
+qualification remain in development.
 
 Retain the result's server-generated command ID. Unknown outcomes must be resolved
 with `Recover(ctx, exactQuery, caller)`, not automatic password resubmission.
