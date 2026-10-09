@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add bounded canonical-account password comparison with current-policy dummy
+  work and a primary authority/material recheck before returning a match.
+  Account blocking, credential changes, expiry and stale versions deny neutrally.
+  This result does not issue a session/proof or replace the required transactional
+  signin, risk, MFA and upgrade workflow; the durable adapter remains pending.
+
 - Gate password hash creation through the existing risk policy's mandatory
   HIBP assessment for every selected creating operation, including recovery and
   administrative paths. Recheck unchanged facts after hashing; stale, foreign,

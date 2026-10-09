@@ -1,9 +1,30 @@
 # Identity password workflows
 
-**Development checkpoint:** only explicit registration input policy is currently
-implemented. Transactional signup/signin, hash upgrades, change/set/reset,
+**Development checkpoint:** input policy, bounded credential work and canonical
+account comparison are implemented. Transactional signup/signin, hash upgrades, change/set/reset,
 reauthentication and administrative workflows remain required and unimplemented.
 These helpers do not authorize persistence or session issuance.
+
+`NewPasswordVerifier` freezes a real primitive service, exact current-policy
+dummy hash, explicit byte/time bounds, trusted clock and platform-owned
+`CredentialVerificationRepository`. `VerifyPassword` accepts a canonical kernel
+`UserID` and trusted `TenantID`, not an email/phone identifier or an OTP. Unknown
+and missing accounts execute real dummy work; even a matching dummy cannot
+authenticate. Blocked, expired, mismatched and stale-version results are neutral.
+A real match requires a second primary snapshot preserving the original hash,
+reference version and user-wide credential epoch. Ordinary user aggregate
+version changes do not invalidate an otherwise eligible credential.
+
+The repository must join kernel authority and owned hash material consistently;
+the concrete password PostgreSQL implementation is still pending. Do not wire
+independent kernel/hash reads or a cached positive fallback into this port.
+The comparison result is not a lease, proof or session: the owning signin
+workflow still must apply risk, verification, MFA, remember policy and atomic
+upgrade/session effects, identically for email, username and phone callers.
+The verifier never trims bytes, upgrades a hash or consumes caller secret custody.
+The caller destroys its Secret after the call. Request/snapshot diagnostics are
+redacted and implicit JSON/text serialization is denied; explicit hash access
+and private-field diagnostic reflection remain sensitive.
 
 The private execution path now performs bounded primitive work: new hashes
 require successful owned screening first, unknown identities use a current-policy
