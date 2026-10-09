@@ -51,7 +51,7 @@ func NewUpdateCommand(b identity.CommandBinding, source Session, label string) (
 	if err != nil {
 		return SessionCommand{}, ErrInvalidSessionCommand
 	}
-	successor, err := NewSession(next)
+	successor, err := rebuildSession(next, source, CSRFState{})
 	if err != nil {
 		return SessionCommand{}, ErrInvalidSessionCommand
 	}

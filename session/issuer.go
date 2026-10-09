@@ -397,7 +397,7 @@ func sameIssuedSession(a, b Session) bool {
 		return false
 	}
 	y, e := b.Bindings()
-	if e != nil || x.Authority.CompareCurrent(y.Authority) != nil || csrfSpec(a) != csrfSpec(b) {
+	if e != nil || x.Authority.CompareCurrent(y.Authority) != nil || csrfSpec(a) != csrfSpec(b) || otpSpec(a) != otpSpec(b) {
 		return false
 	}
 	x.Authority = AuthoritySnapshot{}

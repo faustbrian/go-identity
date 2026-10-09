@@ -50,13 +50,15 @@ func IssueOperation() identity.FeatureOperation {
 // resolved policy. Existing family version is retained, never reset. The final
 // proof metadata must have exact session-issue purpose and be unexpired at
 // original issuance; anonymous records remain an explicit unprivileged variant.
+// OTP metadata cannot enter this credential-proof/anonymous issuance route;
+// consuming OTP issuance requires its own atomically checked effect contract.
 // This is structural/temporal preparation only. SessionIssuer must independently
 // validate the expected authority-issued authentication/anonymous proof, current
 // activity/vector and operation policy before any durable reservation or effect.
 // The adapter owns atomic consumption, safe recovery and reveal-once delivery.
 func NewIssueCommand(b identity.CommandBinding, s Session) (SessionCommand, error) {
 	spec, err := s.Bindings()
-	if err != nil || b.ValidateFor(IssueOperation()) != nil || b.TenantID != spec.TenantID || b.UserID != spec.UserID || b.RecordID != spec.SessionID || spec.Version != 1 {
+	if err != nil || spec.Authentication.Kind == AuthenticationOTP || b.ValidateFor(IssueOperation()) != nil || b.TenantID != spec.TenantID || b.UserID != spec.UserID || b.RecordID != spec.SessionID || spec.Version != 1 {
 		return SessionCommand{}, ErrInvalidSessionCommand
 	}
 	c := SessionCommand{issue: &IssueCommandSpec{Binding: b, Session: s}}

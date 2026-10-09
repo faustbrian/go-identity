@@ -24,6 +24,9 @@ const (
 	AuthenticationVerified AuthenticationKind = iota + 1
 	// AuthenticationAnonymous selects explicitly unprivileged anonymous state.
 	AuthenticationAnonymous
+	// AuthenticationOTP selects explicit historical OTP provenance, never a
+	// fabricated persistent credential or an authority-issued proof.
+	AuthenticationOTP
 )
 
 // AuthenticationMetadata preserves original authentication and credential
@@ -45,8 +48,9 @@ type AuthenticationMetadata struct {
 }
 
 // SessionSpec is the original bounded base projection with no raw token.
-// Synchronizer state is separately projected by Session.CSRFState to preserve
-// this public struct's shape. Complete storage must persist both projections.
+// Synchronizer and OTP metadata are separately projected by Session.CSRFState
+// and Session.OTPAuthentication to preserve this public struct's shape.
+// Complete storage must persist every applicable projection.
 // Remember must already be resolved; Authority is the sole complete vector.
 // Session/family versions must equal that vector's corresponding versions.
 // IDs are canonical 1..128 visible ASCII bytes, Audience at most256. Constructors
@@ -78,6 +82,7 @@ type Session struct{ state *sessionState }
 type sessionState struct {
 	spec SessionSpec
 	csrf CSRFState
+	otp  OTPAuthentication
 }
 
 // NewSession validates and freezes a complete record without IO or callbacks.
@@ -86,6 +91,10 @@ type sessionState struct {
 // absolute lifetime and mismatched record/family versions, returning only the
 // redacted ErrInvalidSession. No token is created, revealed or persisted.
 func NewSession(s SessionSpec) (Session, error) {
+	return newSession(s, OTPAuthentication{})
+}
+
+func newSession(s SessionSpec, otp OTPAuthentication) (Session, error) {
 	if !authorityKey(s.SessionID, 128) || !authorityKey(s.FamilyID, 128) || !authorityKey(string(s.TenantID), 128) || !authorityKey(string(s.UserID), 128) || !authorityKey(s.Audience, 256) || s.Version == 0 || s.FamilyVersion == 0 || s.Lookup.KeyVersion == 0 || s.Lookup.Sum == ([32]byte{}) {
 		return Session{}, ErrInvalidSession
 	}
@@ -93,6 +102,10 @@ func NewSession(s SessionSpec) (Session, error) {
 	if err != nil || a.Session.Version != s.Version || a.SessionFamily.Version != s.FamilyVersion {
 		return Session{}, ErrInvalidSession
 	}
+	if s.Authentication.Kind != AuthenticationOTP && otp.state != nil {
+		return Session{}, ErrInvalidSession
+	}
+	authenticatedAt := s.Authentication.at()
 	switch s.Authentication.Kind {
 	case AuthenticationVerified:
 		m := s.Authentication
@@ -111,10 +124,16 @@ func NewSession(s SessionSpec) (Session, error) {
 		if m.Proof != (authentication.Proof{}) || m.ProofVersion != 0 || m.CredentialID != "" || m.CredentialVersion != 0 || !validTime(m.AnonymousAt) || a.Factor.Present || a.Passkey.Present {
 			return Session{}, ErrInvalidSession
 		}
+	case AuthenticationOTP:
+		if otp.state == nil || s.Authentication != (AuthenticationMetadata{Kind: AuthenticationOTP}) || a.Organization.Present || a.Factor.Present || a.Passkey.Present ||
+			s.IssuedAt.Before(otp.state.AuthenticatedAt) || !s.IssuedAt.Before(otp.state.ValidUntil) {
+			return Session{}, ErrInvalidSession
+		}
+		authenticatedAt = otp.state.AuthenticatedAt
 	default:
 		return Session{}, ErrInvalidSession
 	}
-	if _, err = s.Remember.Evaluate(s.LastActivityAt, s.IssuedAt, s.LastActivityAt, s.Authentication.at()); err != nil {
+	if _, err = s.Remember.Evaluate(s.LastActivityAt, s.IssuedAt, s.LastActivityAt, authenticatedAt); err != nil {
 		return Session{}, ErrInvalidSession
 	}
 	s.SessionID = strings.Clone(s.SessionID)
@@ -122,7 +141,7 @@ func NewSession(s SessionSpec) (Session, error) {
 	s.TenantID = identity.TenantID(strings.Clone(string(s.TenantID)))
 	s.UserID = identity.UserID(strings.Clone(string(s.UserID)))
 	s.Audience = strings.Clone(s.Audience)
-	return Session{state: &sessionState{spec: s}}, nil
+	return Session{state: &sessionState{spec: s, otp: otp}}, nil
 }
 
 func (m AuthenticationMetadata) at() time.Time {
@@ -133,8 +152,9 @@ func (m AuthenticationMetadata) at() time.Time {
 }
 
 // Bindings returns the original owned base projection for trusted adapters.
-// Complete serialization/equality must also retain CSRFState; rebuilding from
-// Bindings alone deliberately produces a legacy tokenless record.
+// Complete serialization/equality must also retain CSRFState and
+// OTPAuthentication. Bindings alone cannot reconstruct an OTP record and
+// deliberately produces a tokenless record for other supported variants.
 // Scope and lookup values correlate people/activity; never log them. Returned
 // Remember and Authority values retain immutable state, not renewed freshness.
 func (s Session) Bindings() (SessionSpec, error) {
@@ -152,7 +172,15 @@ func (s Session) Bindings() (SessionSpec, error) {
 // Bindings and CSRFState; lossy reconstruction is not an equivalent session.
 func NewSessionWithCSRF(spec SessionSpec, state CSRFState) (Session, error) {
 	s, e := NewSession(spec)
-	if e != nil || state.state == nil || state.state.spec.Binding != (CSRFBinding{TenantID: spec.TenantID, SessionID: spec.SessionID, SessionVersion: spec.Version}) {
+	if e != nil {
+		return Session{}, e
+	}
+	return attachCSRF(s, state)
+}
+
+func attachCSRF(s Session, state CSRFState) (Session, error) {
+	spec := s.state.spec
+	if state.state == nil || state.state.spec.Binding != (CSRFBinding{TenantID: spec.TenantID, SessionID: spec.SessionID, SessionVersion: spec.Version}) {
 		return Session{}, ErrInvalidSession
 	}
 	s.state.csrf = state
@@ -187,7 +215,7 @@ func (s Session) Lifetime(now time.Time) (Lifetime, error) {
 		return Lifetime{}, ErrInvalidSession
 	}
 	p := s.state.spec
-	return p.Remember.Evaluate(now, p.IssuedAt, p.LastActivityAt, p.Authentication.at())
+	return p.Remember.Evaluate(now, p.IssuedAt, p.LastActivityAt, s.authenticatedAt())
 }
 
 // Format redacts identifiers, metadata and correlated lookup values.

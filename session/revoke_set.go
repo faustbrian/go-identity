@@ -125,7 +125,7 @@ func (s *SessionService) PrepareRevokeSet(caller GetResult, command SessionComma
 		return out, ErrFreshnessRequired
 	}
 	spec, _ := caller.Session.Bindings()
-	freshUntil := spec.Authentication.at().Add(spec.Remember.fresh)
+	freshUntil := caller.Session.authenticatedAt().Add(spec.Remember.fresh)
 	if !validTime(freshUntil) {
 		return out, ErrUnavailable
 	}

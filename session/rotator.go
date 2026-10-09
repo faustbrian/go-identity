@@ -187,7 +187,7 @@ func (s *SessionRotator) Prepare(caller GetResult, command identity.CommandID, c
 	if err != nil {
 		return out, err
 	}
-	successor, err := NewSession(next)
+	successor, err := rebuildSession(next, caller.Session, CSRFState{})
 	if err != nil {
 		return out, err
 	}

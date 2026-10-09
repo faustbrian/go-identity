@@ -56,12 +56,12 @@ func NewRotateCommand(b identity.CommandBinding, source, successor Session) (Ses
 	if err != nil {
 		return SessionCommand{}, ErrInvalidSessionCommand
 	}
-	record, err := NewSession(expected)
+	record, err := rebuildSession(expected, source, CSRFState{})
 	if successor.CSRFState().state != nil {
 		if source.CSRFState().state != nil && csrfSpec(source).Digest == csrfSpec(successor).Digest {
 			return SessionCommand{}, ErrInvalidSessionCommand
 		}
-		record, err = NewSessionWithCSRF(expected, successor.CSRFState())
+		record, err = rebuildSession(expected, source, successor.CSRFState())
 	}
 	if err != nil || !sameIssuedSession(record, successor) {
 		return SessionCommand{}, ErrInvalidSessionCommand

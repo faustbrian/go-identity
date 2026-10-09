@@ -263,7 +263,7 @@ func (s *SessionService) Get(ctx context.Context, request GetRequest) (out GetRe
 	if err != nil {
 		return GetResult{}, ErrUnavailable
 	}
-	if spec.TenantID != request.TenantID || spec.Audience != s.config.Audience || spec.Authentication.Kind != AuthenticationVerified {
+	if spec.TenantID != request.TenantID || spec.Audience != s.config.Audience || (spec.Authentication.Kind != AuthenticationVerified && spec.Authentication.Kind != AuthenticationOTP) {
 		return GetResult{}, nil
 	}
 	matched := 0

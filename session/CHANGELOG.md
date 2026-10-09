@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Add explicit historical OTP session provenance without fabricating a
+  persistent credential or changing existing public struct shapes. Preserve
+  original authentication time through update/rotation and versioned encrypted
+  cache restoration, including synchronizer state and unchanged authority
+  deadlines. Reject mixed proof fields and unsupported factor/organization
+  profiles; existing credential-proof issuance cannot accept OTP metadata.
+  Native OTP persistence, authoritative admission and atomic signin remain
+  pending; these structural values grant no authentication authority.
+
 - Expose side-effect-free `Configured` inspection on session validation and
   direct/strict-cookie signout owners. Optional transport can reject nil or
   zero-value dependencies before advertising routes, without treating

@@ -219,7 +219,7 @@ func prepareCSRFRecord(record Session, key CSRFKey) (CSRFToken, Session, error) 
 	if e != nil {
 		return CSRFToken{}, Session{}, e
 	}
-	next, e := NewSessionWithCSRF(spec, state)
+	next, e := rebuildSession(spec, record, state)
 	if e != nil {
 		return CSRFToken{}, Session{}, e
 	}

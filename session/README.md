@@ -1,5 +1,37 @@
 # Session
 
+## OTP authentication provenance prerequisite
+
+OTP is not a password/provider credential. `AuthenticationOTP` therefore has
+zero legacy proof and credential fields, and requires a separate immutable
+`OTPAuthentication` projection. `NewOTPAuthentication` validates original
+consuming/signin and Send command IDs, challenge and attempt identities, the
+exact verified email/phone identifier and versions, and original successful
+authentication/continuation times. This is historical metadata, not a proof,
+code, bearer, current eligibility check or permission to issue a session.
+
+Reconstruct complete trusted storage with `NewSessionWithOTP` or
+`NewSessionWithOTPAndCSRF`; persist `Bindings`, `OTPAuthentication().Bindings()`
+and any `CSRFState().Bindings()` together. `NewSession` deliberately rejects
+an OTP base without its metadata. Original continuation expiry bounds issuance,
+not the subsequently issued session; `RememberPolicy` retains the original
+authentication time for freshness and never extends it on rotation or update.
+Organization, factor and passkey profiles are currently rejected explicitly.
+
+Core reader admission accepts OTP only through its trusted configured reader's
+complete current authority observation. Encrypted cache schemas3/4 retain OTP
+without/with CSRF, while legacy schemas1/2 remain unchanged. Cache copies and
+restart preserve the original authoritative deadline, including during outage.
+Metadata updates and rotation preserve OTP provenance; version changes clear or
+replace exact-version CSRF state. The existing credential-proof issuance route
+rejects OTP metadata rather than treating it as authentication authority.
+
+This is a core prerequisite, not complete OTP signin. The native PostgreSQL OTP
+record codec, opt-in authoritative reader and atomic OTP-to-session effect are
+still required; existing proof-only native profiles fail closed for OTP.
+Do not supply consumer-written credential rows or a second transaction to bridge
+that gap. No store, coordinator or replay journal is added by this projection.
+
 ## Cookie-CSRF signout composition prerequisite
 
 `NewCookieSignOutService(base, eligibleKeys)` selects a strict cookie-only
