@@ -33,6 +33,14 @@ func TestPublicSigninPostgresActualSendAndRecovery(t *testing.T) {
 	}
 }
 
+func TestPublicSigninPostgresCompetingCorrectAndIncorrect(t *testing.T) {
+	for _, anonymous := range []bool{false, true} {
+		t.Run(map[bool]string{false: "user", true: "anonymous"}[anonymous], func(t *testing.T) {
+			testPublicSendPostgresScenario(t, false, false, &publicSigninScenario{anonymous: anonymous, mixedRace: true})
+		})
+	}
+}
+
 // Actual public Send and captured delivered code feed public Signin. No test
 // challenge, attempt, recipient, proof or session is injected into the login.
 func TestPublicSigninPostgresRollback(t *testing.T) {
@@ -41,6 +49,7 @@ func TestPublicSigninPostgresRollback(t *testing.T) {
 
 type publicSigninScenario struct {
 	anonymous, persistent, rollback, expiryWait, authorityChange bool
+	mixedRace                                                    bool
 	commitFault                                                  *signinCommitFault
 }
 
@@ -256,15 +265,21 @@ CREATE TRIGGER reject_signin_session BEFORE INSERT ON session_store.sessions FOR
 	type signinResponse struct {
 		result otp.SigninResult
 		err    error
+		wrong  bool
 	}
 	responses := make(chan signinResponse, 4)
 	start := make(chan struct{})
 	var workers sync.WaitGroup
-	for range 4 {
+	for index := range 4 {
+		incorrect := scenario.mixedRace && index >= 2
 		workers.Go(func() {
 			<-start
-			result, err := service.Signin(ctx, otp.SigninRequest{TenantID: request.TenantID, UserID: request.UserID, Caller: request.Caller, Flow: request.Flow, SendCommandID: sent.CommandID, Code: code})
-			responses <- signinResponse{result, err}
+			submitted := code
+			if incorrect {
+				submitted = wrong
+			}
+			result, err := service.Signin(ctx, otp.SigninRequest{TenantID: request.TenantID, UserID: request.UserID, Caller: request.Caller, Flow: request.Flow, SendCommandID: sent.CommandID, Code: submitted})
+			responses <- signinResponse{result, err, incorrect}
 		})
 	}
 	close(start)
@@ -274,6 +289,9 @@ CREATE TRIGGER reject_signin_session BEFORE INSERT ON session_store.sessions FOR
 	winners := 0
 	for response := range responses {
 		if response.err == nil && response.result.Issuance.CommitOutcome == identity.CommitOutcomeCommitted {
+			if response.wrong {
+				t.Fatal("incorrect competing submission issued session")
+			}
 			winners++
 			result = response.result
 		} else {
@@ -284,6 +302,16 @@ CREATE TRIGGER reject_signin_session BEFORE INSERT ON session_store.sessions FOR
 				t.Fatal("losing signin delivered CSRF")
 			}
 		}
+	}
+	if scenario.mixedRace {
+		// A wrong attempt can advance the challenge version before every correct
+		// contender reserves. Such stale submissions must fail closed, not be
+		// transparently retried under another fingerprint or generation.
+		var finalized, issuances int
+		if err := db.QueryRow(ctx, `SELECT used_attempts,failed_attempts,(SELECT count(*) FROM otp_store.challenges WHERE challenge_id=$2 AND state='finalized'),(SELECT count(*) FROM session_store.session_issuances WHERE purpose='identity.otp.signin') FROM otp_store.challenges WHERE tenant_id=$1 AND challenge_id=$2`, string(request.TenantID), string(sent.CommandID)).Scan(&used, &failed, &finalized, &issuances); err != nil || winners > 1 || failed < 1 || failed > 3 || used != failed+winners || finalized != winners || issuances != winners {
+			t.Fatal("competing submissions corrupted attempt or issuance accounting", err, winners, used, failed, finalized, issuances)
+		}
+		return
 	}
 	if winners != 1 || result.SessionID == "" || result.Issuance.Replayed {
 		t.Fatal("concurrent signin did not produce exactly one new winner", winners)
