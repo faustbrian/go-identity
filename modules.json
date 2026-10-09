@@ -4,6 +4,28 @@
   "go_version": "1.27.0",
   "modules": [
     {
+      "directory": "email",
+      "module_path": "github.com/faustbrian/go-identity/email",
+      "go_version": "1.27.0",
+      "packages": [{"module_directory":"email","directory":".","name":"email","import_path":"github.com/faustbrian/go-identity/email","kind":"public","production":true,"executable":true,"coverage_required":true,"build_required":true,"build_tags":[]}],
+      "purpose": "Email-owned bounded address policy; complete verification and lifecycle workflows in development.",
+      "lifecycle": "experimental",
+      "kind": "public library",
+      "releasable": true,
+      "family": "service-edge",
+      "version": "0.0.0",
+      "tag_prefix": "email/v",
+      "owned_dependencies": ["github.com/faustbrian/go-identifier"],
+      "reverse_owned_dependencies": [],
+      "external_runtime_dependencies": [],
+      "required_services": [],
+      "build_tags": [],
+      "test_tags": [],
+      "interoperability_tools": [],
+      "specifications": [],
+      "conformance_corpora": []
+    },
+    {
       "directory": "http/otp",
       "module_path": "github.com/faustbrian/go-identity/http/otp",
       "go_version": "1.27.0",
