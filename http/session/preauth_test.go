@@ -1,12 +1,14 @@
 package sessionhttp_test
 
 import (
+	"bytes"
 	"context"
 	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -17,6 +19,9 @@ import (
 	identityhttp "github.com/faustbrian/go-identity/http"
 	sessionhttp "github.com/faustbrian/go-identity/http/session"
 	"github.com/faustbrian/go-identity/session"
+	openapi "github.com/faustbrian/go-openapi/v2"
+	"github.com/faustbrian/go-openapi/v2/parse"
+	"github.com/faustbrian/go-openapi/v2/validate"
 	"github.com/faustbrian/go-rate-limit/v2/memory"
 )
 
@@ -397,5 +402,207 @@ func TestPreAuthHTTPCancellationDuringBodyReadIsUnavailable(t *testing.T) {
 	h.ServeHTTP(w, preAuthHTTPRequest("{}"))
 	if w.Code != 429 || owner.prepares.Load() != 20 || executor.calls.Load() != 20 {
 		t.Fatal("original-flow rate ceiling changed")
+	}
+}
+
+func TestPreAuthFeatureSelectedRoutesAndDocument(t *testing.T) {
+	c, owner, executor := preAuthHTTPFixture(t)
+	feature, err := sessionhttp.NewPreAuthFeature(c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	selected := identityhttp.FeatureServices{Features: []identityhttp.Feature{feature}}
+	h, doc, err := identityhttp.NewDocumentedHandler(context.Background(), identityhttp.DocumentConfig{Title: "Identity", Version: "1"}, selected)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var document map[string]any
+	if json.Unmarshal(doc.JSON(), &document) != nil {
+		t.Fatal("invalid document")
+	}
+	paths := document["paths"].(map[string]any)
+	if len(paths) != 1 || paths["/v1/session/preauth-issue"] == nil || owner.prepares.Load() != 0 || executor.calls.Load() != 0 {
+		t.Fatal("construction exposed unrelated routes or performed owner IO")
+	}
+	parsed, err := openapi.ParseJSON(context.Background(), bytes.NewReader(doc.JSON()), parse.DefaultLimits())
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertWire := func(w *httptest.ResponseRecorder) {
+		t.Helper()
+		node := parsed.Raw()
+		for _, key := range []string{"paths", "/v1/session/preauth-issue", "post", "responses", strconv.Itoa(w.Code), "content", "application/json", "schema"} {
+			var ok bool
+			node, ok = node.Lookup(key)
+			if !ok {
+				t.Fatalf("missing initiation wire schema for %d", w.Code)
+			}
+		}
+		instance, err := parse.JSON(context.Background(), bytes.NewReader(w.Body.Bytes()), parse.DefaultLimits())
+		if err != nil {
+			t.Fatal(err)
+		}
+		report, err := validate.SchemaInstance(context.Background(), parsed, node, instance, validate.InstanceOptions{Direction: validate.DirectionResponse})
+		if err != nil || !report.Valid() {
+			t.Fatalf("actual initiation wire rejected: %v %+v", err, report.Diagnostics())
+		}
+		bad, _ := parse.JSON(context.Background(), strings.NewReader(`{"error":"unavailable","credential":"secret"}`), parse.DefaultLimits())
+		report, err = validate.SchemaInstance(context.Background(), parsed, node, bad, validate.InstanceOptions{})
+		if err != nil || report.Valid() {
+			t.Fatal("wire admits a credential-bearing result")
+		}
+	}
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, preAuthHTTPRequest("{}"))
+	if w.Code != 200 || len(w.Result().Cookies()) != 1 || executor.calls.Load() != 1 {
+		t.Fatal("selected route did not execute original owner")
+	}
+	assertWire(w)
+	for _, body := range []string{"null", `{"remember":true,"remember":false}`} {
+		w = httptest.NewRecorder()
+		h.ServeHTTP(w, preAuthHTTPRequest(body))
+		if w.Code != 400 {
+			t.Fatal("selected decoder lost closed JSON contract")
+		}
+		assertWire(w)
+	}
+	r := preAuthHTTPRequest("{}")
+	r.Method = http.MethodGet
+	w = httptest.NewRecorder()
+	h.ServeHTTP(w, r)
+	if w.Code != 405 {
+		t.Fatal("selected method admission changed")
+	}
+	assertWire(w)
+	executor.mode = "unknown"
+	w = httptest.NewRecorder()
+	h.ServeHTTP(w, preAuthHTTPRequest("{}"))
+	if w.Code != 503 || len(w.Result().Cookies()) != 0 {
+		t.Fatal("selected ambiguity delivered a credential")
+	}
+	assertWire(w)
+	r = preAuthHTTPRequest("{}")
+	r.Header.Set("Origin", "https://foreign.example")
+	w = httptest.NewRecorder()
+	h.ServeHTTP(w, r)
+	if w.Code != 403 || executor.calls.Load() != 2 {
+		t.Fatal("selected origin policy changed or reached issuer")
+	}
+	assertWire(w)
+	executor.mode = ""
+	for i := 0; i < 18; i++ {
+		w = httptest.NewRecorder()
+		h.ServeHTTP(w, preAuthHTTPRequest("{}"))
+		if w.Code != 200 {
+			t.Fatal("selected rate budget changed")
+		}
+	}
+	w = httptest.NewRecorder()
+	h.ServeHTTP(w, preAuthHTTPRequest("{}"))
+	if w.Code != 429 || executor.calls.Load() != 20 || w.Header().Get("Retry-After") == "" {
+		t.Fatal("selected rate ceiling changed")
+	}
+	assertWire(w)
+	off, offDoc, err := identityhttp.NewDocumentedHandler(context.Background(), identityhttp.DocumentConfig{Title: "Identity", Version: "1"}, identityhttp.FeatureServices{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	w = httptest.NewRecorder()
+	off.ServeHTTP(w, preAuthHTTPRequest("{}"))
+	if w.Code != 404 || strings.Contains(string(offDoc.JSON()), "preauth-issue") || executor.calls.Load() != 20 {
+		t.Fatal("disabled original flow remained exposed")
+	}
+}
+
+func TestPreAuthFeatureSelectionRejectsInvalidAndCoexistsWithSessions(t *testing.T) {
+	c, owner, executor := preAuthHTTPFixture(t)
+	invalid := c
+	invalid.Service = nil
+	if feature, err := sessionhttp.NewPreAuthFeature(invalid); err == nil || feature.ID() != "" || owner.prepares.Load() != 0 || executor.calls.Load() != 0 {
+		t.Fatal("invalid feature exposed partial selection or performed IO")
+	}
+	f := newLogout(t, session.CredentialCookie)
+	sessions, err := sessionhttp.NewFeatureWithPreAuth(f.config, c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	h, doc, err := identityhttp.NewDocumentedHandler(context.Background(), identityhttp.DocumentConfig{Title: "Identity", Version: "1"}, identityhttp.FeatureServices{Features: []identityhttp.Feature{sessions}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(doc.JSON()), "/v1/session/get") || !strings.Contains(string(doc.JSON()), "/v1/session/preauth-issue") {
+		t.Fatal("separate flow selection removed existing session metadata")
+	}
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, request(f.fixture, true))
+	if w.Code != 200 || owner.prepares.Load() != 0 || executor.calls.Load() != 0 {
+		t.Fatal("session read borrowed original-flow authority")
+	}
+	w = httptest.NewRecorder()
+	h.ServeHTTP(w, preAuthHTTPRequest("{}"))
+	if w.Code != 200 || executor.calls.Load() != 1 {
+		t.Fatal("original flow lost under composed session selection")
+	}
+}
+
+func TestPreAuthRouterDenialsMatchDocument(t *testing.T) {
+	c, owner, executor := preAuthHTTPFixture(t)
+	feature, err := sessionhttp.NewPreAuthFeature(c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ops, err := identityhttp.NewOperationDescriptors(identityhttp.FeatureServices{Features: []identityhttp.Feature{feature}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	h, doc, err := identityhttp.NewRouter(identityhttp.TransportPolicy{Network: c.Network, HandlerTimeout: time.Second, Document: identityhttp.DocumentConfig{Title: "Identity", Version: "1"}}, ops, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	parsed, err := openapi.ParseJSON(context.Background(), bytes.NewReader(doc.JSON()), parse.DefaultLimits())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		name, media string
+		change      func(*http.Request)
+	}{
+		{"plaintext", "application/json", func(r *http.Request) { r.TLS = nil; r.URL.Scheme = "http" }},
+		{"foreign-origin", "text/plain", func(r *http.Request) { r.Header.Set("Origin", "https://foreign.example") }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			r := preAuthHTTPRequest("{}")
+			tc.change(r)
+			w := httptest.NewRecorder()
+			h.ServeHTTP(w, r)
+			if w.Code != 403 || !strings.HasPrefix(w.Header().Get("Content-Type"), tc.media) || owner.prepares.Load() != 0 || executor.calls.Load() != 0 || len(w.Result().Cookies()) != 0 {
+				t.Fatal("shared denial reached issuance or changed media")
+			}
+			node := parsed.Raw()
+			for _, key := range []string{"paths", "/v1/session/preauth-issue", "post", "responses", "403", "content", tc.media, "schema"} {
+				var ok bool
+				node, ok = node.Lookup(key)
+				if !ok {
+					t.Fatal("shared transport response missing from document")
+				}
+			}
+			body := w.Body.Bytes()
+			if tc.media == "text/plain" {
+				body, _ = json.Marshal(string(body))
+			}
+			instance, err := parse.JSON(context.Background(), bytes.NewReader(body), parse.DefaultLimits())
+			if err != nil {
+				t.Fatal(err)
+			}
+			report, err := validate.SchemaInstance(context.Background(), parsed, node, instance, validate.InstanceOptions{Direction: validate.DirectionResponse})
+			if err != nil || !report.Valid() {
+				t.Fatalf("shared denial violates advertised schema: %v %+v", err, report.Diagnostics())
+			}
+		})
+	}
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, preAuthHTTPRequest("{}"))
+	if w.Code != 200 || executor.calls.Load() != 1 || len(w.Result().Cookies()) != 1 {
+		t.Fatal("shared admission lost original successful cookie")
 	}
 }

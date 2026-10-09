@@ -32,9 +32,19 @@ and checked unchanged in the original command. Only an exact fresh committed,
 error-free result delivers the cookie; replay, expiry, failure and cancellation
 emit none while preserving known native outcome and safe original locators.
 The response contains no nonce, digest or bearer. Native recovery requires its
-current policy and never delivers or renews a cookie. This handler is opt-in and
-is not yet contributed by `NewFeature`; canonical selected metadata/OpenAPI and
-the complete PostgreSQL/browser journey remain in development.
+current policy and never delivers or renews a cookie. For selected routing and
+OpenAPI, pass `NewPreAuthFeature(config)` to `FeatureServices` alongside any
+other explicitly selected features. This separate contribution does not select
+session reads/logout or OTP; `NewFeature` remains unchanged. Omission exposes no
+initiation route or metadata. `NewPreAuthFeatureWithMiddleware` retains the same
+owned typed phases. Construction performs no issuance or network IO. The real
+PostgreSQL/browser journey and complete release qualification remain pending.
+
+To select reads/logout and initiation together, use
+`NewFeatureWithPreAuth(signOutConfig, preAuthConfig)` (or its
+`NewFeatureWithPreAuthAndMiddleware` variant). These operations retain one
+canonical session feature owner; do not add two `identity/session`
+contributions to the same selection. Duplicate owners reject atomically.
 
 Cookie acquisition uses the base transport's shared strict decoder. Trailing
 SP/HTAB in either the selected cookie value or an unrelated cookie value denies

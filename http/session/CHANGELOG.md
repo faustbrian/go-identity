@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add a separate opt-in original browser-flow feature with concrete OpenAPI
+  request/outcome schemas and secure success-only cookie metadata. Existing
+  session-read/signout selection remains unchanged; omitting this contribution
+  exposes neither initiation route nor advertised operation.
+
 - Add explicit original browser-flow initiation through the selected session
   issuer, with strict HTTPS/origin/input admission and shared IP rate limiting
   before preparation. Preserve the once-resolved remember policy, original
