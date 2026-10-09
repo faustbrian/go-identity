@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Add explicit public HTTPS `/openapi.json` selection with trusted-host and
+  shared safe-rate enforcement; existing constructors remain metadata-off.
+  Serve the exact self-describing immutable document and expose separate
+  deterministic canonical-obligation coverage without claiming disabled
+  features implemented. Protected metadata and full security routing remain
+  in development.
+
 - Export concrete selected OpenAPI 3.1.1 alongside exact dispatch, using separate
   bounded wire contributions and owned schema/document validation. Preserve
   exact integers, reject unresolved/external references and schema collisions,

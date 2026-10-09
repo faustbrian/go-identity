@@ -11,6 +11,29 @@ rate controls, hooks and OpenAPI composition
 remain required subsequent work. Do not deploy an identity endpoint from this
 checkpoint without those transport controls.
 
+## Explicit public metadata
+
+`NewDocumentedHandler` never exposes a metadata endpoint. To explicitly expose
+public metadata, use `NewDocumentedMetadataHandler` with `MetadataConfig`:
+`Public: true`, an exact `NetworkConfig`, the shared `SafeRateLimiter` and a
+positive 1ms..30s request budget. It serves only HTTPS `GET /openapi.json` on
+mapped hosts, charges the canonical safe IP budget once and returns exact
+validated document bytes. The endpoint describes itself in that same snapshot.
+It rejects bodies, queries, retry keys and Authorization; cookies confer no
+authority. No implicit HEAD, CORS or cache validation is enabled. Protected/admin
+metadata remains full-router work: leave the endpoint off for that profile.
+Construction never invokes handlers or readiness callbacks. Caller-owned wire
+examples/descriptions must already be public; this is not a secret detector.
+
+`OpenAPIDocument.OpenapiDocument` provides the typed side-effect-free direct
+snapshot export, with its exact digest. `Coverage()` and `CoverageJSON()` export
+a separate deterministic diagnostic inventory: all canonical obligations plus
+selected extensions, honestly classified as selected, absent, direct-only,
+middleware or unavailable shared-route variants. These do not certify runtime
+implementation or full parity. The report contains disabled baseline names and
+is not automatically embedded in OpenAPI or published over HTTP. Returned
+storage is detached; snapshot exports and dispatch may run concurrently.
+
 ## Safe-route admission
 
 `NewSafeRateLimiter(SafeRateConfig{...})` selects the fixed `rate.safe` catalog

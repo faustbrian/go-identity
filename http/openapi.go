@@ -48,6 +48,7 @@ type DocumentConfig struct{ Title, Version string }
 type OpenAPIDocument struct {
 	data       []byte
 	operations []OperationDescriptor
+	coverage   []OperationCoverage
 }
 
 // JSON returns detached document bytes; callers own the returned storage.
@@ -206,7 +207,7 @@ func NewDocumentedHandler(ctx context.Context, config DocumentConfig, services F
 	if err != nil {
 		return nil, OpenAPIDocument{}, err
 	}
-	return handler, OpenAPIDocument{data: data, operations: ops}, nil
+	return handler, OpenAPIDocument{data: data, operations: ops, coverage: documentCoverage(ops)}, nil
 }
 
 func wireError(ctx context.Context) error {
