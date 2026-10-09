@@ -131,18 +131,7 @@ func (e getFailure) Error() string { return "sessionhttp: " + e.code }
 // JSON media type and no Set-Cookie. Hooks own their bounded JSON denial body.
 // Constructor validation performs no owner reads or rate admission.
 func NewGetHandlerWithMiddleware(c GetConfig, middleware []identityhttp.MiddlewareDescriptor) (http.Handler, error) {
-	if !c.Sessions.Configured() || !c.Rate.Configured() || c.Now == nil || c.MaximumDuration < time.Millisecond || c.MaximumDuration > 30*time.Second || (c.Transport != session.CredentialCookie && c.Transport != session.CredentialBearer) {
-		return nil, identityhttp.ErrInvalidInput
-	}
-	cookie, err := c.Cookie.DeletionAttributes()
-	if err != nil {
-		return nil, identityhttp.ErrInvalidInput
-	}
-	network, err := identityhttp.NewNetworkResolver(c.Network)
-	if err != nil {
-		return nil, err
-	}
-	decoder, err := identityhttp.NewRequestDecoder(c.Network.Limits)
+	decode, err := newSessionReadDecoder(c, "/v1/session/get")
 	if err != nil {
 		return nil, err
 	}
@@ -167,61 +156,7 @@ func NewGetHandlerWithMiddleware(c GetConfig, middleware []identityhttp.Middlewa
 		MaximumDuration: c.MaximumDuration,
 		Middleware:      middleware,
 		Reject:          reject,
-		Decode: func(r *http.Request) (GetState, error) {
-			var state GetState
-			if r.URL.Path != "/v1/session/get" || r.URL.EscapedPath() != "/v1/session/get" {
-				return state, getFailure{status: 404, code: "not_found"}
-			}
-			if r.Method != http.MethodGet {
-				return state, getFailure{status: 405, code: "method_not_allowed", allow: http.MethodGet}
-			}
-			if _, _, err := decoder.IdempotencyKey(r, identityhttp.HeaderForbidden); err != nil || r.URL.RawQuery != "" || r.URL.ForceQuery || r.ContentLength != 0 || len(r.TransferEncoding) != 0 || (r.Body != nil && r.Body != http.NoBody) || len(r.Trailer) != 0 {
-				return state, identityhttp.ErrInvalidInput
-			}
-			facts, err := network.Resolve(r)
-			if err != nil {
-				var invalid identityhttp.DecodeError
-				if errors.As(err, &invalid) {
-					return state, getFailure{status: 421, code: "misdirected_request"}
-				}
-				return state, identityhttp.ErrUnavailable
-			}
-			if facts.Realm() != identityhttp.RealmTenant {
-				return state, getFailure{status: 421, code: "misdirected_request"}
-			}
-			if facts.Scheme() != "https" {
-				return state, identityhttp.ErrInvalidInput
-			}
-			requirement := identityhttp.HeaderForbidden
-			if c.Transport == session.CredentialBearer {
-				requirement = identityhttp.HeaderOptional
-			}
-			bearer, present, err := decoder.Bearer(r, requirement)
-			if err != nil {
-				return state, identityhttp.ErrInvalidInput
-			}
-			wire := ""
-			if c.Transport == session.CredentialBearer {
-				if present {
-					wire = bearer.Token()
-				}
-			} else {
-				wire, err = cookieToken(r.Header, cookie.Name)
-				if err != nil {
-					return state, identityhttp.ErrInvalidInput
-				}
-			}
-			state.facts = facts
-			if wire != "" {
-				token, parseErr := session.ParseToken(wire)
-				if parseErr != nil {
-					return state, identityhttp.ErrInvalidInput
-				}
-				state.credential, _ = session.NewCredential(c.Transport, token)
-				state.present = true
-			}
-			return state, nil
-		},
+		Decode:          decode,
 		Authenticate: func(r *http.Request, state GetState) (GetState, error) {
 			return authenticateSession(c, r, state)
 		},
@@ -270,6 +205,81 @@ func NewGetHandlerWithMiddleware(c GetConfig, middleware []identityhttp.Middlewa
 	return &protectedPipeline{pipeline: handler, serve: func(handler http.Handler, w http.ResponseWriter, r *http.Request) {
 		serveSessionResponse(handler, w, r, func() string { return "" })
 	}}, nil
+}
+
+// Session reads and protected metadata acquire exactly the same original
+// transport custody; only the fixed endpoint path and response differ.
+func newSessionReadDecoder(c GetConfig, path string) (func(*http.Request) (GetState, error), error) {
+	if !c.Sessions.Configured() || !c.Rate.Configured() || c.Now == nil || c.MaximumDuration < time.Millisecond || c.MaximumDuration > 30*time.Second || (c.Transport != session.CredentialCookie && c.Transport != session.CredentialBearer) {
+		return nil, identityhttp.ErrInvalidInput
+	}
+	cookie, err := c.Cookie.DeletionAttributes()
+	if err != nil {
+		return nil, identityhttp.ErrInvalidInput
+	}
+	network, err := identityhttp.NewNetworkResolver(c.Network)
+	if err != nil {
+		return nil, err
+	}
+	decoder, err := identityhttp.NewRequestDecoder(c.Network.Limits)
+	if err != nil {
+		return nil, err
+	}
+	return func(r *http.Request) (GetState, error) {
+		var state GetState
+		if r.URL.Path != path || r.URL.EscapedPath() != path {
+			return state, getFailure{status: 404, code: "not_found"}
+		}
+		if r.Method != http.MethodGet {
+			return state, getFailure{status: 405, code: "method_not_allowed", allow: http.MethodGet}
+		}
+		if _, _, err := decoder.IdempotencyKey(r, identityhttp.HeaderForbidden); err != nil || r.URL.RawQuery != "" || r.URL.ForceQuery || r.ContentLength != 0 || len(r.TransferEncoding) != 0 || (r.Body != nil && r.Body != http.NoBody) || len(r.Trailer) != 0 {
+			return state, identityhttp.ErrInvalidInput
+		}
+		facts, err := network.Resolve(r)
+		if err != nil {
+			var invalid identityhttp.DecodeError
+			if errors.As(err, &invalid) {
+				return state, getFailure{status: 421, code: "misdirected_request"}
+			}
+			return state, identityhttp.ErrUnavailable
+		}
+		if facts.Realm() != identityhttp.RealmTenant {
+			return state, getFailure{status: 421, code: "misdirected_request"}
+		}
+		if facts.Scheme() != "https" {
+			return state, identityhttp.ErrInvalidInput
+		}
+		requirement := identityhttp.HeaderForbidden
+		if c.Transport == session.CredentialBearer {
+			requirement = identityhttp.HeaderOptional
+		}
+		bearer, present, err := decoder.Bearer(r, requirement)
+		if err != nil {
+			return state, identityhttp.ErrInvalidInput
+		}
+		wire := ""
+		if c.Transport == session.CredentialBearer {
+			if present {
+				wire = bearer.Token()
+			}
+		} else {
+			wire, err = cookieToken(r.Header, cookie.Name)
+			if err != nil {
+				return state, identityhttp.ErrInvalidInput
+			}
+		}
+		state.facts = facts
+		if wire != "" {
+			token, parseErr := session.ParseToken(wire)
+			if parseErr != nil {
+				return state, identityhttp.ErrInvalidInput
+			}
+			state.credential, _ = session.NewCredential(c.Transport, token)
+			state.present = true
+		}
+		return state, nil
+	}, nil
 }
 
 func authenticateSession(c GetConfig, r *http.Request, state GetState) (GetState, error) {

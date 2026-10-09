@@ -7,6 +7,37 @@ release-qualified backend platform.
 
 ## Quick start and ownership
 
+For protected opt-in `GET /openapi.json`, call `NewMetadataRouter(ctx,
+identityhttp.DocumentConfig{Title: title, Version: version}, MetadataConfig{
+Read: getConfig, Authorization: authorizer, PolicyRevision: revision,
+Action: action, ResourceType: resourceType}, selectedServices, middleware)`.
+`authorizer` is the existing authorization engine, not a new role callback.
+It must explicitly allow the owner-established user and host-mapped tenant for
+the configured action/resource type and fixed `identity.openapi.document`
+resource ID at the configured revision. No permission is inferred from scopes,
+headers, a user ID supplied by the client, or mere authentication.
+
+This selects only protected metadata plus the supplied services, not session
+routes or a public alternative. It uses `getConfig`'s bounded session cookie or
+bearer profile, network, clock, whole-handler duration and shared safe-rate owner.
+Missing/inactive sessions return 401, explicit authorization denial 403,
+rate denial 429, and stale/expired/failed authority 503. Both authenticated and
+unauthenticated well-formed attempts share the trusted-IP budget; authenticated
+attempts additionally share the tenant/user budget with other safe operations.
+The exact immutable OpenAPI snapshot includes protected metadata once and no
+unselected routes; no credentials, cookies or runtime host details are exported.
+Global middleware sees real `GetState` and cannot replace original custody.
+
+This profile supports tenant-host administration and disables CORS grants.
+The shared transport rejects plaintext with JSON `https_required` (403).
+Cross-origin rejection is fixed `text/plain` `identity.http.origin_denied`
+(403, or 408 if cancellation is observed during origin admission); neither
+rejection enters session or policy work. OpenAPI describes both media profiles.
+Public-realm mapping and JWT/API-key administration are not inferred. Base HTTP's
+existing explicit public metadata profile remains distinct and metadata stays
+off in ordinary constructors. Use `NewHTTPServer` for raw IO/streaming bounds.
+Reference browser, provider, full feature and release qualification remain pending.
+
 For shared secure transport, obtain descriptors with
 `identityhttp.NewOperationDescriptors` and pass them to `identityhttp.NewRouter`
 with `TransportPolicy.Network` equal to the feature network configuration,

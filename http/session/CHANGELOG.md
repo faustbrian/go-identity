@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add explicitly selected protected OpenAPI routing through real session reads
+  and revision-fenced administrator authorization, retaining cookie/bearer
+  separation, original authority expiry, shared rate budgets and exact immutable
+  document bytes. Metadata is never implicitly public or selected.
+
 - Qualify the real GET/self-signout feature through the shared secure router,
   retaining cookie/bearer separation, owner-produced hook state, transactional
   logout and the canonical single rate admission.
