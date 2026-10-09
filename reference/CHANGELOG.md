@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Expose optional original OTP sign-in source discovery through the same selected
+  native owner and sealed graph lifetime. Trusted transport obtains the original
+  identifier for rate admission without an application reader or attempt debit;
+  startup, tenant isolation and shutdown guards remain enforced.
+
 - Add opt-in native original-flow initiation and outcome-only recovery to the
   OTP composition, with fixed deployment origin/action/policy, retained cookie
   key selection and graph lifetime/tenant admission. Initiation migrations use

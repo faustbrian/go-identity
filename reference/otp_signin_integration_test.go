@@ -70,6 +70,19 @@ func configureReferenceSignin(t *testing.T, c *reference.StoreConfiguration) {
 
 func proveReferenceSignin(t *testing.T, ctx context.Context, stores reference.StoreSet, features reference.FeatureSet, workers reference.WorkerSet, f liveStores, send otp.SendRequest, sent otp.SendResult, codes <-chan auth.OneTimeCode) {
 	t.Helper()
+	reader, err := features.OTPSigninSource()
+	if err != nil {
+		t.Fatal("selected source reader", err)
+	}
+	source, err := reader.ResolveSigninSource(ctx, otp.SigninSourceRequest{TenantID: send.TenantID, UserID: send.UserID, Caller: send.Caller, Flow: send.Flow, SendCommandID: sent.CommandID})
+	binding, bindingErr := source.Bindings()
+	if err != nil || bindingErr != nil || binding.TenantID != send.TenantID || binding.SendCommandID != sent.CommandID || binding.Channel != send.Channel || binding.Destination.Value() != send.Destination.Value() {
+		t.Fatal("composed original identifier discovery", err, bindingErr)
+	}
+	var attempted, failed, sessions int
+	if err := f.pool.Raw().QueryRow(ctx, `SELECT used_attempts,failed_attempts,(SELECT count(*) FROM session_store.session_issuances) FROM otp_store.challenges WHERE tenant_id=$1 AND challenge_id=$2`, string(send.TenantID), string(sent.CommandID)).Scan(&attempted, &failed, &sessions); err != nil || attempted != 0 || failed != 0 || sessions != 0 {
+		t.Fatal("composed source reader mutated login state", err)
+	}
 	if _, err := workers.ProcessDeliveryOne(ctx, 0); err != nil {
 		t.Fatal("native explicit delivery", err)
 	}
@@ -109,5 +122,8 @@ func proveReferenceSignin(t *testing.T, ctx context.Context, stores reference.St
 	}
 	if _, err := service.RecoverSignin(ctx, otp.SigninRecoveryRequest{}); err == nil {
 		t.Fatal("retained signin handle survived closure")
+	}
+	if source, err := reader.ResolveSigninSource(ctx, otp.SigninSourceRequest{}); err == nil || source != (otp.SigninSource{}) {
+		t.Fatal("retained source reader survived closure")
 	}
 }

@@ -103,6 +103,13 @@ The native adapter owns atomic challenge/pre-auth consumption, session issuance,
 audit and lifecycle effects. Consumers supply configuration and bounded policy,
 not domain workflow callbacks or stores.
 
+Selected OTP signin also exposes `features.OTPSigninSource()` for code-free
+original identifier discovery through that same native owner. Supply original
+Send/pre-auth possession and trusted caller; current primary policy and recipient
+are checked without an attempt debit or session effect. Use the sensitive
+projection only for trusted transport rate admission, never client output or
+login authority. Startup, tenant and shutdown guards apply to retained readers.
+
 Select `OTP.PreAuth` to obtain `features.PreAuth()` for original flow initiation.
 Its fixed deployment origin/callback/service actor and retained cookie key
 version are explicit configuration; action, policy and native namespace are

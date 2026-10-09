@@ -51,6 +51,41 @@ func TestOTPSigninSelectionAndGraphLifetime(t *testing.T) {
 	}
 }
 
+func TestOTPSigninSourceSelectionAndGraphLifetime(t *testing.T) {
+	for _, features := range []FeatureSet{{}, {state: &storeState{features: &featureState{composed: true}}}} {
+		if reader, err := features.OTPSigninSource(); err == nil || reader != nil {
+			t.Fatal("unselected source reader exposed")
+		}
+	}
+	lifetime, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	drained := make(chan struct{})
+	close(drained)
+	s := &storeState{lifetime: lifetime, cancel: cancel, drained: drained, features: &featureState{composed: true, timeout: time.Second, signin: &otppg.SigninService{}}}
+	reader, err := (FeatureSet{state: s}).OTPSigninSource()
+	if err != nil || reader == nil {
+		t.Fatal("selected source handle absent", err)
+	}
+	deny := func() {
+		t.Helper()
+		if source, err := reader.ResolveSigninSource(context.Background(), otp.SigninSourceRequest{}); err == nil || source != (otp.SigninSource{}) {
+			t.Fatal("inactive/foreign source exposed")
+		}
+		if s.active != 0 {
+			t.Fatal("source reader leaked graph admission")
+		}
+	}
+	deny()
+	s.features.ready = true
+	deny()
+	s.closed = true
+	cancel()
+	deny()
+	if reader, err := (FeatureSet{state: s}).OTPSigninSource(); err == nil || reader != nil {
+		t.Fatal("closed graph exposed source reader")
+	}
+}
+
 func TestSelectedOTPSigninMigrationOwnership(t *testing.T) {
 	for _, schema := range []string{"preauth_store", "authenticated_store", "signin_store"} {
 		t.Run(schema, func(t *testing.T) {
