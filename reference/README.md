@@ -4,7 +4,8 @@
 PostgreSQL-journaled, TLS Valkey velocity store graph and optional native OTP
 Send/delivery composition with opt-in single-factor OTP sign-in. An IO-free
 `NewServer` now exposes exact health/readiness probes and opt-in original-flow
-HTTP initiation over that same graph. Positive dependency readiness, remaining
+HTTP initiation and selected email OTP Send/signin/recovery over that same graph.
+Positive dependency readiness, remaining
 HTTP features and complete identity journeys remain unimplemented. Selected-module
 migration Check/Plan/Apply and durable native command resume are available as
 explicit store operations, not automatic startup behavior.
@@ -117,6 +118,22 @@ backend or domain-store override is accepted.
 Selected HTTP initiation requires the canonical five-minute `OTP.PreAuth.FlowTTL`;
 other lifetimes are rejected during composition, before rate admission or native
 preparation. Direct native issuance retains its existing 1–10-minute profile.
+
+`StoreConfiguration.HTTPEmailSignin` selects `/v1/otp/send`, `/v1/otp/signin`
+and `/v1/otp/signin/recover` with their native OpenAPI operations. Nil exposes
+none of these routes or metadata. Selection requires `OTP.Signin`,
+`HTTPPreAuth` with its dedicated browser-device profile, and `HTTPRate`.
+Supply email-owned address normalization plus trusted actor, policy revision
+and target. Send and signin query policies must share the same authorization
+handle and revision; the native issuer owns session cookie and audience.
+Network JSON limits must admit at least 44 fields, including digest array
+elements in the recovery envelope, and nesting depth at least 3; smaller limits
+fail construction. Use explicit bounded body and decoded sizes.
+No application handlers, stores or workflow callbacks supply these operations.
+Recovery returns the historical committed outcome, never another session
+cookie or CSRF credential. The selected HTTPS integration exercises initiation,
+Send/replay, native delivery, consuming signin and recovery against PostgreSQL
+and TLS Valkey; it is not full-platform or positive-readiness evidence.
 
 The tenant resolver runs synchronously with a bounded request context after
 trusted network resolution and before a workflow. Its nonempty result must

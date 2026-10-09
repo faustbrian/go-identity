@@ -92,12 +92,17 @@ type featureState struct {
 	deliverySlots   chan struct{}
 	authorize       authorization.Service
 	httpPreAuth     *preAuthHTTPState
+	httpEmailSignin *emailSigninHTTPState
 	// mu-protected graph progression and startup state.
 	providers, workers, composed, initializing, ready bool
 }
 
 func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDependencies) error {
 	httpPreAuth, err := composePreAuthHTTP(c)
+	if err != nil {
+		return err
+	}
+	httpEmailSignin, err := composeEmailSigninHTTP(c, httpPreAuth)
 	if err != nil {
 		return err
 	}
@@ -200,7 +205,7 @@ func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDepen
 			capacity = policy.SenderConcurrency
 		}
 	}
-	s.features = &featureState{migrations: migrationConfig, otp: otpOwner, signin: signinOwner, preauth: preauthOwner, delivery: deliveryOwner, sender: d.DeliverySender, timeout: o.Timeout, provider: o.ProviderVersion, deliverySlots: make(chan struct{}, int(capacity)), authorize: o.RequestKeys.Policy.Authorization, httpPreAuth: httpPreAuth}
+	s.features = &featureState{migrations: migrationConfig, otp: otpOwner, signin: signinOwner, preauth: preauthOwner, delivery: deliveryOwner, sender: d.DeliverySender, timeout: o.Timeout, provider: o.ProviderVersion, deliverySlots: make(chan struct{}, int(capacity)), authorize: o.RequestKeys.Policy.Authorization, httpPreAuth: httpPreAuth, httpEmailSignin: httpEmailSignin}
 	return nil
 }
 

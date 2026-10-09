@@ -130,8 +130,7 @@ func NewServer(c ReferenceConfig, d ReferenceDependencies, f FeatureSet) (*Serve
 	s.mu.Lock()
 	valid := !s.closed && s.features != nil && s.features.composed
 	if valid {
-		a, b := reflect.ValueOf(c.Policies.Authorize), reflect.ValueOf(s.features.authorize)
-		valid = a.IsValid() && b.IsValid() && a.Comparable() && b.Comparable() && a.Interface() == b.Interface()
+		valid = sameServerAuthorization(c.Policies.Authorize, s.features.authorize)
 	}
 	for _, host := range c.HTTP.Network.TenantHosts {
 		if s.tenants[string(host.TenantID)] == nil {
@@ -162,6 +161,13 @@ func NewServer(c ReferenceConfig, d ReferenceDependencies, f FeatureSet) (*Serve
 	if selected != nil {
 		contributions = append(contributions, *selected)
 	}
+	selected, err = server.emailSigninFeature(c.HTTP.Network, f)
+	if err != nil {
+		return nil, invalid
+	}
+	if selected != nil {
+		contributions = append(contributions, *selected)
+	}
 	operations, err := identityhttp.NewOperationDescriptors(identityhttp.FeatureServices{Features: contributions})
 	if err != nil {
 		return nil, invalid
@@ -181,6 +187,11 @@ func NewServer(c ReferenceConfig, d ReferenceDependencies, f FeatureSet) (*Serve
 	}
 	server.handler, server.document = handler, document
 	return server, nil
+}
+
+func sameServerAuthorization(a, b any) bool {
+	left, right := reflect.ValueOf(a), reflect.ValueOf(b)
+	return !nilServerDependency(a) && !nilServerDependency(b) && left.Comparable() && right.Comparable() && left.Interface() == right.Interface()
 }
 
 // guardTenant runs inside the native router's network, timeout and body guards.

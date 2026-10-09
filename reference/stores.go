@@ -49,6 +49,8 @@ type StoreConfiguration struct {
 	HTTPRate *HTTPRateConfiguration
 	// HTTPPreAuth explicitly selects the original-flow route for NewServer.
 	HTTPPreAuth *HTTPPreAuthConfiguration
+	// HTTPEmailSignin explicitly selects email OTP Send/signin/recovery routes.
+	HTTPEmailSignin *HTTPEmailSigninConfiguration
 }
 
 // VelocityStoreConfiguration selects one primary/native recovery pair. Native

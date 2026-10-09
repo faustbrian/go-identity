@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Add opt-in email OTP Send, signin and historical recovery routes to the sole
+  server graph. Selected transport requires native consuming owners, dedicated
+  browser-device custody, shared strong rate admission and matching trusted
+  authorization policy. Recovery returns the original outcome without issuing
+  credentials again. JSON field and depth limits below the native recovery
+  envelope are rejected during construction. Positive readiness and the
+  remaining complete reference-server journeys are still pending.
+
 - Add the side-effect-free sole server constructor over the sealed composition
   graph, exact complete policy callbacks, immutable transport selection and
   process probes. Opt-in original-flow HTTP initiation uses graph-owned native
