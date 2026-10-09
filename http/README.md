@@ -348,6 +348,15 @@ codecs, route-derived policy, trusted proxy provenance, prevention of middleware
 credential injection and full routing remain subsequent work. A syntactically
 valid header cannot reveal whether an upstream proxy replaced it.
 
+`RequestDecoder.CookieBearer` acquires one exact case-sensitive cookie into
+the same opaque bearer type. It rejects Authorization/proxy credentials and
+selected-name query alternatives rather than choosing a fallback. All Cookie
+lines share 16KiB/32-part bounds; malformed siblings reject. The selected part
+is unique, unquoted and at most 3800 bytes including its name. Original value
+bytes are unchanged. Optional/required/forbidden policy applies to that selected
+cookie only. Owning session/flow services still validate their token format,
+possession and current authority. This helper creates no flow, route or session.
+
 ## Envelope and body ownership
 
 Media types are explicit `application/json` or

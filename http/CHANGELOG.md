@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add shared strict cookie credential acquisition for selected session and
+  pre-auth transport. Exact cookie names and original bytes are preserved;
+  malformed/duplicate/quoted credentials, ambiguous fallback channels and
+  aggregate resource-limit violations deny without partial custody. Workflow
+  authentication and optional endpoint composition remain separately owned.
+
 - Add fixed sign-in and delivery rate policies through the existing strong rate
   primitive. Budgets span operations within each profile, identifiers and
   subjects use tenant-scoped HMAC keys, and outages/ambiguous decisions deny
