@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add split signin IP/identifier admission for original-custody workflows.
+  Trusted IP admission precedes native source lookup; canonical identifier
+  admission follows it without double-debiting IP. Both share existing signin
+  buckets, and existing combined admission remains unchanged.
+
 - Recognize the canonical original browser-flow issuance operation for typed
   opt-in composition. Catalog recognition alone selects no handler or route;
   the session integration owns its real initiation service and wire profile.

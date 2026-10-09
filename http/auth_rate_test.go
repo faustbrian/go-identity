@@ -62,6 +62,56 @@ func TestAuthRateCanonicalSigninIdentifierAndIP(t *testing.T) {
 	}
 }
 
+func TestAuthRateSplitSigninPreservesOneSharedDebitPerDimension(t *testing.T) {
+	l, _ := authLimiter(t, func() time.Time { return time.Unix(1800000000, 0) })
+	ctx := context.Background()
+	facts := safeFacts(t, "198.51.100.1")
+	for i := 0; i < 20; i++ {
+		if out, err := l.AdmitSigninIP(ctx, facts, "identity.otp.signin"); err != nil || !out.Allowed {
+			t.Fatal("split IP denied early", i, err)
+		}
+		if out, err := l.AdmitSigninIdentifier(ctx, facts, identityhttp.AuthRateRequest{OperationID: "identity.otp.signin", Identifier: fmt.Sprintf("original%d@example.invalid", i)}); err != nil || !out.Allowed {
+			t.Fatal("identifier denied or IP double-debited", i, err)
+		}
+	}
+	if out, err := l.AdmitSigninIP(ctx, facts, "identity.password.signin"); !errors.Is(err, identityhttp.ErrRateLimited) || out.Allowed {
+		t.Fatal("split IP differs from existing signin bucket")
+	}
+	l2, _ := authLimiter(t, func() time.Time { return time.Unix(1800000000, 0) })
+	for i := 0; i < 10; i++ {
+		if out, err := l2.AdmitSigninIdentifier(ctx, facts, identityhttp.AuthRateRequest{OperationID: "identity.otp.signin", Identifier: "same@example.invalid"}); err != nil || !out.Allowed {
+			t.Fatal(err)
+		}
+	}
+	if out, err := l2.Admit(ctx, safeFacts(t, "198.51.100.2"), identityhttp.AuthRateRequest{OperationID: "identity.password.signin", Identifier: "same@example.invalid"}); !errors.Is(err, identityhttp.ErrRateLimited) || out.Allowed {
+		t.Fatal("split identifier differs from existing bucket")
+	}
+}
+
+func TestAuthRateSplitSigninRejectsInvalidAndUnavailable(t *testing.T) {
+	l, b := authLimiter(t, func() time.Time { return time.Unix(1800000000, 0) })
+	ctx := context.Background()
+	facts := safeFacts(t, "198.51.100.1")
+	for _, op := range []string{"", "unknown", "identity.otp.send"} {
+		if _, err := l.AdmitSigninIP(ctx, facts, op); !errors.Is(err, identityhttp.ErrInvalidInput) {
+			t.Fatal("invalid signin selector accepted")
+		}
+	}
+	if _, err := l.AdmitSigninIdentifier(ctx, facts, identityhttp.AuthRateRequest{OperationID: "identity.otp.signin", Identifier: "valid@example.invalid", UserID: "claimed"}); !errors.Is(err, identityhttp.ErrInvalidInput) {
+		t.Fatal("subject override accepted")
+	}
+	b.mode.Store(1)
+	if out, err := l.AdmitSigninIP(ctx, facts, "identity.otp.signin"); !errors.Is(err, identityhttp.ErrRateUnavailable) || out.Allowed {
+		t.Fatal("IP outage allowed")
+	}
+	if out, err := l.AdmitSigninIdentifier(ctx, facts, identityhttp.AuthRateRequest{OperationID: "identity.otp.signin", Identifier: "valid@example.invalid"}); !errors.Is(err, identityhttp.ErrRateUnavailable) || out.Allowed {
+		t.Fatal("identifier outage allowed")
+	}
+	if _, err := (*identityhttp.AuthRateLimiter)(nil).AdmitSigninIP(ctx, facts, "identity.otp.signin"); !errors.Is(err, identityhttp.ErrInvalidInput) {
+		t.Fatal("nil accepted")
+	}
+}
+
 func TestAuthRateDeliveryIdentifierSubjectAndContinuousRefill(t *testing.T) {
 	var millis atomic.Int64
 	millis.Store(1800000000000)

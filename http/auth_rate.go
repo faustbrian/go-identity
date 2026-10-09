@@ -184,6 +184,63 @@ func (l *AuthRateLimiter) Admit(ctx context.Context, facts NetworkFacts, r AuthR
 	return l.admitRequests(ctx, requests)
 }
 
+// AdmitSigninIP applies the existing shared rate.signin trusted-IP20/10m
+// bucket before original-custody/source lookup. Only canonical signin operations
+// and mapped tenant facts are accepted. On nil-error Allowed, the transport may
+// discover its native canonical source, then call AdmitSigninIdentifier once.
+// A failed source lookup retains this debit. Do not also call Admit for the same
+// request: that would debit IP twice. Admission is request-local, not authority
+// or a reusable clearance. Cancellation, panic and backend outage deny without
+// fallback. This method neither reads custody nor creates an identifier bucket.
+func (l *AuthRateLimiter) AdmitSigninIP(ctx context.Context, facts NetworkFacts, operationID string) (AuthRateResult, error) {
+	return l.admitSigninDimension(ctx, facts, operationID, "", false)
+}
+
+// AdmitSigninIdentifier applies only the existing tenant/canonical-identifier
+// rate.signin10/10m bucket after native source discovery. The caller MUST first
+// obtain AdmitSigninIP for this same request; this method grants no independent
+// complete admission. Identifier must come from the original authenticated
+// workflow custody, never a replacement request field. UserID must be empty.
+// Earlier IP debits are not rolled back by rejection or outage. No ticket,
+// local fallback, new budget or domain lookup is created; existing Admit and
+// split callers share exactly the same primitive-owned bucket identities.
+func (l *AuthRateLimiter) AdmitSigninIdentifier(ctx context.Context, facts NetworkFacts, r AuthRateRequest) (AuthRateResult, error) {
+	if r.UserID != "" {
+		return AuthRateResult{}, ErrInvalidInput
+	}
+	return l.admitSigninDimension(ctx, facts, r.OperationID, r.Identifier, true)
+}
+
+func (l *AuthRateLimiter) admitSigninDimension(ctx context.Context, facts NetworkFacts, operationID, identifier string, source bool) (out AuthRateResult, err error) {
+	defer func() {
+		if recover() != nil {
+			out, err = AuthRateResult{}, ErrRateUnavailable
+		}
+	}()
+	if !l.Configured() || ctx == nil || !facts.Valid() || facts.Realm() != RealmTenant || l.operations[operationID] != "rate.signin" || source && !rateIdentifier(identifier) {
+		return out, ErrInvalidInput
+	}
+	ctx, cancel := context.WithTimeout(ctx, l.config.MaximumDuration)
+	defer cancel()
+	if ctx.Err() != nil {
+		return out, ErrRateUnavailable
+	}
+	now := l.config.Now()
+	if now.IsZero() {
+		return out, ErrRateUnavailable
+	}
+	kind, value, capacity := "signin-ip", facts.ClientIP().String(), uint64(20)
+	if source {
+		kind, value, capacity = "signin-identifier", l.digest("signin", "identifier", string(facts.TenantID()), identifier), 10
+	}
+	key, keyErr := rateKey(l.config.Namespace, kind, value)
+	policy, policyErr := ratelimit.NewPolicy(ratelimit.PolicySpec{ID: "identity-http-" + kind, Revision: "identity-http-auth-1", Algorithm: ratelimit.TokenBucket, Capacity: capacity, Period: 10 * time.Minute, Consistency: ratelimit.ConsistencyStrong})
+	if keyErr != nil || policyErr != nil {
+		return out, ErrInvalidInput
+	}
+	return l.admitRequests(ctx, []ratelimit.Request{{Policy: policy, Key: key, Cost: 1, Now: now}})
+}
+
 func (l *AuthRateLimiter) admitRequests(ctx context.Context, requests []ratelimit.Request) (out AuthRateResult, err error) {
 	var retry time.Duration
 	for _, request := range requests {
