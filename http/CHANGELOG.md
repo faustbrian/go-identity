@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Recognize the explicit code-free OTP signin recovery operation and its native
+  historical contract. Recognition alone exposes no handler or metadata.
 - Align the canonical OTP signin descriptor with original Send/pre-auth custody,
   server-owned attempt allocation, native issuance and code-free recovery.
   The optional integration owns real signin; metadata alone exposes no route.
