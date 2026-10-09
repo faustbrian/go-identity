@@ -311,6 +311,12 @@ func authenticateSession(c GetConfig, r *http.Request, state GetState) (GetState
 // hook-supplied value. GET supplies empty; logout permits only its owned exact
 // deletion tuple after confirmed successful completion.
 func serveSessionResponse(handler http.Handler, w http.ResponseWriter, r *http.Request, allowedCookie func() string) {
+	serveSessionCookies(handler, w, r, func() []string { return []string{allowedCookie()} })
+}
+
+// Only owner-produced request-local tuples enter this response guard. Hooks
+// cannot add or replace either cookie of an explicitly selected flow profile.
+func serveSessionCookies(handler http.Handler, w http.ResponseWriter, r *http.Request, allowedCookies func() []string) {
 	protect := func() {
 		// Header maps permit noncanonical keys. Remove every spelling before
 		// establishing the single reviewed policy at the actual commit edge.
@@ -322,8 +328,10 @@ func serveSessionResponse(handler http.Handler, w http.ResponseWriter, r *http.R
 		w.Header().Set("Content-Type", "application/json")
 		w.Header().Set("Cache-Control", "no-store")
 		w.Header().Set("X-Content-Type-Options", "nosniff")
-		if cookie := allowedCookie(); cookie != "" {
-			w.Header().Set("Set-Cookie", cookie)
+		for _, cookie := range allowedCookies() {
+			if cookie != "" {
+				w.Header().Add("Set-Cookie", cookie)
+			}
 		}
 	}
 	protect()

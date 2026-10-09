@@ -7,6 +7,10 @@ import (
 )
 
 func preAuthWire() *identityhttp.WireOperation {
+	return preAuthWireProfile(false)
+}
+
+func preAuthWireProfile(device bool) *identityhttp.WireOperation {
 	text := func(max int) any { return map[string]any{"type": "string", "minLength": 1, "maxLength": max} }
 	object := func(required []string, fields map[string]any) map[string]any {
 		return map[string]any{"type": "object", "additionalProperties": false, "required": required, "properties": fields}
@@ -46,6 +50,10 @@ func preAuthWire() *identityhttp.WireOperation {
 	definition := map[string]any{"operationId": "identity.session.preauth-issue", "description": "Explicit original browser-flow initiation, not a user session. Exact HTTPS host-mapped tenant and configured Origin; no query, trailers, Authorization or Idempotency-Key. Ambient cookies confer no authority. Shared IP rate.auth admission precedes preparation. Fixed trusted action/callback/policy; five-minute original timeline. Each deliberate start is independent; unknown delivery never retries or renews. Native recovery is outcome-only.",
 		"security": []any{}, "parameters": []any{map[string]any{"name": "Origin", "in": "header", "required": true, "description": "Exact configured HTTPS Origin; no Referer fallback. Runtime trust values are not exported.", "schema": text(2048)}},
 		"requestBody": map[string]any{"required": true, "content": map[string]any{"application/json": map[string]any{"schema": object([]string{}, map[string]any{"remember": map[string]any{"type": "boolean", "description": "Absent selects configured default; resolve once for eventual session. Null is invalid. Flow TTL remains five minutes."}})}}}, "responses": responses}
+	if device {
+		definition["description"] = definition["description"].(string) + " Selected non-authenticating browser-device profile: validate existing __Host-identity_device custody before preparation; absent custody is issued after IP admission and delivered only with successful original flow. Existing device expiry is never renewed. Malformed, duplicate, expired or scope-mismatched device cookies deny."
+		responses["200"].(map[string]any)["headers"].(map[string]any)["Set-Cookie"].(map[string]any)["description"] = "Separate Set-Cookie fields: original __Host-identity_flow, plus __Host-identity_device only when absent. Both Secure, HttpOnly, host-only, Path=/, Lax or Strict; device is bounded non-authenticating correlation, never session/MFA authority. Fresh error-free flow commitment only; no replay, error or recovery delivery. Existing device is not redelivered or renewed."
+	}
 	data, _ := json.Marshal(definition)
 	return &identityhttp.WireOperation{Definition: data}
 }

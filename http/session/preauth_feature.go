@@ -1,6 +1,11 @@
 package sessionhttp
 
-import identityhttp "github.com/faustbrian/go-identity/http"
+import (
+	"net/http"
+
+	identityhttp "github.com/faustbrian/go-identity/http"
+	"github.com/faustbrian/go-identity/session"
+)
 
 // NewPreAuthFeature selects only original browser-flow initiation. It does not
 // select session reads, logout or OTP operations. Omit this contribution to
@@ -18,11 +23,32 @@ func NewPreAuthFeatureWithMiddleware(c PreAuthConfig, middleware []identityhttp.
 	if err != nil {
 		return identityhttp.Feature{}, err
 	}
+	return preAuthFeature(h, false)
+}
+
+// NewPreAuthFeatureWithBrowserDevice selects original flow initiation with
+// non-authenticating browser correlation. Omission disables both its route and
+// metadata; the existing flow-only feature remains unchanged.
+func NewPreAuthFeatureWithBrowserDevice(c PreAuthConfig, devices session.BrowserDeviceConfig) (identityhttp.Feature, error) {
+	return NewPreAuthFeatureWithBrowserDeviceAndMiddleware(c, devices, nil)
+}
+
+// NewPreAuthFeatureWithBrowserDeviceAndMiddleware selects the protected real
+// dual-cookie pipeline with typed hooks and accurate selected wire metadata.
+func NewPreAuthFeatureWithBrowserDeviceAndMiddleware(c PreAuthConfig, devices session.BrowserDeviceConfig, middleware []identityhttp.MiddlewareDescriptor) (identityhttp.Feature, error) {
+	h, err := NewPreAuthHandlerWithBrowserDeviceAndMiddleware(c, devices, middleware)
+	if err != nil {
+		return identityhttp.Feature{}, err
+	}
+	return preAuthFeature(h, true)
+}
+
+func preAuthFeature(h http.Handler, device bool) (identityhttp.Feature, error) {
 	op, err := identityhttp.NewCanonicalOperation(identityhttp.CanonicalOperationConfig{Owner: "identity/session", OperationID: "identity.session.preauth-issue", Handler: h, CSRF: identityhttp.CSRFPolicy{Mode: identityhttp.CSRFExactOrigin, RefererFallback: identityhttp.RefererFallbackDeny}, MaximumSerializedBytes: 16384})
 	if err != nil {
 		return identityhttp.Feature{}, err
 	}
-	op.Wire = preAuthWire()
+	op.Wire = preAuthWireProfile(device)
 	return identityhttp.NewFeature(identityhttp.FeatureConfig{ID: "identity/session", Operations: []identityhttp.OperationDescriptor{op}})
 }
 

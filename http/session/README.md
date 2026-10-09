@@ -7,6 +7,20 @@ release-qualified backend platform.
 
 ## Quick start and ownership
 
+Select `NewPreAuthHandlerWithBrowserDevice(config, deviceConfig)` or
+`NewPreAuthFeatureWithBrowserDevice(config, deviceConfig)` to include the
+session-owned browser correlation cookie. Dedicated versioned keys, namespace,
+bounded lifetime and `__Host-identity_device` policy are mandatory. Share the
+same device configuration with the selected OTP Send transport. Existing
+flow-only constructors do not select or inspect this cookie. A valid device is
+reused across flows without renewal; invalid/duplicate/expired custody denies
+before preparation. Absent custody is generated only after IP admission and
+delivered alongside the flow cookie only on fresh successful commitment.
+This signal is not authentication, hardware identity or MFA trust. Clearing or
+copying it can evade/share correlation; IP and identifier controls remain
+independent requirements. Middleware variants retain protected dual-cookie
+ownership. Neither constructor alone proves a complete browser login journey.
+
 For an original browser login flow, construct `NewPreAuthHandler(PreAuthConfig{
 Network: network, Service: preAuthService, Rate: authRate, Cookie: flowCookie,
 Lifetime: sessionLifetime, Origin: trustedOrigin, Action: trustedAction,

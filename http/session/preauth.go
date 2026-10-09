@@ -76,10 +76,11 @@ type PreAuthResponse struct {
 }
 
 type preAuthAttempt struct {
-	out       PreAuthResponse
-	attempted bool
-	cookie    string
-	ctx       context.Context
+	out          PreAuthResponse
+	attempted    bool
+	cookie       string
+	deviceCookie string
+	ctx          context.Context
 }
 type preAuthAttemptKey struct{}
 
@@ -90,6 +91,7 @@ type PreAuthState struct {
 	facts    identityhttp.NetworkFacts
 	remember session.RememberPolicy
 	attempt  *preAuthAttempt
+	device   session.BrowserDevice
 }
 
 // Attempt returns detached safe metadata. True means Handle entered, not that
@@ -135,6 +137,33 @@ func NewPreAuthHandler(c PreAuthConfig) (http.Handler, error) {
 // Hooks cannot manufacture cookie output or inspect the preparation. Detached
 // request headers remain potentially sensitive and must not be logged/retained.
 func NewPreAuthHandlerWithMiddleware(c PreAuthConfig, middleware []identityhttp.MiddlewareDescriptor) (http.Handler, error) {
+	return newPreAuthHandler(c, middleware, nil)
+}
+
+// NewPreAuthHandlerWithBrowserDevice explicitly selects a server-random,
+// non-authenticating browser correlation cookie alongside original flow
+// issuance. Absent custody is issued only after IP admission; valid custody
+// keeps its original expiry and is never redelivered. Malformed, duplicated,
+// expired or tenant/origin-mismatched custody denies before owner preparation.
+// Both new cookies are withheld on failure, replay, ambiguity or cancellation.
+// Device configuration is validated and copied without IO. Clearing or copying
+// the cookie can evade/share correlation; independent IP/identifier controls
+// remain necessary. Existing flow-only constructors are unchanged.
+func NewPreAuthHandlerWithBrowserDevice(c PreAuthConfig, devices session.BrowserDeviceConfig) (http.Handler, error) {
+	return NewPreAuthHandlerWithBrowserDeviceAndMiddleware(c, devices, nil)
+}
+
+// NewPreAuthHandlerWithBrowserDeviceAndMiddleware retains real typed phases and
+// protected dual-cookie ownership. Hooks cannot inspect or forge device custody.
+func NewPreAuthHandlerWithBrowserDeviceAndMiddleware(c PreAuthConfig, devices session.BrowserDeviceConfig, middleware []identityhttp.MiddlewareDescriptor) (http.Handler, error) {
+	codec, err := session.NewBrowserDeviceCodec(devices)
+	if err != nil {
+		return nil, identityhttp.ErrInvalidInput
+	}
+	return newPreAuthHandler(c, middleware, codec)
+}
+
+func newPreAuthHandler(c PreAuthConfig, middleware []identityhttp.MiddlewareDescriptor, devices *session.BrowserDeviceCodec) (http.Handler, error) {
 	if preAuthNil(c.Service) || !c.Rate.Configured() || c.Now == nil || c.MaximumDuration < time.Millisecond || c.MaximumDuration > 30*time.Second {
 		return nil, identityhttp.ErrInvalidInput
 	}
@@ -173,6 +202,7 @@ func NewPreAuthHandlerWithMiddleware(c PreAuthConfig, middleware []identityhttp.
 			}
 		}
 		a.cookie = ""
+		a.deviceCookie = ""
 		a.out.Issued = false
 		failure := getFailure{status: 503, code: "unavailable"}
 		if errors.Is(err, identityhttp.ErrInvalidInput) {
@@ -241,6 +271,18 @@ func NewPreAuthHandlerWithMiddleware(c PreAuthConfig, middleware []identityhttp.
 			}
 			s.remember, err = session.ResolveRememberPolicy(choice, c.Lifetime)
 			s.facts = facts
+			if err == nil && devices != nil {
+				bearer, found, e := decoder.CookieBearer(r, "__Host-identity_device", identityhttp.HeaderOptional)
+				if e != nil {
+					return s, identityhttp.ErrInvalidInput
+				}
+				if found {
+					s.device, e = devices.Resolve(r.Context(), c.Now(), facts.TenantID(), string(c.Origin), bearer.Token())
+					if e != nil {
+						return s, identityhttp.ErrInvalidInput
+					}
+				}
+			}
 			return s, err
 		},
 		Authenticate: func(_ *http.Request, s PreAuthState) (PreAuthState, error) { return s, nil },
@@ -258,6 +300,19 @@ func NewPreAuthHandlerWithMiddleware(c PreAuthConfig, middleware []identityhttp.
 			a := s.attempt
 			a.attempted = true
 			a.ctx = r.Context()
+			if devices != nil {
+				if s.device.DeviceID() == "" {
+					device, err := devices.Issue(r.Context(), c.Now(), s.facts.TenantID(), string(c.Origin))
+					if err != nil {
+						reject(w, r, identityhttp.ErrUnavailable)
+						return
+					}
+					a.deviceCookie = device.CookieHeader()
+				} else if !c.Now().Before(s.device.ExpiresAt()) {
+					reject(w, r, identityhttp.ErrInvalidInput)
+					return
+				}
+			}
 			id, err := identity.NewCommandID()
 			if err != nil {
 				reject(w, r, identityhttp.ErrUnavailable)
@@ -328,11 +383,14 @@ func NewPreAuthHandlerWithMiddleware(c PreAuthConfig, middleware []identityhttp.
 		if r != nil {
 			r = r.WithContext(context.WithValue(r.Context(), preAuthAttemptKey{}, a))
 		}
-		serveSessionResponse(h, w, r, func() string {
+		serveSessionCookies(h, w, r, func() []string {
 			if a.ctx != nil && a.ctx.Err() != nil {
-				return ""
+				return nil
 			}
-			return a.cookie
+			if !a.out.Issued {
+				return nil
+			}
+			return []string{a.cookie, a.deviceCookie}
 		})
 	}}, nil
 }
@@ -342,6 +400,7 @@ func sendPreAuth(w http.ResponseWriter, a *preAuthAttempt, status int, code stri
 	body, err := json.Marshal(a.out)
 	if err != nil {
 		a.cookie = ""
+		a.deviceCookie = ""
 		response(w, 503, `{"error":"unavailable"}`)
 		return
 	}

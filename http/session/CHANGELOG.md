@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add an explicit browser-device flow profile with a server-random, scoped,
+  non-authenticating correlation cookie. Existing valid devices retain their
+  original expiry across fresh flows; invalid custody denies before preparation.
+  Both new cookies remain success-only and protected against hook forgery.
+  Existing flow-only constructors and feature selection are unchanged.
+
 - Add a separate opt-in original browser-flow feature with concrete OpenAPI
   request/outcome schemas and secure success-only cookie metadata. Existing
   session-read/signout selection remains unchanged; omitting this contribution
