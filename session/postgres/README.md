@@ -46,6 +46,28 @@ admission; do not upgrade shared locks afterwards. Never call through a replica,
 cache or autocommit pool. HTTP token-channel/origin checks, pre-auth one-time
 state and integration into protected native executors remain required separately.
 
+## OTP authentication storage
+
+Apply `OTPMigrationSource{Schema: "session_store", Version: allocatedVersion}`
+after `CSRFMigrationSource`, in the same owned migration history, before writing
+OTP sessions. Upgrade all relevant readers and writers first: older binaries
+fail closed on the new schema-3 (OTP) and schema-4 (OTP plus CSRF) records.
+The migration validates populated rows transactionally without rewriting
+historical schema-1/2 payloads or recovery hashes. It has no destructive down SQL.
+Constraint replacement takes an exclusive table lock and validates all stored
+rows. Use the migration runner's bounded context and an appropriate maintenance
+window for a large installation; local fixture success is not production-scale
+lock-duration evidence. A failed or canceled migration rolls back both changes.
+
+Durable reconstruction retains the original Send/sign-in, challenge/attempt,
+identifier/verification versions, authentication time and continuation expiry.
+It also preserves Remember, the complete authority vector and any synchronizer
+binding. The continuation expiry is historical, not the session expiry or a
+renewable authoritative validity lease. Reconstruction cannot authenticate an
+OTP, manufacture a proof or grant permission. Native OTP session issuance and
+the opt-in primary authentication reader remain separate implementation work;
+installing this migration does not enable them.
+
 ## Synchronizer CSRF storage
 
 Apply `CSRFMigrationSource{Schema: "session_store", Version: allocatedVersion}`

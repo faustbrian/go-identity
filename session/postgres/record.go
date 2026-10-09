@@ -32,7 +32,8 @@ type storedRecord struct {
 	Lookup                   session.TokenDigest
 	Authentication           session.AuthenticationMetadata
 	IssuedAt, LastActivityAt time.Time
-	CSRF                     *session.CSRFStateSpec `json:",omitempty"`
+	CSRF                     *session.CSRFStateSpec         `json:",omitempty"`
+	OTP                      *session.OTPAuthenticationSpec `json:",omitempty"`
 }
 
 func encodeRecord(s session.Session) ([]byte, string, error) {
@@ -59,6 +60,10 @@ func encodeRecord(s session.Session) ([]byte, string, error) {
 	if state, e := s.CSRFState().Bindings(); e == nil {
 		record.Schema, record.CSRF = 2, &state
 	}
+	if metadata, e := s.OTPAuthentication().Bindings(); e == nil {
+		record.Schema += 2
+		record.OTP = &metadata
+	}
 	b, err := json.Marshal(record)
 	if err != nil || len(b) > maximumRecordBytes {
 		return nil, "", ErrInvalidRecord
@@ -77,12 +82,21 @@ func decodeRecord(b []byte) (session.Session, error) {
 		return invalid()
 	}
 	_, hasCSRF := envelope["CSRF"]
+	_, hasOTP := envelope["OTP"]
 	if hasCSRF {
 		keys = append(keys, "CSRF")
+	}
+	if hasOTP {
+		keys = append(keys, "OTP")
 	}
 	top, ok := exactObject(b, keys...)
 	if !ok {
 		return invalid()
+	}
+	if hasOTP {
+		if _, ok := exactObject(top["OTP"], "CommandID", "SendCommandID", "ChallengeID", "AttemptID", "IdentifierID", "IdentifierKind", "IdentifierVersion", "VerificationVersion", "AuthenticatedAt", "ValidUntil"); !ok {
+			return invalid()
+		}
 	}
 	if _, ok = exactObject(top["Remember"], "Choice", "AbsoluteTTL", "IdleTTL", "RefreshAfter", "FreshFor"); !ok {
 		return invalid()
@@ -149,7 +163,19 @@ func decodeRecord(b []byte) (session.Session, error) {
 	var record storedRecord
 	decoder := json.NewDecoder(bytes.NewReader(b))
 	decoder.DisallowUnknownFields()
-	if decoder.Decode(&record) != nil || (!hasCSRF && record.Schema != 1) || (hasCSRF && record.Schema != 2) {
+	if decoder.Decode(&record) != nil {
+		return invalid()
+	}
+	// Keep historical schemas byte-compatible, but never infer OTP provenance
+	// from a method tag or silently downgrade a complete OTP record.
+	expectedSchema := uint32(1)
+	if hasCSRF {
+		expectedSchema++
+	}
+	if hasOTP {
+		expectedSchema += 2
+	}
+	if record.Schema != expectedSchema || hasOTP != (record.Authentication.Kind == session.AuthenticationOTP) {
 		return invalid()
 	}
 	if decoder.Decode(new(any)) != io.EOF {
@@ -163,20 +189,32 @@ func decodeRecord(b []byte) (session.Session, error) {
 	if err != nil {
 		return invalid()
 	}
-	result, err := session.NewSession(session.SessionSpec{SessionID: record.SessionID, FamilyID: record.FamilyID, TenantID: record.TenantID, UserID: record.UserID, Audience: record.Audience, Version: record.Version, FamilyVersion: record.FamilyVersion, Remember: remember, Authority: vector, Lookup: record.Lookup, Authentication: record.Authentication, IssuedAt: record.IssuedAt, LastActivityAt: record.LastActivityAt})
+	spec := session.SessionSpec{SessionID: record.SessionID, FamilyID: record.FamilyID, TenantID: record.TenantID, UserID: record.UserID, Audience: record.Audience, Version: record.Version, FamilyVersion: record.FamilyVersion, Remember: remember, Authority: vector, Lookup: record.Lookup, Authentication: record.Authentication, IssuedAt: record.IssuedAt, LastActivityAt: record.LastActivityAt}
+	var state session.CSRFState
+	if hasCSRF {
+		state, err = session.NewCSRFState(*record.CSRF)
+		if err != nil {
+			return invalid()
+		}
+	}
+	var result session.Session
+	if hasOTP {
+		metadata, e := session.NewOTPAuthentication(*record.OTP)
+		if e != nil {
+			return invalid()
+		}
+		if hasCSRF {
+			result, err = session.NewSessionWithOTPAndCSRF(spec, metadata, state)
+		} else {
+			result, err = session.NewSessionWithOTP(spec, metadata)
+		}
+	} else if hasCSRF {
+		result, err = session.NewSessionWithCSRF(spec, state)
+	} else {
+		result, err = session.NewSession(spec)
+	}
 	if err != nil {
 		return invalid()
-	}
-	if hasCSRF {
-		state, e := session.NewCSRFState(*record.CSRF)
-		if e != nil {
-			return invalid()
-		}
-		base, _ := result.Bindings()
-		result, e = session.NewSessionWithCSRF(base, state)
-		if e != nil {
-			return invalid()
-		}
 	}
 	return result, nil
 }

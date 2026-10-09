@@ -83,6 +83,13 @@ func FuzzStoredRecord(f *testing.F) {
 		f.Fatal(err)
 	}
 	f.Add(b)
+	for _, record := range []session.Session{csrfSessionFixture(f), otpRecordFixture(f, false), otpRecordFixture(f, true)} {
+		seed, _, err := encodeRecord(record)
+		if err != nil {
+			f.Fatal(err)
+		}
+		f.Add(seed)
+	}
 	f.Add([]byte(`{}`))
 	f.Add([]byte(`null`))
 	f.Fuzz(func(t *testing.T, b []byte) {

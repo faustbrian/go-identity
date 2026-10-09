@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Preserve original OTP authentication provenance in durable session schemas
+  3/4, including optional synchronizer state, without changing historical
+  schemas 1/2 or renewing authentication time. Apply `OTPMigrationSource` after
+  the CSRF migration and upgrade readers/writers before OTP writes. Native OTP
+  authentication and atomic sign-in composition remain under development.
+
 - Add an explicit owned cookie-logout executor with named-key selection and
   CSRF checks inside the original primary mutation transaction. Keep raw tokens
   ephemeral, retain a strict-profile command discriminator, and reject legacy

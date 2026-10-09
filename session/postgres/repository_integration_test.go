@@ -178,6 +178,22 @@ func TestSessionPostgresIntegration(t *testing.T) {
 	if err != nil || string(upgradedPayload) != string(payload) {
 		t.Fatal("upgrade rewrote legacy recovery bytes", err)
 	}
+	otpHistory, err := (OTPMigrationSource{Schema: "session_store", Version: 14}).Load(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fullHistory = append(fullHistory, otpHistory...)
+	migrate(fixtureSource(fullHistory))
+	migrate(fixtureSource(fullHistory))
+	upgradedRecord, err = repo.Get(ctx, "tenant-a", "session-a")
+	if err != nil {
+		t.Fatal("populated legacy record lost during OTP upgrade", err)
+	}
+	upgradedPayload, _, err = encodeRecord(upgradedRecord.Session)
+	if err != nil || string(upgradedPayload) != string(payload) {
+		t.Fatal("OTP upgrade rewrote legacy recovery bytes", err)
+	}
+	t.Run("complete OTP primary record", func(t *testing.T) { testOTPPrimaryRecord(t, ctx, pool) })
 	t.Run("canonical pre-auth", func(t *testing.T) { testNativePreAuth(t, ctx, pool) })
 	t.Run("borrowed session admission", func(t *testing.T) { testSessionAdmission(t, ctx, pool, native) })
 	t.Run("complete CSRF primary record", func(t *testing.T) { testCSRFPrimaryRecord(t, ctx, pool, native) })
