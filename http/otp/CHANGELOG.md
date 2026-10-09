@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Add explicit original-flow signin recovery HTTP handling and typed middleware.
+  Recovery is code-free historical observation, shares strict IP admission, and
+  never repeats consumption or delivers session/CSRF credentials.
 - Add explicit signin-only feature selection, real router middleware binding
   and concrete OpenAPI 3.1.1 request/result schemas. Disabled selection exposes
   no signin route or metadata; unknown outcomes remain credential-free.

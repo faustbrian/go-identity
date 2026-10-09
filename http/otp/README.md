@@ -22,8 +22,8 @@ Fresh committed success returns credential-free `SigninResponse` JSON, one
 Secure/HttpOnly host-only session cookie and `X-CSRF-Token`. Store the synchronizer
 for protected cookie mutations; never log it. Errors and ambiguity deliver no
 credentials. Preserve original recovery correlation and use native code-free
-`RecoverSignin`; do not retry signin as recovery. Recovery correlation is not
-permission, proof or current session authority. A prepared attempt can retain
+`RecoverSignin` or the explicit recovery handler; do not retry signin as recovery.
+Recovery correlation is not permission, proof or current session authority. A prepared attempt can retain
 recovery before issuance has observed an outcome; this is reported as `none`,
 not rollback or permission to resubmit.
 
@@ -53,8 +53,29 @@ owner IO. The schema describes closed original-flow JSON and credential-free
 results; fresh credentials are delivered only through selected response headers.
 Shared router HTTPS/origin denials retain their actual JSON/plaintext media.
 
+## Original outcome recovery
+
+`NewSigninRecoveryHandler(SigninRecoveryConfig)` constructs only
+`POST /v1/otp/signin/recover`; it does not advertise a feature or route metadata.
+Send exactly `flowID` and the original `recovery` object, with the same flow
+cookie and initiating Origin. No code, replacement subject, new attempt or
+remember policy is accepted. The recovery object is correlation, not permission:
+the native owner validates original custody and current disclosure policy even
+after consumption/expiry. It does not require an executable source lookup.
+Configure request limits for at least 44 total JSON fields/elements and depth 3;
+the existing 32-byte scope digest remains a numeric array, never a string.
+
+Recovery shares the strict signin IP budget before a single native historical
+read. It never compares codes, charges an OTP attempt, issues a session or
+reveals credentials. A resolved history returns 200 with `signedIn:false`;
+`sessionID` on committed history is not a live-login assertion. Unknown outcomes
+and unavailable history return 503, retaining authenticated correlation when
+the native owner supplies it. Rate denial returns 429 and bounded Retry-After.
+Typed middleware uses `PipelineValue[SigninRecoveryState]` and detached `Attempt`
+metadata; response custody prevents cookie/CSRF injection, including trailers.
+
 This remains a development checkpoint, not a complete server. Send HTTP transport,
-HTTP recovery, composed native browser login, exact coverage/mutation,
+recovery feature metadata, composed native browser login, exact coverage/mutation,
 clean-consumer and release qualification remain pending. The single-factor
 profile must deny when further factors are required; complete MFA continuation
 composition remains required. No production memory fallback exists.
