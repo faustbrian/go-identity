@@ -48,9 +48,9 @@ func (s StoreSet) migrationCatalog(ctx context.Context) ([]migrationHistory, err
 			owner = "identity/postgres"
 		case v >= 1000 && v <= 1011:
 			owner = "identity/risk/postgres"
-		case v >= 1100 && v <= 1103:
+		case v >= 1100 && v <= 1103 || v == 1400:
 			owner = "identity/otp/postgres"
-		case v >= 1200 && v <= 1210:
+		case v >= 1200 && v <= 1210 || v >= 1410 && v <= 1416:
 			owner = "identity/session/postgres"
 		case v >= 1250 && v <= 1260:
 			owner = "identity/delivery/postgres"
@@ -79,6 +79,15 @@ func (s StoreSet) migrationCatalog(ctx context.Context) ([]migrationHistory, err
 	}
 	if c.authenticatedSchema != "" && c.authenticatedSchema != c.sessionSchema {
 		catalog[0].guards = append(catalog[0].guards, migrationGuard{version: 1210, schema: c.authenticatedSchema})
+	}
+	if c.signinSchema != "" {
+		catalog[0].guards = append(catalog[0].guards,
+			migrationGuard{version: 1400, schema: c.otpSchema, columns: []string{"challenges.consumer_envelope", "challenges.consumer_owner", "challenges.consumer_record_requirement", "challenges.consumer_subject_requirement"}, functions: []string{"guard_original_custody"}},
+			migrationGuard{version: 1411, schema: c.signinSchema, tables: []string{"family_revocations"}},
+			migrationGuard{version: 1412, schema: c.signinSchema, tables: []string{"session_issuances"}})
+		if c.signinSchema != c.sessionSchema && c.signinSchema != c.authenticatedSchema {
+			catalog[0].guards = append(catalog[0].guards, migrationGuard{version: 1410, schema: c.signinSchema})
+		}
 	}
 	for _, source := range []struct {
 		owner     ModuleID

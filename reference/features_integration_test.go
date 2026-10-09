@@ -114,10 +114,24 @@ func TestReferenceOTPRequiresProductionDeliveryProfile(t *testing.T) {
 // historical-origin fixture proves conditional composition, NOT a fresh warmup.
 // This initial partition is pre-auth; authenticated-session parity is separate.
 func TestReferencePublicOTPCountsNativeIssuanceSuppressionAndReplay(t *testing.T) {
+	testReferencePublicOTP(t, false)
+}
+
+func TestReferencePublicOTPSigninAndRecovery(t *testing.T) {
+	testReferencePublicOTP(t, true)
+}
+
+func testReferencePublicOTP(t *testing.T, signin bool) {
 	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
 	defer cancel()
 	f := newLiveStores(t, ctx)
 	c, deps, worker := otpGraphConfiguration(t, f.config)
+	var codes chan auth.OneTimeCode
+	if signin {
+		codes = make(chan auth.OneTimeCode, 1)
+		configureReferenceSignin(t, &c)
+		deps.DeliverySender = otpSigninCapture{codes: codes}
+	}
 	// A retained older provider must not satisfy the current OTP provider's
 	// required worker. Native construction alone cannot enforce graph coverage.
 	c.Delivery.Enqueue.Custody.ProviderProfiles[2] = deliverypg.ProviderProfile{Provider: "retained-sender", PolicyVersion: 1}
@@ -157,7 +171,50 @@ func TestReferencePublicOTPCountsNativeIssuanceSuppressionAndReplay(t *testing.T
 	if _, err := service.Send(ctx, otp.SendRequest{}); err == nil {
 		t.Fatal("uninitialized graph admitted workflow")
 	}
-	installOTPGraphFixture(t, ctx, f, stores)
+	if signin {
+		// Upgrade an already-populated Send-only deployment through the owned
+		// source; do not replace or rewrite any original ledger entry.
+		legacyConfig := c
+		legacyOTP := *c.OTP
+		legacyOTP.Signin = nil
+		legacyConfig.OTP = &legacyOTP
+		legacy, err := reference.ComposeStores(legacyConfig, deps)
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() {
+			cleanup, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			if err := legacy.Close(cleanup); err != nil {
+				t.Error(err)
+			}
+		})
+		installOTPGraphFixture(t, ctx, f, legacy)
+		db := stdlib.OpenDBFromPool(f.pool.Raw())
+		defer db.Close()
+		backend, err := migrationdb.New(db)
+		if err != nil {
+			t.Fatal(err)
+		}
+		runner, err := migrations.NewRunner(stores.MigrationSource(), backend)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := runner.Up(ctx); err != nil {
+			t.Fatal("populated Send-only to consuming Signin upgrade", err)
+		}
+		check, err := stores.ReferenceMigrationCheck(ctx, reference.ReferenceMigrationCheckRequest{Modules: []reference.ModuleID{"identity/otp/postgres", "identity/session/postgres"}})
+		if err != nil || len(check.Statuses) != 2 {
+			t.Fatal("upgraded ownership discovery", err)
+		}
+		for _, status := range check.Statuses {
+			if status.Compatibility != reference.MigrationCompatible || status.CurrentVersion != status.RequiredVersion {
+				t.Fatal("upgraded native owner incompatible", status.Module)
+			}
+		}
+	} else {
+		installOTPGraphFixture(t, ctx, f, stores)
+	}
 	if err := features.Initialize(ctx); err != nil {
 		t.Fatal("native startup", err)
 	}
@@ -181,6 +238,10 @@ func TestReferencePublicOTPCountsNativeIssuanceSuppressionAndReplay(t *testing.T
 		t.Fatal("native-counted public issuance", err)
 	}
 	assertOTPGraphCounts(t, ctx, f, 1, 1, 1, 2, 1)
+	if signin {
+		proveReferenceSignin(t, ctx, stores, features, workers, f, request, first, codes)
+		return
+	}
 	before := nativeAttemptFacts(t, ctx, f)
 	again, err := service.Send(ctx, request)
 	if err != nil || again != first {
@@ -363,6 +424,15 @@ func installOTPGraphFixture(t *testing.T, ctx context.Context, f liveStores, sto
 			t.Fatal("original independent owner installation", err)
 		}
 		if owner.namespace == "audit" {
+			// Roles are cluster-wide, unlike these test-owned databases. Release
+			// only the roles this successful fresh installation just created.
+			t.Cleanup(func() {
+				cleanup, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+				defer cancel()
+				if _, err := f.pool.Raw().Exec(cleanup, "DROP OWNED BY audit_writer,audit_reader,audit_retention; DROP ROLE audit_writer,audit_reader,audit_retention"); err != nil {
+					t.Error("owned audit role cleanup failed", err)
+				}
+			})
 			for _, table := range []string{"records", "retention_events"} {
 				if _, err := f.pool.Raw().Exec(ctx, "ALTER TABLE audit."+table+" ADD COLUMN accepted_order bigint"); err != nil {
 					t.Fatal(err)

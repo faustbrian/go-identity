@@ -24,6 +24,8 @@ import (
 // distinct authenticated sessions 1210, delivery 1250..1260 and authorization
 // authority 1300. All SQL is supplied by its owner. Shared session schemas
 // reuse the same base; unselected profiles contribute no schema.
+// Optional consuming Signin appends OTP 1400 and session 1411..1416, plus 1410
+// only when its session schema is distinct from the selected session bases.
 // Audit and outbox independent histories are not part of this shared source;
 // their installation remains required before enabling the selected workflow.
 func (s StoreSet) MigrationSource() migrations.Source {
@@ -81,15 +83,16 @@ func (s fixedMigrationSource) Load(ctx context.Context) ([]migrations.Migration,
 type featureMigrationConfig struct {
 	otpSchema, sessionSchema, global                        string
 	authenticatedSchema                                     string
+	signinSchema                                            string
 	tenants                                                 []identity.TenantID
 	cancellation, receiptTracking, receipts, reconciliation bool
 }
 
-// Different storage owners create their own namespaces. Only the two session
+// Different storage owners create their own namespaces. Only the session
 // profiles may share a base schema; accepting other overlaps exports DDL that
 // can be planned but cannot be installed.
 func (c featureMigrationConfig) validateNamespaces(riskSchema string) error {
-	if c.otpSchema == riskSchema || c.sessionSchema != "" && (c.sessionSchema == riskSchema || c.sessionSchema == c.otpSchema) || c.authenticatedSchema != "" && (c.authenticatedSchema == riskSchema || c.authenticatedSchema == c.otpSchema) {
+	if c.otpSchema == riskSchema || c.sessionSchema != "" && (c.sessionSchema == riskSchema || c.sessionSchema == c.otpSchema) || c.authenticatedSchema != "" && (c.authenticatedSchema == riskSchema || c.authenticatedSchema == c.otpSchema) || c.signinSchema != "" && (c.signinSchema == riskSchema || c.signinSchema == c.otpSchema || c.sessionSchema == "") {
 		return identity.InvalidInputError{Field: "reference_schema_ownership"}
 	}
 	return nil
@@ -158,5 +161,38 @@ func (c featureMigrationConfig) load(ctx context.Context, base migrations.Source
 	if err != nil {
 		return nil, err
 	}
-	return append(history, next), nil
+	history = append(history, next)
+	if c.signinSchema == "" {
+		return history, nil
+	}
+	// Existing Send-only histories end at 1300. Append this profile as a suffix
+	// so enabling it never creates a gap before an already-applied migration.
+	baseVersion := migrations.Version(1410)
+	if c.signinSchema == c.sessionSchema {
+		baseVersion = 1200
+	} else if c.signinSchema == c.authenticatedSchema {
+		baseVersion = 1210
+	}
+	owned, err := (sessionpostgres.IssueMigrationSource{Base: sessionpostgres.RevocationMigrationSource{Base: sessionpostgres.MigrationSource{Schema: c.signinSchema, Version: baseVersion}, Version: 1411}, Version: 1412}).Load(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if baseVersion != 1410 {
+		owned = owned[1:] // The exact upstream base is already selected above.
+	}
+	for _, source := range []migrations.Source{
+		otppostgres.ConsumingMigrationSource{Schema: c.otpSchema, Version: 1400},
+		fixedMigrationSource(owned),
+		sessionpostgres.PreAuthReleaseMigrationSource{Schema: c.sessionSchema, Version: 1413},
+		sessionpostgres.CSRFMigrationSource{Schema: c.signinSchema, Version: 1414},
+		sessionpostgres.OTPMigrationSource{Schema: c.signinSchema, Version: 1415},
+		sessionpostgres.OTPIssueMigrationSource{Schema: c.signinSchema, Version: 1416},
+	} {
+		next, err := source.Load(ctx)
+		if err != nil {
+			return nil, err
+		}
+		history = append(history, next...)
+	}
+	return history, nil
 }

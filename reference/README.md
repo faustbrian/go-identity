@@ -2,7 +2,8 @@
 
 **Development checkpoint:** this module currently implements only the
 PostgreSQL-journaled, TLS Valkey velocity store graph and optional native OTP
-Send/delivery composition. The complete reference server, HTTP features,
+Send/delivery composition with opt-in single-factor OTP sign-in. The complete
+reference server, HTTP features,
 readiness and identity journeys remain unimplemented here. Selected-module
 migration Check/Plan/Apply and durable native command resume are available as
 explicit store operations, not automatic startup behavior.
@@ -84,6 +85,24 @@ All workers share the strictest retained sender-concurrency ceiling before
 claiming. Dedicate the sender instance to this graph; unrelated graphs or direct
 callers require their own shared capacity control.
 
+Select `OTP.Signin` with the native `otp/postgres.SigninConfig` to enable
+`features.OTPSignin()`. Nil leaves the handle unavailable and contributes no
+consuming migrations. Sign-in uses the existing Send owner, selected tenant
+allowlist and store lifetime; it is unavailable before `features.Initialize`
+and after store shutdown. No route, worker or listener is started implicitly.
+The sign-in profile must use the same global authority and user policy namespace
+as Send and requires its pre-auth session configuration. Its bounded policy
+must authoritatively deny single-factor issuance when MFA is required; this
+profile does not implement MFA continuation.
+
+Use the public `otp.SigninService` with original Send possession and challenge
+code. Successful new commitment returns the session credential and CSRF token
+once. Preserve its recovery handle for `RecoverSignin`, including ambiguous
+outcomes; recovery returns original history without redelivering credentials.
+The native adapter owns atomic challenge/pre-auth consumption, session issuance,
+audit and lifecycle effects. Consumers supply configuration and bounded policy,
+not domain workflow callbacks or stores.
+
 `StoreSet.MigrationSource()` preserves kernel 1–9 and risk 1000–1011 exactly.
 Selecting OTP/delivery appends owner-produced kernel 1012–1018, OTP 1100–1103,
 pre-auth session 1200–1201, distinct authenticated session 1210, delivery
@@ -91,7 +110,9 @@ pre-auth session 1200–1201, distinct authenticated session 1210, delivery
 1255, receipt metadata uses 1256, authenticated receipt commands use 1257, and
 reconciliation uses 1258–1260. Receipt metadata is included whenever receipt
 tracking, authenticated receipts or reconciliation needs it; unselected
-extensions remain absent. Shared session schemas reuse one base; OTP, session
+extensions remain absent. Consuming sign-in appends OTP 1400 and session
+1411–1416, with 1410 only for a distinct sign-in session schema. Existing Send-only histories
+remain unchanged. Shared session schemas reuse one base; OTP, session
 and risk owners must otherwise use distinct schemas. Unselected profiles
 contribute no schema. These are
 new permanent reference allocations, not changes to applied history. Keep the

@@ -51,6 +51,12 @@ type OTPSendConfiguration struct {
 	RiskTimeout, AuditTimeout     time.Duration
 	RiskPolicyID, ConfigurationID string
 	RiskKeys                      []risk.EvidenceKey
+	// Signin explicitly enables the native single-factor consuming workflow.
+	// Nil exposes Send only. Supply current admission/query policy, independent
+	// session/CSRF keys and the matching deployment authority namespace. The
+	// selected session namespace may share the pre-auth or authenticated store.
+	// Additional-factor policy must deny until the MFA profile is composed.
+	Signin *otppg.SigninConfig
 }
 
 // DeliveryConfiguration owns delivery custody, retained policies and templates
@@ -71,6 +77,7 @@ type DeliveryConfiguration struct {
 type featureState struct {
 	migrations      featureMigrationConfig
 	otp             *otppg.SendService
+	signin          *otppg.SigninService
 	delivery        *deliverypg.EnqueueService
 	sender          delivery.Sender
 	timeout         time.Duration
@@ -104,6 +111,13 @@ func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDepen
 	migrationConfig.reconciliation = c.Delivery.Enqueue.Reconciliation != nil
 	if o.Session != nil {
 		migrationConfig.authenticatedSchema = o.Session.Store.Schema
+	}
+	if o.Signin != nil {
+		profile, _, err := o.Policy.Bindings()
+		if err != nil || profile.Purpose != otp.PurposeSignin || migrationConfig.sessionSchema == "" || o.Signin.Profile.GlobalAuthorityID != o.Store.GlobalAuthorityID || o.Signin.Profile.PolicyNamespace != o.Store.UserPolicyNamespace {
+			return identity.InvalidInputError{Field: "reference_otp_signin"}
+		}
+		migrationConfig.signinSchema = o.Signin.Session.Schema
 	}
 	if err := migrationConfig.validateNamespaces(c.Velocity.Schema); err != nil {
 		return err
@@ -154,6 +168,13 @@ func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDepen
 	if err != nil {
 		return err
 	}
+	var signinOwner *otppg.SigninService
+	if o.Signin != nil {
+		signinOwner, err = otppg.NewSigninService(otpOwner, *o.Signin)
+		if err != nil {
+			return err
+		}
+	}
 	// All workers borrow one sender instance. The strictest retained policy
 	// ceiling bounds the whole graph, not each independently constructed worker.
 	capacity := uint8(64)
@@ -162,7 +183,7 @@ func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDepen
 			capacity = policy.SenderConcurrency
 		}
 	}
-	s.features = &featureState{migrations: migrationConfig, otp: otpOwner, delivery: deliveryOwner, sender: d.DeliverySender, timeout: o.Timeout, provider: o.ProviderVersion, deliverySlots: make(chan struct{}, int(capacity))}
+	s.features = &featureState{migrations: migrationConfig, otp: otpOwner, signin: signinOwner, delivery: deliveryOwner, sender: d.DeliverySender, timeout: o.Timeout, provider: o.ProviderVersion, deliverySlots: make(chan struct{}, int(capacity))}
 	return nil
 }
 
@@ -247,7 +268,8 @@ func ComposeWorkers(stores StoreSet, providers ProviderSet, configs ...deliveryp
 }
 
 // FeatureSet exposes public workflow interfaces, never concrete adapter stores.
-// This development profile contains OTP Send only, not HTTP or a complete server.
+// This development profile contains OTP Send and optional single-factor Signin,
+// not HTTP or a complete server.
 // Initialize and RecoverVelocity remain explicit, separate startup operations.
 type FeatureSet struct{ state *storeState }
 

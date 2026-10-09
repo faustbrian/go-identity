@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Add opt-in single-factor OTP sign-in and code-free recovery through the sealed
+  native composition. Startup, tenant selection and shutdown guard retained
+  handles; new commitment reveals session/CSRF credentials once, while recovery
+  preserves original history without credential redelivery. Selected consuming
+  migrations retain existing Send-only allocations. MFA continuation and the
+  complete reference HTTP server remain pending.
+
 - Add opt-in operator migration Apply with complete-plan revalidation before
   writes, keyed operator-scoped retry binding and native atomic attribution.
   Original command requests resume across reconstructed owners and independent
