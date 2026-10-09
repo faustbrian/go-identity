@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Preserve the original committed session ID independently of the full session
+  payload in sign-in results. Authorized historical recovery can report that ID
+  after payload cleanup without fabricating a session or redelivering tokens.
+
 - Add optional pre-auth-only `SigninService` and immutable code-free consuming
   recovery contracts. Preserve Send-only implementers and reuse session-owned
   reveal-once issuance/CSRF custody. Native consuming orchestration and MFA

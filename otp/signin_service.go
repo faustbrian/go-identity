@@ -117,8 +117,12 @@ func (r SigninRecoveryRequest) Validate() error {
 }
 
 // SigninResult reuses the session owner's commit outcome and reveal-once token
-// custody instead of creating another issuance model. Issuance.Session is a
-// historical record, not current authority. Only a fresh successful committed
+// custody instead of creating another issuance model. SessionID is the original
+// committed session identity when historical disclosure is authorized, even if
+// its live payload has been deleted. It is empty for noncommitted, unresolved or
+// undisclosed outcomes. Issuance.Session may be zero on historical recovery;
+// never fabricate a partial session to populate it. Neither identifies current
+// authority. Only a fresh successful committed
 // issuance may carry Token and CSRFToken; Cookie.Value is always empty and
 // trusted transport explicitly reveals the original bearer once. Replay,
 // recovery, error, cancellation and unknown outcomes carry no credentials.
@@ -127,6 +131,7 @@ func (r SigninRecoveryRequest) Validate() error {
 // count is disclosed. MFA continuation composition is a separate required
 // profile; a single-factor adapter must fail closed when further factors apply.
 type SigninResult struct {
+	SessionID string
 	Issuance  session.IssueResult
 	CSRFToken session.CSRFToken
 	Recovery  SigninRecovery

@@ -17,6 +17,10 @@ policy, without requiring an already consumed/expired pre-auth flow to become
 executable again. It must never charge, compare, regenerate or redeliver.
 
 `SigninResult.Issuance` uses the session owner's outcome and reveal-once bearer.
+`SessionID` separately preserves the original committed identity on authorized
+historical recovery after live payload deletion; `Issuance.Session` may then be
+zero. Noncommitted, unresolved or undisclosed outcomes have no session identity.
+Do not fabricate a partial session or treat a historical ID as live authority.
 Only fresh committed success can deliver bearer/CSRF tokens. The cookie policy
 has an empty value; trusted transport explicitly reveals the original bearer.
 The historical session record does not prove current validity. Request/result

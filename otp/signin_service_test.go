@@ -148,7 +148,7 @@ func TestSigninContractsRejectImplicitDisclosure(t *testing.T) {
 	values := []interface {
 		MarshalText() ([]byte, error)
 		LogValue() slog.Value
-	}{request, b, r, otp.SigninRecoveryRequest{Recovery: r}, otp.SigninResult{Recovery: r, Issuance: session.IssueResult{CommandID: b.Attempt.CommandID, Token: token}, CSRFToken: csrf}}
+	}{request, b, r, otp.SigninRecoveryRequest{Recovery: r}, otp.SigninResult{SessionID: "private-historical-session", Recovery: r, Issuance: session.IssueResult{CommandID: b.Attempt.CommandID, Token: token}, CSRFToken: csrf}}
 	for _, value := range values {
 		if _, err := json.Marshal(value); err == nil {
 			t.Fatal("implicit JSON disclosure")
@@ -158,7 +158,7 @@ func TestSigninContractsRejectImplicitDisclosure(t *testing.T) {
 		}
 		texts := []string{fmt.Sprintf("%v", value), fmt.Sprintf("%+v", value), fmt.Sprintf("%#v", value), value.LogValue().String()}
 		for _, text := range texts {
-			for _, secret := range []string{"123456", strings.Repeat("A", 43), strings.Repeat("B", 42) + "A", strings.Repeat("C", 42) + "A", string(b.Attempt.CommandID), string(b.Attempt.Fingerprint)} {
+			for _, secret := range []string{"123456", "private-historical-session", strings.Repeat("A", 43), strings.Repeat("B", 42) + "A", strings.Repeat("C", 42) + "A", string(b.Attempt.CommandID), string(b.Attempt.Fingerprint)} {
 				if strings.Contains(text, secret) {
 					t.Fatal("diagnostic disclosure")
 				}
