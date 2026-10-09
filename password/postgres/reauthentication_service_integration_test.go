@@ -193,7 +193,7 @@ INSERT INTO authorization_subject_authorities VALUES('AAAAAAAAAAAAAAAAAAAAAQ','u
 		t.Fatal(err)
 	}
 	riskFixture := &reauthenticationRiskFixture{}
-	configuration := passworddb.ReauthenticationConfig{Repository: passworddb.Config{MaximumDuration: 3 * time.Second, HashPolicy: policy}, Verifier: password.VerifierConfig{Primitive: crypto, MaximumBytes: 128, Timeout: time.Second, DummyHash: hash, Now: time.Now}, Session: sessionpg.Config{Schema: "reauth_sessions", MaximumDuration: time.Second}, Profile: sessionpg.IdentifierAdmissionConfig{GlobalAuthorityID: "reauth-deployment", PolicyNamespace: "users", Audience: "backend", AuthenticationMethod: "password", CredentialKind: identity.CredentialPassword, CredentialOwner: "identity/password"}, LookupKeys: []session.DigestKey{lookupKey}, Risk: reauthenticationRisk(t, riskFixture), Coordinator: kernel.CoordinatorConfig{MaximumDuration: 2 * time.Second, LeaseDuration: time.Minute, CurrentFingerprintKeyVersion: 1, RetainedFingerprintKeys: map[uint32][32]byte{1: {1}}, QueryPolicy: &kernel.CommandQueryPolicy{Clock: clock.System{}, PolicyVersion: 9, Authorization: passwordQueryPolicy{}}}, SigningKey: signer, VerificationKeys: map[string]ed25519.PublicKey{"evidence-1": public}, Issuer: "issuer", Environment: "test", Targets: []passworddb.ReauthenticationTarget{{Purpose: "identity.password.change", Action: "identity.password.change", Audience: "backend"}}, TTL: 5 * time.Minute, IdentifierKey: bytes.Repeat([]byte{40}, 32)}
+	configuration := passworddb.ReauthenticationConfig{Repository: passworddb.Config{MaximumDuration: 3 * time.Second, HashPolicy: policy}, Verifier: password.VerifierConfig{Primitive: crypto, MaximumBytes: 128, Timeout: time.Second, DummyHash: hash, Now: time.Now}, Session: sessionpg.Config{Schema: "reauth_sessions", MaximumDuration: time.Second}, Profile: sessionpg.IdentifierAdmissionConfig{GlobalAuthorityID: "reauth-deployment", PolicyNamespace: "users", Audience: "backend", AuthenticationMethod: "password", CredentialKind: identity.CredentialPassword, CredentialOwner: "identity/password"}, LookupKeys: []session.DigestKey{lookupKey}, Risk: reauthenticationRisk(t, riskFixture), Coordinator: kernel.CoordinatorConfig{MaximumDuration: 2 * time.Second, LeaseDuration: time.Minute, CurrentFingerprintKeyVersion: 1, RetainedFingerprintKeys: map[uint32][32]byte{1: {1}}, QueryPolicy: &kernel.CommandQueryPolicy{Clock: clock.System{}, PolicyVersion: 9, Authorization: passwordQueryPolicy{}}}, SigningKey: signer, VerificationKeys: map[string]ed25519.PublicKey{"evidence-1": public}, Issuer: "issuer", Environment: "test", Targets: []passworddb.ReauthenticationTarget{{Purpose: "identity.password.verify", Action: "identity.password.change", Audience: "backend"}}, TTL: 5 * time.Minute, IdentifierKey: bytes.Repeat([]byte{40}, 32)}
 	service, err := passworddb.NewReauthenticationService(pool, configuration)
 	if err != nil {
 		t.Fatal("service composition failed", err)
@@ -238,14 +238,24 @@ INSERT INTO authorization_subject_authorities VALUES('AAAAAAAAAAAAAAAAAAAAAQ','u
 		t.Fatal("recovery reissued proof or lost outcome", err)
 	}
 	// Independent invocations own distinct command IDs, not a caller-selected
-	// replay key. They may share the immutable original session and password.
+	// replay key. They share the immutable session, not a Secret owner: the
+	// primitive deliberately rejects simultaneous borrowing of one owner.
 	t.Run("concurrent-independent-proofs", func(t *testing.T) {
 		const count = 4
 		var results [count]passworddb.ReauthenticationResult
 		var failures [count]error
 		var group sync.WaitGroup
 		for i := range count {
-			group.Go(func() { results[i], failures[i] = service.Verify(ctx, request) })
+			candidate, e := primitive.NewSecret([]byte("synthetic-test-password"))
+			if e != nil {
+				t.Fatal("independent secret unavailable")
+			}
+			r := request
+			r.Password = candidate
+			group.Go(func() {
+				defer candidate.Destroy()
+				results[i], failures[i] = service.Verify(ctx, r)
+			})
 		}
 		group.Wait()
 		seen := make(map[identity.CommandID]bool)
@@ -516,4 +526,5 @@ INSERT INTO authorization_subject_authorities VALUES('AAAAAAAAAAAAAAAAAAAAAQ','u
 			}
 		})
 	}
+	t.Run("native-password-change", func(t *testing.T) { testNativePasswordChange(t, ctx, pool, configuration, service, request) })
 }

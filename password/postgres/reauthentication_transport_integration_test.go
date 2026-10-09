@@ -16,6 +16,7 @@ import (
 // substituted transaction, contributor, durable store or recovery result.
 type reauthenticationCommitFault struct {
 	before bool
+	marker []byte // Immutable before any pool connection is opened.
 	hit    atomic.Bool
 }
 
@@ -35,7 +36,11 @@ type reauthenticationCommitConn struct {
 }
 
 func (c *reauthenticationCommitConn) Write(p []byte) (int, error) {
-	if bytes.Contains(p, []byte("identity_password.reauthentication_records(")) {
+	marker := c.fault.marker
+	if len(marker) == 0 {
+		marker = []byte("identity_password.reauthentication_records(")
+	}
+	if bytes.Contains(p, marker) {
 		c.mutation.Store(true)
 	}
 	if c.fault.before && c.mutation.Load() && len(p) >= 5 && p[0] == 'Q' && bytes.EqualFold(p[5:], []byte("commit\x00")) && c.fault.hit.CompareAndSwap(false, true) {

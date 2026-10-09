@@ -2,8 +2,8 @@
 
 Development checkpoint: owned forward-only password material storage and a
 consistent primary credential reader plus native existing-password material
-replacement/recovery. Registration, authenticated change composition, rehash,
-reset, history and deletion remain unimplemented.
+replacement/recovery and native authenticated password change. Registration,
+rehash, reset, history and deletion remain unimplemented.
 There is deliberately no independent setter or application-written workflow.
 
 ## Original reauthentication records
@@ -24,8 +24,8 @@ and freshness validation; this reader does not authenticate signatures or check
 current credential/session authorities. An expired original remains historical
 data, not renewed permission.
 
-The native service below issues originals; protected atomic consumption remains
-under development. No independent writer, automatic cleanup, replay framework or application-written
+The native service below issues originals; password change consumes them in the
+protected transaction. No independent writer, automatic cleanup, replay framework or application-written
 proof store is introduced. Lifecycle/retention must be coordinated before this
 profile is released; original records cannot be removed independently of their
 command history. The native SQL fixtures prove retrieval and installed schema
@@ -71,8 +71,41 @@ successful or certainly aborted. Do not automatically resubmit the password.
 The pool and callbacks remain caller-owned and must support concurrent use.
 Earlier caller deadlines win; the service owns no goroutine or retry loop and
 never closes the pool. This backend composition is not an HTTP endpoint or a
-completed password-change/reset workflow. Retention, all-factor composition and
+completed password-reset workflow. Retention, all-factor composition and
 release qualification remain pending.
+
+## Native authenticated password change
+
+`NewPasswordChangeService(source, config)` borrows a configured native
+reauthentication source and composes the upstream signed-proof validator, core
+password screening/preparation and native protected counters. Install additive
+password migration 4 and the selected risk counter migrations. The source must
+allow the exact purpose `identity.password.verify`, action
+`identity.password.change` and configured audience. Select explicit HIBP policy,
+bounded provider collection and the source's existing password primitive.
+
+`Change(ctx, request)` accepts the original opaque bearer, original signed proof,
+new owned password secret and trusted caller/network scope. It denies current
+password reuse and rejects incorrect proof bindings. HIBP collection and hashing
+run before SQL locks; original provider observations are checked again against
+primary time without refreshing their timestamps or calling providers in Work.
+The proof's original expiry and configured maximum age bound the remaining
+operation. Destroy the caller's secret when the call returns.
+
+The sole kernel transaction consumes the original proof exactly once, updates
+password material and credential/user authority, and writes mandatory audit and
+lifecycle outbox effects. Rollback restores proof availability and material;
+the protected risk attempt is not refunded. Original signed record bytes remain
+unchanged. This strict initial profile invalidates **all prior credential
+authority, including the source session**. It does not preserve selected sessions
+or implement administrative/reset replacement, history or other-factor flows.
+
+Retain the result's server-generated command ID. Unknown outcomes must be resolved
+with `Recover(ctx, exactQuery, caller)`, not automatic password resubmission.
+Recovery uses original committed effects under current disclosure policy and
+accepts no password, bearer or provider callback. Positive successor/authority
+results require a known commit. This is backend composition, not an HTTP endpoint
+or full password lifecycle/release qualification.
 
 ## Composition
 
@@ -162,10 +195,10 @@ receipt. Do not prune effects independently of command-owner retention, deletion
 and legal-hold rules; that lifecycle remains pending.
 
 This is a **trusted persistence seam, not an authenticated password-change
-endpoint**. Reauthentication/proof consumption, HIBP/reuse, session invalidation,
-durable generated-hash preparation and browser transport still need the real
-password workflow composition. Do not provide application-written stores or
-workflows to bridge those unfinished contracts.
+endpoint**. Use the native service above for authenticated change; do not expose
+this lower-level seam directly. Browser transport and the remaining password
+lifecycle still need their owned composition. Do not provide application-written
+stores or workflows to bridge those unfinished contracts.
 
 ## Native verification and remaining work
 

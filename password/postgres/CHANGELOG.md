@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- Add native authenticated password change with original signed-proof validation,
+  HIBP screening, current-password reuse denial and protected counter admission.
+  Consume the proof with password material, credential authority, audit and
+  lifecycle effects in one transaction; rollback preserves proof availability.
+  The initial strict profile invalidates all prior credential authority, including
+  the source session. Code-free original-outcome recovery does not repeat
+  provider work or password submission. Install additive password migration 4
+  and the selected native risk counter histories. Selective session preservation,
+  reset/administrative flows and full lifecycle/release qualification remain
+  in development.
+
 - Add native single-factor password reauthentication using the original bearer,
   counted/audited abuse admission and current locked primary owners. Commit the
   original signed proof, required audit and lifecycle event together without

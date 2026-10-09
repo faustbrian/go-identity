@@ -38,8 +38,28 @@ func (MigrationSource) Load(ctx context.Context) ([]migrations.Migration, error)
 	if err != nil {
 		return nil, password.ErrPasswordWork
 	}
-	return []migrations.Migration{migration, replacement, reauthentication}, nil
+	consumption, err := migrations.NewMigration(4, "identity_password_reauthentication_consumption", migrations.TransactionModeDefault, reauthenticationConsumptionSQL, "")
+	if err != nil {
+		return nil, password.ErrPasswordWork
+	}
+	return []migrations.Migration{migration, replacement, reauthentication, consumption}, nil
 }
+
+const reauthenticationConsumptionSQL = `ALTER TABLE identity_password.reauthentication_records
+ ADD COLUMN consumed_command_id bytea,
+ ADD COLUMN consumed_purpose text COLLATE "C",
+ ADD COLUMN consumed_at timestamptz,
+ ADD CONSTRAINT reauthentication_consumption_complete CHECK (
+  (consumed_command_id IS NULL AND consumed_purpose IS NULL AND consumed_at IS NULL)
+  OR (consumed_command_id IS NOT NULL AND octet_length(consumed_command_id)=16
+   AND consumed_purpose IS NOT NULL AND consumed_purpose='identity.password.change'
+   AND consumed_at IS NOT NULL AND isfinite(consumed_at)
+   AND consumed_at>='0001-01-01 00:00:00+00'::timestamptz
+   AND consumed_at<'10000-01-01 00:00:00+00'::timestamptz)),
+ ADD CONSTRAINT reauthentication_consumption_command FOREIGN KEY(tenant_id,consumed_purpose,consumed_command_id)
+ REFERENCES identity.commands(tenant_id,purpose,command_id);
+CREATE UNIQUE INDEX reauthentication_consumption_once ON identity_password.reauthentication_records(tenant_id,consumed_purpose,consumed_command_id) WHERE consumed_command_id IS NOT NULL;
+`
 
 const reauthenticationSchemaSQL = `CREATE TABLE identity_password.reauthentication_records (
  proof_id text COLLATE "C" PRIMARY KEY CHECK(octet_length(proof_id) BETWEEN 22 AND 128),

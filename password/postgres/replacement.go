@@ -123,8 +123,15 @@ func (r *Repository) ApplyFeature(ctx context.Context, w kernel.Work, c identity
 	}
 	i, hash, err := passwordReplacement(c, r.policy)
 	s, _ := c.PasswordHashFeature()
-	b, feature, transition, scopeErr := w.FeatureScope(r)
-	if err != nil || scopeErr != nil || b != s.Binding || feature.Operation != replacementOperation() || transition.EventType != "password.changed.v1" || transition.BeforeVersion != i.Credential.Version || transition.AfterVersion != i.Credential.Version+1 {
+	if err != nil {
+		return identity.FeatureReceipt{}, err
+	}
+	return r.applyReplacement(ctx, w, r, s, i, hash)
+}
+
+func (r *Repository) applyReplacement(ctx context.Context, w kernel.Work, owner kernel.FeatureExecutionContributor, s identity.FeatureCommandSpec, i kernel.CredentialReplacementIntent, hash primitive.EncodedHash) (identity.FeatureReceipt, error) {
+	b, feature, transition, scopeErr := w.FeatureScope(owner)
+	if scopeErr != nil || b != s.Binding || feature.Operation != replacementOperation() || transition.EventType != "password.changed.v1" || transition.BeforeVersion != i.Credential.Version || transition.AfterVersion != i.Credential.Version+1 {
 		return identity.FeatureReceipt{}, password.ErrPasswordWork
 	}
 	bounded, cancel := context.WithTimeout(ctx, r.maximumDuration)
@@ -190,13 +197,17 @@ func (r *Repository) ApplyFeature(ctx context.Context, w kernel.Work, c identity
 // journal and other native owners still decide the recoverable outcome.
 // Corruption, missing infrastructure or a foreign/expired invocation is Unknown.
 func (r *Repository) RecoverParticipant(ctx context.Context, w kernel.RecoveryWork) (kernel.RecoveryStatus, error) {
+	return r.recoverReplacement(ctx, w, r)
+}
+
+func (r *Repository) recoverReplacement(ctx context.Context, w kernel.RecoveryWork, owner kernel.FeatureExecutionContributor) (kernel.RecoveryStatus, error) {
 	if ctx == nil || !r.configuredWriter() {
 		return kernel.RecoveryUnknown, password.ErrPasswordWork
 	}
 	if err := ctx.Err(); err != nil {
 		return kernel.RecoveryUnknown, err
 	}
-	b, feature, transition, err := w.FeatureScope(r)
+	b, feature, transition, err := w.FeatureScope(owner)
 	if err != nil || feature.Operation != replacementOperation() || transition.EventType != "password.changed.v1" || transition.BeforeVersion == 0 || transition.BeforeVersion == ^uint64(0) || transition.AfterVersion != transition.BeforeVersion+1 {
 		return kernel.RecoveryUnknown, password.ErrPasswordWork
 	}
