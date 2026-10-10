@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add typed original-signup confirmation results and immutable recovery scope.
+  Preserve observed commit status across disclosure failures, deny address
+  payloads on replay and keep proof-free recovery metadata-only under current
+  authorization. This require-before-signin profile issues no session; native
+  typed service binding, auto-signin and the full email lifecycle remain owed.
+
 - Add typed `VerificationConfirmRequest` with bounded non-consuming proof,
   exact HTTPS callback structure and trusted caller/network admission. This
   does not authenticate the proof, authorize a mutation or create a session;

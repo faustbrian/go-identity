@@ -50,8 +50,19 @@ func (r VerificationConfirmRequest) Validate() error {
 	if _, valid := verificationURL(&r.Callback, 2048); !valid {
 		return ErrInvalidVerification
 	}
-	c := r.Caller.Request
-	if !verificationID(string(r.TenantID)) || c.Tenant != authorization.TenantID(r.TenantID) || c.Action != "identity.email.verification-confirm" || c.Resource.Type != "identity.user" || !verificationID(string(c.Subject.ID)) || (c.Resource.ID != "" && !verificationID(string(c.Resource.ID))) || c.Environment.Time.Location() != time.UTC {
+	if validateVerificationCaller(r.TenantID, r.Caller) != nil || len(r.Network) > 128 {
+		return ErrInvalidVerification
+	}
+	address, err := netip.ParseAddr(r.Network)
+	if err != nil || address.Zone() != "" || address.String() != r.Network {
+		return ErrInvalidVerification
+	}
+	return nil
+}
+
+func validateVerificationCaller(tenant identity.TenantID, caller authorization.DecisionContext) error {
+	c := caller.Request
+	if !verificationID(string(tenant)) || c.Tenant != authorization.TenantID(tenant) || c.Action != "identity.email.verification-confirm" || c.Resource.Type != "identity.user" || !verificationID(string(c.Subject.ID)) || (c.Resource.ID != "" && !verificationID(string(c.Resource.ID))) || c.Environment.Time.Location() != time.UTC {
 		return ErrInvalidVerification
 	}
 	switch c.Subject.Kind {
@@ -92,11 +103,7 @@ func (r VerificationConfirmRequest) Validate() error {
 			}
 		}
 	}
-	if len(r.Network) > 128 || r.Caller.Validate() != nil {
-		return ErrInvalidVerification
-	}
-	address, err := netip.ParseAddr(r.Network)
-	if err != nil || address.Zone() != "" || address.String() != r.Network {
+	if caller.Validate() != nil {
 		return ErrInvalidVerification
 	}
 	return nil

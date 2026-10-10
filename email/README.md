@@ -64,8 +64,25 @@ success nor repeated validation authenticates the proof, proves callback
 allowlisting, consumes one-use authority, commits verification or issues a
 session. A concurrent proof transfer invalidates custody after observation.
 The eventual native service must check the exact original intent and current
-policy and coordinate every effect. This checkpoint adds the request contract,
-not the complete service/result or HTTP implementation.
+policy and coordinate every effect. The native typed service binding and HTTP
+implementation remain pending.
+
+`RegistrationVerificationService` is the narrow original-signup,
+require-before-signin port. Its result conserves observed commit status even
+when the later authorized address read fails. Inspect the returned error before
+using an address: `Committed` alone is not proof that disclosure succeeded.
+Fresh successful confirmation returns an active verified email projection;
+replay returns metadata only. This profile does not issue a session. Explicit
+auto-signin, remember-policy continuation and the full email lifecycle remain
+required work, not implied by the reserved typed session field.
+
+`NewVerificationRecovery` retains immutable original tenant/user/address/actor
+and command correlation. `VerificationRecover` must enforce current query
+authorization, never repeat consumption or disclose address/session payloads.
+Correlation is not authority; reconstruction cannot prove a durable receipt.
+In-progress results carry a positive delay of at most one minute; terminal
+results carry no retry delay. Result validation is structural, not a primary
+read, freshness lease or proof of execution. Recovery owns no resource or IO.
 
 Inputs are caller-owned and immutable during calls. Direct formatting/logging
 redacts and JSON/text serialization denies; explicit field projections and
