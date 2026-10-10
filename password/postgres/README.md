@@ -88,7 +88,20 @@ anonymous/link scopes and foreign/incomplete context deny before native IO.
 The existing direct recovery signature derives the same scope and remains
 unchanged. The integration lane exercises portable issuance and proof-free
 recovery against native signed records and atomic SQL effects, while retaining
-legacy direct callers. Optional verification HTTP and release remain pending.
+legacy direct callers. Cookie verification, browser interoperability and full
+release qualification remain pending.
+
+The optional password HTTP module now selects real native verification through
+`NewBrowserDeviceBearerVerificationFeature`: original Authorization bearer
+plus signed `__Host-identity_device` correlation from the configured browser
+initialization issuer. Native Authentication risk requires this device signal;
+the generic cookie-ignoring bearer handler alone cannot satisfy that profile.
+Compose native session validation, strict atomic PostgreSQL rate storage and
+`NewVerificationWorkflow(service)`, retaining the issuer's dedicated device
+keys/namespace and original tenant/HTTPS origin/expiry. No consumer workflow or
+device minting in verification is needed. Focused in-process integration retains
+the stored signed original, audit/outbox and unchanged-session assertions;
+it does not prove browser interoperability or complete release qualification.
 
 ## Native authenticated password change
 

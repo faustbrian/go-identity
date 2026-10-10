@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Qualify selected bearer password verification with original signed browser
+  correlation through real PostgreSQL primary, atomic rate and proof owners.
+  Missing device custody denies before rate admission; committed HTTP results
+  preserve the original signed proof while session and atomic effects retain
+  native lifecycle behavior. Cookie verification and full release remain pending.
+
 - Bind existing native password reauthentication to the portable verification
   port without changing direct service signatures. Forward original bearer,
   password and target once; reject incomplete or foreign recovery scope instead

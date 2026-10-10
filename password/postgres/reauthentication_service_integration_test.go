@@ -213,10 +213,7 @@ INSERT INTO authorization_subject_authorities VALUES('AAAAAAAAAAAAAAAAAAAAAQ','u
 	portableCaller.Request.Tenant = authorization.TenantID(request.TenantID)
 	portableCaller.Request.Action = "identity.password.verify"
 	portableCaller.Request.Resource = authorization.Resource{Type: "identity.request-admission", ID: "identity.password.verify"}
-	result, err := workflow.Verify(ctx, password.VerificationRequest{TenantID: request.TenantID, Session: request.Session, Password: request.Password, Target: password.VerificationTarget{Purpose: request.Target.Purpose, Action: request.Target.Action, Audience: request.Target.Audience}, Caller: portableCaller, Network: request.Network, Device: request.Device})
-	if err != nil || result.Outcome != identity.CommitOutcomeCommitted || result.Proof.Proof.ID == "" {
-		t.Fatal("native issuance failed", err, result.Outcome)
-	}
+	result := testBearerPasswordVerificationHTTP(t, ctx, pool, configuration, workflow, request)
 	if result.Proof.SessionID != s.SessionID || result.Proof.SessionVersion != s.Version || result.Proof.Proof.Subject != string(s.UserID) || result.Proof.Proof.Tenant != string(s.TenantID) || result.Proof.Proof.Method != "password" || result.Proof.Proof.Purpose != request.Target.Purpose || result.Proof.Action != request.Target.Action || result.Proof.Proof.Audience != request.Target.Audience {
 		t.Fatal("proof lost source/target scope")
 	}
