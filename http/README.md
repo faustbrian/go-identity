@@ -321,9 +321,12 @@ active-session token. Only self-signout permits absent/inactive origin-only
 success; password change always requires an active session. The latter binds token lifetime to
 active stored session state and claims no independent maximum-age enforcement.
 Factories retain responsibility for selecting and enforcing the matching mode.
-Password verification additionally permits explicit `CSRFNone` for the owned
-strict bearer handler. It does not yet permit the stored-session synchronizer
-cookie profile. Canonical metadata recognition alone selects no endpoint.
+Password verification additionally permits explicit `CSRFNone` for a strict
+bearer handler or `CSRFSessionState` for a cookie handler backed by native
+stored-synchronizer protection. The cookie profile requires its configured
+token header, denied Referer fallback and no independent token-age claim.
+Factories must enforce the selected custody and native protection; canonical
+metadata recognition alone selects no endpoint or authenticates a request.
 Conditional pre-auth/session canonical rows also permit an explicit
 `CSRFExactOrigin` with denied Referer fallback for a pre-auth-only selected
 handler. That handler must reject session/MFA variants, never infer pre-auth

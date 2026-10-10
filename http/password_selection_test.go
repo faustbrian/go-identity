@@ -115,7 +115,6 @@ func TestPasswordVerificationSelectsBearerOnly(t *testing.T) {
 	}
 	for _, policy := range []identityhttp.CSRFPolicy{
 		{Mode: identityhttp.CSRFExactOrigin, RefererFallback: identityhttp.RefererFallbackDeny},
-		{Mode: identityhttp.CSRFSessionState, TokenHeader: "X-CSRF-Token", RefererFallback: identityhttp.RefererFallbackDeny},
 		{Mode: identityhttp.CSRFNone, TokenHeader: "X-CSRF-Token"},
 		{Mode: identityhttp.CSRFNone, TokenMaximumAge: time.Minute},
 		{Mode: identityhttp.CSRFNone, RefererFallback: identityhttp.RefererFallbackDeny},
@@ -130,5 +129,40 @@ func TestPasswordVerificationSelectsBearerOnly(t *testing.T) {
 	invalid.Owner = "identity/session"
 	if _, err := identityhttp.NewCanonicalOperation(invalid); err == nil {
 		t.Fatal("foreign verification owner admitted")
+	}
+}
+
+func TestPasswordVerificationSelectsStoredSessionCSRF(t *testing.T) {
+	calls := 0
+	policy := identityhttp.CSRFPolicy{Mode: identityhttp.CSRFSessionState, TokenHeader: "X-CSRF-Token", RefererFallback: identityhttp.RefererFallbackDeny}
+	op, err := identityhttp.NewCanonicalOperation(identityhttp.CanonicalOperationConfig{Owner: "identity/password", OperationID: "identity.password.verify", Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { calls++; w.WriteHeader(202) }), CSRF: policy, MaximumSerializedBytes: 16384})
+	if err != nil {
+		t.Fatal("protected verification profile rejected", err)
+	}
+	if op.Record.CSRFOrigin != policy || op.Record.Idempotency != "none" || op.Record.RatePolicy != "rate.verify" {
+		t.Fatal("canonical protected verification altered")
+	}
+	f, err := identityhttp.NewFeature(identityhttp.FeatureConfig{ID: "identity/password", Operations: []identityhttp.OperationDescriptor{op}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	h, err := identityhttp.NewSelectedHandler(identityhttp.FeatureServices{Features: []identityhttp.Feature{f}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, httptest.NewRequest(http.MethodPost, "/v1/password/verify", nil))
+	if w.Code != 202 || calls != 1 {
+		t.Fatal("selected protected handler not dispatched")
+	}
+	for _, unsupported := range []identityhttp.CSRFPolicy{
+		{Mode: identityhttp.CSRFSessionState, TokenHeader: "X-CSRF-Token", RefererFallback: identityhttp.RefererFallbackSameOriginHTTPS},
+		{Mode: identityhttp.CSRFSessionState, TokenHeader: "X-CSRF-Token", TokenMaximumAge: time.Minute, RefererFallback: identityhttp.RefererFallbackDeny},
+		{Mode: identityhttp.CSRFSessionState, RefererFallback: identityhttp.RefererFallbackDeny},
+		{Mode: identityhttp.CSRFExactOrigin, RefererFallback: identityhttp.RefererFallbackDeny},
+	} {
+		if _, err := identityhttp.NewCanonicalOperation(identityhttp.CanonicalOperationConfig{Owner: "identity/password", OperationID: "identity.password.verify", Handler: http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}), CSRF: unsupported, MaximumSerializedBytes: 16384}); err == nil {
+			t.Fatal("incomplete verification protection selected")
+		}
 	}
 }

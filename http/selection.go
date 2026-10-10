@@ -416,10 +416,10 @@ func validOperation(owner ModuleID, op OperationDescriptor, catalog map[string]c
 		if (r.OperationID == "identity.session.signout" || r.OperationID == "identity.password.change") && (r.CSRFOrigin.Mode == CSRFNone || r.CSRFOrigin.Mode == CSRFSessionState) {
 			csrfMatches = true
 		}
-		// Verification currently has an owned strict bearer handler only. Do not
-		// also advertise a stored-synchronizer cookie profile before its owner
-		// can protect verification under native primary transaction fences.
-		if r.OperationID == "identity.password.verify" && r.CSRFOrigin.Mode == CSRFNone {
+		// Verification selects either strict bearer custody or the stored-session
+		// synchronizer protected by its native transaction owner. Selection grants
+		// no authority and does not issue or age an independent CSRF token.
+		if r.OperationID == "identity.password.verify" && (r.CSRFOrigin.Mode == CSRFNone || (r.CSRFOrigin.Mode == CSRFSessionState && r.CSRFOrigin.RefererFallback == RefererFallbackDeny)) {
 			csrfMatches = true
 		}
 		if r.Exposure != want.Exposure || !slices.Equal(r.Owners, want.Owners) || r.Access != want.Access || r.Authorization != want.Authorization || !csrfMatches || r.RiskClass != want.RiskClass || r.RatePolicy != want.RatePolicy || r.Idempotency != want.Idempotency || r.EventSemantics != want.EventSemantics || r.HandlerOwner != want.HandlerOwner || r.Method != want.Method || r.Path != want.Path || r.OpenAPIOperationID != want.OpenAPIOperationID || r.RequestSchema.ID != row.RequestSchema || r.ResultSchema.ID != row.ResultSchema || r.ErrorSchema.ID != row.ErrorSchema {

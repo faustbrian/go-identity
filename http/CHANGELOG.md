@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Permit explicit stored-session synchronizer selection for password
+  verification backed by native transaction protection. Preserve its non-keyed
+  rate and schema contracts and existing bearer profile; selection alone does
+  not expose a route or confer authority.
+
 - Add explicit auxiliary cookie custody alongside one strict Authorization
   bearer, sharing bounded cookie framing without changing cookie-credential
   exclusivity. Auxiliary custody grants no session or authentication authority.

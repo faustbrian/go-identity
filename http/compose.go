@@ -16,7 +16,9 @@ import (
 // (explicit bearer) or SessionState (cookie origin plus active-state token).
 // Password change requires an active session; only self-signout admits absent/
 // inactive origin-only success. Password verification additionally admits None
-// for its strict bearer handler, but not a stored-synchronizer cookie profile.
+// for strict bearer custody or SessionState with a configured valid header,
+// zero independent token age and denied Referer fallback for native protected
+// cookie custody. Factories own enforcement; selection issues no CSRF token.
 // MaximumSerializedBytes
 // bounds each schema summary (1..16MiB); it is not response-size enforcement.
 // Handler must be usable/concurrency-safe and own its declared security. Nil
