@@ -17,6 +17,14 @@ shared `identityhttp.KeyedSecretRateLimiter`, trusted network and policy revisio
 clock and 1ms..30s whole-request bound. Every borrowed owner must outlive calls.
 Deployment owns migrations/key retention and handler drain, not workflow glue.
 
+For selected routing and OpenAPI 3.1.1, contribute `NewChangeFeature` (or
+`NewChangeFeatureWithMiddleware`) to `identityhttp.FeatureServices`, derive
+operation descriptors and compose through `identityhttp.NewRouter`. This
+contribution selects only password change, with the same native owners and
+credential profile. Omission exposes neither its route nor metadata; selecting
+it with missing owners fails construction. The document describes the closed
+request and credential-free responses, not reflected domain or runtime objects.
+
 JSON contains exactly `proofID` and `newPassword`; the proof ID comes from
 completed credential-specific password verification for this action. Exactly
 one original `Idempotency-Key` header supplies the protected command's only key.
@@ -48,6 +56,9 @@ does not manufacture one. `commitOutcome=none` is not rollback. Known command/ou
 metadata survives errors, while `changed` and successor fields require an
 error-free known commit. Recovery is a locator under current result-access
 policy, not a permission or instruction to automatically repeat mutation.
+Recovery JSON uses `commandID`, `tenantID`, `userID`, `actorID`, `actorKind`,
+`operationID` and `recordID`; the Go response retains `*identity.RecoveryQuery`.
+Anonymous/account-link fields are not part of this password wire contract.
 
 The preliminary read never refreshes authority through hooks/rate/proof IO.
 Native protected work rechecks proof, current primary authority, cumulative risk,
@@ -63,8 +74,9 @@ remain stable while retained commands exist.
   transport never creates a proof from client-claimed identity or timestamps.
 - Can consumers implement stores/transactions? No: select the platform adapters.
 - Is this full password feature parity? No. Verify/signup/signin/reset/set,
-  selected Feature/OpenAPI composition, composed native HTTP/browser checks,
-  privacy/interoperability and exact coverage/mutation/release gates remain.
+  native selected-router and browser qualification, privacy/interoperability
+  and exact coverage/mutation/release gates remain. Native SQL-over-handler
+  password-change behavior has focused integration coverage, not browser proof.
 - Does a committed error mean HTTP success? No; reconcile original scoped
   recovery without new keys or resubmitted secrets.
 

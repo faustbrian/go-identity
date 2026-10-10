@@ -82,6 +82,30 @@ type ChangeResponse struct {
 	Error                string                  `json:"error,omitempty"`
 }
 
+// MarshalJSON projects recovery metadata into this transport's closed wire
+// contract. Kernel recovery queries remain Go lookup inputs, not wire schemas;
+// unrelated anonymous/account-link fields cannot enter password responses.
+func (r ChangeResponse) MarshalJSON() ([]byte, error) {
+	type plain ChangeResponse
+	type recovery struct {
+		CommandID   identity.CommandID        `json:"commandID"`
+		TenantID    identity.TenantID         `json:"tenantID"`
+		UserID      identity.UserID           `json:"userID"`
+		ActorID     identity.ActorID          `json:"actorID"`
+		ActorKind   authorization.SubjectKind `json:"actorKind"`
+		OperationID string                    `json:"operationID"`
+		RecordID    string                    `json:"recordID"`
+	}
+	var scope *recovery
+	if q := r.Recovery; q != nil {
+		scope = &recovery{q.CommandID, q.TenantID, q.UserID, q.ActorID, q.ActorKind, q.OperationID, q.RecordID}
+	}
+	return json.Marshal(struct {
+		plain
+		Recovery *recovery `json:"recovery,omitempty"`
+	}{plain(r), scope})
+}
+
 type changeAttempt struct {
 	secret    primitive.Secret
 	out       ChangeResponse
