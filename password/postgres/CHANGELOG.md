@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Document optional cookie password-change HTTP composition using native
+  primary session/proof and atomic rate owners. Preserve the same protected
+  journal, original retry key, replay and pre-command conflict semantics;
+  HTTP feature selection and full lifecycle/release remain in development.
+
 - Bind the strict native cookie password-change profile to the portable cookie
   Change/Recover port. Forward the original nested retry key and opaque CSRF
   token without selecting bearer fallback or transferring secret custody.

@@ -92,8 +92,8 @@ func testCookiePasswordChangeCommit(t *testing.T, ctx context.Context, pool *dat
 		t.Fatal(err)
 	}
 	before := calls.Load()
-	result, err := workflow.Change(ctx, input)
-	if err != nil || result.CommandID == "" || result.Outcome != identity.CommitOutcomeCommitted || result.CredentialVersion != 10 || !result.AuthorityInvalidated || calls.Load() != before+1 {
+	result := testCookiePasswordChangeHTTP(t, ctx, pool, sourceConfig, workflow, input)
+	if result.CommandID == "" || result.Outcome != identity.CommitOutcomeCommitted || result.CredentialVersion != 10 || !result.AuthorityInvalidated || calls.Load() != before+1 {
 		t.Fatal("cookie password change did not commit exact successor", err)
 	}
 	afterSession, err := repository.Get(ctx, request.TenantID, request.Proof.SessionID)

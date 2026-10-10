@@ -295,8 +295,18 @@ the same native owner; it does not create a workflow, journal or CSRF engine.
 Zero/canceled/structurally invalid inputs deny before native work. Exact-origin
 and channel admission still belong to trusted HTTP composition, not this wrapper.
 Real PostgreSQL tests use this portable port for commitment, fresh-owner replay,
-retired-key denial, changed-token conflict and code-free recovery. Optional HTTP
-and full lifecycle/release qualification remain outstanding.
+retired-key denial, changed-token conflict and code-free recovery.
+
+The optional `identity/http/password` module can select this cookie workflow,
+this repository's original signed-proof source and the session owner's primary
+`NewSessionService`. Supply one shared atomic native PostgreSQL rate owner with
+both rate migrations installed, exact trusted origins and mapped tenant hosts.
+The HTTP module owns strict wire parsing and destroys its request password;
+this adapter still owns the original journal and atomic protected effects.
+The integration lane also sends the cookie change through that actual HTTP
+handler, including matching replay and changed-input pre-command conflict.
+In-process HTTPS facts do not prove a real browser or network journey.
+Selected route/OpenAPI composition and full lifecycle/release remain pending.
 
 Select `NewCookieKeyedPasswordChangeService` over a configured native keyed
 service and 1..4 distinct eligible session CSRF keys. The constructor copies
@@ -321,6 +331,6 @@ continuation, retained-key restart, code-free recovery and original receipt
 replay after source revocation. Retiring the original named key denies even
 committed receipt replay; submitting a different CSRF token under the original
 retry key conflicts before provider work. Original outcome disclosure does not
-renew authentication or reauthorize a mutation. The optional HTTP endpoint
-and complete browser/release qualification remain
+renew authentication or reauthorize a mutation. Complete HTTP feature selection
+and browser/release qualification remain
 in development; synthetic local provider seams are not HIBP interoperability.
