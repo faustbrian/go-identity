@@ -22,6 +22,7 @@ import (
 	password "github.com/faustbrian/go-identity/password"
 	kernel "github.com/faustbrian/go-identity/postgres"
 	"github.com/faustbrian/go-identity/risk"
+	riskpg "github.com/faustbrian/go-identity/risk/postgres"
 	"github.com/faustbrian/go-identity/session"
 	sessionpg "github.com/faustbrian/go-identity/session/postgres"
 	database "github.com/faustbrian/go-postgres"
@@ -38,6 +39,10 @@ type SignupVerificationConfig struct {
 	Issuer   *issuerpg.Issuer
 	Codec    *issuerpg.IssuancePreparationCodec
 	Lifetime time.Duration
+	// Counters optionally selects original-grant-bound confirmation. Nil keeps
+	// signup/scanner behavior unchanged but disables confirmation execution.
+	// Install the forward verification counter migration before selecting it.
+	Counters *riskpg.Repository
 }
 
 // SignupDeliveryConfig selects encrypted email preparation, not a sender.

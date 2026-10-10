@@ -115,7 +115,7 @@ func testNativePublicSignup(t *testing.T, ctx context.Context, pool *database.Po
 		t.Fatal(err)
 	}
 	t.Run("registration-verification-origin", func(t *testing.T) {
-		testPublicSignupVerificationOrigin(t, ctx, service, c, r, q.CommandID)
+		testPublicSignupVerificationOrigin(t, ctx, service, c, r, q.CommandID, keys)
 	})
 	restarted, err := NewSignupService(pool, c, keys)
 	if err != nil {

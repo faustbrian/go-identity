@@ -5,7 +5,26 @@ consistent primary credential reader plus native existing-password material
 replacement/recovery, native authenticated password change and backend
 single-factor signin/recovery with atomic automatic rehash, plus required-email-
 verification signup and password-free signup recovery. Immediate-session/MFA
-signup, email confirmation, reset, history and deletion remain unimplemented.
+signup, reset, history and deletion remain unimplemented. Original signup-link
+confirmation is implemented; the complete generic email lifecycle is not.
+
+Original signup links can be explicitly confirmed with
+`SignupService.ConfirmRegistrationVerification`. Select the borrowed native
+`SignupVerificationConfig.Counters` at startup and install the forward kernel
+`EmailVerificationMigrationSource` and risk `VerificationCounterMigrationSource`
+after their selected existing histories. Nil counters preserve signup/scanner
+behavior but disable confirmation. The service authenticates the actual issued
+proof and encrypted signup intent, checks the exact callback/current policy,
+and coordinates original-grant counters, one-use consumption, address/version
+changes, audit and lifecycle in one protected command. It does not fabricate a
+session, resend mail or use scanner validation as permission to execute.
+
+Use a stable confirmation command ID for retries; replay preserves the original
+receipt without charging again. `RecoverRegistrationVerification` accepts only
+the original command/tenant/user/actor/identifier scope and current authorized
+caller, not a bearer. It reconciles retained metadata after restarts without
+renewing proof or revealing address/session data. This native registration
+bridge is not yet the complete generic email lifecycle or opt-in HTTP transport.
 There is deliberately no independent setter or application-written workflow.
 
 ## Native required-verification signup
@@ -76,7 +95,7 @@ repeated/concurrent scanners cannot consume, renew, deliver or create a session.
 It is not an execution ticket; explicit confirmation must repeat admission.
 
 This initial profile requires verified email and issues no session. Immediate
-session, MFA continuation, confirmation and the complete reset lifecycle remain
+session, MFA continuation and the complete reset lifecycle remain
 in development; unsupported startup profiles fail closed. This is backend
 composition, not a signup UI or a complete platform/release-readiness claim.
 

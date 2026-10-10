@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Confirm original signup email links explicitly through native proof-bound
+  counters and atomic capability, address, audit and lifecycle participants.
+  Scanner validation remains read-only; same-command replay preserves the
+  original receipt, and proof-free recovery uses current disclosure policy.
+  Select `SignupVerificationConfig.Counters` and install the forward kernel
+  email-verification and risk verification-counter migrations. This initial
+  require-verified profile creates no session or additional delivery.
+
 - Inspect delivered signup verification links through scanner-safe public
   validation. Require an issued unused proof, original callback and current
   active account/pending identifier without consuming, renewing, mutating or

@@ -18,6 +18,7 @@ import (
 	email "github.com/faustbrian/go-identity/email"
 	password "github.com/faustbrian/go-identity/password"
 	kernel "github.com/faustbrian/go-identity/postgres"
+	"github.com/faustbrian/go-secret-envelope/adapters/keyring"
 )
 
 type registrationVerificationReader interface {
@@ -46,7 +47,7 @@ func (s signupVerificationSender) Send(ctx context.Context, a delivery.Attempt) 
 // This exercises the actual public signup and native delivery worker, not an
 // invented token, application-owned store or substituted credential origin.
 // Original live pre-auth state has already been removed by the parent fixture.
-func testPublicSignupVerificationOrigin(t *testing.T, ctx context.Context, s *SignupService, c SignupConfig, request password.SignupRequest, command identity.CommandID) {
+func testPublicSignupVerificationOrigin(t *testing.T, ctx context.Context, s *SignupService, c SignupConfig, request password.SignupRequest, command identity.CommandID, keys *keyring.Provider) {
 	t.Helper()
 	reader, ok := any(s).(registrationVerificationReader)
 	if !ok {
@@ -236,4 +237,5 @@ func testPublicSignupVerificationOrigin(t *testing.T, ctx context.Context, s *Si
 	if err := s.pool.Raw().QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM public.capability_identity_one_use WHERE tenant_id=$1 AND capability_id=$2 AND state='issued' AND uses=0),EXISTS(SELECT 1 FROM identity.identifiers WHERE tenant_id=$1 AND identifier_id=$3 AND NOT verified AND verification_state=1 AND verified_at IS NULL)`, grant.Payload().Tenant, grant.Payload().ID, grant.Payload().Resource).Scan(&issued, &unverified); err != nil || !issued || !unverified {
 		t.Fatal("origin read mutated verification or consumed authority", err)
 	}
+	testPublicRegistrationConfirmation(t, ctx, s, c, keys, proof, callback, caller, grant)
 }
