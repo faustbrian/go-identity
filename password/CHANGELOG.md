@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add a native sign-in/recovery port, immutable password-free original attempt
+  correlation, and structurally checked session-owned results. Historical
+  recovery preserves deleted-session identity without credential redelivery;
+  unknown outcomes never imply rollback. Native login orchestration and genuine
+  MFA continuation remain in development; existing workflow APIs are unchanged.
+
 - Add bounded, redacted password sign-in input preserving actual pre-auth cookie
   custody, raw identifier/password bytes and the resolved remember choice.
   Attempt identity remains server-owned; structural validation grants no flow,

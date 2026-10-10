@@ -1,5 +1,25 @@
 # Identity password workflows
 
+`SigninService` supplies distinct non-keyed login and password-free historical
+recovery ports for the native adapter. `SigninRecovery` freezes the existing
+kernel query and original pre-auth identity; it preserves user versus anonymous
+scope instead of substituting the resolved session user. Recovery still requires
+original cookie possession and fresh trusted caller provenance, with native
+current disclosure authorization and exact retained tuple matching. It cannot
+resubmit the password or allocate another attempt. Its shape grants no authority.
+
+`SigninResult.Validate` checks only closed state/outcome and original correlation,
+never current validity or delivery permission. Authenticated means known committed
+history; `Rejected` on an unknown outcome means no authenticated result is
+returned, not bad credentials or rollback. A retained session ID may survive
+payload deletion on replay without fabricating a partial Session. Fresh original
+tokens retain the session owner's shared reveal-once permission; Cookie.Value is
+empty, and replay/recovery/error/cancellation must return no token, synchronizer
+or cookie metadata. Callers must inspect both the error and original outcome.
+The current profile fails closed when MFA/verification requirements are unmet;
+the genuine MFA-owned continuation and native login implementation are still
+mandatory unfinished work. These ports do not constitute a working login.
+
 **Development checkpoint:** input policy, bounded credential work, canonical
 account comparison, portable keyed change and non-keyed verification contracts
 are implemented. The

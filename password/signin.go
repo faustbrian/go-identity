@@ -59,7 +59,28 @@ type SigninRequest struct {
 // Collection bounds constrain logical content/work, not the storage capacity of
 // already constructed caller-owned containers or immutable upstream values.
 func (r SigninRequest) Validate() error {
-	c := r.Caller.Request
+	if validateSigninProvenance(r.TenantID, r.Caller, r.Origin, r.Network, r.Device) != nil || (r.CallbackURL != "" && !verificationText(r.CallbackURL, 2048)) || r.Password.Len() == 0 || r.Password.Len() > 1<<20 {
+		return ErrPasswordWork
+	}
+	if _, err := identity.ParsePreAuthTransactionID(string(r.PreAuthID)); err != nil {
+		return ErrPasswordWork
+	}
+	if _, err := session.ParseToken(r.Cookie.Token()); err != nil {
+		return ErrPasswordWork
+	}
+	if _, err := identifier.NewInput(string(r.Identifier)); err != nil {
+		return ErrPasswordWork
+	}
+	if _, err := r.Remember.Bindings(); err != nil {
+		return ErrPasswordWork
+	}
+	return nil
+}
+
+// Recovery and new login share the same trusted caller/input bounds, without
+// recovery needing a password, identifier or live executable pre-auth record.
+func validateSigninProvenance(tenant identity.TenantID, caller authorization.DecisionContext, origin, network, device string) error {
+	c := caller.Request
 	if c.Environment.Time.Location() != time.UTC || len(c.Attributes) > 64 || len(c.Subject.Groups) > 64 || len(c.Subject.Attributes) > 64 || len(c.Resource.Attributes) > 64 || len(c.Environment.Attributes) > 64 {
 		return ErrPasswordWork
 	}
@@ -93,7 +114,7 @@ func (r SigninRequest) Validate() error {
 			}
 		}
 	}
-	if !boundedChangeText(string(r.TenantID)) || !boundedChangeText(string(c.Subject.ID)) || !boundedChangeText(string(c.Action)) || !boundedChangeText(string(c.Resource.Type)) || (c.Resource.ID != "" && !boundedChangeText(string(c.Resource.ID))) || c.Tenant != authorization.TenantID(r.TenantID) || r.Caller.Validate() != nil || !boundedChangeText(r.Network) || (r.Device != "" && !boundedChangeText(r.Device)) || !verificationText(r.Origin, 2048) || (r.CallbackURL != "" && !verificationText(r.CallbackURL, 2048)) || r.Password.Len() == 0 || r.Password.Len() > 1<<20 {
+	if !boundedChangeText(string(tenant)) || !boundedChangeText(string(c.Subject.ID)) || !boundedChangeText(string(c.Action)) || !boundedChangeText(string(c.Resource.Type)) || (c.Resource.ID != "" && !boundedChangeText(string(c.Resource.ID))) || c.Tenant != authorization.TenantID(tenant) || caller.Validate() != nil || !boundedChangeText(network) || (device != "" && !boundedChangeText(device)) || !verificationText(origin, 2048) {
 		return ErrPasswordWork
 	}
 	switch c.Subject.Kind {
@@ -101,20 +122,8 @@ func (r SigninRequest) Validate() error {
 	default:
 		return ErrPasswordWork
 	}
-	if _, err := identity.ParsePreAuthTransactionID(string(r.PreAuthID)); err != nil {
-		return ErrPasswordWork
-	}
-	if _, err := session.ParseToken(r.Cookie.Token()); err != nil {
-		return ErrPasswordWork
-	}
-	if _, err := identifier.NewInput(string(r.Identifier)); err != nil {
-		return ErrPasswordWork
-	}
-	if _, err := r.Remember.Bindings(); err != nil {
-		return ErrPasswordWork
-	}
-	address, err := netip.ParseAddr(r.Network)
-	if err != nil || address.Zone() != "" || address.String() != r.Network {
+	address, err := netip.ParseAddr(network)
+	if err != nil || address.Zone() != "" || address.String() != network {
 		return ErrPasswordWork
 	}
 	return nil
