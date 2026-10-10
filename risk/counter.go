@@ -371,6 +371,12 @@ func prepareCounter(scope Context, subject Subject, phase Phase, a Admission, no
 	if err != nil {
 		return CounterCommand{}, err
 	}
+	return prepareCounterValues(scope, values, phase, a, now, keys, protected), nil
+}
+
+// All values have already been admitted against the exact selected dimensions.
+// Keep one digest construction for session and proof-bound protected profiles.
+func prepareCounterValues(scope Context, values map[Dimension]string, phase Phase, a Admission, now time.Time, keys []CounterDigestKey, protected bool) CounterCommand {
 	b := CounterBinding{Tenant: scope.Tenant, Operation: scope.Operation, Attempt: scope.Attempt, Phase: phase, PolicyVersion: a.PolicyVersion, PreparedAt: now, Window: a.Profile.Window, Limit: a.Profile.Limit}
 	keyDomain, commandDomain, prefix := "identity-risk-counter-key-v1", "identity-risk-counter-command-v1", "rv1:"
 	if protected {
@@ -392,7 +398,7 @@ func prepareCounter(scope Context, subject Subject, phase Phase, a Admission, no
 		}
 	}
 	b.Fingerprint = hex.EncodeToString(counterMAC(keys[0], commandDomain, fields))
-	return CounterCommand{state: &counterCommand{binding: b, profile: a.Profile}}, nil
+	return CounterCommand{state: &counterCommand{binding: b, profile: a.Profile}}
 }
 
 func counterDimensions(s Subject, tenant string, dimensions []Dimension) (map[Dimension]string, error) {

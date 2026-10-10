@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Prepare and validate sessionless registration-link confirmation counters
+  using the authenticated original grant ID as a distinct keyed dimension.
+  Preserve tenant/subject limits and original evidence lifetime; normal
+  session-based mutation profiles remain unchanged. Preparation grants no
+  proof authentication or transactional allowance.
+
 - Add `AuthenticationAdmission.CheckAt` for native transactions to recheck
   authenticated original risk facts at trusted primary time without configured
   callbacks under locks. Original bounds remain exclusive and cannot renew;

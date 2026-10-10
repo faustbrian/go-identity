@@ -311,6 +311,20 @@ hash equality alone does not prove one-use behavior.
 
 ### Administrative lockout intent
 
+Registration-link confirmation has no authenticated session. Use
+`CommandCounterPolicy.PrepareVerification` and `ValidateVerification` with
+the original cryptographically authenticated grant ID and subject, plus the
+trusted canonical network. Only `identity.email.verification-confirm` selects
+this closed lane. It preserves the configured CredentialMutation bounds but
+uses `tenant + subject + capability + canonical_network`, never a fictitious
+session. Grant IDs are not bearer bytes; only domain-separated keyed digests
+leave preparation. Tenant and subject limits continue across separate links.
+Ordinary `Prepare`/`Validate` and other operations keep their existing session
+requirements. These methods neither authenticate a proof nor authorize a
+mutation; the native participant must reserve, recheck and recover counters
+in the same owning coordinator as the protected email mutation. Concrete
+adapter adoption and composed confirmation remain under development.
+
 `NewLockoutPolicy(LockoutPolicyConfig)` composes an existing
 `CommandCounterPolicy` with an explicit positive microsecond-exact
 `MaximumDuration`. There is no default duration or automatic velocity trigger.
