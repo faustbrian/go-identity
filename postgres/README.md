@@ -188,6 +188,24 @@ than inferring rollback. Existing recovery profiles remain separate.
 
 ## Request-key correlation before command preparation
 
+`QueryRequestPreparation(ctx, query, caller, feature, inputOwner)` returns only
+the original input binding and encrypted bytes. Use it for password-free native
+recovery when a mapping exists before its journal, generation is incomplete, or
+the command rolled back. The exact registered owner and current query policy
+are required. Original actor/tenant/POST route, namespace identity, feature and
+retained fingerprint keys are checked without callbacks, generation or mutation.
+Existing claims also fence complete query scope and original journal identity.
+
+A mapping alone does not contain plaintext subject/flow/record scope. Before
+disclosing anything, the native owner must authenticate the complete envelope
+binding, compare its decrypted original scope with the recovery query, and
+check original bearer possession and current disclosure authority. Clear the
+owned returned ciphertext after use. Reading input establishes neither an
+outcome nor permission to execute. Use the existing coordinator's command query
+and recovery for outcomes; a missing journal never proves rollback. No migration
+beyond existing request-key/input custody history is added. This low-level seam
+is not the public signup/recovery workflow, which remains in development.
+
 Native feature adapters can use `QueryPreparedFeature` to restore an existing
 committed workflow by its server-issued command ID without a new initiating key
 or caller-written store. The exact registered request/preparation owner and

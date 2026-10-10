@@ -5,10 +5,12 @@ package postgres
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/base64"
 	"errors"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/faustbrian/go-authorization"
 	"github.com/faustbrian/go-clock"
@@ -129,5 +131,159 @@ func testPreparedFeatureQuery(t *testing.T, ctx context.Context, c *Coordinator,
 	wait.Wait()
 	if snapshot() != before || phase.generated.Load() != 1 || phase.restored.Load() != 1 {
 		t.Fatal("query changed original workflow")
+	}
+	testOriginalInputQuery(t, ctx, c, phase, command, plan, digest, safe, input)
+}
+
+type originalInputReader interface {
+	QueryRequestPreparation(context.Context, identity.RecoveryQuery, authorization.DecisionContext, FeatureRegistration, RequestKeyPreparationContributor) (RequestKeyPreparationBinding, []byte, error)
+}
+
+// SU-08: recovery needs only the immutable input, including before generation
+// and after a classified rollback. Real journal transitions remain the sole
+// outcome owner; an input read must never classify or execute the attempt.
+func testOriginalInputQuery(t *testing.T, ctx context.Context, c *Coordinator, phase *preparedFeaturePhase, command identity.Command, plan CommandPlan, digest [32]byte, safe, input []byte) {
+	t.Helper()
+	reader, ok := any(c).(originalInputReader)
+	if !ok {
+		t.Fatal("kernel has no password-free original-input read")
+	}
+	if _, err := c.pool.Raw().Exec(ctx, admissionPreparationSchemaSQL); err != nil {
+		t.Fatal(err)
+	}
+	for _, state := range []string{"committed", "input-only", "pending", "started-without-output", "aborted"} {
+		t.Run(state, func(t *testing.T) {
+			s, _ := command.Feature()
+			p := plan
+			p.Audits = append([]AuditPlan(nil), plan.Audits...)
+			if state != "committed" {
+				s.Binding.CommandID, _ = identity.NewCommandID()
+				s.Binding.CorrelationID = string(s.Binding.CommandID)
+				seed, err := securityMutationAudit(ctx, s.Binding, 0, 1, time.Now().UTC().Truncate(time.Microsecond), "committed", p.Audits[0].EventType, p.SubjectType, s.Binding.RecordID, p.Audits[0].RetentionClass, true)
+				if err != nil {
+					t.Fatal(err)
+				}
+				p.Audits[0].BindingDigest, err = FeatureAuditBindingDigest(s.Binding, s.Operation, p.SubjectType, seed)
+				if err != nil {
+					t.Fatal(err)
+				}
+				id, _ := base64.RawURLEncoding.DecodeString(string(s.Binding.CommandID))
+				identityDigest := requestPreparationIdentity(*p.Feature)
+				keyDigest := sha256.Sum256(id)
+				if _, err := c.pool.Raw().Exec(ctx, `INSERT INTO identity.request_key_mappings(namespace,tenant_id,actor_id,actor_kind,method,route_id,key_digest,command_id,fingerprint,fingerprint_key_version,safe_fields,request_preparation_identity,request_preparation_ciphertext) VALUES('original',$1,$2,$3,'POST',$4,$5,$6,$7,1,$8,$9,$10)`, string(s.Binding.TenantID), string(s.Binding.ActorID), string(s.Binding.ActorKind), s.Binding.OperationID, keyDigest[:], id, digest[:], safe, identityDigest[:], input); err != nil {
+					t.Fatal(err)
+				}
+				original := featureCodecCommand(t, s)
+				phase.declaration = p
+				defer func() { phase.declaration, phase.beforeGenerate, phase.fail = plan, nil, false }()
+				switch state {
+				case "pending":
+					claim, admitted, owner, err := c.prepareFeaturePreparation(original, p)
+					if err != nil {
+						t.Fatal(err)
+					}
+					reservation, _, err := c.startFeaturePreparation(ctx, original, claim, admitted, owner, [16]byte{1}, true)
+					if err != nil || reservation.journal.disposition != journalOwned {
+						t.Fatal("pending journal reservation", err)
+					}
+				case "started-without-output":
+					phase.beforeGenerate = func(context.Context, identity.Command, uint64) error { return identity.UnavailableError{} }
+					result, err := c.ExecutePreparedFeature(ctx, original, p)
+					if err == nil || result.Outcome != identity.CommitOutcomeUnknown {
+						t.Fatal("original uncertain generation", err)
+					}
+				case "aborted":
+					phase.fail = true
+					result, err := c.ExecutePreparedFeature(ctx, original, p)
+					if err == nil || result.Outcome != identity.CommitOutcomeNotCommitted {
+						t.Fatal("original rollback", err)
+					}
+				}
+			}
+			q, caller := queryInputs(s.Binding)
+			id, _ := base64.RawURLEncoding.DecodeString(string(q.CommandID))
+			snapshot := func() string {
+				var wire string
+				if err := c.pool.Raw().QueryRow(ctx, `SELECT coalesce((SELECT row_to_json(j)::text FROM identity.commands j WHERE command_id=$1),'absent')`, id).Scan(&wire); err != nil {
+					t.Fatal(err)
+				}
+				return wire
+			}
+			before, generated, restored := snapshot(), phase.generated.Load(), phase.restored.Load()
+			binding, wire, err := reader.QueryRequestPreparation(ctx, q, caller, *p.Feature, phase)
+			if err != nil || binding.Admission.CommandID != q.CommandID || binding.PolicyVersion != 7 || binding.IntentDigest != digest || !bytes.Equal(wire, input) {
+				t.Fatal("original input unavailable for recovery", err)
+			}
+			wire[0] ^= 1
+			_, again, err := reader.QueryRequestPreparation(ctx, q, caller, *p.Feature, phase)
+			if err != nil || !bytes.Equal(again, input) {
+				t.Fatal("input read mutated immutable history", err)
+			}
+			if state != "committed" {
+				if got, err := c.QueryPreparedFeature(ctx, q, caller, *p.Feature, phase); err == nil || got.InputCiphertext != nil || got.OutputCiphertext != nil {
+					t.Fatal("legacy committed-output query was broadened")
+				}
+			}
+			for _, mutate := range []func(*identity.RecoveryQuery){
+				func(q *identity.RecoveryQuery) { q.TenantID = "other" },
+				func(q *identity.RecoveryQuery) { q.ActorID = "other" },
+				func(q *identity.RecoveryQuery) { q.OperationID = "identity.otp.check" },
+			} {
+				other := q
+				mutate(&other)
+				binding, wire, err := reader.QueryRequestPreparation(ctx, other, callerForQuery(caller, other), *p.Feature, phase)
+				if err == nil || binding != (RequestKeyPreparationBinding{}) || wire != nil {
+					t.Fatal("foreign input disclosed")
+				}
+			}
+			binding, wire, err = reader.QueryRequestPreparation(ctx, q, caller, *p.Feature, &preparedFeaturePhase{})
+			if err == nil || binding != (RequestKeyPreparationBinding{}) || wire != nil {
+				t.Fatal("descriptor spoof read original input")
+			}
+			if state != "input-only" {
+				for _, mutate := range []func(*identity.RecoveryQuery){
+					func(q *identity.RecoveryQuery) { q.UserID = "foreign-user" },
+					func(q *identity.RecoveryQuery) { q.RecordID = "foreign-record" },
+				} {
+					other := q
+					mutate(&other)
+					binding, wire, err := reader.QueryRequestPreparation(ctx, other, callerForQuery(caller, other), *p.Feature, phase)
+					if err == nil || binding != (RequestKeyPreparationBinding{}) || wire != nil {
+						t.Fatal("claim subject/record mismatch disclosed input")
+					}
+				}
+			}
+			for _, alter := range []func(*Coordinator){
+				func(c *Coordinator) { c.keys.retained = nil },
+				func(c *Coordinator) {
+					keys, err := NewRequestKeyConfig(c.requestKeys.Namespace, [32]byte{99}, c.requestKeys.Policy)
+					if err != nil {
+						t.Fatal(err)
+					}
+					c.requestKeys = &keys
+				},
+				func(c *Coordinator) {
+					c.queryPolicy = &CommandQueryPolicy{Clock: clock.System{}, PolicyVersion: 9, Authorization: queryDecision(func(context.Context, authorization.DecisionContext) (authorization.Decision, error) {
+						return authorization.Decision{Outcome: authorization.Deny, Revision: 9}, nil
+					})}
+				},
+			} {
+				other := *c
+				alter(&other)
+				reader := any(&other).(originalInputReader)
+				binding, wire, err := reader.QueryRequestPreparation(ctx, q, caller, *p.Feature, phase)
+				if err == nil || binding != (RequestKeyPreparationBinding{}) || wire != nil {
+					t.Fatal("incompatible key/current policy disclosed input")
+				}
+			}
+			cancelled, stop := context.WithCancel(ctx)
+			stop()
+			if binding, wire, err := reader.QueryRequestPreparation(cancelled, q, caller, *p.Feature, phase); !errors.Is(err, context.Canceled) || binding != (RequestKeyPreparationBinding{}) || wire != nil {
+				t.Fatal("cancelled query disclosed custody")
+			}
+			if snapshot() != before || phase.generated.Load() != generated || phase.restored.Load() != restored {
+				t.Fatal("input query changed execution or generation")
+			}
+		})
 	}
 }

@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Read retained original native request input without passwords or initiating
+  keys through QueryRequestPreparation, including before generation and after
+  rollback. Authenticate original mapping provenance and current disclosure
+  policy without executing, regenerating or classifying an outcome. The native
+  owner must authenticate encrypted subject/flow scope and original possession;
+  existing committed-output and command recovery contracts remain unchanged.
+
 - Bind original anonymous signup passwords and cookies before hash generation
   through the existing retained-key claim and preparation journal. Use
   PrepareFeaturePreparationPlan for original input; ordinary reservation remains
