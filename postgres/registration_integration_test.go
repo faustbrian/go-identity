@@ -3,12 +3,16 @@
 package postgres
 
 import (
+	"bytes"
 	"context"
+	"encoding/base64"
+	"errors"
 	"os"
 	"strings"
 	"testing"
 	"time"
 
+	auth "github.com/faustbrian/go-authentication"
 	identity "github.com/faustbrian/go-identity"
 	migrations "github.com/faustbrian/go-migrations/v3"
 	migrationdb "github.com/faustbrian/go-migrations/v3/postgres"
@@ -30,7 +34,7 @@ func (*registrationTestPhase) Descriptor() ContributorDescriptor {
 	return ContributorDescriptor{Owner: "identity/password/postgres", ContractID: "identity.password", Version: 1}
 }
 func (p *registrationTestPhase) FeatureOperations() []identity.FeatureOperation {
-	s, _ := p.expected.Feature()
+	s, _ := p.expected.PasswordSignupFeature()
 	return []identity.FeatureOperation{s.Operation}
 }
 func (p *registrationTestPhase) ValidateFeatureCommand(c identity.Command, plan CommandPlan) error {
@@ -42,8 +46,9 @@ func (p *registrationTestPhase) ValidateFeatureCommand(c identity.Command, plan 
 func (p *registrationTestPhase) ApplyFeature(ctx context.Context, w Work, c identity.Command) (identity.FeatureReceipt, error) {
 	if !p.skip {
 		if p.foreign {
-			s, _ := c.Feature()
-			c, _ = identity.NewFeatureCommand(s)
+			s, _ := c.PasswordSignupFeature()
+			hash, cookie, _ := c.PasswordSignupCustody()
+			c, _ = identity.NewFeaturePasswordSignupCommand(s, hash, cookie)
 		}
 		if _, err := p.domain.Apply(ctx, w, p, c, p.intent); err != nil {
 			return identity.FeatureReceipt{}, err
@@ -62,7 +67,7 @@ func (p *registrationTestPhase) ApplyFeature(ctx context.Context, w Work, c iden
 	if p.fail {
 		return identity.FeatureReceipt{}, identity.ForbiddenError{}
 	}
-	s, _ := c.Feature()
+	s, _ := c.PasswordSignupFeature()
 	return identity.FeatureReceipt{Operation: s.Operation}, nil
 }
 func (*registrationTestPhase) RecoverParticipant(ctx context.Context, w RecoveryWork) (RecoveryStatus, error) {
@@ -191,7 +196,9 @@ func TestPasswordRegistrationIntegration(t *testing.T) {
 			op := identity.FeatureOperation{Owner: "identity/password", OperationID: "identity.password.signup", SchemaID: "password-signup", SchemaVersion: 1, RecordRequirement: identity.FeatureRecordOmitted, SubjectRequirement: identity.FeatureSubjectAnonymousFlow}
 			b.UserID, b.AnonymousFlowID = "", string(b.CommandID)
 			b.OperationID, b.SchemaID, b.SchemaVersion = op.OperationID, op.SchemaID, op.SchemaVersion
-			command, err := identity.NewFeatureCommand(identity.FeatureCommandSpec{Binding: b, Operation: op, Fields: fields})
+			cookie := auth.NewBearerCredential(base64.RawURLEncoding.EncodeToString(bytes.Repeat([]byte{7}, 32)))
+			hash := "$synthetic$prepared-registration-verifier"
+			command, err := identity.NewFeaturePasswordSignupCommand(identity.FeatureCommandSpec{Binding: b, Operation: op, Fields: fields}, hash, cookie)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -297,7 +304,7 @@ func TestPasswordRegistrationIntegration(t *testing.T) {
 				if e != nil {
 					t.Fatal(e)
 				}
-				otherCommand, e := identity.NewFeatureCommand(identity.FeatureCommandSpec{Binding: otherBinding, Operation: op, Fields: otherFields})
+				otherCommand, e := identity.NewFeaturePasswordSignupCommand(identity.FeatureCommandSpec{Binding: otherBinding, Operation: op, Fields: otherFields}, hash, cookie)
 				if e != nil {
 					t.Fatal(e)
 				}
@@ -411,6 +418,37 @@ func TestPasswordRegistrationIntegration(t *testing.T) {
 				replay, history, err := c.ReserveCommand(ctx, b, command, plan)
 				if err != nil || replay.state != nil || history.Outcome != identity.CommitOutcomeCommitted || history.Binding != b {
 					t.Fatal("original signup replay lost", err)
+				}
+				for _, changed := range []struct {
+					hash   string
+					cookie auth.BearerCredential
+				}{{hash + "x", cookie}, {hash, auth.NewBearerCredential(base64.RawURLEncoding.EncodeToString(bytes.Repeat([]byte{8}, 32)))}} {
+					spec, _ := command.PasswordSignupFeature()
+					substitute, e := identity.NewFeaturePasswordSignupCommand(spec, changed.hash, changed.cookie)
+					if e != nil {
+						t.Fatal(e)
+					}
+					// Admit the substitute through its own otherwise valid participant
+					// and freshly computed plan, so only durable intent can reject it.
+					changedPhase := *phase
+					changedPhase.expected = substitute
+					changedRegistry, e := NewContributorRegistry([]Contributor{selectedRepo, audits, outbox, &changedPhase})
+					if e != nil {
+						t.Fatal(e)
+					}
+					changedCoordinator, e := NewCoordinator(selectedPool, changedRegistry, CoordinatorConfig{MaximumDuration: time.Second, LeaseDuration: 500 * time.Millisecond, CurrentFingerprintKeyVersion: 1, RetainedFingerprintKeys: map[uint32][32]byte{1: {1}}})
+					if e != nil {
+						t.Fatal(e)
+					}
+					changedPlan, e := changedCoordinator.PrepareCommandPlan(b, substitute, plan)
+					if e != nil {
+						t.Fatal("changed custody must reach durable claim comparison", e)
+					}
+					reservation, conflictResult, e := changedCoordinator.ReserveCommand(ctx, b, substitute, changedPlan)
+					var conflict identity.ConflictError
+					if !errors.As(e, &conflict) || reservation.state != nil || conflictResult.Outcome != identity.CommitOutcomeConflict {
+						t.Fatal("changed signup custody did not conflict with durable intent", e)
+					}
 				}
 				history, err = c.recoverCommandReceipt(ctx, identity.RecoveryQuery{CommandID: b.CommandID, TenantID: b.TenantID, AnonymousFlowID: b.AnonymousFlowID, ActorID: b.ActorID, ActorKind: b.ActorKind, OperationID: b.OperationID})
 				if err != nil || history.Outcome != identity.CommitOutcomeCommitted || history.Binding != b {

@@ -39,6 +39,16 @@ service, verification delivery, optional session issuance and release
 qualification remain pending; applications should not implement their own
 workflow around this low-level seam.
 
+Construct the original native `password-signup` v1 command with
+`identity.NewFeaturePasswordSignupCommand(spec, preparedHash, originalCookie)`.
+The coordinator fingerprints the exact hash and cookie in distinct retained-key
+domains, with no raw material in the journal or safe collision scope. Scalar
+and cookie-only commands cannot impersonate this profile. Changing either input
+changes command intent; recovery must keep the original command, not regenerate
+its hash or submit a replacement cookie. Other independently registered signup
+schemas are unaffected. This identity binding neither admits the cookie nor
+proves password policy; the native workflow owns those checks.
+
 ## Exact native command custody
 
 Adapters staging a native feature command must call `Work.RequireFeatureCommand`

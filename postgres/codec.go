@@ -169,6 +169,11 @@ func prepareClaim(c identity.Command, key [32]byte) (claimRequest, error) {
 				return claimRequest{}, err
 			}
 		}
+		if _, ok := c.PasswordSignupFeature(); ok {
+			if err := encodePasswordSignupCustody(c, key, payload); err != nil {
+				return claimRequest{}, err
+			}
+		}
 	default:
 		return claimRequest{}, codecError()
 	}
@@ -236,12 +241,15 @@ func commandFeature(c identity.Command) (identity.FeatureCommandSpec, bool) {
 	if s, ok := c.Feature(); ok {
 		// Signin's scalar metadata alone cannot stand in for the paired
 		// password/cookie variant, including preparation and restored plans.
-		if passwordSigninOperation(s.Operation) {
+		if passwordSigninOperation(s.Operation) || passwordRegistrationOperation(s.Operation) {
 			return identity.FeatureCommandSpec{}, false
 		}
 		return s, true
 	}
 	if s, ok := c.PasswordSigninFeature(); ok {
+		return s, true
+	}
+	if s, ok := c.PasswordSignupFeature(); ok {
 		return s, true
 	}
 	if s, ok := c.PasswordChangeFeature(); ok {

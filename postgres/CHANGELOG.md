@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Bind native signup's prepared verifier and original pre-auth cookie in
+  separate retained-key command-intent domains. Require the paired signup
+  command for password-signup v1; scalar or cookie-only commands cannot stand
+  in for it. Other registered schemas remain unchanged, and raw custody is
+  never stored in the command journal. Native password policy, flow admission
+  and complete delivery/session composition remain required.
+
 - Add an explicit native password-registration domain operation. Create the
   user, prepared attributes, unverified identifier and password reference in
   the original signup transaction, with exact command/participant custody and
