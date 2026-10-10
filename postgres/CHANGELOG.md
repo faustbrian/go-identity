@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Add an explicit anonymous signup acceptance branch under the original command.
+  Commit neutral acknowledgements for occupied or live-retired canonical values
+  without account creation, credentials or delivery; retain protected audit,
+  truthful lifecycle and original recovery evidence atomically. Enable through
+  the frozen plan flag and additive acceptance migration. Historical strict
+  creation plans remain unchanged; compatible readers are required before
+  enabling the new profile. Complete native signup orchestration remains pending.
+
 - Allow authenticated restored anonymous signup preparations to enlist their
   original new-user verification issuance and optional delivery in the existing
   transaction. Preserve original admission, journal identity, generation and

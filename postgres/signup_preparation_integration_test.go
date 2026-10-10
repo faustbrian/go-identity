@@ -109,8 +109,20 @@ func (p *signupPreparationPhase) ApplyFeature(ctx context.Context, w Work, c ide
 		return identity.FeatureReceipt{}, invalidWork()
 	}
 	if !p.skip {
-		if _, err := p.domain.Apply(ctx, w, p, c, p.intent); err != nil {
+		var accepted bool
+		var err error
+		if p.accept {
+			_, accepted, err = p.domain.ApplyOrAccept(ctx, w, p, c, p.intent)
+		} else {
+			_, err = p.domain.Apply(ctx, w, p, c, p.intent)
+		}
+		if err != nil {
 			return identity.FeatureReceipt{}, err
+		}
+		if accepted {
+			p.accepted = true
+			s, _ := c.PasswordSignupFeature()
+			return identity.FeatureReceipt{Operation: s.Operation}, nil
 		}
 		b, _, _, err := w.FeatureScope(p)
 		if err != nil {

@@ -86,6 +86,13 @@ func persistCreationSchema(ctx context.Context, w Work, registered registeredSch
 	if _, err := w.Exec(ctx, `INSERT INTO identity.attribute_schemas(tenant_id,schema_id,schema_version,definition) VALUES($1,$2,$3,$4) ON CONFLICT DO NOTHING`, string(w.state.binding.TenantID), registered.schema.ID, registered.schema.Version, registered.definition); err != nil {
 		return err
 	}
+	return checkCreationSchema(ctx, w, registered, false)
+}
+
+// An uninstalled declaration is valid for a prospective creation, but an
+// existing version must agree even when the command creates no account.
+// Callers hold the tenant fence; the shared read lock protects existing rows.
+func checkCreationSchema(ctx context.Context, w Work, registered registeredSchema, allowAbsent bool) error {
 	rows, err := w.Query(ctx, `SELECT definition FROM identity.attribute_schemas WHERE tenant_id=$1 AND schema_id=$2 AND schema_version=$3 FOR SHARE`, string(w.state.binding.TenantID), registered.schema.ID, registered.schema.Version)
 	if err != nil {
 		return err
@@ -93,6 +100,9 @@ func persistCreationSchema(ctx context.Context, w Work, registered registeredSch
 	defer rows.Close()
 	var definition []byte
 	if !rows.Next() {
+		if allowAbsent && rows.Err() == nil {
+			return nil
+		}
 		return w.fail(ctx, attributeStorageError())
 	}
 	if err := rows.Scan(&definition); err != nil {

@@ -89,7 +89,7 @@ func (w Work) StageDelivery(v DeliveryEnvelope) error {
 		return err
 	}
 	d := w.state.delivery
-	if d == nil || d.invocation != nil || !deliveryIdentifier(v.KeyID) || len(v.Ciphertext) < 1 || len(v.Ciphertext) > 524288 || len(v.Ciphertext) > (1<<20)-d.bytes {
+	if w.state.registrationAccepted || d == nil || d.invocation != nil || !deliveryIdentifier(v.KeyID) || len(v.Ciphertext) < 1 || len(v.Ciphertext) > 524288 || len(v.Ciphertext) > (1<<20)-d.bytes {
 		return w.fail(w.state.ctx, invalidWork())
 	}
 	declared := false
@@ -176,6 +176,12 @@ func validateDeliveryContributor(b identity.CommandBinding, p *DeliveryPlan, ent
 func (c *Coordinator) persistDelivery(w Work) (err error) {
 	d := w.state.delivery
 	if d == nil {
+		return nil
+	}
+	if w.state.registrationAccepted {
+		if !w.state.execution.reservation.plan.signupAcceptance || len(d.envelopes) != 0 || d.bytes != 0 {
+			return invalidWork()
+		}
 		return nil
 	}
 	if len(d.envelopes) != len(d.plan.Intents) {

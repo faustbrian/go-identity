@@ -22,6 +22,10 @@ import (
 // admission profile; it is not sufficient for a future successful mutation
 // commit, which must require its lifecycle and full effect declarations.
 type CommandPlan struct {
+	// SignupAcceptance declares the anonymous password-signup alternative which
+	// commits a neutral acknowledgement rather than creating a conflicting account.
+	// False preserves historical declarations; this flag grants no authority.
+	SignupAcceptance bool
 	// IdentifierAdmission selects an exact read-only session checker, not a
 	// durable effect participant. Nil preserves historical plan bytes. Public
 	// identifier execution remains disabled until native composition is complete.
@@ -103,7 +107,7 @@ func encodeKernelPlan(binding identity.CommandBinding, fingerprint [32]byte, pla
 	if plan.CapabilityIssuance != nil {
 		return encodeIssuanceWrappedPlan(binding, fingerprint, plan, encodeKernelPlan)
 	}
-	if plan.Feature != nil || plan.SubjectType != "" || plan.RiskEvidence != nil || plan.CaptchaEvidence != nil || plan.CommandCounters != nil || plan.CaptchaReplayReservation || plan.OTP != nil {
+	if plan.SignupAcceptance || plan.Feature != nil || plan.SubjectType != "" || plan.RiskEvidence != nil || plan.CaptchaEvidence != nil || plan.CommandCounters != nil || plan.CaptchaReplayReservation || plan.OTP != nil {
 		return nil, invalidPlan()
 	}
 	probe := identity.CommandResult{Binding: binding, Outcome: identity.CommitOutcomeInProgress, RetryAfter: time.Microsecond}
@@ -179,6 +183,7 @@ func encodeKernelPlan(binding identity.CommandBinding, fingerprint [32]byte, pla
 // admittedKernelPlan never escapes the coordinator boundary. It freezes only
 // the supported kernel profile, not arbitrary callbacks or opaque input blobs.
 type admittedKernelPlan struct {
+	signupAcceptance    bool
 	identifierAdmission *registeredContributor
 	registry            *contributorRegistryState
 	binding             identity.CommandBinding

@@ -192,7 +192,10 @@ func matchesDomainResult(w Work, result identity.CommandResult) bool {
 		return w.state.creation == nil && w.state.profile == nil && w.state.update == nil && w.state.feature == nil && result.User == owned.User && result.ExpectedVersion == owned.ExpectedVersion && result.Revocation != nil && owned.Revocation != nil && result.Revocation.CascadeID == owned.Revocation.CascadeID && result.Revocation.Generation == owned.Revocation.Generation && result.Revocation.AuthorityVersion == owned.Revocation.AuthorityVersion && result.Revocation.Status == owned.Revocation.Status && slices.Equal(result.Revocation.Owners, owned.Revocation.Owners) && slices.Equal(result.Revocation.ExternalLimitations, owned.Revocation.ExternalLimitations)
 	}
 	if w.state.feature != nil {
-		if passwordRegistrationOperation(w.state.feature.Operation) && w.state.registrationUser == nil {
+		if passwordRegistrationOperation(w.state.feature.Operation) && w.state.registrationUser == nil && !w.state.registrationAccepted {
+			return false
+		}
+		if w.state.registrationAccepted && (w.state.registrationUser != nil || result.User != (identity.User{}) || w.state.lifecycle == nil || w.state.lifecycle.plan.EventType != signupAcceptedEvent || !w.state.execution.reservation.plan.signupAcceptance) {
 			return false
 		}
 		if credentialReplacementOperation(w.state.feature.Operation) && (w.state.replacementReceipt == nil || w.state.replacementIntent == nil || result.Feature == nil || result.Feature.BeforeVersion != w.state.replacementReceipt.BeforeCredentialVersion || result.Feature.AfterVersion != w.state.replacementReceipt.Credential.Version) {

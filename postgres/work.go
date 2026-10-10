@@ -37,6 +37,7 @@ type workState struct {
 	execution             *domainExecution
 	creation              *identity.User
 	registrationUser      *identity.User
+	registrationAccepted  bool
 	profile               *identity.UserProfile
 	update                *identity.User
 	status                *identity.CommandResult

@@ -278,7 +278,7 @@ func preparationFinalDeclaration(b identity.CommandBinding, original, final Comm
 	if final.CapabilityIssuance != nil && (!validCapabilityIssuancePlan(final.CapabilityIssuance) || final.CapabilityIssuance.RegistrationUserID == "" || !validRegistrationIssuance(b, final)) {
 		return false
 	}
-	if final.Feature == nil || final.Lifecycle == nil || preparationProtected(withoutIssuance) || *original.Feature != *final.Feature || *original.Lifecycle != *final.Lifecycle || original.SubjectType != final.SubjectType || len(original.Audits) != len(final.Audits) {
+	if final.Feature == nil || final.Lifecycle == nil || preparationProtected(withoutIssuance) || *original.Feature != *final.Feature || *original.Lifecycle != *final.Lifecycle || original.SubjectType != final.SubjectType || original.SignupAcceptance != final.SignupAcceptance || len(original.Audits) != len(final.Audits) {
 		return false
 	}
 	if (original.CommandCounters == nil) != (final.CommandCounters == nil) || original.CommandCounters != nil && *original.CommandCounters != *final.CommandCounters {

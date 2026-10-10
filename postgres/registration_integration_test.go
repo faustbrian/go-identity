@@ -31,6 +31,7 @@ type registrationTestPhase struct {
 	expected                       identity.Command
 	intent                         PasswordRegistrationIntent
 	fail, foreign, skip, duplicate bool
+	accept, accepted, finalFail    bool
 }
 
 func (*registrationTestPhase) Descriptor() ContributorDescriptor {
@@ -53,8 +54,23 @@ func (p *registrationTestPhase) ApplyFeature(ctx context.Context, w Work, c iden
 			hash, cookie, _ := c.PasswordSignupCustody()
 			c, _ = identity.NewFeaturePasswordSignupCommand(s, hash, cookie)
 		}
-		if _, err := p.domain.Apply(ctx, w, p, c, p.intent); err != nil {
+		var accepted bool
+		var err error
+		if p.accept {
+			_, accepted, err = p.domain.ApplyOrAccept(ctx, w, p, c, p.intent)
+		} else {
+			_, err = p.domain.Apply(ctx, w, p, c, p.intent)
+		}
+		if err != nil {
 			return identity.FeatureReceipt{}, err
+		}
+		if accepted {
+			p.accepted = true
+			if p.fail {
+				return identity.FeatureReceipt{}, identity.ForbiddenError{}
+			}
+			s, _ := c.PasswordSignupFeature()
+			return identity.FeatureReceipt{Operation: s.Operation}, nil
 		}
 		if p.duplicate {
 			_, _ = p.domain.Apply(ctx, w, p, c, p.intent)
@@ -80,6 +96,12 @@ func (p *registrationTestPhase) ApplyFeature(ctx context.Context, w Work, c iden
 }
 func (*registrationTestPhase) RecoverParticipant(ctx context.Context, w RecoveryWork) (RecoveryStatus, error) {
 	return recoveryTestEvidence(ctx, w, "public.identity_test_registration_material")
+}
+func (p *registrationTestPhase) CheckFeatureCommit(ctx context.Context, w Work, c identity.Command) error {
+	if p.finalFail || c != p.expected {
+		return identity.ForbiddenError{}
+	}
+	return ctx.Err()
 }
 
 func TestPasswordRegistrationIntegration(t *testing.T) {
@@ -157,13 +179,42 @@ func TestPasswordRegistrationIntegration(t *testing.T) {
 	if _, err := pool.Raw().Exec(ctx, `CREATE TABLE public.identity_test_audits(event_id text PRIMARY KEY,command_id text NOT NULL UNIQUE); CREATE TABLE public.identity_test_lifecycle(event_id text PRIMARY KEY,command_id text NOT NULL UNIQUE); CREATE TABLE public.identity_test_registration_material(command_id text PRIMARY KEY,user_id text NOT NULL)`); err != nil {
 		t.Fatal(err)
 	}
-	t.Run("signup-issuance", func(t *testing.T) { testSignupCapabilityIssuance(t, ctx, pool, repo, domain) })
-	for _, mode := range []string{"commit", "native-failure", "audit-failure", "outbox-failure", "foreign-command", "missing-domain", "duplicate-domain", "changed-intent", "changed-attributes", "changed-actor", "changed-actor-kind", "changed-command-id", "retired-identifier", "canonical-duplicate", "foreign-tenant-value", "concurrent", "disconnect-before", "disconnect-after"} {
+	acceptanceInstalled := false
+	installAcceptance := func(t *testing.T) {
+		t.Helper()
+		if acceptanceInstalled {
+			return
+		}
+		var before, after int
+		if e := pool.Raw().QueryRow(ctx, `SELECT count(*) FROM identity.registration_bindings`).Scan(&before); e != nil {
+			t.Fatal(e)
+		}
+		r, e := migrations.NewRunner(PasswordSignupAcceptanceMigrationSource{Base: source, Version: 13}, backend)
+		if e != nil {
+			t.Fatal(e)
+		}
+		if _, e = r.Up(ctx); e != nil {
+			t.Fatal("forward acceptance migration", e)
+		}
+		if _, e = r.Up(ctx); e != nil {
+			t.Fatal("forward acceptance replay", e)
+		}
+		if e := pool.Raw().QueryRow(ctx, `SELECT count(*) FROM identity.registration_bindings WHERE NOT accepted_only AND user_id IS NOT NULL AND identifier_id IS NOT NULL AND credential_id IS NOT NULL`).Scan(&after); e != nil || before != after {
+			t.Fatal("forward migration changed populated registration evidence", e)
+		}
+		acceptanceInstalled = true
+	}
+	t.Run("signup-issuance", func(t *testing.T) { testSignupCapabilityIssuance(t, ctx, pool, repo, domain, installAcceptance) })
+	for _, mode := range []string{"commit", "native-failure", "audit-failure", "outbox-failure", "foreign-command", "missing-domain", "duplicate-domain", "changed-intent", "changed-attributes", "changed-actor", "changed-actor-kind", "changed-command-id", "retired-identifier", "canonical-duplicate", "foreign-tenant-value", "concurrent", "disconnect-before", "disconnect-after", "schema-conflict", "accept-canonical-duplicate", "accept-retired-identifier", "accept-commit", "accept-concurrent", "accept-audit-failure", "accept-outbox-failure", "accept-native-failure", "accept-final-failure", "accept-structural-id", "accept-user-id", "accept-unknown-attribute", "accept-unknown-schema", "accept-schema-conflict", "accept-missing-key", "accept-disconnect-before", "accept-disconnect-after"} {
 		t.Run(mode, func(t *testing.T) {
+			scenario := strings.TrimPrefix(mode, "accept-")
+			if strings.HasPrefix(mode, "accept-") && !acceptanceInstalled {
+				installAcceptance(t)
+			}
 			selectedPool, selectedRepo, selectedDomain := pool, repo, domain
 			var fault *registrationCommitFault
-			if strings.HasPrefix(mode, "disconnect-") {
-				fault = &registrationCommitFault{before: mode == "disconnect-before"}
+			if strings.HasPrefix(scenario, "disconnect-") {
+				fault = &registrationCommitFault{before: scenario == "disconnect-before"}
 				var err error
 				selectedPool, err = database.Connect(ctx, database.Config{DSN: dsn, MaxConns: 3, Configure: func(c *database.PoolConfig) error {
 					// ConnString preserves the parsed DSN, not the database selected
@@ -192,12 +243,35 @@ func TestPasswordRegistrationIntegration(t *testing.T) {
 				}
 			}
 			b := codecBinding()
+			if scenario == "missing-key" {
+				b.TenantID = "missing-retirement-key-test"
+			}
 			b.CommandID, _ = identity.NewCommandID()
+			if scenario == "schema-conflict" {
+				b.TenantID = identity.TenantID("schema-conflict-" + string(b.CommandID))
+				different := storageSchema()
+				different.Fields[0].Name = "other"
+				frozen, e := freezeAttributeSchemas([]identity.AttributeSchema{different})
+				if e != nil {
+					t.Fatal("valid differing schema fixture", e)
+				}
+				if _, e := pool.Raw().Exec(ctx, `INSERT INTO identity.attribute_schemas(tenant_id,schema_id,schema_version,definition) VALUES($1,'fields',1,$2)`, string(b.TenantID), frozen[schemaKey{"fields", 1}].definition); e != nil {
+					t.Fatal("conflicting stored schema fixture", e)
+				}
+			}
 			u, _ := identity.NewSubjectID()
 			b.UserID = identity.UserID(u)
 			b.SchemaID = "fields"
 			creation := identity.CreateUserCommand{Binding: b, Status: identity.StatusActive, Attributes: storageValues()}
 			intent := PasswordRegistrationIntent{Creation: creation, Identifier: identity.Identifier{ID: identity.IdentifierID(u), UserID: identity.UserID(u), Kind: identity.IdentifierEmail, CanonicalValue: string(u) + "@example.test", Version: 1}, Credential: identity.CredentialRef{ID: "password", TenantID: b.TenantID, UserID: identity.UserID(u), Kind: identity.CredentialPassword, Owner: "identity/password", Version: 1}, ComparisonProfile: "email-v1"}
+			// These are invalid original declarations, not substitutions after
+			// fingerprinting; neutral occupancy must not bypass owner policy.
+			if scenario == "unknown-attribute" {
+				intent.Creation.Attributes[0].Name = "undeclared"
+			}
+			if scenario == "unknown-schema" {
+				intent.Creation.Binding.SchemaID = "unknown-fields"
+			}
 			fields, err := PasswordRegistrationFields(intent)
 			if err != nil {
 				t.Fatal(err)
@@ -212,6 +286,9 @@ func TestPasswordRegistrationIntegration(t *testing.T) {
 				t.Fatal(err)
 			}
 			phase := &registrationTestPhase{domain: selectedDomain, expected: command, intent: intent, fail: mode == "native-failure", foreign: mode == "foreign-command", skip: mode == "missing-domain", duplicate: mode == "duplicate-domain"}
+			phase.accept = strings.HasPrefix(mode, "accept-")
+			phase.fail = scenario == "native-failure"
+			phase.finalFail = scenario == "final-failure"
 			if mode == "changed-intent" {
 				phase.intent.Identifier.CanonicalValue = "other@example.test"
 			}
@@ -234,30 +311,43 @@ func TestPasswordRegistrationIntegration(t *testing.T) {
 					t.Fatal("binding substitution must remain structurally valid", e)
 				}
 			}
-			if mode == "canonical-duplicate" || mode == "foreign-tenant-value" {
+			if scenario == "canonical-duplicate" || scenario == "foreign-tenant-value" || phase.accept && scenario != "commit" && scenario != "concurrent" && scenario != "retired-identifier" {
 				tenant := b.TenantID
 				if mode == "foreign-tenant-value" {
 					tenant = "another-tenant"
 				}
 				old := "existing-" + string(u)
+				if scenario == "user-id" {
+					if _, e := pool.Raw().Exec(ctx, `INSERT INTO identity.users(tenant_id,user_id,status,version) VALUES($1,$2,'active',1)`, string(tenant), string(u)); e != nil {
+						t.Fatal(e)
+					}
+				}
+				identifierID, canonical := old, intent.Identifier.CanonicalValue
+				if scenario == "structural-id" {
+					identifierID, canonical = string(intent.Identifier.ID), "different-"+canonical
+				}
 				if _, err := pool.Raw().Exec(ctx, `INSERT INTO identity.users(tenant_id,user_id,status,version) VALUES($1,$2,'active',1);`, string(tenant), old); err != nil {
 					t.Fatal(err)
 				}
-				if _, err := pool.Raw().Exec(ctx, `INSERT INTO identity.identifiers(tenant_id,user_id,identifier_id,kind,canonical_value,version,verification_state,verification_version) VALUES($1,$2,$2,'email',$3,1,1,1)`, string(tenant), old, intent.Identifier.CanonicalValue); err != nil {
+				if _, err := pool.Raw().Exec(ctx, `INSERT INTO identity.identifiers(tenant_id,user_id,identifier_id,kind,canonical_value,version,verification_state,verification_version) VALUES($1,$2,$3,'email',$4,1,1,1)`, string(tenant), old, identifierID, canonical); err != nil {
 					t.Fatal(err)
 				}
 			}
-			if mode == "retired-identifier" {
+			if scenario == "retired-identifier" || scenario == "missing-key" {
 				digest := identifierReuseDigest([32]byte{1}, b.TenantID, intent.Identifier.Kind, intent.Identifier.CanonicalValue)
 				if _, err := pool.Raw().Exec(ctx, `INSERT INTO identity.users(tenant_id,user_id,status,version) VALUES($1,$2,'deleted',1)`, string(b.TenantID), "retired-"+string(u)); err != nil {
 					t.Fatal(err)
 				}
-				if _, err := pool.Raw().Exec(ctx, `INSERT INTO identity.identifier_retirements(tenant_id,user_id,identifier_id,kind,record_version,verification_version,removed,command_id,key_version,value_digest,retired_at,reuse_until) VALUES($1,$2,$3,'email',1,1,true,$4,1,$5,clock_timestamp(),clock_timestamp()+interval '1 day')`, string(b.TenantID), "retired-"+string(u), "retired-"+string(u), string(b.CommandID), digest[:]); err != nil {
+				keyVersion := 1
+				if scenario == "missing-key" {
+					keyVersion = 2
+				}
+				if _, err := pool.Raw().Exec(ctx, `INSERT INTO identity.identifier_retirements(tenant_id,user_id,identifier_id,kind,record_version,verification_version,removed,command_id,key_version,value_digest,retired_at,reuse_until) VALUES($1,$2,$3,'email',1,1,true,$4,$5,$6,clock_timestamp(),clock_timestamp()+interval '1 day')`, string(b.TenantID), "retired-"+string(u), "retired-"+string(u), string(b.CommandID), keyVersion, digest[:]); err != nil {
 					t.Fatal(err)
 				}
 			}
 			audits, outbox := &recoveryAuditPhase{}, &recoveryLifecyclePhase{}
-			audits.fail, outbox.fail = mode == "audit-failure", mode == "outbox-failure"
+			audits.fail, outbox.fail = scenario == "audit-failure", scenario == "outbox-failure"
 			registry, err := NewContributorRegistry([]Contributor{selectedRepo, audits, outbox, phase})
 			if err != nil {
 				t.Fatal(err)
@@ -269,6 +359,7 @@ func TestPasswordRegistrationIntegration(t *testing.T) {
 			_, _, plan := featurePlanFixture(t)
 			plan.Contributors, plan.SubjectType, plan.Feature = registry.Descriptors(), "user", &FeatureRegistration{Contributor: phase.Descriptor(), Operation: op}
 			plan.Lifecycle = &LifecyclePlan{EventType: "user.created.v1"}
+			plan.SignupAcceptance = phase.accept
 			plan.Audits[0].EventType, plan.Audits[0].RetentionClass = op.OperationID, "protected"
 			seed, err := securityMutationAudit(ctx, b, 0, 0, time.Now().UTC().Truncate(time.Microsecond), "committed", op.OperationID, "user", b.AnonymousFlowID, "protected", true)
 			if err != nil {
@@ -293,13 +384,21 @@ func TestPasswordRegistrationIntegration(t *testing.T) {
 				}
 				result, err := c.ApplyFeature(ctx, w, command)
 				if err == nil {
+					events, e := w.StagedLifecycle()
+					expectEvent := "user.created.v1"
+					if w.state.registrationAccepted {
+						expectEvent = signupAcceptedEvent
+					}
+					if e != nil || len(events) != 1 || events[0].EventType != expectEvent || events[0].SubjectID != b.AnonymousFlowID || events[0].UserID != "" {
+						return c.Abort(w, identity.UnavailableError{})
+					}
 					return c.Commit(w, result)
 				}
 				result, _ = c.Abort(w, err)
 				return result, err
 			}
 			var result identity.CommandResult
-			if mode == "concurrent" {
+			if scenario == "concurrent" {
 				otherIntent := intent
 				otherUser, _ := identity.NewSubjectID()
 				otherBinding := b
@@ -317,7 +416,7 @@ func TestPasswordRegistrationIntegration(t *testing.T) {
 				if e != nil {
 					t.Fatal(e)
 				}
-				otherPhase := &registrationTestPhase{domain: domain, expected: otherCommand, intent: otherIntent}
+				otherPhase := &registrationTestPhase{domain: domain, expected: otherCommand, intent: otherIntent, accept: phase.accept}
 				otherRegistry, e := NewContributorRegistry([]Contributor{repo, &recoveryAuditPhase{}, &recoveryLifecyclePhase{}, otherPhase})
 				if e != nil {
 					t.Fatal(e)
@@ -363,8 +462,15 @@ func TestPasswordRegistrationIntegration(t *testing.T) {
 						winners++
 					}
 				}
-				if winners != 1 {
+				wantWinners := 1
+				if phase.accept {
+					wantWinners = 2
+				}
+				if winners != wantWinners {
 					t.Fatal("canonical registration race did not have one winner")
+				}
+				if phase.accept && phase.accepted == otherPhase.accepted {
+					t.Fatal("race did not create exactly one account and one neutral acknowledgement")
 				}
 				var accounts int
 				if e := pool.Raw().QueryRow(ctx, `SELECT count(*) FROM identity.users u JOIN identity.identifiers i USING(tenant_id,user_id) JOIN identity.credential_references c USING(tenant_id,user_id) JOIN public.identity_test_registration_material m ON m.user_id=u.user_id WHERE u.tenant_id=$1 AND i.canonical_value=$2`, string(b.TenantID), intent.Identifier.CanonicalValue).Scan(&accounts); e != nil || accounts != 1 {
@@ -377,8 +483,29 @@ func TestPasswordRegistrationIntegration(t *testing.T) {
 			} else {
 				result, err = execute(c, b, command, plan)
 			}
+			expectNeutral := phase.accept && (scenario == "canonical-duplicate" || scenario == "retired-identifier" || scenario == "concurrent")
+			if phase.accept && !expectNeutral && scenario != "commit" && fault == nil && err == nil {
+				t.Fatal("forbidden signup failure was neutralized")
+			}
+			if expectNeutral && err != nil {
+				t.Fatal("valid neutral acknowledgement denied", err)
+			}
+			if expectNeutral && phase.accepted && fault == nil && err == nil {
+				if err != nil || result.Outcome != identity.CommitOutcomeCommitted || result.Binding != b || result.User != (identity.User{}) {
+					t.Fatal("neutral original signup acknowledgement did not commit", err)
+				}
+				var users, material, receipts, audits, events int
+				if e := pool.Raw().QueryRow(ctx, `SELECT (SELECT count(*) FROM identity.users WHERE tenant_id=$1 AND user_id=$2),(SELECT count(*) FROM public.identity_test_registration_material WHERE command_id=$3),(SELECT count(*) FROM identity.registration_bindings WHERE tenant_id=$1 AND command_id=$4),(SELECT count(*) FROM public.identity_test_audits WHERE command_id=$3),(SELECT count(*) FROM public.identity_test_lifecycle WHERE command_id=$3)`, string(b.TenantID), string(u), string(b.CommandID), mustCommandBytes(t, b.CommandID)).Scan(&users, &material, &receipts, &audits, &events); e != nil || users != 0 || material != 0 || receipts != 1 || audits != 1 || events != 1 {
+					t.Fatal("neutral acknowledgement created an account or lost required effects", e)
+				}
+				r, history, e := c.ReserveCommand(ctx, b, command, plan)
+				if e != nil || r.state != nil || history.Outcome != identity.CommitOutcomeCommitted || history.Binding != b || history.User != (identity.User{}) {
+					t.Fatal("neutral original receipt did not replay", e)
+				}
+				return
+			}
 			want := 0
-			if mode == "commit" || mode == "disconnect-after" || mode == "foreign-tenant-value" || mode == "concurrent" && result.Outcome == identity.CommitOutcomeCommitted && err == nil {
+			if scenario == "commit" || !phase.accept && scenario == "disconnect-after" || scenario == "foreign-tenant-value" || scenario == "concurrent" && !phase.accepted && result.Outcome == identity.CommitOutcomeCommitted && err == nil {
 				want = 1
 			}
 			if fault == nil && want == 1 && (err != nil || result.Outcome != identity.CommitOutcomeCommitted || result.Binding.OperationID != op.OperationID || result.Binding.AnonymousFlowID != b.AnonymousFlowID) {
@@ -397,7 +524,7 @@ func TestPasswordRegistrationIntegration(t *testing.T) {
 				ticker := time.NewTicker(10 * time.Millisecond)
 				defer ticker.Stop()
 				outcome := identity.CommitOutcomeNotCommitted
-				if want == 1 {
+				if want == 1 || phase.accepted && scenario == "disconnect-after" {
 					outcome = identity.CommitOutcomeCommitted
 				}
 				for {
@@ -415,9 +542,23 @@ func TestPasswordRegistrationIntegration(t *testing.T) {
 					}
 				}
 			}
+			wantEvents := want
+			if phase.accepted && scenario == "disconnect-after" {
+				wantEvents = 1
+			}
 			var users, identifiers, references, material, bindings, emitted int
-			if err := pool.Raw().QueryRow(ctx, `SELECT (SELECT count(*) FROM identity.users WHERE tenant_id=$1 AND user_id=$2),(SELECT count(*) FROM identity.identifiers WHERE tenant_id=$1 AND user_id=$2 AND NOT verified AND NOT is_primary AND version=1 AND verification_state=1),(SELECT count(*) FROM identity.credential_references WHERE tenant_id=$1 AND user_id=$2 AND enabled AND version=1),(SELECT count(*) FROM public.identity_test_registration_material WHERE command_id=$3),(SELECT count(*) FROM identity.registration_bindings WHERE tenant_id=$1 AND user_id=$2),(SELECT count(*) FROM public.identity_test_lifecycle WHERE command_id=$3)`, string(b.TenantID), string(u), string(b.CommandID)).Scan(&users, &identifiers, &references, &material, &bindings, &emitted); err != nil || users != want || identifiers != want || references != want || material != want || bindings != want || emitted != want {
+			wantUsers := want
+			if scenario == "user-id" {
+				wantUsers = 1
+			}
+			if err := pool.Raw().QueryRow(ctx, `SELECT (SELECT count(*) FROM identity.users WHERE tenant_id=$1 AND user_id=$2),(SELECT count(*) FROM identity.identifiers WHERE tenant_id=$1 AND user_id=$2 AND NOT verified AND NOT is_primary AND version=1 AND verification_state=1),(SELECT count(*) FROM identity.credential_references WHERE tenant_id=$1 AND user_id=$2 AND enabled AND version=1),(SELECT count(*) FROM public.identity_test_registration_material WHERE command_id=$3),(SELECT count(*) FROM identity.registration_bindings WHERE tenant_id=$1 AND user_id=$2),(SELECT count(*) FROM public.identity_test_lifecycle WHERE command_id=$3)`, string(b.TenantID), string(u), string(b.CommandID)).Scan(&users, &identifiers, &references, &material, &bindings, &emitted); err != nil || users != wantUsers || identifiers != want || references != want || material != want || bindings != want || emitted != wantEvents {
 				t.Fatal("signup creation and required effects were not atomic", err)
+			}
+			if phase.accepted {
+				var retained int
+				if e := pool.Raw().QueryRow(ctx, `SELECT count(*) FROM identity.registration_bindings WHERE tenant_id=$1 AND command_id=$2 AND accepted_only AND user_id IS NULL AND identifier_id IS NULL AND credential_id IS NULL`, string(b.TenantID), mustCommandBytes(t, b.CommandID)).Scan(&retained); e != nil || retained != wantEvents {
+					t.Fatal("neutral evidence was not atomic with original outcome", e)
+				}
 			}
 			if want == 1 {
 				var attributes int
@@ -466,4 +607,13 @@ func TestPasswordRegistrationIntegration(t *testing.T) {
 			}
 		})
 	}
+}
+
+func mustCommandBytes(t *testing.T, id identity.CommandID) []byte {
+	t.Helper()
+	b, err := base64.RawURLEncoding.DecodeString(string(id))
+	if err != nil || len(b) != 16 {
+		t.Fatal("invalid fixture command")
+	}
+	return b
 }

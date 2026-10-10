@@ -26,6 +26,29 @@ signup receipt without its actual kernel creation and commits required
 audit/outbox/native effects together. Never chain `UserCreate`, identifier
 attachment and password persistence as separate registration commits.
 
+For enumeration-safe **anonymous** signup, freeze `CommandPlan.SignupAcceptance`
+as true before reservation and call `domain.ApplyOrAccept` instead. The creation
+declaration remains `user.created.v1`; the opt-in profile additionally declares
+`identity.password.signup.accepted.v1` at the same event index and zero versions.
+Canonical occupancy and live retirement are classified under the existing tenant
+fence. A neutral result is `(zero User, true, nil)`: insert no password material,
+session, verification grant or delivery, but still run original pre-auth/risk and
+final admission checks. The coordinator commits the protected audit, neutral
+event and retained original acceptance binding together. Generated structural-ID
+collisions, unavailable retirement keys and other failures are never neutralized.
+Neither provisional result authenticates or reveals an existing account.
+
+Append `PasswordSignupAcceptanceMigrationSource` **after** the registration
+migration before enabling this profile. Its forward migration preserves creation
+receipts and adds a closed all-NULL record arm for neutral acceptance; it does
+not create another journal. Historical plans retain their exact bytes and strict
+creation requirement. The new opt-in plan fails closed in older readers, so
+deploy compatible readers before enabling it. Prepared restoration must retain
+the original opt-in flag; it cannot add/remove the branch after admission. A
+prepared neutral commit intentionally leaves declared prospective issuance and
+delivery unused; any staged credential or envelope instead denies the commit.
+Original replay/recovery cannot regenerate effects or expose account identifiers.
+
 Append `PasswordRegistrationMigrationSource` at an explicitly allocated version
 after the complete credential-reference and identifier-retirement history.
 Existing history and populated accounts are not rewritten or inferred to be

@@ -22,20 +22,25 @@ import (
 
 // This exercises the kernel's selected-subject transaction boundary, not the
 // capability adapter's signing policy or a complete email/password workflow.
-func testSignupCapabilityIssuance(t *testing.T, ctx context.Context, pool *database.Pool, repo *Repository, domain *PasswordRegistrationDomain) {
+func testSignupCapabilityIssuance(t *testing.T, ctx context.Context, pool *database.Pool, repo *Repository, domain *PasswordRegistrationDomain, installAcceptance func(*testing.T)) {
 	if _, err := pool.Raw().Exec(ctx, preparationSchemaSQL); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := pool.Raw().Exec(ctx, `CREATE TABLE public.identity_test_issuance(command_id text UNIQUE NOT NULL,capability_id text PRIMARY KEY,proof_fingerprint bytea NOT NULL,replay_digest bytea NOT NULL,generation numeric NOT NULL); CREATE TABLE public.identity_test_delivery(command_id text UNIQUE NOT NULL,effect_id text PRIMARY KEY,digest bytea NOT NULL,ciphertext bytea NOT NULL)`); err != nil {
 		t.Fatal(err)
 	}
-	for _, profile := range []string{"commit", "missing-registration", "foreign-target", "wrong-subject", "wrong-tenant", "issuer-failure", "later-failure", "disconnect-before", "disconnect-after", "prepared-commit", "prepared-restart", "prepared-missing-registration", "prepared-foreign-target", "prepared-wrong-subject", "prepared-issuer-failure", "prepared-later-failure", "prepared-delivery-commit", "prepared-delivery-failure", "prepared-delivery-later-failure"} {
+	for _, profile := range []string{"commit", "missing-registration", "foreign-target", "wrong-subject", "wrong-tenant", "issuer-failure", "later-failure", "disconnect-before", "disconnect-after", "prepared-commit", "prepared-restart", "prepared-missing-registration", "prepared-foreign-target", "prepared-wrong-subject", "prepared-issuer-failure", "prepared-later-failure", "prepared-delivery-commit", "prepared-delivery-failure", "prepared-delivery-later-failure", "prepared-neutral-commit", "prepared-neutral-restart", "prepared-delivery-neutral-commit"} {
 		t.Run(profile, func(t *testing.T) {
 			mode := strings.TrimPrefix(profile, "prepared-")
 			prepared := mode != profile
 			withDelivery := strings.HasPrefix(mode, "delivery-")
 			if withDelivery {
 				mode = strings.TrimPrefix(mode, "delivery-")
+			}
+			neutral := strings.HasPrefix(mode, "neutral-")
+			if neutral {
+				mode = strings.TrimPrefix(mode, "neutral-")
+				installAcceptance(t)
 			}
 			restart := mode == "restart"
 			if restart {
@@ -91,7 +96,16 @@ func testSignupCapabilityIssuance(t *testing.T, ctx context.Context, pool *datab
 			if mode == "issuer-failure" {
 				issuer.mode = "error"
 			}
-			phase := &registrationTestPhase{domain: domain, expected: command, intent: intent, issuer: issuer, skip: mode == "missing-registration"}
+			phase := &registrationTestPhase{domain: domain, expected: command, intent: intent, issuer: issuer, skip: mode == "missing-registration", accept: neutral}
+			if neutral {
+				old := "occupied-" + string(u)
+				if _, e := pool.Raw().Exec(ctx, `INSERT INTO identity.users(tenant_id,user_id,status,version) VALUES($1,$2,'active',1)`, string(b.TenantID), old); e != nil {
+					t.Fatal(e)
+				}
+				if _, e := pool.Raw().Exec(ctx, `INSERT INTO identity.identifiers(tenant_id,user_id,identifier_id,kind,canonical_value,version,verification_state,verification_version) VALUES($1,$2,$2,'email',$3,1,1,1)`, string(b.TenantID), old, intent.Identifier.CanonicalValue); e != nil {
+					t.Fatal(e)
+				}
+			}
 			audits, lifecycle := &recoveryAuditPhase{}, &recoveryLifecyclePhase{fail: mode == "later-failure"}
 			var native Contributor = phase
 			var preparation *signupPreparationPhase
@@ -148,6 +162,7 @@ func testSignupCapabilityIssuance(t *testing.T, ctx context.Context, pool *datab
 			_, _, plan := featurePlanFixture(t)
 			plan.Contributors, plan.SubjectType, plan.Feature = registry.Descriptors(), "user", &FeatureRegistration{Contributor: phase.Descriptor(), Operation: op}
 			plan.Lifecycle = &LifecyclePlan{EventType: "user.created.v1"}
+			plan.SignupAcceptance = neutral
 			plan.Audits[0].EventType, plan.Audits[0].RetentionClass = op.OperationID, "protected"
 			seed, err := securityMutationAudit(ctx, b, 0, 0, now, "committed", op.OperationID, "user", b.AnonymousFlowID, "protected", true)
 			if err != nil {
@@ -234,6 +249,24 @@ func testSignupCapabilityIssuance(t *testing.T, ctx context.Context, pool *datab
 				} else {
 					_, _ = c.Abort(w, err)
 				}
+			}
+			if neutral {
+				if err != nil || result.Outcome != identity.CommitOutcomeCommitted || result.Binding != b || result.User != (identity.User{}) || issuer.invocations != 0 {
+					t.Fatal("prepared neutral acknowledgement persisted verification issuance", err)
+				}
+				var users, issued, delivered, material, receipts, events int
+				if e := pool.Raw().QueryRow(ctx, `SELECT (SELECT count(*) FROM identity.users WHERE tenant_id=$1 AND user_id=$2),(SELECT count(*) FROM public.identity_test_issuance WHERE command_id=$3),(SELECT count(*) FROM public.identity_test_delivery WHERE command_id=$3),(SELECT count(*) FROM public.identity_test_registration_material WHERE command_id=$3),(SELECT count(*) FROM identity.registration_bindings WHERE tenant_id=$1 AND command_id=$4 AND accepted_only AND user_id IS NULL),(SELECT count(*) FROM public.identity_test_lifecycle WHERE command_id=$3)`, string(b.TenantID), string(u), string(b.CommandID), mustCommandBytes(t, b.CommandID)).Scan(&users, &issued, &delivered, &material, &receipts, &events); e != nil || users != 0 || issued != 0 || delivered != 0 || material != 0 || receipts != 1 || events != 1 {
+					t.Fatal("prepared neutral effects were not closed and atomic", e)
+				}
+				history, e := c.ExecutePreparedFeature(ctx, command, declaration)
+				wantGenerated := int64(1)
+				if restart {
+					wantGenerated = 0
+				}
+				if e != nil || history.Outcome != identity.CommitOutcomeCommitted || history.Binding != b || history.User != (identity.User{}) || preparation.generated.Load() != wantGenerated || preparation.restored.Load() != 1 || preparation.outputGeneration != 1 {
+					t.Fatal("original neutral preparation regenerated or lost history", e)
+				}
+				return
 			}
 			want := 0
 			if fault != nil {

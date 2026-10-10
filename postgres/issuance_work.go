@@ -229,6 +229,17 @@ func (c *Coordinator) persistCapabilityIssuance(w Work) (err error) {
 	if d == nil {
 		return nil
 	}
+	if w.state.registrationAccepted {
+		if !w.state.execution.reservation.plan.signupAcceptance || d.persisted {
+			return invalidWork()
+		}
+		for _, staged := range d.staged {
+			if staged {
+				return invalidWork()
+			}
+		}
+		return nil
+	}
 	if d.persisted || len(d.grants) != len(d.plan.Grants) {
 		return invalidWork()
 	}

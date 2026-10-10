@@ -26,6 +26,9 @@ func FeaturePlanDigest(binding identity.CommandBinding, fingerprint [32]byte, pl
 }
 
 func encodeFeaturePlan(binding identity.CommandBinding, fingerprint [32]byte, p CommandPlan) ([]byte, error) {
+	if p.SignupAcceptance {
+		return encodeSignupAcceptancePlan(binding, fingerprint, p)
+	}
 	if validateCaptchaReplayPlan(binding, p) != nil || validateCaptchaEvidencePlan(binding, p) != nil || validateOTPPlan(p) != nil {
 		return nil, invalidPlan()
 	}
@@ -186,7 +189,7 @@ func (c *Coordinator) prepareFeature(binding identity.CommandBinding, command id
 	if err != nil || !validClaim(q, c.keys) || !bytes.Equal(q.safeFields, commandSafeFields(binding, &spec.Operation)) {
 		return fail()
 	}
-	snapshot := CommandPlan{Contributors: append([]ContributorDescriptor(nil), p.Contributors...), Audits: append([]AuditPlan(nil), p.Audits...), Capability: p.Capability, SubjectType: p.SubjectType, CaptchaReplayReservation: p.CaptchaReplayReservation}
+	snapshot := CommandPlan{Contributors: append([]ContributorDescriptor(nil), p.Contributors...), Audits: append([]AuditPlan(nil), p.Audits...), Capability: p.Capability, SubjectType: p.SubjectType, CaptchaReplayReservation: p.CaptchaReplayReservation, SignupAcceptance: p.SignupAcceptance}
 	snapshot.Delivery = cloneDeliveryPlan(p.Delivery)
 	snapshot.CapabilityIssuance = cloneCapabilityIssuancePlan(p.CapabilityIssuance)
 	snapshot.CaptchaEvidence = cloneCaptchaEvidencePlan(p.CaptchaEvidence)

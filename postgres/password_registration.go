@@ -131,6 +131,15 @@ func passwordRegistrationOperation(op identity.FeatureOperation) bool {
 	return op.Owner == "identity/password" && op.OperationID == "identity.password.signup" && op.SchemaID == "password-signup" && op.SchemaVersion == 1 && op.RecordRequirement == identity.FeatureRecordOmitted && op.SubjectRequirement <= identity.FeatureSubjectAnonymousFlow
 }
 
+// ApplyOrAccept is the opt-in anonymous signup registration branch. A true
+// accepted result contains no User and must not produce password material,
+// sessions, verification credentials or delivery. The coordinator alone
+// commits the original neutral acknowledgement and required security effects.
+func (d *PasswordRegistrationDomain) ApplyOrAccept(ctx context.Context, w Work, p FeatureExecutionContributor, command identity.Command, intent PasswordRegistrationIntent) (identity.User, bool, error) {
+	u, err := d.apply(ctx, w, p, command, intent, true)
+	return u, err == nil && w.state.registrationAccepted, err
+}
+
 // Apply creates the user/attributes, unverified identifier and enabled initial
 // password reference through the original signup Work. The exact native
 // participant, command custody, scope, comparison profile and complete intent
@@ -140,6 +149,10 @@ func passwordRegistrationOperation(op identity.FeatureOperation) bool {
 // The password participant must persist its material before returning; required
 // audit/outbox, native recovery and the sole coordinator establish durability.
 func (d *PasswordRegistrationDomain) Apply(ctx context.Context, w Work, p FeatureExecutionContributor, command identity.Command, intent PasswordRegistrationIntent) (identity.User, error) {
+	return d.apply(ctx, w, p, command, intent, false)
+}
+
+func (d *PasswordRegistrationDomain) apply(ctx context.Context, w Work, p FeatureExecutionContributor, command identity.Command, intent PasswordRegistrationIntent, accept bool) (identity.User, error) {
 	if err := w.usable(); err != nil {
 		return identity.User{}, err
 	}
@@ -151,7 +164,10 @@ func (d *PasswordRegistrationDomain) Apply(ctx context.Context, w Work, p Featur
 		return identity.User{}, err
 	}
 	b, f, l, err := w.FeatureScope(p)
-	if err != nil || p.Descriptor() != (ContributorDescriptor{Owner: "identity/password/postgres", ContractID: "identity.password", Version: 1}) || !passwordRegistrationOperation(f.Operation) || w.state.subjectType != "user" || l.EventType != "user.created.v1" || l.BeforeVersion != 0 || l.AfterVersion != 0 || w.state.registrationUser != nil || w.state.creation != nil || w.state.profile != nil || w.state.update != nil || w.state.status != nil || w.state.identifier != nil {
+	if err != nil || p.Descriptor() != (ContributorDescriptor{Owner: "identity/password/postgres", ContractID: "identity.password", Version: 1}) || !passwordRegistrationOperation(f.Operation) || w.state.subjectType != "user" || l.EventType != "user.created.v1" || l.BeforeVersion != 0 || l.AfterVersion != 0 || w.state.lifecycle.record != nil || w.state.registrationAccepted || w.state.registrationUser != nil || w.state.creation != nil || w.state.profile != nil || w.state.update != nil || w.state.status != nil || w.state.identifier != nil {
+		return fail(invalidPasswordRegistration())
+	}
+	if accept && (!w.state.execution.reservation.plan.signupAcceptance || f.Operation.SubjectRequirement != identity.FeatureSubjectAnonymousFlow || b.UserID != "" || b.AnonymousFlowID == "") {
 		return fail(invalidPasswordRegistration())
 	}
 	s, ok := commandFeature(command)
@@ -207,13 +223,48 @@ func (d *PasswordRegistrationDomain) Apply(ctx context.Context, w Work, p Featur
 	// Freeze lists through the existing structural input owner before SQL.
 	creationCommand, _ := identity.NewUserCreationCommand(intent.Creation)
 	creation, _ := creationCommand.CreateUser()
+	if accept {
+		// Canonical occupancy is the sole alternate outcome, not an exemption
+		// from repository-owned field policy or prospective structural-ID checks.
+		registered, attributes, e := d.repository.prepareCreationAttributes(creation)
+		clear(attributes)
+		if e != nil {
+			return fail(e)
+		}
+		if attributes != nil {
+			if e := checkCreationSchema(ctx, w, registered, true); e != nil {
+				return identity.User{}, e
+			}
+		}
+		if e := requireAbsentRegistrationUser(ctx, w, creation.Binding.UserID); e != nil {
+			return identity.User{}, e
+		}
+	}
 	now, err := w.DatabaseTime(ctx)
 	if err != nil {
 		return identity.User{}, err
 	}
 	i := intent.Identifier
-	if err := checkIdentifierReuse(ctx, w, identity.IdentifierChange{Action: identity.IdentifierAttach, TenantID: b.TenantID, UserID: creation.Binding.UserID, ID: i.ID, Kind: i.Kind, CanonicalValue: i.CanonicalValue}, d.reuse, now); err != nil {
+	blocked, err := classifyIdentifierReuse(ctx, w, identity.IdentifierChange{Action: identity.IdentifierAttach, TenantID: b.TenantID, UserID: creation.Binding.UserID, ID: i.ID, Kind: i.Kind, CanonicalValue: i.CanonicalValue}, d.reuse, now, accept)
+	if err != nil {
 		return identity.User{}, err
+	}
+	if blocked {
+		if !accept {
+			return fail(identity.ConflictError{})
+		}
+		id, e := base64.RawURLEncoding.DecodeString(string(b.CommandID))
+		if e != nil || len(id) != 16 {
+			return fail(invalidPasswordRegistration())
+		}
+		if _, e := w.Exec(ctx, `INSERT INTO identity.registration_bindings(tenant_id,purpose,command_id,user_id,identifier_id,credential_id,accepted_only) VALUES($1,$2,$3,NULL,NULL,NULL,true)`, string(b.TenantID), b.OperationID, id); e != nil {
+			return identity.User{}, e
+		}
+		w.state.registrationAccepted = true
+		// Selection is kernel-owned and was declared before reservation. Keep
+		// the original frozen plan intact; only this Work's actual event changes.
+		w.state.lifecycle.plan.EventType = signupAcceptedEvent
+		return identity.User{}, nil
 	}
 	user, err := d.repository.insertCreation(ctx, w, creation)
 	if err != nil {
@@ -236,6 +287,22 @@ func (d *PasswordRegistrationDomain) Apply(ctx context.Context, w Work, p Featur
 	return user, nil
 }
 
+func requireAbsentRegistrationUser(ctx context.Context, w Work, user identity.UserID) error {
+	rows, err := w.Query(ctx, `SELECT EXISTS(SELECT 1 FROM identity.users WHERE tenant_id=$1 AND user_id=$2)`, string(w.state.binding.TenantID), string(user))
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	var exists bool
+	if !rows.Next() || rows.Scan(&exists) != nil || rows.Next() || rows.Err() != nil {
+		return w.fail(ctx, identity.UnavailableError{})
+	}
+	if exists {
+		return w.fail(ctx, identity.ConflictError{})
+	}
+	return nil
+}
+
 func recoverPasswordRegistration(ctx context.Context, w RecoveryWork) (RecoveryStatus, error) {
 	b, err := w.Scope()
 	if err != nil {
@@ -245,7 +312,10 @@ func recoverPasswordRegistration(ctx context.Context, w RecoveryWork) (RecoveryS
 	if err != nil || len(id) != 16 {
 		return RecoveryUnknown, invalidPasswordRegistration()
 	}
-	rows, err := w.Query(ctx, `SELECT EXISTS(SELECT 1 FROM identity.registration_bindings WHERE tenant_id=$1 AND purpose=$2 AND command_id=$3)`, string(b.TenantID), b.OperationID, id)
+	// A historical creation-only plan cannot mistake a neutral binding for an
+	// account creation. The original columns exist even before the optional
+	// forward migration, so legacy recovery retains its old storage dependency.
+	rows, err := w.Query(ctx, `SELECT EXISTS(SELECT 1 FROM identity.registration_bindings WHERE tenant_id=$1 AND purpose=$2 AND command_id=$3 AND ($4 OR user_id IS NOT NULL))`, string(b.TenantID), b.OperationID, id, w.state.plan.signupAcceptance)
 	if err != nil {
 		return RecoveryUnknown, err
 	}

@@ -324,6 +324,20 @@ func lockIdentifierPartition(ctx context.Context, w Work, change identity.Identi
 }
 
 func checkIdentifierReuse(ctx context.Context, w Work, c identity.IdentifierChange, p identifierMutationPolicy, now time.Time) error {
+	blocked, err := classifyIdentifierReuse(ctx, w, c, p, now, false)
+	if err != nil {
+		return err
+	}
+	if blocked {
+		return w.fail(ctx, identity.ConflictError{})
+	}
+	return nil
+}
+
+// Only canonical occupancy and a live canonical retirement are neutralizable.
+// Structural-ID conflicts, unavailable retained keys and SQL faults poison Work.
+// Callers hold the existing tenant fence, so classification cannot race mutation.
+func classifyIdentifierReuse(ctx context.Context, w Work, c identity.IdentifierChange, p identifierMutationPolicy, now time.Time, neutral bool) (bool, error) {
 	check := func(sql string, args ...any) (bool, error) {
 		rows, err := w.Query(ctx, sql, args...)
 		if err != nil {
@@ -350,43 +364,44 @@ func checkIdentifierReuse(ctx context.Context, w Work, c identity.IdentifierChan
 	}
 	occupied, err := check(`SELECT EXISTS(SELECT 1 FROM identity.identifiers WHERE tenant_id=$1 AND kind=$2 AND canonical_value=$3 AND (user_id<>$4 OR identifier_id<>$5))`, string(c.TenantID), string(c.Kind), c.CanonicalValue, string(c.UserID), string(c.ID))
 	if err != nil {
-		return err
+		return false, err
 	}
-	if occupied {
-		return w.fail(ctx, identity.ConflictError{})
+	if occupied && !neutral {
+		// Preserve the strict profile's original early conflict classification.
+		return true, nil
 	}
 	if c.Action == identity.IdentifierAttach {
 		// Identifier IDs are tenant-wide, independently of canonical kind/value
 		// uniqueness. The dominating tenant lock makes both checks stable.
 		reserved, err := check(`SELECT EXISTS(SELECT 1 FROM identity.identifiers WHERE tenant_id=$1 AND identifier_id=$2) OR EXISTS(SELECT 1 FROM identity.identifier_retirements WHERE tenant_id=$1 AND identifier_id=$2)`, string(c.TenantID), string(c.ID))
 		if err != nil {
-			return err
+			return false, err
 		}
 		if reserved {
-			return w.fail(ctx, identity.ConflictError{})
+			return false, w.fail(ctx, identity.ConflictError{})
 		}
 	}
 	rows, err := w.Query(ctx, `SELECT DISTINCT key_version FROM identity.identifier_retirements WHERE tenant_id=$1 AND kind=$2 AND reuse_until>$3 LIMIT 17`, string(c.TenantID), string(c.Kind), now)
 	if err != nil {
-		return err
+		return false, err
 	}
 	count := 0
 	for rows.Next() {
 		var version uint32
 		if err = rows.Scan(&version); err != nil {
 			rows.Close()
-			return err
+			return false, err
 		}
 		count++
 		if _, ok := p.keys[version]; !ok || count > 16 {
 			rows.Close()
-			return w.fail(ctx, identity.UnavailableError{})
+			return false, w.fail(ctx, identity.UnavailableError{})
 		}
 	}
 	err = rows.Err()
 	rows.Close()
 	if err != nil {
-		return err
+		return false, err
 	}
 	versions := make([]uint32, 0, len(p.keys))
 	for v := range p.keys {
@@ -397,11 +412,11 @@ func checkIdentifierReuse(ctx context.Context, w Work, c identity.IdentifierChan
 		digest := identifierReuseDigest(p.keys[version], c.TenantID, c.Kind, c.CanonicalValue)
 		blocked, err := check(`SELECT EXISTS(SELECT 1 FROM identity.identifier_retirements WHERE tenant_id=$1 AND kind=$2 AND key_version=$3 AND value_digest=$4 AND reuse_until>$5)`, string(c.TenantID), string(c.Kind), version, digest[:], now)
 		if err != nil {
-			return err
+			return false, err
 		}
 		if blocked {
-			return w.fail(ctx, identity.ConflictError{})
+			return true, nil
 		}
 	}
-	return nil
+	return occupied, nil
 }
