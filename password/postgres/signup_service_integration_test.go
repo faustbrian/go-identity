@@ -12,7 +12,9 @@ import (
 	"testing"
 	"time"
 
+	auditpg "github.com/faustbrian/go-audit/postgres"
 	auth "github.com/faustbrian/go-authentication"
+	"github.com/faustbrian/go-authorization"
 	"github.com/faustbrian/go-clock"
 	identity "github.com/faustbrian/go-identity"
 	password "github.com/faustbrian/go-identity/password"
@@ -23,6 +25,7 @@ import (
 	primitive "github.com/faustbrian/go-password"
 	database "github.com/faustbrian/go-postgres"
 	"github.com/faustbrian/go-secret-envelope/adapters/keyring"
+	lifecyclepg "github.com/faustbrian/go-transactional-outbox/v2/postgres/identity"
 )
 
 // SU01/05/07/08: public methods, real journal and all effect owners; callbacks
@@ -224,4 +227,162 @@ func testNativePublicSignup(t *testing.T, ctx context.Context, pool *database.Po
 	if err := pool.Raw().QueryRow(ctx, `SELECT (SELECT count(*) FROM identity.registration_bindings WHERE command_id=$1),(SELECT count(*) FROM identity.delivery_intents WHERE command_id=$1),(SELECT count(*) FROM capability_identity_one_use WHERE origin_command_id=$2)`, fid, string(fq.CommandID)).Scan(&accounts, &messages, &grants); err != nil || accounts != 0 || messages != 0 || grants != 0 {
 		t.Fatal("failed public attempt retained partial effects", err)
 	}
+	// SU06/08: fail actual audit persistence after final-plan attachment. No
+	// fabricated terminal receipt or recovery contributor stands in for an owner.
+	// Expire only this attempt's lease to exercise reconciliation without waiting
+	// a minute; this tests an interrupted-state partition, not a lost network ACK.
+	for _, mode := range []string{"absent", "existing-material"} {
+		t.Run("expired-final-plan-"+mode, func(t *testing.T) {
+			configuration := c
+			configuration.ConfigurationID = "public-expired-" + mode
+			if mode == "existing-material" {
+				var existing string
+				if err := pool.Raw().QueryRow(ctx, `SELECT user_id FROM identity.registration_bindings WHERE tenant_id=$1 AND command_id=$2`, string(r.TenantID), base64Command(t, result.Recovery)).Scan(&existing); err != nil {
+					t.Fatal(err)
+				}
+				// A selected ID collision must not let this attempt adopt existing
+				// password material as evidence that its own mutation rolled back.
+				configuration.SelectUser = func(context.Context) (identity.UserID, error) { return identity.UserID(existing), nil }
+			}
+			native, err := NewSignupService(pool, configuration, keys)
+			if err != nil {
+				t.Fatal(err)
+			}
+			attempt := fresh("expired-"+mode+"@example.test", byte(70+len(mode)))
+			if _, err := pool.Raw().Exec(ctx, `ALTER TABLE audit.identity_command_bindings ADD CONSTRAINT signup_recovery_test_stop CHECK(false) NOT VALID`); err != nil {
+				t.Fatal(err)
+			}
+			before := screens.Load()
+			pending, executionErr := native.Signup(ctx, attempt)
+			if _, err := pool.Raw().Exec(ctx, `ALTER TABLE audit.identity_command_bindings DROP CONSTRAINT signup_recovery_test_stop`); err != nil {
+				t.Fatal(err)
+			}
+			var uncertain identity.UnknownCommitError
+			if !errors.As(executionErr, &uncertain) || pending.Validate() != nil || pending.Outcome != identity.CommitOutcomeUnknown || screens.Load() != before+1 {
+				t.Fatal("audit failure did not retain original uncertainty", executionErr)
+			}
+			id := base64Command(t, pending.Recovery)
+			var state string
+			var hasPlan bool
+			if err := pool.Raw().QueryRow(ctx, `SELECT state, command_plan IS NOT NULL FROM identity.commands WHERE command_id=$1`, id).Scan(&state, &hasPlan); err != nil || state != "pending" || !hasPlan {
+				t.Fatal("failed attempt lacks pending final plan", err)
+			}
+			if _, err := pool.Raw().Exec(ctx, `UPDATE identity.commands SET lease_until=clock_timestamp()-interval '1 second' WHERE command_id=$1`, id); err != nil {
+				t.Fatal(err)
+			}
+			restarted, err := NewSignupService(pool, configuration, keys)
+			if err != nil {
+				t.Fatal(err)
+			}
+			request := password.SignupRecoveryRequest{Recovery: pending.Recovery, Cookie: attempt.Cookie, Caller: attempt.Caller, Origin: attempt.Origin, Network: attempt.Network, Device: attempt.Device}
+			recovered, recoveryErr := restarted.RecoverSignup(ctx, request)
+			if recovered.Validate() != nil || !recovered.Replayed || recovered.VerificationRequired || recovered.SubjectID != "" || recovered.SessionID != "" || screens.Load() != before+1 {
+				t.Fatal("reconciliation regenerated or disclosed authority", recoveryErr)
+			}
+			// Issuance owns positive original receipts, not negative evidence.
+			// Missing grants cannot certify rollback even when other owners agree.
+			if recovered.Outcome != identity.CommitOutcomeUnknown && recovered.Outcome != identity.CommitOutcomeInProgress || recoveryErr == nil {
+				t.Fatal("missing issuance evidence certified rollback", recoveryErr)
+			}
+			if err := pool.Raw().QueryRow(ctx, `SELECT state FROM identity.commands WHERE command_id=$1`, id).Scan(&state); err != nil || state != "pending" {
+				t.Fatal("uncertain original command was finalized", err)
+			}
+			if err := pool.Raw().QueryRow(ctx, `SELECT (SELECT count(*) FROM identity.registration_bindings WHERE command_id=$1),(SELECT count(*) FROM identity.delivery_intents WHERE command_id=$1),(SELECT count(*) FROM capability_identity_one_use WHERE origin_command_id=$2)`, id, string(uncertain.CommandID)).Scan(&accounts, &messages, &grants); err != nil || accounts != 0 || messages != 0 || grants != 0 {
+				t.Fatal("recovery executed original effects", err)
+			}
+			testSignupPasswordOwnerRecovery(t, ctx, pool, restarted, request, mode == "absent")
+		})
+	}
+}
+
+// SU08: isolate the password owner's recovery contract using actual kernel,
+// directory, audit and outbox owners. This reservation has no issuance/delivery
+// declaration and is never executed; it is not a public verification workflow.
+// Public recovery above must still respect every owner in its own frozen plan.
+func testSignupPasswordOwnerRecovery(t *testing.T, ctx context.Context, pool *database.Pool, service *SignupService, request password.SignupRecoveryRequest, absent bool) {
+	t.Helper()
+	p := &signupPhase{service: service}
+	reader, _, err := service.coordinator(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	q, _, _ := request.Recovery.Bindings()
+	caller := request.Caller.Clone()
+	c := service.config()
+	caller.PolicyRevision = authorization.Revision(c.Coordinator.QueryPolicy.PolicyVersion)
+	caller.Request.Resource = authorization.Resource{Type: "identity.anonymous-flow", ID: authorization.ResourceID(q.AnonymousFlowID)}
+	k, wire, err := reader.QueryRequestPreparation(ctx, q, caller, p.registration(), p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer clear(wire)
+	b, selected, _, _, err := service.repository.recoverSignupInput(ctx, service.crypto, k, service.profile, wire)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b.CommandID, err = identity.NewCommandID()
+	if err != nil {
+		t.Fatal(err)
+	}
+	fields, err := kernel.PasswordRegistrationFields(selected)
+	if err != nil {
+		t.Fatal(err)
+	}
+	command, err := identity.NewFeaturePasswordSignupCommand(identity.FeatureCommandSpec{Binding: b, Operation: passwordSignupOperation(), Fields: fields}, c.Screening.DummyHash.String(), request.Cookie)
+	if err != nil {
+		t.Fatal(err)
+	}
+	p.original, p.input.selected = command, selected
+	audits, err := auditpg.NewIdentityContributor(auditpg.Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	outbox, err := lifecyclepg.NewContributor()
+	if err != nil {
+		t.Fatal(err)
+	}
+	registry, err := kernel.NewContributorRegistry([]kernel.Contributor{service.directory, audits, outbox, p})
+	if err != nil {
+		t.Fatal(err)
+	}
+	coordinator, err := kernel.NewCoordinator(pool, registry, c.Coordinator)
+	if err != nil {
+		t.Fatal(err)
+	}
+	plan, err := signupExecutionPlan(coordinator, registry, p, command, time.Now().UTC(), kernel.CapabilityIssuancePlan{}, kernel.DeliveryPlan{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := coordinator.ReserveCommand(ctx, b, command, plan); err != nil {
+		t.Fatal(err)
+	}
+	id, _ := base64.RawURLEncoding.Strict().DecodeString(string(b.CommandID))
+	if _, err := pool.Raw().Exec(ctx, `UPDATE identity.commands SET lease_until=clock_timestamp()-interval '1 second' WHERE command_id=$1`, id); err != nil {
+		t.Fatal(err)
+	}
+	result, recoveryErr := coordinator.RecoverFeatureCommand(ctx, signupQuery(b), caller)
+	var state string
+	if err := pool.Raw().QueryRow(ctx, `SELECT state FROM identity.commands WHERE command_id=$1`, id).Scan(&state); err != nil {
+		t.Fatal(err)
+	}
+	if absent {
+		if result.Outcome != identity.CommitOutcomeNotCommitted || state != "aborted" {
+			t.Fatal("password owner could not prove absent material", recoveryErr)
+		}
+	} else if result.Outcome != identity.CommitOutcomeUnknown && result.Outcome != identity.CommitOutcomeInProgress || recoveryErr == nil || state != "pending" {
+		t.Fatal("password owner treated contradictory material as rollback", recoveryErr)
+	}
+}
+
+func base64Command(t *testing.T, recovery password.SignupRecovery) []byte {
+	t.Helper()
+	q, _, err := recovery.Bindings()
+	if err != nil {
+		t.Fatal(err)
+	}
+	id, err := base64.RawURLEncoding.Strict().DecodeString(string(q.CommandID))
+	if err != nil || len(id) != 16 {
+		t.Fatal("invalid original recovery correlation", err)
+	}
+	return id
 }

@@ -44,6 +44,11 @@ input before reconciling the existing journal. Deleted or expired live flows do
 not renew historical input, credentials or delivery. Unknown remains unknown;
 an input read is never proof of rollback or permission to execute.
 
+After an interrupted final transaction, reconciliation requires every frozen
+owner's authoritative evidence. Missing issuance records are not negative
+evidence: the command remains pending rather than claiming rollback, generating
+another credential, or disclosing account/session authority.
+
 This initial profile requires verified email and issues no session. Immediate
 session, MFA continuation, confirmation and the complete reset lifecycle remain
 in development; unsupported startup profiles fail closed. This is backend

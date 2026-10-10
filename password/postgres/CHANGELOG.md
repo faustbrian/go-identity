@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Fix interrupted-signup password reconciliation through the bounded kernel
+  row API. Preserve nullable credential evidence and deny contradictory
+  material; missing issuance evidence still leaves the whole command pending.
+
 - Add native public required-verification signup and password-free original
   recovery. Keep account, password material, flow consumption, verification
   issuance and encrypted delivery atomic; matching retries do not regenerate.

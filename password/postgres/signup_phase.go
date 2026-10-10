@@ -218,7 +218,9 @@ func (p *signupPhase) RecoverParticipant(ctx context.Context, w kernel.RecoveryW
 	if err != nil || len(id) != 16 || selected.Creation.Binding.UserID == "" {
 		return kernel.RecoveryUnknown, password.ErrPasswordWork
 	}
-	rows, err := w.Query(ctx, `SELECT r.command_id IS NOT NULL,r.user_id,r.credential_id,p.version::text,c.version::text,c.kind,c.owner,EXISTS(SELECT 1 FROM identity_password.credentials WHERE tenant_id=$1 AND user_id=$4)
+	// Work admits nullable int64 destinations, not nullable smallint pointers.
+	// Preserve LEFT JOIN absence explicitly rather than substituting a zero kind.
+	rows, err := w.Query(ctx, `SELECT r.command_id IS NOT NULL,r.user_id,r.credential_id,p.version::text,c.version::text,c.kind::bigint,c.owner,EXISTS(SELECT 1 FROM identity_password.credentials WHERE tenant_id=$1 AND user_id=$4)
 FROM (SELECT true) anchor LEFT JOIN identity.registration_bindings r ON r.tenant_id=$1 AND r.purpose=$2 AND r.command_id=$3
 LEFT JOIN identity_password.credentials p ON p.tenant_id=r.tenant_id AND p.user_id=r.user_id AND p.credential_id=r.credential_id
 LEFT JOIN identity.credential_references c ON c.tenant_id=p.tenant_id AND c.user_id=p.user_id AND c.credential_id=p.credential_id`, string(b.TenantID), b.OperationID, id, string(selected.Creation.Binding.UserID))
@@ -234,7 +236,7 @@ LEFT JOIN identity.credential_references c ON c.tenant_id=p.tenant_id AND c.user
 	}
 	var bound, materialExists bool
 	var user, credential, materialVersion, referenceVersion, owner *string
-	var kind *int16
+	var kind *int64
 	if rows.Scan(&bound, &user, &credential, &materialVersion, &referenceVersion, &kind, &owner, &materialExists) != nil || rows.Next() || rows.Err() != nil {
 		return kernel.RecoveryUnknown, password.ErrPasswordWork
 	}
@@ -250,7 +252,7 @@ LEFT JOIN identity.credential_references c ON c.tenant_id=p.tenant_id AND c.user
 		}
 		return kernel.RecoveryUnknown, password.ErrPasswordWork
 	}
-	if user == nil || credential == nil || materialVersion == nil || referenceVersion == nil || kind == nil || owner == nil || *kind != int16(identity.CredentialPassword) || *owner != "identity/password" || *materialVersion != *referenceVersion {
+	if user == nil || credential == nil || materialVersion == nil || referenceVersion == nil || kind == nil || owner == nil || *kind != int64(identity.CredentialPassword) || *owner != "identity/password" || *materialVersion != *referenceVersion {
 		return kernel.RecoveryUnknown, password.ErrPasswordWork
 	}
 	// Original namespace is anonymous, never the selected user's authority.
