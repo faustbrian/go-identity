@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add distinct prospective signup-session preparation and paired-command
+  binding without relabelling registration as signin. Preserve original
+  remember, authority and CSRF custody; only exact fresh known commits reveal
+  credentials. Native registration policy, verification/MFA admission and atomic
+  persistence remain required; the full signup workflow is still in development.
+
 - Add explicit prospective password-session preparation and bind-once custody.
   Reuse original verified-authentication metadata without fabricating a proof;
   preserve remember choice, authority and synchronizer state. Deliver only an

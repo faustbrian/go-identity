@@ -1,5 +1,21 @@
 # Session
 
+## Optional signup session issuance
+
+`NewPasswordSignupSessionIssuerWithCSRF` selects a disjoint prospective
+registration profile. Use `PrepareSignup`, map its complete session/CSRF state
+into the native registration intent, then `BindSignup` with the original paired
+prepared-verifier/pre-auth command. The executor receives `PasswordSignupCommand`,
+not the signin, OTP or authenticated-proof arm. Original scope, remember choice
+and deadlines are retained; copies share one binding and issuance attempt.
+
+Preparation is not authentication. The native password owner must enforce that
+verification and MFA requirements are complete and commit account, password,
+flow/risk consumption, session and audit/outbox atomically. Only fresh, exact,
+error-free, non-replayed commit results deliver bearer/CSRF. Unknown outcomes
+require separate secret-free native recovery; do not prepare replacement tokens.
+The native signup persistence/effect and full workflow remain in development.
+
 ## Browser-device correlation for abuse control
 
 `NewBrowserDeviceCodec(BrowserDeviceConfig)` freezes explicit dedicated key

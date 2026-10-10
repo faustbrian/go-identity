@@ -18,6 +18,7 @@ type passwordIssueRequestState struct {
 	command identity.Command
 	binding identity.CommandBinding
 	record  Session
+	signup  bool
 }
 
 // NewPasswordSessionIssuer selects prospective native password issuance.
@@ -64,6 +65,13 @@ func NewPasswordSessionIssuerWithCSRF(executor IssueExecutor, c IssuerConfig, ke
 // Issue rejects unbound preparations. Map the exact Session projection into the
 // password-owned native command, then BindPassword once before reservation.
 func (s *SessionIssuer) PreparePassword(b identity.CommandBinding, spec SessionSpec) (out PreparedIssuance, err error) {
+	if s == nil || s.signup {
+		return out, ErrInvalidIssuance
+	}
+	return s.preparePassword(b, spec, passwordSigninOperation(b))
+}
+
+func (s *SessionIssuer) preparePassword(b identity.CommandBinding, spec SessionSpec, operation identity.FeatureOperation) (out PreparedIssuance, err error) {
 	defer func() {
 		if recover() != nil {
 			out, err = PreparedIssuance{}, ErrIssuerUnavailable
@@ -72,7 +80,7 @@ func (s *SessionIssuer) PreparePassword(b identity.CommandBinding, spec SessionS
 	if s == nil || !s.password || spec.Lookup != (TokenDigest{}) || spec.Version != 1 || !spec.LastActivityAt.Equal(spec.IssuedAt) {
 		return out, ErrInvalidIssuance
 	}
-	frozen, e := identity.NewFeatureCommand(identity.FeatureCommandSpec{Binding: b, Operation: passwordSigninOperation(b)})
+	frozen, e := identity.NewFeatureCommand(identity.FeatureCommandSpec{Binding: b, Operation: operation})
 	if e != nil {
 		return out, ErrInvalidIssuance
 	}
@@ -103,7 +111,7 @@ func (s *SessionIssuer) PreparePassword(b identity.CommandBinding, spec SessionS
 // retain the caller-owned Secret lifetime. Keep the returned preparation for one
 // Issue; recovery must use separate password/cookie-free native correlation.
 func (s *SessionIssuer) BindPassword(p PreparedIssuance, command identity.Command) (PreparedIssuance, error) {
-	if s == nil || !s.password || p.state == nil || p.state.owner != s || p.state.password == nil {
+	if s == nil || !s.password || s.signup || p.state == nil || p.state.owner != s || p.state.password == nil {
 		return PreparedIssuance{}, ErrInvalidIssuance
 	}
 	if p.state.request.state != nil {
@@ -127,7 +135,7 @@ func (s *SessionIssuer) BindPassword(p PreparedIssuance, command identity.Comman
 // owners must prove those in the consuming transaction; never persist or recover
 // with this secret-bearing command. The caller retains Secret destruction.
 func (r IssueRequest) PasswordCommand() (identity.Command, Session, bool) {
-	if r.state == nil || r.state.password == nil {
+	if r.state == nil || r.state.password == nil || r.state.password.signup {
 		return identity.Command{}, Session{}, false
 	}
 	return r.state.password.command, r.state.password.record, true

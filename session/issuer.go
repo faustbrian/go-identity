@@ -84,6 +84,7 @@ type SessionIssuer struct {
 	csrfKey  CSRFKey
 	otp      bool
 	password bool
+	signup   bool
 }
 
 // NewSessionIssuerWithCSRF selects the synchronizer profile with a dedicated

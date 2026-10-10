@@ -16,7 +16,8 @@ var ErrInvalidIssueRequest = errors.New("session: invalid issue request")
 // IssueRequest retains one closed proof, consuming-OTP or password variant. Zero
 // is invalid; copies are immutable and concurrency safe. Proof requests require
 // Validate against the configured authority. OTP requests are created only by
-// BindOTP; password requests by BindPassword. Native owners must establish
+// BindOTP; signin requests by BindPassword and signup requests by BindSignup.
+// Native owners must establish
 // successful authentication and all
 // effects atomically, not treat prospective metadata as a checked proof. This
 // value cannot reserve, consume, commit or reveal a credential on its own. OTP

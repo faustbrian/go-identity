@@ -178,6 +178,9 @@ func (r IssueRequest) issuanceScope() (identity.CommandBinding, identity.Feature
 	}
 	if r.state.password != nil {
 		p := r.state.password
+		if p.signup {
+			return p.binding, passwordSignupOperation(p.binding), p.record, true
+		}
 		return p.binding, passwordSigninOperation(p.binding), p.record, true
 	}
 	if r.state.otp != nil {
@@ -190,7 +193,7 @@ func (r IssueRequest) issuanceScope() (identity.CommandBinding, identity.Feature
 
 func (s *SessionIssuer) validateRequestAt(r IssueRequest, now time.Time) error {
 	if s.password {
-		if r.state == nil || r.state.password == nil || r.state.otp != nil {
+		if r.state == nil || r.state.password == nil || r.state.otp != nil || s.signup != r.state.password.signup {
 			return ErrInvalidIssuance
 		}
 		return validatePasswordIssuanceAt(r.state.password.record, now)
