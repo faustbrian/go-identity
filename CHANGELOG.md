@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Add opaque original anonymous signup input carrying the shared password Secret
+  and pre-auth cookie before hash generation. Keep it distinct from generated
+  verifier custody; native journal admission and atomic execution remain required.
+
 - Add disjoint native password-signup custody for the prepared verifier and
   original pre-auth cookie. Preserve exact bytes and scope; older accessors
   cannot silently omit either input. Native policy and composition are required.

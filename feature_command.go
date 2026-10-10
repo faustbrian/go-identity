@@ -75,14 +75,15 @@ type FeatureCommandSpec struct {
 }
 
 type featureCommandState struct {
-	spec           FeatureCommandSpec
-	code           *authentication.OneTimeCode
-	preAuthCookie  *authentication.BearerCredential
-	sessionToken   *authentication.BearerCredential
-	passwordHash   func() string
-	passwordChange func() (string, authentication.BearerCredential, authentication.ReauthenticationProof)
-	passwordSignin func() (primitive.Secret, authentication.BearerCredential)
-	passwordSignup func() (string, authentication.BearerCredential)
+	spec                FeatureCommandSpec
+	code                *authentication.OneTimeCode
+	preAuthCookie       *authentication.BearerCredential
+	sessionToken        *authentication.BearerCredential
+	passwordHash        func() string
+	passwordChange      func() (string, authentication.BearerCredential, authentication.ReauthenticationProof)
+	passwordSignin      func() (primitive.Secret, authentication.BearerCredential)
+	passwordSignup      func() (string, authentication.BearerCredential)
+	passwordSignupInput func() (primitive.Secret, authentication.BearerCredential)
 }
 
 // NewFeatureCommand validates and freezes structural feature input, copying
@@ -134,14 +135,14 @@ func validFeatureFields(fields []FeatureField) bool {
 // safe for concurrent reads. The projection must never become a log, snapshot,
 // public response or authentication decision. No callbacks or I/O run.
 func (c Command) Feature() (FeatureCommandSpec, bool) {
-	if !c.validFeatureVariant() || c.feature.passwordHash != nil || c.feature.passwordChange != nil || c.feature.passwordSignin != nil || c.feature.passwordSignup != nil {
+	if !c.validFeatureVariant() || c.feature.passwordHash != nil || c.feature.passwordChange != nil || c.feature.passwordSignin != nil || c.feature.passwordSignup != nil || c.feature.passwordSignupInput != nil {
 		return FeatureCommandSpec{}, false
 	}
 	return cloneFeatureSpec(c.feature.spec), true
 }
 
 func (c Command) validFeatureVariant() bool {
-	return c.feature != nil && c.create == nil && c.update == nil && c.profile == nil && c.status == nil && c.unlink == nil && c.link == nil && c.identifier == nil && c.privacy == nil && !(c.feature.preAuthCookie != nil && c.feature.sessionToken != nil)
+	return c.feature != nil && c.create == nil && c.update == nil && c.profile == nil && c.status == nil && c.unlink == nil && c.link == nil && c.identifier == nil && c.privacy == nil && !(c.feature.preAuthCookie != nil && c.feature.sessionToken != nil) && (c.feature.passwordSignupInput == nil || c.feature.code == nil && c.feature.preAuthCookie == nil && c.feature.sessionToken == nil && c.feature.passwordHash == nil && c.feature.passwordChange == nil && c.feature.passwordSignin == nil && c.feature.passwordSignup == nil)
 }
 
 func cloneFeatureSpec(s FeatureCommandSpec) FeatureCommandSpec {

@@ -2,6 +2,14 @@
 
 ## Native password signup custody
 
+Before journal-owned generation, `NewFeaturePasswordSignupInputCommand` carries
+the real primitive `Secret` and original cookie for anonymous signup. Select
+`PasswordSignupInputFeature` and `PasswordSignupInputCustody` together; destroy
+the shared secret after bounded use. This input contains no verifier and is not
+ordinary execution authority or password-free recovery input. Native preparation
+must bind its original bytes, perform policy/HIBP admission, and generate the
+verifier only after the durable generation start is acknowledged.
+
 `NewFeaturePasswordSignupCommand` carries the prepared encoded verifier and
 original pre-auth cookie together under the exact `password-signup` v1 profile.
 Use `PasswordSignupFeature` and `PasswordSignupCustody` together in trusted
