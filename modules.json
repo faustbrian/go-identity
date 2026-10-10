@@ -37,7 +37,7 @@
       "family": "service-edge",
       "version": "0.0.0",
       "tag_prefix": "http/password/v",
-      "owned_dependencies": ["github.com/faustbrian/go-authentication","github.com/faustbrian/go-authorization","github.com/faustbrian/go-identity","github.com/faustbrian/go-identity/http","github.com/faustbrian/go-identity/password","github.com/faustbrian/go-identity/session","github.com/faustbrian/go-password"],
+      "owned_dependencies": ["github.com/faustbrian/go-authentication","github.com/faustbrian/go-authorization","github.com/faustbrian/go-identifier","github.com/faustbrian/go-identity","github.com/faustbrian/go-identity/http","github.com/faustbrian/go-identity/password","github.com/faustbrian/go-identity/session","github.com/faustbrian/go-password"],
       "reverse_owned_dependencies": [],
       "external_runtime_dependencies": [],
       "required_services": [],

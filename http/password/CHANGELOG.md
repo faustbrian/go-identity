@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Add opt-in original-flow browser password signin through the native workflow
+  and normalization owner. Preserve split IP/identifier rate admission, original
+  remember/callback/device custody, non-keyed attempts and safe recovery metadata.
+  Deliver the original secure session cookie and synchronizer only on fresh
+  error-free commitment; errors, ambiguity and replay never deliver credentials.
+  Select `FeatureConfig.Signin` alongside existing password operations.
+
 - Add explicit protected cookie password-verification handlers and opt-in
   features through the distinct native cookie service. Require the original
   secure session cookie, exact trusted Origin, sole synchronizer header and

@@ -520,6 +520,15 @@ func (p *changePipeline) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 // Both password handlers enforce the same denial of cookie/CSRF/trailer output
 // across owner responses and trusted middleware short circuits.
 func servePasswordPipeline(w http.ResponseWriter, r *http.Request, pipeline http.Handler) {
+	servePasswordPipelineWithDelivery(w, r, pipeline, func() (string, string) { return "", "" })
+}
+
+// Only the native signin result may supply fresh credentials. Once headers
+// commit, their original tuple is frozen; middleware unwind cannot add or replace
+// it. Other password operations retain their unconditional output denial.
+func servePasswordPipelineWithDelivery(w http.ResponseWriter, r *http.Request, pipeline http.Handler, delivery func() (string, string)) {
+	var committed bool
+	var deliveredCookie, deliveredCSRF string
 	protect := func() {
 		for name := range w.Header() {
 			if strings.HasPrefix(name, http.TrailerPrefix) || strings.EqualFold(name, "Trailer") || strings.EqualFold(name, "Set-Cookie") || strings.EqualFold(name, "X-CSRF-Token") || strings.EqualFold(name, "Content-Type") || strings.EqualFold(name, "Cache-Control") || strings.EqualFold(name, "X-Content-Type-Options") {
@@ -529,15 +538,37 @@ func servePasswordPipeline(w http.ResponseWriter, r *http.Request, pipeline http
 		w.Header().Set("Content-Type", "application/json")
 		w.Header().Set("Cache-Control", "no-store")
 		w.Header().Set("X-Content-Type-Options", "nosniff")
+		cookie, csrf := deliveredCookie, deliveredCSRF
+		if !committed {
+			cookie, csrf = delivery()
+		}
+		if cookie != "" && csrf != "" {
+			w.Header().Set("Set-Cookie", cookie)
+			w.Header().Set("X-CSRF-Token", csrf)
+		}
+	}
+	commit := func() {
+		protect()
+		if !committed {
+			deliveredCookie, deliveredCSRF = w.Header().Get("Set-Cookie"), w.Header().Get("X-CSRF-Token")
+			committed = true
+		}
 	}
 	protect()
 	defer protect()
 	writer := httpsnoop.Wrap(w, httpsnoop.Hooks{WriteHeader: func(next httpsnoop.WriteHeaderFunc) httpsnoop.WriteHeaderFunc {
-		return func(status int) { protect(); next(status) }
+		return func(status int) {
+			if status >= 200 {
+				commit()
+			} else {
+				protect()
+			}
+			next(status)
+		}
 	}, Write: func(next httpsnoop.WriteFunc) httpsnoop.WriteFunc {
-		return func(b []byte) (int, error) { protect(); return next(b) }
-	}, Flush: func(next httpsnoop.FlushFunc) httpsnoop.FlushFunc { return func() { protect(); next() } }, ReadFrom: func(next httpsnoop.ReadFromFunc) httpsnoop.ReadFromFunc {
-		return func(b io.Reader) (int64, error) { protect(); return next(b) }
+		return func(b []byte) (int, error) { commit(); return next(b) }
+	}, Flush: func(next httpsnoop.FlushFunc) httpsnoop.FlushFunc { return func() { commit(); next() } }, ReadFrom: func(next httpsnoop.ReadFromFunc) httpsnoop.ReadFromFunc {
+		return func(b io.Reader) (int64, error) { commit(); return next(b) }
 	}})
 	pipeline.ServeHTTP(writer, r)
 }

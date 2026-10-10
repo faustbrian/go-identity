@@ -19,6 +19,7 @@ import (
 // of generic BearerVerification. CookieVerification selects the distinct native
 // cookie port. Selecting more than one verification variant denies.
 type FeatureConfig struct {
+	Signin                          *SigninConfig
 	Change                          *ChangeConfig
 	BearerVerification              *BearerVerificationConfig
 	BrowserDeviceBearerVerification *BrowserDeviceBearerVerificationConfig
@@ -65,10 +66,17 @@ func NewFeatureWithMiddleware(c FeatureConfig, middleware []identityhttp.Middlew
 	if c.CookieVerification != nil {
 		verificationProfiles++
 	}
-	if (c.Change == nil && verificationProfiles == 0) || verificationProfiles > 1 {
+	if (c.Signin == nil && c.Change == nil && verificationProfiles == 0) || verificationProfiles > 1 {
 		return identityhttp.Feature{}, identityhttp.ErrInvalidInput
 	}
 	var ops []identityhttp.OperationDescriptor
+	if c.Signin != nil {
+		op, err := signinOperation(*c.Signin, middleware)
+		if err != nil {
+			return identityhttp.Feature{}, err
+		}
+		ops = append(ops, op)
+	}
 	if c.Change != nil {
 		op, err := changeOperation(*c.Change, middleware)
 		if err != nil {

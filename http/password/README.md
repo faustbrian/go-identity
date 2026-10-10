@@ -5,6 +5,35 @@ Go 1.27. Base `identity/http` does not import this optional module.
 
 ## Adoption and API
 
+### Browser password signin
+
+Select `NewSigninFeature(SigninConfig{...})`, or `FeatureConfig.Signin` alongside
+other password operations. Supply the real `password/postgres.SigninService`,
+shared `identityhttp.AuthRateLimiter`, trusted tenant network, exact HTTPS
+origin/callback, public-entry service actor/policy/audience, original pre-auth
+cookie, session cookie and browser-device codec configuration. Lifetime/default
+remember policy must match pre-auth initialization. The selected endpoint is
+`POST /v1/password/signin`; construction performs no IO and disabled selection
+exposes neither its route nor OpenAPI metadata.
+
+Closed JSON requires `flowID`, `identifier`, `password`, `callbackURL`, with
+optional boolean `remember`. Both original flow and signed browser-device
+cookies are required; Authorization, retry keys, query/trailers and identity
+overrides are forbidden. IP admission precedes native normalization/custody;
+canonical identifier admission precedes one native signin. The transport never
+looks up accounts, hashes passwords or stores a workflow. It destroys its owned
+password on every exit; transient JSON/string copies are not erasure proof.
+
+Fresh error-free known commitment delivers the original secure session cookie
+and `X-CSRF-Token`, never bearer JSON or redirects. Failure/replay/recovery emit
+no credentials. Retain password-free original recovery correlation and call the
+native recovery API with original possession; never resubmit secrets after an
+ambiguous attempt. This checkpoint supports verified-email single-factor
+signin, not MFA continuation or the complete password lifecycle. Real native
+SQL-through-HTTP and browser/release qualification remain pending.
+
+### Protected password change
+
 Construct `NewChangeHandler(ChangeConfig{...})`, or
 `NewChangeHandlerWithMiddleware` to select trusted synchronous hook phases.
 Mount the returned handler for exact `POST /v1/password/change`; construction
