@@ -837,6 +837,26 @@ The current continuation supports verified password provenance. Native
 PostgreSQL session-selection/revocation wiring and other authentication profiles
 remain pending; cache promotion is not a credential-continuation mechanism.
 
+### Atomic password-login preparation
+
+`NewPasswordSessionIssuer` and its `WithCSRF` variant explicitly select native
+password signin. `PreparePassword` retains original prospective
+`AuthenticationVerified` password/single-factor metadata, the complete vector
+and resolved remember choice; it does not mint an authenticated proof.
+Map the returned tokenless `PreparedIssuance.Session` into the owned
+`password-signin` v1 record-free command and call `BindPassword` once.
+Only the configured native password executor can establish actual comparison,
+pre-auth/risk consumption, optional upgrade and session/audit/outbox effects
+in one coordinator transaction. Applications must not supply workflow glue.
+
+`IssueRequest.PasswordCommand` lends original Secret/pre-auth custody to that
+executor. The caller still owns `Secret.Destroy`; commands/preparations are
+not safe recovery input. `Request`, proof accessors and issuer recovery reject
+this profile. Native recovery must use credential-free command correlation.
+Delivery requires the exact new known commit before original proof expiry;
+replay, cancellation, error, unknown or substituted results disclose no token
+or synchronizer. PostgreSQL atomic password signin remains in development.
+
 **Does refresh reset expiry?** No: preserve original issuance. RefreshDue is
 advisory and authorizes neither a refresh nor a new token.
 

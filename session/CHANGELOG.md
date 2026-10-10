@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add explicit prospective password-session preparation and bind-once custody.
+  Reuse original verified-authentication metadata without fabricating a proof;
+  preserve remember choice, authority and synchronizer state. Deliver only an
+  exact fresh known commit, never replay/recovery/error or expired original.
+  Native password comparison and atomic PostgreSQL login remain required.
+
 - Add explicit password-session credential continuation without rewriting
   original login proof, freshness, activity, remember choice or CSRF state.
   Preserve the separate effective credential linkage through structural

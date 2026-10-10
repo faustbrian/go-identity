@@ -130,6 +130,9 @@ func (p PreparedIssuance) Session() (Session, bool) {
 	if p.state == nil {
 		return Session{}, false
 	}
+	if p.state.password != nil {
+		return p.state.password.record, true
+	}
 	if p.state.otp != nil {
 		return p.state.otp.record, true
 	}
@@ -173,6 +176,10 @@ func (r IssueRequest) issuanceScope() (identity.CommandBinding, identity.Feature
 	if r.state == nil {
 		return identity.CommandBinding{}, identity.FeatureOperation{}, Session{}, false
 	}
+	if r.state.password != nil {
+		p := r.state.password
+		return p.binding, passwordSigninOperation(p.binding), p.record, true
+	}
 	if r.state.otp != nil {
 		p := r.state.otp
 		return p.binding, otpSigninOperation(p.binding), p.record, true
@@ -182,7 +189,13 @@ func (r IssueRequest) issuanceScope() (identity.CommandBinding, identity.Feature
 }
 
 func (s *SessionIssuer) validateRequestAt(r IssueRequest, now time.Time) error {
-	if r.state == nil || s.otp != (r.state.otp != nil) {
+	if s.password {
+		if r.state == nil || r.state.password == nil || r.state.otp != nil {
+			return ErrInvalidIssuance
+		}
+		return validatePasswordIssuanceAt(r.state.password.record, now)
+	}
+	if r.state == nil || r.state.password != nil || s.otp != (r.state.otp != nil) {
 		return ErrInvalidIssuance
 	}
 	if s.otp {

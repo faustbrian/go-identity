@@ -35,7 +35,7 @@ type IssuerClock interface{ Now() time.Time }
 // IssueExecutor is the storage-neutral boundary implemented by the owned
 // durable adapter, not an application workflow or another command journal.
 // ExecuteIssue must validate the selected profile's original opaque proof or
-// OTP code/pre-auth custody, current lifecycle and policy, consume required
+// OTP or password/pre-auth custody, current lifecycle and policy, consume required
 // one-time proofs and persist the exact session plus
 // required audit/outbox effects under the sole authoritative command owner.
 // Replayed is true for any historical terminal observation. RecoverIssue must
@@ -60,7 +60,7 @@ type IssueExecution struct {
 
 // IssuerConfig freezes cookie issuance composition. Authority is the configured
 // private proof authority for NewSessionIssuer; it must be nil for the explicit
-// OTP issuer profile. MaximumDuration is 1ms..30s; dependencies must honor
+// OTP and password profiles. MaximumDuration is 1ms..30s; dependencies must honor
 // it. TokenSize is 32..64 bytes. LookupKey is independent session-lookup custody.
 // Cookie is the validated host-only transport profile. OTP pre-auth flows may
 // retain anonymous command scope while the native effect resolves the final
@@ -83,6 +83,7 @@ type SessionIssuer struct {
 	config   IssuerConfig
 	csrfKey  CSRFKey
 	otp      bool
+	password bool
 }
 
 // NewSessionIssuerWithCSRF selects the synchronizer profile with a dedicated
@@ -134,7 +135,8 @@ func issuerNil(v any) bool {
 // reveals its bearer. One atomic attempt is shared across all copies. It is not
 // a durable receipt, a replay store or a replacement for executor idempotency.
 // Retain Request for proof-route recovery; OTP recovery must use separate
-// code-free native correlation. Do not Prepare again to retry an unknown command.
+// code-free native correlation; password recovery must be password/cookie-free.
+// Do not Prepare again to retry an unknown command.
 type PreparedIssuance struct{ state *preparedIssuanceState }
 type preparedIssuanceState struct {
 	owner     *SessionIssuer
@@ -144,6 +146,7 @@ type preparedIssuanceState struct {
 	csrf      CSRFToken
 	csrfReady atomic.Bool
 	otp       *otpPreparationState
+	password  *passwordPreparationState
 }
 
 // Prepare validates the resolved policy, complete original authentication and
@@ -159,7 +162,7 @@ func (s *SessionIssuer) Prepare(binding identity.CommandBinding, spec SessionSpe
 			err = ErrIssuerUnavailable
 		}
 	}()
-	if s == nil || s.otp || spec.Lookup != (TokenDigest{}) {
+	if s == nil || s.otp || s.password || spec.Lookup != (TokenDigest{}) {
 		return out, ErrInvalidIssuance
 	}
 	// Validate the full structural/proof input before allocating credential bytes.
@@ -237,10 +240,10 @@ func (p PreparedIssuance) CSRFToken() (CSRFToken, error) {
 }
 
 // Request returns the original proof-route command/proof for durable recovery,
-// without bearer bytes. Zero and all OTP preparations return false: code-bearing
+// without bearer bytes. Zero, OTP and password preparations deny: secret-bearing
 // consuming commands must never be advertised as safe recovery input.
 func (p PreparedIssuance) Request() (IssueRequest, bool) {
-	if p.state == nil || p.state.otp != nil {
+	if p.state == nil || p.state.otp != nil || p.state.password != nil {
 		return IssueRequest{}, false
 	}
 	return p.state.request, true
@@ -338,6 +341,11 @@ func (s *SessionIssuer) Issue(ctx context.Context, p PreparedIssuance) (out Issu
 			return out, e
 		}
 	}
+	if s.password {
+		if e := validatePasswordIssuanceAt(out.Session, now); e != nil {
+			return out, e
+		}
+	}
 	life, e := out.Session.Lifetime(now)
 	if e != nil {
 		return out, e
@@ -360,7 +368,7 @@ func (s *SessionIssuer) Issue(ctx context.Context, p PreparedIssuance) (out Issu
 // original request. Proof expiry does not prohibit historical recovery; current
 // result-access policy belongs to the executor. It never executes, regenerates,
 // reveals or redelivers a credential, even when recovery proves Committed.
-// This is proof-profile recovery only. OTP code-bearing requests are rejected;
+// This is proof-profile recovery only. OTP and password requests are rejected;
 // consuming native composition must provide separate code-free correlation.
 func (s *SessionIssuer) Recover(ctx context.Context, r IssueRequest) (out IssueResult, err error) {
 	attempted := false
@@ -375,7 +383,7 @@ func (s *SessionIssuer) Recover(ctx context.Context, r IssueRequest) (out IssueR
 			}
 		}
 	}()
-	if s == nil || s.otp || ctx == nil || r.state == nil || r.state.otp != nil {
+	if s == nil || s.otp || s.password || ctx == nil || r.state == nil || r.state.otp != nil || r.state.password != nil {
 		return out, ErrInvalidIssuance
 	}
 	issue, _ := r.state.command.Issue()

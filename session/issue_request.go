@@ -13,18 +13,20 @@ import (
 // without exposing account, credential or proof identifiers.
 var ErrInvalidIssueRequest = errors.New("session: invalid issue request")
 
-// IssueRequest retains one closed proof-issuance or consuming-OTP variant. Zero
+// IssueRequest retains one closed proof, consuming-OTP or password variant. Zero
 // is invalid; copies are immutable and concurrency safe. Proof requests require
 // Validate against the configured authority. OTP requests are created only by
-// BindOTP; the native executor must establish successful authentication and all
+// BindOTP; password requests by BindPassword. Native owners must establish
+// successful authentication and all
 // effects atomically, not treat prospective metadata as a checked proof. This
 // value cannot reserve, consume, commit or reveal a credential on its own. OTP
-// custody is ephemeral and must never be persisted or used for recovery.
+// and password custody is ephemeral; never persist it or use it for recovery.
 type IssueRequest struct{ state *issueRequestState }
 type issueRequestState struct {
-	command SessionCommand
-	proof   authentication.AuthenticatedProof
-	otp     *otpIssueRequestState
+	command  SessionCommand
+	proof    authentication.AuthenticatedProof
+	otp      *otpIssueRequestState
+	password *passwordIssueRequestState
 }
 
 // NewAuthenticatedIssueRequest preserves a command's complete authority vector,
@@ -60,7 +62,7 @@ func sameAuthenticationProof(a, b authentication.Proof) bool {
 // validity, one-time use or session authentication. Those checks and required
 // audit/outbox effects belong to the protected authoritative transaction.
 func (r IssueRequest) Validate(authority *authentication.AuthorityAuthenticator, now time.Time) error {
-	if r.state == nil || r.state.otp != nil {
+	if r.state == nil || r.state.otp != nil || r.state.password != nil {
 		return ErrInvalidIssueRequest
 	}
 	issue, _ := r.state.command.Issue()
@@ -71,23 +73,24 @@ func (r IssueRequest) Validate(authority *authentication.AuthorityAuthenticator,
 	return r.state.command.ValidateIssueAt(now)
 }
 
-// Command returns the immutable proof-route projection; zero and OTP return false.
+// Command returns the proof-route projection; zero, OTP and password deny.
 // This projection intentionally loses proof admission; it cannot replace the
 // original request or grant execution authority to an adapter.
 func (r IssueRequest) Command() (SessionCommand, bool) {
-	if r.state == nil || r.state.otp != nil {
+	if r.state == nil || r.state.otp != nil || r.state.password != nil {
 		return SessionCommand{}, false
 	}
 	return r.state.command, true
 }
 
 // AuthenticatedProof returns the original upstream opaque proof for the owned
-// durable adapter's protected command admission. Zero and OTP return false. It exposes
+// durable adapter's protected command admission. Zero, OTP and password deny.
+// It exposes
 // no bearer or fabrication capability; the configured authority must still
 // validate its private provenance and exact scope inside the authoritative
 // transaction. Bindings or Command projections cannot substitute this value.
 func (r IssueRequest) AuthenticatedProof() (authentication.AuthenticatedProof, bool) {
-	if r.state == nil || r.state.otp != nil {
+	if r.state == nil || r.state.otp != nil || r.state.password != nil {
 		return authentication.AuthenticatedProof{}, false
 	}
 	return r.state.proof, true
