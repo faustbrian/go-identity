@@ -4,6 +4,28 @@
   "go_version": "1.27.0",
   "modules": [
     {
+      "directory": "http/password",
+      "module_path": "github.com/faustbrian/go-identity/http/password",
+      "go_version": "1.27.0",
+      "packages": [{"module_directory":"http/password","directory":".","name":"passwordhttp","import_path":"github.com/faustbrian/go-identity/http/password","kind":"public","production":true,"executable":true,"coverage_required":true,"build_required":true,"build_tags":[]}],
+      "purpose": "Opt-in original keyed password-change transport; complete password feature and native HTTP qualification in development.",
+      "lifecycle": "experimental",
+      "kind": "public library",
+      "releasable": true,
+      "family": "service-edge",
+      "version": "0.0.0",
+      "tag_prefix": "http/password/v",
+      "owned_dependencies": ["github.com/faustbrian/go-authentication","github.com/faustbrian/go-authorization","github.com/faustbrian/go-identity","github.com/faustbrian/go-identity/http","github.com/faustbrian/go-identity/password","github.com/faustbrian/go-identity/session","github.com/faustbrian/go-password"],
+      "reverse_owned_dependencies": [],
+      "external_runtime_dependencies": [],
+      "required_services": [],
+      "build_tags": [],
+      "test_tags": [],
+      "interoperability_tools": [],
+      "specifications": [],
+      "conformance_corpora": []
+    },
+    {
       "directory": "password/postgres",
       "module_path": "github.com/faustbrian/go-identity/password/postgres",
       "go_version": "1.27.0",
