@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add distinct password-reset command custody for the replacement verifier and
+  original upstream capability proof. Preserve shared proof lifetime and keep
+  legacy change/signin/signup paths closed. Native atomic reset composition is
+  still required; structural construction does not grant mutation authority.
+
 - Register optional email confirmation HTTP composition without adding it to
   base imports. Original-signup confirmation selects a real protected endpoint;
   omitted features expose neither routes nor metadata. Full email HTTP lifecycle

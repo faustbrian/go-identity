@@ -199,6 +199,18 @@ profile; signup/reset/rehash and mixed OTP/bearer input remain unsupported here.
 This adds no password engine dependency to the kernel. Discard secret-bearing
 command copies after bounded use; immutable Go strings cannot be fully erased.
 
+`NewFeaturePasswordResetCommand` carries the prepared replacement verifier and
+original upstream `capability.Proof` in a distinct reset-complete v1 command.
+`PasswordResetFeature` exposes owned metadata and `PasswordResetCustody` borrows
+the complete original pair. Generic, change, signup and signin paths deny it.
+Proof ingress is 32..4096 canonical bytes; verifier transport retains the bounds
+above. Construction neither verifies signatures nor transfers/consumes proof.
+Copies share the upstream proof lifetime: transferring any alias invalidates
+them all, and a bounds observation cannot promise later usability. Never log or
+journal the pair. Native keyed fingerprinting, current account/factor/risk and
+HIBP policy, atomic capability/credential/session execution and recovery remain
+required; this command alone does not implement the durable reset workflow.
+
 `NewFeaturePasswordChangeCommand` is the separate authenticated change variant:
 it freezes the exact hash, original session bearer and upstream
 `authentication.ReauthenticationProof` together. `PasswordChangeFeature` returns
