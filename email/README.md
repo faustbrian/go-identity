@@ -1,8 +1,9 @@
 # Email
 
-Email-owned address parsing and canonical comparison policy. This development
-checkpoint does **not** implement verification, address mutation, persistence,
-delivery or authentication. Those remain requirements of this module.
+Email-owned address parsing, canonical comparison and original signup mailbox
+verification grant policy. This development checkpoint does **not** implement
+scanner-safe confirmation, address mutation, persistence, delivery or
+authentication. Those remain requirements of this module.
 
 ## Quick start
 
@@ -52,6 +53,39 @@ capability. See [RFC 5321](https://www.rfc-editor.org/rfc/rfc5321) and
 this deliberately restricted identity parser is not full mailbox/SMTP conformance.
 
 ## Tradeoffs, security and FAQ
+
+### Signup verification grants
+
+`NewRegistrationVerificationPolicy` freezes the real address policy, issuer,
+single audience, exact HTTPS callbacks, explicit lifetime (whole seconds,
+positive and at most 24 hours), and dedicated retained HMAC binding keys.
+`Payload(RegistrationVerificationSpec)` returns unsigned input with no grant ID
+for the native registration issuer. It binds the original anonymous signup
+command and ingress actor separately from the prospective new user; no logged-in
+session is invented. Canonical IDs, including already-admitted ULIDs, are kept
+unchanged. Identifier and verification versions, token version, exact canonical
+mailbox/profile and callback are committed with a domain-separated keyed digest,
+not a public unkeyed mailbox index. Returned maps/slices are caller-owned.
+
+The internal one-use purpose is `identity.identifier.verify`; the explicit
+`email.confirm_operation` caveat selects `identity.email.verification-confirm`.
+This is **not** the authenticated-session identifier-management proof profile.
+`Authorize` checks an already cryptographically authenticated grant against
+the exact original intent and exclusive expiry using explicit current time.
+It does not verify a signature, check revocation/current primary versions,
+consume the grant, change an identifier or issue a session. Those checks and
+effects must belong to the eventual native confirmation transaction. A payload
+or successful shape authorization must never be treated as completed email
+verification. Retain original binding keys until their grants cease to exist;
+rotation selects the current version only for new issuance, without renewal.
+
+`CapabilityPayload` and verification configuration/specification expose explicit
+sensitive fields for trusted composition. Direct formatting/logging redacts and
+implicit JSON/text serialization denies. As with raw `AddressInput`, Go can
+bypass these methods when traversing private enclosing fields: do not place raw
+configuration or sensitive field projections into diagnostic objects. Keep
+binding keys independent of signing, replay and encryption keys. The policy
+owns no resources, goroutines, callbacks, network requests or stores.
 
 Names, groups, comments, quoted local parts, domain literals, trailing-dot
 domains and multiple recipients are explicitly unsupported. C0/C1 controls,
