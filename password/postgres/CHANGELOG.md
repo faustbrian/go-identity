@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Add native backend password-signin orchestration through exported Go APIs,
+  including canonical email discovery, enumeration-neutral verification,
+  original cookie/intent admission and atomic proof/session/audit effects.
+  Preserve browser or persistent cookie policy and deliver bearer/CSRF once
+  after commit. Password-free restart recovery discloses only authorized
+  original history, including after session payload cleanup. This development
+  profile requires verified email and current-policy single-factor material;
+  atomic rehash, MFA continuation and remaining lifecycle profiles are pending.
+
 - Add immutable native password-signin signing-key custody without exposing a
   public signing operation or private material. Keys copy consistent Ed25519
   input and reject unsupported authentication profiles. Native transaction

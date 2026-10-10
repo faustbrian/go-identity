@@ -2,7 +2,8 @@
 
 Development checkpoint: owned forward-only password material storage and a
 consistent primary credential reader plus native existing-password material
-replacement/recovery and native authenticated password change. Registration,
+replacement/recovery, native authenticated password change and backend
+single-factor signin/recovery. Registration,
 rehash, reset, history and deletion remain unimplemented.
 There is deliberately no independent setter or application-written workflow.
 
@@ -18,7 +19,36 @@ coordinator for signed-original, pre-auth, session, synchronizer and required
 audit/outbox effects. The session owner alone grants original reveal-once bearer
 and synchronizer delivery after a new successful commit. A delivery-time failure
 does not rewrite committed history as rollback; no credential is returned.
-Complete public login orchestration and atomic hash upgrade remain unfinished.
+`NewSigninService(pool, config)` composes the exported backend Go
+`password.SigninService` port, not a UI or an HTTP handler. The constructor
+freezes original flow keys, email normalization, signing/verification keys,
+current policy, bounded password verification and session/risk configuration.
+It does no IO, installs no migrations and starts no background work. Select
+exact HTTPS origin/callback allowlists and install every owner's existing
+migration history before using it.
+
+`Signin(ctx, request)` accepts the original opaque pre-auth cookie and caller-owned
+raw password. It resolves verified canonical email through the email/kernel
+owners, counts risk before real or dummy comparison, authorizes current policy
+and commits original authentication with pre-auth consumption and session/CSRF
+effects. Preserve the resulting server-generated `Recovery`; destroy password
+custody after the call. Only an error-free original commit permits reveal-once
+bearer/CSRF delivery. Errors never deliver credentials, even after a known commit.
+
+`RecoverSignin(ctx, request)` accepts original cookie possession and password-free
+correlation with fresh trusted caller provenance. Current disclosure policy
+controls historical visibility before and after primary reconciliation.
+Consumed/expired pre-auth and deleted live session payloads do not erase the
+original committed `SessionID`. Recovery returns no live `Session`, bearer,
+cookie or synchronizer and never compares a password, charges another login
+attempt, generates a new session or renews authority. Unknown outcomes retain
+their original correlation; do not resubmit secrets to retry the mutation.
+
+This development profile supports verified-email single-factor login only.
+Hashes needing upgrade currently deny; atomic hash upgrade, MFA continuation,
+verification-policy variants and the canonical phone entrypoint remain pending.
+HTTP transport is a separate opt-in feature; complete login parity and release
+qualification are not established by these backend checkpoints.
 
 Migration 5 adds immutable original password-signin records, distinct from
 password-verification records. `Repository.SignInAuthentication(ctx, proofID)`
@@ -31,11 +61,11 @@ The reader performs no signing, authentication, consumption or freshness renewal
 
 Forward this read through the configured authority source; do not replace the
 expected authenticator or reconstruct its opaque `AuthenticatedProof` from a
-password comparison. There is no public writer. The next owning signin workflow
-must persist only real successful authentication through its coordinator and
-compose risk, pre-auth, credential/upgrade, session and audit/outbox effects.
-This storage prerequisite is not an executable signin endpoint or proof that
-registration, MFA, hash upgrades or login session issuance are complete.
+password comparison. There is no independent record setter: the native signin
+workflow above persists only real successful authentication through its
+coordinator with pre-auth, session and audit/outbox effects. This read contract
+alone is not an authentication endpoint and does not establish registration,
+MFA, hash upgrades or complete login parity.
 
 ## Original reauthentication records
 

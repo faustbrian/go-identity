@@ -79,7 +79,7 @@ func (signinRiskBoundary) AppendBatch(context.Context, []audit.Record) (audit.Ba
 	return audit.BatchResult{}, errors.New("unexpected batch")
 }
 
-func signinTestAdmission(t *testing.T, ctx context.Context, b identity.CommandBinding) risk.AuthenticationAdmission {
+func signinTestRisk(t *testing.T) risk.AuthenticationAdmissionCustodyConfig {
 	t.Helper()
 	policy, err := risk.NewPolicy(risk.PolicyConfig{Version: 3, Limits: risk.VelocityLimits{MaxDimensions: 4, MaxCounters: 16, MaxWindow: time.Hour, MaxLimit: 120, KeyBytes: 64, RetryAfterMax: time.Hour}, Profiles: []risk.Profile{
 		{Class: risk.Authentication, Phase: risk.BeforeCredential, Dimensions: []risk.Dimension{risk.TenantDimension, risk.NetworkDimension, risk.DeviceDimension, risk.IdentifierDimension}, Window: 5 * time.Minute, Limit: 10, ThresholdAction: risk.Throttle, EvidenceTTL: 5 * time.Minute, Unknown: risk.DenyUnknown, MaxCounters: 4, RequiredSignals: []string{"status", "velocity"}},
@@ -103,7 +103,13 @@ func signinTestAdmission(t *testing.T, ctx context.Context, b identity.CommandBi
 		t.Fatal(err)
 	}
 	evidence, _ := risk.NewEvidenceKey(1, bytes.Repeat([]byte{72}, 32), bytes.Repeat([]byte{73}, 32))
-	custody, err := risk.NewAuthenticationAdmissionCustody(risk.AuthenticationAdmissionCustodyConfig{Evaluation: evaluator, ConfigurationID: "signin-test-v1", Keys: []risk.EvidenceKey{evidence}})
+	return risk.AuthenticationAdmissionCustodyConfig{Evaluation: evaluator, ConfigurationID: "signin-test-v1", Keys: []risk.EvidenceKey{evidence}}
+}
+
+func signinTestAdmission(t *testing.T, ctx context.Context, b identity.CommandBinding) risk.AuthenticationAdmission {
+	t.Helper()
+	c := signinTestRisk(t)
+	custody, err := risk.NewAuthenticationAdmissionCustody(c)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -111,7 +117,7 @@ func signinTestAdmission(t *testing.T, ctx context.Context, b identity.CommandBi
 	subject := risk.Subject{Network: "192.0.2.1", Device: "synthetic-device", IdentifierDigest: strings.Repeat("a", 64)}
 	// Before comparison there is no verified human actor. The later command
 	// audit separately retains its trusted ingress workload under the same ID.
-	result, err := evaluator.Evaluate(ctx, risk.EvaluateRequest{Context: scope, Phase: risk.NonIssuing, Subject: subject, Attribution: &risk.DecisionAttribution{CommandID: b.CommandID, CorrelationID: b.CommandID, Actor: audit.ActorInput{Kind: audit.ActorAnonymous}, Subject: identity.SecurityAuthenticationAttempt, SubjectID: string(b.CommandID)}})
+	result, err := c.Evaluation.Evaluate(ctx, risk.EvaluateRequest{Context: scope, Phase: risk.NonIssuing, Subject: subject, Attribution: &risk.DecisionAttribution{CommandID: b.CommandID, CorrelationID: b.CommandID, Actor: audit.ActorInput{Kind: audit.ActorAnonymous}, Subject: identity.SecurityAuthenticationAttempt, SubjectID: string(b.CommandID)}})
 	if err != nil {
 		// EvaluateError retains only the owner's stable redacted classification,
 		// never an external counter/source diagnostic or trusted input values.
@@ -248,6 +254,9 @@ INSERT INTO authorization_subject_authorities VALUES('AAAAAAAAAAAAAAAAAAAAAQ','u
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Run("public native service", func(t *testing.T) {
+		testPublicNativeSignin(t, ctx, pool, policy, crypto, hash, sessionConfig, profile)
+	})
 	for _, mode := range []string{"commit", "rollback", "stale-credential", "expired-delivery", "expired-audit"} {
 		t.Run(mode, func(t *testing.T) {
 			r, _, flowKey, _ := nativeSigninFlow(t)
