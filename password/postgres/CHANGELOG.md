@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Bind typed email confirmation/recovery to the existing native coordinator.
+  Fresh successful confirmation returns an exact-version verified address after
+  current disclosure policy and a primary read. Replay/recovery stay metadata-
+  only; later disclosure failure preserves known commitment without payload.
+  Existing receipt APIs remain compatible and this profile issues no session.
+
 - Confirm original signup email links explicitly through native proof-bound
   counters and atomic capability, address, audit and lifecycle participants.
   Scanner validation remains read-only; same-command replay preserves the

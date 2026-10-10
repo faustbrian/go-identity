@@ -40,6 +40,10 @@ import (
 // Unknown rather than inventing rollback. Returned receipts disclose no address,
 // bearer or session and confer no current authority. No goroutines are owned.
 func (s *SignupService) ConfirmRegistrationVerification(ctx context.Context, proof capability.Proof, callback string, commandID identity.CommandID, network string, caller authorization.DecisionContext) (result identity.CommandResult, err error) {
+	return s.confirmRegistrationVerification(ctx, proof, callback, commandID, network, caller, nil)
+}
+
+func (s *SignupService) confirmRegistrationVerification(ctx context.Context, proof capability.Proof, callback string, commandID identity.CommandID, network string, caller authorization.DecisionContext, replayed *bool) (result identity.CommandResult, err error) {
 	if ctx == nil || s == nil || s.config == nil || s.pool == nil || s.directory == nil || s.config().Verification.Counters == nil {
 		return result, identity.InvalidInputError{Field: "email_verification"}
 	}
@@ -82,6 +86,9 @@ func (s *SignupService) ConfirmRegistrationVerification(ctx context.Context, pro
 		return result, err
 	}
 	if !admission.Absent {
+		if replayed != nil {
+			*replayed = true
+		}
 		// Exact single original-signup issuance and callback were authenticated
 		// above. History cannot select a different subject/identifier/actor.
 		return coordinator.RecoverFeatureCommand(ctx, q, caller)
@@ -121,6 +128,11 @@ func (s *SignupService) ConfirmRegistrationVerification(ctx context.Context, pro
 	}
 	reservation, result, err := coordinator.ReserveCommand(ctx, b, command, plan)
 	if err != nil || reservation == (kernel.Reservation{}) {
+		// Another invocation can commit after admission but before reservation.
+		// Retained outcomes never authorize a fresh disclosure on this invocation.
+		if replayed != nil && confirmationReservationReplayed(reservation, result, err) {
+			*replayed = true
+		}
 		return result, err
 	}
 	work, err := coordinator.Begin(ctx, reservation)
@@ -133,6 +145,13 @@ func (s *SignupService) ConfirmRegistrationVerification(ctx context.Context, pro
 		return coordinator.Abort(work, err)
 	}
 	return coordinator.Commit(work, result)
+}
+
+func confirmationReservationReplayed(reservation kernel.Reservation, result identity.CommandResult, err error) bool {
+	// Only the coordinator's successful zero-ticket branch observes retained
+	// busy/terminal history. Fresh denial, ambiguity and conflict also return no
+	// ticket, but carry an error and do not prove a prior command invocation.
+	return err == nil && reservation == (kernel.Reservation{}) && result.Outcome != identity.CommitOutcomeInvalid
 }
 
 // RecoverRegistrationVerification observes/reconciles only the exact original

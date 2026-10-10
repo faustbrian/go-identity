@@ -9,7 +9,10 @@ signup, reset, history and deletion remain unimplemented. Original signup-link
 confirmation is implemented; the complete generic email lifecycle is not.
 
 Original signup links can be explicitly confirmed with
-`SignupService.ConfirmRegistrationVerification`. Select the borrowed native
+the typed `email.RegistrationVerificationService` implemented by `SignupService`:
+`VerificationConfirm(ctx, email.VerificationConfirmRequest)` and proof-free
+`VerificationRecover(ctx, email.VerificationRecoveryRequest)`. The existing
+`ConfirmRegistrationVerification` receipt API remains compatible. Select the borrowed native
 `SignupVerificationConfig.Counters` at startup and install the forward kernel
 `EmailVerificationMigrationSource` and risk `VerificationCounterMigrationSource`
 after their selected existing histories. Nil counters preserve signup/scanner
@@ -26,6 +29,16 @@ caller, not a bearer. It reconciles retained metadata after restarts without
 renewing proof or revealing address/session data. This native registration
 bridge is not yet the complete generic email lifecycle or opt-in HTTP transport.
 There is deliberately no independent setter or application-written workflow.
+
+Fresh typed confirmation returns the exact active verified email projection only
+after commitment, current disclosure authorization and a bounded primary read.
+The address and verification versions must match the retained transition, not a
+later replacement. Replay and recovery return original correlation/outcome only;
+they never return an address or session. One deadline covers mutation and the
+post-commit read. A later read, authorization, cancellation or panic failure
+clears address output without erasing known commitment. Inspect both outcome and
+error before using a result; retry/recovery must preserve original command scope.
+The projection is not a current authorization lease or cached validity evidence.
 
 ## Native required-verification signup
 

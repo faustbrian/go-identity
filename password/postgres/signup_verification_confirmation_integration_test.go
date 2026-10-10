@@ -5,12 +5,14 @@ package passwordpostgres
 import (
 	"bytes"
 	"context"
+	"net/url"
 	"testing"
 	"time"
 
 	"github.com/faustbrian/go-authorization"
 	"github.com/faustbrian/go-capability"
 	identity "github.com/faustbrian/go-identity"
+	email "github.com/faustbrian/go-identity/email"
 	kernel "github.com/faustbrian/go-identity/postgres"
 	"github.com/faustbrian/go-identity/risk"
 	riskpg "github.com/faustbrian/go-identity/risk/postgres"
@@ -77,6 +79,31 @@ func testPublicRegistrationConfirmation(t *testing.T, ctx context.Context, sourc
 	if result, err := owner.ConfirmRegistrationVerification(ctx, proof, callback, id, "2001:db8::1", wrong); err == nil || result.Outcome == identity.CommitOutcomeCommitted {
 		t.Fatal("foreign subject confirmed original address")
 	}
+	typed, ok := any(service).(email.RegistrationVerificationService)
+	if !ok {
+		t.Fatal("native owner has no typed email service binding")
+	}
+	redirect, err := url.Parse(callback)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request := email.VerificationConfirmRequest{TenantID: identity.TenantID(grant.Payload().Tenant), CommandID: id, Token: proof, Callback: *redirect, Network: "2001:db8::1", Caller: caller}
+	confirmed, err := typed.VerificationConfirm(ctx, request)
+	if err != nil || confirmed.Validate() != nil || confirmed.Outcome != identity.CommitOutcomeCommitted || confirmed.Replayed {
+		t.Fatal("typed original confirmation failed", confirmed.Outcome, err)
+	}
+	address, err := confirmed.Address.Bindings()
+	if err != nil || address.UserID != identity.UserID(grant.Payload().Subject) || address.IdentifierVersion != 2 || address.VerificationVersion != 2 {
+		t.Fatal("typed confirmation lost exact committed address", err)
+	}
+	canonical, _, present := confirmed.Address.Values()
+	if !present || canonical == "" {
+		t.Fatal("fresh committed address not disclosed")
+	}
+	typedReplay, err := typed.VerificationConfirm(ctx, request)
+	if err != nil || typedReplay.Validate() != nil || !typedReplay.Replayed || typedReplay.Address != (identity.IdentifierProjection{}) {
+		t.Fatal("typed replay re-disclosed address", err)
+	}
 	result, err := owner.ConfirmRegistrationVerification(ctx, proof, callback, id, "2001:db8::1", caller)
 	if err != nil || result.Outcome != identity.CommitOutcomeCommitted || result.Feature == nil || result.Feature.AfterVersion != 2 {
 		t.Fatal("native delivered signup proof did not confirm atomically", result.Outcome, err)
@@ -90,6 +117,14 @@ func testPublicRegistrationConfirmation(t *testing.T, ctx context.Context, sourc
 		t.Fatal("native registration confirmation has no proof-free recovery")
 	}
 	query := identity.RecoveryQuery{CommandID: id, TenantID: result.Binding.TenantID, UserID: result.Binding.UserID, ActorID: result.Binding.ActorID, ActorKind: result.Binding.ActorKind, OperationID: result.Binding.OperationID, RecordID: result.Binding.RecordID}
+	typedRecovered, err := typed.VerificationRecover(ctx, email.VerificationRecoveryRequest{Recovery: confirmed.Recovery, Caller: caller})
+	if err != nil || typedRecovered.Validate() != nil || typedRecovered.Outcome != identity.CommitOutcomeCommitted {
+		t.Fatal("typed proof-free recovery lost commitment", err)
+	}
+	bindings, err := typedRecovered.Recovery.Bindings()
+	if err != nil || bindings != query {
+		t.Fatal("typed recovery retargeted command", err)
+	}
 	recovered, err := recovery.RecoverRegistrationVerification(ctx, query, caller)
 	if err != nil || recovered.Outcome != identity.CommitOutcomeCommitted || recovered.Binding != result.Binding || recovered.Feature.AfterVersion != 2 {
 		t.Fatal("proof-free original confirmation recovery diverged", err)
