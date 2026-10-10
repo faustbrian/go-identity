@@ -1291,8 +1291,17 @@ That profile preserves the original signed `identity.identifier.verify` purpose,
 envelope fingerprint, expiry and retained replay identity. It requires the
 `identity.email` native owner, identifier lifecycle, protected audits and command
 counters, and excludes OTP reinterpretation, fresh issuance and delivery. Its
-canonical history is readable without granting execution authority: reservation
-remains denied until the kernel domain and one-use phases are implemented.
+canonical history is readable without granting execution authority. Execution
+requires an `EmailVerificationContributor`, the real kernel repository and typed
+capability reservation/execution contributors. The ten `EmailVerificationFields`
+bind the original committed signup, canonical address and current predecessors.
+The kernel locks and verifies the original pending identifier, advances user and
+identifier authority, and commits proof consumption, protected audit and outbox
+in one transaction. Counter denial never reserves the proof; rollback cannot
+retain a verified address or successful consumption. Install the additive
+`EmailVerificationMigrationSource` after the complete existing migration history.
+The native owner still supplies original proof/origin and current action policy;
+this kernel profile alone is not the public email workflow or session issuance.
 
 An empty `CommandPlan.SubjectType` retains the historical v1 structural-only
 profile and cannot reserve. For native execution, select a valid subject type

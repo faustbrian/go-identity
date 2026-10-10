@@ -145,7 +145,11 @@ func (c *Coordinator) reserveCapability(ctx context.Context, tx pgx.Tx, q claimR
 	if p.capability == nil {
 		return nil
 	}
-	if p.belongsTo(c.registry) != nil || j.disposition != journalOwned || !bytes.Equal(q.safeFields, cborMap(commandScope(p.binding))) {
+	var operation *identity.FeatureOperation
+	if p.feature != nil {
+		operation = &p.feature.Operation
+	}
+	if p.belongsTo(c.registry) != nil || j.disposition != journalOwned || !bytes.Equal(q.safeFields, commandSafeFields(p.binding, operation)) {
 		return invalidPlan()
 	}
 	var contributor CapabilityReservationContributor

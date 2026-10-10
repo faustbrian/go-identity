@@ -398,8 +398,10 @@ func (c *Coordinator) reservePreparedCommand(ctx context.Context, binding identi
 			return c.failedReservation(tx, binding, identity.CommandResult{}, err)
 		}
 	}
-	if err = c.reserveCapability(bounded, tx, q, admitted, journal, owner); err != nil {
-		return c.failedReservation(tx, binding, identity.CommandResult{}, err)
+	if !denied {
+		if err = c.reserveCapability(bounded, tx, q, admitted, journal, owner); err != nil {
+			return c.failedReservation(tx, binding, identity.CommandResult{}, err)
+		}
 	}
 	if !denied {
 		if err = c.reserveOTP(bounded, tx, command, q, admitted, journal, owner); err != nil {

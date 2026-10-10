@@ -15,8 +15,8 @@ import (
 // that declaration complete. The coordinator alone computes authoritative keyed
 // intent and matches its frozen registry. Preparation grants no reservation,
 // Work or execution readiness. Only the exact native registration-email profile
-// supports a capability declaration; its execution remains denied until atomic
-// phases are composed. Other capability/cascade inputs are rejected. Invalid
+// supports original registration email proof consumption through its typed
+// atomic phases. Other capability/cascade inputs are rejected. Invalid
 // input returns redacted identity.InvalidInputError. Do not mutate inputs
 // concurrently with this call.
 func FeaturePlanDigest(binding identity.CommandBinding, fingerprint [32]byte, plan CommandPlan) ([32]byte, error) {
@@ -195,6 +195,10 @@ func (c *Coordinator) prepareFeature(binding identity.CommandBinding, command id
 		return fail()
 	}
 	snapshot := CommandPlan{Contributors: append([]ContributorDescriptor(nil), p.Contributors...), Audits: append([]AuditPlan(nil), p.Audits...), Capability: p.Capability, SubjectType: p.SubjectType, CaptchaReplayReservation: p.CaptchaReplayReservation, SignupAcceptance: p.SignupAcceptance}
+	if p.Capability != nil {
+		copy := *p.Capability
+		snapshot.Capability = &copy
+	}
 	snapshot.Delivery = cloneDeliveryPlan(p.Delivery)
 	snapshot.CapabilityIssuance = cloneCapabilityIssuancePlan(p.CapabilityIssuance)
 	snapshot.CaptchaEvidence = cloneCaptchaEvidencePlan(p.CaptchaEvidence)

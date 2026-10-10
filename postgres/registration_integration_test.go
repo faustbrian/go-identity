@@ -210,6 +210,8 @@ func TestPasswordRegistrationIntegration(t *testing.T) {
 		acceptanceInstalled = true
 	}
 	t.Run("signup-issuance", func(t *testing.T) { testSignupCapabilityIssuance(t, ctx, pool, repo, domain, installAcceptance) })
+	var emailOrigin identity.CommandBinding
+	var emailIdentifier identity.Identifier
 	for _, mode := range []string{"commit", "native-failure", "audit-failure", "outbox-failure", "foreign-command", "missing-domain", "duplicate-domain", "changed-intent", "changed-attributes", "changed-actor", "changed-actor-kind", "changed-command-id", "retired-identifier", "canonical-duplicate", "foreign-tenant-value", "concurrent", "disconnect-before", "disconnect-after", "schema-conflict", "accept-canonical-duplicate", "accept-retired-identifier", "accept-commit", "accept-concurrent", "accept-audit-failure", "accept-outbox-failure", "accept-native-failure", "accept-final-failure", "accept-structural-id", "accept-user-id", "accept-unknown-attribute", "accept-unknown-schema", "accept-schema-conflict", "accept-missing-key", "accept-disconnect-before", "accept-disconnect-after"} {
 		t.Run(mode, func(t *testing.T) {
 			scenario := strings.TrimPrefix(mode, "accept-")
@@ -567,6 +569,7 @@ func TestPasswordRegistrationIntegration(t *testing.T) {
 			}
 			if want == 1 {
 				if mode == "commit" {
+					emailOrigin, emailIdentifier = b, phase.intent.Identifier
 					t.Run("registration-origin-input", func(t *testing.T) {
 						testRegistrationOriginInput(t, ctx, c, phase, b, plan)
 					})
@@ -617,6 +620,23 @@ func TestPasswordRegistrationIntegration(t *testing.T) {
 			}
 		})
 	}
+	t.Run("registration-email-confirmation", func(t *testing.T) {
+		if emailOrigin.CommandID == "" {
+			t.Fatal("select original commit fixture with confirmation")
+		}
+		var confirmationBase migrations.Source = source
+		if acceptanceInstalled {
+			confirmationBase = PasswordSignupAcceptanceMigrationSource{Base: source, Version: 13}
+		}
+		runner, e := migrations.NewRunner(EmailVerificationMigrationSource{Base: confirmationBase, Version: 40}, backend)
+		if e != nil {
+			t.Fatal(e)
+		}
+		if _, e := runner.Up(ctx); e != nil {
+			t.Fatal(e)
+		}
+		testRegistrationEmailVerification(t, ctx, pool, repo, emailOrigin, emailIdentifier)
+	})
 }
 
 func mustCommandBytes(t *testing.T, id identity.CommandID) []byte {

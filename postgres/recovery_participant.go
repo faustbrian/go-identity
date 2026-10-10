@@ -210,6 +210,9 @@ func (r *Repository) RecoverParticipant(ctx context.Context, recovery RecoveryWo
 	}
 	b, err := recovery.Scope()
 	if err == nil && recovery.state.plan.feature != nil {
+		if recovery.state.plan.feature.Operation == registrationEmailVerificationOperation() && recovery.state.plan.capability != nil {
+			return recoverEmailVerification(ctx, recovery)
+		}
 		if passwordRegistrationOperation(recovery.state.plan.feature.Operation) {
 			return recoverPasswordRegistration(ctx, recovery)
 		}

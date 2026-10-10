@@ -57,6 +57,14 @@ func validateFeatureCommand(phase FeatureExecutionContributor, command identity.
 	if err := phase.ValidateFeatureCommand(command, plan); err != nil {
 		return err
 	}
+	if plan.Capability != nil {
+		p, ok := phase.(EmailVerificationContributor)
+		if !ok {
+			return invalidEmailVerification()
+		}
+		_, err := emailVerificationCommand(p, command, plan)
+		return err
+	}
 	if plan.Feature != nil && credentialCompromiseOperation(plan.Feature.Operation) {
 		p, ok := phase.(CredentialCompromiseContributor)
 		if !ok {
@@ -77,9 +85,7 @@ func validateFeatureCommand(phase FeatureExecutionContributor, command identity.
 }
 
 func (r *ContributorRegistry) admitFeaturePlan(b identity.CommandBinding, fingerprint [32]byte, p CommandPlan) (*admittedKernelPlan, error) {
-	// Historical declaration support is not execution authority. Keep this
-	// profile denied until its kernel-owned domain and one-use phases exist.
-	if p.Capability != nil {
+	if p.Capability != nil && (p.Feature == nil || p.Feature.Operation != registrationEmailVerificationOperation()) {
 		return nil, invalidPlan()
 	}
 	digest, err := FeaturePlanDigest(b, fingerprint, p)
@@ -92,6 +98,11 @@ func (r *ContributorRegistry) admitFeaturePlan(b identity.CommandBinding, finger
 	}
 	if _, ok := feature.contributor.(FeatureExecutionContributor); !ok {
 		return nil, invalidPlan()
+	}
+	if p.Capability != nil {
+		if _, ok := feature.contributor.(EmailVerificationContributor); !ok {
+			return nil, invalidPlan()
+		}
 	}
 	target, actorKind := featureTargetID(b), audit.ActorService
 	if b.ActorKind == authorization.SubjectUser {
@@ -155,6 +166,21 @@ func (r *ContributorRegistry) admitFeaturePlan(b identity.CommandBinding, finger
 			return nil, invalidPlan()
 		}
 		switch entry.descriptor.Owner {
+		case "identity/postgres":
+			if p.Capability != nil {
+				if _, ok := entry.contributor.(*Repository); !ok {
+					return nil, invalidPlan()
+				}
+			}
+		case "capability/postgres":
+			if p.Capability != nil {
+				if _, ok := entry.contributor.(CapabilityExecutionContributor); !ok {
+					return nil, invalidPlan()
+				}
+				if _, ok := capabilityReservationParticipant(entry.contributor); !ok {
+					return nil, invalidPlan()
+				}
+			}
 		case "identity/otp/postgres":
 			if p.OTP != nil {
 				if _, ok := otpAttemptParticipant(entry.contributor); !ok {
@@ -205,7 +231,12 @@ func (r *ContributorRegistry) admitFeaturePlan(b identity.CommandBinding, finger
 		copy := *p.CommandCounters
 		counters = &copy
 	}
-	return &admittedKernelPlan{registry: r.state, binding: b, digest: digest, contributors: entries, audits: append([]AuditPlan(nil), p.Audits...), lifecycle: &l, risk: risk, counters: counters, captchaReplay: p.CaptchaReplayReservation, captchaUse: cloneCaptchaEvidencePlan(p.CaptchaEvidence), otp: cloneOTPPlan(p.OTP), fingerprint: fingerprint, feature: &f, subjectType: p.SubjectType, delivery: cloneDeliveryPlan(p.Delivery), issuance: cloneCapabilityIssuancePlan(p.CapabilityIssuance), signupAcceptance: p.SignupAcceptance}, nil
+	var proof *CapabilityPlan
+	if p.Capability != nil {
+		copy := *p.Capability
+		proof = &copy
+	}
+	return &admittedKernelPlan{registry: r.state, binding: b, digest: digest, contributors: entries, audits: append([]AuditPlan(nil), p.Audits...), lifecycle: &l, capability: proof, risk: risk, counters: counters, captchaReplay: p.CaptchaReplayReservation, captchaUse: cloneCaptchaEvidencePlan(p.CaptchaEvidence), otp: cloneOTPPlan(p.OTP), fingerprint: fingerprint, feature: &f, subjectType: p.SubjectType, delivery: cloneDeliveryPlan(p.Delivery), issuance: cloneCapabilityIssuancePlan(p.CapabilityIssuance), signupAcceptance: p.SignupAcceptance}, nil
 }
 
 // ApplyFeature invokes only the frozen exact native adapter once through Work.
@@ -307,6 +338,11 @@ func (c *Coordinator) ApplyFeature(ctx context.Context, w Work, command identity
 			return result, e
 		}
 	}
+	if p.capability != nil {
+		if e := prepareEmailVerification(ctx, w, command); e != nil {
+			return result, e
+		}
+	}
 	if e := c.checkPreparedAdmission(w); e != nil {
 		return result, w.fail(ctx, e)
 	}
@@ -328,6 +364,11 @@ func (c *Coordinator) ApplyFeature(ctx context.Context, w Work, command identity
 	}
 	if w.state.replacementIntent != nil {
 		if e := applyCredentialReplacement(ctx, w); e != nil {
+			return result, e
+		}
+	}
+	if w.state.emailVerification != nil {
+		if e := applyEmailVerification(ctx, w); e != nil {
 			return result, e
 		}
 	}

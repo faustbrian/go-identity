@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Execute original signup email confirmation through typed native admission and
+  kernel-owned identifier mutation, with one-use proof finalization, protected
+  audit and outbox committed atomically. Bind original signup provenance and
+  current versions; counter denial leaves the proof unreserved. Enable with the
+  additive email-verification migration and native/capability contributors;
+  public email orchestration and session issuance remain separate contracts.
+
 - Preserve original signup verification proof metadata in the exact native email
   confirmation plan and retained history without rewriting its signed purpose.
   Require protected audit, identifier lifecycle and command-counter declarations;
