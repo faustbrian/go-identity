@@ -3,9 +3,51 @@
 Development checkpoint: owned forward-only password material storage and a
 consistent primary credential reader plus native existing-password material
 replacement/recovery, native authenticated password change and backend
-single-factor signin/recovery with atomic automatic rehash. Registration,
-reset, history and deletion remain unimplemented.
+single-factor signin/recovery with atomic automatic rehash, plus required-email-
+verification signup and password-free signup recovery. Immediate-session/MFA
+signup, email confirmation, reset, history and deletion remain unimplemented.
 There is deliberately no independent setter or application-written workflow.
+
+## Native required-verification signup
+
+`NewSignupService(primaryPool, SignupConfig, localKeyring)` implements the public
+`password.SignupService` port. Configure the actual identity field processor and
+schema, canonical address owner, bounded canonical user-ID selector, registration
+policy, original pre-auth keys/allowlists, risk admission, HIBP screening, and
+native capability issuer/codec and encrypted delivery owners. ConfigurationID
+pins callback/provider semantics that cannot be inferred from function values;
+change it when those semantics change. Keep original configuration and keys for
+the retention lifetime of request mappings. Active envelope-key rotation alone
+does not select a new request profile.
+
+Install the existing kernel registration/neutral-acceptance, request-key/input,
+preparation/admission, password, pre-auth session, capability issuance, delivery,
+audit and lifecycle histories before calling the service. It borrows a primary
+pool and local keyring and does not migrate, send email, retry or create a second
+journal. Remote decryption providers are not selectable. Each call owns its
+participant; simultaneous callers must each own equal independent passwords,
+not share one live Secret borrow.
+
+Call `Signup(ctx, request)` with one original pre-auth cookie and initiating
+idempotency key. Required verification returns an anonymous policy acknowledgement
+with no subject/session for both creation and occupied identifiers. Hashing occurs
+only after original risk admission and the configured HIBP decision. Issuance
+bearers transfer directly to encrypted delivery and never enter public results.
+Identical retries retain original IDs and effects; changed intent conflicts.
+
+Persist the explicit `result.Recovery.Bindings()` projection through trusted
+transport and reconstruct it with `password.NewSignupRecovery`. Call
+`RecoverSignup(ctx, password.SignupRecoveryRequest)` using the original cookie,
+correlation and fresh caller provenance, without password/address/retry key.
+Recovery checks current disclosure policy and authenticates the original encrypted
+input before reconciling the existing journal. Deleted or expired live flows do
+not renew historical input, credentials or delivery. Unknown remains unknown;
+an input read is never proof of rollback or permission to execute.
+
+This initial profile requires verified email and issues no session. Immediate
+session, MFA continuation, confirmation and the complete reset lifecycle remain
+in development; unsupported startup profiles fail closed. This is backend
+composition, not a signup UI or a complete platform/release-readiness claim.
 
 ## Original password-signin storage
 

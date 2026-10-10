@@ -162,7 +162,7 @@ func testNativeSignupKeyInput(t *testing.T, ctx context.Context, pool *database.
 	signer, _ := capability.NewHMACSHA256Signer("email-signing", signingKey)
 	verifier, _ := capability.NewHMACSHA256Verifier(signingKey)
 	resolver, _ := capability.NewKeySet([]capability.Key{{ID: "email-signing", Verifier: verifier}})
-	issuer, err := issuerpg.NewIssuer(issuerpg.IssuerConfig{Crypto: capability.ServiceConfig{Signer: signer, Resolver: resolver, Clock: func() time.Time { return issued }, Limits: capability.DefaultLimits()}, Audience: "email", CurrentReplayKeyVersion: 1, RetainedReplayKeys: map[uint32][32]byte{1: {61}}, PreparationTimeout: time.Second})
+	issuer, err := issuerpg.NewIssuer(issuerpg.IssuerConfig{Crypto: capability.ServiceConfig{Signer: signer, Resolver: resolver, Clock: time.Now, Limits: capability.DefaultLimits()}, Audience: "email", CurrentReplayKeyVersion: 1, RetainedReplayKeys: map[uint32][32]byte{1: {61}}, PreparationTimeout: time.Second})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -206,7 +206,9 @@ func testNativeSignupKeyInput(t *testing.T, ctx context.Context, pool *database.
 	if err != nil || issuancePlan.RegistrationUserID != selected.Creation.Binding.UserID || len(issuancePlan.Grants) != 1 || issuancePlan.Grants[0].CapabilityID == "" || b.UserID != "" {
 		t.Fatal("email issuance lost new-user/original-flow separation", err)
 	}
-	issuanceCodec, err := issuerpg.NewIssuancePreparationCodec(issuer, issuerpg.IssuancePreparationConfig{Deployment: "signup-test", ActiveEnvelopeKey: "checkpoint", EnvelopeKeys: map[string][]byte{"checkpoint": bytes.Repeat([]byte{89}, 32)}, VerificationKeys: []issuerpg.PreparationVerificationKey{{ID: "email-signing", HMAC: signingKey}}, Clock: func() time.Time { return issued }})
+	// Later public attempts retain their own primary issue time, not the first
+	// fixture's frozen second. Real issuer validity must follow the same clock.
+	issuanceCodec, err := issuerpg.NewIssuancePreparationCodec(issuer, issuerpg.IssuancePreparationConfig{Deployment: "signup-test", ActiveEnvelopeKey: "checkpoint", EnvelopeKeys: map[string][]byte{"checkpoint": bytes.Repeat([]byte{89}, 32)}, VerificationKeys: []issuerpg.PreparationVerificationKey{{ID: "email-signing", HMAC: signingKey}}, Clock: time.Now})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -418,6 +420,9 @@ func testNativeSignupKeyInput(t *testing.T, ctx context.Context, pool *database.
 	}
 	t.Run("native generated execution", func(t *testing.T) {
 		testNativeSignupGeneratedExecution(t, ctx, pool, repository, domain, r, selected, original, key, storage, at, generationConfig, riskConfig, base)
+	})
+	t.Run("public signup", func(t *testing.T) {
+		testNativePublicSignup(t, ctx, pool, policy, config, schema, keys, generationConfig, riskConfig, r)
 	})
 	for _, change := range []func(*identity.Command, *uint64, *[32]byte, *[]byte){
 		func(_ *identity.Command, generation *uint64, _ *[32]byte, _ *[]byte) { *generation++ },

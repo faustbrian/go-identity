@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Add native public required-verification signup and password-free original
+  recovery. Keep account, password material, flow consumption, verification
+  issuance and encrypted delivery atomic; matching retries do not regenerate.
+  Suppress occupied identifiers without exposing accounts or issuing grants.
+  Recovery authenticates retained input and original cookie after flow deletion
+  and never redelivers credentials. Immediate-session/MFA signup remains pending.
+
 - Keep original signup password and cookie custody distinct from the generated
   verifier. Native preparation uses the kernel's existing journal before hash
   generation and restores the original encrypted risk, verification issuance
