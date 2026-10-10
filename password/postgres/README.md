@@ -8,6 +8,16 @@ verification signup and password-free signup recovery. Immediate-session/MFA
 signup, reset, history and deletion remain unimplemented. Original signup-link
 confirmation is implemented; the complete generic email lifecycle is not.
 
+For signup rate admission, debit the trusted IP budget first, then use
+`SignupService.SignupRateSource(ctx, input)` to obtain the frozen creation
+parser's canonical identifier for the shared identifier budget. Pass the same
+address to `Signup`. Treat the returned identifier as private: never log or
+disclose it. This pure projection reads no account or flow, performs no password
+work and grants no registration authority. Native signup still checks original
+flow possession and keyed intent; the projection does not prevent historical
+keyed retries when the live flow has been consumed or deleted. Invalid input or
+cancellation returns no identifier. This method does not add a signup HTTP route.
+
 Select `http/password.NewSigninFeature` with this native `SigninService`, the
 strict PostgreSQL rate owner, original pre-auth cookie and signed browser-device
 codec. Match the original lifetime/remember, HTTPS origin/callback and session

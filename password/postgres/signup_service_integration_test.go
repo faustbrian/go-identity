@@ -88,6 +88,23 @@ func testNativePublicSignup(t *testing.T, ctx context.Context, pool *database.Po
 		return r
 	}
 	r := fresh("public-signup@example.test", 'S')
+	for range 3 {
+		canonical, err := service.SignupRateSource(ctx, "public-signup@EXAMPLE.test")
+		if err != nil || canonical != string(r.Email) || screens.Load() != 0 {
+			t.Fatal("signup source differs from native creation or performed password work")
+		}
+	}
+	var beforeAccounts, beforeCommands int
+	if err := pool.Raw().QueryRow(ctx, `SELECT (SELECT count(*) FROM identity.users),(SELECT count(*) FROM identity.registration_bindings)`).Scan(&beforeAccounts, &beforeCommands); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.SignupRateSource(ctx, "public-signup@EXAMPLE.test"); err != nil {
+		t.Fatal(err)
+	}
+	var afterAccounts, afterCommands int
+	if err := pool.Raw().QueryRow(ctx, `SELECT (SELECT count(*) FROM identity.users),(SELECT count(*) FROM identity.registration_bindings)`).Scan(&afterAccounts, &afterCommands); err != nil || beforeAccounts != afterAccounts || beforeCommands != afterCommands {
+		t.Fatal("signup source persisted registration effects", err)
+	}
 	result, err := public.Signup(ctx, r)
 	if err != nil || result.Validate() != nil || result.Outcome != identity.CommitOutcomeCommitted || !result.VerificationRequired || result.SubjectID != "" || result.SessionID != "" {
 		t.Fatal("public verification signup", err)
@@ -120,6 +137,14 @@ func testNativePublicSignup(t *testing.T, ctx context.Context, pool *database.Po
 	restarted, err := NewSignupService(pool, c, keys)
 	if err != nil {
 		t.Fatal(err)
+	}
+	canonical, err := restarted.SignupRateSource(ctx, "public-signup@EXAMPLE.test")
+	if err != nil || canonical != string(r.Email) || screens.Load() != 1 {
+		t.Fatal("source required deleted live flow or repeated screening", err)
+	}
+	keyedReplay, err := restarted.Signup(ctx, r)
+	if err != nil || !keyedReplay.Replayed || keyedReplay.Outcome != identity.CommitOutcomeCommitted || keyedReplay.Recovery != result.Recovery || screens.Load() != 1 {
+		t.Fatal("normalization broke original keyed retry after deleted flow", err)
 	}
 	recovery := password.SignupRecoveryRequest{Recovery: result.Recovery, Cookie: r.Cookie, Caller: r.Caller, Origin: r.Origin, Network: r.Network, Device: r.Device}
 	got, err := restarted.RecoverSignup(ctx, recovery)

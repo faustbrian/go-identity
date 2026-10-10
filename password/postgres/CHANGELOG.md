@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Expose native signup address normalization for split rate admission without
+  account lookup, password work or live-flow requirements. Original keyed
+  retries remain usable after flow consumption or deletion.
+
 - Adopt opt-in browser password signin HTTP composition with the native service
   and strict PostgreSQL admission. Preserve original remember/callback custody,
   fresh-only cookie/CSRF delivery and credential-free restart recovery.
