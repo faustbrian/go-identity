@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Add explicit auxiliary cookie custody alongside one strict Authorization
+  bearer, sharing bounded cookie framing without changing cookie-credential
+  exclusivity. Auxiliary custody grants no session or authentication authority.
+
 - Permit explicit strict bearer selection for canonical password verification,
   preserving its non-keyed request, session authority and rate.verify contract.
   Stored-session cookie selection and unrelated password operations are unchanged.

@@ -27,6 +27,25 @@ import (
 // network/origin/CSRF policy before domain work. Parsed headers cannot establish
 // their original proxy/network provenance.
 func (d *RequestDecoder) CookieBearer(r *http.Request, name string, requirement HeaderRequirement) (authentication.BearerCredential, bool, error) {
+	return d.cookieBearer(r, name, requirement, false)
+}
+
+// AuxiliaryCookieBearer acquires exact auxiliary cookie custody only alongside
+// one syntactically valid direct Authorization bearer. It does not authenticate
+// either input: callers validate the original primary credential and auxiliary
+// provenance with their respective owners. Never use the returned cookie as a
+// session credential or fallback. Proxy-Authorization and query alternatives
+// deny. All CookieBearer framing, limits, cancellation and zero-on-error rules
+// apply unchanged; this method never mutates headers or accesses the body.
+// Existing CookieBearer retains its no-Authorization exclusivity.
+func (d *RequestDecoder) AuxiliaryCookieBearer(r *http.Request, name string, requirement HeaderRequirement) (authentication.BearerCredential, bool, error) {
+	if _, _, err := d.Bearer(r, HeaderRequired); err != nil {
+		return authentication.BearerCredential{}, false, err
+	}
+	return d.cookieBearer(r, name, requirement, true)
+}
+
+func (d *RequestDecoder) cookieBearer(r *http.Request, name string, requirement HeaderRequirement, auxiliary bool) (authentication.BearerCredential, bool, error) {
 	var zero authentication.BearerCredential
 	if len(name) > 128 || !credentialCookieName(name) {
 		return zero, false, ErrInvalidInput
@@ -35,7 +54,7 @@ func (d *RequestDecoder) CookieBearer(r *http.Request, name string, requirement 
 		return zero, false, err
 	}
 	for header := range r.Header {
-		if strings.EqualFold(header, "Authorization") || strings.EqualFold(header, "Proxy-Authorization") {
+		if (!auxiliary && strings.EqualFold(header, "Authorization")) || strings.EqualFold(header, "Proxy-Authorization") {
 			return zero, false, DecodeError{}
 		}
 	}

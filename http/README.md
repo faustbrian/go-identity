@@ -422,6 +422,14 @@ bytes are unchanged. Optional/required/forbidden policy applies to that selected
 cookie only. Owning session/flow services still validate their token format,
 possession and current authority. This helper creates no flow, route or session.
 
+`RequestDecoder.AuxiliaryCookieBearer` explicitly acquires auxiliary custody
+alongside one syntactically valid direct Authorization bearer. The primary
+credential is still authenticated by its owner; the cookie must never serve as
+a session credential or fallback. Proxy/query alternatives deny. It shares all
+strict cookie limits above without modifying the request or weakening
+`CookieBearer` exclusivity. Use it for explicitly selected signed browser-device
+correlation, then validate that provenance with the session device codec.
+
 ## Envelope and body ownership
 
 Media types are explicit `application/json` or
