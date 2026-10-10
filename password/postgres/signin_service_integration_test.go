@@ -7,6 +7,7 @@ import (
 	"context"
 	"crypto/ed25519"
 	"encoding/base64"
+	"errors"
 	"net/http"
 	"strings"
 	"sync/atomic"
@@ -103,7 +104,7 @@ func testPublicNativeSignin(t *testing.T, ctx context.Context, pool *database.Po
 		t.Fatal("native public composition", err)
 	}
 	var workflow password.SigninService = service
-	for _, mode := range []string{"commit", "commit-persistent", "wrong", "unknown", "invalid-email", "foreign-cookie", "foreign-origin", "foreign-callback", "changed-remember", "policy-advance", "rehash", "rehash-persistent", "rehash-wrong", "rehash-policy-advance", "rehash-outbox-failure", "rehash-concurrent"} {
+	for _, mode := range []string{"commit", "commit-persistent", "wrong", "unknown", "invalid-email", "foreign-cookie", "foreign-origin", "foreign-callback", "changed-remember", "policy-advance", "rehash", "rehash-persistent", "rehash-wrong", "rehash-policy-advance", "rehash-outbox-failure", "rehash-concurrent", "rehash-expired", "rehash-cancelled", "rehash-disconnect-before", "rehash-disconnect-after"} {
 		t.Run(mode, func(t *testing.T) {
 			r, _, _, _ := nativeSigninFlow(t)
 			r.TenantID, r.Caller.Request.Tenant, r.Caller.Request.Subject.ID = signinTestTenant, signinTestTenant, signinTestActor
@@ -150,6 +151,8 @@ func testPublicNativeSignin(t *testing.T, ctx context.Context, pool *database.Po
 				}
 			}
 			attempt := workflow
+			attemptContext := ctx
+			var fault *signinCommitFault
 			upgrading := strings.HasPrefix(mode, "rehash")
 			current := crypto
 			if upgrading {
@@ -168,6 +171,31 @@ func testPublicNativeSignin(t *testing.T, ctx context.Context, pool *database.Po
 					t.Fatal("upgrade dummy fixture")
 				}
 				changed := c
+				selectedPool := pool
+				if mode == "rehash-expired" {
+					changed.ProofTTL = 500 * time.Millisecond
+				}
+				if mode == "rehash-cancelled" || strings.HasPrefix(mode, "rehash-disconnect-") {
+					fault = &signinCommitFault{before: mode == "rehash-disconnect-before"}
+					if mode == "rehash-cancelled" {
+						var stop context.CancelFunc
+						attemptContext, stop = context.WithCancel(ctx)
+						defer stop()
+						fault.cancel = stop
+					}
+					selectedPool, e = database.Connect(ctx, database.Config{DSN: pool.Raw().Config().ConnConfig.ConnString(), MaxConns: 3, Configure: func(c *database.PoolConfig) error { c.ConnConfig.DialFunc = fault.dial; return nil }})
+					if e != nil {
+						t.Fatal("fault pool unavailable")
+					}
+					defer func() {
+						cleanup, stop := context.WithTimeout(context.Background(), 3*time.Second)
+						defer stop()
+						if selectedPool.Close(cleanup) != nil {
+							t.Error("fault pool cleanup")
+						}
+					}()
+					changed.Coordinator.LeaseDuration = 500 * time.Millisecond
+				}
 				changed.Repository.HashPolicy = strong
 				changed.Verifier.Primitive, changed.Verifier.DummyHash = current, dummy
 				if mode == "rehash-policy-advance" {
@@ -180,7 +208,7 @@ func testPublicNativeSignin(t *testing.T, ctx context.Context, pool *database.Po
 					admission.Authorization = &signinPublicBarrierPolicy{ready: make(chan struct{})}
 					changed.Coordinator.AdmissionPolicy = &admission
 				}
-				attempt, e = NewSigninService(pool, changed)
+				attempt, e = NewSigninService(selectedPool, changed)
 				if e != nil {
 					t.Fatal("upgrade composition", e)
 				}
@@ -221,6 +249,16 @@ func testPublicNativeSignin(t *testing.T, ctx context.Context, pool *database.Po
 				defer func() {
 					if _, e := pool.Raw().Exec(ctx, `ALTER TABLE public.identity_outbox_bindings DROP CONSTRAINT signin_rehash_fault`); e != nil {
 						t.Error("outbox fault cleanup", e)
+					}
+				}()
+			}
+			if mode == "rehash-expired" {
+				if _, e := pool.Raw().Exec(ctx, `CREATE FUNCTION public.signin_rehash_wait() RETURNS trigger LANGUAGE plpgsql AS 'BEGIN PERFORM pg_sleep(0.6); RETURN NEW; END'; CREATE TRIGGER signin_rehash_wait BEFORE INSERT ON public.identity_outbox_bindings FOR EACH ROW EXECUTE FUNCTION public.signin_rehash_wait()`); e != nil {
+					t.Fatal("expiry wait fixture", e)
+				}
+				defer func() {
+					if _, e := pool.Raw().Exec(ctx, `DROP TRIGGER signin_rehash_wait ON public.identity_outbox_bindings; DROP FUNCTION public.signin_rehash_wait()`); e != nil {
+						t.Error("expiry wait cleanup", e)
 					}
 				}()
 			}
@@ -265,7 +303,23 @@ func testPublicNativeSignin(t *testing.T, ctx context.Context, pool *database.Po
 					t.Fatal("concurrent rehash did not have exactly one winner")
 				}
 			} else {
-				result, signinErr = attempt.Signin(ctx, r)
+				result, signinErr = attempt.Signin(attemptContext, r)
+			}
+			if strings.HasPrefix(mode, "rehash-disconnect-") {
+				checkSigninDisconnect(t, ctx, pool, service, r, result, signinErr, fault, hash, mode == "rehash-disconnect-after")
+				return
+			}
+			if mode == "rehash-cancelled" {
+				if !errors.Is(signinErr, context.Canceled) || !fault.hit.Load() {
+					t.Fatal("staged cancellation classification lost")
+				}
+				// Driver cancellation can close the original socket before rollback
+				// acknowledgement. Preserve unknown rather than inventing a receipt;
+				// the unfaulted primary must reconcile the original attempt.
+				if result.Issuance.CommitOutcome == identity.CommitOutcomeUnknown {
+					checkSigninDisconnect(t, ctx, pool, service, r, result, signinErr, fault, hash, false)
+					return
+				}
 			}
 			var state string
 			if e = pool.Raw().QueryRow(ctx, `SELECT state FROM signin_sessions.preauth_transactions WHERE flow_id=$1`, string(r.PreAuthID)).Scan(&state); e != nil {
@@ -285,6 +339,12 @@ func testPublicNativeSignin(t *testing.T, ctx context.Context, pool *database.Po
 					}
 					if mode == "rehash-outbox-failure" && signinErr == nil {
 						t.Fatal("required outbox failure swallowed")
+					}
+					if (mode == "rehash-expired" || mode == "rehash-cancelled") && (signinErr == nil || result.Issuance.CommitOutcome != identity.CommitOutcomeNotCommitted) {
+						t.Fatal("expired or cancelled rehash fabricated outcome")
+					}
+					if mode == "rehash-cancelled" && !fault.hit.Load() {
+						t.Fatal("cancellation missed staged rehash")
 					}
 				}
 				return
@@ -392,5 +452,65 @@ func testPublicNativeSignin(t *testing.T, ctx context.Context, pool *database.Po
 				checkHistory()
 			}
 		})
+	}
+}
+
+func checkSigninDisconnect(t *testing.T, ctx context.Context, pool *database.Pool, restarted *SigninService, request password.SigninRequest, original password.SigninResult, originalErr error, fault *signinCommitFault, previous primitive.EncodedHash, committed bool) {
+	t.Helper()
+	if originalErr == nil || fault == nil || !fault.hit.Load() || original.Issuance.CommitOutcome != identity.CommitOutcomeUnknown || original.Issuance.Token != (session.Token{}) || original.CSRFToken != (session.CSRFToken{}) || original.Issuance.Cookie.Name != "" || original.SessionID != "" {
+		t.Fatal("transport ambiguity disclosed authentication or fabricated outcome")
+	}
+	id, err := base64.RawURLEncoding.DecodeString(string(original.Issuance.CommandID))
+	if err != nil || len(id) != 16 {
+		t.Fatal("original correlation absent")
+	}
+	var records, audits, events int
+	if err := pool.Raw().QueryRow(ctx, `SELECT (SELECT count(*) FROM identity_password.signin_records WHERE command_id=$1),(SELECT count(*) FROM audit.identity_command_bindings WHERE command_id=$1),(SELECT count(*) FROM public.identity_outbox_bindings WHERE command_id=$1)`, id).Scan(&records, &audits, &events); err != nil {
+		t.Fatal("original effects observation", err)
+	}
+	want := 0
+	version, authority, aggregate, outcome := "7", "13", "11", identity.CommitOutcomeNotCommitted
+	if committed {
+		want, version, authority, aggregate, outcome = 1, "8", "14", "12", identity.CommitOutcomeCommitted
+	}
+	var uv, ca, cv, mv, raw, state string
+	if err := pool.Raw().QueryRow(ctx, `SELECT u.version::text,u.credential_version::text,r.version::text,m.version::text,m.encoded_hash FROM identity.users u JOIN identity.credential_references r USING(tenant_id,user_id) JOIN identity_password.credentials m USING(tenant_id,user_id,credential_id) WHERE u.tenant_id=$1 AND u.user_id=$2`, signinTestTenant, signinTestUser).Scan(&uv, &ca, &cv, &mv, &raw); err != nil || uv != aggregate || ca != authority || cv != version || mv != version || (raw == previous.String()) == committed || records != want || audits != want || events != want {
+		t.Fatal("disconnect split credential and required effects", err)
+	}
+	if err := pool.Raw().QueryRow(ctx, `SELECT state FROM signin_sessions.preauth_transactions WHERE flow_id=$1`, string(request.PreAuthID)).Scan(&state); err != nil || committed && state != "consumed" || !committed && state != "issued" {
+		t.Fatal("disconnect split original flow", err)
+	}
+	recovery := password.SigninRecoveryRequest{Recovery: original.Recovery, Cookie: request.Cookie, Caller: request.Caller, Origin: request.Origin, Network: request.Network, Device: request.Device}
+	bounded, stop := context.WithTimeout(ctx, 3*time.Second)
+	defer stop()
+	ticker := time.NewTicker(10 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		history, err := restarted.RecoverSignin(bounded, recovery)
+		if history.Issuance.Token != (session.Token{}) || history.CSRFToken != (session.CSRFToken{}) || history.Issuance.Cookie.Name != "" || history.Issuance.Session != (session.Session{}) {
+			t.Fatal("ambiguous recovery recreated credential")
+		}
+		if history.Issuance.CommitOutcome == outcome {
+			if committed && (err != nil || history.State != auth.SignInStateAuthenticated || history.SessionID == "") {
+				t.Fatal("committed rehash history missing", err)
+			}
+			if committed {
+				var sessions int
+				if err := pool.Raw().QueryRow(ctx, `SELECT count(*) FROM signin_sessions.sessions s JOIN signin_sessions.families f USING(tenant_id,family_id,user_id) WHERE s.tenant_id=$1 AND s.session_id=$2 AND s.state='active'`, signinTestTenant, history.SessionID).Scan(&sessions); err != nil || sessions != 1 {
+					t.Fatal("committed rehash lost actual session or family", err)
+				}
+			}
+			break
+		}
+		select {
+		case <-bounded.Done():
+			t.Fatal("original ambiguity unresolved", err)
+		case <-ticker.C:
+		}
+	}
+	// Historical reads must not generate another hash or advance the versions.
+	var after string
+	if err := pool.Raw().QueryRow(ctx, `SELECT encoded_hash FROM identity_password.credentials WHERE tenant_id=$1 AND user_id=$2`, signinTestTenant, signinTestUser).Scan(&after); err != nil || after != raw {
+		t.Fatal("recovery replaced password again")
 	}
 }
