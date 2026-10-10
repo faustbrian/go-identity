@@ -257,6 +257,9 @@ INSERT INTO authorization_subject_authorities VALUES('AAAAAAAAAAAAAAAAAAAAAQ','u
 	t.Run("public native service", func(t *testing.T) {
 		testPublicNativeSignin(t, ctx, pool, policy, crypto, hash, sessionConfig, profile)
 	})
+	t.Run("native signup material", func(t *testing.T) {
+		testNativeSignupMaterial(t, ctx, pool, policy, crypto, kernel.DirectoryAuthorityMigrationSource{Base: base, Version: 13, GlobalAuthorityID: "signin-deployment", TenantIDs: []identity.TenantID{signinTestTenant}})
+	})
 	for _, mode := range []string{"commit", "rollback", "stale-credential", "expired-delivery", "expired-audit"} {
 		t.Run(mode, func(t *testing.T) {
 			r, _, flowKey, _ := nativeSigninFlow(t)

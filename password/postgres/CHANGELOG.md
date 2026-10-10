@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add original-command password material persistence for native registration.
+  Require the exact active transaction and newly created account, identifier
+  and password reference; preserve the prepared verifier unchanged and roll
+  back material with the account on failure. Public signup orchestration and
+  password-free signup recovery remain in development.
+
 - Upgrade successfully compared obsolete password hashes inside the original
   backend signin transaction. Bind salted replacement material to the keyed
   command, atomically advance credential material/reference and independent
