@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add immutable emailed-reset capability scope policy binding original account,
+  credential and identifier versions, tenant, issuance command, recovery path,
+  callback and lifetime. Retained callback-binding keys permit rotation without
+  renewing issuance or expiry. Signature verification and transactional one-use
+  consumption remain with capability; complete native reset remains in progress.
+
 - Add signup and password-free original recovery ports with immutable anonymous
   attempt correlation. Closed result validation separates enumeration-safe
   verification acknowledgement from optional native session issuance and

@@ -270,3 +270,30 @@ development work; the existing password verifier alone cannot issue a session.
 See [CHANGELOG.md](CHANGELOG.md) for checkpoint release notes. Exact package
 coverage/mutation, complete workflow/infrastructure/provider evidence,
 clean-consumer and release qualification remain pending.
+
+### Emailed password-reset capability policy
+
+`NewResetProfile` freezes explicit issuer, audience, whole-second maximum
+lifetime, exact HTTPS callback allowlist and retained private callback-binding
+keys. There is no implicit lifetime or fallback recovery method. Supply the
+original `ResetGrantSpec` from trusted durable issuance state, preserving IDs,
+versions, origin command and original UTC issuance/expiry times. `Payload`
+returns closed scope without a grant ID; the durable capability issuer chooses
+the ID and signs using the existing capability engine. Do not log or serialize
+config/spec scalars or the resulting bearer payload.
+
+After actual `capability.Service.Verify`, `Authorize` compares the verified
+grant against that original intent and current time. Only the emailed reset
+path is accepted; extra audiences/caveats and changed versions, callbacks or
+timestamps deny. Callback-binding key rotation may retain the original key;
+removing it denies old grants without extending their original lifetime.
+The profile is immutable and concurrent-safe, performs no IO and owns no
+resource requiring shutdown. Its redacted error is `ErrInvalidReset`.
+
+**Scope validation is not reset permission.** This pure policy neither consumes
+the grant nor checks current account/factor/risk eligibility. Native scanner
+validation must remain read-only. Explicit user-confirmed completion must
+recheck current authoritative state and atomically consume capability/risk,
+change the password and apply required session effects through the existing
+coordinator. Those complete native reset operations remain implementation work;
+consumers must not substitute callback ordering or their own workflows.
