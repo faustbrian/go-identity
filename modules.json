@@ -4,6 +4,28 @@
   "go_version": "1.27.0",
   "modules": [
     {
+      "directory": "http/email",
+      "module_path": "github.com/faustbrian/go-identity/http/email",
+      "go_version": "1.27.0",
+      "packages": [{"module_directory":"http/email","directory":".","name":"emailhttp","import_path":"github.com/faustbrian/go-identity/http/email","kind":"public","production":true,"executable":true,"coverage_required":true,"build_required":true,"build_tags":[]}],
+      "purpose": "Opt-in original signup-link confirmation transport; full email lifecycle and native HTTP qualification in development.",
+      "lifecycle": "experimental",
+      "kind": "public library",
+      "releasable": true,
+      "family": "service-edge",
+      "version": "0.0.0",
+      "tag_prefix": "http/email/v",
+      "owned_dependencies": ["github.com/faustbrian/go-authorization","github.com/faustbrian/go-capability","github.com/faustbrian/go-identity","github.com/faustbrian/go-identity/email","github.com/faustbrian/go-identity/http","github.com/faustbrian/go-openapi/v2","github.com/faustbrian/go-rate-limit/v2"],
+      "reverse_owned_dependencies": [],
+      "external_runtime_dependencies": [],
+      "required_services": [],
+      "build_tags": [],
+      "test_tags": [],
+      "interoperability_tools": [],
+      "specifications": [],
+      "conformance_corpora": []
+    },
+    {
       "directory": "http/password",
       "module_path": "github.com/faustbrian/go-identity/http/password",
       "go_version": "1.27.0",

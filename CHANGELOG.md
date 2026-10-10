@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Register optional email confirmation HTTP composition without adding it to
+  base imports. Original-signup confirmation selects a real protected endpoint;
+  omitted features expose neither routes nor metadata. Full email HTTP lifecycle
+  and native composed qualification remain in development.
+
 - Add opaque identifier snapshots with exact tenant/user/record selection,
   complete-partition validation, independent versions and explicit address
   disclosure. Omitted values are not retained; diagnostics and implicit export
