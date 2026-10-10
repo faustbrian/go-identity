@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Preserve original signup verification proof metadata in the exact native email
+  confirmation plan and retained history without rewriting its signed purpose.
+  Require protected audit, identifier lifecycle and command-counter declarations;
+  other feature proof profiles remain unsupported. This additive preparation
+  profile does not enable reservation or execution before atomic phases exist.
+
 - Add confirmation-authorized access to original encrypted registration input
   without impersonating the initiating actor or requiring a live pre-auth flow.
   Match the committed anonymous signup and positive selected user under current

@@ -77,6 +77,11 @@ func validateFeatureCommand(phase FeatureExecutionContributor, command identity.
 }
 
 func (r *ContributorRegistry) admitFeaturePlan(b identity.CommandBinding, fingerprint [32]byte, p CommandPlan) (*admittedKernelPlan, error) {
+	// Historical declaration support is not execution authority. Keep this
+	// profile denied until its kernel-owned domain and one-use phases exist.
+	if p.Capability != nil {
+		return nil, invalidPlan()
+	}
 	digest, err := FeaturePlanDigest(b, fingerprint, p)
 	if err != nil || digest != p.Digest || p.SubjectType == "" {
 		return nil, invalidPlan()

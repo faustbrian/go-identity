@@ -14,9 +14,11 @@ import (
 // Trusted adapters must declare every required action; these bounds do not prove
 // that declaration complete. The coordinator alone computes authoritative keyed
 // intent and matches its frozen registry. Preparation grants no reservation,
-// Work or execution readiness. Feature capability/cascade phases are unsupported
-// and rejected rather than silently omitted. Invalid input returns redacted
-// identity.InvalidInputError. Do not mutate inputs concurrently with this call.
+// Work or execution readiness. Only the exact native registration-email profile
+// supports a capability declaration; its execution remains denied until atomic
+// phases are composed. Other capability/cascade inputs are rejected. Invalid
+// input returns redacted identity.InvalidInputError. Do not mutate inputs
+// concurrently with this call.
 func FeaturePlanDigest(binding identity.CommandBinding, fingerprint [32]byte, plan CommandPlan) ([32]byte, error) {
 	b, err := encodeFeaturePlan(binding, fingerprint, plan)
 	if err != nil {
@@ -26,6 +28,9 @@ func FeaturePlanDigest(binding identity.CommandBinding, fingerprint [32]byte, pl
 }
 
 func encodeFeaturePlan(binding identity.CommandBinding, fingerprint [32]byte, p CommandPlan) ([]byte, error) {
+	if p.Capability != nil {
+		return encodeEmailVerificationPlan(binding, fingerprint, p)
+	}
 	if p.SignupAcceptance {
 		return encodeSignupAcceptancePlan(binding, fingerprint, p)
 	}

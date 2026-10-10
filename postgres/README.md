@@ -1285,7 +1285,14 @@ Each audit slot has exactly one record, schema 1, positive retention version and
 at most 16 KiB record/aggregate bounds. Required record lifecycle versions are
 one checked successor; record-free declarations keep both zero. Feature-owned
 adapters remain responsible for exhaustive native schemas and action policy.
-Feature capability/cascade inputs fail rather than being silently discarded.
+Feature capability/cascade inputs fail rather than being silently discarded,
+except the exact `identity.email.verification-confirm.native-v1` declaration.
+That profile preserves the original signed `identity.identifier.verify` purpose,
+envelope fingerprint, expiry and retained replay identity. It requires the
+`identity.email` native owner, identifier lifecycle, protected audits and command
+counters, and excludes OTP reinterpretation, fresh issuance and delivery. Its
+canonical history is readable without granting execution authority: reservation
+remains denied until the kernel domain and one-use phases are implemented.
 
 An empty `CommandPlan.SubjectType` retains the historical v1 structural-only
 profile and cannot reserve. For native execution, select a valid subject type
