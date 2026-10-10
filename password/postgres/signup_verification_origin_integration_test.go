@@ -24,6 +24,10 @@ type registrationVerificationReader interface {
 	ReadRegistrationVerification(context.Context, capability.Proof, authorization.DecisionContext) (email.RegistrationVerificationSpec, uint32, error)
 }
 
+type registrationVerificationValidator interface {
+	ValidateRegistrationVerification(context.Context, capability.Proof, string, authorization.DecisionContext) (bool, error)
+}
+
 type signupVerificationSender func(context.Context, delivery.Attempt) (delivery.DeliveryResult, error)
 
 type signupVerificationWorkerPolicy struct{ revision authorization.Revision }
@@ -118,6 +122,31 @@ func testPublicSignupVerificationOrigin(t *testing.T, ctx context.Context, s *Si
 		t.Fatal("native proof lost committed original signup", err)
 	}
 	caller.Request.Resource.ID = authorization.ResourceID(grant.Payload().Subject)
+	validator, ok := any(s).(registrationVerificationValidator)
+	if !ok {
+		t.Fatal("public scanner-safe verification validation is missing")
+	}
+	originalSpec, _, err := reader.ReadRegistrationVerification(ctx, proof, caller)
+	if err != nil {
+		t.Fatal(err)
+	}
+	callback := originalSpec.Payload.Redirect.String()
+	for n := 0; n < 2; n++ {
+		valid, err := validator.ValidateRegistrationVerification(ctx, proof, callback, caller)
+		if err != nil || !valid {
+			t.Fatal("delivered registration link failed read-only validation", err)
+		}
+	}
+	anonymousTarget := caller
+	anonymousTarget.Request.Resource.ID = ""
+	if valid, err := validator.ValidateRegistrationVerification(ctx, proof, callback, anonymousTarget); err != nil || !valid {
+		t.Fatal("scanner required application to recover private signed subject", err)
+	}
+	for _, callback := range []string{"", "https://foreign.example.test/finish", callback + "?token=not-an-allowed-redirect", strings.Repeat("x", 2049)} {
+		if valid, err := validator.ValidateRegistrationVerification(ctx, proof, callback, caller); err == nil || valid {
+			t.Fatal("foreign or malformed callback validated")
+		}
+	}
 	for n := 0; n < 2; n++ {
 		spec, version, err := reader.ReadRegistrationVerification(ctx, proof, caller)
 		if err != nil || version != replayVersion || spec.Binding.CommandID != command || spec.Binding.ActorID != identity.ActorID(request.Caller.Request.Subject.ID) || spec.Payload.SubjectID != identity.SubjectID(grant.Payload().Subject) || spec.Payload.CanonicalAddress.Record().Value != string(request.Email) || c.Verification.Policy.Authorize(grant, spec, time.Now().UTC()) != nil {
@@ -130,7 +159,11 @@ func testPublicSignupVerificationOrigin(t *testing.T, ctx context.Context, s *Si
 		wait.Add(1)
 		go func(n int) {
 			defer wait.Done()
-			_, _, failures[n] = reader.ReadRegistrationVerification(ctx, proof, caller)
+			valid, err := validator.ValidateRegistrationVerification(ctx, proof, callback, caller)
+			if !valid && err == nil {
+				err = identity.ForbiddenError{}
+			}
+			failures[n] = err
 		}(n)
 	}
 	wait.Wait()
@@ -150,6 +183,9 @@ func testPublicSignupVerificationOrigin(t *testing.T, ctx context.Context, s *Si
 		if err == nil || version != 0 || spec.Binding.CommandID != "" {
 			t.Fatal("foreign confirmation context disclosed original input")
 		}
+		if valid, err := validator.ValidateRegistrationVerification(ctx, proof, callback, wrong); err == nil || valid {
+			t.Fatal("foreign confirmation context passed scanner validation")
+		}
 	}
 	cancelled, cancel := context.WithCancel(ctx)
 	cancel()
@@ -157,10 +193,44 @@ func testPublicSignupVerificationOrigin(t *testing.T, ctx context.Context, s *Si
 	if err == nil || version != 0 || spec.Binding.CommandID != "" {
 		t.Fatal("cancelled confirmation retained input")
 	}
+	if valid, err := validator.ValidateRegistrationVerification(cancelled, proof, callback, caller); err == nil || valid {
+		t.Fatal("cancelled scanner validation returned usable metadata")
+	}
 	spec, version, err = reader.ReadRegistrationVerification(ctx, capability.Proof{}, caller)
 	if err == nil || version != 0 || spec.Binding.CommandID != "" {
 		t.Fatal("zero proof disclosed original input")
 	}
+	if valid, err := validator.ValidateRegistrationVerification(ctx, capability.Proof{}, callback, caller); err == nil || valid {
+		t.Fatal("zero proof passed scanner validation")
+	}
+	for _, status := range []string{"suspended", "banned", "anonymized", "deleted"} {
+		t.Run("scanner-"+status, func(t *testing.T) {
+			defer func() {
+				if _, err := s.pool.Raw().Exec(ctx, `UPDATE identity.users SET status='active' WHERE tenant_id=$1 AND user_id=$2`, grant.Payload().Tenant, grant.Payload().Subject); err != nil {
+					t.Error("fixture status restoration failed")
+				}
+			}()
+			if _, err := s.pool.Raw().Exec(ctx, `UPDATE identity.users SET status=$3 WHERE tenant_id=$1 AND user_id=$2`, grant.Payload().Tenant, grant.Payload().Subject, status); err != nil {
+				t.Fatal(err)
+			}
+			if valid, err := validator.ValidateRegistrationVerification(ctx, proof, callback, caller); err == nil || valid {
+				t.Fatal("inactive account passed scanner validation")
+			}
+		})
+	}
+	t.Run("scanner-stale-identifier", func(t *testing.T) {
+		defer func() {
+			if _, err := s.pool.Raw().Exec(ctx, `UPDATE identity.identifiers SET version=1 WHERE tenant_id=$1 AND identifier_id=$2`, grant.Payload().Tenant, originalSpec.IdentifierID); err != nil {
+				t.Error("fixture identifier restoration failed")
+			}
+		}()
+		if _, err := s.pool.Raw().Exec(ctx, `UPDATE identity.identifiers SET version=2 WHERE tenant_id=$1 AND identifier_id=$2`, grant.Payload().Tenant, originalSpec.IdentifierID); err != nil {
+			t.Fatal(err)
+		}
+		if valid, err := validator.ValidateRegistrationVerification(ctx, proof, callback, caller); err == nil || valid {
+			t.Fatal("changed identifier passed scanner validation")
+		}
+	})
 	// An unchanged read never verifies the mailbox or consumes the issued proof.
 	var issued, unverified bool
 	if err := s.pool.Raw().QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM public.capability_identity_one_use WHERE tenant_id=$1 AND capability_id=$2 AND state='issued' AND uses=0),EXISTS(SELECT 1 FROM identity.identifiers WHERE tenant_id=$1 AND identifier_id=$3 AND NOT verified AND verification_state=1 AND verified_at IS NULL)`, grant.Payload().Tenant, grant.Payload().ID, grant.Payload().Resource).Scan(&issued, &unverified); err != nil || !issued || !unverified {

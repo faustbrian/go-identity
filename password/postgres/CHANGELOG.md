@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Inspect delivered signup verification links through scanner-safe public
+  validation. Require an issued unused proof, original callback and current
+  active account/pending identifier without consuming, renewing, mutating or
+  issuing a session. Return only boolean eligibility; later confirmation must
+  repeat admission and commit atomically. Historical origin reads stay separate.
+
 - Authenticate original registration email-verification intent through the
   native signup owner under current confirmation caller policy. Preserve signed
   issuance, encrypted input, original expiry and retained replay-key provenance

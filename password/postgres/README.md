@@ -62,6 +62,19 @@ still fence current identity/capability state and apply protected effects in the
 sole native coordinator transaction. Keep original configuration/encryption and
 email-intent keys through retention; changed profiles fail closed.
 
+For public scanner inspection, call
+`ValidateRegistrationVerification(ctx, proof, callback, caller)` on the same
+signup service. It returns only boolean eligibility, never address, account,
+grant or originating-command metadata. Match the exact original allowlisted
+callback and current confirmation policy context described above. A scanner may
+omit the user resource ID: the authenticated proof selects it without rewriting
+the actual caller. An explicitly supplied foreign target still denies. Issued, unused,
+primary-unexpired proof state and current active account/pending identifier must
+agree with original signed/encrypted intent. Foreign callbacks, changed records,
+inactive accounts and unavailable checks fail closed. Validation is read-only:
+repeated/concurrent scanners cannot consume, renew, deliver or create a session.
+It is not an execution ticket; explicit confirmation must repeat admission.
+
 This initial profile requires verified email and issues no session. Immediate
 session, MFA continuation, confirmation and the complete reset lifecycle remain
 in development; unsupported startup profiles fail closed. This is backend
