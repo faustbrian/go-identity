@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Add an original-signin hash-upgrade transaction seam for the registered
+  password owner. Lock predecessor authority exclusively, advance distinct
+  credential/reference and aggregate versions atomically, preserve original
+  observation freshness, and deny unapplied or expired upgrades at final commit.
+  Native material CAS and session/proof composition remain the password and
+  session owners' responsibility; this seam does not enable signin upgrades
+  on its own. Existing password-change and credential-admission APIs are unchanged.
+
 - Add an optional exact-owner native feature check at the final SQL commit
   boundary, after audit/outbox and journal writes. Original admission expiry
   or failure rolls back provisional effects without renewing facts; callback

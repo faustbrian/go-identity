@@ -364,7 +364,7 @@ func (c *Coordinator) checkFeatureCommit(w Work) (err error) {
 	}
 	phase, required := entry.contributor.(FeatureCommitContributor)
 	if !required {
-		return nil
+		return w.checkPasswordHashUpgradeFinal()
 	}
 	if !w.state.featureAttempted || w.state.featureReceipt == nil || w.state.featureCommitCommand == nil || w.state.featureInvocation != nil || w.state.rows != nil {
 		return w.fail(w.state.ctx, invalidWork())
@@ -391,7 +391,13 @@ func (c *Coordinator) checkFeatureCommit(w Work) (err error) {
 	if w.state.rows != nil {
 		return w.fail(w.state.ctx, invalidWork())
 	}
-	return w.usable()
+	if err := w.usable(); err != nil {
+		return err
+	}
+	// A bounded native final read can still span credential expiry. Fence
+	// successor authority after that work, not before it, without renewing
+	// the original recipient or proof observation.
+	return w.checkPasswordHashUpgradeFinal()
 }
 
 // Restrict self-verification to the exact synchronous native phase. Clear it
@@ -399,8 +405,10 @@ func (c *Coordinator) checkFeatureCommit(w Work) (err error) {
 func invokeFeature(p FeatureExecutionContributor, ctx context.Context, w Work, command identity.Command) (identity.FeatureReceipt, error) {
 	w.state.featureInvocation = p
 	w.state.featureApplying = true
+	w.state.featureApplyCommand = &command
 	defer func() {
 		w.state.featureApplying = false
+		w.state.featureApplyCommand = nil
 		w.state.featureInvocation = nil
 	}()
 	return p.ApplyFeature(ctx, w, command)

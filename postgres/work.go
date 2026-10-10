@@ -49,6 +49,8 @@ type workState struct {
 	featureCommitCommand  *identity.Command
 	featureInvocation     FeatureExecutionContributor
 	featureApplying       bool
+	featureApplyCommand   *identity.Command
+	passwordUpgrade       *passwordHashUpgradeState
 	delivery              *workDelivery
 	issuance              *workIssuance
 	credentialIntent      *CredentialCompromiseIntent
@@ -267,6 +269,7 @@ func invalidateWork(w Work) {
 	}
 	w.state.counterCommand = nil
 	w.state.featureCommitCommand = nil
+	w.state.featureApplyCommand = nil
 	w.state.riskCommand = nil
 	w.state.captchaCommand = nil
 	w.state.otpCommand = nil

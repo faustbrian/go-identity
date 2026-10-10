@@ -92,13 +92,21 @@ func (w Work) RequireRecipientCredential(ctx context.Context, p FeatureExecution
 }
 
 func (w Work) requireActiveCredential(ctx context.Context, b identity.CommandBinding, expected CredentialAdmission) (time.Time, error) {
+	return w.requireActiveCredentialLock(ctx, b, expected, false, 0)
+}
+
+func (w Work) requireActiveCredentialLock(ctx context.Context, b identity.CommandBinding, expected CredentialAdmission, exclusive bool, aggregate uint64) (time.Time, error) {
 	c := expected.Credential
 	if c.Validate(b.TenantID, b.UserID) != nil || expected.UserAuthorityVersion == 0 || expected.IdentifierAuthorityVersion == 0 || expected.CredentialAuthorityVersion == 0 {
 		return time.Time{}, w.fail(ctx, invalidWork())
 	}
+	lock := " FOR SHARE OF u,c"
+	if exclusive {
+		lock = " FOR UPDATE OF u,c"
+	}
 	rows, err := w.Query(ctx, `SELECT u.tenant_id,u.user_id,u.status,u.version::text,u.credential_version::text,c.credential_id,c.kind,c.owner,c.version::text,c.enabled,c.expires_at,u.authority_version::text,u.identifier_version::text
  FROM identity.users u JOIN identity.credential_references c ON c.tenant_id=u.tenant_id AND c.user_id=u.user_id
- WHERE u.tenant_id=$1 AND u.user_id=$2 AND c.credential_id=$3 FOR SHARE OF u,c`, string(b.TenantID), string(b.UserID), string(c.ID))
+ WHERE u.tenant_id=$1 AND u.user_id=$2 AND c.credential_id=$3`+lock, string(b.TenantID), string(b.UserID), string(c.ID))
 	if err != nil {
 		return time.Time{}, err
 	}
@@ -146,7 +154,7 @@ func (w Work) requireActiveCredential(ctx context.Context, b identity.CommandBin
 	if err != nil {
 		return time.Time{}, err
 	}
-	if userVersion != expected.UserAuthorityVersion || identifierVersion != expected.IdentifierAuthorityVersion || identity.CheckCredentialAuthority(current, c, expected.CredentialAuthorityVersion, now) != nil {
+	if aggregate != 0 && current.User.Version != aggregate || userVersion != expected.UserAuthorityVersion || identifierVersion != expected.IdentifierAuthorityVersion || identity.CheckCredentialAuthority(current, c, expected.CredentialAuthorityVersion, now) != nil {
 		return time.Time{}, w.fail(ctx, identity.ForbiddenError{})
 	}
 	return now, nil

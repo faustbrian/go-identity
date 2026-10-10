@@ -1,5 +1,32 @@
 # Identity PostgreSQL
 
+## Original-signin hash upgrades
+
+The registered `identity/password/postgres` owner can compose a hash-only
+upgrade inside the original paired password-signin command. Freeze independent
+predecessor versions with `PasswordHashUpgradeFields` before fingerprinting.
+After directory admission, call `Work.PreparePasswordHashUpgrade` before any
+shared user/credential admission. This exclusively locks current predecessor
+authority and admits the unchanged selected recipient without a lock upgrade.
+
+The native owner compares the original password and prepares bounded replacement
+material before opening Work. It performs its material CAS in that Work, calls
+`ApplyPasswordHashUpgrade`, and binds `PasswordHashUpgradeSuccessor` into its
+own proof/session effects. Every failure must abort. Credential record,
+credential-authority and user aggregate versions advance independently; user
+and identifier authority and the original observation time do not change.
+Advancing credential authority invalidates predecessor-bound sessions: any
+continuation must follow an explicit session-owner policy, not this receipt.
+
+The lifecycle participant can read `StagedPasswordHashUpgrade` after staging.
+Receipts remain provisional until the sole original command commits. A final
+kernel fence rejects missing application, expiry or changed successor authority,
+rolling back material and all effects. Only the exact original native Apply
+invocation can mutate or obtain successor admission; scalar fields grant no
+authentication. This API neither adds a password-change journal nor delivers
+tokens. Existing admission and replacement contracts are unchanged. Public
+signin composition with this seam remains required separately.
+
 ## Final native feature admission
 
 A native feature owner may implement `FeatureCommitContributor` in addition to
