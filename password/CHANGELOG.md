@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add adapter-neutral non-keyed password verification request, target, result
+  and native workflow port. Preserve original authentication proof ownership,
+  borrowed raw credential custody and scoped code-free outcome recovery;
+  intrinsic validation grants no issuance authority or request-selected expiry.
+  Native portable binding and optional verification HTTP remain in development.
+
 - Add a separate adapter-neutral cookie password-change input and workflow port
   using the session-owned opaque synchronizer token and the original nested retry
   key. Structural validation grants no CSRF authority; native transaction checks

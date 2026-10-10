@@ -1,9 +1,11 @@
 # Identity password workflows
 
 **Development checkpoint:** input policy, bounded credential work, canonical
-account comparison and portable keyed change contracts are implemented. The
+account comparison, portable keyed change and non-keyed verification contracts
+are implemented. The
 native PostgreSQL adapter has single-factor reauthentication and authenticated
-change composition; this core does not yet connect its portable change port.
+change composition; its portable change ports have native and optional HTTP
+bindings. Portable verification's native binding and HTTP remain in development.
 Complete signup/signin, upgrades, set/reset, administrative workflows and HTTP
 remain required. These helpers do not authorize persistence or session issuance.
 
@@ -82,6 +84,24 @@ configured HIBP/risk, account status, verification and transactional authority
 before hashing or committing. This checkpoint cannot replace those workflows.
 
 ## API and ownership
+
+`VerificationService` is the adapter-neutral native password reauthentication
+port, distinct from `PasswordVerifier`'s unauthorizing comparison. Its
+`VerificationRequest` carries the original bearer, borrowed raw secret, trusted
+scope and exact `VerificationTarget` (purpose/action/audience). Intrinsic
+`Validate` checks bounds only; native startup policy owns target allowlisting,
+signed issuance, primary session/password authorization and counted/audited risk.
+The request has no retry key, proof, assurance, lifetime or session override.
+Each invocation is a fresh server-owned command, so do not resubmit after an
+ambiguous result. Destroy the secret after the bounded call returns.
+
+`VerificationResult` retains the upstream authentication proof value unchanged;
+only a fresh known commit can deliver it. Command observations survive errors
+without proof delivery. Code-free `Recover` requires the original scoped query
+and current disclosure policy and returns history without reissuing proof or
+extending a session. Protected change consumes evidence in its transaction,
+not during verification. Native binding/HTTP qualification for this portable
+port remain required; the interface itself is not an executable endpoint.
 
 `CookieChangeRequest` wraps the unchanged `ChangeRequest` and the session owner's
 opaque `CSRFToken`. Its nested request carries the sole retry key. Its distinct
