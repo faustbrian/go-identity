@@ -18,6 +18,18 @@ flow possession and keyed intent; the projection does not prevent historical
 keyed retries when the live flow has been consumed or deleted. Invalid input or
 cancellation returns no identifier. This method does not add a signup HTTP route.
 
+Select `http/password.NewSignupFeature` with the native `SignupService` for
+the required-email-verification profile. Borrow the strict PostgreSQL shared
+rate owner, match the original flow/remember and HTTPS origin/callback policy,
+and select the signed device codec and the same input field schema. Supply the
+original byte-exact `Idempotency-Key` header on explicit retries; transport
+normalization does not require a live flow, so retained native history remains
+recoverable after consumption/deletion. Fresh and occupied identifiers return
+the same verification-required acknowledgement without account, mailbox or
+session credentials. Original recovery metadata is not authority. Immediate-
+session/MFA signup remains unsupported in this selected profile. No route or
+metadata is exposed when omitted; this is backend composition, not a UI.
+
 Select `http/password.NewSigninFeature` with this native `SigninService`, the
 strict PostgreSQL rate owner, original pre-auth cookie and signed browser-device
 codec. Match the original lifetime/remember, HTTPS origin/callback and session

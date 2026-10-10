@@ -87,6 +87,11 @@ func testNativePublicSignup(t *testing.T, ctx context.Context, pool *database.Po
 		}
 		return r
 	}
+	t.Run("http", func(t *testing.T) {
+		testNativeSignupHTTP(t, ctx, service, c, keys, fresh, &screens)
+	})
+	// The direct-service partition below has its own generation observation.
+	screens.Store(0)
 	r := fresh("public-signup@example.test", 'S')
 	for range 3 {
 		canonical, err := service.SignupRateSource(ctx, "public-signup@EXAMPLE.test")

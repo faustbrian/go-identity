@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Adopt opt-in keyed browser signup HTTP composition with native required-email
+  verification and strict PostgreSQL admission. Preserve original retry-key,
+  flow/device and schema-field custody; do not manufacture sessions or disclose
+  existing accounts. Immediate-session/MFA signup remains unsupported.
+
 - Expose native signup address normalization for split rate admission without
   account lookup, password work or live-flow requirements. Original keyed
   retries remain usable after flow consumption or deletion.
