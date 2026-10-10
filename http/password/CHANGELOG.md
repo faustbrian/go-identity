@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Add strict bearer password-verification handlers with closed non-keyed JSON,
+  atomic IP/subject rate admission and one native verification invocation.
+  Deliver only the original proof locator and target/timing metadata after
+  fresh known commit; retain command observations without proof on failures.
+  Ambient cookies cannot substitute for bearer custody. Cookie verification,
+  selected verification routing/OpenAPI and native SQL composition remain
+  in development. Password-change response protections remain shared.
+
 - Add opt-in password-change Feature contributions and explicit OpenAPI 3.1.1
   request/response contracts for the selected cookie or bearer profile. Omitted
   features expose no route or metadata; missing dependencies fail construction.

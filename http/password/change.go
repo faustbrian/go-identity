@@ -514,6 +514,12 @@ func (p *changePipeline) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	a := &changeAttempt{out: ChangeResponse{CommitOutcome: "none"}}
 	defer func() { a.secret.Destroy() }()
 	r = r.WithContext(context.WithValue(r.Context(), changeKey{}, a))
+	servePasswordPipeline(w, r, p.pipeline)
+}
+
+// Both password handlers enforce the same denial of cookie/CSRF/trailer output
+// across owner responses and trusted middleware short circuits.
+func servePasswordPipeline(w http.ResponseWriter, r *http.Request, pipeline http.Handler) {
 	protect := func() {
 		for name := range w.Header() {
 			if strings.HasPrefix(name, http.TrailerPrefix) || strings.EqualFold(name, "Trailer") || strings.EqualFold(name, "Set-Cookie") || strings.EqualFold(name, "X-CSRF-Token") || strings.EqualFold(name, "Content-Type") || strings.EqualFold(name, "Cache-Control") || strings.EqualFold(name, "X-Content-Type-Options") {
@@ -533,5 +539,5 @@ func (p *changePipeline) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}, Flush: func(next httpsnoop.FlushFunc) httpsnoop.FlushFunc { return func() { protect(); next() } }, ReadFrom: func(next httpsnoop.ReadFromFunc) httpsnoop.ReadFromFunc {
 		return func(b io.Reader) (int64, error) { protect(); return next(b) }
 	}})
-	p.pipeline.ServeHTTP(writer, r)
+	pipeline.ServeHTTP(writer, r)
 }

@@ -47,6 +47,44 @@ certify commit, successful delivery or reusable authority.
 
 ## Outcomes and security
 
+### Bearer password verification
+
+`NewBearerVerificationHandler(BearerVerificationConfig{...})` (or its typed
+middleware variant) owns exact `POST /v1/password/verify`. Supply the native
+`password/postgres.VerificationWorkflow`, the same primary session service,
+one shared `PasswordVerificationRateLimiter`, trusted network/policy revision,
+prompt clock and 1ms..30s bound. This selects bearer only; cookie verification
+requires a separate protected native profile and has no bearer fallback.
+Selected verification Feature/OpenAPI and native SQL-over-handler qualification
+remain pending; constructing a handler does not advertise or register it.
+
+The closed JSON body contains exactly `password`, `purpose`, `action` and
+`audience`. The native owner enforces its trusted exact target allowlist;
+clients cannot select subject, tenant, assurance, expiry or signing policy.
+`Idempotency-Key`, query/trailer overrides and CSRF alternatives are rejected.
+Only one strict `Authorization: Bearer` header supplies original credential
+custody; ambient cookies are ignored. Every native invocation is a fresh
+counted command. Password bytes are unchanged and the owned secret is destroyed
+on every exit, including middleware short circuits. Transient JSON/string
+buffer erasure is not claimed.
+
+`VerificationState` exposes detached principal/attempt observations to trusted
+synchronous hooks, not reusable authority. Native verification retains original
+primary/password/policy/risk/signing and atomic commitment ownership. Preliminary
+session validity never refreshes through hooks, rate or native work. On a fresh
+known commit only, the response includes `verified=true` and a `proof` object
+with original `proofID`, `purpose`, `action`, `audience`, `issuedAt`, `expiresAt`.
+The original native proof ID is its command ID; protected change looks up the
+original signed record, not this client projection. No session identity,
+credential, cookie, CSRF or signing record is delivered. Generic mismatch is
+403; invalid input400, inactive primary401, path404, method405, host421, rate429,
+native policy denial403 and unavailable/ambiguous/canceled work503. Failures
+preserve valid original `commandID` and `commitOutcome` but never the proof.
+`none` is not rollback. Scoped native recovery returns history, not proof
+redelivery or permission to resubmit the password automatically.
+
+### Password change
+
 Responses are credential-free JSON with no-store/nosniff. Error codes are stable
 and redacted. Invalid input is400; missing/inactive session401; origin/CSRF or
 proof mismatch403; path404; method405; host421; rate429; operational/ambiguous
