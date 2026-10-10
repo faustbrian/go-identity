@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Add immutable native password-signin signing-key custody without exposing a
+  public signing operation or private material. Keys copy consistent Ed25519
+  input and reject unsupported authentication profiles. Native transaction
+  execution now persists original authentication, pre-auth consumption, session
+  and synchronizer with required audit/outbox, and gates reveal-once delivery
+  on a new successful commit. Expired delivery preserves committed history
+  without revealing credentials. This does not yet
+  supply a complete login service or atomic hash-upgrade workflow.
+
 - Add bounded primary reading of immutable committed original password-signin
   records through Authentication's existing SignInSource contract. The additive
   migration preserves existing password material and reauthentication history;

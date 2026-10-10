@@ -8,6 +8,18 @@ There is deliberately no independent setter or application-written workflow.
 
 ## Original password-signin storage
 
+`NewSigninSigningKey(id, privateKey)` freezes a complete consistent Ed25519 key
+for the native password-login owner. Destroy the deployment's original input
+buffer after construction. The value exposes no public signing operation or
+private-key projection; it is not a standalone authentication service. Retain
+the corresponding public verification key across rotation according to original
+command/proof retention. The private native execution path uses the sole kernel
+coordinator for signed-original, pre-auth, session, synchronizer and required
+audit/outbox effects. The session owner alone grants original reveal-once bearer
+and synchronizer delivery after a new successful commit. A delivery-time failure
+does not rewrite committed history as rollback; no credential is returned.
+Complete public login orchestration and atomic hash upgrade remain unfinished.
+
 Migration 5 adds immutable original password-signin records, distinct from
 password-verification records. `Repository.SignInAuthentication(ctx, proofID)`
 implements the upstream `authentication.SignInSource` optional read contract:
