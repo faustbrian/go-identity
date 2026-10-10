@@ -8,7 +8,7 @@ require (
 	github.com/faustbrian/go-authorization v1.1.1-0.20261005011349-60ed4b3229d8
 	github.com/faustbrian/go-identifier v1.0.1-0.20261004001745-6503365429c8
 	github.com/faustbrian/go-identity v0.0.0-20261010204630-abea9ceba62c
-	github.com/faustbrian/go-identity/http v0.0.0-20261010213506-df1f27aa2d08
+	github.com/faustbrian/go-identity/http v0.0.0-20261010223914-876e2a360219
 	github.com/faustbrian/go-identity/password v0.0.0-20261010221158-b69ee381e985
 	github.com/faustbrian/go-identity/session v0.0.0-20261009213959-5635323137bb
 	github.com/faustbrian/go-password v1.0.1-0.20261001082808-a3dbd862340c

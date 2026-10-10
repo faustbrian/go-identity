@@ -77,6 +77,9 @@ func signinRateError(out identityhttp.AuthRateResult, err error) error {
 	if errors.Is(err, identityhttp.ErrRateLimited) {
 		return failure{status: 429, code: "rate_limited", retry: out.RetryAfter}
 	}
+	if errors.Is(err, identityhttp.ErrRateUnavailable) {
+		return failure{status: 503, code: "rate_limiter_unavailable"}
+	}
 	if err != nil || !out.Allowed {
 		return identityhttp.ErrUnavailable
 	}

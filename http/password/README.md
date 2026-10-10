@@ -5,6 +5,44 @@ Go 1.27. Base `identity/http` does not import this optional module.
 
 ## Adoption and API
 
+### Browser required-email-verification signup
+
+Select `NewSignupFeature(SignupConfig{...})` or `FeatureConfig.Signup`. Supply
+the real `password/postgres.SignupService`, shared `AuthRateLimiter`, exact
+mapped tenant/HTTPS origin/callback, original flow cookie and signed device
+configuration, public-entry actor/policy, bounded clock/deadline and the native
+creation `FieldSchema`. Lifetime/default remember must match initialization.
+Omission registers no route or metadata; base HTTP retains no feature imports.
+
+`POST /v1/password/signup` requires exactly one original `Idempotency-Key`
+header and closed JSON `flowID`, `email`, `password`, `callbackURL`; optional
+`remember` is boolean. Optional `allowedFields` contains whole-value replacements
+`{"name":"name","kind":"string","value":"Ada"}`. Only input-writable names
+and exact kinds from the selected schema are admitted: string, bool, int64,
+RFC3339 time or bounded string-list. Native authorization, normalization,
+defaults and constraints remain authoritative. False, integer zero, empty
+strings/lists remain present; floats, nulls, unknown fields and duplicate names
+deny. The selected OpenAPI advertises only those input-writable fields and
+never returns them.
+
+Both original flow and signed device cookies are required. Alternative key
+channels, Authorization, query/trailers and client-selected identity deny.
+IP admission precedes native address projection, then the shared identifier
+budget and one native keyed signup. No account lookup or live-flow gate exists
+in transport, so native keyed replay can retain its history after the original
+flow was consumed/deleted. Do not replace a key or automatically resubmit a
+password after ambiguity. The owned password is destroyed on every exit;
+transient JSON/string copies are not erasure proof.
+
+This explicit profile requires email verification and delivers no session,
+account identity, address or credential. New/occupied identifiers share the
+same acknowledgement. Known original outcome and password-free recovery
+correlation survive errors, ambiguity and replay; correlation grants no
+disclosure permission. A changed-intent native key conflict returns `409`
+without inventing history. Immediate-session and MFA signup remain owed and
+are not silently selected or downgraded. Native SQL-through-HTTP composition,
+browser evidence and complete password lifecycle/release gates remain pending.
+
 ### Browser password signin
 
 Select `NewSigninFeature(SigninConfig{...})`, or `FeatureConfig.Signin` alongside
@@ -23,6 +61,9 @@ overrides are forbidden. IP admission precedes native normalization/custody;
 canonical identifier admission precedes one native signin. The transport never
 looks up accounts, hashes passwords or stores a workflow. It destroys its owned
 password on every exit; transient JSON/string copies are not erasure proof.
+
+Shared signin/signup admission outages fail closed with `503` and stable
+`rate_limiter_unavailable`; exhaustion returns `429` with bounded `Retry-After`.
 
 Fresh error-free known commitment delivers the original secure session cookie
 and `X-CSRF-Token`, never bearer JSON or redirects. Failure/replay/recovery emit

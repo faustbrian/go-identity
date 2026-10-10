@@ -39,7 +39,7 @@ func signinWire(c SigninConfig) *identityhttp.WireOperation {
 	}
 	id := map[string]any{"type": "string", "pattern": "^[A-Za-z0-9_-]{21}[AQgw]$", "not": map[string]any{"const": "AAAAAAAAAAAAAAAAAAAAAA"}}
 	recovery := object([]string{"commandID", "tenantID", "flowID", "actorID", "actorKind"}, map[string]any{"commandID": id, "tenantID": text(256), "flowID": id, "actorID": text(256), "actorKind": map[string]any{"const": "service-account"}})
-	codes := map[string]any{"type": "string", "enum": []string{"invalid_request", "origin_denied", "https_required", "not_found", "method_not_allowed", "misdirected_request", "rate_limited", "denied", "unavailable", "conflict", "in_progress"}}
+	codes := map[string]any{"type": "string", "enum": []string{"invalid_request", "origin_denied", "https_required", "not_found", "method_not_allowed", "misdirected_request", "rate_limited", "rate_limiter_unavailable", "denied", "unavailable", "conflict", "in_progress"}}
 	success := object([]string{"signedIn", "commandID", "sessionID", "commitOutcome", "recovery"}, map[string]any{"signedIn": map[string]any{"const": true}, "commandID": id, "sessionID": text(128), "commitOutcome": map[string]any{"const": "committed"}, "recovery": recovery})
 	attempt := object([]string{"signedIn", "commitOutcome", "error"}, map[string]any{"signedIn": map[string]any{"const": false}, "commandID": id, "sessionID": text(128), "commitOutcome": map[string]any{"type": "string", "enum": []string{"none", "not_committed", "committed", "unknown", "conflict", "in_progress"}}, "recovery": recovery, "error": codes})
 	attempt["dependentRequired"] = map[string]any{"commandID": []string{"recovery"}, "recovery": []string{"commandID"}}

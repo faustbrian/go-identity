@@ -38,6 +38,16 @@ func TestSigninRejectsMissingComposition(t *testing.T) {
 	}
 }
 
+func TestSigninSharedRateOutagePreservesClassification(t *testing.T) {
+	f, c, work, device := newSignin(t)
+	f.rate.fail = true
+	w := serveSignin(t, c, signinRequest(f, device))
+	var out passwordhttp.SigninResponse
+	if w.Code != 503 || json.Unmarshal(w.Body.Bytes(), &out) != nil || out.Error != "rate_limiter_unavailable" || work.reads != 0 || work.calls != 0 {
+		t.Fatal("shared signin rate outage classification lost")
+	}
+}
+
 // This double occupies the native workflow boundary, not SQL or hashing.
 type signinWork struct {
 	base           *changeFixture

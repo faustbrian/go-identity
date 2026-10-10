@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- Preserve `rate_limiter_unavailable` on shared signin/signup admission outages
+  and advertise that stable classification in both selected wire contracts.
+
+- Add opt-in keyed browser signup for the required-email-verification profile.
+  Preserve original flow/device, byte-exact header key, schema-owned fields and
+  remember choice, split shared IP/identifier admission, neutral acknowledgement
+  and original recovery metadata. Never issue a session or disclose account
+  identity; ambiguity and replay do not retry passwords or renew custody.
+  Select `FeatureConfig.Signup` alongside existing password operations.
+
 - Add opt-in original-flow browser password signin through the native workflow
   and normalization owner. Preserve split IP/identifier rate admission, original
   remember/callback/device custody, non-keyed attempts and safe recovery metadata.
