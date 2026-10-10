@@ -15,9 +15,12 @@ import (
 // BearerVerification is bearer-only and never inherits Change's cookie policy.
 // Configurations are copied during construction; do not mutate them concurrently.
 // Their native owners remain borrowed and must outlive requests.
+// BrowserDeviceBearerVerification selects explicit signed correlation instead
+// of generic BearerVerification; selecting both verification variants denies.
 type FeatureConfig struct {
-	Change             *ChangeConfig
-	BearerVerification *BearerVerificationConfig
+	Change                          *ChangeConfig
+	BearerVerification              *BearerVerificationConfig
+	BrowserDeviceBearerVerification *BrowserDeviceBearerVerificationConfig
 }
 
 // Format redacts borrowed runtime configuration.
@@ -50,7 +53,7 @@ func NewFeature(c FeatureConfig) (identityhttp.Feature, error) {
 // they cannot replace input or grant transaction authority. Returned selection
 // is frozen; changing configuration pointers later cannot change its profile.
 func NewFeatureWithMiddleware(c FeatureConfig, middleware []identityhttp.MiddlewareDescriptor) (identityhttp.Feature, error) {
-	if c.Change == nil && c.BearerVerification == nil {
+	if (c.Change == nil && c.BearerVerification == nil && c.BrowserDeviceBearerVerification == nil) || (c.BearerVerification != nil && c.BrowserDeviceBearerVerification != nil) {
 		return identityhttp.Feature{}, identityhttp.ErrInvalidInput
 	}
 	var ops []identityhttp.OperationDescriptor
@@ -63,6 +66,13 @@ func NewFeatureWithMiddleware(c FeatureConfig, middleware []identityhttp.Middlew
 	}
 	if c.BearerVerification != nil {
 		op, err := verificationOperation(*c.BearerVerification, middleware)
+		if err != nil {
+			return identityhttp.Feature{}, err
+		}
+		ops = append(ops, op)
+	}
+	if c.BrowserDeviceBearerVerification != nil {
+		op, err := deviceVerificationOperation(*c.BrowserDeviceBearerVerification, middleware)
 		if err != nil {
 			return identityhttp.Feature{}, err
 		}
@@ -93,7 +103,7 @@ func verificationOperation(c BearerVerificationConfig, middleware []identityhttp
 	if err != nil {
 		return identityhttp.OperationDescriptor{}, err
 	}
-	op.Wire = verificationWire(c)
+	op.Wire = verificationWire(c, false)
 	return op, nil
 }
 

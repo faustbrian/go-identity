@@ -9,7 +9,7 @@ import (
 // The HTTP projection is intentionally separate from native proof authority and
 // direct contract summaries. No reflected configuration or signing record enters
 // the document. Character bounds supplement, not replace, transport byte budgets.
-func verificationWire(c BearerVerificationConfig) *identityhttp.WireOperation {
+func verificationWire(c BearerVerificationConfig, device bool) *identityhttp.WireOperation {
 	object := func(required []string, properties map[string]any) map[string]any {
 		return map[string]any{"type": "object", "additionalProperties": false, "required": required, "properties": properties}
 	}
@@ -40,5 +40,13 @@ func verificationWire(c BearerVerificationConfig) *identityhttp.WireOperation {
 	scheme := map[string]any{"type": "http", "scheme": "bearer", "description": "Exactly one strict Authorization: Bearer session credential; no cookie or CSRF fallback."}
 	data, _ := json.Marshal(definition)
 	security, _ := json.Marshal(scheme)
-	return &identityhttp.WireOperation{Definition: data, SecuritySchemes: []identityhttp.WireComponent{{Name: "PasswordVerificationBearer", Definition: security}}}
+	wire := &identityhttp.WireOperation{Definition: data, SecuritySchemes: []identityhttp.WireComponent{{Name: "PasswordVerificationBearer", Definition: security}}}
+	if device {
+		definition["description"] = "Explicit device-bound bearer verification. Authorization is the sole session credential; the dedicated __Host-identity_device cookie supplies only signed server-random correlation, not account/MFA/hardware authority. Original namespace/tenant/effective HTTPS origin/expiry are checked before native work and before proof delivery, never renewed or issued here. All other ambient cookies are ignored. Closed unchanged password/purpose/action/audience input; no raw device, identity, expiry or key override. Native startup target policy, original primary validity, counted native Authentication risk and atomic proof/audit/outbox remain authoritative. Failures and ambiguous/committed errors never deliver proof or credentials; no automatic retry. Raw and decoded byte budgets remain enforced."
+		definition["security"] = []any{map[string]any{"PasswordVerificationBearer": []string{}, "PasswordVerificationBrowserDevice": []string{}}}
+		wire.Definition, _ = json.Marshal(definition)
+		correlation, _ := json.Marshal(map[string]any{"type": "apiKey", "in": "cookie", "name": "__Host-identity_device", "description": "Required original signed auxiliary correlation from configured initialization; never session authentication or MFA/hardware trust. No replacement issuance or expiry renewal."})
+		wire.SecuritySchemes = append(wire.SecuritySchemes, identityhttp.WireComponent{Name: "PasswordVerificationBrowserDevice", Definition: correlation})
+	}
+	return wire
 }

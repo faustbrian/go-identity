@@ -49,9 +49,28 @@ certify commit, successful delivery or reusable authority.
 
 ### Bearer password verification
 
+Native PostgreSQL verification uses Authentication risk and requires signed
+browser-device correlation. Select
+`NewBrowserDeviceBearerVerificationFeature(BrowserDeviceBearerVerificationConfig{
+Verification: verificationConfig, Device: deviceConfig})`, or the corresponding
+handler/middleware factory. The device configuration must match the existing
+`http/session.NewPreAuthFeatureWithBrowserDevice` initialization issuer:
+dedicated retained keys, namespace, lifetime and `__Host-identity_device`
+cookie policy. Initialize once, then submit that original cookie alongside the
+sole Authorization bearer. The verifier never mints a replacement. Missing,
+duplicate, altered, foreign-scope or expired custody denies. This correlation
+is not session authentication, hardware identity or MFA trust.
+
+For change plus this profile, select `NewFeature(FeatureConfig{Change:
+&changeConfig, BrowserDeviceBearerVerification: &deviceVerificationConfig})`.
+Selecting both verification variants is invalid. The generic APIs below remain
+cookie-ignoring and are suitable only for a verification owner whose selected
+policy does not require device correlation; they do not satisfy the native
+PostgreSQL Authentication risk profile alone.
+
 `NewBearerVerificationHandler(BearerVerificationConfig{...})` (or its typed
-middleware variant) owns exact `POST /v1/password/verify`. Supply the native
-`password/postgres.VerificationWorkflow`, the same primary session service,
+middleware variant) owns exact `POST /v1/password/verify`. Supply a verification
+owner whose selected policy does not require device correlation, a primary session service,
 one shared `PasswordVerificationRateLimiter`, trusted network/policy revision,
 prompt clock and 1ms..30s bound. This selects bearer only; cookie verification
 requires a separate protected native profile and has no bearer fallback.
@@ -66,8 +85,9 @@ no partial contribution. A cookie-change configuration does not select cookie
 verification. Existing change-only factories remain change-only. Shared hooks
 must handle the distinct `ChangeState` and `VerificationState` typed phases.
 The actual wire schema is closed and advertises only strict bearer security,
-not a request key, cookie fallback or a reflected signed record. Native
-SQL-over-handler qualification remains pending for verification.
+not a request key, cookie fallback or a reflected signed record. The explicit
+device-bound variant has focused native SQL-over-router qualification;
+cookie verification, browser interoperability and full release remain pending.
 
 The closed JSON body contains exactly `password`, `purpose`, `action` and
 `audience`. The native owner enforces its trusted exact target allowlist;

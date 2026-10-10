@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Add explicit device-bound bearer verification composition using the existing
+  signed browser correlation cookie, scoped to its original tenant/origin and
+  expiry. Authorization remains the sole session credential; verification never
+  issues or renews device custody. Generic bearer APIs still ignore cookies.
+  Selected wire requires both inputs without advertising an authentication
+  fallback. The native Authentication risk profile requires this provenance.
+
 - Add opt-in bearer-verification features with actual closed OpenAPI 3.1.1
   requests and success/error projections. Combined password feature selection
   supports verification alongside bearer or cookie change without owner-ID

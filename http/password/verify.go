@@ -23,8 +23,11 @@ import (
 
 // BearerVerificationConfig selects only strict bearer password verification.
 // Sessions and Verification must share the real native primary authority;
-// select password/postgres.VerificationWorkflow, not a consumer-written store
-// or proof builder. Rate is a shared native atomic profile, never per-request.
+// never select a consumer-written store or proof builder. The generic handler
+// supplies no device correlation; its owner's policy must permit that profile.
+// For password/postgres.VerificationWorkflow, use this configuration inside
+// BrowserDeviceBearerVerificationConfig to satisfy native Authentication risk.
+// Rate is a shared native atomic profile, never per-request.
 // All borrowed owners and prompt concurrency-safe Now must outlive calls.
 // PolicyRevision is trusted positive startup policy. MaximumDuration is
 // 1ms..30s and never extends an inbound deadline. No cookie fallback exists.
@@ -99,6 +102,7 @@ type VerificationState struct {
 	target     password.VerificationTarget
 	read       session.GetResult
 	user       identity.UserID
+	device     session.BrowserDevice
 	attempt    *verificationAttempt
 }
 
@@ -159,6 +163,10 @@ func NewBearerVerificationHandler(c BearerVerificationConfig) (http.Handler, err
 // effects. All paths destroy the handler-owned password; hooks cannot replace
 // original input, emit cookies/CSRF/trailers or turn observations into authority.
 func NewBearerVerificationHandlerWithMiddleware(c BearerVerificationConfig, middleware []identityhttp.MiddlewareDescriptor) (http.Handler, error) {
+	return newBearerVerificationHandler(c, middleware, nil)
+}
+
+func newBearerVerificationHandler(c BearerVerificationConfig, middleware []identityhttp.MiddlewareDescriptor, devices *session.BrowserDeviceCodec) (http.Handler, error) {
 	if !c.Sessions.Configured() || nilOwner(c.Verification) || !c.Rate.Configured() || c.PolicyRevision == 0 || c.Now == nil || c.MaximumDuration < time.Millisecond || c.MaximumDuration > 30*time.Second {
 		return nil, identityhttp.ErrInvalidInput
 	}
@@ -233,6 +241,16 @@ func NewBearerVerificationHandlerWithMiddleware(c BearerVerificationConfig, midd
 				return s, identityhttp.ErrInvalidInput
 			}
 			s.facts = facts
+			if devices != nil {
+				device, found, err := decoder.AuxiliaryCookieBearer(r, "__Host-identity_device", identityhttp.HeaderRequired)
+				if err != nil || !found {
+					return s, identityhttp.ErrInvalidInput
+				}
+				s.device, err = devices.Resolve(r.Context(), c.Now(), facts.TenantID(), facts.Origin(), device.Token())
+				if err != nil {
+					return s, identityhttp.ErrInvalidInput
+				}
+			}
 			body, err := identityhttp.DecodeJSON[map[string]json.RawMessage](decoder, r)
 			if err != nil || len(body) != 4 {
 				return s, identityhttp.ErrInvalidInput
@@ -280,19 +298,19 @@ func NewBearerVerificationHandlerWithMiddleware(c BearerVerificationConfig, midd
 			if errors.Is(err, identityhttp.ErrRateLimited) {
 				return failure{status: 429, code: "rate_limited", retry: out.RetryAfter}
 			}
-			if err != nil || !out.Allowed || s.read.ValidateAt(c.Now()) != nil {
+			if err != nil || !out.Allowed || s.read.ValidateAt(c.Now()) != nil || (devices != nil && !s.device.ExpiresAt().After(c.Now())) {
 				return identityhttp.ErrUnavailable
 			}
 			return nil
 		},
 		Handle: func(w http.ResponseWriter, r *http.Request, s VerificationState) {
-			if s.read.ValidateAt(c.Now()) != nil {
+			if s.read.ValidateAt(c.Now()) != nil || (devices != nil && !s.device.ExpiresAt().After(c.Now())) {
 				reject(w, r, identityhttp.ErrUnavailable)
 				return
 			}
 			caller := authorization.DecisionContext{PolicyRevision: c.PolicyRevision, Request: authorization.Request{Subject: authorization.Subject{Kind: authorization.SubjectUser, ID: authorization.SubjectID(s.user)}, Tenant: authorization.TenantID(s.facts.TenantID()), Action: "identity.password.verify", Resource: authorization.Resource{Type: "identity.request-admission", ID: "identity.password.verify"}}}
 			s.attempt.attempted = true
-			result, err := c.Verification.Verify(r.Context(), password.VerificationRequest{TenantID: s.facts.TenantID(), Session: s.bearer, Password: s.attempt.secret, Target: s.target, Caller: caller, Network: s.facts.ClientIP().String()})
+			result, err := c.Verification.Verify(r.Context(), password.VerificationRequest{TenantID: s.facts.TenantID(), Session: s.bearer, Password: s.attempt.secret, Target: s.target, Caller: caller, Network: s.facts.ClientIP().String(), Device: s.device.DeviceID()})
 			if !verificationObservation(s, result) {
 				reject(w, r, identityhttp.ErrUnavailable)
 				return
@@ -313,7 +331,7 @@ func NewBearerVerificationHandlerWithMiddleware(c BearerVerificationConfig, midd
 			now := c.Now()
 			b, bindingErr := s.read.Session.Bindings()
 			use := auth.ReauthenticationUse{ProofUse: auth.ProofUse{Tenant: string(s.facts.TenantID()), Subject: string(s.user), Purpose: s.target.Purpose, Audience: s.target.Audience, Now: now}, SessionID: b.SessionID, SessionVersion: b.Version, Action: s.target.Action, MaximumAge: 15 * time.Minute}
-			if bindingErr != nil || s.read.ValidateAt(now) != nil || result.Outcome != identity.CommitOutcomeCommitted || result.Proof.Validate(use) != nil || result.Proof.Proof.Method != "password" || result.Proof.Proof.Assurance != auth.AssuranceSingleFactor || result.Proof.Proof.ExpiresAt.Sub(result.Proof.Proof.IssuedAt) > 15*time.Minute || string(result.Proof.Proof.ID) != string(result.CommandID) {
+			if bindingErr != nil || s.read.ValidateAt(now) != nil || (devices != nil && !s.device.ExpiresAt().After(now)) || result.Outcome != identity.CommitOutcomeCommitted || result.Proof.Validate(use) != nil || result.Proof.Proof.Method != "password" || result.Proof.Proof.Assurance != auth.AssuranceSingleFactor || result.Proof.Proof.ExpiresAt.Sub(result.Proof.Proof.IssuedAt) > 15*time.Minute || string(result.Proof.Proof.ID) != string(result.CommandID) {
 				reject(w, r, identityhttp.ErrUnavailable)
 				return
 			}
