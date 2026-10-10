@@ -19,7 +19,7 @@ import (
 	ratelimit "github.com/faustbrian/go-rate-limit/v2"
 )
 
-// AuthRateConfig selects the fixed original-flow, rate.signin and rate.delivery
+// AuthRateConfig selects fixed original-flow, signup, signin and delivery
 // policies, not caller-defined capacities. Shared must be a borrowed strong
 // backend; Now must be a trusted prompt concurrency-safe clock. IdentifierKey
 // is a stable nonzero deployment HMAC key, independent of credential keys.
@@ -70,7 +70,8 @@ type AuthRateLimiter struct {
 // NewAuthRateLimiter freezes selected policy without admission or storage IO.
 // All signin operations share IP20/10m and tenant/identifier10/10m. Delivery
 // operations share IP10/h, tenant/identifier5/h and, when authenticated,
-// tenant/subject10/h. Different profiles have independent budgets. Identifier
+// tenant/subject10/h. Signup shares IP5/h and tenant/identifier3/day without a
+// subject dimension. Different profiles have independent budgets. Identifier
 // and subject key derivation length-frames the tenant and value under HMAC.
 func NewAuthRateLimiter(c AuthRateConfig) (*AuthRateLimiter, error) {
 	if c.Now == nil || c.IdentifierKey == ([32]byte{}) || c.MaximumDuration < time.Millisecond || c.MaximumDuration > 2*time.Second {
@@ -85,7 +86,7 @@ func NewAuthRateLimiter(c AuthRateConfig) (*AuthRateLimiter, error) {
 	}
 	operations := make(map[string]RatePolicyID)
 	for id, row := range readCatalog() {
-		if row.Rate == "rate.signin" || row.Rate == "rate.delivery" {
+		if row.Rate == "rate.signup" || row.Rate == "rate.signin" || row.Rate == "rate.delivery" {
 			operations[id] = row.Rate
 		}
 	}
@@ -148,7 +149,7 @@ func (l *AuthRateLimiter) Admit(ctx context.Context, facts NetworkFacts, r AuthR
 		return out, ErrInvalidInput
 	}
 	profile := l.operations[r.OperationID]
-	if profile == "" {
+	if profile == "" || profile == "rate.signup" && (r.UserID != "" || facts.Realm() != RealmTenant) {
 		return out, ErrInvalidInput
 	}
 	ctx, cancel := context.WithTimeout(ctx, l.config.MaximumDuration)
@@ -161,21 +162,27 @@ func (l *AuthRateLimiter) Admit(ctx context.Context, facts NetworkFacts, r AuthR
 		return out, ErrRateUnavailable
 	}
 	name, period, ipCapacity, identifierCapacity := "signin", 10*time.Minute, uint64(20), uint64(10)
+	identifierPeriod := period
 	if profile == "rate.delivery" {
 		name, period, ipCapacity, identifierCapacity = "delivery", time.Hour, 10, 5
+		identifierPeriod = period
+	} else if profile == "rate.signup" {
+		name, period, ipCapacity, identifierCapacity = "signup", time.Hour, 5, 3
+		identifierPeriod = 24 * time.Hour
 	}
 	type bucket struct {
 		kind, value string
 		capacity    uint64
+		period      time.Duration
 	}
-	buckets := []bucket{{name + "-ip", facts.ClientIP().String(), ipCapacity}, {name + "-identifier", l.digest(name, "identifier", string(facts.TenantID()), r.Identifier), identifierCapacity}}
+	buckets := []bucket{{name + "-ip", facts.ClientIP().String(), ipCapacity, period}, {name + "-identifier", l.digest(name, "identifier", string(facts.TenantID()), r.Identifier), identifierCapacity, identifierPeriod}}
 	if profile == "rate.delivery" && r.UserID != "" {
-		buckets = append(buckets, bucket{name + "-subject", l.digest(name, "subject", string(facts.TenantID()), string(r.UserID)), 10})
+		buckets = append(buckets, bucket{name + "-subject", l.digest(name, "subject", string(facts.TenantID()), string(r.UserID)), 10, period})
 	}
 	requests := make([]ratelimit.Request, len(buckets))
 	for i, b := range buckets {
 		key, keyErr := rateKey(l.config.Namespace, b.kind, b.value)
-		policy, policyErr := ratelimit.NewPolicy(ratelimit.PolicySpec{ID: "identity-http-" + b.kind, Revision: "identity-http-auth-1", Algorithm: ratelimit.TokenBucket, Capacity: b.capacity, Period: period, Consistency: ratelimit.ConsistencyStrong})
+		policy, policyErr := ratelimit.NewPolicy(ratelimit.PolicySpec{ID: "identity-http-" + b.kind, Revision: "identity-http-auth-1", Algorithm: ratelimit.TokenBucket, Capacity: b.capacity, Period: b.period, Consistency: ratelimit.ConsistencyStrong})
 		if keyErr != nil || policyErr != nil {
 			return out, ErrInvalidInput
 		}
@@ -193,7 +200,7 @@ func (l *AuthRateLimiter) Admit(ctx context.Context, facts NetworkFacts, r AuthR
 // or a reusable clearance. Cancellation, panic and backend outage deny without
 // fallback. This method neither reads custody nor creates an identifier bucket.
 func (l *AuthRateLimiter) AdmitSigninIP(ctx context.Context, facts NetworkFacts, operationID string) (AuthRateResult, error) {
-	return l.admitSigninDimension(ctx, facts, operationID, "", false)
+	return l.admitAuthDimension(ctx, facts, operationID, "", false, "rate.signin")
 }
 
 // AdmitSigninIdentifier applies only the existing tenant/canonical-identifier
@@ -208,16 +215,40 @@ func (l *AuthRateLimiter) AdmitSigninIdentifier(ctx context.Context, facts Netwo
 	if r.UserID != "" {
 		return AuthRateResult{}, ErrInvalidInput
 	}
-	return l.admitSigninDimension(ctx, facts, r.OperationID, r.Identifier, true)
+	return l.admitAuthDimension(ctx, facts, r.OperationID, r.Identifier, true, "rate.signin")
 }
 
-func (l *AuthRateLimiter) admitSigninDimension(ctx context.Context, facts NetworkFacts, operationID, identifier string, source bool) (out AuthRateResult, err error) {
+// AdmitSignupIP applies shared rate.signup IP5/hour before native address
+// normalization. Only canonical signup operations and mapped tenant facts are
+// accepted. A failed subsequent source lookup retains this debit. After nil-
+// error Allowed, call AdmitSignupIdentifier for the same immutable request;
+// never also call Admit, which would debit IP twice. Admission is request-local,
+// not authority. No account lookup, fallback, retry or goroutine runs here.
+func (l *AuthRateLimiter) AdmitSignupIP(ctx context.Context, facts NetworkFacts, operationID string) (AuthRateResult, error) {
+	return l.admitAuthDimension(ctx, facts, operationID, "", false, "rate.signup")
+}
+
+// AdmitSignupIdentifier applies shared tenant/canonical-identifier3/day after
+// native owning-workflow normalization and prior AdmitSignupIP for this request.
+// UserID must be empty; signup cannot select an authenticated subject budget.
+// It grants no complete admission, confirms no account existence and shares
+// exactly the same primitive-owned bucket as Admit. Rejections and outages do
+// not refund earlier IP debits. Retry metadata retains the one-hour ceiling
+// without shortening the actual daily budget's continuous refill period.
+func (l *AuthRateLimiter) AdmitSignupIdentifier(ctx context.Context, facts NetworkFacts, r AuthRateRequest) (AuthRateResult, error) {
+	if r.UserID != "" {
+		return AuthRateResult{}, ErrInvalidInput
+	}
+	return l.admitAuthDimension(ctx, facts, r.OperationID, r.Identifier, true, "rate.signup")
+}
+
+func (l *AuthRateLimiter) admitAuthDimension(ctx context.Context, facts NetworkFacts, operationID, identifier string, source bool, profile RatePolicyID) (out AuthRateResult, err error) {
 	defer func() {
 		if recover() != nil {
 			out, err = AuthRateResult{}, ErrRateUnavailable
 		}
 	}()
-	if !l.Configured() || ctx == nil || !facts.Valid() || facts.Realm() != RealmTenant || l.operations[operationID] != "rate.signin" || source && !rateIdentifier(identifier) {
+	if !l.Configured() || ctx == nil || !facts.Valid() || facts.Realm() != RealmTenant || l.operations[operationID] != profile || source && !rateIdentifier(identifier) {
 		return out, ErrInvalidInput
 	}
 	ctx, cancel := context.WithTimeout(ctx, l.config.MaximumDuration)
@@ -229,12 +260,17 @@ func (l *AuthRateLimiter) admitSigninDimension(ctx context.Context, facts Networ
 	if now.IsZero() {
 		return out, ErrRateUnavailable
 	}
-	kind, value, capacity := "signin-ip", facts.ClientIP().String(), uint64(20)
+	name, period, identifierPeriod, ipCapacity, identifierCapacity := "signin", 10*time.Minute, 10*time.Minute, uint64(20), uint64(10)
+	if profile == "rate.signup" {
+		name, period, identifierPeriod, ipCapacity, identifierCapacity = "signup", time.Hour, 24*time.Hour, 5, 3
+	}
+	kind, value, capacity := name+"-ip", facts.ClientIP().String(), ipCapacity
 	if source {
-		kind, value, capacity = "signin-identifier", l.digest("signin", "identifier", string(facts.TenantID()), identifier), 10
+		kind, value, capacity = name+"-identifier", l.digest(name, "identifier", string(facts.TenantID()), identifier), identifierCapacity
+		period = identifierPeriod
 	}
 	key, keyErr := rateKey(l.config.Namespace, kind, value)
-	policy, policyErr := ratelimit.NewPolicy(ratelimit.PolicySpec{ID: "identity-http-" + kind, Revision: "identity-http-auth-1", Algorithm: ratelimit.TokenBucket, Capacity: capacity, Period: 10 * time.Minute, Consistency: ratelimit.ConsistencyStrong})
+	policy, policyErr := ratelimit.NewPolicy(ratelimit.PolicySpec{ID: "identity-http-" + kind, Revision: "identity-http-auth-1", Algorithm: ratelimit.TokenBucket, Capacity: capacity, Period: period, Consistency: ratelimit.ConsistencyStrong})
 	if keyErr != nil || policyErr != nil {
 		return out, ErrInvalidInput
 	}

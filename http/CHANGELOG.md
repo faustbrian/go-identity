@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add canonical shared signup IP5/hour and tenant/identifier3/day admission.
+  Support split IP-before-native-normalization without double-counting, using
+  the same buckets as full admission. Reject subject overrides and fail closed
+  on shared-store outage or ambiguity; existing signin/delivery budgets remain
+  independent and unchanged. No signup route is selected by the rate owner.
+
 - Add issued-challenge verification admission with trusted IP20/10m, shared
   tenant/subject10/10m and original challenge10/lifetime budgets. Support IP
   admission before proof work and authenticated subject/challenge admission

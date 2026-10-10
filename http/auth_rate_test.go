@@ -62,6 +62,141 @@ func TestAuthRateCanonicalSigninIdentifierAndIP(t *testing.T) {
 	}
 }
 
+func TestAuthRateCanonicalSignupBudgetsAndRefill(t *testing.T) {
+	var seconds atomic.Int64
+	seconds.Store(1800000000)
+	clock := func() time.Time { return time.Unix(seconds.Load(), 0) }
+	l, _ := authLimiter(t, clock)
+	ctx := context.Background()
+	for i := 0; i < 4; i++ {
+		op := "identity.password.signup"
+		if i%2 == 1 {
+			op = "identity.username.signup"
+		}
+		out, err := l.Admit(ctx, safeFacts(t, fmt.Sprintf("198.51.100.%d", i+1)), identityhttp.AuthRateRequest{OperationID: op, Identifier: "person@example.invalid"})
+		if i < 3 && (err != nil || !out.Allowed) {
+			t.Fatal("signup identifier denied early", i, err)
+		}
+		if i == 3 && (!errors.Is(err, identityhttp.ErrRateLimited) || out.Allowed || out.RetryAfter != time.Hour) {
+			// Primitive retry metadata is clamped to the transport's one-hour
+			// ceiling; the actual 8-hour identifier refill remains unchanged.
+			t.Fatal("signup identifier budget bypass", err, out)
+		}
+	}
+	seconds.Add(8*60*60 - 1)
+	if out, err := l.Admit(ctx, safeFacts(t, "198.51.100.9"), identityhttp.AuthRateRequest{OperationID: "identity.password.signup", Identifier: "person@example.invalid"}); !errors.Is(err, identityhttp.ErrRateLimited) || out.Allowed || out.RetryAfter != time.Second {
+		t.Fatal("signup identifier refilled early", err, out)
+	}
+	seconds.Add(1)
+	if out, err := l.Admit(ctx, safeFacts(t, "198.51.100.9"), identityhttp.AuthRateRequest{OperationID: "identity.password.signup", Identifier: "person@example.invalid"}); err != nil || !out.Allowed {
+		t.Fatal("signup identifier refill unavailable", err)
+	}
+	l2, _ := authLimiter(t, clock)
+	for i := 0; i < 6; i++ {
+		out, err := l2.Admit(ctx, safeFacts(t, "198.51.100.1"), identityhttp.AuthRateRequest{OperationID: "identity.password.signup", Identifier: fmt.Sprintf("person%d@example.invalid", i)})
+		if i < 5 && (err != nil || !out.Allowed) {
+			t.Fatal("signup IP denied early", i, err)
+		}
+		if i == 5 && (!errors.Is(err, identityhttp.ErrRateLimited) || out.Allowed || out.RetryAfter != 12*time.Minute) {
+			t.Fatal("signup IP budget bypass", err, out)
+		}
+	}
+	seconds.Add(12 * 60)
+	if out, err := l2.Admit(ctx, safeFacts(t, "198.51.100.1"), identityhttp.AuthRateRequest{OperationID: "identity.username.signup", Identifier: "refilled@example.invalid"}); err != nil || !out.Allowed {
+		t.Fatal("signup IP refill unavailable", err)
+	}
+}
+
+func TestAuthRateSplitSignupSharesBudgetsAndDeniesUnavailable(t *testing.T) {
+	l, backend := authLimiter(t, func() time.Time { return time.Unix(1800000000, 0) })
+	ctx := context.Background()
+	facts := safeFacts(t, "198.51.100.1")
+	for i := 0; i < 5; i++ {
+		if out, err := l.AdmitSignupIP(ctx, facts, "identity.password.signup"); err != nil || !out.Allowed {
+			t.Fatal("split signup IP denied early", i, err)
+		}
+		if out, err := l.AdmitSignupIdentifier(ctx, facts, identityhttp.AuthRateRequest{OperationID: "identity.password.signup", Identifier: fmt.Sprintf("original%d@example.invalid", i)}); err != nil || !out.Allowed {
+			t.Fatal("signup identifier double-debited IP", i, err)
+		}
+	}
+	if out, err := l.Admit(ctx, facts, identityhttp.AuthRateRequest{OperationID: "identity.username.signup", Identifier: "other@example.invalid"}); !errors.Is(err, identityhttp.ErrRateLimited) || out.Allowed || out.RetryAfter != 12*time.Minute {
+		t.Fatal("split signup differs from full IP budget", err, out)
+	}
+	l2, _ := authLimiter(t, func() time.Time { return time.Unix(1800000000, 0) })
+	for range 3 {
+		if out, err := l2.AdmitSignupIdentifier(ctx, facts, identityhttp.AuthRateRequest{OperationID: "identity.password.signup", Identifier: "same@example.invalid"}); err != nil || !out.Allowed {
+			t.Fatal("split signup identifier denied early", err)
+		}
+	}
+	if out, err := l2.Admit(ctx, safeFacts(t, "198.51.100.2"), identityhttp.AuthRateRequest{OperationID: "identity.username.signup", Identifier: "same@example.invalid"}); !errors.Is(err, identityhttp.ErrRateLimited) || out.Allowed {
+		t.Fatal("split signup differs from full identifier budget", err)
+	}
+	for _, operation := range []string{"", "unknown", "identity.password.signin", "identity.otp.send"} {
+		if _, err := l.AdmitSignupIP(ctx, facts, operation); !errors.Is(err, identityhttp.ErrInvalidInput) {
+			t.Fatal("foreign signup operation accepted")
+		}
+	}
+	claimed := identityhttp.AuthRateRequest{OperationID: "identity.password.signup", Identifier: "valid@example.invalid", UserID: "claimed"}
+	if _, err := l.AdmitSignupIdentifier(ctx, facts, claimed); !errors.Is(err, identityhttp.ErrInvalidInput) {
+		t.Fatal("signup subject override accepted")
+	}
+	if _, err := l.Admit(ctx, facts, claimed); !errors.Is(err, identityhttp.ErrInvalidInput) {
+		t.Fatal("full signup subject override accepted")
+	}
+	backend.mode.Store(1)
+	if out, err := l.AdmitSignupIP(ctx, facts, "identity.password.signup"); !errors.Is(err, identityhttp.ErrRateUnavailable) || out.Allowed {
+		t.Fatal("signup IP outage allowed")
+	}
+	if out, err := l.AdmitSignupIdentifier(ctx, facts, identityhttp.AuthRateRequest{OperationID: "identity.password.signup", Identifier: "valid@example.invalid"}); !errors.Is(err, identityhttp.ErrRateUnavailable) || out.Allowed {
+		t.Fatal("signup identifier outage allowed")
+	}
+	canceled, cancel := context.WithCancel(ctx)
+	cancel()
+	if out, err := l.AdmitSignupIP(canceled, facts, "identity.password.signup"); !errors.Is(err, identityhttp.ErrRateUnavailable) || out.Allowed {
+		t.Fatal("canceled signup admitted")
+	}
+	if _, err := (*identityhttp.AuthRateLimiter)(nil).AdmitSignupIP(ctx, facts, "identity.password.signup"); !errors.Is(err, identityhttp.ErrInvalidInput) {
+		t.Fatal("nil signup rate accepted")
+	}
+}
+
+func TestAuthRateSignupIsolation(t *testing.T) {
+	l, _ := authLimiter(t, func() time.Time { return time.Unix(1800000000, 0) })
+	ctx := context.Background()
+	for i := 0; i < 3; i++ {
+		if out, err := l.Admit(ctx, safeFacts(t, fmt.Sprintf("198.51.100.%d", i+1)), identityhttp.AuthRateRequest{OperationID: "identity.password.signup", Identifier: "same@example.invalid"}); err != nil || !out.Allowed {
+			t.Fatal(err)
+		}
+	}
+	for _, operation := range []string{"identity.password.signin", "identity.otp.send"} {
+		if out, err := l.Admit(ctx, safeFacts(t, "198.51.100.1"), identityhttp.AuthRateRequest{OperationID: operation, Identifier: "same@example.invalid"}); err != nil || !out.Allowed {
+			t.Fatal("signup reset or contaminated another profile", err)
+		}
+	}
+	config := networkConfig()
+	config.TenantHosts = []identityhttp.TenantHost{{Host: "other.example", TenantID: "other-tenant"}}
+	resolver, err := identityhttp.NewNetworkResolver(config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := httptest.NewRequest("POST", "/v1/password/signup", nil)
+	r.Host, r.RemoteAddr = "other.example", "198.51.100.9:1234"
+	facts, err := resolver.Resolve(r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out, err := l.Admit(ctx, facts, identityhttp.AuthRateRequest{OperationID: "identity.password.signup", Identifier: "same@example.invalid"}); err != nil || !out.Allowed {
+		t.Fatal("signup identifier budget crossed tenants", err)
+	}
+	for _, mode := range []int32{1, 2} {
+		owner, backend := authLimiter(t, func() time.Time { return time.Unix(1800000000, 0) })
+		backend.mode.Store(mode)
+		if out, err := owner.Admit(ctx, facts, identityhttp.AuthRateRequest{OperationID: "identity.password.signup", Identifier: "same@example.invalid"}); !errors.Is(err, identityhttp.ErrRateUnavailable) || out.Allowed {
+			t.Fatal("signup outage or ambiguity allowed", err)
+		}
+	}
+}
+
 func TestAuthRateSplitSigninPreservesOneSharedDebitPerDimension(t *testing.T) {
 	l, _ := authLimiter(t, func() time.Time { return time.Unix(1800000000, 0) })
 	ctx := context.Background()

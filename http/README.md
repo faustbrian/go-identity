@@ -182,10 +182,10 @@ committed primitive security revision `72dfa13dd0a6`, not released `v2.0.0`,
 whose memory store can evict live counters. Published dependency resolution and
 full release qualification are not established by local archive-backed tests.
 
-### Original-flow, sign-in and delivery policies
+### Original-flow, signup, sign-in and delivery policies
 
-`NewAuthRateLimiter(AuthRateConfig{...})` selects canonical `rate.signin` and
-`rate.delivery` operations from the same catalog. Supply a strong borrowed
+`NewAuthRateLimiter(AuthRateConfig{...})` selects canonical `rate.signup`,
+`rate.signin` and `rate.delivery` operations from the same catalog. Supply a strong borrowed
 backend, stable deployment namespace, independent nonzero 32-byte identifier
 HMAC key, trusted clock and a 1ms..2s maximum duration. No emergency store or
 degradation callback is used: outages and unknown outcomes fail closed.
@@ -196,7 +196,7 @@ Before starting a new tenant-bound browser flow, call
 There is no identifier or challenge yet. Do not use this method for an existing
 flow or any operation with those dimensions; their applicable buckets remain
 required. HTTPS/origin admission belongs to the handler, and rate admission
-must precede flow entropy or durable writes. Original-flow, signin and delivery
+must precede flow entropy or durable writes. Original-flow, signup, signin and delivery
 budgets are independent. This method does not register or advertise a route.
 
 Call `Admit(ctx, facts, AuthRateRequest{OperationID: operationID,
@@ -206,6 +206,15 @@ challenge custody. A client-claimed identifier unrelated to the challenge is
 not suitable. The rate owner neither normalizes identifiers nor authenticates
 subjects. HMAC key derivation length-frames profile, dimension, tenant and value;
 raw identifiers and subjects never become backend keys or diagnostics.
+
+Signup uses IP5/hour and tenant/identifier3/day, with no subject dimension;
+signup requires mapped tenant facts and rejects a supplied UserID. For bounded
+native normalization after IP admission, call `AdmitSignupIP` then
+`AdmitSignupIdentifier` with the same owning workflow's canonical input. Do not
+also call `Admit` for that request: full and split admission share the same
+bucket identities. A rejected source lookup retains its earlier IP debit.
+The one-hour retry ceiling never shortens the daily identifier refill period.
+Neither admission method validates a flow, reads an account or permits signup.
 
 Sign-in uses shared IP20/10m and tenant/identifier10/10m. Delivery uses shared
 IP10/h, tenant/identifier5/h and authenticated tenant/subject10/h. All operations
