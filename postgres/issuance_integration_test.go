@@ -23,6 +23,7 @@ type issuanceSQLPhase struct {
 	retained    CapabilityIssuanceWork
 	observe     func()
 	invocations int
+	binding     CapabilityIssuanceBinding
 }
 
 func (*issuanceSQLPhase) Descriptor() ContributorDescriptor { return issuanceTestPlan().Contributor }
@@ -38,6 +39,7 @@ func (p *issuanceSQLPhase) PersistCapabilityIssuance(ctx context.Context, w Capa
 	if err != nil {
 		return err
 	}
+	p.binding = b
 	if _, err := w.Binding(&issuanceSQLPhase{}); err == nil {
 		return invalidWork()
 	}

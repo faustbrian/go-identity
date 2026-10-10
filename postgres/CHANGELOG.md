@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Permit explicitly frozen new-user verification grants in anonymous native
+  password signup, only after that same transaction has created the selected
+  user. Preserve original command scope, rollback and recovery metadata;
+  existing command-user issuance and historical plan bytes remain unchanged.
+  Older readers reject this opt-in plan extension. Native capability issuance
+  and keyed email/password orchestration must adopt it before use.
+
 - Bind native signup's prepared verifier and original pre-auth cookie in
   separate retained-key command-intent domains. Require the paired signup
   command for password-signup v1; scalar or cookie-only commands cannot stand

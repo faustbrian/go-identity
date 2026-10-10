@@ -758,6 +758,18 @@ The trusted issuing adapter stages authenticated `capability.Grant` values with
 tenant, command user, purpose, ID, whole-second expiry and single-use maximum.
 This profile requires subject-bound grants, not subjectless bearer authority.
 Descriptor equality does not allow a foreign instance to stage custody.
+
+For anonymous native password signup only, `RegistrationUserID` may explicitly
+select the newly registered verification subject. This bounded target is part
+of the frozen plan digest and recovery metadata; it does not replace the original
+anonymous command binding. Only `identity.identifier.verify` grants are admitted
+and staging requires successful kernel registration of that exact user in this
+same Work. Missing registration or a different subject/tenant poisons Work.
+Empty selection retains the existing command-user behavior and identical bytes.
+Older readers fail closed on the additional field. The native capability issuer
+and journal-prepared signup workflow must separately adopt this profile; kernel
+support alone does not enable an end-user verification flow.
+
 The exact owner receives `CapabilityIssuanceWork` only during coordinator-owned
 persistence; its aliases and SQL authority expire on return, including panic.
 The owner must verify original-envelope and keyed replay provenance, insert

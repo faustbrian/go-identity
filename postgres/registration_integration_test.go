@@ -13,6 +13,7 @@ import (
 	"time"
 
 	auth "github.com/faustbrian/go-authentication"
+	"github.com/faustbrian/go-capability"
 	identity "github.com/faustbrian/go-identity"
 	migrations "github.com/faustbrian/go-migrations/v3"
 	migrationdb "github.com/faustbrian/go-migrations/v3/postgres"
@@ -25,6 +26,8 @@ import (
 // not a password workflow, HIBP implementation or audit-provider interoperability.
 type registrationTestPhase struct {
 	domain                         *PasswordRegistrationDomain
+	issuer                         *issuanceSQLPhase
+	grant                          capability.Grant
 	expected                       identity.Command
 	intent                         PasswordRegistrationIntent
 	fail, foreign, skip, duplicate bool
@@ -66,6 +69,11 @@ func (p *registrationTestPhase) ApplyFeature(ctx context.Context, w Work, c iden
 	}
 	if p.fail {
 		return identity.FeatureReceipt{}, identity.ForbiddenError{}
+	}
+	if p.issuer != nil {
+		if err := w.StageCapabilityIssuanceFor(p.issuer, 0, p.grant); err != nil {
+			return identity.FeatureReceipt{}, err
+		}
 	}
 	s, _ := c.PasswordSignupFeature()
 	return identity.FeatureReceipt{Operation: s.Operation}, nil
@@ -149,6 +157,7 @@ func TestPasswordRegistrationIntegration(t *testing.T) {
 	if _, err := pool.Raw().Exec(ctx, `CREATE TABLE public.identity_test_audits(event_id text PRIMARY KEY,command_id text NOT NULL UNIQUE); CREATE TABLE public.identity_test_lifecycle(event_id text PRIMARY KEY,command_id text NOT NULL UNIQUE); CREATE TABLE public.identity_test_registration_material(command_id text PRIMARY KEY,user_id text NOT NULL)`); err != nil {
 		t.Fatal(err)
 	}
+	t.Run("signup-issuance", func(t *testing.T) { testSignupCapabilityIssuance(t, ctx, pool, repo, domain) })
 	for _, mode := range []string{"commit", "native-failure", "audit-failure", "outbox-failure", "foreign-command", "missing-domain", "duplicate-domain", "changed-intent", "changed-attributes", "changed-actor", "changed-actor-kind", "changed-command-id", "retired-identifier", "canonical-duplicate", "foreign-tenant-value", "concurrent", "disconnect-before", "disconnect-after"} {
 		t.Run(mode, func(t *testing.T) {
 			selectedPool, selectedRepo, selectedDomain := pool, repo, domain

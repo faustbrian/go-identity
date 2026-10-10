@@ -129,8 +129,11 @@ func (w CapabilityIssuanceWork) DatabaseTime(ctx context.Context) (time.Time, er
 // the exact declared issuer, not a caller-authored proof projection. Index is
 // the frozen plan position. Grant identity, purpose, tenant, subject, exclusive
 // expiry and single-use maximum must match. The issuer remains responsible for
-// cryptographic envelope/replay provenance and workflow policy. No bearer is
-// exposed or stored here; encrypted delivery must be staged independently by
+// cryptographic envelope/replay provenance and workflow policy.
+// A declared RegistrationUserID instead selects only this Work's successfully
+// created anonymous-signup user for identifier verification; it never changes
+// the original command binding or permits arbitrary subject selection.
+// No bearer is exposed or stored here; encrypted delivery must be staged by
 // its registered owner. Failure poisons this command. Foreign owners are denied
 // before staging. Work and aliases must remain serial-use.
 func (w Work) StageCapabilityIssuanceFor(p CapabilityIssuanceContributor, index uint16, grant capability.Grant) error {
@@ -155,7 +158,15 @@ func (w Work) StageCapabilityIssuanceFor(p CapabilityIssuanceContributor, index 
 		return w.fail(w.state.ctx, invalidWork())
 	}
 	v, payload := d.plan.Grants[index], grant.Payload()
-	if payload.ID != v.CapabilityID || payload.Operation != string(v.Purpose) || payload.Tenant != string(w.state.binding.TenantID) || payload.Subject != string(w.state.binding.UserID) || payload.Subject == "" || payload.Bearer || payload.MaxUses != v.MaxUses || payload.ExpiresAt != v.ExpiresAt {
+	subject := w.state.binding.UserID
+	if d.plan.RegistrationUserID != "" {
+		created := w.state.registrationUser
+		if !validRegistrationIssuance(w.state.binding, w.state.execution.reservation.plan.snapshot()) || created == nil || created.ID != d.plan.RegistrationUserID || created.Validate(w.state.binding.TenantID) != nil || created.Status != identity.StatusActive || created.Version != 1 {
+			return w.fail(w.state.ctx, invalidWork())
+		}
+		subject = created.ID
+	}
+	if payload.ID != v.CapabilityID || payload.Operation != string(v.Purpose) || payload.Tenant != string(w.state.binding.TenantID) || payload.Subject != string(subject) || payload.Subject == "" || payload.Bearer || payload.MaxUses != v.MaxUses || payload.ExpiresAt != v.ExpiresAt {
 		return w.fail(w.state.ctx, invalidWork())
 	}
 	if _, err := capability.CanonicalPayload(payload, capability.DefaultLimits()); err != nil {
