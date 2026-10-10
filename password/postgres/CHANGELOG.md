@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- Keep original signup password and cookie custody distinct from the generated
+  verifier. Native preparation uses the kernel's existing journal before hash
+  generation and restores the original encrypted risk, verification issuance
+  and delivery for atomic account/material/flow effects. Complete public signup
+  orchestration and password-free recovery remain in development.
+
+- Recheck original signin risk admission at the same authoritative observation
+  as the session and credential bounds, without invoking configured risk clocks
+  under SQL locks. A frozen evaluator clock cannot admit expired original facts
+  after audit/outbox waits; stale admission rolls back issuance.
+
 - Add original-command password material persistence for native registration.
   Require the exact active transaction and newly created account, identifier
   and password reference; preserve the prepared verifier unchanged and roll

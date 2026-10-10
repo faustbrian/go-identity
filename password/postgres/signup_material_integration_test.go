@@ -3,8 +3,10 @@
 package passwordpostgres
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
+	"strings"
 	"testing"
 	"time"
 
@@ -12,9 +14,14 @@ import (
 	auditpg "github.com/faustbrian/go-audit/postgres"
 	auth "github.com/faustbrian/go-authentication"
 	"github.com/faustbrian/go-authorization"
+	"github.com/faustbrian/go-clock"
+	identifier "github.com/faustbrian/go-identifier"
 	identity "github.com/faustbrian/go-identity"
+	email "github.com/faustbrian/go-identity/email"
 	password "github.com/faustbrian/go-identity/password"
 	kernel "github.com/faustbrian/go-identity/postgres"
+	"github.com/faustbrian/go-identity/session"
+	sessionpg "github.com/faustbrian/go-identity/session/postgres"
 	primitive "github.com/faustbrian/go-password"
 	database "github.com/faustbrian/go-postgres"
 	lifecyclepg "github.com/faustbrian/go-transactional-outbox/v2/postgres/identity"
@@ -39,6 +46,10 @@ type signupMaterialPhase struct {
 	accept            bool
 	accepted          bool
 	materialSucceeded bool
+	request           *password.SignupRequest
+	flow              session.PreAuthTransaction
+	flowKey           session.DigestKey
+	flowConfig        sessionpg.Config
 }
 
 func (*signupMaterialPhase) Descriptor() kernel.ContributorDescriptor {
@@ -56,6 +67,11 @@ func (p *signupMaterialPhase) ValidateFeatureCommand(c identity.Command, _ kerne
 	return err
 }
 func (p *signupMaterialPhase) ApplyFeature(ctx context.Context, w kernel.Work, c identity.Command) (identity.FeatureReceipt, error) {
+	if p.request != nil {
+		if err := p.repository.applySignupPreAuth(ctx, w, p, c, *p.request, p.flow, p.flowKey, p.flowConfig); err != nil {
+			return identity.FeatureReceipt{}, err
+		}
+	}
 	if !p.skipDomain {
 		var err error
 		if p.accept {
@@ -104,6 +120,16 @@ func (*signupMaterialPhase) RecoverParticipant(context.Context, kernel.RecoveryW
 	return kernel.RecoveryUnknown, password.ErrPasswordWork
 }
 
+func (p *signupMaterialPhase) CheckFeatureCommit(ctx context.Context, w kernel.Work, c identity.Command) error {
+	if c != p.command {
+		return password.ErrPasswordWork
+	}
+	if p.request == nil {
+		return nil
+	}
+	return p.repository.checkSignupPreAuthCommit(ctx, w, p, c, *p.request, p.flow, p.flowKey)
+}
+
 func testNativeSignupMaterial(t *testing.T, ctx context.Context, pool *database.Pool, policy primitive.Policy, crypto *primitive.Service, base kernel.DirectoryAuthorityMigrationSource) {
 	t.Helper()
 	history, err := (kernel.PasswordSignupAcceptanceMigrationSource{Base: kernel.PasswordRegistrationMigrationSource{Base: kernel.IdentifierMutationMigrationSource{Base: base, Version: 14}, Version: 15}, Version: 16}).Load(ctx)
@@ -130,16 +156,96 @@ func testNativeSignupMaterial(t *testing.T, ctx context.Context, pool *database.
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, mode := range []string{"commit", "rollback", "missing-domain", "duplicate", "foreign-command", "existing-domain", "neutral"} {
+	var committedFlow session.PreAuthTransaction
+	for _, mode := range []string{"commit", "native-first-account", "native-second-account", "rollback", "missing-domain", "duplicate", "foreign-command", "existing-domain", "neutral", "flow-commit", "flow-replay", "flow-rollback", "flow-neutral", "flow-cookie", "flow-actor", "flow-expired", "flow-expired-audit"} {
 		t.Run(mode, func(t *testing.T) {
+			nativeCreation := strings.HasPrefix(mode, "native-")
+			if nativeCreation {
+				mode = "commit"
+			}
+			useFlow := strings.HasPrefix(mode, "flow-")
+			mode = strings.TrimPrefix(mode, "flow-")
 			id, _ := identity.NewCommandID()
 			user, _ := identity.NewSubjectID()
 			op := identity.FeatureOperation{Owner: "identity/password", OperationID: "identity.password.signup", SchemaID: "password-signup", SchemaVersion: 1, RecordRequirement: identity.FeatureRecordOmitted}
 			b := identity.CommandBinding{CommandID: id, TenantID: signinTestTenant, UserID: identity.UserID(user), ActorID: signinTestActor, ActorKind: authorization.SubjectServiceAccount, OperationID: op.OperationID, PolicyID: "signup", PolicyVersion: 1, SchemaID: op.SchemaID, SchemaVersion: 1, CorrelationID: string(id)}
+			var request password.SignupRequest
+			var flow session.PreAuthTransaction
+			var flowKey session.DigestKey
+			flowConfig := sessionpg.Config{Schema: "signin_sessions", MaximumDuration: time.Second}
+			cookie := auth.NewBearerCredential(base64.RawURLEncoding.EncodeToString(make([]byte, 32)))
+			if useFlow {
+				request, flow, flowKey, _ = nativeSignupFlow(t)
+				s, _ := flow.Bindings()
+				s.Binding.ID, _ = identity.NewPreAuthTransactionID()
+				s.Binding.Intent.TenantID = b.TenantID
+				s.Binding.Intent.PolicyID, s.Binding.Intent.PolicyVersion = b.PolicyID, b.PolicyVersion
+				s.Binding.IssuedAt = time.Now().UTC().Truncate(time.Microsecond)
+				s.Binding.ExpiresAt = s.Binding.IssuedAt.Add(5 * time.Minute)
+				if mode == "expired-audit" {
+					s.Binding.IssuedAt = s.Binding.IssuedAt.Add(-59 * time.Second)
+					s.Binding.ExpiresAt = s.Binding.IssuedAt.Add(time.Minute)
+				}
+				if mode == "expired" {
+					s.Binding.IssuedAt = s.Binding.IssuedAt.Add(-61 * time.Second)
+					s.Binding.ExpiresAt = s.Binding.IssuedAt.Add(time.Minute)
+				}
+				if mode == "replay" {
+					var originalErr error
+					s, originalErr = committedFlow.Bindings()
+					if originalErr != nil {
+						t.Fatal("missing previously committed signup flow")
+					}
+				}
+				request.TenantID, request.PreAuthID = b.TenantID, s.Binding.ID
+				request.Caller.Request.Tenant, request.Caller.Request.Subject.ID = authorization.TenantID(b.TenantID), authorization.SubjectID(b.ActorID)
+				token, _ := session.ParseToken(request.Cookie.Token())
+				s.Cookie, _ = token.PreAuthDigest(flowKey, s.Binding)
+				flow, err = session.NewPreAuthTransaction(s)
+				if err != nil || mode != "replay" && sessionpg.InsertPreAuth(ctx, signinTestTx{pool}, flowConfig, flow) != nil {
+					t.Fatal("signup flow fixture")
+				}
+				b.UserID, b.AnonymousFlowID = "", string(request.PreAuthID)
+				op.SubjectRequirement = identity.FeatureSubjectAnonymousFlow
+				cookie = request.Cookie
+			}
 			creation := b
+			creation.UserID, creation.AnonymousFlowID = identity.UserID(user), ""
 			creation.OperationID = "identity.user.create"
 			creation.SchemaID = schema.ID
-			intent := kernel.PasswordRegistrationIntent{Creation: identity.CreateUserCommand{Binding: creation, Status: identity.StatusActive}, Identifier: identity.Identifier{ID: identity.IdentifierID(user), UserID: b.UserID, Kind: identity.IdentifierEmail, CanonicalValue: string(user) + "@example.test", Version: 1}, Credential: identity.CredentialRef{ID: "password", TenantID: b.TenantID, UserID: b.UserID, Kind: identity.CredentialPassword, Owner: "identity/password", Version: 1}, ComparisonProfile: "email-v1"}
+			intent := kernel.PasswordRegistrationIntent{Creation: identity.CreateUserCommand{Binding: creation, Status: identity.StatusActive}, Identifier: identity.Identifier{ID: identity.IdentifierID(user), UserID: creation.UserID, Kind: identity.IdentifierEmail, CanonicalValue: string(user) + "@example.test", Version: 1}, Credential: identity.CredentialRef{ID: "password", TenantID: b.TenantID, UserID: creation.UserID, Kind: identity.CredentialPassword, Owner: "identity/password", Version: 1}, ComparisonProfile: "email-v1"}
+			if nativeCreation {
+				// Two real registrations in one tenant exercise the native selected
+				// identifier, not a hand-built intent which hides ID collisions.
+				r, _, _, _ := nativeSignupFlow(t)
+				r.IdempotencyKey, _ = identity.NewIdempotencyKey(bytes.Repeat([]byte{'N'}, 32))
+				r.TenantID, r.Caller.Request.Tenant = b.TenantID, authorization.TenantID(b.TenantID)
+				r.Caller.Request.Subject.ID, r.Caller.Request.Subject.Kind = authorization.SubjectID(b.ActorID), b.ActorKind
+				r.Email = password.SignupAddressInput(string(user) + "@example.test")
+				b.UserID, b.AnonymousFlowID = "", string(r.PreAuthID)
+				op = passwordSignupOperation()
+				processor, processorErr := identity.NewAttributeProcessor(schema, signinPublicPolicy{}, func(_ context.Context, _ identity.NormalizationPolicy, s identity.AttributeScalar) (identity.AttributeScalar, error) {
+					return s, nil
+				}, identity.AttributeProcessorConfig{Clock: clock.System{}, MaximumDuration: time.Second, PolicyVersion: b.PolicyVersion, ValidateCanonicalUserID: func(_ context.Context, selected identity.UserID) error {
+					if selected != identity.UserID(user) {
+						return password.ErrPasswordWork
+					}
+					return nil
+				}, ValidateValue: func(context.Context, identity.FieldPolicy, identity.AttributeValue) error { return nil }})
+				if processorErr != nil {
+					t.Fatal(processorErr)
+				}
+				profile, _ := identifier.NewNormalizationProfile(identifier.NormalizationProfileSpec{ID: "signup-email", Version: 1, Unicode: identifier.UnicodeNormalizationNFC, MaximumBytes: 512})
+				address, addressErr := email.NewAddressParser(email.AddressPolicy{MaximumBytes: 512, Canonicalization: profile, PreserveDisplay: true})
+				if addressErr != nil {
+					t.Fatal(addressErr)
+				}
+				intent, err = repository.prepareSignupCreation(ctx, r, b, identity.UserID(user), processor, address, schema.ID, schema.Version, "email-v1")
+				if err != nil {
+					t.Fatal("native selected account preparation", err)
+				}
+				cookie = r.Cookie
+			}
 			var existing identity.UserID
 			if mode == "existing-domain" || mode == "neutral" {
 				existing = b.UserID
@@ -147,8 +253,10 @@ func testNativeSignupMaterial(t *testing.T, ctx context.Context, pool *database.
 				if mode == "neutral" {
 					old, _ := identity.NewSubjectID()
 					existing, identifier = identity.UserID(old), identity.IdentifierID(old)
-					flow, _ := identity.NewPreAuthTransactionID()
-					b.UserID, b.AnonymousFlowID = "", string(flow)
+					if !useFlow {
+						flow, _ := identity.NewPreAuthTransactionID()
+						b.UserID, b.AnonymousFlowID = "", string(flow)
+					}
 					op.SubjectRequirement = identity.FeatureSubjectAnonymousFlow
 				}
 				for _, query := range []struct {
@@ -172,11 +280,20 @@ func testNativeSignupMaterial(t *testing.T, ctx context.Context, pool *database.
 			if err != nil {
 				t.Fatal("synthetic hashing")
 			}
-			command, err := identity.NewFeaturePasswordSignupCommand(identity.FeatureCommandSpec{Binding: b, Operation: op, Fields: fields}, hash.String(), auth.NewBearerCredential(base64.RawURLEncoding.EncodeToString(make([]byte, 32))))
+			command, err := identity.NewFeaturePasswordSignupCommand(identity.FeatureCommandSpec{Binding: b, Operation: op, Fields: fields}, hash.String(), cookie)
 			if err != nil {
 				t.Fatal(err)
 			}
 			phase := &signupMaterialPhase{repository: repository, domain: domain, command: command, intent: intent, rollback: mode == "rollback", skipDomain: mode == "missing-domain" || mode == "existing-domain", duplicate: mode == "duplicate", foreign: mode == "foreign-command", accept: mode == "neutral"}
+			if useFlow {
+				if mode == "cookie" {
+					request.Cookie = auth.NewBearerCredential(base64.RawURLEncoding.EncodeToString(bytes.Repeat([]byte{101}, 32)))
+				}
+				if mode == "actor" {
+					request.Caller.Request.Subject.ID = "foreign"
+				}
+				phase.request, phase.flow, phase.flowKey, phase.flowConfig = &request, flow, flowKey, flowConfig
+			}
 			audits, err := auditpg.NewIdentityContributor(auditpg.Config{})
 			if err != nil {
 				t.Fatal(err)
@@ -185,7 +302,12 @@ func testNativeSignupMaterial(t *testing.T, ctx context.Context, pool *database.
 			if err != nil {
 				t.Fatal(err)
 			}
-			registry, err := kernel.NewContributorRegistry([]kernel.Contributor{directory, audits, outbox, phase})
+			var auditOwner kernel.Contributor = audits
+			if mode == "expired-audit" {
+				s, _ := flow.Bindings()
+				auditOwner = &signinDelayedAudit{IdentityContributor: audits, until: s.Binding.ExpiresAt.Add(10 * time.Millisecond)}
+			}
+			registry, err := kernel.NewContributorRegistry([]kernel.Contributor{directory, auditOwner, outbox, phase})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -236,6 +358,22 @@ func testNativeSignupMaterial(t *testing.T, ctx context.Context, pool *database.
 			}
 			if mode != "commit" && mode != "neutral" && (err == nil || result.Outcome != identity.CommitOutcomeNotCommitted) {
 				t.Fatal("native signup failure did not roll back")
+			}
+			if useFlow {
+				var state string
+				if err := pool.Raw().QueryRow(ctx, `SELECT state FROM signin_sessions.preauth_transactions WHERE tenant_id=$1 AND flow_id=$2`, string(b.TenantID), string(request.PreAuthID)).Scan(&state); err != nil {
+					t.Fatal("signup flow state")
+				}
+				want := "issued"
+				if mode == "commit" || mode == "neutral" || mode == "replay" {
+					want = "consumed"
+				}
+				if state != want {
+					t.Fatal("signup flow and account outcome diverged")
+				}
+				if mode == "commit" {
+					committedFlow = flow
+				}
 			}
 			stored, readErr := repository.ReadPasswordCredential(ctx, password.CredentialKey{TenantID: b.TenantID, SubjectID: intent.Creation.Binding.UserID})
 			if mode != "commit" {

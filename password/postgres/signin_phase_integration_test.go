@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/ed25519"
+	"encoding/base64"
 	"errors"
 	"io/fs"
 	"net"
@@ -80,6 +81,10 @@ func (signinRiskBoundary) AppendBatch(context.Context, []audit.Record) (audit.Ba
 }
 
 func signinTestRisk(t *testing.T) risk.AuthenticationAdmissionCustodyConfig {
+	return signinTestRiskObservations(t, time.Now, 30*time.Second)
+}
+
+func signinTestRiskObservations(t *testing.T, clock func() time.Time, lifetime time.Duration) risk.AuthenticationAdmissionCustodyConfig {
 	t.Helper()
 	policy, err := risk.NewPolicy(risk.PolicyConfig{Version: 3, Limits: risk.VelocityLimits{MaxDimensions: 4, MaxCounters: 16, MaxWindow: time.Hour, MaxLimit: 120, KeyBytes: 64, RetryAfterMax: time.Hour}, Profiles: []risk.Profile{
 		{Class: risk.Authentication, Phase: risk.BeforeCredential, Dimensions: []risk.Dimension{risk.TenantDimension, risk.NetworkDimension, risk.DeviceDimension, risk.IdentifierDimension}, Window: 5 * time.Minute, Limit: 10, ThresholdAction: risk.Throttle, EvidenceTTL: 5 * time.Minute, Unknown: risk.DenyUnknown, MaxCounters: 4, RequiredSignals: []string{"status", "velocity"}},
@@ -96,8 +101,8 @@ func signinTestRisk(t *testing.T) risk.AuthenticationAdmissionCustodyConfig {
 		t.Fatal(err)
 	}
 	policyID, _ := identity.NewCommandID()
-	evaluator, err := risk.NewEvaluator(risk.EvaluatorConfig{Policy: policy, Clock: time.Now, Timeout: time.Second, Counters: &counters, Sources: []risk.Source{{Name: "status", Version: "signin-test-v1", Timeout: time.Second, Read: func(_ context.Context, c risk.Context) (risk.Signal, error) {
-		return risk.Signal{Tenant: c.Tenant, Operation: c.Operation, Attempt: c.Attempt, Name: "status", State: risk.SignalClean, Trust: risk.ServerVerified, ObservedAt: c.Now, ExpiresAt: c.Now.Add(30 * time.Second)}, nil
+	evaluator, err := risk.NewEvaluator(risk.EvaluatorConfig{Policy: policy, Clock: clock, Timeout: time.Second, Counters: &counters, Sources: []risk.Source{{Name: "status", Version: "signin-test-v1", Timeout: time.Second, Read: func(_ context.Context, c risk.Context) (risk.Signal, error) {
+		return risk.Signal{Tenant: c.Tenant, Operation: c.Operation, Attempt: c.Attempt, Name: "status", State: risk.SignalClean, Trust: risk.ServerVerified, ObservedAt: c.Now, ExpiresAt: c.Now.Add(lifetime)}, nil
 	}}}, DecisionAudit: &risk.DecisionAuditConfig{PolicyID: string(policyID), Timeout: time.Second, Delivery: audit.RecorderConfig{Sink: signinRiskBoundary{}, Mode: audit.DeliveryFailClosed}, OnLoss: func(context.Context, risk.DecisionDelivery) error { return nil }}})
 	if err != nil {
 		t.Fatal(err)
@@ -108,7 +113,11 @@ func signinTestRisk(t *testing.T) risk.AuthenticationAdmissionCustodyConfig {
 
 func signinTestAdmission(t *testing.T, ctx context.Context, b identity.CommandBinding) risk.AuthenticationAdmission {
 	t.Helper()
-	c := signinTestRisk(t)
+	return signinTestAdmissionWithConfig(t, ctx, b, signinTestRisk(t))
+}
+
+func signinTestAdmissionWithConfig(t *testing.T, ctx context.Context, b identity.CommandBinding, c risk.AuthenticationAdmissionCustodyConfig) risk.AuthenticationAdmission {
+	t.Helper()
 	custody, err := risk.NewAuthenticationAdmissionCustody(c)
 	if err != nil {
 		t.Fatal(err)
@@ -260,7 +269,10 @@ INSERT INTO authorization_subject_authorities VALUES('AAAAAAAAAAAAAAAAAAAAAQ','u
 	t.Run("native signup material", func(t *testing.T) {
 		testNativeSignupMaterial(t, ctx, pool, policy, crypto, kernel.DirectoryAuthorityMigrationSource{Base: base, Version: 13, GlobalAuthorityID: "signin-deployment", TenantIDs: []identity.TenantID{signinTestTenant}})
 	})
-	for _, mode := range []string{"commit", "rollback", "stale-credential", "expired-delivery", "expired-audit"} {
+	t.Run("native signup prepared input", func(t *testing.T) {
+		testNativeSignupKeyInput(t, ctx, pool, policy, kernel.DirectoryAuthorityMigrationSource{Base: base, Version: 13, GlobalAuthorityID: "signin-deployment", TenantIDs: []identity.TenantID{signinTestTenant}}, sessionConfig)
+	})
+	for _, mode := range []string{"commit", "rollback", "stale-credential", "expired-delivery", "expired-audit", "risk-clock-callback", "expired-risk"} {
 		t.Run(mode, func(t *testing.T) {
 			r, _, flowKey, _ := nativeSigninFlow(t)
 			r.Device = "synthetic-device"
@@ -286,7 +298,27 @@ INSERT INTO authorization_subject_authorities VALUES('AAAAAAAAAAAAAAAAAAAAAQ','u
 			id, _ := identity.NewCommandID()
 			op := identity.FeatureOperation{Owner: "identity/password", OperationID: "identity.password.signin", SchemaID: "password-signin", SchemaVersion: 1, SubjectRequirement: identity.FeatureSubjectAnonymousFlow, RecordRequirement: identity.FeatureRecordOmitted}
 			b := identity.CommandBinding{CommandID: id, TenantID: r.TenantID, AnonymousFlowID: string(flowID), ActorID: signinTestActor, ActorKind: authorization.SubjectServiceAccount, OperationID: op.OperationID, PolicyID: "login", PolicyVersion: 3, SchemaID: op.SchemaID, SchemaVersion: 1, CorrelationID: string(id)}
-			admission := signinTestAdmission(t, ctx, b)
+			riskClockClosed := false
+			var retainedRiskTime time.Time
+			riskConfig := signinTestRisk(t)
+			riskLifetime := 30 * time.Second
+			if mode == "expired-risk" {
+				riskLifetime = 500 * time.Millisecond
+			}
+			if mode == "risk-clock-callback" || mode == "expired-risk" {
+				riskConfig = signinTestRiskObservations(t, func() time.Time {
+					if riskClockClosed {
+						if mode == "risk-clock-callback" {
+							panic("configured risk clock must not run under native locks")
+						}
+						return retainedRiskTime
+					}
+					retainedRiskTime = time.Now()
+					return retainedRiskTime
+				}, riskLifetime)
+			}
+			admission := signinTestAdmissionWithConfig(t, ctx, b, riskConfig)
+			riskClockClosed = true
 			observation := &reauthenticationObservation{repository: repository}
 			verifier, e := password.NewPasswordVerifier(password.VerifierConfig{Primitive: crypto, Repository: observation, MaximumBytes: 128, Timeout: time.Second, DummyHash: hash, Now: time.Now})
 			if e != nil {
@@ -355,6 +387,9 @@ INSERT INTO authorization_subject_authorities VALUES('AAAAAAAAAAAAAAAAAAAAAQ','u
 			if mode == "expired-audit" {
 				auditing = &signinDelayedAudit{IdentityContributor: audits, until: proofUntil.Add(time.Millisecond)}
 			}
+			if mode == "expired-risk" {
+				auditing = &signinDelayedAudit{IdentityContributor: audits, until: admission.Prepared().Scope.Now.Add(riskLifetime + time.Millisecond)}
+			}
 			registry, e := kernel.NewContributorRegistry([]kernel.Contributor{domain, auditing, outbox, phase})
 			if e != nil {
 				t.Fatal(e)
@@ -387,7 +422,7 @@ INSERT INTO authorization_subject_authorities VALUES('AAAAAAAAAAAAAAAAAAAAAQ','u
 				if _, csrfErr := prepared.CSRFToken(); csrfErr == nil {
 					t.Fatal("expired delivery disclosed synchronizer")
 				}
-			} else if mode == "stale-credential" || mode == "expired-audit" {
+			} else if mode == "stale-credential" || mode == "expired-audit" || mode == "expired-risk" {
 				issued, issueErr := issuer.Issue(ctx, prepared)
 				if issueErr == nil || issued.CommitOutcome != identity.CommitOutcomeNotCommitted || issued.Token != (session.Token{}) || issued.Session != (session.Session{}) || issued.Cookie.Name != "" {
 					t.Fatal("invalidated admission did not roll back native issuance")
@@ -395,7 +430,7 @@ INSERT INTO authorization_subject_authorities VALUES('AAAAAAAAAAAAAAAAAAAAAQ','u
 				if _, csrfErr := prepared.CSRFToken(); csrfErr == nil {
 					t.Fatal("stale credential disclosed synchronizer")
 				}
-			} else if mode == "commit" {
+			} else if mode == "commit" || mode == "risk-clock-callback" {
 				issued, issueErr := issuer.Issue(ctx, prepared)
 				if issueErr != nil || issued.CommitOutcome != identity.CommitOutcomeCommitted || issued.Replayed || issued.Token == (session.Token{}) || issued.Cookie.Name != "__Host-session" || issued.Cookie.Value != "" {
 					t.Fatal("new commit did not grant original delivery", issueErr)
@@ -442,12 +477,22 @@ INSERT INTO authorization_subject_authorities VALUES('AAAAAAAAAAAAAAAAAAAAAQ','u
 				t.Fatal("effect inspection")
 			}
 			want := 0
-			committed := mode == "commit" || mode == "expired-delivery"
+			committed := mode == "commit" || mode == "risk-clock-callback" || mode == "expired-delivery"
 			if committed {
 				want = 1
 			}
 			if originals != want || sessions != want || issuances != want {
 				t.Fatal("non-atomic original/session effects")
+			}
+			if mode == "risk-clock-callback" || mode == "expired-risk" {
+				commandID, e := base64.RawURLEncoding.Strict().DecodeString(string(id))
+				if e != nil {
+					t.Fatal(e)
+				}
+				var events int
+				if e = pool.Raw().QueryRow(ctx, `SELECT count(*) FROM public.identity_outbox_bindings WHERE command_id=$1`, commandID).Scan(&events); e != nil || events != want {
+					t.Fatal("risk admission did not conserve atomic lifecycle effects", e)
+				}
 			}
 			var state string
 			if e = pool.Raw().QueryRow(ctx, `SELECT state FROM signin_sessions.preauth_transactions WHERE flow_id=$1`, string(flowID)).Scan(&state); e != nil {

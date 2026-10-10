@@ -245,7 +245,7 @@ func (p *signinPhase) checkDelivery(ctx context.Context, now time.Time) error {
 	if !expires.IsZero() && !now.Before(expires) {
 		return identity.ForbiddenError{}
 	}
-	return p.admission.Check(ctx)
+	return p.admission.CheckAt(ctx, now)
 }
 
 func (p *signinPhase) RecoverParticipant(ctx context.Context, w kernel.RecoveryWork) (kernel.RecoveryStatus, error) {
