@@ -6,6 +6,25 @@ replacement/recovery and native authenticated password change. Registration,
 rehash, reset, history and deletion remain unimplemented.
 There is deliberately no independent setter or application-written workflow.
 
+## Original password-signin storage
+
+Migration 5 adds immutable original password-signin records, distinct from
+password-verification records. `Repository.SignInAuthentication(ctx, proofID)`
+implements the upstream `authentication.SignInSource` optional read contract:
+exact primary lookup exposes only the original committed password-signin command.
+Missing, pending and aborted rows return the same invalid-proof classification;
+corrupt, oversized or foreign-index records fail closed without partial output.
+Original signatures, full-width versions and nanosecond timestamps are retained.
+The reader performs no signing, authentication, consumption or freshness renewal.
+
+Forward this read through the configured authority source; do not replace the
+expected authenticator or reconstruct its opaque `AuthenticatedProof` from a
+password comparison. There is no public writer. The next owning signin workflow
+must persist only real successful authentication through its coordinator and
+compose risk, pre-auth, credential/upgrade, session and audit/outbox effects.
+This storage prerequisite is not an executable signin endpoint or proof that
+registration, MFA, hash upgrades or login session issuance are complete.
+
 ## Original reauthentication records
 
 Migration 3 adds immutable original signed password-verification storage, bound

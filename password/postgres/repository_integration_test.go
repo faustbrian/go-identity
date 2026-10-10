@@ -137,6 +137,7 @@ INSERT INTO identity.credential_references(tenant_id,user_id,credential_id,kind,
 	}
 	testNativePasswordReplacement(t, ctx, pool, policy, hash)
 	testNativeReauthenticationRead(t, ctx, pool, repo)
+	testNativeSigninRead(t, ctx, pool, repo)
 	testNativeReauthenticationService(t, ctx, pool, policy, crypto, hash)
 	_, err = repo.ReadPasswordCredential(ctx, password.CredentialKey{TenantID: "absent", SubjectID: key.SubjectID})
 	if !errors.Is(err, password.ErrCredentialAbsent) {

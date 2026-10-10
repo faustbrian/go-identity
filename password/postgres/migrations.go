@@ -42,8 +42,24 @@ func (MigrationSource) Load(ctx context.Context) ([]migrations.Migration, error)
 	if err != nil {
 		return nil, password.ErrPasswordWork
 	}
-	return []migrations.Migration{migration, replacement, reauthentication, consumption}, nil
+	signin, err := migrations.NewMigration(5, "identity_password_signin_records", migrations.TransactionModeDefault, signinSchemaSQL, "")
+	if err != nil {
+		return nil, password.ErrPasswordWork
+	}
+	return []migrations.Migration{migration, replacement, reauthentication, consumption, signin}, nil
 }
+
+const signinSchemaSQL = `CREATE TABLE identity_password.signin_records (
+ proof_id text COLLATE "C" PRIMARY KEY CHECK(octet_length(proof_id) BETWEEN 22 AND 128),
+ tenant_id identity.directory_id NOT NULL,
+ user_id identity.directory_id NOT NULL,
+ command_id bytea NOT NULL CHECK(octet_length(command_id)=16),
+ purpose text COLLATE "C" NOT NULL CHECK(purpose='identity.password.signin'),
+ record bytea NOT NULL CHECK(octet_length(record) BETWEEN 1 AND 32768),
+ UNIQUE(tenant_id,purpose,command_id),
+ FOREIGN KEY(tenant_id,purpose,command_id) REFERENCES identity.commands(tenant_id,purpose,command_id)
+);
+`
 
 const reauthenticationConsumptionSQL = `ALTER TABLE identity_password.reauthentication_records
  ADD COLUMN consumed_command_id bytea,

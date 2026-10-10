@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add bounded primary reading of immutable committed original password-signin
+  records through Authentication's existing SignInSource contract. The additive
+  migration preserves existing password material and reauthentication history;
+  closed decoding retains original signatures, versions and times. This source
+  does not sign, authenticate, issue sessions or supply a public record setter.
+
 - Qualify protected cookie verification through selected HTTP and real primary,
   password, rate and proof owners. Return the stored signed original without
   renewing session or synchronizer state; reject invalid custody/password
