@@ -1,5 +1,27 @@
 # Identity PostgreSQL
 
+## Original password-signin intent
+
+The coordinator explicitly selects `identity.NewFeaturePasswordSigninCommand`
+for `identity.password.signin`, `password-signin` v1, record-free user or
+anonymous-flow scope. The original primitive-owned password and pre-auth cookie
+are borrowed together, fingerprinted in distinct `password-signin-password` and
+`password-signin-cookie` domains under the retained command key, and never
+persisted as raw bytes. Changed password or cookie is conflicting intent even
+after key rotation. Busy or destroyed password owners fail closed; callers must
+destroy the original owner after bounded execution. Plain scalar metadata cannot
+impersonate this exact profile. Other independently registered signin schemas,
+including existing CAPTCHA-protected commands, retain their historical mapping.
+
+Native preparation and final-plan attachment preserve the disjoint command and
+its complete scope rather than using legacy accessors that omit its secrets.
+This structural transport grants no password authentication, cookie possession
+or session authority. Execution still requires an exact registered native owner
+to compare the password, enforce current policy and pre-auth state, and commit
+all session and security effects together. The complete native signin workflow
+remains under development. Recovery uses secret-free command correlation, not
+resubmission of destroyed secrets or reconstruction from a persisted digest.
+
 ## Authenticated password-change intent
 
 The coordinator explicitly selects `identity.NewFeaturePasswordChangeCommand`

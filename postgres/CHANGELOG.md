@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Bind original password-signin password and pre-auth cookie to separate
+  retained-key intent domains, preserving user/anonymous scope through native
+  preparation and final-plan attachment. Changed secrets conflict without
+  rewriting the journal; busy/destroyed owners and plain signin metadata deny.
+  Existing CAPTCHA-protected signin schemas retain their mapping. Raw custody
+  is not persisted. Native password comparison and atomic login
+  policy/session composition remain required; this does not enable login alone.
+
 - Preserve the explicitly admitted password-custody command variant when
   attaching prepared output to its final transaction. Generated hash-only and
   authenticated password changes retain their scope and original replay result;

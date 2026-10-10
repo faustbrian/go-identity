@@ -223,7 +223,7 @@ func (c *Coordinator) prepareFeaturePreparation(original identity.Command, p Com
 			q, admitted, phase, err = claimRequest{}, nil, nil, invalidPreparation()
 		}
 	}()
-	s, ok := original.Feature()
+	s, ok := commandFeature(original)
 	if !ok || p.Feature == nil || p.Feature.Operation != s.Operation || p.Delivery != nil || preparationProtected(p) || p.SubjectType == "" {
 		return q, nil, nil, invalidPreparation()
 	}

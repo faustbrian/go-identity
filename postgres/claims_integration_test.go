@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	auth "github.com/faustbrian/go-authentication"
 	identity "github.com/faustbrian/go-identity"
 	database "github.com/faustbrian/go-postgres"
 )
@@ -122,6 +123,68 @@ SELECT command_id,tenant_id,purpose FROM identity.identity_command_id_claims WHE
 	if got, err := execute(request, rotated, true); err != nil || got != claimReplay {
 		t.Fatal("retained-key replay failed")
 	}
+	t.Run("password signin retained paired custody", func(t *testing.T) {
+		for _, anonymous := range []bool{false, true} {
+			s := passwordSigninCodecSpec(anonymous)
+			s.Binding.CommandID, err = identity.NewCommandID()
+			if err != nil {
+				t.Fatal(err)
+			}
+			raw := []byte("synthetic-primary-password")
+			wire := base64.RawURLEncoding.EncodeToString(bytes.Repeat([]byte{17}, 32))
+			command, owner := passwordSigninCodecCommand(t, s, raw, wire)
+			initial, err := prepareClaim(command, keys.retained[1])
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got, err := execute(initial, keys, true); err != nil || got != claimNew {
+				t.Fatal("original paired signin denied", err)
+			}
+			id, _ := base64.RawURLEncoding.DecodeString(string(s.Binding.CommandID))
+			var before, after, safe []byte
+			var version int64
+			if err := pool.Raw().QueryRow(ctx, `SELECT fingerprint,fingerprint_key_version,safe_fields FROM identity.identity_command_id_claims WHERE command_id=$1`, id).Scan(&before, &version, &safe); err != nil || version != 1 || bytes.Contains(safe, raw) || bytes.Contains(safe, []byte(wire)) {
+				t.Fatal("original private claim not retained safely", err)
+			}
+			for _, change := range []struct {
+				raw  []byte
+				wire string
+			}{{append(bytes.Clone(raw), 'x'), wire}, {raw, base64.RawURLEncoding.EncodeToString(bytes.Repeat([]byte{18}, 32))}} {
+				changed, _ := passwordSigninCodecCommand(t, s, change.raw, change.wire)
+				q, err := prepareClaim(changed, rotated.retained[2])
+				if err != nil {
+					t.Fatal(err)
+				}
+				if got, err := execute(q, rotated, true); err != nil || got != claimConflict {
+					t.Fatal("different signin secret replayed claim", err)
+				}
+			}
+			current, err := prepareClaim(command, rotated.retained[2])
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got, err := execute(current, rotated, true); err != nil || got != claimReplay {
+				t.Fatal("paired signin lost stored-key replay", err)
+			}
+			if err := pool.Raw().QueryRow(ctx, `SELECT fingerprint,fingerprint_key_version FROM identity.identity_command_id_claims WHERE command_id=$1`, id).Scan(&after, &version); err != nil || version != 1 || !bytes.Equal(before, after) {
+				t.Fatal("signin substitutions rewrote original claim", err)
+			}
+			var count int
+			if err := pool.Raw().QueryRow(ctx, `SELECT count(*) FROM identity.commands WHERE command_id=$1`, id).Scan(&count); err != nil || count != 1 {
+				t.Fatal("signin replay duplicated journal", err)
+			}
+			// The retained source remains the original live owner, not a digest
+			// from which destroyed credentials can be reconstructed.
+			borrowed, cookie, ok := current.source.PasswordSigninCustody()
+			if !ok || cookie.Token() != auth.NewBearerCredential(wire).Token() || borrowed.Len() != len(raw) {
+				t.Fatal("primary replay lost original paired custody")
+			}
+			owner.Destroy()
+			if got, err := execute(current, rotated, true); err == nil || got != claimInvalid {
+				t.Fatal("destroyed source reconstructed from retained digest")
+			}
+		}
+	})
 	// Denied substitutions cannot replace the original privacy claim or add a
 	// scoped journal. Key rotation must preserve its original fingerprint key.
 	privacyCommand := recordPrivacy(t, nil, nil, "privacy-key")

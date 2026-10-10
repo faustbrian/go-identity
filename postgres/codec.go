@@ -164,6 +164,11 @@ func prepareClaim(c identity.Command, key [32]byte) (claimRequest, error) {
 				return claimRequest{}, err
 			}
 		}
+		if _, ok := c.PasswordSigninFeature(); ok {
+			if err := encodePasswordSigninCustody(c, key, payload); err != nil {
+				return claimRequest{}, err
+			}
+		}
 	default:
 		return claimRequest{}, codecError()
 	}
@@ -229,6 +234,14 @@ func isFeature(c identity.Command) bool    { _, ok := commandFeature(c); return 
 // field; this selection does not replace native policy validation/consumption.
 func commandFeature(c identity.Command) (identity.FeatureCommandSpec, bool) {
 	if s, ok := c.Feature(); ok {
+		// Signin's scalar metadata alone cannot stand in for the paired
+		// password/cookie variant, including preparation and restored plans.
+		if passwordSigninOperation(s.Operation) {
+			return identity.FeatureCommandSpec{}, false
+		}
+		return s, true
+	}
+	if s, ok := c.PasswordSigninFeature(); ok {
 		return s, true
 	}
 	if s, ok := c.PasswordChangeFeature(); ok {
