@@ -40,6 +40,15 @@ clears address output without erasing known commitment. Inspect both outcome and
 error before using a result; retry/recovery must preserve original command scope.
 The projection is not a current authorization lease or cached validity evidence.
 
+`RegistrationVerificationRateSource(ctx, proof, callback, caller)` supplies
+authenticated original subject, signed grant ID and unchanged signed lifetime
+for verification rate admission after trusted-IP counting. Current query policy
+and the exact original callback apply; no mailbox or command is exposed. It
+also permits counting consumed provenance for an original command replay, not
+reuse. It neither charges counters nor proves current account/proof eligibility;
+confirmation still owns those checks and the atomic mutation. Do not log the
+returned identifiers or substitute a request-claimed subject or command ID.
+
 ## Native required-verification signup
 
 `NewSignupService(primaryPool, SignupConfig, localKeyring)` implements the public

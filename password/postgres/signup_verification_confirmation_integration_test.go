@@ -70,6 +70,41 @@ func testPublicRegistrationConfirmation(t *testing.T, ctx context.Context, sourc
 	if !ok {
 		t.Fatal("native signup owner has no explicit registration confirmation")
 	}
+	rateSource, ok := any(service).(registrationVerificationRateSource)
+	if !ok {
+		t.Fatal("native confirmation has no original rate-source port")
+	}
+	assertRateSource := func() {
+		t.Helper()
+		unselected := caller
+		unselected.Request.Resource.ID = ""
+		user, challenge, lifetime, err := rateSource.RegistrationVerificationRateSource(ctx, proof, callback, unselected)
+		original := grant.Payload()
+		if err != nil || user != identity.UserID(original.Subject) || challenge != original.ID || lifetime != original.ExpiresAt.Sub(original.IssuedAt) {
+			t.Fatal("rate source lost authenticated original grant", err)
+		}
+	}
+	assertRateSource()
+	for _, change := range []func(*authorization.DecisionContext, *string){
+		func(_ *authorization.DecisionContext, target *string) {
+			*target = "https://foreign.example.test/finish"
+		},
+		func(c *authorization.DecisionContext, _ *string) { c.Request.Resource.ID = "foreign-user" },
+		func(c *authorization.DecisionContext, _ *string) { c.Request.Tenant = "foreign-tenant" },
+		func(c *authorization.DecisionContext, _ *string) { c.PolicyRevision++ },
+	} {
+		wrong, target := caller, callback
+		change(&wrong, &target)
+		user, challenge, lifetime, err := rateSource.RegistrationVerificationRateSource(ctx, proof, target, wrong)
+		if err == nil || user != "" || challenge != "" || lifetime != 0 {
+			t.Fatal("foreign rate source disclosed original binding")
+		}
+	}
+	canceled, stop := context.WithCancel(ctx)
+	stop()
+	if user, challenge, lifetime, err := rateSource.RegistrationVerificationRateSource(canceled, proof, callback, caller); err == nil || user != "" || challenge != "" || lifetime != 0 {
+		t.Fatal("canceled rate source disclosed original binding")
+	}
 	id, _ := identity.NewCommandID()
 	if result, err := owner.ConfirmRegistrationVerification(ctx, proof, "https://foreign.example.test/finish", id, "2001:db8::1", caller); err == nil || result.Outcome == identity.CommitOutcomeCommitted {
 		t.Fatal("foreign callback confirmed original address")
@@ -104,6 +139,9 @@ func testPublicRegistrationConfirmation(t *testing.T, ctx context.Context, sourc
 	if err != nil || typedReplay.Validate() != nil || !typedReplay.Replayed || typedReplay.Address != (identity.IdentifierProjection{}) {
 		t.Fatal("typed replay re-disclosed address", err)
 	}
+	// Consumed provenance can be counted for original replay; it does not grant
+	// reuse. The existing second-command and scanner denials below still apply.
+	assertRateSource()
 	result, err := owner.ConfirmRegistrationVerification(ctx, proof, callback, id, "2001:db8::1", caller)
 	if err != nil || result.Outcome != identity.CommitOutcomeCommitted || result.Feature == nil || result.Feature.AfterVersion != 2 {
 		t.Fatal("native delivered signup proof did not confirm atomically", result.Outcome, err)

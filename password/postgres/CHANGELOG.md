@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Expose authenticated original signup-link subject, signed grant ID and
+  immutable lifetime for verification-rate composition. Preserve current query
+  policy and callback binding, returning no mailbox or partial metadata on
+  failure. Historical consumed provenance grants no permission to reuse a proof;
+  confirmation remains the owner of current checks and atomic effects.
+
 - Bind typed email confirmation/recovery to the existing native coordinator.
   Fresh successful confirmation returns an exact-version verified address after
   current disclosure policy and a primary read. Replay/recovery stay metadata-
