@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add opaque password-signin command custody using the existing primitive
+  Secret owner and original pre-auth cookie. Native signin must explicitly
+  select the new metadata/custody pair; legacy feature execution stays closed.
+  Password bytes are not copied, normalized or persisted by this transport.
+
 - Add disjoint authenticated password-change command custody for the original
   session bearer, upstream proof and encoded hash. Preserve complete versions
   and timestamps; older feature/hash-only execution paths fail closed rather

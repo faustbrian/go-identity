@@ -8,6 +8,7 @@ import (
 
 	"github.com/faustbrian/go-authentication"
 	"github.com/faustbrian/go-authorization"
+	primitive "github.com/faustbrian/go-password"
 )
 
 // FeatureKind selects exactly one named command scalar. Zero/unknown kinds are
@@ -80,6 +81,7 @@ type featureCommandState struct {
 	sessionToken   *authentication.BearerCredential
 	passwordHash   func() string
 	passwordChange func() (string, authentication.BearerCredential, authentication.ReauthenticationProof)
+	passwordSignin func() (primitive.Secret, authentication.BearerCredential)
 }
 
 // NewFeatureCommand validates and freezes structural feature input, copying
@@ -123,14 +125,15 @@ func validFeatureFields(fields []FeatureField) bool {
 }
 
 // Feature returns an owned projection for trusted adapter schema mapping and
-// false for zero, kernel, mixed or password-hash commands. Hash-bearing native
-// owners must explicitly use PasswordHashFeature instead; older coordinators
-// cannot silently omit verifier material. Mutating returned fields or Bytes
+// false for zero, kernel, mixed or password-custody commands. Password owners
+// must explicitly select their matching metadata/custody pair; older
+// coordinators cannot silently omit verifier or submitted password material.
+// Mutating returned fields or Bytes
 // cannot change retained command intent. Copies of Command are immutable and
 // safe for concurrent reads. The projection must never become a log, snapshot,
 // public response or authentication decision. No callbacks or I/O run.
 func (c Command) Feature() (FeatureCommandSpec, bool) {
-	if !c.validFeatureVariant() || c.feature.passwordHash != nil || c.feature.passwordChange != nil {
+	if !c.validFeatureVariant() || c.feature.passwordHash != nil || c.feature.passwordChange != nil || c.feature.passwordSignin != nil {
 		return FeatureCommandSpec{}, false
 	}
 	return cloneFeatureSpec(c.feature.spec), true

@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/faustbrian/go-authentication"
+	primitive "github.com/faustbrian/go-password"
 )
 
 func TestFeatureCommandMixedUnionIsInvalid(t *testing.T) {
@@ -30,6 +31,48 @@ func TestFeatureCommandMixedUnionIsInvalid(t *testing.T) {
 		_, identifier := c.ChangeIdentifier()
 		if feature || create || update || profile || status || unlink || link || identifier {
 			t.Fatal("mixed command accepted")
+		}
+	}
+}
+
+func TestPasswordSigninMixedVariantsDenyEveryAccessor(t *testing.T) {
+	p, _ := primitive.NewSecret([]byte("candidate"))
+	defer p.Destroy()
+	b := authentication.NewBearerCredential("opaque-cookie")
+	code, _ := authentication.NewOneTimeCode("123456")
+	for _, corrupt := range []func(*Command){
+		func(c *Command) { c.create = &CreateUserCommand{} },
+		func(c *Command) { c.update = &UpdateUserCommand{} },
+		func(c *Command) { c.profile = &ProfileUpdateCommand{} },
+		func(c *Command) { c.status = &UserStatusCommand{} },
+		func(c *Command) { c.unlink = &AccountUnlinkCommand{} },
+		func(c *Command) { c.link = &AccountLinkCommand{} },
+		func(c *Command) { c.identifier = &IdentifierCommand{} },
+		func(c *Command) { c.privacy = &PrivacyExportRequestCommand{} },
+		func(c *Command) { c.feature.code = &code },
+		func(c *Command) { c.feature.preAuthCookie = &b },
+		func(c *Command) { c.feature.sessionToken = &b },
+		func(c *Command) { c.feature.passwordHash = func() string { return "synthetic" } },
+		func(c *Command) {
+			c.feature.passwordChange = func() (string, authentication.BearerCredential, authentication.ReauthenticationProof) {
+				return "synthetic", b, authentication.ReauthenticationProof{}
+			}
+		},
+	} {
+		c := Command{feature: &featureCommandState{spec: FeatureCommandSpec{Operation: FeatureOperation{Owner: "identity/password", OperationID: "identity.password.signin", SchemaID: "password-signin", SchemaVersion: 1, RecordRequirement: FeatureRecordOmitted}}, passwordSignin: func() (primitive.Secret, authentication.BearerCredential) { return p, b }}}
+		corrupt(&c)
+		_, metadata := c.PasswordSigninFeature()
+		secret, bearer, custody := c.PasswordSigninCustody()
+		_, feature := c.Feature()
+		_, hash := c.PasswordHash()
+		_, hm := c.PasswordHashFeature()
+		_, change := c.PasswordChangeFeature()
+		_, _, _, cc := c.PasswordChangeCustody()
+		_, otp := c.OneTimeCode()
+		_, cookie := c.PreAuthCookie()
+		_, session := c.SessionToken()
+		if metadata || custody || secret.Len() != 0 || bearer.Token() != "" || feature || hash || hm || change || cc || otp || cookie || session {
+			t.Fatal("mixed signin custody admitted")
 		}
 	}
 }

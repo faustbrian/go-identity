@@ -223,6 +223,23 @@ and the final-access boundary that transactional unlink must enforce.
 
 ## Development verification
 
+### Password-signin command custody
+
+`NewFeaturePasswordSigninCommand` supports the internal record-free
+`identity/password` / `identity.password.signin` / `password-signin` v1 schema,
+with explicit user or anonymous-flow scope. It retains the existing
+`go-password.Secret` owner and the original bounded pre-auth cookie, not a
+successful authentication proof. Trusted native adapters must use
+`PasswordSigninFeature` and `PasswordSigninCustody` together and exhaustively
+bind the inputs to the coordinator's keyed command intent. Generic `Feature`
+and existing OTP/hash/change/bearer paths reject this variant.
+
+The caller owns `Secret.Destroy` after bounded use; all copies share terminal
+destruction. Never persist secret-bearing commands or use them for recovery.
+Construction performs no password comparison, flow verification or durable
+write. Native signin, risk/MFA, hash-upgrade and session composition remain
+required; this transport alone is not a login service.
+
 Run Go commands with a task-owned disposable `GOCACHE` and delete it afterwards.
 The current focused checks are `go test -race ./...`, `go vet ./...`, and
 `go test -run '^$' -fuzz '^FuzzIDParsing$' -fuzztime=10s .`.

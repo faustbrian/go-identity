@@ -72,7 +72,7 @@ func passwordChangeOperation(op FeatureOperation) bool {
 }
 
 func (c Command) validPasswordChangeVariant() bool {
-	return c.validFeatureVariant() && c.feature.passwordChange != nil && c.feature.passwordHash == nil && c.feature.code == nil && c.feature.preAuthCookie == nil && c.feature.sessionToken == nil && passwordChangeOperation(c.feature.spec.Operation)
+	return c.validFeatureVariant() && c.feature.passwordChange != nil && c.feature.passwordSignin == nil && c.feature.passwordHash == nil && c.feature.code == nil && c.feature.preAuthCookie == nil && c.feature.sessionToken == nil && passwordChangeOperation(c.feature.spec.Operation)
 }
 
 // PasswordChangeFeature returns owned hash/bearer/proof-free command metadata
