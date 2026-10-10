@@ -1,9 +1,33 @@
 package postgres
 
 import (
+	"context"
 	identity "github.com/faustbrian/go-identity"
 	"reflect"
 )
+
+// RequireFeatureCommand admits only the unchanged command supplied to this
+// exact registered participant's synchronous Apply invocation. Ordinary copies
+// retain custody; reconstructed commands do not, even with identical fields.
+// This bounded local guard performs no IO, callback or fingerprint renewal.
+// It does not authenticate credentials or authorize effects. Nil/cancelled
+// contexts and foreign, admission-only or returned invocations deny. Rejection
+// poisons usable Work so ignoring the error cannot commit earlier effects.
+func (w Work) RequireFeatureCommand(ctx context.Context, p FeatureExecutionContributor, command identity.Command) error {
+	if err := w.usable(); err != nil {
+		return err
+	}
+	if ctx == nil {
+		return w.fail(w.state.ctx, invalidWork())
+	}
+	if err := ctx.Err(); err != nil {
+		return w.fail(ctx, err)
+	}
+	if _, _, _, err := w.FeatureCommandIdentity(p); err != nil || w.state.featureApplyCommand == nil || *w.state.featureApplyCommand != command {
+		return w.fail(ctx, invalidWork())
+	}
+	return nil
+}
 
 // FeatureScope lets a native adapter verify that this exact comparable instance
 // is the coordinator's currently invoked feature participant. It returns owned

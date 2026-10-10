@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Add exact original-command admission for native feature adapters. Reject
+  reconstructed or substituted payloads and poison the transaction even when
+  a caller ignores the denial. Existing metadata accessors remain compatible.
+
 - Add an original-signin hash-upgrade transaction seam for the registered
   password owner. Lock predecessor authority exclusively, advance distinct
   credential/reference and aggregate versions atomically, preserve original

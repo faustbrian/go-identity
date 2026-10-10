@@ -12,6 +12,51 @@ type featureCommandIdentityReader interface {
 	FeatureCommandIdentity(FeatureExecutionContributor) (identity.CommandBinding, [32]byte, uint64, error)
 }
 
+func TestRequireFeatureCommandConservesOriginalCustody(t *testing.T) {
+	for _, mode := range []string{"original-copy", "reconstructed", "foreign-owner", "missing-original", "admission-only", "returned", "nil-context", "cancelled-context"} {
+		t.Run(mode, func(t *testing.T) {
+			_, command, plan := featurePlanFixture(t)
+			spec, _ := command.Feature()
+			owner := &scopeFeatureParticipant{operations: []identity.FeatureOperation{spec.Operation}}
+			plan.Feature.Contributor = owner.Descriptor()
+			frozen := &admittedKernelPlan{binding: spec.Binding, feature: plan.Feature, lifecycle: plan.Lifecycle, fingerprint: [32]byte{7}}
+			reservation := &reservationState{plan: frozen, journal: journalReservation{generation: 3}}
+			w := Work{state: &workState{ctx: context.Background(), binding: spec.Binding, generation: 3, feature: plan.Feature, lifecycle: &workLifecycle{plan: *plan.Lifecycle}, featureInvocation: owner, featureApplying: true, featureApplyCommand: &command, execution: &domainExecution{reservation: reservation}}}
+			candidate, participant, ctx := command, FeatureExecutionContributor(owner), context.Background()
+			switch mode {
+			case "reconstructed":
+				var err error
+				candidate, err = identity.NewFeatureCommand(spec)
+				if err != nil {
+					t.Fatal(err)
+				}
+			case "foreign-owner":
+				participant = &scopeFeatureParticipant{operations: owner.operations}
+			case "missing-original":
+				w.state.featureApplyCommand = nil
+			case "admission-only":
+				w.state.featureApplying = false
+			case "returned":
+				w.state.featureInvocation = nil
+			case "nil-context":
+				ctx = nil
+			case "cancelled-context":
+				var cancel context.CancelFunc
+				ctx, cancel = context.WithCancel(ctx)
+				cancel()
+			}
+			err := w.RequireFeatureCommand(ctx, participant, candidate)
+			if mode == "original-copy" {
+				if err != nil || w.state.failed != nil {
+					t.Fatal("original copy denied", err)
+				}
+			} else if err == nil || w.state.failed == nil || w.RequireFeatureCommand(context.Background(), owner, command) == nil {
+				t.Fatal("invalid command failed to poison earlier effects")
+			}
+		})
+	}
+}
+
 func TestFeatureCommandIdentityRequiresExactProtectedInvocation(t *testing.T) {
 	_, command, plan := featurePlanFixture(t)
 	spec, _ := command.Feature()

@@ -24,6 +24,7 @@ type passwordUpgradePhase struct {
 	fail, skipApply, duplicate, foreign bool
 	finalExpiry                         bool
 	ignoredCursor                       bool
+	substituteSuccessor                 bool
 }
 
 func (*passwordUpgradePhase) Descriptor() ContributorDescriptor {
@@ -84,6 +85,17 @@ func (p *passwordUpgradePhase) ApplyFeature(ctx context.Context, w Work, c ident
 	if p.duplicate {
 		_, _ = w.ApplyPasswordHashUpgrade(ctx, p, c)
 		return identity.FeatureReceipt{Operation: s.Operation}, nil
+	}
+	if p.substituteSuccessor {
+		secret, cookie, _ := c.PasswordSigninCustody()
+		other, _ := identity.NewFeaturePasswordSigninCommand(s, secret, cookie)
+		// Even a caller ignoring the denial must not commit prior material and
+		// kernel successor writes under the original command's fingerprint.
+		_ = w.RequireFeatureCommand(ctx, p, other)
+		return identity.FeatureReceipt{Operation: s.Operation}, nil
+	}
+	if err := w.RequireFeatureCommand(ctx, p, c); err != nil {
+		return identity.FeatureReceipt{}, err
 	}
 	recipient, admission, err := w.PasswordHashUpgradeSuccessor(p)
 	if err != nil || recipient.User.Version != i.ExpectedUserVersion+1 || recipient.CredentialAuthorityVersion != i.Admission.CredentialAuthorityVersion+1 || recipient.UserAuthorityVersion != i.Admission.UserAuthorityVersion || recipient.IdentifierAuthorityVersion != i.Admission.IdentifierAuthorityVersion || recipient.ObservedAt != p.recipient.ObservedAt || admission.Credential != receipt.Credential || admission.CredentialAuthorityVersion != receipt.AfterAuthorityVersion {
@@ -153,7 +165,7 @@ func testPasswordHashUpgrade(t *testing.T, ctx context.Context, pool *database.P
 	if _, err := pool.Raw().Exec(ctx, `CREATE TABLE public.identity_test_upgrade_material(tenant_id text,user_id text,version numeric,PRIMARY KEY(tenant_id,user_id)); CREATE TABLE public.identity_test_upgrade_effects(command_id text PRIMARY KEY,user_id text,version numeric); CREATE TABLE public.identity_test_upgrade_epochs(command_id text PRIMARY KEY,user_before numeric,user_after numeric,epoch_before numeric,epoch_after numeric,credential_before numeric,credential_after numeric)`); err != nil {
 		t.Fatal(err)
 	}
-	for _, mode := range []string{"commit", "native-failure", "audit-failure", "outbox-failure", "unapplied", "duplicate", "foreign-command", "stale-user", "stale-credential", "stale-authority", "disabled", "suspended", "expired", "final-expiry", "ignored-cursor", "concurrent"} {
+	for _, mode := range []string{"commit", "native-failure", "audit-failure", "outbox-failure", "unapplied", "duplicate", "foreign-command", "substituted-successor", "stale-user", "stale-credential", "stale-authority", "disabled", "suspended", "expired", "final-expiry", "ignored-cursor", "concurrent"} {
 		t.Run(mode, func(t *testing.T) {
 			user, _ := identity.NewSubjectID()
 			tenant := identity.TenantID("hash-upgrade")
@@ -214,6 +226,7 @@ func testPasswordHashUpgrade(t *testing.T, ctx context.Context, pool *database.P
 					t.Fatal(err)
 				}
 				p := &passwordUpgradePhase{expected: command, recipient: recipient, fail: mode == "native-failure", skipApply: mode == "unapplied", duplicate: mode == "duplicate", foreign: mode == "foreign-command", finalExpiry: mode == "final-expiry", ignoredCursor: mode == "ignored-cursor"}
+				p.substituteSuccessor = mode == "substituted-successor"
 				audits, outbox := &recoveryAuditPhase{}, &passwordUpgradeOutbox{}
 				outbox.noUpgrade = p.ignoredCursor
 				audits.fail, outbox.fail = mode == "audit-failure", mode == "outbox-failure"

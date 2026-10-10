@@ -1,5 +1,15 @@
 # Identity PostgreSQL
 
+## Exact native command custody
+
+Adapters staging a native feature command must call `Work.RequireFeatureCommand`
+with the supplied command before using its payload. It admits only an unchanged
+copy of the original command in that registered owner's active Apply invocation.
+Reconstruction, even from equal-looking fields and the same secrets, denies and
+poisons Work: ignoring the error cannot commit earlier provisional writes.
+`FeatureCommandIdentity` only returns correlation metadata; it does not validate
+a candidate command. Existing metadata and successor accessors remain unchanged.
+
 ## Original-signin hash upgrades
 
 The registered `identity/password/postgres` owner can compose a hash-only

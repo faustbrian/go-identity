@@ -87,4 +87,7 @@ func TestPasswordHashUpgradeRejectsUnownedWork(t *testing.T) {
 	if r, a, err := w.PasswordHashUpgradeSuccessor(nil); err == nil || r != (RecipientRecord{}) || a != (CredentialAdmission{}) {
 		t.Fatal("zero work disclosed successor")
 	}
+	if err := w.RequireFeatureCommand(context.Background(), nil, identity.Command{}); err == nil {
+		t.Fatal("zero work admitted feature command")
+	}
 }
