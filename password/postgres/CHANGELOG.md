@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Adopt opt-in browser password signin HTTP composition with the native service
+  and strict PostgreSQL admission. Preserve original remember/callback custody,
+  fresh-only cookie/CSRF delivery and credential-free restart recovery.
+
 - Expose original-flow-authenticated signin identifier normalization for split
   IP/identifier rate admission without account lookup, password comparison,
   risk charging, pre-auth consumption or session issuance.

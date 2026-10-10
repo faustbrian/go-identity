@@ -16,7 +16,7 @@ require (
 	github.com/faustbrian/go-identity/email v0.0.0-20261010211711-d2f2d6f99289
 	github.com/faustbrian/go-identity/http v0.0.0-20261010213506-df1f27aa2d08
 	github.com/faustbrian/go-identity/http/email v0.0.0-20261010220138-9154c9e34d53
-	github.com/faustbrian/go-identity/http/password v0.0.0-20261010031737-7caf5261dd91
+	github.com/faustbrian/go-identity/http/password v0.0.0-20261010222603-254b524c6a9e
 	github.com/faustbrian/go-identity/password v0.0.0-20261010122037-b7367cbb6d45
 	github.com/faustbrian/go-identity/postgres v0.0.0-20261010195011-42c0fc000cd7
 	github.com/faustbrian/go-identity/risk v0.0.0-20261010201320-cc1720453bf8

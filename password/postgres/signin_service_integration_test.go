@@ -104,13 +104,13 @@ func testPublicNativeSignin(t *testing.T, ctx context.Context, pool *database.Po
 		t.Fatal("native public composition", err)
 	}
 	var workflow password.SigninService = service
-	for _, mode := range []string{"commit", "commit-persistent", "wrong", "unknown", "invalid-email", "foreign-cookie", "foreign-origin", "foreign-callback", "changed-remember", "policy-advance", "rehash", "rehash-persistent", "rehash-wrong", "rehash-policy-advance", "rehash-outbox-failure", "rehash-concurrent", "rehash-expired", "rehash-cancelled", "rehash-disconnect-before", "rehash-disconnect-after"} {
+	for _, mode := range []string{"http-browser", "http-persistent", "commit", "commit-persistent", "wrong", "unknown", "invalid-email", "foreign-cookie", "foreign-origin", "foreign-callback", "changed-remember", "policy-advance", "rehash", "rehash-persistent", "rehash-wrong", "rehash-policy-advance", "rehash-outbox-failure", "rehash-concurrent", "rehash-expired", "rehash-cancelled", "rehash-disconnect-before", "rehash-disconnect-after"} {
 		t.Run(mode, func(t *testing.T) {
 			r, _, _, _ := nativeSigninFlow(t)
 			r.TenantID, r.Caller.Request.Tenant, r.Caller.Request.Subject.ID = signinTestTenant, signinTestTenant, signinTestActor
 			r.Device = "synthetic-device"
 			r.Identifier = "person@EXAMPLE.test"
-			if mode == "commit-persistent" || mode == "rehash-persistent" {
+			if mode == "commit-persistent" || mode == "rehash-persistent" || mode == "http-persistent" {
 				r.Remember, err = session.ResolveRememberPolicy(session.PersistentSession, session.LifetimeConfig{Default: session.BrowserSession, AbsoluteTTL: time.Hour, IdleTTL: 30 * time.Minute, RefreshAfter: time.Minute, FreshFor: 15 * time.Minute})
 				if err != nil {
 					t.Fatal("persistent policy fixture")
@@ -129,6 +129,10 @@ func testPublicNativeSignin(t *testing.T, ctx context.Context, pool *database.Po
 			flow, e := session.NewPreAuthTransaction(session.PreAuthTransactionSpec{Binding: b, Cookie: digest, Version: 1})
 			if e != nil || sessionpg.InsertPreAuth(ctx, signinTestTx{pool}, storage, flow) != nil {
 				t.Fatal("original flow fixture")
+			}
+			if strings.HasPrefix(mode, "http-") {
+				testNativeSigninHTTP(t, ctx, service, c, r, mode == "http-persistent")
+				return
 			}
 			switch mode {
 			case "wrong", "rehash-wrong":

@@ -8,6 +8,17 @@ verification signup and password-free signup recovery. Immediate-session/MFA
 signup, reset, history and deletion remain unimplemented. Original signup-link
 confirmation is implemented; the complete generic email lifecycle is not.
 
+Select `http/password.NewSigninFeature` with this native `SigninService`, the
+strict PostgreSQL rate owner, original pre-auth cookie and signed browser-device
+codec. Match the original lifetime/remember, HTTPS origin/callback and session
+cookie profiles. Omission exposes no route or metadata. The real HTTP integration
+checks both browser and persistent sessions: wrong-password attempts leave the
+flow issued without orphan sessions, and fresh cookie/CSRF delivery matches the
+primary session record after atomic original-flow consumption. Restart recovery
+returns credential-free history under original possession and current policy.
+This fixture's explicit policy/risk callbacks are not durable-risk or provider
+proof; browser, full password lifecycle and release qualification remain pending.
+
 Original signup links can be explicitly confirmed with
 the typed `email.RegistrationVerificationService` implemented by `SignupService`:
 `VerificationConfirm(ctx, email.VerificationConfirmRequest)` and proof-free
