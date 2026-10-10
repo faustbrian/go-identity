@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Clarify native cookie-change restart and recovery: retain original eligible
+  CSRF keys for receipt replay, while retired keys deny replay and changed
+  token intent conflicts under the original retry key. Session continuation
+  preserves historical authentication, lifetime and synchronizer state;
+  disclosure of a committed receipt after source revocation renews no authority.
+
 - Add an explicit keyed cookie password-change profile with required opaque
   session CSRF custody. Validate exact synchronizer state under the existing
   primary fences before preparation admission and mutation; rotation between

@@ -496,15 +496,18 @@ func testNativePasswordChange(t *testing.T, ctx context.Context, pool *database.
 	if e != nil {
 		t.Fatal(e)
 	}
-	lastResult := testNativeKeyedPasswordChange(t, ctx, pool, source, sourceConfig, config, last, &calls)
-	if lastResult.Outcome != identity.CommitOutcomeCommitted || lastResult.CredentialVersion != 10 {
+	lastResult, finalPassword := testNativeKeyedPasswordChange(t, ctx, pool, source, sourceConfig, config, last, &calls)
+	defer finalPassword.Destroy()
+	if lastResult.Outcome != identity.CommitOutcomeCommitted || lastResult.CredentialVersion != 11 {
 		t.Fatal("default strict password change failed", e)
 	}
 	kept, e = sessions.Get(ctx, verification.TenantID, initialSpec.SessionID)
-	if e != nil || !kept.Revoked || kept.Session.EffectiveCredentialVersion() != 9 {
+	if e != nil || !kept.Revoked || kept.Session.EffectiveCredentialVersion() != 10 {
 		t.Fatal("default failed to terminally revoke source", e)
 	}
-	verification.Password = lastSecret
+	// Probe revocation with the actual committed password, not the preceding
+	// cookie password: a mismatch must not hide a broken revocation effect.
+	verification.Password = finalPassword
 	if out, e := source.Verify(ctx, verification); e == nil || out.Proof.Proof.ID != "" {
 		t.Fatal("revoked bearer issued a new proof", e)
 	}

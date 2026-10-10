@@ -305,7 +305,11 @@ does not renew original evidence. Retain eligible old keys while their sessions
 are supported. Removing an original key fails closed; bearer and cookie intents
 cannot silently share an original outcome under the same retry key.
 
-Native cookie success/restart qualification, portable cookie composition and
-the optional HTTP endpoint remain in development; this checkpoint proves local
-named-key denial and real-primary rotation rollback, not a complete browser
-password-change journey.
+The native integration lane exercises a known cookie commit, exact session
+continuation, retained-key restart, code-free recovery and original receipt
+replay after source revocation. Retiring the original named key denies even
+committed receipt replay; submitting a different CSRF token under the original
+retry key conflicts before provider work. Original outcome disclosure does not
+renew authentication or reauthorize a mutation. Portable cookie composition,
+the optional HTTP endpoint and complete browser/release qualification remain
+in development; synthetic local provider seams are not HIBP interoperability.

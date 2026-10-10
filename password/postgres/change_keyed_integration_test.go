@@ -31,7 +31,7 @@ import (
 // original keyed result across process reconstruction and a revoked source.
 // Changed complete input must conflict before provider/hash/counter work. This
 // is local real crypto/SQL, not HIBP interoperability or final release evidence.
-func testNativeKeyedPasswordChange(t *testing.T, ctx context.Context, pool *database.Pool, source *passworddb.ReauthenticationService, sourceConfig passworddb.ReauthenticationConfig, policy passworddb.PasswordChangeConfig, request passworddb.PasswordChangeRequest, calls *atomic.Int64) passworddb.PasswordChangeResult {
+func testNativeKeyedPasswordChange(t *testing.T, ctx context.Context, pool *database.Pool, source *passworddb.ReauthenticationService, sourceConfig passworddb.ReauthenticationConfig, policy passworddb.PasswordChangeConfig, request passworddb.PasswordChangeRequest, calls *atomic.Int64) (passworddb.PasswordChangeResult, primitive.Secret) {
 	t.Helper()
 	base := kernel.CredentialReplacementMigrationSource{Base: kernel.CredentialMigrationSource{Base: kernel.StatusMigrationSource{Base: kernel.MigrationSource{}, Version: 10}, Version: 11}, Version: 12}
 	var history migrations.Source = kernel.RequestKeyMigrationSource{Base: base, Version: 13}
@@ -68,6 +68,12 @@ func testNativeKeyedPasswordChange(t *testing.T, ctx context.Context, pool *data
 	t.Run("keyed-original-signal-deadline", func(t *testing.T) {
 		testKeyedPasswordSignalDeadline(t, ctx, pool, source, policy, config, keys, request, calls)
 	})
+	request, cookieReplay := testCookiePasswordChangeCommit(t, ctx, pool, source, sourceConfig, policy, config, keys, request, calls)
+	// Preserve all original charges/snapshots while starting a fresh synthetic
+	// window for the separately targeted bearer unknown-commit journey.
+	if _, err := pool.Raw().Exec(ctx, `UPDATE password_risk.counter_windows SET started_at=started_at-interval '15 minutes',expires_at=expires_at-interval '15 minutes' WHERE tenant_id=$1 AND operation='identity.password.change'`, string(request.TenantID)); err != nil {
+		t.Fatal("expired cookie risk-window fixture", err)
+	}
 	// Hold only the external provider seam, with no SQL transaction open, so a
 	// second request demonstrably observes the original busy journal. The winner
 	// loses its final COMMIT acknowledgement through the real wire fault boundary.
@@ -150,7 +156,12 @@ func testNativeKeyedPasswordChange(t *testing.T, ctx context.Context, pool *data
 	case <-ctx.Done():
 		t.Fatal("original keyed admission did not enter")
 	}
-	otherSecret, err := primitive.NewSecret([]byte("third-synthetic-test-password"))
+	var otherSecret primitive.Secret
+	err = request.Password.Use(func(raw []byte) error {
+		var err error
+		otherSecret, err = primitive.NewSecret(raw)
+		return err
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -177,7 +188,7 @@ func testNativeKeyedPasswordChange(t *testing.T, ctx context.Context, pool *data
 	}
 	query := identity.RecoveryQuery{CommandID: busy.CommandID, TenantID: request.TenantID, UserID: identity.UserID(request.Caller.Request.Subject.ID), ActorID: identity.ActorID(request.Caller.Request.Subject.ID), ActorKind: authorization.SubjectUser, OperationID: "identity.password.change", RecordID: "reauth-password"}
 	result, err := restarted.Recover(ctx, query, request.Caller)
-	if err != nil || result.CommandID != busy.CommandID || result.Outcome != identity.CommitOutcomeCommitted || result.CredentialVersion != 10 || !result.AuthorityInvalidated || calls.Load() != before+1 {
+	if err != nil || result.CommandID != busy.CommandID || result.Outcome != identity.CommitOutcomeCommitted || result.CredentialVersion != 11 || !result.AuthorityInvalidated || calls.Load() != before+1 {
 		t.Fatal("keyed original outcome recovery failed", err, result.Outcome)
 	}
 	replay, err := restarted.Change(ctx, request, key)
@@ -268,7 +279,10 @@ func testNativeKeyedPasswordChange(t *testing.T, ctx context.Context, pool *data
 			}
 		})
 	}
-	return result
+	// Bearer strict revoke-all has now revoked the original cookie source. Exact
+	// committed replay still returns only its original receipt, never authority.
+	cookieReplay()
+	return result, request.Password
 }
 
 // Rotate the primary synchronizer after original admission but before mutation.
