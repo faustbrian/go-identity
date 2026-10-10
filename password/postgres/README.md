@@ -74,6 +74,22 @@ never closes the pool. This backend composition is not an HTTP endpoint or a
 completed password-reset workflow. Retention, all-factor composition and
 release qualification remain pending.
 
+`NewVerificationWorkflow(service)` binds that same native owner to
+`password.VerificationService` without changing existing direct APIs. Supply a
+complete trusted `DecisionContext` and original bearer/password/target custody;
+the native owner still selects current policy and validates original authority.
+No caller-written store, proof engine or transaction workflow is required.
+This bearer-input seam does not supply a cookie-protected verification profile;
+HTTP must acquire only its explicitly selected channel, not ambient cookies.
+
+Portable `Recover(ctx, query, caller)` requires matching tenant, original human
+user/actor, operation `identity.password.verify` and record equal to command ID;
+anonymous/link scopes and foreign/incomplete context deny before native IO.
+The existing direct recovery signature derives the same scope and remains
+unchanged. The integration lane exercises portable issuance and proof-free
+recovery against native signed records and atomic SQL effects, while retaining
+legacy direct callers. Optional verification HTTP and release remain pending.
+
 ## Native authenticated password change
 
 `NewPasswordChangeService(source, config)` borrows a configured native

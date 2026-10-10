@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Bind existing native password reauthentication to the portable verification
+  port without changing direct service signatures. Forward original bearer,
+  password and target once; reject incomplete or foreign recovery scope instead
+  of discarding it. Original outcomes and proof-free recovery are preserved.
+  Cookie-protected verification and optional verification HTTP remain pending.
+
 - Qualify cookie password change through the optional Feature and selected
   router with native PostgreSQL owners. Validate original committed/replayed
   outcomes, pre-command conflict and missing-CSRF denial against the selected

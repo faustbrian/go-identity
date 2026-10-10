@@ -202,7 +202,18 @@ INSERT INTO authorization_subject_authorities VALUES('AAAAAAAAAAAAAAAAAAAAAQ','u
 	defer secret.Destroy()
 	caller := authorization.DecisionContext{Request: authorization.Request{Subject: authorization.Subject{ID: "AAAAAAAAAAAAAAAAAAAAAg", Kind: authorization.SubjectUser}}}
 	request := passworddb.ReauthenticationRequest{TenantID: "AAAAAAAAAAAAAAAAAAAAAQ", Session: auth.NewBearerCredential(wire), Password: secret, Target: configuration.Targets[0], Caller: caller, Network: "192.0.2.1", Device: "device"}
-	result, err := service.Verify(ctx, request)
+	workflow, err := passworddb.NewVerificationWorkflow(service)
+	if err != nil {
+		t.Fatal("portable native composition failed", err)
+	}
+	// The legacy direct API derives policy context. Portable transport callers
+	// provide complete trusted context without changing legacy callers below.
+	portableCaller := caller.Clone()
+	portableCaller.PolicyRevision = 9
+	portableCaller.Request.Tenant = authorization.TenantID(request.TenantID)
+	portableCaller.Request.Action = "identity.password.verify"
+	portableCaller.Request.Resource = authorization.Resource{Type: "identity.request-admission", ID: "identity.password.verify"}
+	result, err := workflow.Verify(ctx, password.VerificationRequest{TenantID: request.TenantID, Session: request.Session, Password: request.Password, Target: password.VerificationTarget{Purpose: request.Target.Purpose, Action: request.Target.Action, Audience: request.Target.Audience}, Caller: portableCaller, Network: request.Network, Device: request.Device})
 	if err != nil || result.Outcome != identity.CommitOutcomeCommitted || result.Proof.Proof.ID == "" {
 		t.Fatal("native issuance failed", err, result.Outcome)
 	}
@@ -233,7 +244,7 @@ INSERT INTO authorization_subject_authorities VALUES('AAAAAAAAAAAAAAAAAAAAAQ','u
 	if beforeErr != nil || afterErr != nil || !reflect.DeepEqual(beforeFields, afterFields) {
 		t.Fatal("verification extended or changed source session")
 	}
-	recovered, err := service.Recover(ctx, s.TenantID, result.CommandID, caller)
+	recovered, err := workflow.Recover(ctx, identity.RecoveryQuery{CommandID: result.CommandID, TenantID: s.TenantID, UserID: s.UserID, ActorID: identity.ActorID(s.UserID), ActorKind: authorization.SubjectUser, OperationID: "identity.password.verify", RecordID: string(result.CommandID)}, portableCaller)
 	if err != nil || recovered.Outcome != identity.CommitOutcomeCommitted || recovered.Proof != (auth.ReauthenticationProof{}) {
 		t.Fatal("recovery reissued proof or lost outcome", err)
 	}

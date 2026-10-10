@@ -12,7 +12,7 @@ require (
 	github.com/faustbrian/go-identity v0.0.0-20261009202749-c26bd4f61ca6
 	github.com/faustbrian/go-identity/http v0.0.0-20261010011510-5db2fddced79
 	github.com/faustbrian/go-identity/http/password v0.0.0-20261010012415-ce4d8413b578
-	github.com/faustbrian/go-identity/password v0.0.0-20261010001003-af19f8ec1bc1
+	github.com/faustbrian/go-identity/password v0.0.0-20261010013241-762b30fb74d6
 	github.com/faustbrian/go-identity/postgres v0.0.0-20261009225741-cccd836edc90
 	github.com/faustbrian/go-identity/risk v0.0.0-20261009195709-e1506b3d6dd9
 	github.com/faustbrian/go-identity/risk/postgres v0.0.0-20261009204947-23f01e4c8f36
