@@ -59,7 +59,7 @@
       "family": "service-edge",
       "version": "0.0.0",
       "tag_prefix": "password/postgres/v",
-      "owned_dependencies": ["github.com/faustbrian/go-identity", "github.com/faustbrian/go-identity/password", "github.com/faustbrian/go-identity/postgres", "github.com/faustbrian/go-migrations/v3", "github.com/faustbrian/go-password", "github.com/faustbrian/go-postgres"],
+      "owned_dependencies": ["github.com/faustbrian/go-identity", "github.com/faustbrian/go-identity/http/email", "github.com/faustbrian/go-identity/password", "github.com/faustbrian/go-identity/postgres", "github.com/faustbrian/go-migrations/v3", "github.com/faustbrian/go-password", "github.com/faustbrian/go-postgres"],
       "reverse_owned_dependencies": [],
       "external_runtime_dependencies": ["postgresql"],
       "required_services": ["postgresql"],

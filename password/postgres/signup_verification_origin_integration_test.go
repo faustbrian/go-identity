@@ -83,6 +83,7 @@ func testPublicSignupVerificationOrigin(t *testing.T, ctx context.Context, s *Si
 		t.Fatal("native verification delivery composition", err)
 	}
 	var proof capability.Proof
+	var deliveredToken string
 	calls := 0
 	worker, err := workerService.NewWorker(deliverypg.WorkerConfig{Scope: authorization.DecisionContext{PolicyRevision: authorization.Revision(c.RequestKeys.Policy.PolicyVersion), CorrelationID: "verification-worker", Request: authorization.Request{Tenant: authorization.TenantID(request.TenantID), Action: "identity.delivery.process", Subject: authorization.Subject{ID: "verification-worker", Kind: authorization.SubjectServiceAccount}, Resource: authorization.Resource{Type: "identity.delivery-worker", ID: "verification-worker"}}}, ProviderConfigVersion: 1}, signupVerificationSender(func(_ context.Context, a delivery.Attempt) (delivery.DeliveryResult, error) {
 		// Earlier native composition cases enqueue their own original messages.
@@ -98,7 +99,8 @@ func testPublicSignupVerificationOrigin(t *testing.T, ctx context.Context, s *Si
 		if parseErr != nil {
 			t.Error("invalid native verification link")
 		} else {
-			proof, parseErr = capability.ParseProof(link.Query().Get("token"), capability.DefaultLimits())
+			deliveredToken = link.Query().Get("token")
+			proof, parseErr = capability.ParseProof(deliveredToken, capability.DefaultLimits())
 			if parseErr != nil {
 				t.Error("invalid delivered original proof")
 			}
@@ -237,5 +239,5 @@ func testPublicSignupVerificationOrigin(t *testing.T, ctx context.Context, s *Si
 	if err := s.pool.Raw().QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM public.capability_identity_one_use WHERE tenant_id=$1 AND capability_id=$2 AND state='issued' AND uses=0),EXISTS(SELECT 1 FROM identity.identifiers WHERE tenant_id=$1 AND identifier_id=$3 AND NOT verified AND verification_state=1 AND verified_at IS NULL)`, grant.Payload().Tenant, grant.Payload().ID, grant.Payload().Resource).Scan(&issued, &unverified); err != nil || !issued || !unverified {
 		t.Fatal("origin read mutated verification or consumed authority", err)
 	}
-	testPublicRegistrationConfirmation(t, ctx, s, c, keys, proof, callback, caller, grant)
+	testPublicRegistrationConfirmation(t, ctx, s, c, keys, proof, deliveredToken, callback, caller, grant)
 }

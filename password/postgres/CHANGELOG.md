@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Adopt selected original-signup email confirmation HTTP composition with the
+  native service and strict PostgreSQL rate owner. Preserve fresh address
+  disclosure, metadata-only replay and proof-free original-command recovery.
+
 - Expose authenticated original signup-link subject, signed grant ID and
   immutable lifetime for verification-rate composition. Preserve current query
   policy and callback binding, returning no mailbox or partial metadata on

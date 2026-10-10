@@ -23,7 +23,7 @@ import (
 // Actual public signup, delivered signed proof, original encrypted intent,
 // native capability/counters/kernel/audit/outbox all run. Only the caller's
 // authorized email sender and startup access policy are injected boundaries.
-func testPublicRegistrationConfirmation(t *testing.T, ctx context.Context, source *SignupService, c SignupConfig, keys *keyring.Provider, proof capability.Proof, callback string, caller authorization.DecisionContext, grant capability.Grant) {
+func testPublicRegistrationConfirmation(t *testing.T, ctx context.Context, source *SignupService, c SignupConfig, keys *keyring.Provider, proof capability.Proof, deliveredToken, callback string, caller authorization.DecisionContext, grant capability.Grant) {
 	t.Helper()
 	const schema = "registration_confirmation_risk"
 	for _, migrationSource := range []migrations.Source{
@@ -123,17 +123,14 @@ func testPublicRegistrationConfirmation(t *testing.T, ctx context.Context, sourc
 		t.Fatal(err)
 	}
 	request := email.VerificationConfirmRequest{TenantID: identity.TenantID(grant.Payload().Tenant), CommandID: id, Token: proof, Callback: *redirect, Network: "2001:db8::1", Caller: caller}
+	original, _, err := service.ReadRegistrationVerification(ctx, proof, caller)
+	if err != nil {
+		t.Fatal("original confirmation intent unavailable", err)
+	}
+	testRegistrationConfirmationHTTP(t, ctx, service, c, deliveredToken, callback, original.Payload.CanonicalAddress.Record().Value, caller, grant, id)
 	confirmed, err := typed.VerificationConfirm(ctx, request)
-	if err != nil || confirmed.Validate() != nil || confirmed.Outcome != identity.CommitOutcomeCommitted || confirmed.Replayed {
-		t.Fatal("typed original confirmation failed", confirmed.Outcome, err)
-	}
-	address, err := confirmed.Address.Bindings()
-	if err != nil || address.UserID != identity.UserID(grant.Payload().Subject) || address.IdentifierVersion != 2 || address.VerificationVersion != 2 {
-		t.Fatal("typed confirmation lost exact committed address", err)
-	}
-	canonical, _, present := confirmed.Address.Values()
-	if !present || canonical == "" {
-		t.Fatal("fresh committed address not disclosed")
+	if err != nil || confirmed.Validate() != nil || confirmed.Outcome != identity.CommitOutcomeCommitted || !confirmed.Replayed || confirmed.Address != (identity.IdentifierProjection{}) {
+		t.Fatal("typed recovery of HTTP confirmation re-disclosed address", confirmed.Outcome, err)
 	}
 	typedReplay, err := typed.VerificationConfirm(ctx, request)
 	if err != nil || typedReplay.Validate() != nil || !typedReplay.Replayed || typedReplay.Address != (identity.IdentifierProjection{}) {

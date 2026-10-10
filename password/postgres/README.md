@@ -27,8 +27,16 @@ receipt without charging again. `RecoverRegistrationVerification` accepts only
 the original command/tenant/user/actor/identifier scope and current authorized
 caller, not a bearer. It reconciles retained metadata after restarts without
 renewing proof or revealing address/session data. This native registration
-bridge is not yet the complete generic email lifecycle or opt-in HTTP transport.
+bridge is not yet the complete generic email lifecycle.
 There is deliberately no independent setter or application-written workflow.
+
+Select `http/email.NewConfirmationFeature` for the original-signup HTTP route,
+supplying this `SignupService` as its borrowed `ConfirmationService`. Use the
+strict PostgreSQL rate adapter and its schema/atomic migrations, mapped tenant
+host, exact trusted HTTPS origin, current query-policy revision and service
+actor. The feature owns wire parsing and server audit correlation; the native
+service retains proof/current-policy admission and the atomic command. Omission
+exposes no route or metadata. This selected profile returns no session.
 
 Fresh typed confirmation returns the exact active verified email projection only
 after commitment, current disclosure authorization and a bounded primary read.
