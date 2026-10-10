@@ -102,6 +102,28 @@ Close after draining handlers; borrowed storage is never closed. Non-keyed secre
 flows, real password endpoint composition and the remaining rate profiles are
 still pending. Construction selects no routes or advertised capabilities.
 
+## Password-verification admission
+
+`NewPasswordVerificationRateLimiter(PasswordVerificationRateConfig{...})`
+owns only the non-keyed `identity.password.verify` profile, not other verification
+operations. Supply the borrowed native atomic rate backend (PostgreSQL atomic
+schema 2), immutable deployment namespace/key, prompt trusted clock and 1ms..2s
+bound. `Admit` accepts trusted tenant network facts and the actual current primary
+subject in `PasswordVerificationRateRequest`. Never pass a request-claimed user.
+No HTTP retry key or challenge exists for current-password verification.
+
+Each attempt debits trusted IP20/10m and tenant/subject10/10m atomically. A fresh
+server-native command counts repeated attempts; it does not reuse a workflow
+command or permit caller-selected correlation. Unknown/outage/cancellation
+denies without retry or local fallback. Continue only on nil error and Allowed;
+the workflow still owns primary-session checks, cumulative risk, signing and
+proof issuance. Cancellation may follow a debit and does not prove refund.
+Known rejection returns the longest delay rounded to seconds, clamped1..3600.
+Close after draining; the borrowed backend is not closed. Construction exposes
+no endpoint or metadata. Challenge-owning verification flows still require their
+original challenge bucket; their other rate profiles and HTTP adoption remain
+in development.
+
 ## Safe-route admission
 
 `NewSafeRateLimiter(SafeRateConfig{...})` selects the fixed `rate.safe` catalog

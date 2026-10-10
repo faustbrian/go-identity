@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add atomic non-keyed password-verification admission: trusted IP20/10m and
+  current tenant/subject10/10m debit together through native strict rate storage.
+  Each attempt gets fresh server correlation; unknown outcomes fail closed
+  without retry or fallback. No client retry key or invented challenge is used.
+  Challenge-based verification flows retain their own required budgets.
+
 - Permit explicit bearer or stored-session synchronizer selection for the
   canonical password-change operation. Keep active-session authority required
   and preserve the original keyed/rate/schema contract. Other password and
