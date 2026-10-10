@@ -72,6 +72,26 @@ type retainedFeaturePreparation struct {
 	admission  FeaturePreparationAdmission
 }
 
+// PrepareFeaturePreparationPlan validates and freezes an original generation
+// declaration through the registered native preparation owner. Unlike ordinary
+// PrepareCommandPlan, this may select original anonymous signup Secret/cookie
+// custody before any generated verifier exists. Password and cookie intent are
+// bounded and keyed by the existing claim codec; neither is persisted here.
+//
+// This performs no SQL, generation, provider work or reservation. Success is
+// not flow possession, current admission or execution authority: submit the
+// exact original command and returned declaration to ExecutePreparedFeature.
+// Ordinary reservation still rejects original signup input. Returned plan data
+// is independently owned. Keep shared Secrets alive through bounded execution
+// and Destroy afterward. Invalid input returns zero plan and redacted error.
+func (c *Coordinator) PrepareFeaturePreparationPlan(original identity.Command, declaration CommandPlan) (CommandPlan, error) {
+	_, admitted, _, err := c.prepareFeaturePreparation(original, declaration)
+	if err != nil {
+		return CommandPlan{}, err
+	}
+	return admitted.snapshot(), nil
+}
+
 // FeaturePreparationOutput returns an owned copy of the original retained
 // ciphertext and its original generation to the exact registered preparation
 // owner during its synchronous final ApplyFeature invocation. This lets a

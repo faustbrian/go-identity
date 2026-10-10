@@ -25,14 +25,26 @@ type signupPreparationPhase struct {
 	token               string
 	generated, restored atomic.Int64
 	outputGeneration    uint64
+	originalInput       bool
+	generatedCommand    identity.Command
 }
 
 func (p *signupPreparationPhase) ValidateFeaturePreparation(c identity.Command, plan CommandPlan) error {
+	if p.originalInput {
+		secret, cookie, ok := c.PasswordSignupInputCustody()
+		if !ok || secret.Len() == 0 || cookie.Token() == "" {
+			return invalidPreparation()
+		}
+		return nil
+	}
 	return p.ValidateFeatureCommand(c, plan)
 }
 
 func (p *signupPreparationPhase) AdmitFeaturePreparation(ctx context.Context, w Work, c identity.Command) error {
 	s, ok := c.PasswordSignupFeature()
+	if p.originalInput {
+		s, ok = c.PasswordSignupInputFeature()
+	}
 	b, _, _, err := w.FeatureScope(p)
 	if !ok || err != nil || b != s.Binding {
 		return invalidWork()
@@ -101,6 +113,9 @@ func (p *signupPreparationPhase) RestoreFeaturePreparation(ctx context.Context, 
 		return identity.Command{}, CommandPlan{}, err
 	}
 	p.outputGeneration = generation
+	if p.originalInput {
+		return p.generatedCommand, p.declaration, nil
+	}
 	return c, p.declaration, nil
 }
 

@@ -16,6 +16,7 @@ import (
 	auth "github.com/faustbrian/go-authentication"
 	"github.com/faustbrian/go-capability"
 	identity "github.com/faustbrian/go-identity"
+	primitive "github.com/faustbrian/go-password"
 	database "github.com/faustbrian/go-postgres"
 	"github.com/jackc/pgx/v5"
 )
@@ -29,10 +30,12 @@ func testSignupCapabilityIssuance(t *testing.T, ctx context.Context, pool *datab
 	if _, err := pool.Raw().Exec(ctx, `CREATE TABLE public.identity_test_issuance(command_id text UNIQUE NOT NULL,capability_id text PRIMARY KEY,proof_fingerprint bytea NOT NULL,replay_digest bytea NOT NULL,generation numeric NOT NULL); CREATE TABLE public.identity_test_delivery(command_id text UNIQUE NOT NULL,effect_id text PRIMARY KEY,digest bytea NOT NULL,ciphertext bytea NOT NULL)`); err != nil {
 		t.Fatal(err)
 	}
-	for _, profile := range []string{"commit", "missing-registration", "foreign-target", "wrong-subject", "wrong-tenant", "issuer-failure", "later-failure", "disconnect-before", "disconnect-after", "prepared-commit", "prepared-restart", "prepared-missing-registration", "prepared-foreign-target", "prepared-wrong-subject", "prepared-issuer-failure", "prepared-later-failure", "prepared-delivery-commit", "prepared-delivery-failure", "prepared-delivery-later-failure", "prepared-neutral-commit", "prepared-neutral-restart", "prepared-delivery-neutral-commit"} {
+	for _, profile := range []string{"prepared-input-commit", "prepared-input-restart", "commit", "missing-registration", "foreign-target", "wrong-subject", "wrong-tenant", "issuer-failure", "later-failure", "disconnect-before", "disconnect-after", "prepared-commit", "prepared-restart", "prepared-missing-registration", "prepared-foreign-target", "prepared-wrong-subject", "prepared-issuer-failure", "prepared-later-failure", "prepared-delivery-commit", "prepared-delivery-failure", "prepared-delivery-later-failure", "prepared-neutral-commit", "prepared-neutral-restart", "prepared-delivery-neutral-commit"} {
 		t.Run(profile, func(t *testing.T) {
 			mode := strings.TrimPrefix(profile, "prepared-")
 			prepared := mode != profile
+			originalInput := strings.HasPrefix(mode, "input-")
+			mode = strings.TrimPrefix(mode, "input-")
 			withDelivery := strings.HasPrefix(mode, "delivery-")
 			if withDelivery {
 				mode = strings.TrimPrefix(mode, "delivery-")
@@ -193,6 +196,20 @@ func testSignupCapabilityIssuance(t *testing.T, ctx context.Context, pool *datab
 			declaration := plan
 			if prepared {
 				preparation.token, preparation.declaration = token, plan
+				if originalInput {
+					preparation.originalInput, preparation.generatedCommand = true, command
+					secret, e := primitive.NewSecret([]byte("synthetic original signup password"))
+					if e != nil {
+						t.Fatal(e)
+					}
+					t.Cleanup(secret.Destroy)
+					metadata, _ := command.PasswordSignupFeature()
+					_, cookie, _ := command.PasswordSignupCustody()
+					command, err = identity.NewFeaturePasswordSignupInputCommand(metadata, secret, cookie)
+					if err != nil {
+						t.Fatal(err)
+					}
+				}
 				declaration.CapabilityIssuance = nil
 				declaration.Delivery = nil
 				declaration.Contributors = declaration.Contributors[:len(declaration.Contributors)-1]
@@ -200,6 +217,12 @@ func testSignupCapabilityIssuance(t *testing.T, ctx context.Context, pool *datab
 					declaration.Contributors = declaration.Contributors[:len(declaration.Contributors)-1]
 				}
 				declaration.Digest = [32]byte{}
+				if originalInput {
+					declaration, err = c.PrepareFeaturePreparationPlan(command, declaration)
+					if err != nil {
+						t.Fatal("original input plan", err)
+					}
+				}
 				if restart {
 					commits := 0
 					c.preparationCommit = func(ctx context.Context, tx pgx.Tx) error {
@@ -220,7 +243,7 @@ func testSignupCapabilityIssuance(t *testing.T, ctx context.Context, pool *datab
 					if _, err := pool.Raw().Exec(ctx, `UPDATE identity.commands SET created_at=clock_timestamp()-interval '3 seconds',heartbeat_at=clock_timestamp()-interval '2 seconds',updated_at=clock_timestamp()-interval '2 seconds',lease_until=clock_timestamp()-interval '1 second' WHERE command_id=$1`, id); err != nil {
 						t.Fatal(err)
 					}
-					preparation = &signupPreparationPhase{registrationTestPhase: phase, declaration: plan}
+					preparation = &signupPreparationPhase{registrationTestPhase: phase, declaration: plan, originalInput: originalInput, generatedCommand: phase.expected}
 					registry, err = NewContributorRegistry([]Contributor{repo, audits, lifecycle, preparation, issuer})
 					if err != nil {
 						t.Fatal(err)
@@ -329,12 +352,25 @@ func testSignupCapabilityIssuance(t *testing.T, ctx context.Context, pool *datab
 					s, _ := command.PasswordSignupFeature()
 					_, cookie, _ := command.PasswordSignupCustody()
 					changedCommand, e := identity.NewFeaturePasswordSignupCommand(s, "$synthetic$changed-verifier", cookie)
+					if originalInput {
+						s, _ = command.PasswordSignupInputFeature()
+						_, cookie, _ = command.PasswordSignupInputCustody()
+						secret, err := primitive.NewSecret([]byte("changed original signup password"))
+						if err != nil {
+							t.Fatal(err)
+						}
+						t.Cleanup(secret.Destroy)
+						changedCommand, e = identity.NewFeaturePasswordSignupInputCommand(s, secret, cookie)
+					}
 					if e != nil {
 						t.Fatal(e)
 					}
 					changedPhase := *phase
 					changedPhase.expected = changedCommand
-					changedOwner := &signupPreparationPhase{registrationTestPhase: &changedPhase, declaration: plan}
+					if originalInput {
+						changedPhase.expected = phase.expected
+					}
+					changedOwner := &signupPreparationPhase{registrationTestPhase: &changedPhase, declaration: plan, originalInput: originalInput, generatedCommand: phase.expected}
 					changedRegistry, e := NewContributorRegistry([]Contributor{repo, audits, lifecycle, changedOwner, issuer})
 					if e != nil {
 						t.Fatal(e)

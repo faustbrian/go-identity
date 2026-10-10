@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Bind original anonymous signup passwords and cookies before hash generation
+  through the existing retained-key claim and preparation journal. Use
+  PrepareFeaturePreparationPlan for original input; ordinary reservation remains
+  closed until the native owner restores generated verifier custody.
+
 - Add an explicit anonymous signup acceptance branch under the original command.
   Commit neutral acknowledgements for occupied or live-retired canonical values
   without account creation, credentials or delivery; retain protected audit,

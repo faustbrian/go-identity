@@ -1,5 +1,13 @@
 # Identity PostgreSQL
 
+Original anonymous password signup uses `PrepareFeaturePreparationPlan` followed
+by `ExecutePreparedFeature`. The original root input command carries the real
+password Secret and pre-auth cookie, not an already-generated hash. Keep the
+Secret alive for bounded execution and destroy it afterward. Ordinary
+`PrepareCommandPlan` and reservation reject this input; the native owner must
+restore its generated verifier and recheck admission before atomic execution.
+The same command journal and retained-key codec own original replay identity.
+
 ## Native registration domain
 
 `NewPasswordRegistrationDomain(repository, config)` constructs the kernel

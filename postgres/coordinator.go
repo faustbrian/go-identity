@@ -195,6 +195,11 @@ func (c *Coordinator) prepare(binding identity.CommandBinding, command identity.
 	if c == nil || c.registry == nil || c.registry.state == nil || c.keys.current == 0 {
 		return claimRequest{}, CommandPlan{}, nil, coordinatorError()
 	}
+	// Original password custody is only generation input. Ordinary reservation
+	// must never turn it into domain authority before a verifier is generated.
+	if _, ok := command.PasswordSignupInputFeature(); ok {
+		return claimRequest{}, CommandPlan{}, nil, invalidPlan()
+	}
 	if plan.OTP != nil {
 		return claimRequest{}, CommandPlan{}, nil, invalidPlan()
 	}
