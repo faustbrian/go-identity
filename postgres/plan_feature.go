@@ -28,6 +28,11 @@ func FeaturePlanDigest(binding identity.CommandBinding, fingerprint [32]byte, pl
 }
 
 func encodeFeaturePlan(binding identity.CommandBinding, fingerprint [32]byte, p CommandPlan) ([]byte, error) {
+	// Original reset custody is fingerprintable, but ordinary feature owners
+	// cannot execute it without the reset-specific atomic capability profile.
+	if p.Feature != nil && passwordResetOperation(p.Feature.Operation) {
+		return nil, invalidPlan()
+	}
 	if p.Capability != nil {
 		return encodeEmailVerificationPlan(binding, fingerprint, p)
 	}

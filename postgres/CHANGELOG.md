@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Bind the exact original reset proof and replacement verifier in keyed command
+  intent without consuming or requiring current token validity. Reject generic
+  reset metadata that drops custody; reset execution remains closed until its
+  typed atomic capability, credential and session profile is implemented.
+
 - Execute original signup email confirmation through typed native admission and
   kernel-owned identifier mutation, with one-use proof finalization, protected
   audit and outbox committed atomically. Bind original signup provenance and

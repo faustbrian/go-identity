@@ -1,5 +1,14 @@
 # Identity PostgreSQL
 
+Reset command intent binds the exact original opaque proof (including signature)
+and replacement verifier through separate keyed fields, never raw journal values.
+The fingerprint does not verify, transfer, reserve or consume the proof and stays
+stable for retained-key recovery after expiry. Keep original proof custody alive
+through bounded execution; terminal upstream transfer denies further binding.
+Generic reset metadata cannot substitute for the paired command. Reset execution
+is not yet supported: it requires a distinct atomic capability/credential/session
+profile, not the authenticated password-change participant.
+
 Original anonymous password signup uses `PrepareFeaturePreparationPlan` followed
 by `ExecutePreparedFeature`. The original root input command carries the real
 password Secret and pre-auth cookie, not an already-generated hash. Keep the
