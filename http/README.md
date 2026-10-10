@@ -120,9 +120,32 @@ the workflow still owns primary-session checks, cumulative risk, signing and
 proof issuance. Cancellation may follow a debit and does not prove refund.
 Known rejection returns the longest delay rounded to seconds, clamped1..3600.
 Close after draining; the borrowed backend is not closed. Construction exposes
-no endpoint or metadata. Challenge-owning verification flows still require their
-original challenge bucket; their other rate profiles and HTTP adoption remain
-in development.
+no endpoint or metadata.
+
+## Issued-challenge verification admission
+
+`NewChallengeVerificationRateLimiter(ChallengeVerificationRateConfig{...})`
+uses the same atomic backend, namespace and key as password verification, so
+IP and tenant/subject budgets are shared rather than reset by switching flows.
+It selects canonical issued-challenge `rate.verify` operations only; it does
+not install routes or authenticate bearer proofs.
+
+For an HTTP attempt, call `AdmitIP` before proof processing. After the owning
+workflow authenticates the original issuance, call `AdmitChallenge` with its
+actual subject, original challenge ID and immutable policy lifetime (integral
+microseconds, 1s..24h). Never derive these from JSON claims, a replacement challenge
+or remaining expiry. The first phase debits IP20/10m; the second atomically
+debits subject10/10m and original challenge10/lifetime. An IP debit is not
+refunded when authentication or the second phase fails. Already-authenticated
+direct callers may instead use `Admit` for all three dimensions in one batch;
+do not combine it with the split phases for the same attempt.
+
+Proceed only on nil error and Allowed. Native expiry, current authority and
+stricter transaction-owned attempt limits still apply. Each phase uses fresh
+server debit correlation, never HTTP retry keys or workflow command IDs.
+Ambiguity, outage, cancellation and closure deny without retry or fallback.
+Close after draining handlers; borrowed storage remains open. Identifier-only
+challenges and endpoint adoption remain separate implementation work.
 
 ## Safe-route admission
 

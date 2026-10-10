@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add issued-challenge verification admission with trusted IP20/10m, shared
+  tenant/subject10/10m and original challenge10/lifetime budgets. Support IP
+  admission before proof work and authenticated subject/challenge admission
+  afterward without double-counting IP. Native atomic storage owns counting;
+  ambiguity fails closed without retry. No route is selected by this owner.
+
 - Permit explicit stored-session synchronizer selection for password
   verification backed by native transaction protection. Preserve its non-keyed
   rate and schema contracts and existing bearer profile; selection alone does

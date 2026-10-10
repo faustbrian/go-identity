@@ -116,6 +116,10 @@ func (l *PasswordVerificationRateLimiter) Admit(ctx context.Context, facts Netwo
 		}
 		requests[i] = ratelimit.Request{Policy: policy, Key: key, Cost: 1, Now: now}
 	}
+	return l.admitVerificationRequests(ctx, requests)
+}
+
+func (l *PasswordVerificationRateLimiter) admitVerificationRequests(ctx context.Context, requests []ratelimit.Request) (out AuthRateResult, err error) {
 	// Fresh randomness is server-side native correlation, not a credential or a
 	// request retry key. The original workflow independently owns its command.
 	var nonce [32]byte
