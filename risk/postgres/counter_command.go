@@ -20,6 +20,27 @@ import (
 // authorization or commitment. The feature owner must validate its own schema
 // including these reserved fields. Zero/disabled repository fails redacted.
 func (r *Repository) PrepareCommandCounters(c identity.Command, subject risk.Subject, primaryTime time.Time) (identity.Command, identitypostgres.CommandCounterPlan, error) {
+	return r.prepareCommandCounters(c, subject, "", primaryTime)
+}
+
+// PrepareVerificationCommandCounters selects only the core's sessionless
+// registration-link lane. The native email owner must authenticate capabilityID
+// and subject.User from the original signed grant, preserve its exact command
+// and callback intent, and match this ID to its capability consumption plan.
+// Only identity.email.verification-confirm accepts this profile; no session is
+// fabricated. Network is trusted transport input. Install the separately
+// allocated VerificationCounterMigrationSource before reservation. This pure
+// preparation performs no IO, grants no proof validation/allowance and returns
+// zero on error. Existing PrepareCommandCounters retains session semantics.
+func (r *Repository) PrepareVerificationCommandCounters(c identity.Command, subject risk.Subject, capabilityID string, primaryTime time.Time) (identity.Command, identitypostgres.CommandCounterPlan, error) {
+	s, ok := c.Feature()
+	if !ok || s.Operation.Owner != "identity/email" || s.Binding.OperationID != "identity.email.verification-confirm" || capabilityID == "" {
+		return identity.Command{}, identitypostgres.CommandCounterPlan{}, risk.ErrInvalidCounterCommand
+	}
+	return r.prepareCommandCounters(c, subject, capabilityID, primaryTime)
+}
+
+func (r *Repository) prepareCommandCounters(c identity.Command, subject risk.Subject, capabilityID string, primaryTime time.Time) (identity.Command, identitypostgres.CommandCounterPlan, error) {
 	fail := func() (identity.Command, identitypostgres.CommandCounterPlan, error) {
 		return identity.Command{}, identitypostgres.CommandCounterPlan{}, risk.ErrInvalidCounterCommand
 	}
@@ -40,7 +61,7 @@ func (r *Repository) PrepareCommandCounters(c identity.Command, subject risk.Sub
 	if admission.Profile.Class == risk.CredentialMutation && subject.User != string(s.Binding.UserID) || admission.Profile.Class == risk.Privileged && (subject.Actor != string(s.Binding.ActorID) || subject.Resource != s.Binding.RecordID) {
 		return fail()
 	}
-	native, e := r.counterPolicy.Prepare(scope, subject, primaryTime)
+	native, e := prepareNativeCounter(r.counterPolicy, scope, subject, capabilityID, primaryTime)
 	if e != nil {
 		return fail()
 	}
@@ -53,6 +74,9 @@ func (r *Repository) PrepareCommandCounters(c identity.Command, subject risk.Sub
 		binary.BigEndian.PutUint32(versions[i*4:], k.Version)
 	}
 	s.Fields = append(s.Fields, textField("counter.network", subject.Network), textField("counter.session", subject.Session), identity.FeatureField{Name: "counter.prepared-at", Value: identity.FeatureValue{Kind: identity.FeatureTime, Time: primaryTime}}, identity.FeatureField{Name: "counter.key-versions", Value: identity.FeatureValue{Kind: identity.FeatureBytes, Bytes: versions}})
+	if capabilityID != "" {
+		s.Fields = append(s.Fields, textField("counter.capability", capabilityID))
+	}
 	var mapped identity.Command
 	if hash, bearer, proof, authenticated := c.PasswordChangeCustody(); authenticated {
 		// Rebuild the disjoint variant without dropping or renewing any original
@@ -91,11 +115,26 @@ func counterPlan(b risk.CounterBinding) (identitypostgres.CommandCounterPlan, er
 }
 
 type restoredCounter struct {
-	command risk.CounterCommand
-	policy  risk.CommandCounterPolicy
-	current risk.CounterBinding
-	scope   risk.Context
-	subject risk.Subject
+	command      risk.CounterCommand
+	policy       risk.CommandCounterPolicy
+	current      risk.CounterBinding
+	scope        risk.Context
+	subject      risk.Subject
+	capabilityID string
+}
+
+func prepareNativeCounter(p risk.CommandCounterPolicy, scope risk.Context, subject risk.Subject, capabilityID string, at time.Time) (risk.CounterCommand, error) {
+	if capabilityID != "" {
+		return p.PrepareVerification(scope, subject, capabilityID, at)
+	}
+	return p.Prepare(scope, subject, at)
+}
+
+func (n restoredCounter) validateAt(at time.Time) error {
+	if n.capabilityID != "" {
+		return n.policy.ValidateVerification(n.command, n.scope, n.subject, n.capabilityID, at)
+	}
+	return n.policy.Validate(n.command, n.scope, n.subject, at)
 }
 
 // ValidateCommandCounters reconstructs exact native scope and its original
@@ -128,6 +167,7 @@ func (r *Repository) restoreCounter(c identity.Command, p identitypostgres.Comma
 	}
 	var at time.Time
 	var versions []byte
+	var capabilityID string
 	count := 0
 	for _, f := range s.Fields {
 		if !strings.HasPrefix(f.Name, "counter.") {
@@ -145,6 +185,11 @@ func (r *Repository) restoreCounter(c identity.Command, p identitypostgres.Comma
 				return fail()
 			}
 			subject.Session = f.Value.Text
+		case "counter.capability":
+			if f.Value.Kind != identity.FeatureText || f.Value.Text == "" || s.Operation.Owner != "identity/email" {
+				return fail()
+			}
+			capabilityID = f.Value.Text
 		case "counter.prepared-at":
 			if f.Value.Kind != identity.FeatureTime {
 				return fail()
@@ -159,10 +204,10 @@ func (r *Repository) restoreCounter(c identity.Command, p identitypostgres.Comma
 			return fail()
 		}
 	}
-	if count != 4 {
+	if capabilityID == "" && count != 4 || capabilityID != "" && count != 5 {
 		return fail()
 	}
-	current, e := r.counterPolicy.Prepare(scope, subject, at)
+	current, e := prepareNativeCounter(r.counterPolicy, scope, subject, capabilityID, at)
 	if e != nil {
 		return fail()
 	}
@@ -190,7 +235,7 @@ func (r *Repository) restoreCounter(c identity.Command, p identitypostgres.Comma
 	if e != nil {
 		return fail()
 	}
-	original, e := policy.Prepare(scope, subject, at)
+	original, e := prepareNativeCounter(policy, scope, subject, capabilityID, at)
 	if e != nil {
 		return fail()
 	}
@@ -198,5 +243,5 @@ func (r *Repository) restoreCounter(c identity.Command, p identitypostgres.Comma
 	if e != nil || expected != p {
 		return fail()
 	}
-	return restoredCounter{command: original, policy: policy, current: b, scope: scope, subject: subject}, nil
+	return restoredCounter{command: original, policy: policy, current: b, scope: scope, subject: subject, capabilityID: capabilityID}, nil
 }

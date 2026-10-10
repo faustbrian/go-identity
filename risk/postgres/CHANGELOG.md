@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Support original-grant-bound sessionless registration confirmation counters
+  through the existing protected coordinator. Restore exact original grant
+  identity and freshness without fabricating a session; preserve session-based
+  counter behavior. Install the separately allocated forward
+  `VerificationCounterMigrationSource` before selecting this lane; existing
+  windows, aliases, charges and snapshots are preserved without allowance reset.
+
 - Preserve authenticated password-change hash, session and proof custody through
   protected counter preparation and restoration without renewing its original
   timestamps. Hash-only commands remain rejected; counter preparation does not

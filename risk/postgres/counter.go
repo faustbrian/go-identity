@@ -63,7 +63,7 @@ func (r *Repository) ReserveCommandCounters(ctx context.Context, w identitypostg
 	if e != nil {
 		return 0, e
 	}
-	if native.policy.Validate(native.command, native.scope, native.subject, now) != nil {
+	if native.validateAt(now) != nil {
 		return 0, identity.ConflictError{}
 	}
 	binding := native.current

@@ -5,6 +5,20 @@ evidence and decisions. It is **not yet an executable durable risk service**.
 
 ## Implemented boundary
 
+- `PrepareVerificationCommandCounters(command, subject, originalGrantID,
+  primaryTime)` selects only sessionless `identity.email.verification-confirm`.
+  The native email owner must authenticate the original signed grant/subject,
+  preserve callback and intent, and match the grant ID to its consumption plan.
+  Supply only trusted user/network dimensions, not a session. The core derives
+  distinct capability keys while tenant/subject limits continue across links.
+  Existing reservation, takeover, current checks and recovery preserve original
+  preparation and charge snapshots; unavailable or expired authority denies.
+  Install `VerificationCounterMigrationSource{Schema, Version}` after selected
+  protected-counter history. It atomically extends only the owned dimension
+  constraints, leaving populated windows, aliases and charges unchanged.
+  Neither preparation nor counter success authenticates a proof or verifies
+  email; composed transactional confirmation remains separate implementation.
+
 - `MapCaptchaUse(use, protectedSpec)` preserves the protected feature schema,
   binding and all domain target/version fields, appending closed token-free
   consuming custody. The verified actor, command, tenant, subject/anonymous flow

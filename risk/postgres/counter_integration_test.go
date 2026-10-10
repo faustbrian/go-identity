@@ -23,12 +23,24 @@ import (
 // migrations and coordinator reservations are real. The username-update test
 // profile exercises CredentialMutation without pretending to replace password
 // material or implementing the kernel's required credential-replacement trait.
-type counterFeature struct{ delay time.Duration }
+type counterFeature struct {
+	delay        time.Duration
+	verification bool
+	capabilityID string
+}
 
-func (*counterFeature) Descriptor() identitypostgres.ContributorDescriptor {
+func (f *counterFeature) Descriptor() identitypostgres.ContributorDescriptor {
+	if f.verification {
+		return identitypostgres.ContributorDescriptor{Owner: "identity/email/postgres", ContractID: "identity.email", Version: 1}
+	}
 	return identitypostgres.ContributorDescriptor{Owner: "identity/username/postgres", ContractID: "identity.username", Version: 1}
 }
-func (*counterFeature) FeatureOperations() []identity.FeatureOperation {
+func (f *counterFeature) FeatureOperations() []identity.FeatureOperation {
+	if f.verification {
+		// Deliberate counter-only feature seam; no email domain/proof consumption
+		// is represented by this distinct schema or the synthetic fixture effect.
+		return []identity.FeatureOperation{{Owner: "identity/email", OperationID: "identity.email.verification-confirm", SchemaID: "verification-counter-test-v1", SchemaVersion: 1, RecordRequirement: identity.FeatureRecordRequired}}
+	}
 	return []identity.FeatureOperation{{Owner: "identity/username", OperationID: "identity.username.update", SchemaID: "username-update-test-v1", SchemaVersion: 1, RecordRequirement: identity.FeatureRecordRequired}}
 }
 func (*counterFeature) ValidateFeatureCommand(identity.Command, identitypostgres.CommandPlan) error {
@@ -92,7 +104,12 @@ func testNativeProtectedCounters(t *testing.T, ctx context.Context, pool *databa
 		if len(at) == 1 {
 			preparedAt = at[0]
 		}
-		c, cp, e := r.PrepareCommandCounters(c, risk.Subject{User: "subject", Session: "session", Network: "2001:db8::1"}, preparedAt)
+		var cp identitypostgres.CommandCounterPlan
+		if feature.verification {
+			c, cp, e = r.PrepareVerificationCommandCounters(c, risk.Subject{User: "subject", Network: "2001:db8::1"}, feature.capabilityID, preparedAt)
+		} else {
+			c, cp, e = r.PrepareCommandCounters(c, risk.Subject{User: "subject", Session: "session", Network: "2001:db8::1"}, preparedAt)
+		}
 		if e != nil {
 			t.Fatal(e)
 		}
@@ -452,6 +469,95 @@ func testNativeProtectedCounters(t *testing.T, ctx context.Context, pool *databa
 		}
 		if e := pool.Raw().QueryRow(ctx, `SELECT min(value)::text FROM risk_store.counter_windows WHERE tenant_id='counter-hot'`).Scan(&value); e != nil || value != "8" {
 			t.Fatal("lost concurrent increment", e)
+		}
+	})
+	t.Run("sessionless-verification-counters", func(t *testing.T) {
+		// Upgrade populated session-based state without resetting any window,
+		// alias, charge or original snapshot. Schema installation grants no use.
+		const windows = `SELECT COALESCE(jsonb_agg(to_jsonb(w) ORDER BY tenant_id,operation,dimension,counter_id),'[]')::text FROM risk_store.counter_windows w`
+		const snapshots = `SELECT COALESCE(jsonb_agg(to_jsonb(s) ORDER BY command_id,dimension),'[]')::text FROM risk_store.counter_snapshots s`
+		var beforeWindows, beforeSnapshots, afterWindows, afterSnapshots string
+		if err := pool.Raw().QueryRow(ctx, windows).Scan(&beforeWindows); err != nil {
+			t.Fatal(err)
+		}
+		if err := pool.Raw().QueryRow(ctx, snapshots).Scan(&beforeSnapshots); err != nil {
+			t.Fatal(err)
+		}
+		forward, err := (VerificationCounterMigrationSource{Schema: "risk_store", Version: 39}).Load(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		// Explicit atomic migration transaction mirrors the migration runner;
+		// no callback, counter or domain operation shares this fixture upgrade.
+		tx, err := pool.Raw().Begin(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer tx.Rollback(ctx)
+		if _, err := tx.Exec(ctx, forward[0].UpSQL()); err != nil {
+			t.Fatal("verification dimension upgrade", err)
+		}
+		if err := tx.Commit(ctx); err != nil {
+			t.Fatal(err)
+		}
+		if err := pool.Raw().QueryRow(ctx, windows).Scan(&afterWindows); err != nil {
+			t.Fatal(err)
+		}
+		if err := pool.Raw().QueryRow(ctx, snapshots).Scan(&afterSnapshots); err != nil {
+			t.Fatal(err)
+		}
+		if beforeWindows != afterWindows || beforeSnapshots != afterSnapshots {
+			t.Fatal("migration changed populated counter authority")
+		}
+		if _, err := pool.Raw().Exec(ctx, `INSERT INTO risk_store.counter_windows SELECT tenant_id,'identity.password.change','capability',counter_id,value,window_us,started_at,expires_at FROM risk_store.counter_windows LIMIT 1`); err == nil {
+			t.Fatal("foreign operation admitted capability dimension")
+		}
+		for n := 0; n < 6; n++ {
+			// A new proof cannot escape the same tenant/user/network limits.
+			feature := &counterFeature{verification: true, capabilityID: "grant-" + string(rune('a'+n))}
+			coord, b, command, plan := prepareWithFeature(native, "verification-counter", feature, nil)
+			reservation, result, err := coord.ReserveCommand(ctx, b, command, plan)
+			if n == 5 {
+				var forbidden identity.ForbiddenError
+				if !errors.As(err, &forbidden) || result.Outcome != identity.CommitOutcomeNotCommitted {
+					t.Fatal("new proof bypassed subject quota", err)
+				}
+				continue
+			}
+			if err != nil {
+				t.Fatal("native proof counter could not reserve", err)
+			}
+			work, err := coord.Begin(ctx, reservation)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer coord.Abort(work, identity.UnavailableError{})
+			result, err = coord.ApplyFeature(ctx, work, command)
+			if err == nil {
+				result, err = coord.Commit(work, result)
+			}
+			if err != nil || result.Outcome != identity.CommitOutcomeCommitted {
+				t.Fatal("native current counter admission denied", err)
+			}
+			_, replay, err := coord.ReserveCommand(ctx, b, command, plan)
+			if err != nil || replay.Outcome != identity.CommitOutcomeCommitted {
+				t.Fatal("committed counter replay diverged", err)
+			}
+		}
+		var sessionWindows, proofWindows, charges, allowed, countSnapshots int
+		var proofMin, subjectValue string
+		if err := pool.Raw().QueryRow(ctx, `SELECT count(*) FILTER(WHERE dimension='session'),count(*) FILTER(WHERE dimension='capability'),min(value) FILTER(WHERE dimension='capability')::text,max(value) FILTER(WHERE dimension='subject')::text FROM risk_store.counter_windows WHERE tenant_id='verification-counter'`).Scan(&sessionWindows, &proofWindows, &proofMin, &subjectValue); err != nil || sessionWindows != 0 || proofWindows != 6 || proofMin != "1" || subjectValue != "6" {
+			t.Fatal("proof dimensions invented a session or lost aggregate limits", err)
+		}
+		if err := pool.Raw().QueryRow(ctx, `SELECT count(*),count(*) FILTER(WHERE allowed),(SELECT count(*) FROM risk_store.counter_snapshots s JOIN risk_store.counter_charges c USING(command_id) WHERE c.tenant_id='verification-counter') FROM risk_store.counter_charges WHERE tenant_id='verification-counter'`).Scan(&charges, &allowed, &countSnapshots); err != nil || charges != 6 || allowed != 5 || countSnapshots != 24 {
+			t.Fatal("original charge/snapshot replay custody diverged", err)
+		}
+		coord, b, command, plan := prepareWithFeature(native, "verification-expired", &counterFeature{verification: true, capabilityID: "expired-grant"}, nil, time.Now().UTC().Add(-16*time.Minute).Truncate(time.Microsecond))
+		if _, _, err := coord.ReserveCommand(ctx, b, command, plan); err == nil {
+			t.Fatal("expired original proof counter admitted")
+		}
+		if err := pool.Raw().QueryRow(ctx, `SELECT count(*) FROM risk_store.counter_charges WHERE tenant_id='verification-expired'`).Scan(&charges); err != nil || charges != 0 {
+			t.Fatal("expired preparation left a charge", err)
 		}
 	})
 }

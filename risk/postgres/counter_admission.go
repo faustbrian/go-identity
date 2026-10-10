@@ -139,7 +139,7 @@ func (r *Repository) CheckCommandCounters(ctx context.Context, w identitypostgre
 	if e != nil {
 		return e
 	}
-	if native.policy.Validate(native.command, native.scope, native.subject, now) != nil {
+	if native.validateAt(now) != nil {
 		return deny()
 	}
 	for _, s := range current {
