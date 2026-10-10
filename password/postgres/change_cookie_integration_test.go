@@ -13,6 +13,7 @@ import (
 
 	"github.com/faustbrian/go-authorization"
 	identity "github.com/faustbrian/go-identity"
+	password "github.com/faustbrian/go-identity/password"
 	passworddb "github.com/faustbrian/go-identity/password/postgres"
 	session "github.com/faustbrian/go-identity/session"
 	sessionpg "github.com/faustbrian/go-identity/session/postgres"
@@ -77,9 +78,21 @@ func testCookiePasswordChangeCommit(t *testing.T, ctx context.Context, pool *dat
 	if err != nil {
 		t.Fatal(err)
 	}
-	input := passworddb.CookiePasswordChangeRequest{Request: request, IdempotencyKey: key, CSRFToken: token}
+	caller := request.Caller.Clone()
+	caller.PolicyRevision = authorization.Revision(sourceConfig.Coordinator.QueryPolicy.PolicyVersion)
+	caller.Request.Tenant = authorization.TenantID(request.TenantID)
+	caller.Request.Action = "identity.password.change"
+	caller.Request.Resource = authorization.Resource{Type: "identity.request-admission", ID: "identity.password.change"}
+	input := password.CookieChangeRequest{Request: password.ChangeRequest{TenantID: request.TenantID, Session: request.Session, Proof: request.Proof, Password: request.Password, Caller: caller, Network: request.Network, IdempotencyKey: key}, CSRFToken: token}
+	if err := input.Validate(); err != nil {
+		t.Fatal("portable cookie fixture invalid", err)
+	}
+	workflow, err := passworddb.NewCookieChangeWorkflow(cookie)
+	if err != nil {
+		t.Fatal(err)
+	}
 	before := calls.Load()
-	result, err := cookie.Change(ctx, input)
+	result, err := workflow.Change(ctx, input)
 	if err != nil || result.CommandID == "" || result.Outcome != identity.CommitOutcomeCommitted || result.CredentialVersion != 10 || !result.AuthorityInvalidated || calls.Load() != before+1 {
 		t.Fatal("cookie password change did not commit exact successor", err)
 	}
@@ -117,11 +130,15 @@ func testCookiePasswordChangeCommit(t *testing.T, ctx context.Context, pool *dat
 		if err != nil {
 			t.Fatal(err)
 		}
-		got, err := retained.Change(ctx, input)
+		retainedWorkflow, err := passworddb.NewCookieChangeWorkflow(retained)
+		if err != nil {
+			t.Fatal(err)
+		}
+		got, err := retainedWorkflow.Change(ctx, input)
 		if err != nil || got != result || calls.Load() != before {
 			t.Fatal("cookie retained-key restart changed original outcome", err)
 		}
-		recovered, err := retained.Recover(ctx, query, request.Caller)
+		recovered, err := retainedWorkflow.Recover(ctx, query, request.Caller)
 		if err != nil || recovered != result || calls.Load() != before {
 			t.Fatal("cookie code-free recovery changed original outcome", err)
 		}
@@ -129,7 +146,11 @@ func testCookiePasswordChangeCommit(t *testing.T, ctx context.Context, pool *dat
 		if err != nil {
 			t.Fatal(err)
 		}
-		denied, err := retired.Change(ctx, input)
+		retiredWorkflow, err := passworddb.NewCookieChangeWorkflow(retired)
+		if err != nil {
+			t.Fatal(err)
+		}
+		denied, err := retiredWorkflow.Change(ctx, input)
 		var forbidden identity.ForbiddenError
 		if !errors.As(err, &forbidden) || denied.Outcome == identity.CommitOutcomeCommitted || denied.CredentialVersion != 0 || denied.AuthorityInvalidated || calls.Load() != before {
 			t.Fatal("retired key disclosed committed cookie replay", err)
@@ -140,7 +161,7 @@ func testCookiePasswordChangeCommit(t *testing.T, ctx context.Context, pool *dat
 		}
 		changed := input
 		changed.CSRFToken = foreign
-		conflicted, err := retained.Change(ctx, changed)
+		conflicted, err := retainedWorkflow.Change(ctx, changed)
 		var conflict identity.ConflictError
 		if !errors.As(err, &conflict) || conflicted.Outcome != identity.CommitOutcomeConflict || conflicted.CredentialVersion != 0 || calls.Load() != before {
 			t.Fatal("changed CSRF token did not conflict before work", err)

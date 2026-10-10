@@ -287,6 +287,17 @@ See [CHANGELOG.md](CHANGELOG.md).
 
 ### Strict cookie password-change composition
 
+For adapter-neutral browser composition, bind a constructed strict cookie owner
+with `NewCookieChangeWorkflow(cookieService)` and consume the core
+`password.CookieChangeService` interface. The wrapper forwards the original
+`CookieChangeRequest.Request` retry key, upstream proof, password and token to
+the same native owner; it does not create a workflow, journal or CSRF engine.
+Zero/canceled/structurally invalid inputs deny before native work. Exact-origin
+and channel admission still belong to trusted HTTP composition, not this wrapper.
+Real PostgreSQL tests use this portable port for commitment, fresh-owner replay,
+retired-key denial, changed-token conflict and code-free recovery. Optional HTTP
+and full lifecycle/release qualification remain outstanding.
+
 Select `NewCookieKeyedPasswordChangeService` over a configured native keyed
 service and 1..4 distinct eligible session CSRF keys. The constructor copies
 the selection and does not change the original bearer service. Submit one
@@ -310,6 +321,6 @@ continuation, retained-key restart, code-free recovery and original receipt
 replay after source revocation. Retiring the original named key denies even
 committed receipt replay; submitting a different CSRF token under the original
 retry key conflicts before provider work. Original outcome disclosure does not
-renew authentication or reauthorize a mutation. Portable cookie composition,
-the optional HTTP endpoint and complete browser/release qualification remain
+renew authentication or reauthorize a mutation. The optional HTTP endpoint
+and complete browser/release qualification remain
 in development; synthetic local provider seams are not HIBP interoperability.

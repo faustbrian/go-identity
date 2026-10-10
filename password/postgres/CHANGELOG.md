@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Bind the strict native cookie password-change profile to the portable cookie
+  Change/Recover port. Forward the original nested retry key and opaque CSRF
+  token without selecting bearer fallback or transferring secret custody.
+  Existing direct signatures remain supported; optional HTTP remains pending.
+
 - Clarify native cookie-change restart and recovery: retain original eligible
   CSRF keys for receipt replay, while retired keys deny replay and changed
   token intent conflicts under the original retry key. Session continuation
