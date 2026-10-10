@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Add an explicit native password-registration domain operation. Create the
+  user, prepared attributes, unverified identifier and password reference in
+  the original signup transaction, with exact command/participant custody and
+  frozen intent, canonical uniqueness and retained identifier-reuse policy.
+  An additive forward migration retains original domain bindings for primary
+  recovery. Existing structural creation remains unchanged. Native password
+  material, risk/HIBP, pre-authentication and selected delivery/session effects
+  remain their owners' responsibility; this is not a complete signup service.
+
 - Add exact original-command admission for native feature adapters. Reject
   reconstructed or substituted payloads and poison the transaction even when
   a caller ignores the denial. Existing metadata accessors remain compatible.

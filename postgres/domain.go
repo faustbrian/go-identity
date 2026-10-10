@@ -201,6 +201,17 @@ func (r *Repository) ApplyUserCreation(ctx context.Context, w Work, command iden
 	if err != nil || !bytes.Equal(q.canonical, w.state.execution.reservation.request.canonical) {
 		return identity.User{}, w.fail(ctx, identity.ConflictError{})
 	}
+	user, err := r.insertCreation(ctx, w, spec)
+	if err != nil {
+		return identity.User{}, err
+	}
+	w.state.creation = &user
+	return user, nil
+}
+
+// Shared kernel storage only; callers establish their own closed command and
+// invocation ownership before using this primitive within the same Work.
+func (r *Repository) insertCreation(ctx context.Context, w Work, spec identity.CreateUserCommand) (identity.User, error) {
 	registered, attributes, err := r.prepareCreationAttributes(spec)
 	if err != nil {
 		return identity.User{}, w.fail(ctx, err)
@@ -223,7 +234,6 @@ func (r *Repository) ApplyUserCreation(ctx context.Context, w Work, command iden
 		}
 	}
 	user := identity.User{ID: spec.Binding.UserID, TenantID: spec.Binding.TenantID, Status: identity.StatusActive, Version: 1}
-	w.state.creation = &user
 	return user, nil
 }
 

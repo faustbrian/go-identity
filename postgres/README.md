@@ -1,5 +1,44 @@
 # Identity PostgreSQL
 
+## Native registration domain
+
+`NewPasswordRegistrationDomain(repository, config)` constructs the kernel
+participant used by the native password-registration workflow. It does no IO,
+starts no goroutines and borrows the exact repository/pool enlisted with the
+sole coordinator. Configure the exact versioned identifier comparison profile
+and the retained reuse keys used by identifier removal; missing keys fail
+closed while live retirement history references them.
+
+`PasswordRegistrationFields(intent)` binds prepared permitted attributes,
+their schema, the created user, canonical identifier, initial credential and
+comparison profile into the original signup command. Include every returned
+field unchanged before admission. Attributes are committed without putting a
+serialized attribute blob into feature metadata. Neither helper authenticates,
+canonicalizes input, approves fields or grants registration policy.
+
+The native password owner calls `domain.Apply(ctx, work, participant, command,
+intent)` only during its original protected Apply invocation, after HIBP/risk,
+pre-auth and password preparation. The kernel creates user/attributes, an
+unverified non-primary identifier and an enabled version-one password reference;
+the native owner must insert its material through the same Work. Provisional
+results are not authentication or durable success. The coordinator refuses a
+signup receipt without its actual kernel creation and commits required
+audit/outbox/native effects together. Never chain `UserCreate`, identifier
+attachment and password persistence as separate registration commits.
+
+Append `PasswordRegistrationMigrationSource` at an explicitly allocated version
+after the complete credential-reference and identifier-retirement history.
+Existing history and populated accounts are not rewritten or inferred to be
+signups. `identity.registration_bindings` is retained original domain evidence,
+not another journal: it links the signup command to its created record IDs and
+survives pruned account payloads. Primary recovery keeps the original command
+namespace and cannot regenerate an account or infer rollback from cancellation.
+
+This kernel operation is a development prerequisite. The complete native signup
+service, verification delivery, optional session issuance and release
+qualification remain pending; applications should not implement their own
+workflow around this low-level seam.
+
 ## Exact native command custody
 
 Adapters staging a native feature command must call `Work.RequireFeatureCommand`
