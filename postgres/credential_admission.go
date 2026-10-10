@@ -52,6 +52,45 @@ func (w Work) RequireActiveCredential(ctx context.Context, p FeatureExecutionCon
 	return w.requireActiveCredential(ctx, b, expected)
 }
 
+// RequireRecipientCredential fences the exact original email/phone recipient
+// and its credential during this participant's active invocation. The snapshots
+// must agree on tenant, selected user and every security epoch. Primary user,
+// identifier and credential share locks remain held until Work ends; expiry is
+// checked after lock acquisition. It never rewrites anonymous command scope,
+// rediscovers a recipient or refreshes expected versions. Denials poison Work,
+// including when ignored. Malformed/unowned input returns InvalidInput; current
+// ineligibility returns Forbidden with the existing redacted query semantics.
+// Password comparison, proof provenance, authorization, one-time consumption
+// and session issuance remain separate. The returned time is not a validity lease.
+func (w Work) RequireRecipientCredential(ctx context.Context, p FeatureExecutionContributor, recipient RecipientRecord, expected CredentialAdmission) (time.Time, error) {
+	if w.state == nil {
+		return time.Time{}, invalidWork()
+	}
+	if ctx == nil {
+		return time.Time{}, w.fail(w.state.ctx, invalidWork())
+	}
+	b, _, _, err := w.FeatureScope(p)
+	if err != nil {
+		return time.Time{}, w.fail(ctx, invalidWork())
+	}
+	if recipient.Validate() != nil {
+		return time.Time{}, w.fail(ctx, invalidRecipient())
+	}
+	if recipient.Suppressed {
+		return time.Time{}, w.fail(ctx, identity.ForbiddenError{})
+	}
+	if expected.Credential.Validate(b.TenantID, recipient.User.ID) != nil || expected.UserAuthorityVersion != recipient.UserAuthorityVersion || expected.IdentifierAuthorityVersion != recipient.IdentifierAuthorityVersion || expected.CredentialAuthorityVersion != recipient.CredentialAuthorityVersion {
+		return time.Time{}, w.fail(ctx, invalidWork())
+	}
+	if err := w.RequireRecipient(ctx, p, recipient); err != nil {
+		return time.Time{}, err
+	}
+	// Only this local eligibility query uses the selected identity. The frozen
+	// command binding retains the originating anonymous flow for audit/replay.
+	b.UserID = recipient.User.ID
+	return w.requireActiveCredential(ctx, b, expected)
+}
+
 func (w Work) requireActiveCredential(ctx context.Context, b identity.CommandBinding, expected CredentialAdmission) (time.Time, error) {
 	c := expected.Credential
 	if c.Validate(b.TenantID, b.UserID) != nil || expected.UserAuthorityVersion == 0 || expected.IdentifierAuthorityVersion == 0 || expected.CredentialAuthorityVersion == 0 {

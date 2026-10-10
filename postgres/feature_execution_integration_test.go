@@ -26,6 +26,7 @@ type featureExecutionPhase struct {
 	panicValidate                                   bool
 	calls                                           int
 	admission                                       *CredentialAdmission
+	selectedRecipient                               *RecipientRecord
 	beforeAdmission                                 func(context.Context, Work) error
 	ignoreAdmissionDenial                           bool
 	afterAdmission                                  func(context.Context, Work) error
@@ -94,7 +95,25 @@ func (p *featureExecutionPhase) ApplyFeature(ctx context.Context, w Work, comman
 				return identity.FeatureReceipt{}, err
 			}
 		}
-		if _, err := w.RequireActiveCredential(ctx, p, *p.admission); err != nil {
+		var admissionErr error
+		originalBinding := w.state.binding
+		originalDeadline, originalBounded := w.state.ctx.Deadline()
+		if p.selectedRecipient != nil {
+			reader, ok := any(w).(interface {
+				RequireRecipientCredential(context.Context, FeatureExecutionContributor, RecipientRecord, CredentialAdmission) (time.Time, error)
+			})
+			if !ok {
+				return identity.FeatureReceipt{}, invalidWork()
+			}
+			_, admissionErr = reader.RequireRecipientCredential(ctx, p, *p.selectedRecipient, *p.admission)
+		} else {
+			_, admissionErr = w.RequireActiveCredential(ctx, p, *p.admission)
+		}
+		deadline, bounded := w.state.ctx.Deadline()
+		if w.state.binding != originalBinding || deadline != originalDeadline || bounded != originalBounded {
+			return identity.FeatureReceipt{}, invalidWork()
+		}
+		if err := admissionErr; err != nil {
 			if p.ignoreAdmissionDenial {
 				return identity.FeatureReceipt{}, nil
 			}

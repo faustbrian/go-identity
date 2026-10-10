@@ -19,6 +19,24 @@ func (w Work) FeatureScope(p FeatureExecutionContributor) (identity.CommandBindi
 	return w.state.binding, *w.state.feature, w.state.lifecycle.plan, nil
 }
 
+// FeatureCommandIdentity returns the original frozen command binding, keyed
+// fingerprint and reservation generation during this exact participant's Apply
+// invocation. Admission-only, foreign, expired and returned handles deny without
+// IO. The owned copies correlate native transactional effects; they are neither
+// authentication proof nor a renewable validity lease. Do not log this tuple.
+func (w Work) FeatureCommandIdentity(p FeatureExecutionContributor) (identity.CommandBinding, [32]byte, uint64, error) {
+	b, feature, _, err := w.FeatureScope(p)
+	if err != nil || !w.state.featureApplying || w.state.generation == 0 || w.state.execution == nil || w.state.execution.reservation == nil {
+		return identity.CommandBinding{}, [32]byte{}, 0, invalidWork()
+	}
+	r := w.state.execution.reservation
+	plan := r.plan
+	if plan == nil || plan.binding != b || plan.feature == nil || *plan.feature != feature || plan.fingerprint == ([32]byte{}) || r.journal.generation != w.state.generation {
+		return identity.CommandBinding{}, [32]byte{}, 0, invalidWork()
+	}
+	return b, plan.fingerprint, w.state.generation, nil
+}
+
 // FeatureScope verifies the exact native participant during its recovery-only
 // invocation and returns its original frozen transition. It cannot reconstruct
 // success from current state or grant mutation/transaction ownership. Nil,

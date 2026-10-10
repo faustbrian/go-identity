@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Add kernel-owned credential eligibility for an original selected email/phone
+  recipient, retaining anonymous command scope and locking current identifier,
+  user and credential authority until transaction closure. Expose original
+  command identity only to the exact protected Apply participant for native
+  transactional correlation. Existing exact-user credential admission is
+  unchanged; these checks do not authenticate or issue a session by themselves.
+
 - Bind original password-signin password and pre-auth cookie to separate
   retained-key intent domains, preserving user/anonymous scope through native
   preparation and final-plan attachment. Changed secrets conflict without

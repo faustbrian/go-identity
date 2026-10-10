@@ -626,6 +626,21 @@ global/tenant/authorization and optional-owner authority, and atomic one-time
 finalization. The returned time is not a renewable validity lease. Real-primary
 coordinator tests use a synthetic participant, not a completed session issuer.
 
+Anonymous email/phone sign-in can use `Work.RequireRecipientCredential` with
+the original `RecipientRecord` and `CredentialAdmission`. Their tenant, selected
+user and all three security epochs must agree. The kernel rechecks the original
+identifier/verification under retained locks before checking that exact
+credential. It does not replace the anonymous command binding with the selected
+user or rediscover a newer recipient. Bind both snapshots into original intent;
+password verification and every other issuance policy remain the native owner's
+responsibility.
+
+During protected Apply only, `Work.FeatureCommandIdentity` returns owned copies
+of the original binding, keyed fingerprint and reservation generation for native
+effect correlation (including pre-auth consumption). Foreign, admission-only,
+expired and returned invocations deny. This tuple is not proof, a new command,
+or refreshed authority evidence; never log it or use it to reset freshness.
+
 ## Original-command capability issuance
 
 `CommandPlan.CapabilityIssuance` declares 1..16 one-use grants and the exact

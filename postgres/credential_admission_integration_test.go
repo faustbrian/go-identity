@@ -20,21 +20,27 @@ func testLockedCredentialAdmission(t *testing.T, ctx context.Context, pool *data
 		t.Fatal(err)
 	}
 	expected := CredentialAdmission{Credential: identity.CredentialRef{ID: "ref", TenantID: "admission", UserID: "user", Kind: identity.CredentialPassword, Owner: "identity/password", Version: 7}, UserAuthorityVersion: 11, IdentifierAuthorityVersion: 13, CredentialAuthorityVersion: 17}
+	if _, err := pool.Raw().Exec(ctx, `INSERT INTO identity.identifiers(tenant_id,user_id,identifier_id,kind,canonical_value,verified,is_primary,version,verification_state,verification_version,verified_at) VALUES('admission','user','selected-admission-email','email','admission@example.test',true,true,1,2,1,clock_timestamp())`); err != nil {
+		t.Fatal(err)
+	}
+	selected, err := repo.ResolveRecipient(ctx, RecipientQuery{TenantID: "admission", Kind: identity.IdentifierEmail, CanonicalValue: "admission@example.test", Eligibility: RecipientVerified})
+	if err != nil || selected.Suppressed {
+		t.Fatal("selected original unavailable", err)
+	}
 	phase := &featureExecutionPhase{admission: &expected}
 	auditing, lifecycle := &featureExecutionAuditPhase{}, &recoveryLifecyclePhase{}
-	registry, err := NewContributorRegistry([]Contributor{repo, auditing, lifecycle, phase})
-	if err != nil {
-		t.Fatal(err)
-	}
-	coordinator, err := NewCoordinator(pool, registry, CoordinatorConfig{MaximumDuration: time.Second, LeaseDuration: time.Minute, CurrentFingerprintKeyVersion: 1, RetainedFingerprintKeys: map[uint32][32]byte{1: {1}}})
-	if err != nil {
-		t.Fatal(err)
-	}
 	for _, tc := range []struct {
 		name, change string
 		allowed      bool
 	}{
 		{"exact independent epochs", "", true},
+		{"anonymous selected credential", "", true},
+		{"known selected credential", "", true},
+		{"selected stale credential", `UPDATE identity.credential_references SET version=8 WHERE tenant_id='admission'`, false},
+		{"selected stale identifier", `UPDATE identity.identifiers SET version=2 WHERE tenant_id='admission'`, false},
+		{"selected suspended", `UPDATE identity.users SET status='suspended' WHERE tenant_id='admission'`, false},
+		{"selected disabled", `UPDATE identity.credential_references SET enabled=false WHERE tenant_id='admission'`, false},
+		{"selected expiry during lock wait", `UPDATE identity.credential_references SET expires_at=clock_timestamp()+interval '200 milliseconds' WHERE tenant_id='admission'`, false},
 		{"absent reference", "", false},
 		{"foreign reference", "", false},
 		{"aggregate is not authority", `UPDATE identity.users SET version=102 WHERE tenant_id='admission'`, true},
@@ -49,6 +55,9 @@ func testLockedCredentialAdmission(t *testing.T, ctx context.Context, pool *data
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			if _, err := pool.Raw().Exec(ctx, `UPDATE identity.users SET status='active',version=101,authority_version=11,identifier_version=13,credential_version=17 WHERE tenant_id='admission'; UPDATE identity.credential_references SET version=7,enabled=true,expires_at=NULL WHERE tenant_id='admission'`); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := pool.Raw().Exec(ctx, `UPDATE identity.identifiers SET version=1 WHERE tenant_id='admission'`); err != nil {
 				t.Fatal(err)
 			}
 			if tc.change != "" {
@@ -66,10 +75,27 @@ func testLockedCredentialAdmission(t *testing.T, ctx context.Context, pool *data
 				}
 			}
 			phase.admission = &admission
+			phase.selectedRecipient, phase.anonymous, auditing.anonymous = nil, false, false
+			if tc.name == "anonymous selected credential" || tc.name == "known selected credential" || tc.name == "selected stale credential" || tc.name == "selected stale identifier" || tc.name == "selected suspended" || tc.name == "selected disabled" || tc.name == "selected expiry during lock wait" {
+				r := selected
+				phase.selectedRecipient = &r
+				phase.anonymous, auditing.anonymous = tc.name != "known selected credential", tc.name != "known selected credential"
+				if !phase.anonymous {
+					r.Query.UserID = "user"
+				}
+			}
 			phase.ignoreAdmissionDenial = !tc.allowed
+			registry, err := NewContributorRegistry([]Contributor{repo, auditing, lifecycle, phase})
+			if err != nil {
+				t.Fatal(err)
+			}
+			coordinator, err := NewCoordinator(pool, registry, CoordinatorConfig{MaximumDuration: time.Second, LeaseDuration: time.Minute, CurrentFingerprintKeyVersion: 1, RetainedFingerprintKeys: map[uint32][32]byte{1: {1}}})
+			if err != nil {
+				t.Fatal(err)
+			}
 			phase.beforeAdmission = nil
 			var blockerDone chan error
-			if tc.name == "expiry during lock wait" {
+			if tc.name == "expiry during lock wait" || tc.name == "selected expiry during lock wait" {
 				blocker, e := pool.Raw().Begin(ctx)
 				if e != nil {
 					t.Fatal(e)
@@ -101,6 +127,10 @@ func testLockedCredentialAdmission(t *testing.T, ctx context.Context, pool *data
 			s.Binding.ActorID = "user"
 			s.Binding.CommandID, _ = identity.NewCommandID()
 			s.Binding.RecordID = string(s.Binding.CommandID)
+			if phase.anonymous {
+				s.Binding.UserID, s.Binding.AnonymousFlowID = "", "selected-credential-flow"
+				s.Operation.SubjectRequirement = identity.FeatureSubjectAnonymousFlow
+			}
 			command := featureCodecCommand(t, s)
 			_, _, plan := featurePlanFixture(t)
 			plan.Contributors = registry.Descriptors()
@@ -135,7 +165,15 @@ func testLockedCredentialAdmission(t *testing.T, ctx context.Context, pool *data
 				}
 			}
 			phase.afterAdmission = func(call context.Context, w Work) error {
-				for _, sql := range []string{`SELECT user_id FROM identity.users WHERE tenant_id='admission' FOR UPDATE NOWAIT`, `SELECT credential_id FROM identity.credential_references WHERE tenant_id='admission' FOR UPDATE NOWAIT`} {
+				b, fingerprint, generation, err := w.FeatureCommandIdentity(phase)
+				if err != nil || b != s.Binding || fingerprint != reservation.state.plan.fingerprint || generation != reservation.state.journal.generation || generation == 0 {
+					t.Fatal("live command identity changed after selected admission", err)
+				}
+				locks := []string{`SELECT user_id FROM identity.users WHERE tenant_id='admission' FOR UPDATE NOWAIT`, `SELECT credential_id FROM identity.credential_references WHERE tenant_id='admission' FOR UPDATE NOWAIT`}
+				if phase.selectedRecipient != nil {
+					locks = append(locks, `SELECT identifier_id FROM identity.identifiers WHERE tenant_id='admission' FOR UPDATE NOWAIT`)
+				}
+				for _, sql := range locks {
 					tx, e := pool.Raw().Begin(call)
 					if e != nil {
 						return e
@@ -150,6 +188,9 @@ func testLockedCredentialAdmission(t *testing.T, ctx context.Context, pool *data
 				return nil
 			}
 			result, e := coordinator.ApplyFeature(ctx, work, command)
+			if b, f, g, err := work.FeatureCommandIdentity(phase); err == nil || b != (identity.CommandBinding{}) || f != ([32]byte{}) || g != 0 {
+				t.Fatal("returned invocation retained command identity")
+			}
 			if tc.allowed {
 				if e != nil {
 					t.Fatal("active credential denied", e)
