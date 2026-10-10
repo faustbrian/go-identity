@@ -29,6 +29,12 @@ func TestPasswordSigninEffectRequiresNativeWork(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, effect := range []*PasswordSigninEffect{nil, {}, e} {
+		if err := effect.PrepareHashUpgrade(context.Background(), kernel.Work{}, nil, identity.Command{}, kernel.RecipientRecord{}); err == nil {
+			t.Fatal("unowned predecessor reservation admitted")
+		}
+		if _, err := effect.ApplyHashUpgrade(context.Background(), kernel.Work{}, nil, identity.Command{}, session.PreAuthTransaction{}); err == nil {
+			t.Fatal("unowned successor issuance admitted")
+		}
 		if _, err := effect.Apply(context.Background(), kernel.Work{}, nil, identity.Command{}, kernel.RecipientRecord{}, session.PreAuthTransaction{}); err == nil {
 			t.Fatal("unowned issuance admitted")
 		}

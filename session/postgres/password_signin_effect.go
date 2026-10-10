@@ -74,6 +74,9 @@ func (e *PasswordSigninEffect) Apply(ctx context.Context, w kernel.Work, owner k
 	if ctx == nil || e == nil || e.config.MaximumDuration <= 0 {
 		return deny()
 	}
+	if err := w.RequireFeatureCommand(ctx, owner, command); err != nil {
+		return identity.FeatureReceipt{}, err
+	}
 	record, err := PasswordSigninSession(command)
 	if err != nil {
 		return deny()

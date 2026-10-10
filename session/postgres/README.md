@@ -1,5 +1,36 @@
 # PostgreSQL session storage
 
+## Original-signin hash upgrades
+
+`PasswordSigninEffect.PrepareHashUpgrade` admits the frozen prospective
+session's directory before reserving exclusive predecessor user/credential
+locks through the kernel. Call it in the registered password owner's original
+Apply invocation, before shared recipient/credential or password-material
+locks. Freeze the kernel-owned predecessor fields and successor-bound signed
+proof/session into that same original paired command before fingerprinting.
+Native password comparison, original cookie/risk/policy verification and
+bounded replacement generation happen before opening Work.
+
+After preparation, the native owner performs material CAS and the kernel's
+`ApplyPasswordHashUpgrade` in that Work. `ApplyHashUpgrade` obtains the actual
+successor directly from Work and compares the prospective credential reference
+and independent security epochs before staging the unchanged session/pre-auth
+effects. Both `ApplyHashUpgrade` and direct `Apply` enforce exact original
+command custody through the kernel before reading the session payload. A
+reconstructed or substituted command poisons Work, even if its binding and
+successor epochs match; ignoring that denial cannot commit an earlier upgrade.
+It accepts no caller-created successor recipient. Original observation
+and authentication times are not renewed; previous credential-bound sessions
+are not silently preserved. Propagate every error to coordinator abort.
+
+These are provisional transactional effects, not a credential verifier,
+token delivery path or separate password-change command. The native owner must
+use its exact original command and repeat final temporal/risk admission.
+Recovery keeps its original retained-command semantics without recreating a
+bearer. Existing original-command non-upgrade behavior, `Recover`, mapping and
+migration history remain unchanged. Full native signin hash-upgrade composition is a
+separate consuming implementation, not provided by this seam alone.
+
 ## Password-signin session mapping
 
 `PasswordSigninSessionFields(record)` freezes the complete prospective session

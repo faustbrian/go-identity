@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- Add original-signin hash-upgrade session admission: lock directory authority
+  before the kernel's exclusive predecessor reservation, then issue only from
+  that Work's exact applied successor. Preserve independent security epochs,
+  original observation/proof/lifetime, remember/CSRF and anonymous scope.
+  Native password comparison, replacement material CAS and signed proof remain
+  the password owner's responsibility. Both upgrade and direct Apply reject
+  substituted command custody and poison prior provisional writes. Existing
+  original-command behavior and Recover are unchanged. Requires the additive
+  kernel hash-upgrade and exact-command contracts.
+
 - Add bounded primary inspection of retained password-signin user/session/family
   identity. Validate the original command and password-specific commitment even
   after live session deletion, without reconstructing credentials or granting

@@ -7,6 +7,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -21,11 +23,20 @@ import (
 // This native test seam proves session-owned atomic effects, not password
 // comparison, cookie possession, proof signatures or a complete login journey.
 type passwordSigninFeature struct {
-	effect    *PasswordSigninEffect
-	op        identity.FeatureOperation
-	recipient kernel.RecipientRecord
-	flow      session.PreAuthTransaction
-	fail      bool
+	effect            *PasswordSigninEffect
+	op                identity.FeatureOperation
+	recipient         kernel.RecipientRecord
+	flow              session.PreAuthTransaction
+	fail              bool
+	upgrade           *kernel.PasswordHashUpgradeIntent
+	unapplied         bool
+	unprepared        bool
+	foreign           bool
+	foreignAccepted   bool
+	substituteApply   bool
+	alterLookup       bool
+	directApply       bool
+	ignoreApplyDenial bool
 }
 
 func (*passwordSigninFeature) Descriptor() kernel.ContributorDescriptor {
@@ -39,7 +50,85 @@ func (*passwordSigninFeature) ValidateFeatureCommand(c identity.Command, _ kerne
 	return err
 }
 func (p *passwordSigninFeature) ApplyFeature(ctx context.Context, w kernel.Work, c identity.Command) (identity.FeatureReceipt, error) {
-	r, err := p.effect.Apply(ctx, w, p, c, p.recipient, p.flow)
+	var r identity.FeatureReceipt
+	var err error
+	if p.upgrade != nil {
+		if p.unprepared {
+			return p.effect.ApplyHashUpgrade(ctx, w, p, c, p.flow)
+		}
+		if p.foreign {
+			s, _ := c.PasswordSigninFeature()
+			secret, cookie, _ := c.PasswordSigninCustody()
+			other, e := identity.NewFeaturePasswordSigninCommand(s, secret, cookie)
+			if e != nil {
+				return r, e
+			}
+			err = p.effect.PrepareHashUpgrade(ctx, w, p, other, p.recipient)
+			p.foreignAccepted = err == nil
+			return r, err
+		}
+		if err = p.effect.PrepareHashUpgrade(ctx, w, p, c, p.recipient); err != nil {
+			return r, err
+		}
+		// Kernel/session contract seam only: native password material CAS and
+		// signature provenance belong to the consuming password owner's tests.
+		if !p.unapplied {
+			if _, err = w.ApplyPasswordHashUpgrade(ctx, p, c); err != nil {
+				return r, err
+			}
+			got, _, e := w.PasswordHashUpgradeSuccessor(p)
+			if e != nil || got.ObservedAt != p.recipient.ObservedAt || got.User.Version != p.recipient.User.Version+1 {
+				return r, identity.ForbiddenError{}
+			}
+		}
+		if p.substituteApply {
+			s, _ := c.PasswordSigninFeature()
+			if p.alterLookup {
+				record, e := PasswordSigninSession(c)
+				if e != nil {
+					return r, e
+				}
+				bindings, _ := record.Bindings()
+				bindings.Lookup.Sum[0] ^= 1
+				record, e = session.NewSession(bindings)
+				if e != nil {
+					return r, e
+				}
+				fields, e := PasswordSigninSessionFields(record)
+				if e != nil {
+					return r, e
+				}
+				for _, field := range s.Fields {
+					if !strings.HasPrefix(field.Name, passwordSessionPrefix) {
+						fields = append(fields, field)
+					}
+				}
+				s.Fields = fields
+			}
+			secret, cookie, _ := c.PasswordSigninCustody()
+			other, e := identity.NewFeaturePasswordSigninCommand(s, secret, cookie)
+			if e != nil {
+				return r, e
+			}
+			if p.directApply {
+				recipient, _, e := w.PasswordHashUpgradeSuccessor(p)
+				if e != nil {
+					return r, e
+				}
+				r, err = p.effect.Apply(ctx, w, p, other, recipient, p.flow)
+			} else {
+				r, err = p.effect.ApplyHashUpgrade(ctx, w, p, other, p.flow)
+			}
+			p.foreignAccepted = err == nil
+			if p.ignoreApplyDenial {
+				return identity.FeatureReceipt{Operation: s.Operation}, nil
+			}
+		} else {
+			r, err = p.effect.ApplyHashUpgrade(ctx, w, p, c, p.flow)
+		}
+	} else {
+		r, err = p.effect.Apply(ctx, w, p, c, p.recipient, p.flow)
+	}
 	if err == nil && p.fail {
 		return identity.FeatureReceipt{}, identity.UnavailableError{}
 	}
@@ -70,13 +159,30 @@ INSERT INTO identity.identifiers(tenant_id,user_id,identifier_id,kind,canonical_
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, mode := range []string{"known", "anonymous", "csrf", "rollback", "audit-failure", "outbox-failure", "stale-credential", "stale-authorization", "consumed-flow", "wait-expiry", "credential-wait"} {
+	for _, mode := range []string{"known", "anonymous", "csrf", "rollback", "audit-failure", "outbox-failure", "stale-credential", "stale-authorization", "consumed-flow", "wait-expiry", "credential-wait", "upgrade-known", "upgrade-anonymous", "upgrade-csrf", "upgrade-rollback", "upgrade-audit-failure", "upgrade-outbox-failure", "upgrade-unapplied", "upgrade-unprepared", "upgrade-foreign-command", "upgrade-apply-custody", "upgrade-apply-lookup", "upgrade-apply-lookup-known", "upgrade-apply-direct", "upgrade-apply-ignored", "upgrade-predecessor", "upgrade-wrong-successor", "upgrade-stale-authorization", "upgrade-wait-expiry", "upgrade-credential-wait"} {
 		t.Run(mode, func(t *testing.T) {
-			f, original, secret, cookie := passwordSigninMappingFixture(t, mode != "known", false)
+			upgrading := strings.HasPrefix(mode, "upgrade-")
+			baseMode := strings.TrimPrefix(mode, "upgrade-")
+			if upgrading {
+				for _, sql := range []string{`UPDATE identity.users SET version=11,authority_version=19,identifier_version=17,credential_version=13 WHERE tenant_id='password-effect'`, `UPDATE identity.credential_references SET version=7 WHERE tenant_id='password-effect'`} {
+					if _, err := pool.Raw().Exec(ctx, sql); err != nil {
+						t.Fatal(err)
+					}
+				}
+				defer func() {
+					for _, sql := range []string{`UPDATE identity.users SET version=1,authority_version=1,identifier_version=1,credential_version=1 WHERE tenant_id='password-effect'`, `UPDATE identity.credential_references SET version=9 WHERE tenant_id='password-effect'`} {
+						if _, err := pool.Raw().Exec(ctx, sql); err != nil {
+							t.Error(err)
+						}
+					}
+				}()
+			}
+			known := baseMode == "known" || strings.HasSuffix(baseMode, "-known")
+			f, original, secret, cookie := passwordSigninMappingFixture(t, !known, false)
 			b := f.Binding
 			b.CommandID, _ = identity.NewCommandID()
 			b.TenantID, b.ActorID = "password-effect", "recipient"
-			if mode == "known" {
+			if known {
 				b.UserID = "recipient"
 			}
 			f.Binding = b
@@ -90,7 +196,7 @@ INSERT INTO identity.identifiers(tenant_id,user_id,identifier_id,kind,canonical_
 			s.Version, s.FamilyVersion, s.IssuedAt, s.LastActivityAt = 1, 1, now, now
 			s.Authentication.Proof.Tenant, s.Authentication.Proof.Subject, s.Authentication.Proof.Audience = string(s.TenantID), string(s.UserID), profile.Audience
 			s.Authentication.Proof.IssuedAt, s.Authentication.Proof.ExpiresAt = now, now.Add(time.Minute)
-			if mode == "wait-expiry" {
+			if baseMode == "wait-expiry" {
 				s.Authentication.Proof.ExpiresAt = now.Add(250 * time.Millisecond)
 			}
 			s.Audience = profile.Audience
@@ -104,7 +210,18 @@ INSERT INTO identity.identifiers(tenant_id,user_id,identifier_id,kind,canonical_
 			sk, _ := SessionAuthorityKeys(s.TenantID, s.UserID, s.FamilyID, s.SessionID)
 			pk, _ := scope.Key()
 			a := func(k string) session.AuthorityBinding { return session.AuthorityBinding{ScopeKey: k, Version: 1} }
-			s.Authority, err = session.NewAuthoritySnapshot(session.AuthoritySnapshotSpec{Global: a(keys.Global), Tenant: a(keys.Tenant), User: a(keys.User), Identifier: a(keys.Identifier), Credential: a(keys.Credential), SessionFamily: a(sk.Family), Session: a(sk.Session), Authorization: a(pk)})
+			vector := session.AuthoritySnapshotSpec{Global: a(keys.Global), Tenant: a(keys.Tenant), User: a(keys.User), Identifier: a(keys.Identifier), Credential: a(keys.Credential), SessionFamily: a(sk.Family), Session: a(sk.Session), Authorization: a(pk)}
+			if upgrading {
+				vector.User.Version, vector.Identifier.Version, vector.Credential.Version = 19, 17, 14
+				if baseMode == "predecessor" {
+					vector.Credential.Version = 13
+				}
+				s.Authentication.CredentialVersion = 8
+				if baseMode == "wrong-successor" {
+					s.Authentication.CredentialVersion = 9
+				}
+			}
+			s.Authority, err = session.NewAuthoritySnapshot(vector)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -112,12 +229,21 @@ INSERT INTO identity.identifiers(tenant_id,user_id,identifier_id,kind,canonical_
 			if err != nil {
 				t.Fatal(err)
 			}
-			if mode == "csrf" {
+			if baseMode == "csrf" {
 				record = withCSRFState(t, record, 1)
 			}
 			f.Fields, err = PasswordSigninSessionFields(record)
 			if err != nil {
 				t.Fatal(err)
+			}
+			var upgrade *kernel.PasswordHashUpgradeIntent
+			if upgrading {
+				upgrade = &kernel.PasswordHashUpgradeIntent{Admission: kernel.CredentialAdmission{Credential: identity.CredentialRef{ID: "password-a", TenantID: b.TenantID, UserID: recipient.User.ID, Kind: identity.CredentialPassword, Owner: "identity/password", Version: 7}, UserAuthorityVersion: 19, IdentifierAuthorityVersion: 17, CredentialAuthorityVersion: 13}, ExpectedUserVersion: 11}
+				fields, e := kernel.PasswordHashUpgradeFields(*upgrade)
+				if e != nil {
+					t.Fatal(e)
+				}
+				f.Fields = append(f.Fields, fields...)
 			}
 			command, err := identity.NewFeaturePasswordSigninCommand(f, secret, cookie)
 			if err != nil {
@@ -152,8 +278,12 @@ INSERT INTO identity.identifiers(tenant_id,user_id,identifier_id,kind,canonical_
 			if err := tx.Commit(ctx); err != nil {
 				t.Fatal(err)
 			}
-			feature := &passwordSigninFeature{effect: effect, op: f.Operation, recipient: recipient, flow: flow, fail: mode == "rollback"}
-			registry, err := kernel.NewContributorRegistry([]kernel.Contributor{domain, &revokeAudit{fail: mode == "audit-failure"}, &revokeOutbox{fail: mode == "outbox-failure"}, feature})
+			feature := &passwordSigninFeature{effect: effect, op: f.Operation, recipient: recipient, flow: flow, fail: baseMode == "rollback", upgrade: upgrade, unapplied: baseMode == "unapplied", unprepared: baseMode == "unprepared", foreign: baseMode == "foreign-command"}
+			feature.substituteApply = strings.HasPrefix(baseMode, "apply-")
+			feature.alterLookup = feature.substituteApply && baseMode != "apply-custody"
+			feature.directApply = baseMode == "apply-direct"
+			feature.ignoreApplyDenial = baseMode == "apply-ignored"
+			registry, err := kernel.NewContributorRegistry([]kernel.Contributor{domain, &revokeAudit{fail: baseMode == "audit-failure"}, &revokeOutbox{fail: baseMode == "outbox-failure"}, feature})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -178,9 +308,9 @@ INSERT INTO identity.identifiers(tenant_id,user_id,identifier_id,kind,canonical_
 			if err != nil {
 				t.Fatal(err)
 			}
-			if mode == "stale-credential" || mode == "stale-authorization" {
+			if baseMode == "stale-credential" || baseMode == "stale-authorization" {
 				table := "identity.credential_references"
-				if mode == "stale-authorization" {
+				if baseMode == "stale-authorization" {
 					table = "authorization_subject_authorities"
 				}
 				if _, err := pool.Raw().Exec(ctx, "UPDATE "+table+" SET version=version+1 WHERE tenant_id='password-effect'"); err != nil {
@@ -197,7 +327,7 @@ INSERT INTO identity.identifiers(tenant_id,user_id,identifier_id,kind,canonical_
 				t.Fatal(err)
 			}
 			waitUntil := s.Authentication.Proof.ExpiresAt
-			if mode == "credential-wait" {
+			if baseMode == "credential-wait" {
 				if err := pool.Raw().QueryRow(ctx, `UPDATE identity.credential_references SET expires_at=clock_timestamp()+interval '250 milliseconds' WHERE tenant_id='password-effect' RETURNING expires_at`).Scan(&waitUntil); err != nil {
 					t.Fatal(err)
 				}
@@ -213,13 +343,16 @@ INSERT INTO identity.identifiers(tenant_id,user_id,identifier_id,kind,canonical_
 			}
 			defer coordinator.Abort(w, identity.UnavailableError{})
 			var result identity.CommandResult
-			if mode == "wait-expiry" || mode == "credential-wait" {
+			if baseMode == "wait-expiry" || baseMode == "credential-wait" {
 				result, err = applyOTPAfterFamilyWait(t, ctx, pool, coordinator, w, command, s, waitUntil)
 			} else {
 				result, err = coordinator.ApplyFeature(ctx, w, command)
 			}
+			if feature.foreignAccepted {
+				t.Fatal("foreign paired command admitted during original invocation")
+			}
 			want := 0
-			if mode == "known" || mode == "anonymous" || mode == "csrf" {
+			if baseMode == "known" || baseMode == "anonymous" || baseMode == "csrf" {
 				if err != nil {
 					t.Fatal("valid password session effect denied", err)
 				}
@@ -235,7 +368,7 @@ INSERT INTO identity.identifiers(tenant_id,user_id,identifier_id,kind,canonical_
 					result, err = coordinator.Abort(w, err)
 				}
 				wantOutcome := identity.CommitOutcomeNotCommitted
-				if mode == "audit-failure" {
+				if baseMode == "audit-failure" {
 					// Persistent audit failure also prevents the detached failure
 					// receipt. Domain rollback does not prove terminal noncommit.
 					wantOutcome = identity.CommitOutcomeUnknown
@@ -246,7 +379,7 @@ INSERT INTO identity.identifiers(tenant_id,user_id,identifier_id,kind,canonical_
 			}
 			var sessions, families, issuances int
 			wantFamilies := want
-			if mode == "wait-expiry" || mode == "credential-wait" {
+			if baseMode == "wait-expiry" || baseMode == "credential-wait" {
 				wantFamilies = 1 // The locked pre-existing family survives rollback.
 			}
 			var state string
@@ -259,6 +392,12 @@ INSERT INTO identity.identifiers(tenant_id,user_id,identifier_id,kind,canonical_
 			}
 			if state != wantState {
 				t.Fatal("pre-auth state not conserved")
+			}
+			if upgrading {
+				var userVersion, authorityVersion, credentialVersion string
+				if e := pool.Raw().QueryRow(ctx, `SELECT u.version::text,u.credential_version::text,c.version::text FROM identity.users u JOIN identity.credential_references c USING(tenant_id,user_id) WHERE u.tenant_id='password-effect' AND u.user_id='recipient'`).Scan(&userVersion, &authorityVersion, &credentialVersion); e != nil || userVersion != strconv.Itoa(11+want) || authorityVersion != strconv.Itoa(13+want) || credentialVersion != strconv.Itoa(7+want) {
+					t.Fatal("upgrade/session effects not atomic", e)
+				}
 			}
 			if want == 1 {
 				native, _ := NewRepository(pool, config)
