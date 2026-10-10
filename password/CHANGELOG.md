@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add a distinct portable cookie-verification input and native workflow port.
+  Original session-owned synchronizer custody is required without revealing or
+  checking it during intrinsic validation. Native atomic CSRF/proof admission
+  and origin/channel transport remain separate requirements; bearer APIs and
+  original authentication proof ownership are unchanged. Native binding pending.
+
 - Add adapter-neutral non-keyed password verification request, target, result
   and native workflow port. Preserve original authentication proof ownership,
   borrowed raw credential custody and scoped code-free outcome recovery;

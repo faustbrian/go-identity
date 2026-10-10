@@ -103,6 +103,18 @@ extending a session. Protected change consumes evidence in its transaction,
 not during verification. Native binding/HTTP qualification for this portable
 port remain required; the interface itself is not an executable endpoint.
 
+`CookieVerificationRequest` explicitly wraps original cookie-session custody
+and the session-owned opaque synchronizer. `Validate` rejects zero synchronizer
+and invalid nested scope without revealing or checking the token. Select the
+distinct `CookieVerificationService`, never the bearer-only adapter. Its native
+owner must check the exact eligible named CSRF key and fence the complete active
+primary session/family in the same proof/audit/outbox transaction; HTTP must
+separately enforce exact origin and exclusive cookie/CSRF channels. Verification
+does not consume or rotate the synchronizer and concurrent valid invocations
+may issue distinct proofs. Recovery needs no password or synchronizer and
+returns history without a proof. Native cookie binding and HTTP are pending;
+this portable contract alone provides no issuance or CSRF authority.
+
 `CookieChangeRequest` wraps the unchanged `ChangeRequest` and the session owner's
 opaque `CSRFToken`. Its nested request carries the sole retry key. Its distinct
 `CookieChangeService` port lets optional browser HTTP composition select the
