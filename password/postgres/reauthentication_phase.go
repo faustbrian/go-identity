@@ -27,6 +27,7 @@ type reauthenticationPhase struct {
 	admission risk.AuthenticationAdmission
 	record    auth.SignedReauthenticationRecord
 	expected  identity.Command
+	csrf      *reauthenticationCSRF
 }
 
 var _ kernel.FeatureExecutionContributor = (*reauthenticationPhase)(nil)
@@ -119,7 +120,16 @@ func (p *reauthenticationPhase) ApplyFeature(ctx context.Context, w kernel.Work,
 	if err = w.RequireActiveUserAuthorization(ctx, p, policy); err != nil {
 		return identity.FeatureReceipt{}, err
 	}
-	if err = sessionpg.RequireSession(ctx, w, p.service.c.Session, p.original); err != nil {
+	if p.csrf != nil {
+		key, e := p.csrf.key(p.original)
+		if e != nil {
+			return identity.FeatureReceipt{}, e
+		}
+		err = sessionpg.RequireCSRF(ctx, w, p.service.c.Session, p.original, p.csrf.token, key)
+	} else {
+		err = sessionpg.RequireSession(ctx, w, p.service.c.Session, p.original)
+	}
+	if err != nil {
 		return identity.FeatureReceipt{}, err
 	}
 	rows, err := w.Query(ctx, `SELECT version::text,CASE WHEN octet_length(encoded_hash)<=$4 THEN encoded_hash ELSE '' END FROM identity_password.credentials WHERE tenant_id=$1 AND user_id=$2 AND credential_id=$3 FOR SHARE`, string(b.TenantID), string(b.UserID), string(credential.Credential.ID), p.service.repository.limits.EncodedHashBytes)

@@ -36,7 +36,6 @@ func testNativePasswordChange(t *testing.T, ctx context.Context, pool *database.
 	// repeat changes through a preserved bearer, and original recovery after
 	// restart. Existing ambiguity/cancellation/audit/outbox tests remain active.
 	for _, migration := range []migrations.Source{
-		sessionpg.CSRFMigrationSource{Schema: sourceConfig.Session.Schema, Version: 2},
 		sessionpg.OTPMigrationSource{Schema: sourceConfig.Session.Schema, Version: 3},
 		sessionpg.CredentialContinuationMigrationSource{Schema: sourceConfig.Session.Schema, Version: 4},
 		sessionpg.PasswordChangeMigrationSource{Schema: sourceConfig.Session.Schema, Version: 5},

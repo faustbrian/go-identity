@@ -42,10 +42,15 @@ type reauthenticationRiskFixture struct {
 	charges, deliveries atomic.Int64
 	throttle            atomic.Bool
 	outage              atomic.Bool
+	// Immutable external counter callback supplies a deterministic race barrier.
+	onCharge func()
 }
 
 func (f *reauthenticationRiskFixture) Mutate(_ context.Context, c risk.CounterCommand) (risk.CounterResult, error) {
 	f.charges.Add(1)
+	if f.onCharge != nil {
+		f.onCharge()
+	}
 	if f.outage.Load() {
 		return risk.CounterResult{}, errors.New("synthetic unavailable")
 	}
@@ -116,6 +121,13 @@ func testNativeReauthenticationService(t *testing.T, ctx context.Context, pool *
 	}
 	if _, err = pool.Raw().Exec(ctx, source[0].UpSQL()); err != nil {
 		t.Fatal("session migration failed", err)
+	}
+	csrfHistory, err := (sessionpg.CSRFMigrationSource{Schema: "reauth_sessions", Version: 2}).Load(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = pool.Raw().Exec(ctx, csrfHistory[0].UpSQL()); err != nil {
+		t.Fatal("session CSRF migration failed")
 	}
 	if _, err = pool.Raw().Exec(ctx, auditpg.FreshInstallPreflightSQL()); err != nil {
 		t.Fatal("audit installation failed", err)
@@ -534,5 +546,8 @@ INSERT INTO authorization_subject_authorities VALUES('AAAAAAAAAAAAAAAAAAAAAQ','u
 			}
 		})
 	}
+	t.Run("cookie-verification", func(t *testing.T) {
+		testCookieVerificationNative(t, ctx, pool, configuration, service, request, portableCaller)
+	})
 	t.Run("native-password-change", func(t *testing.T) { testNativePasswordChange(t, ctx, pool, configuration, service, request) })
 }

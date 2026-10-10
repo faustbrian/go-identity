@@ -228,6 +228,11 @@ func NewReauthenticationService(pool *database.Pool, c ReauthenticationConfig) (
 // absent passwords return the same zero result. Cancellation is preserved;
 // infrastructure failure is redacted. Each call is a fresh server command.
 func (s *ReauthenticationService) Verify(ctx context.Context, r ReauthenticationRequest) (result ReauthenticationResult, err error) {
+	return s.verify(ctx, r, nil)
+}
+
+// Cookie custody is invocation-local and never changes the shared bearer owner.
+func (s *ReauthenticationService) verify(ctx context.Context, r ReauthenticationRequest, csrf *reauthenticationCSRF) (result ReauthenticationResult, err error) {
 	if s == nil || s.repository == nil || ctx == nil {
 		return result, password.ErrPasswordWork
 	}
@@ -262,6 +267,11 @@ func (s *ReauthenticationService) Verify(ctx context.Context, r Reauthentication
 	original, err := s.lookup(ctx, r.TenantID, r.Session)
 	if err != nil {
 		return result, err
+	}
+	if csrf != nil {
+		if _, err = csrf.key(original); err != nil {
+			return result, err
+		}
 	}
 	spec, _ := original.Bindings()
 	b := identity.CommandBinding{CommandID: id, TenantID: r.TenantID, UserID: spec.UserID, ActorID: identity.ActorID(spec.UserID), ActorKind: authorization.SubjectUser, RecordID: string(id), OperationID: "identity.password.verify", PolicyID: "password-reauthentication", PolicyVersion: s.c.Coordinator.AdmissionPolicy.PolicyVersion, SchemaID: "password-verify", SchemaVersion: 1, CorrelationID: string(id)}
@@ -320,7 +330,7 @@ func (s *ReauthenticationService) Verify(ctx context.Context, r Reauthentication
 	if err != nil {
 		return result, err
 	}
-	phase := &reauthenticationPhase{service: s, original: original, material: reader.last, admission: admission, record: record}
+	phase := &reauthenticationPhase{service: s, original: original, material: reader.last, admission: admission, record: record, csrf: csrf}
 	command, err := phase.command(b, r.Session)
 	if err != nil {
 		return result, err

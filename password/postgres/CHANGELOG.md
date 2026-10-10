@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add explicit native cookie password verification with frozen dedicated
+  synchronizer keys and exact primary session/family admission in the existing
+  atomic proof/audit/outbox transaction. Rotation after lookup denies, including
+  unchanged session versions; concurrent proofs preserve the synchronizer.
+  Bearer APIs remain unchanged, and recovery remains proof-free. HTTP pending.
+
 - Qualify selected bearer password verification with original signed browser
   correlation through real PostgreSQL primary, atomic rate and proof owners.
   Missing device custody denies before rate admission; committed HTTP results

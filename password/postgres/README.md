@@ -33,6 +33,17 @@ constraints. One-use protected mutation remains separate from verification.
 
 ## Native password reauthentication
 
+`NewCookieVerificationWorkflow(service, retainedCSRFKeys)` selects the separate
+portable cookie-verification port. Freeze 1..4 distinct dedicated keys at startup;
+the complete session state names the sole eligible key. Missing, foreign, wrong
+or retired synchronizers deny before password work. The same session-owned
+`RequireCSRF` authority fences the original record and active family under the
+existing proof/audit/outbox transaction; rotation without a version change denies.
+The base bearer service is not mutated. Synchronizers remain reusable and unchanged,
+and concurrent valid non-keyed invocations issue distinct original proofs.
+Scoped recovery returns only history, without password/token/proof redelivery.
+HTTP origin/channel enforcement and complete release qualification remain pending.
+
 `NewReauthenticationService(pool, config)` composes the real password verifier,
 primary session lookup, kernel coordinator, authorization engine, risk admission,
 security audit and lifecycle outbox. Install their owned migration histories,
