@@ -56,6 +56,27 @@ func (c *Coordinator) QueryRequestPreparation(ctx context.Context, q identity.Re
 	// policy callback runs in a transaction or after input has been disclosed.
 	observed, observeErr := c.commandRead(ctx, q.CommandID)
 	missing := errors.Is(observeErr, pgx.ErrNoRows)
+	binding, input, err := c.readRequestPreparation(ctx, q, feature, observed, missing)
+	if ctx.Err() != nil || observeErr != nil && !missing {
+		clear(input)
+		return zero, nil, readFailure(ctx, observeErr)
+	}
+	if policyErr != nil || !allowed {
+		clear(input)
+		if policyErr != nil {
+			return zero, nil, identity.UnavailableError{}
+		}
+		return zero, nil, identity.ForbiddenError{}
+	}
+	return binding, input, err
+}
+
+// Both original-actor recovery and confirmation use this single immutable
+// custody reader after their distinct policy checks. It grants no disclosure,
+// receipt or generation authority by itself.
+func (c *Coordinator) readRequestPreparation(ctx context.Context, q identity.RecoveryQuery, feature FeatureRegistration, observed commandObservation, missing bool) (RequestKeyPreparationBinding, []byte, error) {
+	zero := RequestKeyPreparationBinding{}
+	scope := RequestKeyScope{TenantID: q.TenantID, ActorID: q.ActorID, ActorKind: q.ActorKind, Method: "POST", RouteID: q.OperationID}
 	id, _ := base64.RawURLEncoding.DecodeString(string(q.CommandID))
 	var safe, digest, identityDigest, namespace, input []byte
 	var keyVersion int64
@@ -68,22 +89,10 @@ LEFT JOIN identity.identity_command_id_claims c ON c.command_id=r.command_id
 LEFT JOIN identity.commands j ON j.command_id=c.command_id AND j.tenant_id=c.tenant_id AND j.purpose=c.purpose
 WHERE r.command_id=$1 AND r.namespace=$2 AND r.tenant_id=$3 AND r.actor_id=$4 AND r.actor_kind=$5 AND r.route_id=$6
 AND (($7::boolean AND c.command_id IS NULL) OR (NOT $7 AND c.command_id IS NOT NULL AND NOT c.retired AND c.safe_fields=$8 AND c.fingerprint=$9))`, id, c.requestKeys.Namespace, string(scope.TenantID), string(scope.ActorID), string(scope.ActorKind), scope.RouteID, missing, observed.scope, observed.fingerprint).Scan(&safe, &digest, &keyVersion, &identityDigest, &namespace, &method, &input, &profile)
-	if ctx.Err() != nil || observeErr != nil && !missing {
-		clear(input)
-		return zero, nil, readFailure(ctx, observeErr)
-	}
-	if policyErr != nil || !allowed {
-		clear(input)
-		if policyErr != nil {
-			return zero, nil, identity.UnavailableError{}
-		}
-		return zero, nil, identity.ForbiddenError{}
-	}
+	defer clear(input)
 	if err != nil {
-		clear(input)
 		return zero, nil, readFailure(ctx, err)
 	}
-	defer clear(input)
 	if !missing {
 		if err := requestPreparationClaimScope(q, feature, observed, profile); err != nil {
 			return zero, nil, err

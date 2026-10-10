@@ -104,6 +104,11 @@ func (p *registrationTestPhase) CheckFeatureCommit(ctx context.Context, w Work, 
 	return ctx.Err()
 }
 
+func (*registrationTestPhase) PrepareRequestKey(context.Context, RequestKeyPreparationBinding, identity.RequestIntent) ([]byte, error) {
+	// Origin reads must never generate replacement input.
+	return nil, identity.UnavailableError{}
+}
+
 func TestPasswordRegistrationIntegration(t *testing.T) {
 	dsn := os.Getenv("IDENTITY_POSTGRES_TEST_DSN")
 	config, err := pgx.ParseConfig(dsn)
@@ -561,6 +566,11 @@ func TestPasswordRegistrationIntegration(t *testing.T) {
 				}
 			}
 			if want == 1 {
+				if mode == "commit" {
+					t.Run("registration-origin-input", func(t *testing.T) {
+						testRegistrationOriginInput(t, ctx, c, phase, b, plan)
+					})
+				}
 				var attributes int
 				if err := pool.Raw().QueryRow(ctx, `SELECT count(*) FROM identity.user_attributes WHERE tenant_id=$1 AND user_id=$2 AND schema_id='fields' AND schema_version=1`, string(b.TenantID), string(u)).Scan(&attributes); err != nil || attributes != 1 {
 					t.Fatal("prepared registration attributes lost", err)

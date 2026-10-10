@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Add confirmation-authorized access to original encrypted registration input
+  without impersonating the initiating actor or requiring a live pre-auth flow.
+  Match the committed anonymous signup and positive selected user under current
+  query policy, preserving original namespace, owner and retained-key provenance.
+  No input regeneration, identity mutation or credential consumption occurs;
+  existing original-actor recovery and storage contracts remain compatible.
+
 - Read retained original native request input without passwords or initiating
   keys through QueryRequestPreparation, including before generation and after
   rollback. Authenticate original mapping provenance and current disclosure

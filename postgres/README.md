@@ -188,6 +188,24 @@ than inferring rollback. Existing recovery profiles remain separate.
 
 ## Request-key correlation before command preparation
 
+For a signup verification link, the native owner can use
+`QueryRegistrationPreparation(ctx, query, caller, feature, inputOwner)`.
+The query's command ID identifies the original signup, while its user, actor
+and `identity.email.verification-confirm` action describe the current
+confirmation context. Current query policy must permit that user/action;
+the kernel separately matches the committed anonymous signup, positive selected
+registration user and exact immutable input provenance. Never impersonate the
+original actor or invent a live pre-auth session to read this history.
+
+This returns only caller-owned encrypted original input and its binding. The
+native owner must first authenticate the original signed registration proof,
+then authenticate the ciphertext and reconstruct/authorize its original email
+intent. Reading cannot verify an address, consume or renew the proof, issue a
+session, regenerate input or recover an outcome. Confirmation must still check
+current identity/capability state and perform all protected effects atomically.
+Existing registration, request-key/input and preparation migrations are required;
+no new schema or workflow authority is added. Clear returned bytes after use.
+
 `QueryRequestPreparation(ctx, query, caller, feature, inputOwner)` returns only
 the original input binding and encrypted bytes. Use it for password-free native
 recovery when a mapping exists before its journal, generation is incomplete, or

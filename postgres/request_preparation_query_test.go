@@ -81,3 +81,14 @@ func TestRequestPreparationQueryRejectsZeroComposition(t *testing.T) {
 		}
 	}
 }
+
+func TestRegistrationPreparationQueryRejectsZeroComposition(t *testing.T) {
+	for _, c := range []*Coordinator{nil, {}} {
+		for _, ctx := range []context.Context{nil, context.Background()} {
+			binding, input, err := c.QueryRegistrationPreparation(ctx, identity.RecoveryQuery{}, authorization.DecisionContext{}, FeatureRegistration{}, nil)
+			if err == nil || binding != (RequestKeyPreparationBinding{}) || input != nil {
+				t.Fatal("invalid confirmation composition disclosed input")
+			}
+		}
+	}
+}
