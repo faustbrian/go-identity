@@ -4,7 +4,7 @@ go 1.27.0
 
 require (
 	github.com/faustbrian/go-openapi/v2 v2.0.1-0.20261008233431-8a681bb139db
-	github.com/faustbrian/go-rate-limit/v2 v2.0.0-20260913124548-72dfa13dd0a6
+	github.com/faustbrian/go-rate-limit/v2 v2.0.1-0.20261010004607-5dd986e00e78
 	github.com/faustbrian/go-authentication v1.2.2-0.20261006180804-0f9f7eac1f1d
 	github.com/faustbrian/go-identifier v1.0.1-0.20261004001745-6503365429c8
 	github.com/faustbrian/go-http-middleware v1.0.1-0.20260922112925-626faadc123f

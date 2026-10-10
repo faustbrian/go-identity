@@ -93,7 +93,7 @@ func NewSafeRateLimiter(c SafeRateConfig) (*SafeRateLimiter, error) {
 	if err != nil {
 		return nil, ErrInvalidInput
 	}
-	store, err := memory.New(memory.Options{MaxKeys: c.EmergencyMaximumKeys, Shards: 1})
+	store, err := memory.New(memory.Options{MaxKeys: c.EmergencyMaximumKeys, Shards: 1, RejectOnCapacity: true})
 	if err != nil {
 		return nil, ErrInvalidInput
 	}

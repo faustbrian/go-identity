@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- Add keyed secret-operation admission through native strict atomic rate
+  storage: trusted IP, tenant/subject and optional original challenge budgets
+  debit together or not at all. Replay uses the protected operation's original
+  key; ambiguous outcomes deny without fallback or a replacement command.
+  Non-keyed secret operations and endpoint adoption remain in development.
+- Select the primitive's explicit fail-closed memory saturation profile for
+  emergency safe-route budgets when adopting its current atomic-capable API.
+  Key churn cannot evict live emergency counters; safe idle reclamation remains
+  explicit.
+
 - Preserve bounded owner-written 503 command outcomes after cancellation before
   response commitment, without cookie/CSRF/trailer delivery or automatic retry.
   Canceled successful or oversized responses remain denied or aborted.

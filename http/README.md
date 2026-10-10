@@ -78,6 +78,30 @@ implementation or full parity. The report contains disabled baseline names and
 is not automatically embedded in OpenAPI or published over HTTP. Returned
 storage is detached; snapshot exports and dispatch may run concurrently.
 
+## Keyed secret-route admission
+
+`NewKeyedSecretRateLimiter(KeyedSecretRateConfig{...})` selects canonical keyed
+`rate.secret` operations only. Supply a borrowed native atomic
+`rate-limit/v2.StrictAtomicBatchBackend`, immutable deployment namespace/key,
+trusted clock and 1ms..2s bound. PostgreSQL requires atomic schema migration 2.
+No per-item or emergency fallback is available. Pass trusted network facts,
+the actual authenticated/capability subject and exactly the protected workflow's
+original `identity.IdempotencyKey` in `KeyedSecretRateRequest`. If present,
+challenge ID and immutable original lifetime must come from the challenge owner.
+Never use client-claimed subjects, replacement retry keys or remaining TTL.
+
+Every call debits IP10/10m, tenant/subject10/10m and optional challenge5/lifetime
+as one command. Same key/tenant/subject/operation preserves original correlation;
+changed IP/challenge conflicts with retained native intent rather than resetting
+the command. Matching replay returns the original admission, not a new debit.
+Proceed only on nil error and Allowed; domain authentication, authorization,
+cumulative risk and transaction-safe proof consumption remain separately required.
+Cancellation can deny continuation after a debit and does not prove refund.
+Known denial uses the longest exhausted delay, ceiling seconds clamped1..3600.
+Close after draining handlers; borrowed storage is never closed. Non-keyed secret
+flows, real password endpoint composition and the remaining rate profiles are
+still pending. Construction selects no routes or advertised capabilities.
+
 ## Safe-route admission
 
 `NewSafeRateLimiter(SafeRateConfig{...})` selects the fixed `rate.safe` catalog
