@@ -14,11 +14,11 @@ require (
 	github.com/faustbrian/go-identity/http v0.0.0-20261010031102-37aa751806f6
 	github.com/faustbrian/go-identity/http/password v0.0.0-20261010031737-7caf5261dd91
 	github.com/faustbrian/go-identity/password v0.0.0-20261010054410-f707766a7b28
-	github.com/faustbrian/go-identity/postgres v0.0.0-20261010063620-234baceb3f6b
+	github.com/faustbrian/go-identity/postgres v0.0.0-20261010081637-713934522b93
 	github.com/faustbrian/go-identity/risk v0.0.0-20261009195709-e1506b3d6dd9
 	github.com/faustbrian/go-identity/risk/postgres v0.0.0-20261009204947-23f01e4c8f36
 	github.com/faustbrian/go-identity/session v0.0.0-20261010040225-f718e7161444
-	github.com/faustbrian/go-identity/session/postgres v0.0.0-20261010070838-49b548608660
+	github.com/faustbrian/go-identity/session/postgres v0.0.0-20261010082101-6bb5ae2e0480
 	github.com/faustbrian/go-migrations/v3 v3.0.2-0.20261008154303-7eabbeb156f8
 	github.com/faustbrian/go-openapi/v2 v2.0.1-0.20261008233431-8a681bb139db
 	github.com/faustbrian/go-password v1.0.1-0.20261001082808-a3dbd862340c

@@ -29,6 +29,7 @@ import (
 	"github.com/faustbrian/go-identity/risk"
 	"github.com/faustbrian/go-identity/session"
 	sessionpg "github.com/faustbrian/go-identity/session/postgres"
+	primitive "github.com/faustbrian/go-password"
 	database "github.com/faustbrian/go-postgres"
 	lifecyclepg "github.com/faustbrian/go-transactional-outbox/v2/postgres/identity"
 )
@@ -43,8 +44,8 @@ import (
 // explicitly to admit flows with no redirect. Both policies must support the
 // selected single-factor profile and deny users requiring additional factors.
 // All borrowed dependencies and clocks must be concurrency-safe and bounded.
-// Atomic rehash and other-factor continuation remain in development; hashes
-// requiring upgrade currently deny rather than issuing an incomplete session.
+// Hash upgrades are atomic with original signin. Other-factor continuation
+// remains in development and must be denied by the selected single-factor policy.
 type SigninConfig struct {
 	Repository                    Config
 	Verifier                      password.VerifierConfig
@@ -68,8 +69,8 @@ type SigninConfig struct {
 // commit-gated issuance. It borrows but never closes the pool, owns no goroutine,
 // automatic retry, secondary journal or caller-written storage workflow. Calls
 // are safe concurrently under the configured dependencies' contracts. Current
-// support is verified-email single-factor login with current-policy material;
-// complete upgrade and factor profiles remain in development.
+// support is verified-email single-factor login, including bounded automatic
+// rehash; additional factor profiles remain in development.
 type SigninService struct {
 	pool            *database.Pool
 	repository      *Repository
@@ -274,7 +275,7 @@ func (s *SigninService) Signin(ctx context.Context, r password.SigninRequest) (o
 	if err != nil {
 		return out, err
 	}
-	if !comparison.Matched || comparison.NeedsRehash {
+	if !comparison.Matched {
 		return out, nil
 	}
 	sessionID, err := identity.NewCommandID()
@@ -298,6 +299,30 @@ func (s *SigninService) Signin(ctx context.Context, r password.SigninRequest) (o
 	if err = admission.Check(ctx); err != nil {
 		return out, readerFailure(ctx)
 	}
+	var upgrade *kernel.PasswordHashUpgradeIntent
+	var replacement primitive.EncodedHash
+	credentialVersion := observation.last.Authority().Credential.Version
+	if comparison.NeedsRehash {
+		replacement, err = s.prepareSigninRehash(ctx, r.Password)
+		if err != nil {
+			return out, err
+		}
+		intent := kernel.PasswordHashUpgradeIntent{Admission: kernel.CredentialAdmission{Credential: observation.last.Authority().Credential, UserAuthorityVersion: recipient.UserAuthorityVersion, IdentifierAuthorityVersion: recipient.IdentifierAuthorityVersion, CredentialAuthorityVersion: recipient.CredentialAuthorityVersion}, ExpectedUserVersion: recipient.User.Version}
+		if _, err = kernel.PasswordHashUpgradeFields(intent); err != nil {
+			return out, password.ErrPasswordWork
+		}
+		upgrade = &intent
+		credentialVersion++
+		vector, e := authority.Bindings()
+		if e != nil {
+			return out, password.ErrPasswordWork
+		}
+		vector.Credential.Version++
+		authority, err = session.NewAuthoritySnapshot(vector)
+		if err != nil {
+			return out, password.ErrPasswordWork
+		}
+	}
 	now := s.c.Issuance.Clock.Now().UTC()
 	until := now.Add(s.c.ProofTTL)
 	f, _ := flow.Bindings()
@@ -308,7 +333,7 @@ func (s *SigninService) Signin(ctx context.Context, r password.SigninRequest) (o
 	if !m.ExpiresAt.IsZero() && m.ExpiresAt.Before(until) {
 		until = m.ExpiresAt
 	}
-	signed, err := s.c.SigningKey.sign(auth.SignedSignInRecord{Issuer: s.c.Issuer, Environment: s.c.Environment, State: auth.SignInStateAuthenticated, ProofVersion: 1, CredentialID: string(m.Credential.ID), CredentialVersion: m.Credential.Version, Proof: auth.Proof{ID: auth.ProofID(id), Tenant: string(r.TenantID), Subject: string(selected), Method: "password", Assurance: auth.AssuranceSingleFactor, Purpose: "session-issue", Audience: s.c.Profile.Audience, IssuedAt: now, ExpiresAt: until}})
+	signed, err := s.c.SigningKey.sign(auth.SignedSignInRecord{Issuer: s.c.Issuer, Environment: s.c.Environment, State: auth.SignInStateAuthenticated, ProofVersion: 1, CredentialID: string(m.Credential.ID), CredentialVersion: credentialVersion, Proof: auth.Proof{ID: auth.ProofID(id), Tenant: string(r.TenantID), Subject: string(selected), Method: "password", Assurance: auth.AssuranceSingleFactor, Purpose: "session-issue", Audience: s.c.Profile.Audience, IssuedAt: now, ExpiresAt: until}})
 	if err != nil {
 		return out, password.ErrPasswordWork
 	}
@@ -329,6 +354,14 @@ func (s *SigninService) Signin(ctx context.Context, r password.SigninRequest) (o
 	if err != nil {
 		return out, password.ErrPasswordWork
 	}
+	if upgrade != nil {
+		metadata, e := kernel.PasswordHashUpgradeFields(*upgrade)
+		if e != nil {
+			return out, password.ErrPasswordWork
+		}
+		fields = append(fields, metadata...)
+		fields = append(fields, signinRehashCommitment(replacement))
+	}
 	command, err := identity.NewFeaturePasswordSigninCommand(identity.FeatureCommandSpec{Binding: b, Operation: op, Fields: fields}, r.Password, r.Cookie)
 	if err != nil {
 		return out, password.ErrPasswordWork
@@ -337,7 +370,7 @@ func (s *SigninService) Signin(ctx context.Context, r password.SigninRequest) (o
 	if err != nil {
 		return out, password.ErrPasswordWork
 	}
-	phase := &signinPhase{operation: op, expected: command, effect: s.effect, recipient: recipient, material: observation.last, request: r, flow: flow, flowKey: key, record: signed, verificationKeys: s.c.VerificationKeys, admission: admission, maximumHashBytes: int(s.c.Repository.HashPolicy.Limits().EncodedHashBytes)}
+	phase := &signinPhase{operation: op, expected: command, effect: s.effect, recipient: recipient, material: observation.last, request: r, flow: flow, flowKey: key, record: signed, verificationKeys: s.c.VerificationKeys, admission: admission, maximumHashBytes: int(s.c.Repository.HashPolicy.Limits().EncodedHashBytes), upgrade: upgrade, replacement: replacement, hashPolicy: s.c.Repository.HashPolicy}
 	coordinator, registry, err := s.coordinator(phase)
 	if err != nil {
 		return out, password.ErrPasswordWork

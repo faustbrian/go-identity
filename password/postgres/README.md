@@ -3,8 +3,8 @@
 Development checkpoint: owned forward-only password material storage and a
 consistent primary credential reader plus native existing-password material
 replacement/recovery, native authenticated password change and backend
-single-factor signin/recovery. Registration,
-rehash, reset, history and deletion remain unimplemented.
+single-factor signin/recovery with atomic automatic rehash. Registration,
+reset, history and deletion remain unimplemented.
 There is deliberately no independent setter or application-written workflow.
 
 ## Original password-signin storage
@@ -45,8 +45,20 @@ attempt, generates a new session or renews authority. Unknown outcomes retain
 their original correlation; do not resubmit secrets to retry the mutation.
 
 This development profile supports verified-email single-factor login only.
-Hashes needing upgrade currently deny; atomic hash upgrade, MFA continuation,
-verification-policy variants and the canonical phone entrypoint remain pending.
+Successfully compared obsolete hashes are upgraded to the bounded current
+issuance profile in the original signin transaction. Material and kernel
+credential versions advance once, the user aggregate and credential-authority
+epoch advance independently, and the new session uses only that successor.
+Earlier credential-authority-bound sessions are invalidated; user/identifier
+authority and original risk/policy/expiry bounds are not renewed. A digest of
+the complete salted replacement binds it into the existing keyed command;
+neither the verifier nor password enters the journal. Concurrent predecessor
+changes and required-effect failures abort every provisional write.
+Same-password rehash retains the original signin risk decision; it does not
+establish a different password. Signup, set, change, reset and administrative
+establishment still require their HIBP-screened preparation profiles.
+MFA continuation, verification-policy variants and the canonical phone
+entrypoint remain pending.
 HTTP transport is a separate opt-in feature; complete login parity and release
 qualification are not established by these backend checkpoints.
 
@@ -65,7 +77,7 @@ password comparison. There is no independent record setter: the native signin
 workflow above persists only real successful authentication through its
 coordinator with pre-auth, session and audit/outbox effects. This read contract
 alone is not an authentication endpoint and does not establish registration,
-MFA, hash upgrades or complete login parity.
+MFA or complete login parity.
 
 ## Original reauthentication records
 

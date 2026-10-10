@@ -14,6 +14,7 @@ import (
 	"github.com/faustbrian/go-identity/risk"
 	"github.com/faustbrian/go-identity/session"
 	sessionpg "github.com/faustbrian/go-identity/session/postgres"
+	primitive "github.com/faustbrian/go-password"
 )
 
 // Only the native login invocation constructs this owner after real comparison.
@@ -33,6 +34,9 @@ type signinPhase struct {
 	verificationKeys map[string]ed25519.PublicKey
 	admission        risk.AuthenticationAdmission
 	maximumHashBytes int
+	upgrade          *kernel.PasswordHashUpgradeIntent
+	replacement      primitive.EncodedHash
+	hashPolicy       primitive.Policy
 }
 
 var _ kernel.FeatureExecutionContributor = (*signinPhase)(nil)
@@ -84,23 +88,25 @@ func (p *signinPhase) ValidateFeatureCommand(c identity.Command, plan kernel.Com
 		return password.ErrPasswordWork
 	}
 	r := p.record
+	expectedVersion := material.Credential.Version
+	if p.upgrade != nil {
+		expected := kernel.PasswordHashUpgradeIntent{Admission: kernel.CredentialAdmission{Credential: material.Credential, UserAuthorityVersion: p.recipient.UserAuthorityVersion, IdentifierAuthorityVersion: p.recipient.IdentifierAuthorityVersion, CredentialAuthorityVersion: p.recipient.CredentialAuthorityVersion}, ExpectedUserVersion: p.recipient.User.Version}
+		if *p.upgrade != expected || expectedVersion == ^uint64(0) {
+			return password.ErrPasswordWork
+		}
+		expectedVersion++
+	}
 	frame, err := r.SigningBytes()
 	key := p.verificationKeys[r.KeyID]
-	if err != nil || len(key) != ed25519.PublicKeySize || !ed25519.Verify(key, frame, r.Signature) || r.State != auth.SignInStateAuthenticated || r.Proof != spec.Authentication.Proof || r.ProofVersion != spec.Authentication.ProofVersion || r.CredentialID != spec.Authentication.CredentialID || r.CredentialVersion != spec.Authentication.CredentialVersion || r.Proof.ID != auth.ProofID(f.Binding.CommandID) || material.User.ID != spec.UserID || material.Credential.ID != identity.CredentialID(r.CredentialID) || material.Credential.Version != r.CredentialVersion || p.material.EncodedHash().String() == "" {
+	if err != nil || len(key) != ed25519.PublicKeySize || !ed25519.Verify(key, frame, r.Signature) || r.State != auth.SignInStateAuthenticated || r.Proof != spec.Authentication.Proof || r.ProofVersion != spec.Authentication.ProofVersion || r.CredentialID != spec.Authentication.CredentialID || r.CredentialVersion != spec.Authentication.CredentialVersion || r.Proof.ID != auth.ProofID(f.Binding.CommandID) || material.User.ID != spec.UserID || material.Credential.ID != identity.CredentialID(r.CredentialID) || expectedVersion != r.CredentialVersion || p.material.EncodedHash().String() == "" {
 		return password.ErrPasswordWork
 	}
-	// Only the existing session-owned closed projection is admitted here. The
-	// native service freezes policy/risk/recipient custody separately, not in
-	// client-controlled feature fields or a second durable admission authority.
+	// Session owns its closed projection. Native rehash adds only the exact
+	// predecessor projection and material commitment to the same keyed command.
 	if len(f.Fields) == 0 {
 		return password.ErrPasswordWork
 	}
-	for _, field := range f.Fields {
-		if len(field.Name) < len("session.result.") || field.Name[:len("session.result.")] != "session.result." {
-			return password.ErrPasswordWork
-		}
-	}
-	return nil
+	return p.validateRehashFields(f.Fields)
 }
 
 func (p *signinPhase) ApplyFeature(ctx context.Context, w kernel.Work, c identity.Command) (identity.FeatureReceipt, error) {
@@ -115,15 +121,23 @@ func (p *signinPhase) ApplyFeature(ctx context.Context, w kernel.Work, c identit
 	if err := p.checkTime(ctx, w); err != nil {
 		return identity.FeatureReceipt{}, err
 	}
-	// Session's effect acquires directory/recipient/credential/policy locks in
-	// owner order. A material check after it still rolls every staged effect
-	// back on failure, without taking password locks ahead of those owners.
-	provisional, err := p.effect.Apply(ctx, w, p, c, p.recipient, p.flow)
+	// Directory and kernel predecessor locks precede material. Rehash reserves
+	// exclusive authority before CAS; ordinary signin retains shared admission.
+	var provisional identity.FeatureReceipt
+	if p.upgrade != nil {
+		err = p.effect.PrepareHashUpgrade(ctx, w, p, c, p.recipient)
+	} else {
+		provisional, err = p.effect.Apply(ctx, w, p, c, p.recipient, p.flow)
+	}
 	if err != nil {
 		return identity.FeatureReceipt{}, err
 	}
 	m := p.material.Authority().Credential
-	rows, err := w.Query(ctx, `SELECT version::text,CASE WHEN octet_length(encoded_hash)<=$4 THEN encoded_hash ELSE '' END FROM identity_password.credentials WHERE tenant_id=$1 AND user_id=$2 AND credential_id=$3 FOR SHARE`, string(m.TenantID), string(m.UserID), string(m.ID), p.maximumHashBytes)
+	lock := " FOR SHARE"
+	if p.upgrade != nil {
+		lock = " FOR UPDATE"
+	}
+	rows, err := w.Query(ctx, `SELECT version::text,CASE WHEN octet_length(encoded_hash)<=$4 THEN encoded_hash ELSE '' END FROM identity_password.credentials WHERE tenant_id=$1 AND user_id=$2 AND credential_id=$3`+lock, string(m.TenantID), string(m.UserID), string(m.ID), p.maximumHashBytes)
 	if err != nil {
 		return identity.FeatureReceipt{}, err
 	}
@@ -144,6 +158,22 @@ func (p *signinPhase) ApplyFeature(ctx context.Context, w kernel.Work, c identit
 	}
 	if version != strconv.FormatUint(m.Version, 10) || hash != p.material.EncodedHash().String() {
 		return identity.FeatureReceipt{}, identity.ForbiddenError{}
+	}
+	if p.upgrade != nil {
+		n, e := w.Exec(ctx, `UPDATE identity_password.credentials SET version=version+1,algorithm=$5,encoded_hash=$6,updated_at=GREATEST(updated_at,clock_timestamp()) WHERE tenant_id=$1 AND user_id=$2 AND credential_id=$3 AND version=$4::numeric`, string(m.TenantID), string(m.UserID), string(m.ID), version, string(p.replacement.Algorithm()), p.replacement.String())
+		if e != nil {
+			return identity.FeatureReceipt{}, e
+		}
+		if n != 1 {
+			return identity.FeatureReceipt{}, identity.ConflictError{}
+		}
+		if _, err = w.ApplyPasswordHashUpgrade(ctx, p, c); err != nil {
+			return identity.FeatureReceipt{}, err
+		}
+		provisional, err = p.effect.ApplyHashUpgrade(ctx, w, p, c, p.flow)
+		if err != nil {
+			return identity.FeatureReceipt{}, err
+		}
 	}
 	payload, err := encodeSigninRecord(p.record)
 	if err != nil {

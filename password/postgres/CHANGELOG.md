@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Upgrade successfully compared obsolete password hashes inside the original
+  backend signin transaction. Bind salted replacement material to the keyed
+  command, atomically advance credential material/reference and independent
+  authority versions, and issue only a successor-bound session. Preserve original
+  remember/risk/policy/expiry and password-free historical recovery; failures
+  roll back hash and session effects together. MFA continuation remains pending.
+
 - Add native backend password-signin orchestration through exported Go APIs,
   including canonical email discovery, enumeration-neutral verification,
   original cookie/intent admission and atomic proof/session/audit effects.
