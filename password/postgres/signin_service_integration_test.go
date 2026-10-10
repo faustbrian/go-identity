@@ -150,6 +150,34 @@ func testPublicNativeSignin(t *testing.T, ctx context.Context, pool *database.Po
 					t.Fatal("remember substitution fixture")
 				}
 			}
+			if mode == "commit-persistent" || mode == "wrong" || mode == "unknown" || mode == "invalid-email" {
+				expected := "person@example.test"
+				if mode == "unknown" || mode == "invalid-email" {
+					expected = string(r.Identifier)
+				}
+				for count := 0; count < 2; count++ {
+					canonical, err := service.SigninRateSource(ctx, r)
+					if err != nil || canonical != expected {
+						t.Fatal("signin source diverged from native normalization", err)
+					}
+				}
+				unchanged, err := sessionpg.ReadPreAuth(ctx, pool.Raw(), storage, r.TenantID, r.PreAuthID)
+				before, _ := flow.Bindings()
+				after, e := unchanged.Bindings()
+				if err != nil || e != nil || after != before {
+					t.Fatal("rate source consumed or changed original flow", err)
+				}
+				canceled, cancel := context.WithCancel(ctx)
+				cancel()
+				if canonical, err := service.SigninRateSource(canceled, r); err == nil || canonical != "" {
+					t.Fatal("canceled signin source disclosed metadata")
+				}
+			}
+			if mode == "foreign-cookie" || mode == "foreign-origin" || mode == "foreign-callback" || mode == "changed-remember" {
+				if canonical, err := service.SigninRateSource(ctx, r); err == nil || canonical != "" {
+					t.Fatal("foreign original custody selected a signin budget")
+				}
+			}
 			attempt := workflow
 			attemptContext := ctx
 			var fault *signinCommitFault

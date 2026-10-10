@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Expose original-flow-authenticated signin identifier normalization for split
+  IP/identifier rate admission without account lookup, password comparison,
+  risk charging, pre-auth consumption or session issuance.
+
 - Adopt selected original-signup email confirmation HTTP composition with the
   native service and strict PostgreSQL rate owner. Preserve fresh address
   disclosure, metadata-only replay and proof-free original-command recovery.

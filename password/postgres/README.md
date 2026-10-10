@@ -157,6 +157,16 @@ effects. Preserve the resulting server-generated `Recovery`; destroy password
 custody after the call. Only an error-free original commit permits reveal-once
 bearer/CSRF delivery. Errors never deliver credentials, even after a known commit.
 
+`SigninRateSource(ctx, request)` authenticates original pre-auth cookie, origin,
+callback and remember choice, then returns the same email normalization used by
+`Signin` (including unchanged invalid-email input for dummy work). Debit the
+trusted IP budget before this read, then debit the identifier budget and invoke
+`Signin` with the same immutable request. The result is not account existence,
+authentication or permission to signin. It performs no account lookup, password
+comparison, risk charge, command creation, flow consumption or session issuance.
+Errors and cancellation return no identifier. Do not log its sensitive result;
+the caller retains password ownership and destruction.
+
 `RecoverSignin(ctx, request)` accepts original cookie possession and password-free
 correlation with fresh trusted caller provenance. Current disclosure policy
 controls historical visibility before and after primary reconciliation.
