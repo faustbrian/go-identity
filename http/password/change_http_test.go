@@ -41,9 +41,10 @@ func (r *observationReader) ObserveSession(ctx context.Context, _ session.Sessio
 
 type atomicOwner struct {
 	ratelimit.StrictBackend
-	calls int
-	last  ratelimit.AtomicBatchRequest
-	fail  bool
+	calls   int
+	last    ratelimit.AtomicBatchRequest
+	fail    bool
+	limited bool
 }
 
 func (*atomicOwner) Name() string { return "test-atomic" }
@@ -56,6 +57,14 @@ func (b *atomicOwner) AdmitAtomicStrict(ctx context.Context, r ratelimit.AtomicB
 	out := ratelimit.AtomicBatchDecision{CommandID: r.CommandID, Allowed: true}
 	for _, v := range r.Requests {
 		out.Decisions = append(out.Decisions, ratelimit.Decision{Allowed: true, Limit: v.Policy.Limit(), Remaining: v.Policy.Limit() - 1, Reset: v.Now.Add(v.Policy.Period()), Reason: ratelimit.ReasonAllowed})
+	}
+	if b.limited {
+		out.Allowed = false
+		for i := range out.Decisions {
+			out.Decisions[i].Allowed, out.Decisions[i].Remaining, out.Decisions[i].Reason = false, 0, ratelimit.ReasonLimited
+			out.Decisions[i].RetryAfter = time.Second
+		}
+		return out, ratelimit.ErrRejected
 	}
 	return out, nil
 }

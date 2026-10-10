@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Add opt-in bearer-verification features with actual closed OpenAPI 3.1.1
+  requests and success/error projections. Combined password feature selection
+  supports verification alongside bearer or cookie change without owner-ID
+  collisions or consumer glue. Existing change-only APIs remain change-only;
+  invalid selected owners return no partial feature. Cookie verification and
+  native verification SQL-over-router qualification remain in development.
+
 - Add strict bearer password-verification handlers with closed non-keyed JSON,
   atomic IP/subject rate admission and one native verification invocation.
   Deliver only the original proof locator and target/timing metadata after

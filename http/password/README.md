@@ -55,8 +55,19 @@ middleware variant) owns exact `POST /v1/password/verify`. Supply the native
 one shared `PasswordVerificationRateLimiter`, trusted network/policy revision,
 prompt clock and 1ms..30s bound. This selects bearer only; cookie verification
 requires a separate protected native profile and has no bearer fallback.
-Selected verification Feature/OpenAPI and native SQL-over-handler qualification
-remain pending; constructing a handler does not advertise or register it.
+For selected routing and OpenAPI, contribute `NewBearerVerificationFeature`
+(or its middleware variant) when selecting verification alone. When selecting
+both operations, use `NewFeature(FeatureConfig{Change: &changeConfig,
+BearerVerification: &verificationConfig})` or `NewFeatureWithMiddleware`.
+This creates one password-owned contribution without duplicate feature IDs;
+do not select the standalone change and verification features together.
+Nil fields omit operations; selecting neither or any invalid owner fails with
+no partial contribution. A cookie-change configuration does not select cookie
+verification. Existing change-only factories remain change-only. Shared hooks
+must handle the distinct `ChangeState` and `VerificationState` typed phases.
+The actual wire schema is closed and advertises only strict bearer security,
+not a request key, cookie fallback or a reflected signed record. Native
+SQL-over-handler qualification remains pending for verification.
 
 The closed JSON body contains exactly `password`, `purpose`, `action` and
 `audience`. The native owner enforces its trusted exact target allowlist;
@@ -111,7 +122,7 @@ remain stable while retained commands exist.
 - Why a proof ID? The original signed native verification is loaded unchanged;
   transport never creates a proof from client-claimed identity or timestamps.
 - Can consumers implement stores/transactions? No: select the platform adapters.
-- Is this full password feature parity? No. Verify/signup/signin/reset/set,
+- Is this full password feature parity? No. Cookie verification/signup/signin/reset/set,
   native selected-router and browser qualification, privacy/interoperability
   and exact coverage/mutation/release gates remain. Native SQL-over-handler
   password-change behavior has focused integration coverage, not browser proof.
