@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Add explicit protected cookie password-verification handlers and opt-in
+  features through the distinct native cookie service. Require the original
+  secure session cookie, exact trusted Origin, sole synchronizer header and
+  original signed browser correlation; no bearer fallback, issuance or renewal.
+  Preserve non-keyed atomic admission and original proof/error observations.
+  Selected OpenAPI requires all three custody inputs together. Existing bearer
+  and change-only APIs remain unchanged.
+
 - Add explicit device-bound bearer verification composition using the existing
   signed browser correlation cookie, scoped to its original tenant/origin and
   expiry. Authorization remains the sole session credential; verification never

@@ -50,3 +50,23 @@ func verificationWire(c BearerVerificationConfig, device bool) *identityhttp.Wir
 	}
 	return wire
 }
+
+func cookieVerificationWire(c CookieVerificationConfig) *identityhttp.WireOperation {
+	wire := verificationWire(BearerVerificationConfig{Network: c.Network}, false)
+	var definition map[string]any
+	_ = json.Unmarshal(wire.Definition, &definition)
+	definition["description"] = "Exclusive protected cookie verification: original configured secure session cookie, exact trusted HTTPS Origin without Referer fallback, sole X-CSRF-Token header and original signed browser-device correlation are required. No bearer, body/query/trailer alternatives, retry key, issuance or renewal. Closed unchanged password/purpose/action/audience input, original primary validity and atomic IP/subject admission precede one native cookie transaction. Only fresh error-free known commit delivers the original proof projection; failures retain valid original command observations without proof or automatic retry. Raw/decoded transport byte budgets remain enforced."
+	definition["security"] = []any{map[string]any{"PasswordVerificationSessionCookie": []string{}, "PasswordVerificationCSRF": []string{}, "PasswordVerificationBrowserDevice": []string{}}}
+	wire.Definition, _ = json.Marshal(definition)
+	cookie, _ := c.Cookie.DeletionAttributes()
+	wire.SecuritySchemes = nil
+	for _, item := range []struct{ name, location, wireName, description string }{
+		{"PasswordVerificationSessionCookie", "cookie", cookie.Name, "Original configured secure session credential; Authorization alternatives are forbidden."},
+		{"PasswordVerificationCSRF", "header", "X-CSRF-Token", "Exactly one original session synchronizer, protected by the native transaction owner; not body or query input."},
+		{"PasswordVerificationBrowserDevice", "cookie", "__Host-identity_device", "Original signed tenant/origin-bound browser correlation; never session or MFA authority, issuance or renewal."},
+	} {
+		data, _ := json.Marshal(map[string]any{"type": "apiKey", "in": item.location, "name": item.wireName, "description": item.description})
+		wire.SecuritySchemes = append(wire.SecuritySchemes, identityhttp.WireComponent{Name: item.name, Definition: data})
+	}
+	return wire
+}

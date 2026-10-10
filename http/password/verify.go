@@ -103,6 +103,7 @@ type VerificationState struct {
 	read       session.GetResult
 	user       identity.UserID
 	device     session.BrowserDevice
+	csrf       session.CSRFToken
 	attempt    *verificationAttempt
 }
 
@@ -167,7 +168,11 @@ func NewBearerVerificationHandlerWithMiddleware(c BearerVerificationConfig, midd
 }
 
 func newBearerVerificationHandler(c BearerVerificationConfig, middleware []identityhttp.MiddlewareDescriptor, devices *session.BrowserDeviceCodec) (http.Handler, error) {
-	if !c.Sessions.Configured() || nilOwner(c.Verification) || !c.Rate.Configured() || c.PolicyRevision == 0 || c.Now == nil || c.MaximumDuration < time.Millisecond || c.MaximumDuration > 30*time.Second {
+	return newVerificationHandler(c, middleware, devices, nil)
+}
+
+func newVerificationHandler(c BearerVerificationConfig, middleware []identityhttp.MiddlewareDescriptor, devices *session.BrowserDeviceCodec, cookie *cookieVerificationProfile) (http.Handler, error) {
+	if !c.Sessions.Configured() || (cookie == nil && nilOwner(c.Verification)) || !c.Rate.Configured() || c.PolicyRevision == 0 || c.Now == nil || c.MaximumDuration < time.Millisecond || c.MaximumDuration > 30*time.Second {
 		return nil, identityhttp.ErrInvalidInput
 	}
 	network, err := identityhttp.NewNetworkResolver(c.Network)
@@ -212,14 +217,22 @@ func newBearerVerificationHandler(c BearerVerificationConfig, middleware []ident
 			if _, _, err := decoder.IdempotencyKey(r, identityhttp.HeaderForbidden); err != nil {
 				return s, identityhttp.ErrInvalidInput
 			}
-			for name := range r.Header {
-				if strings.EqualFold(name, "X-CSRF-Token") {
-					return s, identityhttp.ErrInvalidInput
+			if cookie == nil {
+				for name := range r.Header {
+					if strings.EqualFold(name, "X-CSRF-Token") {
+						return s, identityhttp.ErrInvalidInput
+					}
 				}
 			}
 			var present bool
 			var err error
-			s.bearer, present, err = decoder.Bearer(r, identityhttp.HeaderRequired)
+			mode := session.CredentialBearer
+			if cookie == nil {
+				s.bearer, present, err = decoder.Bearer(r, identityhttp.HeaderRequired)
+			} else {
+				mode = session.CredentialCookie
+				s.bearer, present, err = decoder.CookieBearer(r, cookie.name, identityhttp.HeaderRequired)
+			}
 			if err != nil || !present {
 				return s, identityhttp.ErrInvalidInput
 			}
@@ -227,7 +240,7 @@ func newBearerVerificationHandler(c BearerVerificationConfig, middleware []ident
 			if err != nil {
 				return s, identityhttp.ErrInvalidInput
 			}
-			s.credential, err = session.NewCredential(session.CredentialBearer, token)
+			s.credential, err = session.NewCredential(mode, token)
 			if err != nil {
 				return s, identityhttp.ErrInvalidInput
 			}
@@ -241,8 +254,20 @@ func newBearerVerificationHandler(c BearerVerificationConfig, middleware []ident
 				return s, identityhttp.ErrInvalidInput
 			}
 			s.facts = facts
+			if cookie != nil {
+				s.csrf, _, err = identityhttp.DecodeCSRF(cookie.csrf, r, session.ParseCSRFToken)
+				if err != nil {
+					return s, failure{status: 403, code: "origin_denied"}
+				}
+			}
 			if devices != nil {
-				device, found, err := decoder.AuxiliaryCookieBearer(r, "__Host-identity_device", identityhttp.HeaderRequired)
+				var device auth.BearerCredential
+				var found bool
+				if cookie == nil {
+					device, found, err = decoder.AuxiliaryCookieBearer(r, "__Host-identity_device", identityhttp.HeaderRequired)
+				} else {
+					device, found, err = decoder.CookieBearer(r, "__Host-identity_device", identityhttp.HeaderRequired)
+				}
 				if err != nil || !found {
 					return s, identityhttp.ErrInvalidInput
 				}
@@ -310,7 +335,14 @@ func newBearerVerificationHandler(c BearerVerificationConfig, middleware []ident
 			}
 			caller := authorization.DecisionContext{PolicyRevision: c.PolicyRevision, Request: authorization.Request{Subject: authorization.Subject{Kind: authorization.SubjectUser, ID: authorization.SubjectID(s.user)}, Tenant: authorization.TenantID(s.facts.TenantID()), Action: "identity.password.verify", Resource: authorization.Resource{Type: "identity.request-admission", ID: "identity.password.verify"}}}
 			s.attempt.attempted = true
-			result, err := c.Verification.Verify(r.Context(), password.VerificationRequest{TenantID: s.facts.TenantID(), Session: s.bearer, Password: s.attempt.secret, Target: s.target, Caller: caller, Network: s.facts.ClientIP().String(), Device: s.device.DeviceID()})
+			request := password.VerificationRequest{TenantID: s.facts.TenantID(), Session: s.bearer, Password: s.attempt.secret, Target: s.target, Caller: caller, Network: s.facts.ClientIP().String(), Device: s.device.DeviceID()}
+			var result password.VerificationResult
+			var err error
+			if cookie == nil {
+				result, err = c.Verification.Verify(r.Context(), request)
+			} else {
+				result, err = cookie.service.Verify(r.Context(), password.CookieVerificationRequest{Request: request, CSRFToken: s.csrf})
+			}
 			if !verificationObservation(s, result) {
 				reject(w, r, identityhttp.ErrUnavailable)
 				return

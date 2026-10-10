@@ -138,11 +138,32 @@ remain stable while retained commands exist.
 
 ## Tradeoffs, FAQ and remaining qualification
 
+### Protected cookie verification
+
+Select `NewCookieVerificationFeature` with `CookieVerificationConfig` and the
+native `password/postgres.CookieVerificationWorkflow`. Supply the original
+session cookie policy, exact HTTPS `TrustedOrigins`, original browser-device
+issuer policy and the shared native atomic verification rate limiter. The
+distinct cookie service cannot be replaced by bearer verification. Compose
+verification with change through `FeatureConfig.CookieVerification`; only one
+verification profile may be selected per operation.
+
+Requests use the original session cookie, signed `__Host-identity_device` cookie,
+exact trusted `Origin` and exactly one `X-CSRF-Token` header, plus closed JSON
+`password`, `purpose`, `action` and `audience`. No Authorization, Referer fallback,
+body/query/trailer credentials or retry key is accepted. Native protection owns
+the current synchronizer and primary transaction fences. HTTP never issues or
+renews either cookie, token, validity evidence or proof. Only fresh error-free
+known commit returns the original proof locator/target/timing; protected change
+loads the signed original. Errors retain permitted original command observations
+without proof or automatic retry. Real cookie SQL-over-router and browser
+qualification remain pending.
+
 - Why a separate module? Optional password/session imports cannot enter base HTTP.
 - Why a proof ID? The original signed native verification is loaded unchanged;
   transport never creates a proof from client-claimed identity or timestamps.
 - Can consumers implement stores/transactions? No: select the platform adapters.
-- Is this full password feature parity? No. Cookie verification/signup/signin/reset/set,
+- Is this full password feature parity? No. Signup/signin/reset/set,
   native selected-router and browser qualification, privacy/interoperability
   and exact coverage/mutation/release gates remain. Native SQL-over-handler
   password-change behavior has focused integration coverage, not browser proof.
