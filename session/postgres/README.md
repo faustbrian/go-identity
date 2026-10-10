@@ -1029,6 +1029,40 @@ cleanup, but returns neither a credential nor current access authority. The
 coordinator reconciles all participants. This seam does not implement password
 comparison, public login orchestration or an HTTP endpoint.
 
+## Native password-signup session effects
+
+`PasswordSignupSessionFields` and `PasswordSignupSession` preserve the complete
+original single-factor session, including remember policy and CSRF, in the
+closed paired signup command. Signin and ordinary metadata cannot substitute
+for signup custody. Mapping grants no authentication or signup policy decision.
+
+`NewPasswordSignupEffect` borrows registration's exact native participant and
+sole coordinator `Work`. After the kernel registration domain has staged the
+new user, pending identifier and password reference, `Apply` matches their
+retained original-command binding and checks actual current directory,
+recipient/credential and selected-user authorization. The authorization owner
+must explicitly bootstrap the new subject in that same transaction; missing
+authority denies. Anonymous command scope remains unchanged. Session, family,
+issuance evidence and original pre-auth consumption commit or roll back together.
+
+Install the kernel's credential and identifier-retirement histories, then its
+`PasswordRegistrationMigrationSource`. Install `PasswordSignupMigrationSource`
+after the session password-signin history, at an unused permanent version.
+Existing populated records and prior migration checksums remain unchanged.
+
+The native password owner remains responsible for HIBP/hash/risk admission,
+password material, original cookie possession, field policy and authentic proof
+provenance. It must decide that verification and MFA are **not required** before
+selecting full-session issuance. Every effect error must abort the original
+Work; provisional success cannot reveal credentials. Repeat temporal admission
+after later owner/coordinator phases. This seam is not a public signup service.
+
+`Recover` inspects the signup-specific retained commitment only during the
+participant's recovery invocation. `ReadPasswordSignupIdentity` provides bounded
+primary inspection of original user/session/family IDs, even after payload
+cleanup. Neither grants access, restores a bearer, authorizes disclosure or
+proves the whole command outcome. Signin/OTP commitments cannot satisfy signup.
+
 ## Security and tradeoffs
 
 - These are trusted storage APIs, not unauthenticated public endpoints.

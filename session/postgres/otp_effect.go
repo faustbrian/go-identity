@@ -207,6 +207,10 @@ func passwordIssuanceDigest(binding [32]byte, user, id, family string, record []
 	return nativeIssuanceDigest("identity-session-password-issuance-v1\x00", binding, user, id, family, record)
 }
 
+func passwordSignupIssuanceDigest(binding [32]byte, user, id, family string, record []byte) [32]byte {
+	return nativeIssuanceDigest("identity-session-password-signup-issuance-v1\x00", binding, user, id, family, record)
+}
+
 func nativeIssuanceDigest(domain string, binding [32]byte, user, id, family string, record []byte) [32]byte {
 	// Closed scalar fields cannot fail JSON encoding; framing is unambiguous.
 	payload, _ := json.Marshal(struct {

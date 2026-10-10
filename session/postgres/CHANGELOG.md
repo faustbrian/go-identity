@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Add signup-specific session mapping and same-transaction issuance effects.
+  Correlate the newly staged account, pending identifier and password reference
+  with the original registration command; preserve anonymous scope, complete
+  session/remember/CSRF and consume original pre-auth atomically. Keep signin's
+  verified-identifier admission unchanged. Install the additive signup issuance
+  migration after password-signin history. Historical signup identity remains
+  inspectable after payload cleanup without credential recovery or access.
+  Native password policy, material, HIBP and possession remain owner obligations.
+
 - Add original-signin hash-upgrade session admission: lock directory authority
   before the kernel's exclusive predecessor reservation, then issue only from
   that Work's exact applied successor. Preserve independent security epochs,

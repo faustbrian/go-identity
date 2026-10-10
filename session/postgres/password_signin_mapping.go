@@ -54,6 +54,13 @@ func PasswordSigninSession(command identity.Command) (session.Session, error) {
 	if !ok || !custody || secret.Len() == 0 || p.Operation != passwordSessionOperation(p.Binding) {
 		return deny()
 	}
+	return passwordSessionFromFeature(p)
+}
+
+// Both closed password profiles retain the same prospective record vocabulary;
+// their custody and exact operation checks remain separate at entry.
+func passwordSessionFromFeature(p identity.FeatureCommandSpec) (session.Session, error) {
+	deny := func() (session.Session, error) { return session.Session{}, session.ErrInvalidSessionCommand }
 	var tenant identity.TenantID
 	var user identity.UserID
 	fields := make([]identity.FeatureField, 0, 64)
