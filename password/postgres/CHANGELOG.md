@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Qualify cookie password change through the optional Feature and selected
+  router with native PostgreSQL owners. Validate original committed/replayed
+  outcomes, pre-command conflict and missing-CSRF denial against the selected
+  OpenAPI responses without introducing consumer transaction or handler glue.
+
 - Document optional cookie password-change HTTP composition using native
   primary session/proof and atomic rate owners. Preserve the same protected
   journal, original retry key, replay and pre-command conflict semantics;

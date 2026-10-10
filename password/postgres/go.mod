@@ -10,8 +10,8 @@ require (
 	github.com/faustbrian/go-capability v1.0.1-0.20261005033429-2985d8ea8700 // indirect
 	github.com/faustbrian/go-clock v1.0.0
 	github.com/faustbrian/go-identity v0.0.0-20261009202749-c26bd4f61ca6
-	github.com/faustbrian/go-identity/http v0.0.0-20261010004917-4017bc4838e1
-	github.com/faustbrian/go-identity/http/password v0.0.0-20261010010446-342b4e38e10a
+	github.com/faustbrian/go-identity/http v0.0.0-20261010011510-5db2fddced79
+	github.com/faustbrian/go-identity/http/password v0.0.0-20261010012415-ce4d8413b578
 	github.com/faustbrian/go-identity/password v0.0.0-20261010001003-af19f8ec1bc1
 	github.com/faustbrian/go-identity/postgres v0.0.0-20261009225741-cccd836edc90
 	github.com/faustbrian/go-identity/risk v0.0.0-20261009195709-e1506b3d6dd9
@@ -19,6 +19,7 @@ require (
 	github.com/faustbrian/go-identity/session v0.0.0-20261009213959-5635323137bb
 	github.com/faustbrian/go-identity/session/postgres v0.0.0-20261009222152-dce6a0028d63
 	github.com/faustbrian/go-migrations/v3 v3.0.2-0.20261008154303-7eabbeb156f8
+	github.com/faustbrian/go-openapi/v2 v2.0.1-0.20261008233431-8a681bb139db
 	github.com/faustbrian/go-password v1.0.1-0.20261001082808-a3dbd862340c
 	github.com/faustbrian/go-postgres v1.1.1-0.20260912090843-61261695bcc7
 	github.com/faustbrian/go-rate-limit/v2 v2.0.1-0.20261010004607-5dd986e00e78
