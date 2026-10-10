@@ -54,6 +54,23 @@ this deliberately restricted identity parser is not full mailbox/SMTP conformanc
 
 ## Tradeoffs, security and FAQ
 
+### Explicit confirmation input
+
+`VerificationConfirmRequest.Validate` admits a borrowed live opaque proof of
+32..4096 canonical bytes, a stable command ID, an HTTPS callback of at most
+2048 bytes and trusted tenant/caller/network input. It bounds raw URL components
+before rendering, and caller collections before copying attribute sets. Neither
+success nor repeated validation authenticates the proof, proves callback
+allowlisting, consumes one-use authority, commits verification or issues a
+session. A concurrent proof transfer invalidates custody after observation.
+The eventual native service must check the exact original intent and current
+policy and coordinate every effect. This checkpoint adds the request contract,
+not the complete service/result or HTTP implementation.
+
+Inputs are caller-owned and immutable during calls. Direct formatting/logging
+redacts and JSON/text serialization denies; explicit field projections and
+private enclosing diagnostic fields remain sensitive and must not be logged.
+
 ### Signup verification grants
 
 `NewRegistrationVerificationPolicy` freezes the real address policy, issuer,

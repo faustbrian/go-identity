@@ -155,6 +155,11 @@ func verificationURL(u *url.URL, maximum int) (string, bool) {
 			return "", false
 		}
 	}
+	// A caller can construct url.URL without Parse's authority checks. Reparse
+	// only after bounding rendered bytes, retaining the original representation.
+	if _, err := url.Parse(rendered); err != nil {
+		return "", false
+	}
 	return rendered, true
 }
 

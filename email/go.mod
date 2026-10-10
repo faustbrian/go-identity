@@ -4,7 +4,7 @@ go 1.27.0
 
 require (
 	github.com/faustbrian/go-authorization v1.1.1-0.20261005011349-60ed4b3229d8
-	github.com/faustbrian/go-capability v1.0.1-0.20261005033429-2985d8ea8700
+	github.com/faustbrian/go-capability v1.0.1-0.20261010205620-7f9c01cfe0b7
 	github.com/faustbrian/go-identifier v1.0.1-0.20261004001745-6503365429c8
 	github.com/faustbrian/go-identity v0.0.0-20261010134149-0762007509c3
 )
