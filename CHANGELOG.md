@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add opaque identifier snapshots with exact tenant/user/record selection,
+  complete-partition validation, independent versions and explicit address
+  disclosure. Omitted values are not retained; diagnostics and implicit export
+  stay closed. Snapshot construction never grants current authority or ownership.
+
 - Add opaque original anonymous signup input carrying the shared password Secret
   and pre-auth cookie before hash generation. Keep it distinct from generated
   verifier custody; native journal admission and atomic execution remain required.

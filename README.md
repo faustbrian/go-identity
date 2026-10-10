@@ -1,5 +1,27 @@
 # identity
 
+## Safe identifier snapshots
+
+`NewIdentifierProjection` selects one identifier from a complete consistent
+`IdentifierState` under the exact expected tenant/user/record. The feature owner
+must first authorize the operation and obtain its primary read or committed
+state. Pass one trusted observation time and an explicit output selection:
+`IdentifierValuesOmitted` retains no canonical/display values;
+`IdentifierValuesIncluded` permits sensitive `Values()` access.
+
+`Bindings()` returns copied scope, lifecycle state, independent user/authority/
+identifier/verification versions and original verification time. Pending,
+revoked and administratively inspected blocked-user snapshots remain valid;
+they are not usable authentication authority. Construction neither normalizes
+IDs nor verifies a challenge, increments a version, proves a commit or extends
+freshness. Invalid scope, inconsistent non-target rows and zero values fail
+with redacted `InvalidInputError`.
+
+Copies support concurrent reads; source/returned metadata changes do not alter
+them. Formatting and structured logs redact; automatic JSON/text serialization
+is refused. An authorized feature transport selects explicit no-store response
+fields instead of serializing the projection or source partition wholesale.
+
 ## Native password signup custody
 
 Before journal-owned generation, `NewFeaturePasswordSignupInputCommand` carries
