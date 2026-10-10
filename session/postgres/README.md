@@ -120,7 +120,19 @@ original coordinator transaction, and call `RequireSession` with the same
 frozen record. Do not replace the record with a newer observation, refresh its
 timestamps or accept its metadata as a reauthentication proof.
 
-## Retained OTP sign-in identity
+## Retained sign-in identity
+
+`Repository.ReadPasswordSigninIdentity(ctx, originalBinding)` provides trusted
+primary inspection of the original password-signin user/session/family IDs.
+It validates the complete original binding and password-specific commitment;
+it does not depend on a live session payload. Anonymous commands retain their
+original anonymous scope, with the selected user returned separately. Missing
+evidence returns `ErrRecordAbsent`; corrupt evidence returns `ErrInvalidRecord`.
+The native password workflow must authenticate original cookie possession,
+authorize historical disclosure and obtain the sole coordinator's outcome
+before exposing these IDs. Inspection alone cannot authenticate, recover a
+command, recreate a session or issue credentials. Earlier deadlines win, and
+errors and implicit formatting/serialization reveal no retained identity.
 
 `Repository.ReadOTPSigninIdentity(ctx, originalBinding)` reads the original
 user/session/family tuple from existing retained issuance evidence. It works

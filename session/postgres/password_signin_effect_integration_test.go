@@ -5,6 +5,7 @@ package postgres
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"testing"
 	"time"
@@ -270,11 +271,18 @@ INSERT INTO identity.identifiers(tenant_id,user_id,identifier_id,kind,canonical_
 				if !bytes.Equal(a, got) {
 					t.Fatal("original session changed")
 				}
+				retained, e := native.ReadPasswordSigninIdentity(ctx, b)
+				if e != nil || retained.UserID != s.UserID || retained.SessionID != s.SessionID || retained.FamilyID != s.FamilyID {
+					t.Fatal("primary password identity inspection lost original issuance", e)
+				}
+				if _, e := native.ReadOTPSigninIdentity(ctx, b); e == nil {
+					t.Fatal("OTP inspection admitted password issuance")
+				}
 				_, status, err := readNativeIssuanceIdentity(ctx, pool.Raw(), `"session_store"`, b, kernel.LifecyclePlan{}, passwordIssuanceDigest)
 				if err != nil || status != kernel.RecoveryCommitted {
 					t.Fatal("retained recovery lost original issuance", err)
 				}
-				if mode == "anonymous" {
+				if mode == "anonymous" || mode == "known" {
 					testRetainedPasswordIssuance(t, ctx, pool, b, s)
 				}
 			}
@@ -297,6 +305,22 @@ func testRetainedPasswordIssuance(t *testing.T, ctx context.Context, pool *datab
 		} else if got != (OTPSigninIdentity{}) {
 			t.Fatal("unproven retained identity disclosed")
 		}
+		native, e := NewRepository(pool, Config{Schema: "session_store", MaximumDuration: time.Second})
+		if e != nil {
+			t.Fatal(e)
+		}
+		retained, e := native.ReadPasswordSigninIdentity(ctx, b)
+		if want == kernel.RecoveryCommitted && (e != nil || retained.UserID != s.UserID || retained.SessionID != s.SessionID || retained.FamilyID != s.FamilyID) {
+			t.Fatal("owned primary reader lost retained password identity", e)
+		}
+		if want == kernel.RecoveryNotCommitted && (!errors.Is(e, ErrRecordAbsent) || retained != (PasswordSigninIdentity{})) {
+			t.Fatal("missing historical issuance fabricated retained identity", e)
+		}
+		foreign := b
+		foreign.AnonymousFlowID = "AgICAgICAgICAgICAgICAg"
+		if substituted, e := native.ReadPasswordSigninIdentity(ctx, foreign); e == nil || substituted != (PasswordSigninIdentity{}) {
+			t.Fatal("retained identity disclosed for substituted original binding")
+		}
 	}
 	if _, err := pool.Raw().Exec(ctx, `DELETE FROM session_store.sessions WHERE tenant_id=$1 AND session_id=$2`, string(s.TenantID), s.SessionID); err != nil {
 		t.Fatal(err)
@@ -305,7 +329,7 @@ func testRetainedPasswordIssuance(t *testing.T, ctx context.Context, pool *datab
 	id := mustCommandBytes(t, b.CommandID)
 	// Use a real foreign selected user so the FK admits the corruption and the
 	// retained commitment decoder, rather than schema enforcement, denies it.
-	if _, err := pool.Raw().Exec(ctx, `INSERT INTO identity.users(tenant_id,user_id,status,version) VALUES($1,'changed-retained-identity','active',1)`, string(s.TenantID)); err != nil {
+	if _, err := pool.Raw().Exec(ctx, `INSERT INTO identity.users(tenant_id,user_id,status,version) VALUES($1,'changed-retained-identity','active',1) ON CONFLICT DO NOTHING`, string(s.TenantID)); err != nil {
 		t.Fatal(err)
 	}
 	tx, err := pool.Raw().Begin(ctx)
@@ -339,6 +363,76 @@ func testRetainedPasswordIssuance(t *testing.T, ctx context.Context, pool *datab
 		t.Fatal(err)
 	}
 	read(kernel.RecoveryCommitted)
+	native, e := NewRepository(pool, Config{Schema: "session_store", MaximumDuration: time.Second})
+	if e != nil {
+		t.Fatal(e)
+	}
+	for _, expired := range []bool{false, true} {
+		bounded, cancel := context.WithCancel(ctx)
+		cancel()
+		if expired {
+			bounded, cancel = context.WithDeadline(ctx, time.Now().Add(-time.Second))
+		}
+		got, e := native.ReadPasswordSigninIdentity(bounded, b)
+		cancel()
+		var cancelled identity.CancelledError
+		var deadline identity.DeadlineExceededError
+		if got != (PasswordSigninIdentity{}) || !expired && !errors.As(e, &cancelled) || expired && !errors.As(e, &deadline) {
+			t.Fatal("retained password inspection lost cancellation/deadline classification", e)
+		}
+	}
+	for _, mutate := range []func(*identity.CommandBinding){
+		func(b *identity.CommandBinding) { b.TenantID = "foreign" },
+		func(b *identity.CommandBinding) { b.UserID = "foreign" },
+		func(b *identity.CommandBinding) { b.ActorID = "foreign" },
+		func(b *identity.CommandBinding) { b.OperationID = "identity.otp.signin" },
+		func(b *identity.CommandBinding) { b.SchemaID = "identity-otp-signin" },
+		func(b *identity.CommandBinding) { b.SchemaVersion++ },
+		func(b *identity.CommandBinding) { b.PolicyID = "foreign" },
+		func(b *identity.CommandBinding) { b.PolicyVersion++ },
+		func(b *identity.CommandBinding) { b.CorrelationID = "foreign" },
+		func(b *identity.CommandBinding) { b.CommandID, _ = identity.NewCommandID() },
+	} {
+		foreign := b
+		mutate(&foreign)
+		if got, e := native.ReadPasswordSigninIdentity(ctx, foreign); e == nil || got != (PasswordSigninIdentity{}) {
+			t.Fatal("primary password inspection accepted substituted original scope")
+		}
+	}
+	// Commit corruption only in this disposable fixture so the public PRIMARY
+	// reader, rather than a borrowed test transaction, observes each mutation.
+	for _, column := range []string{"user_id", "session_id", "family_id"} {
+		var original string
+		if e := pool.Raw().QueryRow(ctx, `SELECT `+column+` FROM session_store.session_issuances WHERE command_id=$1`, id).Scan(&original); e != nil {
+			t.Fatal(e)
+		}
+		if _, e := pool.Raw().Exec(ctx, `UPDATE session_store.session_issuances SET `+column+`='changed-retained-identity' WHERE command_id=$1`, id); e != nil {
+			t.Fatal(e)
+		}
+		got, e := native.ReadPasswordSigninIdentity(ctx, b)
+		if _, restore := pool.Raw().Exec(ctx, `UPDATE session_store.session_issuances SET `+column+`=$2 WHERE command_id=$1`, id, original); restore != nil {
+			t.Fatal("restore retained fixture")
+		}
+		if !errors.Is(e, ErrInvalidRecord) || got != (PasswordSigninIdentity{}) {
+			t.Fatal("primary inspection disclosed corrupted retained identity", e)
+		}
+	}
+	for _, column := range []string{"binding_digest", "record_digest"} {
+		var original []byte
+		if e := pool.Raw().QueryRow(ctx, `SELECT `+column+` FROM session_store.session_issuances WHERE command_id=$1`, id).Scan(&original); e != nil {
+			t.Fatal(e)
+		}
+		if _, e := pool.Raw().Exec(ctx, `UPDATE session_store.session_issuances SET `+column+`=decode(repeat('00',32),'hex') WHERE command_id=$1`, id); e != nil {
+			t.Fatal(e)
+		}
+		got, e := native.ReadPasswordSigninIdentity(ctx, b)
+		if _, restore := pool.Raw().Exec(ctx, `UPDATE session_store.session_issuances SET `+column+`=$2 WHERE command_id=$1`, id, original); restore != nil {
+			t.Fatal("restore retained commitment")
+		}
+		if !errors.Is(e, ErrInvalidRecord) || got != (PasswordSigninIdentity{}) {
+			t.Fatal("primary inspection disclosed corrupted retained commitment", e)
+		}
+	}
 	_, status, err = readNativeIssuanceIdentity(ctx, pool.Raw(), `"session_store"`, b, kernel.LifecyclePlan{}, otpIssuanceDigest)
 	if err != nil || status != kernel.RecoveryUnknown {
 		t.Fatal("OTP digest domain authenticated password evidence", err)

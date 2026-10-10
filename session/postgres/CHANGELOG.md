@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add bounded primary inspection of retained password-signin user/session/family
+  identity. Validate the original command and password-specific commitment even
+  after live session deletion, without reconstructing credentials or granting
+  disclosure permission. Existing OTP identity inspection remains unchanged.
+
 - Add native password-signin session effects that consume original pre-auth
   state atomically with session, family and retained issuance evidence. Preserve
   anonymous command scope while fencing the selected credential and authority.
