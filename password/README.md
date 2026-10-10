@@ -8,8 +8,26 @@ unapproved until the identity owner applies its frozen schema, authorization
 and sensitivity policy. The native registration owner must independently admit
 the original flow, screen HIBP/risk, hash and coordinate every required effect.
 No account, verification, session or delivery authority follows from validation.
-The complete signup service, verification lifecycle and optional signup-session
-composition remain in development. This input port is not an executable signup.
+`SignupService` supplies the separate registration and password-free recovery
+ports. Recovery always retains the original anonymous pre-auth namespace, never
+the newly created user's namespace. Its cookie and trusted caller scope must be
+independently admitted against primary retained history; reconstruction is not
+execution or disclosure authority.
+
+`SignupResult.Validate` distinguishes known commit, rollback, unknown, conflict
+and in-progress correlation without reading history or granting authority.
+Required-verification acknowledgements omit subject/session identity and all
+credentials; new and suppressed pre-existing accounts must remain publicly
+indistinguishable. Explicit session suppression permits a committed acknowledgement
+without verification continuation. An independently authorized subject projection
+is allowed only after known commit outside the verification-required arm.
+Optional session issuance retains the session owner's reveal-once token/CSRF
+custody. Replay/recovery has no credentials or cookie metadata; authorized
+historical session identity may remain after payload deletion. Both the result
+and error matter: unknown is not evidence of rollback. Validation cannot prove
+enumeration-safe timing or authorize delivery after cancellation/error.
+The native signup workflow, verification lifecycle and optional signup-session
+composition remain in development. These ports are not an executable signup.
 
 `SigninService` supplies distinct non-keyed login and password-free historical
 recovery ports for the native adapter. `SigninRecovery` freezes the existing

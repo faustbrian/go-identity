@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add signup and password-free original recovery ports with immutable anonymous
+  attempt correlation. Closed result validation separates enumeration-safe
+  verification acknowledgement from optional native session issuance and
+  forbids credential redelivery on replay. Existing password APIs are unchanged;
+  the complete native signup workflow remains in development.
+
 - Add bounded, redacted signup input retaining the original raw password,
   generic address, pre-auth cookie, remember choice and opaque retry key.
   Requested attributes have bounded tagged shapes but require independent
