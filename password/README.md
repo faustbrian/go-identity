@@ -83,6 +83,18 @@ before hashing or committing. This checkpoint cannot replace those workflows.
 
 ## API and ownership
 
+`CookieChangeRequest` wraps the unchanged `ChangeRequest` and the session owner's
+opaque `CSRFToken`. Its nested request carries the sole retry key. Its distinct
+`CookieChangeService` port lets optional browser HTTP composition select the
+native cookie profile without importing PostgreSQL or silently falling back to
+bearer change. Trusted transport must first enforce permitted origin and reject
+mixed cookie/bearer channels. Structural `Validate` delegates intrinsic bounds
+only: even a zero CSRF token can pass it, but must be denied by the native service.
+The native owner checks exact synchronizer state under its primary session fence,
+including named-key eligibility before returning a historical retry outcome.
+Neither validation nor formatting consumes token delivery or password custody.
+Cookie native port binding and HTTP endpoint composition remain pending.
+
 `ChangeRequest` is the adapter-neutral authenticated change input. Direct
 callers set its sole required `identity.IdempotencyKey`; HTTP must acquire that
 key only from exactly one `Idempotency-Key` header. The request carries the

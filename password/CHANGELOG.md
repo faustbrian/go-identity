@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add a separate adapter-neutral cookie password-change input and workflow port
+  using the session-owned opaque synchronizer token and the original nested retry
+  key. Structural validation grants no CSRF authority; native transaction checks
+  and exact-origin transport admission remain required. Bearer APIs are unchanged.
+  Cookie native binding and HTTP endpoint composition remain pending.
+
 - Add adapter-neutral keyed password-change request/result and workflow ports.
   Require the original retry key, bounded trusted caller/tenant scope and live
   borrowed password custody without inventing a second proof type or default
