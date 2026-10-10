@@ -961,6 +961,31 @@ No bearer, authority lease, policy decision, refresh or new session is returned.
 Missing/revoked/expired/unequal rows deny uniformly with `identity.ForbiddenError`;
 invalid inputs and storage/corrupt rows retain redacted typed classifications.
 
+## Native password-signin session effects
+
+`NewPasswordSigninEffect(Config, IdentifierAdmissionConfig)` freezes the bounded
+single-factor password admission profile without IO. Install
+`PasswordSigninMigrationSource` after `OTPIssueMigrationSource`, using a permanent
+unused migration version in the existing single history. The forward constraint
+extension preserves populated session and retained issuance records.
+
+The registered `identity/password/postgres` participant calls `Apply` only in
+its original coordinator `Work`, with the original paired password/pre-auth
+command, selected verified recipient and pre-auth snapshot. It must first
+verify actual password and cookie possession, authentic proof provenance,
+complete request intent and risk/policy admission. Structural session mapping
+is not authentication. The effect fences current directory, selected credential
+and authorization without retargeting anonymous command scope; it stages
+pre-auth consumption, family/session and retained issuance in that same Work.
+Original expiry is checked after waits. Every error must reach coordinator Abort;
+provisional success must not disclose a bearer before a known original commit.
+
+`Recover` runs only during that participant's sealed recovery invocation. It
+checks retained original issuance commitments, including after session payload
+cleanup, but returns neither a credential nor current access authority. The
+coordinator reconciles all participants. This seam does not implement password
+comparison, public login orchestration or an HTTP endpoint.
+
 ## Security and tradeoffs
 
 - These are trusted storage APIs, not unauthenticated public endpoints.

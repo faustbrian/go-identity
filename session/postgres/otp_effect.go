@@ -162,6 +162,12 @@ func recoverOTPIssuance[R SessionRows](ctx context.Context, q SessionQueryer[R],
 // One retained decoder serves both sealed recovery and trusted primary
 // inspection; neither path depends on a live payload or reconstructs a session.
 func readOTPIssuanceIdentity[R SessionRows](ctx context.Context, q SessionQueryer[R], schema string, b identity.CommandBinding, transition kernel.LifecyclePlan) (OTPSigninIdentity, kernel.RecoveryStatus, error) {
+	return readNativeIssuanceIdentity(ctx, q, schema, b, transition, otpIssuanceDigest)
+}
+
+// Only closed native wrappers select the retained digest domain. Existing OTP
+// bytes remain unchanged; password signin cannot borrow an OTP commitment.
+func readNativeIssuanceIdentity[R SessionRows](ctx context.Context, q SessionQueryer[R], schema string, b identity.CommandBinding, transition kernel.LifecyclePlan, digestFor func([32]byte, string, string, string, []byte) [32]byte) (OTPSigninIdentity, kernel.RecoveryStatus, error) {
 	id, bindingDigest := revocationEvidence(b, transition)
 	rows, err := q.Query(ctx, `SELECT purpose,user_id,session_id,family_id,binding_digest,record_digest FROM `+schema+`.session_issuances WHERE tenant_id=$1 AND command_id=$2`, string(b.TenantID), id)
 	if err != nil {
@@ -182,7 +188,7 @@ func readOTPIssuanceIdentity[R SessionRows](ctx context.Context, q SessionQuerye
 	if rows.Next() || rows.Err() != nil {
 		return OTPSigninIdentity{}, kernel.RecoveryUnknown, identity.UnavailableError{}
 	}
-	digest := otpIssuanceDigest(bindingDigest, user, idSession, family, record)
+	digest := digestFor(bindingDigest, user, idSession, family, record)
 	if purpose != b.OperationID || !scopeID(user) || (b.UserID != "" && user != string(b.UserID)) || !scopeID(idSession) || !scopeID(family) || subtle.ConstantTimeCompare(stored, digest[:]) != 1 || len(record) != sha256.Size || subtle.ConstantTimeCompare(record, make([]byte, sha256.Size)) == 1 {
 		return OTPSigninIdentity{}, kernel.RecoveryUnknown, nil
 	}
@@ -194,11 +200,19 @@ func readOTPIssuanceIdentity[R SessionRows](ctx context.Context, q SessionQuerye
 // so retained recovery cannot silently substitute either after payload cleanup.
 // This complements the coordinator's keyed intent; it is not authentication.
 func otpIssuanceDigest(binding [32]byte, user, id, family string, record []byte) [32]byte {
+	return nativeIssuanceDigest("identity-session-otp-issuance-v1\x00", binding, user, id, family, record)
+}
+
+func passwordIssuanceDigest(binding [32]byte, user, id, family string, record []byte) [32]byte {
+	return nativeIssuanceDigest("identity-session-password-issuance-v1\x00", binding, user, id, family, record)
+}
+
+func nativeIssuanceDigest(domain string, binding [32]byte, user, id, family string, record []byte) [32]byte {
 	// Closed scalar fields cannot fail JSON encoding; framing is unambiguous.
 	payload, _ := json.Marshal(struct {
 		Binding               [32]byte
 		User, Session, Family string
 		Record                []byte
 	}{binding, user, id, family, record})
-	return sha256.Sum256(append([]byte("identity-session-otp-issuance-v1\x00"), payload...))
+	return sha256.Sum256(append([]byte(domain), payload...))
 }

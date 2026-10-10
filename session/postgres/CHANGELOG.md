@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Add native password-signin session effects that consume original pre-auth
+  state atomically with session, family and retained issuance evidence. Preserve
+  anonymous command scope while fencing the selected credential and authority.
+  Install the forward password-signin migration after OTP issuance history;
+  existing issuance records remain unchanged. Password verification, cookie
+  possession and proof/risk orchestration remain the native password owner's
+  responsibility; this storage seam is not a complete login service.
+
 - Add closed password-signin session mapping for original paired custody.
   Preserve the selected user separately from anonymous command scope, complete
   authentication/authority/remember/CSRF state and exact times. Unsupported or
