@@ -8,5 +8,6 @@ require (
 	github.com/faustbrian/go-identity v0.0.0-20261009172704-f110348f1687
 	github.com/faustbrian/go-identity/risk v0.0.0-20261009171721-32b24c009f8c
 	github.com/faustbrian/go-identity/session v0.0.0-20261009213959-5635323137bb
+	github.com/faustbrian/go-identifier v1.0.1-0.20261004001745-6503365429c8
 	github.com/faustbrian/go-password v1.0.1-0.20261001082808-a3dbd862340c
 )

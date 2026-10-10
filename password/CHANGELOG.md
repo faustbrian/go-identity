@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add bounded, redacted password sign-in input preserving actual pre-auth cookie
+  custody, raw identifier/password bytes and the resolved remember choice.
+  Attempt identity remains server-owned; structural validation grants no flow,
+  authentication or session authority. Native orchestration and endpoint remain
+  in development. Existing password verification/change APIs are unchanged.
+
 - Add a distinct portable cookie-verification input and native workflow port.
   Original session-owned synchronizer custody is required without revealing or
   checking it during intrinsic validation. Native atomic CSRF/proof admission

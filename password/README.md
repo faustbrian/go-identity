@@ -177,6 +177,38 @@ policy values are safe for concurrent reads, not concurrent mutation.
 
 ## Adoption, tradeoffs and FAQ
 
+### Password sign-in input custody
+
+`SigninRequest` carries the original pre-auth transaction ID and actual submitted
+cookie together with raw `identifier.Input`, borrowed password and the already
+resolved session remember policy. Trusted composition supplies tenant, caller,
+exact origin and canonical client IP. There is no client-selected command ID,
+user ID, proof, assurance, clock or retry key: every native sign-in submission
+is a distinct attempt. An ambiguous outcome must be reconciled, not resubmitted.
+
+`Validate` checks bounded structure only. Identifier input is revalidated by
+its owning package without normalization. Origin and callback strings are
+bounded to 2048 visible ASCII bytes; native URL/profile/allowlist validation
+and exact comparison with the original primary flow remain mandatory. Empty
+callback explicitly selects no redirect. Cookie syntax is not proof of flow
+possession. Validation never borrows, changes or destroys the password and does
+not lock its lifetime. Never log explicit scalar projections.
+
+Caller collections admit at most 64 entries each. Group IDs and attribute names
+are bounded to 128 bytes; string values and string-set members to 4096 UTF-8
+bytes, and each set to 64 members before obtaining its copied projection.
+IP attribute zones are empty or bounded non-control UTF-8 text up to 128 bytes.
+Caller evaluation time must retain canonical UTC location: supply `.UTC()` for
+nonzero instants. Validation rejects rather than rewrites borrowed input; that
+instant does not supply native authoritative time. Bounds constrain logical
+content and downstream work, not pre-existing caller container capacities or
+the backing allocations of upstream immutable values. Destruction/ownership
+of those existing allocations remains with their respective owners.
+
+This input checkpoint does not yet expose a completed sign-in service/result,
+MFA continuation, native orchestration or HTTP endpoint. Those remain required
+development work; the existing password verifier alone cannot issue a session.
+
 - **Can these helpers register or authenticate a user?** No. Their sole purpose
   is input admission; the required owning transactional workflows are pending.
 - **Why raw byte limits?** Password normalization changes the secret. Bounds
