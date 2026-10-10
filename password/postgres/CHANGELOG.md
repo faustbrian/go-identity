@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Qualify protected cookie verification through selected HTTP and real primary,
+  password, rate and proof owners. Return the stored signed original without
+  renewing session or synchronizer state; reject invalid custody/password
+  without success effects. Cookie password change consumes the signed proof
+  located by the verification response. Browser and full release remain pending.
+
 - Add explicit native cookie password verification with frozen dedicated
   synchronizer keys and exact primary session/family admission in the existing
   atomic proof/audit/outbox transaction. Rotation after lookup denies, including

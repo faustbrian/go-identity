@@ -495,7 +495,7 @@ func testNativePasswordChange(t *testing.T, ctx context.Context, pool *database.
 	if e != nil {
 		t.Fatal(e)
 	}
-	lastResult, finalPassword := testNativeKeyedPasswordChange(t, ctx, pool, source, sourceConfig, config, last, &calls)
+	lastResult, finalPassword := testNativeKeyedPasswordChange(t, ctx, pool, source, sourceConfig, config, last, secondSecret, &calls)
 	defer finalPassword.Destroy()
 	if lastResult.Outcome != identity.CommitOutcomeCommitted || lastResult.CredentialVersion != 11 {
 		t.Fatal("default strict password change failed", e)

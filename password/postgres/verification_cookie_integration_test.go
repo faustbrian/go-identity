@@ -46,7 +46,8 @@ func testCookieVerificationNative(t *testing.T, ctx context.Context, pool *datab
 	})
 	key, _ := session.NewCSRFKey(3, bytes.Repeat([]byte{81}, 32))
 	newKey, _ := session.NewCSRFKey(4, bytes.Repeat([]byte{82}, 32))
-	token, _ := session.ParseCSRFToken(base64.RawURLEncoding.EncodeToString(bytes.Repeat([]byte{83}, 32)))
+	tokenWire := base64.RawURLEncoding.EncodeToString(bytes.Repeat([]byte{83}, 32))
+	token, _ := session.ParseCSRFToken(tokenWire)
 	wrong, _ := session.ParseCSRFToken(base64.RawURLEncoding.EncodeToString(bytes.Repeat([]byte{84}, 32)))
 	bound := session.CSRFBinding{TenantID: request.TenantID, SessionID: "reauth-session", SessionVersion: 1}
 	state, err := token.Digest(key, bound)
@@ -142,8 +143,8 @@ func testCookieVerificationNative(t *testing.T, ctx context.Context, pool *datab
 	if err != nil {
 		t.Fatal(err)
 	}
-	got, err := cookie.Verify(ctx, input)
-	if err != nil || got.Outcome != identity.CommitOutcomeCommitted || got.Proof.SessionID != bound.SessionID || got.Proof.SessionVersion != bound.SessionVersion {
+	got := testCookiePasswordVerificationHTTP(t, ctx, pool, config, cookie, input, tokenWire)
+	if got.Outcome != identity.CommitOutcomeCommitted || got.Proof.SessionID != bound.SessionID || got.Proof.SessionVersion != bound.SessionVersion {
 		t.Fatal("valid cookie verification failed", err, got.Outcome)
 	}
 	if a, b, c := effects(got.CommandID); a != 1 || b != 1 || c != 1 {

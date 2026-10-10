@@ -27,9 +27,10 @@ import (
 // retirement, changed-token conflict and replay after source revocation. Keep
 // the existing bearer ambiguity/portable tests; no fake terminal journal state.
 // Returned next-request secret is owned/destroyed by the calling test.
-func testCookiePasswordChangeCommit(t *testing.T, ctx context.Context, pool *database.Pool, source *passworddb.ReauthenticationService, sourceConfig passworddb.ReauthenticationConfig, policy passworddb.PasswordChangeConfig, config passworddb.KeyedPasswordChangeConfig, keys *keyring.Provider, request passworddb.PasswordChangeRequest, calls *atomic.Int64) (passworddb.PasswordChangeRequest, func()) {
+func testCookiePasswordChangeCommit(t *testing.T, ctx context.Context, pool *database.Pool, source *passworddb.ReauthenticationService, sourceConfig passworddb.ReauthenticationConfig, policy passworddb.PasswordChangeConfig, config passworddb.KeyedPasswordChangeConfig, keys *keyring.Provider, request passworddb.PasswordChangeRequest, currentPassword primitive.Secret, calls *atomic.Int64) (passworddb.PasswordChangeRequest, func()) {
 	t.Helper()
-	token, err := session.ParseCSRFToken(base64.RawURLEncoding.EncodeToString(bytes.Repeat([]byte{75}, 32)))
+	tokenWire := base64.RawURLEncoding.EncodeToString(bytes.Repeat([]byte{75}, 32))
+	token, err := session.ParseCSRFToken(tokenWire)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -83,6 +84,18 @@ func testCookiePasswordChangeCommit(t *testing.T, ctx context.Context, pool *dat
 	caller.Request.Tenant = authorization.TenantID(request.TenantID)
 	caller.Request.Action = "identity.password.change"
 	caller.Request.Resource = authorization.Resource{Type: "identity.request-admission", ID: "identity.password.change"}
+	verificationOwner, err := passworddb.NewCookieVerificationWorkflow(source, []session.CSRFKey{csrfKey})
+	if err != nil {
+		t.Fatal(err)
+	}
+	verificationCaller := caller.Clone()
+	verificationCaller.Request.Action = "identity.password.verify"
+	verificationCaller.Request.Resource = authorization.Resource{Type: "identity.request-admission", ID: "identity.password.verify"}
+	verification := password.CookieVerificationRequest{Request: password.VerificationRequest{TenantID: request.TenantID, Session: request.Session, Password: currentPassword, Caller: verificationCaller, Network: request.Network, Target: password.VerificationTarget{Purpose: request.Proof.Proof.Purpose, Action: request.Proof.Action, Audience: request.Proof.Proof.Audience}}, CSRFToken: token}
+	// The HTTP locator loads the native signed original, never reconstructs
+	// authority from client fields. Change consumes precisely that original.
+	httpVerified := testCookiePasswordVerificationHTTP(t, ctx, pool, sourceConfig, verificationOwner, verification, tokenWire)
+	request.Proof = httpVerified.Proof
 	input := password.CookieChangeRequest{Request: password.ChangeRequest{TenantID: request.TenantID, Session: request.Session, Proof: request.Proof, Password: request.Password, Caller: caller, Network: request.Network, IdempotencyKey: key}, CSRFToken: token}
 	if err := input.Validate(); err != nil {
 		t.Fatal("portable cookie fixture invalid", err)

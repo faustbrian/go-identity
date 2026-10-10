@@ -10,8 +10,8 @@ require (
 	github.com/faustbrian/go-capability v1.0.1-0.20261005033429-2985d8ea8700 // indirect
 	github.com/faustbrian/go-clock v1.0.0
 	github.com/faustbrian/go-identity v0.0.0-20261009202749-c26bd4f61ca6
-	github.com/faustbrian/go-identity/http v0.0.0-20261010023148-6981a3badf7f
-	github.com/faustbrian/go-identity/http/password v0.0.0-20261010023453-9b153645ac12
+	github.com/faustbrian/go-identity/http v0.0.0-20261010031102-37aa751806f6
+	github.com/faustbrian/go-identity/http/password v0.0.0-20261010031737-7caf5261dd91
 	github.com/faustbrian/go-identity/password v0.0.0-20261010024825-6073e3be42df
 	github.com/faustbrian/go-identity/postgres v0.0.0-20261009225741-cccd836edc90
 	github.com/faustbrian/go-identity/risk v0.0.0-20261009195709-e1506b3d6dd9

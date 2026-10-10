@@ -99,8 +99,8 @@ anonymous/link scopes and foreign/incomplete context deny before native IO.
 The existing direct recovery signature derives the same scope and remains
 unchanged. The integration lane exercises portable issuance and proof-free
 recovery against native signed records and atomic SQL effects, while retaining
-legacy direct callers. Cookie verification, browser interoperability and full
-release qualification remain pending.
+legacy direct callers. Complete cookie lifecycle, browser interoperability and
+full release qualification remain pending.
 
 The optional password HTTP module now selects real native verification through
 `NewBrowserDeviceBearerVerificationFeature`: original Authorization bearer
@@ -113,6 +113,18 @@ keys/namespace and original tenant/HTTPS origin/expiry. No consumer workflow or
 device minting in verification is needed. Focused in-process integration retains
 the stored signed original, audit/outbox and unchanged-session assertions;
 it does not prove browser interoperability or complete release qualification.
+
+For original cookie sessions select `NewCookieVerificationFeature` with
+`NewCookieVerificationWorkflow(service, retainedCSRFKeys)`, the original secure
+session-cookie policy, exact trusted HTTPS origins and the same dedicated device
+issuer. The distinct native cookie owner validates the synchronizer in the
+original proof transaction; HTTP parsing is not authority. Selected-router
+integration exercises absent device/CSRF, wrong synchronizer/password and the
+known committed proof projection against actual OpenAPI. The returned locator
+loads the stored signed original and feeds real cookie password change, which
+consumes that original proof atomically. Verification preserves session and
+synchronizer state and never issues or renews credentials. These in-process
+HTTPS facts are not real-browser or deployment qualification.
 
 ## Native authenticated password change
 
@@ -278,7 +290,9 @@ binding adds no transactions, retry, provider call, mutation authority or store.
 It borrows the existing service and must be drained before borrowed owners close.
 Zero/missing owners and keyless inputs deny. Earlier caller cancellation is
 preserved without entering native work. Existing direct keyed and unkeyed
-service APIs remain available unchanged; optional HTTP wiring remains pending.
+service APIs remain available unchanged. The optional HTTP module supplies
+selected bearer and cookie change handlers; complete lifecycle and browser/
+release qualification remain pending.
 
 Use `NewKeyedPasswordChangeConfig` with a kernel-constructed `RequestKeyConfig`,
 a dedicated nonzero intent HMAC key and the active encryption key ID. Compose

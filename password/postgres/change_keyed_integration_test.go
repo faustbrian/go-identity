@@ -31,7 +31,7 @@ import (
 // original keyed result across process reconstruction and a revoked source.
 // Changed complete input must conflict before provider/hash/counter work. This
 // is local real crypto/SQL, not HIBP interoperability or final release evidence.
-func testNativeKeyedPasswordChange(t *testing.T, ctx context.Context, pool *database.Pool, source *passworddb.ReauthenticationService, sourceConfig passworddb.ReauthenticationConfig, policy passworddb.PasswordChangeConfig, request passworddb.PasswordChangeRequest, calls *atomic.Int64) (passworddb.PasswordChangeResult, primitive.Secret) {
+func testNativeKeyedPasswordChange(t *testing.T, ctx context.Context, pool *database.Pool, source *passworddb.ReauthenticationService, sourceConfig passworddb.ReauthenticationConfig, policy passworddb.PasswordChangeConfig, request passworddb.PasswordChangeRequest, currentPassword primitive.Secret, calls *atomic.Int64) (passworddb.PasswordChangeResult, primitive.Secret) {
 	t.Helper()
 	base := kernel.CredentialReplacementMigrationSource{Base: kernel.CredentialMigrationSource{Base: kernel.StatusMigrationSource{Base: kernel.MigrationSource{}, Version: 10}, Version: 11}, Version: 12}
 	var history migrations.Source = kernel.RequestKeyMigrationSource{Base: base, Version: 13}
@@ -68,7 +68,7 @@ func testNativeKeyedPasswordChange(t *testing.T, ctx context.Context, pool *data
 	t.Run("keyed-original-signal-deadline", func(t *testing.T) {
 		testKeyedPasswordSignalDeadline(t, ctx, pool, source, policy, config, keys, request, calls)
 	})
-	request, cookieReplay := testCookiePasswordChangeCommit(t, ctx, pool, source, sourceConfig, policy, config, keys, request, calls)
+	request, cookieReplay := testCookiePasswordChangeCommit(t, ctx, pool, source, sourceConfig, policy, config, keys, request, currentPassword, calls)
 	// Preserve all original charges/snapshots while starting a fresh synthetic
 	// window for the separately targeted bearer unknown-commit journey.
 	if _, err := pool.Raw().Exec(ctx, `UPDATE password_risk.counter_windows SET started_at=started_at-interval '15 minutes',expires_at=expires_at-interval '15 minutes' WHERE tenant_id=$1 AND operation='identity.password.change'`, string(request.TenantID)); err != nil {

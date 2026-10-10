@@ -7,8 +7,11 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -33,6 +36,16 @@ import (
 // HTTP. Loading the signed original by its returned locator retains native
 // authority; the client projection is never reconstructed into a proof.
 func testBearerPasswordVerificationHTTP(t *testing.T, ctx context.Context, pool *database.Pool, source passworddb.ReauthenticationConfig, workflow password.VerificationService, input passworddb.ReauthenticationRequest) password.VerificationResult {
+	return testPasswordVerificationHTTP(t, ctx, pool, source, workflow, nil, input, "")
+}
+
+func testCookiePasswordVerificationHTTP(t *testing.T, ctx context.Context, pool *database.Pool, source passworddb.ReauthenticationConfig, workflow password.CookieVerificationService, input password.CookieVerificationRequest, csrf string) password.VerificationResult {
+	r := input.Request
+	request := passworddb.ReauthenticationRequest{TenantID: r.TenantID, Session: r.Session, Password: r.Password, Target: passworddb.ReauthenticationTarget{Purpose: r.Target.Purpose, Action: r.Target.Action, Audience: r.Target.Audience}, Caller: r.Caller, Network: r.Network, Device: r.Device}
+	return testPasswordVerificationHTTP(t, ctx, pool, source, nil, workflow, request, csrf)
+}
+
+func testPasswordVerificationHTTP(t *testing.T, ctx context.Context, pool *database.Pool, source passworddb.ReauthenticationConfig, workflow password.VerificationService, cookieWorkflow password.CookieVerificationService, input passworddb.ReauthenticationRequest, csrf string) password.VerificationResult {
 	t.Helper()
 	for _, migration := range []ratepg.Migration{ratepg.SchemaMigration(), ratepg.AtomicSchemaMigration()} {
 		if _, err := pool.Raw().Exec(ctx, migration.Up); err != nil {
@@ -85,7 +98,16 @@ func testBearerPasswordVerificationHTTP(t *testing.T, ctx context.Context, pool 
 	if err != nil {
 		t.Fatal(err)
 	}
-	feature, err := passwordhttp.NewBrowserDeviceBearerVerificationFeature(passwordhttp.BrowserDeviceBearerVerificationConfig{Verification: c, Device: deviceConfig})
+	var feature identityhttp.Feature
+	if cookieWorkflow == nil {
+		feature, err = passwordhttp.NewBrowserDeviceBearerVerificationFeature(passwordhttp.BrowserDeviceBearerVerificationConfig{Verification: c, Device: deviceConfig})
+	} else {
+		policy, e := session.NewCookiePolicy(session.CookieConfig{Name: "__Host-identity_session", SameSite: http.SameSiteLaxMode})
+		if e != nil {
+			t.Fatal(e)
+		}
+		feature, err = passwordhttp.NewCookieVerificationFeature(passwordhttp.CookieVerificationConfig{Network: c.Network, Sessions: c.Sessions, Verification: cookieWorkflow, Rate: c.Rate, Cookie: policy, TrustedOrigins: []identityhttp.Origin{"https://tenant.example"}, Device: deviceConfig, PolicyRevision: c.PolicyRevision, Now: c.Now, MaximumDuration: c.MaximumDuration})
+	}
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -107,21 +129,39 @@ func testBearerPasswordVerificationHTTP(t *testing.T, ctx context.Context, pool 
 		t.Fatal(err)
 	}
 	defer clear(body)
-	r := httptest.NewRequest(http.MethodPost, "/v1/password/verify", bytes.NewReader(body)).WithContext(ctx)
-	r.Host, r.RemoteAddr, r.TLS = "tenant.example", input.Network+":1234", &tls.ConnectionState{}
-	r.Header.Set("Content-Type", "application/json")
-	r.Header.Set("Authorization", "Bearer "+input.Session.Token())
+	request := func(includeDevice bool) *http.Request {
+		r := httptest.NewRequest(http.MethodPost, "/v1/password/verify", bytes.NewReader(body)).WithContext(ctx)
+		r.Host, r.RemoteAddr, r.TLS = "tenant.example", input.Network+":1234", &tls.ConnectionState{}
+		r.Header.Set("Content-Type", "application/json")
+		if cookieWorkflow == nil {
+			r.Header.Set("Authorization", "Bearer "+input.Session.Token())
+		} else {
+			r.Header.Set("Origin", "https://tenant.example")
+			r.Header.Set("X-CSRF-Token", csrf)
+			r.AddCookie(&http.Cookie{Name: "__Host-identity_session", Value: input.Session.Token()})
+		}
+		if includeDevice {
+			r.AddCookie(deviceCookie)
+		}
+		return r
+	}
+	r := request(false)
 	denied := httptest.NewRecorder()
 	h.ServeHTTP(denied, r)
 	var commands int
 	if err := pool.Raw().QueryRow(ctx, `SELECT count(*) FROM rate_limit_atomic_commands`).Scan(&commands); err != nil || denied.Code != 400 || commands != 0 || len(denied.Header().Values("Set-Cookie")) != 0 {
 		t.Fatal("missing original device custody reached native admission", err)
 	}
-	r = httptest.NewRequest(http.MethodPost, "/v1/password/verify", bytes.NewReader(body)).WithContext(ctx)
-	r.Host, r.RemoteAddr, r.TLS = "tenant.example", input.Network+":1234", &tls.ConnectionState{}
-	r.Header.Set("Content-Type", "application/json")
-	r.Header.Set("Authorization", "Bearer "+input.Session.Token())
-	r.AddCookie(deviceCookie)
+	if cookieWorkflow != nil {
+		bad := request(true)
+		bad.Header.Del("X-CSRF-Token")
+		denied = httptest.NewRecorder()
+		h.ServeHTTP(denied, bad)
+		if err := pool.Raw().QueryRow(ctx, `SELECT count(*) FROM rate_limit_atomic_commands`).Scan(&commands); err != nil || denied.Code != 403 || commands != 0 || bytes.Contains(denied.Body.Bytes(), []byte("proofID")) {
+			t.Fatal("missing synchronizer reached native admission", err)
+		}
+	}
+	r = request(true)
 	w := httptest.NewRecorder()
 	h.ServeHTTP(w, r)
 	var out passwordhttp.VerificationResponse
@@ -135,21 +175,64 @@ func testBearerPasswordVerificationHTTP(t *testing.T, ctx context.Context, pool 
 	if err != nil || doc.Version() != "3.1.1" {
 		t.Fatal("native verification document unavailable", err)
 	}
-	schema := parsed.Raw()
-	for _, key := range []string{"paths", "/v1/password/verify", "post", "responses", "200", "content", "application/json", "schema"} {
-		var ok bool
-		schema, ok = schema.Lookup(key)
-		if !ok {
-			t.Fatal("native verification response undocumented")
+	validateResponse := func(response *httptest.ResponseRecorder) {
+		t.Helper()
+		schema := parsed.Raw()
+		for _, key := range []string{"paths", "/v1/password/verify", "post", "responses", strconv.Itoa(response.Code), "content", "application/json", "schema"} {
+			var ok bool
+			schema, ok = schema.Lookup(key)
+			if !ok {
+				t.Fatal("native verification response undocumented")
+			}
+		}
+		instance, err := parse.JSON(ctx, bytes.NewReader(response.Body.Bytes()), parse.DefaultLimits())
+		if err != nil {
+			t.Fatal("native verification response not JSON")
+		}
+		report, err := validate.SchemaInstance(ctx, parsed, schema, instance, validate.InstanceOptions{Direction: validate.DirectionResponse})
+		if err != nil || !report.Valid() {
+			t.Fatal("native verification response violates selected wire")
 		}
 	}
-	instance, err := parse.JSON(ctx, bytes.NewReader(w.Body.Bytes()), parse.DefaultLimits())
-	if err != nil {
-		t.Fatal("native verification response not JSON")
-	}
-	report, err := validate.SchemaInstance(ctx, parsed, schema, instance, validate.InstanceOptions{Direction: validate.DirectionResponse})
-	if err != nil || !report.Valid() {
-		t.Fatal("native verification response violates selected wire")
+	validateResponse(w)
+	if cookieWorkflow != nil {
+		for _, scenario := range []string{"wrong-synchronizer", "wrong-password"} {
+			var proofsBefore, outboxesBefore int
+			if e := pool.Raw().QueryRow(ctx, `SELECT (SELECT count(*) FROM identity_password.reauthentication_records),(SELECT count(*) FROM public.identity_outbox_bindings)`).Scan(&proofsBefore, &outboxesBefore); e != nil {
+				t.Fatal("denial baseline unavailable", e)
+			}
+			bad := request(true)
+			if scenario == "wrong-synchronizer" {
+				bad.Header.Set("X-CSRF-Token", strings.Repeat("A", 43))
+			} else {
+				var fields map[string]string
+				if json.Unmarshal(body, &fields) != nil {
+					t.Fatal("request fixture invalid")
+				}
+				fields["password"] = "incorrect-synthetic-password"
+				badBody, e := json.Marshal(fields)
+				if e != nil {
+					t.Fatal(e)
+				}
+				defer clear(badBody)
+				bad.Body = io.NopCloser(bytes.NewReader(badBody))
+				bad.ContentLength = int64(len(badBody))
+			}
+			denied := httptest.NewRecorder()
+			h.ServeHTTP(denied, bad)
+			validateResponse(denied)
+			var denial passwordhttp.VerificationResponse
+			if json.Unmarshal(denied.Body.Bytes(), &denial) != nil || denied.Code != 403 || denial.Verified || denial.Proof != nil || len(denied.Header().Values("Set-Cookie")) != 0 {
+				t.Fatalf("native cookie denial failed: case=%s status=%d", scenario, denied.Code)
+			}
+			// Mismatch may deliberately expose no command ID. Prove absence of
+			// protected success effects independently of disclosure; failure audits
+			// are allowed and do not make these serial fixture counts increase.
+			var proofsAfter, outboxesAfter int
+			if e := pool.Raw().QueryRow(ctx, `SELECT (SELECT count(*) FROM identity_password.reauthentication_records),(SELECT count(*) FROM public.identity_outbox_bindings)`).Scan(&proofsAfter, &outboxesAfter); e != nil || proofsAfter != proofsBefore || outboxesAfter != outboxesBefore {
+				t.Fatal("denial retained protected success effects", e)
+			}
+		}
 	}
 	repository, err := passworddb.NewRepository(pool, source.Repository)
 	if err != nil {
