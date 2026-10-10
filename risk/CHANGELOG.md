@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add `AuthenticationAdmission.CheckAt` for native transactions to recheck
+  authenticated original risk facts at trusted primary time without configured
+  callbacks under locks. Original bounds remain exclusive and cannot renew;
+  existing clock-based `Check` remains compatible. Native workflow adoption
+  and full release qualification remain pending.
+
 - Apply the canonical Authentication abuse profile to password verification:
   count and audit the exact `identity.password.verify` attempt before password
   work instead of unconditionally denying the operation. Required signals,

@@ -239,11 +239,29 @@ func (a AuthenticationAdmission) Check(ctx context.Context) (err error) {
 			err = ErrInvalidAuthenticationAdmission
 		}
 	}()
-	p := a.prepared
 	now := a.owner.evaluation.state.clock()
+	return a.CheckAt(ctx, now)
+}
+
+// CheckAt re-assesses this opaque authenticated admission at a trusted server
+// observation, such as the owning transaction's primary database time. Never
+// supply request-controlled time. Unlike Check, it invokes no configured clock,
+// source, counter or audit callback, so it can run while the owner holds locks.
+// The original facts and exclusive expiry remain unchanged; backward or invalid
+// observations deny. Nil contexts and cancellation retain their existing errors.
+// This establishes neither current account authority nor one-time consumption.
+// It is bounded, IO-free and safe for concurrent use.
+func (a AuthenticationAdmission) CheckAt(ctx context.Context, now time.Time) error {
+	if ctx == nil {
+		return ErrInvalidContext
+	}
 	if err := ctx.Err(); err != nil {
 		return err
 	}
+	if a.owner == nil {
+		return ErrInvalidAuthenticationAdmission
+	}
+	p := a.prepared
 	if !validTime(now) || now.Before(p.Scope.Now) {
 		return ErrInvalidAuthenticationAdmission
 	}

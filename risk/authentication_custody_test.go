@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -87,6 +88,90 @@ func TestAuthenticationCustodyRestartsWithoutRenewalOrIO(t *testing.T) {
 	}
 	if _, err := fresh.Restore(context.Background(), retained, request.Context, request.Subject); !errors.Is(err, ErrInvalidAuthenticationAdmission) {
 		t.Fatal("expired restoration allowed", err)
+	}
+}
+
+func TestAuthenticationAdmissionCheckAtPreservesOriginalBoundsWithoutCallbacks(t *testing.T) {
+	c, request, result, config, key, now, calls := authenticationCustodyFixture(t)
+	a, err := c.Prepare(context.Background(), result, request.Context, request.Subject)
+	if err != nil {
+		t.Fatal(err)
+	}
+	original := a.Prepared()
+	clockCalls := 0
+	config.Clock = func() time.Time {
+		clockCalls++
+		if clockCalls > 1 {
+			panic("private clock failure")
+		}
+		return *now
+	}
+	e, err := NewEvaluator(config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fresh, err := NewAuthenticationAdmissionCustody(AuthenticationAdmissionCustodyConfig{Evaluation: e, ConfigurationID: "otp-auth-v1", Keys: []EvidenceKey{key}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	restored, err := fresh.Restore(context.Background(), original, request.Context, request.Subject)
+	if err != nil {
+		t.Fatal(err)
+	}
+	beforeCalls := *calls
+	for _, admission := range []AuthenticationAdmission{a, restored} {
+		for _, at := range []time.Time{*now, now.Add(30*time.Second - time.Nanosecond), now.In(time.FixedZone("primary", 3600))} {
+			if err := admission.CheckAt(context.Background(), at); err != nil {
+				t.Fatal("fresh primary observation denied", err)
+			}
+		}
+		for _, at := range []time.Time{time.Time{}, time.Date(10000, 1, 1, 0, 0, 0, 0, time.UTC), now.Add(-time.Nanosecond), now.Add(30 * time.Second), now.Add(time.Hour)} {
+			if err := admission.CheckAt(context.Background(), at); !errors.Is(err, ErrInvalidAuthenticationAdmission) {
+				t.Fatal("invalid or expired observation admitted", err)
+			}
+		}
+		projection := admission.Prepared()
+		projection.Signals[0].ExpiresAt = now.Add(time.Hour)
+		if err := admission.CheckAt(context.Background(), now.Add(30*time.Second)); !errors.Is(err, ErrInvalidAuthenticationAdmission) {
+			t.Fatal("returned projection renewed admission", err)
+		}
+		if !reflect.DeepEqual(original, admission.Prepared()) {
+			t.Fatal("primary checks changed original custody")
+		}
+	}
+	if clockCalls != 1 || *calls != beforeCalls {
+		t.Fatal("primary check invoked configured callbacks")
+	}
+	if err := restored.Check(context.Background()); !errors.Is(err, ErrInvalidAuthenticationAdmission) || clockCalls != 2 || strings.Contains(err.Error(), "private") {
+		t.Fatal("legacy clock check changed or leaked", err)
+	}
+}
+
+func TestAuthenticationAdmissionCheckAtContextAndZero(t *testing.T) {
+	c, request, result, _, _, now, _ := authenticationCustodyFixture(t)
+	a, err := c.Prepare(context.Background(), result, request.Context, request.Subject)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := a.CheckAt(nil, *now); !errors.Is(err, ErrInvalidContext) {
+		t.Fatal("nil context admitted", err)
+	}
+	if err := (AuthenticationAdmission{}).CheckAt(context.Background(), *now); !errors.Is(err, ErrInvalidAuthenticationAdmission) {
+		t.Fatal("zero admission admitted", err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if err := a.CheckAt(ctx, *now); !errors.Is(err, context.Canceled) {
+		t.Fatal("cancellation lost", err)
+	}
+	for _, checkpoint := range []int{2, 3} {
+		parent, stop := context.WithCancel(context.Background())
+		during := &authenticationCancelContext{Context: parent, cancel: stop, remaining: checkpoint}
+		err := a.CheckAt(during, *now)
+		stop()
+		if !errors.Is(err, context.Canceled) {
+			t.Fatal("assessment cancellation lost", checkpoint, err)
+		}
 	}
 }
 

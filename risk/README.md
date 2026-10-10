@@ -37,6 +37,13 @@ exclusive expiry; copies, retries, caller clocks and restoration cannot renew
 them. Both avoid source, counter and audit IO. Original counter/audit identity
 is retained in a keyed digest, not replayed as a new mutation.
 
+An owning native transaction may use `admission.CheckAt(ctx, primaryTime)` to
+validate the same opaque admission against its trusted database observation.
+It invokes no configured callbacks and retains every original interval and
+exclusive expiry. Never pass transport/request-controlled time. `Check(ctx)`
+continues to use the evaluator clock for checks outside that transaction;
+neither method supplies current account authority or consumes one-use evidence.
+
 This is non-issuing abuse admission, **not** phone/CAPTCHA one-use evidence,
 caller authentication, current account/flow/recipient authority, native store
 health or a public OTP Send service. The owning workflow must still recheck its
