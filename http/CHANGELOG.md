@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Permit explicit strict bearer selection for canonical password verification,
+  preserving its non-keyed request, session authority and rate.verify contract.
+  Stored-session cookie selection and unrelated password operations are unchanged.
+
 - Add atomic non-keyed password-verification admission: trusted IP20/10m and
   current tenant/subject10/10m debit together through native strict rate storage.
   Each attempt gets fresh server correlation; unknown outcomes fail closed

@@ -15,7 +15,9 @@ import (
 // and MFA variants. Self-signout and password-change additionally admit None
 // (explicit bearer) or SessionState (cookie origin plus active-state token).
 // Password change requires an active session; only self-signout admits absent/
-// inactive origin-only success. MaximumSerializedBytes
+// inactive origin-only success. Password verification additionally admits None
+// for its strict bearer handler, but not a stored-synchronizer cookie profile.
+// MaximumSerializedBytes
 // bounds each schema summary (1..16MiB); it is not response-size enforcement.
 // Handler must be usable/concurrency-safe and own its declared security. Nil
 // handlers and typed-nil HandlerFunc are invalid. No callback is invoked here.
