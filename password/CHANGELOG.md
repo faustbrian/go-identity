@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add bounded, redacted signup input retaining the original raw password,
+  generic address, pre-auth cookie, remember choice and opaque retry key.
+  Requested attributes have bounded tagged shapes but require independent
+  schema/policy admission. Structural validation grants no creation or session
+  authority; complete native registration remains in development.
+
 - Add a native sign-in/recovery port, immutable password-free original attempt
   correlation, and structurally checked session-owned results. Historical
   recovery preserves deleted-session identity without credential redelivery;

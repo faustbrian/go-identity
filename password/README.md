@@ -1,5 +1,16 @@
 # Identity password workflows
 
+`SignupRequest` borrows the original raw password, pre-auth cookie and opaque
+retry key, preserving the already-resolved remember policy. Its `Email` field
+uses generic `SignupAddressInput`, not an email-owned type or parser. `Validate`
+checks structure and the signup action only: requested attributes remain
+unapproved until the identity owner applies its frozen schema, authorization
+and sensitivity policy. The native registration owner must independently admit
+the original flow, screen HIBP/risk, hash and coordinate every required effect.
+No account, verification, session or delivery authority follows from validation.
+The complete signup service, verification lifecycle and optional signup-session
+composition remain in development. This input port is not an executable signup.
+
 `SigninService` supplies distinct non-keyed login and password-free historical
 recovery ports for the native adapter. `SigninRecovery` freezes the existing
 kernel query and original pre-auth identity; it preserves user versus anonymous
