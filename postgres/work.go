@@ -46,6 +46,7 @@ type workState struct {
 	featureAttempted      bool
 	authenticationChecked bool
 	featureReceipt        *identity.FeatureReceipt
+	featureCommitCommand  *identity.Command
 	featureInvocation     FeatureExecutionContributor
 	featureApplying       bool
 	delivery              *workDelivery
@@ -265,6 +266,7 @@ func invalidateWork(w Work) {
 		w.state.delivery.bytes = 0
 	}
 	w.state.counterCommand = nil
+	w.state.featureCommitCommand = nil
 	w.state.riskCommand = nil
 	w.state.captchaCommand = nil
 	w.state.otpCommand = nil

@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add an optional exact-owner native feature check at the final SQL commit
+  boundary, after audit/outbox and journal writes. Original admission expiry
+  or failure rolls back provisional effects without renewing facts; callback
+  scope cannot regain Apply-only command authority. Existing contributors and
+  commit APIs remain compatible.
+
 - Add kernel-owned credential eligibility for an original selected email/phone
   recipient, retaining anonymous command scope and locking current identifier,
   user and credential authority until transaction closure. Expose original

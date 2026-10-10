@@ -1,5 +1,21 @@
 # Identity PostgreSQL
 
+## Final native feature admission
+
+A native feature owner may implement `FeatureCommitContributor` in addition to
+the unchanged execution contract. The coordinator invokes `CheckFeatureCommit`
+with the original command after required audit/outbox, journal writes and other
+final checks, immediately before SQL commit. Use original expiry/admission
+facts and bounded primary reads; never renew facts, mutate, stage effects,
+perform network IO or retain Work. Existing owners without this optional
+contract keep their behavior.
+
+Only the exact selected owner's synchronous check can use `FeatureScope`.
+Apply-only `FeatureCommandIdentity` remains unavailable. Callback failures,
+panics or unfinished rows roll back all provisional effects; SQL commit
+ambiguity keeps its existing unknown classification. This seam grants neither
+password authentication nor token delivery and creates no additional journal.
+
 ## Original password-signin intent
 
 The coordinator explicitly selects `identity.NewFeaturePasswordSigninCommand`

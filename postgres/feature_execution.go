@@ -31,6 +31,21 @@ type FeatureExecutionContributor interface {
 	ApplyFeature(context.Context, Work, identity.Command) (identity.FeatureReceipt, error)
 }
 
+// FeatureCommitContributor optionally rechecks the exact native feature's
+// original admission after all required persistence and journal writes, just
+// before SQL commit. Existing contributors remain source-compatible. Check
+// receives the original immutable command and serial generation-bound Work;
+// FeatureScope is available only for this exact synchronous invocation, while
+// Apply-only command identity is unavailable. The check may perform bounded
+// primary reads and inspect original facts, never mutate, stage effects, renew
+// admission, perform network IO, retain Work or begin another transaction.
+// Errors or panics deny and roll back provisional effects; SQL commit ambiguity
+// retains its existing Unknown outcome. Calls on independent Work may overlap.
+type FeatureCommitContributor interface {
+	FeatureExecutionContributor
+	CheckFeatureCommit(context.Context, Work, identity.Command) error
+}
+
 // Keep both pre-transaction and open-Work validation inside the same redaction
 // boundary. Validation has no authority to preserve callback diagnostics.
 func validateFeatureCommand(phase FeatureExecutionContributor, command identity.Command, plan CommandPlan) (err error) {
@@ -329,7 +344,54 @@ func (c *Coordinator) ApplyFeature(ctx context.Context, w Work, command identity
 	}
 	stored := receipt
 	w.state.featureReceipt = &stored
+	if _, required := phase.(FeatureCommitContributor); required {
+		original := command
+		w.state.featureCommitCommand = &original
+	}
 	return result, nil
+}
+
+func (c *Coordinator) checkFeatureCommit(w Work) (err error) {
+	if !c.owns(w) || w.usable() != nil {
+		return invalidWork()
+	}
+	if w.state.feature == nil {
+		return nil
+	}
+	entry, err := c.registry.selectFeatureOperation(*w.state.feature)
+	if err != nil {
+		return w.fail(w.state.ctx, invalidPlan())
+	}
+	phase, required := entry.contributor.(FeatureCommitContributor)
+	if !required {
+		return nil
+	}
+	if !w.state.featureAttempted || w.state.featureReceipt == nil || w.state.featureCommitCommand == nil || w.state.featureInvocation != nil || w.state.rows != nil {
+		return w.fail(w.state.ctx, invalidWork())
+	}
+	w.state.featureInvocation = phase
+	defer func() {
+		w.state.featureInvocation = nil
+		if recover() != nil {
+			err = w.fail(w.state.ctx, identity.UnavailableError{})
+		}
+	}()
+	if err = phase.CheckFeatureCommit(w.state.ctx, w, *w.state.featureCommitCommand); err != nil {
+		// Never retain caller-owned diagnostic fields or text from a callback.
+		switch err.(type) {
+		case identity.ForbiddenError:
+			err = identity.ForbiddenError{}
+		case identity.ConflictError:
+			err = identity.ConflictError{}
+		default:
+			err = identity.UnavailableError{}
+		}
+		return w.fail(w.state.ctx, err)
+	}
+	if w.state.rows != nil {
+		return w.fail(w.state.ctx, invalidWork())
+	}
+	return w.usable()
 }
 
 // Restrict self-verification to the exact synchronous native phase. Clear it

@@ -58,7 +58,10 @@ func (phase *featureExecutionPhase) ValidateFeatureCommand(command identity.Comm
 
 // This seam records every slot and selected retention class on the real primary;
 // it does not replace the production audit adapter's interoperability gate.
-type featureExecutionAuditPhase struct{ fail, anonymous bool }
+type featureExecutionAuditPhase struct {
+	fail, anonymous bool
+	afterPersist    func(context.Context, Work) error
+}
 
 func (*featureExecutionAuditPhase) Descriptor() ContributorDescriptor {
 	return (&domainAuditPhase{}).Descriptor()
@@ -79,7 +82,19 @@ func (p *featureExecutionAuditPhase) PersistAudits(ctx context.Context, w Work) 
 	if p.fail {
 		return identity.UnavailableError{}
 	}
+	if p.afterPersist != nil {
+		return p.afterPersist(ctx, w)
+	}
 	return nil
+}
+
+type featureFinalCheckPhase struct {
+	*featureExecutionPhase
+	check func(context.Context, Work, identity.Command) error
+}
+
+func (p *featureFinalCheckPhase) CheckFeatureCommit(ctx context.Context, w Work, command identity.Command) error {
+	return p.check(ctx, w, command)
 }
 func (*featureExecutionAuditPhase) RecoverParticipant(ctx context.Context, w RecoveryWork) (RecoveryStatus, error) {
 	if _, err := w.AuditPlans(); err != nil {
@@ -221,6 +236,103 @@ func testFeatureExecution(t *testing.T, ctx context.Context, pool *database.Pool
 			t.Fatalf("feature atomic state %d/%d/%d: %v", d, a, o, err)
 		}
 	}
+	t.Run("final native admission follows persisted effects", func(t *testing.T) {
+		originalRegistry := c.registry
+		defer func() { c.registry = originalRegistry; auditing.afterPersist = nil }()
+		for _, mode := range []string{"allow", "expiry", "panic"} {
+			t.Run(mode, func(t *testing.T) {
+				final := &featureFinalCheckPhase{featureExecutionPhase: phase}
+				c.registry, err = NewContributorRegistry([]Contributor{repo, auditing, lifecycle, final})
+				if err != nil {
+					t.Fatal(err)
+				}
+				b, command, p := prepare(t)
+				called := 0
+				var deadline time.Time
+				var retained Work
+				final.check = func(checkContext context.Context, w Work, original identity.Command) error {
+					called++
+					retained = w
+					scope, feature, _, e := w.FeatureScope(final)
+					if e != nil || scope != b || original != command || feature.Operation != p.Feature.Operation {
+						return invalidWork()
+					}
+					if _, _, _, e = w.FeatureCommandIdentity(final); e == nil {
+						t.Fatal("final check reopened Apply authority")
+					}
+					var a, o int
+					rows, e := w.Query(checkContext, `SELECT (SELECT count(*) FROM public.identity_test_feature_audits WHERE command_id=$1),(SELECT count(*) FROM public.identity_test_lifecycle WHERE command_id=$1)`, string(b.CommandID))
+					if e != nil {
+						return e
+					}
+					if !rows.Next() {
+						rows.Close()
+						return invalidWork()
+					}
+					e = rows.Scan(&a, &o)
+					extra, rowErr := rows.Next(), rows.Err()
+					rows.Close()
+					if e != nil || extra || rowErr != nil || a != 1 || o != 1 {
+						return invalidWork()
+					}
+					if mode == "panic" {
+						panic("synthetic private final diagnostic")
+					}
+					if mode == "expiry" {
+						now, e := w.DatabaseTime(checkContext)
+						if e != nil {
+							return e
+						}
+						if now.Before(deadline) {
+							t.Fatal("expiry fixture did not cross original bound")
+						}
+						return identity.ForbiddenError{}
+					}
+					return nil
+				}
+				auditing.afterPersist = nil
+				if mode == "expiry" {
+					auditing.afterPersist = func(ctx context.Context, w Work) error {
+						now, e := w.DatabaseTime(ctx)
+						if e != nil {
+							return e
+						}
+						deadline = now.Add(30 * time.Millisecond)
+						_, e = w.Exec(ctx, `SELECT pg_sleep(0.05)`)
+						return e
+					}
+				}
+				r := reserve(t, b, command, p)
+				w, e := c.Begin(ctx, r)
+				if e != nil {
+					t.Fatal(e)
+				}
+				defer c.Abort(w, identity.UnavailableError{})
+				result, e := c.ApplyFeature(ctx, w, command)
+				if e != nil {
+					t.Fatal(e)
+				}
+				result, e = c.Commit(w, result)
+				if called != 1 {
+					t.Fatal("native final admission not invoked exactly once")
+				}
+				if mode == "allow" {
+					if e != nil || result.Outcome != identity.CommitOutcomeCommitted {
+						t.Fatal("valid final admission did not commit", e)
+					}
+					counts(t, b, 1, 1, 1)
+				} else {
+					if e == nil || result.Outcome != identity.CommitOutcomeNotCommitted {
+						t.Fatal("failed final admission did not prove rollback", e)
+					}
+					counts(t, b, 0, 1, 0)
+				}
+				if _, _, _, e = retained.FeatureScope(final); e == nil {
+					t.Fatal("returned final scope survived")
+				}
+			})
+		}
+	})
 	t.Run("multiple audit slots and recovery", func(t *testing.T) {
 		for _, recoverOnly := range []bool{false, true} {
 			b, command, p := prepare(t)
