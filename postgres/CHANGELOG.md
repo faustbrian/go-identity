@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Allow authenticated restored anonymous signup preparations to enlist their
+  original new-user verification issuance and optional delivery in the existing
+  transaction. Preserve original admission, journal identity, generation and
+  contributor ordering; consumption and other protected profiles remain closed.
+  Native issuer restoration and complete signup orchestration remain required.
+
 - Permit explicitly frozen new-user verification grants in anonymous native
   password signup, only after that same transaction has created the selected
   user. Preserve original command scope, rollback and recovery metadata;

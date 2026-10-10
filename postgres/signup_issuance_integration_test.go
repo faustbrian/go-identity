@@ -17,16 +17,30 @@ import (
 	"github.com/faustbrian/go-capability"
 	identity "github.com/faustbrian/go-identity"
 	database "github.com/faustbrian/go-postgres"
+	"github.com/jackc/pgx/v5"
 )
 
 // This exercises the kernel's selected-subject transaction boundary, not the
 // capability adapter's signing policy or a complete email/password workflow.
 func testSignupCapabilityIssuance(t *testing.T, ctx context.Context, pool *database.Pool, repo *Repository, domain *PasswordRegistrationDomain) {
-	if _, err := pool.Raw().Exec(ctx, `CREATE TABLE public.identity_test_issuance(command_id text UNIQUE NOT NULL,capability_id text PRIMARY KEY,proof_fingerprint bytea NOT NULL,replay_digest bytea NOT NULL,generation numeric NOT NULL)`); err != nil {
+	if _, err := pool.Raw().Exec(ctx, preparationSchemaSQL); err != nil {
 		t.Fatal(err)
 	}
-	for _, mode := range []string{"commit", "missing-registration", "foreign-target", "wrong-subject", "wrong-tenant", "issuer-failure", "later-failure", "disconnect-before", "disconnect-after"} {
-		t.Run(mode, func(t *testing.T) {
+	if _, err := pool.Raw().Exec(ctx, `CREATE TABLE public.identity_test_issuance(command_id text UNIQUE NOT NULL,capability_id text PRIMARY KEY,proof_fingerprint bytea NOT NULL,replay_digest bytea NOT NULL,generation numeric NOT NULL); CREATE TABLE public.identity_test_delivery(command_id text UNIQUE NOT NULL,effect_id text PRIMARY KEY,digest bytea NOT NULL,ciphertext bytea NOT NULL)`); err != nil {
+		t.Fatal(err)
+	}
+	for _, profile := range []string{"commit", "missing-registration", "foreign-target", "wrong-subject", "wrong-tenant", "issuer-failure", "later-failure", "disconnect-before", "disconnect-after", "prepared-commit", "prepared-restart", "prepared-missing-registration", "prepared-foreign-target", "prepared-wrong-subject", "prepared-issuer-failure", "prepared-later-failure", "prepared-delivery-commit", "prepared-delivery-failure", "prepared-delivery-later-failure"} {
+		t.Run(profile, func(t *testing.T) {
+			mode := strings.TrimPrefix(profile, "prepared-")
+			prepared := mode != profile
+			withDelivery := strings.HasPrefix(mode, "delivery-")
+			if withDelivery {
+				mode = strings.TrimPrefix(mode, "delivery-")
+			}
+			restart := mode == "restart"
+			if restart {
+				mode = "commit"
+			}
 			pool, repo, domain := pool, repo, domain
 			var fault *registrationCommitFault
 			if strings.HasPrefix(mode, "disconnect-") {
@@ -79,7 +93,24 @@ func testSignupCapabilityIssuance(t *testing.T, ctx context.Context, pool *datab
 			}
 			phase := &registrationTestPhase{domain: domain, expected: command, intent: intent, issuer: issuer, skip: mode == "missing-registration"}
 			audits, lifecycle := &recoveryAuditPhase{}, &recoveryLifecyclePhase{fail: mode == "later-failure"}
-			registry, err := NewContributorRegistry([]Contributor{repo, audits, lifecycle, phase, issuer})
+			var native Contributor = phase
+			var preparation *signupPreparationPhase
+			var delivery *deliverySQLPhase
+			if withDelivery {
+				delivery = &deliverySQLPhase{}
+				if mode == "failure" {
+					delivery.mode = "error"
+				}
+			}
+			if prepared {
+				preparation = &signupPreparationPhase{registrationTestPhase: phase, delivery: delivery}
+				native = preparation
+			}
+			contributors := []Contributor{repo, audits, lifecycle, native, issuer}
+			if delivery != nil {
+				contributors = append(contributors, delivery)
+			}
+			registry, err := NewContributorRegistry(contributors)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -133,24 +164,76 @@ func testSignupCapabilityIssuance(t *testing.T, ctx context.Context, pool *datab
 			}
 			g := &plan.CapabilityIssuance.Grants[0]
 			g.CapabilityID, g.ExpiresAt, g.ProofFingerprint = payload.ID, payload.ExpiresAt, sha256.Sum256([]byte(token))
+			if withDelivery {
+				plan.Delivery = deliveryTestPlan()
+				plan.Delivery.Intents[0].EffectID = string(b.CommandID)
+				plan.Delivery.Intents[0].SubjectID = b.AnonymousFlowID
+				plan.Delivery.Intents[0].ExpiresAt = payload.ExpiresAt
+			}
 			plan, err = c.PrepareCommandPlan(b, command, plan)
 			if err != nil {
 				t.Fatal("selected signup plan", err)
 			}
-			reservation, _, err := c.ReserveCommand(ctx, b, command, plan)
-			if err != nil || reservation.state == nil {
-				t.Fatal("reservation", err)
-			}
-			w, err := c.Begin(ctx, reservation)
-			if err != nil {
-				t.Fatal(err)
-			}
-			defer c.Abort(w, identity.UnavailableError{})
-			result, err := c.ApplyFeature(ctx, w, command)
-			if err == nil {
-				result, err = c.Commit(w, result)
+			var result identity.CommandResult
+			declaration := plan
+			if prepared {
+				preparation.token, preparation.declaration = token, plan
+				declaration.CapabilityIssuance = nil
+				declaration.Delivery = nil
+				declaration.Contributors = declaration.Contributors[:len(declaration.Contributors)-1]
+				if withDelivery {
+					declaration.Contributors = declaration.Contributors[:len(declaration.Contributors)-1]
+				}
+				declaration.Digest = [32]byte{}
+				if restart {
+					commits := 0
+					c.preparationCommit = func(ctx context.Context, tx pgx.Tx) error {
+						commits++
+						if err := tx.Commit(ctx); err != nil {
+							return err
+						}
+						if commits == 2 {
+							return identity.UnavailableError{}
+						}
+						return nil
+					}
+					result, err = c.ExecutePreparedFeature(ctx, command, declaration)
+					if err == nil || result.Outcome != identity.CommitOutcomeUnknown || preparation.generated.Load() != 1 {
+						t.Fatal("lost retention acknowledgement replaced original issuance", err)
+					}
+					id, _ := base64.RawURLEncoding.DecodeString(string(b.CommandID))
+					if _, err := pool.Raw().Exec(ctx, `UPDATE identity.commands SET created_at=clock_timestamp()-interval '3 seconds',heartbeat_at=clock_timestamp()-interval '2 seconds',updated_at=clock_timestamp()-interval '2 seconds',lease_until=clock_timestamp()-interval '1 second' WHERE command_id=$1`, id); err != nil {
+						t.Fatal(err)
+					}
+					preparation = &signupPreparationPhase{registrationTestPhase: phase, declaration: plan}
+					registry, err = NewContributorRegistry([]Contributor{repo, audits, lifecycle, preparation, issuer})
+					if err != nil {
+						t.Fatal(err)
+					}
+					fresh := *c
+					fresh.registry, fresh.preparationCommit = registry, nil
+					fresh.keys = claimKeys{current: 2, retained: map[uint32][32]byte{1: {1}, 2: {2}}}
+					c = &fresh
+				}
+				result, err = c.ExecutePreparedFeature(ctx, command, declaration)
 			} else {
-				_, _ = c.Abort(w, err)
+				var reservation Reservation
+				reservation, _, err = c.ReserveCommand(ctx, b, command, plan)
+				if err != nil || reservation.state == nil {
+					t.Fatal("reservation", err)
+				}
+				var w Work
+				w, err = c.Begin(ctx, reservation)
+				if err != nil {
+					t.Fatal(err)
+				}
+				defer c.Abort(w, identity.UnavailableError{})
+				result, err = c.ApplyFeature(ctx, w, command)
+				if err == nil {
+					result, err = c.Commit(w, result)
+				} else {
+					_, _ = c.Abort(w, err)
+				}
 			}
 			want := 0
 			if fault != nil {
@@ -192,21 +275,57 @@ func testSignupCapabilityIssuance(t *testing.T, ctx context.Context, pool *datab
 				if issuer.binding.Command != b || issuer.binding.Plan.RegistrationUserID != identity.UserID(u) {
 					t.Fatal("issuer retargeted original anonymous command")
 				}
-				_, history, e := c.ReserveCommand(ctx, b, command, plan)
+				var history identity.CommandResult
+				var e error
+				if prepared {
+					history, e = c.ExecutePreparedFeature(ctx, command, declaration)
+				} else {
+					_, history, e = c.ReserveCommand(ctx, b, command, plan)
+				}
 				if e != nil || history.Outcome != identity.CommitOutcomeCommitted || history.Binding != b {
 					t.Fatal("original anonymous replay lost", e)
 				}
-				changed := plan
-				changed.CapabilityIssuance = cloneCapabilityIssuancePlan(plan.CapabilityIssuance)
-				changed.CapabilityIssuance.RegistrationUserID = "different-user"
-				changed, e = c.PrepareCommandPlan(b, command, changed)
-				if e != nil {
-					t.Fatal(e)
-				}
-				_, conflict, e := c.ReserveCommand(ctx, b, command, changed)
-				var conflictError identity.ConflictError
-				if !errors.As(e, &conflictError) || conflict.Outcome != identity.CommitOutcomeConflict {
-					t.Fatal("changed target replayed original signup", e)
+				if prepared {
+					wantGenerated := int64(1)
+					if restart {
+						wantGenerated = 0
+					}
+					if preparation.generated.Load() != wantGenerated || preparation.restored.Load() != 1 || issuer.invocations != 1 || preparation.outputGeneration != 1 || issuer.binding.Plan.Grants[0].ExpiresAt != payload.ExpiresAt {
+						t.Fatal("original prepared issuance changed on replay/restart")
+					}
+					s, _ := command.PasswordSignupFeature()
+					_, cookie, _ := command.PasswordSignupCustody()
+					changedCommand, e := identity.NewFeaturePasswordSignupCommand(s, "$synthetic$changed-verifier", cookie)
+					if e != nil {
+						t.Fatal(e)
+					}
+					changedPhase := *phase
+					changedPhase.expected = changedCommand
+					changedOwner := &signupPreparationPhase{registrationTestPhase: &changedPhase, declaration: plan}
+					changedRegistry, e := NewContributorRegistry([]Contributor{repo, audits, lifecycle, changedOwner, issuer})
+					if e != nil {
+						t.Fatal(e)
+					}
+					changedCoordinator := *c
+					changedCoordinator.registry = changedRegistry
+					conflict, e := changedCoordinator.ExecutePreparedFeature(ctx, changedCommand, declaration)
+					var conflictError identity.ConflictError
+					if !errors.As(e, &conflictError) || conflict.Outcome != identity.CommitOutcomeConflict || changedOwner.generated.Load() != 0 {
+						t.Fatal("changed original signup replayed generated issuance", e)
+					}
+				} else {
+					changed := plan
+					changed.CapabilityIssuance = cloneCapabilityIssuancePlan(plan.CapabilityIssuance)
+					changed.CapabilityIssuance.RegistrationUserID = "different-user"
+					changed, e = c.PrepareCommandPlan(b, command, changed)
+					if e != nil {
+						t.Fatal(e)
+					}
+					_, conflict, e := c.ReserveCommand(ctx, b, command, changed)
+					var conflictError identity.ConflictError
+					if !errors.As(e, &conflictError) || conflict.Outcome != identity.CommitOutcomeConflict {
+						t.Fatal("changed target replayed original signup", e)
+					}
 				}
 			} else if err == nil {
 				t.Fatal("invalid signup issuance committed")
@@ -214,6 +333,15 @@ func testSignupCapabilityIssuance(t *testing.T, ctx context.Context, pool *datab
 			// Denial auditing survives proved rollback; it is not a committed
 			// registration effect. This fixture stores one row per command.
 			var users, issued, registrations, identifiers, credentials, material, auditsCount, lifecycleCount int
+			var deliveryCount int
+			if e := pool.Raw().QueryRow(ctx, `SELECT count(*) FROM public.identity_test_delivery WHERE command_id=$1`, string(b.CommandID)).Scan(&deliveryCount); e != nil || deliveryCount != func() int {
+				if withDelivery {
+					return want
+				}
+				return 0
+			}() {
+				t.Fatal("delivery survived rollback or was omitted", e)
+			}
 			if e := pool.Raw().QueryRow(ctx, `SELECT (SELECT count(*) FROM identity.users WHERE tenant_id=$1 AND user_id=$2),(SELECT count(*) FROM public.identity_test_issuance WHERE command_id=$3),(SELECT count(*) FROM identity.registration_bindings WHERE tenant_id=$1 AND user_id=$2),(SELECT count(*) FROM identity.identifiers WHERE tenant_id=$1 AND user_id=$2 AND NOT verified),(SELECT count(*) FROM identity.credential_references WHERE tenant_id=$1 AND user_id=$2),(SELECT count(*) FROM public.identity_test_registration_material WHERE command_id=$3),(SELECT count(*) FROM public.identity_test_audits WHERE command_id=$3),(SELECT count(*) FROM public.identity_test_lifecycle WHERE command_id=$3)`, string(b.TenantID), string(u), string(b.CommandID)).Scan(&users, &issued, &registrations, &identifiers, &credentials, &material, &auditsCount, &lifecycleCount); e != nil || users != want || issued != want || registrations != want || identifiers != want || credentials != want || material != want || auditsCount != 1 || lifecycleCount != want {
 				t.Fatalf("signup issuance counts %d/%d/%d/%d/%d/%d/%d/%d, want domain=%d: %v", users, issued, registrations, identifiers, credentials, material, auditsCount, lifecycleCount, want, e)
 			}

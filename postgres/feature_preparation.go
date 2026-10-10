@@ -106,8 +106,9 @@ func (w Work) FeaturePreparationOutput(p FeaturePreparationContributor) ([]byte,
 // ExecutePreparedFeature executes a native generated-output feature under its
 // original code-free caller intent, using the existing claim/journal owner.
 // declaration fixes feature, subject, mandatory audits and lifecycle before
-// generation; the authenticated final plan may additionally enlist Delivery.
-// One-use profiles are rejected, not silently omitted. Explicit protected
+// generation; the authenticated final plan may additionally enlist Delivery
+// and exact anonymous-signup new-user verification issuance. Other one-use
+// profiles are rejected, not silently omitted. Explicit protected
 // counters require CounterPreparationMigrationSource and a native current-check
 // owner; their charge commits before generation and survives final rollback.
 // Install PreparationMigrationSource before enabling this opt-in composition.
@@ -194,7 +195,7 @@ func (c *Coordinator) ExecutePreparedFeature(ctx context.Context, original ident
 		r.outputGeneration = r.journal.generation
 	}
 	generated, final, err := phase.RestoreFeaturePreparation(ctx, original, r.outputGeneration, bytes.Clone(wire))
-	if err != nil || ctx.Err() != nil || !preparationFinalDeclaration(admitted.snapshot(), final) {
+	if err != nil || ctx.Err() != nil || !preparationFinalDeclaration(b, admitted.snapshot(), final) {
 		return featureOutcome(b, q.feature, identity.CommitOutcomeUnknown, 0), identity.UnknownCommitError{CommandID: b.CommandID}
 	}
 	executionRequest, snapshot, _, err := c.prepare(b, generated, final)
@@ -265,8 +266,19 @@ func preparationProtected(p CommandPlan) bool {
 	return p.IdentifierAdmission != nil || p.Capability != nil || p.CapabilityIssuance != nil || p.OTP != nil || p.RiskEvidence != nil || p.CaptchaEvidence != nil || p.CaptchaReplayReservation
 }
 
-func preparationFinalDeclaration(original, final CommandPlan) bool {
-	if final.Feature == nil || final.Lifecycle == nil || preparationProtected(final) || *original.Feature != *final.Feature || *original.Lifecycle != *final.Lifecycle || original.SubjectType != final.SubjectType || len(original.Audits) != len(final.Audits) {
+func preparationFinalDeclaration(b identity.CommandBinding, original, final CommandPlan) bool {
+	if original.Feature == nil || original.Lifecycle == nil || preparationProtected(original) || original.Delivery != nil {
+		return false
+	}
+	// Only a restored anonymous signup may add new-user verification issuance.
+	// Original admission remains issuance-free; consumption and other protected
+	// profiles still require their separately owned preparation contracts.
+	withoutIssuance := final
+	withoutIssuance.CapabilityIssuance = nil
+	if final.CapabilityIssuance != nil && (!validCapabilityIssuancePlan(final.CapabilityIssuance) || final.CapabilityIssuance.RegistrationUserID == "" || !validRegistrationIssuance(b, final)) {
+		return false
+	}
+	if final.Feature == nil || final.Lifecycle == nil || preparationProtected(withoutIssuance) || *original.Feature != *final.Feature || *original.Lifecycle != *final.Lifecycle || original.SubjectType != final.SubjectType || len(original.Audits) != len(final.Audits) {
 		return false
 	}
 	if (original.CommandCounters == nil) != (final.CommandCounters == nil) || original.CommandCounters != nil && *original.CommandCounters != *final.CommandCounters {
@@ -277,19 +289,31 @@ func preparationFinalDeclaration(original, final CommandPlan) bool {
 			return false
 		}
 	}
-	// Generated delivery can add only its exact two native participants; final
-	// preparation below independently validates their registry/plan contracts.
-	j := 0
-	for _, d := range final.Contributors {
-		if j < len(original.Contributors) && d == original.Contributors[j] {
-			j++
-			continue
-		}
-		if final.Delivery == nil || d != final.Delivery.Contributor {
+	// Preserve the base exactly, then issuance, then optional delivery. The
+	// existing plan codec and registry independently validate native ownership.
+	expected := len(original.Contributors)
+	if final.CapabilityIssuance != nil {
+		expected++
+	}
+	if final.Delivery != nil {
+		expected++
+	}
+	if len(final.Contributors) != expected {
+		return false
+	}
+	for i, d := range original.Contributors {
+		if final.Contributors[i] != d {
 			return false
 		}
 	}
-	return j == len(original.Contributors)
+	i := len(original.Contributors)
+	if final.CapabilityIssuance != nil {
+		if final.Contributors[i] != final.CapabilityIssuance.Contributor {
+			return false
+		}
+		i++
+	}
+	return final.Delivery == nil || final.Contributors[i] == final.Delivery.Contributor
 }
 
 func (c *Coordinator) startFeaturePreparation(ctx context.Context, original identity.Command, q claimRequest, p *admittedKernelPlan, phase FeaturePreparationContributor, owner [16]byte, external bool) (r preparationReservation, result identity.CommandResult, err error) {

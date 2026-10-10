@@ -770,6 +770,17 @@ Older readers fail closed on the additional field. The native capability issuer
 and journal-prepared signup workflow must separately adopt this profile; kernel
 support alone does not enable an end-user verification flow.
 
+`ExecutePreparedFeature` also permits that exact issuance profile in the
+authenticated restored final plan: original admission must declare neither
+issuance nor delivery. The final plan preserves every original contributor and
+its order, followed by the exact issuer and optional delivery owner. Feature,
+lifecycle, subject, audits and counters cannot change. The original journal
+retains ciphertext and its generation before execution; retries cannot replace
+the grant or renew its expiry. Existing consumption, OTP, identifier-admission,
+risk-evidence and CAPTCHA preparation profiles remain closed. This composition
+seam does not supply native issuer checkpoint/restoration or `SignupService`;
+those owners must still authenticate their original encrypted custody.
+
 The exact owner receives `CapabilityIssuanceWork` only during coordinator-owned
 persistence; its aliases and SQL authority expire on return, including panic.
 The owner must verify original-envelope and keyed replay provenance, insert
