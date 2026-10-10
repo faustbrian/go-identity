@@ -1,5 +1,28 @@
 # PostgreSQL session storage
 
+## Password-signin session mapping
+
+`PasswordSigninSessionFields(record)` freezes the complete prospective session
+into the closed `session.result.*` vocabulary. Include these fields in the
+password owner's native command before fingerprinting and reservation, then
+bind that exact paired command to the prepared password issuer.
+`PasswordSigninSession(command)` restores only that paired profile, including
+the actual selected tenant/user without changing anonymous command scope.
+
+The initial profile supports single-factor password authentication, initial
+session version one, original remember policy and optional synchronizer state.
+Organization, factor, passkey, OTP and credential-continuation profiles deny.
+Missing, unknown, wrongly typed or noncanonical owned fields deny. Returned
+fields are caller-owned copies; raw password, pre-auth cookie and session bearer
+are not scalar fields. Other command fields remain the password owner's duty.
+
+This is structural mapping, not proof of successful password comparison,
+pre-auth possession, current owner state or commitment. The native password
+owner must compare the selected credential and enforce current policy in the
+same transaction as pre-auth/risk consumption, signed original authentication,
+session/family issuance and audit/outbox. That atomic consuming composition is
+still under development; this mapping alone does not enable login or recovery.
+
 ## Continued password-session records
 
 Install `CredentialContinuationMigrationSource{Schema: "session_store",

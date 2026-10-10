@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add closed password-signin session mapping for original paired custody.
+  Preserve the selected user separately from anonymous command scope, complete
+  authentication/authority/remember/CSRF state and exact times. Unsupported or
+  malformed records deny without creating authority. Atomic signin issuance and
+  its consuming password service remain under development.
+
 - Add native bounded password-change session effects in the original consuming
   transaction, with exact current-owner admission, selected continuation or
   revocation and retained command-linked recovery after payload cleanup. Install
