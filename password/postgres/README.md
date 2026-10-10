@@ -49,6 +49,19 @@ owner's authoritative evidence. Missing issuance records are not negative
 evidence: the command remains pending rather than claiming rollback, generating
 another credential, or disclosing account/session authority.
 
+Native email composition uses `ReadRegistrationVerification(ctx, proof, caller)`
+to authenticate the durably issued signup proof and original encrypted mailbox
+intent. Supply the actual confirmation caller, current query policy revision,
+`identity.email.verification-confirm` action and signed `identity.user` target;
+never impersonate the signup actor. No original cookie/password/live flow is
+required. The returned sensitive spec and original replay-key version are only
+for the native email owner, not a public scanner result or current authority.
+Read-only reconstruction neither verifies the address nor consumes a proof,
+issues a session, regenerates input or renews original expiry. Confirmation must
+still fence current identity/capability state and apply protected effects in the
+sole native coordinator transaction. Keep original configuration/encryption and
+email-intent keys through retention; changed profiles fail closed.
+
 This initial profile requires verified email and issues no session. Immediate
 session, MFA continuation, confirmation and the complete reset lifecycle remain
 in development; unsupported startup profiles fail closed. This is backend

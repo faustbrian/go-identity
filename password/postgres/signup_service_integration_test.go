@@ -114,6 +114,9 @@ func testNativePublicSignup(t *testing.T, ctx context.Context, pool *database.Po
 	if _, err := pool.Raw().Exec(ctx, `DELETE FROM signin_sessions.preauth_transactions WHERE flow_id=$1`, string(r.PreAuthID)); err != nil {
 		t.Fatal(err)
 	}
+	t.Run("registration-verification-origin", func(t *testing.T) {
+		testPublicSignupVerificationOrigin(t, ctx, service, c, r, q.CommandID)
+	})
 	restarted, err := NewSignupService(pool, c, keys)
 	if err != nil {
 		t.Fatal(err)

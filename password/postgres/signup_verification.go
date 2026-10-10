@@ -53,34 +53,10 @@ func (r *Repository) prepareSignupVerification(ctx context.Context, b identity.C
 	if err := ctx.Err(); err != nil {
 		return spec, prepared, err
 	}
-	original, err := flow.Bindings()
-	if err != nil || original.Binding.ID != identity.PreAuthTransactionID(b.AnonymousFlowID) || original.Binding.Intent.TenantID != b.TenantID || original.Binding.Intent.Action != b.OperationID || original.Binding.Intent.PolicyID != b.PolicyID || original.Binding.Intent.PolicyVersion != b.PolicyVersion || at.IsZero() || at.Before(original.Binding.IssuedAt) || !at.Before(original.Binding.ExpiresAt) {
-		return spec, prepared, password.ErrPasswordWork
-	}
-	expected := b
-	expected.OperationID, expected.AnonymousFlowID = "identity.user.create", ""
-	expected.UserID, expected.SchemaID, expected.SchemaVersion = selected.Creation.Binding.UserID, selected.Creation.Binding.SchemaID, selected.Creation.Binding.SchemaVersion
-	if selected.Creation.Binding != expected {
-		return spec, prepared, password.ErrPasswordWork
-	}
-	if _, err := kernel.PasswordRegistrationFields(selected); err != nil {
-		return spec, prepared, password.ErrPasswordWork
-	}
-	address, err := c.address.Parse(email.AddressInput(selected.Identifier.CanonicalValue))
-	callback := original.Binding.Intent.CallbackURL
-	if err != nil || len(callback) > 2048 {
-		return spec, prepared, password.ErrPasswordWork
-	}
-	redirect, err := url.Parse(callback)
+	spec, err = signupVerificationSpec(b, selected, flow, at, c)
 	if err != nil {
-		return spec, prepared, password.ErrPasswordWork
+		return spec, prepared, err
 	}
-	issued := at.UTC().Truncate(time.Second)
-	until := issued.Add(c.lifetime)
-	if expiry := original.Binding.ExpiresAt.UTC().Truncate(time.Second); expiry.Before(until) {
-		until = expiry
-	}
-	spec = email.RegistrationVerificationSpec{Binding: b, IdentifierID: selected.Identifier.ID, IdentifierVersion: selected.Identifier.Version, VerificationVersion: 1, Payload: email.CapabilityPayload{TenantID: b.TenantID, SubjectID: identity.SubjectID(selected.Creation.Binding.UserID), CanonicalAddress: address.Canonical(), Purpose: "identity.identifier.verify", Redirect: *redirect, Version: 1}, IssuedAt: issued, ExpiresAt: until}
 	payload, err := c.policy.Payload(spec)
 	if err != nil {
 		return spec, prepared, password.ErrPasswordWork
@@ -90,4 +66,43 @@ func (r *Repository) prepareSignupVerification(ctx context.Context, b identity.C
 		return spec, prepared, readerFailure(ctx)
 	}
 	return spec, prepared, nil
+}
+
+// Issuance and historical confirmation reconstruct exactly the same original
+// intent. This pure projection performs no signing or current-state admission.
+func signupVerificationSpec(b identity.CommandBinding, selected kernel.PasswordRegistrationIntent, flow session.PreAuthTransaction, at time.Time, c signupVerificationPreparation) (email.RegistrationVerificationSpec, error) {
+	bad := func() (email.RegistrationVerificationSpec, error) {
+		return email.RegistrationVerificationSpec{}, password.ErrPasswordWork
+	}
+	if c.lifetime <= 0 || c.lifetime > 24*time.Hour || c.lifetime%time.Second != 0 || b.ValidateFor(passwordSignupOperation()) != nil {
+		return bad()
+	}
+	original, err := flow.Bindings()
+	if err != nil || original.Binding.ID != identity.PreAuthTransactionID(b.AnonymousFlowID) || original.Binding.Intent.TenantID != b.TenantID || original.Binding.Intent.Action != b.OperationID || original.Binding.Intent.PolicyID != b.PolicyID || original.Binding.Intent.PolicyVersion != b.PolicyVersion || at.IsZero() || at.Before(original.Binding.IssuedAt) || !at.Before(original.Binding.ExpiresAt) {
+		return bad()
+	}
+	expected := b
+	expected.OperationID, expected.AnonymousFlowID = "identity.user.create", ""
+	expected.UserID, expected.SchemaID, expected.SchemaVersion = selected.Creation.Binding.UserID, selected.Creation.Binding.SchemaID, selected.Creation.Binding.SchemaVersion
+	if selected.Creation.Binding != expected {
+		return bad()
+	}
+	if _, err := kernel.PasswordRegistrationFields(selected); err != nil {
+		return bad()
+	}
+	address, err := c.address.Parse(email.AddressInput(selected.Identifier.CanonicalValue))
+	callback := original.Binding.Intent.CallbackURL
+	if err != nil || len(callback) > 2048 {
+		return bad()
+	}
+	redirect, err := url.Parse(callback)
+	if err != nil {
+		return bad()
+	}
+	issued := at.UTC().Truncate(time.Second)
+	until := issued.Add(c.lifetime)
+	if expiry := original.Binding.ExpiresAt.UTC().Truncate(time.Second); expiry.Before(until) {
+		until = expiry
+	}
+	return email.RegistrationVerificationSpec{Binding: b, IdentifierID: selected.Identifier.ID, IdentifierVersion: selected.Identifier.Version, VerificationVersion: 1, Payload: email.CapabilityPayload{TenantID: b.TenantID, SubjectID: identity.SubjectID(selected.Creation.Binding.UserID), CanonicalAddress: address.Canonical(), Purpose: "identity.identifier.verify", Redirect: *redirect, Version: 1}, IssuedAt: issued, ExpiresAt: until}, nil
 }

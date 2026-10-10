@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Authenticate original registration email-verification intent through the
+  native signup owner under current confirmation caller policy. Preserve signed
+  issuance, encrypted input, original expiry and retained replay-key provenance
+  without requiring the original cookie/password or a live pre-auth flow. Reads
+  neither mutate nor consume; the complete confirmation workflow remains pending.
+
 - Fix interrupted-signup password reconciliation through the bounded kernel
   row API. Preserve nullable credential evidence and deny contradictory
   material; missing issuance evidence still leaves the whole command pending.
