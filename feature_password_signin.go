@@ -46,7 +46,7 @@ func passwordSigninOperation(op FeatureOperation) bool {
 }
 
 func (c Command) validPasswordSigninVariant() bool {
-	return c.validFeatureVariant() && c.feature.passwordSignin != nil && c.feature.passwordHash == nil && c.feature.passwordChange == nil && c.feature.code == nil && c.feature.preAuthCookie == nil && c.feature.sessionToken == nil && passwordSigninOperation(c.feature.spec.Operation)
+	return c.validFeatureVariant() && c.feature.passwordSignin != nil && c.feature.passwordSignup == nil && c.feature.passwordHash == nil && c.feature.passwordChange == nil && c.feature.code == nil && c.feature.preAuthCookie == nil && c.feature.sessionToken == nil && passwordSigninOperation(c.feature.spec.Operation)
 }
 
 // PasswordSigninFeature returns an owned secret-free projection for the native

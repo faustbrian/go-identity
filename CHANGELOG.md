@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Add disjoint native password-signup custody for the prepared verifier and
+  original pre-auth cookie. Preserve exact bytes and scope; older accessors
+  cannot silently omit either input. Native policy and composition are required.
+
 - Add opaque password-signin command custody using the existing primitive
   Secret owner and original pre-auth cookie. Native signin must explicitly
   select the new metadata/custody pair; legacy feature execution stays closed.

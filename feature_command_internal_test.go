@@ -54,6 +54,9 @@ func TestPasswordSigninMixedVariantsDenyEveryAccessor(t *testing.T) {
 		func(c *Command) { c.feature.sessionToken = &b },
 		func(c *Command) { c.feature.passwordHash = func() string { return "synthetic" } },
 		func(c *Command) {
+			c.feature.passwordSignup = func() (string, authentication.BearerCredential) { return "synthetic", b }
+		},
+		func(c *Command) {
 			c.feature.passwordChange = func() (string, authentication.BearerCredential, authentication.ReauthenticationProof) {
 				return "synthetic", b, authentication.ReauthenticationProof{}
 			}
@@ -140,6 +143,9 @@ func TestFeaturePasswordHashMixedVariantsDenyEveryAccessor(t *testing.T) {
 		func(c *Command) { c.feature.preAuthCookie = &bearer },
 		func(c *Command) { c.feature.sessionToken = &bearer },
 		func(c *Command) {
+			c.feature.passwordSignup = func() (string, authentication.BearerCredential) { return "synthetic", bearer }
+		},
+		func(c *Command) {
 			c.feature.passwordChange = func() (string, authentication.BearerCredential, authentication.ReauthenticationProof) {
 				return "synthetic", bearer, authentication.ReauthenticationProof{}
 			}
@@ -175,6 +181,9 @@ func TestFeaturePasswordChangeMixedVariantsDenyEveryAccessor(t *testing.T) {
 		func(c *Command) { c.feature.preAuthCookie = &bearer },
 		func(c *Command) { c.feature.sessionToken = &bearer },
 		func(c *Command) { c.feature.passwordHash = func() string { return "synthetic" } },
+		func(c *Command) {
+			c.feature.passwordSignup = func() (string, authentication.BearerCredential) { return "synthetic", bearer }
+		},
 	} {
 		c := Command{feature: &featureCommandState{spec: FeatureCommandSpec{Operation: FeatureOperation{Owner: "identity/password", OperationID: "identity.password.change", SchemaID: "password-change", SchemaVersion: 1, RecordRequirement: FeatureRecordRequired}}, passwordChange: func() (string, authentication.BearerCredential, authentication.ReauthenticationProof) {
 			return "synthetic", bearer, authentication.ReauthenticationProof{}

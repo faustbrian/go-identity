@@ -20,13 +20,8 @@ import "strings"
 // retain immutable verifier material; discard all copies after bounded use. Go
 // cannot guarantee erasure of immutable strings. Never pass a plaintext password.
 func NewFeaturePasswordHashCommand(spec FeatureCommandSpec, encodedHash string) (Command, error) {
-	if !passwordHashOperation(spec.Operation) || len(encodedHash) == 0 || len(encodedHash) > 16384 {
+	if !passwordHashOperation(spec.Operation) || !validPasswordHashTransport(encodedHash) {
 		return Command{}, invalidFeatureCommand()
-	}
-	for i := range len(encodedHash) {
-		if encodedHash[i] < '!' || encodedHash[i] > '~' {
-			return Command{}, invalidFeatureCommand()
-		}
 	}
 	c, err := NewFeatureCommand(spec)
 	if err != nil {
@@ -39,12 +34,24 @@ func NewFeaturePasswordHashCommand(spec FeatureCommandSpec, encodedHash string) 
 	return c, nil
 }
 
+func validPasswordHashTransport(hash string) bool {
+	if len(hash) == 0 || len(hash) > 16384 {
+		return false
+	}
+	for i := range len(hash) {
+		if hash[i] < '!' || hash[i] > '~' {
+			return false
+		}
+	}
+	return true
+}
+
 func passwordHashOperation(op FeatureOperation) bool {
 	return op.Owner == "identity/password" && op.OperationID == "identity.password.change" && op.RecordRequirement == FeatureRecordRequired
 }
 
 func (c Command) validPasswordHashVariant() bool {
-	return c.validFeatureVariant() && c.feature.passwordHash != nil && c.feature.passwordChange == nil && c.feature.passwordSignin == nil && c.feature.code == nil && c.feature.preAuthCookie == nil && c.feature.sessionToken == nil && passwordHashOperation(c.feature.spec.Operation)
+	return c.validFeatureVariant() && c.feature.passwordHash != nil && c.feature.passwordChange == nil && c.feature.passwordSignin == nil && c.feature.passwordSignup == nil && c.feature.code == nil && c.feature.preAuthCookie == nil && c.feature.sessionToken == nil && passwordHashOperation(c.feature.spec.Operation)
 }
 
 // PasswordHashFeature returns owned hash-free metadata only for the explicit

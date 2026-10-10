@@ -82,6 +82,7 @@ type featureCommandState struct {
 	passwordHash   func() string
 	passwordChange func() (string, authentication.BearerCredential, authentication.ReauthenticationProof)
 	passwordSignin func() (primitive.Secret, authentication.BearerCredential)
+	passwordSignup func() (string, authentication.BearerCredential)
 }
 
 // NewFeatureCommand validates and freezes structural feature input, copying
@@ -133,7 +134,7 @@ func validFeatureFields(fields []FeatureField) bool {
 // safe for concurrent reads. The projection must never become a log, snapshot,
 // public response or authentication decision. No callbacks or I/O run.
 func (c Command) Feature() (FeatureCommandSpec, bool) {
-	if !c.validFeatureVariant() || c.feature.passwordHash != nil || c.feature.passwordChange != nil || c.feature.passwordSignin != nil {
+	if !c.validFeatureVariant() || c.feature.passwordHash != nil || c.feature.passwordChange != nil || c.feature.passwordSignin != nil || c.feature.passwordSignup != nil {
 		return FeatureCommandSpec{}, false
 	}
 	return cloneFeatureSpec(c.feature.spec), true

@@ -1,5 +1,18 @@
 # identity
 
+## Native password signup custody
+
+`NewFeaturePasswordSignupCommand` carries the prepared encoded verifier and
+original pre-auth cookie together under the exact `password-signup` v1 profile.
+Use `PasswordSignupFeature` and `PasswordSignupCustody` together in trusted
+native adapter mapping; older feature/password/bearer accessors deny it.
+Construction proves transport bounds, not HIBP approval, flow possession or
+permission. Native orchestration must bind both inputs into the coordinator's
+keyed intent and consume current flow/risk authority with required effects.
+Never put these materials in scalar fields, journals, logs or public results.
+Full signup composition remains in development; applications should not build
+their own workflow around this transport seam.
+
 Composable backend identity-domain ownership for Golib. This module is under
 development and targets Go 1.27.
 
