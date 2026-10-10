@@ -277,9 +277,16 @@ func NewConfirmationHandlerWithMiddleware(c ConfirmationConfig, m []identityhttp
 			if now.IsZero() {
 				return s, identityhttp.ErrUnavailable
 			}
+			correlation, err := identity.NewCommandID()
+			if err != nil {
+				return s, identityhttp.ErrUnavailable
+			}
 			s.input.facts = facts
 			s.input.token = token
 			s.input.request = email.VerificationConfirmRequest{TenantID: facts.TenantID(), CommandID: id, Callback: *u, Caller: caller(facts.TenantID(), now), Network: facts.ClientIP().String()}
+			// Native audit binding requires correlation, but client headers must
+			// neither select it nor replace the original durable workflow command.
+			s.input.request.Caller.CorrelationID = string(correlation)
 			return s, nil
 		},
 		Authenticate: func(r *http.Request, s ConfirmationState) (ConfirmationState, error) {

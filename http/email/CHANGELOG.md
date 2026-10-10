@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Supply fresh server-owned audit correlation for native confirmation commands,
+  independent of the original workflow command and untrusted request headers.
+
 - Add explicit original-signup confirmation HTTP handler and selected feature.
   Preserve original grant rate dimensions, callback/current caller policy and
   command outcome. Fresh successful commit alone discloses an address; replay

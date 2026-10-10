@@ -231,6 +231,26 @@ func TestConfirmationConservesOutcomesAndDisclosure(t *testing.T) {
 	}
 }
 
+func TestConfirmationGeneratesTrustedCorrelation(t *testing.T) {
+	var previous string
+	for index := 0; index < 2; index++ {
+		c, s, body := fixture(t)
+		h, err := emailhttp.NewConfirmationHandler(c)
+		if err != nil {
+			t.Fatal(err)
+		}
+		w := httptest.NewRecorder()
+		r := request(body)
+		r.Header.Set("X-Request-ID", "untrusted-client-correlation")
+		h.ServeHTTP(w, r)
+		correlation := s.last.Caller.CorrelationID
+		if _, err := identity.ParseCommandID(correlation); err != nil || correlation == string(s.last.CommandID) || correlation == previous || w.Code != 200 {
+			t.Fatal("native command lacks fresh server-owned correlation")
+		}
+		previous = correlation
+	}
+}
+
 func TestConfirmationRateAndSourceFailureNeverExecute(t *testing.T) {
 	for _, phase := range []string{"ip", "challenge", "source"} {
 		t.Run(phase, func(t *testing.T) {
