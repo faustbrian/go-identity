@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Permit explicit bearer or stored-session synchronizer selection for the
+  canonical password-change operation. Keep active-session authority required
+  and preserve the original keyed/rate/schema contract. Other password and
+  secret operations retain their existing protection profiles; selection
+  alone exposes no handler or metadata.
+
 - Add keyed secret-operation admission through native strict atomic rate
   storage: trusted IP, tenant/subject and optional original challenge budgets
   debit together or not at all. Replay uses the protected operation's original

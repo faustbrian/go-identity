@@ -409,10 +409,11 @@ func validOperation(owner ModuleID, op OperationDescriptor, catalog map[string]c
 		if want.CSRFOrigin.Mode == CSRFConditionalPreAuthSession && r.CSRFOrigin.Mode == CSRFExactOrigin && r.CSRFOrigin.RefererFallback == RefererFallbackDeny {
 			csrfMatches = true
 		}
-		// Canonical signout CSRF is conditional on the explicitly selected
-		// credential profile and active session. Bearer never borrows cookie
-		// authority; the stored synchronizer profile claims no independent age.
-		if r.OperationID == "identity.session.signout" && (r.CSRFOrigin.Mode == CSRFNone || r.CSRFOrigin.Mode == CSRFSessionState) {
+		// These owned operations select explicit bearer or stored-synchronizer
+		// cookie profiles. Password change still requires an active session;
+		// only self-signout admits absent/inactive origin-only success. Neither
+		// stored-token profile claims an independent token-age bound.
+		if (r.OperationID == "identity.session.signout" || r.OperationID == "identity.password.change") && (r.CSRFOrigin.Mode == CSRFNone || r.CSRFOrigin.Mode == CSRFSessionState) {
 			csrfMatches = true
 		}
 		if r.Exposure != want.Exposure || !slices.Equal(r.Owners, want.Owners) || r.Access != want.Access || r.Authorization != want.Authorization || !csrfMatches || r.RiskClass != want.RiskClass || r.RatePolicy != want.RatePolicy || r.Idempotency != want.Idempotency || r.EventSemantics != want.EventSemantics || r.HandlerOwner != want.HandlerOwner || r.Method != want.Method || r.Path != want.Path || r.OpenAPIOperationID != want.OpenAPIOperationID || r.RequestSchema.ID != row.RequestSchema || r.ResultSchema.ID != row.ResultSchema || r.ErrorSchema.ID != row.ErrorSchema {

@@ -293,9 +293,10 @@ Owned optional factories use `NewCanonicalOperation(CanonicalOperationConfig)`
 to bind real handlers to the embedded catalog without maintaining policy or
 digest copies. Unknown/nonrouted operations and incompatible owner/policy/schema
 bounds deny. Returned schema summaries describe direct Go contracts, not HTTP
-wire schemas. For self-signout, `CSRFNone` means an explicitly selected bearer
-handler; `CSRFSessionState` means exact cookie Origin and active-session token,
-with absent/inactive origin-only success. The latter binds token lifetime to
+wire schemas. For self-signout and password change, `CSRFNone` means an explicitly
+selected bearer handler; `CSRFSessionState` means exact cookie Origin and the
+active-session token. Only self-signout permits absent/inactive origin-only
+success; password change always requires an active session. The latter binds token lifetime to
 active stored session state and claims no independent maximum-age enforcement.
 Factories retain responsibility for selecting and enforcing the matching mode.
 Conditional pre-auth/session canonical rows also permit an explicit

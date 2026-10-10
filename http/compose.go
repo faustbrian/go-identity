@@ -12,8 +12,10 @@ import (
 // operation. CSRF selects an actually enforced profile, not a request-selected
 // fallback. Conditional pre-auth/session rows additionally admit ExactOrigin
 // with denied Referer fallback for pre-auth-only handlers that reject session
-// and MFA variants. Only self-signout additionally admits None (explicit bearer)
-// or SessionState (cookie origin plus active-state token). MaximumSerializedBytes
+// and MFA variants. Self-signout and password-change additionally admit None
+// (explicit bearer) or SessionState (cookie origin plus active-state token).
+// Password change requires an active session; only self-signout admits absent/
+// inactive origin-only success. MaximumSerializedBytes
 // bounds each schema summary (1..16MiB); it is not response-size enforcement.
 // Handler must be usable/concurrency-safe and own its declared security. Nil
 // handlers and typed-nil HandlerFunc are invalid. No callback is invoked here.
