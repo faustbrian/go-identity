@@ -93,8 +93,8 @@ func (p *passwordChangePhase) checkTime(ctx context.Context, w kernel.Work) erro
 	}
 	scope := p.scope
 	scope.Now = now
-	decision, err := p.service.c.Screening.Policy.Assess(ctx, scope, p.facts)
-	if err != nil || decision.Decision.Action != risk.Allow {
+	decision, err := p.service.assessChangeProviders(ctx, scope, p.facts)
+	if err != nil || decision.Action != risk.Allow {
 		return identity.ForbiddenError{}
 	}
 	return nil

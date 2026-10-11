@@ -46,8 +46,8 @@ func (a *keyedPasswordChangeAdmission) Check(ctx context.Context) error {
 	}
 	scope := phase.scope
 	scope.Now = now
-	assessment, err := p.service.native.c.Screening.Policy.Assess(ctx, scope, a.facts)
-	if err != nil || assessment.Decision.Action != risk.Allow {
+	decision, err := p.service.native.assessChangeProviders(ctx, scope, a.facts)
+	if err != nil || decision.Action != risk.Allow {
 		return identity.ForbiddenError{}
 	}
 	until := minPasswordChangeExpiry(record.Proof.Proof.ExpiresAt, record.Proof.Proof.IssuedAt.Add(p.service.native.c.MaximumAge))

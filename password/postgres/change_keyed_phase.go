@@ -334,7 +334,7 @@ func (p *keyedPasswordChangePhase) generateWithFacts(ctx context.Context, origin
 	if err != nil {
 		return nil, password.ErrPasswordWork
 	}
-	hash, _, err := preparer.Prepare(ctx, r.Password, risk.Context{Tenant: string(input.Binding.TenantID), Operation: risk.Action(replacementOperation().OperationID), Attempt: string(input.Binding.CommandID)})
+	hash, err := p.service.native.prepareChangeHash(ctx, preparer, r.Password, risk.Context{Tenant: string(input.Binding.TenantID), Operation: risk.Action(replacementOperation().OperationID), Attempt: string(input.Binding.CommandID)})
 	if err != nil {
 		return nil, err
 	}

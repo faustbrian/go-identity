@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Defer command-owned velocity during native password-change screening and
+  hashing while retaining mandatory atomic counter reservation. Keyed retries
+  and primary-time checks reuse original provider evidence without renewing
+  freshness. Existing policies without a velocity signal retain their behavior.
+
 - Select `SignupConfig.AuthorizationNamespace` to initialize the new user's
   authorization epoch atomically with registration, password, factor authority,
   verification grant and delivery. Use the namespace consumed by session

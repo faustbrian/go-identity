@@ -440,6 +440,12 @@ allow the exact purpose `identity.password.verify`, action
 `identity.password.change` and configured audience. Select explicit HIBP policy,
 bounded provider collection and the source's existing password primitive.
 
+For a credential-mutation policy requiring `velocity`, collect only genuine
+provider facts (including HIBP): native preparation and primary-time rechecks
+defer that signal to the mandatory transaction-owned counters. Supplying a
+velocity observation is rejected. Existing profiles without that signal retain
+complete provider assessment; neither profile can omit protected counters.
+
 `Change(ctx, request)` accepts the original opaque bearer, original signed proof,
 new owned password secret and trusted caller/network scope. It denies current
 password reuse and rejects incorrect proof bindings. HIBP collection and hashing

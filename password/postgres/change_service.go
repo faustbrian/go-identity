@@ -234,7 +234,7 @@ func (s *PasswordChangeService) Change(ctx context.Context, r PasswordChangeRequ
 	if err != nil {
 		return result, password.ErrPasswordWork
 	}
-	hash, _, err := preparer.Prepare(ctx, r.Password, scope)
+	hash, err := s.prepareChangeHash(ctx, preparer, r.Password, scope)
 	if err != nil {
 		return result, err
 	}
@@ -313,6 +313,35 @@ func (s *PasswordChangeService) Change(ctx context.Context, r PasswordChangeRequ
 		result.CredentialVersion, result.AuthorityInvalidated = receipt.Feature.AfterVersion, true
 	}
 	return result, err
+}
+
+// Only trusted policy composition selects provider-only preparation. Existing
+// profiles without a velocity signal retain their complete assessment; both
+// paths still require the native counters in the protected command plan.
+func (s *PasswordChangeService) prepareChangeHash(ctx context.Context, preparer *password.HashPreparer, candidate primitive.Secret, scope risk.Context) (primitive.EncodedHash, error) {
+	admission, err := s.c.Screening.Policy.Admit(scope.Operation)
+	if err != nil {
+		return primitive.EncodedHash{}, err
+	}
+	if slices.Contains(admission.Profile.RequiredSignals, "velocity") {
+		hash, _, err := preparer.PrepareProtected(ctx, candidate, scope)
+		return hash, err
+	}
+	hash, _, err := preparer.Prepare(ctx, candidate, scope)
+	return hash, err
+}
+
+func (s *PasswordChangeService) assessChangeProviders(ctx context.Context, scope risk.Context, facts []risk.Signal) (risk.Decision, error) {
+	admission, err := s.c.Screening.Policy.Admit(scope.Operation)
+	if err != nil {
+		return risk.Decision{}, err
+	}
+	if slices.Contains(admission.Profile.RequiredSignals, "velocity") {
+		assessment, err := s.c.Screening.Policy.AssessProtectedProviders(ctx, scope, facts)
+		return assessment.Decision, err
+	}
+	assessment, err := s.c.Screening.Policy.Assess(ctx, scope, facts)
+	return assessment.Decision, err
 }
 
 func (s *PasswordChangeService) coordinator(phase kernel.FeatureExecutionContributor) (*kernel.Coordinator, *kernel.ContributorRegistry, error) {
