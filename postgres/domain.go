@@ -125,6 +125,7 @@ func (p *admittedKernelPlan) snapshot() CommandPlan {
 		descriptors[i] = entry.descriptor
 	}
 	result := CommandPlan{Contributors: descriptors, Audits: append([]AuditPlan(nil), p.audits...), Digest: p.digest, CaptchaReplayReservation: p.captchaReplay, SignupAcceptance: p.signupAcceptance}
+	result.MagicLinkRegistration = cloneMagicLinkRegistrationPlan(p.magicLinkRegistration)
 	if p.identifierAdmission != nil {
 		d := p.identifierAdmission.descriptor
 		result.IdentifierAdmission = &d
@@ -286,7 +287,9 @@ func (c *Coordinator) Commit(w Work, result identity.CommandResult) (identity.Co
 	for _, entry := range w.state.execution.reservation.plan.contributors {
 		if entry.descriptor.Owner == "outbox/postgres" {
 			var err error
-			if w.state.credentialReceipt != nil {
+			if w.state.execution.reservation.plan.magicLinkRegistration != nil {
+				err = entry.contributor.(MagicLinkRegistrationLifecycleContributor).PersistMagicLinkRegistration(w.state.ctx, w)
+			} else if w.state.credentialReceipt != nil {
 				err = entry.contributor.(CredentialCompromiseLifecycleContributor).PersistCredentialCompromise(w.state.ctx, w)
 			} else if w.state.resetIntent != nil {
 				err = entry.contributor.(CredentialResetLifecycleContributor).PersistCredentialReset(w.state.ctx, w)

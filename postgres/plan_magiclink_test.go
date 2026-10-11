@@ -50,6 +50,111 @@ func TestMagicLinkConsumptionPlanRoundTripAndRejectsProofFreeBase(t *testing.T) 
 	}
 }
 
+func TestMagicLinkRegistrationPlanFreezesProspectiveCreation(t *testing.T) {
+	b, p := magicLinkConsumptionPlanFixture(t)
+	fp := [32]byte{1}
+	old, err := encodeFeaturePlan(b, fp, p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	p.MagicLinkRegistration = &MagicLinkRegistrationPlan{UserID: "prospective-user", IdentifierID: "prospective-email", CreationDigest: [32]byte{9}, EmailPossessionPolicyVersion: 3, CreationEventIndex: 1}
+	wire, err := encodeFeaturePlan(b, fp, p)
+	if err != nil || bytes.Equal(old, wire) {
+		t.Fatal("prospective creation was omitted from protected intent", err)
+	}
+	restored, err := decodeFeaturePlan(b, fp, wire)
+	if err != nil || restored.MagicLinkRegistration == nil || *restored.MagicLinkRegistration != *p.MagicLinkRegistration {
+		t.Fatal("prospective creation lost", err)
+	}
+	again, err := encodeFeaturePlan(b, fp, restored)
+	if err != nil || !bytes.Equal(wire, again) {
+		t.Fatal("registration intent changed on restoration", err)
+	}
+	for i := range wire {
+		if _, err := decodeFeaturePlan(b, fp, wire[:i]); err == nil {
+			t.Fatal("truncated signup declaration admitted", i)
+		}
+	}
+	// A structural declaration without registered native ownership grants no
+	// account creation. This must deny before registry access or SQL.
+	var registry *ContributorRegistry
+	p.Digest = sha256.Sum256(wire)
+	if admitted, err := registry.admitFeaturePlan(b, fp, p); err == nil || admitted != nil {
+		t.Fatal("unregistered signup acquired execution authority")
+	}
+	for name, mutate := range map[string]func(*MagicLinkRegistrationPlan){
+		"retarget user":       func(r *MagicLinkRegistrationPlan) { r.UserID = "other-user" },
+		"retarget identifier": func(r *MagicLinkRegistrationPlan) { r.IdentifierID = "other-email" },
+		"replace creation":    func(r *MagicLinkRegistrationPlan) { r.CreationDigest[0]++ },
+		"replace policy":      func(r *MagicLinkRegistrationPlan) { r.EmailPossessionPolicyVersion++ },
+		"replace event slot":  func(r *MagicLinkRegistrationPlan) { r.CreationEventIndex++ },
+	} {
+		t.Run(name, func(t *testing.T) {
+			bad := p
+			bad.MagicLinkRegistration = cloneMagicLinkRegistrationPlan(p.MagicLinkRegistration)
+			mutate(bad.MagicLinkRegistration)
+			digest, err := FeaturePlanDigest(b, fp, bad)
+			if err != nil || digest == sha256.Sum256(wire) {
+				t.Fatal("changed creation not bound", err)
+			}
+		})
+	}
+	foreignBinding, foreign := emailVerificationPlanFixture(t)
+	foreign.MagicLinkRegistration = cloneMagicLinkRegistrationPlan(p.MagicLinkRegistration)
+	if _, err := FeaturePlanDigest(foreignBinding, fp, foreign); err == nil {
+		t.Fatal("registration dropped into foreign feature")
+	}
+	if _, err := KernelPlanDigest(b, fp, p); err == nil {
+		t.Fatal("registration dropped into kernel profile")
+	}
+	for name, mutate := range map[string]func(*MagicLinkRegistrationPlan){
+		"missing user":             func(r *MagicLinkRegistrationPlan) { r.UserID = "" },
+		"missing identifier":       func(r *MagicLinkRegistrationPlan) { r.IdentifierID = "" },
+		"missing creation":         func(r *MagicLinkRegistrationPlan) { r.CreationDigest = [32]byte{} },
+		"missing policy":           func(r *MagicLinkRegistrationPlan) { r.EmailPossessionPolicyVersion = 0 },
+		"duplicate lifecycle slot": func(r *MagicLinkRegistrationPlan) { r.CreationEventIndex = p.Lifecycle.EventIndex },
+	} {
+		t.Run(name, func(t *testing.T) {
+			bad := p
+			r := *p.MagicLinkRegistration
+			mutate(&r)
+			bad.MagicLinkRegistration = &r
+			if _, err := FeaturePlanDigest(b, fp, bad); err == nil {
+				t.Fatal("incomplete creation admitted")
+			}
+		})
+	}
+	p.MagicLinkRegistration = nil
+	again, err = encodeFeaturePlan(b, fp, p)
+	if err != nil || !bytes.Equal(old, again) {
+		t.Fatal("historical signin bytes changed", err)
+	}
+}
+
+func TestMagicLinkConsumptionPlanSupportsAuthenticationAdmission(t *testing.T) {
+	b, p := magicLinkConsumptionPlanFixture(t)
+	p.CommandCounters = nil
+	p.Contributors = append(p.Contributors[:4:4], p.Contributors[len(p.Contributors)-1])
+	fp := [32]byte{1}
+	wire, err := encodeFeaturePlan(b, fp, p)
+	if err != nil {
+		t.Fatal("authentication-admitted magic-link requires credential-mutation counters", err)
+	}
+	restored, err := decodeFeaturePlan(b, fp, wire)
+	if err != nil || restored.CommandCounters != nil || restored.Capability == nil || *restored.Capability != *p.Capability {
+		t.Fatal("authentication admission lost original one-use input", err)
+	}
+	again, err := encodeFeaturePlan(b, fp, restored)
+	if err != nil || !bytes.Equal(wire, again) {
+		t.Fatal("authentication-admitted consuming plan changed", err)
+	}
+	p.Capability = nil
+	p.Contributors = p.Contributors[:len(p.Contributors)-1]
+	if _, err := encodeFeaturePlan(b, fp, p); err == nil {
+		t.Fatal("authentication admission allowed proof-free login")
+	}
+}
+
 func TestMagicLinkConsumptionPlanRejectsForeignAndIncompleteProfiles(t *testing.T) {
 	for name, change := range map[string]func(*CommandPlan){
 		"missing proof":          func(p *CommandPlan) { p.Capability = nil },
@@ -92,7 +197,12 @@ func FuzzMagicLinkConsumptionPlan(f *testing.F) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		inputs := [][]byte{wire, data}
+		p.MagicLinkRegistration = &MagicLinkRegistrationPlan{UserID: "prospective-user", IdentifierID: "prospective-email", CreationDigest: [32]byte{9}, EmailPossessionPolicyVersion: 3, CreationEventIndex: 1}
+		signup, err := encodeFeaturePlan(b, fp, p)
+		if err != nil {
+			t.Fatal(err)
+		}
+		inputs := [][]byte{wire, signup, data}
 		for _, input := range inputs {
 			restored, err := decodeFeaturePlan(b, fp, input)
 			if err != nil {

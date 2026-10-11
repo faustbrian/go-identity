@@ -157,6 +157,63 @@ func testRecipientPostgres(t *testing.T, ctx context.Context, pool *database.Poo
 	}
 	cancelled, stop := context.WithCancel(ctx)
 	stop()
+	for _, mode := range []string{"exact", "identifier-version", "verification-version", "user-epoch", "identifier-epoch", "credential-epoch", "kind", "absent", "reassigned", "removed", "blocked", "verification-revoked", "foreign-owner"} {
+		t.Run("verified-identifier/"+mode, func(t *testing.T) {
+			tx, err := pool.Raw().Begin(ctx)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer tx.Rollback(ctx)
+			owned, stop := context.WithCancel(ctx)
+			defer stop()
+			w := Work{state: &workState{ctx: owned, cancel: stop, tx: tx, binding: b, feature: plan.Feature, lifecycle: &workLifecycle{plan: *plan.Lifecycle}, featureInvocation: native}}
+			expected := VerifiedIdentifierAdmission{IdentifierID: original.Identifier.ID, Kind: original.Identifier.Kind, IdentifierVersion: original.Identifier.Version, VerificationVersion: original.Verification.Version, User: UserAuthorityAdmission{UserAuthorityVersion: original.UserAuthorityVersion, IdentifierAuthorityVersion: original.IdentifierAuthorityVersion, CredentialAuthorityVersion: original.CredentialAuthorityVersion}}
+			owner := native
+			mutation := ""
+			switch mode {
+			case "identifier-version":
+				expected.IdentifierVersion++
+			case "verification-version":
+				expected.VerificationVersion++
+			case "user-epoch":
+				expected.User.UserAuthorityVersion++
+			case "identifier-epoch":
+				expected.User.IdentifierAuthorityVersion++
+			case "credential-epoch":
+				expected.User.CredentialAuthorityVersion++
+			case "kind":
+				expected.Kind = identity.IdentifierPhone
+			case "absent":
+				expected.IdentifierID = "absent"
+			case "foreign-owner":
+				owner = &scopeFeatureParticipant{operations: native.operations}
+			case "reassigned":
+				if _, err := tx.Exec(ctx, `INSERT INTO identity.users(tenant_id,user_id,status,version) VALUES($1,'other-recipient','active',1)`, string(b.TenantID)); err != nil {
+					t.Fatal(err)
+				}
+				mutation = `UPDATE identity.identifiers SET user_id='other-recipient' WHERE tenant_id=$1 AND user_id=$2`
+			case "removed":
+				mutation = `DELETE FROM identity.identifiers WHERE tenant_id=$1 AND user_id=$2`
+			case "blocked":
+				mutation = `UPDATE identity.users SET status='suspended' WHERE tenant_id=$1 AND user_id=$2`
+			case "verification-revoked":
+				mutation = `UPDATE identity.identifiers SET verified=false,is_primary=false,verification_state=3,verification_version=verification_version+1 WHERE tenant_id=$1 AND user_id=$2`
+			}
+			if mutation != "" {
+				if _, err := tx.Exec(ctx, mutation, string(b.TenantID), string(b.UserID)); err != nil {
+					t.Fatal(err)
+				}
+			}
+			err = w.RequireVerifiedIdentifier(ctx, owner, expected)
+			if mode == "exact" {
+				if err != nil {
+					t.Fatal("original identifier denied", err)
+				}
+			} else if err == nil || w.state.failed == nil {
+				t.Fatal("changed original authority accepted or failed to poison Work")
+			}
+		})
+	}
 	got, err := repo.ResolveRecipient(cancelled, query)
 	if !errors.Is(err, context.Canceled) || got.Identifier.ID != "" {
 		t.Fatal("cancellation became absence or usable recipient", err)

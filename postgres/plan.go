@@ -22,6 +22,10 @@ import (
 // admission profile; it is not sufficient for a future successful mutation
 // commit, which must require its lifecycle and full effect declarations.
 type CommandPlan struct {
+	// MagicLinkRegistration freezes a prospective account creation in the
+	// consuming transaction. Nil preserves the existing signin declaration.
+	// This structural input grants neither email-possession nor creation authority.
+	MagicLinkRegistration *MagicLinkRegistrationPlan
 	// SignupAcceptance declares the anonymous password-signup alternative which
 	// commits a neutral acknowledgement rather than creating a conflicting account.
 	// False preserves historical declarations; this flag grants no authority.
@@ -101,6 +105,9 @@ func KernelPlanDigest(binding identity.CommandBinding, fingerprint [32]byte, pla
 // The journal freezes the exact digest input, not a second serialization that
 // can disagree with admission or omit a participant field.
 func encodeKernelPlan(binding identity.CommandBinding, fingerprint [32]byte, plan CommandPlan) ([]byte, error) {
+	if plan.MagicLinkRegistration != nil {
+		return nil, invalidPlan()
+	}
 	if plan.Delivery != nil {
 		return encodeDeliveryWrappedPlan(binding, fingerprint, plan, encodeKernelPlan)
 	}
@@ -183,25 +190,26 @@ func encodeKernelPlan(binding identity.CommandBinding, fingerprint [32]byte, pla
 // admittedKernelPlan never escapes the coordinator boundary. It freezes only
 // the supported kernel profile, not arbitrary callbacks or opaque input blobs.
 type admittedKernelPlan struct {
-	signupAcceptance    bool
-	identifierAdmission *registeredContributor
-	registry            *contributorRegistryState
-	binding             identity.CommandBinding
-	digest              [32]byte
-	contributors        []registeredContributor
-	audits              []AuditPlan
-	lifecycle           *LifecyclePlan
-	capability          *CapabilityPlan
-	risk                *RiskEvidencePlan
-	counters            *CommandCounterPlan
-	captchaReplay       bool
-	captchaUse          *CaptchaEvidencePlan
-	otp                 *OTPAttemptPlan
-	fingerprint         [32]byte
-	feature             *FeatureRegistration
-	subjectType         string
-	delivery            *DeliveryPlan
-	issuance            *CapabilityIssuancePlan
+	magicLinkRegistration *MagicLinkRegistrationPlan
+	signupAcceptance      bool
+	identifierAdmission   *registeredContributor
+	registry              *contributorRegistryState
+	binding               identity.CommandBinding
+	digest                [32]byte
+	contributors          []registeredContributor
+	audits                []AuditPlan
+	lifecycle             *LifecyclePlan
+	capability            *CapabilityPlan
+	risk                  *RiskEvidencePlan
+	counters              *CommandCounterPlan
+	captchaReplay         bool
+	captchaUse            *CaptchaEvidencePlan
+	otp                   *OTPAttemptPlan
+	fingerprint           [32]byte
+	feature               *FeatureRegistration
+	subjectType           string
+	delivery              *DeliveryPlan
+	issuance              *CapabilityIssuancePlan
 }
 
 func (r *ContributorRegistry) admitKernelPlan(binding identity.CommandBinding, fingerprint [32]byte, p CommandPlan) (*admittedKernelPlan, error) {

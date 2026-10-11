@@ -17,8 +17,11 @@ func magicLinkConsumeOperation() identity.FeatureOperation {
 // second replay authority. The proof-free base is private to this fixed-depth
 // grammar and cannot be admitted as a standalone login declaration.
 func encodeMagicLinkConsumptionPlan(b identity.CommandBinding, fp [32]byte, p CommandPlan) ([]byte, error) {
+	if validateMagicLinkRegistrationPlan(b, p) != nil {
+		return nil, invalidPlan()
+	}
 	owner := ContributorDescriptor{Owner: "capability/postgres", ContractID: "capability.one-use", Version: 1}
-	if p.Feature == nil || p.Feature.Operation != magicLinkConsumeOperation() || p.Feature.Contributor != (ContributorDescriptor{Owner: "identity/magiclink/postgres", ContractID: "identity.magiclink", Version: 1}) || p.SubjectType != "authentication_attempt" || p.Capability == nil || p.CommandCounters == nil || p.RiskEvidence != nil || p.OTP != nil || p.CaptchaEvidence != nil || p.CaptchaReplayReservation || p.SignupAcceptance || p.CapabilityIssuance != nil || p.Delivery != nil || p.Lifecycle == nil || p.Lifecycle.EventType != "session.created.v1" || p.Lifecycle.BeforeVersion != 0 || p.Lifecycle.AfterVersion != 0 || len(p.Contributors) == 0 || p.Contributors[len(p.Contributors)-1] != owner || validateCapabilityPlan(b, p.Capability) != nil {
+	if p.Feature == nil || p.Feature.Operation != magicLinkConsumeOperation() || p.Feature.Contributor != (ContributorDescriptor{Owner: "identity/magiclink/postgres", ContractID: "identity.magiclink", Version: 1}) || p.SubjectType != "authentication_attempt" || p.Capability == nil || p.RiskEvidence != nil || p.OTP != nil || p.CaptchaEvidence != nil || p.CaptchaReplayReservation || p.SignupAcceptance || p.CapabilityIssuance != nil || p.Delivery != nil || p.Lifecycle == nil || p.Lifecycle.EventType != "session.created.v1" || p.Lifecycle.BeforeVersion != 0 || p.Lifecycle.AfterVersion != 0 || len(p.Contributors) == 0 || p.Contributors[len(p.Contributors)-1] != owner || validateCapabilityPlan(b, p.Capability) != nil {
 		return nil, invalidPlan()
 	}
 	for _, a := range p.Audits {
@@ -27,13 +30,19 @@ func encodeMagicLinkConsumptionPlan(b identity.CommandBinding, fp [32]byte, p Co
 		}
 	}
 	base := p
+	base.MagicLinkRegistration = nil
 	base.Capability = nil
 	base.Contributors = p.Contributors[:len(p.Contributors)-1]
 	wire, err := encodeFeaturePlanMode(b, fp, base, true)
 	if err != nil {
 		return nil, err
 	}
-	result := cborMap(map[string][]byte{"base": cborBytes(wire), "profile": cborText("identity-magic-link-consumption-v1"), "version": cborUint(1), "capability": encodeCapabilityPlan(p.Capability), "contributor": cborMap(map[string][]byte{"owner": cborText(owner.Owner), "contract_id": cborText(owner.ContractID), "version": cborUint(uint64(owner.Version))})})
+	fields := map[string][]byte{"base": cborBytes(wire), "profile": cborText("identity-magic-link-consumption-v1"), "version": cborUint(1), "capability": encodeCapabilityPlan(p.Capability), "contributor": cborMap(map[string][]byte{"owner": cborText(owner.Owner), "contract_id": cborText(owner.ContractID), "version": cborUint(uint64(owner.Version))})}
+	if p.MagicLinkRegistration != nil {
+		fields["signup"] = encodeMagicLinkRegistrationPlan(p.MagicLinkRegistration)
+		fields["profile"] = cborText("identity-magic-link-registration-v1")
+	}
+	result := cborMap(fields)
 	if len(result) > 65536 {
 		return nil, invalidPlan()
 	}
@@ -46,12 +55,17 @@ func decodeMagicLinkConsumptionPlan(b identity.CommandBinding, fp [32]byte, data
 		return fail()
 	}
 	r := planReader{attributeReader: attributeReader{data: data}, ok: true}
-	r.expect(5, 5)
+	count, valid := r.head(5)
+	if !valid || count != 5 && count != 6 {
+		return fail()
+	}
 	r.key("base")
 	n, ok := r.head(2)
-	// The base is exactly the ordinary command-counter profile. Reject nested
-	// optional envelopes before decoding or narrowing the untrusted length.
-	if !r.ok || !ok || n == 0 || n > uint64(len(r.data)) || r.data[0] != 0xa9 {
+	// Accept the ordinary authentication-admission base and historical charged
+	// counter base only. Neither permits recursive optional envelopes. The
+	// registry and execution separately require retained native admission when
+	// counters are absent; decoding alone establishes no login permission.
+	if !r.ok || !ok || n == 0 || n > uint64(len(r.data)) || r.data[0] != 0xa8 && r.data[0] != 0xa9 {
 		return fail()
 	}
 	base, err := decodeFeaturePlanMode(b, fp, r.data[:int(n)], true)
@@ -59,8 +73,26 @@ func decodeMagicLinkConsumptionPlan(b identity.CommandBinding, fp [32]byte, data
 		return fail()
 	}
 	r.data = r.data[int(n):]
+	profile := "identity-magic-link-consumption-v1"
+	if count == 6 {
+		r.key("signup")
+		r.expect(5, 5)
+		registration := &MagicLinkRegistrationPlan{}
+		r.key("user_id")
+		registration.UserID = identity.UserID(r.string(128))
+		r.key("event_index")
+		registration.CreationEventIndex = uint16(r.number(math.MaxUint16))
+		r.key("identifier_id")
+		registration.IdentifierID = r.string(128)
+		r.key("policy_version")
+		registration.EmailPossessionPolicyVersion = r.number(math.MaxUint64)
+		r.key("creation_digest")
+		r.digest(&registration.CreationDigest)
+		base.MagicLinkRegistration = registration
+		profile = "identity-magic-link-registration-v1"
+	}
 	r.key("profile")
-	r.consume(cborText("identity-magic-link-consumption-v1"))
+	r.consume(cborText(profile))
 	r.key("version")
 	r.consume(cborUint(1))
 	r.key("capability")

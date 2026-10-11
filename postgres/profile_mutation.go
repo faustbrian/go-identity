@@ -192,6 +192,9 @@ func matchesDomainResult(w Work, result identity.CommandResult) bool {
 		return w.state.creation == nil && w.state.profile == nil && w.state.update == nil && w.state.feature == nil && result.User == owned.User && result.ExpectedVersion == owned.ExpectedVersion && result.Revocation != nil && owned.Revocation != nil && result.Revocation.CascadeID == owned.Revocation.CascadeID && result.Revocation.Generation == owned.Revocation.Generation && result.Revocation.AuthorityVersion == owned.Revocation.AuthorityVersion && result.Revocation.Status == owned.Revocation.Status && slices.Equal(result.Revocation.Owners, owned.Revocation.Owners) && slices.Equal(result.Revocation.ExternalLimitations, owned.Revocation.ExternalLimitations)
 	}
 	if w.state.feature != nil {
+		if p := w.state.execution.reservation.plan.magicLinkRegistration; p != nil && (w.state.registrationUser == nil || w.state.registrationAccepted || w.state.registrationUser.ID != p.UserID || w.state.registrationUser.TenantID != w.state.binding.TenantID || w.state.registrationUser.Version != 1 || w.state.registrationUser.Status != identity.StatusActive) {
+			return false
+		}
 		if w.state.execution.reservation.plan.capability != nil && w.state.feature.Operation == registrationEmailVerificationOperation() && (w.state.emailVerification == nil || !w.state.emailVerification.applied || result.Feature == nil || result.Feature.BeforeVersion != 1 || result.Feature.AfterVersion != 2) {
 			return false
 		}

@@ -2,6 +2,45 @@
 
 ## Unreleased
 
+- Reject prepared magic-link restoration that adds, removes or changes the
+  original signup declaration, including its distinct creation-event identity.
+
+- Fence unused prospective magic-link recipients under the original anonymous
+  request, including account/identifier collisions and retained retirement
+  policy. Staged signed custody must match its complete creation digest and
+  mailbox policy; issuance neither creates nor verifies the future account.
+
+- Read the newly created verified email for magic-link session composition
+  inside the original consuming Work. Preserve anonymous scope and constrain
+  selection to its frozen account and identifier, without renewing grant expiry.
+
+- Add genuine passwordless account creation under the original consuming Work,
+  with frozen prospective identity and mailbox-policy custody, verified email,
+  retirement/uniqueness fencing and no invented password credential. Require
+  typed native creation/outbox owners and command-linked recovery evidence;
+  public signup-by-link, factor and session composition remains in progress.
+
+- Preserve prospective magic-link account creation, identifier, creation digest
+  and email-possession policy in a distinct consuming declaration. Existing
+  signin bytes remain unchanged; native signup execution stays closed until
+  account creation, lifecycle and recovery are connected.
+
+- Add forward-only magic-link registration evidence after the password
+  registration/acceptance history. Preserve existing receipts and distinguish
+  genuine passwordless creation from password creation and neutral acceptance.
+  This storage suffix does not enable signup or grant email-possession authority.
+
+- Fence an original verified email or phone identifier inside the protected
+  transaction without inventing a persistent credential. Require its exact
+  identifier and verification versions plus all original user security epochs;
+  reassignment, removal, blocking and stale authority deny and poison the Work.
+
+- Allow the closed consuming magic-link owner to prepare one prospective
+  session through the existing retained-output journal. Keep original one-use
+  proof, exclusive expiry and charged counters unchanged across restoration;
+  preparation cannot add issuance or delivery. Public consuming login remains
+  under development.
+
 - Add the closed anonymous magic-link consumption transaction profile. Require
   native original-input validation, command counters and protected effects;
   finalize the existing one-use capability atomically with the login effect.

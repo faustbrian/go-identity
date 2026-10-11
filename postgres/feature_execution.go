@@ -98,6 +98,9 @@ func validateFeatureCommand(phase FeatureExecutionContributor, command identity.
 }
 
 func (r *ContributorRegistry) admitFeaturePlan(b identity.CommandBinding, fingerprint [32]byte, p CommandPlan) (*admittedKernelPlan, error) {
+	if p.MagicLinkRegistration != nil && (r == nil || r.state == nil) {
+		return nil, invalidPlan()
+	}
 	if p.Capability != nil && (p.Feature == nil || p.Feature.Operation != registrationEmailVerificationOperation() && p.Feature.Operation != credentialResetOperation() && p.Feature.Operation != magicLinkConsumeOperation()) {
 		return nil, invalidPlan()
 	}
@@ -112,10 +115,40 @@ func (r *ContributorRegistry) admitFeaturePlan(b identity.CommandBinding, finger
 	if _, ok := feature.contributor.(FeatureExecutionContributor); !ok {
 		return nil, invalidPlan()
 	}
+	if p.MagicLinkRegistration != nil {
+		if _, ok := feature.contributor.(MagicLinkRegistrationContributor); !ok {
+			return nil, invalidPlan()
+		}
+		entries, err := r.selectContributors(p.Contributors)
+		if err != nil {
+			return nil, invalidPlan()
+		}
+		for _, entry := range entries {
+			if entry.descriptor.Owner == "identity/postgres" {
+				if _, ok := entry.contributor.(*Repository); !ok {
+					return nil, invalidPlan()
+				}
+			}
+			if entry.descriptor.Owner == "outbox/postgres" {
+				if _, ok := entry.contributor.(MagicLinkRegistrationLifecycleContributor); !ok {
+					return nil, invalidPlan()
+				}
+			}
+		}
+	}
 	if p.Capability != nil {
 		if p.Feature.Operation == magicLinkConsumeOperation() {
 			if _, ok := feature.contributor.(MagicLinkConsumptionContributor); !ok {
 				return nil, invalidPlan()
+			}
+			// Authentication counters are charged before credential work, not
+			// through the protected credential-mutation counter participant.
+			// Require the existing retained-admission preparation owner instead;
+			// historical counter-backed plans remain independently supported.
+			if p.CommandCounters == nil {
+				if _, ok := feature.contributor.(FeatureAdmissionPreparationContributor); !ok {
+					return nil, invalidPlan()
+				}
 			}
 		} else if p.Feature.Operation == credentialResetOperation() {
 			if _, ok := feature.contributor.(CredentialResetContributor); !ok {
@@ -279,7 +312,7 @@ func (r *ContributorRegistry) admitFeaturePlan(b identity.CommandBinding, finger
 		copy := *p.Capability
 		proof = &copy
 	}
-	return &admittedKernelPlan{registry: r.state, binding: b, digest: digest, contributors: entries, audits: append([]AuditPlan(nil), p.Audits...), lifecycle: &l, capability: proof, risk: risk, counters: counters, captchaReplay: p.CaptchaReplayReservation, captchaUse: cloneCaptchaEvidencePlan(p.CaptchaEvidence), otp: cloneOTPPlan(p.OTP), fingerprint: fingerprint, feature: &f, subjectType: p.SubjectType, delivery: cloneDeliveryPlan(p.Delivery), issuance: cloneCapabilityIssuancePlan(p.CapabilityIssuance), signupAcceptance: p.SignupAcceptance}, nil
+	return &admittedKernelPlan{magicLinkRegistration: cloneMagicLinkRegistrationPlan(p.MagicLinkRegistration), registry: r.state, binding: b, digest: digest, contributors: entries, audits: append([]AuditPlan(nil), p.Audits...), lifecycle: &l, capability: proof, risk: risk, counters: counters, captchaReplay: p.CaptchaReplayReservation, captchaUse: cloneCaptchaEvidencePlan(p.CaptchaEvidence), otp: cloneOTPPlan(p.OTP), fingerprint: fingerprint, feature: &f, subjectType: p.SubjectType, delivery: cloneDeliveryPlan(p.Delivery), issuance: cloneCapabilityIssuancePlan(p.CapabilityIssuance), signupAcceptance: p.SignupAcceptance}, nil
 }
 
 // ApplyFeature invokes only the frozen exact native adapter once through Work.

@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"context"
+	"encoding/hex"
 	"strconv"
 
 	"github.com/faustbrian/go-capability"
@@ -10,8 +11,9 @@ import (
 
 // Selection exists only after this invocation's locked primary admission.
 type magicLinkRecipientAdmission struct {
-	owner     FeatureExecutionContributor
-	recipient RecipientRecord
+	owner       FeatureExecutionContributor
+	recipient   RecipientRecord
+	prospective *MagicLinkRegistrationIntent
 }
 
 // RequireMagicLinkRecipient fences the original verified email recipient only
@@ -42,6 +44,22 @@ func (w Work) RequireMagicLinkRecipient(ctx context.Context, p FeatureExecutionC
 
 func magicLinkIssuanceSubject(s *workState, p CommandPlan, payload capability.Payload) (identity.UserID, error) {
 	if s == nil || s.magicLinkRecipient == nil || p.CapabilityIssuance == nil || !validMagicLinkRecipientIssuance(s.binding, p) || p.CapabilityIssuance.MagicLinkRecipientUserID == "" || !sameParticipant(s.featureInvocation, s.magicLinkRecipient.owner) {
+		return "", invalidWork()
+	}
+	if intent := s.magicLinkRecipient.prospective; intent != nil {
+		digest, err := MagicLinkRegistrationDigest(*intent)
+		user := intent.Creation.Binding.UserID
+		if err != nil || user != p.CapabilityIssuance.MagicLinkRecipientUserID || payload.Subject != string(user) || payload.Tenant != string(s.binding.TenantID) || payload.Resource != "identity.magiclink/"+string(intent.Identifier.ID) || payload.CorrelationID != string(s.binding.CommandID) || payload.Caveats["magiclink.prospective"] != "1" || payload.Caveats["magiclink.intent"] != "signup-if-allowed" || payload.Caveats["magiclink.creation-digest"] != hex.EncodeToString(digest[:]) || payload.Caveats["magiclink.email-policy-version"] != strconv.FormatUint(intent.EmailPossessionPolicyVersion, 10) || payload.Caveats["magiclink.identifier"] != string(intent.Identifier.ID) || payload.Caveats["magiclink.canonical-email"] != intent.Identifier.CanonicalValue {
+			return "", invalidWork()
+		}
+		for _, field := range []string{"magiclink.identifier-version", "magiclink.verification-version", "magiclink.identifier-authority-version", "magiclink.user-authority-version", "magiclink.credential-authority-version"} {
+			if payload.Caveats[field] != "1" {
+				return "", invalidWork()
+			}
+		}
+		return user, nil
+	}
+	if _, exists := payload.Caveats["magiclink.prospective"]; exists {
 		return "", invalidWork()
 	}
 	r := s.magicLinkRecipient.recipient

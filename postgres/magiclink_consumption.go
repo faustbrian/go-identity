@@ -25,7 +25,21 @@ func validateMagicLinkConsumption(owner FeatureExecutionContributor, command ide
 	if !ok || !feature || p.Feature == nil || p.Feature.Operation != magicLinkConsumeOperation() || s.Operation != p.Feature.Operation || p.Capability == nil || p.Capability.Purpose != "identity.magic-link.consume" {
 		return invalidPlan()
 	}
-	return native.ValidateMagicLinkConsumption(command, *p.Capability)
+	if err := native.ValidateMagicLinkConsumption(command, *p.Capability); err != nil {
+		return err
+	}
+	if p.MagicLinkRegistration != nil {
+		registration, ok := owner.(MagicLinkRegistrationContributor)
+		if !ok {
+			return invalidMagicLinkRegistration()
+		}
+		intent, err := registration.MagicLinkRegistration(command)
+		if err != nil {
+			return invalidMagicLinkRegistration()
+		}
+		return validateMagicLinkRegistrationIntent(command, p.MagicLinkRegistration, intent)
+	}
+	return nil
 }
 
 // MagicLinkConsumption exposes frozen original one-use input only during the

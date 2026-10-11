@@ -102,14 +102,15 @@ func recipientEligible(policy RecipientEligibility, state identity.VerificationS
 
 // The unique tenant/kind/canonical index bounds this read independently of user
 // directory size. Explicit columns preserve populated-schema compatibility.
-const recipientSelect = `SELECT u.tenant_id,u.user_id,u.status,u.version::text,
+const recipientColumns = `SELECT u.tenant_id,u.user_id,u.status,u.version::text,
  u.identifier_version::text,clock_timestamp(),
  i.identifier_id,i.kind,i.canonical_value,i.display_value,i.verified,i.is_primary,
  i.version::text,i.verification_state,i.verification_version::text,i.verified_at,
  u.authority_version::text,u.credential_version::text
  FROM identity.identifiers i JOIN identity.users u
- ON u.tenant_id=i.tenant_id AND u.user_id=i.user_id
- WHERE i.tenant_id=$1 AND i.kind=$2 AND i.canonical_value=$3 LIMIT 2`
+ ON u.tenant_id=i.tenant_id AND u.user_id=i.user_id`
+
+const recipientSelect = recipientColumns + ` WHERE i.tenant_id=$1 AND i.kind=$2 AND i.canonical_value=$3 LIMIT 2`
 
 type recipientRows interface {
 	Next() bool
@@ -148,6 +149,10 @@ func (r *Repository) ResolveRecipient(ctx context.Context, q RecipientQuery) (Re
 }
 
 func readRecipient(q RecipientQuery, rows recipientRows) (RecipientRecord, error) {
+	return readRecipientSelection(q, rows, false)
+}
+
+func readRecipientSelection(q RecipientQuery, rows recipientRows, discoverCanonical bool) (RecipientRecord, error) {
 	if !rows.Next() {
 		if err := rows.Err(); err != nil {
 			return RecipientRecord{}, err
@@ -179,6 +184,9 @@ func readRecipient(q RecipientQuery, rows recipientRows) (RecipientRecord, error
 	}
 	if err := rows.Err(); err != nil {
 		return RecipientRecord{}, err
+	}
+	if discoverCanonical {
+		q.CanonicalValue = canonical
 	}
 	return decodeRecipient(q, row, user, credential)
 }

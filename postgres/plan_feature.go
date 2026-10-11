@@ -37,6 +37,9 @@ func encodeFeaturePlanMode(binding identity.CommandBinding, fingerprint [32]byte
 	if p.Feature != nil && p.Feature.Operation.OperationID == "identity.magic-link.consume" && !proofBase {
 		return encodeMagicLinkConsumptionPlan(binding, fingerprint, p)
 	}
+	if p.MagicLinkRegistration != nil {
+		return nil, invalidPlan()
+	}
 	if p.Feature != nil && passwordResetOperation(p.Feature.Operation) && !proofBase {
 		return encodeCredentialResetPlan(binding, fingerprint, p)
 	}
@@ -212,6 +215,7 @@ func (c *Coordinator) prepareFeature(binding identity.CommandBinding, command id
 		snapshot.Capability = &copy
 	}
 	snapshot.Delivery = cloneDeliveryPlan(p.Delivery)
+	snapshot.MagicLinkRegistration = cloneMagicLinkRegistrationPlan(p.MagicLinkRegistration)
 	snapshot.CapabilityIssuance = cloneCapabilityIssuancePlan(p.CapabilityIssuance)
 	snapshot.CaptchaEvidence = cloneCaptchaEvidencePlan(p.CaptchaEvidence)
 	snapshot.OTP = cloneOTPPlan(p.OTP)

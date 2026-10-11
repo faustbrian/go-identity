@@ -27,6 +27,18 @@ itself provide public magic-link APIs or native session composition.
 
 ## Magic-link recipient issuance
 
+For prospective signup, the selected native request calls
+`MagicLinkRegistrationDomain.RequireProspectiveRecipient` with its frozen
+`MagicLinkRegistrationIntent`. This reuses the kernel's tenant and identifier
+retirement fences, rejects occupied account/identifier/email selections, and
+creates no account or MFA state. The issuer's explicit
+`PrepareMagicLinkProspectiveRecipient` profile signs the creation digest,
+mailbox-policy version and future identity versions; ordinary existing-recipient
+preparation cannot select that profile. The original anonymous command and
+issuance plan envelope remain unchanged. Consumption must independently create
+the exact account, prove possession, initialize real factor authority and issue
+the session atomically. Public signup composition remains in development.
+
 Native magic-link request contributors use the exact `identity/magiclink/postgres`
 owner, `identity.magiclink` contract version one and anonymous
 `identity.magic-link.request` operation. `CapabilityIssuancePlan.MagicLinkRecipientUserID`

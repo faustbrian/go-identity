@@ -127,8 +127,10 @@ func (w Work) FeaturePreparationOutput(p FeaturePreparationContributor) ([]byte,
 // original code-free caller intent, using the existing claim/journal owner.
 // declaration fixes feature, subject, mandatory audits and lifecycle before
 // generation; the authenticated final plan may additionally enlist Delivery
-// and exact anonymous-signup new-user verification issuance. Other one-use
-// profiles are rejected, not silently omitted. Explicit protected
+// and exact anonymous-signup new-user verification issuance. Closed reset and
+// magic-link consumption retain their original one-use input unchanged while
+// generating the replacement/session. Other one-use profiles are rejected,
+// not silently omitted. Explicit protected
 // counters require CounterPreparationMigrationSource and a native current-check
 // owner; their charge commits before generation and survives final rollback.
 // Install PreparationMigrationSource before enabling this opt-in composition.
@@ -283,7 +285,7 @@ func (c *Coordinator) prepareFeaturePreparation(original identity.Command, p Com
 }
 
 func preparationProtected(p CommandPlan) bool {
-	return p.IdentifierAdmission != nil || p.Capability != nil && !resetAuthenticationPreparation(p) || p.CapabilityIssuance != nil || p.OTP != nil || p.RiskEvidence != nil || p.CaptchaEvidence != nil || p.CaptchaReplayReservation
+	return p.IdentifierAdmission != nil || p.Capability != nil && !consumptionAuthenticationPreparation(p) || p.CapabilityIssuance != nil || p.OTP != nil || p.RiskEvidence != nil || p.CaptchaEvidence != nil || p.CaptchaReplayReservation
 }
 
 // Only the original closed reset consumption plan may precede hash generation.
@@ -293,12 +295,20 @@ func resetAuthenticationPreparation(p CommandPlan) bool {
 	return p.Feature != nil && p.Feature.Operation == credentialResetOperation() && p.Capability != nil && p.CommandCounters == nil
 }
 
+// The consuming magic-link declaration already contains the original verified
+// one-use grant and charged counters. Preparation may generate the prospective
+// session, never introduce or replace its authentication input. The ordinary
+// closed plan codec and native owner still validate the complete envelope.
+func consumptionAuthenticationPreparation(p CommandPlan) bool {
+	return resetAuthenticationPreparation(p) || p.Feature != nil && p.Feature.Operation == magicLinkConsumeOperation() && p.Capability != nil && p.Capability.Purpose == "identity.magic-link.consume" && p.Capability.MaxUses == 1
+}
+
 func preparationFinalDeclaration(b identity.CommandBinding, original, final CommandPlan) bool {
 	if original.Feature == nil || original.Lifecycle == nil || preparationProtected(original) || original.Delivery != nil {
 		return false
 	}
-	if resetAuthenticationPreparation(original) {
-		if !resetAuthenticationPreparation(final) || *original.Capability != *final.Capability || final.Delivery != nil || final.CapabilityIssuance != nil {
+	if consumptionAuthenticationPreparation(original) {
+		if !consumptionAuthenticationPreparation(final) || *original.Capability != *final.Capability || final.Delivery != nil || final.CapabilityIssuance != nil {
 			return false
 		}
 	} else if final.Capability != nil {
@@ -316,6 +326,11 @@ func preparationFinalDeclaration(b identity.CommandBinding, original, final Comm
 		return false
 	}
 	if (original.CommandCounters == nil) != (final.CommandCounters == nil) || original.CommandCounters != nil && *original.CommandCounters != *final.CommandCounters {
+		return false
+	}
+	// Restoration may generate session material, but cannot change whether
+	// consuming the original grant creates an account or its creation custody.
+	if (original.MagicLinkRegistration == nil) != (final.MagicLinkRegistration == nil) || original.MagicLinkRegistration != nil && *original.MagicLinkRegistration != *final.MagicLinkRegistration {
 		return false
 	}
 	for i, a := range original.Audits {
@@ -604,7 +619,7 @@ func (c *Coordinator) checkPreparedAdmission(w Work) error {
 	}
 	p := w.state.execution.reservation.preparation
 	plan := w.state.execution.reservation.plan
-	if plan != nil && plan.feature != nil && plan.feature.Operation == credentialResetOperation() && plan.counters == nil {
+	if plan != nil && plan.feature != nil && (plan.feature.Operation == credentialResetOperation() || plan.feature.Operation == magicLinkConsumeOperation()) && plan.counters == nil {
 		if p == nil || p.admission == nil || p.generation == 0 || len(p.ciphertext) == 0 || len(p.ciphertext) > maximumPreparationCiphertext || w.state.execution.reservation.executionRequest == nil {
 			return invalidPreparation()
 		}
