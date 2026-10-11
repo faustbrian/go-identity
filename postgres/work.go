@@ -40,6 +40,8 @@ type workState struct {
 	registrationAccepted  bool
 	resetRecipient        *resetRecipientAdmission
 	magicLinkRecipient    *magicLinkRecipientAdmission
+	magicLinkConsumed     bool
+	magicLinkFinalized    bool
 	profile               *identity.UserProfile
 	update                *identity.User
 	status                *identity.CommandResult

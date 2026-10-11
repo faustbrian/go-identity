@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Add the closed anonymous magic-link consumption transaction profile. Require
+  native original-input validation, command counters and protected effects;
+  finalize the existing one-use capability atomically with the login effect.
+  Original expiry remains exclusive, replay returns the retained receipt and
+  failures roll back provisional consumption. Public magic-link orchestration
+  and native session composition remain separate consumer contracts.
+
 - Bind anonymous magic-link request issuance to its own verified-email recipient
   profile and same-invocation primary fence. Preserve original anonymous scope
   and historical password plan bytes; recipient/version substitutions deny.

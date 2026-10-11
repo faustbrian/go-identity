@@ -14,9 +14,9 @@ import (
 // Trusted adapters must declare every required action; these bounds do not prove
 // that declaration complete. The coordinator alone computes authoritative keyed
 // intent and matches its frozen registry. Preparation grants no reservation,
-// Work or execution readiness. Only the exact native registration-email and
-// password-reset profiles support original proof consumption through their
-// typed atomic phases. Other capability/cascade inputs are rejected. Invalid
+// Work or execution readiness. Only the exact native registration-email,
+// password-reset and magic-link profiles support original proof consumption
+// through their typed atomic phases. Other capability/cascade inputs are rejected. Invalid
 // input returns redacted identity.InvalidInputError. Do not mutate inputs
 // concurrently with this call.
 func FeaturePlanDigest(binding identity.CommandBinding, fingerprint [32]byte, plan CommandPlan) ([32]byte, error) {
@@ -31,10 +31,13 @@ func encodeFeaturePlan(binding identity.CommandBinding, fingerprint [32]byte, p 
 	return encodeFeaturePlanMode(binding, fingerprint, p, false)
 }
 
-// resetBase is private to the fixed-depth reset envelope. Public preparation
-// and historical top-level decoding never admit a proof-free reset base.
-func encodeFeaturePlanMode(binding identity.CommandBinding, fingerprint [32]byte, p CommandPlan, resetBase bool) ([]byte, error) {
-	if p.Feature != nil && passwordResetOperation(p.Feature.Operation) && !resetBase {
+// proofBase is private to fixed-depth, closed consumption envelopes. Public
+// preparation never admits their proof-free base as a standalone declaration.
+func encodeFeaturePlanMode(binding identity.CommandBinding, fingerprint [32]byte, p CommandPlan, proofBase bool) ([]byte, error) {
+	if p.Feature != nil && p.Feature.Operation.OperationID == "identity.magic-link.consume" && !proofBase {
+		return encodeMagicLinkConsumptionPlan(binding, fingerprint, p)
+	}
+	if p.Feature != nil && passwordResetOperation(p.Feature.Operation) && !proofBase {
 		return encodeCredentialResetPlan(binding, fingerprint, p)
 	}
 	if p.Capability != nil {

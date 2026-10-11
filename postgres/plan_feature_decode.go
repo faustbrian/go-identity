@@ -14,8 +14,11 @@ func decodeFeaturePlan(binding identity.CommandBinding, fingerprint [32]byte, en
 	return decodeFeaturePlanMode(binding, fingerprint, encoded, false)
 }
 
-func decodeFeaturePlanMode(binding identity.CommandBinding, fingerprint [32]byte, encoded []byte, resetBase bool) (CommandPlan, error) {
-	if !resetBase && binding.OperationID == "identity.password.reset-complete" {
+func decodeFeaturePlanMode(binding identity.CommandBinding, fingerprint [32]byte, encoded []byte, proofBase bool) (CommandPlan, error) {
+	if !proofBase && binding.OperationID == "identity.magic-link.consume" {
+		return decodeMagicLinkConsumptionPlan(binding, fingerprint, encoded)
+	}
+	if !proofBase && binding.OperationID == "identity.password.reset-complete" {
 		return decodeCredentialResetPlan(binding, fingerprint, encoded)
 	}
 	if len(encoded) > 0 && encoded[0] == 0xa5 {
@@ -222,7 +225,7 @@ func decodeFeaturePlanMode(binding identity.CommandBinding, fingerprint [32]byte
 	if !r.ok || len(r.data) != 0 {
 		return fail()
 	}
-	canonical, err := encodeFeaturePlanMode(binding, fingerprint, p, resetBase)
+	canonical, err := encodeFeaturePlanMode(binding, fingerprint, p, proofBase)
 	// One encoder owns semantic bounds; byte equality also rejects nonminimal
 	// lengths/integers, alternate keys/order and unsupported representations.
 	if err != nil || !bytes.Equal(canonical, encoded) {

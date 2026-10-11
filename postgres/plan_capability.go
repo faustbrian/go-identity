@@ -50,7 +50,7 @@ func validateCapabilityPlan(binding identity.CommandBinding, plan *CapabilityPla
 		return invalidPlan()
 	}
 	switch binding.OperationID {
-	case "identity.identifier.attach", "identity.identifier.verify", "identity.identifier.make-primary", "identity.identifier.replace", "identity.identifier.remove", "identity.account.link-token", "identity.account.unlink", "identity.password.reset-complete":
+	case "identity.identifier.attach", "identity.identifier.verify", "identity.identifier.make-primary", "identity.identifier.replace", "identity.identifier.remove", "identity.account.link-token", "identity.account.unlink", "identity.password.reset-complete", "identity.magic-link.consume":
 	default:
 		return invalidPlan()
 	}

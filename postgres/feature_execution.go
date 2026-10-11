@@ -23,7 +23,7 @@ import (
 // The coordinator stages the declared effects and establishes durability.
 // Methods must support concurrent calls with independent serial-use handles.
 // Risk execution additionally requires its exact typed current-check/finalize
-// owner. The exact registration-email and password-reset capability profiles
+// owner. The exact registration-email, password-reset and magic-link profiles
 // additionally require their typed atomic participants. Other capability/OTP
 // profiles remain rejected until their typed phases exist.
 type FeatureExecutionContributor interface {
@@ -60,6 +60,9 @@ func validateFeatureCommand(phase FeatureExecutionContributor, command identity.
 		return err
 	}
 	if plan.Capability != nil {
+		if plan.Feature != nil && plan.Feature.Operation == magicLinkConsumeOperation() {
+			return validateMagicLinkConsumption(phase, command, plan)
+		}
 		if plan.Feature != nil && plan.Feature.Operation == credentialResetOperation() {
 			p, ok := phase.(CredentialResetContributor)
 			if !ok {
@@ -95,7 +98,7 @@ func validateFeatureCommand(phase FeatureExecutionContributor, command identity.
 }
 
 func (r *ContributorRegistry) admitFeaturePlan(b identity.CommandBinding, fingerprint [32]byte, p CommandPlan) (*admittedKernelPlan, error) {
-	if p.Capability != nil && (p.Feature == nil || p.Feature.Operation != registrationEmailVerificationOperation() && p.Feature.Operation != credentialResetOperation()) {
+	if p.Capability != nil && (p.Feature == nil || p.Feature.Operation != registrationEmailVerificationOperation() && p.Feature.Operation != credentialResetOperation() && p.Feature.Operation != magicLinkConsumeOperation()) {
 		return nil, invalidPlan()
 	}
 	digest, err := FeaturePlanDigest(b, fingerprint, p)
@@ -110,7 +113,11 @@ func (r *ContributorRegistry) admitFeaturePlan(b identity.CommandBinding, finger
 		return nil, invalidPlan()
 	}
 	if p.Capability != nil {
-		if p.Feature.Operation == credentialResetOperation() {
+		if p.Feature.Operation == magicLinkConsumeOperation() {
+			if _, ok := feature.contributor.(MagicLinkConsumptionContributor); !ok {
+				return nil, invalidPlan()
+			}
+		} else if p.Feature.Operation == credentialResetOperation() {
 			if _, ok := feature.contributor.(CredentialResetContributor); !ok {
 				return nil, invalidPlan()
 			}
@@ -375,7 +382,11 @@ func (c *Coordinator) ApplyFeature(ctx context.Context, w Work, command identity
 		}
 	}
 	if p.capability != nil {
-		if p.feature.Operation == credentialResetOperation() {
+		if p.feature.Operation == magicLinkConsumeOperation() {
+			if e := prepareMagicLinkConsumption(ctx, w); e != nil {
+				return result, e
+			}
+		} else if p.feature.Operation == credentialResetOperation() {
 			if e := prepareCredentialReset(ctx, w, command); e != nil {
 				return result, e
 			}

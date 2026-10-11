@@ -1,5 +1,30 @@
 # Identity PostgreSQL
 
+## Atomic magic-link consumption
+
+The exact anonymous-flow `identity.magic-link.consume`, `magic-link-consume`
+version-one profile enlists `identity/magiclink/postgres` and the existing
+`capability/postgres` one-use owner. Declare the original purpose-bound
+`CapabilityPlan`, command counters, protected authentication audit and
+`session.created.v1` lifecycle with zero directory-version transition.
+Proof-free, reset, OTP and issuance/delivery profiles cannot substitute.
+
+The native owner must implement `MagicLinkConsumptionContributor`, including
+pure original-input validation and a final current-authority check. Its exact
+`ApplyFeature` invocation may inspect `Work.MagicLinkConsumption(owner)` only
+after provisional capability consumption in the same transaction. The returned
+binding is not a bearer, authorization or a committed result; foreign,
+retained and final-check invocations deny. The owner must authenticate the
+original grant and issuance, pre-auth possession, callback and recipient,
+enforce current factor/risk policy, and persist the complete native session.
+
+Capability finalization, native effects, audits, lifecycle and journal share
+the sole coordinator transaction. Any late denial rolls them back; original
+exclusive expiry is rechecked by the capability owner without renewal. A
+committed retry returns the existing journal receipt. No additional replay
+store or original-intent journal is created. This kernel profile does not
+itself provide public magic-link APIs or native session composition.
+
 ## Magic-link recipient issuance
 
 Native magic-link request contributors use the exact `identity/magiclink/postgres`
