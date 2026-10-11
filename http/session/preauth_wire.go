@@ -10,7 +10,7 @@ func preAuthWire() *identityhttp.WireOperation {
 	return preAuthWireProfile(false)
 }
 
-func preAuthWireProfile(device bool) *identityhttp.WireOperation {
+func preAuthWireProfile(device bool, methods ...PreAuthMethod) *identityhttp.WireOperation {
 	text := func(max int) any { return map[string]any{"type": "string", "minLength": 1, "maxLength": max} }
 	object := func(required []string, fields map[string]any) map[string]any {
 		return map[string]any{"type": "object", "additionalProperties": false, "required": required, "properties": fields}
@@ -53,6 +53,15 @@ func preAuthWireProfile(device bool) *identityhttp.WireOperation {
 	if device {
 		definition["description"] = definition["description"].(string) + " Selected non-authenticating browser-device profile: validate existing __Host-identity_device custody before preparation; absent custody is issued after IP admission and delivered only with successful original flow. Existing device expiry is never renewed. Malformed, duplicate, expired or scope-mismatched device cookies deny."
 		responses["200"].(map[string]any)["headers"].(map[string]any)["Set-Cookie"].(map[string]any)["description"] = "Separate Set-Cookie fields: original __Host-identity_flow, plus __Host-identity_device only when absent. Both Secure, HttpOnly, host-only, Path=/, Lax or Strict; device is bounded non-authenticating correlation, never session/MFA authority. Fresh error-free flow commitment only; no replay, error or recovery delivery. Existing device is not redelivered or renewed."
+	}
+	if len(methods) != 0 {
+		names := make([]string, len(methods))
+		for i, method := range methods {
+			names[i] = method.Name
+		}
+		schema := definition["requestBody"].(map[string]any)["content"].(map[string]any)["application/json"].(map[string]any)["schema"].(map[string]any)
+		schema["properties"].(map[string]any)["method"] = map[string]any{"type": "string", "enum": names, "description": "Exact selected login-method name. Absent retains the default deployment profile. Selects a fixed issuer; cannot override action, callback, origin or policy."}
+		definition["description"] = definition["description"].(string) + " Optional method selects only an explicitly configured fixed profile; unknown, null or empty method denies before preparation."
 	}
 	data, _ := json.Marshal(definition)
 	return &identityhttp.WireOperation{Definition: data}

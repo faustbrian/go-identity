@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Allow opt-in named login-method profiles on original browser-flow initiation.
+  Each selection retains its issuer's fixed action, callback and policy under
+  the same origin, cookie, device and rate protections. Unselected names deny
+  before owner work; existing remember-only profiles remain unchanged.
+
 - Add an explicit browser-device flow profile with a server-random, scoped,
   non-authenticating correlation cookie. Existing valid devices retain their
   original expiry across fresh flows; invalid custody denies before preparation.

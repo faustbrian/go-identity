@@ -31,7 +31,7 @@ write another flow store or issuance workflow. Use the secure
 `__Host-identity_flow` Lax/Strict cookie policy and the same configured issuer
 action/origin/callback/policy. Empty callback explicitly disables redirects.
 
-Only `POST /v1/session/preauth-issue` accepts bounded JSON `{}` or an optional
+By default, `POST /v1/session/preauth-issue` accepts bounded JSON `{}` or an optional
 boolean `remember`. Null, extra/duplicate fields, query, trailers, Authorization
 and Idempotency-Key deny. The request needs the exact configured HTTPS Origin
 and host-mapped tenant. Ambient cookies are not authentication for initiation.
@@ -39,6 +39,19 @@ IP-only shared `rate.auth` admission precedes command/flow entropy and persisten
 Each deliberate fresh start is independent; the handler never retries an unknown
 outcome or prepares another command as recovery. Subsequent OTP Send must use
 the returned original flow ID/cookie and its own keyed contract.
+
+To support multiple login methods on this one route, explicitly populate
+`PreAuthConfig.Methods` with named `PreAuthMethod` profiles. For example, a
+`password` profile supplies a password-bound original issuer and its exact
+action, callback and policy. `{"method":"password","remember":true}` selects
+that profile; `{}` still selects the original base profile. All profiles share
+the configured origin, network, cookie, session lifetime, device protection and
+IP budget. The handler checks the chosen owner's prepared intent before issuing;
+it never relabels an OTP flow as password custody. Names are unique and bounded
+to sixteen profiles. Unknown, empty, null or duplicate method fields deny, and
+selected OpenAPI lists only configured names. With no Methods, the additional
+field remains forbidden. Callers own each borrowed issuer's lifetime and must
+not mutate configuration or service state concurrently with construction.
 
 The native issuer resolves the original five-minute flow independently of final
 session persistence. Remember is resolved once through Lifetime before Prepare

@@ -46,7 +46,36 @@ type PreAuthConfig struct {
 	PolicyVersion                 uint64
 	Now                           func() time.Time
 	MaximumDuration               time.Duration
+	// Methods optionally enables exact named login-method selection. Omission
+	// keeps the original profile and closed remember-only request contract.
+	// Profiles share Network, Origin, Rate, Cookie, Lifetime and device custody;
+	// each borrowed owner must enforce its own fixed original intent. The slice
+	// is copied at construction. No method, action or policy is auto-registered.
+	Methods []PreAuthMethod
 }
+
+// PreAuthMethod binds a public selection name to one trusted original-flow
+// owner. Name is 1..32 lowercase ASCII letters, digits or hyphens. Service is
+// borrowed, bounded and concurrency-safe. Action, callback and policy are
+// fixed deployment values, never request overrides. One to sixteen distinct
+// names may be selected; omitted method retains PreAuthConfig's base profile.
+type PreAuthMethod struct {
+	Name                          string
+	Service                       PreAuthService
+	Action, CallbackURL, PolicyID string
+	PolicyVersion                 uint64
+}
+
+// Format hides borrowed service and trusted deployment bindings.
+func (PreAuthMethod) Format(s fmt.State, _ rune) {
+	io.WriteString(s, "sessionhttp.PreAuthMethod(redacted)")
+}
+
+// MarshalJSON rejects implicit deployment custody export.
+func (PreAuthMethod) MarshalJSON() ([]byte, error) { return nil, session.ErrSecretSerialization }
+
+// MarshalText rejects implicit deployment custody export.
+func (PreAuthMethod) MarshalText() ([]byte, error) { return nil, session.ErrSecretSerialization }
 
 // Format prevents traversal of borrowed service and deployment configuration.
 func (PreAuthConfig) Format(s fmt.State, _ rune) {
@@ -92,6 +121,7 @@ type PreAuthState struct {
 	remember session.RememberPolicy
 	attempt  *preAuthAttempt
 	device   session.BrowserDevice
+	profile  PreAuthMethod
 }
 
 // Attempt returns detached safe metadata. True means Handle entered, not that
@@ -115,7 +145,7 @@ func (PreAuthState) MarshalJSON() ([]byte, error) { return nil, session.ErrSecre
 func (PreAuthState) MarshalText() ([]byte, error) { return nil, session.ErrSecretSerialization }
 
 // NewPreAuthHandler constructs only POST /v1/session/preauth-issue, with no
-// registration or IO. Strict JSON accepts only optional boolean remember;
+// registration or IO. Without Methods, strict JSON accepts only optional boolean remember;
 // absence selects configured default and null is invalid. Query, trailers,
 // Idempotency-Key and Authorization are forbidden. Ambient cookies confer no
 // authority and are ignored: a deliberate fresh start creates an independent
@@ -127,6 +157,9 @@ func (PreAuthState) MarshalText() ([]byte, error) { return nil, session.ErrSecre
 // 404 path, 405 method, 421 host, 429 rate, 409 conflict/in-progress, 503 unavailable.
 // Native recovery stays outcome-only. Handler alone does not advertise a feature,
 // satisfy browser/reference journeys or establish full release qualification.
+// Explicit Methods additionally accepts an optional exact string method. It
+// selects a frozen deployment profile; omission retains the base profile.
+// Unknown names or malformed selection deny before rate debit or owner work.
 func NewPreAuthHandler(c PreAuthConfig) (http.Handler, error) {
 	return NewPreAuthHandlerWithMiddleware(c, nil)
 }
@@ -190,9 +223,28 @@ func newPreAuthHandler(c PreAuthConfig, middleware []identityhttp.MiddlewareDesc
 		return nil, identityhttp.ErrInvalidInput
 	}
 	stamp := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
-	_, err = session.NewPreAuthTransaction(session.PreAuthTransactionSpec{Binding: session.PreAuthBinding{ID: "AQEBAQEBAQEBAQEBAQEBAQ", Intent: session.PreAuthIntent{TenantID: "configuration", Action: c.Action, Origin: string(c.Origin), CallbackURL: c.CallbackURL, PolicyID: c.PolicyID, PolicyVersion: c.PolicyVersion, Nonce: [32]byte{1}, Remember: remember}, IssuedAt: stamp, ExpiresAt: stamp.Add(5 * time.Minute)}, Cookie: session.TokenDigest{KeyVersion: 1, Sum: [32]byte{1}}, Version: 1})
-	if err != nil || c.CallbackURL != "" && !strings.HasPrefix(c.CallbackURL, "https://") {
+	base := PreAuthMethod{Service: c.Service, Action: c.Action, CallbackURL: c.CallbackURL, PolicyID: c.PolicyID, PolicyVersion: c.PolicyVersion}
+	validProfile := func(p PreAuthMethod) bool {
+		_, err := session.NewPreAuthTransaction(session.PreAuthTransactionSpec{Binding: session.PreAuthBinding{ID: "AQEBAQEBAQEBAQEBAQEBAQ", Intent: session.PreAuthIntent{TenantID: "configuration", Action: p.Action, Origin: string(c.Origin), CallbackURL: p.CallbackURL, PolicyID: p.PolicyID, PolicyVersion: p.PolicyVersion, Nonce: [32]byte{1}, Remember: remember}, IssuedAt: stamp, ExpiresAt: stamp.Add(5 * time.Minute)}, Cookie: session.TokenDigest{KeyVersion: 1, Sum: [32]byte{1}}, Version: 1})
+		return err == nil && !preAuthNil(p.Service) && (p.CallbackURL == "" || strings.HasPrefix(p.CallbackURL, "https://"))
+	}
+	if !validProfile(base) || len(c.Methods) > 16 {
 		return nil, identityhttp.ErrInvalidInput
+	}
+	profiles := make(map[string]PreAuthMethod, len(c.Methods))
+	for _, p := range c.Methods {
+		if len(p.Name) < 1 || len(p.Name) > 32 || !validProfile(p) {
+			return nil, identityhttp.ErrInvalidInput
+		}
+		for _, ch := range p.Name {
+			if !(ch >= 'a' && ch <= 'z' || ch >= '0' && ch <= '9' || ch == '-') {
+				return nil, identityhttp.ErrInvalidInput
+			}
+		}
+		if _, exists := profiles[p.Name]; exists {
+			return nil, identityhttp.ErrInvalidInput
+		}
+		profiles[p.Name] = p
 	}
 	reject := func(w http.ResponseWriter, r *http.Request, err error) {
 		a := &preAuthAttempt{out: PreAuthResponse{CommitOutcome: "none"}}
@@ -222,7 +274,7 @@ func newPreAuthHandler(c PreAuthConfig, middleware []identityhttp.MiddlewareDesc
 	}
 	handler, err := identityhttp.NewOperationPipeline(identityhttp.OperationPipelineConfig[PreAuthState]{MaximumDuration: c.MaximumDuration, Middleware: middleware, Reject: reject,
 		Decode: func(r *http.Request) (PreAuthState, error) {
-			s := PreAuthState{attempt: r.Context().Value(preAuthAttemptKey{}).(*preAuthAttempt)}
+			s := PreAuthState{attempt: r.Context().Value(preAuthAttemptKey{}).(*preAuthAttempt), profile: base}
 			if r.URL.Path != "/v1/session/preauth-issue" || r.URL.EscapedPath() != "/v1/session/preauth-issue" {
 				return s, getFailure{status: 404, code: "not_found"}
 			}
@@ -257,6 +309,18 @@ func newPreAuthHandler(c PreAuthConfig, middleware []identityhttp.MiddlewareDesc
 			}
 			choice := session.RememberDefault
 			for name, raw := range input {
+				if name == "method" && len(profiles) != 0 {
+					var method string
+					if json.Unmarshal(raw, &method) != nil {
+						return s, identityhttp.ErrInvalidInput
+					}
+					profile, ok := profiles[method]
+					if !ok {
+						return s, identityhttp.ErrInvalidInput
+					}
+					s.profile = profile
+					continue
+				}
 				if name != "remember" {
 					return s, identityhttp.ErrInvalidInput
 				}
@@ -298,6 +362,7 @@ func newPreAuthHandler(c PreAuthConfig, middleware []identityhttp.MiddlewareDesc
 		},
 		Handle: func(w http.ResponseWriter, r *http.Request, s PreAuthState) {
 			a := s.attempt
+			profile := s.profile
 			a.attempted = true
 			a.ctx = r.Context()
 			if devices != nil {
@@ -319,7 +384,7 @@ func newPreAuthHandler(c PreAuthConfig, middleware []identityhttp.MiddlewareDesc
 				return
 			}
 			a.out.CommandID = id
-			p, err := c.Service.Prepare(r.Context(), session.PreAuthPrepareInput{CommandID: id, TenantID: s.facts.TenantID(), CorrelationID: string(id), Remember: s.remember})
+			p, err := profile.Service.Prepare(r.Context(), session.PreAuthPrepareInput{CommandID: id, TenantID: s.facts.TenantID(), CorrelationID: string(id), Remember: s.remember})
 			if err != nil || r.Context().Err() != nil {
 				reject(w, r, identityhttp.ErrUnavailable)
 				return
@@ -327,7 +392,7 @@ func newPreAuthHandler(c PreAuthConfig, middleware []identityhttp.MiddlewareDesc
 			command, ok := p.Command()
 			spec, e := command.Record.Bindings()
 			i := spec.Binding.Intent
-			if !ok || e != nil || command.CommandID != id || command.CorrelationID != string(id) || i.TenantID != s.facts.TenantID() || i.Action != c.Action || i.Origin != string(c.Origin) || i.CallbackURL != c.CallbackURL || i.PolicyID != c.PolicyID || i.PolicyVersion != c.PolicyVersion || i.Remember != s.remember || spec.Version != 1 || spec.Binding.ExpiresAt.Sub(spec.Binding.IssuedAt) != 5*time.Minute || command.Record.Check(c.Now(), spec.Binding, spec.Cookie) != nil {
+			if !ok || e != nil || command.CommandID != id || command.CorrelationID != string(id) || i.TenantID != s.facts.TenantID() || i.Action != profile.Action || i.Origin != string(c.Origin) || i.CallbackURL != profile.CallbackURL || i.PolicyID != profile.PolicyID || i.PolicyVersion != profile.PolicyVersion || i.Remember != s.remember || spec.Version != 1 || spec.Binding.ExpiresAt.Sub(spec.Binding.IssuedAt) != 5*time.Minute || command.Record.Check(c.Now(), spec.Binding, spec.Cookie) != nil {
 				reject(w, r, identityhttp.ErrUnavailable)
 				return
 			}
@@ -335,7 +400,7 @@ func newPreAuthHandler(c PreAuthConfig, middleware []identityhttp.MiddlewareDesc
 			a.out.IssuedAt = spec.Binding.IssuedAt
 			a.out.ExpiresAt = spec.Binding.ExpiresAt
 			a.out.CommitOutcome = "unknown"
-			out, err := c.Service.Issue(r.Context(), p)
+			out, err := profile.Service.Issue(r.Context(), p)
 			if out.CommandID == id {
 				a.out.CommitOutcome = logoutOutcome(out.CommitOutcome)
 			}

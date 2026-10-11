@@ -153,6 +153,121 @@ func TestPreAuthHTTPOriginalCommitAndRemember(t *testing.T) {
 	}
 }
 
+func TestPreAuthHTTPSelectedLoginMethods(t *testing.T) {
+	c, otpOwner, otpExecutor := preAuthHTTPFixture(t)
+	key, err := session.NewDigestKey(1, bytes.Repeat([]byte{37}, 32))
+	if err != nil {
+		t.Fatal(err)
+	}
+	passwordExecutor := &preAuthExecutor{}
+	issuer, err := session.NewPreAuthIssuer(passwordExecutor, session.PreAuthIssuerConfig{ActorID: "preauth-service", Action: "identity.password.signin", Origin: string(c.Origin), CallbackURL: "https://tenant.example/after", PolicyID: "password-policy", PolicyVersion: 9, Clock: clock(c.Now), MaximumDuration: time.Second, FlowTTL: 5 * time.Minute, LookupKey: key, TokenSize: 32, Cookie: c.Cookie})
+	if err != nil {
+		t.Fatal(err)
+	}
+	passwordOwner := &preAuthOwner{issuer: issuer}
+	c.Methods = []sessionhttp.PreAuthMethod{{Name: "password", Service: passwordOwner, Action: "identity.password.signin", CallbackURL: "https://tenant.example/after", PolicyID: "password-policy", PolicyVersion: 9}}
+	feature, err := sessionhttp.NewPreAuthFeature(c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The constructor freezes selection, not the caller's mutable slice.
+	c.Methods[0].Service = otpOwner
+	h, doc, err := identityhttp.NewDocumentedHandler(t.Context(), identityhttp.DocumentConfig{Title: "Identity", Version: "1"}, identityhttp.FeatureServices{Features: []identityhttp.Feature{feature}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, body := range []string{`{"method":"password","remember":true}`, `{}`} {
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, preAuthHTTPRequest(body))
+		if w.Code != 200 || len(w.Result().Cookies()) != 1 {
+			t.Fatal("selected original issuance absent", w.Code)
+		}
+	}
+	passwordFlow, err := passwordExecutor.last.Record.Bindings()
+	if err != nil || passwordOwner.prepares.Load() != 1 || passwordExecutor.calls.Load() != 1 || passwordFlow.Binding.Intent.Action != "identity.password.signin" || passwordFlow.Binding.Intent.PolicyID != "password-policy" || passwordFlow.Binding.Intent.PolicyVersion != 9 || passwordFlow.Binding.Intent.CallbackURL != "https://tenant.example/after" || passwordFlow.Binding.Intent.Remember.Choice() != session.PersistentSession {
+		t.Fatal("method selection altered original issuer authority", err)
+	}
+	otpFlow, err := otpExecutor.last.Record.Bindings()
+	if err != nil || otpOwner.prepares.Load() != 1 || otpExecutor.calls.Load() != 1 || otpFlow.Binding.Intent.Action != c.Action {
+		t.Fatal("default OTP profile changed", err)
+	}
+	for _, body := range []string{`{"method":"unknown"}`, `{"method":""}`, `{"method":null}`, `{"method":1}`, `{"method":"password","action":"otp-signin"}`, `{"method":"password","method":"other"}`} {
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, preAuthHTTPRequest(body))
+		if w.Code != 400 || len(w.Result().Cookies()) != 0 || passwordOwner.prepares.Load() != 1 || otpOwner.prepares.Load() != 1 {
+			t.Fatal("unselected method prepared custody", w.Code)
+		}
+	}
+	var document map[string]any
+	if json.Unmarshal(doc.JSON(), &document) != nil {
+		t.Fatal("invalid wire document")
+	}
+	schema := document["paths"].(map[string]any)["/v1/session/preauth-issue"].(map[string]any)["post"].(map[string]any)["requestBody"].(map[string]any)["content"].(map[string]any)["application/json"].(map[string]any)["schema"].(map[string]any)
+	method := schema["properties"].(map[string]any)["method"].(map[string]any)
+	values := method["enum"].([]any)
+	if len(values) != 1 || values[0] != "password" {
+		t.Fatal("wire advertises wrong method selection")
+	}
+	for _, mode := range []string{"unknown", "replay", "error"} {
+		passwordExecutor.mode = mode
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, preAuthHTTPRequest(`{"method":"password"}`))
+		if w.Code != 503 || len(w.Result().Cookies()) != 0 {
+			t.Fatal("non-fresh selected method delivered cookie", mode, w.Code)
+		}
+	}
+	// A selected name cannot relabel another owner's durable original intent.
+	c.Methods[0].Service = otpOwner
+	mismatched, err := sessionhttp.NewPreAuthHandler(c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	w := httptest.NewRecorder()
+	mismatched.ServeHTTP(w, preAuthHTTPRequest(`{"method":"password"}`))
+	if w.Code != 503 || len(w.Result().Cookies()) != 0 || otpExecutor.calls.Load() != 1 {
+		t.Fatal("mismatched selected issuer intent reached durable execution")
+	}
+}
+
+func TestPreAuthHTTPMethodSelectionValidation(t *testing.T) {
+	c, owner, executor := preAuthHTTPFixture(t)
+	method := sessionhttp.PreAuthMethod{Name: "password", Service: owner, Action: c.Action, CallbackURL: c.CallbackURL, PolicyID: c.PolicyID, PolicyVersion: c.PolicyVersion}
+	for _, change := range []func(*sessionhttp.PreAuthMethod){
+		func(m *sessionhttp.PreAuthMethod) { m.Name = "" },
+		func(m *sessionhttp.PreAuthMethod) { m.Name = strings.Repeat("a", 33) },
+		func(m *sessionhttp.PreAuthMethod) { m.Name = "Password" },
+		func(m *sessionhttp.PreAuthMethod) { m.Name = "pässword" },
+		func(m *sessionhttp.PreAuthMethod) { m.Service = (*preAuthOwner)(nil) },
+		func(m *sessionhttp.PreAuthMethod) { m.Action = "" },
+		func(m *sessionhttp.PreAuthMethod) { m.CallbackURL = "http://tenant.example" },
+		func(m *sessionhttp.PreAuthMethod) { m.PolicyID = "" },
+		func(m *sessionhttp.PreAuthMethod) { m.PolicyVersion = 0 },
+	} {
+		invalid := method
+		change(&invalid)
+		c.Methods = []sessionhttp.PreAuthMethod{invalid}
+		if h, err := sessionhttp.NewPreAuthHandler(c); err == nil || h != nil {
+			t.Fatal("invalid selection exposed handler")
+		}
+	}
+	for _, methods := range [][]sessionhttp.PreAuthMethod{{method, method}, make([]sessionhttp.PreAuthMethod, 17)} {
+		c.Methods = methods
+		if h, err := sessionhttp.NewPreAuthHandler(c); err == nil || h != nil {
+			t.Fatal("ambiguous or unbounded selection exposed handler")
+		}
+	}
+	c.Methods = nil
+	h, err := sessionhttp.NewPreAuthHandler(c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, preAuthHTTPRequest(`{"method":"password"}`))
+	if w.Code != 400 || owner.prepares.Load() != 0 || executor.calls.Load() != 0 {
+		t.Fatal("legacy profile silently enabled method selection")
+	}
+}
+
 func TestPreAuthHTTPAdmissionPrecedesPreparation(t *testing.T) {
 	for _, change := range []func(*http.Request){
 		func(r *http.Request) { r.Host = "unmapped.example" },
