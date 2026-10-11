@@ -81,7 +81,7 @@ func testMFACompletionPreparation(t *testing.T, method string) {
 	b, p := mfaCompletionPlanFixture(t, method)
 	op := p.Feature.Operation
 	command := featureCodecCommand(t, identity.FeatureCommandSpec{Binding: b, Operation: op, Fields: []identity.FeatureField{{Name: "proof-id", Value: identity.FeatureValue{Kind: identity.FeatureText, Text: p.Capability.CapabilityID}}}})
-	if method == "otp-verify" {
+	if method == "otp-verify" || method == "totp-verify" {
 		spec, _ := command.Feature()
 		command = codeCodecCommand(t, spec, "123456")
 	}
@@ -125,13 +125,16 @@ func testMFACompletionPreparation(t *testing.T, method string) {
 		if preparationFinalDeclaration(b, prepared, bad) {
 			t.Fatal("restoration replaced completion scope")
 		}
+		if _, _, _, err := c.prepareRestoredFeature(b, command, bad); err == nil {
+			t.Fatal("restored execution accepted substituted completion scope")
+		}
 	}
 	if _, _, _, err := c.prepareRestoredFeature(b, command, prepared); err != nil {
 		t.Fatal("native completion execution unavailable", err)
 	}
-	if method == "otp-verify" {
+	if method == "otp-verify" || method == "totp-verify" {
 		if _, err := c.PrepareCommandPlan(b, command, prepared); err == nil {
-			t.Fatal("ordinary preparation admitted opaque OTP custody")
+			t.Fatal("ordinary preparation admitted opaque factor custody")
 		}
 	}
 }

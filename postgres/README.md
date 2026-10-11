@@ -28,8 +28,20 @@ original versions, capability and optional OTP submission. The existing
 coordinator owns finalization, audit/lifecycle, commit and recovery; late denial
 rolls back protected effects, and a committed retry returns the original receipt.
 
-This kernel seam does not implement factor verification, counted failed
-attempts, the production continuation store or MFA session issuance. Public MFA
+For TOTP failed attempts, `PrepareMFATOTPAttemptPlan` and
+`RecordMFATOTPAttemptDenial` enlist the exact `MFATOTPAttemptContributor`.
+The existing journal transaction locks the original command before calling
+the native owner through bounded `MFATOTPAttemptWork`. Native wrong-attempt
+accounting, denial audit and an aborted command result commit together; exact
+replay does not compare or charge again. Unchanged rolls back and grants no
+successful-factor authority. No child, OTP or session reservation is invoked.
+The native owner must verify the real factor and lock/recheck the current
+continuation and shared budget. Successful completion uses the retained
+preparation route, preserving the original opaque TOTP submission and verifying
+it again under protected current authority; ordinary opaque execution denies.
+
+These kernel seams do not implement factor verification, the production
+shared-budget mutation, continuation store or MFA session issuance. Public MFA
 remains disabled until those owners and the consumer journey are connected.
 
 ## Atomic magic-link consumption

@@ -266,11 +266,23 @@ func meteredCheckPlan(p *admittedKernelPlan) bool {
 }
 
 func (c *Coordinator) recordOTPAttemptCommand(ctx context.Context, b identity.CommandBinding, command identity.Command, p CommandPlan, metered bool) (identity.CommandResult, error) {
+	return c.recordCountedAttemptCommand(ctx, b, command, p, metered, false)
+}
+
+func (c *Coordinator) recordCountedAttemptCommand(ctx context.Context, b identity.CommandBinding, command identity.Command, p CommandPlan, metered, mfa bool) (identity.CommandResult, error) {
 	if ctx == nil {
 		return identity.CommandResult{}, invalidPlan()
 	}
-	q, snapshot, declared, err := c.prepareOTPAttempt(b, command, p)
-	if err != nil || snapshot.Digest != p.Digest || metered && !meteredCheckPlan(declared) || !metered && (declared == nil || declared.otp.Mode != OTPConsume) {
+	var q claimRequest
+	var snapshot CommandPlan
+	var declared *admittedKernelPlan
+	var err error
+	if mfa {
+		q, snapshot, declared, err = c.prepareMFATOTPAttempt(b, command, p)
+	} else {
+		q, snapshot, declared, err = c.prepareOTPAttempt(b, command, p)
+	}
+	if err != nil || snapshot.Digest != p.Digest || mfa && metered || !mfa && (metered && !meteredCheckPlan(declared) || !metered && (declared == nil || declared.otp.Mode != OTPConsume)) {
 		return identity.CommandResult{}, invalidPlan()
 	}
 	bounded, cancel := context.WithTimeout(ctx, c.maximumDuration)
@@ -319,7 +331,7 @@ func (c *Coordinator) recordOTPAttemptCommand(ctx context.Context, b identity.Co
 	if j.previousGeneration != 0 {
 		return fail(featureOutcome(b, q.feature, identity.CommitOutcomeUnknown, 0), identity.UnavailableError{})
 	}
-	choice, result, err := c.recordOTPCountedAttempt(bounded, tx, command, q, admitted, j, owner, metered)
+	choice, result, err := c.recordCountedAttempt(bounded, tx, command, q, admitted, j, owner, metered, mfa)
 	if err != nil {
 		return fail(identity.CommandResult{}, err)
 	}
@@ -335,9 +347,10 @@ func (c *Coordinator) recordOTPAttemptCommand(ctx context.Context, b identity.Co
 	return result, identity.ForbiddenError{}
 }
 
-func (c *Coordinator) recordOTPCountedAttempt(ctx context.Context, tx pgx.Tx, command identity.Command, q claimRequest, p *admittedKernelPlan, j journalReservation, owner [16]byte, metered bool) (choice OTPAttemptDisposition, result identity.CommandResult, err error) {
+func (c *Coordinator) recordCountedAttempt(ctx context.Context, tx pgx.Tx, command identity.Command, q claimRequest, p *admittedKernelPlan, j journalReservation, owner [16]byte, metered, mfa bool) (choice OTPAttemptDisposition, result identity.CommandResult, err error) {
 	participant := otpAttemptOwner(p)
-	if participant == nil || p.belongsTo(c.registry) != nil || j.disposition != journalOwned || j.previousGeneration != 0 {
+	mfaParticipant := mfaAttemptOwner(p)
+	if (!mfa && participant == nil || mfa && (mfaParticipant == nil || metered)) || p.belongsTo(c.registry) != nil || j.disposition != journalOwned || j.previousGeneration != 0 {
 		return 0, result, invalidPlan()
 	}
 	fence, err := beginJournal(ctx, tx, q, c.keys, j, owner)
@@ -352,8 +365,10 @@ func (c *Coordinator) recordOTPCountedAttempt(ctx context.Context, tx pgx.Tx, co
 	r := &reservationState{coordinator: c, request: q, plan: p, journal: j, owner: owner}
 	work.state.execution = &domainExecution{coordinator: c, reservation: r, ctx: ctx}
 	s := &otpAttemptState{work: work, owner: participant, command: command, active: true}
+	m := &mfaAttemptState{work: work, owner: mfaParticipant, command: command, active: mfa}
 	defer func() {
 		s.active, s.command = false, identity.Command{}
+		m.active, m.command = false, identity.Command{}
 		invalidateWork(work)
 		if recover() != nil {
 			choice, result, err = 0, identity.CommandResult{}, identity.UnavailableError{}
@@ -365,7 +380,18 @@ func (c *Coordinator) recordOTPCountedAttempt(ctx context.Context, tx pgx.Tx, co
 	if err = configureKernelWork(ctx, work); err != nil {
 		return 0, result, err
 	}
-	if metered {
+	if mfa {
+		var decision MFAAttemptDisposition
+		decision, err = mfaParticipant.RecordMFATOTPAttemptDenial(ctx, MFATOTPAttemptWork{state: m})
+		switch decision {
+		case MFAAttemptUnchanged:
+			choice = OTPAttemptUnchanged
+		case MFAAttemptDenied:
+			choice = OTPAttemptDenied
+		default:
+			choice = 0
+		}
+	} else if metered {
 		if !meteredCheckPlan(p) {
 			return 0, result, invalidPlan()
 		}
@@ -380,6 +406,7 @@ func (c *Coordinator) recordOTPCountedAttempt(ctx context.Context, tx pgx.Tx, co
 		return 0, result, invalidWork()
 	}
 	s.active = false
+	m.active = false
 	if choice == OTPAttemptUnchanged {
 		return choice, result, nil
 	}

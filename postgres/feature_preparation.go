@@ -249,6 +249,27 @@ func (c *Coordinator) prepareRestoredFeature(b identity.CommandBinding, generate
 		}
 		return c.prepareOTPReservation(b, generated, final)
 	}
+	if _, opaque := generated.OneTimeCode(); opaque {
+		// TOTP custody is restored only through the retained native completion
+		// owner. It is not an OTP challenge and must not acquire OTP phases.
+		// prepareFeature still validates the native owner and complete command;
+		// Apply must verify the factor under current locked authority.
+		if c == nil || c.registry == nil || c.registry.state == nil || c.keys.current == 0 || !validMFACompletionPlan(b, final) || final.Feature.Operation.OperationID != "identity.mfa.totp-verify" {
+			return claimRequest{}, CommandPlan{}, nil, invalidPreparation()
+		}
+		spec, ok := commandFeature(generated)
+		if !ok {
+			return claimRequest{}, CommandPlan{}, nil, invalidPreparation()
+		}
+		entry, err := c.registry.selectFeatureOperation(*final.Feature)
+		if err != nil {
+			return claimRequest{}, CommandPlan{}, nil, invalidPreparation()
+		}
+		if _, ok := entry.contributor.(FeaturePreparationContributor); !ok {
+			return claimRequest{}, CommandPlan{}, nil, invalidPreparation()
+		}
+		return c.prepareFeature(b, generated, spec, final)
+	}
 	return c.prepare(b, generated, final)
 }
 

@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Add a native TOTP denial-only phase using the existing command journal.
+  Commit native wrong-attempt accounting with required denial audits and the
+  aborted command receipt; replay skips comparison and charging. This phase
+  grants no factor proof, capability consumption or session authority.
+
+- Preserve opaque TOTP submissions through native retained MFA completion
+  without admitting them through ordinary command execution or enlisting an
+  unrelated OTP challenge. Native factor verification remains required.
+
 - Bind session-producing MFA factor operations to the original continuation
   purpose without relaxing other capability-purpose checks. Preserve original
   scope and attempt/factor/policy versions through preparation and recovery;

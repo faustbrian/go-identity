@@ -4,6 +4,9 @@ package postgres
 
 import (
 	"context"
+	"reflect"
+	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -19,6 +22,51 @@ type mfaCompletionAtomicPhase struct {
 	failApply, failCommit bool
 	retained              Work
 	plan                  CommandPlan
+}
+
+// Transaction oracle only: the production MFA owner must perform real locked
+// factor verification and shared-budget accounting through this bounded seam.
+type sqlMFATOTPAttempt struct {
+	*mfaCompletionAtomicPhase
+	mode     string
+	calls    atomic.Int32
+	retained MFATOTPAttemptWork
+}
+
+func (p *sqlMFATOTPAttempt) RecordMFATOTPAttemptDenial(ctx context.Context, w MFATOTPAttemptWork) (MFAAttemptDisposition, error) {
+	p.calls.Add(1)
+	p.retained = w
+	b, err := w.Binding(p)
+	if err != nil {
+		return 0, err
+	}
+	if _, err := w.Binding(&sqlMFATOTPAttempt{}); err == nil {
+		return 0, invalidWork()
+	}
+	c, err := w.NativeCommand(p)
+	if err != nil || c != p.expected {
+		return 0, invalidWork()
+	}
+	if _, err := w.DatabaseTime(ctx); err != nil {
+		return 0, err
+	}
+	if _, err := w.Exec(ctx, `INSERT INTO public.identity_test_mfa_attempts(command_id,fingerprint) VALUES($1,$2)`, string(b.Command.CommandID), b.Fingerprint[:]); err != nil {
+		return 0, err
+	}
+	switch p.mode {
+	case "counted-unchanged":
+		return MFAAttemptUnchanged, nil
+	case "counted-error":
+		return 0, identity.UnavailableError{}
+	case "counted-panic":
+		panic("private factor detail")
+	case "counted-zero":
+		return 0, nil
+	case "counted-rows":
+		_, err := w.Query(ctx, "SELECT 1")
+		return MFAAttemptDenied, err
+	}
+	return MFAAttemptDenied, nil
 }
 
 type mfaCompletionFixtureAdmission struct{ owner *mfaCompletionAtomicPhase }
@@ -110,21 +158,25 @@ func testMFACompletion(t *testing.T, ctx context.Context, pool *database.Pool, r
 	if _, err := pool.Raw().Exec(ctx, `CREATE TABLE IF NOT EXISTS public.identity_test_audits(event_id text PRIMARY KEY,command_id text NOT NULL UNIQUE);
 CREATE TABLE IF NOT EXISTS public.identity_test_lifecycle(event_id text PRIMARY KEY,command_id text NOT NULL UNIQUE);
 CREATE TABLE public.identity_test_mfa_completion(command_id text PRIMARY KEY,tenant_id text NOT NULL,continuation_id text NOT NULL UNIQUE,scope_digest bytea NOT NULL);
+CREATE TABLE public.identity_test_mfa_attempts(command_id text PRIMARY KEY,fingerprint bytea NOT NULL);
 CREATE TABLE IF NOT EXISTS identity.capability_recovery_fixture(tenant_id text NOT NULL,purpose text NOT NULL,capability_id text PRIMARY KEY,expiry timestamptz NOT NULL,state text NOT NULL,command_id text,fingerprint bytea,generation numeric)`); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := pool.Raw().Exec(ctx, `CREATE TABLE IF NOT EXISTS public.otp_reservation_fixture(tenant_id text PRIMARY KEY,challenge_id text NOT NULL,state text NOT NULL,command_id text,fingerprint bytea,attempt_id text,generation numeric,version numeric NOT NULL,expiry timestamptz NOT NULL)`); err != nil {
 		t.Fatal(err)
 	}
-	for _, mode := range []string{"commit", "apply-denied", "commit-denied", "audit-failure", "outbox-failure", "finalize-failure", "competing-command", "prepared-otp", "prepared-otp-denied"} {
+	for _, mode := range []string{"commit", "apply-denied", "commit-denied", "audit-failure", "outbox-failure", "finalize-failure", "competing-command", "prepared-otp", "prepared-otp-denied", "prepared-totp", "prepared-totp-denied", "counted-denied", "counted-unchanged", "counted-error", "counted-panic", "counted-zero", "counted-rows", "counted-audit-failure"} {
 		t.Run(mode, func(t *testing.T) {
 			preparedOTP := mode == "prepared-otp" || mode == "prepared-otp-denied"
+			preparedTOTP := mode == "prepared-totp" || mode == "prepared-totp-denied"
+			prepared := preparedOTP || preparedTOTP
+			counted := strings.HasPrefix(mode, "counted-")
 			method := "totp-verify"
 			if preparedOTP {
 				method = "otp-verify"
 			}
 			b, p := mfaCompletionPlanFixture(t, method)
-			if preparedOTP {
+			if prepared || counted {
 				b.TenantID = identity.TenantID(mode)
 				p.CommandCounters = nil
 			}
@@ -141,20 +193,32 @@ CREATE TABLE IF NOT EXISTS identity.capability_recovery_fixture(tenant_id text N
 			p.MFACompletion.ID = id
 			op := p.Feature.Operation
 			command := featureCodecCommand(t, identity.FeatureCommandSpec{Binding: b, Operation: op, Fields: []identity.FeatureField{{Name: "proof-id", Value: identity.FeatureValue{Kind: identity.FeatureText, Text: p.Capability.CapabilityID}}}})
-			if preparedOTP {
+			if prepared || counted {
 				s, _ := command.Feature()
 				command = codeCodecCommand(t, s, "123456")
 			}
 			native := &mfaCompletionAtomicPhase{mfaCompletionValidationParticipant: mfaCompletionValidationParticipant{magicLinkPreparationParticipant: magicLinkPreparationParticipant{outputPreparationParticipant: outputPreparationParticipant{scopeFeatureParticipant{operations: []identity.FeatureOperation{op}}}, expected: command, proof: *p.Capability}, completion: *p.MFACompletion}, operation: op, failApply: mode == "apply-denied", failCommit: mode == "commit-denied"}
-			if mode == "prepared-otp-denied" {
+			if mode == "prepared-otp-denied" || mode == "prepared-totp-denied" {
 				native.failCommit = true
 			}
 			entries := []Contributor{repo, &recoveryAuditPhase{domainAuditPhase: domainAuditPhase{fail: mode == "audit-failure"}}, &recoveryLifecyclePhase{domainLifecyclePhase: domainLifecyclePhase{fail: mode == "outbox-failure"}}, native, &emailVerificationCounterPhase{}, &emailVerificationCapabilityPhase{failFinalize: mode == "finalize-failure"}}
+			var attempt *sqlMFATOTPAttempt
+			if counted {
+				attempt = &sqlMFATOTPAttempt{mfaCompletionAtomicPhase: native, mode: mode}
+				entries[3] = attempt
+				entries = append(entries[:4], entries[5:]...)
+				if mode == "counted-audit-failure" {
+					entries[1] = &recoveryAuditPhase{domainAuditPhase: domainAuditPhase{fail: true}}
+				}
+			}
 			var otpOwner *sqlOTPDomain
 			if preparedOTP {
 				otpOwner = &sqlOTPDomain{}
 				otpOwner.registered = otpOwner
 				entries = append(entries[:len(entries)-1:len(entries)-1], otpOwner, entries[len(entries)-1])
+				entries = append(entries[:4], entries[5:]...)
+			}
+			if preparedTOTP {
 				entries = append(entries[:4], entries[5:]...)
 			}
 			registry, err := NewContributorRegistry(entries)
@@ -177,7 +241,9 @@ CREATE TABLE IF NOT EXISTS identity.capability_recovery_fixture(tenant_id text N
 					t.Fatal(e)
 				}
 				var got CommandPlan
-				if preparedOTP {
+				if counted {
+					got, e = c.PrepareMFATOTPAttemptPlan(binding, command, p)
+				} else if prepared {
 					got, e = c.PrepareFeaturePreparationPlan(command, p)
 				} else {
 					got, e = c.PrepareCommandPlan(binding, command, p)
@@ -190,6 +256,70 @@ CREATE TABLE IF NOT EXISTS identity.capability_recovery_fixture(tenant_id text N
 			p = prepare(b, command, p)
 			if _, err := pool.Raw().Exec(ctx, `INSERT INTO identity.capability_recovery_fixture VALUES($1,$2,$3,$4,'issued',NULL,NULL,NULL)`, string(b.TenantID), string(p.Capability.Purpose), p.Capability.CapabilityID, p.Capability.ExpiresAt); err != nil {
 				t.Fatal(err)
+			}
+			if counted {
+				result, err := c.RecordMFATOTPAttemptDenial(ctx, b, command, p)
+				var state string
+				var charges, effects, audits, events int
+				if e := pool.Raw().QueryRow(ctx, `SELECT state,(SELECT count(*) FROM public.identity_test_mfa_attempts WHERE command_id=$2),(SELECT count(*) FROM public.identity_test_mfa_completion WHERE command_id=$2),(SELECT count(*) FROM public.identity_test_audits WHERE command_id=$2),(SELECT count(*) FROM public.identity_test_lifecycle WHERE command_id=$2) FROM identity.capability_recovery_fixture WHERE capability_id=$1`, p.Capability.CapabilityID, string(b.CommandID)).Scan(&state, &charges, &effects, &audits, &events); e != nil {
+					t.Fatal(e)
+				}
+				if err == nil || state != "issued" || effects != 0 || events != 0 || attempt.calls.Load() != 1 {
+					t.Fatal("counted attempt granted completion or discarded error", err)
+				}
+				if mode == "counted-denied" {
+					if result.Outcome != identity.CommitOutcomeNotCommitted || charges != 1 || audits != 1 {
+						t.Fatal("counted denial not atomic", charges, audits, err)
+					}
+					got, e := c.RecordMFATOTPAttemptDenial(ctx, b, command, p)
+					if e != nil || !reflect.DeepEqual(got, result) || attempt.calls.Load() != 1 {
+						t.Fatal("counted replay repeated comparison or charge", e)
+					}
+					spec, _ := command.Feature()
+					changed := codeCodecCommand(t, spec, "654321")
+					native.expected = changed
+					changedPlan, e := c.PrepareMFATOTPAttemptPlan(b, changed, p)
+					if e != nil {
+						t.Fatal(e)
+					}
+					got, e = c.RecordMFATOTPAttemptDenial(ctx, b, changed, changedPlan)
+					if e == nil || got.Outcome != identity.CommitOutcomeConflict || attempt.calls.Load() != 1 {
+						t.Fatal("changed counted code reused original command", e)
+					}
+				} else if charges != 0 || audits != 0 {
+					t.Fatal("invalid/unchanged attempt retained effects", charges, audits, err)
+				}
+				if _, e := attempt.retained.Binding(attempt); e == nil {
+					t.Fatal("returned counted invocation retained authority")
+				}
+				return
+			}
+			if preparedTOTP {
+				native.plan = p
+				result, err := c.ExecutePreparedFeature(ctx, command, p)
+				var state string
+				var effects, audits, events int
+				if e := pool.Raw().QueryRow(ctx, `SELECT state,(SELECT count(*) FROM public.identity_test_mfa_completion WHERE command_id=$2),(SELECT count(*) FROM public.identity_test_audits WHERE command_id=$2),(SELECT count(*) FROM public.identity_test_lifecycle WHERE command_id=$2) FROM identity.capability_recovery_fixture WHERE capability_id=$1`, p.Capability.CapabilityID, string(b.CommandID)).Scan(&state, &effects, &audits, &events); e != nil {
+					t.Fatal(e)
+				}
+				if mode == "prepared-totp" {
+					if err != nil || result.Outcome != identity.CommitOutcomeCommitted || state != "finalized" || effects != 1 || audits != 1 || events != 1 {
+						t.Fatal("prepared TOTP completion not atomic", state, effects, audits, events, err)
+					}
+					replay, e := c.ExecutePreparedFeature(ctx, command, p)
+					if e != nil || !reflect.DeepEqual(replay, result) {
+						t.Fatal("prepared TOTP replay lost original result", e)
+					}
+					spec, _ := command.Feature()
+					changed := codeCodecCommand(t, spec, "654321")
+					native.expected = changed
+					if _, e := c.ExecutePreparedFeature(ctx, changed, p); e == nil {
+						t.Fatal("changed opaque submission replayed completion")
+					}
+				} else if err == nil || state != "released" || effects != 0 || audits != 1 || events != 0 {
+					t.Fatal("prepared TOTP late denial retained effects", state, effects, audits, events, err)
+				}
+				return
 			}
 			if preparedOTP {
 				native.plan = p
