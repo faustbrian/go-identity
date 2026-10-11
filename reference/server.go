@@ -168,7 +168,7 @@ func NewServer(c ReferenceConfig, d ReferenceDependencies, f FeatureSet) (*Serve
 	if selected != nil {
 		contributions = append(contributions, *selected)
 	}
-	selected, err = server.passwordResetFeature(c.HTTP.Network, f)
+	selected, err = server.passwordFeature(c.HTTP.Network, f)
 	if err != nil {
 		return nil, invalid
 	}

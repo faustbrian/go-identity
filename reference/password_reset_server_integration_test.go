@@ -25,6 +25,7 @@ import (
 	"github.com/faustbrian/go-identity/delivery"
 	email "github.com/faustbrian/go-identity/email"
 	passwordhttp "github.com/faustbrian/go-identity/http/password"
+	sessionhttp "github.com/faustbrian/go-identity/http/session"
 	"github.com/faustbrian/go-identity/password"
 	passwordpg "github.com/faustbrian/go-identity/password/postgres"
 	kernel "github.com/faustbrian/go-identity/postgres"
@@ -41,6 +42,9 @@ type referenceResetPolicy struct{}
 func (referenceResetPolicy) Decide(ctx context.Context, c authorization.DecisionContext) (authorization.Decision, error) {
 	if err := ctx.Err(); err != nil {
 		return authorization.Decision{}, err
+	}
+	if string(c.Request.Tenant) == otpTenant && c.PolicyRevision == 9 && c.Request.Action == "identity.session.preauth-issue" && c.Request.Subject.Kind == authorization.SubjectServiceAccount && c.Request.Subject.ID == "AAAAAAAAAAAAAAAAAAAAAw" {
+		return authorization.Decision{Outcome: authorization.Allow, Revision: 9}, nil
 	}
 	if string(c.Request.Tenant) == otpTenant && c.PolicyRevision == 9 && (c.Request.Action == "identity.password.reset-request" || c.Request.Action == "identity.password.reset-complete" || c.Request.Action == "identity.password.signin" || c.Request.Action == "identity.password.signin.recover") {
 		return authorization.Decision{Outcome: authorization.Allow, Revision: 9}, nil
@@ -140,9 +144,11 @@ func configureReferencePasswordReset(t *testing.T, c *reference.StoreConfigurati
 		Coordinator: coordinator, SigningKey: loginSigner, VerificationKeys: map[string]ed25519.PublicKey{"reference-password": private.Public().(ed25519.PublicKey)},
 		Issuer: origin, Environment: "test", PolicyID: "password-login", ProofTTL: time.Minute, IdentifierKey: bytes.Repeat([]byte{114}, 32), Origins: []string{origin}, CallbackURLs: []string{callback},
 	}}
+	c.PasswordSignin.PreAuth = &reference.PasswordPreAuthConfiguration{ActorID: "AAAAAAAAAAAAAAAAAAAAAw", Origin: origin, CallbackURL: callback, FlowKeyIndex: 0, AuditRetentionVersion: 1, FlowTTL: 5 * time.Minute, TokenSize: 32, Cookie: c.OTP.PreAuth.Cookie}
+	c.HTTPPasswordSignin = &reference.HTTPPasswordSigninConfiguration{ActorID: "AAAAAAAAAAAAAAAAAAAAAw", PolicyRevision: 9}
 }
 
-func proveNativeServerPasswordReset(t *testing.T, ctx context.Context, f liveStores, features reference.FeatureSet, workers reference.WorkerSet, client *http.Client, baseURL, origin string, cookies []*http.Cookie, messages <-chan string, native passwordpg.ResetConfig, signin passwordpg.SigninConfig) {
+func proveNativeServerPasswordReset(t *testing.T, ctx context.Context, f liveStores, features reference.FeatureSet, workers reference.WorkerSet, client *http.Client, baseURL, origin string, otpFlow sessionhttp.PreAuthResponse, cookies []*http.Cookie, messages <-chan string, native passwordpg.ResetConfig, signin passwordpg.SigninConfig) {
 	t.Helper()
 	// The preexisting account has no password/factor authority yet: enumeration
 	// suppression must still produce a committed, replay-stable public response
@@ -236,15 +242,26 @@ func proveNativeServerPasswordReset(t *testing.T, ctx context.Context, f liveSto
 			t.Fatal("preexisting password/factor fixture", err)
 		}
 	}
-	login, err := features.PasswordSignin()
+	foreignMethod, err := json.Marshal(map[string]string{"flowID": string(otpFlow.FlowID), "identifier": "recipient@example.invalid", "password": "synthetic-reference-old-password", "callbackURL": signin.CallbackURLs[0]})
 	if err != nil {
-		t.Fatal("selected reference password login", err)
+		t.Fatal(err)
 	}
-	before := referencePasswordLogin(t, ctx, f, login, signin, "synthetic-reference-old-password")
-	if before.Validate() != nil || before.Issuance.CommitOutcome != identity.CommitOutcomeCommitted || before.SessionID == "" {
+	denied, deniedStatus := invoke("/v1/password/signin", "", foreignMethod)
+	var methodDenial passwordhttp.SigninResponse
+	// The password transport deliberately maps original-custody authentication
+	// failure to unavailable, without exposing the failed native predicate.
+	if deniedStatus != http.StatusServiceUnavailable || json.Unmarshal(denied, &methodDenial) != nil || methodDenial.Error != "unavailable" || methodDenial.SignedIn || methodDenial.SessionID != "" {
+		t.Fatal("OTP original flow authenticated as password", deniedStatus)
+	}
+	var unchanged int
+	if err := f.pool.Raw().QueryRow(ctx, "SELECT count(*) FROM session_store.preauth_transactions WHERE tenant_id=$1 AND flow_id=$2 AND state='issued'", otpTenant, string(otpFlow.FlowID)).Scan(&unchanged); err != nil || unchanged != 1 {
+		t.Fatal("wrong-method denial changed original OTP custody", err)
+	}
+	before, beforeToken := referencePasswordLogin(t, ctx, f, client, baseURL, origin, cookies, signin, "synthetic-reference-old-password")
+	if !before.SignedIn || before.CommitOutcome != "committed" || before.SessionID == "" {
 		t.Fatal("predecessor reference password login did not commit")
 	}
-	credential, err := session.NewCredential(session.CredentialBearer, before.Issuance.Token)
+	credential, err := session.NewCredential(session.CredentialBearer, beforeToken)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -366,15 +383,15 @@ func proveNativeServerPasswordReset(t *testing.T, ctx context.Context, f liveSto
 	if err := f.pool.Raw().QueryRow(ctx, "SELECT revoked_count FROM session_store.password_resets").Scan(&revoked); err != nil || revoked != 1 {
 		t.Fatal("reset receipt omitted original live session", err)
 	}
-	rejected := referencePasswordLogin(t, ctx, f, login, signin, "synthetic-reference-old-password")
-	if rejected.Validate() != nil || rejected.Issuance.CommitOutcome != identity.CommitOutcomeNotCommitted || rejected.SessionID != "" {
+	rejected, _ := referencePasswordLogin(t, ctx, f, client, baseURL, origin, cookies, signin, "synthetic-reference-old-password")
+	if rejected.SignedIn || rejected.CommitOutcome != "not_committed" || rejected.SessionID != "" {
 		t.Fatal("old password obtained a reference session after reset")
 	}
-	accepted := referencePasswordLogin(t, ctx, f, login, signin, "synthetic-reference-new-password")
-	if accepted.Validate() != nil || accepted.Issuance.CommitOutcome != identity.CommitOutcomeCommitted || accepted.SessionID == "" || accepted.SessionID == before.SessionID {
+	accepted, acceptedToken := referencePasswordLogin(t, ctx, f, client, baseURL, origin, cookies, signin, "synthetic-reference-new-password")
+	if !accepted.SignedIn || accepted.CommitOutcome != "committed" || accepted.SessionID == "" || accepted.SessionID == before.SessionID {
 		t.Fatal("replacement password failed reference login")
 	}
-	newCredential, err := session.NewCredential(session.CredentialBearer, accepted.Issuance.Token)
+	newCredential, err := session.NewCredential(session.CredentialBearer, acceptedToken)
 	if err != nil {
 		t.Fatal(err)
 	}

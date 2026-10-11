@@ -118,6 +118,7 @@ func testNativeServerOriginalFlow(t *testing.T, consuming, reset bool) {
 	baseOTP.PreAuth = nil
 	base.OTP, base.HTTPPreAuth, base.HTTPRate, base.HTTPEmailSignin = &baseOTP, nil, nil, nil
 	base.PasswordReset, base.HTTPPasswordReset, base.PasswordSignin = nil, nil, nil
+	base.HTTPPasswordSignin = nil
 	baseStores, err := reference.ComposeStores(base, deps)
 	if err != nil {
 		t.Fatal(err)
@@ -177,7 +178,7 @@ func testNativeServerOriginalFlow(t *testing.T, consuming, reset bool) {
 		expectedOperations = 6
 	}
 	if reset {
-		expectedOperations = 5
+		expectedOperations = 6
 	}
 	if len(server.OpenAPI().Operations()) != expectedOperations || !strings.Contains(string(server.OpenAPI().JSON()), "/v1/session/preauth-issue") {
 		t.Fatal("selected server metadata")
@@ -345,7 +346,7 @@ func testNativeServerOriginalFlow(t *testing.T, consuming, reset bool) {
 		probe(false)
 	}
 	if reset {
-		proveNativeServerPasswordReset(t, ctx, f, features, workers, client, networkServer.URL, origin, cookies, codes, c.PasswordReset.Native, c.PasswordSignin.Native)
+		proveNativeServerPasswordReset(t, ctx, f, features, workers, client, networkServer.URL, origin, out, cookies, codes, c.PasswordReset.Native, c.PasswordSignin.Native)
 	}
 	if err := stores.Close(ctx); err != nil {
 		t.Fatal(err)

@@ -20,6 +20,10 @@ import (
 // construction. The native owner freezes retained keys and closes no borrowed IO.
 type PasswordSigninConfiguration struct {
 	Native passwordpg.SigninConfig
+	// PreAuth optionally selects the native original password-flow issuer.
+	// It does not enable HTTP. The selected key index comes from Native.FlowKeys,
+	// so initiation cannot introduce a second independently configured key set.
+	PreAuth *PasswordPreAuthConfiguration
 }
 
 func composePasswordSignin(c StoreConfiguration, d ReferenceDependencies, evaluator risk.Evaluator) (*passwordpg.SigninService, error) {

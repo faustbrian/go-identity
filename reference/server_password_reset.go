@@ -52,26 +52,25 @@ func composePasswordResetHTTP(c StoreConfiguration, device *preAuthHTTPState, ra
 	return &passwordResetHTTPState{config: p, rate: limiter, maximumDuration: n.Repository.MaximumDuration}, nil
 }
 
-func (s *Server) passwordResetFeature(network identityhttp.NetworkConfig, f FeatureSet) (*identityhttp.Feature, error) {
+func (s *Server) passwordResetHTTPConfig(network identityhttp.NetworkConfig, f FeatureSet) (passwordhttp.FeatureConfig, error) {
 	h := s.state.features.httpPasswordReset
 	if h == nil {
-		return nil, nil
+		return passwordhttp.FeatureConfig{}, nil
 	}
 	p := s.state.features.httpPreAuth
 	if p == nil || p.device == nil || s.state.httpRate == nil {
-		return nil, identity.InvalidInputError{Field: "reference_http_password_reset"}
+		return passwordhttp.FeatureConfig{}, identity.InvalidInputError{Field: "reference_http_password_reset"}
 	}
 	owner, err := f.PasswordReset()
 	if err != nil {
-		return nil, err
+		return passwordhttp.FeatureConfig{}, err
 	}
 	// PasswordReset exclusively constructs this sealed graph/lifetime handle.
 	native := owner.(composedPasswordReset)
 	c := h.config
 	request := passwordhttp.ResetRequestConfig{Network: network, Service: native, Rate: s.state.httpRate.limiter, Origin: identityhttp.Origin(p.deployment.Origin), CallbackURL: c.CallbackURL, Device: *p.device, ActorID: c.ActorID, PolicyRevision: c.PolicyRevision, Now: time.Now, MaximumDuration: h.maximumDuration}
 	complete := passwordhttp.ResetCompleteConfig{Network: network, Service: native, Rate: h.rate, Origin: identityhttp.Origin(p.deployment.Origin), Device: *p.device, ActorID: c.ActorID, PolicyRevision: c.PolicyRevision, Now: time.Now, MaximumDuration: h.maximumDuration}
-	feature, err := passwordhttp.NewFeature(passwordhttp.FeatureConfig{ResetRequest: &request, ResetComplete: &complete})
-	return &feature, err
+	return passwordhttp.FeatureConfig{ResetRequest: &request, ResetComplete: &complete}, nil
 }
 
 // Format hides deployment keys and policy internals.

@@ -4,6 +4,7 @@ import (
 	"context"
 
 	identity "github.com/faustbrian/go-identity"
+	passwordhttp "github.com/faustbrian/go-identity/http/password"
 	"github.com/faustbrian/go-identity/password"
 )
 
@@ -35,6 +36,18 @@ func (f composedPasswordSignin) Signin(ctx context.Context, r password.SigninReq
 	return f.state.features.passwordSignin.Signin(w, r)
 }
 
+// SigninRateSource retains graph startup, tenant and shutdown admission while
+// authenticating the original flow through the native owner. Its identifier is
+// rate-budget input only; it confers no authority to issue a session.
+func (f composedPasswordSignin) SigninRateSource(ctx context.Context, r password.SigninRequest) (string, error) {
+	w, done, err := (composedPasswordReset{state: f.state}).enter(ctx, r.TenantID)
+	if err != nil {
+		return "", err
+	}
+	defer done()
+	return f.state.features.passwordSignin.SigninRateSource(w, r)
+}
+
 func (f composedPasswordSignin) RecoverSignin(ctx context.Context, r password.SigninRecoveryRequest) (password.SigninResult, error) {
 	q, _, err := r.Recovery.Bindings()
 	if err != nil {
@@ -49,3 +62,4 @@ func (f composedPasswordSignin) RecoverSignin(ctx context.Context, r password.Si
 }
 
 var _ password.SigninService = composedPasswordSignin{}
+var _ passwordhttp.SigninService = composedPasswordSignin{}

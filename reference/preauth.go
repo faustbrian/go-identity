@@ -85,10 +85,13 @@ func (f FeatureSet) PreAuth() (PreAuthService, error) {
 	if s.closed || s.features == nil || !s.features.composed || s.features.preauth == nil {
 		return nil, identity.UnavailableError{}
 	}
-	return composedPreAuth{state: s}, nil
+	return composedPreAuth{state: s, issuer: s.features.preauth}, nil
 }
 
-type composedPreAuth struct{ state *storeState }
+type composedPreAuth struct {
+	state  *storeState
+	issuer *session.PreAuthIssuer
+}
 
 func (f composedPreAuth) Prepare(ctx context.Context, i session.PreAuthPrepareInput) (session.PreparedPreAuthIssuance, error) {
 	w, done, err := f.state.enterFeature(ctx, true)
@@ -102,7 +105,7 @@ func (f composedPreAuth) Prepare(ctx context.Context, i session.PreAuthPrepareIn
 	if err := w.Err(); err != nil {
 		return session.PreparedPreAuthIssuance{}, err
 	}
-	p, err := f.state.features.preauth.Prepare(i)
+	p, err := f.issuer.Prepare(i)
 	if err != nil {
 		return session.PreparedPreAuthIssuance{}, err
 	}
@@ -122,7 +125,7 @@ func (f composedPreAuth) Issue(ctx context.Context, p session.PreparedPreAuthIss
 	if !ok || !f.permits(c) {
 		return session.PreAuthIssueResult{}, identity.UnavailableError{}
 	}
-	return f.state.features.preauth.Issue(w, p)
+	return f.issuer.Issue(w, p)
 }
 
 func (f composedPreAuth) Recover(ctx context.Context, c session.PreAuthIssueCommand) (session.PreAuthIssueResult, error) {
@@ -134,7 +137,7 @@ func (f composedPreAuth) Recover(ctx context.Context, c session.PreAuthIssueComm
 	if !f.permits(c) {
 		return session.PreAuthIssueResult{}, identity.UnavailableError{}
 	}
-	return f.state.features.preauth.Recover(w, c)
+	return f.issuer.Recover(w, c)
 }
 
 func (f composedPreAuth) permits(c session.PreAuthIssueCommand) bool {

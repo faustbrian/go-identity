@@ -81,22 +81,24 @@ type DeliveryConfiguration struct {
 // featureState is immutable after construction except the fields explicitly
 // protected by storeState.mu. Startup and all requests share StoreSet's lifetime.
 type featureState struct {
-	migrations        featureMigrationConfig
-	otp               *otppg.SendService
-	signin            *otppg.SigninService
-	reset             *passwordpg.ResetService
-	passwordSignin    *passwordpg.SigninService
-	preauth           *session.PreAuthIssuer
-	delivery          *deliverypg.EnqueueService
-	sender            delivery.Sender
-	timeout           time.Duration
-	provider          uint64
-	deliveryWorkers   []*deliverypg.Worker
-	deliverySlots     chan struct{}
-	authorize         authorization.Service
-	httpPreAuth       *preAuthHTTPState
-	httpEmailSignin   *emailSigninHTTPState
-	httpPasswordReset *passwordResetHTTPState
+	migrations         featureMigrationConfig
+	otp                *otppg.SendService
+	signin             *otppg.SigninService
+	reset              *passwordpg.ResetService
+	passwordSignin     *passwordpg.SigninService
+	passwordPreauth    *session.PreAuthIssuer
+	preauth            *session.PreAuthIssuer
+	delivery           *deliverypg.EnqueueService
+	sender             delivery.Sender
+	timeout            time.Duration
+	provider           uint64
+	deliveryWorkers    []*deliverypg.Worker
+	deliverySlots      chan struct{}
+	authorize          authorization.Service
+	httpPreAuth        *preAuthHTTPState
+	httpEmailSignin    *emailSigninHTTPState
+	httpPasswordReset  *passwordResetHTTPState
+	httpPasswordSignin *passwordSigninHTTPState
 	// mu-protected graph progression and startup state.
 	providers, workers, composed, initializing, ready bool
 }
@@ -127,6 +129,10 @@ func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDepen
 			httpPasswordReset.rate.Close()
 		}
 	}()
+	httpPasswordSignin, err := composePasswordSigninHTTP(c, httpPreAuth)
+	if err != nil {
+		return err
+	}
 	if c.OTP == nil && c.Delivery == nil {
 		return nil
 	}
@@ -229,6 +235,16 @@ func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDepen
 	if err != nil {
 		return err
 	}
+	passwordPreauthOwner, err := composePasswordPreAuth(d.PostgreSQL, c.PasswordSignin)
+	if err != nil {
+		return err
+	}
+	if passwordPreauthOwner != nil {
+		if c.PasswordSignin.Native.Session.Schema != migrationConfig.sessionSchema {
+			return identity.InvalidInputError{Field: "reference_password_preauth"}
+		}
+		migrationConfig.preauthIssue = true
+	}
 	if passwordSigninOwner != nil {
 		migrationConfig.passwordSigninSchema = c.PasswordSignin.Native.Session.Schema
 	}
@@ -240,7 +256,7 @@ func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDepen
 			capacity = policy.SenderConcurrency
 		}
 	}
-	s.features = &featureState{migrations: migrationConfig, otp: otpOwner, signin: signinOwner, reset: resetOwner, passwordSignin: passwordSigninOwner, preauth: preauthOwner, delivery: deliveryOwner, sender: d.DeliverySender, timeout: o.Timeout, provider: o.ProviderVersion, deliverySlots: make(chan struct{}, int(capacity)), authorize: o.RequestKeys.Policy.Authorization, httpPreAuth: httpPreAuth, httpEmailSignin: httpEmailSignin, httpPasswordReset: httpPasswordReset}
+	s.features = &featureState{migrations: migrationConfig, otp: otpOwner, signin: signinOwner, reset: resetOwner, passwordSignin: passwordSigninOwner, passwordPreauth: passwordPreauthOwner, preauth: preauthOwner, delivery: deliveryOwner, sender: d.DeliverySender, timeout: o.Timeout, provider: o.ProviderVersion, deliverySlots: make(chan struct{}, int(capacity)), authorize: o.RequestKeys.Policy.Authorization, httpPreAuth: httpPreAuth, httpEmailSignin: httpEmailSignin, httpPasswordReset: httpPasswordReset, httpPasswordSignin: httpPasswordSignin}
 	retainedResetHTTP = true
 	return nil
 }

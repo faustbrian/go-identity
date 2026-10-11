@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Add explicitly selected original password-flow issuance and browser signin
+  over the existing native session/password owners. Password initiation uses
+  the named shared-route method without changing default OTP intent. Reset and
+  signin compose as one password feature; wrong-method flows and replay cannot
+  issue credentials. Native HTTP integration proves reset revocation and login
+  with the replacement password without manually inserting original flows.
+  The reference profile still requires the selected OTP/device storage graph.
+
 - Compose observed HIBP screening from native reset's original command and
   authenticated issuer challenge with the durable PostgreSQL audit adapter.
   Native consumer integration checks required query/match/rejection records,

@@ -5,74 +5,119 @@ package reference_test
 import (
 	"bytes"
 	"context"
-	"encoding/base64"
+	"encoding/json"
+	"io"
+	"net/http"
+	"strings"
 	"testing"
-	"time"
 
-	auth "github.com/faustbrian/go-authentication"
-	"github.com/faustbrian/go-authorization"
-	identity "github.com/faustbrian/go-identity"
-	"github.com/faustbrian/go-identity/password"
+	passwordhttp "github.com/faustbrian/go-identity/http/password"
+	sessionhttp "github.com/faustbrian/go-identity/http/session"
 	passwordpg "github.com/faustbrian/go-identity/password/postgres"
 	"github.com/faustbrian/go-identity/session"
 	sessionpg "github.com/faustbrian/go-identity/session/postgres"
-	primitive "github.com/faustbrian/go-password"
 	database "github.com/faustbrian/go-postgres"
 	"github.com/jackc/pgx/v5"
 )
 
-// This installs an explicit original password flow through its native owner.
-// The selected HTTP initiation profile remains OTP-specific and is not relabeled
-// as password custody. Login, counted risk and session issuance use the public
-// graph port, not an application-written evaluator, domain store or transaction.
-func referencePasswordLogin(t *testing.T, ctx context.Context, f liveStores, service password.SigninService, c passwordpg.SigninConfig, raw string) password.SigninResult {
+// The browser obtains original password intent through the actual HTTP issuer;
+// no fixture writes a flow or manufactures its cookie.
+func referencePasswordLogin(t *testing.T, ctx context.Context, f liveStores, client *http.Client, baseURL, origin string, browser []*http.Cookie, c passwordpg.SigninConfig, raw string) (passwordhttp.SigninResponse, session.Token) {
 	t.Helper()
-	remember, err := session.ResolveRememberPolicy(session.BrowserSession, session.LifetimeConfig{Default: session.BrowserSession, AbsoluteTTL: time.Hour, IdleTTL: 30 * time.Minute, RefreshAfter: time.Minute, FreshFor: 15 * time.Minute})
+	call := func(path string, body any, cookies []*http.Cookie) (*http.Response, []byte) {
+		t.Helper()
+		wire, err := json.Marshal(body)
+		if err != nil {
+			t.Fatal(err)
+		}
+		request, err := http.NewRequestWithContext(ctx, http.MethodPost, baseURL+path, bytes.NewReader(wire))
+		if err != nil {
+			t.Fatal(err)
+		}
+		request.Header.Set("Content-Type", "application/json")
+		request.Header.Set("Origin", origin)
+		for _, cookie := range cookies {
+			request.AddCookie(cookie)
+		}
+		response, err := client.Do(request)
+		if err != nil {
+			t.Fatal(err)
+		}
+		payload, err := io.ReadAll(io.LimitReader(response.Body, 16385))
+		closeErr := response.Body.Close()
+		if err != nil || closeErr != nil || len(payload) > 16384 || response.Header.Get("Cache-Control") != "no-store" {
+			t.Fatal("bounded password HTTP response")
+		}
+		return response, payload
+	}
+	var device []*http.Cookie
+	for _, cookie := range browser {
+		if cookie.Name == "__Host-identity_device" {
+			device = append(device, cookie)
+		}
+	}
+	response, wire := call("/v1/session/preauth-issue", map[string]string{"method": "password"}, device)
+	var flow sessionhttp.PreAuthResponse
+	if response.StatusCode != http.StatusOK || json.Unmarshal(wire, &flow) != nil || !flow.Issued || flow.CommitOutcome != "committed" || flow.FlowID == "" {
+		t.Fatal("native HTTP password initiation", response.StatusCode, flow.Error, flow.CommitOutcome, "prepared", flow.FlowID != "")
+	}
+	var flowCookie *http.Cookie
+	for _, cookie := range response.Cookies() {
+		if !cookie.Secure || !cookie.HttpOnly || cookie.Path != "/" || cookie.Domain != "" || strings.Contains(string(wire), cookie.Value) {
+			t.Fatal("password original cookie custody")
+		}
+		if cookie.Name == "__Host-identity_flow" {
+			flowCookie = cookie
+		} else {
+			t.Fatal("unexpected password original cookie")
+		}
+	}
+	if flowCookie == nil || len(response.Cookies()) != 1 || len(device) != 1 {
+		t.Fatal("password original/device custody")
+	}
+	original, err := sessionpg.ReadPreAuth(ctx, referenceOriginalFlowReader{pool: f.pool}, c.Session, otpTenant, flow.FlowID)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatal("native original password flow read", err)
 	}
-	flowID, err := identity.NewPreAuthTransactionID()
+	spec, err := original.Bindings()
+	binding := spec.Binding
+	if err != nil || binding.Intent.Action != "identity.password.signin" || binding.Intent.TenantID != otpTenant || binding.Intent.Origin != origin || binding.Intent.CallbackURL != c.CallbackURLs[0] || binding.Intent.PolicyID != c.PolicyID || binding.Intent.PolicyVersion != 9 || !binding.IssuedAt.Equal(flow.IssuedAt) || !binding.ExpiresAt.Equal(flow.ExpiresAt) {
+		t.Fatal("password original authority differs from issued response", err)
+	}
+	request := map[string]string{"flowID": string(flow.FlowID), "identifier": "recipient@example.invalid", "password": raw, "callbackURL": c.CallbackURLs[0]}
+	response, wire = call("/v1/password/signin", request, append(device, flowCookie))
+	var out passwordhttp.SigninResponse
+	if json.Unmarshal(wire, &out) != nil || strings.Contains(string(wire), raw) || strings.Contains(string(wire), "recipient@example.invalid") {
+		t.Fatal("password signin disclosure")
+	}
+	if !out.SignedIn {
+		if response.StatusCode != http.StatusForbidden || out.CommitOutcome != "not_committed" || out.SessionID != "" || len(response.Cookies()) != 0 || response.Header.Get("X-CSRF-Token") != "" {
+			t.Fatal("password denial custody", response.StatusCode, out.CommitOutcome)
+		}
+		return out, session.Token{}
+	}
+	issued := response.Cookies()
+	csrf := response.Header.Get("X-CSRF-Token")
+	if response.StatusCode != http.StatusOK || out.CommitOutcome != "committed" || out.SessionID == "" || len(issued) != 1 || issued[0].Name != "__Host-session" || !issued[0].Secure || !issued[0].HttpOnly || issued[0].Path != "/" || issued[0].Domain != "" || issued[0].MaxAge != 0 || !issued[0].Expires.IsZero() || csrf == "" || strings.Contains(string(wire), issued[0].Value) || strings.Contains(string(wire), csrf) {
+		t.Fatal("password session/CSRF custody", response.StatusCode)
+	}
+	token, err := session.ParseToken(issued[0].Value)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatal("password session token invalid")
 	}
-	cookie := base64.RawURLEncoding.EncodeToString(bytes.Repeat([]byte{115}, 32))
-	token, err := session.ParseToken(cookie)
-	if err != nil {
-		t.Fatal(err)
+	var consumed int
+	if err := f.pool.Raw().QueryRow(ctx, "SELECT count(*) FROM session_store.preauth_transactions WHERE tenant_id=$1 AND flow_id=$2 AND state='consumed'", otpTenant, string(flow.FlowID)).Scan(&consumed); err != nil || consumed != 1 {
+		t.Fatal("password original flow not atomically consumed", err)
 	}
-	now := time.Now().UTC().Truncate(time.Microsecond)
-	binding := session.PreAuthBinding{ID: flowID, Intent: session.PreAuthIntent{TenantID: otpTenant, Action: "identity.password.signin", Origin: c.Origins[0], CallbackURL: c.CallbackURLs[0], Nonce: [32]byte{116}, Remember: remember, PolicyID: c.PolicyID, PolicyVersion: 9}, IssuedAt: now, ExpiresAt: now.Add(5 * time.Minute)}
-	digest, err := token.PreAuthDigest(c.FlowKeys[0], binding)
-	if err != nil {
-		t.Fatal(err)
+	response, replay := call("/v1/password/signin", request, append(device, flowCookie))
+	if response.StatusCode == http.StatusOK || len(response.Cookies()) != 0 || response.Header.Get("X-CSRF-Token") != "" || bytes.Contains(replay, []byte(issued[0].Value)) {
+		t.Fatal("password original replay reissued credential")
 	}
-	flow, err := session.NewPreAuthTransaction(session.PreAuthTransactionSpec{Binding: binding, Cookie: digest, Version: 1})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := sessionpg.InsertPreAuth(ctx, referenceOriginalFlowFixture{pool: f.pool}, c.Session, flow); err != nil {
-		t.Fatal("native original password flow fixture", err)
-	}
-	secret, err := primitive.NewSecret([]byte(raw))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer secret.Destroy()
-	caller := authorization.DecisionContext{PolicyRevision: 9, Request: authorization.Request{Tenant: otpTenant, Subject: authorization.Subject{Kind: authorization.SubjectServiceAccount, ID: "AAAAAAAAAAAAAAAAAAAAAw"}, Action: "identity.password.signin", Resource: authorization.Resource{Type: "identity.request-admission", ID: "identity.password.signin"}}}
-	result, err := service.Signin(ctx, password.SigninRequest{TenantID: otpTenant, PreAuthID: flowID, Cookie: auth.NewBearerCredential(cookie), Identifier: "recipient@example.invalid", Password: secret, Remember: remember, Origin: c.Origins[0], CallbackURL: c.CallbackURLs[0], Caller: caller, Network: "127.0.0.1", Device: "reference-password-device"})
-	if err != nil {
-		t.Fatal("reference public password signin", err)
-	}
-	return result
+	return out, token
 }
 
-type referenceOriginalFlowFixture struct{ pool *database.Pool }
+type referenceOriginalFlowReader struct{ pool *database.Pool }
 
-func (f referenceOriginalFlowFixture) Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error) {
+func (f referenceOriginalFlowReader) Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error) {
 	return f.pool.Raw().Query(ctx, sql, args...)
-}
-
-func (f referenceOriginalFlowFixture) Exec(ctx context.Context, sql string, args ...any) (int64, error) {
-	tag, err := f.pool.Raw().Exec(ctx, sql, args...)
-	return tag.RowsAffected(), err
 }

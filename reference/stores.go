@@ -60,6 +60,9 @@ type StoreConfiguration struct {
 	// HTTPPasswordReset independently selects request/completion routes. Native
 	// reset, strict HTTP rate and the original browser-device issuer are required.
 	HTTPPasswordReset *HTTPPasswordResetConfiguration
+	// HTTPPasswordSignin explicitly selects browser login and its named original
+	// flow method. Native signin/PreAuth, rate and device owners are required.
+	HTTPPasswordSignin *HTTPPasswordSigninConfiguration
 }
 
 // VelocityStoreConfiguration selects one primary/native recovery pair. Native

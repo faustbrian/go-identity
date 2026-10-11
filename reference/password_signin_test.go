@@ -5,9 +5,11 @@ import (
 	"testing"
 	"time"
 
+	passwordhttp "github.com/faustbrian/go-identity/http/password"
 	"github.com/faustbrian/go-identity/password"
 	passwordpg "github.com/faustbrian/go-identity/password/postgres"
 	"github.com/faustbrian/go-identity/risk"
+	"github.com/faustbrian/go-identity/session"
 )
 
 func TestPasswordSigninSelectionAndGraphLifetime(t *testing.T) {
@@ -38,8 +40,15 @@ func TestPasswordSigninSelectionAndGraphLifetime(t *testing.T) {
 	if err != nil || owner == nil {
 		t.Fatal("selected graph did not expose password signin", err)
 	}
+	httpOwner, ok := owner.(passwordhttp.SigninService)
+	if !ok {
+		t.Fatal("selected password owner cannot authenticate HTTP identifier-rate input")
+	}
 	deny := func() {
 		t.Helper()
+		if source, err := httpOwner.SigninRateSource(t.Context(), password.SigninRequest{}); err == nil || source != "" {
+			t.Fatal("inactive or foreign graph disclosed password identifier-rate input")
+		}
 		if _, err := owner.Signin(t.Context(), password.SigninRequest{}); err == nil {
 			t.Fatal("inactive or foreign graph admitted password signin")
 		}
@@ -58,6 +67,51 @@ func TestPasswordSigninSelectionAndGraphLifetime(t *testing.T) {
 	deny()
 	if owner, err := selected.PasswordSignin(); err == nil || owner != nil {
 		t.Fatal("closed graph exported password signin")
+	}
+}
+
+func TestPasswordOriginalFlowSelectionAndGraphLifetime(t *testing.T) {
+	type originalPasswordFlow interface {
+		PasswordPreAuth() (PreAuthService, error)
+	}
+	selected, ok := any(FeatureSet{}).(originalPasswordFlow)
+	if !ok {
+		t.Fatal("reference has no original password-flow issuer")
+	}
+	if owner, err := selected.PasswordPreAuth(); err == nil || owner != nil {
+		t.Fatal("empty graph exposed password initiation")
+	}
+	lifetime, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	drained := make(chan struct{})
+	close(drained)
+	state := &storeState{lifetime: lifetime, cancel: cancel, drained: drained, features: &featureState{composed: true, timeout: time.Second, passwordPreauth: &session.PreAuthIssuer{}}}
+	owner, err := any(FeatureSet{state: state}).(originalPasswordFlow).PasswordPreAuth()
+	if err != nil || owner == nil {
+		t.Fatal("selected password issuer unavailable", err)
+	}
+	for _, ready := range []bool{false, true} {
+		state.features.ready = ready
+		if _, err := owner.Prepare(t.Context(), session.PreAuthPrepareInput{}); err == nil {
+			t.Fatal("inactive/foreign flow prepared")
+		}
+		if _, err := owner.Issue(t.Context(), session.PreparedPreAuthIssuance{}); err == nil {
+			t.Fatal("inactive/foreign flow issued")
+		}
+		if _, err := owner.Recover(t.Context(), session.PreAuthIssueCommand{}); err == nil {
+			t.Fatal("inactive/foreign flow recovered")
+		}
+		if state.active != 0 {
+			t.Fatal("password initiation leaked graph admission")
+		}
+	}
+	state.closed = true
+	cancel()
+	if _, err := owner.Prepare(t.Context(), session.PreAuthPrepareInput{}); err == nil {
+		t.Fatal("closed graph prepared flow")
+	}
+	if handle, err := any(FeatureSet{state: state}).(originalPasswordFlow).PasswordPreAuth(); err == nil || handle != nil {
+		t.Fatal("closed graph exposed password issuer")
 	}
 }
 

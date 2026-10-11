@@ -58,9 +58,28 @@ independent migration history shared with reset; selected signin additionally
 installs the native session-issuance purpose extension without rewriting either
 workflow's existing history. The native integration journey authenticates an
 existing session before reset and denies that same bearer afterward, then proves
-replacement-password login. Its original password-flow setup is an explicit
-native fixture: the current HTTP initiation profile remains OTP-specific, and
-password-flow HTTP initiation/signin routes remain separate composition work.
+replacement-password login through real selected HTTP initiation and signin.
+The preexisting account/factor fixture remains explicit; this does not prove
+registration or full release qualification.
+
+Select `PasswordSignin.PreAuth` to compose the native original password-flow
+issuer, using an exact retained `Native.FlowKeys` index and the signin owner's
+action, policy and revision. Its public port is `features.PasswordPreAuth()`;
+it does not change OTP initiation or implicitly select HTTP. Select
+`HTTPPasswordSignin` separately, with the matching service actor/revision and
+the shared `HTTPPreAuth.Device`/`HTTPRate` selections. POST
+`/v1/session/preauth-issue` with `{"method":"password"}` to receive an original
+flow and secure cookie, then POST `/v1/password/signin` with `flowID`,
+`identifier`, `password` and the exact `callbackURL`, carrying the original
+flow and device cookies. Optional `remember` must match initiation. Omitted
+method retains OTP; an OTP original flow cannot authenticate password login.
+Both profiles share original-flow rate admission and secure cookie policy.
+Successful signin delivers the session cookie and `X-CSRF-Token`, never JSON
+credentials. Replay cannot reveal either again. Reset and signin coexist as
+one canonical password-owner contribution. Disabled password HTTP exports
+neither signin nor the password method in initiation metadata. The current
+reference profile still requires OTP's storage/device graph; independent
+password-only composition remains an end-state obligation.
 
 Use selected-owner Check/Plan/Apply for reset installation, rather than only
 the legacy shared `MigrationSource()`. Independent native histories install
