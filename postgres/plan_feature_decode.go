@@ -15,6 +15,9 @@ func decodeFeaturePlan(binding identity.CommandBinding, fingerprint [32]byte, en
 }
 
 func decodeFeaturePlanMode(binding identity.CommandBinding, fingerprint [32]byte, encoded []byte, proofBase bool) (CommandPlan, error) {
+	if !proofBase && mfaCompletionPurpose(binding.OperationID) && len(encoded) > 0 && encoded[0] == 0xa6 {
+		return decodeMFACompletionPlan(binding, fingerprint, encoded)
+	}
 	if !proofBase && binding.OperationID == "identity.magic-link.consume" {
 		return decodeMagicLinkConsumptionPlan(binding, fingerprint, encoded)
 	}

@@ -379,6 +379,7 @@ func TestPostgresIntegration(t *testing.T) {
 	t.Run("reset recipient issuance", func(t *testing.T) { testResetRecipientIssuance(t, ctx, pool, repo) })
 	t.Run("magic-link recipient issuance", func(t *testing.T) { testMagicLinkRecipientIssuance(t, ctx, pool, repo) })
 	t.Run("magic-link consumption", func(t *testing.T) { testMagicLinkConsumption(t, ctx, pool, repo) })
+	t.Run("MFA completion", func(t *testing.T) { testMFACompletion(t, ctx, pool, repo) })
 	t.Run("magic-link MFA challenge", func(t *testing.T) { testMagicLinkMFAChallenge(t, ctx, pool, repo) })
 }
 

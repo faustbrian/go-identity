@@ -1,0 +1,279 @@
+//go:build integration
+
+package postgres
+
+import (
+	"context"
+	"testing"
+	"time"
+
+	identity "github.com/faustbrian/go-identity"
+	database "github.com/faustbrian/go-postgres"
+)
+
+// This SQL seam tests coordinator custody/atomicity, not cryptographic factor
+// verification, the production MFA store or real session issuance.
+type mfaCompletionAtomicPhase struct {
+	mfaCompletionValidationParticipant
+	operation             identity.FeatureOperation
+	failApply, failCommit bool
+	retained              Work
+	plan                  CommandPlan
+}
+
+type mfaCompletionFixtureAdmission struct{ owner *mfaCompletionAtomicPhase }
+
+func (a mfaCompletionFixtureAdmission) Check(ctx context.Context) error { return ctx.Err() }
+func (a mfaCompletionFixtureAdmission) Generate(ctx context.Context, generation uint64) ([]byte, error) {
+	return a.owner.GenerateFeaturePreparation(ctx, a.owner.expected, generation)
+}
+func (p *mfaCompletionAtomicPhase) PrepareFeatureAdmission(ctx context.Context, c identity.Command) (FeaturePreparationAdmission, error) {
+	if c != p.expected || ctx.Err() != nil {
+		return nil, invalidPreparation()
+	}
+	return mfaCompletionFixtureAdmission{p}, nil
+}
+func (p *mfaCompletionAtomicPhase) RestoreFeatureAdmission(ctx context.Context, c identity.Command, generation uint64, wire []byte) (FeaturePreparationAdmission, error) {
+	if _, _, err := p.RestoreFeaturePreparation(ctx, c, generation, wire); err != nil {
+		return nil, err
+	}
+	return mfaCompletionFixtureAdmission{p}, nil
+}
+
+func (p *mfaCompletionAtomicPhase) AdmitFeaturePreparation(ctx context.Context, w Work, c identity.Command) error {
+	if c != p.expected {
+		return invalidWork()
+	}
+	if _, _, _, err := w.FeatureScope(p); err != nil {
+		return err
+	}
+	_, err := w.DatabaseTime(ctx)
+	return err
+}
+func (p *mfaCompletionAtomicPhase) GenerateFeaturePreparation(ctx context.Context, c identity.Command, generation uint64) ([]byte, error) {
+	if c != p.expected || generation == 0 || ctx.Err() != nil {
+		return nil, invalidPreparation()
+	}
+	return []byte("retained-mfa-test-output"), nil
+}
+func (p *mfaCompletionAtomicPhase) RestoreFeaturePreparation(ctx context.Context, c identity.Command, generation uint64, wire []byte) (identity.Command, CommandPlan, error) {
+	if c != p.expected || generation == 0 || string(wire) != "retained-mfa-test-output" || ctx.Err() != nil {
+		return identity.Command{}, CommandPlan{}, invalidPreparation()
+	}
+	return c, p.plan, nil
+}
+
+func (p *mfaCompletionAtomicPhase) ApplyFeature(ctx context.Context, w Work, c identity.Command) (identity.FeatureReceipt, error) {
+	if err := w.RequireFeatureCommand(ctx, p, c); err != nil {
+		return identity.FeatureReceipt{}, err
+	}
+	b, scope, err := w.MFACompletionConsumption(p)
+	if err != nil || scope != p.completion || b.Plan != p.proof {
+		return identity.FeatureReceipt{}, invalidWork()
+	}
+	if _, _, err := w.MFACompletionConsumption(&mfaCompletionAtomicPhase{}); err == nil {
+		return identity.FeatureReceipt{}, invalidWork()
+	}
+	p.retained = w
+	n, err := w.Exec(ctx, `INSERT INTO public.identity_test_mfa_completion(command_id,tenant_id,continuation_id,scope_digest) VALUES($1,$2,$3,$4)`, string(b.Command.CommandID), string(b.Command.TenantID), string(scope.ID), scope.ScopeDigest[:])
+	if err != nil {
+		return identity.FeatureReceipt{}, err
+	}
+	if n != 1 {
+		return identity.FeatureReceipt{}, identity.ConflictError{}
+	}
+	if p.failApply {
+		return identity.FeatureReceipt{}, identity.ForbiddenError{}
+	}
+	return identity.FeatureReceipt{Operation: p.operation}, nil
+}
+func (p *mfaCompletionAtomicPhase) CheckFeatureCommit(ctx context.Context, w Work, c identity.Command) error {
+	if c != p.expected {
+		return invalidWork()
+	}
+	if _, _, _, err := w.FeatureScope(p); err != nil {
+		return err
+	}
+	if _, _, err := w.MFACompletionConsumption(p); err == nil {
+		return invalidWork()
+	}
+	if p.failCommit {
+		return identity.ForbiddenError{}
+	}
+	return ctx.Err()
+}
+func (*mfaCompletionAtomicPhase) RecoverParticipant(ctx context.Context, w RecoveryWork) (RecoveryStatus, error) {
+	return recoveryTestEvidence(ctx, w, "public.identity_test_mfa_completion")
+}
+
+func testMFACompletion(t *testing.T, ctx context.Context, pool *database.Pool, repo *Repository) {
+	if _, err := pool.Raw().Exec(ctx, `CREATE TABLE IF NOT EXISTS public.identity_test_audits(event_id text PRIMARY KEY,command_id text NOT NULL UNIQUE);
+CREATE TABLE IF NOT EXISTS public.identity_test_lifecycle(event_id text PRIMARY KEY,command_id text NOT NULL UNIQUE);
+CREATE TABLE public.identity_test_mfa_completion(command_id text PRIMARY KEY,tenant_id text NOT NULL,continuation_id text NOT NULL UNIQUE,scope_digest bytea NOT NULL);
+CREATE TABLE IF NOT EXISTS identity.capability_recovery_fixture(tenant_id text NOT NULL,purpose text NOT NULL,capability_id text PRIMARY KEY,expiry timestamptz NOT NULL,state text NOT NULL,command_id text,fingerprint bytea,generation numeric)`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Raw().Exec(ctx, `CREATE TABLE IF NOT EXISTS public.otp_reservation_fixture(tenant_id text PRIMARY KEY,challenge_id text NOT NULL,state text NOT NULL,command_id text,fingerprint bytea,attempt_id text,generation numeric,version numeric NOT NULL,expiry timestamptz NOT NULL)`); err != nil {
+		t.Fatal(err)
+	}
+	for _, mode := range []string{"commit", "apply-denied", "commit-denied", "audit-failure", "outbox-failure", "finalize-failure", "competing-command", "prepared-otp", "prepared-otp-denied"} {
+		t.Run(mode, func(t *testing.T) {
+			preparedOTP := mode == "prepared-otp" || mode == "prepared-otp-denied"
+			method := "totp-verify"
+			if preparedOTP {
+				method = "otp-verify"
+			}
+			b, p := mfaCompletionPlanFixture(t, method)
+			if preparedOTP {
+				b.TenantID = identity.TenantID(mode)
+				p.CommandCounters = nil
+			}
+			var err error
+			b.CommandID, err = identity.NewCommandID()
+			if err != nil {
+				t.Fatal(err)
+			}
+			id, err := identity.NewCommandID()
+			if err != nil {
+				t.Fatal(err)
+			}
+			p.Capability.CapabilityID = string(id)
+			p.MFACompletion.ID = id
+			op := p.Feature.Operation
+			command := featureCodecCommand(t, identity.FeatureCommandSpec{Binding: b, Operation: op, Fields: []identity.FeatureField{{Name: "proof-id", Value: identity.FeatureValue{Kind: identity.FeatureText, Text: p.Capability.CapabilityID}}}})
+			if preparedOTP {
+				s, _ := command.Feature()
+				command = codeCodecCommand(t, s, "123456")
+			}
+			native := &mfaCompletionAtomicPhase{mfaCompletionValidationParticipant: mfaCompletionValidationParticipant{magicLinkPreparationParticipant: magicLinkPreparationParticipant{outputPreparationParticipant: outputPreparationParticipant{scopeFeatureParticipant{operations: []identity.FeatureOperation{op}}}, expected: command, proof: *p.Capability}, completion: *p.MFACompletion}, operation: op, failApply: mode == "apply-denied", failCommit: mode == "commit-denied"}
+			if mode == "prepared-otp-denied" {
+				native.failCommit = true
+			}
+			entries := []Contributor{repo, &recoveryAuditPhase{domainAuditPhase: domainAuditPhase{fail: mode == "audit-failure"}}, &recoveryLifecyclePhase{domainLifecyclePhase: domainLifecyclePhase{fail: mode == "outbox-failure"}}, native, &emailVerificationCounterPhase{}, &emailVerificationCapabilityPhase{failFinalize: mode == "finalize-failure"}}
+			var otpOwner *sqlOTPDomain
+			if preparedOTP {
+				otpOwner = &sqlOTPDomain{}
+				otpOwner.registered = otpOwner
+				entries = append(entries[:len(entries)-1:len(entries)-1], otpOwner, entries[len(entries)-1])
+				entries = append(entries[:4], entries[5:]...)
+			}
+			registry, err := NewContributorRegistry(entries)
+			if err != nil {
+				t.Fatal(err)
+			}
+			c, err := NewCoordinator(pool, registry, CoordinatorConfig{MaximumDuration: time.Second, LeaseDuration: time.Minute, CurrentFingerprintKeyVersion: 1, RetainedFingerprintKeys: map[uint32][32]byte{1: {1}}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			p.Contributors = registry.Descriptors()
+			prepare := func(binding identity.CommandBinding, command identity.Command, p CommandPlan) CommandPlan {
+				seed, e := securityMutationAudit(ctx, binding, 0, 0, time.Now().UTC().Truncate(time.Microsecond), "committed", p.Audits[0].EventType, p.SubjectType, binding.AnonymousFlowID, "protected", true)
+				if e != nil {
+					t.Fatal(e)
+				}
+				p.Audits = append([]AuditPlan(nil), p.Audits...)
+				p.Audits[0].BindingDigest, e = FeatureAuditBindingDigest(binding, op, p.SubjectType, seed)
+				if e != nil {
+					t.Fatal(e)
+				}
+				var got CommandPlan
+				if preparedOTP {
+					got, e = c.PrepareFeaturePreparationPlan(command, p)
+				} else {
+					got, e = c.PrepareCommandPlan(binding, command, p)
+				}
+				if e != nil {
+					t.Fatal("MFA completion plan", e)
+				}
+				return got
+			}
+			p = prepare(b, command, p)
+			if _, err := pool.Raw().Exec(ctx, `INSERT INTO identity.capability_recovery_fixture VALUES($1,$2,$3,$4,'issued',NULL,NULL,NULL)`, string(b.TenantID), string(p.Capability.Purpose), p.Capability.CapabilityID, p.Capability.ExpiresAt); err != nil {
+				t.Fatal(err)
+			}
+			if preparedOTP {
+				native.plan = p
+				if _, err := pool.Raw().Exec(ctx, `INSERT INTO public.otp_reservation_fixture(tenant_id,challenge_id,state,version,expiry) VALUES($1,$2,'issued',$3,clock_timestamp()+interval '1 minute')`, string(b.TenantID), p.OTP.ChallengeID, p.OTP.ExpectedVersion); err != nil {
+					t.Fatal(err)
+				}
+				result, err := c.ExecutePreparedFeature(ctx, command, p)
+				var state string
+				var effects int
+				if e := pool.Raw().QueryRow(ctx, `SELECT state,(SELECT count(*) FROM public.identity_test_mfa_completion WHERE command_id=$2) FROM public.otp_reservation_fixture WHERE tenant_id=$1`, string(b.TenantID), string(b.CommandID)).Scan(&state, &effects); e != nil {
+					t.Fatal(e)
+				}
+				if mode == "prepared-otp" {
+					if err != nil || result.Outcome != identity.CommitOutcomeCommitted || state != "finalized" || effects != 1 {
+						t.Fatal("prepared OTP completion not atomic", state, effects, err)
+					}
+					result, err = c.ExecutePreparedFeature(ctx, command, p)
+					if err != nil || result.Outcome != identity.CommitOutcomeCommitted || otpOwner.calls.Load() != 1 {
+						t.Fatal("prepared OTP replay compared again", err)
+					}
+				} else if err == nil || state != "released" || effects != 0 {
+					t.Fatal("prepared OTP denial retained effects", state, effects, err)
+				}
+				return
+			}
+			r, _, err := c.ReserveCommand(ctx, b, command, p)
+			if err != nil {
+				t.Fatal("completion reserve", err)
+			}
+			if mode == "competing-command" {
+				other := b
+				other.CommandID, err = identity.NewCommandID()
+				if err != nil {
+					t.Fatal(err)
+				}
+				s, _ := command.Feature()
+				s.Binding = other
+				second := featureCodecCommand(t, s)
+				native.expected = second
+				otherPlan := prepare(other, second, p)
+				if got, _, err := c.ReserveCommand(ctx, other, second, otherPlan); err == nil || got.state != nil {
+					t.Fatal("child admitted competing completion")
+				}
+				native.expected = command
+			}
+			w, err := c.Begin(ctx, r)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer c.Abort(w, identity.UnavailableError{})
+			result, err := c.ApplyFeature(ctx, w, command)
+			if err == nil {
+				result, err = c.Commit(w, result)
+			}
+			success := mode == "commit" || mode == "competing-command"
+			if success {
+				if err != nil || result.Outcome != identity.CommitOutcomeCommitted {
+					t.Fatal("completion did not commit", err)
+				}
+				retry, replay, e := c.ReserveCommand(ctx, b, command, p)
+				if e != nil || retry.state != nil || replay.Outcome != identity.CommitOutcomeCommitted {
+					t.Fatal("lost original completion replay", e)
+				}
+			} else {
+				if err == nil {
+					t.Fatal("denial committed completion")
+				}
+				_, _ = c.Abort(w, err)
+			}
+			if _, _, err := native.retained.MFACompletionConsumption(native); err == nil {
+				t.Fatal("returned invocation retained custody")
+			}
+			var effects, events, audits int
+			var state string
+			if err := pool.Raw().QueryRow(ctx, `SELECT (SELECT count(*) FROM public.identity_test_mfa_completion WHERE command_id=$1),(SELECT count(*) FROM public.identity_test_lifecycle WHERE command_id=$1),(SELECT count(*) FROM public.identity_test_audits WHERE command_id=$1),(SELECT state FROM identity.capability_recovery_fixture WHERE capability_id=$2)`, string(b.CommandID), p.Capability.CapabilityID).Scan(&effects, &events, &audits, &state); err != nil {
+				t.Fatal(err)
+			}
+			if success {
+				if effects != 1 || events != 1 || audits != 1 || state != "finalized" {
+					t.Fatal("split completion", effects, events, audits, state)
+				}
+			} else if effects != 0 || events != 0 || state == "consuming" || state == "finalized" {
+				t.Fatal("denial retained completion", effects, events, state)
+			}
+		})
+	}
+}

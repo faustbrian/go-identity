@@ -46,13 +46,16 @@ func validateCapabilityPlan(binding identity.CommandBinding, plan *CapabilityPla
 	if plan == nil {
 		return nil
 	}
-	if plan.MaxUses != 1 || plan.ReplayKeyVersion == 0 || plan.ProofFingerprint == ([32]byte{}) || plan.Purpose != capability.Purpose(binding.OperationID) || !postgresExactTime(plan.ExpiresAt) {
+	mfa := mfaCompletionPurpose(binding.OperationID) && plan.Purpose == "identity.mfa.complete"
+	if plan.MaxUses != 1 || plan.ReplayKeyVersion == 0 || plan.ProofFingerprint == ([32]byte{}) || !mfa && plan.Purpose != capability.Purpose(binding.OperationID) || !postgresExactTime(plan.ExpiresAt) {
 		return invalidPlan()
 	}
 	switch binding.OperationID {
 	case "identity.identifier.attach", "identity.identifier.verify", "identity.identifier.make-primary", "identity.identifier.replace", "identity.identifier.remove", "identity.account.link-token", "identity.account.unlink", "identity.password.reset-complete", "identity.magic-link.consume":
 	default:
-		return invalidPlan()
+		if !mfa {
+			return invalidPlan()
+		}
 	}
 	if _, err := capability.NewReference(plan.CapabilityID, plan.Purpose, plan.ReplayDigest, plan.ExpiresAt); err != nil {
 		return invalidPlan()

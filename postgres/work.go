@@ -43,6 +43,8 @@ type workState struct {
 	magicLinkRecipient        *magicLinkRecipientAdmission
 	magicLinkConsumed         bool
 	magicLinkFinalized        bool
+	mfaConsumed               bool
+	mfaFinalized              bool
 	profile                   *identity.UserProfile
 	update                    *identity.User
 	status                    *identity.CommandResult

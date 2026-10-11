@@ -220,7 +220,7 @@ func (c *Coordinator) ExecutePreparedFeature(ctx context.Context, original ident
 	if err != nil || ctx.Err() != nil || !preparationFinalDeclaration(b, admitted.snapshot(), final) {
 		return featureOutcome(b, q.feature, identity.CommitOutcomeUnknown, 0), identity.UnknownCommitError{CommandID: b.CommandID}
 	}
-	executionRequest, snapshot, _, err := c.prepare(b, generated, final)
+	executionRequest, snapshot, _, err := c.prepareRestoredFeature(b, generated, final)
 	if err != nil {
 		return featureOutcome(b, q.feature, identity.CommitOutcomeUnknown, 0), identity.UnknownCommitError{CommandID: b.CommandID}
 	}
@@ -238,6 +238,18 @@ func (c *Coordinator) ExecutePreparedFeature(ctx context.Context, original ident
 		return c.Abort(w, err)
 	}
 	return c.Commit(w, result)
+}
+
+func (c *Coordinator) prepareRestoredFeature(b identity.CommandBinding, generated identity.Command, final CommandPlan) (claimRequest, CommandPlan, *admittedKernelPlan, error) {
+	// Only this closed retained-preparation route may restore consuming OTP.
+	// Ordinary command preparation remains closed to opaque code custody.
+	if final.OTP != nil {
+		if final.MFACompletion == nil || !validMFACompletionPlan(b, final) {
+			return claimRequest{}, CommandPlan{}, nil, invalidPreparation()
+		}
+		return c.prepareOTPReservation(b, generated, final)
+	}
+	return c.prepare(b, generated, final)
 }
 
 func (c *Coordinator) prepareFeaturePreparation(original identity.Command, p CommandPlan) (q claimRequest, admitted *admittedKernelPlan, phase FeaturePreparationContributor, err error) {
@@ -278,6 +290,12 @@ func (c *Coordinator) prepareFeaturePreparation(original identity.Command, p Com
 	if owned.MFAContinuation != nil && validateMagicLinkConsumption(phase, original, admitted.snapshot()) != nil {
 		return q, nil, nil, invalidPreparation()
 	}
+	if owned.MFACompletion != nil && validateMFACompletion(phase, original, admitted.snapshot()) != nil {
+		return q, nil, nil, invalidPreparation()
+	}
+	if owned.OTP != nil && (otpReservationOwner(admitted) == nil || validateOTPAttempt(otpAttemptOwner(admitted), original, *owned.OTP) != nil) {
+		return q, nil, nil, invalidPreparation()
+	}
 	if admitted.counters != nil {
 		counter := counterAdmissionParticipant(admitted)
 		if counter == nil || validateCommandCounters(counter, original, *admitted.counters) != nil {
@@ -288,7 +306,7 @@ func (c *Coordinator) prepareFeaturePreparation(original identity.Command, p Com
 }
 
 func preparationProtected(p CommandPlan) bool {
-	return p.IdentifierAdmission != nil || p.Capability != nil && !consumptionAuthenticationPreparation(p) || p.CapabilityIssuance != nil || p.OTP != nil || p.RiskEvidence != nil || p.CaptchaEvidence != nil || p.CaptchaReplayReservation
+	return p.IdentifierAdmission != nil || p.Capability != nil && !consumptionAuthenticationPreparation(p) || p.CapabilityIssuance != nil || p.OTP != nil && p.MFACompletion == nil || p.RiskEvidence != nil || p.CaptchaEvidence != nil || p.CaptchaReplayReservation
 }
 
 // Only the original closed reset consumption plan may precede hash generation.
@@ -303,7 +321,7 @@ func resetAuthenticationPreparation(p CommandPlan) bool {
 // session, never introduce or replace its authentication input. The ordinary
 // closed plan codec and native owner still validate the complete envelope.
 func consumptionAuthenticationPreparation(p CommandPlan) bool {
-	return resetAuthenticationPreparation(p) || p.Feature != nil && p.Feature.Operation == magicLinkConsumeOperation() && p.Capability != nil && p.Capability.Purpose == "identity.magic-link.consume" && p.Capability.MaxUses == 1
+	return resetAuthenticationPreparation(p) || p.Feature != nil && p.Feature.Operation == magicLinkConsumeOperation() && p.Capability != nil && p.Capability.Purpose == "identity.magic-link.consume" && p.Capability.MaxUses == 1 || p.MFACompletion != nil && p.Feature != nil && mfaCompletionOperation(p.Feature.Operation) && p.Capability != nil && p.Capability.Purpose == "identity.mfa.complete" && p.Capability.MaxUses == 1
 }
 
 func preparationFinalDeclaration(b identity.CommandBinding, original, final CommandPlan) bool {
@@ -340,6 +358,12 @@ func preparationFinalDeclaration(b identity.CommandBinding, original, final Comm
 	// It cannot introduce MFA, replace its primary proof or renew the exact
 	// original challenge scope, including issue time and absolute expiry.
 	if (original.MFAContinuation == nil) != (final.MFAContinuation == nil) || original.MFAContinuation != nil && (*original.MFAContinuation != *final.MFAContinuation || !validMagicLinkMFAPlan(b, original) || !validMagicLinkMFAPlan(b, final) || final.CapabilityIssuance == nil) {
+		return false
+	}
+	if (original.MFACompletion == nil) != (final.MFACompletion == nil) || original.MFACompletion != nil && (*original.MFACompletion != *final.MFACompletion || !validMFACompletionPlan(b, original) || !validMFACompletionPlan(b, final)) {
+		return false
+	}
+	if (original.OTP == nil) != (final.OTP == nil) || original.OTP != nil && *original.OTP != *final.OTP {
 		return false
 	}
 	for i, a := range original.Audits {
@@ -556,6 +580,21 @@ func (c *Coordinator) attachFeaturePreparation(ctx context.Context, original, ge
 			return Reservation{}, err
 		}
 	}
+	if admitted.otp != nil {
+		if admitted.mfaCompletion == nil || original.source == nil {
+			return Reservation{}, invalidPreparation()
+		}
+		otpJournal := r.journal
+		// A journal-only predecessor has never attached a reservation. Once an
+		// attachment exists, transfer its exact generation rather than compare
+		// or charge the original opaque submission again.
+		if plan == nil {
+			otpJournal.previousGeneration = 0
+		}
+		if err := c.reserveOTP(ctx, tx, *original.source, original, admitted, otpJournal, owner); err != nil {
+			return Reservation{}, err
+		}
+	}
 	if err := c.commitPreparation(ctx, tx); err != nil {
 		return Reservation{}, err
 	}
@@ -634,7 +673,7 @@ func (c *Coordinator) checkPreparedAdmission(w Work) error {
 	}
 	p := w.state.execution.reservation.preparation
 	plan := w.state.execution.reservation.plan
-	if plan != nil && plan.feature != nil && (plan.feature.Operation == credentialResetOperation() || plan.feature.Operation == magicLinkConsumeOperation()) && plan.counters == nil {
+	if plan != nil && plan.feature != nil && (plan.feature.Operation == credentialResetOperation() || plan.feature.Operation == magicLinkConsumeOperation() || plan.mfaCompletion != nil) && plan.counters == nil {
 		if p == nil || p.admission == nil || p.generation == 0 || len(p.ciphertext) == 0 || len(p.ciphertext) > maximumPreparationCiphertext || w.state.execution.reservation.executionRequest == nil {
 			return invalidPreparation()
 		}

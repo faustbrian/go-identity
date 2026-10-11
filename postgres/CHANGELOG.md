@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Bind session-producing MFA factor operations to the original continuation
+  purpose without relaxing other capability-purpose checks. Preserve original
+  scope and attempt/factor/policy versions through preparation and recovery;
+  consume/finalize the child alongside native effects in one transaction.
+  Native factor verification and session composition are still required.
+
 - Retain a distinct magic-link MFA challenge declaration containing the original
   primary consumption and one bounded continuation issuance. It cannot produce
   a session, create an account or extend the original proof expiry. Original

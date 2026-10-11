@@ -60,6 +60,9 @@ func validateFeatureCommand(phase FeatureExecutionContributor, command identity.
 		return err
 	}
 	if plan.Capability != nil {
+		if plan.MFACompletion != nil {
+			return validateMFACompletion(phase, command, plan)
+		}
 		if plan.Feature != nil && plan.Feature.Operation == magicLinkConsumeOperation() {
 			return validateMagicLinkConsumption(phase, command, plan)
 		}
@@ -104,7 +107,7 @@ func (r *ContributorRegistry) admitFeaturePlan(b identity.CommandBinding, finger
 	if p.MagicLinkRegistration != nil && (r == nil || r.state == nil) {
 		return nil, invalidPlan()
 	}
-	if p.Capability != nil && (p.Feature == nil || p.Feature.Operation != registrationEmailVerificationOperation() && p.Feature.Operation != credentialResetOperation() && p.Feature.Operation != magicLinkConsumeOperation()) {
+	if p.Capability != nil && (p.Feature == nil || p.Feature.Operation != registrationEmailVerificationOperation() && p.Feature.Operation != credentialResetOperation() && p.Feature.Operation != magicLinkConsumeOperation() && !validMFACompletionPlan(b, p)) {
 		return nil, invalidPlan()
 	}
 	digest, err := FeaturePlanDigest(b, fingerprint, p)
@@ -145,7 +148,16 @@ func (r *ContributorRegistry) admitFeaturePlan(b identity.CommandBinding, finger
 		}
 	}
 	if p.Capability != nil {
-		if p.Feature.Operation == magicLinkConsumeOperation() {
+		if p.MFACompletion != nil {
+			if _, ok := feature.contributor.(MFACompletionContributor); !ok {
+				return nil, invalidPlan()
+			}
+			if p.CommandCounters == nil {
+				if _, ok := feature.contributor.(FeatureAdmissionPreparationContributor); !ok {
+					return nil, invalidPlan()
+				}
+			}
+		} else if p.Feature.Operation == magicLinkConsumeOperation() {
 			if _, ok := feature.contributor.(MagicLinkConsumptionContributor); !ok {
 				return nil, invalidPlan()
 			}
@@ -320,7 +332,7 @@ func (r *ContributorRegistry) admitFeaturePlan(b identity.CommandBinding, finger
 		copy := *p.Capability
 		proof = &copy
 	}
-	return &admittedKernelPlan{mfaContinuation: cloneMFAContinuationPlan(p.MFAContinuation), magicLinkRequestAcceptance: p.MagicLinkRequestAcceptance, magicLinkRegistration: cloneMagicLinkRegistrationPlan(p.MagicLinkRegistration), registry: r.state, binding: b, digest: digest, contributors: entries, audits: append([]AuditPlan(nil), p.Audits...), lifecycle: &l, capability: proof, risk: risk, counters: counters, captchaReplay: p.CaptchaReplayReservation, captchaUse: cloneCaptchaEvidencePlan(p.CaptchaEvidence), otp: cloneOTPPlan(p.OTP), fingerprint: fingerprint, feature: &f, subjectType: p.SubjectType, delivery: cloneDeliveryPlan(p.Delivery), issuance: cloneCapabilityIssuancePlan(p.CapabilityIssuance), signupAcceptance: p.SignupAcceptance}, nil
+	return &admittedKernelPlan{mfaCompletion: cloneMFACompletionPlan(p.MFACompletion), mfaContinuation: cloneMFAContinuationPlan(p.MFAContinuation), magicLinkRequestAcceptance: p.MagicLinkRequestAcceptance, magicLinkRegistration: cloneMagicLinkRegistrationPlan(p.MagicLinkRegistration), registry: r.state, binding: b, digest: digest, contributors: entries, audits: append([]AuditPlan(nil), p.Audits...), lifecycle: &l, capability: proof, risk: risk, counters: counters, captchaReplay: p.CaptchaReplayReservation, captchaUse: cloneCaptchaEvidencePlan(p.CaptchaEvidence), otp: cloneOTPPlan(p.OTP), fingerprint: fingerprint, feature: &f, subjectType: p.SubjectType, delivery: cloneDeliveryPlan(p.Delivery), issuance: cloneCapabilityIssuancePlan(p.CapabilityIssuance), signupAcceptance: p.SignupAcceptance}, nil
 }
 
 // ApplyFeature invokes only the frozen exact native adapter once through Work.
@@ -423,7 +435,11 @@ func (c *Coordinator) ApplyFeature(ctx context.Context, w Work, command identity
 		}
 	}
 	if p.capability != nil {
-		if p.feature.Operation == magicLinkConsumeOperation() {
+		if p.mfaCompletion != nil {
+			if e := prepareMFACompletionConsumption(ctx, w); e != nil {
+				return result, e
+			}
+		} else if p.feature.Operation == magicLinkConsumeOperation() {
 			if e := prepareMagicLinkConsumption(ctx, w); e != nil {
 				return result, e
 			}

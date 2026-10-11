@@ -1,5 +1,37 @@
 # Identity PostgreSQL
 
+## Atomic MFA completion
+
+`CommandPlan.MFACompletion` selects the session-producing alternative of the
+anonymous-flow `identity.mfa.totp-verify`, `identity.mfa.otp-verify`,
+`identity.mfa.recovery-use` or `identity.mfa.security-key-assert-verify`
+version-one operation. Their schemas are the corresponding `mfa-*` names.
+The command remains the named factor operation; `identity.mfa.complete` is
+the original child's capability purpose, not another public endpoint.
+Enrollment verification without this declaration retains its existing profile.
+
+The closed declaration binds the original child ID, subject, immutable scope
+digest and expected continuation/factor/policy versions. It requires the exact
+`identity/mfa/postgres`, `identity.mfa` version-one native owner implementing
+`MFACompletionContributor`, protected authentication audit and
+`session.created.v1`. OTP verification additionally requires its consuming OTP
+plan/owner; other factor methods reject OTP consumption. No new capability
+issuance, delivery, signup or challenge-only branch is permitted.
+
+The native owner must validate original grant/browser/primary/remember custody,
+fence current authority and shared attempts, verify the actual selected factor
+and persist continuation completion plus session effects in the sole Work.
+`Work.MFACompletionConsumption(owner)` returns owned frozen metadata only after
+provisional consumption, only to the exact protected Apply invocation. It is
+not a factor proof or session grant. Preparation and restoration preserve all
+original versions, capability and optional OTP submission. The existing
+coordinator owns finalization, audit/lifecycle, commit and recovery; late denial
+rolls back protected effects, and a committed retry returns the original receipt.
+
+This kernel seam does not implement factor verification, counted failed
+attempts, the production continuation store or MFA session issuance. Public MFA
+remains disabled until those owners and the consumer journey are connected.
+
 ## Atomic magic-link consumption
 
 The exact anonymous-flow `identity.magic-link.consume`, `magic-link-consume`
