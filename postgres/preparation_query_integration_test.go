@@ -44,6 +44,10 @@ func testPreparedFeatureQuery(t *testing.T, ctx context.Context, c *Coordinator,
 	}
 	s, _ := command.Feature()
 	q, caller := queryInputs(s.Binding)
+	output, generation, err := c.QueryFeaturePreparation(ctx, q, caller, *plan.Feature, phase)
+	if err != nil || generation != 1 || len(output) != 17000 {
+		t.Fatal("native output incorrectly requires a request-key mapping", err)
+	}
 	scope := RequestKeyScope{TenantID: q.TenantID, ActorID: q.ActorID, ActorKind: q.ActorKind, Method: "POST", RouteID: q.OperationID}
 	if r, err := c.QueryPreparedFeature(ctx, q, caller, *plan.Feature, phase); err == nil || r.InputCiphertext != nil || r.OutputGeneration != 0 {
 		t.Fatal("committed journal without original input accepted")

@@ -11,7 +11,7 @@ import (
 
 func encodeCredentialResetPlan(b identity.CommandBinding, fp [32]byte, p CommandPlan) ([]byte, error) {
 	owner := ContributorDescriptor{Owner: "capability/postgres", ContractID: "capability.one-use", Version: 1}
-	if p.Feature == nil || p.Feature.Operation != credentialResetOperation() || p.Feature.Contributor != (ContributorDescriptor{Owner: "identity/password/postgres", ContractID: "identity.password", Version: 1}) || p.SubjectType != "credential" || p.Capability == nil || p.CommandCounters == nil || p.RiskEvidence != nil || p.OTP != nil || p.CaptchaEvidence != nil || p.CaptchaReplayReservation || p.SignupAcceptance || p.CapabilityIssuance != nil || p.Delivery != nil || p.Lifecycle == nil || p.Lifecycle.EventType != "password.reset.v1" || p.Lifecycle.BeforeVersion == 0 || len(p.Contributors) == 0 || p.Contributors[len(p.Contributors)-1] != owner || validateCapabilityPlan(b, p.Capability) != nil {
+	if p.Feature == nil || p.Feature.Operation != credentialResetOperation() || p.Feature.Contributor != (ContributorDescriptor{Owner: "identity/password/postgres", ContractID: "identity.password", Version: 1}) || p.SubjectType != "credential" || p.Capability == nil || p.RiskEvidence != nil || p.OTP != nil || p.CaptchaEvidence != nil || p.CaptchaReplayReservation || p.SignupAcceptance || p.CapabilityIssuance != nil || p.Delivery != nil || p.Lifecycle == nil || p.Lifecycle.EventType != "password.reset.v1" || p.Lifecycle.BeforeVersion == 0 || len(p.Contributors) == 0 || p.Contributors[len(p.Contributors)-1] != owner || validateCapabilityPlan(b, p.Capability) != nil {
 		return nil, invalidPlan()
 	}
 	for _, a := range p.Audits {
@@ -42,9 +42,10 @@ func decodeCredentialResetPlan(b identity.CommandBinding, fp [32]byte, data []by
 	r.expect(5, 5)
 	r.key("base")
 	n, ok := r.head(2)
-	// Reset's base is exactly the counter-bound ordinary feature grammar;
+	// Reset's base is exactly ordinary protected feature grammar, with either
+	// historical command counters or the native Authentication admission lane;
 	// wrappers cannot recursively nest or allocate beyond the original input.
-	if !r.ok || !ok || n == 0 || n > uint64(len(r.data)) || r.data[0] != 0xa9 {
+	if !r.ok || !ok || n == 0 || n > uint64(len(r.data)) || r.data[0] != 0xa8 && r.data[0] != 0xa9 {
 		return fail()
 	}
 	base, err := decodeFeaturePlanMode(b, fp, r.data[:int(n)], true)

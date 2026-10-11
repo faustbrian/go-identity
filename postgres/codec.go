@@ -169,6 +169,11 @@ func prepareClaim(c identity.Command, key [32]byte) (claimRequest, error) {
 				return claimRequest{}, err
 			}
 		}
+		if _, ok := c.PasswordResetInputFeature(); ok {
+			if err := encodePasswordResetInputCustody(c, key, payload); err != nil {
+				return claimRequest{}, err
+			}
+		}
 		if _, ok := c.PasswordSigninFeature(); ok {
 			if err := encodePasswordSigninCustody(c, key, payload); err != nil {
 				return claimRequest{}, err
@@ -248,6 +253,9 @@ func isFeature(c identity.Command) bool    { _, ok := commandFeature(c); return 
 // The authenticated variant additionally binds every original hash/bearer/proof
 // field; this selection does not replace native policy validation/consumption.
 func commandFeature(c identity.Command) (identity.FeatureCommandSpec, bool) {
+	if s, ok := c.PasswordResetInputFeature(); ok {
+		return s, true
+	}
 	if s, ok := c.PasswordSignupInputFeature(); ok {
 		return s, true
 	}

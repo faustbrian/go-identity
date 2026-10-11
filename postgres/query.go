@@ -208,18 +208,9 @@ func (c *Coordinator) queryCommandReceiptChecked(ctx context.Context, q identity
 // Both owned recovery and authorized public metadata lookup share the same
 // historical fences. This parser grants no caller authorization or ownership.
 func commandReceipt(q identity.RecoveryQuery, observed commandObservation, err error) (identity.CommandResult, error) {
-	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
-		return identity.CommandResult{}, identity.UnavailableError{}
-	}
-	if errors.Is(err, pgx.ErrNoRows) || observed.retired || observed.tenant != string(q.TenantID) || observed.purpose != q.OperationID {
-		return identity.CommandResult{}, identity.ForbiddenError{}
-	}
-	binding, feature, decodeErr := decodeObservedScope(observed.scope)
-	if decodeErr != nil {
-		return identity.CommandResult{}, identity.UnavailableError{}
-	}
-	if binding.CommandID != q.CommandID || binding.TenantID != q.TenantID || binding.UserID != q.UserID || binding.AnonymousFlowID != q.AnonymousFlowID || binding.ActorID != q.ActorID || binding.ActorKind != q.ActorKind || binding.OperationID != q.OperationID || binding.RecordID != q.RecordID || binding.LinkMode != q.LinkMode {
-		return identity.CommandResult{}, identity.ForbiddenError{}
+	binding, feature, err := commandObservationScope(q, observed, err)
+	if err != nil {
+		return identity.CommandResult{}, err
 	}
 	if observed.state == nil || observed.until == nil || !postgresExactTime(*observed.until) || !postgresExactTime(observed.now) || len(observed.plan) == 0 || len(observed.plan) > 65536 {
 		return identity.CommandResult{}, identity.UnavailableError{}
@@ -284,6 +275,26 @@ func commandReceipt(q identity.RecoveryQuery, observed commandObservation, err e
 	default:
 		return identity.CommandResult{}, identity.UnavailableError{}
 	}
+}
+
+// Shared by receipt lookup and native preparation reads. Original scope is
+// correlation only; each caller establishes current disclosure policy first.
+func commandObservationScope(q identity.RecoveryQuery, observed commandObservation, err error) (identity.CommandBinding, *identity.FeatureOperation, error) {
+	zero := identity.CommandBinding{}
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		return zero, nil, identity.UnavailableError{}
+	}
+	if errors.Is(err, pgx.ErrNoRows) || observed.retired || observed.tenant != string(q.TenantID) || observed.purpose != q.OperationID {
+		return zero, nil, identity.ForbiddenError{}
+	}
+	binding, feature, err := decodeObservedScope(observed.scope)
+	if err != nil {
+		return zero, nil, identity.UnavailableError{}
+	}
+	if binding.CommandID != q.CommandID || binding.TenantID != q.TenantID || binding.UserID != q.UserID || binding.AnonymousFlowID != q.AnonymousFlowID || binding.ActorID != q.ActorID || binding.ActorKind != q.ActorKind || binding.OperationID != q.OperationID || binding.RecordID != q.RecordID || binding.LinkMode != q.LinkMode {
+		return zero, nil, identity.ForbiddenError{}
+	}
+	return binding, feature, nil
 }
 
 func (c *Coordinator) authorizeCommandQuery(ctx context.Context, q identity.RecoveryQuery, caller authorization.DecisionContext) (allowed bool, err error) {

@@ -2,6 +2,30 @@
 
 ## Unreleased
 
+- Select reset-request recipient and password-reference snapshots inside the
+  exact native preparation Work, without exposing verifiers or granting factor
+  permission. Missing/ineligible selections suppress; malformed primary state
+  denies. Final execution must retain the original credential/factor fences.
+
+- Read retained native preparation output under current disclosure policy and
+  exact registered ownership without allocating a request-key command. Preserve
+  original generation for pending/resumed and terminal caller-command workflows;
+  missing output does not permit regeneration or prove rollback.
+
+- Fence the exact reset password predecessor before preparation can screen or
+  hash a replacement. Reuse the same account/version/enablement/primary-expiry
+  checks as final reset execution; preparation does not consume or mutate.
+
+- Prepare reset replacements through the canonical pre-credential Authentication
+  admission path without fabricating session-bound counters. Bind original
+  raw password/proof custody, preserve the exact one-use consumption declaration,
+  and reject execution without retained admission and generated output. Historical
+  counter-bound reset plans remain decodable; native public composition is pending.
+
+- Fence disabled password predecessors during anonymous reset initiation using
+  a reset-only recipient contract. Preserve current status, expiry and independent
+  version checks; sign-in fences still deny disabled references.
+
 - Bind anonymous password-reset issuance to an existing recipient independently
   fenced in the native transaction. Selected-user history remains distinct from
   signup's new-user target; foreign purposes and predecessor substitutions deny.

@@ -114,6 +114,14 @@ func (r *ContributorRegistry) admitFeaturePlan(b identity.CommandBinding, finger
 			if _, ok := feature.contributor.(CredentialResetContributor); !ok {
 				return nil, invalidPlan()
 			}
+			// The canonical reset policy charges Authentication counters before
+			// credential work. Only the existing admission-gated preparation owner
+			// can carry those original facts into execution without a session.
+			if p.CommandCounters == nil {
+				if _, ok := feature.contributor.(FeatureAdmissionPreparationContributor); !ok {
+					return nil, invalidPlan()
+				}
+			}
 		} else if _, ok := feature.contributor.(EmailVerificationContributor); !ok {
 			return nil, invalidPlan()
 		}

@@ -8,6 +8,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -15,7 +16,9 @@ import (
 	"github.com/faustbrian/go-capability"
 	"github.com/faustbrian/go-clock"
 	identity "github.com/faustbrian/go-identity"
+	primitive "github.com/faustbrian/go-password"
 	database "github.com/faustbrian/go-postgres"
+	"github.com/jackc/pgx/v5"
 )
 
 // These fixtures exercise real kernel SQL/one-time transaction phases, not
@@ -111,7 +114,7 @@ CREATE TABLE IF NOT EXISTS public.identity_test_replacement_epochs(command_id te
 CREATE TABLE IF NOT EXISTS identity.capability_recovery_fixture(tenant_id text NOT NULL,purpose text NOT NULL,capability_id text PRIMARY KEY,expiry timestamptz NOT NULL,state text NOT NULL,command_id text,fingerprint bytea,generation numeric)`); err != nil {
 		t.Fatal(err)
 	}
-	for _, mode := range []string{"commit", "competing-commands", "disabled-recovery", "stale-user", "stale-epoch", "stale-record", "enabled-mismatch", "banned", "expired-credential", "native-failure", "receipt-failure", "audit-failure", "outbox-failure", "finalize-failure", "commit-admission-failure", "counter-denied", "recovery-negative", "recovery-retained"} {
+	for _, mode := range []string{"prepared-commit", "prepared-retention-restart", "prepared-attachment-restart", "prepared-denied", "prepared-commit-denied", "prepared-bypass", "commit", "competing-commands", "disabled-recovery", "stale-user", "stale-epoch", "stale-record", "enabled-mismatch", "banned", "expired-credential", "native-failure", "receipt-failure", "audit-failure", "outbox-failure", "finalize-failure", "commit-admission-failure", "counter-denied", "recovery-negative", "recovery-retained"} {
 		t.Run(mode, func(t *testing.T) {
 			command, plan, intent := resetPlanFixture(t)
 			s, _ := command.PasswordResetFeature()
@@ -200,7 +203,24 @@ CREATE TABLE IF NOT EXISTS identity.capability_recovery_fixture(tenant_id text N
 			native.fail, native.wrongReceipt = mode == "native-failure", mode == "receipt-failure"
 			auditing, outbox, oneUse, counters := &recoveryAuditPhase{}, &resetOutboxPhase{}, &emailVerificationCapabilityPhase{failFinalize: mode == "finalize-failure"}, &emailVerificationCounterPhase{deny: mode == "counter-denied"}
 			auditing.fail, outbox.fail = mode == "audit-failure", mode == "outbox-failure"
-			registry, err := NewContributorRegistry([]Contributor{repo, auditing, outbox, native, counters, oneUse})
+			contributors := []Contributor{repo, auditing, outbox, native, counters, oneUse}
+			var prepared *preparedResetPhase
+			if strings.HasPrefix(mode, "prepared-") {
+				secret, err := primitive.NewSecret([]byte("original synthetic reset password"))
+				if err != nil {
+					t.Fatal(err)
+				}
+				t.Cleanup(secret.Destroy)
+				input, err := identity.NewFeaturePasswordResetInputCommand(s, secret, proof)
+				if err != nil {
+					t.Fatal(err)
+				}
+				prepared = &preparedResetPhase{resetNativePhase: native, original: input, generated: command, deny: mode == "prepared-denied"}
+				native.failCommit = mode == "prepared-commit-denied"
+				plan.CommandCounters = nil
+				contributors = []Contributor{repo, auditing, outbox, prepared, oneUse}
+			}
+			registry, err := NewContributorRegistry(contributors)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -229,6 +249,73 @@ CREATE TABLE IF NOT EXISTS identity.capability_recovery_fixture(tenant_id text N
 				t.Fatal(err)
 			}
 			var reservation Reservation
+			if prepared != nil && mode != "prepared-bypass" {
+				prepared.plan = plan
+				declaration, err := coordinator.PrepareFeaturePreparationPlan(prepared.original, plan)
+				if err != nil {
+					t.Fatal("original reset cannot prepare before hashing", err)
+				}
+				if mode == "prepared-retention-restart" || mode == "prepared-attachment-restart" {
+					lostStage := 3
+					if mode == "prepared-attachment-restart" {
+						lostStage = 4
+					}
+					commits := 0
+					coordinator.preparationCommit = func(ctx context.Context, tx pgx.Tx) error {
+						commits++
+						if err := tx.Commit(ctx); err != nil {
+							return err
+						}
+						if commits == lostStage {
+							return identity.UnavailableError{}
+						}
+						return nil
+					}
+					result, err := coordinator.ExecutePreparedFeature(ctx, prepared.original, declaration)
+					if err == nil || result.Outcome != identity.CommitOutcomeUnknown || prepared.generations != 1 {
+						t.Fatal("lost acknowledgement discarded original reset generation", err)
+					}
+					q, caller := queryInputs(b)
+					wire, generation, err := coordinator.QueryFeaturePreparation(ctx, q, caller, *declaration.Feature, prepared)
+					if err != nil || generation != 1 || len(wire) != 32 || prepared.generations != 1 {
+						t.Fatal("pending retained output cannot recover original reset before attachment", err)
+					}
+					wire[0] ^= 1
+					again, g, err := coordinator.QueryFeaturePreparation(ctx, q, caller, *declaration.Feature, prepared)
+					if err != nil || g != generation || bytes.Equal(wire, again) {
+						t.Fatal("native preparation read changed original history", err)
+					}
+					withoutKey := *coordinator
+					withoutKey.keys.retained = nil
+					if wire, g, e := withoutKey.QueryFeaturePreparation(ctx, q, caller, *declaration.Feature, prepared); e == nil || wire != nil || g != 0 {
+						t.Fatal("missing retained claim key disclosed reset output")
+					}
+					key, _ := base64.RawURLEncoding.DecodeString(string(b.CommandID))
+					if _, err := pool.Raw().Exec(ctx, `UPDATE identity.commands SET created_at=clock_timestamp()-interval '3 seconds',heartbeat_at=clock_timestamp()-interval '2 seconds',updated_at=clock_timestamp()-interval '2 seconds',lease_until=clock_timestamp()-interval '1 second' WHERE command_id=$1`, key); err != nil {
+						t.Fatal(err)
+					}
+					fresh := *coordinator
+					fresh.preparationCommit = nil
+					fresh.keys = claimKeys{current: 2, retained: map[uint32][32]byte{1: {1}, 2: {2}}}
+					coordinator = &fresh
+				}
+				result, err := coordinator.ExecutePreparedFeature(ctx, prepared.original, declaration)
+				if mode == "prepared-commit" || mode == "prepared-retention-restart" || mode == "prepared-attachment-restart" {
+					if err != nil || result.Outcome != identity.CommitOutcomeCommitted || prepared.generations != 1 {
+						t.Fatal("admitted reset generation did not commit atomically", err)
+					}
+					replay, err := coordinator.ExecutePreparedFeature(ctx, prepared.original, declaration)
+					if err != nil || replay.Outcome != result.Outcome || prepared.generations != 1 {
+						t.Fatal("original replay regenerated password or changed result", err)
+					}
+				} else if err == nil || result.Outcome == identity.CommitOutcomeCommitted {
+					t.Fatal("denied reset preparation committed")
+				}
+				if mode == "prepared-denied" && prepared.generations != 0 {
+					t.Fatal("password generation preceded risk admission")
+				}
+				goto verifyResetEffects
+			}
 			if mode == "competing-commands" {
 				other := s
 				other.Binding.CommandID, err = identity.NewCommandID()
@@ -343,12 +430,13 @@ CREATE TABLE IF NOT EXISTS identity.capability_recovery_fixture(tenant_id text N
 			} else if err == nil {
 				t.Fatal("counter denial admitted reset")
 			}
+		verifyResetEffects:
 			current, err := repo.GetCredentialAuthority(ctx, identity.CredentialAuthorityQuery{TenantID: b.TenantID, UserID: b.UserID, CredentialID: identity.CredentialID(b.RecordID)})
 			if err != nil {
 				t.Fatal(err)
 			}
 			wantEffects := 0
-			if mode == "commit" || mode == "disabled-recovery" || mode == "competing-commands" {
+			if mode == "commit" || mode == "disabled-recovery" || mode == "competing-commands" || mode == "prepared-commit" || mode == "prepared-retention-restart" || mode == "prepared-attachment-restart" {
 				u++
 				a++
 				r++

@@ -362,7 +362,9 @@ func TestPostgresIntegration(t *testing.T) {
 	t.Run("credential reset transaction", func(t *testing.T) {
 		base := DirectoryAuthorityMigrationSource{Base: CredentialCompromiseMigrationSource{Base: CredentialMigrationSource{Base: StatusMigrationSource{Base: MigrationSource{}, Version: 12}, Version: 13}, Version: 14}, Version: 15, GlobalAuthorityID: "deployment'\\opaque", TenantIDs: []identity.TenantID{"directory"}}
 		history := CredentialReplacementMigrationSource{Base: base, Version: 16}
-		runner, err := migrations.NewRunner(CredentialResetMigrationSource{Base: history, Version: 17}, backend)
+		resetHistory := CredentialResetMigrationSource{Base: history, Version: 17}
+		preparedHistory := PreparationMigrationSource{Base: resetHistory, Version: 18}
+		runner, err := migrations.NewRunner(AdmissionPreparationMigrationSource{Base: preparedHistory, Version: 19}, backend)
 		if err != nil {
 			t.Fatal(err)
 		}

@@ -283,11 +283,25 @@ func (c *Coordinator) prepareFeaturePreparation(original identity.Command, p Com
 }
 
 func preparationProtected(p CommandPlan) bool {
-	return p.IdentifierAdmission != nil || p.Capability != nil || p.CapabilityIssuance != nil || p.OTP != nil || p.RiskEvidence != nil || p.CaptchaEvidence != nil || p.CaptchaReplayReservation
+	return p.IdentifierAdmission != nil || p.Capability != nil && !resetAuthenticationPreparation(p) || p.CapabilityIssuance != nil || p.OTP != nil || p.RiskEvidence != nil || p.CaptchaEvidence != nil || p.CaptchaReplayReservation
+}
+
+// Only the original closed reset consumption plan may precede hash generation.
+// It cannot add, replace or renew capability consumption in the final output.
+// The plan codec and registry independently require the exact native owners.
+func resetAuthenticationPreparation(p CommandPlan) bool {
+	return p.Feature != nil && p.Feature.Operation == credentialResetOperation() && p.Capability != nil && p.CommandCounters == nil
 }
 
 func preparationFinalDeclaration(b identity.CommandBinding, original, final CommandPlan) bool {
 	if original.Feature == nil || original.Lifecycle == nil || preparationProtected(original) || original.Delivery != nil {
+		return false
+	}
+	if resetAuthenticationPreparation(original) {
+		if !resetAuthenticationPreparation(final) || *original.Capability != *final.Capability || final.Delivery != nil || final.CapabilityIssuance != nil {
+			return false
+		}
+	} else if final.Capability != nil {
 		return false
 	}
 	// Only closed anonymous signup or reset-request profiles may add issuance.
@@ -432,6 +446,9 @@ func (c *Coordinator) admitFeaturePreparation(ctx context.Context, tx pgx.Tx, or
 	}
 	w.state.featureInvocation = phase
 	defer func() { w.state.featureInvocation = nil }()
+	if err := admitResetInputCredential(ctx, w, original, p); err != nil {
+		return err
+	}
 	if err := phase.AdmitFeaturePreparation(ctx, w, original); err != nil {
 		return w.fail(ctx, err)
 	}
@@ -494,6 +511,20 @@ func (c *Coordinator) attachFeaturePreparation(ctx context.Context, original, ge
 	admitted, err := c.freezePlan(ctx, tx, s.Binding, original, d, final)
 	if err != nil {
 		return Reservation{}, err
+	}
+	if admitted.capability != nil {
+		// The generated reset plan carries the original consumption declaration.
+		// Enlist its existing reservation owner in the same transaction that first
+		// attaches that declaration. Admission denial/generation failure never
+		// reserves a proof. A missing final plan proves no earlier attachment (or
+		// capability reservation) committed, even after journal-only takeover.
+		capabilityJournal := r.journal
+		if plan == nil {
+			capabilityJournal.previousGeneration = 0
+		}
+		if err := c.reserveCapability(ctx, tx, original, admitted, capabilityJournal, owner); err != nil {
+			return Reservation{}, err
+		}
 	}
 	if err := c.commitPreparation(ctx, tx); err != nil {
 		return Reservation{}, err
@@ -572,6 +603,12 @@ func (c *Coordinator) checkPreparedAdmission(w Work) error {
 		return invalidWork()
 	}
 	p := w.state.execution.reservation.preparation
+	plan := w.state.execution.reservation.plan
+	if plan != nil && plan.feature != nil && plan.feature.Operation == credentialResetOperation() && plan.counters == nil {
+		if p == nil || p.admission == nil || p.generation == 0 || len(p.ciphertext) == 0 || len(p.ciphertext) > maximumPreparationCiphertext || w.state.execution.reservation.executionRequest == nil {
+			return invalidPreparation()
+		}
+	}
 	if p == nil || p.admission == nil {
 		return nil
 	}

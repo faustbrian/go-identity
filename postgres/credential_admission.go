@@ -63,6 +63,31 @@ func (w Work) RequireActiveCredential(ctx context.Context, p FeatureExecutionCon
 // Password comparison, proof provenance, authorization, one-time consumption
 // and session issuance remain separate. The returned time is not a validity lease.
 func (w Work) RequireRecipientCredential(ctx context.Context, p FeatureExecutionContributor, recipient RecipientRecord, expected CredentialAdmission) (time.Time, error) {
+	return w.requireRecipientCredential(ctx, p, recipient, expected, true)
+}
+
+// RequireResetRecipientCredential admits the original enabled/disabled password
+// predecessor only for the exact anonymous native reset-request profile. It
+// preserves primary recipient, status, expiry and independent epoch fences and
+// poisons Work on denial. expectedEnabled is original trusted intent, never
+// client input. This grants no authentication, factor bypass or reset completion.
+// Locks, clock, lifetime and original anonymous-scope semantics match
+// RequireRecipientCredential, which still requires an enabled reference.
+func (w Work) RequireResetRecipientCredential(ctx context.Context, p FeatureExecutionContributor, recipient RecipientRecord, expected CredentialAdmission, expectedEnabled bool) (time.Time, error) {
+	if w.state == nil {
+		return time.Time{}, invalidWork()
+	}
+	if ctx == nil {
+		return time.Time{}, w.fail(w.state.ctx, invalidWork())
+	}
+	b, f, _, err := w.FeatureScope(p)
+	if err != nil || !passwordResetRequestOperation(f.Operation) || b.UserID != "" || b.AnonymousFlowID == "" || f.Contributor.Owner != "identity/password/postgres" || f.Contributor.ContractID != "identity.password" || f.Contributor.Version != 1 || recipient.Query.Kind != identity.IdentifierEmail || recipient.Query.Eligibility != RecipientVerified || expected.Credential.Kind != identity.CredentialPassword || expected.Credential.Owner != "identity/password" {
+		return time.Time{}, w.fail(ctx, invalidWork())
+	}
+	return w.requireRecipientCredential(ctx, p, recipient, expected, expectedEnabled)
+}
+
+func (w Work) requireRecipientCredential(ctx context.Context, p FeatureExecutionContributor, recipient RecipientRecord, expected CredentialAdmission, expectedEnabled bool) (time.Time, error) {
 	if w.state == nil {
 		return time.Time{}, invalidWork()
 	}
@@ -88,7 +113,7 @@ func (w Work) RequireRecipientCredential(ctx context.Context, p FeatureExecution
 	// Only this local eligibility query uses the selected identity. The frozen
 	// command binding retains the originating anonymous flow for audit/replay.
 	b.UserID = recipient.User.ID
-	now, err := w.requireActiveCredential(ctx, b, expected)
+	now, err := w.requireCredentialLock(ctx, b, expected, false, 0, expectedEnabled)
 	if err == nil && w.state.feature != nil && passwordResetRequestOperation(w.state.feature.Operation) {
 		// The command keeps its anonymous scope. Only this successful primary
 		// fence can admit its selected recipient to later reset-token staging.
@@ -105,6 +130,10 @@ func (w Work) requireActiveCredential(ctx context.Context, b identity.CommandBin
 }
 
 func (w Work) requireActiveCredentialLock(ctx context.Context, b identity.CommandBinding, expected CredentialAdmission, exclusive bool, aggregate uint64) (time.Time, error) {
+	return w.requireCredentialLock(ctx, b, expected, exclusive, aggregate, true)
+}
+
+func (w Work) requireCredentialLock(ctx context.Context, b identity.CommandBinding, expected CredentialAdmission, exclusive bool, aggregate uint64, expectedEnabled bool) (time.Time, error) {
 	c := expected.Credential
 	if c.Validate(b.TenantID, b.UserID) != nil || expected.UserAuthorityVersion == 0 || expected.IdentifierAuthorityVersion == 0 || expected.CredentialAuthorityVersion == 0 {
 		return time.Time{}, w.fail(ctx, invalidWork())
@@ -163,7 +192,11 @@ func (w Work) requireActiveCredentialLock(ctx context.Context, b identity.Comman
 	if err != nil {
 		return time.Time{}, err
 	}
-	if aggregate != 0 && current.User.Version != aggregate || userVersion != expected.UserAuthorityVersion || identifierVersion != expected.IdentifierAuthorityVersion || identity.CheckCredentialAuthority(current, c, expected.CredentialAuthorityVersion, now) != nil {
+	admission := identity.CheckCredentialAuthority(current, c, expected.CredentialAuthorityVersion, now)
+	if !expectedEnabled {
+		admission = identity.CheckPasswordRecoveryAuthority(current, c, expected.CredentialAuthorityVersion, false, now)
+	}
+	if aggregate != 0 && current.User.Version != aggregate || userVersion != expected.UserAuthorityVersion || identifierVersion != expected.IdentifierAuthorityVersion || admission != nil {
 		return time.Time{}, w.fail(ctx, identity.ForbiddenError{})
 	}
 	return now, nil

@@ -200,6 +200,9 @@ func (c *Coordinator) prepare(binding identity.CommandBinding, command identity.
 	if _, ok := command.PasswordSignupInputFeature(); ok {
 		return claimRequest{}, CommandPlan{}, nil, invalidPlan()
 	}
+	if _, ok := command.PasswordResetInputFeature(); ok {
+		return claimRequest{}, CommandPlan{}, nil, invalidPlan()
+	}
 	if plan.OTP != nil {
 		return claimRequest{}, CommandPlan{}, nil, invalidPlan()
 	}

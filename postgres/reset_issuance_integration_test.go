@@ -18,11 +18,12 @@ import (
 // seam, not the production issuer or complete reset/factor/delivery workflow.
 type resetSelectionNative struct {
 	resetIssuancePhase
-	recipient  RecipientRecord
-	credential CredentialAdmission
-	issuer     *issuanceSQLPhase
-	grant      capability.Grant
-	skipFence  bool
+	recipient       RecipientRecord
+	credential      CredentialAdmission
+	issuer          *issuanceSQLPhase
+	grant           capability.Grant
+	skipFence       bool
+	recoverDisabled bool
 }
 
 type resetSelectionAudit struct{ recoveryAuditPhase }
@@ -57,7 +58,19 @@ func (p *resetSelectionNative) ApplyFeature(ctx context.Context, w Work, c ident
 		return identity.FeatureReceipt{}, err
 	}
 	if !p.skipFence {
-		if _, err := w.RequireRecipientCredential(ctx, p, p.recipient, p.credential); err != nil {
+		var err error
+		if p.recoverDisabled {
+			if reader, ok := any(w).(interface {
+				RequireResetRecipientCredential(context.Context, FeatureExecutionContributor, RecipientRecord, CredentialAdmission, bool) (time.Time, error)
+			}); ok {
+				_, err = reader.RequireResetRecipientCredential(ctx, p, p.recipient, p.credential, false)
+			} else {
+				_, err = w.RequireRecipientCredential(ctx, p, p.recipient, p.credential)
+			}
+		} else {
+			_, err = w.RequireRecipientCredential(ctx, p, p.recipient, p.credential)
+		}
+		if err != nil {
 			return identity.FeatureReceipt{}, err
 		}
 	}
@@ -94,9 +107,9 @@ INSERT INTO identity.identifiers(tenant_id,user_id,identifier_id,kind,canonical_
 INSERT INTO identity.credential_references(tenant_id,user_id,credential_id,kind,owner,version,enabled) VALUES('reset-selection','existing-user','password',1,'identity/password',5,true)`); err != nil {
 		t.Fatal(err)
 	}
-	for _, mode := range []string{"commit", "missing-fence", "stale-credential", "stale-identifier", "blocked-user", "wrong-subject", "wrong-origin", "wrong-identifier", "issuer-failure", "lifecycle-failure"} {
+	for _, mode := range []string{"commit", "disabled-recovery", "missing-fence", "stale-credential", "stale-identifier", "blocked-user", "wrong-subject", "wrong-origin", "wrong-identifier", "issuer-failure", "lifecycle-failure"} {
 		t.Run(mode, func(t *testing.T) {
-			if _, err := pool.Raw().Exec(ctx, `UPDATE identity.users SET status='active' WHERE tenant_id='reset-selection'; UPDATE identity.credential_references SET version=5 WHERE tenant_id='reset-selection'; UPDATE identity.identifiers SET version=7 WHERE tenant_id='reset-selection'`); err != nil {
+			if _, err := pool.Raw().Exec(ctx, `UPDATE identity.users SET status='active' WHERE tenant_id='reset-selection'; UPDATE identity.credential_references SET version=5,enabled=true WHERE tenant_id='reset-selection'; UPDATE identity.identifiers SET version=7 WHERE tenant_id='reset-selection'`); err != nil {
 				t.Fatal(err)
 			}
 			r, err := repo.ResolveRecipient(ctx, RecipientQuery{TenantID: "reset-selection", Kind: identity.IdentifierEmail, CanonicalValue: "reset-selection@example.test", Eligibility: RecipientVerified})
@@ -115,6 +128,7 @@ INSERT INTO identity.credential_references(tenant_id,user_id,credential_id,kind,
 				issuer.mode = "error"
 			}
 			phase := &resetSelectionNative{resetIssuancePhase: resetIssuancePhase{operation: plan.Feature.Operation}, recipient: r, credential: CredentialAdmission{Credential: identity.CredentialRef{ID: "password", TenantID: b.TenantID, UserID: r.User.ID, Owner: "identity/password", Kind: identity.CredentialPassword, Version: 5}, UserAuthorityVersion: 2, IdentifierAuthorityVersion: 3, CredentialAuthorityVersion: 4}, issuer: issuer, skipFence: mode == "missing-fence"}
+			phase.recoverDisabled = mode == "disabled-recovery"
 			auditing, lifecycle := &resetSelectionAudit{}, &recoveryLifecyclePhase{}
 			lifecycle.fail = mode == "lifecycle-failure"
 			registry, err := NewContributorRegistry([]Contributor{repo, auditing, lifecycle, phase, issuer})
@@ -128,6 +142,8 @@ INSERT INTO identity.credential_references(tenant_id,user_id,credential_id,kind,
 			now := time.Now().UTC().Truncate(time.Second)
 			payload := capability.Payload{Version: 1, ID: string(b.CommandID), Issuer: "https://reset.test", Audiences: []string{"identity"}, Subject: string(r.User.ID), Tenant: string(b.TenantID), Resource: "identity.password/password", Operation: "identity.password.reset-complete", CorrelationID: string(b.CommandID), IssuedAt: now, NotBefore: now, ExpiresAt: now.Add(time.Minute), MaxUses: 1, Caveats: map[string]string{"password.identifier": "email", "password.identifier-version": "7", "password.credential-version": "5", "password.credential-authority-version": "4", "password.user-authority-version": "2"}}
 			switch mode {
+			case "disabled-recovery":
+				_, err = pool.Raw().Exec(ctx, `UPDATE identity.credential_references SET enabled=false WHERE tenant_id='reset-selection'`)
 			case "wrong-subject":
 				payload.Subject = "other-user"
 			case "wrong-origin":
@@ -199,7 +215,7 @@ INSERT INTO identity.credential_references(tenant_id,user_id,credential_id,kind,
 				_, _ = coordinator.Abort(work, executionErr)
 			}
 			want := 0
-			if mode == "commit" {
+			if mode == "commit" || mode == "disabled-recovery" {
 				if executionErr != nil || result.Outcome != identity.CommitOutcomeCommitted {
 					t.Fatal("reset selection commit", executionErr)
 				}

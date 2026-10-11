@@ -1,5 +1,19 @@
 # Identity PostgreSQL
 
+Reset completion uses the canonical Authentication risk profile, which counts
+the attempt before credential work. `PrepareFeaturePreparationPlan` accepts its
+original `NewFeaturePasswordResetInputCommand` under the exact native
+`FeatureAdmissionPreparationContributor` and `CredentialResetContributor`.
+`ExecutePreparedFeature` retains the admitted generation in the existing journal;
+its final plan must preserve every original capability field and contributor.
+No delivery, issuance, new counter or renewed proof may appear during generation.
+Ordinary reservation rejects original input, and counter-free reset execution
+requires original admission, ciphertext, generation and generated execution
+custody. The kernel rechecks retained admission before mutation and commit.
+Historical session-counter-bound reset plans retain their original encoding.
+Native admission must still authenticate the original risk/HIBP facts and enforce
+all current recovery fences; public workflow composition remains in development.
+
 Reset command intent binds the exact original opaque proof (including signature)
 and replacement verifier through separate keyed fields, never raw journal values.
 The fingerprint does not verify, transfer, reserve or consume the proof and stays
@@ -440,6 +454,14 @@ all opaque OTP submissions; native counted and consuming phases must own their
 primary checks. No storage or migration change is introduced by this framing.
 
 ## Workflow recipient selection
+
+`Work.RequireResetRecipientCredential` is the reset-only password predecessor
+fence. The native anonymous reset owner supplies original trusted enabled/disabled
+state alongside the recipient and independent credential epochs. It may recover a
+disabled password reference without permitting sign-in; ordinary
+`RequireRecipientCredential` and `RequireActiveCredential` still require enabled
+credentials. Current account status, verified email, expiry and exact versions
+remain required. Factor authority and recovery permission are separate checks.
 
 `Repository.ResolveRecipient` selects an exact owner-canonical email or phone
 identifier within one tenant. It never normalizes addresses. Supply `UserID`
