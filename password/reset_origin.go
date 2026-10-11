@@ -52,6 +52,13 @@ func (p ResetProfile) ResolveOriginal(g capability.Grant, now time.Time) (ResetG
 		}
 		*field.target = value
 	}
+	if raw, present := w.Caveats["password.factor-version"]; present {
+		value, err := strconv.ParseUint(raw, 10, 64)
+		if err != nil || value == 0 || strconv.FormatUint(value, 10) != raw {
+			return ResetGrantSpec{}, ErrInvalidReset
+		}
+		s.FactorVersion = value
+	}
 	var resolved ResetGrantSpec
 	matches := 0
 	for callback := range p.state.callbacks {

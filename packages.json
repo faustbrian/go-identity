@@ -2,6 +2,8 @@
   "schema_version": 1,
   "repository": "github.com/faustbrian/go-identity",
   "packages": [
+    {"module_directory":"mfa","directory":".","name":"mfa","import_path":"github.com/faustbrian/go-identity/mfa","kind":"public","production":true,"executable":true,"coverage_required":true,"build_required":true,"build_tags":[]},
+    {"module_directory":"mfa/postgres","directory":".","name":"mfapostgres","import_path":"github.com/faustbrian/go-identity/mfa/postgres","kind":"public","production":true,"executable":true,"coverage_required":true,"build_required":true,"build_tags":[]},
     {"module_directory":"http/email","directory":".","name":"emailhttp","import_path":"github.com/faustbrian/go-identity/http/email","kind":"public","production":true,"executable":true,"coverage_required":true,"build_required":true,"build_tags":[]},
     {"module_directory":"http/password","directory":".","name":"passwordhttp","import_path":"github.com/faustbrian/go-identity/http/password","kind":"public","production":true,"executable":true,"coverage_required":true,"build_required":true,"build_tags":[]},
     {"module_directory":"password/postgres","directory":".","name":"passwordpostgres","import_path":"github.com/faustbrian/go-identity/password/postgres","kind":"public","production":true,"executable":true,"coverage_required":true,"build_required":true,"build_tags":[]},

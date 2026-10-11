@@ -44,6 +44,9 @@ type ResetProfileConfig struct {
 // positive UTC whole seconds; expiry must fit the explicit profile lifetime.
 // Only RecoveryPathEmail is supported by this emailed-reset profile. Current
 // account/factor/risk eligibility must be checked independently by the workflow.
+// FactorVersion is the independent MFA generation authenticated at issuance.
+// Zero preserves historical unbound payload bytes, not proof of no factors;
+// native factor-fenced completion must reject such historical grants.
 type ResetGrantSpec struct {
 	TenantID                                                            identity.TenantID
 	UserID                                                              identity.UserID
@@ -51,6 +54,7 @@ type ResetGrantSpec struct {
 	CredentialVersion, CredentialAuthorityVersion, UserAuthorityVersion uint64
 	IdentifierID                                                        identity.IdentifierID
 	IdentifierVersion                                                   uint64
+	FactorVersion                                                       uint64
 	OriginCommandID                                                     identity.CommandID
 	RecoveryPath                                                        auth.RecoveryPath
 	CallbackURL                                                         string
@@ -132,7 +136,7 @@ func (p ResetProfile) payload(s ResetGrantSpec, version uint32) (capability.Payl
 	h := hmac.New(sha256.New, key[:])
 	_, _ = io.WriteString(h, "golib.identity.password.reset.callback.v1\x00")
 	_, _ = io.WriteString(h, s.CallbackURL)
-	return capability.Payload{Version: 1, Issuer: p.state.issuer, Audiences: []string{p.state.audience}, Subject: string(s.UserID), Resource: "identity.password/" + string(s.CredentialID), Operation: "identity.password.reset-complete", IssuedAt: s.IssuedAt, NotBefore: s.IssuedAt, ExpiresAt: s.ExpiresAt, Tenant: string(s.TenantID), CorrelationID: string(s.OriginCommandID), MaxUses: 1, Caveats: map[string]string{
+	payload := capability.Payload{Version: 1, Issuer: p.state.issuer, Audiences: []string{p.state.audience}, Subject: string(s.UserID), Resource: "identity.password/" + string(s.CredentialID), Operation: "identity.password.reset-complete", IssuedAt: s.IssuedAt, NotBefore: s.IssuedAt, ExpiresAt: s.ExpiresAt, Tenant: string(s.TenantID), CorrelationID: string(s.OriginCommandID), MaxUses: 1, Caveats: map[string]string{
 		"password.recovery-path":                "emailed_password_reset",
 		"password.credential-version":           strconv.FormatUint(s.CredentialVersion, 10),
 		"password.credential-authority-version": strconv.FormatUint(s.CredentialAuthorityVersion, 10),
@@ -141,7 +145,11 @@ func (p ResetProfile) payload(s ResetGrantSpec, version uint32) (capability.Payl
 		"password.identifier-version":           strconv.FormatUint(s.IdentifierVersion, 10),
 		"password.binding-key-version":          strconv.FormatUint(uint64(version), 10),
 		"password.callback":                     hex.EncodeToString(h.Sum(nil)),
-	}}, nil
+	}}
+	if s.FactorVersion != 0 {
+		payload.Caveats["password.factor-version"] = strconv.FormatUint(s.FactorVersion, 10)
+	}
+	return payload, nil
 }
 
 // Authorize checks a genuinely verified grant against exact original intent

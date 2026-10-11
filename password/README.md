@@ -273,6 +273,23 @@ clean-consumer and release qualification remain pending.
 
 ### Emailed password-reset capability policy
 
+`ResetService` defines the public request, explicit completion and proof-free
+original-command recovery port. `ResetRequestRequest` preserves the raw
+identifier and exact HTTPS callback; `ResetCompleteRequest` borrows the upstream
+opaque proof and unmodified replacement secret. Their validation is structural,
+not reset permission. Accepted request receipts do not disclose eligibility or
+actual delivery. Committed completion receipts require atomic session revocation
+and do not imply a new login. The complete native implementation and selected
+HTTP composition are still in development; consumers must not implement missing
+security orchestration through callbacks.
+
+Set `ResetGrantSpec.FactorVersion` from the transaction-locked MFA owner when
+issuing a reset. Its positive generation is signed as `password.factor-version`
+and reconstructed unchanged by `ResolveOriginal`. Completion must fence that
+exact current generation through the MFA adapter. Zero preserves historical
+unbound scope bytes, not evidence that an account has no factors; native
+factor-fenced completion rejects zero. No factor change may renew an old grant.
+
 `NewResetProfile` freezes explicit issuer, audience, whole-second maximum
 lifetime, exact HTTPS callback allowlist and retained private callback-binding
 keys. There is no implicit lifetime or fallback recovery method. Supply the

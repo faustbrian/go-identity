@@ -4,6 +4,34 @@
   "go_version": "1.27.0",
   "modules": [
     {
+      "directory": "mfa",
+      "module_path": "github.com/faustbrian/go-identity/mfa",
+      "go_version": "1.27.0",
+      "packages": [{"module_directory":"mfa","directory":".","name":"mfa","import_path":"github.com/faustbrian/go-identity/mfa","kind":"public","production":true,"executable":true,"coverage_required":true,"build_required":true,"build_tags":[]}],
+      "purpose": "Authoritative second-factor state and recovery admission; complete MFA workflows in development.",
+      "lifecycle": "experimental", "kind": "public library", "releasable": true,
+      "family": "service-edge", "version": "0.0.0", "tag_prefix": "mfa/v",
+      "owned_dependencies": ["github.com/faustbrian/go-identity"],
+      "reverse_owned_dependencies": ["github.com/faustbrian/go-identity/mfa/postgres"],
+      "external_runtime_dependencies": [], "required_services": [],
+      "build_tags": [], "test_tags": [], "interoperability_tools": [],
+      "specifications": [], "conformance_corpora": []
+    },
+    {
+      "directory": "mfa/postgres",
+      "module_path": "github.com/faustbrian/go-identity/mfa/postgres",
+      "go_version": "1.27.0",
+      "packages": [{"module_directory":"mfa/postgres","directory":".","name":"mfapostgres","import_path":"github.com/faustbrian/go-identity/mfa/postgres","kind":"public","production":true,"executable":true,"coverage_required":true,"build_required":true,"build_tags":[]}],
+      "purpose": "Transactional second-factor generations and genuine signup initialization; factor lifecycle storage in development.",
+      "lifecycle": "experimental", "kind": "public library", "releasable": true,
+      "family": "service-edge", "version": "0.0.0", "tag_prefix": "mfa/postgres/v",
+      "owned_dependencies": ["github.com/faustbrian/go-identity", "github.com/faustbrian/go-identity/mfa", "github.com/faustbrian/go-identity/postgres", "github.com/faustbrian/go-migrations/v3"],
+      "reverse_owned_dependencies": ["github.com/faustbrian/go-identity/password/postgres"],
+      "external_runtime_dependencies": ["postgresql"], "required_services": ["postgresql"],
+      "build_tags": [], "test_tags": ["integration"], "interoperability_tools": [],
+      "specifications": [], "conformance_corpora": []
+    },
+    {
       "directory": "http/email",
       "module_path": "github.com/faustbrian/go-identity/http/email",
       "go_version": "1.27.0",
@@ -59,7 +87,7 @@
       "family": "service-edge",
       "version": "0.0.0",
       "tag_prefix": "password/postgres/v",
-      "owned_dependencies": ["github.com/faustbrian/go-identity", "github.com/faustbrian/go-identity/http/email", "github.com/faustbrian/go-identity/password", "github.com/faustbrian/go-identity/postgres", "github.com/faustbrian/go-migrations/v3", "github.com/faustbrian/go-password", "github.com/faustbrian/go-postgres"],
+      "owned_dependencies": ["github.com/faustbrian/go-identity", "github.com/faustbrian/go-identity/http/email", "github.com/faustbrian/go-identity/mfa/postgres", "github.com/faustbrian/go-identity/password", "github.com/faustbrian/go-identity/postgres", "github.com/faustbrian/go-migrations/v3", "github.com/faustbrian/go-password", "github.com/faustbrian/go-postgres"],
       "reverse_owned_dependencies": [],
       "external_runtime_dependencies": ["postgresql"],
       "required_services": ["postgresql"],

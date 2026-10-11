@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- Add borrowed-secret, original-proof reset request/completion contracts and
+  scoped proof-free recovery ports. Structural validation performs no IO or
+  authority checks; request acceptance reveals no account/delivery state, and
+  completion reports successors only with committed session revocation.
+  The native public reset workflow remains in development.
+
+- Bind original MFA generations in emailed-reset capabilities and reconstruct
+  them unchanged. Historical unbound payloads retain their original bytes and
+  do not fabricate factor authority; factor-fenced native completion denies them.
+
 - Recover original emailed-reset scope from genuinely verified grants and the
   trusted callback allowlist without renewing versions or timestamps. Retained
   keys support unchanged original intent; retired keys/callbacks and malformed
