@@ -15,8 +15,11 @@ import (
 var ErrAuditUnavailable = errors.New("hibp: security audit unavailable")
 
 // SecurityAttribution is trusted workflow context, not transport input. The
-// attempt must be an actual pre-authentication transaction, not SubjectScope,
-// a user identifier or its digest. PolicyVersion is the numeric audit-policy
+// attempt must be an actual pre-authentication transaction or authenticated
+// issuer challenge in that canonical ID profile, never a newly invented attempt,
+// SubjectScope, user identifier or digest. AttemptID is the shared representation;
+// it does not assert that an issuer challenge has a pre-authentication row.
+// PolicyVersion is the numeric audit-policy
 // version, distinct from the checker's provider configuration version string.
 // Caller owns the actor/delegation input and must not mutate it during Check.
 type SecurityAttribution struct {

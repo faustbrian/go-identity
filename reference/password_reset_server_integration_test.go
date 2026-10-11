@@ -15,6 +15,7 @@ import (
 	"testing"
 	"time"
 
+	audit "github.com/faustbrian/go-audit"
 	"github.com/faustbrian/go-authorization"
 	"github.com/faustbrian/go-capability"
 	issuerpg "github.com/faustbrian/go-capability/postgres/identity"
@@ -32,6 +33,7 @@ import (
 	"github.com/faustbrian/go-identity/session"
 	sessionpg "github.com/faustbrian/go-identity/session/postgres"
 	primitive "github.com/faustbrian/go-password"
+	database "github.com/faustbrian/go-postgres"
 )
 
 type referenceResetPolicy struct{}
@@ -46,7 +48,7 @@ func (referenceResetPolicy) Decide(ctx context.Context, c authorization.Decision
 	return (otpReferenceSigninPolicy{}).Decide(ctx, c)
 }
 
-func configureReferencePasswordReset(t *testing.T, c *reference.StoreConfiguration, origin string) {
+func configureReferencePasswordReset(t *testing.T, c *reference.StoreConfiguration, origin string, pool *database.Pool) {
 	t.Helper()
 	query := kernel.CommandQueryPolicy{Authorization: referenceResetPolicy{}, Clock: clock.System{}, PolicyVersion: 9}
 	c.OTP.RequestKeys.Policy = query
@@ -109,12 +111,13 @@ func configureReferencePasswordReset(t *testing.T, c *reference.StoreConfigurati
 	callback := origin + "/reset"
 	c.Delivery.Templates = append(c.Delivery.Templates, delivery.Template{ID: "password-reset", Version: 1, Channel: delivery.ChannelEmail, Locale: "en", Body: "{{.link}}", ContentType: "text/plain", RequiredVariables: []string{"link"}, VariableSchema: []delivery.VariableSchema{{Name: "link", Kind: "url", Sensitive: true}}, AllowedOrigins: []string{origin}, MaxRenderedBytes: 4096})
 	c.PasswordReset = &reference.PasswordResetConfiguration{Native: passwordpg.ResetConfig{
-		Repository: passwordpg.Config{MaximumDuration: 3 * time.Second, HashPolicy: policy}, ConfigurationID: "reference-reset-v1", PolicyID: "reset", GlobalAuthorityID: "deployment", AuthorizationNamespace: "users", Origins: []string{origin}, ActiveEnvelopeKeyID: "issue-envelope", IdentifierKey: [32]byte{97}, Session: c.OTP.Signin.Session, Coordinator: coordinator,
-		Profile:   password.ResetProfileConfig{Issuer: origin, Audience: "reset", MaximumLifetime: 2 * time.Minute, Callbacks: []string{callback}, CurrentBindingKeyVersion: 1, RetainedBindingKeys: map[uint32][32]byte{1: {95}}},
-		Issuer:    issuerpg.IssuerConfig{Crypto: capability.ServiceConfig{Signer: signer, Resolver: resolver, Clock: time.Now, Limits: capability.DefaultLimits()}, Audience: "reset", CurrentReplayKeyVersion: 1, RetainedReplayKeys: map[uint32][32]byte{1: {94}}, PreparationTimeout: time.Second},
-		Screening: password.HashPreparationConfig{Primitive: crypto, MinimumBytes: 8, MaximumBytes: 128, Timeout: time.Second, DummyHash: dummy, Policy: screeningPolicy, Now: time.Now, Collect: referenceHIBPScreening(t, screeningPolicy)},
-		Risk:      risk.AuthenticationAdmissionCustodyConfig{ConfigurationID: "reference-reset-v1", Keys: c.OTP.RiskKeys},
-		Request:   &passwordpg.ResetRequestConfig{Address: address, RequestKeys: requestKeys, Lifetime: time.Minute, IssuanceCustody: issuerpg.IssuancePreparationConfig{Deployment: "deployment", ActiveEnvelopeKey: "reset-issuer", EnvelopeKeys: map[string][]byte{"reset-issuer": bytes.Repeat([]byte{104}, 32)}, VerificationKeys: []issuerpg.PreparationVerificationKey{{ID: "reference-reset", HMAC: bytes.Repeat([]byte{93}, 32)}}, Clock: time.Now}, Delivery: passwordpg.SignupDeliveryConfig{Resolver: resolver, Endpoint: origin + "/password/reset", TemplateID: "password-reset", TemplateVersion: 1, ProviderVersion: 1, Locales: []string{"en"}, ScopeKey: [32]byte{105}, Timeout: time.Second}},
+		Repository: passwordpg.Config{MaximumDuration: 3 * time.Second, HashPolicy: policy}, ConfigurationID: "reference-reset-observed-v1", PolicyID: "AAAAAAAAAAAAAAAAAAAACQ", GlobalAuthorityID: "deployment", AuthorizationNamespace: "users", Origins: []string{origin}, ActiveEnvelopeKeyID: "issue-envelope", IdentifierKey: [32]byte{97}, Session: c.OTP.Signin.Session, Coordinator: coordinator,
+		Profile:      password.ResetProfileConfig{Issuer: origin, Audience: "reset", MaximumLifetime: 2 * time.Minute, Callbacks: []string{callback}, CurrentBindingKeyVersion: 1, RetainedBindingKeys: map[uint32][32]byte{1: {95}}},
+		Issuer:       issuerpg.IssuerConfig{Crypto: capability.ServiceConfig{Signer: signer, Resolver: resolver, Clock: time.Now, Limits: capability.DefaultLimits()}, Audience: "reset", CurrentReplayKeyVersion: 1, RetainedReplayKeys: map[uint32][32]byte{1: {94}}, PreparationTimeout: time.Second},
+		Screening:    password.HashPreparationConfig{Primitive: crypto, MinimumBytes: 8, MaximumBytes: 128, Timeout: time.Second, DummyHash: dummy, Policy: screeningPolicy, Now: time.Now},
+		CollectReset: referenceHIBPScreening(t, screeningPolicy, pool),
+		Risk:         risk.AuthenticationAdmissionCustodyConfig{ConfigurationID: "reference-reset-v1", Keys: c.OTP.RiskKeys},
+		Request:      &passwordpg.ResetRequestConfig{Address: address, RequestKeys: requestKeys, Lifetime: time.Minute, IssuanceCustody: issuerpg.IssuancePreparationConfig{Deployment: "deployment", ActiveEnvelopeKey: "reset-issuer", EnvelopeKeys: map[string][]byte{"reset-issuer": bytes.Repeat([]byte{104}, 32)}, VerificationKeys: []issuerpg.PreparationVerificationKey{{ID: "reference-reset", HMAC: bytes.Repeat([]byte{93}, 32)}}, Clock: time.Now}, Delivery: passwordpg.SignupDeliveryConfig{Resolver: resolver, Endpoint: origin + "/password/reset", TemplateID: "password-reset", TemplateVersion: 1, ProviderVersion: 1, Locales: []string{"en"}, ScopeKey: [32]byte{105}, Timeout: time.Second}},
 	}}
 	c.HTTPPasswordReset = &reference.HTTPPasswordResetConfiguration{ActorID: "AAAAAAAAAAAAAAAAAAAAAw", PolicyRevision: 9, CallbackURL: callback, VerificationNamespace: "reference-reset", VerificationKey: [32]byte{112}}
 	private := ed25519.NewKeyFromSeed(bytes.Repeat([]byte{113}, 32))
@@ -289,7 +292,7 @@ func proveNativeServerPasswordReset(t *testing.T, ctx context.Context, f liveSto
 	}
 	// The original grant must survive provider denial, and neither credential
 	// replacement nor predecessor-session revocation may precede screening.
-	for _, candidate := range []string{"synthetic-reference-breached-password", "synthetic-reference-malformed-password", "synthetic-reference-outage-password", "synthetic-reference-redirect-password"} {
+	for _, candidate := range []string{"synthetic-reference-breached-password", "synthetic-reference-malformed-password", "synthetic-reference-outage-password", "synthetic-reference-redirect-password", "synthetic-reference-audit-unknown-password"} {
 		denied, err := identity.NewCommandID()
 		if err != nil {
 			t.Fatal(err)
@@ -311,6 +314,7 @@ func proveNativeServerPasswordReset(t *testing.T, ctx context.Context, f liveSto
 		if current, err := validation.Get(ctx, get); err != nil || !current.Authenticated {
 			t.Fatal("provider denial revoked predecessor session", err)
 		}
+		proveResetHIBPEvents(t, ctx, f, denied, native.PolicyID, candidate)
 	}
 	body, err = json.Marshal(map[string]string{"commandID": string(completion), "token": parsed.Query().Get("token"), "newPassword": "synthetic-reference-new-password"})
 	if err != nil {
@@ -326,6 +330,7 @@ func proveNativeServerPasswordReset(t *testing.T, ctx context.Context, f liveSto
 	if status != http.StatusOK || !bytes.Equal(first, repeated) {
 		t.Fatal("reference reset completion replay changed original result")
 	}
+	proveResetHIBPEvents(t, ctx, f, completion, native.PolicyID, "synthetic-reference-new-password")
 	var effects int
 	if err := f.pool.Raw().QueryRow(ctx, `SELECT (SELECT count(*) FROM capability_identity_one_use),(SELECT count(*) FROM identity.delivery_intents),(SELECT count(*) FROM session_store.password_resets)`).Scan(&grants, &intents, &effects); err != nil || grants != 1 || intents != 1 || effects != 1 {
 		t.Fatal("reference reset retry duplicated issuance, delivery or effects", err)
@@ -375,6 +380,63 @@ func proveNativeServerPasswordReset(t *testing.T, ctx context.Context, f liveSto
 	}
 	if current, err := validation.Get(ctx, session.GetRequest{TenantID: otpTenant, Credential: newCredential}); err != nil || !current.Authenticated {
 		t.Fatal("replacement-password session not usable", err)
+	}
+}
+
+func proveResetHIBPEvents(t *testing.T, ctx context.Context, f liveStores, command identity.CommandID, policy, candidate string) {
+	t.Helper()
+	rows, err := f.pool.Raw().Query(ctx, `SELECT canonical_record FROM audit.records WHERE action LIKE 'identity.hibp.%' AND correlation_id=$1 ORDER BY recorded_at,record_id`, string(command))
+	if err != nil {
+		t.Fatal("native HIBP audit query failed", err)
+	}
+	defer rows.Close()
+	var records []audit.Record
+	for rows.Next() {
+		var wire []byte
+		if err := rows.Scan(&wire); err != nil {
+			t.Fatal(err)
+		}
+		record, err := audit.ParseCanonicalJSON(wire, audit.DefaultLimits())
+		if err != nil || bytes.Contains(wire, []byte(candidate)) || bytes.Contains(wire, []byte("recipient@example.invalid")) {
+			t.Fatal("native HIBP audit disclosed secret or invalid canonical bytes")
+		}
+		if record.Context().TenantID() != otpTenant || record.Attributes()["command.id"] != string(command) || record.Policy().PolicyID != policy || record.Policy().Version != "9" || record.Subject().Type() != "authentication_attempt" || record.Actor().ID() != "AAAAAAAAAAAAAAAAAAAAAw" || record.Actor().Kind() != audit.ActorSystem || record.Attributes()["provider.profile"] != "hibp.range.padded.v1" {
+			t.Fatal("native HIBP audit lost original workflow attribution")
+		}
+		var challenge bool
+		if err := f.pool.Raw().QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM capability_identity_one_use WHERE capability_id=$1 AND tenant_id=$2 AND origin_command_id IS NOT NULL)`, record.Subject().ID(), otpTenant).Scan(&challenge); err != nil || !challenge {
+			t.Fatal("native HIBP audit invented its challenge subject", err)
+		}
+		records = append(records, record)
+	}
+	if rows.Err() != nil {
+		t.Fatal(rows.Err())
+	}
+	want := 2
+	if candidate == "synthetic-reference-new-password" || candidate == "synthetic-reference-audit-unknown-password" {
+		want = 1
+	}
+	if len(records) != want || records[0].Action() != "identity.hibp.query_range" {
+		t.Fatal("native reset did not persist exactly its required HIBP records", len(records))
+	}
+	queryOutcome, queryReason, providerResult := audit.OutcomeSucceeded, "completed", "accepted"
+	switch candidate {
+	case "synthetic-reference-malformed-password":
+		queryOutcome, queryReason, providerResult = audit.OutcomeFailed, "provider_unavailable", "malformed"
+	case "synthetic-reference-outage-password", "synthetic-reference-redirect-password":
+		queryOutcome, queryReason, providerResult = audit.OutcomeFailed, "provider_unavailable", "unavailable"
+	}
+	if records[0].Outcome() != queryOutcome || records[0].ReasonCode() != queryReason || records[0].Attributes()["provider.result"] != providerResult {
+		t.Fatal("native HIBP query rewrote provider outcome or failure classification")
+	}
+	if want == 2 {
+		action := "identity.hibp.reject_range"
+		if candidate == "synthetic-reference-breached-password" {
+			action = "identity.hibp.detect_match"
+		}
+		if records[1].Action() != action || records[1].Context().CausationID() != records[0].ID() || records[1].Outcome() != audit.OutcomeSucceeded {
+			t.Fatal("native HIBP secondary event lost query causation or detection semantics")
+		}
 	}
 }
 

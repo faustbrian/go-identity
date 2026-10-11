@@ -33,9 +33,14 @@ Use the same retained records, not a repeated check, for audit reconciliation.
 `NewObservedChecker(*Client, ObservationConfig)` selects security emission.
 The original `Client` stays provider-only; the reference composition must select
 the observed checker. Each request supplies `SecurityAttribution` from trusted
-workflow state: real pre-authentication attempt, command/correlation, actor and
+workflow state: real pre-authentication transaction or authenticated issuer
+challenge, original command/correlation, actor and
 numeric audit-policy version. Free-form `SubjectScope` and provider configuration
 versions are not audit identity. Inputs must not mutate during `Check`.
+For native reset, select `password/postgres.ResetConfig.CollectReset` and use
+its immutable binding and authenticated challenge unchanged. `AttemptID` is the
+shared canonical ID representation, not a claim that the challenge belongs to
+the pre-authentication table. Never manufacture an attempt to fit this field.
 
 One logical call emits `identity.hibp.query_range`, plus `detect_match` when a
 positive fact exists or `reject_range` when unusable evidence is discarded.

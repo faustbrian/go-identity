@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Compose observed HIBP screening from native reset's original command and
+  authenticated issuer challenge with the durable PostgreSQL audit adapter.
+  Native consumer integration checks required query/match/rejection records,
+  protected attribution and unchanged-id reconciliation after a synthetic lost
+  acknowledgement. Failed audit acknowledgement denies password mutation even
+  when reconciliation confirms delivery. This does not qualify live provider
+  interoperability or a durable audit-outage backlog.
+
 - Exercise native reset password screening through the owned padded HIBP range
   client. Breached candidates, malformed responses, provider outages and
   redirects deny before password replacement, proof consumption or session

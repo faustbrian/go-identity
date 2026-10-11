@@ -49,7 +49,8 @@ const (
 )
 
 // SecuritySubject is a closed safe resource classification. Initial HIBP
-// construction uses the real pre-auth attempt, never an identifier or digest.
+// construction uses a real pre-auth transaction or authenticated issuer
+// challenge, never an identifier, digest or fabricated attempt.
 type SecuritySubject string
 
 const SecurityAuthenticationAttempt SecuritySubject = "authentication_attempt"
@@ -179,8 +180,9 @@ func validSecurityInput(i SecurityEventInput) bool {
 	if i.Action != SecurityHIBPQueryRange && i.Action != SecurityHIBPDetectMatch && i.Action != SecurityHIBPRejectRange {
 		return false
 	}
-	// Unknown-identity subjects are actual pre-auth transactions, not a general
-	// opaque-ID slot into which an identifier digest could be substituted.
+	// Authentication-attempt subjects are actual pre-auth transactions or issuer
+	// challenges in this canonical ID profile, never a general opaque-ID slot
+	// into which an identifier digest or manufactured attempt may be substituted.
 	if _, e := ParsePreAuthTransactionID(i.SubjectID); e != nil {
 		return false
 	}

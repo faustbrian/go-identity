@@ -87,7 +87,7 @@ func testNativeServerOriginalFlow(t *testing.T, consuming, reset bool) {
 		deps.DeliverySender = nativeBrowserCodeSender{codes: codes}
 	}
 	if reset {
-		configureReferencePasswordReset(t, &c, origin)
+		configureReferencePasswordReset(t, &c, origin, f.pool)
 		c.HTTPEmailSignin = nil
 	}
 	stores, err := reference.ComposeStores(c, deps)

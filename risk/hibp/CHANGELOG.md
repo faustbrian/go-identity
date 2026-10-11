@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Clarify observed attribution for authenticated issuer challenges as well as
+  real pre-authentication transactions, using their unchanged canonical identity.
+  Native reset can supply original binding/challenge through its attributed
+  screening callback; no fabricated attempt or identifier digest is acceptable.
+
 - Provide an executable public observed-screening example and adoption guidance
   for borrowed password custody, bounded audit delivery and explicit shutdown.
 

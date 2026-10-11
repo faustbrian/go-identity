@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Clarify that the existing authentication-attempt security subject may carry
+  a genuine issuer challenge in the shared canonical ID profile, not only a
+  pre-authentication transaction. Provenance remains the workflow owner's duty;
+  identifier digests and manufactured attempts remain forbidden.
+
 - Bind original password-reset Secret and proof before verifier generation,
   using disjoint preparation-only custody. Preserve shared terminal lifetimes
   and exact raw password bytes; generated execution remains separately selected.

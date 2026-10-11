@@ -28,14 +28,22 @@ configured tenants deny. HTTP remains independently opt-in and requires the
 existing `HTTPPreAuth.Device` and `HTTPRate` selections. Disabled reset HTTP
 exports neither routes nor operation metadata.
 
-The native reset integration uses the owned HIBP client and signal provider,
+The native reset integration uses the owned observed HIBP checker and signal
+provider with the native PostgreSQL audit adapter,
 with only fixed-endpoint HTTPS response IO substituted by synthetic fixtures.
 It proves prefix-only padded requests and denial before protected effects for
 breaches, malformed responses, outages and redirects; a zero-count padding row
 permits the clean replacement. Replay performs no additional provider request.
-This is consumer integration evidence, not live provider interoperability or
-complete observed audit delivery. The latter still requires trusted original
-workflow attribution and the existing audit reconciliation owner.
+Select `Native.CollectReset` with `Native.Screening.Collect` nil for attributed
+screening. Its original binding and authenticated issuer challenge supply audit
+identity without transport reconstruction or a fabricated attempt. Required
+query/match/rejection records are checked in native storage. Synthetic lost
+acknowledgement denies even a clean candidate; unchanged records reconcile
+idempotently without screening again. This is consumer integration evidence,
+not live provider interoperability, real audit transport-disconnect qualification
+or a durable audit-outage backlog. A host selecting a different failure policy
+must retain original records through the existing audit protocol, not invent a
+second identity journal or silently accept undelivered required events.
 
 `PasswordSignin` independently selects the native password login/recovery port,
 available as `features.PasswordSignin()`. Supply `PasswordSigninConfiguration.Native`

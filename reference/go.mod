@@ -22,7 +22,7 @@ require (
 	github.com/faustbrian/go-identity/otp/postgres v0.0.0-20261009093814-b6a42a3e9ed6
 	github.com/faustbrian/go-identity/mfa/postgres v0.0.0-20261011053034-730501d98965
 	github.com/faustbrian/go-identity/password v0.0.0-20261011053034-730501d98965
-	github.com/faustbrian/go-identity/password/postgres v0.0.0-20261011053626-9d095e8ca17c
+	github.com/faustbrian/go-identity/password/postgres v0.0.0-20261011060157-d577e43377d3
 	github.com/faustbrian/go-identity/postgres v0.0.0-20261011052832-0417c168e3e7
 	github.com/faustbrian/go-identity/risk v0.0.0-20261008072308-b2d88e4d68db
 	github.com/faustbrian/go-identity/risk/hibp v0.0.0-20261003233054-4e97f4723689
