@@ -28,6 +28,15 @@ configured tenants deny. HTTP remains independently opt-in and requires the
 existing `HTTPPreAuth.Device` and `HTTPRate` selections. Disabled reset HTTP
 exports neither routes nor operation metadata.
 
+The native reset integration uses the owned HIBP client and signal provider,
+with only fixed-endpoint HTTPS response IO substituted by synthetic fixtures.
+It proves prefix-only padded requests and denial before protected effects for
+breaches, malformed responses, outages and redirects; a zero-count padding row
+permits the clean replacement. Replay performs no additional provider request.
+This is consumer integration evidence, not live provider interoperability or
+complete observed audit delivery. The latter still requires trusted original
+workflow attribution and the existing audit reconciliation owner.
+
 `PasswordSignin` independently selects the native password login/recovery port,
 available as `features.PasswordSignin()`. Supply `PasswordSigninConfiguration.Native`
 with the native verifier, signing/flow/session keys and exact password original-

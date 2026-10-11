@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Exercise native reset password screening through the owned padded HIBP range
+  client. Breached candidates, malformed responses, provider outages and
+  redirects deny before password replacement, proof consumption or session
+  revocation. Provider network responses remain synthetic test fixtures;
+  observed audit integration and live interoperability remain unqualified.
+
 - Add opt-in native password signin and recovery to the sealed graph with its
   counted risk evaluator, matching authorization and selected session storage.
   Retained handles enforce initialization, tenant isolation and closure without
