@@ -27,6 +27,9 @@ const (
 	// AuthenticationOTP selects explicit historical OTP provenance, never a
 	// fabricated persistent credential or an authority-issued proof.
 	AuthenticationOTP
+	// AuthenticationMagicLink selects original email-grant possession metadata,
+	// never a fabricated persistent credential or opaque authentication proof.
+	AuthenticationMagicLink
 )
 
 // AuthenticationMetadata preserves original authentication and credential
@@ -83,6 +86,7 @@ type sessionState struct {
 	spec         SessionSpec
 	csrf         CSRFState
 	otp          OTPAuthentication
+	magicLink    MagicLinkAuthentication
 	continuation *CredentialContinuationSpec
 }
 
@@ -96,6 +100,10 @@ func NewSession(s SessionSpec) (Session, error) {
 }
 
 func newSession(s SessionSpec, otp OTPAuthentication) (Session, error) {
+	return newSessionWithProvenance(s, otp, MagicLinkAuthentication{})
+}
+
+func newSessionWithProvenance(s SessionSpec, otp OTPAuthentication, magicLink MagicLinkAuthentication) (Session, error) {
 	if !authorityKey(s.SessionID, 128) || !authorityKey(s.FamilyID, 128) || !authorityKey(string(s.TenantID), 128) || !authorityKey(string(s.UserID), 128) || !authorityKey(s.Audience, 256) || s.Version == 0 || s.FamilyVersion == 0 || s.Lookup.KeyVersion == 0 || s.Lookup.Sum == ([32]byte{}) {
 		return Session{}, ErrInvalidSession
 	}
@@ -104,6 +112,9 @@ func newSession(s SessionSpec, otp OTPAuthentication) (Session, error) {
 		return Session{}, ErrInvalidSession
 	}
 	if s.Authentication.Kind != AuthenticationOTP && otp.state != nil {
+		return Session{}, ErrInvalidSession
+	}
+	if s.Authentication.Kind != AuthenticationMagicLink && magicLink.state != nil {
 		return Session{}, ErrInvalidSession
 	}
 	authenticatedAt := s.Authentication.at()
@@ -131,6 +142,12 @@ func newSession(s SessionSpec, otp OTPAuthentication) (Session, error) {
 			return Session{}, ErrInvalidSession
 		}
 		authenticatedAt = otp.state.AuthenticatedAt
+	case AuthenticationMagicLink:
+		if magicLink.state == nil || s.Authentication != (AuthenticationMetadata{Kind: AuthenticationMagicLink}) || a.Organization.Present || a.Factor.Present || a.Passkey.Present ||
+			s.IssuedAt.Before(magicLink.state.AuthenticatedAt) || !s.IssuedAt.Before(magicLink.state.ValidUntil) {
+			return Session{}, ErrInvalidSession
+		}
+		authenticatedAt = magicLink.state.AuthenticatedAt
 	default:
 		return Session{}, ErrInvalidSession
 	}
@@ -142,7 +159,7 @@ func newSession(s SessionSpec, otp OTPAuthentication) (Session, error) {
 	s.TenantID = identity.TenantID(strings.Clone(string(s.TenantID)))
 	s.UserID = identity.UserID(strings.Clone(string(s.UserID)))
 	s.Audience = strings.Clone(s.Audience)
-	return Session{state: &sessionState{spec: s, otp: otp}}, nil
+	return Session{state: &sessionState{spec: s, otp: otp, magicLink: magicLink}}, nil
 }
 
 func (m AuthenticationMetadata) at() time.Time {

@@ -79,7 +79,7 @@ func (s *SessionService) GetCached(ctx context.Context, request GetRequest, cach
 		}
 		if p != nil && p.owner == s && p.transport == request.Credential.kind && entry.ValidateAt(now) == nil {
 			spec, e := entry.Session.Bindings()
-			if e == nil && spec.TenantID == request.TenantID && spec.Audience == s.config.Audience {
+			if e == nil && spec.TenantID == request.TenantID && spec.Audience == s.config.Audience && (s.method == 0 || spec.Authentication.Kind == s.method) {
 				matched := 0
 				for _, key := range s.config.LookupKeys {
 					if key.state != nil && key.state.version == spec.Lookup.KeyVersion {

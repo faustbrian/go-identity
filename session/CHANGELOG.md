@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- Add closed method and selected-reader-profile cache admission. Native adapters
+  can bind positive encrypted entries to their exact authority configuration;
+  foreign methods/profiles refresh from primary instead of borrowing validity.
+  The generic reader-selected constructor preserves its historical framing.
+
+- Retain distinct historical magic-link grant and verified-address provenance
+  without inventing a persistent credential. Preserve it through session
+  updates, rotation and encrypted-cache restart without renewing validity.
+  Explicit reconstruction does not authorize consumption or issuance; existing
+  proof and OTP profiles remain separate.
+
 - Add distinct prospective signup-session preparation and paired-command
   binding without relabelling registration as signin. Preserve original
   remember, authority and CSRF custody; only exact fresh known commits reveal

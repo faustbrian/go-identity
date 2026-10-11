@@ -58,7 +58,7 @@ func IssueOperation() identity.FeatureOperation {
 // The adapter owns atomic consumption, safe recovery and reveal-once delivery.
 func NewIssueCommand(b identity.CommandBinding, s Session) (SessionCommand, error) {
 	spec, err := s.Bindings()
-	if err != nil || spec.Authentication.Kind == AuthenticationOTP || b.ValidateFor(IssueOperation()) != nil || b.TenantID != spec.TenantID || b.UserID != spec.UserID || b.RecordID != spec.SessionID || spec.Version != 1 {
+	if err != nil || (spec.Authentication.Kind != AuthenticationVerified && spec.Authentication.Kind != AuthenticationAnonymous) || b.ValidateFor(IssueOperation()) != nil || b.TenantID != spec.TenantID || b.UserID != spec.UserID || b.RecordID != spec.SessionID || spec.Version != 1 {
 		return SessionCommand{}, ErrInvalidSessionCommand
 	}
 	c := SessionCommand{issue: &IssueCommandSpec{Binding: b, Session: s}}

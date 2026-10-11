@@ -95,6 +95,11 @@ func (c *EncryptedCacheCodec) Seal(ctx context.Context, result GetResult) (out [
 		record.OTP = &value
 		record.Schema += 2
 	}
+	if metadata := result.Session.MagicLinkAuthentication(); metadata.state != nil {
+		value := *metadata.state
+		record.MagicLink = &value
+		record.Schema += 6
+	}
 	if continuation, ok := result.Session.CredentialContinuation(); ok {
 		record.Continuation = &continuation
 		record.Schema += 4
@@ -207,9 +212,10 @@ type cacheRecord struct {
 	Transport                             CredentialKind
 	NeedsRefresh                          bool
 	Eligible, AcceptedAt, Until, StoredAt time.Time
-	CSRF                                  *CSRFStateSpec              `json:",omitempty"`
-	OTP                                   *OTPAuthenticationSpec      `json:",omitempty"`
-	Continuation                          *CredentialContinuationSpec `json:",omitempty"`
+	CSRF                                  *CSRFStateSpec               `json:",omitempty"`
+	OTP                                   *OTPAuthenticationSpec       `json:",omitempty"`
+	MagicLink                             *MagicLinkAuthenticationSpec `json:",omitempty"`
+	Continuation                          *CredentialContinuationSpec  `json:",omitempty"`
 }
 
 func (c *EncryptedCacheCodec) restore(plaintext []byte, tenant identity.TenantID) CachedAdmission {
@@ -227,13 +233,15 @@ func (c *EncryptedCacheCodec) restore(plaintext []byte, tenant identity.TenantID
 		return CachedAdmission{}
 	}
 	defer clear(canonical)
-	validSchema := (r.Schema == 1 && r.CSRF == nil && r.OTP == nil && r.Continuation == nil && r.Session.Authentication.Kind == AuthenticationVerified) ||
+	validSchema := r.MagicLink == nil && ((r.Schema == 1 && r.CSRF == nil && r.OTP == nil && r.Continuation == nil && r.Session.Authentication.Kind == AuthenticationVerified) ||
 		(r.Schema == 2 && r.CSRF != nil && r.OTP == nil && r.Continuation == nil && r.Session.Authentication.Kind == AuthenticationVerified) ||
 		(r.Schema == 3 && r.CSRF == nil && r.OTP != nil && r.Continuation == nil && r.Session.Authentication.Kind == AuthenticationOTP) ||
 		(r.Schema == 4 && r.CSRF != nil && r.OTP != nil && r.Continuation == nil && r.Session.Authentication.Kind == AuthenticationOTP) ||
 		(r.Schema == 5 && r.CSRF == nil && r.OTP == nil && r.Continuation != nil && r.Session.Authentication.Kind == AuthenticationVerified) ||
-		(r.Schema == 6 && r.CSRF != nil && r.OTP == nil && r.Continuation != nil && r.Session.Authentication.Kind == AuthenticationVerified)
-	if !bytes.Equal(plaintext, canonical) || !validSchema || r.Session.TenantID != tenant || r.Session.Audience != c.service.config.Audience || (r.Transport != CredentialCookie && r.Transport != CredentialBearer) || !validTime(r.AcceptedAt) || !validTime(r.Until) || !validTime(r.StoredAt) || r.StoredAt.Before(r.AcceptedAt) || !r.Until.After(r.StoredAt) || r.Until.After(r.AcceptedAt.Add(20*time.Second)) {
+		(r.Schema == 6 && r.CSRF != nil && r.OTP == nil && r.Continuation != nil && r.Session.Authentication.Kind == AuthenticationVerified)) ||
+		(r.Schema == 7 && r.CSRF == nil && r.OTP == nil && r.Continuation == nil && r.MagicLink != nil && r.Session.Authentication.Kind == AuthenticationMagicLink) ||
+		(r.Schema == 8 && r.CSRF != nil && r.OTP == nil && r.Continuation == nil && r.MagicLink != nil && r.Session.Authentication.Kind == AuthenticationMagicLink)
+	if !bytes.Equal(plaintext, canonical) || !validSchema || (c.service.method != 0 && r.Session.Authentication.Kind != c.service.method) || r.Session.TenantID != tenant || r.Session.Audience != c.service.config.Audience || (r.Transport != CredentialCookie && r.Transport != CredentialBearer) || !validTime(r.AcceptedAt) || !validTime(r.Until) || !validTime(r.StoredAt) || r.StoredAt.Before(r.AcceptedAt) || !r.Until.After(r.StoredAt) || r.Until.After(r.AcceptedAt.Add(20*time.Second)) {
 		return CachedAdmission{}
 	}
 	remember, e := NewRememberPolicy(r.Session.Remember)
@@ -252,7 +260,14 @@ func (c *EncryptedCacheCodec) restore(plaintext []byte, tenant identity.TenantID
 			return CachedAdmission{}
 		}
 	}
-	record, e := newSession(SessionSpec{s.SessionID, s.FamilyID, s.TenantID, s.UserID, s.Audience, s.Version, s.FamilyVersion, remember, authority, s.Lookup, s.Authentication, s.IssuedAt, s.LastActivityAt}, metadata)
+	var magicLink MagicLinkAuthentication
+	if r.MagicLink != nil {
+		magicLink, e = NewMagicLinkAuthentication(*r.MagicLink)
+		if e != nil {
+			return CachedAdmission{}
+		}
+	}
+	record, e := newSessionWithProvenance(SessionSpec{s.SessionID, s.FamilyID, s.TenantID, s.UserID, s.Audience, s.Version, s.FamilyVersion, remember, authority, s.Lookup, s.Authentication, s.IssuedAt, s.LastActivityAt}, metadata, magicLink)
 	if e != nil || !r.Eligible.Equal(s.LastActivityAt.Add(remember.refresh)) {
 		return CachedAdmission{}
 	}
@@ -281,7 +296,18 @@ func (c *EncryptedCacheCodec) restore(plaintext []byte, tenant identity.TenantID
 }
 
 func (c *EncryptedCacheCodec) additionalData(tenant identity.TenantID) (envelope.Context, error) {
-	return envelope.NewContext(map[string]string{"purpose": "golib.session.encrypted-cache.v1", "issuer": c.config.Issuer, "environment": c.config.Environment, "epoch": strconv.FormatUint(c.config.DeploymentEpoch, 10), "audience": c.service.config.Audience, "tenant": string(tenant), "clock-uncertainty": strconv.FormatInt(int64(c.service.config.ClockUncertainty), 10)})
+	fields := map[string]string{"purpose": "golib.session.encrypted-cache.v1", "issuer": c.config.Issuer, "environment": c.config.Environment, "epoch": strconv.FormatUint(c.config.DeploymentEpoch, 10), "audience": c.service.config.Audience, "tenant": string(tenant), "clock-uncertainty": strconv.FormatInt(int64(c.service.config.ClockUncertainty), 10)}
+	// Closed native methods must not share positive authority through a warm
+	// cache, even when wrapping and lookup keys are shared. Legacy generic
+	// reader-selected composition keeps its original framing; a closed reader
+	// cannot restore that unbound framing and must refresh from primary.
+	if c.service.method != 0 {
+		fields["authentication-kind"] = strconv.FormatUint(uint64(c.service.method), 10)
+	}
+	if c.service.cacheProfile != "" {
+		fields["admission-profile"] = c.service.cacheProfile
+	}
+	return envelope.NewContext(fields)
 }
 func cacheCryptoError(ctx context.Context, e error) error {
 	if ctx.Err() != nil {

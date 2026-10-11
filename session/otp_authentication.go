@@ -118,6 +118,9 @@ func otpSpec(s Session) OTPAuthenticationSpec {
 }
 
 func (s Session) authenticatedAt() time.Time {
+	if s.state.magicLink.state != nil {
+		return s.state.magicLink.state.AuthenticatedAt
+	}
 	if s.state.otp.state != nil {
 		return s.state.otp.state.AuthenticatedAt
 	}
@@ -130,7 +133,7 @@ func rebuildSession(spec SessionSpec, source Session, csrf CSRFState) (Session, 
 	if c, ok := source.CredentialContinuation(); ok {
 		return NewContinuedPasswordSession(spec, csrf, c)
 	}
-	s, e := newSession(spec, source.OTPAuthentication())
+	s, e := newSessionWithProvenance(spec, source.OTPAuthentication(), source.MagicLinkAuthentication())
 	if e != nil {
 		return Session{}, e
 	}

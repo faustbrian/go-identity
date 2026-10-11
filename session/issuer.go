@@ -212,7 +212,7 @@ func (s *SessionIssuer) prepareTokenRecord(record Session) (Token, Session, CSRF
 	if e != nil {
 		return fail(e)
 	}
-	record, e = newSession(spec, record.OTPAuthentication())
+	record, e = newSessionWithProvenance(spec, record.OTPAuthentication(), record.MagicLinkAuthentication())
 	if e != nil {
 		return fail(e)
 	}
@@ -446,7 +446,7 @@ func sameIssuedSession(a, b Session) bool {
 	y, e := b.Bindings()
 	ac, ah := a.CredentialContinuation()
 	bc, bh := b.CredentialContinuation()
-	if e != nil || x.Authority.CompareCurrent(y.Authority) != nil || csrfSpec(a) != csrfSpec(b) || otpSpec(a) != otpSpec(b) || ah != bh || ac != bc {
+	if e != nil || x.Authority.CompareCurrent(y.Authority) != nil || csrfSpec(a) != csrfSpec(b) || otpSpec(a) != otpSpec(b) || magicLinkSpec(a) != magicLinkSpec(b) || ah != bh || ac != bc {
 		return false
 	}
 	x.Authority = AuthoritySnapshot{}

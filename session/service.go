@@ -119,8 +119,45 @@ type ServiceConfig struct {
 // goroutines, transactions or authorization engine. Get is authentication only;
 // callers must separately authorize each protected action with current policy.
 type SessionService struct {
-	reader SessionReader
-	config ServiceConfig
+	reader       SessionReader
+	config       ServiceConfig
+	method       AuthenticationKind
+	cacheProfile string
+}
+
+// NewProfileSessionService additionally binds encrypted-cache admission to a
+// stable, trusted reader profile identifier (1..256 visible ASCII bytes). The
+// owner must distinguish all selected authority/store/method configuration that
+// can change admission. The identifier is not authority itself; primary reads
+// still enforce current owners. Changing it invalidates cached positives and
+// refreshes from primary. Constructor inputs are copied without IO.
+func NewProfileSessionService(reader SessionReader, config ServiceConfig, method AuthenticationKind, cacheProfile string) (*SessionService, error) {
+	if !authorityKey(cacheProfile, 256) {
+		return nil, ErrInvalidInput
+	}
+	s, err := NewMethodSessionService(reader, config, method)
+	if err != nil {
+		return nil, err
+	}
+	s.cacheProfile = strings.Clone(cacheProfile)
+	return s, nil
+}
+
+// NewMethodSessionService freezes one explicit authentication method for primary
+// and cached admission. Only verified-credential, OTP and magic-link methods are
+// supported. This is an additional restriction on the trusted reader, not proof
+// of issuance or an alternative to current authority. Other methods fail closed.
+// Existing NewSessionService retains its reader-selected method composition.
+func NewMethodSessionService(reader SessionReader, config ServiceConfig, method AuthenticationKind) (*SessionService, error) {
+	if method != AuthenticationVerified && method != AuthenticationOTP && method != AuthenticationMagicLink {
+		return nil, ErrInvalidInput
+	}
+	s, err := NewSessionService(reader, config)
+	if err != nil {
+		return nil, err
+	}
+	s.method = method
+	return s, nil
 }
 
 // Configured reports immutable constructor validity without IO, clock calls or
@@ -263,7 +300,7 @@ func (s *SessionService) Get(ctx context.Context, request GetRequest) (out GetRe
 	if err != nil {
 		return GetResult{}, ErrUnavailable
 	}
-	if spec.TenantID != request.TenantID || spec.Audience != s.config.Audience || (spec.Authentication.Kind != AuthenticationVerified && spec.Authentication.Kind != AuthenticationOTP) {
+	if spec.TenantID != request.TenantID || spec.Audience != s.config.Audience || (s.method != 0 && spec.Authentication.Kind != s.method) || (spec.Authentication.Kind != AuthenticationVerified && spec.Authentication.Kind != AuthenticationOTP && spec.Authentication.Kind != AuthenticationMagicLink) {
 		return GetResult{}, nil
 	}
 	matched := 0

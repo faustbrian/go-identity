@@ -1,5 +1,30 @@
 # Session
 
+## Historical magic-link authentication
+
+Use `NewMagicLinkAuthentication` with the original consuming command, request,
+grant and verified-address versions, then `NewSessionWithMagicLink` (or
+`NewSessionWithMagicLinkAndCSRF`) for trusted complete reconstruction. Store
+`MagicLinkAuthentication().Bindings()` alongside the base and synchronizer.
+Construction is not cryptographic verification or successful consumption.
+Native login must establish both in the protected issuance transaction.
+
+The original authentication/admission expiry is immutable; it does not shorten
+an already issued session's resolved remember policy. Updates and rotation
+retain provenance; encrypted cache promotion cannot renew primary validity.
+Legacy proof/OTP issuance cannot accept these projections. Organization, MFA
+and passkey combinations require their real owners and currently fail closed.
+
+`NewMethodSessionService` restricts primary and cache admission to one method.
+Owned adapters use `NewProfileSessionService` to additionally bind the complete
+selected native authority/store profile into encrypted-cache context. Shared
+wrapping keys cannot transfer a positive between methods or selected profiles.
+Changing profile makes old entries cache misses and requires primary refresh;
+the generic reader-selected constructor retains its historical cache framing.
+Separate physical stores must also use distinct issuer/environment/deployment
+context when sharing envelope keys. Original expiry never resets on refresh
+failure or cache promotion.
+
 ## Optional signup session issuance
 
 `NewPasswordSignupSessionIssuerWithCSRF` selects a disjoint prospective
