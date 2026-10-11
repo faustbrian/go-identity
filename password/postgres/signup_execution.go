@@ -8,6 +8,7 @@ import (
 
 	"github.com/faustbrian/go-audit"
 	"github.com/faustbrian/go-authorization"
+	authoritypg "github.com/faustbrian/go-authorization/postgres"
 	issuerpg "github.com/faustbrian/go-capability/postgres/identity"
 	identity "github.com/faustbrian/go-identity"
 	deliverypg "github.com/faustbrian/go-identity/delivery/postgres"
@@ -19,18 +20,19 @@ import (
 )
 
 type signupExecutionPreparation struct {
-	owner      kernel.FeaturePreparationContributor
-	original   identity.Command
-	selected   kernel.PasswordRegistrationIntent
-	flow       session.PreAuthTransaction
-	flowKey    session.DigestKey
-	storage    sessionpg.Config
-	at         time.Time
-	request    password.SignupRequest
-	domain     *kernel.PasswordRegistrationDomain
-	generation signupGenerationPreparation
-	risk       risk.AuthenticationAdmissionCustodyConfig
-	subject    risk.Subject
+	authorizationNamespace string
+	owner                  kernel.FeaturePreparationContributor
+	original               identity.Command
+	selected               kernel.PasswordRegistrationIntent
+	flow                   session.PreAuthTransaction
+	flowKey                session.DigestKey
+	storage                sessionpg.Config
+	at                     time.Time
+	request                password.SignupRequest
+	domain                 *kernel.PasswordRegistrationDomain
+	generation             signupGenerationPreparation
+	risk                   risk.AuthenticationAdmissionCustodyConfig
+	subject                risk.Subject
 }
 
 // Restored invocation-local custody borrows the existing journal and Work.
@@ -145,6 +147,12 @@ func (e *signupExecution) apply(ctx context.Context, w kernel.Work, c identity.C
 	}
 	if err := e.repository.applySignupMaterial(ctx, w, e.input.owner, c, e.input.selected); err != nil {
 		return identity.FeatureReceipt{}, err
+	}
+	if e.input.authorizationNamespace != "" {
+		scope := authoritypg.AuthorityScope{TenantID: authorization.TenantID(spec.Binding.TenantID), SubjectID: authorization.SubjectID(e.input.selected.Creation.Binding.UserID), PolicyNamespace: e.input.authorizationNamespace}
+		if _, err := authoritypg.InitializeAuthority(ctx, w, scope, e.repository.maximumDuration); err != nil {
+			return identity.FeatureReceipt{}, readerFailure(ctx)
+		}
 	}
 	if err := e.input.generation.verification.issuer.Stage(ctx, w, e.issuance); err != nil {
 		return identity.FeatureReceipt{}, err

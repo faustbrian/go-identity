@@ -76,6 +76,7 @@ func (p *signupPhase) initialize(r password.SignupRequest, b identity.CommandBin
 	_, _ = mac.Write([]byte("identity-password-signup-counter-v1\x00" + string(b.TenantID) + "\x00" + selected.Identifier.CanonicalValue))
 	p.original = command
 	p.input = signupExecutionPreparation{owner: p, original: command, selected: selected, flow: flow, flowKey: key, storage: c.Session, at: at, request: r, domain: p.service.domain, generation: p.service.generation(), risk: c.Risk, subject: risk.Subject{Network: r.Network, Device: r.Device, IdentifierDigest: hex.EncodeToString(mac.Sum(nil))}}
+	p.input.authorizationNamespace = c.AuthorizationNamespace
 	return nil
 }
 

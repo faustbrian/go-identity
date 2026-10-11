@@ -152,6 +152,16 @@ change it when those semantics change. Keep original configuration and keys for
 the retention lifetime of request mappings. Active envelope-key rotation alone
 does not select a new request profile.
 
+For subsequent native signin, select `SignupConfig.AuthorizationNamespace` to
+match the user-policy namespace consumed by signin/session admission, and install
+the authorization owner's authority migration. Signup initializes that owner's
+policy epoch inside the same protected transaction as password, factor authority
+and account creation. Occupied-address acknowledgement never resets existing
+authority. Leaving the namespace empty preserves the registration-only profile;
+it does not provide the policy authority needed for later signin. Namespace
+changes select different preparation custody, so retain original configuration
+for outstanding recovery.
+
 Install the existing kernel registration/neutral-acceptance, request-key/input,
 preparation/admission, password, pre-auth session, capability issuance, delivery,
 audit and lifecycle histories before calling the service. It borrows a primary

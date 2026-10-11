@@ -326,6 +326,51 @@ func testNativePublicSignup(t *testing.T, ctx context.Context, pool *database.Po
 			testSignupPasswordOwnerRecovery(t, ctx, pool, restarted, request, mode == "absent")
 		})
 	}
+	t.Run("selected-authorization-epoch", func(t *testing.T) {
+		configuration := c
+		configuration.AuthorizationNamespace = "signup-users"
+		owner, err := NewSignupService(pool, configuration, keys)
+		if err != nil || owner.profile == service.profile {
+			t.Fatal("selected authority not bound to original preparation", err)
+		}
+		invalid := configuration
+		invalid.AuthorizationNamespace = "signup users"
+		if owner, err := NewSignupService(pool, invalid, keys); err == nil || owner != nil {
+			t.Fatal("invalid policy namespace admitted")
+		}
+		attempt := fresh("authority-public@example.test", 'A')
+		created, err := owner.Signup(ctx, attempt)
+		if err != nil || created.Outcome != identity.CommitOutcomeCommitted {
+			t.Fatal("authority-bearing signup", err)
+		}
+		var user, epoch string
+		id := base64Command(t, created.Recovery)
+		if err := pool.Raw().QueryRow(ctx, `SELECT b.user_id,a.version::text FROM identity.registration_bindings b JOIN authorization_subject_authorities a ON a.tenant_id=b.tenant_id AND a.subject_id=b.user_id AND a.policy_namespace='signup-users' WHERE b.command_id=$1`, id).Scan(&user, &epoch); err != nil || epoch != "1" {
+			t.Fatal("created account lacks owned initial authorization epoch", err)
+		}
+		// A later lifecycle epoch is not creation state. Neutral acknowledgement
+		// of an occupied address must not overwrite it or create another account.
+		if _, err := pool.Raw().Exec(ctx, `UPDATE authorization_subject_authorities SET version=2 WHERE tenant_id=$1 AND subject_id=$2 AND policy_namespace='signup-users'`, string(attempt.TenantID), user); err != nil {
+			t.Fatal(err)
+		}
+		occupied := fresh("authority-public@example.test", 'B')
+		neutral, err := owner.Signup(ctx, occupied)
+		if err != nil || neutral.Outcome != identity.CommitOutcomeCommitted || neutral.SubjectID != "" || neutral.SessionID != "" {
+			t.Fatal("occupied authority-bearing signup enumerated", err)
+		}
+		var authorities int
+		if err := pool.Raw().QueryRow(ctx, `SELECT version::text,(SELECT count(*) FROM authorization_subject_authorities WHERE policy_namespace='signup-users') FROM authorization_subject_authorities WHERE tenant_id=$1 AND subject_id=$2 AND policy_namespace='signup-users'`, string(attempt.TenantID), user).Scan(&epoch, &authorities); err != nil || epoch != "2" || authorities != 1 {
+			t.Fatal("occupied signup reset or duplicated authority", err)
+		}
+		configuration.AuthorizationNamespace = "different-users"
+		changed, err := NewSignupService(pool, configuration, keys)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := changed.Signup(ctx, attempt); err == nil {
+			t.Fatal("different namespace adopted original keyed preparation")
+		}
+	})
 }
 
 // SU08: isolate the password owner's recovery contract using actual kernel,

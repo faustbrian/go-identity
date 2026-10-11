@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Select `SignupConfig.AuthorizationNamespace` to initialize the new user's
+  authorization epoch atomically with registration, password, factor authority,
+  verification grant and delivery. Use the namespace consumed by session
+  admission. Neutral collisions and recovery never initialize or reset epochs.
+  Empty retains legacy registration-only preparation identity; selected profiles
+  have distinct custody and require the authorization owner's installed history.
+
 - Add explicit reset screening attribution using the immutable original command
   and authenticated issuer challenge. Select `ResetConfig.CollectReset` instead
   of `Screening.Collect` for observed provider/audit composition. Foreign proof

@@ -13,6 +13,7 @@ import (
 
 	auditpg "github.com/faustbrian/go-audit/postgres"
 	"github.com/faustbrian/go-authorization"
+	authoritypg "github.com/faustbrian/go-authorization/postgres"
 	"github.com/faustbrian/go-capability"
 	issuerpg "github.com/faustbrian/go-capability/postgres/identity"
 	identity "github.com/faustbrian/go-identity"
@@ -70,6 +71,13 @@ type SignupDeliveryConfig struct {
 // This initial profile requires verified email and issues no session; immediate
 // session and MFA continuation profiles remain in development and are denied.
 type SignupConfig struct {
+	// AuthorizationNamespace explicitly initializes the new user's policy epoch
+	// through the authorization owner in the protected signup transaction. Select
+	// the namespace consumed by signin/session admission. Empty preserves legacy
+	// registration-only custody and does not supply authority for later signin.
+	// Changing this selection changes preparation identity; retain old profiles
+	// for their original recovery. Initialization cannot reset an existing epoch.
+	AuthorizationNamespace    string
 	Repository                Config
 	Registration              password.RegistrationPolicy
 	ConfigurationID, PolicyID string
@@ -114,6 +122,9 @@ var _ password.SignupService = (*SignupService)(nil)
 // migrations or password work. Local keyring custody excludes remote decrypt
 // callbacks under the kernel's restoration locks. Zero/mixed profiles deny.
 func NewSignupService(pool *database.Pool, c SignupConfig, keys *keyring.Provider) (*SignupService, error) {
+	if c.AuthorizationNamespace != "" && (authoritypg.AuthorityScope{TenantID: "tenant", SubjectID: "user", PolicyNamespace: c.AuthorizationNamespace}).Validate() != nil {
+		return nil, password.ErrPasswordWork
+	}
 	if keys == nil || c.Fields == nil || c.SelectUser == nil || c.Registration.Validate() != nil || !c.Registration.RequireVerifiedEmail || c.FieldSchema.Validate() != nil || !reauthenticationText(c.ConfigurationID, 128) || !reauthenticationText(c.PolicyID, 128) || c.IntentKey == ([32]byte{}) || !reauthenticationText(c.ActiveEnvelopeKeyID, 256) || c.Coordinator.QueryPolicy == nil || c.Coordinator.AdmissionPolicy == nil || c.RequestKeys.Policy.PolicyVersion != c.Coordinator.AdmissionPolicy.PolicyVersion || c.Screening.MinimumBytes != c.Registration.MinimumBytes || c.Screening.MaximumBytes != c.Registration.MaximumBytes || len(c.FlowKeys) == 0 || len(c.FlowKeys) > 16 || !signinURLs(c.Origins, true) || !signinURLs(c.CallbackURLs, false) || c.Verification.Policy == nil || c.Verification.Issuer == nil || c.Verification.Codec == nil || c.Verification.Lifetime <= 0 || c.Verification.Lifetime > 24*time.Hour || c.Verification.Lifetime%time.Second != 0 || c.Delivery.Owner == nil || c.Delivery.Renderer == nil || c.Delivery.Resolver == nil || c.Delivery.TemplateVersion == 0 || c.Delivery.ProviderVersion == 0 || len(c.Delivery.Locales) == 0 || len(c.Delivery.Locales) > 16 || c.Delivery.ScopeKey == ([32]byte{}) || c.Delivery.Timeout <= 0 || c.Delivery.Timeout > 5*time.Second {
 		return nil, password.ErrPasswordWork
 	}
@@ -176,6 +187,20 @@ func NewSignupService(pool *database.Pool, c SignupConfig, keys *keyring.Provide
 	}
 	profile := sha256.Sum256(frame)
 	clear(frame)
+	// Preserve the exact legacy profile when initialization is unselected.
+	// Selected namespace is part of immutable original custody, not a mutable
+	// callback or a later read-side bootstrap.
+	if c.AuthorizationNamespace != "" {
+		frame, err = json.Marshal(struct {
+			Profile                [32]byte
+			AuthorizationNamespace string
+		}{profile, c.AuthorizationNamespace})
+		if err != nil {
+			return nil, password.ErrPasswordWork
+		}
+		profile = sha256.Sum256(frame)
+		clear(frame)
+	}
 	s := &SignupService{pool: pool, repository: repository, directory: directory, domain: domain, crypto: crypto, custody: custody, config: func() SignupConfig { return c }, profile: profile}
 	if _, _, err := s.coordinator(&signupPhase{service: s}); err != nil {
 		return nil, password.ErrPasswordWork
