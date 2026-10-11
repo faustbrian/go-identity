@@ -133,6 +133,9 @@ func (w CapabilityIssuanceWork) DatabaseTime(ctx context.Context) (time.Time, er
 // A declared RegistrationUserID instead selects only this Work's successfully
 // created anonymous-signup user for identifier verification; it never changes
 // the original command binding or permits arbitrary subject selection.
+// ResetRecipientUserID instead requires this invocation's successful primary
+// recipient/credential fence and matching original reset scope. Neither target
+// alone proves current factor eligibility or complete workflow authorization.
 // No bearer is exposed or stored here; encrypted delivery must be staged by
 // its registered owner. Failure poisons this command. Foreign owners are denied
 // before staging. Work and aliases must remain serial-use.
@@ -165,6 +168,13 @@ func (w Work) StageCapabilityIssuanceFor(p CapabilityIssuanceContributor, index 
 			return w.fail(w.state.ctx, invalidWork())
 		}
 		subject = created.ID
+	}
+	if d.plan.ResetRecipientUserID != "" {
+		var err error
+		subject, err = resetIssuanceSubject(w.state, w.state.execution.reservation.plan.snapshot(), payload)
+		if err != nil {
+			return w.fail(w.state.ctx, err)
+		}
 	}
 	if payload.ID != v.CapabilityID || payload.Operation != string(v.Purpose) || payload.Tenant != string(w.state.binding.TenantID) || payload.Subject != string(subject) || payload.Subject == "" || payload.Bearer || payload.MaxUses != v.MaxUses || payload.ExpiresAt != v.ExpiresAt {
 		return w.fail(w.state.ctx, invalidWork())

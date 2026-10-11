@@ -88,7 +88,16 @@ func (w Work) RequireRecipientCredential(ctx context.Context, p FeatureExecution
 	// Only this local eligibility query uses the selected identity. The frozen
 	// command binding retains the originating anonymous flow for audit/replay.
 	b.UserID = recipient.User.ID
-	return w.requireActiveCredential(ctx, b, expected)
+	now, err := w.requireActiveCredential(ctx, b, expected)
+	if err == nil && w.state.feature != nil && passwordResetRequestOperation(w.state.feature.Operation) {
+		// The command keeps its anonymous scope. Only this successful primary
+		// fence can admit its selected recipient to later reset-token staging.
+		if recipient.Query.Kind != identity.IdentifierEmail || recipient.Query.Eligibility != RecipientVerified || expected.Credential.Kind != identity.CredentialPassword || expected.Credential.Owner != "identity/password" {
+			return time.Time{}, w.fail(ctx, invalidWork())
+		}
+		w.state.resetRecipient = &resetRecipientAdmission{owner: p, recipient: recipient, credential: expected}
+	}
+	return now, err
 }
 
 func (w Work) requireActiveCredential(ctx context.Context, b identity.CommandBinding, expected CredentialAdmission) (time.Time, error) {

@@ -860,6 +860,18 @@ Older readers fail closed on the additional field. The native capability issuer
 and journal-prepared signup workflow must separately adopt this profile; kernel
 support alone does not enable an end-user verification flow.
 
+For the closed anonymous password reset-request profile, `ResetRecipientUserID`
+instead binds exactly one existing recipient and one reset-complete grant. It is
+mutually exclusive with signup selection and preserves the anonymous command.
+Staging requires this native invocation's successful `RequireRecipientCredential`
+primary fence for a verified email and password reference. The grant must match
+the original command, selected user, identifier and independent predecessor
+versions. Declaration metadata alone cannot select a recipient. Current factor
+and risk policy remain mandatory workflow admission, not supplied by this fence.
+The issuer adapter and full reset workflow must adopt this separate profile;
+these kernel contracts alone do not enable reset. Empty target retains prior
+plan bytes; older readers deny the new target rather than dropping it.
+
 `ExecutePreparedFeature` also permits that exact issuance profile in the
 authenticated restored final plan: original admission must declare neither
 issuance nor delivery. The final plan preserves every original contributor and

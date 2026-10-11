@@ -287,6 +287,14 @@ grant against that original intent and current time. Only the emailed reset
 path is accepted; extra audiences/caveats and changed versions, callbacks or
 timestamps deny. Callback-binding key rotation may retain the original key;
 removing it denies old grants without extending their original lifetime.
+`ResolveOriginal` can recover the unchanged `ResetGrantSpec` directly from a
+genuinely verified grant, selecting exactly one matching callback from the
+trusted allowlist using its original retained binding key. It preserves all
+original versions and timestamps; retired callbacks/keys and malformed scope
+deny. Authenticate the issuer's durable issuance provenance separately and
+check that its originating command matches the reconstructed origin. This
+does not require another reset-intent store and does not authorize recovery.
+
 The profile is immutable and concurrent-safe, performs no IO and owns no
 resource requiring shutdown. Its redacted error is `ErrInvalidReset`.
 

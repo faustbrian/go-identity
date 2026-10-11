@@ -290,12 +290,12 @@ func preparationFinalDeclaration(b identity.CommandBinding, original, final Comm
 	if original.Feature == nil || original.Lifecycle == nil || preparationProtected(original) || original.Delivery != nil {
 		return false
 	}
-	// Only a restored anonymous signup may add new-user verification issuance.
-	// Original admission remains issuance-free; consumption and other protected
-	// profiles still require their separately owned preparation contracts.
+	// Only closed anonymous signup or reset-request profiles may add issuance.
+	// Their selected targets are admitted by distinct native transaction fences;
+	// original admission stays issuance-free and cannot introduce consumption.
 	withoutIssuance := final
 	withoutIssuance.CapabilityIssuance = nil
-	if final.CapabilityIssuance != nil && (!validCapabilityIssuancePlan(final.CapabilityIssuance) || final.CapabilityIssuance.RegistrationUserID == "" || !validRegistrationIssuance(b, final)) {
+	if final.CapabilityIssuance != nil && (!validCapabilityIssuancePlan(final.CapabilityIssuance) || final.CapabilityIssuance.RegistrationUserID == "" && final.CapabilityIssuance.ResetRecipientUserID == "" || !validRegistrationIssuance(b, final) || !validResetRecipientIssuance(b, final)) {
 		return false
 	}
 	if final.Feature == nil || final.Lifecycle == nil || preparationProtected(withoutIssuance) || *original.Feature != *final.Feature || *original.Lifecycle != *final.Lifecycle || original.SubjectType != final.SubjectType || original.SignupAcceptance != final.SignupAcceptance || len(original.Audits) != len(final.Audits) {

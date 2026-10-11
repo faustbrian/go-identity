@@ -38,6 +38,7 @@ type workState struct {
 	creation              *identity.User
 	registrationUser      *identity.User
 	registrationAccepted  bool
+	resetRecipient        *resetRecipientAdmission
 	profile               *identity.UserProfile
 	update                *identity.User
 	status                *identity.CommandResult

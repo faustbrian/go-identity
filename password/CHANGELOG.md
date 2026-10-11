@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Recover original emailed-reset scope from genuinely verified grants and the
+  trusted callback allowlist without renewing versions or timestamps. Retained
+  keys support unchanged original intent; retired keys/callbacks and malformed
+  scope deny. Durable provenance and current recovery admission remain separate.
+
 - Add immutable emailed-reset capability scope policy binding original account,
   credential and identifier versions, tenant, issuance command, recovery path,
   callback and lifetime. Retained callback-binding keys permit rotation without

@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Bind anonymous password-reset issuance to an existing recipient independently
+  fenced in the native transaction. Selected-user history remains distinct from
+  signup's new-user target; foreign purposes and predecessor substitutions deny.
+  Complete reset orchestration and durable integration remain in development.
+
 - Add a distinct native password-reset transaction with explicit expected
   credential enablement, locked predecessor checks and atomic capability
   finalization, verifier mutation, audit and lifecycle effects. Append the new
