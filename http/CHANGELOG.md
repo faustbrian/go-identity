@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Validate all selected wire schemas together during bounded OpenAPI
+  construction, preserving document-relative and recursive references. Larger
+  valid feature compositions no longer repeatedly compile the full document
+  for each response. Invalid schemas and existing resource/deadline limits
+  still fail closed; exported wire definitions are unchanged.
+
 - Support anonymous delivery IP admission before native destination
   normalization, followed by destination admission without a second IP debit.
   Split callers share existing delivery budgets and cannot select a subject;

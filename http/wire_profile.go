@@ -22,6 +22,7 @@ type wireProfile struct {
 	depth      int
 	active     map[string]bool
 	compiler   *jsonschema.Compiler
+	schemas    []jsonvalue.Value
 }
 
 func (p *wireProfile) walk(value jsonvalue.Value, role string) error {
@@ -34,9 +35,7 @@ func (p *wireProfile) walk(value jsonvalue.Value, role string) error {
 		return ErrInvalidInput
 	}
 	if role == "schemaRoot" {
-		if err := p.compile(value); err != nil {
-			return err
-		}
+		p.schemas = append(p.schemas, value)
 		role = "schema"
 	}
 	if elements, ok := value.Elements(); ok {
@@ -131,10 +130,16 @@ func (p *wireProfile) walk(value jsonvalue.Value, role string) error {
 			}
 		}
 	}
+	if role == "document" {
+		return p.compile()
+	}
 	return nil
 }
 
-func (p *wireProfile) compile(schema jsonvalue.Value) error {
+func (p *wireProfile) compile() error {
+	if len(p.schemas) == 0 {
+		return nil
+	}
 	if p.compiler == nil {
 		compiler, err := jsonschema.NewCompilerForDocument(p.document, jsonschema.WithTraversalLimits(200000, 64))
 		if err != nil {
@@ -142,12 +147,14 @@ func (p *wireProfile) compile(schema jsonvalue.Value) error {
 		}
 		p.compiler = compiler
 	}
-	// A detached Schema Object is not the resolution root of document-relative
-	// pointers. Retain the immutable document as the root and compile the selected
-	// schema through allOf, so components and recursive pointers keep their exact
-	// meaning. OpenAPI root members are annotations to the JSON Schema evaluator.
+	// Validate every selected schema in one compilation, retaining the immutable
+	// document as the resolution root for component and document-relative pointers.
+	// Compiling a document-sized root separately for each response grows work
+	// quadratically and can exhaust the same bounded constructor's deadline.
+	// This compilation is validation only: its allOf is never an instance policy.
+	// OpenAPI root members remain annotations to the JSON Schema evaluator.
 	members, _ := p.document.Raw().Members()
-	all, err := jsonvalue.Array([]jsonvalue.Value{schema})
+	all, err := jsonvalue.Array(p.schemas)
 	if err != nil {
 		return err
 	}
