@@ -87,6 +87,8 @@ type featureState struct {
 	reset                        *passwordpg.ResetService
 	passwordSignin               *passwordpg.SigninService
 	passwordSignup               *passwordpg.SignupService
+	session                      *sessionState
+	httpSession                  *sessionHTTPState
 	signupPreauth                *session.PreAuthIssuer
 	passwordPreauth              *session.PreAuthIssuer
 	preauth                      *session.PreAuthIssuer
@@ -108,6 +110,12 @@ type featureState struct {
 }
 
 func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDependencies) error {
+	if c.HTTPSession != nil && c.Session == nil {
+		return identity.InvalidInputError{Field: "reference_http_session"}
+	}
+	if c.Session != nil && (c.OTP == nil || c.OTP.Signin == nil) {
+		return identity.InvalidInputError{Field: "reference_session"}
+	}
 	if c.PasswordSignup != nil && (c.OTP == nil || c.Delivery == nil) {
 		return identity.InvalidInputError{Field: "reference_password_signup"}
 	}
@@ -259,6 +267,20 @@ func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDepen
 	if err != nil {
 		return err
 	}
+	sessionOwner, err := composeSession(c, d)
+	if err != nil {
+		return err
+	}
+	migrationConfig.singleSessionRevocation = sessionOwner != nil
+	httpSession, err := composeSessionHTTP(c, sessionOwner, s.httpRate)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if httpSession != nil && !retainedResetHTTP {
+			httpSession.rate.Close()
+		}
+	}()
 	signupPreauthOwner, err := composeSignupPreAuth(d.PostgreSQL, c.PasswordSignup)
 	if err != nil {
 		return err
@@ -289,6 +311,8 @@ func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDepen
 	}
 	s.features = &featureState{migrations: migrationConfig, otp: otpOwner, signin: signinOwner, reset: resetOwner, passwordSignin: passwordSigninOwner, passwordPreauth: passwordPreauthOwner, preauth: preauthOwner, delivery: deliveryOwner, sender: d.DeliverySender, timeout: o.Timeout, provider: o.ProviderVersion, deliverySlots: make(chan struct{}, int(capacity)), authorize: o.RequestKeys.Policy.Authorization, httpPreAuth: httpPreAuth, httpEmailSignin: httpEmailSignin, httpPasswordReset: httpPasswordReset, httpPasswordSignin: httpPasswordSignin}
 	s.features.passwordSignup = passwordSignupOwner
+	s.features.session = sessionOwner
+	s.features.httpSession = httpSession
 	s.features.signupPreauth = signupPreauthOwner
 	s.features.httpPasswordSignup = httpPasswordSignup
 	s.features.httpRegistrationVerification = httpRegistrationVerification

@@ -154,9 +154,9 @@ func NewServer(c ReferenceConfig, d ReferenceDependencies, f FeatureSet) (*Serve
 		return nil, invalid
 	}
 	contributions := []identityhttp.Feature{probe}
-	selected, err := server.preAuthFeature(c.HTTP.Network, f)
+	selected, err := server.sessionFeature(c.HTTP.Network, f)
 	if err != nil {
-		return nil, invalid
+		return nil, err
 	}
 	if selected != nil {
 		contributions = append(contributions, *selected)
@@ -184,7 +184,7 @@ func NewServer(c ReferenceConfig, d ReferenceDependencies, f FeatureSet) (*Serve
 	}
 	operations, err := identityhttp.NewOperationDescriptors(identityhttp.FeatureServices{Features: contributions})
 	if err != nil {
-		return nil, invalid
+		return nil, identity.InvalidInputError{Field: "reference_server_operations"}
 	}
 	network, err := identityhttp.NewNetworkResolver(c.HTTP.Network)
 	if err != nil {
@@ -197,7 +197,7 @@ func NewServer(c ReferenceConfig, d ReferenceDependencies, f FeatureSet) (*Serve
 	}
 	handler, document, err := identityhttp.NewRouter(c.HTTP, operations, nil)
 	if err != nil {
-		return nil, invalid
+		return nil, identity.InvalidInputError{Field: "reference_server_router"}
 	}
 	server.handler, server.document = handler, document
 	return server, nil

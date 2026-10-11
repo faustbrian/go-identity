@@ -93,6 +93,32 @@ construction rather than creating an account that cannot log in. The graph
 exports `features.PasswordSignup()` and `features.RegistrationVerification()`
 only after explicit selection, with initialization, tenant and shutdown guards.
 
+`Session` independently selects primary session reads, self-signout and command
+recovery through `features.Sessions()`. Supply its native authority profile,
+repository, explicit clock/policy/transaction bounds and retained lookup keys.
+`Native.Validation.Clock` must be absent: the graph uses `Native.Execution.Clock`
+for reads and protected revocation. With password signin selected, the authority
+profile, repository, cookie deletion tuple and current lookup key must match
+issuance. Historical rotation keys may remain. Nonempty `CSRFKeys` selects
+strict cookie logout and must include the current password issuer's exact key;
+an empty slice disables cookie logout rather than enabling a legacy bypass.
+The current reader supports its explicit single-factor native profile, not
+anonymous, organization, MFA or passkey authority.
+
+Select `HTTPSession` separately to expose GET `/v1/session/get` and POST
+`/v1/session/signout`. Configure one explicit cookie or bearer transport; cookie
+mode requires exact HTTPS trusted origins, while bearer mode forbids them and
+never uses ambient cookies. Supply a deployment-scoped rate namespace, bounded
+emergency capacity and a synchronous bounded degradation recorder. Both routes
+share one native safe-rate budget. Cookie logout sends strict JSON `{}` and the
+signin-delivered `X-CSRF-Token` under the trusted Origin. Only confirmed success
+clears transport; failed or ambiguous mutation does not retry automatically.
+An inactive/absent session yields neutral logout. Selected session routes and
+original-flow initiation form one contribution, preserving device custody and
+named signup/password methods. Disabled session HTTP contributes no read/logout
+routes or metadata. Native and HTTP work deny after graph closure; in-flight
+native HTTP calls join cancellation and drain.
+
 Select `PasswordSignup.PreAuth`, `HTTPPasswordSignup`, shared `HTTPPreAuth` and
 `HTTPRate` to expose signup initiation. POST `/v1/session/preauth-issue` with
 `{"method":"signup"}`, then `/v1/password/signup` with `flowID`, `email`,

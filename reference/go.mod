@@ -11,7 +11,7 @@ require (
 	github.com/faustbrian/go-clock v1.0.0
 	github.com/faustbrian/go-http-client v1.0.1-0.20260913110751-02502a99b967
 	github.com/faustbrian/go-identity v0.0.0-20261011052554-3ca77f9f25c7
-	github.com/faustbrian/go-identity/http v0.0.0-20261011053228-3c341e583cd2
+	github.com/faustbrian/go-identity/http v0.0.0-20261011081638-77ea50faec8b
 	github.com/faustbrian/go-identity/http/email v0.0.0-20261010220138-9154c9e34d53
 	github.com/faustbrian/go-identity/http/otp v0.0.0-20261009150609-678770cec7bb
 	github.com/faustbrian/go-identity/http/password v0.0.0-20261011053417-12511056c3cc
@@ -32,7 +32,7 @@ require (
 	github.com/faustbrian/go-identity/session v0.0.0-20261009140546-a2e5ff7807ee
 	github.com/faustbrian/go-identity/session/postgres v0.0.0-20261011053228-3c341e583cd2
 	github.com/faustbrian/go-identifier v1.0.1-0.20261004001745-6503365429c8
-	github.com/faustbrian/go-migrations/v3 v3.0.2-0.20261008154303-7eabbeb156f85
+	github.com/faustbrian/go-migrations/v3 v3.0.2-0.20261008154303-7eabbeb156f8
 	github.com/faustbrian/go-postgres v1.1.1-0.20260912090843-61261695bcc7
 	github.com/faustbrian/go-rate-limit/v2 v2.0.0-20260913124548-72dfa13dd0a6
 	github.com/faustbrian/go-secret-envelope v1.0.1-0.20260913112010-22fc4a2d925d

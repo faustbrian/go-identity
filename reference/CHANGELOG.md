@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+- Add explicitly selected primary session reads and self-signout to the native
+  reference graph. Cookie logout uses the original transaction's synchronizer
+  state; bearer selection never falls back to cookies. Selected HTTP shares
+  one bounded safe-rate owner, retains named browser-flow initiation, and joins
+  graph shutdown cancellation/drain. Password session selection rejects lookup
+  or CSRF keys that cannot verify the current issuer's exact key material.
+  Selected signout appends the native single-session revocation migration;
+  existing applied migration allocations and checksums remain unchanged.
+  Correct the migration dependency's pseudo-version spelling without changing
+  its source revision. Full session lifecycle and release qualification remain
+  outstanding.
+
 - Compose explicitly selected required-email-verification registration and
   confirmation through native signup, capability issuance, protected counters
   and encrypted delivery. Named signup initiation uses the existing secure

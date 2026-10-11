@@ -5,7 +5,9 @@ package reference_test
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"io"
 	"net"
 	"net/http"
@@ -16,6 +18,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/faustbrian/go-audit"
 	"github.com/faustbrian/go-authorization"
 	"github.com/faustbrian/go-capability"
 	issuerpg "github.com/faustbrian/go-capability/postgres/identity"
@@ -36,6 +39,7 @@ import (
 	"github.com/faustbrian/go-identity/risk/hibp"
 	riskpg "github.com/faustbrian/go-identity/risk/postgres"
 	"github.com/faustbrian/go-identity/session"
+	sessionpg "github.com/faustbrian/go-identity/session/postgres"
 	primitive "github.com/faustbrian/go-password"
 )
 
@@ -50,6 +54,9 @@ func (referenceRegistrationPolicy) Decide(ctx context.Context, c authorization.D
 		case "identity.password.signup", "identity.user.create", "identity.email.verification-confirm", "identity.password.signup.recover":
 			return authorization.Decision{Outcome: authorization.Allow, Revision: 9}, nil
 		}
+	}
+	if string(c.Request.Tenant) == otpTenant && c.PolicyRevision == 9 && c.Request.Subject.Kind == authorization.SubjectUser && (c.Request.Action == "identity.session.revoke-one" || c.Request.Action == "identity.session.revoke-one.recover") {
+		return authorization.Decision{Outcome: authorization.Allow, Revision: 9}, nil
 	}
 	return (referenceResetPolicy{}).Decide(ctx, c)
 }
@@ -223,6 +230,12 @@ func proveReferenceSignupGraph(t *testing.T, competing bool) {
 	c.HTTPPreAuth = &reference.HTTPPreAuthConfiguration{Lifetime: session.LifetimeConfig{Default: session.BrowserSession, AbsoluteTTL: time.Hour, IdleTTL: 30 * time.Minute, RefreshAfter: time.Minute, FreshFor: 15 * time.Minute}, Device: &session.BrowserDeviceConfig{Namespace: "reference-registration", Keys: []session.BrowserDeviceKey{key}, ActiveVersion: 1, Lifetime: 24 * time.Hour, Cookie: cookie}}
 	configureReferencePasswordReset(t, &c, origin, f.pool, true)
 	calls := configureReferenceRegistration(t, &c, origin)
+	signin := c.PasswordSignin.Native
+	c.Session = &reference.SessionConfiguration{Native: sessionpg.SignOutServiceConfig{Execution: sessionpg.IssueExecutorConfig{Repository: signin.Session, Profile: sessionpg.IssueAdmissionConfig(signin.Profile), Coordinator: signin.Coordinator, Authorization: c.OTP.RequestKeys.Policy.Authorization, Clock: clock.System{}, PolicyID: "session-signout", PolicyVersion: 9, AuditRetentionVersion: 1}, Validation: session.ServiceConfig{Profile: session.StorageStatefulOpaque, Audience: signin.Profile.Audience, MaximumDuration: 2 * time.Second, ClockUncertainty: time.Millisecond, LookupKeys: []session.DigestKey{signin.Issuance.LookupKey}}, Cookie: signin.Issuance.Cookie, MaximumDuration: 3 * time.Second}, CSRFKeys: []session.CSRFKey{signin.CSRFKey}}
+	c.HTTPSession = &reference.HTTPSessionConfiguration{Transport: session.CredentialCookie, TrustedOrigins: []identityhttp.Origin{identityhttp.Origin(origin)}, RateNamespace: "reference-session", EmergencyMaximumKeys: 128, Degraded: func(context.Context, identityhttp.SafeRateEvent) error {
+		t.Error("unexpected shared rate degradation")
+		return nil
+	}}
 	messages := make(chan string, 4)
 	deps.DeliverySender = nativeBrowserCodeSender{codes: messages}
 	for _, namespace := range []string{"", "other-users"} {
@@ -289,13 +302,16 @@ END $$`); err != nil {
 	config := reference.ReferenceConfig{Profile: reference.PostgresWithValkey, Policies: policies, HTTP: identityhttp.TransportPolicy{Network: identityhttp.NetworkConfig{Limits: identityhttp.Limits{MaximumHeaderBytes: 32768, MaximumURLBytes: 4096, MaximumBodyBytes: 16384, MaximumDecodedBytes: 16384, MaximumFields: 64, MaximumDepth: 8}, MaximumForwardedHops: 1, TenantHosts: []identityhttp.TenantHost{{Host: "127.0.0.1", TenantID: otpTenant}}, PublicHosts: []string{"localhost"}}, HandlerTimeout: 4 * time.Second, Document: identityhttp.DocumentConfig{Title: "Registration reference", Version: "1"}}, Migration: reference.MigrationPolicy{LockTimeout: time.Second, CommandRetention: time.Hour}, Workers: reference.WorkerPolicy{MaxConcurrency: 1, LeaseDuration: time.Minute, DrainTimeout: time.Second}, Tenant: reference.TenantPolicy{Resolver: &nativeServerTenant{}}}
 	server, err := reference.NewServer(config, deps, features)
 	if err != nil {
+		if invalid, ok := err.(identity.InvalidInputError); ok {
+			t.Fatal("registration HTTP server", invalid.Field)
+		}
 		t.Fatal("registration HTTP server", err)
 	}
 	seen := map[string]bool{}
 	for _, op := range server.OpenAPI().Operations() {
 		seen[op.Record.OperationID] = true
 	}
-	if !seen["identity.password.signup"] || !seen["identity.email.verification-confirm"] || !seen["identity.password.signin"] || len(seen) != 6 {
+	if !seen["identity.password.signup"] || !seen["identity.email.verification-confirm"] || !seen["identity.password.signin"] || !seen["identity.session.get"] || !seen["identity.session.signout"] || len(seen) != 8 {
 		t.Fatal("selected public registration routes missing")
 	}
 	network.Config.Handler = server.Handler()
@@ -487,6 +503,15 @@ CREATE TRIGGER registration_fixture_fail BEFORE INSERT ON identity.delivery_inte
 	if r.StatusCode != 200 || json.Unmarshal(p, &signed) != nil || signed.CommitOutcome != "committed" || signed.SessionID == "" || len(r.Cookies()) != 1 {
 		t.Fatal("verified registration did not produce usable login", r.StatusCode, signed.CommitOutcome, signed.Error, signed.CommandID != "", signed.SessionID != "")
 	}
+	logoutID := proveRegistrationSessionLogout(t, ctx, client, base, origin, r.Cookies(), r.Header.Get("X-CSRF-Token"), signed.SessionID, f, features)
+	commandBytes, err := base64.RawURLEncoding.DecodeString(string(logoutID))
+	if err != nil {
+		t.Fatal("logout command identity malformed")
+	}
+	var revocations, audits, events int
+	if err := f.pool.Raw().QueryRow(ctx, `SELECT (SELECT count(*) FROM session_store.session_revocations WHERE command_id=$1),(SELECT count(*) FROM audit.identity_command_bindings b JOIN audit.records r ON r.record_id=b.event_id WHERE b.command_id=$1),(SELECT count(*) FROM public.identity_outbox_bindings WHERE command_id=$1)`, commandBytes).Scan(&revocations, &audits, &events); err != nil || revocations != 1 || audits != 1 || events != 1 {
+		t.Fatal("logout omitted or repeated protected effects", err)
+	}
 	if screens.Load() != screened {
 		t.Fatal("confirmation/login repeated password creation screening")
 	}
@@ -609,4 +634,143 @@ CREATE TRIGGER confirmation_fixture_fail BEFORE INSERT ON identity.email_verific
 	if err := f.pool.Raw().QueryRow(ctx, `SELECT (SELECT count(*) FROM identity.identifiers WHERE verified),(SELECT COALESCE(sum(uses),0) FROM capability_identity_one_use),(SELECT count(*) FROM identity.email_verifications)`).Scan(&verified, &consumed, &confirmationRows); err != nil || verified != 2 || consumed != 2 || confirmationRows != 2 {
 		t.Fatal("competing confirmation duplicated or lost protected effects", err)
 	}
+}
+
+func proveRegistrationSessionLogout(t *testing.T, ctx context.Context, client *http.Client, base, origin string, cookies []*http.Cookie, csrf, sessionID string, f liveStores, features reference.FeatureSet) identity.CommandID {
+	t.Helper()
+	call := func(method, path, token string) (*http.Response, []byte) {
+		var body io.Reader
+		if method == "POST" {
+			body = strings.NewReader("{}")
+		}
+		r, err := http.NewRequestWithContext(ctx, method, base+path, body)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if method == "POST" {
+			r.Header.Set("Content-Type", "application/json")
+			r.Header.Set("Origin", origin)
+		}
+		if token != "" {
+			r.Header.Set("X-CSRF-Token", token)
+		}
+		for _, c := range cookies {
+			r.AddCookie(c)
+		}
+		response, err := client.Do(r)
+		if err != nil {
+			t.Fatal(err)
+		}
+		payload, err := io.ReadAll(io.LimitReader(response.Body, 16385))
+		closeErr := response.Body.Close()
+		if err != nil || closeErr != nil || len(payload) > 16384 || response.Header.Get("Cache-Control") != "no-store" {
+			t.Fatal("unbounded/cacheable session response")
+		}
+		return response, payload
+	}
+	r, p := call("GET", "/v1/session/get", "")
+	var read sessionhttp.GetResponse
+	if r.StatusCode != 200 || json.Unmarshal(p, &read) != nil || !read.Authenticated || read.Session == nil || read.Session.ID != sessionID {
+		t.Fatal("new login session not readable", r.StatusCode)
+	}
+	r, _ = call("POST", "/v1/session/signout", "")
+	if r.StatusCode != 403 || len(r.Cookies()) != 0 {
+		t.Fatal("active logout bypassed CSRF or cleared cookie", r.StatusCode)
+	}
+	r, p = call("GET", "/v1/session/get", "")
+	read = sessionhttp.GetResponse{}
+	if r.StatusCode != 200 || json.Unmarshal(p, &read) != nil || !read.Authenticated {
+		t.Fatal("CSRF denial revoked session")
+	}
+	if csrf == "" {
+		t.Fatal("login did not deliver synchronizer token")
+	}
+	owner, err := features.Sessions()
+	if err != nil {
+		t.Fatal("selected native session port absent", err)
+	}
+	recoverOutcome := func(result sessionhttp.SignOutResponse, want identity.CommitOutcome) {
+		t.Helper()
+		if result.Recovery == nil || result.Recovery.CommandID != result.CommandID || result.Recovery.TenantID != otpTenant || result.Recovery.RecordID != sessionID {
+			t.Fatal("logout lost original recovery scope")
+		}
+		q := result.Recovery
+		query := identity.RecoveryQuery{CommandID: q.CommandID, TenantID: q.TenantID, UserID: q.UserID, AnonymousFlowID: q.AnonymousFlowID, ActorID: q.ActorID, ActorKind: q.ActorKind, OperationID: q.OperationID, RecordID: q.RecordID, LinkMode: q.LinkMode}
+		caller := authorization.DecisionContext{PolicyRevision: 9, Request: authorization.Request{Subject: authorization.Subject{ID: authorization.SubjectID(q.ActorID), Kind: q.ActorKind}, Action: authorization.Action(q.OperationID), Tenant: authorization.TenantID(q.TenantID), Resource: authorization.Resource{Type: "identity.user", ID: authorization.ResourceID(q.UserID)}}}
+		historical, err := owner.RecoverSignOut(ctx, query, caller)
+		var unavailable identity.UnavailableError
+		errorMatches := err == nil
+		if want == identity.CommitOutcomeNotCommitted {
+			// Terminal dependency-failure history preserves its original error,
+			// not a fabricated successful recovery or permission to reexecute.
+			errorMatches = errors.As(err, &unavailable)
+		}
+		if !errorMatches || historical.Outcome != want || historical.Binding.CommandID != query.CommandID || historical.Binding.RecordID != sessionID {
+			t.Fatal("selected logout recovery lost terminal history", err)
+		}
+		foreign := caller
+		foreign.Request.Tenant = "foreign-tenant"
+		if _, err := owner.RecoverSignOut(ctx, query, foreign); err == nil {
+			t.Fatal("foreign tenant acquired logout history")
+		}
+	}
+	// Reject the downstream lifecycle binding after the native revocation has
+	// been staged. No cookie clearing or successful effect may escape rollback.
+	if _, err := f.pool.Raw().Exec(ctx, `CREATE FUNCTION public.session_fixture_fail() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'synthetic session rollback'; END $$;
+CREATE TRIGGER session_fixture_fail BEFORE INSERT ON public.identity_outbox_bindings FOR EACH ROW EXECUTE FUNCTION public.session_fixture_fail()`); err != nil {
+		t.Fatal("session failure fixture", err)
+	}
+	cleanup := func() {
+		bounded, stop := context.WithTimeout(context.Background(), 3*time.Second)
+		defer stop()
+		if _, err := f.pool.Raw().Exec(bounded, `DROP TRIGGER IF EXISTS session_fixture_fail ON public.identity_outbox_bindings; DROP FUNCTION IF EXISTS public.session_fixture_fail()`); err != nil {
+			t.Error("session failure fixture cleanup", err)
+		}
+	}
+	t.Cleanup(cleanup)
+	r, p = call("POST", "/v1/session/signout", csrf)
+	var aborted sessionhttp.SignOutResponse
+	if json.Unmarshal(p, &aborted) != nil || r.StatusCode != 503 || aborted.CommitOutcome != "not_committed" || aborted.SignedOut || len(r.Cookies()) != 0 {
+		t.Fatal("failed lifecycle falsely cleared logout", r.StatusCode)
+	}
+	cleanup()
+	abortedID, err := base64.RawURLEncoding.DecodeString(string(aborted.CommandID))
+	if err != nil {
+		t.Fatal("aborted logout lost command identity")
+	}
+	var transitions, successfulAudits, lifecycle int
+	if err := f.pool.Raw().QueryRow(ctx, `SELECT (SELECT count(*) FROM session_store.session_revocations WHERE command_id=$1),(SELECT count(*) FROM audit.identity_command_bindings b JOIN audit.records r ON r.record_id=b.event_id WHERE b.command_id=$1 AND r.outcome=$2),(SELECT count(*) FROM public.identity_outbox_bindings WHERE command_id=$1)`, abortedID, int64(audit.OutcomeSucceeded)).Scan(&transitions, &successfulAudits, &lifecycle); err != nil || transitions != 0 || successfulAudits != 0 || lifecycle != 0 {
+		t.Fatal("failed lifecycle leaked successful protected effects", err)
+	}
+	recoverOutcome(aborted, identity.CommitOutcomeNotCommitted)
+	r, p = call("GET", "/v1/session/get", "")
+	read = sessionhttp.GetResponse{}
+	if json.Unmarshal(p, &read) != nil || r.StatusCode != 200 || !read.Authenticated {
+		t.Fatal("failed lifecycle revoked active session")
+	}
+	r, p = call("POST", "/v1/session/signout", csrf)
+	var logout sessionhttp.SignOutResponse
+	decodeErr := json.Unmarshal(p, &logout)
+	if r.StatusCode != 200 || decodeErr != nil || !logout.SignedOut || logout.CommitOutcome != "committed" || len(r.Cookies()) != 1 || r.Cookies()[0].MaxAge != -1 {
+		var shape map[string]json.RawMessage
+		_ = json.Unmarshal(p, &shape)
+		keys := make([]string, 0, len(shape))
+		for key := range shape {
+			keys = append(keys, key)
+		}
+		t.Fatal("native logout failed", r.StatusCode, logout.Error, logout.CommitOutcome, "JSON", json.Valid(p), "decode", decodeErr != nil, "fields", keys, "bytes", len(p))
+	}
+	recoverOutcome(logout, identity.CommitOutcomeCommitted)
+	command := logout.CommandID
+	r, p = call("GET", "/v1/session/get", "")
+	read = sessionhttp.GetResponse{}
+	if r.StatusCode != 200 || json.Unmarshal(p, &read) != nil || read.Authenticated || read.Session != nil || read.Principal != nil {
+		t.Fatal("revoked session still authenticated")
+	}
+	r, p = call("POST", "/v1/session/signout", "")
+	logout = sessionhttp.SignOutResponse{}
+	if r.StatusCode != 200 || json.Unmarshal(p, &logout) != nil || !logout.SignedOut {
+		t.Fatal("repeated logout was not neutral", r.StatusCode)
+	}
+	return command
 }

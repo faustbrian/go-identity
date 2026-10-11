@@ -54,7 +54,7 @@ func (s StoreSet) migrationCatalog(ctx context.Context) ([]migrationHistory, err
 			owner = "identity/risk/postgres"
 		case v >= 1100 && v <= 1103 || v == 1400:
 			owner = "identity/otp/postgres"
-		case v >= 1200 && v <= 1210 || v >= 1410 && v <= 1416:
+		case v >= 1200 && v <= 1210 || v >= 1410 && v <= 1417:
 			owner = "identity/session/postgres"
 		case v >= 1250 && v <= 1260:
 			owner = "identity/delivery/postgres"
@@ -126,6 +126,9 @@ func (s StoreSet) migrationCatalog(ctx context.Context) ([]migrationHistory, err
 		if c.signinSchema != c.sessionSchema && c.signinSchema != c.authenticatedSchema {
 			catalog[0].guards = append(catalog[0].guards, migrationGuard{version: 1410, schema: c.signinSchema})
 		}
+	}
+	if c.singleSessionRevocation {
+		catalog[0].guards = append(catalog[0].guards, migrationGuard{version: 1417, schema: c.signinSchema, tables: []string{"session_revocations"}})
 	}
 	for _, source := range []struct {
 		owner     ModuleID

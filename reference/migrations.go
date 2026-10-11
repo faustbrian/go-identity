@@ -91,6 +91,7 @@ type featureMigrationConfig struct {
 	resetSchema                                             string
 	passwordSigninSchema                                    string
 	preauthIssue                                            bool
+	singleSessionRevocation                                 bool
 	tenants                                                 []identity.TenantID
 	cancellation, receiptTracking, receipts, reconciliation bool
 }
@@ -200,6 +201,15 @@ func (c featureMigrationConfig) load(ctx context.Context, base migrations.Source
 			return nil, err
 		}
 		history = append(history, next...)
+	}
+	if c.singleSessionRevocation {
+		owned, err := (sessionpostgres.RevokeOneMigrationSource{Base: sessionpostgres.RevocationMigrationSource{Base: sessionpostgres.MigrationSource{Schema: c.signinSchema, Version: baseVersion}, Version: 1411}, Version: 1417}).Load(ctx)
+		if err != nil {
+			return nil, err
+		}
+		// Base and family histories retain their existing allocation/checksums.
+		// Only the separately selected single-session receipt is appended.
+		history = append(history, owned[len(owned)-1])
 	}
 	return history, nil
 }

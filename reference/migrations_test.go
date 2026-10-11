@@ -13,6 +13,42 @@ import (
 	migrations "github.com/faustbrian/go-migrations/v3"
 )
 
+func TestSessionSignoutUpgradePreservesAppliedHistory(t *testing.T) {
+	ctx := context.Background()
+	c := featureMigrationConfig{otpSchema: "otp_store", sessionSchema: "preauth_store", signinSchema: "session_store", global: "deployment"}
+	state := &storeState{config: VelocityStoreConfiguration{Schema: "risk_store"}, features: &featureState{migrations: c}}
+	stores := StoreSet{state: state}
+	before, err := stores.MigrationSource().Load(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	records := make([]migrations.Record, len(before))
+	for i, step := range before {
+		records[i], err = migrations.NewRecord(migrations.RecordKindMigration, step.Version(), step.Name(), step.Checksum(), time.Unix(1700000000, 0), time.Millisecond, false)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	state.features.migrations.singleSessionRevocation = true
+	after, err := stores.MigrationSource().Load(ctx)
+	if err != nil || len(after) != len(before)+1 {
+		t.Fatal("selected signout omitted native receipt history", err)
+	}
+	for i, step := range before {
+		if after[i] != step {
+			t.Fatal("signout rewrote installed history")
+		}
+	}
+	owner, err := (sessionpostgres.RevokeOneMigrationSource{Base: sessionpostgres.RevocationMigrationSource{Base: sessionpostgres.MigrationSource{Schema: c.signinSchema, Version: 1410}, Version: 1411}, Version: 1417}).Load(ctx)
+	if err != nil || after[len(after)-1] != owner[len(owner)-1] {
+		t.Fatal("signout differs from its native migration owner", err)
+	}
+	plan, err := migrations.PlanUp(after, records)
+	if err != nil || len(plan.Steps()) != 1 {
+		t.Fatal("installed signin cannot upgrade to signout", err)
+	}
+}
+
 func TestSelectedMigrationDeliveryProfiles(t *testing.T) {
 	for mask := 0; mask < 16; mask++ {
 		config := featureMigrationConfig{otpSchema: "otp_store", sessionSchema: "preauth_store", global: "deployment",
