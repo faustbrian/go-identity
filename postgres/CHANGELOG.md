@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Add a distinct native password-reset transaction with explicit expected
+  credential enablement, locked predecessor checks and atomic capability
+  finalization, verifier mutation, audit and lifecycle effects. Append the new
+  forward-only reset migration after credential replacement; historical schema
+  checksums are preserved. This supplies the kernel profile required by the
+  earlier reset-intent entry; public password/session orchestration remains
+  separate work.
+
 - Bind the exact original reset proof and replacement verifier in keyed command
   intent without consuming or requiring current token validity. Reject generic
   reset metadata that drops custody; reset execution remains closed until its

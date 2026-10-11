@@ -53,7 +53,7 @@ func (c *Coordinator) Begin(ctx context.Context, r Reservation) (Work, error) {
 	if r.state != nil && r.state.plan != nil && r.state.plan.captchaUse != nil && captchaExecutionParticipant(r.state.plan) == nil {
 		return Work{}, invalidWork()
 	}
-	if ctx == nil || c == nil || c.pool == nil || c.pool.Raw() == nil || r.state == nil || r.state.coordinator != c || r.state.plan.belongsTo(c.registry) != nil || r.state.plan.capability != nil && (r.state.plan.feature == nil || r.state.plan.feature.Operation != registrationEmailVerificationOperation()) || r.state.plan.risk != nil && riskExecutionParticipant(r.state.plan) == nil || r.state.plan.counters != nil && counterAdmissionParticipant(r.state.plan) == nil {
+	if ctx == nil || c == nil || c.pool == nil || c.pool.Raw() == nil || r.state == nil || r.state.coordinator != c || r.state.plan.belongsTo(c.registry) != nil || r.state.plan.capability != nil && (r.state.plan.feature == nil || r.state.plan.feature.Operation != registrationEmailVerificationOperation() && r.state.plan.feature.Operation != credentialResetOperation()) || r.state.plan.risk != nil && riskExecutionParticipant(r.state.plan) == nil || r.state.plan.counters != nil && counterAdmissionParticipant(r.state.plan) == nil {
 		return Work{}, invalidWork()
 	}
 	bounded, cancel := context.WithTimeout(ctx, c.maximumDuration)
@@ -288,6 +288,8 @@ func (c *Coordinator) Commit(w Work, result identity.CommandResult) (identity.Co
 			var err error
 			if w.state.credentialReceipt != nil {
 				err = entry.contributor.(CredentialCompromiseLifecycleContributor).PersistCredentialCompromise(w.state.ctx, w)
+			} else if w.state.resetIntent != nil {
+				err = entry.contributor.(CredentialResetLifecycleContributor).PersistCredentialReset(w.state.ctx, w)
 			} else if w.state.replacementReceipt != nil {
 				err = entry.contributor.(CredentialReplacementLifecycleContributor).PersistCredentialReplacement(w.state.ctx, w)
 			} else {
@@ -356,6 +358,9 @@ func (c *Coordinator) Commit(w Work, result identity.CommandResult) (identity.Co
 		return c.Abort(w, err)
 	}
 	if err := c.finalizeEmailVerification(w); err != nil {
+		return c.Abort(w, err)
+	}
+	if err := c.finalizeCredentialReset(w); err != nil {
 		return c.Abort(w, err)
 	}
 	if err := c.checkAuthenticatedCommand(w.state.ctx, w, true); err != nil {

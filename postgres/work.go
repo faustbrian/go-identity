@@ -59,6 +59,9 @@ type workState struct {
 	credentialReceipt     *CredentialCompromiseReceipt
 	replacementIntent     *CredentialReplacementIntent
 	replacementReceipt    *CredentialReplacementReceipt
+	resetIntent           *CredentialResetIntent
+	resetApplied          bool
+	resetFinalized        bool
 	emailVerification     *emailVerificationProgress
 	counterCommand        *identity.Command
 	riskCommand           *identity.Command

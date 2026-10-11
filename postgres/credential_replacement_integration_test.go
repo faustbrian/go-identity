@@ -81,6 +81,19 @@ func (p *replacementOutboxPhase) PersistCredentialReplacement(ctx context.Contex
 }
 
 func testCredentialReplacement(t *testing.T, ctx context.Context, pool *database.Pool, repo *Repository) {
+	// Selected replacement/reset lanes must not depend on an earlier domain test.
+	var prepared bool
+	if err := pool.Raw().QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM pg_attribute WHERE attrelid='identity.commands'::regclass AND attname='preparation_profile' AND NOT attisdropped)`).Scan(&prepared); err != nil {
+		t.Fatal(err)
+	}
+	if !prepared {
+		if _, err := pool.Raw().Exec(ctx, preparationSchemaSQL); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := pool.Raw().Exec(ctx, `CREATE TABLE IF NOT EXISTS public.identity_test_audits(event_id text PRIMARY KEY,command_id text NOT NULL UNIQUE);CREATE TABLE IF NOT EXISTS public.identity_test_lifecycle(event_id text PRIMARY KEY,command_id text NOT NULL UNIQUE)`); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := pool.Raw().Exec(ctx, `CREATE TABLE public.identity_test_replacement_native(tenant_id text,user_id text,credential_id text,version numeric NOT NULL,command_id text UNIQUE,PRIMARY KEY(tenant_id,user_id,credential_id)); CREATE TABLE public.identity_test_replacement_epochs(command_id text PRIMARY KEY,user_before numeric,user_after numeric,epoch_before numeric,epoch_after numeric,record_before numeric,record_after numeric)`); err != nil {
 		t.Fatal(err)
 	}

@@ -33,6 +33,13 @@ func prepareCredentialReplacement(ctx context.Context, w Work, command identity.
 	if err != nil {
 		return w.fail(ctx, err)
 	}
+	return lockCredentialReplacement(ctx, w, repo, intent, nil)
+}
+
+func lockCredentialReplacement(ctx context.Context, w Work, repo *Repository, intent CredentialReplacementIntent, reset *CredentialResetIntent) error {
+	if repo == nil || repo.read == nil || w.state.replacementIntent != nil {
+		return w.fail(ctx, invalidCredentialReplacement())
+	}
 	c := intent.Credential
 	rows, err := w.Query(ctx, `SELECT u.tenant_id,u.user_id,u.status,u.version::text,u.credential_version::text,c.credential_id,c.kind,c.owner,c.version::text,c.enabled,c.expires_at
  FROM identity.users u JOIN identity.credential_references c ON c.tenant_id=u.tenant_id AND c.user_id=u.user_id
@@ -77,11 +84,24 @@ func prepareCredentialReplacement(ctx context.Context, w Work, command identity.
 	if err != nil {
 		return err
 	}
+	if reset != nil {
+		if current.Enabled != reset.ExpectedEnabled {
+			return w.fail(ctx, identity.ForbiddenError{})
+		}
+		// Reset's separately admitted recovery profile may restore a disabled
+		// reference. The existing exact authority check still owns every other
+		// scope/status/version/expiry bound; authenticated change is unchanged.
+		current.Enabled = true
+	}
 	if current.User.Version != intent.ExpectedUserVersion || identity.CheckCredentialAuthority(current, c, intent.ExpectedAuthorityVersion, now) != nil {
 		return w.fail(ctx, identity.ForbiddenError{})
 	}
 	copy := intent
 	w.state.replacementIntent = &copy
+	if reset != nil {
+		copy := *reset
+		w.state.resetIntent = &copy
+	}
 	return nil
 }
 
@@ -91,6 +111,16 @@ func applyCredentialReplacement(ctx context.Context, w Work) error {
 	}
 	s := *w.state.replacementIntent
 	c := s.Credential
+	expectedEnabled := true
+	if w.state.resetIntent != nil {
+		if w.state.resetApplied {
+			return w.fail(ctx, invalidCredentialReset())
+		}
+		expectedEnabled = w.state.resetIntent.ExpectedEnabled
+		if err := w.state.execution.coordinator.runCapabilityExecution(ctx, w, false); err != nil {
+			return err
+		}
+	}
 	n, err := w.Exec(ctx, `UPDATE identity.users SET version=version+1,credential_version=credential_version+1 WHERE tenant_id=$1 AND user_id=$2 AND version=$3::numeric AND credential_version=$4::numeric AND status='active'`, string(c.TenantID), string(c.UserID), strconv.FormatUint(s.ExpectedUserVersion, 10), strconv.FormatUint(s.ExpectedAuthorityVersion, 10))
 	if err != nil {
 		return err
@@ -98,7 +128,7 @@ func applyCredentialReplacement(ctx context.Context, w Work) error {
 	if n != 1 {
 		return w.fail(ctx, identity.ConflictError{})
 	}
-	n, err = w.Exec(ctx, `UPDATE identity.credential_references SET version=version+1 WHERE tenant_id=$1 AND user_id=$2 AND credential_id=$3 AND kind=1 AND owner='identity/password' AND version=$4::numeric AND enabled=true AND (expires_at IS NULL OR expires_at>clock_timestamp())`, string(c.TenantID), string(c.UserID), string(c.ID), strconv.FormatUint(c.Version, 10))
+	n, err = w.Exec(ctx, `UPDATE identity.credential_references SET version=version+1,enabled=true WHERE tenant_id=$1 AND user_id=$2 AND credential_id=$3 AND kind=1 AND owner='identity/password' AND version=$4::numeric AND enabled=$5 AND (expires_at IS NULL OR expires_at>clock_timestamp())`, string(c.TenantID), string(c.UserID), string(c.ID), strconv.FormatUint(c.Version, 10), expectedEnabled)
 	if err != nil {
 		return err
 	}
@@ -120,6 +150,9 @@ func applyCredentialReplacement(ctx context.Context, w Work) error {
 	before := c.Version
 	c.Version++
 	w.state.replacementReceipt = &CredentialReplacementReceipt{Credential: c, BeforeUserVersion: s.ExpectedUserVersion, AfterUserVersion: s.ExpectedUserVersion + 1, BeforeAuthorityVersion: s.ExpectedAuthorityVersion, AfterAuthorityVersion: s.ExpectedAuthorityVersion + 1, BeforeCredentialVersion: before}
+	if w.state.resetIntent != nil {
+		w.state.resetApplied = true
+	}
 	return nil
 }
 

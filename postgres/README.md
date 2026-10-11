@@ -5,9 +5,23 @@ and replacement verifier through separate keyed fields, never raw journal values
 The fingerprint does not verify, transfer, reserve or consume the proof and stays
 stable for retained-key recovery after expiry. Keep original proof custody alive
 through bounded execution; terminal upstream transfer denies further binding.
-Generic reset metadata cannot substitute for the paired command. Reset execution
-is not yet supported: it requires a distinct atomic capability/credential/session
-profile, not the authenticated password-change participant.
+Generic reset metadata cannot substitute for the paired command. The distinct
+reset transaction profile requires `CredentialResetContributor`, a one-use
+capability participant and `CredentialResetLifecycleContributor`; authenticated
+password-change admission cannot substitute for reset admission. Append
+`CredentialResetMigrationSource` after the credential-replacement migration,
+using a new allocated version. Historical migration checksums remain unchanged.
+
+`CredentialResetFields` binds independent user, authority and credential
+predecessors plus the original reference enablement. Only explicitly authorized
+reset can restore a disabled reference; blocked users and expired references
+remain denied. Native verifier mutation, kernel version increments, protected
+audit, required lifecycle/session effects and capability finalization share one
+`Work`. The native owner must validate original signed recovery scope, factors,
+current identifier authority and password policy, including HIBP. Pending-journal
+recovery never reconstructs success from a retained effect. This kernel seam is
+not complete public password-reset orchestration; production password/session
+composition and release qualification remain required.
 
 Original anonymous password signup uses `PrepareFeaturePreparationPlan` followed
 by `ExecutePreparedFeature`. The original root input command carries the real

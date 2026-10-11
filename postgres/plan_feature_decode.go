@@ -11,6 +11,13 @@ import (
 // Historical decoding conserves a frozen declaration. It does not consult the
 // current registry or grant permission to reserve, execute or recover a feature.
 func decodeFeaturePlan(binding identity.CommandBinding, fingerprint [32]byte, encoded []byte) (CommandPlan, error) {
+	return decodeFeaturePlanMode(binding, fingerprint, encoded, false)
+}
+
+func decodeFeaturePlanMode(binding identity.CommandBinding, fingerprint [32]byte, encoded []byte, resetBase bool) (CommandPlan, error) {
+	if !resetBase && binding.OperationID == "identity.password.reset-complete" {
+		return decodeCredentialResetPlan(binding, fingerprint, encoded)
+	}
 	if len(encoded) > 0 && encoded[0] == 0xa5 {
 		return decodeEmailVerificationPlan(binding, fingerprint, encoded)
 	}
@@ -215,7 +222,7 @@ func decodeFeaturePlan(binding identity.CommandBinding, fingerprint [32]byte, en
 	if !r.ok || len(r.data) != 0 {
 		return fail()
 	}
-	canonical, err := encodeFeaturePlan(binding, fingerprint, p)
+	canonical, err := encodeFeaturePlanMode(binding, fingerprint, p, resetBase)
 	// One encoder owns semantic bounds; byte equality also rejects nonminimal
 	// lengths/integers, alternate keys/order and unsupported representations.
 	if err != nil || !bytes.Equal(canonical, encoded) {

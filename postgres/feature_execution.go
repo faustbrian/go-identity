@@ -10,7 +10,7 @@ import (
 	identity "github.com/faustbrian/go-identity"
 )
 
-// FeatureExecutionContributor is the complete native non-one-time feature
+// FeatureExecutionContributor is the native feature execution
 // participant. Registration remains immutable; only the coordinator invokes
 // ApplyFeature and recovery. ValidateFeatureCommand is a pure bounded local
 // operation, validating every native field, declared security action, subject
@@ -23,7 +23,9 @@ import (
 // The coordinator stages the declared effects and establishes durability.
 // Methods must support concurrent calls with independent serial-use handles.
 // Risk execution additionally requires its exact typed current-check/finalize
-// owner. Capability/OTP profiles remain rejected until their typed phases exist.
+// owner. The exact registration-email and password-reset capability profiles
+// additionally require their typed atomic participants. Other capability/OTP
+// profiles remain rejected until their typed phases exist.
 type FeatureExecutionContributor interface {
 	FeatureContributor
 	RecoveryContributor
@@ -58,6 +60,14 @@ func validateFeatureCommand(phase FeatureExecutionContributor, command identity.
 		return err
 	}
 	if plan.Capability != nil {
+		if plan.Feature != nil && plan.Feature.Operation == credentialResetOperation() {
+			p, ok := phase.(CredentialResetContributor)
+			if !ok {
+				return invalidCredentialReset()
+			}
+			_, err := credentialResetCommand(p, command, plan)
+			return err
+		}
 		p, ok := phase.(EmailVerificationContributor)
 		if !ok {
 			return invalidEmailVerification()
@@ -85,7 +95,7 @@ func validateFeatureCommand(phase FeatureExecutionContributor, command identity.
 }
 
 func (r *ContributorRegistry) admitFeaturePlan(b identity.CommandBinding, fingerprint [32]byte, p CommandPlan) (*admittedKernelPlan, error) {
-	if p.Capability != nil && (p.Feature == nil || p.Feature.Operation != registrationEmailVerificationOperation()) {
+	if p.Capability != nil && (p.Feature == nil || p.Feature.Operation != registrationEmailVerificationOperation() && p.Feature.Operation != credentialResetOperation()) {
 		return nil, invalidPlan()
 	}
 	digest, err := FeaturePlanDigest(b, fingerprint, p)
@@ -100,7 +110,11 @@ func (r *ContributorRegistry) admitFeaturePlan(b identity.CommandBinding, finger
 		return nil, invalidPlan()
 	}
 	if p.Capability != nil {
-		if _, ok := feature.contributor.(EmailVerificationContributor); !ok {
+		if p.Feature.Operation == credentialResetOperation() {
+			if _, ok := feature.contributor.(CredentialResetContributor); !ok {
+				return nil, invalidPlan()
+			}
+		} else if _, ok := feature.contributor.(EmailVerificationContributor); !ok {
 			return nil, invalidPlan()
 		}
 	}
@@ -156,6 +170,20 @@ func (r *ContributorRegistry) admitFeaturePlan(b identity.CommandBinding, finger
 			}
 			if entry.descriptor.Owner == "outbox/postgres" {
 				if _, ok := entry.contributor.(CredentialReplacementLifecycleContributor); !ok {
+					return nil, invalidPlan()
+				}
+			}
+		}
+	}
+	if p.Feature.Operation == credentialResetOperation() {
+		for _, entry := range entries {
+			if entry.descriptor.Owner == "identity/postgres" {
+				if _, ok := entry.contributor.(*Repository); !ok {
+					return nil, invalidPlan()
+				}
+			}
+			if entry.descriptor.Owner == "outbox/postgres" {
+				if _, ok := entry.contributor.(CredentialResetLifecycleContributor); !ok {
 					return nil, invalidPlan()
 				}
 			}
@@ -339,7 +367,11 @@ func (c *Coordinator) ApplyFeature(ctx context.Context, w Work, command identity
 		}
 	}
 	if p.capability != nil {
-		if e := prepareEmailVerification(ctx, w, command); e != nil {
+		if p.feature.Operation == credentialResetOperation() {
+			if e := prepareCredentialReset(ctx, w, command); e != nil {
+				return result, e
+			}
+		} else if e := prepareEmailVerification(ctx, w, command); e != nil {
 			return result, e
 		}
 	}

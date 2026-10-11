@@ -14,9 +14,9 @@ import (
 // Trusted adapters must declare every required action; these bounds do not prove
 // that declaration complete. The coordinator alone computes authoritative keyed
 // intent and matches its frozen registry. Preparation grants no reservation,
-// Work or execution readiness. Only the exact native registration-email profile
-// supports original registration email proof consumption through its typed
-// atomic phases. Other capability/cascade inputs are rejected. Invalid
+// Work or execution readiness. Only the exact native registration-email and
+// password-reset profiles support original proof consumption through their
+// typed atomic phases. Other capability/cascade inputs are rejected. Invalid
 // input returns redacted identity.InvalidInputError. Do not mutate inputs
 // concurrently with this call.
 func FeaturePlanDigest(binding identity.CommandBinding, fingerprint [32]byte, plan CommandPlan) ([32]byte, error) {
@@ -28,10 +28,14 @@ func FeaturePlanDigest(binding identity.CommandBinding, fingerprint [32]byte, pl
 }
 
 func encodeFeaturePlan(binding identity.CommandBinding, fingerprint [32]byte, p CommandPlan) ([]byte, error) {
-	// Original reset custody is fingerprintable, but ordinary feature owners
-	// cannot execute it without the reset-specific atomic capability profile.
-	if p.Feature != nil && passwordResetOperation(p.Feature.Operation) {
-		return nil, invalidPlan()
+	return encodeFeaturePlanMode(binding, fingerprint, p, false)
+}
+
+// resetBase is private to the fixed-depth reset envelope. Public preparation
+// and historical top-level decoding never admit a proof-free reset base.
+func encodeFeaturePlanMode(binding identity.CommandBinding, fingerprint [32]byte, p CommandPlan, resetBase bool) ([]byte, error) {
+	if p.Feature != nil && passwordResetOperation(p.Feature.Operation) && !resetBase {
+		return encodeCredentialResetPlan(binding, fingerprint, p)
 	}
 	if p.Capability != nil {
 		return encodeEmailVerificationPlan(binding, fingerprint, p)
