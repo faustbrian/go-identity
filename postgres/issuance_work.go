@@ -188,7 +188,12 @@ func (w Work) StageCapabilityIssuanceFor(p CapabilityIssuanceContributor, index 
 	if payload.ID != v.CapabilityID || payload.Operation != string(v.Purpose) || payload.Tenant != string(w.state.binding.TenantID) || payload.Subject != string(subject) || payload.Subject == "" || payload.Bearer || payload.MaxUses != v.MaxUses || payload.ExpiresAt != v.ExpiresAt {
 		return w.fail(w.state.ctx, invalidWork())
 	}
-	if _, err := capability.CanonicalPayload(payload, capability.DefaultLimits()); err != nil {
+	// Grant is opaque, copied authority already validated by capability.Verify
+	// under its owner's explicit limits. Reapplying unrelated defaults here
+	// rejects valid profiles without strengthening the authenticated boundary.
+	// Bind the complete verified envelope to the frozen declaration instead;
+	// the enlisted issuer independently rechecks its selected policy at persist.
+	if grant.EnvelopeDigest() == ([32]byte{}) || grant.EnvelopeDigest() != v.ProofFingerprint {
 		return w.fail(w.state.ctx, invalidWork())
 	}
 	d.grants[index], d.staged[index] = grant, true

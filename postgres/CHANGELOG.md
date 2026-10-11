@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Preserve the issuer's explicitly verified capability profile during staging,
+  rather than reapplying unrelated default parser limits. Bind every staged
+  grant to its exact declared authenticated envelope fingerprint; the enlisted
+  issuer retains selected-policy validation before durable issuance.
+
 - Reject prepared magic-link restoration that adds, removes or changes the
   original signup declaration, including its distinct creation-event identity.
 

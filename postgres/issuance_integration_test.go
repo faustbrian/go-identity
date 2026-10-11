@@ -5,6 +5,7 @@ package postgres
 import (
 	"context"
 	"crypto/sha256"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -78,7 +79,7 @@ func testIssuanceExecution(t *testing.T, ctx context.Context, pool *database.Poo
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, mode := range []string{"success", "missing", "error", "panic", "later-failure", "expiry-after-persistence", "wrong-subject", "wrong-tenant", "wrong-id", "wrong-purpose", "wrong-max-uses", "wrong-expiry", "zero-grant", "foreign-owner", "duplicate-stage"} {
+	for _, mode := range []string{"success", "selected-limits", "wrong-fingerprint", "missing", "error", "panic", "later-failure", "expiry-after-persistence", "wrong-subject", "wrong-tenant", "wrong-id", "wrong-purpose", "wrong-max-uses", "wrong-expiry", "zero-grant", "foreign-owner", "duplicate-stage"} {
 		t.Run(mode, func(t *testing.T) {
 			owner := &issuanceSQLPhase{mode: mode}
 			auditing := &deliveryAuditPhase{}
@@ -147,13 +148,21 @@ func testIssuanceExecution(t *testing.T, ctx context.Context, pool *database.Poo
 			case "wrong-expiry":
 				payload.ExpiresAt = expires.Add(time.Second)
 			}
-			token, err := capability.Issue(ctx, payload, signer, capability.DefaultLimits())
+			limits := capability.DefaultLimits()
+			if mode == "selected-limits" {
+				limits.MaxCaveats = 18
+				payload.Caveats = make(map[string]string, 18)
+				for n := 0; n < 18; n++ {
+					payload.Caveats[fmt.Sprintf("scope-%d", n)] = "bound"
+				}
+			}
+			token, err := capability.Issue(ctx, payload, signer, limits)
 			if err != nil {
 				t.Fatal(err)
 			}
 			grant, err := capability.Verify(ctx, token, capability.ResolverFunc(func(context.Context, string, capability.Algorithm) (capability.ResolvedKey, error) {
 				return capability.ResolvedKey{Verifier: verifier}, nil
-			}), capability.VerifyOptions{Now: now, Limits: capability.DefaultLimits()})
+			}), capability.VerifyOptions{Now: now, Limits: limits})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -162,6 +171,9 @@ func testIssuanceExecution(t *testing.T, ctx context.Context, pool *database.Poo
 			}
 			issue := issuanceTestPlan()
 			issue.Grants[0].CapabilityID, issue.Grants[0].ExpiresAt, issue.Grants[0].ProofFingerprint = string(b.CommandID), expires, sha256.Sum256([]byte(token))
+			if mode == "wrong-fingerprint" {
+				issue.Grants[0].ProofFingerprint[0] ^= 1
+			}
 			p, err := c.PrepareCommandPlan(b, command, CommandPlan{Contributors: r.Descriptors(), Audits: []AuditPlan{ap}, Lifecycle: &LifecyclePlan{EventType: "identity.created.v1", AfterVersion: 1}, CapabilityIssuance: issue})
 			if err != nil {
 				t.Fatal("issuance preparation", err)
@@ -223,7 +235,7 @@ func testIssuanceExecution(t *testing.T, ctx context.Context, pool *database.Poo
 				}
 			}
 			result, err := c.Commit(w, identity.CommandResult{Binding: b, Outcome: identity.CommitOutcomeCommitted, User: user, AuditEventID: record.ID()})
-			if mode == "success" || mode == "foreign-owner" {
+			if mode == "success" || mode == "foreign-owner" || mode == "selected-limits" {
 				if err != nil || result.Outcome != identity.CommitOutcomeCommitted {
 					t.Fatal("issuance commit", err)
 				}
