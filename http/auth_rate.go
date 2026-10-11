@@ -242,6 +242,28 @@ func (l *AuthRateLimiter) AdmitSignupIdentifier(ctx context.Context, facts Netwo
 	return l.admitAuthDimension(ctx, facts, r.OperationID, r.Identifier, true, "rate.signup")
 }
 
+// AdmitDeliveryIP applies shared delivery IP10/hour before native destination
+// normalization. Only canonical delivery operations and mapped tenant facts
+// are accepted. A failed source lookup retains this debit. After admission,
+// call AdmitDeliveryIdentifier once for the same immutable anonymous request;
+// do not also call Admit. This grants no identity or delivery authority.
+func (l *AuthRateLimiter) AdmitDeliveryIP(ctx context.Context, facts NetworkFacts, operationID string) (AuthRateResult, error) {
+	return l.admitAuthDimension(ctx, facts, operationID, "", false, "rate.delivery")
+}
+
+// AdmitDeliveryIdentifier applies shared tenant/destination5/hour after native
+// normalization and AdmitDeliveryIP. It does not debit IP again or refund an
+// earlier debit. UserID must be empty: this split profile is anonymous; use
+// Admit for authenticated delivery requiring the additional subject budget.
+// Both profiles share the same destination bucket. Outage or ambiguity denies
+// without fallback, retries, or a reusable admission ticket.
+func (l *AuthRateLimiter) AdmitDeliveryIdentifier(ctx context.Context, facts NetworkFacts, r AuthRateRequest) (AuthRateResult, error) {
+	if r.UserID != "" {
+		return AuthRateResult{}, ErrInvalidInput
+	}
+	return l.admitAuthDimension(ctx, facts, r.OperationID, r.Identifier, true, "rate.delivery")
+}
+
 func (l *AuthRateLimiter) admitAuthDimension(ctx context.Context, facts NetworkFacts, operationID, identifier string, source bool, profile RatePolicyID) (out AuthRateResult, err error) {
 	defer func() {
 		if recover() != nil {
@@ -263,6 +285,8 @@ func (l *AuthRateLimiter) admitAuthDimension(ctx context.Context, facts NetworkF
 	name, period, identifierPeriod, ipCapacity, identifierCapacity := "signin", 10*time.Minute, 10*time.Minute, uint64(20), uint64(10)
 	if profile == "rate.signup" {
 		name, period, identifierPeriod, ipCapacity, identifierCapacity = "signup", time.Hour, 24*time.Hour, 5, 3
+	} else if profile == "rate.delivery" {
+		name, period, identifierPeriod, ipCapacity, identifierCapacity = "delivery", time.Hour, time.Hour, 10, 5
 	}
 	kind, value, capacity := name+"-ip", facts.ClientIP().String(), ipCapacity
 	if source {

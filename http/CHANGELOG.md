@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Support anonymous delivery IP admission before native destination
+  normalization, followed by destination admission without a second IP debit.
+  Split callers share existing delivery budgets and cannot select a subject;
+  unavailable shared storage denies rather than falling back locally.
+
 - Add canonical shared signup IP5/hour and tenant/identifier3/day admission.
   Support split IP-before-native-normalization without double-counting, using
   the same buckets as full admission. Reject subject overrides and fail closed

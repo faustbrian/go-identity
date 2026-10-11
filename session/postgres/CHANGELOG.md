@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add reset-specific transactional all-session revocation with no source-session
+  preservation. Bound the complete active-state set, retain original effect
+  evidence including empty sets, and roll back with credential/audit/lifecycle
+  failure. Install the forward reset-effect migration after kernel reset history.
+  Public password-reset orchestration remains in development.
+
 - Add signup-specific session mapping and same-transaction issuance effects.
   Correlate the newly staged account, pending identifier and password reference
   with the original registration command; preserve anonymous scope, complete

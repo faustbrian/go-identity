@@ -33,6 +33,47 @@ func authLimiter(t *testing.T, clock func() time.Time) (*identityhttp.AuthRateLi
 	return l, shared
 }
 
+func TestAuthRateSplitDeliverySharesOriginalBudgets(t *testing.T) {
+	l, backend := authLimiter(t, func() time.Time { return time.Unix(1800000000, 0) })
+	ctx := context.Background()
+	facts := safeFacts(t, "198.51.100.1")
+	for i := range 10 {
+		if out, err := l.AdmitDeliveryIP(ctx, facts, "identity.password.reset-request"); err != nil || !out.Allowed {
+			t.Fatal("reset IP denied early", i, err)
+		}
+		if out, err := l.AdmitDeliveryIdentifier(ctx, facts, identityhttp.AuthRateRequest{OperationID: "identity.password.reset-request", Identifier: fmt.Sprintf("reset%d@example.invalid", i)}); err != nil || !out.Allowed {
+			t.Fatal("reset identifier double-debited IP", i, err)
+		}
+	}
+	if out, err := l.Admit(ctx, facts, identityhttp.AuthRateRequest{OperationID: "identity.password.reset-request", Identifier: "other@example.invalid"}); !errors.Is(err, identityhttp.ErrRateLimited) || out.Allowed || out.RetryAfter != 6*time.Minute {
+		t.Fatal("split delivery escaped full admission IP budget", err, out)
+	}
+	l2, _ := authLimiter(t, func() time.Time { return time.Unix(1800000000, 0) })
+	for range 5 {
+		if out, err := l2.AdmitDeliveryIdentifier(ctx, facts, identityhttp.AuthRateRequest{OperationID: "identity.password.reset-request", Identifier: "same@example.invalid"}); err != nil || !out.Allowed {
+			t.Fatal("reset destination denied early", err)
+		}
+	}
+	if out, err := l2.Admit(ctx, safeFacts(t, "198.51.100.2"), identityhttp.AuthRateRequest{OperationID: "identity.password.reset-request", Identifier: "same@example.invalid"}); !errors.Is(err, identityhttp.ErrRateLimited) || out.Allowed || out.RetryAfter != 12*time.Minute {
+		t.Fatal("split delivery escaped full destination budget", err, out)
+	}
+	for _, operation := range []string{"identity.password.signin", "identity.password.signup", "identity.password.reset-complete", "unknown"} {
+		if _, err := l.AdmitDeliveryIP(ctx, facts, operation); !errors.Is(err, identityhttp.ErrInvalidInput) {
+			t.Fatal("non-delivery operation selected budget", operation, err)
+		}
+	}
+	if _, err := l.AdmitDeliveryIdentifier(ctx, facts, identityhttp.AuthRateRequest{OperationID: "identity.password.reset-request", Identifier: "same@example.invalid", UserID: "claimed"}); !errors.Is(err, identityhttp.ErrInvalidInput) {
+		t.Fatal("public reset selected a subject budget", err)
+	}
+	backend.mode.Store(1)
+	if out, err := l.AdmitDeliveryIP(ctx, facts, "identity.password.reset-request"); !errors.Is(err, identityhttp.ErrRateUnavailable) || out.Allowed {
+		t.Fatal("reset delivery outage allowed IP", err, out)
+	}
+	if out, err := l.AdmitDeliveryIdentifier(ctx, facts, identityhttp.AuthRateRequest{OperationID: "identity.password.reset-request", Identifier: "outage@example.invalid"}); !errors.Is(err, identityhttp.ErrRateUnavailable) || out.Allowed {
+		t.Fatal("reset delivery outage allowed destination", err, out)
+	}
+}
+
 func TestAuthRateCanonicalSigninIdentifierAndIP(t *testing.T) {
 	now := func() time.Time { return time.Unix(1800000000, 0) }
 	l, _ := authLimiter(t, now)

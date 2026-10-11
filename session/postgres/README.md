@@ -92,6 +92,25 @@ The consuming password-service integration is still pending.
 
 ## Native password-change session effect
 
+### Password reset is distinct
+
+`NewPasswordResetEffect(sessionConfig)` is lent the exact native
+`CredentialResetContributor` and its original `Work`; it accepts no pool or
+authenticated source session. Install `PasswordResetMigrationSource` after
+kernel `CredentialResetMigrationSource` and the session history. It terminally
+revokes every active-state row for the tenant/user, including expired and
+other-method records. The whole-set limit is 100000, with locked keyset pages of
+16; overflow aborts all effects. An empty set is valid. No session is preserved
+or issued. Original effect evidence is retained with command history, separately
+from disposable session payloads, and `Recover` reveals no bearer.
+
+The reset owner still must authenticate original issuer custody, current
+account/identifier/factor authority, risk/HIBP and one-use consumption. Propagate
+every error to the existing coordinator. This effect is not a public reset
+endpoint; that complete native workflow remains in development.
+
+### Authenticated password change
+
 Install `PasswordChangeMigrationSource` at a permanently allocated version after
 the credential-continuation and kernel credential-replacement histories. It adds
 command-linked retained session evidence without changing prior migration bytes

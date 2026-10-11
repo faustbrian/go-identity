@@ -687,6 +687,15 @@ func TestNativeFamilyRevocationIntegration(t *testing.T) {
 			t.Fatal(e)
 		}
 		complete = append(complete, signupHistory...)
+		complete, e = (identitypostgres.CredentialResetMigrationSource{Base: fixtureSource(complete), Version: 37}).Load(ctx)
+		if e != nil {
+			t.Fatal(e)
+		}
+		resetHistory, e := (PasswordResetMigrationSource{Schema: "session_store", Version: 38}).Load(ctx)
+		if e != nil {
+			t.Fatal(e)
+		}
+		complete = append(complete, resetHistory...)
 		migrate(complete)
 		migrate(complete)
 		var afterIssuances string
@@ -706,6 +715,7 @@ func TestNativeFamilyRevocationIntegration(t *testing.T) {
 		t.Run("native password signin effect", func(t *testing.T) { testNativePasswordSigninEffect(t, ctx, pool) })
 		t.Run("native password signup effect", func(t *testing.T) { testNativePasswordSignupEffect(t, ctx, pool) })
 		t.Run("native password session effect", func(t *testing.T) { testNativePasswordSessionEffect(t, ctx, pool) })
+		t.Run("native password reset session effect", func(t *testing.T) { testNativeResetSessionEffect(t, ctx, pool) })
 	})
 }
 
