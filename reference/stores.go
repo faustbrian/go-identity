@@ -57,12 +57,18 @@ type StoreConfiguration struct {
 	// PasswordSignin selects native login/recovery using graph-owned counted
 	// risk and the selected session base, without enabling any HTTP route.
 	PasswordSignin *PasswordSigninConfiguration
+	// PasswordSignup selects native registration and confirmation, not HTTP.
+	PasswordSignup *PasswordSignupConfiguration
 	// HTTPPasswordReset independently selects request/completion routes. Native
 	// reset, strict HTTP rate and the original browser-device issuer are required.
 	HTTPPasswordReset *HTTPPasswordResetConfiguration
 	// HTTPPasswordSignin explicitly selects browser login and its named original
 	// flow method. Native signin/PreAuth, rate and device owners are required.
 	HTTPPasswordSignin *HTTPPasswordSigninConfiguration
+	// HTTPPasswordSignup explicitly selects browser signup, not confirmation.
+	HTTPPasswordSignup *HTTPPasswordSignupConfiguration
+	// HTTPRegistrationVerification explicitly selects confirmation, not signup.
+	HTTPRegistrationVerification *HTTPRegistrationVerificationConfiguration
 }
 
 // VelocityStoreConfiguration selects one primary/native recovery pair. Native
@@ -371,6 +377,9 @@ func (s StoreSet) Close(ctx context.Context) error {
 	}
 	if state.features != nil && state.features.httpPasswordReset != nil {
 		state.features.httpPasswordReset.rate.Close()
+	}
+	if state.features != nil && state.features.httpRegistrationVerification != nil {
+		state.features.httpRegistrationVerification.rate.Close()
 	}
 	drained := state.drained
 	state.mu.Unlock()

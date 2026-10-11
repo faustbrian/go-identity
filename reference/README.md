@@ -81,6 +81,47 @@ neither signin nor the password method in initiation metadata. The current
 reference profile still requires OTP's storage/device graph; independent
 password-only composition remains an end-state obligation.
 
+`PasswordSignup` independently selects required-email-verification registration
+and its native confirmation/recovery owner. Configure immutable native field,
+address, registration, password/HIBP and authorization policies, then supply the
+paired issuer/preparation configuration and protected counter configuration.
+Leave native evaluator, issuer/codec/counters and delivery owner/renderer absent:
+the graph constructs these actual owners together. `Native.AuthorizationNamespace`
+must match OTP's consuming user-policy namespace; the new account acquires its
+epoch in the registration transaction. Missing or mismatched selection fails
+construction rather than creating an account that cannot log in. The graph
+exports `features.PasswordSignup()` and `features.RegistrationVerification()`
+only after explicit selection, with initialization, tenant and shutdown guards.
+
+Select `PasswordSignup.PreAuth`, `HTTPPasswordSignup`, shared `HTTPPreAuth` and
+`HTTPRate` to expose signup initiation. POST `/v1/session/preauth-issue` with
+`{"method":"signup"}`, then `/v1/password/signup` with `flowID`, `email`,
+`password` and the original exact `callbackURL`, carrying the returned cookies
+and an `Idempotency-Key`. Signup returns a neutral verification acknowledgement,
+not an account ID or session. The configured worker sends the encrypted native
+verification delivery. Identical keyed retry retains original effects; changing
+the original input conflicts. Occupied-address acknowledgement does not replace
+credentials, issue another grant or reset authorization authority.
+
+Select `HTTPRegistrationVerification` separately for
+`/v1/email/verification-confirm`. Supply the delivered `token`, original exact
+`callback` and a stable canonical `commandID` under the configured HTTPS Origin.
+Confirmation atomically verifies the original address and consumes its proof;
+it issues no session. Exact replay returns metadata, not the address again.
+Failed protected attempts remain charged, while domain changes roll back; proven
+abort terminally retires the grant rather than resetting it for reuse. Typed
+recovery is available through the public native ports; no HTTP recovery route
+is implicitly added. After confirmation, use the independently selected password
+initiation/signin route described above.
+
+Apply selected-owner migrations for registration, verification and protected
+counter extensions alongside the shared kernel, password, factor, capability,
+delivery and authorization histories. Existing history bytes remain unchanged.
+The native integration journey creates accounts and original flows through
+public HTTP and actual migrations, then proves captured delivery, confirmation,
+login, denial and rollback. Historical velocity warmup remains an explicit test
+fixture, not proof of fresh velocity bootstrap or full release qualification.
+
 Use selected-owner Check/Plan/Apply for reset installation, rather than only
 the legacy shared `MigrationSource()`. Independent native histories install
 kernel replacement/reset effects, password material, factor authority,

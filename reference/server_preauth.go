@@ -87,6 +87,13 @@ func (s *Server) preAuthFeature(network identityhttp.NetworkConfig, f FeatureSet
 		}
 		c.Methods = []sessionhttp.PreAuthMethod{{Name: "password", Service: password, Action: "identity.password.signin", CallbackURL: selected.preauth.CallbackURL, PolicyID: selected.policy, PolicyVersion: selected.version}}
 	}
+	if selected := s.state.features.httpPasswordSignup; selected != nil {
+		owner, err := f.SignupPreAuth()
+		if err != nil {
+			return nil, err
+		}
+		c.Methods = append(c.Methods, sessionhttp.PreAuthMethod{Name: "signup", Service: owner, Action: "identity.password.signup", CallbackURL: selected.preauth.CallbackURL, PolicyID: selected.policy, PolicyVersion: selected.version})
+	}
 	var feature identityhttp.Feature
 	if h.device != nil {
 		feature, err = sessionhttp.NewPreAuthFeatureWithBrowserDevice(c, *h.device)

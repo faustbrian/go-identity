@@ -52,7 +52,7 @@ func (referenceResetPolicy) Decide(ctx context.Context, c authorization.Decision
 	return (otpReferenceSigninPolicy{}).Decide(ctx, c)
 }
 
-func configureReferencePasswordReset(t *testing.T, c *reference.StoreConfiguration, origin string, pool *database.Pool) {
+func configureReferencePasswordReset(t *testing.T, c *reference.StoreConfiguration, origin string, pool *database.Pool, signupOnly ...bool) {
 	t.Helper()
 	query := kernel.CommandQueryPolicy{Authorization: referenceResetPolicy{}, Clock: clock.System{}, PolicyVersion: 9}
 	c.OTP.RequestKeys.Policy = query
@@ -113,13 +113,17 @@ func configureReferencePasswordReset(t *testing.T, c *reference.StoreConfigurati
 		t.Fatal(err)
 	}
 	callback := origin + "/reset"
+	var collector passwordpg.ResetScreeningCollector
+	if len(signupOnly) == 0 || !signupOnly[0] {
+		collector = referenceHIBPScreening(t, screeningPolicy, pool)
+	}
 	c.Delivery.Templates = append(c.Delivery.Templates, delivery.Template{ID: "password-reset", Version: 1, Channel: delivery.ChannelEmail, Locale: "en", Body: "{{.link}}", ContentType: "text/plain", RequiredVariables: []string{"link"}, VariableSchema: []delivery.VariableSchema{{Name: "link", Kind: "url", Sensitive: true}}, AllowedOrigins: []string{origin}, MaxRenderedBytes: 4096})
 	c.PasswordReset = &reference.PasswordResetConfiguration{Native: passwordpg.ResetConfig{
 		Repository: passwordpg.Config{MaximumDuration: 3 * time.Second, HashPolicy: policy}, ConfigurationID: "reference-reset-observed-v1", PolicyID: "AAAAAAAAAAAAAAAAAAAACQ", GlobalAuthorityID: "deployment", AuthorizationNamespace: "users", Origins: []string{origin}, ActiveEnvelopeKeyID: "issue-envelope", IdentifierKey: [32]byte{97}, Session: c.OTP.Signin.Session, Coordinator: coordinator,
 		Profile:      password.ResetProfileConfig{Issuer: origin, Audience: "reset", MaximumLifetime: 2 * time.Minute, Callbacks: []string{callback}, CurrentBindingKeyVersion: 1, RetainedBindingKeys: map[uint32][32]byte{1: {95}}},
 		Issuer:       issuerpg.IssuerConfig{Crypto: capability.ServiceConfig{Signer: signer, Resolver: resolver, Clock: time.Now, Limits: capability.DefaultLimits()}, Audience: "reset", CurrentReplayKeyVersion: 1, RetainedReplayKeys: map[uint32][32]byte{1: {94}}, PreparationTimeout: time.Second},
 		Screening:    password.HashPreparationConfig{Primitive: crypto, MinimumBytes: 8, MaximumBytes: 128, Timeout: time.Second, DummyHash: dummy, Policy: screeningPolicy, Now: time.Now},
-		CollectReset: referenceHIBPScreening(t, screeningPolicy, pool),
+		CollectReset: collector,
 		Risk:         risk.AuthenticationAdmissionCustodyConfig{ConfigurationID: "reference-reset-v1", Keys: c.OTP.RiskKeys},
 		Request:      &passwordpg.ResetRequestConfig{Address: address, RequestKeys: requestKeys, Lifetime: time.Minute, IssuanceCustody: issuerpg.IssuancePreparationConfig{Deployment: "deployment", ActiveEnvelopeKey: "reset-issuer", EnvelopeKeys: map[string][]byte{"reset-issuer": bytes.Repeat([]byte{104}, 32)}, VerificationKeys: []issuerpg.PreparationVerificationKey{{ID: "reference-reset", HMAC: bytes.Repeat([]byte{93}, 32)}}, Clock: time.Now}, Delivery: passwordpg.SignupDeliveryConfig{Resolver: resolver, Endpoint: origin + "/password/reset", TemplateID: "password-reset", TemplateVersion: 1, ProviderVersion: 1, Locales: []string{"en"}, ScopeKey: [32]byte{105}, Timeout: time.Second}},
 	}}

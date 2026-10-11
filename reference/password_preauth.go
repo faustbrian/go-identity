@@ -14,7 +14,7 @@ import (
 )
 
 // PasswordPreAuthConfiguration selects a fixed password original-flow profile.
-// Origin and CallbackURL must be allowed by the consuming native signin owner.
+// Origin and CallbackURL must be allowed by the consuming native workflow owner.
 // FlowKeyIndex selects its retained Native.FlowKeys, including original version;
 // action, policy and revision come from that owner. ActorID is a service identity,
 // not the future authenticated user. Lifetime, token size and secure cookie obey

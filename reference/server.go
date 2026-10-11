@@ -175,6 +175,13 @@ func NewServer(c ReferenceConfig, d ReferenceDependencies, f FeatureSet) (*Serve
 	if selected != nil {
 		contributions = append(contributions, *selected)
 	}
+	selected, err = server.registrationVerificationFeature(c.HTTP.Network, f)
+	if err != nil {
+		return nil, invalid
+	}
+	if selected != nil {
+		contributions = append(contributions, *selected)
+	}
 	operations, err := identityhttp.NewOperationDescriptors(identityhttp.FeatureServices{Features: contributions})
 	if err != nil {
 		return nil, invalid

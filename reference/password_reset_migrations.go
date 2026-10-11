@@ -35,7 +35,7 @@ func migrationDiscoveryIDs(catalog []migrationHistory, ids []ModuleID) []ModuleI
 
 func resetKernelDependent(namespace string) bool {
 	switch namespace {
-	case "identity_password", "identity_mfa", "identity_capability", "identity_reset_session", "identity_password_session":
+	case "identity_password", "identity_mfa", "identity_capability", "identity_reset_session", "identity_password_session", "identity_registration", "identity_registration_counters":
 		return true
 	default:
 		return false

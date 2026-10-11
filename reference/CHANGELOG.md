@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Compose explicitly selected required-email-verification registration and
+  confirmation through native signup, capability issuance, protected counters
+  and encrypted delivery. Named signup initiation uses the existing secure
+  browser-flow route. New accounts acquire the authorization epoch consumed by
+  login atomically; unverified accounts cannot sign in. Selected native migration
+  histories preserve existing reset/signin installations. HTTP remains opt-in;
+  confirmation and retries do not issue sessions or reveal credentials again.
+  The current profile still requires the OTP/device storage graph.
+
 - Add explicitly selected original password-flow issuance and browser signin
   over the existing native session/password owners. Password initiation uses
   the named shared-route method without changing default OTP intent. Reset and

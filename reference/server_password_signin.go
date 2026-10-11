@@ -95,7 +95,11 @@ func (s *Server) passwordFeature(network identityhttp.NetworkConfig, f FeatureSe
 	if err != nil {
 		return nil, err
 	}
-	if config.ResetRequest == nil && config.ResetComplete == nil && config.Signin == nil {
+	config.Signup, err = s.passwordSignupHTTPConfig(network, f)
+	if err != nil {
+		return nil, err
+	}
+	if config.ResetRequest == nil && config.ResetComplete == nil && config.Signin == nil && config.Signup == nil {
 		return nil, nil
 	}
 	feature, err := passwordhttp.NewFeature(config)
