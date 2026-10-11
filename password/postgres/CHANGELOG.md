@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Add explicit reset screening attribution using the immutable original command
+  and authenticated issuer challenge. Select `ResetConfig.CollectReset` instead
+  of `Screening.Collect` for observed provider/audit composition. Foreign proof
+  or scope never reaches the collector; recovery restores original output
+  without recollecting. Legacy collector profiles retain their original digest;
+  switching collection modes changes custody identity and cannot reuse retained
+  preparations under the other mode.
+
 - Authenticate original issued reset subject, credential and challenge lifetime
   for transport admission through the configured current query policy. Foreign
   tenant/target/action or stale policy denies without returning source metadata.

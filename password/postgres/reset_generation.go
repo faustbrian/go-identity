@@ -9,6 +9,7 @@ import (
 	password "github.com/faustbrian/go-identity/password"
 	kernel "github.com/faustbrian/go-identity/postgres"
 	"github.com/faustbrian/go-identity/risk"
+	primitive "github.com/faustbrian/go-password"
 )
 
 // Only the native preparation journal's acknowledged original generation may
@@ -20,6 +21,10 @@ import (
 // without regeneration and fences current account/identifier/factor authority
 // with material, one-use, session and lifecycle effects in the sole Work.
 func (r *Repository) generateResetCommand(ctx context.Context, input identity.Command, c password.HashPreparationConfig, admission risk.AuthenticationAdmission, verifier capability.Service, profile password.ResetProfile, original password.ResetGrantSpec, grant capability.Grant, consumption kernel.CapabilityPlan) (command identity.Command, facts []risk.Signal, err error) {
+	return r.generateResetCommandWithCollector(ctx, input, c, admission, verifier, profile, original, grant, consumption, nil)
+}
+
+func (r *Repository) generateResetCommandWithCollector(ctx context.Context, input identity.Command, c password.HashPreparationConfig, admission risk.AuthenticationAdmission, verifier capability.Service, profile password.ResetProfile, original password.ResetGrantSpec, grant capability.Grant, consumption kernel.CapabilityPlan, collect ResetScreeningCollector) (command identity.Command, facts []risk.Signal, err error) {
 	caller := ctx
 	defer func() {
 		if recover() != nil {
@@ -70,6 +75,16 @@ func (r *Repository) generateResetCommand(ctx context.Context, input identity.Co
 	verified, err := verifier.Verify(ctx, proof, "identity.password.reset-complete", audiences[0])
 	if err != nil || verified.EnvelopeDigest() != grant.EnvelopeDigest() {
 		return command, nil, identity.ForbiddenError{}
+	}
+	if collect != nil {
+		challenge := verified.Payload().ID
+		if c.Collect != nil || challenge == "" || challenge != consumption.CapabilityID {
+			return command, nil, password.ErrPasswordWork
+		}
+		binding := spec.Binding
+		c.Collect = func(ctx context.Context, actual risk.Context, borrowed primitive.Secret) ([]risk.Signal, error) {
+			return collect(ctx, binding, challenge, actual, borrowed)
+		}
 	}
 	hash, facts, err := r.prepareResetHash(ctx, c, admission, scope, candidate)
 	if err != nil {

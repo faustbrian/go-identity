@@ -18,6 +18,7 @@ import (
 	email "github.com/faustbrian/go-identity/email"
 	password "github.com/faustbrian/go-identity/password"
 	kernel "github.com/faustbrian/go-identity/postgres"
+	"github.com/faustbrian/go-identity/risk"
 	primitive "github.com/faustbrian/go-password"
 	database "github.com/faustbrian/go-postgres"
 	envelope "github.com/faustbrian/go-secret-envelope"
@@ -47,6 +48,18 @@ func testPublicResetRequest(t *testing.T, ctx context.Context, previous *ResetSe
 	normalization, _ := identifier.NewNormalizationProfile(identifier.NormalizationProfileSpec{ID: "reset-email", Version: 1, Unicode: identifier.UnicodeNormalizationNFC, MaximumBytes: 512})
 	address, _ := email.NewAddressParser(email.AddressPolicy{MaximumBytes: 512, Canonicalization: normalization})
 	c := previous.config()
+	collect := c.Screening.Collect
+	c.Screening.Collect = nil
+	c.CollectReset = func(ctx context.Context, binding identity.CommandBinding, challenge string, scope risk.Context, candidate primitive.Secret) ([]risk.Signal, error) {
+		if scope.Attempt != string(binding.CommandID) || scope.Tenant != string(binding.TenantID) || scope.Operation != risk.Action(binding.OperationID) || binding.CorrelationID != string(binding.CommandID) || binding.PolicyID != c.PolicyID || binding.PolicyVersion != c.Coordinator.AdmissionPolicy.PolicyVersion || binding.ActorID != signinTestActor || binding.ActorKind != authorization.SubjectServiceAccount {
+			t.Fatal("public reset screening lost original attribution")
+		}
+		var original bool
+		if err := previous.pool.Raw().QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM capability_identity_one_use WHERE capability_id=$1 AND tenant_id=$2 AND subject_id=$3 AND origin_command_id IS NOT NULL)`, challenge, string(binding.TenantID), string(binding.UserID)).Scan(&original); err != nil || !original {
+			t.Fatal("public reset screening fabricated challenge identity", err)
+		}
+		return collect(ctx, scope, candidate)
+	}
 	requestKeys, err := kernel.NewRequestKeyConfig("public-reset", [32]byte{108}, *c.Coordinator.QueryPolicy)
 	if err != nil {
 		t.Fatal(err)

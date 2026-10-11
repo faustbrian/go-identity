@@ -26,6 +26,10 @@ type resetGenerationOwner interface {
 	generateResetCommand(context.Context, identity.Command, password.HashPreparationConfig, risk.AuthenticationAdmission, capability.Service, password.ResetProfile, password.ResetGrantSpec, capability.Grant, kernel.CapabilityPlan) (identity.Command, []risk.Signal, error)
 }
 
+type resetAttributedGenerationOwner interface {
+	generateResetCommandWithCollector(context.Context, identity.Command, password.HashPreparationConfig, risk.AuthenticationAdmission, capability.Service, password.ResetProfile, password.ResetGrantSpec, capability.Grant, kernel.CapabilityPlan, func(context.Context, identity.CommandBinding, string, risk.Context, primitive.Secret) ([]risk.Signal, error)) (identity.Command, []risk.Signal, error)
+}
+
 type resetOutputOwner interface {
 	sealResetOutput(context.Context, *envelope.Service, string, identity.Command, uint64, [32]byte, identity.Command, risk.AuthenticationAdmission, []risk.Signal) ([]byte, error)
 	restoreResetOutput(context.Context, *envelope.Service, identity.Command, uint64, [32]byte, []byte) (identity.Command, risk.PreparedAuthenticationAdmission, []risk.Signal, error)
@@ -76,8 +80,13 @@ func TestResetGenerationPreservesOriginalProofAndSignedScope(t *testing.T) {
 	crypto, _ := primitive.New(policy)
 	dummy, _ := crypto.Hash(context.Background(), []byte("synthetic-dummy"))
 	screening := signupScreeningPolicy(t)
-	for _, mode := range []string{"clean", "foreign-proof", "foreign-version", "missing-factor", "missing-admission", "breached", "expired-during-provider", "foreign-command", "provider-panic", "expired-risk", "cancelled"} {
+	for _, mode := range []string{"clean", "attributed", "attributed-foreign-proof", "attributed-breached", "attributed-provider-panic", "attributed-cancelled", "attributed-ambiguous", "foreign-proof", "foreign-version", "missing-factor", "missing-admission", "breached", "expired-during-provider", "foreign-command", "provider-panic", "expired-risk", "cancelled"} {
 		t.Run(mode, func(t *testing.T) {
+			attributed := strings.HasPrefix(mode, "attributed")
+			mode = strings.TrimPrefix(mode, "attributed-")
+			if mode == "attributed" {
+				mode = "clean"
+			}
 			at := now
 			candidate, _ := primitive.NewSecret([]byte(" synthetic-reset-password "))
 			defer candidate.Destroy()
@@ -122,6 +131,7 @@ func TestResetGenerationPreservesOriginalProofAndSignedScope(t *testing.T) {
 				var stop context.CancelFunc
 				ctx, stop = context.WithCancel(ctx)
 				stop()
+			case "ambiguous":
 			default:
 				before = false
 			}
@@ -145,7 +155,28 @@ func TestResetGenerationPreservesOriginalProofAndSignedScope(t *testing.T) {
 			if !ok {
 				t.Fatal("native reset cannot generate its original proof-bound verifier")
 			}
-			generated, facts, err := owner.generateResetCommand(ctx, command, config, admission, engine, profile, selected, grant, plan)
+			var generated identity.Command
+			var facts []risk.Signal
+			if !attributed {
+				generated, facts, err = owner.generateResetCommand(ctx, command, config, admission, engine, profile, selected, grant, plan)
+			}
+			if attributed {
+				owner, ok := any(&Repository{policy: policy}).(resetAttributedGenerationOwner)
+				if !ok {
+					t.Fatal("native reset cannot bind authenticated challenge attribution to screening")
+				}
+				collect := config.Collect
+				if mode != "ambiguous" {
+					config.Collect = nil
+				}
+				calls = 0
+				generated, facts, err = owner.generateResetCommandWithCollector(ctx, command, config, admission, engine, profile, selected, grant, plan, func(ctx context.Context, binding identity.CommandBinding, challenge string, scope risk.Context, candidate primitive.Secret) ([]risk.Signal, error) {
+					if binding != spec.Binding || challenge != payload.ID || scope.Attempt != string(binding.CommandID) || scope.Tenant != string(binding.TenantID) || scope.Operation != risk.Action(binding.OperationID) {
+						t.Fatal("screening attribution lost original authenticated custody")
+					}
+					return collect(ctx, scope, candidate)
+				})
+			}
 			if mode == "clean" {
 				got, hash, e := passwordResetOriginalMaterial(generated, policy, profile, original, grant, plan, at)
 				metadata, valid := generated.PasswordResetFeature()

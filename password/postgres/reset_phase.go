@@ -36,6 +36,7 @@ type resetCompletionPhase struct {
 	sessions            *sessionpg.PasswordResetEffect
 	declaration         kernel.CommandPlan
 	screening           password.HashPreparationConfig
+	collectReset        ResetScreeningCollector
 	verifier            capability.Service
 	crypto              *envelope.Service
 	envelopeKey         string
@@ -156,7 +157,7 @@ func (a *resetCompletionAdmission) Generate(ctx context.Context, generation uint
 		return nil, err
 	}
 	p := a.owner
-	command, facts, err := p.repository.generateResetCommand(ctx, p.original, p.screening, a.admission, p.verifier, p.profile, p.origin, p.grant, p.consumption)
+	command, facts, err := p.repository.generateResetCommandWithCollector(ctx, p.original, p.screening, a.admission, p.verifier, p.profile, p.origin, p.grant, p.consumption, p.collectReset)
 	if err != nil {
 		return nil, err
 	}

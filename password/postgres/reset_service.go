@@ -25,6 +25,7 @@ import (
 	kernel "github.com/faustbrian/go-identity/postgres"
 	"github.com/faustbrian/go-identity/risk"
 	sessionpg "github.com/faustbrian/go-identity/session/postgres"
+	primitive "github.com/faustbrian/go-password"
 	database "github.com/faustbrian/go-postgres"
 	envelope "github.com/faustbrian/go-secret-envelope"
 	"github.com/faustbrian/go-secret-envelope/adapters/keyring"
@@ -41,11 +42,16 @@ import (
 // a separate private risk-attribution key. Retain original issuer, profile and
 // command keys while historical workflow custody remains supported.
 type ResetConfig struct {
-	Repository                                Config
-	ConfigurationID, PolicyID                 string
-	Profile                                   password.ResetProfileConfig
-	Issuer                                    issuerpg.IssuerConfig
-	Screening                                 password.HashPreparationConfig
+	Repository                Config
+	ConfigurationID, PolicyID string
+	Profile                   password.ResetProfileConfig
+	Issuer                    issuerpg.IssuerConfig
+	Screening                 password.HashPreparationConfig
+	// CollectReset selects attributed screening instead of Screening.Collect.
+	// Exactly one collector is required. Native generation supplies original
+	// command metadata and the authenticated issuer challenge before password
+	// work; callers must not reconstruct these from transport correlation.
+	CollectReset                              ResetScreeningCollector
 	Risk                                      risk.AuthenticationAdmissionCustodyConfig
 	Coordinator                               kernel.CoordinatorConfig
 	Session                                   sessionpg.Config
@@ -57,6 +63,16 @@ type ResetConfig struct {
 	// only composition; ResetRequest and its recovery then deny explicitly.
 	Request *ResetRequestConfig
 }
+
+// ResetScreeningCollector synchronously borrows an exact candidate after native
+// issuer provenance, original scope, proof and counted admission validation.
+// Binding is the immutable original command, not today's transport attempt;
+// challengeID is the verified grant ID matched to durable consumption custody.
+// The collector owns provider/audit composition, honors ctx, retains no secret,
+// and returns exactly one HIBP signal or an error. Unknown required audit delivery
+// must deny and retain records through the existing audit reconciliation owner.
+// Dependencies must be concurrency-safe. Recovery never invokes this callback.
+type ResetScreeningCollector = func(context.Context, identity.CommandBinding, string, risk.Context, primitive.Secret) ([]risk.Signal, error)
 
 // Format hides key material and runtime dependencies from diagnostics.
 func (ResetConfig) Format(s fmt.State, _ rune) {
@@ -104,7 +120,18 @@ func NewResetService(pool *database.Pool, c ResetConfig, keys *keyring.Provider)
 	if keys == nil || !reauthenticationText(c.ConfigurationID, 128) || !reauthenticationText(c.PolicyID, 128) || !reauthenticationText(c.GlobalAuthorityID, 128) || !reauthenticationText(c.AuthorizationNamespace, 128) || !reauthenticationText(c.ActiveEnvelopeKeyID, 256) || c.IdentifierKey == ([32]byte{}) || !signinURLs(c.Origins, true) || c.Coordinator.AdmissionPolicy == nil || c.Coordinator.QueryPolicy == nil || c.Profile.Audience != c.Issuer.Audience {
 		return nil, password.ErrPasswordWork
 	}
-	if _, err := password.NewHashPreparer(c.Screening); err != nil || !signinCurrentHash(c.Screening.DummyHash, c.Repository.HashPolicy) {
+	screening := c.Screening
+	if c.CollectReset != nil {
+		if screening.Collect != nil {
+			return nil, password.ErrPasswordWork
+		}
+		// Validate the shared profile without invoking a provider. Generation
+		// replaces this fail-closed callback only after authenticated custody.
+		screening.Collect = func(context.Context, risk.Context, primitive.Secret) ([]risk.Signal, error) {
+			return nil, password.ErrPasswordWork
+		}
+	}
+	if _, err := password.NewHashPreparer(screening); err != nil || !signinCurrentHash(c.Screening.DummyHash, c.Repository.HashPolicy) {
 		return nil, password.ErrPasswordWork
 	}
 	repository, err := NewRepository(pool, c.Repository)
@@ -158,7 +185,8 @@ func NewResetService(pool *database.Pool, c ResetConfig, keys *keyring.Provider)
 		Parameters, Limits                                                                  any
 		Dummy                                                                               [32]byte
 		Origins, Callbacks                                                                  []string
-	}{"identity-password-reset-native-v1", c.ConfigurationID, c.PolicyID, c.Risk.ConfigurationID, c.GlobalAuthorityID, c.AuthorizationNamespace, c.Profile.Issuer, c.Profile.Audience, string(p.Algorithm()), admission.PolicyVersion, query.PolicyVersion, uint32(c.Screening.MinimumBytes), uint32(c.Screening.MaximumBytes), c.Profile.MaximumLifetime, c.Screening.Timeout, p.Argon2idParameters(), p.Limits(), sha256.Sum256([]byte(c.Screening.DummyHash.String())), c.Origins, c.Profile.Callbacks})
+		AttributedScreening                                                                 bool `json:",omitempty"`
+	}{"identity-password-reset-native-v1", c.ConfigurationID, c.PolicyID, c.Risk.ConfigurationID, c.GlobalAuthorityID, c.AuthorizationNamespace, c.Profile.Issuer, c.Profile.Audience, string(p.Algorithm()), admission.PolicyVersion, query.PolicyVersion, uint32(c.Screening.MinimumBytes), uint32(c.Screening.MaximumBytes), c.Profile.MaximumLifetime, c.Screening.Timeout, p.Argon2idParameters(), p.Limits(), sha256.Sum256([]byte(c.Screening.DummyHash.String())), c.Origins, c.Profile.Callbacks, c.CollectReset != nil})
 	if err != nil {
 		return nil, password.ErrPasswordWork
 	}
@@ -249,7 +277,7 @@ func (s *ResetService) ResetComplete(ctx context.Context, r password.ResetComple
 		return out, identity.ForbiddenError{}
 	}
 	caller.Request.Resource.ID = authorization.ResourceID(origin.UserID)
-	p := &resetCompletionPhase{profile: s.profile, origin: origin, grant: grant, screening: c.Screening, verifier: s.verifier, crypto: s.crypto, envelopeKey: c.ActiveEnvelopeKeyID, configuration: s.configuration, riskConfig: c.Risk, subject: risk.Subject{Network: r.Network, Device: r.Device}}
+	p := &resetCompletionPhase{profile: s.profile, origin: origin, grant: grant, screening: c.Screening, collectReset: c.CollectReset, verifier: s.verifier, crypto: s.crypto, envelopeKey: c.ActiveEnvelopeKeyID, configuration: s.configuration, riskConfig: c.Risk, subject: risk.Subject{Network: r.Network, Device: r.Device}}
 	coordinator, registry, err := s.completionCoordinator(p)
 	if err != nil {
 		return out, password.ErrPasswordWork

@@ -54,10 +54,18 @@ func testResetCompletionDisconnect(t *testing.T, ctx context.Context, service *R
 			config := service.config()
 			config.Coordinator.LeaseDuration = 500 * time.Millisecond
 			collected := 0
-			collect := config.Screening.Collect
-			config.Screening.Collect = func(ctx context.Context, c risk.Context, secret primitive.Secret) ([]risk.Signal, error) {
-				collected++
-				return collect(ctx, c, secret)
+			if config.CollectReset != nil {
+				collect := config.CollectReset
+				config.CollectReset = func(ctx context.Context, binding identity.CommandBinding, challenge string, c risk.Context, secret primitive.Secret) ([]risk.Signal, error) {
+					collected++
+					return collect(ctx, binding, challenge, c, secret)
+				}
+			} else {
+				collect := config.Screening.Collect
+				config.Screening.Collect = func(ctx context.Context, c risk.Context, secret primitive.Secret) ([]risk.Signal, error) {
+					collected++
+					return collect(ctx, c, secret)
+				}
 			}
 			fault := &signinCommitFault{before: before, marker: "INSERT INTO identity_password.replacements"}
 			pool, err := database.Connect(ctx, database.Config{DSN: service.pool.Raw().Config().ConnConfig.ConnString(), MaxConns: 3, Configure: func(c *database.PoolConfig) error { c.ConnConfig.DialFunc = fault.dial; return nil }})

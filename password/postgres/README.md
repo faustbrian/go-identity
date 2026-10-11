@@ -27,6 +27,21 @@ Password screening precedes hashing. Credential replacement, required session
 revocation, one-time consumption and audit/lifecycle effects commit together.
 Original retries preserve the generated verifier and reject changed input.
 Proof-free recovery returns historical metadata only, not authority or secrets.
+
+For observed HIBP composition, select `ResetConfig.CollectReset` and leave
+`Screening.Collect` nil. Exactly one mode is required. The native owner invokes
+the attributed collector only after original issuer/proof and counted-admission
+validation, passing the original `CommandBinding`, verified challenge ID,
+original risk scope and borrowed exact-byte candidate. Correlation remains the
+original command's correlation, not a retry's transport correlation. Supply the
+owned observed HIBP adapter and existing audit recorder in that callback; required
+unknown audit delivery must deny and retain unchanged records through that
+recorder's reconciliation path. Never substitute a random attempt or derive one
+from an identifier. The callback is synchronous, bounded and concurrency-safe;
+native restoration/recovery never invokes it. Change `ConfigurationID` when its
+semantics change. Collection mode is also bound into preparation identity, while
+legacy profiles keep the existing digest unchanged. This binding point does not
+itself establish provider interoperability or observed audit delivery.
 A proven rollback can return `NotCommitted` with `identity.UnavailableError`
 retaining the original dependency failure; its released proof cannot be reused.
 Selected reset HTTP/reference composition remains unfinished; backend public
