@@ -12,6 +12,8 @@ import (
 	kernel "github.com/faustbrian/go-identity/postgres"
 	"github.com/faustbrian/go-identity/session"
 	database "github.com/faustbrian/go-postgres"
+	envelope "github.com/faustbrian/go-secret-envelope"
+	"github.com/faustbrian/go-secret-envelope/adapters/keyring"
 )
 
 // Real primary reader coverage, not proof of public Send/Signin or issuance.
@@ -190,6 +192,129 @@ func testNativeOTPSessionAuthentication(t *testing.T, ctx context.Context, pool 
 		}
 		if got, err := selected.Get(ctx, foreign); err != nil || got.Authenticated {
 			t.Fatal("OTP reader crossed tenant", err)
+		}
+	})
+	t.Run("magic-link profile", func(t *testing.T) {
+		p, _ := metadata.Bindings()
+		s.Authentication = session.AuthenticationMetadata{Kind: session.AuthenticationMagicLink}
+		m, err := session.NewMagicLinkAuthentication(session.MagicLinkAuthenticationSpec{CommandID: p.CommandID, RequestCommandID: p.SendCommandID, CapabilityID: "original-grant", IdentifierID: p.IdentifierID, IdentifierVersion: p.IdentifierVersion, VerificationVersion: p.VerificationVersion, AuthenticatedAt: p.AuthenticatedAt, ValidUntil: p.ValidUntil})
+		if err != nil {
+			t.Fatal(err)
+		}
+		record, err := session.NewSessionWithMagicLink(s, m)
+		if err != nil {
+			t.Fatal(err)
+		}
+		encoded, _, err := encodeRecord(record)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := pool.Raw().Exec(ctx, `UPDATE session_store.sessions SET record=$1::jsonb WHERE tenant_id='otp-read'`, encoded); err != nil {
+			t.Fatal(err)
+		}
+		defer func() {
+			if _, err := pool.Raw().Exec(ctx, `UPDATE session_store.sessions SET record=$1::jsonb WHERE tenant_id='otp-read'`, payload); err != nil {
+				t.Fatal(err)
+			}
+		}()
+		service, err := NewMagicLinkSessionService(pool, MagicLinkSessionServiceConfig{Repository: c.Repository, Profile: MagicLinkAdmissionConfig(c.Profile), Validation: c.Validation})
+		if err != nil {
+			t.Fatal(err)
+		}
+		got, err := service.Get(ctx, request)
+		if err != nil || !got.Authenticated || !got.ValidUntil().Equal(positive.ValidUntil()) {
+			t.Fatal("magic-link reader denied exact live session", err)
+		}
+		if read().Authenticated {
+			t.Fatal("OTP reader borrowed magic-link provenance")
+		}
+		keys, err := keyring.New(map[string][]byte{"cache": make([]byte, 32)})
+		if err != nil {
+			t.Fatal(err)
+		}
+		crypto, err := envelope.NewService(keys)
+		if err != nil {
+			t.Fatal(err)
+		}
+		cacheProfile := session.EncryptedCacheConfig{Issuer: "issuer", Environment: "test", DeploymentEpoch: 1, KeyReference: "cache", MaximumAge: time.Minute, MaximumBytes: 32768}
+		codec, err := session.NewEncryptedCacheCodec(service, crypto, cacheProfile)
+		if err != nil {
+			t.Fatal(err)
+		}
+		blob, err := codec.Seal(ctx, got)
+		if err != nil {
+			t.Fatal(err)
+		}
+		passwordReader, err := NewSessionService(pool, SessionServiceConfig{Repository: c.Repository, Validation: c.Validation, Profile: IdentifierAdmissionConfig{GlobalAuthorityID: c.Profile.GlobalAuthorityID, PolicyNamespace: c.Profile.PolicyNamespace, Audience: c.Profile.Audience, AuthenticationMethod: "password", CredentialKind: identity.CredentialPassword, CredentialOwner: "identity/password"}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		otpReader, err := NewOTPSessionService(pool, c)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, target := range []*session.SessionService{otpReader, passwordReader} {
+			cache, err := session.NewEncryptedCacheCodec(target, crypto, cacheProfile)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got, err := cache.Get(ctx, request, blob); err != nil || got.Authenticated {
+				t.Fatal("native foreign profile admitted magic-link warm cache", err)
+			}
+		}
+		restarted, err := NewMagicLinkSessionService(pool, MagicLinkSessionServiceConfig{Repository: c.Repository, Profile: MagicLinkAdmissionConfig(c.Profile), Validation: c.Validation})
+		if err != nil {
+			t.Fatal(err)
+		}
+		warm, err := session.NewEncryptedCacheCodec(restarted, crypto, cacheProfile)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if restored, err := warm.Get(ctx, request, blob); err != nil || !restored.Authenticated || !restored.ValidUntil().Equal(got.ValidUntil()) {
+			t.Fatal("native same-profile restoration changed validity", err)
+		}
+		for _, change := range []func(*MagicLinkSessionServiceConfig){
+			func(c *MagicLinkSessionServiceConfig) { c.Profile.GlobalAuthorityID = "different-deployment" },
+			func(c *MagicLinkSessionServiceConfig) { c.Profile.PolicyNamespace = "different-policy" },
+		} {
+			other := MagicLinkSessionServiceConfig{Repository: c.Repository, Profile: MagicLinkAdmissionConfig(c.Profile), Validation: c.Validation}
+			change(&other)
+			target, err := NewMagicLinkSessionService(pool, other)
+			if err != nil {
+				t.Fatal(err)
+			}
+			cache, err := session.NewEncryptedCacheCodec(target, crypto, cacheProfile)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got, err := cache.Get(ctx, request, blob); err != nil || got.Authenticated {
+				t.Fatal("same method borrowed another authority profile", err)
+			}
+		}
+		for _, change := range []struct{ name, update, restore string }{
+			{"blocked", `UPDATE identity.users SET status='banned' WHERE tenant_id='otp-read'`, `UPDATE identity.users SET status='active' WHERE tenant_id='otp-read'`},
+			{"credential-epoch", `UPDATE identity.users SET credential_version=2 WHERE tenant_id='otp-read'`, `UPDATE identity.users SET credential_version=1 WHERE tenant_id='otp-read'`},
+			{"verification", `UPDATE identity.identifiers SET verification_version=2 WHERE tenant_id='otp-read'`, `UPDATE identity.identifiers SET verification_version=1 WHERE tenant_id='otp-read'`},
+			{"revoked", `UPDATE session_store.sessions SET state='revoked' WHERE tenant_id='otp-read'`, `UPDATE session_store.sessions SET state='active' WHERE tenant_id='otp-read'`},
+		} {
+			t.Run(change.name, func(t *testing.T) {
+				if _, err := pool.Raw().Exec(ctx, change.update); err != nil {
+					t.Fatal(err)
+				}
+				defer func() {
+					if _, err := pool.Raw().Exec(ctx, change.restore); err != nil {
+						t.Fatal(err)
+					}
+				}()
+				if got, err := service.Get(ctx, request); err != nil || got.Authenticated {
+					t.Fatal("stale magic-link authority admitted", err)
+				}
+			})
+		}
+		foreign := request
+		foreign.TenantID = "session-read"
+		if got, err := service.Get(ctx, foreign); err != nil || got.Authenticated {
+			t.Fatal("magic-link reader crossed tenant", err)
 		}
 	})
 }

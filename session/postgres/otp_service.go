@@ -64,6 +64,10 @@ func (OTPSessionServiceConfig) MarshalJSON() ([]byte, error) {
 // not an issued session's expiry. Existing NewSessionService stays proof-only;
 // neither factory manufactures issuance or accepts the other method implicitly.
 func NewOTPSessionService(pool *database.Pool, c OTPSessionServiceConfig) (*session.SessionService, error) {
+	return newPossessionSessionService(pool, c, false)
+}
+
+func newPossessionSessionService(pool *database.Pool, c OTPSessionServiceConfig, magicLink bool) (*session.SessionService, error) {
 	if !c.Profile.valid() || c.Profile.Audience != c.Validation.Audience || c.Repository.MaximumDuration > c.Validation.MaximumDuration {
 		return nil, session.ErrInvalidInput
 	}
@@ -81,7 +85,19 @@ func NewOTPSessionService(pool *database.Pool, c OTPSessionServiceConfig) (*sess
 	}
 	profile := c.Profile
 	profile.GlobalAuthorityID, profile.PolicyNamespace, profile.Audience = strings.Clone(profile.GlobalAuthorityID), strings.Clone(profile.PolicyNamespace), strings.Clone(profile.Audience)
-	return session.NewSessionService(&primarySessionReader{native: native, domain: domain, policy: policy, clock: c.Validation.Clock, otp: &profile}, c.Validation)
+	reader := &primarySessionReader{native: native, domain: domain, policy: policy, clock: c.Validation.Clock}
+	if magicLink {
+		p := MagicLinkAdmissionConfig(profile)
+		reader.magicLink = &p
+	} else {
+		reader.otp = &profile
+	}
+	method := session.AuthenticationOTP
+	if magicLink {
+		method = session.AuthenticationMagicLink
+	}
+	cacheProfile := nativeAdmissionCacheProfile(c.Repository.Schema, profile.GlobalAuthorityID, profile.PolicyNamespace, profile.Audience)
+	return session.NewProfileSessionService(reader, c.Validation, method, cacheProfile)
 }
 
 // This derives keys only. Current authority always comes from its primary owner.
@@ -95,6 +111,13 @@ func otpSessionAdmission(c OTPAdmissionConfig, record session.Session) (kernel.D
 	}
 	if _, err := record.OTPAuthentication().Bindings(); err != nil {
 		return deny()
+	}
+	return verifiedIdentifierSessionAdmission(c, s)
+}
+
+func verifiedIdentifierSessionAdmission(c OTPAdmissionConfig, s session.SessionSpec) (kernel.DirectoryAuthorityQuery, authority.AuthorityScope, error) {
+	deny := func() (kernel.DirectoryAuthorityQuery, authority.AuthorityScope, error) {
+		return kernel.DirectoryAuthorityQuery{}, authority.AuthorityScope{}, session.ErrUnauthenticated
 	}
 	a, err := s.Authority.Bindings()
 	if err != nil || a.Organization.Present || a.Factor.Present || a.Passkey.Present {
@@ -122,8 +145,18 @@ func (r *primarySessionReader) observeOTP(ctx context.Context, stored StoredSess
 	if err != nil {
 		return session.SessionObservation{}, err
 	}
-	s, _ := stored.Session.Bindings()
 	p, _ := stored.Session.OTPAuthentication().Bindings()
+	return r.observeVerifiedIdentifier(ctx, stored, start, query, scope, verifiedIdentifierProvenance{p.IdentifierID, p.IdentifierKind, p.IdentifierVersion, p.VerificationVersion})
+}
+
+type verifiedIdentifierProvenance struct {
+	id                    identity.IdentifierID
+	kind                  identity.IdentifierKind
+	version, verification uint64
+}
+
+func (r *primarySessionReader) observeVerifiedIdentifier(ctx context.Context, stored StoredSession, start time.Time, query kernel.DirectoryAuthorityQuery, scope authority.AuthorityScope, p verifiedIdentifierProvenance) (session.SessionObservation, error) {
+	s, _ := stored.Session.Bindings()
 	directory, err := r.domain.GetDirectoryAuthority(ctx, query)
 	if err != nil {
 		return session.SessionObservation{}, observationError(err)
@@ -134,7 +167,7 @@ func (r *primarySessionReader) observeOTP(ctx context.Context, stored StoredSess
 	}
 	var canonical string
 	for _, identifier := range identifiers.Identifiers {
-		if identifier.ID == p.IdentifierID && identifier.Kind == p.IdentifierKind && identifier.Version == p.IdentifierVersion && identifier.Verified {
+		if identifier.ID == p.id && identifier.Kind == p.kind && identifier.Version == p.version && identifier.Verified {
 			canonical = identifier.CanonicalValue
 		}
 	}
@@ -144,11 +177,11 @@ func (r *primarySessionReader) observeOTP(ctx context.Context, stored StoredSess
 	// Reuse the identity owner for all three security epochs and exact verified
 	// identifier. The session's actual user restricts resolution; an address
 	// reassigned to another user can never retarget this session.
-	recipient, err := r.domain.ResolveRecipient(ctx, kernel.RecipientQuery{TenantID: s.TenantID, UserID: s.UserID, Kind: p.IdentifierKind, CanonicalValue: canonical, Eligibility: kernel.RecipientVerified})
+	recipient, err := r.domain.ResolveRecipient(ctx, kernel.RecipientQuery{TenantID: s.TenantID, UserID: s.UserID, Kind: p.kind, CanonicalValue: canonical, Eligibility: kernel.RecipientVerified})
 	if err != nil {
 		return session.SessionObservation{}, observationError(err)
 	}
-	if recipient.Suppressed || recipient.User.ID != s.UserID || recipient.Identifier.ID != p.IdentifierID || recipient.Identifier.Version != p.IdentifierVersion || recipient.Verification.IdentifierID != p.IdentifierID || recipient.Verification.Version != p.VerificationVersion || recipient.Verification.State != identity.VerificationVerified {
+	if recipient.Suppressed || recipient.User.ID != s.UserID || recipient.Identifier.ID != p.id || recipient.Identifier.Version != p.version || recipient.Verification.IdentifierID != p.id || recipient.Verification.Version != p.verification || recipient.Verification.State != identity.VerificationVerified {
 		return session.SessionObservation{}, session.ErrUnauthenticated
 	}
 	policy, err := r.policy.Get(ctx, scope)

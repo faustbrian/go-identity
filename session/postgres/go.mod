@@ -10,7 +10,7 @@ require (
 	github.com/faustbrian/go-clock v1.0.0
 	github.com/faustbrian/go-identity v0.0.0-20261011052554-3ca77f9f25c7
 	github.com/faustbrian/go-identity/postgres v0.0.0-20261011052832-0417c168e3e7
-	github.com/faustbrian/go-identity/session v0.0.0-20261010102003-fc1006ce176e
+	github.com/faustbrian/go-identity/session v0.0.0-20261011102605-954333fbc307
 	github.com/faustbrian/go-migrations/v3 v3.0.2-0.20261001014304-a461b18b6b24
 	github.com/faustbrian/go-password v1.0.1-0.20261001082808-a3dbd862340c
 	github.com/faustbrian/go-postgres v1.1.1-0.20260912090843-61261695bcc7

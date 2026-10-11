@@ -1,5 +1,31 @@
 # PostgreSQL session storage
 
+## Magic-link session records and primary reads
+
+Install `MagicLinkMigrationSource` at a new permanent version after
+`CredentialContinuationMigrationSource` in the same schema/history. It admits
+schemas 7/8 without rewriting existing records or earlier SQL/checksums.
+Upgrade readers and writers before enabling the profile: old readers reject
+it. Never reinterpret magic-link metadata as OTP or a persistent password.
+
+`NewMagicLinkSessionService` explicitly selects native magic-link reads using
+`MagicLinkSessionServiceConfig`. Configure the exact global authority, user
+policy namespace, audience and bounded validation/key profile. The borrowed
+primary pool remains caller-owned. Reads require the original verified email,
+identifier/verification versions and every current authority dimension; blocking,
+revocation or a security epoch change denies. Positive evidence expires within
+20 seconds of read start and cache copies cannot renew it. This reader does not
+authenticate a link or implement atomic issuance; native magic-link consumption
+and selected reference composition remain under development.
+
+All native factories select a closed authentication method and bind their
+schema, global authority, policy namespace and remaining selected admission
+configuration into encrypted-cache context. Another method or selected profile
+cannot borrow a warm positive, even with shared wrapping/lookup keys. Earlier
+unbound cache entries miss and refresh from primary; stored session records do
+not change. Distinct physical databases must use distinct explicit encrypted
+cache issuer/environment/deployment contexts.
+
 ## Original-signin hash upgrades
 
 `PasswordSigninEffect.PrepareHashUpgrade` admits the frozen prospective

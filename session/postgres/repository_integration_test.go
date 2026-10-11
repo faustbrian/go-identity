@@ -208,7 +208,23 @@ func TestSessionPostgresIntegration(t *testing.T) {
 	if err != nil || string(upgradedPayload) != string(payload) {
 		t.Fatal("continuation upgrade rewrote legacy recovery bytes", err)
 	}
+	magicLinkHistory, err := (MagicLinkMigrationSource{Schema: "session_store", Version: 16}).Load(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fullHistory = append(fullHistory, magicLinkHistory...)
+	migrate(fixtureSource(fullHistory))
+	migrate(fixtureSource(fullHistory))
+	upgradedRecord, err = repo.Get(ctx, "tenant-a", "session-a")
+	if err != nil {
+		t.Fatal("magic-link upgrade lost legacy record", err)
+	}
+	upgradedPayload, _, err = encodeRecord(upgradedRecord.Session)
+	if err != nil || string(upgradedPayload) != string(payload) {
+		t.Fatal("magic-link upgrade rewrote legacy bytes", err)
+	}
 	t.Run("complete OTP primary record", func(t *testing.T) { testOTPPrimaryRecord(t, ctx, pool) })
+	t.Run("complete magic-link primary record", func(t *testing.T) { testMagicLinkPrimaryRecord(t, ctx, pool) })
 	t.Run("complete continued primary record", func(t *testing.T) { testContinuedPrimaryRecord(t, ctx, pool, native) })
 	t.Run("canonical pre-auth", func(t *testing.T) { testNativePreAuth(t, ctx, pool) })
 	t.Run("borrowed session admission", func(t *testing.T) { testSessionAdmission(t, ctx, pool, native) })

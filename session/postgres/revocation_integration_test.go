@@ -696,6 +696,11 @@ func TestNativeFamilyRevocationIntegration(t *testing.T) {
 			t.Fatal(e)
 		}
 		complete = append(complete, resetHistory...)
+		magicLinkHistory, e := (MagicLinkMigrationSource{Schema: "session_store", Version: 39}).Load(ctx)
+		if e != nil {
+			t.Fatal(e)
+		}
+		complete = append(complete, magicLinkHistory...)
 		migrate(complete)
 		migrate(complete)
 		var afterIssuances string

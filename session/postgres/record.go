@@ -32,9 +32,10 @@ type storedRecord struct {
 	Lookup                   session.TokenDigest
 	Authentication           session.AuthenticationMetadata
 	IssuedAt, LastActivityAt time.Time
-	CSRF                     *session.CSRFStateSpec              `json:",omitempty"`
-	OTP                      *session.OTPAuthenticationSpec      `json:",omitempty"`
-	Continuation             *session.CredentialContinuationSpec `json:",omitempty"`
+	CSRF                     *session.CSRFStateSpec               `json:",omitempty"`
+	OTP                      *session.OTPAuthenticationSpec       `json:",omitempty"`
+	MagicLink                *session.MagicLinkAuthenticationSpec `json:",omitempty"`
+	Continuation             *session.CredentialContinuationSpec  `json:",omitempty"`
 }
 
 func encodeRecord(s session.Session) ([]byte, string, error) {
@@ -65,6 +66,10 @@ func encodeRecord(s session.Session) ([]byte, string, error) {
 		record.Schema += 2
 		record.OTP = &metadata
 	}
+	if metadata, e := s.MagicLinkAuthentication().Bindings(); e == nil {
+		record.Schema += 6
+		record.MagicLink = &metadata
+	}
 	if continuation, ok := s.CredentialContinuation(); ok {
 		record.Schema += 4
 		record.Continuation = &continuation
@@ -88,12 +93,16 @@ func decodeRecord(b []byte) (session.Session, error) {
 	}
 	_, hasCSRF := envelope["CSRF"]
 	_, hasOTP := envelope["OTP"]
+	_, hasMagicLink := envelope["MagicLink"]
 	_, hasContinuation := envelope["Continuation"]
 	if hasCSRF {
 		keys = append(keys, "CSRF")
 	}
 	if hasOTP {
 		keys = append(keys, "OTP")
+	}
+	if hasMagicLink {
+		keys = append(keys, "MagicLink")
 	}
 	if hasContinuation {
 		keys = append(keys, "Continuation")
@@ -103,7 +112,7 @@ func decodeRecord(b []byte) (session.Session, error) {
 		return invalid()
 	}
 	if hasContinuation {
-		if hasOTP {
+		if hasOTP || hasMagicLink {
 			return invalid()
 		}
 		if _, ok := exactObject(top["Continuation"], "CommandID", "BeforeAuthorityVersion", "BeforeCredentialVersion"); !ok {
@@ -112,6 +121,14 @@ func decodeRecord(b []byte) (session.Session, error) {
 	}
 	if hasOTP {
 		if _, ok := exactObject(top["OTP"], "CommandID", "SendCommandID", "ChallengeID", "AttemptID", "IdentifierID", "IdentifierKind", "IdentifierVersion", "VerificationVersion", "AuthenticatedAt", "ValidUntil"); !ok {
+			return invalid()
+		}
+	}
+	if hasMagicLink {
+		if hasOTP {
+			return invalid()
+		}
+		if _, ok := exactObject(top["MagicLink"], "CommandID", "RequestCommandID", "CapabilityID", "IdentifierID", "IdentifierVersion", "VerificationVersion", "AuthenticatedAt", "ValidUntil"); !ok {
 			return invalid()
 		}
 	}
@@ -195,7 +212,10 @@ func decodeRecord(b []byte) (session.Session, error) {
 	if hasContinuation {
 		expectedSchema += 4
 	}
-	if record.Schema != expectedSchema || hasOTP != (record.Authentication.Kind == session.AuthenticationOTP) {
+	if hasMagicLink {
+		expectedSchema += 6
+	}
+	if record.Schema != expectedSchema || hasOTP != (record.Authentication.Kind == session.AuthenticationOTP) || hasMagicLink != (record.Authentication.Kind == session.AuthenticationMagicLink) {
 		return invalid()
 	}
 	if decoder.Decode(new(any)) != io.EOF {
@@ -220,6 +240,16 @@ func decodeRecord(b []byte) (session.Session, error) {
 	var result session.Session
 	if hasContinuation {
 		result, err = session.NewContinuedPasswordSession(spec, state, *record.Continuation)
+	} else if hasMagicLink {
+		metadata, e := session.NewMagicLinkAuthentication(*record.MagicLink)
+		if e != nil {
+			return invalid()
+		}
+		if hasCSRF {
+			result, err = session.NewSessionWithMagicLinkAndCSRF(spec, metadata, state)
+		} else {
+			result, err = session.NewSessionWithMagicLink(spec, metadata)
+		}
 	} else if hasOTP {
 		metadata, e := session.NewOTPAuthentication(*record.OTP)
 		if e != nil {

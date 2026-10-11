@@ -2,6 +2,9 @@ package postgres
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -62,17 +65,29 @@ func NewSessionService(pool *database.Pool, c SessionServiceConfig) (*session.Se
 	profile.Audience = strings.Clone(profile.Audience)
 	profile.AuthenticationMethod = strings.Clone(profile.AuthenticationMethod)
 	profile.CredentialOwner = strings.Clone(profile.CredentialOwner)
-	return session.NewSessionService(&primarySessionReader{native: native, domain: domain, policy: policy, profile: profile, clock: c.Validation.Clock}, c.Validation)
+	cacheProfile := nativeAdmissionCacheProfile(c.Repository.Schema, profile.GlobalAuthorityID, profile.PolicyNamespace, profile.Audience, profile.AuthenticationMethod, string(profile.CredentialKind), profile.CredentialOwner)
+	return session.NewProfileSessionService(&primarySessionReader{native: native, domain: domain, policy: policy, profile: profile, clock: c.Validation.Clock}, c.Validation, session.AuthenticationVerified, cacheProfile)
+}
+
+// Canonical selected native authority and storage configuration is authenticated
+// cache context, not a new validity vector. The envelope already binds issuer,
+// environment, epoch and audience; deployments sharing those keys must still
+// distinguish separate primary stores through that explicit deployment context.
+func nativeAdmissionCacheProfile(fields ...string) string {
+	encoded, _ := json.Marshal(fields) // A string slice has no failing JSON arm.
+	digest := sha256.Sum256(encoded)
+	return hex.EncodeToString(digest[:])
 }
 
 // Kept private: consumers configure the factory, not arbitrary owner readers.
 type primarySessionReader struct {
-	native  *Repository
-	domain  *kernel.Repository
-	policy  *authority.AuthorityStore
-	profile IdentifierAdmissionConfig
-	clock   session.IssuerClock
-	otp     *OTPAdmissionConfig
+	native    *Repository
+	domain    *kernel.Repository
+	policy    *authority.AuthorityStore
+	profile   IdentifierAdmissionConfig
+	clock     session.IssuerClock
+	otp       *OTPAdmissionConfig
+	magicLink *MagicLinkAdmissionConfig
 }
 
 var _ session.SessionReader = (*primarySessionReader)(nil)
@@ -123,6 +138,9 @@ func (r *primarySessionReader) ObserveSession(ctx context.Context, lookup sessio
 	}
 	if r.otp != nil {
 		return r.observeOTP(bounded, stored, start)
+	}
+	if r.magicLink != nil {
+		return r.observeMagicLink(bounded, stored, start)
 	}
 	binding := identity.CommandBinding{TenantID: spec.TenantID, UserID: spec.UserID, ActorID: identity.ActorID(spec.UserID), ActorKind: authorization.SubjectUser}
 	directory, credential, policy, err := sessionAdmissionBindings(r.profile, stored.Session, binding, spec.SessionID, spec.Version)

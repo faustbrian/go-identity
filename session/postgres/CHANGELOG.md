@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+- Bind native session cache admission to the selected method, schema and
+  authority configuration. Shared wrapping keys cannot transfer warm positives
+  across profiles. Earlier unbound entries refresh from primary; persisted
+  session records and their lifetimes are unchanged.
+
+- Preserve magic-link grant provenance in new session record schemas 7/8 and
+  add an explicit primary reader that checks the original verified address and
+  current account authority. Install MagicLinkMigrationSource after credential
+  continuation history and upgrade readers before selecting these records.
+  Existing storage bytes/checksums remain unchanged; atomic magic-link login
+  and reference composition remain workflow-owned and in development.
+
 - Add reset-specific transactional all-session revocation with no source-session
   preservation. Bound the complete active-state set, retain original effect
   evidence including empty sets, and roll back with credential/audit/lifecycle
