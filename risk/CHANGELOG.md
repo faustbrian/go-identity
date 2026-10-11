@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Separate protected credential-mutation provider assessment from transaction-
+  owned velocity allowance. Required provider and HIBP failures still deny;
+  caller-supplied velocity cannot bypass native atomic counters. Ordinary
+  complete assessment remains unchanged.
+
 - Prepare and validate sessionless registration-link confirmation counters
   using the authenticated original grant ID as a distinct keyed dimension.
   Preserve tenant/subject limits and original evidence lifetime; normal

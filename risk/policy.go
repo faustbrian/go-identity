@@ -358,6 +358,10 @@ type Assessment struct {
 // Callers must not execute a protected effect from this pure result alone.
 // Context cancellation is preserved; nil/invalid input returns no assessment.
 func (p Policy) Assess(ctx context.Context, c Context, input []Signal) (Assessment, error) {
+	return p.assess(ctx, c, input, false)
+}
+
+func (p Policy) assess(ctx context.Context, c Context, input []Signal, protectedProviders bool) (Assessment, error) {
 	if ctx == nil {
 		return Assessment{}, ErrInvalidContext
 	}
@@ -367,6 +371,14 @@ func (p Policy) Assess(ctx context.Context, c Context, input []Signal) (Assessme
 	a, err := p.Admit(c.Operation)
 	if err != nil {
 		return Assessment{}, err
+	}
+	if protectedProviders {
+		if a.Preflight != "" || a.Profile.Class != CredentialMutation || a.Profile.Phase != ReserveWithCommand || !slices.Contains(a.Profile.RequiredSignals, "velocity") {
+			return Assessment{}, ErrInvalidAction
+		}
+		// Admit returns owned slices. Remove only the signal whose actual
+		// allowance belongs to mandatory command reservation/finalization.
+		a.Profile.RequiredSignals = slices.DeleteFunc(a.Profile.RequiredSignals, func(name string) bool { return name == "velocity" })
 	}
 	if !scopeID(c.Tenant) || !scopeID(c.Attempt) || !validTime(c.Now) {
 		return Assessment{}, ErrInvalidContext

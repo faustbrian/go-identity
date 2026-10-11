@@ -50,6 +50,16 @@ health or a public OTP Send service. The owning workflow must still recheck its
 applicable primary authority and commit effects through its existing atomic
 journal. Native OTP composition and full release proof remain unfinished.
 
+### Protected credential-mutation preparation
+
+`Policy.AssessProtectedProviders` checks required provider observations before
+password hashing and rechecks their original freshness without provider IO.
+It supports only the command-reserved credential-mutation profile and rejects
+caller-supplied velocity. Its distinct result is **not** complete risk admission:
+the native mutation owner must reserve and recheck the exact matching counter
+policy in the protected transaction. HIBP and every other mandatory provider
+remain fail-closed. Ordinary `Policy.Assess` still requires velocity.
+
 ### Owned velocity recovery custody
 
 The private `risk/internal/velocity` connection orders owned adapter calls:
