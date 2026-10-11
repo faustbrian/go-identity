@@ -160,20 +160,21 @@ func TestRecoveryPublishesOnlyItsReturnedSuccessfulActivation(t *testing.T) {
 		panic("publication must not dispatch")
 	})
 	tenant := &tenantRecovery{}
-	if store, err := state.finishVelocityRecovery(context.Background(), tenant, owner, nil); err != nil || store == nil || tenant.counter == nil {
+	health := &velocityHealth{check: func(context.Context) error { panic("publication must not probe") }}
+	if store, err := state.finishVelocityRecovery(context.Background(), tenant, owner, health, nil); err != nil || store == nil || tenant.counter == nil || tenant.health != health {
 		t.Fatal("successful recovery did not publish its returned owner")
 	}
 	canceled, cancel := context.WithCancel(context.Background())
 	cancel()
-	if store, err := state.finishVelocityRecovery(canceled, tenant, owner, nil); store != nil || !errors.Is(err, context.Canceled) || tenant.counter != nil {
+	if store, err := state.finishVelocityRecovery(canceled, tenant, owner, health, nil); store != nil || !errors.Is(err, context.Canceled) || tenant.counter != nil || tenant.health != nil {
 		t.Fatal("canceled recovery retained an unreturned activation")
 	}
 	failure := errors.New("fixture unavailable")
-	if store, err := state.finishVelocityRecovery(context.Background(), tenant, owner, failure); store != nil || !errors.Is(err, failure) || tenant.counter != nil {
+	if store, err := state.finishVelocityRecovery(context.Background(), tenant, owner, health, failure); store != nil || !errors.Is(err, failure) || tenant.counter != nil || tenant.health != nil {
 		t.Fatal("failed recovery installed activation")
 	}
 	state.closed = true
-	if store, err := state.finishVelocityRecovery(context.Background(), tenant, owner, nil); store != nil || err == nil || tenant.counter != nil {
+	if store, err := state.finishVelocityRecovery(context.Background(), tenant, owner, health, nil); store != nil || err == nil || tenant.counter != nil || tenant.health != nil {
 		t.Fatal("shutdown raced successful recovery publication")
 	}
 }

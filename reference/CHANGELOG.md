@@ -2,6 +2,35 @@
 
 ## Unreleased
 
+- Add opt-in native password signin and recovery to the sealed graph with its
+  counted risk evaluator, matching authorization and selected session storage.
+  Retained handles enforce initialization, tenant isolation and closure without
+  implicitly enabling HTTP. Selected native password/session migrations share
+  password material with reset and preserve existing migration history. Native
+  integration proves usable login before reset, revocation afterward and login
+  with the replacement password. Migration discovery and readiness identify the
+  signin constraint extension, not its already-owned shared session table.
+
+- Deny readiness when a selected session store loses its credential-digest
+  column, even if its native ledger and table names still match. Readiness
+  observation does not repair schema or renew existing validity.
+
+- Add selected native password-reset request, completion and recovery to the
+  sealed graph and opt-in HTTP server, borrowing its counted risk, encrypted
+  delivery and configured session owner. Startup, tenant and shutdown guards
+  apply to every call. Selected migration discovery includes password material,
+  factor authority, capability provenance, protected kernel/session reset
+  effects and atomic completion rate admission without rewriting existing
+  histories. Native integration exercises request, captured delivery, completion,
+  revoked predecessor sessions and login with the replacement password.
+
+- Enable bounded fresh readiness for the selected native graph after explicit
+  migration deployment, initialization and covered velocity activation. Every
+  observation checks selected migration compatibility and all tenants' original
+  current custody. Recovery, schema loss, expiry and closure deny without
+  debiting counters, renewing leases or repairing state. This does not complete
+  the remaining reference-server profiles or platform journeys.
+
 - Add opt-in email OTP Send, signin and historical recovery routes to the sole
   server graph. Selected transport requires native consuming owners, dedicated
   browser-device custody, shared strong rate admission and matching trusted

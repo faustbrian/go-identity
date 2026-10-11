@@ -90,12 +90,23 @@ func buildMigrationPlan(snapshots []migrationSnapshot, ids []ModuleID) (Migratio
 	for _, id := range ids {
 		selected[id] = true
 	}
+	requiresKernel := false
+	for _, snapshot := range snapshots {
+		if resetKernelDependent(snapshot.history.namespace) {
+			for _, owner := range snapshot.history.owners {
+				requiresKernel = requiresKernel || selected[owner]
+			}
+		}
+	}
 	for _, snapshot := range snapshots {
 		for owner, status := range snapshot.statuses {
 			if status.Compatibility != MigrationCompatible && status.Compatibility != MigrationRequired {
 				return MigrationPlan{}, identity.ConflictError{}
 			}
 			current[owner] = max(current[owner], status.CurrentVersion)
+			if requiresKernel && owner == "identity/postgres" && !selected[owner] && status.Compatibility != MigrationCompatible {
+				return MigrationPlan{}, identity.ConflictError{}
+			}
 			// Lifecycle bindings cannot be installed before the root outbox,
 			// even though the two owners have independent native namespaces.
 			if owner == "outbox/postgres" && selected["outbox/postgres/identity"] && !selected[owner] && status.Compatibility != MigrationCompatible {
@@ -218,6 +229,15 @@ func migrationSourceDigest(h migrationHistory) [32]byte {
 		for _, names := range [][]string{g.tables, g.roles, g.columns, g.functions} {
 			d.number(uint64(len(names)))
 			for _, name := range names {
+				d.string(name)
+			}
+		}
+		// Preserve legacy source fingerprints for histories without constraint
+		// guards; selected extensions bind their complete additional identities.
+		if len(g.constraints) != 0 {
+			d.string("constraint-guards-v1")
+			d.number(uint64(len(g.constraints)))
+			for _, name := range g.constraints {
 				d.string(name)
 			}
 		}

@@ -41,15 +41,19 @@ func (r *nativeServerTenant) ResolveTenant(ctx context.Context) (identity.Tenant
 // migrations and graph-owned rate/issuer resources. No application handler,
 // rate backend or domain-store override supplies the initiation workflow.
 func TestReferenceServerNativeOriginalFlow(t *testing.T) {
-	testNativeServerOriginalFlow(t, false)
+	testNativeServerOriginalFlow(t, false, false)
 }
 
 func TestReferenceServerNativeEmailSignin(t *testing.T) {
-	testNativeServerOriginalFlow(t, true)
+	testNativeServerOriginalFlow(t, true, false)
 }
 
-func testNativeServerOriginalFlow(t *testing.T, consuming bool) {
-	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
+func TestReferenceServerNativePasswordReset(t *testing.T) {
+	testNativeServerOriginalFlow(t, false, true)
+}
+
+func testNativeServerOriginalFlow(t *testing.T, consuming, reset bool) {
+	ctx, cancel := context.WithTimeout(t.Context(), 45*time.Second)
 	defer cancel()
 	f := newLiveStores(t, ctx)
 	c, deps, worker := otpGraphConfiguration(t, f.config)
@@ -62,7 +66,8 @@ func testNativeServerOriginalFlow(t *testing.T, consuming bool) {
 	c.HTTPRate = &reference.HTTPRateConfiguration{Namespace: "reference-server-native", IdentifierKey: [32]byte{1}, MaximumDuration: time.Second, Timeout: 500 * time.Millisecond, LockTimeout: 250 * time.Millisecond, RollbackTimeout: 250 * time.Millisecond}
 	c.HTTPPreAuth = &reference.HTTPPreAuthConfiguration{Lifetime: session.LifetimeConfig{Default: session.BrowserSession, AbsoluteTTL: time.Hour, IdleTTL: 30 * time.Minute, RefreshAfter: time.Minute, FreshFor: 15 * time.Minute}}
 	codes := make(chan string, 1)
-	if consuming {
+	if consuming || reset {
+		c.Velocity.LeaseDuration = 10 * time.Second
 		configureReferenceSignin(t, &c)
 		c.OTP.RequestKeys.Policy.Authorization = otpReferenceSigninPolicy{}
 		profile, err := identifier.NewNormalizationProfile(identifier.NormalizationProfileSpec{ID: "reference-email", Version: 1, Unicode: identifier.UnicodeNormalizationNFC, MaximumBytes: 4096})
@@ -80,6 +85,10 @@ func testNativeServerOriginalFlow(t *testing.T, consuming bool) {
 		c.HTTPPreAuth.Device = &session.BrowserDeviceConfig{Namespace: "reference-server-native", Keys: []session.BrowserDeviceKey{key}, ActiveVersion: 1, Lifetime: 24 * time.Hour, Cookie: cookie}
 		c.HTTPEmailSignin = &reference.HTTPEmailSigninConfiguration{ActorID: "AAAAAAAAAAAAAAAAAAAAAw", PolicyRevision: 9, TargetID: "login", Address: email.AddressPolicy{MaximumBytes: 4096, Canonicalization: profile}}
 		deps.DeliverySender = nativeBrowserCodeSender{codes: codes}
+	}
+	if reset {
+		configureReferencePasswordReset(t, &c, origin)
+		c.HTTPEmailSignin = nil
 	}
 	stores, err := reference.ComposeStores(c, deps)
 	if err != nil {
@@ -108,6 +117,7 @@ func testNativeServerOriginalFlow(t *testing.T, consuming bool) {
 	baseOTP := *c.OTP
 	baseOTP.PreAuth = nil
 	base.OTP, base.HTTPPreAuth, base.HTTPRate, base.HTTPEmailSignin = &baseOTP, nil, nil, nil
+	base.PasswordReset, base.HTTPPasswordReset, base.PasswordSignin = nil, nil, nil
 	baseStores, err := reference.ComposeStores(base, deps)
 	if err != nil {
 		t.Fatal(err)
@@ -120,7 +130,14 @@ func testNativeServerOriginalFlow(t *testing.T, consuming bool) {
 		}
 	})
 	installOTPGraphFixture(t, ctx, f, baseStores)
-	request := applyRequest(t, ctx, stores, []reference.ModuleID{"identity/session/postgres", "rate-limit/postgres"})
+	modules := []reference.ModuleID{"identity/session/postgres", "rate-limit/postgres"}
+	if consuming {
+		modules = []reference.ModuleID{"identity/postgres", "identity/risk/postgres", "identity/otp/postgres", "identity/session/postgres", "identity/delivery/postgres", "authorization/postgres", "audit/postgres", "outbox/postgres", "outbox/postgres/identity", "rate-limit/postgres"}
+	}
+	if reset {
+		modules = []reference.ModuleID{"identity/postgres", "identity/risk/postgres", "identity/otp/postgres", "identity/session/postgres", "identity/delivery/postgres", "authorization/postgres", "audit/postgres", "outbox/postgres", "outbox/postgres/identity", "rate-limit/postgres", "identity/password/postgres", "identity/mfa/postgres", "capability/postgres/identity"}
+	}
+	request := applyRequest(t, ctx, stores, modules)
 	if out, err := stores.ReferenceMigrationApply(ctx, request); err != nil || out.Result.State() != reference.MigrationApplied {
 		t.Fatal("native selected migration", err)
 	}
@@ -142,6 +159,14 @@ func testNativeServerOriginalFlow(t *testing.T, consuming bool) {
 	if consuming {
 		config.HTTP.Network.Limits.MaximumFields = 44
 		config.HTTP.Network.Limits.MaximumDepth = 3
+		config.HTTP.Network.PublicHosts = []string{"localhost"}
+	}
+	if reset {
+		config.HTTP.Network.Limits.MaximumBodyBytes = 16384
+		config.HTTP.Network.Limits.MaximumDecodedBytes = 16384
+		config.HTTP.Network.Limits.MaximumFields = 64
+		config.HTTP.Network.Limits.MaximumDepth = 8
+		config.HTTP.Network.PublicHosts = []string{"localhost"}
 	}
 	server, err := reference.NewServer(config, deps, features)
 	if err != nil {
@@ -151,6 +176,9 @@ func testNativeServerOriginalFlow(t *testing.T, consuming bool) {
 	if consuming {
 		expectedOperations = 6
 	}
+	if reset {
+		expectedOperations = 5
+	}
 	if len(server.OpenAPI().Operations()) != expectedOperations || !strings.Contains(string(server.OpenAPI().JSON()), "/v1/session/preauth-issue") {
 		t.Fatal("selected server metadata")
 	}
@@ -158,6 +186,27 @@ func testNativeServerOriginalFlow(t *testing.T, consuming bool) {
 	networkServer.StartTLS()
 	client := networkServer.Client()
 	client.Timeout = 5 * time.Second
+	probe := func(ready bool) {
+		t.Helper()
+		request, err := http.NewRequestWithContext(ctx, "GET", networkServer.URL+"/readyz", nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		request.Host = "localhost"
+		response, err := client.Do(request)
+		if err != nil {
+			t.Fatal(err)
+		}
+		payload, err := io.ReadAll(io.LimitReader(response.Body, 1024))
+		closeErr := response.Body.Close()
+		status, body := http.StatusServiceUnavailable, "{\"ready\":false}\n"
+		if ready {
+			status, body = http.StatusOK, "{\"ready\":true}\n"
+		}
+		if err != nil || closeErr != nil || response.StatusCode != status || string(payload) != body || response.Header.Get("Cache-Control") != "no-store" || len(response.Cookies()) != 0 {
+			t.Fatal("readiness probe contract", response.StatusCode)
+		}
+	}
 	call := func() (*http.Response, []byte) {
 		t.Helper()
 		r, err := http.NewRequestWithContext(ctx, "POST", networkServer.URL+"/v1/session/preauth-issue", strings.NewReader("{}"))
@@ -186,7 +235,11 @@ func testNativeServerOriginalFlow(t *testing.T, consuming bool) {
 	if err := features.Initialize(ctx); err != nil {
 		t.Fatal(err)
 	}
-	if consuming {
+	if consuming || reset {
+		probe(false)
+		if server.Readiness(ctx).Ready {
+			t.Fatal("initialized pointers manufactured native readiness")
+		}
 		if owner, err := stores.RecoverVelocity(ctx, otpTenant); err == nil || owner != nil {
 			t.Fatal("fresh coverage manufactured")
 		}
@@ -195,9 +248,49 @@ func testNativeServerOriginalFlow(t *testing.T, consuming bool) {
 		if _, err := f.pool.Raw().Exec(ctx, "UPDATE risk_store.velocity_epochs SET journal_started_at=clock_timestamp()-interval '61 minutes' WHERE tenant_id=$1 AND state='replaying'", otpTenant); err != nil {
 			t.Fatal(err)
 		}
-		wait(ctx, t, 6*time.Second)
+		wait(ctx, t, 11*time.Second)
 		if owner, err := stores.RecoverVelocity(ctx, otpTenant); err != nil || owner == nil {
 			t.Fatal("historical native activation", err)
+		}
+		if observation := server.Readiness(ctx); !observation.Ready || len(observation.Failures) != 0 {
+			t.Fatal("current selected native graph not ready", observation.Failures)
+		}
+		var before, after time.Time
+		leaseQuery := "SELECT lease_expires_at FROM risk_store.velocity_epochs WHERE tenant_id=$1 AND state='healthy'"
+		if err := f.pool.Raw().QueryRow(ctx, leaseQuery, otpTenant).Scan(&before); err != nil {
+			t.Fatal(err)
+		}
+		facts := nativeAttemptFacts(t, ctx, f)
+		probe(true)
+		probe(true)
+		if _, err := f.pool.Raw().Exec(ctx, "ALTER TABLE session_store.sessions RENAME TO fixture_sessions"); err != nil {
+			t.Fatal(err)
+		}
+		probe(false)
+		if _, err := f.pool.Raw().Exec(ctx, "ALTER TABLE session_store.fixture_sessions RENAME TO sessions"); err != nil {
+			t.Fatal(err)
+		}
+		probe(true)
+		if _, err := f.pool.Raw().Exec(ctx, "ALTER TABLE session_store.sessions RENAME COLUMN digest TO fixture_digest"); err != nil {
+			t.Fatal(err)
+		}
+		probe(false)
+		if _, err := f.pool.Raw().Exec(ctx, "ALTER TABLE session_store.sessions RENAME COLUMN fixture_digest TO digest"); err != nil {
+			t.Fatal(err)
+		}
+		probe(true)
+		if reset {
+			if _, err := f.pool.Raw().Exec(ctx, "ALTER TABLE session_store.session_issuances RENAME CONSTRAINT session_issuances_purpose_v3 TO fixture_password_purpose"); err != nil {
+				t.Fatal(err)
+			}
+			probe(false)
+			if _, err := f.pool.Raw().Exec(ctx, "ALTER TABLE session_store.session_issuances RENAME CONSTRAINT fixture_password_purpose TO session_issuances_purpose_v3"); err != nil {
+				t.Fatal(err)
+			}
+			probe(true)
+		}
+		if err := f.pool.Raw().QueryRow(ctx, leaseQuery, otpTenant).Scan(&after); err != nil || !before.Equal(after) || facts != nativeAttemptFacts(t, ctx, f) {
+			t.Fatal("readiness renewed lease or changed journal", err)
 		}
 	}
 	tenant.foreign.Store(true)
@@ -217,7 +310,7 @@ func testNativeServerOriginalFlow(t *testing.T, consuming bool) {
 	}
 	cookies := response.Cookies()
 	expectedCookies := 1
-	if consuming {
+	if consuming || reset {
 		expectedCookies = 2
 	}
 	if len(cookies) != expectedCookies {
@@ -233,9 +326,32 @@ func testNativeServerOriginalFlow(t *testing.T, consuming bool) {
 	}
 	if consuming {
 		proveNativeServerEmailSignin(t, ctx, f, workers, client, networkServer.URL, origin, out, cookies, codes)
+		if _, err := f.pool.Raw().Exec(ctx, "ALTER TABLE public.rate_limit_states RENAME TO fixture_rate_limit_states"); err != nil {
+			t.Fatal(err)
+		}
+		probe(false)
+		if _, err := f.pool.Raw().Exec(ctx, "ALTER TABLE public.fixture_rate_limit_states RENAME TO rate_limit_states"); err != nil {
+			t.Fatal(err)
+		}
+		probe(true)
+		var seconds float64
+		if err := f.pool.Raw().QueryRow(ctx, "SELECT GREATEST(0,EXTRACT(EPOCH FROM lease_expires_at-clock_timestamp()))::float8 FROM risk_store.velocity_epochs WHERE tenant_id=$1 AND state='healthy'", otpTenant).Scan(&seconds); err != nil || seconds < 0 || seconds > 10 {
+			t.Fatal("bounded original lease expiry", err)
+		}
+		wait(ctx, t, time.Duration(seconds*float64(time.Second))+100*time.Millisecond)
+		if server.Readiness(ctx).Ready {
+			t.Fatal("expired original custody remained ready")
+		}
+		probe(false)
+	}
+	if reset {
+		proveNativeServerPasswordReset(t, ctx, f, features, workers, client, networkServer.URL, origin, cookies, codes, c.PasswordReset.Native, c.PasswordSignin.Native)
 	}
 	if err := stores.Close(ctx); err != nil {
 		t.Fatal(err)
+	}
+	if consuming {
+		probe(false)
 	}
 	response, _ = call()
 	if response.StatusCode != 503 || len(response.Cookies()) != 0 {

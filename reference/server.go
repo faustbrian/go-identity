@@ -168,6 +168,13 @@ func NewServer(c ReferenceConfig, d ReferenceDependencies, f FeatureSet) (*Serve
 	if selected != nil {
 		contributions = append(contributions, *selected)
 	}
+	selected, err = server.passwordResetFeature(c.HTTP.Network, f)
+	if err != nil {
+		return nil, invalid
+	}
+	if selected != nil {
+		contributions = append(contributions, *selected)
+	}
 	operations, err := identityhttp.NewOperationDescriptors(identityhttp.FeatureServices{Features: contributions})
 	if err != nil {
 		return nil, invalid
@@ -287,16 +294,13 @@ func (s *Server) Health(ctx context.Context) Readiness {
 }
 
 // Readiness never substitutes a listener or initialized flag for native health.
-// Before startup it performs no IO. Complete fresh native velocity readiness is
-// not yet composed, so this development profile cannot advertise ready traffic.
+// Before startup it performs no IO. Initialized selected graphs require fresh
+// complete migration compatibility and every selected tenant's original native
+// custody. One server budget bounds the observation; closure joins/cancels it.
+// Success is momentary, not cached admission or permission to skip workflow
+// checks. No counter, marker, TTL, evidence or health authority is renewed.
 func (s *Server) Readiness(ctx context.Context) Readiness {
-	if s == nil || ctx == nil || ctx.Err() != nil || s.lifecycle() == identityhttp.ServerStopped {
-		return Readiness{Failures: []ReadinessCode{"server_unavailable"}}
-	}
-	if s.lifecycle() != identityhttp.ServerRunning {
-		return Readiness{Failures: []ReadinessCode{"not_initialized"}}
-	}
-	return Readiness{Failures: []ReadinessCode{"native_readiness_pending"}}
+	return s.readiness(ctx)
 }
 
 // Format redacts deployment policies and resource/callback internals.

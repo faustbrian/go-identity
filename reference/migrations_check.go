@@ -145,6 +145,7 @@ func (s StoreSet) discoverMigrations(ctx context.Context, ids []ModuleID) ([]mig
 	if err != nil {
 		return nil, checkFailure(ctx, err)
 	}
+	ids = migrationDiscoveryIDs(catalog, ids)
 	selected := make(map[ModuleID]bool)
 	for _, h := range catalog {
 		for _, owner := range h.owners {

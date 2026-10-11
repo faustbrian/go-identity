@@ -51,6 +51,15 @@ type StoreConfiguration struct {
 	HTTPPreAuth *HTTPPreAuthConfiguration
 	// HTTPEmailSignin explicitly selects email OTP Send/signin/recovery routes.
 	HTTPEmailSignin *HTTPEmailSigninConfiguration
+	// PasswordReset selects native request/completion/recovery over this graph's
+	// existing primary risk, delivery and session owners. Nil selects none.
+	PasswordReset *PasswordResetConfiguration
+	// PasswordSignin selects native login/recovery using graph-owned counted
+	// risk and the selected session base, without enabling any HTTP route.
+	PasswordSignin *PasswordSigninConfiguration
+	// HTTPPasswordReset independently selects request/completion routes. Native
+	// reset, strict HTTP rate and the original browser-device issuer are required.
+	HTTPPasswordReset *HTTPPasswordResetConfiguration
 }
 
 // VelocityStoreConfiguration selects one primary/native recovery pair. Native
@@ -102,6 +111,7 @@ type tenantRecovery struct {
 	busy     bool
 	previous risk.VelocityLease
 	counter  risk.CounterStore
+	health   *velocityHealth
 }
 
 // ComposeStores validates/copies deployment configuration without network IO,
@@ -199,6 +209,7 @@ func (s StoreSet) RecoverVelocity(ctx context.Context, tenant string) (store ris
 	// A new recovery generation may fence the old owner even when it fails.
 	// Never fall back to a previously installed activation after that attempt.
 	t.counter = nil
+	t.health = nil
 	state.mu.Unlock()
 	defer func() {
 		state.mu.Lock()
@@ -210,12 +221,13 @@ func (s StoreSet) RecoverVelocity(ctx context.Context, tenant string) (store ris
 		state.mu.Unlock()
 	}()
 	bounded, cancel := context.WithTimeout(ctx, state.config.RecoveryTimeout)
+	var health *velocityHealth
 	stop := context.AfterFunc(state.lifetime, cancel)
 	defer func() {
 		// Primary adapters redact SQL errors. The composition owns the outer
 		// lifetime and must preserve its cancellation/deadline, not expose an
 		// unavailable substitute or a store activated after shutdown.
-		store, err = state.finishVelocityRecovery(bounded, t, store, err)
+		store, err = state.finishVelocityRecovery(bounded, t, store, health, err)
 		stop()
 		cancel()
 	}()
@@ -303,15 +315,22 @@ func (s StoreSet) RecoverVelocity(ctx context.Context, tenant string) (store ris
 		return nil, err
 	}
 	store, err = state.native.OwnedCounterStore(bounded, journal)
+	if err == nil {
+		// Capture the inferred opaque journal without exporting its internal
+		// type or accepting a caller-supplied checker. Its original custody and
+		// native transport remain the same ones used by this counter owner.
+		health = &velocityHealth{check: func(ctx context.Context) error { return state.native.CheckCurrent(ctx, journal) }}
+	}
 	return store, err
 }
 
 // finishVelocityRecovery publishes the returned handle and deferred routing
 // together at one lifetime-checked synchronization point, before busy clears.
-func (s *storeState) finishVelocityRecovery(ctx context.Context, t *tenantRecovery, store risk.CounterStore, err error) (risk.CounterStore, error) {
+func (s *storeState) finishVelocityRecovery(ctx context.Context, t *tenantRecovery, store risk.CounterStore, health *velocityHealth, err error) (risk.CounterStore, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	t.counter = nil
+	t.health = nil
 	if lifetimeErr := ctx.Err(); lifetimeErr != nil {
 		return nil, lifetimeErr
 	}
@@ -321,7 +340,11 @@ func (s *storeState) finishVelocityRecovery(ctx context.Context, t *tenantRecove
 	if err != nil {
 		return nil, err
 	}
+	if store == nil || health == nil || health.check == nil {
+		return nil, identity.UnavailableError{}
+	}
 	t.counter = store
+	t.health = health
 	return store, nil
 }
 
@@ -342,6 +365,9 @@ func (s StoreSet) Close(ctx context.Context) error {
 	state.cancel()
 	if state.httpRate != nil {
 		state.httpRate.limiter.Close()
+	}
+	if state.features != nil && state.features.httpPasswordReset != nil {
+		state.features.httpPasswordReset.rate.Close()
 	}
 	drained := state.drained
 	state.mu.Unlock()

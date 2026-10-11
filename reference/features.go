@@ -15,6 +15,7 @@ import (
 	deliverypg "github.com/faustbrian/go-identity/delivery/postgres"
 	"github.com/faustbrian/go-identity/otp"
 	otppg "github.com/faustbrian/go-identity/otp/postgres"
+	passwordpg "github.com/faustbrian/go-identity/password/postgres"
 	kernel "github.com/faustbrian/go-identity/postgres"
 	"github.com/faustbrian/go-identity/risk"
 	"github.com/faustbrian/go-identity/session"
@@ -80,24 +81,33 @@ type DeliveryConfiguration struct {
 // featureState is immutable after construction except the fields explicitly
 // protected by storeState.mu. Startup and all requests share StoreSet's lifetime.
 type featureState struct {
-	migrations      featureMigrationConfig
-	otp             *otppg.SendService
-	signin          *otppg.SigninService
-	preauth         *session.PreAuthIssuer
-	delivery        *deliverypg.EnqueueService
-	sender          delivery.Sender
-	timeout         time.Duration
-	provider        uint64
-	deliveryWorkers []*deliverypg.Worker
-	deliverySlots   chan struct{}
-	authorize       authorization.Service
-	httpPreAuth     *preAuthHTTPState
-	httpEmailSignin *emailSigninHTTPState
+	migrations        featureMigrationConfig
+	otp               *otppg.SendService
+	signin            *otppg.SigninService
+	reset             *passwordpg.ResetService
+	passwordSignin    *passwordpg.SigninService
+	preauth           *session.PreAuthIssuer
+	delivery          *deliverypg.EnqueueService
+	sender            delivery.Sender
+	timeout           time.Duration
+	provider          uint64
+	deliveryWorkers   []*deliverypg.Worker
+	deliverySlots     chan struct{}
+	authorize         authorization.Service
+	httpPreAuth       *preAuthHTTPState
+	httpEmailSignin   *emailSigninHTTPState
+	httpPasswordReset *passwordResetHTTPState
 	// mu-protected graph progression and startup state.
 	providers, workers, composed, initializing, ready bool
 }
 
 func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDependencies) error {
+	if c.PasswordSignin != nil && (c.OTP == nil || c.OTP.Signin == nil) {
+		return identity.InvalidInputError{Field: "reference_password_signin"}
+	}
+	if c.PasswordReset != nil && (c.OTP == nil || c.Delivery == nil) {
+		return identity.InvalidInputError{Field: "reference_password_reset"}
+	}
 	httpPreAuth, err := composePreAuthHTTP(c)
 	if err != nil {
 		return err
@@ -106,6 +116,17 @@ func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDepen
 	if err != nil {
 		return err
 	}
+	httpPasswordReset, err := composePasswordResetHTTP(c, httpPreAuth, s.httpRate)
+	if err != nil {
+		return err
+	}
+	// A failed later graph construction must not retain a private rate owner.
+	retainedResetHTTP := false
+	defer func() {
+		if httpPasswordReset != nil && !retainedResetHTTP {
+			httpPasswordReset.rate.Close()
+		}
+	}()
 	if c.OTP == nil && c.Delivery == nil {
 		return nil
 	}
@@ -197,6 +218,20 @@ func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDepen
 			return err
 		}
 	}
+	resetOwner, err := composePasswordReset(c, d, evaluator)
+	if err != nil {
+		return err
+	}
+	if resetOwner != nil {
+		migrationConfig.resetSchema = c.PasswordReset.Native.Session.Schema
+	}
+	passwordSigninOwner, err := composePasswordSignin(c, d, evaluator)
+	if err != nil {
+		return err
+	}
+	if passwordSigninOwner != nil {
+		migrationConfig.passwordSigninSchema = c.PasswordSignin.Native.Session.Schema
+	}
 	// All workers borrow one sender instance. The strictest retained policy
 	// ceiling bounds the whole graph, not each independently constructed worker.
 	capacity := uint8(64)
@@ -205,7 +240,8 @@ func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDepen
 			capacity = policy.SenderConcurrency
 		}
 	}
-	s.features = &featureState{migrations: migrationConfig, otp: otpOwner, signin: signinOwner, preauth: preauthOwner, delivery: deliveryOwner, sender: d.DeliverySender, timeout: o.Timeout, provider: o.ProviderVersion, deliverySlots: make(chan struct{}, int(capacity)), authorize: o.RequestKeys.Policy.Authorization, httpPreAuth: httpPreAuth, httpEmailSignin: httpEmailSignin}
+	s.features = &featureState{migrations: migrationConfig, otp: otpOwner, signin: signinOwner, reset: resetOwner, passwordSignin: passwordSigninOwner, preauth: preauthOwner, delivery: deliveryOwner, sender: d.DeliverySender, timeout: o.Timeout, provider: o.ProviderVersion, deliverySlots: make(chan struct{}, int(capacity)), authorize: o.RequestKeys.Policy.Authorization, httpPreAuth: httpPreAuth, httpEmailSignin: httpEmailSignin, httpPasswordReset: httpPasswordReset}
+	retainedResetHTTP = true
 	return nil
 }
 

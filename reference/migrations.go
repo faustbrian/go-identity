@@ -88,6 +88,8 @@ type featureMigrationConfig struct {
 	otpSchema, sessionSchema, global                        string
 	authenticatedSchema                                     string
 	signinSchema                                            string
+	resetSchema                                             string
+	passwordSigninSchema                                    string
 	preauthIssue                                            bool
 	tenants                                                 []identity.TenantID
 	cancellation, receiptTracking, receipts, reconciliation bool

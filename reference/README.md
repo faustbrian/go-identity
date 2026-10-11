@@ -5,10 +5,54 @@ PostgreSQL-journaled, TLS Valkey velocity store graph and optional native OTP
 Send/delivery composition with opt-in single-factor OTP sign-in. An IO-free
 `NewServer` now exposes exact health/readiness probes and opt-in original-flow
 HTTP initiation and selected email OTP Send/signin/recovery over that same graph.
-Positive dependency readiness, remaining
+Optional `PasswordReset` composes the native public request/completion/recovery
+service with graph-owned risk and encrypted delivery; `HTTPPasswordReset`
+selects its two routes using the existing signed-device and primary rate owners.
+The selected PostgreSQL/TLS-Valkey integration journey proves reset delivery,
+completion, predecessor-session revocation, old-password rejection and usable
+replacement-password login. Full release and remaining reset failure-path
+qualification are not complete.
+Fresh dependency readiness is available for this selected graph; remaining
 HTTP features and complete identity journeys remain unimplemented. Selected-module
 migration Check/Plan/Apply and durable native command resume are available as
 explicit store operations, not automatic startup behavior.
+
+Reset currently requires the selected OTP/delivery graph and uses one of its
+configured session schemas. Supply `PasswordResetConfiguration.Native` with
+the native password profile, HIBP/password policy, issuer custody, current
+authorization and explicit bounded callbacks; leave its risk evaluation and
+request delivery owner/renderer unset so composition supplies the existing
+owners. After explicit initialization, `features.PasswordReset()` returns the
+public workflow port. Calls before initialization, after closure or outside
+configured tenants deny. HTTP remains independently opt-in and requires the
+existing `HTTPPreAuth.Device` and `HTTPRate` selections. Disabled reset HTTP
+exports neither routes nor operation metadata.
+
+`PasswordSignin` independently selects the native password login/recovery port,
+available as `features.PasswordSignin()`. Supply `PasswordSigninConfiguration.Native`
+with the native verifier, signing/flow/session keys and exact password original-
+flow profile; leave `Native.Risk.Evaluation` zero for graph-owned counted risk.
+Query/admission policy and revision must match this graph's authorization owner.
+The current composition requires OTP's selected consuming session storage base,
+but does not authenticate using OTP or accept its different original-flow action.
+Startup, tenant and shutdown guards apply equally to login and recovery. No
+password signin route is implicitly enabled. Native password material has one
+independent migration history shared with reset; selected signin additionally
+installs the native session-issuance purpose extension without rewriting either
+workflow's existing history. The native integration journey authenticates an
+existing session before reset and denies that same bearer afterward, then proves
+replacement-password login. Its original password-flow setup is an explicit
+native fixture: the current HTTP initiation profile remains OTP-specific, and
+password-flow HTTP initiation/signin routes remain separate composition work.
+
+Use selected-owner Check/Plan/Apply for reset installation, rather than only
+the legacy shared `MigrationSource()`. Independent native histories install
+kernel replacement/reset effects, password material, factor authority,
+capability provenance and session reset effects without changing the installed
+shared prefix. HTTP completion additionally selects native atomic rate receipts.
+Pending kernel prerequisites must be explicitly selected; installed compatible
+prerequisites are reused. Existing accounts are not implicitly assigned empty
+factor authority: unreconciled authority continues to fail closed.
 
 ## Quick start
 
@@ -145,9 +189,16 @@ The router freezes host policy and OpenAPI metadata at construction.
 `Handler()` returns the owned standard-library handler. `OpenAPI()` exposes
 detached native document snapshots. Only `GET /healthz` and `GET /readyz` are
 probes; no `/v1` aliases exist. Health is process liveness, not store readiness.
-Readiness currently denies before initialization and also remains fail-closed
-after initialization until fresh mandatory native health is fully composed.
-Do not use this development checkpoint to advertise ready production traffic.
+Readiness denies before initialization, during recovery and after closure. Each
+bounded observation checks every selected native migration owner and the current
+original PostgreSQL journal/TLS Valkey custody for every configured tenant.
+Missing or incompatible schema, unavailable stores and expired ownership deny.
+Probes do not debit counters, repair state, renew leases or refresh evidence.
+A successful probe is a momentary observation of this selected graph, not
+permission to bypass credential checks or proof of full-platform readiness.
+Healthy velocity recovery requires historical coverage of the maximum configured
+window; a fresh journal cannot skip that warmup. Recovery remains explicit when
+original ownership expires. Readiness does not run it automatically.
 Initialize features and deploy migrations explicitly; graph closure prevents
 later workflow admission without taking ownership of the caller pool.
 This constructor is not a completed login/reference-server milestone.

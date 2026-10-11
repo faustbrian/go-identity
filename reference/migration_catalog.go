@@ -7,6 +7,7 @@ import (
 
 	auditpg "github.com/faustbrian/go-audit/postgres"
 	identity "github.com/faustbrian/go-identity"
+	passwordpg "github.com/faustbrian/go-identity/password/postgres"
 	sessionpg "github.com/faustbrian/go-identity/session/postgres"
 	migrations "github.com/faustbrian/go-migrations/v3"
 	ratepg "github.com/faustbrian/go-rate-limit/v2/postgres"
@@ -25,12 +26,13 @@ type migrationHistory struct {
 }
 
 type migrationGuard struct {
-	version   migrations.Version
-	schema    string
-	tables    []string
-	roles     []string
-	columns   []string // table.column; only columns first introduced by this step
-	functions []string
+	version     migrations.Version
+	schema      string
+	tables      []string
+	roles       []string
+	columns     []string // table.column; only columns first introduced by this step
+	functions   []string
+	constraints []string // table.constraint; only constraints introduced by this step
 }
 
 func (s StoreSet) migrationCatalog(ctx context.Context) ([]migrationHistory, error) {
@@ -72,7 +74,18 @@ func (s StoreSet) migrationCatalog(ctx context.Context) ([]migrationHistory, err
 		if err != nil {
 			return nil, err
 		}
-		catalog = append(catalog, migrationHistory{namespace: "identity_http_rate", history: []migrations.Migration{step}, owners: map[migrations.Version]ModuleID{step.Version(): "rate-limit/postgres"}, guards: []migrationGuard{{version: step.Version(), schema: "public", tables: []string{"rate_limit_states", "rate_limit_states_expires_at_idx"}}}})
+		owned := migrationHistory{namespace: "identity_http_rate", history: []migrations.Migration{step}, owners: map[migrations.Version]ModuleID{step.Version(): "rate-limit/postgres"}, guards: []migrationGuard{{version: step.Version(), schema: "public", tables: []string{"rate_limit_states", "rate_limit_states_expires_at_idx"}}}}
+		if s.state.features != nil && s.state.features.httpPasswordReset != nil {
+			native := ratepg.AtomicSchemaMigration()
+			atomic, err := migrations.NewMigration(migrations.Version(native.Version), native.Name, migrations.TransactionModeDefault, native.Up, native.Down)
+			if err != nil {
+				return nil, err
+			}
+			owned.history = append(owned.history, atomic)
+			owned.owners[atomic.Version()] = "rate-limit/postgres"
+			owned.guards = append(owned.guards, migrationGuard{version: atomic.Version(), schema: "public", tables: []string{"rate_limit_atomic_commands"}})
+		}
+		catalog = append(catalog, owned)
 	}
 	if s.state.features == nil {
 		return catalog, nil
@@ -146,6 +159,35 @@ func (s StoreSet) migrationCatalog(ctx context.Context) ([]migrationHistory, err
 		}
 		catalog = append(catalog, owned)
 	}
+	if c.resetSchema != "" {
+		reset, err := passwordResetMigrationCatalog(ctx, shared.history, c.resetSchema)
+		if err != nil {
+			return nil, err
+		}
+		catalog = append(catalog, reset...)
+	}
+	if c.passwordSigninSchema != "" {
+		// Password material has one physical owner shared with reset. Selecting
+		// either workflow first must leave its installed checksums unchanged.
+		if c.resetSchema == "" {
+			steps, err := (passwordpg.MigrationSource{}).Load(ctx)
+			if err != nil {
+				return nil, err
+			}
+			owned := migrationHistory{namespace: "identity_password", history: steps, owners: make(map[migrations.Version]ModuleID), guards: []migrationGuard{{version: 1, schema: "identity_password"}}}
+			for _, step := range steps {
+				owned.owners[step.Version()] = "identity/password/postgres"
+			}
+			catalog = append(catalog, owned)
+		}
+		steps, err := (sessionpg.PasswordSigninMigrationSource{Schema: c.passwordSigninSchema, Version: 1}).Load(ctx)
+		if err != nil {
+			return nil, err
+		}
+		catalog = append(catalog, migrationHistory{namespace: "identity_password_session", history: steps,
+			owners: map[migrations.Version]ModuleID{1: "identity/session/postgres"},
+			guards: []migrationGuard{{version: 1, schema: c.passwordSigninSchema, constraints: []string{"session_issuances.session_issuances_purpose_v3"}}}})
+	}
 	return catalog, nil
 }
 
@@ -158,7 +200,8 @@ func (g migrationGuard) exists(ctx context.Context, s *storeState) (bool, error)
  OR EXISTS(SELECT 1 FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname=$1 AND c.relname=ANY($3::text[]))
 	 OR EXISTS(SELECT 1 FROM pg_catalog.pg_roles WHERE rolname=ANY($4::text[]))
 	 OR EXISTS(SELECT 1 FROM pg_catalog.pg_attribute a JOIN pg_catalog.pg_class c ON c.oid=a.attrelid JOIN pg_catalog.pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname=$1 AND NOT a.attisdropped AND (c.relname::text||'.'||a.attname::text)=ANY($5::text[]))
-	 OR EXISTS(SELECT 1 FROM pg_catalog.pg_proc p JOIN pg_catalog.pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname=$1 AND p.proname=ANY($6::text[]))`, g.schema, len(g.tables) == 0 && len(g.columns) == 0 && len(g.functions) == 0, g.tables, g.roles, g.columns, g.functions).Scan(&exists)
+	 OR EXISTS(SELECT 1 FROM pg_catalog.pg_proc p JOIN pg_catalog.pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname=$1 AND p.proname=ANY($6::text[]))
+	 OR EXISTS(SELECT 1 FROM pg_catalog.pg_constraint k JOIN pg_catalog.pg_class c ON c.oid=k.conrelid JOIN pg_catalog.pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname=$1 AND (c.relname::text||'.'||k.conname::text)=ANY($7::text[]))`, g.schema, len(g.tables) == 0 && len(g.columns) == 0 && len(g.functions) == 0 && len(g.constraints) == 0, g.tables, g.roles, g.columns, g.functions, g.constraints).Scan(&exists)
 	return exists, err
 }
 

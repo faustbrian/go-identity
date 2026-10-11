@@ -201,10 +201,7 @@ func (s StoreSet) ReferenceMigrationApply(ctx context.Context, input ReferenceMi
 	if err != nil {
 		return fail(MigrationApplyPending, checkFailure(bounded, err))
 	}
-	discovery := slices.Clone(ids)
-	if slices.Contains(ids, ModuleID("outbox/postgres/identity")) && !slices.Contains(ids, ModuleID("outbox/postgres")) {
-		discovery = append(discovery, "outbox/postgres")
-	}
+	discovery := migrationDiscoveryIDs(catalog, ids)
 	histories, err := selectMigrationHistories(catalog, discovery)
 	if err != nil {
 		return ReferenceMigrationApplyResult{}, err
@@ -243,7 +240,7 @@ func (s StoreSet) ReferenceMigrationApply(ctx context.Context, input ReferenceMi
 	if exists && (progress.Fingerprint() != fingerprint || progress.IdempotencyDigest() != idempotency) {
 		return fail(MigrationApplyIncompatible, identity.ConflictError{CommandID: req.CommandID})
 	}
-	snapshots, err := discoverOwnedMigrations(bounded, owned, histories)
+	snapshots, err := discoverOwnedMigrations(bounded, owned, histories, s.state)
 	if err != nil {
 		return failMigrationNative(out, bounded, req.CommandID, err)
 	}
@@ -375,7 +372,7 @@ func selectMigrationHistories(catalog []migrationHistory, ids []ModuleID) ([]mig
 	return result, nil
 }
 
-func discoverOwnedMigrations(ctx context.Context, owned *migrationdb.CommandSession, histories []migrationHistory) ([]migrationSnapshot, error) {
+func discoverOwnedMigrations(ctx context.Context, owned *migrationdb.CommandSession, histories []migrationHistory, state *storeState) ([]migrationSnapshot, error) {
 	snapshots := make([]migrationSnapshot, 0, len(histories))
 	for _, h := range histories {
 		records, err := owned.ReadLedger(ctx, h.namespace)
@@ -390,6 +387,24 @@ func discoverOwnedMigrations(ctx context.Context, owned *migrationdb.CommandSess
 			applied := slices.ContainsFunc(records, func(r migrations.Record) bool { return r.Version() == g.version })
 			if applied {
 				continue
+			}
+			// The native catalog API has no constraint identity kind. Read only
+			// these exact extension identities from the same primary while the
+			// command session retains global migration ownership. No second lock,
+			// transaction, migration runner or adoption path is introduced.
+			if len(g.constraints) != 0 {
+				exists, err := g.exists(ctx, state)
+				if err != nil {
+					return nil, err
+				}
+				if exists {
+					for owner, status := range statuses {
+						if status.Compatibility != MigrationDirty {
+							status.Compatibility = MigrationIncompatible
+						}
+						statuses[owner] = status
+					}
+				}
 			}
 			objects := guardCatalogIdentities(g)
 			if len(objects) == 0 {
@@ -415,7 +430,7 @@ func discoverOwnedMigrations(ctx context.Context, owned *migrationdb.CommandSess
 
 func guardCatalogIdentities(g migrationGuard) []migrationdb.CatalogIdentity {
 	var result []migrationdb.CatalogIdentity
-	if len(g.tables) == 0 && len(g.columns) == 0 && len(g.functions) == 0 {
+	if len(g.tables) == 0 && len(g.columns) == 0 && len(g.functions) == 0 && len(g.constraints) == 0 {
 		result = append(result, migrationdb.CatalogIdentity{Kind: migrationdb.CatalogSchema, Schema: g.schema})
 	}
 	for _, name := range g.tables {
