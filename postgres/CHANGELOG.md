@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+- Retain a distinct magic-link MFA challenge declaration containing the original
+  primary consumption and one bounded continuation issuance. It cannot produce
+  a session, create an account or extend the original proof expiry. Original
+  preparation conserves the complete challenge scope before child signing.
+  Require the exact challenge owner and its original-scope validation rather
+  than admitting existing session-only owners; public MFA composition remains
+  incomplete until native persistence and issuer custody are connected.
+
+- Bind MFA child issuance to the frozen challenge subject after primary proof
+  consumption. Reject signed tenant, scope, resource, time or caveat substitutions
+  and prevent incomplete challenge preparation from beginning domain work.
+
 - Classify prospective signup mailboxes during the exact original preparation
   invocation without allocating identity or granting creation authority. Include
   unverified and banned occupants and retained retirement policy; recheck at

@@ -45,6 +45,12 @@ type domainExecution struct {
 // contributor. Begin grants no counter allowance: ApplyFeature and Commit each
 // recheck under domain tenant exclusion, without recharging or renewing evidence.
 func (c *Coordinator) Begin(ctx context.Context, r Reservation) (Work, error) {
+	// Original challenge preparation has no signed child yet. It may admit
+	// preparation only; domain start must not consume the primary proof until
+	// the retained final output enlists its exact child issuance.
+	if r.state != nil && r.state.plan != nil && r.state.plan.mfaContinuation != nil && r.state.plan.issuance == nil {
+		return Work{}, invalidWork()
+	}
 	if r.state != nil && r.state.plan != nil && r.state.plan.otp != nil && otpExecutionOwner(r.state.plan) == nil {
 		return Work{}, invalidWork()
 	}
@@ -127,6 +133,7 @@ func (p *admittedKernelPlan) snapshot() CommandPlan {
 	result := CommandPlan{Contributors: descriptors, Audits: append([]AuditPlan(nil), p.audits...), Digest: p.digest, CaptchaReplayReservation: p.captchaReplay, SignupAcceptance: p.signupAcceptance}
 	result.MagicLinkRequestAcceptance = p.magicLinkRequestAcceptance
 	result.MagicLinkRegistration = cloneMagicLinkRegistrationPlan(p.magicLinkRegistration)
+	result.MFAContinuation = cloneMFAContinuationPlan(p.mfaContinuation)
 	if p.identifierAdmission != nil {
 		d := p.identifierAdmission.descriptor
 		result.IdentifierAdmission = &d

@@ -379,6 +379,7 @@ func TestPostgresIntegration(t *testing.T) {
 	t.Run("reset recipient issuance", func(t *testing.T) { testResetRecipientIssuance(t, ctx, pool, repo) })
 	t.Run("magic-link recipient issuance", func(t *testing.T) { testMagicLinkRecipientIssuance(t, ctx, pool, repo) })
 	t.Run("magic-link consumption", func(t *testing.T) { testMagicLinkConsumption(t, ctx, pool, repo) })
+	t.Run("magic-link MFA challenge", func(t *testing.T) { testMagicLinkMFAChallenge(t, ctx, pool, repo) })
 }
 
 // This test policy selects the existing upstream authorization.Service seam;

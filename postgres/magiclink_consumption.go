@@ -19,6 +19,20 @@ type MagicLinkConsumptionContributor interface {
 	ValidateMagicLinkConsumption(identity.Command, CapabilityPlan) error
 }
 
+// MagicLinkMFAChallengeContributor owns the challenge-only alternative, not a
+// session-producing login. Validation must match the complete original MFA
+// scope and command in addition to the primary grant. It is pure and bounded.
+// ApplyFeature must recheck enrolled methods and current policy/factor authority,
+// persist the original continuation and stage its exact child issuance without
+// calling a session issuer. CheckFeatureCommit must repeat current authority and
+// absolute-expiry checks. Persistence, pre-auth transition, one-use, audit and
+// challenge lifecycle share the sole Work; missing authority denies.
+// Implementing the interface conveys no proof or independently committable work.
+type MagicLinkMFAChallengeContributor interface {
+	MagicLinkConsumptionContributor
+	ValidateMagicLinkMFAChallenge(identity.Command, MFAContinuationPlan) error
+}
+
 func validateMagicLinkConsumption(owner FeatureExecutionContributor, command identity.Command, p CommandPlan) error {
 	native, ok := owner.(MagicLinkConsumptionContributor)
 	s, feature := command.Feature()
@@ -27,6 +41,13 @@ func validateMagicLinkConsumption(owner FeatureExecutionContributor, command ide
 	}
 	if err := native.ValidateMagicLinkConsumption(command, *p.Capability); err != nil {
 		return err
+	}
+	if p.MFAContinuation != nil {
+		challenge, ok := owner.(MagicLinkMFAChallengeContributor)
+		if !ok || p.MagicLinkRegistration != nil {
+			return invalidPlan()
+		}
+		return challenge.ValidateMagicLinkMFAChallenge(command, *p.MFAContinuation)
 	}
 	if p.MagicLinkRegistration != nil {
 		registration, ok := owner.(MagicLinkRegistrationContributor)
@@ -59,6 +80,22 @@ func (w Work) MagicLinkConsumption(owner FeatureExecutionContributor) (Capabilit
 		return CapabilityReservationBinding{}, invalidWork()
 	}
 	return CapabilityReservationBinding{Command: b, Plan: *p.capability, Fingerprint: fp, Generation: generation}, nil
+}
+
+// MagicLinkMFAChallenge exposes the frozen original scope only to its exact
+// challenge owner during protected Apply, after provisional primary consumption.
+// Metadata, preparation, final checks, recovery and retained/foreign handles
+// deny. The projection is not completed MFA, fresh authority or a session grant.
+// It performs no IO, consumes nothing and cannot renew the original expiry.
+func (w Work) MagicLinkMFAChallenge(owner MagicLinkMFAChallengeContributor) (MFAContinuationPlan, error) {
+	if _, err := w.MagicLinkConsumption(owner); err != nil {
+		return MFAContinuationPlan{}, err
+	}
+	p := w.state.execution.reservation.plan
+	if p.mfaContinuation == nil || p.issuance == nil || p.lifecycle == nil || p.lifecycle.EventType != "mfa.challenge.created.v1" {
+		return MFAContinuationPlan{}, invalidWork()
+	}
+	return *p.mfaContinuation, nil
 }
 
 func prepareMagicLinkConsumption(ctx context.Context, w Work) error {

@@ -27,6 +27,26 @@ itself provide public magic-link APIs or native session composition.
 
 ## Magic-link recipient issuance
 
+`CommandPlan.MFAContinuation` has a separate challenge-only historical profile.
+It freezes the target, MFA scope digest, policy/factor generations and original
+time bounds together with primary consumption and exactly one
+`identity.mfa.complete` issuance. Its lifetime is at most five minutes and never
+extends the parent proof. It cannot carry signup, delivery or a session-created
+lifecycle. Original preparation declares these immutable fields without an
+issuer or signed child. Restoration must add exactly one child without changing
+any original field or primary proof. Historical session-producing bytes remain
+unchanged. Registry admission requires `MagicLinkMFAChallengeContributor` and
+its pure original-scope validation; session-only owners deny. During protected
+Apply, `Work.MagicLinkMFAChallenge` exposes an owned projection only after
+provisional primary consumption. It grants neither current factor authority nor
+completed MFA. Public MFA composition remains incomplete until native
+continuation persistence and the real issuer's challenge recovery are integrated.
+`CapabilityIssuancePlan.MFAContinuationUserID` selects only the frozen challenge
+subject after primary consumption. Staging checks the signed child's tenant,
+subject, resource, original time bounds and exact profile/scope caveats; it is
+not a general anonymous subject override. Original preparation without a signed
+child cannot begin protected domain work.
+
 For signup-by-link preparation, the native owner calls
 `MagicLinkRegistrationDomain.AdmitProspectiveMailbox` with its email-owned
 canonical address. This checks all occupants and live retirement policy under

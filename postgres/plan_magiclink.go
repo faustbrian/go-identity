@@ -61,6 +61,9 @@ func decodeMagicLinkConsumptionPlan(b identity.CommandBinding, fp [32]byte, data
 	}
 	r.key("base")
 	n, ok := r.head(2)
+	if count == 6 && r.ok && ok && n > 0 && n <= uint64(len(r.data)) && (r.data[0] == 0xa4 || bytes.HasPrefix(r.data[int(n):], cborText("profile"))) {
+		return decodeMagicLinkMFAPlan(b, fp, data)
+	}
 	// Accept the ordinary authentication-admission base and historical charged
 	// counter base only. Neither permits recursive optional envelopes. The
 	// registry and execution separately require retained native admission when

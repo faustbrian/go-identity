@@ -138,6 +138,8 @@ func (w CapabilityIssuanceWork) DatabaseTime(ctx context.Context) (time.Time, er
 // alone proves current factor eligibility or complete workflow authorization.
 // MagicLinkRecipientUserID likewise requires the exact magic-link invocation's
 // primary verified-email fence and signed original identifier/security scope.
+// MFAContinuationUserID selects only the closed challenge owner's subject after
+// provisional primary consumption, with exact signed continuation scope/time.
 // No bearer is exposed or stored here; encrypted delivery must be staged by
 // its registered owner. Failure poisons this command. Foreign owners are denied
 // before staging. Work and aliases must remain serial-use.
@@ -184,6 +186,13 @@ func (w Work) StageCapabilityIssuanceFor(p CapabilityIssuanceContributor, index 
 	if d.plan.MagicLinkRecipientUserID != "" {
 		var err error
 		subject, err = magicLinkIssuanceSubject(w.state, w.state.execution.reservation.plan.snapshot(), payload)
+		if err != nil {
+			return w.fail(w.state.ctx, err)
+		}
+	}
+	if d.plan.MFAContinuationUserID != "" {
+		var err error
+		subject, err = magicLinkMFAIssuanceSubject(w, payload)
 		if err != nil {
 			return w.fail(w.state.ctx, err)
 		}

@@ -275,6 +275,9 @@ func (c *Coordinator) prepareFeaturePreparation(original identity.Command, p Com
 	if e != nil || phase.ValidateFeaturePreparation(original, admitted.snapshot()) != nil {
 		return q, nil, nil, invalidPreparation()
 	}
+	if owned.MFAContinuation != nil && validateMagicLinkConsumption(phase, original, admitted.snapshot()) != nil {
+		return q, nil, nil, invalidPreparation()
+	}
 	if admitted.counters != nil {
 		counter := counterAdmissionParticipant(admitted)
 		if counter == nil || validateCommandCounters(counter, original, *admitted.counters) != nil {
@@ -308,7 +311,7 @@ func preparationFinalDeclaration(b identity.CommandBinding, original, final Comm
 		return false
 	}
 	if consumptionAuthenticationPreparation(original) {
-		if !consumptionAuthenticationPreparation(final) || *original.Capability != *final.Capability || final.Delivery != nil || final.CapabilityIssuance != nil {
+		if !consumptionAuthenticationPreparation(final) || *original.Capability != *final.Capability || final.Delivery != nil || final.CapabilityIssuance != nil && original.MFAContinuation == nil {
 			return false
 		}
 	} else if final.Capability != nil {
@@ -319,7 +322,7 @@ func preparationFinalDeclaration(b identity.CommandBinding, original, final Comm
 	// original admission stays issuance-free and cannot introduce consumption.
 	withoutIssuance := final
 	withoutIssuance.CapabilityIssuance = nil
-	if final.CapabilityIssuance != nil && (!validCapabilityIssuancePlan(final.CapabilityIssuance) || final.CapabilityIssuance.RegistrationUserID == "" && final.CapabilityIssuance.ResetRecipientUserID == "" && final.CapabilityIssuance.MagicLinkRecipientUserID == "" || !validRegistrationIssuance(b, final) || !validResetRecipientIssuance(b, final) || !validMagicLinkRecipientIssuance(b, final)) {
+	if final.CapabilityIssuance != nil && (!validCapabilityIssuancePlan(final.CapabilityIssuance) || final.MFAContinuation == nil && final.CapabilityIssuance.RegistrationUserID == "" && final.CapabilityIssuance.ResetRecipientUserID == "" && final.CapabilityIssuance.MagicLinkRecipientUserID == "" || !validRegistrationIssuance(b, final) || !validResetRecipientIssuance(b, final) || !validMagicLinkRecipientIssuance(b, final) || !validMFAContinuationIssuance(b, final)) {
 		return false
 	}
 	if final.Feature == nil || final.Lifecycle == nil || preparationProtected(withoutIssuance) || *original.Feature != *final.Feature || *original.Lifecycle != *final.Lifecycle || original.SubjectType != final.SubjectType || original.SignupAcceptance != final.SignupAcceptance || original.MagicLinkRequestAcceptance != final.MagicLinkRequestAcceptance || len(original.Audits) != len(final.Audits) {
@@ -331,6 +334,12 @@ func preparationFinalDeclaration(b identity.CommandBinding, original, final Comm
 	// Restoration may generate session material, but cannot change whether
 	// consuming the original grant creates an account or its creation custody.
 	if (original.MagicLinkRegistration == nil) != (final.MagicLinkRegistration == nil) || original.MagicLinkRegistration != nil && *original.MagicLinkRegistration != *final.MagicLinkRegistration {
+		return false
+	}
+	// Child signing may occur only after acknowledged original preparation.
+	// It cannot introduce MFA, replace its primary proof or renew the exact
+	// original challenge scope, including issue time and absolute expiry.
+	if (original.MFAContinuation == nil) != (final.MFAContinuation == nil) || original.MFAContinuation != nil && (*original.MFAContinuation != *final.MFAContinuation || !validMagicLinkMFAPlan(b, original) || !validMagicLinkMFAPlan(b, final) || final.CapabilityIssuance == nil) {
 		return false
 	}
 	for i, a := range original.Audits {

@@ -34,6 +34,11 @@ type CapabilityIssuancePlan struct {
 	// with both password targets. Staging requires the same invocation's primary
 	// recipient fence; this metadata grants neither authentication nor issuance.
 	MagicLinkRecipientUserID identity.UserID
+	// MFAContinuationUserID selects only the subject of the closed anonymous
+	// magic-link challenge profile, after provisional primary consumption in
+	// the same native Apply invocation. It cannot be combined with other targets
+	// and permits one identity.mfa.complete grant, never session authentication.
+	MFAContinuationUserID identity.UserID
 }
 
 func cloneCapabilityIssuancePlan(p *CapabilityIssuancePlan) *CapabilityIssuancePlan {
@@ -56,6 +61,9 @@ func validCapabilityIssuancePlan(p *CapabilityIssuancePlan) bool {
 		return false
 	}
 	if p.MagicLinkRecipientUserID != "" && (p.RegistrationUserID != "" || p.ResetRecipientUserID != "" || (identity.User{ID: p.MagicLinkRecipientUserID, TenantID: "validation", Status: identity.StatusActive, Version: 1}).Validate("validation") != nil) {
+		return false
+	}
+	if p.MFAContinuationUserID != "" && (p.RegistrationUserID != "" || p.ResetRecipientUserID != "" || p.MagicLinkRecipientUserID != "" || (identity.User{ID: p.MFAContinuationUserID, TenantID: "validation", Status: identity.StatusActive, Version: 1}).Validate("validation") != nil) {
 		return false
 	}
 	for i, v := range p.Grants {
@@ -115,11 +123,22 @@ func validMagicLinkRecipientIssuance(b identity.CommandBinding, p CommandPlan) b
 	return i.RegistrationUserID == "" && i.ResetRecipientUserID == "" && b.UserID == "" && b.AnonymousFlowID != "" && p.Feature != nil && magicLinkRequestOperation(p.Feature.Operation) && p.Feature.Contributor == (ContributorDescriptor{Owner: "identity/magiclink/postgres", ContractID: "identity.magiclink", Version: 1}) && p.Lifecycle != nil && len(i.Grants) == 1 && i.Grants[0].Purpose == "identity.magic-link.consume"
 }
 
+// The outer closed challenge grammar independently requires full MFA scope.
+// This inner issuance check cannot select a subject on its own; staging also
+// requires exact same-invocation primary consumption and signed scope equality.
+func validMFAContinuationIssuance(b identity.CommandBinding, p CommandPlan) bool {
+	i := p.CapabilityIssuance
+	if i.MFAContinuationUserID == "" {
+		return true
+	}
+	return b.UserID == "" && b.AnonymousFlowID != "" && p.Feature != nil && p.Feature.Operation == magicLinkConsumeOperation() && p.Feature.Contributor == (ContributorDescriptor{Owner: "identity/magiclink/postgres", ContractID: "identity.magiclink", Version: 1}) && p.SubjectType == "authentication_attempt" && p.Lifecycle != nil && p.Lifecycle.EventType == "mfa.challenge.created.v1" && p.Lifecycle.BeforeVersion == 0 && p.Lifecycle.AfterVersion == 0 && len(i.Grants) == 1 && i.Grants[0].Purpose == "identity.mfa.complete"
+}
+
 // The four-field optional envelope is distinct from the existing three-field
 // delivery envelope. Delivery remains outermost; a nested issuer envelope is
 // forbidden. No second journal or alternative history authority is introduced.
 func encodeIssuanceWrappedPlan(b identity.CommandBinding, fp [32]byte, p CommandPlan, encode func(identity.CommandBinding, [32]byte, CommandPlan) ([]byte, error)) ([]byte, error) {
-	if !validCapabilityIssuancePlan(p.CapabilityIssuance) || !validRegistrationIssuance(b, p) || !validResetRecipientIssuance(b, p) || !validMagicLinkRecipientIssuance(b, p) || p.Lifecycle == nil || len(p.Contributors) == 0 || p.Contributors[len(p.Contributors)-1] != p.CapabilityIssuance.Contributor {
+	if !validCapabilityIssuancePlan(p.CapabilityIssuance) || !validRegistrationIssuance(b, p) || !validResetRecipientIssuance(b, p) || !validMagicLinkRecipientIssuance(b, p) || !validMFAContinuationIssuance(b, p) || p.Lifecycle == nil || len(p.Contributors) == 0 || p.Contributors[len(p.Contributors)-1] != p.CapabilityIssuance.Contributor {
 		return nil, invalidPlan()
 	}
 	base := p
@@ -143,6 +162,9 @@ func encodeIssuanceWrappedPlan(b identity.CommandBinding, fp [32]byte, p Command
 	}
 	if p.CapabilityIssuance.MagicLinkRecipientUserID != "" {
 		fields["magic_link_recipient_user_id"] = cborText(string(p.CapabilityIssuance.MagicLinkRecipientUserID))
+	}
+	if p.CapabilityIssuance.MFAContinuationUserID != "" {
+		fields["mfa_continuation_user_id"] = cborText(string(p.CapabilityIssuance.MFAContinuationUserID))
 	}
 	issuance := cborMap(fields)
 	result := cborMap(map[string][]byte{"base": cborBytes(wire), "profile": cborText("identity-capability-issuance-v1"), "issuance": issuance, "version": cborUint(1)})
@@ -212,6 +234,8 @@ func decodeIssuanceWrappedPlan(b identity.CommandBinding, fp [32]byte, data []by
 			p.ResetRecipientUserID = identity.UserID(r.string(128))
 		case "magic_link_recipient_user_id":
 			p.MagicLinkRecipientUserID = identity.UserID(r.string(128))
+		case "mfa_continuation_user_id":
+			p.MFAContinuationUserID = identity.UserID(r.string(128))
 		default:
 			return fail()
 		}

@@ -98,6 +98,9 @@ func validateFeatureCommand(phase FeatureExecutionContributor, command identity.
 }
 
 func (r *ContributorRegistry) admitFeaturePlan(b identity.CommandBinding, fingerprint [32]byte, p CommandPlan) (*admittedKernelPlan, error) {
+	if p.MFAContinuation != nil && (r == nil || r.state == nil) {
+		return nil, invalidPlan()
+	}
 	if p.MagicLinkRegistration != nil && (r == nil || r.state == nil) {
 		return nil, invalidPlan()
 	}
@@ -114,6 +117,11 @@ func (r *ContributorRegistry) admitFeaturePlan(b identity.CommandBinding, finger
 	}
 	if _, ok := feature.contributor.(FeatureExecutionContributor); !ok {
 		return nil, invalidPlan()
+	}
+	if p.MFAContinuation != nil {
+		if _, ok := feature.contributor.(MagicLinkMFAChallengeContributor); !ok {
+			return nil, invalidPlan()
+		}
 	}
 	if p.MagicLinkRegistration != nil {
 		if _, ok := feature.contributor.(MagicLinkRegistrationContributor); !ok {
@@ -249,7 +257,7 @@ func (r *ContributorRegistry) admitFeaturePlan(b identity.CommandBinding, finger
 				}
 			}
 		case "capability/postgres":
-			if p.Capability != nil {
+			if p.Capability != nil && entry.descriptor.ContractID == "capability.one-use" {
 				if _, ok := entry.contributor.(CapabilityExecutionContributor); !ok {
 					return nil, invalidPlan()
 				}
@@ -312,7 +320,7 @@ func (r *ContributorRegistry) admitFeaturePlan(b identity.CommandBinding, finger
 		copy := *p.Capability
 		proof = &copy
 	}
-	return &admittedKernelPlan{magicLinkRequestAcceptance: p.MagicLinkRequestAcceptance, magicLinkRegistration: cloneMagicLinkRegistrationPlan(p.MagicLinkRegistration), registry: r.state, binding: b, digest: digest, contributors: entries, audits: append([]AuditPlan(nil), p.Audits...), lifecycle: &l, capability: proof, risk: risk, counters: counters, captchaReplay: p.CaptchaReplayReservation, captchaUse: cloneCaptchaEvidencePlan(p.CaptchaEvidence), otp: cloneOTPPlan(p.OTP), fingerprint: fingerprint, feature: &f, subjectType: p.SubjectType, delivery: cloneDeliveryPlan(p.Delivery), issuance: cloneCapabilityIssuancePlan(p.CapabilityIssuance), signupAcceptance: p.SignupAcceptance}, nil
+	return &admittedKernelPlan{mfaContinuation: cloneMFAContinuationPlan(p.MFAContinuation), magicLinkRequestAcceptance: p.MagicLinkRequestAcceptance, magicLinkRegistration: cloneMagicLinkRegistrationPlan(p.MagicLinkRegistration), registry: r.state, binding: b, digest: digest, contributors: entries, audits: append([]AuditPlan(nil), p.Audits...), lifecycle: &l, capability: proof, risk: risk, counters: counters, captchaReplay: p.CaptchaReplayReservation, captchaUse: cloneCaptchaEvidencePlan(p.CaptchaEvidence), otp: cloneOTPPlan(p.OTP), fingerprint: fingerprint, feature: &f, subjectType: p.SubjectType, delivery: cloneDeliveryPlan(p.Delivery), issuance: cloneCapabilityIssuancePlan(p.CapabilityIssuance), signupAcceptance: p.SignupAcceptance}, nil
 }
 
 // ApplyFeature invokes only the frozen exact native adapter once through Work.

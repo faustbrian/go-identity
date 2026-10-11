@@ -22,6 +22,9 @@ import (
 // admission profile; it is not sufficient for a future successful mutation
 // commit, which must require its lifecycle and full effect declarations.
 type CommandPlan struct {
+	// MFAContinuation freezes the challenge-only alternative to magic-link
+	// session issuance. Metadata alone grants no factor or session authority.
+	MFAContinuation *MFAContinuationPlan
 	// MagicLinkRegistration freezes a prospective account creation in the
 	// consuming transaction. Nil preserves the existing signin declaration.
 	// This structural input grants neither email-possession nor creation authority.
@@ -111,7 +114,7 @@ func KernelPlanDigest(binding identity.CommandBinding, fingerprint [32]byte, pla
 // The journal freezes the exact digest input, not a second serialization that
 // can disagree with admission or omit a participant field.
 func encodeKernelPlan(binding identity.CommandBinding, fingerprint [32]byte, plan CommandPlan) ([]byte, error) {
-	if plan.MagicLinkRegistration != nil || plan.MagicLinkRequestAcceptance {
+	if plan.MFAContinuation != nil || plan.MagicLinkRegistration != nil || plan.MagicLinkRequestAcceptance {
 		return nil, invalidPlan()
 	}
 	if plan.Delivery != nil {
@@ -196,6 +199,7 @@ func encodeKernelPlan(binding identity.CommandBinding, fingerprint [32]byte, pla
 // admittedKernelPlan never escapes the coordinator boundary. It freezes only
 // the supported kernel profile, not arbitrary callbacks or opaque input blobs.
 type admittedKernelPlan struct {
+	mfaContinuation            *MFAContinuationPlan
 	magicLinkRegistration      *MagicLinkRegistrationPlan
 	signupAcceptance           bool
 	magicLinkRequestAcceptance bool
