@@ -83,6 +83,7 @@ type featureCommandState struct {
 	passwordHash        func() string
 	passwordChange      func() (string, authentication.BearerCredential, authentication.ReauthenticationProof)
 	passwordReset       func() (string, capability.Proof)
+	passwordResetInput  func() (primitive.Secret, capability.Proof)
 	passwordSignin      func() (primitive.Secret, authentication.BearerCredential)
 	passwordSignup      func() (string, authentication.BearerCredential)
 	passwordSignupInput func() (primitive.Secret, authentication.BearerCredential)
@@ -137,13 +138,16 @@ func validFeatureFields(fields []FeatureField) bool {
 // safe for concurrent reads. The projection must never become a log, snapshot,
 // public response or authentication decision. No callbacks or I/O run.
 func (c Command) Feature() (FeatureCommandSpec, bool) {
-	if !c.validFeatureVariant() || c.feature.passwordHash != nil || c.feature.passwordChange != nil || c.feature.passwordReset != nil || c.feature.passwordSignin != nil || c.feature.passwordSignup != nil || c.feature.passwordSignupInput != nil {
+	if !c.validFeatureVariant() || c.feature.passwordHash != nil || c.feature.passwordChange != nil || c.feature.passwordReset != nil || c.feature.passwordResetInput != nil || c.feature.passwordSignin != nil || c.feature.passwordSignup != nil || c.feature.passwordSignupInput != nil {
 		return FeatureCommandSpec{}, false
 	}
 	return cloneFeatureSpec(c.feature.spec), true
 }
 
 func (c Command) validFeatureVariant() bool {
+	if c.feature != nil && c.feature.passwordResetInput != nil && (c.feature.code != nil || c.feature.preAuthCookie != nil || c.feature.sessionToken != nil || c.feature.passwordHash != nil || c.feature.passwordChange != nil || c.feature.passwordReset != nil || c.feature.passwordSignin != nil || c.feature.passwordSignup != nil || c.feature.passwordSignupInput != nil) {
+		return false
+	}
 	if c.feature != nil && c.feature.passwordReset != nil && (c.feature.code != nil || c.feature.preAuthCookie != nil || c.feature.sessionToken != nil || c.feature.passwordHash != nil || c.feature.passwordChange != nil || c.feature.passwordSignin != nil || c.feature.passwordSignup != nil || c.feature.passwordSignupInput != nil) {
 		return false
 	}

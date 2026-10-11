@@ -1,5 +1,17 @@
 # identity
 
+## Original password-reset preparation
+
+`NewFeaturePasswordResetInputCommand` borrows the primitive replacement `Secret`
+and original capability `Proof` before hashing. Select `PasswordResetInputFeature`
+and `PasswordResetInputCustody` together; no legacy or generated accessor admits
+this variant. Keep both owners alive through bounded preparation and destroy the
+password afterward. Proof aliases share upstream terminal transfer, and metadata
+does not establish liveness. The native coordinator must bind exact original
+bytes, authenticate durable issuance and current recovery authority, and screen
+risk/HIBP before acknowledged generation. Use `NewFeaturePasswordResetCommand`
+only for the generated verifier. This transport is not a public reset service.
+
 ## Safe identifier snapshots
 
 `NewIdentifierProjection` selects one identifier from a complete consistent

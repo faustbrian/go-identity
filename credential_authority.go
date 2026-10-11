@@ -75,7 +75,26 @@ type CredentialAuthorityRepository interface {
 // refresh. Success cannot replace current global/tenant/user/identifier/factor/
 // provider checks, verified original proof provenance or atomic finalization.
 func CheckCredentialAuthority(current CredentialAuthorityRecord, expected CredentialRef, expectedAuthorityVersion uint64, now time.Time) error {
-	if now.IsZero() || now.UTC().Year() < 1 || now.UTC().Year() > 9999 || expected.Validate(expected.TenantID, expected.UserID) != nil || current.User.Validate(expected.TenantID) != nil || current.User.ID != expected.UserID || !current.User.Status.AllowsAuthentication() || current.Credential.Validate(expected.TenantID, expected.UserID) != nil || current.Credential != expected || !current.Enabled || expectedAuthorityVersion == 0 || current.AuthorityVersion != expectedAuthorityVersion {
+	return checkCredentialPredecessor(current, expected, expectedAuthorityVersion, true, now)
+}
+
+// CheckPasswordRecoveryAuthority checks the exact enabled or disabled password
+// predecessor for recovery, never authentication. It preserves all current
+// tenant/user/status/reference/epoch/expiry checks and requires the password
+// owner's reference. expectedEnabled must come from original trusted intent,
+// not client policy or an assumption. Success grants neither reset permission
+// nor a session: verified recovery, current factors/risk and atomic one-use
+// mutation remain mandatory. No IO, renewal, metadata substitution or mutation
+// occurs; CheckCredentialAuthority continues to reject disabled references.
+func CheckPasswordRecoveryAuthority(current CredentialAuthorityRecord, expected CredentialRef, expectedAuthorityVersion uint64, expectedEnabled bool, now time.Time) error {
+	if expected.Kind != CredentialPassword || expected.Owner != "identity/password" {
+		return ErrCredentialAuthority
+	}
+	return checkCredentialPredecessor(current, expected, expectedAuthorityVersion, expectedEnabled, now)
+}
+
+func checkCredentialPredecessor(current CredentialAuthorityRecord, expected CredentialRef, expectedAuthorityVersion uint64, expectedEnabled bool, now time.Time) error {
+	if now.IsZero() || now.UTC().Year() < 1 || now.UTC().Year() > 9999 || expected.Validate(expected.TenantID, expected.UserID) != nil || current.User.Validate(expected.TenantID) != nil || current.User.ID != expected.UserID || !current.User.Status.AllowsAuthentication() || current.Credential.Validate(expected.TenantID, expected.UserID) != nil || current.Credential != expected || current.Enabled != expectedEnabled || expectedAuthorityVersion == 0 || current.AuthorityVersion != expectedAuthorityVersion {
 		return ErrCredentialAuthority
 	}
 	if !current.ExpiresAt.IsZero() && (current.ExpiresAt.UTC().Year() < 1 || current.ExpiresAt.UTC().Year() > 9999 || current.ExpiresAt.Nanosecond()%1000 != 0 || !current.ExpiresAt.After(now)) {

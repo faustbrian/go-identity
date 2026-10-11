@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Bind original password-reset Secret and proof before verifier generation,
+  using disjoint preparation-only custody. Preserve shared terminal lifetimes
+  and exact raw password bytes; generated execution remains separately selected.
+
+- Add exact enabled/disabled password predecessor checks for recovery without
+  admitting disabled credentials for authentication. Recovery still requires
+  independently verified factors, risk and atomic protected mutation.
+
 - Add distinct password-reset command custody for the replacement verifier and
   original upstream capability proof. Preserve shared proof lifetime and keep
   legacy change/signin/signup paths closed. Native atomic reset composition is
