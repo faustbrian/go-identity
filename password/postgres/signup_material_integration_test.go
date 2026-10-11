@@ -376,6 +376,17 @@ func testNativeSignupMaterial(t *testing.T, ctx context.Context, pool *database.
 				}
 			}
 			stored, readErr := repository.ReadPasswordCredential(ctx, password.CredentialKey{TenantID: b.TenantID, SubjectID: intent.Creation.Binding.UserID})
+			var factorRows int
+			if err := pool.Raw().QueryRow(ctx, `SELECT count(*) FROM identity_mfa.factor_authorities WHERE tenant_id=$1 AND user_id=$2 AND version=1 AND active_factors=0`, string(b.TenantID), string(intent.Creation.Binding.UserID)).Scan(&factorRows); err != nil {
+				t.Fatal("factor authority read", err)
+			}
+			wantFactorRows := 0
+			if mode == "commit" {
+				wantFactorRows = 1
+			}
+			if factorRows != wantFactorRows {
+				t.Fatal("fresh account factor authority did not follow atomic signup outcome")
+			}
 			if mode != "commit" {
 				if readErr != password.ErrCredentialAbsent {
 					t.Fatal("rolled-back signup retained material")
@@ -407,4 +418,8 @@ func testNativeSignupMaterial(t *testing.T, ctx context.Context, pool *database.
 			}
 		})
 	}
+	testResetFactorAuthority(t, ctx, pool, directory)
+	t.Run("native reset completion", func(t *testing.T) {
+		testNativeResetCompletion(t, ctx, pool, directory, policy, crypto, base)
+	})
 }

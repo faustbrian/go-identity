@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	identity "github.com/faustbrian/go-identity"
+	mfapg "github.com/faustbrian/go-identity/mfa/postgres"
 	password "github.com/faustbrian/go-identity/password"
 	kernel "github.com/faustbrian/go-identity/postgres"
 	primitive "github.com/faustbrian/go-password"
@@ -112,6 +113,9 @@ AND i.version=1 AND NOT i.verified AND NOT i.is_primary AND i.verification_state
 	}
 	if n != 1 {
 		return password.ErrPasswordWork
+	}
+	if err := mfapg.InitializeSignup(bounded, w, owner, c, intent.Creation.Binding.UserID); err != nil {
+		return err
 	}
 	return bounded.Err()
 }

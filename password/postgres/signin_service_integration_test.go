@@ -80,7 +80,7 @@ func (signinPublicPolicy) Decide(_ context.Context, c authorization.DecisionCont
 	return authorization.Decision{Outcome: authorization.Allow, Revision: c.PolicyRevision}, nil
 }
 
-func testPublicNativeSignin(t *testing.T, ctx context.Context, pool *database.Pool, policy primitive.Policy, crypto *primitive.Service, hash primitive.EncodedHash, storage sessionpg.Config, profile sessionpg.IdentifierAdmissionConfig) {
+func publicSigninFixture(t *testing.T, pool *database.Pool, policy primitive.Policy, crypto *primitive.Service, hash primitive.EncodedHash, storage sessionpg.Config, profile sessionpg.IdentifierAdmissionConfig) (*SigninService, SigninConfig) {
 	t.Helper()
 	normalization, err := identifier.NewNormalizationProfile(identifier.NormalizationProfileSpec{ID: "signin-email", Version: 1, Unicode: identifier.UnicodeNormalizationNFC, MaximumBytes: 512})
 	if err != nil {
@@ -103,6 +103,15 @@ func testPublicNativeSignin(t *testing.T, ctx context.Context, pool *database.Po
 	if err != nil {
 		t.Fatal("native public composition", err)
 	}
+	return service, c
+}
+
+func testPublicNativeSignin(t *testing.T, ctx context.Context, pool *database.Pool, policy primitive.Policy, crypto *primitive.Service, hash primitive.EncodedHash, storage sessionpg.Config, profile sessionpg.IdentifierAdmissionConfig) {
+	t.Helper()
+	service, c := publicSigninFixture(t, pool, policy, crypto, hash, storage, profile)
+	flowKey := c.FlowKeys[0]
+	query := *c.Coordinator.QueryPolicy
+	var err error
 	var workflow password.SigninService = service
 	for _, mode := range []string{"http-browser", "http-persistent", "commit", "commit-persistent", "wrong", "unknown", "invalid-email", "foreign-cookie", "foreign-origin", "foreign-callback", "changed-remember", "policy-advance", "rehash", "rehash-persistent", "rehash-wrong", "rehash-policy-advance", "rehash-outbox-failure", "rehash-concurrent", "rehash-expired", "rehash-cancelled", "rehash-disconnect-before", "rehash-disconnect-after"} {
 		t.Run(mode, func(t *testing.T) {

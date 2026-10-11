@@ -17,6 +17,17 @@ import (
 // keyed preparation journal owns whether generation may run, not this helper.
 // Returned facts belong only in that owner's authenticated encrypted output.
 func (*Repository) prepareSignupHash(ctx context.Context, c password.HashPreparationConfig, original risk.AuthenticationAdmission, scope risk.Context, candidate primitive.Secret) (hash primitive.EncodedHash, facts []risk.Signal, err error) {
+	return prepareAuthenticationHash(ctx, c, original, scope, candidate, "identity.password.signup")
+}
+
+// Reset and signup share the canonical Authentication lane. The exact action
+// remains bound to original custody; sharing screening cannot turn one
+// operation's counted admission into authority for the other.
+func (*Repository) prepareResetHash(ctx context.Context, c password.HashPreparationConfig, original risk.AuthenticationAdmission, scope risk.Context, candidate primitive.Secret) (primitive.EncodedHash, []risk.Signal, error) {
+	return prepareAuthenticationHash(ctx, c, original, scope, candidate, "identity.password.reset-complete")
+}
+
+func prepareAuthenticationHash(ctx context.Context, c password.HashPreparationConfig, original risk.AuthenticationAdmission, scope risk.Context, candidate primitive.Secret, action risk.Action) (hash primitive.EncodedHash, facts []risk.Signal, err error) {
 	defer func() {
 		if recover() != nil {
 			err = password.ErrPasswordWork
@@ -35,7 +46,7 @@ func (*Repository) prepareSignupHash(ctx context.Context, c password.HashPrepara
 		return hash, nil, err
 	}
 	p := original.Prepared()
-	if scope.Operation != "identity.password.signup" || scope.Tenant != p.Scope.Tenant || scope.Operation != p.Scope.Operation || scope.Attempt != p.Scope.Attempt || scope.IndependentFactor != p.Scope.IndependentFactor || len(p.Signals) == 0 || len(p.Signals) > 31 {
+	if (action != "identity.password.signup" && action != "identity.password.reset-complete") || scope.Operation != action || scope.Tenant != p.Scope.Tenant || scope.Operation != p.Scope.Operation || scope.Attempt != p.Scope.Attempt || scope.IndependentFactor != p.Scope.IndependentFactor || len(p.Signals) == 0 || len(p.Signals) > 31 {
 		return hash, nil, password.ErrPasswordWork
 	}
 	admission, err := c.Policy.Admit(scope.Operation)
@@ -56,6 +67,9 @@ func (*Repository) prepareSignupHash(ctx context.Context, c password.HashPrepara
 			return nil, password.ErrPasswordWork
 		}
 		if err := original.Check(ctx); err != nil {
+			return nil, password.ErrPasswordWork
+		}
+		if err := original.CheckAt(ctx, actual.Now); err != nil {
 			return nil, password.ErrPasswordWork
 		}
 		provider, err := collect(ctx, actual, borrowed)
@@ -82,7 +96,7 @@ func (*Repository) prepareSignupHash(ctx context.Context, c password.HashPrepara
 	if err := original.Check(ctx); err != nil {
 		return hash, nil, password.ErrPasswordWork
 	}
-	if err := checkSignupScreening(ctx, c.Policy, p.Scope, facts, c.Now()); err != nil {
+	if err := checkAuthenticationScreening(ctx, c.Policy, p.Scope, facts, c.Now(), action); err != nil {
 		return hash, nil, err
 	}
 	return hash, slices.Clone(facts), nil
@@ -93,7 +107,15 @@ func (*Repository) prepareSignupHash(ctx context.Context, c password.HashPrepara
 // authenticated outside Work; these immutable facts cannot be renewed here.
 // This does not establish current flow/account/field authority or one-time use.
 func checkSignupScreening(ctx context.Context, policy risk.Policy, original risk.Context, facts []risk.Signal, now time.Time) error {
-	if ctx == nil || now.IsZero() || now.Before(original.Now) || original.Operation != "identity.password.signup" {
+	return checkAuthenticationScreening(ctx, policy, original, facts, now, "identity.password.signup")
+}
+
+func (*Repository) checkResetScreening(ctx context.Context, policy risk.Policy, original risk.Context, facts []risk.Signal, now time.Time) error {
+	return checkAuthenticationScreening(ctx, policy, original, facts, now, "identity.password.reset-complete")
+}
+
+func checkAuthenticationScreening(ctx context.Context, policy risk.Policy, original risk.Context, facts []risk.Signal, now time.Time, action risk.Action) error {
+	if ctx == nil || now.IsZero() || now.Before(original.Now) || (action != "identity.password.signup" && action != "identity.password.reset-complete") || original.Operation != action {
 		return password.ErrPasswordWork
 	}
 	if err := ctx.Err(); err != nil {

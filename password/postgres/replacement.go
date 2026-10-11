@@ -94,16 +94,26 @@ func passwordReplacement(c identity.Command, policy primitive.Policy) (kernel.Cr
 			return fail()
 		}
 	}
+	hash, err := issuanceHash(raw, policy)
+	if err != nil {
+		return fail()
+	}
+	return i, hash, nil
+}
+
+// New verifier material always uses the selected issuance profile, while reads
+// retain broader verification limits for supported legacy predecessors.
+func issuanceHash(raw string, policy primitive.Policy) (primitive.EncodedHash, error) {
 	hash, err := primitive.ParseEncodedHash(raw, policy.Limits())
 	if err != nil || hash.Algorithm() != policy.Algorithm() {
-		return fail()
+		return primitive.EncodedHash{}, password.ErrPasswordWork
 	}
 	// Policies may retain unused fields for another algorithm. Only the selected
 	// issuance algorithm owns work parameters; verification limits remain broader.
 	if hash.Algorithm() == primitive.Argon2id && hash.Argon2idParameters() != policy.Argon2idParameters() || hash.Algorithm() == primitive.Bcrypt && hash.BcryptCost() != policy.BcryptCost() {
-		return fail()
+		return primitive.EncodedHash{}, password.ErrPasswordWork
 	}
-	return i, hash, nil
+	return hash, nil
 }
 
 // ApplyFeature replaces only owned material through this exact repository's
@@ -131,7 +141,7 @@ func (r *Repository) ApplyFeature(ctx context.Context, w kernel.Work, c identity
 
 func (r *Repository) applyReplacement(ctx context.Context, w kernel.Work, owner kernel.FeatureExecutionContributor, s identity.FeatureCommandSpec, i kernel.CredentialReplacementIntent, hash primitive.EncodedHash) (identity.FeatureReceipt, error) {
 	b, feature, transition, scopeErr := w.FeatureScope(owner)
-	if scopeErr != nil || b != s.Binding || feature.Operation != replacementOperation() || transition.EventType != "password.changed.v1" || transition.BeforeVersion != i.Credential.Version || transition.AfterVersion != i.Credential.Version+1 {
+	if scopeErr != nil || b != s.Binding || feature.Operation != s.Operation || !replacementEffectScope(feature.Operation, transition) || transition.BeforeVersion != i.Credential.Version || transition.AfterVersion != i.Credential.Version+1 {
 		return identity.FeatureReceipt{}, password.ErrPasswordWork
 	}
 	bounded, cancel := context.WithTimeout(ctx, r.maximumDuration)
@@ -208,7 +218,7 @@ func (r *Repository) recoverReplacement(ctx context.Context, w kernel.RecoveryWo
 		return kernel.RecoveryUnknown, err
 	}
 	b, feature, transition, err := w.FeatureScope(owner)
-	if err != nil || feature.Operation != replacementOperation() || transition.EventType != "password.changed.v1" || transition.BeforeVersion == 0 || transition.BeforeVersion == ^uint64(0) || transition.AfterVersion != transition.BeforeVersion+1 {
+	if err != nil || !replacementEffectScope(feature.Operation, transition) {
 		return kernel.RecoveryUnknown, password.ErrPasswordWork
 	}
 	bounded, cancel := context.WithTimeout(ctx, r.maximumDuration)
@@ -240,6 +250,16 @@ func (r *Repository) recoverReplacement(ctx context.Context, w kernel.RecoveryWo
 		return kernel.RecoveryUnknown, nil
 	}
 	return kernel.RecoveryCommitted, nil
+}
+
+// Both workflows share the material CAS and its existing hash-free evidence.
+// Reset remains a distinct closed native operation: no public hash-only writer
+// is registered for it, and it must enter through CredentialResetContributor.
+func replacementEffectScope(op identity.FeatureOperation, l kernel.LifecyclePlan) bool {
+	if l.BeforeVersion == 0 || l.BeforeVersion == ^uint64(0) || l.AfterVersion != l.BeforeVersion+1 {
+		return false
+	}
+	return op == replacementOperation() && l.EventType == "password.changed.v1" || op == resetOperation() && l.EventType == "password.reset.v1"
 }
 
 // Non-secret binding complements the keyed journal rather than copying it.

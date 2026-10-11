@@ -9,6 +9,8 @@ import (
 	"io"
 	"net"
 	"sync/atomic"
+	"testing"
+	"time"
 )
 
 // Only the disposable loopback connection is intercepted. SQL, transaction
@@ -16,8 +18,31 @@ import (
 // and session effects; earlier reservation transactions must not be faulted.
 type signinCommitFault struct {
 	before bool
+	marker string // Optional final-effect marker for other native workflows.
 	cancel context.CancelFunc
 	hit    atomic.Bool
+}
+
+func TestSigninFaultReaderPreservesPartialFrame(t *testing.T) {
+	client, server := net.Pipe()
+	defer client.Close()
+	defer server.Close()
+	deadline := time.Now().Add(time.Second)
+	_ = client.SetDeadline(deadline)
+	_ = server.SetDeadline(deadline)
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		_, _ = server.Write([]byte{'Z', 0, 0})
+		_ = server.Close()
+	}()
+	defer func() { <-done }()
+	c := &signinCommitConn{Conn: client, fault: &signinCommitFault{before: true}}
+	var output [8]byte
+	n, _ := c.Read(output[:])
+	if n != 3 || !bytes.Equal(output[:n], []byte{'Z', 0, 0}) {
+		t.Fatal("fault reader discarded bytes before a fragmented-frame interruption")
+	}
 }
 
 func (f *signinCommitFault) dial(ctx context.Context, network, address string) (net.Conn, error) {
@@ -36,7 +61,16 @@ type signinCommitConn struct {
 }
 
 func (c *signinCommitConn) Write(p []byte) (int, error) {
-	if bytes.Contains(p, []byte("identity_password.signin_records(")) {
+	// A rolled-back mutation must not fault a later reservation or failure-
+	// audit transaction when pgx reuses this physical connection.
+	if len(p) >= 5 && p[0] == 'Q' && bytes.EqualFold(p[5:], []byte("rollback\x00")) {
+		c.mutation.Store(false)
+	}
+	marker := c.fault.marker
+	if marker == "" {
+		marker = "identity_password.signin_records("
+	}
+	if bytes.Contains(p, []byte(marker)) {
 		c.mutation.Store(true)
 		if c.fault.cancel != nil && c.fault.hit.CompareAndSwap(false, true) {
 			c.fault.cancel()
@@ -50,30 +84,30 @@ func (c *signinCommitConn) Write(p []byte) (int, error) {
 }
 
 func (c *signinCommitConn) Read(p []byte) (int, error) {
-	if len(p) == 0 {
-		return 0, nil
+	// Observe frames without changing the driver's read/deadline semantics.
+	// ReadFull used to lose already-read bytes on a partial-frame interruption.
+	n, err := c.Conn.Read(p)
+	if len(c.pending)+n > (16<<20)+5 {
+		return 0, io.ErrUnexpectedEOF
 	}
-	if len(c.pending) == 0 {
-		var header [5]byte
-		if _, err := io.ReadFull(c.Conn, header[:]); err != nil {
-			return 0, err
-		}
-		size := binary.BigEndian.Uint32(header[1:])
+	c.pending = append(c.pending, p[:n]...)
+	for len(c.pending) >= 5 {
+		size := binary.BigEndian.Uint32(c.pending[1:5])
 		if size < 4 || size > 16<<20 {
 			return 0, io.ErrUnexpectedEOF
 		}
-		message := make([]byte, int(size)+1)
-		copy(message, header[:])
-		if _, err := io.ReadFull(c.Conn, message[5:]); err != nil {
-			return 0, err
+		if len(c.pending) < int(size)+1 {
+			break
 		}
-		if c.fault.cancel == nil && !c.fault.before && header[0] == 'C' && bytes.Equal(message[5:], []byte("COMMIT\x00")) && c.mutation.Load() && c.fault.hit.CompareAndSwap(false, true) {
+		message := c.pending[:int(size)+1]
+		if c.fault.cancel == nil && !c.fault.before && message[0] == 'C' && bytes.Equal(message[5:], []byte("COMMIT\x00")) && c.mutation.Load() && c.fault.hit.CompareAndSwap(false, true) {
 			_ = c.Conn.Close()
 			return 0, io.ErrUnexpectedEOF
 		}
-		c.pending = message
+		if message[0] == 'Z' && len(message) == 6 && message[5] == 'I' {
+			c.mutation.Store(false)
+		}
+		c.pending = c.pending[len(message):]
 	}
-	n := copy(p, c.pending)
-	c.pending = c.pending[n:]
-	return n, nil
+	return n, err
 }

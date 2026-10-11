@@ -5,8 +5,43 @@ consistent primary credential reader plus native existing-password material
 replacement/recovery, native authenticated password change and backend
 single-factor signin/recovery with atomic automatic rehash, plus required-email-
 verification signup and password-free signup recovery. Immediate-session/MFA
-signup, reset, history and deletion remain unimplemented. Original signup-link
+signup, reset HTTP/reference wiring, history and deletion remain unimplemented. Original signup-link
 confirmation is implemented; the complete generic email lifecycle is not.
+
+Native signup now also initializes known-empty second-factor authority in the
+same protected transaction. Install `mfa/postgres.MigrationSource` in the owned
+`identity_mfa` namespace after kernel users/commands and before signup. Neutral
+collisions and rollbacks create no factor authority. Existing users are not
+backfilled as factor-free; their unknown state denies email-only recovery until
+reconciled by the factor owner. This adds no enrollment or MFA bypass.
+
+`NewResetService` supplies the public `password.ResetService` interface.
+Select `ResetConfig.Request` to enable `ResetRequest` and `RecoverResetRequest`;
+nil keeps existing completion-only composition and explicitly denies requests.
+Request composition selects email normalization, request-key policy, original
+issuance custody and encrypted delivery. Install kernel request-key/preparation
+histories, independent MFA authority and delivery histories before enabling it.
+Completion requires real issuer-owned durable provenance, a verified email and
+current credential/account/factor authority; missing factor authority denies.
+Password screening precedes hashing. Credential replacement, required session
+revocation, one-time consumption and audit/lifecycle effects commit together.
+Original retries preserve the generated verifier and reject changed input.
+Proof-free recovery returns historical metadata only, not authority or secrets.
+A proven rollback can return `NotCommitted` with `identity.UnavailableError`
+retaining the original dependency failure; its released proof cannot be reused.
+Selected reset HTTP/reference composition remains unfinished; backend public
+request/delivery/completion integration does not claim transport readiness.
+
+Native request preparation now transfers real issuer-owned reset tokens into
+encrypted delivery checkpoints. The PostgreSQL integration journey stages those
+restored checkpoints atomically and captures the email through the actual worker
+before calling public completion. The public-request journey also proves stable
+acknowledgement without duplicate issuance/messages, conflicting raw input,
+proof-free recovery, old-password rejection, replacement-password signin and
+atomic revocation of the predecessor session set. Missing, enrolled-factor and
+genuinely unknown-factor selections receive the same committed acknowledgement
+without an issued grant or delivery intent. Retained output restores original
+recipient, factor/credential epochs, token and message, not current replacements.
 
 For signup rate admission, debit the trusted IP budget first, then use
 `SignupService.SignupRateSource(ctx, input)` to obtain the frozen creation
@@ -432,6 +467,10 @@ or full password lifecycle/release qualification.
    adds retained, hash-free replacement-effect bindings and supports populated
    version-1 upgrades. Install kernel `CredentialReplacementMigrationSource`
    before enabling the native replacement profile.
+   Version 6 permits reset-complete effects in the same retained material table;
+   prior migration bytes and password-change receipts are unchanged. Reset uses
+   only the private native workflow, not the registered hash-only change writer.
+   The complete public reset workflow is still in development.
 3. Construct the reader using an existing caller-owned **primary-only**
    `go-postgres.Pool` and the password owner's constructed primitive policy:
 

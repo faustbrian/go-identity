@@ -23,6 +23,7 @@ import (
 	"github.com/faustbrian/go-authorization"
 	authoritypg "github.com/faustbrian/go-authorization/postgres"
 	identity "github.com/faustbrian/go-identity"
+	mfapg "github.com/faustbrian/go-identity/mfa/postgres"
 	password "github.com/faustbrian/go-identity/password"
 	kernel "github.com/faustbrian/go-identity/postgres"
 	"github.com/faustbrian/go-identity/risk"
@@ -178,6 +179,7 @@ func TestNativeSigninPhaseIntegration(t *testing.T) {
 	for _, source := range []migrations.Source{
 		kernel.DirectoryAuthorityMigrationSource{Base: base, Version: 13, GlobalAuthorityID: "signin-deployment", TenantIDs: []identity.TenantID{signinTestTenant}},
 		MigrationSource{},
+		mfapg.MigrationSource{Version: 1},
 		sessionpg.IssueMigrationSource{Base: sessionpg.RevocationMigrationSource{Base: sessionpg.MigrationSource{Schema: sessionConfig.Schema, Version: 1}, Version: 2}, Version: 3},
 		sessionpg.PreAuthMigrationSource{Schema: sessionConfig.Schema, Version: 4},
 		sessionpg.PreAuthReleaseMigrationSource{Schema: sessionConfig.Schema, Version: 5},

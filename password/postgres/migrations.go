@@ -46,8 +46,19 @@ func (MigrationSource) Load(ctx context.Context) ([]migrations.Migration, error)
 	if err != nil {
 		return nil, password.ErrPasswordWork
 	}
-	return []migrations.Migration{migration, replacement, reauthentication, consumption, signin}, nil
+	reset, err := migrations.NewMigration(6, "identity_password_reset_material_effects", migrations.TransactionModeDefault, resetMaterialSchemaSQL, "")
+	if err != nil {
+		return nil, password.ErrPasswordWork
+	}
+	return []migrations.Migration{migration, replacement, reauthentication, consumption, signin, reset}, nil
 }
+
+// Preserve installed checksums and populated change receipts. Reset shares the
+// original material-effect owner, rather than adding a second intent journal.
+const resetMaterialSchemaSQL = `ALTER TABLE identity_password.replacements
+ DROP CONSTRAINT replacements_purpose_check,
+ ADD CONSTRAINT replacements_purpose_check CHECK(purpose IN ('identity.password.change','identity.password.reset-complete'));
+`
 
 const signinSchemaSQL = `CREATE TABLE identity_password.signin_records (
  proof_id text COLLATE "C" PRIMARY KEY CHECK(octet_length(proof_id) BETWEEN 22 AND 128),

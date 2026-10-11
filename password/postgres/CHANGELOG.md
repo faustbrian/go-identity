@@ -2,6 +2,62 @@
 
 ## Unreleased
 
+- Authenticate original issued reset subject, credential and challenge lifetime
+  for transport admission through the configured current query policy. Foreign
+  tenant/target/action or stale policy denies without returning source metadata.
+  This read grants no use; completion repeats primary authority and atomic use.
+
+- Expose the frozen reset-request destination parser for shared HTTP rate
+  admission without account, factor, issuer or delivery lookup. Invalid or
+  canceled input returns no destination; native reset retains all authority.
+
+- Compose public reset request and proof-free request recovery with keyed
+  original-intent correlation, primary credential/factor admission and encrypted
+  issuer/delivery checkpoints. Matching retries do not issue/send again;
+  missing or factor-ineligible recipients receive the same acknowledgement
+  without issuance. Select `ResetConfig.Request` and install its owner histories;
+  nil preserves completion-only composition. Reset HTTP remains in development.
+
+- Prepare reset grants into original encrypted email delivery and issuance
+  custody without exposing a bearer or sending before commitment. Preserve
+  recipient, callback, factor, authority and expiry bindings across restoration.
+  Public request initiation/recovery and reset HTTP remain in development.
+
+- Add native public reset completion and proof-free command recovery using
+  issuer-owned provenance and current credential/factor authority. Replacement,
+  session revocation, one-time use and required audit/lifecycle effects share
+  the protected transaction. Original retries retain their generated verifier;
+  proven rollback retains its dependency failure and terminally releases the
+  original proof. Public reset request, delivery and HTTP remain unfinished.
+
+- Retain code-free original reset predecessors inside encrypted preparation
+  output so retries need not select a new aggregate version after commitment.
+  Bind output to the immutable command, configuration and original generation;
+  reconstruction still requires original password/proof fingerprint matching.
+
+- Compose native reset completion with real credential replacement, required
+  session revocation and atomic one-use/audit/lifecycle owners. Preserve encrypted
+  preparation and original replay without hashing again. Public request,
+  delivery and reset HTTP/service orchestration remain in development.
+
+- Bind native reset verifier generation to original proof custody and signed
+  credential/factor scope. Reuse counted Authentication admission and shared
+  HIBP-before-hash screening without renewing original evidence. Restore the
+  original verifier and signed admission from encrypted preparation output
+  without regeneration or resurrection of terminal proof custody. Public reset
+  orchestration and HTTP exposure remain in development.
+
+- Extend the existing original-command material CAS and hash-free effect history
+  to the distinct native reset-complete operation. Preserve password-change
+  behavior and installed migration bytes; forward migration 6 admits reset
+  receipts without adding another intent journal. No hash-only reset endpoint is
+  registered. Full native/public reset composition remains in development.
+
+- Initialize authoritative known-empty MFA state atomically with genuine new
+  password accounts. Neutral signup and rollback do not create factor state;
+  existing accounts remain unknown. Install the MFA authority migration before
+  native signup. Password-reset orchestration remains in development.
+
 - Adopt opt-in keyed browser signup HTTP composition with native required-email
   verification and strict PostgreSQL admission. Preserve original retry-key,
   flow/device and schema-field custody; do not manufacture sessions or disclose
