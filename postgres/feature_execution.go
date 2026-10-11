@@ -312,7 +312,7 @@ func (r *ContributorRegistry) admitFeaturePlan(b identity.CommandBinding, finger
 		copy := *p.Capability
 		proof = &copy
 	}
-	return &admittedKernelPlan{magicLinkRegistration: cloneMagicLinkRegistrationPlan(p.MagicLinkRegistration), registry: r.state, binding: b, digest: digest, contributors: entries, audits: append([]AuditPlan(nil), p.Audits...), lifecycle: &l, capability: proof, risk: risk, counters: counters, captchaReplay: p.CaptchaReplayReservation, captchaUse: cloneCaptchaEvidencePlan(p.CaptchaEvidence), otp: cloneOTPPlan(p.OTP), fingerprint: fingerprint, feature: &f, subjectType: p.SubjectType, delivery: cloneDeliveryPlan(p.Delivery), issuance: cloneCapabilityIssuancePlan(p.CapabilityIssuance), signupAcceptance: p.SignupAcceptance}, nil
+	return &admittedKernelPlan{magicLinkRequestAcceptance: p.MagicLinkRequestAcceptance, magicLinkRegistration: cloneMagicLinkRegistrationPlan(p.MagicLinkRegistration), registry: r.state, binding: b, digest: digest, contributors: entries, audits: append([]AuditPlan(nil), p.Audits...), lifecycle: &l, capability: proof, risk: risk, counters: counters, captchaReplay: p.CaptchaReplayReservation, captchaUse: cloneCaptchaEvidencePlan(p.CaptchaEvidence), otp: cloneOTPPlan(p.OTP), fingerprint: fingerprint, feature: &f, subjectType: p.SubjectType, delivery: cloneDeliveryPlan(p.Delivery), issuance: cloneCapabilityIssuancePlan(p.CapabilityIssuance), signupAcceptance: p.SignupAcceptance}, nil
 }
 
 // ApplyFeature invokes only the frozen exact native adapter once through Work.

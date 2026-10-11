@@ -121,6 +121,7 @@ func TestMagicLinkRegistrationIntegration(t *testing.T) {
 	}
 	testMagicLinkRegistration(t, ctx, pool, repo)
 	t.Run("prospective request", func(t *testing.T) { testMagicLinkProspectiveRequest(t, ctx, pool, repo) })
+	t.Run("mailbox preparation", func(t *testing.T) { testMagicLinkMailboxPreparation(t, ctx, pool, repo) })
 }
 
 func testMagicLinkRegistration(t *testing.T, ctx context.Context, pool *database.Pool, repo *Repository) {

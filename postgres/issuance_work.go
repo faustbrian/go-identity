@@ -146,6 +146,9 @@ func (w Work) StageCapabilityIssuanceFor(p CapabilityIssuanceContributor, index 
 		return err
 	}
 	d := w.state.issuance
+	if w.state.magicLinkRequestAccepted {
+		return w.fail(w.state.ctx, invalidWork())
+	}
 	if d == nil || d.invocation != nil || d.persisted || w.state.execution == nil || w.state.execution.reservation == nil {
 		return invalidWork()
 	}
@@ -253,8 +256,8 @@ func (c *Coordinator) persistCapabilityIssuance(w Work) (err error) {
 	if d == nil {
 		return nil
 	}
-	if w.state.registrationAccepted {
-		if !w.state.execution.reservation.plan.signupAcceptance || d.persisted {
+	if w.state.registrationAccepted || w.state.magicLinkRequestAccepted {
+		if !neutralEffectsDeclared(w) || d.persisted {
 			return invalidWork()
 		}
 		for _, staged := range d.staged {

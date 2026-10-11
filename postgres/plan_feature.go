@@ -34,6 +34,9 @@ func encodeFeaturePlan(binding identity.CommandBinding, fingerprint [32]byte, p 
 // proofBase is private to fixed-depth, closed consumption envelopes. Public
 // preparation never admits their proof-free base as a standalone declaration.
 func encodeFeaturePlanMode(binding identity.CommandBinding, fingerprint [32]byte, p CommandPlan, proofBase bool) ([]byte, error) {
+	if p.MagicLinkRequestAcceptance {
+		return encodeMagicLinkRequestAcceptancePlan(binding, fingerprint, p)
+	}
 	if p.Feature != nil && p.Feature.Operation.OperationID == "identity.magic-link.consume" && !proofBase {
 		return encodeMagicLinkConsumptionPlan(binding, fingerprint, p)
 	}
@@ -210,6 +213,7 @@ func (c *Coordinator) prepareFeature(binding identity.CommandBinding, command id
 		return fail()
 	}
 	snapshot := CommandPlan{Contributors: append([]ContributorDescriptor(nil), p.Contributors...), Audits: append([]AuditPlan(nil), p.Audits...), Capability: p.Capability, SubjectType: p.SubjectType, CaptchaReplayReservation: p.CaptchaReplayReservation, SignupAcceptance: p.SignupAcceptance}
+	snapshot.MagicLinkRequestAcceptance = p.MagicLinkRequestAcceptance
 	if p.Capability != nil {
 		copy := *p.Capability
 		snapshot.Capability = &copy

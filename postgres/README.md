@@ -27,6 +27,22 @@ itself provide public magic-link APIs or native session composition.
 
 ## Magic-link recipient issuance
 
+For signup-by-link preparation, the native owner calls
+`MagicLinkRegistrationDomain.AdmitProspectiveMailbox` with its email-owned
+canonical address. This checks all occupants and live retirement policy under
+the original preparation invocation, without allocating future IDs or staging
+issuance. An eligible-recipient lookup's suppressed result is not proof of absence.
+Preparation availability is not reusable authority: its locks end before generation.
+
+Declare `CommandPlan.MagicLinkRequestAcceptance` in both original and restored
+plans to preserve the neutral no-delivery branch. At protected request Apply,
+`SelectProspectiveRecipient` repeats the current collision check with the original
+generated identity. A canonical collision can commit the request audit/lifecycle
+without invoking its prepared issuer or delivery. Structural future-ID conflicts
+and unavailable retained keys still abort. Missing branch declaration or kernel
+admission cannot silently suppress planned effects. This does not authorize
+account creation, email possession or session issuance.
+
 For prospective signup, the selected native request calls
 `MagicLinkRegistrationDomain.RequireProspectiveRecipient` with its frozen
 `MagicLinkRegistrationIntent`. This reuses the kernel's tenant and identifier

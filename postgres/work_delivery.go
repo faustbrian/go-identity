@@ -89,7 +89,7 @@ func (w Work) StageDelivery(v DeliveryEnvelope) error {
 		return err
 	}
 	d := w.state.delivery
-	if w.state.registrationAccepted || d == nil || d.invocation != nil || !deliveryIdentifier(v.KeyID) || len(v.Ciphertext) < 1 || len(v.Ciphertext) > 524288 || len(v.Ciphertext) > (1<<20)-d.bytes {
+	if w.state.registrationAccepted || w.state.magicLinkRequestAccepted || d == nil || d.invocation != nil || !deliveryIdentifier(v.KeyID) || len(v.Ciphertext) < 1 || len(v.Ciphertext) > 524288 || len(v.Ciphertext) > (1<<20)-d.bytes {
 		return w.fail(w.state.ctx, invalidWork())
 	}
 	declared := false
@@ -178,8 +178,8 @@ func (c *Coordinator) persistDelivery(w Work) (err error) {
 	if d == nil {
 		return nil
 	}
-	if w.state.registrationAccepted {
-		if !w.state.execution.reservation.plan.signupAcceptance || len(d.envelopes) != 0 || d.bytes != 0 {
+	if w.state.registrationAccepted || w.state.magicLinkRequestAccepted {
+		if !neutralEffectsDeclared(w) || len(d.envelopes) != 0 || d.bytes != 0 {
 			return invalidWork()
 		}
 		return nil

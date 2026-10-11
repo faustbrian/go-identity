@@ -30,6 +30,12 @@ type CommandPlan struct {
 	// commits a neutral acknowledgement rather than creating a conflicting account.
 	// False preserves historical declarations; this flag grants no authority.
 	SignupAcceptance bool
+	// MagicLinkRequestAcceptance freezes the anonymous signup-by-link request's
+	// neutral no-issuance/no-delivery alternative for a final mailbox collision.
+	// It preserves the request lifecycle and audit; it does not grant permission
+	// to suppress effects. Only the kernel's protected prospective selector can
+	// select this branch. False preserves historical request declaration bytes.
+	MagicLinkRequestAcceptance bool
 	// IdentifierAdmission selects an exact read-only session checker, not a
 	// durable effect participant. Nil preserves historical plan bytes. Public
 	// identifier execution remains disabled until native composition is complete.
@@ -105,7 +111,7 @@ func KernelPlanDigest(binding identity.CommandBinding, fingerprint [32]byte, pla
 // The journal freezes the exact digest input, not a second serialization that
 // can disagree with admission or omit a participant field.
 func encodeKernelPlan(binding identity.CommandBinding, fingerprint [32]byte, plan CommandPlan) ([]byte, error) {
-	if plan.MagicLinkRegistration != nil {
+	if plan.MagicLinkRegistration != nil || plan.MagicLinkRequestAcceptance {
 		return nil, invalidPlan()
 	}
 	if plan.Delivery != nil {
@@ -190,26 +196,27 @@ func encodeKernelPlan(binding identity.CommandBinding, fingerprint [32]byte, pla
 // admittedKernelPlan never escapes the coordinator boundary. It freezes only
 // the supported kernel profile, not arbitrary callbacks or opaque input blobs.
 type admittedKernelPlan struct {
-	magicLinkRegistration *MagicLinkRegistrationPlan
-	signupAcceptance      bool
-	identifierAdmission   *registeredContributor
-	registry              *contributorRegistryState
-	binding               identity.CommandBinding
-	digest                [32]byte
-	contributors          []registeredContributor
-	audits                []AuditPlan
-	lifecycle             *LifecyclePlan
-	capability            *CapabilityPlan
-	risk                  *RiskEvidencePlan
-	counters              *CommandCounterPlan
-	captchaReplay         bool
-	captchaUse            *CaptchaEvidencePlan
-	otp                   *OTPAttemptPlan
-	fingerprint           [32]byte
-	feature               *FeatureRegistration
-	subjectType           string
-	delivery              *DeliveryPlan
-	issuance              *CapabilityIssuancePlan
+	magicLinkRegistration      *MagicLinkRegistrationPlan
+	signupAcceptance           bool
+	magicLinkRequestAcceptance bool
+	identifierAdmission        *registeredContributor
+	registry                   *contributorRegistryState
+	binding                    identity.CommandBinding
+	digest                     [32]byte
+	contributors               []registeredContributor
+	audits                     []AuditPlan
+	lifecycle                  *LifecyclePlan
+	capability                 *CapabilityPlan
+	risk                       *RiskEvidencePlan
+	counters                   *CommandCounterPlan
+	captchaReplay              bool
+	captchaUse                 *CaptchaEvidencePlan
+	otp                        *OTPAttemptPlan
+	fingerprint                [32]byte
+	feature                    *FeatureRegistration
+	subjectType                string
+	delivery                   *DeliveryPlan
+	issuance                   *CapabilityIssuancePlan
 }
 
 func (r *ContributorRegistry) admitKernelPlan(binding identity.CommandBinding, fingerprint [32]byte, p CommandPlan) (*admittedKernelPlan, error) {

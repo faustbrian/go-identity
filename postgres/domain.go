@@ -125,6 +125,7 @@ func (p *admittedKernelPlan) snapshot() CommandPlan {
 		descriptors[i] = entry.descriptor
 	}
 	result := CommandPlan{Contributors: descriptors, Audits: append([]AuditPlan(nil), p.audits...), Digest: p.digest, CaptchaReplayReservation: p.captchaReplay, SignupAcceptance: p.signupAcceptance}
+	result.MagicLinkRequestAcceptance = p.magicLinkRequestAcceptance
 	result.MagicLinkRegistration = cloneMagicLinkRegistrationPlan(p.magicLinkRegistration)
 	if p.identifierAdmission != nil {
 		d := p.identifierAdmission.descriptor

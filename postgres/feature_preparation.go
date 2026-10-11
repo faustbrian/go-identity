@@ -322,7 +322,7 @@ func preparationFinalDeclaration(b identity.CommandBinding, original, final Comm
 	if final.CapabilityIssuance != nil && (!validCapabilityIssuancePlan(final.CapabilityIssuance) || final.CapabilityIssuance.RegistrationUserID == "" && final.CapabilityIssuance.ResetRecipientUserID == "" && final.CapabilityIssuance.MagicLinkRecipientUserID == "" || !validRegistrationIssuance(b, final) || !validResetRecipientIssuance(b, final) || !validMagicLinkRecipientIssuance(b, final)) {
 		return false
 	}
-	if final.Feature == nil || final.Lifecycle == nil || preparationProtected(withoutIssuance) || *original.Feature != *final.Feature || *original.Lifecycle != *final.Lifecycle || original.SubjectType != final.SubjectType || original.SignupAcceptance != final.SignupAcceptance || len(original.Audits) != len(final.Audits) {
+	if final.Feature == nil || final.Lifecycle == nil || preparationProtected(withoutIssuance) || *original.Feature != *final.Feature || *original.Lifecycle != *final.Lifecycle || original.SubjectType != final.SubjectType || original.SignupAcceptance != final.SignupAcceptance || original.MagicLinkRequestAcceptance != final.MagicLinkRequestAcceptance || len(original.Audits) != len(final.Audits) {
 		return false
 	}
 	if (original.CommandCounters == nil) != (final.CommandCounters == nil) || original.CommandCounters != nil && *original.CommandCounters != *final.CommandCounters {
@@ -460,7 +460,13 @@ func (c *Coordinator) admitFeaturePreparation(ctx context.Context, tx pgx.Tx, or
 		return err
 	}
 	w.state.featureInvocation = phase
-	defer func() { w.state.featureInvocation = nil }()
+	w.state.featurePreparationCommand = &original
+	w.state.featurePreparationPlan = p
+	defer func() {
+		w.state.featureInvocation = nil
+		w.state.featurePreparationCommand = nil
+		w.state.featurePreparationPlan = nil
+	}()
 	if err := admitResetInputCredential(ctx, w, original, p); err != nil {
 		return err
 	}

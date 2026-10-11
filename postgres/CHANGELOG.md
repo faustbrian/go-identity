@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+- Classify prospective signup mailboxes during the exact original preparation
+  invocation without allocating identity or granting creation authority. Include
+  unverified and banned occupants and retained retirement policy; recheck at
+  final request Apply after preparation releases its locks.
+
+- Preserve an explicit neutral branch in the original signup-by-link request
+  declaration. A protected final mailbox collision can suppress unstaged token
+  issuance and encrypted delivery while committing the required request audit
+  and lifecycle. Missing declaration or admission still aborts; historical
+  password-signup and signin request declarations remain unchanged.
+
+- Classify occupied or retired prospective magic-link mailboxes without aborting
+  the protected request, allowing neutral no-delivery acknowledgement. Generated
+  account/identifier conflicts and unavailable authority still abort; selection
+  neither creates an account nor authorizes later consumption.
+
 - Preserve the issuer's explicitly verified capability profile during staging,
   rather than reapplying unrelated default parser limits. Bind every staged
   grant to its exact declared authenticated envelope fingerprint; the enlisted
