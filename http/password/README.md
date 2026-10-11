@@ -5,6 +5,60 @@ Go 1.27. Base `identity/http` does not import this optional module.
 
 ## Adoption and API
 
+### Browser password-reset request
+
+Select `FeatureConfig.ResetRequest` with `ResetRequestConfig`. Supply the native
+`password/postgres.ResetService` with request issuance/delivery enabled, the
+existing shared `AuthRateLimiter`, mapped HTTPS tenant and exact Origin,
+fixed allowed callback, signed browser-device codec, public-entry actor/policy
+and bounded clock/deadline. No session or pre-auth flow is required.
+
+`POST /v1/password/reset-request` takes closed JSON `commandID`, `identifier`,
+`callbackURL`, exactly one `Idempotency-Key` header and the existing
+`__Host-identity_device` cookie. Preserve commandID and key across explicit
+retries; changing the original intent conflicts. Unknown fields, duplicate JSON,
+query/trailers, alternative keys and Authorization deny. Trusted-IP admission
+precedes native normalization, then shared destination admission and one native
+request. Neither transport nor normalization discovers account existence.
+
+Eligible and suppressed recipients receive the same acknowledgement. Responses
+contain only original command/outcome and attempt/tenant/actor recovery metadata,
+never a mailbox, token, key or session. For native proof-free recovery, use the
+returned commandID and attemptID as `RecoveryQuery.CommandID` and
+`AnonymousFlowID`; trusted current query policy remains required. No automatic
+retry, recovery or redirect occurs. A real PostgreSQL-through-HTTP journey
+exercises request, captured delivery, completion and session revocation.
+Reference-server composition remains unfinished; this is not a delivered reset
+slice or verified-unit claim.
+
+### Explicit password-reset completion
+
+Select `FeatureConfig.ResetComplete` with `ResetCompleteConfig`, alone or
+alongside request. Supply the native reset service, existing shared
+`ChallengeVerificationRateLimiter`, mapped HTTPS tenant/Origin, signed device
+codec, trusted public-entry actor/policy and bounded clock/deadline.
+
+`POST /v1/password/reset-complete` requires closed JSON `commandID`, `token`,
+`newPassword` and the signed device cookie. The command is the original
+completion attempt, distinct from request initiation. Idempotency-Key,
+Authorization, query/trailers, identity overrides and GET consumption deny.
+Trusted-IP admission precedes real purpose-bound durable issuance lookup;
+subject/original-challenge admission follows. The native owner repeats current
+account/factor authority, HIBP/password policy, atomic use and all-session
+revocation. Reset never automatically signs in or emits a session.
+
+Error-free known commitment returns replacement version and session-revocation
+metadata. Errors/ambiguity withhold success while preserving original command
+and proof/password-free recovery scope. Use response commandID, recovery
+tenantID/userID/credentialID/actor metadata to build the native recovery query;
+credentialID maps to `RecordID`, and operation is
+`identity.password.reset-complete`. Current trusted query policy remains
+required; never automatically resubmit a password after uncertainty. Owned
+password and proof are cleaned up on all exits; transient JSON/string copies
+are not erasure proof. The real PostgreSQL-through-HTTP journey also exercises
+original-input replay and changed-password conflict without corrupting the
+original result. Reference-server composition remains pending.
+
 ### Browser required-email-verification signup
 
 Select `NewSignupFeature(SignupConfig{...})` or `FeatureConfig.Signup`. Supply

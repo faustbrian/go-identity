@@ -18,7 +18,10 @@ import (
 // BrowserDeviceBearerVerification selects explicit signed correlation instead
 // of generic BearerVerification. CookieVerification selects the distinct native
 // cookie port. Selecting more than one verification variant denies.
+// ResetRequest selects only initiation; it does not implicitly expose completion.
 type FeatureConfig struct {
+	ResetRequest                    *ResetRequestConfig
+	ResetComplete                   *ResetCompleteConfig
 	Signup                          *SignupConfig
 	Signin                          *SigninConfig
 	Change                          *ChangeConfig
@@ -67,10 +70,29 @@ func NewFeatureWithMiddleware(c FeatureConfig, middleware []identityhttp.Middlew
 	if c.CookieVerification != nil {
 		verificationProfiles++
 	}
-	if (c.Signup == nil && c.Signin == nil && c.Change == nil && verificationProfiles == 0) || verificationProfiles > 1 {
+	if (c.ResetComplete == nil && c.ResetRequest == nil && c.Signup == nil && c.Signin == nil && c.Change == nil && verificationProfiles == 0) || verificationProfiles > 1 {
 		return identityhttp.Feature{}, identityhttp.ErrInvalidInput
 	}
 	var ops []identityhttp.OperationDescriptor
+	if c.ResetComplete != nil {
+		op, err := resetCompleteOperation(*c.ResetComplete, middleware)
+		if err != nil {
+			return identityhttp.Feature{}, err
+		}
+		// Combined reset declares its shared browser-cookie wire component on
+		// request exactly once. Standalone completion retains that declaration.
+		if c.ResetRequest != nil {
+			op.Wire.SecuritySchemes = nil
+		}
+		ops = append(ops, op)
+	}
+	if c.ResetRequest != nil {
+		op, err := resetRequestOperation(*c.ResetRequest, middleware)
+		if err != nil {
+			return identityhttp.Feature{}, err
+		}
+		ops = append(ops, op)
+	}
 	if c.Signup != nil {
 		op, err := signupOperation(*c.Signup, middleware)
 		if err != nil {

@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- Add separately selected reset-completion transport with original issued-proof
+  and shared challenge admission. Preserve password/proof-free recovery metadata
+  on ambiguity, destroy local credential custody on every exit, and return
+  replacement/session effects only after known error-free commitment.
+
+- Add opt-in enumeration-safe password-reset request transport with exact
+  callback/origin policy, signed browser-device correlation and shared delivery
+  budgets. Preserve original attempt metadata for native recovery; return no
+  address, reset token or session. Completion remains separately selected work.
+
 - Preserve `rate_limiter_unavailable` on shared signin/signup admission outages
   and advertise that stable classification in both selected wire contracts.
 
