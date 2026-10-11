@@ -46,6 +46,61 @@ func TestOriginalSessionFieldsPreserveOTPAndOptionalAuthority(t *testing.T) {
 	}
 }
 
+func TestOriginalSessionFieldsPreserveMagicLinkProvenance(t *testing.T) {
+	for _, csrf := range []bool{false, true} {
+		original := magicLinkRecordFixture(t, csrf)
+		spec, _ := original.Bindings()
+		fields, err := OriginalSessionFields(original)
+		if err != nil {
+			t.Fatal("native workflows cannot bind original magic-link session", err)
+		}
+		restored, err := OriginalSessionFromFields(spec.TenantID, spec.UserID, fields)
+		if err != nil {
+			t.Fatal("native workflow lost original magic-link session", err)
+		}
+		want, _, _ := encodeRecord(original)
+		got, _, err := encodeRecord(restored)
+		if err != nil || !bytes.Equal(got, want) {
+			t.Fatal("original magic-link provenance or CSRF changed")
+		}
+		if _, err := mapSessionRecord(identity.CommandBinding{TenantID: spec.TenantID, UserID: spec.UserID}, session.IssueOperation(), original); err == nil {
+			t.Fatal("metadata bypassed generic proof-only issuance")
+		}
+		for _, binding := range [][2]string{{"foreign", string(spec.UserID)}, {string(spec.TenantID), "foreign"}} {
+			if _, err := OriginalSessionFromFields(identity.TenantID(binding[0]), identity.UserID(binding[1]), fields); err == nil {
+				t.Fatal("original session crossed scope")
+			}
+		}
+		for i := range fields {
+			wrong := append([]identity.FeatureField(nil), fields...)
+			wrong = append(wrong[:i:i], wrong[i+1:]...)
+			if _, err := OriginalSessionFromFields(spec.TenantID, spec.UserID, wrong); err == nil {
+				t.Fatal("incomplete original magic-link accepted", fields[i].Name)
+			}
+		}
+		for _, field := range []identity.FeatureField{
+			{Name: "source-session.authentication.kind", Value: identity.FeatureValue{Kind: identity.FeatureUint64, Uint64: uint64(session.AuthenticationOTP)}},
+			{Name: "source-session.magiclink.request", Value: identity.FeatureValue{Kind: identity.FeatureText, Text: "foreign"}},
+			{Name: "source-session.credential.id", Value: identity.FeatureValue{Kind: identity.FeatureText, Text: "inactive"}},
+		} {
+			wrong := append([]identity.FeatureField(nil), fields...)
+			found := false
+			for i := range wrong {
+				if wrong[i].Name == field.Name {
+					wrong[i] = field
+					found = true
+				}
+			}
+			if !found {
+				wrong = append(wrong, field)
+			}
+			if _, err := OriginalSessionFromFields(spec.TenantID, spec.UserID, wrong); err == nil {
+				t.Fatal("foreign/inactive provenance accepted", field.Name)
+			}
+		}
+	}
+}
+
 func TestOriginalSessionFieldsPreserveCompleteOwnedRecord(t *testing.T) {
 	original, _, _ := identifierSessionFixture(t)
 	original = withCSRFState(t, original, 9)
@@ -92,8 +147,15 @@ func TestOriginalSessionFieldsPreserveCompleteOwnedRecord(t *testing.T) {
 func FuzzOriginalSessionFields(f *testing.F) {
 	f.Add(uint8(0), "source-session.audience", "service-a")
 	f.Add(uint8(17), "source-session.unknown", "other")
+	f.Add(uint8(2), "source-session.magiclink.capability", "other")
 	f.Fuzz(func(t *testing.T, index uint8, name, text string) {
 		original := csrfSessionFixture(t)
+		if index%3 == 1 {
+			original = otpRecordFixture(t, true)
+		}
+		if index%3 == 2 {
+			original = magicLinkRecordFixture(t, true)
+		}
 		spec, _ := original.Bindings()
 		fields, err := OriginalSessionFields(original)
 		if err != nil {

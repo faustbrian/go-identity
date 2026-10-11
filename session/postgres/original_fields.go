@@ -15,7 +15,7 @@ const originalSessionPrefix = "source-session."
 // session into the owner's closed scalar vocabulary, under source-session.
 // It preserves original authentication, remember policy, every authority
 // dimension, lookup commitment and optional CSRF state; no raw bearer is exposed.
-// Returned fields and byte slices are caller-owned. Credential and OTP records
+// Returned fields and byte slices are caller-owned. Credential, OTP and magic-link records
 // retain their separate historical provenance. Zero and anonymous records deny
 // with ErrInvalidSessionCommand; anonymous admission is a different profile.
 // This pure bounded mapping performs no IO, freshness renewal or authentication.
@@ -27,7 +27,7 @@ func OriginalSessionFields(original session.Session) ([]identity.FeatureField, e
 	if err != nil {
 		return nil, session.ErrInvalidSessionCommand
 	}
-	fields, err := sessionRecordFields(original, spec.Authentication.Kind == session.AuthenticationOTP)
+	fields, err := sessionRecordFieldsKind(original, spec.Authentication.Kind)
 	if err != nil {
 		return nil, session.ErrInvalidSessionCommand
 	}
@@ -65,17 +65,19 @@ func OriginalSessionFromFields(tenant identity.TenantID, user identity.UserID, f
 		values[name] = f.Value
 	}
 	kind := values["authentication.kind"]
-	if kind.Kind != identity.FeatureUint64 || kind.Uint64 != uint64(session.AuthenticationVerified) && kind.Uint64 != uint64(session.AuthenticationOTP) {
+	if kind.Kind != identity.FeatureUint64 || kind.Uint64 != uint64(session.AuthenticationVerified) && kind.Uint64 != uint64(session.AuthenticationOTP) && kind.Uint64 != uint64(session.AuthenticationMagicLink) {
 		return deny()
 	}
-	otp := kind.Uint64 == uint64(session.AuthenticationOTP)
 	binding := identity.CommandBinding{TenantID: tenant, UserID: user}
-	if otp {
+	if kind.Uint64 == uint64(session.AuthenticationOTP) {
 		// This is the historical authenticating OTP command, not the protected
 		// command that now carries the original session as admission metadata.
 		binding.CommandID = identity.CommandID(values["otp.command"].Text)
 	}
-	restored, err := sessionRecordFromFields(binding, values, otp)
+	if kind.Uint64 == uint64(session.AuthenticationMagicLink) {
+		binding.CommandID = identity.CommandID(values["magiclink.command"].Text)
+	}
+	restored, err := sessionRecordFromFieldsKind(binding, values, session.AuthenticationKind(kind.Uint64))
 	if err != nil {
 		return deny()
 	}

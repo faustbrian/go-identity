@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Add native magic-link session mapping and same-transaction issuance after
+  capability consumption. Preserve the original email grant, anonymous command,
+  remember policy and CSRF; consume pre-auth with the session/family and retain
+  method-specific recovery evidence after payload cleanup. Current account and
+  address authority and original exclusive expiry remain required. Install
+  MagicLinkSigninMigrationSource after password-signup issuance history.
+  Proof, cookie, callback and factor/risk validation remain magic-link-owned;
+  this native adapter does not expose a public passwordless login endpoint.
+
 - Bind native session cache admission to the selected method, schema and
   authority configuration. Shared wrapping keys cannot transfer warm positives
   across profiles. Earlier unbound entries refresh from primary; persisted

@@ -1,5 +1,30 @@
 # PostgreSQL session storage
 
+## Atomic magic-link session effects
+
+Install `MagicLinkSigninMigrationSource` at a new permanent version after
+`PasswordSignupMigrationSource`, preserving the existing issuance history.
+`MagicLinkSigninSessionFields` freezes the complete initial session into the
+native owner's command before fingerprinting. `MagicLinkSigninSession` restores
+that exact anonymous consume profile without selecting a user in command scope.
+
+Configure `NewMagicLinkSigninEffect` with the trusted primary schema, bounded
+duration and `MagicLinkAdmissionConfig`. The exact registered
+`identity.magiclink` native owner calls `Apply` within its consuming Work, after
+the real capability participant provisionally consumes the original grant.
+Session/family writes, pre-auth consumption and retained method-specific
+evidence share that transaction; a later denial rolls them back. Original
+grant expiry, verified email versions and current account/authorization
+authority are checked without renewing authentication time.
+
+The native owner must authenticate the original signed grant/issuance, cookie
+possession and full callback/remember intent, enforce current factor/risk policy,
+and repeat final temporal admission in `CheckFeatureCommit`. Propagate every
+error to abort; disclose no session bearer before reconciled commitment.
+`Recover` examines retained evidence even after session payload cleanup but
+grants no current access or permission to recover a bearer. These public adapter
+seams are not a complete passwordless workflow or HTTP endpoint.
+
 ## Magic-link session records and primary reads
 
 Install `MagicLinkMigrationSource` at a new permanent version after

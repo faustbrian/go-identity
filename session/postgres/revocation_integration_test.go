@@ -701,6 +701,11 @@ func TestNativeFamilyRevocationIntegration(t *testing.T) {
 			t.Fatal(e)
 		}
 		complete = append(complete, magicLinkHistory...)
+		magicLinkSigninHistory, e := (MagicLinkSigninMigrationSource{Schema: "session_store", Version: 40}).Load(ctx)
+		if e != nil {
+			t.Fatal(e)
+		}
+		complete = append(complete, magicLinkSigninHistory...)
 		migrate(complete)
 		migrate(complete)
 		var afterIssuances string
@@ -717,6 +722,7 @@ func TestNativeFamilyRevocationIntegration(t *testing.T) {
 		t.Run("native session authentication", func(t *testing.T) { testNativeSessionAuthentication(t, ctx, pool) })
 		t.Run("native OTP session authentication", func(t *testing.T) { testNativeOTPSessionAuthentication(t, ctx, pool) })
 		t.Run("native OTP session effect", func(t *testing.T) { testNativeOTPSessionEffect(t, ctx, pool) })
+		t.Run("native magic-link session effect", func(t *testing.T) { testNativeMagicLinkSessionEffect(t, ctx, pool) })
 		t.Run("native password signin effect", func(t *testing.T) { testNativePasswordSigninEffect(t, ctx, pool) })
 		t.Run("native password signup effect", func(t *testing.T) { testNativePasswordSignupEffect(t, ctx, pool) })
 		t.Run("native password session effect", func(t *testing.T) { testNativePasswordSessionEffect(t, ctx, pool) })
