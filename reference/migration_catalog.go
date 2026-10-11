@@ -75,7 +75,7 @@ func (s StoreSet) migrationCatalog(ctx context.Context) ([]migrationHistory, err
 			return nil, err
 		}
 		owned := migrationHistory{namespace: "identity_http_rate", history: []migrations.Migration{step}, owners: map[migrations.Version]ModuleID{step.Version(): "rate-limit/postgres"}, guards: []migrationGuard{{version: step.Version(), schema: "public", tables: []string{"rate_limit_states", "rate_limit_states_expires_at_idx"}}}}
-		if s.state.features != nil && (s.state.features.httpPasswordReset != nil || s.state.features.httpRegistrationVerification != nil) {
+		if s.state.features != nil && (s.state.features.httpPasswordReset != nil || s.state.features.httpRegistrationVerification != nil || s.state.features.httpPasswordVerification != nil || s.state.features.httpPasswordChange != nil) {
 			native := ratepg.AtomicSchemaMigration()
 			atomic, err := migrations.NewMigration(migrations.Version(native.Version), native.Name, migrations.TransactionModeDefault, native.Up, native.Down)
 			if err != nil {
@@ -192,7 +192,13 @@ func (s StoreSet) migrationCatalog(ctx context.Context) ([]migrationHistory, err
 			guards: []migrationGuard{{version: 1, schema: c.passwordSigninSchema, constraints: []string{"session_issuances.session_issuances_purpose_v3"}}}})
 	}
 	if s.state.features.passwordSignup != nil {
-		return passwordSignupMigrationCatalog(ctx, catalog, s.state.config.Schema)
+		catalog, err = passwordSignupMigrationCatalog(ctx, catalog, s.state.config.Schema)
+		if err != nil {
+			return nil, err
+		}
+	}
+	if s.state.features.passwordChange != nil {
+		return passwordChangeMigrationCatalog(ctx, catalog, c.passwordSigninSchema)
 	}
 	return catalog, nil
 }

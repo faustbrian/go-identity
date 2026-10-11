@@ -88,6 +88,10 @@ type featureState struct {
 	passwordSignin               *passwordpg.SigninService
 	passwordSignup               *passwordpg.SignupService
 	session                      *sessionState
+	passwordVerification         *passwordVerificationState
+	passwordChange               *passwordChangeState
+	httpPasswordVerification     *passwordVerificationHTTPState
+	httpPasswordChange           *passwordChangeHTTPState
 	httpSession                  *sessionHTTPState
 	signupPreauth                *session.PreAuthIssuer
 	passwordPreauth              *session.PreAuthIssuer
@@ -110,6 +114,15 @@ type featureState struct {
 }
 
 func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDependencies) error {
+	if c.HTTPPasswordVerification != nil && c.PasswordVerification == nil || c.HTTPPasswordChange != nil && c.PasswordChange == nil {
+		return identity.InvalidInputError{Field: "reference_http_password_protection"}
+	}
+	if c.PasswordChange != nil && c.PasswordVerification == nil {
+		return identity.InvalidInputError{Field: "reference_password_change"}
+	}
+	if c.PasswordVerification != nil && (c.Session == nil || c.PasswordSignin == nil || c.OTP == nil || c.OTP.Signin == nil) {
+		return identity.InvalidInputError{Field: "reference_password_verification"}
+	}
 	if c.HTTPSession != nil && c.Session == nil {
 		return identity.InvalidInputError{Field: "reference_http_session"}
 	}
@@ -272,6 +285,32 @@ func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDepen
 		return err
 	}
 	migrationConfig.singleSessionRevocation = sessionOwner != nil
+	passwordVerificationOwner, err := composePasswordVerification(c, d, evaluator)
+	if err != nil {
+		return err
+	}
+	passwordChangeOwner, err := composePasswordChange(c, d, passwordVerificationOwner)
+	if err != nil {
+		return err
+	}
+	httpPasswordVerification, err := composePasswordVerificationHTTP(c, passwordVerificationOwner, httpPreAuth, s.httpRate)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if httpPasswordVerification != nil && !retainedResetHTTP {
+			httpPasswordVerification.rate.Close()
+		}
+	}()
+	httpPasswordChange, err := composePasswordChangeHTTP(c, passwordChangeOwner, passwordVerificationOwner, s.httpRate)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if httpPasswordChange != nil && !retainedResetHTTP {
+			httpPasswordChange.rate.Close()
+		}
+	}()
 	httpSession, err := composeSessionHTTP(c, sessionOwner, s.httpRate)
 	if err != nil {
 		return err
@@ -312,6 +351,10 @@ func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDepen
 	s.features = &featureState{migrations: migrationConfig, otp: otpOwner, signin: signinOwner, reset: resetOwner, passwordSignin: passwordSigninOwner, passwordPreauth: passwordPreauthOwner, preauth: preauthOwner, delivery: deliveryOwner, sender: d.DeliverySender, timeout: o.Timeout, provider: o.ProviderVersion, deliverySlots: make(chan struct{}, int(capacity)), authorize: o.RequestKeys.Policy.Authorization, httpPreAuth: httpPreAuth, httpEmailSignin: httpEmailSignin, httpPasswordReset: httpPasswordReset, httpPasswordSignin: httpPasswordSignin}
 	s.features.passwordSignup = passwordSignupOwner
 	s.features.session = sessionOwner
+	s.features.passwordVerification = passwordVerificationOwner
+	s.features.passwordChange = passwordChangeOwner
+	s.features.httpPasswordVerification = httpPasswordVerification
+	s.features.httpPasswordChange = httpPasswordChange
 	s.features.httpSession = httpSession
 	s.features.signupPreauth = signupPreauthOwner
 	s.features.httpPasswordSignup = httpPasswordSignup

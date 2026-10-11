@@ -99,9 +99,26 @@ func (s *Server) passwordFeature(network identityhttp.NetworkConfig, f FeatureSe
 	if err != nil {
 		return nil, err
 	}
-	if config.ResetRequest == nil && config.ResetComplete == nil && config.Signin == nil && config.Signup == nil {
+	if err := s.passwordProtectionHTTPConfig(network, f, &config); err != nil {
+		return nil, err
+	}
+	if config.ResetRequest == nil && config.ResetComplete == nil && config.Signin == nil && config.Signup == nil && config.Change == nil && config.CookieVerification == nil && config.BrowserDeviceBearerVerification == nil {
 		return nil, nil
 	}
 	feature, err := passwordhttp.NewFeature(config)
+	if err != nil {
+		return nil, err
+	}
+	ops, err := identityhttp.NewOperationDescriptors(identityhttp.FeatureServices{Features: []identityhttp.Feature{feature}})
+	if err != nil {
+		return nil, err
+	}
+	for i := range ops {
+		id := ops[i].Record.OperationID
+		if id == "identity.password.verify" || id == "identity.password.change" {
+			ops[i].Handler = s.guardPasswordProtectionLifetime(ops[i].Handler, id)
+		}
+	}
+	feature, err = identityhttp.NewFeature(identityhttp.FeatureConfig{ID: "identity/password", Operations: ops})
 	return &feature, err
 }

@@ -61,6 +61,14 @@ type StoreConfiguration struct {
 	PasswordSignup *PasswordSignupConfiguration
 	// Session selects native primary reads and self-signout, not HTTP.
 	Session *SessionConfiguration
+	// PasswordVerification selects native reauthentication/proof recovery, not HTTP.
+	PasswordVerification *PasswordVerificationConfiguration
+	// PasswordChange selects native keyed replacement over selected verification.
+	PasswordChange *PasswordChangeConfiguration
+	// HTTPPasswordVerification explicitly selects native reauthentication HTTP.
+	HTTPPasswordVerification *HTTPPasswordProtectionConfiguration
+	// HTTPPasswordChange independently selects native keyed replacement HTTP.
+	HTTPPasswordChange *HTTPPasswordProtectionConfiguration
 	// HTTPSession explicitly selects native session read/self-signout routes.
 	HTTPSession *HTTPSessionConfiguration
 	// HTTPPasswordReset independently selects request/completion routes. Native
@@ -387,6 +395,12 @@ func (s StoreSet) Close(ctx context.Context) error {
 	}
 	if state.features != nil && state.features.httpSession != nil {
 		state.features.httpSession.rate.Close()
+	}
+	if state.features != nil && state.features.httpPasswordVerification != nil {
+		state.features.httpPasswordVerification.rate.Close()
+	}
+	if state.features != nil && state.features.httpPasswordChange != nil {
+		state.features.httpPasswordChange.rate.Close()
 	}
 	drained := state.drained
 	state.mu.Unlock()

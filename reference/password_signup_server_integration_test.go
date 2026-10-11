@@ -55,7 +55,7 @@ func (referenceRegistrationPolicy) Decide(ctx context.Context, c authorization.D
 			return authorization.Decision{Outcome: authorization.Allow, Revision: 9}, nil
 		}
 	}
-	if string(c.Request.Tenant) == otpTenant && c.PolicyRevision == 9 && c.Request.Subject.Kind == authorization.SubjectUser && (c.Request.Action == "identity.session.revoke-one" || c.Request.Action == "identity.session.revoke-one.recover") {
+	if string(c.Request.Tenant) == otpTenant && c.PolicyRevision == 9 && c.Request.Subject.Kind == authorization.SubjectUser && (c.Request.Action == "identity.session.revoke-one" || c.Request.Action == "identity.session.revoke-one.recover" || c.Request.Action == "identity.password.verify" || c.Request.Action == "identity.password.verify.recover" || c.Request.Action == "identity.password.change" || c.Request.Action == "identity.password.change.recover") {
 		return authorization.Decision{Outcome: authorization.Allow, Revision: 9}, nil
 	}
 	return (referenceResetPolicy{}).Decide(ctx, c)
@@ -70,7 +70,7 @@ func registrationRiskPolicy(t *testing.T, version uint64, screening bool) risk.P
 		{Class: risk.StateNeutralRead, Phase: risk.BeforeReturn, Dimensions: []risk.Dimension{risk.TenantDimension, risk.SubjectOrNetworkDimension}, Window: time.Minute, Limit: 120, ThresholdAction: risk.Throttle, EvidenceTTL: time.Minute, Unknown: risk.StepUpWithIndependentFactor, MaxCounters: 2, RequiredSignals: []string{"velocity"}},
 	}}
 	if screening {
-		c.HIBP = risk.HIBPPolicy{CacheTTL: time.Hour, Operations: []risk.Action{"identity.password.signup"}}
+		c.HIBP = risk.HIBPPolicy{CacheTTL: time.Hour, Operations: []risk.Action{"identity.password.signup", "identity.password.change"}}
 	}
 	p, err := risk.NewPolicy(c)
 	if err != nil {
@@ -81,8 +81,12 @@ func registrationRiskPolicy(t *testing.T, version uint64, screening bool) risk.P
 
 // Only provider IO is synthetic. The owned client derives padded SHA-1-prefix
 // requests and binds results to the actual native command before hashing.
-func registrationScreening(t *testing.T, policy risk.Policy) (func(context.Context, risk.Context, primitive.Secret) ([]risk.Signal, error), *atomic.Int32) {
+func registrationScreening(t *testing.T, policy risk.Policy, selected ...string) (func(context.Context, risk.Context, primitive.Secret) ([]risk.Signal, error), *atomic.Int32) {
 	t.Helper()
+	operation := "identity.password.signup"
+	if len(selected) != 0 {
+		operation = selected[0]
+	}
 	var calls atomic.Int32
 	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		calls.Add(1)
@@ -130,7 +134,7 @@ func registrationScreening(t *testing.T, policy risk.Policy) (func(context.Conte
 		if err != nil {
 			return nil, err
 		}
-		signal, err := provider.Assess(ctx, hibp.CheckRequest{OperationID: "identity.password.signup", TenantID: identity.TenantID(b.Tenant), Action: b.Operation, Purpose: "signup", SubjectScope: "password-signup", PolicyVersion: "reference-signup-v1", ReplayID: command, Candidate: candidate})
+		signal, err := provider.Assess(ctx, hibp.CheckRequest{OperationID: operation, TenantID: identity.TenantID(b.Tenant), Action: b.Operation, Purpose: operation, SubjectScope: "password-screening", PolicyVersion: "reference-signup-v1", ReplayID: command, Candidate: candidate})
 		return []risk.Signal{signal}, err
 	}, &calls
 }
@@ -210,7 +214,7 @@ func TestReferenceServerNativePasswordSignup(t *testing.T) {
 	t.Run("competing", func(t *testing.T) { proveReferenceSignupGraph(t, true) })
 }
 
-func proveReferenceSignupGraph(t *testing.T, competing bool) {
+func proveReferenceSignupGraph(t *testing.T, competing bool, protected ...bool) {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(t.Context(), 60*time.Second)
 	defer cancel()
@@ -236,6 +240,10 @@ func proveReferenceSignupGraph(t *testing.T, competing bool) {
 		t.Error("unexpected shared rate degradation")
 		return nil
 	}}
+	var changeScreens *atomic.Int32
+	if len(protected) != 0 && protected[0] {
+		changeScreens = configureReferencePasswordProtection(t, &c, origin)
+	}
 	messages := make(chan string, 4)
 	deps.DeliverySender = nativeBrowserCodeSender{codes: messages}
 	for _, namespace := range []string{"", "other-users"} {
@@ -311,7 +319,14 @@ END $$`); err != nil {
 	for _, op := range server.OpenAPI().Operations() {
 		seen[op.Record.OperationID] = true
 	}
-	if !seen["identity.password.signup"] || !seen["identity.email.verification-confirm"] || !seen["identity.password.signin"] || !seen["identity.session.get"] || !seen["identity.session.signout"] || len(seen) != 8 {
+	wantOperations := 8
+	if changeScreens != nil {
+		wantOperations += 2
+		if !seen["identity.password.verify"] || !seen["identity.password.change"] {
+			t.Fatal("selected protected password routes missing")
+		}
+	}
+	if !seen["identity.password.signup"] || !seen["identity.email.verification-confirm"] || !seen["identity.password.signin"] || !seen["identity.session.get"] || !seen["identity.session.signout"] || len(seen) != wantOperations {
 		t.Fatal("selected public registration routes missing")
 	}
 	network.Config.Handler = server.Handler()
@@ -335,10 +350,10 @@ END $$`); err != nil {
 	if r := server.Readiness(ctx); !r.Ready {
 		t.Fatal("selected native readiness", r.Failures)
 	}
-	proveReferenceRegistration(t, ctx, f, features, workers, client, network.URL, origin, messages, calls, competing)
+	proveReferenceRegistration(t, ctx, f, features, workers, client, network.URL, origin, messages, calls, competing, changeScreens)
 }
 
-func proveReferenceRegistration(t *testing.T, ctx context.Context, f liveStores, features reference.FeatureSet, workers reference.WorkerSet, client *http.Client, base, origin string, messages <-chan string, screens *atomic.Int32, competing bool) {
+func proveReferenceRegistration(t *testing.T, ctx context.Context, f liveStores, features reference.FeatureSet, workers reference.WorkerSet, client *http.Client, base, origin string, messages <-chan string, screens *atomic.Int32, competing bool, changeScreens *atomic.Int32) {
 	t.Helper()
 	invoke := func(path string, body any, key string, cookies []*http.Cookie) (*http.Response, []byte) {
 		t.Helper()
@@ -502,6 +517,10 @@ CREATE TRIGGER registration_fixture_fail BEFORE INSERT ON identity.delivery_inte
 	var signed passwordhttp.SigninResponse
 	if r.StatusCode != 200 || json.Unmarshal(p, &signed) != nil || signed.CommitOutcome != "committed" || signed.SessionID == "" || len(r.Cookies()) != 1 {
 		t.Fatal("verified registration did not produce usable login", r.StatusCode, signed.CommitOutcome, signed.Error, signed.CommandID != "", signed.SessionID != "")
+	}
+	if changeScreens != nil {
+		proveReferencePasswordProtection(t, ctx, f, features, client, base, origin, append(loginCookies, r.Cookies()...), r.Header.Get("X-CSRF-Token"), changeScreens)
+		return
 	}
 	logoutID := proveRegistrationSessionLogout(t, ctx, client, base, origin, r.Cookies(), r.Header.Get("X-CSRF-Token"), signed.SessionID, f, features)
 	commandBytes, err := base64.RawURLEncoding.DecodeString(string(logoutID))

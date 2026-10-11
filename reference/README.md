@@ -105,6 +105,49 @@ an empty slice disables cookie logout rather than enabling a legacy bypass.
 The current reader supports its explicit single-factor native profile, not
 anonymous, organization, MFA or passkey authority.
 
+`PasswordVerification` selects native reauthentication through
+`features.PasswordVerification()` and, when retained `CSRFKeys` are supplied,
+`features.CookiePasswordVerification()`. It requires selected password signin
+and primary sessions with matching authority, repository and current issuer
+keys. Leave native risk evaluation and verifier clock absent: the graph supplies
+its counted risk owner and the selected session authority clock. Configure exact
+purpose/action/audience targets and native signing-key retention explicitly.
+Verification issues only the native bounded proof; it does not extend sessions
+or consume that proof. Historical recovery does not redeliver it.
+
+`PasswordChange` selects the native keyed replacement and recovery ports through
+`features.PasswordChange()` and, with verification's retained CSRF keys,
+`features.CookiePasswordChange()`. Supply native screening/session-disposition
+policy, the kernel-constructed keyed profile and protected counter configuration
+in the graph's risk namespace; leave `Native.Counters` and screening clock absent.
+The graph requires the native local envelope keyring and constructs the existing
+protected owner, never an unkeyed fallback. Native defaults revoke all sessions;
+preservation requires explicit policy. Original proof consumption, credential
+replacement and session effects stay in the sole native transaction. Existing
+reset and signin migrations remain unchanged; change adds native counter
+preparation and session-effect/continuation suffixes. Provider screening defers
+only command-owned velocity to those mandatory protected counters. These native
+selections do not implicitly expose routes.
+
+Select `HTTPPasswordVerification` and `HTTPPasswordChange` independently to
+expose POST `/v1/password/verify` and `/v1/password/change`. Each uses an explicit
+cookie or bearer transport, stable rate namespace and dedicated rate key.
+Cookie selection requires exact HTTPS trusted origins and native CSRF custody;
+bearer selection forbids origins and never borrows cookies. Verification also
+requires the selected original browser-device owner. Verification returns a
+bounded original proof; change accepts its `proofID`, `newPassword` and required
+`Idempotency-Key`. Neither route returns password hashes or replacement session
+credentials. Required graph authority and shutdown/drain guards cover primary
+readers as well as the protected mutation. Revocation denies HTTP retries using
+the old session; authorized native recovery can disclose the original outcome
+without reauthenticating that session or redelivering credentials.
+
+The real PostgreSQL/TLS-Valkey reference journey exercises registration,
+delivered email proof, confirmation, login, reauthentication, protected change,
+downstream rollback, original-session revocation and old/new-password login.
+Provider network responses remain controlled fixtures; release qualification
+and the remaining identity-platform workflows are outstanding.
+
 Select `HTTPSession` separately to expose GET `/v1/session/get` and POST
 `/v1/session/signout`. Configure one explicit cookie or bearer transport; cookie
 mode requires exact HTTPS trusted origins, while bearer mode forbids them and

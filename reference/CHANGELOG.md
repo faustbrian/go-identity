@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+- Add explicit native password verification and keyed password-change selection
+  to the reference graph. Bearer and CSRF-protected cookie ports remain distinct;
+  all calls retain initialization, tenant and shutdown guards. Composition reuses
+  native signing, protected counters, proof consumption, replacement and session
+  disposition. New change migration suffixes retain existing installed histories
+  and share the existing credential-replacement allocation with reset. Select
+  verification/change HTTP independently with strict transport, origins, CSRF
+  and shared native rate admission. Real durable reference composition exercises
+  rollback, authorized recovery, session revocation and old/new-password login.
+  Revoked cookies cannot authenticate same-key HTTP retries. Provider network
+  responses remain fixtures; full release qualification remains outstanding.
+
 - Add explicitly selected primary session reads and self-signout to the native
   reference graph. Cookie logout uses the original transaction's synchronizer
   state; bearer selection never falls back to cookies. Selected HTTP shares
