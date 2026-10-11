@@ -17,8 +17,10 @@ import (
 // operations. Unselected operations cannot reach Collect or hashing.
 //
 // Collect is the platform's bounded provider orchestration, not request input or
-// an acceptance override. It returns complete provenance-valid original signals
-// for the supplied exact context, including the risk-owned HIBP signal. It must
+// an acceptance override. It returns provenance-valid original signals for the
+// supplied exact context, including the risk-owned HIBP signal. Prepare requires
+// the complete set; PrepareProtected requires providers only, without velocity.
+// It must
 // honor ctx, synchronously borrow candidate custody, retain no candidate and
 // return no more than the selected policy's mandatory signal count. Structural
 // validation does not establish provider provenance: reference composition must
@@ -41,7 +43,8 @@ type HashPreparationConfig struct {
 // Copies share immutable closure custody and support concurrent calls under
 // the configured dependencies' contracts. No candidate is retained after calls.
 type HashPreparer struct {
-	prepare func(context.Context, primitive.Secret, risk.Context) (primitive.EncodedHash, risk.Assessment, error)
+	prepare          func(context.Context, primitive.Secret, risk.Context) (primitive.EncodedHash, risk.Assessment, error)
+	prepareProtected func(context.Context, primitive.Secret, risk.Context) (primitive.EncodedHash, risk.ProtectedProviderAssessment, error)
 }
 
 // NewHashPreparer validates explicit composition without callbacks, crypto or
@@ -59,6 +62,11 @@ func NewHashPreparer(c HashPreparationConfig) (*HashPreparer, error) {
 	s := passwordScreening{policy: c.Policy, now: c.Now, collect: c.Collect}
 	return &HashPreparer{prepare: func(ctx context.Context, candidate primitive.Secret, binding risk.Context) (primitive.EncodedHash, risk.Assessment, error) {
 		return w.newScreenedHash(ctx, candidate, s, binding)
+	}, prepareProtected: func(ctx context.Context, candidate primitive.Secret, binding risk.Context) (primitive.EncodedHash, risk.ProtectedProviderAssessment, error) {
+		protected := s
+		protected.protectedProviders = true
+		hash, assessment, err := w.newScreenedHash(ctx, candidate, protected, binding)
+		return hash, risk.ProtectedProviderAssessment{Decision: assessment.Decision, PolicyVersion: assessment.PolicyVersion, Signals: assessment.Signals}, err
 	}}, nil
 }
 
@@ -79,6 +87,21 @@ func (p *HashPreparer) Prepare(ctx context.Context, candidate primitive.Secret, 
 		return primitive.EncodedHash{}, risk.Assessment{}, ErrPasswordWork
 	}
 	return p.prepare(ctx, candidate, binding)
+}
+
+// PrepareProtected screens and hashes for the closed command-reserved credential
+// mutation profile. Required HIBP/provider facts are checked before and after
+// crypto without recollection or freshness renewal; only native transaction-
+// owned velocity is deferred. Caller velocity and unsupported profiles deny.
+// The distinct provider-only result grants no counter allowance or authority:
+// the mutation owner must reserve/recheck matching counters atomically with its
+// protected effects. Prepare retains its existing complete-assessment behavior.
+// Secret ownership, bounds, cancellation and redaction match Prepare.
+func (p *HashPreparer) PrepareProtected(ctx context.Context, candidate primitive.Secret, binding risk.Context) (primitive.EncodedHash, risk.ProtectedProviderAssessment, error) {
+	if p == nil || p.prepareProtected == nil {
+		return primitive.EncodedHash{}, risk.ProtectedProviderAssessment{}, ErrPasswordWork
+	}
+	return p.prepareProtected(ctx, candidate, binding)
 }
 
 func (HashPreparationConfig) Format(s fmt.State, _ rune) {

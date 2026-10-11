@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add explicit protected hash preparation that checks HIBP and required
+  providers while deferring only transaction-owned velocity. Original provider
+  freshness is rechecked after hashing; ordinary complete preparation remains
+  unchanged. Native mutations must still reserve/recheck counters atomically.
+
 - Add borrowed-secret, original-proof reset request/completion contracts and
   scoped proof-free recovery ports. Structural validation performs no IO or
   authority checks; request acceptance reveals no account/delivery state, and

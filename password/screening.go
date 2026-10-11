@@ -17,13 +17,15 @@ import (
 // runs under a lock, Secret.Use, or transaction. Structural validation of facts
 // establishes no provider provenance; concrete owned adapter wiring is required.
 type passwordScreening struct {
-	policy  risk.Policy
-	now     func() time.Time
-	collect func(context.Context, risk.Context, primitive.Secret) ([]risk.Signal, error)
+	policy             risk.Policy
+	now                func() time.Time
+	collect            func(context.Context, risk.Context, primitive.Secret) ([]risk.Signal, error)
+	protectedProviders bool
 }
 
-// newScreenedHash lets only the existing risk owner's complete Allow decision
-// reach hashing. Every creating action must explicitly select HIBP; disabled or
+// newScreenedHash requires the risk owner's Allow decision for the explicitly
+// selected complete or protected-provider lane. Every creating action must
+// explicitly select HIBP; disabled or
 // omitted provider policy is not an opt-out. Missing/unavailable facts retain
 // the configured risk owner's fail-closed decision. Administrative/recovery
 // actions use this same path. This result is not authorization, transactional
@@ -46,16 +48,9 @@ func (w passwordWork) newScreenedHash(ctx context.Context, secret primitive.Secr
 	}
 	started := s.now()
 	binding.Now = started
-	// Validate exact selected action, scope and clock before provider access.
-	if _, e := s.policy.PasswordSignal(ctx, binding, risk.PasswordObservation{Failure: risk.ProviderUnavailable}); e != nil {
-		if err := ctx.Err(); err != nil {
-			return primitive.EncodedHash{}, risk.Assessment{}, err
-		}
-		return primitive.EncodedHash{}, risk.Assessment{}, ErrPasswordWork
-	}
-	admission, e := s.policy.Admit(binding.Operation)
-	if e != nil {
-		return primitive.EncodedHash{}, risk.Assessment{}, ErrPasswordWork
+	admission, err := s.admit(ctx, binding)
+	if err != nil {
+		return primitive.EncodedHash{}, risk.Assessment{}, err
 	}
 	var facts []risk.Signal
 	last := started
@@ -92,12 +87,45 @@ func (w passwordWork) newScreenedHash(ctx context.Context, secret primitive.Secr
 	return hash, assessment, nil
 }
 
+// admit validates the selected phase before provider access. It retains context
+// errors across each pure owner call; a concurrent cancellation is not an
+// infrastructure failure and must not lose its standard error identity.
+func (s passwordScreening) admit(ctx context.Context, binding risk.Context) (risk.Admission, error) {
+	if _, err := s.policy.PasswordSignal(ctx, binding, risk.PasswordObservation{Failure: risk.ProviderUnavailable}); err != nil {
+		if err := ctx.Err(); err != nil {
+			return risk.Admission{}, err
+		}
+		return risk.Admission{}, ErrPasswordWork
+	}
+	admission, err := s.policy.Admit(binding.Operation)
+	if err != nil {
+		return risk.Admission{}, ErrPasswordWork
+	}
+	if s.protectedProviders {
+		if _, err := s.policy.AssessProtectedProviders(ctx, binding, nil); err != nil {
+			if err := ctx.Err(); err != nil {
+				return risk.Admission{}, err
+			}
+			return risk.Admission{}, ErrPasswordWork
+		}
+	}
+	return admission, nil
+}
+
 func (s passwordScreening) check(ctx context.Context, binding risk.Context, last time.Time, facts []risk.Signal) (risk.Assessment, time.Time, error) {
 	now := s.now()
 	if now.IsZero() || now.Before(last) {
 		return risk.Assessment{}, time.Time{}, ErrPasswordWork
 	}
 	binding.Now = now
+	if s.protectedProviders {
+		providers, err := s.policy.AssessProtectedProviders(ctx, binding, facts)
+		if err != nil {
+			return risk.Assessment{}, time.Time{}, ErrPasswordWork
+		}
+		// This private summary never leaves through the complete Prepare API.
+		return risk.Assessment{Decision: providers.Decision, PolicyVersion: providers.PolicyVersion, Signals: providers.Signals}, now, nil
+	}
 	assessment, err := s.policy.Assess(ctx, binding, facts)
 	if err != nil {
 		return risk.Assessment{}, time.Time{}, ErrPasswordWork

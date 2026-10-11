@@ -107,6 +107,13 @@ The assessment is not authorization or transactional risk evidence. Complete
 reference composition must wire real provider provenance; this public helper
 does not establish provenance from caller-built structural facts.
 
+`PrepareProtected` is the explicit command-reserved credential-mutation lane.
+It requires HIBP and all other configured providers, rejects supplied velocity,
+and rechecks unchanged observations after hashing. Its distinct provider-only
+result does not grant velocity allowance: the native mutation must reserve and
+recheck the exact matching counter policy in its protected transaction. Other
+profiles cannot borrow this lane; ordinary `Prepare` remains unchanged.
+
 Run preparation before opening the protected transaction. Never log or return
 `EncodedHash.String()`; borrow it only for owned command/persistence work and
 discard copies afterward. The caller destroys the password after the call and
