@@ -1,5 +1,33 @@
 # Identity PostgreSQL
 
+## Magic-link recipient issuance
+
+Native magic-link request contributors use the exact `identity/magiclink/postgres`
+owner, `identity.magiclink` contract version one and anonymous
+`identity.magic-link.request` operation. `CapabilityIssuancePlan.MagicLinkRecipientUserID`
+selects one existing verified-email recipient for one `identity.magic-link.consume`
+grant. It cannot coexist with either password-specific target and does not change
+the command's original anonymous flow. Existing plan encodings stay unchanged
+when this field is empty; readers without this additive profile deny new plans.
+
+Before `StageCapabilityIssuanceFor`, call `Work.RequireMagicLinkRecipient` with
+the frozen original `RecipientRecord` during the exact contributor invocation.
+The kernel locks and rechecks current user, identifier, verification and security
+versions. The authenticated grant must match that recipient, original command,
+resource `identity.magiclink/<identifier ID>` and the `magiclink.identifier`,
+`magiclink.canonical-email`, `magiclink.identifier-version`,
+`magiclink.verification-version`, `magiclink.identifier-authority-version`,
+`magiclink.user-authority-version` and `magiclink.credential-authority-version`
+caveats. Versions use canonical unsigned decimal strings. Metadata alone cannot
+select a recipient; failures poison the existing transaction.
+
+This seam supplies neither authentication nor factor permission. The native
+workflow still owns original pre-auth/device/callback intent, current factor
+and risk admission, encrypted delivery, supersession and atomic consume/session
+composition. It must not relabel a password reset grant or call ordinary session
+issuance after a separate consumption commit. Complete public magic-link
+composition and package release qualification remain in development.
+
 Reset completion uses the canonical Authentication risk profile, which counts
 the attempt before credential work. `PrepareFeaturePreparationPlan` accepts its
 original `NewFeaturePasswordResetInputCommand` under the exact native

@@ -29,6 +29,11 @@ type CapabilityIssuancePlan struct {
 	// exclusive with RegistrationUserID and permits one reset-complete grant.
 	// Metadata alone grants no selection, factor or issuance authority.
 	ResetRecipientUserID identity.UserID
+	// MagicLinkRecipientUserID selects an existing verified-email recipient only
+	// under the anonymous magic-link request profile. It is mutually exclusive
+	// with both password targets. Staging requires the same invocation's primary
+	// recipient fence; this metadata grants neither authentication nor issuance.
+	MagicLinkRecipientUserID identity.UserID
 }
 
 func cloneCapabilityIssuancePlan(p *CapabilityIssuancePlan) *CapabilityIssuancePlan {
@@ -48,6 +53,9 @@ func validCapabilityIssuancePlan(p *CapabilityIssuancePlan) bool {
 		return false
 	}
 	if p.ResetRecipientUserID != "" && (p.RegistrationUserID != "" || (identity.User{ID: p.ResetRecipientUserID, TenantID: "validation", Status: identity.StatusActive, Version: 1}).Validate("validation") != nil) {
+		return false
+	}
+	if p.MagicLinkRecipientUserID != "" && (p.RegistrationUserID != "" || p.ResetRecipientUserID != "" || (identity.User{ID: p.MagicLinkRecipientUserID, TenantID: "validation", Status: identity.StatusActive, Version: 1}).Validate("validation") != nil) {
 		return false
 	}
 	for i, v := range p.Grants {
@@ -95,11 +103,23 @@ func validResetRecipientIssuance(b identity.CommandBinding, p CommandPlan) bool 
 	return i.RegistrationUserID == "" && b.UserID == "" && b.AnonymousFlowID != "" && p.Feature != nil && passwordResetRequestOperation(p.Feature.Operation) && p.Feature.Contributor == (ContributorDescriptor{Owner: "identity/password/postgres", ContractID: "identity.password", Version: 1}) && p.Lifecycle != nil && len(i.Grants) == 1 && i.Grants[0].Purpose == "identity.password.reset-complete"
 }
 
+func magicLinkRequestOperation(op identity.FeatureOperation) bool {
+	return op == (identity.FeatureOperation{Owner: "identity/magiclink", OperationID: "identity.magic-link.request", SchemaID: "magic-link-request", SchemaVersion: 1, RecordRequirement: identity.FeatureRecordOmitted, SubjectRequirement: identity.FeatureSubjectAnonymousFlow})
+}
+
+func validMagicLinkRecipientIssuance(b identity.CommandBinding, p CommandPlan) bool {
+	i := p.CapabilityIssuance
+	if i.MagicLinkRecipientUserID == "" {
+		return true
+	}
+	return i.RegistrationUserID == "" && i.ResetRecipientUserID == "" && b.UserID == "" && b.AnonymousFlowID != "" && p.Feature != nil && magicLinkRequestOperation(p.Feature.Operation) && p.Feature.Contributor == (ContributorDescriptor{Owner: "identity/magiclink/postgres", ContractID: "identity.magiclink", Version: 1}) && p.Lifecycle != nil && len(i.Grants) == 1 && i.Grants[0].Purpose == "identity.magic-link.consume"
+}
+
 // The four-field optional envelope is distinct from the existing three-field
 // delivery envelope. Delivery remains outermost; a nested issuer envelope is
 // forbidden. No second journal or alternative history authority is introduced.
 func encodeIssuanceWrappedPlan(b identity.CommandBinding, fp [32]byte, p CommandPlan, encode func(identity.CommandBinding, [32]byte, CommandPlan) ([]byte, error)) ([]byte, error) {
-	if !validCapabilityIssuancePlan(p.CapabilityIssuance) || !validRegistrationIssuance(b, p) || !validResetRecipientIssuance(b, p) || p.Lifecycle == nil || len(p.Contributors) == 0 || p.Contributors[len(p.Contributors)-1] != p.CapabilityIssuance.Contributor {
+	if !validCapabilityIssuancePlan(p.CapabilityIssuance) || !validRegistrationIssuance(b, p) || !validResetRecipientIssuance(b, p) || !validMagicLinkRecipientIssuance(b, p) || p.Lifecycle == nil || len(p.Contributors) == 0 || p.Contributors[len(p.Contributors)-1] != p.CapabilityIssuance.Contributor {
 		return nil, invalidPlan()
 	}
 	base := p
@@ -120,6 +140,9 @@ func encodeIssuanceWrappedPlan(b identity.CommandBinding, fp [32]byte, p Command
 	}
 	if p.CapabilityIssuance.ResetRecipientUserID != "" {
 		fields["reset_recipient_user_id"] = cborText(string(p.CapabilityIssuance.ResetRecipientUserID))
+	}
+	if p.CapabilityIssuance.MagicLinkRecipientUserID != "" {
+		fields["magic_link_recipient_user_id"] = cborText(string(p.CapabilityIssuance.MagicLinkRecipientUserID))
 	}
 	issuance := cborMap(fields)
 	result := cborMap(map[string][]byte{"base": cborBytes(wire), "profile": cborText("identity-capability-issuance-v1"), "issuance": issuance, "version": cborUint(1)})
@@ -187,6 +210,8 @@ func decodeIssuanceWrappedPlan(b identity.CommandBinding, fp [32]byte, data []by
 			p.RegistrationUserID = identity.UserID(r.string(128))
 		case "reset_recipient_user_id":
 			p.ResetRecipientUserID = identity.UserID(r.string(128))
+		case "magic_link_recipient_user_id":
+			p.MagicLinkRecipientUserID = identity.UserID(r.string(128))
 		default:
 			return fail()
 		}

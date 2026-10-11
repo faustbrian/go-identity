@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Bind anonymous magic-link request issuance to its own verified-email recipient
+  profile and same-invocation primary fence. Preserve original anonymous scope
+  and historical password plan bytes; recipient/version substitutions deny.
+  This is a kernel prerequisite, not complete passwordless login composition.
+
 - Select reset-request recipient and password-reference snapshots inside the
   exact native preparation Work, without exposing verifiers or granting factor
   permission. Missing/ineligible selections suppress; malformed primary state

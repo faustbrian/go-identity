@@ -136,6 +136,8 @@ func (w CapabilityIssuanceWork) DatabaseTime(ctx context.Context) (time.Time, er
 // ResetRecipientUserID instead requires this invocation's successful primary
 // recipient/credential fence and matching original reset scope. Neither target
 // alone proves current factor eligibility or complete workflow authorization.
+// MagicLinkRecipientUserID likewise requires the exact magic-link invocation's
+// primary verified-email fence and signed original identifier/security scope.
 // No bearer is exposed or stored here; encrypted delivery must be staged by
 // its registered owner. Failure poisons this command. Foreign owners are denied
 // before staging. Work and aliases must remain serial-use.
@@ -172,6 +174,13 @@ func (w Work) StageCapabilityIssuanceFor(p CapabilityIssuanceContributor, index 
 	if d.plan.ResetRecipientUserID != "" {
 		var err error
 		subject, err = resetIssuanceSubject(w.state, w.state.execution.reservation.plan.snapshot(), payload)
+		if err != nil {
+			return w.fail(w.state.ctx, err)
+		}
+	}
+	if d.plan.MagicLinkRecipientUserID != "" {
+		var err error
+		subject, err = magicLinkIssuanceSubject(w.state, w.state.execution.reservation.plan.snapshot(), payload)
 		if err != nil {
 			return w.fail(w.state.ctx, err)
 		}
