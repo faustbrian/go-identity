@@ -169,4 +169,5 @@ func TestNativeContinuationPostgres(t *testing.T) {
 		t.Fatal(err)
 	}
 	testMFAIssuance(t, ctx, pool, repo, auditing, lifecycle)
+	testRecoveryStorage(t, ctx, pool)
 }

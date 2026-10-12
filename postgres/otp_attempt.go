@@ -278,9 +278,17 @@ func (c *Coordinator) recordCountedAttemptCommand(ctx context.Context, b identit
 	var declared *admittedKernelPlan
 	var err error
 	if mfa && original != nil {
-		q, snapshot, declared, err = c.prepareMFATOTPAttemptWithOriginal(*original, command, p)
+		f, ok := command.Feature()
+		if !ok {
+			return identity.CommandResult{}, invalidPlan()
+		}
+		q, snapshot, declared, err = c.prepareMFAAttemptWithOriginal(*original, command, p, f.Operation.OperationID)
 	} else if mfa {
-		q, snapshot, declared, err = c.prepareMFATOTPAttempt(b, command, p)
+		f, ok := command.Feature()
+		if !ok {
+			return identity.CommandResult{}, invalidPlan()
+		}
+		q, snapshot, declared, err = c.prepareMFAAttempt(b, command, p, f.Operation.OperationID)
 	} else {
 		q, snapshot, declared, err = c.prepareOTPAttempt(b, command, p)
 	}
@@ -384,7 +392,14 @@ func (c *Coordinator) recordCountedAttempt(ctx context.Context, tx pgx.Tx, comma
 	}
 	if mfa {
 		var decision MFAAttemptDisposition
-		decision, err = mfaParticipant.RecordMFATOTPAttemptDenial(ctx, MFATOTPAttemptWork{state: m})
+		switch p.feature.Operation.OperationID {
+		case "identity.mfa.totp-verify":
+			decision, err = mfaParticipant.(MFATOTPAttemptContributor).RecordMFATOTPAttemptDenial(ctx, MFATOTPAttemptWork{state: m})
+		case "identity.mfa.recovery-use":
+			decision, err = mfaParticipant.(MFARecoveryAttemptContributor).RecordMFARecoveryAttemptDenial(ctx, MFARecoveryAttemptWork{recoveryState: m})
+		default:
+			return 0, result, invalidPlan()
+		}
 		switch decision {
 		case MFAAttemptUnchanged:
 			choice = OTPAttemptUnchanged

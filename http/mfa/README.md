@@ -33,6 +33,21 @@ to the actual decode, source, rate-admission and execution phases.
 
 ## Wire contract
 
+### Recovery-code completion
+
+`NewRecoveryUseHandler(RecoveryUseConfig)` and `FeatureConfig.RecoveryUse`
+select `POST /v1/mfa/recovery-use` explicitly. The closed body contains
+`commandID`, `preAuthID`, `continuationID`, `token`, `recoveryCode` and
+`callbackURL`; original flow/device cookies and exact Origin are required.
+Caller-selected users, factors, recovery sets, remember policy and OTP fields
+are rejected. Select `PasswordPrimary` only for matching password-origin native
+issuance. There is no TOTP fallback. Fresh delivery includes `recoveryRequired`
+from committed native policy; it does not grant authority for regeneration.
+The standalone transport requires a `RecoveryUseService`. The reference server
+supplies the native password-primary owner through `PasswordSignin.Recovery`
+and `FeatureSet.PasswordRecovery()`. Select `HTTPMFA.PasswordRecoveryUse` to
+expose that profile; the transport alone does not implement authentication.
+
 The composed verify route reserves `X-MFA-Variant: enrollment` for its distinct
 authenticated confirmation profile. Absence selects existing login. Empty,
 duplicate, unknown and unselected values deny before authentication, with no

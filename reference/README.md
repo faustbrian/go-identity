@@ -37,6 +37,40 @@ factor through public operations, completes password/TOTP, reads the resulting
 MFA session and logs out. This is development evidence, not full platform or
 release qualification.
 
+### Selected password recovery-code completion
+
+Select `PasswordSignin.MFA.AllowedMethods` as `[]string{"totp", "recovery-code"}`
+and configure `PasswordSignin.Recovery` with `PasswordRecoveryConfiguration`.
+Its retained `VerificationKeys` must match every live enrollment/recovery-set
+digest key version; missing or corrupt custody denies. The graph supplies the
+original password/browser/issuer owners and counted risk policy. No TOTP login
+completion owner or magic-link login is required by this recovery profile.
+Enrollment confirmation remains a separate explicit selection.
+
+Apply the selected forward migrations, start the graph, and obtain
+`FeatureSet.PasswordRecovery()`. Submit `mfa.RecoveryUseRequest` with the
+original continuation proof, flow cookie and opaque recovery code. The native
+owner shares the original attempt budget and independently compares again under
+locks before atomically burning the code and creating the session. The existing
+preparation contract charges abuse-rate quota before output generation; that
+charge survives a final abort and is never repeated for the same command.
+Factor/child/session/lifecycle changes roll back together on final failure.
+
+Independently select `HTTPMFA.PasswordRecoveryUse` for
+`POST /v1/mfa/recovery-use`. Its closed body is `commandID`, `preAuthID`,
+`continuationID`, `token`, `recoveryCode` and `callbackURL`, with the original
+flow/device cookies and exact Origin. Only fresh committed delivery emits
+session/CSRF credentials. Retry and code-free `RecoverRecoveryUse` preserve the
+outcome without credentials. This profile imposes no additional post-login
+remediation (`recoveryRequired:false`); factor-sensitive changes still require
+their own eligible fresh proof and cannot substitute a recovery login.
+
+The real PostgreSQL/TLS-Valkey journey captures a public enrollment code,
+completes password-first recovery, reads the session and logs out. It also
+exercises wrong-code/browser denial, late lifecycle rollback, retained rate
+quota, exact retry and lost-COMMIT-acknowledgement recovery. This is a local
+development checkpoint, not full MFA or platform release qualification.
+
 ### Selected magic-link TOTP completion
 
 Select primary continuation with `MagicLink.Request.MFAContinuation` and

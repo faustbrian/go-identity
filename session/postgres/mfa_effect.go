@@ -11,6 +11,7 @@ import (
 	"github.com/faustbrian/go-authorization"
 	authority "github.com/faustbrian/go-authorization/postgres"
 	identity "github.com/faustbrian/go-identity"
+	"github.com/faustbrian/go-identity/mfa"
 	mfapg "github.com/faustbrian/go-identity/mfa/postgres"
 	kernel "github.com/faustbrian/go-identity/postgres"
 	"github.com/faustbrian/go-identity/session"
@@ -83,6 +84,23 @@ func NewMFAPasswordTOTPCompletionEffect(c Config, p IdentifierAdmissionConfig) (
 // grant or pre-auth flow is consumed again. Every error must abort; all session,
 // factor, child, audit and lifecycle effects depend on the sole coordinator.
 func (e *MFATOTPCompletionEffect) Apply(ctx context.Context, w kernel.Work, owner kernel.MFACompletionContributor, command identity.Command, recipient kernel.RecipientRecord, completed mfapg.LockedTOTPCompletion) (identity.FeatureReceipt, error) {
+	return e.applyNativeMFA(ctx, w, owner, command, recipient, "totp", func(ctx context.Context) (mfa.ContinuationSpec, mfaRecordedFactor, identity.CommandID, error) {
+		scope, factor, primary, err := mfapg.RequireRecordedTOTPCompletion(ctx, w, owner, command, completed)
+		return scope, mfaRecordedFactor{FactorID: factor.FactorID, EnrollmentVersion: factor.EnrollmentVersion, FactorAuthorityVersion: factor.FactorAuthorityVersion, ScopeDigest: factor.ScopeDigest}, primary, err
+	})
+}
+
+// Private common projections are returned only by method-specific native
+// recorded-custody readers. They are not factor proof or a caller injection seam.
+type mfaRecordedFactor struct {
+	FactorID                                  string
+	EnrollmentVersion, FactorAuthorityVersion uint64
+	ScopeDigest                               [32]byte
+	RecoverySetID                             identity.CommandID
+	RecoverySetVersion                        uint64
+}
+
+func (e *MFATOTPCompletionEffect) applyNativeMFA(ctx context.Context, w kernel.Work, owner kernel.MFACompletionContributor, command identity.Command, recipient kernel.RecipientRecord, method string, read func(context.Context) (mfa.ContinuationSpec, mfaRecordedFactor, identity.CommandID, error)) (identity.FeatureReceipt, error) {
 	deny := func() (identity.FeatureReceipt, error) {
 		return identity.FeatureReceipt{}, session.ErrInvalidSessionCommand
 	}
@@ -96,21 +114,28 @@ func (e *MFATOTPCompletionEffect) Apply(ctx context.Context, w kernel.Work, owne
 		return identity.FeatureReceipt{}, err
 	}
 	_, code := command.OneTimeCode()
+	operation := mfaTOTPCompletionSessionOperation()
+	if method == "recovery-code" {
+		_, code = command.RecoveryCode()
+		operation = mfaRecoveryCompletionSessionOperation()
+	} else if method != "totp" {
+		return deny()
+	}
 	_, browser := command.PreAuthCookie()
 	if !code || !browser {
 		return deny()
 	}
-	record, err := MFATOTPCompletionSession(command)
+	record, err := mfaCompletionSession(command, operation, method)
 	if err != nil {
 		return deny()
 	}
 	b, feature, transition, err := w.FeatureScope(owner)
-	if err != nil || feature.Operation != mfaTOTPCompletionSessionOperation() || transition.EventType != "session.created.v1" || transition.BeforeVersion != 0 || transition.AfterVersion != 0 || owner.Descriptor() != (kernel.ContributorDescriptor{Owner: "identity/mfa/postgres", ContractID: "identity.mfa", Version: 1}) {
+	if err != nil || feature.Operation != operation || transition.EventType != "session.created.v1" || transition.BeforeVersion != 0 || transition.AfterVersion != 0 || owner.Descriptor() != (kernel.ContributorDescriptor{Owner: "identity/mfa/postgres", ContractID: "identity.mfa", Version: 1}) {
 		return deny()
 	}
 	bounded, stop := context.WithTimeout(ctx, e.config.MaximumDuration)
 	defer stop()
-	scope, factor, primaryCommand, err := mfapg.RequireRecordedTOTPCompletion(bounded, w, owner, command, completed)
+	scope, factor, primaryCommand, err := read(bounded)
 	if err != nil {
 		return identity.FeatureReceipt{}, err
 	}
@@ -123,6 +148,9 @@ func (e *MFATOTPCompletionEffect) Apply(ctx context.Context, w kernel.Work, owne
 	key, keyErr := mfapg.FactorAuthorityKey(s.TenantID, s.UserID)
 	expectedFactor := session.OptionalAuthorityBinding{Present: true, Binding: session.AuthorityBinding{ScopeKey: key, Version: factor.FactorAuthorityVersion}}
 	if keyErr != nil || s.Audience != e.profile.Audience || scope.Audience != s.Audience || scope.TenantID != s.TenantID || scope.SubjectID != identity.SubjectID(s.UserID) || string(scope.SourcePreAuthID) != b.AnonymousFlowID || m.CommandID != b.CommandID || m.PrimaryCommandID != primaryCommand || m.ContinuationID != identity.CommandID(scope.ID) || m.ContinuationScopeDigest != factor.ScopeDigest || m.ContinuationVersion != scope.Version || m.FactorID != factor.FactorID || m.EnrollmentVersion != factor.EnrollmentVersion || m.FactorAuthorityVersion != factor.FactorAuthorityVersion || !m.ValidUntil.Equal(scope.ExpiresAt) || remember != originalRemember || a.Factor != expectedFactor {
+		return deny()
+	}
+	if m.RecoverySetID != factor.RecoverySetID || m.RecoverySetVersion != factor.RecoverySetVersion {
 		return deny()
 	}
 	if recipient.Validate() != nil || recipient.Suppressed || recipient.Query.TenantID != b.TenantID || recipient.Query.UserID != "" || recipient.Query.Kind != identity.IdentifierEmail || recipient.Query.Eligibility != kernel.RecipientVerified || recipient.User.ID != s.UserID || recipient.UserAuthorityVersion != a.User.Version || recipient.IdentifierAuthorityVersion != a.Identifier.Version || recipient.CredentialAuthorityVersion != a.Credential.Version {
@@ -138,7 +166,7 @@ func (e *MFATOTPCompletionEffect) Apply(ctx context.Context, w kernel.Work, owne
 		}
 		selected := b
 		selected.UserID, selected.ActorID, selected.ActorKind = s.UserID, identity.ActorID(s.UserID), authorization.SubjectUser
-		directory, admitted, authorizationScope, admissionErr := passwordMFASessionAdmission(*e.password, record, selected, s.SessionID, s.Version)
+		directory, admitted, authorizationScope, admissionErr := passwordMFASessionAdmissionMethod(*e.password, record, selected, s.SessionID, s.Version, method)
 		if admissionErr != nil {
 			return deny()
 		}
@@ -181,7 +209,7 @@ func (e *MFATOTPCompletionEffect) Apply(ctx context.Context, w kernel.Work, owne
 	if err := RequireSession(bounded, w, e.config, record); err != nil {
 		return identity.FeatureReceipt{}, err
 	}
-	if _, _, _, err := mfapg.RequireRecordedTOTPCompletion(bounded, w, owner, command, completed); err != nil {
+	if _, _, _, err := read(bounded); err != nil {
 		return identity.FeatureReceipt{}, err
 	}
 	if e.password != nil {
@@ -225,6 +253,10 @@ func requireMFAIssueTime(ctx context.Context, w kernel.Work, record session.Sess
 // live session payload and cannot execute or redeliver anything. The sole
 // coordinator must reconcile this vote with all other participant outcomes.
 func (e *MFATOTPCompletionEffect) Recover(ctx context.Context, w kernel.RecoveryWork, owner kernel.MFACompletionContributor) (kernel.RecoveryStatus, error) {
+	return e.recoverNativeMFA(ctx, w, owner, "totp")
+}
+
+func (e *MFATOTPCompletionEffect) recoverNativeMFA(ctx context.Context, w kernel.RecoveryWork, owner kernel.MFACompletionContributor, method string) (kernel.RecoveryStatus, error) {
 	if ctx == nil || e == nil || e.config.MaximumDuration <= 0 {
 		return kernel.RecoveryUnknown, session.ErrInvalidSessionCommand
 	}
@@ -232,12 +264,18 @@ func (e *MFATOTPCompletionEffect) Recover(ctx context.Context, w kernel.Recovery
 		return kernel.RecoveryUnknown, err
 	}
 	b, feature, transition, err := w.FeatureScope(owner)
-	if err != nil || feature.Operation != mfaTOTPCompletionSessionOperation() || transition.EventType != "session.created.v1" || transition.BeforeVersion != 0 || transition.AfterVersion != 0 || owner.Descriptor() != (kernel.ContributorDescriptor{Owner: "identity/mfa/postgres", ContractID: "identity.mfa", Version: 1}) {
+	operation, digest := mfaTOTPCompletionSessionOperation(), mfaTOTPIssuanceDigest
+	if method == "recovery-code" {
+		operation, digest = mfaRecoveryCompletionSessionOperation(), mfaRecoveryIssuanceDigest
+	} else if method != "totp" {
+		return kernel.RecoveryUnknown, session.ErrInvalidSessionCommand
+	}
+	if err != nil || feature.Operation != operation || transition.EventType != "session.created.v1" || transition.BeforeVersion != 0 || transition.AfterVersion != 0 || owner.Descriptor() != (kernel.ContributorDescriptor{Owner: "identity/mfa/postgres", ContractID: "identity.mfa", Version: 1}) {
 		return kernel.RecoveryUnknown, session.ErrInvalidSessionCommand
 	}
 	bounded, stop := context.WithTimeout(ctx, e.config.MaximumDuration)
 	defer stop()
-	_, status, err := readNativeIssuanceIdentity(bounded, w, e.native.schema, b, transition, mfaTOTPIssuanceDigest)
+	_, status, err := readNativeIssuanceIdentity(bounded, w, e.native.schema, b, transition, digest)
 	return status, err
 }
 

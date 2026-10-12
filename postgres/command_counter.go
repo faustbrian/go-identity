@@ -163,7 +163,7 @@ func (w CommandCounterWork) NativeCommand(p CommandCounterContributor) (identity
 	return w.state.command, nil
 }
 
-// MFACompletionScope lends the exact frozen anonymous TOTP completion subject
+// MFACompletionScope lends the exact frozen anonymous TOTP/recovery completion subject
 // and child plan only to the registered counter owner. It grants no factor or
 // consumption authority; its purpose is to prevent a caller-selected counter
 // subject or fictitious session. Zero, other profiles and foreign custody deny.
@@ -172,7 +172,7 @@ func (w CommandCounterWork) MFACompletionScope(owner CommandCounterContributor) 
 		return CapabilityPlan{}, MFACompletionPlan{}, err
 	}
 	p := w.state.work.state.execution.reservation.plan
-	if p.feature == nil || p.feature.Operation.OperationID != "identity.mfa.totp-verify" || !validMFACompletionPlan(p.binding, p.snapshot()) {
+	if p.feature == nil || p.feature.Operation.OperationID != "identity.mfa.totp-verify" && p.feature.Operation.OperationID != "identity.mfa.recovery-use" || !validMFACompletionPlan(p.binding, p.snapshot()) {
 		return CapabilityPlan{}, MFACompletionPlan{}, invalidWork()
 	}
 	return *p.capability, *p.mfaCompletion, nil

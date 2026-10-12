@@ -85,5 +85,8 @@ func TestMFAConsumedPreAuthRequiresOriginalNativeCustody(t *testing.T) {
 		if err := RequireMFAConsumedPreAuthAttempt(ctx, kernel.MFATOTPAttemptWork{}, nil, Config{Schema: "session_store", MaximumDuration: time.Second}, session.PreAuthTransaction{}, "AQEBAQEBAQEBAQEBAQEBAQ"); err == nil {
 			t.Fatal("unowned counted attempt admitted browser metadata")
 		}
+		if err := RequireMFAConsumedPreAuthRecoveryAttempt(ctx, kernel.MFARecoveryAttemptWork{}, nil, Config{Schema: "session_store", MaximumDuration: time.Second}, session.PreAuthTransaction{}, "AQEBAQEBAQEBAQEBAQEBAQ"); err == nil {
+			t.Fatal("unowned recovery attempt admitted browser metadata")
+		}
 	}
 }

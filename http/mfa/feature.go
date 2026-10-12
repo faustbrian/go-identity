@@ -13,7 +13,9 @@ import (
 // Omit the feature from composition to expose no routes or metadata. Empty
 // selection denies; construction invokes no native service or global registry.
 type FeatureConfig struct {
-	TOTPVerify *TOTPVerifyConfig
+	// RecoveryUse exposes only the explicitly selected original-primary owner.
+	RecoveryUse *RecoveryUseConfig
+	TOTPVerify  *TOTPVerifyConfig
 	// PasswordTOTPVerify selects the password-origin native owner explicitly.
 	// With both login owners, singleton X-MFA-Variant: password selects it;
 	// otherwise it is the selected default. Selection is never fallback after denial.
@@ -31,10 +33,22 @@ func NewFeature(c FeatureConfig) (identityhttp.Feature, error) {
 // NewFeatureWithMiddleware binds hooks to actual owned phases without granting
 // credential output ownership or returning a partial feature on failure.
 func NewFeatureWithMiddleware(c FeatureConfig, m []identityhttp.MiddlewareDescriptor) (identityhttp.Feature, error) {
-	if c.TOTPVerify == nil && c.PasswordTOTPVerify == nil && c.Enable == nil && c.URI == nil && c.EnrollmentConfirmation == nil {
+	if c.TOTPVerify == nil && c.PasswordTOTPVerify == nil && c.Enable == nil && c.URI == nil && c.EnrollmentConfirmation == nil && c.RecoveryUse == nil {
 		return identityhttp.Feature{}, identityhttp.ErrInvalidInput
 	}
 	var operations []identityhttp.OperationDescriptor
+	if c.RecoveryUse != nil {
+		h, err := NewRecoveryUseHandlerWithMiddleware(*c.RecoveryUse, m)
+		if err != nil {
+			return identityhttp.Feature{}, err
+		}
+		op, err := identityhttp.NewCanonicalOperation(identityhttp.CanonicalOperationConfig{Owner: "identity/mfa", OperationID: "identity.mfa.recovery-use", Handler: h, CSRF: identityhttp.CSRFPolicy{Mode: identityhttp.CSRFExactOrigin, RefererFallback: identityhttp.RefererFallbackDeny}, MaximumSerializedBytes: 16384})
+		if err != nil {
+			return identityhttp.Feature{}, err
+		}
+		op.Wire = recoveryWire(*c.RecoveryUse)
+		operations = append(operations, op)
+	}
 	if c.TOTPVerify != nil || c.PasswordTOTPVerify != nil || c.EnrollmentConfirmation != nil {
 		h := &verifyDispatch{passwordDefault: c.TOTPVerify == nil && c.PasswordTOTPVerify != nil}
 		var err error

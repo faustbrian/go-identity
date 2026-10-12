@@ -184,7 +184,12 @@ func (r IssueRequest) issuanceScope() (identity.CommandBinding, identity.Feature
 	}
 	if r.state.mfa != nil {
 		p := r.state.mfa
-		return p.binding, mfaTOTPCompletionOperation(), p.record, true
+		m, err := p.record.MFAAuthentication().Bindings()
+		if err != nil {
+			return identity.CommandBinding{}, identity.FeatureOperation{}, Session{}, false
+		}
+		operation, ok := mfaCompletionOperationForMethod(m.Method)
+		return p.binding, operation, p.record, ok
 	}
 	if r.state.password != nil {
 		p := r.state.password

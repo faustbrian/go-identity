@@ -213,6 +213,9 @@ func (c *Coordinator) prepare(binding identity.CommandBinding, command identity.
 	if _, ok := command.OneTimeCode(); ok {
 		return claimRequest{}, CommandPlan{}, nil, invalidPlan()
 	}
+	if _, ok := command.RecoveryCode(); ok {
+		return claimRequest{}, CommandPlan{}, nil, invalidPlan()
+	}
 	// Bound new caller-owned custody declarations before snapshot allocation.
 	if plan.Delivery != nil && !validDeliveryPlan(plan.Delivery) {
 		return claimRequest{}, CommandPlan{}, nil, invalidPlan()

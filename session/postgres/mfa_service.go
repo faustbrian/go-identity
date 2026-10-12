@@ -15,7 +15,9 @@ import (
 )
 
 // MFAMagicLinkSessionServiceConfig explicitly selects original magic-link plus
-// confirmed TOTP authentication. Single-factor factories remain disjoint. The
+// confirmed TOTP or recovery-code authentication. Recovery consumption is
+// historical, not a requirement for another unused code. Single-factor factories
+// remain disjoint. The
 // primary pool outlives calls; install directory, authorization, MFA/TOTP and
 // complete session histories. Validation retains its owned clock/key/budgets.
 type MFAMagicLinkSessionServiceConfig struct {
@@ -52,7 +54,7 @@ func NewMFAMagicLinkSessionService(pool *database.Pool, c MFAMagicLinkSessionSer
 	}
 	p := MagicLinkAdmissionConfig{GlobalAuthorityID: strings.Clone(profile.GlobalAuthorityID), PolicyNamespace: strings.Clone(profile.PolicyNamespace), Audience: strings.Clone(profile.Audience)}
 	r := &primarySessionReader{native: native, domain: domain, policy: authority, clock: c.Validation.Clock, mfaMagicLink: &p, mfaFactors: factors}
-	cacheProfile := nativeAdmissionCacheProfile("native-mfa-magic-link-totp-session-v1", c.Repository.Schema, p.GlobalAuthorityID, p.PolicyNamespace, p.Audience)
+	cacheProfile := nativeAdmissionCacheProfile("native-mfa-magic-link-totp-recovery-session-v2", c.Repository.Schema, p.GlobalAuthorityID, p.PolicyNamespace, p.Audience)
 	return session.NewProfileSessionService(r, c.Validation, session.AuthenticationMagicLink, cacheProfile)
 }
 
@@ -60,7 +62,7 @@ func mfaMagicLinkSessionAdmission(c MagicLinkAdmissionConfig, record session.Ses
 	s, err := record.Bindings()
 	m, me := record.MFAAuthentication().Bindings()
 	primary, pe := record.MagicLinkAuthentication().Bindings()
-	if err != nil || me != nil || pe != nil || !OTPAdmissionConfig(c).valid() || s.Audience != c.Audience || s.Authentication.Kind != session.AuthenticationMagicLink || m.Method != "totp" || m.PrimaryCommandID != primary.CommandID {
+	if err != nil || me != nil || pe != nil || !OTPAdmissionConfig(c).valid() || s.Audience != c.Audience || s.Authentication.Kind != session.AuthenticationMagicLink || m.Method != "totp" && m.Method != "recovery-code" || m.PrimaryCommandID != primary.CommandID {
 		return kernel.DirectoryAuthorityQuery{}, policy.AuthorityScope{}, session.ErrUnauthenticated
 	}
 	key, err := mfapg.FactorAuthorityKey(s.TenantID, s.UserID)

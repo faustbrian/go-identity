@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Add distinct opaque recovery-code/browser command custody for native MFA
+  adapters. Recovery input cannot become an OTP submission or expose plaintext
+  through scalar metadata; construction alone grants no authentication or use.
+
 - Clarify that the existing authentication-attempt security subject may carry
   a genuine issuer challenge in the shared canonical ID profile, not only a
   pre-authentication transaction. Provenance remains the workflow owner's duty;

@@ -62,7 +62,7 @@ func (MFATOTPAttemptBinding) MarshalText() ([]byte, error) { return nil, invalid
 type MFATOTPAttemptWork struct{ state *mfaAttemptState }
 type mfaAttemptState struct {
 	work               Work
-	owner              MFATOTPAttemptContributor
+	owner              MFACompletionContributor
 	command            identity.Command
 	active             bool
 	counterCalled      bool
@@ -82,6 +82,20 @@ func (MFATOTPAttemptWork) MarshalText() ([]byte, error) { return nil, invalidWor
 
 func (w MFATOTPAttemptWork) usable() error {
 	s := w.state
+	if s == nil {
+		return invalidWork()
+	}
+	if _, ok := s.command.OneTimeCode(); !ok {
+		return invalidWork()
+	}
+	f, ok := s.command.Feature()
+	if !ok || f.Operation.OperationID != "identity.mfa.totp-verify" {
+		return invalidWork()
+	}
+	return s.usable()
+}
+
+func (s *mfaAttemptState) usable() error {
 	if s == nil || !s.active || s.work.state == nil || s.work.state.execution == nil {
 		return invalidWork()
 	}
@@ -143,11 +157,15 @@ func (w MFATOTPAttemptWork) ReserveCommandCounters(ctx context.Context, owner MF
 	if _, err := w.Binding(owner); err != nil {
 		return 0, err
 	}
-	native := w.state.work
+	return reserveMFAAttemptCounters(ctx, w.state)
+}
+
+func reserveMFAAttemptCounters(ctx context.Context, state *mfaAttemptState) (CommandCounterDisposition, error) {
+	native := state.work
 	if ctx == nil {
 		return 0, native.fail(native.state.ctx, invalidWork())
 	}
-	if w.state.counterCalled {
+	if state.counterCalled {
 		return 0, native.fail(ctx, invalidWork())
 	}
 	p := native.state.execution.reservation.plan
@@ -155,12 +173,12 @@ func (w MFATOTPAttemptWork) ReserveCommandCounters(ctx context.Context, owner MF
 	if participant == nil {
 		return 0, native.fail(ctx, invalidPlan())
 	}
-	w.state.counterCalled = true
-	choice, err := native.state.execution.coordinator.reserveCounterInWork(ctx, native, participant, w.state.command)
+	state.counterCalled = true
+	choice, err := native.state.execution.coordinator.reserveCounterInWork(ctx, native, participant, state.command)
 	if err != nil {
 		return 0, native.fail(ctx, err)
 	}
-	w.state.counterDisposition = choice
+	state.counterDisposition = choice
 	return choice, nil
 }
 
@@ -173,7 +191,11 @@ func (w MFATOTPAttemptWork) RequireActiveDirectoryAuthority(ctx context.Context,
 		return err
 	}
 	b, err := w.Binding(owner)
-	native, command, err := otpAuthorityScope(ctx, w.state.work, b.Command, err)
+	return requireMFAAttemptDirectory(ctx, w.state, b.Command, err, expected)
+}
+
+func requireMFAAttemptDirectory(ctx context.Context, state *mfaAttemptState, binding identity.CommandBinding, bindingErr error, expected DirectoryAuthorityAdmission) error {
+	native, command, err := otpAuthorityScope(ctx, state.work, binding, bindingErr)
 	if err != nil {
 		return err
 	}
@@ -189,7 +211,11 @@ func (w MFATOTPAttemptWork) RequireRecipient(ctx context.Context, owner MFATOTPA
 		return err
 	}
 	b, err := w.Binding(owner)
-	native, command, err := otpAuthorityScope(ctx, w.state.work, b.Command, err)
+	return requireMFAAttemptRecipient(ctx, w.state, b.Command, err, expected)
+}
+
+func requireMFAAttemptRecipient(ctx context.Context, state *mfaAttemptState, binding identity.CommandBinding, bindingErr error, expected RecipientRecord) error {
+	native, command, err := otpAuthorityScope(ctx, state.work, binding, bindingErr)
 	if err != nil {
 		return err
 	}
@@ -207,7 +233,11 @@ func (w MFATOTPAttemptWork) RequireRecipientCredential(ctx context.Context, owne
 		return time.Time{}, err
 	}
 	b, err := w.Binding(owner)
-	native, command, err := otpAuthorityScope(ctx, w.state.work, b.Command, err)
+	return requireMFAAttemptCredential(ctx, w.state, b.Command, err, recipient, expected)
+}
+
+func requireMFAAttemptCredential(ctx context.Context, state *mfaAttemptState, binding identity.CommandBinding, bindingErr error, recipient RecipientRecord, expected CredentialAdmission) (time.Time, error) {
+	native, command, err := otpAuthorityScope(ctx, state.work, binding, bindingErr)
 	if err != nil {
 		return time.Time{}, err
 	}
@@ -225,15 +255,24 @@ func (w MFATOTPAttemptWork) RequireRecipientCredential(ctx context.Context, owne
 	return now, nil
 }
 
-func mfaAttemptOwner(p *admittedKernelPlan) MFATOTPAttemptContributor {
-	if p == nil || p.feature == nil || p.feature.Operation.OperationID != "identity.mfa.totp-verify" || p.mfaCompletion == nil || p.otp != nil {
+func mfaAttemptOwner(p *admittedKernelPlan) MFACompletionContributor {
+	if p == nil || p.feature == nil || p.mfaCompletion == nil || p.otp != nil {
 		return nil
 	}
 	for _, e := range p.contributors {
 		if e.descriptor == p.feature.Contributor {
-			owner, ok := e.contributor.(MFATOTPAttemptContributor)
-			if ok && !nilContributor(owner) && reflect.TypeOf(owner).Comparable() {
-				return owner
+			if nilContributor(e.contributor) || !reflect.TypeOf(e.contributor).Comparable() {
+				return nil
+			}
+			switch p.feature.Operation.OperationID {
+			case "identity.mfa.totp-verify":
+				if owner, ok := e.contributor.(MFATOTPAttemptContributor); ok {
+					return owner
+				}
+			case "identity.mfa.recovery-use":
+				if owner, ok := e.contributor.(MFARecoveryAttemptContributor); ok {
+					return owner
+				}
 			}
 		}
 	}
@@ -249,11 +288,21 @@ func (c *Coordinator) PrepareMFATOTPAttemptPlan(b identity.CommandBinding, comma
 }
 
 func (c *Coordinator) prepareMFATOTPAttempt(b identity.CommandBinding, command identity.Command, p CommandPlan) (claimRequest, CommandPlan, *admittedKernelPlan, error) {
-	if c == nil || c.registry == nil || c.registry.state == nil || c.keys.current == 0 || p.OTP != nil || !validMFACompletionPlan(b, p) || p.Feature.Operation.OperationID != "identity.mfa.totp-verify" {
+	return c.prepareMFAAttempt(b, command, p, "identity.mfa.totp-verify")
+}
+
+func (c *Coordinator) prepareMFAAttempt(b identity.CommandBinding, command identity.Command, p CommandPlan, operation string) (claimRequest, CommandPlan, *admittedKernelPlan, error) {
+	if c == nil || c.registry == nil || c.registry.state == nil || c.keys.current == 0 || p.OTP != nil || !validMFACompletionPlan(b, p) || p.Feature.Operation.OperationID != operation {
 		return claimRequest{}, CommandPlan{}, nil, invalidPlan()
 	}
 	s, ok := command.Feature()
-	if _, opaque := command.OneTimeCode(); !ok || !opaque {
+	_, opaque := command.OneTimeCode()
+	if operation == "identity.mfa.recovery-use" {
+		_, opaque = command.RecoveryCode()
+	} else if operation != "identity.mfa.totp-verify" {
+		return claimRequest{}, CommandPlan{}, nil, invalidPlan()
+	}
+	if !ok || !opaque {
 		return claimRequest{}, CommandPlan{}, nil, invalidPlan()
 	}
 	q, snapshot, admitted, err := c.prepareFeature(b, command, s, p)
@@ -274,6 +323,9 @@ func (c *Coordinator) prepareMFATOTPAttempt(b identity.CommandBinding, command i
 // Unchanged rolls that provisional charge back with the callback. No child,
 // OTP, session/domain reservation or lifecycle effect is invoked.
 func (c *Coordinator) RecordMFATOTPAttemptDenial(ctx context.Context, b identity.CommandBinding, command identity.Command, p CommandPlan) (identity.CommandResult, error) {
+	if b.OperationID != "identity.mfa.totp-verify" {
+		return identity.CommandResult{}, invalidPlan()
+	}
 	return c.recordCountedAttemptCommand(ctx, b, command, p, false, true, nil)
 }
 
@@ -283,7 +335,7 @@ func (c *Coordinator) RecordMFATOTPAttemptDenial(ctx context.Context, b identity
 // declarations still conflict and correct-code probing still rolls back.
 func (c *Coordinator) RecordMFATOTPAttemptDenialWithOriginal(ctx context.Context, original, prepared identity.Command, p CommandPlan) (identity.CommandResult, error) {
 	f, ok := prepared.Feature()
-	if !ok {
+	if !ok || f.Operation.OperationID != "identity.mfa.totp-verify" {
 		return identity.CommandResult{}, invalidPlan()
 	}
 	return c.recordCountedAttemptCommand(ctx, f.Binding, prepared, p, false, true, &original)

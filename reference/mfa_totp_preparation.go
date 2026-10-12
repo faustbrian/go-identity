@@ -136,10 +136,6 @@ func (a *magicTOTPAdmission) Generate(ctx context.Context, generation uint64) ([
 	if err != nil {
 		return nil, err
 	}
-	meta, err := p.input.snapshot.Metadata()
-	if err != nil {
-		return nil, err
-	}
 	remember, err := scope.RememberPolicy.Bindings()
 	if err != nil {
 		return nil, err
@@ -149,7 +145,22 @@ func (a *magicTOTPAdmission) Generate(ctx context.Context, generation uint64) ([
 	if err != nil {
 		return nil, err
 	}
-	mfa, err := session.NewMFAAuthentication(session.MFAAuthenticationSpec{CommandID: f.Binding.CommandID, PrimaryCommandID: primary, ContinuationID: identity.CommandID(scope.ID), ContinuationScopeDigest: completion.ScopeDigest, Method: "totp", FactorID: meta.FactorID, EnrollmentVersion: meta.EnrollmentVersion, FactorAuthorityVersion: meta.FactorAuthorityVersion, ContinuationVersion: scope.Version, Remember: remember, VerifiedAt: p.verifiedAt, ValidUntil: scope.ExpiresAt})
+	factor := session.MFAAuthenticationSpec{CommandID: f.Binding.CommandID, PrimaryCommandID: primary, ContinuationID: identity.CommandID(scope.ID), ContinuationScopeDigest: completion.ScopeDigest, Method: "totp", FactorAuthorityVersion: scope.FactorVersion, ContinuationVersion: scope.Version, Remember: remember, VerifiedAt: p.verifiedAt, ValidUntil: scope.ExpiresAt}
+	if p.recovery {
+		set := p.recoverySet
+		if set.TenantID != scope.TenantID || set.UserID != identity.UserID(scope.SubjectID) {
+			return nil, identity.ForbiddenError{}
+		}
+		factor.Method, factor.FactorID, factor.EnrollmentVersion = "recovery-code", set.FactorID, set.FactorEnrollmentVersion
+		factor.RecoverySetID, factor.RecoverySetVersion = identity.CommandID(set.SetID), set.SetVersion
+	} else {
+		meta, err := p.input.snapshot.Metadata()
+		if err != nil {
+			return nil, err
+		}
+		factor.FactorID, factor.EnrollmentVersion, factor.FactorAuthorityVersion = meta.FactorID, meta.EnrollmentVersion, meta.FactorAuthorityVersion
+	}
+	mfa, err := session.NewMFAAuthentication(factor)
 	if err != nil {
 		return nil, err
 	}
@@ -167,7 +178,7 @@ func (a *magicTOTPAdmission) Generate(ctx context.Context, generation uint64) ([
 	if !ok {
 		return nil, invalidTOTPCompletion()
 	}
-	fields, err := sessionpg.MFATOTPCompletionSessionFields(record)
+	fields, err := p.sessionFields(record)
 	if err != nil {
 		return nil, err
 	}
@@ -207,7 +218,11 @@ func (p *magicTOTPPhase) outputAAD(generation uint64) (envelope.Context, error) 
 		return envelope.Context{}, err
 	}
 	digest := sha256.Sum256(frame)
-	return envelope.NewContext(map[string]string{"profile": "identity-mfa-totp-session-output-v1", "binding": hex.EncodeToString(digest[:])})
+	profile := "identity-mfa-totp-session-output-v1"
+	if p.recovery {
+		profile = "identity-mfa-recovery-session-output-v1"
+	}
+	return envelope.NewContext(map[string]string{"profile": profile, "binding": hex.EncodeToString(digest[:])})
 }
 
 func (p *magicTOTPPhase) RestoreFeaturePreparation(ctx context.Context, original identity.Command, generation uint64, wire []byte) (identity.Command, kernel.CommandPlan, error) {
@@ -248,20 +263,28 @@ func (p *magicTOTPPhase) RestoreFeaturePreparation(ctx context.Context, original
 	}
 	f, _ := original.Feature()
 	f.Fields = append(f.Fields, stored.Fields...)
-	command, err := identity.NewFeatureOneTimeCodePreAuthCommand(f, p.input.request.Code, p.input.request.Cookie)
+	var command identity.Command
+	if p.recovery {
+		if p.input.recovery == nil {
+			return deny()
+		}
+		command, err = identity.NewFeatureRecoveryCodePreAuthCommand(f, p.input.recovery.RecoveryCode, p.input.recovery.Cookie)
+	} else {
+		command, err = identity.NewFeatureOneTimeCodePreAuthCommand(f, p.input.request.Code, p.input.request.Cookie)
+	}
 	if err != nil {
 		return deny()
 	}
-	record, err := sessionpg.MFATOTPCompletionSession(command)
+	record, err := p.sessionRecord(command)
 	if err != nil {
 		return deny()
 	}
-	fields, err := sessionpg.MFATOTPCompletionSessionFields(record)
+	fields, err := p.sessionFields(record)
 	if err != nil || !reflect.DeepEqual(fields, stored.Fields) {
 		return deny()
 	}
 	s, err := record.Bindings()
-	if err != nil || s.UserID != p.input.recipient.User.ID || s.TenantID != p.input.request.TenantID {
+	if err != nil || s.UserID != p.input.recipient.User.ID || s.TenantID != p.input.scope.TenantID {
 		return deny()
 	}
 	expected, err := p.sessionAuthority(s.SessionID, s.FamilyID)
@@ -274,7 +297,7 @@ func (p *magicTOTPPhase) RestoreFeaturePreparation(ctx context.Context, original
 	// continuation metadata under locks; restoration cannot replace those fences.
 	if p.prepared != (session.PreparedIssuance{}) {
 		owned, ok := p.prepared.Session()
-		ownedFields, err := sessionpg.MFATOTPCompletionSessionFields(owned)
+		ownedFields, err := p.sessionFields(owned)
 		if !ok || err != nil || !reflect.DeepEqual(ownedFields, fields) {
 			return deny()
 		}

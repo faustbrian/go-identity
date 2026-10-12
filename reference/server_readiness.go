@@ -159,7 +159,7 @@ func readinessSchemaPresent(ctx context.Context, state *storeState, catalog []mi
 // sources assembled in migrations.go; do not infer SQL or copy migration DDL.
 func readinessCatalogGuards(state *storeState, history migrationHistory) []migrationGuard {
 	guards := slices.Clone(history.guards)
-	if state.features != nil && (state.features.migrations.magicSessionSchema != "" || state.features.migrations.passwordTOTP) {
+	if state.features != nil && (state.features.migrations.magicSessionSchema != "" || state.features.migrations.passwordTOTP || state.features.migrations.passwordRecovery) {
 		schema := state.features.migrations.magicSessionSchema
 		if schema == "" {
 			schema = state.features.migrations.passwordSigninSchema
@@ -180,7 +180,7 @@ func readinessCatalogGuards(state *storeState, history migrationHistory) []migra
 				case "sessions.session_credential_continuation_v1":
 					guards[i].constraints[j] = "sessions.session_credential_continuation_v2"
 				}
-				if state.features.migrations.magicTOTP || state.features.migrations.passwordTOTP {
+				if state.features.migrations.magicTOTP || state.features.migrations.passwordTOTP || state.features.migrations.passwordRecovery {
 					switch guards[i].constraints[j] {
 					case "session_issuances.session_issuances_purpose_v5":
 						guards[i].constraints[j] = "session_issuances.session_issuances_purpose_v6"
@@ -190,12 +190,20 @@ func readinessCatalogGuards(state *storeState, history migrationHistory) []migra
 						guards[i].constraints[j] = "sessions.session_record_binding_v6"
 					}
 				}
-				if state.features.migrations.passwordTOTP {
+				if state.features.migrations.passwordTOTP || state.features.migrations.passwordRecovery {
 					switch guards[i].constraints[j] {
 					case "sessions.session_record_binding_v6":
 						guards[i].constraints[j] = "sessions.session_record_binding_v7"
 					case "sessions.session_credential_continuation_v3":
 						guards[i].constraints[j] = "sessions.session_credential_continuation_v4"
+					}
+				}
+				if state.features.migrations.passwordRecovery {
+					switch guards[i].constraints[j] {
+					case "sessions.session_record_binding_v7":
+						guards[i].constraints[j] = "sessions.session_record_binding_v8"
+					case "sessions.session_credential_continuation_v4":
+						guards[i].constraints[j] = "sessions.session_credential_continuation_v5"
 					}
 				}
 			}

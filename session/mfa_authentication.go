@@ -18,7 +18,9 @@ const PasswordMFAPrimaryPurpose auth.Purpose = "identity.password.mfa-primary"
 // MFAAuthenticationSpec is historical, secret-free second-factor provenance.
 // CommandID names completion, PrimaryCommandID the original primary admission,
 // and ContinuationID/ScopeDigest the unchanged one-use child. ContinuationVersion
-// is the version before completion. This initial native profile supports TOTP;
+// is the version before completion. TOTP and recovery-code profiles are distinct;
+// recovery requires its immutable set identity/epoch in addition to the original
+// factor enrollment. Set regeneration cannot silently substitute that provenance.
 // it never treats a passkey sign-in as an enrolled factor. Remember is the exact
 // original resolved policy, not a new default. VerifiedAt is factor time, never
 // the session's primary-authentication freshness origin. ValidUntil is the
@@ -28,6 +30,8 @@ type MFAAuthenticationSpec struct {
 	CommandID, PrimaryCommandID, ContinuationID identity.CommandID
 	ContinuationScopeDigest                     [32]byte
 	Method, FactorID                            string
+	RecoverySetID                               identity.CommandID `json:",omitempty"`
+	RecoverySetVersion                          uint64             `json:",omitempty"`
 	EnrollmentVersion, FactorAuthorityVersion   uint64
 	ContinuationVersion                         uint64
 	Remember                                    RememberPolicySpec
@@ -49,7 +53,19 @@ func NewMFAAuthentication(p MFAAuthenticationSpec) (MFAAuthentication, error) {
 			return MFAAuthentication{}, ErrInvalidSession
 		}
 	}
-	if p.CommandID == p.PrimaryCommandID || p.CommandID == p.ContinuationID || p.PrimaryCommandID == p.ContinuationID || p.ContinuationScopeDigest == ([32]byte{}) || p.Method != "totp" || p.EnrollmentVersion == 0 || p.FactorAuthorityVersion == 0 || p.ContinuationVersion == 0 || !validTime(p.VerifiedAt) || !validTime(p.ValidUntil) || !p.ValidUntil.After(p.VerifiedAt) || p.ValidUntil.Sub(p.VerifiedAt) > 5*time.Minute {
+	if p.CommandID == p.PrimaryCommandID || p.CommandID == p.ContinuationID || p.PrimaryCommandID == p.ContinuationID || p.ContinuationScopeDigest == ([32]byte{}) || p.EnrollmentVersion == 0 || p.FactorAuthorityVersion == 0 || p.ContinuationVersion == 0 || !validTime(p.VerifiedAt) || !validTime(p.ValidUntil) || !p.ValidUntil.After(p.VerifiedAt) || p.ValidUntil.Sub(p.VerifiedAt) > 5*time.Minute {
+		return MFAAuthentication{}, ErrInvalidSession
+	}
+	switch p.Method {
+	case "totp":
+		if p.RecoverySetID != "" || p.RecoverySetVersion != 0 {
+			return MFAAuthentication{}, ErrInvalidSession
+		}
+	case "recovery-code":
+		if _, err := identity.ParseCommandID(string(p.RecoverySetID)); err != nil || p.RecoverySetVersion == 0 {
+			return MFAAuthentication{}, ErrInvalidSession
+		}
+	default:
 		return MFAAuthentication{}, ErrInvalidSession
 	}
 	if _, err := NewRememberPolicy(p.Remember); err != nil {
@@ -58,6 +74,7 @@ func NewMFAAuthentication(p MFAAuthenticationSpec) (MFAAuthentication, error) {
 	p.CommandID = identity.CommandID(strings.Clone(string(p.CommandID)))
 	p.PrimaryCommandID = identity.CommandID(strings.Clone(string(p.PrimaryCommandID)))
 	p.ContinuationID = identity.CommandID(strings.Clone(string(p.ContinuationID)))
+	p.RecoverySetID = identity.CommandID(strings.Clone(string(p.RecoverySetID)))
 	p.Method, p.FactorID = strings.Clone(p.Method), strings.Clone(p.FactorID)
 	p.VerifiedAt, p.ValidUntil = p.VerifiedAt.UTC().Round(0), p.ValidUntil.UTC().Round(0)
 	return MFAAuthentication{state: &p}, nil

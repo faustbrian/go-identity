@@ -7,13 +7,22 @@ import (
 )
 
 func TestMFACompletionCountersRetainProtectedPolicyWithoutSession(t *testing.T) {
+	testMFACompletionCounters(t, "identity.mfa.totp-verify")
+}
+
+func TestRecoveryCompletionCountersRetainProtectedPolicyWithoutSession(t *testing.T) {
+	testMFACompletionCounters(t, "identity.mfa.recovery-use")
+}
+
+func testMFACompletionCounters(t *testing.T, action Action) {
+	t.Helper()
 	key, _ := NewCounterDigestKey(1, bytes.Repeat([]byte{71}, 32))
 	policy, err := NewCommandCounterPolicy(CommandCounterPolicyConfig{Policy: testPolicy(t), Keys: []CounterDigestKey{key}})
 	if err != nil {
 		t.Fatal(err)
 	}
 	now := testContext().Now.UTC().Truncate(time.Microsecond)
-	scope := Context{Tenant: "tenant", Operation: "identity.mfa.totp-verify", Attempt: "attempt"}
+	scope := Context{Tenant: "tenant", Operation: action, Attempt: "attempt"}
 	subject := Subject{User: "original-subject", Network: "127.0.0.1"}
 	command, err := policy.PrepareMFACompletion(scope, subject, "original-child", now)
 	if err != nil {

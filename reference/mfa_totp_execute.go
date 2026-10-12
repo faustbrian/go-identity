@@ -35,7 +35,7 @@ func (p *magicTOTPPhase) compose() error {
 	if err != nil {
 		return err
 	}
-	p.delivery = &magicTOTPDelivery{}
+	p.delivery = &magicTOTPDelivery{recovery: p.recovery}
 	// Recovery has no submitted input or decrypted primary. The explicitly
 	// composed owner selects the profile without requiring secret custody.
 	if p.state.password != nil {
@@ -78,7 +78,14 @@ func (p *magicTOTPPhase) declaration() (kernel.CommandPlan, error) {
 func (p *magicTOTPPhase) admitRisk(ctx context.Context) error {
 	f, _ := p.input.command.Feature()
 	b := f.Binding
-	p.subject = risk.Subject{Network: p.input.request.Network, User: string(p.input.recipient.User.ID)}
+	network := p.input.request.Network
+	if p.recovery {
+		if p.input.recovery == nil {
+			return identity.ForbiddenError{}
+		}
+		network = p.input.recovery.Network
+	}
+	p.subject = risk.Subject{Network: network, User: string(p.input.recipient.User.ID)}
 	scope := risk.Context{Tenant: string(b.TenantID), Operation: risk.Action(b.OperationID), Attempt: string(b.CommandID)}
 	result, err := p.state.config.Risk.Evaluation.EvaluateProtectedProviders(ctx, risk.EvaluateRequest{Context: scope, Phase: risk.NonIssuing})
 	if err != nil {
@@ -98,6 +105,16 @@ func (p *magicTOTPPhase) admitRisk(ctx context.Context) error {
 
 func totpReceipt(id identity.CommandID, receipt identity.CommandResult) mfa.TotpVerifyResult {
 	return mfa.TotpVerifyResult{Outcome: receipt.Outcome, Session: session.IssueResult{CommandID: id, CommitOutcome: receipt.Outcome, Replayed: receipt.Outcome == identity.CommitOutcomeCommitted, RetryAfter: receipt.RetryAfter}}
+}
+
+type nativeMFACompletionResult struct {
+	Outcome   identity.CommitOutcome
+	Session   session.IssueResult
+	CSRFToken session.CSRFToken
+}
+
+func nativeMFAReceipt(id identity.CommandID, receipt identity.CommandResult) nativeMFACompletionResult {
+	return nativeMFACompletionResult{Outcome: receipt.Outcome, Session: session.IssueResult{CommandID: id, CommitOutcome: receipt.Outcome, Replayed: receipt.Outcome == identity.CommitOutcomeCommitted, RetryAfter: receipt.RetryAfter}}
 }
 
 func (s *magicLinkTOTPService) TotpVerify(ctx context.Context, request mfa.TotpVerifyRequest) (out mfa.TotpVerifyResult, err error) {
@@ -123,10 +140,24 @@ func (s *magicLinkTOTPService) TotpVerify(ctx context.Context, request mfa.TotpV
 		return out, err
 	}
 	defer input.destroy()
-	if input.historical != nil {
-		return totpReceipt(request.CommandID, *input.historical), input.historyError
+	completed, err := executeNativeMFA(ctx, state, input)
+	return mfa.TotpVerifyResult{Outcome: completed.Outcome, Session: completed.Session, CSRFToken: completed.CSRFToken}, err
+}
+
+func executeNativeMFA(ctx context.Context, state *magicLinkTOTPState, input *magicTOTPInput) (out nativeMFACompletionResult, err error) {
+	f, ok := input.command.Feature()
+	if !ok {
+		return out, invalidTOTPCompletion()
 	}
-	p := &magicTOTPPhase{state: state, input: input}
+	id, flow := f.Binding.CommandID, identity.PreAuthTransactionID(f.Binding.AnonymousFlowID)
+	caller := input.request.Caller
+	if input.recovery != nil {
+		caller = input.recovery.Caller
+	}
+	if input.historical != nil {
+		return nativeMFAReceipt(id, *input.historical), input.historyError
+	}
+	p := &magicTOTPPhase{state: state, input: input, recovery: input.recovery != nil}
 	if err = p.compose(); err != nil {
 		return out, err
 	}
@@ -137,30 +168,42 @@ func (s *magicLinkTOTPService) TotpVerify(ctx context.Context, request mfa.TotpV
 	if err != nil {
 		return out, err
 	}
-	denialPlan, err := p.coordinator.PrepareMFATOTPAttemptPlanWithOriginal(input.command, p.counterCommand, declaration)
+	prepareAttempt := p.coordinator.PrepareMFATOTPAttemptPlanWithOriginal
+	recordAttempt := p.coordinator.RecordMFATOTPAttemptDenialWithOriginal
+	prepareFeature := p.coordinator.PrepareMFATOTPFeaturePlanWithOriginal
+	executeFeature := p.coordinator.ExecutePreparedMFATOTPFeature
+	query := state.history.QueryMFATOTPCommand
+	if p.recovery {
+		prepareAttempt = p.coordinator.PrepareMFARecoveryAttemptPlanWithOriginal
+		recordAttempt = p.coordinator.RecordMFARecoveryAttemptDenialWithOriginal
+		prepareFeature = p.coordinator.PrepareMFARecoveryFeaturePlanWithOriginal
+		executeFeature = p.coordinator.ExecutePreparedMFARecoveryFeature
+		query = state.history.QueryMFARecoveryCommand
+	}
+	denialPlan, err := prepareAttempt(input.command, p.counterCommand, declaration)
 	if err != nil {
 		return out, err
 	}
-	receipt, err := p.coordinator.RecordMFATOTPAttemptDenialWithOriginal(ctx, input.command, p.counterCommand, denialPlan)
+	receipt, err := recordAttempt(ctx, input.command, p.counterCommand, denialPlan)
 	// Only this callback's successful comparison and proven rollback permit the
 	// generation phase. A generic conflict is never interpreted as a valid code.
 	var conflict identity.ConflictError
 	if !p.correct || receipt.Outcome != identity.CommitOutcomeConflict || !errors.As(err, &conflict) {
 		if receipt.Outcome == identity.CommitOutcomeConflict {
-			caller := request.Caller.Clone()
-			caller.Request.Resource = authorization.Resource{Type: "identity.anonymous-flow", ID: authorization.ResourceID(request.PreAuthID)}
-			if original, found, queryErr := state.history.QueryMFATOTPCommand(ctx, input.command, caller); found && original.Validate() == nil {
-				return totpReceipt(request.CommandID, original), queryErr
+			caller := caller.Clone()
+			caller.Request.Resource = authorization.Resource{Type: "identity.anonymous-flow", ID: authorization.ResourceID(flow)}
+			if original, found, queryErr := query(ctx, input.command, caller); found && original.Validate() == nil {
+				return nativeMFAReceipt(id, original), queryErr
 			}
 		}
-		return totpReceipt(request.CommandID, receipt), err
+		return nativeMFAReceipt(id, receipt), err
 	}
-	preparedPlan, err := p.coordinator.PrepareMFATOTPFeaturePlanWithOriginal(input.command, p.counterCommand, declaration)
+	preparedPlan, err := prepareFeature(input.command, p.counterCommand, declaration)
 	if err != nil {
 		return out, err
 	}
-	receipt, err = p.coordinator.ExecutePreparedMFATOTPFeature(ctx, input.command, p.counterCommand, preparedPlan)
-	out = totpReceipt(request.CommandID, receipt)
+	receipt, err = executeFeature(ctx, input.command, p.counterCommand, preparedPlan)
+	out = nativeMFAReceipt(id, receipt)
 	if err != nil || receipt.Outcome != identity.CommitOutcomeCommitted || p.prepared == (session.PreparedIssuance{}) || p.command == (identity.Command{}) {
 		return out, err
 	}

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/url"
+	"slices"
 	"time"
 
 	auth "github.com/faustbrian/go-authentication"
@@ -28,11 +29,16 @@ import (
 // Install password primary, MFA continuation/TOTP and complete capability
 // histories before calling. This configuration is not request data or a UI.
 type MFAChallengeConfig struct {
-	Lifetime    time.Duration
-	MaxAttempts uint32
-	IssuerURL   string
-	Issuer      issuerpg.IssuerConfig
-	Custody     issuerpg.IssuancePreparationConfig
+	// AllowedMethods is an owned TOTP-primary selection with optional recovery-code.
+	// Empty preserves the existing TOTP-only profile. Selection grants no factor
+	// authority; completion independently verifies the enrolled method and shares
+	// one original attempt budget. Unsupported methods and duplicates deny.
+	AllowedMethods []string
+	Lifetime       time.Duration
+	MaxAttempts    uint32
+	IssuerURL      string
+	Issuer         issuerpg.IssuerConfig
+	Custody        issuerpg.IssuancePreparationConfig
 }
 
 // Format redacts all deployment and key configuration.
@@ -59,6 +65,10 @@ type signinMFAComposition struct {
 // are borrowed and must outlive bounded concurrent calls. No session is issued
 // before actual second-factor completion.
 func NewMFASigninService(pool *database.Pool, c SigninConfig, m MFAChallengeConfig) (*SigninService, error) {
+	methods, methodErr := freezeMFACompletionMethods(m.AllowedMethods)
+	if methodErr != nil {
+		return nil, methodErr
+	}
 	u, err := url.Parse(m.IssuerURL)
 	if err != nil || u.Scheme != "https" || u.Host == "" || u.User != nil || u.Fragment != "" || u.RawFragment != "" || u.Opaque != "" || len(m.IssuerURL) > 2048 || m.Lifetime < time.Second || m.Lifetime > 5*time.Minute || m.Lifetime%time.Second != 0 || m.MaxAttempts < 1 || m.MaxAttempts > 100 || m.Issuer.Audience != c.Profile.Audience {
 		return nil, password.ErrPasswordWork
@@ -77,7 +87,7 @@ func NewMFASigninService(pool *database.Pool, c SigninConfig, m MFAChallengeConf
 	}
 	// All cryptographic configuration is frozen by its actual owner factories;
 	// retain only non-secret lifetime/issuer policy here.
-	s.mfa = &signinMFAComposition{config: MFAChallengeConfig{Lifetime: m.Lifetime, MaxAttempts: m.MaxAttempts, IssuerURL: m.IssuerURL}, issuer: i, codec: codec}
+	s.mfa = &signinMFAComposition{config: MFAChallengeConfig{AllowedMethods: methods, Lifetime: m.Lifetime, MaxAttempts: m.MaxAttempts, IssuerURL: m.IssuerURL}, issuer: i, codec: codec}
 	return s, nil
 }
 
@@ -110,7 +120,7 @@ func (s *SigninService) signinMFA(ctx context.Context, r password.SigninRequest,
 	if err != nil {
 		return out, err
 	}
-	continuation, err := mfa.NewPartialAuthContinuation(mfa.ContinuationSpec{ID: mfa.ContinuationID(id), PrimaryProofID: primary.Proof.ID, PrimaryProofDigest: digest, PrimaryProofExpiresAt: until, TenantID: b.TenantID, SubjectID: identity.SubjectID(recipient.User.ID), SourcePreAuthID: r.PreAuthID, Origin: r.Origin, AllowedMethods: []string{"totp"}, PolicyVersion: b.PolicyVersion, FactorVersion: factor, RememberPolicy: r.Remember, Purpose: "identity.mfa.complete", Audience: s.c.Profile.Audience, IssuedAt: at, ExpiresAt: until, MaxAttempts: s.mfa.config.MaxAttempts, AttemptsRemaining: s.mfa.config.MaxAttempts, State: mfa.Pending, Version: 1})
+	continuation, err := mfa.NewPartialAuthContinuation(mfa.ContinuationSpec{ID: mfa.ContinuationID(id), PrimaryProofID: primary.Proof.ID, PrimaryProofDigest: digest, PrimaryProofExpiresAt: until, TenantID: b.TenantID, SubjectID: identity.SubjectID(recipient.User.ID), SourcePreAuthID: r.PreAuthID, Origin: r.Origin, AllowedMethods: s.mfa.config.AllowedMethods, PolicyVersion: b.PolicyVersion, FactorVersion: factor, RememberPolicy: r.Remember, Purpose: "identity.mfa.complete", Audience: s.c.Profile.Audience, IssuedAt: at, ExpiresAt: until, MaxAttempts: s.mfa.config.MaxAttempts, AttemptsRemaining: s.mfa.config.MaxAttempts, State: mfa.Pending, Version: 1})
 	if err != nil {
 		return out, err
 	}
@@ -200,4 +210,24 @@ func (s *SigninService) signinMFA(ctx context.Context, r password.SigninRequest,
 		}
 	}
 	return out, err
+}
+
+func freezeMFACompletionMethods(input []string) ([]string, error) {
+	if len(input) == 0 {
+		return []string{"totp"}, nil
+	}
+	if len(input) > 2 {
+		return nil, password.ErrPasswordWork
+	}
+	methods := slices.Clone(input)
+	slices.Sort(methods)
+	if !slices.Contains(methods, "totp") {
+		return nil, password.ErrPasswordWork
+	}
+	for i, method := range methods {
+		if method != "totp" && method != "recovery-code" || i > 0 && method == methods[i-1] {
+			return nil, password.ErrPasswordWork
+		}
+	}
+	return methods, nil
 }

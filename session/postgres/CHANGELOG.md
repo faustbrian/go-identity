@@ -2,6 +2,23 @@
 
 ## Unreleased
 
+- Admit complete recovery-code provenance through selected MFA session readers
+  and revocation mapping, retaining original credential/factor authority and
+  single-factor isolation. New cache profiles reject prior profile custody
+  rather than promoting or renewing evidence. Extend original consumed-browser
+  fencing to exact native recovery completion and its distinct denial callback.
+
+- Add forward recovery-code record profiles for password and magic-link MFA,
+  preserving populated historical records and rejecting malformed set epochs.
+  Add native recovery completion effects requiring the same Work's recorded
+  code burn, original primary/remember/factor/set custody and current authority;
+  retained recovery issuance evidence stays distinct from TOTP evidence.
+
+- Map and restore complete recovery-code session provenance, including original
+  primary, factor enrollment and recovery set epoch. Recovery-use and TOTP
+  completion mappings remain disjoint; partial or cross-method records deny.
+  Durable recovery-session constraint installation and issuance remain separate.
+
 - Extend explicit selected session reads and revocation admission to genuine
   password/TOTP records, retaining both credential and factor fences without
   single-factor fallback. MFA-only and combined readers have separate cache

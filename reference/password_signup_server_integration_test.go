@@ -53,7 +53,7 @@ func (referenceRegistrationPolicy) Decide(ctx context.Context, c authorization.D
 	}
 	if string(c.Request.Tenant) == otpTenant && c.PolicyRevision == 9 && c.Request.Subject.Kind == authorization.SubjectServiceAccount && c.Request.Subject.ID == "AAAAAAAAAAAAAAAAAAAAAw" {
 		switch c.Request.Action {
-		case "identity.password.signup", "identity.user.create", "identity.email.verification-confirm", "identity.password.signup.recover", "identity.magic-link.request", "identity.magic-link.consume", "identity.magic-link.request.recover", "identity.magic-link.consume.recover", "identity.mfa.totp-verify", "identity.mfa.totp-verify.recover":
+		case "identity.password.signup", "identity.user.create", "identity.email.verification-confirm", "identity.password.signup.recover", "identity.magic-link.request", "identity.magic-link.consume", "identity.magic-link.request.recover", "identity.magic-link.consume.recover", "identity.mfa.totp-verify", "identity.mfa.totp-verify.recover", "identity.mfa.recovery-use", "identity.mfa.recovery-use.recover":
 			return authorization.Decision{Outcome: authorization.Allow, Revision: 9}, nil
 		}
 	}
@@ -229,13 +229,14 @@ func proveReferenceSignupGraph(t *testing.T, competing bool, protected ...bool) 
 	proveReferenceSignupGraphExtensions(t, competing, signupGraphExtensions{}, protected...)
 }
 
-type signupGraphExtensions struct{ mfaEnrollment, passwordMFA, completionCommitFault bool }
+type signupGraphExtensions struct{ mfaEnrollment, passwordMFA, passwordRecovery, recoveryRace, completionCommitFault bool }
 
 func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extensions signupGraphExtensions, protected ...bool) {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(t.Context(), 60*time.Second)
 	defer cancel()
 	f := newLiveStoresProfile(t, ctx, false)
+	f.recoveryRace = extensions.recoveryRace
 	c, deps, worker := otpGraphConfiguration(t, f.config)
 	deps.PostgreSQL = f.pool
 	if extensions.completionCommitFault {
@@ -285,6 +286,9 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 	}
 	if extensions.passwordMFA {
 		configureReferencePasswordMFA(t, &c, origin)
+	}
+	if extensions.passwordRecovery {
+		configureReferencePasswordRecovery(t, &c, origin)
 	}
 	magic := len(protected) > 1 && protected[1]
 	if magic {
@@ -427,6 +431,14 @@ END $$`); err != nil {
 			t.Fatal("selected magic-link routes missing")
 		}
 	}
+	if c.HTTPMFA != nil && c.HTTPMFA.PasswordRecoveryUse {
+		wantOperations++
+		if !seen["identity.mfa.recovery-use"] {
+			t.Fatal("selected recovery route missing")
+		}
+	} else if seen["identity.mfa.recovery-use"] {
+		t.Fatal("unselected recovery advertised")
+	}
 	if changeScreens != nil {
 		wantOperations += 2
 		if !seen["identity.password.verify"] || !seen["identity.password.change"] {
@@ -475,13 +487,13 @@ END $$`); err != nil {
 			}
 		}
 	}
-	proveReferenceRegistration(t, ctx, f, features, workers, client, network.URL, origin, messages, calls, competing, changeScreens, extensions.mfaEnrollment, extensions.passwordMFA)
+	proveReferenceRegistration(t, ctx, f, features, workers, client, network.URL, origin, messages, calls, competing, changeScreens, extensions.mfaEnrollment, extensions.passwordMFA, extensions.passwordRecovery)
 	if magic {
 		proveReferenceMagicLink(t, ctx, f, features, workers, client, network.URL, origin, messages, c, deps, len(protected) > 5 && protected[5])
 	}
 }
 
-func proveReferenceRegistration(t *testing.T, ctx context.Context, f liveStores, features reference.FeatureSet, workers reference.WorkerSet, client *http.Client, base, origin string, messages <-chan string, screens *atomic.Int32, competing bool, changeScreens *atomic.Int32, enrollment bool, passwordMFA bool) {
+func proveReferenceRegistration(t *testing.T, ctx context.Context, f liveStores, features reference.FeatureSet, workers reference.WorkerSet, client *http.Client, base, origin string, messages <-chan string, screens *atomic.Int32, competing bool, changeScreens *atomic.Int32, enrollment bool, passwordMFA bool, recoveryLogin ...bool) {
 	t.Helper()
 	invoke := func(path string, body any, key string, cookies []*http.Cookie) (*http.Response, []byte) {
 		t.Helper()
@@ -647,7 +659,7 @@ CREATE TRIGGER registration_fixture_fail BEFORE INSERT ON identity.delivery_inte
 		t.Fatal("verified registration did not produce usable login", r.StatusCode, signed.CommitOutcome, signed.Error, signed.CommandID != "", signed.SessionID != "")
 	}
 	if enrollment {
-		proveReferenceMFAEnrollment(t, ctx, f, features, client, base, origin, r.Cookies(), r.Header.Get("X-CSRF-Token"), signed.SessionID, passwordMFA)
+		proveReferenceMFAEnrollment(t, ctx, f, features, client, base, origin, r.Cookies(), r.Header.Get("X-CSRF-Token"), signed.SessionID, passwordMFA, recoveryLogin...)
 		return
 	}
 	if changeScreens != nil {

@@ -133,6 +133,10 @@ func sessionRecordFieldsKind(record session.Session, kind session.Authentication
 		add("mfa.scope", identity.FeatureValue{Kind: identity.FeatureBytes, Bytes: p.ContinuationScopeDigest[:]})
 		text("mfa.method", p.Method)
 		text("mfa.factor", p.FactorID)
+		if p.Method == "recovery-code" {
+			text("mfa.recovery-set", string(p.RecoverySetID))
+			number("mfa.recovery-set-version", p.RecoverySetVersion)
+		}
 		number("mfa.enrollment-version", p.EnrollmentVersion)
 		number("mfa.authority-version", p.FactorAuthorityVersion)
 		number("mfa.continuation-version", p.ContinuationVersion)
@@ -280,6 +284,9 @@ func sessionRecordFromFieldsKind(b identity.CommandBinding, values map[string]id
 	var factor session.MFAAuthentication
 	if _, hasMFA := values["mfa.command"]; hasMFA {
 		p := session.MFAAuthenticationSpec{CommandID: identity.CommandID(text("mfa.command")), PrimaryCommandID: identity.CommandID(text("mfa.primary-command")), ContinuationID: identity.CommandID(text("mfa.continuation")), Method: text("mfa.method"), FactorID: text("mfa.factor"), EnrollmentVersion: number("mfa.enrollment-version"), FactorAuthorityVersion: number("mfa.authority-version"), ContinuationVersion: number("mfa.continuation-version"), Remember: remember, VerifiedAt: instant("mfa.verified"), ValidUntil: instant("mfa.valid-until")}
+		if p.Method == "recovery-code" {
+			p.RecoverySetID, p.RecoverySetVersion = identity.CommandID(text("mfa.recovery-set")), number("mfa.recovery-set-version")
+		}
 		digest := take("mfa.scope", identity.FeatureBytes).Bytes
 		if len(digest) != len(p.ContinuationScopeDigest) {
 			return fail()

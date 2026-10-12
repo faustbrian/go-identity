@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+- Connect recovery-code transport to the explicitly selected native reference
+  password-primary profile. This supersedes the earlier transport-only
+  orchestration caveat below; standalone handlers still require a native service.
+
+- Return a redacted HTTP 409 for classified completion conflicts instead of
+  reporting them as provider unavailability, without delivering credentials.
+
+- Add opt-in recovery-code completion transport with closed original-continuation
+  input and no TOTP fallback. Retain shared browser/rate admission and deliver
+  credentials only for fresh, matching recovery-session provenance. Native
+  recovery orchestration and reference-server selection are not yet connected.
+
 - Withhold provisioning URI and recovery codes when final-response middleware
   delays, cancels or fails delivery. Preserve committed command metadata without
   extending the original session or disclosure deadline.

@@ -126,6 +126,16 @@ func prepareClaim(c identity.Command, key [32]byte) (claimRequest, error) {
 			}
 			payload["one_time_code"] = cborBytes(digest[:])
 		}
+		if code, ok := c.RecoveryCode(); ok {
+			// Preserve submitted recovery intent, never the enrolled verifier.
+			// Type-specific framing and a separate claim member prevent OTP
+			// relabelling even when the original credential bytes are identical.
+			digest, err := code.KeyedDigest(key, []byte("identity.command.recovery-code.intent-v1"))
+			if err != nil {
+				return claimRequest{}, codecError()
+			}
+			payload["recovery_code"] = cborBytes(digest[:])
+		}
 		if cookie, ok := c.PreAuthCookie(); ok {
 			// A changed submitted cookie is different command intent, even when
 			// scalar flow metadata/code match. Only a keyed binding is retained;

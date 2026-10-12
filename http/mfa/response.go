@@ -54,6 +54,7 @@ func (p *responsePipeline) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if !committed && a.out.SignedIn && (status != http.StatusOK || a.ctx == nil || a.ctx.Err() != nil || a.fresh == nil || !a.fresh()) {
 			a.cookie, a.csrf = "", ""
 			a.out.SignedIn = false
+			a.out.RecoveryRequired = nil
 			a.out.SessionID = ""
 			a.out.Error = "unavailable"
 		}

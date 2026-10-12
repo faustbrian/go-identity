@@ -156,6 +156,23 @@ func (c *Coordinator) ExecutePreparedFeature(ctx context.Context, original ident
 // is permitted. Full frozen-plan, counter and factor checks remain mandatory;
 // no retry may replace original preparation or regenerate lost bearer custody.
 func (c *Coordinator) ExecutePreparedMFATOTPFeature(ctx context.Context, original, prepared identity.Command, declaration CommandPlan) (identity.CommandResult, error) {
+	f, ok := prepared.Feature()
+	if !ok || f.Operation.OperationID != "identity.mfa.totp-verify" {
+		return identity.CommandResult{}, invalidPreparation()
+	}
+	return c.executePreparedFeature(ctx, &original, prepared, declaration)
+}
+
+// ExecutePreparedMFARecoveryFeature retains original recovery/browser identity
+// while executing the validated counter-enriched native declaration. Generation,
+// atomic code consumption and session effects remain with the registered owner
+// in the sole coordinator transaction. Replay cannot regenerate bearer custody
+// or substitute original intent; uncertain outcomes require original recovery.
+func (c *Coordinator) ExecutePreparedMFARecoveryFeature(ctx context.Context, original, prepared identity.Command, declaration CommandPlan) (identity.CommandResult, error) {
+	f, ok := prepared.Feature()
+	if !ok || f.Operation.OperationID != "identity.mfa.recovery-use" {
+		return identity.CommandResult{}, invalidPreparation()
+	}
 	return c.executePreparedFeature(ctx, &original, prepared, declaration)
 }
 
@@ -245,6 +262,9 @@ func (c *Coordinator) executePreparedFeature(ctx context.Context, claimSource *i
 	}
 	reservation, err := c.attachFeaturePreparation(ctx, q, executionRequest, snapshot, r, owner, wire)
 	if err != nil {
+		if denied, ok := err.(preparationAttachmentDenied); ok {
+			return denied.result, identity.ConflictError{}
+		}
 		return featureOutcome(b, q.feature, identity.CommitOutcomeUnknown, 0), identity.UnknownCommitError{CommandID: b.CommandID}
 	}
 	w, err := c.Begin(ctx, reservation)
@@ -268,12 +288,18 @@ func (c *Coordinator) prepareRestoredFeature(b identity.CommandBinding, generate
 		}
 		return c.prepareOTPReservation(b, generated, final)
 	}
-	if _, opaque := generated.OneTimeCode(); opaque {
-		// TOTP custody is restored only through the retained native completion
+	_, otp := generated.OneTimeCode()
+	_, recovery := generated.RecoveryCode()
+	if otp || recovery {
+		// Factor custody is restored only through the retained native completion
 		// owner. It is not an OTP challenge and must not acquire OTP phases.
 		// prepareFeature still validates the native owner and complete command;
 		// Apply must verify the factor under current locked authority.
-		if c == nil || c.registry == nil || c.registry.state == nil || c.keys.current == 0 || !validMFACompletionPlan(b, final) || final.Feature.Operation.OperationID != "identity.mfa.totp-verify" {
+		if c == nil || c.registry == nil || c.registry.state == nil || c.keys.current == 0 || !validMFACompletionPlan(b, final) {
+			return claimRequest{}, CommandPlan{}, nil, invalidPreparation()
+		}
+		operation := final.Feature.Operation.OperationID
+		if otp && operation != "identity.mfa.totp-verify" || recovery && operation != "identity.mfa.recovery-use" {
 			return claimRequest{}, CommandPlan{}, nil, invalidPreparation()
 		}
 		spec, ok := commandFeature(generated)
@@ -630,8 +656,32 @@ func (c *Coordinator) attachFeaturePreparation(ctx context.Context, original, ge
 		if plan == nil {
 			capabilityJournal.previousGeneration = 0
 		}
-		if err := c.reserveCapability(ctx, tx, original, admitted, capabilityJournal, owner); err != nil {
+		// A first attachment has no earlier committed participant reservation.
+		// Isolate provisional participant writes so a definitive conflict can
+		// retain the frozen plan and audited denial without releasing any other
+		// command's credential. Existing attachments still require reconciliation.
+		participantTx, err := tx.Begin(ctx)
+		if err != nil {
+			return Reservation{}, readFailure(ctx, err)
+		}
+		if err := c.reserveCapability(ctx, participantTx, original, admitted, capabilityJournal, owner); err != nil {
+			if rollbackPreparation(participantTx) != nil {
+				return Reservation{}, identity.UnavailableError{}
+			}
+			if _, conflict := err.(identity.ConflictError); conflict && plan == nil {
+				result, failure := c.denyPreparationAttachment(ctx, tx, original, admitted, r.journal, owner)
+				if failure != nil {
+					return Reservation{}, failure
+				}
+				if failure := c.commitPreparation(ctx, tx); failure != nil {
+					return Reservation{}, failure
+				}
+				return Reservation{}, preparationAttachmentDenied{result: result}
+			}
 			return Reservation{}, err
+		}
+		if err := participantTx.Commit(ctx); err != nil {
+			return Reservation{}, readFailure(ctx, err)
 		}
 	}
 	if admitted.otp != nil {

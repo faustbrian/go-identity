@@ -74,22 +74,10 @@ func (r TotpVerifyRequest) Validate() error {
 		return r.validateEnrollmentConfirmation()
 	}
 	bad := func() error { return identity.InvalidInputError{Field: "mfa_totp_verify"} }
-	if _, err := identity.ParseIdentifierID(string(r.TenantID)); err != nil {
-		return bad()
-	}
-	if _, err := identity.ParseCommandID(string(r.CommandID)); err != nil {
-		return bad()
-	}
-	if _, err := identity.ParseCommandID(string(r.ChallengeID)); err != nil {
+	if !validContinuationBrowserInput(continuationBrowserInput{tenant: r.TenantID, command: r.CommandID, continuation: ContinuationID(r.ChallengeID), flow: r.PreAuthID, proof: r.Proof, cookie: r.Cookie, caller: r.Caller, origin: r.Origin, callback: r.Callback, network: r.Network, device: r.Device}, "identity.mfa.totp-verify") {
 		return bad()
 	}
 	if _, err := identity.ParseCommandID(string(r.FactorID)); err != nil {
-		return bad()
-	}
-	if _, err := identity.ParsePreAuthTransactionID(string(r.PreAuthID)); err != nil {
-		return bad()
-	}
-	if r.CommandID == identity.CommandID(r.ChallengeID) || r.Proof.ValidateBounds(32, 4096) != nil {
 		return bad()
 	}
 	// Match identity's opaque command validation boundary. This discarded
@@ -97,21 +85,6 @@ func (r TotpVerifyRequest) Validate() error {
 	digest, err := r.Code.CommandDigest([32]byte{1}, "mfa.input.validation")
 	clear(digest[:])
 	if err != nil {
-		return bad()
-	}
-	if _, err := session.ParseToken(r.Cookie.Token()); err != nil {
-		return bad()
-	}
-	request := r.Caller.Request
-	if request.Tenant != authorization.TenantID(r.TenantID) || request.Action != "identity.mfa.totp-verify" || r.Caller.PolicyRevision == 0 || !continuationText(string(request.Subject.ID), 128) || request.Resource.Type != "identity.mfa-continuation" || request.Resource.ID != authorization.ResourceID(r.ChallengeID) {
-		return bad()
-	}
-	switch request.Subject.Kind {
-	case authorization.SubjectUser, authorization.SubjectAPIKey, authorization.SubjectServiceAccount:
-	default:
-		return bad()
-	}
-	if !totpCompletionURL(r.Origin, true) || !totpCompletionURL(r.Callback, false) || len(r.Network) > 255 || net.ParseIP(r.Network) == nil || r.Device != "" && !continuationText(r.Device, 255) {
 		return bad()
 	}
 	return nil

@@ -90,6 +90,8 @@ func (r *Repository) writeIssuedSession(ctx context.Context, w kernel.Work, b id
 		digest = magicLinkIssuanceDigest(digest, string(s.UserID), s.SessionID, s.FamilyID, recordDigest[:])
 	} else if b.OperationID == "identity.mfa.totp-verify" {
 		digest = mfaTOTPIssuanceDigest(digest, string(s.UserID), s.SessionID, s.FamilyID, recordDigest[:])
+	} else if b.OperationID == "identity.mfa.recovery-use" {
+		digest = mfaRecoveryIssuanceDigest(digest, string(s.UserID), s.SessionID, s.FamilyID, recordDigest[:])
 	}
 	n, err = w.Exec(ctx, `INSERT INTO `+r.schema+`.session_issuances(tenant_id,command_id,purpose,user_id,session_id,family_id,binding_digest,record_digest) VALUES($1,$2,$3,$4,$5,$6,$7,$8)`, string(b.TenantID), id, b.OperationID, string(s.UserID), s.SessionID, s.FamilyID, digest[:], recordDigest[:])
 	if err != nil {

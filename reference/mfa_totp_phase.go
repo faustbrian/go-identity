@@ -33,13 +33,22 @@ type magicTOTPPhase struct {
 	issuer         *session.SessionIssuer
 	prepared       session.PreparedIssuance
 	delivery       *magicTOTPDelivery
+	recovery       bool
+	recoverySet    mfapg.RecoverySetMetadata
 }
 
 func (*magicTOTPPhase) Descriptor() kernel.ContributorDescriptor {
 	return kernel.ContributorDescriptor{Owner: "identity/mfa/postgres", ContractID: "identity.mfa", Version: 1}
 }
-func (*magicTOTPPhase) FeatureOperations() []identity.FeatureOperation {
-	return []identity.FeatureOperation{magicTOTPCompletionOperation()}
+func (p *magicTOTPPhase) FeatureOperations() []identity.FeatureOperation {
+	return []identity.FeatureOperation{p.operation()}
+}
+
+func (p *magicTOTPPhase) operation() identity.FeatureOperation {
+	if p != nil && p.recovery {
+		return recoveryCompletionOperation()
+	}
+	return magicTOTPCompletionOperation()
 }
 func (p *magicTOTPPhase) completion() (kernel.MFACompletionPlan, error) {
 	if p == nil || p.state == nil || p.input == nil || p.input.historical != nil {
@@ -60,7 +69,7 @@ func (p *magicTOTPPhase) ValidateMFACompletion(command identity.Command, child k
 	return nil
 }
 func (p *magicTOTPPhase) ValidateFeatureCommand(command identity.Command, plan kernel.CommandPlan) error {
-	if plan.Feature == nil || plan.Feature.Contributor != p.Descriptor() || plan.Feature.Operation != magicTOTPCompletionOperation() || plan.MFACompletion == nil || plan.Capability == nil || plan.SubjectType != "authentication_attempt" || plan.Lifecycle == nil || plan.Lifecycle.EventType != "session.created.v1" || plan.Lifecycle.BeforeVersion != 0 || plan.Lifecycle.AfterVersion != 0 || plan.OTP != nil || plan.CapabilityIssuance != nil || plan.MFAContinuation != nil || plan.MagicLinkRegistration != nil || plan.CommandCounters == nil || *plan.CommandCounters != p.counterPlan || plan.RiskEvidence != nil || plan.Delivery != nil {
+	if plan.Feature == nil || plan.Feature.Contributor != p.Descriptor() || plan.Feature.Operation != p.operation() || plan.MFACompletion == nil || plan.Capability == nil || plan.SubjectType != "authentication_attempt" || plan.Lifecycle == nil || plan.Lifecycle.EventType != "session.created.v1" || plan.Lifecycle.BeforeVersion != 0 || plan.Lifecycle.AfterVersion != 0 || plan.OTP != nil || plan.CapabilityIssuance != nil || plan.MFAContinuation != nil || plan.MagicLinkRegistration != nil || plan.CommandCounters == nil || *plan.CommandCounters != p.counterPlan || plan.RiskEvidence != nil || plan.Delivery != nil {
 		return invalidTOTPCompletion()
 	}
 	return p.ValidateMFACompletion(command, *plan.Capability, *plan.MFACompletion)
@@ -106,16 +115,19 @@ func (p *magicTOTPPhase) browser(ctx context.Context, command identity.Command, 
 }
 
 func (p *magicTOTPPhase) directoryAdmission() kernel.DirectoryAuthorityAdmission {
-	return kernel.DirectoryAuthorityAdmission{Query: kernel.DirectoryAuthorityQuery{GlobalAuthorityID: p.state.config.Profile.GlobalAuthorityID, TenantID: p.input.request.TenantID}, GlobalVersion: p.input.directory.GlobalVersion, TenantVersion: p.input.directory.TenantVersion}
+	return kernel.DirectoryAuthorityAdmission{Query: kernel.DirectoryAuthorityQuery{GlobalAuthorityID: p.state.config.Profile.GlobalAuthorityID, TenantID: p.input.scope.TenantID}, GlobalVersion: p.input.directory.GlobalVersion, TenantVersion: p.input.directory.TenantVersion}
 }
 func (p *magicTOTPPhase) policyScope() policy.AuthorityScope {
-	return policy.AuthorityScope{TenantID: authorization.TenantID(p.input.request.TenantID), SubjectID: authorization.SubjectID(p.input.recipient.User.ID), PolicyNamespace: p.state.config.Profile.PolicyNamespace}
+	return policy.AuthorityScope{TenantID: authorization.TenantID(p.input.scope.TenantID), SubjectID: authorization.SubjectID(p.input.recipient.User.ID), PolicyNamespace: p.state.config.Profile.PolicyNamespace}
 }
 
 // Wrong-code accounting authenticates browser and current authority before
 // taking factor locks. A correct comparison leaves no denial state; successful
 // execution independently repeats comparison under its own native locks.
 func (p *magicTOTPPhase) RecordMFATOTPAttemptDenial(ctx context.Context, w kernel.MFATOTPAttemptWork) (kernel.MFAAttemptDisposition, error) {
+	if p != nil && p.recovery {
+		return 0, identity.ForbiddenError{}
+	}
 	if _, err := p.completion(); err != nil {
 		return 0, err
 	}
@@ -237,6 +249,23 @@ func (p *magicTOTPPhase) ApplyFeature(ctx context.Context, w kernel.Work, comman
 	if err = policy.RequireAuthority(ctx, w, p.policyScope(), p.input.policy.Version, p.state.config.MaximumDuration); err != nil {
 		return identity.FeatureReceipt{}, err
 	}
+	if p.recovery {
+		if p.state.recoveryEffect == nil {
+			return identity.FeatureReceipt{}, identity.UnavailableError{}
+		}
+		locked, err := mfapg.LockRecoveryCompletion(ctx, w, p, command, p.state.recoveryKeys)
+		if err != nil {
+			return identity.FeatureReceipt{}, err
+		}
+		if err = mfapg.RecordRecoveryCompletion(ctx, w, p, locked); err != nil {
+			return identity.FeatureReceipt{}, err
+		}
+		receipt, err := p.state.recoveryEffect.Apply(ctx, w, p, command, p.input.recipient, locked)
+		if err == nil {
+			p.applied = true
+		}
+		return receipt, err
+	}
 	locked, err := mfapg.LockTOTPCompletion(ctx, w, p, command, p.input.snapshot)
 	if err != nil {
 		return identity.FeatureReceipt{}, err
@@ -277,7 +306,7 @@ func (p *magicTOTPPhase) CheckFeatureCommit(ctx context.Context, w kernel.Work, 
 	if err != nil {
 		return err
 	}
-	record, err := sessionpg.MFATOTPCompletionSession(command)
+	record, err := p.sessionRecord(command)
 	if err != nil {
 		return err
 	}
@@ -289,6 +318,12 @@ func (p *magicTOTPPhase) CheckFeatureCommit(ctx context.Context, w kernel.Work, 
 }
 
 func (p *magicTOTPPhase) RecoverParticipant(ctx context.Context, w kernel.RecoveryWork) (kernel.RecoveryStatus, error) {
+	if p != nil && p.recovery {
+		if p.state == nil || p.state.recoveryEffect == nil {
+			return kernel.RecoveryUnknown, identity.UnavailableError{}
+		}
+		return p.state.recoveryEffect.Recover(ctx, w, p)
+	}
 	if p == nil || p.state == nil || p.state.effect == nil {
 		return kernel.RecoveryUnknown, identity.UnavailableError{}
 	}

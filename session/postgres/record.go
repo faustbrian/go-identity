@@ -78,6 +78,9 @@ func encodeRecord(s session.Session) ([]byte, string, error) {
 			record.Schema += 2
 		}
 		record.MFA = &metadata
+		if metadata.Method == "recovery-code" {
+			record.Schema += 4
+		}
 	}
 	if continuation, ok := s.CredentialContinuation(); ok {
 		record.Schema += 4
@@ -149,7 +152,15 @@ func decodeRecord(b []byte) (session.Session, error) {
 		if hasOTP || hasContinuation {
 			return invalid()
 		}
-		factor, valid := exactObject(top["MFA"], "CommandID", "PrimaryCommandID", "ContinuationID", "ContinuationScopeDigest", "Method", "FactorID", "EnrollmentVersion", "FactorAuthorityVersion", "ContinuationVersion", "Remember", "VerifiedAt", "ValidUntil")
+		var method struct{ Method string }
+		if json.Unmarshal(top["MFA"], &method) != nil {
+			return invalid()
+		}
+		keys := []string{"CommandID", "PrimaryCommandID", "ContinuationID", "ContinuationScopeDigest", "Method", "FactorID", "EnrollmentVersion", "FactorAuthorityVersion", "ContinuationVersion", "Remember", "VerifiedAt", "ValidUntil"}
+		if method.Method == "recovery-code" {
+			keys = append(keys, "RecoverySetID", "RecoverySetVersion")
+		}
+		factor, valid := exactObject(top["MFA"], keys...)
 		if !valid {
 			return invalid()
 		}
@@ -256,6 +267,9 @@ func decodeRecord(b []byte) (session.Session, error) {
 			expectedSchema += 2
 		} else {
 			return invalid()
+		}
+		if record.MFA.Method == "recovery-code" {
+			expectedSchema += 4
 		}
 	}
 	if record.Schema != expectedSchema || hasOTP != (record.Authentication.Kind == session.AuthenticationOTP) || hasMagicLink != (record.Authentication.Kind == session.AuthenticationMagicLink) {

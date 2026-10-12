@@ -10,6 +10,7 @@ import (
 	"crypto/sha256"
 	"encoding/binary"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"reflect"
@@ -43,27 +44,28 @@ import (
 // consumption, session/family/evidence persistence and the coordinator are real.
 // This proves their transaction composition, not public MFA login.
 type mfaSessionFixture struct {
-	command       identity.Command
-	plan          kernel.CommandPlan
-	primary       kernel.CapabilityPlan
-	challenge     kernel.MFAContinuationPlan
-	continuation  mfa.PartialAuthContinuation
-	issuer        *capabilitypg.Issuer
-	issuance      capabilitypg.PreparedIssuance
-	child         kernel.CapabilityPlan
-	completion    kernel.MFACompletionPlan
-	effect        *MFATOTPCompletionEffect
-	recipient     kernel.RecipientRecord
-	snapshot      mfapg.TOTPFactorSnapshot
-	secret        password.Secret
-	verifier      mfa.TOTPVerifier
-	deny          bool
-	calls         int
-	stage         string
-	flow          session.PreAuthTransaction
-	cookieKey     session.DigestKey
-	primaryOrigin identity.CommandID
-	counters      *riskpg.Repository
+	command        identity.Command
+	plan           kernel.CommandPlan
+	primary        kernel.CapabilityPlan
+	challenge      kernel.MFAContinuationPlan
+	continuation   mfa.PartialAuthContinuation
+	issuer         *capabilitypg.Issuer
+	issuance       capabilitypg.PreparedIssuance
+	child          kernel.CapabilityPlan
+	completion     kernel.MFACompletionPlan
+	effect         *MFATOTPCompletionEffect
+	recoveryEffect *MFARecoveryCompletionEffect
+	recipient      kernel.RecipientRecord
+	snapshot       mfapg.TOTPFactorSnapshot
+	secret         password.Secret
+	verifier       mfa.TOTPVerifier
+	deny           bool
+	calls          int
+	stage          string
+	flow           session.PreAuthTransaction
+	cookieKey      session.DigestKey
+	primaryOrigin  identity.CommandID
+	counters       *riskpg.Repository
 }
 
 func (p *mfaSessionFixture) Descriptor() kernel.ContributorDescriptor {
@@ -153,6 +155,9 @@ func (p *mfaSessionFixture) ApplyFeature(ctx context.Context, w kernel.Work, c i
 	}
 	p.stage = "directory"
 	record, err := MFATOTPCompletionSession(c)
+	if p.recoveryEffect != nil {
+		record, err = MFARecoveryCompletionSession(c)
+	}
 	if err != nil {
 		return identity.FeatureReceipt{}, err
 	}
@@ -173,6 +178,18 @@ func (p *mfaSessionFixture) ApplyFeature(ctx context.Context, w kernel.Work, c i
 		return identity.FeatureReceipt{}, err
 	}
 	p.stage = "factor"
+	if p.recoveryEffect != nil {
+		keys, _ := mfapg.NewRecoveryVerificationKeys(map[uint32][32]byte{1: {4}})
+		locked, err := mfapg.LockRecoveryCompletion(ctx, w, p, c, keys)
+		if err != nil {
+			return identity.FeatureReceipt{}, err
+		}
+		if err := mfapg.RecordRecoveryCompletion(ctx, w, p, locked); err != nil {
+			return identity.FeatureReceipt{}, err
+		}
+		p.stage = "recovery-session"
+		return p.recoveryEffect.Apply(ctx, w, p, c, p.recipient, locked)
+	}
 	locked, err := mfapg.LockTOTPCompletion(ctx, w, p, c, p.snapshot)
 	if err != nil {
 		return identity.FeatureReceipt{}, err
@@ -201,6 +218,9 @@ func (p *mfaSessionFixture) CheckFeatureCommit(ctx context.Context, w kernel.Wor
 	}
 	if p.effect != nil {
 		r, err := MFATOTPCompletionSession(c)
+		if p.recoveryEffect != nil {
+			r, err = MFARecoveryCompletionSession(c)
+		}
 		if err != nil {
 			return err
 		}
@@ -209,6 +229,9 @@ func (p *mfaSessionFixture) CheckFeatureCommit(ctx context.Context, w kernel.Wor
 	return ctx.Err()
 }
 func (p *mfaSessionFixture) RecoverParticipant(ctx context.Context, w kernel.RecoveryWork) (kernel.RecoveryStatus, error) {
+	if p.recoveryEffect != nil {
+		return p.recoveryEffect.Recover(ctx, w, p)
+	}
 	if p.effect != nil {
 		return p.effect.Recover(ctx, w, p)
 	}
@@ -343,6 +366,13 @@ func testNativeMFASessionEffect(t *testing.T, ctx context.Context, pool *databas
 			t.Fatal(err)
 		}
 	}
+	recoveryHistory, err := (mfapg.RecoveryMigrationSource{Base: fixtureSource(factors), Version: 5}).Load(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Raw().Exec(ctx, recoveryHistory[len(recoveryHistory)-1].UpSQL()); err != nil {
+		t.Fatal(err)
+	}
 	preparation, err := (kernel.PreparationMigrationSource{Base: kernel.MigrationSource{}, Version: 43}).Load(ctx)
 	if err != nil {
 		t.Fatal(err)
@@ -365,7 +395,7 @@ func testNativeMFASessionEffect(t *testing.T, ctx context.Context, pool *databas
 	}
 	for _, source := range []interface {
 		Load(context.Context) ([]migrations.Migration, error)
-	}{MFAMigrationSource{Schema: "session_store", Version: 45}, MFASigninMigrationSource{Schema: "session_store", Version: 46}, PasswordMFAMigrationSource{Schema: "session_store", Version: 47}} {
+	}{MFAMigrationSource{Schema: "session_store", Version: 45}, MFASigninMigrationSource{Schema: "session_store", Version: 46}, PasswordMFAMigrationSource{Schema: "session_store", Version: 47}, MFARecoveryMigrationSource{Schema: "session_store", Version: 48}} {
 		history, err := source.Load(ctx)
 		if err != nil {
 			t.Fatal(err)
@@ -387,8 +417,9 @@ func testNativeMFASessionEffect(t *testing.T, ctx context.Context, pool *databas
 		t.Fatal(err)
 	}
 	counters := installMFACounters(t, ctx, pool)
-	for _, mode := range []string{"late-denial", "blocked-user", "stale-factor", "changed-remember", "wrong-cookie", "foreign-primary", "released-flow", "foreign-browser-fingerprint", "foreign-browser-generation", "counted-wrong-code", "counted-wrong-cookie", "counted-risk-wrong-code", "counted-risk-correct-code", "counted-risk-wrong-cookie", "counted-risk-audit-failure", "commit", "risk-commit", "stale-policy"} {
+	for _, mode := range []string{"late-denial", "blocked-user", "stale-factor", "changed-remember", "wrong-cookie", "foreign-primary", "released-flow", "foreign-browser-fingerprint", "foreign-browser-generation", "counted-wrong-code", "counted-wrong-cookie", "counted-risk-wrong-code", "counted-risk-correct-code", "counted-risk-wrong-cookie", "counted-risk-audit-failure", "commit", "risk-commit", "recovery-late-denial", "recovery-wrong-cookie", "recovery-commit", "recovery-risk-commit", "stale-policy"} {
 		t.Run(mode, func(t *testing.T) {
+			recovery := strings.HasPrefix(mode, "recovery-")
 			var now time.Time
 			if err := pool.Raw().QueryRow(ctx, "SELECT clock_timestamp()").Scan(&now); err != nil {
 				t.Fatal(err)
@@ -442,6 +473,23 @@ func testNativeMFASessionEffect(t *testing.T, ctx context.Context, pool *databas
 			defer clear(wire)
 			if _, err := pool.Raw().Exec(ctx, `INSERT INTO identity_mfa.totp_factors(tenant_id,user_id,factor_id,state,enrollment_version,row_version,algorithm,digits,period_seconds,skew_steps,issuer,encrypted_secret,created_command_id,created_purpose,created_at,enrollment_expires_at,confirmed_at) VALUES('magic-effect','recipient',$1,2,1,1,'SHA1',8,30,0,'Example',$2,$3,'identity.mfa.enable',$4,$5,$4)`, string(factorID), wire, mustCommandBytes(t, enrollmentID), now, now.Add(5*time.Minute)); err != nil {
 				t.Fatal(err)
+			}
+			recoveryCode, _ := auth.NewRecoveryCode("synthetic-recovery-" + string(factorID))
+			if recovery {
+				binding, _ := json.Marshal(struct {
+					Profile, Tenant, User, Factor, Set string
+					Epoch                              uint64
+				}{"mfa-recovery-code-v1", "magic-effect", "recipient", string(factorID), string(factorID), 1})
+				digest, err := recoveryCode.KeyedDigest([32]byte{4}, binding)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if _, err := pool.Raw().Exec(ctx, `INSERT INTO identity_mfa.recovery_sets VALUES('magic-effect','recipient',$1,$1,1,1,2,1,1,$2,'identity.mfa.enable',$3)`, string(factorID), mustCommandBytes(t, enrollmentID), now); err != nil {
+					t.Fatal(err)
+				}
+				if _, err := pool.Raw().Exec(ctx, `INSERT INTO identity_mfa.recovery_codes(tenant_id,set_id,code_index,digest) VALUES('magic-effect',$1,0,$2)`, string(factorID), digest[:]); err != nil {
+					t.Fatal(err)
+				}
 			}
 			key := []byte("0123456789abcdef0123456789abcdef")
 			signer, _ := capability.NewHMACSHA256Signer("sign-v1", key)
@@ -500,7 +548,11 @@ func testNativeMFASessionEffect(t *testing.T, ctx context.Context, pool *databas
 			if _, err := pool.Raw().Exec(ctx, `INSERT INTO session_store.preauth_transactions(tenant_id,flow_id,record,issued_at,expires_at,digest_version,digest,issued_version,version,state) VALUES($1,$2,$3,$4,$5,1,$6,1,1,'issued')`, string(b.TenantID), b.AnonymousFlowID, flowWire, now.Format(storedTimeLayout), flowBinding.ExpiresAt.Format(storedTimeLayout), cookieDigest.Sum[:]); err != nil {
 				t.Fatal(err)
 			}
-			continuation, err := mfa.NewPartialAuthContinuation(mfa.ContinuationSpec{ID: mfa.ContinuationID(childID), PrimaryProofID: auth.ProofID(primary.CapabilityID), PrimaryProofDigest: primary.ProofFingerprint, PrimaryProofExpiresAt: primary.ExpiresAt, TenantID: b.TenantID, SubjectID: "recipient", SourcePreAuthID: identity.PreAuthTransactionID(b.AnonymousFlowID), Origin: "https://app.example.test", AllowedMethods: []string{"totp"}, PolicyVersion: 1, FactorVersion: 2, RememberPolicy: s.Remember, Purpose: "identity.mfa.complete", Audience: "service-a", IssuedAt: now, ExpiresAt: now.Add(5 * time.Minute), MaxAttempts: 3, AttemptsRemaining: 3, State: mfa.Pending, Version: 1})
+			methods := []string{"totp"}
+			if recovery {
+				methods = append(methods, "recovery-code")
+			}
+			continuation, err := mfa.NewPartialAuthContinuation(mfa.ContinuationSpec{ID: mfa.ContinuationID(childID), PrimaryProofID: auth.ProofID(primary.CapabilityID), PrimaryProofDigest: primary.ProofFingerprint, PrimaryProofExpiresAt: primary.ExpiresAt, TenantID: b.TenantID, SubjectID: "recipient", SourcePreAuthID: identity.PreAuthTransactionID(b.AnonymousFlowID), Origin: "https://app.example.test", AllowedMethods: methods, PolicyVersion: 1, FactorVersion: 2, RememberPolicy: s.Remember, Purpose: "identity.mfa.complete", Audience: "service-a", IssuedAt: now, ExpiresAt: now.Add(5 * time.Minute), MaxAttempts: 3, AttemptsRemaining: 3, State: mfa.Pending, Version: 1})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -641,6 +693,9 @@ func testNativeMFASessionEffect(t *testing.T, ctx context.Context, pool *databas
 			b.CommandID = completeID
 			b.OperationID = "identity.mfa.totp-verify"
 			b.SchemaID = "mfa-totp-verify"
+			if recovery {
+				b.OperationID, b.SchemaID = "identity.mfa.recovery-use", "mfa-recovery-use"
+			}
 			child, err := issuer.PrepareMFAConsumption(ctx, b, "recipient", childID, digest, parent.Issuer, childProof, grant.EnvelopeDigest(), replayVersion)
 			if err != nil {
 				t.Fatal(err)
@@ -694,29 +749,50 @@ func testNativeMFASessionEffect(t *testing.T, ctx context.Context, pool *databas
 			if err != nil {
 				t.Fatal(err)
 			}
+			if recovery {
+				metadata, _ := factorMeta.Bindings()
+				metadata.Method, metadata.RecoverySetID, metadata.RecoverySetVersion = "recovery-code", factorID, 1
+				factorMeta, err = session.NewMFAAuthentication(metadata)
+				if err != nil {
+					t.Fatal(err)
+				}
+			}
 			record, err := session.NewSessionWithMagicLinkMFA(s, primaryMeta, factorMeta)
 			if err != nil {
 				t.Fatal(err)
 			}
 			fields, err := MFATOTPCompletionSessionFields(record)
+			if recovery {
+				fields, err = MFARecoveryCompletionSessionFields(record)
+			}
 			if err != nil {
 				t.Fatal(err)
 			}
 			fields = append(fields, identity.FeatureField{Name: "proof-id", Value: identity.FeatureValue{Kind: identity.FeatureText, Text: child.CapabilityID}})
 			browserCookie := strings.Repeat("A", 43)
-			if mode == "wrong-cookie" || mode == "counted-wrong-cookie" || mode == "counted-risk-wrong-cookie" {
+			if mode == "wrong-cookie" || mode == "counted-wrong-cookie" || mode == "counted-risk-wrong-cookie" || mode == "recovery-wrong-cookie" {
 				browserCookie = strings.Repeat("B", 42) + "A"
 			}
 			command, err = identity.NewFeatureOneTimeCodePreAuthCommand(identity.FeatureCommandSpec{Binding: b, Operation: mfaTOTPCompletionSessionOperation(), Fields: fields}, code, auth.NewBearerCredential(browserCookie))
+			if recovery {
+				command, err = identity.NewFeatureRecoveryCodePreAuthCommand(identity.FeatureCommandSpec{Binding: b, Operation: mfaRecoveryCompletionSessionOperation(), Fields: fields}, recoveryCode, auth.NewBearerCredential(browserCookie))
+			}
 			if err != nil {
 				t.Fatal(err)
 			}
 			totp, _ := mfa.NewTOTPVerifier([32]byte{1})
 			completion := kernel.MFACompletionPlan{ID: childID, UserID: "recipient", ScopeDigest: digest, PolicyVersion: 1, FactorVersion: 2, ContinuationVersion: 1}
 			phase = &mfaSessionFixture{command: command, child: child, completion: completion, effect: effect, recipient: recipient, snapshot: snapshot, secret: secret, verifier: totp, deny: mode == "late-denial", flow: flow, cookieKey: cookieKey, primaryOrigin: primaryOrigin}
+			if recovery {
+				phase.recoveryEffect, err = NewMFARecoveryCompletionEffect(config, profile)
+				if err != nil {
+					t.Fatal(err)
+				}
+				phase.deny = mode == "recovery-late-denial"
+			}
 			var counterPlan kernel.CommandCounterPlan
 			originalCommand := command
-			if strings.HasPrefix(mode, "counted-risk-") || mode == "risk-commit" {
+			if strings.HasPrefix(mode, "counted-risk-") || mode == "risk-commit" || mode == "recovery-risk-commit" {
 				phase.counters = counters
 				command, counterPlan, err = counters.PrepareMFACompletionCommandCounters(command, risk.Subject{User: "recipient", Network: "127.0.0.1"}, child, completion, time.Now().UTC().Truncate(time.Microsecond))
 				if err != nil {
@@ -734,7 +810,9 @@ func testNativeMFASessionEffect(t *testing.T, ctx context.Context, pool *databas
 			if phase.counters != nil {
 				phase.plan.CommandCounters = &counterPlan
 			}
-			if mode == "risk-commit" {
+			if mode == "recovery-risk-commit" {
+				phase.plan, err = coordinator.PrepareMFARecoveryFeaturePlanWithOriginal(originalCommand, command, phase.plan)
+			} else if mode == "risk-commit" {
 				phase.plan, err = coordinator.PrepareMFATOTPFeaturePlanWithOriginal(originalCommand, command, phase.plan)
 			} else if phase.counters != nil {
 				phase.plan, err = coordinator.PrepareMFATOTPAttemptPlanWithOriginal(originalCommand, command, phase.plan)
@@ -789,7 +867,9 @@ func testNativeMFASessionEffect(t *testing.T, ctx context.Context, pool *databas
 			}
 			var result identity.CommandResult
 			var runErr error
-			if mode == "risk-commit" {
+			if mode == "recovery-risk-commit" {
+				result, runErr = coordinator.ExecutePreparedMFARecoveryFeature(ctx, originalCommand, command, phase.plan)
+			} else if mode == "risk-commit" {
 				result, runErr = coordinator.ExecutePreparedMFATOTPFeature(ctx, originalCommand, command, phase.plan)
 			} else if phase.counters != nil {
 				result, runErr = coordinator.RecordMFATOTPAttemptDenialWithOriginal(ctx, originalCommand, command, phase.plan)
@@ -808,7 +888,16 @@ func testNativeMFASessionEffect(t *testing.T, ctx context.Context, pool *databas
 			if err := pool.Raw().QueryRow(ctx, `SELECT (SELECT count(*) FROM session_store.sessions WHERE tenant_id=$1 AND session_id=$2),(SELECT count(*) FROM session_store.families WHERE tenant_id=$1 AND family_id=$3),(SELECT count(*) FROM session_store.session_issuances WHERE command_id=$4),(SELECT count(*) FROM public.revoke_outbox WHERE command_id=$5),c.state,c.attempts_remaining,t.last_step::text,k.uses FROM identity_mfa.continuations c JOIN identity_mfa.totp_factors t ON t.tenant_id=c.tenant_id AND t.user_id=c.user_id JOIN public.capability_identity_one_use k ON k.tenant_id=c.tenant_id AND k.capability_id=c.continuation_id WHERE c.tenant_id=$1 AND c.continuation_id=$6 AND t.factor_id=$7`, string(s.TenantID), s.SessionID, s.FamilyID, mustCommandBytes(t, completeID), string(completeID), string(childID), string(factorID)).Scan(&sessions, &families, &issuances, &events, &state, &remaining, &last, &uses); err != nil {
 				t.Fatal(err)
 			}
-			if mode != "commit" && mode != "risk-commit" {
+			if recovery {
+				var burned, bound bool
+				if err := pool.Raw().QueryRow(ctx, `SELECT COALESCE(consumed_command_id=$2,false),consumed_at IS NOT NULL FROM identity_mfa.recovery_codes WHERE tenant_id=$1 AND set_id=$3`, string(s.TenantID), mustCommandBytes(t, completeID), string(factorID)).Scan(&bound, &burned); err != nil || burned != bound || burned != (mode == "recovery-commit" || mode == "recovery-risk-commit") {
+					t.Fatal("recovery burn split from original outcome", err, burned, runErr, phase.stage)
+				}
+			}
+			if mode != "commit" && mode != "risk-commit" && mode != "recovery-commit" && mode != "recovery-risk-commit" {
+				if mode == "recovery-late-denial" && phase.stage != "recovery-session" {
+					t.Fatal("rollback case never reached recorded burn/session", phase.stage, runErr)
+				}
 				if phase.counters != nil {
 					var charges, snapshots int
 					if err := pool.Raw().QueryRow(ctx, `SELECT (SELECT count(*) FROM risk_mfa.counter_charges WHERE command_id=$1),(SELECT count(*) FROM risk_mfa.counter_snapshots WHERE command_id=$1)`, mustCommandBytes(t, completeID)).Scan(&charges, &snapshots); err != nil {
@@ -855,10 +944,10 @@ func testNativeMFASessionEffect(t *testing.T, ctx context.Context, pool *databas
 				}
 				return
 			}
-			if runErr != nil || result.Outcome != identity.CommitOutcomeCommitted || phase.calls != 1 || sessions != 1 || families != 1 || issuances != 1 || events != 1 || state != int16(mfa.Completed) || remaining != 2 || last == nil || uses != 1 {
+			if runErr != nil || result.Outcome != identity.CommitOutcomeCommitted || phase.calls != 1 || sessions != 1 || families != 1 || issuances != 1 || events != 1 || state != int16(mfa.Completed) || remaining != 2 || last == nil && !recovery || last != nil && recovery || uses != 1 {
 				t.Fatal("native MFA/session not atomic", phase.stage, runErr, sessions, families, issuances, events, state, remaining, uses)
 			}
-			if mode == "risk-commit" {
+			if mode == "risk-commit" || mode == "recovery-risk-commit" {
 				var charges, snapshots int
 				if err := pool.Raw().QueryRow(ctx, `SELECT (SELECT count(*) FROM risk_mfa.counter_charges WHERE command_id=$1),(SELECT count(*) FROM risk_mfa.counter_snapshots WHERE command_id=$1)`, mustCommandBytes(t, completeID)).Scan(&charges, &snapshots); err != nil || charges != 1 || snapshots != 4 {
 					t.Fatal("successful native MFA lost original counter charge", charges, snapshots, err)
@@ -889,7 +978,7 @@ func testNativeMFASessionEffect(t *testing.T, ctx context.Context, pool *databas
 			if admitted.Session.MFAAuthentication() == (session.MFAAuthentication{}) {
 				t.Fatal("factor metadata lost on public session read")
 			}
-			if mode == "commit" {
+			if mode == "commit" || mode == "recovery-commit" {
 				t.Run("password-origin session reader", func(t *testing.T) {
 					testPasswordMFASessionRead(t, ctx, pool, config, profile, validation, record, request)
 				})
@@ -964,7 +1053,9 @@ func testNativeMFASessionEffect(t *testing.T, ctx context.Context, pool *databas
 				t.Fatal("later session read renewed primary authentication")
 			}
 			var replay identity.CommandResult
-			if mode == "risk-commit" {
+			if mode == "recovery-risk-commit" {
+				replay, err = coordinator.ExecutePreparedMFARecoveryFeature(ctx, originalCommand, command, phase.plan)
+			} else if mode == "risk-commit" {
 				replay, err = coordinator.ExecutePreparedMFATOTPFeature(ctx, originalCommand, command, phase.plan)
 			} else {
 				replay, err = coordinator.ExecutePreparedFeature(ctx, command, phase.plan)
@@ -990,9 +1081,19 @@ func testNativeMFASessionEffect(t *testing.T, ctx context.Context, pool *databas
 			if _, err := pool.Raw().Exec(ctx, `DELETE FROM session_store.sessions WHERE tenant_id=$1 AND session_id=$2`, string(s.TenantID), s.SessionID); err != nil {
 				t.Fatal(err)
 			}
-			retained, status, err := readNativeIssuanceIdentity(ctx, pool.Raw(), `"session_store"`, b, kernel.LifecyclePlan{}, mfaTOTPIssuanceDigest)
+			issuanceDigest := mfaTOTPIssuanceDigest
+			if recovery {
+				issuanceDigest = mfaRecoveryIssuanceDigest
+			}
+			retained, status, err := readNativeIssuanceIdentity(ctx, pool.Raw(), `"session_store"`, b, kernel.LifecyclePlan{}, issuanceDigest)
 			if err != nil || status != kernel.RecoveryCommitted || retained.SessionID != s.SessionID {
 				t.Fatal("pruning lost original MFA issuance", err)
+			}
+			if recovery {
+				_, wrong, err := readNativeIssuanceIdentity(ctx, pool.Raw(), `"session_store"`, b, kernel.LifecyclePlan{}, mfaTOTPIssuanceDigest)
+				if err != nil || wrong != kernel.RecoveryUnknown {
+					t.Fatal("recovery borrowed TOTP issuance evidence", err)
+				}
 			}
 		})
 	}
@@ -1016,6 +1117,11 @@ func installMFACounters(t *testing.T, ctx context.Context, pool *database.Pool) 
 	}
 	history = append(history, verification...)
 	history = append(history, completion...)
+	recovery, err := (riskpg.MFARecoveryCounterMigrationSource{Schema: "risk_mfa", Version: 67}).Load(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	history = append(history, recovery...)
 	for _, migration := range history {
 		if _, err := pool.Raw().Exec(ctx, migration.UpSQL()); err != nil {
 			t.Fatal("native risk history", err)

@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+- Persist audited terminal conflict receipts when first prepared capability
+  attachment is definitively denied. Roll back provisional reservation writes
+  without releasing another command's capability; uncertain commits remain
+  unknown and never permit credential delivery.
+
+- Add closed recovery-code counted-attempt admission and authorized original-input
+  history alongside TOTP. Preserve original code/browser identity across validated
+  risk-counter enrichment and retained preparation. Recovery and TOTP custody
+  cannot cross method-specific entry points; ordinary execution still denies.
+
+- Bind original recovery-code submissions separately from OTP in command
+  fingerprints. Ordinary structural reservation rejects recovery custody;
+  protected native completion remains required for recovery-code consumption.
+
 - Fence original password credential authority in the sealed counted TOTP
   callback before charging or comparison, without exposing general Work or
   changing anonymous journal scope.

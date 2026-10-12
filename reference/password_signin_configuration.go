@@ -30,6 +30,9 @@ type PasswordSigninConfiguration struct {
 	// TOTP selects the graph-owned second-factor completion pipeline, not HTTP.
 	// MFA must be selected too; a magic-link request owner is not required.
 	TOTP *PasswordTOTPConfiguration
+	// Recovery selects password-origin recovery completion, independently of
+	// TOTP completion or HTTP. MFA must also be selected.
+	Recovery *PasswordRecoveryConfiguration
 }
 
 func composePasswordSignin(c StoreConfiguration, d ReferenceDependencies, evaluator risk.Evaluator) (*passwordpg.SigninService, error) {
@@ -50,7 +53,7 @@ func composePasswordSignin(c StoreConfiguration, d ReferenceDependencies, evalua
 		}
 	}
 	n.Risk.Evaluation = evaluator
-	if c.PasswordSignin.TOTP != nil && c.PasswordSignin.MFA == nil {
+	if (c.PasswordSignin.TOTP != nil || c.PasswordSignin.Recovery != nil) && c.PasswordSignin.MFA == nil {
 		return nil, invalid
 	}
 	if c.PasswordSignin.MFA != nil {

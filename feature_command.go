@@ -78,6 +78,7 @@ type FeatureCommandSpec struct {
 type featureCommandState struct {
 	spec                FeatureCommandSpec
 	code                *authentication.OneTimeCode
+	recovery            *authentication.RecoveryCode
 	preAuthCookie       *authentication.BearerCredential
 	sessionToken        *authentication.BearerCredential
 	passwordHash        func() string
@@ -145,6 +146,9 @@ func (c Command) Feature() (FeatureCommandSpec, bool) {
 }
 
 func (c Command) validFeatureVariant() bool {
+	if c.feature != nil && c.feature.recovery != nil && (c.feature.code != nil || c.feature.sessionToken != nil || c.feature.passwordHash != nil || c.feature.passwordChange != nil || c.feature.passwordReset != nil || c.feature.passwordResetInput != nil || c.feature.passwordSignin != nil || c.feature.passwordSignup != nil || c.feature.passwordSignupInput != nil) {
+		return false
+	}
 	if c.feature != nil && c.feature.passwordResetInput != nil && (c.feature.code != nil || c.feature.preAuthCookie != nil || c.feature.sessionToken != nil || c.feature.passwordHash != nil || c.feature.passwordChange != nil || c.feature.passwordReset != nil || c.feature.passwordSignin != nil || c.feature.passwordSignup != nil || c.feature.passwordSignupInput != nil) {
 		return false
 	}

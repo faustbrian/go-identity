@@ -22,7 +22,9 @@ type HTTPMFAConfiguration struct {
 	TOTPVerify bool
 	// PasswordTOTPVerify independently selects password-primary completion.
 	// When both are selected, X-MFA-Variant: password chooses its native owner.
-	PasswordTOTPVerify    bool
+	PasswordTOTPVerify bool
+	// PasswordRecoveryUse independently selects original password recovery.
+	PasswordRecoveryUse   bool
 	ActorID               identity.ActorID
 	PolicyRevision        authorization.Revision
 	VerificationNamespace string
@@ -37,6 +39,7 @@ type mfaHTTPState struct {
 	timeout  time.Duration
 	rate     *identityhttp.ChallengeVerificationRateLimiter
 	password *passwordTOTPHTTPProfile
+	recovery *passwordTOTPHTTPProfile
 }
 
 type passwordTOTPHTTPProfile struct {
@@ -50,7 +53,7 @@ func composeMFAHTTP(c StoreConfiguration, base *preAuthHTTPState, rate *httpRate
 		return nil, nil
 	}
 	invalid := identity.InvalidInputError{Field: "reference_http_mfa"}
-	if (!c.HTTPMFA.TOTPVerify && !c.HTTPMFA.PasswordTOTPVerify) || base == nil || base.device == nil || rate == nil || c.HTTPRate == nil {
+	if (!c.HTTPMFA.TOTPVerify && !c.HTTPMFA.PasswordTOTPVerify && !c.HTTPMFA.PasswordRecoveryUse) || base == nil || base.device == nil || rate == nil || c.HTTPRate == nil {
 		return nil, invalid
 	}
 	h := *c.HTTPMFA
@@ -77,6 +80,16 @@ func composeMFAHTTP(c StoreConfiguration, base *preAuthHTTPState, rate *httpRate
 		if h.TOTPVerify && (p.Origin != out.preauth.Origin || p.CallbackURL != out.preauth.CallbackURL || n.Profile.Audience != out.audience) {
 			return nil, invalid
 		}
+	}
+	if h.PasswordRecoveryUse {
+		if c.PasswordSignin == nil || c.PasswordSignin.PreAuth == nil || c.PasswordSignin.MFA == nil || c.PasswordSignin.Recovery == nil {
+			return nil, invalid
+		}
+		n, p := c.PasswordSignin.Native, *c.PasswordSignin.PreAuth
+		if p.Origin != base.deployment.Origin || p.ActorID != h.ActorID || n.Coordinator.QueryPolicy == nil || n.Coordinator.AdmissionPolicy == nil || uint64(h.PolicyRevision) != n.Coordinator.QueryPolicy.PolicyVersion || uint64(h.PolicyRevision) != n.Coordinator.AdmissionPolicy.PolicyVersion {
+			return nil, invalid
+		}
+		out.recovery = &passwordTOTPHTTPProfile{origin: p.Origin, callback: p.CallbackURL, audience: n.Profile.Audience, cookie: n.Issuance.Cookie, timeout: c.PasswordSignin.Recovery.MaximumDuration}
 	}
 	if (authorization.DecisionContext{PolicyRevision: h.PolicyRevision, Request: authorization.Request{Tenant: "configuration", Subject: authorization.Subject{Kind: authorization.SubjectServiceAccount, ID: authorization.SubjectID(h.ActorID)}, Action: "identity.mfa.totp-verify", Resource: authorization.Resource{Type: "identity.mfa-continuation", ID: "configuration"}}}).Validate() != nil {
 		return nil, invalid
@@ -131,6 +144,19 @@ func (s *Server) mfaFeature(network identityhttp.NetworkConfig, f FeatureSet) (*
 		p := h.password
 		selection := mfahttp.TOTPVerifyConfig{Network: network, Service: native, Rate: h.rate, Origin: identityhttp.Origin(p.origin), CallbackURL: p.callback, SessionCookie: p.cookie, Device: *s.state.features.httpPreAuth.device, ActorID: h.config.ActorID, PolicyRevision: h.config.PolicyRevision, Audience: p.audience, Now: time.Now, MaximumDuration: p.timeout}
 		config.PasswordTOTPVerify = &selection
+	}
+	if h != nil && h.recovery != nil {
+		owner, err := f.PasswordRecovery()
+		if err != nil {
+			return nil, err
+		}
+		native, ok := owner.(mfahttp.RecoveryUseService)
+		if !ok {
+			return nil, identity.InvalidInputError{Field: "reference_http_mfa_recovery"}
+		}
+		p := h.recovery
+		selection := mfahttp.RecoveryUseConfig{PasswordPrimary: true, Network: network, Service: native, Rate: h.rate, Origin: identityhttp.Origin(p.origin), CallbackURL: p.callback, SessionCookie: p.cookie, Device: *s.state.features.httpPreAuth.device, ActorID: h.config.ActorID, PolicyRevision: h.config.PolicyRevision, Audience: p.audience, Now: time.Now, MaximumDuration: p.timeout}
+		config.RecoveryUse = &selection
 	}
 	feature, err := mfahttp.NewFeature(config)
 	if err != nil {

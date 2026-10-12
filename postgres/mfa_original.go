@@ -8,19 +8,18 @@ import (
 )
 
 // Keep submitted intent and server-prepared counter state separate only for
-// the closed native anonymous TOTP profile. Generic claim codecs stay exact.
+// the closed native anonymous TOTP/recovery profiles. Generic codecs stay exact.
 // Native counter validation and the complete frozen plan still bind every
 // prepared counter field; nothing permits replacing an existing declaration.
 func (c *Coordinator) originalMFAClaim(original, prepared identity.Command, plan *admittedKernelPlan) (claimRequest, *admittedKernelPlan, error) {
 	fail := func() (claimRequest, *admittedKernelPlan, error) { return claimRequest{}, nil, invalidPlan() }
-	if c == nil || c.registry == nil || plan == nil || plan.counters == nil || plan.feature == nil || plan.feature.Operation.OperationID != "identity.mfa.totp-verify" || !validMFACompletionPlan(plan.binding, plan.snapshot()) {
+	if c == nil || c.registry == nil || plan == nil || plan.counters == nil || plan.feature == nil || !validMFACompletionPlan(plan.binding, plan.snapshot()) {
 		return fail()
 	}
 	base, baseOK := original.Feature()
 	full, fullOK := prepared.Feature()
-	code, codeOK := prepared.OneTimeCode()
 	cookie, cookieOK := prepared.PreAuthCookie()
-	if !baseOK || !fullOK || !codeOK || !cookieOK || base.Binding != full.Binding || base.Operation != full.Operation || base.Binding != plan.binding || full.Operation != plan.feature.Operation {
+	if !baseOK || !fullOK || !cookieOK || base.Binding != full.Binding || base.Operation != full.Operation || base.Binding != plan.binding || full.Operation != plan.feature.Operation {
 		return fail()
 	}
 	for _, field := range base.Fields {
@@ -46,7 +45,24 @@ func (c *Coordinator) originalMFAClaim(original, prepared identity.Command, plan
 	if count != 6 {
 		return fail()
 	}
-	stripped, err := identity.NewFeatureOneTimeCodePreAuthCommand(filtered, code, cookie)
+	var stripped identity.Command
+	var err error
+	switch full.Operation.OperationID {
+	case "identity.mfa.totp-verify":
+		code, ok := prepared.OneTimeCode()
+		if !ok {
+			return fail()
+		}
+		stripped, err = identity.NewFeatureOneTimeCodePreAuthCommand(filtered, code, cookie)
+	case "identity.mfa.recovery-use":
+		code, ok := prepared.RecoveryCode()
+		if !ok {
+			return fail()
+		}
+		stripped, err = identity.NewFeatureRecoveryCodePreAuthCommand(filtered, code, cookie)
+	default:
+		return fail()
+	}
 	if err != nil {
 		return fail()
 	}
@@ -87,11 +103,15 @@ func (c *Coordinator) PrepareMFATOTPAttemptPlanWithOriginal(original, prepared i
 }
 
 func (c *Coordinator) prepareMFATOTPAttemptWithOriginal(original, prepared identity.Command, p CommandPlan) (claimRequest, CommandPlan, *admittedKernelPlan, error) {
+	return c.prepareMFAAttemptWithOriginal(original, prepared, p, "identity.mfa.totp-verify")
+}
+
+func (c *Coordinator) prepareMFAAttemptWithOriginal(original, prepared identity.Command, p CommandPlan, operation string) (claimRequest, CommandPlan, *admittedKernelPlan, error) {
 	f, ok := prepared.Feature()
 	if !ok {
 		return claimRequest{}, CommandPlan{}, nil, invalidPlan()
 	}
-	_, _, admitted, err := c.prepareMFATOTPAttempt(f.Binding, prepared, p)
+	_, _, admitted, err := c.prepareMFAAttempt(f.Binding, prepared, p, operation)
 	if err != nil {
 		return claimRequest{}, CommandPlan{}, nil, err
 	}
@@ -107,6 +127,14 @@ func (c *Coordinator) prepareMFATOTPAttemptWithOriginal(original, prepared ident
 // remains frozen. Pass the exact pair to ExecutePreparedMFATOTPFeature; a current
 // key or preparation time cannot replace historical command or plan evidence.
 func (c *Coordinator) PrepareMFATOTPFeaturePlanWithOriginal(original, prepared identity.Command, p CommandPlan) (CommandPlan, error) {
+	return c.prepareMFAFeaturePlanWithOriginal(original, prepared, p, "identity.mfa.totp-verify")
+}
+
+func (c *Coordinator) prepareMFAFeaturePlanWithOriginal(original, prepared identity.Command, p CommandPlan, operation string) (CommandPlan, error) {
+	f, ok := prepared.Feature()
+	if !ok || f.Operation.OperationID != operation {
+		return CommandPlan{}, invalidPlan()
+	}
 	_, admitted, _, err := c.prepareFeaturePreparation(prepared, p)
 	if err != nil {
 		return CommandPlan{}, err
@@ -116,4 +144,22 @@ func (c *Coordinator) PrepareMFATOTPFeaturePlanWithOriginal(original, prepared i
 		return CommandPlan{}, err
 	}
 	return admitted.snapshot(), nil
+}
+
+// PrepareMFARecoveryAttemptPlanWithOriginal freezes validated counter enrichment
+// while preserving the exact original recovery code, browser and public intent
+// as journal identity. Only the six native counter fields may be added. No IO,
+// comparison, charge, code consumption or session issuance occurs here.
+func (c *Coordinator) PrepareMFARecoveryAttemptPlanWithOriginal(original, prepared identity.Command, p CommandPlan) (CommandPlan, error) {
+	_, snapshot, _, err := c.prepareMFAAttemptWithOriginal(original, prepared, p, "identity.mfa.recovery-use")
+	return snapshot, err
+}
+
+// PrepareMFARecoveryFeaturePlanWithOriginal freezes the native retained-session
+// declaration while keeping original recovery/browser custody as journal intent.
+// Counter/child/lifecycle validation remains mandatory. This does not consume
+// the recovery code or grant a session; pass the exact pair to the corresponding
+// ExecutePreparedMFARecoveryFeature method without replacing retained evidence.
+func (c *Coordinator) PrepareMFARecoveryFeaturePlanWithOriginal(original, prepared identity.Command, p CommandPlan) (CommandPlan, error) {
+	return c.prepareMFAFeaturePlanWithOriginal(original, prepared, p, "identity.mfa.recovery-use")
 }

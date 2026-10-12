@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add explicit password-primary recovery-code completion and opt-in HTTP
+  composition. Preserve original primary/browser scope, shared attempts,
+  digest-only code burn, session provenance and credential-free replay/recovery.
+  Existing preparation rate quotas remain charged after a final mutation abort;
+  code, child consumption, session and lifecycle effects roll back together.
+
 - Preserve code-free TOTP completion recovery for both selected primary profiles;
   recovery does not require verification input or regenerate credentials.
 

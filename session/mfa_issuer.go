@@ -19,7 +19,7 @@ type mfaIssueRequestState struct {
 	record  Session
 }
 
-// NewMFAMagicLinkSessionIssuer selects native TOTP completion of an original
+// NewMFAMagicLinkSessionIssuer selects native TOTP or recovery-code completion of an original
 // magic-link primary. Authority must be nil; projected metadata is not a new
 // credential-issued proof. The native executor must verify original child,
 // primary, browser and factor authority and commit factor replay, continuation,
@@ -117,14 +117,21 @@ func (s *SessionIssuer) prepareMFA(b identity.CommandBinding, spec SessionSpec, 
 	if s == nil || !s.mfa || spec.Lookup != (TokenDigest{}) || spec.Version != 1 || !spec.LastActivityAt.Equal(spec.IssuedAt) {
 		return out, ErrInvalidIssuance
 	}
-	frozen, e := identity.NewFeatureCommand(identity.FeatureCommandSpec{Binding: b, Operation: mfaTOTPCompletionOperation()})
+	m, e := metadata.Bindings()
+	if e != nil {
+		return out, ErrInvalidIssuance
+	}
+	operation, ok := mfaCompletionOperationForMethod(m.Method)
+	if !ok {
+		return out, ErrInvalidIssuance
+	}
+	frozen, e := identity.NewFeatureCommand(identity.FeatureCommandSpec{Binding: b, Operation: operation})
 	if e != nil {
 		return out, ErrInvalidIssuance
 	}
 	f, _ := frozen.Feature()
 	b = f.Binding
-	m, e := metadata.Bindings()
-	if e != nil || m.CommandID != b.CommandID || b.TenantID != spec.TenantID {
+	if m.CommandID != b.CommandID || b.TenantID != spec.TenantID {
 		return out, ErrInvalidIssuance
 	}
 	spec.Lookup = TokenDigest{KeyVersion: s.config.LookupKey.state.version, Sum: [32]byte{1}}
@@ -147,7 +154,7 @@ func (s *SessionIssuer) prepareMFA(b identity.CommandBinding, spec SessionSpec, 
 	return PreparedIssuance{state: &preparedIssuanceState{owner: s, token: token, csrf: csrf, mfa: &mfaPreparationState{binding: b, record: record}}}, nil
 }
 
-// BindMFA retains the exact original opaque TOTP/pre-auth command. Scalar
+// BindMFA retains the exact original method-specific opaque code/pre-auth command. Scalar
 // projections cannot replace it. Copies share one atomic bind claim; invalid
 // input does not spend it. Native execution must independently verify the code
 // and original child and compare the exhaustive Session mapping. This binding
@@ -160,10 +167,18 @@ func (s *SessionIssuer) BindMFA(p PreparedIssuance, command identity.Command) (P
 		return PreparedIssuance{}, ErrIssuanceAlreadyBound
 	}
 	f, ok := command.Feature()
+	m, err := p.state.mfa.record.MFAAuthentication().Bindings()
+	if err != nil {
+		return PreparedIssuance{}, ErrInvalidIssuance
+	}
+	operation, methodOK := mfaCompletionOperationForMethod(m.Method)
 	_, code := command.OneTimeCode()
+	if m.Method == "recovery-code" {
+		_, code = command.RecoveryCode()
+	}
 	_, cookie := command.PreAuthCookie()
 	_, session := command.SessionToken()
-	if !ok || !code || !cookie || session || f.Binding != p.state.mfa.binding || f.Operation != mfaTOTPCompletionOperation() {
+	if !ok || !methodOK || !code || !cookie || session || f.Binding != p.state.mfa.binding || f.Operation != operation {
 		return PreparedIssuance{}, ErrInvalidIssuance
 	}
 	if !p.state.mfa.bound.CompareAndSwap(false, true) {
@@ -186,6 +201,17 @@ func (r IssueRequest) MFACommand() (identity.Command, Session, bool) {
 
 func mfaTOTPCompletionOperation() identity.FeatureOperation {
 	return identity.FeatureOperation{Owner: "identity/mfa", OperationID: "identity.mfa.totp-verify", SchemaID: "mfa-totp-verify", SchemaVersion: 1, RecordRequirement: identity.FeatureRecordOmitted, SubjectRequirement: identity.FeatureSubjectAnonymousFlow}
+}
+
+func mfaCompletionOperationForMethod(method string) (identity.FeatureOperation, bool) {
+	switch method {
+	case "totp":
+		return mfaTOTPCompletionOperation(), true
+	case "recovery-code":
+		return identity.FeatureOperation{Owner: "identity/mfa", OperationID: "identity.mfa.recovery-use", SchemaID: "mfa-recovery-use", SchemaVersion: 1, RecordRequirement: identity.FeatureRecordOmitted, SubjectRequirement: identity.FeatureSubjectAnonymousFlow}, true
+	default:
+		return identity.FeatureOperation{}, false
+	}
 }
 
 func validateMFAIssuanceAt(record Session, now time.Time) error {

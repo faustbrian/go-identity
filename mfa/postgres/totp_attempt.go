@@ -207,8 +207,15 @@ func lockTOTPAttempt(ctx context.Context, sql totpAttemptSQL, b kernel.MFATOTPAt
 // Shared authoritative account/continuation fences do not require a fabricated
 // factor snapshot. Both ordinary wrong-code and absent-factor denial use them.
 func lockTOTPAttemptContinuation(ctx context.Context, sql totpAttemptSQL, b kernel.MFATOTPAttemptBinding) (mfa.PartialAuthContinuation, time.Time, error) {
+	return lockMFAAttemptContinuation(ctx, sql, b, "totp")
+}
+
+func lockMFAAttemptContinuation(ctx context.Context, sql totpAttemptSQL, b kernel.MFATOTPAttemptBinding, method string) (mfa.PartialAuthContinuation, time.Time, error) {
 	deny := func() (mfa.PartialAuthContinuation, time.Time, error) {
 		return mfa.PartialAuthContinuation{}, time.Time{}, identity.ForbiddenError{}
+	}
+	if method != "totp" && method != "recovery-code" {
+		return deny()
 	}
 	p := b.Plan
 	args := []any{string(b.Command.TenantID), string(p.UserID)}
@@ -250,18 +257,28 @@ AND j.state='committed' AND NOT k.retired AND k.fingerprint=c.origin_fingerprint
 		return deny()
 	}
 	s, err := c.Bindings()
-	if err != nil || s.TenantID != b.Command.TenantID || s.SubjectID != identity.SubjectID(p.UserID) || string(s.ID) != string(p.ID) || string(s.SourcePreAuthID) != source || source != b.Command.AnonymousFlowID || s.PolicyVersion != p.PolicyVersion || s.FactorVersion != p.FactorVersion || s.MaxAttempts != uint32(maximum) || !s.IssuedAt.Equal(issued) || !s.ExpiresAt.Equal(expires) || !slices.Contains(s.AllowedMethods, "totp") || c.RequirePending(now) != nil {
+	if err != nil || s.TenantID != b.Command.TenantID || s.SubjectID != identity.SubjectID(p.UserID) || string(s.ID) != string(p.ID) || string(s.SourcePreAuthID) != source || source != b.Command.AnonymousFlowID || s.PolicyVersion != p.PolicyVersion || s.FactorVersion != p.FactorVersion || s.MaxAttempts != uint32(maximum) || !s.IssuedAt.Equal(issued) || !s.ExpiresAt.Equal(expires) || !slices.Contains(s.AllowedMethods, method) || c.RequirePending(now) != nil {
 		return deny()
 	}
 	return c, now.UTC(), nil
 }
 
 func spendTOTPAttempt(ctx context.Context, sql totpAttemptSQL, c mfa.PartialAuthContinuation, now time.Time) error {
+	return spendMFAAttempt(ctx, sql, c, now, "totp")
+}
+
+func spendMFAAttempt(ctx context.Context, sql totpAttemptSQL, c mfa.PartialAuthContinuation, now time.Time, method string) error {
+	if ctx == nil || method != "totp" && method != "recovery-code" {
+		return invalidAuthority()
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	s, err := c.Bindings()
 	if err != nil {
 		return invalidAuthority()
 	}
-	next, err := c.RecordAttempt("totp", now, s.Version)
+	next, err := c.RecordAttempt(method, now, s.Version)
 	if err != nil {
 		return err
 	}

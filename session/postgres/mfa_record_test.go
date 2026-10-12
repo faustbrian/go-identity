@@ -10,9 +10,9 @@ import (
 )
 
 func TestMFARecordRetainsExactFactorAndPrimaryProvenance(t *testing.T) {
-	for _, mode := range []struct{ password, csrf bool }{{false, false}, {false, true}, {true, false}, {true, true}} {
+	for _, mode := range []struct{ password, csrf, recovery bool }{{false, false, false}, {false, true, false}, {true, false, false}, {true, true, false}, {false, false, true}, {false, true, true}, {true, false, true}, {true, true, true}} {
 		csrf := mode.csrf
-		t.Run(fmt.Sprintf("password=%t/csrf=%t", mode.password, csrf), func(t *testing.T) {
+		t.Run(fmt.Sprintf("password=%t/csrf=%t/recovery=%t", mode.password, csrf, mode.recovery), func(t *testing.T) {
 			original := magicLinkRecordFixture(t, csrf)
 			s, _ := original.Bindings()
 			primary := original.MagicLinkAuthentication()
@@ -28,6 +28,14 @@ func TestMFARecordRetainsExactFactorAndPrimaryProvenance(t *testing.T) {
 			factor, err := session.NewMFAAuthentication(session.MFAAuthenticationSpec{CommandID: "BAQEBAQEBAQEBAQEBAQEBA", PrimaryCommandID: p.CommandID, ContinuationID: "BQUFBQUFBQUFBQUFBQUFBQ", ContinuationScopeDigest: [32]byte{1}, Method: "totp", FactorID: "BgYGBgYGBgYGBgYGBgYGBg", EnrollmentVersion: 1, FactorAuthorityVersion: 7, ContinuationVersion: 1, Remember: remember, VerifiedAt: s.IssuedAt, ValidUntil: p.ValidUntil})
 			if err != nil {
 				t.Fatal(err)
+			}
+			if mode.recovery {
+				p, _ := factor.Bindings()
+				p.Method, p.RecoverySetID, p.RecoverySetVersion = "recovery-code", "BwcHBwcHBwcHBwcHBwcHBw", 2
+				factor, err = session.NewMFAAuthentication(p)
+				if err != nil {
+					t.Fatal(err)
+				}
 			}
 			if mode.password && csrf {
 				original, err = session.NewSessionWithPasswordMFAAndCSRF(s, factor, original.CSRFState())
@@ -74,6 +82,23 @@ func TestMFARecordRetainsExactFactorAndPrimaryProvenance(t *testing.T) {
 			var top map[string]json.RawMessage
 			if json.Unmarshal(wire, &top) != nil || len(top["MFA"]) == 0 {
 				t.Fatal("durable record dropped MFA provenance")
+			}
+			var schema uint32
+			if json.Unmarshal(top["Schema"], &schema) != nil {
+				t.Fatal("missing record profile")
+			}
+			wantSchema := uint32(9)
+			if mode.password {
+				wantSchema += 2
+			}
+			if csrf {
+				wantSchema++
+			}
+			if mode.recovery {
+				wantSchema += 4
+			}
+			if schema != wantSchema {
+				t.Fatal("recovery reused historical TOTP schema", schema, wantSchema)
 			}
 			// JSONB reorders object keys, so complete semantic decoding must
 			// retain the exact projections without relying on wire key order.

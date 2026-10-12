@@ -16,7 +16,7 @@ import (
 // RequireMFAConsumedPreAuth fences the unchanged original browser flow already
 // consumed by the committed password or magic-link primary. It is read-only: it neither
 // reactivates nor consumes that flow again. Only the exact registered native
-// TOTP completion owner, during its bounded preparation or Apply callback, may
+// TOTP/recovery completion owner, during its bounded preparation or Apply callback, may
 // invoke it. Primary must come from verified original child issuance custody,
 // never a request field. The native owner must separately compare the submitted
 // opaque cookie digest, original origin/callback/Remember and signed child scope.
@@ -33,7 +33,12 @@ func RequireMFAConsumedPreAuth(ctx context.Context, w kernel.Work, owner kernel.
 	spec, ok := command.Feature()
 	_, cookie := command.PreAuthCookie()
 	_, code := command.OneTimeCode()
-	if err != nil || !ok || !cookie || !code || spec.Binding != b || spec.Operation != feature.Operation || feature.Operation != mfaTOTPCompletionSessionOperation() || owner.Descriptor() != (kernel.ContributorDescriptor{Owner: "identity/mfa/postgres", ContractID: "identity.mfa", Version: 1}) || transition.EventType != "session.created.v1" || transition.BeforeVersion != 0 || transition.AfterVersion != 0 {
+	operation := mfaTOTPCompletionSessionOperation()
+	if ok && spec.Operation == mfaRecoveryCompletionSessionOperation() {
+		operation = mfaRecoveryCompletionSessionOperation()
+		_, code = command.RecoveryCode()
+	}
+	if err != nil || !ok || !cookie || !code || spec.Binding != b || spec.Operation != feature.Operation || feature.Operation != operation || owner.Descriptor() != (kernel.ContributorDescriptor{Owner: "identity/mfa/postgres", ContractID: "identity.mfa", Version: 1}) || transition.EventType != "session.created.v1" || transition.BeforeVersion != 0 || transition.AfterVersion != 0 {
 		return identity.ForbiddenError{}
 	}
 	return requireMFAConsumedPreAuth(ctx, w, w.DatabaseTime, b, c, original, primary)
@@ -70,7 +75,37 @@ func RequireMFAConsumedPreAuthAttempt(ctx context.Context, w kernel.MFATOTPAttem
 	return requireMFAConsumedPreAuth(ctx, w, w.DatabaseTime, b.Command, c, original, primary)
 }
 
-// Both callers supply sealed native readers and their own database-time method,
+// RequireMFAConsumedPreAuthRecoveryAttempt applies the same original-browser
+// fence exclusively in the live registered recovery-code denial callback.
+// The native owner must first authenticate original cookie and child scope;
+// invalid browser possession cannot spend a factor attempt. This read grants
+// no comparison, burn, child consumption or session authority. Propagate every
+// error so the sole transaction aborts; returned/foreign handles fail closed.
+func RequireMFAConsumedPreAuthRecoveryAttempt(ctx context.Context, w kernel.MFARecoveryAttemptWork, owner kernel.MFARecoveryAttemptContributor, c Config, original session.PreAuthTransaction, primary identity.CommandID) error {
+	if ctx == nil || owner == nil {
+		return identity.InvalidInputError{Field: "session_mfa_preauth"}
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	b, err := w.Binding(owner)
+	if err != nil {
+		return err
+	}
+	command, err := w.NativeCommand(owner)
+	if err != nil {
+		return err
+	}
+	spec, ok := command.Feature()
+	_, cookie := command.PreAuthCookie()
+	_, code := command.RecoveryCode()
+	if !ok || !cookie || !code || spec.Binding != b.Command || spec.Operation != mfaRecoveryCompletionSessionOperation() || owner.Descriptor() != (kernel.ContributorDescriptor{Owner: "identity/mfa/postgres", ContractID: "identity.mfa", Version: 1}) {
+		return identity.ForbiddenError{}
+	}
+	return requireMFAConsumedPreAuth(ctx, w, w.DatabaseTime, b.Command, c, original, primary)
+}
+
+// All callers supply sealed native readers and their own database-time method,
 // never a consumer callback or independently opened transaction.
 func requireMFAConsumedPreAuth[R SessionRows](ctx context.Context, q SessionQueryer[R], databaseTime func(context.Context) (time.Time, error), b identity.CommandBinding, c Config, original session.PreAuthTransaction, primary identity.CommandID) error {
 	if _, err := identity.ParseCommandID(string(primary)); err != nil || primary == b.CommandID {

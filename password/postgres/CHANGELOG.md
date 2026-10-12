@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Allow explicit TOTP/recovery-code password-MFA continuation selection while
+  preserving TOTP-only defaults. Methods are frozen into the signed original
+  continuation and share its attempt budget; selection does not verify a factor.
+
 - Bind the original signin identifier and verification versions into non-final
   password-MFA evidence. The native completion reader returns only its current
   exact verified recipient, denying identifier replacement or epoch changes.

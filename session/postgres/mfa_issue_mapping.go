@@ -16,7 +16,18 @@ const mfaCompletionSessionPrefix = "session.result."
 // Only the initial native TOTP completion profile is accepted. This bounded
 // structural mapping performs no verification, reservation, IO or renewal.
 func MFATOTPCompletionSessionFields(record session.Session) ([]identity.FeatureField, error) {
-	if !mfaTOTPCompletionRecord(record) {
+	return mfaCompletionSessionFields(record, "totp")
+}
+
+// MFARecoveryCompletionSessionFields freezes complete original-primary and
+// recovery-set/factor provenance without submitted code or bearer custody.
+// It is structural metadata, never permission to burn a code or issue a session.
+func MFARecoveryCompletionSessionFields(record session.Session) ([]identity.FeatureField, error) {
+	return mfaCompletionSessionFields(record, "recovery-code")
+}
+
+func mfaCompletionSessionFields(record session.Session, method string) ([]identity.FeatureField, error) {
+	if !mfaCompletionRecord(record, method) {
 		return nil, session.ErrInvalidSessionCommand
 	}
 	fields, err := OriginalSessionFields(record)
@@ -37,9 +48,21 @@ func MFATOTPCompletionSessionFields(record session.Session) ([]identity.FeatureF
 // code/browser/child custody and actual recorded factor completion. Successful
 // reconstruction is not authentication or permission to persist a session.
 func MFATOTPCompletionSession(command identity.Command) (session.Session, error) {
+	return mfaCompletionSession(command, mfaTOTPCompletionSessionOperation(), "totp")
+}
+
+// MFARecoveryCompletionSession restores only exact recovery-use v1 session
+// metadata. Missing set epoch, partial fields or TOTP substitution denies.
+// The native owner must authenticate original primary/browser/child and prove
+// actual recorded recovery burn in the same transaction before persistence.
+func MFARecoveryCompletionSession(command identity.Command) (session.Session, error) {
+	return mfaCompletionSession(command, mfaRecoveryCompletionSessionOperation(), "recovery-code")
+}
+
+func mfaCompletionSession(command identity.Command, operation identity.FeatureOperation, method string) (session.Session, error) {
 	deny := func() (session.Session, error) { return session.Session{}, session.ErrInvalidSessionCommand }
 	p, ok := command.Feature()
-	if !ok || p.Operation != mfaTOTPCompletionSessionOperation() || p.Binding.UserID != "" || p.Binding.RecordID != "" || p.Binding.AnonymousFlowID == "" {
+	if !ok || p.Operation != operation || p.Binding.UserID != "" || p.Binding.RecordID != "" || p.Binding.AnonymousFlowID == "" {
 		return deny()
 	}
 	fields := make([]identity.FeatureField, 0, 96)
@@ -70,7 +93,7 @@ func MFATOTPCompletionSession(command identity.Command) (session.Session, error)
 		user = passwordSubject
 	}
 	record, err := OriginalSessionFromFields(p.Binding.TenantID, user, fields)
-	if err != nil || !mfaTOTPCompletionRecord(record) {
+	if err != nil || !mfaCompletionRecord(record, method) {
 		return deny()
 	}
 	m, _ := record.MFAAuthentication().Bindings()
@@ -84,7 +107,15 @@ func mfaTOTPCompletionSessionOperation() identity.FeatureOperation {
 	return identity.FeatureOperation{Owner: "identity/mfa", OperationID: "identity.mfa.totp-verify", SchemaID: "mfa-totp-verify", SchemaVersion: 1, RecordRequirement: identity.FeatureRecordOmitted, SubjectRequirement: identity.FeatureSubjectAnonymousFlow}
 }
 
+func mfaRecoveryCompletionSessionOperation() identity.FeatureOperation {
+	return identity.FeatureOperation{Owner: "identity/mfa", OperationID: "identity.mfa.recovery-use", SchemaID: "mfa-recovery-use", SchemaVersion: 1, RecordRequirement: identity.FeatureRecordOmitted, SubjectRequirement: identity.FeatureSubjectAnonymousFlow}
+}
+
 func mfaTOTPCompletionRecord(record session.Session) bool {
+	return mfaCompletionRecord(record, "totp")
+}
+
+func mfaCompletionRecord(record session.Session, method string) bool {
 	s, err := record.Bindings()
 	if err != nil || s.Version != 1 || !s.IssuedAt.Equal(s.LastActivityAt) {
 		return false
@@ -94,7 +125,7 @@ func mfaTOTPCompletionRecord(record session.Session) bool {
 		return false
 	}
 	m, err := record.MFAAuthentication().Bindings()
-	if err != nil || m.Method != "totp" || m.FactorAuthorityVersion != a.Factor.Binding.Version {
+	if err != nil || m.Method != method || m.FactorAuthorityVersion != a.Factor.Binding.Version {
 		return false
 	}
 	switch s.Authentication.Kind {

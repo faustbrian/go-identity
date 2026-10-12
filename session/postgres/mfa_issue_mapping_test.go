@@ -14,6 +14,10 @@ func mfaCompletionMappingFixture(t testing.TB, csrf bool) (identity.FeatureComma
 }
 
 func mfaCompletionMappingProfile(t testing.TB, csrf, password bool) (identity.FeatureCommandSpec, session.Session) {
+	return mfaCompletionMappingMethod(t, csrf, password, "totp")
+}
+
+func mfaCompletionMappingMethod(t testing.TB, csrf, password bool, method string) (identity.FeatureCommandSpec, session.Session) {
 	t.Helper()
 	spec, record := magicLinkSigninMappingFixture(t, csrf)
 	s, _ := record.Bindings()
@@ -31,6 +35,14 @@ func mfaCompletionMappingProfile(t testing.TB, csrf, password bool) (identity.Fe
 	if err != nil {
 		t.Fatal(err)
 	}
+	if method == "recovery-code" {
+		p, _ := m.Bindings()
+		p.Method, p.RecoverySetID, p.RecoverySetVersion = method, "BwcHBwcHBwcHBwcHBwcHBw", 2
+		m, err = session.NewMFAAuthentication(p)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
 	if password && csrf {
 		record, err = session.NewSessionWithPasswordMFAAndCSRF(s, m, record.CSRFState())
 	} else if password {
@@ -45,11 +57,53 @@ func mfaCompletionMappingProfile(t testing.TB, csrf, password bool) (identity.Fe
 	}
 	spec.Binding.CommandID, spec.Binding.OperationID, spec.Binding.SchemaID = "BAQEBAQEBAQEBAQEBAQEBA", "identity.mfa.totp-verify", "mfa-totp-verify"
 	spec.Operation = identity.FeatureOperation{Owner: "identity/mfa", OperationID: spec.Binding.OperationID, SchemaID: spec.Binding.SchemaID, SchemaVersion: 1, RecordRequirement: identity.FeatureRecordOmitted, SubjectRequirement: identity.FeatureSubjectAnonymousFlow}
-	spec.Fields, err = MFATOTPCompletionSessionFields(record)
+	if method == "recovery-code" {
+		spec.Binding.OperationID, spec.Binding.SchemaID = "identity.mfa.recovery-use", "mfa-recovery-use"
+		spec.Operation.OperationID, spec.Operation.SchemaID = spec.Binding.OperationID, spec.Binding.SchemaID
+		spec.Fields, err = MFARecoveryCompletionSessionFields(record)
+	} else {
+		spec.Fields, err = MFATOTPCompletionSessionFields(record)
+	}
 	if err != nil {
 		t.Fatal(err)
 	}
 	return spec, record
+}
+
+func TestMFARecoveryCompletionMappingPreservesMethodAndSet(t *testing.T) {
+	for _, profile := range []struct{ csrf, password bool }{{false, false}, {true, false}, {false, true}, {true, true}} {
+		spec, expected := mfaCompletionMappingMethod(t, profile.csrf, profile.password, "recovery-code")
+		command, err := identity.NewFeatureCommand(spec)
+		if err != nil {
+			t.Fatal(err)
+		}
+		got, err := MFARecoveryCompletionSession(command)
+		if err != nil {
+			t.Fatal("recovery session mapping unavailable", err)
+		}
+		a, _, _ := encodeRecord(expected)
+		b, _, _ := encodeRecord(got)
+		if !bytes.Equal(a, b) {
+			t.Fatal("recovery mapping changed primary, set or factor")
+		}
+		if _, err := MFATOTPCompletionSession(command); err == nil {
+			t.Fatal("recovery entered TOTP mapping")
+		}
+		if _, err := MFATOTPCompletionSessionFields(expected); err == nil {
+			t.Fatal("recovery record entered TOTP fields")
+		}
+		for i := range spec.Fields {
+			partial := spec
+			partial.Fields = append(spec.Fields[:i:i], spec.Fields[i+1:]...)
+			command, err := identity.NewFeatureCommand(partial)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := MFARecoveryCompletionSession(command); err == nil {
+				t.Fatal("partial recovery provenance accepted")
+			}
+		}
+	}
 }
 
 func TestMFATOTPCompletionMappingRetainsAllOriginalFields(t *testing.T) {

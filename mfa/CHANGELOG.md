@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Define recovery-code completion with distinct opaque code, original child and
+  browser custody, stable continuation/command identities and redacted results.
+  Recovery never redelivers credentials or repeats uncertain authentication;
+  shared structural checks do not grant factor or session authority.
+
 - Add explicit synchronizer custody to cookie MFA enable requests. Zero keeps
   the existing bearer profile; cookie transports must supply the original token
   and exact HTTPS-origin policy, with native CSRF fencing during enrollment.

@@ -19,9 +19,10 @@ func TestMFAIssuerGatesOriginalCustodyAndExactCommittedSession(t *testing.T) {
 	for _, profile := range []struct {
 		mode     string
 		password bool
-	}{{"commit", false}, {"unknown", false}, {"replay", false}, {"substituted-factor", false}, {"expired", false}, {"commit", true}, {"unknown", true}, {"replay", true}, {"substituted-factor", true}, {"expired", true}} {
+		recovery bool
+	}{{"commit", false, false}, {"unknown", false, false}, {"replay", false, false}, {"substituted-factor", false, false}, {"expired", false, false}, {"commit", true, false}, {"unknown", true, false}, {"replay", true, false}, {"substituted-factor", true, false}, {"expired", true, false}, {"commit", false, true}, {"unknown", false, true}, {"replay", false, true}, {"substituted-factor", false, true}, {"expired", false, true}, {"commit", true, true}, {"unknown", true, true}, {"replay", true, true}, {"substituted-factor", true, true}, {"expired", true, true}} {
 		mode := profile.mode
-		t.Run(fmt.Sprintf("%s/password=%t", mode, profile.password), func(t *testing.T) {
+		t.Run(fmt.Sprintf("%s/password=%t/recovery=%t", mode, profile.password, profile.recovery), func(t *testing.T) {
 			spec, primary, provenance := mfaMagicLinkSession(t)
 			if profile.password {
 				spec.Authentication = sessionSpec(t).Authentication
@@ -35,6 +36,9 @@ func TestMFAIssuerGatesOriginalCustodyAndExactCommittedSession(t *testing.T) {
 			vector, _ := spec.Authority.Bindings()
 			vector.Session.Version = 1
 			spec.Authority, _ = session.NewAuthoritySnapshot(vector)
+			if profile.recovery {
+				provenance.Method, provenance.RecoverySetID, provenance.RecoverySetVersion = "recovery-code", "BwcHBwcHBwcHBwcHBwcHBw", 2
+			}
 			metadata, err := session.NewMFAAuthentication(provenance)
 			if err != nil {
 				t.Fatal(err)
@@ -44,6 +48,9 @@ func TestMFAIssuerGatesOriginalCustodyAndExactCommittedSession(t *testing.T) {
 			b.AnonymousFlowID = "original-browser"
 			b.ActorID, b.ActorKind = "ingress", authorization.SubjectServiceAccount
 			b.OperationID, b.SchemaID = "identity.mfa.totp-verify", "mfa-totp-verify"
+			if profile.recovery {
+				b.OperationID, b.SchemaID = "identity.mfa.recovery-use", "mfa-recovery-use"
+			}
 			op := identity.FeatureOperation{Owner: "identity/mfa", OperationID: b.OperationID, SchemaID: b.SchemaID, SchemaVersion: 1, RecordRequirement: identity.FeatureRecordOmitted, SubjectRequirement: identity.FeatureSubjectAnonymousFlow}
 			clock := &mutableIssueClock{now: spec.IssuedAt}
 			calls := 0
@@ -128,8 +135,22 @@ func TestMFAIssuerGatesOriginalCustodyAndExactCommittedSession(t *testing.T) {
 			}
 			code, _ := auth.NewOneTimeCode("123456")
 			original, err = identity.NewFeatureOneTimeCodePreAuthCommand(identity.FeatureCommandSpec{Binding: b, Operation: op}, code, auth.NewBearerCredential(base64.RawURLEncoding.EncodeToString(make([]byte, 32))))
+			if profile.recovery {
+				recoveryCode, _ := auth.NewRecoveryCode("synthetic-recovery-code")
+				original, err = identity.NewFeatureRecoveryCodePreAuthCommand(identity.FeatureCommandSpec{Binding: b, Operation: op}, recoveryCode, auth.NewBearerCredential(base64.RawURLEncoding.EncodeToString(make([]byte, 32))))
+			}
 			if err != nil {
 				t.Fatal(err)
+			}
+			if profile.recovery {
+				wrongCode, _ := auth.NewOneTimeCode("123456")
+				mixed, err := identity.NewFeatureOneTimeCodePreAuthCommand(identity.FeatureCommandSpec{Binding: b, Operation: op}, wrongCode, auth.NewBearerCredential(base64.RawURLEncoding.EncodeToString(make([]byte, 32))))
+				if err != nil {
+					t.Fatal(err)
+				}
+				if _, err := issuer.BindMFA(prepared, mixed); err == nil {
+					t.Fatal("recovery preparation accepted OTP custody")
+				}
 			}
 			bound, err := issuer.BindMFA(prepared, original)
 			if err != nil {

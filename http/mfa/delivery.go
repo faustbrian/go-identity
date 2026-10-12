@@ -9,6 +9,10 @@ import (
 )
 
 func deliver(c TOTPVerifyConfig, s input, result mfa.TotpVerifyResult) (string, string, string, func() bool, error) {
+	return deliverCompletion(c, s, completionResult{Outcome: result.Outcome, Session: result.Session, CSRFToken: result.CSRFToken})
+}
+
+func deliverCompletion(c TOTPVerifyConfig, s input, result completionResult) (string, string, string, func() bool, error) {
 	deny := func() (string, string, string, func() bool, error) {
 		return "", "", "", nil, identityhttp.ErrUnavailable
 	}
@@ -19,12 +23,20 @@ func deliver(c TOTPVerifyConfig, s input, result mfa.TotpVerifyResult) (string, 
 	now := c.Now()
 	primaryID, primaryAt, primaryUntil := primary.CommandID, primary.AuthenticatedAt, primary.ValidUntil
 	primaryValid := pe == nil && spec.Authentication.Kind == session.AuthenticationMagicLink
+	tenant, command, continuation, factorID := s.request.TenantID, s.request.CommandID, string(s.request.ChallengeID), string(s.request.FactorID)
+	method := "totp"
+	factorValid := factor.FactorID == factorID
+	if s.recovery.CommandID != "" {
+		tenant, command, continuation = s.recovery.TenantID, s.recovery.CommandID, string(s.recovery.ContinuationID)
+		method = "recovery-code"
+		factorValid = factor.FactorID != "" && factor.RecoverySetID != "" && factor.RecoverySetVersion != 0
+	}
 	if c.PasswordPrimary {
 		proof := spec.Authentication.Proof
 		primaryID, primaryAt, primaryUntil = identity.CommandID(proof.ID), proof.IssuedAt, proof.ExpiresAt
 		primaryValid = spec.Authentication.Kind == session.AuthenticationVerified && proof.Method == "password" && proof.Assurance == auth.AssuranceSingleFactor && proof.Validate(auth.ProofUse{Tenant: string(spec.TenantID), Subject: string(spec.UserID), Purpose: session.PasswordMFAPrimaryPurpose, Audience: c.Audience, Now: now}) == nil
 	}
-	if err != nil || fe != nil || !primaryValid || ce != nil || spec.TenantID != s.request.TenantID || spec.UserID != s.rate.UserID || spec.Audience != c.Audience || factor.Method != "totp" || factor.CommandID != s.request.CommandID || string(factor.ContinuationID) != s.rate.ChallengeID || string(factor.ContinuationID) != string(s.request.ChallengeID) || factor.FactorID != string(s.request.FactorID) || factor.PrimaryCommandID != primaryID || result.Session.Cookie.Value != "" || csrfState.Binding != (session.CSRFBinding{TenantID: spec.TenantID, SessionID: spec.SessionID, SessionVersion: spec.Version}) {
+	if err != nil || fe != nil || !primaryValid || ce != nil || spec.TenantID != tenant || spec.UserID != s.rate.UserID || spec.Audience != c.Audience || factor.Method != method || factor.CommandID != command || string(factor.ContinuationID) != s.rate.ChallengeID || string(factor.ContinuationID) != continuation || !factorValid || factor.PrimaryCommandID != primaryID || result.Session.Cookie.Value != "" || csrfState.Binding != (session.CSRFBinding{TenantID: spec.TenantID, SessionID: spec.SessionID, SessionVersion: spec.Version}) {
 		return deny()
 	}
 	fresh := func() (valid bool) {

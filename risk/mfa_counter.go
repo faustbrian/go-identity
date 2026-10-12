@@ -3,7 +3,7 @@ package risk
 import "time"
 
 // PrepareMFACompletion selects the anonymous original-continuation counter
-// projection only for identity.mfa.totp-verify. The native MFA owner must
+// projection only for identity.mfa.totp-verify or identity.mfa.recovery-use. The native MFA owner must
 // authenticate subject.User and capabilityID against the original signed child
 // and frozen MFA completion plan; scalar construction is not authority. Only
 // User and trusted Network may be populated. No session identity is fabricated.
@@ -16,7 +16,10 @@ import "time"
 // including denied factor attempts. Preparation is pure and never charges,
 // consumes, authorizes, samples a clock or renews the supplied primary time.
 func (p CommandCounterPolicy) PrepareMFACompletion(scope Context, subject Subject, capabilityID string, primaryTime time.Time) (CounterCommand, error) {
-	return p.prepareCapabilityCounter(scope, subject, capabilityID, primaryTime, "identity.mfa.totp-verify")
+	if !mfaCompletionCounterAction(scope.Operation) {
+		return CounterCommand{}, ErrInvalidCounterCommand
+	}
+	return p.prepareCapabilityCounter(scope, subject, capabilityID, primaryTime, scope.Operation)
 }
 
 // ValidateMFACompletion compares exact original tenant/action/attempt/user/
@@ -25,5 +28,12 @@ func (p CommandCounterPolicy) PrepareMFACompletion(scope Context, subject Subjec
 // Changed, expired, foreign and other-profile commands fail closed; no evidence
 // freshness is reset. Concurrent immutable calls are safe and retain no inputs.
 func (p CommandCounterPolicy) ValidateMFACompletion(command CounterCommand, scope Context, subject Subject, capabilityID string, primaryTime time.Time) error {
-	return p.validateCapabilityCounter(command, scope, subject, capabilityID, primaryTime, "identity.mfa.totp-verify")
+	if !mfaCompletionCounterAction(scope.Operation) {
+		return ErrInvalidCounterCommand
+	}
+	return p.validateCapabilityCounter(command, scope, subject, capabilityID, primaryTime, scope.Operation)
+}
+
+func mfaCompletionCounterAction(action Action) bool {
+	return action == "identity.mfa.totp-verify" || action == "identity.mfa.recovery-use"
 }

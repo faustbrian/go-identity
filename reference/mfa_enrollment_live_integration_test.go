@@ -83,7 +83,7 @@ func configureReferenceMFAEnrollment(t *testing.T, c *reference.StoreConfigurati
 
 // Account, verified identifier, password, empty factor authority, original
 // primary session and proof are created through public workflows, not fixtures.
-func proveReferenceMFAEnrollment(t *testing.T, ctx context.Context, f liveStores, features reference.FeatureSet, client *http.Client, base, origin string, cookies []*http.Cookie, csrfWire, sessionID string, passwordMFA bool) {
+func proveReferenceMFAEnrollment(t *testing.T, ctx context.Context, f liveStores, features reference.FeatureSet, client *http.Client, base, origin string, cookies []*http.Cookie, csrfWire, sessionID string, passwordMFA bool, recovery ...bool) {
 	t.Helper()
 	if len(cookies) != 1 {
 		t.Fatal("original primary session cookie unavailable")
@@ -368,6 +368,9 @@ func proveReferenceMFAEnrollment(t *testing.T, ctx context.Context, f liveStores
 	}
 	if passwordMFA {
 		proveReferencePasswordMFAHTTP(t, ctx, f, features, client, base, origin, mfa.FactorID(pending.Enrollment.ID), secret)
+	}
+	if len(recovery) > 0 && recovery[0] {
+		proveReferencePasswordRecoveryHTTP(t, ctx, f, features, client, base, origin, out.RecoveryCodes[0])
 	}
 	proveRegistrationSessionLogout(t, ctx, client, base, origin, cookies, csrfWire, sessionID, f, features)
 }

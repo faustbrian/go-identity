@@ -59,11 +59,12 @@ type TOTPVerifyConfig struct {
 // delivered new committed credentials; a historical commit is not new delivery.
 // JSON never contains a code, proof, token, synchronizer or subject.
 type TOTPVerifyResponse struct {
-	SignedIn      bool               `json:"signedIn"`
-	CommitOutcome string             `json:"commitOutcome"`
-	CommandID     identity.CommandID `json:"commandID,omitempty"`
-	SessionID     string             `json:"sessionID,omitempty"`
-	Error         string             `json:"error,omitempty"`
+	RecoveryRequired *bool              `json:"recoveryRequired,omitempty"`
+	SignedIn         bool               `json:"signedIn"`
+	CommitOutcome    string             `json:"commitOutcome"`
+	CommandID        identity.CommandID `json:"commandID,omitempty"`
+	SessionID        string             `json:"sessionID,omitempty"`
+	Error            string             `json:"error,omitempty"`
 }
 
 type rejection struct {
@@ -83,10 +84,18 @@ type attempt struct {
 	fresh        func() bool
 }
 type input struct {
-	request mfa.TotpVerifyRequest
-	facts   identityhttp.NetworkFacts
-	rate    identityhttp.ChallengeVerificationRateRequest
-	wire    string
+	request  mfa.TotpVerifyRequest
+	recovery mfa.RecoveryUseRequest
+	facts    identityhttp.NetworkFacts
+	rate     identityhttp.ChallengeVerificationRateRequest
+	wire     string
+}
+
+type completionResult struct {
+	Outcome          identity.CommitOutcome
+	Session          session.IssueResult
+	CSRFToken        session.CSRFToken
+	recoveryRequired bool
 }
 
 func current(r *http.Request) *attempt { return r.Context().Value(attemptKey{}).(*attempt) }
@@ -103,7 +112,18 @@ func NewTOTPVerifyHandler(c TOTPVerifyConfig) (http.Handler, error) {
 // admission and native execution phases. Hooks cannot replace private input or
 // credential output; final response commitment rechecks delivery freshness.
 func NewTOTPVerifyHandlerWithMiddleware(c TOTPVerifyConfig, middleware []identityhttp.MiddlewareDescriptor) (http.Handler, error) {
-	if c.Service == nil || reflect.ValueOf(c.Service).Kind() == reflect.Pointer && reflect.ValueOf(c.Service).IsNil() || !c.Rate.Configured() || c.Now == nil || c.PolicyRevision == 0 || c.MaximumDuration < time.Millisecond || c.MaximumDuration > 30*time.Second || len(c.Audience) == 0 || len(c.Audience) > 256 {
+	return newCompletionHandler(c, nil, middleware)
+}
+
+func newCompletionHandler(c TOTPVerifyConfig, recoveryService RecoveryUseService, middleware []identityhttp.MiddlewareDescriptor) (http.Handler, error) {
+	recovery := recoveryService != nil
+	var service any = c.Service
+	operation, path := "identity.mfa.totp-verify", "/v1/mfa/totp-verify"
+	if recovery {
+		service = recoveryService
+		operation, path = "identity.mfa.recovery-use", "/v1/mfa/recovery-use"
+	}
+	if service == nil || reflect.ValueOf(service).Kind() == reflect.Pointer && reflect.ValueOf(service).IsNil() || !c.Rate.Configured() || c.Now == nil || c.PolicyRevision == 0 || c.MaximumDuration < time.Millisecond || c.MaximumDuration > 30*time.Second || len(c.Audience) == 0 || len(c.Audience) > 256 {
 		return nil, identityhttp.ErrInvalidInput
 	}
 	u, err := url.Parse(c.CallbackURL)
@@ -131,7 +151,7 @@ func NewTOTPVerifyHandlerWithMiddleware(c TOTPVerifyConfig, middleware []identit
 		return nil, err
 	}
 	caller := func(tenant identity.TenantID, child string) authorization.DecisionContext {
-		return authorization.DecisionContext{PolicyRevision: c.PolicyRevision, Request: authorization.Request{Tenant: authorization.TenantID(tenant), Subject: authorization.Subject{Kind: authorization.SubjectServiceAccount, ID: authorization.SubjectID(c.ActorID)}, Action: "identity.mfa.totp-verify", Resource: authorization.Resource{Type: "identity.mfa-continuation", ID: authorization.ResourceID(child)}}}
+		return authorization.DecisionContext{PolicyRevision: c.PolicyRevision, Request: authorization.Request{Tenant: authorization.TenantID(tenant), Subject: authorization.Subject{Kind: authorization.SubjectServiceAccount, ID: authorization.SubjectID(c.ActorID)}, Action: authorization.Action(operation), Resource: authorization.Resource{Type: "identity.mfa-continuation", ID: authorization.ResourceID(child)}}}
 	}
 	if caller("configuration", "configuration").Validate() != nil {
 		return nil, identityhttp.ErrInvalidInput
@@ -140,10 +160,12 @@ func NewTOTPVerifyHandlerWithMiddleware(c TOTPVerifyConfig, middleware []identit
 		a := current(r)
 		a.cookie, a.csrf = "", ""
 		a.out.SignedIn = false
+		a.out.RecoveryRequired = nil
 		a.out.SessionID = ""
 		f := rejection{status: 503, code: "unavailable"}
 		var specific rejection
 		var denied identity.ForbiddenError
+		var conflict identity.ConflictError
 		var invalid identity.InvalidInputError
 		switch {
 		case errors.As(err, &specific):
@@ -152,6 +174,8 @@ func NewTOTPVerifyHandlerWithMiddleware(c TOTPVerifyConfig, middleware []identit
 			f = rejection{status: 400, code: "invalid_request"}
 		case errors.As(err, &denied):
 			f = rejection{status: 403, code: "denied"}
+		case errors.As(err, &conflict):
+			f = rejection{status: 409, code: "conflict"}
 		}
 		if f.status == 405 {
 			w.Header().Set("Allow", http.MethodPost)
@@ -166,7 +190,7 @@ func NewTOTPVerifyHandlerWithMiddleware(c TOTPVerifyConfig, middleware []identit
 	pipeline, err := identityhttp.NewOperationPipeline(identityhttp.OperationPipelineConfig[input]{MaximumDuration: c.MaximumDuration, Middleware: middleware, Reject: reject,
 		Decode: func(r *http.Request) (input, error) {
 			var s input
-			if r.URL.Path != "/v1/mfa/totp-verify" || r.URL.EscapedPath() != r.URL.Path {
+			if r.URL.Path != path || r.URL.EscapedPath() != r.URL.Path {
 				return s, rejection{status: 404, code: "not_found"}
 			}
 			if r.Method != http.MethodPost {
@@ -206,7 +230,11 @@ func NewTOTPVerifyHandlerWithMiddleware(c TOTPVerifyConfig, middleware []identit
 				return s, identityhttp.ErrInvalidInput
 			}
 			body, err := identityhttp.DecodeJSON[map[string]json.RawMessage](decoder, r)
-			if err != nil || len(body) != 8 {
+			fields := 8
+			if recovery {
+				fields = 6
+			}
+			if err != nil || len(body) != fields {
 				return s, identityhttp.ErrInvalidInput
 			}
 			defer func() {
@@ -215,15 +243,24 @@ func NewTOTPVerifyHandlerWithMiddleware(c TOTPVerifyConfig, middleware []identit
 				}
 			}()
 			var command, flow, child, factor, wire, code, callback string
-			for name, dst := range map[string]*string{"commandID": &command, "preAuthID": &flow, "challengeID": &child, "factorID": &factor, "token": &wire, "code": &code, "callbackURL": &callback} {
+			members := map[string]*string{"commandID": &command, "preAuthID": &flow, "challengeID": &child, "factorID": &factor, "token": &wire, "code": &code, "callbackURL": &callback}
+			if recovery {
+				members = map[string]*string{"commandID": &command, "preAuthID": &flow, "continuationID": &child, "token": &wire, "recoveryCode": &code, "callbackURL": &callback}
+			}
+			for name, dst := range members {
 				raw, ok := body[name]
 				if !ok || string(raw) == "null" || json.Unmarshal(raw, dst) != nil {
 					return s, identityhttp.ErrInvalidInput
 				}
 			}
 			var trust bool
-			raw, ok := body["trustDevice"]
-			if !ok || string(raw) == "null" || json.Unmarshal(raw, &trust) != nil || callback != c.CallbackURL {
+			if !recovery {
+				raw, ok := body["trustDevice"]
+				if !ok || string(raw) == "null" || json.Unmarshal(raw, &trust) != nil {
+					return s, identityhttp.ErrInvalidInput
+				}
+			}
+			if callback != c.CallbackURL {
 				return s, identityhttp.ErrInvalidInput
 			}
 			id, err := identity.ParseCommandID(command)
@@ -237,18 +274,26 @@ func NewTOTPVerifyHandlerWithMiddleware(c TOTPVerifyConfig, middleware []identit
 			if _, err := identity.ParseCommandID(child); err != nil {
 				return s, identityhttp.ErrInvalidInput
 			}
-			if _, err := identity.ParseCommandID(factor); err != nil {
+			if _, err := identity.ParseCommandID(factor); !recovery && err != nil {
 				return s, identityhttp.ErrInvalidInput
 			}
 			if len(wire) < 32 || len(wire) > 4096 {
 				return s, identityhttp.ErrInvalidInput
 			}
-			opaque, err := auth.NewOneTimeCode(code)
-			if err != nil {
-				return s, identityhttp.ErrInvalidInput
-			}
 			s.facts, s.wire = facts, wire
-			s.request = mfa.TotpVerifyRequest{TenantID: facts.TenantID(), CommandID: id, PreAuthID: preauth, ChallengeID: mfa.ChallengeID(child), FactorID: mfa.FactorID(factor), Code: opaque, TrustDevice: trust, Cookie: browser, Origin: string(c.Origin), Callback: callback, Network: facts.ClientIP().String(), Device: device.DeviceID(), Caller: caller(facts.TenantID(), child)}
+			if recovery {
+				opaque, err := auth.NewRecoveryCode(code)
+				if err != nil {
+					return s, identityhttp.ErrInvalidInput
+				}
+				s.recovery = mfa.RecoveryUseRequest{TenantID: facts.TenantID(), CommandID: id, PreAuthID: preauth, ContinuationID: mfa.ContinuationID(child), RecoveryCode: opaque, Cookie: browser, Origin: string(c.Origin), Callback: callback, Network: facts.ClientIP().String(), Device: device.DeviceID(), Caller: caller(facts.TenantID(), child)}
+			} else {
+				opaque, err := auth.NewOneTimeCode(code)
+				if err != nil {
+					return s, identityhttp.ErrInvalidInput
+				}
+				s.request = mfa.TotpVerifyRequest{TenantID: facts.TenantID(), CommandID: id, PreAuthID: preauth, ChallengeID: mfa.ChallengeID(child), FactorID: mfa.FactorID(factor), Code: opaque, TrustDevice: trust, Cookie: browser, Origin: string(c.Origin), Callback: callback, Network: facts.ClientIP().String(), Device: device.DeviceID(), Caller: caller(facts.TenantID(), child)}
+			}
 			return s, nil
 		},
 		Authenticate: func(r *http.Request, s input) (input, error) {
@@ -260,19 +305,30 @@ func NewTOTPVerifyHandlerWithMiddleware(c TOTPVerifyConfig, middleware []identit
 				return s, identityhttp.ErrInvalidInput
 			}
 			current(r).proof = proof
-			s.request.Proof = proof
 			s.wire = ""
-			if s.request.Validate() != nil {
-				return s, identityhttp.ErrInvalidInput
+			var user identity.UserID
+			var child string
+			var lifetime time.Duration
+			if recovery {
+				s.recovery.Proof = proof
+				if s.recovery.Validate() != nil {
+					return s, identityhttp.ErrInvalidInput
+				}
+				user, child, lifetime, err = recoveryService.RecoveryVerificationRateSource(r.Context(), s.recovery)
+			} else {
+				s.request.Proof = proof
+				if s.request.Validate() != nil {
+					return s, identityhttp.ErrInvalidInput
+				}
+				user, child, lifetime, err = c.Service.TotpVerificationRateSource(r.Context(), s.request)
 			}
-			user, child, lifetime, err := c.Service.TotpVerificationRateSource(r.Context(), s.request)
 			if err != nil {
 				return s, err
 			}
 			if r.Context().Err() != nil {
 				return s, identityhttp.ErrUnavailable
 			}
-			s.rate = identityhttp.ChallengeVerificationRateRequest{OperationID: "identity.mfa.totp-verify", UserID: user, ChallengeID: child, ChallengeLifetime: lifetime}
+			s.rate = identityhttp.ChallengeVerificationRateRequest{OperationID: operation, UserID: user, ChallengeID: child, ChallengeLifetime: lifetime}
 			return s, nil
 		},
 		Admit: func(r *http.Request, s input) error {
@@ -281,17 +337,31 @@ func NewTOTPVerifyHandlerWithMiddleware(c TOTPVerifyConfig, middleware []identit
 		Handle: func(w http.ResponseWriter, r *http.Request, s input) {
 			a := current(r)
 			a.ctx = r.Context()
-			a.out.CommandID = s.request.CommandID
+			commandID := s.request.CommandID
+			if recovery {
+				commandID = s.recovery.CommandID
+			}
+			a.out.CommandID = commandID
 			a.out.CommitOutcome = "unknown"
-			result, err := c.Service.TotpVerify(r.Context(), s.request)
-			if result.Session.CommandID == s.request.CommandID && result.Outcome == result.Session.CommitOutcome {
+			var result completionResult
+			var err error
+			if recovery {
+				completed, completionErr := recoveryService.RecoveryUse(r.Context(), s.recovery)
+				result = completionResult{Outcome: completed.Outcome, Session: completed.Session, CSRFToken: completed.CSRFToken, recoveryRequired: completed.RecoveryRequired}
+				err = completionErr
+			} else {
+				completed, completionErr := c.Service.TotpVerify(r.Context(), s.request)
+				result = completionResult{Outcome: completed.Outcome, Session: completed.Session, CSRFToken: completed.CSRFToken}
+				err = completionErr
+			}
+			if result.Session.CommandID == commandID && result.Outcome == result.Session.CommitOutcome {
 				a.out.CommitOutcome = outcome(result.Outcome)
 			}
 			if err != nil {
 				reject(w, r, err)
 				return
 			}
-			if r.Context().Err() != nil || result.Session.CommandID != s.request.CommandID || result.Outcome != result.Session.CommitOutcome {
+			if r.Context().Err() != nil || result.Session.CommandID != commandID || result.Outcome != result.Session.CommitOutcome {
 				reject(w, r, identityhttp.ErrUnavailable)
 				return
 			}
@@ -312,13 +382,16 @@ func NewTOTPVerifyHandlerWithMiddleware(c TOTPVerifyConfig, middleware []identit
 				reject(w, r, rejection{status: 409, code: "replay"})
 				return
 			}
-			cookie, csrf, id, fresh, err := deliver(c, s, result)
+			cookie, csrf, id, fresh, err := deliverCompletion(c, s, result)
 			if err != nil {
 				reject(w, r, err)
 				return
 			}
 			a.cookie, a.csrf, a.fresh = cookie, csrf, fresh
 			a.out.SignedIn = true
+			if recovery {
+				a.out.RecoveryRequired = &result.recoveryRequired
+			}
 			a.out.SessionID = id
 			w.WriteHeader(http.StatusOK)
 			_ = json.NewEncoder(w).Encode(a.out)

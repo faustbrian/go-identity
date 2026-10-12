@@ -15,8 +15,10 @@ import (
 	"strings"
 	"time"
 
+	auth "github.com/faustbrian/go-authentication"
 	"github.com/faustbrian/go-authorization"
 	policy "github.com/faustbrian/go-authorization/postgres"
+	"github.com/faustbrian/go-capability"
 	capabilitypg "github.com/faustbrian/go-capability/postgres/identity"
 	identity "github.com/faustbrian/go-identity"
 	magicpg "github.com/faustbrian/go-identity/magiclink/postgres"
@@ -86,21 +88,23 @@ func (MagicLinkTOTPCompletionConfig) LogValue() slog.Value {
 // configuration even when fmt suppresses methods on an unexported parent field.
 type magicLinkTOTPService struct{ state func() *magicLinkTOTPState }
 type magicLinkTOTPState struct {
-	pool         *database.Pool
-	request      *magicpg.RequestService
-	password     *passwordpg.SigninService
-	config       MagicLinkTOTPCompletionConfig
-	issuer       *capabilitypg.Issuer
-	directory    *kernel.Repository
-	continuation *mfapg.ContinuationReader
-	factors      *mfapg.TOTPFactorReader
-	policy       *policy.AuthorityStore
-	crypto       *envelope.Service
-	verifier     mfa.TOTPVerifier
-	custody      risk.ProtectedProviderAdmissionCustody
-	counters     *riskpg.Repository
-	effect       *sessionpg.MFATOTPCompletionEffect
-	history      *kernel.Coordinator
+	pool           *database.Pool
+	request        *magicpg.RequestService
+	password       *passwordpg.SigninService
+	config         MagicLinkTOTPCompletionConfig
+	issuer         *capabilitypg.Issuer
+	directory      *kernel.Repository
+	continuation   *mfapg.ContinuationReader
+	factors        *mfapg.TOTPFactorReader
+	policy         *policy.AuthorityStore
+	crypto         *envelope.Service
+	verifier       mfa.TOTPVerifier
+	custody        risk.ProtectedProviderAdmissionCustody
+	counters       *riskpg.Repository
+	effect         *sessionpg.MFATOTPCompletionEffect
+	recoveryKeys   mfapg.RecoveryVerificationKeys
+	recoveryEffect *sessionpg.MFARecoveryCompletionEffect
+	history        *kernel.Coordinator
 }
 
 func invalidTOTPCompletion() error {
@@ -116,7 +120,19 @@ func newPasswordTOTPService(pool *database.Pool, primary *passwordpg.SigninServi
 }
 
 func newNativeTOTPService(pool *database.Pool, request *magicpg.RequestService, passwordPrimary *passwordpg.SigninService, c MagicLinkTOTPCompletionConfig, passwordProfile sessionpg.IdentifierAdmissionConfig, keys *keyring.Provider) (*magicLinkTOTPService, error) {
-	if pool == nil || pool.Raw() == nil || (request == nil) == (passwordPrimary == nil) || keys == nil || c.MaximumDuration < time.Millisecond || c.MaximumDuration > 5*time.Second || c.Coordinator.QueryPolicy == nil || c.Coordinator.AdmissionPolicy == nil || c.Coordinator.MaximumDuration <= 0 || c.Coordinator.MaximumDuration > c.MaximumDuration || c.Session.MaximumDuration <= 0 || c.Session.MaximumDuration > c.MaximumDuration || c.ComparisonKeyVersion == 0 || len(c.CookieKeys) == 0 || len(c.CookieKeys) > 32 || c.Issuer.Audience != c.Profile.Audience {
+	return newNativeMFAService(pool, request, passwordPrimary, c, passwordProfile, keys, nil)
+}
+
+func newNativeRecoveryService(pool *database.Pool, request *magicpg.RequestService, passwordPrimary *passwordpg.SigninService, c MagicLinkTOTPCompletionConfig, passwordProfile sessionpg.IdentifierAdmissionConfig, keys *keyring.Provider, recoveryKeys map[uint32][32]byte) (*magicLinkTOTPService, error) {
+	if recoveryKeys == nil {
+		return nil, invalidTOTPCompletion()
+	}
+	return newNativeMFAService(pool, request, passwordPrimary, c, passwordProfile, keys, recoveryKeys)
+}
+
+func newNativeMFAService(pool *database.Pool, request *magicpg.RequestService, passwordPrimary *passwordpg.SigninService, c MagicLinkTOTPCompletionConfig, passwordProfile sessionpg.IdentifierAdmissionConfig, keys *keyring.Provider, recoveryKeys map[uint32][32]byte) (*magicLinkTOTPService, error) {
+	recovery := recoveryKeys != nil
+	if pool == nil || pool.Raw() == nil || (request == nil) == (passwordPrimary == nil) || keys == nil || c.MaximumDuration < time.Millisecond || c.MaximumDuration > 5*time.Second || c.Coordinator.QueryPolicy == nil || c.Coordinator.AdmissionPolicy == nil || c.Coordinator.MaximumDuration <= 0 || c.Coordinator.MaximumDuration > c.MaximumDuration || c.Session.MaximumDuration <= 0 || c.Session.MaximumDuration > c.MaximumDuration || !recovery && c.ComparisonKeyVersion == 0 || len(c.CookieKeys) == 0 || len(c.CookieKeys) > 32 || c.Issuer.Audience != c.Profile.Audience {
 		return nil, invalidTOTPCompletion()
 	}
 	if c.Counters.CommandCounters == nil {
@@ -146,6 +162,12 @@ func newNativeTOTPService(pool *database.Pool, request *magicpg.RequestService, 
 	query, admission := *c.Coordinator.QueryPolicy, *c.Coordinator.AdmissionPolicy
 	c.Coordinator.QueryPolicy, c.Coordinator.AdmissionPolicy = &query, &admission
 	s := &magicLinkTOTPState{pool: pool, request: request, password: passwordPrimary, config: c}
+	if recovery {
+		s.recoveryKeys, err = mfapg.NewRecoveryVerificationKeys(recoveryKeys)
+		if err != nil {
+			return nil, invalidTOTPCompletion()
+		}
+	}
 	s.issuer, err = capabilitypg.NewIssuer(c.Issuer)
 	if err != nil {
 		return nil, identity.InvalidInputError{Field: "reference_mfa_totp_issuer"}
@@ -168,9 +190,11 @@ func newNativeTOTPService(pool *database.Pool, request *magicpg.RequestService, 
 	if err != nil {
 		return nil, invalidTOTPCompletion()
 	}
-	s.factors, err = mfapg.NewTOTPFactorReader(pool, c.MaximumDuration)
-	if err != nil {
-		return nil, invalidTOTPCompletion()
+	if !recovery {
+		s.factors, err = mfapg.NewTOTPFactorReader(pool, c.MaximumDuration)
+		if err != nil {
+			return nil, invalidTOTPCompletion()
+		}
 	}
 	s.policy, err = policy.NewAuthorityStore(pool.Raw(), c.MaximumDuration)
 	if err != nil {
@@ -180,9 +204,11 @@ func newNativeTOTPService(pool *database.Pool, request *magicpg.RequestService, 
 	if err != nil {
 		return nil, invalidTOTPCompletion()
 	}
-	s.verifier, err = mfa.NewTOTPVerifier(c.ComparisonKey)
-	if err != nil {
-		return nil, invalidTOTPCompletion()
+	if !recovery {
+		s.verifier, err = mfa.NewTOTPVerifier(c.ComparisonKey)
+		if err != nil {
+			return nil, invalidTOTPCompletion()
+		}
 	}
 	s.custody, err = risk.NewProtectedProviderAdmissionCustody(c.Risk)
 	if err != nil {
@@ -192,9 +218,17 @@ func newNativeTOTPService(pool *database.Pool, request *magicpg.RequestService, 
 		if passwordProfile.GlobalAuthorityID != c.Profile.GlobalAuthorityID || passwordProfile.PolicyNamespace != c.Profile.PolicyNamespace || passwordProfile.Audience != c.Profile.Audience {
 			return nil, invalidTOTPCompletion()
 		}
-		s.effect, err = sessionpg.NewMFAPasswordTOTPCompletionEffect(c.Session, passwordProfile)
+		if recovery {
+			s.recoveryEffect, err = sessionpg.NewMFAPasswordRecoveryCompletionEffect(c.Session, passwordProfile)
+		} else {
+			s.effect, err = sessionpg.NewMFAPasswordTOTPCompletionEffect(c.Session, passwordProfile)
+		}
 	} else {
-		s.effect, err = sessionpg.NewMFATOTPCompletionEffect(c.Session, c.Profile)
+		if recovery {
+			s.recoveryEffect, err = sessionpg.NewMFARecoveryCompletionEffect(c.Session, c.Profile)
+		} else {
+			s.effect, err = sessionpg.NewMFATOTPCompletionEffect(c.Session, c.Profile)
+		}
 	}
 	if err != nil {
 		return nil, identity.InvalidInputError{Field: "reference_mfa_totp_session_effect"}
@@ -221,6 +255,7 @@ func newNativeTOTPService(pool *database.Pool, request *magicpg.RequestService, 
 
 type magicTOTPInput struct {
 	request         mfa.TotpVerifyRequest
+	recovery        *mfa.RecoveryUseRequest
 	command         identity.Command
 	continuation    mfa.PartialAuthContinuation
 	scope           mfa.ContinuationSpec
@@ -287,6 +322,34 @@ func (s *magicLinkTOTPService) readInputMode(ctx context.Context, r mfa.TotpVeri
 	if ctx == nil || s == nil || s.state == nil || r.Enrollment != nil || r.Validate() != nil {
 		return nil, invalidTOTPCompletion()
 	}
+	return s.readNativeMFAInput(ctx, nativeMFAOriginalInput{TenantID: r.TenantID, CommandID: r.CommandID, ChallengeID: mfa.ContinuationID(r.ChallengeID), PreAuthID: r.PreAuthID, Proof: r.Proof, Cookie: r.Cookie, Caller: r.Caller, Origin: r.Origin, Callback: r.Callback, Network: r.Network, Device: r.Device, totp: &r}, rateSource)
+}
+
+// Only validated public requests enter this shared primary/browser reader.
+// It owns no factor comparison or transaction; method-specific credential
+// custody stays in the original request, never converted into another method.
+type nativeMFAOriginalInput struct {
+	TenantID                          identity.TenantID
+	CommandID                         identity.CommandID
+	ChallengeID                       mfa.ContinuationID
+	PreAuthID                         identity.PreAuthTransactionID
+	Proof                             capability.Proof
+	Cookie                            auth.BearerCredential
+	Caller                            authorization.DecisionContext
+	Origin, Callback, Network, Device string
+	totp                              *mfa.TotpVerifyRequest
+	recovery                          *mfa.RecoveryUseRequest
+}
+
+func (r nativeMFAOriginalInput) preparedInput() *magicTOTPInput {
+	i := &magicTOTPInput{recovery: r.recovery}
+	if r.totp != nil {
+		i.request = *r.totp
+	}
+	return i
+}
+
+func (s *magicLinkTOTPService) readNativeMFAInput(ctx context.Context, r nativeMFAOriginalInput, rateSource bool) (out *magicTOTPInput, err error) {
 	state := s.state()
 	ctx, stop := context.WithTimeout(ctx, state.config.MaximumDuration)
 	defer stop()
@@ -305,7 +368,7 @@ func (s *magicLinkTOTPService) readInputMode(ctx context.Context, r mfa.TotpVeri
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	if r.TrustDevice || r.Caller.PolicyRevision != authorization.Revision(state.config.Coordinator.AdmissionPolicy.PolicyVersion) {
+	if r.totp != nil && r.totp.TrustDevice || r.Caller.PolicyRevision != authorization.Revision(state.config.Coordinator.AdmissionPolicy.PolicyVersion) {
 		return nil, identity.ForbiddenError{}
 	}
 	grant, primaryID, replayVersion, err := state.issuer.ReadIssuanceOrigin(ctx, state.pool, r.Proof, "identity.mfa.complete")
@@ -323,7 +386,12 @@ func (s *magicLinkTOTPService) readInputMode(ctx context.Context, r mfa.TotpVeri
 	if _, err := identity.ParseIdentifierID(payload.Subject); rateSource && err != nil {
 		return nil, identity.ForbiddenError{}
 	}
-	command, err := state.originalCommand(r, grant.EnvelopeDigest())
+	var command identity.Command
+	if r.recovery != nil {
+		command, err = state.originalRecoveryCommand(*r.recovery, grant.EnvelopeDigest())
+	} else {
+		command, err = state.originalCommand(*r.totp, grant.EnvelopeDigest())
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -331,7 +399,14 @@ func (s *magicLinkTOTPService) readInputMode(ctx context.Context, r mfa.TotpVeri
 	// advanced that version, and a successful completion is no longer active.
 	caller := r.Caller.Clone()
 	caller.Request.Resource = authorization.Resource{Type: "identity.anonymous-flow", ID: authorization.ResourceID(r.PreAuthID)}
-	receipt, found, historyErr := state.history.QueryMFATOTPCommand(ctx, command, caller)
+	var receipt identity.CommandResult
+	var found bool
+	var historyErr error
+	if r.recovery != nil {
+		receipt, found, historyErr = state.history.QueryMFARecoveryCommand(ctx, command, caller)
+	} else {
+		receipt, found, historyErr = state.history.QueryMFATOTPCommand(ctx, command, caller)
+	}
 	if found {
 		// Historical errors belong to the original receipt, not current admission.
 		// Retain no decrypted factor, session token or renewed authority here.
@@ -346,7 +421,10 @@ func (s *magicLinkTOTPService) readInputMode(ctx context.Context, r mfa.TotpVeri
 				return nil, historyErr
 			}
 		}
-		return &magicTOTPInput{request: r, command: command, historical: &receipt, historyError: historyErr, rateUser: identity.UserID(payload.Subject), rateChallenge: payload.ID, rateLifetime: rateLifetime}, nil
+		out = r.preparedInput()
+		out.command, out.historical, out.historyError = command, &receipt, historyErr
+		out.rateUser, out.rateChallenge, out.rateLifetime = identity.UserID(payload.Subject), payload.ID, rateLifetime
+		return out, nil
 	}
 	if historyErr != nil {
 		return nil, historyErr
@@ -357,6 +435,13 @@ func (s *magicLinkTOTPService) readInputMode(ctx context.Context, r mfa.TotpVeri
 	}
 	c, err := continuation.Bindings()
 	if err != nil || c.SourcePreAuthID != r.PreAuthID || c.Origin != r.Origin || c.PolicyVersion != state.config.Coordinator.AdmissionPolicy.PolicyVersion {
+		return nil, identity.ForbiddenError{}
+	}
+	method := "totp"
+	if r.recovery != nil {
+		method = "recovery-code"
+	}
+	if !slices.Contains(c.AllowedMethods, method) {
 		return nil, identity.ForbiddenError{}
 	}
 	flow, err := sessionpg.ReadPreAuth(ctx, state.pool.Raw(), state.config.Session, r.TenantID, r.PreAuthID)
@@ -442,7 +527,10 @@ func (s *magicLinkTOTPService) readInputMode(ctx context.Context, r mfa.TotpVeri
 		return nil, identity.ForbiddenError{}
 	}
 	if rateSource {
-		return &magicTOTPInput{request: r, command: command, rateUser: identity.UserID(payload.Subject), rateChallenge: payload.ID, rateLifetime: rateLifetime}, nil
+		out = r.preparedInput()
+		out.command = command
+		out.rateUser, out.rateChallenge, out.rateLifetime = identity.UserID(payload.Subject), payload.ID, rateLifetime
+		return out, nil
 	}
 	scope, scopeErr := continuation.ScopeDigest()
 	if scopeErr != nil {
@@ -454,8 +542,14 @@ func (s *magicLinkTOTPService) readInputMode(ctx context.Context, r mfa.TotpVeri
 	if err != nil {
 		return nil, err
 	}
-	out = &magicTOTPInput{request: r, command: command, continuation: continuation, scope: c, child: child, flow: flow, primary: primary, passwordPrimary: passwordPrimary, recipient: current, directory: directory, policy: epoch}
-	snapshot, err := state.factors.Read(ctx, grant, grant.Payload().Issuer, string(r.FactorID))
+	out = r.preparedInput()
+	out.command, out.continuation, out.scope, out.child, out.flow = command, continuation, c, child, flow
+	out.primary, out.passwordPrimary, out.recipient, out.directory, out.policy = primary, passwordPrimary, current, directory, epoch
+	if r.recovery != nil {
+		return out, nil
+	}
+	totp := r.totp
+	snapshot, err := state.factors.Read(ctx, grant, grant.Payload().Issuer, string(totp.FactorID))
 	if err != nil {
 		var denied identity.ForbiddenError
 		if !errors.As(err, &denied) {
@@ -491,7 +585,7 @@ func (s *magicLinkTOTPService) readInputMode(ctx context.Context, r mfa.TotpVeri
 	out.comparison, err = json.Marshal(struct {
 		Domain, Tenant, User, Factor, Challenge string
 		KeyVersion                              uint32
-	}{"identity-mfa-totp-comparison-v1", string(r.TenantID), string(current.User.ID), string(r.FactorID), string(r.ChallengeID), state.config.ComparisonKeyVersion})
+	}{"identity-mfa-totp-comparison-v1", string(r.TenantID), string(current.User.ID), string(totp.FactorID), string(r.ChallengeID), state.config.ComparisonKeyVersion})
 	return out, err
 }
 
@@ -525,6 +619,7 @@ func magicTOTPCompletionOperation() identity.FeatureOperation {
 // Delivery is a closed post-commit adapter, not an alternative transaction. It
 // starts empty and is armed only by the reconciled native completion result.
 type magicTOTPDelivery struct {
+	recovery    bool
 	command     identity.Command
 	receipt     identity.CommandResult
 	record      session.Session
@@ -539,8 +634,12 @@ func (p *magicTOTPDelivery) ExecuteIssue(ctx context.Context, request session.Is
 	if !ok || command != p.command {
 		return session.IssueExecution{}, invalidTOTPCompletion()
 	}
-	actual, err := sessionpg.MFATOTPCompletionSessionFields(record)
-	expected, expectedErr := sessionpg.MFATOTPCompletionSessionFields(p.record)
+	mapFields := sessionpg.MFATOTPCompletionSessionFields
+	if p.recovery {
+		mapFields = sessionpg.MFARecoveryCompletionSessionFields
+	}
+	actual, err := mapFields(record)
+	expected, expectedErr := mapFields(p.record)
 	if err != nil || expectedErr != nil || !reflect.DeepEqual(actual, expected) {
 		return session.IssueExecution{}, invalidTOTPCompletion()
 	}

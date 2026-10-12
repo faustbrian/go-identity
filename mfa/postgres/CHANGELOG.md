@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+- Expose non-secret matched-set preparation metadata only during the live native
+  recovery comparison callback. Wrong, zero, spent or returned custody denies;
+  the projection is not proof and protected completion must reverify the code
+  and exact original set/factor versions before issuing a session.
+
+- Add bounded digest-only recovery comparison with retained keys and unchanged
+  enrollment bindings. Native counted-denial and protected-completion handles
+  separate probing from actual single-use burn, shared continuation completion
+  and recorded custody for session mapping. Missing keys or corrupt active sets
+  fail closed; all durable effects remain in the coordinator's transaction.
+
+- Share continuation locking and denial-budget transitions between TOTP and
+  recovery-code methods without resetting original scope or remaining attempts.
+  Method switching cannot bypass exhaustion; unselected methods remain denied.
+
 - Add bounded password-signin factor selection and protected original-generation
   admission. Missing authority denies, known empty state alone permits SFA, and
   challenge creation requires an actual confirmed TOTP method in the same Work.

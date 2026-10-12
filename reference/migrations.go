@@ -95,6 +95,7 @@ type featureMigrationConfig struct {
 	magicMFAChallenge                                       bool
 	magicTOTP                                               bool
 	passwordMFA, passwordTOTP                               bool
+	passwordRecovery                                        bool
 	mfaEnrollment                                           bool
 	magicSignup                                             bool
 	preauthIssue                                            bool

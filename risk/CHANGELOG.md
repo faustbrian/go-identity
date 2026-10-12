@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Admit original-continuation recovery-code completion through the same protected
+  anonymous MFA counter policy as TOTP, without synthesizing a session.
+
 - Classify one-time TOTP URI disclosure as a protected credential mutation,
   with transaction-owned admission and the existing per-command attempt budget.
   It is not an unclassified or state-neutral read.

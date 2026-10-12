@@ -105,7 +105,7 @@ func handlerFixture(t *testing.T) (TOTPVerifyConfig, *native, string, *http.Cook
 }
 
 func TestTOTPHTTPClosedInputAndReplayHaveNoCredentialDelivery(t *testing.T) {
-	for _, mode := range []string{"replay", "origin", "idempotency", "duplicate", "unknown-field", "source-denied", "missing-device"} {
+	for _, mode := range []string{"replay", "conflict", "origin", "idempotency", "duplicate", "unknown-field", "source-denied", "missing-device"} {
 		t.Run(mode, func(t *testing.T) {
 			c, owner, body, device := handlerFixture(t)
 			h, err := NewTOTPVerifyHandler(c)
@@ -119,6 +119,10 @@ func TestTOTPHTTPClosedInputAndReplayHaveNoCredentialDelivery(t *testing.T) {
 				body = strings.TrimSuffix(body, "}") + `,"userID":"foreign"}`
 			case "source-denied":
 				owner.fail = true
+			case "conflict":
+				owner.result = func(r mfa.TotpVerifyRequest) (mfa.TotpVerifyResult, error) {
+					return mfa.TotpVerifyResult{Outcome: identity.CommitOutcomeNotCommitted, Session: session.IssueResult{CommandID: r.CommandID, CommitOutcome: identity.CommitOutcomeNotCommitted}}, identity.ConflictError{}
+				}
 			}
 			r := httptest.NewRequest(http.MethodPost, "https://tenant.example/v1/mfa/totp-verify", strings.NewReader(body))
 			r.RequestURI = r.URL.RequestURI()
@@ -142,7 +146,7 @@ func TestTOTPHTTPClosedInputAndReplayHaveNoCredentialDelivery(t *testing.T) {
 			if w.Header().Get("Set-Cookie") != "" || w.Header().Get("X-CSRF-Token") != "" || w.Header().Get("X-MFA-Token") != "" || w.Header().Get("Cache-Control") != "no-store" {
 				t.Fatal("denial/replay leaked credentials or cacheable output")
 			}
-			if mode == "replay" {
+			if mode == "replay" || mode == "conflict" {
 				if w.Code != 409 || owner.calls != 1 || owner.reads != 1 || owner.rate.calls != 2 {
 					t.Fatal("replay lost ordered native/rate admission", w.Code, owner.calls, owner.reads)
 				}

@@ -30,6 +30,7 @@ import (
 )
 
 type liveStores struct {
+	recoveryRace    bool
 	completionFault *completionCommitFault
 	stores          reference.StoreSet
 	pool            *database.Pool

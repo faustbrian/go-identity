@@ -33,6 +33,29 @@ func TestPasswordMFASessionAdmissionRetainsCredentialAndFactor(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	recoveryMetadata, _ := factor.Bindings()
+	recoveryMetadata.Method, recoveryMetadata.RecoverySetID, recoveryMetadata.RecoverySetVersion = "recovery-code", "BwcHBwcHBwcHBwcHBwcHBw", 2
+	recoveryFactor, err := session.NewMFAAuthentication(recoveryMetadata)
+	if err != nil {
+		t.Fatal(err)
+	}
+	recoveryRecord, err := session.NewSessionWithPasswordMFA(s, recoveryFactor)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, recoveryCredential, _, err := passwordMFASessionAdmissionMethod(profile, recoveryRecord, command.Binding, s.SessionID, s.Version, "recovery-code")
+	if err != nil || recoveryCredential.Credential.ID != identity.CredentialID(s.Authentication.CredentialID) || recoveryCredential.Credential.Version != s.Authentication.CredentialVersion {
+		t.Fatal("recovery issuance lost original credential", err)
+	}
+	if _, _, _, err := passwordMFASessionAdmissionMethod(profile, record, command.Binding, s.SessionID, s.Version, "recovery-code"); err == nil {
+		t.Fatal("recovery issuance accepted TOTP metadata")
+	}
+	if _, _, _, err := passwordMFASessionAdmission(profile, recoveryRecord, command.Binding, s.SessionID, s.Version); err != nil {
+		t.Fatal("selected MFA reader rejected complete recovery provenance", err)
+	}
+	if _, _, _, err := sessionAdmissionBindings(profile, recoveryRecord, command.Binding, s.SessionID, s.Version); err == nil {
+		t.Fatal("recovery MFA entered single-factor reader")
+	}
 	_, credential, _, err := passwordMFASessionAdmission(profile, record, command.Binding, s.SessionID, s.Version)
 	if err != nil || credential.Credential.ID != identity.CredentialID(s.Authentication.CredentialID) || credential.Credential.Version != s.Authentication.CredentialVersion {
 		t.Fatal("original credential lost", err)

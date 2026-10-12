@@ -3,19 +3,48 @@ package postgres
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
+	auth "github.com/faustbrian/go-authentication"
 	authorization "github.com/faustbrian/go-authorization"
 	identity "github.com/faustbrian/go-identity"
 	"github.com/jackc/pgx/v5"
 )
 
 func TestQueryMFATOTPCommandRetainsDenialWithoutCurrentContinuation(t *testing.T) {
+	testQueryMFACommandRetainsDenial(t, "totp-verify")
+}
+
+func TestQueryMFARecoveryCommandRetainsDenialWithoutCurrentContinuation(t *testing.T) {
+	testQueryMFACommandRetainsDenial(t, "recovery-use")
+}
+
+func testQueryMFACommandRetainsDenial(t *testing.T, method string) {
+	t.Helper()
 	c, _, _ := coordinatorFixture(t)
-	b, p := mfaCompletionPlanFixture(t, "totp-verify")
+	b, p := mfaCompletionPlanFixture(t, method)
 	spec := identity.FeatureCommandSpec{Binding: b, Operation: p.Feature.Operation, Fields: []identity.FeatureField{{Name: "proof-id", Value: identity.FeatureValue{Kind: identity.FeatureText, Text: p.Capability.CapabilityID}}}}
-	command := codeCodecCommand(t, spec, "123456")
+	makeCommand := func(value string) identity.Command {
+		if method == "totp-verify" {
+			return codeCodecCommand(t, spec, value)
+		}
+		code, err := auth.NewRecoveryCode("synthetic-recovery-" + value)
+		if err != nil {
+			t.Fatal(err)
+		}
+		command, err := identity.NewFeatureRecoveryCodePreAuthCommand(spec, code, auth.NewBearerCredential(strings.Repeat("A", 43)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return command
+	}
+	query := c.QueryMFATOTPCommand
+	if method == "recovery-use" {
+		query = c.QueryMFARecoveryCommand
+	}
+	command := makeCommand("123456")
 	claim, err := prepareClaim(command, c.keys.retained[c.keys.current])
 	if err != nil {
 		t.Fatal(err)
@@ -42,13 +71,13 @@ func TestQueryMFATOTPCommandRetainsDenialWithoutCurrentContinuation(t *testing.T
 	// Current key and continuation state may advance; neither replaces history.
 	c.keys.current = 2
 	c.keys.retained[2] = [32]byte{2}
-	got, found, err := c.QueryMFATOTPCommand(t.Context(), command, caller)
+	got, found, err := query(t.Context(), command, caller)
 	var forbidden identity.ForbiddenError
 	if !found || got.Outcome != identity.CommitOutcomeNotCommitted || !errors.As(err, &forbidden) {
 		t.Fatal("original denial lost", found, err)
 	}
-	changed := codeCodecCommand(t, spec, "654321")
-	got, found, err = c.QueryMFATOTPCommand(t.Context(), changed, caller)
+	changed := makeCommand("654321")
+	got, found, err = query(t.Context(), changed, caller)
 	var conflict identity.ConflictError
 	if !found || got.Outcome != identity.CommitOutcomeConflict || !errors.As(err, &conflict) {
 		t.Fatal("changed code adopted denial", found, err)
@@ -71,7 +100,7 @@ func TestQueryMFATOTPCommandRetainsDenialWithoutCurrentContinuation(t *testing.T
 				}
 				return copy, nil
 			}
-			got, _, err := c.QueryMFATOTPCommand(t.Context(), command, caller)
+			got, _, err := query(t.Context(), command, caller)
 			if err == nil || got != (identity.CommandResult{}) {
 				t.Fatal("unproved history returned", mode, err)
 			}
@@ -80,14 +109,14 @@ func TestQueryMFATOTPCommandRetainsDenialWithoutCurrentContinuation(t *testing.T
 	c.commandRead = func(context.Context, identity.CommandID) (commandObservation, error) {
 		return commandObservation{}, pgx.ErrNoRows
 	}
-	got, found, err = c.QueryMFATOTPCommand(t.Context(), command, caller)
+	got, found, err = query(t.Context(), command, caller)
 	if found || err != nil || got != (identity.CommandResult{}) {
 		t.Fatal("authorized absence unavailable", found, err)
 	}
 	c.queryPolicy.Authorization = queryDecision(func(context.Context, authorization.DecisionContext) (authorization.Decision, error) {
 		return authorization.Decision{Outcome: authorization.Deny, Revision: 9}, nil
 	})
-	_, found, err = c.QueryMFATOTPCommand(t.Context(), command, caller)
+	_, found, err = query(t.Context(), command, caller)
 	if found || !errors.As(err, &forbidden) {
 		t.Fatal("absence disclosed without policy", found, err)
 	}

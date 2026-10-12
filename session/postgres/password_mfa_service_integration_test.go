@@ -25,7 +25,7 @@ func testPasswordMFASessionRead(t *testing.T, ctx context.Context, pool *databas
 	s, _ := original.Bindings()
 	m, _ := original.MFAAuthentication().Bindings()
 	primary, _ := original.MagicLinkAuthentication().Bindings()
-	credentialID := "password-mfa-reader-fixture"
+	credentialID := "password-mfa-reader-fixture-" + m.Method
 	if _, err := pool.Raw().Exec(ctx, `INSERT INTO identity.credential_references(tenant_id,user_id,credential_id,kind,owner,version,enabled) VALUES($1,$2,$3,1,'identity/password',1,true)`, string(s.TenantID), string(s.UserID), credentialID); err != nil {
 		t.Fatal(err)
 	}

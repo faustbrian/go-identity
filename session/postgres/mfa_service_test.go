@@ -46,13 +46,24 @@ func TestMFASessionAdmissionKeepsExactFactorOwner(t *testing.T) {
 	factorKey, _ := mfapg.FactorAuthorityKey(s.TenantID, s.UserID)
 	a.Global.ScopeKey, a.Tenant.ScopeKey, a.User.ScopeKey, a.Identifier.ScopeKey, a.Credential.ScopeKey = keys.Global, keys.Tenant, keys.User, keys.Identifier, keys.Credential
 	a.SessionFamily.ScopeKey, a.Session.ScopeKey, a.Authorization.ScopeKey, a.Factor.Binding.ScopeKey = sessionKeys.Family, sessionKeys.Session, policyKey, factorKey
-	for _, foreign := range []bool{false, true} {
+	for _, test := range []struct{ foreign, recovery bool }{{false, false}, {true, false}, {false, true}, {true, true}} {
+		foreign := test.foreign
 		current := a
 		if foreign {
 			current.Factor.Binding.ScopeKey = "foreign-factor"
 		}
 		s.Authority, _ = session.NewAuthoritySnapshot(current)
-		expected, err := session.NewSessionWithMagicLinkMFA(s, record.MagicLinkAuthentication(), record.MFAAuthentication())
+		factor := record.MFAAuthentication()
+		if test.recovery {
+			metadata, _ := factor.Bindings()
+			metadata.Method, metadata.RecoverySetID, metadata.RecoverySetVersion = "recovery-code", "BwcHBwcHBwcHBwcHBwcHBw", 2
+			var err error
+			factor, err = session.NewMFAAuthentication(metadata)
+			if err != nil {
+				t.Fatal(err)
+			}
+		}
+		expected, err := session.NewSessionWithMagicLinkMFA(s, record.MagicLinkAuthentication(), factor)
 		if err != nil {
 			t.Fatal(err)
 		}

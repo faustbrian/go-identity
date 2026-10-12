@@ -20,22 +20,29 @@ import (
 // safe; discard every secret-bearing copy at terminal outcomes. Recovery uses
 // code/cookie-free metadata; Go cannot guarantee immutable secret erasure.
 func NewFeatureOneTimeCodePreAuthCommand(spec FeatureCommandSpec, code authentication.OneTimeCode, cookie authentication.BearerCredential) (Command, error) {
-	wire := cookie.Token()
-	if len(wire) < 43 || len(wire) > 86 {
-		return Command{}, invalidFeatureCommand()
-	}
-	raw, err := base64.RawURLEncoding.Strict().DecodeString(wire)
-	defer clear(raw)
-	if err != nil || len(raw) < 32 || len(raw) > 64 || base64.RawURLEncoding.EncodeToString(raw) != wire {
-		return Command{}, invalidFeatureCommand()
+	frozen, err := freezeFeaturePreAuthCookie(cookie)
+	if err != nil {
+		return Command{}, err
 	}
 	c, err := NewFeatureOneTimeCodeCommand(spec, code)
 	if err != nil {
 		return Command{}, err
 	}
-	frozen := authentication.NewBearerCredential(strings.Clone(wire))
 	c.feature.preAuthCookie = &frozen
 	return c, nil
+}
+
+func freezeFeaturePreAuthCookie(cookie authentication.BearerCredential) (authentication.BearerCredential, error) {
+	wire := cookie.Token()
+	if len(wire) < 43 || len(wire) > 86 {
+		return authentication.BearerCredential{}, invalidFeatureCommand()
+	}
+	raw, err := base64.RawURLEncoding.Strict().DecodeString(wire)
+	defer clear(raw)
+	if err != nil || len(raw) < 32 || len(raw) > 64 || base64.RawURLEncoding.EncodeToString(raw) != wire {
+		return authentication.BearerCredential{}, invalidFeatureCommand()
+	}
+	return authentication.NewBearerCredential(strings.Clone(wire)), nil
 }
 
 // PreAuthCookie lends the exact submitted bearer only to trusted native owners

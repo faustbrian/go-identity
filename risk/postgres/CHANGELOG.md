@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Retain distinct recovery-code/browser custody through protected MFA counters.
+  Install `MFARecoveryCounterMigrationSource` after completion counter history
+  before selecting recovery completion; existing allowance and timing persist.
+
 - Preserve original session-bearer custody when preparing protected feature
   counters, including MFA enrollment. Counter preparation still grants no
   authentication authority; the owning workflow performs its primary checks.

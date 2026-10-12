@@ -87,6 +87,43 @@ func TestMFASessionPreservesOriginalPrimaryAndFreshness(t *testing.T) {
 	}
 }
 
+func TestRecoveryMFASessionPreservesDistinctSetAndFactorProvenance(t *testing.T) {
+	s, primary, p := mfaMagicLinkSession(t)
+	p.Method = "recovery-code"
+	p.RecoverySetID = "BwcHBwcHBwcHBwcHBwcHBw"
+	p.RecoverySetVersion = 2
+	metadata, err := session.NewMFAAuthentication(p)
+	if err != nil {
+		t.Fatal("recovery completion provenance unavailable", err)
+	}
+	record, err := session.NewSessionWithMagicLinkMFA(s, primary, metadata)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, _ := record.MFAAuthentication().Bindings()
+	if got != p || got.FactorID == string(got.RecoverySetID) {
+		t.Fatal("recovery set replaced original factor enrollment")
+	}
+	original, _ := primary.Bindings()
+	policy, _ := s.Remember.Bindings()
+	life, err := record.Lifetime(original.AuthenticatedAt.Add(policy.FreshFor))
+	if err != nil || life.Fresh {
+		t.Fatal("recovery renewed original primary freshness", err)
+	}
+	for _, mutate := range []func(*session.MFAAuthenticationSpec){
+		func(p *session.MFAAuthenticationSpec) { p.RecoverySetID = "" },
+		func(p *session.MFAAuthenticationSpec) { p.RecoverySetID = "bad" },
+		func(p *session.MFAAuthenticationSpec) { p.RecoverySetVersion = 0 },
+		func(p *session.MFAAuthenticationSpec) { p.Method = "totp" },
+	} {
+		changed := p
+		mutate(&changed)
+		if _, err := session.NewMFAAuthentication(changed); err == nil {
+			t.Fatal("missing or cross-method recovery provenance accepted")
+		}
+	}
+}
+
 func TestMFASessionRejectsForeignPrimaryAndMalformedProvenance(t *testing.T) {
 	for _, change := range []func(*session.MFAAuthenticationSpec){
 		func(p *session.MFAAuthenticationSpec) { p.CommandID = "bad" },

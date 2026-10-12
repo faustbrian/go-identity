@@ -2,9 +2,11 @@ package postgres
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
+	auth "github.com/faustbrian/go-authentication"
 	identity "github.com/faustbrian/go-identity"
 )
 
@@ -71,7 +73,7 @@ func TestMFACompletionCustodyRequiresProtectedConsumedInvocation(t *testing.T) {
 }
 
 func TestMFACompletionPreparationRequiresNativeScopeAndConservesVersions(t *testing.T) {
-	for _, method := range []string{"totp-verify", "otp-verify"} {
+	for _, method := range []string{"totp-verify", "otp-verify", "recovery-use"} {
 		t.Run(method, func(t *testing.T) { testMFACompletionPreparation(t, method) })
 	}
 }
@@ -84,6 +86,15 @@ func testMFACompletionPreparation(t *testing.T, method string) {
 	if method == "otp-verify" || method == "totp-verify" {
 		spec, _ := command.Feature()
 		command = codeCodecCommand(t, spec, "123456")
+	}
+	if method == "recovery-use" {
+		spec, _ := command.Feature()
+		code, _ := auth.NewRecoveryCode("synthetic-recovery-code")
+		var err error
+		command, err = identity.NewFeatureRecoveryCodePreAuthCommand(spec, code, auth.NewBearerCredential(strings.Repeat("A", 43)))
+		if err != nil {
+			t.Fatal(err)
+		}
 	}
 	owner := &mfaCompletionValidationParticipant{magicLinkPreparationParticipant: magicLinkPreparationParticipant{outputPreparationParticipant: outputPreparationParticipant{scopeFeatureParticipant{operations: []identity.FeatureOperation{op}}}, expected: command, proof: *p.Capability}, completion: *p.MFACompletion}
 	entries := []Contributor{&Repository{}, &riskPassiveProbe{registryContributor{p.Contributors[1]}}, &riskPassiveProbe{registryContributor{p.Contributors[2]}}, owner, &magicLinkPreparationCounter{}, &capabilityExecutionProbe{}}
@@ -132,7 +143,7 @@ func testMFACompletionPreparation(t *testing.T, method string) {
 	if _, _, _, err := c.prepareRestoredFeature(b, command, prepared); err != nil {
 		t.Fatal("native completion execution unavailable", err)
 	}
-	if method == "otp-verify" || method == "totp-verify" {
+	if method == "otp-verify" || method == "totp-verify" || method == "recovery-use" {
 		if _, err := c.PrepareCommandPlan(b, command, prepared); err == nil {
 			t.Fatal("ordinary preparation admitted opaque factor custody")
 		}

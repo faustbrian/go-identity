@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- Support recovery-code command custody in explicit password and magic-link MFA
+  issuers. Preserve exact method/operation binding and withhold reveal-once bearer
+  and synchronizer custody on replay, ambiguity, expiry or substituted receipts.
+  OTP custody cannot bind a recovery preparation or spend its bind claim.
+
+- Preserve distinct recovery-code set identity and epoch alongside original
+  factor enrollment and primary authentication in MFA session metadata. Reject
+  incomplete or cross-method provenance without renewing freshness or remember
+  policy; TOTP metadata retains its existing serialized shape.
+
 - Add explicit password-primary TOTP session provenance and commit-gated
   issuance preparation. Retain the original password credential, authentication
   time, expiry and remember policy through update and encrypted-cache restart;

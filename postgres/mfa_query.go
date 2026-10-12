@@ -23,12 +23,33 @@ import (
 // authenticate or reveal a session. No participant, code comparison, generation,
 // reservation, consumption, mutation or recovery is invoked by this read.
 func (c *Coordinator) QueryMFATOTPCommand(ctx context.Context, command identity.Command, caller authorization.DecisionContext) (identity.CommandResult, bool, error) {
+	return c.queryMFACommand(ctx, command, caller, "identity.mfa.totp-verify")
+}
+
+// QueryMFARecoveryCommand observes authorized original recovery-code history
+// using its retained fingerprint key and frozen plan, without comparing against
+// stored codes or charging an attempt. Matching denied retries remain observable
+// after continuation changes; changed code/browser conflicts. Retired, missing
+// or corrupt evidence fails closed. Presence includes conflicting input; only
+// authorized absence returns false with no error. A receipt grants no factor
+// authority, session delivery or permission to repeat uncertain consumption.
+func (c *Coordinator) QueryMFARecoveryCommand(ctx context.Context, command identity.Command, caller authorization.DecisionContext) (identity.CommandResult, bool, error) {
+	return c.queryMFACommand(ctx, command, caller, "identity.mfa.recovery-use")
+}
+
+func (c *Coordinator) queryMFACommand(ctx context.Context, command identity.Command, caller authorization.DecisionContext, operation string) (identity.CommandResult, bool, error) {
 	if ctx == nil || c == nil || c.commandRead == nil || c.queryPolicy == nil || c.admissionPolicy == nil || c.maximumDuration <= 0 {
 		return identity.CommandResult{}, false, coordinatorError()
 	}
 	spec, ok := command.Feature()
-	_, opaque := command.OneTimeCode()
-	if !ok || !opaque || spec.Operation.OperationID != "identity.mfa.totp-verify" || !mfaCompletionOperation(spec.Operation) {
+	var opaque bool
+	switch operation {
+	case "identity.mfa.totp-verify":
+		_, opaque = command.OneTimeCode()
+	case "identity.mfa.recovery-use":
+		_, opaque = command.RecoveryCode()
+	}
+	if !ok || !opaque || spec.Operation.OperationID != operation || !mfaCompletionOperation(spec.Operation) {
 		return identity.CommandResult{}, false, invalidPlan()
 	}
 	if _, err := prepareClaim(command, c.keys.retained[c.keys.current]); err != nil {

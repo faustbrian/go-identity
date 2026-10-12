@@ -80,7 +80,7 @@ func newPasswordSessionService(pool *database.Pool, c SessionServiceConfig, mfa 
 		if err != nil {
 			return nil, session.ErrInvalidInput
 		}
-		cacheProfile = nativeAdmissionCacheProfile("native-mfa-password-totp-session-v1", cacheProfile)
+		cacheProfile = nativeAdmissionCacheProfile("native-mfa-password-totp-recovery-session-v2", cacheProfile)
 	}
 	return session.NewProfileSessionService(r, c.Validation, session.AuthenticationVerified, cacheProfile)
 }

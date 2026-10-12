@@ -67,6 +67,40 @@ func TestMFATOTPCompletionEffectRequiresActualProtectedFactor(t *testing.T) {
 	}
 }
 
+func TestMFARecoveryCompletionEffectRequiresRecordedNativeBurn(t *testing.T) {
+	c := Config{Schema: "session_store", MaximumDuration: time.Second}
+	magic, err := NewMFARecoveryCompletionEffect(c, MagicLinkAdmissionConfig{GlobalAuthorityID: "deployment", PolicyNamespace: "users", Audience: "identity"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	password, err := NewMFAPasswordRecoveryCompletionEffect(c, IdentifierAdmissionConfig{GlobalAuthorityID: "deployment", PolicyNamespace: "users", Audience: "identity", AuthenticationMethod: "password", CredentialKind: identity.CredentialPassword, CredentialOwner: "identity/password"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, effect := range []*MFARecoveryCompletionEffect{nil, {}, magic, password} {
+		if _, err := effect.Apply(context.Background(), kernel.Work{}, nil, identity.Command{}, kernel.RecipientRecord{}, mfapg.LockedRecoveryCompletion{}); err == nil {
+			t.Fatal("session issued without recorded recovery burn")
+		}
+		if _, err := effect.Recover(context.Background(), kernel.RecoveryWork{}, nil); err == nil {
+			t.Fatal("unowned recovery evidence accepted")
+		}
+	}
+	if fmt.Sprintf("%#v", password) != "postgres.MFARecoveryCompletionEffect(redacted)" {
+		t.Fatal("recovery profile disclosed")
+	}
+	if _, err := json.Marshal(password); !errors.Is(err, session.ErrSecretSerialization) {
+		t.Fatal("recovery profile serialized", err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, err := password.Apply(ctx, kernel.Work{}, nil, identity.Command{}, kernel.RecipientRecord{}, mfapg.LockedRecoveryCompletion{}); !errors.Is(err, context.Canceled) {
+		t.Fatal("recovery effect lost cancellation", err)
+	}
+	if mfaRecoveryIssuanceDigest([32]byte{1}, "user", "session", "family", []byte{1}) == mfaTOTPIssuanceDigest([32]byte{1}, "user", "session", "family", []byte{1}) {
+		t.Fatal("recovery reused TOTP issuance evidence")
+	}
+}
+
 func TestMFAFactorAuthorityKeyIsOwnerAndTenantBound(t *testing.T) {
 	a, err := mfapg.FactorAuthorityKey("a", "b:c")
 	if err != nil {

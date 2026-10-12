@@ -40,7 +40,7 @@ func (r *Repository) PrepareVerificationCommandCounters(c identity.Command, subj
 	return r.prepareCommandCounters(c, subject, capabilityID, nil, primaryTime)
 }
 
-// PrepareMFACompletionCommandCounters selects only anonymous native TOTP login
+// PrepareMFACompletionCommandCounters selects only anonymous native TOTP/recovery login
 // completion. It binds the signed continuation subject and child plan without
 // inventing an authenticated session or changing command user ownership.
 // Preserve opaque code/cookie custody. The actual reservation/current checks
@@ -49,6 +49,9 @@ func (r *Repository) PrepareVerificationCommandCounters(c identity.Command, subj
 func (r *Repository) PrepareMFACompletionCommandCounters(c identity.Command, subject risk.Subject, child identitypostgres.CapabilityPlan, completion identitypostgres.MFACompletionPlan, at time.Time) (identity.Command, identitypostgres.CommandCounterPlan, error) {
 	s, ok := c.Feature()
 	_, code := c.OneTimeCode()
+	if ok && s.Operation.OperationID == "identity.mfa.recovery-use" {
+		_, code = c.RecoveryCode()
+	}
 	_, cookie := c.PreAuthCookie()
 	if !ok || !anonymousMFACounter(s) || !code || !cookie || subject.User != string(completion.UserID) || completion.UserID == "" || child.Purpose != "identity.mfa.complete" || child.MaxUses != 1 || child.CapabilityID != string(completion.ID) || completion.ScopeDigest == ([32]byte{}) || completion.PolicyVersion == 0 || completion.FactorVersion == 0 || completion.ContinuationVersion == 0 {
 		return identity.Command{}, identitypostgres.CommandCounterPlan{}, risk.ErrInvalidCounterCommand
@@ -57,7 +60,11 @@ func (r *Repository) PrepareMFACompletionCommandCounters(c identity.Command, sub
 }
 
 func anonymousMFACounter(s identity.FeatureCommandSpec) bool {
-	return s.Operation == (identity.FeatureOperation{Owner: "identity/mfa", OperationID: "identity.mfa.totp-verify", SchemaID: "mfa-totp-verify", SchemaVersion: 1, RecordRequirement: identity.FeatureRecordOmitted, SubjectRequirement: identity.FeatureSubjectAnonymousFlow}) && s.Binding.UserID == "" && s.Binding.AnonymousFlowID != "" && s.Binding.RecordID == ""
+	operation, schema := "identity.mfa.totp-verify", "mfa-totp-verify"
+	if s.Operation.OperationID == "identity.mfa.recovery-use" {
+		operation, schema = "identity.mfa.recovery-use", "mfa-recovery-use"
+	}
+	return s.Operation == (identity.FeatureOperation{Owner: "identity/mfa", OperationID: operation, SchemaID: schema, SchemaVersion: 1, RecordRequirement: identity.FeatureRecordOmitted, SubjectRequirement: identity.FeatureSubjectAnonymousFlow}) && s.Binding.UserID == "" && s.Binding.AnonymousFlowID != "" && s.Binding.RecordID == ""
 }
 
 func (r *Repository) prepareCommandCounters(c identity.Command, subject risk.Subject, capabilityID string, mfa *identitypostgres.MFACompletionPlan, primaryTime time.Time) (identity.Command, identitypostgres.CommandCounterPlan, error) {
@@ -105,6 +112,10 @@ func (r *Repository) prepareCommandCounters(c identity.Command, subject risk.Sub
 		code, _ := c.OneTimeCode()
 		cookie, _ := c.PreAuthCookie()
 		mapped, e = identity.NewFeatureOneTimeCodePreAuthCommand(s, code, cookie)
+		if s.Operation.OperationID == "identity.mfa.recovery-use" {
+			recovery, _ := c.RecoveryCode()
+			mapped, e = identity.NewFeatureRecoveryCodePreAuthCommand(s, recovery, cookie)
+		}
 	} else if hash, bearer, proof, authenticated := c.PasswordChangeCustody(); authenticated {
 		// Rebuild the disjoint variant without dropping or renewing any original
 		// custody. Counter preparation itself authenticates neither the bearer
@@ -157,7 +168,7 @@ type restoredCounter struct {
 
 func prepareNativeCounter(p risk.CommandCounterPolicy, scope risk.Context, subject risk.Subject, capabilityID string, at time.Time) (risk.CounterCommand, error) {
 	if capabilityID != "" {
-		if scope.Operation == "identity.mfa.totp-verify" {
+		if nativeMFACounterAction(scope.Operation) {
 			return p.PrepareMFACompletion(scope, subject, capabilityID, at)
 		}
 		return p.PrepareVerification(scope, subject, capabilityID, at)
@@ -167,12 +178,16 @@ func prepareNativeCounter(p risk.CommandCounterPolicy, scope risk.Context, subje
 
 func (n restoredCounter) validateAt(at time.Time) error {
 	if n.capabilityID != "" {
-		if n.scope.Operation == "identity.mfa.totp-verify" {
+		if nativeMFACounterAction(n.scope.Operation) {
 			return n.policy.ValidateMFACompletion(n.command, n.scope, n.subject, n.capabilityID, at)
 		}
 		return n.policy.ValidateVerification(n.command, n.scope, n.subject, n.capabilityID, at)
 	}
 	return n.policy.Validate(n.command, n.scope, n.subject, at)
+}
+
+func nativeMFACounterAction(action risk.Action) bool {
+	return action == "identity.mfa.totp-verify" || action == "identity.mfa.recovery-use"
 }
 
 // ValidateCommandCounters reconstructs exact native scope and its original
