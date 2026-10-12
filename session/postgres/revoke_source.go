@@ -33,15 +33,27 @@ func MapRevokeOneRequest(request session.RevokeOneRequest) (identity.Command, er
 	if err != nil {
 		return identity.Command{}, err
 	}
-	caller, err := mapSessionRecord(one.Binding, session.RevokeOneOperation(), request.Caller())
+	caller, err := mapRevokeSessionRecord(one.Binding, request.Caller())
 	if err != nil {
 		return identity.Command{}, err
 	}
 	projection, _ := target.Feature()
 	source, _ := caller.Feature()
-	for _, f := range source.Fields {
-		f.Name = "caller." + f.Name
-		projection.Fields = append(projection.Fields, f)
+	if len(projection.Fields)+len(source.Fields)+2 > 128 {
+		// The full MFA self-target record exceeds the command's field bound
+		// when duplicated. Retain it once, with an explicit original-source
+		// reference. Never alias independently different source/target records.
+		a, _, ae := encodeRecord(request.Caller())
+		z, _, ze := encodeRecord(one.Session)
+		if ae != nil || ze != nil || !bytes.Equal(a, z) {
+			return identity.Command{}, session.ErrInvalidSessionCommand
+		}
+		projection.Fields = append(projection.Fields, identity.FeatureField{Name: "caller.same-target", Value: identity.FeatureValue{Kind: identity.FeatureBool, Bool: true}})
+	} else {
+		for _, f := range source.Fields {
+			f.Name = "caller." + f.Name
+			projection.Fields = append(projection.Fields, f)
+		}
 	}
 	projection.Fields = append(projection.Fields, identity.FeatureField{Name: "caller.valid-until", Value: identity.FeatureValue{Kind: identity.FeatureText, Text: request.ValidUntil().UTC().Format(storedTimeLayout)}})
 	if _, strict := request.CSRFToken(); strict {
@@ -67,8 +79,14 @@ func nativeRevokeIntent(command identity.Command) (session.SessionCommand, *revo
 	var until time.Time
 	hasUntil := false
 	csrf := false
+	sameTarget := false
 	for _, f := range projection.Fields {
-		if f.Name == "caller.csrf-required" {
+		if f.Name == "caller.same-target" {
+			if f.Value.Kind != identity.FeatureBool || !f.Value.Bool {
+				return fail()
+			}
+			sameTarget = true
+		} else if f.Name == "caller.csrf-required" {
 			if f.Value.Kind != identity.FeatureBool || !f.Value.Bool {
 				return fail()
 			}
@@ -94,7 +112,7 @@ func nativeRevokeIntent(command identity.Command) (session.SessionCommand, *revo
 	if err != nil {
 		return fail()
 	}
-	b, record, err := nativeSessionRecord(targetCommand, session.RevokeOneOperation())
+	b, record, err := nativeRevokeSessionRecord(targetCommand)
 	if err != nil {
 		return fail()
 	}
@@ -103,6 +121,9 @@ func nativeRevokeIntent(command identity.Command) (session.SessionCommand, *revo
 		return fail()
 	}
 	if len(caller.Fields) == 0 && !hasUntil {
+		if sameTarget {
+			return fail()
+		}
 		if csrf {
 			return fail()
 		}
@@ -111,13 +132,20 @@ func nativeRevokeIntent(command identity.Command) (session.SessionCommand, *revo
 	if !hasUntil {
 		return fail()
 	}
-	sourceCommand, err := identity.NewFeatureCommand(caller)
-	if err != nil {
-		return fail()
-	}
-	_, source, err := nativeSessionRecord(sourceCommand, session.RevokeOneOperation())
-	if err != nil {
-		return fail()
+	source := record
+	if sameTarget {
+		if len(caller.Fields) != 0 {
+			return fail()
+		}
+	} else {
+		sourceCommand, err := identity.NewFeatureCommand(caller)
+		if err != nil {
+			return fail()
+		}
+		_, source, err = nativeRevokeSessionRecord(sourceCommand)
+		if err != nil {
+			return fail()
+		}
 	}
 	spec, _ := source.Bindings()
 	dest, _ := record.Bindings()
@@ -150,17 +178,7 @@ func (r *Repository) requireRevokeSource(ctx context.Context, w kernel.Work, b i
 	ctx, cancel := context.WithTimeout(ctx, r.maximumDuration)
 	defer cancel()
 	spec, _ := source.record.Bindings()
-	directory, credential, policy, err := sessionAdmissionBindings(IdentifierAdmissionConfig(*r.issueAdmission), source.record, b, spec.SessionID, spec.Version)
-	if err != nil {
-		return err
-	}
-	if err = w.RequireActiveDirectoryAuthority(ctx, r, directory); err != nil {
-		return err
-	}
-	if _, err = w.RequireActiveCredential(ctx, r, credential); err != nil {
-		return err
-	}
-	if err = w.RequireActiveUserAuthorization(ctx, r, policy); err != nil {
+	if err := r.requireRevokeRecordAuthority(ctx, w, source.record, b); err != nil {
 		return err
 	}
 	destination, _ := target.Bindings()

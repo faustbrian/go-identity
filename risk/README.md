@@ -60,6 +60,22 @@ the native mutation owner must reserve and recheck the exact matching counter
 policy in the protected transaction. HIBP and every other mandatory provider
 remain fail-closed. Ordinary `Policy.Assess` still requires velocity.
 
+`Evaluator.EvaluateProtectedProviders` collects those facts through the same
+configured bounded readers and failure handling as ordinary evaluation. It
+does not call velocity or the standalone audit sink: native counters and audit
+belong to the protected transaction. `RequireProtectedProviderAdmission`
+rechecks the owned result's original scope and exclusive expiry without
+provider redispatch. Neither method grants authentication, factor proof or
+mutation permission; public MFA composition is still incomplete.
+
+`ProtectedProviderAdmissionCustody` retains the provider-only result through
+the existing native admission integrity codec and encrypted preparation output.
+It has a distinct profile from Authentication custody and requires pinned
+source/configuration versions. Restore never reruns providers or renews facts;
+`CheckAt` uses trusted primary time without callbacks under native locks.
+`ValidateCounterPolicy` requires the same immutable policy for native counters.
+No additional store, replay journal or evidence issuer is introduced.
+
 ### Owned velocity recovery custody
 
 The private `risk/internal/velocity` connection orders owned adapter calls:
@@ -334,6 +350,16 @@ requirements. These methods neither authenticate a proof nor authorize a
 mutation; the native participant must reserve, recheck and recover counters
 in the same owning coordinator as the protected email mutation. Concrete
 adapter adoption and composed confirmation remain under development.
+
+Anonymous TOTP login completion separately selects `PrepareMFACompletion` and
+`ValidateMFACompletion` for `identity.mfa.totp-verify`. Authenticate the original
+continuation's subject and child capability at the native MFA owner first.
+This lane retains the same protected limits, phase and failure policy and uses
+the same four dimension kinds; it does not reclassify enrollment or step-up
+as authentication. Wrong-code attempts need command-owned risk charging as
+well as the MFA budget, not a success-only charge. These pure APIs grant no
+allowance or factor authority. Native adapter integration remains unfinished;
+do not enable public completion by substituting Authentication admission.
 
 `NewLockoutPolicy(LockoutPolicyConfig)` composes an existing
 `CommandCounterPolicy` with an explicit positive microsecond-exact

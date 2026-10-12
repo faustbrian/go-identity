@@ -2,6 +2,25 @@
 
 ## Unreleased
 
+- Add explicit TOTP-completed magic-link session metadata and commit-gated
+  native issuance. Preserve the original primary time and resolved remember
+  policy, retain factor/continuation provenance through update, rotation and
+  encrypted cache, and deny changed-factor receipts or replay disclosure.
+  The native durable MFA executor must verify and commit all required effects;
+  this profile does not make projection-only metadata authentication authority.
+
+- Add explicit selected-method session admission for combined password, OTP and
+  magic-link owners. Freeze the selected set and bind it into encrypted-cache
+  custody alongside the native owner profile. Changed method selection requires
+  authoritative refresh; it cannot reuse a warm positive from another profile.
+  Existing single-method and generic constructors preserve their contracts.
+
+- Add explicit prospective magic-link session preparation and bind-once
+  native-command custody. Preserve original grant, remember and CSRF state;
+  reveal credentials only after a fresh known commit, never replay, recovery,
+  ambiguity or expired original authority. Native proof/browser verification
+  and atomic PostgreSQL consumption remain required.
+
 - Add closed method and selected-reader-profile cache admission. Native adapters
   can bind positive encrypted entries to their exact authority configuration;
   foreign methods/profiles refresh from primary instead of borrowing validity.

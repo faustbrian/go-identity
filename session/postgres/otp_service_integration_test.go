@@ -317,4 +317,7 @@ func testNativeOTPSessionAuthentication(t *testing.T, ctx context.Context, pool 
 			t.Fatal("magic-link reader crossed tenant", err)
 		}
 	})
+	t.Run("selected possession self-signout", func(t *testing.T) {
+		testSelectedPossessionSignOut(t, ctx, pool, c, original)
+	})
 }

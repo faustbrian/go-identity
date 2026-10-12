@@ -163,6 +163,21 @@ func (w CommandCounterWork) NativeCommand(p CommandCounterContributor) (identity
 	return w.state.command, nil
 }
 
+// MFACompletionScope lends the exact frozen anonymous TOTP completion subject
+// and child plan only to the registered counter owner. It grants no factor or
+// consumption authority; its purpose is to prevent a caller-selected counter
+// subject or fictitious session. Zero, other profiles and foreign custody deny.
+func (w CommandCounterWork) MFACompletionScope(owner CommandCounterContributor) (CapabilityPlan, MFACompletionPlan, error) {
+	if _, err := w.Binding(owner); err != nil {
+		return CapabilityPlan{}, MFACompletionPlan{}, err
+	}
+	p := w.state.work.state.execution.reservation.plan
+	if p.feature == nil || p.feature.Operation.OperationID != "identity.mfa.totp-verify" || !validMFACompletionPlan(p.binding, p.snapshot()) {
+		return CapabilityPlan{}, MFACompletionPlan{}, invalidWork()
+	}
+	return *p.capability, *p.mfaCompletion, nil
+}
+
 // Exec executes one bounded trusted statement, never transaction closure.
 func (w CommandCounterWork) Exec(ctx context.Context, sql string, args ...any) (int64, error) {
 	if err := w.usable(); err != nil {
@@ -211,9 +226,7 @@ func (c *Coordinator) reserveCommandCounters(ctx context.Context, tx pgx.Tx, com
 	work.state.registry = c.registry.state
 	r := &reservationState{coordinator: c, request: q, plan: p, journal: j, owner: owner}
 	work.state.execution = &domainExecution{coordinator: c, reservation: r, ctx: ctx}
-	state := &commandCounterState{work: work, participant: participant, command: command, active: true}
 	defer func() {
-		state.active = false
 		invalidateWork(work)
 		if recover() != nil {
 			denied = false
@@ -226,14 +239,13 @@ func (c *Coordinator) reserveCommandCounters(ctx context.Context, tx pgx.Tx, com
 	if err = configureKernelWork(ctx, work); err != nil {
 		return false, err
 	}
-	choice, err := participant.ReserveCommandCounters(ctx, CommandCounterWork{state: state})
+	choice, err := c.reserveCounterInWork(ctx, work, participant, command)
 	if err != nil {
 		return false, identity.UnavailableError{}
 	}
 	if work.state.rows != nil || work.usable() != nil || choice != CommandCounterAllowed && choice != CommandCounterDenied {
 		return false, invalidWork()
 	}
-	state.active = false
 	if choice == CommandCounterAllowed {
 		return false, nil
 	}
@@ -261,4 +273,24 @@ func (c *Coordinator) reserveCommandCounters(ctx context.Context, tx pgx.Tx, com
 		return false, err
 	}
 	return true, nil
+}
+
+// Both ordinary reservation and native counted MFA callbacks use the same
+// participant and original transaction; this helper never opens or closes one.
+func (c *Coordinator) reserveCounterInWork(ctx context.Context, work Work, participant CommandCounterContributor, command identity.Command) (choice CommandCounterDisposition, err error) {
+	state := &commandCounterState{work: work, participant: participant, command: command, active: true}
+	defer func() {
+		state.active, state.command = false, identity.Command{}
+		if recover() != nil {
+			choice, err = 0, identity.UnavailableError{}
+		}
+	}()
+	choice, err = participant.ReserveCommandCounters(ctx, CommandCounterWork{state: state})
+	if err != nil {
+		return 0, identity.UnavailableError{}
+	}
+	if work.state.rows != nil || work.usable() != nil || choice != CommandCounterAllowed && choice != CommandCounterDenied {
+		return 0, invalidWork()
+	}
+	return choice, nil
 }

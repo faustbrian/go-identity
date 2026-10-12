@@ -5,6 +5,19 @@ evidence and decisions. It is **not yet an executable durable risk service**.
 
 ## Implemented boundary
 
+- `PrepareMFACompletionCommandCounters(command, subject, child, completion,
+  primaryTime)` selects anonymous native `identity.mfa.totp-verify` only.
+  Supply authenticated original continuation subject/child and trusted network;
+  no session or authenticated command user is invented. Opaque code/browser
+  custody survives mapping. Reservation and current admission compare subject
+  and child to the exact sealed coordinator completion plan. Use the same native
+  counted transaction for denied TOTP and risk attempts, not a success-only
+  charge. Correct-code probing rolls its provisional charge back before retained
+  generation. Install `MFACompletionCounterMigrationSource` after protected and
+  registration counter histories; populated evidence remains unchanged.
+  This adapter path is not public MFA login; provider admission and workflow/
+  transport composition must still be completed and tested.
+
 - `PrepareVerificationCommandCounters(command, subject, originalGrantID,
   primaryTime)` selects only sessionless `identity.email.verification-confirm`.
   The native email owner must authenticate the original signed grant/subject,

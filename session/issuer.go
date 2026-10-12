@@ -79,12 +79,14 @@ type IssuerConfig struct {
 // Dependencies remain borrowed and must outlive calls. Copies of preparations
 // share one execution claim; unrelated preparations can execute concurrently.
 type SessionIssuer struct {
-	executor IssueExecutor
-	config   IssuerConfig
-	csrfKey  CSRFKey
-	otp      bool
-	password bool
-	signup   bool
+	executor  IssueExecutor
+	config    IssuerConfig
+	csrfKey   CSRFKey
+	otp       bool
+	password  bool
+	signup    bool
+	magicLink bool
+	mfa       bool
 }
 
 // NewSessionIssuerWithCSRF selects the synchronizer profile with a dedicated
@@ -148,6 +150,8 @@ type preparedIssuanceState struct {
 	csrfReady atomic.Bool
 	otp       *otpPreparationState
 	password  *passwordPreparationState
+	magicLink *magicLinkPreparationState
+	mfa       *mfaPreparationState
 }
 
 // Prepare validates the resolved policy, complete original authentication and
@@ -163,7 +167,7 @@ func (s *SessionIssuer) Prepare(binding identity.CommandBinding, spec SessionSpe
 			err = ErrIssuerUnavailable
 		}
 	}()
-	if s == nil || s.otp || s.password || spec.Lookup != (TokenDigest{}) {
+	if s == nil || s.otp || s.password || s.magicLink || s.mfa || spec.Lookup != (TokenDigest{}) {
 		return out, ErrInvalidIssuance
 	}
 	// Validate the full structural/proof input before allocating credential bytes.
@@ -212,7 +216,7 @@ func (s *SessionIssuer) prepareTokenRecord(record Session) (Token, Session, CSRF
 	if e != nil {
 		return fail(e)
 	}
-	record, e = newSessionWithProvenance(spec, record.OTPAuthentication(), record.MagicLinkAuthentication())
+	record, e = newSessionWithMFA(spec, record.OTPAuthentication(), record.MagicLinkAuthentication(), record.MFAAuthentication())
 	if e != nil {
 		return fail(e)
 	}
@@ -244,7 +248,7 @@ func (p PreparedIssuance) CSRFToken() (CSRFToken, error) {
 // without bearer bytes. Zero, OTP and password preparations deny: secret-bearing
 // consuming commands must never be advertised as safe recovery input.
 func (p PreparedIssuance) Request() (IssueRequest, bool) {
-	if p.state == nil || p.state.otp != nil || p.state.password != nil {
+	if p.state == nil || p.state.otp != nil || p.state.password != nil || p.state.magicLink != nil || p.state.mfa != nil {
 		return IssueRequest{}, false
 	}
 	return p.state.request, true
@@ -337,6 +341,16 @@ func (s *SessionIssuer) Issue(ctx context.Context, p PreparedIssuance) (out Issu
 		return out, err
 	}
 	now := s.config.Clock.Now()
+	if s.mfa {
+		if e := validateMFAIssuanceAt(out.Session, now); e != nil {
+			return out, e
+		}
+	}
+	if s.magicLink {
+		if e := validateMagicLinkIssuanceAt(out.Session, now); e != nil {
+			return out, e
+		}
+	}
 	if s.otp {
 		if e := validateOTPIssuanceAt(out.Session, now); e != nil {
 			return out, e
@@ -384,7 +398,7 @@ func (s *SessionIssuer) Recover(ctx context.Context, r IssueRequest) (out IssueR
 			}
 		}
 	}()
-	if s == nil || s.otp || s.password || ctx == nil || r.state == nil || r.state.otp != nil || r.state.password != nil {
+	if s == nil || s.otp || s.password || s.magicLink || s.mfa || ctx == nil || r.state == nil || r.state.otp != nil || r.state.password != nil || r.state.magicLink != nil || r.state.mfa != nil {
 		return out, ErrInvalidIssuance
 	}
 	issue, _ := r.state.command.Issue()
@@ -446,7 +460,7 @@ func sameIssuedSession(a, b Session) bool {
 	y, e := b.Bindings()
 	ac, ah := a.CredentialContinuation()
 	bc, bh := b.CredentialContinuation()
-	if e != nil || x.Authority.CompareCurrent(y.Authority) != nil || csrfSpec(a) != csrfSpec(b) || otpSpec(a) != otpSpec(b) || magicLinkSpec(a) != magicLinkSpec(b) || ah != bh || ac != bc {
+	if e != nil || x.Authority.CompareCurrent(y.Authority) != nil || csrfSpec(a) != csrfSpec(b) || otpSpec(a) != otpSpec(b) || magicLinkSpec(a) != magicLinkSpec(b) || mfaSpec(a) != mfaSpec(b) || ah != bh || ac != bc {
 		return false
 	}
 	x.Authority = AuthoritySnapshot{}

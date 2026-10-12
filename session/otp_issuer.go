@@ -130,8 +130,14 @@ func (p PreparedIssuance) Session() (Session, bool) {
 	if p.state == nil {
 		return Session{}, false
 	}
+	if p.state.mfa != nil {
+		return p.state.mfa.record, true
+	}
 	if p.state.password != nil {
 		return p.state.password.record, true
+	}
+	if p.state.magicLink != nil {
+		return p.state.magicLink.record, true
 	}
 	if p.state.otp != nil {
 		return p.state.otp.record, true
@@ -176,12 +182,20 @@ func (r IssueRequest) issuanceScope() (identity.CommandBinding, identity.Feature
 	if r.state == nil {
 		return identity.CommandBinding{}, identity.FeatureOperation{}, Session{}, false
 	}
+	if r.state.mfa != nil {
+		p := r.state.mfa
+		return p.binding, mfaTOTPCompletionOperation(), p.record, true
+	}
 	if r.state.password != nil {
 		p := r.state.password
 		if p.signup {
 			return p.binding, passwordSignupOperation(p.binding), p.record, true
 		}
 		return p.binding, passwordSigninOperation(p.binding), p.record, true
+	}
+	if r.state.magicLink != nil {
+		p := r.state.magicLink
+		return p.binding, magicLinkConsumeOperation(), p.record, true
 	}
 	if r.state.otp != nil {
 		p := r.state.otp
@@ -192,6 +206,24 @@ func (r IssueRequest) issuanceScope() (identity.CommandBinding, identity.Feature
 }
 
 func (s *SessionIssuer) validateRequestAt(r IssueRequest, now time.Time) error {
+	if s.mfa {
+		if r.state == nil || r.state.mfa == nil || r.state.magicLink != nil || r.state.password != nil || r.state.otp != nil {
+			return ErrInvalidIssuance
+		}
+		return validateMFAIssuanceAt(r.state.mfa.record, now)
+	}
+	if r.state != nil && r.state.mfa != nil {
+		return ErrInvalidIssuance
+	}
+	if s.magicLink {
+		if r.state == nil || r.state.magicLink == nil || r.state.password != nil || r.state.otp != nil {
+			return ErrInvalidIssuance
+		}
+		return validateMagicLinkIssuanceAt(r.state.magicLink.record, now)
+	}
+	if r.state != nil && r.state.magicLink != nil {
+		return ErrInvalidIssuance
+	}
 	if s.password {
 		if r.state == nil || r.state.password == nil || r.state.otp != nil || s.signup != r.state.password.signup {
 			return ErrInvalidIssuance

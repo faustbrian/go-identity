@@ -31,6 +31,7 @@ import (
 	emailhttp "github.com/faustbrian/go-identity/http/email"
 	passwordhttp "github.com/faustbrian/go-identity/http/password"
 	sessionhttp "github.com/faustbrian/go-identity/http/session"
+	magicpg "github.com/faustbrian/go-identity/magiclink/postgres"
 	"github.com/faustbrian/go-identity/password"
 	passwordpg "github.com/faustbrian/go-identity/password/postgres"
 	kernel "github.com/faustbrian/go-identity/postgres"
@@ -51,7 +52,7 @@ func (referenceRegistrationPolicy) Decide(ctx context.Context, c authorization.D
 	}
 	if string(c.Request.Tenant) == otpTenant && c.PolicyRevision == 9 && c.Request.Subject.Kind == authorization.SubjectServiceAccount && c.Request.Subject.ID == "AAAAAAAAAAAAAAAAAAAAAw" {
 		switch c.Request.Action {
-		case "identity.password.signup", "identity.user.create", "identity.email.verification-confirm", "identity.password.signup.recover":
+		case "identity.password.signup", "identity.user.create", "identity.email.verification-confirm", "identity.password.signup.recover", "identity.magic-link.request", "identity.magic-link.consume", "identity.magic-link.request.recover", "identity.magic-link.consume.recover", "identity.mfa.totp-verify", "identity.mfa.totp-verify.recover":
 			return authorization.Decision{Outcome: authorization.Allow, Revision: 9}, nil
 		}
 	}
@@ -228,6 +229,10 @@ func proveReferenceSignupGraph(t *testing.T, competing bool, protected ...bool) 
 	origin := "https://" + network.Listener.Addr().String()
 	c.OTP.PreAuth.Origin = origin
 	c.Velocity.LeaseDuration = 10 * time.Second
+	// These account graphs apply many selected histories as one operator run.
+	// Keep that run bounded at five seconds rather than the velocity-only
+	// fixture's one-second budget. Native authentication/read budgets stay capped.
+	c.Velocity.PrimaryTimeout = 5 * time.Second
 	c.HTTPRate = &reference.HTTPRateConfiguration{Namespace: "reference-registration", IdentifierKey: [32]byte{1}, MaximumDuration: time.Second, Timeout: 500 * time.Millisecond, LockTimeout: 250 * time.Millisecond, RollbackTimeout: 250 * time.Millisecond}
 	key, _ := session.NewBrowserDeviceKey(1, bytes.Repeat([]byte{107}, 32))
 	cookie, _ := session.NewCookiePolicy(session.CookieConfig{Name: "__Host-identity_device", SameSite: http.SameSiteLaxMode})
@@ -244,6 +249,37 @@ func proveReferenceSignupGraph(t *testing.T, competing bool, protected ...bool) 
 	if len(protected) != 0 && protected[0] {
 		changeScreens = configureReferencePasswordProtection(t, &c, origin)
 	}
+	magic := len(protected) > 1 && protected[1]
+	if magic {
+		configureReferenceMagicLink(t, &c, origin)
+		if len(protected) > 4 && protected[4] {
+			domain := c.PasswordSignup.Native.RegistrationDomain
+			c.MagicLink.Request.Signup = &magicpg.SignupConfig{SchemaID: "signup-fields", SchemaVersion: 1, Domain: kernel.MagicLinkRegistrationDomainConfig{ComparisonProfile: domain.ComparisonProfile, EmailPossessionPolicyVersion: 9, CurrentIdentifierKeyVersion: domain.CurrentIdentifierKeyVersion, RetainedIdentifierKeys: domain.RetainedIdentifierKeys}}
+			var err error
+			c.MagicLink.Request.Possession, err = email.NewMagicLinkPossessionPolicy(email.MagicLinkPossessionConfig{Address: c.PasswordSignin.Native.Address, Issuer: origin, Audience: c.MagicLink.Request.Issuer.Audience, MaximumLifetime: c.MagicLink.Request.Lifetime, Callbacks: c.MagicLink.Request.Callbacks, Version: 9})
+			if err != nil {
+				t.Fatal(err)
+			}
+			c.MagicLink.Request.Issuer.Crypto.Limits.MaxCaveats = 18
+		}
+		if len(protected) > 2 && protected[2] {
+			c.MagicLink.Request.MFAContinuation = true
+			c.MagicLink.Consume.MFA = &magicpg.MFAChallengeConfig{Lifetime: time.Minute, MaxAttempts: 3}
+			counters := c.PasswordSignup.Counters
+			counterPolicy := *counters.CommandCounters
+			counterPolicy.Policy, counterPolicy.Keys = c.Velocity.Native.Policy, c.Velocity.Native.Keys
+			counters.CommandCounters = &counterPolicy
+			admitted, err := counterPolicy.Policy.Admit("identity.mfa.totp-verify")
+			if err != nil {
+				t.Fatal(err)
+			}
+			counters.PolicyVersion = admitted.PolicyVersion
+			c.MagicLink.TOTP = &reference.MagicLinkTOTPConfiguration{MaximumDuration: c.OTP.Timeout, ConfigurationID: "reference-totp-v1", PolicyID: "magic-totp", Counters: counters, RiskKeys: c.OTP.RiskKeys, ComparisonKey: [32]byte{188}, ComparisonKeyVersion: 1, ActiveEnvelopeKeyID: "issue-envelope"}
+			if len(protected) > 3 && protected[3] {
+				c.HTTPMFA = &reference.HTTPMFAConfiguration{TOTPVerify: true, ActorID: c.HTTPMagicLink.ActorID, PolicyRevision: c.HTTPMagicLink.PolicyRevision, VerificationNamespace: c.HTTPMagicLink.VerificationNamespace, VerificationKey: c.HTTPMagicLink.VerificationKey}
+			}
+		}
+	}
 	messages := make(chan string, 4)
 	deps.DeliverySender = nativeBrowserCodeSender{codes: messages}
 	for _, namespace := range []string{"", "other-users"} {
@@ -259,6 +295,10 @@ func proveReferenceSignupGraph(t *testing.T, competing bool, protected ...bool) 
 	}
 	stores, err := reference.ComposeStores(c, deps)
 	if err != nil {
+		var invalid identity.InvalidInputError
+		if errors.As(err, &invalid) {
+			t.Fatal("registration graph invalid field", invalid.Field)
+		}
 		t.Fatal("registration graph", err)
 	}
 	t.Cleanup(func() {
@@ -298,7 +338,7 @@ END $$`); err != nil {
 		}
 	})
 	if out, err := stores.ReferenceMigrationApply(ctx, applyRequest(t, ctx, stores, modules)); err != nil || out.Result.State() != reference.MigrationApplied {
-		t.Fatal("fresh selected registration migration", err)
+		t.Fatal("fresh selected registration migration", err, "state", out.Result.State(), "safe-cause", errors.Unwrap(err), "receipts", len(out.Result.Receipts()))
 	}
 	policies := identity.PolicySet{Authorize: c.OTP.RequestKeys.Policy.Authorization, AssessRisk: func(context.Context, identity.RiskPolicyInput) (identity.RiskPolicyDecision, error) { panic("unused") }, MapClaims: func(context.Context, identity.ClaimsPolicyInput) (identity.ClaimsPolicyDecision, error) {
 		panic("unused")
@@ -320,6 +360,20 @@ END $$`); err != nil {
 		seen[op.Record.OperationID] = true
 	}
 	wantOperations := 8
+	if c.HTTPMFA != nil {
+		wantOperations++
+		if !seen["identity.mfa.totp-verify"] {
+			t.Fatal("selected TOTP route missing")
+		}
+	} else if seen["identity.mfa.totp-verify"] {
+		t.Fatal("unselected TOTP route advertised")
+	}
+	if magic {
+		wantOperations += 2
+		if !seen["identity.magic-link.request"] || !seen["identity.magic-link.consume"] {
+			t.Fatal("selected magic-link routes missing")
+		}
+	}
 	if changeScreens != nil {
 		wantOperations += 2
 		if !seen["identity.password.verify"] || !seen["identity.password.change"] {
@@ -350,7 +404,28 @@ END $$`); err != nil {
 	if r := server.Readiness(ctx); !r.Ready {
 		t.Fatal("selected native readiness", r.Failures)
 	}
+	if magic {
+		targets := []struct{ table, name string }{{"session_issuances", "session_issuances_purpose_v5"}, {"sessions", "session_credential_continuation_v2"}, {"sessions", "session_record_binding_v5"}}
+		if c.MagicLink.TOTP != nil {
+			targets = []struct{ table, name string }{{"session_issuances", "session_issuances_purpose_v6"}, {"sessions", "session_credential_continuation_v3"}, {"sessions", "session_record_binding_v6"}}
+		}
+		for _, target := range targets {
+			if _, err := f.pool.Raw().Exec(ctx, "ALTER TABLE session_store."+target.table+" RENAME CONSTRAINT "+target.name+" TO magic_fixture_missing"); err != nil {
+				t.Fatal(err)
+			}
+			observation := server.Readiness(ctx)
+			if _, err := f.pool.Raw().Exec(ctx, "ALTER TABLE session_store."+target.table+" RENAME CONSTRAINT magic_fixture_missing TO "+target.name); err != nil {
+				t.Fatal(err)
+			}
+			if observation.Ready || !server.Readiness(ctx).Ready {
+				t.Fatal("magic-link successor constraint did not control readiness")
+			}
+		}
+	}
 	proveReferenceRegistration(t, ctx, f, features, workers, client, network.URL, origin, messages, calls, competing, changeScreens)
+	if magic {
+		proveReferenceMagicLink(t, ctx, f, features, workers, client, network.URL, origin, messages, c, deps, len(protected) > 5 && protected[5])
+	}
 }
 
 func proveReferenceRegistration(t *testing.T, ctx context.Context, f liveStores, features reference.FeatureSet, workers reference.WorkerSet, client *http.Client, base, origin string, messages <-chan string, screens *atomic.Int32, competing bool, changeScreens *atomic.Int32) {
@@ -750,7 +825,7 @@ CREATE TRIGGER session_fixture_fail BEFORE INSERT ON public.identity_outbox_bind
 	r, p = call("POST", "/v1/session/signout", csrf)
 	var aborted sessionhttp.SignOutResponse
 	if json.Unmarshal(p, &aborted) != nil || r.StatusCode != 503 || aborted.CommitOutcome != "not_committed" || aborted.SignedOut || len(r.Cookies()) != 0 {
-		t.Fatal("failed lifecycle falsely cleared logout", r.StatusCode)
+		t.Fatal("failed lifecycle falsely cleared logout", r.StatusCode, aborted.CommitOutcome, aborted.Error, "signed-out", aborted.SignedOut, "cookies", len(r.Cookies()))
 	}
 	cleanup()
 	abortedID, err := base64.RawURLEncoding.DecodeString(string(aborted.CommandID))

@@ -81,6 +81,18 @@ func (p *revokeOutbox) PersistLifecycle(ctx context.Context, w identitypostgres.
 func (*revokeOutbox) RecoverParticipant(ctx context.Context, w identitypostgres.RecoveryWork) (identitypostgres.RecoveryStatus, error) {
 	return revokeEffectEvidence(ctx, w, "public.revoke_outbox")
 }
+
+func (p *revokeOutbox) PersistMagicLinkRegistration(ctx context.Context, w identitypostgres.Work) error {
+	if err := p.PersistLifecycle(ctx, w); err != nil {
+		return err
+	}
+	r, err := w.StagedMagicLinkRegistrationLifecycle()
+	if err != nil {
+		return err
+	}
+	_, err = w.Exec(ctx, `INSERT INTO public.revoke_outbox(event_id,command_id,event_type,subject_type,subject_id,before_version,after_version) VALUES($1,$2,$3,$4,$5,$6,$7)`, r.ID, string(r.CommandID), r.EventType, r.SubjectType, r.SubjectID, strconv.FormatUint(r.BeforeVersion, 10), strconv.FormatUint(r.AfterVersion, 10))
+	return err
+}
 func revokeEffectEvidence(ctx context.Context, w identitypostgres.RecoveryWork, table string) (identitypostgres.RecoveryStatus, error) {
 	b, err := w.Scope()
 	if err != nil {

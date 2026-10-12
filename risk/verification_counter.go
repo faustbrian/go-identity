@@ -25,10 +25,14 @@ const CapabilityDimension Dimension = "capability"
 // The original UTC microsecond primaryTime is never refreshed. Calls are pure,
 // concurrent-safe, bounded and own no resources; every error returns zero.
 func (p CommandCounterPolicy) PrepareVerification(scope Context, subject Subject, capabilityID string, primaryTime time.Time) (CounterCommand, error) {
+	return p.prepareCapabilityCounter(scope, subject, capabilityID, primaryTime, "identity.email.verification-confirm")
+}
+
+func (p CommandCounterPolicy) prepareCapabilityCounter(scope Context, subject Subject, capabilityID string, primaryTime time.Time, operation Action) (CounterCommand, error) {
 	if p.state == nil {
 		return CounterCommand{}, ErrInvalidPolicy
 	}
-	if scope.Operation != "identity.email.verification-confirm" || !databaseEvidenceTime(primaryTime) || !scopeID(scope.Tenant) || !scopeID(scope.Attempt) || !verificationCounterID(capabilityID) {
+	if scope.Operation != operation || !databaseEvidenceTime(primaryTime) || !scopeID(scope.Tenant) || !scopeID(scope.Attempt) || !verificationCounterID(capabilityID) {
 		return CounterCommand{}, ErrInvalidCounterCommand
 	}
 	a, err := p.state.policy.Admit(scope.Operation)
@@ -56,6 +60,10 @@ func (p CommandCounterPolicy) PrepareVerification(scope Context, subject Subject
 // session-based commands and expired evidence deny. The native participant
 // still owns current row/key-history checks and transactional allowance.
 func (p CommandCounterPolicy) ValidateVerification(command CounterCommand, scope Context, subject Subject, capabilityID string, primaryTime time.Time) error {
+	return p.validateCapabilityCounter(command, scope, subject, capabilityID, primaryTime, "identity.email.verification-confirm")
+}
+
+func (p CommandCounterPolicy) validateCapabilityCounter(command CounterCommand, scope Context, subject Subject, capabilityID string, primaryTime time.Time, operation Action) error {
 	if p.state == nil || command.state == nil || command.state.owner != nil || command.state.commandOwner != p.state || !databaseEvidenceTime(primaryTime) {
 		return ErrInvalidCounterCommand
 	}
@@ -63,7 +71,7 @@ func (p CommandCounterPolicy) ValidateVerification(command CounterCommand, scope
 	if primaryTime.Before(b.PreparedAt) || !primaryTime.Before(b.PreparedAt.Add(command.state.profile.EvidenceTTL)) {
 		return ErrInvalidCounterCommand
 	}
-	expected, err := p.PrepareVerification(scope, subject, capabilityID, b.PreparedAt)
+	expected, err := p.prepareCapabilityCounter(scope, subject, capabilityID, b.PreparedAt, operation)
 	if err != nil || !hmac.Equal([]byte(expected.state.binding.Fingerprint), []byte(b.Fingerprint)) {
 		return ErrInvalidCounterCommand
 	}

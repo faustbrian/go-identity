@@ -20,7 +20,8 @@ import (
 // allocations are not silently adopted. This partial development profile does
 // not implement the complete reference Check/Plan/Apply migration coordinator.
 // Selected OTP/delivery appends permanent allocations after that existing
-// prefix: kernel 1012..1018, OTP 1100..1103, pre-auth sessions 1200..1201,
+// prefix: kernel 1012..1018 (1019 additionally for selected native TOTP), OTP
+// 1100..1103, pre-auth sessions 1200..1201,
 // distinct authenticated sessions 1210, delivery 1250..1260 and authorization
 // authority 1300. All SQL is supplied by its owner. Shared session schemas
 // reuse the same base; unselected profiles contribute no schema.
@@ -90,6 +91,10 @@ type featureMigrationConfig struct {
 	signinSchema                                            string
 	resetSchema                                             string
 	passwordSigninSchema                                    string
+	magicSessionSchema                                      string
+	magicMFAChallenge                                       bool
+	magicTOTP                                               bool
+	magicSignup                                             bool
 	preauthIssue                                            bool
 	singleSessionRevocation                                 bool
 	tenants                                                 []identity.TenantID
@@ -116,7 +121,10 @@ func (c featureMigrationConfig) load(ctx context.Context, base migrations.Source
 	credentials := identitypostgres.CredentialMigrationSource{Base: status, Version: 1015}
 	directory := identitypostgres.DirectoryAuthorityMigrationSource{Base: credentials, Version: 1016, GlobalAuthorityID: c.global, TenantIDs: c.tenants}
 	keyed := identitypostgres.RequestKeyMigrationSource{Base: directory, Version: 1017}
-	complete := identitypostgres.RequestKeyPreparationMigrationSource{Base: keyed, Version: 1018}
+	var complete migrations.Source = identitypostgres.RequestKeyPreparationMigrationSource{Base: keyed, Version: 1018}
+	if c.magicTOTP {
+		complete = identitypostgres.CounterPreparationMigrationSource{Base: complete, Version: 1019}
+	}
 	history, err := complete.Load(ctx)
 	if err != nil {
 		return nil, err

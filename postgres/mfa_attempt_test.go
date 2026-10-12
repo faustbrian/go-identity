@@ -2,9 +2,11 @@ package postgres
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
+	auth "github.com/faustbrian/go-authentication"
 	identity "github.com/faustbrian/go-identity"
 )
 
@@ -21,7 +23,19 @@ func TestMFATOTPAttemptPreparationRequiresOriginalOpaqueCompletion(t *testing.T)
 	b, p := mfaCompletionPlanFixture(t, "totp-verify")
 	op := p.Feature.Operation
 	spec := identity.FeatureCommandSpec{Binding: b, Operation: op, Fields: []identity.FeatureField{{Name: "proof-id", Value: identity.FeatureValue{Kind: identity.FeatureText, Text: p.Capability.CapabilityID}}}}
-	command := codeCodecCommand(t, spec, "123456")
+	withBrowser := func(spec identity.FeatureCommandSpec, value string) identity.Command {
+		t.Helper()
+		code, err := auth.NewOneTimeCode(value)
+		if err != nil {
+			t.Fatal(err)
+		}
+		command, err := identity.NewFeatureOneTimeCodePreAuthCommand(spec, code, auth.NewBearerCredential(strings.Repeat("A", 43)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return command
+	}
+	command := withBrowser(spec, "123456")
 	owner := &mfaAttemptProbe{mfaCompletionValidationParticipant{magicLinkPreparationParticipant: magicLinkPreparationParticipant{outputPreparationParticipant: outputPreparationParticipant{scopeFeatureParticipant{operations: []identity.FeatureOperation{op}}}, expected: command, proof: *p.Capability}, completion: *p.MFACompletion}}
 	registry, err := NewContributorRegistry([]Contributor{&Repository{}, &riskPassiveProbe{registryContributor{p.Contributors[1]}}, &riskPassiveProbe{registryContributor{p.Contributors[2]}}, owner, &magicLinkPreparationCounter{}, &capabilityExecutionProbe{}})
 	if err != nil {
@@ -41,6 +55,46 @@ func TestMFATOTPAttemptPreparationRequiresOriginalOpaqueCompletion(t *testing.T)
 	if err != nil || got.MFACompletion == nil || *got.MFACompletion != owner.completion || got.OTP != nil {
 		t.Fatal("native counted TOTP admission unavailable", err)
 	}
+	if _, err := c.PrepareMFATOTPAttemptPlanWithOriginal(command, command, got); err == nil {
+		t.Fatal("unmapped original admitted through protected-counter separation")
+	}
+	preparedSpec := spec
+	preparedSpec.Fields = append(append([]identity.FeatureField(nil), spec.Fields...),
+		identity.FeatureField{Name: "counter.network", Value: identity.FeatureValue{Kind: identity.FeatureText, Text: "127.0.0.1"}},
+		identity.FeatureField{Name: "counter.session", Value: identity.FeatureValue{Kind: identity.FeatureText}},
+		identity.FeatureField{Name: "counter.subject", Value: identity.FeatureValue{Kind: identity.FeatureText, Text: "factor-user"}},
+		identity.FeatureField{Name: "counter.capability", Value: identity.FeatureValue{Kind: identity.FeatureText, Text: p.Capability.CapabilityID}},
+		identity.FeatureField{Name: "counter.prepared-at", Value: identity.FeatureValue{Kind: identity.FeatureTime, Time: time.Now().UTC().Truncate(time.Microsecond)}},
+		identity.FeatureField{Name: "counter.key-versions", Value: identity.FeatureValue{Kind: identity.FeatureBytes, Bytes: []byte{0, 0, 0, 1}}})
+	preparedCommand := withBrowser(preparedSpec, "123456")
+	owner.expected = preparedCommand
+	withCounters := p
+	withCounters.CommandCounters = &CommandCounterPlan{PolicyVersion: 3, Fingerprint: [32]byte{9}}
+	originalPlan, err := c.PrepareMFATOTPAttemptPlanWithOriginal(command, preparedCommand, withCounters)
+	if err != nil {
+		t.Fatal("separated original intent unavailable", err)
+	}
+	q, err := prepareClaim(command, c.keys.retained[c.keys.current])
+	if err != nil {
+		t.Fatal(err)
+	}
+	want, err := FeaturePlanDigest(b, claimFingerprint(c.keys.retained[c.keys.current], q.canonical), originalPlan)
+	if err != nil || want != originalPlan.Digest {
+		t.Fatal("mapped counters replaced original journal identity", err)
+	}
+	changed := withBrowser(preparedSpec, "654321")
+	owner.expected = changed
+	if _, err := c.PrepareMFATOTPAttemptPlanWithOriginal(command, changed, withCounters); err == nil {
+		t.Fatal("changed opaque code admitted as original")
+	}
+	extra := preparedSpec
+	extra.Fields = append(append([]identity.FeatureField(nil), preparedSpec.Fields...), identity.FeatureField{Name: "counter.unrecognized", Value: identity.FeatureValue{Kind: identity.FeatureBool, Bool: true}})
+	changed = withBrowser(extra, "123456")
+	owner.expected = changed
+	if _, err := c.PrepareMFATOTPAttemptPlanWithOriginal(command, changed, withCounters); err == nil {
+		t.Fatal("unrecognized counter transformation admitted")
+	}
+	owner.expected = command
 	if _, err := c.PrepareCommandPlan(b, command, got); err == nil {
 		t.Fatal("counted declaration enabled ordinary opaque execution")
 	}
@@ -76,5 +130,17 @@ func TestMFATOTPAttemptZeroWorkDenies(t *testing.T) {
 	}
 	if _, err := w.DatabaseTime(t.Context()); err == nil {
 		t.Fatal("zero work read clock")
+	}
+	if err := w.RequireActiveDirectoryAuthority(t.Context(), nil, DirectoryAuthorityAdmission{}); err == nil {
+		t.Fatal("zero counted work admitted directory authority")
+	}
+	if err := w.RequireRecipient(t.Context(), nil, RecipientRecord{}); err == nil {
+		t.Fatal("zero counted work admitted recipient authority")
+	}
+	if _, err := w.ReserveCommandCounters(t.Context(), nil); err == nil {
+		t.Fatal("zero counted work charged risk")
+	}
+	if _, _, err := (CommandCounterWork{}).MFACompletionScope(nil); err == nil {
+		t.Fatal("zero counter work disclosed MFA scope")
 	}
 }

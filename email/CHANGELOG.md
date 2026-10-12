@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add explicit email-owned prospective magic-link mailbox-possession policy.
+  Match the existing authenticated grant to original account, address, creation,
+  browser, callback, expiry and selected policy without issuing another token.
+  Acceptance remains conditional on protected native consumption committing;
+  password registration and ordinary verification profiles remain unchanged.
+
 - Add typed original-signup confirmation results and immutable recovery scope.
   Preserve observed commit status across disclosure failures, deny address
   payloads on replay and keep proof-free recovery metadata-only under current

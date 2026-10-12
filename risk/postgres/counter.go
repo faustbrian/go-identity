@@ -42,6 +42,12 @@ func (r *Repository) ReserveCommandCounters(ctx context.Context, w identitypostg
 	if e != nil {
 		return 0, e
 	}
+	if native.scope.Operation == "identity.mfa.totp-verify" && native.capabilityID != "" {
+		child, completion, scopeErr := w.MFACompletionScope(r)
+		if scopeErr != nil || native.subject.User != string(completion.UserID) || native.capabilityID != child.CapabilityID || child.CapabilityID != string(completion.ID) {
+			return 0, risk.ErrInvalidCounterCommand
+		}
+	}
 	if b.Generation == 0 || b.PreviousGeneration == ^uint64(0) || b.PreviousGeneration != 0 && b.Generation != b.PreviousGeneration+1 {
 		return 0, identity.ConflictError{}
 	}

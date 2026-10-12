@@ -36,6 +36,10 @@ func sessionFromCSRFFieldsWithOTP(values map[string]identity.FeatureValue, prefi
 }
 
 func sessionFromCSRFFieldsWithProvenance(values map[string]identity.FeatureValue, prefix string, base session.SessionSpec, metadata session.OTPAuthentication, magic session.MagicLinkAuthentication) (session.Session, error) {
+	return sessionFromCSRFFieldsWithMFA(values, prefix, base, metadata, magic, session.MFAAuthentication{})
+}
+
+func sessionFromCSRFFieldsWithMFA(values map[string]identity.FeatureValue, prefix string, base session.SessionSpec, metadata session.OTPAuthentication, magic session.MagicLinkAuthentication, factor session.MFAAuthentication) (session.Session, error) {
 	command, hasCommand := values[prefix+"continuation.command"]
 	authority, hasAuthority := values[prefix+"continuation.authority"]
 	credential, hasCredential := values[prefix+"continuation.credential"]
@@ -43,6 +47,11 @@ func sessionFromCSRFFieldsWithProvenance(values map[string]identity.FeatureValue
 	delete(values, prefix+"continuation.authority")
 	delete(values, prefix+"continuation.credential")
 	continued := hasCommand || hasAuthority || hasCredential
+	_, factorErr := factor.Bindings()
+	hasFactor := factorErr == nil
+	if hasFactor && (continued || base.Authentication.Kind != session.AuthenticationMagicLink) {
+		return session.Session{}, session.ErrInvalidSessionCommand
+	}
 	if continued && (!hasCommand || !hasAuthority || !hasCredential || command.Kind != identity.FeatureText || authority.Kind != identity.FeatureUint64 || credential.Kind != identity.FeatureUint64) {
 		return session.Session{}, session.ErrInvalidSessionCommand
 	}
@@ -59,6 +68,9 @@ func sessionFromCSRFFieldsWithProvenance(values map[string]identity.FeatureValue
 			return session.NewSessionWithOTP(base, metadata)
 		}
 		if base.Authentication.Kind == session.AuthenticationMagicLink {
+			if hasFactor {
+				return session.NewSessionWithMagicLinkMFA(base, magic, factor)
+			}
 			return session.NewSessionWithMagicLink(base, magic)
 		}
 		return session.NewSession(base)
@@ -79,6 +91,9 @@ func sessionFromCSRFFieldsWithProvenance(values map[string]identity.FeatureValue
 		return session.NewSessionWithOTPAndCSRF(base, metadata, state)
 	}
 	if base.Authentication.Kind == session.AuthenticationMagicLink {
+		if hasFactor {
+			return session.NewSessionWithMagicLinkMFAAndCSRF(base, magic, factor, state)
+		}
 		return session.NewSessionWithMagicLinkAndCSRF(base, magic, state)
 	}
 	return session.NewSessionWithCSRF(base, state)

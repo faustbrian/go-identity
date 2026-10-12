@@ -116,11 +116,15 @@ func otpSessionAdmission(c OTPAdmissionConfig, record session.Session) (kernel.D
 }
 
 func verifiedIdentifierSessionAdmission(c OTPAdmissionConfig, s session.SessionSpec) (kernel.DirectoryAuthorityQuery, authority.AuthorityScope, error) {
+	return verifiedIdentifierSessionAdmissionWithFactor(c, s, session.OptionalAuthorityBinding{})
+}
+
+func verifiedIdentifierSessionAdmissionWithFactor(c OTPAdmissionConfig, s session.SessionSpec, factor session.OptionalAuthorityBinding) (kernel.DirectoryAuthorityQuery, authority.AuthorityScope, error) {
 	deny := func() (kernel.DirectoryAuthorityQuery, authority.AuthorityScope, error) {
 		return kernel.DirectoryAuthorityQuery{}, authority.AuthorityScope{}, session.ErrUnauthenticated
 	}
 	a, err := s.Authority.Bindings()
-	if err != nil || a.Organization.Present || a.Factor.Present || a.Passkey.Present {
+	if err != nil || a.Organization.Present || a.Factor != factor || a.Passkey.Present {
 		return deny()
 	}
 	query := kernel.DirectoryAuthorityQuery{GlobalAuthorityID: c.GlobalAuthorityID, TenantID: s.TenantID}

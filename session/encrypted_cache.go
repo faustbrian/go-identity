@@ -100,6 +100,11 @@ func (c *EncryptedCacheCodec) Seal(ctx context.Context, result GetResult) (out [
 		record.MagicLink = &value
 		record.Schema += 6
 	}
+	if metadata := result.Session.MFAAuthentication(); metadata.state != nil {
+		value := *metadata.state
+		record.MFA = &value
+		record.Schema += 2
+	}
 	if continuation, ok := result.Session.CredentialContinuation(); ok {
 		record.Continuation = &continuation
 		record.Schema += 4
@@ -215,6 +220,7 @@ type cacheRecord struct {
 	CSRF                                  *CSRFStateSpec               `json:",omitempty"`
 	OTP                                   *OTPAuthenticationSpec       `json:",omitempty"`
 	MagicLink                             *MagicLinkAuthenticationSpec `json:",omitempty"`
+	MFA                                   *MFAAuthenticationSpec       `json:",omitempty"`
 	Continuation                          *CredentialContinuationSpec  `json:",omitempty"`
 }
 
@@ -233,14 +239,16 @@ func (c *EncryptedCacheCodec) restore(plaintext []byte, tenant identity.TenantID
 		return CachedAdmission{}
 	}
 	defer clear(canonical)
-	validSchema := r.MagicLink == nil && ((r.Schema == 1 && r.CSRF == nil && r.OTP == nil && r.Continuation == nil && r.Session.Authentication.Kind == AuthenticationVerified) ||
+	validSchema := r.MFA == nil && (r.MagicLink == nil && ((r.Schema == 1 && r.CSRF == nil && r.OTP == nil && r.Continuation == nil && r.Session.Authentication.Kind == AuthenticationVerified) ||
 		(r.Schema == 2 && r.CSRF != nil && r.OTP == nil && r.Continuation == nil && r.Session.Authentication.Kind == AuthenticationVerified) ||
 		(r.Schema == 3 && r.CSRF == nil && r.OTP != nil && r.Continuation == nil && r.Session.Authentication.Kind == AuthenticationOTP) ||
 		(r.Schema == 4 && r.CSRF != nil && r.OTP != nil && r.Continuation == nil && r.Session.Authentication.Kind == AuthenticationOTP) ||
 		(r.Schema == 5 && r.CSRF == nil && r.OTP == nil && r.Continuation != nil && r.Session.Authentication.Kind == AuthenticationVerified) ||
 		(r.Schema == 6 && r.CSRF != nil && r.OTP == nil && r.Continuation != nil && r.Session.Authentication.Kind == AuthenticationVerified)) ||
 		(r.Schema == 7 && r.CSRF == nil && r.OTP == nil && r.Continuation == nil && r.MagicLink != nil && r.Session.Authentication.Kind == AuthenticationMagicLink) ||
-		(r.Schema == 8 && r.CSRF != nil && r.OTP == nil && r.Continuation == nil && r.MagicLink != nil && r.Session.Authentication.Kind == AuthenticationMagicLink)
+		(r.Schema == 8 && r.CSRF != nil && r.OTP == nil && r.Continuation == nil && r.MagicLink != nil && r.Session.Authentication.Kind == AuthenticationMagicLink)) ||
+		(r.Schema == 9 && r.CSRF == nil && r.OTP == nil && r.Continuation == nil && r.MagicLink != nil && r.MFA != nil && r.Session.Authentication.Kind == AuthenticationMagicLink) ||
+		(r.Schema == 10 && r.CSRF != nil && r.OTP == nil && r.Continuation == nil && r.MagicLink != nil && r.MFA != nil && r.Session.Authentication.Kind == AuthenticationMagicLink)
 	if !bytes.Equal(plaintext, canonical) || !validSchema || (c.service.method != 0 && r.Session.Authentication.Kind != c.service.method) || r.Session.TenantID != tenant || r.Session.Audience != c.service.config.Audience || (r.Transport != CredentialCookie && r.Transport != CredentialBearer) || !validTime(r.AcceptedAt) || !validTime(r.Until) || !validTime(r.StoredAt) || r.StoredAt.Before(r.AcceptedAt) || !r.Until.After(r.StoredAt) || r.Until.After(r.AcceptedAt.Add(20*time.Second)) {
 		return CachedAdmission{}
 	}
@@ -267,7 +275,14 @@ func (c *EncryptedCacheCodec) restore(plaintext []byte, tenant identity.TenantID
 			return CachedAdmission{}
 		}
 	}
-	record, e := newSessionWithProvenance(SessionSpec{s.SessionID, s.FamilyID, s.TenantID, s.UserID, s.Audience, s.Version, s.FamilyVersion, remember, authority, s.Lookup, s.Authentication, s.IssuedAt, s.LastActivityAt}, metadata, magicLink)
+	var mfa MFAAuthentication
+	if r.MFA != nil {
+		mfa, e = NewMFAAuthentication(*r.MFA)
+		if e != nil {
+			return CachedAdmission{}
+		}
+	}
+	record, e := newSessionWithMFA(SessionSpec{s.SessionID, s.FamilyID, s.TenantID, s.UserID, s.Audience, s.Version, s.FamilyVersion, remember, authority, s.Lookup, s.Authentication, s.IssuedAt, s.LastActivityAt}, metadata, magicLink, mfa)
 	if e != nil || !r.Eligible.Equal(s.LastActivityAt.Add(remember.refresh)) {
 		return CachedAdmission{}
 	}
@@ -303,6 +318,9 @@ func (c *EncryptedCacheCodec) additionalData(tenant identity.TenantID) (envelope
 	// cannot restore that unbound framing and must refresh from primary.
 	if c.service.method != 0 {
 		fields["authentication-kind"] = strconv.FormatUint(uint64(c.service.method), 10)
+	}
+	if c.service.methods != 0 {
+		fields["authentication-selection"] = strconv.FormatUint(uint64(c.service.methods), 10)
 	}
 	if c.service.cacheProfile != "" {
 		fields["admission-profile"] = c.service.cacheProfile

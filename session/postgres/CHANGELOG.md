@@ -2,6 +2,71 @@
 
 ## Unreleased
 
+- Add opt-in MFA-aware self-revocation with the same current factor fence for
+  caller and target. Retain an oversized self-target record once with an explicit
+  source reference instead of weakening the 128-field command input bound;
+  legacy source/target encodings remain unchanged.
+
+- Add an opt-in combined primary session reader for selected single-factor and
+  magic-link/TOTP profiles. Dispatch MFA provenance before single-factor methods,
+  keep exact common owner profiles and distinct cache custody, and preserve
+  legacy single-factor selection. Combined logout/reference wiring is pending.
+
+- Exercise native MFA denial with real protected risk counters, proving atomic
+  wrong-attempt charging and rollback for correct-code probing, invalid browser
+  admission and failed denial audit. Public MFA composition remains unfinished.
+
+- Fence TOTP completion and counted denial against the original already-consumed
+  browser flow and exact committed primary command custody. Invalid browser
+  possession cannot charge the factor budget; retrying a recorded wrong code
+  cannot charge twice. Completion never consumes or renews that browser flow.
+
+- Add an explicitly selected native magic-link/TOTP session reader. Require
+  the exact confirmed enrollment and current MFA-owned factor generation along
+  with every existing authority dimension; single-factor factories stay
+  disjoint. Preserve the original at-most-20-second evidence deadline through
+  cache reuse and deny expired evidence when bounded refresh is unavailable.
+
+- Adopt the native outbox's paired magic-link signup lifecycle contract so
+  account creation and authentication events can share the protected transaction.
+  Install the complete selected capability adapter history, including original
+  issuance and supersession extensions, before selecting native MFA composition.
+
+- Add the native original-primary TOTP completion session effect and retained
+  recovery domain. Require the recorded factor/continuation handle, original
+  scope, exact MFA-owned factor authority and current verified recipient/policy
+  before session writes. No primary/browser credential is consumed again.
+  Public MFA completion and positive protected-path integration remain pending.
+
+- Bind complete prospective TOTP-completed magic-link sessions into the native
+  completion command. Preserve distinct primary and completion identities,
+  factor/child provenance, remember policy, authority and synchronizer state;
+  incomplete or foreign mappings deny rather than enter primary-only issuance.
+
+- Add forward-only complete MFA record and retained issuance-purpose constraint
+  extensions. Preserve populated legacy records and recovery bytes, reject
+  missing/substituted factor state and remember-policy changes, and retain only
+  closed factor-completion purposes. Upgrade readers before selecting the new
+  record schemas; native MFA issuance and reference composition remain pending.
+
+- Retain explicit magic-link/TOTP completion provenance in record schemas9/10
+  and closed original-session command fields. Reject lossy factor metadata,
+  malformed scope digests and mismatched primary/factor policy during decoding.
+  Database schema admission and the native MFA session effect remain pending;
+  these codecs alone do not enable durable MFA issuance.
+
+- Extend explicitly selected transactional self-signout to OTP and magic-link
+  sessions. Preserve their original possession provenance and identifier/security
+  versions through command mapping; revoke, audit and lifecycle effects remain
+  atomic. Cookie signout retains exact synchronizer validation. Nil selection
+  remains verified-only; reference composition is still being connected.
+
+- Add an explicitly selected single-factor primary reader that performs one
+  digest lookup and dispatches on the stored password, OTP or magic-link kind.
+  All selected deployment, policy and audience profiles must agree; unselected
+  methods deny without fallback. Cache custody binds the method set and complete
+  native profiles. Method-aware transactional self-signout remains in development.
+
 - Add native magic-link session mapping and same-transaction issuance after
   capability consumption. Preserve the original email grant, anonymous command,
   remember policy and CSRF; consume pre-auth with the session/family and retain

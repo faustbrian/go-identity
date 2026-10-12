@@ -13,12 +13,16 @@ import (
 	"time"
 
 	"github.com/faustbrian/go-audit"
+	"github.com/faustbrian/go-authorization"
 	policy "github.com/faustbrian/go-authorization/postgres"
 	identitycapability "github.com/faustbrian/go-capability/postgres/identity"
 	identity "github.com/faustbrian/go-identity"
+	mfapg "github.com/faustbrian/go-identity/mfa/postgres"
 	kernel "github.com/faustbrian/go-identity/postgres"
 	"github.com/faustbrian/go-identity/session"
 	database "github.com/faustbrian/go-postgres"
+	outboxpg "github.com/faustbrian/go-transactional-outbox/v2/postgres"
+	lifecyclepg "github.com/faustbrian/go-transactional-outbox/v2/postgres/identity"
 )
 
 // This closed native feature/counter seam exercises real capability, pre-auth
@@ -26,12 +30,23 @@ import (
 // cookie possession and factor/risk decisions remain public-workflow obligations;
 // synthetic grant metadata here is not cryptographic or login evidence.
 type magicLinkEffectFeature struct {
+	registration          *kernel.MagicLinkRegistrationDomain
+	intent                *kernel.MagicLinkRegistrationIntent
+	duplicateFactors      bool
+	stage                 string
 	effect                *MagicLinkSigninEffect
 	expected              identity.Command
 	proof                 kernel.CapabilityPlan
 	recipient             kernel.RecipientRecord
 	flow                  session.PreAuthTransaction
 	failApply, failCommit bool
+}
+
+func (p *magicLinkEffectFeature) MagicLinkRegistration(c identity.Command) (kernel.MagicLinkRegistrationIntent, error) {
+	if c != p.expected || p.intent == nil {
+		return kernel.MagicLinkRegistrationIntent{}, identity.InvalidInputError{Field: "magic_registration"}
+	}
+	return *p.intent, nil
 }
 
 func (*magicLinkEffectFeature) Descriptor() kernel.ContributorDescriptor {
@@ -54,6 +69,35 @@ func (p *magicLinkEffectFeature) ValidateMagicLinkConsumption(c identity.Command
 	return nil
 }
 func (p *magicLinkEffectFeature) ApplyFeature(ctx context.Context, w kernel.Work, c identity.Command) (identity.FeatureReceipt, error) {
+	if p.intent != nil {
+		p.stage = "creation"
+		if _, err := p.registration.Apply(ctx, w, p, c); err != nil {
+			return identity.FeatureReceipt{}, err
+		}
+		p.stage = "factor initialization"
+		if err := mfapg.InitializeMagicLinkSignup(ctx, w, p, c, p.intent.Creation.Binding.UserID); err != nil {
+			return identity.FeatureReceipt{}, err
+		}
+		if p.duplicateFactors {
+			if err := mfapg.InitializeMagicLinkSignup(ctx, w, p, c, p.intent.Creation.Binding.UserID); err != nil {
+				return identity.FeatureReceipt{}, err
+			}
+		}
+		if _, err := mfapg.RequireMagicLinkFactors(ctx, w, p, c, p.intent.Creation.Binding.UserID, 1); err != nil {
+			return identity.FeatureReceipt{}, err
+		}
+		p.stage = "recipient selection"
+		current, err := p.registration.Recipient(ctx, w, p, c)
+		if err != nil {
+			return identity.FeatureReceipt{}, err
+		}
+		p.recipient = current
+		p.stage = "policy initialization"
+		if _, err := policy.InitializeAuthority(ctx, w, policy.AuthorityScope{TenantID: authorization.TenantID(current.User.TenantID), PolicyNamespace: "users", SubjectID: authorization.SubjectID(current.User.ID)}, time.Second); err != nil {
+			return identity.FeatureReceipt{}, err
+		}
+	}
+	p.stage = "session effect"
 	r, err := p.effect.Apply(ctx, w, p, c, p.recipient, p.flow)
 	if err == nil && p.failApply {
 		return identity.FeatureReceipt{}, identity.ForbiddenError{}
@@ -63,6 +107,11 @@ func (p *magicLinkEffectFeature) ApplyFeature(ctx context.Context, w kernel.Work
 func (p *magicLinkEffectFeature) CheckFeatureCommit(ctx context.Context, w kernel.Work, c identity.Command) error {
 	if p.failCommit {
 		return identity.ForbiddenError{}
+	}
+	if p.intent != nil {
+		if _, err := mfapg.RequireMagicLinkFactors(ctx, w, p, c, p.intent.Creation.Binding.UserID, 1); err != nil {
+			return err
+		}
 	}
 	r, err := MagicLinkSigninSession(c)
 	if err != nil {
@@ -94,12 +143,67 @@ func (*magicLinkEffectCounters) RecoverParticipant(context.Context, kernel.Recov
 }
 
 func testNativeMagicLinkSessionEffect(t *testing.T, ctx context.Context, pool *database.Pool) {
-	contents, err := fs.ReadFile(identitycapability.Migrations(), "001_identity_one_use.sql")
+	for _, history := range []struct {
+		table string
+		files fs.FS
+	}{{"public.outbox_messages", outboxpg.Migrations()}, {"public.identity_outbox_bindings", lifecyclepg.Migrations()}} {
+		var installed bool
+		if err := pool.Raw().QueryRow(ctx, `SELECT to_regclass($1) IS NOT NULL`, history.table).Scan(&installed); err != nil {
+			t.Fatal(err)
+		}
+		if installed {
+			continue
+		}
+		paths, err := fs.Glob(history.files, "*.sql")
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, path := range paths {
+			contents, err := fs.ReadFile(history.files, path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := pool.Raw().Exec(ctx, strings.Split(string(contents), "-- +migrations Down")[0]); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	// Extend only this owned fixture; old histories remain byte-for-byte intact.
+	acceptance, err := (kernel.PasswordSignupAcceptanceMigrationSource{Base: kernel.MigrationSource{}, Version: 41}).Load(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err = pool.Raw().Exec(ctx, strings.Split(string(contents), "-- +migrations Down")[0]); err != nil {
+	if _, err := pool.Raw().Exec(ctx, acceptance[len(acceptance)-1].UpSQL()); err != nil {
 		t.Fatal(err)
+	}
+	registrationHistory, err := (kernel.MagicLinkRegistrationMigrationSource{Base: fixtureSource(acceptance), Version: 42}).Load(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Raw().Exec(ctx, registrationHistory[len(registrationHistory)-1].UpSQL()); err != nil {
+		t.Fatal(err)
+	}
+	factorHistory, err := (mfapg.MagicLinkSignupMigrationSource{Base: mfapg.MigrationSource{Version: 1}, Version: 2}).Load(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, m := range factorHistory {
+		if _, err := pool.Raw().Exec(ctx, m.UpSQL()); err != nil {
+			t.Fatal(err)
+		}
+	}
+	capabilityHistory, err := fs.Glob(identitycapability.Migrations(), "*.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, path := range capabilityHistory {
+		contents, err := fs.ReadFile(identitycapability.Migrations(), path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err = pool.Raw().Exec(ctx, strings.Split(string(contents), "-- +migrations Down")[0]); err != nil {
+			t.Fatal(err)
+		}
 	}
 	if _, err := pool.Raw().Exec(ctx, `INSERT INTO identity.tenant_authorities(tenant_id,version,enabled) VALUES('magic-effect',1,true);
 INSERT INTO identity.users(tenant_id,user_id,status,version) VALUES('magic-effect','recipient','active',1);
@@ -120,7 +224,11 @@ INSERT INTO identity.identifiers(tenant_id,user_id,identifier_id,kind,canonical_
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, mode := range []string{"commit", "csrf", "apply-denied", "commit-denied", "audit-failure", "outbox-failure", "stale-user", "consumed-flow", "foreign-grant", "late-expiry"} {
+	registration, err := kernel.NewMagicLinkRegistrationDomain(domain, kernel.MagicLinkRegistrationDomainConfig{ComparisonProfile: "email-v1", EmailPossessionPolicyVersion: 3, CurrentIdentifierKeyVersion: 1, RetainedIdentifierKeys: map[uint32][32]byte{1: {1}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, mode := range []string{"commit", "csrf", "apply-denied", "commit-denied", "audit-failure", "outbox-failure", "stale-user", "consumed-flow", "foreign-grant", "late-expiry", "signup", "signup-duplicate-factors", "signup-commit-denied", "signup-audit-failure", "signup-outbox-failure", "signup-native-outbox", "signup-native-outbox-failure"} {
 		t.Run(mode, func(t *testing.T) {
 			b := revokeBinding()
 			b.CommandID, _ = identity.NewCommandID()
@@ -135,13 +243,19 @@ INSERT INTO identity.identifiers(tenant_id,user_id,identifier_id,kind,canonical_
 				t.Fatal(err)
 			}
 			now = now.UTC()
+			if strings.HasPrefix(mode, "signup") {
+				recipient.User.ID, recipient.User.Version = identity.UserID("prospective-"+mode), 1
+				recipient.Identifier.ID, recipient.Identifier.UserID, recipient.Identifier.CanonicalValue, recipient.Identifier.Primary = identity.IdentifierID("prospective-email-"+mode), recipient.User.ID, mode+"@example.test", false
+				recipient.Identifier.Version, recipient.Verification.IdentifierID, recipient.Verification.Version, recipient.Verification.VerifiedAt = 1, recipient.Identifier.ID, 1, now
+				recipient.Query.CanonicalValue, recipient.ObservedAt = recipient.Identifier.CanonicalValue, now
+			}
 			_, original := magicLinkSigninMappingFixture(t, false)
 			s, _ := original.Bindings()
 			s.TenantID, s.UserID, s.SessionID, s.FamilyID = b.TenantID, recipient.User.ID, "magic-session-"+mode, "magic-family-"+mode
 			s.IssuedAt, s.LastActivityAt, s.Lookup = now, now, session.TokenDigest{KeyVersion: 1, Sum: sha256.Sum256([]byte("session-fixture/" + mode))}
 			keys, _ := kernel.KernelAuthorityKeys(kernel.DirectoryAuthorityQuery{GlobalAuthorityID: profile.GlobalAuthorityID, TenantID: b.TenantID}, s.UserID)
 			sk, _ := SessionAuthorityKeys(s.TenantID, s.UserID, s.FamilyID, s.SessionID)
-			pk, _ := scope.Key()
+			pk, _ := (policy.AuthorityScope{TenantID: authorization.TenantID(b.TenantID), PolicyNamespace: "users", SubjectID: authorization.SubjectID(s.UserID)}).Key()
 			a := func(key string) session.AuthorityBinding { return session.AuthorityBinding{ScopeKey: key, Version: 1} }
 			s.Authority, err = session.NewAuthoritySnapshot(session.AuthoritySnapshotSpec{Global: a(keys.Global), Tenant: a(keys.Tenant), User: a(keys.User), Identifier: a(keys.Identifier), Credential: a(keys.Credential), SessionFamily: a(sk.Family), Session: a(sk.Session), Authorization: a(pk)})
 			if err != nil {
@@ -191,15 +305,42 @@ INSERT INTO identity.identifiers(tenant_id,user_id,identifier_id,kind,canonical_
 			if err != nil {
 				t.Fatal(err)
 			}
+			var intent *kernel.MagicLinkRegistrationIntent
+			var declaration *kernel.MagicLinkRegistrationPlan
+			if strings.HasPrefix(mode, "signup") {
+				creation := b
+				creation.OperationID, creation.AnonymousFlowID, creation.UserID, creation.SchemaID = "identity.user.create", "", recipient.User.ID, "identity-user"
+				email := recipient.Identifier
+				email.Verified = false
+				intent = &kernel.MagicLinkRegistrationIntent{Creation: identity.CreateUserCommand{Binding: creation, Status: identity.StatusActive}, Identifier: email, ComparisonProfile: "email-v1", EmailPossessionPolicyVersion: 3}
+				additional, err := kernel.MagicLinkRegistrationFields(*intent)
+				if err != nil {
+					t.Fatal(err)
+				}
+				fields = append(fields, additional...)
+				digest, err := kernel.MagicLinkRegistrationDigest(*intent)
+				if err != nil {
+					t.Fatal(err)
+				}
+				declaration = &kernel.MagicLinkRegistrationPlan{UserID: recipient.User.ID, IdentifierID: string(email.ID), CreationDigest: digest, EmailPossessionPolicyVersion: 3, CreationEventIndex: 1}
+			}
 			command, err := identity.NewFeatureCommand(identity.FeatureCommandSpec{Binding: b, Operation: magicLinkSessionOperation(), Fields: fields})
 			if err != nil {
 				t.Fatal(err)
 			}
-			native := &magicLinkEffectFeature{effect: effect, expected: command, proof: proof, recipient: recipient, flow: flow, failApply: mode == "apply-denied", failCommit: mode == "commit-denied"}
+			native := &magicLinkEffectFeature{registration: registration, intent: intent, duplicateFactors: mode == "signup-duplicate-factors", effect: effect, expected: command, proof: proof, recipient: recipient, flow: flow, failApply: mode == "apply-denied", failCommit: mode == "commit-denied" || mode == "signup-commit-denied"}
 			if mode == "foreign-grant" {
 				native.proof.CapabilityID = "different-grant"
 			}
-			registry, err := kernel.NewContributorRegistry([]kernel.Contributor{domain, &revokeAudit{fail: mode == "audit-failure"}, &revokeOutbox{fail: mode == "outbox-failure"}, native, &magicLinkEffectCounters{}, identitycapability.NewParticipant()})
+			var outbox kernel.Contributor = &revokeOutbox{fail: mode == "outbox-failure" || mode == "signup-outbox-failure"}
+			actualOutbox := strings.HasPrefix(mode, "signup-native-outbox")
+			if actualOutbox {
+				outbox, err = lifecyclepg.NewContributor()
+				if err != nil {
+					t.Fatal(err)
+				}
+			}
+			registry, err := kernel.NewContributorRegistry([]kernel.Contributor{domain, &revokeAudit{fail: mode == "audit-failure" || mode == "signup-audit-failure"}, outbox, native, &magicLinkEffectCounters{}, identitycapability.NewParticipant()})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -216,7 +357,7 @@ INSERT INTO identity.identifiers(tenant_id,user_id,identifier_id,kind,canonical_
 			if err != nil {
 				t.Fatal(err)
 			}
-			plan, err := c.PrepareCommandPlan(b, command, kernel.CommandPlan{Contributors: registry.Descriptors(), SubjectType: "authentication_attempt", Feature: &kernel.FeatureRegistration{Contributor: native.Descriptor(), Operation: magicLinkSessionOperation()}, Capability: &proof, CommandCounters: &kernel.CommandCounterPlan{PolicyVersion: 1, Fingerprint: [32]byte{3}}, Lifecycle: &kernel.LifecyclePlan{EventType: "session.created.v1"}, Audits: []kernel.AuditPlan{{EventType: "authentication.succeeded", SchemaVersion: 1, Required: true, RequiredRecordCount: 1, MaxRecordBytes: 16384, MaxAggregateBytes: 16384, RetentionPolicyVersion: 1, RetentionClass: "protected", BindingDigest: digest}}})
+			plan, err := c.PrepareCommandPlan(b, command, kernel.CommandPlan{MagicLinkRegistration: declaration, Contributors: registry.Descriptors(), SubjectType: "authentication_attempt", Feature: &kernel.FeatureRegistration{Contributor: native.Descriptor(), Operation: magicLinkSessionOperation()}, Capability: &proof, CommandCounters: &kernel.CommandCounterPlan{PolicyVersion: 1, Fingerprint: [32]byte{3}}, Lifecycle: &kernel.LifecyclePlan{EventType: "session.created.v1"}, Audits: []kernel.AuditPlan{{EventType: "authentication.succeeded", SchemaVersion: 1, Required: true, RequiredRecordCount: 1, MaxRecordBytes: 16384, MaxAggregateBytes: 16384, RetentionPolicyVersion: 1, RetentionClass: "protected", BindingDigest: digest}}})
 			if mode == "foreign-grant" {
 				if err == nil {
 					t.Fatal("native grant mismatch admitted")
@@ -255,13 +396,24 @@ INSERT INTO identity.identifiers(tenant_id,user_id,identifier_id,kind,canonical_
 				}
 			}
 			if err == nil {
+				if mode == "signup-native-outbox-failure" {
+					// Fail the real second INSERT, after the login event prefix.
+					if _, e := pool.Raw().Exec(ctx, `ALTER TABLE public.outbox_messages ADD CONSTRAINT reject_magiclink_creation CHECK(topic <> 'user.created.v1') NOT VALID`); e != nil {
+						t.Fatal(e)
+					}
+					defer func() {
+						if _, e := pool.Raw().Exec(ctx, `ALTER TABLE public.outbox_messages DROP CONSTRAINT reject_magiclink_creation`); e != nil {
+							t.Error("outbox fault cleanup")
+						}
+					}()
+				}
 				result, err = c.Commit(w, result)
 			}
 			want := 0
-			if mode == "commit" || mode == "csrf" {
+			if mode == "commit" || mode == "csrf" || mode == "signup" || mode == "signup-native-outbox" {
 				want = 1
 				if err != nil || result.Outcome != identity.CommitOutcomeCommitted {
-					t.Fatal("commit", err)
+					t.Fatal("commit", native.stage, err)
 				}
 				_, replay, err := c.ReserveCommand(ctx, b, command, plan)
 				if err != nil || replay.Outcome != identity.CommitOutcomeCommitted {
@@ -277,6 +429,28 @@ INSERT INTO identity.identifiers(tenant_id,user_id,identifier_id,kind,canonical_
 			var state, flowState string
 			if err := pool.Raw().QueryRow(ctx, `SELECT (SELECT count(*) FROM session_store.sessions WHERE tenant_id=$1 AND session_id=$2),(SELECT count(*) FROM session_store.families WHERE tenant_id=$1 AND family_id=$3),(SELECT count(*) FROM session_store.session_issuances WHERE command_id=$4),(SELECT uses FROM public.capability_identity_one_use WHERE capability_id=$5),(SELECT state FROM public.capability_identity_one_use WHERE capability_id=$5),(SELECT state FROM session_store.preauth_transactions WHERE tenant_id=$1 AND flow_id=$6)`, string(b.TenantID), s.SessionID, s.FamilyID, mustCommandBytes(t, b.CommandID), proof.CapabilityID, string(fs.Binding.ID)).Scan(&sessions, &families, &issuances, &uses, &state, &flowState); err != nil || sessions != want || families != want || issuances != want || uses != want {
 				t.Fatalf("atomic effects %d/%d/%d/%d: %v", sessions, families, issuances, uses, err)
+			}
+			if intent != nil {
+				var users, emails, factors, bindings, passwords, createdEvents int
+				if err := pool.Raw().QueryRow(ctx, `SELECT
+(SELECT count(*) FROM identity.users WHERE tenant_id=$1 AND user_id=$2 AND status='active' AND version=1),
+(SELECT count(*) FROM identity.identifiers WHERE tenant_id=$1 AND user_id=$2 AND identifier_id=$3 AND verified AND verification_state=2 AND verified_at IS NOT NULL),
+(SELECT count(*) FROM identity_mfa.factor_authorities WHERE tenant_id=$1 AND user_id=$2 AND version=1 AND active_factors=0 AND initialized_command_id=$4 AND initialized_purpose='identity.magic-link.consume'),
+(SELECT count(*) FROM identity.registration_bindings WHERE tenant_id=$1 AND user_id=$2 AND command_id=$4 AND credential_id IS NULL AND NOT accepted_only),
+(SELECT count(*) FROM identity.credential_references WHERE tenant_id=$1 AND user_id=$2),
+(SELECT count(*) FROM public.revoke_outbox WHERE command_id=$5 AND event_type='user.created.v1' AND subject_id=$2 AND before_version='0' AND after_version='1')`, string(b.TenantID), string(s.UserID), string(intent.Identifier.ID), mustCommandBytes(t, b.CommandID), string(b.CommandID)).Scan(&users, &emails, &factors, &bindings, &passwords, &createdEvents); err != nil || users != want || emails != want || factors != want || bindings != want || passwords != 0 || !actualOutbox && createdEvents != want || actualOutbox && createdEvents != 0 {
+					t.Fatalf("atomic signup effects %d/%d/%d/%d/passwords=%d/events=%d: %v", users, emails, factors, bindings, passwords, createdEvents, err)
+				}
+			}
+			if actualOutbox {
+				var messages, bindings, login, creation int
+				if err := pool.Raw().QueryRow(ctx, `SELECT
+(SELECT count(*) FROM public.outbox_messages WHERE convert_from(payload,'UTF8')::jsonb->>'command_id'=$1),
+(SELECT count(*) FROM public.identity_outbox_bindings WHERE tenant_id=$2 AND command_id=$3),
+(SELECT count(*) FROM public.outbox_messages WHERE topic='session.created.v1' AND convert_from(payload,'UTF8')::jsonb->>'command_id'=$1 AND convert_from(payload,'UTF8')::jsonb->>'subject_id'=$4),
+(SELECT count(*) FROM public.outbox_messages WHERE topic='user.created.v1' AND convert_from(payload,'UTF8')::jsonb->>'command_id'=$1 AND convert_from(payload,'UTF8')::jsonb->>'subject_id'=$5 AND convert_from(payload,'UTF8')::jsonb->>'before_version'='0' AND convert_from(payload,'UTF8')::jsonb->>'after_version'='1')`, string(b.CommandID), string(b.TenantID), mustCommandBytes(t, b.CommandID), b.AnonymousFlowID, string(s.UserID)).Scan(&messages, &bindings, &login, &creation); err != nil || messages != 2*want || bindings != 2*want || login != want || creation != want {
+					t.Fatalf("real paired outbox %d/%d/login=%d/creation=%d: %v", messages, bindings, login, creation, err)
+				}
 			}
 			if want == 1 {
 				if state != "finalized" || flowState != "consumed" {
@@ -312,4 +486,5 @@ INSERT INTO identity.identifiers(tenant_id,user_id,identifier_id,kind,canonical_
 			}
 		})
 	}
+	t.Run("native MFA completion session", func(t *testing.T) { testNativeMFASessionEffect(t, ctx, pool) })
 }

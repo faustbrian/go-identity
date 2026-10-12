@@ -61,10 +61,12 @@ func (MFATOTPAttemptBinding) MarshalText() ([]byte, error) { return nil, invalid
 // There is no general Work, transaction, reservation or session accessor.
 type MFATOTPAttemptWork struct{ state *mfaAttemptState }
 type mfaAttemptState struct {
-	work    Work
-	owner   MFATOTPAttemptContributor
-	command identity.Command
-	active  bool
+	work               Work
+	owner              MFATOTPAttemptContributor
+	command            identity.Command
+	active             bool
+	counterCalled      bool
+	counterDisposition CommandCounterDisposition
 }
 
 // Format redacts callback authority and opaque input.
@@ -131,6 +133,69 @@ func (w MFATOTPAttemptWork) DatabaseTime(ctx context.Context) (time.Time, error)
 	return w.state.work.DatabaseTime(ctx)
 }
 
+// ReserveCommandCounters invokes the exact registered protected-risk owner
+// once inside this counted attempt transaction, after native browser/current
+// authority admission and before factor comparison. Denied must return native
+// MFAAttemptDenied without comparing a code. Wrong-code denial commits risk,
+// budget and audit together; correct-code Unchanged rolls all of them back.
+// No child, session, lifecycle or private transaction is invoked here.
+func (w MFATOTPAttemptWork) ReserveCommandCounters(ctx context.Context, owner MFATOTPAttemptContributor) (CommandCounterDisposition, error) {
+	if _, err := w.Binding(owner); err != nil {
+		return 0, err
+	}
+	native := w.state.work
+	if ctx == nil {
+		return 0, native.fail(native.state.ctx, invalidWork())
+	}
+	if w.state.counterCalled {
+		return 0, native.fail(ctx, invalidWork())
+	}
+	p := native.state.execution.reservation.plan
+	participant := counterAdmissionParticipant(p)
+	if participant == nil {
+		return 0, native.fail(ctx, invalidPlan())
+	}
+	w.state.counterCalled = true
+	choice, err := native.state.execution.coordinator.reserveCounterInWork(ctx, native, participant, w.state.command)
+	if err != nil {
+		return 0, native.fail(ctx, err)
+	}
+	w.state.counterDisposition = choice
+	return choice, nil
+}
+
+// RequireActiveDirectoryAuthority fences the original pre-decision global and
+// tenant epochs during the exact native counted callback, before factor locks.
+// It does not disclose general Work or refresh authority. Live failures poison
+// the sole transaction even if ignored; zero/foreign/returned custody denies.
+func (w MFATOTPAttemptWork) RequireActiveDirectoryAuthority(ctx context.Context, owner MFATOTPAttemptContributor, expected DirectoryAuthorityAdmission) error {
+	if err := w.usable(); err != nil {
+		return err
+	}
+	b, err := w.Binding(owner)
+	native, command, err := otpAuthorityScope(ctx, w.state.work, b.Command, err)
+	if err != nil {
+		return err
+	}
+	return otpAuthorityFailure(ctx, native, native.requireActiveDirectoryAuthority(ctx, command, expected))
+}
+
+// RequireRecipient fences the original selected user/identifier and security
+// epochs during counted denial, using the same directory owner as successful
+// completion. Take this before factor locks. It neither authenticates a code
+// nor permits a session; live denied checks poison the transaction.
+func (w MFATOTPAttemptWork) RequireRecipient(ctx context.Context, owner MFATOTPAttemptContributor, expected RecipientRecord) error {
+	if err := w.usable(); err != nil {
+		return err
+	}
+	b, err := w.Binding(owner)
+	native, command, err := otpAuthorityScope(ctx, w.state.work, b.Command, err)
+	if err != nil {
+		return err
+	}
+	return otpAuthorityFailure(ctx, native, native.requireRecipient(ctx, command, expected))
+}
+
 func mfaAttemptOwner(p *admittedKernelPlan) MFATOTPAttemptContributor {
 	if p == nil || p.feature == nil || p.feature.Operation.OperationID != "identity.mfa.totp-verify" || p.mfaCompletion == nil || p.otp != nil {
 		return nil
@@ -175,7 +240,22 @@ func (c *Coordinator) prepareMFATOTPAttempt(b identity.CommandBinding, command i
 // rolls back and returns Conflict, never successful authentication. Unresolved
 // predecessors are not taken over or compared again. Commit ambiguity remains
 // Unknown and requires observation of the original command, not replacement.
-// No child/risk/OTP/session/domain reservation or lifecycle effect is invoked.
+// A declared protected-risk charge uses the exact native counted callback and
+// shares its transaction; omission or ignored risk denial aborts. Correct-code
+// Unchanged rolls that provisional charge back with the callback. No child,
+// OTP, session/domain reservation or lifecycle effect is invoked.
 func (c *Coordinator) RecordMFATOTPAttemptDenial(ctx context.Context, b identity.CommandBinding, command identity.Command, p CommandPlan) (identity.CommandResult, error) {
-	return c.recordCountedAttemptCommand(ctx, b, command, p, false, true)
+	return c.recordCountedAttemptCommand(ctx, b, command, p, false, true, nil)
+}
+
+// RecordMFATOTPAttemptDenialWithOriginal charges the same native atomic denial
+// lane using the original submitted claim and separately validated native
+// counter-enriched command. Exact history remains original-input keyed; changed
+// declarations still conflict and correct-code probing still rolls back.
+func (c *Coordinator) RecordMFATOTPAttemptDenialWithOriginal(ctx context.Context, original, prepared identity.Command, p CommandPlan) (identity.CommandResult, error) {
+	f, ok := prepared.Feature()
+	if !ok {
+		return identity.CommandResult{}, invalidPlan()
+	}
+	return c.recordCountedAttemptCommand(ctx, f.Binding, prepared, p, false, true, &original)
 }

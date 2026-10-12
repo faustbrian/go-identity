@@ -11,6 +11,9 @@ import (
 
 func TestAuthorityRequiresActualProtectedInvocation(t *testing.T) {
 	for _, ctx := range []context.Context{nil, context.Background()} {
+		if err := mfapg.InitializeMagicLinkSignup(ctx, kernel.Work{}, nil, identity.Command{}, "user"); err == nil {
+			t.Fatal("factor state initialized without consuming creation")
+		}
 		if err := mfapg.InitializeSignup(ctx, kernel.Work{}, nil, identity.Command{}, "user"); err == nil {
 			t.Fatal("factor absence initialized outside genuine account creation")
 		}

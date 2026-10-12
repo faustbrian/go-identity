@@ -54,6 +54,9 @@ type StoreConfiguration struct {
 	// PasswordReset selects native request/completion/recovery over this graph's
 	// existing primary risk, delivery and session owners. Nil selects none.
 	PasswordReset *PasswordResetConfiguration
+	// MagicLink selects native request and optional consumption/original flow,
+	// not HTTP. It shares this graph's risk, delivery and primary authority.
+	MagicLink *MagicLinkConfiguration
 	// PasswordSignin selects native login/recovery using graph-owned counted
 	// risk and the selected session base, without enabling any HTTP route.
 	PasswordSignin *PasswordSigninConfiguration
@@ -81,6 +84,12 @@ type StoreConfiguration struct {
 	HTTPPasswordSignup *HTTPPasswordSignupConfiguration
 	// HTTPRegistrationVerification explicitly selects confirmation, not signup.
 	HTTPRegistrationVerification *HTTPRegistrationVerificationConfiguration
+	// HTTPMagicLink independently selects native magic-link routes and the named
+	// original-flow method, requiring real strict rate and signed device custody.
+	HTTPMagicLink *HTTPMagicLinkConfiguration
+	// HTTPMFA explicitly selects native TOTP completion transport, not other MFA
+	// routes. Original pre-auth/device, TOTP and strict rate owners are required.
+	HTTPMFA *HTTPMFAConfiguration
 }
 
 // VelocityStoreConfiguration selects one primary/native recovery pair. Native
@@ -401,6 +410,12 @@ func (s StoreSet) Close(ctx context.Context) error {
 	}
 	if state.features != nil && state.features.httpPasswordChange != nil {
 		state.features.httpPasswordChange.rate.Close()
+	}
+	if state.features != nil && state.features.httpMagicLink != nil && state.features.httpMagicLink.rate != nil {
+		state.features.httpMagicLink.rate.Close()
+	}
+	if state.features != nil && state.features.httpMFA != nil {
+		state.features.httpMFA.rate.Close()
 	}
 	drained := state.drained
 	state.mu.Unlock()

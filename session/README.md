@@ -908,6 +908,30 @@ issuance, not a lower bound that could extend remaining lifetime.
 **Why no defaults?** All sign-in methods must share one selected policy instead
 of silently choosing different lifetimes. Resolve before MFA, not after it.
 
+### Magic-link primary with TOTP completion
+
+`NewMFAMagicLinkSessionIssuer` (or its `WithCSRF` variant) prepares only the
+explicit native TOTP-completion profile. `PrepareMFAMagicLink` freezes original
+primary provenance, factor/continuation metadata and the already resolved
+remember policy before generating token custody. `BindMFA` binds once to the
+unchanged opaque code/pre-auth command. `IssueRequest.MFACommand` lends that
+command to the native executor; it is never safe restart-recovery input.
+
+The owned durable MFA executor must verify the original primary, child, browser,
+factor and current policy and atomically commit successful replay, continuation,
+child consumption, session and required audit/lifecycle. Applications must not
+implement this domain orchestration. The core profile alone is not usable MFA;
+the PostgreSQL completion service and reference wiring are still in development.
+
+`MFAAuthentication` is separate historical metadata, not a new credential-issued
+proof or permission to issue a session. `NewSessionWithMagicLinkMFA` preserves the
+original primary authentication time for freshness. Factor completion cannot
+upgrade remember policy or replace primary provenance. Complete stores retain
+both projections and optional CSRF. Updates, rotations and encrypted cache retain
+all metadata; lost or changed factor projections fail closed. Cached admission
+keeps the earliest original authoritative deadline even across promotion/outage.
+Legacy single-factor metadata and cache schemas are unchanged.
+
 **Is logout implemented?** Only deletion attributes and the closed native
 `NewRevokeFamilyCommand(binding, expectedVersion)` preparation contract.
 `RevokeFamilyOperation` targets one family, not user-wide logout; exact scope

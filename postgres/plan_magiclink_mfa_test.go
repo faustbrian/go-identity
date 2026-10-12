@@ -141,6 +141,34 @@ func FuzzMagicLinkMFAPlan(f *testing.F) {
 		if err != nil {
 			t.Fatal(err)
 		}
+		ungenerated := original
+		ungenerated.CommandCounters = nil
+		ungenerated.Contributors = nil
+		for _, d := range original.Contributors {
+			if d.Owner != "identity/risk/postgres" {
+				ungenerated.Contributors = append(ungenerated.Contributors, d)
+			}
+		}
+		ungenerated.MFAContinuation = &MFAContinuationPlan{UserID: original.MFAContinuation.UserID, PolicyVersion: original.MFAContinuation.PolicyVersion, FactorVersion: original.MFAContinuation.FactorVersion}
+		initial, err := encodeMagicLinkMFAPlanMode(b, [32]byte{1}, ungenerated, true)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, input := range [][]byte{initial, data} {
+			got, err := decodeMagicLinkMFAPlanMode(b, [32]byte{1}, input, true)
+			if err != nil {
+				continue
+			}
+			wire, err := encodeMagicLinkMFAPlanMode(b, [32]byte{1}, got, true)
+			if err != nil || !bytes.Equal(wire, input) {
+				t.Fatal("noncanonical preparation accepted")
+			}
+			if ungeneratedMFAContinuation(got.MFAContinuation) {
+				if _, err := decodeFeaturePlan(b, [32]byte{1}, input); err == nil {
+					t.Fatal("ungenerated preparation widened ordinary execution")
+				}
+			}
+		}
 		for _, input := range [][]byte{seed, preparation, data} {
 			got, err := decodeFeaturePlan(b, [32]byte{1}, input)
 			if err != nil {

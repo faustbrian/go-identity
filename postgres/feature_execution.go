@@ -3,6 +3,7 @@ package postgres
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"time"
 
 	"github.com/faustbrian/go-audit"
@@ -101,6 +102,10 @@ func validateFeatureCommand(phase FeatureExecutionContributor, command identity.
 }
 
 func (r *ContributorRegistry) admitFeaturePlan(b identity.CommandBinding, fingerprint [32]byte, p CommandPlan) (*admittedKernelPlan, error) {
+	return r.admitFeaturePlanMode(b, fingerprint, p, false)
+}
+
+func (r *ContributorRegistry) admitFeaturePlanMode(b identity.CommandBinding, fingerprint [32]byte, p CommandPlan, preparation bool) (*admittedKernelPlan, error) {
 	if p.MFAContinuation != nil && (r == nil || r.state == nil) {
 		return nil, invalidPlan()
 	}
@@ -111,6 +116,13 @@ func (r *ContributorRegistry) admitFeaturePlan(b identity.CommandBinding, finger
 		return nil, invalidPlan()
 	}
 	digest, err := FeaturePlanDigest(b, fingerprint, p)
+	if preparation && ungeneratedMFAContinuation(p.MFAContinuation) {
+		wire, e := encodeMagicLinkMFAPlanMode(b, fingerprint, p, true)
+		err = e
+		if e == nil {
+			digest = sha256.Sum256(wire)
+		}
+	}
 	if err != nil || digest != p.Digest || p.SubjectType == "" {
 		return nil, invalidPlan()
 	}

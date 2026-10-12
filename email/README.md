@@ -90,6 +90,19 @@ private enclosing diagnostic fields remain sensitive and must not be logged.
 
 ### Signup verification grants
 
+`NewMagicLinkPossessionPolicy` is a separate signup-by-link policy; it does not
+widen password registration verification. It freezes the address comparison,
+issuer, audience, exact HTTPS callbacks, lifetime and nonzero policy revision.
+`Authorize` checks an already authenticated grant against the complete original
+prospective account, mailbox, request, browser binding and exclusive expiry.
+Unsigned input, signin-only grants and substituted original fields deny.
+The native consumer must invoke it using transaction-owned database time before
+creating a verified identifier, and atomically enforce one-use, current authority,
+collision admission and required session/lifecycle effects. Success is neither
+a reusable possession receipt nor proof of committed signup. The policy itself
+owns no store, signing keys, clock, network callbacks or resources. Public native
+signup consumption and required MFA continuation remain integration work.
+
 `NewRegistrationVerificationPolicy` freezes the real address policy, issuer,
 single audience, exact HTTPS callbacks, explicit lifetime (whole seconds,
 positive and at most 24 hours), and dedicated retained HMAC binding keys.

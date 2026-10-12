@@ -126,6 +126,19 @@ func sessionRecordFieldsKind(record session.Session, kind session.Authentication
 		instant("proof.expires", p.ExpiresAt)
 	}
 	instant("session.issued", s.IssuedAt)
+	if p, err := record.MFAAuthentication().Bindings(); err == nil {
+		text("mfa.command", string(p.CommandID))
+		text("mfa.primary-command", string(p.PrimaryCommandID))
+		text("mfa.continuation", string(p.ContinuationID))
+		add("mfa.scope", identity.FeatureValue{Kind: identity.FeatureBytes, Bytes: p.ContinuationScopeDigest[:]})
+		text("mfa.method", p.Method)
+		text("mfa.factor", p.FactorID)
+		number("mfa.enrollment-version", p.EnrollmentVersion)
+		number("mfa.authority-version", p.FactorAuthorityVersion)
+		number("mfa.continuation-version", p.ContinuationVersion)
+		instant("mfa.verified", p.VerifiedAt)
+		instant("mfa.valid-until", p.ValidUntil)
+	}
 	instant("session.activity", s.LastActivityAt)
 	binding("authority.global", authority.Global)
 	binding("authority.tenant", authority.Tenant)
@@ -264,6 +277,20 @@ func sessionRecordFromFieldsKind(b identity.CommandBinding, values map[string]id
 		s.Authentication.Proof = p
 	}
 	s.IssuedAt, s.LastActivityAt = instant("session.issued"), instant("session.activity")
+	var factor session.MFAAuthentication
+	if _, hasMFA := values["mfa.command"]; hasMFA {
+		p := session.MFAAuthenticationSpec{CommandID: identity.CommandID(text("mfa.command")), PrimaryCommandID: identity.CommandID(text("mfa.primary-command")), ContinuationID: identity.CommandID(text("mfa.continuation")), Method: text("mfa.method"), FactorID: text("mfa.factor"), EnrollmentVersion: number("mfa.enrollment-version"), FactorAuthorityVersion: number("mfa.authority-version"), ContinuationVersion: number("mfa.continuation-version"), Remember: remember, VerifiedAt: instant("mfa.verified"), ValidUntil: instant("mfa.valid-until")}
+		digest := take("mfa.scope", identity.FeatureBytes).Bytes
+		if len(digest) != len(p.ContinuationScopeDigest) {
+			return fail()
+		}
+		copy(p.ContinuationScopeDigest[:], digest)
+		var err error
+		factor, err = session.NewMFAAuthentication(p)
+		if err != nil {
+			return fail()
+		}
+	}
 	authority := session.AuthoritySnapshotSpec{Global: binding("authority.global"), Tenant: binding("authority.tenant"), User: binding("authority.user"), Identifier: binding("authority.identifier"), Credential: binding("authority.credential"), SessionFamily: binding("authority.family"), Session: binding("authority.session"), Authorization: binding("authority.authorization"), ActiveOrganizationID: text("authority.organization.id"), Organization: optional("authority.organization"), Factor: optional("authority.factor"), Passkey: optional("authority.passkey")}
 	if !valid || s.Authentication.Kind != kind || kind != session.AuthenticationVerified && kind != session.AuthenticationOTP && kind != session.AuthenticationMagicLink {
 		return fail()
@@ -277,7 +304,7 @@ func sessionRecordFromFieldsKind(b identity.CommandBinding, values map[string]id
 	if err != nil {
 		return fail()
 	}
-	record, err := sessionFromCSRFFieldsWithProvenance(values, "", s, metadata, magic)
+	record, err := sessionFromCSRFFieldsWithMFA(values, "", s, metadata, magic, factor)
 	if err != nil || len(values) != 0 {
 		return fail()
 	}

@@ -44,11 +44,14 @@ func (s StoreSet) migrationCatalog(ctx context.Context) ([]migrationHistory, err
 		{version: 1, schema: "identity"}, {version: 1000, schema: s.state.config.Schema},
 	}}
 	shared.guards = append(shared.guards, sharedSuffixGuards(s.state.config.Schema)...)
+	if s.state.features != nil && s.state.features.migrations.magicTOTP {
+		shared.guards = append(shared.guards, migrationGuard{version: 1019, schema: "identity", columns: []string{"commands.preparation_declaration"}})
+	}
 	for _, step := range history {
 		v := step.Version()
 		var owner ModuleID
 		switch {
-		case v <= 9 || v >= 1012 && v <= 1018:
+		case v <= 9 || v >= 1012 && v <= 1019:
 			owner = "identity/postgres"
 		case v >= 1000 && v <= 1011:
 			owner = "identity/risk/postgres"
@@ -75,7 +78,7 @@ func (s StoreSet) migrationCatalog(ctx context.Context) ([]migrationHistory, err
 			return nil, err
 		}
 		owned := migrationHistory{namespace: "identity_http_rate", history: []migrations.Migration{step}, owners: map[migrations.Version]ModuleID{step.Version(): "rate-limit/postgres"}, guards: []migrationGuard{{version: step.Version(), schema: "public", tables: []string{"rate_limit_states", "rate_limit_states_expires_at_idx"}}}}
-		if s.state.features != nil && (s.state.features.httpPasswordReset != nil || s.state.features.httpRegistrationVerification != nil || s.state.features.httpPasswordVerification != nil || s.state.features.httpPasswordChange != nil) {
+		if s.state.features != nil && (s.state.features.httpPasswordReset != nil || s.state.features.httpRegistrationVerification != nil || s.state.features.httpPasswordVerification != nil || s.state.features.httpPasswordChange != nil || s.state.features.httpMagicLink != nil && s.state.features.httpMagicLink.config.Consume) {
 			native := ratepg.AtomicSchemaMigration()
 			atomic, err := migrations.NewMigration(migrations.Version(native.Version), native.Name, migrations.TransactionModeDefault, native.Up, native.Down)
 			if err != nil {
@@ -198,7 +201,25 @@ func (s StoreSet) migrationCatalog(ctx context.Context) ([]migrationHistory, err
 		}
 	}
 	if s.state.features.passwordChange != nil {
-		return passwordChangeMigrationCatalog(ctx, catalog, c.passwordSigninSchema)
+		catalog, err = passwordChangeMigrationCatalog(ctx, catalog, c.passwordSigninSchema)
+		if err != nil {
+			return nil, err
+		}
+	}
+	if s.state.features.magicRequest != nil {
+		catalog, err = magicLinkMigrationCatalog(ctx, catalog, c.magicSessionSchema, c.magicMFAChallenge)
+		if err != nil {
+			return nil, err
+		}
+		if c.magicSignup {
+			catalog, err = magicLinkSignupMigrationCatalog(ctx, catalog)
+			if err != nil {
+				return nil, err
+			}
+		}
+		if c.magicTOTP {
+			return magicLinkTOTPRequiredMigrations(ctx, catalog, c.magicSessionSchema, s.state.config.Schema)
+		}
 	}
 	return catalog, nil
 }

@@ -60,6 +60,14 @@ func NewCookieRevokeOneExecutor(pool *database.Pool, c RevokeOneExecutorConfig, 
 		return nil, err
 	}
 	c.Execution.Coordinator = copyRevokeCoordinatorConfig(c.Execution.Coordinator)
+	if c.Admission != nil {
+		selected := copySingleFactorAdmission(*c.Admission)
+		c.Admission = &selected
+	}
+	if c.MFAMagicLink != nil {
+		p := *c.MFAMagicLink
+		c.MFAMagicLink = &p
+	}
 	return &CookieRevokeOneExecutor{pool: pool, config: c, keys: append([]session.CSRFKey(nil), keys...), base: base}, nil
 }
 

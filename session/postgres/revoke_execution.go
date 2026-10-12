@@ -23,6 +23,15 @@ import (
 type RevokeOneExecutorConfig struct {
 	Execution IssueExecutorConfig
 	Sessions  *session.SessionService
+	// Admission explicitly enables native single-factor methods for caller and
+	// target revocation. Nil retains the existing verified-only profile. Selected
+	// deployment, namespace and audience must match Execution.Profile. The same
+	// frozen selection must construct Sessions; configuration grants no authority.
+	Admission *SingleFactorSessionAdmissionConfig
+	// MFAMagicLink explicitly selects current confirmed TOTP authority for
+	// magic-link source and target sessions. It never enables single-factor
+	// fallback; the same profile must be selected by Sessions.
+	MFAMagicLink *MagicLinkAdmissionConfig
 }
 
 // RevokeOneExecutor owns kernel/native/audit/outbox composition. It accepts no
@@ -45,6 +54,41 @@ func NewRevokeOneExecutor(pool *database.Pool, c RevokeOneExecutorConfig) (*Revo
 	owned, err := newOwnedSessionExecution(pool, c.Execution, false)
 	if err != nil {
 		return nil, err
+	}
+	if c.Admission != nil {
+		if _, _, err := singleFactorAdmission(*c.Admission); err != nil {
+			return nil, err
+		}
+		selected := copySingleFactorAdmission(*c.Admission)
+		profiles := []OTPAdmissionConfig{}
+		if p := selected.Verified; p != nil {
+			profiles = append(profiles, OTPAdmissionConfig{p.GlobalAuthorityID, p.PolicyNamespace, p.Audience})
+		}
+		if p := selected.OTP; p != nil {
+			profiles = append(profiles, *p)
+		}
+		if p := selected.MagicLink; p != nil {
+			profiles = append(profiles, OTPAdmissionConfig(*p))
+		}
+		base := c.Execution.Profile
+		for _, p := range profiles {
+			if p.GlobalAuthorityID != base.GlobalAuthorityID || p.PolicyNamespace != base.PolicyNamespace || p.Audience != base.Audience {
+				return nil, session.ErrInvalidInput
+			}
+		}
+		owned.native.revokeAdmission = &selected
+	}
+	if p := c.MFAMagicLink; p != nil {
+		base := c.Execution.Profile
+		if !OTPAdmissionConfig(*p).valid() || p.GlobalAuthorityID != base.GlobalAuthorityID || p.PolicyNamespace != base.PolicyNamespace || p.Audience != base.Audience {
+			return nil, session.ErrInvalidInput
+		}
+		copied := *p
+		owned.native.revokeMFAMagicLink = &copied
+		if owned.native.revokeAdmission == nil {
+			verified := IdentifierAdmissionConfig(base)
+			owned.native.revokeAdmission = &SingleFactorSessionAdmissionConfig{Verified: &verified}
+		}
 	}
 	return &RevokeOneExecutor{owned, c.Sessions}, nil
 }

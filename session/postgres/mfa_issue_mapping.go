@@ -1,0 +1,89 @@
+package postgres
+
+import (
+	"strings"
+
+	identity "github.com/faustbrian/go-identity"
+	"github.com/faustbrian/go-identity/session"
+)
+
+const mfaCompletionSessionPrefix = "session.result."
+
+// MFATOTPCompletionSessionFields freezes the complete prospective magic-link
+// primary/TOTP session into the native completion command before fingerprinting.
+// It retains original primary, child/factor provenance, every authority dimension,
+// resolved remember policy and optional CSRF, never a bearer or submitted code.
+// Only the initial native TOTP completion profile is accepted. This bounded
+// structural mapping performs no verification, reservation, IO or renewal.
+func MFATOTPCompletionSessionFields(record session.Session) ([]identity.FeatureField, error) {
+	if !mfaTOTPCompletionRecord(record) {
+		return nil, session.ErrInvalidSessionCommand
+	}
+	fields, err := OriginalSessionFields(record)
+	if err != nil {
+		return nil, session.ErrInvalidSessionCommand
+	}
+	for i := range fields {
+		fields[i].Name = mfaCompletionSessionPrefix + strings.TrimPrefix(fields[i].Name, originalSessionPrefix)
+	}
+	return fields, nil
+}
+
+// MFATOTPCompletionSession restores only the complete session-owned projection
+// of an anonymous TOTP completion v1 command. Completion identity and tenant
+// must match; original primary identity remains distinct and cannot retarget the
+// browser command. Missing, mixed, noncanonical or extra session fields deny.
+// The native owner separately checks non-session fields and original opaque
+// code/browser/child custody and actual recorded factor completion. Successful
+// reconstruction is not authentication or permission to persist a session.
+func MFATOTPCompletionSession(command identity.Command) (session.Session, error) {
+	deny := func() (session.Session, error) { return session.Session{}, session.ErrInvalidSessionCommand }
+	p, ok := command.Feature()
+	if !ok || p.Operation != mfaTOTPCompletionSessionOperation() || p.Binding.UserID != "" || p.Binding.RecordID != "" || p.Binding.AnonymousFlowID == "" {
+		return deny()
+	}
+	fields := make([]identity.FeatureField, 0, 96)
+	var user identity.UserID
+	for _, f := range p.Fields {
+		name, owned := strings.CutPrefix(f.Name, mfaCompletionSessionPrefix)
+		if !owned {
+			continue
+		}
+		if name == "user.id" {
+			user = identity.UserID(f.Value.Text)
+		}
+		f.Name = originalSessionPrefix + name
+		fields = append(fields, f)
+	}
+	record, err := OriginalSessionFromFields(p.Binding.TenantID, user, fields)
+	if err != nil || !mfaTOTPCompletionRecord(record) {
+		return deny()
+	}
+	m, _ := record.MFAAuthentication().Bindings()
+	if m.CommandID != p.Binding.CommandID {
+		return deny()
+	}
+	return record, nil
+}
+
+func mfaTOTPCompletionSessionOperation() identity.FeatureOperation {
+	return identity.FeatureOperation{Owner: "identity/mfa", OperationID: "identity.mfa.totp-verify", SchemaID: "mfa-totp-verify", SchemaVersion: 1, RecordRequirement: identity.FeatureRecordOmitted, SubjectRequirement: identity.FeatureSubjectAnonymousFlow}
+}
+
+func mfaTOTPCompletionRecord(record session.Session) bool {
+	s, err := record.Bindings()
+	if err != nil || s.Authentication.Kind != session.AuthenticationMagicLink || s.Version != 1 || !s.IssuedAt.Equal(s.LastActivityAt) {
+		return false
+	}
+	a, err := s.Authority.Bindings()
+	if err != nil || a.Organization.Present || !a.Factor.Present || a.Passkey.Present {
+		return false
+	}
+	m, err := record.MFAAuthentication().Bindings()
+	p, primaryErr := record.MagicLinkAuthentication().Bindings()
+	if err != nil || primaryErr != nil || m.Method != "totp" || m.PrimaryCommandID != p.CommandID || m.FactorAuthorityVersion != a.Factor.Binding.Version {
+		return false
+	}
+	_, continued := record.CredentialContinuation()
+	return !continued
+}

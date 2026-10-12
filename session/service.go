@@ -122,7 +122,53 @@ type SessionService struct {
 	reader       SessionReader
 	config       ServiceConfig
 	method       AuthenticationKind
+	methods      uint8
 	cacheProfile string
+}
+
+// NewSelectedProfileSessionService freezes an explicit nonempty subset of
+// verified-credential, OTP and magic-link admission. The owned reader must
+// dispatch on the stored record's kind and enforce that kind's complete current
+// authority, never try readers until one accepts. cacheProfile binds all native
+// owner/store configuration; the selected set is additionally authenticated in
+// encrypted cache context. Selection is copied, order-independent, and grants
+// no authority. Existing single-method constructors keep their closed semantics.
+func NewSelectedProfileSessionService(reader SessionReader, config ServiceConfig, methods []AuthenticationKind, cacheProfile string) (*SessionService, error) {
+	if len(methods) < 1 || len(methods) > 3 || !authorityKey(cacheProfile, 256) {
+		return nil, ErrInvalidInput
+	}
+	var selected uint8
+	for _, method := range methods {
+		bit := sessionMethodBit(method)
+		if bit == 0 || selected&bit != 0 {
+			return nil, ErrInvalidInput
+		}
+		selected |= bit
+	}
+	s, err := NewSessionService(reader, config)
+	if err != nil {
+		return nil, err
+	}
+	s.methods, s.cacheProfile = selected, strings.Clone(cacheProfile)
+	return s, nil
+}
+
+func sessionMethodBit(kind AuthenticationKind) uint8 {
+	switch kind {
+	case AuthenticationVerified:
+		return 1
+	case AuthenticationOTP:
+		return 2
+	case AuthenticationMagicLink:
+		return 4
+	default:
+		return 0
+	}
+}
+
+func (s *SessionService) admitsMethod(kind AuthenticationKind) bool {
+	bit := sessionMethodBit(kind)
+	return bit != 0 && (s.method == 0 || s.method == kind) && (s.methods == 0 || s.methods&bit != 0)
 }
 
 // NewProfileSessionService additionally binds encrypted-cache admission to a
@@ -300,7 +346,7 @@ func (s *SessionService) Get(ctx context.Context, request GetRequest) (out GetRe
 	if err != nil {
 		return GetResult{}, ErrUnavailable
 	}
-	if spec.TenantID != request.TenantID || spec.Audience != s.config.Audience || (s.method != 0 && spec.Authentication.Kind != s.method) || (spec.Authentication.Kind != AuthenticationVerified && spec.Authentication.Kind != AuthenticationOTP && spec.Authentication.Kind != AuthenticationMagicLink) {
+	if spec.TenantID != request.TenantID || spec.Audience != s.config.Audience || !s.admitsMethod(spec.Authentication.Kind) {
 		return GetResult{}, nil
 	}
 	matched := 0

@@ -147,6 +147,19 @@ func (w Work) FeaturePreparationOutput(p FeaturePreparationContributor) ([]byte,
 // are redacted and uncertain durable outcomes return UnknownCommitError.
 // This trusted adapter seam is not a public authentication endpoint or proof.
 func (c *Coordinator) ExecutePreparedFeature(ctx context.Context, original identity.Command, declaration CommandPlan) (result identity.CommandResult, err error) {
+	return c.executePreparedFeature(ctx, nil, original, declaration)
+}
+
+// ExecutePreparedMFATOTPFeature uses original submitted intent for the sole
+// journal and a separately validated counter-enriched command for native
+// admission/generation/execution. Only the closed anonymous TOTP transformation
+// is permitted. Full frozen-plan, counter and factor checks remain mandatory;
+// no retry may replace original preparation or regenerate lost bearer custody.
+func (c *Coordinator) ExecutePreparedMFATOTPFeature(ctx context.Context, original, prepared identity.Command, declaration CommandPlan) (identity.CommandResult, error) {
+	return c.executePreparedFeature(ctx, &original, prepared, declaration)
+}
+
+func (c *Coordinator) executePreparedFeature(ctx context.Context, claimSource *identity.Command, original identity.Command, declaration CommandPlan) (result identity.CommandResult, err error) {
 	if ctx == nil || c == nil || c.pool == nil || c.pool.Raw() == nil || c.registry == nil || c.maximumDuration <= 0 {
 		return result, invalidPreparation()
 	}
@@ -155,6 +168,12 @@ func (c *Coordinator) ExecutePreparedFeature(ctx context.Context, original ident
 	q, admitted, phase, err := c.prepareFeaturePreparation(original, declaration)
 	if err != nil {
 		return result, err
+	}
+	if claimSource != nil {
+		q, admitted, err = c.originalMFAClaim(*claimSource, original, admitted)
+		if err != nil {
+			return result, err
+		}
 	}
 	b := admitted.binding
 	started := false
@@ -297,14 +316,21 @@ func (c *Coordinator) prepareFeaturePreparation(original identity.Command, p Com
 	}
 	fingerprint := claimFingerprint(c.keys.retained[c.keys.current], q.canonical)
 	wire, e := encodeFeaturePlan(s.Binding, fingerprint, p)
+	ungenerated := ungeneratedMFAContinuation(p.MFAContinuation)
+	if ungenerated {
+		wire, e = encodeMagicLinkMFAPlanMode(s.Binding, fingerprint, p, true)
+	}
 	if e != nil {
 		return q, nil, nil, invalidPreparation()
 	}
 	owned, e := decodeFeaturePlan(s.Binding, fingerprint, wire)
+	if ungenerated {
+		owned, e = decodeMagicLinkMFAPlanMode(s.Binding, fingerprint, wire, true)
+	}
 	if e != nil {
 		return q, nil, nil, invalidPreparation()
 	}
-	admitted, e = c.registry.admitFeaturePlan(s.Binding, fingerprint, owned)
+	admitted, e = c.registry.admitFeaturePlanMode(s.Binding, fingerprint, owned, true)
 	if e != nil || phase.ValidateFeaturePreparation(original, admitted.snapshot()) != nil {
 		return q, nil, nil, invalidPreparation()
 	}
@@ -378,8 +404,15 @@ func preparationFinalDeclaration(b identity.CommandBinding, original, final Comm
 	// Child signing may occur only after acknowledged original preparation.
 	// It cannot introduce MFA, replace its primary proof or renew the exact
 	// original challenge scope, including issue time and absolute expiry.
-	if (original.MFAContinuation == nil) != (final.MFAContinuation == nil) || original.MFAContinuation != nil && (*original.MFAContinuation != *final.MFAContinuation || !validMagicLinkMFAPlan(b, original) || !validMagicLinkMFAPlan(b, final) || final.CapabilityIssuance == nil) {
+	if (original.MFAContinuation == nil) != (final.MFAContinuation == nil) {
 		return false
+	}
+	if original.MFAContinuation != nil {
+		a, z := original.MFAContinuation, final.MFAContinuation
+		ungenerated := ungeneratedMFAContinuation(a)
+		if !validMagicLinkMFAPlanMode(b, original, true) || !validMagicLinkMFAPlan(b, final) || final.CapabilityIssuance == nil || a.UserID != z.UserID || a.PolicyVersion != z.PolicyVersion || a.FactorVersion != z.FactorVersion || !ungenerated && *a != *z {
+			return false
+		}
 	}
 	if (original.MFACompletion == nil) != (final.MFACompletion == nil) || original.MFACompletion != nil && (*original.MFACompletion != *final.MFACompletion || !validMFACompletionPlan(b, original) || !validMFACompletionPlan(b, final)) {
 		return false

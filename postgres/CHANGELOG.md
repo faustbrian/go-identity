@@ -2,6 +2,33 @@
 
 ## Unreleased
 
+- Expose original frozen MFA challenge scope only to its exact native recovery
+  participant, preserving complete-plan validation and journal ownership.
+
+- Permit selected user/policy/factor-only MFA challenge declarations solely in
+  journal-owned preparation. The original generator supplies child ID/scope/
+  lifetime after its acknowledged marker. Ordinary execution/history reject
+  incomplete challenges, and final issuance preserves selected authority.
+
+- Keep submitted opaque MFA input as journal identity while independently
+  validating native server-prepared counters and the complete frozen plan.
+  Matching denial history survives fingerprint-key rotation without another
+  factor comparison or charge; generic command codecs remain exact.
+
+- Allow the native counted TOTP callback to charge its declared protected-risk
+  counters once in the same transaction. Missing charging or ignored risk
+  denial aborts. Wrong-code denial commits charge/budget/audit together;
+  correct-code probing rolls the provisional charge back before generation.
+
+- Fence original directory and recipient authority during native counted TOTP
+  callbacks, before factor locks. Denied live checks poison the transaction;
+  the restricted handle never exposes general mutation Work.
+
+- Add authorized exact-input TOTP command history lookup using retained keys
+  and the original frozen completion plan. Matching denied retries do not need
+  a current continuation version; changed input conflicts. The read grants no
+  factor authority or session delivery and does not charge another attempt.
+
 - Add a native TOTP denial-only phase using the existing command journal.
   Commit native wrong-attempt accounting with required denial audits and the
   aborted command receipt; replay skips comparison and charging. This phase

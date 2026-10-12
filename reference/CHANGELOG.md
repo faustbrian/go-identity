@@ -2,6 +2,79 @@
 
 ## Unreleased
 
+- Compose explicitly selected signup-by-magic-link with its owned registration
+  and factor-provenance histories, preserving installed prefixes and optional
+  password/TOTP selection. Carry native proof limits into HTTP consumption.
+  New and existing-account HTTP journeys cover delivery, supersession,
+  consumption, credential-free retries and normal session logout.
+
+- Add explicit HTTPMFA selection for native magic-link/TOTP completion with
+  strict shared verification rates, original browser/device policy and concrete
+  wire schemas. Unselected features expose no route or advertised operation;
+  real HTTP integration remains to be verified.
+
+- Expose an owned TOTP verification rate-source method on the selected handle.
+  Authenticate original issuance and live or exact retained intent before
+  returning immutable subject/challenge quota bindings; never decrypt a factor,
+  charge native counters, generate a session or renew validity during this read.
+
+- Route authenticated missing-factor TOTP attempts through the same atomic
+  shared-budget, risk-counter, denial-audit and original-command history as
+  wrong codes. Exact retries do not recharge; the final valid attempt completes.
+
+- Compose selected magic-link/TOTP sessions into normal primary reads and
+  cookie logout, retaining current factor fences and protected rollback/recovery.
+  The public PostgreSQL journey exercises MFA login through session revocation.
+
+- Select native magic-link TOTP completion through `MagicLink.TOTP` and
+  `FeatureSet.MagicLinkTOTP`, with graph-owned issuer/browser/provider authority,
+  original code/proof-free recovery and atomic shared budget, replay, child-use
+  and session effects. Keep risk policy versions distinct from authorization
+  revisions and preserve the original login policy identity.
+- Install selected continuation/TOTP, protected preparation, counter and MFA
+  session histories without rewriting existing prefixes; readiness checks the
+  actual successor constraints. TOTP HTTP and mixed-session graph integration
+  remain unfinished; no complete MFA enrollment or platform release is claimed.
+
+- Bind selected magic-link HTTP continuation delivery to the native MFA
+  configuration; unselected transport advertises no challenge credential arm.
+  Full public TOTP completion and all-feature qualification remain unfinished.
+
+- Compose native magic-link TOTP completion with protected provider custody,
+  original-intent counter preparation and command-owned denial charging. Retain
+  provider facts in encrypted output and recheck them at primary time. Graph/
+  HTTP selection and positive public-path integration remain unfinished.
+
+- Develop native TOTP completion orchestration with original-input history,
+  counted denial, protected factor/session effects and reveal-once delivery.
+  The feature remains unselected: anonymous protected-risk adapter charging,
+  graph/HTTP selection and positive public-path integration are unfinished.
+
+- Connect native magic-link resend and its supersession migration. The selected
+  reference flow rejects an obsolete link without session credentials and logs
+  in with its replacement; signup-by-link and MFA continuation remain unfinished.
+
+- Require selected magic-link successor constraints in live readiness instead
+  of their removed password/session predecessors. Keep original migration
+  collision guards and checksums unchanged. Real PostgreSQL/Valkey reference
+  integration now exercises public account creation and verification, encrypted
+  magic-link delivery, explicit login, session reading and atomic logout/recovery.
+  Scanner requests and foreign browsers cannot consume; replay cannot redeliver
+  credentials. Resend and signup/MFA continuation remain unfinished.
+
+- Use the same explicit password/OTP/selected magic-link method set for native
+  session reading and transactional self-signout. Reject consuming issuers with
+  incompatible deployment, namespace, audience, store, cookie or unreadable key
+  material. Request-only magic-link selection grants no session authority.
+  Complete reference magic-link runtime qualification remains outstanding.
+
+- Add opt-in native magic-link request/consumption and original browser-flow
+  selection to the reference graph, with guarded handles and selected HTTP
+  routes. Reuse native factor, capability and session migration histories without
+  rewriting existing prefixes. Selecting HTTP without its native graph now
+  rejects construction rather than silently omitting the requested feature.
+  Runtime reference-session and self-signout composition remain in development.
+
 - Add explicit native password verification and keyed password-change selection
   to the reference graph. Bearer and CSRF-protected cookie ports remain distinct;
   all calls retain initialization, tenant and shutdown guards. Composition reuses

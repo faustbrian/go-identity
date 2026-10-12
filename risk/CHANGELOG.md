@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+- Retain protected provider facts in the existing native admission custody
+  codec under a distinct profile. Restore across restart without provider IO,
+  recheck original expiry at primary time without callbacks under locks, and
+  reject mismatched native counter policy. Authentication custody stays separate.
+
+- Collect owned protected-operation provider facts through the bounded risk
+  evaluator without reading or mutating deferred velocity. Recheck original
+  scope and expiry without provider redispatch; provider-only results cannot
+  grant authentication or command-counter allowance.
+
+- Add an explicit anonymous TOTP login-completion counter projection using
+  authenticated subject and original child capability, without inventing a
+  session. Preserve protected credential-mutation limits and failure policy;
+  session-based activation/step-up and email confirmation remain separate.
+  Native adapter charging and public MFA composition are still pending.
+
 - Separate protected credential-mutation provider assessment from transaction-
   owned velocity allowance. Required provider and HIBP failures still deny;
   caller-supplied velocity cannot bypass native atomic counters. Ordinary

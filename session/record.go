@@ -52,7 +52,8 @@ type AuthenticationMetadata struct {
 
 // SessionSpec is the original bounded base projection with no raw token.
 // Synchronizer and OTP metadata are separately projected by Session.CSRFState
-// and Session.OTPAuthentication to preserve this public struct's shape.
+// and Session.OTPAuthentication to preserve this public struct's shape. Magic-link
+// primary and MFA provenance likewise use their separate structural projections.
 // Complete storage must persist every applicable projection.
 // Remember must already be resolved; Authority is the sole complete vector.
 // Session/family versions must equal that vector's corresponding versions.
@@ -87,6 +88,7 @@ type sessionState struct {
 	csrf         CSRFState
 	otp          OTPAuthentication
 	magicLink    MagicLinkAuthentication
+	mfa          MFAAuthentication
 	continuation *CredentialContinuationSpec
 }
 
@@ -104,6 +106,10 @@ func newSession(s SessionSpec, otp OTPAuthentication) (Session, error) {
 }
 
 func newSessionWithProvenance(s SessionSpec, otp OTPAuthentication, magicLink MagicLinkAuthentication) (Session, error) {
+	return newSessionWithMFA(s, otp, magicLink, MFAAuthentication{})
+}
+
+func newSessionWithMFA(s SessionSpec, otp OTPAuthentication, magicLink MagicLinkAuthentication, factor MFAAuthentication) (Session, error) {
 	if !authorityKey(s.SessionID, 128) || !authorityKey(s.FamilyID, 128) || !authorityKey(string(s.TenantID), 128) || !authorityKey(string(s.UserID), 128) || !authorityKey(s.Audience, 256) || s.Version == 0 || s.FamilyVersion == 0 || s.Lookup.KeyVersion == 0 || s.Lookup.Sum == ([32]byte{}) {
 		return Session{}, ErrInvalidSession
 	}
@@ -116,6 +122,13 @@ func newSessionWithProvenance(s SessionSpec, otp OTPAuthentication, magicLink Ma
 	}
 	if s.Authentication.Kind != AuthenticationMagicLink && magicLink.state != nil {
 		return Session{}, ErrInvalidSession
+	}
+	if factor.state != nil {
+		p := factor.state
+		remember, err := s.Remember.Bindings()
+		if err != nil || s.Authentication.Kind != AuthenticationMagicLink || magicLink.state == nil || !a.Factor.Present || a.Factor.Binding.Version != p.FactorAuthorityVersion || p.PrimaryCommandID != magicLink.state.CommandID || p.Remember != remember || p.VerifiedAt.Before(magicLink.state.AuthenticatedAt) || s.IssuedAt.Before(p.VerifiedAt) || !s.IssuedAt.Before(p.ValidUntil) || p.ValidUntil.After(magicLink.state.ValidUntil) {
+			return Session{}, ErrInvalidSession
+		}
 	}
 	authenticatedAt := s.Authentication.at()
 	switch s.Authentication.Kind {
@@ -143,7 +156,7 @@ func newSessionWithProvenance(s SessionSpec, otp OTPAuthentication, magicLink Ma
 		}
 		authenticatedAt = otp.state.AuthenticatedAt
 	case AuthenticationMagicLink:
-		if magicLink.state == nil || s.Authentication != (AuthenticationMetadata{Kind: AuthenticationMagicLink}) || a.Organization.Present || a.Factor.Present || a.Passkey.Present ||
+		if magicLink.state == nil || s.Authentication != (AuthenticationMetadata{Kind: AuthenticationMagicLink}) || a.Organization.Present || a.Factor.Present != (factor.state != nil) || a.Passkey.Present ||
 			s.IssuedAt.Before(magicLink.state.AuthenticatedAt) || !s.IssuedAt.Before(magicLink.state.ValidUntil) {
 			return Session{}, ErrInvalidSession
 		}
@@ -159,7 +172,7 @@ func newSessionWithProvenance(s SessionSpec, otp OTPAuthentication, magicLink Ma
 	s.TenantID = identity.TenantID(strings.Clone(string(s.TenantID)))
 	s.UserID = identity.UserID(strings.Clone(string(s.UserID)))
 	s.Audience = strings.Clone(s.Audience)
-	return Session{state: &sessionState{spec: s, otp: otp, magicLink: magicLink}}, nil
+	return Session{state: &sessionState{spec: s, otp: otp, magicLink: magicLink, mfa: factor}}, nil
 }
 
 func (m AuthenticationMetadata) at() time.Time {
@@ -171,7 +184,8 @@ func (m AuthenticationMetadata) at() time.Time {
 
 // Bindings returns the original owned base projection for trusted adapters.
 // Complete serialization/equality must also retain CSRFState and
-// OTPAuthentication. Bindings alone cannot reconstruct an OTP record and
+// OTPAuthentication, MagicLinkAuthentication and MFAAuthentication. Bindings
+// alone cannot reconstruct those records and
 // deliberately produces a tokenless record for other supported variants.
 // Scope and lookup values correlate people/activity; never log them. Returned
 // Remember and Authority values retain immutable state, not renewed freshness.

@@ -13,6 +13,7 @@ import (
 	authorization "github.com/faustbrian/go-authorization"
 	authority "github.com/faustbrian/go-authorization/postgres"
 	identity "github.com/faustbrian/go-identity"
+	mfapg "github.com/faustbrian/go-identity/mfa/postgres"
 	kernel "github.com/faustbrian/go-identity/postgres"
 	"github.com/faustbrian/go-identity/session"
 	database "github.com/faustbrian/go-postgres"
@@ -81,13 +82,15 @@ func nativeAdmissionCacheProfile(fields ...string) string {
 
 // Kept private: consumers configure the factory, not arbitrary owner readers.
 type primarySessionReader struct {
-	native    *Repository
-	domain    *kernel.Repository
-	policy    *authority.AuthorityStore
-	profile   IdentifierAdmissionConfig
-	clock     session.IssuerClock
-	otp       *OTPAdmissionConfig
-	magicLink *MagicLinkAdmissionConfig
+	native       *Repository
+	domain       *kernel.Repository
+	policy       *authority.AuthorityStore
+	profile      IdentifierAdmissionConfig
+	clock        session.IssuerClock
+	otp          *OTPAdmissionConfig
+	magicLink    *MagicLinkAdmissionConfig
+	mfaMagicLink *MagicLinkAdmissionConfig
+	mfaFactors   *mfapg.TOTPSessionFactorReader
 }
 
 var _ session.SessionReader = (*primarySessionReader)(nil)
@@ -136,11 +139,23 @@ func (r *primarySessionReader) ObserveSession(ctx context.Context, lookup sessio
 	if err != nil {
 		return session.SessionObservation{}, session.ErrUnavailable
 	}
-	if r.otp != nil {
+	// MFA is an additional immutable dimension, not another authentication
+	// kind. Dispatch it first: no single-factor reader may erase that dimension,
+	// even when both magic-link profiles are selected by the same graph.
+	if stored.Session.MFAAuthentication() != (session.MFAAuthentication{}) {
+		if spec.Authentication.Kind != session.AuthenticationMagicLink || r.mfaMagicLink == nil || r.mfaFactors == nil {
+			return session.SessionObservation{}, session.ErrUnauthenticated
+		}
+		return r.observeMFAMagicLink(bounded, stored, start)
+	}
+	if r.otp != nil && spec.Authentication.Kind == session.AuthenticationOTP {
 		return r.observeOTP(bounded, stored, start)
 	}
-	if r.magicLink != nil {
+	if r.magicLink != nil && spec.Authentication.Kind == session.AuthenticationMagicLink {
 		return r.observeMagicLink(bounded, stored, start)
+	}
+	if spec.Authentication.Kind != session.AuthenticationVerified || !r.profile.valid() {
+		return session.SessionObservation{}, session.ErrUnauthenticated
 	}
 	binding := identity.CommandBinding{TenantID: spec.TenantID, UserID: spec.UserID, ActorID: identity.ActorID(spec.UserID), ActorKind: authorization.SubjectUser}
 	directory, credential, policy, err := sessionAdmissionBindings(r.profile, stored.Session, binding, spec.SessionID, spec.Version)

@@ -112,6 +112,23 @@ func requireEmailRecovery(ctx context.Context, w kernel.Work, b identity.Command
 	if _, err := identity.ParseIdentifierID(string(user)); err != nil {
 		return mfa.FactorAuthority{}, invalidAuthority()
 	}
+	return readKnownEmptyFactors(ctx, w, b, user, expectedVersion)
+}
+
+// Both workflow families use the same authoritative MFA row and lock. No
+// second factor generation, inferred absence or feature-local enrollment exists.
+func readKnownEmptyFactors(ctx context.Context, w kernel.Work, b identity.CommandBinding, user identity.UserID, expectedVersion uint64) (mfa.FactorAuthority, error) {
+	state, err := readFactorAuthority(ctx, w, b, user, expectedVersion)
+	if err != nil {
+		return mfa.FactorAuthority{}, err
+	}
+	if err := state.RequireEmailRecovery(b.TenantID, user); err != nil {
+		return mfa.FactorAuthority{}, err
+	}
+	return state, nil
+}
+
+func readFactorAuthority(ctx context.Context, w kernel.Work, b identity.CommandBinding, user identity.UserID, expectedVersion uint64) (mfa.FactorAuthority, error) {
 	rows, err := w.Query(ctx, `SELECT version::text,active_factors FROM identity_mfa.factor_authorities WHERE tenant_id=$1 AND user_id=$2 FOR UPDATE`, string(b.TenantID), string(user))
 	if err != nil {
 		return mfa.FactorAuthority{}, identity.UnavailableError{}
@@ -138,9 +155,6 @@ func requireEmailRecovery(ctx context.Context, w kernel.Work, b identity.Command
 	state, err := mfa.NewFactorAuthority(mfa.AuthorityRecord{TenantID: b.TenantID, UserID: user, Version: v, ActiveFactors: uint32(active)})
 	if err != nil {
 		return mfa.FactorAuthority{}, identity.UnavailableError{}
-	}
-	if err := state.RequireEmailRecovery(b.TenantID, user); err != nil {
-		return mfa.FactorAuthority{}, err
 	}
 	return state, nil
 }

@@ -35,6 +35,13 @@ the native owner through bounded `MFATOTPAttemptWork`. Native wrong-attempt
 accounting, denial audit and an aborted command result commit together; exact
 replay does not compare or charge again. Unchanged rolls back and grants no
 successful-factor authority. No child, OTP or session reservation is invoked.
+When protected counters are declared, the native callback must call
+`MFATOTPAttemptWork.ReserveCommandCounters` once after browser/current-authority
+admission and before comparison. Risk denial must return native denial without
+comparing the factor. Missing charging or ignored denial aborts. Wrong-code
+denial commits risk, MFA budget and audit in the same transaction; correct-code
+Unchanged rolls the provisional charge back. Sealed counter scope access binds
+the original MFA subject and child without granting factor/consumption authority.
 The native owner must verify the real factor and lock/recheck the current
 continuation and shared budget. Successful completion uses the retained
 preparation route, preserving the original opaque TOTP submission and verifying
@@ -45,6 +52,15 @@ shared-budget mutation, continuation store or MFA session issuance. Public MFA
 remains disabled until those owners and the consumer journey are connected.
 
 ## Atomic magic-link consumption
+
+Original MFA challenge preparation may declare only selected user/policy/factor
+while omitting ID, scope digest and both timestamps together. Only
+`PrepareFeaturePreparationPlan` admits that ungenerated form; ordinary
+reservation and history decoding reject it. The acknowledged original generator
+supplies the complete child through the existing retained output and issuance
+owner. Final scope preserves selected authority, original primary consumption,
+required audits and challenge-only lifecycle. This enables native composition;
+it does not itself implement public MFA challenge issuance.
 
 The exact anonymous-flow `identity.magic-link.consume`, `magic-link-consume`
 version-one profile enlists `identity/magiclink/postgres` and the existing
@@ -737,6 +753,24 @@ remains pending;
 applications must not implement private replay stores to fill these gaps.
 
 ## Exact original final-authentication outcome recovery
+
+`QueryMFATOTPCommand` is the owned TOTP completion adapter's exact-input history
+lookup. It compares opaque original code/cookie custody under the retained
+fingerprint key and validates the historical native completion plan, without
+requiring today's mutable continuation version. Current query policy remains
+mandatory. Only authorized absence returns `found=false` with no error;
+matching denied attempts retain their original receipt, changed input conflicts,
+and incomplete or retired history fails closed. Receipts never authorize a new
+session or credential delivery. This read performs no factor comparison,
+attempt charge, participant callback, reservation or mutation.
+
+For native anonymous TOTP commands enriched with protected counters, use
+`PrepareMFATOTPAttemptPlanWithOriginal` / `RecordMFATOTPAttemptDenialWithOriginal`
+and `PrepareMFATOTPFeaturePlanWithOriginal` / `ExecutePreparedMFATOTPFeature`.
+Supply the exact submitted code/browser command and its native counter-enriched
+counterpart. Only the six known, independently validated counter fields may be
+added. Original input owns journal history; the complete counter declaration
+still owns preparation and charging. Generic command codecs are unchanged.
 
 `QueryAuthenticatedCommand` is a read-only bridge for the owned authenticated
 session adapter. Supply the original mapped command, opaque final proof,

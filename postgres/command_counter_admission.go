@@ -55,6 +55,12 @@ func (w CommandCounterAdmissionWork) NativeCommand(p CommandCounterContributor) 
 	return (CommandCounterWork{state: w.state}).NativeCommand(p)
 }
 
+// MFACompletionScope retains the same exact native counter-owner scope guard
+// during current admission. It cannot authenticate a factor or consume a child.
+func (w CommandCounterAdmissionWork) MFACompletionScope(p CommandCounterContributor) (CapabilityPlan, MFACompletionPlan, error) {
+	return (CommandCounterWork{state: w.state}).MFACompletionScope(p)
+}
+
 // Query reads bounded current primary state in the domain transaction.
 func (w CommandCounterAdmissionWork) Query(ctx context.Context, sql string, args ...any) (*WorkRows, error) {
 	return (CommandCounterWork{state: w.state}).Query(ctx, sql, args...)

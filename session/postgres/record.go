@@ -35,6 +35,7 @@ type storedRecord struct {
 	CSRF                     *session.CSRFStateSpec               `json:",omitempty"`
 	OTP                      *session.OTPAuthenticationSpec       `json:",omitempty"`
 	MagicLink                *session.MagicLinkAuthenticationSpec `json:",omitempty"`
+	MFA                      *session.MFAAuthenticationSpec       `json:",omitempty"`
 	Continuation             *session.CredentialContinuationSpec  `json:",omitempty"`
 }
 
@@ -70,6 +71,10 @@ func encodeRecord(s session.Session) ([]byte, string, error) {
 		record.Schema += 6
 		record.MagicLink = &metadata
 	}
+	if metadata, e := s.MFAAuthentication().Bindings(); e == nil {
+		record.Schema += 2
+		record.MFA = &metadata
+	}
 	if continuation, ok := s.CredentialContinuation(); ok {
 		record.Schema += 4
 		record.Continuation = &continuation
@@ -94,6 +99,7 @@ func decodeRecord(b []byte) (session.Session, error) {
 	_, hasCSRF := envelope["CSRF"]
 	_, hasOTP := envelope["OTP"]
 	_, hasMagicLink := envelope["MagicLink"]
+	_, hasMFA := envelope["MFA"]
 	_, hasContinuation := envelope["Continuation"]
 	if hasCSRF {
 		keys = append(keys, "CSRF")
@@ -103,6 +109,9 @@ func decodeRecord(b []byte) (session.Session, error) {
 	}
 	if hasMagicLink {
 		keys = append(keys, "MagicLink")
+	}
+	if hasMFA {
+		keys = append(keys, "MFA")
 	}
 	if hasContinuation {
 		keys = append(keys, "Continuation")
@@ -130,6 +139,27 @@ func decodeRecord(b []byte) (session.Session, error) {
 		}
 		if _, ok := exactObject(top["MagicLink"], "CommandID", "RequestCommandID", "CapabilityID", "IdentifierID", "IdentifierVersion", "VerificationVersion", "AuthenticatedAt", "ValidUntil"); !ok {
 			return invalid()
+		}
+	}
+	if hasMFA {
+		if !hasMagicLink || hasOTP || hasContinuation {
+			return invalid()
+		}
+		factor, valid := exactObject(top["MFA"], "CommandID", "PrimaryCommandID", "ContinuationID", "ContinuationScopeDigest", "Method", "FactorID", "EnrollmentVersion", "FactorAuthorityVersion", "ContinuationVersion", "Remember", "VerifiedAt", "ValidUntil")
+		if !valid {
+			return invalid()
+		}
+		if _, valid := exactObject(factor["Remember"], "Choice", "AbsoluteTTL", "IdleTTL", "RefreshAfter", "FreshFor"); !valid {
+			return invalid()
+		}
+		var digest []*uint8
+		if json.Unmarshal(factor["ContinuationScopeDigest"], &digest) != nil || len(digest) != 32 {
+			return invalid()
+		}
+		for _, value := range digest {
+			if value == nil {
+				return invalid()
+			}
 		}
 	}
 	if _, ok = exactObject(top["Remember"], "Choice", "AbsoluteTTL", "IdleTTL", "RefreshAfter", "FreshFor"); !ok {
@@ -215,6 +245,9 @@ func decodeRecord(b []byte) (session.Session, error) {
 	if hasMagicLink {
 		expectedSchema += 6
 	}
+	if hasMFA {
+		expectedSchema += 2
+	}
 	if record.Schema != expectedSchema || hasOTP != (record.Authentication.Kind == session.AuthenticationOTP) || hasMagicLink != (record.Authentication.Kind == session.AuthenticationMagicLink) {
 		return invalid()
 	}
@@ -245,7 +278,17 @@ func decodeRecord(b []byte) (session.Session, error) {
 		if e != nil {
 			return invalid()
 		}
-		if hasCSRF {
+		if hasMFA {
+			factor, e := session.NewMFAAuthentication(*record.MFA)
+			if e != nil {
+				return invalid()
+			}
+			if hasCSRF {
+				result, err = session.NewSessionWithMagicLinkMFAAndCSRF(spec, metadata, factor, state)
+			} else {
+				result, err = session.NewSessionWithMagicLinkMFA(spec, metadata, factor)
+			}
+		} else if hasCSRF {
 			result, err = session.NewSessionWithMagicLinkAndCSRF(spec, metadata, state)
 		} else {
 			result, err = session.NewSessionWithMagicLink(spec, metadata)

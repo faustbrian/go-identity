@@ -63,6 +63,18 @@ func validateMagicLinkConsumption(owner FeatureExecutionContributor, command ide
 	return nil
 }
 
+// MagicLinkMFAChallenge returns the complete original challenge declaration
+// only to its exact native recovery participant. It grants historical primary
+// evidence reads, never factor/session authority, mutation or bearer delivery.
+// Zero, foreign, incomplete and returned invocations deny; the copy is owned.
+func (w RecoveryWork) MagicLinkMFAChallenge(owner MagicLinkMFAChallengeContributor) (MFAContinuationPlan, error) {
+	b, _, life, err := w.FeatureScope(owner)
+	if err != nil || life.EventType != "mfa.challenge.created.v1" || !validMagicLinkMFAPlan(b, w.state.plan.snapshot()) || w.state.plan.issuance == nil {
+		return MFAContinuationPlan{}, invalidWork()
+	}
+	return *cloneMFAContinuationPlan(w.state.plan.mfaContinuation), nil
+}
+
 // MagicLinkConsumption exposes frozen original one-use input only during the
 // exact registered owner's protected Apply invocation, after the capability
 // participant has provisionally consumed it in this same transaction. Zero,

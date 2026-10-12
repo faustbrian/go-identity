@@ -15,6 +15,18 @@ type magicLinkMFAValidationParticipant struct {
 	challenge MFAContinuationPlan
 }
 
+// Pure admission-shape probe only; it cannot run external admission or generate.
+type magicLinkMFAAdmissionValidationParticipant struct {
+	*magicLinkMFAValidationParticipant
+}
+
+func (*magicLinkMFAAdmissionValidationParticipant) PrepareFeatureAdmission(context.Context, identity.Command) (FeaturePreparationAdmission, error) {
+	return nil, invalidPreparation()
+}
+func (*magicLinkMFAAdmissionValidationParticipant) RestoreFeatureAdmission(context.Context, identity.Command, uint64, []byte) (FeaturePreparationAdmission, error) {
+	return nil, invalidPreparation()
+}
+
 // Exercise the invocation capability, not PostgreSQL consumption/persistence.
 // Those effects require the actual durable consumer journey before adoption.
 func TestMagicLinkMFAProjectionRequiresProtectedConsumedInvocation(t *testing.T) {
@@ -95,6 +107,70 @@ func TestMagicLinkMFAPreparationRequiresExactOwnerAndOwnsScope(t *testing.T) {
 	if err != nil || admitted == nil || admitted.mfaContinuation == nil || *admitted.mfaContinuation != owner.challenge {
 		t.Fatal("admission dropped original MFA scope", err)
 	}
+	// Journal-owned generation cannot require entropy, timestamps or scope
+	// digest before its start marker. Only the preparation route may admit this
+	// all-or-none ungenerated declaration; ordinary execution stays closed.
+	ungenerated := original
+	ungenerated.CommandCounters = nil
+	ungenerated.Contributors = append(append([]ContributorDescriptor(nil), original.Contributors[:4]...), original.Contributors[5:]...)
+	generated := final
+	generated.CommandCounters = nil
+	generated.Contributors = append(append([]ContributorDescriptor(nil), final.Contributors[:4]...), final.Contributors[5:]...)
+	ungenerated.MFAContinuation = &MFAContinuationPlan{UserID: owner.challenge.UserID, PolicyVersion: owner.challenge.PolicyVersion, FactorVersion: owner.challenge.FactorVersion}
+	completeScope := owner.challenge
+	owner.challenge = *ungenerated.MFAContinuation
+	admissionEntries := append([]Contributor(nil), entries...)
+	admissionEntries[3] = &magicLinkMFAAdmissionValidationParticipant{owner}
+	c.registry, err = NewContributorRegistry(admissionEntries)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wire, codecErr := encodeMagicLinkMFAPlanMode(b, [32]byte{1}, ungenerated, true)
+	if codecErr != nil {
+		t.Fatal("ungenerated preparation codec rejected original", codecErr)
+	}
+	decoded, codecErr := decodeMagicLinkMFAPlanMode(b, [32]byte{1}, wire, true)
+	if codecErr != nil || decoded.MFAContinuation == nil || *decoded.MFAContinuation != owner.challenge {
+		t.Fatal("ungenerated original did not round trip", codecErr)
+	}
+	if _, err := decodeFeaturePlan(b, [32]byte{1}, wire); err == nil {
+		t.Fatal("ordinary history decoder accepted ungenerated challenge")
+	}
+	for i := range wire {
+		if _, err := decodeMagicLinkMFAPlanMode(b, [32]byte{1}, wire[:i], true); err == nil {
+			t.Fatal("truncated ungenerated declaration admitted", i)
+		}
+	}
+	initial, err := c.PrepareFeaturePreparationPlan(command, ungenerated)
+	if err != nil || initial.MFAContinuation == nil || *initial.MFAContinuation != owner.challenge {
+		t.Fatal("journal-owned challenge generation has no original admission", err)
+	}
+	if _, err := c.PrepareCommandPlan(b, command, initial); err == nil {
+		t.Fatal("ungenerated challenge acquired ordinary execution")
+	}
+	if _, err := encodeFeaturePlan(b, [32]byte{1}, initial); err == nil {
+		t.Fatal("ordinary codec admitted ungenerated challenge")
+	}
+	if !preparationFinalDeclaration(b, initial, generated) {
+		t.Fatal("original generation cannot introduce its complete child")
+	}
+	for _, change := range []func(*MFAContinuationPlan){func(m *MFAContinuationPlan) { m.UserID = "foreign" }, func(m *MFAContinuationPlan) { m.PolicyVersion++ }, func(m *MFAContinuationPlan) { m.FactorVersion++ }} {
+		changed := generated
+		changed.MFAContinuation = cloneMFAContinuationPlan(generated.MFAContinuation)
+		change(changed.MFAContinuation)
+		if preparationFinalDeclaration(b, initial, changed) {
+			t.Fatal("generated child changed original selected authority")
+		}
+	}
+	partial := initial
+	partial.MFAContinuation = cloneMFAContinuationPlan(initial.MFAContinuation)
+	partial.MFAContinuation.ID = completeScope.ID
+	owner.challenge = *partial.MFAContinuation
+	if _, err := c.PrepareFeaturePreparationPlan(command, partial); err == nil {
+		t.Fatal("partially generated child admitted")
+	}
+	owner.challenge = completeScope
+	c.registry = registry
 	prepared.MFAContinuation.ScopeDigest[0]++
 	if admitted.mfaContinuation.ScopeDigest != owner.challenge.ScopeDigest {
 		t.Fatal("caller changed admitted challenge")

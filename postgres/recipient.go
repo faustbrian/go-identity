@@ -233,6 +233,10 @@ func (w Work) RequireRecipient(ctx context.Context, p FeatureExecutionContributo
 	if err != nil {
 		return w.fail(ctx, invalidWork())
 	}
+	return w.requireRecipient(ctx, b, expected)
+}
+
+func (w Work) requireRecipient(ctx context.Context, b identity.CommandBinding, expected RecipientRecord) error {
 	if expected.Validate() != nil || expected.Query.TenantID != b.TenantID || expected.Query.UserID != b.UserID || b.UserID != "" && expected.User.ID != b.UserID {
 		return w.fail(ctx, invalidRecipient())
 	}

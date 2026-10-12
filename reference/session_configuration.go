@@ -11,13 +11,19 @@ import (
 	sessionpg "github.com/faustbrian/go-identity/session/postgres"
 )
 
-// SessionConfiguration selects native single-factor primary reads and self
+// SessionConfiguration selects native primary reads and self
 // signout, without HTTP. Native freezes the authority profile, lookup keys,
 // clock, policy and transaction bounds. Validation.Clock must be absent so the
 // graph supplies Execution.Clock to both reading and mutation. CSRFKeys selects
 // cookie signout; an empty slice disables it, never enables legacy cookie
 // mutation. Bearer signout has no cookie fallback. Resources/callbacks remain
 // borrowed, bounded and concurrent-safe. Construction performs no IO.
+// The explicit verified profile remains selected; configured OTP and magic-link
+// consuming issuers add their own native profiles to both read and revoke paths.
+// Selected MagicLink.TOTP additionally composes current confirmed factor
+// authority into both paths; MFA never falls back to a single-factor profile.
+// Every selected issuer must use the same store, deployment, policy namespace,
+// audience and cookie policy, with readable lookup and optional signout CSRF keys.
 type SessionConfiguration struct {
 	Native   sessionpg.SignOutServiceConfig
 	CSRFKeys []session.CSRFKey
@@ -44,24 +50,25 @@ func composeSession(c StoreConfiguration, d ReferenceDependencies) (*sessionStat
 	if n.Validation.Clock != nil || e.Profile.GlobalAuthorityID != o.Store.GlobalAuthorityID || e.Profile.PolicyNamespace != o.Store.UserPolicyNamespace || e.Repository.Schema != o.Signin.Session.Schema || e.Repository.MaximumDuration > o.Timeout || e.Coordinator.MaximumDuration > o.Timeout || n.MaximumDuration > o.Timeout || e.PolicyVersion != o.RequestKeys.Policy.PolicyVersion || !sameServerAuthorization(e.Authorization, o.RequestKeys.Policy.Authorization) {
 		return nil, invalid
 	}
-	if c.PasswordSignin != nil {
-		p := c.PasswordSignin.Native
-		if sessionpg.IdentifierAdmissionConfig(e.Profile) != p.Profile || e.Repository != p.Session || !sessionIssuerKeysMatch(*c.Session, p) {
-			return nil, invalid
-		}
-		selected, err := n.Cookie.DeletionAttributes()
-		issued, issueErr := p.Issuance.Cookie.DeletionAttributes()
-		if err != nil || issueErr != nil || selected.String() != issued.String() {
-			return nil, invalid
-		}
-	}
-	validation := n.Validation
-	validation.Clock = e.Clock
-	reader, err := sessionpg.NewSessionService(d.PostgreSQL, sessionpg.SessionServiceConfig{Repository: e.Repository, Profile: sessionpg.IdentifierAdmissionConfig(e.Profile), Validation: validation})
+	selection, err := sessionAdmissionSelection(c)
 	if err != nil {
 		return nil, invalid
 	}
-	execution := sessionpg.RevokeOneExecutorConfig{Execution: e, Sessions: reader}
+	validation := n.Validation
+	validation.Clock = e.Clock
+	var mfa *sessionpg.MagicLinkAdmissionConfig
+	if c.MagicLink != nil && c.MagicLink.TOTP != nil {
+		if selection.MagicLink == nil || c.MagicLink.Consume == nil || c.MagicLink.Consume.MFA == nil || !c.MagicLink.Request.MFAContinuation {
+			return nil, invalid
+		}
+		profile := *selection.MagicLink
+		mfa = &profile
+	}
+	reader, err := sessionpg.NewSelectedSessionService(d.PostgreSQL, sessionpg.SelectedSessionServiceConfig{Repository: e.Repository, Admission: sessionpg.SelectedSessionAdmissionConfig{SingleFactor: selection, MFAMagicLink: mfa}, Validation: validation})
+	if err != nil {
+		return nil, invalid
+	}
+	execution := sessionpg.RevokeOneExecutorConfig{Execution: e, Sessions: reader, Admission: &selection, MFAMagicLink: mfa}
 	revoke, err := sessionpg.NewRevokeOneExecutor(d.PostgreSQL, execution)
 	if err != nil {
 		return nil, invalid
@@ -92,17 +99,62 @@ func composeSession(c StoreConfiguration, d ReferenceDependencies) (*sessionStat
 	return state, nil
 }
 
+// Derive one explicit selection from actual consuming issuers. A request-only
+// feature cannot enable authentication. Never try a second reader after denial,
+// or give the revoker a broader method set than its primary reader.
+func sessionAdmissionSelection(c StoreConfiguration) (sessionpg.SingleFactorSessionAdmissionConfig, error) {
+	invalid := identity.InvalidInputError{Field: "reference_session"}
+	deny := func() (sessionpg.SingleFactorSessionAdmissionConfig, error) {
+		return sessionpg.SingleFactorSessionAdmissionConfig{}, invalid
+	}
+	if c.Session == nil || c.OTP == nil || c.OTP.Signin == nil {
+		return deny()
+	}
+	n, e := *c.Session, c.Session.Native.Execution
+	verified := sessionpg.IdentifierAdmissionConfig(e.Profile)
+	common := sessionpg.OTPAdmissionConfig{GlobalAuthorityID: verified.GlobalAuthorityID, PolicyNamespace: verified.PolicyNamespace, Audience: verified.Audience}
+	otp := c.OTP.Signin
+	if otp.Profile != common || otp.Session != e.Repository || !sessionIssuanceMatches(n, otp.Issuer, otp.CSRFKey) {
+		return deny()
+	}
+	selected := sessionpg.SingleFactorSessionAdmissionConfig{Verified: &verified, OTP: &common}
+	if c.PasswordSignin != nil {
+		p := c.PasswordSignin.Native
+		if p.Profile != verified || p.Session != e.Repository || !sessionIssuanceMatches(n, p.Issuance, p.CSRFKey) {
+			return deny()
+		}
+	}
+	if m := c.MagicLink; m != nil && m.Consume != nil {
+		profile := sessionpg.MagicLinkAdmissionConfig{GlobalAuthorityID: m.Request.GlobalAuthorityID, PolicyNamespace: m.Consume.PolicyNamespace, Audience: m.Request.Issuer.Audience}
+		if sessionpg.OTPAdmissionConfig(profile) != common || m.Request.Session != e.Repository || !sessionIssuanceMatches(n, m.Consume.Issuer, m.Consume.CSRF) {
+			return deny()
+		}
+		selected.MagicLink = &profile
+	}
+	return selected, nil
+}
+
+func sessionIssuanceMatches(n SessionConfiguration, issuer session.IssuerConfig, csrf session.CSRFKey) bool {
+	selected, err := n.Native.Cookie.DeletionAttributes()
+	issued, issueErr := issuer.Cookie.DeletionAttributes()
+	return err == nil && issueErr == nil && selected.String() == issued.String() && sessionKeysMatch(n, issuer.LookupKey, csrf)
+}
+
 // Compare opaque keys through their owned domain-separated digest APIs, not
 // pointer identity or exposed material. This fixed public probe is neither an
 // issued credential nor persisted state. Retained rotation keys may be added,
 // but the current issuer's exact version/material must remain readable.
 func sessionIssuerKeysMatch(n SessionConfiguration, p passwordpg.SigninConfig) bool {
+	return sessionKeysMatch(n, p.Issuance.LookupKey, p.CSRFKey)
+}
+
+func sessionKeysMatch(n SessionConfiguration, lookup session.DigestKey, csrfKey session.CSRFKey) bool {
 	const probe = "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE"
 	token, err := session.ParseToken(probe)
 	if err != nil {
 		return false
 	}
-	expected, err := token.Digest(p.Issuance.LookupKey, "reference-key-profile")
+	expected, err := token.Digest(lookup, "reference-key-profile")
 	if err != nil {
 		return false
 	}
@@ -124,7 +176,7 @@ func sessionIssuerKeysMatch(n SessionConfiguration, p passwordpg.SigninConfig) b
 		return false
 	}
 	binding := session.CSRFBinding{TenantID: "reference-key-profile", SessionID: "reference-key-profile", SessionVersion: 1}
-	state, err := csrf.Digest(p.CSRFKey, binding)
+	state, err := csrf.Digest(csrfKey, binding)
 	if err != nil {
 		return false
 	}

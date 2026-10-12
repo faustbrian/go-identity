@@ -133,7 +133,7 @@ func rebuildSession(spec SessionSpec, source Session, csrf CSRFState) (Session, 
 	if c, ok := source.CredentialContinuation(); ok {
 		return NewContinuedPasswordSession(spec, csrf, c)
 	}
-	s, e := newSessionWithProvenance(spec, source.OTPAuthentication(), source.MagicLinkAuthentication())
+	s, e := newSessionWithMFA(spec, source.OTPAuthentication(), source.MagicLinkAuthentication(), source.MFAAuthentication())
 	if e != nil {
 		return Session{}, e
 	}

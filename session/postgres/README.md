@@ -1,5 +1,48 @@
 # PostgreSQL session storage
 
+## Native TOTP completion composition
+
+`MFATOTPCompletionEffect` composes the real MFA store's recorded completion
+with session, family and retained issuance writes in the coordinator's single
+transaction. The native owner must acquire directory, verified-recipient and
+authorization fences before locking the factor, verify the unchanged opaque
+code, and call `RecordTOTPCompletion` before the effect. A late denial rolls
+back factor replay, continuation completion, session creation and child use.
+Original primary authentication time and remember policy remain unchanged.
+
+Before factor verification or charging a denial, compare the submitted original
+cookie against its retained digest and call `RequireMFAConsumedPreAuth` or
+`RequireMFAConsumedPreAuthAttempt` under the exact sealed native owner. These
+guards lock the already-consumed flow and its committed primary command, matching
+the original fingerprint and generation. They neither consume it again nor
+renew its absolute expiry. The attempt guard runs before the shared budget is
+charged; the existing coordinator retains wrong-code receipts for retry safety.
+
+Install `MFAMigrationSource` and `MFASigninMigrationSource` after their existing
+magic-link predecessors, the selected MFA continuation/TOTP histories, native
+preparation histories, and the **complete** selected capability adapter history.
+Installing only its first one-use migration is insufficient for original child
+issuance and supersession fencing.
+
+The transaction composition is integration-tested with real PostgreSQL, signed
+child issuance and encrypted factors. Browser/policy admission and audit sinks
+in that test are explicit fixtures. This is not yet a public MFA login service;
+native public completion, reference session-reader selection and HTTP wiring
+remain unfinished. Do not enable enrolled MFA from this effect alone.
+
+For issued magic-link/TOTP sessions, `NewMFAMagicLinkSessionService` composes
+the primary session, directory, authorization and confirmed-factor readers.
+Configure `MFAMagicLinkSessionServiceConfig` with the same deployment, policy
+namespace and audience used for issuance. The factor reader does not decrypt a
+secret or consume another code. Missing/revoked enrollment and changed factor
+generation deny; the original primary time remains the freshness origin.
+The completed child's expiry is historical, not the issued session's expiry.
+
+This factory has a distinct MFA cache profile. `NewMagicLinkSessionService`
+and `NewSingleFactorSessionService` do not admit its records or cached evidence.
+Read and copy/promotion paths retain the original earliest-authority deadline;
+expired evidence plus failed bounded refresh cannot fall back to stale access.
+
 ## Atomic magic-link session effects
 
 Install `MagicLinkSigninMigrationSource` at a new permanent version after
@@ -1251,3 +1294,63 @@ override. Zero/malformed profile and missing pool/configuration are InvalidInput
 foreign, stale, revoked and unsupported sessions deny uniformly as Forbidden;
 corrupt storage and unavailable primary reads are redacted Unavailable. Earlier
 caller/Work deadlines win, and cancellation/deadline classifications remain.
+
+## MFA completion record development
+
+`NewSelectedSessionService` can explicitly compose `SingleFactor` profiles and
+`MFAMagicLink` in one native primary reader. The MFA profile requires the same
+deployment, policy namespace and audience as the selected primary profiles.
+Immutable MFA provenance is dispatched first: failed or unavailable factor
+authority never falls back to single-factor magic-link admission. Selecting
+both profiles does not change the session's original authentication kind or
+remove its factor dimension. Cache custody binds the complete selected set;
+the original earliest authoritative-read deadline is retained. Omitting MFA
+preserves the existing single-factor profile. This read selection alone does
+not enable MFA logout; select `RevokeOneExecutorConfig.MFAMagicLink` with the
+same profile for native revocation. The reference graph selects both when
+`MagicLink.TOTP` is enabled. The MFA owner fences current confirmed enrollment
+and factor generation inside the sole logout transaction for caller and target.
+
+`NewMFATOTPCompletionEffect` composes the session-owned effect for the exact
+native magic-link/TOTP completion profile. The MFA owner must authenticate
+original primary/browser/child and current factor policy, acquire directory,
+recipient and authorization fences before factor locks, verify the original
+opaque code and record its transition. `Apply` requires that same recorded
+TOTP handle and exhaustively compares original scope and command-bound session.
+The factor dimension uses the MFA owner's `FactorAuthorityKey` and generation;
+the single-factor admission profile still rejects factor applicability.
+
+This initial profile preserves primary authentication at original continuation
+issuance and passes the original resolved remember policy unchanged. It does
+not consume the original grant or browser transaction again. Session/family and
+retained issuance evidence share the existing coordinator transaction. `Recover`
+votes from the retained tuple and complete record commitment, never a bearer or
+current live payload. Positive protected-path integration, public completion and
+reference selection remain pending; constructor/guard tests are not MFA login.
+
+`MFATOTPCompletionSessionFields` binds the full prospective original-primary
+session into the TOTP completion command's `session.result` namespace before
+fingerprinting. `MFATOTPCompletionSession` restores only that closed anonymous
+completion profile; the original primary command remains distinct from the
+completion command. Missing or mixed fields deny. Mapping never verifies a code
+or supplies permission to persist a session: the actual native MFA owner must
+check original opaque custody and the recorded same-transaction factor result.
+
+The record codec and `OriginalSessionFields` now retain separate original
+magic-link primary and TOTP completion metadata, with optional synchronizer
+state, in explicit schemas9/10. Decoding rejects missing/partial factor data,
+foreign primary linkage, changed remember policy and malformed scope digests.
+This mapping is structural, not proof of successful authentication.
+
+Append `MFAMigrationSource` after `MagicLinkMigrationSource` in the existing
+session history to admit complete schemas9/10. It preserves legacy expressions
+and records; upgrade all readers first because older binaries reject this
+profile. Append `MFASigninMigrationSource` after `MagicLinkSigninMigrationSource`
+in the existing issuance history to admit the closed factor-completion purposes
+without creating another journal or changing previous rows.
+
+The native MFA issuance effect, completion service and reference composition
+remain unfinished. Do not select this profile until those owners are composed
+and the public transaction journey is verified. Applied migration bytes remain
+unchanged; installing these extensions does not authenticate a factor or issue
+a session.

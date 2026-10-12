@@ -44,36 +44,42 @@ func (AuthenticationAdmissionCustody) MarshalText() ([]byte, error) {
 }
 
 type authenticationCustody struct {
-	evaluation Evaluator
-	identity   string
-	keys       []EvidenceKey
-	current    EvidenceKey
+	evaluation         Evaluator
+	identity           string
+	keys               []EvidenceKey
+	current            EvidenceKey
+	protectedProviders bool
 }
 
 // NewAuthenticationAdmissionCustody validates and copies startup configuration
 // without clock, source, counter, audit or storage IO. Zero is invalid.
 func NewAuthenticationAdmissionCustody(c AuthenticationAdmissionCustodyConfig) (AuthenticationAdmissionCustody, error) {
+	s, err := newAdmissionCustody(c, false)
+	return AuthenticationAdmissionCustody{state: s}, err
+}
+
+func newAdmissionCustody(c AuthenticationAdmissionCustodyConfig, protected bool) (*authenticationCustody, error) {
 	e := c.Evaluation.state
-	if e == nil || e.audit == nil || e.counters.state == nil || !scopeID(c.ConfigurationID) || len(c.Keys) < 1 || len(c.Keys) > 16 {
-		return AuthenticationAdmissionCustody{}, ErrInvalidPolicy
+	if e == nil || !protected && (e.audit == nil || e.counters.state == nil) || !scopeID(c.ConfigurationID) || len(c.Keys) < 1 || len(c.Keys) > 16 {
+		return nil, ErrInvalidPolicy
 	}
 	for _, source := range e.sources {
 		if source.Version == "" {
-			return AuthenticationAdmissionCustody{}, ErrInvalidPolicy
+			return nil, ErrInvalidPolicy
 		}
 	}
-	s := &authenticationCustody{evaluation: c.Evaluation, identity: c.ConfigurationID, keys: slices.Clone(c.Keys)}
+	s := &authenticationCustody{evaluation: c.Evaluation, identity: c.ConfigurationID, keys: slices.Clone(c.Keys), protectedProviders: protected}
 	seen := make(map[uint32]bool, len(s.keys))
 	for _, k := range s.keys {
 		if k.version == 0 || k.signing == ([32]byte{}) || k.digest == ([32]byte{}) || seen[k.version] {
-			return AuthenticationAdmissionCustody{}, ErrInvalidPolicy
+			return nil, ErrInvalidPolicy
 		}
 		seen[k.version] = true
 		if k.version > s.current.version {
 			s.current = k
 		}
 	}
-	return AuthenticationAdmissionCustody{state: s}, nil
+	return s, nil
 }
 
 // PreparedAuthenticationAdmission is a signed native-only projection for an
@@ -136,7 +142,7 @@ func (s AuthenticationAdmissionCustody) Prepare(ctx context.Context, result Eval
 	if err := ctx.Err(); err != nil {
 		return AuthenticationAdmission{}, err
 	}
-	if s.state == nil {
+	if s.state == nil || s.state.protectedProviders {
 		return AuthenticationAdmission{}, ErrInvalidAuthenticationAdmission
 	}
 	e := s.state.evaluation
@@ -178,7 +184,7 @@ func (s AuthenticationAdmissionCustody) Restore(ctx context.Context, p PreparedA
 	if err := ctx.Err(); err != nil {
 		return AuthenticationAdmission{}, err
 	}
-	if s.state == nil || len(p.Signals) < 1 || len(p.Signals) > 32 || p.KeyVersion == 0 || p.ProofDigest == ([32]byte{}) || !validTime(p.Scope.Now) || p.Scope.Tenant != scope.Tenant || p.Scope.Operation != scope.Operation || p.Scope.Attempt != scope.Attempt {
+	if s.state == nil || s.state.protectedProviders || len(p.Signals) < 1 || len(p.Signals) > 32 || p.KeyVersion == 0 || p.ProofDigest == ([32]byte{}) || !validTime(p.Scope.Now) || p.Scope.Tenant != scope.Tenant || p.Scope.Operation != scope.Operation || p.Scope.Attempt != scope.Attempt {
 		return bad()
 	}
 	e := s.state.evaluation
@@ -231,7 +237,7 @@ func (a AuthenticationAdmission) Check(ctx context.Context) (err error) {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	if a.owner == nil {
+	if a.owner == nil || a.owner.protectedProviders {
 		return ErrInvalidAuthenticationAdmission
 	}
 	defer func() {
@@ -258,7 +264,7 @@ func (a AuthenticationAdmission) CheckAt(ctx context.Context, now time.Time) err
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	if a.owner == nil {
+	if a.owner == nil || a.owner.protectedProviders {
 		return ErrInvalidAuthenticationAdmission
 	}
 	p := a.prepared
@@ -300,7 +306,15 @@ func (s *authenticationCustody) configuration(k EvidenceKey) [32]byte {
 		HIBP     map[Action]bool
 	}{policy.version, policy.limits, policy.profiles, policy.hibpTTL, policy.hibpOperations})
 	defer clear(shape)
-	fields := []string{s.identity, string(shape), strconv.FormatInt(int64(e.timeout), 10), strconv.FormatInt(int64(e.counters.state.timeout), 10), e.audit.config.PolicyID, strconv.FormatInt(int64(e.audit.config.Timeout), 10), strconv.Itoa(int(e.audit.config.Delivery.Mode)), strconv.FormatBool(e.independentFactor != nil)}
+	fields := []string{s.identity, string(shape), strconv.FormatInt(int64(e.timeout), 10)}
+	if s.protectedProviders {
+		// The same native custody codec binds a distinct provider-only profile.
+		// No nontransactional counter/audit owner participates in this lane.
+		fields = append(fields, "protected-providers-v1", strconv.FormatBool(e.independentFactor != nil))
+	} else {
+		// Keep legacy Authentication configuration bytes unchanged.
+		fields = append(fields, strconv.FormatInt(int64(e.counters.state.timeout), 10), e.audit.config.PolicyID, strconv.FormatInt(int64(e.audit.config.Timeout), 10), strconv.Itoa(int(e.audit.config.Delivery.Mode)), strconv.FormatBool(e.independentFactor != nil))
+	}
 	names := make([]string, 0, len(e.sources))
 	for name := range e.sources {
 		names = append(names, name)
@@ -310,8 +324,10 @@ func (s *authenticationCustody) configuration(k EvidenceKey) [32]byte {
 		source := e.sources[name]
 		fields = append(fields, name, source.Version, strconv.FormatInt(int64(source.Timeout), 10), strconv.FormatBool(source.Expensive))
 	}
-	for _, key := range e.counters.state.keys {
-		fields = append(fields, strconv.FormatUint(uint64(key.version), 10), string(key.secret))
+	if !s.protectedProviders {
+		for _, key := range e.counters.state.keys {
+			fields = append(fields, strconv.FormatUint(uint64(key.version), 10), string(key.secret))
+		}
 	}
 	return evidenceMAC(k.digest, "identity-risk-authentication-configuration-v1", fields)
 }

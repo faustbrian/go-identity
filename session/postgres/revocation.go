@@ -51,7 +51,7 @@ func MapCommand(c session.SessionCommand) (identity.Command, error) {
 		return mapIssue(s)
 	}
 	if s, ok := c.RevokeOne(); ok {
-		return mapSessionRecord(s.Binding, session.RevokeOneOperation(), s.Session)
+		return mapRevokeSessionRecord(s.Binding, s.Session)
 	}
 	s, ok := c.RevokeFamily()
 	if !ok {

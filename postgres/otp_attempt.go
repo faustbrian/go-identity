@@ -266,10 +266,10 @@ func meteredCheckPlan(p *admittedKernelPlan) bool {
 }
 
 func (c *Coordinator) recordOTPAttemptCommand(ctx context.Context, b identity.CommandBinding, command identity.Command, p CommandPlan, metered bool) (identity.CommandResult, error) {
-	return c.recordCountedAttemptCommand(ctx, b, command, p, metered, false)
+	return c.recordCountedAttemptCommand(ctx, b, command, p, metered, false, nil)
 }
 
-func (c *Coordinator) recordCountedAttemptCommand(ctx context.Context, b identity.CommandBinding, command identity.Command, p CommandPlan, metered, mfa bool) (identity.CommandResult, error) {
+func (c *Coordinator) recordCountedAttemptCommand(ctx context.Context, b identity.CommandBinding, command identity.Command, p CommandPlan, metered, mfa bool, original *identity.Command) (identity.CommandResult, error) {
 	if ctx == nil {
 		return identity.CommandResult{}, invalidPlan()
 	}
@@ -277,7 +277,9 @@ func (c *Coordinator) recordCountedAttemptCommand(ctx context.Context, b identit
 	var snapshot CommandPlan
 	var declared *admittedKernelPlan
 	var err error
-	if mfa {
+	if mfa && original != nil {
+		q, snapshot, declared, err = c.prepareMFATOTPAttemptWithOriginal(*original, command, p)
+	} else if mfa {
 		q, snapshot, declared, err = c.prepareMFATOTPAttempt(b, command, p)
 	} else {
 		q, snapshot, declared, err = c.prepareOTPAttempt(b, command, p)
@@ -401,6 +403,9 @@ func (c *Coordinator) recordCountedAttempt(ctx context.Context, tx pgx.Tx, comma
 	}
 	if err != nil {
 		return 0, result, identity.UnavailableError{}
+	}
+	if mfa && p.counters != nil && (!m.counterCalled || m.counterDisposition == CommandCounterDenied && choice != OTPAttemptDenied) {
+		return 0, result, invalidWork()
 	}
 	if work.state.rows != nil || work.usable() != nil || choice != OTPAttemptUnchanged && choice != OTPAttemptDenied && (!metered || choice != OTPAttemptChecked) {
 		return 0, result, invalidWork()

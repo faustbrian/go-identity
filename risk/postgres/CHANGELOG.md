@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Prepare anonymous native TOTP completion counters from the original signed
+  continuation subject and child, retaining opaque code/browser custody and
+  protected limits. Reservation and current admission require sealed native
+  completion scope. Install `MFACompletionCounterMigrationSource` after the
+  protected and registration counter histories; existing evidence is preserved.
+
 - Support original-grant-bound sessionless registration confirmation counters
   through the existing protected coordinator. Restore exact original grant
   identity and freshness without fabricating a session; preserve session-based

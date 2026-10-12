@@ -54,6 +54,8 @@ type Repository struct {
 	cleanupBatch        uint32
 	preAuthIssue        *preAuthIssueProfile
 	cookieRevoke        *revokeCSRFInput
+	revokeAdmission     *SingleFactorSessionAdmissionConfig
+	revokeMFAMagicLink  *MagicLinkAdmissionConfig
 }
 
 // NewRepository validates configuration without IO. The database must already

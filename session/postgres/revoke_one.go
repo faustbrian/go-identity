@@ -28,12 +28,11 @@ func (r *Repository) validateRevokeOnePlan(command identity.Command, p kernel.Co
 	one, _ := native.RevokeOne()
 	spec, _ := one.Session.Bindings()
 	if source != nil {
-		caller, _ := source.record.Bindings()
-		if _, _, _, err = sessionAdmissionBindings(IdentifierAdmissionConfig(*r.issueAdmission), source.record, one.Binding, caller.SessionID, caller.Version); err != nil {
+		if _, err = r.revokeRecordAdmission(source.record, one.Binding); err != nil {
 			return err
 		}
 	}
-	if _, _, _, err = sessionAdmissionBindings(IdentifierAdmissionConfig(*r.issueAdmission), one.Session, one.Binding, spec.SessionID, spec.Version); err != nil {
+	if _, err = r.revokeRecordAdmission(one.Session, one.Binding); err != nil {
 		return err
 	}
 	if p.Feature == nil || p.Feature.Contributor != r.Descriptor() || p.Feature.Operation != session.RevokeOneOperation() || p.SubjectType != "session" || p.Capability != nil || p.Lifecycle == nil || p.Lifecycle.EventType != "session.revoked.v1" || p.Lifecycle.BeforeVersion != spec.Version || p.Lifecycle.AfterVersion != spec.Version+1 || len(p.Audits) != 1 {
@@ -65,17 +64,7 @@ func (r *Repository) applyRevokeOne(ctx context.Context, w kernel.Work, one sess
 	}
 	bounded, cancel := context.WithTimeout(ctx, r.maximumDuration)
 	defer cancel()
-	directory, credential, policy, err := sessionAdmissionBindings(IdentifierAdmissionConfig(*r.issueAdmission), one.Session, b, spec.SessionID, spec.Version)
-	if err != nil {
-		return identity.FeatureReceipt{}, err
-	}
-	if err = w.RequireActiveDirectoryAuthority(bounded, r, directory); err != nil {
-		return identity.FeatureReceipt{}, err
-	}
-	if _, err = w.RequireActiveCredential(bounded, r, credential); err != nil {
-		return identity.FeatureReceipt{}, err
-	}
-	if err = w.RequireActiveUserAuthorization(bounded, r, policy); err != nil {
+	if err = r.requireRevokeRecordAuthority(bounded, w, one.Session, b); err != nil {
 		return identity.FeatureReceipt{}, err
 	}
 	// Acquire the mutation lock before the shared record admission, so two

@@ -44,6 +44,12 @@ func (r *Repository) CheckCommandCounters(ctx context.Context, w identitypostgre
 	if e != nil || b.Generation == 0 {
 		return deny()
 	}
+	if native.scope.Operation == "identity.mfa.totp-verify" && native.capabilityID != "" {
+		child, completion, scopeErr := w.MFACompletionScope(r)
+		if scopeErr != nil || native.subject.User != string(completion.UserID) || native.capabilityID != child.CapabilityID || child.CapabilityID != string(completion.ID) {
+			return deny()
+		}
+	}
 	raw, e := base64.RawURLEncoding.DecodeString(string(b.Command.CommandID))
 	if e != nil || len(raw) != 16 {
 		return deny()

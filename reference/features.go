@@ -13,6 +13,7 @@ import (
 	identity "github.com/faustbrian/go-identity"
 	"github.com/faustbrian/go-identity/delivery"
 	deliverypg "github.com/faustbrian/go-identity/delivery/postgres"
+	magicpg "github.com/faustbrian/go-identity/magiclink/postgres"
 	"github.com/faustbrian/go-identity/otp"
 	otppg "github.com/faustbrian/go-identity/otp/postgres"
 	passwordpg "github.com/faustbrian/go-identity/password/postgres"
@@ -85,6 +86,12 @@ type featureState struct {
 	otp                          *otppg.SendService
 	signin                       *otppg.SigninService
 	reset                        *passwordpg.ResetService
+	magicRequest                 *magicpg.RequestService
+	magicConsume                 *magicpg.ConsumeService
+	magicTOTP                    *magicLinkTOTPService
+	magicPreauth                 *session.PreAuthIssuer
+	httpMagicLink                *magicLinkHTTPState
+	httpMFA                      *mfaHTTPState
 	passwordSignin               *passwordpg.SigninService
 	passwordSignup               *passwordpg.SignupService
 	session                      *sessionState
@@ -114,6 +121,12 @@ type featureState struct {
 }
 
 func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDependencies) error {
+	if c.HTTPMFA != nil && (c.MagicLink == nil || c.MagicLink.TOTP == nil) {
+		return identity.InvalidInputError{Field: "reference_http_mfa"}
+	}
+	if c.HTTPMagicLink != nil && c.MagicLink == nil {
+		return identity.InvalidInputError{Field: "reference_http_magic_link"}
+	}
 	if c.HTTPPasswordVerification != nil && c.PasswordVerification == nil || c.HTTPPasswordChange != nil && c.PasswordChange == nil {
 		return identity.InvalidInputError{Field: "reference_http_password_protection"}
 	}
@@ -137,6 +150,9 @@ func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDepen
 	}
 	if c.PasswordReset != nil && (c.OTP == nil || c.Delivery == nil) {
 		return identity.InvalidInputError{Field: "reference_password_reset"}
+	}
+	if c.MagicLink != nil && (c.OTP == nil || c.Delivery == nil) {
+		return identity.InvalidInputError{Field: "reference_magic_link"}
 	}
 	httpPreAuth, err := composePreAuthHTTP(c)
 	if err != nil {
@@ -269,6 +285,46 @@ func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDepen
 	if err != nil {
 		return err
 	}
+	magicRequest, magicConsume, err := composeMagicLink(c, d, evaluator)
+	if err != nil {
+		return err
+	}
+	magicPreauth, err := composeMagicLinkPreAuth(d.PostgreSQL, c.MagicLink)
+	if err != nil {
+		return err
+	}
+	magicTOTP, err := composeMagicLinkTOTP(c, d, magicRequest, evaluator)
+	if err != nil {
+		return err
+	}
+	migrationConfig.magicTOTP = magicTOTP != nil
+	migrationConfig.magicSignup = c.MagicLink != nil && c.MagicLink.Request.Signup != nil
+	if magicPreauth != nil {
+		migrationConfig.preauthIssue = true
+	}
+	if magicConsume != nil {
+		migrationConfig.magicSessionSchema = c.MagicLink.Request.Session.Schema
+		migrationConfig.magicMFAChallenge = c.MagicLink.Consume.MFA != nil
+	}
+	httpMagicLink, err := composeMagicLinkHTTP(c, httpPreAuth, s.httpRate)
+	if err != nil {
+		return err
+	}
+	httpMFA, err := composeMFAHTTP(c, httpPreAuth, s.httpRate)
+	if err != nil {
+		if httpMagicLink != nil && httpMagicLink.rate != nil {
+			httpMagicLink.rate.Close()
+		}
+		return err
+	}
+	defer func() {
+		if httpMagicLink != nil && httpMagicLink.rate != nil && !retainedResetHTTP {
+			httpMagicLink.rate.Close()
+		}
+		if httpMFA != nil && !retainedResetHTTP {
+			httpMFA.rate.Close()
+		}
+	}()
 	if resetOwner != nil {
 		migrationConfig.resetSchema = c.PasswordReset.Native.Session.Schema
 	}
@@ -359,6 +415,9 @@ func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDepen
 	s.features.signupPreauth = signupPreauthOwner
 	s.features.httpPasswordSignup = httpPasswordSignup
 	s.features.httpRegistrationVerification = httpRegistrationVerification
+	s.features.magicRequest, s.features.magicConsume, s.features.magicPreauth, s.features.httpMagicLink = magicRequest, magicConsume, magicPreauth, httpMagicLink
+	s.features.magicTOTP = magicTOTP
+	s.features.httpMFA = httpMFA
 	retainedResetHTTP = true
 	return nil
 }

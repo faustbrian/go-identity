@@ -17,9 +17,10 @@ import (
 // by their actual owners; this declaration proves neither MFA nor authentication.
 // It cannot accompany signup or session creation. Times are UTC whole seconds,
 // with a five-minute maximum and no extension beyond the original primary proof.
-// All fields are fixed in original preparation before child signing. A nil
-// CapabilityIssuance declares only that original preparation; restoration must
-// preserve this complete value and add exactly one original-generation child.
+// Preparation alone may omit ID/digest/times together while fixing the selected
+// user/policy/factor. The journal-owned generator supplies those original child
+// fields once. Ordinary execution and history require the complete declaration;
+// restoration preserves it and adds exactly one original-generation child.
 type MFAContinuationPlan struct {
 	ID            identity.CommandID
 	UserID        identity.UserID
@@ -48,11 +49,22 @@ func cloneMFAContinuationPlan(p *MFAContinuationPlan) *MFAContinuationPlan {
 }
 
 func validMagicLinkMFAPlan(b identity.CommandBinding, p CommandPlan) bool {
+	return validMagicLinkMFAPlanMode(b, p, false)
+}
+
+func ungeneratedMFAContinuation(m *MFAContinuationPlan) bool {
+	return m != nil && m.ID == "" && m.ScopeDigest == ([32]byte{}) && m.IssuedAt.IsZero() && m.ExpiresAt.IsZero()
+}
+
+func validMagicLinkMFAPlanMode(b identity.CommandBinding, p CommandPlan, allowUngenerated bool) bool {
 	m, i := p.MFAContinuation, p.CapabilityIssuance
 	if m == nil || p.Feature == nil || p.Feature.Operation != magicLinkConsumeOperation() || p.Feature.Contributor != (ContributorDescriptor{Owner: "identity/magiclink/postgres", ContractID: "identity.magiclink", Version: 1}) || b.UserID != "" || b.AnonymousFlowID == "" || p.SubjectType != "authentication_attempt" || p.MagicLinkRegistration != nil || p.MagicLinkRequestAcceptance || p.SignupAcceptance || p.Delivery != nil || p.RiskEvidence != nil || p.OTP != nil || p.CaptchaEvidence != nil || p.CaptchaReplayReservation || p.Capability == nil || validateCapabilityPlan(b, p.Capability) != nil || p.Lifecycle == nil || p.Lifecycle.EventType != "mfa.challenge.created.v1" || p.Lifecycle.BeforeVersion != 0 || p.Lifecycle.AfterVersion != 0 || len(p.Contributors) == 0 {
 		return false
 	}
 	oneUse := ContributorDescriptor{Owner: "capability/postgres", ContractID: "capability.one-use", Version: 1}
+	if allowUngenerated && ungeneratedMFAContinuation(m) {
+		return i == nil && p.CommandCounters == nil && (identity.User{ID: m.UserID, TenantID: b.TenantID, Status: identity.StatusActive, Version: 1}).Validate(b.TenantID) == nil && m.PolicyVersion > 0 && m.FactorVersion > 0 && p.Contributors[len(p.Contributors)-1] == oneUse
+	}
 	if _, err := identity.ParseCommandID(string(m.ID)); err != nil {
 		return false
 	}
@@ -83,7 +95,11 @@ func encodeMagicLinkMFAIssuedBase(b identity.CommandBinding, fp [32]byte, p Comm
 }
 
 func encodeMagicLinkMFAPlan(b identity.CommandBinding, fp [32]byte, p CommandPlan) ([]byte, error) {
-	if !validMagicLinkMFAPlan(b, p) {
+	return encodeMagicLinkMFAPlanMode(b, fp, p, false)
+}
+
+func encodeMagicLinkMFAPlanMode(b identity.CommandBinding, fp [32]byte, p CommandPlan, allowUngenerated bool) ([]byte, error) {
+	if !validMagicLinkMFAPlanMode(b, p, allowUngenerated) {
 		return nil, invalidPlan()
 	}
 	for _, a := range p.Audits {
@@ -98,6 +114,9 @@ func encodeMagicLinkMFAPlan(b identity.CommandBinding, fp [32]byte, p CommandPla
 	var wire []byte
 	var err error
 	if p.CapabilityIssuance == nil {
+		if ungeneratedMFAContinuation(p.MFAContinuation) {
+			profile = "identity-magic-link-mfa-ungenerated-v1"
+		}
 		base.Contributors = p.Contributors[:parentIndex]
 		wire, err = encodeFeaturePlanMode(b, fp, base, true)
 	} else {
@@ -110,13 +129,17 @@ func encodeMagicLinkMFAPlan(b identity.CommandBinding, fp [32]byte, p CommandPla
 		return nil, err
 	}
 	m := p.MFAContinuation
+	issued, expires := uint64(m.IssuedAt.Unix()), uint64(m.ExpiresAt.Unix())
+	if ungeneratedMFAContinuation(m) {
+		issued, expires = 0, 0
+	}
 	owner := p.Contributors[parentIndex]
 	result := cborMap(map[string][]byte{
 		"base": cborBytes(wire), "profile": cborText(profile), "version": cborUint(1),
 		"challenge": cborMap(map[string][]byte{
 			"id": cborText(string(m.ID)), "user_id": cborText(string(m.UserID)), "scope_digest": cborBytes(m.ScopeDigest[:]),
 			"policy_version": cborUint(m.PolicyVersion), "factor_version": cborUint(m.FactorVersion),
-			"issued_at": cborUint(uint64(m.IssuedAt.Unix())), "expires_at": cborUint(uint64(m.ExpiresAt.Unix())),
+			"issued_at": cborUint(issued), "expires_at": cborUint(expires),
 		}),
 		"capability":  encodeCapabilityPlan(p.Capability),
 		"contributor": cborMap(map[string][]byte{"owner": cborText(owner.Owner), "contract_id": cborText(owner.ContractID), "version": cborUint(uint64(owner.Version))}),
@@ -128,6 +151,10 @@ func encodeMagicLinkMFAPlan(b identity.CommandBinding, fp [32]byte, p CommandPla
 }
 
 func decodeMagicLinkMFAPlan(b identity.CommandBinding, fp [32]byte, data []byte) (CommandPlan, error) {
+	return decodeMagicLinkMFAPlanMode(b, fp, data, false)
+}
+
+func decodeMagicLinkMFAPlanMode(b identity.CommandBinding, fp [32]byte, data []byte, allowUngenerated bool) (CommandPlan, error) {
 	fail := func() (CommandPlan, error) { return CommandPlan{}, identity.UnavailableError{} }
 	if len(data) == 0 || len(data) > 65536 {
 		return fail()
@@ -159,7 +186,11 @@ func decodeMagicLinkMFAPlan(b identity.CommandBinding, fp [32]byte, data []byte)
 	}
 	r.data = r.data[int(n):]
 	r.key("profile")
-	r.consume(cborText(profile))
+	actualProfile := r.string(128)
+	ungenerated := allowUngenerated && p.CapabilityIssuance == nil && actualProfile == "identity-magic-link-mfa-ungenerated-v1"
+	if actualProfile != profile && !ungenerated {
+		return fail()
+	}
 	r.key("version")
 	r.consume(cborUint(1))
 	r.key("challenge")
@@ -173,6 +204,9 @@ func decodeMagicLinkMFAPlan(b identity.CommandBinding, fp [32]byte, data []byte)
 	m.IssuedAt = time.Unix(int64(r.number(253402300799)), 0).UTC()
 	r.key("expires_at")
 	m.ExpiresAt = time.Unix(int64(r.number(253402300799)), 0).UTC()
+	if ungenerated && m.IssuedAt.Unix() == 0 && m.ExpiresAt.Unix() == 0 {
+		m.IssuedAt, m.ExpiresAt = time.Time{}, time.Time{}
+	}
 	r.key("scope_digest")
 	r.digest(&m.ScopeDigest)
 	r.key("factor_version")
@@ -209,7 +243,7 @@ func decodeMagicLinkMFAPlan(b identity.CommandBinding, fp [32]byte, data []byte)
 		issuer := p.Contributors[len(p.Contributors)-1]
 		p.Contributors = append(p.Contributors[:len(p.Contributors)-1], owner, issuer)
 	}
-	canonical, err := encodeMagicLinkMFAPlan(b, fp, p)
+	canonical, err := encodeMagicLinkMFAPlanMode(b, fp, p, allowUngenerated)
 	if err != nil || !bytes.Equal(canonical, data) {
 		return fail()
 	}

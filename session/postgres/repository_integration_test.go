@@ -223,6 +223,23 @@ func TestSessionPostgresIntegration(t *testing.T) {
 	if err != nil || string(upgradedPayload) != string(payload) {
 		t.Fatal("magic-link upgrade rewrote legacy bytes", err)
 	}
+	mfaHistory, err := (MFAMigrationSource{Schema: "session_store", Version: 17}).Load(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fullHistory = append(fullHistory, mfaHistory...)
+	migrate(fixtureSource(fullHistory))
+	migrate(fixtureSource(fullHistory))
+	upgradedRecord, err = repo.Get(ctx, "tenant-a", "session-a")
+	if err != nil {
+		t.Fatal("MFA upgrade lost legacy record", err)
+	}
+	upgradedPayload, _, err = encodeRecord(upgradedRecord.Session)
+	if err != nil || string(upgradedPayload) != string(payload) {
+		t.Fatal("MFA upgrade rewrote legacy recovery bytes", err)
+	}
+	t.Run("complete MFA primary record", func(t *testing.T) { testMFAPrimaryRecord(t, ctx, pool) })
+	t.Run("complete MFA issuance purposes", func(t *testing.T) { testMFASigninPurposes(t, ctx, pool) })
 	t.Run("complete OTP primary record", func(t *testing.T) { testOTPPrimaryRecord(t, ctx, pool) })
 	t.Run("complete magic-link primary record", func(t *testing.T) { testMagicLinkPrimaryRecord(t, ctx, pool) })
 	t.Run("complete continued primary record", func(t *testing.T) { testContinuedPrimaryRecord(t, ctx, pool, native) })

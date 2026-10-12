@@ -173,10 +173,11 @@ type EvaluateResult struct {
 // Only a successful owned evaluation can populate issuing provenance. Public
 // decision fields and caller-created Assessment values cannot recreate it.
 type evaluationProvenance struct {
-	owner   *evaluatorState
-	context Context
-	signals []Signal
-	audit   DecisionDelivery
+	owner              *evaluatorState
+	context            Context
+	signals            []Signal
+	audit              DecisionDelivery
+	protectedProviders bool
 }
 
 // Format omits private correlated source and counter state.
@@ -223,6 +224,10 @@ func evaluationFailure(err error) (EvaluateResult, error) {
 // variant issues evidence or grants permission to execute.
 // Issuing phases fail before clock, factor, counter or source access.
 func (e Evaluator) Evaluate(ctx context.Context, request EvaluateRequest) (result EvaluateResult, err error) {
+	return e.evaluate(ctx, request, false)
+}
+
+func (e Evaluator) evaluate(ctx context.Context, request EvaluateRequest, protected bool) (result EvaluateResult, err error) {
 	var counted *CounterEvaluation
 	defer func() { result.counter = counted }()
 	if e.state == nil {
@@ -245,7 +250,19 @@ func (e Evaluator) Evaluate(ctx context.Context, request EvaluateRequest) (resul
 	if !scopeID(c.Tenant) || !scopeID(c.Attempt) {
 		return evaluationFailure(ErrInvalidContext)
 	}
-	if request.Subject != (Subject{}) && (e.state.counters.state == nil || a.Preflight != "") {
+	if protected {
+		velocity := false
+		for _, name := range a.Profile.RequiredSignals {
+			velocity = velocity || name == "velocity"
+		}
+		if a.Preflight != "" || a.Profile.Class != CredentialMutation || a.Profile.Phase != ReserveWithCommand || !velocity {
+			return evaluationFailure(ErrInvalidAction)
+		}
+		if request.Subject != (Subject{}) || request.Attribution != nil {
+			return evaluationFailure(ErrInvalidContext)
+		}
+	}
+	if !protected && request.Subject != (Subject{}) && (e.state.counters.state == nil || a.Preflight != "") {
 		return evaluationFailure(ErrInvalidCounterCommand)
 	}
 	bounded, cancel := context.WithTimeout(ctx, e.state.timeout)
@@ -256,7 +273,7 @@ func (e Evaluator) Evaluate(ctx context.Context, request EvaluateRequest) (resul
 	}
 	c.Now, c.IndependentFactor = start, false
 	last := start
-	if e.state.audit != nil {
+	if !protected && e.state.audit != nil {
 		if err := e.state.audit.prepare(bounded, &request, start, e.state.policy.state.version); err != nil {
 			return evaluationFailure(err)
 		}
@@ -281,7 +298,7 @@ func (e Evaluator) Evaluate(ctx context.Context, request EvaluateRequest) (resul
 		return result, nil
 	}
 	var command CounterCommand
-	if e.state.counters.state != nil {
+	if !protected && e.state.counters.state != nil {
 		command, err = e.state.counters.Prepare(c, request.Subject, a.Profile.Phase)
 		if err != nil {
 			return evaluationFailure(err)
@@ -323,6 +340,9 @@ func (e Evaluator) Evaluate(ctx context.Context, request EvaluateRequest) (resul
 	for _, name := range a.Profile.RequiredSignals {
 		if err := bounded.Err(); err != nil {
 			return evaluationFailure(err)
+		}
+		if protected && name == "velocity" {
+			continue
 		}
 		if name == "velocity" && command.state != nil {
 			if counted == nil {
@@ -404,13 +424,13 @@ func (e Evaluator) Evaluate(ctx context.Context, request EvaluateRequest) (resul
 			}
 		}
 	}
-	assessment, err := e.state.policy.Assess(bounded, c, signals)
+	assessment, err := e.state.policy.assess(bounded, c, signals, protected)
 	if err != nil {
 		return evaluationFailure(err)
 	}
 	result = safeEvaluation(assessment)
-	result.provenance = &evaluationProvenance{owner: e.state, context: c, signals: signals}
-	if e.state.audit != nil {
+	result.provenance = &evaluationProvenance{owner: e.state, context: c, signals: signals, protectedProviders: protected}
+	if !protected && e.state.audit != nil {
 		result.counter = counted
 		return e.finishDecisionAudit(bounded, request, result, now, start)
 	}

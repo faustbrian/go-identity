@@ -1,6 +1,6 @@
 # Identity reference composition
 
-**Development checkpoint:** this module currently implements only the
+**Development checkpoint:** this module currently includes the
 PostgreSQL-journaled, TLS Valkey velocity store graph and optional native OTP
 Send/delivery composition with opt-in single-factor OTP sign-in. An IO-free
 `NewServer` now exposes exact health/readiness probes and opt-in original-flow
@@ -16,6 +16,63 @@ Fresh dependency readiness is available for this selected graph; remaining
 HTTP features and complete identity journeys remain unimplemented. Selected-module
 migration Check/Plan/Apply and durable native command resume are available as
 explicit store operations, not automatic startup behavior.
+
+### Selected magic-link TOTP completion
+
+Select primary continuation with `MagicLink.Request.MFAContinuation` and
+`MagicLink.Consume.MFA`, then select native completion with `MagicLink.TOTP`.
+`MagicLinkTOTPConfiguration` supplies bounded completion timing, versioned
+comparison/envelope custody and durable counters in the graph's risk namespace.
+Its counter policy must be the graph's exact immutable policy; its risk policy
+version is independent of the authorization revision. The graph supplies the
+actual original request issuer, browser keys, session profile and provider
+evaluator. Apply the selected native migrations before startup; existing
+histories remain unchanged, and readiness requires current MFA successors.
+
+After graph startup, `FeatureSet.MagicLinkTOTP()` returns the public
+`mfa.TOTPCompletionService`. Submit the original child proof, browser cookie,
+challenge/factor IDs and opaque TOTP code to `TotpVerify`. Only a new committed
+invocation returns reveal-once session/CSRF custody. Wrong codes spend the shared
+budget once per command; authenticated missing/ineligible factor selections
+use the same budget after a protected eligibility recheck. Retry and
+`RecoverTotpVerify` preserve original outcome
+without credentials. The original primary and completion policy IDs stay
+distinct. Unsupported trusted-device requests deny rather than silently degrade.
+
+The native PostgreSQL/TLS-Valkey journey exercises primary HTTP delivery,
+advanced factor epochs, encrypted factor custody, foreign-browser denial,
+wrong-code accounting, competing completion, replay/recovery and current MFA
+session validation. Enrollment remains a pre-existing-authority fixture, not a
+public enrollment claim. The graph's selected session reader and cookie signout
+now retain current MFA authority, including CSRF denial, protected lifecycle
+rollback and terminal recovery. Explicit `HTTPMFA.TOTPVerify` selection exposes
+the concrete TOTP completion route with the same native owners. The real HTTP
+journey proves credential delivery, metadata-only exact retry, session read and
+logout. This is backend composition, not a UI or a complete platform release.
+
+The selected native TOTP handle also implements
+`TotpVerificationRateSource(context.Context, mfa.TotpVerifyRequest)
+(identity.UserID, string, time.Duration, error)` for consumer-owned HTTP rate
+composition. Use the existing challenge verification limiter: IP admission
+first, then this owned source read, subject/challenge admission, and actual
+`TotpVerify`. Subject and child come from verified original issuance, never
+JSON-selected identity or the transport actor. The interval is the original
+signed lifetime, not remaining expiry; this quota profile requires an integral
+microsecond interval between one second and five minutes.
+
+An exact authorized committed or denied retry reads original command history
+before mutable continuation/factor state. Conflicting input, unavailable
+history or a foreign browser returns no quota metadata. The source read performs
+no factor decryption, code comparison, native debit, reservation or issuance.
+It is not completion permission. Expired proofs remain denied; use the existing
+proof/code-free `RecoverTotpVerify` for historical reconciliation.
+
+Set `StoreConfiguration.HTTPMFA` to `HTTPMFAConfiguration{TOTPVerify: true, ...}`
+to select `POST /v1/mfa/totp-verify`. Actor and policy revision match native
+primary issuance. Select the same verification namespace/key as other flows
+when sharing their IP/subject budgets. The native TOTP, original pre-auth/device
+and strict rate graph are required; omitted configuration contributes no route
+or OpenAPI operation. No enrollment or trusted-device route is implied.
 
 Reset currently requires the selected OTP/delivery graph and uses one of its
 configured session schemas. Supply `PasswordResetConfiguration.Native` with
@@ -97,13 +154,43 @@ only after explicit selection, with initialization, tenant and shutdown guards.
 recovery through `features.Sessions()`. Supply its native authority profile,
 repository, explicit clock/policy/transaction bounds and retained lookup keys.
 `Native.Validation.Clock` must be absent: the graph uses `Native.Execution.Clock`
-for reads and protected revocation. With password signin selected, the authority
-profile, repository, cookie deletion tuple and current lookup key must match
-issuance. Historical rotation keys may remain. Nonempty `CSRFKeys` selects
-strict cookie logout and must include the current password issuer's exact key;
+for reads and protected revocation. The explicit verified profile, selected OTP
+signin and optional magic-link consumption share one kind-dispatched primary
+reader and the same transactional logout selection, without fallback. Every
+selected consuming issuer must match deployment, policy namespace, audience,
+repository and cookie deletion tuple. Retained lookup keys must contain each
+issuer's exact current version and material; historical rotation keys may remain.
+Nonempty `CSRFKeys` selects strict cookie logout and must include each selected
+consuming issuer's exact current CSRF key;
 an empty slice disables cookie logout rather than enabling a legacy bypass.
-The current reader supports its explicit single-factor native profile, not
-anonymous, organization, MFA or passkey authority.
+Request-only magic-link selection grants no session authority. This composition
+does not enable anonymous, organization, MFA or passkey session authority.
+
+`MagicLink` selects native request and optional explicit consumption. Supply
+versioned issuer/custody keys, address normalization, exact trusted origins and
+callbacks, original browser-flow keys, delivery template/endpoint and bounded
+policy configuration. Leave request risk evaluation and delivery owner/renderer
+unset: the graph injects its counted risk evaluator and encrypted delivery owner.
+`PreAuth` selects original flow issuance; `HTTPMagicLink` independently opts into
+request/consume routes and requires the shared HTTP rate/device graph. The
+named `magic-link` method on `/v1/session/preauth-issue` creates original intent.
+Email delivery carries the bearer in a URL fragment; the landing page belongs
+to the consumer, not this backend. Only explicit POST consumption can log in.
+
+The current reference journey uses a publicly registered, verified account
+without enrolled MFA. It proves request, encrypted delivery, scanner/foreign-
+browser denial, one-use login, session read and transactional cookie logout,
+including rollback/recovery. Retry cannot disclose credentials again. Resend,
+supersession and optional signup/MFA continuation are still under development;
+do not treat this existing-account journey as complete magic-link parity.
+
+Native TOTP completion is being composed with protected provider custody and
+the real command-owned counter adapter, not Authentication-lane admission or a
+fabricated session. Submitted code/browser intent remains the journal identity;
+counter preparation is separate. Provider facts enter the existing encrypted
+session preparation output and retain original expiry on restore. This path is
+not selected by the graph or HTTP yet: primary MFA challenge branching and a
+positive public-path PostgreSQL journey remain required before enablement.
 
 `PasswordVerification` selects native reauthentication through
 `features.PasswordVerification()` and, when retained `CSRFKeys` are supplied,
@@ -612,6 +699,26 @@ It tests joint mechanics conditioned on established coverage. Only the separate
 actual one-hour lane can prove genuine fresh warmup.
 
 ## Verification and release notes
+
+### Selected magic-link signup
+
+Configure `MagicLink.Request.Signup` with the same identifier comparison and
+retirement key history used by other creation methods, plus its matching
+versioned email-possession policy. Request/delivery retains prospective signed
+creation without creating a user; consumption creates account, verified email,
+empty factor authority, policy authority and session atomically. Existing
+verified recipients sign in normally. The selected migration catalog includes
+the owner registration and factor-provenance extensions without requiring the
+password signup workflow or modifying installed history prefixes. HTTP
+consumption receives the actual native issuer's proof limits.
+
+The corrected prospective supersession family is keyed by original mailbox,
+browser and policy rather than newly prepared IDs. When adopting it from an
+experimental deployment, drain issuing workers and retained preparations and
+expire outstanding old prospective grants before enabling the new profile;
+mixed-version prospective issuance/rollback is not supported. Existing-recipient
+families are unchanged. Neither this profile nor selected TOTP completion implies
+public MFA enrollment or complete platform release qualification.
 
 Integration tests require isolated loopback PostgreSQL and explicit native TLS
 configuration. Apply/Plan/Check do not connect to Valkey; risk/OTP runtime tests
