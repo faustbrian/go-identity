@@ -11,6 +11,7 @@ import (
 	"github.com/faustbrian/go-authorization"
 	authority "github.com/faustbrian/go-authorization/postgres"
 	identity "github.com/faustbrian/go-identity"
+	mfapg "github.com/faustbrian/go-identity/mfa/postgres"
 	kernel "github.com/faustbrian/go-identity/postgres"
 	"github.com/faustbrian/go-identity/session"
 	"github.com/jackc/pgx/v5"
@@ -120,6 +121,12 @@ func (e *PasswordSigninEffect) Apply(ctx context.Context, w kernel.Work, owner k
 		return identity.FeatureReceipt{}, readError(bounded, err)
 	}
 	use := PreAuthUse{Command: b, Fingerprint: fingerprint, Generation: generation}
+	// Factor locks precede browser locks in the challenge owner too. Taking
+	// this optional known-empty fence after consuming the flow could deadlock
+	// competing SFA/MFA decisions on the same original browser transaction.
+	if err := requirePasswordSigninFactorIntent(bounded, w, owner, command, s.UserID); err != nil {
+		return identity.FeatureReceipt{}, err
+	}
 	if err := ReservePreAuth(bounded, w, e.config, preauth, use); err != nil {
 		return identity.FeatureReceipt{}, err
 	}
@@ -148,6 +155,23 @@ func (e *PasswordSigninEffect) Apply(ctx context.Context, w kernel.Work, owner k
 		return identity.FeatureReceipt{}, err
 	}
 	return identity.FeatureReceipt{Operation: feature.Operation}, nil
+}
+
+func requirePasswordSigninFactorIntent(ctx context.Context, w kernel.Work, owner kernel.FeatureExecutionContributor, command identity.Command, user identity.UserID) error {
+	f, ok := command.PasswordSigninFeature()
+	if !ok {
+		return session.ErrInvalidSessionCommand
+	}
+	for _, field := range f.Fields {
+		if field.Name != "password.factor-version" {
+			continue
+		}
+		if field.Value.Kind != identity.FeatureUint64 || field.Value.Uint64 == 0 {
+			return session.ErrInvalidSessionCommand
+		}
+		return mfapg.RequirePasswordSigninFactors(ctx, w, owner, command, user, field.Value.Uint64, false)
+	}
+	return nil
 }
 
 func requirePasswordIssueTime(ctx context.Context, w kernel.Work, record session.Session) error {

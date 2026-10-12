@@ -196,6 +196,35 @@ func (w MFATOTPAttemptWork) RequireRecipient(ctx context.Context, owner MFATOTPA
 	return otpAuthorityFailure(ctx, native, native.requireRecipient(ctx, command, expected))
 }
 
+// RequireRecipientCredential fences the original password credential before
+// counted TOTP comparison or charging. It retains anonymous journal scope;
+// selected-user eligibility is local to the locked directory read. Expected
+// versions must come from authenticated original primary custody. No proof,
+// session, fresh lease, independent transaction or general Work is exposed.
+// Expiry is checked after locks; every live denial poisons the transaction.
+func (w MFATOTPAttemptWork) RequireRecipientCredential(ctx context.Context, owner MFATOTPAttemptContributor, recipient RecipientRecord, expected CredentialAdmission) (time.Time, error) {
+	if err := w.usable(); err != nil {
+		return time.Time{}, err
+	}
+	b, err := w.Binding(owner)
+	native, command, err := otpAuthorityScope(ctx, w.state.work, b.Command, err)
+	if err != nil {
+		return time.Time{}, err
+	}
+	if recipient.Validate() != nil || recipient.Suppressed || expected.Credential.Validate(command.TenantID, recipient.User.ID) != nil || expected.Credential.Kind != identity.CredentialPassword || expected.Credential.Owner != "identity/password" || expected.UserAuthorityVersion != recipient.UserAuthorityVersion || expected.IdentifierAuthorityVersion != recipient.IdentifierAuthorityVersion || expected.CredentialAuthorityVersion != recipient.CredentialAuthorityVersion {
+		return time.Time{}, native.fail(ctx, invalidWork())
+	}
+	if err := native.requireRecipient(ctx, command, recipient); err != nil {
+		return time.Time{}, otpAuthorityFailure(ctx, native, err)
+	}
+	command.UserID = recipient.User.ID
+	now, err := native.requireActiveCredential(ctx, command, expected)
+	if err != nil {
+		return time.Time{}, otpAuthorityFailure(ctx, native, err)
+	}
+	return now, nil
+}
+
 func mfaAttemptOwner(p *admittedKernelPlan) MFATOTPAttemptContributor {
 	if p == nil || p.feature == nil || p.feature.Operation.OperationID != "identity.mfa.totp-verify" || p.mfaCompletion == nil || p.otp != nil {
 		return nil

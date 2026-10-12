@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	auth "github.com/faustbrian/go-authentication"
 	identity "github.com/faustbrian/go-identity"
 	"github.com/faustbrian/go-identity/session"
 	envelope "github.com/faustbrian/go-secret-envelope"
@@ -151,19 +152,33 @@ func TestMFASessionRotationRejectsChangedFactorProvenance(t *testing.T) {
 }
 
 func TestMFASessionEncryptedRestartRetainsCompleteProvenanceAndDeadline(t *testing.T) {
-	for _, csrf := range []bool{false, true} {
-		t.Run(fmt.Sprint(csrf), func(t *testing.T) {
+	for _, mode := range []struct{ password, csrf bool }{{false, false}, {false, true}, {true, false}, {true, true}} {
+		t.Run(fmt.Sprintf("password=%t/csrf=%t", mode.password, mode.csrf), func(t *testing.T) {
 			service, request, clock, observed, config, _ := validationFixture(t)
 			s, primary, p := mfaMagicLinkSession(t)
 			base, _ := observed.Session.Bindings()
 			s.Lookup = base.Lookup
 			m, _ := session.NewMFAAuthentication(p)
 			var err error
-			observed.Session, err = session.NewSessionWithMagicLinkMFA(s, primary, m)
+			if mode.password {
+				s.Authentication = sessionSpec(t).Authentication
+				s.Authentication.Proof.Purpose = "identity.password.mfa-primary"
+				s.Authentication.Proof.ID = auth.ProofID(p.PrimaryCommandID)
+				original, _ := primary.Bindings()
+				s.Authentication.Proof.IssuedAt = original.AuthenticatedAt
+				s.Authentication.Proof.ExpiresAt = original.ValidUntil
+				observed.Session, err = session.NewSessionWithPasswordMFA(s, m)
+			} else {
+				observed.Session, err = session.NewSessionWithMagicLinkMFA(s, primary, m)
+			}
 			observed.Current = s.Authority
-			if csrf {
+			if mode.csrf {
 				state, _ := session.NewCSRFState(session.CSRFStateSpec{Binding: session.CSRFBinding{TenantID: s.TenantID, SessionID: s.SessionID, SessionVersion: s.Version}, KeyVersion: 1, Digest: [32]byte{7}})
-				observed.Session, err = session.NewSessionWithMagicLinkMFAAndCSRF(s, primary, m, state)
+				if mode.password {
+					observed.Session, err = session.NewSessionWithPasswordMFAAndCSRF(s, m, state)
+				} else {
+					observed.Session, err = session.NewSessionWithMagicLinkMFAAndCSRF(s, primary, m, state)
+				}
 			}
 			if err != nil {
 				t.Fatal(err)
@@ -192,8 +207,14 @@ func TestMFASessionEncryptedRestartRetainsCompleteProvenanceAndDeadline(t *testi
 			}
 			before, _ := original.Session.CSRFState().Bindings()
 			after, _ := warm.Session.CSRFState().Bindings()
-			if before != after || warm.Session.MagicLinkAuthentication() == (session.MagicLinkAuthentication{}) {
+			if before != after || !mode.password && warm.Session.MagicLinkAuthentication() == (session.MagicLinkAuthentication{}) {
 				t.Fatal("restart dropped primary or synchronizer")
+			}
+			if mode.password {
+				retained, _ := warm.Session.Bindings()
+				if retained.Authentication != s.Authentication || warm.Session.MagicLinkAuthentication() != (session.MagicLinkAuthentication{}) {
+					t.Fatal("restart substituted password primary")
+				}
 			}
 			promoted, err := cache.Seal(context.Background(), warm)
 			if err != nil {

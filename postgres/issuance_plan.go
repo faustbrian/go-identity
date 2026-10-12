@@ -131,6 +131,9 @@ func validMFAContinuationIssuance(b identity.CommandBinding, p CommandPlan) bool
 	if i.MFAContinuationUserID == "" {
 		return true
 	}
+	if passwordMFAOperation(p) {
+		return b.UserID == "" && b.AnonymousFlowID != "" && p.SubjectType == "authentication_attempt" && p.Lifecycle != nil && p.Lifecycle.EventType == "mfa.challenge.created.v1" && p.Lifecycle.BeforeVersion == 0 && p.Lifecycle.AfterVersion == 0 && len(i.Grants) == 1 && i.Grants[0].Purpose == "identity.mfa.complete"
+	}
 	return b.UserID == "" && b.AnonymousFlowID != "" && p.Feature != nil && p.Feature.Operation == magicLinkConsumeOperation() && p.Feature.Contributor == (ContributorDescriptor{Owner: "identity/magiclink/postgres", ContractID: "identity.magiclink", Version: 1}) && p.SubjectType == "authentication_attempt" && p.Lifecycle != nil && p.Lifecycle.EventType == "mfa.challenge.created.v1" && p.Lifecycle.BeforeVersion == 0 && p.Lifecycle.AfterVersion == 0 && len(i.Grants) == 1 && i.Grants[0].Purpose == "identity.mfa.complete"
 }
 

@@ -72,7 +72,11 @@ func encodeRecord(s session.Session) ([]byte, string, error) {
 		record.MagicLink = &metadata
 	}
 	if metadata, e := s.MFAAuthentication().Bindings(); e == nil {
-		record.Schema += 2
+		if spec.Authentication.Kind == session.AuthenticationVerified {
+			record.Schema += 10
+		} else {
+			record.Schema += 2
+		}
 		record.MFA = &metadata
 	}
 	if continuation, ok := s.CredentialContinuation(); ok {
@@ -142,7 +146,7 @@ func decodeRecord(b []byte) (session.Session, error) {
 		}
 	}
 	if hasMFA {
-		if !hasMagicLink || hasOTP || hasContinuation {
+		if hasOTP || hasContinuation {
 			return invalid()
 		}
 		factor, valid := exactObject(top["MFA"], "CommandID", "PrimaryCommandID", "ContinuationID", "ContinuationScopeDigest", "Method", "FactorID", "EnrollmentVersion", "FactorAuthorityVersion", "ContinuationVersion", "Remember", "VerifiedAt", "ValidUntil")
@@ -246,7 +250,13 @@ func decodeRecord(b []byte) (session.Session, error) {
 		expectedSchema += 6
 	}
 	if hasMFA {
-		expectedSchema += 2
+		if record.Authentication.Kind == session.AuthenticationVerified && !hasMagicLink {
+			expectedSchema += 10
+		} else if record.Authentication.Kind == session.AuthenticationMagicLink && hasMagicLink {
+			expectedSchema += 2
+		} else {
+			return invalid()
+		}
 	}
 	if record.Schema != expectedSchema || hasOTP != (record.Authentication.Kind == session.AuthenticationOTP) || hasMagicLink != (record.Authentication.Kind == session.AuthenticationMagicLink) {
 		return invalid()
@@ -302,6 +312,16 @@ func decodeRecord(b []byte) (session.Session, error) {
 			result, err = session.NewSessionWithOTPAndCSRF(spec, metadata, state)
 		} else {
 			result, err = session.NewSessionWithOTP(spec, metadata)
+		}
+	} else if hasMFA {
+		factor, e := session.NewMFAAuthentication(*record.MFA)
+		if e != nil {
+			return invalid()
+		}
+		if hasCSRF {
+			result, err = session.NewSessionWithPasswordMFAAndCSRF(spec, factor, state)
+		} else {
+			result, err = session.NewSessionWithPasswordMFA(spec, factor)
 		}
 	} else if hasCSRF {
 		result, err = session.NewSessionWithCSRF(spec, state)

@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+- Describe shared TOTP verification as explicit Origin-only login versus
+  original stored-session CSRF confirmation. Keep one owned route and do not
+  invent an independent CSRF token age or weaken other operations' profiles.
+
+- Add original-command admission for one-time secret operations using the same
+  strict shared budgets as keyed mutations, without inventing request keys.
+  Native cookie-only provisioning URI selection retains stored-session CSRF.
+
+- Allow native cookie-only MFA enrollment to declare the stored-session CSRF
+  profile without inventing an independently renewable token age. Exact Origin
+  and the original synchronizer remain required; no bearer fallback is added.
+
 - Validate all selected wire schemas together during bounded OpenAPI
   construction, preserving document-relative and recursive references. Larger
   valid feature compositions no longer repeatedly compile the full document

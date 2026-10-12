@@ -55,6 +55,9 @@ type SigninConfig struct {
 	Audience                  string
 	Now                       func() time.Time
 	MaximumDuration           time.Duration
+	// MFAContinuation explicitly permits challenge-only native results. It
+	// does not authenticate a factor or enable a TOTP completion route.
+	MFAContinuation bool
 }
 
 // Format redacts runtime composition.
@@ -87,12 +90,16 @@ type SigninRecovery struct {
 // SignedIn means fresh delivery, not current authorization. Known command
 // history survives delivery errors; none does not establish rollback.
 type SigninResponse struct {
-	SignedIn      bool               `json:"signedIn"`
-	CommandID     identity.CommandID `json:"commandID,omitempty"`
-	SessionID     string             `json:"sessionID,omitempty"`
-	CommitOutcome string             `json:"commitOutcome"`
-	Recovery      *SigninRecovery    `json:"recovery,omitempty"`
-	Error         string             `json:"error,omitempty"`
+	SignedIn           bool               `json:"signedIn"`
+	CommandID          identity.CommandID `json:"commandID,omitempty"`
+	SessionID          string             `json:"sessionID,omitempty"`
+	CommitOutcome      string             `json:"commitOutcome"`
+	Recovery           *SigninRecovery    `json:"recovery,omitempty"`
+	Error              string             `json:"error,omitempty"`
+	ChallengeRequired  bool               `json:"challengeRequired,omitempty"`
+	ChallengeID        identity.CommandID `json:"challengeID,omitempty"`
+	ChallengeMethod    string             `json:"challengeMethod,omitempty"`
+	ChallengeExpiresAt string             `json:"challengeExpiresAt,omitempty"`
 }
 
 // NewSigninHandler selects only POST /v1/password/signin. Closed JSON requires
@@ -165,6 +172,9 @@ func NewSigninHandlerWithMiddleware(c SigninConfig, middleware []identityhttp.Mi
 	reject := func(w http.ResponseWriter, r *http.Request, err error) {
 		a := signinAttemptFor(r)
 		a.cookie, a.csrf = "", ""
+		a.challenge, a.deliveryFresh = "", nil
+		a.out.ChallengeRequired = false
+		a.out.ChallengeID, a.out.ChallengeMethod, a.out.ChallengeExpiresAt = "", "", ""
 		a.out.SignedIn = false
 		f := failure{status: 503, code: "unavailable"}
 		if errors.Is(err, identityhttp.ErrInvalidInput) {
@@ -181,7 +191,7 @@ func NewSigninHandlerWithMiddleware(c SigninConfig, middleware []identityhttp.Mi
 			w.Header().Set("Retry-After", strconv.FormatInt(int64((min(max(f.retry, time.Second), time.Hour)+time.Second-1)/time.Second), 10))
 		}
 		a.out.Error = f.code
-		writeSigninResponse(w, f.status, a.out)
+		writeSigninResponse(w, f.status, &a.out)
 	}
 	pipeline, err := identityhttp.NewOperationPipeline(identityhttp.OperationPipelineConfig[SigninState]{MaximumDuration: c.MaximumDuration, Middleware: middleware, Reject: reject,
 		Decode: func(r *http.Request) (SigninState, error) {
@@ -312,6 +322,7 @@ func NewSigninHandlerWithMiddleware(c SigninConfig, middleware []identityhttp.Mi
 			a.ctx = r.Context()
 			a.out.CommitOutcome = "unknown"
 			result, err := c.Service.Signin(r.Context(), s.request)
+			a.child = result.Challenge.Proof
 			if result.Validate() != nil {
 				reject(w, r, identityhttp.ErrUnavailable)
 				return
@@ -346,6 +357,40 @@ func NewSigninHandlerWithMiddleware(c SigninConfig, middleware []identityhttp.Mi
 				reject(w, r, identityhttp.ErrUnavailable)
 				return
 			}
+			if result.State == auth.SignInStateChallengeRequired {
+				challenge, now := result.Challenge, c.Now()
+				if !c.MFAContinuation || challenge.ID == result.Issuance.CommandID || challenge.Method != "totp" || now.IsZero() || !now.Before(challenge.ExpiresAt) || challenge.ExpiresAt.After(now.Add(5*time.Minute)) {
+					reject(w, r, identityhttp.ErrUnavailable)
+					return
+				}
+				if err := challenge.Proof.Transfer(r.Context(), func(_ context.Context, wire []byte) error {
+					if len(wire) < 32 || len(wire) > 4096 || strings.ContainsAny(string(wire), "\r\n") {
+						return identityhttp.ErrUnavailable
+					}
+					a.challenge = string(wire)
+					return nil
+				}); err != nil {
+					reject(w, r, identityhttp.ErrUnavailable)
+					return
+				}
+				a.deliveryFresh = func() (fresh bool) {
+					defer func() {
+						if recover() != nil {
+							fresh = false
+						}
+					}()
+					at := c.Now()
+					return !at.IsZero() && !at.Before(now) && at.Before(challenge.ExpiresAt)
+				}
+				a.out.ChallengeRequired, a.out.ChallengeID = true, challenge.ID
+				a.out.ChallengeMethod, a.out.ChallengeExpiresAt = challenge.Method, challenge.ExpiresAt.UTC().Format(time.RFC3339Nano)
+				writeSigninResponse(w, http.StatusOK, &a.out)
+				return
+			}
+			if result.State != auth.SignInStateAuthenticated {
+				reject(w, r, identityhttp.ErrUnavailable)
+				return
+			}
 			cookie, csrf, e := signinDelivery(c, s.request, result, c.Now())
 			if e != nil || r.Context().Err() != nil {
 				reject(w, r, identityhttp.ErrUnavailable)
@@ -353,7 +398,7 @@ func NewSigninHandlerWithMiddleware(c SigninConfig, middleware []identityhttp.Mi
 			}
 			a.cookie, a.csrf = cookie, csrf
 			a.out.SignedIn = true
-			writeSigninResponse(w, 200, a.out)
+			writeSigninResponse(w, 200, &a.out)
 		},
 	})
 	if err != nil {

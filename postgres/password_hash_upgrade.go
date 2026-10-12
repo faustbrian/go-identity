@@ -129,7 +129,15 @@ func decodePasswordHashUpgrade(s identity.FeatureCommandSpec) (PasswordHashUpgra
 
 func (w Work) passwordUpgradeCommand(p FeatureExecutionContributor, c identity.Command) (PasswordHashUpgradeIntent, error) {
 	b, f, l, err := w.FeatureScope(p)
-	if err != nil || !w.state.featureApplying || w.state.featureApplyCommand == nil || *w.state.featureApplyCommand != c || p.Descriptor() != (ContributorDescriptor{Owner: "identity/password/postgres", ContractID: "identity.password", Version: 1}) || l.EventType != "session.created.v1" || l.BeforeVersion != 0 || l.AfterVersion != 0 {
+	if err != nil {
+		return PasswordHashUpgradeIntent{}, invalidPasswordHashUpgrade()
+	}
+	eventOK := l.EventType == "session.created.v1"
+	if l.EventType == "mfa.challenge.created.v1" {
+		_, native := p.(PasswordMFAChallengeContributor)
+		eventOK = native && w.state.execution != nil && w.state.execution.reservation != nil && w.state.execution.reservation.plan != nil && w.state.execution.reservation.plan.mfaContinuation != nil && passwordMFAOperation(w.state.execution.reservation.plan.snapshot())
+	}
+	if !w.state.featureApplying || w.state.featureApplyCommand == nil || *w.state.featureApplyCommand != c || p.Descriptor() != (ContributorDescriptor{Owner: "identity/password/postgres", ContractID: "identity.password", Version: 1}) || !eventOK || l.BeforeVersion != 0 || l.AfterVersion != 0 {
 		return PasswordHashUpgradeIntent{}, invalidPasswordHashUpgrade()
 	}
 	s, ok := c.PasswordSigninFeature()

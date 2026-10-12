@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Preserve original session-bearer custody when preparing protected feature
+  counters, including MFA enrollment. Counter preparation still grants no
+  authentication authority; the owning workflow performs its primary checks.
+
 - Prepare anonymous native TOTP completion counters from the original signed
   continuation subject and child, retaining opaque code/browser custody and
   protected limits. Reservation and current admission require sealed native

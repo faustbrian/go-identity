@@ -2,6 +2,23 @@
 
 ## Unreleased
 
+- Fence original password credential authority in the sealed counted TOTP
+  callback before charging or comparison, without exposing general Work or
+  changing anonymous journal scope.
+
+- Add authorized closed password-MFA history projection from the existing
+  canonical frozen plan. Disclose challenge scope only after known commitment;
+  pending or failed observations expose no primary subject or challenge data.
+
+- Permit protected password hash upgrades within the closed native MFA challenge
+  transaction as well as completed SFA signin. Other events/owners still deny;
+  original predecessor locks, successor versions and final checks are unchanged.
+
+- Add a closed password-primary MFA challenge declaration to the existing
+  command journal and child-capability issuance path. Require the exact native
+  password owner, preserve original generated scope, and reject synthetic
+  primary capabilities, incomplete scope and session-producing variants.
+
 - Expose original frozen MFA challenge scope only to its exact native recovery
   participant, preserving complete-plan validation and journal ownership.
 

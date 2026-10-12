@@ -16,9 +16,21 @@ import (
 )
 
 func TestMFAIssuerGatesOriginalCustodyAndExactCommittedSession(t *testing.T) {
-	for _, mode := range []string{"commit", "unknown", "replay", "substituted-factor", "expired"} {
-		t.Run(mode, func(t *testing.T) {
+	for _, profile := range []struct {
+		mode     string
+		password bool
+	}{{"commit", false}, {"unknown", false}, {"replay", false}, {"substituted-factor", false}, {"expired", false}, {"commit", true}, {"unknown", true}, {"replay", true}, {"substituted-factor", true}, {"expired", true}} {
+		mode := profile.mode
+		t.Run(fmt.Sprintf("%s/password=%t", mode, profile.password), func(t *testing.T) {
 			spec, primary, provenance := mfaMagicLinkSession(t)
+			if profile.password {
+				spec.Authentication = sessionSpec(t).Authentication
+				spec.Authentication.Proof.Purpose = "identity.password.mfa-primary"
+				spec.Authentication.Proof.ID = auth.ProofID(provenance.PrimaryCommandID)
+				original, _ := primary.Bindings()
+				spec.Authentication.Proof.IssuedAt = original.AuthenticatedAt
+				spec.Authentication.Proof.ExpiresAt = original.ValidUntil
+			}
 			spec.Lookup, spec.Version = session.TokenDigest{}, 1
 			vector, _ := spec.Authority.Bindings()
 			vector.Session.Version = 1
@@ -63,7 +75,11 @@ func TestMFAIssuerGatesOriginalCustodyAndExactCommittedSession(t *testing.T) {
 						t.Fatal(e)
 					}
 					s, _ := record.Bindings()
-					result.Session, e = session.NewSessionWithMagicLinkMFAAndCSRF(s, primary, m, record.CSRFState())
+					if profile.password {
+						result.Session, e = session.NewSessionWithPasswordMFAAndCSRF(s, m, record.CSRFState())
+					} else {
+						result.Session, e = session.NewSessionWithMagicLinkMFAAndCSRF(s, primary, m, record.CSRFState())
+					}
 					if e != nil {
 						t.Fatal(e)
 					}
@@ -79,11 +95,28 @@ func TestMFAIssuerGatesOriginalCustodyAndExactCommittedSession(t *testing.T) {
 			lookup, _ := session.NewDigestKey(1, make([]byte, 32))
 			cookie, _ := session.NewCookiePolicy(session.CookieConfig{Name: "__Host-session", SameSite: http.SameSiteStrictMode})
 			csrf, _ := session.NewCSRFKey(1, make([]byte, 32))
-			issuer, err := session.NewMFAMagicLinkSessionIssuerWithCSRF(executor, session.IssuerConfig{Clock: clock, MaximumDuration: time.Second, LookupKey: lookup, TokenSize: 32, Cookie: cookie}, csrf)
+			config := session.IssuerConfig{Clock: clock, MaximumDuration: time.Second, LookupKey: lookup, TokenSize: 32, Cookie: cookie}
+			var issuer *session.SessionIssuer
+			if profile.password {
+				issuer, err = session.NewMFAPasswordSessionIssuerWithCSRF(executor, config, csrf)
+			} else {
+				issuer, err = session.NewMFAMagicLinkSessionIssuerWithCSRF(executor, config, csrf)
+			}
 			if err != nil {
 				t.Fatal(err)
 			}
-			prepared, err := issuer.PrepareMFAMagicLink(b, spec, primary, metadata)
+			var prepared session.PreparedIssuance
+			if profile.password {
+				if _, e := issuer.PrepareMFAMagicLink(b, spec, primary, metadata); e == nil {
+					t.Fatal("password issuer accepted magic-link profile")
+				}
+				prepared, err = issuer.PrepareMFAPassword(b, spec, metadata)
+			} else {
+				if _, e := issuer.PrepareMFAPassword(b, spec, metadata); e == nil {
+					t.Fatal("magic-link issuer accepted password profile")
+				}
+				prepared, err = issuer.PrepareMFAMagicLink(b, spec, primary, metadata)
+			}
 			if err != nil {
 				t.Fatal(err)
 			}

@@ -9,6 +9,7 @@ import (
 
 	auth "github.com/faustbrian/go-authentication"
 	identity "github.com/faustbrian/go-identity"
+	mfapg "github.com/faustbrian/go-identity/mfa/postgres"
 	password "github.com/faustbrian/go-identity/password"
 	kernel "github.com/faustbrian/go-identity/postgres"
 	"github.com/faustbrian/go-identity/risk"
@@ -37,6 +38,7 @@ type signinPhase struct {
 	upgrade          *kernel.PasswordHashUpgradeIntent
 	replacement      primitive.EncodedHash
 	hashPolicy       primitive.Policy
+	factorVersion    uint64
 }
 
 var _ kernel.FeatureExecutionContributor = (*signinPhase)(nil)
@@ -132,6 +134,11 @@ func (p *signinPhase) ApplyFeature(ctx context.Context, w kernel.Work, c identit
 	if err != nil {
 		return identity.FeatureReceipt{}, err
 	}
+	if p.factorVersion != 0 {
+		if err := mfapg.RequirePasswordSigninFactors(ctx, w, p, c, p.recipient.User.ID, p.factorVersion, false); err != nil {
+			return identity.FeatureReceipt{}, err
+		}
+	}
 	m := p.material.Authority().Credential
 	lock := " FOR SHARE"
 	if p.upgrade != nil {
@@ -207,7 +214,13 @@ func (p *signinPhase) CheckFeatureCommit(ctx context.Context, w kernel.Work, com
 	if err != nil || b != f.Binding || feature.Operation != f.Operation || transition.EventType != "session.created.v1" || transition.BeforeVersion != 0 || transition.AfterVersion != 0 {
 		return password.ErrPasswordWork
 	}
-	return p.checkTime(ctx, w)
+	if err := p.checkTime(ctx, w); err != nil {
+		return err
+	}
+	if p.factorVersion != 0 {
+		return mfapg.RequirePasswordSigninFactors(ctx, w, p, command, p.recipient.User.ID, p.factorVersion, false)
+	}
+	return nil
 }
 
 func (p *signinPhase) checkTime(ctx context.Context, w kernel.Work) error {

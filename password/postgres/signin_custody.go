@@ -19,8 +19,9 @@ import (
 // Copies share immutable custody and support concurrent calls. The deployment
 // owns key rotation and disposal of its original input buffer.
 type SigninSigningKey struct {
-	apply  func(auth.SignedSignInRecord) (auth.SignedSignInRecord, error)
-	public func() (string, ed25519.PublicKey)
+	apply        func(auth.SignedSignInRecord) (auth.SignedSignInRecord, error)
+	applyPrimary func(mfaSigninPrimary) (mfaSigninPrimary, error)
+	public       func() (string, ed25519.PublicKey)
 }
 
 // NewSigninSigningKey copies an internally consistent complete Ed25519 key and
@@ -38,6 +39,22 @@ func NewSigninSigningKey(id string, key ed25519.PrivateKey) (SigninSigningKey, e
 	}
 	id = strings.Clone(id)
 	return SigninSigningKey{
+		applyPrimary: func(r mfaSigninPrimary) (mfaSigninPrimary, error) {
+			r.KeyID, r.Signature = id, nil
+			frame, err := mfaSigninPrimaryFrame(r)
+			if err != nil {
+				return mfaSigninPrimary{}, password.ErrPasswordWork
+			}
+			defer clear(frame)
+			proof, err := auth.NewProof(auth.ProofSpec(r.Proof))
+			if err != nil {
+				return mfaSigninPrimary{}, password.ErrPasswordWork
+			}
+			r.Proof = proof
+			r.Issuer, r.Environment, r.CredentialID = strings.Clone(r.Issuer), strings.Clone(r.Environment), strings.Clone(r.CredentialID)
+			r.Signature = ed25519.Sign(owned, frame)
+			return r, nil
+		},
 		public: func() (string, ed25519.PublicKey) {
 			return id, ed25519.PublicKey(slices.Clone(owned[ed25519.SeedSize:]))
 		},

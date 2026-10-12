@@ -365,7 +365,7 @@ func testNativeMFASessionEffect(t *testing.T, ctx context.Context, pool *databas
 	}
 	for _, source := range []interface {
 		Load(context.Context) ([]migrations.Migration, error)
-	}{MFAMigrationSource{Schema: "session_store", Version: 45}, MFASigninMigrationSource{Schema: "session_store", Version: 46}} {
+	}{MFAMigrationSource{Schema: "session_store", Version: 45}, MFASigninMigrationSource{Schema: "session_store", Version: 46}, PasswordMFAMigrationSource{Schema: "session_store", Version: 47}} {
 		history, err := source.Load(ctx)
 		if err != nil {
 			t.Fatal(err)
@@ -888,6 +888,11 @@ func testNativeMFASessionEffect(t *testing.T, ctx context.Context, pool *databas
 			}
 			if admitted.Session.MFAAuthentication() == (session.MFAAuthentication{}) {
 				t.Fatal("factor metadata lost on public session read")
+			}
+			if mode == "commit" {
+				t.Run("password-origin session reader", func(t *testing.T) {
+					testPasswordMFASessionRead(t, ctx, pool, config, profile, validation, record, request)
+				})
 			}
 			combined, err := NewSelectedSessionService(pool, SelectedSessionServiceConfig{Repository: config, Validation: validation, Admission: SelectedSessionAdmissionConfig{SingleFactor: SingleFactorSessionAdmissionConfig{MagicLink: &profile}, MFAMagicLink: &profile}})
 			if err != nil {

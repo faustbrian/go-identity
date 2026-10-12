@@ -56,6 +56,7 @@ type Repository struct {
 	cookieRevoke        *revokeCSRFInput
 	revokeAdmission     *SingleFactorSessionAdmissionConfig
 	revokeMFAMagicLink  *MagicLinkAdmissionConfig
+	revokeMFAPassword   *IdentifierAdmissionConfig
 }
 
 // NewRepository validates configuration without IO. The database must already

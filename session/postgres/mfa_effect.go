@@ -7,6 +7,8 @@ import (
 	"strings"
 	"time"
 
+	auth "github.com/faustbrian/go-authentication"
+	"github.com/faustbrian/go-authorization"
 	authority "github.com/faustbrian/go-authorization/postgres"
 	identity "github.com/faustbrian/go-identity"
 	mfapg "github.com/faustbrian/go-identity/mfa/postgres"
@@ -20,9 +22,10 @@ import (
 // callback, pool or goroutine. Configuration is immutable; independent calls
 // require separate serial Work handles. It is not a public MFA login service.
 type MFATOTPCompletionEffect struct {
-	native  Repository
-	config  Config
-	profile MagicLinkAdmissionConfig
+	native   Repository
+	config   Config
+	profile  MagicLinkAdmissionConfig
+	password *IdentifierAdmissionConfig
 }
 
 // Format redacts correlated deployment configuration for every verb.
@@ -52,6 +55,21 @@ func NewMFATOTPCompletionEffect(c Config, p MagicLinkAdmissionConfig) (*MFATOTPC
 	c.Schema = strings.Clone(c.Schema)
 	p.GlobalAuthorityID, p.PolicyNamespace, p.Audience = strings.Clone(p.GlobalAuthorityID), strings.Clone(p.PolicyNamespace), strings.Clone(p.Audience)
 	return &MFATOTPCompletionEffect{native: Repository{schema: pgx.Identifier{c.Schema}.Sanitize(), maximumDuration: c.MaximumDuration}, config: c, profile: p}, nil
+}
+
+// NewMFAPasswordTOTPCompletionEffect selects genuine password-primary/TOTP
+// issuance. Install PasswordMFAMigrationSource after the existing session MFA
+// histories. The original signed non-final password primary, child/browser
+// possession and current credential must be authenticated by the native owner;
+// this effect never compares passwords or substitutes metadata for factor proof.
+// Configuration and transaction ownership follow NewMFATOTPCompletionEffect.
+func NewMFAPasswordTOTPCompletionEffect(c Config, p IdentifierAdmissionConfig) (*MFATOTPCompletionEffect, error) {
+	original, err := NewPasswordSigninEffect(c, p)
+	if err != nil {
+		return nil, err
+	}
+	profile := original.profile
+	return &MFATOTPCompletionEffect{native: original.native, config: original.config, profile: MagicLinkAdmissionConfig{GlobalAuthorityID: profile.GlobalAuthorityID, PolicyNamespace: profile.PolicyNamespace, Audience: profile.Audience}, password: &profile}, nil
 }
 
 // Apply persists the exact command-bound session after a recorded TOTP
@@ -104,18 +122,46 @@ func (e *MFATOTPCompletionEffect) Apply(ctx context.Context, w kernel.Work, owne
 	originalRemember, _ := scope.RememberPolicy.Bindings()
 	key, keyErr := mfapg.FactorAuthorityKey(s.TenantID, s.UserID)
 	expectedFactor := session.OptionalAuthorityBinding{Present: true, Binding: session.AuthorityBinding{ScopeKey: key, Version: factor.FactorAuthorityVersion}}
-	if keyErr != nil || s.Audience != e.profile.Audience || scope.Audience != s.Audience || scope.TenantID != s.TenantID || scope.SubjectID != identity.SubjectID(s.UserID) || string(scope.SourcePreAuthID) != b.AnonymousFlowID || m.CommandID != b.CommandID || m.PrimaryCommandID != primaryCommand || p.CommandID != primaryCommand || p.CapabilityID != string(scope.PrimaryProofID) || !p.AuthenticatedAt.Equal(scope.IssuedAt) || !p.ValidUntil.Equal(scope.PrimaryProofExpiresAt) || m.ContinuationID != identity.CommandID(scope.ID) || m.ContinuationScopeDigest != factor.ScopeDigest || m.ContinuationVersion != scope.Version || m.FactorID != factor.FactorID || m.EnrollmentVersion != factor.EnrollmentVersion || m.FactorAuthorityVersion != factor.FactorAuthorityVersion || !m.ValidUntil.Equal(scope.ExpiresAt) || remember != originalRemember || a.Factor != expectedFactor {
+	if keyErr != nil || s.Audience != e.profile.Audience || scope.Audience != s.Audience || scope.TenantID != s.TenantID || scope.SubjectID != identity.SubjectID(s.UserID) || string(scope.SourcePreAuthID) != b.AnonymousFlowID || m.CommandID != b.CommandID || m.PrimaryCommandID != primaryCommand || m.ContinuationID != identity.CommandID(scope.ID) || m.ContinuationScopeDigest != factor.ScopeDigest || m.ContinuationVersion != scope.Version || m.FactorID != factor.FactorID || m.EnrollmentVersion != factor.EnrollmentVersion || m.FactorAuthorityVersion != factor.FactorAuthorityVersion || !m.ValidUntil.Equal(scope.ExpiresAt) || remember != originalRemember || a.Factor != expectedFactor {
 		return deny()
 	}
-	query, policy, err := verifiedIdentifierSessionAdmissionWithFactor(OTPAdmissionConfig(e.profile), s, expectedFactor)
-	if err != nil || recipient.Validate() != nil || recipient.Suppressed || recipient.Query.TenantID != b.TenantID || recipient.Query.UserID != "" || recipient.Query.Kind != identity.IdentifierEmail || recipient.Query.Eligibility != kernel.RecipientVerified || recipient.User.ID != s.UserID || recipient.Identifier.ID != p.IdentifierID || recipient.Identifier.Kind != identity.IdentifierEmail || recipient.Identifier.Version != p.IdentifierVersion || recipient.Verification.Version != p.VerificationVersion || recipient.Verification.State != identity.VerificationVerified || recipient.UserAuthorityVersion != a.User.Version || recipient.IdentifierAuthorityVersion != a.Identifier.Version || recipient.CredentialAuthorityVersion != a.Credential.Version {
+	if recipient.Validate() != nil || recipient.Suppressed || recipient.Query.TenantID != b.TenantID || recipient.Query.UserID != "" || recipient.Query.Kind != identity.IdentifierEmail || recipient.Query.Eligibility != kernel.RecipientVerified || recipient.User.ID != s.UserID || recipient.UserAuthorityVersion != a.User.Version || recipient.IdentifierAuthorityVersion != a.Identifier.Version || recipient.CredentialAuthorityVersion != a.Credential.Version {
 		return deny()
+	}
+	var query kernel.DirectoryAuthorityQuery
+	var policy authority.AuthorityScope
+	var credential kernel.CredentialAdmission
+	if e.password != nil {
+		proof := s.Authentication.Proof
+		if string(proof.ID) != string(primaryCommand) || proof.ID != scope.PrimaryProofID || !proof.IssuedAt.Equal(scope.IssuedAt) || !proof.ExpiresAt.Equal(scope.PrimaryProofExpiresAt) {
+			return deny()
+		}
+		selected := b
+		selected.UserID, selected.ActorID, selected.ActorKind = s.UserID, identity.ActorID(s.UserID), authorization.SubjectUser
+		directory, admitted, authorizationScope, admissionErr := passwordMFASessionAdmission(*e.password, record, selected, s.SessionID, s.Version)
+		if admissionErr != nil {
+			return deny()
+		}
+		query, credential, policy = directory.Query, admitted, authorizationScope.Scope
+	} else {
+		if s.Authentication.Kind != session.AuthenticationMagicLink || p.CommandID != primaryCommand || p.CapabilityID != string(scope.PrimaryProofID) || !p.AuthenticatedAt.Equal(scope.IssuedAt) || !p.ValidUntil.Equal(scope.PrimaryProofExpiresAt) || recipient.Identifier.ID != p.IdentifierID || recipient.Identifier.Kind != identity.IdentifierEmail || recipient.Identifier.Version != p.IdentifierVersion || recipient.Verification.Version != p.VerificationVersion || recipient.Verification.State != identity.VerificationVerified {
+			return deny()
+		}
+		query, policy, err = verifiedIdentifierSessionAdmissionWithFactor(OTPAdmissionConfig(e.profile), s, expectedFactor)
+		if err != nil {
+			return deny()
+		}
 	}
 	if err := w.RequireActiveDirectoryAuthority(bounded, owner, kernel.DirectoryAuthorityAdmission{Query: query, GlobalVersion: a.Global.Version, TenantVersion: a.Tenant.Version}); err != nil {
 		return identity.FeatureReceipt{}, err
 	}
 	if err := w.RequireRecipient(bounded, owner, recipient); err != nil {
 		return identity.FeatureReceipt{}, err
+	}
+	if e.password != nil {
+		if _, err := w.RequireRecipientCredential(bounded, owner, recipient, credential); err != nil {
+			return identity.FeatureReceipt{}, err
+		}
 	}
 	if err := authority.RequireAuthority(bounded, w, policy, a.Authorization.Version, e.config.MaximumDuration); err != nil {
 		if errors.Is(err, authority.ErrAuthorityDenied) {
@@ -138,6 +184,13 @@ func (e *MFATOTPCompletionEffect) Apply(ctx context.Context, w kernel.Work, owne
 	if _, _, _, err := mfapg.RequireRecordedTOTPCompletion(bounded, w, owner, command, completed); err != nil {
 		return identity.FeatureReceipt{}, err
 	}
+	if e.password != nil {
+		// Owner locks retain versions, not expiry: recheck the original enabled
+		// credential after the session/family persistence path may have waited.
+		if _, err := w.RequireRecipientCredential(bounded, owner, recipient, credential); err != nil {
+			return identity.FeatureReceipt{}, err
+		}
+	}
 	if err := requireMFAIssueTime(bounded, w, record); err != nil {
 		return identity.FeatureReceipt{}, err
 	}
@@ -152,6 +205,17 @@ func requireMFAIssueTime(ctx context.Context, w kernel.Work, record session.Sess
 	m, err := record.MFAAuthentication().Bindings()
 	if err != nil || now.Before(m.VerifiedAt) || !now.Before(m.ValidUntil) {
 		return identity.ForbiddenError{}
+	}
+	s, err := record.Bindings()
+	if err != nil {
+		return identity.ForbiddenError{}
+	}
+	if s.Authentication.Kind == session.AuthenticationVerified {
+		life, err := record.Lifetime(now)
+		if err != nil || now.Before(s.IssuedAt) || !life.Fresh || s.Authentication.Proof.Validate(auth.ProofUse{Tenant: string(s.TenantID), Subject: string(s.UserID), Purpose: session.PasswordMFAPrimaryPurpose, Audience: s.Audience, Now: now}) != nil {
+			return identity.ForbiddenError{}
+		}
+		return nil
 	}
 	return requireMagicLinkIssueTime(ctx, w, record)
 }

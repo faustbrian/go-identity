@@ -57,6 +57,7 @@ func composeSession(c StoreConfiguration, d ReferenceDependencies) (*sessionStat
 	validation := n.Validation
 	validation.Clock = e.Clock
 	var mfa *sessionpg.MagicLinkAdmissionConfig
+	var passwordMFA *sessionpg.IdentifierAdmissionConfig
 	if c.MagicLink != nil && c.MagicLink.TOTP != nil {
 		if selection.MagicLink == nil || c.MagicLink.Consume == nil || c.MagicLink.Consume.MFA == nil || !c.MagicLink.Request.MFAContinuation {
 			return nil, invalid
@@ -64,11 +65,21 @@ func composeSession(c StoreConfiguration, d ReferenceDependencies) (*sessionStat
 		profile := *selection.MagicLink
 		mfa = &profile
 	}
-	reader, err := sessionpg.NewSelectedSessionService(d.PostgreSQL, sessionpg.SelectedSessionServiceConfig{Repository: e.Repository, Admission: sessionpg.SelectedSessionAdmissionConfig{SingleFactor: selection, MFAMagicLink: mfa}, Validation: validation})
+	if c.PasswordSignin != nil && c.PasswordSignin.TOTP != nil {
+		if c.PasswordSignin.MFA == nil || selection.Verified == nil {
+			return nil, invalid
+		}
+		profile := c.PasswordSignin.Native.Profile
+		if profile != *selection.Verified {
+			return nil, invalid
+		}
+		passwordMFA = &profile
+	}
+	reader, err := sessionpg.NewSelectedSessionService(d.PostgreSQL, sessionpg.SelectedSessionServiceConfig{Repository: e.Repository, Admission: sessionpg.SelectedSessionAdmissionConfig{SingleFactor: selection, MFAMagicLink: mfa, MFAPassword: passwordMFA}, Validation: validation})
 	if err != nil {
 		return nil, invalid
 	}
-	execution := sessionpg.RevokeOneExecutorConfig{Execution: e, Sessions: reader, Admission: &selection, MFAMagicLink: mfa}
+	execution := sessionpg.RevokeOneExecutorConfig{Execution: e, Sessions: reader, Admission: &selection, MFAMagicLink: mfa, MFAPassword: passwordMFA}
 	revoke, err := sessionpg.NewRevokeOneExecutor(d.PostgreSQL, execution)
 	if err != nil {
 		return nil, invalid

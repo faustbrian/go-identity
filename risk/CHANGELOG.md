@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Classify one-time TOTP URI disclosure as a protected credential mutation,
+  with transaction-owned admission and the existing per-command attempt budget.
+  It is not an unclassified or state-neutral read.
+
 - Retain protected provider facts in the existing native admission custody
   codec under a distinct profile. Restore across restart without provider IO,
   recheck original expiry at primary time without callbacks under locks, and

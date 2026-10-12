@@ -45,17 +45,28 @@ func (p *magicTOTPPhase) AdmitFeaturePreparation(ctx context.Context, w kernel.W
 	if err = p.browser(ctx, c, now); err != nil {
 		return err
 	}
-	primary, err := p.input.primary.Authentication.Bindings()
+	primary, err := p.input.primaryCommandID()
 	if err != nil {
 		return err
 	}
-	if err = sessionpg.RequireMFAConsumedPreAuth(ctx, w, p, c, p.state.config.Session, p.input.flow, primary.CommandID); err != nil {
+	if err = sessionpg.RequireMFAConsumedPreAuth(ctx, w, p, c, p.state.config.Session, p.input.flow, primary); err != nil {
 		return err
 	}
 	if err = w.RequireActiveDirectoryAuthority(ctx, p, p.directoryAdmission()); err != nil {
 		return err
 	}
-	return w.RequireRecipient(ctx, p, p.input.recipient)
+	if err := w.RequireRecipient(ctx, p, p.input.recipient); err != nil {
+		return err
+	}
+	if p.input.passwordPrimary != nil {
+		credential, err := p.input.passwordCredential()
+		if err != nil {
+			return err
+		}
+		_, err = w.RequireRecipientCredential(ctx, p, p.input.recipient, credential)
+		return err
+	}
+	return nil
 }
 func (p *magicTOTPPhase) PrepareFeatureAdmission(ctx context.Context, c identity.Command) (kernel.FeaturePreparationAdmission, error) {
 	if p == nil || p.input == nil || c != p.counterCommand || !p.correct || p.verifiedAt.IsZero() {
@@ -121,7 +132,7 @@ func (a *magicTOTPAdmission) Generate(ctx context.Context, generation uint64) ([
 		return nil, err
 	}
 	scope := p.input.scope
-	primary, err := p.input.primary.Authentication.Bindings()
+	primary, err := p.input.primaryCommandID()
 	if err != nil {
 		return nil, err
 	}
@@ -138,11 +149,17 @@ func (a *magicTOTPAdmission) Generate(ctx context.Context, generation uint64) ([
 	if err != nil {
 		return nil, err
 	}
-	mfa, err := session.NewMFAAuthentication(session.MFAAuthenticationSpec{CommandID: f.Binding.CommandID, PrimaryCommandID: primary.CommandID, ContinuationID: identity.CommandID(scope.ID), ContinuationScopeDigest: completion.ScopeDigest, Method: "totp", FactorID: meta.FactorID, EnrollmentVersion: meta.EnrollmentVersion, FactorAuthorityVersion: meta.FactorAuthorityVersion, ContinuationVersion: scope.Version, Remember: remember, VerifiedAt: p.verifiedAt, ValidUntil: scope.ExpiresAt})
+	mfa, err := session.NewMFAAuthentication(session.MFAAuthenticationSpec{CommandID: f.Binding.CommandID, PrimaryCommandID: primary, ContinuationID: identity.CommandID(scope.ID), ContinuationScopeDigest: completion.ScopeDigest, Method: "totp", FactorID: meta.FactorID, EnrollmentVersion: meta.EnrollmentVersion, FactorAuthorityVersion: meta.FactorAuthorityVersion, ContinuationVersion: scope.Version, Remember: remember, VerifiedAt: p.verifiedAt, ValidUntil: scope.ExpiresAt})
 	if err != nil {
 		return nil, err
 	}
-	p.prepared, err = p.issuer.PrepareMFAMagicLink(f.Binding, session.SessionSpec{SessionID: string(id), FamilyID: string(family), TenantID: f.Binding.TenantID, UserID: p.input.recipient.User.ID, Audience: scope.Audience, Version: 1, FamilyVersion: 1, Remember: scope.RememberPolicy, Authority: authority, Authentication: session.AuthenticationMetadata{Kind: session.AuthenticationMagicLink}, IssuedAt: p.verifiedAt, LastActivityAt: p.verifiedAt}, p.input.primary.Authentication, mfa)
+	spec := session.SessionSpec{SessionID: string(id), FamilyID: string(family), TenantID: f.Binding.TenantID, UserID: p.input.recipient.User.ID, Audience: scope.Audience, Version: 1, FamilyVersion: 1, Remember: scope.RememberPolicy, Authority: authority, Authentication: session.AuthenticationMetadata{Kind: session.AuthenticationMagicLink}, IssuedAt: p.verifiedAt, LastActivityAt: p.verifiedAt}
+	if p.input.passwordPrimary != nil {
+		spec.Authentication = p.input.passwordPrimary.Authentication
+		p.prepared, err = p.issuer.PrepareMFAPassword(f.Binding, spec, mfa)
+	} else {
+		p.prepared, err = p.issuer.PrepareMFAMagicLink(f.Binding, spec, p.input.primary.Authentication, mfa)
+	}
 	if err != nil {
 		return nil, err
 	}

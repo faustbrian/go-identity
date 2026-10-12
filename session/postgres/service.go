@@ -45,6 +45,10 @@ func (SessionServiceConfig) MarshalJSON() ([]byte, error) { return nil, session.
 // This profile rejects anonymous, organization, MFA and passkey records until
 // their native authority owners are composed; it never drops a dimension.
 func NewSessionService(pool *database.Pool, c SessionServiceConfig) (*session.SessionService, error) {
+	return newPasswordSessionService(pool, c, false)
+}
+
+func newPasswordSessionService(pool *database.Pool, c SessionServiceConfig, mfa bool) (*session.SessionService, error) {
 	if !c.Profile.valid() || c.Profile.CredentialKind == identity.CredentialPasskey || c.Profile.Audience != c.Validation.Audience || c.Repository.MaximumDuration > c.Validation.MaximumDuration {
 		return nil, session.ErrInvalidInput
 	}
@@ -67,7 +71,18 @@ func NewSessionService(pool *database.Pool, c SessionServiceConfig) (*session.Se
 	profile.AuthenticationMethod = strings.Clone(profile.AuthenticationMethod)
 	profile.CredentialOwner = strings.Clone(profile.CredentialOwner)
 	cacheProfile := nativeAdmissionCacheProfile(c.Repository.Schema, profile.GlobalAuthorityID, profile.PolicyNamespace, profile.Audience, profile.AuthenticationMethod, string(profile.CredentialKind), profile.CredentialOwner)
-	return session.NewProfileSessionService(&primarySessionReader{native: native, domain: domain, policy: policy, profile: profile, clock: c.Validation.Clock}, c.Validation, session.AuthenticationVerified, cacheProfile)
+	r := &primarySessionReader{native: native, domain: domain, policy: policy, profile: profile, clock: c.Validation.Clock, mfaPassword: mfa}
+	if mfa {
+		if profile.AuthenticationMethod != "password" || profile.CredentialKind != identity.CredentialPassword || profile.CredentialOwner != "identity/password" {
+			return nil, session.ErrInvalidInput
+		}
+		r.mfaFactors, err = mfapg.NewTOTPSessionFactorReader(pool, c.Repository.MaximumDuration)
+		if err != nil {
+			return nil, session.ErrInvalidInput
+		}
+		cacheProfile = nativeAdmissionCacheProfile("native-mfa-password-totp-session-v1", cacheProfile)
+	}
+	return session.NewProfileSessionService(r, c.Validation, session.AuthenticationVerified, cacheProfile)
 }
 
 // Canonical selected native authority and storage configuration is authenticated
@@ -82,15 +97,17 @@ func nativeAdmissionCacheProfile(fields ...string) string {
 
 // Kept private: consumers configure the factory, not arbitrary owner readers.
 type primarySessionReader struct {
-	native       *Repository
-	domain       *kernel.Repository
-	policy       *authority.AuthorityStore
-	profile      IdentifierAdmissionConfig
-	clock        session.IssuerClock
-	otp          *OTPAdmissionConfig
-	magicLink    *MagicLinkAdmissionConfig
-	mfaMagicLink *MagicLinkAdmissionConfig
-	mfaFactors   *mfapg.TOTPSessionFactorReader
+	native            *Repository
+	domain            *kernel.Repository
+	policy            *authority.AuthorityStore
+	profile           IdentifierAdmissionConfig
+	clock             session.IssuerClock
+	otp               *OTPAdmissionConfig
+	magicLink         *MagicLinkAdmissionConfig
+	mfaMagicLink      *MagicLinkAdmissionConfig
+	mfaFactors        *mfapg.TOTPSessionFactorReader
+	mfaPassword       bool
+	mfaPasswordReader *primarySessionReader
 }
 
 var _ session.SessionReader = (*primarySessionReader)(nil)
@@ -143,6 +160,12 @@ func (r *primarySessionReader) ObserveSession(ctx context.Context, lookup sessio
 	// kind. Dispatch it first: no single-factor reader may erase that dimension,
 	// even when both magic-link profiles are selected by the same graph.
 	if stored.Session.MFAAuthentication() != (session.MFAAuthentication{}) {
+		if spec.Authentication.Kind == session.AuthenticationVerified && r.mfaPasswordReader != nil {
+			return r.mfaPasswordReader.observePassword(bounded, stored, start)
+		}
+		if spec.Authentication.Kind == session.AuthenticationVerified && r.mfaPassword && r.mfaFactors != nil {
+			return r.observePassword(bounded, stored, start)
+		}
 		if spec.Authentication.Kind != session.AuthenticationMagicLink || r.mfaMagicLink == nil || r.mfaFactors == nil {
 			return session.SessionObservation{}, session.ErrUnauthenticated
 		}
@@ -157,8 +180,22 @@ func (r *primarySessionReader) ObserveSession(ctx context.Context, lookup sessio
 	if spec.Authentication.Kind != session.AuthenticationVerified || !r.profile.valid() {
 		return session.SessionObservation{}, session.ErrUnauthenticated
 	}
+	if r.mfaPassword {
+		return session.SessionObservation{}, session.ErrUnauthenticated
+	}
+	return r.observePassword(bounded, stored, start)
+}
+
+func (r *primarySessionReader) observePassword(bounded context.Context, stored StoredSession, start time.Time) (session.SessionObservation, error) {
+	spec, err := stored.Session.Bindings()
+	if err != nil {
+		return session.SessionObservation{}, session.ErrUnavailable
+	}
 	binding := identity.CommandBinding{TenantID: spec.TenantID, UserID: spec.UserID, ActorID: identity.ActorID(spec.UserID), ActorKind: authorization.SubjectUser}
 	directory, credential, policy, err := sessionAdmissionBindings(r.profile, stored.Session, binding, spec.SessionID, spec.Version)
+	if r.mfaPassword {
+		directory, credential, policy, err = passwordMFASessionAdmission(r.profile, stored.Session, binding, spec.SessionID, spec.Version)
+	}
 	if err != nil {
 		return session.SessionObservation{}, session.ErrUnauthenticated
 	}
@@ -184,6 +221,21 @@ func (r *primarySessionReader) ObserveSession(ctx context.Context, lookup sessio
 	if err != nil {
 		return session.SessionObservation{}, observationError(err)
 	}
+	var factorVersion uint64
+	if r.mfaPassword {
+		if r.mfaFactors == nil {
+			return session.SessionObservation{}, session.ErrUnauthenticated
+		}
+		m, _ := stored.Session.MFAAuthentication().Bindings()
+		factor, e := r.mfaFactors.Read(bounded, spec.TenantID, spec.UserID, m.FactorID)
+		if e != nil {
+			return session.SessionObservation{}, observationError(e)
+		}
+		if factor.EnrollmentVersion != m.EnrollmentVersion {
+			return session.SessionObservation{}, session.ErrUnauthenticated
+		}
+		factorVersion = factor.AuthorityVersion
+	}
 	now := r.clock.Now()
 	if bounded.Err() != nil {
 		return session.SessionObservation{}, readError(bounded, bounded.Err())
@@ -200,6 +252,9 @@ func (r *primarySessionReader) ObserveSession(ctx context.Context, lookup sessio
 	vector.Credential.Version = currentCredential.AuthorityVersion
 	vector.SessionFamily.Version, vector.Session.Version = stored.CurrentFamilyVersion, spec.Version
 	vector.Authorization.Version = currentPolicy.Version
+	if r.mfaPassword {
+		vector.Factor.Binding.Version = factorVersion
+	}
 	current, err := session.NewAuthoritySnapshot(vector)
 	if err != nil {
 		return session.SessionObservation{}, session.ErrUnavailable

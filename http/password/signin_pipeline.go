@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"net/http"
 
+	"github.com/faustbrian/go-capability"
 	identity "github.com/faustbrian/go-identity"
 	identityhttp "github.com/faustbrian/go-identity/http"
 	"github.com/faustbrian/go-identity/password"
@@ -17,11 +18,14 @@ import (
 )
 
 type signinAttempt struct {
-	secret       primitive.Secret
-	out          SigninResponse
-	attempted    bool
-	cookie, csrf string
-	ctx          context.Context
+	secret        primitive.Secret
+	out           SigninResponse
+	attempted     bool
+	cookie, csrf  string
+	ctx           context.Context
+	child         capability.Proof
+	challenge     string
+	deliveryFresh func() bool
 }
 type signinAttemptKey struct{}
 
@@ -100,13 +104,15 @@ func signinOutcome(out identity.CommitOutcome) string {
 	}
 	return "unknown"
 }
-func writeSigninResponse(w http.ResponseWriter, status int, out SigninResponse) {
+func writeSigninResponse(w http.ResponseWriter, status int, out *SigninResponse) {
+	// The custody wrapper may normalize an expired challenge at commitment.
+	// Serialize the resulting safe metadata, not a pre-commit stale copy.
+	w.WriteHeader(status)
 	data, err := json.Marshal(out)
 	if err != nil {
 		w.WriteHeader(503)
 		return
 	}
-	w.WriteHeader(status)
 	w.Write(append(data, '\n'))
 }
 
@@ -124,12 +130,30 @@ func (p *signinPipeline) WithOperationMiddleware(m []identityhttp.MiddlewareDesc
 }
 func (p *signinPipeline) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	a := &signinAttempt{out: SigninResponse{CommitOutcome: "none"}}
-	defer func() { a.secret.Destroy() }()
+	defer func() {
+		a.secret.Destroy()
+		_ = a.child.Transfer(context.Background(), func(context.Context, []byte) error { return nil })
+		a.challenge = ""
+	}()
 	r = r.WithContext(context.WithValue(r.Context(), signinAttemptKey{}, a))
-	servePasswordPipelineWithDelivery(w, r, p.pipeline, func() (string, string) {
+	servePasswordPipelineWithCustody(w, r, p.pipeline, func() (string, string, string) {
 		if a.out.SignedIn && a.ctx != nil && a.ctx.Err() == nil {
-			return a.cookie, a.csrf
+			return a.cookie, a.csrf, ""
 		}
-		return "", ""
+		if a.out.ChallengeRequired && a.ctx != nil && a.ctx.Err() == nil {
+			return "", "", a.challenge
+		}
+		return "", "", ""
+	}, func(status int) int {
+		if a.out.ChallengeRequired && (status != http.StatusOK || a.ctx == nil || a.ctx.Err() != nil || a.deliveryFresh == nil || !a.deliveryFresh()) {
+			a.challenge = ""
+			a.out.ChallengeRequired = false
+			a.out.ChallengeID, a.out.ChallengeMethod, a.out.ChallengeExpiresAt = "", "", ""
+			a.out.Error = "unavailable"
+			if status == http.StatusOK {
+				return http.StatusServiceUnavailable
+			}
+		}
+		return status
 	})
 }

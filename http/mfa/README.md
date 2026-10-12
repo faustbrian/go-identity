@@ -1,7 +1,8 @@
 # MFA HTTP transport
 
-Go 1.27 opt-in `net/http` adapter for the native magic-link/TOTP completion
-profile. This is backend transport, not a UI or a factor verification engine.
+Go 1.27 opt-in `net/http` adapters for native pending TOTP enrollment and the
+password/TOTP and magic-link/TOTP completion profiles. This is backend transport, not a UI or a
+factor verification engine.
 Full MFA transport remains in development; the selected reference HTTP journey
 proves actual native completion, metadata-only retry, session read and logout.
 
@@ -20,11 +21,25 @@ handler, err := mfahttp.NewTOTPVerifyHandler(config)
 
 Use `NewFeature(FeatureConfig{TOTPVerify: &config})` when composing the owned
 HTTP operation router and OpenAPI document. Omit the feature to expose nothing.
+Select `FeatureConfig.PasswordTOTPVerify` for a password-origin native owner.
+When both login profiles are selected, `X-MFA-Variant: password` selects password
+completion and no header selects magic-link. Password-only selection defaults to
+password. The standalone handler requires `TOTPVerifyConfig.PasswordPrimary`
+for password delivery. Profiles reject one another's authentication evidence;
+failure never falls back to another login owner.
 Resources and callbacks remain borrowed; close them only after calls finish.
 `NewTOTPVerifyHandlerWithMiddleware` and `NewFeatureWithMiddleware` attach hooks
 to the actual decode, source, rate-admission and execution phases.
 
 ## Wire contract
+
+The composed verify route reserves `X-MFA-Variant: enrollment` for its distinct
+authenticated confirmation profile. Absence selects existing login. Empty,
+duplicate, unknown and unselected values deny before authentication, with no
+cookie/body inference or fallback. Select `FeatureConfig.EnrollmentConfirmation`
+with its native source, session, verification rate and cookie owners; setting
+this header alone does not enable it. When configuring browser CORS, allow
+this header only for an explicitly selected confirmation profile.
 
 `POST /v1/mfa/totp-verify` accepts a closed JSON object containing `commandID`,
 `preAuthID`, `challengeID`, `factorID`, `token`, `code`, `callbackURL` and
@@ -50,9 +65,39 @@ credentials remains a commit, not proof of rollback or permission to reissue.
 
 ## Scope and caveats
 
-The selected profile is original magic-link primary plus confirmed TOTP, with
+### Pending enrollment selection
+
+`FeatureConfig.Enable` independently selects `POST /v1/mfa/enable`. Supply
+`EnableConfig` with the native session reader, committed reauthentication source,
+enrollment service, shared keyed rate owner, session cookie policy and exact
+trusted HTTPS origins. The request body contains only `proofID`; the session
+cookie, `Origin`, `X-CSRF-Token` and original `Idempotency-Key` are mandatory.
+The HTTP handler does not accept body-selected users, methods or factor policy.
+
+An error-free known commit returns pending enrollment metadata (`active:false`).
+Only a fresh commit includes reveal-once `recoveryCodes`; securely retain these
+and never log the response. A matching retry returns no codes. Error/unknown
+observations retain the original command ID when available and are not proof of
+rollback. Do not replace the original request key or verification proof to retry.
+The handler issues no session, cookies or provisioning URI. URI revelation and
+code confirmation are separate required steps; URI HTTP/reference wiring is
+available through explicit selection below, including confirmation HTTP.
+
+`FeatureConfig.URI` separately selects `POST /v1/mfa/totp-uri` using `URIConfig`.
+The native service also supplies the original enrollment's quota lifetime and
+earliest delivery deadline. JSON accepts only `commandID` and `enrollmentID`;
+cookie, exact Origin and original synchronizer are required. Idempotency-Key,
+Authorization and subject/lifetime overrides are forbidden. Keep the same
+canonical random reveal command across retries. The first known committed
+disclosure returns its URI; matching replay returns 409 with committed metadata
+and no URI. All outcomes send no-store/no-cache and issue no session or redirect.
+Select `FeatureConfig.EnrollmentConfirmation` separately for HTTP code
+confirmation. Select password-first login independently through
+`FeatureConfig.PasswordTOTPVerify` as described above.
+
+The selected login profiles use original password or magic-link primary plus confirmed TOTP, with
 original remember policy and primary authentication freshness. It does not add
-enrollment, OTP, recovery-code, passkey, security-key, trusted-device or reusable
+OTP, recovery-code, passkey, security-key, trusted-device or reusable
 step-up routes. Those remain required platform work. Expired-proof historical
 reconciliation uses the native proof/code-free recovery API; no automatic
 recovery endpoint is implied here.

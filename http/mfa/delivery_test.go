@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	auth "github.com/faustbrian/go-authentication"
 	identity "github.com/faustbrian/go-identity"
 	identityhttp "github.com/faustbrian/go-identity/http"
 	"github.com/faustbrian/go-identity/mfa"
@@ -49,6 +50,11 @@ func issuance(t *testing.T, c TOTPVerifyConfig, r mfa.TotpVerifyRequest) mfa.Tot
 		t.Fatal(err)
 	}
 	record, err := session.NewSessionWithMagicLinkMFAAndCSRF(session.SessionSpec{SessionID: "session-a", FamilyID: "family-a", TenantID: r.TenantID, UserID: "user-a", Audience: c.Audience, Version: 1, FamilyVersion: 1, Remember: remember, Authority: authority, Lookup: digest, Authentication: session.AuthenticationMetadata{Kind: session.AuthenticationMagicLink}, IssuedAt: now, LastActivityAt: now}, primary, factor, state)
+	if c.PasswordPrimary {
+		spec, _ := record.Bindings()
+		spec.Authentication = session.AuthenticationMetadata{Kind: session.AuthenticationVerified, Proof: auth.Proof{ID: auth.ProofID(parent), Tenant: string(r.TenantID), Subject: "user-a", Method: "password", Assurance: auth.AssuranceSingleFactor, Purpose: session.PasswordMFAPrimaryPurpose, Audience: c.Audience, IssuedAt: now.Add(-5 * time.Second), ExpiresAt: now.Add(time.Minute)}, ProofVersion: 1, CredentialID: "credential-a", CredentialVersion: 1}
+		record, err = session.NewSessionWithPasswordMFAAndCSRF(spec, factor, state)
+	}
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -114,22 +120,27 @@ func TestTOTPHTTPFinalCommitCannotDeliverDelayedOrFailedResponse(t *testing.T) {
 }
 
 func TestTOTPHTTPFreshCommitDeliversOnlyMatchingMFA(t *testing.T) {
-	for _, mode := range []string{"success", "foreign-factor", "expired-at-commit", "error-with-custody"} {
+	for _, mode := range []string{"success", "foreign-factor", "expired-at-commit", "error-with-custody", "password-success", "password-foreign-factor", "password-expired-at-commit", "password-error-with-custody", "password-on-magic-route", "magic-on-password-route"} {
 		t.Run(mode, func(t *testing.T) {
 			c, owner, body, device := handlerFixture(t)
+			c.PasswordPrimary = strings.HasPrefix(mode, "password-") && mode != "password-on-magic-route" || mode == "magic-on-password-route"
 			initial := c.Now()
 			now := initial
 			c.Now = func() time.Time { return now }
 			owner.result = func(r mfa.TotpVerifyRequest) (mfa.TotpVerifyResult, error) {
 				actual := r
-				if mode == "foreign-factor" {
+				if strings.HasSuffix(mode, "foreign-factor") {
 					actual.FactorID = "CQkJCQkJCQkJCQkJCQkJCQ"
 				}
-				result := issuance(t, c, actual)
-				if mode == "error-with-custody" {
+				profile := c
+				if mode == "password-on-magic-route" || mode == "magic-on-password-route" {
+					profile.PasswordPrimary = !c.PasswordPrimary
+				}
+				result := issuance(t, profile, actual)
+				if strings.HasSuffix(mode, "error-with-custody") {
 					return result, identity.UnavailableError{}
 				}
-				if mode == "expired-at-commit" {
+				if strings.HasSuffix(mode, "expired-at-commit") {
 					now = initial.Add(time.Minute)
 				}
 				return result, nil
@@ -151,7 +162,7 @@ func TestTOTPHTTPFreshCommitDeliversOnlyMatchingMFA(t *testing.T) {
 			if json.Unmarshal(w.Body.Bytes(), &out) != nil {
 				t.Fatal("invalid result JSON")
 			}
-			if mode == "success" {
+			if mode == "success" || mode == "password-success" {
 				if w.Code != 200 || !out.SignedIn || out.SessionID != "session-a" || len(w.Result().Cookies()) != 1 || w.Header().Get("X-CSRF-Token") == "" {
 					t.Fatal("fresh owned tuple not delivered", w.Code)
 				}

@@ -44,6 +44,7 @@ type passwordSigninHTTPState struct {
 	sessionCookie    session.CookiePolicy
 	audience, policy string
 	version          uint64
+	mfaContinuation  bool
 }
 
 func composePasswordSigninHTTP(c StoreConfiguration, original *preAuthHTTPState) (*passwordSigninHTTPState, error) {
@@ -63,7 +64,7 @@ func composePasswordSigninHTTP(c StoreConfiguration, original *preAuthHTTPState)
 	if err != nil || e != nil || flow.Name != "__Host-identity_flow" || flow.String() != base.String() {
 		return nil, invalid
 	}
-	return &passwordSigninHTTPState{config: selection, preauth: p, sessionCookie: n.Issuance.Cookie, audience: n.Profile.Audience, policy: n.PolicyID, version: n.Coordinator.AdmissionPolicy.PolicyVersion}, nil
+	return &passwordSigninHTTPState{config: selection, preauth: p, sessionCookie: n.Issuance.Cookie, audience: n.Profile.Audience, policy: n.PolicyID, version: n.Coordinator.AdmissionPolicy.PolicyVersion, mfaContinuation: c.PasswordSignin.MFA != nil}, nil
 }
 
 func (s *Server) passwordSigninHTTPConfig(network identityhttp.NetworkConfig, f FeatureSet) (*passwordhttp.SigninConfig, error) {
@@ -82,6 +83,7 @@ func (s *Server) passwordSigninHTTPConfig(network identityhttp.NetworkConfig, f 
 	// FeatureSet exclusively constructs this guarded native owner handle.
 	native := owner.(composedPasswordSignin)
 	config := passwordhttp.SigninConfig{Network: network, Service: native, Rate: s.state.httpRate.limiter, Origin: identityhttp.Origin(h.preauth.Origin), CallbackURL: h.preauth.CallbackURL, Lifetime: p.lifetime, FlowCookie: h.preauth.Cookie, SessionCookie: h.sessionCookie, Device: *p.device, ActorID: h.config.ActorID, PolicyRevision: h.config.PolicyRevision, Audience: h.audience, Now: time.Now, MaximumDuration: s.state.features.timeout}
+	config.MFAContinuation = h.mfaContinuation
 	return &config, nil
 }
 

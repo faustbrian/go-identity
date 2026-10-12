@@ -2,6 +2,79 @@
 
 ## Unreleased
 
+- Add bounded password-signin factor selection and protected original-generation
+  admission. Missing authority denies, known empty state alone permits SFA, and
+  challenge creation requires an actual confirmed TOTP method in the same Work.
+
+- Add password-owned continuation persistence and a forward migration allowing
+  password-first MFA alongside unchanged magic-link histories. Persistence uses
+  the existing protected Work and retains original factor, scope and expiry.
+  Complete native password-MFA login composition remains in development.
+
+- Supply read-only original enrollment/session quota custody for confirmation
+  transport, preserving immutable enrollment lifetime and primary deadlines
+  without factor-secret decryption, code comparison, attempt use or activation.
+
+- Expose a bounded original-enrollment quota source for URI transport. Retain
+  immutable lifetime and earliest primary/enrollment deadline without factor
+  secret decryption, rate debit or reveal consumption; mutation still owns
+  current-authority fences and atomic disclosure.
+
+- Bind cookie versus bearer selection into the original MFA enable intent,
+  preserving existing bearer intent bytes. Cookie execution requires the native
+  primary source's transactional synchronizer admission; HTTP origin policy
+  remains a separate mandatory transport check.
+
+- Select the verified primary email as the TOTP URI account label, or the
+  sole verified email when no primary is designated. Ambiguous/unverified
+  candidates deny. Bind and fence its value, version and primary status;
+  disclosure never promotes an address to primary or recovery authority.
+  This permits enrollment after ordinary registration verification.
+
+- Add explicit original-session TOTP enrollment confirmation. A valid code
+  activates the pending factor and digest-only recovery set, records its used
+  counter, and advances factor authority atomically with risk, audit and
+  lifecycle effects. Existing single-factor sessions are not silently promoted
+  or replaced. Retain the independent comparison key/version and install
+  TOTPActivationMigrationSource after URI history. Recovery is secret-free;
+  HTTP/reference enrollment exposure remains unfinished.
+
+- Define the original-primary boundary for explicit enrollment confirmation,
+  retaining enable provenance without reconsuming its proof. Confirmation
+  custody must reject URI/login schemas; actual activation and session effects
+  remain required native workflow work.
+
+- Add native reveal-once TOTP URI disclosure with explicit original-session/
+  synchronizer ownership and HTTPS-origin selection. Reuse authenticated enable
+  input and encrypted command preparation; fence the verified directory label,
+  pending factor, primary authority and protected risk. Attribute the marker to
+  one command, return material only after first known commit, and reconcile
+  unknown outcomes without redelivery. Install URIRevealMigrationSource after
+  recovery history. Confirmation and HTTP exposure remain separate.
+
+- Define a separate original-session primary port for pending TOTP URI
+  disclosure. The native owner must authenticate retained enrollment input and
+  fence current session, synchronizer and parent proof use; the port itself does
+  not implement URI revelation or grant disclosure authority.
+
+- Add native keyed TOTP enable with encrypted original preparation, protected
+  primary/factor/risk admission, digest-only pending recovery sets and atomic
+  audit/lifecycle effects. Matching retries preserve pending metadata without
+  redelivering codes; recovery is secret-free. Install the recovery-set and
+  selected kernel/counter histories first. URI revelation and confirmation
+  remain separate, unfinished operations; enable does not activate MFA.
+
+- Define the consumer-owned enrollment primary port for original admission,
+  authenticated preparation restore and coupled transactional recovery without
+  introducing a dependency on concrete password or session adapters.
+
+- Prepare encrypted TOTP factor custody with an original bounded expiry and
+  persist a pending factor atomically with native primary-proof use. Fence the
+  exact known-empty factor generation, cap live pending enrollments at eight,
+  advance the generation without activating a factor, and reconcile original
+  creation without regenerating a secret. Public enable/reveal/confirmation
+  orchestration is still required; this is not an enrollment endpoint.
+
 - Adopt the reviewed capability owner with corrected prospective signup resend
   families while preserving existing-recipient and native MFA scope handling.
 

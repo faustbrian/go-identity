@@ -11,7 +11,27 @@ import (
 	identity "github.com/faustbrian/go-identity"
 	mfapg "github.com/faustbrian/go-identity/mfa/postgres"
 	kernel "github.com/faustbrian/go-identity/postgres"
+	"github.com/faustbrian/go-identity/session"
 )
+
+func TestMFAPasswordTOTPCompletionEffectIsExplicitAndNative(t *testing.T) {
+	c := Config{Schema: "session_store", MaximumDuration: time.Second}
+	p := IdentifierAdmissionConfig{GlobalAuthorityID: "deployment", PolicyNamespace: "users", Audience: "identity", AuthenticationMethod: "password", CredentialKind: identity.CredentialPassword, CredentialOwner: "identity/password"}
+	effect, err := NewMFAPasswordTOTPCompletionEffect(c, p)
+	if err != nil || effect == nil {
+		t.Fatal("password completion profile unavailable", err)
+	}
+	if _, err := effect.Apply(context.Background(), kernel.Work{}, nil, identity.Command{}, kernel.RecipientRecord{}, mfapg.LockedTOTPCompletion{}); err == nil {
+		t.Fatal("session persisted without native factor completion")
+	}
+	p.AuthenticationMethod = "email-otp"
+	if got, err := NewMFAPasswordTOTPCompletionEffect(c, p); err == nil || got != nil {
+		t.Fatal("foreign primary profile accepted")
+	}
+	if _, err := json.Marshal(effect); !errors.Is(err, session.ErrSecretSerialization) {
+		t.Fatal("configuration exported", err)
+	}
+}
 
 func TestMFATOTPCompletionEffectRequiresActualProtectedFactor(t *testing.T) {
 	config := Config{Schema: "session_store", MaximumDuration: time.Second}

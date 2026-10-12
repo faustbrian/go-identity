@@ -1,10 +1,38 @@
 package postgres
 
 import (
+	identity "github.com/faustbrian/go-identity"
 	"testing"
 
 	"github.com/faustbrian/go-identity/session"
 )
+
+func TestSelectedPasswordMFARetainsDistinctCacheCustodyAndOwnerProfile(t *testing.T) {
+	password := IdentifierAdmissionConfig{GlobalAuthorityID: "deployment", PolicyNamespace: "users", Audience: "service-a", AuthenticationMethod: "password", CredentialKind: identity.CredentialPassword, CredentialOwner: "identity/password"}
+	one := SingleFactorSessionAdmissionConfig{Verified: &password}
+	_, legacy, err := singleFactorAdmission(one)
+	if err != nil {
+		t.Fatal(err)
+	}
+	methods, only, err := selectedSessionAdmission(SelectedSessionAdmissionConfig{MFAPassword: &password})
+	if err != nil || len(methods) != 1 || methods[0] != session.AuthenticationVerified || only == legacy {
+		t.Fatal("password MFA-only selection collapsed", err)
+	}
+	methods, both, err := selectedSessionAdmission(SelectedSessionAdmissionConfig{SingleFactor: one, MFAPassword: &password})
+	if err != nil || len(methods) != 1 || both == only || both == legacy {
+		t.Fatal("combined password profile collapsed", err)
+	}
+	foreign := password
+	foreign.PolicyNamespace = "different"
+	if _, _, err := selectedSessionAdmission(SelectedSessionAdmissionConfig{SingleFactor: one, MFAPassword: &foreign}); err == nil {
+		t.Fatal("foreign password authority selected")
+	}
+	foreign = password
+	foreign.AuthenticationMethod = "email-otp"
+	if _, _, err := selectedSessionAdmission(SelectedSessionAdmissionConfig{MFAPassword: &foreign}); err == nil {
+		t.Fatal("non-password primary selected")
+	}
+}
 
 func TestSelectedSessionAdmissionSeparatesMFAFromSingleFactor(t *testing.T) {
 	p := MagicLinkAdmissionConfig{GlobalAuthorityID: "deployment", PolicyNamespace: "users", Audience: "service-a"}

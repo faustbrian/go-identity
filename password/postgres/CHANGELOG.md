@@ -2,6 +2,72 @@
 
 ## Unreleased
 
+- Bind the original signin identifier and verification versions into non-final
+  password-MFA evidence. The native completion reader returns only its current
+  exact verified recipient, denying identifier replacement or epoch changes.
+
+- Recover password-first MFA attempts through the original password-free
+  correlation and browser possession. Preserve committed challenge ID/expiry
+  without proof redelivery, reconcile ambiguous outcomes using existing owners,
+  and retain pending and failed history without rerunning credential work.
+
+- Add opt-in native password-first TOTP challenge creation. Successful password
+  comparison commits a non-final signed primary, original browser consumption,
+  continuation and child issuance atomically with audit/lifecycle effects and
+  any required hash upgrade. No session is issued before factor completion;
+  challenge recovery, final password-origin completion and HTTP wiring remain
+  in development.
+
+- Keep required-MFA password comparison evidence separate from completed signin
+  proofs. Use domain-separated non-final signing and closed original framing;
+  reject signature retagging, changed credential versions, foreign scope and
+  retired keys. Persistence and final factor admission remain native workflow
+  responsibilities; comparison evidence never grants a session by itself.
+
+- Fence cookie MFA enable's original synchronizer under the same primary-session
+  locks as proof consumption and enrollment. Original snapshots and commands
+  distinguish cookie from bearer custody; restoration cannot drop CSRF or use
+  an unconfigured/retired key. Existing bearer enrollment remains supported.
+
+- Restore original enable session and synchronizer for the distinct TOTP
+  enrollment-confirmation schema. Reject use as URI disclosure or a second
+  verification-proof consumption. This admission port does not verify the code,
+  activate a factor or implement the required session effects.
+
+- Restore original MFA enrollment custody for a distinct URI command with exact
+  source-session possession and retained synchronizer-key matching. Protected
+  admission additionally fences the committed parent enrollment's immutable
+  proof-use record. URI custody cannot consume verification again; original
+  freshness is retained. Factor reveal consumption and transport remain pending.
+
+- Select a frozen retained session-CSRF key profile for pending MFA management
+  without mutating the original primary source. Invalid or duplicate key
+  versions deny setup. Native URI management admission remains unfinished;
+  selecting keys alone grants no secret-disclosure authority.
+
+- Fence original primary authority during MFA enrollment preparation without
+  consuming it, then repeat admission during protected proof use. Expose the
+  earliest original freshness deadline and native proof-marker reconciliation
+  for coupled, secret-free MFA recovery.
+
+- Expose the native MFA enrollment primary port with explicit original-session
+  matching and bounded provenance snapshots for authenticated keyed preparation.
+  Restore checks original bearer possession without renewing proof or session
+  times; protected SQL still owns current authority and atomic proof use.
+
+- Provide a password-owned MFA enrollment primary-admission source with opaque
+  original custody, exact signed reauthentication, current primary/session
+  fences and the shared atomic one-use consumer. Original primary freshness
+  cannot be renewed by activity or lookup. This adapter is not an enrollment
+  endpoint; native factor effects, browser CSRF and workflow policy remain
+  independently required in the registered MFA participant.
+
+- Append migration 7 to permit atomic one-use password reauthentication
+  consumption by `identity.mfa.enable`, retaining original password-change
+  receipts, command foreign keys and consumption uniqueness. Other consumer
+  purposes and partial markers still fail closed. This storage extension alone
+  does not authorize or provide an MFA enrollment workflow.
+
 - Defer command-owned velocity during native password-change screening and
   hashing while retaining mandatory atomic counter reservation. Keyed retries
   and primary-time checks reuse original provider evidence without renewing

@@ -5,16 +5,22 @@ import (
 	"fmt"
 	"testing"
 
+	auth "github.com/faustbrian/go-authentication"
 	"github.com/faustbrian/go-identity/session"
 )
 
 func TestMFARecordRetainsExactFactorAndPrimaryProvenance(t *testing.T) {
-	for _, csrf := range []bool{false, true} {
-		t.Run(fmt.Sprint(csrf), func(t *testing.T) {
+	for _, mode := range []struct{ password, csrf bool }{{false, false}, {false, true}, {true, false}, {true, true}} {
+		csrf := mode.csrf
+		t.Run(fmt.Sprintf("password=%t/csrf=%t", mode.password, csrf), func(t *testing.T) {
 			original := magicLinkRecordFixture(t, csrf)
 			s, _ := original.Bindings()
 			primary := original.MagicLinkAuthentication()
 			p, _ := primary.Bindings()
+			if mode.password {
+				s.Authentication = session.AuthenticationMetadata{Kind: session.AuthenticationVerified, ProofVersion: 1, CredentialID: "password", CredentialVersion: 3, Proof: auth.Proof{ID: auth.ProofID(p.CommandID), Tenant: string(s.TenantID), Subject: string(s.UserID), Method: "password", Assurance: auth.AssuranceSingleFactor, Purpose: "session-issue", Audience: s.Audience, IssuedAt: p.AuthenticatedAt, ExpiresAt: p.ValidUntil}}
+				s.Authentication.Proof.Purpose = "identity.password.mfa-primary"
+			}
 			a, _ := s.Authority.Bindings()
 			a.Factor = session.OptionalAuthorityBinding{Present: true, Binding: session.AuthorityBinding{ScopeKey: "factor/user", Version: 7}}
 			s.Authority, _ = session.NewAuthoritySnapshot(a)
@@ -23,7 +29,11 @@ func TestMFARecordRetainsExactFactorAndPrimaryProvenance(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if csrf {
+			if mode.password && csrf {
+				original, err = session.NewSessionWithPasswordMFAAndCSRF(s, factor, original.CSRFState())
+			} else if mode.password {
+				original, err = session.NewSessionWithPasswordMFA(s, factor)
+			} else if csrf {
 				original, err = session.NewSessionWithMagicLinkMFAAndCSRF(s, primary, factor, original.CSRFState())
 			} else {
 				original, err = session.NewSessionWithMagicLinkMFA(s, primary, factor)
@@ -43,6 +53,10 @@ func TestMFARecordRetainsExactFactorAndPrimaryProvenance(t *testing.T) {
 			expectedFactor, _ := factor.Bindings()
 			if mappedFactor != expectedFactor {
 				t.Fatal("native mapping substituted factor")
+			}
+			mappedSpec, _ := mapped.Bindings()
+			if mappedSpec.Authentication != s.Authentication {
+				t.Fatal("native mapping substituted password credential")
 			}
 			for i, field := range fields {
 				if field.Name != "source-session.mfa.scope" {
@@ -73,8 +87,14 @@ func TestMFARecordRetainsExactFactorAndPrimaryProvenance(t *testing.T) {
 			before, _ := primary.Bindings()
 			after, _ := loaded.MagicLinkAuthentication().Bindings()
 			_, restoredExpiry, err := encodeRecord(loaded)
-			if err != nil || got != want || before != after || restoredExpiry != expiry {
+			if err != nil || got != want || !mode.password && before != after || restoredExpiry != expiry {
 				t.Fatal("durable restore substituted factor, primary or expiry")
+			}
+			if mode.password {
+				loadedSpec, _ := loaded.Bindings()
+				if loadedSpec.Authentication != s.Authentication || loaded.MagicLinkAuthentication() != (session.MagicLinkAuthentication{}) {
+					t.Fatal("durable restore fabricated magic-link primary")
+				}
 			}
 			var object map[string]json.RawMessage
 			if json.Unmarshal(top["MFA"], &object) != nil {

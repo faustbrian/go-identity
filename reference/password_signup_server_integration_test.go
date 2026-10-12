@@ -42,6 +42,7 @@ import (
 	"github.com/faustbrian/go-identity/session"
 	sessionpg "github.com/faustbrian/go-identity/session/postgres"
 	primitive "github.com/faustbrian/go-password"
+	database "github.com/faustbrian/go-postgres"
 )
 
 type referenceRegistrationPolicy struct{}
@@ -57,6 +58,15 @@ func (referenceRegistrationPolicy) Decide(ctx context.Context, c authorization.D
 		}
 	}
 	if string(c.Request.Tenant) == otpTenant && c.PolicyRevision == 9 && c.Request.Subject.Kind == authorization.SubjectUser && (c.Request.Action == "identity.session.revoke-one" || c.Request.Action == "identity.session.revoke-one.recover" || c.Request.Action == "identity.password.verify" || c.Request.Action == "identity.password.verify.recover" || c.Request.Action == "identity.password.change" || c.Request.Action == "identity.password.change.recover") {
+		return authorization.Decision{Outcome: authorization.Allow, Revision: 9}, nil
+	}
+	if string(c.Request.Tenant) == otpTenant && c.PolicyRevision == 9 && c.Request.Subject.Kind == authorization.SubjectUser && c.Request.Resource.Type == "identity.user" && string(c.Request.Resource.ID) == string(c.Request.Subject.ID) {
+		switch c.Request.Action {
+		case "identity.mfa.enable", "identity.mfa.totp-uri", "identity.mfa.totp-verify":
+			return authorization.Decision{Outcome: authorization.Allow, Revision: 9}, nil
+		}
+	}
+	if string(c.Request.Tenant) == otpTenant && c.PolicyRevision == 9 && c.Request.Subject.Kind == authorization.SubjectUser && c.Request.Action == "identity.mfa.enable" && c.Request.Resource.Type == "identity.request-admission" && c.Request.Resource.ID == "identity.mfa.enable" {
 		return authorization.Decision{Outcome: authorization.Allow, Revision: 9}, nil
 	}
 	return (referenceResetPolicy{}).Decide(ctx, c)
@@ -216,12 +226,33 @@ func TestReferenceServerNativePasswordSignup(t *testing.T) {
 }
 
 func proveReferenceSignupGraph(t *testing.T, competing bool, protected ...bool) {
+	proveReferenceSignupGraphExtensions(t, competing, signupGraphExtensions{}, protected...)
+}
+
+type signupGraphExtensions struct{ mfaEnrollment, passwordMFA, completionCommitFault bool }
+
+func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extensions signupGraphExtensions, protected ...bool) {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(t.Context(), 60*time.Second)
 	defer cancel()
 	f := newLiveStoresProfile(t, ctx, false)
 	c, deps, worker := otpGraphConfiguration(t, f.config)
 	deps.PostgreSQL = f.pool
+	if extensions.completionCommitFault {
+		f.completionFault = &completionCommitFault{}
+		faultPool, err := database.Connect(ctx, database.Config{DSN: f.pool.Raw().Config().ConnConfig.ConnString(), MaxConns: 4, Configure: func(pc *database.PoolConfig) error { pc.ConnConfig.DialFunc = f.completionFault.dial; return nil }})
+		if err != nil {
+			t.Fatal("completion fault pool unavailable")
+		}
+		t.Cleanup(func() {
+			bounded, stop := context.WithTimeout(context.Background(), 3*time.Second)
+			defer stop()
+			if err := faultPool.Close(bounded); err != nil {
+				t.Error("completion fault pool cleanup failed")
+			}
+		})
+		deps.PostgreSQL = faultPool
+	}
 	configureReferencePreAuth(t, &c)
 	configureReferenceSignin(t, &c)
 	network := httptest.NewUnstartedServer(nil)
@@ -248,6 +279,12 @@ func proveReferenceSignupGraph(t *testing.T, competing bool, protected ...bool) 
 	var changeScreens *atomic.Int32
 	if len(protected) != 0 && protected[0] {
 		changeScreens = configureReferencePasswordProtection(t, &c, origin)
+	}
+	if extensions.mfaEnrollment {
+		configureReferenceMFAEnrollment(t, &c, origin)
+	}
+	if extensions.passwordMFA {
+		configureReferencePasswordMFA(t, &c, origin)
 	}
 	magic := len(protected) > 1 && protected[1]
 	if magic {
@@ -360,7 +397,23 @@ END $$`); err != nil {
 		seen[op.Record.OperationID] = true
 	}
 	wantOperations := 8
-	if c.HTTPMFA != nil {
+	if c.HTTPMFAEnrollment != nil {
+		wantOperations++
+		if !seen["identity.mfa.enable"] {
+			t.Fatal("selected enrollment route missing")
+		}
+		if c.HTTPMFAEnrollment.ProvisioningURI {
+			wantOperations++
+			if !seen["identity.mfa.totp-uri"] {
+				t.Fatal("selected provisioning route missing")
+			}
+		} else if seen["identity.mfa.totp-uri"] {
+			t.Fatal("unselected provisioning route advertised")
+		}
+	} else if seen["identity.mfa.enable"] {
+		t.Fatal("unselected enrollment route advertised")
+	}
+	if c.HTTPMFA != nil || c.HTTPMFAEnrollment != nil && c.HTTPMFAEnrollment.Confirmation {
 		wantOperations++
 		if !seen["identity.mfa.totp-verify"] {
 			t.Fatal("selected TOTP route missing")
@@ -422,13 +475,13 @@ END $$`); err != nil {
 			}
 		}
 	}
-	proveReferenceRegistration(t, ctx, f, features, workers, client, network.URL, origin, messages, calls, competing, changeScreens)
+	proveReferenceRegistration(t, ctx, f, features, workers, client, network.URL, origin, messages, calls, competing, changeScreens, extensions.mfaEnrollment, extensions.passwordMFA)
 	if magic {
 		proveReferenceMagicLink(t, ctx, f, features, workers, client, network.URL, origin, messages, c, deps, len(protected) > 5 && protected[5])
 	}
 }
 
-func proveReferenceRegistration(t *testing.T, ctx context.Context, f liveStores, features reference.FeatureSet, workers reference.WorkerSet, client *http.Client, base, origin string, messages <-chan string, screens *atomic.Int32, competing bool, changeScreens *atomic.Int32) {
+func proveReferenceRegistration(t *testing.T, ctx context.Context, f liveStores, features reference.FeatureSet, workers reference.WorkerSet, client *http.Client, base, origin string, messages <-chan string, screens *atomic.Int32, competing bool, changeScreens *atomic.Int32, enrollment bool, passwordMFA bool) {
 	t.Helper()
 	invoke := func(path string, body any, key string, cookies []*http.Cookie) (*http.Response, []byte) {
 		t.Helper()
@@ -592,6 +645,10 @@ CREATE TRIGGER registration_fixture_fail BEFORE INSERT ON identity.delivery_inte
 	var signed passwordhttp.SigninResponse
 	if r.StatusCode != 200 || json.Unmarshal(p, &signed) != nil || signed.CommitOutcome != "committed" || signed.SessionID == "" || len(r.Cookies()) != 1 {
 		t.Fatal("verified registration did not produce usable login", r.StatusCode, signed.CommitOutcome, signed.Error, signed.CommandID != "", signed.SessionID != "")
+	}
+	if enrollment {
+		proveReferenceMFAEnrollment(t, ctx, f, features, client, base, origin, r.Cookies(), r.Header.Get("X-CSRF-Token"), signed.SessionID, passwordMFA)
+		return
 	}
 	if changeScreens != nil {
 		proveReferencePasswordProtection(t, ctx, f, features, client, base, origin, append(loginCookies, r.Cookies()...), r.Header.Get("X-CSRF-Token"), changeScreens)

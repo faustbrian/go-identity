@@ -15,6 +15,7 @@ import (
 
 	auth "github.com/faustbrian/go-authentication"
 	"github.com/faustbrian/go-authorization"
+	"github.com/faustbrian/go-capability"
 	identity "github.com/faustbrian/go-identity"
 	identityhttp "github.com/faustbrian/go-identity/http"
 	passwordhttp "github.com/faustbrian/go-identity/http/password"
@@ -25,7 +26,95 @@ import (
 	"github.com/faustbrian/go-openapi/v2/validate"
 	ratelimit "github.com/faustbrian/go-rate-limit/v2"
 	"github.com/faustbrian/go-rate-limit/v2/memory"
+	"github.com/felixge/httpsnoop"
 )
+
+func TestSigninMFAChallengeIsOptInAndNeverDeliversSession(t *testing.T) {
+	for _, mode := range []string{"fresh", "injected-header", "delayed", "disabled", "error", "replay", "expired", "unknown", "mixed-token", "cancelled"} {
+		t.Run(mode, func(t *testing.T) {
+			f, c, owner, device := newSignin(t)
+			c.MFAContinuation = mode != "disabled"
+			now := c.Now()
+			signer, _ := capability.NewHMACSHA256Signer("test", []byte(strings.Repeat("x", 32)))
+			wire, err := capability.Issue(t.Context(), capability.Payload{Version: 1, ID: "AwMDAwMDAwMDAwMDAwMDAw", Issuer: "https://issuer.test", Tenant: "tenant-a", Subject: "user-a", Audiences: []string{c.Audience}, Resource: "identity.mfa/user-a", Operation: "identity.mfa.complete", IssuedAt: now, NotBefore: now, ExpiresAt: now.Add(time.Minute), MaxUses: 1}, signer, capability.DefaultLimits())
+			if err != nil {
+				t.Fatal(err)
+			}
+			proof, err := capability.ParseProof(wire, capability.DefaultLimits())
+			if err != nil {
+				t.Fatal(err)
+			}
+			owner.result.State = auth.SignInStateChallengeRequired
+			owner.result.Issuance.CommitOutcome = identity.CommitOutcomeCommitted
+			owner.result.Challenge = password.MFAChallengeResult{ID: "AwMDAwMDAwMDAwMDAwMDAw", Proof: proof, Method: "totp", ExpiresAt: now.Add(time.Minute)}
+			switch mode {
+			case "error":
+				owner.err = errors.New("unavailable")
+			case "replay":
+				owner.result.Issuance.Replayed = true
+				owner.result.Challenge.Proof = capability.Proof{}
+			case "expired":
+				owner.result.Challenge.ExpiresAt = now
+			case "unknown":
+				owner.result.Issuance.CommitOutcome = identity.CommitOutcomeUnknown
+			case "mixed-token":
+				owner.result.Issuance.Token, _ = session.NewToken(32)
+			}
+			request := signinRequest(f, device)
+			if mode == "cancelled" {
+				ctx, cancel := context.WithCancel(request.Context())
+				defer cancel()
+				request = request.WithContext(ctx)
+				owner.cancel = cancel
+			}
+			var middleware []identityhttp.MiddlewareDescriptor
+			if mode == "delayed" || mode == "injected-header" {
+				at := now
+				c.Now = func() time.Time { return at }
+				middleware = []identityhttp.MiddlewareDescriptor{{Owner: "identity/password", Middleware: identityhttp.Middleware{Name: "commit-custody", Phase: identityhttp.MiddlewareBeforeHandler, Order: 1, Handler: func(next http.Handler) http.Handler {
+					return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+						proxy := httpsnoop.Wrap(w, httpsnoop.Hooks{WriteHeader: func(next httpsnoop.WriteHeaderFunc) httpsnoop.WriteHeaderFunc {
+							return func(status int) {
+								if status >= 200 {
+									if mode == "delayed" {
+										at = now.Add(2 * time.Minute)
+									} else {
+										w.Header().Set("X-MFA-Token", "injected")
+										w.Header().Set("Set-Cookie", "injected")
+										w.Header().Set("X-CSRF-Token", "injected")
+									}
+								}
+								next(status)
+							}
+						}})
+						next.ServeHTTP(proxy, r)
+						w.Header().Set("X-MFA-Token", "unwind-injected")
+					})
+				}}}}
+			}
+			h, err := passwordhttp.NewSigninHandlerWithMiddleware(c, middleware)
+			if err != nil {
+				t.Fatal(err)
+			}
+			out := httptest.NewRecorder()
+			h.ServeHTTP(out, request)
+			if out.Header().Get("Set-Cookie") != "" || out.Header().Get("X-CSRF-Token") != "" || strings.Contains(out.Body.String(), wire) || strings.Contains(out.Body.String(), "user-a") {
+				t.Fatal("partial authentication disclosed session or JSON credentials")
+			}
+			var response map[string]any
+			if json.Unmarshal(out.Body.Bytes(), &response) != nil {
+				t.Fatal("invalid response")
+			}
+			if mode == "fresh" || mode == "injected-header" {
+				if out.Code != 200 || out.Header().Get("X-MFA-Token") != wire || response["challengeRequired"] != true || response["signedIn"] != false {
+					t.Fatal("fresh challenge delivery missing", out.Code)
+				}
+			} else if out.Code == 200 || out.Header().Get("X-MFA-Token") != "" || response["challengeRequired"] == true {
+				t.Fatal("non-deliverable challenge leaked", mode)
+			}
+		})
+	}
+}
 
 // Transport plan: original pre-auth cookie and signed device, exact HTTPS
 // tenant/origin/callback/remember, IP-before-native-source then identifier rate,

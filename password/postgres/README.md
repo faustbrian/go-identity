@@ -8,6 +8,21 @@ verification signup and password-free signup recovery. Immediate-session/MFA
 signup, reset HTTP/reference wiring, history and deletion remain unimplemented. Original signup-link
 confirmation is implemented; the complete generic email lifecycle is not.
 
+`NewMFASigninService` explicitly selects password-first TOTP challenge creation
+using `SigninConfig` plus `MFAChallengeConfig`. Install the complete capability
+adapter history and MFA continuation/TOTP history, including
+`PasswordContinuationMigrationSource`, alongside the existing password/session
+histories. Configure independent child signing/replay/envelope keys through the
+capability issuer and custody configurations. Known empty factor authority may
+issue SFA; enrolled accounts receive only a continuation. Missing authority denies.
+Password evidence, original browser consumption, child issuance, audit/lifecycle
+and automatic hash upgrade commit atomically. No session, cookie or synchronizer
+is issued for a challenge. Password-free `RecoverSignin` checks the original
+browser and current disclosure policy, preserving ID/expiry without redelivering
+the proof. Live leases remain pending; expired unresolved attempts use the
+existing coordinator's owner reconciliation. The native password-origin
+completion and selected HTTP/reference wiring remain in development.
+
 Native signup now also initializes known-empty second-factor authority in the
 same protected transaction. Install `mfa/postgres.MigrationSource` in the owned
 `identity_mfa` namespace after kernel users/commands and before signup. Neutral

@@ -49,7 +49,7 @@ func sessionFromCSRFFieldsWithMFA(values map[string]identity.FeatureValue, prefi
 	continued := hasCommand || hasAuthority || hasCredential
 	_, factorErr := factor.Bindings()
 	hasFactor := factorErr == nil
-	if hasFactor && (continued || base.Authentication.Kind != session.AuthenticationMagicLink) {
+	if hasFactor && (continued || base.Authentication.Kind != session.AuthenticationMagicLink && base.Authentication.Kind != session.AuthenticationVerified) {
 		return session.Session{}, session.ErrInvalidSessionCommand
 	}
 	if continued && (!hasCommand || !hasAuthority || !hasCredential || command.Kind != identity.FeatureText || authority.Kind != identity.FeatureUint64 || credential.Kind != identity.FeatureUint64) {
@@ -73,6 +73,9 @@ func sessionFromCSRFFieldsWithMFA(values map[string]identity.FeatureValue, prefi
 			}
 			return session.NewSessionWithMagicLink(base, magic)
 		}
+		if hasFactor {
+			return session.NewSessionWithPasswordMFA(base, factor)
+		}
 		return session.NewSession(base)
 	}
 	if !hasKey || !hasDigest || key.Kind != identity.FeatureUint64 || key.Uint64 == 0 || key.Uint64 > uint64(^uint32(0)) || digest.Kind != identity.FeatureBytes || len(digest.Bytes) != 32 {
@@ -95,6 +98,9 @@ func sessionFromCSRFFieldsWithMFA(values map[string]identity.FeatureValue, prefi
 			return session.NewSessionWithMagicLinkMFAAndCSRF(base, magic, factor, state)
 		}
 		return session.NewSessionWithMagicLinkAndCSRF(base, magic, state)
+	}
+	if hasFactor {
+		return session.NewSessionWithPasswordMFAAndCSRF(base, factor, state)
 	}
 	return session.NewSessionWithCSRF(base, state)
 }

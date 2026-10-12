@@ -15,6 +15,9 @@ func decodeFeaturePlan(binding identity.CommandBinding, fingerprint [32]byte, en
 }
 
 func decodeFeaturePlanMode(binding identity.CommandBinding, fingerprint [32]byte, encoded []byte, proofBase bool) (CommandPlan, error) {
+	if !proofBase && binding.OperationID == "identity.password.signin" && len(encoded) > 0 && encoded[0] == 0xa5 {
+		return decodePasswordMFAPlanMode(binding, fingerprint, encoded, false)
+	}
 	if !proofBase && mfaCompletionPurpose(binding.OperationID) && len(encoded) > 0 && encoded[0] == 0xa6 {
 		return decodeMFACompletionPlan(binding, fingerprint, encoded)
 	}

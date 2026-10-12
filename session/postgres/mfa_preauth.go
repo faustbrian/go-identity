@@ -14,7 +14,7 @@ import (
 )
 
 // RequireMFAConsumedPreAuth fences the unchanged original browser flow already
-// consumed by the committed magic-link primary. It is read-only: it neither
+// consumed by the committed password or magic-link primary. It is read-only: it neither
 // reactivates nor consumes that flow again. Only the exact registered native
 // TOTP completion owner, during its bounded preparation or Apply callback, may
 // invoke it. Primary must come from verified original child issuance custody,
@@ -81,18 +81,19 @@ func requireMFAConsumedPreAuth[R SessionRows](ctx context.Context, q SessionQuer
 		return err
 	}
 	defer stop()
-	if s.Binding.Intent.TenantID != b.TenantID || string(s.Binding.ID) != b.AnonymousFlowID || s.Binding.Intent.Action != "identity.magic-link.consume" {
+	primaryPurpose := s.Binding.Intent.Action
+	if s.Binding.Intent.TenantID != b.TenantID || string(s.Binding.ID) != b.AnonymousFlowID || (primaryPurpose != "identity.magic-link.consume" && primaryPurpose != "identity.password.signin") {
 		return identity.ForbiddenError{}
 	}
 	primaryBytes, _ := base64.RawURLEncoding.DecodeString(string(primary))
 	rows, err := q.Query(bounded, `SELECT f.record FROM `+pgx.Identifier{c.Schema}.Sanitize()+`.preauth_transactions f
-JOIN identity.commands j ON j.command_id=f.command_id AND j.tenant_id=f.tenant_id AND j.purpose='identity.magic-link.consume'
+JOIN identity.commands j ON j.command_id=f.command_id AND j.tenant_id=f.tenant_id AND j.purpose=$10
 JOIN identity.identity_command_id_claims k ON k.command_id=j.command_id AND k.tenant_id=j.tenant_id AND k.purpose=j.purpose
 WHERE f.tenant_id=$1 AND f.flow_id=$2 AND f.state='consumed'
 AND f.version=$3::numeric AND f.issued_version=$4::numeric AND f.issued_at=$5 AND f.expires_at=$6
 AND f.digest_version=$7 AND f.digest=$8 AND f.command_id=$9
 AND j.state='committed' AND j.generation=f.generation AND k.fingerprint=f.fingerprint AND NOT k.retired
-FOR SHARE OF f,j,k`, string(b.TenantID), string(s.Binding.ID), strconv.FormatUint(s.Version+2, 10), strconv.FormatUint(s.Version, 10), s.Binding.IssuedAt.Format(storedTimeLayout), s.Binding.ExpiresAt.Format(storedTimeLayout), int64(s.Cookie.KeyVersion), s.Cookie.Sum[:], primaryBytes)
+FOR SHARE OF f,j,k`, string(b.TenantID), string(s.Binding.ID), strconv.FormatUint(s.Version+2, 10), strconv.FormatUint(s.Version, 10), s.Binding.IssuedAt.Format(storedTimeLayout), s.Binding.ExpiresAt.Format(storedTimeLayout), int64(s.Cookie.KeyVersion), s.Cookie.Sum[:], primaryBytes, primaryPurpose)
 	if err != nil {
 		return readError(bounded, err)
 	}

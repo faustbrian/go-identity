@@ -218,8 +218,17 @@ func (s StoreSet) migrationCatalog(ctx context.Context) ([]migrationHistory, err
 			}
 		}
 		if c.magicTOTP {
-			return magicLinkTOTPRequiredMigrations(ctx, catalog, c.magicSessionSchema, s.state.config.Schema)
+			catalog, err = magicLinkTOTPRequiredMigrations(ctx, catalog, c.magicSessionSchema, s.state.config.Schema)
+			if err != nil {
+				return nil, err
+			}
 		}
+	}
+	if c.passwordMFA {
+		return passwordTOTPMigrationCatalog(ctx, catalog, c.passwordSigninSchema, s.state.config.Schema, c.passwordTOTP)
+	}
+	if s.state.features.mfaEnrollment != nil {
+		return mfaEnrollmentMigrationCatalog(ctx, catalog, s.state.config.Schema)
 	}
 	return catalog, nil
 }

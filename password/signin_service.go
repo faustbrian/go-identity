@@ -6,9 +6,11 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"time"
 
 	auth "github.com/faustbrian/go-authentication"
 	"github.com/faustbrian/go-authorization"
+	"github.com/faustbrian/go-capability"
 	identity "github.com/faustbrian/go-identity"
 	"github.com/faustbrian/go-identity/session"
 )
@@ -111,8 +113,8 @@ func (r SigninRecoveryRequest) Validate() error {
 // fabricate a partial Session. Recovery retains the original command namespace.
 // Rejected means no authenticated outcome is returned, not that credentials
 // were wrong or that an Unknown command rolled back. Inspect CommitOutcome.
-// The current single-factor profile cannot return ChallengeRequired: actual
-// MFA-owned continuation composition remains required, not a password stub.
+// ChallengeRequired describes committed partial authentication, never session
+// authority. Its challenge cannot accompany a session, cookie or synchronizer.
 // Fresh bearer/CSRF exists only for original error-free uncancelled commit;
 // replay/recovery/errors must omit both and all cookie metadata. Cookie.Value
 // is always empty; trusted HTTP alone reveals the original token into a cookie.
@@ -123,6 +125,35 @@ type SigninResult struct {
 	Issuance  session.IssueResult
 	CSRFToken session.CSRFToken
 	Recovery  SigninRecovery
+	Challenge MFAChallengeResult
+}
+
+// MFAChallengeResult retains the original password-first continuation metadata.
+// Only the original successful commit may carry reveal-once Proof custody;
+// recovery/replay omit it. ID and expiry do not authenticate a user. No session
+// credential or synchronizer may accompany this result. Copies retain the same
+// opaque capability custody and cannot renew its lifetime.
+type MFAChallengeResult struct {
+	ID        identity.CommandID
+	Proof     capability.Proof
+	Method    string
+	ExpiresAt time.Time
+}
+
+// Format redacts the challenge credential and correlated metadata.
+func (MFAChallengeResult) Format(s fmt.State, _ rune) {
+	_, _ = io.WriteString(s, "password.MFAChallengeResult(redacted)")
+}
+
+// MarshalJSON denies implicit credential export; trusted transport owns reveal.
+func (MFAChallengeResult) MarshalJSON() ([]byte, error) { return nil, ErrSensitiveSerialization }
+
+// MarshalText denies implicit textual credential export.
+func (MFAChallengeResult) MarshalText() ([]byte, error) { return nil, ErrSensitiveSerialization }
+
+// LogValue redacts structured diagnostics.
+func (MFAChallengeResult) LogValue() slog.Value {
+	return slog.StringValue("password.MFAChallengeResult(redacted)")
 }
 
 // Validate checks result shape/correlation without revealing or authenticating
@@ -137,6 +168,16 @@ func (r SigninResult) Validate() error {
 		return ErrPasswordWork
 	}
 	hasToken, hasCSRF := i.Token != (session.Token{}), r.CSRFToken != (session.CSRFToken{})
+	if r.State == auth.SignInStateChallengeRequired {
+		c := r.Challenge
+		if _, err := identity.ParseCommandID(string(c.ID)); err != nil || i.CommitOutcome != identity.CommitOutcomeCommitted || r.SessionID != "" || i.Session != (session.Session{}) || hasToken || hasCSRF || !emptySigninCookie(i.Cookie) || c.Method != "totp" || c.ExpiresAt.IsZero() || !c.ExpiresAt.After(time.Unix(0, 0)) || c.ExpiresAt.Nanosecond() != 0 || i.Replayed && c.Proof != (capability.Proof{}) {
+			return ErrPasswordWork
+		}
+		return nil
+	}
+	if r.Challenge != (MFAChallengeResult{}) {
+		return ErrPasswordWork
+	}
 	if hasToken != hasCSRF || (i.Replayed || !hasToken) && !emptySigninCookie(i.Cookie) {
 		return ErrPasswordWork
 	}

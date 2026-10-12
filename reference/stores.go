@@ -66,6 +66,10 @@ type StoreConfiguration struct {
 	Session *SessionConfiguration
 	// PasswordVerification selects native reauthentication/proof recovery, not HTTP.
 	PasswordVerification *PasswordVerificationConfiguration
+	// MFAEnrollment selects native first-factor enrollment management, not HTTP.
+	MFAEnrollment *MFAEnrollmentConfiguration
+	// HTTPMFAEnrollment independently selects native cookie enrollment HTTP.
+	HTTPMFAEnrollment *HTTPMFAEnrollmentConfiguration
 	// PasswordChange selects native keyed replacement over selected verification.
 	PasswordChange *PasswordChangeConfiguration
 	// HTTPPasswordVerification explicitly selects native reauthentication HTTP.
@@ -416,6 +420,12 @@ func (s StoreSet) Close(ctx context.Context) error {
 	}
 	if state.features != nil && state.features.httpMFA != nil {
 		state.features.httpMFA.rate.Close()
+	}
+	if state.features != nil && state.features.httpMFAEnrollment != nil {
+		state.features.httpMFAEnrollment.rate.Close()
+		if state.features.httpMFAEnrollment.verifyRate != nil {
+			state.features.httpMFAEnrollment.verifyRate.Close()
+		}
 	}
 	drained := state.drained
 	state.mu.Unlock()

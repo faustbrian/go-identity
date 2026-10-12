@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Add opt-in password-first MFA challenge responses. Deliver the native proof
+  once through `X-MFA-Token`, never JSON or a session cookie; error, ambiguity,
+  replay, expiry and failed final response commitment withhold credentials.
+
 - Add separately selected reset-completion transport with original issued-proof
   and shared challenge admission. Preserve password/proof-free recovery metadata
   on ambiguity, destroy local credential custody on every exit, and return

@@ -19,7 +19,10 @@ import (
 // and key select existing strict shared verification quotas, not MFA authority.
 // Omit configuration to expose no route, OpenAPI operation or capability.
 type HTTPMFAConfiguration struct {
-	TOTPVerify            bool
+	TOTPVerify bool
+	// PasswordTOTPVerify independently selects password-primary completion.
+	// When both are selected, X-MFA-Variant: password chooses its native owner.
+	PasswordTOTPVerify    bool
 	ActorID               identity.ActorID
 	PolicyRevision        authorization.Revision
 	VerificationNamespace string
@@ -33,6 +36,13 @@ type mfaHTTPState struct {
 	audience string
 	timeout  time.Duration
 	rate     *identityhttp.ChallengeVerificationRateLimiter
+	password *passwordTOTPHTTPProfile
+}
+
+type passwordTOTPHTTPProfile struct {
+	origin, callback, audience string
+	cookie                     session.CookiePolicy
+	timeout                    time.Duration
 }
 
 func composeMFAHTTP(c StoreConfiguration, base *preAuthHTTPState, rate *httpRateState) (*mfaHTTPState, error) {
@@ -40,12 +50,33 @@ func composeMFAHTTP(c StoreConfiguration, base *preAuthHTTPState, rate *httpRate
 		return nil, nil
 	}
 	invalid := identity.InvalidInputError{Field: "reference_http_mfa"}
-	if !c.HTTPMFA.TOTPVerify || c.MagicLink == nil || c.MagicLink.TOTP == nil || c.MagicLink.PreAuth == nil || c.MagicLink.Consume == nil || c.MagicLink.Consume.MFA == nil || !c.MagicLink.Request.MFAContinuation || base == nil || base.device == nil || rate == nil || c.HTTPRate == nil {
+	if (!c.HTTPMFA.TOTPVerify && !c.HTTPMFA.PasswordTOTPVerify) || base == nil || base.device == nil || rate == nil || c.HTTPRate == nil {
 		return nil, invalid
 	}
-	h, n, p := *c.HTTPMFA, c.MagicLink.Request, *c.MagicLink.PreAuth
-	if p.Origin != base.deployment.Origin || p.ActorID != h.ActorID || n.Coordinator.QueryPolicy == nil || n.Coordinator.AdmissionPolicy == nil || uint64(h.PolicyRevision) != n.Coordinator.QueryPolicy.PolicyVersion || uint64(h.PolicyRevision) != n.Coordinator.AdmissionPolicy.PolicyVersion {
-		return nil, invalid
+	h := *c.HTTPMFA
+	out := &mfaHTTPState{config: h}
+	if h.TOTPVerify {
+		if c.MagicLink == nil || c.MagicLink.TOTP == nil || c.MagicLink.PreAuth == nil || c.MagicLink.Consume == nil || c.MagicLink.Consume.MFA == nil || !c.MagicLink.Request.MFAContinuation {
+			return nil, invalid
+		}
+		n, p := c.MagicLink.Request, *c.MagicLink.PreAuth
+		if p.Origin != base.deployment.Origin || p.ActorID != h.ActorID || n.Coordinator.QueryPolicy == nil || n.Coordinator.AdmissionPolicy == nil || uint64(h.PolicyRevision) != n.Coordinator.QueryPolicy.PolicyVersion || uint64(h.PolicyRevision) != n.Coordinator.AdmissionPolicy.PolicyVersion {
+			return nil, invalid
+		}
+		out.preauth, out.cookie, out.audience, out.timeout = p, c.MagicLink.Consume.Issuer.Cookie, n.Issuer.Audience, c.MagicLink.TOTP.MaximumDuration
+	}
+	if h.PasswordTOTPVerify {
+		if c.PasswordSignin == nil || c.PasswordSignin.PreAuth == nil || c.PasswordSignin.MFA == nil || c.PasswordSignin.TOTP == nil {
+			return nil, invalid
+		}
+		n, p := c.PasswordSignin.Native, *c.PasswordSignin.PreAuth
+		if p.Origin != base.deployment.Origin || p.ActorID != h.ActorID || n.Coordinator.QueryPolicy == nil || n.Coordinator.AdmissionPolicy == nil || uint64(h.PolicyRevision) != n.Coordinator.QueryPolicy.PolicyVersion || uint64(h.PolicyRevision) != n.Coordinator.AdmissionPolicy.PolicyVersion {
+			return nil, invalid
+		}
+		out.password = &passwordTOTPHTTPProfile{origin: p.Origin, callback: p.CallbackURL, audience: n.Profile.Audience, cookie: n.Issuance.Cookie, timeout: c.PasswordSignin.TOTP.MaximumDuration}
+		if h.TOTPVerify && (p.Origin != out.preauth.Origin || p.CallbackURL != out.preauth.CallbackURL || n.Profile.Audience != out.audience) {
+			return nil, invalid
+		}
 	}
 	if (authorization.DecisionContext{PolicyRevision: h.PolicyRevision, Request: authorization.Request{Tenant: "configuration", Subject: authorization.Subject{Kind: authorization.SubjectServiceAccount, ID: authorization.SubjectID(h.ActorID)}, Action: "identity.mfa.totp-verify", Resource: authorization.Resource{Type: "identity.mfa-continuation", ID: "configuration"}}}).Validate() != nil {
 		return nil, invalid
@@ -54,28 +85,68 @@ func composeMFAHTTP(c StoreConfiguration, base *preAuthHTTPState, rate *httpRate
 	if err != nil {
 		return nil, invalid
 	}
-	return &mfaHTTPState{config: h, preauth: p, cookie: c.MagicLink.Consume.Issuer.Cookie, audience: n.Issuer.Audience, timeout: c.MagicLink.TOTP.MaximumDuration, rate: limiter}, nil
+	out.rate = limiter
+	return out, nil
 }
 
 func (s *Server) mfaFeature(network identityhttp.NetworkConfig, f FeatureSet) (*identityhttp.Feature, error) {
 	h := s.state.features.httpMFA
-	if h == nil {
+	enrollment, err := s.mfaEnrollmentHTTPConfig(network, f)
+	if err != nil {
+		return nil, err
+	}
+	if h == nil && enrollment == nil {
 		return nil, nil
 	}
-	owner, err := f.MagicLinkTOTP()
+	config := mfahttp.FeatureConfig{Enable: enrollment}
+	config.URI, err = s.mfaProvisioningHTTPConfig(network, f, enrollment)
 	if err != nil {
 		return nil, err
 	}
-	native, ok := owner.(mfahttp.TOTPVerifyService)
-	if !ok {
-		return nil, identity.InvalidInputError{Field: "reference_http_mfa"}
-	}
-	selection := mfahttp.TOTPVerifyConfig{Network: network, Service: native, Rate: h.rate, Origin: identityhttp.Origin(h.preauth.Origin), CallbackURL: h.preauth.CallbackURL, SessionCookie: h.cookie, Device: *s.state.features.httpPreAuth.device, ActorID: h.config.ActorID, PolicyRevision: h.config.PolicyRevision, Audience: h.audience, Now: time.Now, MaximumDuration: h.timeout}
-	feature, err := mfahttp.NewFeature(mfahttp.FeatureConfig{TOTPVerify: &selection})
+	config.EnrollmentConfirmation, err = s.mfaConfirmationHTTPConfig(network, f, enrollment)
 	if err != nil {
 		return nil, err
 	}
-	return &feature, nil
+	if h != nil && h.config.TOTPVerify {
+		owner, err := f.MagicLinkTOTP()
+		if err != nil {
+			return nil, err
+		}
+		native, ok := owner.(mfahttp.TOTPVerifyService)
+		if !ok {
+			return nil, identity.InvalidInputError{Field: "reference_http_mfa"}
+		}
+		selection := mfahttp.TOTPVerifyConfig{Network: network, Service: native, Rate: h.rate, Origin: identityhttp.Origin(h.preauth.Origin), CallbackURL: h.preauth.CallbackURL, SessionCookie: h.cookie, Device: *s.state.features.httpPreAuth.device, ActorID: h.config.ActorID, PolicyRevision: h.config.PolicyRevision, Audience: h.audience, Now: time.Now, MaximumDuration: h.timeout}
+		config.TOTPVerify = &selection
+	}
+	if h != nil && h.password != nil {
+		owner, err := f.PasswordTOTP()
+		if err != nil {
+			return nil, err
+		}
+		native, ok := owner.(mfahttp.TOTPVerifyService)
+		if !ok {
+			return nil, identity.InvalidInputError{Field: "reference_http_mfa"}
+		}
+		p := h.password
+		selection := mfahttp.TOTPVerifyConfig{Network: network, Service: native, Rate: h.rate, Origin: identityhttp.Origin(p.origin), CallbackURL: p.callback, SessionCookie: p.cookie, Device: *s.state.features.httpPreAuth.device, ActorID: h.config.ActorID, PolicyRevision: h.config.PolicyRevision, Audience: p.audience, Now: time.Now, MaximumDuration: p.timeout}
+		config.PasswordTOTPVerify = &selection
+	}
+	feature, err := mfahttp.NewFeature(config)
+	if err != nil {
+		return nil, err
+	}
+	operations, err := identityhttp.NewOperationDescriptors(identityhttp.FeatureServices{Features: []identityhttp.Feature{feature}})
+	if err != nil {
+		return nil, err
+	}
+	for i := range operations {
+		if operations[i].Record.OperationID == "identity.mfa.enable" || operations[i].Record.OperationID == "identity.mfa.totp-uri" || (operations[i].Record.OperationID == "identity.mfa.totp-verify" && config.EnrollmentConfirmation != nil) {
+			operations[i].Handler = &mfaEnrollmentLifetimeHandler{state: s.state, next: operations[i].Handler, operation: operations[i].Record.OperationID}
+		}
+	}
+	feature, err = identityhttp.NewFeature(identityhttp.FeatureConfig{ID: "identity/mfa", Operations: operations})
+	return &feature, err
 }
 
 // Format redacts deployment and rate key configuration.

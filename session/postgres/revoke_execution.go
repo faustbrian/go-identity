@@ -32,6 +32,10 @@ type RevokeOneExecutorConfig struct {
 	// magic-link source and target sessions. It never enables single-factor
 	// fallback; the same profile must be selected by Sessions.
 	MFAMagicLink *MagicLinkAdmissionConfig
+	// MFAPassword retains current password credential and confirmed TOTP
+	// authority for both caller and target. Select the identical native reader
+	// profile; nil never downgrades an MFA session to single-factor admission.
+	MFAPassword *IdentifierAdmissionConfig
 }
 
 // RevokeOneExecutor owns kernel/native/audit/outbox composition. It accepts no
@@ -89,6 +93,14 @@ func NewRevokeOneExecutor(pool *database.Pool, c RevokeOneExecutorConfig) (*Revo
 			verified := IdentifierAdmissionConfig(base)
 			owned.native.revokeAdmission = &SingleFactorSessionAdmissionConfig{Verified: &verified}
 		}
+	}
+	if p := c.MFAPassword; p != nil {
+		base := c.Execution.Profile
+		if !p.valid() || p.AuthenticationMethod != "password" || p.CredentialKind != identity.CredentialPassword || p.CredentialOwner != "identity/password" || p.GlobalAuthorityID != base.GlobalAuthorityID || p.PolicyNamespace != base.PolicyNamespace || p.Audience != base.Audience {
+			return nil, session.ErrInvalidInput
+		}
+		copied := *p
+		owned.native.revokeMFAPassword = &copied
 	}
 	return &RevokeOneExecutor{owned, c.Sessions}, nil
 }

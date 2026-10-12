@@ -2,6 +2,62 @@
 
 ## Unreleased
 
+- Preserve code-free TOTP completion recovery for both selected primary profiles;
+  recovery does not require verification input or regenerate credentials.
+
+- Compose password-origin TOTP completion and opt-in HTTP challenge delivery
+  without requiring magic-link login. Preserve original password/factor
+  provenance through session reading and logout; replay never redelivers
+  authentication credentials.
+
+- Compose selected password-first TOTP owners with forward MFA/session migration
+  histories and matching session read/signout profiles. Preserve previously
+  installed prefixes and reuse native counting, encrypted output and recovery.
+  Full public password-MFA journey acceptance and HTTP wiring remain outstanding.
+
+- Add explicit password-primary TOTP completion selection, reusing the native
+  counted completion pipeline without magic-link primary substitution. Preserve
+  original signed credential/identifier authority and primary times. Graph
+  migration selection, session read/signout and HTTP login wiring remain unfinished.
+
+- Complete explicit enrollment-confirmation HTTP selection with native original
+  custody, verification quotas and graph drain. Real registration proves HTTP
+  enrollment, URI disclosure, activation and metadata-only retries without
+  silently promoting the primary session. Closed-graph responses preserve the
+  selected operation's wire shape. Password-first MFA login remains unfinished.
+
+- Forward original confirmation quota custody through the native MFA graph's
+  tenant/startup/shutdown admission. Confirmation HTTP selection remains
+  unfinished; this read-only source neither verifies a code nor activates.
+
+- Add explicit provisioning URI selection to MFA enrollment HTTP, preserving
+  the native original-source quota/deadline and graph lifetime. The real
+  registration journey now proves HTTP reveal and secret-free committed replay;
+  confirmation HTTP and password-first MFA login remain unfinished.
+
+- Add independent HTTPMFAEnrollment selection over native session,
+  reauthentication, enrollment and shared-rate owners. Preserve pipeline hooks
+  and graph shutdown/drain ownership. The real registration journey now proves
+  cookie/CSRF enrollment, reveal-once recovery codes and metadata-only retry;
+  URI/confirmation HTTP and MFA-required password login remain unfinished.
+
+- Compose native MFA enable with retained synchronizer keys so selected cookie
+  requests are fenced atomically with enrollment. The live registration-to-
+  enrollment journey now uses that native cookie binding; HTTP enrollment
+  handlers and MFA-required login remain separate unfinished work.
+
+- Add explicit native MFAEnrollment composition for pending TOTP enable,
+  reveal-once URI and code-confirmed activation over the graph's real password,
+  primary-session and counted-risk owners. Retained handles enforce startup,
+  tenant and shutdown admission. Extend the existing MFA history and reuse
+  counted-preparation ownership without rewriting installed shared histories.
+  Selection does not expose enrollment HTTP routes; live graph enrollment
+  acceptance and that transport remain unfinished.
+
+- Keep the selected magic-link/TOTP login owner closed to the new enrollment
+  confirmation variant; do not interpret it as a login child or expose an
+  unimplemented activation route. Existing login composition is unchanged.
+
 - Compose explicitly selected signup-by-magic-link with its owned registration
   and factor-provenance histories, preserving installed prefixes and optional
   password/TOTP selection. Carry native proof limits into HTTP consumption.

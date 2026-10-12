@@ -137,6 +137,9 @@ func TestMFATOTPAttemptZeroWorkDenies(t *testing.T) {
 	if err := w.RequireRecipient(t.Context(), nil, RecipientRecord{}); err == nil {
 		t.Fatal("zero counted work admitted recipient authority")
 	}
+	if now, err := w.RequireRecipientCredential(t.Context(), nil, RecipientRecord{}, CredentialAdmission{}); err == nil || !now.IsZero() {
+		t.Fatal("zero counted work admitted credential authority")
+	}
 	if _, err := w.ReserveCommandCounters(t.Context(), nil); err == nil {
 		t.Fatal("zero counted work charged risk")
 	}

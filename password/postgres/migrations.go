@@ -50,8 +50,46 @@ func (MigrationSource) Load(ctx context.Context) ([]migrations.Migration, error)
 	if err != nil {
 		return nil, password.ErrPasswordWork
 	}
-	return []migrations.Migration{migration, replacement, reauthentication, consumption, signin, reset}, nil
+	mfa, err := migrations.NewMigration(7, "identity_password_mfa_reauthentication_consumption", migrations.TransactionModeDefault, mfaReauthenticationConsumptionSQL, "")
+	if err != nil {
+		return nil, password.ErrPasswordWork
+	}
+	primary, err := migrations.NewMigration(8, "identity_password_mfa_primary_records", migrations.TransactionModeDefault, mfaSigninPrimarySQL, "")
+	if err != nil {
+		return nil, password.ErrPasswordWork
+	}
+	return []migrations.Migration{migration, replacement, reauthentication, consumption, signin, reset, mfa, primary}, nil
 }
+
+// Non-final comparison evidence never shares the completed-signin source table.
+// This is owned domain data under the original command, not another journal.
+const mfaSigninPrimarySQL = `CREATE TABLE identity_password.mfa_primary_records (
+ proof_id text COLLATE "C" PRIMARY KEY CHECK(proof_id ~ '^[A-Za-z0-9_-]{22}$'),
+ tenant_id identity.directory_id NOT NULL,
+ user_id identity.directory_id NOT NULL,
+ command_id bytea NOT NULL CHECK(octet_length(command_id)=16),
+ purpose text COLLATE "C" NOT NULL CHECK(purpose='identity.password.signin'),
+ record_digest bytea NOT NULL CHECK(octet_length(record_digest)=32),
+ record bytea NOT NULL CHECK(octet_length(record) BETWEEN 1 AND 32768),
+ UNIQUE(tenant_id,purpose,command_id),
+ FOREIGN KEY(tenant_id,user_id) REFERENCES identity.users(tenant_id,user_id),
+ FOREIGN KEY(tenant_id,purpose,command_id) REFERENCES identity.commands(tenant_id,purpose,command_id)
+);
+`
+
+// The existing one-use record remains the sole consumer marker. Preserve
+// installed history, FK custody and uniqueness; admitting the named MFA action
+// does not validate a proof or authorize enrollment by itself.
+const mfaReauthenticationConsumptionSQL = `ALTER TABLE identity_password.reauthentication_records
+ DROP CONSTRAINT reauthentication_consumption_complete,
+ ADD CONSTRAINT reauthentication_consumption_complete CHECK (
+  (consumed_command_id IS NULL AND consumed_purpose IS NULL AND consumed_at IS NULL)
+  OR (consumed_command_id IS NOT NULL AND octet_length(consumed_command_id)=16
+   AND consumed_purpose IS NOT NULL AND consumed_purpose IN ('identity.password.change','identity.mfa.enable')
+   AND consumed_at IS NOT NULL AND isfinite(consumed_at)
+   AND consumed_at>='0001-01-01 00:00:00+00'::timestamptz
+   AND consumed_at<'10000-01-01 00:00:00+00'::timestamptz));
+`
 
 // Preserve installed checksums and populated change receipts. Reset shares the
 // original material-effect owner, rather than adding a second intent journal.

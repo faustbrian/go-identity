@@ -166,13 +166,24 @@ func (p *passwordChangePhase) ApplyFeature(ctx context.Context, w kernel.Work, c
 }
 
 func (p *passwordChangePhase) consume(ctx context.Context, w kernel.Work, b identity.CommandBinding) error {
-	expected, err := encodeReauthenticationRecord(p.record)
+	return consumeReauthenticationRecord(ctx, w, b, p.record, p.checkTime)
+}
+
+// Both protected actions use the same password-owned record and exclusive
+// consumer lock. The calling native phase must first fence its current owners;
+// checkTime rechecks original expiry after waiting, never renews it.
+func consumeReauthenticationRecord(ctx context.Context, w kernel.Work, b identity.CommandBinding, record auth.SignedReauthenticationRecord, checkTime func(context.Context, kernel.Work) error) error {
+	if ctx == nil || checkTime == nil || record.Proof.Proof.Tenant != string(b.TenantID) || record.Proof.Proof.Subject != string(b.UserID) || record.Proof.Action != b.OperationID || (b.OperationID != "identity.password.change" && b.OperationID != "identity.mfa.enable") {
+		return identity.ForbiddenError{}
+	}
+	expected, err := encodeReauthenticationRecord(record)
 	if err != nil {
 		return err
 	}
+	defer clear(expected)
 	rows, err := w.Query(ctx, `SELECT CASE WHEN octet_length(p.record)<=$4 THEN p.record ELSE ''::bytea END,p.consumed_command_id IS NULL
 FROM identity_password.reauthentication_records p JOIN identity.commands c USING(tenant_id,purpose,command_id)
-WHERE p.proof_id=$1 AND p.tenant_id=$2 AND p.user_id=$3 AND c.state='committed' FOR UPDATE OF p`, string(p.record.Proof.Proof.ID), string(b.TenantID), string(b.UserID), maximumReauthenticationRecordBytes)
+WHERE p.proof_id=$1 AND p.tenant_id=$2 AND p.user_id=$3 AND c.state='committed' FOR UPDATE OF p`, string(record.Proof.Proof.ID), string(b.TenantID), string(b.UserID), maximumReauthenticationRecordBytes)
 	if err != nil {
 		return err
 	}
@@ -197,7 +208,7 @@ WHERE p.proof_id=$1 AND p.tenant_id=$2 AND p.user_id=$3 AND c.state='committed' 
 		return identity.ForbiddenError{}
 	}
 	// Recheck original expiry after waiting for the exclusive one-use lock.
-	if err = p.checkTime(ctx, w); err != nil {
+	if err = checkTime(ctx, w); err != nil {
 		return err
 	}
 	now, err := w.DatabaseTime(ctx)
@@ -208,7 +219,7 @@ WHERE p.proof_id=$1 AND p.tenant_id=$2 AND p.user_id=$3 AND c.state='committed' 
 	if err != nil {
 		return password.ErrPasswordWork
 	}
-	n, err := w.Exec(ctx, `UPDATE identity_password.reauthentication_records SET consumed_command_id=$4,consumed_purpose=$5,consumed_at=$6 WHERE proof_id=$1 AND tenant_id=$2 AND user_id=$3 AND consumed_command_id IS NULL`, string(p.record.Proof.Proof.ID), string(b.TenantID), string(b.UserID), id, b.OperationID, now)
+	n, err := w.Exec(ctx, `UPDATE identity_password.reauthentication_records SET consumed_command_id=$4,consumed_purpose=$5,consumed_at=$6 WHERE proof_id=$1 AND tenant_id=$2 AND user_id=$3 AND consumed_command_id IS NULL`, string(record.Proof.Proof.ID), string(b.TenantID), string(b.UserID), id, b.OperationID, now)
 	if err != nil {
 		return err
 	}

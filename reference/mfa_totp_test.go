@@ -128,6 +128,38 @@ func TestMagicLinkTOTPFeatureCannotBypassGraphLifetime(t *testing.T) {
 	}
 }
 
+func TestPasswordTOTPSelectionNeverFallsBackAndRetainedHandleDeniesShutdown(t *testing.T) {
+	var empty FeatureSet
+	if owner, err := empty.PasswordTOTP(); err == nil || owner != nil {
+		t.Fatal("zero graph exposed password TOTP")
+	}
+	_, _, graph := serverFixture(t)
+	graph.state.features.magicTOTP = &magicLinkTOTPService{}
+	if owner, err := graph.PasswordTOTP(); err == nil || owner != nil {
+		t.Fatal("magic-link selection silently enabled password TOTP")
+	}
+	graph.state.features.passwordTOTP = &magicLinkTOTPService{}
+	owner, err := graph.PasswordTOTP()
+	if err != nil || owner == nil {
+		t.Fatal("selected password completion unavailable", err)
+	}
+	graph.state.mu.Lock()
+	graph.state.closed = true
+	graph.state.mu.Unlock()
+	if next, err := graph.PasswordTOTP(); err == nil || next != nil {
+		t.Fatal("closed graph exposed password completion")
+	}
+	if result, err := owner.TotpVerify(t.Context(), nativeTOTPRequest(t)); err == nil || result.Session.Token != (session.Token{}) {
+		t.Fatal("retained password completion bypassed shutdown")
+	}
+	source := owner.(interface {
+		TotpVerificationRateSource(context.Context, mfa.TotpVerifyRequest) (identity.UserID, string, time.Duration, error)
+	})
+	if user, challenge, life, err := source.TotpVerificationRateSource(t.Context(), nativeTOTPRequest(t)); err == nil || user != "" || challenge != "" || life != 0 {
+		t.Fatal("retained password rate source bypassed shutdown")
+	}
+}
+
 func nativeTOTPRequest(t *testing.T) mfa.TotpVerifyRequest {
 	t.Helper()
 	now := time.Now().UTC().Truncate(time.Second)

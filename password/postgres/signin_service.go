@@ -22,8 +22,10 @@ import (
 	auth "github.com/faustbrian/go-authentication"
 	"github.com/faustbrian/go-authorization"
 	authoritypg "github.com/faustbrian/go-authorization/postgres"
+	"github.com/faustbrian/go-capability"
 	identity "github.com/faustbrian/go-identity"
 	email "github.com/faustbrian/go-identity/email"
+	mfapg "github.com/faustbrian/go-identity/mfa/postgres"
 	password "github.com/faustbrian/go-identity/password"
 	kernel "github.com/faustbrian/go-identity/postgres"
 	"github.com/faustbrian/go-identity/risk"
@@ -81,6 +83,7 @@ type SigninService struct {
 	address         email.AddressParser
 	custody         risk.AuthenticationAdmissionCustody
 	c               SigninConfig
+	mfa             *signinMFAComposition
 }
 
 var _ password.SigninService = (*SigninService)(nil)
@@ -210,6 +213,7 @@ func (s *SigninService) Signin(ctx context.Context, r password.SigninRequest) (o
 		if err != nil {
 			out.Issuance.Token, out.CSRFToken = session.Token{}, session.CSRFToken{}
 			out.Issuance.Cookie = http.Cookie{}
+			out.Challenge.Proof = capability.Proof{}
 		}
 	}()
 	if err = ctx.Err(); err != nil {
@@ -278,6 +282,14 @@ func (s *SigninService) Signin(ctx context.Context, r password.SigninRequest) (o
 	if !comparison.Matched {
 		return out, nil
 	}
+	var factorVersion uint64
+	var challengeRequired bool
+	if s.mfa != nil {
+		factorVersion, challengeRequired, err = mfapg.ReadPasswordSigninFactors(ctx, s.pool, r.TenantID, selected, s.c.Repository.MaximumDuration)
+		if err != nil {
+			return out, err
+		}
+	}
 	sessionID, err := identity.NewCommandID()
 	if err != nil {
 		return out, password.ErrPasswordWork
@@ -293,7 +305,11 @@ func (s *SigninService) Signin(ctx context.Context, r password.SigninRequest) (o
 	if err != nil {
 		return out, readerFailure(ctx)
 	}
-	if err = s.authorize(ctx, r.Caller, b, selected); err != nil {
+	profile := "single-factor"
+	if challengeRequired {
+		profile = "multi-factor"
+	}
+	if err = s.authorizeProfile(ctx, r.Caller, b, selected, profile); err != nil {
 		return out, err
 	}
 	if err = admission.Check(ctx); err != nil {
@@ -322,6 +338,13 @@ func (s *SigninService) Signin(ctx context.Context, r password.SigninRequest) (o
 		if err != nil {
 			return out, password.ErrPasswordWork
 		}
+	}
+	if challengeRequired {
+		result, e := s.signinMFA(ctx, r, b, recipient, observation.last, flow, key, admission, authority, factorVersion, upgrade, replacement, out)
+		if e != nil {
+			return result, fmt.Errorf("password MFA: %w", e)
+		}
+		return result, nil
 	}
 	now := s.c.Issuance.Clock.Now().UTC()
 	until := now.Add(s.c.ProofTTL)
@@ -362,6 +385,9 @@ func (s *SigninService) Signin(ctx context.Context, r password.SigninRequest) (o
 		fields = append(fields, metadata...)
 		fields = append(fields, signinRehashCommitment(replacement))
 	}
+	if factorVersion != 0 {
+		fields = append(fields, identity.FeatureField{Name: "password.factor-version", Value: identity.FeatureValue{Kind: identity.FeatureUint64, Uint64: factorVersion}})
+	}
 	command, err := identity.NewFeaturePasswordSigninCommand(identity.FeatureCommandSpec{Binding: b, Operation: op, Fields: fields}, r.Password, r.Cookie)
 	if err != nil {
 		return out, password.ErrPasswordWork
@@ -370,7 +396,7 @@ func (s *SigninService) Signin(ctx context.Context, r password.SigninRequest) (o
 	if err != nil {
 		return out, password.ErrPasswordWork
 	}
-	phase := &signinPhase{operation: op, expected: command, effect: s.effect, recipient: recipient, material: observation.last, request: r, flow: flow, flowKey: key, record: signed, verificationKeys: s.c.VerificationKeys, admission: admission, maximumHashBytes: int(s.c.Repository.HashPolicy.Limits().EncodedHashBytes), upgrade: upgrade, replacement: replacement, hashPolicy: s.c.Repository.HashPolicy}
+	phase := &signinPhase{operation: op, expected: command, effect: s.effect, recipient: recipient, material: observation.last, request: r, flow: flow, flowKey: key, record: signed, verificationKeys: s.c.VerificationKeys, admission: admission, maximumHashBytes: int(s.c.Repository.HashPolicy.Limits().EncodedHashBytes), upgrade: upgrade, replacement: replacement, hashPolicy: s.c.Repository.HashPolicy, factorVersion: factorVersion}
 	coordinator, registry, err := s.coordinator(phase)
 	if err != nil {
 		return out, password.ErrPasswordWork
@@ -407,6 +433,10 @@ func (s *SigninService) flow(ctx context.Context, r password.SigninRequest) (ses
 }
 
 func (s *SigninService) authorize(ctx context.Context, caller authorization.DecisionContext, b identity.CommandBinding, user identity.UserID) error {
+	return s.authorizeProfile(ctx, caller, b, user, "single-factor")
+}
+
+func (s *SigninService) authorizeProfile(ctx context.Context, caller authorization.DecisionContext, b identity.CommandBinding, user identity.UserID, profile string) error {
 	c := caller.Clone()
 	c.PolicyRevision = authorization.Revision(s.c.Coordinator.AdmissionPolicy.PolicyVersion)
 	c.Request.Tenant, c.Request.Action = authorization.TenantID(b.TenantID), authorization.Action(b.OperationID)
@@ -425,9 +455,12 @@ func (s *SigninService) authorize(ctx context.Context, caller authorization.Deci
 		c.Request.Attributes = authorization.Attributes{}
 	}
 	c.Request.Attributes["identity.authentication.method"] = authorization.StringValue("password")
-	c.Request.Attributes["identity.authentication.profile"] = authorization.StringValue("single-factor")
+	c.Request.Attributes["identity.authentication.profile"] = authorization.StringValue(profile)
 	c.Request.Attributes["identity.authentication.phase"] = authorization.StringValue("proposed")
 	c.Request.Attributes["identity.authentication.factor-count"] = authorization.IntValue(1)
+	if profile == "multi-factor" {
+		c.Request.Attributes["identity.authentication.factor-count"] = authorization.IntValue(2)
+	}
 	decision, err := s.c.Coordinator.AdmissionPolicy.Authorization.Decide(ctx, c)
 	if ctx.Err() != nil {
 		return ctx.Err()
@@ -538,6 +571,18 @@ func (s *SigninService) RecoverSignin(ctx context.Context, r password.SigninReco
 	caller.Request.Tenant = authorization.TenantID(q.TenantID)
 	caller.Request.Action = authorization.Action(q.OperationID)
 	caller.Request.Resource = authorization.Resource{Type: "identity.anonymous-flow", ID: authorization.ResourceID(q.AnonymousFlowID)}
+	if s.mfa != nil {
+		_, observed, challenge, e := coordinator.QueryPasswordMFAChallenge(ctx, q, caller)
+		// A classified failed receipt is still authorized original history.
+		// Policy/structural denial returns no valid observed binding and cannot
+		// select a recovery participant or disclose a partial authentication.
+		if e != nil && observed.Validate() != nil {
+			return out, e
+		}
+		if challenge {
+			return s.recoverMFASignin(ctx, r, flow, caller)
+		}
+	}
 	receipt, err := coordinator.RecoverFeatureCommand(ctx, q, caller)
 	if receipt.Feature == nil {
 		return out, err

@@ -4,6 +4,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	auth "github.com/faustbrian/go-authentication"
 	identity "github.com/faustbrian/go-identity"
 )
 
@@ -25,6 +26,20 @@ type mfaIssueRequestState struct {
 // child use, session and audit/lifecycle in the same authoritative transaction.
 // This constructor performs no IO or factor authentication.
 func NewMFAMagicLinkSessionIssuer(executor IssueExecutor, c IssuerConfig) (*SessionIssuer, error) {
+	return newMFASessionIssuer(executor, c, false)
+}
+
+// NewMFAPasswordSessionIssuer selects completion of an original committed
+// password primary, not a magic-link grant or newly authenticated opaque proof.
+// Authority must be nil. The native executor must fence the original signed
+// password evidence and current credential, browser, child and factor, committing
+// child use, factor replay, continuation completion, session and audit/lifecycle
+// atomically. This constructor performs no IO or authentication.
+func NewMFAPasswordSessionIssuer(executor IssueExecutor, c IssuerConfig) (*SessionIssuer, error) {
+	return newMFASessionIssuer(executor, c, true)
+}
+
+func newMFASessionIssuer(executor IssueExecutor, c IssuerConfig, passwordPrimary bool) (*SessionIssuer, error) {
 	if c.Authority != nil {
 		return nil, ErrInvalidIssuer
 	}
@@ -33,6 +48,22 @@ func NewMFAMagicLinkSessionIssuer(executor IssueExecutor, c IssuerConfig) (*Sess
 		return nil, err
 	}
 	s.otp, s.mfa = false, true
+	s.mfaPassword = passwordPrimary
+	return s, nil
+}
+
+// NewMFAPasswordSessionIssuerWithCSRF prepares original synchronizer custody
+// together with password-primary completion. Only a fresh exact known committed
+// Issue may reveal tokens; replay, unknown outcomes and recovery reveal none.
+func NewMFAPasswordSessionIssuerWithCSRF(executor IssueExecutor, c IssuerConfig, key CSRFKey) (*SessionIssuer, error) {
+	if key.key.state == nil {
+		return nil, ErrInvalidIssuer
+	}
+	s, err := NewMFAPasswordSessionIssuer(executor, c)
+	if err != nil {
+		return nil, err
+	}
+	s.csrfKey = key
 	return s, nil
 }
 
@@ -58,6 +89,26 @@ func NewMFAMagicLinkSessionIssuerWithCSRF(executor IssueExecutor, c IssuerConfig
 // original remember policy and continuation expiry are never renewed. BindMFA
 // must freeze the same final opaque command before any reservation/execution.
 func (s *SessionIssuer) PrepareMFAMagicLink(b identity.CommandBinding, spec SessionSpec, primary MagicLinkAuthentication, metadata MFAAuthentication) (out PreparedIssuance, err error) {
+	if s == nil || s.mfaPassword {
+		return out, ErrInvalidIssuance
+	}
+	return s.prepareMFA(b, spec, primary, metadata)
+}
+
+// PrepareMFAPassword freezes original password and factor provenance before
+// allocation. It is available only on the explicit password-MFA issuer; the
+// single-factor password and magic-link issuers cannot enter this profile.
+// Lookup must be zero, Version one and activity equal issuance. The original
+// password time/expiry and resolved remember policy cannot be renewed. BindMFA
+// must retain the final opaque code/browser command before protected execution.
+func (s *SessionIssuer) PrepareMFAPassword(b identity.CommandBinding, spec SessionSpec, metadata MFAAuthentication) (out PreparedIssuance, err error) {
+	if s == nil || !s.mfaPassword {
+		return out, ErrInvalidIssuance
+	}
+	return s.prepareMFA(b, spec, MagicLinkAuthentication{}, metadata)
+}
+
+func (s *SessionIssuer) prepareMFA(b identity.CommandBinding, spec SessionSpec, primary MagicLinkAuthentication, metadata MFAAuthentication) (out PreparedIssuance, err error) {
 	defer func() {
 		if recover() != nil {
 			out, err = PreparedIssuance{}, ErrIssuerUnavailable
@@ -77,7 +128,12 @@ func (s *SessionIssuer) PrepareMFAMagicLink(b identity.CommandBinding, spec Sess
 		return out, ErrInvalidIssuance
 	}
 	spec.Lookup = TokenDigest{KeyVersion: s.config.LookupKey.state.version, Sum: [32]byte{1}}
-	record, e := NewSessionWithMagicLinkMFA(spec, primary, metadata)
+	var record Session
+	if s.mfaPassword {
+		record, e = NewSessionWithPasswordMFA(spec, metadata)
+	} else {
+		record, e = NewSessionWithMagicLinkMFA(spec, primary, metadata)
+	}
 	if e != nil {
 		return out, e
 	}
@@ -136,6 +192,21 @@ func validateMFAIssuanceAt(record Session, now time.Time) error {
 	p, err := record.MFAAuthentication().Bindings()
 	if err != nil || now.Before(p.VerifiedAt) || !now.Before(p.ValidUntil) {
 		return ErrInvalidIssuance
+	}
+	spec, err := record.Bindings()
+	if err != nil {
+		return ErrInvalidIssuance
+	}
+	if spec.Authentication.Kind == AuthenticationVerified {
+		primary := spec.Authentication.Proof
+		if primary.Method != "password" || primary.Assurance != auth.AssuranceSingleFactor || now.Before(spec.IssuedAt) || primary.Validate(auth.ProofUse{Tenant: string(spec.TenantID), Subject: string(spec.UserID), Purpose: PasswordMFAPrimaryPurpose, Audience: spec.Audience, Now: now}) != nil {
+			return ErrInvalidIssuance
+		}
+		life, err := record.Lifetime(now)
+		if err != nil || !life.Fresh {
+			return ErrInvalidIssuance
+		}
+		return nil
 	}
 	return validateMagicLinkIssuanceAt(record, now)
 }

@@ -25,8 +25,8 @@ type CommandPlan struct {
 	// MFACompletion selects the closed session-producing factor profile, not
 	// enrollment verification or a caller-provided authentication proof.
 	MFACompletion *MFACompletionPlan
-	// MFAContinuation freezes the challenge-only alternative to magic-link
-	// session issuance. Metadata alone grants no factor or session authority.
+	// MFAContinuation freezes the challenge-only alternative to password or
+	// magic-link session issuance. Metadata alone grants no authentication.
 	MFAContinuation *MFAContinuationPlan
 	// MagicLinkRegistration freezes a prospective account creation in the
 	// consuming transaction. Nil preserves the existing signin declaration.

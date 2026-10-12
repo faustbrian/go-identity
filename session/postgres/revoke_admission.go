@@ -45,6 +45,17 @@ func (r *Repository) revokeRecordAdmission(record session.Session, b identity.Co
 		return deny()
 	}
 	if s.Authentication.Kind == session.AuthenticationVerified {
+		if record.MFAAuthentication() != (session.MFAAuthentication{}) {
+			if r.revokeMFAPassword == nil {
+				return deny()
+			}
+			directory, credential, policy, err := passwordMFASessionAdmission(*r.revokeMFAPassword, record, b, s.SessionID, s.Version)
+			factor, factorErr := record.MFAAuthentication().Bindings()
+			if err != nil || factorErr != nil {
+				return deny()
+			}
+			return revokeRecordAuthority{directory: directory, credential: &credential, policy: policy, factor: &factor}, nil
+		}
 		var profile *IdentifierAdmissionConfig
 		if r.revokeAdmission != nil {
 			profile = r.revokeAdmission.Verified

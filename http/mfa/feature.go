@@ -9,10 +9,19 @@ import (
 	"github.com/faustbrian/go-identity/session"
 )
 
-// FeatureConfig selects only the explicitly configured TOTP verify operation.
+// FeatureConfig selects only explicitly configured native MFA operations.
 // Omit the feature from composition to expose no routes or metadata. Empty
 // selection denies; construction invokes no native service or global registry.
-type FeatureConfig struct{ TOTPVerify *TOTPVerifyConfig }
+type FeatureConfig struct {
+	TOTPVerify *TOTPVerifyConfig
+	// PasswordTOTPVerify selects the password-origin native owner explicitly.
+	// With both login owners, singleton X-MFA-Variant: password selects it;
+	// otherwise it is the selected default. Selection is never fallback after denial.
+	PasswordTOTPVerify     *TOTPVerifyConfig
+	Enable                 *EnableConfig
+	URI                    *URIConfig
+	EnrollmentConfirmation *EnrollmentConfirmationConfig
+}
 
 // NewFeature contributes the selected owned handler and closed wire contract.
 func NewFeature(c FeatureConfig) (identityhttp.Feature, error) {
@@ -22,19 +31,77 @@ func NewFeature(c FeatureConfig) (identityhttp.Feature, error) {
 // NewFeatureWithMiddleware binds hooks to actual owned phases without granting
 // credential output ownership or returning a partial feature on failure.
 func NewFeatureWithMiddleware(c FeatureConfig, m []identityhttp.MiddlewareDescriptor) (identityhttp.Feature, error) {
-	if c.TOTPVerify == nil {
+	if c.TOTPVerify == nil && c.PasswordTOTPVerify == nil && c.Enable == nil && c.URI == nil && c.EnrollmentConfirmation == nil {
 		return identityhttp.Feature{}, identityhttp.ErrInvalidInput
 	}
-	h, err := NewTOTPVerifyHandlerWithMiddleware(*c.TOTPVerify, m)
-	if err != nil {
-		return identityhttp.Feature{}, err
+	var operations []identityhttp.OperationDescriptor
+	if c.TOTPVerify != nil || c.PasswordTOTPVerify != nil || c.EnrollmentConfirmation != nil {
+		h := &verifyDispatch{passwordDefault: c.TOTPVerify == nil && c.PasswordTOTPVerify != nil}
+		var err error
+		policy := identityhttp.CSRFPolicy{Mode: identityhttp.CSRFExactOrigin, RefererFallback: identityhttp.RefererFallbackDeny}
+		if c.TOTPVerify != nil {
+			h.login, err = NewTOTPVerifyHandlerWithMiddleware(*c.TOTPVerify, m)
+			if err != nil {
+				return identityhttp.Feature{}, err
+			}
+		}
+		if c.PasswordTOTPVerify != nil {
+			if c.TOTPVerify != nil {
+				a, b := *c.TOTPVerify, *c.PasswordTOTPVerify
+				if a.Origin != b.Origin || a.CallbackURL != b.CallbackURL || a.ActorID != b.ActorID || a.PolicyRevision != b.PolicyRevision || a.Audience != b.Audience {
+					return identityhttp.Feature{}, identityhttp.ErrInvalidInput
+				}
+			}
+			password := *c.PasswordTOTPVerify
+			password.PasswordPrimary = true
+			h.password, err = NewTOTPVerifyHandlerWithMiddleware(password, m)
+			if err != nil {
+				return identityhttp.Feature{}, err
+			}
+		}
+		if c.EnrollmentConfirmation != nil {
+			h.enrollment, err = NewEnrollmentConfirmationHandlerWithMiddleware(*c.EnrollmentConfirmation, m)
+			if err != nil {
+				return identityhttp.Feature{}, err
+			}
+			policy.Mode = identityhttp.CSRFSessionState
+			policy.TokenHeader = "X-CSRF-Token"
+			if c.TOTPVerify != nil || c.PasswordTOTPVerify != nil {
+				policy.Mode = identityhttp.CSRFVariantOriginSessionState
+			}
+		}
+		op, err := identityhttp.NewCanonicalOperation(identityhttp.CanonicalOperationConfig{Owner: "identity/mfa", OperationID: "identity.mfa.totp-verify", Handler: h, CSRF: policy, MaximumSerializedBytes: 16384})
+		if err != nil {
+			return identityhttp.Feature{}, err
+		}
+		op.Wire = selectedVerifyWire(c)
+		operations = append(operations, op)
 	}
-	op, err := identityhttp.NewCanonicalOperation(identityhttp.CanonicalOperationConfig{Owner: "identity/mfa", OperationID: "identity.mfa.totp-verify", Handler: h, CSRF: identityhttp.CSRFPolicy{Mode: identityhttp.CSRFExactOrigin, RefererFallback: identityhttp.RefererFallbackDeny}, MaximumSerializedBytes: 16384})
-	if err != nil {
-		return identityhttp.Feature{}, err
+	if c.Enable != nil {
+		h, err := NewEnableHandlerWithMiddleware(*c.Enable, m)
+		if err != nil {
+			return identityhttp.Feature{}, err
+		}
+		op, err := identityhttp.NewCanonicalOperation(identityhttp.CanonicalOperationConfig{Owner: "identity/mfa", OperationID: "identity.mfa.enable", Handler: h, CSRF: identityhttp.CSRFPolicy{Mode: identityhttp.CSRFSessionState, TokenHeader: "X-CSRF-Token", RefererFallback: identityhttp.RefererFallbackDeny}, MaximumSerializedBytes: 32768})
+		if err != nil {
+			return identityhttp.Feature{}, err
+		}
+		op.Wire = enableWire(*c.Enable)
+		operations = append(operations, op)
 	}
-	op.Wire = totpWire(*c.TOTPVerify)
-	return identityhttp.NewFeature(identityhttp.FeatureConfig{ID: "identity/mfa", Operations: []identityhttp.OperationDescriptor{op}})
+	if c.URI != nil {
+		h, err := NewURIHandlerWithMiddleware(*c.URI, m)
+		if err != nil {
+			return identityhttp.Feature{}, err
+		}
+		op, err := identityhttp.NewCanonicalOperation(identityhttp.CanonicalOperationConfig{Owner: "identity/mfa", OperationID: "identity.mfa.totp-uri", Handler: h, CSRF: identityhttp.CSRFPolicy{Mode: identityhttp.CSRFSessionState, TokenHeader: "X-CSRF-Token", RefererFallback: identityhttp.RefererFallbackDeny}, MaximumSerializedBytes: 16384})
+		if err != nil {
+			return identityhttp.Feature{}, err
+		}
+		op.Wire = uriWire(*c.URI)
+		operations = append(operations, op)
+	}
+	return identityhttp.NewFeature(identityhttp.FeatureConfig{ID: "identity/mfa", Operations: operations})
 }
 
 func totpWire(c TOTPVerifyConfig) *identityhttp.WireOperation {

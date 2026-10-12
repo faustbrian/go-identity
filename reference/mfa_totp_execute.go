@@ -36,7 +36,13 @@ func (p *magicTOTPPhase) compose() error {
 		return err
 	}
 	p.delivery = &magicTOTPDelivery{}
-	p.issuer, err = session.NewMFAMagicLinkSessionIssuerWithCSRF(p.delivery, p.state.config.SessionIssuer, p.state.config.CSRF)
+	// Recovery has no submitted input or decrypted primary. The explicitly
+	// composed owner selects the profile without requiring secret custody.
+	if p.state.password != nil {
+		p.issuer, err = session.NewMFAPasswordSessionIssuerWithCSRF(p.delivery, p.state.config.SessionIssuer, p.state.config.CSRF)
+	} else {
+		p.issuer, err = session.NewMFAMagicLinkSessionIssuerWithCSRF(p.delivery, p.state.config.SessionIssuer, p.state.config.CSRF)
+	}
 	return err
 }
 
@@ -95,7 +101,7 @@ func totpReceipt(id identity.CommandID, receipt identity.CommandResult) mfa.Totp
 }
 
 func (s *magicLinkTOTPService) TotpVerify(ctx context.Context, request mfa.TotpVerifyRequest) (out mfa.TotpVerifyResult, err error) {
-	if ctx == nil || s == nil || s.state == nil || request.Validate() != nil {
+	if ctx == nil || s == nil || s.state == nil || request.Enrollment != nil || request.Validate() != nil {
 		return out, invalidTOTPCompletion()
 	}
 	state := s.state()

@@ -4,16 +4,25 @@ import (
 	"bytes"
 	"testing"
 
+	auth "github.com/faustbrian/go-authentication"
 	identity "github.com/faustbrian/go-identity"
 	"github.com/faustbrian/go-identity/session"
 )
 
 func mfaCompletionMappingFixture(t testing.TB, csrf bool) (identity.FeatureCommandSpec, session.Session) {
+	return mfaCompletionMappingProfile(t, csrf, false)
+}
+
+func mfaCompletionMappingProfile(t testing.TB, csrf, password bool) (identity.FeatureCommandSpec, session.Session) {
 	t.Helper()
 	spec, record := magicLinkSigninMappingFixture(t, csrf)
 	s, _ := record.Bindings()
 	primary := record.MagicLinkAuthentication()
 	p, _ := primary.Bindings()
+	if password {
+		s.Authentication = session.AuthenticationMetadata{Kind: session.AuthenticationVerified, ProofVersion: 1, CredentialID: "password", CredentialVersion: 3, Proof: auth.Proof{ID: auth.ProofID(p.CommandID), Tenant: string(s.TenantID), Subject: string(s.UserID), Method: "password", Assurance: auth.AssuranceSingleFactor, Purpose: "session-issue", Audience: s.Audience, IssuedAt: p.AuthenticatedAt, ExpiresAt: p.ValidUntil}}
+		s.Authentication.Proof.Purpose = "identity.password.mfa-primary"
+	}
 	a, _ := s.Authority.Bindings()
 	a.Factor = session.OptionalAuthorityBinding{Present: true, Binding: session.AuthorityBinding{ScopeKey: "factor/user", Version: 7}}
 	s.Authority, _ = session.NewAuthoritySnapshot(a)
@@ -22,7 +31,11 @@ func mfaCompletionMappingFixture(t testing.TB, csrf bool) (identity.FeatureComma
 	if err != nil {
 		t.Fatal(err)
 	}
-	if csrf {
+	if password && csrf {
+		record, err = session.NewSessionWithPasswordMFAAndCSRF(s, m, record.CSRFState())
+	} else if password {
+		record, err = session.NewSessionWithPasswordMFA(s, m)
+	} else if csrf {
 		record, err = session.NewSessionWithMagicLinkMFAAndCSRF(s, primary, m, record.CSRFState())
 	} else {
 		record, err = session.NewSessionWithMagicLinkMFA(s, primary, m)
@@ -40,8 +53,8 @@ func mfaCompletionMappingFixture(t testing.TB, csrf bool) (identity.FeatureComma
 }
 
 func TestMFATOTPCompletionMappingRetainsAllOriginalFields(t *testing.T) {
-	for _, csrf := range []bool{false, true} {
-		spec, expected := mfaCompletionMappingFixture(t, csrf)
+	for _, profile := range []struct{ csrf, password bool }{{false, false}, {true, false}, {false, true}, {true, true}} {
+		spec, expected := mfaCompletionMappingProfile(t, profile.csrf, profile.password)
 		command, err := identity.NewFeatureCommand(spec)
 		if err != nil {
 			t.Fatal(err)
@@ -89,14 +102,20 @@ func TestMFATOTPCompletionMappingRetainsAllOriginalFields(t *testing.T) {
 func FuzzMFATOTPCompletionMapping(f *testing.F) {
 	f.Add(uint8(0), "invalid")
 	f.Add(uint8(25), "2026-10-11T00:00:00.000000000Z")
+	f.Add(uint8(128), "invalid")
+	f.Add(uint8(153), "2026-10-11T00:00:00.000000000Z")
 	spec, _ := mfaCompletionMappingFixture(f, true)
+	passwordSpec, _ := mfaCompletionMappingProfile(f, true, true)
 	f.Fuzz(func(t *testing.T, index uint8, input string) {
 		if len(input) > 8192 {
 			return
 		}
 		changed := spec
-		changed.Fields = append([]identity.FeatureField{}, spec.Fields...)
-		i := int(index) % len(changed.Fields)
+		if index&128 != 0 {
+			changed = passwordSpec
+		}
+		changed.Fields = append([]identity.FeatureField{}, changed.Fields...)
+		i := int(index&127) % len(changed.Fields)
 		changed.Fields[i].Value = identity.FeatureValue{Kind: identity.FeatureText, Text: input}
 		command, err := identity.NewFeatureCommand(changed)
 		if err != nil {

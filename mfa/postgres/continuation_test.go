@@ -81,5 +81,8 @@ func TestContinuationPersistenceNeedsExactProtectedChallenge(t *testing.T) {
 		if err := PersistMagicLinkContinuation(ctx, kernel.Work{}, nil, identity.Command{}, continuationFixture(t)); err == nil {
 			t.Fatal("continuation persisted outside primary-consuming challenge")
 		}
+		if err := PersistPasswordContinuation(ctx, kernel.Work{}, nil, identity.Command{}, continuationFixture(t)); err == nil {
+			t.Fatal("password continuation persisted without its comparison owner")
+		}
 	}
 }

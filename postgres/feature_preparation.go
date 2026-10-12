@@ -318,14 +318,14 @@ func (c *Coordinator) prepareFeaturePreparation(original identity.Command, p Com
 	wire, e := encodeFeaturePlan(s.Binding, fingerprint, p)
 	ungenerated := ungeneratedMFAContinuation(p.MFAContinuation)
 	if ungenerated {
-		wire, e = encodeMagicLinkMFAPlanMode(s.Binding, fingerprint, p, true)
+		wire, e = encodeMFAContinuationPlanMode(s.Binding, fingerprint, p, true)
 	}
 	if e != nil {
 		return q, nil, nil, invalidPreparation()
 	}
 	owned, e := decodeFeaturePlan(s.Binding, fingerprint, wire)
 	if ungenerated {
-		owned, e = decodeMagicLinkMFAPlanMode(s.Binding, fingerprint, wire, true)
+		owned, e = decodeMFAContinuationPlanMode(s.Binding, fingerprint, wire, true)
 	}
 	if e != nil {
 		return q, nil, nil, invalidPreparation()
@@ -334,7 +334,7 @@ func (c *Coordinator) prepareFeaturePreparation(original identity.Command, p Com
 	if e != nil || phase.ValidateFeaturePreparation(original, admitted.snapshot()) != nil {
 		return q, nil, nil, invalidPreparation()
 	}
-	if owned.MFAContinuation != nil && validateMagicLinkConsumption(phase, original, admitted.snapshot()) != nil {
+	if owned.MFAContinuation != nil && validateMFAContinuation(phase, original, admitted.snapshot()) != nil {
 		return q, nil, nil, invalidPreparation()
 	}
 	if owned.MFACompletion != nil && validateMFACompletion(phase, original, admitted.snapshot()) != nil {
@@ -410,7 +410,7 @@ func preparationFinalDeclaration(b identity.CommandBinding, original, final Comm
 	if original.MFAContinuation != nil {
 		a, z := original.MFAContinuation, final.MFAContinuation
 		ungenerated := ungeneratedMFAContinuation(a)
-		if !validMagicLinkMFAPlanMode(b, original, true) || !validMagicLinkMFAPlan(b, final) || final.CapabilityIssuance == nil || a.UserID != z.UserID || a.PolicyVersion != z.PolicyVersion || a.FactorVersion != z.FactorVersion || !ungenerated && *a != *z {
+		if !validMFAContinuationPlanMode(b, original, true) || !validMFAContinuationPlanMode(b, final, false) || final.CapabilityIssuance == nil || a.UserID != z.UserID || a.PolicyVersion != z.PolicyVersion || a.FactorVersion != z.FactorVersion || !ungenerated && *a != *z {
 			return false
 		}
 	}

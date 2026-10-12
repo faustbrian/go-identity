@@ -30,9 +30,10 @@ import (
 )
 
 type liveStores struct {
-	stores reference.StoreSet
-	pool   *database.Pool
-	config reference.StoreConfiguration
+	completionFault *completionCommitFault
+	stores          reference.StoreSet
+	pool            *database.Pool
+	config          reference.StoreConfiguration
 }
 
 func newLiveStores(t *testing.T, ctx context.Context) liveStores {

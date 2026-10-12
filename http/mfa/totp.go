@@ -38,6 +38,9 @@ type TOTPVerifyService interface {
 // owners. Now is prompt and concurrent-safe; MaximumDuration is1ms..30s, with
 // earlier inbound deadlines winning. Construction performs no IO or issuance.
 type TOTPVerifyConfig struct {
+	// PasswordPrimary explicitly selects password-origin delivery. False retains
+	// the existing magic-link profile; neither profile accepts the other's evidence.
+	PasswordPrimary bool
 	Network         identityhttp.NetworkConfig
 	Service         TOTPVerifyService
 	Rate            *identityhttp.ChallengeVerificationRateLimiter

@@ -206,6 +206,7 @@ INSERT INTO authorization_subject_authorities VALUES('AAAAAAAAAAAAAAAAAAAAAQ','u
 	}
 	riskFixture := &reauthenticationRiskFixture{}
 	configuration := passworddb.ReauthenticationConfig{Repository: passworddb.Config{MaximumDuration: 3 * time.Second, HashPolicy: policy}, Verifier: password.VerifierConfig{Primitive: crypto, MaximumBytes: 128, Timeout: time.Second, DummyHash: hash, Now: time.Now}, Session: sessionpg.Config{Schema: "reauth_sessions", MaximumDuration: time.Second}, Profile: sessionpg.IdentifierAdmissionConfig{GlobalAuthorityID: "reauth-deployment", PolicyNamespace: "users", Audience: "backend", AuthenticationMethod: "password", CredentialKind: identity.CredentialPassword, CredentialOwner: "identity/password"}, LookupKeys: []session.DigestKey{lookupKey}, Risk: reauthenticationRisk(t, riskFixture), Coordinator: kernel.CoordinatorConfig{MaximumDuration: 2 * time.Second, LeaseDuration: time.Minute, CurrentFingerprintKeyVersion: 1, RetainedFingerprintKeys: map[uint32][32]byte{1: {1}}, QueryPolicy: &kernel.CommandQueryPolicy{Clock: clock.System{}, PolicyVersion: 9, Authorization: passwordQueryPolicy{}}}, SigningKey: signer, VerificationKeys: map[string]ed25519.PublicKey{"evidence-1": public}, Issuer: "issuer", Environment: "test", Targets: []passworddb.ReauthenticationTarget{{Purpose: "identity.password.verify", Action: "identity.password.change", Audience: "backend"}}, TTL: 5 * time.Minute, IdentifierKey: bytes.Repeat([]byte{40}, 32)}
+	configuration.Targets = append(configuration.Targets, passworddb.ReauthenticationTarget{Purpose: "identity.password.verify", Action: "identity.mfa.enable", Audience: "backend"})
 	service, err := passworddb.NewReauthenticationService(pool, configuration)
 	if err != nil {
 		t.Fatal("service composition failed", err)
@@ -548,6 +549,9 @@ INSERT INTO authorization_subject_authorities VALUES('AAAAAAAAAAAAAAAAAAAAAQ','u
 	}
 	t.Run("cookie-verification", func(t *testing.T) {
 		testCookieVerificationNative(t, ctx, pool, configuration, service, request, portableCaller)
+	})
+	t.Run("native-mfa-primary", func(t *testing.T) {
+		testNativeMFAEnablePrimary(t, ctx, pool, configuration, service, request, original)
 	})
 	t.Run("native-password-change", func(t *testing.T) { testNativePasswordChange(t, ctx, pool, configuration, service, request) })
 }

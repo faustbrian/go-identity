@@ -186,6 +186,10 @@ func identifierSessionBindings(c IdentifierAdmissionConfig, record session.Sessi
 // Both workflows derive owner keys from the same original session projection.
 // Workflow-specific version transitions are validated by their owning wrappers.
 func sessionAdmissionBindings(c IdentifierAdmissionConfig, record session.Session, binding identity.CommandBinding, sessionID string, version uint64) (kernel.DirectoryAuthorityAdmission, kernel.CredentialAdmission, kernel.UserAuthorizationAdmission, error) {
+	return passwordSessionAdmissionBindings(c, record, binding, sessionID, version, session.OptionalAuthorityBinding{})
+}
+
+func passwordSessionAdmissionBindings(c IdentifierAdmissionConfig, record session.Session, binding identity.CommandBinding, sessionID string, version uint64, factor session.OptionalAuthorityBinding) (kernel.DirectoryAuthorityAdmission, kernel.CredentialAdmission, kernel.UserAuthorizationAdmission, error) {
 	deny := func() (kernel.DirectoryAuthorityAdmission, kernel.CredentialAdmission, kernel.UserAuthorizationAdmission, error) {
 		return kernel.DirectoryAuthorityAdmission{}, kernel.CredentialAdmission{}, kernel.UserAuthorizationAdmission{}, identity.ForbiddenError{}
 	}
@@ -197,7 +201,7 @@ func sessionAdmissionBindings(c IdentifierAdmissionConfig, record session.Sessio
 	if err != nil {
 		return deny()
 	}
-	if s.TenantID != binding.TenantID || s.UserID != binding.UserID || string(binding.ActorID) != string(s.UserID) || binding.ActorKind != authorization.SubjectUser || s.SessionID != sessionID || s.Version != version || s.Audience != c.Audience || s.Authentication.Kind != session.AuthenticationVerified || s.Authentication.Proof.Method != c.AuthenticationMethod || s.Authentication.Proof.Assurance != authentication.AssuranceSingleFactor || c.CredentialKind == identity.CredentialPasskey || a.Organization.Present || a.Factor.Present || a.Passkey.Present {
+	if s.TenantID != binding.TenantID || s.UserID != binding.UserID || string(binding.ActorID) != string(s.UserID) || binding.ActorKind != authorization.SubjectUser || s.SessionID != sessionID || s.Version != version || s.Audience != c.Audience || s.Authentication.Kind != session.AuthenticationVerified || s.Authentication.Proof.Method != c.AuthenticationMethod || s.Authentication.Proof.Assurance != authentication.AssuranceSingleFactor || c.CredentialKind == identity.CredentialPasskey || a.Organization.Present || a.Factor != factor || a.Passkey.Present {
 		return deny()
 	}
 	query := kernel.DirectoryAuthorityQuery{GlobalAuthorityID: c.GlobalAuthorityID, TenantID: s.TenantID}

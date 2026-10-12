@@ -1,6 +1,8 @@
 package mfahttp
 
 import (
+	auth "github.com/faustbrian/go-authentication"
+	identity "github.com/faustbrian/go-identity"
 	identityhttp "github.com/faustbrian/go-identity/http"
 	"github.com/faustbrian/go-identity/mfa"
 	"github.com/faustbrian/go-identity/session"
@@ -15,7 +17,14 @@ func deliver(c TOTPVerifyConfig, s input, result mfa.TotpVerifyResult) (string, 
 	primary, pe := result.Session.Session.MagicLinkAuthentication().Bindings()
 	csrfState, ce := result.Session.Session.CSRFState().Bindings()
 	now := c.Now()
-	if err != nil || fe != nil || pe != nil || ce != nil || spec.TenantID != s.request.TenantID || spec.UserID != s.rate.UserID || spec.Audience != c.Audience || spec.Authentication.Kind != session.AuthenticationMagicLink || factor.Method != "totp" || factor.CommandID != s.request.CommandID || string(factor.ContinuationID) != s.rate.ChallengeID || string(factor.ContinuationID) != string(s.request.ChallengeID) || factor.FactorID != string(s.request.FactorID) || factor.PrimaryCommandID != primary.CommandID || result.Session.Cookie.Value != "" || csrfState.Binding != (session.CSRFBinding{TenantID: spec.TenantID, SessionID: spec.SessionID, SessionVersion: spec.Version}) {
+	primaryID, primaryAt, primaryUntil := primary.CommandID, primary.AuthenticatedAt, primary.ValidUntil
+	primaryValid := pe == nil && spec.Authentication.Kind == session.AuthenticationMagicLink
+	if c.PasswordPrimary {
+		proof := spec.Authentication.Proof
+		primaryID, primaryAt, primaryUntil = identity.CommandID(proof.ID), proof.IssuedAt, proof.ExpiresAt
+		primaryValid = spec.Authentication.Kind == session.AuthenticationVerified && proof.Method == "password" && proof.Assurance == auth.AssuranceSingleFactor && proof.Validate(auth.ProofUse{Tenant: string(spec.TenantID), Subject: string(spec.UserID), Purpose: session.PasswordMFAPrimaryPurpose, Audience: c.Audience, Now: now}) == nil
+	}
+	if err != nil || fe != nil || !primaryValid || ce != nil || spec.TenantID != s.request.TenantID || spec.UserID != s.rate.UserID || spec.Audience != c.Audience || factor.Method != "totp" || factor.CommandID != s.request.CommandID || string(factor.ContinuationID) != s.rate.ChallengeID || string(factor.ContinuationID) != string(s.request.ChallengeID) || factor.FactorID != string(s.request.FactorID) || factor.PrimaryCommandID != primaryID || result.Session.Cookie.Value != "" || csrfState.Binding != (session.CSRFBinding{TenantID: spec.TenantID, SessionID: spec.SessionID, SessionVersion: spec.Version}) {
 		return deny()
 	}
 	fresh := func() (valid bool) {
@@ -25,10 +34,10 @@ func deliver(c TOTPVerifyConfig, s input, result mfa.TotpVerifyResult) (string, 
 			}
 		}()
 		at := c.Now()
-		if now.IsZero() || at.Before(now) || at.Before(spec.IssuedAt) || at.Before(factor.VerifiedAt) || at.Before(primary.AuthenticatedAt) || !at.Before(factor.ValidUntil) || !at.Before(primary.ValidUntil) {
+		if now.IsZero() || at.Before(now) || at.Before(spec.IssuedAt) || at.Before(factor.VerifiedAt) || at.Before(primaryAt) || !at.Before(factor.ValidUntil) || !at.Before(primaryUntil) {
 			return false
 		}
-		_, err := spec.Remember.Evaluate(at, spec.IssuedAt, spec.LastActivityAt, primary.AuthenticatedAt)
+		_, err := spec.Remember.Evaluate(at, spec.IssuedAt, spec.LastActivityAt, primaryAt)
 		return err == nil
 	}
 	if !fresh() {

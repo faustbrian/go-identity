@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Add explicit password-primary TOTP session provenance and commit-gated
+  issuance preparation. Retain the original password credential, authentication
+  time, expiry and remember policy through update and encrypted-cache restart;
+  reject cross-profile preparation and changed-factor receipts. Native password
+  continuation verification and atomic completion remain required for issuance.
+  Password primary metadata uses a distinct non-final purpose, never a completed
+  signin proof that could bypass required factor completion.
+
 - Add explicit TOTP-completed magic-link session metadata and commit-gated
   native issuance. Preserve the original primary time and resolved remember
   policy, retain factor/continuation provenance through update, rotation and

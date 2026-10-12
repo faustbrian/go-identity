@@ -103,7 +103,13 @@ func (c *EncryptedCacheCodec) Seal(ctx context.Context, result GetResult) (out [
 	if metadata := result.Session.MFAAuthentication(); metadata.state != nil {
 		value := *metadata.state
 		record.MFA = &value
-		record.Schema += 2
+		if spec.Authentication.Kind == AuthenticationVerified {
+			// Password-primary MFA has its own closed schema; do not collide
+			// with the legacy OTP schemas or silently drop factor provenance.
+			record.Schema += 10
+		} else {
+			record.Schema += 2
+		}
 	}
 	if continuation, ok := result.Session.CredentialContinuation(); ok {
 		record.Continuation = &continuation
@@ -248,7 +254,9 @@ func (c *EncryptedCacheCodec) restore(plaintext []byte, tenant identity.TenantID
 		(r.Schema == 7 && r.CSRF == nil && r.OTP == nil && r.Continuation == nil && r.MagicLink != nil && r.Session.Authentication.Kind == AuthenticationMagicLink) ||
 		(r.Schema == 8 && r.CSRF != nil && r.OTP == nil && r.Continuation == nil && r.MagicLink != nil && r.Session.Authentication.Kind == AuthenticationMagicLink)) ||
 		(r.Schema == 9 && r.CSRF == nil && r.OTP == nil && r.Continuation == nil && r.MagicLink != nil && r.MFA != nil && r.Session.Authentication.Kind == AuthenticationMagicLink) ||
-		(r.Schema == 10 && r.CSRF != nil && r.OTP == nil && r.Continuation == nil && r.MagicLink != nil && r.MFA != nil && r.Session.Authentication.Kind == AuthenticationMagicLink)
+		(r.Schema == 10 && r.CSRF != nil && r.OTP == nil && r.Continuation == nil && r.MagicLink != nil && r.MFA != nil && r.Session.Authentication.Kind == AuthenticationMagicLink) ||
+		(r.Schema == 11 && r.CSRF == nil && r.OTP == nil && r.Continuation == nil && r.MagicLink == nil && r.MFA != nil && r.Session.Authentication.Kind == AuthenticationVerified) ||
+		(r.Schema == 12 && r.CSRF != nil && r.OTP == nil && r.Continuation == nil && r.MagicLink == nil && r.MFA != nil && r.Session.Authentication.Kind == AuthenticationVerified)
 	if !bytes.Equal(plaintext, canonical) || !validSchema || (c.service.method != 0 && r.Session.Authentication.Kind != c.service.method) || r.Session.TenantID != tenant || r.Session.Audience != c.service.config.Audience || (r.Transport != CredentialCookie && r.Transport != CredentialBearer) || !validTime(r.AcceptedAt) || !validTime(r.Until) || !validTime(r.StoredAt) || r.StoredAt.Before(r.AcceptedAt) || !r.Until.After(r.StoredAt) || r.Until.After(r.AcceptedAt.Add(20*time.Second)) {
 		return CachedAdmission{}
 	}

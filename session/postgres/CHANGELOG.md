@@ -2,6 +2,32 @@
 
 ## Unreleased
 
+- Extend explicit selected session reads and revocation admission to genuine
+  password/TOTP records, retaining both credential and factor fences without
+  single-factor fallback. MFA-only and combined readers have separate cache
+  custody; current read deadlines are not renewed by profile dispatch.
+
+- Add explicit password-primary TOTP session persistence with original credential,
+  primary time and current authority fences. The consumed-browser guard admits
+  only committed password or magic-link signin origins; it never consumes or
+  renews the original flow. Public password-to-TOTP orchestration remains unfinished.
+
+- Fence explicitly selected known-empty password factor intent before browser
+  consumption, retaining the native factor-before-browser lock order shared by
+  MFA challenge creation. Unselected legacy password commands remain unchanged.
+
+- Add explicit native password/TOTP session reads with current credential and
+  confirmed-factor admission and separate cache custody. Install the additive
+  `PasswordMFAMigrationSource` after the existing MFA history for schemas11/12;
+  historical records and single-factor readers retain their existing behavior.
+  This reader does not enable the unfinished password-MFA login workflow.
+
+- Preserve password-primary TOTP provenance in complete native command mappings
+  and durable session records. Keep historical schemas unchanged, distinguish
+  the new profile explicitly, and reject missing or mixed factor metadata rather
+  than restore a weaker session. Mapping does not authenticate the password or
+  factor; native protected completion still owns those checks.
+
 - Add opt-in MFA-aware self-revocation with the same current factor fence for
   caller and target. Retain an oversized self-target record once with an explicit
   source reference instead of weakening the 128-field command input bound;

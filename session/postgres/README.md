@@ -43,6 +43,20 @@ and `NewSingleFactorSessionService` do not admit its records or cached evidence.
 Read and copy/promotion paths retain the original earliest-authority deadline;
 expired evidence plus failed bounded refresh cannot fall back to stale access.
 
+## Password/TOTP session reads
+
+`NewMFAPasswordSessionService` takes the existing `SessionServiceConfig` with
+the password credential profile and explicitly selects completed password/TOTP
+records. It requires the original password credential and exact confirmed factor
+enrollment to remain active, with current directory and authorization authority.
+Single-factor records are rejected; `NewSessionService` still rejects MFA records.
+Factor reads do not renew the original at-most-20-second authority deadline.
+
+Install `PasswordMFAMigrationSource` at a new permanent version after
+`MFAMigrationSource` in the same session history. It adds schemas11/12 without
+rewriting older migrations or records. Upgrade readers first. This is a native
+session-reading API, not the still-unfinished password challenge/login service.
+
 ## Atomic magic-link session effects
 
 Install `MagicLinkSigninMigrationSource` at a new permanent version after

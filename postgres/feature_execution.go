@@ -60,6 +60,9 @@ func validateFeatureCommand(phase FeatureExecutionContributor, command identity.
 	if err := phase.ValidateFeatureCommand(command, plan); err != nil {
 		return err
 	}
+	if plan.MFAContinuation != nil && passwordMFAOperation(plan) {
+		return validateMFAContinuation(phase, command, plan)
+	}
 	if plan.Capability != nil {
 		if plan.MFACompletion != nil {
 			return validateMFACompletion(phase, command, plan)
@@ -117,7 +120,7 @@ func (r *ContributorRegistry) admitFeaturePlanMode(b identity.CommandBinding, fi
 	}
 	digest, err := FeaturePlanDigest(b, fingerprint, p)
 	if preparation && ungeneratedMFAContinuation(p.MFAContinuation) {
-		wire, e := encodeMagicLinkMFAPlanMode(b, fingerprint, p, true)
+		wire, e := encodeMFAContinuationPlanMode(b, fingerprint, p, true)
 		err = e
 		if e == nil {
 			digest = sha256.Sum256(wire)
@@ -134,8 +137,14 @@ func (r *ContributorRegistry) admitFeaturePlanMode(b identity.CommandBinding, fi
 		return nil, invalidPlan()
 	}
 	if p.MFAContinuation != nil {
-		if _, ok := feature.contributor.(MagicLinkMFAChallengeContributor); !ok {
-			return nil, invalidPlan()
+		if passwordMFAOperation(p) {
+			if _, ok := feature.contributor.(PasswordMFAChallengeContributor); !ok {
+				return nil, invalidPlan()
+			}
+		} else {
+			if _, ok := feature.contributor.(MagicLinkMFAChallengeContributor); !ok {
+				return nil, invalidPlan()
+			}
 		}
 	}
 	if p.MagicLinkRegistration != nil {

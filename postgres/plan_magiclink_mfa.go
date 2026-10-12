@@ -10,9 +10,9 @@ import (
 	identity "github.com/faustbrian/go-identity"
 )
 
-// MFAContinuationPlan declares a challenge-only result of consuming a primary
-// magic-link proof. ScopeDigest binds the MFA owner's complete immutable scope,
-// including browser, primary proof, methods and remember policy. The one child
+// MFAContinuationPlan declares a challenge-only result of admitting an original
+// password primary or consuming a magic-link proof. ScopeDigest binds immutable
+// scope, including browser, primary proof, methods and remember policy. The child
 // capability has this ID and expiry. Factor and policy versions must be fenced
 // by their actual owners; this declaration proves neither MFA nor authentication.
 // It cannot accompany signup or session creation. Times are UTC whole seconds,

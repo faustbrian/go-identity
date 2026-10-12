@@ -110,6 +110,11 @@ func (r *Repository) prepareCommandCounters(c identity.Command, subject risk.Sub
 		// custody. Counter preparation itself authenticates neither the bearer
 		// nor the proof; the protected native feature remains their authority.
 		mapped, e = identity.NewFeaturePasswordChangeCommand(s, hash, bearer, proof)
+	} else if bearer, has := c.SessionToken(); has {
+		// Authenticated feature counters retain the original borrowed bearer.
+		// A scalar-only rebuild would strip the owning workflow's possession
+		// custody before its protected primary admission can run.
+		mapped, e = identity.NewFeatureSessionCommand(s, bearer)
 	} else {
 		mapped, e = identity.NewFeatureCommand(s)
 	}

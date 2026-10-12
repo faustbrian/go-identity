@@ -17,6 +17,26 @@ HTTP features and complete identity journeys remain unimplemented. Selected-modu
 migration Check/Plan/Apply and durable native command resume are available as
 explicit store operations, not automatic startup behavior.
 
+### Selected password TOTP completion
+
+Select `PasswordSignin.MFA` for password-first challenges and
+`PasswordSignin.TOTP` for native completion. `FeatureSet.PasswordTOTP()` returns
+the composed completion service. Independently select
+`HTTPMFA.PasswordTOTPVerify` for its HTTP route and `HTTPPasswordSignin` for
+password signin. This does not select magic-link login.
+
+Password signin delivers a pending challenge and reveal-once `X-MFA-Token`,
+not a session. Complete it through `/v1/mfa/totp-verify` with
+`X-MFA-Variant: password` and the original flow/device cookies. Successful
+completion delivers a session cookie and CSRF token only once. Current password
+and factor authority, original primary expiry and browser binding remain
+mandatory; neither a challenge nor a replay grants a new session.
+
+The selected real PostgreSQL/TLS-Valkey HTTP journey creates the account and
+factor through public operations, completes password/TOTP, reads the resulting
+MFA session and logs out. This is development evidence, not full platform or
+release qualification.
+
 ### Selected magic-link TOTP completion
 
 Select primary continuation with `MagicLink.Request.MFAContinuation` and
@@ -73,6 +93,42 @@ primary issuance. Select the same verification namespace/key as other flows
 when sharing their IP/subject budgets. The native TOTP, original pre-auth/device
 and strict rate graph are required; omitted configuration contributes no route
 or OpenAPI operation. No enrollment or trusted-device route is implied.
+
+Select pending enrollment separately with `StoreConfiguration.MFAEnrollment`
+and `HTTPMFAEnrollment`. The latter requires the real session, password
+verification and strict HTTP rate graph, an exact subset of native management
+origins, and stable rate namespace/key. `RecoveryCodes` defaults to ten and is
+bounded to 1..20. It selects only `POST /v1/mfa/enable`; login is not a dependency
+of that HTTP selection. Submit the original session cookie, synchronizer,
+Origin, verification proof ID and unchanged request key. Success creates a
+pending factor, not a session or active factor. Recovery codes appear only on
+the fresh known commit. Matching retries cannot retrieve them again.
+
+Native keyed preparation conceals preliminary rejection details as unavailable;
+a wrong synchronizer can therefore return 503 without creating a factor or
+consuming the verification proof. Never treat that response as permission to
+replace request custody or bypass CSRF. Separate URI/confirmation operations
+remain required and independently selectable below. Password-first MFA login
+is independently selected through `PasswordSignin.MFA` and `PasswordSignin.TOTP`.
+
+Set `HTTPMFAEnrollment.ProvisioningURI` explicitly to also select
+`POST /v1/mfa/totp-uri`. The graph supplies the actual native original-custody
+quota source and shares secret-operation rate budgets. The source is read-only;
+it cannot consume revelation, decrypt the factor secret or renew the retained
+disclosure deadline. The real journey proves HTTP URI delivery and metadata-only
+replay.
+
+Set `HTTPMFAEnrollment.Confirmation` with stable `VerificationNamespace` and
+`VerificationKey` to select authenticated activation on the shared
+`POST /v1/mfa/totp-verify` route. Use the same verification identity as other
+flows when sharing their quotas. JSON contains only `commandID`, `factorID` and
+`code`; `X-MFA-Variant: enrollment`, the original session cookie, exact Origin
+and synchronizer are mandatory. Missing/unselected variants never fall back to
+login. Native source reads do not compare codes or activate; protected execution
+owns both. Activation/retry returns historical metadata, no session or URI.
+The real HTTP enrollment journey includes confirmation and retains the original
+SFA session unchanged. Password-first MFA login is independently selected as
+described above; activation does not promote the original SFA session.
 
 Reset currently requires the selected OTP/delivery graph and uses one of its
 configured session schemas. Supply `PasswordResetConfiguration.Native` with

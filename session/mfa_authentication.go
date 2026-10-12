@@ -6,8 +6,14 @@ import (
 	"strings"
 	"time"
 
+	auth "github.com/faustbrian/go-authentication"
 	identity "github.com/faustbrian/go-identity"
 )
+
+// PasswordMFAPrimaryPurpose identifies historical, non-final password comparison
+// evidence in a completed MFA session. It is not a completed signin proof and
+// must never be accepted by a single-factor or AuthenticatedProof issuer.
+const PasswordMFAPrimaryPurpose auth.Purpose = "identity.password.mfa-primary"
 
 // MFAAuthenticationSpec is historical, secret-free second-factor provenance.
 // CommandID names completion, PrimaryCommandID the original primary admission,
@@ -82,6 +88,33 @@ func NewSessionWithMagicLinkMFA(s SessionSpec, primary MagicLinkAuthentication, 
 // transaction, factor verification or authority refresh occurs here.
 func NewSessionWithMagicLinkMFAAndCSRF(s SessionSpec, primary MagicLinkAuthentication, factor MFAAuthentication, csrf CSRFState) (Session, error) {
 	r, err := NewSessionWithMagicLinkMFA(s, primary, factor)
+	if err != nil {
+		return Session{}, err
+	}
+	return attachCSRF(r, csrf)
+}
+
+// NewSessionWithPasswordMFA reconstructs original password credential metadata
+// and its completed second factor. The primary projection remains single-factor
+// historical evidence: this constructor neither upgrades it nor authenticates
+// it. Its purpose must be PasswordMFAPrimaryPurpose rather than session-issue.
+// Its ID must name the factor's original PrimaryCommandID, its credential
+// ID/version must be retained, and its original time and expiry bound the factor.
+// Factor authority and the unchanged resolved remember policy are required.
+// Native issuance must independently validate the committed password primary,
+// current credential, browser, child and factor in the protected transaction.
+// Organization and passkey variants fail closed. No IO or issuance occurs.
+func NewSessionWithPasswordMFA(s SessionSpec, factor MFAAuthentication) (Session, error) {
+	if factor.state == nil || s.Authentication.Kind != AuthenticationVerified {
+		return Session{}, ErrInvalidSession
+	}
+	return newSessionWithMFA(s, OTPAuthentication{}, MagicLinkAuthentication{}, factor)
+}
+
+// NewSessionWithPasswordMFAAndCSRF also retains the exact synchronizer digest
+// bound to this tenant/session/version. It creates no token or authority lease.
+func NewSessionWithPasswordMFAAndCSRF(s SessionSpec, factor MFAAuthentication, csrf CSRFState) (Session, error) {
+	r, err := NewSessionWithPasswordMFA(s, factor)
 	if err != nil {
 		return Session{}, err
 	}

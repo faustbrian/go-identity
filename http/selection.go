@@ -41,6 +41,10 @@ const (
 	// inactive self-signout needs origin only. Token lifetime follows active
 	// session state; no independent token-age bound is claimed.
 	CSRFSessionState
+	// CSRFVariantOriginSessionState requires exact Origin for the explicitly
+	// selected login variant and original stored-session synchronizer plus Origin
+	// for enrollment confirmation. No independent token age is minted.
+	CSRFVariantOriginSessionState
 )
 
 // RefererFallbackPolicy is explicit when a CSRF variant uses origin protection.
@@ -55,6 +59,8 @@ const (
 // ConditionalPreAuthSession require TokenHeader (1..128 HTTP-token bytes) and
 // TokenMaximumAge (positive, at most 24h). SessionState requires TokenHeader but
 // zero TokenMaximumAge, binding lifetime to active session state instead.
+// VariantOriginSessionState applies that stored-token lifetime only to the
+// explicit enrollment branch; login requires exact Origin.
 // RefererFallback is required except for None, where it must be zero.
 type CSRFPolicy struct {
 	Mode            CSRFMode
@@ -422,6 +428,15 @@ func validOperation(owner ModuleID, op OperationDescriptor, catalog map[string]c
 		if r.OperationID == "identity.password.verify" && (r.CSRFOrigin.Mode == CSRFNone || (r.CSRFOrigin.Mode == CSRFSessionState && r.CSRFOrigin.RefererFallback == RefererFallbackDeny)) {
 			csrfMatches = true
 		}
+		// Native cookie-only MFA enrollment authenticates the synchronizer
+		// against original session state under mutation fences. It never issues
+		// a separately aged CSRF token or admits an origin-only/bearer fallback.
+		if (r.OperationID == "identity.mfa.enable" || r.OperationID == "identity.mfa.totp-uri") && r.CSRFOrigin.Mode == CSRFSessionState && r.CSRFOrigin.TokenHeader == "X-CSRF-Token" && r.CSRFOrigin.RefererFallback == RefererFallbackDeny {
+			csrfMatches = true
+		}
+		if r.OperationID == "identity.mfa.totp-verify" && (r.CSRFOrigin.Mode == CSRFSessionState || r.CSRFOrigin.Mode == CSRFVariantOriginSessionState) && r.CSRFOrigin.TokenHeader == "X-CSRF-Token" && r.CSRFOrigin.RefererFallback == RefererFallbackDeny {
+			csrfMatches = true
+		}
 		if r.Exposure != want.Exposure || !slices.Equal(r.Owners, want.Owners) || r.Access != want.Access || r.Authorization != want.Authorization || !csrfMatches || r.RiskClass != want.RiskClass || r.RatePolicy != want.RatePolicy || r.Idempotency != want.Idempotency || r.EventSemantics != want.EventSemantics || r.HandlerOwner != want.HandlerOwner || r.Method != want.Method || r.Path != want.Path || r.OpenAPIOperationID != want.OpenAPIOperationID || r.RequestSchema.ID != row.RequestSchema || r.ResultSchema.ID != row.ResultSchema || r.ErrorSchema.ID != row.ErrorSchema {
 			return false
 		}
@@ -485,7 +500,7 @@ func validPath(p string) bool {
 	return ascii(p, 2048, false) && p[0] == '/' && !strings.ContainsAny(p, "%?#\\") && !strings.Contains(p, "//") && !strings.Contains(p+"/", "/./") && !strings.Contains(p+"/", "/../")
 }
 func validCSRF(p CSRFPolicy) bool {
-	if p.Mode < CSRFNone || p.Mode > CSRFSessionState {
+	if p.Mode < CSRFNone || p.Mode > CSRFVariantOriginSessionState {
 		return false
 	}
 	if p.Mode == CSRFNone {
@@ -494,10 +509,11 @@ func validCSRF(p CSRFPolicy) bool {
 	if p.RefererFallback != RefererFallbackDeny && p.RefererFallback != RefererFallbackSameOriginHTTPS {
 		return false
 	}
-	if p.Mode != CSRFSessionOriginAndToken && p.Mode != CSRFConditionalPreAuthSession && p.Mode != CSRFSessionState {
+	if p.Mode != CSRFSessionOriginAndToken && p.Mode != CSRFConditionalPreAuthSession && p.Mode != CSRFSessionState && p.Mode != CSRFVariantOriginSessionState {
 		return p.TokenHeader == "" && p.TokenMaximumAge == 0
 	}
-	if len(p.TokenHeader) == 0 || len(p.TokenHeader) > 128 || p.TokenMaximumAge > 24*time.Hour || (p.Mode == CSRFSessionState && p.TokenMaximumAge != 0) || (p.Mode != CSRFSessionState && p.TokenMaximumAge <= 0) {
+	stored := p.Mode == CSRFSessionState || p.Mode == CSRFVariantOriginSessionState
+	if len(p.TokenHeader) == 0 || len(p.TokenHeader) > 128 || p.TokenMaximumAge > 24*time.Hour || (stored && p.TokenMaximumAge != 0) || (!stored && p.TokenMaximumAge <= 0) {
 		return false
 	}
 	for i := range p.TokenHeader {

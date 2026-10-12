@@ -527,11 +527,19 @@ func servePasswordPipeline(w http.ResponseWriter, r *http.Request, pipeline http
 // commit, their original tuple is frozen; middleware unwind cannot add or replace
 // it. Other password operations retain their unconditional output denial.
 func servePasswordPipelineWithDelivery(w http.ResponseWriter, r *http.Request, pipeline http.Handler, delivery func() (string, string)) {
+	servePasswordPipelineWithCustody(w, r, pipeline, func() (string, string, string) { cookie, csrf := delivery(); return cookie, csrf, "" }, nil)
+}
+
+// Password credential output has one commitment owner. Challenge custody is
+// disjoint from session/CSRF custody; informational output and middleware
+// unwinding cannot inject or replace either frozen tuple.
+func servePasswordPipelineWithCustody(w http.ResponseWriter, r *http.Request, pipeline http.Handler, delivery func() (string, string, string), beforeCommit func(int) int) {
 	var committed bool
-	var deliveredCookie, deliveredCSRF string
+	var committing bool
+	var deliveredCookie, deliveredCSRF, deliveredChallenge string
 	protect := func() {
 		for name := range w.Header() {
-			if strings.HasPrefix(name, http.TrailerPrefix) || strings.EqualFold(name, "Trailer") || strings.EqualFold(name, "Set-Cookie") || strings.EqualFold(name, "X-CSRF-Token") || strings.EqualFold(name, "Content-Type") || strings.EqualFold(name, "Cache-Control") || strings.EqualFold(name, "X-Content-Type-Options") {
+			if strings.HasPrefix(name, http.TrailerPrefix) || strings.EqualFold(name, "Trailer") || strings.EqualFold(name, "Set-Cookie") || strings.EqualFold(name, "X-CSRF-Token") || strings.EqualFold(name, "X-MFA-Token") || strings.EqualFold(name, "Authorization") || strings.EqualFold(name, "Location") || strings.EqualFold(name, "Content-Type") || strings.EqualFold(name, "Cache-Control") || strings.EqualFold(name, "X-Content-Type-Options") {
 				delete(w.Header(), name)
 			}
 		}
@@ -539,36 +547,47 @@ func servePasswordPipelineWithDelivery(w http.ResponseWriter, r *http.Request, p
 		w.Header().Set("Cache-Control", "no-store")
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		cookie, csrf := deliveredCookie, deliveredCSRF
-		if !committed {
-			cookie, csrf = delivery()
+		challenge := deliveredChallenge
+		if !committed && committing {
+			cookie, csrf, challenge = delivery()
 		}
-		if cookie != "" && csrf != "" {
+		if cookie != "" && csrf != "" && challenge == "" {
 			w.Header().Set("Set-Cookie", cookie)
 			w.Header().Set("X-CSRF-Token", csrf)
 		}
+		if challenge != "" && cookie == "" && csrf == "" {
+			w.Header().Set("X-MFA-Token", challenge)
+		}
 	}
-	commit := func() {
+	commit := func(status int) int {
+		if !committed && beforeCommit != nil {
+			status = beforeCommit(status)
+		}
+		committing = true
 		protect()
+		committing = false
 		if !committed {
 			deliveredCookie, deliveredCSRF = w.Header().Get("Set-Cookie"), w.Header().Get("X-CSRF-Token")
+			deliveredChallenge = w.Header().Get("X-MFA-Token")
 			committed = true
 		}
+		return status
 	}
 	protect()
 	defer protect()
 	writer := httpsnoop.Wrap(w, httpsnoop.Hooks{WriteHeader: func(next httpsnoop.WriteHeaderFunc) httpsnoop.WriteHeaderFunc {
 		return func(status int) {
 			if status >= 200 {
-				commit()
+				status = commit(status)
 			} else {
 				protect()
 			}
 			next(status)
 		}
 	}, Write: func(next httpsnoop.WriteFunc) httpsnoop.WriteFunc {
-		return func(b []byte) (int, error) { commit(); return next(b) }
-	}, Flush: func(next httpsnoop.FlushFunc) httpsnoop.FlushFunc { return func() { commit(); next() } }, ReadFrom: func(next httpsnoop.ReadFromFunc) httpsnoop.ReadFromFunc {
-		return func(b io.Reader) (int64, error) { commit(); return next(b) }
+		return func(b []byte) (int, error) { commit(http.StatusOK); return next(b) }
+	}, Flush: func(next httpsnoop.FlushFunc) httpsnoop.FlushFunc { return func() { commit(http.StatusOK); next() } }, ReadFrom: func(next httpsnoop.ReadFromFunc) httpsnoop.ReadFromFunc {
+		return func(b io.Reader) (int64, error) { commit(http.StatusOK); return next(b) }
 	}})
 	pipeline.ServeHTTP(writer, r)
 }

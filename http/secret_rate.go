@@ -17,8 +17,8 @@ import (
 	ratelimit "github.com/faustbrian/go-rate-limit/v2"
 )
 
-// KeyedSecretRateConfig selects fixed rate.secret buckets for canonical keyed
-// operations. Shared must be an initialized, concurrency-safe native atomic
+// KeyedSecretRateConfig selects shared fixed rate.secret buckets for canonical
+// keyed and original-command operations. Shared must be a concurrency-safe native atomic
 // owner (PostgreSQL requires its additive atomic schema); no per-item fallback
 // exists. Shared and prompt concurrency-safe Now remain borrowed and must
 // outlive calls. Namespace/Key are immutable deployment rate identity, not
@@ -49,6 +49,19 @@ type KeyedSecretRateRequest struct {
 	ChallengeLifetime time.Duration
 }
 
+// OriginalCommandSecretRateRequest retains the stable native command of a
+// canonical one-time secret operation. It must not manufacture an idempotency
+// header or request key. UserID comes from current authenticated custody;
+// challenge ID/lifetime come from the original native challenge owner, not
+// claimed transport fields or a renewed expiry. Structure grants no authority.
+type OriginalCommandSecretRateRequest struct {
+	OperationID       string
+	UserID            identity.UserID
+	CommandID         identity.CommandID
+	ChallengeID       string
+	ChallengeLifetime time.Duration
+}
+
 // KeyedSecretRateLimiter enforces all applicable buckets through one explicit
 // atomic dispatch and native retained outcome. It adds no counter algorithm,
 // workflow journal, local fallback, automatic retry or goroutine. Share one
@@ -56,10 +69,11 @@ type KeyedSecretRateRequest struct {
 // invalid. Rate admission neither grants authentication/authorization nor
 // bypasses the protected workflow's cumulative risk/abuse policy.
 type KeyedSecretRateLimiter struct {
-	shared     *ratelimit.StrictService
-	config     KeyedSecretRateConfig
-	operations map[string]bool
-	closed     *atomic.Bool
+	shared             *ratelimit.StrictService
+	config             KeyedSecretRateConfig
+	operations         map[string]bool
+	originalOperations map[string]bool
+	closed             *atomic.Bool
 }
 
 // NewKeyedSecretRateLimiter freezes canonical keyed rate.secret selection.
@@ -78,12 +92,16 @@ func NewKeyedSecretRateLimiter(c KeyedSecretRateConfig) (*KeyedSecretRateLimiter
 		return nil, ErrInvalidInput
 	}
 	operations := make(map[string]bool)
+	originalOperations := make(map[string]bool)
 	for id, row := range readCatalog() {
 		if row.Rate == "rate.secret" && row.Idempotency == "keyed" && row.Exposure != "direct" {
 			operations[id] = true
 		}
+		if row.Rate == "rate.secret" && row.Idempotency == "once" && row.Exposure != "direct" {
+			originalOperations[id] = true
+		}
 	}
-	return &KeyedSecretRateLimiter{shared: shared, config: c, operations: operations, closed: &atomic.Bool{}}, nil
+	return &KeyedSecretRateLimiter{shared: shared, config: c, operations: operations, originalOperations: originalOperations, closed: &atomic.Bool{}}, nil
 }
 
 // Configured reports structural, observed nonterminal owner validity without
@@ -117,14 +135,40 @@ func (l *KeyedSecretRateLimiter) Admit(ctx context.Context, facts NetworkFacts, 
 	if keyErr != nil {
 		return out, ErrInvalidInput
 	}
+	command := l.digest("command", l.config.Namespace, string(facts.TenantID()), string(r.UserID), r.OperationID, hex.EncodeToString(digest[:]))
+	return l.admitSecret(ctx, facts, r.UserID, r.ChallengeID, r.ChallengeLifetime, command)
+}
+
+// AdmitOriginalCommand enforces the same shared secret buckets for canonical
+// one-time operations. Original command/tenant/subject/operation retain debit
+// identity across retry. Changed network/challenge inputs must reconcile with
+// the atomic backend's original intent, not receive a successor debit command.
+// It performs no challenge authentication, reservation or domain mutation.
+func (l *KeyedSecretRateLimiter) AdmitOriginalCommand(ctx context.Context, facts NetworkFacts, r OriginalCommandSecretRateRequest) (AuthRateResult, error) {
+	if !l.Configured() || ctx == nil || !facts.Valid() || facts.Realm() != RealmTenant || !l.originalOperations[r.OperationID] || !ascii(string(r.UserID), 128, false) || r.ChallengeID == "" && r.ChallengeLifetime != 0 || r.ChallengeID != "" && (!ascii(r.ChallengeID, 128, false) || r.ChallengeLifetime <= 0) {
+		return AuthRateResult{}, ErrInvalidInput
+	}
+	if _, err := identity.ParseCommandID(string(r.CommandID)); err != nil {
+		return AuthRateResult{}, ErrInvalidInput
+	}
+	command := l.digest("original-command", l.config.Namespace, string(facts.TenantID()), string(r.UserID), r.OperationID, string(r.CommandID))
+	return l.admitSecret(ctx, facts, r.UserID, r.ChallengeID, r.ChallengeLifetime, command)
+}
+
+func (l *KeyedSecretRateLimiter) admitSecret(ctx context.Context, facts NetworkFacts, user identity.UserID, challenge string, lifetime time.Duration, command string) (out AuthRateResult, err error) {
+	defer func() {
+		if recover() != nil {
+			out, err = AuthRateResult{}, ErrRateUnavailable
+		}
+	}()
 	type bucket struct {
 		kind, value string
 		capacity    uint64
 		period      time.Duration
 	}
-	buckets := []bucket{{"secret-ip", facts.ClientIP().String(), 10, 10 * time.Minute}, {"secret-subject", l.digest("subject", string(facts.TenantID()), string(r.UserID)), 10, 10 * time.Minute}}
-	if r.ChallengeID != "" {
-		buckets = append(buckets, bucket{"secret-challenge", l.digest("challenge", string(facts.TenantID()), r.ChallengeID), 5, r.ChallengeLifetime})
+	buckets := []bucket{{"secret-ip", facts.ClientIP().String(), 10, 10 * time.Minute}, {"secret-subject", l.digest("subject", string(facts.TenantID()), string(user)), 10, 10 * time.Minute}}
+	if challenge != "" {
+		buckets = append(buckets, bucket{"secret-challenge", l.digest("challenge", string(facts.TenantID()), challenge), 5, lifetime})
 	}
 	requests := make([]ratelimit.Request, len(buckets))
 	for i, b := range buckets {
@@ -147,7 +191,6 @@ func (l *KeyedSecretRateLimiter) Admit(ctx context.Context, facts NetworkFacts, 
 	for i := range requests {
 		requests[i].Now = now
 	}
-	command := l.digest("command", l.config.Namespace, string(facts.TenantID()), string(r.UserID), r.OperationID, hex.EncodeToString(digest[:]))
 	decision, backendErr := l.shared.AdmitAtomicBatch(ctx, ratelimit.AtomicBatchRequest{CommandID: command, Requests: requests})
 	if ctx.Err() != nil || l.closed.Load() {
 		return out, ErrRateUnavailable

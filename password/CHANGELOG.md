@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Add a closed password-first MFA challenge result, separate from authenticated
+  session results. Challenge history cannot carry session cookies or CSRF, and
+  replay cannot redeliver the challenge proof. Native login wiring is ongoing.
+
 - Add explicit protected hash preparation that checks HIBP and required
   providers while deferring only transaction-owned velocity. Original provider
   freshness is rechecked after hashing; ordinary complete preparation remains

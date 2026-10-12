@@ -76,10 +76,10 @@ func NewSingleFactorSessionService(pool *database.Pool, c SingleFactorSessionSer
 	if err != nil {
 		return nil, err
 	}
-	return newSelectedNativeSessionService(pool, c, nil, methods, profile)
+	return newSelectedNativeSessionService(pool, c, nil, nil, methods, profile)
 }
 
-func newSelectedNativeSessionService(pool *database.Pool, c SingleFactorSessionServiceConfig, mfa *MagicLinkAdmissionConfig, methods []session.AuthenticationKind, profile string) (*session.SessionService, error) {
+func newSelectedNativeSessionService(pool *database.Pool, c SingleFactorSessionServiceConfig, mfa *MagicLinkAdmissionConfig, passwordMFA *IdentifierAdmissionConfig, methods []session.AuthenticationKind, profile string) (*session.SessionService, error) {
 	if c.Repository.MaximumDuration > c.Validation.MaximumDuration {
 		return nil, session.ErrInvalidInput
 	}
@@ -95,6 +95,9 @@ func newSelectedNativeSessionService(pool *database.Pool, c SingleFactorSessionS
 	}
 	if mfa != nil {
 		audience = mfa.Audience
+	}
+	if passwordMFA != nil {
+		audience = passwordMFA.Audience
 	}
 	if audience != c.Validation.Audience {
 		return nil, session.ErrInvalidInput
@@ -126,10 +129,17 @@ func newSelectedNativeSessionService(pool *database.Pool, c SingleFactorSessionS
 	}
 	if p := mfa; p != nil {
 		r.mfaMagicLink = &MagicLinkAdmissionConfig{clone(p.GlobalAuthorityID), clone(p.PolicyNamespace), clone(p.Audience)}
+	}
+	if mfa != nil || passwordMFA != nil {
 		r.mfaFactors, err = mfapg.NewTOTPSessionFactorReader(pool, c.Repository.MaximumDuration)
 		if err != nil {
 			return nil, session.ErrInvalidInput
 		}
+	}
+	if p := passwordMFA; p != nil {
+		copied := *p
+		copied.GlobalAuthorityID, copied.PolicyNamespace, copied.Audience, copied.AuthenticationMethod, copied.CredentialOwner = clone(p.GlobalAuthorityID), clone(p.PolicyNamespace), clone(p.Audience), clone(p.AuthenticationMethod), clone(p.CredentialOwner)
+		r.mfaPasswordReader = &primarySessionReader{native: native, domain: domain, policy: policy, clock: c.Validation.Clock, profile: copied, mfaPassword: true, mfaFactors: r.mfaFactors}
 	}
 	return session.NewSelectedProfileSessionService(r, c.Validation, methods, nativeAdmissionCacheProfile(c.Repository.Schema, profile))
 }

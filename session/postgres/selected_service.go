@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"fmt"
+	identity "github.com/faustbrian/go-identity"
 
 	"github.com/faustbrian/go-identity/session"
 	database "github.com/faustbrian/go-postgres"
@@ -14,6 +15,9 @@ import (
 type SelectedSessionAdmissionConfig struct {
 	SingleFactor SingleFactorSessionAdmissionConfig
 	MFAMagicLink *MagicLinkAdmissionConfig
+	// MFAPassword selects the genuine password-plus-TOTP owner independently
+	// of single-factor password and magic-link profiles. No fallback is allowed.
+	MFAPassword *IdentifierAdmissionConfig
 }
 
 // SelectedSessionServiceConfig retains the native repository and validation
@@ -26,6 +30,42 @@ type SelectedSessionServiceConfig struct {
 }
 
 func selectedSessionAdmission(c SelectedSessionAdmissionConfig) ([]session.AuthenticationKind, string, error) {
+	if c.MFAPassword != nil {
+		p := *c.MFAPassword
+		if !p.valid() || p.AuthenticationMethod != "password" || p.CredentialKind != identity.CredentialPassword || p.CredentialOwner != "identity/password" {
+			return nil, "", session.ErrInvalidInput
+		}
+		one := c.SingleFactor
+		if one.Verified != nil && *one.Verified != p {
+			return nil, "", session.ErrInvalidInput
+		}
+		one.Verified = &p
+		if c.MFAMagicLink != nil {
+			one.MagicLink = c.MFAMagicLink
+		}
+		if _, _, err := singleFactorAdmission(one); err != nil {
+			return nil, "", err
+		}
+		prior := c
+		prior.MFAPassword = nil
+		var methods []session.AuthenticationKind
+		var previous string
+		if c.SingleFactor.Verified != nil || c.SingleFactor.OTP != nil || c.SingleFactor.MagicLink != nil || c.MFAMagicLink != nil {
+			var err error
+			methods, previous, err = selectedSessionAdmission(prior)
+			if err != nil {
+				return nil, "", err
+			}
+		}
+		found := false
+		for _, kind := range methods {
+			found = found || kind == session.AuthenticationVerified
+		}
+		if !found {
+			methods = append(methods, session.AuthenticationVerified)
+		}
+		return methods, nativeAdmissionCacheProfile("native-selected-password-mfa-session-v1", previous, p.GlobalAuthorityID, p.PolicyNamespace, p.Audience, p.AuthenticationMethod, string(p.CredentialKind), p.CredentialOwner), nil
+	}
 	if c.MFAMagicLink == nil {
 		return singleFactorAdmission(c.SingleFactor)
 	}
@@ -73,7 +113,7 @@ func NewSelectedSessionService(pool *database.Pool, c SelectedSessionServiceConf
 	if err != nil {
 		return nil, err
 	}
-	return newSelectedNativeSessionService(pool, SingleFactorSessionServiceConfig{Repository: c.Repository, Admission: c.Admission.SingleFactor, Validation: c.Validation}, c.Admission.MFAMagicLink, methods, profile)
+	return newSelectedNativeSessionService(pool, SingleFactorSessionServiceConfig{Repository: c.Repository, Admission: c.Admission.SingleFactor, Validation: c.Validation}, c.Admission.MFAMagicLink, c.Admission.MFAPassword, methods, profile)
 }
 
 // Format redacts deployment, profile and key configuration.

@@ -7,7 +7,7 @@ require (
 	github.com/faustbrian/go-audit/postgres v1.0.1-0.20261003012155-21ad3d11d3b2
 	github.com/faustbrian/go-authorization v1.1.1-0.20261005011349-60ed4b3229d8
 	github.com/faustbrian/go-capability v1.0.1-0.20261010235105-f1b4eb9d0c3a
-	github.com/faustbrian/go-capability/postgres/identity v0.0.0-20261012050557-e85480bd3f10
+	github.com/faustbrian/go-capability/postgres/identity v0.0.0-20261012193534-c13f373468a4
 	github.com/faustbrian/go-clock v1.0.0
 	github.com/faustbrian/go-http-client v1.0.1-0.20260913110751-02502a99b967
 	github.com/faustbrian/go-identity v0.0.0-20261011052554-3ca77f9f25c7

@@ -89,13 +89,16 @@ type featureState struct {
 	magicRequest                 *magicpg.RequestService
 	magicConsume                 *magicpg.ConsumeService
 	magicTOTP                    *magicLinkTOTPService
+	passwordTOTP                 *magicLinkTOTPService
 	magicPreauth                 *session.PreAuthIssuer
 	httpMagicLink                *magicLinkHTTPState
 	httpMFA                      *mfaHTTPState
+	httpMFAEnrollment            *mfaEnrollmentHTTPState
 	passwordSignin               *passwordpg.SigninService
 	passwordSignup               *passwordpg.SignupService
 	session                      *sessionState
 	passwordVerification         *passwordVerificationState
+	mfaEnrollment                *mfaEnrollmentState
 	passwordChange               *passwordChangeState
 	httpPasswordVerification     *passwordVerificationHTTPState
 	httpPasswordChange           *passwordChangeHTTPState
@@ -121,7 +124,13 @@ type featureState struct {
 }
 
 func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDependencies) error {
-	if c.HTTPMFA != nil && (c.MagicLink == nil || c.MagicLink.TOTP == nil) {
+	if c.HTTPMFAEnrollment != nil && (c.MFAEnrollment == nil || c.PasswordVerification == nil || c.Session == nil) {
+		return identity.InvalidInputError{Field: "reference_http_mfa_enrollment"}
+	}
+	if c.MFAEnrollment != nil && c.PasswordVerification == nil {
+		return identity.InvalidInputError{Field: "reference_mfa_enrollment"}
+	}
+	if c.HTTPMFA != nil && ((c.HTTPMFA.TOTPVerify && (c.MagicLink == nil || c.MagicLink.TOTP == nil)) || (c.HTTPMFA.PasswordTOTPVerify && (c.PasswordSignin == nil || c.PasswordSignin.TOTP == nil))) {
 		return identity.InvalidInputError{Field: "reference_http_mfa"}
 	}
 	if c.HTTPMagicLink != nil && c.MagicLink == nil {
@@ -332,6 +341,12 @@ func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDepen
 	if err != nil {
 		return err
 	}
+	passwordTOTP, err := composePasswordTOTP(c, d, passwordSigninOwner, evaluator)
+	if err != nil {
+		return err
+	}
+	migrationConfig.passwordMFA = c.PasswordSignin != nil && c.PasswordSignin.MFA != nil
+	migrationConfig.passwordTOTP = passwordTOTP != nil
 	passwordSignupOwner, err := composePasswordSignup(c, d, evaluator)
 	if err != nil {
 		return err
@@ -349,6 +364,23 @@ func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDepen
 	if err != nil {
 		return err
 	}
+	mfaEnrollmentOwner, err := composeMFAEnrollment(c, d, passwordVerificationOwner, evaluator)
+	if err != nil {
+		return err
+	}
+	migrationConfig.mfaEnrollment = mfaEnrollmentOwner != nil
+	httpMFAEnrollment, err := composeMFAEnrollmentHTTP(c, mfaEnrollmentOwner, passwordVerificationOwner, s.httpRate)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if httpMFAEnrollment != nil && !retainedResetHTTP {
+			httpMFAEnrollment.rate.Close()
+			if httpMFAEnrollment.verifyRate != nil {
+				httpMFAEnrollment.verifyRate.Close()
+			}
+		}
+	}()
 	httpPasswordVerification, err := composePasswordVerificationHTTP(c, passwordVerificationOwner, httpPreAuth, s.httpRate)
 	if err != nil {
 		return err
@@ -409,6 +441,7 @@ func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDepen
 	s.features.session = sessionOwner
 	s.features.passwordVerification = passwordVerificationOwner
 	s.features.passwordChange = passwordChangeOwner
+	s.features.mfaEnrollment = mfaEnrollmentOwner
 	s.features.httpPasswordVerification = httpPasswordVerification
 	s.features.httpPasswordChange = httpPasswordChange
 	s.features.httpSession = httpSession
@@ -417,7 +450,9 @@ func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDepen
 	s.features.httpRegistrationVerification = httpRegistrationVerification
 	s.features.magicRequest, s.features.magicConsume, s.features.magicPreauth, s.features.httpMagicLink = magicRequest, magicConsume, magicPreauth, httpMagicLink
 	s.features.magicTOTP = magicTOTP
+	s.features.passwordTOTP = passwordTOTP
 	s.features.httpMFA = httpMFA
+	s.features.httpMFAEnrollment = httpMFAEnrollment
 	retainedResetHTTP = true
 	return nil
 }

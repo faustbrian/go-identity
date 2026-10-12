@@ -10,6 +10,7 @@ require (
 	github.com/faustbrian/go-identity/http v0.0.0-20261011081638-77ea50faec8b
 	github.com/faustbrian/go-identity/mfa v0.0.0
 	github.com/faustbrian/go-identity/session v0.0.0-20261011102605-954333fbc307
+	github.com/faustbrian/go-password v1.0.1-0.20261001082808-a3dbd862340c
 	github.com/faustbrian/go-rate-limit/v2 v2.0.1-0.20261010004607-5dd986e00e78
 	github.com/felixge/httpsnoop v1.1.0
 )

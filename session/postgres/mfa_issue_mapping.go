@@ -9,8 +9,8 @@ import (
 
 const mfaCompletionSessionPrefix = "session.result."
 
-// MFATOTPCompletionSessionFields freezes the complete prospective magic-link
-// primary/TOTP session into the native completion command before fingerprinting.
+// MFATOTPCompletionSessionFields freezes the complete prospective password or
+// magic-link primary/TOTP session before native command fingerprinting.
 // It retains original primary, child/factor provenance, every authority dimension,
 // resolved remember policy and optional CSRF, never a bearer or submitted code.
 // Only the initial native TOTP completion profile is accepted. This bounded
@@ -44,6 +44,8 @@ func MFATOTPCompletionSession(command identity.Command) (session.Session, error)
 	}
 	fields := make([]identity.FeatureField, 0, 96)
 	var user identity.UserID
+	var passwordSubject identity.UserID
+	var kind session.AuthenticationKind
 	for _, f := range p.Fields {
 		name, owned := strings.CutPrefix(f.Name, mfaCompletionSessionPrefix)
 		if !owned {
@@ -52,8 +54,20 @@ func MFATOTPCompletionSession(command identity.Command) (session.Session, error)
 		if name == "user.id" {
 			user = identity.UserID(f.Value.Text)
 		}
+		if name == "proof.subject" {
+			passwordSubject = identity.UserID(f.Value.Text)
+		}
+		if name == "authentication.kind" && f.Value.Kind == identity.FeatureUint64 && f.Value.Uint64 == uint64(session.AuthenticationVerified) {
+			kind = session.AuthenticationVerified
+		}
 		f.Name = originalSessionPrefix + name
 		fields = append(fields, f)
+	}
+	if kind == session.AuthenticationVerified {
+		// Verified-credential mappings derive scope from the bound original
+		// proof, not the magic-link-specific user.id union member. Complete
+		// reconstruction below checks its tenant/subject and rejects mixtures.
+		user = passwordSubject
 	}
 	record, err := OriginalSessionFromFields(p.Binding.TenantID, user, fields)
 	if err != nil || !mfaTOTPCompletionRecord(record) {
@@ -72,7 +86,7 @@ func mfaTOTPCompletionSessionOperation() identity.FeatureOperation {
 
 func mfaTOTPCompletionRecord(record session.Session) bool {
 	s, err := record.Bindings()
-	if err != nil || s.Authentication.Kind != session.AuthenticationMagicLink || s.Version != 1 || !s.IssuedAt.Equal(s.LastActivityAt) {
+	if err != nil || s.Version != 1 || !s.IssuedAt.Equal(s.LastActivityAt) {
 		return false
 	}
 	a, err := s.Authority.Bindings()
@@ -80,8 +94,20 @@ func mfaTOTPCompletionRecord(record session.Session) bool {
 		return false
 	}
 	m, err := record.MFAAuthentication().Bindings()
-	p, primaryErr := record.MagicLinkAuthentication().Bindings()
-	if err != nil || primaryErr != nil || m.Method != "totp" || m.PrimaryCommandID != p.CommandID || m.FactorAuthorityVersion != a.Factor.Binding.Version {
+	if err != nil || m.Method != "totp" || m.FactorAuthorityVersion != a.Factor.Binding.Version {
+		return false
+	}
+	switch s.Authentication.Kind {
+	case session.AuthenticationMagicLink:
+		p, err := record.MagicLinkAuthentication().Bindings()
+		if err != nil || m.PrimaryCommandID != p.CommandID {
+			return false
+		}
+	case session.AuthenticationVerified:
+		if s.Authentication.Proof.Method != "password" || string(m.PrimaryCommandID) != string(s.Authentication.Proof.ID) {
+			return false
+		}
+	default:
 		return false
 	}
 	_, continued := record.CredentialContinuation()

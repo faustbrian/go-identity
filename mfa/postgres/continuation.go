@@ -40,6 +40,51 @@ func PersistMagicLinkContinuation(ctx context.Context, w kernel.Work, owner kern
 	if err != nil || s.State != mfa.Pending || s.Version != 1 || s.ID != mfa.ContinuationID(challenge.ID) || s.SubjectID != identity.SubjectID(challenge.UserID) || s.TenantID != parent.Command.TenantID || string(s.SourcePreAuthID) != parent.Command.AnonymousFlowID || string(s.PrimaryProofID) != parent.Plan.CapabilityID || s.PrimaryProofDigest != parent.Plan.ProofFingerprint || !s.PrimaryProofExpiresAt.Equal(parent.Plan.ExpiresAt) || digest != challenge.ScopeDigest || s.PolicyVersion != challenge.PolicyVersion || s.FactorVersion != challenge.FactorVersion || !s.IssuedAt.Equal(challenge.IssuedAt) || !s.ExpiresAt.Equal(challenge.ExpiresAt) {
 		return identity.ForbiddenError{}
 	}
+	return persistContinuation(ctx, w, c, parent.Command, parent.Fingerprint, parent.Generation)
+}
+
+// PersistPasswordContinuation stores the original pending password-first
+// challenge only within its comparison owner's exact protected Apply. The
+// password owner must validate and persist its non-final signed primary in the
+// same Work before calling this operation. This function neither compares a
+// password nor issues a capability/session. It binds the frozen child scope and
+// active factor generation; all errors must propagate to the sole coordinator.
+// Duplicate insertion denies without resetting attempts or extending expiry.
+func PersistPasswordContinuation(ctx context.Context, w kernel.Work, owner kernel.PasswordMFAChallengeContributor, command identity.Command, c mfa.PartialAuthContinuation) error {
+	if ctx == nil || owner == nil {
+		return invalidAuthority()
+	}
+	if err := w.RequireFeatureCommand(ctx, owner, command); err != nil {
+		return err
+	}
+	challenge, err := w.PasswordMFAChallenge(owner)
+	if err != nil {
+		return err
+	}
+	b, fingerprint, generation, err := w.FeatureCommandIdentity(owner)
+	if err != nil {
+		return err
+	}
+	s, err := c.Bindings()
+	if err != nil {
+		return invalidAuthority()
+	}
+	digest, err := c.ScopeDigest()
+	if err != nil || b.OperationID != "identity.password.signin" || s.State != mfa.Pending || s.Version != 1 || s.ID != mfa.ContinuationID(challenge.ID) || s.SubjectID != identity.SubjectID(challenge.UserID) || s.TenantID != b.TenantID || string(s.SourcePreAuthID) != b.AnonymousFlowID || string(s.PrimaryProofID) != string(b.CommandID) || digest != challenge.ScopeDigest || s.PolicyVersion != challenge.PolicyVersion || s.FactorVersion != challenge.FactorVersion || !s.IssuedAt.Equal(challenge.IssuedAt) || !s.ExpiresAt.Equal(challenge.ExpiresAt) {
+		return identity.ForbiddenError{}
+	}
+	return persistContinuation(ctx, w, c, b, fingerprint, generation)
+}
+
+func persistContinuation(ctx context.Context, w kernel.Work, c mfa.PartialAuthContinuation, b identity.CommandBinding, fingerprint [32]byte, generation uint64) error {
+	s, err := c.Bindings()
+	if err != nil {
+		return invalidAuthority()
+	}
+	digest, err := c.ScopeDigest()
+	if err != nil {
+		return err
+	}
 	now, err := w.DatabaseTime(ctx)
 	if err != nil {
 		return err
@@ -52,7 +97,7 @@ func PersistMagicLinkContinuation(ctx context.Context, w kernel.Work, owner kern
 		return err
 	}
 	defer clear(wire)
-	commandID, err := base64.RawURLEncoding.DecodeString(string(parent.Command.CommandID))
+	commandID, err := base64.RawURLEncoding.DecodeString(string(b.CommandID))
 	if err != nil || len(commandID) != 16 {
 		return invalidAuthority()
 	}
@@ -69,7 +114,7 @@ func PersistMagicLinkContinuation(ctx context.Context, w kernel.Work, owner kern
 	if !matched || factorVersion != strconv.FormatUint(s.FactorVersion, 10) || active <= 0 || active > 64 {
 		return identity.ForbiddenError{}
 	}
-	count, err := w.Exec(ctx, `INSERT INTO identity_mfa.continuations(tenant_id,continuation_id,user_id,source_preauth_id,origin_command_id,origin_purpose,origin_fingerprint,origin_generation,scope_digest,original_scope,state,version,max_attempts,attempts_remaining,issued_at,expires_at) VALUES($1,$2,$3,$4,$5,'identity.magic-link.consume',$6,$7::numeric,$8,$9,1,1,$10,$11,$12,$13)`, string(s.TenantID), string(s.ID), string(s.SubjectID), string(s.SourcePreAuthID), commandID, parent.Fingerprint[:], strconv.FormatUint(parent.Generation, 10), digest[:], wire, int32(s.MaxAttempts), int32(s.AttemptsRemaining), s.IssuedAt, s.ExpiresAt)
+	count, err := w.Exec(ctx, `INSERT INTO identity_mfa.continuations(tenant_id,continuation_id,user_id,source_preauth_id,origin_command_id,origin_purpose,origin_fingerprint,origin_generation,scope_digest,original_scope,state,version,max_attempts,attempts_remaining,issued_at,expires_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8::numeric,$9,$10,1,1,$11,$12,$13,$14)`, string(s.TenantID), string(s.ID), string(s.SubjectID), string(s.SourcePreAuthID), commandID, b.OperationID, fingerprint[:], strconv.FormatUint(generation, 10), digest[:], wire, int32(s.MaxAttempts), int32(s.AttemptsRemaining), s.IssuedAt, s.ExpiresAt)
 	if err != nil {
 		return identity.UnavailableError{}
 	}

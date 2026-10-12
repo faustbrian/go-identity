@@ -2,6 +2,37 @@
 
 ## Unreleased
 
+- Add explicit synchronizer custody to cookie MFA enable requests. Zero keeps
+  the existing bearer profile; cookie transports must supply the original token
+  and exact HTTPS-origin policy, with native CSRF fencing during enrollment.
+
+- Add an explicit authenticated enrollment-confirmation variant of TOTP
+  verification, disjoint from the existing login-child fields. Preserve legacy
+  login validation and borrowed CSRF custody; activation metadata does not grant
+  a session or renew pending expiry. Native activation remains unfinished.
+
+- Preserve borrowed synchronizer custody across repeated URI-request validation;
+  validation rejects zero tokens without consuming transport reveal permission.
+
+- Define a separate TOTP URI reveal request bound to enrollment, stable command,
+  original session, CSRF synchronizer and trusted origin/caller scope. Reveal
+  results forbid implicit export and require no-store/no-cache transport. Native
+  marker consumption and transport remain unfinished; validation grants no
+  disclosure authority.
+
+- Define keyed, subject-bound MFA enrollment input with separate original
+  primary and action-specific reauthentication proofs, explicit positive
+  recovery-code policy and redacted pending/recovery result contracts. Execution
+  commands remain server-owned and are returned for recovery. Reveal-once code
+  output uses destroyable secret owners for explicit delivery, not the opaque
+  verification-input type. These contracts do not yet provide an enrollment
+  service.
+
+- Add bounded TOTP provisioning URI construction from the exact stored profile
+  and borrowed secret, with escaped issuer/account labels and redacted delivery
+  material. Construction grants no reveal authority; native enrollment must
+  still consume its reveal marker atomically and disclose only on first commit.
+
 - Define bounded browser TOTP-completion input and reveal-once result contracts.
   Bind the child challenge, enrolled factor, original browser cookie and trusted
   caller scope without accepting account, expiry or remember-policy overrides.

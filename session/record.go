@@ -126,7 +126,20 @@ func newSessionWithMFA(s SessionSpec, otp OTPAuthentication, magicLink MagicLink
 	if factor.state != nil {
 		p := factor.state
 		remember, err := s.Remember.Bindings()
-		if err != nil || s.Authentication.Kind != AuthenticationMagicLink || magicLink.state == nil || !a.Factor.Present || a.Factor.Binding.Version != p.FactorAuthorityVersion || p.PrimaryCommandID != magicLink.state.CommandID || p.Remember != remember || p.VerifiedAt.Before(magicLink.state.AuthenticatedAt) || s.IssuedAt.Before(p.VerifiedAt) || !s.IssuedAt.Before(p.ValidUntil) || p.ValidUntil.After(magicLink.state.ValidUntil) {
+		if err != nil || !a.Factor.Present || a.Factor.Binding.Version != p.FactorAuthorityVersion || p.Remember != remember || s.IssuedAt.Before(p.VerifiedAt) || !s.IssuedAt.Before(p.ValidUntil) {
+			return Session{}, ErrInvalidSession
+		}
+		switch s.Authentication.Kind {
+		case AuthenticationMagicLink:
+			if magicLink.state == nil || p.PrimaryCommandID != magicLink.state.CommandID || p.VerifiedAt.Before(magicLink.state.AuthenticatedAt) || p.ValidUntil.After(magicLink.state.ValidUntil) {
+				return Session{}, ErrInvalidSession
+			}
+		case AuthenticationVerified:
+			primary := s.Authentication.Proof
+			if primary.Method != "password" || primary.Assurance != authentication.AssuranceSingleFactor || primary.Purpose != PasswordMFAPrimaryPurpose || string(p.PrimaryCommandID) != string(primary.ID) || p.VerifiedAt.Before(primary.IssuedAt) || p.ValidUntil.After(primary.ExpiresAt) || a.Organization.Present || a.Passkey.Present {
+				return Session{}, ErrInvalidSession
+			}
+		default:
 			return Session{}, ErrInvalidSession
 		}
 	}

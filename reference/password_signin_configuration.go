@@ -24,6 +24,12 @@ type PasswordSigninConfiguration struct {
 	// It does not enable HTTP. The selected key index comes from Native.FlowKeys,
 	// so initiation cannot introduce a second independently configured key set.
 	PreAuth *PasswordPreAuthConfiguration
+	// MFA opts into password-first continuations using the native issuer and
+	// encrypted child custody. Nil preserves the existing single-factor profile.
+	MFA *passwordpg.MFAChallengeConfig
+	// TOTP selects the graph-owned second-factor completion pipeline, not HTTP.
+	// MFA must be selected too; a magic-link request owner is not required.
+	TOTP *PasswordTOTPConfiguration
 }
 
 func composePasswordSignin(c StoreConfiguration, d ReferenceDependencies, evaluator risk.Evaluator) (*passwordpg.SigninService, error) {
@@ -44,6 +50,12 @@ func composePasswordSignin(c StoreConfiguration, d ReferenceDependencies, evalua
 		}
 	}
 	n.Risk.Evaluation = evaluator
+	if c.PasswordSignin.TOTP != nil && c.PasswordSignin.MFA == nil {
+		return nil, invalid
+	}
+	if c.PasswordSignin.MFA != nil {
+		return passwordpg.NewMFASigninService(d.PostgreSQL, n, *c.PasswordSignin.MFA)
+	}
 	return passwordpg.NewSigninService(d.PostgreSQL, n)
 }
 
