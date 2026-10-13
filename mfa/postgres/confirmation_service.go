@@ -23,6 +23,9 @@ type TOTPConfirmationConfig struct {
 	AllowedOrigins       []string
 	ComparisonKey        [32]byte
 	ComparisonKeyVersion uint32
+	// Nil preserves the original enrollment profile. Replacement additionally
+	// requires exact native whole-subject session disposition ownership.
+	Replacement *TOTPReplacementContinuationConfig
 }
 
 // TOTPConfirmationService confirms a pending enrollment through the existing
@@ -73,11 +76,14 @@ func (s *TOTPConfirmationService) EnrollmentConfirmationRateSource(ctx context.C
 	if err = p.load(ctx); err != nil {
 		return 0, time.Time{}, err
 	}
-	until, err = p.primary.Deadline()
+	if err = p.refreshPrimary(ctx); err != nil {
+		return 0, time.Time{}, err
+	}
+	until, err = p.deadline()
 	if err != nil {
 		return 0, time.Time{}, err
 	}
-	m := p.pending.Input.Meta
+	m := p.pending.metadata()
 	if m.ExpiresAt.Before(until) {
 		until = m.ExpiresAt
 	}
@@ -99,6 +105,13 @@ func NewTOTPConfirmationService(enrollment *TOTPEnrollmentService, c TOTPConfirm
 		return nil, err
 	}
 	shared := &totpURIState{enrollment: enrollment.state(), config: TOTPURIConfig{AllowedOrigins: slices.Clone(c.AllowedOrigins)}}
+	if c.Replacement != nil {
+		selected := *c.Replacement
+		if selected.Management == nil || selected.Management.state == nil || nilEnrollmentPrimary(selected.Primary) || nilEnrollmentPrimary(selected.Sessions) || selected.Management.state().shared != shared.enrollment || !selected.Management.ReplacementConfigured() {
+			return nil, invalidEnrollment()
+		}
+		shared.config.Replacement = &selected
+	}
 	slices.Sort(shared.config.AllowedOrigins)
 	for i, origin := range shared.config.AllowedOrigins {
 		u, err := url.Parse(origin)
@@ -118,6 +131,11 @@ func NewTOTPConfirmationService(enrollment *TOTPEnrollmentService, c TOTPConfirm
 	frame = append(frame, keyIdentity[:]...)
 	for shift := 24; shift >= 0; shift -= 8 {
 		frame = append(frame, byte(c.ComparisonKeyVersion>>shift))
+	}
+	if shared.config.Replacement != nil {
+		identity := shared.config.Replacement.Management.state().identity
+		frame = append(frame, []byte("replacement\x00")...)
+		frame = append(frame, identity[:]...)
 	}
 	shared.identity = sha256.Sum256(frame)
 	clear(frame)
@@ -167,7 +185,7 @@ func (s *TOTPConfirmationService) TotpVerify(ctx context.Context, r mfa.TotpVeri
 	result, err := c.ExecutePreparedFeature(ctx, p.command, p.plan)
 	out.Outcome = result.Outcome
 	if err == nil && result.Outcome == identity.CommitOutcomeCommitted {
-		out.Enrollment = mfa.Enrollment{ID: mfa.EnrollmentID(r.FactorID), FactorMethod: "totp", ExpiresAt: p.pending.Input.Meta.ExpiresAt, Version: p.pending.RowVersion + 1}
+		out.Enrollment = mfa.Enrollment{ID: mfa.EnrollmentID(r.FactorID), FactorMethod: "totp", ExpiresAt: p.pending.metadata().ExpiresAt, Version: p.pending.RowVersion + 1}
 	}
 	return out, err
 }

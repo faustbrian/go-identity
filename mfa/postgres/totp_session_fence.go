@@ -25,7 +25,7 @@ func RequireTOTPSessionFactor(ctx context.Context, w kernel.Work, owner kernel.F
 	}
 	b, f, _, err := w.FeatureScope(owner)
 	sessionOwner := b.OperationID == "identity.session.revoke-one" && f.Operation.Owner == "identity/session" && f.Contributor == (kernel.ContributorDescriptor{Owner: "identity/session/postgres", ContractID: "identity.session.store", Version: 1})
-	mfaOwner := b.SchemaVersion == 1 && (b.OperationID == "identity.mfa.totp-verify" && b.SchemaID == "mfa-totp-step-up" || b.OperationID == "identity.mfa.recovery-regenerate" && b.SchemaID == "mfa-recovery-regenerate" || b.OperationID == "identity.mfa.factor-update" && b.SchemaID == "mfa-factor-update" || b.OperationID == "identity.mfa.disable" && b.SchemaID == "mfa-disable") && f.Operation.Owner == "identity/mfa" && f.Contributor == (kernel.ContributorDescriptor{Owner: "identity/mfa/postgres", ContractID: "identity.mfa", Version: 1})
+	mfaOwner := b.SchemaVersion == 1 && (b.OperationID == "identity.mfa.totp-verify" && (b.SchemaID == "mfa-totp-step-up" || b.SchemaID == "mfa-totp-enrollment-confirm") || b.OperationID == "identity.mfa.totp-uri" && b.SchemaID == "mfa-totp-uri" || b.OperationID == "identity.mfa.recovery-regenerate" && b.SchemaID == "mfa-recovery-regenerate" || b.OperationID == "identity.mfa.factor-update" && b.SchemaID == "mfa-factor-update" || b.OperationID == "identity.mfa.disable" && b.SchemaID == "mfa-disable") && f.Operation.Owner == "identity/mfa" && f.Contributor == (kernel.ContributorDescriptor{Owner: "identity/mfa/postgres", ContractID: "identity.mfa", Version: 1})
 	if err != nil || b.UserID != user || b.ActorKind != authorization.SubjectUser || string(b.ActorID) != string(user) || !sessionOwner && !mfaOwner {
 		return invalidAuthority()
 	}

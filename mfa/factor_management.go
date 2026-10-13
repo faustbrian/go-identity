@@ -22,6 +22,40 @@ type FactorUpdateResult struct {
 	CommandID identity.CommandID
 	Outcome   identity.CommitOutcome
 	Factor    FactorProjection
+	// Replacement is present only after a fresh committed Replace initiation.
+	// It identifies the pending successor and owns its reveal-once recovery
+	// material, never an active factor, replacement proof or session. Errors,
+	// replay and historical recovery return nil. Destroy borrowed codes after
+	// explicit bounded delivery. Implicit serialization omits this custody.
+	Replacement *TOTPReplacementEnrollment `json:"-"`
+}
+
+// TOTPReplacementEnrollment carries public pending-ceremony metadata and
+// one-time delivery custody. The predecessor remains active until successful
+// confirmation. Recovery material cannot authenticate before that activation.
+type TOTPReplacementEnrollment struct {
+	Enrollment       Enrollment
+	RecoveryMaterial RevealOnceCodes
+}
+
+// Format prevents traversal of replacement delivery custody.
+func (TOTPReplacementEnrollment) Format(s fmt.State, _ rune) {
+	_, _ = s.Write([]byte("mfa.TOTPReplacementEnrollment(redacted)"))
+}
+
+// MarshalJSON rejects implicit export; transports own explicit guarded delivery.
+func (TOTPReplacementEnrollment) MarshalJSON() ([]byte, error) {
+	return nil, identity.ForbiddenError{}
+}
+
+// MarshalText rejects implicit text/map-key secret export.
+func (TOTPReplacementEnrollment) MarshalText() ([]byte, error) {
+	return nil, identity.ForbiddenError{}
+}
+
+// LogValue exposes no pending identifiers or recovery material.
+func (TOTPReplacementEnrollment) LogValue() slog.Value {
+	return slog.StringValue("mfa.TOTPReplacementEnrollment(redacted)")
 }
 
 // FactorManagementService owns protected self-management and metadata-only
@@ -62,10 +96,12 @@ type FactorUpdateRequest struct {
 	// CommandID is absent on a fresh keyed call. If supplied on retry, the
 	// native owner must compare it with the key's retained authoritative ID;
 	// it must never let the caller choose or replace that command.
-	CommandID       identity.CommandID
-	FactorID        FactorID
-	Action          FactorUpdateAction
-	Name            string
+	CommandID identity.CommandID
+	FactorID  FactorID
+	Action    FactorUpdateAction
+	Name      string
+	// Replace reserves two predecessor increments: initiation and retirement.
+	// Its maximum is MaxUint64-2; rename/removal retain MaxUint64-1.
 	ExpectedVersion uint64
 	FactorProof     auth.Proof
 	Session         auth.BearerCredential
@@ -105,8 +141,13 @@ func (r FactorUpdateRequest) validateFor(operation string) error {
 	}
 	switch r.Action {
 	case Rename:
-	case Remove, Replace:
+	case Remove:
 		if r.Name != "" {
+			return bad()
+		}
+	case Replace:
+		// Initiation and confirmed retirement each advance the predecessor.
+		if r.Name != "" || r.ExpectedVersion >= math.MaxUint64-1 {
 			return bad()
 		}
 	default:

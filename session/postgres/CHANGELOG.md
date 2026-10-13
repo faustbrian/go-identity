@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add native original-session/CSRF custody for pending TOTP replacement URI and
+  confirmation. Continuations obtain real current authority without extending
+  original proof/ceremony limits or copying expired evidence. Confirmation
+  revokes all bounded subject sessions in the protected MFA transaction, with
+  retained outcome evidence and optional forward-only disposition v4.
+
 - Add exact native disable session custody and all-subject disposition ownership,
   retaining original cookie/CSRF/deadlines and primary authority. Append optional
   disposition v3 after v2; older regeneration/update purposes and receipts remain

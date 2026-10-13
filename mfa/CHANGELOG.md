@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- Reject replacement versions without room for both initiation and retirement;
+  preserve the existing one-increment rename/removal bounds.
+
+- Add explicit pending TOTP replacement metadata and reveal-once recovery
+  material to factor-update results. The native/HTTP selected profile preserves
+  predecessor authentication until successor confirmation, then retires the
+  predecessor/codes and revokes subject sessions atomically. Replay and recovery
+  disclose no fresh material. This supersedes the selected TOTP replacement
+  caveats below, not other factor methods or general multi-factor management.
+
 - Add explicit one/all-factor disable with original disable-purpose proof and
   native optimistic authority derived from authenticated issuance. The selected
   sole-TOTP/email-recovery profile erases factors/codes and revokes sessions

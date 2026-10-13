@@ -2,6 +2,7 @@ package mfahttp
 
 import (
 	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -36,8 +37,11 @@ type FactorUpdateConfig struct {
 	Now                         func() time.Time
 	MaximumDuration, MaximumAge time.Duration
 	// Empty preserves rename-only compatibility. A closed copied selection may
-	// add Remove; removal forbids name even when empty. Replace remains unsupported.
+	// add Remove or Replace; both forbid name even when empty.
 	Actions []mfa.FactorUpdateAction
+	// ReplacementCodeCount must match the selected native replacement policy,
+	// is1..64 when Replace is selected, and must be zero otherwise.
+	ReplacementCodeCount uint32
 }
 
 type factorUpdateHTTPState struct {
@@ -54,11 +58,11 @@ func factorUpdateActions(selected []mfa.FactorUpdateAction) ([]mfa.FactorUpdateA
 	if len(selected) == 0 {
 		return []mfa.FactorUpdateAction{mfa.Rename}, nil
 	}
-	if len(selected) > 2 {
+	if len(selected) > 3 {
 		return nil, identityhttp.ErrInvalidInput
 	}
 	for i, action := range selected {
-		if action != mfa.Rename && action != mfa.Remove || slices.Contains(selected[:i], action) {
+		if action != mfa.Rename && action != mfa.Remove && action != mfa.Replace || slices.Contains(selected[:i], action) {
 			return nil, identityhttp.ErrInvalidInput
 		}
 	}
@@ -91,6 +95,13 @@ func newFactorMutationHandler(c FactorUpdateConfig, m []identityhttp.MiddlewareD
 	actions, err := factorUpdateActions(c.Actions)
 	if err != nil {
 		return nil, err
+	}
+	if slices.Contains(actions, mfa.Replace) {
+		if disable != nil || c.ReplacementCodeCount < 1 || c.ReplacementCodeCount > 64 {
+			return nil, identityhttp.ErrInvalidInput
+		}
+	} else if c.ReplacementCodeCount != 0 {
+		return nil, identityhttp.ErrInvalidInput
 	}
 	if !c.Sessions.Configured() || enableNil(c.Proofs) || serviceMissing || !c.Rate.Configured() || c.Now == nil || c.PolicyRevision == 0 || c.MaximumDuration < time.Millisecond || c.MaximumDuration > 30*time.Second || c.MaximumAge <= 0 || c.MaximumAge > 5*time.Minute {
 		return nil, identityhttp.ErrInvalidInput
@@ -222,8 +233,11 @@ func newFactorMutationHandler(c FactorUpdateConfig, m []identityhttp.MiddlewareD
 				if !ok || len(body) != 5 || len(raw) < 2 || raw[0] != '"' || json.Unmarshal(raw, &s.name) != nil {
 					return s, identityhttp.ErrInvalidInput
 				}
-			case "remove":
+			case "remove", "replace":
 				s.action = mfa.Remove
+				if action == "replace" {
+					s.action = mfa.Replace
+				}
 				if _, present := body["name"]; present || len(body) != 4 {
 					return s, identityhttp.ErrInvalidInput
 				}
@@ -343,6 +357,14 @@ func newFactorMutationHandler(c FactorUpdateConfig, m []identityhttp.MiddlewareD
 				return
 			}
 			out, err := c.Service.FactorUpdate(r.Context(), request)
+			defer func() {
+				if out.Replacement != nil {
+					for _, code := range out.Replacement.RecoveryMaterial.Codes {
+						code.Destroy()
+					}
+					clear(out.Replacement.RecoveryMaterial.Codes)
+				}
+			}()
 			safeObservation := mfa.EnableResult{Outcome: out.Outcome}
 			if _, parseErr := identity.ParseCommandID(string(out.CommandID)); parseErr == nil {
 				safeObservation.CommandID = out.CommandID
@@ -358,7 +380,13 @@ func newFactorMutationHandler(c FactorUpdateConfig, m []identityhttp.MiddlewareD
 			if s.action == mfa.Remove {
 				wantedState = mfa.FactorRevoked
 			}
-			if _, err := identity.ParseCommandID(string(out.CommandID)); err != nil || out.Outcome != identity.CommitOutcomeCommitted || out.Factor.ID != s.factor || out.Factor.Method != "totp" || out.Factor.State != wantedState || out.Factor.Label != s.name || out.Factor.Version != s.version+1 || (mfa.ListResult{Factors: []mfa.FactorProjection{out.Factor}}).ValidateAt(c.Now()) != nil || s.base.read.ValidateAt(c.Now()) != nil || p.Validate(freshUse) != nil {
+			matched := out.Factor.ID == s.factor && out.Factor.Version == s.version+1 && out.Replacement == nil
+			if s.action == mfa.Replace {
+				wantedState = mfa.FactorPending
+				pending := out.Replacement
+				matched = pending != nil && out.Factor.ID != s.factor && out.Factor.Version == 1 && pending.Enrollment.ID == mfa.EnrollmentID(out.Factor.ID) && pending.Enrollment.FactorMethod == "totp" && pending.Enrollment.Version == 1 && c.Now().Before(pending.Enrollment.ExpiresAt) && len(pending.RecoveryMaterial.Codes) == int(c.ReplacementCodeCount)
+			}
+			if _, err := identity.ParseCommandID(string(out.CommandID)); err != nil || out.Outcome != identity.CommitOutcomeCommitted || !matched || out.Factor.Method != "totp" || out.Factor.State != wantedState || out.Factor.Label != s.name || (mfa.ListResult{Factors: []mfa.FactorProjection{out.Factor}}).ValidateAt(c.Now()) != nil || s.base.read.ValidateAt(c.Now()) != nil || p.Validate(freshUse) != nil {
 				fail(w, enableFailure{status: 503, code: "unavailable"}, observation)
 				return
 			}
@@ -367,13 +395,13 @@ func newFactorMutationHandler(c FactorUpdateConfig, m []identityhttp.MiddlewareD
 				fail(w, classify(err), observation)
 				return
 			}
-			defer clear(data)
+			defer clear(data[:cap(data)])
 			start := c.Now()
 			writeSecretJSON(w, r, data, observation, func() bool {
 				at := c.Now()
 				freshUse := use
 				freshUse.ProofUse.Now = at
-				return !at.Before(start) && s.base.read.ValidateAt(at) == nil && p.Validate(freshUse) == nil
+				return !at.Before(start) && s.base.read.ValidateAt(at) == nil && p.Validate(freshUse) == nil && (out.Replacement == nil || at.Before(out.Replacement.Enrollment.ExpiresAt))
 			})
 		},
 	})
@@ -398,6 +426,9 @@ func factorUpdateBody(out mfa.FactorUpdateResult) ([]byte, error) {
 		v := out.Factor.LastUsedAt.UTC()
 		f.LastUsedAt = &v
 	}
+	if out.Replacement != nil {
+		return replacementFactorBody(out, f)
+	}
 	var buffer bytes.Buffer
 	encoder := json.NewEncoder(&buffer)
 	encoder.SetEscapeHTML(false)
@@ -409,6 +440,61 @@ func factorUpdateBody(out mfa.FactorUpdateResult) ([]byte, error) {
 		return nil, identityhttp.ErrUnavailable
 	}
 	return buffer.Bytes(), nil
+}
+
+func replacementFactorBody(out mfa.FactorUpdateResult, factor any) ([]byte, error) {
+	pending := out.Replacement
+	if pending == nil || len(pending.RecoveryMaterial.Codes) < 1 || len(pending.RecoveryMaterial.Codes) > 64 {
+		return nil, identityhttp.ErrUnavailable
+	}
+	metadata, err := json.Marshal(map[string]any{"commitOutcome": "committed", "commandID": out.CommandID, "factor": factor, "replacement": map[string]any{"enrollmentID": pending.Enrollment.ID, "factorMethod": "totp", "expiresAt": pending.Enrollment.ExpiresAt.UTC(), "version": pending.Enrollment.Version}})
+	if err != nil || len(metadata) < 2 || len(metadata) > 2048 {
+		clear(metadata)
+		return nil, identityhttp.ErrUnavailable
+	}
+	// Allocate the exact bounded canonical-code allowance before borrowing
+	// plaintext, avoiding abandoned backing arrays during append growth.
+	data := make([]byte, len(metadata)-2, len(metadata)+len(pending.RecoveryMaterial.Codes)*25+32)
+	copy(data, metadata[:len(metadata)-2])
+	clear(metadata)
+	accepted := false
+	defer func() {
+		if !accepted {
+			clear(data[:cap(data)])
+		}
+	}()
+	data = append(data, `,"recoveryCodes":[`...)
+	var seen [64][16]byte
+	defer clear(seen[:])
+	for i, code := range pending.RecoveryMaterial.Codes {
+		if i > 0 {
+			data = append(data, ',')
+		}
+		if code.Len() != 22 || code.Use(func(raw []byte) error {
+			var decoded [16]byte
+			var canonical [22]byte
+			defer clear(decoded[:])
+			defer clear(canonical[:])
+			n, err := base64.RawURLEncoding.Decode(decoded[:], raw)
+			if err != nil || n != len(decoded) {
+				return identityhttp.ErrInvalidInput
+			}
+			base64.RawURLEncoding.Encode(canonical[:], decoded[:])
+			if !bytes.Equal(canonical[:], raw) || slices.Contains(seen[:i], decoded) {
+				return identityhttp.ErrInvalidInput
+			}
+			seen[i] = decoded
+			data = append(data, '"')
+			data = append(data, raw...)
+			data = append(data, '"')
+			return nil
+		}) != nil {
+			return nil, identityhttp.ErrUnavailable
+		}
+	}
+	data = append(data, ']', '}', '}', '\n')
+	accepted = true
+	return data, nil
 }
 
 // Format redacts borrowed configuration and rate custody.

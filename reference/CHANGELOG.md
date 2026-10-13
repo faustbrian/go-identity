@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Compose explicitly selected pending TOTP replacement through the native
+  factor-update, URI and confirmation owners, with actual session custody and
+  whole-subject revocation. Append optional MFA v12/session-disposition v4 only
+  when selected; preserve prior migration prefixes. Opt-in HTTP derives its
+  recovery-code count from native policy. Original factor/codes stay usable
+  until confirmation; confirmed successor TOTP and recovery codes support login.
+  This supersedes the selected TOTP replacement caveats below, not general MFA.
+
 - Native and HTTP one-target disable preserve and report untargeted pending
   factors; all-target disable still erases and retires their custody.
 

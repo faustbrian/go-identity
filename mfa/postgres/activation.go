@@ -36,6 +36,10 @@ func enrollmentConfirmationScope(m PendingTOTPMetadata, command identity.Command
 // Decryption belongs before locks; comparison uses primary database time here.
 // The original SFA session is neither promoted nor implicitly replaced.
 func activatePendingTOTP(ctx context.Context, w kernel.Work, owner kernel.FeatureExecutionContributor, c identity.Command, m PendingTOTPMetadata, rowVersion, authorityVersion uint64, encrypted []byte, secret primitive.Secret, code auth.OneTimeCode, verifier mfa.TOTPVerifier, keyVersion uint32) error {
+	return activatePendingTOTPProfile(ctx, w, owner, c, m, rowVersion, authorityVersion, encrypted, secret, code, verifier, keyVersion, nil, 0)
+}
+
+func activatePendingTOTPProfile(ctx context.Context, w kernel.Work, owner kernel.FeatureExecutionContributor, c identity.Command, m PendingTOTPMetadata, rowVersion, authorityVersion uint64, encrypted []byte, secret primitive.Secret, code auth.OneTimeCode, verifier mfa.TOTPVerifier, keyVersion uint32, replacement *factorUpdateInput, predecessorRowVersion uint64) error {
 	if ctx == nil {
 		return invalidEnrollment()
 	}
@@ -50,8 +54,15 @@ func activatePendingTOTP(ctx context.Context, w kernel.Work, owner kernel.Featur
 	if err != nil {
 		return err
 	}
-	if err = authority.RequireEmailRecovery(b.TenantID, b.UserID); err != nil {
-		return err
+	if replacement == nil {
+		if predecessorRowVersion != 0 {
+			return invalidEnrollment()
+		}
+		if err = authority.RequireEmailRecovery(b.TenantID, b.UserID); err != nil {
+			return err
+		}
+	} else if replacement.Replacement == nil || replacement.Replacement.FactorID != m.FactorID || replacement.Replacement.AuthorityVersion != authorityVersion || replacement.Binding.TenantID != b.TenantID || replacement.Binding.UserID != b.UserID || replacement.Before.ID == mfa.FactorID(m.FactorID) || replacement.Before.Version == 0 || replacement.Before.Version >= math.MaxUint64-1 || predecessorRowVersion < replacement.Before.Version+1 || predecessorRowVersion == math.MaxUint64 {
+		return invalidEnrollment()
 	}
 	store := completionTOTPStore(w)
 	var wire []byte
@@ -99,6 +110,19 @@ WHERE tenant_id=$1 AND user_id=$2 AND factor_id=$3 AND state=1 AND enrollment_ve
 	if err != nil {
 		return invalidEnrollment()
 	}
+	if replacement != nil {
+		// No retirement precedes successful new-secret comparison. These writes,
+		// activation, epoch advancement and required session disposition share
+		// the caller's Work; any failure rolls all of them back.
+		n, err := w.Exec(ctx, `UPDATE identity_mfa.totp_factors SET state=3,encrypted_secret=NULL,last_step=NULL,label='',row_version=row_version+1 WHERE tenant_id=$1 AND user_id=$2 AND factor_id=$3 AND state=2 AND row_version=$4::numeric`, string(b.TenantID), string(b.UserID), string(replacement.Before.ID), strconv.FormatUint(predecessorRowVersion, 10))
+		if err != nil || n != 1 {
+			return replacementWriteError(err)
+		}
+		n, err = w.Exec(ctx, `UPDATE identity_mfa.recovery_sets SET state=3,row_version=row_version+1 WHERE tenant_id=$1 AND user_id=$2 AND factor_id=$3 AND state=2`, string(b.TenantID), string(b.UserID), string(replacement.Before.ID))
+		if err != nil || n != 1 {
+			return replacementWriteError(err)
+		}
+	}
 	n, err := w.Exec(ctx, `UPDATE identity_mfa.totp_factors SET state=2,confirmed_at=$5,last_step=$6::numeric,row_version=row_version+1,activation_command_id=$7,activation_before_version=row_version,activation_authority_before=$8::numeric
 WHERE tenant_id=$1 AND user_id=$2 AND factor_id=$3 AND state=1 AND row_version=$4::numeric AND enrollment_expires_at>clock_timestamp()`, string(b.TenantID), string(b.UserID), b.RecordID, strconv.FormatUint(rowVersion, 10), now, strconv.FormatUint(step, 10), id, strconv.FormatUint(authorityVersion, 10))
 	if err != nil {
@@ -114,7 +138,11 @@ WHERE tenant_id=$1 AND user_id=$2 AND factor_id=$3 AND state=1 AND row_version=$
 	if n != 1 {
 		return identity.ForbiddenError{}
 	}
-	n, err = w.Exec(ctx, `UPDATE identity_mfa.factor_authorities SET version=version+1,active_factors=1 WHERE tenant_id=$1 AND user_id=$2 AND version=$3::numeric AND active_factors=0`, string(b.TenantID), string(b.UserID), strconv.FormatUint(authorityVersion, 10))
+	beforeCount := int32(0)
+	if replacement != nil {
+		beforeCount = 1
+	}
+	n, err = w.Exec(ctx, `UPDATE identity_mfa.factor_authorities SET version=version+1,active_factors=1 WHERE tenant_id=$1 AND user_id=$2 AND version=$3::numeric AND active_factors=$4`, string(b.TenantID), string(b.UserID), strconv.FormatUint(authorityVersion, 10), beforeCount)
 	if err != nil {
 		return err
 	}

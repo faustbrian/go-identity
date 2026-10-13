@@ -241,4 +241,38 @@ Remove consumes the original factor proof, erases secret/replay material,
 retires dependent code sets, advances authority to known-empty and revokes all
 subject sessions atomically. Historical outcome recovery reads the retained
 removal disposition, not today's mutable email eligibility. Unsupported recovery
-paths, replacement and general multi-factor removal remain denied.
+paths and general multi-factor removal remain denied.
+
+## Selected pending TOTP replacement
+
+Set `FactorUpdateConfig.Replacement` to `TOTPReplacementConfig{RecoveryCodes: 10}`
+(allowed count1..64). Nil preserves rename/removal configuration identity and
+does not enable replacement. Install optional `TOTPReplacementMigrationSource`
+v12 after the existing MFA history, without rewriting installed prefixes.
+The supported profile replaces the sole active confirmed TOTP using its original
+fresh factor-update proof, observed row version and actual recent primary session.
+Password/TOTP and password/recovery source sessions retain their existing factor
+fences through continuation; they do not fall back to single-factor admission.
+The initial optimistic version must be at most `MaxUint64-2`, reserving both
+initiation and retirement increments. Exhaustion denies before proof consumption
+or successor creation; rename/removal retain their original one-step bounds.
+
+Initiation consumes the management proof but does not advance factor authority,
+retire old codes or revoke sessions. It creates one pending successor and returns
+its recovery material once. Explicitly compose `TOTPReplacementContinuationConfig`
+into URI and confirmation configuration, borrowing the same management owner,
+native original-session primary source and replacement session effect. The
+reference graph supplies these concrete owners; no caller-created enable record
+or forged password proof is needed. URI disclosure remains one-use and confirmation
+requires the pending successor's actual code, not the old factor's code.
+
+Continuations retain the original session, proof, predecessor and parent-command
+identity. They acquire an actual current authority observation bounded at20seconds;
+copies never renew freshness. Original primary/proof age and enrollment expiry
+remain absolute ceilings. Benign predecessor replay updates are accepted while
+unchanged management authority is fenced; account blocking, revocation, factor
+epoch change or unavailable authority denies. Confirmation atomically retires
+old factor/code sets, advances the epoch and revokes every bounded subject session.
+Historical recovery authenticates retained effects without reviving a session or
+repeating URI/code delivery. Multi-factor/device/admin replacement is not provided
+by this selected sole-TOTP profile.

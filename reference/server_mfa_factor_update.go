@@ -25,17 +25,19 @@ type HTTPMFAFactorUpdateConfiguration struct {
 	RateNamespace  string
 	RateKey        [32]byte
 	// Empty selects rename only. Explicit Remove requires the selected native
-	// email-recovery owner. Duplicates, replacement and unknown actions deny.
+	// email-recovery owner; Replace requires native pending replacement and its
+	// URI/confirmation owners. Duplicates and unknown actions deny.
 	Actions []mfa.FactorUpdateAction
 }
 
 type mfaFactorUpdateHTTPState struct {
-	config              HTTPMFAFactorUpdateConfiguration
-	proofs              auth.ReauthenticationSource
-	rate                *identityhttp.KeyedSecretRateLimiter
-	now                 func() time.Time
-	revision            authorization.Revision
-	timeout, maximumAge time.Duration
+	config               HTTPMFAFactorUpdateConfiguration
+	proofs               auth.ReauthenticationSource
+	rate                 *identityhttp.KeyedSecretRateLimiter
+	now                  func() time.Time
+	revision             authorization.Revision
+	timeout, maximumAge  time.Duration
+	replacementCodeCount uint32
 }
 
 func composeMFAFactorUpdateHTTP(c StoreConfiguration, d ReferenceDependencies, owner *mfaEnrollmentState, rate *httpRateState) (*mfaFactorUpdateHTTPState, error) {
@@ -47,12 +49,12 @@ func composeMFAFactorUpdateHTTP(c StoreConfiguration, d ReferenceDependencies, o
 		return nil, invalid
 	}
 	h := *c.HTTPMFAFactorUpdate
-	if len(h.Actions) > 2 {
+	if len(h.Actions) > 3 {
 		return nil, invalid
 	}
 	h.Actions = slices.Clone(h.Actions)
 	for i, action := range h.Actions {
-		if action != mfa.Rename && action != mfa.Remove || slices.Contains(h.Actions[:i], action) || action == mfa.Remove && !owner.manage.RemovalConfigured() {
+		if action != mfa.Rename && action != mfa.Remove && action != mfa.Replace || slices.Contains(h.Actions[:i], action) || action == mfa.Remove && !owner.manage.RemovalConfigured() || action == mfa.Replace && (!owner.manage.ReplacementConfigured() || owner.uri == nil || owner.confirm == nil || c.MFAEnrollment.FactorManagement.Replacement == nil) {
 			return nil, invalid
 		}
 	}
@@ -74,7 +76,11 @@ func composeMFAFactorUpdateHTTP(c StoreConfiguration, d ReferenceDependencies, o
 	if err != nil {
 		return nil, invalid
 	}
-	return &mfaFactorUpdateHTTPState{config: h, proofs: source, rate: limiter, now: now, revision: authorization.Revision(c.OTP.RequestKeys.Policy.PolicyVersion), timeout: c.MFAEnrollment.Native.MaximumDuration, maximumAge: c.MFAEnrollment.FactorManagement.MaximumAge}, nil
+	state := &mfaFactorUpdateHTTPState{config: h, proofs: source, rate: limiter, now: now, revision: authorization.Revision(c.OTP.RequestKeys.Policy.PolicyVersion), timeout: c.MFAEnrollment.Native.MaximumDuration, maximumAge: c.MFAEnrollment.FactorManagement.MaximumAge}
+	if slices.Contains(h.Actions, mfa.Replace) {
+		state.replacementCodeCount = c.MFAEnrollment.FactorManagement.Replacement.RecoveryCodes
+	}
+	return state, nil
 }
 
 func (s *Server) mfaFactorUpdateHTTPConfig(network identityhttp.NetworkConfig, f FeatureSet) (*mfahttp.FactorUpdateConfig, error) {
@@ -90,7 +96,7 @@ func (s *Server) mfaFactorUpdateHTTPConfig(network identityhttp.NetworkConfig, f
 		return nil, identity.InvalidInputError{Field: "reference_http_mfa_factor_update"}
 	}
 	sessions := s.state.features.session
-	return &mfahttp.FactorUpdateConfig{Network: network, Sessions: sessions.reader, Proofs: h.proofs, Service: owner, Rate: h.rate, Cookie: sessions.config.Cookie, TrustedOrigins: h.config.TrustedOrigins, PolicyRevision: h.revision, Now: h.now, MaximumDuration: h.timeout, MaximumAge: h.maximumAge, Actions: h.config.Actions}, nil
+	return &mfahttp.FactorUpdateConfig{Network: network, Sessions: sessions.reader, Proofs: h.proofs, Service: owner, Rate: h.rate, Cookie: sessions.config.Cookie, TrustedOrigins: h.config.TrustedOrigins, PolicyRevision: h.revision, Now: h.now, MaximumDuration: h.timeout, MaximumAge: h.maximumAge, Actions: h.config.Actions, ReplacementCodeCount: h.replacementCodeCount}, nil
 }
 
 // Format redacts borrowed rate keys and deployment policy.

@@ -38,7 +38,7 @@ func (s StoreSet) activeStepUpMigrationCatalog(ctx context.Context, catalog []mi
 			owners[9] = "identity/mfa/postgres"
 			catalog[i].history = steps
 			catalog[i].guards = append(catalog[i].guards, migrationGuard{version: 9, schema: "identity_mfa", tables: []string{"factor_update_effects"}, columns: []string{"totp_factors.label"}})
-			if s.state.features.mfaEnrollment.disable != nil || s.state.features.mfaEnrollment.manage.RemovalConfigured() {
+			if s.state.features.mfaEnrollment.disable != nil || s.state.features.mfaEnrollment.manage.RemovalConfigured() || s.state.features.mfaEnrollment.manage.ReplacementConfigured() {
 				steps, err = (mfapg.FactorRemovalMigrationSource{Base: fixedMigrationSource(steps), Version: 10}).Load(ctx)
 				if err != nil {
 					return nil, err
@@ -55,6 +55,15 @@ func (s StoreSet) activeStepUpMigrationCatalog(ctx context.Context, catalog []mi
 					catalog[i].history = steps
 					catalog[i].guards = append(catalog[i].guards, migrationGuard{version: 11, schema: "identity_mfa", tables: []string{"factor_update_effects"}, columns: []string{"factor_update_effects.disable_target"}})
 				}
+			}
+			if s.state.features.mfaEnrollment.manage.ReplacementConfigured() {
+				steps, err = (mfapg.TOTPReplacementMigrationSource{Base: fixedMigrationSource(steps), Version: 12}).Load(ctx)
+				if err != nil {
+					return nil, err
+				}
+				owners[12] = "identity/mfa/postgres"
+				catalog[i].history = steps
+				catalog[i].guards = append(catalog[i].guards, migrationGuard{version: 12, schema: "identity_mfa", tables: []string{"factor_update_effects"}, columns: []string{"totp_factors.replaces_factor_id", "totp_factors.replaces_version", "factor_update_effects.replacement_factor_id"}})
 			}
 		}
 		if s.state.features.mfaEnrollment.regenerate != nil || s.state.features.mfaEnrollment.manage != nil || s.state.features.mfaEnrollment.disable != nil {
@@ -79,6 +88,14 @@ func (s StoreSet) activeStepUpMigrationCatalog(ctx context.Context, catalog []mi
 					}
 					catalog[j].history = append(catalog[j].history, extension...)
 					catalog[j].owners[3] = "identity/session/postgres"
+				}
+				if s.state.features.mfaEnrollment.manage.ReplacementConfigured() {
+					extension, err = (sessionpg.MFATOTPReplacementSessionMigrationSource{Schema: schema, Version: 4}).Load(ctx)
+					if err != nil {
+						return nil, err
+					}
+					catalog[j].history = append(catalog[j].history, extension...)
+					catalog[j].owners[4] = "identity/session/postgres"
 				}
 			}
 		}

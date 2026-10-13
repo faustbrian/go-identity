@@ -15,13 +15,15 @@ func FuzzFactorUpdateHTTPEnvelope(f *testing.F) {
 	f.Add([]byte(`{"factorID":"one","factorID":"two"}`), "userID=foreign", "duplicate-input")
 	f.Add([]byte(`{"factorID":"AAAAAAAAAAAAAAAAAAAABA","proofID":"AAAAAAAAAAAAAAAAAAAAAg","action":"remove","expectedVersion":1}`), "", "removal-key")
 	f.Add([]byte(`{"factorID":"AAAAAAAAAAAAAAAAAAAABA","proofID":"AAAAAAAAAAAAAAAAAAAAAg","action":"remove","name":"","expectedVersion":1}`), "", "removal-key")
+	f.Add([]byte(`{"factorID":"AAAAAAAAAAAAAAAAAAAABA","proofID":"AAAAAAAAAAAAAAAAAAAAAg","action":"replace","expectedVersion":1}`), "", "replacement-key")
+	f.Add([]byte(`{"factorID":"AAAAAAAAAAAAAAAAAAAABA","proofID":"AAAAAAAAAAAAAAAAAAAAAg","action":"replace","name":"","expectedVersion":1}`), "", "replacement-key")
 	f.Fuzz(func(t *testing.T, body []byte, query, key string) {
 		if len(body) > 8192 || len(query) > 4096 || len(key) > 512 {
 			t.Skip()
 		}
 		base, proofs, _, _, r := enableFixture(t)
 		owner := &factorUpdateOwner{enableOwner: proofs}
-		config := FactorUpdateConfig{Network: base.Network, Sessions: base.Sessions, Proofs: proofs, Service: owner, Rate: base.Rate, Cookie: base.Cookie, TrustedOrigins: base.TrustedOrigins, PolicyRevision: base.PolicyRevision, Now: base.Now, MaximumDuration: base.MaximumDuration, MaximumAge: time.Minute, Actions: []mfa.FactorUpdateAction{mfa.Rename, mfa.Remove}}
+		config := FactorUpdateConfig{Network: base.Network, Sessions: base.Sessions, Proofs: proofs, Service: owner, Rate: base.Rate, Cookie: base.Cookie, TrustedOrigins: base.TrustedOrigins, PolicyRevision: base.PolicyRevision, Now: base.Now, MaximumDuration: base.MaximumDuration, MaximumAge: time.Minute, Actions: []mfa.FactorUpdateAction{mfa.Rename, mfa.Remove, mfa.Replace}, ReplacementCodeCount: 10}
 		h, err := NewFactorUpdateHandler(config)
 		if err != nil {
 			t.Fatal(err)

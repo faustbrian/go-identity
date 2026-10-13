@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+- Admit original password/TOTP and password/recovery sessions through exact
+  native replacement URI/confirmation schemas while retaining current factor
+  authority fences. Reject unfinishable near-exhausted initiation versions.
+
+- Add explicitly selected same-profile TOTP replacement: keyed initiation
+  preserves the active predecessor and source session while issuing a pending
+  successor; URI reveal and confirmation retain authentic parent custody and
+  absolute proof/ceremony limits. Successful new-secret confirmation atomically
+  retires the predecessor and recovery set, advances factor authority and
+  revokes subject sessions. Normal predecessor authentication can advance replay
+  counters without cancelling the ceremony; management-authority changes still
+  deny. Install the optional forward-only replacement v12 suffix before use.
+
 - Fresh one-target disable reports safe remaining pending factors from its
   protected transaction without erasing untargeted enrollment or recovery
   custody; failed projection validation rolls back all effects.

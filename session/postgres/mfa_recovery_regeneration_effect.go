@@ -30,6 +30,7 @@ type MFARecoverySessionEffect struct {
 	schema           string
 	factorManagement bool
 	disable          bool
+	replacement      bool
 }
 
 // NewMFARecoverySessionEffect freezes native password/password-MFA ownership
@@ -69,9 +70,25 @@ func NewMFADisableSessionEffect(c Config, p IdentifierAdmissionConfig) (*MFAReco
 	return e, nil
 }
 
+// NewMFATOTPReplacementSessionEffect selects session revocation only for
+// code-confirmed successor activation. URI and pending initiation cannot use
+// this disposition. Install MFATOTPReplacementSessionMigrationSource first.
+func NewMFATOTPReplacementSessionEffect(c Config, p IdentifierAdmissionConfig) (*MFARecoverySessionEffect, error) {
+	e, err := NewMFARecoverySessionEffect(c, p)
+	if err != nil {
+		return nil, err
+	}
+	e.replacement = true
+	return e, nil
+}
+
 func (e *MFARecoverySessionEffect) acceptsScope(b identity.CommandBinding, f kernel.FeatureRegistration, l kernel.LifecyclePlan) bool {
 	if e == nil {
 		return false
+	}
+	if e.replacement {
+		_, err := identity.ParseCommandID(b.RecordID)
+		return err == nil && b.RecordID != string(b.UserID) && b.SchemaVersion == 1 && b.OperationID == "identity.mfa.totp-verify" && b.SchemaID == "mfa-totp-enrollment-confirm" && f.Operation == (identity.FeatureOperation{Owner: "identity/mfa", OperationID: b.OperationID, SchemaID: b.SchemaID, SchemaVersion: 1, RecordRequirement: identity.FeatureRecordRequired}) && f.Contributor == (kernel.ContributorDescriptor{Owner: "identity/mfa/postgres", ContractID: "identity.mfa", Version: 1}) && l.EventType == "factor.enrolled.v1" && l.BeforeVersion > 0 && l.BeforeVersion < math.MaxUint64 && l.AfterVersion == l.BeforeVersion+1
 	}
 	if e.disable {
 		return b.SchemaVersion == 1 && b.OperationID == "identity.mfa.disable" && b.SchemaID == "mfa-disable" && b.RecordID == string(b.UserID) && f.Operation == (identity.FeatureOperation{Owner: "identity/mfa", OperationID: b.OperationID, SchemaID: b.SchemaID, SchemaVersion: 1, RecordRequirement: identity.FeatureRecordRequired}) && f.Contributor == (kernel.ContributorDescriptor{Owner: "identity/mfa/postgres", ContractID: "identity.mfa", Version: 1}) && l.EventType == "factor.removed.v1" && l.BeforeVersion > 0 && l.BeforeVersion < math.MaxUint64 && l.AfterVersion == l.BeforeVersion+1

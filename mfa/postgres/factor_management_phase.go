@@ -24,18 +24,23 @@ import (
 )
 
 type factorUpdateInput struct {
-	Schema           uint32
-	Binding          identity.CommandBinding
-	Primary          []byte
-	Record           factorVerificationRecord
-	Intent           []identity.FeatureField
-	Before           mfa.FactorProjection
-	CreatedAt, Until time.Time
+	Schema             uint32
+	Binding            identity.CommandBinding
+	Primary            []byte
+	Record             factorVerificationRecord
+	Intent             []identity.FeatureField
+	Before             mfa.FactorProjection
+	CreatedAt, Until   time.Time
+	Replacement        *PendingTOTPMetadata `json:",omitempty"`
+	ReplacementOrigin  string               `json:",omitempty"`
+	ReplacementNetwork string               `json:",omitempty"`
+	ReplacementUntil   *time.Time           `json:",omitempty"`
 }
 type factorUpdateOutput struct {
-	Schema     uint32
-	Generation uint64
-	Risk       enrollmentStoredRisk
+	Schema      uint32
+	Generation  uint64
+	Risk        enrollmentStoredRisk
+	Replacement *totpEnrollmentOutput `json:",omitempty"`
 }
 type factorUpdatePhase struct {
 	state       *factorUpdateState
@@ -52,6 +57,7 @@ type factorUpdatePhase struct {
 	applied     bool
 	disable     *mfa.DisableRequest
 	remaining   []mfa.FactorProjection
+	replacement *totpEnrollmentOutput
 }
 
 func (p *factorUpdatePhase) operation() identity.FeatureOperation { return p.state.operation }
@@ -91,6 +97,9 @@ func (p *factorUpdatePhase) FeatureOperations() []identity.FeatureOperation {
 }
 func (p *factorUpdatePhase) lifecycle() kernel.LifecyclePlan {
 	v := p.input.Record.FactorAuthorityVersion
+	if p.request.Action == mfa.Replace {
+		return kernel.LifecyclePlan{EventType: "factor.updated.v1", BeforeVersion: p.input.Before.Version, AfterVersion: p.input.Before.Version + 1}
+	}
 	if p.request.Action == mfa.Remove {
 		return kernel.LifecyclePlan{EventType: "factor.removed.v1", BeforeVersion: v, AfterVersion: v + 1}
 	}
@@ -229,6 +238,24 @@ func (p *factorUpdatePhase) PrepareRequestKey(ctx context.Context, k kernel.Requ
 	op := p.operation()
 	b := identity.CommandBinding{CommandID: k.Admission.CommandID, TenantID: r.TenantID, UserID: s.UserID, ActorID: k.Scope.ActorID, ActorKind: authorization.SubjectUser, OperationID: op.OperationID, SchemaID: op.SchemaID, SchemaVersion: 1, PolicyID: p.state.shared.config.PolicyID, PolicyVersion: p.state.shared.config.Coordinator.AdmissionPolicy.PolicyVersion, CorrelationID: string(k.Admission.CommandID), RecordID: string(s.UserID)}
 	in := factorUpdateInput{Schema: 1, Binding: b, Primary: snapshot, Record: record, Intent: fields, Before: before, CreatedAt: now.UTC().Truncate(time.Microsecond), Until: until}
+	if r.Action == mfa.Replace {
+		if factor != mfa.FactorID(record.Original.CredentialID) {
+			return nil, identity.ForbiddenError{}
+		}
+		id, err := identity.NewCommandID()
+		if err != nil || string(id) == string(factor) || id == k.Admission.CommandID {
+			return nil, identity.UnavailableError{}
+		}
+		in.Replacement = &PendingTOTPMetadata{TenantID: b.TenantID, UserID: b.UserID, FactorID: string(id), AuthorityVersion: record.FactorAuthorityVersion, Profile: p.state.shared.config.Profile, CreatedAt: in.CreatedAt, ExpiresAt: in.CreatedAt.Add(p.state.shared.config.TTL)}
+		in.ReplacementOrigin, in.ReplacementNetwork = r.Origin, r.Network
+		ceiling := in.Replacement.ExpiresAt
+		for _, candidate := range []time.Time{record.Original.Proof.Proof.ExpiresAt, record.Original.Proof.Proof.IssuedAt.Add(p.state.config.MaximumAge), s.Authentication.Proof.IssuedAt.Add(p.state.config.PrimaryMaximumAge)} {
+			if candidate.Before(ceiling) {
+				ceiling = candidate
+			}
+		}
+		in.ReplacementUntil = &ceiling
+	}
 	plain, err := json.Marshal(in)
 	if err != nil {
 		return nil, invalidAuthority()
@@ -273,6 +300,9 @@ func (p *factorUpdatePhase) restoreInput(ctx context.Context, k kernel.RequestKe
 		return err
 	}
 	if (mfa.ListResult{Factors: []mfa.FactorProjection{in.Before}}).ValidateAt(in.CreatedAt) != nil {
+		return invalidAuthority()
+	}
+	if !p.validReplacementInput(&in) {
 		return invalidAuthority()
 	}
 	var primary TOTPActivePrimary
@@ -320,6 +350,10 @@ func (p *factorUpdatePhase) buildCommand() error {
 	defer clear(wire)
 	digest := sha256.Sum256(wire)
 	fields := []identity.FeatureField{{Name: "factor.before", Value: identity.FeatureValue{Kind: identity.FeatureUint64, Uint64: i.Record.FactorAuthorityVersion}}, {Name: "factor.after", Value: identity.FeatureValue{Kind: identity.FeatureUint64, Uint64: i.Record.FactorAuthorityVersion + 1}}, {Name: "factor.proof", Value: identity.FeatureValue{Kind: identity.FeatureText, Text: string(i.Record.Original.Proof.Proof.ID)}}, {Name: "factor.proof-record", Value: identity.FeatureValue{Kind: identity.FeatureBytes, Bytes: digest[:]}}, {Name: "factor.target", Value: identity.FeatureValue{Kind: identity.FeatureText, Text: string(p.targetID())}}, {Name: "factor.target-version", Value: identity.FeatureValue{Kind: identity.FeatureUint64, Uint64: p.targetVersion()}}, {Name: "factor.label", Value: identity.FeatureValue{Kind: identity.FeatureText, Text: p.request.Name}}}
+	if p.request.Action == mfa.Replace {
+		fields[1].Value.Uint64 = i.Record.FactorAuthorityVersion
+		fields = append(fields, identity.FeatureField{Name: "factor.action", Value: identity.FeatureValue{Kind: identity.FeatureUint64, Uint64: uint64(mfa.Replace)}}, identity.FeatureField{Name: "factor.replacement", Value: identity.FeatureValue{Kind: identity.FeatureText, Text: i.Replacement.FactorID}})
+	}
 	if p.request.Action == mfa.Remove {
 		if nilEnrollmentPrimary(p.state.config.RemovalRecovery) || p.state.config.RemovalRecoveryPath != auth.RecoveryPathEmail {
 			return identity.ForbiddenError{}
@@ -451,7 +485,16 @@ func (a *factorUpdateAdmission) Generate(ctx context.Context, generation uint64)
 		return nil, err
 	}
 	p := a.phase
-	plain, err := json.Marshal(factorUpdateOutput{Schema: 1, Generation: generation, Risk: enrollmentStoredRisk(a.risk.Prepared())})
+	output := factorUpdateOutput{Schema: 1, Generation: generation, Risk: enrollmentStoredRisk(a.risk.Prepared())}
+	if p.request.Action == mfa.Replace {
+		material, err := generateEnrollmentMaterial(ctx, p.state.shared, *p.input.Replacement, generation, p.state.config.Replacement.RecoveryCodes)
+		if err != nil {
+			return nil, err
+		}
+		defer clearEnrollmentOutput(&material)
+		output.Replacement = &material
+	}
+	plain, err := json.Marshal(output)
 	if err != nil {
 		return nil, invalidAuthority()
 	}
@@ -476,7 +519,21 @@ func (p *factorUpdatePhase) RestoreFeaturePreparation(ctx context.Context, c ide
 	}
 	defer clear(plain)
 	var out factorUpdateOutput
+	keepReplacement := false
+	defer func() {
+		if !keepReplacement && out.Replacement != nil {
+			clearEnrollmentOutput(out.Replacement)
+		}
+	}()
 	if decodeEnrollmentJSON(plain, &out) != nil || out.Schema != 1 || out.Generation != generation {
+		return identity.Command{}, kernel.CommandPlan{}, invalidAuthority()
+	}
+	if p.request.Action == mfa.Replace {
+		if err := p.restoreReplacementMaterial(ctx, generation, out.Replacement); err != nil {
+			return identity.Command{}, kernel.CommandPlan{}, err
+		}
+	} else if out.Replacement != nil {
+		clearEnrollmentOutput(out.Replacement)
 		return identity.Command{}, kernel.CommandPlan{}, invalidAuthority()
 	}
 	scope := risk.Context{Tenant: string(p.request.TenantID), Operation: risk.Action(p.operation().OperationID), Attempt: string(p.input.Binding.CommandID)}
@@ -484,6 +541,7 @@ func (p *factorUpdatePhase) RestoreFeaturePreparation(ctx context.Context, c ide
 	if err != nil {
 		return identity.Command{}, kernel.CommandPlan{}, err
 	}
+	keepReplacement = true
 	return p.command, p.plan, nil
 }
 func (p *factorUpdatePhase) RestoreFeatureAdmission(ctx context.Context, c identity.Command, generation uint64, wire []byte) (kernel.FeaturePreparationAdmission, error) {
@@ -561,6 +619,9 @@ func (p *factorUpdatePhase) ApplyFeature(ctx context.Context, w kernel.Work, c i
 	}
 	if err := p.risk.CheckAt(ctx, now); err != nil {
 		return identity.FeatureReceipt{}, err
+	}
+	if r.Action == mfa.Replace {
+		return p.applyReplacement(ctx, w, c, now)
 	}
 	rows, err := w.Query(ctx, `SELECT row_version::text,label,created_at FROM identity_mfa.totp_factors WHERE tenant_id=$1 AND user_id=$2 AND factor_id=$3 AND state=2 AND confirmed_at IS NOT NULL FOR UPDATE`, string(b.TenantID), string(b.UserID), string(r.FactorID))
 	if err != nil {
@@ -671,6 +732,9 @@ func (p *factorUpdatePhase) CheckFeatureCommit(ctx context.Context, w kernel.Wor
 	if p == nil || p.input == nil || c != p.command {
 		return invalidAuthority()
 	}
+	if p.request.Action == mfa.Replace {
+		return p.checkReplacement(ctx, w, c)
+	}
 	if err := p.lockProof(ctx, w, true); err != nil {
 		return err
 	}
@@ -727,6 +791,12 @@ func (p *factorUpdatePhase) RecoverParticipant(ctx context.Context, w kernel.Rec
 	removed := l.EventType == "factor.removed.v1"
 	if err != nil || f.Operation != p.operation() || f.Contributor != p.Descriptor() || l.EventType != "factor.updated.v1" && !removed || l.BeforeVersion == 0 || l.BeforeVersion == math.MaxUint64 || l.AfterVersion != l.BeforeVersion+1 {
 		return kernel.RecoveryUnknown, invalidAuthority()
+	}
+	if p.state.config.Replacement != nil {
+		matched, status, err := p.recoverReplacement(ctx, w, b, l)
+		if matched || err != nil {
+			return status, err
+		}
 	}
 	status, err := p.state.config.Sessions.Recover(ctx, w, p)
 	if err != nil {
@@ -872,6 +942,10 @@ func (p *factorUpdatePhase) revokePendingForDisable(ctx context.Context, w kerne
 	return nil
 }
 func (p *factorUpdatePhase) destroy() {
+	if p.replacement != nil {
+		clearEnrollmentOutput(p.replacement)
+		p.replacement = nil
+	}
 	if p.input != nil {
 		clear(p.input.Primary)
 		clear(p.input.Record.Original.Signature)

@@ -176,5 +176,12 @@ original proof's factor, erases its secret/replay material, retires dependent
 recovery codes and advances authority to known-empty in the same transaction.
 It creates no replacement factor or session. Subsequent recovery uses the
 selected public reset workflow, not the removed proof or revoked cookie.
-Replace, disable, other recovery paths and general multi-factor management
-remain unfinished; their action names do not enable unsupported behavior.
+The separately selected same-profile TOTP `Replace` operation returns a distinct
+pending successor and `TOTPReplacementEnrollment`, with destroyable reveal-once
+recovery codes. The predecessor, its codes and the source session remain usable
+until provisioning and code-confirmed successor activation. Ordinary old-factor
+use does not cancel the ceremony. Confirmation retires predecessor/codes,
+advances authority and revokes all subject sessions atomically; sign in again
+with the successor. Replay/recovery disclose no fresh metadata, URI or codes.
+Explicit disable has its own operation, described above. Other recovery paths,
+factor methods and general multi-factor management remain unfinished.

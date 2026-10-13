@@ -2,6 +2,7 @@ package mfahttp
 
 import (
 	"context"
+	"encoding/json"
 	"net/http/httptest"
 	"strings"
 	"testing"
@@ -13,6 +14,7 @@ import (
 	identityhttp "github.com/faustbrian/go-identity/http"
 	"github.com/faustbrian/go-identity/mfa"
 	"github.com/faustbrian/go-identity/session"
+	primitive "github.com/faustbrian/go-password"
 )
 
 // This port tests transport conservation, not signatures or SQL atomicity.
@@ -37,6 +39,97 @@ func (o *factorUpdateOwner) FactorUpdate(ctx context.Context, r mfa.FactorUpdate
 }
 func (*factorUpdateOwner) RecoverFactorUpdate(context.Context, identity.RecoveryQuery, authorization.DecisionContext) (mfa.FactorUpdateResult, error) {
 	return mfa.FactorUpdateResult{}, identity.UnavailableError{}
+}
+
+func TestFactorUpdateHTTPReplacementDeliversPendingCustodyOnce(t *testing.T) {
+	for _, mode := range []string{"fresh", "unselected", "name", "exhausted-version", "expired", "unknown", "replay", "same-factor", "mismatched-enrollment", "missing-codes", "duplicate-codes"} {
+		t.Run(mode, func(t *testing.T) {
+			base, proofs, _, clock, r := enableFixture(t)
+			proofs.proof.Proof.ID = "AAAAAAAAAAAAAAAAAAAABg"
+			proofs.proof.Proof.Method, proofs.proof.Proof.Assurance = "totp", auth.AssuranceMultiFactor
+			proofs.proof.Proof.Purpose, proofs.proof.Action = "identity.mfa.factor-update", "identity.mfa.factor-update"
+			proofs.proof.Proof.IssuedAt, proofs.proof.Proof.ExpiresAt = clock.now, clock.now.Add(time.Minute)
+			secret, err := primitive.NewSecret([]byte("AAAAAAAAAAAAAAAAAAAAAQ"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer secret.Destroy()
+			owner := &factorUpdateOwner{enableOwner: proofs, result: mfa.FactorUpdateResult{CommandID: "AAAAAAAAAAAAAAAAAAAABA", Outcome: identity.CommitOutcomeCommitted, Factor: mfa.FactorProjection{ID: "AAAAAAAAAAAAAAAAAAAABw", Method: "totp", State: mfa.FactorPending, CreatedAt: clock.now, Version: 1}, Replacement: &mfa.TOTPReplacementEnrollment{Enrollment: mfa.Enrollment{ID: "AAAAAAAAAAAAAAAAAAAABw", FactorMethod: "totp", ExpiresAt: clock.now.Add(time.Minute), Version: 1}, RecoveryMaterial: mfa.RevealOnceCodes{Codes: []primitive.Secret{secret}}}}}
+			c := FactorUpdateConfig{Network: base.Network, Sessions: base.Sessions, Proofs: proofs, Service: owner, Rate: base.Rate, Cookie: base.Cookie, TrustedOrigins: base.TrustedOrigins, PolicyRevision: base.PolicyRevision, Now: base.Now, MaximumDuration: base.MaximumDuration, MaximumAge: time.Minute, Actions: []mfa.FactorUpdateAction{mfa.Replace}, ReplacementCodeCount: 1}
+			body := `{"factorID":"AAAAAAAAAAAAAAAAAAAABQ","proofID":"AAAAAAAAAAAAAAAAAAAABg","action":"replace","expectedVersion":3}`
+			switch mode {
+			case "unselected":
+				c.Actions = nil
+				c.ReplacementCodeCount = 0
+			case "name":
+				body = strings.TrimSuffix(body, "}") + `,"name":"not-rename"}`
+			case "exhausted-version":
+				body = strings.Replace(body, `"expectedVersion":3`, `"expectedVersion":18446744073709551614`, 1)
+			case "expired":
+				owner.after = func() { clock.now = clock.now.Add(21 * time.Second) }
+			case "unknown":
+				owner.result.Outcome = identity.CommitOutcomeUnknown
+			case "replay":
+				owner.result.Factor, owner.result.Replacement = mfa.FactorProjection{}, nil
+			case "same-factor":
+				owner.result.Factor.ID, owner.result.Replacement.Enrollment.ID = "AAAAAAAAAAAAAAAAAAAABQ", "AAAAAAAAAAAAAAAAAAAABQ"
+			case "mismatched-enrollment":
+				owner.result.Replacement.Enrollment.ID = "AAAAAAAAAAAAAAAAAAAACA"
+			case "missing-codes":
+				owner.result.Replacement.RecoveryMaterial.Codes = nil
+			case "duplicate-codes":
+				duplicate, err := primitive.NewSecret([]byte("AAAAAAAAAAAAAAAAAAAAAQ"))
+				if err != nil {
+					t.Fatal(err)
+				}
+				defer duplicate.Destroy()
+				owner.result.Replacement.RecoveryMaterial.Codes = append(owner.result.Replacement.RecoveryMaterial.Codes, duplicate)
+				c.ReplacementCodeCount = 2
+			}
+			r.URL.Path, r.RequestURI = "/v1/mfa/factor-update", "/v1/mfa/factor-update"
+			r.Body, r.ContentLength = ioBody(body), int64(len(body))
+			h, err := NewFactorUpdateHandler(c)
+			if err != nil {
+				t.Fatal("explicit replacement handler unavailable", err)
+			}
+			w := httptest.NewRecorder()
+			h.ServeHTTP(w, r)
+			var out struct {
+				CommitOutcome string
+				Factor        struct {
+					ID      mfa.FactorID
+					State   mfa.FactorState
+					Version uint64
+				}
+				Replacement *struct {
+					EnrollmentID  mfa.EnrollmentID
+					FactorMethod  string
+					ExpiresAt     time.Time
+					Version       uint64
+					RecoveryCodes []string
+				}
+			}
+			decodeErr := json.Unmarshal(w.Body.Bytes(), &out)
+			if mode == "fresh" {
+				if w.Code != 200 || decodeErr != nil || owner.calls != 1 || owner.last.Action != mfa.Replace || owner.last.Name != "" || out.CommitOutcome != "committed" || out.Factor.ID != owner.result.Factor.ID || out.Factor.State != mfa.FactorPending || out.Factor.Version != 1 || out.Replacement == nil || out.Replacement.EnrollmentID != owner.result.Replacement.Enrollment.ID || out.Replacement.FactorMethod != "totp" || out.Replacement.Version != 1 || !out.Replacement.ExpiresAt.Equal(clock.now.Add(time.Minute)) || len(out.Replacement.RecoveryCodes) != 1 || out.Replacement.RecoveryCodes[0] != "AAAAAAAAAAAAAAAAAAAAAQ" {
+					t.Fatal("replacement did not deliver exact pending ceremony", w.Code)
+				}
+				clear(out.Replacement.RecoveryCodes)
+			} else if mode == "unselected" || mode == "name" || mode == "exhausted-version" {
+				if w.Code != 400 || owner.calls != 0 || out.Replacement != nil {
+					t.Fatal("unselected replacement or label override reached mutation", w.Code)
+				}
+			} else if w.Code != 503 || decodeErr != nil || out.Replacement != nil || out.Factor.ID != "" || out.CommitOutcome == "" {
+				t.Fatal("invalid/expired/uncertain replacement disclosed custody or lost observation", w.Code)
+			}
+			if owner.calls > 0 && mode != "replay" && mode != "missing-codes" && secret.Use(func([]byte) error { return nil }) == nil {
+				t.Fatal("replacement transport did not destroy returned recovery custody")
+			}
+			if w.Header().Get("Cache-Control") != "no-store" || w.Header().Get("Pragma") != "no-cache" || w.Header().Get("Set-Cookie") != "" || w.Header().Get("X-CSRF-Token") != "" {
+				t.Fatal("replacement response was cacheable or issued a session")
+			}
+		})
+	}
 }
 
 func TestFactorUpdateHTTPExplicitRemovalForbidsLabelOverrides(t *testing.T) {

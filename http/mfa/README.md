@@ -219,10 +219,22 @@ cannot be supplied in the body; bearer/query/duplicate alternatives deny.
 Empty `FactorUpdateConfig.Actions` preserves rename-only behavior. Explicitly
 select `mfa.Remove`, alone or with `mfa.Rename`, only with a native manager whose
 recovery owner is configured. Remove takes the same fields except `name`, which
-is forbidden even when empty. Both actions are closed startup selections; replace,
+is forbidden even when empty. Actions are closed startup selections;
 duplicates and unknown actions deny. Selected OpenAPI reflects the same action
 and response-state set. Successful removal returns revoked safe metadata, not
 recovery codes, a reset grant or a new session.
+
+To select `mfa.Replace`, configure the native pending-replacement owner and set
+`ReplacementCodeCount` to that owner's exact1..64 policy. Replacement takes the
+same fields as removal, with no `name`. An `expectedVersion` at most
+`MaxUint64-2` is required so retirement can finish. Fresh success returns a
+distinct pending factor, enrollment ID, original expiry and unique canonical
+recovery codes once.
+Existing factor/codes and the source cookie remain usable until separate URI
+disclosure and enrollment confirmation. Successful confirmation retires old
+authority and revokes sessions; neither operation issues a session. Codes remain
+non-authenticating while pending. Errors, replay, recovery and expired final
+delivery expose no fresh material and do not hide a safely known commitment.
 
 To issue the matching TOTP proof, separately configure `ActiveStepUpConfig.Purposes`
 and send the exact selected `purpose` on the existing authenticated step-up arm.

@@ -78,11 +78,15 @@ type activePrimarySnapshot struct {
 
 type activePrimaryProfile IdentifierAdmissionConfig
 type passwordActiveTOTPPrimary struct {
-	source   *PasswordActiveTOTPPrimarySource
-	request  activeSessionRequest
-	original session.Session
-	until    time.Time
-	expected identity.Command
+	source        *PasswordActiveTOTPPrimarySource
+	request       activeSessionRequest
+	original      session.Session
+	until         time.Time
+	expected      identity.Command
+	continuation  bool
+	originalUntil time.Time
+	observation   session.GetResult
+	observed      bool
 }
 
 type activeSessionRequest struct {
@@ -212,6 +216,85 @@ func (s *PasswordActiveTOTPPrimarySource) RestoreDisable(ctx context.Context, r 
 	return s.restoreCurrent(ctx, activeSessionRequest{TenantID: r.TenantID, UserID: identity.UserID(r.Caller.Request.Subject.ID), CommandID: command, OperationID: "identity.mfa.disable", Session: r.Session, CSRFToken: r.CSRFToken}, wire)
 }
 
+// RestoreReplacementForURI checks original bearer/synchronizer possession
+// against the native factor-update snapshot already authenticated by MFA.
+// It neither translates password-enable provenance nor renews freshness.
+func (s *PasswordActiveTOTPPrimarySource) RestoreReplacementForURI(ctx context.Context, r mfa.TotpUriRequest, wire []byte, ceiling time.Time) (mfapg.TOTPReplacementPrimary, error) {
+	if ctx == nil || s == nil || s.sessions == nil || r.Validate() != nil || len(wire) < 1 || len(wire) > 32768 {
+		return nil, session.ErrInvalidSessionCommand
+	}
+	return s.restoreReplacement(ctx, activeSessionRequest{TenantID: r.TenantID, UserID: identity.UserID(r.Caller.Request.Subject.ID), CommandID: r.CommandID, OperationID: "identity.mfa.totp-uri", Session: r.Session, CSRFToken: r.CSRFToken}, wire, ceiling)
+}
+
+// RestoreReplacementForConfirmation restores the same original active-session
+// custody for the exact enrollment variant. Current owners and original
+// exclusive deadline remain checked by the protected continuation Work.
+func (s *PasswordActiveTOTPPrimarySource) RestoreReplacementForConfirmation(ctx context.Context, r mfa.TotpVerifyRequest, wire []byte, ceiling time.Time) (mfapg.TOTPReplacementPrimary, error) {
+	if ctx == nil || s == nil || s.sessions == nil || r.Enrollment == nil || r.Validate() != nil || len(wire) < 1 || len(wire) > 32768 {
+		return nil, session.ErrInvalidSessionCommand
+	}
+	return s.restoreReplacement(ctx, activeSessionRequest{TenantID: r.TenantID, UserID: identity.UserID(r.Caller.Request.Subject.ID), CommandID: r.CommandID, OperationID: "identity.mfa.totp-verify", Session: r.Enrollment.Session, CSRFToken: r.Enrollment.CSRFToken}, wire, ceiling)
+}
+
+func (s *PasswordActiveTOTPPrimarySource) restoreReplacement(ctx context.Context, r activeSessionRequest, wire []byte, ceiling time.Time) (mfapg.TOTPReplacementPrimary, error) {
+	if ceiling.IsZero() {
+		return nil, session.ErrInvalidSessionCommand
+	}
+	restored, err := s.restoreCurrent(ctx, r, wire)
+	if err != nil {
+		return nil, err
+	}
+	p, ok := restored.(*passwordActiveTOTPPrimary)
+	if !ok {
+		return nil, session.ErrInvalidSessionCommand
+	}
+	p.continuation, p.originalUntil, p.until = true, p.until, ceiling
+	return p, nil
+}
+
+// ReadCurrent acquires one genuine native observation before locks. Neither
+// the retained original snapshot nor a second call resets its freshness.
+func (p *passwordActiveTOTPPrimary) ReadCurrent(ctx context.Context) error {
+	if ctx == nil || p == nil || p.source == nil || !p.continuation {
+		return identity.ForbiddenError{}
+	}
+	if p.observed {
+		return p.observation.ValidateAt(time.Now().UTC())
+	}
+	token, err := session.ParseToken(p.request.Session.Token())
+	if err != nil {
+		return identity.ForbiddenError{}
+	}
+	credential, err := session.NewCredential(session.CredentialCookie, token)
+	if err != nil {
+		return identity.ForbiddenError{}
+	}
+	current, err := p.source.sessions.Get(ctx, session.GetRequest{TenantID: p.request.TenantID, Credential: credential})
+	if err != nil {
+		return err
+	}
+	if current.ValidateAt(time.Now().UTC()) != nil {
+		return identity.ForbiddenError{}
+	}
+	original, _, originalErr := encodeRecord(p.original)
+	actual, _, actualErr := encodeRecord(current.Session)
+	defer clear(original)
+	defer clear(actual)
+	if originalErr != nil || actualErr != nil || !bytes.Equal(original, actual) {
+		return identity.ForbiddenError{}
+	}
+	p.observation, p.observed = current, true
+	return nil
+}
+
+// OriginalDeadline returns unchanged initial observation custody, not a lease.
+func (p *passwordActiveTOTPPrimary) OriginalDeadline() (time.Time, error) {
+	if p == nil || !p.continuation || p.originalUntil.IsZero() {
+		return time.Time{}, identity.ForbiddenError{}
+	}
+	return p.originalUntil, nil
+}
+
 func (s *PasswordActiveTOTPPrimarySource) restoreCurrent(ctx context.Context, r activeSessionRequest, wire []byte) (mfapg.TOTPActivePrimary, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
@@ -300,6 +383,14 @@ func (p *passwordActiveTOTPPrimary) Deadline() (time.Time, error) {
 	if p == nil || p.until.IsZero() {
 		return time.Time{}, identity.ForbiddenError{}
 	}
+	if p.continuation {
+		if !p.observed || p.observation.ValidateAt(time.Now().UTC()) != nil {
+			return time.Time{}, identity.ForbiddenError{}
+		}
+		if p.observation.ValidUntil().Before(p.until) {
+			return p.observation.ValidUntil(), nil
+		}
+	}
 	return p.until, nil
 }
 func (p *passwordActiveTOTPPrimary) Snapshot() ([]byte, error) {
@@ -310,7 +401,11 @@ func (p *passwordActiveTOTPPrimary) Snapshot() ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	wire, err := json.Marshal(activePrimarySnapshot{Schema: 1, Profile: activePrimaryProfile(p.source.config.Session.Profile), Store: p.source.config.Session.Repository, Fields: fields, Until: p.until})
+	until := p.until
+	if p.continuation {
+		until = p.originalUntil
+	}
+	wire, err := json.Marshal(activePrimarySnapshot{Schema: 1, Profile: activePrimaryProfile(p.source.config.Session.Profile), Store: p.source.config.Session.Repository, Fields: fields, Until: until})
 	if err != nil || len(wire) > 32768 {
 		return nil, session.ErrInvalidSessionCommand
 	}
@@ -352,6 +447,9 @@ func (p *passwordActiveTOTPPrimary) Admit(ctx context.Context, w kernel.Work, ow
 	if !ok {
 		return identity.ForbiddenError{}
 	}
+	if p.continuation {
+		return p.source.guard.checkObservation(ctx, w, preparation, input, false, &p.observation)
+	}
 	return p.source.guard.AdmitPreparation(ctx, w, preparation, input)
 }
 func (p *passwordActiveTOTPPrimary) Check(ctx context.Context, w kernel.Work, owner kernel.FeatureExecutionContributor, c identity.Command) error {
@@ -366,6 +464,9 @@ func (p *passwordActiveTOTPPrimary) Check(ctx context.Context, w kernel.Work, ow
 	commit, ok := owner.(kernel.FeatureCommitContributor)
 	if !ok {
 		return identity.ForbiddenError{}
+	}
+	if p.continuation {
+		return p.source.guard.checkObservation(ctx, w, commit, input, false, &p.observation)
 	}
 	return p.source.guard.RecheckCommit(ctx, w, commit, input)
 }
@@ -403,6 +504,7 @@ func (*PasswordActiveTOTPPrimarySource) MarshalText() ([]byte, error) {
 var _ mfapg.TOTPActivePrimarySource = (*PasswordActiveTOTPPrimarySource)(nil)
 var _ mfapg.RecoveryRegenerationPrimarySource = (*PasswordActiveTOTPPrimarySource)(nil)
 var _ mfapg.FactorUpdatePrimarySource = (*PasswordActiveTOTPPrimarySource)(nil)
+var _ mfapg.TOTPReplacementPrimarySource = (*PasswordActiveTOTPPrimarySource)(nil)
 
 func (*passwordActiveTOTPPrimary) Format(s fmt.State, _ rune) {
 	_, _ = s.Write([]byte("postgres.passwordActiveTOTPPrimary(redacted)"))

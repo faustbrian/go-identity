@@ -72,3 +72,35 @@ type TOTPConfirmationPrimarySource interface {
 // requires custody for the enrollment-confirmation schema/lifecycle only.
 // An implementation must reject using this value in a URI or login command.
 type TOTPConfirmationPrimary interface{ TOTPURIPrimary }
+
+// TOTPReplacementPrimarySource restores an original active-session snapshot
+// only after MFA authenticates its committed factor-update parent. Neither
+// method translates it into password-enable evidence, creates factor proof or
+// renews the retained validity deadline. MFA fences original replacement
+// lineage and current predecessor authority in the protected Work.
+type TOTPReplacementPrimarySource interface {
+	RestoreReplacementForURI(context.Context, mfa.TotpUriRequest, []byte, time.Time) (TOTPReplacementPrimary, error)
+	RestoreReplacementForConfirmation(context.Context, mfa.TotpVerifyRequest, []byte, time.Time) (TOTPReplacementPrimary, error)
+}
+
+// TOTPReplacementPrimary separates immutable authenticated parent custody from
+// a new bounded authoritative observation. ReadCurrent runs before protected
+// locks and retains its first actual read deadline; repeated calls must not
+// renew that observation. OriginalDeadline identifies the unchanged parent's
+// initial observation, not continuing permission. Historical outcome replay
+// restores original custody without requiring a still-active source session.
+type TOTPReplacementPrimary interface {
+	TOTPURIPrimary
+	ReadCurrent(context.Context) error
+	OriginalDeadline() (time.Time, error)
+}
+
+// TOTPReplacementContinuationConfig explicitly selects the same native
+// management owner that created the successor and its original-session adapter.
+// Owners are borrowed and must outlive all bounded continuation calls.
+type TOTPReplacementContinuationConfig struct {
+	Management *FactorUpdateService
+	Primary    TOTPReplacementPrimarySource
+	// Sessions is required for confirmation and unused by URI revelation.
+	Sessions RecoveryRegenerationSessionEffects
+}

@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Select replacement independently alongside rename/removal with a frozen
+  native recovery-code count. Closed replacement requests forbid labels; fresh
+  known commits deliver bounded unique canonical codes and pending metadata
+  once, without session issuance. Invalid, replayed, uncertain or expired output
+  withholds material while retaining the known command/outcome. Selected OpenAPI
+  advertises only configured actions and their matching result variants.
+
 - One-target disable returns bounded, closed pending-factor display metadata;
   invalid remaining projections are withheld without hiding a known commit.
 

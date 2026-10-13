@@ -96,20 +96,25 @@ func proveReferenceActiveStepUp(t *testing.T, ctx context.Context, f liveStores,
 	}
 	// The actual lifecycle participant fails after comparison, replay advancement
 	// and proof insertion. Rollback must erase the proof and restore replay.
-	if _, err := f.pool.Raw().Exec(ctx, `CREATE FUNCTION public.step_up_fixture_fail() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'synthetic step-up rollback'; END $$; CREATE TRIGGER step_up_fixture_fail BEFORE INSERT ON public.identity_outbox_bindings FOR EACH ROW EXECUTE FUNCTION public.step_up_fixture_fail()`); err != nil {
-		t.Fatal("step-up rollback fixture unavailable")
-	}
-	out, err := service.TotpVerify(ctx, r)
-	if err == nil || out.Outcome != identity.CommitOutcomeNotCommitted || out.StepUpProof.Bindings().Proof.ID != "" {
-		t.Fatal("failed lifecycle delivered factor proof", out.Outcome, err)
-	}
-	if _, err := f.pool.Raw().Exec(ctx, `DROP TRIGGER step_up_fixture_fail ON public.identity_outbox_bindings; DROP FUNCTION public.step_up_fixture_fail()`); err != nil {
-		t.Fatal("step-up rollback fixture cleanup failed")
-	}
-	var row string
-	var proofs int
-	if f.pool.Raw().QueryRow(ctx, `SELECT row_version::text,(SELECT count(*) FROM identity_mfa.factor_verifications WHERE tenant_id=$1 AND user_id=$2) FROM identity_mfa.totp_factors WHERE tenant_id=$1 AND user_id=$2 AND factor_id=$3`, otpTenant, string(spec.UserID), string(factor)).Scan(&row, &proofs) != nil || row != before || proofs != 0 {
-		t.Fatal("failed step-up leaked replay or signed evidence")
+	// Replacement reuses this already covered setup behavior instead of spending
+	// extra real attempts on unrelated fault scenarios inside its complete journey.
+	var out mfa.TotpVerifyResult
+	if !f.factorReplacement {
+		if _, err := f.pool.Raw().Exec(ctx, `CREATE FUNCTION public.step_up_fixture_fail() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'synthetic step-up rollback'; END $$; CREATE TRIGGER step_up_fixture_fail BEFORE INSERT ON public.identity_outbox_bindings FOR EACH ROW EXECUTE FUNCTION public.step_up_fixture_fail()`); err != nil {
+			t.Fatal("step-up rollback fixture unavailable")
+		}
+		out, err = service.TotpVerify(ctx, r)
+		if err == nil || out.Outcome != identity.CommitOutcomeNotCommitted || out.StepUpProof.Bindings().Proof.ID != "" {
+			t.Fatal("failed lifecycle delivered factor proof", out.Outcome, err)
+		}
+		if _, err := f.pool.Raw().Exec(ctx, `DROP TRIGGER step_up_fixture_fail ON public.identity_outbox_bindings; DROP FUNCTION public.step_up_fixture_fail()`); err != nil {
+			t.Fatal("step-up rollback fixture cleanup failed")
+		}
+		var row string
+		var proofs int
+		if f.pool.Raw().QueryRow(ctx, `SELECT row_version::text,(SELECT count(*) FROM identity_mfa.factor_verifications WHERE tenant_id=$1 AND user_id=$2) FROM identity_mfa.totp_factors WHERE tenant_id=$1 AND user_id=$2 AND factor_id=$3`, otpTenant, string(spec.UserID), string(factor)).Scan(&row, &proofs) != nil || row != before || proofs != 0 {
+			t.Fatal("failed step-up leaked replay or signed evidence")
+		}
 	}
 	r.CommandID, _ = identity.NewCommandID()
 	if f.completionFault != nil && !f.regeneration && !f.factorManagement && !f.disable {
@@ -153,11 +158,13 @@ func proveReferenceActiveStepUp(t *testing.T, ctx context.Context, f liveStores,
 	if err != nil || replayed.Outcome != identity.CommitOutcomeCommitted || replayed.StepUpProof.Bindings().Proof.ID != "" {
 		t.Fatal("terminal step-up replay redelivered original proof", err)
 	}
-	r.CommandID, _ = identity.NewCommandID()
-	denied, err := service.TotpVerify(ctx, r)
-	var forbidden identity.ForbiddenError
-	if !errors.As(err, &forbidden) || denied.StepUpProof.Bindings().Proof.ID != "" {
-		t.Fatal("same TOTP step won twice", err)
+	if !f.factorReplacement {
+		r.CommandID, _ = identity.NewCommandID()
+		denied, err := service.TotpVerify(ctx, r)
+		var forbidden identity.ForbiddenError
+		if !errors.As(err, &forbidden) || denied.StepUpProof.Bindings().Proof.ID != "" {
+			t.Fatal("same TOTP step won twice", err)
+		}
 	}
 	query := identity.RecoveryQuery{TenantID: otpTenant, UserID: spec.UserID, ActorID: identity.ActorID(spec.UserID), ActorKind: authorization.SubjectUser, OperationID: "identity.mfa.totp-verify", CommandID: identity.CommandID(proof.Proof.ID), RecordID: string(factor)}
 	history, err := service.RecoverTotpVerify(ctx, query, caller)

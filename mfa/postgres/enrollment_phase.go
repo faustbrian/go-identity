@@ -2,8 +2,6 @@ package mfapostgres
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/base64"
 	"encoding/json"
 	"reflect"
 	"slices"
@@ -181,51 +179,12 @@ func (a *totpEnrollmentAdmission) Generate(ctx context.Context, generation uint6
 	if generation == 0 {
 		return nil, invalidEnrollment()
 	}
-	m := p.input.Meta
-	pending, err := p.state.preparer.Prepare(ctx, TOTPEnrollmentPreparation{TenantID: m.TenantID, UserID: m.UserID, FactorID: m.FactorID, AuthorityVersion: m.AuthorityVersion, Profile: m.Profile, CreatedAt: m.CreatedAt, TTL: m.ExpiresAt.Sub(m.CreatedAt)})
+	output, err := generateEnrollmentMaterial(ctx, p.state, p.input.Meta, generation, p.request().FactorPolicy.RecoveryCodes)
 	if err != nil {
 		return nil, err
 	}
-	sealed, err := pending.Envelope()
-	if err != nil {
-		return nil, err
-	}
-	wire, err := sealed.MarshalBinary()
-	if err != nil {
-		return nil, err
-	}
-	output := totpEnrollmentOutput{Schema: 1, RecoveryKeyVersion: p.state.config.RecoveryKeyVersion, Generation: generation, Meta: m, Envelope: wire, Risk: enrollmentStoredRisk(a.risk.Prepared())}
 	defer clearEnrollmentOutput(&output)
-	key := p.state.config.recoveryKey()
-	defer clear(key[:])
-	for range p.request().FactorPolicy.RecoveryCodes {
-		raw := make([]byte, 16)
-		if _, err := rand.Read(raw); err != nil {
-			clear(raw)
-			return nil, identity.UnavailableError{}
-		}
-		encoded := make([]byte, base64.RawURLEncoding.EncodedLen(len(raw)))
-		base64.RawURLEncoding.Encode(encoded, raw)
-		clear(raw)
-		code, err := auth.NewRecoveryCode(string(encoded))
-		if err != nil {
-			clear(encoded)
-			return nil, identity.UnavailableError{}
-		}
-		binding, err := enrollmentRecoveryBinding(m)
-		if err != nil {
-			clear(encoded)
-			return nil, err
-		}
-		digest, err := code.KeyedDigest(key, binding)
-		clear(binding)
-		if err != nil {
-			clear(encoded)
-			return nil, identity.UnavailableError{}
-		}
-		output.Codes = append(output.Codes, encoded)
-		output.Digests = append(output.Digests, digest)
-	}
+	output.Risk = enrollmentStoredRisk(a.risk.Prepared())
 	plain, err := json.Marshal(output)
 	if err != nil {
 		return nil, invalidEnrollment()
@@ -395,7 +354,17 @@ func (p *totpEnrollmentPhase) recoveryDelivery(ctx context.Context) (mfa.RevealO
 	if p == nil || p.output == nil || !p.applied || ctx == nil || ctx.Err() != nil {
 		return out, enrollmentReadError(ctx)
 	}
-	for _, raw := range p.output.stored.Codes {
+	return enrollmentRecoveryDelivery(ctx, p.output.stored.Codes)
+}
+
+// Copy delivery custody only after the owning invocation established its fresh
+// known commitment. This helper grants no factor or transaction authority.
+func enrollmentRecoveryDelivery(ctx context.Context, codes [][]byte) (mfa.RevealOnceCodes, error) {
+	var out mfa.RevealOnceCodes
+	if ctx == nil || ctx.Err() != nil {
+		return out, enrollmentReadError(ctx)
+	}
+	for _, raw := range codes {
 		secret, err := primitive.NewSecret(raw)
 		if err != nil {
 			for _, code := range out.Codes {

@@ -21,6 +21,7 @@ import (
 	"github.com/faustbrian/go-identity/mfa"
 	"github.com/faustbrian/go-identity/reference"
 	"github.com/faustbrian/go-identity/session"
+	primitive "github.com/faustbrian/go-password"
 )
 
 func TestReferenceFactorRenameFromFreshTOTP(t *testing.T) {
@@ -341,7 +342,7 @@ func proveReferenceFactorRenameDenials(t *testing.T, ctx context.Context, f live
 		// protected commit; only later authoritative denials retain a command.
 		concealedPreparation := errors.As(err, &unavailable) && out.CommandID == "" && out.Outcome == 0
 		denied := errors.As(err, &forbidden) || conflict && errors.As(err, &stale) || concealedPreparation
-		if !denied || out.Outcome == identity.CommitOutcomeCommitted || out.Factor.ID != "" {
+		if !denied || out.Outcome == identity.CommitOutcomeCommitted || out.Factor.ID != "" || out.Replacement != nil {
 			t.Fatal(name, "did not deny without factor metadata", out.Outcome, err)
 		}
 		if state() != before {
@@ -421,6 +422,8 @@ func invokeReferenceFactorUpdateHTTP(t *testing.T, ctx context.Context, client *
 		body["action"], body["name"] = "rename", r.Name
 	case mfa.Remove:
 		body["action"] = "remove"
+	case mfa.Replace:
+		body["action"] = "replace"
 	default:
 		t.Fatal("unsupported fixture action")
 	}
@@ -459,11 +462,21 @@ func invokeReferenceFactorUpdateHTTP(t *testing.T, ctx context.Context, client *
 			CreatedAt time.Time       `json:"createdAt"`
 			Version   uint64          `json:"version"`
 		} `json:"factor"`
+		Replacement *struct {
+			EnrollmentID  mfa.EnrollmentID `json:"enrollmentID"`
+			FactorMethod  string           `json:"factorMethod"`
+			ExpiresAt     time.Time        `json:"expiresAt"`
+			Version       uint64           `json:"version"`
+			RecoveryCodes []string         `json:"recoveryCodes"`
+		} `json:"replacement"`
 	}
 	decoder := json.NewDecoder(io.LimitReader(response.Body, 4097))
 	decoder.DisallowUnknownFields()
 	if decoder.Decode(&payload) != nil {
 		t.Fatal("factor-update HTTP payload malformed")
+	}
+	if payload.Replacement != nil {
+		defer clear(payload.Replacement.RecoveryCodes)
 	}
 	out := mfa.FactorUpdateResult{CommandID: payload.CommandID}
 	switch payload.Outcome {
@@ -482,7 +495,7 @@ func invokeReferenceFactorUpdateHTTP(t *testing.T, ctx context.Context, client *
 		t.Fatal("factor-update HTTP outcome malformed")
 	}
 	if response.StatusCode != 200 {
-		if payload.Factor.ID != "" {
+		if payload.Factor.ID != "" || payload.Replacement != nil {
 			t.Fatal("failed HTTP update returned factor metadata")
 		}
 		return out, identity.UnavailableError{}
@@ -491,5 +504,19 @@ func invokeReferenceFactorUpdateHTTP(t *testing.T, ctx context.Context, client *
 		t.Fatal("HTTP success did not conserve commitment")
 	}
 	out.Factor = mfa.FactorProjection{ID: payload.Factor.ID, Method: payload.Factor.Method, Label: payload.Factor.Label, State: payload.Factor.State, CreatedAt: payload.Factor.CreatedAt, Version: payload.Factor.Version}
+	if payload.Replacement != nil {
+		p := payload.Replacement
+		if r.Action != mfa.Replace || len(p.RecoveryCodes) < 1 || len(p.RecoveryCodes) > 64 {
+			t.Fatal("unexpected replacement delivery")
+		}
+		out.Replacement = &mfa.TOTPReplacementEnrollment{Enrollment: mfa.Enrollment{ID: p.EnrollmentID, FactorMethod: p.FactorMethod, ExpiresAt: p.ExpiresAt, Version: p.Version}}
+		for _, raw := range p.RecoveryCodes {
+			code, err := primitive.NewSecret([]byte(raw))
+			if err != nil {
+				t.Fatal("replacement recovery wire invalid")
+			}
+			out.Replacement.RecoveryMaterial.Codes = append(out.Replacement.RecoveryMaterial.Codes, code)
+		}
+	}
 	return out, nil
 }

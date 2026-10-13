@@ -52,7 +52,7 @@ func NewPasswordMFAActionSessionGuard(c Config, p IdentifierAdmissionConfig) (*P
 }
 
 func nativeMFAActionBinding(b identity.CommandBinding) bool {
-	return b.SchemaVersion == 1 && (b.OperationID == "identity.mfa.totp-verify" && b.SchemaID == "mfa-totp-step-up" || b.OperationID == "identity.mfa.recovery-regenerate" && b.SchemaID == "mfa-recovery-regenerate" || b.OperationID == "identity.mfa.factor-update" && b.SchemaID == "mfa-factor-update" || b.OperationID == "identity.mfa.disable" && b.SchemaID == "mfa-disable")
+	return b.SchemaVersion == 1 && (b.OperationID == "identity.mfa.totp-verify" && b.SchemaID == "mfa-totp-step-up" || b.OperationID == "identity.mfa.recovery-regenerate" && b.SchemaID == "mfa-recovery-regenerate" || b.OperationID == "identity.mfa.factor-update" && b.SchemaID == "mfa-factor-update" || b.OperationID == "identity.mfa.disable" && b.SchemaID == "mfa-disable" || b.OperationID == "identity.mfa.totp-uri" && b.SchemaID == "mfa-totp-uri" || b.OperationID == "identity.mfa.totp-verify" && b.SchemaID == "mfa-totp-enrollment-confirm")
 }
 
 func (g *PasswordMFAActionSessionGuard) admission(original session.Session, b identity.CommandBinding) (revokeRecordAuthority, error) {
@@ -94,6 +94,10 @@ func (g *PasswordMFAActionSessionGuard) RecheckCommit(ctx context.Context, w ker
 }
 
 func (g *PasswordMFAActionSessionGuard) check(ctx context.Context, w kernel.Work, owner kernel.FeatureExecutionContributor, input PasswordMFAActionSessionInput, apply bool) error {
+	return g.checkObservation(ctx, w, owner, input, apply, nil)
+}
+
+func (g *PasswordMFAActionSessionGuard) checkObservation(ctx context.Context, w kernel.Work, owner kernel.FeatureExecutionContributor, input PasswordMFAActionSessionInput, apply bool, observation *session.GetResult) error {
 	if ctx == nil || g == nil {
 		return session.ErrInvalidSessionCommand
 	}
@@ -103,6 +107,9 @@ func (g *PasswordMFAActionSessionGuard) check(ctx context.Context, w kernel.Work
 	b, feature, _, err := w.FeatureScope(owner)
 	p, ok := input.Command.Feature()
 	if err != nil || !ok || !nativeMFAActionBinding(b) || p.Binding != b || p.Operation != feature.Operation || feature.Operation.Owner != "identity/mfa" || feature.Contributor != (kernel.ContributorDescriptor{Owner: "identity/mfa/postgres", ContractID: "identity.mfa", Version: 1}) {
+		return identity.ForbiddenError{}
+	}
+	if observation != nil && !(b.OperationID == "identity.mfa.totp-uri" && b.SchemaID == "mfa-totp-uri" || b.OperationID == "identity.mfa.totp-verify" && b.SchemaID == "mfa-totp-enrollment-confirm") {
 		return identity.ForbiddenError{}
 	}
 	if apply {
@@ -140,8 +147,24 @@ func (g *PasswordMFAActionSessionGuard) check(ctx context.Context, w kernel.Work
 	if err != nil {
 		return err
 	}
-	if !now.Before(input.ValidUntil) || input.ValidUntil.After(now.Add(20*time.Second)) {
+	if !now.Before(input.ValidUntil) {
 		return identity.ForbiddenError{}
+	}
+	if observation == nil {
+		if input.ValidUntil.After(now.Add(20 * time.Second)) {
+			return identity.ForbiddenError{}
+		}
+	} else {
+		if observation.ValidateAt(now) != nil {
+			return identity.ForbiddenError{}
+		}
+		want, _, wantErr := encodeRecord(input.Original)
+		got, _, gotErr := encodeRecord(observation.Session)
+		defer clear(want)
+		defer clear(got)
+		if wantErr != nil || gotErr != nil || !bytes.Equal(want, got) {
+			return identity.ForbiddenError{}
+		}
 	}
 	return bounded.Err()
 }

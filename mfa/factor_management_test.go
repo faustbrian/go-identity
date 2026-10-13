@@ -83,6 +83,23 @@ func TestFactorUpdateAllowsOwnerDerivedInitialCommand(t *testing.T) {
 	}
 }
 
+func TestReplacementVersionReservesInitiationAndRetirement(t *testing.T) {
+	for _, action := range []mfa.FactorUpdateAction{mfa.Rename, mfa.Remove, mfa.Replace} {
+		for _, version := range []uint64{math.MaxUint64 - 2, math.MaxUint64 - 1} {
+			r := factorUpdateRequest(t)
+			r.Action, r.ExpectedVersion = action, version
+			if action != mfa.Rename {
+				r.Name = ""
+			}
+			valid := r.Validate() == nil
+			want := action != mfa.Replace || version == math.MaxUint64-2
+			if valid != want {
+				t.Fatal("factor mutation admitted an unfinishable version or narrowed one-step compatibility", action, version)
+			}
+		}
+	}
+}
+
 func TestFactorUpdateRequestDoesNotImplicitlyExportCustody(t *testing.T) {
 	r := factorUpdateRequest(t)
 	for _, verb := range []string{"%v", "%+v", "%#v"} {

@@ -922,5 +922,23 @@ remain current. Native removal does not select HTTP reset or management routes.
 Select `HTTPMFAFactorUpdate.Actions` explicitly for removal and independently
 select `HTTPPasswordReset` when HTTP recovery is wanted. Real native and HTTP
 journeys prove removal → emailed reset → completion → new-password login without
-resurrecting factors or reusing the revoked session. Replacement, disable, other
-recovery paths and general multi-factor management remain unfinished.
+resurrecting factors or reusing the revoked session. Other recovery paths and
+general multi-factor management remain unfinished; explicit disable is described
+above.
+
+For same-profile pending TOTP replacement, additionally set
+`FactorManagement.Replacement = &mfapostgres.TOTPReplacementConfig{RecoveryCodes: 10}`.
+The graph supplies authentic URI/confirmation parent custody, current-session
+authority and the session-owned atomic revocation effect; caller substitutions
+are rejected. Selected migration history appends MFA v12 and disposition v4.
+Native-only selection exposes no management HTTP route. Separately include
+`mfa.Replace` in `HTTPMFAFactorUpdate.Actions` and select provisioning/confirmation
+HTTP when desired; the graph freezes the transport code count from native policy.
+
+Use the original session and CSRF for pending URI reveal and confirmation.
+The predecessor and its recovery codes remain usable while the successor's codes
+are non-authenticating. A later real authority read does not extend original
+proof, primary or ceremony expiry. After confirmation, all prior subject sessions
+are revoked; the new TOTP/recovery set supports ordinary password-first signin.
+General multi-factor, other-method, trusted-device and administrative replacement
+remain unfinished. Local slice behavior is not whole-unit release qualification.

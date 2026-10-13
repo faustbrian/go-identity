@@ -40,7 +40,8 @@ type FactorRemovalRecoverySource interface {
 // session effects. Both ages are positive and at most five minutes. Primary and
 // Sessions borrow native owners; they cannot open transactions or retain Work.
 // Default selection supports TOTP rename; explicit email recovery selection
-// adds removal of the sole active TOTP. Replacement and other paths deny.
+// adds removal of the sole active TOTP. Explicit Replacement adds a pending
+// same-profile successor; other recovery paths and factor methods deny.
 type FactorUpdateConfig struct {
 	Primary           FactorUpdatePrimarySource
 	Sessions          RecoveryRegenerationSessionEffects
@@ -50,12 +51,23 @@ type FactorUpdateConfig struct {
 	// request/completion owner; unsupported paths and missing authority deny.
 	RemovalRecoveryPath auth.RecoveryPath
 	RemovalRecovery     FactorRemovalRecoverySource
+	// Replacement explicitly selects same-profile pending TOTP replacement.
+	// Nil preserves rename/removal-only behavior and retained config identity.
+	Replacement *TOTPReplacementConfig
+}
+
+// TOTPReplacementConfig selects the complete pending successor recovery set.
+// RecoveryCodes is 1..64; zero is not a default or a permission to omit recovery.
+// The existing enrollment owner supplies the immutable TOTP profile and TTL.
+type TOTPReplacementConfig struct {
+	RecoveryCodes uint32
 }
 
 // FactorUpdateService owns keyed, optimistic native TOTP metadata management
 // with original proof consumption, session revocation and lifecycle/audit.
 // It borrows existing enrollment, step-up and coordinator owners and creates
-// no private transaction, journal, authority, goroutine or generated credential.
+// no private transaction, journal, authority or goroutine. Explicit replacement
+// borrows existing enrollment generation for its pending successor.
 type FactorUpdateService struct{ state func() *factorUpdateState }
 
 type factorUpdateState struct {
@@ -81,6 +93,13 @@ func newFactorMutationService(enrollment *TOTPEnrollmentService, stepup *TOTPAct
 		return nil, invalidAuthority()
 	}
 	s := &factorUpdateState{shared: enrollment.state(), stepup: stepup.state(), config: c, operation: operation, disablePrimary: disablePrimary}
+	if c.Replacement != nil {
+		if c.Replacement.RecoveryCodes == 0 || c.Replacement.RecoveryCodes > 64 || operation != factorUpdateOperation() {
+			return nil, invalidAuthority()
+		}
+		copy := *c.Replacement
+		s.config.Replacement = &copy
+	}
 	if c.RemovalRecoveryPath != auth.RecoveryPathUnspecified && c.RemovalRecoveryPath != auth.RecoveryPathEmail || c.RemovalRecoveryPath == auth.RecoveryPathUnspecified && !nilEnrollmentPrimary(c.RemovalRecovery) || c.RemovalRecoveryPath == auth.RecoveryPathEmail && (nilEnrollmentPrimary(c.RemovalRecovery) || c.RemovalRecovery.FactorRemovalRecoveryIdentity() == ([32]byte{})) {
 		return nil, invalidAuthority()
 	}
@@ -115,8 +134,9 @@ func newFactorMutationService(enrollment *TOTPEnrollmentService, stepup *TOTPAct
 	frame, err := json.Marshal(struct {
 		Shared, StepUp        [32]byte
 		FactorAge, PrimaryAge time.Duration
-		Removal               *removalIdentity `json:",omitempty"`
-	}{s.shared.identity, s.stepup.identity, c.MaximumAge, c.PrimaryMaximumAge, removal})
+		Removal               *removalIdentity       `json:",omitempty"`
+		Replacement           *TOTPReplacementConfig `json:",omitempty"`
+	}{s.shared.identity, s.stepup.identity, c.MaximumAge, c.PrimaryMaximumAge, removal, s.config.Replacement})
 	if err != nil {
 		return nil, invalidAuthority()
 	}
@@ -148,6 +168,12 @@ func (s *FactorUpdateService) RemovalConfigured() bool {
 	}
 	state := s.state()
 	return state != nil && state.config.RemovalRecoveryPath == auth.RecoveryPathEmail && !nilEnrollmentPrimary(state.config.RemovalRecovery)
+}
+
+// ReplacementConfigured reports explicit immutable pending-replacement
+// selection, not current factor authority or completion of the ceremony.
+func (s *FactorUpdateService) ReplacementConfigured() bool {
+	return s != nil && s.state != nil && s.state() != nil && s.state().config.Replacement != nil
 }
 
 func (s *factorUpdateState) requestIntent(r mfa.FactorUpdateRequest) (identity.RequestIntent, error) {
@@ -191,23 +217,14 @@ func (s *FactorUpdateService) FactorUpdate(ctx context.Context, r mfa.FactorUpda
 
 func (s *FactorUpdateService) executeFactorMutation(ctx context.Context, p *factorUpdatePhase) (out mfa.FactorUpdateResult, err error) {
 	state, r := p.state, p.request
-	if state == nil || r.Action != mfa.Rename && (r.Action != mfa.Remove || state.config.RemovalRecoveryPath != auth.RecoveryPathEmail || nilEnrollmentPrimary(state.config.RemovalRecovery)) || r.FactorProof.Method != "totp" || !slices.Contains(state.stepup.config.AllowedOrigins, r.Origin) {
+	selected := state != nil && (r.Action == mfa.Rename || r.Action == mfa.Remove && state.config.RemovalRecoveryPath == auth.RecoveryPathEmail && !nilEnrollmentPrimary(state.config.RemovalRecovery) || r.Action == mfa.Replace && state.config.Replacement != nil)
+	if !selected || r.FactorProof.Method != "totp" || !slices.Contains(state.stepup.config.AllowedOrigins, r.Origin) {
 		return out, identity.ForbiddenError{}
 	}
 	ctx, stop := context.WithTimeout(ctx, state.shared.config.MaximumDuration)
 	defer stop()
 	defer p.destroy()
-	defer func() {
-		if recover() != nil {
-			err = identity.UnavailableError{}
-		}
-		if ctx.Err() != nil {
-			err = ctx.Err()
-		}
-		if err != nil {
-			out.Factor = mfa.FactorProjection{}
-		}
-	}()
+	defer finishFactorMutation(ctx, &out, &err)
 	p.coordinator, p.registry, err = state.shared.coordinator(p)
 	if err != nil {
 		return out, err
@@ -247,8 +264,33 @@ func (s *FactorUpdateService) executeFactorMutation(ctx context.Context, p *fact
 			return out, identity.ForbiddenError{}
 		}
 		out.Factor = p.result
+		if r.Action == mfa.Replace {
+			out.Replacement, err = p.replacementDelivery(ctx)
+		}
 	}
 	return out, err
+}
+
+// This direct defer owns final delivery custody after the protected command
+// returns; preparation cleanup owns separate generation/input buffers.
+func finishFactorMutation(ctx context.Context, out *mfa.FactorUpdateResult, err *error) {
+	if recover() != nil {
+		*err = identity.UnavailableError{}
+	}
+	if ctx.Err() != nil {
+		*err = ctx.Err()
+	}
+	if *err != nil {
+		out.Factor = mfa.FactorProjection{}
+		if out.Replacement != nil {
+			for _, code := range out.Replacement.RecoveryMaterial.Codes {
+				code.Destroy()
+			}
+			clear(out.Replacement.RecoveryMaterial.Codes)
+			out.Replacement.RecoveryMaterial.Codes = nil
+		}
+		out.Replacement = nil
+	}
 }
 
 // RecoverFactorUpdate resolves historical outcome under current access policy

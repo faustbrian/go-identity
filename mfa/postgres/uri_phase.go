@@ -33,6 +33,10 @@ type totpURIPhase struct {
 	output         *totpURIOutput
 	risk           risk.ProtectedProviderAdmission
 	applied        bool
+	activated      bool
+	// Invocation-local CAS observed under the predecessor lock. Ordinary TOTP
+	// replay advancement must not rewrite the immutable initiation receipt.
+	predecessorRowVersion uint64
 }
 type totpURIOutput struct {
 	Schema     uint32
@@ -66,12 +70,13 @@ func (p *totpURIPhase) buildCommand() error {
 		return invalidEnrollment()
 	}
 	r := p.request
-	m := p.pending.Input.Meta
-	b := p.pending.Input.Binding
+	m := p.pending.metadata()
+	b := p.pending.binding()
 	b.CommandID = r.CommandID
 	b.OperationID = p.operation().OperationID
 	b.SchemaID = p.operation().SchemaID
 	b.SchemaVersion = 1
+	b.RecordID = m.FactorID
 	b.CorrelationID = string(r.CommandID)
 	field := func(name string, v identity.FeatureValue) identity.FeatureField {
 		return identity.FeatureField{Name: name, Value: v}
@@ -79,7 +84,7 @@ func (p *totpURIPhase) buildCommand() error {
 	digest := sha256.Sum256(p.pending.Wire)
 	label := sha256.Sum256([]byte(p.pending.Label))
 	fields := []identity.FeatureField{
-		field("factor.parent", identity.FeatureValue{Kind: identity.FeatureText, Text: string(p.pending.Input.Binding.CommandID)}),
+		field("factor.parent", identity.FeatureValue{Kind: identity.FeatureText, Text: string(p.pending.binding().CommandID)}),
 		field("factor.before", identity.FeatureValue{Kind: identity.FeatureUint64, Uint64: p.pending.RowVersion}),
 		field("factor.envelope", identity.FeatureValue{Kind: identity.FeatureBytes, Bytes: digest[:]}),
 		field("factor.uri.configuration", identity.FeatureValue{Kind: identity.FeatureBytes, Bytes: p.state.identity[:]}),
@@ -164,7 +169,8 @@ func (p *totpURIPhase) AdmitFeaturePreparation(ctx context.Context, w kernel.Wor
 	if p.confirmation != nil {
 		return p.admitConfirmation(ctx, w)
 	}
-	b := p.pending.Input.Binding
+	b := p.pending.binding()
+	m := p.pending.metadata()
 	rows, err := w.Query(ctx, `SELECT version::text,active_factors FROM identity_mfa.factor_authorities WHERE tenant_id=$1 AND user_id=$2 FOR SHARE`, string(b.TenantID), string(b.UserID))
 	if err != nil {
 		return err
@@ -179,10 +185,17 @@ func (p *totpURIPhase) AdmitFeaturePreparation(ctx context.Context, w kernel.Wor
 	rowErr := rows.Err()
 	rows.Close()
 	got, err := strconv.ParseUint(version, 10, 64)
-	if err != nil || extra || rowErr != nil || count != 0 || got != p.pending.Input.Meta.AuthorityVersion+1 {
+	expectedCount, expectedVersion := int32(0), m.AuthorityVersion+1
+	if p.pending.Replacement != nil {
+		expectedCount, expectedVersion = 1, m.AuthorityVersion
+	}
+	if err != nil || extra || rowErr != nil || count != expectedCount || got != expectedVersion {
 		return identity.ForbiddenError{}
 	}
-	rows, err = w.Query(ctx, `SELECT row_version::text,encrypted_secret,created_command_id,enrollment_expires_at FROM identity_mfa.totp_factors WHERE tenant_id=$1 AND user_id=$2 AND factor_id=$3 AND state=1 AND NOT reveal_consumed FOR UPDATE`, string(b.TenantID), string(b.UserID), b.RecordID)
+	if err := p.checkReplacementPredecessor(ctx, w); err != nil {
+		return err
+	}
+	rows, err = w.Query(ctx, `SELECT row_version::text,encrypted_secret,created_command_id,enrollment_expires_at FROM identity_mfa.totp_factors WHERE tenant_id=$1 AND user_id=$2 AND factor_id=$3 AND state=1 AND NOT reveal_consumed FOR UPDATE`, string(b.TenantID), string(b.UserID), m.FactorID)
 	if err != nil {
 		return err
 	}
@@ -197,7 +210,7 @@ func (p *totpURIPhase) AdmitFeaturePreparation(ctx context.Context, w kernel.Wor
 	rows.Close()
 	defer clear(wire)
 	got, err = strconv.ParseUint(version, 10, 64)
-	if err != nil || extra || rowErr != nil || got != p.pending.RowVersion || sha256.Sum256(wire) != sha256.Sum256(p.pending.Wire) || base64.RawURLEncoding.EncodeToString(parent) != string(b.CommandID) || !expires.Equal(p.pending.Input.Meta.ExpiresAt) {
+	if err != nil || extra || rowErr != nil || got != p.pending.RowVersion || sha256.Sum256(wire) != sha256.Sum256(p.pending.Wire) || base64.RawURLEncoding.EncodeToString(parent) != string(b.CommandID) || !expires.Equal(m.ExpiresAt) {
 		return identity.ForbiddenError{}
 	}
 	rows, err = w.Query(ctx, `SELECT canonical_value,version::text FROM identity.identifiers i WHERE tenant_id=$1 AND user_id=$2 AND identifier_id=$3 AND verified AND verification_state=2 AND is_primary=$4 AND kind='email' AND (is_primary OR NOT EXISTS(SELECT 1 FROM identity.identifiers p WHERE p.tenant_id=i.tenant_id AND p.user_id=i.user_id AND p.verified AND p.verification_state=2 AND p.is_primary AND p.kind='email')) FOR SHARE`, string(b.TenantID), string(b.UserID), p.pending.LabelID, p.pending.LabelPrimary)
@@ -219,7 +232,7 @@ func (p *totpURIPhase) AdmitFeaturePreparation(ctx context.Context, w kernel.Wor
 	if err != nil {
 		return err
 	}
-	if now.Before(p.pending.Input.Meta.CreatedAt) || !now.Before(expires) {
+	if now.Before(m.CreatedAt) || !now.Before(expires) {
 		return identity.ForbiddenError{}
 	}
 	return p.primary.Check(ctx, w, p, c)
@@ -237,12 +250,12 @@ func (a *totpURIAdmission) Check(ctx context.Context) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	until, err := a.phase.primary.Deadline()
+	until, err := a.phase.deadline()
 	if err != nil {
 		return err
 	}
 	now := time.Now().UTC()
-	if !now.Before(until) || !now.Before(a.phase.pending.Input.Meta.ExpiresAt) {
+	if !now.Before(until) || !now.Before(a.phase.pending.metadata().ExpiresAt) {
 		return identity.ForbiddenError{}
 	}
 	return a.risk.CheckAt(ctx, now)
@@ -250,6 +263,9 @@ func (a *totpURIAdmission) Check(ctx context.Context) error {
 func (p *totpURIPhase) PrepareFeatureAdmission(ctx context.Context, c identity.Command) (kernel.FeaturePreparationAdmission, error) {
 	if p == nil || p.pending == nil || c != p.command {
 		return nil, invalidEnrollment()
+	}
+	if err := p.refreshPrimary(ctx); err != nil {
+		return nil, err
 	}
 	scope := risk.Context{Tenant: string(p.request.TenantID), Operation: risk.Action(p.operation().OperationID), Attempt: string(p.request.CommandID)}
 	assessment, err := p.state.enrollment.config.Risk.Evaluation.EvaluateProtectedProviders(ctx, risk.EvaluateRequest{Context: scope, Phase: risk.NonIssuing})
@@ -285,6 +301,22 @@ func (p *totpURIPhase) outputAAD(generation uint64) (envelope.Context, error) {
 	if err != nil {
 		return envelope.Context{}, invalidEnrollment()
 	}
+	if p.pending.Replacement != nil {
+		clear(wire)
+		wire, err = json.Marshal(struct {
+			Replacement   factorUpdateInput
+			Command       identity.CommandBinding
+			Fields        []identity.FeatureField
+			Row           uint64
+			Label         string
+			LabelVersion  uint64
+			Configuration [32]byte
+			Generation    uint64
+		}{*p.pending.Replacement, b.Binding, b.Fields, p.pending.RowVersion, p.pending.Label, p.pending.LabelVersion, p.state.identity, generation})
+		if err != nil {
+			return envelope.Context{}, invalidEnrollment()
+		}
+	}
 	defer clear(wire)
 	digest := sha256.Sum256(wire)
 	return envelope.NewContext(map[string]string{"profile": "mfa-uri-output-v1", "binding": base64.RawURLEncoding.EncodeToString(digest[:])})
@@ -294,7 +326,7 @@ func (a *totpURIAdmission) Generate(ctx context.Context, generation uint64) ([]b
 		return nil, err
 	}
 	p := a.phase
-	m := p.pending.Input.Meta
+	m := p.pending.metadata()
 	binding, err := totpEncryptionContext(m.TenantID, m.UserID, m.FactorID, 1, m.Profile)
 	if err != nil {
 		return nil, err
@@ -371,6 +403,9 @@ func (p *totpURIPhase) RestoreFeaturePreparation(ctx context.Context, c identity
 	return p.command, p.plan, nil
 }
 func (p *totpURIPhase) RestoreFeatureAdmission(ctx context.Context, c identity.Command, generation uint64, wire []byte) (kernel.FeaturePreparationAdmission, error) {
+	if err := p.refreshPrimary(ctx); err != nil {
+		return nil, err
+	}
 	if _, _, err := p.RestoreFeaturePreparation(ctx, c, generation, wire); err != nil {
 		return nil, err
 	}
@@ -395,7 +430,7 @@ func (p *totpURIPhase) ApplyFeature(ctx context.Context, w kernel.Work, c identi
 		return p.applyConfirmation(ctx, w, c)
 	}
 	command, _ := base64.RawURLEncoding.Strict().DecodeString(string(p.request.CommandID))
-	n, err := w.Exec(ctx, `UPDATE identity_mfa.totp_factors SET reveal_consumed=true,reveal_command_id=$4,reveal_before_version=row_version,row_version=row_version+1 WHERE tenant_id=$1 AND user_id=$2 AND factor_id=$3 AND state=1 AND NOT reveal_consumed AND row_version=$5::numeric`, string(p.request.TenantID), string(p.pending.Input.Binding.UserID), string(p.request.EnrollmentID), command, strconv.FormatUint(p.pending.RowVersion, 10))
+	n, err := w.Exec(ctx, `UPDATE identity_mfa.totp_factors SET reveal_consumed=true,reveal_command_id=$4,reveal_before_version=row_version,row_version=row_version+1 WHERE tenant_id=$1 AND user_id=$2 AND factor_id=$3 AND state=1 AND NOT reveal_consumed AND row_version=$5::numeric`, string(p.request.TenantID), string(p.pending.binding().UserID), string(p.request.EnrollmentID), command, strconv.FormatUint(p.pending.RowVersion, 10))
 	if err != nil {
 		return identity.FeatureReceipt{}, err
 	}
@@ -412,14 +447,30 @@ func (p *totpURIPhase) CheckFeatureCommit(ctx context.Context, w kernel.Work, c 
 	if p == nil || p.output == nil || c != p.command {
 		return invalidEnrollment()
 	}
-	if err := p.primary.Check(ctx, w, p, c); err != nil {
-		return err
+	if p.activated && p.pending.Replacement != nil {
+		if err := p.state.config.Replacement.Sessions.Check(ctx, w, p, c); err != nil {
+			return err
+		}
+		if err := p.checkActivatedReplacement(ctx, w); err != nil {
+			return err
+		}
+	} else {
+		if err := p.primary.Check(ctx, w, p, c); err != nil {
+			return err
+		}
+		if err := p.checkReplacementPredecessor(ctx, w); err != nil {
+			return err
+		}
 	}
 	now, err := w.DatabaseTime(ctx)
 	if err != nil {
 		return err
 	}
-	if !now.Before(p.pending.Input.Meta.ExpiresAt) {
+	until, err := p.deadline()
+	if err != nil {
+		return err
+	}
+	if !now.Before(until) || !now.Before(p.pending.metadata().ExpiresAt) {
 		return identity.ForbiddenError{}
 	}
 	return p.risk.CheckAt(ctx, now)
@@ -454,6 +505,10 @@ func (p *totpURIPhase) destroy() {
 	p.secret.Destroy()
 	if p.pending != nil {
 		clear(p.pending.Input.Primary)
+		if p.pending.Replacement != nil {
+			clear(p.pending.Replacement.Primary)
+			clear(p.pending.Replacement.Record.Original.Signature)
+		}
 		clear(p.pending.Wire)
 		p.pending = nil
 	}

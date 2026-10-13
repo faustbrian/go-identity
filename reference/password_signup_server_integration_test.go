@@ -232,11 +232,21 @@ func proveReferenceSignupGraph(t *testing.T, competing bool, protected ...bool) 
 	proveReferenceSignupGraphExtensions(t, competing, signupGraphExtensions{}, protected...)
 }
 
-type signupGraphExtensions struct{ disable, disableAll, disablePending, disableHTTP, mfaEnrollment, mfaListing, mfaListHTTP, mfaListStandalone, mfaListDenials, mfaListRecheck, activeStepUp, activeStepUpHTTP, factorManagement, factorManagementHTTP, factorManagementRace, factorManagementDenials, factorManagementClear, factorRemoval, factorRemovalReset, factorRemovalLocks, regeneration, regenerationHTTP, regenerationRace, regenerationDenials, passwordMFA, passwordRecovery, recoveryRace, completionCommitFault bool }
+type signupGraphExtensions struct {
+	disable, disableAll, disablePending, disableHTTP, mfaEnrollment, mfaListing, mfaListHTTP, mfaListStandalone, mfaListDenials, mfaListRecheck, activeStepUp, activeStepUpHTTP, factorManagement, factorReplacement, factorReplacementDelayed, factorReplacementRollback, factorReplacementConfirmationFault, factorReplacementConfirmationRace, factorReplacementPredecessorUse, factorReplacementRecovery, factorManagementHTTP, factorManagementRace, factorManagementDenials, factorManagementClear, factorRemoval, factorRemovalReset, factorRemovalLocks, regeneration, regenerationHTTP, regenerationRace, regenerationDenials, passwordMFA, passwordRecovery, recoveryRace, completionCommitFault bool
+	replacementContinuationDenial                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          string
+	replacementSourceMethod                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                string
+}
 
 func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extensions signupGraphExtensions, protected ...bool) {
 	t.Helper()
-	ctx, cancel := context.WithTimeout(t.Context(), 60*time.Second)
+	budget := 60 * time.Second
+	if extensions.factorReplacementPredecessorUse || extensions.replacementSourceMethod == "totp" {
+		// The genuine predecessor replay counter needs a later TOTP step. Only
+		// the whole test budget changes; native deadlines remain unchanged.
+		budget = 90 * time.Second
+	}
+	ctx, cancel := context.WithTimeout(t.Context(), budget)
 	defer cancel()
 	f := newLiveStoresProfile(t, ctx, false)
 	f.disable, f.disableAll = extensions.disable, extensions.disableAll
@@ -247,6 +257,15 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 	f.factorManagementRace = extensions.factorManagementRace
 	f.factorManagementDenials = extensions.factorManagementDenials
 	f.factorManagementClear = extensions.factorManagementClear
+	f.factorReplacement = extensions.factorReplacement
+	f.factorReplacementDelayed = extensions.factorReplacementDelayed
+	f.factorReplacementRollback = extensions.factorReplacementRollback
+	f.factorReplacementConfirmationFault = extensions.factorReplacementConfirmationFault
+	f.factorReplacementConfirmationRace = extensions.factorReplacementConfirmationRace
+	f.factorReplacementPredecessorUse = extensions.factorReplacementPredecessorUse
+	f.factorReplacementRecovery = extensions.factorReplacementRecovery
+	f.replacementContinuationDenial = extensions.replacementContinuationDenial
+	f.replacementSourceMethod = extensions.replacementSourceMethod
 	f.factorRemoval = extensions.factorRemoval
 	f.factorRemovalReset = extensions.factorRemovalReset
 	f.factorRemovalResetHTTP = extensions.factorRemovalReset && extensions.factorManagementHTTP
@@ -257,7 +276,7 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 	c, deps, worker := otpGraphConfiguration(t, f.config)
 	deps.PostgreSQL = f.pool
 	if extensions.completionCommitFault {
-		f.completionFault = &completionCommitFault{factorProof: extensions.activeStepUp, regeneration: extensions.regeneration, factorManagement: extensions.factorManagement || extensions.disable}
+		f.completionFault = &completionCommitFault{factorProof: extensions.activeStepUp, regeneration: extensions.regeneration, factorManagement: extensions.factorManagement || extensions.disable, replacementConfirmation: extensions.factorReplacementConfirmationFault}
 		faultPool, err := database.Connect(ctx, database.Config{DSN: f.pool.Raw().Config().ConnConfig.ConnString(), MaxConns: 4, Configure: func(pc *database.PoolConfig) error { pc.ConnConfig.DialFunc = f.completionFault.dial; return nil }})
 		if err != nil {
 			t.Fatal("completion fault pool unavailable")
@@ -343,6 +362,12 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 	}
 	if extensions.factorManagement {
 		c.MFAEnrollment.FactorManagement = &mfapg.FactorUpdateConfig{MaximumAge: time.Minute, PrimaryMaximumAge: 2 * time.Minute}
+		if extensions.factorReplacement {
+			c.MFAEnrollment.FactorManagement.Replacement = &mfapg.TOTPReplacementConfig{RecoveryCodes: 10}
+			if extensions.replacementContinuationDenial == "uri-expired-proof" {
+				c.MFAEnrollment.FactorManagement.MaximumAge = 10 * time.Second
+			}
+		}
 		if extensions.factorRemoval {
 			c.MFAEnrollment.FactorManagement.RemovalRecoveryPath = auth.RecoveryPathEmail
 		}
@@ -361,6 +386,9 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 		c.HTTPMFAFactorUpdate = &reference.HTTPMFAFactorUpdateConfiguration{TrustedOrigins: []identityhttp.Origin{identityhttp.Origin(origin)}, RateNamespace: c.HTTPMFAEnrollment.RateNamespace, RateKey: c.HTTPMFAEnrollment.RateKey}
 		if extensions.factorRemoval {
 			c.HTTPMFAFactorUpdate.Actions = []mfa.FactorUpdateAction{mfa.Remove}
+		}
+		if extensions.factorReplacement {
+			c.HTTPMFAFactorUpdate.Actions = []mfa.FactorUpdateAction{mfa.Replace}
 		}
 		f.factorManagementHTTP = true
 		if c.HTTPMFAActiveStepUp != nil {
@@ -429,6 +457,7 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 		}
 		t.Fatal("registration graph", err)
 	}
+	f.stores = stores
 	t.Cleanup(func() {
 		bounded, stop := context.WithTimeout(context.Background(), 5*time.Second)
 		defer stop()
@@ -465,7 +494,16 @@ END $$`); err != nil {
 			t.Error("owned audit cleanup", err)
 		}
 	})
-	if out, err := stores.ReferenceMigrationApply(ctx, applyRequest(t, ctx, stores, modules)); err != nil || out.Result.State() != reference.MigrationApplied {
+	migrationRequest := applyRequest(t, ctx, stores, modules)
+	migrationResult, migrationErr := stores.ReferenceMigrationApply(ctx, migrationRequest)
+	if extensions.factorReplacement && migrationErr != nil && migrationResult.Result.State() == reference.MigrationApplyUnknown {
+		// This larger selected graph can outlive the bounded operator call on a
+		// busy local database. Resume its durable exact prefix, never re-plan or
+		// widen the native authentication/read budgets to get the fixture ready.
+		t.Log("resuming original migration plan after bounded unknown outcome")
+		migrationResult, migrationErr = stores.ReferenceMigrationApply(ctx, migrationRequest)
+	}
+	if out, err := migrationResult, migrationErr; err != nil || out.Result.State() != reference.MigrationApplied {
 		t.Fatal("fresh selected registration migration", err, "state", out.Result.State(), "safe-cause", errors.Unwrap(err), "receipts", len(out.Result.Receipts()))
 	}
 	policies := identity.PolicySet{Authorize: c.OTP.RequestKeys.Policy.Authorization, AssessRisk: func(context.Context, identity.RiskPolicyInput) (identity.RiskPolicyDecision, error) { panic("unused") }, MapClaims: func(context.Context, identity.ClaimsPolicyInput) (identity.ClaimsPolicyDecision, error) {
@@ -792,7 +830,7 @@ CREATE TRIGGER registration_fixture_fail BEFORE INSERT ON identity.delivery_inte
 		t.Fatal("verified registration did not produce usable login", r.StatusCode, signed.CommitOutcome, signed.Error, signed.CommandID != "", signed.SessionID != "")
 	}
 	if enrollment {
-		if f.regenerationDenials || f.factorManagementDenials || f.factorRemoval {
+		if f.regenerationDenials || f.factorManagementDenials || f.factorRemoval || strings.HasSuffix(f.replacementContinuationDenial, "other-session") {
 			secondFlow, secondCookies := issue("password")
 			secondBody := map[string]any{}
 			for key, value := range loginBody {

@@ -16,6 +16,7 @@ import (
 	"github.com/faustbrian/go-identity/mfa"
 	kernel "github.com/faustbrian/go-identity/postgres"
 	"github.com/faustbrian/go-identity/risk"
+	envelope "github.com/faustbrian/go-secret-envelope"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -30,6 +31,8 @@ import (
 type TOTPURIConfig struct {
 	Primary        TOTPURIPrimarySource
 	AllowedOrigins []string
+	// Nil preserves initial-enrollment-only provenance and configuration bytes.
+	Replacement *TOTPReplacementContinuationConfig
 }
 
 // TOTPURIService atomically consumes pending enrollment disclosure through the
@@ -53,6 +56,13 @@ func NewTOTPURIService(enrollment *TOTPEnrollmentService, c TOTPURIConfig) (*TOT
 		return nil, invalidEnrollment()
 	}
 	s := &totpURIState{enrollment: enrollment.state(), config: c}
+	if c.Replacement != nil {
+		selected := *c.Replacement
+		if selected.Management == nil || selected.Management.state == nil || nilEnrollmentPrimary(selected.Primary) || selected.Management.state().shared != s.enrollment || !selected.Management.ReplacementConfigured() {
+			return nil, invalidEnrollment()
+		}
+		s.config.Replacement = &selected
+	}
 	s.config.AllowedOrigins = slices.Clone(c.AllowedOrigins)
 	slices.Sort(s.config.AllowedOrigins)
 	for i, origin := range s.config.AllowedOrigins {
@@ -68,6 +78,11 @@ func NewTOTPURIService(enrollment *TOTPEnrollmentService, c TOTPURIConfig) (*TOT
 	frame := append(slices.Clone(s.enrollment.identity[:]), []byte("mfa-uri-v1\x00")...)
 	for _, origin := range s.config.AllowedOrigins {
 		frame = append(frame, []byte(origin+"\x00")...)
+	}
+	if s.config.Replacement != nil {
+		identity := s.config.Replacement.Management.state().identity
+		frame = append(frame, []byte("replacement\x00")...)
+		frame = append(frame, identity[:]...)
 	}
 	s.identity = sha256.Sum256(frame)
 	clear(frame)
@@ -111,11 +126,14 @@ func (s *TOTPURIService) TotpUriRateSource(ctx context.Context, r mfa.TotpUriReq
 	if err = p.load(ctx); err != nil {
 		return 0, time.Time{}, err
 	}
-	until, err = p.primary.Deadline()
+	if err = p.refreshPrimary(ctx); err != nil {
+		return 0, time.Time{}, err
+	}
+	until, err = p.deadline()
 	if err != nil {
 		return 0, time.Time{}, err
 	}
-	m := p.pending.Input.Meta
+	m := p.pending.metadata()
 	if m.ExpiresAt.Before(until) {
 		until = m.ExpiresAt
 	}
@@ -195,12 +213,27 @@ func (s *TOTPURIService) RecoverTotpUri(ctx context.Context, q identity.Recovery
 
 type totpURIPending struct {
 	Input            totpEnrollmentInput
+	Replacement      *factorUpdateInput
 	Wire             []byte
 	RowVersion       uint64
 	Label, LabelID   string
 	LabelVersion     uint64
 	LabelPrimary     bool
 	AuthorityVersion uint64
+}
+
+func (p *totpURIPending) metadata() PendingTOTPMetadata {
+	if p.Replacement != nil {
+		return *p.Replacement.Replacement
+	}
+	return p.Input.Meta
+}
+
+func (p *totpURIPending) binding() identity.CommandBinding {
+	if p.Replacement != nil {
+		return p.Replacement.Binding
+	}
+	return p.Input.Binding
 }
 
 func (p *totpURIPhase) load(ctx context.Context) error {
@@ -210,19 +243,24 @@ func (p *totpURIPhase) load(ctx context.Context) error {
 	var keyVersion int64
 	var rowVersion, beforeVersion string
 	var revealed bool
+	var purpose string
 	var revealID []byte
+	replacementPurpose := enrollmentOperation().OperationID
+	if p.state.config.Replacement != nil {
+		replacementPurpose = factorUpdateOperation().OperationID
+	}
 	projection := `f.reveal_consumed,f.reveal_command_id,COALESCE(f.reveal_before_version::text,'')`
 	if p.confirmation != nil {
 		projection = `f.activation_command_id IS NOT NULL,f.activation_command_id,COALESCE(f.activation_before_version::text,'')`
 	}
 	// Only closed owner-selected projections vary; caller data stays parameterized.
-	err := s.pool.Raw().QueryRow(ctx, `SELECT f.created_command_id,f.row_version::text,`+projection+`,
+	err := s.pool.Raw().QueryRow(ctx, `SELECT f.created_command_id,f.row_version::text,f.created_purpose,`+projection+`,
 CASE WHEN octet_length(f.encrypted_secret)<=4096 THEN f.encrypted_secret ELSE ''::bytea END,
 k.fingerprint,k.fingerprint_key_version,CASE WHEN octet_length(k.request_preparation_ciphertext)<=$6 THEN k.request_preparation_ciphertext ELSE ''::bytea END
 FROM identity_mfa.totp_factors f JOIN identity.request_key_mappings k ON k.command_id=f.created_command_id AND k.tenant_id=f.tenant_id
-JOIN identity.commands c ON c.command_id=f.created_command_id AND c.tenant_id=f.tenant_id AND c.purpose='identity.mfa.enable'
-WHERE f.tenant_id=$1 AND f.user_id=$2 AND f.factor_id=$3 AND f.state IN(1,2) AND f.created_purpose='identity.mfa.enable' AND c.state='committed'
-AND k.namespace=$4 AND k.actor_id=f.user_id AND k.actor_kind='user' AND k.method='POST' AND k.route_id=$5`, string(r.TenantID), string(r.Caller.Request.Subject.ID), string(r.EnrollmentID), s.config.RequestKeys.Namespace, enrollmentOperation().OperationID, maximumEnrollmentCustody).Scan(&parent, &rowVersion, &revealed, &revealID, &beforeVersion, &secret, &fingerprint, &keyVersion, &wire)
+JOIN identity.commands c ON c.command_id=f.created_command_id AND c.tenant_id=f.tenant_id AND c.purpose=f.created_purpose
+WHERE f.tenant_id=$1 AND f.user_id=$2 AND f.factor_id=$3 AND f.state IN(1,2) AND f.created_purpose IN($5,$7) AND c.state='committed'
+AND k.namespace=$4 AND k.actor_id=f.user_id AND k.actor_kind='user' AND k.method='POST' AND k.route_id=f.created_purpose`, string(r.TenantID), string(r.Caller.Request.Subject.ID), string(r.EnrollmentID), s.config.RequestKeys.Namespace, enrollmentOperation().OperationID, maximumEnrollmentCustody, replacementPurpose).Scan(&parent, &rowVersion, &purpose, &revealed, &revealID, &beforeVersion, &secret, &fingerprint, &keyVersion, &wire)
 	defer clear(wire)
 	defer clear(secret)
 	if err != nil {
@@ -245,9 +283,18 @@ AND k.namespace=$4 AND k.actor_id=f.user_id AND k.actor_kind='user' AND k.method
 	if err != nil {
 		return invalidEnrollment()
 	}
-	k := kernel.RequestKeyPreparationBinding{Namespace: s.config.RequestKeys.Namespace, Scope: kernel.RequestKeyScope{TenantID: r.TenantID, ActorID: identity.ActorID(r.Caller.Request.Subject.ID), ActorKind: authorization.SubjectUser, Method: "POST", RouteID: enrollmentOperation().OperationID}, Admission: kernel.RequestKeyAdmission{CommandID: parentID, FingerprintKeyVersion: uint32(keyVersion)}, Feature: kernel.FeatureRegistration{Contributor: p.Descriptor(), Operation: enrollmentOperation()}, PolicyVersion: s.config.RequestKeys.Policy.PolicyVersion, IntentDigest: [32]byte(fingerprint)}
+	op := enrollmentOperation()
+	if purpose == factorUpdateOperation().OperationID {
+		op = factorUpdateOperation()
+	}
+	k := kernel.RequestKeyPreparationBinding{Namespace: s.config.RequestKeys.Namespace, Scope: kernel.RequestKeyScope{TenantID: r.TenantID, ActorID: identity.ActorID(r.Caller.Request.Subject.ID), ActorKind: authorization.SubjectUser, Method: "POST", RouteID: op.OperationID}, Admission: kernel.RequestKeyAdmission{CommandID: parentID, FingerprintKeyVersion: uint32(keyVersion)}, Feature: kernel.FeatureRegistration{Contributor: p.Descriptor(), Operation: op}, PolicyVersion: s.config.RequestKeys.Policy.PolicyVersion, IntentDigest: [32]byte(fingerprint)}
 	codec := &totpEnrollmentPhase{state: s}
-	aad, err := codec.inputAAD(k)
+	var aad envelope.Context
+	if op == factorUpdateOperation() {
+		aad, err = (&factorUpdatePhase{state: p.state.config.Replacement.Management.state()}).inputAAD(k)
+	} else {
+		aad, err = codec.inputAAD(k)
+	}
 	if err != nil {
 		return err
 	}
@@ -256,23 +303,36 @@ AND k.namespace=$4 AND k.actor_id=f.user_id AND k.actor_kind='user' AND k.method
 		return err
 	}
 	defer clear(plain)
-	var input totpEnrollmentInput
-	if decodeEnrollmentJSON(plain, &input) != nil || input.Schema != 1 || input.Binding.CommandID != parentID || input.Binding.TenantID != r.TenantID || input.Binding.UserID != identity.UserID(r.Caller.Request.Subject.ID) || input.Binding.RecordID != string(r.EnrollmentID) || input.Meta.FactorID != string(r.EnrollmentID) || input.Meta.Profile != s.config.Profile {
-		clear(input.Primary)
-		return invalidEnrollment()
-	}
-	p.pending = &totpURIPending{Input: input, Wire: slices.Clone(secret), RowVersion: version}
-	if p.confirmation != nil {
-		p.primary, err = p.confirmation.primary.RestoreEnrollmentForConfirmation(ctx, p.confirmRequest, parentID, version, input.Primary)
+	if op == factorUpdateOperation() {
+		err = p.restoreReplacementParent(ctx, k, plain, secret, version)
 	} else {
-		p.primary, err = p.state.config.Primary.RestoreEnrollmentForURI(ctx, r, parentID, version, input.Primary)
+		var input totpEnrollmentInput
+		if decodeEnrollmentJSON(plain, &input) != nil || input.Schema != 1 || input.Binding.CommandID != parentID || input.Binding.TenantID != r.TenantID || input.Binding.UserID != identity.UserID(r.Caller.Request.Subject.ID) || input.Binding.RecordID != string(r.EnrollmentID) || input.Meta.FactorID != string(r.EnrollmentID) || input.Meta.Profile != s.config.Profile {
+			clear(input.Primary)
+			return invalidEnrollment()
+		}
+		p.pending = &totpURIPending{Input: input, Wire: slices.Clone(secret), RowVersion: version}
+		if p.confirmation != nil {
+			p.primary, err = p.confirmation.primary.RestoreEnrollmentForConfirmation(ctx, p.confirmRequest, parentID, version, input.Primary)
+		} else {
+			p.primary, err = p.state.config.Primary.RestoreEnrollmentForURI(ctx, r, parentID, version, input.Primary)
+		}
 	}
 	if err != nil {
 		return err
 	}
+	// Native preparation fences authority before its generation callback. Read
+	// once outside those locks. An exact retained reveal/activation candidate
+	// may instead reconstruct historical intent after intentional revocation;
+	// the coordinator still authenticates that complete command and outcome.
+	if !revealed {
+		if err := p.refreshPrimary(ctx); err != nil {
+			return err
+		}
+	}
 	if p.confirmation != nil {
 		var authority string
-		err = s.pool.Raw().QueryRow(ctx, `SELECT CASE WHEN f.activation_command_id IS NULL THEN a.version ELSE f.activation_authority_before END::text FROM identity_mfa.totp_factors f JOIN identity_mfa.factor_authorities a ON a.tenant_id=f.tenant_id AND a.user_id=f.user_id WHERE f.tenant_id=$1 AND f.user_id=$2 AND f.factor_id=$3`, string(r.TenantID), string(input.Binding.UserID), string(r.EnrollmentID)).Scan(&authority)
+		err = s.pool.Raw().QueryRow(ctx, `SELECT CASE WHEN f.activation_command_id IS NULL THEN a.version ELSE f.activation_authority_before END::text FROM identity_mfa.totp_factors f JOIN identity_mfa.factor_authorities a ON a.tenant_id=f.tenant_id AND a.user_id=f.user_id WHERE f.tenant_id=$1 AND f.user_id=$2 AND f.factor_id=$3`, string(r.TenantID), string(p.pending.binding().UserID), string(r.EnrollmentID)).Scan(&authority)
 		if err != nil {
 			return enrollmentReadError(ctx)
 		}
@@ -284,7 +344,7 @@ AND k.namespace=$4 AND k.actor_id=f.user_id AND k.actor_kind='user' AND k.method
 	}
 	// Registration verification does not select a primary address. Its sole
 	// verified address can label a factor without acquiring primary authority.
-	rows, err := s.pool.Raw().Query(ctx, `SELECT identifier_id,canonical_value,version::text,is_primary FROM identity.identifiers i WHERE tenant_id=$1 AND user_id=$2 AND verified AND verification_state=2 AND kind='email' AND (is_primary OR NOT EXISTS(SELECT 1 FROM identity.identifiers p WHERE p.tenant_id=i.tenant_id AND p.user_id=i.user_id AND p.verified AND p.verification_state=2 AND p.is_primary AND p.kind='email')) ORDER BY identifier_id LIMIT 2`, string(r.TenantID), string(input.Binding.UserID))
+	rows, err := s.pool.Raw().Query(ctx, `SELECT identifier_id,canonical_value,version::text,is_primary FROM identity.identifiers i WHERE tenant_id=$1 AND user_id=$2 AND verified AND verification_state=2 AND kind='email' AND (is_primary OR NOT EXISTS(SELECT 1 FROM identity.identifiers p WHERE p.tenant_id=i.tenant_id AND p.user_id=i.user_id AND p.verified AND p.verification_state=2 AND p.is_primary AND p.kind='email')) ORDER BY identifier_id LIMIT 2`, string(r.TenantID), string(p.pending.binding().UserID))
 	if err != nil {
 		return enrollmentReadError(ctx)
 	}

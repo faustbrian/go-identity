@@ -420,12 +420,48 @@ func proveReferenceMFAEnrollment(t *testing.T, ctx context.Context, f liveStores
 		return
 	}
 	if f.activeStepUp {
+		if f.replacementContinuationDenial == "begin-version-exhaustion" || f.replacementContinuationDenial == "begin-last-finishable-version" {
+			version := "18446744073709551613"
+			if f.replacementContinuationDenial == "begin-last-finishable-version" {
+				version = "18446744073709551612"
+			}
+			if _, err := f.pool.Raw().Exec(ctx, `UPDATE identity_mfa.totp_factors SET row_version=$3::numeric WHERE tenant_id=$1 AND factor_id=$2 AND state=2`, otpTenant, string(pending.Enrollment.ID), version); err != nil {
+				t.Fatal("owned near-exhaustion factor fixture failed", err)
+			}
+		}
+		if f.replacementSourceMethod != "" {
+			var sourceBearer, sourceCSRF string
+			if f.replacementSourceMethod == "totp" {
+				_, sourceBearer, sourceCSRF = proveReplacementPasswordLogin(t, ctx, f, features, client, base, origin, mfa.FactorID(pending.Enrollment.ID), secret)
+				// Login used the next admissible replay step. Obtain a genuinely
+				// later step for fresh management proof, not a rewritten counter.
+				timer := time.NewTimer(31 * time.Second)
+				select {
+				case <-timer.C:
+				case <-ctx.Done():
+					timer.Stop()
+					t.Fatal("MFA-origin fixture did not reach a fresh TOTP period")
+				}
+				timer.Stop()
+				if _, err := f.stores.RecoverVelocity(ctx, otpTenant); err != nil {
+					t.Fatal("native velocity recovery after MFA-origin wait failed", err)
+				}
+			} else {
+				_, sourceBearer, sourceCSRF = proveReplacementRecoveryLogin(t, ctx, features, client, base, origin, out.RecoveryCodes[0], true)
+			}
+			cookies = []*http.Cookie{{Name: cookies[0].Name, Value: sourceBearer}}
+			csrfWire = sourceCSRF
+		}
 		proof := proveReferenceActiveStepUp(t, ctx, f, features, cookies[0].Value, csrfWire, origin, mfa.FactorID(pending.Enrollment.ID), secret, client, base, cookies[0].Name)
 		if f.disable {
 			proveReferenceDisable(t, ctx, f, features, cookies[0].Value, csrfWire, origin, mfa.FactorID(pending.Enrollment.ID), proof, client, base, cookies[0].Name)
 			return
 		}
 		if f.factorManagement {
+			if f.factorReplacement {
+				proveReferenceFactorReplacementBegin(t, ctx, f, features, cookies[0].Value, csrfWire, origin, mfa.FactorID(pending.Enrollment.ID), secret, out.RecoveryCodes, proof, client, base, cookies[0].Name)
+				return
+			}
 			proveReferenceFactorRename(t, ctx, f, features, cookies[0].Value, csrfWire, origin, mfa.FactorID(pending.Enrollment.ID), proof, client, base, cookies[0].Name)
 			return
 		}

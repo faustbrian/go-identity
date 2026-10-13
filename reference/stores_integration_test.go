@@ -32,40 +32,49 @@ import (
 )
 
 type liveStores struct {
-	disable                 bool
-	disableAll              bool
-	disablePending          bool
-	pendingDisableFactor    string
-	disableHTTP             bool
-	factorManagementHTTP    bool
-	factorManagementRace    bool
-	factorManagementDenials bool
-	factorManagementClear   bool
-	factorRemoval           bool
-	factorRemovalReset      bool
-	factorRemovalResetHTTP  bool
-	factorRemovalLocks      bool
-	removalSignin           passwordpg.SigninConfig
-	afterFactorRemoval      func(context.Context, identity.UserID)
-	factorManagement        bool
-	mfaListing              bool
-	mfaListHTTP             bool
-	mfaListStandalone       bool
-	mfaListDenials          bool
-	mfaListRecheck          bool
-	activeStepUp            bool
-	activeStepUpHTTP        bool
-	regeneration            bool
-	regenerationHTTP        bool
-	regenerationRace        bool
-	regenerationDenials     bool
-	secondBearer            string
-	secondCSRF              string
-	recoveryRace            bool
-	completionFault         *completionCommitFault
-	stores                  reference.StoreSet
-	pool                    *database.Pool
-	config                  reference.StoreConfiguration
+	disable                            bool
+	disableAll                         bool
+	disablePending                     bool
+	pendingDisableFactor               string
+	disableHTTP                        bool
+	factorManagementHTTP               bool
+	factorManagementRace               bool
+	factorManagementDenials            bool
+	factorManagementClear              bool
+	factorRemoval                      bool
+	factorRemovalReset                 bool
+	factorRemovalResetHTTP             bool
+	factorRemovalLocks                 bool
+	removalSignin                      passwordpg.SigninConfig
+	afterFactorRemoval                 func(context.Context, identity.UserID)
+	factorManagement                   bool
+	factorReplacement                  bool
+	factorReplacementDelayed           bool
+	factorReplacementRollback          bool
+	factorReplacementConfirmationFault bool
+	factorReplacementConfirmationRace  bool
+	factorReplacementPredecessorUse    bool
+	factorReplacementRecovery          bool
+	replacementContinuationDenial      string
+	replacementSourceMethod            string
+	mfaListing                         bool
+	mfaListHTTP                        bool
+	mfaListStandalone                  bool
+	mfaListDenials                     bool
+	mfaListRecheck                     bool
+	activeStepUp                       bool
+	activeStepUpHTTP                   bool
+	regeneration                       bool
+	regenerationHTTP                   bool
+	regenerationRace                   bool
+	regenerationDenials                bool
+	secondBearer                       string
+	secondCSRF                         string
+	recoveryRace                       bool
+	completionFault                    *completionCommitFault
+	stores                             reference.StoreSet
+	pool                               *database.Pool
+	config                             reference.StoreConfiguration
 }
 
 func newLiveStores(t *testing.T, ctx context.Context) liveStores {

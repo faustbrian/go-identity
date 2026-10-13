@@ -164,6 +164,21 @@ func composeMFAEnrollment(c StoreConfiguration, d ReferenceDependencies, verific
 			if err != nil {
 				return nil, invalid
 			}
+			if native.Replacement != nil {
+				effects, err := sessionpg.NewMFATOTPReplacementSessionEffect(c.PasswordVerification.Native.Session, c.PasswordVerification.Native.Profile)
+				if err != nil {
+					return nil, invalid
+				}
+				selected := &mfapg.TOTPReplacementContinuationConfig{Management: state.manage, Primary: primary, Sessions: effects}
+				state.uri, err = mfapg.NewTOTPURIService(enable, mfapg.TOTPURIConfig{Primary: cookie, AllowedOrigins: p.AllowedOrigins, Replacement: selected})
+				if err != nil {
+					return nil, invalid
+				}
+				state.confirm, err = mfapg.NewTOTPConfirmationService(enable, mfapg.TOTPConfirmationConfig{Primary: cookie, AllowedOrigins: p.AllowedOrigins, ComparisonKey: p.ComparisonKey, ComparisonKeyVersion: p.ComparisonKeyVersion, Replacement: selected})
+				if err != nil {
+					return nil, invalid
+				}
+			}
 		}
 		if p.Disable != nil {
 			if p.Disable.Primary != nil || p.Disable.Sessions != nil || p.Disable.Recovery != nil || p.Disable.RecoveryPath != auth.RecoveryPathEmail {

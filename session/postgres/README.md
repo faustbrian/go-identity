@@ -1412,3 +1412,16 @@ The same protected disposition admits exactly `factor.updated.v1` or
 `factor.removed.v1`; removal must still be independently authorized by MFA's
 actual recovery policy. Both revoke the complete bounded subject-session set,
 not only the session that supplied the proof, and recovery never revives it.
+
+Pending TOTP replacement uses the same primary owner through
+`RestoreReplacementForURI`/`RestoreReplacementForConfirmation`, preserving the
+original bearer and synchronizer while `ReadCurrent` obtains an actual native
+session-authority observation. That observation expires within20seconds of its
+read start; repeat checks/copies never reset it or extend original absolute limits.
+Initiation preserves sessions. `NewMFATOTPReplacementSessionEffect` revokes the
+whole bounded subject set only with successor activation in the same Work.
+Install optional `MFATOTPReplacementSessionMigrationSource` v4 after the existing
+selected disposition history; independently optional disable v3 is not required.
+Recovery
+authenticates the original retained disposition; it does not require a live source
+cookie, disclose a new session or repeat revocation.
