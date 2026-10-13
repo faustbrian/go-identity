@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+- Add independently selected `HTTPMFAList`, sharing the exact HTTP-session safe
+  limiter or using an explicit standalone policy without selecting session
+  routes. Real metadata/count journeys preserve no-store, credential-free
+  responses and selected graph lifetime. Unconfigured selected listing now
+  fails rather than silently disappearing in a recovery-only graph.
+
+- Independently select native safe MFA metadata with
+  `MFAEnrollmentConfiguration.Listing` and `MFAListing`. Reuse the existing real
+  session and authorization owners; list confirmed TOTP metadata and remaining
+  recovery counts without granting factor authority or disclosing credentials.
+  This selection exposes no HTTP route or trusted-device/security-key profile.
+
 - Connect separately selected `HTTPMFARecoveryRegeneration` to the native original
   factor-proof source and whole-set/session replacement. This supersedes the
   native-only HTTP caveat below; selection enables neither step-up nor login.

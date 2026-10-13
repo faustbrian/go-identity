@@ -1,5 +1,27 @@
 # MFA (in development)
 
+## Safe factor inventory
+
+`ListService.List` authenticates the actual `ListRequest.Credential`, derives
+the subject from the owned session result, authorizes `identity.mfa.list`, reads
+bounded safe metadata and rechecks current session authority before disclosure.
+Pass the trusted tenant and bounded correlation only; there is no target-user,
+proof, command, idempotency key or mutation-CSRF input. Original acceptance expiry
+always wins, even after a fresh second read.
+
+`NewListService` borrows the real session owner, `FactorListReader`, authorization
+engine and trusted clock through explicit `ListConfig`. `FactorListSnapshot`
+requires a known positive generation: unavailable authority is not an empty list.
+Collections and remaining codes are bounded to100. Empty lists and zero remaining
+codes are valid. `ListResult.Outcome` stays zero because this is a read, not a
+mutation or recoverable commit. `ValidateAt` checks display shape only.
+
+Projections expose IDs, method/state, bounded untrusted labels, recorded dates
+and optimistic versions; they never contain secrets, verifiers, replay counters
+or reusable authority. Unknown usage times are omitted by HTTP, not fabricated.
+Native selected-profile adoption is documented in `postgres/README.md`; HTTP and
+reference selection remain independent. Full MFA qualification remains pending.
+
 This Go 1.27 module owns second-factor authority, separate from primary
 authentication. The initial API distinguishes explicitly known empty state from
 unknown state. It now defines immutable browser partial-authentication continuation

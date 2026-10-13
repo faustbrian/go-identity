@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add bounded TOTP-only primary metadata listing and unused active recovery-set
+  counts through the existing enrollment owner. Missing authority, unsupported
+  active inventories and incomplete code sets fail without partial metadata;
+  secrets, verifiers and replay counters are never selected. This profile does
+  not claim security-key or trusted-device listing support.
+
 - Expose read-only authenticated active-factor quota metadata for selected HTTP
   composition. Preserve fixed policy lifetime and original primary/session
   deadlines without decrypting factor secrets, comparing codes or issuing proof.

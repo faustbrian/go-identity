@@ -63,7 +63,7 @@ func (referenceRegistrationPolicy) Decide(ctx context.Context, c authorization.D
 	}
 	if string(c.Request.Tenant) == otpTenant && c.PolicyRevision == 9 && c.Request.Subject.Kind == authorization.SubjectUser && c.Request.Resource.Type == "identity.user" && string(c.Request.Resource.ID) == string(c.Request.Subject.ID) {
 		switch c.Request.Action {
-		case "identity.mfa.enable", "identity.mfa.totp-uri", "identity.mfa.totp-verify", "identity.mfa.recovery-regenerate":
+		case "identity.mfa.enable", "identity.mfa.totp-uri", "identity.mfa.totp-verify", "identity.mfa.recovery-regenerate", "identity.mfa.list":
 			return authorization.Decision{Outcome: authorization.Allow, Revision: 9}, nil
 		}
 	}
@@ -230,7 +230,7 @@ func proveReferenceSignupGraph(t *testing.T, competing bool, protected ...bool) 
 	proveReferenceSignupGraphExtensions(t, competing, signupGraphExtensions{}, protected...)
 }
 
-type signupGraphExtensions struct{ mfaEnrollment, activeStepUp, activeStepUpHTTP, regeneration, regenerationHTTP, regenerationRace, regenerationDenials, passwordMFA, passwordRecovery, recoveryRace, completionCommitFault bool }
+type signupGraphExtensions struct{ mfaEnrollment, mfaListing, mfaListHTTP, mfaListStandalone, mfaListDenials, mfaListRecheck, activeStepUp, activeStepUpHTTP, regeneration, regenerationHTTP, regenerationRace, regenerationDenials, passwordMFA, passwordRecovery, recoveryRace, completionCommitFault bool }
 
 func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extensions signupGraphExtensions, protected ...bool) {
 	t.Helper()
@@ -240,6 +240,8 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 	f.recoveryRace = extensions.recoveryRace
 	f.regenerationRace = extensions.regenerationRace
 	f.regenerationDenials = extensions.regenerationDenials
+	f.mfaListDenials = extensions.mfaListDenials
+	f.mfaListRecheck = extensions.mfaListRecheck
 	c, deps, worker := otpGraphConfiguration(t, f.config)
 	deps.PostgreSQL = f.pool
 	if extensions.completionCommitFault {
@@ -286,6 +288,22 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 	}
 	if extensions.mfaEnrollment {
 		configureReferenceMFAEnrollment(t, &c, origin)
+	}
+	if extensions.mfaListing {
+		c.MFAEnrollment.Listing = true
+		f.mfaListing = true
+	}
+	if extensions.mfaListHTTP {
+		c.HTTPMFAList = &reference.HTTPMFAListConfiguration{}
+		f.mfaListHTTP = true
+	}
+	if extensions.mfaListStandalone {
+		c.HTTPSession = nil
+		c.HTTPMFAList.StandaloneRate = &reference.MFAListStandaloneRateConfiguration{Namespace: "reference-mfa-list", EmergencyMaximumKeys: 128, Degraded: func(context.Context, identityhttp.SafeRateEvent) error {
+			t.Error("unexpected standalone rate degradation")
+			return nil
+		}}
+		f.mfaListStandalone = true
 	}
 	if extensions.activeStepUp {
 		configureReferenceActiveStepUp(t, &c, origin)
@@ -420,6 +438,20 @@ END $$`); err != nil {
 		seen[op.Record.OperationID] = true
 	}
 	wantOperations := 8
+	if c.HTTPSession == nil {
+		wantOperations -= 2
+		if seen["identity.session.get"] || seen["identity.session.signout"] {
+			t.Fatal("standalone listing selected HTTP session routes")
+		}
+	}
+	if c.HTTPMFAList != nil {
+		wantOperations++
+		if !seen["identity.mfa.list"] {
+			t.Fatal("selected list route missing")
+		}
+	} else if seen["identity.mfa.list"] {
+		t.Fatal("unselected list route advertised")
+	}
 	if c.HTTPMFAEnrollment != nil {
 		wantOperations++
 		if !seen["identity.mfa.enable"] {
@@ -472,7 +504,7 @@ END $$`); err != nil {
 			t.Fatal("selected protected password routes missing")
 		}
 	}
-	if !seen["identity.password.signup"] || !seen["identity.email.verification-confirm"] || !seen["identity.password.signin"] || !seen["identity.session.get"] || !seen["identity.session.signout"] || len(seen) != wantOperations {
+	if !seen["identity.password.signup"] || !seen["identity.email.verification-confirm"] || !seen["identity.password.signin"] || (c.HTTPSession != nil && (!seen["identity.session.get"] || !seen["identity.session.signout"])) || len(seen) != wantOperations {
 		t.Fatal("selected public registration routes missing")
 	}
 	network.Config.Handler = server.Handler()

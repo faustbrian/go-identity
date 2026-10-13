@@ -13,6 +13,8 @@ import (
 // Omit the feature from composition to expose no routes or metadata. Empty
 // selection denies; construction invokes no native service or global registry.
 type FeatureConfig struct {
+	// List exposes only authenticated safe metadata, independently of mutations.
+	List *ListConfig
 	// RecoveryUse exposes only the explicitly selected original-primary owner.
 	RecoveryUse *RecoveryUseConfig
 	// RecoveryRegenerate explicitly selects fresh-factor whole-set replacement.
@@ -37,10 +39,22 @@ func NewFeature(c FeatureConfig) (identityhttp.Feature, error) {
 // NewFeatureWithMiddleware binds hooks to actual owned phases without granting
 // credential output ownership or returning a partial feature on failure.
 func NewFeatureWithMiddleware(c FeatureConfig, m []identityhttp.MiddlewareDescriptor) (identityhttp.Feature, error) {
-	if c.TOTPVerify == nil && c.PasswordTOTPVerify == nil && c.Enable == nil && c.URI == nil && c.EnrollmentConfirmation == nil && c.ActiveStepUp == nil && c.RecoveryUse == nil && c.RecoveryRegenerate == nil {
+	if c.List == nil && c.TOTPVerify == nil && c.PasswordTOTPVerify == nil && c.Enable == nil && c.URI == nil && c.EnrollmentConfirmation == nil && c.ActiveStepUp == nil && c.RecoveryUse == nil && c.RecoveryRegenerate == nil {
 		return identityhttp.Feature{}, identityhttp.ErrInvalidInput
 	}
 	var operations []identityhttp.OperationDescriptor
+	if c.List != nil {
+		h, err := NewListHandlerWithMiddleware(*c.List, m)
+		if err != nil {
+			return identityhttp.Feature{}, err
+		}
+		op, err := identityhttp.NewCanonicalOperation(identityhttp.CanonicalOperationConfig{Owner: "identity/mfa", OperationID: "identity.mfa.list", Handler: h, CSRF: identityhttp.CSRFPolicy{Mode: identityhttp.CSRFNone}, MaximumSerializedBytes: 262144})
+		if err != nil {
+			return identityhttp.Feature{}, err
+		}
+		op.Wire = listWire(*c.List)
+		operations = append(operations, op)
+	}
 	if c.RecoveryRegenerate != nil {
 		h, err := NewRecoveryRegenerateHandlerWithMiddleware(*c.RecoveryRegenerate, m)
 		if err != nil {

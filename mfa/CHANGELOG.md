@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Add authenticated self-listing contracts with bounded safe factor/device
+  projections and remaining recovery-code counts. Empty inventory and exhausted
+  codes are valid; missing authority, foreign/corrupt records and unauthenticated
+  callers deny without partial metadata. Listing retains original session
+  validity and rechecks current authority. Native adapter and HTTP/reference
+  composition remain in development.
+
 - Add a disjoint authenticated TOTP step-up request and immutable original
   session/action proof projection for recovery regeneration. Login and pending
   enrollment cannot supply this profile. Proof construction grants no issuance

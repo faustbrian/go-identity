@@ -97,6 +97,7 @@ type featureState struct {
 	httpMFAEnrollment            *mfaEnrollmentHTTPState
 	httpMFAActiveStepUp          *mfaActiveStepUpHTTPState
 	httpMFARecoveryRegeneration  *mfaRecoveryRegenerationHTTPState
+	httpMFAList                  *mfaListHTTPState
 	passwordSignin               *passwordpg.SigninService
 	passwordSignup               *passwordpg.SignupService
 	session                      *sessionState
@@ -127,6 +128,9 @@ type featureState struct {
 }
 
 func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDependencies) error {
+	if c.HTTPMFAList != nil && (c.MFAEnrollment == nil || !c.MFAEnrollment.Listing || c.Session == nil) {
+		return identity.InvalidInputError{Field: "reference_http_mfa_list"}
+	}
 	if c.HTTPMFARecoveryRegeneration != nil && (c.MFAEnrollment == nil || c.MFAEnrollment.Regeneration == nil || c.Session == nil) {
 		return identity.InvalidInputError{Field: "reference_http_mfa_regeneration"}
 	}
@@ -382,6 +386,9 @@ func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDepen
 	if err != nil {
 		return err
 	}
+	if err := composeMFAListing(c, mfaEnrollmentOwner, sessionOwner); err != nil {
+		return err
+	}
 	migrationConfig.mfaEnrollment = mfaEnrollmentOwner != nil
 	httpMFARecoveryRegeneration, err := composeMFARecoveryRegenerationHTTP(c, d, mfaEnrollmentOwner, s.httpRate)
 	if err != nil {
@@ -440,6 +447,15 @@ func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDepen
 			httpSession.rate.Close()
 		}
 	}()
+	httpMFAList, err := composeMFAListHTTP(c, mfaEnrollmentOwner, sessionOwner, httpSession, s.httpRate)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if httpMFAList != nil && httpMFAList.owned && !retainedResetHTTP {
+			httpMFAList.rate.Close()
+		}
+	}()
 	signupPreauthOwner, err := composeSignupPreAuth(d.PostgreSQL, c.PasswordSignup)
 	if err != nil {
 		return err
@@ -488,6 +504,7 @@ func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDepen
 	s.features.httpMFAEnrollment = httpMFAEnrollment
 	s.features.httpMFAActiveStepUp = httpMFAActiveStepUp
 	s.features.httpMFARecoveryRegeneration = httpMFARecoveryRegeneration
+	s.features.httpMFAList = httpMFAList
 	retainedResetHTTP = true
 	return nil
 }

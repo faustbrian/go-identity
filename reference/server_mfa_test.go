@@ -24,6 +24,29 @@ func TestMFATransportRequiresExplicitNativeSelection(t *testing.T) {
 	}
 }
 
+func TestMFAListHTTPRequiresExplicitNativeSelection(t *testing.T) {
+	if owner, err := composeMFAListHTTP(StoreConfiguration{}, nil, nil, nil, nil); err != nil || owner != nil {
+		t.Fatal("unselected listing acquired HTTP", err)
+	}
+	c := StoreConfiguration{HTTPMFAList: &HTTPMFAListConfiguration{}}
+	if owner, err := composeMFAListHTTP(c, nil, nil, nil, nil); err == nil || owner != nil {
+		t.Fatal("missing listing owners exposed HTTP")
+	}
+	if err := (&storeState{}).composeFeatureStores(c, ReferenceDependencies{}); err == nil {
+		t.Fatal("selected listing disappeared in recovery-only graph")
+	}
+}
+
+func TestMFAListClosedGraphWithholdsMetadata(t *testing.T) {
+	s := &Server{state: &storeState{closed: true}}
+	h := s.guardSessionLifetime(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { t.Fatal("closed graph reached list owner") }))
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "https://login.example/v1/mfa/list", nil))
+	if w.Code != 503 || !strings.Contains(w.Body.String(), `"error":"unavailable"`) || w.Header().Get("Cache-Control") != "no-store" || w.Header().Get("Set-Cookie") != "" {
+		t.Fatal("closed listing graph disclosed metadata or lost denial")
+	}
+}
+
 func TestMFAEnrollmentHTTPRequiresSelectedNativeOwners(t *testing.T) {
 	if h, err := composeMFAEnrollmentHTTP(StoreConfiguration{}, nil, nil, nil); err != nil || h != nil {
 		t.Fatal("unselected enrollment acquired HTTP authority")

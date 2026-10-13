@@ -116,10 +116,14 @@ func (s *Server) mfaFeature(network identityhttp.NetworkConfig, f FeatureSet) (*
 	if err != nil {
 		return nil, err
 	}
-	if h == nil && enrollment == nil && stepup == nil && regeneration == nil {
+	listing, err := s.mfaListHTTPConfig(network, f)
+	if err != nil {
+		return nil, err
+	}
+	if h == nil && enrollment == nil && stepup == nil && regeneration == nil && listing == nil {
 		return nil, nil
 	}
-	config := mfahttp.FeatureConfig{Enable: enrollment, ActiveStepUp: stepup, RecoveryRegenerate: regeneration}
+	config := mfahttp.FeatureConfig{List: listing, Enable: enrollment, ActiveStepUp: stepup, RecoveryRegenerate: regeneration}
 	config.URI, err = s.mfaProvisioningHTTPConfig(network, f, enrollment)
 	if err != nil {
 		return nil, err
@@ -175,6 +179,9 @@ func (s *Server) mfaFeature(network identityhttp.NetworkConfig, f FeatureSet) (*
 		return nil, err
 	}
 	for i := range operations {
+		if operations[i].Record.OperationID == "identity.mfa.list" {
+			operations[i].Handler = s.guardSessionLifetime(operations[i].Handler)
+		}
 		if operations[i].Record.OperationID == "identity.mfa.enable" || operations[i].Record.OperationID == "identity.mfa.totp-uri" || operations[i].Record.OperationID == "identity.mfa.recovery-regenerate" || (operations[i].Record.OperationID == "identity.mfa.totp-verify" && (config.EnrollmentConfirmation != nil || config.ActiveStepUp != nil)) {
 			operations[i].Handler = &mfaEnrollmentLifetimeHandler{state: s.state, next: operations[i].Handler, operation: operations[i].Record.OperationID, stepup: config.ActiveStepUp != nil, stepupOnly: config.ActiveStepUp != nil && config.EnrollmentConfirmation == nil && config.TOTPVerify == nil && config.PasswordTOTPVerify == nil}
 		}

@@ -1,5 +1,23 @@
 # PostgreSQL MFA authority (in development)
 
+## Safe selected-profile inventory
+
+`NewTOTPListReader(enrollment)` borrows the existing real TOTP enrollment owner
+and its primary pool/read budget. Compose it with `mfa.NewListService` and the
+actual session/authorization owners; the reader alone is not an access endpoint.
+Install the existing factor/recovery histories. Listing creates no new schema,
+transaction, journal or goroutine and selects no ciphertext, verifier or replay
+counter. One bounded primary snapshot validates known authority and complete
+active recovery sets before reporting unused counts. Initial set epochs retain
+their existing interpretation; they are not equal to global factor generations.
+
+This explicit TOTP-only profile has no trusted-device issuance or security-key
+owner. Its empty device projection is not fabricated empty unsupported storage.
+Unexpected active-factor inventory, incomplete code rows, missing authority or
+overflow fail without a partial result. Labels and usage times not stored by this
+profile remain absent. Full trusted-device/security-key support and release
+qualification remain required by the complete MFA goal.
+
 ## Native authenticated step-up and recovery replacement
 
 Compose `NewTOTPActiveStepUpService` over the actual selected enrollment graph

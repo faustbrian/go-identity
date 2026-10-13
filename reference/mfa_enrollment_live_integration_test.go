@@ -88,6 +88,15 @@ func proveReferenceMFAEnrollment(t *testing.T, ctx context.Context, f liveStores
 	if len(cookies) != 1 {
 		t.Fatal("original primary session cookie unavailable")
 	}
+	if f.mfaListing {
+		proveReferenceMFAListing(t, ctx, features, cookies[0].Value, "", 0)
+		if f.mfaListHTTP {
+			proveReferenceMFAListingHTTP(t, ctx, client, base, cookies[0], "", 0)
+		}
+	}
+	if len(cookies) != 1 {
+		t.Fatal("original primary session cookie unavailable")
+	}
 	token, err := session.ParseToken(cookies[0].Value)
 	if err != nil {
 		t.Fatal("original session custody malformed")
@@ -366,6 +375,23 @@ func proveReferenceMFAEnrollment(t *testing.T, ctx context.Context, f liveStores
 	if _, err := current.Session.MFAAuthentication().Bindings(); err == nil {
 		t.Fatal("activation silently promoted original session")
 	}
+	if f.mfaListing {
+		proveReferenceMFAListing(t, ctx, features, cookies[0].Value, string(pending.Enrollment.ID), 10)
+		if f.mfaListHTTP {
+			proveReferenceMFAListingHTTP(t, ctx, client, base, cookies[0], string(pending.Enrollment.ID), 10)
+		}
+	}
+	if f.mfaListDenials {
+		proveReferenceMFAListDenials(t, ctx, f, features, cookies[0].Value)
+		return
+	}
+	if f.mfaListRecheck {
+		proveReferenceMFAListRecheck(t, ctx, f, features, cookies[0].Value)
+		return
+	}
+	if f.mfaListStandalone {
+		return
+	}
 	if f.activeStepUp {
 		proof := proveReferenceActiveStepUp(t, ctx, f, features, cookies[0].Value, csrfWire, origin, mfa.FactorID(pending.Enrollment.ID), secret, client, base, cookies[0].Name)
 		if f.regeneration {
@@ -381,6 +407,12 @@ func proveReferenceMFAEnrollment(t *testing.T, ctx context.Context, f liveStores
 	}
 	if len(recovery) > 0 && recovery[0] {
 		proveReferencePasswordRecoveryHTTP(t, ctx, f, features, client, base, origin, out.RecoveryCodes[0])
+		if f.mfaListing {
+			proveReferenceMFAListing(t, ctx, features, cookies[0].Value, string(pending.Enrollment.ID), 9)
+			if f.mfaListHTTP {
+				proveReferenceMFAListingHTTP(t, ctx, client, base, cookies[0], string(pending.Enrollment.ID), 9)
+			}
+		}
 	}
 	proveRegistrationSessionLogout(t, ctx, client, base, origin, cookies, csrfWire, sessionID, f, features)
 }

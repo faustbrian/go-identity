@@ -1,5 +1,22 @@
 # MFA HTTP transport
 
+## Safe listing
+
+`NewListHandler(ListConfig)` owns cookie-only `GET /v1/mfa/list`;
+`FeatureConfig.List` contributes that operation and its closed OpenAPI schema
+independently of all mutation/login routes. Supply the real session/listing
+owners, shared `SafeRateLimiter`, trusted network/tenant mapping, cookie policy,
+clock and positive whole-call budget. No application domain store is needed.
+
+The route rejects Authorization, query/body, target-user and idempotency overrides.
+It is a read, not a mutation-CSRF operation. Safe IP/subject quotas and middleware
+work do not renew original session validity. Output contains only bounded factor/
+device metadata and remaining code count, including legitimate empty/count0
+state. It emits no cookie, CSRF, proof, redirect or transaction outcome. Every
+response is no-store/nosniff JSON; existing final-status/body custody guards also
+withhold metadata after expiry or failed delivery. Consumers render labels as
+untrusted display text. No UI or automatic refresh is provided.
+
 Go 1.27 opt-in `net/http` adapters for native pending TOTP enrollment and the
 password/TOTP and magic-link/TOTP completion profiles. This is backend transport, not a UI or a
 factor verification engine.

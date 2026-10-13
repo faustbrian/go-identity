@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	identity "github.com/faustbrian/go-identity"
+	"github.com/faustbrian/go-identity/mfa"
 	mfapg "github.com/faustbrian/go-identity/mfa/postgres"
 	passwordpg "github.com/faustbrian/go-identity/password/postgres"
 	kernel "github.com/faustbrian/go-identity/postgres"
@@ -35,6 +36,9 @@ type MFAEnrollmentConfiguration struct {
 	// Primary and Sessions must be absent; this graph supplies real native owners.
 	// ActiveStepUp is required. No HTTP route is selected by this field.
 	Regeneration *mfapg.RecoveryRegenerationConfig
+	// Listing explicitly selects safe TOTP/recovery metadata through the graph's
+	// existing real session owner. It selects no HTTP route or trusted devices.
+	Listing bool
 }
 
 type mfaEnrollmentState struct {
@@ -43,6 +47,7 @@ type mfaEnrollmentState struct {
 	confirm    *mfapg.TOTPConfirmationService
 	stepup     *mfapg.TOTPActiveStepUpService
 	regenerate *mfapg.RecoveryRegenerationService
+	listing    *mfa.ListService
 }
 
 func composeMFAEnrollment(c StoreConfiguration, d ReferenceDependencies, verification *passwordVerificationState, evaluation risk.Evaluator) (*mfaEnrollmentState, error) {

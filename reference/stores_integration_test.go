@@ -30,6 +30,11 @@ import (
 )
 
 type liveStores struct {
+	mfaListing          bool
+	mfaListHTTP         bool
+	mfaListStandalone   bool
+	mfaListDenials      bool
+	mfaListRecheck      bool
 	activeStepUp        bool
 	activeStepUpHTTP    bool
 	regeneration        bool

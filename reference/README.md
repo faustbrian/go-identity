@@ -1,5 +1,25 @@
 # Identity reference composition
 
+## Selected MFA inventory
+
+Set `MFAEnrollmentConfiguration.Listing = true` for guarded native
+`FeatureSet.MFAListing()`. It reuses this graph's actual session reader and policy
+engine and the TOTP-only PostgreSQL metadata owner; graph startup/tenant/shutdown
+guards remain effective. Other MFA methods/devices remain outside this profile.
+
+Set `StoreConfiguration.HTTPMFAList = &HTTPMFAListConfiguration{}` to select
+`GET /v1/mfa/list` when HTTP session routes already exist. Both borrow the exact
+same safe limiter, including emergency capacity. Without HTTP session routes,
+provide explicit `StandaloneRate` namespace, maximum keys and bounded degraded-
+event callback. Native sessions remain required, HTTP session routes do not.
+Conflicting simultaneous standalone/session rate ownership is rejected. Selecting
+listing does not select enrollment, login, step-up or regeneration routes.
+
+Real selected-reference journeys cover empty→enrolled inventory, actual code
+consumption count10→9, missing-cookie/target-query denial, standalone route
+selection, corrupt inventory, account blocking and post-read authority loss.
+These are bounded slice results, not complete MFA/platform release qualification.
+
 **Development checkpoint:** this module currently includes the
 PostgreSQL-journaled, TLS Valkey velocity store graph and optional native OTP
 Send/delivery composition with opt-in single-factor OTP sign-in. An IO-free

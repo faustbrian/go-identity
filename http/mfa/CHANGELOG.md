@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- Add independently selected cookie-only MFA listing with closed safe metadata
+  output, shared safe-route admission and unchanged original session validity.
+  Reads reject body/query/target/Authorization/idempotency overrides, send no
+  credentials and remain no-store through middleware and final delivery. HTTP
+  reference composition remains in development.
+
+- Connect that listing profile through explicit reference selection and real
+  HTTP enrollment/recovery-count journeys. This supersedes the reference-
+  composition caveat above; full MFA transport qualification remains pending.
+
 - Add independent recovery-regeneration HTTP with original signed factor-proof
   lookup, cookie/Origin/CSRF, stable original-command quotas and reveal-once
   modern-code delivery. Native replacement owns atomic proof/set/session effects;
