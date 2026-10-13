@@ -1,5 +1,29 @@
 # Identity reference composition
 
+## Selected native and HTTP disable
+
+Set `MFAEnrollmentConfiguration.Disable` with `RecoveryPathEmail` and bounded
+factor/primary maximum ages, alongside native `ActiveStepUp` and complete
+`PasswordReset` request/completion/HIBP/delivery selection. Leave its Primary,
+Sessions and Recovery unset: the graph supplies actual native owners and rejects
+application substitutes. Obtain `FeatureSet.MFADisable()` after graph startup.
+One/all targets and original disable-purpose proof require no private SQL query.
+Fresh one-target results include safe unexpired pending siblings captured in the
+protected transaction; those siblings and their recovery custody are untouched.
+All-target retires them and returns an empty remaining set. Retained outcome
+recovery/replay returns no fresh projections.
+
+Set `HTTPMFADisable` separately for HTTP with exact native origins and explicit
+shared-rate namespace/key. Native disable alone selects no route or metadata.
+Authenticated TOTP HTTP may independently select `identity.mfa.disable`; neither
+step-up HTTP nor factor-update HTTP is a mandatory disable dependency. Selected
+histories append MFA v11 and session disposition v3 without rewriting prefixes.
+Calls and retained handles obey graph startup/drain/shutdown and exact tenant.
+Current scope is sole active TOTP plus bounded pending siblings/email recovery;
+general multi-factor replacement, trusted devices and administrative recovery
+remain unfinished. The reference acceptance crosses disable and actual emailed
+password reset/delivery/completion into replacement-password login.
+
 ## Selected MFA inventory
 
 Set `MFAEnrollmentConfiguration.Listing = true` for guarded native

@@ -1,5 +1,24 @@
 # MFA (in development)
 
+## Explicit disable
+
+`DisableService.Disable` takes a closed `OneFactor`/`AllFactors` target. One
+requires `FactorID`; all forbids it. Supply actual source-session/CSRF custody,
+trusted self-caller/origin/network, one idempotency key and an original fresh
+`identity.mfa.disable` proof. The native owner derives optimistic generation
+from authenticated proof issuance; consumers do not query private authority rows.
+Recent primary authentication remains required independently of fresh TOTP.
+
+The selected native sole-TOTP/email-reset profile erases factor custody and
+dependent recovery material, revokes subject sessions and emits audit/lifecycle
+atomically. All-target includes bounded older pending enrollments. Additional
+unsupported active factors deny; general multi-factor/device profiles remain
+unfinished. A fresh known commit returns the safe remaining set: one-target
+preserves and reports unexpired pending siblings; all-target returns an allocated
+empty set after erasing them. Revoked historical factors are not remaining state.
+Replay, unknown outcomes and `RecoverDisable` return no fresh factor metadata,
+replacement proof, secret or session. Recover using the retained command identity.
+
 ## Safe factor inventory
 
 `ListService.List` authenticates the actual `ListRequest.Credential`, derives

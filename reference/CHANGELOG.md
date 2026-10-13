@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Native and HTTP one-target disable preserve and report untargeted pending
+  factors; all-target disable still erases and retires their custody.
+
+- Compose independent native disable and opt-in HTTPMFADisable with real session,
+  proof, risk and complete email-reset recovery owners. Selected MFA v11 and
+  session-disposition v3 migrations preserve populated prefixes. One/all native
+  and HTTP consumers need no private authority-version queries. This supersedes
+  the selected sole-TOTP/email-recovery disable caveat below, not general MFA.
+
 - Compose sole-TOTP removal with the actual native emailed-reset request and
   completion owner. Explicit email recovery selection requires its HIBP and
   delivery dependencies; the graph supplies the recovery checker and optional

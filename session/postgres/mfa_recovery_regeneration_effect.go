@@ -29,6 +29,7 @@ type MFARecoverySessionEffect struct {
 	profile          IdentifierAdmissionConfig
 	schema           string
 	factorManagement bool
+	disable          bool
 }
 
 // NewMFARecoverySessionEffect freezes native password/password-MFA ownership
@@ -56,9 +57,24 @@ func NewMFAFactorUpdateSessionEffect(c Config, p IdentifierAdmissionConfig) (*MF
 	return e, nil
 }
 
+// NewMFADisableSessionEffect selects exact disable-purpose disposition ownership.
+// It does not accept update, regeneration or administrator-reset scope. Install
+// MFADisableSessionMigrationSource after the existing disposition prefix.
+func NewMFADisableSessionEffect(c Config, p IdentifierAdmissionConfig) (*MFARecoverySessionEffect, error) {
+	e, err := NewMFARecoverySessionEffect(c, p)
+	if err != nil {
+		return nil, err
+	}
+	e.disable = true
+	return e, nil
+}
+
 func (e *MFARecoverySessionEffect) acceptsScope(b identity.CommandBinding, f kernel.FeatureRegistration, l kernel.LifecyclePlan) bool {
 	if e == nil {
 		return false
+	}
+	if e.disable {
+		return b.SchemaVersion == 1 && b.OperationID == "identity.mfa.disable" && b.SchemaID == "mfa-disable" && b.RecordID == string(b.UserID) && f.Operation == (identity.FeatureOperation{Owner: "identity/mfa", OperationID: b.OperationID, SchemaID: b.SchemaID, SchemaVersion: 1, RecordRequirement: identity.FeatureRecordRequired}) && f.Contributor == (kernel.ContributorDescriptor{Owner: "identity/mfa/postgres", ContractID: "identity.mfa", Version: 1}) && l.EventType == "factor.removed.v1" && l.BeforeVersion > 0 && l.BeforeVersion < math.MaxUint64 && l.AfterVersion == l.BeforeVersion+1
 	}
 	if !e.factorManagement {
 		return mfaRecoveryEffectScope(b, f, l)

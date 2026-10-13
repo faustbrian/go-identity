@@ -59,22 +59,28 @@ type FactorUpdateConfig struct {
 type FactorUpdateService struct{ state func() *factorUpdateState }
 
 type factorUpdateState struct {
-	shared    *totpEnrollmentState
-	stepup    *activeStepUpState
-	config    FactorUpdateConfig
-	source    *FactorVerificationSource
-	validator *auth.AuthorityAuthenticator
-	identity  [32]byte
+	shared         *totpEnrollmentState
+	stepup         *activeStepUpState
+	config         FactorUpdateConfig
+	source         *FactorVerificationSource
+	validator      *auth.AuthorityAuthenticator
+	identity       [32]byte
+	operation      identity.FeatureOperation
+	disablePrimary DisablePrimarySource
 }
 
 // NewFactorUpdateService freezes native composition without IO. Enrollment and
 // step-up must share their exact original owner. Install management metadata,
 // proof-use and selected session-effect migrations before calls begin.
 func NewFactorUpdateService(enrollment *TOTPEnrollmentService, stepup *TOTPActiveStepUpService, c FactorUpdateConfig) (*FactorUpdateService, error) {
-	if enrollment == nil || enrollment.state == nil || stepup == nil || stepup.state == nil || nilEnrollmentPrimary(c.Primary) || nilEnrollmentPrimary(c.Sessions) || c.MaximumAge <= 0 || c.MaximumAge > 5*time.Minute || c.PrimaryMaximumAge <= 0 || c.PrimaryMaximumAge > 5*time.Minute {
+	return newFactorMutationService(enrollment, stepup, c, factorUpdateOperation(), nil)
+}
+
+func newFactorMutationService(enrollment *TOTPEnrollmentService, stepup *TOTPActiveStepUpService, c FactorUpdateConfig, operation identity.FeatureOperation, disablePrimary DisablePrimarySource) (*FactorUpdateService, error) {
+	if enrollment == nil || enrollment.state == nil || stepup == nil || stepup.state == nil || (nilEnrollmentPrimary(c.Primary) && nilEnrollmentPrimary(disablePrimary)) || nilEnrollmentPrimary(c.Sessions) || c.MaximumAge <= 0 || c.MaximumAge > 5*time.Minute || c.PrimaryMaximumAge <= 0 || c.PrimaryMaximumAge > 5*time.Minute {
 		return nil, invalidAuthority()
 	}
-	s := &factorUpdateState{shared: enrollment.state(), stepup: stepup.state(), config: c}
+	s := &factorUpdateState{shared: enrollment.state(), stepup: stepup.state(), config: c, operation: operation, disablePrimary: disablePrimary}
 	if c.RemovalRecoveryPath != auth.RecoveryPathUnspecified && c.RemovalRecoveryPath != auth.RecoveryPathEmail || c.RemovalRecoveryPath == auth.RecoveryPathUnspecified && !nilEnrollmentPrimary(c.RemovalRecovery) || c.RemovalRecoveryPath == auth.RecoveryPathEmail && (nilEnrollmentPrimary(c.RemovalRecovery) || c.RemovalRecovery.FactorRemovalRecoveryIdentity() == ([32]byte{})) {
 		return nil, invalidAuthority()
 	}
@@ -94,7 +100,7 @@ func NewFactorUpdateService(enrollment *TOTPEnrollmentService, stepup *TOTPActiv
 	if err != nil {
 		return nil, invalidAuthority()
 	}
-	admitted, err := s.shared.config.Counters.CommandCounters.Policy.Admit("identity.mfa.factor-update")
+	admitted, err := s.shared.config.Counters.CommandCounters.Policy.Admit(risk.Action(operation.OperationID))
 	if err != nil || admitted.Profile.Class != risk.CredentialMutation {
 		return nil, invalidAuthority()
 	}
@@ -116,6 +122,17 @@ func NewFactorUpdateService(enrollment *TOTPEnrollmentService, stepup *TOTPActiv
 	}
 	s.identity = sha256.Sum256(frame)
 	clear(frame)
+	if operation != factorUpdateOperation() {
+		frame, err = json.Marshal(struct {
+			Base      [32]byte
+			Operation identity.FeatureOperation
+		}{s.identity, operation})
+		if err != nil {
+			return nil, invalidAuthority()
+		}
+		s.identity = sha256.Sum256(frame)
+		clear(frame)
+	}
 	return &FactorUpdateService{state: func() *factorUpdateState { return s }}, nil
 }
 
@@ -166,12 +183,19 @@ func (s *FactorUpdateService) FactorUpdate(ctx context.Context, r mfa.FactorUpda
 		return out, invalidAuthority()
 	}
 	state := s.state()
+	if state == nil || state.operation != factorUpdateOperation() {
+		return out, invalidAuthority()
+	}
+	return s.executeFactorMutation(ctx, &factorUpdatePhase{state: state, request: r})
+}
+
+func (s *FactorUpdateService) executeFactorMutation(ctx context.Context, p *factorUpdatePhase) (out mfa.FactorUpdateResult, err error) {
+	state, r := p.state, p.request
 	if state == nil || r.Action != mfa.Rename && (r.Action != mfa.Remove || state.config.RemovalRecoveryPath != auth.RecoveryPathEmail || nilEnrollmentPrimary(state.config.RemovalRecovery)) || r.FactorProof.Method != "totp" || !slices.Contains(state.stepup.config.AllowedOrigins, r.Origin) {
 		return out, identity.ForbiddenError{}
 	}
 	ctx, stop := context.WithTimeout(ctx, state.shared.config.MaximumDuration)
 	defer stop()
-	p := &factorUpdatePhase{state: state, request: r}
 	defer p.destroy()
 	defer func() {
 		if recover() != nil {
@@ -188,18 +212,18 @@ func (s *FactorUpdateService) FactorUpdate(ctx context.Context, r mfa.FactorUpda
 	if err != nil {
 		return out, err
 	}
-	if err = authorizeNativeMFAAction(ctx, state.shared, r.Caller, "identity.mfa.factor-update"); err != nil {
+	if err = authorizeNativeMFAAction(ctx, state.shared, r.Caller, authorization.Action(state.operation.OperationID)); err != nil {
 		return out, err
 	}
-	intent, err := state.requestIntent(r)
+	intent, err := p.requestIntent()
 	if err != nil {
 		return out, err
 	}
-	scope := kernel.RequestKeyScope{TenantID: r.TenantID, ActorID: identity.ActorID(r.Caller.Request.Subject.ID), ActorKind: authorization.SubjectUser, Method: "POST", RouteID: factorUpdateOperation().OperationID}
+	scope := kernel.RequestKeyScope{TenantID: r.TenantID, ActorID: identity.ActorID(r.Caller.Request.Subject.ID), ActorKind: authorization.SubjectUser, Method: "POST", RouteID: p.operation().OperationID}
 	caller := r.Caller.Clone()
 	caller.Request.Resource = authorization.Resource{Type: "identity.request-admission", ID: authorization.ResourceID(scope.RouteID)}
 	caller.PolicyRevision = authorization.Revision(state.shared.config.RequestKeys.Policy.PolicyVersion)
-	k, wire, err := p.coordinator.ResolvePreparedRequestKey(ctx, scope, r.IdempotencyKey, intent, caller, kernel.FeatureRegistration{Contributor: p.Descriptor(), Operation: factorUpdateOperation()}, p)
+	k, wire, err := p.coordinator.ResolvePreparedRequestKey(ctx, scope, r.IdempotencyKey, intent, caller, kernel.FeatureRegistration{Contributor: p.Descriptor(), Operation: p.operation()}, p)
 	defer clear(wire)
 	if err != nil {
 		return out, err
@@ -230,10 +254,13 @@ func (s *FactorUpdateService) FactorUpdate(ctx context.Context, r mfa.FactorUpda
 // RecoverFactorUpdate resolves historical outcome under current access policy
 // without credentials, proof reuse, fresh metadata or new session issuance.
 func (s *FactorUpdateService) RecoverFactorUpdate(ctx context.Context, q identity.RecoveryQuery, caller authorization.DecisionContext) (out mfa.FactorUpdateResult, err error) {
-	if ctx == nil || s == nil || s.state == nil || q.OperationID != factorUpdateOperation().OperationID {
+	if ctx == nil || s == nil || s.state == nil {
 		return out, invalidAuthority()
 	}
 	state := s.state()
+	if state == nil || q.OperationID != state.operation.OperationID {
+		return out, invalidAuthority()
+	}
 	ctx, stop := context.WithTimeout(ctx, state.shared.config.MaximumDuration)
 	defer stop()
 	if q.RecordID == "" {

@@ -1,5 +1,26 @@
 # PostgreSQL MFA authority (in development)
 
+## Native disable
+
+`NewDisableService(enrollment, stepup, DisableConfig)` selects a distinct native
+disable operation, not a factor-update alias. Provide real `DisablePrimarySource`,
+session effects and the actual selected email-reset request/completion recovery
+owner; both maximum ages are positive and at most five minutes. Missing, changed
+or unavailable authority denies without fallback. Native calls own no private
+transactions or new proof journal; the existing coordinator owns atomicity.
+
+Install `DisableMigrationSource` at permanently allocated MFA version11 after
+proof8/management9/removal10. Older histories and retained update receipts are
+unchanged. Select the corresponding session-disposition v3 extension. One/all
+are retained as distinct immutable request/effect scopes. All-target bounds older
+pending enrollments before erasure, supporting at most63 pending siblings beside
+the sole active TOTP, not arbitrary additional active factor methods. One-target
+leaves untargeted pending factors and their recovery sets unchanged. Its fresh
+result includes up to100 unexpired pending projections captured inside the same
+protected transaction, excluding revoked history. Unknown/replayed outcomes
+never return this snapshot. Safe metadata failure rolls back the mutation.
+Any overflow or unsupported authority rolls back all effects.
+
 ## Safe selected-profile inventory
 
 `NewTOTPListReader(enrollment)` borrows the existing real TOTP enrollment owner

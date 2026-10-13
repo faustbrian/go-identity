@@ -32,6 +32,11 @@ import (
 )
 
 type liveStores struct {
+	disable                 bool
+	disableAll              bool
+	disablePending          bool
+	pendingDisableFactor    string
+	disableHTTP             bool
 	factorManagementHTTP    bool
 	factorManagementRace    bool
 	factorManagementDenials bool

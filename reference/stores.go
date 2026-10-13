@@ -76,6 +76,8 @@ type StoreConfiguration struct {
 	HTTPMFARecoveryRegeneration *HTTPMFARecoveryRegenerationConfiguration
 	// HTTPMFAFactorUpdate independently selects native TOTP rename HTTP.
 	HTTPMFAFactorUpdate *HTTPMFAFactorUpdateConfiguration
+	// HTTPMFADisable independently selects native disable HTTP, never implicitly.
+	HTTPMFADisable *HTTPMFADisableConfiguration
 	// HTTPMFAList independently selects cookie-only safe factor metadata.
 	HTTPMFAList *HTTPMFAListConfiguration
 	// PasswordChange selects native keyed replacement over selected verification.
@@ -440,6 +442,9 @@ func (s StoreSet) Close(ctx context.Context) error {
 	}
 	if state.features != nil && state.features.httpMFAFactorUpdate != nil {
 		state.features.httpMFAFactorUpdate.rate.Close()
+	}
+	if state.features != nil && state.features.httpMFADisable != nil {
+		state.features.httpMFADisable.rate.Close()
 	}
 	if state.features != nil && state.features.httpMFAEnrollment != nil {
 		state.features.httpMFAEnrollment.rate.Close()

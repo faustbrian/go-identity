@@ -16,7 +16,7 @@ func TestMFAVerifyConditionalStoredSessionPolicyIsNarrow(t *testing.T) {
 		}
 		for _, change := range []func(*identityhttp.CanonicalOperationConfig){func(c *identityhttp.CanonicalOperationConfig) { c.CSRF.TokenMaximumAge = time.Minute }, func(c *identityhttp.CanonicalOperationConfig) { c.CSRF.TokenHeader = "Other-Token" }, func(c *identityhttp.CanonicalOperationConfig) {
 			c.CSRF.RefererFallback = identityhttp.RefererFallbackSameOriginHTTPS
-		}, func(c *identityhttp.CanonicalOperationConfig) { c.OperationID = "identity.mfa.disable" }} {
+		}, func(c *identityhttp.CanonicalOperationConfig) { c.OperationID = "identity.admin.mfa-reset" }} {
 			bad := c
 			change(&bad)
 			if _, err := identityhttp.NewCanonicalOperation(bad); err == nil {
@@ -57,7 +57,12 @@ func TestMFAEnrollmentStoredCSRFProfileIsNarrow(t *testing.T) {
 	if _, err := identityhttp.NewCanonicalOperation(regeneration); err != nil {
 		t.Fatal("owned stored-session replacement profile denied", err)
 	}
-	for _, id := range []string{"identity.mfa.disable"} {
+	disable := c
+	disable.OperationID = "identity.mfa.disable"
+	if _, err := identityhttp.NewCanonicalOperation(disable); err != nil {
+		t.Fatal("explicit disable stored-session CSRF denied", err)
+	}
+	for _, id := range []string{"identity.admin.mfa-reset"} {
 		bad := c
 		bad.OperationID = id
 		if _, err := identityhttp.NewCanonicalOperation(bad); err == nil {

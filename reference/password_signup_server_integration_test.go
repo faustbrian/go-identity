@@ -65,11 +65,11 @@ func (referenceRegistrationPolicy) Decide(ctx context.Context, c authorization.D
 	}
 	if string(c.Request.Tenant) == otpTenant && c.PolicyRevision == 9 && c.Request.Subject.Kind == authorization.SubjectUser && c.Request.Resource.Type == "identity.user" && string(c.Request.Resource.ID) == string(c.Request.Subject.ID) {
 		switch c.Request.Action {
-		case "identity.mfa.enable", "identity.mfa.totp-uri", "identity.mfa.totp-verify", "identity.mfa.recovery-regenerate", "identity.mfa.list", "identity.mfa.factor-update":
+		case "identity.mfa.enable", "identity.mfa.totp-uri", "identity.mfa.totp-verify", "identity.mfa.recovery-regenerate", "identity.mfa.list", "identity.mfa.factor-update", "identity.mfa.disable":
 			return authorization.Decision{Outcome: authorization.Allow, Revision: 9}, nil
 		}
 	}
-	if string(c.Request.Tenant) == otpTenant && c.PolicyRevision == 9 && c.Request.Subject.Kind == authorization.SubjectUser && (c.Request.Action == "identity.mfa.enable" || c.Request.Action == "identity.mfa.factor-update") && c.Request.Resource.Type == "identity.request-admission" && string(c.Request.Resource.ID) == string(c.Request.Action) {
+	if string(c.Request.Tenant) == otpTenant && c.PolicyRevision == 9 && c.Request.Subject.Kind == authorization.SubjectUser && (c.Request.Action == "identity.mfa.enable" || c.Request.Action == "identity.mfa.factor-update" || c.Request.Action == "identity.mfa.disable") && c.Request.Resource.Type == "identity.request-admission" && string(c.Request.Resource.ID) == string(c.Request.Action) {
 		return authorization.Decision{Outcome: authorization.Allow, Revision: 9}, nil
 	}
 	return (referenceResetPolicy{}).Decide(ctx, c)
@@ -232,13 +232,16 @@ func proveReferenceSignupGraph(t *testing.T, competing bool, protected ...bool) 
 	proveReferenceSignupGraphExtensions(t, competing, signupGraphExtensions{}, protected...)
 }
 
-type signupGraphExtensions struct{ mfaEnrollment, mfaListing, mfaListHTTP, mfaListStandalone, mfaListDenials, mfaListRecheck, activeStepUp, activeStepUpHTTP, factorManagement, factorManagementHTTP, factorManagementRace, factorManagementDenials, factorManagementClear, factorRemoval, factorRemovalReset, factorRemovalLocks, regeneration, regenerationHTTP, regenerationRace, regenerationDenials, passwordMFA, passwordRecovery, recoveryRace, completionCommitFault bool }
+type signupGraphExtensions struct{ disable, disableAll, disablePending, disableHTTP, mfaEnrollment, mfaListing, mfaListHTTP, mfaListStandalone, mfaListDenials, mfaListRecheck, activeStepUp, activeStepUpHTTP, factorManagement, factorManagementHTTP, factorManagementRace, factorManagementDenials, factorManagementClear, factorRemoval, factorRemovalReset, factorRemovalLocks, regeneration, regenerationHTTP, regenerationRace, regenerationDenials, passwordMFA, passwordRecovery, recoveryRace, completionCommitFault bool }
 
 func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extensions signupGraphExtensions, protected ...bool) {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(t.Context(), 60*time.Second)
 	defer cancel()
 	f := newLiveStoresProfile(t, ctx, false)
+	f.disable, f.disableAll = extensions.disable, extensions.disableAll
+	f.disablePending = extensions.disablePending
+	f.disableHTTP = extensions.disableHTTP
 	f.recoveryRace = extensions.recoveryRace
 	f.regenerationRace = extensions.regenerationRace
 	f.factorManagementRace = extensions.factorManagementRace
@@ -254,7 +257,7 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 	c, deps, worker := otpGraphConfiguration(t, f.config)
 	deps.PostgreSQL = f.pool
 	if extensions.completionCommitFault {
-		f.completionFault = &completionCommitFault{factorProof: extensions.activeStepUp, regeneration: extensions.regeneration, factorManagement: extensions.factorManagement}
+		f.completionFault = &completionCommitFault{factorProof: extensions.activeStepUp, regeneration: extensions.regeneration, factorManagement: extensions.factorManagement || extensions.disable}
 		faultPool, err := database.Connect(ctx, database.Config{DSN: f.pool.Raw().Config().ConnConfig.ConnString(), MaxConns: 4, Configure: func(pc *database.PoolConfig) error { pc.ConnConfig.DialFunc = f.completionFault.dial; return nil }})
 		if err != nil {
 			t.Fatal("completion fault pool unavailable")
@@ -344,6 +347,15 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 			c.MFAEnrollment.FactorManagement.RemovalRecoveryPath = auth.RecoveryPathEmail
 		}
 		f.factorManagement = true
+	}
+	if extensions.disable {
+		c.MFAEnrollment.Disable = &mfapg.DisableConfig{RecoveryPath: auth.RecoveryPathEmail, MaximumAge: time.Minute, PrimaryMaximumAge: 2 * time.Minute}
+	}
+	if extensions.disableHTTP {
+		c.HTTPMFADisable = &reference.HTTPMFADisableConfiguration{TrustedOrigins: []identityhttp.Origin{identityhttp.Origin(origin)}, RateNamespace: c.HTTPMFAEnrollment.RateNamespace, RateKey: c.HTTPMFAEnrollment.RateKey}
+		if extensions.activeStepUpHTTP {
+			c.HTTPMFAActiveStepUp.Purposes = []auth.Purpose{"identity.mfa.disable"}
+		}
 	}
 	if extensions.factorManagementHTTP {
 		c.HTTPMFAFactorUpdate = &reference.HTTPMFAFactorUpdateConfiguration{TrustedOrigins: []identityhttp.Origin{identityhttp.Origin(origin)}, RateNamespace: c.HTTPMFAEnrollment.RateNamespace, RateKey: c.HTTPMFAEnrollment.RateKey}
@@ -557,6 +569,14 @@ END $$`); err != nil {
 		if !seen["identity.password.verify"] || !seen["identity.password.change"] {
 			t.Fatal("selected protected password routes missing")
 		}
+	}
+	if extensions.disableHTTP {
+		wantOperations++
+		if !seen["identity.mfa.disable"] {
+			t.Fatal("selected disable HTTP route missing")
+		}
+	} else if seen["identity.mfa.disable"] {
+		t.Fatal("native disable implicitly exposed HTTP")
 	}
 	if !seen["identity.password.signup"] || !seen["identity.email.verification-confirm"] || !seen["identity.password.signin"] || (c.HTTPSession != nil && (!seen["identity.session.get"] || !seen["identity.session.signout"])) || len(seen) != wantOperations {
 		t.Fatal("selected public registration routes missing")

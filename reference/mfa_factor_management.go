@@ -9,8 +9,9 @@ import (
 )
 
 // MFAFactorManagement returns separately selected native self-management.
-// The current TOTP profile supports rename; removal/replacement owners remain
-// unselected and fail closed. It selects no HTTP routes, login or regeneration.
+// The current TOTP profile supports rename and explicitly configured sole-factor
+// email-recovery removal; replacement remains unavailable. It selects no disable,
+// HTTP routes, login or regeneration.
 // Retained handles obey exact tenant and graph startup/drain/shutdown ownership.
 func (f FeatureSet) MFAFactorManagement() (mfa.FactorManagementService, error) {
 	if err := f.mfaEnrollmentSelected(); err != nil {

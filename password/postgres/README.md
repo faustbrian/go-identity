@@ -1,5 +1,11 @@
 # Password PostgreSQL adapter
 
+The selected recovery source below also admits exact native `identity.mfa.disable`
+with a closed one/all target. It borrows the same complete request/completion,
+HIBP and delivery composition; it does not translate disable to factor-update
+authority, open another transaction or issue a reset. Recovery after a committed
+disable reads its original retained disposition, not today's email eligibility.
+
 ## Selected recovery for TOTP removal
 
 `NewFactorRemovalRecoverySource` borrows a fully configured native `ResetService`

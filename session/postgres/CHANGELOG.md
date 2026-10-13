@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add exact native disable session custody and all-subject disposition ownership,
+  retaining original cookie/CSRF/deadlines and primary authority. Append optional
+  disposition v3 after v2; older regeneration/update purposes and receipts remain
+  unchanged. Deliberate source revocation never renews or replaces a session.
+
 - Admit native factor removal in the existing protected whole-subject session
   disposition. Revocation and retained outcome evidence commit with MFA's
   proof/factor/recovery effects; no source session is refreshed or revived.

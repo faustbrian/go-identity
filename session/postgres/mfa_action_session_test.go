@@ -140,3 +140,21 @@ func TestMFAActionSessionGuardRequiresExplicitPasswordProfile(t *testing.T) {
 		t.Fatal("unselected password owner admitted")
 	}
 }
+
+func TestDisableSessionCustodyRequiresItsExactNativeSchema(t *testing.T) {
+	g, input := mfaActionSessionFixture(t)
+	p, _ := input.Command.Feature()
+	bearer, _ := input.Command.SessionToken()
+	p.Binding.OperationID, p.Binding.SchemaID = "identity.mfa.disable", "mfa-disable"
+	p.Binding.RecordID = string(p.Binding.UserID)
+	p.Operation.OperationID, p.Operation.SchemaID = p.Binding.OperationID, p.Binding.SchemaID
+	input.Command, _ = identity.NewFeatureSessionCommand(p, bearer)
+	if err := g.originalInput(input); err != nil {
+		t.Fatal("exact disable custody rejected", err)
+	}
+	p.Binding.SchemaID, p.Operation.SchemaID = "mfa-factor-update", "mfa-factor-update"
+	input.Command, _ = identity.NewFeatureSessionCommand(p, bearer)
+	if g.originalInput(input) == nil {
+		t.Fatal("disable borrowed factor-update schema authority")
+	}
+}

@@ -43,6 +43,11 @@ type MFAEnrollmentConfiguration struct {
 	// Email removal requires actual PasswordReset request/completion composition;
 	// RemovalRecovery must be absent because this graph supplies that owner.
 	FactorManagement *mfapg.FactorUpdateConfig
+	// Disable independently selects native disable-purpose mutation. Primary,
+	// Sessions and Recovery must be absent: the graph supplies actual owners.
+	// Requires ActiveStepUp and complete selected emailed-password-reset recovery;
+	// it selects no HTTP route or factor-update operation.
+	Disable *mfapg.DisableConfig
 	// Listing explicitly selects safe TOTP/recovery metadata through the graph's
 	// existing real session owner. It selects no HTTP route or trusted devices.
 	Listing bool
@@ -56,6 +61,7 @@ type mfaEnrollmentState struct {
 	regenerate *mfapg.RecoveryRegenerationService
 	listing    *mfa.ListService
 	manage     *mfapg.FactorUpdateService
+	disable    *mfapg.DisableService
 }
 
 func composeMFAEnrollment(c StoreConfiguration, d ReferenceDependencies, verification *passwordVerificationState, evaluation risk.Evaluator, reset *passwordpg.ResetService) (*mfaEnrollmentState, error) {
@@ -100,7 +106,7 @@ func composeMFAEnrollment(c StoreConfiguration, d ReferenceDependencies, verific
 		return nil, invalid
 	}
 	state := &mfaEnrollmentState{enable: enable, uri: uri, confirm: confirm}
-	if (p.Regeneration != nil || p.FactorManagement != nil) && p.ActiveStepUp == nil {
+	if (p.Regeneration != nil || p.FactorManagement != nil || p.Disable != nil) && p.ActiveStepUp == nil {
 		return nil, invalid
 	}
 	if p.ActiveStepUp != nil {
@@ -155,6 +161,25 @@ func composeMFAEnrollment(c StoreConfiguration, d ReferenceDependencies, verific
 				}
 			}
 			state.manage, err = mfapg.NewFactorUpdateService(enable, state.stepup, native)
+			if err != nil {
+				return nil, invalid
+			}
+		}
+		if p.Disable != nil {
+			if p.Disable.Primary != nil || p.Disable.Sessions != nil || p.Disable.Recovery != nil || p.Disable.RecoveryPath != auth.RecoveryPathEmail {
+				return nil, invalid
+			}
+			effects, err := sessionpg.NewMFADisableSessionEffect(c.PasswordVerification.Native.Session, c.PasswordVerification.Native.Profile)
+			if err != nil {
+				return nil, invalid
+			}
+			recovery, err := passwordpg.NewFactorRemovalRecoverySource(reset)
+			if err != nil {
+				return nil, invalid
+			}
+			native := *p.Disable
+			native.Primary, native.Sessions, native.Recovery = primary, effects, recovery
+			state.disable, err = mfapg.NewDisableService(enable, state.stepup, native)
 			if err != nil {
 				return nil, invalid
 			}

@@ -177,6 +177,33 @@ func proveReferenceMFAEnrollment(t *testing.T, ctx context.Context, f liveStores
 	if err := f.pool.Raw().QueryRow(ctx, `SELECT count(*) FROM identity_password.reauthentication_records WHERE proof_id=$1 AND consumed_command_id IS NOT NULL`, string(proof.Proof.Proof.ID)).Scan(&proofUses); err != nil || proofUses != 0 {
 		t.Fatal("wrong synchronizer consumed reauthentication")
 	}
+	if f.disableAll || f.disablePending {
+		// Both records must come from actual public enrollment, not injected
+		// factor material. All-target disable must retire an unconfirmed sibling
+		// as well as the subsequently activated original factor.
+		verifyCaller := caller.Clone()
+		verifyCaller.Request.Action = "identity.password.verify"
+		extraProof, err := verifier.Verify(ctx, password.CookieVerificationRequest{Request: password.VerificationRequest{TenantID: otpTenant, Session: auth.NewBearerCredential(cookies[0].Value), Password: candidate, Target: password.VerificationTarget{Purpose: "identity.password.verify", Action: "identity.mfa.enable", Audience: "reference-mfa-enable"}, Caller: verifyCaller, Network: "127.0.0.1", Device: "reference-enrollment-device"}, CSRFToken: csrf})
+		if err != nil {
+			t.Fatal("extra public pending enrollment proof unavailable", err)
+		}
+		enrollment, err := features.MFAEnrollment()
+		if err != nil {
+			t.Fatal(err)
+		}
+		extra := enable
+		extra.Reauthentication = extraProof.Proof
+		extra.IdempotencyKey, _ = identity.NewIdempotencyKey([]byte("disable-all-extra-pending"))
+		pendingOther, err := enrollment.Enable(ctx, extra)
+		for _, code := range pendingOther.RecoveryMaterial.Codes {
+			code.Destroy()
+		}
+		clear(pendingOther.RecoveryMaterial.Codes)
+		if err != nil || pendingOther.Outcome != identity.CommitOutcomeCommitted || pendingOther.Enrollment.ID == "" {
+			t.Fatal("second genuine pending enrollment unavailable", err)
+		}
+		f.pendingDisableFactor = string(pendingOther.Enrollment.ID)
+	}
 	status, out := requestEnable(csrfWire)
 	defer clear(out.RecoveryCodes)
 	if status != http.StatusOK || !out.Enabled || out.Active || out.CommitOutcome != "committed" || len(out.RecoveryCodes) != 10 {
@@ -394,6 +421,10 @@ func proveReferenceMFAEnrollment(t *testing.T, ctx context.Context, f liveStores
 	}
 	if f.activeStepUp {
 		proof := proveReferenceActiveStepUp(t, ctx, f, features, cookies[0].Value, csrfWire, origin, mfa.FactorID(pending.Enrollment.ID), secret, client, base, cookies[0].Name)
+		if f.disable {
+			proveReferenceDisable(t, ctx, f, features, cookies[0].Value, csrfWire, origin, mfa.FactorID(pending.Enrollment.ID), proof, client, base, cookies[0].Name)
+			return
+		}
 		if f.factorManagement {
 			proveReferenceFactorRename(t, ctx, f, features, cookies[0].Value, csrfWire, origin, mfa.FactorID(pending.Enrollment.ID), proof, client, base, cookies[0].Name)
 			return

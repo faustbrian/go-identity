@@ -1,5 +1,19 @@
 # PostgreSQL session storage
 
+## Disable custody and disposition
+
+`PasswordActiveTOTPPrimarySource` separately implements `PrepareDisable` and
+`RestoreDisable` for exact original cookie/CSRF/session possession. Original
+snapshot restore cannot renew freshness or authenticate arbitrary bytes. The
+MFA owner authenticates its original signed proof and current factor generation.
+
+`NewMFADisableSessionEffect` admits only `identity.mfa.disable` / `mfa-disable`
+and the canonical `factor.removed.v1` transition. It uses the existing bounded
+1024-session all-subject disposition, primary/current-authority fences and
+historical result evidence. Install `MFADisableSessionMigrationSource` at v3
+after v1/v2; no historical SQL or receipt is rewritten. No revoked source or
+replacement session is made usable by successful mutation or recovery.
+
 ## Native TOTP completion composition
 
 `MFATOTPCompletionEffect` composes the real MFA store's recorded completion

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Admit explicitly selected disable only with exact original stored-session CSRF
+  policy. Variant/login CSRF, renewable token age and administrator-reset scope
+  remain distinct; selection alone supplies no mutation authority.
+
 - Admit independently selected factor-update only under its exact original
   stored-session CSRF profile. This adds no bearer fallback, renewable token
   age or general exemption for other mutation routes.

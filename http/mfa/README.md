@@ -1,5 +1,25 @@
 # MFA HTTP transport
 
+## Opt-in disable
+
+`FeatureConfig.Disable` / `NewDisableHandler(DisableConfig)` independently selects
+`POST /v1/mfa/disable`. One target uses `{"target":"one","factorID":"…","proofID":"…"}`;
+all uses `{"target":"all","proofID":"…"}` and forbids factorID even empty/null.
+No body command, expected authority generation, action, label or subject override
+is accepted. The native owner derives optimistic generation from actual original
+disable-purpose proof custody. Supply real session/proof/service/shared-rate
+owners plus exact cookie/Origin/CSRF and one `Idempotency-Key`.
+
+The selected native sole-TOTP profile returns safe `factors` only from a fresh
+known commit. One-target preserves and reports unexpired pending siblings with
+closed display fields (`id`, `method`, optional `label`, `state`, `createdAt`,
+`version`), bounded to100. All-target erases pending siblings and returns an empty
+set. Failure/uncertainty retains safe outcome metadata without factors;
+responses are no-store and issue no session cookie or replacement proof. Native
+historical recovery remains the outcome path after deliberate session revocation.
+Additional unsupported active factors fail closed. Unselected disable contributes
+no route or OpenAPI capability; existing rename/removal defaults are unchanged.
+
 ## Safe listing
 
 `NewListHandler(ListConfig)` owns cookie-only `GET /v1/mfa/list`;

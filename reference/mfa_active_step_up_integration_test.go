@@ -78,6 +78,9 @@ func proveReferenceActiveStepUp(t *testing.T, ctx context.Context, f liveStores,
 	if f.factorManagement {
 		r.StepUp.Purpose = "identity.mfa.factor-update"
 	}
+	if f.disable {
+		r.StepUp.Purpose = "identity.mfa.disable"
+	}
 	rateSource, ok := service.(mfahttp.ActiveStepUpService)
 	if !ok {
 		t.Fatal("selected step-up has no native original quota source")
@@ -109,7 +112,7 @@ func proveReferenceActiveStepUp(t *testing.T, ctx context.Context, f liveStores,
 		t.Fatal("failed step-up leaked replay or signed evidence")
 	}
 	r.CommandID, _ = identity.NewCommandID()
-	if f.completionFault != nil && !f.regeneration && !f.factorManagement {
+	if f.completionFault != nil && !f.regeneration && !f.factorManagement && !f.disable {
 		f.completionFault.armed.Store(true)
 	}
 	if f.activeStepUpHTTP {
@@ -118,7 +121,7 @@ func proveReferenceActiveStepUp(t *testing.T, ctx context.Context, f liveStores,
 		out, err = service.TotpVerify(ctx, r)
 	}
 	proof := out.StepUpProof.Bindings()
-	if f.completionFault != nil && !f.regeneration && !f.factorManagement {
+	if f.completionFault != nil && !f.regeneration && !f.factorManagement && !f.disable {
 		if err == nil || out.Outcome != identity.CommitOutcomeUnknown || proof.Proof.ID != "" || !f.completionFault.hit.Load() {
 			t.Fatal("lost factor-proof commit acknowledgement disclosed proof", out.Outcome, err)
 		}
@@ -130,7 +133,7 @@ func proveReferenceActiveStepUp(t *testing.T, ctx context.Context, f liveStores,
 		t.Fatal(err)
 	}
 	signed, err := source.Reauthentication(ctx, auth.ProofID(r.CommandID))
-	if f.activeStepUpHTTP || f.completionFault != nil && !f.regeneration && !f.factorManagement {
+	if f.activeStepUpHTTP || f.completionFault != nil && !f.regeneration && !f.factorManagement && !f.disable {
 		proof = signed.Proof
 	}
 	if err != nil || signed.Proof != proof {

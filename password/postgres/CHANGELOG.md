@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Admit exact one/all-factor disable in the selected native email-reset recovery
+  fence. It checks current viable recovery in the MFA owner's protected Work,
+  never translates disable to update authority or issues a reset itself.
+
 - Provide a narrow native email-reset recovery source for protected TOTP
   removal. Require actual configured request/completion dependencies, current
   verified email and unambiguous usable password authority in existing Work;

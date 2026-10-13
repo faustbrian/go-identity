@@ -49,7 +49,9 @@ func (s *FactorRemovalRecoverySource) CheckFactorRemovalRecovery(ctx context.Con
 	}
 	b, f, _, err := w.FeatureScope(owner)
 	spec, ok := c.Feature()
-	if err != nil || !ok || spec.Binding != b || spec.Operation != f.Operation || b.OperationID != "identity.mfa.factor-update" || b.SchemaID != "mfa-factor-update" || b.SchemaVersion != 1 || b.ActorKind != authorization.SubjectUser || string(b.ActorID) != string(b.UserID) || f.Contributor != (kernel.ContributorDescriptor{Owner: "identity/mfa/postgres", ContractID: "identity.mfa", Version: 1}) {
+	disable := b.OperationID == "identity.mfa.disable" && b.SchemaID == "mfa-disable"
+	update := b.OperationID == "identity.mfa.factor-update" && b.SchemaID == "mfa-factor-update"
+	if err != nil || !ok || spec.Binding != b || spec.Operation != f.Operation || !update && !disable || b.SchemaVersion != 1 || b.ActorKind != authorization.SubjectUser || string(b.ActorID) != string(b.UserID) || f.Contributor != (kernel.ContributorDescriptor{Owner: "identity/mfa/postgres", ContractID: "identity.mfa", Version: 1}) {
 		return identity.ForbiddenError{}
 	}
 	selected := false
@@ -63,6 +65,20 @@ func (s *FactorRemovalRecoverySource) CheckFactorRemovalRecovery(ctx context.Con
 	}
 	if !selected {
 		return identity.ForbiddenError{}
+	}
+	if disable {
+		target := false
+		for _, field := range spec.Fields {
+			if field.Name == "disable.target" {
+				if target || field.Value.Kind != identity.FeatureUint64 || field.Value.Uint64 != uint64(mfa.OneFactor) && field.Value.Uint64 != uint64(mfa.AllFactors) {
+					return identity.ForbiddenError{}
+				}
+				target = true
+			}
+		}
+		if !target {
+			return identity.ForbiddenError{}
+		}
 	}
 	bounded, stop := context.WithTimeout(ctx, s.reset.config().Repository.MaximumDuration)
 	defer stop()

@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- Fresh one-target disable reports safe remaining pending factors from its
+  protected transaction without erasing untargeted enrollment or recovery
+  custody; failed projection validation rolls back all effects.
+
+- Add separately selected native disable with exact one/all target intent,
+  disable-purpose proof consumption and viable email-recovery fencing. All-target
+  also erases bounded older pending enrollments and retires their recovery sets.
+  Append MFA v11 after removal v10; retained update/removal history stays valid.
+  No new session or factor secret is issued; unknown outcomes retain original
+  command identity. Additional unsupported active factor authority denies.
+
 - Add explicitly selected sole-TOTP removal with an actual native email-reset
   recovery owner. Erase secret/replay material, retire dependent recovery sets,
   consume proof and revoke sessions in one protected transaction; missing or

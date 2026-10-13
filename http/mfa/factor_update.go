@@ -47,6 +47,7 @@ type factorUpdateHTTPState struct {
 	name    string
 	version uint64
 	action  mfa.FactorUpdateAction
+	target  mfa.FactorTarget
 }
 
 func factorUpdateActions(selected []mfa.FactorUpdateAction) ([]mfa.FactorUpdateAction, error) {
@@ -77,11 +78,21 @@ func NewFactorUpdateHandler(c FactorUpdateConfig) (http.Handler, error) {
 // NewFactorUpdateHandlerWithMiddleware preserves owned session/proof deadlines
 // through actual decode, authentication, shared quota and native mutation phases.
 func NewFactorUpdateHandlerWithMiddleware(c FactorUpdateConfig, m []identityhttp.MiddlewareDescriptor) (http.Handler, error) {
+	return newFactorMutationHandler(c, m, nil)
+}
+
+func newFactorMutationHandler(c FactorUpdateConfig, m []identityhttp.MiddlewareDescriptor, disable *DisableConfig) (http.Handler, error) {
+	operation, path := "identity.mfa.factor-update", "/v1/mfa/factor-update"
+	serviceMissing := enableNil(c.Service)
+	if disable != nil {
+		operation, path = "identity.mfa.disable", "/v1/mfa/disable"
+		serviceMissing = enableNil(disable.Service)
+	}
 	actions, err := factorUpdateActions(c.Actions)
 	if err != nil {
 		return nil, err
 	}
-	if !c.Sessions.Configured() || enableNil(c.Proofs) || enableNil(c.Service) || !c.Rate.Configured() || c.Now == nil || c.PolicyRevision == 0 || c.MaximumDuration < time.Millisecond || c.MaximumDuration > 30*time.Second || c.MaximumAge <= 0 || c.MaximumAge > 5*time.Minute {
+	if !c.Sessions.Configured() || enableNil(c.Proofs) || serviceMissing || !c.Rate.Configured() || c.Now == nil || c.PolicyRevision == 0 || c.MaximumDuration < time.Millisecond || c.MaximumDuration > 30*time.Second || c.MaximumAge <= 0 || c.MaximumAge > 5*time.Minute {
 		return nil, identityhttp.ErrInvalidInput
 	}
 	network, err := identityhttp.NewNetworkResolver(c.Network)
@@ -142,7 +153,7 @@ func NewFactorUpdateHandlerWithMiddleware(c FactorUpdateConfig, m []identityhttp
 	h, err := identityhttp.NewOperationPipeline(identityhttp.OperationPipelineConfig[factorUpdateHTTPState]{MaximumDuration: c.MaximumDuration, Middleware: m, Reject: reject,
 		Decode: func(r *http.Request) (factorUpdateHTTPState, error) {
 			s := factorUpdateHTTPState{}
-			if r.URL.Path != "/v1/mfa/factor-update" || r.URL.EscapedPath() != r.URL.Path {
+			if r.URL.Path != path || r.URL.EscapedPath() != r.URL.Path {
 				return s, enableFailure{status: 404, code: "not_found"}
 			}
 			if r.Method != http.MethodPost {
@@ -188,6 +199,12 @@ func NewFactorUpdateHandlerWithMiddleware(c FactorUpdateConfig, m []identityhttp
 				return s, identityhttp.ErrInvalidInput
 			}
 			body, err := identityhttp.DecodeJSON[map[string]json.RawMessage](decoder, r)
+			if disable != nil {
+				if err != nil {
+					return s, identityhttp.ErrInvalidInput
+				}
+				return decodeDisableBody(s, body)
+			}
 			if err != nil || len(body) < 4 || len(body) > 5 {
 				return s, identityhttp.ErrInvalidInput
 			}
@@ -253,7 +270,7 @@ func NewFactorUpdateHandlerWithMiddleware(c FactorUpdateConfig, m []identityhttp
 			return s, nil
 		},
 		Admit: func(r *http.Request, s factorUpdateHTTPState) error {
-			out, err := c.Rate.Admit(r.Context(), s.base.facts, identityhttp.KeyedSecretRateRequest{OperationID: "identity.mfa.factor-update", UserID: s.base.user, IdempotencyKey: s.base.key})
+			out, err := c.Rate.Admit(r.Context(), s.base.facts, identityhttp.KeyedSecretRateRequest{OperationID: operation, UserID: s.base.user, IdempotencyKey: s.base.key})
 			if errors.Is(err, identityhttp.ErrRateLimited) {
 				return enableFailure{status: 429, code: "rate_limited", retry: out.RetryAfter}
 			}
@@ -274,7 +291,7 @@ func NewFactorUpdateHandlerWithMiddleware(c FactorUpdateConfig, m []identityhttp
 			}
 			b, bindErr := s.base.read.Session.Bindings()
 			p := record.Proof
-			use := auth.ReauthenticationUse{ProofUse: auth.ProofUse{Tenant: string(s.base.facts.TenantID()), Subject: string(s.base.user), Purpose: "identity.mfa.factor-update", Audience: p.Proof.Audience, Now: c.Now()}, SessionID: b.SessionID, SessionVersion: b.Version, Action: "identity.mfa.factor-update", MaximumAge: c.MaximumAge}
+			use := auth.ReauthenticationUse{ProofUse: auth.ProofUse{Tenant: string(s.base.facts.TenantID()), Subject: string(s.base.user), Purpose: auth.Purpose(operation), Audience: p.Proof.Audience, Now: c.Now()}, SessionID: b.SessionID, SessionVersion: b.Version, Action: operation, MaximumAge: c.MaximumAge}
 			if err != nil || bindErr != nil || p.Proof.ID != s.base.proofID || p.Proof.Method != "totp" || p.Proof.Assurance != auth.AssuranceMultiFactor || p.Validate(use) != nil {
 				reject(w, r, identity.ForbiddenError{})
 				return
@@ -283,7 +300,43 @@ func NewFactorUpdateHandlerWithMiddleware(c FactorUpdateConfig, m []identityhttp
 				reject(w, r, identityhttp.ErrUnavailable)
 				return
 			}
-			caller := authorization.DecisionContext{PolicyRevision: c.PolicyRevision, Request: authorization.Request{Tenant: authorization.TenantID(b.TenantID), Subject: authorization.Subject{Kind: authorization.SubjectUser, ID: authorization.SubjectID(b.UserID)}, Action: "identity.mfa.factor-update", Resource: authorization.Resource{Type: "identity.user", ID: authorization.ResourceID(b.UserID)}}}
+			caller := authorization.DecisionContext{PolicyRevision: c.PolicyRevision, Request: authorization.Request{Tenant: authorization.TenantID(b.TenantID), Subject: authorization.Subject{Kind: authorization.SubjectUser, ID: authorization.SubjectID(b.UserID)}, Action: authorization.Action(operation), Resource: authorization.Resource{Type: "identity.user", ID: authorization.ResourceID(b.UserID)}}}
+			if disable != nil {
+				request := mfa.DisableRequest{TenantID: b.TenantID, Target: s.target, FactorID: s.factor, FactorProof: p.Proof, Session: s.base.bearer, CSRFToken: s.base.csrf, Caller: caller, Origin: string(s.origin), Network: s.base.facts.ClientIP().String(), IdempotencyKey: s.base.key}
+				if request.Validate() != nil {
+					reject(w, r, identityhttp.ErrInvalidInput)
+					return
+				}
+				out, err := disable.Service.Disable(r.Context(), request)
+				observation := enableObservation(mfa.EnableResult{CommandID: out.CommandID, Outcome: out.Outcome})
+				if _, parseErr := identity.ParseCommandID(string(out.CommandID)); parseErr != nil {
+					delete(observation, "commandID")
+				}
+				if err != nil || r.Context().Err() != nil {
+					fail(w, classify(err), observation)
+					return
+				}
+				freshUse := use
+				freshUse.ProofUse.Now = c.Now()
+				if _, parseErr := identity.ParseCommandID(string(out.CommandID)); parseErr != nil || out.Outcome != identity.CommitOutcomeCommitted || !validDisableFactors(out, request, c.Now()) || s.base.read.ValidateAt(c.Now()) != nil || p.Validate(freshUse) != nil {
+					fail(w, enableFailure{status: 503, code: "unavailable"}, observation)
+					return
+				}
+				data, err := disableBody(out)
+				if err != nil {
+					fail(w, classify(err), observation)
+					return
+				}
+				defer clear(data)
+				start := c.Now()
+				writeSecretJSON(w, r, data, observation, func() bool {
+					at := c.Now()
+					latest := use
+					latest.ProofUse.Now = at
+					return !at.Before(start) && s.base.read.ValidateAt(at) == nil && p.Validate(latest) == nil
+				})
+				return
+			}
 			request := mfa.FactorUpdateRequest{TenantID: b.TenantID, FactorID: s.factor, Action: s.action, Name: s.name, ExpectedVersion: s.version, FactorProof: p.Proof, Session: s.base.bearer, CSRFToken: s.base.csrf, Caller: caller, Origin: string(s.origin), Network: s.base.facts.ClientIP().String(), IdempotencyKey: s.base.key}
 			if request.Validate() != nil {
 				reject(w, r, identityhttp.ErrInvalidInput)

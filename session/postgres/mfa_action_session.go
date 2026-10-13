@@ -52,7 +52,7 @@ func NewPasswordMFAActionSessionGuard(c Config, p IdentifierAdmissionConfig) (*P
 }
 
 func nativeMFAActionBinding(b identity.CommandBinding) bool {
-	return b.SchemaVersion == 1 && (b.OperationID == "identity.mfa.totp-verify" && b.SchemaID == "mfa-totp-step-up" || b.OperationID == "identity.mfa.recovery-regenerate" && b.SchemaID == "mfa-recovery-regenerate" || b.OperationID == "identity.mfa.factor-update" && b.SchemaID == "mfa-factor-update")
+	return b.SchemaVersion == 1 && (b.OperationID == "identity.mfa.totp-verify" && b.SchemaID == "mfa-totp-step-up" || b.OperationID == "identity.mfa.recovery-regenerate" && b.SchemaID == "mfa-recovery-regenerate" || b.OperationID == "identity.mfa.factor-update" && b.SchemaID == "mfa-factor-update" || b.OperationID == "identity.mfa.disable" && b.SchemaID == "mfa-disable")
 }
 
 func (g *PasswordMFAActionSessionGuard) admission(original session.Session, b identity.CommandBinding) (revokeRecordAuthority, error) {

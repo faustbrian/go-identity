@@ -1,5 +1,10 @@
 # Identity HTTP transport
 
+Explicit `identity.mfa.disable` selection accepts only original stored-session
+CSRF (`X-CSRF-Token`, exact Origin, no Referer fallback). It grants no general
+mutation exemption, bearer fallback or renewable freshness. The optional
+`http/mfa` module owns the actual disable handler and selected closed wire shape.
+
 **Development checkpoint, not a complete identity HTTP product.** Go 1.27.
 This independently versioned module currently owns server lifecycle, separate
 health/readiness probe handlers, typed opt-in operation selection and bounded

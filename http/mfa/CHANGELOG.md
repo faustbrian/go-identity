@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- One-target disable returns bounded, closed pending-factor display metadata;
+  invalid remaining projections are withheld without hiding a known commit.
+
+- Add independently selected POST /v1/mfa/disable with closed one/all target,
+  original proof-ID lookup, cookie/Origin/CSRF and one keyed quota identity.
+  Optimistic generation comes from native proof custody, not private caller
+  queries. No factor secret, command override or successor session is exposed.
+  Existing factor-update decoding and purpose remain unchanged.
+
 - Allow explicitly selected factor removal alone or alongside rename, with
   copied closed action policy and matching selected OpenAPI. Removal forbids
   labels, preserves original cookie/CSRF/proof custody and returns safe revoked

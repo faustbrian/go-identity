@@ -82,6 +82,12 @@ type FactorUpdateRequest struct {
 // positive non-exhausted expected version is required even for historical
 // requests. Historical recovery never requires reusable credential custody.
 func (r FactorUpdateRequest) Validate() error {
+	return r.validateFor("identity.mfa.factor-update")
+}
+
+// validateFor shares intrinsic custody bounds, never authentication, between
+// the two closed public operations. Actual signed purpose is not rewritten.
+func (r FactorUpdateRequest) validateFor(operation string) error {
 	bad := func() error { return identity.InvalidInputError{Field: "mfa_factor_update"} }
 	if _, err := identity.ParseIdentifierID(string(r.TenantID)); err != nil {
 		return bad()
@@ -107,14 +113,14 @@ func (r FactorUpdateRequest) Validate() error {
 		return bad()
 	}
 	p := r.FactorProof
-	if _, err := auth.NewProof(auth.ProofSpec(p)); err != nil || p.Purpose != "identity.mfa.factor-update" || !eligibleFreshFactorProof(p) {
+	if _, err := auth.NewProof(auth.ProofSpec(p)); err != nil || string(p.Purpose) != operation || !eligibleFreshFactorProof(p) {
 		return bad()
 	}
 	if _, err := identity.ParseCommandID(string(p.ID)); err != nil || string(p.ID) == string(r.CommandID) {
 		return bad()
 	}
 	request := r.Caller.Request
-	if r.Caller.Validate() != nil || r.Caller.PolicyRevision == 0 || request.Tenant != authorization.TenantID(r.TenantID) || request.Subject.Kind != authorization.SubjectUser || request.Action != "identity.mfa.factor-update" || request.Resource.Type != "identity.user" || request.Resource.ID != authorization.ResourceID(request.Subject.ID) || p.Tenant != string(r.TenantID) || p.Subject != string(request.Subject.ID) {
+	if r.Caller.Validate() != nil || r.Caller.PolicyRevision == 0 || request.Tenant != authorization.TenantID(r.TenantID) || request.Subject.Kind != authorization.SubjectUser || string(request.Action) != operation || request.Resource.Type != "identity.user" || request.Resource.ID != authorization.ResourceID(request.Subject.ID) || p.Tenant != string(r.TenantID) || p.Subject != string(request.Subject.ID) {
 		return bad()
 	}
 	if _, err := identity.ParseIdentifierID(string(request.Subject.ID)); err != nil {

@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Add explicit one/all-factor disable with original disable-purpose proof and
+  native optimistic authority derived from authenticated issuance. The selected
+  sole-TOTP/email-recovery profile erases factors/codes and revokes sessions
+  atomically. Historical recovery returns no fresh factor projections; no caller
+  needs private authority-version queries. General multi-factor disable remains
+  unfinished, superseding only the selected-profile disable caveat below.
+
 - Connect explicitly selected sole-TOTP removal to native emailed-reset recovery
   and opt-in HTTP composition. Removal erases factor material, retires its code
   sets and revokes subject sessions atomically; default rename-only behavior
