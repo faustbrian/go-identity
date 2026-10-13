@@ -4,10 +4,12 @@ package reference_test
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -57,6 +59,46 @@ func TestReferenceFactorRenameHTTPClearsExistingLabel(t *testing.T) {
 	proveReferenceSignupGraphExtensions(t, false, signupGraphExtensions{mfaEnrollment: true, mfaListing: true, activeStepUp: true, activeStepUpHTTP: true, factorManagement: true, factorManagementHTTP: true, factorManagementClear: true}, true)
 }
 
+func TestReferenceFactorRemovalWithEmailRecovery(t *testing.T) {
+	proveReferenceSignupGraphExtensions(t, false, signupGraphExtensions{mfaEnrollment: true, mfaListing: true, activeStepUp: true, factorManagement: true, factorRemoval: true}, true)
+}
+
+func TestReferenceFactorRemovalHTTPWithEmailRecovery(t *testing.T) {
+	proveReferenceSignupGraphExtensions(t, false, signupGraphExtensions{mfaEnrollment: true, mfaListing: true, activeStepUp: true, activeStepUpHTTP: true, factorManagement: true, factorManagementHTTP: true, factorRemoval: true}, true)
+}
+
+func TestReferenceFactorRemovalRejectsLostRecovery(t *testing.T) {
+	proveReferenceSignupGraphExtensions(t, false, signupGraphExtensions{mfaEnrollment: true, mfaListing: true, activeStepUp: true, factorManagement: true, factorManagementDenials: true, factorRemoval: true}, true)
+}
+
+func TestReferenceFactorRemovalCompetingCommands(t *testing.T) {
+	proveReferenceSignupGraphExtensions(t, false, signupGraphExtensions{mfaEnrollment: true, mfaListing: true, activeStepUp: true, factorManagement: true, factorManagementRace: true, factorRemoval: true}, true)
+}
+
+func TestReferenceFactorRemovalHTTPCompetingCommands(t *testing.T) {
+	proveReferenceSignupGraphExtensions(t, false, signupGraphExtensions{mfaEnrollment: true, mfaListing: true, activeStepUp: true, activeStepUpHTTP: true, factorManagement: true, factorManagementHTTP: true, factorManagementRace: true, factorRemoval: true}, true)
+}
+
+func TestReferenceFactorRemovalCommitRecovery(t *testing.T) {
+	proveReferenceSignupGraphExtensions(t, false, signupGraphExtensions{mfaEnrollment: true, mfaListing: true, activeStepUp: true, factorManagement: true, completionCommitFault: true, factorRemoval: true}, true)
+}
+
+func TestReferenceFactorRemovalHTTPCommitRecovery(t *testing.T) {
+	proveReferenceSignupGraphExtensions(t, false, signupGraphExtensions{mfaEnrollment: true, mfaListing: true, activeStepUp: true, activeStepUpHTTP: true, factorManagement: true, factorManagementHTTP: true, completionCommitFault: true, factorRemoval: true}, true)
+}
+
+func TestReferenceFactorRemovalThenNativeEmailReset(t *testing.T) {
+	proveReferenceSignupGraphExtensions(t, false, signupGraphExtensions{mfaEnrollment: true, mfaListing: true, activeStepUp: true, factorManagement: true, factorRemoval: true, factorRemovalReset: true}, true)
+}
+
+func TestReferenceFactorRemovalThenHTTPEmailReset(t *testing.T) {
+	proveReferenceSignupGraphExtensions(t, false, signupGraphExtensions{mfaEnrollment: true, mfaListing: true, activeStepUp: true, activeStepUpHTTP: true, factorManagement: true, factorManagementHTTP: true, factorRemoval: true, factorRemovalReset: true}, true)
+}
+
+func TestReferenceFactorRemovalSerializesRecoveryAuthority(t *testing.T) {
+	proveReferenceSignupGraphExtensions(t, false, signupGraphExtensions{mfaEnrollment: true, mfaListing: true, activeStepUp: true, factorManagement: true, factorRemoval: true, factorRemovalLocks: true}, true)
+}
+
 func proveReferenceFactorRename(t *testing.T, ctx context.Context, f liveStores, features reference.FeatureSet, bearer, csrfWire, origin string, factor mfa.FactorID, proof auth.ReauthenticationProof, client *http.Client, base, cookieName string) {
 	t.Helper()
 	management, err := features.MFAFactorManagement()
@@ -104,8 +146,16 @@ func proveReferenceFactorRename(t *testing.T, ctx context.Context, f liveStores,
 	csrf, _ := session.ParseCSRFToken(csrfWire)
 	caller := authorization.DecisionContext{PolicyRevision: 9, Request: authorization.Request{Tenant: otpTenant, Subject: authorization.Subject{Kind: authorization.SubjectUser, ID: authorization.SubjectID(spec.UserID)}, Action: "identity.mfa.factor-update", Resource: authorization.Resource{Type: "identity.user", ID: authorization.ResourceID(spec.UserID)}, Environment: authorization.Environment{Time: time.Now().UTC()}}}
 	r := mfa.FactorUpdateRequest{TenantID: otpTenant, FactorID: factor, Action: mfa.Rename, Name: "authenticator <work>", ExpectedVersion: before.Factors[0].Version, FactorProof: proof.Proof, Session: auth.NewBearerCredential(bearer), CSRFToken: csrf, Caller: caller, Origin: origin, Network: "127.0.0.1", IdempotencyKey: key}
+	wantedState := mfa.FactorActive
+	if f.factorRemoval {
+		r.Action, r.Name, wantedState = mfa.Remove, "", mfa.FactorRevoked
+	}
 	if f.factorManagementClear {
 		r.Name = ""
+	}
+	if f.factorRemovalLocks {
+		proveReferenceFactorRemovalLocks(t, ctx, f, management, r)
+		return
 	}
 	if f.factorManagementDenials {
 		proveReferenceFactorRenameDenials(t, ctx, f, management, sessions, r)
@@ -143,8 +193,15 @@ func proveReferenceFactorRename(t *testing.T, ctx context.Context, f liveStores,
 	}
 	var label, version, afterEpoch string
 	var uses, effects, revoked int
-	if f.pool.Raw().QueryRow(ctx, `SELECT t.label,t.row_version::text,a.version::text,(SELECT count(*) FROM identity_mfa.factor_verifications v WHERE v.tenant_id=$1 AND v.user_id=$2 AND v.used_purpose='identity.mfa.factor-update'),(SELECT count(*) FROM identity_mfa.factor_update_effects e WHERE e.tenant_id=$1 AND e.user_id=$2),(SELECT count(*) FROM session_store.sessions s WHERE s.tenant_id=$1 AND s.user_id=$2 AND s.state='revoked') FROM identity_mfa.totp_factors t JOIN identity_mfa.factor_authorities a USING(tenant_id,user_id) WHERE t.tenant_id=$1 AND t.user_id=$2 AND t.factor_id=$3`, otpTenant, string(spec.UserID), string(factor)).Scan(&label, &version, &afterEpoch, &uses, &effects, &revoked) != nil || label != originalLabel || afterEpoch != epoch || uses != 0 || effects != 0 || revoked != 0 {
+	if f.pool.Raw().QueryRow(ctx, `SELECT t.label,t.row_version::text,a.version::text,(SELECT count(*) FROM identity_mfa.factor_verifications v WHERE v.tenant_id=$1 AND v.user_id=$2 AND v.used_purpose='identity.mfa.factor-update'),(SELECT count(*) FROM identity_mfa.factor_update_effects e WHERE e.tenant_id=$1 AND e.user_id=$2),(SELECT count(*) FROM session_store.sessions s WHERE s.tenant_id=$1 AND s.user_id=$2 AND s.state='revoked') FROM identity_mfa.totp_factors t JOIN identity_mfa.factor_authorities a USING(tenant_id,user_id) WHERE t.tenant_id=$1 AND t.user_id=$2 AND t.factor_id=$3`, otpTenant, string(spec.UserID), string(factor)).Scan(&label, &version, &afterEpoch, &uses, &effects, &revoked) != nil || label != originalLabel || version != strconv.FormatUint(r.ExpectedVersion, 10) || afterEpoch != epoch || uses != 0 || effects != 0 || revoked != 0 {
 		t.Fatal("rollback left factor, proof or session effects")
+	}
+	if f.factorRemoval {
+		var intact, replayPresent bool
+		var codeSets, active int
+		if f.pool.Raw().QueryRow(ctx, `SELECT t.state=2 AND t.encrypted_secret IS NOT NULL,t.last_step IS NOT NULL,(SELECT count(*) FROM identity_mfa.recovery_sets WHERE tenant_id=$1 AND user_id=$2 AND state=2),(SELECT count(*) FROM session_store.sessions WHERE tenant_id=$1 AND user_id=$2 AND state='active') FROM identity_mfa.totp_factors t WHERE tenant_id=$1 AND user_id=$2 AND factor_id=$3`, otpTenant, string(spec.UserID), string(factor)).Scan(&intact, &replayPresent, &codeSets, &active) != nil || !intact || !replayPresent || codeSets != 1 || active != 2 {
+			t.Fatal("removal rollback erased material, retired codes or revoked genuine sessions")
+		}
 	}
 	keyText = "factor-rename-after-rollback"
 	r.IdempotencyKey, err = identity.NewIdempotencyKey([]byte(keyText))
@@ -166,7 +223,9 @@ func proveReferenceFactorRename(t *testing.T, ctx context.Context, f liveStores,
 		if err != nil {
 			t.Fatal(err)
 		}
-		attempts[1].request.Name = "other authenticator"
+		if r.Action == mfa.Rename {
+			attempts[1].request.Name = "other authenticator"
+		}
 		start := make(chan struct{})
 		var workers sync.WaitGroup
 		for i := range attempts {
@@ -198,11 +257,18 @@ func proveReferenceFactorRename(t *testing.T, ctx context.Context, f liveStores,
 		if err == nil || out.Outcome != identity.CommitOutcomeUnknown || out.CommandID == "" || out.Factor.ID != "" || !f.completionFault.hit.Load() {
 			t.Fatal("lost rename acknowledgement disclosed metadata or lost uncertainty", out.Outcome, err)
 		}
-	} else if err != nil || out.Outcome != identity.CommitOutcomeCommitted || out.CommandID == "" || out.Factor.ID != factor || out.Factor.Label != r.Name || out.Factor.Version != r.ExpectedVersion+1 || out.Factor.State != mfa.FactorActive {
+	} else if err != nil || out.Outcome != identity.CommitOutcomeCommitted || out.CommandID == "" || out.Factor.ID != factor || out.Factor.Label != r.Name || out.Factor.Version != r.ExpectedVersion+1 || out.Factor.State != wantedState {
 		t.Fatal("actual rename not committed", out.Outcome, err)
 	}
 	if got, err := sessions.Get(ctx, session.GetRequest{TenantID: otpTenant, Credential: credential}); err == nil && got.Authenticated {
 		t.Fatal("rename left source session usable")
+	}
+	if f.factorRemoval && f.completionFault != nil {
+		// Historical reconciliation must conserve the committed disposition,
+		// even after the formerly usable recovery path loses current eligibility.
+		if _, err := f.pool.Raw().Exec(ctx, `UPDATE identity.identifiers SET verified=false,is_primary=false,verification_state=1,verified_at=NULL WHERE tenant_id=$1 AND user_id=$2 AND kind='email'`, otpTenant, string(spec.UserID)); err != nil {
+			t.Fatal("owned post-commit recovery-path change unavailable", err)
+		}
 	}
 	r.CommandID = out.CommandID
 	query := identity.RecoveryQuery{TenantID: otpTenant, UserID: spec.UserID, ActorID: identity.ActorID(spec.UserID), ActorKind: authorization.SubjectUser, OperationID: "identity.mfa.factor-update", CommandID: out.CommandID}
@@ -215,6 +281,29 @@ func proveReferenceFactorRename(t *testing.T, ctx context.Context, f liveStores,
 	if f.pool.Raw().QueryRow(ctx, `SELECT t.label,t.row_version::text,(SELECT count(*) FROM identity_mfa.factor_update_effects e WHERE e.tenant_id=t.tenant_id AND e.user_id=t.user_id),(SELECT count(*) FROM identity_mfa.factor_verifications v WHERE v.tenant_id=t.tenant_id AND v.user_id=t.user_id AND v.used_purpose='identity.mfa.factor-update') FROM identity_mfa.totp_factors t WHERE t.tenant_id=$1 AND t.user_id=$2 AND t.factor_id=$3`, otpTenant, string(spec.UserID), string(factor)).Scan(&label, &version, &effects, &uses) != nil || label != r.Name || effects != 1 || uses != 1 {
 		t.Fatal("rename effect was not one-time and durable")
 	}
+	if f.factorRemoval {
+		var remaining, state, sets int
+		var erased bool
+		if f.pool.Raw().QueryRow(ctx, `SELECT a.active_factors,t.state,t.encrypted_secret IS NULL AND t.last_step IS NULL,(SELECT count(*) FROM identity_mfa.recovery_sets s WHERE s.tenant_id=t.tenant_id AND s.user_id=t.user_id AND s.state=2) FROM identity_mfa.totp_factors t JOIN identity_mfa.factor_authorities a USING(tenant_id,user_id) WHERE t.tenant_id=$1 AND t.user_id=$2 AND t.factor_id=$3`, otpTenant, string(spec.UserID), string(factor)).Scan(&remaining, &state, &erased, &sets) != nil || remaining != 0 || state != 3 || !erased || sets != 0 {
+			t.Fatal("removal retained factor authority, secret or dependent recovery set")
+		}
+		command, decodeErr := base64.RawURLEncoding.DecodeString(string(out.CommandID))
+		var audits, lifecycle, count int
+		if decodeErr != nil || f.pool.Raw().QueryRow(ctx, `SELECT
+(SELECT count(*) FROM audit.identity_command_bindings WHERE command_id=$1),
+(SELECT count(*) FROM public.identity_outbox_bindings WHERE command_id=$1),
+(SELECT revoked_count FROM session_store.mfa_recovery_dispositions WHERE command_id=$1 AND purpose='identity.mfa.factor-update')`, command).Scan(&audits, &lifecycle, &count) != nil || audits != 1 || lifecycle != 1 || count != 2 {
+			t.Fatal("removal did not bind atomic audit/lifecycle and both genuine session effects")
+		}
+		second, _ := session.ParseToken(f.secondBearer)
+		secondCredential, _ := session.NewCredential(session.CredentialCookie, second)
+		if current, err := sessions.Get(ctx, session.GetRequest{TenantID: otpTenant, Credential: secondCredential}); err == nil && current.Authenticated {
+			t.Fatal("removal left the second genuine session usable")
+		}
+		if f.afterFactorRemoval != nil {
+			f.afterFactorRemoval(ctx, spec.UserID)
+		}
+	}
 }
 
 func proveReferenceFactorRenameDenials(t *testing.T, ctx context.Context, f liveStores, service mfa.FactorManagementService, sessions reference.SessionService, original mfa.FactorUpdateRequest) {
@@ -225,7 +314,8 @@ func proveReferenceFactorRenameDenials(t *testing.T, ctx context.Context, f live
 		var snapshot string
 		if err := f.pool.Raw().QueryRow(ctx, `SELECT jsonb_build_array(
  (SELECT jsonb_agg(jsonb_build_array(tenant_id,user_id,version,active_factors) ORDER BY tenant_id,user_id) FROM identity_mfa.factor_authorities),
- (SELECT jsonb_agg(jsonb_build_array(tenant_id,user_id,factor_id,label,state,row_version) ORDER BY tenant_id,user_id,factor_id) FROM identity_mfa.totp_factors),
+ (SELECT jsonb_agg(jsonb_build_array(tenant_id,user_id,factor_id,label,state,row_version,encrypted_secret IS NOT NULL,last_step IS NOT NULL) ORDER BY tenant_id,user_id,factor_id) FROM identity_mfa.totp_factors),
+ (SELECT jsonb_agg(jsonb_build_array(tenant_id,user_id,state,row_version) ORDER BY tenant_id,user_id,state,row_version) FROM identity_mfa.recovery_sets),
  (SELECT jsonb_agg(jsonb_build_array(proof_id,used_command_id IS NOT NULL) ORDER BY proof_id) FROM identity_mfa.factor_verifications),
  (SELECT count(*) FROM identity_mfa.factor_update_effects),
  (SELECT jsonb_agg(jsonb_build_array(tenant_id,user_id,session_id,state,version) ORDER BY tenant_id,user_id,session_id) FROM session_store.sessions),
@@ -256,6 +346,31 @@ func proveReferenceFactorRenameDenials(t *testing.T, ctx context.Context, f live
 		}
 		if state() != before {
 			t.Fatal(name, "changed protected factor/proof/session state")
+		}
+	}
+	if original.Action == mfa.Remove {
+		// The actual reset owner rejects multiple password references, even if
+		// one is disabled. Removal must use that same unambiguous ownership rule.
+		for _, enabled := range []bool{true, false} {
+			if _, err := f.pool.Raw().Exec(ctx, `INSERT INTO identity.credential_references(tenant_id,user_id,credential_id,kind,owner,version,enabled) VALUES($1,$2,'password-secondary',1,'identity/password',1,$3)`, original.TenantID, original.FactorProof.Subject, enabled); err != nil {
+				t.Fatal("owned duplicate recovery credential fixture unavailable", err)
+			}
+			deny("ambiguous-recovery-password", original, false)
+			if _, err := f.pool.Raw().Exec(ctx, `DELETE FROM identity.credential_references WHERE tenant_id=$1 AND user_id=$2 AND credential_id='password-secondary'`, original.TenantID, original.FactorProof.Subject); err != nil {
+				t.Fatal("owned duplicate recovery credential cleanup failed", err)
+			}
+		}
+		var identifier string
+		var verifiedAt time.Time
+		if err := f.pool.Raw().QueryRow(ctx, `SELECT identifier_id,verified_at FROM identity.identifiers WHERE tenant_id=$1 AND user_id=$2 AND kind='email' AND verified`, original.TenantID, original.FactorProof.Subject).Scan(&identifier, &verifiedAt); err != nil {
+			t.Fatal("original recovery identifier unavailable", err)
+		}
+		if _, err := f.pool.Raw().Exec(ctx, `UPDATE identity.identifiers SET verified=false,verification_state=1,verified_at=NULL WHERE tenant_id=$1 AND user_id=$2 AND identifier_id=$3`, original.TenantID, original.FactorProof.Subject, identifier); err != nil {
+			t.Fatal("owned recovery-email loss fixture unavailable", err)
+		}
+		deny("unverified-recovery-email", original, false)
+		if _, err := f.pool.Raw().Exec(ctx, `UPDATE identity.identifiers SET verified=true,verification_state=2,verified_at=$4 WHERE tenant_id=$1 AND user_id=$2 AND identifier_id=$3`, original.TenantID, original.FactorProof.Subject, identifier, verifiedAt); err != nil {
+			t.Fatal("owned recovery-email fixture restoration failed", err)
 		}
 	}
 	other := original
@@ -300,7 +415,16 @@ func proveReferenceFactorRenameDenials(t *testing.T, ctx context.Context, f live
 
 func invokeReferenceFactorUpdateHTTP(t *testing.T, ctx context.Context, client *http.Client, base, origin, bearer, csrf, cookieName, key string, r mfa.FactorUpdateRequest) (mfa.FactorUpdateResult, error) {
 	t.Helper()
-	wire, err := json.Marshal(map[string]any{"factorID": r.FactorID, "proofID": r.FactorProof.ID, "action": "rename", "name": r.Name, "expectedVersion": r.ExpectedVersion})
+	body := map[string]any{"factorID": r.FactorID, "proofID": r.FactorProof.ID, "expectedVersion": r.ExpectedVersion}
+	switch r.Action {
+	case mfa.Rename:
+		body["action"], body["name"] = "rename", r.Name
+	case mfa.Remove:
+		body["action"] = "remove"
+	default:
+		t.Fatal("unsupported fixture action")
+	}
+	wire, err := json.Marshal(body)
 	if err != nil {
 		t.Fatal(err)
 	}

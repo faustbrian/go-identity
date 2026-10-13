@@ -133,7 +133,7 @@ the shared attempt budget, continuation completion and original-primary session
 effects. Verification alone must never issue a session. Those durable completion
 operations and enrollment remain unfinished.
 
-## Selected factor rename
+## Selected factor management
 
 `FactorManagementService.FactorUpdate` accepts an owned `IdempotencyKey`, an
 actual session/synchronizer, the original factor-update proof and the observed
@@ -150,5 +150,12 @@ Fresh known commits return safe `FactorProjection`; replay, recovery, errors and
 uncertain/expired delivery return no factor projection. Use
 `RecoverFactorUpdate` with the original command for outcome reconciliation,
 not another mutation or renewed proof. HTTP exposure is separately selected.
-Remove, replace, disable and other MFA management remain unfinished; defining
-their action names does not enable them in this selected native profile.
+The separately selected single-active-TOTP removal profile requires the native
+emailed-password-reset request/completion owner and current verified email plus
+unambiguous usable password authority. `Remove` forbids labels, targets the
+original proof's factor, erases its secret/replay material, retires dependent
+recovery codes and advances authority to known-empty in the same transaction.
+It creates no replacement factor or session. Subsequent recovery uses the
+selected public reset workflow, not the removed proof or revoked cookie.
+Replace, disable, other recovery paths and general multi-factor management
+remain unfinished; their action names do not enable unsupported behavior.

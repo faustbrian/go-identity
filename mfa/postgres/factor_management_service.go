@@ -27,16 +27,29 @@ type FactorUpdatePrimarySource interface {
 	RestoreFactorUpdate(context.Context, mfa.FactorUpdateRequest, identity.CommandID, []byte) (TOTPActivePrimary, error)
 }
 
+// FactorRemovalRecoverySource borrows the selected native recovery workflow.
+// It must fence current usable recovery authority in the caller's exact Work,
+// not return a cached absence assertion or open another transaction. Identity
+// versions its immutable selected policy; checks retain no Work or credentials.
+type FactorRemovalRecoverySource interface {
+	FactorRemovalRecoveryIdentity() [32]byte
+	CheckFactorRemovalRecovery(context.Context, kernel.Work, kernel.FeatureExecutionContributor, identity.Command) error
+}
+
 // FactorUpdateConfig selects bounded primary/factor freshness and real enlisted
 // session effects. Both ages are positive and at most five minutes. Primary and
 // Sessions borrow native owners; they cannot open transactions or retain Work.
-// The selected initial profile supports TOTP rename. Other actions fail closed
-// until their recovery and replacement owners are composed.
+// Default selection supports TOTP rename; explicit email recovery selection
+// adds removal of the sole active TOTP. Replacement and other paths deny.
 type FactorUpdateConfig struct {
 	Primary           FactorUpdatePrimarySource
 	Sessions          RecoveryRegenerationSessionEffects
 	MaximumAge        time.Duration
 	PrimaryMaximumAge time.Duration
+	// Zero preserves rename-only compatibility. Email requires a composed native
+	// request/completion owner; unsupported paths and missing authority deny.
+	RemovalRecoveryPath auth.RecoveryPath
+	RemovalRecovery     FactorRemovalRecoverySource
 }
 
 // FactorUpdateService owns keyed, optimistic native TOTP metadata management
@@ -62,6 +75,9 @@ func NewFactorUpdateService(enrollment *TOTPEnrollmentService, stepup *TOTPActiv
 		return nil, invalidAuthority()
 	}
 	s := &factorUpdateState{shared: enrollment.state(), stepup: stepup.state(), config: c}
+	if c.RemovalRecoveryPath != auth.RecoveryPathUnspecified && c.RemovalRecoveryPath != auth.RecoveryPathEmail || c.RemovalRecoveryPath == auth.RecoveryPathUnspecified && !nilEnrollmentPrimary(c.RemovalRecovery) || c.RemovalRecoveryPath == auth.RecoveryPathEmail && (nilEnrollmentPrimary(c.RemovalRecovery) || c.RemovalRecovery.FactorRemovalRecoveryIdentity() == ([32]byte{})) {
+		return nil, invalidAuthority()
+	}
 	if s.shared == nil || s.stepup == nil || s.stepup.shared != s.shared || len(s.stepup.config.VerificationKeys) > 32 {
 		return nil, invalidAuthority()
 	}
@@ -82,10 +98,19 @@ func NewFactorUpdateService(enrollment *TOTPEnrollmentService, stepup *TOTPActiv
 	if err != nil || admitted.Profile.Class != risk.CredentialMutation {
 		return nil, invalidAuthority()
 	}
+	type removalIdentity struct {
+		Path     auth.RecoveryPath
+		Identity [32]byte
+	}
+	var removal *removalIdentity
+	if c.RemovalRecoveryPath == auth.RecoveryPathEmail {
+		removal = &removalIdentity{Path: c.RemovalRecoveryPath, Identity: c.RemovalRecovery.FactorRemovalRecoveryIdentity()}
+	}
 	frame, err := json.Marshal(struct {
 		Shared, StepUp        [32]byte
 		FactorAge, PrimaryAge time.Duration
-	}{s.shared.identity, s.stepup.identity, c.MaximumAge, c.PrimaryMaximumAge})
+		Removal               *removalIdentity `json:",omitempty"`
+	}{s.shared.identity, s.stepup.identity, c.MaximumAge, c.PrimaryMaximumAge, removal})
 	if err != nil {
 		return nil, invalidAuthority()
 	}
@@ -96,6 +121,16 @@ func NewFactorUpdateService(enrollment *TOTPEnrollmentService, stepup *TOTPActiv
 
 func factorUpdateOperation() identity.FeatureOperation {
 	return identity.FeatureOperation{Owner: "identity/mfa", OperationID: "identity.mfa.factor-update", SchemaID: "mfa-factor-update", SchemaVersion: 1, RecordRequirement: identity.FeatureRecordRequired}
+}
+
+// RemovalConfigured reports immutable profile selection for migration and
+// transport composition, not current recovery eligibility or authentication.
+func (s *FactorUpdateService) RemovalConfigured() bool {
+	if s == nil || s.state == nil {
+		return false
+	}
+	state := s.state()
+	return state != nil && state.config.RemovalRecoveryPath == auth.RecoveryPathEmail && !nilEnrollmentPrimary(state.config.RemovalRecovery)
 }
 
 func (s *factorUpdateState) requestIntent(r mfa.FactorUpdateRequest) (identity.RequestIntent, error) {
@@ -131,7 +166,7 @@ func (s *FactorUpdateService) FactorUpdate(ctx context.Context, r mfa.FactorUpda
 		return out, invalidAuthority()
 	}
 	state := s.state()
-	if state == nil || r.Action != mfa.Rename || r.FactorProof.Method != "totp" || !slices.Contains(state.stepup.config.AllowedOrigins, r.Origin) {
+	if state == nil || r.Action != mfa.Rename && (r.Action != mfa.Remove || state.config.RemovalRecoveryPath != auth.RecoveryPathEmail || nilEnrollmentPrimary(state.config.RemovalRecovery)) || r.FactorProof.Method != "totp" || !slices.Contains(state.stepup.config.AllowedOrigins, r.Origin) {
 		return out, identity.ForbiddenError{}
 	}
 	ctx, stop := context.WithTimeout(ctx, state.shared.config.MaximumDuration)

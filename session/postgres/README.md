@@ -1387,10 +1387,14 @@ subject sessions and still-current primary authority. Recovery reads retained
 effect evidence, not mutable current-session state. No caller pool, transaction,
 goroutine or session revival is owned by this effect.
 
-For selected factor rename, `NewMFAFactorUpdateSessionEffect` borrows that same
+For selected factor rename or removal, `NewMFAFactorUpdateSessionEffect` borrows that same
 bounded owner under the exact factor-update binding; it does not admit arbitrary
 actions or select regeneration. Install `MFAFactorUpdateSessionMigrationSource`
 after the base disposition v1 history. `PrepareFactorUpdate` and
 `RestoreFactorUpdate` retain actual primary session/synchronizer custody under
 the owner-generated keyed command. The source is intentionally revoked on
 commit, not refreshed or replaced; outcome recovery requires no live cookie.
+The same protected disposition admits exactly `factor.updated.v1` or
+`factor.removed.v1`; removal must still be independently authorized by MFA's
+actual recovery policy. Both revoke the complete bounded subject-session set,
+not only the session that supplied the proof, and recovery never revives it.

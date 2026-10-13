@@ -32,7 +32,7 @@ import (
 // This is observed consumer composition, not live provider interoperability.
 // Provider IO and one post-commit acknowledgement are faulted deliberately;
 // native audit records persist in PostgreSQL.
-func referenceHIBPScreening(t *testing.T, policy risk.Policy, pool *database.Pool) passwordpg.ResetScreeningCollector {
+func referenceHIBPScreening(t *testing.T, policy risk.Policy, pool *database.Pool, expectedCalls ...int32) passwordpg.ResetScreeningCollector {
 	t.Helper()
 	type response struct{ suffix, mode string }
 	responses := make(map[string]response)
@@ -117,7 +117,15 @@ func referenceHIBPScreening(t *testing.T, policy risk.Policy, pool *database.Poo
 		t.Fatal(err)
 	}
 	t.Cleanup(func() {
-		if calls.Load() != 6 || acknowledgements.reconciled.Load() != 1 {
+		wantCalls, wantReconciliation := int32(6), int32(1)
+		if len(expectedCalls) != 0 {
+			if len(expectedCalls) != 1 || expectedCalls[0] < 0 || expectedCalls[0] > 1 {
+				t.Error("invalid bounded HIBP fixture expectation")
+				return
+			}
+			wantCalls, wantReconciliation = expectedCalls[0], 0
+		}
+		if calls.Load() != wantCalls || acknowledgements.reconciled.Load() != wantReconciliation {
 			t.Error("native screening did not execute each provider case exactly once")
 		}
 	})

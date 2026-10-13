@@ -19,6 +19,8 @@ import (
 	"testing"
 	"time"
 
+	identity "github.com/faustbrian/go-identity"
+	passwordpg "github.com/faustbrian/go-identity/password/postgres"
 	"github.com/faustbrian/go-identity/reference"
 	"github.com/faustbrian/go-identity/risk"
 	riskvalkey "github.com/faustbrian/go-identity/risk/valkey"
@@ -34,6 +36,12 @@ type liveStores struct {
 	factorManagementRace    bool
 	factorManagementDenials bool
 	factorManagementClear   bool
+	factorRemoval           bool
+	factorRemovalReset      bool
+	factorRemovalResetHTTP  bool
+	factorRemovalLocks      bool
+	removalSignin           passwordpg.SigninConfig
+	afterFactorRemoval      func(context.Context, identity.UserID)
 	factorManagement        bool
 	mfaListing              bool
 	mfaListHTTP             bool

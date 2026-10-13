@@ -59,6 +59,9 @@ func (*factorUpdatePhase) FeatureOperations() []identity.FeatureOperation {
 }
 func (p *factorUpdatePhase) lifecycle() kernel.LifecyclePlan {
 	v := p.input.Record.FactorAuthorityVersion
+	if p.request.Action == mfa.Remove {
+		return kernel.LifecyclePlan{EventType: "factor.removed.v1", BeforeVersion: v, AfterVersion: v + 1}
+	}
 	return kernel.LifecyclePlan{EventType: "factor.updated.v1", BeforeVersion: v, AfterVersion: v + 1}
 }
 func (p *factorUpdatePhase) inputAAD(k kernel.RequestKeyPreparationBinding) (envelope.Context, error) {
@@ -259,6 +262,16 @@ func (p *factorUpdatePhase) buildCommand() error {
 	defer clear(wire)
 	digest := sha256.Sum256(wire)
 	fields := []identity.FeatureField{{Name: "factor.before", Value: identity.FeatureValue{Kind: identity.FeatureUint64, Uint64: i.Record.FactorAuthorityVersion}}, {Name: "factor.after", Value: identity.FeatureValue{Kind: identity.FeatureUint64, Uint64: i.Record.FactorAuthorityVersion + 1}}, {Name: "factor.proof", Value: identity.FeatureValue{Kind: identity.FeatureText, Text: string(i.Record.Original.Proof.Proof.ID)}}, {Name: "factor.proof-record", Value: identity.FeatureValue{Kind: identity.FeatureBytes, Bytes: digest[:]}}, {Name: "factor.target", Value: identity.FeatureValue{Kind: identity.FeatureText, Text: string(p.request.FactorID)}}, {Name: "factor.target-version", Value: identity.FeatureValue{Kind: identity.FeatureUint64, Uint64: p.request.ExpectedVersion}}, {Name: "factor.label", Value: identity.FeatureValue{Kind: identity.FeatureText, Text: p.request.Name}}}
+	if p.request.Action == mfa.Remove {
+		if nilEnrollmentPrimary(p.state.config.RemovalRecovery) || p.state.config.RemovalRecoveryPath != auth.RecoveryPathEmail {
+			return identity.ForbiddenError{}
+		}
+		recovery := p.state.config.RemovalRecovery.FactorRemovalRecoveryIdentity()
+		if recovery == ([32]byte{}) {
+			return identity.ForbiddenError{}
+		}
+		fields = append(fields, identity.FeatureField{Name: "factor.action", Value: identity.FeatureValue{Kind: identity.FeatureUint64, Uint64: uint64(mfa.Remove)}}, identity.FeatureField{Name: "factor.recovery-path", Value: identity.FeatureValue{Kind: identity.FeatureUint64, Uint64: uint64(auth.RecoveryPathEmail)}}, identity.FeatureField{Name: "factor.recovery", Value: identity.FeatureValue{Kind: identity.FeatureBytes, Bytes: recovery[:]}})
+	}
 	c, err := p.primary.Command(i.Binding, fields)
 	if err != nil {
 		return err
@@ -317,6 +330,14 @@ func (p *factorUpdatePhase) admit(ctx context.Context, w kernel.Work, c identity
 	}
 	if err != nil {
 		return err
+	}
+	if p.request.Action == mfa.Remove {
+		if p.request.FactorID != mfa.FactorID(p.input.Record.Original.CredentialID) {
+			return identity.ForbiddenError{}
+		}
+		if err := p.state.config.RemovalRecovery.CheckFactorRemovalRecovery(ctx, w, p, c); err != nil {
+			return err
+		}
 	}
 	r := p.input.Record
 	if err := RequireTOTPSessionFactor(ctx, w, p, p.input.Binding.UserID, r.Original.CredentialID, TOTPSessionFactorState{EnrollmentVersion: r.Original.CredentialVersion, AuthorityVersion: r.FactorAuthorityVersion}); err != nil {
@@ -502,7 +523,11 @@ func (p *factorUpdatePhase) ApplyFeature(ctx context.Context, w kernel.Work, c i
 	if version != strconv.FormatUint(r.ExpectedVersion, 10) || label != p.input.Before.Label || !created.Equal(p.input.Before.CreatedAt) {
 		return identity.FeatureReceipt{}, identity.ConflictError{}
 	}
-	n, err := w.Exec(ctx, `UPDATE identity_mfa.totp_factors SET label=$5,row_version=row_version+1 WHERE tenant_id=$1 AND user_id=$2 AND factor_id=$3 AND state=2 AND row_version=$4::numeric`, string(b.TenantID), string(b.UserID), string(r.FactorID), version, r.Name)
+	statement := `UPDATE identity_mfa.totp_factors SET label=$5,row_version=row_version+1 WHERE tenant_id=$1 AND user_id=$2 AND factor_id=$3 AND state=2 AND row_version=$4::numeric`
+	if r.Action == mfa.Remove {
+		statement = `UPDATE identity_mfa.totp_factors SET label=$5,state=3,encrypted_secret=NULL,last_step=NULL,row_version=row_version+1 WHERE tenant_id=$1 AND user_id=$2 AND factor_id=$3 AND state=2 AND row_version=$4::numeric`
+	}
+	n, err := w.Exec(ctx, statement, string(b.TenantID), string(b.UserID), string(r.FactorID), version, r.Name)
 	if err != nil {
 		return identity.FeatureReceipt{}, err
 	}
@@ -520,7 +545,16 @@ func (p *factorUpdatePhase) ApplyFeature(ctx context.Context, w kernel.Work, c i
 	if err := p.state.config.Sessions.Apply(ctx, w, p, c); err != nil {
 		return identity.FeatureReceipt{}, err
 	}
-	n, err = w.Exec(ctx, `UPDATE identity_mfa.factor_authorities SET version=version+1 WHERE tenant_id=$1 AND user_id=$2 AND version=$3::numeric AND active_factors BETWEEN 1 AND 64`, string(b.TenantID), string(b.UserID), strconv.FormatUint(p.input.Record.FactorAuthorityVersion, 10))
+	if r.Action == mfa.Remove {
+		if _, err := w.Exec(ctx, `UPDATE identity_mfa.recovery_sets SET state=3,row_version=row_version+1 WHERE tenant_id=$1 AND user_id=$2 AND factor_id=$3 AND state<>3`, string(b.TenantID), string(b.UserID), string(r.FactorID)); err != nil {
+			return identity.FeatureReceipt{}, err
+		}
+	}
+	statement = `UPDATE identity_mfa.factor_authorities SET version=version+1 WHERE tenant_id=$1 AND user_id=$2 AND version=$3::numeric AND active_factors BETWEEN 1 AND 64`
+	if r.Action == mfa.Remove {
+		statement = `UPDATE identity_mfa.factor_authorities SET version=version+1,active_factors=0 WHERE tenant_id=$1 AND user_id=$2 AND version=$3::numeric AND active_factors=1 AND NOT EXISTS(SELECT 1 FROM identity_mfa.totp_factors t WHERE t.tenant_id=$1 AND t.user_id=$2 AND t.state=2)`
+	}
+	n, err = w.Exec(ctx, statement, string(b.TenantID), string(b.UserID), strconv.FormatUint(p.input.Record.FactorAuthorityVersion, 10))
 	if err != nil {
 		return identity.FeatureReceipt{}, err
 	}
@@ -535,11 +569,24 @@ func (p *factorUpdatePhase) ApplyFeature(ctx context.Context, w kernel.Work, c i
 	if n != 1 {
 		return identity.FeatureReceipt{}, identity.ConflictError{}
 	}
+	if r.Action == mfa.Remove {
+		recovery := p.state.config.RemovalRecovery.FactorRemovalRecoveryIdentity()
+		n, err = w.Exec(ctx, `UPDATE identity_mfa.factor_update_effects SET action=2,recovery_identity=$4 WHERE tenant_id=$1 AND user_id=$2 AND command_id=$3 AND action=1 AND recovery_identity IS NULL`, string(b.TenantID), string(b.UserID), id, recovery[:])
+		if err != nil {
+			return identity.FeatureReceipt{}, err
+		}
+		if n != 1 {
+			return identity.FeatureReceipt{}, identity.ConflictError{}
+		}
+	}
 	if err := p.CheckFeatureCommit(ctx, w, c); err != nil {
 		return identity.FeatureReceipt{}, err
 	}
 	p.result = p.input.Before
 	p.result.Label, p.result.Version = r.Name, r.ExpectedVersion+1
+	if r.Action == mfa.Remove {
+		p.result.State = mfa.FactorRevoked
+	}
 	p.applied = true
 	return identity.FeatureReceipt{Operation: factorUpdateOperation(), BeforeVersion: l.BeforeVersion, AfterVersion: l.AfterVersion}, nil
 }
@@ -551,13 +598,23 @@ func (p *factorUpdatePhase) CheckFeatureCommit(ctx context.Context, w kernel.Wor
 		return err
 	}
 	b, r := p.input.Binding, p.input.Record
-	if err := RequireTOTPSessionFactor(ctx, w, p, b.UserID, r.Original.CredentialID, TOTPSessionFactorState{EnrollmentVersion: r.Original.CredentialVersion, AuthorityVersion: r.FactorAuthorityVersion + 1}); err != nil {
-		return err
+	if p.request.Action == mfa.Remove {
+		if err := p.checkRemoval(ctx, w); err != nil {
+			return err
+		}
+	} else {
+		if err := RequireTOTPSessionFactor(ctx, w, p, b.UserID, r.Original.CredentialID, TOTPSessionFactorState{EnrollmentVersion: r.Original.CredentialVersion, AuthorityVersion: r.FactorAuthorityVersion + 1}); err != nil {
+			return err
+		}
 	}
 	if err := p.state.config.Sessions.Check(ctx, w, p, c); err != nil {
 		return err
 	}
-	rows, err := w.Query(ctx, `SELECT row_version::text,label FROM identity_mfa.totp_factors WHERE tenant_id=$1 AND user_id=$2 AND factor_id=$3 AND state=2`, string(b.TenantID), string(b.UserID), string(p.request.FactorID))
+	wantedState := 2
+	if p.request.Action == mfa.Remove {
+		wantedState = 3
+	}
+	rows, err := w.Query(ctx, `SELECT row_version::text,label FROM identity_mfa.totp_factors WHERE tenant_id=$1 AND user_id=$2 AND factor_id=$3 AND state=$4`, string(b.TenantID), string(b.UserID), string(p.request.FactorID), wantedState)
 	if err != nil {
 		return err
 	}
@@ -590,7 +647,8 @@ func (p *factorUpdatePhase) CheckFeatureCommit(ctx context.Context, w kernel.Wor
 }
 func (p *factorUpdatePhase) RecoverParticipant(ctx context.Context, w kernel.RecoveryWork) (kernel.RecoveryStatus, error) {
 	b, f, l, err := w.FeatureScope(p)
-	if err != nil || f.Operation != factorUpdateOperation() || f.Contributor != p.Descriptor() || l.EventType != "factor.updated.v1" || l.BeforeVersion == 0 || l.BeforeVersion == math.MaxUint64 || l.AfterVersion != l.BeforeVersion+1 {
+	removed := l.EventType == "factor.removed.v1"
+	if err != nil || f.Operation != factorUpdateOperation() || f.Contributor != p.Descriptor() || l.EventType != "factor.updated.v1" && !removed || l.BeforeVersion == 0 || l.BeforeVersion == math.MaxUint64 || l.AfterVersion != l.BeforeVersion+1 {
 		return kernel.RecoveryUnknown, invalidAuthority()
 	}
 	status, err := p.state.config.Sessions.Recover(ctx, w, p)
@@ -620,7 +678,53 @@ func (p *factorUpdatePhase) RecoverParticipant(ctx context.Context, w kernel.Rec
 	if err != nil || v == 0 || v == math.MaxUint64 || after != strconv.FormatUint(v+1, 10) {
 		return kernel.RecoveryUnknown, identity.UnavailableError{}
 	}
+	if removed {
+		rows.Close()
+		check, err := w.Query(ctx, `SELECT recovery_identity FROM identity_mfa.factor_update_effects WHERE tenant_id=$1 AND user_id=$2 AND command_id=$3 AND action=2`, string(b.TenantID), string(b.UserID), id)
+		if err != nil {
+			return kernel.RecoveryUnknown, err
+		}
+		defer check.Close()
+		var recovery []byte
+		if !check.Next() || check.Scan(&recovery) != nil || check.Next() || check.Err() != nil || len(recovery) != 32 || hmac.Equal(recovery, make([]byte, 32)) {
+			return kernel.RecoveryUnknown, identity.UnavailableError{}
+		}
+	}
 	return kernel.RecoveryCommitted, nil
+}
+
+func (p *factorUpdatePhase) checkRemoval(ctx context.Context, w kernel.Work) error {
+	b, r := p.input.Binding, p.input.Record
+	state, err := readFactorAuthority(ctx, w, b, b.UserID, r.FactorAuthorityVersion+1)
+	if err != nil {
+		return err
+	}
+	if state.RequireEmailRecovery(b.TenantID, b.UserID) != nil {
+		return identity.ForbiddenError{}
+	}
+	if err := p.state.config.RemovalRecovery.CheckFactorRemovalRecovery(ctx, w, p, p.command); err != nil {
+		return err
+	}
+	rows, err := w.Query(ctx, `SELECT t.enrollment_version::text,t.encrypted_secret IS NULL AND t.last_step IS NULL,NOT EXISTS(SELECT 1 FROM identity_mfa.recovery_sets s WHERE s.tenant_id=t.tenant_id AND s.user_id=t.user_id AND s.factor_id=t.factor_id AND s.state<>3) FROM identity_mfa.totp_factors t WHERE t.tenant_id=$1 AND t.user_id=$2 AND t.factor_id=$3 AND t.state=3`, string(b.TenantID), string(b.UserID), string(p.request.FactorID))
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	var version string
+	var erased, retired bool
+	if !rows.Next() {
+		if rows.Err() != nil {
+			return rows.Err()
+		}
+		return identity.ForbiddenError{}
+	}
+	if rows.Scan(&version, &erased, &retired) != nil || rows.Next() || rows.Err() != nil {
+		return identity.UnavailableError{}
+	}
+	if version != strconv.FormatUint(r.Original.CredentialVersion, 10) || !erased || !retired {
+		return identity.ForbiddenError{}
+	}
+	return nil
 }
 func (p *factorUpdatePhase) destroy() {
 	if p.input != nil {

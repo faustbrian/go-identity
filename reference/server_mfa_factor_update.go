@@ -11,18 +11,22 @@ import (
 	identity "github.com/faustbrian/go-identity"
 	identityhttp "github.com/faustbrian/go-identity/http"
 	mfahttp "github.com/faustbrian/go-identity/http/mfa"
+	"github.com/faustbrian/go-identity/mfa"
 	mfapg "github.com/faustbrian/go-identity/mfa/postgres"
 	"github.com/faustbrian/go-identity/session"
 )
 
 // HTTPMFAFactorUpdateConfiguration independently selects cookie-only native
-// TOTP rename. Native management/session/original evidence and the shared strict
+// TOTP management. Native management/session/original evidence and the shared strict
 // rate backend are required, not enrollment, login or regeneration HTTP routes.
 // Origins are exact native origins; namespace/key preserve shared quota identity.
 type HTTPMFAFactorUpdateConfiguration struct {
 	TrustedOrigins []identityhttp.Origin
 	RateNamespace  string
 	RateKey        [32]byte
+	// Empty selects rename only. Explicit Remove requires the selected native
+	// email-recovery owner. Duplicates, replacement and unknown actions deny.
+	Actions []mfa.FactorUpdateAction
 }
 
 type mfaFactorUpdateHTTPState struct {
@@ -43,6 +47,15 @@ func composeMFAFactorUpdateHTTP(c StoreConfiguration, d ReferenceDependencies, o
 		return nil, invalid
 	}
 	h := *c.HTTPMFAFactorUpdate
+	if len(h.Actions) > 2 {
+		return nil, invalid
+	}
+	h.Actions = slices.Clone(h.Actions)
+	for i, action := range h.Actions {
+		if action != mfa.Rename && action != mfa.Remove || slices.Contains(h.Actions[:i], action) || action == mfa.Remove && !owner.manage.RemovalConfigured() {
+			return nil, invalid
+		}
+	}
 	if len(h.TrustedOrigins) == 0 || len(h.TrustedOrigins) > 16 {
 		return nil, invalid
 	}
@@ -77,7 +90,7 @@ func (s *Server) mfaFactorUpdateHTTPConfig(network identityhttp.NetworkConfig, f
 		return nil, identity.InvalidInputError{Field: "reference_http_mfa_factor_update"}
 	}
 	sessions := s.state.features.session
-	return &mfahttp.FactorUpdateConfig{Network: network, Sessions: sessions.reader, Proofs: h.proofs, Service: owner, Rate: h.rate, Cookie: sessions.config.Cookie, TrustedOrigins: h.config.TrustedOrigins, PolicyRevision: h.revision, Now: h.now, MaximumDuration: h.timeout, MaximumAge: h.maximumAge}, nil
+	return &mfahttp.FactorUpdateConfig{Network: network, Sessions: sessions.reader, Proofs: h.proofs, Service: owner, Rate: h.rate, Cookie: sessions.config.Cookie, TrustedOrigins: h.config.TrustedOrigins, PolicyRevision: h.revision, Now: h.now, MaximumDuration: h.timeout, MaximumAge: h.maximumAge, Actions: h.config.Actions}, nil
 }
 
 // Format redacts borrowed rate keys and deployment policy.

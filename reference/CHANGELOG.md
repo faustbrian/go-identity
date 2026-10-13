@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Compose sole-TOTP removal with the actual native emailed-reset request and
+  completion owner. Explicit email recovery selection requires its HIBP and
+  delivery dependencies; the graph supplies the recovery checker and optional
+  forward-only MFA v10 history. Independently select removal HTTP actions and
+  reset routes. Native and HTTP workflows recover password login after removal.
+  This supersedes the removal caveat below, not unsupported replacement or disable.
+
 - Independently select native TOTP label management and
   `HTTPMFAFactorUpdate` with actual session, original proof and shared limiter
   owners. Selected migrations include only the required forward-only MFA and

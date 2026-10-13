@@ -15,7 +15,7 @@ import (
 type FeatureConfig struct {
 	// List exposes only authenticated safe metadata, independently of mutations.
 	List *ListConfig
-	// FactorUpdate independently selects authenticated native TOTP rename.
+	// FactorUpdate independently selects authenticated native TOTP management.
 	FactorUpdate *FactorUpdateConfig
 	// RecoveryUse exposes only the explicitly selected original-primary owner.
 	RecoveryUse *RecoveryUseConfig

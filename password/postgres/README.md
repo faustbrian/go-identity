@@ -1,5 +1,18 @@
 # Password PostgreSQL adapter
 
+## Selected recovery for TOTP removal
+
+`NewFactorRemovalRecoverySource` borrows a fully configured native `ResetService`
+with request, completion, HIBP and delivery dependencies. Keep that service and
+its dependencies alive while management uses the source. It opens no transaction
+and retains no Work: current active account, verified email and exactly one
+enabled, unexpired password reference are fenced inside MFA's protected Work.
+Multiple password references deny even when one is disabled, matching the real
+reset request owner's unambiguous selection. No reset grant or factor proof is
+created by this check. After removal, use the actual public reset-request,
+delivery and completion workflow; removal does not automatically issue a session.
+Other recovery methods are not selected by this source.
+
 Development checkpoint: owned forward-only password material storage and a
 consistent primary credential reader plus native existing-password material
 replacement/recovery, native authenticated password change and backend

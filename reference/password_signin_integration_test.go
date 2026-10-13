@@ -22,8 +22,15 @@ import (
 
 // The browser obtains original password intent through the actual HTTP issuer;
 // no fixture writes a flow or manufactures its cookie.
-func referencePasswordLogin(t *testing.T, ctx context.Context, f liveStores, client *http.Client, baseURL, origin string, browser []*http.Cookie, c passwordpg.SigninConfig, raw string) (passwordhttp.SigninResponse, session.Token) {
+func referencePasswordLogin(t *testing.T, ctx context.Context, f liveStores, client *http.Client, baseURL, origin string, browser []*http.Cookie, c passwordpg.SigninConfig, raw string, selectedIdentifier ...string) (passwordhttp.SigninResponse, session.Token) {
 	t.Helper()
+	identifier := "recipient@example.invalid"
+	if len(selectedIdentifier) > 1 {
+		t.Fatal("ambiguous login fixture identifier")
+	}
+	if len(selectedIdentifier) == 1 {
+		identifier = selectedIdentifier[0]
+	}
 	call := func(path string, body any, cookies []*http.Cookie) (*http.Response, []byte) {
 		t.Helper()
 		wire, err := json.Marshal(body)
@@ -84,10 +91,10 @@ func referencePasswordLogin(t *testing.T, ctx context.Context, f liveStores, cli
 	if err != nil || binding.Intent.Action != "identity.password.signin" || binding.Intent.TenantID != otpTenant || binding.Intent.Origin != origin || binding.Intent.CallbackURL != c.CallbackURLs[0] || binding.Intent.PolicyID != c.PolicyID || binding.Intent.PolicyVersion != 9 || !binding.IssuedAt.Equal(flow.IssuedAt) || !binding.ExpiresAt.Equal(flow.ExpiresAt) {
 		t.Fatal("password original authority differs from issued response", err)
 	}
-	request := map[string]string{"flowID": string(flow.FlowID), "identifier": "recipient@example.invalid", "password": raw, "callbackURL": c.CallbackURLs[0]}
+	request := map[string]string{"flowID": string(flow.FlowID), "identifier": identifier, "password": raw, "callbackURL": c.CallbackURLs[0]}
 	response, wire = call("/v1/password/signin", request, append(device, flowCookie))
 	var out passwordhttp.SigninResponse
-	if json.Unmarshal(wire, &out) != nil || strings.Contains(string(wire), raw) || strings.Contains(string(wire), "recipient@example.invalid") {
+	if json.Unmarshal(wire, &out) != nil || strings.Contains(string(wire), raw) || strings.Contains(string(wire), identifier) {
 		t.Fatal("password signin disclosure")
 	}
 	if !out.SignedIn {

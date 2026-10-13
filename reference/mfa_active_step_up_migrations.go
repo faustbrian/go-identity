@@ -38,6 +38,15 @@ func (s StoreSet) activeStepUpMigrationCatalog(ctx context.Context, catalog []mi
 			owners[9] = "identity/mfa/postgres"
 			catalog[i].history = steps
 			catalog[i].guards = append(catalog[i].guards, migrationGuard{version: 9, schema: "identity_mfa", tables: []string{"factor_update_effects"}, columns: []string{"totp_factors.label"}})
+			if s.state.features.mfaEnrollment.manage.RemovalConfigured() {
+				steps, err = (mfapg.FactorRemovalMigrationSource{Base: fixedMigrationSource(steps), Version: 10}).Load(ctx)
+				if err != nil {
+					return nil, err
+				}
+				owners[10] = "identity/mfa/postgres"
+				catalog[i].history = steps
+				catalog[i].guards = append(catalog[i].guards, migrationGuard{version: 10, schema: "identity_mfa", tables: []string{"factor_update_effects"}, columns: []string{"factor_update_effects.action", "factor_update_effects.recovery_identity"}})
+			}
 		}
 		if s.state.features.mfaEnrollment.regenerate != nil || s.state.features.mfaEnrollment.manage != nil {
 			schema := s.state.features.migrations.passwordSigninSchema

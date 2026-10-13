@@ -3,6 +3,7 @@ package reference
 import (
 	"fmt"
 
+	auth "github.com/faustbrian/go-authentication"
 	identity "github.com/faustbrian/go-identity"
 	"github.com/faustbrian/go-identity/mfa"
 	mfapg "github.com/faustbrian/go-identity/mfa/postgres"
@@ -39,6 +40,8 @@ type MFAEnrollmentConfiguration struct {
 	// FactorManagement separately selects native protected factor updates.
 	// Primary/Sessions must be absent: this graph supplies real session owners.
 	// ActiveStepUp is required; this field selects no HTTP routes or regeneration.
+	// Email removal requires actual PasswordReset request/completion composition;
+	// RemovalRecovery must be absent because this graph supplies that owner.
 	FactorManagement *mfapg.FactorUpdateConfig
 	// Listing explicitly selects safe TOTP/recovery metadata through the graph's
 	// existing real session owner. It selects no HTTP route or trusted devices.
@@ -55,7 +58,7 @@ type mfaEnrollmentState struct {
 	manage     *mfapg.FactorUpdateService
 }
 
-func composeMFAEnrollment(c StoreConfiguration, d ReferenceDependencies, verification *passwordVerificationState, evaluation risk.Evaluator) (*mfaEnrollmentState, error) {
+func composeMFAEnrollment(c StoreConfiguration, d ReferenceDependencies, verification *passwordVerificationState, evaluation risk.Evaluator, reset *passwordpg.ResetService) (*mfaEnrollmentState, error) {
 	if c.MFAEnrollment == nil {
 		return nil, nil
 	}
@@ -133,7 +136,7 @@ func composeMFAEnrollment(c StoreConfiguration, d ReferenceDependencies, verific
 			}
 		}
 		if p.FactorManagement != nil {
-			if p.FactorManagement.Primary != nil || p.FactorManagement.Sessions != nil {
+			if p.FactorManagement.Primary != nil || p.FactorManagement.Sessions != nil || p.FactorManagement.RemovalRecovery != nil {
 				return nil, invalid
 			}
 			effects, err := sessionpg.NewMFAFactorUpdateSessionEffect(c.PasswordVerification.Native.Session, c.PasswordVerification.Native.Profile)
@@ -142,6 +145,15 @@ func composeMFAEnrollment(c StoreConfiguration, d ReferenceDependencies, verific
 			}
 			native := *p.FactorManagement
 			native.Primary, native.Sessions = primary, effects
+			if native.RemovalRecoveryPath != 0 {
+				if native.RemovalRecoveryPath != auth.RecoveryPathEmail {
+					return nil, invalid
+				}
+				native.RemovalRecovery, err = passwordpg.NewFactorRemovalRecoverySource(reset)
+				if err != nil {
+					return nil, invalid
+				}
+			}
 			state.manage, err = mfapg.NewFactorUpdateService(enable, state.stepup, native)
 			if err != nil {
 				return nil, invalid

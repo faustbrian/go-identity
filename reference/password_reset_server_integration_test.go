@@ -114,7 +114,13 @@ func configureReferencePasswordReset(t *testing.T, c *reference.StoreConfigurati
 	}
 	callback := origin + "/reset"
 	var collector passwordpg.ResetScreeningCollector
-	if len(signupOnly) == 0 || !signupOnly[0] {
+	if len(signupOnly) > 1 && signupOnly[1] {
+		expected := int32(0)
+		if len(signupOnly) > 2 && signupOnly[2] {
+			expected = 1
+		}
+		collector = referenceHIBPScreening(t, screeningPolicy, pool, expected)
+	} else if len(signupOnly) == 0 || !signupOnly[0] {
 		collector = referenceHIBPScreening(t, screeningPolicy, pool)
 	}
 	c.Delivery.Templates = append(c.Delivery.Templates, delivery.Template{ID: "password-reset", Version: 1, Channel: delivery.ChannelEmail, Locale: "en", Body: "{{.link}}", ContentType: "text/plain", RequiredVariables: []string{"link"}, VariableSchema: []delivery.VariableSchema{{Name: "link", Kind: "url", Sensitive: true}}, AllowedOrigins: []string{origin}, MaxRenderedBytes: 4096})

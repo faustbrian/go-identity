@@ -12,7 +12,7 @@ func TestMFAFactorManagementSelectionCannotInventOwners(t *testing.T) {
 		t.Fatal("unselected graph acquired factor management")
 	}
 	c := StoreConfiguration{MFAEnrollment: &MFAEnrollmentConfiguration{FactorManagement: &mfapg.FactorUpdateConfig{}}}
-	if owner, err := composeMFAEnrollment(c, ReferenceDependencies{}, nil, risk.Evaluator{}); err == nil || owner != nil {
+	if owner, err := composeMFAEnrollment(c, ReferenceDependencies{}, nil, risk.Evaluator{}, nil); err == nil || owner != nil {
 		t.Fatal("management selection invented primary or persistence owners")
 	}
 }

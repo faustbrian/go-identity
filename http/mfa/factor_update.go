@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"slices"
 	"strconv"
 	"time"
 
@@ -18,7 +19,7 @@ import (
 	"github.com/faustbrian/go-identity/session"
 )
 
-// FactorUpdateConfig selects cookie-only native TOTP rename without registering
+// FactorUpdateConfig selects cookie-only native TOTP management without registering
 // a route. Sessions, original proof source, mutation and shared keyed quota
 // owners are borrowed, bounded and concurrency-safe. Exact origins and policy
 // revision are trusted startup inputs. MaximumAge is positive and at most five
@@ -34,6 +35,9 @@ type FactorUpdateConfig struct {
 	PolicyRevision              authorization.Revision
 	Now                         func() time.Time
 	MaximumDuration, MaximumAge time.Duration
+	// Empty preserves rename-only compatibility. A closed copied selection may
+	// add Remove; removal forbids name even when empty. Replace remains unsupported.
+	Actions []mfa.FactorUpdateAction
 }
 
 type factorUpdateHTTPState struct {
@@ -42,10 +46,27 @@ type factorUpdateHTTPState struct {
 	factor  mfa.FactorID
 	name    string
 	version uint64
+	action  mfa.FactorUpdateAction
+}
+
+func factorUpdateActions(selected []mfa.FactorUpdateAction) ([]mfa.FactorUpdateAction, error) {
+	if len(selected) == 0 {
+		return []mfa.FactorUpdateAction{mfa.Rename}, nil
+	}
+	if len(selected) > 2 {
+		return nil, identityhttp.ErrInvalidInput
+	}
+	for i, action := range selected {
+		if action != mfa.Rename && action != mfa.Remove || slices.Contains(selected[:i], action) {
+			return nil, identityhttp.ErrInvalidInput
+		}
+	}
+	return slices.Clone(selected), nil
 }
 
 // NewFactorUpdateHandler owns POST /v1/mfa/factor-update without registration.
-// Closed JSON requires factorID, proofID, action:"rename", name and expectedVersion.
+// Closed JSON requires factorID, proofID, an explicitly selected action and
+// expectedVersion. Rename requires name; remove forbids it, even when empty.
 // One Idempotency-Key, actual cookie, exact Origin and synchronizer are required.
 // Subject, tenant, command, method and proof projections cannot be overridden.
 // Fresh known commit returns safe metadata, never a session or factor secret.
@@ -56,6 +77,10 @@ func NewFactorUpdateHandler(c FactorUpdateConfig) (http.Handler, error) {
 // NewFactorUpdateHandlerWithMiddleware preserves owned session/proof deadlines
 // through actual decode, authentication, shared quota and native mutation phases.
 func NewFactorUpdateHandlerWithMiddleware(c FactorUpdateConfig, m []identityhttp.MiddlewareDescriptor) (http.Handler, error) {
+	actions, err := factorUpdateActions(c.Actions)
+	if err != nil {
+		return nil, err
+	}
 	if !c.Sessions.Configured() || enableNil(c.Proofs) || enableNil(c.Service) || !c.Rate.Configured() || c.Now == nil || c.PolicyRevision == 0 || c.MaximumDuration < time.Millisecond || c.MaximumDuration > 30*time.Second || c.MaximumAge <= 0 || c.MaximumAge > 5*time.Minute {
 		return nil, identityhttp.ErrInvalidInput
 	}
@@ -163,17 +188,32 @@ func NewFactorUpdateHandlerWithMiddleware(c FactorUpdateConfig, m []identityhttp
 				return s, identityhttp.ErrInvalidInput
 			}
 			body, err := identityhttp.DecodeJSON[map[string]json.RawMessage](decoder, r)
-			if err != nil || len(body) != 5 {
+			if err != nil || len(body) < 4 || len(body) > 5 {
 				return s, identityhttp.ErrInvalidInput
 			}
 			var factor, proof, action string
-			for name, dst := range map[string]*string{"factorID": &factor, "proofID": &proof, "action": &action, "name": &s.name} {
+			for name, dst := range map[string]*string{"factorID": &factor, "proofID": &proof, "action": &action} {
 				raw, ok := body[name]
 				if !ok || len(raw) < 2 || raw[0] != '"' || json.Unmarshal(raw, dst) != nil {
 					return s, identityhttp.ErrInvalidInput
 				}
 			}
-			if action != "rename" {
+			switch action {
+			case "rename":
+				s.action = mfa.Rename
+				raw, ok := body["name"]
+				if !ok || len(body) != 5 || len(raw) < 2 || raw[0] != '"' || json.Unmarshal(raw, &s.name) != nil {
+					return s, identityhttp.ErrInvalidInput
+				}
+			case "remove":
+				s.action = mfa.Remove
+				if _, present := body["name"]; present || len(body) != 4 {
+					return s, identityhttp.ErrInvalidInput
+				}
+			default:
+				return s, identityhttp.ErrInvalidInput
+			}
+			if !slices.Contains(actions, s.action) {
 				return s, identityhttp.ErrInvalidInput
 			}
 			id, err := identity.ParseCommandID(factor)
@@ -244,7 +284,7 @@ func NewFactorUpdateHandlerWithMiddleware(c FactorUpdateConfig, m []identityhttp
 				return
 			}
 			caller := authorization.DecisionContext{PolicyRevision: c.PolicyRevision, Request: authorization.Request{Tenant: authorization.TenantID(b.TenantID), Subject: authorization.Subject{Kind: authorization.SubjectUser, ID: authorization.SubjectID(b.UserID)}, Action: "identity.mfa.factor-update", Resource: authorization.Resource{Type: "identity.user", ID: authorization.ResourceID(b.UserID)}}}
-			request := mfa.FactorUpdateRequest{TenantID: b.TenantID, FactorID: s.factor, Action: mfa.Rename, Name: s.name, ExpectedVersion: s.version, FactorProof: p.Proof, Session: s.base.bearer, CSRFToken: s.base.csrf, Caller: caller, Origin: string(s.origin), Network: s.base.facts.ClientIP().String(), IdempotencyKey: s.base.key}
+			request := mfa.FactorUpdateRequest{TenantID: b.TenantID, FactorID: s.factor, Action: s.action, Name: s.name, ExpectedVersion: s.version, FactorProof: p.Proof, Session: s.base.bearer, CSRFToken: s.base.csrf, Caller: caller, Origin: string(s.origin), Network: s.base.facts.ClientIP().String(), IdempotencyKey: s.base.key}
 			if request.Validate() != nil {
 				reject(w, r, identityhttp.ErrInvalidInput)
 				return
@@ -261,7 +301,11 @@ func NewFactorUpdateHandlerWithMiddleware(c FactorUpdateConfig, m []identityhttp
 			}
 			freshUse := use
 			freshUse.ProofUse.Now = c.Now()
-			if _, err := identity.ParseCommandID(string(out.CommandID)); err != nil || out.Outcome != identity.CommitOutcomeCommitted || out.Factor.ID != s.factor || out.Factor.Method != "totp" || out.Factor.State != mfa.FactorActive || out.Factor.Label != s.name || out.Factor.Version != s.version+1 || (mfa.ListResult{Factors: []mfa.FactorProjection{out.Factor}}).ValidateAt(c.Now()) != nil || s.base.read.ValidateAt(c.Now()) != nil || p.Validate(freshUse) != nil {
+			wantedState := mfa.FactorActive
+			if s.action == mfa.Remove {
+				wantedState = mfa.FactorRevoked
+			}
+			if _, err := identity.ParseCommandID(string(out.CommandID)); err != nil || out.Outcome != identity.CommitOutcomeCommitted || out.Factor.ID != s.factor || out.Factor.Method != "totp" || out.Factor.State != wantedState || out.Factor.Label != s.name || out.Factor.Version != s.version+1 || (mfa.ListResult{Factors: []mfa.FactorProjection{out.Factor}}).ValidateAt(c.Now()) != nil || s.base.read.ValidateAt(c.Now()) != nil || p.Validate(freshUse) != nil {
 				fail(w, enableFailure{status: 503, code: "unavailable"}, observation)
 				return
 			}

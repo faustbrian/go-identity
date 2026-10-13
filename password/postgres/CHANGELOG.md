@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Provide a narrow native email-reset recovery source for protected TOTP
+  removal. Require actual configured request/completion dependencies, current
+  verified email and unambiguous usable password authority in existing Work;
+  a second password reference denies even when disabled. The source neither
+  issues a reset nor opens another transaction.
+
 - Allow explicit TOTP/recovery-code password-MFA continuation selection while
   preserving TOTP-only defaults. Methods are frozen into the signed original
   continuation and share its attempt budget; selection does not verify a factor.

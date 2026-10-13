@@ -199,7 +199,7 @@ authoritative observation expiry wins without renewal.
 Install `FactorManagementMigrationSource` after the factor-verification history
 and the selected session factor-update disposition suffix. MFA v9 adds a bounded
 label and retained effects without modifying factor secrets or prior migrations.
-The current profile supports confirmed TOTP rename only. Optimistic versions,
+The default profile supports confirmed TOTP rename. Optimistic versions,
 current authority and one-time proof fences give one mutation winner; lifecycle
 failure rolls back label, proof and sessions. An unknown commit acknowledgement
 requires original-command outcome recovery, never proof or metadata redelivery.
@@ -207,3 +207,17 @@ requires original-command outcome recovery, never proof or metadata redelivery.
 `NewTOTPManagementListReader` explicitly borrows this selected manager to read
 the new safe label. Base `NewTOTPListReader` remains compatible with the previous
 schema. Neither reader infers authority from optional fields or reads secrets.
+
+To additionally select removal of the sole confirmed TOTP, set
+`FactorUpdateConfig.RemovalRecoveryPath` to `authentication.RecoveryPathEmail`
+and borrow `password/postgres.NewFactorRemovalRecoverySource` from the actual
+selected native reset request/completion service. The source checks verified
+email and exactly one usable password reference under protected Work, retaining
+current row locks. Missing, ambiguous, blocked or unavailable recovery denies;
+there is no fallback or scalar assertion of recovery availability.
+Install the optional `FactorRemovalMigrationSource` v10 suffix after v9.
+Remove consumes the original factor proof, erases secret/replay material,
+retires dependent code sets, advances authority to known-empty and revokes all
+subject sessions atomically. Historical outcome recovery reads the retained
+removal disposition, not today's mutable email eligibility. Unsupported recovery
+paths, replacement and general multi-factor removal remain denied.

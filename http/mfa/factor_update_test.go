@@ -39,6 +39,75 @@ func (*factorUpdateOwner) RecoverFactorUpdate(context.Context, identity.Recovery
 	return mfa.FactorUpdateResult{}, identity.UnavailableError{}
 }
 
+func TestFactorUpdateHTTPExplicitRemovalForbidsLabelOverrides(t *testing.T) {
+	for _, mode := range []string{"remove", "mixed-remove", "mixed-rename", "mutated-selection", "label", "empty-label", "unselected-rename"} {
+		t.Run(mode, func(t *testing.T) {
+			base, proofs, _, clock, r := enableFixture(t)
+			target := proofs.proof
+			target.Proof.Purpose, target.Action = "identity.mfa.factor-update", "identity.mfa.factor-update"
+			target.Proof.Method, target.Proof.Assurance = "totp", auth.AssuranceMultiFactor
+			target.Proof.ID = "AAAAAAAAAAAAAAAAAAAABg"
+			target.Proof.IssuedAt, target.Proof.ExpiresAt = clock.now, clock.now.Add(time.Minute)
+			proofs.proof = target
+			owner := &factorUpdateOwner{enableOwner: proofs, result: mfa.FactorUpdateResult{CommandID: "AAAAAAAAAAAAAAAAAAAABA", Outcome: identity.CommitOutcomeCommitted, Factor: mfa.FactorProjection{ID: "AAAAAAAAAAAAAAAAAAAABQ", Method: "totp", State: mfa.FactorRevoked, CreatedAt: clock.now.Add(-time.Minute), Version: 4}}}
+			c := FactorUpdateConfig{Network: base.Network, Sessions: base.Sessions, Proofs: proofs, Service: owner, Rate: base.Rate, Cookie: base.Cookie, TrustedOrigins: base.TrustedOrigins, PolicyRevision: base.PolicyRevision, Now: base.Now, MaximumDuration: base.MaximumDuration, MaximumAge: time.Minute, Actions: []mfa.FactorUpdateAction{mfa.Remove}}
+			if mode == "mixed-remove" || mode == "mixed-rename" {
+				c.Actions = []mfa.FactorUpdateAction{mfa.Rename, mfa.Remove}
+			}
+			body := `{"factorID":"AAAAAAAAAAAAAAAAAAAABQ","proofID":"AAAAAAAAAAAAAAAAAAAABg","action":"remove","expectedVersion":3}`
+			switch mode {
+			case "label":
+				body = strings.TrimSuffix(body, "}") + `,"name":"other"}`
+			case "empty-label":
+				body = strings.TrimSuffix(body, "}") + `,"name":""}`
+			case "unselected-rename":
+				body = strings.Replace(body, `"remove"`, `"rename"`, 1)
+			case "mixed-rename":
+				body = strings.Replace(body, `"remove"`, `"rename"`, 1)
+				body = strings.TrimSuffix(body, "}") + `,"name":"work"}`
+				owner.result.Factor.State, owner.result.Factor.Label = mfa.FactorActive, "work"
+			}
+			r.URL.Path = "/v1/mfa/factor-update"
+			r.RequestURI = r.URL.RequestURI()
+			r.Body = ioBody(body)
+			r.ContentLength = int64(len(body))
+			h, err := NewFactorUpdateHandler(c)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if mode == "mutated-selection" {
+				c.Actions[0] = mfa.Rename
+			}
+			w := httptest.NewRecorder()
+			h.ServeHTTP(w, r)
+			if mode == "mixed-rename" {
+				if w.Code != 200 || owner.calls != 1 || owner.last.Action != mfa.Rename || owner.last.Name != "work" || !strings.Contains(w.Body.String(), `"state":2`) {
+					t.Fatal("mixed action policy lost rename custody", w.Code)
+				}
+			} else if mode == "remove" || mode == "mixed-remove" || mode == "mutated-selection" {
+				if w.Code != 200 || owner.calls != 1 || owner.last.Action != mfa.Remove || owner.last.Name != "" || !strings.Contains(w.Body.String(), `"state":3`) {
+					t.Fatal("explicit removal lost native custody or revoked projection", w.Code)
+				}
+			} else if w.Code != 400 || owner.calls != 0 || strings.Contains(w.Body.String(), `"factor"`) {
+				t.Fatal("unselected action/label override reached mutation", w.Code)
+			}
+			if mode == "remove" || mode == "mixed-remove" || mode == "mixed-rename" {
+				feature, err := NewFeature(FeatureConfig{FactorUpdate: &c})
+				if err != nil {
+					t.Fatal("selected management feature invalid", err)
+				}
+				ops, err := identityhttp.NewOperationDescriptors(identityhttp.FeatureServices{Features: []identityhttp.Feature{feature}})
+				if err != nil || len(ops) != 1 {
+					t.Fatal("selected actions exposed unrelated operations", err)
+				}
+				if _, _, err := identityhttp.NewRouter(identityhttp.TransportPolicy{Network: c.Network, HandlerTimeout: time.Second, Document: identityhttp.DocumentConfig{Title: "Selected management", Version: "1"}}, ops, nil); err != nil {
+					t.Fatal("selected action wire contract invalid", err)
+				}
+			}
+		})
+	}
+}
+
 func TestFactorUpdateHTTPConservesCustodyAndWithholdsInvalidMetadata(t *testing.T) {
 	for _, mode := range []string{"fresh", "expired", "unknown", "bad-command", "foreign-proof", "foreign-result", "mixed-auth", "missing-key", "duplicate-key", "body-command", "wrong-action", "missing-csrf", "null-name", "overflow-version", "scope-query"} {
 		t.Run(mode, func(t *testing.T) {
@@ -138,5 +207,13 @@ func TestFactorUpdateHTTPConservesCustodyAndWithholdsInvalidMetadata(t *testing.
 func TestFactorUpdateHTTPRequiresActualOwners(t *testing.T) {
 	if h, err := NewFactorUpdateHandler(FactorUpdateConfig{}); err == nil || h != nil {
 		t.Fatal("unconfigured HTTP acquired management authority")
+	}
+	for _, actions := range [][]mfa.FactorUpdateAction{{mfa.Replace}, {mfa.Remove, mfa.Remove}, {mfa.Rename, mfa.Rename}, {mfa.Remove, mfa.Rename, mfa.Remove}, {mfa.FactorUpdateAction(255)}} {
+		base, proofs, _, _, _ := enableFixture(t)
+		owner := &factorUpdateOwner{enableOwner: proofs}
+		config := FactorUpdateConfig{Network: base.Network, Sessions: base.Sessions, Proofs: proofs, Service: owner, Rate: base.Rate, Cookie: base.Cookie, TrustedOrigins: base.TrustedOrigins, PolicyRevision: base.PolicyRevision, Now: base.Now, MaximumDuration: base.MaximumDuration, MaximumAge: time.Minute, Actions: actions}
+		if h, err := NewFactorUpdateHandler(config); err == nil || h != nil {
+			t.Fatal("invalid closed action selection acquired a handler")
+		}
 	}
 }

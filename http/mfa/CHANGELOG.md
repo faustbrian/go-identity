@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Allow explicitly selected factor removal alone or alongside rename, with
+  copied closed action policy and matching selected OpenAPI. Removal forbids
+  labels, preserves original cookie/CSRF/proof custody and returns safe revoked
+  metadata only from a fresh known commit. Empty action selection stays rename-only.
+
 - Add opt-in factor rename with closed JSON, one original Idempotency-Key,
   cookie/Origin/synchronizer and original factor-proof lookup. Safe metadata
   is returned only from fresh known commit; errors, replay, uncertainty and

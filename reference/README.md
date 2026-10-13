@@ -869,7 +869,7 @@ contact existing application services. Exact coverage, mutation, interoperabilit
 clean-consumer and complete reference acceptance gates remain release requirements.
 See [CHANGELOG.md](CHANGELOG.md).
 
-## Selected factor rename composition
+## Selected factor management composition
 
 Set `MFAEnrollmentConfiguration.ActiveStepUp`, then optional
 `FactorManagement` with explicit primary/factor maximum ages. The graph supplies
@@ -885,3 +885,18 @@ absent; incomplete selected dependencies fail composition. Graph drain/close
 guards apply to native and HTTP calls. Real-adapter journeys exercise fresh
 TOTP proof, optimistic rename, rollback, session invalidation and original
 outcome recovery; this is not complete MFA or platform release qualification.
+
+For the single-active-TOTP removal profile, additionally select
+`FactorManagement.RemovalRecoveryPath = authentication.RecoveryPathEmail` and
+the real `PasswordResetConfiguration` request/completion owner with required
+HIBP and delivery dependencies. Leave `RemovalRecovery` absent: the graph
+supplies that native owner, rejecting caller substitutions. Selected migrations
+append optional MFA v10 after v9; rename-only histories stay unchanged. Removal
+erases factor material, retires its recovery-code sets and revokes all subject
+sessions only while verified email and unambiguous usable password authority
+remain current. Native removal does not select HTTP reset or management routes.
+Select `HTTPMFAFactorUpdate.Actions` explicitly for removal and independently
+select `HTTPPasswordReset` when HTTP recovery is wanted. Real native and HTTP
+journeys prove removal → emailed reset → completion → new-password login without
+resurrecting factors or reusing the revoked session. Replacement, disable, other
+recovery paths and general multi-factor management remain unfinished.

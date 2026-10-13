@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Admit native factor removal in the existing protected whole-subject session
+  disposition. Revocation and retained outcome evidence commit with MFA's
+  proof/factor/recovery effects; no source session is refreshed or revived.
+
 - Extend the existing native MFA primary/disposition owner to exact
   factor-update Work, retaining original cookie/CSRF/session custody and
   atomic whole-subject revocation. Install the optional forward-only

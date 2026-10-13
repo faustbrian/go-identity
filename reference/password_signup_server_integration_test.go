@@ -33,6 +33,7 @@ import (
 	passwordhttp "github.com/faustbrian/go-identity/http/password"
 	sessionhttp "github.com/faustbrian/go-identity/http/session"
 	magicpg "github.com/faustbrian/go-identity/magiclink/postgres"
+	"github.com/faustbrian/go-identity/mfa"
 	mfapg "github.com/faustbrian/go-identity/mfa/postgres"
 	"github.com/faustbrian/go-identity/password"
 	passwordpg "github.com/faustbrian/go-identity/password/postgres"
@@ -231,7 +232,7 @@ func proveReferenceSignupGraph(t *testing.T, competing bool, protected ...bool) 
 	proveReferenceSignupGraphExtensions(t, competing, signupGraphExtensions{}, protected...)
 }
 
-type signupGraphExtensions struct{ mfaEnrollment, mfaListing, mfaListHTTP, mfaListStandalone, mfaListDenials, mfaListRecheck, activeStepUp, activeStepUpHTTP, factorManagement, factorManagementHTTP, factorManagementRace, factorManagementDenials, factorManagementClear, regeneration, regenerationHTTP, regenerationRace, regenerationDenials, passwordMFA, passwordRecovery, recoveryRace, completionCommitFault bool }
+type signupGraphExtensions struct{ mfaEnrollment, mfaListing, mfaListHTTP, mfaListStandalone, mfaListDenials, mfaListRecheck, activeStepUp, activeStepUpHTTP, factorManagement, factorManagementHTTP, factorManagementRace, factorManagementDenials, factorManagementClear, factorRemoval, factorRemovalReset, factorRemovalLocks, regeneration, regenerationHTTP, regenerationRace, regenerationDenials, passwordMFA, passwordRecovery, recoveryRace, completionCommitFault bool }
 
 func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extensions signupGraphExtensions, protected ...bool) {
 	t.Helper()
@@ -243,6 +244,10 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 	f.factorManagementRace = extensions.factorManagementRace
 	f.factorManagementDenials = extensions.factorManagementDenials
 	f.factorManagementClear = extensions.factorManagementClear
+	f.factorRemoval = extensions.factorRemoval
+	f.factorRemovalReset = extensions.factorRemovalReset
+	f.factorRemovalResetHTTP = extensions.factorRemovalReset && extensions.factorManagementHTTP
+	f.factorRemovalLocks = extensions.factorRemovalLocks
 	f.regenerationDenials = extensions.regenerationDenials
 	f.mfaListDenials = extensions.mfaListDenials
 	f.mfaListRecheck = extensions.mfaListRecheck
@@ -278,9 +283,21 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 	key, _ := session.NewBrowserDeviceKey(1, bytes.Repeat([]byte{107}, 32))
 	cookie, _ := session.NewCookiePolicy(session.CookieConfig{Name: "__Host-identity_device", SameSite: http.SameSiteLaxMode})
 	c.HTTPPreAuth = &reference.HTTPPreAuthConfiguration{Lifetime: session.LifetimeConfig{Default: session.BrowserSession, AbsoluteTTL: time.Hour, IdleTTL: 30 * time.Minute, RefreshAfter: time.Minute, FreshFor: 15 * time.Minute}, Device: &session.BrowserDeviceConfig{Namespace: "reference-registration", Keys: []session.BrowserDeviceKey{key}, ActiveVersion: 1, Lifetime: 24 * time.Hour, Cookie: cookie}}
-	configureReferencePasswordReset(t, &c, origin, f.pool, true)
+	configureReferencePasswordReset(t, &c, origin, f.pool, !extensions.factorRemoval, extensions.factorRemoval, extensions.factorRemovalReset)
+	selectedReset := c.PasswordReset
+	selectedResetHTTP := c.HTTPPasswordReset
 	calls := configureReferenceRegistration(t, &c, origin)
+	if extensions.factorRemoval {
+		c.PasswordReset = selectedReset
+		c.PasswordReset.Native.Coordinator.QueryPolicy = c.OTP.Signin.Coordinator.QueryPolicy
+		c.PasswordReset.Native.Coordinator.AdmissionPolicy = c.OTP.Signin.Coordinator.QueryPolicy
+		c.PasswordReset.Native.Request.RequestKeys.Policy = c.OTP.RequestKeys.Policy
+		if f.factorRemovalResetHTTP {
+			c.HTTPPasswordReset = selectedResetHTTP
+		}
+	}
 	signin := c.PasswordSignin.Native
+	f.removalSignin = signin
 	c.Session = &reference.SessionConfiguration{Native: sessionpg.SignOutServiceConfig{Execution: sessionpg.IssueExecutorConfig{Repository: signin.Session, Profile: sessionpg.IssueAdmissionConfig(signin.Profile), Coordinator: signin.Coordinator, Authorization: c.OTP.RequestKeys.Policy.Authorization, Clock: clock.System{}, PolicyID: "session-signout", PolicyVersion: 9, AuditRetentionVersion: 1}, Validation: session.ServiceConfig{Profile: session.StorageStatefulOpaque, Audience: signin.Profile.Audience, MaximumDuration: 2 * time.Second, ClockUncertainty: time.Millisecond, LookupKeys: []session.DigestKey{signin.Issuance.LookupKey}}, Cookie: signin.Issuance.Cookie, MaximumDuration: 3 * time.Second}, CSRFKeys: []session.CSRFKey{signin.CSRFKey}}
 	c.HTTPSession = &reference.HTTPSessionConfiguration{Transport: session.CredentialCookie, TrustedOrigins: []identityhttp.Origin{identityhttp.Origin(origin)}, RateNamespace: "reference-session", EmergencyMaximumKeys: 128, Degraded: func(context.Context, identityhttp.SafeRateEvent) error {
 		t.Error("unexpected shared rate degradation")
@@ -323,10 +340,16 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 	}
 	if extensions.factorManagement {
 		c.MFAEnrollment.FactorManagement = &mfapg.FactorUpdateConfig{MaximumAge: time.Minute, PrimaryMaximumAge: 2 * time.Minute}
+		if extensions.factorRemoval {
+			c.MFAEnrollment.FactorManagement.RemovalRecoveryPath = auth.RecoveryPathEmail
+		}
 		f.factorManagement = true
 	}
 	if extensions.factorManagementHTTP {
 		c.HTTPMFAFactorUpdate = &reference.HTTPMFAFactorUpdateConfiguration{TrustedOrigins: []identityhttp.Origin{identityhttp.Origin(origin)}, RateNamespace: c.HTTPMFAEnrollment.RateNamespace, RateKey: c.HTTPMFAEnrollment.RateKey}
+		if extensions.factorRemoval {
+			c.HTTPMFAFactorUpdate.Actions = []mfa.FactorUpdateAction{mfa.Remove}
+		}
 		f.factorManagementHTTP = true
 		if c.HTTPMFAActiveStepUp != nil {
 			c.HTTPMFAActiveStepUp.Purposes = []auth.Purpose{"identity.mfa.factor-update"}
@@ -453,6 +476,14 @@ END $$`); err != nil {
 		seen[op.Record.OperationID] = true
 	}
 	wantOperations := 8
+	if c.HTTPPasswordReset != nil {
+		wantOperations += 2
+		if !seen["identity.password.reset-request"] || !seen["identity.password.reset-complete"] {
+			t.Fatal("selected recovery routes missing")
+		}
+	} else if seen["identity.password.reset-request"] || seen["identity.password.reset-complete"] {
+		t.Fatal("unselected recovery route advertised")
+	}
 	if c.HTTPSession == nil {
 		wantOperations -= 2
 		if seen["identity.session.get"] || seen["identity.session.signout"] {
@@ -741,7 +772,7 @@ CREATE TRIGGER registration_fixture_fail BEFORE INSERT ON identity.delivery_inte
 		t.Fatal("verified registration did not produce usable login", r.StatusCode, signed.CommitOutcome, signed.Error, signed.CommandID != "", signed.SessionID != "")
 	}
 	if enrollment {
-		if f.regenerationDenials || f.factorManagementDenials {
+		if f.regenerationDenials || f.factorManagementDenials || f.factorRemoval {
 			secondFlow, secondCookies := issue("password")
 			secondBody := map[string]any{}
 			for key, value := range loginBody {
@@ -754,6 +785,11 @@ CREATE TRIGGER registration_fixture_fail BEFORE INSERT ON identity.delivery_inte
 				t.Fatal("second genuine source session unavailable")
 			}
 			f.secondBearer, f.secondCSRF = second.Cookies()[0].Value, second.Header.Get("X-CSRF-Token")
+		}
+		if f.factorRemovalReset {
+			f.afterFactorRemoval = func(ctx context.Context, user identity.UserID) {
+				proveReferenceEmailResetAfterRemoval(t, ctx, f, features, workers, client, base, origin, loginCookies, messages, user)
+			}
 		}
 		proveReferenceMFAEnrollment(t, ctx, f, features, client, base, origin, r.Cookies(), r.Header.Get("X-CSRF-Token"), signed.SessionID, passwordMFA, recoveryLogin...)
 		return

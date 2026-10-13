@@ -13,11 +13,11 @@ import (
 )
 
 func TestMFAEnrollmentSelectionDeniesAbsentNativeAuthority(t *testing.T) {
-	if owner, err := composeMFAEnrollment(StoreConfiguration{}, ReferenceDependencies{}, nil, risk.Evaluator{}); err != nil || owner != nil {
+	if owner, err := composeMFAEnrollment(StoreConfiguration{}, ReferenceDependencies{}, nil, risk.Evaluator{}, nil); err != nil || owner != nil {
 		t.Fatal("unselected enrollment acquired authority")
 	}
 	c := StoreConfiguration{MFAEnrollment: &MFAEnrollmentConfiguration{}}
-	if owner, err := composeMFAEnrollment(c, ReferenceDependencies{}, nil, risk.Evaluator{}); err == nil || owner != nil {
+	if owner, err := composeMFAEnrollment(c, ReferenceDependencies{}, nil, risk.Evaluator{}, nil); err == nil || owner != nil {
 		t.Fatal("selected enrollment accepted absent primary/storage authority")
 	}
 	if err := (&storeState{}).composeFeatureStores(c, ReferenceDependencies{}); err == nil {

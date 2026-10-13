@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Connect explicitly selected sole-TOTP removal to native emailed-reset recovery
+  and opt-in HTTP composition. Removal erases factor material, retires its code
+  sets and revokes subject sessions atomically; default rename-only behavior
+  remains unchanged. This supersedes the removal caveat below, not replacement,
+  disable or general multi-factor management.
+
 - Connect the bounded factor-management contract to native TOTP rename and
   independently selected HTTP/reference composition. Fresh signed TOTP proof,
   actual source session and recent primary authentication are required. Rename

@@ -63,7 +63,7 @@ func (e *MFARecoverySessionEffect) acceptsScope(b identity.CommandBinding, f ker
 	if !e.factorManagement {
 		return mfaRecoveryEffectScope(b, f, l)
 	}
-	return b.SchemaVersion == 1 && b.OperationID == "identity.mfa.factor-update" && b.SchemaID == "mfa-factor-update" && b.RecordID == string(b.UserID) && f.Operation == (identity.FeatureOperation{Owner: "identity/mfa", OperationID: b.OperationID, SchemaID: b.SchemaID, SchemaVersion: 1, RecordRequirement: identity.FeatureRecordRequired}) && f.Contributor == (kernel.ContributorDescriptor{Owner: "identity/mfa/postgres", ContractID: "identity.mfa", Version: 1}) && l.EventType == "factor.updated.v1" && l.BeforeVersion > 0 && l.BeforeVersion < math.MaxUint64 && l.AfterVersion == l.BeforeVersion+1
+	return b.SchemaVersion == 1 && b.OperationID == "identity.mfa.factor-update" && b.SchemaID == "mfa-factor-update" && b.RecordID == string(b.UserID) && f.Operation == (identity.FeatureOperation{Owner: "identity/mfa", OperationID: b.OperationID, SchemaID: b.SchemaID, SchemaVersion: 1, RecordRequirement: identity.FeatureRecordRequired}) && f.Contributor == (kernel.ContributorDescriptor{Owner: "identity/mfa/postgres", ContractID: "identity.mfa", Version: 1}) && (l.EventType == "factor.updated.v1" || l.EventType == "factor.removed.v1") && l.BeforeVersion > 0 && l.BeforeVersion < math.MaxUint64 && l.AfterVersion == l.BeforeVersion+1
 }
 
 func mfaRecoveryEffectScope(b identity.CommandBinding, f kernel.FeatureRegistration, l kernel.LifecyclePlan) bool {

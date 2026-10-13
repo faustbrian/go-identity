@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add explicitly selected sole-TOTP removal with an actual native email-reset
+  recovery owner. Erase secret/replay material, retire dependent recovery sets,
+  consume proof and revoke sessions in one protected transaction; missing or
+  ambiguous recovery denies. Append optional forward-only removal v10 after v9.
+  Default rename-only configuration and migration history remain unchanged.
+
 - Add native optimistic TOTP label rename using existing keyed preparation,
   original signed proof validation and one protected mutation transaction.
   Proof use, factor epoch, whole-subject session revocation and retained
