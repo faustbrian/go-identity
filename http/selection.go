@@ -431,7 +431,7 @@ func validOperation(owner ModuleID, op OperationDescriptor, catalog map[string]c
 		// Native cookie-only MFA enrollment authenticates the synchronizer
 		// against original session state under mutation fences. It never issues
 		// a separately aged CSRF token or admits an origin-only/bearer fallback.
-		if (r.OperationID == "identity.mfa.enable" || r.OperationID == "identity.mfa.totp-uri") && r.CSRFOrigin.Mode == CSRFSessionState && r.CSRFOrigin.TokenHeader == "X-CSRF-Token" && r.CSRFOrigin.RefererFallback == RefererFallbackDeny {
+		if (r.OperationID == "identity.mfa.enable" || r.OperationID == "identity.mfa.totp-uri" || r.OperationID == "identity.mfa.recovery-regenerate") && r.CSRFOrigin.Mode == CSRFSessionState && r.CSRFOrigin.TokenHeader == "X-CSRF-Token" && r.CSRFOrigin.RefererFallback == RefererFallbackDeny {
 			csrfMatches = true
 		}
 		if r.OperationID == "identity.mfa.totp-verify" && (r.CSRFOrigin.Mode == CSRFSessionState || r.CSRFOrigin.Mode == CSRFVariantOriginSessionState) && r.CSRFOrigin.TokenHeader == "X-CSRF-Token" && r.CSRFOrigin.RefererFallback == RefererFallbackDeny {

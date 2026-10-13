@@ -1,5 +1,37 @@
 # PostgreSQL MFA authority (in development)
 
+## Native authenticated step-up and recovery replacement
+
+Compose `NewTOTPActiveStepUpService` over the actual selected enrollment graph
+with the native current-session primary owner, exact allowed origins, fixed
+comparison key/version and original-evidence Ed25519 signing/retained public
+keys. It borrows the graph's pool, encryption, risk/counters and transaction
+coordinator; it starts no goroutine or independent journal. Persist original
+evidence using `FactorVerificationMigrationSource`. In selected reference
+graphs this is MFA version8, preserving password-continuation version7.
+
+`ActiveStepUpRateSource` reads original authenticated session/factor custody
+without decrypting, comparing, consuming or issuing. Retain its exclusive
+deadline. Protected verification compares the actual enrolled TOTP and commits
+replay advancement, original signed evidence and audit/lifecycle together.
+Original prepared ciphertext is reused on retry; terminal replay/recovery
+cannot disclose proof again. Retain verification keys for historical evidence.
+
+Compose `NewRecoveryRegenerationService` with that same step-up/enrollment
+graph, the native current-session primary and the session-owned replacement
+effects. Count is 1..64 and maximum proof age is positive, at most five minutes.
+The service uses authentication's existing original-proof validator, then locks
+and consumes actual stored proof use in protected Work. It retires all preceding
+sets, installs independent random128/base64url codes, advances factor authority
+and enlists bounded session revocation and events in one transaction. Neither
+source reads nor retries renew proof/session timestamps. Only the fresh known
+commit returns secrets; destroy them after delivery. Recovery is metadata-only.
+
+The reference graph supplies native owners and migrations through
+`MFAEnrollment.ActiveStepUp`/`.Regeneration`; HTTP remains separately opt-in.
+These operations do not provide the remaining OTP, trusted-device, security-key
+or administrative-recovery workflows, nor complete module release qualification.
+
 Install `MigrationSource` with a permanent version in the `identity_mfa` migration
 namespace after the kernel user and command histories. The source deliberately
 does not backfill existing users as having no factors. An unmanaged schema fails.

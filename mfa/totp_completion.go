@@ -17,7 +17,8 @@ import (
 
 // ChallengeID names one exact original MFA challenge, not possession or a
 // session. This browser TOTP-completion profile uses the continuation's
-// canonical random128 identity; enrollment/step-up are distinct future profiles.
+// canonical random128 identity; enrollment and authenticated step-up use their
+// distinct explicit request arms instead of a login challenge identity.
 type ChallengeID string
 
 // FactorID selects an enrolled factor under the proof-authenticated account.
@@ -51,6 +52,10 @@ type TotpVerifyRequest struct {
 	// fields must be absent; the original enable provenance is restored by the
 	// native owner, not supplied as another caller-generated primary proof.
 	Enrollment *TOTPEnrollmentConfirmation
+	// StepUp selects active-factor verification for a protected action. It is
+	// disjoint from both login and pending-enrollment confirmation; unselected
+	// owners must reject it rather than fall back to their existing profile.
+	StepUp *TOTPAuthenticatedStepUp
 }
 
 // TOTPEnrollmentConfirmation borrows the original authenticated session and
@@ -71,7 +76,13 @@ type TOTPEnrollmentConfirmation struct {
 // native shared-attempt policy, not bypass it through a structural success.
 func (r TotpVerifyRequest) Validate() error {
 	if r.Enrollment != nil {
+		if r.StepUp != nil {
+			return identity.InvalidInputError{Field: "mfa_totp_verify"}
+		}
 		return r.validateEnrollmentConfirmation()
+	}
+	if r.StepUp != nil {
+		return r.validateAuthenticatedStepUp()
 	}
 	bad := func() error { return identity.InvalidInputError{Field: "mfa_totp_verify"} }
 	if !validContinuationBrowserInput(continuationBrowserInput{tenant: r.TenantID, command: r.CommandID, continuation: ContinuationID(r.ChallengeID), flow: r.PreAuthID, proof: r.Proof, cookie: r.Cookie, caller: r.Caller, origin: r.Origin, callback: r.Callback, network: r.Network, device: r.Device}, "identity.mfa.totp-verify") {
@@ -108,7 +119,8 @@ func totpCompletionURL(value string, origin bool) bool {
 // unknown outcomes, recovery, cancellation and delivery failure return neither.
 // Session metadata is historical, not current access authority. This selected
 // login variant returns no enrollment activation. Enrollment confirmation
-// returns no login credential or reusable step-up proof.
+// returns no login credential or reusable step-up proof. Active step-up uses
+// its own StepUpProof arm and never creates a new session.
 type TotpVerifyResult struct {
 	Outcome   identity.CommitOutcome
 	Session   session.IssueResult
@@ -117,9 +129,18 @@ type TotpVerifyResult struct {
 	// variant only. It grants no session or current factor authority. Its expiry
 	// is the original pending deadline, not an active-factor expiration reset.
 	Enrollment Enrollment
+	// StepUpProof is the original active-factor verification projection, not
+	// a session or permission to consume it. Only a fresh committed step-up
+	// response may carry it; native issuance provenance and atomic one-use
+	// validation remain mandatory at the consuming protected operation.
+	StepUpProof ContinuationProof
 }
 
 func (r TotpVerifyRequest) validateEnrollmentConfirmation() error {
+	return r.validateAuthenticatedTOTPCustody(r.Enrollment.Session, r.Enrollment.CSRFToken)
+}
+
+func (r TotpVerifyRequest) validateAuthenticatedTOTPCustody(token auth.BearerCredential, csrf session.CSRFToken) error {
 	bad := func() error { return identity.InvalidInputError{Field: "mfa_totp_verify"} }
 	if r.ChallengeID != "" || r.PreAuthID != "" || r.Proof != (capability.Proof{}) || r.Cookie.Token() != "" || r.Callback != "" || r.Device != "" {
 		return bad()
@@ -133,10 +154,10 @@ func (r TotpVerifyRequest) validateEnrollmentConfirmation() error {
 	if _, err := identity.ParseCommandID(string(r.FactorID)); err != nil || r.CommandID == identity.CommandID(r.FactorID) {
 		return bad()
 	}
-	if _, err := session.ParseToken(r.Enrollment.Session.Token()); err != nil {
+	if _, err := session.ParseToken(token.Token()); err != nil {
 		return bad()
 	}
-	if r.Enrollment.CSRFToken == (session.CSRFToken{}) {
+	if csrf == (session.CSRFToken{}) {
 		return bad()
 	}
 	digest, err := r.Code.CommandDigest([32]byte{1}, "mfa.input.validation")

@@ -3,9 +3,33 @@
 This Go 1.27 module owns second-factor authority, separate from primary
 authentication. The initial API distinguishes explicitly known empty state from
 unknown state. It now defines immutable browser partial-authentication continuation
-bindings and shared attempt budgets. Durable continuation issuance/completion,
-enrollment, factor verification, recovery codes and trusted devices remain
-unfinished; it is not a complete MFA service.
+bindings and shared attempt budgets. Selected native paths now support TOTP
+enrollment, password-first TOTP/recovery login, authenticated step-up and recovery
+regeneration. OTP/security-key orchestration, trusted devices and administrative
+factor recovery remain unfinished; this is not the complete MFA capability set.
+
+## Authenticated step-up and recovery regeneration
+
+`TotpVerifyRequest.StepUp` explicitly selects current-session active-factor
+verification. It is disjoint from login and `Enrollment`; inactive-arm inputs
+must be absent. Submit the actual session, synchronizer, factor, opaque code,
+trusted caller/origin/network and exact `identity.mfa.recovery-regenerate`
+purpose. Unselected owners deny rather than fall back. This issues no session
+and accepts no trusted-device bypass.
+
+Only fresh known commitment returns `ContinuationProof`. Its `Bindings()`
+projection retains the original session/version/action/timestamps but grants
+no authority. `NewContinuationProof` validates structure, not signed issuance.
+Native regeneration must authenticate original evidence and current owners.
+Replay, uncertainty, cancellation and code-free recovery return no proof.
+
+`RecoveryRegenerationService.RecoveryRegenerate` replaces every predecessor
+recovery set atomically with proof consumption, factor advancement, subject
+session revocation and audit/lifecycle effects. `RecoveryCodes` are owned
+reveal-once secrets: explicitly deliver, then destroy them. Matching retries
+and `RecoverRecoveryRegenerate` return original outcomes without codes. Sign
+in again after successful replacement. PostgreSQL and opt-in HTTP/reference
+composition provide these workflows without consumer-written domain stores.
 
 Trusted adapters construct `FactorAuthority` from current owner storage.
 `RequireEmailRecovery` denies unknown, cross-subject, or enrolled state. Successful

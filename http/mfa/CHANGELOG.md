@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- Add independent recovery-regeneration HTTP with original signed factor-proof
+  lookup, cookie/Origin/CSRF, stable original-command quotas and reveal-once
+  modern-code delivery. Native replacement owns atomic proof/set/session effects;
+  replay, uncertainty and failed/expired delivery expose no codes.
+
+- Add opt-in authenticated TOTP step-up on the explicit `X-MFA-Variant: step-up`
+  arm. Require current cookie/Origin/CSRF and native original quota/deadline
+  custody. Only a fresh known commit reveals a regeneration proof ID; no session,
+  enrollment, replay, uncertain or expired proof output is delivered.
+
 - Connect recovery-code transport to the explicitly selected native reference
   password-primary profile. This supersedes the earlier transport-only
   orchestration caveat below; standalone handlers still require a native service.

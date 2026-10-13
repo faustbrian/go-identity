@@ -2,6 +2,35 @@
 
 ## Unreleased
 
+- Expose read-only authenticated active-factor quota metadata for selected HTTP
+  composition. Preserve fixed policy lifetime and original primary/session
+  deadlines without decrypting factor secrets, comparing codes or issuing proof.
+
+- Add native fresh-TOTP-proof recovery-set regeneration using authentication's
+  original-proof validator and one protected proof-use/set/factor/session/event
+  transaction. All predecessor codes are retired, replacement codes are retained
+  encrypted and returned only from a fresh known commit, and replay/recovery never
+  redeliver them. Current configured action policy now precedes new step-up and
+  regeneration calls; epoch fencing alone does not grant action permission.
+
+- Add explicit native authenticated TOTP step-up for recovery regeneration.
+  Verify the real active factor in protected Work and persist the existing
+  authentication signed-reauthentication frame atomically with replay, audit
+  and lifecycle effects. Original encrypted preparation survives retries;
+  terminal replay and unknown-commit recovery never redeliver factor proof.
+  Selecting this service does not select HTTP or recovery-set replacement.
+
+- Add committed-only original factor-verification storage and its bounded
+  signature-preserving reader, plus a separate active-factor ciphertext read
+  bound to an owned current session observation. Extend the current enrollment
+  fence only to exact authenticated step-up and regeneration owner schemas.
+  These boundaries do not yet issue fresh factor proofs or rotate recovery sets.
+
+- Define bounded canonical storage for original signed TOTP factor verification,
+  with an independent immutable factor-authority epoch and preserved original
+  session/action/timestamps. The codec grants no signature, current-authority
+  or one-use validation; native issuance and consumption remain in development.
+
 - Expose non-secret matched-set preparation metadata only during the live native
   recovery comparison callback. Wrong, zero, spent or returned custody denies;
   the projection is not proof and protected completion must reverify the code

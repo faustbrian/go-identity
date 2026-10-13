@@ -10,8 +10,8 @@ import (
 )
 
 // RequireTOTPSessionFactor fences the original confirmed TOTP enrollment and
-// account-wide factor generation inside the exact native session-revoke-one
-// owner's live Work. Directory, identifier and policy must already be fenced.
+// account-wide factor generation inside exact native session-revoke-one or
+// authenticated MFA-action Work. Directory, primary and policy must already be fenced.
 // Locks are account, factor authority, then selected factor; the coordinator
 // owns their lifetime and rollback. No secret, child or replay counter is read
 // or changed, and historical continuation expiry is not session validity.
@@ -24,7 +24,9 @@ func RequireTOTPSessionFactor(ctx context.Context, w kernel.Work, owner kernel.F
 		return err
 	}
 	b, f, _, err := w.FeatureScope(owner)
-	if err != nil || b.UserID != user || b.ActorKind != authorization.SubjectUser || string(b.ActorID) != string(user) || b.OperationID != "identity.session.revoke-one" || f.Operation.Owner != "identity/session" || f.Contributor != (kernel.ContributorDescriptor{Owner: "identity/session/postgres", ContractID: "identity.session.store", Version: 1}) {
+	sessionOwner := b.OperationID == "identity.session.revoke-one" && f.Operation.Owner == "identity/session" && f.Contributor == (kernel.ContributorDescriptor{Owner: "identity/session/postgres", ContractID: "identity.session.store", Version: 1})
+	mfaOwner := b.SchemaVersion == 1 && (b.OperationID == "identity.mfa.totp-verify" && b.SchemaID == "mfa-totp-step-up" || b.OperationID == "identity.mfa.recovery-regenerate" && b.SchemaID == "mfa-recovery-regenerate") && f.Operation.Owner == "identity/mfa" && f.Contributor == (kernel.ContributorDescriptor{Owner: "identity/mfa/postgres", ContractID: "identity.mfa", Version: 1})
+	if err != nil || b.UserID != user || b.ActorKind != authorization.SubjectUser || string(b.ActorID) != string(user) || !sessionOwner && !mfaOwner {
 		return invalidAuthority()
 	}
 	if _, err := identity.ParseCommandID(factorID); err != nil {

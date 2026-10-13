@@ -95,6 +95,8 @@ type featureState struct {
 	httpMagicLink                *magicLinkHTTPState
 	httpMFA                      *mfaHTTPState
 	httpMFAEnrollment            *mfaEnrollmentHTTPState
+	httpMFAActiveStepUp          *mfaActiveStepUpHTTPState
+	httpMFARecoveryRegeneration  *mfaRecoveryRegenerationHTTPState
 	passwordSignin               *passwordpg.SigninService
 	passwordSignup               *passwordpg.SignupService
 	session                      *sessionState
@@ -125,6 +127,12 @@ type featureState struct {
 }
 
 func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDependencies) error {
+	if c.HTTPMFARecoveryRegeneration != nil && (c.MFAEnrollment == nil || c.MFAEnrollment.Regeneration == nil || c.Session == nil) {
+		return identity.InvalidInputError{Field: "reference_http_mfa_regeneration"}
+	}
+	if c.HTTPMFAActiveStepUp != nil && (c.MFAEnrollment == nil || c.MFAEnrollment.ActiveStepUp == nil || c.Session == nil) {
+		return identity.InvalidInputError{Field: "reference_http_mfa_step_up"}
+	}
 	if c.HTTPMFAEnrollment != nil && (c.MFAEnrollment == nil || c.PasswordVerification == nil || c.Session == nil) {
 		return identity.InvalidInputError{Field: "reference_http_mfa_enrollment"}
 	}
@@ -375,6 +383,24 @@ func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDepen
 		return err
 	}
 	migrationConfig.mfaEnrollment = mfaEnrollmentOwner != nil
+	httpMFARecoveryRegeneration, err := composeMFARecoveryRegenerationHTTP(c, d, mfaEnrollmentOwner, s.httpRate)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if httpMFARecoveryRegeneration != nil && !retainedResetHTTP {
+			httpMFARecoveryRegeneration.rate.Close()
+		}
+	}()
+	httpMFAActiveStepUp, err := composeMFAActiveStepUpHTTP(c, mfaEnrollmentOwner, s.httpRate)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if httpMFAActiveStepUp != nil && !retainedResetHTTP {
+			httpMFAActiveStepUp.rate.Close()
+		}
+	}()
 	httpMFAEnrollment, err := composeMFAEnrollmentHTTP(c, mfaEnrollmentOwner, passwordVerificationOwner, s.httpRate)
 	if err != nil {
 		return err
@@ -460,6 +486,8 @@ func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDepen
 	s.features.passwordRecovery = passwordRecovery
 	s.features.httpMFA = httpMFA
 	s.features.httpMFAEnrollment = httpMFAEnrollment
+	s.features.httpMFAActiveStepUp = httpMFAActiveStepUp
+	s.features.httpMFARecoveryRegeneration = httpMFARecoveryRegeneration
 	retainedResetHTTP = true
 	return nil
 }

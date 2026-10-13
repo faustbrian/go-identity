@@ -52,6 +52,11 @@ func TestMFAEnrollmentStoredCSRFProfileIsNarrow(t *testing.T) {
 	if _, err := identityhttp.NewCanonicalOperation(uri); err != nil {
 		t.Fatal("owned stored-session URI profile denied", err)
 	}
+	regeneration := c
+	regeneration.OperationID = "identity.mfa.recovery-regenerate"
+	if _, err := identityhttp.NewCanonicalOperation(regeneration); err != nil {
+		t.Fatal("owned stored-session replacement profile denied", err)
+	}
 	for _, id := range []string{"identity.mfa.disable"} {
 		bad := c
 		bad.OperationID = id

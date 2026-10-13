@@ -69,5 +69,5 @@ func NewEnrollmentConfirmationHandler(c EnrollmentConfirmationConfig) (http.Hand
 // NewEnrollmentConfirmationHandlerWithMiddleware binds real cookie, native
 // source, rate and protected confirmation phases, retaining original deadlines.
 func NewEnrollmentConfirmationHandlerWithMiddleware(c EnrollmentConfirmationConfig, m []identityhttp.MiddlewareDescriptor) (http.Handler, error) {
-	return newPendingFactorHandler(URIConfig{Network: c.Network, Sessions: c.Sessions, Cookie: c.Cookie, TrustedOrigins: c.TrustedOrigins, PolicyRevision: c.PolicyRevision, Now: c.Now, MaximumDuration: c.MaximumDuration}, &c, m)
+	return newPendingFactorHandler(URIConfig{Network: c.Network, Sessions: c.Sessions, Cookie: c.Cookie, TrustedOrigins: c.TrustedOrigins, PolicyRevision: c.PolicyRevision, Now: c.Now, MaximumDuration: c.MaximumDuration}, &c, nil, m)
 }

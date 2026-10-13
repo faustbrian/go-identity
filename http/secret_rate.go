@@ -97,7 +97,10 @@ func NewKeyedSecretRateLimiter(c KeyedSecretRateConfig) (*KeyedSecretRateLimiter
 		if row.Rate == "rate.secret" && row.Idempotency == "keyed" && row.Exposure != "direct" {
 			operations[id] = true
 		}
-		if row.Rate == "rate.secret" && row.Idempotency == "once" && row.Exposure != "direct" {
+		// Recovery-set rotation has an explicit native command, not a request
+		// key. Preserve that command's debit without broadening other rotations.
+		originalCommand := row.Idempotency == "once" || id == "identity.mfa.recovery-regenerate" && row.Idempotency == "rotate"
+		if row.Rate == "rate.secret" && originalCommand && row.Exposure != "direct" {
 			originalOperations[id] = true
 		}
 	}

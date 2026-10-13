@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 	"sync"
 	"testing"
 	"time"
@@ -18,6 +19,7 @@ import (
 	identity "github.com/faustbrian/go-identity"
 	passwordhttp "github.com/faustbrian/go-identity/http/password"
 	sessionhttp "github.com/faustbrian/go-identity/http/session"
+	mfapg "github.com/faustbrian/go-identity/mfa/postgres"
 	"github.com/faustbrian/go-identity/reference"
 	"github.com/faustbrian/go-identity/session"
 )
@@ -49,7 +51,7 @@ func configureReferencePasswordRecovery(t *testing.T, c *reference.StoreConfigur
 
 // Every account/factor/code/primary is produced by actual public workflows.
 // The supplied code was captured once from enrollment transport, not seeded.
-func proveReferencePasswordRecoveryHTTP(t *testing.T, ctx context.Context, f liveStores, features reference.FeatureSet, client *http.Client, base, origin, code string) {
+func proveReferencePasswordRecoveryHTTP(t *testing.T, ctx context.Context, f liveStores, features reference.FeatureSet, client *http.Client, base, origin, code string, rejected ...string) {
 	t.Helper()
 	invoke := func(path string, body any, cookies []*http.Cookie) (*http.Response, []byte) {
 		wire, err := json.Marshal(body)
@@ -108,6 +110,9 @@ func proveReferencePasswordRecoveryHTTP(t *testing.T, ctx context.Context, f liv
 	}
 	wrong["commandID"], _ = identity.NewCommandID()
 	wrong["recoveryCode"] = "synthetic-wrong-recovery-code"
+	if len(rejected) > 0 {
+		wrong["recoveryCode"] = rejected[0]
+	}
 	response, _ = invoke("/v1/mfa/recovery-use", wrong, cookies)
 	if response.StatusCode != 403 || len(response.Cookies()) != 0 || response.Header.Get("X-CSRF-Token") != "" {
 		t.Fatal("wrong recovery code did not deny", response.StatusCode)
@@ -210,8 +215,42 @@ func proveReferencePasswordRecoveryHTTP(t *testing.T, ctx context.Context, f liv
 	}
 	admitted, err := sessions.Get(ctx, session.GetRequest{TenantID: otpTenant, Credential: credential})
 	factor, factorErr := admitted.Session.MFAAuthentication().Bindings()
-	if err != nil || !admitted.Authenticated || factorErr != nil || factor.Method != "recovery-code" || factor.RecoverySetVersion != 1 {
+	wantSetVersion := uint64(1)
+	if f.regeneration {
+		var epoch string
+		if f.pool.Raw().QueryRow(ctx, `SELECT set_version::text FROM identity_mfa.recovery_sets WHERE tenant_id=$1 AND state=2`, otpTenant).Scan(&epoch) != nil {
+			t.Fatal("regenerated set epoch unavailable")
+		}
+		wantSetVersion, err = strconv.ParseUint(epoch, 10, 64)
+		if err != nil || wantSetVersion <= 1 {
+			t.Fatal("replacement did not advance recovery epoch")
+		}
+	}
+	if err != nil || !admitted.Authenticated || factorErr != nil || factor.Method != "recovery-code" || factor.RecoverySetVersion != wantSetVersion {
 		t.Fatal("recovery session unreadable or lost provenance", err)
+	}
+	activeReader, err := mfapg.NewTOTPFactorReader(f.pool, time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	active, err := activeReader.ReadForStepUp(ctx, admitted, factor.FactorID)
+	metadata, metadataErr := active.Metadata()
+	spec, specErr := admitted.Session.Bindings()
+	if err != nil || metadataErr != nil || specErr != nil || metadata.Factor.FactorID != factor.FactorID || metadata.Factor.EnrollmentVersion != factor.EnrollmentVersion || metadata.Factor.FactorAuthorityVersion != factor.FactorAuthorityVersion || metadata.SessionID != spec.SessionID || metadata.SessionVersion != spec.Version || !metadata.ValidUntil.Equal(admitted.ValidUntil()) {
+		t.Fatal("active factor read lost original owned session or factor fences")
+	}
+	if _, err := active.Envelope(); err != nil {
+		t.Fatal("active factor read did not retain actual enrolled ciphertext")
+	}
+	if _, err := active.EncryptionContext(); err != nil {
+		t.Fatal("active factor read lost envelope authentication binding")
+	}
+	if _, err := activeReader.ReadForStepUp(ctx, session.GetResult{Authenticated: true, Session: admitted.Session}, factor.FactorID); err == nil {
+		t.Fatal("fabricated authentication flag supplied active factor custody")
+	}
+	otherFactor, _ := identity.NewCommandID()
+	if _, err := activeReader.ReadForStepUp(ctx, admitted, string(otherFactor)); err == nil {
+		t.Fatal("unrelated factor supplied active custody")
 	}
 	response, _ = invoke("/v1/mfa/recovery-use", body, cookies)
 	if response.StatusCode != 409 || len(response.Cookies()) != 0 || response.Header.Get("X-CSRF-Token") != "" {

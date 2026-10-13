@@ -170,4 +170,5 @@ func TestNativeContinuationPostgres(t *testing.T) {
 	}
 	testMFAIssuance(t, ctx, pool, repo, auditing, lifecycle)
 	testRecoveryStorage(t, ctx, pool)
+	testFactorVerificationStorage(t, ctx, pool)
 }

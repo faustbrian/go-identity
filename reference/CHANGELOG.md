@@ -2,6 +2,32 @@
 
 ## Unreleased
 
+- Connect separately selected `HTTPMFARecoveryRegeneration` to the native original
+  factor-proof source and whole-set/session replacement. This supersedes the
+  native-only HTTP caveat below; selection enables neither step-up nor login.
+  Real HTTP rollback, contention and lost-ack recovery preserve no-redelivery.
+
+- Independently select authenticated TOTP proof HTTP through
+  `HTTPMFAActiveStepUp`, using the actual native session/factor source and shared
+  verification limits. It enables neither enrollment nor login; unselected
+  graphs expose no step-up variant. Recovery-regeneration HTTP remains separate.
+
+- Compose separately selected native recovery-code replacement through
+  `MFAEnrollmentConfiguration.Regeneration` and `MFARecoveryRegeneration`, with
+  genuine fresh-factor proof admission, complete set replacement and session
+  revocation. Selecting it appends the native session-disposition history but
+  does not expose an HTTP route. Consumers must sign in again after replacement.
+
+- Allow independently selected authenticated TOTP proof issuance through
+  `MFAEnrollmentConfiguration.ActiveStepUp` and `MFAActiveStepUp`. Compose the
+  real native current-session owner and append factor-verification storage only
+  for selected graphs, preserving existing MFA/password migration allocations.
+  This exposes a native public API, not an HTTP route or regeneration endpoint.
+
+- Reject authenticated step-up requests in unselected login TOTP owners before
+  entering login composition or disclosing rate-source metadata. Step-up cannot
+  silently fall back to an anonymous continuation profile.
+
 - Add explicit password-primary recovery-code completion and opt-in HTTP
   composition. Preserve original primary/browser scope, shared attempts,
   digest-only code burn, session provenance and credential-free replay/recovery.

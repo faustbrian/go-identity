@@ -1363,8 +1363,26 @@ profile. Append `MFASigninMigrationSource` after `MagicLinkSigninMigrationSource
 in the existing issuance history to admit the closed factor-completion purposes
 without creating another journal or changing previous rows.
 
-The native MFA issuance effect, completion service and reference composition
-remain unfinished. Do not select this profile until those owners are composed
-and the public transaction journey is verified. Applied migration bytes remain
-unchanged; installing these extensions does not authenticate a factor or issue
-a session.
+Native password/TOTP and recovery-code completion/reference composition now
+exercise this profile through real public journeys; the remaining MFA capability
+set is unfinished. Applied migration bytes remain unchanged; installing these
+extensions alone does not authenticate a factor or issue a session.
+
+## MFA recovery-regeneration session effects
+
+`NewPasswordActiveTOTPPrimarySource` supplies actual session/bearer/CSRF custody
+for native authenticated step-up and regeneration. Original encrypted snapshot
+restoration checks unchanged bearer/synchronizer possession without a new read
+or renewed freshness. Native protected fences retain current directory,
+credential, policy, factor, session and family authority.
+
+`MFARecoverySessionEffect` is the sole session-write owner enlisted by native
+regeneration. Install `MFARecoverySessionMigrationSource` in the selected
+disposition migration history using the native session schema. The effect
+revokes active subject sessions in bounded stable pages (maximum1024), retaining
+command-bound original-source and disposition evidence in the same Work. Too
+many sessions roll the whole mutation back. Its final check permits the source's
+intentional revocation but requires exact original identity/version, no active
+subject sessions and still-current primary authority. Recovery reads retained
+effect evidence, not mutable current-session state. No caller pool, transaction,
+goroutine or session revival is owned by this effect.

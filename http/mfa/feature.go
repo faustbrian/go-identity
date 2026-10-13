@@ -15,7 +15,9 @@ import (
 type FeatureConfig struct {
 	// RecoveryUse exposes only the explicitly selected original-primary owner.
 	RecoveryUse *RecoveryUseConfig
-	TOTPVerify  *TOTPVerifyConfig
+	// RecoveryRegenerate explicitly selects fresh-factor whole-set replacement.
+	RecoveryRegenerate *RecoveryRegenerateConfig
+	TOTPVerify         *TOTPVerifyConfig
 	// PasswordTOTPVerify selects the password-origin native owner explicitly.
 	// With both login owners, singleton X-MFA-Variant: password selects it;
 	// otherwise it is the selected default. Selection is never fallback after denial.
@@ -23,6 +25,8 @@ type FeatureConfig struct {
 	Enable                 *EnableConfig
 	URI                    *URIConfig
 	EnrollmentConfirmation *EnrollmentConfirmationConfig
+	// ActiveStepUp selects only the explicit authenticated step-up verify arm.
+	ActiveStepUp *ActiveStepUpConfig
 }
 
 // NewFeature contributes the selected owned handler and closed wire contract.
@@ -33,10 +37,22 @@ func NewFeature(c FeatureConfig) (identityhttp.Feature, error) {
 // NewFeatureWithMiddleware binds hooks to actual owned phases without granting
 // credential output ownership or returning a partial feature on failure.
 func NewFeatureWithMiddleware(c FeatureConfig, m []identityhttp.MiddlewareDescriptor) (identityhttp.Feature, error) {
-	if c.TOTPVerify == nil && c.PasswordTOTPVerify == nil && c.Enable == nil && c.URI == nil && c.EnrollmentConfirmation == nil && c.RecoveryUse == nil {
+	if c.TOTPVerify == nil && c.PasswordTOTPVerify == nil && c.Enable == nil && c.URI == nil && c.EnrollmentConfirmation == nil && c.ActiveStepUp == nil && c.RecoveryUse == nil && c.RecoveryRegenerate == nil {
 		return identityhttp.Feature{}, identityhttp.ErrInvalidInput
 	}
 	var operations []identityhttp.OperationDescriptor
+	if c.RecoveryRegenerate != nil {
+		h, err := NewRecoveryRegenerateHandlerWithMiddleware(*c.RecoveryRegenerate, m)
+		if err != nil {
+			return identityhttp.Feature{}, err
+		}
+		op, err := identityhttp.NewCanonicalOperation(identityhttp.CanonicalOperationConfig{Owner: "identity/mfa", OperationID: "identity.mfa.recovery-regenerate", Handler: h, CSRF: identityhttp.CSRFPolicy{Mode: identityhttp.CSRFSessionState, TokenHeader: "X-CSRF-Token", RefererFallback: identityhttp.RefererFallbackDeny}, MaximumSerializedBytes: 16384})
+		if err != nil {
+			return identityhttp.Feature{}, err
+		}
+		op.Wire = regenerationWire(*c.RecoveryRegenerate)
+		operations = append(operations, op)
+	}
 	if c.RecoveryUse != nil {
 		h, err := NewRecoveryUseHandlerWithMiddleware(*c.RecoveryUse, m)
 		if err != nil {
@@ -49,7 +65,7 @@ func NewFeatureWithMiddleware(c FeatureConfig, m []identityhttp.MiddlewareDescri
 		op.Wire = recoveryWire(*c.RecoveryUse)
 		operations = append(operations, op)
 	}
-	if c.TOTPVerify != nil || c.PasswordTOTPVerify != nil || c.EnrollmentConfirmation != nil {
+	if c.TOTPVerify != nil || c.PasswordTOTPVerify != nil || c.EnrollmentConfirmation != nil || c.ActiveStepUp != nil {
 		h := &verifyDispatch{passwordDefault: c.TOTPVerify == nil && c.PasswordTOTPVerify != nil}
 		var err error
 		policy := identityhttp.CSRFPolicy{Mode: identityhttp.CSRFExactOrigin, RefererFallback: identityhttp.RefererFallbackDeny}
@@ -75,6 +91,17 @@ func NewFeatureWithMiddleware(c FeatureConfig, m []identityhttp.MiddlewareDescri
 		}
 		if c.EnrollmentConfirmation != nil {
 			h.enrollment, err = NewEnrollmentConfirmationHandlerWithMiddleware(*c.EnrollmentConfirmation, m)
+			if err != nil {
+				return identityhttp.Feature{}, err
+			}
+			policy.Mode = identityhttp.CSRFSessionState
+			policy.TokenHeader = "X-CSRF-Token"
+			if c.TOTPVerify != nil || c.PasswordTOTPVerify != nil {
+				policy.Mode = identityhttp.CSRFVariantOriginSessionState
+			}
+		}
+		if c.ActiveStepUp != nil {
+			h.stepup, err = NewActiveStepUpHandlerWithMiddleware(*c.ActiveStepUp, m)
 			if err != nil {
 				return identityhttp.Feature{}, err
 			}

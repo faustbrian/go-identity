@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"net/http"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/faustbrian/go-authorization"
@@ -165,9 +166,11 @@ func (s *Server) mfaEnrollmentHTTPConfig(network identityhttp.NetworkConfig, f F
 // Preserve actual pipeline hook binding while joining preliminary session and
 // proof reads, admission and mutation to the graph's cancellation/drain owner.
 type mfaEnrollmentLifetimeHandler struct {
-	state     *storeState
-	next      http.Handler
-	operation string
+	state      *storeState
+	next       http.Handler
+	operation  string
+	stepup     bool
+	stepupOnly bool
 }
 
 func (h *mfaEnrollmentLifetimeHandler) WithOperationMiddleware(m []identityhttp.MiddlewareDescriptor) (http.Handler, error) {
@@ -178,7 +181,7 @@ func (h *mfaEnrollmentLifetimeHandler) WithOperationMiddleware(m []identityhttp.
 	if err != nil {
 		return nil, err
 	}
-	return &mfaEnrollmentLifetimeHandler{state: h.state, next: next, operation: h.operation}, nil
+	return &mfaEnrollmentLifetimeHandler{state: h.state, next: next, operation: h.operation, stepup: h.stepup, stepupOnly: h.stepupOnly}, nil
 }
 func (h *mfaEnrollmentLifetimeHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	ctx, done, err := h.state.enterFeature(r.Context(), true)
@@ -192,8 +195,25 @@ func (h *mfaEnrollmentLifetimeHandler) ServeHTTP(w http.ResponseWriter, r *http.
 		if h.operation == "identity.mfa.totp-uri" {
 			body = "{\"disclosed\":false,\"commitOutcome\":\"none\",\"error\":\"unavailable\"}\n"
 		}
+		if h.operation == "identity.mfa.recovery-regenerate" {
+			body = "{\"regenerated\":false,\"commitOutcome\":\"none\",\"error\":\"unavailable\"}\n"
+		}
 		if h.operation == "identity.mfa.totp-verify" {
 			body = "{\"activated\":false,\"commitOutcome\":\"none\",\"error\":\"unavailable\"}\n"
+			selected := h.stepupOnly
+			if h.stepup && !selected {
+				count := 0
+				for name, values := range r.Header {
+					if strings.EqualFold(name, "X-MFA-Variant") {
+						count++
+						selected = len(values) == 1 && values[0] == "step-up"
+					}
+				}
+				selected = selected && count == 1
+			}
+			if selected {
+				body = "{\"verified\":false,\"commitOutcome\":\"none\",\"error\":\"unavailable\"}\n"
+			}
 		}
 		w.Write([]byte(body))
 		return

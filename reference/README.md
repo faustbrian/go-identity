@@ -128,6 +128,36 @@ when sharing their IP/subject budgets. The native TOTP, original pre-auth/device
 and strict rate graph are required; omitted configuration contributes no route
 or OpenAPI operation. No enrollment or trusted-device route is implied.
 
+Select native authenticated step-up with `MFAEnrollment.ActiveStepUp`; the graph
+supplies the real current-session owner and factor-verification migration.
+Select `StoreConfiguration.HTTPMFAActiveStepUp` separately with exact native
+allowed `TrustedOrigins`, stable `VerificationNamespace` and `VerificationKey`
+to expose only the `X-MFA-Variant: step-up` arm of `POST /v1/mfa/totp-verify`.
+The body is `commandID`, `factorID`, `code`; the current cookie, Origin and
+synchronizer are mandatory. Only fresh known commitment reveals `proofID` for
+recovery regeneration. Replay/uncertainty never redeliver it. No session,
+enrollment or login route is selected by this option. Both original session
+observations and proof freshness remain exclusive, non-renewable deadlines.
+Recovery regeneration remains separately selected through native
+`MFAEnrollment.Regeneration` and `MFARecoveryRegeneration()`. Select
+`HTTPMFARecoveryRegeneration` with exact native allowed `TrustedOrigins`, stable
+shared `RateNamespace` and `RateKey` to expose `POST /v1/mfa/recovery-regenerate`.
+The body is `commandID`, `proofID`; the original cookie, Origin and synchronizer
+are required. Count and freshness come from the native replacement policy,
+not the request. The graph supplies the committed-only original factor-proof
+source, native whole-set replacement and atomic session revocation. Selecting
+this endpoint does not implicitly select the step-up, enrollment or login routes.
+
+Only fresh known commitment returns the complete replacement set. All subject
+sessions are revoked, so sign in again using an enrolled factor or a new recovery
+code. Further HTTP attempts with the revoked cookie deny without returning codes.
+Ambiguous responses retain the original command/outcome without plaintext; use
+the native `RecoverRecoveryRegenerate` operation under trusted caller policy to
+reconcile history. Neither that recovery nor matching native retries redeliver
+codes. A real PostgreSQL/TLS-Valkey journey proves HTTP step-up, lifecycle rollback,
+replacement, old-code denial, new-code login/logout, competing requests and lost
+commit acknowledgement. This is slice evidence, not full platform release proof.
+
 Select pending enrollment separately with `StoreConfiguration.MFAEnrollment`
 and `HTTPMFAEnrollment`. The latter requires the real session, password
 verification and strict HTTP rate graph, an exact subset of native management

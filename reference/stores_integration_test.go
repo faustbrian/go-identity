@@ -30,11 +30,19 @@ import (
 )
 
 type liveStores struct {
-	recoveryRace    bool
-	completionFault *completionCommitFault
-	stores          reference.StoreSet
-	pool            *database.Pool
-	config          reference.StoreConfiguration
+	activeStepUp        bool
+	activeStepUpHTTP    bool
+	regeneration        bool
+	regenerationHTTP    bool
+	regenerationRace    bool
+	regenerationDenials bool
+	secondBearer        string
+	secondCSRF          string
+	recoveryRace        bool
+	completionFault     *completionCommitFault
+	stores              reference.StoreSet
+	pool                *database.Pool
+	config              reference.StoreConfiguration
 }
 
 func newLiveStores(t *testing.T, ctx context.Context) liveStores {

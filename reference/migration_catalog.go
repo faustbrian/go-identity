@@ -230,12 +230,19 @@ func (s StoreSet) migrationCatalog(ctx context.Context) ([]migrationHistory, err
 			return nil, err
 		}
 		if c.passwordRecovery {
-			return recoveryCompletionMigrationCatalog(ctx, catalog, c.passwordSigninSchema, s.state.config.Schema)
+			catalog, err = recoveryCompletionMigrationCatalog(ctx, catalog, c.passwordSigninSchema, s.state.config.Schema)
+			if err != nil {
+				return nil, err
+			}
 		}
-		return catalog, nil
+		return s.activeStepUpMigrationCatalog(ctx, catalog)
 	}
 	if s.state.features.mfaEnrollment != nil {
-		return mfaEnrollmentMigrationCatalog(ctx, catalog, s.state.config.Schema)
+		catalog, err = mfaEnrollmentMigrationCatalog(ctx, catalog, s.state.config.Schema)
+		if err != nil {
+			return nil, err
+		}
+		return s.activeStepUpMigrationCatalog(ctx, catalog)
 	}
 	return catalog, nil
 }

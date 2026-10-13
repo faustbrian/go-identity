@@ -37,14 +37,54 @@ func TestMFAEnrollmentHTTPRequiresSelectedNativeOwners(t *testing.T) {
 	}
 }
 
+func TestActiveStepUpHTTPRequiresSelectedNativeOwners(t *testing.T) {
+	if h, err := composeMFAActiveStepUpHTTP(StoreConfiguration{}, nil, nil); err != nil || h != nil {
+		t.Fatal("unselected step-up acquired transport authority")
+	}
+	c := StoreConfiguration{HTTPMFAActiveStepUp: &HTTPMFAActiveStepUpConfiguration{}}
+	if h, err := composeMFAActiveStepUpHTTP(c, nil, nil); err == nil || h != nil {
+		t.Fatal("missing active factor owner exposed step-up")
+	}
+	if err := (&storeState{}).composeFeatureStores(c, ReferenceDependencies{}); err == nil {
+		t.Fatal("selected step-up disappeared in recovery-only graph")
+	}
+}
+
+func TestActiveStepUpClosedGraphPreservesResponse(t *testing.T) {
+	h := &mfaEnrollmentLifetimeHandler{state: &storeState{closed: true}, operation: "identity.mfa.totp-verify", next: http.NotFoundHandler(), stepup: true}
+	r := httptest.NewRequest(http.MethodPost, "https://login.example/v1/mfa/totp-verify", nil)
+	r.Header.Set("X-MFA-Variant", "step-up")
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, r)
+	if w.Code != 503 || !strings.Contains(w.Body.String(), `"verified":false`) || strings.Contains(w.Body.String(), `"activated"`) || strings.Contains(w.Body.String(), `"proofID"`) {
+		t.Fatal("graph shutdown changed step-up response or disclosed proof")
+	}
+}
+
+func TestRegenerationHTTPRequiresSelectedNativeOwners(t *testing.T) {
+	if h, err := composeMFARecoveryRegenerationHTTP(StoreConfiguration{}, ReferenceDependencies{}, nil, nil); err != nil || h != nil {
+		t.Fatal("unselected replacement acquired HTTP")
+	}
+	c := StoreConfiguration{HTTPMFARecoveryRegeneration: &HTTPMFARecoveryRegenerationConfiguration{}}
+	if h, err := composeMFARecoveryRegenerationHTTP(c, ReferenceDependencies{}, nil, nil); err == nil || h != nil {
+		t.Fatal("missing native replacement owner exposed route")
+	}
+	if err := (&storeState{}).composeFeatureStores(c, ReferenceDependencies{}); err == nil {
+		t.Fatal("selected replacement disappeared")
+	}
+}
+
 func TestMFAEnrollmentClosedGraphPreservesOperationResponse(t *testing.T) {
-	for _, operation := range []string{"identity.mfa.totp-uri", "identity.mfa.totp-verify"} {
+	for _, operation := range []string{"identity.mfa.totp-uri", "identity.mfa.totp-verify", "identity.mfa.recovery-regenerate"} {
 		h := &mfaEnrollmentLifetimeHandler{state: &storeState{closed: true}, operation: operation, next: http.NotFoundHandler()}
 		w := httptest.NewRecorder()
 		h.ServeHTTP(w, httptest.NewRequest(http.MethodPost, "https://login.example/v1/mfa/totp-verify", nil))
 		field := "disclosed"
 		if operation == "identity.mfa.totp-verify" {
 			field = "activated"
+		}
+		if operation == "identity.mfa.recovery-regenerate" {
+			field = "regenerated"
 		}
 		if w.Code != 503 || !strings.Contains(w.Body.String(), `"`+field+`":false`) || strings.Contains(w.Body.String(), `"enabled"`) {
 			t.Fatal("graph shutdown changed operation wire contract")

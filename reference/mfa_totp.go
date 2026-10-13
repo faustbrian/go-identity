@@ -319,7 +319,7 @@ func (s *magicLinkTOTPService) readInput(ctx context.Context, r mfa.TotpVerifyRe
 }
 
 func (s *magicLinkTOTPService) readInputMode(ctx context.Context, r mfa.TotpVerifyRequest, rateSource bool) (out *magicTOTPInput, err error) {
-	if ctx == nil || s == nil || s.state == nil || r.Enrollment != nil || r.Validate() != nil {
+	if ctx == nil || s == nil || s.state == nil || r.Enrollment != nil || r.StepUp != nil || r.Validate() != nil {
 		return nil, invalidTOTPCompletion()
 	}
 	return s.readNativeMFAInput(ctx, nativeMFAOriginalInput{TenantID: r.TenantID, CommandID: r.CommandID, ChallengeID: mfa.ContinuationID(r.ChallengeID), PreAuthID: r.PreAuthID, Proof: r.Proof, Cookie: r.Cookie, Caller: r.Caller, Origin: r.Origin, Callback: r.Callback, Network: r.Network, Device: r.Device, totp: &r}, rateSource)

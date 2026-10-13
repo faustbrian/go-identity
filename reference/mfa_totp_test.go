@@ -94,6 +94,33 @@ func TestNativeTOTPCompletionRejectsMissingOwnedComposition(t *testing.T) {
 	}
 }
 
+func TestLoginTOTPRejectsActiveStepUpBeforeComposition(t *testing.T) {
+	r := nativeTOTPRequest(t)
+	r.ChallengeID, r.PreAuthID = "", ""
+	r.Proof, r.Cookie = capability.Proof{}, auth.BearerCredential{}
+	r.Callback, r.Device = "", ""
+	csrf, err := session.ParseCSRFToken(strings.Repeat("A", 43))
+	if err != nil {
+		t.Fatal(err)
+	}
+	r.StepUp = &mfa.TOTPAuthenticatedStepUp{Session: auth.NewBearerCredential(strings.Repeat("A", 43)), CSRFToken: csrf, Purpose: "identity.mfa.recovery-regenerate"}
+	r.Caller = authorization.DecisionContext{PolicyRevision: 1, Request: authorization.Request{Tenant: authorization.TenantID(r.TenantID), Subject: authorization.Subject{Kind: authorization.SubjectUser, ID: "user-a"}, Action: "identity.mfa.totp-verify", Resource: authorization.Resource{Type: "identity.user", ID: "user-a"}}}
+	if r.Validate() != nil {
+		t.Fatal("active-session fixture is not structurally valid")
+	}
+	calls := 0
+	s := &magicLinkTOTPService{state: func() *magicLinkTOTPState {
+		calls++
+		return &magicLinkTOTPState{config: MagicLinkTOTPCompletionConfig{MaximumDuration: time.Second}}
+	}}
+	if out, err := s.TotpVerify(t.Context(), r); err == nil || out.Outcome != identity.CommitOutcomeInvalid || calls != 0 {
+		t.Fatal("unselected active-session profile reached login composition")
+	}
+	if user, challenge, ttl, err := s.TotpVerificationRateSource(t.Context(), r); err == nil || user != "" || challenge != "" || ttl != 0 || calls != 0 {
+		t.Fatal("unselected active-session profile reached login rate source")
+	}
+}
+
 func TestMagicLinkTOTPFeatureCannotBypassGraphLifetime(t *testing.T) {
 	var empty FeatureSet
 	if owner, err := empty.MagicLinkTOTP(); err == nil || owner != nil {

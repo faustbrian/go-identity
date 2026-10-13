@@ -46,3 +46,20 @@ func TestOriginalCommandSecretRatePreservesDebitAndSharedBudgets(t *testing.T) {
 		}
 	}
 }
+
+func TestRegenerationOriginalCommandRetainsRotationQuota(t *testing.T) {
+	l, b := secretLimiter(t)
+	facts := safeFacts(t, "198.51.100.1")
+	command, _ := identity.NewCommandID()
+	r := identityhttp.OriginalCommandSecretRateRequest{OperationID: "identity.mfa.recovery-regenerate", UserID: "original-user", CommandID: command, ChallengeID: "original-factor-proof", ChallengeLifetime: time.Minute}
+	if out, err := l.AdmitOriginalCommand(t.Context(), facts, r); err != nil || !out.Allowed {
+		t.Fatal("original replacement command cannot use shared quota", err)
+	}
+	first := b.last
+	if len(first.Requests) != 3 || first.Requests[2].Policy.Capacity() != 5 || first.Requests[2].Policy.Period() != time.Minute {
+		t.Fatal("original proof quota missing")
+	}
+	if _, err := l.AdmitOriginalCommand(t.Context(), facts, r); err != nil || b.last.CommandID != first.CommandID {
+		t.Fatal("rotation retry changed original debit", err)
+	}
+}

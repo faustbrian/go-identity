@@ -366,6 +366,16 @@ func proveReferenceMFAEnrollment(t *testing.T, ctx context.Context, f liveStores
 	if _, err := current.Session.MFAAuthentication().Bindings(); err == nil {
 		t.Fatal("activation silently promoted original session")
 	}
+	if f.activeStepUp {
+		proof := proveReferenceActiveStepUp(t, ctx, f, features, cookies[0].Value, csrfWire, origin, mfa.FactorID(pending.Enrollment.ID), secret, client, base, cookies[0].Name)
+		if f.regeneration {
+			code := proveReferenceRecoveryRegeneration(t, ctx, f, features, cookies[0].Value, csrfWire, origin, proof, client, base, cookies[0].Name)
+			if code != "" {
+				proveReferencePasswordRecoveryHTTP(t, ctx, f, features, client, base, origin, code, out.RecoveryCodes[0])
+			}
+			return
+		}
+	}
 	if passwordMFA {
 		proveReferencePasswordMFAHTTP(t, ctx, f, features, client, base, origin, mfa.FactorID(pending.Enrollment.ID), secret)
 	}

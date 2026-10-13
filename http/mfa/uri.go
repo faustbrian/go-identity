@@ -87,14 +87,22 @@ func NewURIHandler(c URIConfig) (http.Handler, error) { return NewURIHandlerWith
 // original source/quota admission and atomic native reveal phases. Waiting cannot
 // reset original session evidence or extend the source's delivery deadline.
 func NewURIHandlerWithMiddleware(c URIConfig, m []identityhttp.MiddlewareDescriptor) (http.Handler, error) {
-	return newPendingFactorHandler(c, nil, m)
+	return newPendingFactorHandler(c, nil, nil, m)
 }
 
-// Two closed native profiles share cookie parsing and original validity only;
+// Closed native profiles share cookie parsing and original validity only;
 // neither can substitute for the other's source, rate policy or mutation owner.
-func newPendingFactorHandler(c URIConfig, confirm *EnrollmentConfirmationConfig, m []identityhttp.MiddlewareDescriptor) (http.Handler, error) {
-	if !c.Sessions.Configured() || (confirm == nil && (enableNil(c.Service) || !c.Rate.Configured())) || (confirm != nil && (enableNil(confirm.Service) || !confirm.Rate.Configured())) || c.Now == nil || c.PolicyRevision == 0 || c.MaximumDuration < time.Millisecond || c.MaximumDuration > 30*time.Second {
+func newPendingFactorHandler(c URIConfig, confirm *EnrollmentConfirmationConfig, active *ActiveStepUpConfig, m []identityhttp.MiddlewareDescriptor) (http.Handler, error) {
+	if !c.Sessions.Configured() || (confirm == nil && active == nil && (enableNil(c.Service) || !c.Rate.Configured())) || (confirm != nil && (active != nil || enableNil(confirm.Service) || !confirm.Rate.Configured())) || (active != nil && (enableNil(active.Service) || !active.Rate.Configured())) || c.Now == nil || c.PolicyRevision == 0 || c.MaximumDuration < time.Millisecond || c.MaximumDuration > 30*time.Second {
 		return nil, identityhttp.ErrInvalidInput
+	}
+	verification := confirm != nil || active != nil
+	var verifyRate *identityhttp.ChallengeVerificationRateLimiter
+	if confirm != nil {
+		verifyRate = confirm.Rate
+	}
+	if active != nil {
+		verifyRate = active.Rate
 	}
 	network, err := identityhttp.NewNetworkResolver(c.Network)
 	if err != nil {
@@ -120,7 +128,9 @@ func newPendingFactorHandler(c URIConfig, confirm *EnrollmentConfirmationConfig,
 		if observation == nil {
 			observation = map[string]any{"commitOutcome": "none"}
 		}
-		if confirm == nil {
+		if active != nil {
+			observation["verified"] = false
+		} else if confirm == nil {
 			observation["disclosed"] = false
 		} else {
 			observation["activated"] = false
@@ -160,13 +170,17 @@ func newPendingFactorHandler(c URIConfig, confirm *EnrollmentConfirmationConfig,
 		Decode: func(r *http.Request) (uriState, error) {
 			s := uriState{}
 			path := "/v1/mfa/totp-uri"
-			if confirm != nil {
+			if verification {
 				path = "/v1/mfa/totp-verify"
+				variant := "enrollment"
+				if active != nil {
+					variant = "step-up"
+				}
 				count := 0
 				for name, values := range r.Header {
 					if strings.EqualFold(name, "X-MFA-Variant") {
 						count++
-						if len(values) != 1 || values[0] != "enrollment" {
+						if len(values) != 1 || values[0] != variant {
 							return s, identityhttp.ErrInvalidInput
 						}
 					}
@@ -222,7 +236,7 @@ func newPendingFactorHandler(c URIConfig, confirm *EnrollmentConfirmationConfig,
 			body, err := identityhttp.DecodeJSON[map[string]json.RawMessage](decoder, r)
 			fields := 2
 			factorField := "enrollmentID"
-			if confirm != nil {
+			if verification {
 				fields = 3
 				factorField = "factorID"
 			}
@@ -245,7 +259,7 @@ func newPendingFactorHandler(c URIConfig, confirm *EnrollmentConfirmationConfig,
 				return s, identityhttp.ErrInvalidInput
 			}
 			s.enrollment = mfa.EnrollmentID(id)
-			if confirm != nil {
+			if verification {
 				var code string
 				if raw, ok := body["code"]; !ok || json.Unmarshal(raw, &code) != nil {
 					return s, identityhttp.ErrInvalidInput
@@ -258,8 +272,8 @@ func newPendingFactorHandler(c URIConfig, confirm *EnrollmentConfirmationConfig,
 			return s, nil
 		},
 		Authenticate: func(r *http.Request, s uriState) (uriState, error) {
-			if confirm != nil {
-				out, err := confirm.Rate.AdmitIP(r.Context(), s.facts)
+			if verification {
+				out, err := verifyRate.AdmitIP(r.Context(), s.facts)
 				if errors.Is(err, identityhttp.ErrRateLimited) {
 					return s, enableFailure{status: 429, code: "rate_limited", retry: out.RetryAfter}
 				}
@@ -283,12 +297,18 @@ func newPendingFactorHandler(c URIConfig, confirm *EnrollmentConfirmationConfig,
 			s.request = mfa.TotpUriRequest{TenantID: b.TenantID, EnrollmentID: s.enrollment, CommandID: s.command, Session: s.bearer, CSRFToken: s.csrf, Caller: caller, Origin: string(s.origin), Network: s.facts.ClientIP().String()}
 			var lifetime time.Duration
 			var until time.Time
-			if confirm == nil {
+			if !verification {
 				lifetime, until, err = c.Service.TotpUriRateSource(r.Context(), s.request)
 			} else {
 				caller.Request.Action = "identity.mfa.totp-verify"
 				s.confirmation = mfa.TotpVerifyRequest{TenantID: b.TenantID, CommandID: s.command, FactorID: mfa.FactorID(s.enrollment), Code: s.code, Enrollment: &mfa.TOTPEnrollmentConfirmation{Session: s.bearer, CSRFToken: s.csrf}, Caller: caller, Origin: string(s.origin), Network: s.facts.ClientIP().String()}
-				lifetime, until, err = confirm.Service.EnrollmentConfirmationRateSource(r.Context(), s.confirmation)
+				if active != nil {
+					s.confirmation.Enrollment = nil
+					s.confirmation.StepUp = &mfa.TOTPAuthenticatedStepUp{Session: s.bearer, CSRFToken: s.csrf, Purpose: "identity.mfa.recovery-regenerate"}
+					lifetime, until, err = active.Service.ActiveStepUpRateSource(r.Context(), s.confirmation)
+				} else {
+					lifetime, until, err = confirm.Service.EnrollmentConfirmationRateSource(r.Context(), s.confirmation)
+				}
 			}
 			if err != nil {
 				return s, err
@@ -305,10 +325,10 @@ func newPendingFactorHandler(c URIConfig, confirm *EnrollmentConfirmationConfig,
 		Admit: func(r *http.Request, s uriState) error {
 			var out identityhttp.AuthRateResult
 			var err error
-			if confirm == nil {
+			if !verification {
 				out, err = c.Rate.AdmitOriginalCommand(r.Context(), s.facts, identityhttp.OriginalCommandSecretRateRequest{OperationID: "identity.mfa.totp-uri", UserID: s.user, CommandID: s.command, ChallengeID: string(s.enrollment), ChallengeLifetime: s.lifetime})
 			} else {
-				out, err = confirm.Rate.AdmitChallenge(r.Context(), s.facts, identityhttp.ChallengeVerificationRateRequest{OperationID: "identity.mfa.totp-verify", UserID: s.user, ChallengeID: string(s.enrollment), ChallengeLifetime: s.lifetime})
+				out, err = verifyRate.AdmitChallenge(r.Context(), s.facts, identityhttp.ChallengeVerificationRateRequest{OperationID: "identity.mfa.totp-verify", UserID: s.user, ChallengeID: string(s.enrollment), ChallengeLifetime: s.lifetime})
 			}
 			if errors.Is(err, identityhttp.ErrRateLimited) {
 				return enableFailure{status: 429, code: "rate_limited", retry: out.RetryAfter}
@@ -321,6 +341,33 @@ func newPendingFactorHandler(c URIConfig, confirm *EnrollmentConfirmationConfig,
 		Handle: func(w http.ResponseWriter, r *http.Request, s uriState) {
 			if s.read.ValidateAt(c.Now()) != nil || !c.Now().Before(s.until) {
 				reject(w, r, identityhttp.ErrUnavailable)
+				return
+			}
+			if active != nil {
+				result, err := active.Service.TotpVerify(r.Context(), s.confirmation)
+				observation := enableObservation(mfa.EnableResult{CommandID: s.command, Outcome: result.Outcome})
+				if err != nil || r.Context().Err() != nil {
+					writeFailure(w, classify(err), observation)
+					return
+				}
+				proof := result.StepUpProof.Bindings()
+				b, bindingErr := s.read.Session.Bindings()
+				if result.Outcome != identity.CommitOutcomeCommitted || bindingErr != nil || proof.Proof.ID != auth.ProofID(s.command) || proof.Proof.Tenant != string(s.facts.TenantID()) || proof.Proof.Subject != string(s.user) || proof.Proof.Method != "totp" || proof.Proof.Assurance != auth.AssuranceMultiFactor || proof.Proof.Purpose != "identity.mfa.recovery-regenerate" || proof.Action != "identity.mfa.recovery-regenerate" || proof.SessionID != b.SessionID || proof.SessionVersion != b.Version || !reflect.ValueOf(result.Session).IsZero() || result.CSRFToken != (session.CSRFToken{}) || !reflect.ValueOf(result.Enrollment).IsZero() || s.read.ValidateAt(c.Now()) != nil || !c.Now().Before(s.until) || c.Now().Before(proof.Proof.IssuedAt) || !c.Now().Before(proof.Proof.ExpiresAt) {
+					writeFailure(w, enableFailure{status: 503, code: "unavailable"}, observation)
+					return
+				}
+				data, err := json.Marshal(map[string]any{"verified": true, "commitOutcome": "committed", "commandID": s.command, "proofID": proof.Proof.ID})
+				if err != nil {
+					writeFailure(w, enableFailure{status: 503, code: "unavailable"}, observation)
+					return
+				}
+				defer clear(data)
+				start := c.Now()
+				observation["verified"] = false
+				writeSecretJSON(w, r, data, observation, func() bool {
+					at := c.Now()
+					return !at.Before(start) && at.Before(s.until) && at.Before(proof.Proof.ExpiresAt) && s.read.ValidateAt(at) == nil
+				})
 				return
 			}
 			if confirm != nil {

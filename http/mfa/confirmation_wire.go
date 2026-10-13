@@ -30,7 +30,7 @@ func confirmationWire(c EnrollmentConfirmationConfig) *identityhttp.WireOperatio
 	return &identityhttp.WireOperation{Definition: definition, SecuritySchemes: []identityhttp.WireComponent{{Name: "MFAConfirmationSession", Definition: scheme}}}
 }
 
-func selectedVerifyWire(c FeatureConfig) *identityhttp.WireOperation {
+func selectedBaseVerifyWire(c FeatureConfig) *identityhttp.WireOperation {
 	passwordSelected := c.PasswordTOTPVerify != nil
 	if c.TOTPVerify == nil {
 		c.TOTPVerify = c.PasswordTOTPVerify

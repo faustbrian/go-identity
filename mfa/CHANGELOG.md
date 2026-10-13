@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- Add a disjoint authenticated TOTP step-up request and immutable original
+  session/action proof projection for recovery regeneration. Login and pending
+  enrollment cannot supply this profile. Proof construction grants no issuance
+  provenance or consumption authority; native step-up remains in development.
+
+- Define recovery-code regeneration requests with a separate action-bound
+  eligible factor proof, original session custody and exact caller scope.
+  Replacement results keep reveal-once codes out of implicit diagnostics and
+  serialization. Structural validation grants no proof-use authority; native
+  step-up issuance and atomic replacement composition remain in development.
+
 - Define recovery-code completion with distinct opaque code, original child and
   browser custody, stable continuation/command identities and redacted results.
   Recovery never redelivers credentials or repeats uncertain authentication;

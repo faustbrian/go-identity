@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Support native recovery-set rotation using its original command identity for
+  shared secret quotas, without a fabricated request key. Select only its exact
+  stored-session CSRF profile; other rotation/CSRF ownership remains unchanged.
+
 - Describe shared TOTP verification as explicit Origin-only login versus
   original stored-session CSRF confirmation. Keep one owned route and do not
   invent an independent CSRF token age or weaken other operations' profiles.

@@ -32,6 +32,7 @@ import (
 	passwordhttp "github.com/faustbrian/go-identity/http/password"
 	sessionhttp "github.com/faustbrian/go-identity/http/session"
 	magicpg "github.com/faustbrian/go-identity/magiclink/postgres"
+	mfapg "github.com/faustbrian/go-identity/mfa/postgres"
 	"github.com/faustbrian/go-identity/password"
 	passwordpg "github.com/faustbrian/go-identity/password/postgres"
 	kernel "github.com/faustbrian/go-identity/postgres"
@@ -62,7 +63,7 @@ func (referenceRegistrationPolicy) Decide(ctx context.Context, c authorization.D
 	}
 	if string(c.Request.Tenant) == otpTenant && c.PolicyRevision == 9 && c.Request.Subject.Kind == authorization.SubjectUser && c.Request.Resource.Type == "identity.user" && string(c.Request.Resource.ID) == string(c.Request.Subject.ID) {
 		switch c.Request.Action {
-		case "identity.mfa.enable", "identity.mfa.totp-uri", "identity.mfa.totp-verify":
+		case "identity.mfa.enable", "identity.mfa.totp-uri", "identity.mfa.totp-verify", "identity.mfa.recovery-regenerate":
 			return authorization.Decision{Outcome: authorization.Allow, Revision: 9}, nil
 		}
 	}
@@ -229,7 +230,7 @@ func proveReferenceSignupGraph(t *testing.T, competing bool, protected ...bool) 
 	proveReferenceSignupGraphExtensions(t, competing, signupGraphExtensions{}, protected...)
 }
 
-type signupGraphExtensions struct{ mfaEnrollment, passwordMFA, passwordRecovery, recoveryRace, completionCommitFault bool }
+type signupGraphExtensions struct{ mfaEnrollment, activeStepUp, activeStepUpHTTP, regeneration, regenerationHTTP, regenerationRace, regenerationDenials, passwordMFA, passwordRecovery, recoveryRace, completionCommitFault bool }
 
 func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extensions signupGraphExtensions, protected ...bool) {
 	t.Helper()
@@ -237,10 +238,12 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 	defer cancel()
 	f := newLiveStoresProfile(t, ctx, false)
 	f.recoveryRace = extensions.recoveryRace
+	f.regenerationRace = extensions.regenerationRace
+	f.regenerationDenials = extensions.regenerationDenials
 	c, deps, worker := otpGraphConfiguration(t, f.config)
 	deps.PostgreSQL = f.pool
 	if extensions.completionCommitFault {
-		f.completionFault = &completionCommitFault{}
+		f.completionFault = &completionCommitFault{factorProof: extensions.activeStepUp, regeneration: extensions.regeneration}
 		faultPool, err := database.Connect(ctx, database.Config{DSN: f.pool.Raw().Config().ConnConfig.ConnString(), MaxConns: 4, Configure: func(pc *database.PoolConfig) error { pc.ConnConfig.DialFunc = f.completionFault.dial; return nil }})
 		if err != nil {
 			t.Fatal("completion fault pool unavailable")
@@ -283,6 +286,22 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 	}
 	if extensions.mfaEnrollment {
 		configureReferenceMFAEnrollment(t, &c, origin)
+	}
+	if extensions.activeStepUp {
+		configureReferenceActiveStepUp(t, &c, origin)
+		f.activeStepUp = true
+	}
+	if extensions.activeStepUpHTTP {
+		c.HTTPMFAActiveStepUp = &reference.HTTPMFAActiveStepUpConfiguration{TrustedOrigins: []identityhttp.Origin{identityhttp.Origin(origin)}, VerificationNamespace: "reference-mfa-step-up-http", VerificationKey: [32]byte{195}}
+		f.activeStepUpHTTP = true
+	}
+	if extensions.regeneration {
+		c.MFAEnrollment.Regeneration = &mfapg.RecoveryRegenerationConfig{CodeCount: 10, MaximumAge: time.Minute}
+		f.regeneration = true
+	}
+	if extensions.regenerationHTTP {
+		c.HTTPMFARecoveryRegeneration = &reference.HTTPMFARecoveryRegenerationConfiguration{TrustedOrigins: []identityhttp.Origin{identityhttp.Origin(origin)}, RateNamespace: c.HTTPMFAEnrollment.RateNamespace, RateKey: c.HTTPMFAEnrollment.RateKey}
+		f.regenerationHTTP = true
 	}
 	if extensions.passwordMFA {
 		configureReferencePasswordMFA(t, &c, origin)
@@ -417,13 +436,21 @@ END $$`); err != nil {
 	} else if seen["identity.mfa.enable"] {
 		t.Fatal("unselected enrollment route advertised")
 	}
-	if c.HTTPMFA != nil || c.HTTPMFAEnrollment != nil && c.HTTPMFAEnrollment.Confirmation {
+	if c.HTTPMFA != nil || c.HTTPMFAEnrollment != nil && c.HTTPMFAEnrollment.Confirmation || c.HTTPMFAActiveStepUp != nil {
 		wantOperations++
 		if !seen["identity.mfa.totp-verify"] {
 			t.Fatal("selected TOTP route missing")
 		}
 	} else if seen["identity.mfa.totp-verify"] {
 		t.Fatal("unselected TOTP route advertised")
+	}
+	if c.HTTPMFARecoveryRegeneration != nil {
+		wantOperations++
+		if !seen["identity.mfa.recovery-regenerate"] {
+			t.Fatal("selected replacement route missing")
+		}
+	} else if seen["identity.mfa.recovery-regenerate"] {
+		t.Fatal("unselected replacement route advertised")
 	}
 	if magic {
 		wantOperations += 2
@@ -659,6 +686,20 @@ CREATE TRIGGER registration_fixture_fail BEFORE INSERT ON identity.delivery_inte
 		t.Fatal("verified registration did not produce usable login", r.StatusCode, signed.CommitOutcome, signed.Error, signed.CommandID != "", signed.SessionID != "")
 	}
 	if enrollment {
+		if f.regenerationDenials {
+			secondFlow, secondCookies := issue("password")
+			secondBody := map[string]any{}
+			for key, value := range loginBody {
+				secondBody[key] = value
+			}
+			secondBody["flowID"] = string(secondFlow.FlowID)
+			second, payload := invoke("/v1/password/signin", secondBody, "", secondCookies)
+			var other passwordhttp.SigninResponse
+			if second.StatusCode != 200 || json.Unmarshal(payload, &other) != nil || !other.SignedIn || other.SessionID == signed.SessionID || len(second.Cookies()) != 1 {
+				t.Fatal("second genuine source session unavailable")
+			}
+			f.secondBearer, f.secondCSRF = second.Cookies()[0].Value, second.Header.Get("X-CSRF-Token")
+		}
 		proveReferenceMFAEnrollment(t, ctx, f, features, client, base, origin, r.Cookies(), r.Header.Get("X-CSRF-Token"), signed.SessionID, passwordMFA, recoveryLogin...)
 		return
 	}

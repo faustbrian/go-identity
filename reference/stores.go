@@ -70,6 +70,10 @@ type StoreConfiguration struct {
 	MFAEnrollment *MFAEnrollmentConfiguration
 	// HTTPMFAEnrollment independently selects native cookie enrollment HTTP.
 	HTTPMFAEnrollment *HTTPMFAEnrollmentConfiguration
+	// HTTPMFAActiveStepUp independently selects authenticated TOTP proof HTTP.
+	HTTPMFAActiveStepUp *HTTPMFAActiveStepUpConfiguration
+	// HTTPMFARecoveryRegeneration independently selects whole-set replacement HTTP.
+	HTTPMFARecoveryRegeneration *HTTPMFARecoveryRegenerationConfiguration
 	// PasswordChange selects native keyed replacement over selected verification.
 	PasswordChange *PasswordChangeConfiguration
 	// HTTPPasswordVerification explicitly selects native reauthentication HTTP.
@@ -420,6 +424,12 @@ func (s StoreSet) Close(ctx context.Context) error {
 	}
 	if state.features != nil && state.features.httpMFA != nil {
 		state.features.httpMFA.rate.Close()
+	}
+	if state.features != nil && state.features.httpMFAActiveStepUp != nil {
+		state.features.httpMFAActiveStepUp.rate.Close()
+	}
+	if state.features != nil && state.features.httpMFARecoveryRegeneration != nil {
+		state.features.httpMFARecoveryRegeneration.rate.Close()
 	}
 	if state.features != nil && state.features.httpMFAEnrollment != nil {
 		state.features.httpMFAEnrollment.rate.Close()

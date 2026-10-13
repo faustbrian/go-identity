@@ -118,7 +118,7 @@ func nativeMFAReceipt(id identity.CommandID, receipt identity.CommandResult) nat
 }
 
 func (s *magicLinkTOTPService) TotpVerify(ctx context.Context, request mfa.TotpVerifyRequest) (out mfa.TotpVerifyResult, err error) {
-	if ctx == nil || s == nil || s.state == nil || request.Enrollment != nil || request.Validate() != nil {
+	if ctx == nil || s == nil || s.state == nil || request.Enrollment != nil || request.StepUp != nil || request.Validate() != nil {
 		return out, invalidTOTPCompletion()
 	}
 	state := s.state()

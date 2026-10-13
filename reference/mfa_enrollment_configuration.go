@@ -9,6 +9,7 @@ import (
 	kernel "github.com/faustbrian/go-identity/postgres"
 	"github.com/faustbrian/go-identity/risk"
 	"github.com/faustbrian/go-identity/session"
+	sessionpg "github.com/faustbrian/go-identity/session/postgres"
 	"github.com/faustbrian/go-secret-envelope/adapters/keyring"
 )
 
@@ -26,12 +27,22 @@ type MFAEnrollmentConfiguration struct {
 	AllowedOrigins       []string
 	ComparisonKey        [32]byte
 	ComparisonKeyVersion uint32
+	// ActiveStepUp independently selects native authenticated TOTP proof issuance.
+	// Primary must be absent; this graph supplies the real cookie/session owner.
+	// This selects no HTTP routes or login-completion fallback.
+	ActiveStepUp *mfapg.TOTPActiveStepUpConfig
+	// Regeneration separately selects fresh-proof-consuming whole-set replacement.
+	// Primary and Sessions must be absent; this graph supplies real native owners.
+	// ActiveStepUp is required. No HTTP route is selected by this field.
+	Regeneration *mfapg.RecoveryRegenerationConfig
 }
 
 type mfaEnrollmentState struct {
-	enable  *mfapg.TOTPEnrollmentService
-	uri     *mfapg.TOTPURIService
-	confirm *mfapg.TOTPConfirmationService
+	enable     *mfapg.TOTPEnrollmentService
+	uri        *mfapg.TOTPURIService
+	confirm    *mfapg.TOTPConfirmationService
+	stepup     *mfapg.TOTPActiveStepUpService
+	regenerate *mfapg.RecoveryRegenerationService
 }
 
 func composeMFAEnrollment(c StoreConfiguration, d ReferenceDependencies, verification *passwordVerificationState, evaluation risk.Evaluator) (*mfaEnrollmentState, error) {
@@ -75,7 +86,44 @@ func composeMFAEnrollment(c StoreConfiguration, d ReferenceDependencies, verific
 	if err != nil {
 		return nil, invalid
 	}
-	return &mfaEnrollmentState{enable: enable, uri: uri, confirm: confirm}, nil
+	state := &mfaEnrollmentState{enable: enable, uri: uri, confirm: confirm}
+	if p.Regeneration != nil && p.ActiveStepUp == nil {
+		return nil, invalid
+	}
+	if p.ActiveStepUp != nil {
+		if c.Session == nil || p.ActiveStepUp.Primary != nil {
+			return nil, invalid
+		}
+		validation := c.Session.Native.Validation
+		validation.Clock = c.Session.Native.Execution.Clock
+		primary, err := sessionpg.NewPasswordActiveTOTPPrimarySource(d.PostgreSQL, sessionpg.PasswordActiveTOTPPrimaryConfig{Session: sessionpg.SessionServiceConfig{Repository: c.PasswordVerification.Native.Session, Profile: c.PasswordVerification.Native.Profile, Validation: validation}, CSRFKeys: p.CSRFKeys})
+		if err != nil {
+			return nil, invalid
+		}
+		selected := *p.ActiveStepUp
+		selected.Primary = primary
+		state.stepup, err = mfapg.NewTOTPActiveStepUpService(enable, selected)
+		if err != nil {
+			return nil, invalid
+		}
+		if p.Regeneration != nil {
+			if p.Regeneration.Primary != nil || p.Regeneration.Sessions != nil {
+				return nil, invalid
+			}
+			effects, err := sessionpg.NewMFARecoverySessionEffect(c.PasswordVerification.Native.Session, c.PasswordVerification.Native.Profile)
+			if err != nil {
+				return nil, invalid
+			}
+			native := *p.Regeneration
+			native.Primary = primary
+			native.Sessions = effects
+			state.regenerate, err = mfapg.NewRecoveryRegenerationService(enable, state.stepup, native)
+			if err != nil {
+				return nil, invalid
+			}
+		}
+	}
+	return state, nil
 }
 
 // Format redacts native cryptographic and policy custody.

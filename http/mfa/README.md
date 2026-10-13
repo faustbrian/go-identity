@@ -33,6 +33,52 @@ to the actual decode, source, rate-admission and execution phases.
 
 ## Wire contract
 
+### Authenticated TOTP step-up
+
+`NewActiveStepUpHandler(ActiveStepUpConfig)` and `FeatureConfig.ActiveStepUp`
+select only `X-MFA-Variant: step-up` on `POST /v1/mfa/totp-verify`. Closed JSON
+contains `commandID`, `factorID` and `code`. The original session cookie, exact
+HTTPS Origin and native `X-CSRF-Token` are required; Authorization,
+Idempotency-Key, query/trailer fields, purpose overrides and trusted-device
+choices are rejected. Native `ActiveStepUpService` supplies authenticated
+read-only quota/deadline custody before actual protected TOTP verification.
+
+Only fresh known commitment returns `verified`, `commitOutcome`, `commandID`
+and `proofID`. No session is issued. The proof is exclusively for recovery-code
+regeneration, not login or enrollment. Replay, uncertainty, expiry and failed
+delivery return no proof. Original observation and proof deadlines are retained
+through rate admission and final-response middleware. Selecting this variant
+does not select the regeneration route or another verify variant. Allow the
+variant header in CORS only when this feature is explicitly selected.
+
+### Recovery-code regeneration
+
+`NewRecoveryRegenerateHandler(RecoveryRegenerateConfig)` and
+`FeatureConfig.RecoveryRegenerate` independently select
+`POST /v1/mfa/recovery-regenerate`. Closed JSON is `commandID`, `proofID`.
+Supply the actual current session cookie, exact HTTPS Origin and native
+synchronizer. No user, set, count, purpose, Authorization, request-key header,
+query or trailer is accepted. Borrow the native replacement service and its
+committed original reauthentication source; metadata alone grants no authority.
+The native service must authenticate original issuance and atomically consume
+the proof with replacement, factor advancement, session revocation and events.
+
+Configure `CodeCount` identically to native policy (1..64) and use its positive
+`MaximumAge` (at most five minutes). The modern native profile returns independent
+16-byte random codes as canonical 22-byte unpadded base64url; the transport
+checks that profile before disclosure. The original proof lifetime determines
+shared challenge quota; native command identity retains debit/retry correlation.
+Original proof/session/freshness deadlines remain exclusive across waits and
+delivery. Successful mutation intentionally revokes the source session: output
+uses the original observation deadline, not a renewed read or session revival.
+
+Only an error-free fresh known commit returns `regenerated`, `commitOutcome`,
+`commandID`, `recoveryCodes`. Secrets are destroyed after explicit delivery and
+never cached or redelivered on replay, uncertainty, cancellation, expiry or failed
+final-response middleware. After revocation, further cookie retries may return
+401; reconcile the original native command through code-free recovery instead
+of interpreting uncertainty as rollback. Sign in again after successful replacement.
+
 ### Recovery-code completion
 
 `NewRecoveryUseHandler(RecoveryUseConfig)` and `FeatureConfig.RecoveryUse`

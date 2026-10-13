@@ -2,6 +2,24 @@
 
 ## Unreleased
 
+- Add session-owned atomic whole-subject revocation for native recovery-set
+  replacement, including command-bound retained disposition evidence and the
+  original source's intentional revocation. The bounded 1024-session profile
+  fails closed on excess; it never preserves or silently upgrades the source.
+  Apply `MFARecoverySessionMigrationSource` for selected regeneration graphs.
+
+- Provide native password/password-MFA primary custody for authenticated TOTP
+  step-up, with actual session-cookie reads and unchanged synchronizer checking.
+  Retain original scalar session/deadline snapshots inside MFA-owned encrypted
+  preparation and repeat current owner checks in preparation and final commit.
+  No caller-written session reader or authentication fallback is accepted.
+
+- Add exact native authenticated MFA-action session admission for password,
+  password/TOTP and password/recovery sessions. Retain credential, factor,
+  session and family fences, command-frozen observation expiry, submitted bearer
+  possession and unchanged CSRF custody. This does not yet expose a usable
+  step-up or recovery-code regeneration workflow.
+
 - Admit complete recovery-code provenance through selected MFA session readers
   and revocation mapping, retaining original credential/factor authority and
   single-factor isolation. New cache profiles reject prior profile custody

@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"testing"
+	"time"
 
 	identity "github.com/faustbrian/go-identity"
 	mfapg "github.com/faustbrian/go-identity/mfa/postgres"
@@ -67,6 +68,34 @@ func TestPasswordMFASessionAdmissionRetainsCredentialAndFactor(t *testing.T) {
 		t.Fatal("single-factor upgraded through MFA reader")
 	}
 	r := &Repository{revokeMFAPassword: &profile}
+	guard, err := NewPasswordMFAActionSessionGuard(Config{Schema: "session_store", MaximumDuration: time.Second}, profile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	action := command.Binding
+	action.OperationID, action.SchemaID, action.SchemaVersion = "identity.mfa.totp-verify", "mfa-totp-step-up", 1
+	for _, candidate := range []session.Session{record, recoveryRecord} {
+		got, err := guard.admission(candidate, action)
+		if err != nil || got.credential == nil || got.factor == nil || got.credential.Credential != credential.Credential || got.factor.FactorAuthorityVersion != 7 {
+			t.Fatal("authenticated factor action lost original credential or factor", err)
+		}
+	}
+	for _, mutation := range []string{"actor", "schema", "operation", "tenant"} {
+		bad := action
+		switch mutation {
+		case "actor":
+			bad.ActorID = "other-user"
+		case "schema":
+			bad.SchemaID = "mfa-totp-verify"
+		case "operation":
+			bad.OperationID = "identity.session.revoke-one"
+		case "tenant":
+			bad.TenantID = "foreign"
+		}
+		if _, err := guard.admission(record, bad); err == nil {
+			t.Fatal("foreign or anonymous factor action admitted", mutation)
+		}
+	}
 	admission, err := r.revokeRecordAdmission(record, command.Binding)
 	if err != nil || admission.factor == nil || admission.credential == nil || admission.credential.Credential != credential.Credential || admission.factor.FactorID != "BgYGBgYGBgYGBgYGBgYGBg" {
 		t.Fatal("native password revocation lost credential or factor", err)
