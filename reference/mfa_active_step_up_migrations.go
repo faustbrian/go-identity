@@ -30,13 +30,31 @@ func (s StoreSet) activeStepUpMigrationCatalog(ctx context.Context, catalog []mi
 		}
 		owners[8] = "identity/mfa/postgres"
 		catalog[i] = migrationHistory{namespace: h.namespace, history: steps, owners: owners, guards: append(append([]migrationGuard(nil), h.guards...), migrationGuard{version: 8, schema: "identity_mfa", tables: []string{"factor_verifications"}})}
-		if s.state.features.mfaEnrollment.regenerate != nil {
+		if s.state.features.mfaEnrollment.manage != nil {
+			steps, err = (mfapg.FactorManagementMigrationSource{Base: fixedMigrationSource(steps), Version: 9}).Load(ctx)
+			if err != nil {
+				return nil, err
+			}
+			owners[9] = "identity/mfa/postgres"
+			catalog[i].history = steps
+			catalog[i].guards = append(catalog[i].guards, migrationGuard{version: 9, schema: "identity_mfa", tables: []string{"factor_update_effects"}, columns: []string{"totp_factors.label"}})
+		}
+		if s.state.features.mfaEnrollment.regenerate != nil || s.state.features.mfaEnrollment.manage != nil {
 			schema := s.state.features.migrations.passwordSigninSchema
 			steps, err := (sessionpg.MFARecoverySessionMigrationSource{Schema: schema, Version: 1}).Load(ctx)
 			if err != nil {
 				return nil, err
 			}
 			catalog = append(catalog, migrationHistory{namespace: "identity_mfa_recovery_dispositions", history: steps, owners: map[migrations.Version]ModuleID{1: "identity/session/postgres"}, guards: []migrationGuard{{version: 1, schema: schema, tables: []string{"mfa_recovery_dispositions"}}}})
+			if s.state.features.mfaEnrollment.manage != nil {
+				extension, err := (sessionpg.MFAFactorUpdateSessionMigrationSource{Schema: schema, Version: 2}).Load(ctx)
+				if err != nil {
+					return nil, err
+				}
+				j := len(catalog) - 1
+				catalog[j].history = append(catalog[j].history, extension...)
+				catalog[j].owners[2] = "identity/session/postgres"
+			}
 		}
 		return catalog, nil
 	}

@@ -868,3 +868,20 @@ The actual warmup test requires
 contact existing application services. Exact coverage, mutation, interoperability,
 clean-consumer and complete reference acceptance gates remain release requirements.
 See [CHANGELOG.md](CHANGELOG.md).
+
+## Selected factor rename composition
+
+Set `MFAEnrollmentConfiguration.ActiveStepUp`, then optional
+`FactorManagement` with explicit primary/factor maximum ages. The graph supplies
+the actual native primary and session-effect owners; caller-written overrides
+are rejected. `FeatureSet.MFAFactorManagement` enables native rename without
+requiring any management, step-up, regeneration or session HTTP route.
+
+For transport, separately set `HTTPMFAFactorUpdate` with trusted origins and
+the shared keyed rate namespace/key. Set `HTTPMFAActiveStepUp.Purposes` to include
+`identity.mfa.factor-update` if HTTP should produce the proof. Selected origins
+must be a subset of native step-up origins. Unselected routes and metadata are
+absent; incomplete selected dependencies fail composition. Graph drain/close
+guards apply to native and HTTP calls. Real-adapter journeys exercise fresh
+TOTP proof, optimistic rename, rollback, session invalidation and original
+outcome recovery; this is not complete MFA or platform release qualification.

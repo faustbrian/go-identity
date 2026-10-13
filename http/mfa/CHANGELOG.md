@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- Add opt-in factor rename with closed JSON, one original Idempotency-Key,
+  cookie/Origin/synchronizer and original factor-proof lookup. Safe metadata
+  is returned only from fresh known commit; errors, replay, uncertainty and
+  expired final delivery never expose factor metadata or issue credentials.
+
+- Allow authenticated TOTP step-up to select an explicit closed purpose set
+  for factor-update/disable as well as regeneration. Empty configuration keeps
+  the regeneration default; other-only sets require a purpose. Null, arbitrary
+  and unselected purposes deny without falling back to regeneration.
+
 - Add independently selected cookie-only MFA listing with closed safe metadata
   output, shared safe-route admission and unchanged original session validity.
   Reads reject body/query/target/Authorization/idempotency overrides, send no

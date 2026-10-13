@@ -74,6 +74,8 @@ type StoreConfiguration struct {
 	HTTPMFAActiveStepUp *HTTPMFAActiveStepUpConfiguration
 	// HTTPMFARecoveryRegeneration independently selects whole-set replacement HTTP.
 	HTTPMFARecoveryRegeneration *HTTPMFARecoveryRegenerationConfiguration
+	// HTTPMFAFactorUpdate independently selects native TOTP rename HTTP.
+	HTTPMFAFactorUpdate *HTTPMFAFactorUpdateConfiguration
 	// HTTPMFAList independently selects cookie-only safe factor metadata.
 	HTTPMFAList *HTTPMFAListConfiguration
 	// PasswordChange selects native keyed replacement over selected verification.
@@ -435,6 +437,9 @@ func (s StoreSet) Close(ctx context.Context) error {
 	}
 	if state.features != nil && state.features.httpMFARecoveryRegeneration != nil {
 		state.features.httpMFARecoveryRegeneration.rate.Close()
+	}
+	if state.features != nil && state.features.httpMFAFactorUpdate != nil {
+		state.features.httpMFAFactorUpdate.rate.Close()
 	}
 	if state.features != nil && state.features.httpMFAEnrollment != nil {
 		state.features.httpMFAEnrollment.rate.Close()

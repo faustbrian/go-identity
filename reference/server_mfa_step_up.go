@@ -6,6 +6,7 @@ import (
 	"slices"
 	"time"
 
+	auth "github.com/faustbrian/go-authentication"
 	"github.com/faustbrian/go-authorization"
 	identity "github.com/faustbrian/go-identity"
 	identityhttp "github.com/faustbrian/go-identity/http"
@@ -18,6 +19,9 @@ import (
 // session and shared strict rate owners are required. Origins must be exact
 // native allowed origins; namespace/key retain stable shared quota identity.
 type HTTPMFAActiveStepUpConfiguration struct {
+	// Purposes explicitly selects the finite native management targets. Empty
+	// retains regeneration; non-default targets must be named in the request.
+	Purposes              []auth.Purpose
 	TrustedOrigins        []identityhttp.Origin
 	VerificationNamespace string
 	VerificationKey       [32]byte
@@ -60,6 +64,15 @@ func composeMFAActiveStepUpHTTP(c StoreConfiguration, owner *mfaEnrollmentState,
 		return nil, invalid
 	}
 	h := *c.HTTPMFAActiveStepUp
+	if len(h.Purposes) > 3 {
+		return nil, invalid
+	}
+	h.Purposes = slices.Clone(h.Purposes)
+	for i, purpose := range h.Purposes {
+		if purpose != "identity.mfa.recovery-regenerate" && purpose != "identity.mfa.factor-update" && purpose != "identity.mfa.disable" || slices.Contains(h.Purposes[:i], purpose) {
+			return nil, invalid
+		}
+	}
 	if len(h.TrustedOrigins) == 0 || len(h.TrustedOrigins) > 16 {
 		return nil, invalid
 	}
@@ -91,5 +104,5 @@ func (s *Server) mfaActiveStepUpHTTPConfig(network identityhttp.NetworkConfig, f
 		return nil, identity.InvalidInputError{Field: "reference_http_mfa_step_up"}
 	}
 	sessions := s.state.features.session
-	return &mfahttp.ActiveStepUpConfig{Network: network, Sessions: sessions.reader, Service: native, Rate: h.rate, Cookie: sessions.config.Cookie, TrustedOrigins: h.config.TrustedOrigins, PolicyRevision: h.revision, Now: h.now, MaximumDuration: h.timeout}, nil
+	return &mfahttp.ActiveStepUpConfig{Network: network, Sessions: sessions.reader, Service: native, Rate: h.rate, Cookie: sessions.config.Cookie, TrustedOrigins: h.config.TrustedOrigins, PolicyRevision: h.revision, Now: h.now, MaximumDuration: h.timeout, Purposes: h.config.Purposes}, nil
 }

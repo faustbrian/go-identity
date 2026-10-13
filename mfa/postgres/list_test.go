@@ -20,3 +20,11 @@ func TestTOTPListReaderRequiresExistingNativeOwner(t *testing.T) {
 	}
 	var _ mfa.FactorListReader = (*TOTPListReader)(nil)
 }
+
+func TestTOTPManagementListReaderRequiresSelectedMutationOwner(t *testing.T) {
+	for _, owner := range []*FactorUpdateService{nil, {}} {
+		if reader, err := NewTOTPManagementListReader(owner); err == nil || reader != nil {
+			t.Fatal("unselected mutation profile acquired managed metadata storage")
+		}
+	}
+}

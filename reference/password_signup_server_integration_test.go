@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/faustbrian/go-audit"
+	auth "github.com/faustbrian/go-authentication"
 	"github.com/faustbrian/go-authorization"
 	"github.com/faustbrian/go-capability"
 	issuerpg "github.com/faustbrian/go-capability/postgres/identity"
@@ -63,11 +64,11 @@ func (referenceRegistrationPolicy) Decide(ctx context.Context, c authorization.D
 	}
 	if string(c.Request.Tenant) == otpTenant && c.PolicyRevision == 9 && c.Request.Subject.Kind == authorization.SubjectUser && c.Request.Resource.Type == "identity.user" && string(c.Request.Resource.ID) == string(c.Request.Subject.ID) {
 		switch c.Request.Action {
-		case "identity.mfa.enable", "identity.mfa.totp-uri", "identity.mfa.totp-verify", "identity.mfa.recovery-regenerate", "identity.mfa.list":
+		case "identity.mfa.enable", "identity.mfa.totp-uri", "identity.mfa.totp-verify", "identity.mfa.recovery-regenerate", "identity.mfa.list", "identity.mfa.factor-update":
 			return authorization.Decision{Outcome: authorization.Allow, Revision: 9}, nil
 		}
 	}
-	if string(c.Request.Tenant) == otpTenant && c.PolicyRevision == 9 && c.Request.Subject.Kind == authorization.SubjectUser && c.Request.Action == "identity.mfa.enable" && c.Request.Resource.Type == "identity.request-admission" && c.Request.Resource.ID == "identity.mfa.enable" {
+	if string(c.Request.Tenant) == otpTenant && c.PolicyRevision == 9 && c.Request.Subject.Kind == authorization.SubjectUser && (c.Request.Action == "identity.mfa.enable" || c.Request.Action == "identity.mfa.factor-update") && c.Request.Resource.Type == "identity.request-admission" && string(c.Request.Resource.ID) == string(c.Request.Action) {
 		return authorization.Decision{Outcome: authorization.Allow, Revision: 9}, nil
 	}
 	return (referenceResetPolicy{}).Decide(ctx, c)
@@ -230,7 +231,7 @@ func proveReferenceSignupGraph(t *testing.T, competing bool, protected ...bool) 
 	proveReferenceSignupGraphExtensions(t, competing, signupGraphExtensions{}, protected...)
 }
 
-type signupGraphExtensions struct{ mfaEnrollment, mfaListing, mfaListHTTP, mfaListStandalone, mfaListDenials, mfaListRecheck, activeStepUp, activeStepUpHTTP, regeneration, regenerationHTTP, regenerationRace, regenerationDenials, passwordMFA, passwordRecovery, recoveryRace, completionCommitFault bool }
+type signupGraphExtensions struct{ mfaEnrollment, mfaListing, mfaListHTTP, mfaListStandalone, mfaListDenials, mfaListRecheck, activeStepUp, activeStepUpHTTP, factorManagement, factorManagementHTTP, factorManagementRace, factorManagementDenials, factorManagementClear, regeneration, regenerationHTTP, regenerationRace, regenerationDenials, passwordMFA, passwordRecovery, recoveryRace, completionCommitFault bool }
 
 func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extensions signupGraphExtensions, protected ...bool) {
 	t.Helper()
@@ -239,13 +240,16 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 	f := newLiveStoresProfile(t, ctx, false)
 	f.recoveryRace = extensions.recoveryRace
 	f.regenerationRace = extensions.regenerationRace
+	f.factorManagementRace = extensions.factorManagementRace
+	f.factorManagementDenials = extensions.factorManagementDenials
+	f.factorManagementClear = extensions.factorManagementClear
 	f.regenerationDenials = extensions.regenerationDenials
 	f.mfaListDenials = extensions.mfaListDenials
 	f.mfaListRecheck = extensions.mfaListRecheck
 	c, deps, worker := otpGraphConfiguration(t, f.config)
 	deps.PostgreSQL = f.pool
 	if extensions.completionCommitFault {
-		f.completionFault = &completionCommitFault{factorProof: extensions.activeStepUp, regeneration: extensions.regeneration}
+		f.completionFault = &completionCommitFault{factorProof: extensions.activeStepUp, regeneration: extensions.regeneration, factorManagement: extensions.factorManagement}
 		faultPool, err := database.Connect(ctx, database.Config{DSN: f.pool.Raw().Config().ConnConfig.ConnString(), MaxConns: 4, Configure: func(pc *database.PoolConfig) error { pc.ConnConfig.DialFunc = f.completionFault.dial; return nil }})
 		if err != nil {
 			t.Fatal("completion fault pool unavailable")
@@ -316,6 +320,17 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 	if extensions.regeneration {
 		c.MFAEnrollment.Regeneration = &mfapg.RecoveryRegenerationConfig{CodeCount: 10, MaximumAge: time.Minute}
 		f.regeneration = true
+	}
+	if extensions.factorManagement {
+		c.MFAEnrollment.FactorManagement = &mfapg.FactorUpdateConfig{MaximumAge: time.Minute, PrimaryMaximumAge: 2 * time.Minute}
+		f.factorManagement = true
+	}
+	if extensions.factorManagementHTTP {
+		c.HTTPMFAFactorUpdate = &reference.HTTPMFAFactorUpdateConfiguration{TrustedOrigins: []identityhttp.Origin{identityhttp.Origin(origin)}, RateNamespace: c.HTTPMFAEnrollment.RateNamespace, RateKey: c.HTTPMFAEnrollment.RateKey}
+		f.factorManagementHTTP = true
+		if c.HTTPMFAActiveStepUp != nil {
+			c.HTTPMFAActiveStepUp.Purposes = []auth.Purpose{"identity.mfa.factor-update"}
+		}
 	}
 	if extensions.regenerationHTTP {
 		c.HTTPMFARecoveryRegeneration = &reference.HTTPMFARecoveryRegenerationConfiguration{TrustedOrigins: []identityhttp.Origin{identityhttp.Origin(origin)}, RateNamespace: c.HTTPMFAEnrollment.RateNamespace, RateKey: c.HTTPMFAEnrollment.RateKey}
@@ -483,6 +498,14 @@ END $$`); err != nil {
 		}
 	} else if seen["identity.mfa.recovery-regenerate"] {
 		t.Fatal("unselected replacement route advertised")
+	}
+	if c.HTTPMFAFactorUpdate != nil {
+		wantOperations++
+		if !seen["identity.mfa.factor-update"] {
+			t.Fatal("selected factor-update route missing")
+		}
+	} else if seen["identity.mfa.factor-update"] {
+		t.Fatal("unselected factor-update route advertised")
 	}
 	if magic {
 		wantOperations += 2
@@ -718,7 +741,7 @@ CREATE TRIGGER registration_fixture_fail BEFORE INSERT ON identity.delivery_inte
 		t.Fatal("verified registration did not produce usable login", r.StatusCode, signed.CommitOutcome, signed.Error, signed.CommandID != "", signed.SessionID != "")
 	}
 	if enrollment {
-		if f.regenerationDenials {
+		if f.regenerationDenials || f.factorManagementDenials {
 			secondFlow, secondCookies := issue("password")
 			secondBody := map[string]any{}
 			for key, value := range loginBody {

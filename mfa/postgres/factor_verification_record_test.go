@@ -82,3 +82,40 @@ func TestFactorVerificationRecordPreservesSignedOriginalAndOwnerEpoch(t *testing
 		t.Fatal("foreign evidence crossed tenant scope")
 	}
 }
+
+func TestFactorVerificationCodecKeepsExactManagementPurpose(t *testing.T) {
+	for _, purpose := range []auth.Purpose{"identity.mfa.factor-update", "identity.mfa.disable"} {
+		r := factorVerificationFixture(t)
+		r.Original.Proof.Proof.Purpose = purpose
+		r.Original.Proof.Action = string(purpose)
+		frame, err := r.Original.SigningBytes()
+		if err != nil {
+			t.Fatal(err)
+		}
+		key := ed25519.NewKeyFromSeed(bytes.Repeat([]byte{42}, ed25519.SeedSize))
+		r.Original.Signature = ed25519.Sign(key, frame)
+		clear(key)
+		wire, err := encodeFactorVerificationRecord(r)
+		if err != nil {
+			t.Fatal("native codec refused an exact management proof", err)
+		}
+		got, err := decodeFactorVerificationRecord(r.Original.Proof.Proof.ID, "tenant-a", "user-a", wire)
+		if err != nil || got.Original.Proof != r.Original.Proof || !bytes.Equal(got.Original.Signature, r.Original.Signature) {
+			t.Fatal("management proof action changed in storage", err)
+		}
+		publicKey := ed25519.NewKeyFromSeed(bytes.Repeat([]byte{42}, ed25519.SeedSize))
+		if !ed25519.Verify(publicKey.Public().(ed25519.PublicKey), frame, got.Original.Signature) {
+			t.Fatal("original signed management frame changed")
+		}
+		clear(publicKey)
+		clear(frame)
+	}
+	for _, purpose := range []auth.Purpose{"identity.mfa.enable", "identity.admin.mfa-reset", "identity.mfa.list", "identity.mfa.factor-update.extra"} {
+		r := factorVerificationFixture(t)
+		r.Original.Proof.Proof.Purpose = purpose
+		r.Original.Proof.Action = string(purpose)
+		if _, err := encodeFactorVerificationRecord(r); err == nil {
+			t.Fatal("unrelated purpose entered management evidence storage")
+		}
+	}
+}

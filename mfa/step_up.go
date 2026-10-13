@@ -13,8 +13,9 @@ import (
 
 // TOTPAuthenticatedStepUp borrows the current authenticated browser session and
 // synchronizer for active-factor verification. It creates no login continuation
-// or trusted-device bypass. The initial selected purpose is recovery-code
-// regeneration. The native owner must verify current session/primary/factor
+// or trusted-device bypass. The purpose selects exactly recovery-code
+// regeneration, factor update or MFA disable. These actions are not
+// interchangeable: the native owner must verify current session/primary/factor
 // authority, current policy/risk, the submitted TOTP and replay advancement in
 // the transaction that persists original signed proof evidence. Zero denies.
 type TOTPAuthenticatedStepUp struct {
@@ -24,10 +25,19 @@ type TOTPAuthenticatedStepUp struct {
 }
 
 func (r TotpVerifyRequest) validateAuthenticatedStepUp() error {
-	if r.Enrollment != nil || r.TrustDevice || r.StepUp.Purpose != "identity.mfa.recovery-regenerate" {
+	if r.Enrollment != nil || r.TrustDevice || !factorManagementPurpose(r.StepUp.Purpose) {
 		return identity.InvalidInputError{Field: "mfa_totp_verify"}
 	}
 	return r.validateAuthenticatedTOTPCustody(r.StepUp.Session, r.StepUp.CSRFToken)
+}
+
+func factorManagementPurpose(p auth.Purpose) bool {
+	switch p {
+	case "identity.mfa.recovery-regenerate", "identity.mfa.factor-update", "identity.mfa.disable":
+		return true
+	default:
+		return false
+	}
 }
 
 // ContinuationProof is an immutable, non-secret projection of fresh factor

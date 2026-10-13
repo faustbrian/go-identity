@@ -116,6 +116,19 @@ func (s *PasswordActiveTOTPPrimarySource) PrepareRegeneration(ctx context.Contex
 	return s.prepareCurrent(ctx, activeSessionRequest{TenantID: r.TenantID, UserID: identity.UserID(r.Caller.Request.Subject.ID), CommandID: r.CommandID, OperationID: "identity.mfa.recovery-regenerate", Session: r.Session, CSRFToken: r.CSRFToken})
 }
 
+// PrepareFactorUpdate authenticates actual cookie/synchronizer custody for the
+// keyed command selected by MFA's owner. It does not fabricate a regeneration
+// request, authenticate a factor projection or renew the original observation.
+func (s *PasswordActiveTOTPPrimarySource) PrepareFactorUpdate(ctx context.Context, r mfa.FactorUpdateRequest, command identity.CommandID) (mfapg.TOTPActivePrimary, session.GetResult, error) {
+	if ctx == nil || s == nil || s.sessions == nil || r.Validate() != nil {
+		return nil, session.GetResult{}, session.ErrInvalidSessionCommand
+	}
+	if _, err := identity.ParseCommandID(string(command)); err != nil || r.CommandID != "" && r.CommandID != command {
+		return nil, session.GetResult{}, session.ErrInvalidSessionCommand
+	}
+	return s.prepareCurrent(ctx, activeSessionRequest{TenantID: r.TenantID, UserID: identity.UserID(r.Caller.Request.Subject.ID), CommandID: command, OperationID: "identity.mfa.factor-update", Session: r.Session, CSRFToken: r.CSRFToken})
+}
+
 func (s *PasswordActiveTOTPPrimarySource) prepareCurrent(ctx context.Context, r activeSessionRequest) (mfapg.TOTPActivePrimary, session.GetResult, error) {
 	zero := session.GetResult{}
 	token, err := session.ParseToken(r.Session.Token())
@@ -160,6 +173,19 @@ func (s *PasswordActiveTOTPPrimarySource) RestoreRegeneration(ctx context.Contex
 		return nil, session.ErrInvalidSessionCommand
 	}
 	return s.restoreCurrent(ctx, activeSessionRequest{TenantID: r.TenantID, UserID: identity.UserID(r.Caller.Request.Subject.ID), CommandID: r.CommandID, OperationID: "identity.mfa.recovery-regenerate", Session: r.Session, CSRFToken: r.CSRFToken}, wire)
+}
+
+// RestoreFactorUpdate checks original possession against MFA-authenticated
+// snapshot bytes and the retained keyed command without IO or new freshness.
+// The mutation still must fence current owners in the actual protected Work.
+func (s *PasswordActiveTOTPPrimarySource) RestoreFactorUpdate(ctx context.Context, r mfa.FactorUpdateRequest, command identity.CommandID, wire []byte) (mfapg.TOTPActivePrimary, error) {
+	if ctx == nil || s == nil || s.sessions == nil || r.Validate() != nil || len(wire) < 1 || len(wire) > 32768 {
+		return nil, session.ErrInvalidSessionCommand
+	}
+	if _, err := identity.ParseCommandID(string(command)); err != nil || r.CommandID != "" && r.CommandID != command {
+		return nil, session.ErrInvalidSessionCommand
+	}
+	return s.restoreCurrent(ctx, activeSessionRequest{TenantID: r.TenantID, UserID: identity.UserID(r.Caller.Request.Subject.ID), CommandID: command, OperationID: "identity.mfa.factor-update", Session: r.Session, CSRFToken: r.CSRFToken}, wire)
 }
 
 func (s *PasswordActiveTOTPPrimarySource) restoreCurrent(ctx context.Context, r activeSessionRequest, wire []byte) (mfapg.TOTPActivePrimary, error) {
@@ -352,6 +378,7 @@ func (*PasswordActiveTOTPPrimarySource) MarshalText() ([]byte, error) {
 
 var _ mfapg.TOTPActivePrimarySource = (*PasswordActiveTOTPPrimarySource)(nil)
 var _ mfapg.RecoveryRegenerationPrimarySource = (*PasswordActiveTOTPPrimarySource)(nil)
+var _ mfapg.FactorUpdatePrimarySource = (*PasswordActiveTOTPPrimarySource)(nil)
 
 func (*passwordActiveTOTPPrimary) Format(s fmt.State, _ rune) {
 	_, _ = s.Write([]byte("postgres.passwordActiveTOTPPrimary(redacted)"))

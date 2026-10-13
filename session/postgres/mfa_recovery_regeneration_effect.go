@@ -25,9 +25,10 @@ import (
 // factor proof in this same Work before Apply. This never grants continuing
 // access to a deliberately revoked source or issues replacement credentials.
 type MFARecoverySessionEffect struct {
-	config  Config
-	profile IdentifierAdmissionConfig
-	schema  string
+	config           Config
+	profile          IdentifierAdmissionConfig
+	schema           string
+	factorManagement bool
 }
 
 // NewMFARecoverySessionEffect freezes native password/password-MFA ownership
@@ -39,6 +40,30 @@ func NewMFARecoverySessionEffect(c Config, p IdentifierAdmissionConfig) (*MFARec
 		return nil, err
 	}
 	return &MFARecoverySessionEffect{config: guard.config, profile: guard.profile, schema: pgx.Identifier{c.Schema}.Sanitize()}, nil
+}
+
+// NewMFAFactorUpdateSessionEffect selects the same native session disposition
+// owner for exact factor-update Work instead of recovery regeneration. It does
+// not select regeneration, accept an arbitrary action or grant continuing
+// session authority. Install MFAFactorUpdateSessionMigrationSource after the
+// existing disposition history. All inherited caps and rollback rules apply.
+func NewMFAFactorUpdateSessionEffect(c Config, p IdentifierAdmissionConfig) (*MFARecoverySessionEffect, error) {
+	e, err := NewMFARecoverySessionEffect(c, p)
+	if err != nil {
+		return nil, err
+	}
+	e.factorManagement = true
+	return e, nil
+}
+
+func (e *MFARecoverySessionEffect) acceptsScope(b identity.CommandBinding, f kernel.FeatureRegistration, l kernel.LifecyclePlan) bool {
+	if e == nil {
+		return false
+	}
+	if !e.factorManagement {
+		return mfaRecoveryEffectScope(b, f, l)
+	}
+	return b.SchemaVersion == 1 && b.OperationID == "identity.mfa.factor-update" && b.SchemaID == "mfa-factor-update" && b.RecordID == string(b.UserID) && f.Operation == (identity.FeatureOperation{Owner: "identity/mfa", OperationID: b.OperationID, SchemaID: b.SchemaID, SchemaVersion: 1, RecordRequirement: identity.FeatureRecordRequired}) && f.Contributor == (kernel.ContributorDescriptor{Owner: "identity/mfa/postgres", ContractID: "identity.mfa", Version: 1}) && l.EventType == "factor.updated.v1" && l.BeforeVersion > 0 && l.BeforeVersion < math.MaxUint64 && l.AfterVersion == l.BeforeVersion+1
 }
 
 func mfaRecoveryEffectScope(b identity.CommandBinding, f kernel.FeatureRegistration, l kernel.LifecyclePlan) bool {
@@ -126,7 +151,7 @@ func (e *MFARecoverySessionEffect) Apply(ctx context.Context, w kernel.Work, own
 		return err
 	}
 	b, f, l, err := w.FeatureScope(owner)
-	if err != nil || !mfaRecoveryEffectScope(b, f, l) {
+	if err != nil || !e.acceptsScope(b, f, l) {
 		return session.ErrInvalidSessionCommand
 	}
 	bounded, stop := context.WithTimeout(ctx, e.config.MaximumDuration)
@@ -229,7 +254,7 @@ func (e *MFARecoverySessionEffect) Check(ctx context.Context, w kernel.Work, own
 		return session.ErrInvalidSessionCommand
 	}
 	b, f, l, err := w.FeatureScope(owner)
-	if err != nil || !mfaRecoveryEffectScope(b, f, l) {
+	if err != nil || !e.acceptsScope(b, f, l) {
 		return session.ErrInvalidSessionCommand
 	}
 	bounded, stop := context.WithTimeout(ctx, e.config.MaximumDuration)
@@ -299,7 +324,7 @@ func (e *MFARecoverySessionEffect) Recover(ctx context.Context, w kernel.Recover
 		return kernel.RecoveryUnknown, session.ErrInvalidSessionCommand
 	}
 	b, f, l, err := w.FeatureScope(owner)
-	if err != nil || !mfaRecoveryEffectScope(b, f, l) {
+	if err != nil || !e.acceptsScope(b, f, l) {
 		return kernel.RecoveryUnknown, session.ErrInvalidSessionCommand
 	}
 	bounded, stop := context.WithTimeout(ctx, e.config.MaximumDuration)

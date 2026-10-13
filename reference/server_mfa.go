@@ -120,10 +120,14 @@ func (s *Server) mfaFeature(network identityhttp.NetworkConfig, f FeatureSet) (*
 	if err != nil {
 		return nil, err
 	}
-	if h == nil && enrollment == nil && stepup == nil && regeneration == nil && listing == nil {
+	management, err := s.mfaFactorUpdateHTTPConfig(network, f)
+	if err != nil {
+		return nil, err
+	}
+	if h == nil && enrollment == nil && stepup == nil && regeneration == nil && listing == nil && management == nil {
 		return nil, nil
 	}
-	config := mfahttp.FeatureConfig{List: listing, Enable: enrollment, ActiveStepUp: stepup, RecoveryRegenerate: regeneration}
+	config := mfahttp.FeatureConfig{List: listing, Enable: enrollment, ActiveStepUp: stepup, RecoveryRegenerate: regeneration, FactorUpdate: management}
 	config.URI, err = s.mfaProvisioningHTTPConfig(network, f, enrollment)
 	if err != nil {
 		return nil, err
@@ -179,6 +183,9 @@ func (s *Server) mfaFeature(network identityhttp.NetworkConfig, f FeatureSet) (*
 		return nil, err
 	}
 	for i := range operations {
+		if operations[i].Record.OperationID == "identity.mfa.factor-update" {
+			operations[i].Handler = s.guardSessionLifetime(operations[i].Handler)
+		}
 		if operations[i].Record.OperationID == "identity.mfa.list" {
 			operations[i].Handler = s.guardSessionLifetime(operations[i].Handler)
 		}

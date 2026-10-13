@@ -36,6 +36,10 @@ type MFAEnrollmentConfiguration struct {
 	// Primary and Sessions must be absent; this graph supplies real native owners.
 	// ActiveStepUp is required. No HTTP route is selected by this field.
 	Regeneration *mfapg.RecoveryRegenerationConfig
+	// FactorManagement separately selects native protected factor updates.
+	// Primary/Sessions must be absent: this graph supplies real session owners.
+	// ActiveStepUp is required; this field selects no HTTP routes or regeneration.
+	FactorManagement *mfapg.FactorUpdateConfig
 	// Listing explicitly selects safe TOTP/recovery metadata through the graph's
 	// existing real session owner. It selects no HTTP route or trusted devices.
 	Listing bool
@@ -48,6 +52,7 @@ type mfaEnrollmentState struct {
 	stepup     *mfapg.TOTPActiveStepUpService
 	regenerate *mfapg.RecoveryRegenerationService
 	listing    *mfa.ListService
+	manage     *mfapg.FactorUpdateService
 }
 
 func composeMFAEnrollment(c StoreConfiguration, d ReferenceDependencies, verification *passwordVerificationState, evaluation risk.Evaluator) (*mfaEnrollmentState, error) {
@@ -92,7 +97,7 @@ func composeMFAEnrollment(c StoreConfiguration, d ReferenceDependencies, verific
 		return nil, invalid
 	}
 	state := &mfaEnrollmentState{enable: enable, uri: uri, confirm: confirm}
-	if p.Regeneration != nil && p.ActiveStepUp == nil {
+	if (p.Regeneration != nil || p.FactorManagement != nil) && p.ActiveStepUp == nil {
 		return nil, invalid
 	}
 	if p.ActiveStepUp != nil {
@@ -123,6 +128,21 @@ func composeMFAEnrollment(c StoreConfiguration, d ReferenceDependencies, verific
 			native.Primary = primary
 			native.Sessions = effects
 			state.regenerate, err = mfapg.NewRecoveryRegenerationService(enable, state.stepup, native)
+			if err != nil {
+				return nil, invalid
+			}
+		}
+		if p.FactorManagement != nil {
+			if p.FactorManagement.Primary != nil || p.FactorManagement.Sessions != nil {
+				return nil, invalid
+			}
+			effects, err := sessionpg.NewMFAFactorUpdateSessionEffect(c.PasswordVerification.Native.Session, c.PasswordVerification.Native.Profile)
+			if err != nil {
+				return nil, invalid
+			}
+			native := *p.FactorManagement
+			native.Primary, native.Sessions = primary, effects
+			state.manage, err = mfapg.NewFactorUpdateService(enable, state.stepup, native)
 			if err != nil {
 				return nil, invalid
 			}

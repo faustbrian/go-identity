@@ -29,7 +29,7 @@ func TestActiveStepUpHTTPRequiresNativeComposition(t *testing.T) {
 }
 
 func TestActiveStepUpHTTPConservesProofAndAuthenticatedVariant(t *testing.T) {
-	for _, mode := range []string{"fresh", "replay", "unknown", "expired", "foreign-proof", "missing-variant", "enrollment-variant", "duplicate-variant", "foreign-fields"} {
+	for _, mode := range []string{"fresh", "management", "unselected-purpose", "null-purpose", "replay", "unknown", "expired", "foreign-proof", "missing-variant", "enrollment-variant", "duplicate-variant", "foreign-fields"} {
 		t.Run(mode, func(t *testing.T) {
 			c, _, reader, clock, r := uriFixture(t)
 			factor, _ := identity.NewCommandID()
@@ -38,6 +38,9 @@ func TestActiveStepUpHTTPConservesProofAndAuthenticatedVariant(t *testing.T) {
 			proof := auth.ReauthenticationProof{Proof: auth.Proof{ID: auth.ProofID(command), Tenant: string(b.TenantID), Subject: string(b.UserID), Method: "totp", Assurance: auth.AssuranceMultiFactor, Purpose: "identity.mfa.recovery-regenerate", Audience: "regeneration", IssuedAt: clock.now, ExpiresAt: clock.now.Add(time.Minute)}, SessionID: b.SessionID, SessionVersion: b.Version, Action: "identity.mfa.recovery-regenerate"}
 			owner := &stepUpOwner{confirmationOwner: confirmationOwner{until: clock.now.Add(10 * time.Second), result: mfa.TotpVerifyResult{Outcome: identity.CommitOutcomeCommitted}}}
 			switch mode {
+			case "management":
+				proof.Proof.Purpose = "identity.mfa.factor-update"
+				proof.Action = "identity.mfa.factor-update"
 			case "replay":
 				proof = auth.ReauthenticationProof{}
 			case "unknown":
@@ -60,11 +63,18 @@ func TestActiveStepUpHTTPConservesProofAndAuthenticatedVariant(t *testing.T) {
 			}
 			t.Cleanup(func() { rate.Close() })
 			config := ActiveStepUpConfig{Network: c.Network, Sessions: c.Sessions, Service: owner, Rate: rate, Cookie: c.Cookie, TrustedOrigins: c.TrustedOrigins, PolicyRevision: c.PolicyRevision, Now: c.Now, MaximumDuration: c.MaximumDuration}
+			if mode == "management" {
+				config.Purposes = []auth.Purpose{"identity.mfa.recovery-regenerate", "identity.mfa.factor-update"}
+			}
 			r.URL.Path = "/v1/mfa/totp-verify"
 			r.RequestURI = r.URL.RequestURI()
 			r.Header.Set("X-MFA-Variant", "step-up")
 			body := `{"commandID":"` + string(command) + `","factorID":"` + string(factor) + `","code":"123456"}`
 			switch mode {
+			case "management", "unselected-purpose":
+				body = strings.TrimSuffix(body, "}") + `,"purpose":"identity.mfa.factor-update"}`
+			case "null-purpose":
+				body = strings.TrimSuffix(body, "}") + `,"purpose":null}`
 			case "missing-variant":
 				r.Header.Del("X-MFA-Variant")
 			case "enrollment-variant":
@@ -86,9 +96,12 @@ func TestActiveStepUpHTTPConservesProofAndAuthenticatedVariant(t *testing.T) {
 			if w.Header().Get("Set-Cookie") != "" || w.Header().Get("X-CSRF-Token") != "" || w.Header().Get("Cache-Control") != "no-store" {
 				t.Fatal("step-up issued a session or cacheable output")
 			}
-			if mode == "fresh" {
+			if mode == "fresh" || mode == "management" {
 				if w.Code != 200 || owner.calls != 1 || owner.last.StepUp == nil || !strings.Contains(w.Body.String(), `"proofID":"`+string(command)+`"`) {
 					t.Fatal("fresh authenticated factor proof unavailable", w.Code)
+				}
+				if mode == "management" && owner.last.StepUp.Purpose != "identity.mfa.factor-update" {
+					t.Fatal("selected purpose changed at native boundary")
 				}
 				feature, err := NewFeature(FeatureConfig{ActiveStepUp: &config})
 				if err != nil {
@@ -104,7 +117,7 @@ func TestActiveStepUpHTTPConservesProofAndAuthenticatedVariant(t *testing.T) {
 			} else if w.Code == 200 || strings.Contains(w.Body.String(), `"proofID"`) {
 				t.Fatal("invalid/replayed result disclosed proof", mode, w.Code)
 			}
-			if strings.Contains(mode, "variant") || mode == "foreign-fields" {
+			if strings.Contains(mode, "variant") || mode == "foreign-fields" || mode == "unselected-purpose" || mode == "null-purpose" {
 				if owner.calls != 0 || owner.reads != 0 {
 					t.Fatal("another variant acquired active-factor custody")
 				}

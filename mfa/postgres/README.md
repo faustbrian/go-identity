@@ -187,3 +187,23 @@ The owning MFA service must still verify the actual original opaque code before
 recording, enforce primary/browser/current policy, and persist the original-
 primary session in this same transaction. Positive native composition and its
 session effect remain in development; a guard or mapping alone is not MFA login.
+
+## Native factor label management
+
+`NewFactorUpdateService` borrows the same enrollment and active-step-up owners,
+real native primary source and enlisted session effect. It owns no new pool,
+transaction, journal or goroutine. Positive primary/factor maximum ages are
+explicit and at most five minutes; earliest original proof, primary and
+authoritative observation expiry wins without renewal.
+
+Install `FactorManagementMigrationSource` after the factor-verification history
+and the selected session factor-update disposition suffix. MFA v9 adds a bounded
+label and retained effects without modifying factor secrets or prior migrations.
+The current profile supports confirmed TOTP rename only. Optimistic versions,
+current authority and one-time proof fences give one mutation winner; lifecycle
+failure rolls back label, proof and sessions. An unknown commit acknowledgement
+requires original-command outcome recovery, never proof or metadata redelivery.
+
+`NewTOTPManagementListReader` explicitly borrows this selected manager to read
+the new safe label. Base `NewTOTPListReader` remains compatible with the previous
+schema. Neither reader infers authority from optional fields or reads secrets.

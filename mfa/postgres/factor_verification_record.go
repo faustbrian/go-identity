@@ -31,14 +31,14 @@ func (factorVerificationRecord) Format(s fmt.State, _ rune) {
 	_, _ = s.Write([]byte("mfapostgres.factorVerificationRecord(redacted)"))
 }
 
-// This codec validates the closed native TOTP/regeneration profile, not the
+// This codec validates the closed native TOTP management profile, not the
 // signature or current account/session/factor. Native issuance and one-use
 // admission remain separate protected transitions; callers cannot insert
 // evidence merely by constructing this private representation.
 func encodeFactorVerificationRecord(r factorVerificationRecord) ([]byte, error) {
 	bad := func() ([]byte, error) { return nil, invalidAuthority() }
 	p := r.Original.Proof
-	if r.Schema != 1 || r.FactorAuthorityVersion == 0 || p.Proof.Method != "totp" || p.Proof.Assurance != auth.AssuranceMultiFactor || p.Proof.Purpose != "identity.mfa.recovery-regenerate" || p.Action != string(p.Proof.Purpose) || p.Proof.ExpiresAt.Sub(p.Proof.IssuedAt) > 5*time.Minute || r.Original.ProofVersion != 1 || len(r.Original.Signature) != ed25519.SignatureSize {
+	if r.Schema != 1 || r.FactorAuthorityVersion == 0 || p.Proof.Method != "totp" || p.Proof.Assurance != auth.AssuranceMultiFactor || !nativeFactorEvidencePurpose(p.Proof.Purpose) || p.Action != string(p.Proof.Purpose) || p.Proof.ExpiresAt.Sub(p.Proof.IssuedAt) > 5*time.Minute || r.Original.ProofVersion != 1 || len(r.Original.Signature) != ed25519.SignatureSize {
 		return bad()
 	}
 	if _, err := identity.ParseCommandID(string(p.Proof.ID)); err != nil {
@@ -63,6 +63,15 @@ func encodeFactorVerificationRecord(r factorVerificationRecord) ([]byte, error) 
 		return bad()
 	}
 	return wire, nil
+}
+
+func nativeFactorEvidencePurpose(p auth.Purpose) bool {
+	switch p {
+	case "identity.mfa.recovery-regenerate", "identity.mfa.factor-update", "identity.mfa.disable":
+		return true
+	default:
+		return false
+	}
 }
 
 func decodeFactorVerificationRecord(id auth.ProofID, tenant, user string, wire []byte) (factorVerificationRecord, error) {

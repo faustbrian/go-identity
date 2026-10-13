@@ -15,6 +15,9 @@ func FuzzActiveStepUpClosedInput(f *testing.F) {
 		f.Add(body, "step-up")
 	}
 	f.Add(`{}`, "enrollment")
+	f.Add(`{"commandID":"AAAAAAAAAAAAAAAAAAAAAQ","factorID":"AAAAAAAAAAAAAAAAAAAAAg","code":"123456","purpose":null}`, "step-up")
+	f.Add(`{"commandID":"AAAAAAAAAAAAAAAAAAAAAQ","factorID":"AAAAAAAAAAAAAAAAAAAAAg","code":"123456","purpose":"identity.admin.mfa-reset"}`, "step-up")
+	f.Add(`{"commandID":"AAAAAAAAAAAAAAAAAAAAAQ","factorID":"AAAAAAAAAAAAAAAAAAAAAg","code":"123456","purpose":"identity.mfa.recovery-regenerate"}`, "step-up")
 	f.Add(`{}`, "")
 	f.Fuzz(func(t *testing.T, body, variant string) {
 		if len(body) > 8192 || len(variant) > 256 {

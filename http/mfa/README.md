@@ -186,6 +186,27 @@ authentication. The real reference HTTP integration proves the selected durable
 journey. Final coherent-slice review and all applicable release gates remain
 required before broader delivery/completion claims.
 
+## Opt-in factor rename
+
+Select `FeatureConfig.FactorUpdate` separately with the real native manager,
+session and original signed-proof source, exact HTTPS origins and the existing
+shared keyed limiter. `POST /v1/mfa/factor-update` accepts only `factorID`,
+`proofID`, `action: "rename"`, explicit `name` (empty clears), and positive
+`expectedVersion`. Send one `Idempotency-Key`, the session cookie, `Origin` and
+the original `X-CSRF-Token`. Subject, tenant, command and proof method/purpose
+cannot be supplied in the body; bearer/query/duplicate alternatives deny.
+
+To issue the matching TOTP proof, separately configure `ActiveStepUpConfig.Purposes`
+and send the exact selected `purpose` on the existing authenticated step-up arm.
+An empty purpose set preserves regeneration-only compatibility. Missing purpose
+is allowed only if regeneration is selected; null never selects a default.
+Management selection does not enable step-up, enrollment, login or regeneration.
+
+Rename revokes subject sessions, including this cookie. Fresh success returns
+safe factor metadata and the owner-derived command; subsequent recovery uses
+the native outcome API, not a revoked HTTP cookie. HTTP has no implicit recovery
+endpoint and never redelivers factor proof, session credentials or fresh metadata.
+
 ## FAQ
 
 - **Does a successful quota read authorize login?** No; native completion must

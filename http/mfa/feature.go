@@ -15,6 +15,8 @@ import (
 type FeatureConfig struct {
 	// List exposes only authenticated safe metadata, independently of mutations.
 	List *ListConfig
+	// FactorUpdate independently selects authenticated native TOTP rename.
+	FactorUpdate *FactorUpdateConfig
 	// RecoveryUse exposes only the explicitly selected original-primary owner.
 	RecoveryUse *RecoveryUseConfig
 	// RecoveryRegenerate explicitly selects fresh-factor whole-set replacement.
@@ -39,10 +41,22 @@ func NewFeature(c FeatureConfig) (identityhttp.Feature, error) {
 // NewFeatureWithMiddleware binds hooks to actual owned phases without granting
 // credential output ownership or returning a partial feature on failure.
 func NewFeatureWithMiddleware(c FeatureConfig, m []identityhttp.MiddlewareDescriptor) (identityhttp.Feature, error) {
-	if c.List == nil && c.TOTPVerify == nil && c.PasswordTOTPVerify == nil && c.Enable == nil && c.URI == nil && c.EnrollmentConfirmation == nil && c.ActiveStepUp == nil && c.RecoveryUse == nil && c.RecoveryRegenerate == nil {
+	if c.FactorUpdate == nil && c.List == nil && c.TOTPVerify == nil && c.PasswordTOTPVerify == nil && c.Enable == nil && c.URI == nil && c.EnrollmentConfirmation == nil && c.ActiveStepUp == nil && c.RecoveryUse == nil && c.RecoveryRegenerate == nil {
 		return identityhttp.Feature{}, identityhttp.ErrInvalidInput
 	}
 	var operations []identityhttp.OperationDescriptor
+	if c.FactorUpdate != nil {
+		h, err := NewFactorUpdateHandlerWithMiddleware(*c.FactorUpdate, m)
+		if err != nil {
+			return identityhttp.Feature{}, err
+		}
+		op, err := identityhttp.NewCanonicalOperation(identityhttp.CanonicalOperationConfig{Owner: "identity/mfa", OperationID: "identity.mfa.factor-update", Handler: h, CSRF: identityhttp.CSRFPolicy{Mode: identityhttp.CSRFSessionState, TokenHeader: "X-CSRF-Token", RefererFallback: identityhttp.RefererFallbackDeny}, MaximumSerializedBytes: 4096})
+		if err != nil {
+			return identityhttp.Feature{}, err
+		}
+		op.Wire = factorUpdateWire(*c.FactorUpdate)
+		operations = append(operations, op)
+	}
 	if c.List != nil {
 		h, err := NewListHandlerWithMiddleware(*c.List, m)
 		if err != nil {

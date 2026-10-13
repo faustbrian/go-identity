@@ -394,6 +394,10 @@ func proveReferenceMFAEnrollment(t *testing.T, ctx context.Context, f liveStores
 	}
 	if f.activeStepUp {
 		proof := proveReferenceActiveStepUp(t, ctx, f, features, cookies[0].Value, csrfWire, origin, mfa.FactorID(pending.Enrollment.ID), secret, client, base, cookies[0].Name)
+		if f.factorManagement {
+			proveReferenceFactorRename(t, ctx, f, features, cookies[0].Value, csrfWire, origin, mfa.FactorID(pending.Enrollment.ID), proof, client, base, cookies[0].Name)
+			return
+		}
 		if f.regeneration {
 			code := proveReferenceRecoveryRegeneration(t, ctx, f, features, cookies[0].Value, csrfWire, origin, proof, client, base, cookies[0].Name)
 			if code != "" {

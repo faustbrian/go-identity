@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Add native optimistic TOTP label rename using existing keyed preparation,
+  original signed proof validation and one protected mutation transaction.
+  Proof use, factor epoch, whole-subject session revocation and retained
+  outcome/audit/lifecycle effects commit or roll back together. Install the
+  forward-only factor-management v9 suffix after verification v8; existing
+  histories and encrypted factor material are unchanged. Selected management
+  listing reads labels without forcing base listing onto the newer schema.
+
 - Add bounded TOTP-only primary metadata listing and unused active recovery-set
   counts through the existing enrollment owner. Missing authority, unsupported
   active inventories and incomplete code sets fail without partial metadata;

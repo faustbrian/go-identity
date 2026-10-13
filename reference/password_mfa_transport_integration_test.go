@@ -17,10 +17,11 @@ import (
 // The database receives COMMIT, but its acknowledgement never reaches pgx.
 // No SQL values, proof bytes, cookies or credentials are recorded or logged.
 type completionCommitFault struct {
-	factorProof  bool
-	regeneration bool
-	armed        atomic.Bool
-	hit          atomic.Bool
+	factorProof      bool
+	regeneration     bool
+	factorManagement bool
+	armed            atomic.Bool
+	hit              atomic.Bool
 }
 
 func (f *completionCommitFault) dial(ctx context.Context, network, address string) (net.Conn, error) {
@@ -70,6 +71,9 @@ func (c *completionCommitConn) Write(p []byte) (int, error) {
 	}
 	if c.fault.regeneration {
 		selected = bytes.Contains(p, []byte("INSERT INTO identity_mfa.recovery_sets("))
+	}
+	if c.fault.factorManagement {
+		selected = bytes.Contains(p, []byte("INSERT INTO identity_mfa.factor_update_effects("))
 	}
 	if c.fault.armed.Load() && selected {
 		c.mutation.Store(true)

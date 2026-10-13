@@ -75,6 +75,9 @@ func proveReferenceActiveStepUp(t *testing.T, ctx context.Context, f liveStores,
 	code, _ := auth.NewOneTimeCode(codeWire)
 	command, _ := identity.NewCommandID()
 	r := mfa.TotpVerifyRequest{TenantID: otpTenant, CommandID: command, FactorID: factor, Code: code, Caller: caller, Origin: origin, Network: "127.0.0.1", StepUp: &mfa.TOTPAuthenticatedStepUp{Session: auth.NewBearerCredential(bearer), CSRFToken: csrf, Purpose: "identity.mfa.recovery-regenerate"}}
+	if f.factorManagement {
+		r.StepUp.Purpose = "identity.mfa.factor-update"
+	}
 	rateSource, ok := service.(mfahttp.ActiveStepUpService)
 	if !ok {
 		t.Fatal("selected step-up has no native original quota source")
@@ -106,20 +109,20 @@ func proveReferenceActiveStepUp(t *testing.T, ctx context.Context, f liveStores,
 		t.Fatal("failed step-up leaked replay or signed evidence")
 	}
 	r.CommandID, _ = identity.NewCommandID()
-	if f.completionFault != nil && !f.regeneration {
+	if f.completionFault != nil && !f.regeneration && !f.factorManagement {
 		f.completionFault.armed.Store(true)
 	}
 	if f.activeStepUpHTTP {
-		proveReferenceActiveStepUpHTTP(t, ctx, client, base, origin, bearer, csrfWire, cookieName, r.CommandID, factor, codeWire)
+		proveReferenceActiveStepUpHTTP(t, ctx, client, base, origin, bearer, csrfWire, cookieName, r.CommandID, factor, codeWire, r.StepUp.Purpose)
 	} else {
 		out, err = service.TotpVerify(ctx, r)
 	}
 	proof := out.StepUpProof.Bindings()
-	if f.completionFault != nil && !f.regeneration {
+	if f.completionFault != nil && !f.regeneration && !f.factorManagement {
 		if err == nil || out.Outcome != identity.CommitOutcomeUnknown || proof.Proof.ID != "" || !f.completionFault.hit.Load() {
 			t.Fatal("lost factor-proof commit acknowledgement disclosed proof", out.Outcome, err)
 		}
-	} else if !f.activeStepUpHTTP && (err != nil || out.Outcome != identity.CommitOutcomeCommitted || proof.Proof.ID != auth.ProofID(r.CommandID) || proof.Proof.Method != "totp" || proof.Proof.Assurance != auth.AssuranceMultiFactor || proof.SessionID != spec.SessionID || proof.SessionVersion != spec.Version || proof.Action != "identity.mfa.recovery-regenerate") {
+	} else if !f.activeStepUpHTTP && (err != nil || out.Outcome != identity.CommitOutcomeCommitted || proof.Proof.ID != auth.ProofID(r.CommandID) || proof.Proof.Method != "totp" || proof.Proof.Assurance != auth.AssuranceMultiFactor || proof.SessionID != spec.SessionID || proof.SessionVersion != spec.Version || proof.Action != string(r.StepUp.Purpose)) {
 		t.Fatal("actual TOTP did not issue exact original factor proof", out.Outcome, err)
 	}
 	source, err := mfapg.NewFactorVerificationSource(f.pool, time.Second)
@@ -127,7 +130,7 @@ func proveReferenceActiveStepUp(t *testing.T, ctx context.Context, f liveStores,
 		t.Fatal(err)
 	}
 	signed, err := source.Reauthentication(ctx, auth.ProofID(r.CommandID))
-	if f.activeStepUpHTTP || f.completionFault != nil && !f.regeneration {
+	if f.activeStepUpHTTP || f.completionFault != nil && !f.regeneration && !f.factorManagement {
 		proof = signed.Proof
 	}
 	if err != nil || signed.Proof != proof {
@@ -161,10 +164,13 @@ func proveReferenceActiveStepUp(t *testing.T, ctx context.Context, f liveStores,
 	return proof
 }
 
-func proveReferenceActiveStepUpHTTP(t *testing.T, ctx context.Context, client *http.Client, base, origin, bearer, csrf, cookieName string, command identity.CommandID, factor mfa.FactorID, code string) {
+func proveReferenceActiveStepUpHTTP(t *testing.T, ctx context.Context, client *http.Client, base, origin, bearer, csrf, cookieName string, command identity.CommandID, factor mfa.FactorID, code string, purpose auth.Purpose) {
 	t.Helper()
 	for _, attempt := range []string{"missing-csrf", "fresh", "replay"} {
 		body := `{"commandID":"` + string(command) + `","factorID":"` + string(factor) + `","code":"` + code + `"}`
+		if purpose != "identity.mfa.recovery-regenerate" {
+			body = strings.TrimSuffix(body, "}") + `,"purpose":"` + string(purpose) + `"}`
+		}
 		r, err := http.NewRequestWithContext(ctx, http.MethodPost, base+"/v1/mfa/totp-verify", strings.NewReader(body))
 		if err != nil {
 			t.Fatal(err)

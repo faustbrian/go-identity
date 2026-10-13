@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+- Connect the bounded factor-management contract to native TOTP rename and
+  independently selected HTTP/reference composition. Fresh signed TOTP proof,
+  actual source session and recent primary authentication are required. Rename
+  atomically consumes proof, advances factor authority and revokes subject
+  sessions; replay/recovery return only original outcome metadata. This
+  supersedes the native/HTTP caveat below, not the unfinished remove/replace
+  and other factor-management requirements.
+
+- Define bounded optimistic factor-management requests with exact rename,
+  remove and replace selection, session custody, keyed input and fresh
+  action-bound factor proof. Extend authenticated TOTP structural admission
+  to factor-update and disable without accepting unrelated protected actions.
+  These contracts do not yet deliver native management mutations or HTTP routes.
+
 - Add authenticated self-listing contracts with bounded safe factor/device
   projections and remaining recovery-code counts. Empty inventory and exhausted
   codes are valid; missing authority, foreign/corrupt records and unauthenticated

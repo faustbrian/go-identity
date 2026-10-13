@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Extend the existing native MFA primary/disposition owner to exact
+  factor-update Work, retaining original cookie/CSRF/session custody and
+  atomic whole-subject revocation. Install the optional forward-only
+  factor-update disposition v2 suffix after v1; regeneration-only selection
+  stays unchanged. Successful rename deliberately revokes its source session.
+
 - Add session-owned atomic whole-subject revocation for native recovery-set
   replacement, including command-bound retained disposition evidence and the
   original source's intentional revocation. The bounded 1024-session profile

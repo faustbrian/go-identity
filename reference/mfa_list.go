@@ -18,6 +18,9 @@ func composeMFAListing(c StoreConfiguration, owner *mfaEnrollmentState, sessions
 		return invalid
 	}
 	reader, err := mfapg.NewTOTPListReader(owner.enable)
+	if owner.manage != nil {
+		reader, err = mfapg.NewTOTPManagementListReader(owner.manage)
+	}
 	if err != nil {
 		return invalid
 	}

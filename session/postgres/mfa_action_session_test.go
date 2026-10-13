@@ -106,6 +106,28 @@ func TestMFAActionSessionBindsBearerCSRFOriginalRecordAndDeadline(t *testing.T) 
 	}
 }
 
+func TestFactorUpdateSessionCustodyRequiresItsExactNativeSchema(t *testing.T) {
+	g, input := mfaActionSessionFixture(t)
+	p, _ := input.Command.Feature()
+	bearer, _ := input.Command.SessionToken()
+	p.Binding.OperationID, p.Binding.SchemaID = "identity.mfa.factor-update", "mfa-factor-update"
+	p.Binding.RecordID = string(p.Binding.UserID)
+	p.Operation.OperationID, p.Operation.SchemaID = p.Binding.OperationID, p.Binding.SchemaID
+	var err error
+	input.Command, err = identity.NewFeatureSessionCommand(p, bearer)
+	if err != nil || g.originalInput(input) != nil {
+		t.Fatal("exact factor-update custody rejected", err)
+	}
+	p.Binding.SchemaID, p.Operation.SchemaID = "mfa-recovery-regenerate", "mfa-recovery-regenerate"
+	input.Command, err = identity.NewFeatureSessionCommand(p, bearer)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if g.originalInput(input) == nil {
+		t.Fatal("factor update borrowed regeneration schema authority")
+	}
+}
+
 func TestMFAActionSessionGuardRequiresExplicitPasswordProfile(t *testing.T) {
 	_, _, profile := identifierSessionFixture(t)
 	for _, config := range []Config{{}, {Schema: "public", MaximumDuration: time.Second}, {Schema: "session_store", MaximumDuration: 6 * time.Second}} {

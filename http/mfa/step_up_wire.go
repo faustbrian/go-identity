@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"slices"
 
+	auth "github.com/faustbrian/go-authentication"
 	identityhttp "github.com/faustbrian/go-identity/http"
 )
 
@@ -11,7 +12,16 @@ func stepUpWire(c ActiveStepUpConfig) *identityhttp.WireOperation {
 	wire := confirmationWire(EnrollmentConfirmationConfig{Cookie: c.Cookie, TrustedOrigins: c.TrustedOrigins})
 	var d map[string]any
 	_ = json.Unmarshal(wire.Definition, &d)
-	d["description"] = "Explicit authenticated TOTP step-up requires singleton X-MFA-Variant: step-up and original cookie/Origin/CSRF. Fixed original native quota and observation deadlines precede atomic code/replay/proof verification. Only a fresh known commit reveals proofID for recovery regeneration; replay, ambiguity and expiry never redeliver. No login, enrollment, purpose/subject override or session issuance."
+	d["description"] = "Explicit authenticated TOTP step-up requires singleton X-MFA-Variant: step-up and original cookie/Origin/CSRF. Fixed original native quota and observation deadlines precede atomic code/replay/proof verification. Only a fresh known commit reveals an exact action-bound proofID; replay, ambiguity and expiry never redeliver. Body purpose must be selected by startup policy; omission means regeneration only when selected. No login, enrollment, arbitrary purpose/subject override or session issuance."
+	purposes := c.Purposes
+	if len(purposes) == 0 {
+		purposes = []auth.Purpose{"identity.mfa.recovery-regenerate"}
+	}
+	body := d["requestBody"].(map[string]any)["content"].(map[string]any)["application/json"].(map[string]any)["schema"].(map[string]any)
+	body["properties"].(map[string]any)["purpose"] = map[string]any{"type": "string", "enum": purposes}
+	if !slices.Contains(purposes, auth.Purpose("identity.mfa.recovery-regenerate")) {
+		body["required"] = append(body["required"].([]any), "purpose")
+	}
 	d["parameters"].([]any)[0].(map[string]any)["schema"] = map[string]any{"const": "step-up"}
 	responses := d["responses"].(map[string]any)
 	var rename func(any)

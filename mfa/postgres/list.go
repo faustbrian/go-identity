@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"strconv"
+	"strings"
 	"time"
 
 	identity "github.com/faustbrian/go-identity"
@@ -19,7 +20,10 @@ import (
 // not a claim that unsupported device storage is an authoritative empty store.
 // No secret, envelope, verifier, replay counter or credential is selected.
 // This structural reader is not an authentication or enumeration endpoint.
-type TOTPListReader struct{ shared *totpEnrollmentState }
+type TOTPListReader struct {
+	shared *totpEnrollmentState
+	query  string
+}
 
 // NewTOTPListReader selects the existing native TOTP metadata profile without
 // IO. Enrollment supplies the immutable whole-read bound and primary owner;
@@ -29,11 +33,32 @@ func NewTOTPListReader(enrollment *TOTPEnrollmentService) (*TOTPListReader, erro
 	if enrollment == nil || enrollment.state == nil {
 		return nil, invalidAuthority()
 	}
-	s := enrollment.state()
+	return newTOTPListReader(enrollment.state(), factorListSQL)
+}
+
+// NewTOTPManagementListReader selects safe labels from the separately composed
+// factor-management metadata schema. It borrows that exact mutation owner's
+// native enrollment state; it does not infer optional columns or swallow a
+// missing migration as an empty label. The base reader remains schema-compatible
+// with profiles that have not selected management. Construction performs no IO.
+func NewTOTPManagementListReader(management *FactorUpdateService) (*TOTPListReader, error) {
+	if management == nil || management.state == nil {
+		return nil, invalidAuthority()
+	}
+	s := management.state()
+	if s == nil {
+		return nil, invalidAuthority()
+	}
+	query := strings.Replace(factorListSQL, "SELECT t.factor_id,t.state,t.created_at,t.row_version", "SELECT t.factor_id,t.state,t.created_at,t.row_version,t.label", 1)
+	query = strings.Replace(query, "'CreatedAt',created_at,'Version',row_version)", "'CreatedAt',created_at,'Version',row_version,'Label',label)", 1)
+	return newTOTPListReader(s.shared, query)
+}
+
+func newTOTPListReader(s *totpEnrollmentState, query string) (*TOTPListReader, error) {
 	if s == nil || s.pool == nil || s.pool.Raw() == nil || s.config.MaximumDuration < time.Millisecond || s.config.MaximumDuration > 5*time.Second {
 		return nil, invalidAuthority()
 	}
-	return &TOTPListReader{shared: s}, nil
+	return &TOTPListReader{shared: s, query: query}, nil
 }
 
 // ReadFactors reads one bounded, coherent primary snapshot of safe TOTP metadata
@@ -44,7 +69,7 @@ func NewTOTPListReader(enrollment *TOTPEnrollmentService) (*TOTPListReader, erro
 // pending/retired sets and revoked factors never contribute remaining counts.
 func (r *TOTPListReader) ReadFactors(ctx context.Context, q mfa.FactorListQuery) (mfa.FactorListSnapshot, error) {
 	zero := mfa.FactorListSnapshot{}
-	if ctx == nil || r == nil || r.shared == nil || r.shared.pool == nil || r.shared.pool.Raw() == nil {
+	if ctx == nil || r == nil || r.shared == nil || r.shared.pool == nil || r.shared.pool.Raw() == nil || r.query == "" {
 		return zero, invalidAuthority()
 	}
 	if _, err := identity.ParseIdentifierID(string(q.TenantID)); err != nil {
@@ -63,7 +88,7 @@ func (r *TOTPListReader) ReadFactors(ctx context.Context, q mfa.FactorListQuery)
 	var remaining, sets, badSets, distinctFactors int64
 	var wire []byte
 	var observed time.Time
-	err := r.shared.pool.Raw().QueryRow(bounded, factorListSQL, string(q.TenantID), string(q.UserID)).Scan(&version, &active, &observed, &wire, &remaining, &sets, &badSets, &distinctFactors)
+	err := r.shared.pool.Raw().QueryRow(bounded, r.query, string(q.TenantID), string(q.UserID)).Scan(&version, &active, &observed, &wire, &remaining, &sets, &badSets, &distinctFactors)
 	if bounded.Err() != nil {
 		return zero, bounded.Err()
 	}

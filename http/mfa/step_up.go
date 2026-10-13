@@ -6,8 +6,10 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"slices"
 	"time"
 
+	auth "github.com/faustbrian/go-authentication"
 	"github.com/faustbrian/go-authorization"
 	identityhttp "github.com/faustbrian/go-identity/http"
 	"github.com/faustbrian/go-identity/mfa"
@@ -28,6 +30,10 @@ type ActiveStepUpService interface {
 // for concurrent use. Cookie/exact origins/revision/Now are trusted startup
 // policy. MaximumDuration is 1ms..30s; earlier caller deadlines win.
 type ActiveStepUpConfig struct {
+	// Purposes selects exact native management targets (at most three).
+	// Empty preserves recovery regeneration. Non-default targets require an
+	// explicit body purpose; unselected actions deny, never fall back.
+	Purposes        []auth.Purpose
 	Network         identityhttp.NetworkConfig
 	Sessions        *session.SessionService
 	Service         ActiveStepUpService
@@ -67,5 +73,17 @@ func NewActiveStepUpHandler(c ActiveStepUpConfig) (http.Handler, error) {
 // NewActiveStepUpHandlerWithMiddleware binds hooks to actual cookie, native
 // custody, quota and verification phases while preserving original deadlines.
 func NewActiveStepUpHandlerWithMiddleware(c ActiveStepUpConfig, m []identityhttp.MiddlewareDescriptor) (http.Handler, error) {
+	if len(c.Purposes) == 0 {
+		c.Purposes = []auth.Purpose{"identity.mfa.recovery-regenerate"}
+	}
+	if len(c.Purposes) > 3 {
+		return nil, identityhttp.ErrInvalidInput
+	}
+	c.Purposes = slices.Clone(c.Purposes)
+	for i, purpose := range c.Purposes {
+		if purpose != "identity.mfa.recovery-regenerate" && purpose != "identity.mfa.factor-update" && purpose != "identity.mfa.disable" || slices.Contains(c.Purposes[:i], purpose) {
+			return nil, identityhttp.ErrInvalidInput
+		}
+	}
 	return newPendingFactorHandler(URIConfig{Network: c.Network, Sessions: c.Sessions, Cookie: c.Cookie, TrustedOrigins: c.TrustedOrigins, PolicyRevision: c.PolicyRevision, Now: c.Now, MaximumDuration: c.MaximumDuration}, nil, &c, m)
 }

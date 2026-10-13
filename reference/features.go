@@ -97,6 +97,7 @@ type featureState struct {
 	httpMFAEnrollment            *mfaEnrollmentHTTPState
 	httpMFAActiveStepUp          *mfaActiveStepUpHTTPState
 	httpMFARecoveryRegeneration  *mfaRecoveryRegenerationHTTPState
+	httpMFAFactorUpdate          *mfaFactorUpdateHTTPState
 	httpMFAList                  *mfaListHTTPState
 	passwordSignin               *passwordpg.SigninService
 	passwordSignup               *passwordpg.SignupService
@@ -128,6 +129,9 @@ type featureState struct {
 }
 
 func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDependencies) error {
+	if c.HTTPMFAFactorUpdate != nil && (c.MFAEnrollment == nil || c.MFAEnrollment.FactorManagement == nil || c.Session == nil) {
+		return identity.InvalidInputError{Field: "reference_http_mfa_factor_update"}
+	}
 	if c.HTTPMFAList != nil && (c.MFAEnrollment == nil || !c.MFAEnrollment.Listing || c.Session == nil) {
 		return identity.InvalidInputError{Field: "reference_http_mfa_list"}
 	}
@@ -390,6 +394,15 @@ func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDepen
 		return err
 	}
 	migrationConfig.mfaEnrollment = mfaEnrollmentOwner != nil
+	httpMFAFactorUpdate, err := composeMFAFactorUpdateHTTP(c, d, mfaEnrollmentOwner, s.httpRate)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if httpMFAFactorUpdate != nil && !retainedResetHTTP {
+			httpMFAFactorUpdate.rate.Close()
+		}
+	}()
 	httpMFARecoveryRegeneration, err := composeMFARecoveryRegenerationHTTP(c, d, mfaEnrollmentOwner, s.httpRate)
 	if err != nil {
 		return err
@@ -504,6 +517,7 @@ func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDepen
 	s.features.httpMFAEnrollment = httpMFAEnrollment
 	s.features.httpMFAActiveStepUp = httpMFAActiveStepUp
 	s.features.httpMFARecoveryRegeneration = httpMFARecoveryRegeneration
+	s.features.httpMFAFactorUpdate = httpMFAFactorUpdate
 	s.features.httpMFAList = httpMFAList
 	retainedResetHTTP = true
 	return nil

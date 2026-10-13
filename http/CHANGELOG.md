@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Admit independently selected factor-update only under its exact original
+  stored-session CSRF profile. This adds no bearer fallback, renewable token
+  age or general exemption for other mutation routes.
+
 - Support native recovery-set rotation using its original command identity for
   shared secret quotas, without a fabricated request key. Select only its exact
   stored-session CSRF profile; other rotation/CSRF ownership remains unchanged.

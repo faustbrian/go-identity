@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"net/http"
 	"reflect"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -69,6 +70,7 @@ type uriState struct {
 	lifetime     time.Duration
 	confirmation mfa.TotpVerifyRequest
 	code         auth.OneTimeCode
+	purpose      auth.Purpose
 }
 
 func (uriState) Format(s fmt.State, _ rune)   { io.WriteString(s, "mfahttp.uriState(redacted)") }
@@ -240,6 +242,18 @@ func newPendingFactorHandler(c URIConfig, confirm *EnrollmentConfirmationConfig,
 				fields = 3
 				factorField = "factorID"
 			}
+			if active != nil {
+				s.purpose = "identity.mfa.recovery-regenerate"
+				if raw, ok := body["purpose"]; ok {
+					fields++
+					if len(raw) < 2 || raw[0] != '"' || json.Unmarshal(raw, &s.purpose) != nil {
+						return s, identityhttp.ErrInvalidInput
+					}
+				}
+				if !slices.Contains(active.Purposes, s.purpose) {
+					return s, identityhttp.ErrInvalidInput
+				}
+			}
 			if err != nil || len(body) != fields {
 				return s, identityhttp.ErrInvalidInput
 			}
@@ -304,7 +318,7 @@ func newPendingFactorHandler(c URIConfig, confirm *EnrollmentConfirmationConfig,
 				s.confirmation = mfa.TotpVerifyRequest{TenantID: b.TenantID, CommandID: s.command, FactorID: mfa.FactorID(s.enrollment), Code: s.code, Enrollment: &mfa.TOTPEnrollmentConfirmation{Session: s.bearer, CSRFToken: s.csrf}, Caller: caller, Origin: string(s.origin), Network: s.facts.ClientIP().String()}
 				if active != nil {
 					s.confirmation.Enrollment = nil
-					s.confirmation.StepUp = &mfa.TOTPAuthenticatedStepUp{Session: s.bearer, CSRFToken: s.csrf, Purpose: "identity.mfa.recovery-regenerate"}
+					s.confirmation.StepUp = &mfa.TOTPAuthenticatedStepUp{Session: s.bearer, CSRFToken: s.csrf, Purpose: s.purpose}
 					lifetime, until, err = active.Service.ActiveStepUpRateSource(r.Context(), s.confirmation)
 				} else {
 					lifetime, until, err = confirm.Service.EnrollmentConfirmationRateSource(r.Context(), s.confirmation)
@@ -352,7 +366,7 @@ func newPendingFactorHandler(c URIConfig, confirm *EnrollmentConfirmationConfig,
 				}
 				proof := result.StepUpProof.Bindings()
 				b, bindingErr := s.read.Session.Bindings()
-				if result.Outcome != identity.CommitOutcomeCommitted || bindingErr != nil || proof.Proof.ID != auth.ProofID(s.command) || proof.Proof.Tenant != string(s.facts.TenantID()) || proof.Proof.Subject != string(s.user) || proof.Proof.Method != "totp" || proof.Proof.Assurance != auth.AssuranceMultiFactor || proof.Proof.Purpose != "identity.mfa.recovery-regenerate" || proof.Action != "identity.mfa.recovery-regenerate" || proof.SessionID != b.SessionID || proof.SessionVersion != b.Version || !reflect.ValueOf(result.Session).IsZero() || result.CSRFToken != (session.CSRFToken{}) || !reflect.ValueOf(result.Enrollment).IsZero() || s.read.ValidateAt(c.Now()) != nil || !c.Now().Before(s.until) || c.Now().Before(proof.Proof.IssuedAt) || !c.Now().Before(proof.Proof.ExpiresAt) {
+				if result.Outcome != identity.CommitOutcomeCommitted || bindingErr != nil || proof.Proof.ID != auth.ProofID(s.command) || proof.Proof.Tenant != string(s.facts.TenantID()) || proof.Proof.Subject != string(s.user) || proof.Proof.Method != "totp" || proof.Proof.Assurance != auth.AssuranceMultiFactor || proof.Proof.Purpose != s.purpose || proof.Action != string(s.purpose) || proof.SessionID != b.SessionID || proof.SessionVersion != b.Version || !reflect.ValueOf(result.Session).IsZero() || result.CSRFToken != (session.CSRFToken{}) || !reflect.ValueOf(result.Enrollment).IsZero() || s.read.ValidateAt(c.Now()) != nil || !c.Now().Before(s.until) || c.Now().Before(proof.Proof.IssuedAt) || !c.Now().Before(proof.Proof.ExpiresAt) {
 					writeFailure(w, enableFailure{status: 503, code: "unavailable"}, observation)
 					return
 				}

@@ -30,24 +30,29 @@ import (
 )
 
 type liveStores struct {
-	mfaListing          bool
-	mfaListHTTP         bool
-	mfaListStandalone   bool
-	mfaListDenials      bool
-	mfaListRecheck      bool
-	activeStepUp        bool
-	activeStepUpHTTP    bool
-	regeneration        bool
-	regenerationHTTP    bool
-	regenerationRace    bool
-	regenerationDenials bool
-	secondBearer        string
-	secondCSRF          string
-	recoveryRace        bool
-	completionFault     *completionCommitFault
-	stores              reference.StoreSet
-	pool                *database.Pool
-	config              reference.StoreConfiguration
+	factorManagementHTTP    bool
+	factorManagementRace    bool
+	factorManagementDenials bool
+	factorManagementClear   bool
+	factorManagement        bool
+	mfaListing              bool
+	mfaListHTTP             bool
+	mfaListStandalone       bool
+	mfaListDenials          bool
+	mfaListRecheck          bool
+	activeStepUp            bool
+	activeStepUpHTTP        bool
+	regeneration            bool
+	regenerationHTTP        bool
+	regenerationRace        bool
+	regenerationDenials     bool
+	secondBearer            string
+	secondCSRF              string
+	recoveryRace            bool
+	completionFault         *completionCommitFault
+	stores                  reference.StoreSet
+	pool                    *database.Pool
+	config                  reference.StoreConfiguration
 }
 
 func newLiveStores(t *testing.T, ctx context.Context) liveStores {

@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Independently select native TOTP label management and
+  `HTTPMFAFactorUpdate` with actual session, original proof and shared limiter
+  owners. Selected migrations include only the required forward-only MFA and
+  session disposition suffixes. HTTP step-up can explicitly issue the selected
+  management purpose without selecting regeneration routes. Unsupported native
+  remove/replace actions deny rather than falling back to rename.
+
 - Add independently selected `HTTPMFAList`, sharing the exact HTTP-session safe
   limiter or using an explicit standalone policy without selecting session
   routes. Real metadata/count journeys preserve no-store, credential-free

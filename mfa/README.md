@@ -35,9 +35,25 @@ factor recovery remain unfinished; this is not the complete MFA capability set.
 `TotpVerifyRequest.StepUp` explicitly selects current-session active-factor
 verification. It is disjoint from login and `Enrollment`; inactive-arm inputs
 must be absent. Submit the actual session, synchronizer, factor, opaque code,
-trusted caller/origin/network and exact `identity.mfa.recovery-regenerate`
-purpose. Unselected owners deny rather than fall back. This issues no session
+trusted caller/origin/network and the exact selected protected purpose.
+Unselected owners deny rather than fall back. This issues no session
 and accepts no trusted-device bypass.
+
+Step-up admission recognizes exactly `identity.mfa.recovery-regenerate`,
+`identity.mfa.factor-update` and `identity.mfa.disable`. HTTP defaults to
+regeneration only, but an explicit closed purpose set can select the other
+management purposes independently. Proof production does not select management
+routes or implement a disabled mutation owner. Original proofs remain action-bound
+and cannot be reused as a different protected action.
+
+`FactorUpdateRequest` defines bounded self-management input for `Rename`,
+`Remove` and `Replace`, with an exact factor, positive non-exhausted optimistic
+version, caller key and separately issued factor proof. `Rename` may clear an
+optional label; `Remove` and `Replace` forbid label input. Structural validation
+does not authenticate custody, prove a recovery path, consume a proof or mutate
+storage. Native confirmed-TOTP rename and independently selected HTTP/reference
+composition are implemented as described below. Remove, replace, disable and
+other management operations remain unfinished and deny in this selected profile.
 
 Only fresh known commitment returns `ContinuationProof`. Its `Bindings()`
 projection retains the original session/version/action/timestamps but grants
@@ -116,3 +132,23 @@ The returned counter is metadata, not a proof or consumed factor. Read and fence
 the shared attempt budget, continuation completion and original-primary session
 effects. Verification alone must never issue a session. Those durable completion
 operations and enrollment remain unfinished.
+
+## Selected factor rename
+
+`FactorManagementService.FactorUpdate` accepts an owned `IdempotencyKey`, an
+actual session/synchronizer, the original factor-update proof and the observed
+factor version. A fresh keyed call leaves `CommandID` empty; only the native
+request-key owner selects it. A supplied retry ID must match retained input.
+`Rename` changes a bounded presentation label; an empty label clears it. The
+label is never credential authority, a provisioning URI or HTML.
+
+The native TOTP profile authenticates original signed proof provenance and the
+exact source session, fences current account/factor authority, and atomically
+updates the label, consumes proof, revokes all subject sessions and records
+audit/lifecycle effects. Do not expect the source session to remain usable.
+Fresh known commits return safe `FactorProjection`; replay, recovery, errors and
+uncertain/expired delivery return no factor projection. Use
+`RecoverFactorUpdate` with the original command for outcome reconciliation,
+not another mutation or renewed proof. HTTP exposure is separately selected.
+Remove, replace, disable and other MFA management remain unfinished; defining
+their action names does not enable them in this selected native profile.
