@@ -71,10 +71,12 @@ Scheduled/manual runs retain whole-tree secrets and online authority refresh.
 These commands do not run application tests or establish runtime/release proof.
 See [contributing](CONTRIBUTING.md) for public tooling installation and scope.
 
-See the versioned [Golib ecosystem index](https://github.com/faustbrian/go-library-tools/blob/v1.4.0/docs/ecosystem/README.md)
-and [package-family guidance](https://github.com/faustbrian/go-library-tools/blob/v1.4.0/docs/ecosystem/design-language.md#package-families-and-selection)
+See the versioned [Golib ecosystem index](https://github.com/faustbrian/go-library-tools/blob/v1.8.4/docs/ecosystem/README.md)
+and [package-family guidance](https://github.com/faustbrian/go-library-tools/blob/v1.8.4/docs/ecosystem/design-language.md#package-families-and-selection)
 for the shared design language.
 
 ## License
 
 MIT. See [LICENSE](LICENSE).
+
+Continue with the [documentation index](docs/README.md).

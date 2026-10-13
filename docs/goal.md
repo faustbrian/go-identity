@@ -1,5 +1,7 @@
 # Goal: planned go-identity boundary
 
+[Documentation index](README.md)
+
 Status: planned
 
 The coordination plan identifies `github.com/faustbrian/go-identity` as the

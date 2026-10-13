@@ -1,5 +1,7 @@
 # go-identity threat model v0.1
 
+[Documentation index](../README.md)
+
 Status: planning baseline, 2026-09-24. Owner: go-identity maintainers.
 
 This model covers the proposed storage-neutral identity core, not an existing
