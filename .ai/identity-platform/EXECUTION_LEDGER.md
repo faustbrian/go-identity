@@ -1,8 +1,8 @@
 # Identity Implementation — Current Milestone
 
-Activated on 2026-10-14. B1 is in implementation; no milestone is closed.
+Activated on 2026-10-14. B1 is closed; B2 reset is next.
 
-## Active: B1 runnable authentication baseline
+## Closed: B1 runnable authentication baseline
 
 - Workspace: go-identity on main, adopting the existing runtime checkpoint.
 - Outcome: real PostgreSQL bootstrap → registration → captured verification
@@ -92,6 +92,26 @@ Activated on 2026-10-14. B1 is in implementation; no milestone is closed.
   several historical remote pseudoversions are unavailable. This is development
   compatibility evidence, not downloadable/public-release qualification.
   Full-unit qualification and the 67-unit requirement remain unchanged.
+
+### B1 delivery (2026-10-14)
+
+- Complete final-diff review by `/root/b1_complete_review` (GPT-6.1 Sol medium)
+  approved base `063dc38` to tree `17cccd0b65d70bccac929f648ba2568fbcedddff`.
+  Both prior filesystem-durability findings are resolved. The final native
+  immutable-supplier integration passed all selected packages under race;
+  updated-tree changed-content/current-tree secrets and command vet passed.
+- Delivered commit `90d4f2cb271926ace09eb36487163036e4fd756a` to origin/main.
+  Required CI passed in run `38527264686`. Hosted CI proves its declared
+  structure/change-range checks; the real runtime proof is the local native
+  PostgreSQL/HTTPS integration, not a hosted runtime or deployment claim.
+- B1 closes the selected runnable local source-consumer baseline. Whole-history
+  secret failures, public-download compatibility and full-unit qualification
+  remain explicit debt. No unit or full platform is newly declared verified.
+- The disposable B1 PostgreSQL cluster was stopped and its databases, captured
+  credentials, supplier archives and Go caches removed after evidence capture.
+- Next: freeze and finish B2 reset request → captured delivery → completion →
+  old-password denial → new-password signin → required session invalidation.
+  B3 password change remains subsequent; no neighboring profile was added.
 
 Existing reviewed email-OTP runtime behavior and prior native results remain
 in their owning commits/historical records. Refer to an applicable original

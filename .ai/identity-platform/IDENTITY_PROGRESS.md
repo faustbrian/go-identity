@@ -1,6 +1,6 @@
 # Identity Platform Progress
 
-Implementation activated by the user on 2026-10-14. B1 is active.
+Implementation activated by the user on 2026-10-14. B1 is closed; B2 is next.
 
 ## Live ownership and update rule
 
@@ -12,8 +12,8 @@ Historical planning ledgers and evidence stay at their original locations.
 
 ## Current state
 
-- Active deliverable: B1, a runnable PostgreSQL authentication backend, then B2
-  reset and B3 fresh reauthentication/password change. The complete fresh
+- Delivered: B1, a runnable PostgreSQL authentication backend. Next is B2
+  reset, then B3 fresh reauthentication/password change. The complete fresh
   PostgreSQL-only B1 HTTP journey now passes locally with captured delivery and
   existing rollback/replay/CSRF/isolation checks. It does not backdate history.
   The runnable HTTPS consumer also passes locally using the command's public
@@ -23,8 +23,10 @@ Historical planning ledgers and evidence stay at their original locations.
   the frozen source-runner integration passed. Independent review found two
   filesystem-durability defects; their new failure/recovery regressions failed
   before correction and now pass with the affected command under race.
-  Complete final re-review and main delivery remain open;
-  B1 is not closed. No new whole-unit verification is claimed.
+  Complete final review approved the corrected slice, delivered on origin/main
+  as `90d4f2c`; Required CI passed in run `38527264686`. B1 is closed:
+  **1/39 consumer milestones delivered**. No new whole-unit verification is
+  claimed. Native runtime proof is local, not hosted runtime/deployment proof.
 - Existing runtime source checkpoint: identity main `ef377dd`. Adopt it;
   documentation commits do not restart its implementation or invalidate
   unchanged runtime proof. Verify live Git state on activation.
@@ -59,7 +61,7 @@ restart old slices merely to fill this table; adopt applicable prior proof.
 
 | ID | Consumer outcome / owning units | Current disposition |
 | --- | --- | --- |
-| B1 | Runnable registration/verification/signin/session/logout baseline: identity, identity/postgres, identity/password, identity/password/postgres, identity/session, identity/session/postgres, identity/delivery, identity/delivery/postgres, identity/http, identity/reference; required primitive contracts | Full journey and runnable HTTPS consumer locally proven; final checks/review/main delivery pending |
+| B1 | Runnable registration/verification/signin/session/logout baseline: identity, identity/postgres, identity/password, identity/password/postgres, identity/session, identity/session/postgres, identity/delivery, identity/delivery/postgres, identity/http, identity/reference; required primitive contracts | Closed: reviewed native PostgreSQL/HTTPS journey, reproducible source-consumer walkthrough, main 90d4f2c and Required CI 38527264686; public-download/full-unit qualification pending |
 | B2 | Reset and required session invalidation using the baseline owners plus identity/risk/hibp | Not demonstrated |
 | B3 | Password change and fresh reauthentication through baseline owners | Not demonstrated |
 | M04 | Email add/change/verify/list/get/remove with session/lifecycle policy: identity/email | Closure not reassessed |
