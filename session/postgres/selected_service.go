@@ -15,7 +15,7 @@ import (
 type SelectedSessionAdmissionConfig struct {
 	SingleFactor SingleFactorSessionAdmissionConfig
 	MFAMagicLink *MagicLinkAdmissionConfig
-	// MFAPassword selects the genuine password-plus-TOTP owner independently
+	// MFAPassword selects genuine password-plus-TOTP/OTP/recovery owners independently
 	// of single-factor password and magic-link profiles. No fallback is allowed.
 	MFAPassword *IdentifierAdmissionConfig
 }
@@ -64,7 +64,7 @@ func selectedSessionAdmission(c SelectedSessionAdmissionConfig) ([]session.Authe
 		if !found {
 			methods = append(methods, session.AuthenticationVerified)
 		}
-		return methods, nativeAdmissionCacheProfile("native-selected-password-mfa-session-v1", previous, p.GlobalAuthorityID, p.PolicyNamespace, p.Audience, p.AuthenticationMethod, string(p.CredentialKind), p.CredentialOwner), nil
+		return methods, nativeAdmissionCacheProfile("native-selected-password-totp-otp-recovery-session-v2", previous, p.GlobalAuthorityID, p.PolicyNamespace, p.Audience, p.AuthenticationMethod, string(p.CredentialKind), p.CredentialOwner), nil
 	}
 	if c.MFAMagicLink == nil {
 		return singleFactorAdmission(c.SingleFactor)

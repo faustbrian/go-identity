@@ -409,6 +409,12 @@ func (p *Contributor) GenerateFeaturePreparation(ctx context.Context, original i
 	if err != nil {
 		return nil, err
 	}
+	return p.generatePreparedSend(ctx, original, r, generation, aad)
+}
+
+// Both native callers use the same generator and output checkpoint. Their
+// own admission and original AAD remain separate; no clearance is accepted.
+func (p *Contributor) generatePreparedSend(ctx context.Context, original identity.Command, r sendRequestRecord, generation uint64, aad envelope.Context) ([]byte, error) {
 	spec, _ := original.Feature()
 	spec.Fields = nil
 	bearer, _ := original.SessionToken()
@@ -417,7 +423,7 @@ func (p *Contributor) GenerateFeaturePreparation(ctx context.Context, original i
 		bearer, _ = original.PreAuthCookie()
 	}
 	var output []byte
-	_, err = p.send.preparer.Prepare(ctx, r.continuation, r.issuedAt, r.expiresAt, func(ctx context.Context, challenge otp.Challenge, recipient delivery.Recipient, message delivery.RenderedMessage) error {
+	_, err := p.send.preparer.Prepare(ctx, r.continuation, r.issuedAt, r.expiresAt, func(ctx context.Context, challenge otp.Challenge, recipient delivery.Recipient, message delivery.RenderedMessage) error {
 		var generated identity.Command
 		var err error
 		var selected []kernel.RecipientRecord

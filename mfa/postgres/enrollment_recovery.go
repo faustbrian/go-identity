@@ -45,9 +45,15 @@ func (p *totpEnrollmentPhase) persistRecovery(ctx context.Context, w kernel.Work
 		return invalidEnrollment()
 	}
 	count := len(p.output.stored.Digests)
-	n, err := w.Exec(ctx, `INSERT INTO identity_mfa.recovery_sets(tenant_id,user_id,set_id,factor_id,set_version,row_version,state,code_count,key_version,created_command_id,created_purpose,created_at)
+	sql := `INSERT INTO identity_mfa.recovery_sets(tenant_id,user_id,set_id,factor_id,set_version,row_version,state,code_count,key_version,created_command_id,created_purpose,created_at)
 SELECT tenant_id,user_id,factor_id,factor_id,1,1,1,$4,$5,$3,'identity.mfa.enable',created_at
-FROM identity_mfa.totp_factors WHERE tenant_id=$1 AND user_id=$2 AND factor_id=$6 AND state=1 AND created_command_id=$3 AND created_purpose='identity.mfa.enable'`, string(b.TenantID), string(b.UserID), id, count, int64(p.output.stored.RecoveryKeyVersion), b.RecordID)
+FROM identity_mfa.totp_factors WHERE tenant_id=$1 AND user_id=$2 AND factor_id=$6 AND state=1 AND created_command_id=$3 AND created_purpose='identity.mfa.enable'`
+	if p.state.method == "otp" {
+		sql = `INSERT INTO identity_mfa.recovery_sets(tenant_id,user_id,set_id,factor_id,factor_method,set_version,row_version,state,code_count,key_version,created_command_id,created_purpose,created_at)
+SELECT tenant_id,user_id,factor_id,factor_id,'otp',1,1,1,$4,$5,$3,'identity.mfa.enable',created_at
+FROM identity_mfa.otp_factors WHERE tenant_id=$1 AND user_id=$2 AND factor_id=$6 AND state=1 AND created_command_id=$3 AND created_purpose='identity.mfa.enable'`
+	}
+	n, err := w.Exec(ctx, sql, string(b.TenantID), string(b.UserID), id, count, int64(p.output.stored.RecoveryKeyVersion), b.RecordID)
 	if err != nil {
 		return err
 	}
@@ -82,10 +88,17 @@ func (p *totpEnrollmentPhase) RecoverParticipant(ctx context.Context, w kernel.R
 	if err != nil {
 		return kernel.RecoveryUnknown, invalidEnrollment()
 	}
-	rows, err := w.Query(ctx, `SELECT f.user_id,f.factor_id,r.user_id,r.set_id,r.code_count,
+	sql := `SELECT f.user_id,f.factor_id,r.user_id,r.set_id,r.code_count,
 (SELECT count(*) FROM identity_mfa.recovery_codes c WHERE c.tenant_id=r.tenant_id AND c.set_id=r.set_id)
 FROM identity_mfa.totp_factors f LEFT JOIN identity_mfa.recovery_sets r ON r.tenant_id=f.tenant_id AND r.factor_id=f.factor_id
-WHERE f.tenant_id=$1 AND f.created_purpose='identity.mfa.enable' AND f.created_command_id=$2`, string(b.TenantID), id)
+WHERE f.tenant_id=$1 AND f.created_purpose='identity.mfa.enable' AND f.created_command_id=$2`
+	if p.state.method == "otp" {
+		sql = `SELECT f.user_id,f.factor_id,r.user_id,r.set_id,r.code_count,
+(SELECT count(*) FROM identity_mfa.recovery_codes c WHERE c.tenant_id=r.tenant_id AND c.set_id=r.set_id)
+FROM identity_mfa.otp_factors f LEFT JOIN identity_mfa.recovery_sets r ON r.tenant_id=f.tenant_id AND r.factor_id=f.factor_id AND r.factor_method='otp'
+WHERE f.tenant_id=$1 AND f.created_purpose='identity.mfa.enable' AND f.created_command_id=$2`
+	}
+	rows, err := w.Query(ctx, sql, string(b.TenantID), id)
 	if err != nil {
 		return kernel.RecoveryUnknown, err
 	}

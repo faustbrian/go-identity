@@ -65,7 +65,7 @@ func composeSession(c StoreConfiguration, d ReferenceDependencies) (*sessionStat
 		profile := *selection.MagicLink
 		mfa = &profile
 	}
-	if c.PasswordSignin != nil && (c.PasswordSignin.TOTP != nil || c.PasswordSignin.Recovery != nil) {
+	if c.PasswordSignin != nil && (c.PasswordSignin.TOTP != nil || c.PasswordSignin.Recovery != nil || c.PasswordSignin.OTP != nil) {
 		if c.PasswordSignin.MFA == nil || selection.Verified == nil {
 			return nil, invalid
 		}

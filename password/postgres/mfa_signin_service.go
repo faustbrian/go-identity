@@ -22,14 +22,14 @@ import (
 	database "github.com/faustbrian/go-postgres"
 )
 
-// MFAChallengeConfig explicitly selects password-first TOTP continuations.
+// MFAChallengeConfig explicitly selects password-first MFA continuations.
 // Issuer and Custody retain their native key/clock ownership contracts; use
 // independent signing, replay and envelope keys. Lifetime is whole seconds,
 // at most five minutes, and capped by original password/browser expiry.
-// Install password primary, MFA continuation/TOTP and complete capability
+// Install password primary, MFA continuation/selected factor and complete capability
 // histories before calling. This configuration is not request data or a UI.
 type MFAChallengeConfig struct {
-	// AllowedMethods is an owned TOTP-primary selection with optional recovery-code.
+	// AllowedMethods is an owned explicit TOTP/OTP selection with optional recovery-code.
 	// Empty preserves the existing TOTP-only profile. Selection grants no factor
 	// authority; completion independently verifies the enrolled method and shares
 	// one original attempt budget. Unsupported methods and duplicates deny.
@@ -58,7 +58,7 @@ type signinMFAComposition struct {
 	codec  *issuerpg.IssuancePreparationCodec
 }
 
-// NewMFASigninService freezes explicit native password/TOTP composition without
+// NewMFASigninService freezes explicit native password/MFA composition without
 // IO. Known empty factor authority may use ordinary SFA; enrolled users receive
 // only a committed continuation. Missing/unsupported factor state denies.
 // The existing NewSigninService remains unchanged. Pool and policy collaborators
@@ -216,16 +216,16 @@ func freezeMFACompletionMethods(input []string) ([]string, error) {
 	if len(input) == 0 {
 		return []string{"totp"}, nil
 	}
-	if len(input) > 2 {
+	if len(input) > 3 {
 		return nil, password.ErrPasswordWork
 	}
 	methods := slices.Clone(input)
 	slices.Sort(methods)
-	if !slices.Contains(methods, "totp") {
+	if !slices.Contains(methods, "totp") && !slices.Contains(methods, "otp") {
 		return nil, password.ErrPasswordWork
 	}
 	for i, method := range methods {
-		if method != "totp" && method != "recovery-code" || i > 0 && method == methods[i-1] {
+		if method != "totp" && method != "otp" && method != "recovery-code" || i > 0 && method == methods[i-1] {
 			return nil, password.ErrPasswordWork
 		}
 	}

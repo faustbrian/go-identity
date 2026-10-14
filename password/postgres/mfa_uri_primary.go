@@ -27,6 +27,8 @@ type mfaURIPrimaryCustody struct {
 	token        session.CSRFToken
 	key          session.CSRFKey
 	confirmation bool
+	otpSend      bool
+	otpConfirm   bool
 }
 
 func (s mfaEnablePrimaryCustody) operation() identity.FeatureOperation {
@@ -36,6 +38,12 @@ func (s mfaEnablePrimaryCustody) operation() identity.FeatureOperation {
 	if s.uri.confirmation {
 		return identity.FeatureOperation{Owner: "identity/mfa", OperationID: "identity.mfa.totp-verify", SchemaID: "mfa-totp-enrollment-confirm", SchemaVersion: 1, RecordRequirement: identity.FeatureRecordRequired}
 	}
+	if s.uri.otpConfirm {
+		return identity.FeatureOperation{Owner: "identity/mfa", OperationID: "identity.mfa.otp-verify", SchemaID: "mfa-otp-enrollment-confirm", SchemaVersion: 1, RecordRequirement: identity.FeatureRecordRequired}
+	}
+	if s.uri.otpSend {
+		return identity.FeatureOperation{Owner: "identity/mfa", OperationID: "identity.mfa.otp-send", SchemaID: "mfa-otp-send", SchemaVersion: 1, RecordRequirement: identity.FeatureRecordRequired}
+	}
 	return identity.FeatureOperation{Owner: "identity/mfa", OperationID: "identity.mfa.totp-uri", SchemaID: "mfa-totp-uri", SchemaVersion: 1, RecordRequirement: identity.FeatureRecordRequired}
 }
 
@@ -43,10 +51,36 @@ func (s mfaEnablePrimaryCustody) lifecycle(event string, before, after uint64) b
 	if s.uri == nil {
 		return event == "factor.enrollment-created.v1" && before == 0 && after == 1
 	}
-	if s.uri.confirmation {
+	if s.uri.confirmation || s.uri.otpConfirm {
 		return event == "factor.enrolled.v1" && before == s.uri.rowVersion && after == before+1
 	}
+	if s.uri.otpSend {
+		return event == "otp.sent.v1" && before == s.uri.rowVersion && after == before+1
+	}
 	return event == "factor.uri-revealed.v1" && before == s.uri.rowVersion && after == before+1
+}
+
+// RestoreEnrollmentForOTPConfirmation authenticates the retained enable
+// provenance and original session/CSRF under the distinct OTP confirmation
+// schema. It performs no comparison, primary consumption or freshness renewal.
+func (s *MFAEnablePrimarySource) RestoreEnrollmentForOTPConfirmation(ctx context.Context, r mfa.OtpVerifyRequest, parent identity.CommandID, rowVersion uint64, wire []byte) (mfapg.TOTPURIPrimary, error) {
+	if r.Enrollment == nil || r.Validate() != nil || r.TrustDevice {
+		return nil, identity.InvalidInputError{Field: "mfa_otp_verify"}
+	}
+	input := mfa.TotpUriRequest{TenantID: r.TenantID, EnrollmentID: mfa.EnrollmentID(r.FactorID), CommandID: r.CommandID, Session: r.Enrollment.Session, CSRFToken: r.Enrollment.CSRFToken, Caller: r.Caller, Origin: r.Origin, Network: r.Network}
+	base, err := s.restoreEnrollmentManagement(ctx, input, parent, rowVersion, wire, false)
+	if err != nil {
+		return nil, err
+	}
+	a, ok := base.(MFAEnableAdmission)
+	if !ok || a.custody == nil {
+		return nil, identity.ForbiddenError{}
+	}
+	c := a.custody()
+	u := *c.uri
+	u.otpConfirm = true
+	c.uri = &u
+	return MFAEnableAdmission{custody: func() mfaEnablePrimaryCustody { return c }}, nil
 }
 
 // RestoreEnrollmentForURI reconstructs exact original enrollment custody for a
@@ -61,6 +95,29 @@ func (s *MFAEnablePrimarySource) RestoreEnrollmentForURI(ctx context.Context, r 
 		return nil, identity.InvalidInputError{Field: "mfa_totp_uri"}
 	}
 	return s.restoreEnrollmentManagement(ctx, r, parent, rowVersion, wire, false)
+}
+
+// RestoreEnrollmentForOTPSend restores only the authenticated pending OTP
+// variant under its actual send schema. It does not consume enable proof again,
+// generate a code, select a recipient or renew original authentication age.
+func (s *MFAEnablePrimarySource) RestoreEnrollmentForOTPSend(ctx context.Context, r mfa.OtpSendRequest, assigned, parent identity.CommandID, rowVersion uint64, wire []byte) (mfapg.TOTPURIPrimary, error) {
+	if r.Enrollment == nil || r.Validate() != nil {
+		return nil, identity.InvalidInputError{Field: "mfa_otp_send"}
+	}
+	input := mfa.TotpUriRequest{TenantID: r.TenantID, EnrollmentID: mfa.EnrollmentID(r.FactorID), CommandID: assigned, Session: r.Enrollment.Session, CSRFToken: r.Enrollment.CSRFToken, Caller: r.Caller, Origin: r.Origin, Network: r.Network}
+	base, err := s.restoreEnrollmentManagement(ctx, input, parent, rowVersion, wire, false)
+	if err != nil {
+		return nil, err
+	}
+	a, ok := base.(MFAEnableAdmission)
+	if !ok || a.custody == nil {
+		return nil, identity.ForbiddenError{}
+	}
+	c := a.custody()
+	u := *c.uri
+	u.otpSend = true
+	c.uri = &u
+	return MFAEnableAdmission{custody: func() mfaEnablePrimaryCustody { return c }}, nil
 }
 
 // RestoreEnrollmentForConfirmation retains original enable evidence for the

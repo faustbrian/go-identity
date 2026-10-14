@@ -68,6 +68,11 @@ type EnableRequest struct {
 	// original session synchronizer and enforce the configured HTTPS Origin;
 	// native primary admission must check CSRF under the mutation fences.
 	CSRFToken session.CSRFToken
+	// OTP selects one exact existing identifier/channel for Method="otp" only.
+	// Nil preserves other method inputs. This is not a destination, ownership or
+	// verification proof: native admission must read and fence that identifier's
+	// actual owner, channel, verification and versions before pending enrollment.
+	OTP *OTPEnrollmentSelection
 }
 
 // Validate checks bounded structure and exact tenant/subject/action consistency
@@ -82,6 +87,13 @@ func (r EnableRequest) Validate() error {
 		return bad()
 	}
 	if r.FactorPolicy.Validate() != nil || r.IdempotencyKey == (identity.IdempotencyKey{}) {
+		return bad()
+	}
+	if r.FactorPolicy.Method == "otp" {
+		if r.OTP == nil || r.OTP.Validate() != nil {
+			return bad()
+		}
+	} else if r.OTP != nil {
 		return bad()
 	}
 	if _, err := session.ParseToken(r.Session.Token()); err != nil {

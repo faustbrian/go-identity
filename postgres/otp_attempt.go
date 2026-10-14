@@ -214,7 +214,7 @@ func (c *Coordinator) prepareOTPAttempt(b identity.CommandBinding, command ident
 		return fail()
 	}
 	q, snapshot, admitted, err := c.prepareFeature(b, command, s, p)
-	if err != nil || admitted == nil || validateOTPAttempt(otpAttemptOwner(admitted), command, *admitted.otp) != nil {
+	if err != nil || admitted == nil || validateOTPAttempt(otpAttemptOwner(admitted), command, *admitted.otp) != nil || admitted.mfaCompletion != nil && mfaAttemptOwner(admitted) == nil {
 		return fail()
 	}
 	return q, snapshot, admitted, nil
@@ -341,7 +341,7 @@ func (c *Coordinator) recordCountedAttemptCommand(ctx context.Context, b identit
 	if j.previousGeneration != 0 {
 		return fail(featureOutcome(b, q.feature, identity.CommitOutcomeUnknown, 0), identity.UnavailableError{})
 	}
-	choice, result, err := c.recordCountedAttempt(bounded, tx, command, q, admitted, j, owner, metered, mfa)
+	choice, result, err := c.recordCountedAttempt(bounded, tx, command, q, admitted, j, owner, metered, mfa, false)
 	if err != nil {
 		return fail(identity.CommandResult{}, err)
 	}
@@ -357,10 +357,11 @@ func (c *Coordinator) recordCountedAttemptCommand(ctx context.Context, b identit
 	return result, identity.ForbiddenError{}
 }
 
-func (c *Coordinator) recordCountedAttempt(ctx context.Context, tx pgx.Tx, command identity.Command, q claimRequest, p *admittedKernelPlan, j journalReservation, owner [16]byte, metered, mfa bool) (choice OTPAttemptDisposition, result identity.CommandResult, err error) {
+func (c *Coordinator) recordCountedAttempt(ctx context.Context, tx pgx.Tx, command identity.Command, q claimRequest, p *admittedKernelPlan, j journalReservation, owner [16]byte, metered, mfa, countersPrepared bool) (choice OTPAttemptDisposition, result identity.CommandResult, err error) {
 	participant := otpAttemptOwner(p)
 	mfaParticipant := mfaAttemptOwner(p)
-	if (!mfa && participant == nil || mfa && (mfaParticipant == nil || metered)) || p.belongsTo(c.registry) != nil || j.disposition != journalOwned || j.previousGeneration != 0 {
+	joinedOTP := !mfa && p != nil && p.mfaCompletion != nil
+	if (!mfa && participant == nil || (mfa || joinedOTP) && (mfaParticipant == nil || metered)) || p.belongsTo(c.registry) != nil || j.disposition != journalOwned || j.previousGeneration != 0 {
 		return 0, result, invalidPlan()
 	}
 	fence, err := beginJournal(ctx, tx, q, c.keys, j, owner)
@@ -375,7 +376,7 @@ func (c *Coordinator) recordCountedAttempt(ctx context.Context, tx pgx.Tx, comma
 	r := &reservationState{coordinator: c, request: q, plan: p, journal: j, owner: owner}
 	work.state.execution = &domainExecution{coordinator: c, reservation: r, ctx: ctx}
 	s := &otpAttemptState{work: work, owner: participant, command: command, active: true}
-	m := &mfaAttemptState{work: work, owner: mfaParticipant, command: command, active: mfa}
+	m := &mfaAttemptState{work: work, owner: mfaParticipant, command: command, active: mfa, counterAdmissionOnly: countersPrepared}
 	defer func() {
 		s.active, s.command = false, identity.Command{}
 		m.active, m.command = false, identity.Command{}
@@ -389,6 +390,11 @@ func (c *Coordinator) recordCountedAttempt(ctx context.Context, tx pgx.Tx, comma
 	}
 	if err = configureKernelWork(ctx, work); err != nil {
 		return 0, result, err
+	}
+	if !mfa {
+		if err = c.admitOTPFeatureInput(ctx, work, command, p); err != nil {
+			return 0, result, err
+		}
 	}
 	if mfa {
 		var decision MFAAttemptDisposition
@@ -408,6 +414,32 @@ func (c *Coordinator) recordCountedAttempt(ctx context.Context, tx pgx.Tx, comma
 		default:
 			choice = 0
 		}
+	} else if joinedOTP {
+		// Native MFA admits/locks the original shared budget before the real
+		// OTP owner compares. Only that owner's actual denial permits a debit.
+		m.active = true
+		native := mfaParticipant.(MFAOTPAttemptContributor)
+		decision, admissionErr := native.PrepareMFAOTPAttempt(ctx, MFAOTPAttemptWork{state: m})
+		m.active = false
+		if admissionErr != nil {
+			return 0, result, identity.UnavailableError{}
+		}
+		if p.counters != nil && (!m.counterCalled || m.counterDisposition == CommandCounterDenied && decision != MFAAttemptDenied) {
+			return 0, result, invalidWork()
+		}
+		switch decision {
+		case MFAAttemptDenied:
+			choice = OTPAttemptDenied
+		case MFAAttemptUnchanged:
+			choice, err = participant.RecordOTPAttemptDenial(ctx, OTPAttemptWork{state: s})
+			if err == nil && choice == OTPAttemptDenied {
+				m.active, m.otpDenied = true, true
+				err = native.RecordMFAOTPAttemptDenial(ctx, MFAOTPAttemptWork{state: m})
+				m.active, m.otpDenied = false, false
+			}
+		default:
+			return 0, result, invalidWork()
+		}
 	} else if metered {
 		if !meteredCheckPlan(p) {
 			return 0, result, invalidPlan()
@@ -419,7 +451,7 @@ func (c *Coordinator) recordCountedAttempt(ctx context.Context, tx pgx.Tx, comma
 	if err != nil {
 		return 0, result, identity.UnavailableError{}
 	}
-	if mfa && p.counters != nil && (!m.counterCalled || m.counterDisposition == CommandCounterDenied && choice != OTPAttemptDenied) {
+	if (mfa || joinedOTP) && p.counters != nil && (!m.counterCalled || m.counterDisposition == CommandCounterDenied && choice != OTPAttemptDenied) {
 		return 0, result, invalidWork()
 	}
 	if work.state.rows != nil || work.usable() != nil || choice != OTPAttemptUnchanged && choice != OTPAttemptDenied && (!metered || choice != OTPAttemptChecked) {
@@ -429,6 +461,11 @@ func (c *Coordinator) recordCountedAttempt(ctx context.Context, tx pgx.Tx, comma
 	m.active = false
 	if choice == OTPAttemptUnchanged {
 		return choice, result, nil
+	}
+	if !mfa {
+		if err = c.admitOTPFeatureInput(ctx, work, command, p); err != nil {
+			return 0, result, err
+		}
 	}
 	now, err := work.DatabaseTime(ctx)
 	if err != nil {
@@ -464,6 +501,13 @@ func (c *Coordinator) recordCountedAttempt(ctx context.Context, tx pgx.Tx, comma
 	}
 	if err = terminalizeJournal(ctx, tx, q, j, owner, result, class); err != nil {
 		return 0, identity.CommandResult{}, err
+	}
+	// Audit/journal persistence may wait. Fence the same original native input
+	// once more at the last transaction boundary; no observation is renewed.
+	if !mfa {
+		if err = c.admitOTPFeatureInput(ctx, work, command, p); err != nil {
+			return 0, identity.CommandResult{}, err
+		}
 	}
 	return choice, result, nil
 }

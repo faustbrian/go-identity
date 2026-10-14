@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"slices"
 	"strings"
 	"time"
 
@@ -69,6 +70,8 @@ type AttemptCodec struct {
 	issuers         map[uint32]otp.AttemptIssuer
 	verifier        otp.Verifier
 	maximumDuration time.Duration
+	codeVersions    []uint32
+	configuration   [32]byte
 }
 
 // Format redacts custody keys for every formatting verb, including nil receivers.
@@ -131,7 +134,45 @@ func NewAttemptCodec(config AttemptCodecConfig) (*AttemptCodec, error) {
 	if err != nil {
 		return nil, ErrInvalidConfiguration
 	}
-	return &AttemptCodec{crypto: crypto, current: strings.Clone(config.CurrentWrappingKey), issuers: issuers, verifier: verifier, maximumDuration: config.MaximumDuration}, nil
+	versions := make([]uint32, 0, len(config.CodeKeys))
+	for version := range config.CodeKeys {
+		versions = append(versions, version)
+	}
+	slices.Sort(versions)
+	// Original owner selection must bind all retained custody, not only the
+	// active version. Hash a bounded private frame and erase its copied keys.
+	frame := []byte("identity-otp-codec-configuration-v1\x00")
+	frame = appendAuthorityText(frame, config.CurrentWrappingKey)
+	frame = binary.BigEndian.AppendUint32(frame, config.CurrentCodeKeyVersion)
+	frame = binary.BigEndian.AppendUint64(frame, uint64(config.MaximumDuration))
+	wrapping := make([]string, 0, len(config.WrappingKeys))
+	for name := range config.WrappingKeys {
+		wrapping = append(wrapping, name)
+	}
+	slices.Sort(wrapping)
+	frame = binary.BigEndian.AppendUint32(frame, uint32(len(wrapping)))
+	for _, name := range wrapping {
+		frame = appendAuthorityText(frame, name)
+		frame = binary.BigEndian.AppendUint32(frame, uint32(len(config.WrappingKeys[name])))
+		frame = append(frame, config.WrappingKeys[name]...)
+	}
+	for _, keys := range []map[uint32][32]byte{config.AttemptKeys, config.CodeKeys} {
+		selected := make([]uint32, 0, len(keys))
+		for version := range keys {
+			selected = append(selected, version)
+		}
+		slices.Sort(selected)
+		frame = binary.BigEndian.AppendUint32(frame, uint32(len(selected)))
+		for _, version := range selected {
+			frame = binary.BigEndian.AppendUint32(frame, version)
+			key := keys[version]
+			frame = append(frame, key[:]...)
+			clear(key[:])
+		}
+	}
+	configuration := sha256.Sum256(frame)
+	clear(frame)
+	return &AttemptCodec{crypto: crypto, current: strings.Clone(config.CurrentWrappingKey), issuers: issuers, verifier: verifier, maximumDuration: config.MaximumDuration, codeVersions: versions, configuration: configuration}, nil
 }
 
 // Map appends the reserved native OTP custody fields to the owning feature's

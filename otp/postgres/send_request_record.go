@@ -15,6 +15,7 @@ const sendRequestRecordPrefix = "identity-otp-send-request-v1\x00"
 const sendRecipientRequestPrefix = "identity-otp-send-request-v2\x00"
 const csrfSendRequestPrefix = "identity-otp-send-request-v3\x00"
 const csrfSendRecipientRequestPrefix = "identity-otp-send-request-v4\x00"
+const mfaSendRecipientRequestPrefix = "identity-otp-mfa-login-send-request-v1\x00"
 
 // Original declaration before entropy. This invocation-memory profile has no
 // challenge digest, submitted bearer or generated delivery. The coordinator
@@ -38,12 +39,8 @@ func (sendRequestRecord) MarshalText() ([]byte, error) { return nil, otp.ErrSens
 func (s sendRequestRecord) validate(binding identity.CommandBinding) error {
 	b, err := s.continuation.Bindings()
 	p, _, policyErr := s.policy.Bindings()
-	subject := identity.FeatureSubjectUser
-	if binding.UserID == "" {
-		subject = identity.FeatureSubjectAnonymousFlow
-	}
-	if err != nil || policyErr != nil || binding.ValidateFor(issuanceOperation(subject)) != nil || s.authority.validate(binding) != nil ||
-		b.Scope.TenantID != string(binding.TenantID) || b.Scope.SubjectID != string(binding.UserID) || b.Scope.ChallengeID != binding.RecordID ||
+	op, opErr := boundIssuanceOperation(binding)
+	if err != nil || policyErr != nil || opErr != nil || s.authority.validate(binding) != nil || !issuanceScopeMatches(binding, b.Scope) ||
 		p.Purpose != b.Scope.Purpose || !nativeTime(s.issuedAt) || !nativeTime(s.expiresAt) ||
 		!s.expiresAt.After(s.issuedAt) || s.expiresAt.Sub(s.issuedAt) > p.TTL || p.TTL%time.Microsecond != 0 || p.ResendInterval%time.Microsecond != 0 {
 		return ErrInvalidCommand
@@ -51,7 +48,21 @@ func (s sendRequestRecord) validate(binding identity.CommandBinding) error {
 	if s.recipient != nil && validateSendRecipient(*s.recipient, b.Scope, binding) != nil {
 		return ErrInvalidCommand
 	}
+	if op == mfaLoginSendOperation() {
+		flow, err := retainedMFAFlow(binding, op, s.continuation)
+		if err != nil || s.recipient == nil {
+			return ErrInvalidCommand
+		}
+		original, _ := flow.mfaOriginal.Bindings()
+		if s.issuedAt.Before(original.Binding.IssuedAt) || s.expiresAt.After(original.Binding.ExpiresAt) {
+			return ErrInvalidCommand
+		}
+		return nil
+	}
 	if original, ok := b.Authorization.PreAuthTransaction(); ok {
+		if op == mfaEnrollmentSendOperation() {
+			return ErrInvalidCommand
+		}
 		flow, err := original.Bindings()
 		if err != nil || binding.UserID == "" && binding.AnonymousFlowID != string(flow.Binding.ID) {
 			return ErrInvalidCommand
@@ -77,6 +88,10 @@ func encodeSendRequestRecord(s sendRequestRecord, binding identity.CommandBindin
 		if s.recipient != nil {
 			prefix = csrfSendRecipientRequestPrefix
 		}
+	}
+	bindings, _ := s.continuation.Bindings()
+	if _, _, bound := bindings.Authorization.MFAContinuation(); bound {
+		prefix = mfaSendRecipientRequestPrefix
 	}
 	out := appendSendContinuation([]byte(prefix), s.continuation)
 	p, checks, _ := s.policy.Bindings()
@@ -127,11 +142,15 @@ func decodeSendRequestRecord(wire []byte, binding identity.CommandBinding) (send
 		prefix = csrfSendRecipientRequestPrefix
 		data, authority, err = decodeAuthorityProfile(wire, binding, prefix)
 	}
+	if err != nil {
+		prefix = mfaSendRecipientRequestPrefix
+		data, authority, err = decodeAuthorityProfile(wire, binding, prefix)
+	}
 	if err != nil || authority == nil || !bytes.HasPrefix(data, []byte(prefix)) {
 		return bad()
 	}
 	r := recordReader{data: data[len(prefix):], ok: true}
-	continuation, err := readSendContinuation(&r, prefix == csrfSendRequestPrefix || prefix == csrfSendRecipientRequestPrefix)
+	continuation, err := readSendContinuation(&r, prefix == csrfSendRequestPrefix || prefix == csrfSendRecipientRequestPrefix, prefix == mfaSendRecipientRequestPrefix)
 	if err != nil {
 		return bad()
 	}
@@ -155,7 +174,7 @@ func decodeSendRequestRecord(wire []byte, binding identity.CommandBinding) (send
 	issuedAt, e1 := time.Parse(time.RFC3339Nano, issued)
 	expiresAt, e2 := time.Parse(time.RFC3339Nano, expires)
 	var recipient *kernel.RecipientRecord
-	if prefix == sendRecipientRequestPrefix || prefix == csrfSendRecipientRequestPrefix {
+	if prefix == sendRecipientRequestPrefix || prefix == csrfSendRecipientRequestPrefix || prefix == mfaSendRecipientRequestPrefix {
 		selected, err := readSendRecipient(&r)
 		if err != nil {
 			return bad()

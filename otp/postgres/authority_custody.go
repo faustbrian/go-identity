@@ -170,7 +170,7 @@ func decodeAuthorityProfile(data []byte, binding identity.CommandBinding, profil
 	default:
 		return bad()
 	}
-	validRecord := bytes.HasPrefix(record, []byte(recordPrefix)) || bytes.HasPrefix(record, []byte(boundRecordPrefix)) || bytes.HasPrefix(record, []byte(sessionRecordPrefix)) || bytes.HasPrefix(record, []byte(csrfSessionRecordPrefix))
+	validRecord := bytes.HasPrefix(record, []byte(recordPrefix)) || bytes.HasPrefix(record, []byte(boundRecordPrefix)) || bytes.HasPrefix(record, []byte(sessionRecordPrefix)) || bytes.HasPrefix(record, []byte(csrfSessionRecordPrefix)) || bytes.HasPrefix(record, []byte(mfaRecordPrefix))
 	if profile != "" {
 		validRecord = bytes.HasPrefix(record, []byte(profile))
 	}

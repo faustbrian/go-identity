@@ -3,7 +3,7 @@ package risk
 import "time"
 
 // PrepareMFACompletion selects the anonymous original-continuation counter
-// projection only for identity.mfa.totp-verify or identity.mfa.recovery-use. The native MFA owner must
+// projection only for native TOTP, OTP or recovery-code completion. The MFA owner must
 // authenticate subject.User and capabilityID against the original signed child
 // and frozen MFA completion plan; scalar construction is not authority. Only
 // User and trusted Network may be populated. No session identity is fabricated.
@@ -35,5 +35,5 @@ func (p CommandCounterPolicy) ValidateMFACompletion(command CounterCommand, scop
 }
 
 func mfaCompletionCounterAction(action Action) bool {
-	return action == "identity.mfa.totp-verify" || action == "identity.mfa.recovery-use"
+	return action == "identity.mfa.totp-verify" || action == "identity.mfa.otp-verify" || action == "identity.mfa.recovery-use"
 }

@@ -87,6 +87,38 @@ func TestMFASessionPreservesOriginalPrimaryAndFreshness(t *testing.T) {
 	}
 }
 
+func TestMFASessionOTPPreservesPrimaryWithoutRecoveryProvenance(t *testing.T) {
+	s, primary, p := mfaMagicLinkSession(t)
+	p.Method = "otp"
+	metadata, err := session.NewMFAAuthentication(p)
+	if err != nil {
+		t.Fatal("explicit OTP provenance is unavailable", err)
+	}
+	record, err := session.NewSessionWithMagicLinkMFA(s, primary, metadata)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := record.MFAAuthentication().Bindings()
+	if err != nil || got.Method != "otp" || got.PrimaryCommandID != p.PrimaryCommandID || got.ContinuationScopeDigest != p.ContinuationScopeDigest || record.MagicLinkAuthentication() != primary {
+		t.Fatal("OTP replaced original primary or continuation", err)
+	}
+	original, _ := primary.Bindings()
+	policy, _ := s.Remember.Bindings()
+	if life, err := record.Lifetime(original.AuthenticatedAt.Add(policy.FreshFor)); err != nil || life.Fresh {
+		t.Fatal("OTP renewed original primary freshness", err)
+	}
+	for _, change := range []func(*session.MFAAuthenticationSpec){
+		func(p *session.MFAAuthenticationSpec) { p.RecoverySetID = "BwcHBwcHBwcHBwcHBwcHBw" },
+		func(p *session.MFAAuthenticationSpec) { p.RecoverySetVersion = 1 },
+	} {
+		foreign := p
+		change(&foreign)
+		if _, err := session.NewMFAAuthentication(foreign); err == nil {
+			t.Fatal("OTP adopted recovery-code provenance")
+		}
+	}
+}
+
 func TestRecoveryMFASessionPreservesDistinctSetAndFactorProvenance(t *testing.T) {
 	s, primary, p := mfaMagicLinkSession(t)
 	p.Method = "recovery-code"

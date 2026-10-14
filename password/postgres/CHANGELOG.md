@@ -2,6 +2,24 @@
 
 ## Unreleased
 
+- Keep cross-owner workflow acceptance in the downstream reference module so
+  testing the password adapter no longer requires a cyclic reference dependency.
+
+- Allow explicit password-first OTP method selection while preserving the
+  TOTP-only default. Native challenge creation fences a confirmed selected
+  factor; OTP requires its exact verified identifier/channel versions. Missing
+  OTP storage, unrelated TOTP and changed recipients cannot issue an OTP child
+  or consume the browser. OTP verification/session composition remains pending.
+
+- Restore original enable/session/synchronizer custody only under the distinct
+  native OTP enrollment-confirmation schema. Keep exact consumed-parent proof
+  attribution and primary freshness without another proof consumption or login
+  grant; borrowed OTP/CSRF never enters scalar command or recovery output.
+
+- Restore original consumed enable/session/CSRF custody through the selected
+  native pending-OTP send port. Sending cannot consume primary proof again or
+  renew its original freshness; the distinct MFA send schema remains required.
+
 - Admit exact one/all-factor disable in the selected native email-reset recovery
   fence. It checks current viable recovery in the MFA owner's protected Work,
   never translates disable to update authority or issues a reset itself.

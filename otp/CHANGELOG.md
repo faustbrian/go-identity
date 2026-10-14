@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Add an explicit MFA-continuation authorization arm that retains original
+  consumed-primary correlation without reopening ordinary pre-auth or treating
+  partial authentication as a session. Its purpose-bound consuming attempts
+  preserve the original browser namespace, subject, child scope and remember
+  choice. Existing authorization/fingerprint profiles remain unchanged. Native
+  enrollment, durable admission and complete secondary-OTP wiring remain pending.
+
 - Add an optional code-free sign-in source reader contract for original
   identifier rate admission. Preserve existing Send/Signin interfaces and
   immutable redacted source scope; discovery grants no login authority and

@@ -86,6 +86,7 @@ type attempt struct {
 type input struct {
 	request  mfa.TotpVerifyRequest
 	recovery mfa.RecoveryUseRequest
+	otp      mfa.OtpVerifyRequest
 	facts    identityhttp.NetworkFacts
 	rate     identityhttp.ChallengeVerificationRateRequest
 	wire     string
@@ -116,12 +117,24 @@ func NewTOTPVerifyHandlerWithMiddleware(c TOTPVerifyConfig, middleware []identit
 }
 
 func newCompletionHandler(c TOTPVerifyConfig, recoveryService RecoveryUseService, middleware []identityhttp.MiddlewareDescriptor) (http.Handler, error) {
+	return newNativeCompletionHandler(c, recoveryService, nil, middleware)
+}
+
+func newNativeCompletionHandler(c TOTPVerifyConfig, recoveryService RecoveryUseService, otpService OTPVerifyService, middleware []identityhttp.MiddlewareDescriptor) (http.Handler, error) {
 	recovery := recoveryService != nil
+	otp := otpService != nil
 	var service any = c.Service
 	operation, path := "identity.mfa.totp-verify", "/v1/mfa/totp-verify"
 	if recovery {
 		service = recoveryService
 		operation, path = "identity.mfa.recovery-use", "/v1/mfa/recovery-use"
+	}
+	if otp {
+		if recovery || !c.PasswordPrimary {
+			return nil, identityhttp.ErrInvalidInput
+		}
+		service = otpService
+		operation, path = "identity.mfa.otp-verify", "/v1/mfa/otp-verify"
 	}
 	if service == nil || reflect.ValueOf(service).Kind() == reflect.Pointer && reflect.ValueOf(service).IsNil() || !c.Rate.Configured() || c.Now == nil || c.PolicyRevision == 0 || c.MaximumDuration < time.Millisecond || c.MaximumDuration > 30*time.Second || len(c.Audience) == 0 || len(c.Audience) > 256 {
 		return nil, identityhttp.ErrInvalidInput
@@ -203,7 +216,7 @@ func newCompletionHandler(c TOTPVerifyConfig, recoveryService RecoveryUseService
 				return s, identityhttp.ErrInvalidInput
 			}
 			for name := range r.Header {
-				if strings.EqualFold(name, "Authorization") || strings.EqualFold(name, "Proxy-Authorization") || strings.EqualFold(name, "X-CSRF-Token") {
+				if strings.EqualFold(name, "Authorization") || strings.EqualFold(name, "Proxy-Authorization") || strings.EqualFold(name, "X-CSRF-Token") || otp && strings.EqualFold(name, "X-MFA-Variant") {
 					return s, identityhttp.ErrInvalidInput
 				}
 			}
@@ -233,6 +246,8 @@ func newCompletionHandler(c TOTPVerifyConfig, recoveryService RecoveryUseService
 			fields := 8
 			if recovery {
 				fields = 6
+			} else if otp {
+				fields = 7
 			}
 			if err != nil || len(body) != fields {
 				return s, identityhttp.ErrInvalidInput
@@ -246,6 +261,8 @@ func newCompletionHandler(c TOTPVerifyConfig, recoveryService RecoveryUseService
 			members := map[string]*string{"commandID": &command, "preAuthID": &flow, "challengeID": &child, "factorID": &factor, "token": &wire, "code": &code, "callbackURL": &callback}
 			if recovery {
 				members = map[string]*string{"commandID": &command, "preAuthID": &flow, "continuationID": &child, "token": &wire, "recoveryCode": &code, "callbackURL": &callback}
+			} else if otp {
+				members = map[string]*string{"commandID": &command, "preAuthID": &flow, "continuationID": &child, "token": &wire, "code": &code, "callbackURL": &callback}
 			}
 			for name, dst := range members {
 				raw, ok := body[name]
@@ -274,7 +291,7 @@ func newCompletionHandler(c TOTPVerifyConfig, recoveryService RecoveryUseService
 			if _, err := identity.ParseCommandID(child); err != nil {
 				return s, identityhttp.ErrInvalidInput
 			}
-			if _, err := identity.ParseCommandID(factor); !recovery && err != nil {
+			if _, err := identity.ParseCommandID(factor); !recovery && !otp && err != nil {
 				return s, identityhttp.ErrInvalidInput
 			}
 			if len(wire) < 32 || len(wire) > 4096 {
@@ -292,7 +309,11 @@ func newCompletionHandler(c TOTPVerifyConfig, recoveryService RecoveryUseService
 				if err != nil {
 					return s, identityhttp.ErrInvalidInput
 				}
-				s.request = mfa.TotpVerifyRequest{TenantID: facts.TenantID(), CommandID: id, PreAuthID: preauth, ChallengeID: mfa.ChallengeID(child), FactorID: mfa.FactorID(factor), Code: opaque, TrustDevice: trust, Cookie: browser, Origin: string(c.Origin), Callback: callback, Network: facts.ClientIP().String(), Device: device.DeviceID(), Caller: caller(facts.TenantID(), child)}
+				if otp {
+					s.otp = mfa.OtpVerifyRequest{TenantID: facts.TenantID(), CommandID: id, PreAuthID: preauth, ContinuationID: mfa.ContinuationID(child), Code: opaque, TrustDevice: trust, Cookie: browser, Origin: string(c.Origin), Callback: callback, Network: facts.ClientIP().String(), Device: device.DeviceID(), Caller: caller(facts.TenantID(), child)}
+				} else {
+					s.request = mfa.TotpVerifyRequest{TenantID: facts.TenantID(), CommandID: id, PreAuthID: preauth, ChallengeID: mfa.ChallengeID(child), FactorID: mfa.FactorID(factor), Code: opaque, TrustDevice: trust, Cookie: browser, Origin: string(c.Origin), Callback: callback, Network: facts.ClientIP().String(), Device: device.DeviceID(), Caller: caller(facts.TenantID(), child)}
+				}
 			}
 			return s, nil
 		},
@@ -315,6 +336,12 @@ func newCompletionHandler(c TOTPVerifyConfig, recoveryService RecoveryUseService
 					return s, identityhttp.ErrInvalidInput
 				}
 				user, child, lifetime, err = recoveryService.RecoveryVerificationRateSource(r.Context(), s.recovery)
+			} else if otp {
+				s.otp.Proof = proof
+				if s.otp.Validate() != nil {
+					return s, identityhttp.ErrInvalidInput
+				}
+				user, child, lifetime, err = otpService.OtpVerificationRateSource(r.Context(), s.otp)
 			} else {
 				s.request.Proof = proof
 				if s.request.Validate() != nil {
@@ -340,6 +367,8 @@ func newCompletionHandler(c TOTPVerifyConfig, recoveryService RecoveryUseService
 			commandID := s.request.CommandID
 			if recovery {
 				commandID = s.recovery.CommandID
+			} else if otp {
+				commandID = s.otp.CommandID
 			}
 			a.out.CommandID = commandID
 			a.out.CommitOutcome = "unknown"
@@ -348,6 +377,10 @@ func newCompletionHandler(c TOTPVerifyConfig, recoveryService RecoveryUseService
 			if recovery {
 				completed, completionErr := recoveryService.RecoveryUse(r.Context(), s.recovery)
 				result = completionResult{Outcome: completed.Outcome, Session: completed.Session, CSRFToken: completed.CSRFToken, recoveryRequired: completed.RecoveryRequired}
+				err = completionErr
+			} else if otp {
+				completed, completionErr := otpService.OtpVerify(r.Context(), s.otp)
+				result = completionResult{Outcome: completed.Outcome, Session: completed.Session, CSRFToken: completed.CSRFToken}
 				err = completionErr
 			} else {
 				completed, completionErr := c.Service.TotpVerify(r.Context(), s.request)

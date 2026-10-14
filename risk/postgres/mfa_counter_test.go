@@ -12,15 +12,20 @@ import (
 )
 
 func TestNativeMFACompletionCounterPreparationPreservesOpaqueInput(t *testing.T) {
-	testNativeMFACompletionCounterPreparation(t, false)
+	testNativeMFACompletionCounterPreparation(t, "totp")
 }
 
 func TestNativeRecoveryCompletionCounterPreparationPreservesOpaqueInput(t *testing.T) {
-	testNativeMFACompletionCounterPreparation(t, true)
+	testNativeMFACompletionCounterPreparation(t, "recovery-code")
 }
 
-func testNativeMFACompletionCounterPreparation(t *testing.T, recovery bool) {
+func TestNativeOTPCompletionCounterPreparationPreservesOpaqueInput(t *testing.T) {
+	testNativeMFACompletionCounterPreparation(t, "otp")
+}
+
+func testNativeMFACompletionCounterPreparation(t *testing.T, method string) {
 	t.Helper()
+	recovery := method == "recovery-code"
 	r, err := NewRepository(protectedConfig(t))
 	if err != nil {
 		t.Fatal(err)
@@ -30,6 +35,9 @@ func testNativeMFACompletionCounterPreparation(t *testing.T, recovery bool) {
 	s.Binding.OperationID, s.Binding.SchemaID = s.Operation.OperationID, s.Operation.SchemaID
 	if recovery {
 		s.Operation.OperationID, s.Operation.SchemaID = "identity.mfa.recovery-use", "mfa-recovery-use"
+		s.Binding.OperationID, s.Binding.SchemaID = s.Operation.OperationID, s.Operation.SchemaID
+	} else if method == "otp" {
+		s.Operation.OperationID, s.Operation.SchemaID = "identity.mfa.otp-verify", "mfa-otp-verify"
 		s.Binding.OperationID, s.Binding.SchemaID = s.Operation.OperationID, s.Operation.SchemaID
 	}
 	s.Binding.UserID, s.Binding.RecordID, s.Binding.AnonymousFlowID = "", "", "bbbbbbbbbbbbbbbbbbbbbg"

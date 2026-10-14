@@ -8,7 +8,7 @@ import (
 	database "github.com/faustbrian/go-postgres"
 )
 
-// NewMFAPasswordSessionService selects password plus confirmed TOTP/recovery
+// NewMFAPasswordSessionService selects password plus confirmed TOTP/OTP/recovery
 // records. Recovery-set consumption is historical; current authority remains
 // the original confirmed factor enrollment and account-wide generation.
 // It uses native current directory, password credential, authorization and exact
@@ -34,7 +34,7 @@ func passwordMFASessionAdmissionMethod(c IdentifierAdmissionConfig, record sessi
 	}
 	s, err := record.Bindings()
 	m, me := record.MFAAuthentication().Bindings()
-	if err != nil || me != nil || method != "totp" && method != "recovery-code" || c.AuthenticationMethod != "password" || c.CredentialKind != identity.CredentialPassword || c.CredentialOwner != "identity/password" || s.Authentication.Proof.Purpose != session.PasswordMFAPrimaryPurpose || m.Method != method || string(m.PrimaryCommandID) != string(s.Authentication.Proof.ID) {
+	if err != nil || me != nil || method != "totp" && method != "otp" && method != "recovery-code" || c.AuthenticationMethod != "password" || c.CredentialKind != identity.CredentialPassword || c.CredentialOwner != "identity/password" || s.Authentication.Proof.Purpose != session.PasswordMFAPrimaryPurpose || m.Method != method || string(m.PrimaryCommandID) != string(s.Authentication.Proof.ID) {
 		return deny()
 	}
 	key, err := mfapg.FactorAuthorityKey(s.TenantID, s.UserID)

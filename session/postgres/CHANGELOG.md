@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+- Add closed password/secondary-OTP session mapping and a same-Work completion
+  effect requiring actual checked OTP/child custody and recorded shared MFA
+  transition. Original credential, remember and optional synchronizer remain
+  bound; recovery uses a distinct OTP issuance digest. Full public completion,
+  selected storage migration and live OTP session validation remain in development.
+
+- Extend native consumed-primary reading to explicitly selected secondary-OTP
+  sending as well as completion. Keep the original browser read-only and
+  require the exact anonymous MFA operation and factor target.
+
+- Add read-only original consumed-primary fencing for native secondary OTP.
+  Require exact MFA operation/browser lineage and unchanged absolute expiry;
+  never reactivate, reserve, release or finalize the primary again. This guard
+  grants no successful factor authentication or session by itself.
+
 - Add native original-session/CSRF custody for pending TOTP replacement URI and
   confirmation. Continuations obtain real current authority without extending
   original proof/ceremony limits or copying expired evidence. Confirmation

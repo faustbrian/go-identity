@@ -136,6 +136,14 @@ func (r *ContributorRegistry) admitFeaturePlanMode(b identity.CommandBinding, fi
 	if _, ok := feature.contributor.(FeatureExecutionContributor); !ok {
 		return nil, invalidPlan()
 	}
+	if otpFeatureInputAdmissionRequired(p) {
+		if _, ok := feature.contributor.(FeatureInputAdmissionContributor); !ok {
+			return nil, invalidPlan()
+		}
+		if _, ok := feature.contributor.(FeatureCommitContributor); !ok {
+			return nil, invalidPlan()
+		}
+	}
 	if p.MFAContinuation != nil {
 		if passwordMFAOperation(p) {
 			if _, ok := feature.contributor.(PasswordMFAChallengeContributor); !ok {

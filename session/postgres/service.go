@@ -80,7 +80,11 @@ func newPasswordSessionService(pool *database.Pool, c SessionServiceConfig, mfa 
 		if err != nil {
 			return nil, session.ErrInvalidInput
 		}
-		cacheProfile = nativeAdmissionCacheProfile("native-mfa-password-totp-recovery-session-v2", cacheProfile)
+		r.mfaOTPFactors, err = mfapg.NewOTPSessionFactorReader(pool, c.Repository.MaximumDuration)
+		if err != nil {
+			return nil, session.ErrInvalidInput
+		}
+		cacheProfile = nativeAdmissionCacheProfile("native-mfa-password-totp-otp-recovery-session-v3", cacheProfile)
 	}
 	return session.NewProfileSessionService(r, c.Validation, session.AuthenticationVerified, cacheProfile)
 }
@@ -106,6 +110,7 @@ type primarySessionReader struct {
 	magicLink         *MagicLinkAdmissionConfig
 	mfaMagicLink      *MagicLinkAdmissionConfig
 	mfaFactors        *mfapg.TOTPSessionFactorReader
+	mfaOTPFactors     *mfapg.OTPSessionFactorReader
 	mfaPassword       bool
 	mfaPasswordReader *primarySessionReader
 }
@@ -227,14 +232,28 @@ func (r *primarySessionReader) observePassword(bounded context.Context, stored S
 			return session.SessionObservation{}, session.ErrUnauthenticated
 		}
 		m, _ := stored.Session.MFAAuthentication().Bindings()
-		factor, e := r.mfaFactors.Read(bounded, spec.TenantID, spec.UserID, m.FactorID)
-		if e != nil {
-			return session.SessionObservation{}, observationError(e)
+		if m.Method == "otp" {
+			if r.mfaOTPFactors == nil {
+				return session.SessionObservation{}, session.ErrUnauthenticated
+			}
+			factor, e := r.mfaOTPFactors.Read(bounded, spec.TenantID, spec.UserID, m.FactorID)
+			if e != nil {
+				return session.SessionObservation{}, observationError(e)
+			}
+			if factor.EnrollmentVersion != m.EnrollmentVersion {
+				return session.SessionObservation{}, session.ErrUnauthenticated
+			}
+			factorVersion = factor.AuthorityVersion
+		} else {
+			factor, e := r.mfaFactors.Read(bounded, spec.TenantID, spec.UserID, m.FactorID)
+			if e != nil {
+				return session.SessionObservation{}, observationError(e)
+			}
+			if factor.EnrollmentVersion != m.EnrollmentVersion {
+				return session.SessionObservation{}, session.ErrUnauthenticated
+			}
+			factorVersion = factor.AuthorityVersion
 		}
-		if factor.EnrollmentVersion != m.EnrollmentVersion {
-			return session.SessionObservation{}, session.ErrUnauthenticated
-		}
-		factorVersion = factor.AuthorityVersion
 	}
 	now := r.clock.Now()
 	if bounded.Err() != nil {

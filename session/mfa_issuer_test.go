@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 	"testing"
 	"time"
 
@@ -20,9 +21,9 @@ func TestMFAIssuerGatesOriginalCustodyAndExactCommittedSession(t *testing.T) {
 		mode     string
 		password bool
 		recovery bool
-	}{{"commit", false, false}, {"unknown", false, false}, {"replay", false, false}, {"substituted-factor", false, false}, {"expired", false, false}, {"commit", true, false}, {"unknown", true, false}, {"replay", true, false}, {"substituted-factor", true, false}, {"expired", true, false}, {"commit", false, true}, {"unknown", false, true}, {"replay", false, true}, {"substituted-factor", false, true}, {"expired", false, true}, {"commit", true, true}, {"unknown", true, true}, {"replay", true, true}, {"substituted-factor", true, true}, {"expired", true, true}} {
-		mode := profile.mode
-		t.Run(fmt.Sprintf("%s/password=%t/recovery=%t", mode, profile.password, profile.recovery), func(t *testing.T) {
+	}{{"commit", false, false}, {"unknown", false, false}, {"replay", false, false}, {"substituted-factor", false, false}, {"expired", false, false}, {"commit", true, false}, {"unknown", true, false}, {"replay", true, false}, {"substituted-factor", true, false}, {"expired", true, false}, {"commit", false, true}, {"unknown", false, true}, {"replay", false, true}, {"substituted-factor", false, true}, {"expired", false, true}, {"commit", true, true}, {"unknown", true, true}, {"replay", true, true}, {"substituted-factor", true, true}, {"expired", true, true}, {"otp-commit", true, false}, {"otp-unknown", true, false}, {"otp-replay", true, false}, {"otp-substituted-factor", true, false}, {"otp-expired", true, false}} {
+		mode := strings.TrimPrefix(profile.mode, "otp-")
+		t.Run(fmt.Sprintf("%s/password=%t/recovery=%t", profile.mode, profile.password, profile.recovery), func(t *testing.T) {
 			spec, primary, provenance := mfaMagicLinkSession(t)
 			if profile.password {
 				spec.Authentication = sessionSpec(t).Authentication
@@ -39,6 +40,9 @@ func TestMFAIssuerGatesOriginalCustodyAndExactCommittedSession(t *testing.T) {
 			if profile.recovery {
 				provenance.Method, provenance.RecoverySetID, provenance.RecoverySetVersion = "recovery-code", "BwcHBwcHBwcHBwcHBwcHBw", 2
 			}
+			if strings.HasPrefix(profile.mode, "otp-") {
+				provenance.Method = "otp"
+			}
 			metadata, err := session.NewMFAAuthentication(provenance)
 			if err != nil {
 				t.Fatal(err)
@@ -50,6 +54,9 @@ func TestMFAIssuerGatesOriginalCustodyAndExactCommittedSession(t *testing.T) {
 			b.OperationID, b.SchemaID = "identity.mfa.totp-verify", "mfa-totp-verify"
 			if profile.recovery {
 				b.OperationID, b.SchemaID = "identity.mfa.recovery-use", "mfa-recovery-use"
+			}
+			if provenance.Method == "otp" {
+				b.OperationID, b.SchemaID = "identity.mfa.otp-verify", "mfa-otp-verify"
 			}
 			op := identity.FeatureOperation{Owner: "identity/mfa", OperationID: b.OperationID, SchemaID: b.SchemaID, SchemaVersion: 1, RecordRequirement: identity.FeatureRecordOmitted, SubjectRequirement: identity.FeatureSubjectAnonymousFlow}
 			clock := &mutableIssueClock{now: spec.IssuedAt}

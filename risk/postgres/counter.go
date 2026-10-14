@@ -48,6 +48,12 @@ func (r *Repository) ReserveCommandCounters(ctx context.Context, w identitypostg
 			return 0, risk.ErrInvalidCounterCommand
 		}
 	}
+	if native.scope.Operation == "identity.mfa.otp-send" && native.capabilityID != "" {
+		user, browser, scopeErr := w.MFALoginSendScope(r)
+		if scopeErr != nil || native.subject.User != string(user) || native.capabilityID != browser {
+			return 0, risk.ErrInvalidCounterCommand
+		}
+	}
 	if b.Generation == 0 || b.PreviousGeneration == ^uint64(0) || b.PreviousGeneration != 0 && b.Generation != b.PreviousGeneration+1 {
 		return 0, identity.ConflictError{}
 	}

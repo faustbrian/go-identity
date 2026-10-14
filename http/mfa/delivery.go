@@ -30,6 +30,11 @@ func deliverCompletion(c TOTPVerifyConfig, s input, result completionResult) (st
 		tenant, command, continuation = s.recovery.TenantID, s.recovery.CommandID, string(s.recovery.ContinuationID)
 		method = "recovery-code"
 		factorValid = factor.FactorID != "" && factor.RecoverySetID != "" && factor.RecoverySetVersion != 0
+	} else if s.otp.CommandID != "" {
+		tenant, command, continuation = s.otp.TenantID, s.otp.CommandID, string(s.otp.ContinuationID)
+		method = "otp"
+		// The native original send, not login JSON, selects this factor.
+		factorValid = factor.FactorID != "" && factor.RecoverySetID == "" && factor.RecoverySetVersion == 0
 	}
 	if c.PasswordPrimary {
 		proof := spec.Authentication.Proof

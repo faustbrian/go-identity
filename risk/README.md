@@ -9,6 +9,20 @@ RiskEvidence/CaptchaEvidence issuance remain required implementation work.
 
 ## Adoption and API
 
+### Anonymous MFA OTP login-send counters
+
+`CommandCounterPolicy.PrepareMFALoginSend` selects only
+`identity.mfa.otp-send`, retaining the canonical protected-operation policy.
+The native MFA workflow supplies the authenticated original browser-flow ID,
+resolved account and trusted network. It never fabricates a session. The four
+keyed targets are tenant, account, original browser flow and network; a new
+child or command in the same browser does not get a fresh browser budget.
+`ValidateMFALoginSend` preserves original exclusive evidence expiry and exact
+policy/scope ownership. Pure preparation is not proof validation or allowance.
+The PostgreSQL participant and public sender must still authenticate the
+original source and reserve/check these counters transactionally; this core
+profile alone is not a working OTP login service.
+
 ### Original Authentication admission across restart
 
 `NewAuthenticationAdmissionCustody` selects an existing counted, audited

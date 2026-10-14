@@ -28,9 +28,8 @@ import (
 // invocation-local state. Final ApplyFeature still owns current authorization
 // and atomic effects. No application-written workflow is required or permitted.
 type FeaturePreparationContributor interface {
-	FeatureExecutionContributor
+	FeatureInputAdmissionContributor
 	ValidateFeaturePreparation(identity.Command, CommandPlan) error
-	AdmitFeaturePreparation(context.Context, Work, identity.Command) error
 	GenerateFeaturePreparation(context.Context, identity.Command, uint64) ([]byte, error)
 	RestoreFeaturePreparation(context.Context, identity.Command, uint64, []byte) (identity.Command, CommandPlan, error)
 }
@@ -176,6 +175,20 @@ func (c *Coordinator) ExecutePreparedMFARecoveryFeature(ctx context.Context, ori
 	return c.executePreparedFeature(ctx, &original, prepared, declaration)
 }
 
+// ExecutePreparedMFAOTPFeature freezes the native mapped attempt before any
+// session generation in the existing immutable preparation declaration. The
+// original submitted code/browser defines journal identity; the exact OTP,
+// child, counter and lifecycle owners retain atomic execution and recovery.
+// Retained output never regenerates, terminal replay never compares again, and
+// uncertain outcomes disclose no session. Restore frozen metadata before retry.
+func (c *Coordinator) ExecutePreparedMFAOTPFeature(ctx context.Context, original, prepared identity.Command, declaration CommandPlan) (identity.CommandResult, error) {
+	f, ok := prepared.Feature()
+	if !ok || f.Operation.OperationID != "identity.mfa.otp-verify" || !validMFACompletionPlan(f.Binding, declaration) {
+		return identity.CommandResult{}, invalidPreparation()
+	}
+	return c.executePreparedFeature(ctx, &original, prepared, declaration)
+}
+
 func (c *Coordinator) executePreparedFeature(ctx context.Context, claimSource *identity.Command, original identity.Command, declaration CommandPlan) (result identity.CommandResult, err error) {
 	if ctx == nil || c == nil || c.pool == nil || c.pool.Raw() == nil || c.registry == nil || c.maximumDuration <= 0 {
 		return result, invalidPreparation()
@@ -283,7 +296,7 @@ func (c *Coordinator) prepareRestoredFeature(b identity.CommandBinding, generate
 	// Only this closed retained-preparation route may restore consuming OTP.
 	// Ordinary command preparation remains closed to opaque code custody.
 	if final.OTP != nil {
-		if final.MFACompletion == nil || !validMFACompletionPlan(b, final) {
+		if !(final.MFACompletion != nil && validMFACompletionPlan(b, final)) && !otpEnrollmentPreparation(final) {
 			return claimRequest{}, CommandPlan{}, nil, invalidPreparation()
 		}
 		return c.prepareOTPReservation(b, generated, final)
@@ -379,7 +392,7 @@ func (c *Coordinator) prepareFeaturePreparation(original identity.Command, p Com
 }
 
 func preparationProtected(p CommandPlan) bool {
-	return p.IdentifierAdmission != nil || p.Capability != nil && !consumptionAuthenticationPreparation(p) || p.CapabilityIssuance != nil || p.OTP != nil && p.MFACompletion == nil || p.RiskEvidence != nil || p.CaptchaEvidence != nil || p.CaptchaReplayReservation
+	return p.IdentifierAdmission != nil || p.Capability != nil && !consumptionAuthenticationPreparation(p) || p.CapabilityIssuance != nil || p.OTP != nil && p.MFACompletion == nil && !otpEnrollmentPreparation(p) || p.RiskEvidence != nil || p.CaptchaEvidence != nil || p.CaptchaReplayReservation
 }
 
 // Only the original closed reset consumption plan may precede hash generation.
@@ -443,7 +456,8 @@ func preparationFinalDeclaration(b identity.CommandBinding, original, final Comm
 	if (original.MFACompletion == nil) != (final.MFACompletion == nil) || original.MFACompletion != nil && (*original.MFACompletion != *final.MFACompletion || !validMFACompletionPlan(b, original) || !validMFACompletionPlan(b, final)) {
 		return false
 	}
-	if (original.OTP == nil) != (final.OTP == nil) || original.OTP != nil && *original.OTP != *final.OTP {
+	addedEnrollmentOTP := original.OTP == nil && final.OTP != nil && otpEnrollmentPreparation(original) && otpEnrollmentPreparation(final)
+	if !addedEnrollmentOTP && ((original.OTP == nil) != (final.OTP == nil) || original.OTP != nil && *original.OTP != *final.OTP) {
 		return false
 	}
 	for i, a := range original.Audits {
@@ -460,6 +474,9 @@ func preparationFinalDeclaration(b identity.CommandBinding, original, final Comm
 	if final.Delivery != nil {
 		expected++
 	}
+	if addedEnrollmentOTP {
+		expected++
+	}
 	if len(final.Contributors) != expected {
 		return false
 	}
@@ -469,6 +486,12 @@ func preparationFinalDeclaration(b identity.CommandBinding, original, final Comm
 		}
 	}
 	i := len(original.Contributors)
+	if addedEnrollmentOTP {
+		if final.Contributors[i] != otpDescriptor() {
+			return false
+		}
+		i++
+	}
 	if final.CapabilityIssuance != nil {
 		if final.Contributors[i] != final.CapabilityIssuance.Contributor {
 			return false
@@ -508,7 +531,7 @@ func (c *Coordinator) startFeaturePreparation(ctx context.Context, original iden
 		return r, result, err
 	}
 	if p.counters != nil {
-		p, err = c.freezePreparationCounters(ctx, tx, q, p)
+		p, err = c.freezePreparationCounters(ctx, tx, q, p, original)
 		if err != nil {
 			return preparationReservation{}, result, err
 		}
@@ -572,24 +595,7 @@ func (c *Coordinator) admitFeaturePreparation(ctx context.Context, tx pgx.Tx, or
 	if err := configureKernelWork(ctx, w); err != nil {
 		return err
 	}
-	w.state.featureInvocation = phase
-	w.state.featurePreparationCommand = &original
-	w.state.featurePreparationPlan = p
-	defer func() {
-		w.state.featureInvocation = nil
-		w.state.featurePreparationCommand = nil
-		w.state.featurePreparationPlan = nil
-	}()
-	if err := admitResetInputCredential(ctx, w, original, p); err != nil {
-		return err
-	}
-	if err := phase.AdmitFeaturePreparation(ctx, w, original); err != nil {
-		return w.fail(ctx, err)
-	}
-	if w.usable() != nil || w.state.rows != nil {
-		return invalidWork()
-	}
-	return nil
+	return c.invokeFeatureInputAdmission(ctx, w, original, p)
 }
 
 func (c *Coordinator) retainFeaturePreparation(ctx context.Context, q claimRequest, j journalReservation, owner [16]byte, wire []byte) error {
@@ -646,29 +652,97 @@ func (c *Coordinator) attachFeaturePreparation(ctx context.Context, original, ge
 	if err != nil {
 		return Reservation{}, err
 	}
-	if admitted.capability != nil {
-		// The generated reset plan carries the original consumption declaration.
-		// Enlist its existing reservation owner in the same transaction that first
-		// attaches that declaration. Admission denial/generation failure never
-		// reserves a proof. A missing final plan proves no earlier attachment (or
-		// capability reservation) committed, even after journal-only takeover.
-		capabilityJournal := r.journal
-		if plan == nil {
-			capabilityJournal.previousGeneration = 0
+	if admitted.otp != nil {
+		if admitted.mfaCompletion == nil && !otpEnrollmentPreparation(admitted.snapshot()) || generated.source == nil {
+			return Reservation{}, invalidPreparation()
 		}
-		// A first attachment has no earlier committed participant reservation.
-		// Isolate provisional participant writes so a definitive conflict can
-		// retain the frozen plan and audited denial without releasing any other
-		// command's credential. Existing attachments still require reconciliation.
-		participantTx, err := tx.Begin(ctx)
+		otpJournal := r.journal
+		// A journal-only predecessor has never attached a reservation. Once an
+		// attachment exists, transfer its exact generation rather than compare
+		// or charge the original opaque submission again.
+		if plan == nil {
+			otpJournal.previousGeneration = 0
+		}
+		if plan == nil && (otpEnrollmentPreparation(admitted.snapshot()) || validMFACompletionPlan(admitted.binding, admitted.snapshot())) {
+			// Reuse the native counted-denial phase in this same attachment
+			// transaction before any consuming participant is reserved. A correct
+			// precheck rolls back; a wrong submission retains debit/audit/terminal
+			// result without reserving the child's remaining legitimate authority.
+			counted, err := tx.Begin(ctx)
+			if err != nil {
+				return Reservation{}, readFailure(ctx, err)
+			}
+			choice, result, err := c.recordCountedAttempt(ctx, counted, *generated.source, original, admitted, otpJournal, owner, false, false, true)
+			if err != nil {
+				if rollbackPreparation(counted) != nil {
+					return Reservation{}, identity.UnavailableError{}
+				}
+				// Original native authority can disappear while preparation is
+				// outside locks. A definitive first-attachment denial has reached
+				// neither domain execution nor any retained OTP reservation. Keep
+				// its frozen original plan/audit/terminal receipt instead of leaving
+				// an unrecoverable journal with no final attachment. Never release
+				// the competing command's OTP or classify a failed acknowledgement.
+				var forbidden identity.ForbiddenError
+				var conflict identity.ConflictError
+				if ctx.Err() == nil && (errors.As(err, &forbidden) || errors.As(err, &conflict)) {
+					result, failure := c.denyPreparationAttachment(ctx, tx, original, admitted, r.journal, owner)
+					if failure != nil {
+						return Reservation{}, failure
+					}
+					if failure := c.commitPreparation(ctx, tx); failure != nil {
+						return Reservation{}, failure
+					}
+					return Reservation{}, preparationAttachmentDenied{result: result}
+				}
+				return Reservation{}, err
+			}
+			if choice == OTPAttemptUnchanged {
+				if err := rollbackPreparation(counted); err != nil {
+					return Reservation{}, readFailure(ctx, err)
+				}
+			} else if choice == OTPAttemptDenied {
+				if err := counted.Commit(ctx); err != nil {
+					return Reservation{}, readFailure(ctx, err)
+				}
+				if err := c.commitPreparation(ctx, tx); err != nil {
+					return Reservation{}, err
+				}
+				return Reservation{}, preparationAttachmentDenied{result: result}
+			} else {
+				_ = rollbackPreparation(counted)
+				return Reservation{}, invalidPreparation()
+			}
+		}
+	}
+	if admitted.otp != nil || admitted.capability != nil {
+		// Denial must roll back the entire consuming prefix, not just its last
+		// participant. Otherwise a rejected command can strand the child's
+		// one-use reservation, or retain OTP after a later child conflict.
+		participants, err := tx.Begin(ctx)
 		if err != nil {
 			return Reservation{}, readFailure(ctx, err)
 		}
-		if err := c.reserveCapability(ctx, participantTx, original, admitted, capabilityJournal, owner); err != nil {
-			if rollbackPreparation(participantTx) != nil {
+		journal := r.journal
+		if plan == nil {
+			// A journal-only predecessor has no committed consuming reservation.
+			journal.previousGeneration = 0
+		}
+		if admitted.otp != nil {
+			err = c.reserveOTP(ctx, participants, *generated.source, original, admitted, journal, owner)
+		}
+		if err == nil && admitted.capability != nil {
+			// Preserve capability-last enlistment for the joined OTP profile.
+			err = c.reserveCapability(ctx, participants, original, admitted, journal, owner)
+		}
+		if err != nil {
+			if rollbackPreparation(participants) != nil {
 				return Reservation{}, identity.UnavailableError{}
 			}
-			if _, conflict := err.(identity.ConflictError); conflict && plan == nil {
+			var forbidden identity.ForbiddenError
+			var conflict identity.ConflictError
+			definitive := errors.As(err, &conflict) || admitted.otp != nil && errors.As(err, &forbidden)
+			if plan == nil && ctx.Err() == nil && definitive {
 				result, failure := c.denyPreparationAttachment(ctx, tx, original, admitted, r.journal, owner)
 				if failure != nil {
 					return Reservation{}, failure
@@ -680,23 +754,8 @@ func (c *Coordinator) attachFeaturePreparation(ctx context.Context, original, ge
 			}
 			return Reservation{}, err
 		}
-		if err := participantTx.Commit(ctx); err != nil {
+		if err := participants.Commit(ctx); err != nil {
 			return Reservation{}, readFailure(ctx, err)
-		}
-	}
-	if admitted.otp != nil {
-		if admitted.mfaCompletion == nil || original.source == nil {
-			return Reservation{}, invalidPreparation()
-		}
-		otpJournal := r.journal
-		// A journal-only predecessor has never attached a reservation. Once an
-		// attachment exists, transfer its exact generation rather than compare
-		// or charge the original opaque submission again.
-		if plan == nil {
-			otpJournal.previousGeneration = 0
-		}
-		if err := c.reserveOTP(ctx, tx, *original.source, original, admitted, otpJournal, owner); err != nil {
-			return Reservation{}, err
 		}
 	}
 	if err := c.commitPreparation(ctx, tx); err != nil {

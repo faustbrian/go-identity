@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+- Preserve original code/browser custody through secondary OTP completion
+  counter mapping. Select `MFAOTPCompletionCounterMigrationSource` after the
+  existing completion/recovery/login-send histories before charging that lane.
+  Populated allowances and evidence remain unchanged; browser-flow counters
+  remain exclusive to sending. Public OTP verification/session composition is
+  still required.
+
+- Prepare anonymous MFA OTP login-send counters against the original browser
+  and resolved account while preserving cookie custody and empty journal user
+  ownership. Reservation/current checks require the exact registered native
+  MFA source; caller-selected subjects are insufficient. Install the forward
+  `MFALoginSendCounterMigrationSource` after the selected protected, verification
+  and MFA-completion histories. Existing windows, aliases, snapshots and limits
+  remain unchanged. Public OTP login sender composition is still pending.
+
 - Retain distinct recovery-code/browser custody through protected MFA counters.
   Install `MFARecoveryCounterMigrationSource` after completion counter history
   before selecting recovery completion; existing allowance and timing persist.

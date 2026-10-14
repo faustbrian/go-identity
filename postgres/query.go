@@ -65,6 +65,8 @@ type commandObservation struct {
 	resultVersion         *int32
 	class                 *string
 	result, plan          []byte
+	preparationProfile    *int16
+	declaration           []byte
 }
 
 // CommandRecord is a safe historical command observation. It contains scope,
@@ -114,7 +116,27 @@ j.state,j.lease_until,clock_timestamp(),j.result_version,j.terminal_class,j.resu
 FROM identity.identity_command_id_claims c LEFT JOIN identity.commands j
 ON j.command_id=c.command_id AND j.tenant_id=c.tenant_id AND j.purpose=c.purpose
 WHERE c.command_id=$1`, key).Scan(&observed.tenant, &observed.purpose, &observed.scope, &observed.retired, &observed.state, &observed.until, &observed.now, &observed.resultVersion, &observed.class, &observed.result, &observed.plan, &observed.fingerprint, &observed.fingerprintKeyVersion)
+	if err == nil {
+		err = readObservedMFAOTPPreparation(ctx, c.pool.Raw(), key, &observed)
+	}
 	return observed, err
+}
+
+// Preparation columns are opt-in migrations. Only this native command's
+// unattached branch reads them; ordinary kernel/history queries need no feature
+// schema. The second read must match the first immutable claim and journal
+// snapshot. A concurrent attachment causes retry, never false noncommit proof.
+func readObservedMFAOTPPreparation(ctx context.Context, reader interface {
+	QueryRow(context.Context, string, ...any) pgx.Row
+}, id []byte, observed *commandObservation) error {
+	_, feature, err := decodeObservedScope(observed.scope)
+	if err != nil || observed.plan != nil || feature == nil || feature.OperationID != "identity.mfa.otp-verify" || observed.state == nil || observed.until == nil || (*observed.state != "pending" && *observed.state != "aborted") {
+		return nil
+	}
+	return reader.QueryRow(ctx, `SELECT j.preparation_profile,CASE WHEN octet_length(j.preparation_declaration) BETWEEN 1 AND 65536 THEN j.preparation_declaration END
+FROM identity.identity_command_id_claims c JOIN identity.commands j USING(command_id)
+WHERE c.command_id=$1 AND c.tenant_id=$2 AND c.purpose=$3 AND c.safe_fields=$4 AND c.fingerprint=$5
+AND j.tenant_id=c.tenant_id AND j.purpose=c.purpose AND j.command_plan IS NULL AND j.state=$6 AND j.lease_until=$7`, id, observed.tenant, observed.purpose, observed.scope, observed.fingerprint, *observed.state, *observed.until).Scan(&observed.preparationProfile, &observed.declaration)
 }
 
 // QueryCommand performs one bounded, uncached primary observation and one
@@ -212,18 +234,10 @@ func commandReceipt(q identity.RecoveryQuery, observed commandObservation, err e
 	if err != nil {
 		return identity.CommandResult{}, err
 	}
-	if observed.state == nil || observed.until == nil || !postgresExactTime(*observed.until) || !postgresExactTime(observed.now) || len(observed.plan) == 0 || len(observed.plan) > 65536 {
+	if observed.state == nil || observed.until == nil || !postgresExactTime(*observed.until) || !postgresExactTime(observed.now) {
 		return identity.CommandResult{}, identity.UnavailableError{}
 	}
-	if len(observed.fingerprint) != 32 {
-		return identity.CommandResult{}, identity.UnavailableError{}
-	}
-	var plan CommandPlan
-	if feature == nil {
-		plan, err = decodeKernelPlan(binding, [32]byte(observed.fingerprint), observed.plan)
-	} else {
-		plan, err = decodeFeaturePlan(binding, [32]byte(observed.fingerprint), observed.plan)
-	}
+	plan, _, err := observedCommandPlan(binding, feature, observed)
 	if err != nil || feature != nil && (plan.Feature == nil || plan.Feature.Operation != *feature) {
 		return identity.CommandResult{}, identity.UnavailableError{}
 	}
@@ -275,6 +289,36 @@ func commandReceipt(q identity.RecoveryQuery, observed commandObservation, err e
 	default:
 		return identity.CommandResult{}, identity.UnavailableError{}
 	}
+}
+
+// An authenticated preparation declaration permits observation of pending or
+// aborted history, never success. Only recovery under claim/journal exclusion
+// can use absent final attachment as evidence that consuming/domain effects did
+// not begin. Generated credentials and original code/browser are not restored.
+func observedCommandPlan(binding identity.CommandBinding, feature *identity.FeatureOperation, observed commandObservation) (CommandPlan, bool, error) {
+	if len(observed.fingerprint) != 32 {
+		return CommandPlan{}, false, identity.UnavailableError{}
+	}
+	fp := [32]byte(observed.fingerprint)
+	if observed.plan == nil {
+		if feature == nil || feature.OperationID != "identity.mfa.otp-verify" || observed.state == nil || (*observed.state != "pending" && *observed.state != "aborted") || observed.preparationProfile == nil || (*observed.preparationProfile != 3 && *observed.preparationProfile != 4) {
+			return CommandPlan{}, false, identity.UnavailableError{}
+		}
+		_, plan, err := decodeMFAOTPPreparation(binding, fp, observed.declaration)
+		if err != nil || plan.Feature.Operation != *feature {
+			return CommandPlan{}, false, identity.UnavailableError{}
+		}
+		return plan, true, nil
+	}
+	if len(observed.plan) == 0 || len(observed.plan) > 65536 {
+		return CommandPlan{}, false, identity.UnavailableError{}
+	}
+	if feature == nil {
+		plan, err := decodeKernelPlan(binding, fp, observed.plan)
+		return plan, false, err
+	}
+	plan, err := decodeFeaturePlan(binding, fp, observed.plan)
+	return plan, false, err
 }
 
 // Shared by receipt lookup and native preparation reads. Original scope is

@@ -21,6 +21,11 @@ type FeatureConfig struct {
 	Disable *DisableConfig
 	// RecoveryUse exposes only the explicitly selected original-primary owner.
 	RecoveryUse *RecoveryUseConfig
+	// OTPVerify independently selects native password-origin secondary OTP login.
+	// Its original-send owner restores factor selection; no TOTP fallback exists.
+	OTPVerify *OTPVerifyConfig
+	// OTPSend independently selects keyed secondary-OTP login sending.
+	OTPSend *OTPSendConfig
 	// RecoveryRegenerate explicitly selects fresh-factor whole-set replacement.
 	RecoveryRegenerate *RecoveryRegenerateConfig
 	TOTPVerify         *TOTPVerifyConfig
@@ -43,10 +48,34 @@ func NewFeature(c FeatureConfig) (identityhttp.Feature, error) {
 // NewFeatureWithMiddleware binds hooks to actual owned phases without granting
 // credential output ownership or returning a partial feature on failure.
 func NewFeatureWithMiddleware(c FeatureConfig, m []identityhttp.MiddlewareDescriptor) (identityhttp.Feature, error) {
-	if c.Disable == nil && c.FactorUpdate == nil && c.List == nil && c.TOTPVerify == nil && c.PasswordTOTPVerify == nil && c.Enable == nil && c.URI == nil && c.EnrollmentConfirmation == nil && c.ActiveStepUp == nil && c.RecoveryUse == nil && c.RecoveryRegenerate == nil {
+	if c.Disable == nil && c.FactorUpdate == nil && c.List == nil && c.TOTPVerify == nil && c.PasswordTOTPVerify == nil && c.Enable == nil && c.URI == nil && c.EnrollmentConfirmation == nil && c.ActiveStepUp == nil && c.RecoveryUse == nil && c.RecoveryRegenerate == nil && c.OTPVerify == nil && c.OTPSend == nil {
 		return identityhttp.Feature{}, identityhttp.ErrInvalidInput
 	}
 	var operations []identityhttp.OperationDescriptor
+	if c.OTPSend != nil {
+		h, err := NewOTPSendHandlerWithMiddleware(*c.OTPSend, m)
+		if err != nil {
+			return identityhttp.Feature{}, err
+		}
+		op, err := identityhttp.NewCanonicalOperation(identityhttp.CanonicalOperationConfig{Owner: "identity/mfa", OperationID: "identity.mfa.otp-send", Handler: h, CSRF: identityhttp.CSRFPolicy{Mode: identityhttp.CSRFExactOrigin, RefererFallback: identityhttp.RefererFallbackDeny}, MaximumSerializedBytes: 16384})
+		if err != nil {
+			return identityhttp.Feature{}, err
+		}
+		op.Wire = otpSendWire(*c.OTPSend)
+		operations = append(operations, op)
+	}
+	if c.OTPVerify != nil {
+		h, err := NewOTPVerifyHandlerWithMiddleware(*c.OTPVerify, m)
+		if err != nil {
+			return identityhttp.Feature{}, err
+		}
+		op, err := identityhttp.NewCanonicalOperation(identityhttp.CanonicalOperationConfig{Owner: "identity/mfa", OperationID: "identity.mfa.otp-verify", Handler: h, CSRF: identityhttp.CSRFPolicy{Mode: identityhttp.CSRFExactOrigin, RefererFallback: identityhttp.RefererFallbackDeny}, MaximumSerializedBytes: 16384})
+		if err != nil {
+			return identityhttp.Feature{}, err
+		}
+		op.Wire = otpWire(*c.OTPVerify)
+		operations = append(operations, op)
+	}
 	if c.Disable != nil {
 		h, err := NewDisableHandlerWithMiddleware(*c.Disable, m)
 		if err != nil {

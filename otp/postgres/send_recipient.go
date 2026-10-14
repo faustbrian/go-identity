@@ -13,7 +13,7 @@ import (
 const issuanceRecipientRecordPrefix = "identity-otp-recipient-issuance-v1\x00"
 
 func unwrapRecipientIssuance(data []byte) ([]byte, *kernel.RecipientRecord, error) {
-	if bytes.HasPrefix(data, []byte(issuanceRecordPrefix)) || bytes.HasPrefix(data, []byte(csrfIssuanceRecordPrefix)) {
+	if bytes.HasPrefix(data, []byte(issuanceRecordPrefix)) || bytes.HasPrefix(data, []byte(csrfIssuanceRecordPrefix)) || bytes.HasPrefix(data, []byte(mfaIssuanceRecordPrefix)) {
 		return data, nil, nil
 	}
 	if !bytes.HasPrefix(data, []byte(issuanceRecipientRecordPrefix)) || len(data) > 8192 {
@@ -43,7 +43,14 @@ func validateSendRecipient(r kernel.RecipientRecord, scope otp.DigestScopeSpec, 
 	if scope.Purpose == otp.PurposeEmailVerification || scope.Purpose == otp.PurposeEmailChange {
 		eligibility = kernel.RecipientPendingOrVerified
 	}
-	if r.Validate() != nil || r.Suppressed || r.Query.TenantID != binding.TenantID || r.Query.UserID != binding.UserID || r.Query.Kind != kind || r.Query.CanonicalValue != scope.Destination.Value() || r.Query.Eligibility != eligibility {
+	user := binding.UserID
+	login := false
+	if op, err := boundIssuanceOperation(binding); err == nil && op == mfaLoginSendOperation() {
+		user = identity.UserID(scope.SubjectID)
+		login = true
+	}
+	queryMatches := r.Query.UserID == user || login && r.Query.UserID == ""
+	if r.Validate() != nil || r.Suppressed || r.Query.TenantID != binding.TenantID || !queryMatches || login && r.User.ID != user || r.Query.Kind != kind || r.Query.CanonicalValue != scope.Destination.Value() || r.Query.Eligibility != eligibility {
 		return ErrInvalidCommand
 	}
 	return nil

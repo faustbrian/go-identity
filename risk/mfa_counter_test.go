@@ -14,6 +14,10 @@ func TestRecoveryCompletionCountersRetainProtectedPolicyWithoutSession(t *testin
 	testMFACompletionCounters(t, "identity.mfa.recovery-use")
 }
 
+func TestOTPCompletionCountersRetainProtectedPolicyWithoutSession(t *testing.T) {
+	testMFACompletionCounters(t, "identity.mfa.otp-verify")
+}
+
 func testMFACompletionCounters(t *testing.T, action Action) {
 	t.Helper()
 	key, _ := NewCounterDigestKey(1, bytes.Repeat([]byte{71}, 32))

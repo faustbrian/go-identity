@@ -118,6 +118,8 @@ func (e *MFATOTPCompletionEffect) applyNativeMFA(ctx context.Context, w kernel.W
 	if method == "recovery-code" {
 		_, code = command.RecoveryCode()
 		operation = mfaRecoveryCompletionSessionOperation()
+	} else if method == "otp" {
+		operation = mfaOTPCompletionSessionOperation()
 	} else if method != "totp" {
 		return deny()
 	}
@@ -267,6 +269,8 @@ func (e *MFATOTPCompletionEffect) recoverNativeMFA(ctx context.Context, w kernel
 	operation, digest := mfaTOTPCompletionSessionOperation(), mfaTOTPIssuanceDigest
 	if method == "recovery-code" {
 		operation, digest = mfaRecoveryCompletionSessionOperation(), mfaRecoveryIssuanceDigest
+	} else if method == "otp" {
+		operation, digest = mfaOTPCompletionSessionOperation(), mfaOTPIssuanceDigest
 	} else if method != "totp" {
 		return kernel.RecoveryUnknown, session.ErrInvalidSessionCommand
 	}

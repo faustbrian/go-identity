@@ -314,6 +314,32 @@ func testPublicPasswordMFAChallenge(t *testing.T, ctx context.Context, pool *dat
 	if materialVersion != "8" || referenceVersion != "8" || primaryVersion != "8" {
 		t.Fatal("challenge did not bind protected credential successor")
 	}
+	// Explicit OTP must not inherit the otherwise valid enrolled TOTP or a
+	// verified email address. Missing selected-method storage fails closed.
+	selected := mc
+	selected.AllowedMethods = []string{"otp"}
+	otpOnly, err := NewMFASigninService(pool, c, selected)
+	if err != nil {
+		t.Fatal("explicit OTP configuration unavailable", err)
+	}
+	otpRequest := r
+	otpRequest.PreAuthID, _ = identity.NewPreAuthTransactionID()
+	otpBinding := b
+	otpBinding.ID = otpRequest.PreAuthID
+	otpBinding.IssuedAt = time.Now().UTC().Truncate(time.Microsecond)
+	otpBinding.ExpiresAt = otpBinding.IssuedAt.Add(5 * time.Minute)
+	otpDigest, _ := token.PreAuthDigest(c.FlowKeys[0], otpBinding)
+	otpFlow, err := session.NewPreAuthTransaction(session.PreAuthTransactionSpec{Binding: otpBinding, Cookie: otpDigest, Version: 1})
+	if err != nil || sessionpg.InsertPreAuth(ctx, signinTestTx{pool}, storage, otpFlow) != nil {
+		t.Fatal("selected-method browser fixture unavailable", err)
+	}
+	unsupported, _ := otpOnly.Signin(ctx, otpRequest)
+	if unsupported.State == auth.SignInStateChallengeRequired || unsupported.State == auth.SignInStateAuthenticated || unsupported.Challenge.Proof != (capability.Proof{}) || unsupported.SessionID != "" {
+		t.Fatal("selected OTP borrowed unrelated TOTP or verified-address authority")
+	}
+	if err := pool.Raw().QueryRow(ctx, `SELECT state FROM signin_sessions.preauth_transactions WHERE flow_id=$1`, string(otpRequest.PreAuthID)).Scan(&pending); err != nil || pending != "issued" {
+		t.Fatal("unavailable OTP authority consumed original browser", err)
+	}
 	// An explicit known-empty successor may select ordinary password signin;
 	// an absent row must never stand in for this authoritative transition.
 	if _, err := pool.Raw().Exec(ctx, `WITH removed AS (UPDATE identity_mfa.factor_authorities SET version=2,active_factors=0 WHERE tenant_id=$1 AND user_id=$2 RETURNING tenant_id,user_id) UPDATE identity_mfa.totp_factors SET state=3,encrypted_secret=NULL,last_step=NULL WHERE (tenant_id,user_id) IN (SELECT tenant_id,user_id FROM removed)`, signinTestTenant, signinTestUser); err != nil {
@@ -331,5 +357,113 @@ func testPublicPasswordMFAChallenge(t *testing.T, ctx context.Context, pool *dat
 	ordinary, err := upgrading.Signin(ctx, r)
 	if err != nil || ordinary.State != auth.SignInStateAuthenticated || ordinary.Challenge != (password.MFAChallengeResult{}) || ordinary.Validate() != nil {
 		t.Fatal("known-empty native MFA selection lost SFA compatibility", err)
+	}
+	testPasswordOTPChallengeSelection(t, ctx, pool, c, mc, r, factors)
+}
+
+// Factor rows are deliberate authoritative storage fixtures, not a replacement
+// OTP verifier. This proves public password challenge selection only; actual
+// OTP delivery, comparison and session completion have separate journeys.
+func testPasswordOTPChallengeSelection(t *testing.T, ctx context.Context, pool *database.Pool, c SigninConfig, mc MFAChallengeConfig, request password.SigninRequest, factors mfapg.TOTPFactorMigrationSource) {
+	t.Helper()
+	recovery := mfapg.RecoveryMigrationSource{Base: mfapg.PasswordContinuationMigrationSource{Base: factors, Version: 4}, Version: 5}
+	references := mfapg.FactorReferenceMigrationSource{Base: recovery, Version: 6}
+	history, err := (mfapg.OTPFactorMigrationSource{Base: references, Version: 7}).Load(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, migration := range history[len(history)-3:] {
+		if _, err := pool.Raw().Exec(ctx, migration.UpSQL()); err != nil {
+			t.Fatal("selected OTP history unavailable", err)
+		}
+	}
+	seedCommand := func(purpose string) []byte {
+		id, _ := identity.NewCommandID()
+		raw, _ := base64.RawURLEncoding.DecodeString(string(id))
+		if _, err := pool.Raw().Exec(ctx, `INSERT INTO identity.identity_command_id_claims(command_id,tenant_id,purpose,fingerprint,fingerprint_key_version,safe_fields) VALUES($1,$2,$3,$4,1,decode('01','hex'))`, raw, signinTestTenant, purpose, make([]byte, 32)); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := pool.Raw().Exec(ctx, `INSERT INTO identity.commands(command_id,tenant_id,purpose) VALUES($1,$2,$3)`, raw, signinTestTenant, purpose); err != nil {
+			t.Fatal(err)
+		}
+		return raw
+	}
+	factor, _ := identity.NewCommandID()
+	created, activated := seedCommand("identity.mfa.enable"), seedCommand("identity.mfa.otp-verify")
+	if _, err := pool.Raw().Exec(ctx, `UPDATE identity_mfa.factor_authorities SET version=3,active_factors=1 WHERE tenant_id=$1 AND user_id=$2`, signinTestTenant, signinTestUser); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Raw().Exec(ctx, `INSERT INTO identity_mfa.otp_factors(tenant_id,user_id,factor_id,state,enrollment_version,row_version,channel,identifier_id,identifier_version,verification_version,created_command_id,created_purpose,created_at,enrollment_expires_at,confirmed_at,activation_command_id,activation_before_version,activation_authority_before)
+VALUES($1,$2,$3,2,1,2,'email','email',1,1,$4,'identity.mfa.enable',clock_timestamp(),clock_timestamp()+interval '5 minutes',clock_timestamp(),$5,1,2)`, signinTestTenant, signinTestUser, string(factor), created, activated); err != nil {
+		t.Fatal("confirmed OTP storage fixture unavailable", err)
+	}
+	mc.AllowedMethods = []string{"otp"}
+	service, err := NewMFASigninService(pool, c, mc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, scenario := range []string{"confirmed", "stale-recipient", "unverified-recipient"} {
+		if scenario == "stale-recipient" {
+			_, err = pool.Raw().Exec(ctx, `UPDATE identity_mfa.otp_factors SET identifier_version=2 WHERE tenant_id=$1 AND factor_id=$2`, signinTestTenant, string(factor))
+		} else if scenario == "unverified-recipient" {
+			_, err = pool.Raw().Exec(ctx, `UPDATE identity_mfa.otp_factors SET identifier_version=1 WHERE tenant_id=$1 AND factor_id=$2;`, signinTestTenant, string(factor))
+			if err == nil {
+				_, err = pool.Raw().Exec(ctx, `UPDATE identity.identifiers SET verified=false,is_primary=false,verification_state=1,verified_at=NULL WHERE tenant_id=$1 AND identifier_id='email'`, signinTestTenant)
+			}
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+		r := request
+		r.PreAuthID, _ = identity.NewPreAuthTransactionID()
+		at := time.Now().UTC().Truncate(time.Microsecond)
+		binding := session.PreAuthBinding{ID: r.PreAuthID, Intent: session.PreAuthIntent{TenantID: r.TenantID, Action: "identity.password.signin", Origin: r.Origin, CallbackURL: r.CallbackURL, Nonce: [32]byte{2}, Remember: r.Remember, PolicyID: c.PolicyID, PolicyVersion: 3}, IssuedAt: at, ExpiresAt: at.Add(5 * time.Minute)}
+		token, _ := session.ParseToken(r.Cookie.Token())
+		digest, _ := token.PreAuthDigest(c.FlowKeys[0], binding)
+		flow, flowErr := session.NewPreAuthTransaction(session.PreAuthTransactionSpec{Binding: binding, Cookie: digest, Version: 1})
+		if flowErr != nil || sessionpg.InsertPreAuth(ctx, signinTestTx{pool}, c.Session, flow) != nil {
+			t.Fatal("OTP password browser fixture unavailable", flowErr)
+		}
+		out, callErr := service.Signin(ctx, r)
+		var state string
+		if err := pool.Raw().QueryRow(ctx, `SELECT state FROM signin_sessions.preauth_transactions WHERE flow_id=$1`, string(r.PreAuthID)).Scan(&state); err != nil {
+			t.Fatal(err)
+		}
+		if scenario != "confirmed" {
+			if out.State == auth.SignInStateAuthenticated || out.State == auth.SignInStateChallengeRequired || out.Challenge.Proof != (capability.Proof{}) || state != "issued" {
+				t.Fatal("changed OTP recipient acquired primary continuation")
+			}
+			continue
+		}
+		if callErr != nil || out.State != auth.SignInStateChallengeRequired || out.Validate() != nil || state != "consumed" || out.SessionID != "" || out.Issuance.Token != (session.Token{}) {
+			t.Fatal("confirmed selected OTP failed native password challenge", callErr)
+		}
+		verifier, _ := capability.NewService(mc.Issuer.Crypto)
+		grant, err := verifier.Verify(ctx, out.Challenge.Proof, "identity.mfa.complete", c.Profile.Audience)
+		if err != nil {
+			t.Fatal(err)
+		}
+		reader, _ := mfapg.NewContinuationReader(pool, time.Second)
+		continuation, err := reader.Read(ctx, grant, mc.IssuerURL)
+		scope, scopeErr := continuation.Bindings()
+		if err != nil || scopeErr != nil || len(scope.AllowedMethods) != 1 || scope.AllowedMethods[0] != "otp" || scope.SourcePreAuthID != r.PreAuthID || scope.FactorVersion != 3 {
+			t.Fatal("signed OTP child changed explicit method/browser/authority", err)
+		}
+		otpReader, err := mfapg.NewOTPFactorReader(pool, time.Second)
+		if err != nil {
+			t.Fatal(err)
+		}
+		snapshot, err := otpReader.Read(ctx, grant, mc.IssuerURL, string(factor))
+		if err != nil {
+			t.Fatal("actual OTP child cannot resolve confirmed factor recipient", err)
+		}
+		metadata, err := snapshot.Metadata()
+		if err != nil || metadata.UserID != signinTestUser || metadata.FactorID != string(factor) || metadata.IdentifierID != "email" || metadata.IdentifierVersion != 1 || metadata.VerificationVersion != 1 || metadata.FactorAuthorityVersion != 3 || metadata.ContinuationID != scope.ID {
+			t.Fatal("OTP factor reader changed original child/recipient fence", err)
+		}
+		foreign, _ := identity.NewCommandID()
+		if _, err := otpReader.Read(ctx, grant, mc.IssuerURL, string(foreign)); err == nil {
+			t.Fatal("actual child resolved an unowned OTP factor")
+		}
 	}
 }

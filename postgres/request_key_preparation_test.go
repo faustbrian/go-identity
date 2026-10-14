@@ -74,6 +74,15 @@ func TestRequestKeyPreparationRequiresExactRegisteredOwner(t *testing.T) {
 	}
 }
 
+func TestReadPreparedRequestKeyRequiresConfiguredNativeOwner(t *testing.T) {
+	var c Coordinator
+	key, _ := identity.NewIdempotencyKey([]byte("request-key"))
+	intent, _ := identity.NewRequestIntent(nil)
+	if b, wire, found, err := c.ReadPreparedRequestKey(context.Background(), RequestKeyScope{}, key, intent, requestKeyUnitCaller(RequestKeyScope{}), FeatureRegistration{}, nil); err == nil || found || wire != nil || b != (RequestKeyPreparationBinding{}) {
+		t.Fatal("unconfigured read-only lookup exported original input")
+	}
+}
+
 func TestRequestKeyPreparationCallbackBoundsAndRedaction(t *testing.T) {
 	intent, _ := identity.NewRequestIntent(nil)
 	for name, callback := range map[string]func(context.Context, RequestKeyPreparationBinding, identity.RequestIntent) ([]byte, error){

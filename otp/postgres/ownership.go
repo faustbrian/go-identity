@@ -19,6 +19,7 @@ import (
 // callback provider, code oracle or way to infer rollback from expiry.
 type lockedReservation struct {
 	schema                          string
+	subject                         string
 	binding                         identitypostgres.OTPReservationBinding
 	version, generation             uint64
 	issuedAt, expiresAt, reservedAt time.Time
@@ -104,9 +105,11 @@ func persistOriginalReservation(ctx context.Context, exec challengeExec, row loc
 // decryption. Thus authoritative noncommit can release an expired reservation
 // without reviving a challenge or depending on submitted-code retention. It
 // grants no live expiry, flow authority or noncommit proof; phase checks follow.
-func loadReservation(ctx context.Context, query challengeQuery, schema string, b identitypostgres.OTPReservationBinding, expected uint64) (lockedReservation, error) {
+// Subject comes from authenticated native attempt scope, not the anonymous
+// command's UserID. Retain it for every terminal/rebind CAS on this locked row.
+func loadReservation(ctx context.Context, query challengeQuery, schema string, b identitypostgres.OTPReservationBinding, expected uint64, subject string) (lockedReservation, error) {
 	bad := func(err error) (lockedReservation, error) { return lockedReservation{}, err }
-	if ctx == nil || query == nil || !validSchema(schema) || !validOwnership(b) || expected == 0 {
+	if ctx == nil || query == nil || !validSchema(schema) || !validOwnership(b) || expected == 0 || len(subject) > 256 {
 		return bad(ErrInvalidCommand)
 	}
 	if err := ctx.Err(); err != nil {
@@ -117,7 +120,7 @@ func loadReservation(ctx context.Context, query challengeQuery, schema string, b
 	rows, err := query(ctx, `SELECT version::text,consumer_generation::text,issued_at,expires_at,reserved_at
  FROM `+quoted+`.challenges WHERE tenant_id=$1 AND challenge_id=$2 AND digest_key_version=$3 AND scope_digest=$4
  AND subject_id=$5 AND state='reserved' AND consumer_command_id=$6 AND consumer_purpose=$7 AND consumer_fingerprint=$8
- AND consumer_generation=$9::numeric AND consumer_attempt_id=$10 AND consumer_attempt_fingerprint=$11 AND consumer_issuer_version=$12 FOR UPDATE`, string(b.Command.TenantID), b.Plan.ChallengeID, int64(b.Plan.DigestKeyVersion), b.Plan.ScopeDigest[:], string(b.Command.UserID), id, b.Command.OperationID, b.Fingerprint[:], strconv.FormatUint(expected, 10), b.Plan.AttemptID, b.Plan.AttemptFingerprint[:], int64(b.Plan.FingerprintKeyVersion))
+ AND consumer_generation=$9::numeric AND consumer_attempt_id=$10 AND consumer_attempt_fingerprint=$11 AND consumer_issuer_version=$12 FOR UPDATE`, string(b.Command.TenantID), b.Plan.ChallengeID, int64(b.Plan.DigestKeyVersion), b.Plan.ScopeDigest[:], subject, id, b.Command.OperationID, b.Fingerprint[:], strconv.FormatUint(expected, 10), b.Plan.AttemptID, b.Plan.AttemptFingerprint[:], int64(b.Plan.FingerprintKeyVersion))
 	if err != nil {
 		return bad(challengeFailure(ctx))
 	}
@@ -143,7 +146,7 @@ func loadReservation(ctx context.Context, query challengeQuery, schema string, b
 	if err := ctx.Err(); err != nil {
 		return bad(err)
 	}
-	return lockedReservation{schema: quoted, binding: b, version: v, generation: expected, issuedAt: issued, expiresAt: expires, reservedAt: reserved}, nil
+	return lockedReservation{schema: quoted, subject: subject, binding: b, version: v, generation: expected, issuedAt: issued, expiresAt: expires, reservedAt: reserved}, nil
 }
 
 // rebindReservation requires the exact successor and never compares, charges,
@@ -192,7 +195,7 @@ func updateReservation(ctx context.Context, exec challengeExec, row lockedReserv
  WHERE tenant_id=$1 AND challenge_id=$2 AND digest_key_version=$3 AND scope_digest=$4 AND subject_id=$5
  AND state='reserved' AND consumer_command_id=$6 AND consumer_purpose=$7 AND consumer_fingerprint=$8
  AND consumer_generation=$9::numeric AND consumer_attempt_id=$10 AND consumer_attempt_fingerprint=$11 AND consumer_issuer_version=$12
- AND version=$17::numeric AND (NOT $18 OR (issued_at<=clock_timestamp() AND expires_at>clock_timestamp()))`, string(b.Command.TenantID), b.Plan.ChallengeID, int64(b.Plan.DigestKeyVersion), b.Plan.ScopeDigest[:], string(b.Command.UserID), id, b.Command.OperationID, b.Fingerprint[:], strconv.FormatUint(row.generation, 10), b.Plan.AttemptID, b.Plan.AttemptFingerprint[:], int64(b.Plan.FingerprintKeyVersion), state, strconv.FormatUint(row.version+1, 10), strconv.FormatUint(b.Generation, 10), now, strconv.FormatUint(row.version, 10), live)
+ AND version=$17::numeric AND (NOT $18 OR (issued_at<=clock_timestamp() AND expires_at>clock_timestamp()))`, string(b.Command.TenantID), b.Plan.ChallengeID, int64(b.Plan.DigestKeyVersion), b.Plan.ScopeDigest[:], row.subject, id, b.Command.OperationID, b.Fingerprint[:], strconv.FormatUint(row.generation, 10), b.Plan.AttemptID, b.Plan.AttemptFingerprint[:], int64(b.Plan.FingerprintKeyVersion), state, strconv.FormatUint(row.version+1, 10), strconv.FormatUint(b.Generation, 10), now, strconv.FormatUint(row.version, 10), live)
 	if err != nil {
 		return challengeFailure(ctx)
 	}

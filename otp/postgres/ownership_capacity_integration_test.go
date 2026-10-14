@@ -68,7 +68,7 @@ func TestNativeRebindPreservesTerminalVersionCapacity(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer tx.Rollback(context.Background())
-	row, err := loadReservation(ctx, sqlChallengeQuery(tx), "otp_store", b, 1)
+	row, err := loadReservation(ctx, sqlChallengeQuery(tx), "otp_store", b, 1, string(b.Command.UserID))
 	if err != nil {
 		t.Fatal(err)
 	}

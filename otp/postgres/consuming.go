@@ -147,10 +147,17 @@ func (p *Contributor) ReserveOTP(ctx context.Context, w kernel.OTPReservationWor
 		return err
 	}
 	d, err := p.codec.verifier.EvaluateAttempt(row.challenge, attempt, now)
+	snapshot, _ := row.challenge.Bindings()
+	spec, _ := command.Feature()
+	if err == nil && spec.Operation == mfaEnrollmentConfirmationOperation() && (d.Outcome == otp.AttemptConflict || snapshot.State != otp.ChallengeIssued) {
+		// The exact authenticated row is now another reservation or terminal
+		// generation. This is a definitive admission conflict, not an IO or
+		// acknowledgement failure; never release or adopt that owner's state.
+		return identity.ConflictError{}
+	}
 	if err != nil || d.Outcome != otp.AttemptReserved {
 		return ErrInvalidCommand
 	}
-	spec, _ := command.Feature()
 	return persistOriginalReservation(ctx, w.Exec, row, d, b, now, &spec)
 }
 
@@ -195,7 +202,7 @@ func (p *Contributor) RebindOTP(ctx context.Context, w kernel.OTPReservationWork
 	if _, _, err = p.lockout.loadLockouts(ctx, query, p.schema, c.Scope); err != nil {
 		return err
 	}
-	row, err := loadReservation(ctx, query, p.schema, b, b.PreviousGeneration)
+	row, err := loadReservation(ctx, query, p.schema, b, b.PreviousGeneration, c.Scope.SubjectID)
 	if err != nil {
 		return err
 	}

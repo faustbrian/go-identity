@@ -132,8 +132,7 @@ func (i AttemptIssuer) recordScope(r CommandAttemptRecord) (*attemptCommandScope
 		return nil, ErrInvalidAttempt
 	}
 	s, _ := c.Feature()
-	scope := a.Continuation.state.bindings.Scope
-	if s.Binding != r.Binding || s.Operation != r.Operation || string(s.Binding.TenantID) != scope.TenantID || string(s.Binding.UserID) != scope.SubjectID || s.Operation.RecordRequirement == identity.FeatureRecordRequired && s.Binding.RecordID != scope.TargetID {
+	if s.Binding != r.Binding || s.Operation != r.Operation || !validAttemptCommandScope(s.Binding, s.Operation, a.Continuation, a.Mode) {
 		return nil, ErrInvalidAttempt
 	}
 	return &attemptCommandScope{binding: s.Binding, operation: s.Operation, digest: attemptCommandDigest(s.Binding, s.Operation)}, nil

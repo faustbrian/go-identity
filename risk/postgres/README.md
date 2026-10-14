@@ -5,16 +5,34 @@ evidence and decisions. It is **not yet an executable durable risk service**.
 
 ## Implemented boundary
 
+- `PrepareMFALoginSendCommandCounters` selects only anonymous
+  `identity.mfa.otp-send` with the exact original browser cookie, required factor
+  ID and resolved account. Journal `UserID` remains empty. The browser dimension
+  spans newly issued children/commands; no authenticated session is invented.
+  Native reservation and current checks obtain the account/browser only from
+  the registered `MFALoginSendCounterContributor`, whose protected source checks
+  still own signed child, primary, factor, recipient and current policy. Scalar
+  preparation is not authentication or allowance. Install
+  `MFALoginSendCounterMigrationSource` after protected, verification and selected
+  MFA completion histories. The forward migration preserves original windows,
+  aliases, charges and snapshots and permits browser windows only for OTP send.
+  The public login sender itself remains composition work.
+
 - `PrepareMFACompletionCommandCounters(command, subject, child, completion,
-  primaryTime)` selects anonymous native `identity.mfa.totp-verify` only.
+  primaryTime)` selects anonymous native TOTP, OTP or recovery-code completion.
   Supply authenticated original continuation subject/child and trusted network;
   no session or authenticated command user is invented. Opaque code/browser
   custody survives mapping. Reservation and current admission compare subject
   and child to the exact sealed coordinator completion plan. Use the same native
-  counted transaction for denied TOTP and risk attempts, not a success-only
+  counted transaction for denied factor and risk attempts, not a success-only
   charge. Correct-code probing rolls its provisional charge back before retained
   generation. Install `MFACompletionCounterMigrationSource` after protected and
-  registration counter histories; populated evidence remains unchanged.
+  registration counter histories. Select `MFARecoveryCounterMigrationSource`
+  for recovery codes, then `MFALoginSendCounterMigrationSource` for OTP sending
+  and `MFAOTPCompletionCounterMigrationSource` for OTP completion at separate
+  permanently allocated successor versions. Populated evidence is unchanged;
+  completion uses the original child dimension, never the sending-only browser
+  dimension.
   This adapter path is not public MFA login; provider admission and workflow/
   transport composition must still be completed and tested.
 

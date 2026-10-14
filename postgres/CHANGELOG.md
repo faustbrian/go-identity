@@ -2,6 +2,44 @@
 
 ## Unreleased
 
+- Reconcile abandoned native secondary-OTP preparations without replaying a
+  code, browser cookie or generated credential. Preserve live leases and
+  original protected attempt charges; only claim/journal exclusion, validated
+  immutable declaration and absent atomic attachment permit audited abort.
+  Attached commands retain complete participant recovery, and ordinary kernel
+  receipt reads do not require optional preparation migrations.
+
+- Retain native OTP completion metadata alongside the immutable pre-generation
+  declaration and restore it under original code/browser intent. Matching
+  retries conserve the same attempt, counter preparation and child scope across
+  restart/key rotation; changed metadata conflicts before generation. Add
+  authorized OTP receipt/preparation reads and native joined counted-denial
+  attachment. This coordinator support does not itself expose OTP login or
+  deliver an authenticated session.
+
+- Lend original resolved-account/browser scope to the exact native counter
+  participant only through the registered anonymous MFA OTP-send owner. Other
+  profiles, caller-selected subjects and returned/foreign custody deny without
+  introducing a session, child-consumption plan or another journal.
+
+- Couple counted secondary-OTP denial to the registered MFA owner's original
+  shared budget in the existing transaction. Admit/lock MFA and protected risk
+  before native OTP comparison; debit MFA only after actual OTP denial. Correct
+  probes and failures roll back both owners; terminal replay invokes neither.
+  OTP MFA declarations without this native budget participant fail closed.
+
+- Retain audited terminal denial for a definitively rejected first OTP
+  enrollment attachment after acknowledged savepoint rollback. Preserve the
+  competing credential owner and keep failed acknowledgements unknown; losing
+  confirmations no longer strand output without a recoverable final plan.
+
+- Add scoped native original-input admission before OTP-backed MFA comparison,
+  debit and reservation, with a final original-validity fence. Retain one
+  consuming enrollment attempt in the existing preparation journal while
+  preserving original risk/lifecycle/audit intent and exact retry history.
+  Wrong-attempt denial and protected activation use the existing native OTP
+  phases; no new journal, general callback grant or session profile is added.
+
 - Persist audited terminal conflict receipts when first prepared capability
   attachment is definitively denied. Roll back provisional reservation writes
   without releasing another command's capability; uncertain commits remain

@@ -33,7 +33,7 @@ func (p lockoutProfile) persistIssuance(ctx context.Context, query challengeQuer
 	profile, checks, err := s.Policy.Bindings()
 	command, valid := ownershipID(string(binding.CommandID))
 	family, familyErr := p.sendIdentity(scope)
-	if err != nil || !valid || familyErr != nil || family != row.digest || scope.TenantID != row.tenant || scope.Purpose != row.purpose || binding.TenantID != identity.TenantID(scope.TenantID) || string(binding.UserID) != scope.SubjectID || binding.OperationID != "identity.otp.send" || binding.RecordID != scope.ChallengeID || s.State != otp.ChallengeIssued || s.Version != 1 || s.UsedAttempts != 0 || s.FailedAttempts != 0 || s.Checks != 0 || now.Before(s.IssuedAt) || !now.Before(s.ExpiresAt) || profile.TTL%time.Microsecond != 0 || profile.ResendInterval%time.Microsecond != 0 {
+	if err != nil || !valid || familyErr != nil || family != row.digest || scope.TenantID != row.tenant || scope.Purpose != row.purpose || !issuanceScopeMatches(binding, scope) || s.State != otp.ChallengeIssued || s.Version != 1 || s.UsedAttempts != 0 || s.FailedAttempts != 0 || s.Checks != 0 || now.Before(s.IssuedAt) || !now.Before(s.ExpiresAt) || profile.TTL%time.Microsecond != 0 || profile.ResendInterval%time.Microsecond != 0 {
 		return ErrInvalidCommand
 	}
 	digestScope, err := s.Continuation.DigestScope()
@@ -77,14 +77,14 @@ func (p lockoutProfile) persistIssuance(ctx context.Context, query challengeQuer
  tenant_id,challenge_id,subject_id,purpose,issue_command_id,issue_command_purpose,issue_fingerprint,
  digest_key_version,code_digest,scope_digest,policy_version,scope_generation,alphabet,code_length,ttl_us,resend_interval_us,
  maximum_sends,attempt_limit,replacement,checks_enabled,check_limit,lockout_us,issued_at,expires_at,state,version,send_family_digest)
- SELECT $1::text,$2::text,$3::text,$4::text,$5::bytea,'identity.otp.send',j.fingerprint,$6,$7,$8,$9::numeric,$10::numeric,$11,$12,$13,$14,
+ SELECT $1::text,$2::text,$3::text,$4::text,$5::bytea,$26::text,j.fingerprint,$6,$7,$8,$9::numeric,$10::numeric,$11,$12,$13,$14,
  $15,$16,$17,$18,$19,$20,$21,$22,'issued',1,$23
  FROM identity.identity_command_id_claims j JOIN identity.commands k USING(command_id,tenant_id,purpose)
- WHERE j.command_id=$5 AND j.tenant_id=$1 AND j.purpose='identity.otp.send' AND k.state='pending'
+ WHERE j.command_id=$5 AND j.tenant_id=$1 AND j.purpose=$26 AND k.state='pending'
  AND $21::timestamptz<=clock_timestamp() AND $22::timestamptz>clock_timestamp()
  AND EXISTS(SELECT 1 FROM `+row.schema+`.send_families f WHERE f.tenant_id=$1 AND f.scope_digest=$23
  AND f.version=$24::numeric AND f.sent_at[cardinality(f.sent_at)]=$25::timestamptz)`, row.tenant, scope.ChallengeID, scope.SubjectID, string(scope.Purpose), command,
-		int64(s.Digest.KeyVersion), s.Digest.Value[:], scopeDigest.Value[:], strconv.FormatUint(scope.PolicyVersion, 10), strconv.FormatUint(scope.Generation, 10), profile.Alphabet, int64(profile.Length), profile.TTL.Microseconds(), profile.ResendInterval.Microseconds(), int64(profile.MaximumSends), int64(profile.Attempts), replacement, checks.Enabled, int64(checks.MaximumChecks), checks.LockoutAfter.Microseconds(), s.IssuedAt, s.ExpiresAt, row.digest[:], strconv.FormatUint(row.version+1, 10), now)
+		int64(s.Digest.KeyVersion), s.Digest.Value[:], scopeDigest.Value[:], strconv.FormatUint(scope.PolicyVersion, 10), strconv.FormatUint(scope.Generation, 10), profile.Alphabet, int64(profile.Length), profile.TTL.Microseconds(), profile.ResendInterval.Microseconds(), int64(profile.MaximumSends), int64(profile.Attempts), replacement, checks.Enabled, int64(checks.MaximumChecks), checks.LockoutAfter.Microseconds(), s.IssuedAt, s.ExpiresAt, row.digest[:], strconv.FormatUint(row.version+1, 10), now, binding.OperationID)
 	if err != nil {
 		return challengeFailure(ctx)
 	}

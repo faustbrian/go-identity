@@ -24,6 +24,26 @@ func TestMFATransportRequiresExplicitNativeSelection(t *testing.T) {
 	}
 }
 
+func TestOTPTransportRequiresSelectedNativeOwners(t *testing.T) {
+	c := StoreConfiguration{HTTPMFA: &HTTPMFAConfiguration{PasswordOTPVerify: true}}
+	if h, err := composeMFAHTTP(c, nil, nil); err == nil || h != nil {
+		t.Fatal("missing native OTP graph exposed HTTP")
+	}
+	if err := (&storeState{}).composeFeatureStores(c, ReferenceDependencies{}); err == nil {
+		t.Fatal("selected OTP silently disappeared in recovery-only graph")
+	}
+}
+
+func TestOTPSendTransportRequiresSelectedNativeOwners(t *testing.T) {
+	c := StoreConfiguration{HTTPMFA: &HTTPMFAConfiguration{PasswordOTPSend: true}}
+	if h, err := composeMFAHTTP(c, nil, nil); err == nil || h != nil {
+		t.Fatal("missing native OTP graph exposed sending HTTP")
+	}
+	if err := (&storeState{}).composeFeatureStores(c, ReferenceDependencies{}); err == nil {
+		t.Fatal("selected sending silently disappeared in recovery-only graph")
+	}
+}
+
 func TestMFAListHTTPRequiresExplicitNativeSelection(t *testing.T) {
 	if owner, err := composeMFAListHTTP(StoreConfiguration{}, nil, nil, nil, nil); err != nil || owner != nil {
 		t.Fatal("unselected listing acquired HTTP", err)

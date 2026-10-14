@@ -1,5 +1,103 @@
 # Identity reference composition
 
+## Native password/secondary-OTP login
+
+Select `PasswordSigninConfiguration.OTP` with `PasswordOTPConfiguration` and
+explicitly include `"otp"` in `MFAChallengeConfig.AllowedMethods`. The graph
+supplies the actual password primary, child issuer, original browser, session,
+OTP codec/store and encrypted delivery owners. Call `FeatureSet.PasswordOTP()`
+for native sending, verification and original-command recovery. Its retained
+handle observes the same startup, tenant and shutdown admission as other
+features; selecting TOTP alone never enables this handle.
+
+`HTTPMFAConfiguration.PasswordOTPVerify` separately selects the native password-
+origin `POST /v1/mfa/otp-verify` route and closed OpenAPI contract. Supply the
+existing original-flow/device HTTP graph and verification-rate namespace/key;
+missing native OTP dependencies fail construction, including recovery-only
+graphs. It selects no OTP-send/enrollment route or TOTP fallback. The native
+`OtpVerificationRateSource` authenticates exact retained input before mutable
+state, preserves the original signed quota interval and exports zero metadata
+on conflict, unavailable authority or cancellation. Rate metadata cannot grant
+factor authority or issue a session. The selected email OTP consumer journey is
+covered through actual native enrollment/delivery/confirmation, opt-in HTTP
+send/verify, public session read, replay and factor-authority invalidation. This
+does not qualify all MFA profiles or the complete reference backend for release.
+
+Select `HTTPMFAConfiguration.PasswordOTPSend` independently for
+`POST /v1/mfa/otp-send`; it borrows the graph's native password/OTP owner and
+existing delivery-IP/destination limiter. It requires the same original
+flow/device graph but no verification-rate configuration when sending alone is
+selected. One unchanged initiating key maps through native request preparation;
+HTTP never invents a command or chooses a recipient. HTTP 202 reports queued
+metadata, not provider delivery or an authenticated session. Select verification
+separately for delivered-code completion. Enrollment remains a distinct public
+native workflow and is not implicitly exposed by either login route.
+
+Configure a consuming `otp.PurposeMFA` policy, selected template/locale,
+request-intent custody, original attempt-key version, protected counter/evidence
+keys, and stable send/completion configuration IDs. Retained password-flow keys
+must match the existing OTP store's browser-key versions/material. The OTP
+issuer reuses that store's lockout/digest key identities rather than creating
+another startup authority. Construction enables no HTTP route or enrollment.
+
+The public migration plan/apply graph contributes independent OTP factor/send,
+counter and session suffixes. Existing TOTP/recovery storage predecessors are
+installed under their original namespaces without enabling those APIs; shared
+MFA management allocations remain available. `FeatureSet.Initialize` registers
+the actual OTP issuer before admitting calls. Real bootstrap/retry and later
+TOTP selection are covered. The selected enrollment/login/HTTP acceptance below
+uses supported native services and selected handlers; it is not proof of the
+complete reference server's account/password/session operational baseline.
+
+`NewPasswordOTPLoginSendService` composes a concrete `password/postgres`
+`SigninService` selected with `MFAChallengeConfig.AllowedMethods = []string{"otp"}`
+and a concrete `otp/postgres.MFALoginIssuer`. It requires a confirmed OTP factor;
+pending enrollment, TOTP fallback and an unverified address cannot substitute.
+Construct its intent custody with `NewPasswordOTPLoginSendConfig`, then select
+the actual session/profile, cookie keys, issuer, coordinator, protected risk,
+counter owner, keyring and exact origins. Change `ConfigurationID` whenever
+borrowed policy callbacks or signing semantics change; retain original keys
+and configuration for recovery.
+
+Install the selected password-primary/continuation, browser, OTP/send-family/
+issuance, request preparation, protected counter and delivery histories, including
+`MFALoginSendCounterMigrationSource` and `OTPLoginSendMigrationSource`, and
+initialize the native OTP issuer. The continuation records its exact committed
+send/factor together with OTP/delivery effects, without renewing its scope,
+version or shared attempt budget. Verification restores that source rather than
+accepting a caller-selected recipient, factor or replacement challenge.
+`OtpSend` accepts the actual issued child and original browser cookie, an enrolled
+factor/channel and a request key. Its caller resource is `identity.mfa-continuation`
+with the child ID. `RecoverOtpSend` instead requires the original command,
+actor, anonymous browser flow and factor record, with an `identity.anonymous-flow`
+caller resource. Recovery requires no proof/cookie and discloses no code.
+
+The original OTP account/destination resend window spans enrollment and login:
+confirmation or a new child does not refill it. Queue commitment is not provider
+delivery or factor verification, and never issues a session. Run the actual
+delivery worker with the configured bounded email/SMS sender. This standalone
+native sending constructor alone does not select graph features or HTTP routes.
+`NewPasswordOTPLoginCompletionService` adds actual verification and atomic
+session/CSRF issuance. Unknown outcomes, matching replay and recovery withhold
+credentials; original password freshness, remember policy and factor authority
+remain bound. Use the selection above for graph-owned native composition;
+OTP login sending/verification transport is selected as described above;
+enrollment/confirmation use their supported native public APIs. No enrollment
+HTTP route is implied. Full reference-server and remaining MFA qualification
+are separate from this selected consumer proof.
+
+The cross-owner journey is in `integration/password`. With the documented
+disposable PostgreSQL fixture and candidate module wiring, run:
+
+```sh
+go test -race -tags=integration ./integration/password \
+  -run '^TestSecondaryOTPPasswordLoginHTTPIntegration$/native-mfa-primary/public-enrollment/public-otp-enrollment$' -count=1
+```
+
+It uses the real password/factor/OTP/session/transaction owners and PostgreSQL
+strict quotas. Only the declared external email sender captures generated codes;
+no fixture supplies a fake domain store or issues an invented authentication grant.
+
 ## Selected native and HTTP disable
 
 Set `MFAEnrollmentConfiguration.Disable` with `RecoveryPathEmail` and bounded

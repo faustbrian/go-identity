@@ -57,6 +57,23 @@ func (p *issuanceContributor) ValidateFeatureCommand(command identity.Command, p
 	if err != nil || delivery.Contributor != plan.Delivery.Contributor || len(plan.Delivery.Intents) != 1 || len(delivery.Intents) != 1 || delivery.Intents[0] != plan.Delivery.Intents[0] {
 		return ErrInvalidCommand
 	}
+	return p.validateIssuanceDelivery(command)
+}
+
+// This validates immutable challenge/delivery custody only; current authority
+// and the actual registered feature declaration are independently required.
+func (p *issuanceContributor) validateIssuanceDelivery(command identity.Command) error {
+	if p == nil || p.store == nil || p.prepared == (deliverypg.PreparedDelivery{}) {
+		return ErrInvalidCommand
+	}
+	spec, ok := command.Feature()
+	if !ok || len(spec.Fields) != 2 {
+		return ErrInvalidCommand
+	}
+	delivery, err := p.prepared.Plan()
+	if err != nil || len(delivery.Intents) != 1 || delivery.Contributor != p.delivery.Descriptor() {
+		return ErrInvalidCommand
+	}
 	ctx, stop := context.WithTimeout(context.Background(), p.store.codec.maximumDuration)
 	defer stop()
 	custody, _, err := p.store.authenticateIssuance(ctx, command)
@@ -91,7 +108,19 @@ func (p *issuanceContributor) applyIssuance(ctx context.Context, w kernel.Work, 
 		return bad(err)
 	}
 	spec, ok := command.Feature()
-	if !ok || binding != spec.Binding || registration.Operation != spec.Operation || spec.Operation != issuanceOperation(spec.Operation.SubjectRequirement) || transition.BeforeVersion != 0 || transition.AfterVersion != 1 || transition.EventType != "otp.sent.v1" {
+	op, opErr := boundIssuanceOperation(binding)
+	if !ok || opErr != nil || binding != spec.Binding || registration.Operation != spec.Operation || spec.Operation != op || transition.EventType != "otp.sent.v1" {
+		return bad(ErrInvalidCommand)
+	}
+	if op == mfaEnrollmentSendOperation() {
+		if registration.Contributor != (kernel.ContributorDescriptor{Owner: "identity/mfa/postgres", ContractID: "identity.mfa", Version: 1}) || transition.BeforeVersion == 0 || transition.BeforeVersion == ^uint64(0) || transition.AfterVersion != transition.BeforeVersion+1 {
+			return bad(ErrInvalidCommand)
+		}
+	} else if op == mfaLoginSendOperation() {
+		if registration.Contributor != (kernel.ContributorDescriptor{Owner: "identity/mfa/postgres", ContractID: "identity.mfa", Version: 1}) || transition.BeforeVersion != 0 || transition.AfterVersion != 1 {
+			return bad(ErrInvalidCommand)
+		}
+	} else if registration.Contributor != p.Descriptor() || transition.BeforeVersion != 0 || transition.AfterVersion != 1 {
 		return bad(ErrInvalidCommand)
 	}
 	custody, flow, err := p.store.authenticateIssuance(ctx, command)
@@ -122,7 +151,15 @@ func (p *issuanceContributor) applyIssuance(ctx context.Context, w kernel.Work, 
 		return bad(err)
 	}
 	if custody.recipient != nil {
-		if err := w.RequireRecipient(ctx, owner, *custody.recipient); err != nil {
+		selected := *custody.recipient
+		if op == mfaLoginSendOperation() {
+			// Preserve the sealed user-bound source unchanged. The kernel's
+			// anonymous command reader uses canonical lookup, but still fences
+			// every actual selected-user/identifier/credential epoch and ID.
+			// Original MFA correlation already binds this exact resolved user.
+			selected.Query.UserID = ""
+		}
+		if err := w.RequireRecipient(ctx, owner, selected); err != nil {
 			return bad(err)
 		}
 	}
@@ -160,7 +197,7 @@ func (p *issuanceContributor) applyIssuance(ctx context.Context, w kernel.Work, 
 	if err := p.delivery.Stage(ctx, w, p.prepared); err != nil {
 		return bad(err)
 	}
-	return identity.FeatureReceipt{Operation: spec.Operation, AfterVersion: 1}, nil
+	return identity.FeatureReceipt{Operation: spec.Operation, BeforeVersion: transition.BeforeVersion, AfterVersion: transition.AfterVersion}, nil
 }
 
 func issuanceCredential(a AttemptAuthority) kernel.CredentialAdmission {
@@ -193,7 +230,8 @@ func (p *issuanceContributor) recoverIssuance(ctx context.Context, w kernel.Reco
 		return kernel.RecoveryUnknown, ErrInvalidCommand
 	}
 	b, registration, _, err := w.FeatureScope(owner)
-	if err != nil || registration.Operation != issuanceOperation(registration.Operation.SubjectRequirement) {
+	op, opErr := boundIssuanceOperation(b)
+	if err != nil || opErr != nil || registration.Operation != op {
 		return kernel.RecoveryUnknown, ErrInvalidCommand
 	}
 	id, ok := ownershipID(string(b.CommandID))
@@ -203,7 +241,7 @@ func (p *issuanceContributor) recoverIssuance(ctx context.Context, w kernel.Reco
 	// Any retained effect blocks a negative vote. Challenge tombstones remain
 	// durable through key retirement; absent delivery payload is not rollback
 	// proof and no current flow, code or replacement may be reconstructed here.
-	rows, err := w.Query(ctx, `SELECT EXISTS(SELECT 1 FROM `+pgx.Identifier{p.store.schema}.Sanitize()+`.challenges WHERE tenant_id=$1 AND issue_command_id=$2 AND issue_command_purpose='identity.otp.send')`, string(b.TenantID), id)
+	rows, err := w.Query(ctx, `SELECT EXISTS(SELECT 1 FROM `+pgx.Identifier{p.store.schema}.Sanitize()+`.challenges WHERE tenant_id=$1 AND issue_command_id=$2 AND issue_command_purpose=$3)`, string(b.TenantID), id, b.OperationID)
 	if err != nil {
 		return kernel.RecoveryUnknown, err
 	}

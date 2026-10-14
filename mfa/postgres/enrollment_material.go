@@ -35,18 +35,46 @@ func generateEnrollmentMaterial(ctx context.Context, state *totpEnrollmentState,
 		return output, err
 	}
 	output = totpEnrollmentOutput{Schema: 1, RecoveryKeyVersion: state.config.RecoveryKeyVersion, Generation: generation, Meta: m, Envelope: wire}
+	err = generateEnrollmentRecovery(ctx, state, &output, count)
+	return output, err
+}
+
+// OTP enrollment creates no authenticator secret or challenge. Recovery bytes
+// use the same factor/set digest profile and existing encrypted preparation.
+func generateOTPEnrollmentMaterial(ctx context.Context, state *totpEnrollmentState, m PendingTOTPMetadata, otp *PendingOTPMetadata, generation uint64, count uint32) (output totpEnrollmentOutput, err error) {
+	if state == nil || state.method != "otp" || otp == nil || generation == 0 {
+		return output, invalidEnrollment()
+	}
+	output = totpEnrollmentOutput{Schema: 2, RecoveryKeyVersion: state.config.RecoveryKeyVersion, Generation: generation, Meta: m, OTP: otp}
+	err = generateEnrollmentRecovery(ctx, state, &output, count)
+	if err != nil {
+		clearEnrollmentOutput(&output)
+	}
+	return output, err
+}
+
+func generateEnrollmentRecovery(ctx context.Context, state *totpEnrollmentState, output *totpEnrollmentOutput, count uint32) error {
+	if ctx == nil || state == nil || output == nil || count == 0 || count > 64 {
+		return invalidEnrollment()
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	key := state.config.recoveryKey()
 	defer clear(key[:])
-	binding, err := enrollmentRecoveryBinding(m)
+	binding, err := enrollmentRecoveryBinding(output.Meta)
 	if err != nil {
-		return output, err
+		return err
 	}
 	defer clear(binding)
 	for range count {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		raw := make([]byte, 16)
 		if _, err := rand.Read(raw); err != nil {
 			clear(raw)
-			return output, identity.UnavailableError{}
+			return identity.UnavailableError{}
 		}
 		encoded := make([]byte, base64.RawURLEncoding.EncodedLen(len(raw)))
 		base64.RawURLEncoding.Encode(encoded, raw)
@@ -54,15 +82,15 @@ func generateEnrollmentMaterial(ctx context.Context, state *totpEnrollmentState,
 		code, err := auth.NewRecoveryCode(string(encoded))
 		if err != nil {
 			clear(encoded)
-			return output, identity.UnavailableError{}
+			return identity.UnavailableError{}
 		}
 		digest, err := code.KeyedDigest(key, binding)
 		if err != nil {
 			clear(encoded)
-			return output, identity.UnavailableError{}
+			return identity.UnavailableError{}
 		}
 		output.Codes = append(output.Codes, encoded)
 		output.Digests = append(output.Digests, digest)
 	}
-	return output, nil
+	return ctx.Err()
 }

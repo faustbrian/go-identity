@@ -5,6 +5,8 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
+	"reflect"
+	"slices"
 	"strconv"
 	"time"
 
@@ -18,22 +20,31 @@ import (
 )
 
 type totpURIPhase struct {
-	confirmation   *totpConfirmationState
-	confirmRequest mfa.TotpVerifyRequest
-	secret         primitive.Secret
-	state          *totpURIState
-	request        mfa.TotpUriRequest
-	pending        *totpURIPending
-	primary        TOTPURIPrimary
-	coordinator    *kernel.Coordinator
-	registry       *kernel.ContributorRegistry
-	command        identity.Command
-	plan           kernel.CommandPlan
-	counters       kernel.CommandCounterPlan
-	output         *totpURIOutput
-	risk           risk.ProtectedProviderAdmission
-	applied        bool
-	activated      bool
+	otpConfirmation    *otpEnrollmentConfirmationState
+	otpConfirmRequest  mfa.OtpVerifyRequest
+	nativeConfirmation OTPEnrollmentConfirmation
+	generatedOTP       identity.Command
+	otpPlan            *kernel.OTPAttemptPlan
+	send               *otpEnrollmentSendState
+	sendRequest        mfa.OtpSendRequest
+	sendInput          *otpEnrollmentSendInput
+	preparedSend       OTPEnrollmentPreparedSend
+	confirmation       *totpConfirmationState
+	confirmRequest     mfa.TotpVerifyRequest
+	secret             primitive.Secret
+	state              *totpURIState
+	request            mfa.TotpUriRequest
+	pending            *totpURIPending
+	primary            TOTPURIPrimary
+	coordinator        *kernel.Coordinator
+	registry           *kernel.ContributorRegistry
+	command            identity.Command
+	plan               kernel.CommandPlan
+	counters           kernel.CommandCounterPlan
+	output             *totpURIOutput
+	risk               risk.ProtectedProviderAdmission
+	applied            bool
+	activated          bool
 	// Invocation-local CAS observed under the predecessor lock. Ordinary TOTP
 	// replay advancement must not rewrite the immutable initiation receipt.
 	predecessorRowVersion uint64
@@ -43,12 +54,19 @@ type totpURIOutput struct {
 	Generation uint64
 	URI        string
 	Risk       enrollmentStoredRisk
+	OTP        []byte `json:",omitempty"`
 }
 
 func (*totpURIPhase) Descriptor() kernel.ContributorDescriptor {
 	return kernel.ContributorDescriptor{Owner: "identity/mfa/postgres", ContractID: "identity.mfa", Version: 1}
 }
 func (p *totpURIPhase) operation() identity.FeatureOperation {
+	if p.otpConfirmation != nil {
+		return otpConfirmationOperation()
+	}
+	if p.send != nil {
+		return otpSendOperation()
+	}
 	if p.confirmation != nil {
 		return confirmationOperation()
 	}
@@ -56,7 +74,10 @@ func (p *totpURIPhase) operation() identity.FeatureOperation {
 }
 func (p *totpURIPhase) lifecycle() kernel.LifecyclePlan {
 	event := "factor.uri-revealed.v1"
-	if p.confirmation != nil {
+	if p.send != nil {
+		event = "otp.sent.v1"
+	}
+	if p.confirmation != nil || p.otpConfirmation != nil {
 		event = "factor.enrolled.v1"
 	}
 	return kernel.LifecyclePlan{EventType: event, BeforeVersion: p.pending.RowVersion, AfterVersion: p.pending.RowVersion + 1}
@@ -95,6 +116,37 @@ func (p *totpURIPhase) buildCommand() error {
 		field("factor.uri.identifier-primary", identity.FeatureValue{Kind: identity.FeatureBool, Bool: p.pending.LabelPrimary}),
 		field("factor.uri.label", identity.FeatureValue{Kind: identity.FeatureBytes, Bytes: label[:]}),
 	}
+	if p.send != nil || p.otpConfirmation != nil {
+		if p.sendInput == nil || p.pending.Input.OTP == nil {
+			return invalidEnrollment()
+		}
+		// Audit/counter time belongs to this original send, not its older parent.
+		m.CreatedAt = p.sendInput.IssuedAt
+		om := p.pending.Input.OTP
+		fields = []identity.FeatureField{
+			field("factor.parent-command", identity.FeatureValue{Kind: identity.FeatureText, Text: string(p.pending.binding().CommandID)}),
+			field("factor.before", identity.FeatureValue{Kind: identity.FeatureUint64, Uint64: p.pending.RowVersion}),
+			field("factor.authority", identity.FeatureValue{Kind: identity.FeatureUint64, Uint64: p.pending.AuthorityVersion}),
+			field("factor.otp.input", identity.FeatureValue{Kind: identity.FeatureBytes, Bytes: digest[:]}),
+			field("factor.otp.configuration", identity.FeatureValue{Kind: identity.FeatureBytes, Bytes: p.state.identity[:]}),
+			field("factor.otp.origin", identity.FeatureValue{Kind: identity.FeatureText, Text: r.Origin}),
+			field("factor.otp.network", identity.FeatureValue{Kind: identity.FeatureText, Text: r.Network}),
+			field("factor.otp.channel", identity.FeatureValue{Kind: identity.FeatureText, Text: otpChannelText(om.Channel)}),
+			field("factor.otp.identifier", identity.FeatureValue{Kind: identity.FeatureText, Text: string(om.IdentifierID)}),
+			field("factor.otp.identifier-version", identity.FeatureValue{Kind: identity.FeatureUint64, Uint64: om.IdentifierVersion}),
+			field("factor.otp.verification-version", identity.FeatureValue{Kind: identity.FeatureUint64, Uint64: om.VerificationVersion}),
+			field("factor.otp.issued-at", identity.FeatureValue{Kind: identity.FeatureText, Text: m.CreatedAt.Format(time.RFC3339Nano)}),
+		}
+		if p.otpConfirmation != nil {
+			key := p.state.enrollment.config.intentKey()
+			digest, err := p.otpConfirmRequest.Code.CommandDigest(key, "mfa-otp-enrollment-confirm-v1\x00"+string(r.CommandID))
+			clear(key[:])
+			if err != nil {
+				return err
+			}
+			fields = append(fields, field("factor.confirm.code", identity.FeatureValue{Kind: identity.FeatureBytes, Bytes: digest[:]}), field("factor.confirm.send", identity.FeatureValue{Kind: identity.FeatureText, Text: string(p.sendInput.Binding.CommandID)}))
+		}
+	}
 	if p.confirmation != nil {
 		scope, err := enrollmentConfirmationScope(m, r.CommandID, p.confirmation.keyVersion)
 		if err != nil {
@@ -125,6 +177,12 @@ func (p *totpURIPhase) buildCommand() error {
 		return err
 	}
 	p.command, p.counters = c, counters
+	if p.send != nil && p.sendInput.Root != nil {
+		root, ok := c.Feature()
+		if !ok || !reflect.DeepEqual(root, *p.sendInput.Root) {
+			return invalidEnrollment()
+		}
+	}
 	builder, err := audit.NewBuilder(audit.BuilderConfig{})
 	if err != nil {
 		return err
@@ -141,13 +199,33 @@ func (p *totpURIPhase) buildCommand() error {
 	}
 	life := p.lifecycle()
 	declaration := kernel.CommandPlan{Contributors: p.registry.Descriptors(), SubjectType: "factor", Feature: &kernel.FeatureRegistration{Contributor: p.Descriptor(), Operation: p.operation()}, CommandCounters: &counters, Lifecycle: &life, Audits: []kernel.AuditPlan{{EventType: b.OperationID, SchemaVersion: 1, Required: true, RequiredRecordCount: 1, MaxRecordBytes: 16384, MaxAggregateBytes: 16384, RetentionPolicyVersion: 1, RetentionClass: "protected", BindingDigest: auditDigest}}}
+	if p.send != nil {
+		deliveryOwner := p.send.issuance.DeliveryContributor().Descriptor()
+		declaration.Contributors = slices.DeleteFunc(declaration.Contributors, func(d kernel.ContributorDescriptor) bool { return d == deliveryOwner })
+	}
+	if p.otpConfirmation != nil {
+		owner := p.otpConfirmation.owner.ConfirmationContributor().Descriptor()
+		declaration.Contributors = slices.DeleteFunc(declaration.Contributors, func(d kernel.ContributorDescriptor) bool { return d == owner })
+	}
 	p.plan, err = p.coordinator.PrepareFeaturePreparationPlan(c, declaration)
 	return err
 }
 
 func (p *totpURIPhase) ValidateFeatureCommand(c identity.Command, plan kernel.CommandPlan) error {
-	if p == nil || p.pending == nil || c != p.command || plan.Feature == nil || plan.Feature.Contributor != p.Descriptor() || plan.Feature.Operation != p.operation() || plan.SubjectType != "factor" || plan.Lifecycle == nil || *plan.Lifecycle != p.lifecycle() || plan.CommandCounters == nil || *plan.CommandCounters != p.counters || plan.Capability != nil || plan.OTP != nil || plan.RiskEvidence != nil || plan.Delivery != nil || plan.MFACompletion != nil || plan.MFAContinuation != nil || plan.CapabilityIssuance != nil || len(plan.Audits) != 1 {
+	if p == nil || p.pending == nil || c != p.command && c != p.generatedOTP || plan.Feature == nil || plan.Feature.Contributor != p.Descriptor() || plan.Feature.Operation != p.operation() || plan.SubjectType != "factor" || plan.Lifecycle == nil || *plan.Lifecycle != p.lifecycle() || plan.CommandCounters == nil || *plan.CommandCounters != p.counters || plan.Capability != nil || plan.RiskEvidence != nil || plan.MFACompletion != nil || plan.MFAContinuation != nil || plan.CapabilityIssuance != nil || len(plan.Audits) != 1 {
 		return invalidEnrollment()
+	}
+	if plan.OTP != nil && (p.otpConfirmation == nil || p.otpPlan == nil || *plan.OTP != *p.otpPlan || c != p.generatedOTP) || plan.OTP == nil && c != p.command {
+		return invalidEnrollment()
+	}
+	if plan.Delivery != nil {
+		if p.send == nil || p.preparedSend == nil {
+			return invalidEnrollment()
+		}
+		expected, err := p.preparedSend.Plan()
+		if err != nil || !reflect.DeepEqual(*plan.Delivery, expected) {
+			return invalidEnrollment()
+		}
 	}
 	a := plan.Audits[0]
 	if !a.Required || a.EventType != p.operation().OperationID || a.RequiredRecordCount != 1 || a.RetentionClass != "protected" {
@@ -156,15 +234,24 @@ func (p *totpURIPhase) ValidateFeatureCommand(c identity.Command, plan kernel.Co
 	return nil
 }
 func (p *totpURIPhase) ValidateFeaturePreparation(c identity.Command, plan kernel.CommandPlan) error {
+	if plan.Delivery != nil || plan.OTP != nil || c != p.command {
+		return invalidEnrollment()
+	}
 	return p.ValidateFeatureCommand(c, plan)
 }
 
 func (p *totpURIPhase) AdmitFeaturePreparation(ctx context.Context, w kernel.Work, c identity.Command) error {
-	if p == nil || p.pending == nil || c != p.command {
+	if p == nil || p.pending == nil || c != p.command && c != p.generatedOTP {
 		return invalidEnrollment()
 	}
 	if err := p.primary.Admit(ctx, w, p, c); err != nil {
 		return err
+	}
+	if p.send != nil {
+		return p.admitOTPSend(ctx, w)
+	}
+	if p.otpConfirmation != nil {
+		return p.admitOTPConfirmation(ctx, w, c)
 	}
 	if p.confirmation != nil {
 		return p.admitConfirmation(ctx, w)
@@ -326,6 +413,33 @@ func (a *totpURIAdmission) Generate(ctx context.Context, generation uint64) ([]b
 		return nil, err
 	}
 	p := a.phase
+	if p.otpConfirmation != nil {
+		generated, _, err := p.nativeConfirmation.Prepare(ctx, p.state.enrollment.pool, p.command, p.otpConfirmRequest.Code, p.otpConfirmation.key)
+		if err != nil {
+			return nil, err
+		}
+		metadata, ok := generated.Feature()
+		if !ok {
+			return nil, invalidEnrollment()
+		}
+		wire, err := json.Marshal(metadata)
+		if err != nil {
+			return nil, invalidEnrollment()
+		}
+		defer clear(wire)
+		return p.sealURIOutput(ctx, generation, totpURIOutput{Schema: 3, Generation: generation, Risk: enrollmentStoredRisk(a.risk.Prepared()), OTP: wire})
+	}
+	if p.send != nil {
+		if p.sendInput == nil {
+			return nil, invalidEnrollment()
+		}
+		output, err := p.send.issuance.GenerateEnrollmentSend(ctx, p.command, p.sendInput.NativeInput, generation)
+		if err != nil {
+			return nil, err
+		}
+		defer clear(output)
+		return p.sealURIOutput(ctx, generation, totpURIOutput{Schema: 2, Generation: generation, Risk: enrollmentStoredRisk(a.risk.Prepared()), OTP: output})
+	}
 	m := p.pending.metadata()
 	binding, err := totpEncryptionContext(m.TenantID, m.UserID, m.FactorID, 1, m.Profile)
 	if err != nil {
@@ -356,6 +470,10 @@ func (a *totpURIAdmission) Generate(ctx context.Context, generation uint64) ([]b
 		}
 	}
 	output := totpURIOutput{Schema: 1, Generation: generation, URI: uri.URI, Risk: enrollmentStoredRisk(a.risk.Prepared())}
+	return p.sealURIOutput(ctx, generation, output)
+}
+
+func (p *totpURIPhase) sealURIOutput(ctx context.Context, generation uint64, output totpURIOutput) ([]byte, error) {
 	plain, err := json.Marshal(output)
 	if err != nil {
 		return nil, invalidEnrollment()
@@ -386,7 +504,18 @@ func (p *totpURIPhase) RestoreFeaturePreparation(ctx context.Context, c identity
 	}
 	defer clear(plain)
 	var output totpURIOutput
-	if decodeEnrollmentJSON(plain, &output) != nil || output.Schema != 1 || output.Generation != generation || p.confirmation == nil && (len(output.URI) == 0 || len(output.URI) > 4096) || p.confirmation != nil && output.URI != "" {
+	if decodeEnrollmentJSON(plain, &output) != nil || output.Generation != generation {
+		return bad(invalidEnrollment())
+	}
+	if p.send != nil || p.otpConfirmation != nil {
+		schema := uint32(2)
+		if p.otpConfirmation != nil {
+			schema = 3
+		}
+		if output.Schema != schema || output.URI != "" || len(output.OTP) == 0 || p.sendInput == nil {
+			return bad(invalidEnrollment())
+		}
+	} else if output.Schema != 1 || len(output.OTP) != 0 || p.confirmation == nil && (len(output.URI) == 0 || len(output.URI) > 4096) || p.confirmation != nil && output.URI != "" {
 		return bad(invalidEnrollment())
 	}
 	scope := risk.Context{Tenant: string(p.request.TenantID), Operation: risk.Action(p.operation().OperationID), Attempt: string(p.request.CommandID)}
@@ -395,6 +524,37 @@ func (p *totpURIPhase) RestoreFeaturePreparation(ctx context.Context, c identity
 		return bad(err)
 	}
 	p.output, p.risk = &output, admission
+	if p.otpConfirmation != nil {
+		var metadata identity.FeatureCommandSpec
+		if decodeEnrollmentJSON(output.OTP, &metadata) != nil {
+			return bad(invalidEnrollment())
+		}
+		generated, attempt, err := p.nativeConfirmation.RestorePrepared(ctx, c, p.otpConfirmRequest.Code, metadata)
+		if err != nil {
+			return bad(err)
+		}
+		p.generatedOTP, p.otpPlan = generated, &attempt
+		plan := p.plan
+		plan.Digest = [32]byte{}
+		plan.Contributors = append(slices.Clone(plan.Contributors), p.nativeConfirmation.Contributor().Descriptor())
+		plan.OTP = &attempt
+		return generated, plan, nil
+	}
+	if p.send != nil {
+		p.preparedSend, err = p.send.issuance.RestoreEnrollmentSend(ctx, c, p.sendInput.NativeInput, generation, output.OTP)
+		if err != nil {
+			return bad(err)
+		}
+		delivery, err := p.preparedSend.Plan()
+		if err != nil {
+			return bad(err)
+		}
+		plan := p.plan
+		plan.Digest = [32]byte{}
+		plan.Contributors = append(slices.Clone(plan.Contributors), delivery.Contributor)
+		plan.Delivery = &delivery
+		return p.command, plan, nil
+	}
 	if p.confirmation != nil {
 		if err := p.restoreConfirmationSecret(ctx); err != nil {
 			return bad(err)
@@ -414,8 +574,11 @@ func (p *totpURIPhase) RestoreFeatureAdmission(ctx context.Context, c identity.C
 }
 
 func (p *totpURIPhase) ApplyFeature(ctx context.Context, w kernel.Work, c identity.Command) (identity.FeatureReceipt, error) {
-	if p == nil || p.output == nil || c != p.command {
+	if p == nil || p.output == nil || c != p.command && c != p.generatedOTP {
 		return identity.FeatureReceipt{}, invalidEnrollment()
+	}
+	if p.otpConfirmation != nil {
+		return p.applyOTPConfirmation(ctx, w, c)
 	}
 	if err := w.RequireFeatureCommand(ctx, p, c); err != nil {
 		return identity.FeatureReceipt{}, err
@@ -425,6 +588,9 @@ func (p *totpURIPhase) ApplyFeature(ctx context.Context, w kernel.Work, c identi
 	}
 	if err := p.CheckFeatureCommit(ctx, w, c); err != nil {
 		return identity.FeatureReceipt{}, err
+	}
+	if p.send != nil {
+		return p.applyOTPSend(ctx, w, c)
 	}
 	if p.confirmation != nil {
 		return p.applyConfirmation(ctx, w, c)
@@ -444,7 +610,7 @@ func (p *totpURIPhase) ApplyFeature(ctx context.Context, w kernel.Work, c identi
 	return identity.FeatureReceipt{Operation: uriOperation(), BeforeVersion: p.pending.RowVersion, AfterVersion: p.pending.RowVersion + 1}, nil
 }
 func (p *totpURIPhase) CheckFeatureCommit(ctx context.Context, w kernel.Work, c identity.Command) error {
-	if p == nil || p.output == nil || c != p.command {
+	if p == nil || p.output == nil || c != p.command && c != p.generatedOTP {
 		return invalidEnrollment()
 	}
 	if p.activated && p.pending.Replacement != nil {
@@ -473,9 +639,25 @@ func (p *totpURIPhase) CheckFeatureCommit(ctx context.Context, w kernel.Work, c 
 	if !now.Before(until) || !now.Before(p.pending.metadata().ExpiresAt) {
 		return identity.ForbiddenError{}
 	}
+	if p.send != nil {
+		if err := p.checkOTPSendState(ctx, w, p.applied); err != nil {
+			return err
+		}
+	}
+	if p.otpConfirmation != nil {
+		if err := p.checkOTPConfirmationState(ctx, w, p.applied); err != nil {
+			return err
+		}
+	}
 	return p.risk.CheckAt(ctx, now)
 }
 func (p *totpURIPhase) RecoverParticipant(ctx context.Context, w kernel.RecoveryWork) (kernel.RecoveryStatus, error) {
+	if p.otpConfirmation != nil {
+		return p.recoverOTPConfirmation(ctx, w)
+	}
+	if p.send != nil {
+		return p.send.issuance.RecoverEnrollmentSend(ctx, w, p)
+	}
 	if p.confirmation != nil {
 		return p.recoverConfirmation(ctx, w)
 	}
@@ -513,7 +695,13 @@ func (p *totpURIPhase) destroy() {
 		p.pending = nil
 	}
 	if p.output != nil {
+		clear(p.output.OTP)
 		p.output.URI = ""
 		p.output = nil
 	}
+	if p.sendInput != nil {
+		clear(p.sendInput.NativeInput)
+		p.sendInput = nil
+	}
+	p.preparedSend = nil
 }

@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Support original-continuation secondary OTP completion under the protected
+  anonymous MFA counter policy, preserving limits, original freshness and
+  child/subject isolation without inventing an authenticated session.
+
+- Prepare anonymous MFA OTP login-send counters against the original browser
+  flow and resolved account, without inventing a session or allowing newly
+  issued children to reset the browser budget. Existing limits and absolute
+  evidence expiry remain unchanged; native send composition is still pending.
+
 - Admit original-continuation recovery-code completion through the same protected
   anonymous MFA counter policy as TOTP, without synthesizing a session.
 

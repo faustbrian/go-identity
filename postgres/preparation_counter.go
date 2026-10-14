@@ -14,7 +14,7 @@ import (
 // charge. It is distinct from the generated final plan, whose audit/delivery
 // custody can depend on output. Retained claim keys, not the current key, bind
 // charge provenance across process restart and key rotation.
-func (c *Coordinator) freezePreparationCounters(ctx context.Context, tx pgx.Tx, q claimRequest, p *admittedKernelPlan) (*admittedKernelPlan, error) {
+func (c *Coordinator) freezePreparationCounters(ctx context.Context, tx pgx.Tx, q claimRequest, p *admittedKernelPlan, command identity.Command) (*admittedKernelPlan, error) {
 	id, _ := base64.RawURLEncoding.DecodeString(string(q.commandID))
 	var fingerprint, stored []byte
 	if err := tx.QueryRow(ctx, `SELECT c.fingerprint,j.preparation_declaration FROM identity.identity_command_id_claims c JOIN identity.commands j USING(command_id) WHERE c.command_id=$1 AND j.tenant_id=$2 AND j.purpose=$3 FOR UPDATE OF j`, id, string(q.tenant), q.purpose).Scan(&fingerprint, &stored); err != nil {
@@ -30,6 +30,16 @@ func (c *Coordinator) freezePreparationCounters(ctx context.Context, tx pgx.Tx, 
 		return nil, invalidPreparation()
 	}
 	declaration.Digest = sha256.Sum256(wire)
+	if declaration.MFACompletion != nil && declaration.OTP != nil && validMFACompletionPlan(p.binding, declaration) {
+		spec, ok := command.Feature()
+		if !ok {
+			return nil, invalidPreparation()
+		}
+		wire, err = encodeMFAOTPPreparation(spec, retained, declaration)
+		if err != nil {
+			return nil, err
+		}
+	}
 	if stored == nil {
 		tag, err := tx.Exec(ctx, `UPDATE identity.commands SET preparation_declaration=$4 WHERE command_id=$1 AND tenant_id=$2 AND purpose=$3 AND preparation_profile IN (3,4) AND preparation_declaration IS NULL AND preparation_started_generation IS NULL`, id, string(q.tenant), q.purpose, wire)
 		if err != nil {

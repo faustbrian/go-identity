@@ -50,6 +50,12 @@ func (r *Repository) CheckCommandCounters(ctx context.Context, w identitypostgre
 			return deny()
 		}
 	}
+	if native.scope.Operation == "identity.mfa.otp-send" && native.capabilityID != "" {
+		user, browser, scopeErr := w.MFALoginSendScope(r)
+		if scopeErr != nil || native.subject.User != string(user) || native.capabilityID != browser {
+			return deny()
+		}
+	}
 	raw, e := base64.RawURLEncoding.DecodeString(string(b.Command.CommandID))
 	if e != nil || len(raw) != 16 {
 		return deny()

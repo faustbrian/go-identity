@@ -560,4 +560,5 @@ func testNativeProtectedCounters(t *testing.T, ctx context.Context, pool *databa
 			t.Fatal("expired preparation left a charge", err)
 		}
 	})
+	t.Run("anonymous-mfa-login-send-counters", func(t *testing.T) { testNativeMFALoginSendCounters(t, ctx, pool, native) })
 }

@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+- Let secondary OTP send's native request-key owner assign the command identity;
+  return it with the historical result instead of requiring a competing
+  caller-selected command. Sending still proves no factor or login authority.
+
+- Require explicit identifier/channel selection for OTP enrollment and separate
+  authenticated pending-enrollment send/confirmation from partial-login child
+  inputs. Other factor methods forbid that selection; existing TOTP inputs stay
+  unchanged. These core contracts do not yet provide a native OTP workflow.
+
+- Define bounded secondary-OTP send/verify inputs and separate historical
+  delivery/session results. Requests retain original MFA/browser custody and
+  expose no recipient, remember-policy or authority override. These core ports
+  do not yet provide a durable OTP-factor service or HTTP/reference workflow.
+
 - Reject replacement versions without room for both initiation and retirement;
   preserve the existing one-increment rename/removal bounds.
 

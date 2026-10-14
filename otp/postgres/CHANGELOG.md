@@ -2,6 +2,59 @@
 
 ## Unreleased
 
+- Restore the actual original MFA login issuance into an opaque consuming
+  completion owner. Preparation and restart retain original challenge, purpose,
+  attempt/version, code binding, browser and authority without comparing,
+  reserving, generating or renewing. Real comparison/finalization still belongs
+  to this contributor in the native MFA service's protected transaction.
+
+- Cap retained MFA login challenges to the shorter of the original child
+  deadline and native OTP lifetime. Preserve original issuance time across
+  restoration; neither callback policy nor retry can restart that lifetime.
+
+- Retain code/bearer-free MFA login-send input using the existing native codec
+  and complete issuer configuration, then restore original generation/delivery
+  after restart without selecting a new recipient or renewing timestamps.
+  Input belongs only inside the native owner's encrypted request preparation;
+  it grants no current child/factor/risk admission. Public login send is pending.
+
+- Add a distinct native MFA partial-login OTP issuer using the original
+  consumed browser/primary, verified recipient and bounded child lifetime.
+  Reuse existing code generation, send limits, encrypted delivery and original
+  journal output; restore cannot change parent, browser, generation, recipient,
+  policy or authority. No authenticated-session dependency, child consumption
+  or session issuance is introduced. Public login sending remains under development.
+
+- Admit the explicit MFA consuming-attempt custody arm with original browser
+  possession and consumed-primary lineage. Keep it disjoint from pending
+  pre-auth: OTP reservation, release and finalization never mutate that primary
+  again. Authenticate its authority-wrapped record and preserve absolute expiry.
+  This is not a complete OTP MFA login/session service.
+
+- Classify a locked challenge's changed generation or reserved/terminal state
+  as a definitive conflict only for native MFA enrollment confirmation. Preserve
+  ordinary OTP error profiles and never release another command's reservation.
+
+- Restore actual native MFA enrollment issuance into a narrow consuming
+  confirmation port. Preserve original root, challenge, attempt/version,
+  recipient and primary custody; reject changed static intent or selected keys.
+  MFA keeps the preparation/activation owner and OTP retains real comparison,
+  attempt budget, reservation, finalization and recovery. Install the existing
+  consuming-history suffix before selecting confirmation.
+
+- Supply an opaque native MFA enrollment issuer to the MFA-owned coordinator,
+  reusing OTP generation, digest/shared-send/lockout storage and encrypted
+  delivery. Keep enrollment factor and server-issued challenge identities
+  distinct, preserve original generation/parent and bind retained configuration
+  to actual store, keys, session profile and policy. Startup key registration
+  shares ordinary Send's existing initializer; no second journal is introduced.
+
+- Preserve explicit MFA-continuation custody in a versioned, code-free attempt
+  record without treating the consumed primary browser flow as pending or as
+  a session. Existing record profiles retain their encoding. This adds bounded
+  serialization only; native MFA enrollment, admission and atomic completion
+  are not yet connected.
+
 - Resolve original sign-in identifiers through authenticated public Send custody
   and current pre-auth, policy and recipient authority. Code-free discovery
   makes no attempt debit, command or session and grants no login clearance;

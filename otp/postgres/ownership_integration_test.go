@@ -96,7 +96,7 @@ func TestNativeReservationAndAtomicFinalization(t *testing.T) {
 			t.Fatal(err)
 		}
 		defer tx.Rollback(context.Background())
-		owned, err := loadReservation(ctx, sqlChallengeQuery(tx), "otp_store", b, 1)
+		owned, err := loadReservation(ctx, sqlChallengeQuery(tx), "otp_store", b, 1, string(b.Command.UserID))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -134,7 +134,7 @@ func TestNativeReservationAndAtomicFinalization(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer tx.Rollback(context.Background())
-	if _, err := loadReservation(ctx, sqlChallengeQuery(tx), "otp_store", b, 1); !errors.Is(err, ErrInvalidCommand) {
+	if _, err := loadReservation(ctx, sqlChallengeQuery(tx), "otp_store", b, 1, string(b.Command.UserID)); !errors.Is(err, ErrInvalidCommand) {
 		t.Fatal("terminal code regained ownership")
 	}
 	if err := tx.Rollback(ctx); err != nil {
@@ -171,7 +171,7 @@ func TestNativeReservationTakeoverPreservesOriginalCustody(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer tx.Rollback(context.Background())
-	row, err := loadReservation(ctx, sqlChallengeQuery(tx), "otp_store", next, b.Generation)
+	row, err := loadReservation(ctx, sqlChallengeQuery(tx), "otp_store", next, b.Generation, string(next.Command.UserID))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -195,11 +195,11 @@ func TestNativeReservationTakeoverPreservesOriginalCustody(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer tx.Rollback(context.Background())
-	if _, err := loadReservation(ctx, sqlChallengeQuery(tx), "otp_store", b, b.Generation); !errors.Is(err, ErrInvalidCommand) {
+	if _, err := loadReservation(ctx, sqlChallengeQuery(tx), "otp_store", b, b.Generation, string(b.Command.UserID)); !errors.Is(err, ErrInvalidCommand) {
 		t.Fatal("stale generation retained ownership", err)
 	}
 	next.PreviousGeneration = 0
-	row, err = loadReservation(ctx, sqlChallengeQuery(tx), "otp_store", next, next.Generation)
+	row, err = loadReservation(ctx, sqlChallengeQuery(tx), "otp_store", next, next.Generation, string(next.Command.UserID))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -247,7 +247,7 @@ func TestNativeReservationReleaseAndOwnershipIsolation(t *testing.T) {
 			for i, change := range changes {
 				foreign := b
 				change(&foreign)
-				if _, err := loadReservation(ctx, sqlChallengeQuery(tx), "otp_store", foreign, 1); !errors.Is(err, ErrInvalidCommand) {
+				if _, err := loadReservation(ctx, sqlChallengeQuery(tx), "otp_store", foreign, 1, string(foreign.Command.UserID)); !errors.Is(err, ErrInvalidCommand) {
 					t.Fatalf("ownership substitution %d selected reservation: %v", i, err)
 				}
 			}
@@ -256,7 +256,7 @@ func TestNativeReservationReleaseAndOwnershipIsolation(t *testing.T) {
 			if recover {
 				release.Generation = 2
 			}
-			row, err := loadReservation(ctx, sqlChallengeQuery(tx), "otp_store", release, 1)
+			row, err := loadReservation(ctx, sqlChallengeQuery(tx), "otp_store", release, 1, string(release.Command.UserID))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -287,7 +287,7 @@ func TestNativeReservationReleaseAndOwnershipIsolation(t *testing.T) {
 				t.Fatal(err)
 			}
 			defer tx.Rollback(context.Background())
-			if _, err := loadReservation(ctx, sqlChallengeQuery(tx), "otp_store", release, release.Generation); !errors.Is(err, ErrInvalidCommand) {
+			if _, err := loadReservation(ctx, sqlChallengeQuery(tx), "otp_store", release, release.Generation, string(release.Command.UserID)); !errors.Is(err, ErrInvalidCommand) {
 				t.Fatal("released challenge regained ownership", err)
 			}
 		})
@@ -312,7 +312,7 @@ func TestNativeReservationExpiryNeverAuthorizesRelease(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer tx.Rollback(context.Background())
-	row, err := loadReservation(ctx, sqlChallengeQuery(tx), "otp_store", b, 1)
+	row, err := loadReservation(ctx, sqlChallengeQuery(tx), "otp_store", b, 1, string(b.Command.UserID))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -354,7 +354,7 @@ func TestNativeReservationExpiryNeverAuthorizesRelease(t *testing.T) {
 	defer tx.Rollback(context.Background())
 	release := b
 	release.PreviousGeneration = 1
-	row, err = loadReservation(ctx, sqlChallengeQuery(tx), "otp_store", release, 1)
+	row, err = loadReservation(ctx, sqlChallengeQuery(tx), "otp_store", release, 1, string(release.Command.UserID))
 	if err != nil {
 		t.Fatal(err)
 	}

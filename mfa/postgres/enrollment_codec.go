@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"io"
 	"reflect"
 	"strconv"
@@ -13,10 +14,12 @@ import (
 
 	"github.com/faustbrian/go-authorization"
 	identity "github.com/faustbrian/go-identity"
+	"github.com/faustbrian/go-identity/delivery"
 	"github.com/faustbrian/go-identity/mfa"
 	kernel "github.com/faustbrian/go-identity/postgres"
 	"github.com/faustbrian/go-identity/risk"
 	envelope "github.com/faustbrian/go-secret-envelope"
+	"github.com/jackc/pgx/v5"
 )
 
 const maximumEnrollmentCustody = 131072
@@ -30,6 +33,12 @@ type totpEnrollmentInput struct {
 	Meta    PendingTOTPMetadata
 	Primary []byte
 	Intent  []identity.FeatureField
+	OTP     *PendingOTPMetadata `json:",omitempty"`
+}
+
+type otpEnrollmentSelection struct {
+	Channel      delivery.Channel
+	IdentifierID identity.IdentifierID
 }
 type enrollmentStoredRisk risk.PreparedProtectedProviderAdmission
 type totpEnrollmentOutput struct {
@@ -40,6 +49,7 @@ type totpEnrollmentOutput struct {
 	Codes                      [][]byte
 	Digests                    [][32]byte
 	Risk                       enrollmentStoredRisk
+	OTP                        *PendingOTPMetadata `json:",omitempty"`
 }
 
 func (p *totpEnrollmentPhase) inputAAD(k kernel.RequestKeyPreparationBinding) (envelope.Context, error) {
@@ -190,6 +200,13 @@ func (p *totpEnrollmentPhase) PrepareRequestKey(ctx context.Context, k kernel.Re
 	op := enrollmentOperation()
 	b := identity.CommandBinding{CommandID: k.Admission.CommandID, TenantID: r.TenantID, UserID: session.UserID, ActorID: k.Scope.ActorID, ActorKind: k.Scope.ActorKind, OperationID: op.OperationID, SchemaID: op.SchemaID, SchemaVersion: op.SchemaVersion, PolicyID: p.state.config.PolicyID, PolicyVersion: p.state.config.Coordinator.AdmissionPolicy.PolicyVersion, RecordID: string(id), CorrelationID: string(k.Admission.CommandID)}
 	input := totpEnrollmentInput{Schema: 1, Binding: b, Meta: PendingTOTPMetadata{TenantID: b.TenantID, UserID: b.UserID, FactorID: b.RecordID, AuthorityVersion: authority, Profile: p.state.config.Profile, CreatedAt: at.UTC(), ExpiresAt: at.UTC().Add(p.state.config.TTL)}, Primary: snapshot, Intent: fields}
+	if p.state.method == "otp" {
+		metadata, err := p.state.originalOTPRecipient(ctx, input.Meta, r.OTP)
+		if err != nil {
+			return nil, err
+		}
+		input.Schema, input.OTP = 2, &metadata
+	}
 	plain, err := json.Marshal(input)
 	if err != nil {
 		return nil, invalidEnrollment()
@@ -217,7 +234,7 @@ func (p *totpEnrollmentPhase) restoreInput(ctx context.Context, k kernel.Request
 	intent, err := p.state.requestIntent(r)
 	fields, ok := intent.Fields()
 	op, b, m := enrollmentOperation(), input.Binding, input.Meta
-	if err != nil || !ok || !reflect.DeepEqual(fields, input.Intent) || input.Schema != 1 || b.CommandID != k.Admission.CommandID || b.TenantID != k.Scope.TenantID || b.ActorID != k.Scope.ActorID || b.ActorKind != authorization.SubjectUser || b.UserID != identity.UserID(k.Scope.ActorID) || b.OperationID != op.OperationID || b.SchemaID != op.SchemaID || b.SchemaVersion != op.SchemaVersion || b.PolicyID != p.state.config.PolicyID || b.PolicyVersion != p.state.config.Coordinator.AdmissionPolicy.PolicyVersion || b.CorrelationID != string(b.CommandID) || m.TenantID != b.TenantID || m.UserID != b.UserID || m.FactorID != b.RecordID || m.AuthorityVersion == 0 || m.AuthorityVersion == ^uint64(0) || m.Profile != p.state.config.Profile || m.CreatedAt.IsZero() || m.CreatedAt.Nanosecond()%1000 != 0 || !m.ExpiresAt.Equal(m.CreatedAt.Add(p.state.config.TTL)) {
+	if err != nil || !ok || !reflect.DeepEqual(fields, input.Intent) || !p.state.validEnrollmentMethod(input.Schema, m, input.OTP, r.OTP) || b.CommandID != k.Admission.CommandID || b.TenantID != k.Scope.TenantID || b.ActorID != k.Scope.ActorID || b.ActorKind != authorization.SubjectUser || b.UserID != identity.UserID(k.Scope.ActorID) || b.OperationID != op.OperationID || b.SchemaID != op.SchemaID || b.SchemaVersion != op.SchemaVersion || b.PolicyID != p.state.config.PolicyID || b.PolicyVersion != p.state.config.Coordinator.AdmissionPolicy.PolicyVersion || b.CorrelationID != string(b.CommandID) || m.TenantID != b.TenantID || m.UserID != b.UserID || m.FactorID != b.RecordID || m.AuthorityVersion == 0 || m.AuthorityVersion == ^uint64(0) || m.Profile != p.state.config.Profile || m.CreatedAt.IsZero() || m.CreatedAt.Nanosecond()%1000 != 0 || !m.ExpiresAt.Equal(m.CreatedAt.Add(p.state.config.TTL)) {
 		clear(input.Primary)
 		return identity.ForbiddenError{}
 	}
@@ -228,6 +245,52 @@ func (p *totpEnrollmentPhase) restoreInput(ctx context.Context, k kernel.Request
 	}
 	p.input, p.primary = &input, primary
 	return nil
+}
+
+func (s *totpEnrollmentState) validEnrollmentMethod(schema uint32, common PendingTOTPMetadata, otp *PendingOTPMetadata, selection *mfa.OTPEnrollmentSelection) bool {
+	if s.method != "otp" {
+		return schema == 1 && otp == nil && selection == nil
+	}
+	if schema != 2 || otp == nil || selection == nil || otp.Channel != selection.Channel || otp.IdentifierID != selection.IdentifierID ||
+		otp.TenantID != common.TenantID || otp.UserID != common.UserID || otp.FactorID != common.FactorID || otp.AuthorityVersion != common.AuthorityVersion ||
+		!otp.CreatedAt.Equal(common.CreatedAt) || !otp.ExpiresAt.Equal(common.ExpiresAt) || common.Profile != (mfa.TOTPProfile{}) {
+		return false
+	}
+	_, err := NewPreparedOTPEnrollment(*otp)
+	return err == nil
+}
+
+// Only the native directory supplies these original versions. This observation
+// grants no persistence; protected admission locks/rechecks the exact row.
+func (s *totpEnrollmentState) originalOTPRecipient(ctx context.Context, common PendingTOTPMetadata, selection *mfa.OTPEnrollmentSelection) (PendingOTPMetadata, error) {
+	if selection == nil || selection.Validate() != nil {
+		return PendingOTPMetadata{}, invalidEnrollment()
+	}
+	var kind, version, verification string
+	var verified bool
+	var state int16
+	var at *time.Time
+	err := s.pool.Raw().QueryRow(ctx, `SELECT kind,verified,verification_state,version::text,verification_version::text,verified_at FROM identity.identifiers WHERE tenant_id=$1 AND user_id=$2 AND identifier_id=$3`, string(common.TenantID), string(common.UserID), string(selection.IdentifierID)).Scan(&kind, &verified, &state, &version, &verification, &at)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return PendingOTPMetadata{}, identity.ForbiddenError{}
+		}
+		return PendingOTPMetadata{}, enrollmentReadError(ctx)
+	}
+	if !verified || state != int16(identity.VerificationVerified) || at == nil || at.After(common.CreatedAt) || selection.Channel == delivery.ChannelEmail && kind != "email" || selection.Channel == delivery.ChannelSMS && kind != "phone" {
+		return PendingOTPMetadata{}, identity.ForbiddenError{}
+	}
+	iv, e1 := strconv.ParseUint(version, 10, 64)
+	vv, e2 := strconv.ParseUint(verification, 10, 64)
+	if e1 != nil || e2 != nil {
+		return PendingOTPMetadata{}, identity.UnavailableError{}
+	}
+	m := PendingOTPMetadata{TenantID: common.TenantID, UserID: common.UserID, FactorID: common.FactorID, AuthorityVersion: common.AuthorityVersion, CreatedAt: common.CreatedAt, ExpiresAt: common.ExpiresAt, IdentifierID: selection.IdentifierID, Channel: selection.Channel, IdentifierVersion: iv, VerificationVersion: vv}
+	p, err := NewPreparedOTPEnrollment(m)
+	if err != nil {
+		return PendingOTPMetadata{}, err
+	}
+	return p.Metadata()
 }
 
 func enrollmentReadError(ctx context.Context) error {

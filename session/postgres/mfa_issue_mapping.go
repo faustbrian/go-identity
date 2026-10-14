@@ -26,6 +26,13 @@ func MFARecoveryCompletionSessionFields(record session.Session) ([]identity.Feat
 	return mfaCompletionSessionFields(record, "recovery-code")
 }
 
+// MFAOTPCompletionSessionFields freezes complete original-primary/OTP
+// provenance, original remember and optional CSRF without code or bearer.
+// It performs no authentication, consumption, persistence or renewal.
+func MFAOTPCompletionSessionFields(record session.Session) ([]identity.FeatureField, error) {
+	return mfaCompletionSessionFields(record, "otp")
+}
+
 func mfaCompletionSessionFields(record session.Session, method string) ([]identity.FeatureField, error) {
 	if !mfaCompletionRecord(record, method) {
 		return nil, session.ErrInvalidSessionCommand
@@ -57,6 +64,13 @@ func MFATOTPCompletionSession(command identity.Command) (session.Session, error)
 // actual recorded recovery burn in the same transaction before persistence.
 func MFARecoveryCompletionSession(command identity.Command) (session.Session, error) {
 	return mfaCompletionSession(command, mfaRecoveryCompletionSessionOperation(), "recovery-code")
+}
+
+// MFAOTPCompletionSession reconstructs only the exhaustive anonymous OTP
+// completion projection. Native same-Work OTP/child/factor completion remains
+// mandatory; metadata alone cannot authorize a session. Mixed methods deny.
+func MFAOTPCompletionSession(command identity.Command) (session.Session, error) {
+	return mfaCompletionSession(command, mfaOTPCompletionSessionOperation(), "otp")
 }
 
 func mfaCompletionSession(command identity.Command, operation identity.FeatureOperation, method string) (session.Session, error) {
@@ -105,6 +119,10 @@ func mfaCompletionSession(command identity.Command, operation identity.FeatureOp
 
 func mfaTOTPCompletionSessionOperation() identity.FeatureOperation {
 	return identity.FeatureOperation{Owner: "identity/mfa", OperationID: "identity.mfa.totp-verify", SchemaID: "mfa-totp-verify", SchemaVersion: 1, RecordRequirement: identity.FeatureRecordOmitted, SubjectRequirement: identity.FeatureSubjectAnonymousFlow}
+}
+
+func mfaOTPCompletionSessionOperation() identity.FeatureOperation {
+	return identity.FeatureOperation{Owner: "identity/mfa", OperationID: "identity.mfa.otp-verify", SchemaID: "mfa-otp-verify", SchemaVersion: 1, RecordRequirement: identity.FeatureRecordOmitted, SubjectRequirement: identity.FeatureSubjectAnonymousFlow}
 }
 
 func mfaRecoveryCompletionSessionOperation() identity.FeatureOperation {

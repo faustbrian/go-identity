@@ -37,6 +37,7 @@ type totpEnrollmentPhase struct {
 type totpEnrollmentRestored struct {
 	metadata PendingTOTPMetadata
 	pending  PreparedTOTPEnrollment
+	otp      PreparedOTPEnrollment
 	stored   totpEnrollmentOutput
 	risk     risk.ProtectedProviderAdmission
 }
@@ -55,6 +56,16 @@ func (p *totpEnrollmentPhase) staticFields() ([]identity.FeatureField, error) {
 	m := p.input.Meta
 	metadata := PreparedTOTPEnrollment{custody: func() preparedTOTPEnrollment { return preparedTOTPEnrollment{metadata: m} }}
 	fields, err := metadata.Fields()
+	if p.state.method == "otp" {
+		if p.input.OTP == nil {
+			return nil, invalidEnrollment()
+		}
+		pending, prepareErr := NewPreparedOTPEnrollment(*p.input.OTP)
+		if prepareErr != nil {
+			return nil, prepareErr
+		}
+		fields, err = pending.Fields()
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -131,6 +142,18 @@ func (p *totpEnrollmentPhase) AdmitFeaturePreparation(ctx context.Context, w ker
 	if err := state.RequireEmailRecovery(p.input.Binding.TenantID, p.input.Binding.UserID); err != nil {
 		return err
 	}
+	if p.state.method == "otp" {
+		if p.input.OTP == nil {
+			return invalidEnrollment()
+		}
+		pending, err := NewPreparedOTPEnrollment(*p.input.OTP)
+		if err != nil {
+			return err
+		}
+		if err := pending.checkRecipient(ctx, w); err != nil {
+			return err
+		}
+	}
 	now, err := w.DatabaseTime(ctx)
 	if err != nil {
 		return err
@@ -179,7 +202,13 @@ func (a *totpEnrollmentAdmission) Generate(ctx context.Context, generation uint6
 	if generation == 0 {
 		return nil, invalidEnrollment()
 	}
-	output, err := generateEnrollmentMaterial(ctx, p.state, p.input.Meta, generation, p.request().FactorPolicy.RecoveryCodes)
+	var output totpEnrollmentOutput
+	var err error
+	if p.state.method == "otp" {
+		output, err = generateOTPEnrollmentMaterial(ctx, p.state, p.input.Meta, p.input.OTP, generation, p.request().FactorPolicy.RecoveryCodes)
+	} else {
+		output, err = generateEnrollmentMaterial(ctx, p.state, p.input.Meta, generation, p.request().FactorPolicy.RecoveryCodes)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -245,23 +274,38 @@ func (p *totpEnrollmentPhase) RestoreFeaturePreparation(ctx context.Context, c i
 			clearEnrollmentOutput(&stored)
 		}
 	}()
-	if stored.Schema != 1 || stored.Generation != generation || stored.RecoveryKeyVersion != p.state.config.RecoveryKeyVersion || !reflect.DeepEqual(stored.Meta, p.input.Meta) || len(stored.Codes) != int(p.request().FactorPolicy.RecoveryCodes) || len(stored.Digests) != len(stored.Codes) || len(stored.Envelope) == 0 || len(stored.Envelope) > 4096 {
+	if stored.Schema != p.input.Schema || stored.Generation != generation || stored.RecoveryKeyVersion != p.state.config.RecoveryKeyVersion || !reflect.DeepEqual(stored.Meta, p.input.Meta) || !reflect.DeepEqual(stored.OTP, p.input.OTP) || len(stored.Codes) != int(p.request().FactorPolicy.RecoveryCodes) || len(stored.Digests) != len(stored.Codes) {
 		return bad(identity.ForbiddenError{})
 	}
-	ctxBinding, err := totpEncryptionContext(stored.Meta.TenantID, stored.Meta.UserID, stored.Meta.FactorID, 1, stored.Meta.Profile)
-	if err != nil {
-		return bad(err)
-	}
-	sealed, err := envelope.ParseEnvelope(stored.Envelope)
-	if err != nil {
-		return bad(invalidEnrollment())
-	}
-	secret, err := p.state.crypto.Decrypt(ctx, envelope.DecryptRequest{Envelope: sealed, Context: ctxBinding})
-	if err != nil || len(secret) != 32 {
+	var ctxBinding envelope.Context
+	var otpPending PreparedOTPEnrollment
+	if p.state.method == "otp" {
+		if stored.OTP == nil || len(stored.Envelope) != 0 {
+			return bad(identity.ForbiddenError{})
+		}
+		otpPending, err = NewPreparedOTPEnrollment(*stored.OTP)
+		if err != nil {
+			return bad(err)
+		}
+	} else {
+		if stored.OTP != nil || len(stored.Envelope) == 0 || len(stored.Envelope) > 4096 {
+			return bad(identity.ForbiddenError{})
+		}
+		ctxBinding, err = totpEncryptionContext(stored.Meta.TenantID, stored.Meta.UserID, stored.Meta.FactorID, 1, stored.Meta.Profile)
+		if err != nil {
+			return bad(err)
+		}
+		sealed, err := envelope.ParseEnvelope(stored.Envelope)
+		if err != nil {
+			return bad(invalidEnrollment())
+		}
+		secret, err := p.state.crypto.Decrypt(ctx, envelope.DecryptRequest{Envelope: sealed, Context: ctxBinding})
+		if err != nil || len(secret) != 32 {
+			clear(secret)
+			return bad(identity.UnavailableError{})
+		}
 		clear(secret)
-		return bad(identity.UnavailableError{})
 	}
-	clear(secret)
 	key := p.state.config.recoveryKey()
 	defer clear(key[:])
 	binding, err := enrollmentRecoveryBinding(stored.Meta)
@@ -294,7 +338,7 @@ func (p *totpEnrollmentPhase) RestoreFeaturePreparation(ctx context.Context, c i
 		clearEnrollmentOutput(&p.output.stored)
 	}
 	owned := preparedTOTPEnrollment{metadata: stored.Meta, wire: slices.Clone(stored.Envelope), binding: ctxBinding}
-	p.output = &totpEnrollmentRestored{metadata: stored.Meta, pending: PreparedTOTPEnrollment{custody: func() preparedTOTPEnrollment { return owned }}, stored: stored, risk: admission}
+	p.output = &totpEnrollmentRestored{metadata: stored.Meta, pending: PreparedTOTPEnrollment{custody: func() preparedTOTPEnrollment { return owned }}, otp: otpPending, stored: stored, risk: admission}
 	keep = true
 	return p.command, p.plan, nil
 }
@@ -320,8 +364,14 @@ func (p *totpEnrollmentPhase) ApplyFeature(ctx context.Context, w kernel.Work, c
 	if err := p.output.risk.CheckAt(ctx, now); err != nil {
 		return identity.FeatureReceipt{}, err
 	}
-	if err := p.output.pending.Persist(ctx, w, p, c, p.primary); err != nil {
-		return identity.FeatureReceipt{}, err
+	var persistErr error
+	if p.state.method == "otp" {
+		persistErr = p.output.otp.Persist(ctx, w, p, c, p.primary)
+	} else {
+		persistErr = p.output.pending.Persist(ctx, w, p, c, p.primary)
+	}
+	if persistErr != nil {
+		return identity.FeatureReceipt{}, persistErr
 	}
 	if err := p.persistRecovery(ctx, w, c); err != nil {
 		return identity.FeatureReceipt{}, err
@@ -338,6 +388,11 @@ func (p *totpEnrollmentPhase) CheckFeatureCommit(ctx context.Context, w kernel.W
 	}
 	if err := p.primary.Check(ctx, w, p, c); err != nil {
 		return err
+	}
+	if p.state.method == "otp" {
+		if err := p.output.otp.checkRecipient(ctx, w); err != nil {
+			return err
+		}
 	}
 	now, err := w.DatabaseTime(ctx)
 	if err != nil {

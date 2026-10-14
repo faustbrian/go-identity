@@ -2,6 +2,39 @@
 
 ## Unreleased
 
+- Exercise native email secondary-OTP enrollment/confirmation through actual
+  encrypted delivery and selected HTTP login with public session admission,
+  credential-free replay and factor-authority invalidation. This supersedes
+  selected workflow caveats below, not full reference/MFA release qualification.
+
+- Independently select password-origin OTP sending HTTP through
+  `HTTPMFAConfiguration.PasswordOTPSend` with the native read-only source and
+  shared delivery quotas. Send-only selection requires no verification limiter
+  and exposes no verification or enrollment operation.
+- Place cross-owner password/OTP acceptance tests in reference composition,
+  avoiding a reverse password-adapter dependency on its downstream consumer.
+
+- Select password-origin secondary OTP verification transport independently.
+  Native quota metadata preserves the original signed subject/child/lifetime,
+  authenticates exact retained attempts before mutable factor reads and rejects
+  historical input conflicts without new comparisons or consumption. Selected
+  graph handles retain startup/tenant/shutdown admission. Complete selected
+  enrollment-to-HTTP-login acceptance remains in development.
+
+- Explicitly select native password-origin secondary OTP through
+  `PasswordSigninConfiguration.OTP` and `FeatureSet.PasswordOTP`. Composition
+  supplies the existing primary, child, session, OTP and delivery owners and
+  validates shared browser-key bindings. Startup registers the native OTP
+  issuer before admission; independent forward suffixes preserve optional
+  TOTP/recovery/management migration allocations. This selects no HTTP route.
+
+- Add concrete native password/secondary-OTP login sending with original signed
+  child/browser custody, confirmed-factor and recipient fences, shared protected
+  counters and encrypted durable delivery. Exact retry/recovery cannot generate
+  another code or renew the original child. Enrollment and login share OTP's
+  existing account/destination resend limits. Sending grants no session; OTP
+  completion and graph/HTTP selection are still being connected.
+
 - Compose explicitly selected pending TOTP replacement through the native
   factor-update, URI and confirmation owners, with actual session custody and
   whole-subject revocation. Append optional MFA v12/session-disposition v4 only

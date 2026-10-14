@@ -21,7 +21,8 @@ const maximumSendOutput = 1 << 20
 // delivery together. Opening never remaps/re-encrypts either component, borrows
 // the submitted bearer anew, and grants no current primary admission.
 func sendOutputAAD(spec identity.FeatureCommandSpec, generation uint64) (envelope.Context, error) {
-	if generation == 0 || spec.Operation != issuanceOperation(spec.Operation.SubjectRequirement) {
+	op, err := boundIssuanceOperation(spec.Binding)
+	if generation == 0 || err != nil || spec.Operation != op {
 		return envelope.Context{}, ErrInvalidCommand
 	}
 	aad, err := commandCustodyAAD(spec, 1, "identity-otp-send-output-scope-v1\x00", "identity-otp-send-output-v1")
@@ -128,11 +129,11 @@ func restoreSendOutputContext(ctx context.Context, store *Contributor, delivery 
 	if err := w.Err(); err != nil {
 		return bad(err)
 	}
-	subject := identity.FeatureSubjectUser
-	if binding.UserID == "" {
-		subject = identity.FeatureSubjectAnonymousFlow
+	op, err := boundIssuanceOperation(binding)
+	if err != nil {
+		return bad(err)
 	}
-	spec := identity.FeatureCommandSpec{Binding: binding, Operation: issuanceOperation(subject)}
+	spec := identity.FeatureCommandSpec{Binding: binding, Operation: op}
 	sealed, err := envelope.ParseEnvelope(wire)
 	if err != nil {
 		return bad(ErrInvalidCommand)
@@ -192,6 +193,9 @@ func (p *issuanceContributor) validateSendOutput(command identity.Command) error
 	spec, ok := command.Feature()
 	if !ok {
 		return ErrInvalidCommand
+	}
+	if spec.Operation == mfaEnrollmentSendOperation() || spec.Operation == mfaLoginSendOperation() {
+		return p.validateIssuanceDelivery(command)
 	}
 	delivery, err := p.prepared.Plan()
 	if err != nil {

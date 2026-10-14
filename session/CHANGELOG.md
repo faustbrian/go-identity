@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Preserve explicit secondary-OTP provenance in original-primary MFA sessions,
+  disjoint from TOTP and recovery-set metadata. Password-MFA issuance binds the
+  OTP operation and retains primary time/remember policy; substituted receipts,
+  replay, expiry and unknown outcomes withhold credential delivery. Native
+  verification and atomic completion remain required; metadata is not proof.
+
 - Support recovery-code command custody in explicit password and magic-link MFA
   issuers. Preserve exact method/operation binding and withhold reveal-once bearer
   and synchronizer custody on replay, ambiguity, expiry or substituted receipts.

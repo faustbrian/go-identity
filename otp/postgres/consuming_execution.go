@@ -106,7 +106,7 @@ func (p *Contributor) checkConsuming(ctx context.Context, w consumingWork, b ker
 	if _, _, err = p.lockout.loadLockouts(ctx, query, p.schema, continuation.Scope); err != nil {
 		return bad(err)
 	}
-	row, err := loadReservation(ctx, query, p.schema, b, b.Generation)
+	row, err := loadReservation(ctx, query, p.schema, b, b.Generation, continuation.Scope.SubjectID)
 	if err != nil {
 		return bad(err)
 	}
@@ -164,10 +164,13 @@ func (p *Contributor) ReleaseOTP(ctx context.Context, w kernel.OTPReleaseWork) e
 		if err = sessionpg.ReleasePreAuth(ctx, w, p, p.preauth.config, flow.preauth); err != nil {
 			return err
 		}
-	} else if p.sessionAuthority(flow.session, b.Command, *c.authority) != nil {
+	} else if flow.session != (session.Session{}) && p.sessionAuthority(flow.session, b.Command, *c.authority) != nil {
 		return ErrInvalidCommand
 	}
-	row, err := loadReservation(ctx, query, p.schema, b, b.PreviousGeneration)
+	// MFA's already-consumed primary is neither an OTP-owned preauth reservation
+	// nor a session. Sealed noncommit custody releases only this exact OTP row.
+	scope, _ := c.record.Attempt.Continuation.Bindings()
+	row, err := loadReservation(ctx, query, p.schema, b, b.PreviousGeneration, scope.Scope.SubjectID)
 	if err != nil {
 		return err
 	}
@@ -194,19 +197,21 @@ func (p *Contributor) recoverConsuming(ctx context.Context, w kernel.RecoveryWor
 	if err != nil {
 		return kernel.RecoveryUnknown, err
 	}
-	if flow.session != (session.Session{}) {
-		if p.sessionAuthority(flow.session, b.Command, *c.authority) != nil {
+	scope, _ := c.record.Attempt.Continuation.Bindings()
+	if flow.session != (session.Session{}) || flow.mfaOriginal != (session.PreAuthTransaction{}) {
+		if flow.session != (session.Session{}) && p.sessionAuthority(flow.session, b.Command, *c.authority) != nil {
 			return kernel.RecoveryUnknown, ErrInvalidCommand
 		}
-		_, err := loadReservation(ctx, query, p.schema, b, b.PreviousGeneration)
+		_, err := loadReservation(ctx, query, p.schema, b, b.PreviousGeneration, scope.Scope.SubjectID)
 		if err != nil {
 			if errors.Is(err, ErrInvalidCommand) {
 				return kernel.RecoveryUnknown, nil
 			}
 			return kernel.RecoveryUnknown, err
 		}
-		// The session is not a one-time participant. Exact OTP reserved custody,
-		// not session expiry/revocation, supplies this owner's noncommit evidence.
+		// Neither a session nor an already-consumed MFA primary belongs to
+		// this reservation. Exact OTP reserved custody, not upstream expiry
+		// or revocation, supplies this owner's noncommit evidence.
 		return kernel.RecoveryNotCommitted, nil
 	}
 	if p.preauth == nil {
@@ -240,7 +245,7 @@ func (p *Contributor) recoverConsuming(ctx context.Context, w kernel.RecoveryWor
 	if !ok {
 		return kernel.RecoveryUnknown, nil
 	}
-	_, err = loadReservation(ctx, query, p.schema, b, b.PreviousGeneration)
+	_, err = loadReservation(ctx, query, p.schema, b, b.PreviousGeneration, scope.Scope.SubjectID)
 	if err != nil {
 		if errors.Is(err, ErrInvalidCommand) {
 			return kernel.RecoveryUnknown, nil

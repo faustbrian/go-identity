@@ -91,6 +91,7 @@ type featureState struct {
 	magicTOTP                    *magicLinkTOTPService
 	passwordTOTP                 *magicLinkTOTPService
 	passwordRecovery             *magicLinkTOTPService
+	passwordOTP                  *PasswordOTPLoginCompletionService
 	magicPreauth                 *session.PreAuthIssuer
 	httpMagicLink                *magicLinkHTTPState
 	httpMFA                      *mfaHTTPState
@@ -151,7 +152,7 @@ func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDepen
 	if c.MFAEnrollment != nil && c.PasswordVerification == nil {
 		return identity.InvalidInputError{Field: "reference_mfa_enrollment"}
 	}
-	if c.HTTPMFA != nil && ((c.HTTPMFA.TOTPVerify && (c.MagicLink == nil || c.MagicLink.TOTP == nil)) || (c.HTTPMFA.PasswordTOTPVerify && (c.PasswordSignin == nil || c.PasswordSignin.TOTP == nil)) || (c.HTTPMFA.PasswordRecoveryUse && (c.PasswordSignin == nil || c.PasswordSignin.Recovery == nil))) {
+	if c.HTTPMFA != nil && ((c.HTTPMFA.TOTPVerify && (c.MagicLink == nil || c.MagicLink.TOTP == nil)) || (c.HTTPMFA.PasswordTOTPVerify && (c.PasswordSignin == nil || c.PasswordSignin.TOTP == nil)) || (c.HTTPMFA.PasswordRecoveryUse && (c.PasswordSignin == nil || c.PasswordSignin.Recovery == nil)) || ((c.HTTPMFA.PasswordOTPVerify || c.HTTPMFA.PasswordOTPSend) && (c.PasswordSignin == nil || c.PasswordSignin.OTP == nil))) {
 		return identity.InvalidInputError{Field: "reference_http_mfa"}
 	}
 	if c.HTTPMagicLink != nil && c.MagicLink == nil {
@@ -370,9 +371,14 @@ func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDepen
 	if err != nil {
 		return err
 	}
+	passwordOTP, err := composePasswordOTP(c, d, passwordSigninOwner, evaluator)
+	if err != nil {
+		return err
+	}
 	migrationConfig.passwordMFA = c.PasswordSignin != nil && c.PasswordSignin.MFA != nil
 	migrationConfig.passwordTOTP = passwordTOTP != nil
 	migrationConfig.passwordRecovery = passwordRecovery != nil
+	migrationConfig.passwordOTP = passwordOTP != nil
 	passwordSignupOwner, err := composePasswordSignup(c, d, evaluator)
 	if err != nil {
 		return err
@@ -526,6 +532,7 @@ func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDepen
 	s.features.magicTOTP = magicTOTP
 	s.features.passwordTOTP = passwordTOTP
 	s.features.passwordRecovery = passwordRecovery
+	s.features.passwordOTP = passwordOTP
 	s.features.httpMFA = httpMFA
 	s.features.httpMFAEnrollment = httpMFAEnrollment
 	s.features.httpMFAActiveStepUp = httpMFAActiveStepUp
@@ -668,6 +675,14 @@ func (f FeatureSet) Initialize(ctx context.Context) error {
 	}
 	if err := s.features.otp.Initialize(w); err != nil {
 		return err
+	}
+	if otp := s.features.passwordOTP; otp != nil {
+		if otp.state == nil || otp.state() == nil {
+			return invalidPasswordOTPCompletion()
+		}
+		if err := otp.state().sender.config.Issuance.Initialize(w, s.pool); err != nil {
+			return err
+		}
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()

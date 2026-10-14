@@ -214,7 +214,7 @@ func lockMFAAttemptContinuation(ctx context.Context, sql totpAttemptSQL, b kerne
 	deny := func() (mfa.PartialAuthContinuation, time.Time, error) {
 		return mfa.PartialAuthContinuation{}, time.Time{}, identity.ForbiddenError{}
 	}
-	if method != "totp" && method != "recovery-code" {
+	if method != "totp" && method != "otp" && method != "recovery-code" {
 		return deny()
 	}
 	p := b.Plan
@@ -268,7 +268,7 @@ func spendTOTPAttempt(ctx context.Context, sql totpAttemptSQL, c mfa.PartialAuth
 }
 
 func spendMFAAttempt(ctx context.Context, sql totpAttemptSQL, c mfa.PartialAuthContinuation, now time.Time, method string) error {
-	if ctx == nil || method != "totp" && method != "recovery-code" {
+	if ctx == nil || method != "totp" && method != "otp" && method != "recovery-code" {
 		return invalidAuthority()
 	}
 	if err := ctx.Err(); err != nil {

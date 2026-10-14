@@ -154,19 +154,26 @@ func (s *SendService) Initialize(ctx context.Context) error {
 	if ctx == nil || s == nil || s.owner == nil || s.pool == nil {
 		return ErrInvalidConfiguration
 	}
-	ctx, stop := context.WithTimeout(ctx, s.timeout)
+	return initializeIssuanceKeys(ctx, s.pool, s.owner.store, s.timeout, s.digestVersions)
+}
+
+func initializeIssuanceKeys(ctx context.Context, pool *database.Pool, store *Contributor, timeout time.Duration, versions []uint32) error {
+	if ctx == nil || pool == nil || pool.Raw() == nil || store == nil || store.codec == nil || len(versions) == 0 {
+		return ErrInvalidConfiguration
+	}
+	ctx, stop := context.WithTimeout(ctx, timeout)
 	defer stop()
-	tx, err := s.pool.Raw().Begin(ctx)
+	tx, err := pool.Raw().Begin(ctx)
 	if err != nil {
 		return custodyFailure(ctx)
 	}
 	defer func() {
-		cleanup, cancel := context.WithTimeout(context.Background(), s.timeout)
+		cleanup, cancel := context.WithTimeout(context.Background(), timeout)
 		defer cancel()
 		_ = tx.Rollback(cleanup)
 	}()
-	schema := pgx.Identifier{s.owner.store.schema}.Sanitize()
-	binding := s.owner.store.lockout.binding()
+	schema := pgx.Identifier{store.schema}.Sanitize()
+	binding := store.lockout.binding()
 	if _, err := tx.Exec(ctx, `INSERT INTO `+schema+`.lockout_key_binding VALUES(true,$1) ON CONFLICT(singleton) DO NOTHING`, binding[:]); err != nil {
 		return custodyFailure(ctx)
 	}
@@ -177,7 +184,7 @@ func (s *SendService) Initialize(ctx context.Context) error {
 	if !hmac.Equal(original, binding[:]) {
 		return ErrInvalidConfiguration
 	}
-	for _, version := range s.digestVersions {
+	for _, version := range versions {
 		if _, err := tx.Exec(ctx, `INSERT INTO `+schema+`.digest_keys(key_version,algorithm) VALUES($1,'hmac-sha256-v1') ON CONFLICT(key_version) DO NOTHING`, version); err != nil {
 			return custodyFailure(ctx)
 		}

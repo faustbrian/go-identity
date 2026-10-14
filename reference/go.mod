@@ -3,6 +3,9 @@ module github.com/faustbrian/go-identity/reference
 go 1.27.0
 
 require (
+	github.com/faustbrian/go-authentication v1.2.2-0.20261009190006-7fc797d91317
+	github.com/faustbrian/go-openapi/v2 v2.0.1-0.20261008233431-8a681bb139db
+	github.com/faustbrian/go-password v1.0.1-0.20261002040645-c5746af64a6f
 	github.com/faustbrian/go-audit v1.0.0
 	github.com/faustbrian/go-audit/postgres v1.0.1-0.20261003012155-21ad3d11d3b2
 	github.com/faustbrian/go-authorization v1.1.1-0.20261005011349-60ed4b3229d8

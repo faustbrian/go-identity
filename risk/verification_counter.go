@@ -29,10 +29,16 @@ func (p CommandCounterPolicy) PrepareVerification(scope Context, subject Subject
 }
 
 func (p CommandCounterPolicy) prepareCapabilityCounter(scope Context, subject Subject, capabilityID string, primaryTime time.Time, operation Action) (CounterCommand, error) {
+	return p.prepareBoundCounter(scope, subject, capabilityID, CapabilityDimension, primaryTime, operation)
+}
+
+// The closed workflows select this dimension; callers cannot select arbitrary
+// dimensions or alter the canonical protected-operation policy.
+func (p CommandCounterPolicy) prepareBoundCounter(scope Context, subject Subject, boundID string, dimension Dimension, primaryTime time.Time, operation Action) (CounterCommand, error) {
 	if p.state == nil {
 		return CounterCommand{}, ErrInvalidPolicy
 	}
-	if scope.Operation != operation || !databaseEvidenceTime(primaryTime) || !scopeID(scope.Tenant) || !scopeID(scope.Attempt) || !verificationCounterID(capabilityID) {
+	if scope.Operation != operation || !databaseEvidenceTime(primaryTime) || !scopeID(scope.Tenant) || !scopeID(scope.Attempt) || !verificationCounterID(boundID) {
 		return CounterCommand{}, ErrInvalidCounterCommand
 	}
 	a, err := p.state.policy.Admit(scope.Operation)
@@ -46,8 +52,8 @@ func (p CommandCounterPolicy) prepareCapabilityCounter(scope Context, subject Su
 	if err != nil {
 		return CounterCommand{}, err
 	}
-	values[CapabilityDimension] = capabilityID
-	a.Profile.Dimensions = []Dimension{TenantDimension, SubjectDimension, CapabilityDimension, NetworkDimension}
+	values[dimension] = boundID
+	a.Profile.Dimensions = []Dimension{TenantDimension, SubjectDimension, dimension, NetworkDimension}
 	command := prepareCounterValues(scope, values, ReserveWithCommand, a, primaryTime, p.state.keys, true)
 	command.state.commandOwner = p.state
 	return command, nil
@@ -64,6 +70,10 @@ func (p CommandCounterPolicy) ValidateVerification(command CounterCommand, scope
 }
 
 func (p CommandCounterPolicy) validateCapabilityCounter(command CounterCommand, scope Context, subject Subject, capabilityID string, primaryTime time.Time, operation Action) error {
+	return p.validateBoundCounter(command, scope, subject, capabilityID, CapabilityDimension, primaryTime, operation)
+}
+
+func (p CommandCounterPolicy) validateBoundCounter(command CounterCommand, scope Context, subject Subject, boundID string, dimension Dimension, primaryTime time.Time, operation Action) error {
 	if p.state == nil || command.state == nil || command.state.owner != nil || command.state.commandOwner != p.state || !databaseEvidenceTime(primaryTime) {
 		return ErrInvalidCounterCommand
 	}
@@ -71,7 +81,7 @@ func (p CommandCounterPolicy) validateCapabilityCounter(command CounterCommand, 
 	if primaryTime.Before(b.PreparedAt) || !primaryTime.Before(b.PreparedAt.Add(command.state.profile.EvidenceTTL)) {
 		return ErrInvalidCounterCommand
 	}
-	expected, err := p.prepareCapabilityCounter(scope, subject, capabilityID, b.PreparedAt, operation)
+	expected, err := p.prepareBoundCounter(scope, subject, boundID, dimension, b.PreparedAt, operation)
 	if err != nil || !hmac.Equal([]byte(expected.state.binding.Fingerprint), []byte(b.Fingerprint)) {
 		return ErrInvalidCounterCommand
 	}

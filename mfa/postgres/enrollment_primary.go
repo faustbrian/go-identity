@@ -73,6 +73,21 @@ type TOTPConfirmationPrimarySource interface {
 // An implementation must reject using this value in a URI or login command.
 type TOTPConfirmationPrimary interface{ TOTPURIPrimary }
 
+// OTPEnrollmentSendPrimarySource restores the exact original enable/session
+// custody for native pending OTP sending. assigned is the sole request-key
+// owner's command ID. Restoration grants no factor or delivery authority;
+// current Admit/Check and unchanged synchronizer/parent consumption are required.
+type OTPEnrollmentSendPrimarySource interface {
+	RestoreEnrollmentForOTPSend(context.Context, mfa.OtpSendRequest, identity.CommandID, identity.CommandID, uint64, []byte) (TOTPURIPrimary, error)
+}
+
+// OTPEnrollmentConfirmationPrimarySource restores the original enable/session
+// and synchronizer only for authenticated pending OTP confirmation. It cannot
+// consume the primary proof again, select login custody or renew freshness.
+type OTPEnrollmentConfirmationPrimarySource interface {
+	RestoreEnrollmentForOTPConfirmation(context.Context, mfa.OtpVerifyRequest, identity.CommandID, uint64, []byte) (TOTPURIPrimary, error)
+}
+
 // TOTPReplacementPrimarySource restores an original active-session snapshot
 // only after MFA authenticates its committed factor-update parent. Neither
 // method translates it into password-enable evidence, creates factor proof or

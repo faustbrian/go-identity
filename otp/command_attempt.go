@@ -31,6 +31,10 @@ type attemptCommandScope struct {
 // This is preparation only, not command admission, reservation or execution.
 // Legacy Prepare keeps its exact unbound fingerprint profile; durable command
 // adapters must require CommandBinding and reject unbound preparations.
+// The explicit MFA arm is the sole exception to the empty pre-account subject:
+// its real user remains inside purpose-bound OTP scope while the exact consuming
+// MFA command retains the original anonymous browser namespace. Ordinary OTP
+// signin/check operations cannot select that arm or substitute a live session.
 // Context/entropy/custody semantics are identical to Prepare. Invalid structural
 // or mismatched scope returns ErrInvalidAttempt without underlying input/errors.
 func (i AttemptIssuer) PrepareForCommand(ctx context.Context, b identity.CommandBinding, operation identity.FeatureOperation, c Continuation, mode AttemptMode, expectedVersion uint64, code auth.OneTimeCode) (AttemptCommand, error) {
@@ -40,18 +44,39 @@ func (i AttemptIssuer) PrepareForCommand(ctx context.Context, b identity.Command
 	}
 	frozen, _ := command.Feature()
 	b, operation = frozen.Binding, frozen.Operation
-	scope := c.state.bindings.Scope
-	if string(b.TenantID) != scope.TenantID || string(b.UserID) != scope.SubjectID || operation.RecordRequirement == identity.FeatureRecordRequired && b.RecordID != scope.TargetID {
+	if !validAttemptCommandScope(b, operation, c, mode) {
 		return AttemptCommand{}, ErrInvalidAttempt
-	}
-	if record, bound := c.state.bindings.Authorization.PreAuthTransaction(); bound && b.AnonymousFlowID != "" {
-		original, _ := record.Bindings()
-		if b.AnonymousFlowID != string(original.Binding.ID) {
-			return AttemptCommand{}, ErrInvalidAttempt
-		}
 	}
 	s := &attemptCommandScope{binding: b, operation: operation, digest: attemptCommandDigest(b, operation)}
 	return i.prepareWithCommand(ctx, rand.Reader, c, mode, expectedVersion, code, s)
+}
+
+// MFA retains a real subject under the original anonymous browser namespace.
+// Only its explicit custody and exact consuming operation admit that combination;
+// the ordinary pre-account OTP profile and released fingerprint bytes stay intact.
+func validAttemptCommandScope(b identity.CommandBinding, op identity.FeatureOperation, c Continuation, mode AttemptMode) bool {
+	if c.state == nil || string(b.TenantID) != c.state.bindings.Scope.TenantID {
+		return false
+	}
+	scope := c.state.bindings.Scope
+	if original, binding, bound := c.state.bindings.Authorization.MFAContinuation(); bound {
+		p, err := original.Bindings()
+		return err == nil && mode == AttemptModeConsume && scope.Purpose == PurposeMFA &&
+			op == (identity.FeatureOperation{Owner: "identity/mfa", OperationID: "identity.mfa.otp-verify",
+				SchemaID: "mfa-otp-verify", SchemaVersion: 1, RecordRequirement: identity.FeatureRecordOmitted,
+				SubjectRequirement: identity.FeatureSubjectAnonymousFlow}) &&
+			b.UserID == "" && b.RecordID == "" && b.AnonymousFlowID == string(p.Binding.ID) &&
+			b.CommandID != binding.PrimaryCommandID && b.CommandID != binding.ContinuationID &&
+			scope.SubjectID == string(binding.SubjectID) && scope.TargetID == string(binding.ContinuationID)
+	}
+	if string(b.UserID) != scope.SubjectID || op.RecordRequirement == identity.FeatureRecordRequired && b.RecordID != scope.TargetID {
+		return false
+	}
+	if record, bound := c.state.bindings.Authorization.PreAuthTransaction(); bound && b.AnonymousFlowID != "" {
+		original, _ := record.Bindings()
+		return b.AnonymousFlowID == string(original.Binding.ID)
+	}
+	return true
 }
 
 // CommandBinding returns owned structural command/operation declarations, not

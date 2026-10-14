@@ -1,5 +1,123 @@
 # PostgreSQL MFA authority (in development)
 
+`NewOTPFactorReader` reads confirmed owned OTP factors and their exact verified
+recipients only under a real live OTP-enabled child grant. `Metadata` and
+`Recipient` are original version/recipient custody, not code verification or
+session permission. Protected sending/completion must repeat current account,
+factor, identifier, policy, browser and absolute-time fences. Pending/revoked,
+foreign, exhausted, stale or unavailable authority denies. Public OTP login
+send/completion composition is supplied by the reference module for the selected
+password-origin profile; constructing or reading this factor alone is not login.
+
+## OTP factor storage under development
+
+`FactorReferenceMigrationSource` follows existing TOTP/recovery history;
+`OTPFactorMigrationSource` follows those references and the kernel identifier
+history. Allocate permanent versions in the owned MFA namespace. Neither source
+changes prior migration bytes or selects an HTTP feature. The shared namespace
+contains immutable identity/method only, not verification or active-factor policy.
+Per-method records and current native admission remain authoritative.
+
+The forward reference migration backfills TOTP identities under table locks.
+Existing TOTP inserts register the same identity transactionally. Recovery sets
+retain their original TOTP default and gain a method-bound reference; generated
+per-method references preserve factor-deletion restrictions without duplicating
+the recovery store. New OTP recovery writes must explicitly select `factor_method`
+`otp`. OTP rows bind exact identifier/verification versions; confirmation requires
+attribution and revocation clears recipient references. None of this proves
+possession of a code, recipient ownership, enrollment or authentication.
+
+The migrations scan/backfill and acquire blocking DDL locks. Set bounded lock
+and statement timeouts and plan headroom before adoption. Security-invoker
+registration requires the native MFA writer's SELECT/INSERT privileges on the
+new reference table; no privileged definer or runtime business callback is added.
+Current local tests do not establish production-scale rollout or latency budgets.
+`NewOTPEnrollmentConfig` and `NewOTPEnrollmentService` explicitly select native
+pending enrollment without selecting a TOTP algorithm or generating its secret.
+Supply the same actual `TOTPEnrollmentPrimarySource` port implemented by the
+password primary adapter (including its cookie/CSRF variant), protected risk and
+counter owners, keyring and coordinator/request-key configuration. The historical
+port name does not create a second primary-proof authority. The constructor does
+no IO and does not initialize unknown account factor state.
+
+Call `Enable` with `FactorPolicy.Method="otp"`, a bounded recovery-code count and
+`OTPEnrollmentSelection` containing an existing verified identifier ID and its
+email/SMS channel. Native preparation freezes its versions; protected admission
+locks/rechecks them. First-factor enrollment requires known-empty active-factor
+authority and permits at most eight live pending TOTP/OTP ceremonies combined.
+Primary proof use, pending factor, inactive recovery codes, audit and lifecycle
+commit together. Only a fresh, error-free commit returns reveal-once recovery
+material. Destroy each returned secret after its explicit delivery.
+
+An identical retry preserves the original outcome and returns no recovery codes;
+a known rolled-back command is not repeated under the same key. A new attempt
+requires a new key and current admission. `RecoverEnable` takes the original
+non-secret command scope and current result-access policy, not a password, code
+or bearer. Changing recipient or configured counter namespace cannot restore a
+retained original request. This pending service proves no OTP possession and
+does not activate a factor or issue a session. Sending and confirmation are
+separately selected below; OTP login and HTTP/reference remain under development.
+
+### Native pending-OTP sending
+
+Append `OTPSendMigrationSource` after OTP factors (selected MFA history versions
+13/14/15 for factor references/factors/send attribution). Historical prefixes
+remain unchanged. Select `NewOTPEnrollmentSendService` with the same
+`OTPEnrollmentService`, password's actual `OTPEnrollmentSendPrimarySource`,
+an `otp/postgres.NewMFAEnrollmentIssuer` and exact HTTPS origins. Initialize the
+issuer's stable keys against installed OTP and delivery histories first.
+
+Call `OtpSend` with the pending factor ID, exact enrolled channel, idempotency
+key, trusted caller/origin/network and `OTPEnrollmentContext` containing the
+original session and synchronizer. The server assigns one command/challenge ID;
+no recipient, expiry or command ID is request-selectable. Current original
+primary, consumed enable proof, pending factor/recipient versions and protected
+risk must admit before generation and commit. Unknown outcomes retain the
+original command; retry cannot select a successor code or recipient.
+
+Challenge creation, factor send attribution and encrypted delivery commit or
+roll back together. A committed `StateQueued` is historical queue acceptance,
+not provider delivery or confirmation. The actual delivery worker invokes the
+selected sender separately. `RecoverOtpSend` takes original non-secret scope and
+current result-access policy, never code, bearer or primary proof. Partial-login
+sends, confirmation, OTP session completion and HTTP are not supplied by this
+pending-enrollment-only service.
+
+### Native pending-OTP confirmation
+
+Select `NewOTPEnrollmentConfirmationService(sender,
+OTPEnrollmentConfirmationConfig{Primary: primary, AttemptKeyVersion: version})`
+with password's actual `OTPEnrollmentConfirmationPrimarySource`. The sender
+supplies the same real OTP owner and exact origin allowlist. Install OTP's
+`ConsumingMigrationSource` after its challenge history; retain the selected
+attempt key and all original wrapping, session, enrollment and digest keys.
+
+Call `OtpVerify` with a new command ID, the pending factor ID, actual delivered
+code, original `OTPEnrollmentContext` and trusted caller/origin/network. The
+client cannot choose a challenge, recipient, parent proof or authority version.
+The service authenticates the committed original send's complete static root
+and encrypted output from existing request/preparation custody. It retains one
+random server-owned attempt in that same journal, never in another intent store.
+Wrong submissions debit the real OTP budget once; exact retry replays history.
+Changed same-command code or intent conflicts instead of creating another attempt.
+
+Protected native primary/CSRF, factor, recipient, account and risk admission
+precedes comparison and is fenced again after waits. Confirmation atomically
+activates the pending OTP factor and its existing recovery set, advances factor
+authority and finalizes OTP, audit and lifecycle effects. Activation failure
+rolls those effects back and releases its original consuming reservation; the
+charged admission remains historical and a released challenge cannot be reused.
+An unknown outcome carries no enrollment metadata and requires original recovery.
+
+`RecoverOtpVerify` accepts original code/proof/session-free scope with current
+result-access authorization. It never compares, debits, sends, reactivates or
+reveals a code. Successful confirmation returns historical enrollment metadata,
+not a login session or step-up proof. Trusted-device requests and login-child
+variants deny. This service confirms enrollment only. The reference module and
+opt-in HTTP handlers supply the selected password-primary continuation, sending
+and atomic session completion. OTP management, other channels and full release
+qualification remain pending; enrollment confirmation never issues a session.
+
 ## Native disable
 
 `NewDisableService(enrollment, stepup, DisableConfig)` selects a distinct native

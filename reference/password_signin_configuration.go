@@ -3,6 +3,7 @@ package reference
 import (
 	"fmt"
 	"io"
+	"slices"
 
 	identity "github.com/faustbrian/go-identity"
 	passwordpg "github.com/faustbrian/go-identity/password/postgres"
@@ -33,6 +34,9 @@ type PasswordSigninConfiguration struct {
 	// Recovery selects password-origin recovery completion, independently of
 	// TOTP completion or HTTP. MFA must also be selected.
 	Recovery *PasswordRecoveryConfiguration
+	// OTP independently selects native secondary OTP send/completion, not HTTP.
+	// MFA must explicitly allow otp; the graph supplies all native owners.
+	OTP *PasswordOTPConfiguration
 }
 
 func composePasswordSignin(c StoreConfiguration, d ReferenceDependencies, evaluator risk.Evaluator) (*passwordpg.SigninService, error) {
@@ -53,10 +57,13 @@ func composePasswordSignin(c StoreConfiguration, d ReferenceDependencies, evalua
 		}
 	}
 	n.Risk.Evaluation = evaluator
-	if (c.PasswordSignin.TOTP != nil || c.PasswordSignin.Recovery != nil) && c.PasswordSignin.MFA == nil {
+	if (c.PasswordSignin.TOTP != nil || c.PasswordSignin.Recovery != nil || c.PasswordSignin.OTP != nil) && c.PasswordSignin.MFA == nil {
 		return nil, invalid
 	}
 	if c.PasswordSignin.MFA != nil {
+		if slices.Contains(c.PasswordSignin.MFA.AllowedMethods, "otp") != (c.PasswordSignin.OTP != nil) {
+			return nil, invalid
+		}
 		return passwordpg.NewMFASigninService(d.PostgreSQL, n, *c.PasswordSignin.MFA)
 	}
 	return passwordpg.NewSigninService(d.PostgreSQL, n)

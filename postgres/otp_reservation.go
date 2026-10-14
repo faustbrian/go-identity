@@ -201,7 +201,13 @@ func (c *Coordinator) reserveOTP(ctx context.Context, tx pgx.Tx, command identit
 			err = identity.UnavailableError{}
 		}
 	}()
+	if err := p.bindWork(work); err != nil {
+		return err
+	}
 	if err := configureKernelWork(ctx, work); err != nil {
+		return err
+	}
+	if err := c.admitOTPFeatureInput(ctx, work, command, p); err != nil {
 		return err
 	}
 	handle := OTPReservationWork{state: s}
@@ -218,6 +224,9 @@ func (c *Coordinator) reserveOTP(ctx context.Context, tx pgx.Tx, command identit
 	}
 	if work.state.rows != nil {
 		return identity.UnavailableError{}
+	}
+	if err := c.admitOTPFeatureInput(ctx, work, command, p); err != nil {
+		return err
 	}
 	return work.usable()
 }

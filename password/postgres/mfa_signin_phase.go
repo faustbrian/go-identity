@@ -179,7 +179,7 @@ func (p *signinMFAChallengePhase) ApplyFeature(ctx context.Context, w kernel.Wor
 		return identity.FeatureReceipt{}, err
 	}
 	scope, _ := p.continuation.Bindings()
-	if err := mfapg.RequirePasswordSigninFactors(ctx, w, p, c, p.recipient.User.ID, scope.FactorVersion, true); err != nil {
+	if err := mfapg.RequirePasswordSigninFactorMethods(ctx, w, p, c, p.recipient.User.ID, scope.FactorVersion, scope.AllowedMethods); err != nil {
 		return identity.FeatureReceipt{}, err
 	}
 	lock := " FOR SHARE"
@@ -261,7 +261,7 @@ func (p *signinMFAChallengePhase) CheckFeatureCommit(ctx context.Context, w kern
 		return err
 	}
 	scope, _ := p.continuation.Bindings()
-	return mfapg.RequirePasswordSigninFactors(ctx, w, p, c, p.recipient.User.ID, scope.FactorVersion, true)
+	return mfapg.RequirePasswordSigninFactorMethods(ctx, w, p, c, p.recipient.User.ID, scope.FactorVersion, scope.AllowedMethods)
 }
 func (p *signinMFAChallengePhase) RecoverParticipant(ctx context.Context, w kernel.RecoveryWork) (kernel.RecoveryStatus, error) {
 	if p == nil || p.service == nil || ctx == nil {

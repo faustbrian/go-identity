@@ -225,12 +225,18 @@ func (s StoreSet) migrationCatalog(ctx context.Context) ([]migrationHistory, err
 		}
 	}
 	if c.passwordMFA {
-		catalog, err = passwordTOTPMigrationCatalog(ctx, catalog, c.passwordSigninSchema, s.state.config.Schema, c.passwordTOTP || c.passwordRecovery)
+		catalog, err = passwordTOTPMigrationCatalog(ctx, catalog, c.passwordSigninSchema, s.state.config.Schema, c.passwordTOTP || c.passwordRecovery || c.passwordOTP)
 		if err != nil {
 			return nil, err
 		}
-		if c.passwordRecovery {
+		if c.passwordRecovery || c.passwordOTP {
 			catalog, err = recoveryCompletionMigrationCatalog(ctx, catalog, c.passwordSigninSchema, s.state.config.Schema)
+			if err != nil {
+				return nil, err
+			}
+		}
+		if c.passwordOTP {
+			catalog, err = passwordOTPMigrationCatalog(ctx, catalog, c.passwordSigninSchema, s.state.config.Schema)
 			if err != nil {
 				return nil, err
 			}

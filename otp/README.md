@@ -1,5 +1,25 @@
 # otp
 
+## Secondary MFA custody
+
+`NewMFAFlowAuthorization(original, binding)` retains the original tokenless
+pre-auth snapshot, primary command, child continuation, subject and scope digest.
+It selects `FlowAuthorizationMFAContinuation` explicitly; ordinary
+`PreAuthTransaction()` and `AuthenticatedSession()` accessors return absent.
+Never reopen or reserve the primary's already-consumed browser flow.
+
+`NewContinuation` permits this arm only for `PurposeMFA`, the exact bound
+subject/continuation target, original tenant and unchanged remember policy.
+`AttemptIssuer.PrepareForCommand` accepts only the exact anonymous-browser
+`identity.mfa.otp-verify` consuming operation. Sealed code-free custody can be
+verified and restored without changing original correlation. These projections
+are not proof of current primary state, enrollment, factor policy or completion;
+native owners still enforce those and shared attempts in the protected commit.
+Existing v1–v4 authorization frames are unchanged. The selected native MFA and
+reference owners implement durable password-origin email-OTP composition; other
+profiles and full qualification remain pending. These core values alone never
+authenticate or authorize a session.
+
 ## Original sign-in source for rate admission
 
 The optional `SigninSourceService.ResolveSigninSource(ctx, request)` selects

@@ -28,16 +28,23 @@ const (
 	// FlowAuthorizationPreAuthTransaction selects a purpose-bound, single-use
 	// pre-auth transaction; it must never be treated as authenticated authority.
 	FlowAuthorizationPreAuthTransaction
+	// FlowAuthorizationMFAContinuation retains original consumed-primary custody
+	// for an explicitly selected second factor. It is neither a pending pre-auth
+	// flow nor a completed session; unsupported owners must reject this arm.
+	FlowAuthorizationMFAContinuation
 )
 
 // FlowAuthorizationSpec is an explicit tagged union. Exactly the selected
-// member must be nonzero; the other must be absent. Session IDs follow session's
-// existing 1..128 visible ASCII contract. Pre-auth IDs use identity's canonical
-// nonzero 128-bit ID contract. This is trusted structural data, not a proof.
+// identity must be nonzero; all others must be absent. Session IDs follow
+// session's existing 1..128 visible ASCII contract. Pre-auth and MFA child IDs
+// use identity's canonical nonzero 128-bit ID contract. NewFlowAuthorization
+// accepts only ordinary scalar contexts; NewMFAFlowAuthorization additionally
+// requires complete original custody for its arm. This is structure, not proof.
 type FlowAuthorizationSpec struct {
 	Kind                   FlowAuthorizationKind
 	AuthenticatedSessionID string
 	PreAuthTransactionID   identity.PreAuthTransactionID
+	MFAContinuationID      identity.CommandID
 }
 
 func (FlowAuthorizationSpec) Format(s fmt.State, _ rune) {
@@ -54,6 +61,7 @@ type FlowAuthorization struct {
 	spec    FlowAuthorizationSpec
 	preAuth session.PreAuthTransaction
 	session session.Session
+	mfa     *mfaFlowAuthorization
 }
 
 // NewBoundPreAuthAuthorization retains the complete immutable original flow,
@@ -77,7 +85,7 @@ func NewBoundPreAuthAuthorization(record session.PreAuthTransaction) (FlowAuthor
 
 // PreAuthTransaction returns the immutable original private projection and
 // true only for the explicit complete-binding profile. Legacy ID-only and
-// authenticated-session contexts return zero/false. It never proves active
+// authenticated-session and MFA contexts return zero/false. It never proves active
 // state, cookie possession or a reservation; never log or export the projection.
 func (a FlowAuthorization) PreAuthTransaction() (session.PreAuthTransaction, bool) {
 	return a.preAuth, a.preAuth != (session.PreAuthTransaction{})
@@ -88,7 +96,7 @@ func (a FlowAuthorization) PreAuthTransaction() (session.PreAuthTransaction, boo
 func NewFlowAuthorization(s FlowAuthorizationSpec) (FlowAuthorization, error) {
 	switch s.Kind {
 	case FlowAuthorizationAuthenticatedSession:
-		if len(s.AuthenticatedSessionID) < 1 || len(s.AuthenticatedSessionID) > 128 || s.PreAuthTransactionID != "" {
+		if len(s.AuthenticatedSessionID) < 1 || len(s.AuthenticatedSessionID) > 128 || s.PreAuthTransactionID != "" || s.MFAContinuationID != "" {
 			return FlowAuthorization{}, ErrInvalidAuthorization
 		}
 		for _, r := range s.AuthenticatedSessionID {
@@ -97,7 +105,7 @@ func NewFlowAuthorization(s FlowAuthorizationSpec) (FlowAuthorization, error) {
 			}
 		}
 	case FlowAuthorizationPreAuthTransaction:
-		if s.AuthenticatedSessionID != "" {
+		if s.AuthenticatedSessionID != "" || s.MFAContinuationID != "" {
 			return FlowAuthorization{}, ErrInvalidAuthorization
 		}
 		if _, e := identity.ParsePreAuthTransactionID(string(s.PreAuthTransactionID)); e != nil {
@@ -166,12 +174,15 @@ type continuationState struct {
 // tenant/subject must match the original verified record. Original session policy,
 // lookup digest, full authority and authentication timeline are committed without
 // renewal; this remains structural custody, not authenticated admission.
+// Explicit NewMFAFlowAuthorization uses a disjoint v5 consumed-primary frame,
+// accepts only PurposeMFA and binds the exact subject/child target and original
+// remember policy. It neither exposes nor renews an ordinary pending flow.
 func NewContinuation(s DigestScopeSpec, a FlowAuthorization, remember session.RememberPolicy) (Continuation, error) {
 	flow, e := a.Bindings()
 	if e != nil || s.AuthorizationBinding != ([32]byte{}) {
 		return Continuation{}, ErrInvalidAuthorization
 	}
-	needsRemember := s.Purpose == PurposeSignin || (s.Purpose == PurposeMFA && flow.Kind == FlowAuthorizationPreAuthTransaction)
+	needsRemember := s.Purpose == PurposeSignin || (s.Purpose == PurposeMFA && (flow.Kind == FlowAuthorizationPreAuthTransaction || flow.Kind == FlowAuthorizationMFAContinuation))
 	if s.Purpose == PurposeSignin && flow.Kind != FlowAuthorizationPreAuthTransaction {
 		return Continuation{}, ErrInvalidAuthorization
 	}
@@ -202,6 +213,16 @@ func NewContinuation(s DigestScopeSpec, a FlowAuthorization, remember session.Re
 			b = []byte("identity-otp-authorization-v4\x00")
 		}
 	}
+	if record, binding, bound := a.MFAContinuation(); bound {
+		original, err := record.Bindings()
+		if err != nil || flow.Kind != FlowAuthorizationMFAContinuation || s.Purpose != PurposeMFA ||
+			original.Binding.Intent.TenantID != identity.TenantID(s.TenantID) ||
+			s.SubjectID != string(binding.SubjectID) || s.TargetID != string(binding.ContinuationID) ||
+			original.Binding.Intent.Remember != remember {
+			return Continuation{}, ErrInvalidAuthorization
+		}
+		b = []byte("identity-otp-authorization-v5\x00")
+	}
 	b = append(b, byte(flow.Kind))
 	for _, value := range []string{flow.AuthenticatedSessionID, string(flow.PreAuthTransactionID)} {
 		b = binary.BigEndian.AppendUint16(b, uint16(len(value)))
@@ -212,25 +233,18 @@ func NewContinuation(s DigestScopeSpec, a FlowAuthorization, remember session.Re
 		b = binary.BigEndian.AppendUint64(b, uint64(duration))
 	}
 	if record, bound := a.PreAuthTransaction(); bound {
-		original, _ := record.Bindings()
-		i := original.Binding.Intent
-		for _, value := range []string{string(original.Binding.ID), string(i.TenantID), i.Action, i.Origin, i.CallbackURL, i.PolicyID, original.Binding.IssuedAt.UTC().Format(time.RFC3339Nano), original.Binding.ExpiresAt.UTC().Format(time.RFC3339Nano)} {
-			b = binary.BigEndian.AppendUint16(b, uint16(len(value)))
-			b = append(b, value...)
-		}
-		b = append(b, i.Nonce[:]...)
-		b = binary.BigEndian.AppendUint64(b, i.PolicyVersion)
-		resolved, _ := i.Remember.Bindings()
-		b = append(b, byte(resolved.Choice))
-		for _, duration := range []time.Duration{resolved.AbsoluteTTL, resolved.IdleTTL, resolved.RefreshAfter, resolved.FreshFor} {
-			b = binary.BigEndian.AppendUint64(b, uint64(duration))
-		}
-		b = binary.BigEndian.AppendUint32(b, original.Cookie.KeyVersion)
-		b = append(b, original.Cookie.Sum[:]...)
-		b = binary.BigEndian.AppendUint64(b, original.Version)
+		b = appendPreAuthAuthorization(b, record)
 	}
 	if record, bound := a.AuthenticatedSession(); bound {
 		b = appendSessionAuthorization(b, record)
+	}
+	if record, binding, bound := a.MFAContinuation(); bound {
+		b = appendPreAuthAuthorization(b, record)
+		for _, value := range []string{string(binding.PrimaryCommandID), string(binding.ContinuationID), string(binding.SubjectID)} {
+			b = binary.BigEndian.AppendUint16(b, uint16(len(value)))
+			b = append(b, value...)
+		}
+		b = append(b, binding.ScopeDigest[:]...)
 	}
 	s.AuthorizationBinding = sha256.Sum256(b)
 	clear(b)
@@ -269,3 +283,24 @@ func (Continuation) Format(s fmt.State, _ rune) {
 }
 func (Continuation) MarshalJSON() ([]byte, error) { return nil, ErrSensitiveSerialization }
 func (Continuation) MarshalText() ([]byte, error) { return nil, ErrSensitiveSerialization }
+
+// The ordinary v2 frame is preserved byte-for-byte. MFA's distinct v5 frame
+// reuses only this structural encoding, never ordinary pre-auth admission.
+func appendPreAuthAuthorization(b []byte, record session.PreAuthTransaction) []byte {
+	original, _ := record.Bindings()
+	i := original.Binding.Intent
+	for _, value := range []string{string(original.Binding.ID), string(i.TenantID), i.Action, i.Origin, i.CallbackURL, i.PolicyID, original.Binding.IssuedAt.UTC().Format(time.RFC3339Nano), original.Binding.ExpiresAt.UTC().Format(time.RFC3339Nano)} {
+		b = binary.BigEndian.AppendUint16(b, uint16(len(value)))
+		b = append(b, value...)
+	}
+	b = append(b, i.Nonce[:]...)
+	b = binary.BigEndian.AppendUint64(b, i.PolicyVersion)
+	resolved, _ := i.Remember.Bindings()
+	b = append(b, byte(resolved.Choice))
+	for _, duration := range []time.Duration{resolved.AbsoluteTTL, resolved.IdleTTL, resolved.RefreshAfter, resolved.FreshFor} {
+		b = binary.BigEndian.AppendUint64(b, uint64(duration))
+	}
+	b = binary.BigEndian.AppendUint32(b, original.Cookie.KeyVersion)
+	b = append(b, original.Cookie.Sum[:]...)
+	return binary.BigEndian.AppendUint64(b, original.Version)
+}

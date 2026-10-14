@@ -1,5 +1,44 @@
 # MFA HTTP transport
 
+## Password-origin secondary OTP login
+
+`NewOTPSendHandler(OTPSendConfig)` / `FeatureConfig.OTPSend` independently
+selects `POST /v1/mfa/otp-send`. Closed JSON contains `preAuthID`,
+`continuationID`, `factorID`, `channel` (`email` or `sms`), `token` and
+`callbackURL`; exactly one original `Idempotency-Key` header is required.
+Supply the same native sending/source owner and strict shared delivery limiter,
+original flow/device policies and exact HTTPS origin/callback. IP quota precedes
+the read-only native canonical-recipient source and destination quota. The native
+transaction still owns current authority, cooldown, challenge and encrypted queue.
+
+HTTP 202 contains only historical queue/outcome metadata, not an OTP, recipient,
+proof, session or CSRF. It is not proof of external delivery or login. Sending
+does not consume the child or enroll a factor. Uncertain/denied output stays
+credential-free and no-store. Send-only selection exposes no verification route.
+
+`NewOTPVerifyHandler(OTPVerifyConfig)` / `FeatureConfig.OTPVerify` independently
+selects `POST /v1/mfa/otp-verify`. Supply the actual native completion/rate-source
+owner, strict shared verification limiter, exact tenant/HTTPS/Origin/callback,
+original flow/device cookies and matching session-cookie/audience policy.
+This is backend transport, not a UI or an OTP authentication engine.
+
+Closed JSON contains `commandID`, `preAuthID`, `continuationID`, `token`, `code`,
+`callbackURL` and `trustDevice`. The native original committed send selects the
+enrolled factor and recipient. Factor/user/channel/generation/remember overrides,
+query credentials, Authorization, Idempotency-Key and X-MFA-Variant are forbidden.
+This profile selects neither enrollment nor active step-up. Unsupported trusted
+devices deny natively; failure never falls back to TOTP or recovery codes.
+
+IP admission precedes native original-source lookup and subject/child quotas;
+native OTP/capability/shared-attempt/session effects remain atomic. Only a fresh
+matching password/OTP commit delivers a secure session cookie and synchronizer
+header, with no credential in JSON. Replay, cancellation, conflict, uncertain
+commit or expiry at final response commitment deliver no credentials. Every
+response remains no-store. The selected email profile is exercised from native
+enrollment and delivered-code confirmation through the real sending/verification
+handlers, session read, replay and factor-authority invalidation. Other MFA
+profiles and full transport release qualification remain in development.
+
 ## Opt-in disable
 
 `FeatureConfig.Disable` / `NewDisableHandler(DisableConfig)` independently selects

@@ -8,7 +8,7 @@ import (
 )
 
 // Keep submitted intent and server-prepared counter state separate only for
-// the closed native anonymous TOTP/recovery profiles. Generic codecs stay exact.
+// the closed native anonymous TOTP/OTP/recovery profiles. Generic codecs stay exact.
 // Native counter validation and the complete frozen plan still bind every
 // prepared counter field; nothing permits replacing an existing declaration.
 func (c *Coordinator) originalMFAClaim(original, prepared identity.Command, plan *admittedKernelPlan) (claimRequest, *admittedKernelPlan, error) {
@@ -23,13 +23,14 @@ func (c *Coordinator) originalMFAClaim(original, prepared identity.Command, plan
 		return fail()
 	}
 	for _, field := range base.Fields {
-		if strings.HasPrefix(field.Name, "counter.") {
+		if strings.HasPrefix(field.Name, "counter.") || full.Operation.OperationID == "identity.mfa.otp-verify" && (field.Name == "otp" || strings.HasPrefix(field.Name, "otp.")) {
 			return fail()
 		}
 	}
 	filtered := full
 	filtered.Fields = nil
 	count := 0
+	otpFields := 0
 	for _, field := range full.Fields {
 		if strings.HasPrefix(field.Name, "counter.") {
 			switch field.Name {
@@ -38,6 +39,20 @@ func (c *Coordinator) originalMFAClaim(original, prepared identity.Command, plan
 			default:
 				return fail()
 			}
+		} else if full.Operation.OperationID == "identity.mfa.otp-verify" && (field.Name == "otp" || strings.HasPrefix(field.Name, "otp.")) {
+			switch field.Name {
+			case "otp.attempt-custody":
+				if field.Value.Kind != identity.FeatureBytes || len(field.Value.Bytes) == 0 || len(field.Value.Bytes) > 8192 {
+					return fail()
+				}
+			case "otp.digest-key-version":
+				if field.Value.Kind != identity.FeatureUint64 || field.Value.Uint64 == 0 || field.Value.Uint64 > uint64(^uint32(0)) {
+					return fail()
+				}
+			default:
+				return fail()
+			}
+			otpFields++
 		} else {
 			filtered.Fields = append(filtered.Fields, field)
 		}
@@ -45,10 +60,13 @@ func (c *Coordinator) originalMFAClaim(original, prepared identity.Command, plan
 	if count != 6 {
 		return fail()
 	}
+	if full.Operation.OperationID == "identity.mfa.otp-verify" && (otpFields != 2 || plan.otp == nil || !mfaOTPNetworkMatches(base, full) || validateOTPAttempt(otpAttemptOwner(plan), prepared, *plan.otp) != nil) {
+		return fail()
+	}
 	var stripped identity.Command
 	var err error
 	switch full.Operation.OperationID {
-	case "identity.mfa.totp-verify":
+	case "identity.mfa.totp-verify", "identity.mfa.otp-verify":
 		code, ok := prepared.OneTimeCode()
 		if !ok {
 			return fail()
@@ -162,4 +180,16 @@ func (c *Coordinator) PrepareMFARecoveryAttemptPlanWithOriginal(original, prepar
 // ExecutePreparedMFARecoveryFeature method without replacing retained evidence.
 func (c *Coordinator) PrepareMFARecoveryFeaturePlanWithOriginal(original, prepared identity.Command, p CommandPlan) (CommandPlan, error) {
 	return c.prepareMFAFeaturePlanWithOriginal(original, prepared, p, "identity.mfa.recovery-use")
+}
+
+// PrepareMFAOTPFeaturePlanWithOriginal validates the exact native consuming OTP
+// attempt and protected-counter enrichment while preserving submitted
+// code/browser/public intent as journal identity. The native OTP owner must
+// authenticate its encrypted custody; all other field changes deny.
+// Original transport.network must match the counter network; it remains only
+// in opaque original intent, not the stored preparation declaration.
+// No IO, comparison, charge, generation or session issuance occurs. Execute the exact
+// pair through ExecutePreparedMFAOTPFeature; retries cannot remap the attempt.
+func (c *Coordinator) PrepareMFAOTPFeaturePlanWithOriginal(original, prepared identity.Command, p CommandPlan) (CommandPlan, error) {
+	return c.prepareMFAFeaturePlanWithOriginal(original, prepared, p, "identity.mfa.otp-verify")
 }

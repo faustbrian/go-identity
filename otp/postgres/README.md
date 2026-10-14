@@ -1,5 +1,87 @@
 # OTP PostgreSQL
 
+## Native MFA login issuance
+
+`PrepareLoginSend` freezes the existing native code/bearer-free input with this
+issuer's complete configuration identity. Keep it only inside the original
+native request-key encrypted preparation. `ReadLoginSend`, `GenerateLoginSend`
+and `RestoreLoginSend` restore that same input/generation after restart; they
+never select a new recipient, renew original time or run another sender.
+`RecoverLoginSend` lends only the existing issuance tombstone vote, never proof
+or delivery. Current primary/child/browser/factor/risk admission is still the
+registered MFA owner's responsibility; these APIs alone are not public login.
+
+`NewMFALoginIssuer` selects a disjoint consumed-primary profile with actual
+pre-auth cookie keys, MFA-only consuming policy, native encrypted delivery and
+templates. It requires no authenticated-session admission. The MFA service must
+authenticate the signed child, original browser/password primary, confirmed
+factor, verified recipient and current policy/risk, then retain code-free input
+in its existing keyed preparation before invoking generation. `Restore` preserves
+original output; `PreparedMFALoginSend.Persist` uses only the registered MFA
+owner's Work. It never reopens the primary or consumes the child. Profile identity
+includes complete retained key, policy, store and template configuration.
+
+This issuer is not the public login send/completion service. The reference module
+supplies the selected native password-origin email-OTP sender and completion,
+with separately opt-in HTTP routes. Other profiles and full qualification remain
+pending. Do not substitute ordinary OTP signin or application-written
+verification/delivery glue; see `../../reference/README.md` for the native path.
+
+## Native MFA pending-enrollment issuance
+
+`NewMFAEnrollmentIssuer` implements MFA PostgreSQL's narrow
+`OTPEnrollmentIssuanceOwner`. Provide the actual attempt codec/store, authenticated
+session profile, encrypted delivery contributor, consuming-only MFA purpose
+policy and email/SMS templates. `Initialize(ctx, pool)` registers the same stable
+lockout binding and retained digest-key metadata as ordinary Send; it does not
+install schemas or start a business transaction.
+
+Compose it through `mfa/postgres.NewOTPEnrollmentSendService`, not by calling
+ordinary `SendService` from another command. MFA owns original parent/session/
+synchronizer, pending factor/recipient and protected risk admission; OTP owns
+generation, comparison material and shared abuse state. Both use the existing
+coordinator Work. MFA is a consumer-owned port, preserving the acyclic graph
+`otp/postgres -> session/postgres -> mfa/postgres`.
+
+Generated output retains one challenge and its matching encrypted delivery.
+Restoration cannot regenerate, change parent/configuration/generation or acquire
+live permission. `Persist` requires the actual registered MFA owner/root in its
+borrowed Work; standalone calls deny. Applications configure native owners and
+bounded sender callbacks, not missing OTP workflow stores. This issuer does not
+confirm enrollment, authenticate a login child or issue a session.
+
+The same issuer also implements MFA's `OTPEnrollmentConfirmationOwner`.
+`RestoreEnrollmentConfirmation` authenticates the exact original send root,
+input, generation, bearer and encrypted output without generation or comparison.
+The opaque result exposes the real consuming contributor. `Prepare` reads only
+the exact challenge version and maps a server-generated attempt onto the already
+frozen MFA confirmation root after acknowledged original preparation.
+`RestorePrepared` conserves authenticated code-free metadata, verifies original
+static intent and submitted code/bearer binding, and does not remap or renew it.
+Install `ConsumingMigrationSource` before selecting MFA's public confirmation
+service. MFA retains original preparation and owns current parent/factor/CSRF/
+risk admission and activation; OTP still owns every comparison, budget,
+reservation, finalization and consuming-recovery effect. This port is not an
+application callback clearance or an independent factor/session issuer.
+
+## Secondary MFA attempt custody under development
+
+The bounded v6 attempt record preserves OTP's explicit MFA-continuation arm:
+original tokenless pre-auth snapshot, primary command, child identity/scope and
+subject, with unchanged remember policy. The existing server-issued attempt MAC
+authenticates this code-free record before use. Original v1/v2/v4/v5 record bytes
+remain unchanged; no second journal or continuation store is introduced.
+
+Serialization is not native admission. The current generic pre-auth/session
+profiles do not accept this arm as pending or authenticated authority. MFA must
+authenticate its child/enrolled method/current policy/shared budget, session must
+authenticate consumed-primary provenance, and the sole coordinator must commit
+OTP/capability/MFA/session effects together. The selected native MFA/reference
+owners and opt-in HTTP handlers implement that password-origin email-OTP path.
+The real PostgreSQL reference acceptance covers its delivery and completion;
+other profiles and full qualification remain pending. Do not bypass those
+checks or reconstruct a pending flow from this projection.
+
 ## Original sign-in source for rate admission
 
 The selected `SigninService` also implements

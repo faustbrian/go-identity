@@ -26,6 +26,14 @@ func (p *mfaCompletionValidationParticipant) ValidateMFACompletion(c identity.Co
 	return nil
 }
 
+// This remains a custody oracle, not native factor/budget persistence.
+func (*mfaCompletionValidationParticipant) PrepareMFAOTPAttempt(context.Context, MFAOTPAttemptWork) (MFAAttemptDisposition, error) {
+	return MFAAttemptUnchanged, nil
+}
+func (*mfaCompletionValidationParticipant) RecordMFAOTPAttemptDenial(context.Context, MFAOTPAttemptWork) error {
+	return nil
+}
+
 func TestMFACompletionCustodyRequiresProtectedConsumedInvocation(t *testing.T) {
 	b, p := mfaCompletionPlanFixture(t, "totp-verify")
 	owner := &mfaCompletionValidationParticipant{}

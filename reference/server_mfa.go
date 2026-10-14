@@ -24,7 +24,12 @@ type HTTPMFAConfiguration struct {
 	// When both are selected, X-MFA-Variant: password chooses its native owner.
 	PasswordTOTPVerify bool
 	// PasswordRecoveryUse independently selects original password recovery.
-	PasswordRecoveryUse   bool
+	PasswordRecoveryUse bool
+	// PasswordOTPVerify independently selects the native original-send OTP owner.
+	// It selects no enrollment, active step-up or alternate-method fallback.
+	PasswordOTPVerify bool
+	// PasswordOTPSend independently selects native keyed OTP login sending.
+	PasswordOTPSend       bool
 	ActorID               identity.ActorID
 	PolicyRevision        authorization.Revision
 	VerificationNamespace string
@@ -40,6 +45,9 @@ type mfaHTTPState struct {
 	rate     *identityhttp.ChallengeVerificationRateLimiter
 	password *passwordTOTPHTTPProfile
 	recovery *passwordTOTPHTTPProfile
+	otp      *passwordTOTPHTTPProfile
+	send     *passwordTOTPHTTPProfile
+	delivery *identityhttp.AuthRateLimiter
 }
 
 type passwordTOTPHTTPProfile struct {
@@ -53,7 +61,7 @@ func composeMFAHTTP(c StoreConfiguration, base *preAuthHTTPState, rate *httpRate
 		return nil, nil
 	}
 	invalid := identity.InvalidInputError{Field: "reference_http_mfa"}
-	if (!c.HTTPMFA.TOTPVerify && !c.HTTPMFA.PasswordTOTPVerify && !c.HTTPMFA.PasswordRecoveryUse) || base == nil || base.device == nil || rate == nil || c.HTTPRate == nil {
+	if (!c.HTTPMFA.TOTPVerify && !c.HTTPMFA.PasswordTOTPVerify && !c.HTTPMFA.PasswordRecoveryUse && !c.HTTPMFA.PasswordOTPVerify && !c.HTTPMFA.PasswordOTPSend) || base == nil || base.device == nil || rate == nil || c.HTTPRate == nil {
 		return nil, invalid
 	}
 	h := *c.HTTPMFA
@@ -91,14 +99,32 @@ func composeMFAHTTP(c StoreConfiguration, base *preAuthHTTPState, rate *httpRate
 		}
 		out.recovery = &passwordTOTPHTTPProfile{origin: p.Origin, callback: p.CallbackURL, audience: n.Profile.Audience, cookie: n.Issuance.Cookie, timeout: c.PasswordSignin.Recovery.MaximumDuration}
 	}
+	if h.PasswordOTPVerify || h.PasswordOTPSend {
+		if c.PasswordSignin == nil || c.PasswordSignin.PreAuth == nil || c.PasswordSignin.MFA == nil || c.PasswordSignin.OTP == nil {
+			return nil, invalid
+		}
+		n, p := c.PasswordSignin.Native, *c.PasswordSignin.PreAuth
+		if p.Origin != base.deployment.Origin || p.ActorID != h.ActorID || n.Coordinator.QueryPolicy == nil || n.Coordinator.AdmissionPolicy == nil || uint64(h.PolicyRevision) != n.Coordinator.QueryPolicy.PolicyVersion || uint64(h.PolicyRevision) != n.Coordinator.AdmissionPolicy.PolicyVersion {
+			return nil, invalid
+		}
+		profile := &passwordTOTPHTTPProfile{origin: p.Origin, callback: p.CallbackURL, audience: n.Profile.Audience, cookie: n.Issuance.Cookie, timeout: c.PasswordSignin.OTP.MaximumDuration}
+		if h.PasswordOTPVerify {
+			out.otp = profile
+		}
+		if h.PasswordOTPSend {
+			out.send, out.delivery = profile, rate.limiter
+		}
+	}
 	if (authorization.DecisionContext{PolicyRevision: h.PolicyRevision, Request: authorization.Request{Tenant: "configuration", Subject: authorization.Subject{Kind: authorization.SubjectServiceAccount, ID: authorization.SubjectID(h.ActorID)}, Action: "identity.mfa.totp-verify", Resource: authorization.Resource{Type: "identity.mfa-continuation", ID: "configuration"}}}).Validate() != nil {
 		return nil, invalid
 	}
-	limiter, err := identityhttp.NewChallengeVerificationRateLimiter(identityhttp.ChallengeVerificationRateConfig{Shared: rate.backend, Namespace: h.VerificationNamespace, Key: h.VerificationKey, Now: time.Now, MaximumDuration: c.HTTPRate.MaximumDuration})
-	if err != nil {
-		return nil, invalid
+	if h.TOTPVerify || h.PasswordTOTPVerify || h.PasswordRecoveryUse || h.PasswordOTPVerify {
+		limiter, err := identityhttp.NewChallengeVerificationRateLimiter(identityhttp.ChallengeVerificationRateConfig{Shared: rate.backend, Namespace: h.VerificationNamespace, Key: h.VerificationKey, Now: time.Now, MaximumDuration: c.HTTPRate.MaximumDuration})
+		if err != nil {
+			return nil, invalid
+		}
+		out.rate = limiter
 	}
-	out.rate = limiter
 	return out, nil
 }
 
@@ -177,6 +203,32 @@ func (s *Server) mfaFeature(network identityhttp.NetworkConfig, f FeatureSet) (*
 		p := h.recovery
 		selection := mfahttp.RecoveryUseConfig{PasswordPrimary: true, Network: network, Service: native, Rate: h.rate, Origin: identityhttp.Origin(p.origin), CallbackURL: p.callback, SessionCookie: p.cookie, Device: *s.state.features.httpPreAuth.device, ActorID: h.config.ActorID, PolicyRevision: h.config.PolicyRevision, Audience: p.audience, Now: time.Now, MaximumDuration: p.timeout}
 		config.RecoveryUse = &selection
+	}
+	if h != nil && h.otp != nil {
+		owner, err := f.PasswordOTP()
+		if err != nil {
+			return nil, err
+		}
+		native, ok := owner.(mfahttp.OTPVerifyService)
+		if !ok {
+			return nil, identity.InvalidInputError{Field: "reference_http_mfa_otp"}
+		}
+		p := h.otp
+		selection := mfahttp.OTPVerifyConfig{Network: network, Service: native, Rate: h.rate, Origin: identityhttp.Origin(p.origin), CallbackURL: p.callback, SessionCookie: p.cookie, Device: *s.state.features.httpPreAuth.device, ActorID: h.config.ActorID, PolicyRevision: h.config.PolicyRevision, Audience: p.audience, Now: time.Now, MaximumDuration: p.timeout}
+		config.OTPVerify = &selection
+	}
+	if h != nil && h.send != nil {
+		owner, err := f.PasswordOTP()
+		if err != nil {
+			return nil, err
+		}
+		native, ok := owner.(mfahttp.OTPSendService)
+		if !ok {
+			return nil, identity.InvalidInputError{Field: "reference_http_mfa_otp_send"}
+		}
+		p := h.send
+		selection := mfahttp.OTPSendConfig{Network: network, Service: native, Rate: h.delivery, Origin: identityhttp.Origin(p.origin), CallbackURL: p.callback, Device: *s.state.features.httpPreAuth.device, ActorID: h.config.ActorID, PolicyRevision: h.config.PolicyRevision, Now: time.Now, MaximumDuration: p.timeout}
+		config.OTPSend = &selection
 	}
 	feature, err := mfahttp.NewFeature(config)
 	if err != nil {

@@ -61,12 +61,14 @@ func (MFATOTPAttemptBinding) MarshalText() ([]byte, error) { return nil, invalid
 // There is no general Work, transaction, reservation or session accessor.
 type MFATOTPAttemptWork struct{ state *mfaAttemptState }
 type mfaAttemptState struct {
-	work               Work
-	owner              MFACompletionContributor
-	command            identity.Command
-	active             bool
-	counterCalled      bool
-	counterDisposition CommandCounterDisposition
+	work                 Work
+	owner                MFACompletionContributor
+	command              identity.Command
+	active               bool
+	counterCalled        bool
+	counterAdmissionOnly bool
+	counterDisposition   CommandCounterDisposition
+	otpDenied            bool
 }
 
 // Format redacts callback authority and opaque input.
@@ -100,7 +102,7 @@ func (s *mfaAttemptState) usable() error {
 		return invalidWork()
 	}
 	e := s.work.state.execution
-	if e.coordinator == nil || !e.coordinator.owns(s.work) || e.reservation == nil || e.reservation.plan == nil || e.reservation.plan.otp != nil || e.reservation.plan.mfaCompletion == nil || e.reservation.plan.fingerprint == ([32]byte{}) || e.reservation.journal.generation == 0 || e.reservation.journal.previousGeneration != 0 || mfaAttemptOwner(e.reservation.plan) != s.owner {
+	if e.coordinator == nil || !e.coordinator.owns(s.work) || e.reservation == nil || e.reservation.plan == nil || e.reservation.plan.mfaCompletion == nil || e.reservation.plan.fingerprint == ([32]byte{}) || e.reservation.journal.generation == 0 || e.reservation.journal.previousGeneration != 0 || mfaAttemptOwner(e.reservation.plan) != s.owner {
 		return invalidWork()
 	}
 	return s.work.usable()
@@ -174,6 +176,16 @@ func reserveMFAAttemptCounters(ctx context.Context, state *mfaAttemptState) (Com
 		return 0, native.fail(ctx, invalidPlan())
 	}
 	state.counterCalled = true
+	if state.counterAdmissionOnly {
+		// Retained preparation has already committed this generation's charge.
+		// Authenticate its exact scope/fingerprint and current allowance; another
+		// reservation would debit twice and collide with the same command row.
+		if err := native.state.execution.coordinator.checkCommandCounters(ctx, native, state.command); err != nil {
+			return 0, err
+		}
+		state.counterDisposition = CommandCounterAllowed
+		return CommandCounterAllowed, nil
+	}
 	choice, err := native.state.execution.coordinator.reserveCounterInWork(ctx, native, participant, state.command)
 	if err != nil {
 		return 0, native.fail(ctx, err)
@@ -256,7 +268,7 @@ func requireMFAAttemptCredential(ctx context.Context, state *mfaAttemptState, bi
 }
 
 func mfaAttemptOwner(p *admittedKernelPlan) MFACompletionContributor {
-	if p == nil || p.feature == nil || p.mfaCompletion == nil || p.otp != nil {
+	if p == nil || p.feature == nil || p.mfaCompletion == nil || p.otp != nil && p.feature.Operation.OperationID != "identity.mfa.otp-verify" {
 		return nil
 	}
 	for _, e := range p.contributors {
@@ -265,6 +277,10 @@ func mfaAttemptOwner(p *admittedKernelPlan) MFACompletionContributor {
 				return nil
 			}
 			switch p.feature.Operation.OperationID {
+			case "identity.mfa.otp-verify":
+				if owner, ok := e.contributor.(MFAOTPAttemptContributor); ok && p.otp != nil {
+					return owner
+				}
 			case "identity.mfa.totp-verify":
 				if owner, ok := e.contributor.(MFATOTPAttemptContributor); ok {
 					return owner

@@ -23,11 +23,11 @@ func (p *Contributor) mapSendRequest(ctx context.Context, request sendRequestRec
 		return identity.Command{}, err
 	}
 	defer clear(wire)
-	subject := identity.FeatureSubjectUser
-	if binding.UserID == "" {
-		subject = identity.FeatureSubjectAnonymousFlow
+	op, err := boundIssuanceOperation(binding)
+	if err != nil {
+		return identity.Command{}, err
 	}
-	spec := identity.FeatureCommandSpec{Binding: binding, Operation: issuanceOperation(subject), Fields: []identity.FeatureField{{Name: "otp.send-request", Value: identity.FeatureValue{Kind: identity.FeatureBytes, Bytes: wire}}}}
+	spec := identity.FeatureCommandSpec{Binding: binding, Operation: op, Fields: []identity.FeatureField{{Name: "otp.send-request", Value: identity.FeatureValue{Kind: identity.FeatureBytes, Bytes: wire}}}}
 	b, _ := request.continuation.Bindings()
 	var command identity.Command
 	if _, ok := b.Authorization.AuthenticatedSession(); ok {
@@ -53,7 +53,8 @@ func (p *Contributor) authenticateSendRequest(ctx context.Context, command ident
 		return bad(err)
 	}
 	spec, ok := command.Feature()
-	if !ok || spec.Operation != issuanceOperation(spec.Operation.SubjectRequirement) || len(spec.Fields) != 1 ||
+	op, opErr := boundIssuanceOperation(spec.Binding)
+	if !ok || opErr != nil || spec.Operation != op || len(spec.Fields) != 1 ||
 		spec.Fields[0].Name != "otp.send-request" || spec.Fields[0].Value.Kind != identity.FeatureBytes {
 		return bad(ErrInvalidCommand)
 	}

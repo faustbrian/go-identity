@@ -4,6 +4,8 @@ import (
 	"context"
 	"crypto/hmac"
 
+	"github.com/faustbrian/go-authorization"
+
 	auth "github.com/faustbrian/go-authentication"
 	identity "github.com/faustbrian/go-identity"
 	"github.com/faustbrian/go-identity/otp"
@@ -18,6 +20,62 @@ func issuanceOperation(subject identity.FeatureSubjectRequirement) identity.Feat
 		schema = "identity-otp-send-preauth"
 	}
 	return identity.FeatureOperation{Owner: "identity/otp", OperationID: "identity.otp.send", SchemaID: schema, SchemaVersion: 1, RecordRequirement: identity.FeatureRecordRequired, SubjectRequirement: subject}
+}
+
+// This is a concrete native owner contract, not caller-selected registration.
+// MFA keeps factor/parent/CSRF/risk admission; OTP supplies only its issuance
+// effect in that owner's Work. No other MFA operation can enter this profile.
+func mfaEnrollmentSendOperation() identity.FeatureOperation {
+	return identity.FeatureOperation{Owner: "identity/mfa", OperationID: "identity.mfa.otp-send", SchemaID: "mfa-otp-send", SchemaVersion: 1, RecordRequirement: identity.FeatureRecordRequired}
+}
+
+func mfaLoginSendOperation() identity.FeatureOperation {
+	return identity.FeatureOperation{Owner: "identity/mfa", OperationID: "identity.mfa.otp-send", SchemaID: "mfa-otp-send", SchemaVersion: 1, RecordRequirement: identity.FeatureRecordRequired, SubjectRequirement: identity.FeatureSubjectAnonymousFlow}
+}
+
+func boundIssuanceOperation(b identity.CommandBinding) (identity.FeatureOperation, error) {
+	subject := identity.FeatureSubjectUser
+	if b.UserID == "" {
+		subject = identity.FeatureSubjectAnonymousFlow
+	}
+	op := issuanceOperation(subject)
+	if b.OperationID == mfaEnrollmentSendOperation().OperationID {
+		op = mfaEnrollmentSendOperation()
+		if b.UserID == "" {
+			op = mfaLoginSendOperation()
+		} else if b.ActorID != identity.ActorID(b.UserID) || b.ActorKind != authorization.SubjectUser {
+			return identity.FeatureOperation{}, ErrInvalidCommand
+		}
+		if b.RecordID == string(b.CommandID) {
+			return identity.FeatureOperation{}, ErrInvalidCommand
+		}
+		if _, err := identity.ParseCommandID(b.RecordID); err != nil {
+			return identity.FeatureOperation{}, ErrInvalidCommand
+		}
+	}
+	if b.ValidateFor(op) != nil {
+		return identity.FeatureOperation{}, ErrInvalidCommand
+	}
+	return op, nil
+}
+
+func issuanceScopeMatches(b identity.CommandBinding, scope otp.DigestScopeSpec) bool {
+	op, err := boundIssuanceOperation(b)
+	if err != nil || scope.TenantID != string(b.TenantID) {
+		return false
+	}
+	if op == mfaLoginSendOperation() {
+		_, subjectErr := identity.ParseIdentifierID(scope.SubjectID)
+		_, targetErr := identity.ParseCommandID(scope.TargetID)
+		return subjectErr == nil && targetErr == nil && scope.Purpose == otp.PurposeMFA && scope.ChallengeID == string(b.CommandID)
+	}
+	if scope.SubjectID != string(b.UserID) {
+		return false
+	}
+	if op == mfaEnrollmentSendOperation() {
+		return scope.Purpose == otp.PurposeMFA && scope.TargetID == b.RecordID && scope.ChallengeID == string(b.CommandID)
+	}
+	return scope.ChallengeID == b.RecordID
 }
 
 // MapIssuancePreAuth freezes a newly generated digest-only challenge, complete
@@ -53,17 +111,25 @@ type issuanceCustody struct {
 
 func validIssuance(challenge otp.Challenge, spec identity.FeatureCommandSpec) bool {
 	s, err := challenge.Bindings()
-	if err != nil || spec.Binding.ValidateFor(spec.Operation) != nil || spec.Operation != issuanceOperation(spec.Operation.SubjectRequirement) || s.State != otp.ChallengeIssued || s.Version != 1 || s.UsedAttempts != 0 || s.FailedAttempts != 0 || s.Checks != 0 {
+	op, opErr := boundIssuanceOperation(spec.Binding)
+	if err != nil || opErr != nil || spec.Operation != op || s.State != otp.ChallengeIssued || s.Version != 1 || s.UsedAttempts != 0 || s.FailedAttempts != 0 || s.Checks != 0 {
 		return false
 	}
 	b, err := s.Continuation.Bindings()
 	p, _, policyErr := s.Policy.Bindings()
-	if err != nil || policyErr != nil || p.TTL%1000 != 0 || p.ResendInterval%1000 != 0 || b.Scope.TenantID != string(spec.Binding.TenantID) || b.Scope.SubjectID != string(spec.Binding.UserID) || b.Scope.ChallengeID != spec.Binding.RecordID {
+	if err != nil || policyErr != nil || p.TTL%1000 != 0 || p.ResendInterval%1000 != 0 || !issuanceScopeMatches(spec.Binding, b.Scope) {
 		return false
 	}
 	if original, ok := b.Authorization.PreAuthTransaction(); ok {
+		if op == mfaEnrollmentSendOperation() || op == mfaLoginSendOperation() {
+			return false
+		}
 		r, err := original.Bindings()
 		return err == nil && (spec.Binding.UserID != "" || spec.Binding.AnonymousFlowID == string(r.Binding.ID))
+	}
+	if _, _, ok := b.Authorization.MFAContinuation(); ok {
+		_, err := retainedMFAFlow(spec.Binding, spec.Operation, s.Continuation)
+		return err == nil && op == mfaLoginSendOperation()
 	}
 	_, ok := b.Authorization.AuthenticatedSession()
 	return ok && spec.Binding.UserID != ""
@@ -328,6 +394,13 @@ func (p *Contributor) authenticateSendFlow(ctx context.Context, command identity
 		flow.session = original
 	} else {
 		original, bound := b.Authorization.PreAuthTransaction()
+		mfaFlow, mfaBound := nativeFlow{}, false
+		if !bound {
+			var err error
+			mfaFlow, err = retainedMFAFlow(spec.Binding, spec.Operation, continuation)
+			mfaBound = err == nil
+			original, bound = mfaFlow.mfaOriginal, mfaBound
+		}
 		bearer, present := command.PreAuthCookie()
 		if !bound || !present || p.preauth == nil {
 			return bad(ErrInvalidCommand)
@@ -345,7 +418,11 @@ func (p *Contributor) authenticateSendFlow(ctx context.Context, command identity
 		if err != nil || actual.KeyVersion != projection.Cookie.KeyVersion || !hmac.Equal(actual.Sum[:], projection.Cookie.Sum[:]) {
 			return bad(ErrInvalidCommand)
 		}
-		flow.preauth = original
+		if mfaBound {
+			flow = mfaFlow
+		} else {
+			flow.preauth = original
+		}
 	}
 	if err := ctx.Err(); err != nil {
 		return bad(err)

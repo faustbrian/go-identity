@@ -20,6 +20,8 @@ import (
 // derive its commitment under the exact retained pre-auth key and compare the
 // original primary record, policy and ownership. Wrong but syntactically valid
 // cookies remain distinct submitted intent until that admission rejects them.
+// The distinct MFA continuation arm preserves an already-consumed primary;
+// native admission authenticates that lineage read-only, never reopens it.
 // The coordinator fingerprints the bearer independently; it is never stored in
 // Feature fields, attempt envelopes, safe collision fields or recovery outputs.
 // Map once and preserve the resulting command through ambiguity; never remap a
@@ -62,7 +64,9 @@ func (c *AttemptCodec) mapPreAuth(ctx context.Context, a otp.AttemptCommand, dig
 		return bad(ErrInvalidCommand)
 	}
 	if _, bound := continuation.Authorization.PreAuthTransaction(); !bound {
-		return bad(ErrInvalidCommand)
+		if _, _, bound := continuation.Authorization.MFAContinuation(); !bound {
+			return bad(ErrInvalidCommand)
+		}
 	}
 	command, plan, err := c.mapAttempt(ctx, a, digestKeyVersion, spec, authority)
 	if err != nil {

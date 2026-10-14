@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+- Cover the selected email secondary-OTP workflow through actual enrollment,
+  delivered-code confirmation, HTTP send/verify, session/CSRF, public session
+  read, credential-free replay and factor-authority invalidation. Full MFA
+  transport qualification remains separate.
+
+- Independently select keyed secondary-OTP sending with original child/browser,
+  confirmed-factor/channel and read-only canonical-recipient quota custody.
+  Queue acceptance returns HTTP 202 metadata only; no code, recipient, proof or
+  session is disclosed, and unselected verification remains unavailable.
+
+- Add independently selected password-origin secondary OTP login verification
+  with closed original-child/browser input and no factor or recipient override.
+  Native original-source quotas precede atomic verification; replay, ambiguity,
+  cancellation and expired final response withhold session/CSRF credentials.
+  OTP never falls back to TOTP, recovery, enrollment or active step-up.
+
 - Select replacement independently alongside rename/removal with a frozen
   native recovery-code count. Closed replacement requests forbid labels; fresh
   known commits deliver bounded unique canonical codes and pending metadata

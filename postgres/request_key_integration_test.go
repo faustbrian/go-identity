@@ -479,6 +479,34 @@ func TestRequestKeyIntegration(t *testing.T) {
 		if err != nil || again != binding || !bytes.Equal(stored, original) {
 			t.Fatal("restart lost original provenance", err)
 		}
+		// Read-only source discovery cannot allocate correlation or invoke native
+		// preparation; only its exact historical ciphertext may be observed.
+		var beforeMappings, afterMappings int
+		if err := pool.Raw().QueryRow(ctx, `SELECT count(*) FROM identity.request_key_mappings`).Scan(&beforeMappings); err != nil {
+			t.Fatal(err)
+		}
+		if b, out, found, err := restarted.ReadPreparedRequestKey(ctx, preparedScope, keyFor("read_only_missing"), intent, preparedCaller, feature, freshOwner); err != nil || found || out != nil || b != (RequestKeyPreparationBinding{}) {
+			t.Fatal("authorized absence allocated or disclosed input", err)
+		}
+		if err := pool.Raw().QueryRow(ctx, `SELECT count(*) FROM identity.request_key_mappings`).Scan(&afterMappings); err != nil || afterMappings != beforeMappings {
+			t.Fatal("read-only source allocated a request key", err)
+		}
+		if b, out, found, err := restarted.ReadPreparedRequestKey(ctx, preparedScope, keyFor("prepared_original"), intent, preparedCaller, feature, freshOwner); err != nil || !found || b != binding || !bytes.Equal(out, original) {
+			t.Fatal("read-only original lookup lost retained custody", err)
+		}
+		if b, out, _, err := restarted.ReadPreparedRequestKey(ctx, preparedScope, keyFor("prepared_original"), changed, preparedCaller, feature, freshOwner); !errors.As(err, &conflict) || out != nil || b != (RequestKeyPreparationBinding{}) {
+			t.Fatal("changed intent recovered read-only input", err)
+		}
+		foreignCaller := preparedCaller.Clone()
+		foreignCaller.Request.Subject.ID = "foreign"
+		if b, out, found, err := restarted.ReadPreparedRequestKey(ctx, preparedScope, keyFor("prepared_original"), intent, foreignCaller, feature, freshOwner); err == nil || found || out != nil || b != (RequestKeyPreparationBinding{}) {
+			t.Fatal("foreign actor observed original input")
+		}
+		stopped, stop := context.WithCancel(ctx)
+		stop()
+		if b, out, found, err := restarted.ReadPreparedRequestKey(stopped, preparedScope, keyFor("prepared_original"), intent, preparedCaller, feature, freshOwner); err == nil || found || out != nil || b != (RequestKeyPreparationBinding{}) {
+			t.Fatal("canceled lookup exported custody")
+		}
 		if b, out, err := restarted.ResolvePreparedRequestKey(ctx, preparedScope, keyFor("prepared_original"), changed, preparedCaller, feature, freshOwner); !errors.As(err, &conflict) || out != nil || b != (RequestKeyPreparationBinding{}) {
 			t.Fatal("changed intent recovered custody", err)
 		}

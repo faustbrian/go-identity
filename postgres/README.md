@@ -1,5 +1,38 @@
 # Identity PostgreSQL
 
+## Anonymous MFA login-send counter source
+
+`MFALoginSendCounterContributor` lets the registered native MFA owner lend its
+authenticated original resolved account to the exact counter invocation.
+`CommandCounterWork.MFALoginSendScope` and the current-check counterpart accept
+only the closed anonymous OTP-send profile, preserve original browser identity
+and reject foreign, returned or other-profile custody. The journal remains
+anonymous; these methods create no session, fake child-consumption plan, store
+or proof. The source's protected input/commit checks remain mandatory.
+
+## Native OTP enrollment confirmation
+
+The closed authenticated `identity.mfa.otp-verify` /
+`mfa-otp-enrollment-confirm` profile can retain one native consuming attempt in
+the existing preparation journal. Original protected counters, factor lifecycle,
+audit and static intent stay unchanged. Restoration adds only OTP's actual
+consuming contributor/plan; it cannot introduce a login child, capability,
+delivery or session effect. Ordinary OTP admission profiles remain separate.
+
+`FeatureInputAdmissionContributor` supplies the exact registered MFA owner's
+original primary/factor/recipient checks before OTP counted denial and consuming
+reservation, and again after waits before commitment. Its synchronous scope
+does not acquire Apply-only command authority. Failures poison the complete
+transaction; no callback result becomes independent authentication evidence.
+The existing counted-denial phase commits wrong-attempt/audit/history together.
+Correct verification proceeds through the real reservation, protected
+`Work.OTPConsumption`, feature activation and OTP finalization in the sole
+coordinator. Retained output and terminal replay never generate another attempt.
+
+Use the native MFA confirmation service, not application-written orchestration.
+The profile is not OTP login completion or an authorization to omit a pending
+feature's current admission, configured protected risk or consuming history.
+
 ## Atomic MFA completion
 
 `CommandPlan.MFACompletion` selects the session-producing alternative of the
@@ -771,6 +804,23 @@ Supply the exact submitted code/browser command and its native counter-enriched
 counterpart. Only the six known, independently validated counter fields may be
 added. Original input owns journal history; the complete counter declaration
 still owns preparation and charging. Generic command codecs are unchanged.
+
+For the closed anonymous OTP completion profile, use
+`PrepareMFAOTPFeaturePlanWithOriginal` / `ExecutePreparedMFAOTPFeature`.
+Besides those six counter fields, only the two authenticated native OTP custody
+fields may enrich original input. Bind the unchanged trusted network as
+`transport.network` in original opaque intent. The existing immutable declaration
+retains only encrypted OTP custody and original counter time/key metadata before
+session generation or comparison; raw network/base intent is not persisted there.
+On retry, `QueryMFAOTPPreparation` authenticates the exact original opaque
+code/browser/intent identity and reconstructs independently owned metadata for the native
+OTP owner's `RestorePrepared`; never prepare another attempt or refresh its
+counter time. It also restores checkpoints that have no generated session output.
+`QueryMFAOTPCommand` observes pending or terminal history before any mutable
+continuation/factor read. A pending receipt cannot justify new generation, and
+terminal history cannot reveal credentials. The native OTP, MFA, risk and session
+owners still must implement the protected complete login transaction; these
+coordinator APIs alone are not a public OTP authentication service.
 
 `QueryAuthenticatedCommand` is a read-only bridge for the owned authenticated
 session adapter. Supply the original mapped command, opaque final proof,

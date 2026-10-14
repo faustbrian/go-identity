@@ -83,6 +83,7 @@ func (TOTPEnrollmentConfig) MarshalText() ([]byte, error) { return nil, invalidE
 // before use. Construction does not initialize missing account factor state.
 type TOTPEnrollmentService struct{ state func() *totpEnrollmentState }
 type totpEnrollmentState struct {
+	method   string
 	pool     *database.Pool
 	config   TOTPEnrollmentConfig
 	crypto   *envelope.Service
@@ -100,7 +101,17 @@ func invalidEnrollment() error { return identity.InvalidInputError{Field: "mfa_e
 // cannot substitute for protected velocity. Missing/unsupported owners deny.
 // Existing account factor absence is never interpreted as known-empty state.
 func NewTOTPEnrollmentService(pool *database.Pool, c TOTPEnrollmentConfig, keys *keyring.Provider) (*TOTPEnrollmentService, error) {
-	if pool == nil || pool.Raw() == nil || keys == nil || nilEnrollmentPrimary(c.Primary) || c.intentKey == nil || c.recoveryKey == nil || c.intentKey() == ([32]byte{}) || c.recoveryKey() == ([32]byte{}) || c.RecoveryKeyVersion == 0 || c.MaximumDuration < time.Millisecond || c.MaximumDuration > 5*time.Second || c.TTL < time.Second || c.TTL > 15*time.Minute || c.TTL%time.Microsecond != 0 || c.Profile.Validate() != nil || (c.Profile.Digits != 6 && c.Profile.Digits != 8) || c.Coordinator.QueryPolicy == nil || c.Coordinator.MaximumDuration <= 0 || c.Coordinator.MaximumDuration > c.MaximumDuration || c.Counters.CommandCounters == nil || !c.Counters.EnforceLockouts {
+	return newEnrollmentService(pool, c, keys, "totp")
+}
+
+// The two selected public services share the same request-key, primary, risk,
+// preparation, recovery and transaction owners. The method is frozen at startup;
+// request input cannot turn a TOTP service into a weaker OTP fallback.
+func newEnrollmentService(pool *database.Pool, c TOTPEnrollmentConfig, keys *keyring.Provider, method string) (*TOTPEnrollmentService, error) {
+	if method != "totp" && method != "otp" {
+		return nil, invalidEnrollment()
+	}
+	if pool == nil || pool.Raw() == nil || keys == nil || nilEnrollmentPrimary(c.Primary) || c.intentKey == nil || c.recoveryKey == nil || c.intentKey() == ([32]byte{}) || c.recoveryKey() == ([32]byte{}) || c.RecoveryKeyVersion == 0 || c.MaximumDuration < time.Millisecond || c.MaximumDuration > 5*time.Second || c.TTL < time.Second || c.TTL > 15*time.Minute || c.TTL%time.Microsecond != 0 || method == "totp" && (c.Profile.Validate() != nil || (c.Profile.Digits != 6 && c.Profile.Digits != 8)) || c.Coordinator.QueryPolicy == nil || c.Coordinator.MaximumDuration <= 0 || c.Coordinator.MaximumDuration > c.MaximumDuration || c.Counters.CommandCounters == nil || !c.Counters.EnforceLockouts {
 		return nil, invalidEnrollment()
 	}
 	for _, value := range []string{c.ConfigurationID, c.PolicyID} {
@@ -119,7 +130,7 @@ func NewTOTPEnrollmentService(pool *database.Pool, c TOTPEnrollmentConfig, keys 
 	c.Coordinator.QueryPolicy, c.Coordinator.AdmissionPolicy = &query, &admission
 	c.Coordinator.RetainedFingerprintKeys = maps.Clone(c.Coordinator.RetainedFingerprintKeys)
 	c.Risk.Keys = slices.Clone(c.Risk.Keys)
-	s := &totpEnrollmentState{pool: pool, config: c}
+	s := &totpEnrollmentState{pool: pool, config: c, method: method}
 	var err error
 	if s.domain, err = kernel.NewRepository(pool, kernel.Config{MaximumDuration: c.MaximumDuration}); err != nil {
 		return nil, err
@@ -127,8 +138,10 @@ func NewTOTPEnrollmentService(pool *database.Pool, c TOTPEnrollmentConfig, keys 
 	if s.crypto, err = envelope.NewService(keys); err != nil {
 		return nil, invalidEnrollment()
 	}
-	if s.preparer, err = NewTOTPEnrollmentPreparer(keys, c.ActiveEnvelopeKeyID); err != nil {
-		return nil, err
+	if method == "totp" {
+		if s.preparer, err = NewTOTPEnrollmentPreparer(keys, c.ActiveEnvelopeKeyID); err != nil {
+			return nil, err
+		}
 	}
 	if s.counters, err = riskpg.NewRepository(c.Counters); err != nil {
 		return nil, invalidEnrollment()
@@ -155,6 +168,12 @@ func NewTOTPEnrollmentService(pool *database.Pool, c TOTPEnrollmentConfig, keys 
 		return nil, invalidEnrollment()
 	}
 	s.identity = sha256.Sum256(frame)
+	if method == "otp" {
+		// Retain historical TOTP configuration identity and domain-separate the
+		// explicit OTP profile and its protected-counter namespace. Moving the
+		// store must not restore original requests under an uncharged owner.
+		s.identity = sha256.Sum256(append([]byte("mfa-otp-enrollment-config-v1\x00"+c.Counters.Schema+"\x00"), frame...))
+	}
 	clear(frame)
 	service := &TOTPEnrollmentService{state: func() *totpEnrollmentState { return s }}
 	if _, _, err := s.coordinator(&totpEnrollmentPhase{state: s}); err != nil {
@@ -199,7 +218,14 @@ func (s *totpEnrollmentState) coordinator(p kernel.FeatureExecutionContributor) 
 	if err != nil {
 		return nil, nil, err
 	}
-	r, err := kernel.NewContributorRegistry([]kernel.Contributor{s.domain, s.counters, audits, lifecycle, p})
+	contributors := []kernel.Contributor{s.domain, s.counters, audits, lifecycle, p}
+	if phase, ok := p.(*totpURIPhase); ok && phase.send != nil {
+		contributors = append(contributors, phase.send.issuance.DeliveryContributor())
+	}
+	if phase, ok := p.(*totpURIPhase); ok && phase.otpConfirmation != nil {
+		contributors = append(contributors, phase.otpConfirmation.owner.ConfirmationContributor())
+	}
+	r, err := kernel.NewContributorRegistry(contributors)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -219,7 +245,7 @@ func (s *TOTPEnrollmentService) Enable(ctx context.Context, r mfa.EnableRequest)
 		return out, invalidEnrollment()
 	}
 	state := s.state()
-	if r.FactorPolicy.Method != "totp" || r.FactorPolicy.RequireUserVerification || r.FactorPolicy.AllowTrustedDevice {
+	if r.FactorPolicy.Method != state.method || r.FactorPolicy.RequireUserVerification || r.FactorPolicy.AllowTrustedDevice {
 		return out, identity.ForbiddenError{}
 	}
 	ctx, stop := context.WithTimeout(ctx, state.config.MaximumDuration)
@@ -291,7 +317,7 @@ func (s *TOTPEnrollmentService) Enable(ctx context.Context, r mfa.EnableRequest)
 		return out, err
 	}
 	m := p.input.Meta
-	out.Enrollment = mfa.Enrollment{ID: mfa.EnrollmentID(m.FactorID), FactorMethod: "totp", Version: 1, ExpiresAt: m.ExpiresAt}
+	out.Enrollment = mfa.Enrollment{ID: mfa.EnrollmentID(m.FactorID), FactorMethod: state.method, Version: 1, ExpiresAt: m.ExpiresAt}
 	if p.applied {
 		out.RecoveryMaterial, err = p.recoveryDelivery(ctx)
 	}
@@ -299,13 +325,20 @@ func (s *TOTPEnrollmentService) Enable(ctx context.Context, r mfa.EnableRequest)
 }
 
 func (s *totpEnrollmentState) requestIntent(r mfa.EnableRequest) (identity.RequestIntent, error) {
+	// Deliberate original-custody projection, not implicit export of the
+	// redacted public selection value. Nil preserves historical TOTP bytes.
+	var otp *otpEnrollmentSelection
+	if r.OTP != nil {
+		otp = &otpEnrollmentSelection{Channel: r.OTP.Channel, IdentifierID: r.OTP.IdentifierID}
+	}
 	plain, err := json.Marshal(struct {
 		Primary          any
 		Reauthentication any
 		Policy           mfa.FactorPolicy
 		Network          string
-		Cookie           bool `json:",omitempty"`
-	}{r.PrimaryProof, r.Reauthentication, r.FactorPolicy, r.Network, r.CSRFToken != (session.CSRFToken{})})
+		Cookie           bool                    `json:",omitempty"`
+		OTP              *otpEnrollmentSelection `json:",omitempty"`
+	}{r.PrimaryProof, r.Reauthentication, r.FactorPolicy, r.Network, r.CSRFToken != (session.CSRFToken{}), otp})
 	if err != nil || len(plain) > 32768 {
 		clear(plain)
 		return identity.RequestIntent{}, invalidEnrollment()

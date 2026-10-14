@@ -207,6 +207,8 @@ func mfaCompletionOperationForMethod(method string) (identity.FeatureOperation, 
 	switch method {
 	case "totp":
 		return mfaTOTPCompletionOperation(), true
+	case "otp":
+		return identity.FeatureOperation{Owner: "identity/mfa", OperationID: "identity.mfa.otp-verify", SchemaID: "mfa-otp-verify", SchemaVersion: 1, RecordRequirement: identity.FeatureRecordOmitted, SubjectRequirement: identity.FeatureSubjectAnonymousFlow}, true
 	case "recovery-code":
 		return identity.FeatureOperation{Owner: "identity/mfa", OperationID: "identity.mfa.recovery-use", SchemaID: "mfa-recovery-use", SchemaVersion: 1, RecordRequirement: identity.FeatureRecordOmitted, SubjectRequirement: identity.FeatureSubjectAnonymousFlow}, true
 	default:

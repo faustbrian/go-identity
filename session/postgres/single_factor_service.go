@@ -137,9 +137,13 @@ func newSelectedNativeSessionService(pool *database.Pool, c SingleFactorSessionS
 		}
 	}
 	if p := passwordMFA; p != nil {
+		r.mfaOTPFactors, err = mfapg.NewOTPSessionFactorReader(pool, c.Repository.MaximumDuration)
+		if err != nil {
+			return nil, session.ErrInvalidInput
+		}
 		copied := *p
 		copied.GlobalAuthorityID, copied.PolicyNamespace, copied.Audience, copied.AuthenticationMethod, copied.CredentialOwner = clone(p.GlobalAuthorityID), clone(p.PolicyNamespace), clone(p.Audience), clone(p.AuthenticationMethod), clone(p.CredentialOwner)
-		r.mfaPasswordReader = &primarySessionReader{native: native, domain: domain, policy: policy, clock: c.Validation.Clock, profile: copied, mfaPassword: true, mfaFactors: r.mfaFactors}
+		r.mfaPasswordReader = &primarySessionReader{native: native, domain: domain, policy: policy, clock: c.Validation.Clock, profile: copied, mfaPassword: true, mfaFactors: r.mfaFactors, mfaOTPFactors: r.mfaOTPFactors}
 	}
 	return session.NewSelectedProfileSessionService(r, c.Validation, methods, nativeAdmissionCacheProfile(c.Repository.Schema, profile))
 }

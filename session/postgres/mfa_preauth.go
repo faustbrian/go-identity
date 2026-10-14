@@ -105,8 +105,47 @@ func RequireMFAConsumedPreAuthRecoveryAttempt(ctx context.Context, w kernel.MFAR
 	return requireMFAConsumedPreAuth(ctx, w, w.DatabaseTime, b.Command, c, original, primary)
 }
 
-// All callers supply sealed native readers and their own database-time method,
-// never a consumer callback or independently opened transaction.
+// RequireMFAOTPConsumedPreAuth is the read-only original-browser fence used by
+// native OTP's distinct MFA continuation arm. Binding and primary must come
+// from authenticated original attempt custody, not caller projections. The OTP
+// owner separately verifies cookie possession; the MFA owner verifies the signed
+// child, subject, factor, policy and shared budget. This reader alone grants no
+// authentication, comparison, charge, reservation or permission to issue a
+// session. It never reactivates/releases/finalizes the already-consumed primary.
+// q borrows the caller's bounded transaction; all rows are closed before return,
+// and primary time is sampled there without an injectable clock or renewal.
+func RequireMFAOTPConsumedPreAuth[R SessionRows](ctx context.Context, q SessionQueryer[R], b identity.CommandBinding, c Config, original session.PreAuthTransaction, primary identity.CommandID) error {
+	op := identity.FeatureOperation{Owner: "identity/mfa", OperationID: "identity.mfa.otp-verify", SchemaID: "mfa-otp-verify", SchemaVersion: 1, RecordRequirement: identity.FeatureRecordOmitted, SubjectRequirement: identity.FeatureSubjectAnonymousFlow}
+	if b.OperationID == "identity.mfa.otp-send" {
+		op.OperationID, op.SchemaID, op.RecordRequirement = b.OperationID, "mfa-otp-send", identity.FeatureRecordRequired
+		if _, err := identity.ParseCommandID(b.RecordID); err != nil {
+			return identity.ForbiddenError{}
+		}
+	}
+	if b.ValidateFor(op) != nil || b.UserID != "" || b.AnonymousFlowID == "" {
+		return identity.ForbiddenError{}
+	}
+	clock := func(ctx context.Context) (time.Time, error) {
+		rows, err := q.Query(ctx, `SELECT clock_timestamp()`)
+		if err != nil {
+			return time.Time{}, readError(ctx, err)
+		}
+		if nilSessionHandle(rows) {
+			return time.Time{}, identity.UnavailableError{}
+		}
+		var now time.Time
+		err = readSessionAdmission(rows, &now)
+		rows.Close()
+		if err != nil {
+			return time.Time{}, admissionError(ctx, err)
+		}
+		return now, ctx.Err()
+	}
+	return requireMFAConsumedPreAuth(ctx, q, clock, b, c, original, primary)
+}
+
+// All callers use owned bounded native readers; clock callbacks here remain
+// private and never replace original primary freshness with caller input.
 func requireMFAConsumedPreAuth[R SessionRows](ctx context.Context, q SessionQueryer[R], databaseTime func(context.Context) (time.Time, error), b identity.CommandBinding, c Config, original session.PreAuthTransaction, primary identity.CommandID) error {
 	if _, err := identity.ParseCommandID(string(primary)); err != nil || primary == b.CommandID {
 		return identity.ForbiddenError{}

@@ -11,6 +11,7 @@ import (
 
 const issuanceRecordPrefix = "identity-otp-issuance-record-v1\x00"
 const csrfIssuanceRecordPrefix = "identity-otp-issuance-record-v2\x00"
+const mfaIssuanceRecordPrefix = "identity-otp-issuance-record-v3\x00"
 
 func continuationHasCSRF(c otp.Continuation) bool {
 	b, _ := c.Bindings()
@@ -27,6 +28,10 @@ func encodeIssuanceRecord(challenge otp.Challenge) []byte {
 	prefix := issuanceRecordPrefix
 	if continuationHasCSRF(s.Continuation) {
 		prefix = csrfIssuanceRecordPrefix
+	}
+	b, _ := s.Continuation.Bindings()
+	if _, _, bound := b.Authorization.MFAContinuation(); bound {
+		prefix = mfaIssuanceRecordPrefix
 	}
 	out := appendSendContinuation([]byte(prefix), s.Continuation)
 	out = appendAuthorityText(out, p.Alphabet)
@@ -65,6 +70,9 @@ func appendSendContinuation(out []byte, continuation otp.Continuation) []byte {
 	if original, ok := b.Authorization.PreAuthTransaction(); ok {
 		out = append(out, byte(otp.FlowAuthorizationPreAuthTransaction))
 		out = appendPreAuthRecord(out, original)
+	} else if original, binding, ok := b.Authorization.MFAContinuation(); ok {
+		out = append(out, byte(otp.FlowAuthorizationMFAContinuation))
+		out = appendMFAFlowRecord(out, original, binding)
 	} else {
 		original, _ := b.Authorization.AuthenticatedSession()
 		out = append(out, byte(otp.FlowAuthorizationAuthenticatedSession))
@@ -76,15 +84,19 @@ func appendSendContinuation(out []byte, continuation otp.Continuation) []byte {
 func decodeIssuanceRecord(data []byte) (otp.Challenge, error) {
 	bad := func() (otp.Challenge, error) { return otp.Challenge{}, ErrInvalidCommand }
 	csrfBound := bytes.HasPrefix(data, []byte(csrfIssuanceRecordPrefix))
-	if len(data) > 8192 || !csrfBound && !bytes.HasPrefix(data, []byte(issuanceRecordPrefix)) {
+	mfaBound := bytes.HasPrefix(data, []byte(mfaIssuanceRecordPrefix))
+	if len(data) > 8192 || !csrfBound && !mfaBound && !bytes.HasPrefix(data, []byte(issuanceRecordPrefix)) {
 		return bad()
 	}
 	prefix := issuanceRecordPrefix
 	if csrfBound {
 		prefix = csrfIssuanceRecordPrefix
 	}
+	if mfaBound {
+		prefix = mfaIssuanceRecordPrefix
+	}
 	r := recordReader{data: data[len(prefix):], ok: true}
-	continuation, err := readSendContinuation(&r, csrfBound)
+	continuation, err := readSendContinuation(&r, csrfBound, mfaBound)
 	if err != nil {
 		return bad()
 	}
@@ -127,7 +139,7 @@ func decodeIssuanceRecord(data []byte) (otp.Challenge, error) {
 	return challenge, nil
 }
 
-func readSendContinuation(r *recordReader, csrfBound bool) (otp.Continuation, error) {
+func readSendContinuation(r *recordReader, csrfBound, mfaBound bool) (otp.Continuation, error) {
 	bad := func() (otp.Continuation, error) { return otp.Continuation{}, ErrInvalidCommand }
 	scope := otp.DigestScopeSpec{TenantID: r.text(256), Purpose: otp.Purpose(r.text(32)), SubjectID: r.text(256), Channel: otp.Channel(r.text(5))}
 	destination, err := otp.NewDestinationInput(r.text(320))
@@ -145,7 +157,11 @@ func readSendContinuation(r *recordReader, csrfBound bool) (otp.Continuation, er
 		}
 	}
 	var flow otp.FlowAuthorization
-	switch otp.FlowAuthorizationKind(r.u8()) {
+	kind := otp.FlowAuthorizationKind(r.u8())
+	if mfaBound && kind != otp.FlowAuthorizationMFAContinuation {
+		return bad()
+	}
+	switch kind {
 	case otp.FlowAuthorizationPreAuthTransaction:
 		if csrfBound {
 			return bad()
@@ -161,6 +177,11 @@ func readSendContinuation(r *recordReader, csrfBound bool) (otp.Continuation, er
 			return bad()
 		}
 		flow, err = otp.NewBoundSessionAuthorization(original)
+	case otp.FlowAuthorizationMFAContinuation:
+		if csrfBound || !mfaBound {
+			return bad()
+		}
+		flow, err = readMFAFlowRecord(r)
 	default:
 		return bad()
 	}

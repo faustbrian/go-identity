@@ -80,6 +80,8 @@ func encodeRecord(s session.Session) ([]byte, string, error) {
 		record.MFA = &metadata
 		if metadata.Method == "recovery-code" {
 			record.Schema += 4
+		} else if metadata.Method == "otp" {
+			record.Schema += 8
 		}
 	}
 	if continuation, ok := s.CredentialContinuation(); ok {
@@ -270,6 +272,8 @@ func decodeRecord(b []byte) (session.Session, error) {
 		}
 		if record.MFA.Method == "recovery-code" {
 			expectedSchema += 4
+		} else if record.MFA.Method == "otp" {
+			expectedSchema += 8
 		}
 	}
 	if record.Schema != expectedSchema || hasOTP != (record.Authentication.Kind == session.AuthenticationOTP) || hasMagicLink != (record.Authentication.Kind == session.AuthenticationMagicLink) {

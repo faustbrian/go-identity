@@ -15,6 +15,7 @@ import (
 type continuationBrowserInput struct {
 	tenant                            identity.TenantID
 	command                           identity.CommandID
+	keyed                             bool
 	continuation                      ContinuationID
 	flow                              identity.PreAuthTransactionID
 	proof                             capability.Proof
@@ -27,8 +28,14 @@ func validContinuationBrowserInput(i continuationBrowserInput, action authorizat
 	if _, err := identity.ParseIdentifierID(string(i.tenant)); err != nil {
 		return false
 	}
-	if _, err := identity.ParseCommandID(string(i.command)); err != nil {
-		return false
+	if i.keyed {
+		if i.command != "" {
+			return false
+		}
+	} else {
+		if _, err := identity.ParseCommandID(string(i.command)); err != nil {
+			return false
+		}
 	}
 	if _, err := identity.ParseCommandID(string(i.continuation)); err != nil {
 		return false

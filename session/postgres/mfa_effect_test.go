@@ -33,6 +33,27 @@ func TestMFAPasswordTOTPCompletionEffectIsExplicitAndNative(t *testing.T) {
 	}
 }
 
+func TestMFAPasswordOTPCompletionEffectRequiresNativeSameWorkCompletion(t *testing.T) {
+	c := Config{Schema: "session_store", MaximumDuration: time.Second}
+	p := IdentifierAdmissionConfig{GlobalAuthorityID: "deployment", PolicyNamespace: "users", Audience: "identity", AuthenticationMethod: "password", CredentialKind: identity.CredentialPassword, CredentialOwner: "identity/password"}
+	effect, err := NewMFAPasswordOTPCompletionEffect(c, p)
+	if err != nil || effect == nil {
+		t.Fatal("native password/OTP completion effect unavailable", err)
+	}
+	if _, err := effect.Apply(t.Context(), kernel.Work{}, nil, identity.Command{}, kernel.RecipientRecord{}, mfapg.LockedOTPCompletion{}); err == nil {
+		t.Fatal("OTP session persisted without actual checked/recorded completion")
+	}
+	ctx, stop := context.WithCancel(t.Context())
+	stop()
+	if _, err := effect.Apply(ctx, kernel.Work{}, nil, identity.Command{}, kernel.RecipientRecord{}, mfapg.LockedOTPCompletion{}); !errors.Is(err, context.Canceled) {
+		t.Fatal("OTP effect lost cancellation", err)
+	}
+	p.AuthenticationMethod = "email-otp"
+	if e, err := NewMFAPasswordOTPCompletionEffect(c, p); err == nil || e != nil {
+		t.Fatal("single-factor OTP substituted for original password authority")
+	}
+}
+
 func TestMFATOTPCompletionEffectRequiresActualProtectedFactor(t *testing.T) {
 	config := Config{Schema: "session_store", MaximumDuration: time.Second}
 	profile := MagicLinkAdmissionConfig{GlobalAuthorityID: "deployment", PolicyNamespace: "users", Audience: "identity"}

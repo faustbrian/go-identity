@@ -1,5 +1,31 @@
 # MFA (in development)
 
+## Selected secondary email-OTP workflow
+
+OTP enable input must explicitly select `OTPEnrollmentSelection` with an existing
+identifier and channel; other methods forbid this selection. `OTPEnrollmentContext`
+selects authenticated pending-enrollment send/confirmation, with original session
+and CSRF custody and no login-child fields. Login completion cannot use its
+enrollment-only factor selector to replace original send provenance. Structural
+validation checks none of the required current recipient/enrollment authority.
+
+`OTPCompletionService` defines secondary-factor `OtpSend` and `OtpVerify`,
+with original-command, code-free recovery. These are not ordinary OTP signin
+and do not enable an email/SMS fallback for required TOTP or security-key policy.
+The native owner must require confirmed OTP enrollment and explicit current
+policy, authenticate the original child/browser/primary, and retain the original
+continuation deadline, shared attempts and remember choice. Sending returns queue
+status, never factor verification or a session; verification must consume OTP
+and the child and create the session in one protected authoritative commit.
+
+The core ports validate bounded structure and redact credential custody; they
+do not authenticate by themselves. The selected native PostgreSQL owners and
+opt-in HTTP handlers connect email-OTP enrollment, delivery, confirmation and
+password-origin login. See `postgres/README.md` and the reference acceptance for
+adoption. Other channels and full MFA/reference qualification remain pending.
+Do not supply application-written stores. Existing TOTP/recovery consumers
+remain unchanged.
+
 ## Explicit disable
 
 `DisableService.Disable` takes a closed `OneFactor`/`AllFactors` target. One
@@ -46,8 +72,9 @@ authentication. The initial API distinguishes explicitly known empty state from
 unknown state. It now defines immutable browser partial-authentication continuation
 bindings and shared attempt budgets. Selected native paths now support TOTP
 enrollment, password-first TOTP/recovery login, authenticated step-up and recovery
-regeneration. OTP/security-key orchestration, trusted devices and administrative
-factor recovery remain unfinished; this is not the complete MFA capability set.
+regeneration and selected secondary email-OTP login. Other OTP profiles,
+security-key orchestration, trusted devices and administrative factor recovery
+remain unfinished; this is not the complete MFA capability set.
 
 ## Authenticated step-up and recovery regeneration
 

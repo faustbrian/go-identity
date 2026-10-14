@@ -98,7 +98,13 @@ func (c *AttemptCodec) authenticatePreAuthSpec(ctx context.Context, p *preAuthPr
 	}
 	original, bound := continuation.Authorization.PreAuthTransaction()
 	if !bound {
-		return bad(ErrInvalidCommand)
+		// The explicit MFA arm authenticates the same original browser bytes,
+		// but live admission requires its committed consumed-primary lineage.
+		flow, err := retainedNativeFlow(nativeCustody{record: record})
+		if err != nil || flow.mfaOriginal == (session.PreAuthTransaction{}) {
+			return bad(ErrInvalidCommand)
+		}
+		original = flow.mfaOriginal
 	}
 	s, err := original.Bindings()
 	if err != nil {

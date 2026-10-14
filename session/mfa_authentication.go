@@ -18,7 +18,7 @@ const PasswordMFAPrimaryPurpose auth.Purpose = "identity.password.mfa-primary"
 // MFAAuthenticationSpec is historical, secret-free second-factor provenance.
 // CommandID names completion, PrimaryCommandID the original primary admission,
 // and ContinuationID/ScopeDigest the unchanged one-use child. ContinuationVersion
-// is the version before completion. TOTP and recovery-code profiles are distinct;
+// is the version before completion. OTP, TOTP and recovery-code profiles are distinct;
 // recovery requires its immutable set identity/epoch in addition to the original
 // factor enrollment. Set regeneration cannot silently substitute that provenance.
 // it never treats a passkey sign-in as an enrolled factor. Remember is the exact
@@ -57,7 +57,7 @@ func NewMFAAuthentication(p MFAAuthenticationSpec) (MFAAuthentication, error) {
 		return MFAAuthentication{}, ErrInvalidSession
 	}
 	switch p.Method {
-	case "totp":
+	case "totp", "otp":
 		if p.RecoverySetID != "" || p.RecoverySetVersion != 0 {
 			return MFAAuthentication{}, ErrInvalidSession
 		}

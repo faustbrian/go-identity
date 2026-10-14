@@ -2,6 +2,68 @@
 
 ## Unreleased
 
+- Append optional continuation-owned OTP-send attribution so verification can
+  restore its exact committed source without a caller-selected factor or a
+  replacement challenge. Existing scopes, versions, attempts and timestamps
+  remain unchanged; unsent/legacy rows retain no inferred attribution. Install
+  `OTPLoginSendMigrationSource` after selected OTP/password-continuation histories.
+
+- Add native same-Work OTP completion custody requiring actual checked OTP and
+  consumed child before one shared MFA transition. It cannot compare codes,
+  transfer proof, renew a primary or issue a session; public completion wiring
+  and real atomic-session acceptance remain unfinished.
+
+- Fence original confirmed OTP factor/recipient and live child versions inside
+  the registered login-send owner's protected transaction, without consuming
+  the child, reusing the primary browser or issuing a session. Preserve original
+  account, enrollment and identifier/verification authority across waits.
+
+- Resolve confirmed OTP factor/recipient custody under an actual live child
+  explicitly allowing OTP. Fence account, factor/continuation generation and
+  exact identifier/verification versions; foreign or unavailable state denies.
+  This reader creates no factor proof, attempt debit or session authority.
+
+- Reuse original continuation locking and cross-method attempt CAS for native
+  OTP completion denial. Opaque callback custody requires the coordinator's
+  actual OTP denial before one shared debit. No separate budget/store, code
+  comparison, child consumption or session issuance is introduced here.
+
+- Add method-aware native password challenge admission for explicitly selected
+  TOTP/OTP. Preserve the existing TOTP/SFA guard; OTP requires confirmed owned
+  factor storage and exact current verified recipient versions/channel. This
+  guard grants no successful factor authentication or session.
+
+- Add selected native pending-OTP confirmation over the actual original send,
+  session/CSRF, protected risk and consuming OTP owners. Retain one attempt
+  through retry; atomically activate factor/recovery authority with OTP
+  finalization. Denial, rollback and recovery issue no session or successor
+  code. The new unpublished send-input profile retains its complete static
+  root for confirmation without primary renewal; existing TOTP profiles stay
+  unchanged. OTP login and HTTP/reference composition remain unfinished.
+
+- Add explicitly selected native pending-OTP sending over existing keyed
+  preparation, primary/CSRF, protected risk and transaction owners. OTP stores
+  the challenge while encrypted delivery stages atomically with factor send
+  attribution. Matching retry/recovery never regenerate or redeliver a code;
+  wrong factor/channel/account/session/synchronizer deny before generation.
+  Install forward-only OTP send attribution after OTP-factor storage. Native
+  confirmation, OTP login/session completion and HTTP/reference remain pending.
+
+- Add explicitly selected native pending OTP enrollment through the existing
+  primary-proof, protected-risk, preparation and transaction owners. Fence the
+  verified recipient's exact channel and versions, create inactive recovery
+  codes atomically and reveal them once after a fresh commit. Bind retained
+  requests to their original counter namespace; retry/recovery cannot change
+  recipient, regenerate material or repeat a terminal mutation. Sending,
+  confirmation, login completion and HTTP/reference composition remain pending.
+
+- Add forward-only shared factor identity references and pending/confirmed OTP
+  factor storage. Existing TOTP/recovery rows and original TOTP inserts remain
+  supported; method-bound recovery references retain per-method deletion
+  integrity. OTP revocation erases recipient references. Core preparation
+  metadata is bounded and code-free. Native OTP enrollment/admission/completion
+  and selected HTTP/reference journeys remain under development.
+
 - Admit original password/TOTP and password/recovery sessions through exact
   native replacement URI/confirmation schemas while retaining current factor
   authority fences. Reject unfinishable near-exhausted initiation versions.

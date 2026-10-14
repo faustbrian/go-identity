@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/hmac"
 	"errors"
+	"time"
 
 	authorization "github.com/faustbrian/go-authorization"
 	identity "github.com/faustbrian/go-identity"
@@ -37,14 +38,51 @@ func (c *Coordinator) QueryMFARecoveryCommand(ctx context.Context, command ident
 	return c.queryMFACommand(ctx, command, caller, "identity.mfa.recovery-use")
 }
 
+// QueryMFAOTPCommand observes the original opaque OTP/browser submission under
+// its retained fingerprint key and current query authorization. Terminal denial
+// or success is historical: it requires no live continuation, factor, OTP
+// comparison or renewed allowance. Changed input conflicts, corrupt or retired
+// custody denies, and only authorized absence returns false without an error.
+// The returned receipt cannot disclose a session or authorize another attempt.
+func (c *Coordinator) QueryMFAOTPCommand(ctx context.Context, command identity.Command, caller authorization.DecisionContext) (identity.CommandResult, bool, error) {
+	return c.queryMFACommand(ctx, command, caller, "identity.mfa.otp-verify")
+}
+
 func (c *Coordinator) queryMFACommand(ctx context.Context, command identity.Command, caller authorization.DecisionContext, operation string) (identity.CommandResult, bool, error) {
+	return c.withMFACommandObservation(ctx, command, caller, operation, func(_ context.Context, spec identity.FeatureCommandSpec, _ [32]byte, observed commandObservation) (identity.CommandResult, error) {
+		query := creationRecoveryQuery(spec.Binding)
+		query.AnonymousFlowID = spec.Binding.AnonymousFlowID
+		// An acknowledged OTP preparation may precede final-plan attachment.
+		// Original fingerprint/scope still permit only a pending receipt, never
+		// inference of rollback, new entropy or a completed authentication.
+		if operation == "identity.mfa.otp-verify" && observed.plan == nil && observed.declaration == nil && observed.state != nil && *observed.state == "pending" && observed.resultVersion == nil && observed.class == nil && observed.result == nil {
+			if observed.until == nil || !postgresExactTime(*observed.until) || !postgresExactTime(observed.now) {
+				return identity.CommandResult{}, identity.UnavailableError{}
+			}
+			retry := observed.until.Sub(observed.now)
+			if retry < time.Microsecond {
+				retry = time.Microsecond
+			} else if retry > time.Minute {
+				retry = time.Minute
+			}
+			return featureOutcome(spec.Binding, &spec.Operation, identity.CommitOutcomeInProgress, retry), nil
+		}
+		plan, _, err := observedCommandPlan(spec.Binding, &spec.Operation, observed)
+		if err != nil || !validMFACompletionPlan(spec.Binding, plan) || plan.Feature.Operation != spec.Operation {
+			return identity.CommandResult{}, identity.UnavailableError{}
+		}
+		return commandReceipt(query, observed, nil)
+	})
+}
+
+func (c *Coordinator) withMFACommandObservation(ctx context.Context, command identity.Command, caller authorization.DecisionContext, operation string, visit func(context.Context, identity.FeatureCommandSpec, [32]byte, commandObservation) (identity.CommandResult, error)) (identity.CommandResult, bool, error) {
 	if ctx == nil || c == nil || c.commandRead == nil || c.queryPolicy == nil || c.admissionPolicy == nil || c.maximumDuration <= 0 {
 		return identity.CommandResult{}, false, coordinatorError()
 	}
 	spec, ok := command.Feature()
 	var opaque bool
 	switch operation {
-	case "identity.mfa.totp-verify":
+	case "identity.mfa.totp-verify", "identity.mfa.otp-verify":
 		_, opaque = command.OneTimeCode()
 	case "identity.mfa.recovery-use":
 		_, opaque = command.RecoveryCode()
@@ -95,10 +133,6 @@ func (c *Coordinator) queryMFACommand(ctx context.Context, command identity.Comm
 	if !bytes.Equal(claim.safeFields, observed.scope) || !hmac.Equal(fp[:], observed.fingerprint) {
 		return featureOutcome(spec.Binding, &spec.Operation, identity.CommitOutcomeConflict, 0), true, identity.ConflictError{CommandID: spec.Binding.CommandID}
 	}
-	plan, err := decodeFeaturePlan(spec.Binding, fp, observed.plan)
-	if err != nil || !validMFACompletionPlan(spec.Binding, plan) || plan.OTP != nil || plan.Feature.Operation != spec.Operation {
-		return identity.CommandResult{}, true, identity.UnavailableError{}
-	}
-	result, err := commandReceipt(query, observed, nil)
+	result, err := visit(bounded, spec, fp, observed)
 	return result, true, err
 }

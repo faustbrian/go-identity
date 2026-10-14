@@ -43,6 +43,14 @@ func mfaCompletionMappingMethod(t testing.TB, csrf, password bool, method string
 			t.Fatal(err)
 		}
 	}
+	if method == "otp" {
+		p, _ := m.Bindings()
+		p.Method = method
+		m, err = session.NewMFAAuthentication(p)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
 	if password && csrf {
 		record, err = session.NewSessionWithPasswordMFAAndCSRF(s, m, record.CSRFState())
 	} else if password {
@@ -61,6 +69,10 @@ func mfaCompletionMappingMethod(t testing.TB, csrf, password bool, method string
 		spec.Binding.OperationID, spec.Binding.SchemaID = "identity.mfa.recovery-use", "mfa-recovery-use"
 		spec.Operation.OperationID, spec.Operation.SchemaID = spec.Binding.OperationID, spec.Binding.SchemaID
 		spec.Fields, err = MFARecoveryCompletionSessionFields(record)
+	} else if method == "otp" {
+		spec.Binding.OperationID, spec.Binding.SchemaID = "identity.mfa.otp-verify", "mfa-otp-verify"
+		spec.Operation.OperationID, spec.Operation.SchemaID = spec.Binding.OperationID, spec.Binding.SchemaID
+		spec.Fields, err = MFAOTPCompletionSessionFields(record)
 	} else {
 		spec.Fields, err = MFATOTPCompletionSessionFields(record)
 	}
@@ -68,6 +80,31 @@ func mfaCompletionMappingMethod(t testing.TB, csrf, password bool, method string
 		t.Fatal(err)
 	}
 	return spec, record
+}
+
+func TestMFAOTPCompletionMappingPreservesExactPasswordAndBrowserProfile(t *testing.T) {
+	for _, csrf := range []bool{false, true} {
+		spec, expected := mfaCompletionMappingMethod(t, csrf, true, "otp")
+		command, err := identity.NewFeatureCommand(spec)
+		if err != nil {
+			t.Fatal(err)
+		}
+		got, err := MFAOTPCompletionSession(command)
+		if err != nil {
+			t.Fatal("OTP mapping unavailable", err)
+		}
+		a, _, _ := encodeRecord(expected)
+		b, _, _ := encodeRecord(got)
+		if !bytes.Equal(a, b) {
+			t.Fatal("OTP mapping replaced original primary, factor, remember or synchronizer")
+		}
+		if _, err := MFATOTPCompletionSession(command); err == nil {
+			t.Fatal("OTP entered TOTP completion")
+		}
+		if _, err := MFARecoveryCompletionSession(command); err == nil {
+			t.Fatal("OTP entered recovery-code completion")
+		}
+	}
 }
 
 func TestMFARecoveryCompletionMappingPreservesMethodAndSet(t *testing.T) {
