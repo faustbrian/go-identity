@@ -99,6 +99,19 @@ priority system/developer instructions remain controlling.
   failures, skipped checks and unverified boundaries; reused proof MUST NOT be
   described as newly executed.
 
+## Identity Platform Goal Inputs
+
+- After explicit user activation, the supplied IMPLEMENTATION_GOAL.md owns
+  identity milestone sequencing. Start B1 in this repository on main, adopt
+  existing code, then close B2 reset and B3 password change before expansion.
+- Live milestone/progress notes are `.ai/identity-platform/EXECUTION_LEDGER.md`
+  and `.ai/identity-platform/IDENTITY_PROGRESS.md`. Product goals/catalogs remain
+  reference input in the preserved planning snapshot; do not migrate history.
+- Tools-main planning publication, closed Tools PR #338 and the retired repair
+  goal are not implementation prerequisites. Supporting-tool changes require a
+  demonstrated blocker and the smallest isolated fix; security and required CI
+  are not waived. Preparing these documents does not activate implementation.
+
 ## Repository Structure
 
 - The public root module MUST live at the repository root.
