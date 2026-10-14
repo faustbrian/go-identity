@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/rand"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -23,6 +24,7 @@ import (
 
 	"github.com/faustbrian/go-audit"
 	auditpg "github.com/faustbrian/go-audit/postgres"
+	identity "github.com/faustbrian/go-identity"
 	database "github.com/faustbrian/go-postgres"
 	"github.com/jackc/pgx/v5"
 )
@@ -242,18 +244,38 @@ func TestBaselineResetUpgradePreservesPopulatedBaselineAndOperatorCustody(t *tes
 	proveBaselineRuntimeWithUpgrade(t, true, true)
 }
 
+func TestBaselinePasswordChangeJourneyAndOriginalSessionRevocation(t *testing.T) {
+	proveBaselineRuntimeWithProfiles(t, false, true, false)
+}
+
+func TestBaselinePasswordChangeUpgradePreservesPopulatedBaseline(t *testing.T) {
+	proveBaselineRuntimeWithProfiles(t, false, true, true)
+}
+
+func TestBaselineCombinedResetAndChangeJourney(t *testing.T) {
+	proveBaselineRuntimeWithProfiles(t, true, true, false)
+}
+
 func proveBaselineRuntime(t *testing.T, reset bool) {
 	t.Helper()
 	proveBaselineRuntimeWithUpgrade(t, reset, false)
 }
 
 func proveBaselineRuntimeWithUpgrade(t *testing.T, reset, upgrade bool) {
+	proveBaselineRuntimeWithProfiles(t, reset, false, upgrade)
+}
+
+func proveBaselineRuntimeWithProfiles(t *testing.T, reset, change, upgrade bool) {
 	t.Helper()
 	ctx, stop := context.WithTimeout(context.Background(), 40*time.Second)
 	defer stop()
 	dsn, connection := baselineTestDatabase(t, ctx)
 	directory := filepath.Join(t.TempDir(), "baseline")
 	if err := initializeCredentials(directory, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	originalKeys, err := readPrivateFile(filepath.Join(directory, "credentials.json"), 32768)
+	if err != nil {
 		t.Fatal(err)
 	}
 	secrets, err := loadCredentials(directory, time.Now())
@@ -301,7 +323,12 @@ func proveBaselineRuntimeWithUpgrade(t *testing.T, reset, upgrade bool) {
 			t.Fatal("baseline original operator custody missing")
 		}
 	}
-	proveBaselineRuntimeStage(t, ctx, directory, secrets, pool, mailbox, outbound, reset)
+	if change {
+		if err := prepareChangeCredentials(directory); err != nil {
+			t.Fatal("additive change key custody unavailable", err)
+		}
+	}
+	proveBaselineRuntimeStageWithProfiles(t, ctx, directory, secrets, pool, mailbox, outbound, reset, change)
 	if reset {
 		var effects int
 		if err := connection.QueryRow(ctx, `SELECT count(*) FROM session_store.password_resets`).Scan(&effects); err != nil || effects != 1 {
@@ -315,9 +342,52 @@ func proveBaselineRuntimeWithUpgrade(t *testing.T, reset, upgrade bool) {
 			t.Fatal("reset upgrade replaced original custody or existing account")
 		}
 	}
+	if change {
+		keys, err := readPrivateFile(filepath.Join(directory, "credentials.json"), 32768)
+		var effects, consumed int
+		if err != nil || !bytes.Equal(originalKeys, keys) || connection.QueryRow(ctx, `SELECT (SELECT count(*) FROM session_store.password_changes), (SELECT count(*) FROM identity_password.reauthentication_records WHERE consumed_command_id IS NOT NULL)`).Scan(&effects, &consumed) != nil || effects != 1 || consumed != 1 {
+			t.Fatal("change replaced baseline key custody or lost atomic proof/session effects")
+		}
+		var proof string
+		var commandBytes []byte
+		if err := connection.QueryRow(ctx, "SELECT proof_id, consumed_command_id FROM identity_password.reauthentication_records WHERE consumed_command_id IS NOT NULL").Scan(&proof, &commandBytes); err != nil {
+			t.Fatal("committed original verification custody unavailable")
+		}
+		command, err := identity.ParseCommandID(base64.RawURLEncoding.EncodeToString(commandBytes))
+		if err != nil {
+			t.Fatal("committed native command identity malformed")
+		}
+		committed := string(command)
+		store, err := auditpg.New(pool.Raw(), auditpg.Config{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		tenant, _ := audit.Tenant(baselineTenant)
+		query, err := audit.NewQuery(audit.QueryInput{Tenant: tenant, Action: "identity.hibp.query_range", Limit: 16})
+		if err != nil {
+			t.Fatal(err)
+		}
+		page, err := store.Query(ctx, query)
+		matched := 0
+		for _, record := range page.Records {
+			if record.Context().CorrelationID() == committed {
+				matched++
+				if record.Subject().ID() != proof || record.Actor().Kind() != audit.ActorHuman || record.Policy().PolicyID != baselineChangePolicy || record.Attributes()["command.id"] != committed {
+					t.Fatal("change HIBP auditing replaced original proof/command/policy attribution")
+				}
+			}
+		}
+		if err != nil || matched != 1 {
+			t.Fatal("committed change lacks confirmed original HIBP security audit")
+		}
+	}
 }
 
 func proveBaselineRuntimeStage(t *testing.T, ctx context.Context, directory string, secrets credentials, pool *database.Pool, mailbox *localMailbox, outbound *http.Transport, reset bool) {
+	proveBaselineRuntimeStageWithProfiles(t, ctx, directory, secrets, pool, mailbox, outbound, reset, false)
+}
+
+func proveBaselineRuntimeStageWithProfiles(t *testing.T, ctx context.Context, directory string, secrets credentials, pool *database.Pool, mailbox *localMailbox, outbound *http.Transport, reset, change bool) {
 	t.Helper()
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
@@ -329,6 +399,9 @@ func proveBaselineRuntimeStage(t *testing.T, ctx context.Context, directory stri
 	if reset {
 		args = append(args, "--password-reset")
 	}
+	if change {
+		args = append(args, "--password-change")
+	}
 	o, err := parseOptions(args)
 	if err != nil {
 		t.Fatal(err)
@@ -338,7 +411,7 @@ func proveBaselineRuntimeStage(t *testing.T, ctx context.Context, directory stri
 		t.Fatal("native command graph rejected", err)
 	}
 	defer graph.close(context.Background())
-	if err := migrateSelectedBaseline(ctx, graph.stores, directory, reset); err != nil {
+	if err := migrateBaselineWithRequest(ctx, graph.stores, directory, migrationRequestName(o), syncDirectory); err != nil {
 		t.Fatal("fresh native command migrations rejected", err)
 	}
 	if err := graph.features.Initialize(ctx); err != nil || !graph.server.Readiness(ctx).Ready {
@@ -347,7 +420,9 @@ func proveBaselineRuntimeStage(t *testing.T, ctx context.Context, directory stri
 	lifetime, cancel := context.WithCancel(ctx)
 	defer cancel()
 	completed := make(chan error, 1)
-	go func() { completed <- serveBaselineOnListener(lifetime, graph, o, secrets, io.Discard, listener) }()
+	go func(serverOptions options) {
+		completed <- serveBaselineOnListener(lifetime, graph, serverOptions, secrets, io.Discard, listener)
+	}(o)
 	defer func() {
 		cancel()
 		select {
@@ -360,6 +435,12 @@ func proveBaselineRuntimeStage(t *testing.T, ctx context.Context, directory stri
 		}
 	}()
 	var output bytes.Buffer
+	if change {
+		o.operation = "exercise-change"
+		if reset {
+			o.operation = "exercise"
+		}
+	}
 	if err := exerciseBaseline(ctx, o, secrets, &output); err != nil {
 		t.Fatal("public HTTPS walkthrough did not complete", err)
 	}
@@ -416,5 +497,26 @@ func TestBaselineOperatorCommandInstallsRealNativeMigrations(t *testing.T) {
 	var installed bool
 	if err := database.QueryRow(ctx, `SELECT to_regclass('session_store.password_resets') IS NOT NULL`).Scan(&installed); err != nil || !installed {
 		t.Fatal("reset command did not install the actual session-effect owner")
+	}
+	resetOriginal := append([]byte(nil), reset...)
+	baselineKeys, err := readPrivateFile(filepath.Join(directory, "credentials.json"), 32768)
+	if err != nil {
+		t.Fatal(err)
+	}
+	combined := append(append([]string(nil), resetArgs...), "--password-change")
+	for range 2 {
+		if err := runBaseline(ctx, combined, &output); err != nil {
+			t.Fatal("populated reset-to-change operator upgrade/retry failed", err)
+		}
+	}
+	resetAfter, err := readPrivateFile(filepath.Join(directory, "migration-request-reset.json"), 1<<20)
+	keysAfter, keysErr := readPrivateFile(filepath.Join(directory, "credentials.json"), 32768)
+	changeRequest, changeErr := readPrivateFile(filepath.Join(directory, "migration-request-reset-change.json"), 1<<20)
+	var combinedRequest operatorRequest
+	if err != nil || keysErr != nil || changeErr != nil || !bytes.Equal(resetOriginal, resetAfter) || !bytes.Equal(baselineKeys, keysAfter) || json.Unmarshal(changeRequest, &combinedRequest) != nil || combinedRequest.Command == resetRequest.Command {
+		t.Fatal("change upgrade replaced original key/operator custody")
+	}
+	if err := database.QueryRow(ctx, "SELECT to_regclass('session_store.password_changes') IS NOT NULL").Scan(&installed); err != nil || !installed {
+		t.Fatal("change operator did not install the native session-effect owner")
 	}
 }

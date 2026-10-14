@@ -58,6 +58,12 @@ func TestReferenceServerPasswordProtection(t *testing.T) {
 	proveReferenceSignupGraph(t, false, true)
 }
 
+func TestReferencePostgresPasswordProtection(t *testing.T) {
+	// Reuse the full native rollback, replay and scoped-recovery assertions with
+	// the selected PostgreSQL-only admission owner, without a Valkey dependency.
+	proveReferenceSignupGraphExtensions(t, false, signupGraphExtensions{postgresBaseline: true}, true)
+}
+
 // Registration, encrypted delivery, confirmation and first login all precede
 // this helper through real public routes. No account/password/proof/session
 // rows are fabricated. Only external HIBP response IO and failure triggers are

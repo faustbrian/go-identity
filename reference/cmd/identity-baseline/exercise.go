@@ -107,6 +107,7 @@ func exerciseBaseline(ctx context.Context, o options, secrets credentials, outpu
 	}
 	address := "baseline-" + hex.EncodeToString(unique[:16]) + "@example.invalid"
 	password := hex.EncodeToString(candidate[:])
+	credentialVersion := uint64(1)
 	callback := o.origin + "/confirm"
 	flow, err := issue("signup")
 	if err != nil {
@@ -164,7 +165,7 @@ func exerciseBaseline(ctx context.Context, o options, secrets credentials, outpu
 	if err != nil || result.status != 200 || json.Unmarshal(result.body, &read) != nil || !read.Authenticated || read.Session == nil || read.Session.ID != signed.SessionID {
 		return errLocalProfile
 	}
-	if o.passwordReset {
+	if o.passwordReset && o.operation != "exercise-change" {
 		originalSessionID := signed.SessionID
 		additional, additionalSignin, err := login(password)
 		if err != nil || additional.status != 200 || !additionalSignin.SignedIn || additionalSignin.SessionID == originalSessionID || len(additional.cookie) != 1 {
@@ -279,6 +280,98 @@ func exerciseBaseline(ctx context.Context, o options, secrets credentials, outpu
 		if csrf == "" {
 			return errLocalProfile
 		}
+		// The generic combined exercise continues from this successful reset,
+		// not from the predecessor credential already proven unusable above.
+		password, credentialVersion = newPassword, 2
+	}
+	if o.passwordChange && o.operation != "exercise-reset" {
+		first := retained
+		additional, second, err := login(password)
+		if err != nil || additional.status != 200 || !second.SignedIn || second.SessionID == signed.SessionID || len(additional.cookie) != 1 {
+			return fmt.Errorf("change second-session signin status %d: %w", additional.status, errLocalProfile)
+		}
+		csrf = additional.header.Get("X-CSRF-Token")
+		verify := func(candidate, purpose string, token string) (passwordhttp.VerificationResponse, response, error) {
+			result, err := call(http.MethodPost, "/v1/password/verify", map[string]string{"password": candidate, "purpose": purpose, "action": "identity.password.change", "audience": "local-password-change"}, "", token, nil)
+			var verified passwordhttp.VerificationResponse
+			if err != nil || json.Unmarshal(result.body, &verified) != nil || len(result.cookie) != 0 {
+				return verified, result, errLocalProfile
+			}
+			return verified, result, nil
+		}
+		for _, denied := range []struct{ candidate, purpose, csrf string }{
+			{password, "identity.password.verify", ""},
+			{"incorrect-" + password, "identity.password.verify", csrf},
+			{password, "unselected-purpose", csrf},
+		} {
+			verified, response, err := verify(denied.candidate, denied.purpose, denied.csrf)
+			if err != nil || response.status == 200 || verified.Verified || verified.Proof != nil {
+				return fmt.Errorf("change verification denial status %d: %w", response.status, errLocalProfile)
+			}
+		}
+		before, err := call(http.MethodGet, "/v1/session/get", nil, "", "", nil)
+		var current sessionhttp.GetResponse
+		if err != nil || before.status != 200 || json.Unmarshal(before.body, &current) != nil || !current.Authenticated || current.Session == nil {
+			return errLocalProfile
+		}
+		verified, checked, err := verify(password, "identity.password.verify", csrf)
+		if err != nil || checked.status != 200 || !verified.Verified || verified.Proof == nil || verified.CommitOutcome != "committed" {
+			return fmt.Errorf("fresh password verification status %d: %w", checked.status, errLocalProfile)
+		}
+		after, err := call(http.MethodGet, "/v1/session/get", nil, "", "", nil)
+		var unchanged sessionhttp.GetResponse
+		if err != nil || after.status != 200 || json.Unmarshal(after.body, &unchanged) != nil || !unchanged.Authenticated || unchanged.Session == nil || *current.Session != *unchanged.Session {
+			return fmt.Errorf("verification changed original session: %w", errLocalProfile)
+		}
+		var replacement [32]byte
+		if _, err := rand.Read(replacement[:]); err != nil {
+			return errLocalProfile
+		}
+		newPassword := hex.EncodeToString(replacement[:])
+		change := map[string]string{"proofID": verified.Proof.ProofID, "newPassword": newPassword}
+		key := "change-" + hex.EncodeToString(unique[:])
+		missing, err := call(http.MethodPost, "/v1/password/change", change, key, "", nil)
+		if err != nil || missing.status != 403 || len(missing.cookie) != 0 {
+			return fmt.Errorf("password change CSRF denial status %d: %w", missing.status, errLocalProfile)
+		}
+		reused, err := call(http.MethodPost, "/v1/password/change", map[string]string{"proofID": verified.Proof.ProofID, "newPassword": password}, key+"-reuse", csrf, nil)
+		if err != nil || reused.status == 200 || len(reused.cookie) != 0 {
+			return fmt.Errorf("password reuse denial status %d: %w", reused.status, errLocalProfile)
+		}
+		changed, err := call(http.MethodPost, "/v1/password/change", change, key, csrf, nil)
+		var complete passwordhttp.ChangeResponse
+		if err != nil || changed.status != 200 || json.Unmarshal(changed.body, &complete) != nil || !complete.Changed || complete.CommitOutcome != "committed" || complete.CredentialVersion != credentialVersion+1 || !complete.AuthorityInvalidated || complete.Recovery == nil || len(changed.cookie) != 0 {
+			var observed passwordhttp.ChangeResponse
+			_ = json.Unmarshal(changed.body, &observed)
+			return fmt.Errorf("password change completion status %d (original command=%t, unknown=%t, rollback=%t): %w", changed.status, observed.CommandID != "", observed.CommitOutcome == "unknown", observed.CommitOutcome == "not_committed", errLocalProfile)
+		}
+		replayed, err := call(http.MethodPost, "/v1/password/change", change, key, csrf, nil)
+		var denied passwordhttp.ChangeResponse
+		if err != nil || replayed.status != 401 || json.Unmarshal(replayed.body, &denied) != nil || denied.Changed || len(replayed.cookie) != 0 {
+			return fmt.Errorf("revoked source change replay status %d: %w", replayed.status, errLocalProfile)
+		}
+		for _, cookies := range [][]*http.Cookie{first, additional.cookie} {
+			result, err := call(http.MethodGet, "/v1/session/get", nil, "", "", cookies)
+			var denied sessionhttp.GetResponse
+			if err != nil || result.status != 200 || json.Unmarshal(result.body, &denied) != nil || denied.Authenticated || denied.Session != nil {
+				return fmt.Errorf("changed-password original session remained valid: %w", errLocalProfile)
+			}
+		}
+		old, failed, err := login(password)
+		if err != nil || old.status == 200 || failed.SignedIn || len(old.cookie) != 0 {
+			return errLocalProfile
+		}
+		result, signed, err = login(newPassword)
+		if err != nil || result.status != 200 || !signed.SignedIn || signed.CommitOutcome != "committed" || len(result.cookie) != 1 {
+			return fmt.Errorf("changed-password signin status %d: %w", result.status, errLocalProfile)
+		}
+		// A previously consumed/session-bound proof cannot authorize another
+		// change under the new credential/session, even with its fresh CSRF.
+		stale, err := call(http.MethodPost, "/v1/password/change", map[string]string{"proofID": verified.Proof.ProofID, "newPassword": newPassword + "-stale"}, key+"-stale", result.header.Get("X-CSRF-Token"), nil)
+		if err != nil || stale.status == 200 || len(stale.cookie) != 0 {
+			return fmt.Errorf("stale password-change proof status %d: %w", stale.status, errLocalProfile)
+		}
+		retained, csrf = result.cookie, result.header.Get("X-CSRF-Token")
 	}
 	result, err = call(http.MethodPost, "/v1/session/signout", map[string]any{}, "", "", nil)
 	if err != nil || result.status != 403 || len(result.cookie) != 0 {
@@ -299,6 +392,12 @@ func exerciseBaseline(ctx context.Context, o options, secrets credentials, outpu
 	message := "baseline passed: registration -> captured verification -> verification -> password signin -> authenticated session -> logout -> original session denied\n"
 	if o.passwordReset {
 		message = "reset passed: request -> captured delivery -> repeated read-only inspection -> completion -> old password denied -> new password signin -> original session denied -> logout\n"
+	}
+	if o.passwordChange && o.operation != "exercise-reset" {
+		message = "change passed: fresh password verification -> change -> both original sessions denied -> old password denied -> new password signin -> stale proof denied -> logout -> original session denied\n"
+	}
+	if o.passwordReset && o.passwordChange && o.operation == "exercise" {
+		message = "reset and change passed: reset -> replacement-password signin -> fresh verification -> change -> original sessions denied -> replacement-password signin -> logout -> original session denied\n"
 	}
 	_, err = io.WriteString(output, message)
 	return err

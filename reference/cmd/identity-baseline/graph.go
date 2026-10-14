@@ -10,6 +10,7 @@ import (
 
 	"github.com/faustbrian/go-audit"
 	auditpg "github.com/faustbrian/go-audit/postgres"
+	auth "github.com/faustbrian/go-authentication"
 	"github.com/faustbrian/go-authorization"
 	"github.com/faustbrian/go-capability"
 	issuerpg "github.com/faustbrian/go-capability/postgres/identity"
@@ -60,7 +61,7 @@ func (*fixedTenant) ResolveTenant(ctx context.Context) (identity.TenantID, error
 	return baselineTenant, ctx.Err()
 }
 
-func baselineRiskPolicy(version uint64, screening, reset bool) (risk.Policy, error) {
+func baselineRiskPolicy(version uint64, screening, reset bool, change ...bool) (risk.Policy, error) {
 	c := risk.PolicyConfig{Version: version, Limits: risk.VelocityLimits{MaxDimensions: 4, MaxCounters: 16, MaxWindow: time.Hour, MaxLimit: 120, KeyBytes: 64, RetryAfterMax: time.Hour}, Profiles: []risk.Profile{
 		{Class: risk.Authentication, Phase: risk.BeforeCredential, Dimensions: []risk.Dimension{risk.TenantDimension, risk.NetworkDimension, risk.DeviceDimension, risk.IdentifierDimension}, Window: 5 * time.Minute, Limit: 10, ThresholdAction: risk.Throttle, EvidenceTTL: 5 * time.Minute, Unknown: risk.DenyUnknown, MaxCounters: 4, RequiredSignals: []string{"velocity"}},
 		{Class: risk.CredentialMutation, Phase: risk.ReserveWithCommand, Dimensions: []risk.Dimension{risk.TenantDimension, risk.SubjectDimension, risk.SessionDimension, risk.NetworkDimension}, Window: 15 * time.Minute, Limit: 5, ThresholdAction: risk.Deny, EvidenceTTL: 15 * time.Minute, Unknown: risk.DenyUnknown, MaxCounters: 4, RequiredSignals: []string{"velocity"}},
@@ -71,6 +72,9 @@ func baselineRiskPolicy(version uint64, screening, reset bool) (risk.Policy, err
 		c.HIBP = risk.HIBPPolicy{CacheTTL: time.Hour, Operations: []risk.Action{"identity.password.signup"}}
 		if reset {
 			c.HIBP.Operations = append(c.HIBP.Operations, "identity.password.reset-complete")
+		}
+		if len(change) == 1 && change[0] {
+			c.HIBP.Operations = append(c.HIBP.Operations, "identity.password.change")
 		}
 	}
 	return risk.NewPolicy(c)
@@ -88,7 +92,7 @@ func buildBaseline(ctx context.Context, o options, secrets credentials, pool *da
 func composeBaseline(ctx context.Context, o options, secrets credentials, pool *database.Pool, sender delivery.Sender, outbound http.RoundTripper) (_ *baselineGraph, err error) {
 	key := func(name string) [32]byte { return secrets.Keys[name] }
 	bytes := func(name string) []byte { k := key(name); return append([]byte(nil), k[:]...) }
-	authorize, err := baselineAuthorization(o.passwordReset)
+	authorize, err := baselineAuthorization(o.passwordReset, o.passwordChange)
 	if err != nil {
 		return nil, err
 	}
@@ -288,7 +292,8 @@ func composeBaseline(ctx context.Context, o options, secrets credentials, pool *
 	}
 	configured.HTTPPasswordSignup = &reference.HTTPPasswordSignupConfiguration{ActorID: baselineActor, PolicyRevision: 9}
 	configured.HTTPRegistrationVerification = &reference.HTTPRegistrationVerificationConfiguration{Origin: o.origin, ActorID: baselineActor, PolicyRevision: 9, VerificationNamespace: "local-registration", VerificationKey: key("verification-http")}
-	if o.passwordReset {
+	var observed *hibp.ObservedChecker
+	if o.passwordReset || o.passwordChange {
 		audits, err := auditpg.New(pool.Raw(), auditpg.Config{})
 		if err != nil {
 			return nil, err
@@ -297,10 +302,12 @@ func composeBaseline(ctx context.Context, o options, secrets credentials, pool *
 		if err != nil {
 			return nil, err
 		}
-		observed, err := hibp.NewObservedChecker(g.hibp, hibp.ObservationConfig{Delivery: audit.RecorderConfig{Sink: g.audits, Mode: audit.DeliveryFailClosed}, AuditTimeout: time.Second})
+		observed, err = hibp.NewObservedChecker(g.hibp, hibp.ObservationConfig{Delivery: audit.RecorderConfig{Sink: g.audits, Mode: audit.DeliveryFailClosed}, AuditTimeout: time.Second})
 		if err != nil {
 			return nil, err
 		}
+	}
+	if o.passwordReset {
 		resetProvider, err := hibp.NewObservedSignalProvider(observed, screeningPolicy)
 		if err != nil {
 			return nil, err
@@ -331,6 +338,61 @@ func composeBaseline(ctx context.Context, o options, secrets credentials, pool *
 		configured.HTTPPasswordReset = &reference.HTTPPasswordResetConfiguration{ActorID: baselineActor, PolicyRevision: 9, CallbackURL: o.origin + "/reset", VerificationNamespace: "local-reset", VerificationKey: key("verification-http"), Inspect: true}
 	}
 	configured.Session = &reference.SessionConfiguration{Native: sessionpg.SignOutServiceConfig{Execution: sessionpg.IssueExecutorConfig{Repository: storage, Profile: sessionpg.IssueAdmissionConfig(signin.Profile), Coordinator: coordinator, Authorization: authorize, Clock: clock.System{}, PolicyID: "session-signout", PolicyVersion: 9, AuditRetentionVersion: 1}, Validation: session.ServiceConfig{Profile: session.StorageStatefulOpaque, Audience: "local-baseline", MaximumDuration: 2 * time.Second, ClockUncertainty: time.Millisecond, LookupKeys: []session.DigestKey{lookup}}, Cookie: sessionCookie, MaximumDuration: 4 * time.Second}, CSRFKeys: []session.CSRFKey{csrf}}
+	if o.passwordChange {
+		keys, err := loadChangeCredentials(o.directory)
+		if err != nil {
+			return nil, errCredentials
+		}
+		for _, value := range keys {
+			for _, original := range secrets.Keys {
+				if value == original {
+					return nil, errCredentials
+				}
+			}
+		}
+		proofKey := keys["reauth-proof"]
+		private := ed25519.NewKeyFromSeed(proofKey[:])
+		signing, err := passwordpg.NewReauthenticationSigningKey("local-password-verification", private)
+		if err != nil {
+			return nil, err
+		}
+		verifier := signin.Verifier
+		verifier.Now = nil // The native session owner supplies the authority clock.
+		identifierKey := keys["reauth-identifier"]
+		configured.PasswordVerification = &reference.PasswordVerificationConfiguration{Native: passwordpg.ReauthenticationConfig{Repository: signin.Repository, Verifier: verifier, Session: storage, Profile: signin.Profile, LookupKeys: []session.DigestKey{lookup}, Risk: risk.AuthenticationAdmissionCustodyConfig{ConfigurationID: "local-reauthentication-v1", Keys: []risk.EvidenceKey{evidence}}, Coordinator: coordinator, SigningKey: signing, VerificationKeys: map[string]ed25519.PublicKey{"local-password-verification": private.Public().(ed25519.PublicKey)}, Issuer: o.origin, Environment: "local-capture", Targets: []passwordpg.ReauthenticationTarget{{Purpose: "identity.password.verify", Action: "identity.password.change", Audience: "local-password-change"}}, TTL: 2 * time.Minute, IdentifierKey: identifierKey[:]}, CSRFKeys: []session.CSRFKey{csrf}}
+		keyed, err := passwordpg.NewKeyedPasswordChangeConfig(requestKeys, keys["change-intent"], "delivery-envelope")
+		if err != nil {
+			return nil, err
+		}
+		changePolicy, err := baselineRiskPolicy(3, true, false, true)
+		if err != nil {
+			return nil, err
+		}
+		changeProvider, err := hibp.NewObservedSignalProvider(observed, changePolicy)
+		if err != nil {
+			return nil, err
+		}
+		collectChange := func(ctx context.Context, original identity.CommandBinding, proof auth.ReauthenticationProof, scope risk.Context, candidate primitive.Secret) ([]risk.Signal, error) {
+			attempt, err := identity.ParsePreAuthTransactionID(string(proof.Proof.ID))
+			if err != nil {
+				return nil, err
+			}
+			correlation, err := identity.ParseCommandID(original.CorrelationID)
+			if err != nil {
+				return nil, err
+			}
+			if original.ActorKind != authorization.SubjectUser || original.ActorID != identity.ActorID(original.UserID) || original.PolicyID != baselineChangePolicy || original.OperationID != "identity.password.change" || scope.Tenant != string(original.TenantID) || scope.Attempt != string(original.CommandID) || string(scope.Operation) != original.OperationID {
+				return nil, hibp.ErrInvalidRequest
+			}
+			signal, err := changeProvider.Assess(ctx, hibp.CheckRequest{OperationID: original.OperationID, Action: scope.Operation, TenantID: original.TenantID, ReplayID: original.CommandID, Purpose: "change", SubjectScope: "password-change", PolicyVersion: "local-baseline-v1", Candidate: candidate, Attribution: &hibp.SecurityAttribution{CommandID: original.CommandID, CorrelationID: correlation, Actor: audit.ActorInput{Kind: audit.ActorHuman, ID: string(original.ActorID)}, AttemptID: attempt, PolicyID: original.PolicyID, PolicyVersion: original.PolicyVersion}})
+			return []risk.Signal{signal}, err
+		}
+		configured.PasswordChange = &reference.PasswordChangeConfiguration{Native: passwordpg.PasswordChangeConfig{PolicyID: baselineChangePolicy, Audience: "local-password-change", MaximumAge: 2 * time.Minute, Screening: password.HashPreparationConfig{Primitive: crypto, MinimumBytes: 12, MaximumBytes: 128, Timeout: 3 * time.Second, DummyHash: dummy, Policy: changePolicy}, CollectChange: collectChange, SessionDisposition: sessionpg.PasswordChangeRevokeAllSessions}, Keyed: keyed, Counters: configured.PasswordSignup.Counters}
+		httpProtection := reference.HTTPPasswordProtectionConfiguration{Transport: session.CredentialCookie, TrustedOrigins: []identityhttp.Origin{identityhttp.Origin(o.origin)}, RateNamespace: "local-password", RateKey: key("http-rate")}
+		configured.HTTPPasswordVerification = &httpProtection
+		changeHTTP := httpProtection
+		configured.HTTPPasswordChange = &changeHTTP
+	}
 	configured.HTTPSession = &reference.HTTPSessionConfiguration{Transport: session.CredentialCookie, TrustedOrigins: []identityhttp.Origin{identityhttp.Origin(o.origin)}, RateNamespace: "local-session", EmergencyMaximumKeys: 128, Degraded: func(ctx context.Context, _ identityhttp.SafeRateEvent) error { return ctx.Err() }}
 	dependencies := reference.ReferenceDependencies{PostgreSQL: pool, EnvelopeKeys: envelope, DeliverySender: sender}
 	g.stores, err = reference.ComposeStores(configured, dependencies)

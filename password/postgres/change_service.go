@@ -31,13 +31,28 @@ import (
 // revoke-all and a whole-set cap of 100000, preserving strict invalidation.
 // Explicit preservation supports the source's single-factor password profile.
 type PasswordChangeConfig struct {
+	// PolicyID is trusted original-command/audit attribution. Empty retains
+	// the existing identity-password profile; it is never request-selectable.
+	PolicyID           string
 	Audience           string
 	MaximumAge         time.Duration
 	Screening          password.HashPreparationConfig
 	Counters           *riskpg.Repository
 	SessionDisposition sessionpg.PasswordChangeSessionDisposition
 	MaximumSessions    uint32
+	// CollectChange optionally replaces Screening.Collect with original native
+	// command/proof attribution. Missing selection retains the existing API.
+	CollectChange PasswordChangeScreeningCollector
 }
+
+// PasswordChangeScreeningCollector borrows the exact candidate only after
+// native source-session and signed-original proof validation. Binding and proof
+// retain the actual protected command and issued verification, not replacement
+// event/attempt IDs. Return bound HIBP facts or deny; unknown required audit
+// delivery must retain original records through the existing audit owner.
+// Dependencies honor bounded contexts, are concurrency-safe and retain no
+// candidate. Native replay/recovery does not invoke this callback again.
+type PasswordChangeScreeningCollector = func(context.Context, identity.CommandBinding, auth.ReauthenticationProof, risk.Context, primitive.Secret) ([]risk.Signal, error)
 
 // PasswordChangeRequest borrows the original bearer, issued password-specific
 // proof and new raw-byte secret. Caller and Network have trusted transport
@@ -84,6 +99,19 @@ type PasswordChangeService struct {
 func NewPasswordChangeService(source *ReauthenticationService, c PasswordChangeConfig) (*PasswordChangeService, error) {
 	if source == nil || !source.repository.configuredWriter() || source.sessions == nil || c.Counters == nil || c.MaximumAge <= 0 || c.MaximumAge > 15*time.Minute || !reauthenticationText(c.Audience, 256) || c.Screening.Primitive != source.c.Verifier.Primitive {
 		return nil, password.ErrPasswordWork
+	}
+	if c.PolicyID == "" {
+		c.PolicyID = "identity-password"
+	}
+	if !reauthenticationText(c.PolicyID, 128) {
+		return nil, password.ErrPasswordWork
+	}
+	if c.CollectChange != nil {
+		// Constructor validation must not invoke an attributed callback without
+		// the original checked command. Actual calls use collectChange below.
+		c.Screening.Collect = func(context.Context, risk.Context, primitive.Secret) ([]risk.Signal, error) {
+			return nil, password.ErrPasswordWork
+		}
 	}
 	target := ReauthenticationTarget{Purpose: "identity.password.verify", Action: "identity.password.change", Audience: c.Audience}
 	if !slices.Contains(source.c.Targets, target) {
@@ -188,7 +216,7 @@ func (s *PasswordChangeService) Change(ctx context.Context, r PasswordChangeRequ
 		return result, password.ErrPasswordWork
 	}
 	op := replacementOperation()
-	b := identity.CommandBinding{CommandID: id, TenantID: r.TenantID, UserID: bindings.UserID, ActorID: identity.ActorID(bindings.UserID), ActorKind: authorization.SubjectUser, OperationID: op.OperationID, SchemaID: op.SchemaID, SchemaVersion: op.SchemaVersion, PolicyID: "identity-password", PolicyVersion: s.source.c.Coordinator.AdmissionPolicy.PolicyVersion, RecordID: bindings.Authentication.CredentialID, CorrelationID: string(id)}
+	b := identity.CommandBinding{CommandID: id, TenantID: r.TenantID, UserID: bindings.UserID, ActorID: identity.ActorID(bindings.UserID), ActorKind: authorization.SubjectUser, OperationID: op.OperationID, SchemaID: op.SchemaID, SchemaVersion: op.SchemaVersion, PolicyID: s.c.PolicyID, PolicyVersion: s.source.c.Coordinator.AdmissionPolicy.PolicyVersion, RecordID: bindings.Authentication.CredentialID, CorrelationID: string(id)}
 	target := ReauthenticationTarget{Purpose: "identity.password.verify", Action: op.OperationID, Audience: s.c.Audience}
 	if err = s.source.authorize(ctx, r.Caller, b, target); err != nil {
 		return result, err
@@ -222,9 +250,8 @@ func (s *PasswordChangeService) Change(ctx context.Context, r PasswordChangeRequ
 	scope := risk.Context{Tenant: string(b.TenantID), Operation: risk.Action(op.OperationID), Attempt: string(id)}
 	var facts []risk.Signal
 	screening := s.c.Screening
-	collect := screening.Collect
 	screening.Collect = func(ctx context.Context, c risk.Context, candidate primitive.Secret) ([]risk.Signal, error) {
-		found, e := collect(ctx, c, candidate)
+		found, e := s.collectChange(ctx, b, r.Proof, c, candidate)
 		if e == nil {
 			facts = slices.Clone(found)
 		}
@@ -313,6 +340,13 @@ func (s *PasswordChangeService) Change(ctx context.Context, r PasswordChangeRequ
 		result.CredentialVersion, result.AuthorityInvalidated = receipt.Feature.AfterVersion, true
 	}
 	return result, err
+}
+
+func (s *PasswordChangeService) collectChange(ctx context.Context, original identity.CommandBinding, proof auth.ReauthenticationProof, scope risk.Context, candidate primitive.Secret) ([]risk.Signal, error) {
+	if s.c.CollectChange != nil {
+		return s.c.CollectChange(ctx, original, proof, scope, candidate)
+	}
+	return s.c.Screening.Collect(ctx, scope, candidate)
 }
 
 // Only trusted policy composition selects provider-only preparation. Existing

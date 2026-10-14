@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Optionally attribute password-change screening to the original native
+  command and signed verification proof, with a trusted configured policy ID.
+  Existing collectors and the default keyed profile retain their original
+  behavior and fingerprint. Native replay/recovery does not repeat screening.
+
 - Inspect original unused emailed-reset issuance against current recipient,
   credential, account, authorization and MFA generation without mutation or
   password work. Used, expired, unissued and ineligible proofs expose no

@@ -12,13 +12,14 @@ const (
 	baselineActor  = "AAAAAAAAAAAAAAAAAAAAAw"
 	// The security-event profile requires the actual policy's canonical opaque
 	// identifier, not a human-readable label or a fabricated per-check identity.
-	baselineResetPolicy = "AAAAAAAAAAAAAAAAAAAABQ"
+	baselineResetPolicy  = "AAAAAAAAAAAAAAAAAAAABQ"
+	baselineChangePolicy = "AAAAAAAAAAAAAAAAAAAABg"
 )
 
 // This is the selected application's finite policy, evaluated by the existing
 // authorization engine. Native owners still prove current account, credential,
 // original-flow and session ownership inside their protected transactions.
-type baselineEvaluator struct{ reset bool }
+type baselineEvaluator struct{ reset, change bool }
 
 func (e *baselineEvaluator) Evaluate(ctx context.Context, r authorization.Request) (authorization.Decision, error) {
 	deny := authorization.Decision{Outcome: authorization.Deny}
@@ -46,8 +47,11 @@ func (e *baselineEvaluator) Evaluate(ctx context.Context, r authorization.Reques
 	if r.Subject.Kind == authorization.SubjectServiceAccount && r.Subject.ID == "baseline-worker" && r.Action == "identity.delivery.process" {
 		allow = r.Resource.Type == "identity.delivery-worker" && r.Resource.ID == "baseline-worker"
 	}
-	if r.Subject.Kind == authorization.SubjectUser && (r.Action == "identity.session.revoke-one" || r.Action == "identity.session.revoke-one.recover") {
+	if r.Subject.Kind == authorization.SubjectUser && (r.Action == "identity.session.revoke-one" || r.Action == "identity.session.revoke-one.recover" || e.change && (r.Action == "identity.password.verify" || r.Action == "identity.password.verify.recover" || r.Action == "identity.password.change" || r.Action == "identity.password.change.recover")) {
 		allow = r.Resource.Type == "identity.user" && string(r.Resource.ID) == string(r.Subject.ID) && r.Subject.ID != ""
+		if e.change && r.Action == "identity.password.change" && r.Subject.ID != "" && r.Resource.Type == "identity.request-admission" && r.Resource.ID == "identity.password.change" {
+			allow = true
+		}
 	}
 	if allow {
 		return authorization.Decision{Outcome: authorization.Allow}, nil
@@ -55,8 +59,9 @@ func (e *baselineEvaluator) Evaluate(ctx context.Context, r authorization.Reques
 	return deny, nil
 }
 
-func baselineAuthorization(reset bool) (authorization.Service, error) {
-	snapshot, err := authorization.NewSnapshot(9, authorization.DenyOverrides, authorization.PolicyDefinition{ID: "local-baseline", Revision: 9, Evaluator: &baselineEvaluator{reset: reset}})
+func baselineAuthorization(reset bool, change ...bool) (authorization.Service, error) {
+	selected := len(change) == 1 && change[0]
+	snapshot, err := authorization.NewSnapshot(9, authorization.DenyOverrides, authorization.PolicyDefinition{ID: "local-baseline", Revision: 9, Evaluator: &baselineEvaluator{reset: reset, change: selected}})
 	if err != nil {
 		return nil, errLocalProfile
 	}

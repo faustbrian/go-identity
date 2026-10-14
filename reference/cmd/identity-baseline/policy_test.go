@@ -7,6 +7,38 @@ import (
 	"github.com/faustbrian/go-authorization"
 )
 
+func TestBaselineChangeAdmitsOnlyItsNativeRequestAndSelfScope(t *testing.T) {
+	selected, err := baselineAuthorization(false, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request := authorization.DecisionContext{PolicyRevision: 9, Request: authorization.Request{Tenant: baselineTenant, Subject: authorization.Subject{Kind: authorization.SubjectUser, ID: "current-user"}, Action: "identity.password.change", Resource: authorization.Resource{Type: "identity.request-admission", ID: "identity.password.change"}}}
+	if decision, err := selected.Decide(t.Context(), request); err != nil || decision.Outcome != authorization.Allow {
+		t.Fatal("authenticated native password-change admission denied")
+	}
+	unselected, err := baselineAuthorization(false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if decision, err := unselected.Decide(t.Context(), request); err != nil || decision.Outcome != authorization.Deny {
+		t.Fatal("unselected native change request admitted")
+	}
+	for _, modify := range []func(*authorization.DecisionContext){
+		func(r *authorization.DecisionContext) { r.Request.Resource.ID = "identity.user.create" },
+		func(r *authorization.DecisionContext) {
+			r.Request.Resource = authorization.Resource{Type: "identity.user", ID: "other-user"}
+		},
+		func(r *authorization.DecisionContext) { r.Request.Subject.ID = "" },
+		func(r *authorization.DecisionContext) { r.Request.Tenant = "other-tenant" },
+	} {
+		other := request
+		modify(&other)
+		if decision, _ := selected.Decide(t.Context(), other); decision.Outcome == authorization.Allow {
+			t.Fatal("change selection expanded native caller/resource authority")
+		}
+	}
+}
+
 func TestBaselinePolicyIsRevisionAndTenantFenced(t *testing.T) {
 	service, err := baselineAuthorization(false)
 	if err != nil {

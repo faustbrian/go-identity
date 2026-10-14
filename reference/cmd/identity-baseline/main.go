@@ -48,6 +48,11 @@ func runBaseline(ctx context.Context, args []string, output io.Writer) (err erro
 		if err := initializeCredentials(o.directory, time.Now()); err != nil {
 			return err
 		}
+		if o.passwordChange {
+			if err := prepareChangeCredentials(o.directory); err != nil {
+				return err
+			}
+		}
 		_, err := io.WriteString(output, "private local configuration initialized; no database or listener opened\n")
 		return err
 	}
@@ -55,8 +60,13 @@ func runBaseline(ctx context.Context, args []string, output io.Writer) (err erro
 	if err != nil {
 		return err
 	}
-	if o.operation == "exercise" || o.operation == "exercise-reset" {
+	if o.operation == "exercise" || o.operation == "exercise-reset" || o.operation == "exercise-change" {
 		return exerciseBaseline(ctx, o, secrets, output)
+	}
+	if o.operation == "migrate" && o.passwordChange {
+		if err := prepareChangeCredentials(o.directory); err != nil {
+			return err
+		}
 	}
 	dsn, err := readPrivateFile(o.dsnFile, 16384)
 	if err != nil {
@@ -86,19 +96,35 @@ func runBaseline(ctx context.Context, args []string, output io.Writer) (err erro
 		return err
 	}
 	defer func() { err = errors.Join(err, sender.Close()) }()
-	if o.operation == "migrate" && o.passwordReset {
+	if o.operation == "migrate" && (o.passwordReset || o.passwordChange) {
 		// Optional migrations get a separate original request, only after the
 		// unchanged baseline request is complete. Resume an existing reset
 		// request directly; reverting to the smaller profile after its suffix
 		// is installed would misclassify that managed history as foreign.
-		if _, statErr := os.Lstat(filepath.Join(o.directory, "migration-request-reset.json")); errors.Is(statErr, os.ErrNotExist) {
+		if _, statErr := os.Lstat(filepath.Join(o.directory, migrationRequestName(o))); errors.Is(statErr, os.ErrNotExist) {
 			base := o
 			base.passwordReset = false
+			base.passwordChange = false
+			// A combined upgrade resumes whichever already selected predecessor
+			// has original custody. Never rebuild a smaller graph over its suffix.
+			if o.passwordReset && o.passwordChange {
+				for _, prior := range []struct {
+					name          string
+					reset, change bool
+				}{{"migration-request-reset.json", true, false}, {"migration-request-change.json", false, true}} {
+					if _, err := os.Lstat(filepath.Join(o.directory, prior.name)); err == nil {
+						base.passwordReset, base.passwordChange = prior.reset, prior.change
+						break
+					} else if !errors.Is(err, os.ErrNotExist) {
+						return errCredentials
+					}
+				}
+			}
 			predecessor, buildErr := buildBaseline(ctx, base, secrets, pool, sender)
 			if buildErr != nil {
 				return buildErr
 			}
-			migrateErr := migrateBaseline(ctx, predecessor.stores, o.directory)
+			migrateErr := migrateBaselineWithRequest(ctx, predecessor.stores, o.directory, migrationRequestName(base), syncDirectory)
 			closeErr := predecessor.close(ctx)
 			if migrateErr != nil || closeErr != nil {
 				return errors.Join(migrateErr, closeErr)
@@ -117,7 +143,7 @@ func runBaseline(ctx context.Context, args []string, output io.Writer) (err erro
 		err = errors.Join(err, graph.close(bounded))
 	}()
 	if o.operation == "migrate" {
-		if err := migrateSelectedBaseline(ctx, graph.stores, o.directory, o.passwordReset); err != nil {
+		if err := migrateBaselineWithRequest(ctx, graph.stores, o.directory, migrationRequestName(o), syncDirectory); err != nil {
 			return err
 		}
 		_, err := io.WriteString(output, "migrations compatible; no account created or serving started\n")
@@ -142,6 +168,19 @@ func runBaseline(ctx context.Context, args []string, output io.Writer) (err erro
 		return err
 	}
 	return serveBaseline(ctx, graph, o, secrets, output)
+}
+
+func migrationRequestName(o options) string {
+	switch {
+	case o.passwordReset && o.passwordChange:
+		return "migration-request-reset-change.json"
+	case o.passwordChange:
+		return "migration-request-change.json"
+	case o.passwordReset:
+		return "migration-request-reset.json"
+	default:
+		return "migration-request.json"
+	}
 }
 
 func localDatabaseHost(host string) bool { return host == "127.0.0.1" || host == "::1" }

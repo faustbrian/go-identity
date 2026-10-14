@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Opt into fresh password verification and keyed password change in the
+  runnable PostgreSQL backend, with required HIBP/audit delivery and atomic
+  revoke-all session effects. New signing/intent keys and migration requests
+  are additive; original baseline/reset custody is preserved.
+  Keep the bounded tenant-resolution context local to admission rather than
+  truncating the configured router/workflow deadline after successful resolution.
+  The combined reset/change walkthrough continues with the successfully reset
+  credential and checks the next credential version.
+
 - Add explicitly selected emailed-capability password reset to the runnable
   PostgreSQL backend: captured delivery, repeatable non-consuming inspection,
   explicit completion, required all-session revocation and replacement-password

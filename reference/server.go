@@ -254,7 +254,11 @@ func (s *Server) guardTenant(network *identityhttp.NetworkResolver, next http.Ha
 			deny()
 			return
 		}
-		next.ServeHTTP(w, owned)
+		// The callback budget bounds admission only. The native router already
+		// owns the whole request deadline; forwarding this shorter context would
+		// prematurely cancel multi-step password work after successful admission.
+		cancel()
+		next.ServeHTTP(w, r)
 	})
 }
 

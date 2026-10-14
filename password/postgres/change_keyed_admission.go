@@ -75,7 +75,8 @@ func (p *keyedPasswordChangePhase) PrepareFeatureAdmission(ctx context.Context, 
 	scope := risk.Context{Tenant: string(input.Binding.TenantID), Operation: risk.Action(replacementOperation().OperationID), Attempt: string(input.Binding.CommandID), Now: p.service.native.source.c.Verifier.Now().UTC()}
 	ctx, stop := context.WithTimeout(ctx, p.service.native.c.Screening.Timeout)
 	defer stop()
-	facts, err := p.service.native.c.Screening.Collect(ctx, scope, p.request().Password)
+	request := p.request()
+	facts, err := p.service.native.collectChange(ctx, input.Binding, request.Proof, scope, request.Password)
 	if err != nil || len(facts) == 0 || len(facts) > 32 || ctx.Err() != nil {
 		return nil, readerFailure(ctx)
 	}

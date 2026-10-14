@@ -73,7 +73,7 @@ func (p *keyedPasswordChangePhase) PrepareRequestKey(ctx context.Context, k kern
 	if err != nil || k.Scope.ActorID != identity.ActorID(spec.UserID) || k.Scope.TenantID != spec.TenantID || spec.UserID != identity.UserID(r.Caller.Request.Subject.ID) {
 		return nil, identity.ForbiddenError{}
 	}
-	b := identity.CommandBinding{CommandID: k.Admission.CommandID, TenantID: spec.TenantID, UserID: spec.UserID, ActorID: k.Scope.ActorID, ActorKind: k.Scope.ActorKind, OperationID: replacementOperation().OperationID, SchemaID: replacementOperation().SchemaID, SchemaVersion: replacementOperation().SchemaVersion, PolicyID: "identity-password", PolicyVersion: native.source.c.Coordinator.AdmissionPolicy.PolicyVersion, RecordID: spec.Authentication.CredentialID, CorrelationID: string(k.Admission.CommandID)}
+	b := identity.CommandBinding{CommandID: k.Admission.CommandID, TenantID: spec.TenantID, UserID: spec.UserID, ActorID: k.Scope.ActorID, ActorKind: k.Scope.ActorKind, OperationID: replacementOperation().OperationID, SchemaID: replacementOperation().SchemaID, SchemaVersion: replacementOperation().SchemaVersion, PolicyID: native.c.PolicyID, PolicyVersion: native.source.c.Coordinator.AdmissionPolicy.PolicyVersion, RecordID: spec.Authentication.CredentialID, CorrelationID: string(k.Admission.CommandID)}
 	target := ReauthenticationTarget{Purpose: "identity.password.verify", Action: b.OperationID, Audience: native.c.Audience}
 	if err := native.source.authorize(ctx, r.Caller, b, target); err != nil {
 		return nil, err

@@ -5,6 +5,21 @@ import (
 	"testing"
 )
 
+func TestBaselinePasswordChangeRequiresExplicitSelection(t *testing.T) {
+	for _, operation := range []string{"serve", "migrate", "exercise-change"} {
+		args := []string{operation, "--local-capture", "--password-change", "--directory", "private-run"}
+		if operation != "exercise-change" {
+			args = append(args, "--dsn-file", "private-dsn")
+		}
+		if _, err := parseOptions(args); err != nil {
+			t.Fatal("explicit password change profile rejected", err)
+		}
+	}
+	if _, err := parseOptions([]string{"exercise-change", "--local-capture", "--directory", "private-run"}); err == nil {
+		t.Fatal("password change exercise accepted without feature selection")
+	}
+}
+
 func TestBaselineResetRequiresExplicitFeatureSelection(t *testing.T) {
 	for _, operation := range []string{"serve", "migrate", "exercise-reset"} {
 		args := []string{operation, "--local-capture", "--password-reset", "--directory", "private-run"}

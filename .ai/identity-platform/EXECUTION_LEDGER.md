@@ -1,6 +1,63 @@
 # Identity Implementation — Current Milestone
 
-Activated on 2026-10-14. B1 and B2 are closed; B3 is next.
+Activated on 2026-10-14. B1 and B2 are closed; B3 is active.
+
+## Active: B3 fresh password reauthentication and change
+
+- Base: main 0675bfd; adopt delivered B1/B2 and the existing native
+  verification/keyed-change/cookie/session-effect owners. Supplier pins remain
+  those in reference/LOCAL_SOURCES.json. One bounded B3 investigation is done.
+- Outcome: opt-in browser-cookie verification of the current password, then
+  explicit keyed change, old-password rejection, new-password signin and denial
+  of both saved original sessions. Revoke all sessions; no automatic signin,
+  preserved-session, bearer, administrative or stronger-factor variant.
+- Preserve populated baseline keys and original migration requests; new
+  reauthentication/change key custody is an additive private local file.
+  Change and reset remain independent explicit HTTP selections.
+- Finite acceptance: wrong-current-password/CSRF/foreign-origin denial, fresh
+  proof leaves session unchanged, original signed purpose/action/session/
+  credential/version/expiry fences, reuse/breach/HIBP outage denial, atomic
+  rollback and original scoped native recovery, replay cannot authenticate a
+  revoked cookie, two-session revocation, populated migration/restart custody.
+- Adopt the supported existing public ChangeRequest and separate verification
+  contracts. The stale typed catalog's caller-selected subject, current password
+  and revocation fields are not the public change body: current password is
+  proved through verification; subject/session comes from native authority;
+  revocation is frozen trusted policy. Record this correction with the B3
+  consumer documentation, not a Tools catalog migration.
+- Focused checks: new baseline opt-in/journey/upgrade regressions red/green;
+  reference unit race and TestBaseline integration; existing
+  TestReferenceServerPasswordProtection and TestPrimaryPasswordCredentialIntegration
+  native recovery/freshness/breach/rollback cases. Run actual PostgreSQL and
+  source-consumer wiring, then one complete independent final-diff review,
+  affected changelogs/current secrets and ordinary main delivery/Required CI.
+- Runtime diagnosis: sanitized journal observations located intermittent race
+  failures both before retained output and after the final plan. A native
+  comparison deadline expired after only 875ms of that comparison; shared
+  tenant admission was forwarding its narrower two-second context into the
+  whole workflow. TestReferenceServerTenantAdmissionDoesNotReplaceWorkflowDeadline
+  failed before correction, then passed. Admission stays bounded; dispatch
+  retains the original router/caller deadline. No primitive, proof age, audit
+  acknowledgement or configured workflow timeout changed. Final runtime
+  regression/review/delivery remain pending.
+- Final selected local checks: reference unit race passes (11.648s and command
+  11.345s); complete TestBaseline plus tenant-admission race integration passes
+  (command 146.945s, reference 5.134s). The PostgreSQL-only native protection
+  journey passes (4.478s), including real rollback, revoked-cookie denial and
+  independently authorized scoped recovery. Isolated legacy native password
+  change passes (4.523s); earlier broader overlapping-fixture failures remain
+  outside that claim. Current tooling v2.5.1 planning-check and changed-content
+  secrets pass. A concurrent remote CI-only update ca43e21 was fast-forwarded
+  and verified on origin/main without changing identity runtime source.
+  Complete independent review and B3 main delivery are pending.
+- /root/b3_complete_review reviewed immutable tree 90851a21 against ca43e21
+  and requested changes for one concrete consumer defect: the accepted generic
+  exercise with both flags reset the password but then used its predecessor
+  password/version for change. The new combined real PostgreSQL/HTTPS race
+  regression failed at second-session signin (403, 15.01s). The consumer now
+  carries the successfully reset credential/version into change. The corrected
+  combined journey and standalone reset/change race cases pass (39.395s total);
+  complete review of the corrected full diff remains pending.
 
 ## Closed: B2 emailed-capability password reset
 

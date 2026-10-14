@@ -1,11 +1,11 @@
-# Runnable password authentication and reset backend (B1/B2)
+# Runnable password authentication, reset and change backend (B1/B2/B3)
 
 This is a **local, loopback-only backend**, not a UI or a production deployment.
 It composes public owners and real PostgreSQL for registration, verification,
 password signin, authenticated session reads and logout. Nothing seeds a user or
 substitutes a domain store. HTTP features are explicitly selected; reset is an
-additional opt-in profile. Password change, OTP signin, MFA and other login
-methods are not enabled here.
+additional opt-in profile. Fresh verification/password change is independently
+opt-in. OTP signin, MFA and other login methods are not enabled here.
 
 ## Prerequisites and source boundary
 
@@ -197,5 +197,63 @@ At most 256 batches of one or two records are retained; full capacity or an
 unavailable filesystem denies new required audit delivery rather than evicting
 unconfirmed records. Do not edit or delete pending files to manufacture success.
 
-These proofs do not close the platform: password change is B3, and full
-unit/release qualification and the other retained milestones remain.
+## Opt into fresh verification and password change (B3)
+
+Keep the existing private directory, database and exact HTTPS origin. Stop
+serving, then explicitly select the new profile:
+
+    ruby scripts/identity-baseline.rb "$collection" migrate --password-change \
+      --local-capture --directory "$baseline_parent/app" \
+      --dsn-file "$baseline_parent/postgres.dsn"
+    ruby scripts/identity-baseline.rb "$collection" serve --password-change \
+      --local-capture --directory "$baseline_parent/app" \
+      --dsn-file "$baseline_parent/postgres.dsn"
+
+If the database already has reset selected, retain **--password-reset** on both
+commands. The combined upgrade resumes the original reset request before adding
+change. A new migration-request-change.json (or migration-request-reset-change.json
+for the combination) preserves its own original operator input; it never
+overwrites the original baseline/reset request or installed history.
+
+Explicit migration adds private password-change-credentials.json for independent
+reauthentication signing, identifier and change-intent keys. Serving cannot
+generate missing keys. Original credentials.json is unchanged; keep both files
+stable across restarts. Unsafe, ambiguous or unavailable custody denies.
+
+In the second terminal:
+
+    ruby scripts/identity-baseline.rb "$(dirname "$PWD")" exercise-change --password-change \
+      --local-capture --directory "$baseline_parent/app"
+
+The consumer traverses registration/verification/signin, creates two sessions,
+denies missing-CSRF/wrong-password/unselected-purpose verification, obtains a
+fresh original proof without extending its session, denies current-password
+reuse, then explicitly changes with native required HIBP/audit delivery. It
+proves both saved original sessions are denied, old-password signin fails,
+new-password signin succeeds and the old proof cannot change that new session.
+It ends with logout and rejection of the saved replacement-session cookie.
+
+With both profiles installed, `exercise --password-reset --password-change`
+runs reset and then change against the reset's replacement credential.
+`exercise-reset` and `exercise-change` keep their respective journeys separate,
+even when both feature flags are present.
+
+POST /v1/password/verify accepts current password plus the exact selected
+purpose/action/audience; POST /v1/password/change accepts proofID/newPassword and
+one Idempotency-Key header. Both require the original browser/session custody,
+exact HTTPS Origin and CSRF. Subject identity comes from current native
+authentication, not a caller-selected subject. Change consumes the original
+issued proof in the protected transaction; revoke-all policy is trusted startup
+configuration, not a request override. This adopts the supported public change
+contract rather than the historical catalog's subject/current-password/
+revocation fields in the change body.
+
+A same-key HTTP retry after successful revoke-all change denies because its
+cookie is revoked; idempotency does not restore authentication. Original keyed
+replay and code-free scoped recovery remain available through the separate
+native ports under independent trusted authorization, without another hash,
+screening or mutation. The local command does not expose a recovery bypass.
+
+Audit reconciliation above also accepts --password-change; retain both flags
+when both profiles are installed. Full unit/release qualification and the other
+retained milestones remain; these selected journeys do not close the platform.

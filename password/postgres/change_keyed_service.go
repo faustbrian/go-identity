@@ -104,6 +104,10 @@ func NewKeyedPasswordChangeService(source *ReauthenticationService, policy Passw
 	// Freeze the scalar behavior selection, not ephemeral provider observations.
 	// Encryption-key selection is deliberately absent: retained envelopes identify
 	// their original key and changing only the active key must not remap input.
+	policyID := native.c.PolicyID
+	if policyID == "identity-password" {
+		policyID = "" // Preserve the exact historical default profile frame.
+	}
 	frame, err := json.Marshal(struct {
 		Profile                      string
 		Namespace, Audience          string
@@ -114,7 +118,8 @@ func NewKeyedPasswordChangeService(source *ReauthenticationService, policy Passw
 		SessionDisposition           uint8
 		AdmissionPolicy, QueryPolicy uint64
 		PrimitivePolicy              [32]byte
-	}{"identity-password-keyed-v1", c.RequestKeys.Namespace, native.c.Audience, source.c.Issuer, source.c.Environment, []string{source.c.Profile.GlobalAuthorityID, source.c.Profile.PolicyNamespace, source.c.Profile.Audience, source.c.Profile.AuthenticationMethod, source.c.Profile.CredentialOwner, source.c.Session.Schema}, native.c.MaximumAge, native.c.Screening.Timeout, native.c.Screening.MinimumBytes, native.c.Screening.MaximumBytes, native.c.MaximumSessions, uint8(native.c.SessionDisposition), source.c.Coordinator.AdmissionPolicy.PolicyVersion, c.RequestKeys.Policy.PolicyVersion, primitiveDigest})
+		PolicyID                     string `json:"PolicyID,omitempty"`
+	}{"identity-password-keyed-v1", c.RequestKeys.Namespace, native.c.Audience, source.c.Issuer, source.c.Environment, []string{source.c.Profile.GlobalAuthorityID, source.c.Profile.PolicyNamespace, source.c.Profile.Audience, source.c.Profile.AuthenticationMethod, source.c.Profile.CredentialOwner, source.c.Session.Schema}, native.c.MaximumAge, native.c.Screening.Timeout, native.c.Screening.MinimumBytes, native.c.Screening.MaximumBytes, native.c.MaximumSessions, uint8(native.c.SessionDisposition), source.c.Coordinator.AdmissionPolicy.PolicyVersion, c.RequestKeys.Policy.PolicyVersion, primitiveDigest, policyID})
 	if err != nil {
 		return nil, password.ErrPasswordWork
 	}

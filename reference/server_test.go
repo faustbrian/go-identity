@@ -37,6 +37,7 @@ func TestReferenceServerTenantAdmissionPrecedesWorkflow(t *testing.T) {
 		err     error
 		panic   bool
 		cancel  bool
+		expire  bool
 		allowed bool
 	}{
 		{name: "matching", tenant: "tenant", allowed: true},
@@ -45,9 +46,13 @@ func TestReferenceServerTenantAdmissionPrecedesWorkflow(t *testing.T) {
 		{name: "unavailable", err: errors.New("sensitive provider failure")},
 		{name: "panic", panic: true},
 		{name: "canceled", tenant: "tenant", cancel: true},
+		{name: "expired-admission", tenant: "tenant", expire: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			c, d, f := serverFixture(t)
+			if tc.expire {
+				c.HTTP.HandlerTimeout = 5 * time.Millisecond
+			}
 			ctx, cancel := context.WithCancel(t.Context())
 			defer cancel()
 			c.Tenant.Resolver = serverTenantFunc(func(ctx context.Context) (identity.TenantID, error) {
@@ -59,6 +64,9 @@ func TestReferenceServerTenantAdmissionPrecedesWorkflow(t *testing.T) {
 				}
 				if tc.cancel {
 					cancel()
+				}
+				if tc.expire {
+					<-ctx.Done()
 				}
 				return tc.tenant, tc.err
 			})
@@ -84,6 +92,51 @@ func TestReferenceServerTenantAdmissionPrecedesWorkflow(t *testing.T) {
 				t.Fatal("tenant denial leaked custody")
 			}
 		})
+	}
+}
+
+func TestReferenceServerTenantAdmissionDoesNotReplaceWorkflowDeadline(t *testing.T) {
+	c, d, f := serverFixture(t)
+	c.HTTP.HandlerTimeout = 4 * time.Second
+	parent, stop := context.WithTimeout(t.Context(), c.HTTP.HandlerTimeout)
+	defer stop()
+	var admission context.Context
+	c.Tenant.Resolver = serverTenantFunc(func(ctx context.Context) (identity.TenantID, error) {
+		admission = ctx
+		deadline, ok := ctx.Deadline()
+		outer, _ := parent.Deadline()
+		if !ok || !deadline.Before(outer) {
+			t.Error("tenant resolution lost its own narrower budget")
+		}
+		return "tenant", nil
+	})
+	s, err := NewServer(c, d, f)
+	if err != nil {
+		t.Fatal(err)
+	}
+	network, err := identityhttp.NewNetworkResolver(c.HTTP.Network)
+	if err != nil {
+		t.Fatal(err)
+	}
+	dispatched := false
+	h := s.guardTenant(network, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		dispatched = true
+		outer, _ := parent.Deadline()
+		actual, _ := r.Context().Deadline()
+		if !actual.Equal(outer) || r.Context() != parent {
+			t.Error("tenant callback budget truncated the workflow's router-owned deadline")
+		}
+		if admission.Err() != context.Canceled {
+			t.Error("finished tenant resolution retained its deadline timer")
+		}
+		w.WriteHeader(204)
+	}))
+	r := httptest.NewRequest("POST", "https://login.example/test", nil).WithContext(parent)
+	r.RequestURI, r.RemoteAddr = "/test", "127.0.0.1:1234"
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, r)
+	if !dispatched || w.Code != 204 || parent.Err() != nil {
+		t.Fatal("admitted workflow lost live parent cancellation ownership")
 	}
 }
 
