@@ -24,9 +24,11 @@ Prepared on 2026-10-14. No implementation goal has been activated here.
   obtain one independent final-diff review, resolve concrete findings, commit
   and push the coherent main checkpoint with applicable required CI. Then B2,
   then B3; do not add neighboring profiles before closing B1.
-- Known delivery gap: prior identity hosted CI failed historical secret
-  classification. It remains unverified, not waived. Continue safe B1 work and
-  isolate any demonstrated supporting-tool fix needed for affected delivery.
+- Hosted check scope: documentation-only run 38513309150 passed Required on
+  `833df6f`; prior run 38501126112 failed historical secret classification.
+  Neither runtime qualification nor repair of that historical result is claimed.
+  Start safe B1 work on activation, assess its actual affected checks and isolate
+  any reproduced supporting-tool defect needed for delivery.
 
 ## Continuity
 

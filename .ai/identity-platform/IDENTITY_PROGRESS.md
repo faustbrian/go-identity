@@ -26,9 +26,11 @@ Historical planning ledgers and evidence stay at their original locations.
   0/61 fully qualified product units. These are prior records, not a new
   qualification audit or an overall effort percentage. Reconcile only affected
   units from their native evidence as implementation proceeds.
-- Known delivery gap: historical identity hosted CI failed its secret scan.
-  Do not label it passing. Solve the concrete affected delivery check narrowly;
-  it is not an excuse for a new planning/tooling programme.
+- Hosted check scope: documentation-only run 38513309150 passed Required on
+  `833df6f`. Historical run 38501126112 failed on imported-history secrets.
+  The later pass is not runtime/full-history qualification and does not repair
+  that old result. Assess B1's actual affected checks; isolate a reproduced
+  delivery failure, not a dashboard cleanup or new planning/tooling programme.
 - Closed Tools PR #338 stays closed. No historical evidence import, Tools-main
   planning publication or completion of the retired repair goal is required.
 - Full target remains 67 units, 19 journey categories and 10 shared-issuer cases.
