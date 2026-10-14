@@ -1,8 +1,8 @@
 # Identity Implementation — Current Milestone
 
-Activated on 2026-10-14. B1 is closed; B2 reset is active.
+Activated on 2026-10-14. B1 and B2 are closed; B3 is next.
 
-## Active: B2 emailed-capability password reset
+## Closed: B2 emailed-capability password reset
 
 - Base: identity main `04118b2`, adopting B1 and existing native reset workflows.
   Same committed supplier source pins as `reference/LOCAL_SOURCES.json`.
@@ -44,7 +44,7 @@ Activated on 2026-10-14. B1 is closed; B2 reset is active.
   pass. Selected native reset/factor/recovery tests pass; an attempted entire
   legacy signin fixture fails from overlapping fixture histories/expectations
   and is not claimed green. No unrelated fixture/tooling repair is included.
-  B2 still requires final affected checks, complete review and main delivery.
+  Later final correction checks and delivery are recorded below.
 - Final affected local checks pass: password and password-HTTP race suites;
   reference unit race suite and all Baseline command integration cases;
   native reset migrations and selected native reset/factor/recovery/screening
@@ -53,7 +53,7 @@ Activated on 2026-10-14. B1 is closed; B2 reset is active.
   The broader HTTP suite's response-extension case also fails on unchanged
   B1 source with the same pinned suppliers, so it is a retained broader
   qualification gap, not a green whole-suite claim or a reset implementation
-  repair. Complete review, changed-content secrets and main delivery remain.
+  repair. Final reviewed source and delivery are recorded below.
 - Complete review of tree `392e9c47` requested changes for one concrete B2
   defect: a lost primary HIBP audit acknowledgement denied screening but the
   collector's safe error projection discarded original event recovery custody.
@@ -73,6 +73,20 @@ Activated on 2026-10-14. B1 is closed; B2 reset is active.
   lost-acknowledgement, privacy/cancellation, directory-sync denial/retry and
   reference unit race tests pass. No timeout or primary-acknowledgement policy
   was relaxed. Complete final review of the resulting full diff remains.
+- Closure on 2026-10-14: /root/b2_complete_review (GPT-6.1 Sol medium)
+  approved the complete base 04118b2 to source tree
+  94e5b34a3f1a28ec22718e7b30315e2cd421bd6d. Both audit findings are resolved.
+  Reference go test -race ./... passed; command
+  go test -race -tags=integration -run '^TestBaseline' -count=1 -v
+  ./cmd/identity-baseline passed (74.088s), including B1/B2, populated upgrade,
+  actual PostgreSQL post-COMMIT acknowledgement loss and native audit replay.
+  Command vet, planning-check, local docs and final changed-content secrets
+  passed. Earlier transient signin failures remain unattributed; no policy or
+  timeout was weakened. Complete source commit fd439aa71aa0e12259785cf2b094daf996ab3eb7
+  is on origin/main; Required CI succeeded in run 38547848026. This closes B2,
+  not whole-unit, public-download, full-history or release qualification.
+  The owned PostgreSQL cluster is stopped. Next: B3 fresh reauthentication,
+  password change and required session effects, with wrong/stale-proof denial.
 
 ## Closed: B1 runnable authentication baseline
 
