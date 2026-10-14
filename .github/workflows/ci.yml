@@ -60,9 +60,18 @@ jobs:
           GOLIB_TASK_CACHE_ROOT="$(mktemp -d "${TMPDIR}/golib-cache-session.XXXXXX")"
           export GOLIB_TASK_CACHE_ROOT
           mkdir -m 700 "${GOLIB_TASK_CACHE_ROOT}/cache" "${GOLIB_TASK_CACHE_ROOT}/mod"
+          mkdir -m 700 "${GOLIB_TASK_CACHE_ROOT}/verifier-cache" "${GOLIB_TASK_CACHE_ROOT}/verifier-mod" "${GOLIB_TASK_CACHE_ROOT}/verifier-tmp"
           export GOCACHE="${GOLIB_TASK_CACHE_ROOT}/cache"
           export GOMODCACHE="${GOLIB_TASK_CACHE_ROOT}/mod"
           export GOTMPDIR="${TMPDIR}"
+          # Compile the same pinned scanner used by golib v2.5.1 before the
+          # scan deadline. Only verifiers borrow these isolated owned caches;
+          # repository/runtime commands cannot populate them.
+          timeout --signal=TERM --kill-after=5s 120s env \
+            GOCACHE="${GOLIB_TASK_CACHE_ROOT}/verifier-cache" \
+            GOMODCACHE="${GOLIB_TASK_CACHE_ROOT}/verifier-mod" \
+            GOTMPDIR="${GOLIB_TASK_CACHE_ROOT}/verifier-tmp" GOCACHEPROG='' \
+            go run github.com/zricethezav/gitleaks/v8@v8.30.1 version
           case "${EVENT_NAME}" in
             pull_request|push)
               [[ "${BASE_SHA}" =~ ^[0-9a-f]{40}$ ]] || exit 1
