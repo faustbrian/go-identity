@@ -1,0 +1,331 @@
+# Identity password workflows
+
+`SignupRequest` borrows the original raw password, pre-auth cookie and opaque
+retry key, preserving the already-resolved remember policy. Its `Email` field
+uses generic `SignupAddressInput`, not an email-owned type or parser. `Validate`
+checks structure and the signup action only: requested attributes remain
+unapproved until the identity owner applies its frozen schema, authorization
+and sensitivity policy. The native registration owner must independently admit
+the original flow, screen HIBP/risk, hash and coordinate every required effect.
+No account, verification, session or delivery authority follows from validation.
+`SignupService` supplies the separate registration and password-free recovery
+ports. Recovery always retains the original anonymous pre-auth namespace, never
+the newly created user's namespace. Its cookie and trusted caller scope must be
+independently admitted against primary retained history; reconstruction is not
+execution or disclosure authority.
+
+`SignupResult.Validate` distinguishes known commit, rollback, unknown, conflict
+and in-progress correlation without reading history or granting authority.
+Required-verification acknowledgements omit subject/session identity and all
+credentials; new and suppressed pre-existing accounts must remain publicly
+indistinguishable. Explicit session suppression permits a committed acknowledgement
+without verification continuation. An independently authorized subject projection
+is allowed only after known commit outside the verification-required arm.
+Optional session issuance retains the session owner's reveal-once token/CSRF
+custody. Replay/recovery has no credentials or cookie metadata; authorized
+historical session identity may remain after payload deletion. Both the result
+and error matter: unknown is not evidence of rollback. Validation cannot prove
+enumeration-safe timing or authorize delivery after cancellation/error.
+The native signup workflow, verification lifecycle and optional signup-session
+composition remain in development. These ports are not an executable signup.
+
+`SigninService` supplies distinct non-keyed login and password-free historical
+recovery ports for the native adapter. `SigninRecovery` freezes the existing
+kernel query and original pre-auth identity; it preserves user versus anonymous
+scope instead of substituting the resolved session user. Recovery still requires
+original cookie possession and fresh trusted caller provenance, with native
+current disclosure authorization and exact retained tuple matching. It cannot
+resubmit the password or allocate another attempt. Its shape grants no authority.
+
+`SigninResult.Validate` checks only closed state/outcome and original correlation,
+never current validity or delivery permission. Authenticated means known committed
+history; `Rejected` on an unknown outcome means no authenticated result is
+returned, not bad credentials or rollback. A retained session ID may survive
+payload deletion on replay without fabricating a partial Session. Fresh original
+tokens retain the session owner's shared reveal-once permission; Cookie.Value is
+empty, and replay/recovery/error/cancellation must return no token, synchronizer
+or cookie metadata. Callers must inspect both the error and original outcome.
+The current profile fails closed when MFA/verification requirements are unmet;
+the genuine MFA-owned continuation and native login implementation are still
+mandatory unfinished work. These ports do not constitute a working login.
+
+**Development checkpoint:** input policy, bounded credential work, canonical
+account comparison, portable keyed change and non-keyed verification contracts
+are implemented. The
+native PostgreSQL adapter has single-factor reauthentication and authenticated
+change composition; its portable change ports have native and optional HTTP
+bindings. Portable verification's native binding and HTTP remain in development.
+Complete signup/signin, upgrades, set/reset, administrative workflows and HTTP
+remain required. These helpers do not authorize persistence or session issuance.
+
+`NewPasswordVerifier` freezes a real primitive service, exact current-policy
+dummy hash, explicit byte/time bounds, trusted clock and platform-owned
+`CredentialVerificationRepository`. `VerifyPassword` accepts a canonical kernel
+`UserID` and trusted `TenantID`, not an email/phone identifier or an OTP. Unknown
+and missing accounts execute real dummy work; even a matching dummy cannot
+authenticate. Blocked, expired, mismatched and stale-version results are neutral.
+A real match requires a second primary snapshot preserving the original hash,
+reference version and user-wide credential epoch. Ordinary user aggregate
+version changes do not invalidate an otherwise eligible credential.
+
+The repository must join kernel authority and owned hash material consistently;
+the native password PostgreSQL adapter provides that reader and single-factor
+reauthentication composition. Do not wire
+independent kernel/hash reads or a cached positive fallback into this port.
+The comparison result is not a lease, proof or session: the owning signin
+workflow still must apply risk, verification, MFA, remember policy and atomic
+upgrade/session effects, identically for email, username and phone callers.
+The verifier never trims bytes, upgrades a hash or consumes caller secret custody.
+The caller destroys its Secret after the call. Request/snapshot diagnostics are
+redacted and implicit JSON/text serialization is denied; explicit hash access
+and private-field diagnostic reflection remain sensitive.
+
+The private execution path now performs bounded primitive work: new hashes
+require successful owned screening first, unknown identities use a current-policy
+dummy hash and never return a match, and late cancellation or secret destruction
+discards output. Existing short passwords are not rejected by the signup minimum.
+This is not a wall-clock constant-time claim across legacy hash algorithms or
+storage, and the HIBP provider and durable workflows are not yet connected here.
+
+The shared screening path now delegates complete decisions to `risk.Policy`,
+requiring explicitly selected HIBP for each creating action. It freezes bounded
+provider facts and reassesses their original age after hashing, without another
+provider call, cache promotion or freshness reset. Missing/unavailable signals,
+breaches, foreign bindings, step-up and throttle cannot yield a usable hash.
+Concrete HIBP provider collection, atomic risk consumption and password workflow
+composition still need to be connected; structural facts are not source proof.
+
+`NewHashPreparer(HashPreparationConfig)` makes that existing screened path
+available to native workflow composition without importing a persistence or
+provider adapter. Construction requires the real primitive, exact policy dummy
+hash, explicit inclusive byte bounds, a timeout up to ten seconds, trusted clock,
+HIBP-enabled risk policy and bounded owned signal collector. It performs no IO.
+`Prepare(ctx, candidate, binding)` returns the primitive's opaque encoded hash
+and an internal assessment only after complete Allow screening and unchanged
+original-fact rechecks. Unselected creating actions cannot reach the provider.
+The assessment is not authorization or transactional risk evidence. Complete
+reference composition must wire real provider provenance; this public helper
+does not establish provenance from caller-built structural facts.
+
+`PrepareProtected` is the explicit command-reserved credential-mutation lane.
+It requires HIBP and all other configured providers, rejects supplied velocity,
+and rechecks unchanged observations after hashing. Its distinct provider-only
+result does not grant velocity allowance: the native mutation must reserve and
+recheck the exact matching counter policy in its protected transaction. Other
+profiles cannot borrow this lane; ordinary `Prepare` remains unchanged.
+
+Run preparation before opening the protected transaction. Never log or return
+`EncodedHash.String()`; borrow it only for owned command/persistence work and
+discard copies afterward. The caller destroys the password after the call and
+retains provider/primitive shutdown ownership. No retry, store or goroutine is
+introduced. Earlier deadlines win; cancellation survives and errors/panics redact.
+
+## Quick start
+
+```go
+policy := password.RegistrationPolicy{
+    Enabled: true, MinimumBytes: 12, MaximumBytes: 128,
+    RequireVerifiedEmail: true,
+}
+if err := policy.Validate(); err != nil { return err }
+secret, err := primitive.NewSecret(input)
+if err != nil { return err }
+defer secret.Destroy()
+if err := policy.CheckPassword(secret); err != nil { return err }
+```
+
+Here `password` is `github.com/faustbrian/go-identity/password`; `primitive` is
+`github.com/faustbrian/go-password`. Production workflows must still enforce
+configured HIBP/risk, account status, verification and transactional authority
+before hashing or committing. This checkpoint cannot replace those workflows.
+
+## API and ownership
+
+`VerificationService` is the adapter-neutral native password reauthentication
+port, distinct from `PasswordVerifier`'s unauthorizing comparison. Its
+`VerificationRequest` carries the original bearer, borrowed raw secret, trusted
+scope and exact `VerificationTarget` (purpose/action/audience). Intrinsic
+`Validate` checks bounds only; native startup policy owns target allowlisting,
+signed issuance, primary session/password authorization and counted/audited risk.
+The request has no retry key, proof, assurance, lifetime or session override.
+Each invocation is a fresh server-owned command, so do not resubmit after an
+ambiguous result. Destroy the secret after the bounded call returns.
+
+`VerificationResult` retains the upstream authentication proof value unchanged;
+only a fresh known commit can deliver it. Command observations survive errors
+without proof delivery. Code-free `Recover` requires the original scoped query
+and current disclosure policy and returns history without reissuing proof or
+extending a session. Protected change consumes evidence in its transaction,
+not during verification. Native binding/HTTP qualification for this portable
+port remain required; the interface itself is not an executable endpoint.
+
+`CookieVerificationRequest` explicitly wraps original cookie-session custody
+and the session-owned opaque synchronizer. `Validate` rejects zero synchronizer
+and invalid nested scope without revealing or checking the token. Select the
+distinct `CookieVerificationService`, never the bearer-only adapter. Its native
+owner must check the exact eligible named CSRF key and fence the complete active
+primary session/family in the same proof/audit/outbox transaction; HTTP must
+separately enforce exact origin and exclusive cookie/CSRF channels. Verification
+does not consume or rotate the synchronizer and concurrent valid invocations
+may issue distinct proofs. Recovery needs no password or synchronizer and
+returns history without a proof. Native cookie binding and HTTP are pending;
+this portable contract alone provides no issuance or CSRF authority.
+
+`CookieChangeRequest` wraps the unchanged `ChangeRequest` and the session owner's
+opaque `CSRFToken`. Its nested request carries the sole retry key. Its distinct
+`CookieChangeService` port lets optional browser HTTP composition select the
+native cookie profile without importing PostgreSQL or silently falling back to
+bearer change. Trusted transport must first enforce permitted origin and reject
+mixed cookie/bearer channels. Structural `Validate` delegates intrinsic bounds
+only: even a zero CSRF token can pass it, but must be denied by the native service.
+The native owner checks exact synchronizer state under its primary session fence,
+including named-key eligibility before returning a historical retry outcome.
+Neither validation nor formatting consumes token delivery or password custody.
+Cookie native port binding and HTTP endpoint composition remain pending.
+
+`ChangeRequest` is the adapter-neutral authenticated change input. Direct
+callers set its sole required `identity.IdempotencyKey`; HTTP must acquire that
+key only from exactly one `Idempotency-Key` header. The request carries the
+original upstream `authentication.ReauthenticationProof` and bearer, a borrowed
+primitive password secret, and trusted tenant/caller/network provenance. It
+exposes no request-selectable clock, assurance or revocation policy.
+
+`Validate` checks only intrinsic bounds, key presence, live secret length and
+caller/tenant consistency. It neither authenticates a proof nor establishes
+freshness, risk eligibility or permission to mutate. A structurally valid
+request with a zero, expired or foreign proof must still be denied by the native
+signed-proof owner. Deployment byte limits are separate. Values must not be
+mutated during a call; destroy the secret only after work returns. Formatting
+and slog redact, JSON/text serialization deny, and explicit field access remains
+sensitive. Do not put raw input into private diagnostic wrappers.
+
+`ChangeService` defines the native `Change` and code-free
+`Recover` workflow boundary without importing persistence or
+providers. Select the real platform adapter, not application-written stores or
+workflow callbacks. `ChangeResult` conserves original command/outcome and exposes
+no credential material. Zero outcome is absence of authoritative observation,
+not rollback; busy/unknown does not permit a new key or automatic retry. Only
+error-free known commitment can expose the credential successor and predecessor
+invalidation. Native binding and opt-in HTTP composition are subsequent work;
+these port declarations alone are not a working endpoint or lifecycle claim.
+
+`RegistrationPolicy.Validate` requires explicit inclusive raw byte bounds in
+1..1,048,576, with maximum at least minimum. The reference deployment separately
+owns stricter policy ranges/defaults; the core never supplies silent defaults.
+`CheckPassword` rejects disabled registration and zero/destroyed/out-of-bounds
+secrets. It does not trim, normalize, copy, borrow, hash or destroy them.
+Caller-owned secrets require explicit destruction. Successful length admission
+does not pin secret lifetime; later work must still use the primitive's bounded
+exclusive borrow contract and handle concurrent destruction or use.
+
+`SignupAddressInput.Validate` admits 1..4096 UTF-8 bytes without interpreting an
+address kind. Pass the original input to the identity registration owner for
+canonicalization, uniqueness and verification. Email parsing does not belong
+here; no `identity/email` dependency is required. Generic input admission proves
+neither address ownership nor deliverability.
+
+Errors are stable `errors.Is` classifications and contain no password/address
+material. Direct address formatting and structured logging redact; implicit
+JSON/text serialization is rejected. Explicit string conversion reveals input.
+Never retain raw address scalars inside diagnostic objects: private fields can
+bypass formatting methods. This checkpoint owns no IO, goroutines or resources;
+policy values are safe for concurrent reads, not concurrent mutation.
+
+## Adoption, tradeoffs and FAQ
+
+### Password sign-in input custody
+
+`SigninRequest` carries the original pre-auth transaction ID and actual submitted
+cookie together with raw `identifier.Input`, borrowed password and the already
+resolved session remember policy. Trusted composition supplies tenant, caller,
+exact origin and canonical client IP. There is no client-selected command ID,
+user ID, proof, assurance, clock or retry key: every native sign-in submission
+is a distinct attempt. An ambiguous outcome must be reconciled, not resubmitted.
+
+`Validate` checks bounded structure only. Identifier input is revalidated by
+its owning package without normalization. Origin and callback strings are
+bounded to 2048 visible ASCII bytes; native URL/profile/allowlist validation
+and exact comparison with the original primary flow remain mandatory. Empty
+callback explicitly selects no redirect. Cookie syntax is not proof of flow
+possession. Validation never borrows, changes or destroys the password and does
+not lock its lifetime. Never log explicit scalar projections.
+
+Caller collections admit at most 64 entries each. Group IDs and attribute names
+are bounded to 128 bytes; string values and string-set members to 4096 UTF-8
+bytes, and each set to 64 members before obtaining its copied projection.
+IP attribute zones are empty or bounded non-control UTF-8 text up to 128 bytes.
+Caller evaluation time must retain canonical UTC location: supply `.UTC()` for
+nonzero instants. Validation rejects rather than rewrites borrowed input; that
+instant does not supply native authoritative time. Bounds constrain logical
+content and downstream work, not pre-existing caller container capacities or
+the backing allocations of upstream immutable values. Destruction/ownership
+of those existing allocations remains with their respective owners.
+
+This input checkpoint does not yet expose a completed sign-in service/result,
+MFA continuation, native orchestration or HTTP endpoint. Those remain required
+development work; the existing password verifier alone cannot issue a session.
+
+- **Can these helpers register or authenticate a user?** No. Their sole purpose
+  is input admission; the required owning transactional workflows are pending.
+- **Why raw byte limits?** Password normalization changes the secret. Bounds
+  apply to the exact primitive-owned bytes, not characters or trimmed text.
+- **Why allow a non-email signup address?** The registration owner selects the
+  address kind; this package must not duplicate that interpretation.
+- **Can I persist or log a Secret?** No. Use its explicit synchronous borrow
+  only for bounded verification/hashing and destroy caller custody afterwards.
+
+See [CHANGELOG.md](CHANGELOG.md) for checkpoint release notes. Exact package
+coverage/mutation, complete workflow/infrastructure/provider evidence,
+clean-consumer and release qualification remain pending.
+
+### Emailed password-reset capability policy
+
+`ResetService` defines the public request, explicit completion and proof-free
+original-command recovery port. `ResetRequestRequest` preserves the raw
+identifier and exact HTTPS callback; `ResetCompleteRequest` borrows the upstream
+opaque proof and unmodified replacement secret. Their validation is structural,
+not reset permission. Accepted request receipts do not disclose eligibility or
+actual delivery. Committed completion receipts require atomic session revocation
+and do not imply a new login. The complete native implementation and selected
+HTTP composition are still in development; consumers must not implement missing
+security orchestration through callbacks.
+
+Set `ResetGrantSpec.FactorVersion` from the transaction-locked MFA owner when
+issuing a reset. Its positive generation is signed as `password.factor-version`
+and reconstructed unchanged by `ResolveOriginal`. Completion must fence that
+exact current generation through the MFA adapter. Zero preserves historical
+unbound scope bytes, not evidence that an account has no factors; native
+factor-fenced completion rejects zero. No factor change may renew an old grant.
+
+`NewResetProfile` freezes explicit issuer, audience, whole-second maximum
+lifetime, exact HTTPS callback allowlist and retained private callback-binding
+keys. There is no implicit lifetime or fallback recovery method. Supply the
+original `ResetGrantSpec` from trusted durable issuance state, preserving IDs,
+versions, origin command and original UTC issuance/expiry times. `Payload`
+returns closed scope without a grant ID; the durable capability issuer chooses
+the ID and signs using the existing capability engine. Do not log or serialize
+config/spec scalars or the resulting bearer payload.
+
+After actual `capability.Service.Verify`, `Authorize` compares the verified
+grant against that original intent and current time. Only the emailed reset
+path is accepted; extra audiences/caveats and changed versions, callbacks or
+timestamps deny. Callback-binding key rotation may retain the original key;
+removing it denies old grants without extending their original lifetime.
+`ResolveOriginal` can recover the unchanged `ResetGrantSpec` directly from a
+genuinely verified grant, selecting exactly one matching callback from the
+trusted allowlist using its original retained binding key. It preserves all
+original versions and timestamps; retired callbacks/keys and malformed scope
+deny. Authenticate the issuer's durable issuance provenance separately and
+check that its originating command matches the reconstructed origin. This
+does not require another reset-intent store and does not authorize recovery.
+
+The profile is immutable and concurrent-safe, performs no IO and owns no
+resource requiring shutdown. Its redacted error is `ErrInvalidReset`.
+
+**Scope validation is not reset permission.** This pure policy neither consumes
+the grant nor checks current account/factor/risk eligibility. Native scanner
+validation must remain read-only. Explicit user-confirmed completion must
+recheck current authoritative state and atomically consume capability/risk,
+change the password and apply required session effects through the existing
+coordinator. Those complete native reset operations remain implementation work;
+consumers must not substitute callback ordering or their own workflows.

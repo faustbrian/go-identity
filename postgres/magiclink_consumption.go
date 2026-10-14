@@ -1,0 +1,138 @@
+package postgres
+
+import (
+	"context"
+
+	identity "github.com/faustbrian/go-identity"
+)
+
+// MagicLinkConsumptionContributor is the closed native passwordless login
+// owner. Validation must exhaustively match original verified grant/issuance,
+// pre-auth, callback, recipient and prospective-session custody to the command
+// and declared one-use input; it is pure, bounded and must not perform IO.
+// Apply and CheckFeatureCommit enforce current recipient/factor/risk authority,
+// original exclusive expiry and complete session effects in the sole Work.
+// Signature/origin validation belongs to the real capability owner, not these
+// scalar declarations. No projection or method implementation grants authority.
+type MagicLinkConsumptionContributor interface {
+	FeatureCommitContributor
+	ValidateMagicLinkConsumption(identity.Command, CapabilityPlan) error
+}
+
+// MagicLinkMFAChallengeContributor owns the challenge-only alternative, not a
+// session-producing login. Validation must match the complete original MFA
+// scope and command in addition to the primary grant. It is pure and bounded.
+// ApplyFeature must recheck enrolled methods and current policy/factor authority,
+// persist the original continuation and stage its exact child issuance without
+// calling a session issuer. CheckFeatureCommit must repeat current authority and
+// absolute-expiry checks. Persistence, pre-auth transition, one-use, audit and
+// challenge lifecycle share the sole Work; missing authority denies.
+// Implementing the interface conveys no proof or independently committable work.
+type MagicLinkMFAChallengeContributor interface {
+	MagicLinkConsumptionContributor
+	ValidateMagicLinkMFAChallenge(identity.Command, MFAContinuationPlan) error
+}
+
+func validateMagicLinkConsumption(owner FeatureExecutionContributor, command identity.Command, p CommandPlan) error {
+	native, ok := owner.(MagicLinkConsumptionContributor)
+	s, feature := command.Feature()
+	if !ok || !feature || p.Feature == nil || p.Feature.Operation != magicLinkConsumeOperation() || s.Operation != p.Feature.Operation || p.Capability == nil || p.Capability.Purpose != "identity.magic-link.consume" {
+		return invalidPlan()
+	}
+	if err := native.ValidateMagicLinkConsumption(command, *p.Capability); err != nil {
+		return err
+	}
+	if p.MFAContinuation != nil {
+		challenge, ok := owner.(MagicLinkMFAChallengeContributor)
+		if !ok || p.MagicLinkRegistration != nil {
+			return invalidPlan()
+		}
+		return challenge.ValidateMagicLinkMFAChallenge(command, *p.MFAContinuation)
+	}
+	if p.MagicLinkRegistration != nil {
+		registration, ok := owner.(MagicLinkRegistrationContributor)
+		if !ok {
+			return invalidMagicLinkRegistration()
+		}
+		intent, err := registration.MagicLinkRegistration(command)
+		if err != nil {
+			return invalidMagicLinkRegistration()
+		}
+		return validateMagicLinkRegistrationIntent(command, p.MagicLinkRegistration, intent)
+	}
+	return nil
+}
+
+// MagicLinkMFAChallenge returns the complete original challenge declaration
+// only to its exact native recovery participant. It grants historical primary
+// evidence reads, never factor/session authority, mutation or bearer delivery.
+// Zero, foreign, incomplete and returned invocations deny; the copy is owned.
+func (w RecoveryWork) MagicLinkMFAChallenge(owner MagicLinkMFAChallengeContributor) (MFAContinuationPlan, error) {
+	b, _, life, err := w.FeatureScope(owner)
+	if err != nil || life.EventType != "mfa.challenge.created.v1" || !validMagicLinkMFAPlan(b, w.state.plan.snapshot()) || w.state.plan.issuance == nil {
+		return MFAContinuationPlan{}, invalidWork()
+	}
+	return *cloneMFAContinuationPlan(w.state.plan.mfaContinuation), nil
+}
+
+// MagicLinkConsumption exposes frozen original one-use input only during the
+// exact registered owner's protected Apply invocation, after the capability
+// participant has provisionally consumed it in this same transaction. Zero,
+// metadata-only, admission/commit/recovery, returned and foreign handles deny.
+// Returned scalars are owned copies, contain no bearer and cannot authorize
+// delivery: session/pre-auth, audit and capability finalization may still fail.
+// Calls are serial within the invocation and perform no IO or renewal.
+func (w Work) MagicLinkConsumption(owner FeatureExecutionContributor) (CapabilityReservationBinding, error) {
+	b, fp, generation, err := w.FeatureCommandIdentity(owner)
+	if err != nil || !w.state.magicLinkConsumed || w.state.magicLinkFinalized {
+		return CapabilityReservationBinding{}, invalidWork()
+	}
+	p := w.state.execution.reservation.plan
+	if p.feature == nil || p.feature.Operation != magicLinkConsumeOperation() || p.capability == nil || p.capability.Purpose != "identity.magic-link.consume" || p.capability.MaxUses != 1 {
+		return CapabilityReservationBinding{}, invalidWork()
+	}
+	return CapabilityReservationBinding{Command: b, Plan: *p.capability, Fingerprint: fp, Generation: generation}, nil
+}
+
+// MagicLinkMFAChallenge exposes the frozen original scope only to its exact
+// challenge owner during protected Apply, after provisional primary consumption.
+// Metadata, preparation, final checks, recovery and retained/foreign handles
+// deny. The projection is not completed MFA, fresh authority or a session grant.
+// It performs no IO, consumes nothing and cannot renew the original expiry.
+func (w Work) MagicLinkMFAChallenge(owner MagicLinkMFAChallengeContributor) (MFAContinuationPlan, error) {
+	if _, err := w.MagicLinkConsumption(owner); err != nil {
+		return MFAContinuationPlan{}, err
+	}
+	p := w.state.execution.reservation.plan
+	if p.mfaContinuation == nil || p.issuance == nil || p.lifecycle == nil || p.lifecycle.EventType != "mfa.challenge.created.v1" {
+		return MFAContinuationPlan{}, invalidWork()
+	}
+	return *p.mfaContinuation, nil
+}
+
+func prepareMagicLinkConsumption(ctx context.Context, w Work) error {
+	p := w.state.execution.reservation.plan
+	if p.feature == nil || p.feature.Operation != magicLinkConsumeOperation() || w.state.magicLinkConsumed || w.state.magicLinkFinalized {
+		return w.fail(ctx, invalidPlan())
+	}
+	if err := w.state.execution.coordinator.runCapabilityExecution(ctx, w, false); err != nil {
+		return err
+	}
+	w.state.magicLinkConsumed = true
+	return nil
+}
+
+func (c *Coordinator) finalizeMagicLinkConsumption(w Work) error {
+	p := w.state.execution.reservation.plan
+	if p.feature == nil || p.feature.Operation != magicLinkConsumeOperation() {
+		return nil
+	}
+	if !w.state.magicLinkConsumed || w.state.magicLinkFinalized || w.state.featureReceipt == nil {
+		return w.fail(w.state.ctx, invalidWork())
+	}
+	if err := c.runCapabilityExecution(w.state.ctx, w, true); err != nil {
+		return err
+	}
+	w.state.magicLinkFinalized = true
+	return nil
+}

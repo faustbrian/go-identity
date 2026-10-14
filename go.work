@@ -1,0 +1,32 @@
+go 1.27.2
+
+use (
+	.
+	./delivery
+	./delivery/postgres
+	./email
+	./http
+	./http/email
+	./http/magiclink
+	./http/mfa
+	./http/otp
+	./http/password
+	./http/session
+	./i18n
+	./magiclink
+	./magiclink/postgres
+	./mfa
+	./mfa/postgres
+	./otp
+	./otp/postgres
+	./password
+	./password/postgres
+	./postgres
+	./reference
+	./risk
+	./risk/hibp
+	./risk/postgres
+	./risk/valkey
+	./session
+	./session/postgres
+)

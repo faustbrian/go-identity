@@ -1,0 +1,64 @@
+package identity
+
+import (
+	"encoding/base64"
+	"strings"
+
+	authentication "github.com/faustbrian/go-authentication"
+)
+
+// NewFeatureOneTimeCodePreAuthCommand freezes an OTP submission and its separate
+// original pre-auth cookie in opaque command custody, never in scalar metadata.
+// Cookie is the canonical unpadded base64url transport of 32..64 bytes. This
+// validates syntax only: the native session/OTP owner must independently derive
+// the named cookie commitment from the original flow, admit primary state and
+// current policy, and consume atomically. Neither a cookie nor code is proof.
+//
+// Existing one-time-code constructors remain unchanged. Invalid spec, zero code
+// or malformed cookie returns zero Command and redacted InvalidInputError. No IO,
+// callbacks, time samples or disclosure occur. Immutable copies are concurrency
+// safe; discard every secret-bearing copy at terminal outcomes. Recovery uses
+// code/cookie-free metadata; Go cannot guarantee immutable secret erasure.
+func NewFeatureOneTimeCodePreAuthCommand(spec FeatureCommandSpec, code authentication.OneTimeCode, cookie authentication.BearerCredential) (Command, error) {
+	frozen, err := freezeFeaturePreAuthCookie(cookie)
+	if err != nil {
+		return Command{}, err
+	}
+	c, err := NewFeatureOneTimeCodeCommand(spec, code)
+	if err != nil {
+		return Command{}, err
+	}
+	c.feature.preAuthCookie = &frozen
+	return c, nil
+}
+
+func freezeFeaturePreAuthCookie(cookie authentication.BearerCredential) (authentication.BearerCredential, error) {
+	wire := cookie.Token()
+	if len(wire) < 43 || len(wire) > 86 {
+		return authentication.BearerCredential{}, invalidFeatureCommand()
+	}
+	raw, err := base64.RawURLEncoding.Strict().DecodeString(wire)
+	defer clear(raw)
+	if err != nil || len(raw) < 32 || len(raw) > 64 || base64.RawURLEncoding.EncodeToString(raw) != wire {
+		return authentication.BearerCredential{}, invalidFeatureCommand()
+	}
+	return authentication.NewBearerCredential(strings.Clone(wire)), nil
+}
+
+// PreAuthCookie lends the exact submitted bearer only to trusted native owners
+// for independently derived flow-cookie comparison. It never returns a caller
+// digest or grants authentication/one-use authority. Code-free issuance custody
+// and code-bearing submissions share this borrow; neither fabricates the other.
+// Zero, ordinary, code-only
+// and mixed commands return zero/false. Feature projections contain neither
+// bearer nor code, and cannot reconstruct them. Discard borrowed copies after
+// use; never log, serialize, persist or disclose Token. No IO or callbacks run.
+func (c Command) PreAuthCookie() (authentication.BearerCredential, bool) {
+	if c.feature == nil || c.feature.preAuthCookie == nil {
+		return authentication.BearerCredential{}, false
+	}
+	if _, ok := c.Feature(); !ok {
+		return authentication.BearerCredential{}, false
+	}
+	return *c.feature.preAuthCookie, true
+}

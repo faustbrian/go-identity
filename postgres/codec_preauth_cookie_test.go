@@ -1,0 +1,63 @@
+package postgres
+
+import (
+	"bytes"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/base64"
+	"encoding/binary"
+	"testing"
+
+	auth "github.com/faustbrian/go-authentication"
+	identity "github.com/faustbrian/go-identity"
+)
+
+func TestPreAuthCookieBindsPrivateCommandIntent(t *testing.T) {
+	spec := featureCodecSpec()
+	code, _ := auth.NewOneTimeCode("123456")
+	wire := base64.RawURLEncoding.EncodeToString(bytes.Repeat([]byte{0x11}, 32))
+	c, err := identity.NewFeatureOneTimeCodePreAuthCommand(spec, code, auth.NewBearerCredential(wire))
+	if err != nil {
+		t.Fatal(err)
+	}
+	key := [32]byte{1}
+	bound, err := prepareClaim(c, key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	legacy, _ := prepareClaim(codeCodecCommand(t, spec, "123456"), key)
+	if bytes.Equal(bound.canonical, legacy.canonical) || !bytes.Equal(bound.safeFields, legacy.safeFields) || bytes.Contains(bound.canonical, []byte(wire)) {
+		t.Fatal("cookie omitted or disclosed")
+	}
+	// Independent literal oracle, not the production framing helper.
+	mac := hmac.New(sha256.New, key[:])
+	mac.Write([]byte("identity-command-secret-v1"))
+	mac.Write(binary.BigEndian.AppendUint32(nil, 15))
+	mac.Write([]byte("pre-auth-cookie"))
+	mac.Write(binary.BigEndian.AppendUint64(nil, uint64(len(wire))))
+	mac.Write([]byte(wire))
+	want := mac.Sum(nil)
+	if !bytes.Contains(bound.canonical, want) {
+		t.Fatal("named secret framing not reused")
+	}
+	otherWire := base64.RawURLEncoding.EncodeToString(bytes.Repeat([]byte{0x12}, 32))
+	other, _ := identity.NewFeatureOneTimeCodePreAuthCommand(spec, code, auth.NewBearerCredential(otherWire))
+	changed, err := prepareClaim(other, key)
+	if err != nil || bytes.Equal(bound.canonical, changed.canonical) {
+		t.Fatal("different cookie shares command intent")
+	}
+	rotated, err := prepareClaim(c, [32]byte{2})
+	if err != nil || rotated.source == nil {
+		t.Fatal("original custody not retained")
+	}
+	retained, err := prepareClaim(*rotated.source, key)
+	if err != nil || !bytes.Equal(bound.canonical, retained.canonical) {
+		t.Fatal("retained-key cookie replay changed")
+	}
+	coordinator, plain, plan := featurePlanFixture(t)
+	declared, _ := plain.Feature()
+	secret, _ := identity.NewFeatureOneTimeCodePreAuthCommand(declared, code, auth.NewBearerCredential(wire))
+	if _, err := coordinator.PrepareCommandPlan(declared.Binding, secret, plan); err == nil {
+		t.Fatal("cookie entered generic execution")
+	}
+}

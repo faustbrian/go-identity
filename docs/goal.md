@@ -2,7 +2,13 @@
 
 [Documentation index](README.md)
 
-Status: planned
+Status: historical scaffold goal, superseded for current implementation status.
+
+The separately authorized identity-platform implementation now exists in the
+source and nested modules. This document preserves the earlier planning boundary,
+not a claim that no code exists or a replacement for current product requirements.
+See [the reference composition](../reference/README.md) and module delivery metadata
+for the bounded development checkpoint; full release qualification remains pending.
 
 The coordination plan identifies `github.com/faustbrian/go-identity` as the
 future storage-neutral owner of users, accounts, login identifiers, credential

@@ -10,28 +10,41 @@
       "packages": [
         {
           "module_directory": ".",
+          "directory": "internal/velocity",
+          "name": "velocity",
+          "import_path": "github.com/faustbrian/go-identity/internal/velocity",
+          "kind": "internal",
+          "production": true,
+          "executable": true,
+          "coverage_required": true,
+          "build_required": true,
+          "build_tags": []
+        },
+        {
+          "module_directory": ".",
           "directory": ".",
-          "name": "planned",
+          "name": "identity",
           "import_path": "github.com/faustbrian/go-identity",
-          "kind": "planned entry point",
-          "production": false,
-          "executable": false,
-          "coverage_required": false,
-          "build_required": false,
+          "kind": "public",
+          "production": true,
+          "executable": true,
+          "coverage_required": true,
+          "build_required": true,
           "build_tags": []
         }
       ],
-      "purpose": "Planned storage-neutral identity core for users, accounts, login identifiers, credential references, verification state, account status, and domain events; no runtime package is implemented or released.",
-      "lifecycle": "planned",
+      "purpose": "Identity-domain ownership, workflows and adapter-neutral composition.",
+      "lifecycle": "experimental",
       "kind": "public library",
-      "releasable": false,
+      "releasable": true,
       "family": "service-edge",
-      "family_label": "Service Edge",
-      "family_description": "Request-edge policy, identity, access decisions, routing, middleware, and process lifecycle.",
-      "family_order": 2,
-      "version": "",
+      "version": "0.0.0",
       "tag_prefix": "v",
-      "owned_dependencies": [],
+      "owned_dependencies": [
+        "github.com/faustbrian/go-audit",
+        "github.com/faustbrian/go-authorization",
+        "github.com/faustbrian/go-clock"
+      ],
       "reverse_owned_dependencies": [],
       "external_runtime_dependencies": [],
       "required_services": [],
@@ -40,31 +53,45 @@
       "interoperability_tools": [],
       "specifications": [],
       "conformance_corpora": [],
-      "provenance": [],
-      "goal_files": [
-        "docs/goal.md"
-      ],
-      "goal_status": "planned",
+      "family_label": "Service Edge",
+      "family_description": "Request-edge policy, identity, access decisions, routing, middleware, and process lifecycle.",
+      "family_order": 2,
+      "gates": {
+        "api_compatibility": false,
+        "benchmarks": false,
+        "conformance": false,
+        "coverage": false,
+        "documentation": false,
+        "fuzz": false,
+        "interoperability": false,
+        "lint": false,
+        "mutation": false,
+        "race": false,
+        "security": false,
+        "tests": false
+      },
+      "goal_status": "in-progress",
+      "goal_files": [],
       "goal_evidence": [],
+      "provenance": [],
       "cohesion": {
         "family": "service-edge",
         "secondary_capabilities": [
           "identity-and-access"
         ],
-        "responsibility": "Plan a storage-neutral identity core for users, accounts, identifiers, credential references, verification state, account status, policy boundaries, and domain events.",
+        "responsibility": "Identity-domain ownership, workflows and adapter-neutral composition.",
         "non_goals": [
-          "Claim that a public package identifier, runtime API, implementation, compatibility promise, or release currently exists.",
-          "Own sessions, authentication ceremonies, credential verification, provider protocols, message delivery, organization membership, or user interfaces.",
-          "Own database clients, migrations, transactions, caches, background workers, or application authorization policy."
+          "Claim unimplemented profiles, published releases, or complete identity-platform qualification.",
+          "Provide user interfaces or a vendor-owned authentication engine."
         ],
-        "public_package_identifier": "none",
+        "public_package_identifier": "identity",
         "primary_entry_packages": [
           "github.com/faustbrian/go-identity"
         ],
         "package_selection": {
-          "github.com/faustbrian/go-identity": "Planning identity only; no importable package or runtime API currently exists."
+          "github.com/faustbrian/go-identity": "Experimental Identity-domain ownership, workflows and adapter-neutral composition. Use only documented selected profiles; full qualification is pending."
         },
-        "lifecycle_status": "planned",
+        "lifecycle_status": "active",
         "maturity": "experimental",
         "construction_styles": [
           "new-config",
@@ -77,7 +104,281 @@
         "ownership": {
           "configuration": "caller",
           "mutable_inputs": [
-            "copy"
+            "borrow",
+            "copy",
+            "transfer"
+          ],
+          "runtime_resources": "none",
+          "background_work": "none"
+        },
+        "optional_owned_dependencies": [],
+        "adapters": [],
+        "companions": [],
+        "supported_go": {
+          "minimum": "1.27.0",
+          "tested": [
+            "1.27.2"
+          ]
+        },
+        "supported_platforms": [
+          "portable-go"
+        ],
+        "supported_backends": [],
+        "supported_protocols": [],
+        "documentation": {
+          "readme": "README.md",
+          "api": "README.md",
+          "adoption": "README.md",
+          "security": "SECURITY.md",
+          "compatibility": null,
+          "performance": null,
+          "examples": "README.md",
+          "faq": null,
+          "changelog": "CHANGELOG.md",
+          "pkg_go_dev": "https://pkg.go.dev/github.com/faustbrian/go-identity",
+          "ecosystem_index": "https://github.com/faustbrian/go-library-tools/blob/v2.1.2/docs/ecosystem/README.md"
+        },
+        "known_good_compatibility_sets": [],
+        "delivery": {
+          "implementation": "in-progress",
+          "hardening": "in-progress",
+          "release": "blocked"
+        }
+      }
+    },
+    {
+      "directory": "delivery",
+      "module_path": "github.com/faustbrian/go-identity/delivery",
+      "go_version": "1.27.0",
+      "packages": [
+        {
+          "module_directory": "delivery",
+          "directory": ".",
+          "name": "delivery",
+          "import_path": "github.com/faustbrian/go-identity/delivery",
+          "kind": "public",
+          "production": true,
+          "executable": true,
+          "coverage_required": true,
+          "build_required": true,
+          "build_tags": []
+        }
+      ],
+      "purpose": "Provider-neutral identity message validation and rendering; durable delivery orchestration in development.",
+      "lifecycle": "experimental",
+      "kind": "public library",
+      "releasable": true,
+      "family": "service-edge",
+      "version": "0.0.0",
+      "tag_prefix": "delivery/v",
+      "owned_dependencies": [],
+      "reverse_owned_dependencies": [],
+      "external_runtime_dependencies": [],
+      "required_services": [],
+      "build_tags": [],
+      "test_tags": [],
+      "interoperability_tools": [],
+      "specifications": [],
+      "conformance_corpora": [],
+      "family_label": "Service Edge",
+      "family_description": "Request-edge policy, identity, access decisions, routing, middleware, and process lifecycle.",
+      "family_order": 2,
+      "gates": {
+        "api_compatibility": false,
+        "benchmarks": false,
+        "conformance": false,
+        "coverage": false,
+        "documentation": false,
+        "fuzz": false,
+        "interoperability": false,
+        "lint": false,
+        "mutation": false,
+        "race": false,
+        "security": false,
+        "tests": false
+      },
+      "goal_status": "in-progress",
+      "goal_files": [],
+      "goal_evidence": [],
+      "provenance": [],
+      "cohesion": {
+        "family": "service-edge",
+        "secondary_capabilities": [
+          "identity-and-access"
+        ],
+        "responsibility": "Provider-neutral identity message validation and rendering; durable delivery orchestration in development.",
+        "non_goals": [
+          "Claim unimplemented profiles, published releases, or complete identity-platform qualification.",
+          "Provide user interfaces or a vendor-owned authentication engine."
+        ],
+        "public_package_identifier": "delivery",
+        "primary_entry_packages": [
+          "github.com/faustbrian/go-identity/delivery"
+        ],
+        "package_selection": {
+          "github.com/faustbrian/go-identity/delivery": "Experimental Provider-neutral identity message validation and rendering; durable delivery orchestration in development. Use only documented selected profiles; full qualification is pending."
+        },
+        "lifecycle_status": "active",
+        "maturity": "experimental",
+        "construction_styles": [
+          "new-config",
+          "plain-function",
+          "validated-value"
+        ],
+        "lifecycle_styles": [
+          "stateless"
+        ],
+        "ownership": {
+          "configuration": "caller",
+          "mutable_inputs": [
+            "borrow",
+            "copy",
+            "transfer"
+          ],
+          "runtime_resources": "none",
+          "background_work": "none"
+        },
+        "optional_owned_dependencies": [],
+        "adapters": [],
+        "companions": [],
+        "supported_go": {
+          "minimum": "1.27.0",
+          "tested": [
+            "1.27.2"
+          ]
+        },
+        "supported_platforms": [
+          "portable-go"
+        ],
+        "supported_backends": [],
+        "supported_protocols": [],
+        "documentation": {
+          "readme": "delivery/README.md",
+          "api": "delivery/README.md",
+          "adoption": "delivery/README.md",
+          "security": "SECURITY.md",
+          "compatibility": null,
+          "performance": null,
+          "examples": "delivery/README.md",
+          "faq": null,
+          "changelog": "delivery/CHANGELOG.md",
+          "pkg_go_dev": "https://pkg.go.dev/github.com/faustbrian/go-identity/delivery",
+          "ecosystem_index": "https://github.com/faustbrian/go-library-tools/blob/v2.1.2/docs/ecosystem/README.md"
+        },
+        "known_good_compatibility_sets": [],
+        "delivery": {
+          "implementation": "in-progress",
+          "hardening": "in-progress",
+          "release": "blocked"
+        }
+      }
+    },
+    {
+      "directory": "delivery/postgres",
+      "module_path": "github.com/faustbrian/go-identity/delivery/postgres",
+      "go_version": "1.27.0",
+      "packages": [
+        {
+          "module_directory": "delivery/postgres",
+          "directory": ".",
+          "name": "postgres",
+          "import_path": "github.com/faustbrian/go-identity/delivery/postgres",
+          "kind": "public",
+          "production": true,
+          "executable": true,
+          "coverage_required": true,
+          "build_required": true,
+          "build_tags": []
+        }
+      ],
+      "purpose": "Public encrypted original-command preparation, staging, migration and atomic intent/outbox admission; queue processing in development.",
+      "lifecycle": "experimental",
+      "kind": "public library",
+      "releasable": true,
+      "family": "persistence-and-durability",
+      "version": "0.0.0",
+      "tag_prefix": "delivery/postgres/v",
+      "owned_dependencies": [
+        "github.com/faustbrian/go-audit",
+        "github.com/faustbrian/go-audit/postgres",
+        "github.com/faustbrian/go-authorization",
+        "github.com/faustbrian/go-identity",
+        "github.com/faustbrian/go-identity/delivery",
+        "github.com/faustbrian/go-identity/postgres",
+        "github.com/faustbrian/go-migrations/v3",
+        "github.com/faustbrian/go-postgres",
+        "github.com/faustbrian/go-secret-envelope",
+        "github.com/faustbrian/go-transactional-outbox/v2",
+        "github.com/faustbrian/go-transactional-outbox/v2/postgres/identity"
+      ],
+      "reverse_owned_dependencies": [],
+      "external_runtime_dependencies": [
+        "postgresql"
+      ],
+      "required_services": [
+        "postgresql"
+      ],
+      "build_tags": [],
+      "test_tags": [
+        "integration"
+      ],
+      "interoperability_tools": [],
+      "specifications": [],
+      "conformance_corpora": [],
+      "family_label": "Persistence and Durability",
+      "family_description": "Storage adapters, transactions, durable state, and persistence ownership.",
+      "family_order": 4,
+      "gates": {
+        "api_compatibility": false,
+        "benchmarks": false,
+        "conformance": false,
+        "coverage": false,
+        "documentation": false,
+        "fuzz": false,
+        "interoperability": false,
+        "lint": false,
+        "mutation": false,
+        "race": false,
+        "security": false,
+        "tests": false
+      },
+      "goal_status": "in-progress",
+      "goal_files": [],
+      "goal_evidence": [],
+      "provenance": [],
+      "cohesion": {
+        "family": "persistence-and-durability",
+        "secondary_capabilities": [
+          "identity-and-access"
+        ],
+        "responsibility": "Public encrypted original-command preparation, staging, migration and atomic intent/outbox admission; queue processing in development.",
+        "non_goals": [
+          "Claim unimplemented profiles, published releases, or complete identity-platform qualification.",
+          "Provide user interfaces or a vendor-owned authentication engine."
+        ],
+        "public_package_identifier": "postgres",
+        "primary_entry_packages": [
+          "github.com/faustbrian/go-identity/delivery/postgres"
+        ],
+        "package_selection": {
+          "github.com/faustbrian/go-identity/delivery/postgres": "Experimental Public encrypted original-command preparation, staging, migration and atomic intent/outbox admission; queue processing in development. Use only documented selected profiles; full qualification is pending."
+        },
+        "lifecycle_status": "active",
+        "maturity": "experimental",
+        "construction_styles": [
+          "new-config",
+          "plain-function",
+          "validated-value"
+        ],
+        "lifecycle_styles": [
+          "stateless"
+        ],
+        "ownership": {
+          "configuration": "caller",
+          "mutable_inputs": [
+            "borrow",
+            "copy",
+            "transfer"
           ],
           "runtime_resources": "caller",
           "background_work": "none"
@@ -88,7 +389,138 @@
         "supported_go": {
           "minimum": "1.27.0",
           "tested": [
-            "1.27.0"
+            "1.27.2"
+          ]
+        },
+        "supported_platforms": [
+          "portable-go"
+        ],
+        "supported_backends": [
+          "postgresql"
+        ],
+        "supported_protocols": [],
+        "documentation": {
+          "readme": "delivery/postgres/README.md",
+          "api": "delivery/postgres/README.md",
+          "adoption": "delivery/postgres/README.md",
+          "security": "SECURITY.md",
+          "compatibility": null,
+          "performance": null,
+          "examples": "delivery/postgres/README.md",
+          "faq": null,
+          "changelog": "delivery/postgres/CHANGELOG.md",
+          "pkg_go_dev": "https://pkg.go.dev/github.com/faustbrian/go-identity/delivery/postgres",
+          "ecosystem_index": "https://github.com/faustbrian/go-library-tools/blob/v2.1.2/docs/ecosystem/README.md"
+        },
+        "known_good_compatibility_sets": [],
+        "delivery": {
+          "implementation": "in-progress",
+          "hardening": "in-progress",
+          "release": "blocked"
+        }
+      }
+    },
+    {
+      "directory": "email",
+      "module_path": "github.com/faustbrian/go-identity/email",
+      "go_version": "1.27.0",
+      "packages": [
+        {
+          "module_directory": "email",
+          "directory": ".",
+          "name": "email",
+          "import_path": "github.com/faustbrian/go-identity/email",
+          "kind": "public",
+          "production": true,
+          "executable": true,
+          "coverage_required": true,
+          "build_required": true,
+          "build_tags": []
+        }
+      ],
+      "purpose": "Email-owned bounded address policy; complete verification and lifecycle workflows in development.",
+      "lifecycle": "experimental",
+      "kind": "public library",
+      "releasable": true,
+      "family": "service-edge",
+      "version": "0.0.0",
+      "tag_prefix": "email/v",
+      "owned_dependencies": [
+        "github.com/faustbrian/go-identifier"
+      ],
+      "reverse_owned_dependencies": [],
+      "external_runtime_dependencies": [],
+      "required_services": [],
+      "build_tags": [],
+      "test_tags": [],
+      "interoperability_tools": [],
+      "specifications": [],
+      "conformance_corpora": [],
+      "family_label": "Service Edge",
+      "family_description": "Request-edge policy, identity, access decisions, routing, middleware, and process lifecycle.",
+      "family_order": 2,
+      "gates": {
+        "api_compatibility": false,
+        "benchmarks": false,
+        "conformance": false,
+        "coverage": false,
+        "documentation": false,
+        "fuzz": false,
+        "interoperability": false,
+        "lint": false,
+        "mutation": false,
+        "race": false,
+        "security": false,
+        "tests": false
+      },
+      "goal_status": "in-progress",
+      "goal_files": [],
+      "goal_evidence": [],
+      "provenance": [],
+      "cohesion": {
+        "family": "service-edge",
+        "secondary_capabilities": [
+          "identity-and-access"
+        ],
+        "responsibility": "Email-owned bounded address policy; complete verification and lifecycle workflows in development.",
+        "non_goals": [
+          "Claim unimplemented profiles, published releases, or complete identity-platform qualification.",
+          "Provide user interfaces or a vendor-owned authentication engine."
+        ],
+        "public_package_identifier": "email",
+        "primary_entry_packages": [
+          "github.com/faustbrian/go-identity/email"
+        ],
+        "package_selection": {
+          "github.com/faustbrian/go-identity/email": "Experimental Email-owned bounded address policy; complete verification and lifecycle workflows in development. Use only documented selected profiles; full qualification is pending."
+        },
+        "lifecycle_status": "active",
+        "maturity": "experimental",
+        "construction_styles": [
+          "new-config",
+          "plain-function",
+          "validated-value"
+        ],
+        "lifecycle_styles": [
+          "stateless"
+        ],
+        "ownership": {
+          "configuration": "caller",
+          "mutable_inputs": [
+            "borrow",
+            "copy",
+            "transfer"
+          ],
+          "runtime_resources": "none",
+          "background_work": "none"
+        },
+        "optional_owned_dependencies": [],
+        "adapters": [],
+        "companions": [],
+        "supported_go": {
+          "minimum": "1.27.0",
+          "tested": [
+            "1.27.2"
           ]
         },
         "supported_platforms": [
@@ -97,31 +529,74 @@
         "supported_backends": [],
         "supported_protocols": [],
         "documentation": {
-          "readme": "README.md",
-          "api": null,
-          "adoption": null,
+          "readme": "email/README.md",
+          "api": "email/README.md",
+          "adoption": "email/README.md",
           "security": "SECURITY.md",
           "compatibility": null,
           "performance": null,
-          "examples": null,
+          "examples": "email/README.md",
           "faq": null,
-          "changelog": null,
-          "pkg_go_dev": null,
-          "ecosystem_index": "https://github.com/faustbrian/go-library-tools/blob/v1.8.4/docs/ecosystem/README.md"
+          "changelog": "email/CHANGELOG.md",
+          "pkg_go_dev": "https://pkg.go.dev/github.com/faustbrian/go-identity/email",
+          "ecosystem_index": "https://github.com/faustbrian/go-library-tools/blob/v2.1.2/docs/ecosystem/README.md"
         },
         "known_good_compatibility_sets": [],
         "delivery": {
-          "implementation": "not-started",
-          "hardening": "not-started",
+          "implementation": "in-progress",
+          "hardening": "in-progress",
           "release": "blocked"
         }
-      },
+      }
+    },
+    {
+      "directory": "http",
+      "module_path": "github.com/faustbrian/go-identity/http",
+      "go_version": "1.27.0",
+      "packages": [
+        {
+          "module_directory": "http",
+          "directory": ".",
+          "name": "identityhttp",
+          "import_path": "github.com/faustbrian/go-identity/http",
+          "kind": "public",
+          "production": true,
+          "executable": true,
+          "coverage_required": true,
+          "build_required": true,
+          "build_tags": []
+        }
+      ],
+      "purpose": "Explicit bounded HTTP server lifecycle; opt-in feature routing and full transport in development.",
+      "lifecycle": "experimental",
+      "kind": "public library",
+      "releasable": true,
+      "family": "service-edge",
+      "version": "0.0.0",
+      "tag_prefix": "http/v",
+      "owned_dependencies": [
+        "github.com/faustbrian/go-authentication",
+        "github.com/faustbrian/go-identifier",
+        "github.com/faustbrian/go-identity",
+        "github.com/faustbrian/go-rate-limit/v2"
+      ],
+      "reverse_owned_dependencies": [],
+      "external_runtime_dependencies": [],
+      "required_services": [],
+      "build_tags": [],
+      "test_tags": [],
+      "interoperability_tools": [],
+      "specifications": [],
+      "conformance_corpora": [],
+      "family_label": "Service Edge",
+      "family_description": "Request-edge policy, identity, access decisions, routing, middleware, and process lifecycle.",
+      "family_order": 2,
       "gates": {
         "api_compatibility": false,
         "benchmarks": false,
         "conformance": false,
         "coverage": false,
-        "documentation": true,
+        "documentation": false,
         "fuzz": false,
         "interoperability": false,
         "lint": false,
@@ -129,6 +604,3290 @@
         "race": false,
         "security": false,
         "tests": false
+      },
+      "goal_status": "in-progress",
+      "goal_files": [],
+      "goal_evidence": [],
+      "provenance": [],
+      "cohesion": {
+        "family": "service-edge",
+        "secondary_capabilities": [
+          "identity-and-access"
+        ],
+        "responsibility": "Explicit bounded HTTP server lifecycle; opt-in feature routing and full transport in development.",
+        "non_goals": [
+          "Claim unimplemented profiles, published releases, or complete identity-platform qualification.",
+          "Provide user interfaces or a vendor-owned authentication engine."
+        ],
+        "public_package_identifier": "identityhttp",
+        "primary_entry_packages": [
+          "github.com/faustbrian/go-identity/http"
+        ],
+        "package_selection": {
+          "github.com/faustbrian/go-identity/http": "Experimental Explicit bounded HTTP server lifecycle; opt-in feature routing and full transport in development. Use only documented selected profiles; full qualification is pending."
+        },
+        "lifecycle_status": "active",
+        "maturity": "experimental",
+        "construction_styles": [
+          "new-config",
+          "plain-function",
+          "validated-value"
+        ],
+        "lifecycle_styles": [
+          "stateless"
+        ],
+        "ownership": {
+          "configuration": "caller",
+          "mutable_inputs": [
+            "borrow",
+            "copy",
+            "transfer"
+          ],
+          "runtime_resources": "none",
+          "background_work": "none"
+        },
+        "optional_owned_dependencies": [],
+        "adapters": [],
+        "companions": [],
+        "supported_go": {
+          "minimum": "1.27.0",
+          "tested": [
+            "1.27.2"
+          ]
+        },
+        "supported_platforms": [
+          "portable-go"
+        ],
+        "supported_backends": [],
+        "supported_protocols": [],
+        "documentation": {
+          "readme": "http/README.md",
+          "api": "http/README.md",
+          "adoption": "http/README.md",
+          "security": "SECURITY.md",
+          "compatibility": null,
+          "performance": null,
+          "examples": "http/README.md",
+          "faq": null,
+          "changelog": "http/CHANGELOG.md",
+          "pkg_go_dev": "https://pkg.go.dev/github.com/faustbrian/go-identity/http",
+          "ecosystem_index": "https://github.com/faustbrian/go-library-tools/blob/v2.1.2/docs/ecosystem/README.md"
+        },
+        "known_good_compatibility_sets": [],
+        "delivery": {
+          "implementation": "in-progress",
+          "hardening": "in-progress",
+          "release": "blocked"
+        }
+      }
+    },
+    {
+      "directory": "http/email",
+      "module_path": "github.com/faustbrian/go-identity/http/email",
+      "go_version": "1.27.0",
+      "packages": [
+        {
+          "module_directory": "http/email",
+          "directory": ".",
+          "name": "emailhttp",
+          "import_path": "github.com/faustbrian/go-identity/http/email",
+          "kind": "public",
+          "production": true,
+          "executable": true,
+          "coverage_required": true,
+          "build_required": true,
+          "build_tags": []
+        }
+      ],
+      "purpose": "Opt-in original signup-link confirmation transport; full email lifecycle and native HTTP qualification in development.",
+      "lifecycle": "experimental",
+      "kind": "public library",
+      "releasable": true,
+      "family": "service-edge",
+      "version": "0.0.0",
+      "tag_prefix": "http/email/v",
+      "owned_dependencies": [
+        "github.com/faustbrian/go-authorization",
+        "github.com/faustbrian/go-capability",
+        "github.com/faustbrian/go-identity",
+        "github.com/faustbrian/go-identity/email",
+        "github.com/faustbrian/go-identity/http",
+        "github.com/faustbrian/go-openapi/v2",
+        "github.com/faustbrian/go-rate-limit/v2"
+      ],
+      "reverse_owned_dependencies": [],
+      "external_runtime_dependencies": [],
+      "required_services": [],
+      "build_tags": [],
+      "test_tags": [],
+      "interoperability_tools": [],
+      "specifications": [],
+      "conformance_corpora": [],
+      "family_label": "Service Edge",
+      "family_description": "Request-edge policy, identity, access decisions, routing, middleware, and process lifecycle.",
+      "family_order": 2,
+      "gates": {
+        "api_compatibility": false,
+        "benchmarks": false,
+        "conformance": false,
+        "coverage": false,
+        "documentation": false,
+        "fuzz": false,
+        "interoperability": false,
+        "lint": false,
+        "mutation": false,
+        "race": false,
+        "security": false,
+        "tests": false
+      },
+      "goal_status": "in-progress",
+      "goal_files": [],
+      "goal_evidence": [],
+      "provenance": [],
+      "cohesion": {
+        "family": "service-edge",
+        "secondary_capabilities": [
+          "identity-and-access"
+        ],
+        "responsibility": "Opt-in original signup-link confirmation transport; full email lifecycle and native HTTP qualification in development.",
+        "non_goals": [
+          "Claim unimplemented profiles, published releases, or complete identity-platform qualification.",
+          "Provide user interfaces or a vendor-owned authentication engine."
+        ],
+        "public_package_identifier": "emailhttp",
+        "primary_entry_packages": [
+          "github.com/faustbrian/go-identity/http/email"
+        ],
+        "package_selection": {
+          "github.com/faustbrian/go-identity/http/email": "Experimental Opt-in original signup-link confirmation transport; full email lifecycle and native HTTP qualification in development. Use only documented selected profiles; full qualification is pending."
+        },
+        "lifecycle_status": "active",
+        "maturity": "experimental",
+        "construction_styles": [
+          "new-config",
+          "plain-function",
+          "validated-value"
+        ],
+        "lifecycle_styles": [
+          "stateless"
+        ],
+        "ownership": {
+          "configuration": "caller",
+          "mutable_inputs": [
+            "borrow",
+            "copy",
+            "transfer"
+          ],
+          "runtime_resources": "none",
+          "background_work": "none"
+        },
+        "optional_owned_dependencies": [],
+        "adapters": [],
+        "companions": [],
+        "supported_go": {
+          "minimum": "1.27.0",
+          "tested": [
+            "1.27.2"
+          ]
+        },
+        "supported_platforms": [
+          "portable-go"
+        ],
+        "supported_backends": [],
+        "supported_protocols": [],
+        "documentation": {
+          "readme": "http/email/README.md",
+          "api": "http/email/README.md",
+          "adoption": "http/email/README.md",
+          "security": "SECURITY.md",
+          "compatibility": null,
+          "performance": null,
+          "examples": "http/email/README.md",
+          "faq": null,
+          "changelog": "http/email/CHANGELOG.md",
+          "pkg_go_dev": "https://pkg.go.dev/github.com/faustbrian/go-identity/http/email",
+          "ecosystem_index": "https://github.com/faustbrian/go-library-tools/blob/v2.1.2/docs/ecosystem/README.md"
+        },
+        "known_good_compatibility_sets": [],
+        "delivery": {
+          "implementation": "in-progress",
+          "hardening": "in-progress",
+          "release": "blocked"
+        }
+      }
+    },
+    {
+      "directory": "http/magiclink",
+      "module_path": "github.com/faustbrian/go-identity/http/magiclink",
+      "go_version": "1.27.0",
+      "packages": [
+        {
+          "module_directory": "http/magiclink",
+          "directory": ".",
+          "name": "magiclinkhttp",
+          "import_path": "github.com/faustbrian/go-identity/http/magiclink",
+          "kind": "public",
+          "production": true,
+          "executable": true,
+          "coverage_required": true,
+          "build_required": true,
+          "build_tags": []
+        }
+      ],
+      "purpose": "Opt-in enumeration-safe magic-link request and original-flow consumption transport; native reference composition in development.",
+      "lifecycle": "experimental",
+      "kind": "public library",
+      "releasable": true,
+      "family": "service-edge",
+      "version": "0.0.0",
+      "tag_prefix": "http/magiclink/v",
+      "owned_dependencies": [
+        "github.com/faustbrian/go-authentication",
+        "github.com/faustbrian/go-authorization",
+        "github.com/faustbrian/go-capability",
+        "github.com/faustbrian/go-identity",
+        "github.com/faustbrian/go-identity/email",
+        "github.com/faustbrian/go-identity/http",
+        "github.com/faustbrian/go-identity/magiclink",
+        "github.com/faustbrian/go-identity/session",
+        "github.com/faustbrian/go-openapi/v2",
+        "github.com/faustbrian/go-rate-limit/v2"
+      ],
+      "reverse_owned_dependencies": [],
+      "external_runtime_dependencies": [],
+      "required_services": [],
+      "build_tags": [],
+      "test_tags": [],
+      "interoperability_tools": [],
+      "specifications": [],
+      "conformance_corpora": [],
+      "family_label": "Service Edge",
+      "family_description": "Request-edge policy, identity, access decisions, routing, middleware, and process lifecycle.",
+      "family_order": 2,
+      "gates": {
+        "api_compatibility": false,
+        "benchmarks": false,
+        "conformance": false,
+        "coverage": false,
+        "documentation": false,
+        "fuzz": false,
+        "interoperability": false,
+        "lint": false,
+        "mutation": false,
+        "race": false,
+        "security": false,
+        "tests": false
+      },
+      "goal_status": "in-progress",
+      "goal_files": [],
+      "goal_evidence": [],
+      "provenance": [],
+      "cohesion": {
+        "family": "service-edge",
+        "secondary_capabilities": [
+          "identity-and-access"
+        ],
+        "responsibility": "Opt-in enumeration-safe magic-link request and original-flow consumption transport; native reference composition in development.",
+        "non_goals": [
+          "Claim unimplemented profiles, published releases, or complete identity-platform qualification.",
+          "Provide user interfaces or a vendor-owned authentication engine."
+        ],
+        "public_package_identifier": "magiclinkhttp",
+        "primary_entry_packages": [
+          "github.com/faustbrian/go-identity/http/magiclink"
+        ],
+        "package_selection": {
+          "github.com/faustbrian/go-identity/http/magiclink": "Experimental Opt-in enumeration-safe magic-link request and original-flow consumption transport; native reference composition in development. Use only documented selected profiles; full qualification is pending."
+        },
+        "lifecycle_status": "active",
+        "maturity": "experimental",
+        "construction_styles": [
+          "new-config",
+          "plain-function",
+          "validated-value"
+        ],
+        "lifecycle_styles": [
+          "stateless"
+        ],
+        "ownership": {
+          "configuration": "caller",
+          "mutable_inputs": [
+            "borrow",
+            "copy",
+            "transfer"
+          ],
+          "runtime_resources": "none",
+          "background_work": "none"
+        },
+        "optional_owned_dependencies": [],
+        "adapters": [],
+        "companions": [],
+        "supported_go": {
+          "minimum": "1.27.0",
+          "tested": [
+            "1.27.2"
+          ]
+        },
+        "supported_platforms": [
+          "portable-go"
+        ],
+        "supported_backends": [],
+        "supported_protocols": [],
+        "documentation": {
+          "readme": "http/magiclink/README.md",
+          "api": "http/magiclink/README.md",
+          "adoption": "http/magiclink/README.md",
+          "security": "SECURITY.md",
+          "compatibility": null,
+          "performance": null,
+          "examples": "http/magiclink/README.md",
+          "faq": null,
+          "changelog": "http/magiclink/CHANGELOG.md",
+          "pkg_go_dev": "https://pkg.go.dev/github.com/faustbrian/go-identity/http/magiclink",
+          "ecosystem_index": "https://github.com/faustbrian/go-library-tools/blob/v2.1.2/docs/ecosystem/README.md"
+        },
+        "known_good_compatibility_sets": [],
+        "delivery": {
+          "implementation": "in-progress",
+          "hardening": "in-progress",
+          "release": "blocked"
+        }
+      }
+    },
+    {
+      "directory": "http/mfa",
+      "module_path": "github.com/faustbrian/go-identity/http/mfa",
+      "go_version": "1.27.0",
+      "packages": [
+        {
+          "module_directory": "http/mfa",
+          "directory": ".",
+          "name": "mfahttp",
+          "import_path": "github.com/faustbrian/go-identity/http/mfa",
+          "kind": "public",
+          "production": true,
+          "executable": true,
+          "coverage_required": true,
+          "build_required": true,
+          "build_tags": []
+        }
+      ],
+      "purpose": "Opt-in original-flow TOTP completion transport; reference composition in development.",
+      "lifecycle": "experimental",
+      "kind": "public library",
+      "releasable": true,
+      "family": "service-edge",
+      "version": "0.0.0",
+      "tag_prefix": "http/mfa/v",
+      "owned_dependencies": [
+        "github.com/faustbrian/go-authentication",
+        "github.com/faustbrian/go-authorization",
+        "github.com/faustbrian/go-capability",
+        "github.com/faustbrian/go-identity",
+        "github.com/faustbrian/go-identity/http",
+        "github.com/faustbrian/go-identity/mfa",
+        "github.com/faustbrian/go-identity/session",
+        "github.com/faustbrian/go-rate-limit/v2"
+      ],
+      "reverse_owned_dependencies": [],
+      "external_runtime_dependencies": [],
+      "required_services": [],
+      "build_tags": [],
+      "test_tags": [],
+      "interoperability_tools": [],
+      "specifications": [],
+      "conformance_corpora": [],
+      "family_label": "Service Edge",
+      "family_description": "Request-edge policy, identity, access decisions, routing, middleware, and process lifecycle.",
+      "family_order": 2,
+      "gates": {
+        "api_compatibility": false,
+        "benchmarks": false,
+        "conformance": false,
+        "coverage": false,
+        "documentation": false,
+        "fuzz": false,
+        "interoperability": false,
+        "lint": false,
+        "mutation": false,
+        "race": false,
+        "security": false,
+        "tests": false
+      },
+      "goal_status": "in-progress",
+      "goal_files": [],
+      "goal_evidence": [],
+      "provenance": [],
+      "cohesion": {
+        "family": "service-edge",
+        "secondary_capabilities": [
+          "identity-and-access"
+        ],
+        "responsibility": "Opt-in original-flow TOTP completion transport; reference composition in development.",
+        "non_goals": [
+          "Claim unimplemented profiles, published releases, or complete identity-platform qualification.",
+          "Provide user interfaces or a vendor-owned authentication engine."
+        ],
+        "public_package_identifier": "mfahttp",
+        "primary_entry_packages": [
+          "github.com/faustbrian/go-identity/http/mfa"
+        ],
+        "package_selection": {
+          "github.com/faustbrian/go-identity/http/mfa": "Experimental Opt-in original-flow TOTP completion transport; reference composition in development. Use only documented selected profiles; full qualification is pending."
+        },
+        "lifecycle_status": "active",
+        "maturity": "experimental",
+        "construction_styles": [
+          "new-config",
+          "plain-function",
+          "validated-value"
+        ],
+        "lifecycle_styles": [
+          "stateless"
+        ],
+        "ownership": {
+          "configuration": "caller",
+          "mutable_inputs": [
+            "borrow",
+            "copy",
+            "transfer"
+          ],
+          "runtime_resources": "none",
+          "background_work": "none"
+        },
+        "optional_owned_dependencies": [],
+        "adapters": [],
+        "companions": [],
+        "supported_go": {
+          "minimum": "1.27.0",
+          "tested": [
+            "1.27.2"
+          ]
+        },
+        "supported_platforms": [
+          "portable-go"
+        ],
+        "supported_backends": [],
+        "supported_protocols": [],
+        "documentation": {
+          "readme": "http/mfa/README.md",
+          "api": "http/mfa/README.md",
+          "adoption": "http/mfa/README.md",
+          "security": "SECURITY.md",
+          "compatibility": null,
+          "performance": null,
+          "examples": "http/mfa/README.md",
+          "faq": null,
+          "changelog": "http/mfa/CHANGELOG.md",
+          "pkg_go_dev": "https://pkg.go.dev/github.com/faustbrian/go-identity/http/mfa",
+          "ecosystem_index": "https://github.com/faustbrian/go-library-tools/blob/v2.1.2/docs/ecosystem/README.md"
+        },
+        "known_good_compatibility_sets": [],
+        "delivery": {
+          "implementation": "in-progress",
+          "hardening": "in-progress",
+          "release": "blocked"
+        }
+      }
+    },
+    {
+      "directory": "http/otp",
+      "module_path": "github.com/faustbrian/go-identity/http/otp",
+      "go_version": "1.27.0",
+      "packages": [
+        {
+          "module_directory": "http/otp",
+          "directory": ".",
+          "name": "otphttp",
+          "import_path": "github.com/faustbrian/go-identity/http/otp",
+          "kind": "public",
+          "production": true,
+          "executable": true,
+          "coverage_required": true,
+          "build_required": true,
+          "build_tags": []
+        }
+      ],
+      "purpose": "Opt-in original-flow OTP signin transport; full feature and release qualification in development.",
+      "lifecycle": "experimental",
+      "kind": "public library",
+      "releasable": true,
+      "family": "service-edge",
+      "version": "0.0.0",
+      "tag_prefix": "http/otp/v",
+      "owned_dependencies": [
+        "github.com/faustbrian/go-authentication",
+        "github.com/faustbrian/go-authorization",
+        "github.com/faustbrian/go-identity",
+        "github.com/faustbrian/go-identity/http",
+        "github.com/faustbrian/go-identity/otp",
+        "github.com/faustbrian/go-identity/session",
+        "github.com/faustbrian/go-rate-limit/v2"
+      ],
+      "reverse_owned_dependencies": [],
+      "external_runtime_dependencies": [],
+      "required_services": [],
+      "build_tags": [],
+      "test_tags": [],
+      "interoperability_tools": [],
+      "specifications": [],
+      "conformance_corpora": [],
+      "family_label": "Service Edge",
+      "family_description": "Request-edge policy, identity, access decisions, routing, middleware, and process lifecycle.",
+      "family_order": 2,
+      "gates": {
+        "api_compatibility": false,
+        "benchmarks": false,
+        "conformance": false,
+        "coverage": false,
+        "documentation": false,
+        "fuzz": false,
+        "interoperability": false,
+        "lint": false,
+        "mutation": false,
+        "race": false,
+        "security": false,
+        "tests": false
+      },
+      "goal_status": "in-progress",
+      "goal_files": [],
+      "goal_evidence": [],
+      "provenance": [],
+      "cohesion": {
+        "family": "service-edge",
+        "secondary_capabilities": [
+          "identity-and-access"
+        ],
+        "responsibility": "Opt-in original-flow OTP signin transport; full feature and release qualification in development.",
+        "non_goals": [
+          "Claim unimplemented profiles, published releases, or complete identity-platform qualification.",
+          "Provide user interfaces or a vendor-owned authentication engine."
+        ],
+        "public_package_identifier": "otphttp",
+        "primary_entry_packages": [
+          "github.com/faustbrian/go-identity/http/otp"
+        ],
+        "package_selection": {
+          "github.com/faustbrian/go-identity/http/otp": "Experimental Opt-in original-flow OTP signin transport; full feature and release qualification in development. Use only documented selected profiles; full qualification is pending."
+        },
+        "lifecycle_status": "active",
+        "maturity": "experimental",
+        "construction_styles": [
+          "new-config",
+          "plain-function",
+          "validated-value"
+        ],
+        "lifecycle_styles": [
+          "stateless"
+        ],
+        "ownership": {
+          "configuration": "caller",
+          "mutable_inputs": [
+            "borrow",
+            "copy",
+            "transfer"
+          ],
+          "runtime_resources": "none",
+          "background_work": "none"
+        },
+        "optional_owned_dependencies": [],
+        "adapters": [],
+        "companions": [],
+        "supported_go": {
+          "minimum": "1.27.0",
+          "tested": [
+            "1.27.2"
+          ]
+        },
+        "supported_platforms": [
+          "portable-go"
+        ],
+        "supported_backends": [],
+        "supported_protocols": [],
+        "documentation": {
+          "readme": "http/otp/README.md",
+          "api": "http/otp/README.md",
+          "adoption": "http/otp/README.md",
+          "security": "SECURITY.md",
+          "compatibility": null,
+          "performance": null,
+          "examples": "http/otp/README.md",
+          "faq": null,
+          "changelog": "http/otp/CHANGELOG.md",
+          "pkg_go_dev": "https://pkg.go.dev/github.com/faustbrian/go-identity/http/otp",
+          "ecosystem_index": "https://github.com/faustbrian/go-library-tools/blob/v2.1.2/docs/ecosystem/README.md"
+        },
+        "known_good_compatibility_sets": [],
+        "delivery": {
+          "implementation": "in-progress",
+          "hardening": "in-progress",
+          "release": "blocked"
+        }
+      }
+    },
+    {
+      "directory": "http/password",
+      "module_path": "github.com/faustbrian/go-identity/http/password",
+      "go_version": "1.27.0",
+      "packages": [
+        {
+          "module_directory": "http/password",
+          "directory": ".",
+          "name": "passwordhttp",
+          "import_path": "github.com/faustbrian/go-identity/http/password",
+          "kind": "public",
+          "production": true,
+          "executable": true,
+          "coverage_required": true,
+          "build_required": true,
+          "build_tags": []
+        }
+      ],
+      "purpose": "Opt-in original keyed password-change transport; complete password feature and native HTTP qualification in development.",
+      "lifecycle": "experimental",
+      "kind": "public library",
+      "releasable": true,
+      "family": "service-edge",
+      "version": "0.0.0",
+      "tag_prefix": "http/password/v",
+      "owned_dependencies": [
+        "github.com/faustbrian/go-authentication",
+        "github.com/faustbrian/go-authorization",
+        "github.com/faustbrian/go-identifier",
+        "github.com/faustbrian/go-identity",
+        "github.com/faustbrian/go-identity/http",
+        "github.com/faustbrian/go-identity/password",
+        "github.com/faustbrian/go-identity/session",
+        "github.com/faustbrian/go-password"
+      ],
+      "reverse_owned_dependencies": [],
+      "external_runtime_dependencies": [],
+      "required_services": [],
+      "build_tags": [],
+      "test_tags": [],
+      "interoperability_tools": [],
+      "specifications": [],
+      "conformance_corpora": [],
+      "family_label": "Service Edge",
+      "family_description": "Request-edge policy, identity, access decisions, routing, middleware, and process lifecycle.",
+      "family_order": 2,
+      "gates": {
+        "api_compatibility": false,
+        "benchmarks": false,
+        "conformance": false,
+        "coverage": false,
+        "documentation": false,
+        "fuzz": false,
+        "interoperability": false,
+        "lint": false,
+        "mutation": false,
+        "race": false,
+        "security": false,
+        "tests": false
+      },
+      "goal_status": "in-progress",
+      "goal_files": [],
+      "goal_evidence": [],
+      "provenance": [],
+      "cohesion": {
+        "family": "service-edge",
+        "secondary_capabilities": [
+          "identity-and-access"
+        ],
+        "responsibility": "Opt-in original keyed password-change transport; complete password feature and native HTTP qualification in development.",
+        "non_goals": [
+          "Claim unimplemented profiles, published releases, or complete identity-platform qualification.",
+          "Provide user interfaces or a vendor-owned authentication engine."
+        ],
+        "public_package_identifier": "passwordhttp",
+        "primary_entry_packages": [
+          "github.com/faustbrian/go-identity/http/password"
+        ],
+        "package_selection": {
+          "github.com/faustbrian/go-identity/http/password": "Experimental Opt-in original keyed password-change transport; complete password feature and native HTTP qualification in development. Use only documented selected profiles; full qualification is pending."
+        },
+        "lifecycle_status": "active",
+        "maturity": "experimental",
+        "construction_styles": [
+          "new-config",
+          "plain-function",
+          "validated-value"
+        ],
+        "lifecycle_styles": [
+          "stateless"
+        ],
+        "ownership": {
+          "configuration": "caller",
+          "mutable_inputs": [
+            "borrow",
+            "copy",
+            "transfer"
+          ],
+          "runtime_resources": "none",
+          "background_work": "none"
+        },
+        "optional_owned_dependencies": [],
+        "adapters": [],
+        "companions": [],
+        "supported_go": {
+          "minimum": "1.27.0",
+          "tested": [
+            "1.27.2"
+          ]
+        },
+        "supported_platforms": [
+          "portable-go"
+        ],
+        "supported_backends": [],
+        "supported_protocols": [],
+        "documentation": {
+          "readme": "http/password/README.md",
+          "api": "http/password/README.md",
+          "adoption": "http/password/README.md",
+          "security": "SECURITY.md",
+          "compatibility": null,
+          "performance": null,
+          "examples": "http/password/README.md",
+          "faq": null,
+          "changelog": "http/password/CHANGELOG.md",
+          "pkg_go_dev": "https://pkg.go.dev/github.com/faustbrian/go-identity/http/password",
+          "ecosystem_index": "https://github.com/faustbrian/go-library-tools/blob/v2.1.2/docs/ecosystem/README.md"
+        },
+        "known_good_compatibility_sets": [],
+        "delivery": {
+          "implementation": "in-progress",
+          "hardening": "in-progress",
+          "release": "blocked"
+        }
+      }
+    },
+    {
+      "directory": "http/session",
+      "module_path": "github.com/faustbrian/go-identity/http/session",
+      "go_version": "1.27.0",
+      "packages": [
+        {
+          "module_directory": "http/session",
+          "directory": ".",
+          "name": "sessionhttp",
+          "import_path": "github.com/faustbrian/go-identity/http/session",
+          "kind": "public",
+          "production": true,
+          "executable": true,
+          "coverage_required": true,
+          "build_required": true,
+          "build_tags": []
+        }
+      ],
+      "purpose": "Opt-in real session HTTP handlers; feature/router/OpenAPI and complete transport qualification in development.",
+      "lifecycle": "experimental",
+      "kind": "public library",
+      "releasable": true,
+      "family": "service-edge",
+      "version": "0.0.0",
+      "tag_prefix": "http/session/v",
+      "owned_dependencies": [
+        "github.com/faustbrian/go-identity",
+        "github.com/faustbrian/go-identity/http",
+        "github.com/faustbrian/go-identity/session"
+      ],
+      "reverse_owned_dependencies": [],
+      "external_runtime_dependencies": [],
+      "required_services": [],
+      "build_tags": [],
+      "test_tags": [],
+      "interoperability_tools": [],
+      "specifications": [],
+      "conformance_corpora": [],
+      "family_label": "Service Edge",
+      "family_description": "Request-edge policy, identity, access decisions, routing, middleware, and process lifecycle.",
+      "family_order": 2,
+      "gates": {
+        "api_compatibility": false,
+        "benchmarks": false,
+        "conformance": false,
+        "coverage": false,
+        "documentation": false,
+        "fuzz": false,
+        "interoperability": false,
+        "lint": false,
+        "mutation": false,
+        "race": false,
+        "security": false,
+        "tests": false
+      },
+      "goal_status": "in-progress",
+      "goal_files": [],
+      "goal_evidence": [],
+      "provenance": [],
+      "cohesion": {
+        "family": "service-edge",
+        "secondary_capabilities": [
+          "identity-and-access"
+        ],
+        "responsibility": "Opt-in real session HTTP handlers; feature/router/OpenAPI and complete transport qualification in development.",
+        "non_goals": [
+          "Claim unimplemented profiles, published releases, or complete identity-platform qualification.",
+          "Provide user interfaces or a vendor-owned authentication engine."
+        ],
+        "public_package_identifier": "sessionhttp",
+        "primary_entry_packages": [
+          "github.com/faustbrian/go-identity/http/session"
+        ],
+        "package_selection": {
+          "github.com/faustbrian/go-identity/http/session": "Experimental Opt-in real session HTTP handlers; feature/router/OpenAPI and complete transport qualification in development. Use only documented selected profiles; full qualification is pending."
+        },
+        "lifecycle_status": "active",
+        "maturity": "experimental",
+        "construction_styles": [
+          "new-config",
+          "plain-function",
+          "validated-value"
+        ],
+        "lifecycle_styles": [
+          "stateless"
+        ],
+        "ownership": {
+          "configuration": "caller",
+          "mutable_inputs": [
+            "borrow",
+            "copy",
+            "transfer"
+          ],
+          "runtime_resources": "none",
+          "background_work": "none"
+        },
+        "optional_owned_dependencies": [],
+        "adapters": [],
+        "companions": [],
+        "supported_go": {
+          "minimum": "1.27.0",
+          "tested": [
+            "1.27.2"
+          ]
+        },
+        "supported_platforms": [
+          "portable-go"
+        ],
+        "supported_backends": [],
+        "supported_protocols": [],
+        "documentation": {
+          "readme": "http/session/README.md",
+          "api": "http/session/README.md",
+          "adoption": "http/session/README.md",
+          "security": "SECURITY.md",
+          "compatibility": null,
+          "performance": null,
+          "examples": "http/session/README.md",
+          "faq": null,
+          "changelog": "http/session/CHANGELOG.md",
+          "pkg_go_dev": "https://pkg.go.dev/github.com/faustbrian/go-identity/http/session",
+          "ecosystem_index": "https://github.com/faustbrian/go-library-tools/blob/v2.1.2/docs/ecosystem/README.md"
+        },
+        "known_good_compatibility_sets": [],
+        "delivery": {
+          "implementation": "in-progress",
+          "hardening": "in-progress",
+          "release": "blocked"
+        }
+      }
+    },
+    {
+      "directory": "i18n",
+      "module_path": "github.com/faustbrian/go-identity/i18n",
+      "go_version": "1.27.0",
+      "packages": [
+        {
+          "module_directory": "i18n",
+          "directory": ".",
+          "name": "i18n",
+          "import_path": "github.com/faustbrian/go-identity/i18n",
+          "kind": "public",
+          "production": true,
+          "executable": true,
+          "coverage_required": true,
+          "build_required": true,
+          "build_tags": []
+        }
+      ],
+      "purpose": "Bounded identity localization, configured fallbacks and preference policy; durable preference lifecycle in development.",
+      "lifecycle": "experimental",
+      "kind": "public library",
+      "releasable": true,
+      "family": "service-edge",
+      "version": "0.0.0",
+      "tag_prefix": "i18n/v",
+      "owned_dependencies": [
+        "github.com/faustbrian/go-identity"
+      ],
+      "reverse_owned_dependencies": [],
+      "external_runtime_dependencies": [],
+      "required_services": [],
+      "build_tags": [],
+      "test_tags": [],
+      "interoperability_tools": [],
+      "specifications": [],
+      "conformance_corpora": [],
+      "family_label": "Service Edge",
+      "family_description": "Request-edge policy, identity, access decisions, routing, middleware, and process lifecycle.",
+      "family_order": 2,
+      "gates": {
+        "api_compatibility": false,
+        "benchmarks": false,
+        "conformance": false,
+        "coverage": false,
+        "documentation": false,
+        "fuzz": false,
+        "interoperability": false,
+        "lint": false,
+        "mutation": false,
+        "race": false,
+        "security": false,
+        "tests": false
+      },
+      "goal_status": "in-progress",
+      "goal_files": [],
+      "goal_evidence": [],
+      "provenance": [],
+      "cohesion": {
+        "family": "service-edge",
+        "secondary_capabilities": [
+          "identity-and-access"
+        ],
+        "responsibility": "Bounded identity localization, configured fallbacks and preference policy; durable preference lifecycle in development.",
+        "non_goals": [
+          "Claim unimplemented profiles, published releases, or complete identity-platform qualification.",
+          "Provide user interfaces or a vendor-owned authentication engine."
+        ],
+        "public_package_identifier": "i18n",
+        "primary_entry_packages": [
+          "github.com/faustbrian/go-identity/i18n"
+        ],
+        "package_selection": {
+          "github.com/faustbrian/go-identity/i18n": "Experimental Bounded identity localization, configured fallbacks and preference policy; durable preference lifecycle in development. Use only documented selected profiles; full qualification is pending."
+        },
+        "lifecycle_status": "active",
+        "maturity": "experimental",
+        "construction_styles": [
+          "new-config",
+          "plain-function",
+          "validated-value"
+        ],
+        "lifecycle_styles": [
+          "stateless"
+        ],
+        "ownership": {
+          "configuration": "caller",
+          "mutable_inputs": [
+            "borrow",
+            "copy",
+            "transfer"
+          ],
+          "runtime_resources": "none",
+          "background_work": "none"
+        },
+        "optional_owned_dependencies": [],
+        "adapters": [],
+        "companions": [],
+        "supported_go": {
+          "minimum": "1.27.0",
+          "tested": [
+            "1.27.2"
+          ]
+        },
+        "supported_platforms": [
+          "portable-go"
+        ],
+        "supported_backends": [],
+        "supported_protocols": [],
+        "documentation": {
+          "readme": "i18n/README.md",
+          "api": "i18n/README.md",
+          "adoption": "i18n/README.md",
+          "security": "SECURITY.md",
+          "compatibility": null,
+          "performance": null,
+          "examples": "i18n/README.md",
+          "faq": null,
+          "changelog": "i18n/CHANGELOG.md",
+          "pkg_go_dev": "https://pkg.go.dev/github.com/faustbrian/go-identity/i18n",
+          "ecosystem_index": "https://github.com/faustbrian/go-library-tools/blob/v2.1.2/docs/ecosystem/README.md"
+        },
+        "known_good_compatibility_sets": [],
+        "delivery": {
+          "implementation": "in-progress",
+          "hardening": "in-progress",
+          "release": "blocked"
+        }
+      }
+    },
+    {
+      "directory": "magiclink",
+      "module_path": "github.com/faustbrian/go-identity/magiclink",
+      "go_version": "1.27.0",
+      "packages": [
+        {
+          "module_directory": "magiclink",
+          "directory": ".",
+          "name": "magiclink",
+          "import_path": "github.com/faustbrian/go-identity/magiclink",
+          "kind": "public",
+          "production": true,
+          "executable": true,
+          "coverage_required": true,
+          "build_required": true,
+          "build_tags": []
+        }
+      ],
+      "purpose": "Scanner-safe signed magic-link scope inspection; complete durable passwordless workflow in development.",
+      "lifecycle": "experimental",
+      "kind": "public library",
+      "releasable": true,
+      "family": "service-edge",
+      "version": "0.0.0",
+      "tag_prefix": "magiclink/v",
+      "owned_dependencies": [
+        "github.com/faustbrian/go-capability"
+      ],
+      "reverse_owned_dependencies": [],
+      "external_runtime_dependencies": [],
+      "required_services": [],
+      "build_tags": [],
+      "test_tags": [],
+      "interoperability_tools": [],
+      "specifications": [],
+      "conformance_corpora": [],
+      "family_label": "Service Edge",
+      "family_description": "Request-edge policy, identity, access decisions, routing, middleware, and process lifecycle.",
+      "family_order": 2,
+      "gates": {
+        "api_compatibility": false,
+        "benchmarks": false,
+        "conformance": false,
+        "coverage": false,
+        "documentation": false,
+        "fuzz": false,
+        "interoperability": false,
+        "lint": false,
+        "mutation": false,
+        "race": false,
+        "security": false,
+        "tests": false
+      },
+      "goal_status": "in-progress",
+      "goal_files": [],
+      "goal_evidence": [],
+      "provenance": [],
+      "cohesion": {
+        "family": "service-edge",
+        "secondary_capabilities": [
+          "identity-and-access"
+        ],
+        "responsibility": "Scanner-safe signed magic-link scope inspection; complete durable passwordless workflow in development.",
+        "non_goals": [
+          "Claim unimplemented profiles, published releases, or complete identity-platform qualification.",
+          "Provide user interfaces or a vendor-owned authentication engine."
+        ],
+        "public_package_identifier": "magiclink",
+        "primary_entry_packages": [
+          "github.com/faustbrian/go-identity/magiclink"
+        ],
+        "package_selection": {
+          "github.com/faustbrian/go-identity/magiclink": "Experimental Scanner-safe signed magic-link scope inspection; complete durable passwordless workflow in development. Use only documented selected profiles; full qualification is pending."
+        },
+        "lifecycle_status": "active",
+        "maturity": "experimental",
+        "construction_styles": [
+          "new-config",
+          "plain-function",
+          "validated-value"
+        ],
+        "lifecycle_styles": [
+          "stateless"
+        ],
+        "ownership": {
+          "configuration": "caller",
+          "mutable_inputs": [
+            "borrow",
+            "copy",
+            "transfer"
+          ],
+          "runtime_resources": "none",
+          "background_work": "none"
+        },
+        "optional_owned_dependencies": [],
+        "adapters": [],
+        "companions": [],
+        "supported_go": {
+          "minimum": "1.27.0",
+          "tested": [
+            "1.27.2"
+          ]
+        },
+        "supported_platforms": [
+          "portable-go"
+        ],
+        "supported_backends": [],
+        "supported_protocols": [],
+        "documentation": {
+          "readme": "magiclink/README.md",
+          "api": "magiclink/README.md",
+          "adoption": "magiclink/README.md",
+          "security": "SECURITY.md",
+          "compatibility": null,
+          "performance": null,
+          "examples": "magiclink/README.md",
+          "faq": null,
+          "changelog": "magiclink/CHANGELOG.md",
+          "pkg_go_dev": "https://pkg.go.dev/github.com/faustbrian/go-identity/magiclink",
+          "ecosystem_index": "https://github.com/faustbrian/go-library-tools/blob/v2.1.2/docs/ecosystem/README.md"
+        },
+        "known_good_compatibility_sets": [],
+        "delivery": {
+          "implementation": "in-progress",
+          "hardening": "in-progress",
+          "release": "blocked"
+        }
+      }
+    },
+    {
+      "directory": "magiclink/postgres",
+      "module_path": "github.com/faustbrian/go-identity/magiclink/postgres",
+      "go_version": "1.27.0",
+      "packages": [
+        {
+          "module_directory": "magiclink/postgres",
+          "directory": ".",
+          "name": "magiclinkpostgres",
+          "import_path": "github.com/faustbrian/go-identity/magiclink/postgres",
+          "kind": "public",
+          "production": true,
+          "executable": true,
+          "coverage_required": true,
+          "build_required": true,
+          "build_tags": []
+        }
+      ],
+      "purpose": "Native atomic magic-link request, encrypted delivery and consuming-session composition; complete workflow in development.",
+      "lifecycle": "experimental",
+      "kind": "public library",
+      "releasable": true,
+      "family": "service-edge",
+      "version": "0.0.0",
+      "tag_prefix": "magiclink/postgres/v",
+      "owned_dependencies": [
+        "github.com/faustbrian/go-audit",
+        "github.com/faustbrian/go-audit/postgres",
+        "github.com/faustbrian/go-authorization",
+        "github.com/faustbrian/go-capability",
+        "github.com/faustbrian/go-capability/postgres/identity",
+        "github.com/faustbrian/go-identity",
+        "github.com/faustbrian/go-identity/delivery",
+        "github.com/faustbrian/go-identity/delivery/postgres",
+        "github.com/faustbrian/go-identity/email",
+        "github.com/faustbrian/go-identity/magiclink",
+        "github.com/faustbrian/go-identity/mfa/postgres",
+        "github.com/faustbrian/go-identity/postgres",
+        "github.com/faustbrian/go-identity/risk",
+        "github.com/faustbrian/go-identity/session",
+        "github.com/faustbrian/go-identity/session/postgres",
+        "github.com/faustbrian/go-postgres",
+        "github.com/faustbrian/go-secret-envelope",
+        "github.com/faustbrian/go-transactional-outbox/v2/postgres/identity"
+      ],
+      "reverse_owned_dependencies": [],
+      "external_runtime_dependencies": [
+        "postgresql"
+      ],
+      "required_services": [
+        "postgresql"
+      ],
+      "build_tags": [],
+      "test_tags": [
+        "integration"
+      ],
+      "interoperability_tools": [],
+      "specifications": [],
+      "conformance_corpora": [],
+      "family_label": "Service Edge",
+      "family_description": "Request-edge policy, identity, access decisions, routing, middleware, and process lifecycle.",
+      "family_order": 2,
+      "gates": {
+        "api_compatibility": false,
+        "benchmarks": false,
+        "conformance": false,
+        "coverage": false,
+        "documentation": false,
+        "fuzz": false,
+        "interoperability": false,
+        "lint": false,
+        "mutation": false,
+        "race": false,
+        "security": false,
+        "tests": false
+      },
+      "goal_status": "in-progress",
+      "goal_files": [],
+      "goal_evidence": [],
+      "provenance": [],
+      "cohesion": {
+        "family": "service-edge",
+        "secondary_capabilities": [
+          "identity-and-access"
+        ],
+        "responsibility": "Native atomic magic-link request, encrypted delivery and consuming-session composition; complete workflow in development.",
+        "non_goals": [
+          "Claim unimplemented profiles, published releases, or complete identity-platform qualification.",
+          "Provide user interfaces or a vendor-owned authentication engine."
+        ],
+        "public_package_identifier": "magiclinkpostgres",
+        "primary_entry_packages": [
+          "github.com/faustbrian/go-identity/magiclink/postgres"
+        ],
+        "package_selection": {
+          "github.com/faustbrian/go-identity/magiclink/postgres": "Experimental Native atomic magic-link request, encrypted delivery and consuming-session composition; complete workflow in development. Use only documented selected profiles; full qualification is pending."
+        },
+        "lifecycle_status": "active",
+        "maturity": "experimental",
+        "construction_styles": [
+          "new-config",
+          "plain-function",
+          "validated-value"
+        ],
+        "lifecycle_styles": [
+          "stateless"
+        ],
+        "ownership": {
+          "configuration": "caller",
+          "mutable_inputs": [
+            "borrow",
+            "copy",
+            "transfer"
+          ],
+          "runtime_resources": "caller",
+          "background_work": "none"
+        },
+        "optional_owned_dependencies": [],
+        "adapters": [],
+        "companions": [],
+        "supported_go": {
+          "minimum": "1.27.0",
+          "tested": [
+            "1.27.2"
+          ]
+        },
+        "supported_platforms": [
+          "portable-go"
+        ],
+        "supported_backends": [
+          "postgresql"
+        ],
+        "supported_protocols": [],
+        "documentation": {
+          "readme": "magiclink/postgres/README.md",
+          "api": "magiclink/postgres/README.md",
+          "adoption": "magiclink/postgres/README.md",
+          "security": "SECURITY.md",
+          "compatibility": null,
+          "performance": null,
+          "examples": "magiclink/postgres/README.md",
+          "faq": null,
+          "changelog": "magiclink/postgres/CHANGELOG.md",
+          "pkg_go_dev": "https://pkg.go.dev/github.com/faustbrian/go-identity/magiclink/postgres",
+          "ecosystem_index": "https://github.com/faustbrian/go-library-tools/blob/v2.1.2/docs/ecosystem/README.md"
+        },
+        "known_good_compatibility_sets": [],
+        "delivery": {
+          "implementation": "in-progress",
+          "hardening": "in-progress",
+          "release": "blocked"
+        }
+      }
+    },
+    {
+      "directory": "mfa",
+      "module_path": "github.com/faustbrian/go-identity/mfa",
+      "go_version": "1.27.0",
+      "packages": [
+        {
+          "module_directory": "mfa",
+          "directory": ".",
+          "name": "mfa",
+          "import_path": "github.com/faustbrian/go-identity/mfa",
+          "kind": "public",
+          "production": true,
+          "executable": true,
+          "coverage_required": true,
+          "build_required": true,
+          "build_tags": []
+        }
+      ],
+      "purpose": "Authoritative second-factor state and recovery admission; complete MFA workflows in development.",
+      "lifecycle": "experimental",
+      "kind": "public library",
+      "releasable": true,
+      "family": "service-edge",
+      "version": "0.0.0",
+      "tag_prefix": "mfa/v",
+      "owned_dependencies": [
+        "github.com/faustbrian/go-identity"
+      ],
+      "reverse_owned_dependencies": [
+        "github.com/faustbrian/go-identity/mfa/postgres"
+      ],
+      "external_runtime_dependencies": [],
+      "required_services": [],
+      "build_tags": [],
+      "test_tags": [],
+      "interoperability_tools": [],
+      "specifications": [],
+      "conformance_corpora": [],
+      "family_label": "Service Edge",
+      "family_description": "Request-edge policy, identity, access decisions, routing, middleware, and process lifecycle.",
+      "family_order": 2,
+      "gates": {
+        "api_compatibility": false,
+        "benchmarks": false,
+        "conformance": false,
+        "coverage": false,
+        "documentation": false,
+        "fuzz": false,
+        "interoperability": false,
+        "lint": false,
+        "mutation": false,
+        "race": false,
+        "security": false,
+        "tests": false
+      },
+      "goal_status": "in-progress",
+      "goal_files": [],
+      "goal_evidence": [],
+      "provenance": [],
+      "cohesion": {
+        "family": "service-edge",
+        "secondary_capabilities": [
+          "identity-and-access"
+        ],
+        "responsibility": "Authoritative second-factor state and recovery admission; complete MFA workflows in development.",
+        "non_goals": [
+          "Claim unimplemented profiles, published releases, or complete identity-platform qualification.",
+          "Provide user interfaces or a vendor-owned authentication engine."
+        ],
+        "public_package_identifier": "mfa",
+        "primary_entry_packages": [
+          "github.com/faustbrian/go-identity/mfa"
+        ],
+        "package_selection": {
+          "github.com/faustbrian/go-identity/mfa": "Experimental Authoritative second-factor state and recovery admission; complete MFA workflows in development. Use only documented selected profiles; full qualification is pending."
+        },
+        "lifecycle_status": "active",
+        "maturity": "experimental",
+        "construction_styles": [
+          "new-config",
+          "plain-function",
+          "validated-value"
+        ],
+        "lifecycle_styles": [
+          "stateless"
+        ],
+        "ownership": {
+          "configuration": "caller",
+          "mutable_inputs": [
+            "borrow",
+            "copy",
+            "transfer"
+          ],
+          "runtime_resources": "none",
+          "background_work": "none"
+        },
+        "optional_owned_dependencies": [],
+        "adapters": [],
+        "companions": [],
+        "supported_go": {
+          "minimum": "1.27.0",
+          "tested": [
+            "1.27.2"
+          ]
+        },
+        "supported_platforms": [
+          "portable-go"
+        ],
+        "supported_backends": [],
+        "supported_protocols": [],
+        "documentation": {
+          "readme": "mfa/README.md",
+          "api": "mfa/README.md",
+          "adoption": "mfa/README.md",
+          "security": "SECURITY.md",
+          "compatibility": null,
+          "performance": null,
+          "examples": "mfa/README.md",
+          "faq": null,
+          "changelog": "mfa/CHANGELOG.md",
+          "pkg_go_dev": "https://pkg.go.dev/github.com/faustbrian/go-identity/mfa",
+          "ecosystem_index": "https://github.com/faustbrian/go-library-tools/blob/v2.1.2/docs/ecosystem/README.md"
+        },
+        "known_good_compatibility_sets": [],
+        "delivery": {
+          "implementation": "in-progress",
+          "hardening": "in-progress",
+          "release": "blocked"
+        }
+      }
+    },
+    {
+      "directory": "mfa/postgres",
+      "module_path": "github.com/faustbrian/go-identity/mfa/postgres",
+      "go_version": "1.27.0",
+      "packages": [
+        {
+          "module_directory": "mfa/postgres",
+          "directory": ".",
+          "name": "mfapostgres",
+          "import_path": "github.com/faustbrian/go-identity/mfa/postgres",
+          "kind": "public",
+          "production": true,
+          "executable": true,
+          "coverage_required": true,
+          "build_required": true,
+          "build_tags": []
+        }
+      ],
+      "purpose": "Transactional second-factor generations and genuine signup initialization; factor lifecycle storage in development.",
+      "lifecycle": "experimental",
+      "kind": "public library",
+      "releasable": true,
+      "family": "service-edge",
+      "version": "0.0.0",
+      "tag_prefix": "mfa/postgres/v",
+      "owned_dependencies": [
+        "github.com/faustbrian/go-identity",
+        "github.com/faustbrian/go-identity/mfa",
+        "github.com/faustbrian/go-identity/postgres",
+        "github.com/faustbrian/go-migrations/v3"
+      ],
+      "reverse_owned_dependencies": [
+        "github.com/faustbrian/go-identity/password/postgres"
+      ],
+      "external_runtime_dependencies": [
+        "postgresql"
+      ],
+      "required_services": [
+        "postgresql"
+      ],
+      "build_tags": [],
+      "test_tags": [
+        "integration"
+      ],
+      "interoperability_tools": [],
+      "specifications": [],
+      "conformance_corpora": [],
+      "family_label": "Service Edge",
+      "family_description": "Request-edge policy, identity, access decisions, routing, middleware, and process lifecycle.",
+      "family_order": 2,
+      "gates": {
+        "api_compatibility": false,
+        "benchmarks": false,
+        "conformance": false,
+        "coverage": false,
+        "documentation": false,
+        "fuzz": false,
+        "interoperability": false,
+        "lint": false,
+        "mutation": false,
+        "race": false,
+        "security": false,
+        "tests": false
+      },
+      "goal_status": "in-progress",
+      "goal_files": [],
+      "goal_evidence": [],
+      "provenance": [],
+      "cohesion": {
+        "family": "service-edge",
+        "secondary_capabilities": [
+          "identity-and-access"
+        ],
+        "responsibility": "Transactional second-factor generations and genuine signup initialization; factor lifecycle storage in development.",
+        "non_goals": [
+          "Claim unimplemented profiles, published releases, or complete identity-platform qualification.",
+          "Provide user interfaces or a vendor-owned authentication engine."
+        ],
+        "public_package_identifier": "mfapostgres",
+        "primary_entry_packages": [
+          "github.com/faustbrian/go-identity/mfa/postgres"
+        ],
+        "package_selection": {
+          "github.com/faustbrian/go-identity/mfa/postgres": "Experimental Transactional second-factor generations and genuine signup initialization; factor lifecycle storage in development. Use only documented selected profiles; full qualification is pending."
+        },
+        "lifecycle_status": "active",
+        "maturity": "experimental",
+        "construction_styles": [
+          "new-config",
+          "plain-function",
+          "validated-value"
+        ],
+        "lifecycle_styles": [
+          "stateless"
+        ],
+        "ownership": {
+          "configuration": "caller",
+          "mutable_inputs": [
+            "borrow",
+            "copy",
+            "transfer"
+          ],
+          "runtime_resources": "caller",
+          "background_work": "none"
+        },
+        "optional_owned_dependencies": [],
+        "adapters": [],
+        "companions": [],
+        "supported_go": {
+          "minimum": "1.27.0",
+          "tested": [
+            "1.27.2"
+          ]
+        },
+        "supported_platforms": [
+          "portable-go"
+        ],
+        "supported_backends": [
+          "postgresql"
+        ],
+        "supported_protocols": [],
+        "documentation": {
+          "readme": "mfa/postgres/README.md",
+          "api": "mfa/postgres/README.md",
+          "adoption": "mfa/postgres/README.md",
+          "security": "SECURITY.md",
+          "compatibility": null,
+          "performance": null,
+          "examples": "mfa/postgres/README.md",
+          "faq": null,
+          "changelog": "mfa/postgres/CHANGELOG.md",
+          "pkg_go_dev": "https://pkg.go.dev/github.com/faustbrian/go-identity/mfa/postgres",
+          "ecosystem_index": "https://github.com/faustbrian/go-library-tools/blob/v2.1.2/docs/ecosystem/README.md"
+        },
+        "known_good_compatibility_sets": [],
+        "delivery": {
+          "implementation": "in-progress",
+          "hardening": "in-progress",
+          "release": "blocked"
+        }
+      }
+    },
+    {
+      "directory": "otp",
+      "module_path": "github.com/faustbrian/go-identity/otp",
+      "go_version": "1.27.0",
+      "packages": [
+        {
+          "module_directory": "otp",
+          "directory": ".",
+          "name": "otp",
+          "import_path": "github.com/faustbrian/go-identity/otp",
+          "kind": "public",
+          "production": true,
+          "executable": true,
+          "coverage_required": true,
+          "build_required": true,
+          "build_tags": []
+        }
+      ],
+      "purpose": "Purpose-bound OTP profiles, generation, keyed digests, explicit authorization continuations and server-owned attempt preparation; durable workflows in development.",
+      "lifecycle": "experimental",
+      "kind": "public library",
+      "releasable": true,
+      "family": "service-edge",
+      "version": "0.0.0",
+      "tag_prefix": "otp/v",
+      "owned_dependencies": [
+        "github.com/faustbrian/go-authentication",
+        "github.com/faustbrian/go-authorization",
+        "github.com/faustbrian/go-identity",
+        "github.com/faustbrian/go-identity/session"
+      ],
+      "reverse_owned_dependencies": [],
+      "external_runtime_dependencies": [],
+      "required_services": [],
+      "build_tags": [],
+      "test_tags": [],
+      "interoperability_tools": [],
+      "specifications": [],
+      "conformance_corpora": [],
+      "family_label": "Service Edge",
+      "family_description": "Request-edge policy, identity, access decisions, routing, middleware, and process lifecycle.",
+      "family_order": 2,
+      "gates": {
+        "api_compatibility": false,
+        "benchmarks": false,
+        "conformance": false,
+        "coverage": false,
+        "documentation": false,
+        "fuzz": false,
+        "interoperability": false,
+        "lint": false,
+        "mutation": false,
+        "race": false,
+        "security": false,
+        "tests": false
+      },
+      "goal_status": "in-progress",
+      "goal_files": [],
+      "goal_evidence": [],
+      "provenance": [],
+      "cohesion": {
+        "family": "service-edge",
+        "secondary_capabilities": [
+          "identity-and-access"
+        ],
+        "responsibility": "Purpose-bound OTP profiles, generation, keyed digests, explicit authorization continuations and server-owned attempt preparation; durable workflows in development.",
+        "non_goals": [
+          "Claim unimplemented profiles, published releases, or complete identity-platform qualification.",
+          "Provide user interfaces or a vendor-owned authentication engine."
+        ],
+        "public_package_identifier": "otp",
+        "primary_entry_packages": [
+          "github.com/faustbrian/go-identity/otp"
+        ],
+        "package_selection": {
+          "github.com/faustbrian/go-identity/otp": "Experimental Purpose-bound OTP profiles, generation, keyed digests, explicit authorization continuations and server-owned attempt preparation; durable workflows in development. Use only documented selected profiles; full qualification is pending."
+        },
+        "lifecycle_status": "active",
+        "maturity": "experimental",
+        "construction_styles": [
+          "new-config",
+          "plain-function",
+          "validated-value"
+        ],
+        "lifecycle_styles": [
+          "stateless"
+        ],
+        "ownership": {
+          "configuration": "caller",
+          "mutable_inputs": [
+            "borrow",
+            "copy",
+            "transfer"
+          ],
+          "runtime_resources": "none",
+          "background_work": "none"
+        },
+        "optional_owned_dependencies": [],
+        "adapters": [],
+        "companions": [],
+        "supported_go": {
+          "minimum": "1.27.0",
+          "tested": [
+            "1.27.2"
+          ]
+        },
+        "supported_platforms": [
+          "portable-go"
+        ],
+        "supported_backends": [],
+        "supported_protocols": [],
+        "documentation": {
+          "readme": "otp/README.md",
+          "api": "otp/README.md",
+          "adoption": "otp/README.md",
+          "security": "SECURITY.md",
+          "compatibility": null,
+          "performance": null,
+          "examples": "otp/README.md",
+          "faq": null,
+          "changelog": "otp/CHANGELOG.md",
+          "pkg_go_dev": "https://pkg.go.dev/github.com/faustbrian/go-identity/otp",
+          "ecosystem_index": "https://github.com/faustbrian/go-library-tools/blob/v2.1.2/docs/ecosystem/README.md"
+        },
+        "known_good_compatibility_sets": [],
+        "delivery": {
+          "implementation": "in-progress",
+          "hardening": "in-progress",
+          "release": "blocked"
+        }
+      }
+    },
+    {
+      "directory": "otp/postgres",
+      "module_path": "github.com/faustbrian/go-identity/otp/postgres",
+      "go_version": "1.27.0",
+      "packages": [
+        {
+          "module_directory": "otp/postgres",
+          "directory": ".",
+          "name": "postgres",
+          "import_path": "github.com/faustbrian/go-identity/otp/postgres",
+          "kind": "public",
+          "production": true,
+          "executable": true,
+          "coverage_required": true,
+          "build_required": true,
+          "build_tags": []
+        }
+      ],
+      "purpose": "Public native OTP Send composition, atomic challenge/delivery issuance and suppression; remaining consuming workflows and release verification in development.",
+      "lifecycle": "experimental",
+      "kind": "public library",
+      "releasable": true,
+      "family": "persistence-and-durability",
+      "version": "0.0.0",
+      "tag_prefix": "otp/postgres/v",
+      "owned_dependencies": [
+        "github.com/faustbrian/go-audit",
+        "github.com/faustbrian/go-audit/postgres",
+        "github.com/faustbrian/go-authentication",
+        "github.com/faustbrian/go-authorization",
+        "github.com/faustbrian/go-identity",
+        "github.com/faustbrian/go-identity/delivery",
+        "github.com/faustbrian/go-identity/delivery/postgres",
+        "github.com/faustbrian/go-identity/otp",
+        "github.com/faustbrian/go-identity/postgres",
+        "github.com/faustbrian/go-identity/risk",
+        "github.com/faustbrian/go-identity/session",
+        "github.com/faustbrian/go-identity/session/postgres",
+        "github.com/faustbrian/go-migrations/v3",
+        "github.com/faustbrian/go-postgres",
+        "github.com/faustbrian/go-secret-envelope",
+        "github.com/faustbrian/go-transactional-outbox/v2/postgres/identity"
+      ],
+      "reverse_owned_dependencies": [],
+      "external_runtime_dependencies": [
+        "postgresql"
+      ],
+      "required_services": [
+        "postgresql"
+      ],
+      "build_tags": [],
+      "test_tags": [
+        "integration"
+      ],
+      "interoperability_tools": [],
+      "specifications": [],
+      "conformance_corpora": [],
+      "family_label": "Persistence and Durability",
+      "family_description": "Storage adapters, transactions, durable state, and persistence ownership.",
+      "family_order": 4,
+      "gates": {
+        "api_compatibility": false,
+        "benchmarks": false,
+        "conformance": false,
+        "coverage": false,
+        "documentation": false,
+        "fuzz": false,
+        "interoperability": false,
+        "lint": false,
+        "mutation": false,
+        "race": false,
+        "security": false,
+        "tests": false
+      },
+      "goal_status": "in-progress",
+      "goal_files": [],
+      "goal_evidence": [],
+      "provenance": [],
+      "cohesion": {
+        "family": "persistence-and-durability",
+        "secondary_capabilities": [
+          "identity-and-access"
+        ],
+        "responsibility": "Public native OTP Send composition, atomic challenge/delivery issuance and suppression; remaining consuming workflows and release verification in development.",
+        "non_goals": [
+          "Claim unimplemented profiles, published releases, or complete identity-platform qualification.",
+          "Provide user interfaces or a vendor-owned authentication engine."
+        ],
+        "public_package_identifier": "postgres",
+        "primary_entry_packages": [
+          "github.com/faustbrian/go-identity/otp/postgres"
+        ],
+        "package_selection": {
+          "github.com/faustbrian/go-identity/otp/postgres": "Experimental Public native OTP Send composition, atomic challenge/delivery issuance and suppression; remaining consuming workflows and release verification in development. Use only documented selected profiles; full qualification is pending."
+        },
+        "lifecycle_status": "active",
+        "maturity": "experimental",
+        "construction_styles": [
+          "new-config",
+          "plain-function",
+          "validated-value"
+        ],
+        "lifecycle_styles": [
+          "stateless"
+        ],
+        "ownership": {
+          "configuration": "caller",
+          "mutable_inputs": [
+            "borrow",
+            "copy",
+            "transfer"
+          ],
+          "runtime_resources": "caller",
+          "background_work": "none"
+        },
+        "optional_owned_dependencies": [],
+        "adapters": [],
+        "companions": [],
+        "supported_go": {
+          "minimum": "1.27.0",
+          "tested": [
+            "1.27.2"
+          ]
+        },
+        "supported_platforms": [
+          "portable-go"
+        ],
+        "supported_backends": [
+          "postgresql"
+        ],
+        "supported_protocols": [],
+        "documentation": {
+          "readme": "otp/postgres/README.md",
+          "api": "otp/postgres/README.md",
+          "adoption": "otp/postgres/README.md",
+          "security": "SECURITY.md",
+          "compatibility": null,
+          "performance": null,
+          "examples": "otp/postgres/README.md",
+          "faq": null,
+          "changelog": "otp/postgres/CHANGELOG.md",
+          "pkg_go_dev": "https://pkg.go.dev/github.com/faustbrian/go-identity/otp/postgres",
+          "ecosystem_index": "https://github.com/faustbrian/go-library-tools/blob/v2.1.2/docs/ecosystem/README.md"
+        },
+        "known_good_compatibility_sets": [],
+        "delivery": {
+          "implementation": "in-progress",
+          "hardening": "in-progress",
+          "release": "blocked"
+        }
+      }
+    },
+    {
+      "directory": "password",
+      "module_path": "github.com/faustbrian/go-identity/password",
+      "go_version": "1.27.0",
+      "packages": [
+        {
+          "module_directory": "password",
+          "directory": ".",
+          "name": "password",
+          "import_path": "github.com/faustbrian/go-identity/password",
+          "kind": "public",
+          "production": true,
+          "executable": true,
+          "coverage_required": true,
+          "build_required": true,
+          "build_tags": []
+        }
+      ],
+      "purpose": "Explicit password registration input policy; complete credential workflows in development.",
+      "lifecycle": "experimental",
+      "kind": "public library",
+      "releasable": true,
+      "family": "service-edge",
+      "version": "0.0.0",
+      "tag_prefix": "password/v",
+      "owned_dependencies": [
+        "github.com/faustbrian/go-authentication",
+        "github.com/faustbrian/go-authorization",
+        "github.com/faustbrian/go-identity",
+        "github.com/faustbrian/go-identity/risk",
+        "github.com/faustbrian/go-identity/session",
+        "github.com/faustbrian/go-identifier",
+        "github.com/faustbrian/go-password"
+      ],
+      "reverse_owned_dependencies": [],
+      "external_runtime_dependencies": [],
+      "required_services": [],
+      "build_tags": [],
+      "test_tags": [],
+      "interoperability_tools": [],
+      "specifications": [],
+      "conformance_corpora": [],
+      "family_label": "Service Edge",
+      "family_description": "Request-edge policy, identity, access decisions, routing, middleware, and process lifecycle.",
+      "family_order": 2,
+      "gates": {
+        "api_compatibility": false,
+        "benchmarks": false,
+        "conformance": false,
+        "coverage": false,
+        "documentation": false,
+        "fuzz": false,
+        "interoperability": false,
+        "lint": false,
+        "mutation": false,
+        "race": false,
+        "security": false,
+        "tests": false
+      },
+      "goal_status": "in-progress",
+      "goal_files": [],
+      "goal_evidence": [],
+      "provenance": [],
+      "cohesion": {
+        "family": "service-edge",
+        "secondary_capabilities": [
+          "identity-and-access"
+        ],
+        "responsibility": "Explicit password registration input policy; complete credential workflows in development.",
+        "non_goals": [
+          "Claim unimplemented profiles, published releases, or complete identity-platform qualification.",
+          "Provide user interfaces or a vendor-owned authentication engine."
+        ],
+        "public_package_identifier": "password",
+        "primary_entry_packages": [
+          "github.com/faustbrian/go-identity/password"
+        ],
+        "package_selection": {
+          "github.com/faustbrian/go-identity/password": "Experimental Explicit password registration input policy; complete credential workflows in development. Use only documented selected profiles; full qualification is pending."
+        },
+        "lifecycle_status": "active",
+        "maturity": "experimental",
+        "construction_styles": [
+          "new-config",
+          "plain-function",
+          "validated-value"
+        ],
+        "lifecycle_styles": [
+          "stateless"
+        ],
+        "ownership": {
+          "configuration": "caller",
+          "mutable_inputs": [
+            "borrow",
+            "copy",
+            "transfer"
+          ],
+          "runtime_resources": "none",
+          "background_work": "none"
+        },
+        "optional_owned_dependencies": [],
+        "adapters": [],
+        "companions": [],
+        "supported_go": {
+          "minimum": "1.27.0",
+          "tested": [
+            "1.27.2"
+          ]
+        },
+        "supported_platforms": [
+          "portable-go"
+        ],
+        "supported_backends": [],
+        "supported_protocols": [],
+        "documentation": {
+          "readme": "password/README.md",
+          "api": "password/README.md",
+          "adoption": "password/README.md",
+          "security": "SECURITY.md",
+          "compatibility": null,
+          "performance": null,
+          "examples": "password/README.md",
+          "faq": null,
+          "changelog": "password/CHANGELOG.md",
+          "pkg_go_dev": "https://pkg.go.dev/github.com/faustbrian/go-identity/password",
+          "ecosystem_index": "https://github.com/faustbrian/go-library-tools/blob/v2.1.2/docs/ecosystem/README.md"
+        },
+        "known_good_compatibility_sets": [],
+        "delivery": {
+          "implementation": "in-progress",
+          "hardening": "in-progress",
+          "release": "blocked"
+        }
+      }
+    },
+    {
+      "directory": "password/postgres",
+      "module_path": "github.com/faustbrian/go-identity/password/postgres",
+      "go_version": "1.27.0",
+      "packages": [
+        {
+          "module_directory": "password/postgres",
+          "directory": ".",
+          "name": "passwordpostgres",
+          "import_path": "github.com/faustbrian/go-identity/password/postgres",
+          "kind": "public",
+          "production": true,
+          "executable": true,
+          "coverage_required": true,
+          "build_required": true,
+          "build_tags": []
+        }
+      ],
+      "purpose": "Owned password material and consistent primary credential reads; coordinated lifecycle mutations in development.",
+      "lifecycle": "experimental",
+      "kind": "public library",
+      "releasable": true,
+      "family": "service-edge",
+      "version": "0.0.0",
+      "tag_prefix": "password/postgres/v",
+      "owned_dependencies": [
+        "github.com/faustbrian/go-identity",
+        "github.com/faustbrian/go-identity/http/email",
+        "github.com/faustbrian/go-identity/mfa/postgres",
+        "github.com/faustbrian/go-identity/password",
+        "github.com/faustbrian/go-identity/postgres",
+        "github.com/faustbrian/go-migrations/v3",
+        "github.com/faustbrian/go-password",
+        "github.com/faustbrian/go-postgres"
+      ],
+      "reverse_owned_dependencies": [],
+      "external_runtime_dependencies": [
+        "postgresql"
+      ],
+      "required_services": [
+        "postgresql"
+      ],
+      "build_tags": [],
+      "test_tags": [
+        "integration"
+      ],
+      "interoperability_tools": [],
+      "specifications": [],
+      "conformance_corpora": [],
+      "family_label": "Service Edge",
+      "family_description": "Request-edge policy, identity, access decisions, routing, middleware, and process lifecycle.",
+      "family_order": 2,
+      "gates": {
+        "api_compatibility": false,
+        "benchmarks": false,
+        "conformance": false,
+        "coverage": false,
+        "documentation": false,
+        "fuzz": false,
+        "interoperability": false,
+        "lint": false,
+        "mutation": false,
+        "race": false,
+        "security": false,
+        "tests": false
+      },
+      "goal_status": "in-progress",
+      "goal_files": [],
+      "goal_evidence": [],
+      "provenance": [],
+      "cohesion": {
+        "family": "service-edge",
+        "secondary_capabilities": [
+          "identity-and-access"
+        ],
+        "responsibility": "Owned password material and consistent primary credential reads; coordinated lifecycle mutations in development.",
+        "non_goals": [
+          "Claim unimplemented profiles, published releases, or complete identity-platform qualification.",
+          "Provide user interfaces or a vendor-owned authentication engine."
+        ],
+        "public_package_identifier": "passwordpostgres",
+        "primary_entry_packages": [
+          "github.com/faustbrian/go-identity/password/postgres"
+        ],
+        "package_selection": {
+          "github.com/faustbrian/go-identity/password/postgres": "Experimental Owned password material and consistent primary credential reads; coordinated lifecycle mutations in development. Use only documented selected profiles; full qualification is pending."
+        },
+        "lifecycle_status": "active",
+        "maturity": "experimental",
+        "construction_styles": [
+          "new-config",
+          "plain-function",
+          "validated-value"
+        ],
+        "lifecycle_styles": [
+          "stateless"
+        ],
+        "ownership": {
+          "configuration": "caller",
+          "mutable_inputs": [
+            "borrow",
+            "copy",
+            "transfer"
+          ],
+          "runtime_resources": "caller",
+          "background_work": "none"
+        },
+        "optional_owned_dependencies": [],
+        "adapters": [],
+        "companions": [],
+        "supported_go": {
+          "minimum": "1.27.0",
+          "tested": [
+            "1.27.2"
+          ]
+        },
+        "supported_platforms": [
+          "portable-go"
+        ],
+        "supported_backends": [
+          "postgresql"
+        ],
+        "supported_protocols": [],
+        "documentation": {
+          "readme": "password/postgres/README.md",
+          "api": "password/postgres/README.md",
+          "adoption": "password/postgres/README.md",
+          "security": "SECURITY.md",
+          "compatibility": null,
+          "performance": null,
+          "examples": "password/postgres/README.md",
+          "faq": null,
+          "changelog": "password/postgres/CHANGELOG.md",
+          "pkg_go_dev": "https://pkg.go.dev/github.com/faustbrian/go-identity/password/postgres",
+          "ecosystem_index": "https://github.com/faustbrian/go-library-tools/blob/v2.1.2/docs/ecosystem/README.md"
+        },
+        "known_good_compatibility_sets": [],
+        "delivery": {
+          "implementation": "in-progress",
+          "hardening": "in-progress",
+          "release": "blocked"
+        }
+      }
+    },
+    {
+      "directory": "postgres",
+      "module_path": "github.com/faustbrian/go-identity/postgres",
+      "go_version": "1.27.0",
+      "packages": [
+        {
+          "module_directory": "postgres",
+          "directory": ".",
+          "name": "postgres",
+          "import_path": "github.com/faustbrian/go-identity/postgres",
+          "kind": "public",
+          "production": true,
+          "executable": true,
+          "coverage_required": true,
+          "build_required": true,
+          "build_tags": []
+        }
+      ],
+      "purpose": "Authoritative PostgreSQL identity persistence.",
+      "lifecycle": "experimental",
+      "kind": "public library",
+      "releasable": true,
+      "family": "service-edge",
+      "version": "0.0.0",
+      "tag_prefix": "postgres/v",
+      "owned_dependencies": [
+        "github.com/faustbrian/go-audit",
+        "github.com/faustbrian/go-authorization",
+        "github.com/faustbrian/go-capability",
+        "github.com/faustbrian/go-clock",
+        "github.com/faustbrian/go-identity",
+        "github.com/faustbrian/go-migrations/v3",
+        "github.com/faustbrian/go-postgres"
+      ],
+      "reverse_owned_dependencies": [],
+      "external_runtime_dependencies": [
+        "postgresql"
+      ],
+      "required_services": [
+        "postgresql"
+      ],
+      "build_tags": [],
+      "test_tags": [
+        "integration"
+      ],
+      "interoperability_tools": [],
+      "specifications": [],
+      "conformance_corpora": [],
+      "family_label": "Service Edge",
+      "family_description": "Request-edge policy, identity, access decisions, routing, middleware, and process lifecycle.",
+      "family_order": 2,
+      "gates": {
+        "api_compatibility": false,
+        "benchmarks": false,
+        "conformance": false,
+        "coverage": false,
+        "documentation": false,
+        "fuzz": false,
+        "interoperability": false,
+        "lint": false,
+        "mutation": false,
+        "race": false,
+        "security": false,
+        "tests": false
+      },
+      "goal_status": "in-progress",
+      "goal_files": [],
+      "goal_evidence": [],
+      "provenance": [],
+      "cohesion": {
+        "family": "service-edge",
+        "secondary_capabilities": [
+          "identity-and-access"
+        ],
+        "responsibility": "Authoritative PostgreSQL identity persistence.",
+        "non_goals": [
+          "Claim unimplemented profiles, published releases, or complete identity-platform qualification.",
+          "Provide user interfaces or a vendor-owned authentication engine."
+        ],
+        "public_package_identifier": "postgres",
+        "primary_entry_packages": [
+          "github.com/faustbrian/go-identity/postgres"
+        ],
+        "package_selection": {
+          "github.com/faustbrian/go-identity/postgres": "Experimental Authoritative PostgreSQL identity persistence. Use only documented selected profiles; full qualification is pending."
+        },
+        "lifecycle_status": "active",
+        "maturity": "experimental",
+        "construction_styles": [
+          "new-config",
+          "plain-function",
+          "validated-value"
+        ],
+        "lifecycle_styles": [
+          "stateless"
+        ],
+        "ownership": {
+          "configuration": "caller",
+          "mutable_inputs": [
+            "borrow",
+            "copy",
+            "transfer"
+          ],
+          "runtime_resources": "caller",
+          "background_work": "none"
+        },
+        "optional_owned_dependencies": [],
+        "adapters": [],
+        "companions": [],
+        "supported_go": {
+          "minimum": "1.27.0",
+          "tested": [
+            "1.27.2"
+          ]
+        },
+        "supported_platforms": [
+          "portable-go"
+        ],
+        "supported_backends": [
+          "postgresql"
+        ],
+        "supported_protocols": [],
+        "documentation": {
+          "readme": "postgres/README.md",
+          "api": "postgres/README.md",
+          "adoption": "postgres/README.md",
+          "security": "SECURITY.md",
+          "compatibility": null,
+          "performance": null,
+          "examples": "postgres/README.md",
+          "faq": null,
+          "changelog": "postgres/CHANGELOG.md",
+          "pkg_go_dev": "https://pkg.go.dev/github.com/faustbrian/go-identity/postgres",
+          "ecosystem_index": "https://github.com/faustbrian/go-library-tools/blob/v2.1.2/docs/ecosystem/README.md"
+        },
+        "known_good_compatibility_sets": [],
+        "delivery": {
+          "implementation": "in-progress",
+          "hardening": "in-progress",
+          "release": "blocked"
+        }
+      }
+    },
+    {
+      "directory": "reference",
+      "module_path": "github.com/faustbrian/go-identity/reference",
+      "go_version": "1.27.0",
+      "packages": [
+        {
+          "module_directory": "reference",
+          "directory": ".",
+          "name": "reference",
+          "import_path": "github.com/faustbrian/go-identity/reference",
+          "kind": "public",
+          "production": true,
+          "executable": true,
+          "coverage_required": true,
+          "build_required": true,
+          "build_tags": []
+        },
+        {
+          "module_directory": "reference",
+          "directory": "integration/password",
+          "name": "passwordintegration",
+          "import_path": "github.com/faustbrian/go-identity/reference/integration/password",
+          "kind": "test support",
+          "production": false,
+          "executable": true,
+          "coverage_required": false,
+          "build_required": true,
+          "build_tags": [
+            "integration"
+          ]
+        }
+      ],
+      "purpose": "Sealed concrete PostgreSQL/Valkey recovery and optional native pre-auth/OTP Send/Signin/delivery composition; full reference server and lifecycle in development.",
+      "lifecycle": "experimental",
+      "kind": "public library",
+      "releasable": true,
+      "family": "service-edge",
+      "version": "0.0.0",
+      "tag_prefix": "reference/v",
+      "owned_dependencies": [
+        "github.com/faustbrian/go-audit",
+        "github.com/faustbrian/go-audit/postgres",
+        "github.com/faustbrian/go-authentication",
+        "github.com/faustbrian/go-clock",
+        "github.com/faustbrian/go-http-client",
+        "github.com/faustbrian/go-identity",
+        "github.com/faustbrian/go-identity/delivery",
+        "github.com/faustbrian/go-identity/delivery/postgres",
+        "github.com/faustbrian/go-identity/http/mfa",
+        "github.com/faustbrian/go-identity/otp",
+        "github.com/faustbrian/go-identity/otp/postgres",
+        "github.com/faustbrian/go-identity/postgres",
+        "github.com/faustbrian/go-identity/risk",
+        "github.com/faustbrian/go-identity/risk/hibp",
+        "github.com/faustbrian/go-identity/risk/postgres",
+        "github.com/faustbrian/go-identity/risk/valkey",
+        "github.com/faustbrian/go-identity/session",
+        "github.com/faustbrian/go-identity/session/postgres",
+        "github.com/faustbrian/go-migrations/v3",
+        "github.com/faustbrian/go-openapi/v2",
+        "github.com/faustbrian/go-password",
+        "github.com/faustbrian/go-postgres",
+        "github.com/faustbrian/go-secret-envelope"
+      ],
+      "reverse_owned_dependencies": [],
+      "external_runtime_dependencies": [
+        "postgresql",
+        "valkey"
+      ],
+      "required_services": [
+        "postgresql",
+        "valkey"
+      ],
+      "build_tags": [],
+      "test_tags": [
+        "integration"
+      ],
+      "interoperability_tools": [],
+      "specifications": [],
+      "conformance_corpora": [],
+      "family_label": "Service Edge",
+      "family_description": "Request-edge policy, identity, access decisions, routing, middleware, and process lifecycle.",
+      "family_order": 2,
+      "gates": {
+        "api_compatibility": false,
+        "benchmarks": false,
+        "conformance": false,
+        "coverage": false,
+        "documentation": false,
+        "fuzz": false,
+        "interoperability": false,
+        "lint": false,
+        "mutation": false,
+        "race": false,
+        "security": false,
+        "tests": false
+      },
+      "goal_status": "in-progress",
+      "goal_files": [],
+      "goal_evidence": [],
+      "provenance": [],
+      "cohesion": {
+        "family": "service-edge",
+        "secondary_capabilities": [
+          "identity-and-access"
+        ],
+        "responsibility": "Sealed concrete PostgreSQL/Valkey recovery and optional native pre-auth/OTP Send/Signin/delivery composition; full reference server and lifecycle in development.",
+        "non_goals": [
+          "Claim unimplemented profiles, published releases, or complete identity-platform qualification.",
+          "Provide user interfaces or a vendor-owned authentication engine."
+        ],
+        "public_package_identifier": "reference",
+        "primary_entry_packages": [
+          "github.com/faustbrian/go-identity/reference"
+        ],
+        "package_selection": {
+          "github.com/faustbrian/go-identity/reference": "Experimental Sealed concrete PostgreSQL/Valkey recovery and optional native pre-auth/OTP Send/Signin/delivery composition; full reference server and lifecycle in development. Use only documented selected profiles; full qualification is pending."
+        },
+        "lifecycle_status": "active",
+        "maturity": "experimental",
+        "construction_styles": [
+          "new-config",
+          "plain-function",
+          "validated-value"
+        ],
+        "lifecycle_styles": [
+          "close"
+        ],
+        "ownership": {
+          "configuration": "caller",
+          "mutable_inputs": [
+            "borrow",
+            "copy",
+            "transfer"
+          ],
+          "runtime_resources": "package",
+          "background_work": "none"
+        },
+        "optional_owned_dependencies": [],
+        "adapters": [],
+        "companions": [],
+        "supported_go": {
+          "minimum": "1.27.0",
+          "tested": [
+            "1.27.2"
+          ]
+        },
+        "supported_platforms": [
+          "portable-go"
+        ],
+        "supported_backends": [
+          "postgresql",
+          "valkey"
+        ],
+        "supported_protocols": [],
+        "documentation": {
+          "readme": "reference/README.md",
+          "api": "reference/README.md",
+          "adoption": "reference/README.md",
+          "security": "SECURITY.md",
+          "compatibility": null,
+          "performance": null,
+          "examples": "reference/README.md",
+          "faq": null,
+          "changelog": "reference/CHANGELOG.md",
+          "pkg_go_dev": "https://pkg.go.dev/github.com/faustbrian/go-identity/reference",
+          "ecosystem_index": "https://github.com/faustbrian/go-library-tools/blob/v2.1.2/docs/ecosystem/README.md"
+        },
+        "known_good_compatibility_sets": [],
+        "delivery": {
+          "implementation": "in-progress",
+          "hardening": "in-progress",
+          "release": "blocked"
+        }
+      }
+    },
+    {
+      "directory": "risk",
+      "module_path": "github.com/faustbrian/go-identity/risk",
+      "go_version": "1.27.0",
+      "packages": [
+        {
+          "module_directory": "risk",
+          "directory": ".",
+          "name": "risk",
+          "import_path": "github.com/faustbrian/go-identity/risk",
+          "kind": "public",
+          "production": true,
+          "executable": true,
+          "coverage_required": true,
+          "build_required": true,
+          "build_tags": []
+        },
+        {
+          "module_directory": "risk",
+          "directory": "internal/velocity",
+          "name": "velocity",
+          "import_path": "github.com/faustbrian/go-identity/risk/internal/velocity",
+          "kind": "internal",
+          "production": true,
+          "executable": true,
+          "coverage_required": true,
+          "build_required": true,
+          "build_tags": []
+        }
+      ],
+      "purpose": "Canonical risk policy admission and scoped deterministic assessment; durable service and evidence issuance in development.",
+      "lifecycle": "experimental",
+      "kind": "public library",
+      "releasable": true,
+      "family": "service-edge",
+      "version": "0.0.0",
+      "tag_prefix": "risk/v",
+      "owned_dependencies": [],
+      "reverse_owned_dependencies": [],
+      "external_runtime_dependencies": [],
+      "required_services": [],
+      "build_tags": [],
+      "test_tags": [],
+      "interoperability_tools": [],
+      "specifications": [],
+      "conformance_corpora": [],
+      "family_label": "Service Edge",
+      "family_description": "Request-edge policy, identity, access decisions, routing, middleware, and process lifecycle.",
+      "family_order": 2,
+      "gates": {
+        "api_compatibility": false,
+        "benchmarks": false,
+        "conformance": false,
+        "coverage": false,
+        "documentation": false,
+        "fuzz": false,
+        "interoperability": false,
+        "lint": false,
+        "mutation": false,
+        "race": false,
+        "security": false,
+        "tests": false
+      },
+      "goal_status": "in-progress",
+      "goal_files": [],
+      "goal_evidence": [],
+      "provenance": [],
+      "cohesion": {
+        "family": "service-edge",
+        "secondary_capabilities": [
+          "identity-and-access"
+        ],
+        "responsibility": "Canonical risk policy admission and scoped deterministic assessment; durable service and evidence issuance in development.",
+        "non_goals": [
+          "Claim unimplemented profiles, published releases, or complete identity-platform qualification.",
+          "Provide user interfaces or a vendor-owned authentication engine."
+        ],
+        "public_package_identifier": "risk",
+        "primary_entry_packages": [
+          "github.com/faustbrian/go-identity/risk"
+        ],
+        "package_selection": {
+          "github.com/faustbrian/go-identity/risk": "Experimental Canonical risk policy admission and scoped deterministic assessment; durable service and evidence issuance in development. Use only documented selected profiles; full qualification is pending."
+        },
+        "lifecycle_status": "active",
+        "maturity": "experimental",
+        "construction_styles": [
+          "new-config",
+          "plain-function",
+          "validated-value"
+        ],
+        "lifecycle_styles": [
+          "stateless"
+        ],
+        "ownership": {
+          "configuration": "caller",
+          "mutable_inputs": [
+            "borrow",
+            "copy",
+            "transfer"
+          ],
+          "runtime_resources": "none",
+          "background_work": "none"
+        },
+        "optional_owned_dependencies": [],
+        "adapters": [],
+        "companions": [],
+        "supported_go": {
+          "minimum": "1.27.0",
+          "tested": [
+            "1.27.2"
+          ]
+        },
+        "supported_platforms": [
+          "portable-go"
+        ],
+        "supported_backends": [],
+        "supported_protocols": [],
+        "documentation": {
+          "readme": "risk/README.md",
+          "api": "risk/README.md",
+          "adoption": "risk/README.md",
+          "security": "SECURITY.md",
+          "compatibility": null,
+          "performance": null,
+          "examples": "risk/README.md",
+          "faq": null,
+          "changelog": "risk/CHANGELOG.md",
+          "pkg_go_dev": "https://pkg.go.dev/github.com/faustbrian/go-identity/risk",
+          "ecosystem_index": "https://github.com/faustbrian/go-library-tools/blob/v2.1.2/docs/ecosystem/README.md"
+        },
+        "known_good_compatibility_sets": [],
+        "delivery": {
+          "implementation": "in-progress",
+          "hardening": "in-progress",
+          "release": "blocked"
+        }
+      }
+    },
+    {
+      "directory": "risk/hibp",
+      "module_path": "github.com/faustbrian/go-identity/risk/hibp",
+      "go_version": "1.27.0",
+      "packages": [
+        {
+          "module_directory": "risk/hibp",
+          "directory": ".",
+          "name": "hibp",
+          "import_path": "github.com/faustbrian/go-identity/risk/hibp",
+          "kind": "public",
+          "production": true,
+          "executable": true,
+          "coverage_required": true,
+          "build_required": true,
+          "build_tags": []
+        }
+      ],
+      "purpose": "Scoped privacy-preserving Pwned Passwords checking with bounded transport, cache and cancellation; risk integration in development.",
+      "lifecycle": "experimental",
+      "kind": "public library",
+      "releasable": true,
+      "family": "service-edge",
+      "version": "0.0.0",
+      "tag_prefix": "risk/hibp/v",
+      "owned_dependencies": [
+        "github.com/faustbrian/go-audit",
+        "github.com/faustbrian/go-clock",
+        "github.com/faustbrian/go-http-client",
+        "github.com/faustbrian/go-identity",
+        "github.com/faustbrian/go-identity/risk",
+        "github.com/faustbrian/go-password"
+      ],
+      "reverse_owned_dependencies": [],
+      "external_runtime_dependencies": [],
+      "required_services": [],
+      "build_tags": [],
+      "test_tags": [],
+      "interoperability_tools": [],
+      "specifications": [],
+      "conformance_corpora": [],
+      "family_label": "Service Edge",
+      "family_description": "Request-edge policy, identity, access decisions, routing, middleware, and process lifecycle.",
+      "family_order": 2,
+      "gates": {
+        "api_compatibility": false,
+        "benchmarks": false,
+        "conformance": false,
+        "coverage": false,
+        "documentation": false,
+        "fuzz": false,
+        "interoperability": false,
+        "lint": false,
+        "mutation": false,
+        "race": false,
+        "security": false,
+        "tests": false
+      },
+      "goal_status": "in-progress",
+      "goal_files": [],
+      "goal_evidence": [],
+      "provenance": [],
+      "cohesion": {
+        "family": "service-edge",
+        "secondary_capabilities": [
+          "identity-and-access"
+        ],
+        "responsibility": "Scoped privacy-preserving Pwned Passwords checking with bounded transport, cache and cancellation; risk integration in development.",
+        "non_goals": [
+          "Claim unimplemented profiles, published releases, or complete identity-platform qualification.",
+          "Provide user interfaces or a vendor-owned authentication engine."
+        ],
+        "public_package_identifier": "hibp",
+        "primary_entry_packages": [
+          "github.com/faustbrian/go-identity/risk/hibp"
+        ],
+        "package_selection": {
+          "github.com/faustbrian/go-identity/risk/hibp": "Experimental Scoped privacy-preserving Pwned Passwords checking with bounded transport, cache and cancellation; risk integration in development. Use only documented selected profiles; full qualification is pending."
+        },
+        "lifecycle_status": "active",
+        "maturity": "experimental",
+        "construction_styles": [
+          "new-config",
+          "plain-function",
+          "validated-value"
+        ],
+        "lifecycle_styles": [
+          "stateless"
+        ],
+        "ownership": {
+          "configuration": "caller",
+          "mutable_inputs": [
+            "borrow",
+            "copy",
+            "transfer"
+          ],
+          "runtime_resources": "none",
+          "background_work": "none"
+        },
+        "optional_owned_dependencies": [],
+        "adapters": [],
+        "companions": [],
+        "supported_go": {
+          "minimum": "1.27.0",
+          "tested": [
+            "1.27.2"
+          ]
+        },
+        "supported_platforms": [
+          "portable-go"
+        ],
+        "supported_backends": [],
+        "supported_protocols": [],
+        "documentation": {
+          "readme": "risk/hibp/README.md",
+          "api": "risk/hibp/README.md",
+          "adoption": "risk/hibp/README.md",
+          "security": "SECURITY.md",
+          "compatibility": null,
+          "performance": null,
+          "examples": "risk/hibp/README.md",
+          "faq": null,
+          "changelog": "risk/hibp/CHANGELOG.md",
+          "pkg_go_dev": "https://pkg.go.dev/github.com/faustbrian/go-identity/risk/hibp",
+          "ecosystem_index": "https://github.com/faustbrian/go-library-tools/blob/v2.1.2/docs/ecosystem/README.md"
+        },
+        "known_good_compatibility_sets": [],
+        "delivery": {
+          "implementation": "in-progress",
+          "hardening": "in-progress",
+          "release": "blocked"
+        }
+      }
+    },
+    {
+      "directory": "risk/postgres",
+      "module_path": "github.com/faustbrian/go-identity/risk/postgres",
+      "go_version": "1.27.0",
+      "packages": [
+        {
+          "module_directory": "risk/postgres",
+          "directory": ".",
+          "name": "postgres",
+          "import_path": "github.com/faustbrian/go-identity/risk/postgres",
+          "kind": "public",
+          "production": true,
+          "executable": true,
+          "coverage_required": true,
+          "build_required": true,
+          "build_tags": []
+        }
+      ],
+      "purpose": "Native signed risk evidence issuance with shared-Work atomicity and encrypted response custody; complete risk service in development.",
+      "lifecycle": "experimental",
+      "kind": "public library",
+      "releasable": true,
+      "family": "service-edge",
+      "version": "0.0.0",
+      "tag_prefix": "risk/postgres/v",
+      "owned_dependencies": [
+        "github.com/faustbrian/go-audit",
+        "github.com/faustbrian/go-authorization",
+        "github.com/faustbrian/go-clock",
+        "github.com/faustbrian/go-identity",
+        "github.com/faustbrian/go-identity/postgres",
+        "github.com/faustbrian/go-identity/risk",
+        "github.com/faustbrian/go-migrations/v3",
+        "github.com/faustbrian/go-postgres",
+        "github.com/faustbrian/go-secret-envelope"
+      ],
+      "reverse_owned_dependencies": [],
+      "external_runtime_dependencies": [
+        "postgresql"
+      ],
+      "required_services": [
+        "postgresql"
+      ],
+      "build_tags": [],
+      "test_tags": [
+        "integration"
+      ],
+      "interoperability_tools": [],
+      "specifications": [],
+      "conformance_corpora": [],
+      "family_label": "Service Edge",
+      "family_description": "Request-edge policy, identity, access decisions, routing, middleware, and process lifecycle.",
+      "family_order": 2,
+      "gates": {
+        "api_compatibility": false,
+        "benchmarks": false,
+        "conformance": false,
+        "coverage": false,
+        "documentation": false,
+        "fuzz": false,
+        "interoperability": false,
+        "lint": false,
+        "mutation": false,
+        "race": false,
+        "security": false,
+        "tests": false
+      },
+      "goal_status": "in-progress",
+      "goal_files": [],
+      "goal_evidence": [],
+      "provenance": [],
+      "cohesion": {
+        "family": "service-edge",
+        "secondary_capabilities": [
+          "identity-and-access"
+        ],
+        "responsibility": "Native signed risk evidence issuance with shared-Work atomicity and encrypted response custody; complete risk service in development.",
+        "non_goals": [
+          "Claim unimplemented profiles, published releases, or complete identity-platform qualification.",
+          "Provide user interfaces or a vendor-owned authentication engine."
+        ],
+        "public_package_identifier": "postgres",
+        "primary_entry_packages": [
+          "github.com/faustbrian/go-identity/risk/postgres"
+        ],
+        "package_selection": {
+          "github.com/faustbrian/go-identity/risk/postgres": "Experimental Native signed risk evidence issuance with shared-Work atomicity and encrypted response custody; complete risk service in development. Use only documented selected profiles; full qualification is pending."
+        },
+        "lifecycle_status": "active",
+        "maturity": "experimental",
+        "construction_styles": [
+          "new-config",
+          "plain-function",
+          "validated-value"
+        ],
+        "lifecycle_styles": [
+          "stateless"
+        ],
+        "ownership": {
+          "configuration": "caller",
+          "mutable_inputs": [
+            "borrow",
+            "copy",
+            "transfer"
+          ],
+          "runtime_resources": "caller",
+          "background_work": "none"
+        },
+        "optional_owned_dependencies": [],
+        "adapters": [],
+        "companions": [],
+        "supported_go": {
+          "minimum": "1.27.0",
+          "tested": [
+            "1.27.2"
+          ]
+        },
+        "supported_platforms": [
+          "portable-go"
+        ],
+        "supported_backends": [
+          "postgresql"
+        ],
+        "supported_protocols": [],
+        "documentation": {
+          "readme": "risk/postgres/README.md",
+          "api": "risk/postgres/README.md",
+          "adoption": "risk/postgres/README.md",
+          "security": "SECURITY.md",
+          "compatibility": null,
+          "performance": null,
+          "examples": "risk/postgres/README.md",
+          "faq": null,
+          "changelog": "risk/postgres/CHANGELOG.md",
+          "pkg_go_dev": "https://pkg.go.dev/github.com/faustbrian/go-identity/risk/postgres",
+          "ecosystem_index": "https://github.com/faustbrian/go-library-tools/blob/v2.1.2/docs/ecosystem/README.md"
+        },
+        "known_good_compatibility_sets": [],
+        "delivery": {
+          "implementation": "in-progress",
+          "hardening": "in-progress",
+          "release": "blocked"
+        }
+      }
+    },
+    {
+      "directory": "risk/valkey",
+      "module_path": "github.com/faustbrian/go-identity/risk/valkey",
+      "go_version": "1.27.0",
+      "packages": [
+        {
+          "module_directory": "risk/valkey",
+          "directory": ".",
+          "name": "valkey",
+          "import_path": "github.com/faustbrian/go-identity/risk/valkey",
+          "kind": "public",
+          "production": true,
+          "executable": true,
+          "coverage_required": true,
+          "build_required": true,
+          "build_tags": []
+        }
+      ],
+      "purpose": "Bounded native ephemeral risk command planning and reply validation; mutation and journal-fenced recovery in development.",
+      "lifecycle": "experimental",
+      "kind": "public library",
+      "releasable": true,
+      "family": "persistence-and-durability",
+      "version": "0.0.0",
+      "tag_prefix": "risk/valkey/v",
+      "owned_dependencies": [
+        "github.com/faustbrian/go-identity/risk"
+      ],
+      "reverse_owned_dependencies": [],
+      "external_runtime_dependencies": [
+        "valkey"
+      ],
+      "required_services": [
+        "valkey"
+      ],
+      "build_tags": [],
+      "test_tags": [
+        "integration"
+      ],
+      "interoperability_tools": [],
+      "specifications": [],
+      "conformance_corpora": [],
+      "family_label": "Persistence and Durability",
+      "family_description": "Storage adapters, transactions, durable state, and persistence ownership.",
+      "family_order": 4,
+      "gates": {
+        "api_compatibility": false,
+        "benchmarks": false,
+        "conformance": false,
+        "coverage": false,
+        "documentation": false,
+        "fuzz": false,
+        "interoperability": false,
+        "lint": false,
+        "mutation": false,
+        "race": false,
+        "security": false,
+        "tests": false
+      },
+      "goal_status": "in-progress",
+      "goal_files": [],
+      "goal_evidence": [],
+      "provenance": [],
+      "cohesion": {
+        "family": "persistence-and-durability",
+        "secondary_capabilities": [
+          "identity-and-access"
+        ],
+        "responsibility": "Bounded native ephemeral risk command planning and reply validation; mutation and journal-fenced recovery in development.",
+        "non_goals": [
+          "Claim unimplemented profiles, published releases, or complete identity-platform qualification.",
+          "Provide user interfaces or a vendor-owned authentication engine."
+        ],
+        "public_package_identifier": "valkey",
+        "primary_entry_packages": [
+          "github.com/faustbrian/go-identity/risk/valkey"
+        ],
+        "package_selection": {
+          "github.com/faustbrian/go-identity/risk/valkey": "Experimental Bounded native ephemeral risk command planning and reply validation; mutation and journal-fenced recovery in development. Use only documented selected profiles; full qualification is pending."
+        },
+        "lifecycle_status": "active",
+        "maturity": "experimental",
+        "construction_styles": [
+          "new-config",
+          "plain-function",
+          "validated-value"
+        ],
+        "lifecycle_styles": [
+          "close"
+        ],
+        "ownership": {
+          "configuration": "caller",
+          "mutable_inputs": [
+            "borrow",
+            "copy",
+            "transfer"
+          ],
+          "runtime_resources": "caller",
+          "background_work": "none"
+        },
+        "optional_owned_dependencies": [],
+        "adapters": [],
+        "companions": [],
+        "supported_go": {
+          "minimum": "1.27.0",
+          "tested": [
+            "1.27.2"
+          ]
+        },
+        "supported_platforms": [
+          "portable-go"
+        ],
+        "supported_backends": [
+          "valkey"
+        ],
+        "supported_protocols": [],
+        "documentation": {
+          "readme": "risk/valkey/README.md",
+          "api": "risk/valkey/README.md",
+          "adoption": "risk/valkey/README.md",
+          "security": "SECURITY.md",
+          "compatibility": null,
+          "performance": null,
+          "examples": "risk/valkey/README.md",
+          "faq": null,
+          "changelog": "risk/valkey/CHANGELOG.md",
+          "pkg_go_dev": "https://pkg.go.dev/github.com/faustbrian/go-identity/risk/valkey",
+          "ecosystem_index": "https://github.com/faustbrian/go-library-tools/blob/v2.1.2/docs/ecosystem/README.md"
+        },
+        "known_good_compatibility_sets": [],
+        "delivery": {
+          "implementation": "in-progress",
+          "hardening": "in-progress",
+          "release": "blocked"
+        }
+      }
+    },
+    {
+      "directory": "session",
+      "module_path": "github.com/faustbrian/go-identity/session",
+      "go_version": "1.27.0",
+      "packages": [
+        {
+          "module_directory": "session",
+          "directory": ".",
+          "name": "session",
+          "import_path": "github.com/faustbrian/go-identity/session",
+          "kind": "public",
+          "production": true,
+          "executable": true,
+          "coverage_required": true,
+          "build_required": true,
+          "build_tags": []
+        }
+      ],
+      "purpose": "Shared session lifetime and secure transport policy; issuance and storage in development.",
+      "lifecycle": "experimental",
+      "kind": "public library",
+      "releasable": true,
+      "family": "service-edge",
+      "version": "0.0.0",
+      "tag_prefix": "session/v",
+      "owned_dependencies": [
+        "github.com/faustbrian/go-authentication",
+        "github.com/faustbrian/go-authorization",
+        "github.com/faustbrian/go-identity"
+      ],
+      "reverse_owned_dependencies": [],
+      "external_runtime_dependencies": [],
+      "required_services": [],
+      "build_tags": [],
+      "test_tags": [],
+      "interoperability_tools": [],
+      "specifications": [],
+      "conformance_corpora": [],
+      "family_label": "Service Edge",
+      "family_description": "Request-edge policy, identity, access decisions, routing, middleware, and process lifecycle.",
+      "family_order": 2,
+      "gates": {
+        "api_compatibility": false,
+        "benchmarks": false,
+        "conformance": false,
+        "coverage": false,
+        "documentation": false,
+        "fuzz": false,
+        "interoperability": false,
+        "lint": false,
+        "mutation": false,
+        "race": false,
+        "security": false,
+        "tests": false
+      },
+      "goal_status": "in-progress",
+      "goal_files": [],
+      "goal_evidence": [],
+      "provenance": [],
+      "cohesion": {
+        "family": "service-edge",
+        "secondary_capabilities": [
+          "identity-and-access"
+        ],
+        "responsibility": "Shared session lifetime and secure transport policy; issuance and storage in development.",
+        "non_goals": [
+          "Claim unimplemented profiles, published releases, or complete identity-platform qualification.",
+          "Provide user interfaces or a vendor-owned authentication engine."
+        ],
+        "public_package_identifier": "session",
+        "primary_entry_packages": [
+          "github.com/faustbrian/go-identity/session"
+        ],
+        "package_selection": {
+          "github.com/faustbrian/go-identity/session": "Experimental Shared session lifetime and secure transport policy; issuance and storage in development. Use only documented selected profiles; full qualification is pending."
+        },
+        "lifecycle_status": "active",
+        "maturity": "experimental",
+        "construction_styles": [
+          "new-config",
+          "plain-function",
+          "validated-value"
+        ],
+        "lifecycle_styles": [
+          "stateless"
+        ],
+        "ownership": {
+          "configuration": "caller",
+          "mutable_inputs": [
+            "borrow",
+            "copy",
+            "transfer"
+          ],
+          "runtime_resources": "none",
+          "background_work": "none"
+        },
+        "optional_owned_dependencies": [],
+        "adapters": [],
+        "companions": [],
+        "supported_go": {
+          "minimum": "1.27.0",
+          "tested": [
+            "1.27.2"
+          ]
+        },
+        "supported_platforms": [
+          "portable-go"
+        ],
+        "supported_backends": [],
+        "supported_protocols": [],
+        "documentation": {
+          "readme": "session/README.md",
+          "api": "session/README.md",
+          "adoption": "session/README.md",
+          "security": "SECURITY.md",
+          "compatibility": null,
+          "performance": null,
+          "examples": "session/README.md",
+          "faq": null,
+          "changelog": "session/CHANGELOG.md",
+          "pkg_go_dev": "https://pkg.go.dev/github.com/faustbrian/go-identity/session",
+          "ecosystem_index": "https://github.com/faustbrian/go-library-tools/blob/v2.1.2/docs/ecosystem/README.md"
+        },
+        "known_good_compatibility_sets": [],
+        "delivery": {
+          "implementation": "in-progress",
+          "hardening": "in-progress",
+          "release": "blocked"
+        }
+      }
+    },
+    {
+      "directory": "session/postgres",
+      "module_path": "github.com/faustbrian/go-identity/session/postgres",
+      "go_version": "1.27.0",
+      "packages": [
+        {
+          "module_directory": "session/postgres",
+          "directory": ".",
+          "name": "postgres",
+          "import_path": "github.com/faustbrian/go-identity/session/postgres",
+          "kind": "public",
+          "production": true,
+          "executable": true,
+          "coverage_required": true,
+          "build_required": true,
+          "build_tags": []
+        }
+      ],
+      "purpose": "Durable complete session records, scoped primary reads and native transactional family revocation; issuance in development.",
+      "lifecycle": "experimental",
+      "kind": "public library",
+      "releasable": true,
+      "family": "service-edge",
+      "version": "0.0.0",
+      "tag_prefix": "session/postgres/v",
+      "owned_dependencies": [
+        "github.com/faustbrian/go-audit",
+        "github.com/faustbrian/go-authentication",
+        "github.com/faustbrian/go-authorization",
+        "github.com/faustbrian/go-clock",
+        "github.com/faustbrian/go-identity",
+        "github.com/faustbrian/go-identity/postgres",
+        "github.com/faustbrian/go-identity/session",
+        "github.com/faustbrian/go-migrations/v3",
+        "github.com/faustbrian/go-postgres"
+      ],
+      "reverse_owned_dependencies": [],
+      "external_runtime_dependencies": [
+        "postgresql"
+      ],
+      "required_services": [
+        "postgresql"
+      ],
+      "build_tags": [],
+      "test_tags": [
+        "integration"
+      ],
+      "interoperability_tools": [],
+      "specifications": [],
+      "conformance_corpora": [],
+      "family_label": "Service Edge",
+      "family_description": "Request-edge policy, identity, access decisions, routing, middleware, and process lifecycle.",
+      "family_order": 2,
+      "gates": {
+        "api_compatibility": false,
+        "benchmarks": false,
+        "conformance": false,
+        "coverage": false,
+        "documentation": false,
+        "fuzz": false,
+        "interoperability": false,
+        "lint": false,
+        "mutation": false,
+        "race": false,
+        "security": false,
+        "tests": false
+      },
+      "goal_status": "in-progress",
+      "goal_files": [],
+      "goal_evidence": [],
+      "provenance": [],
+      "cohesion": {
+        "family": "service-edge",
+        "secondary_capabilities": [
+          "identity-and-access"
+        ],
+        "responsibility": "Durable complete session records, scoped primary reads and native transactional family revocation; issuance in development.",
+        "non_goals": [
+          "Claim unimplemented profiles, published releases, or complete identity-platform qualification.",
+          "Provide user interfaces or a vendor-owned authentication engine."
+        ],
+        "public_package_identifier": "postgres",
+        "primary_entry_packages": [
+          "github.com/faustbrian/go-identity/session/postgres"
+        ],
+        "package_selection": {
+          "github.com/faustbrian/go-identity/session/postgres": "Experimental Durable complete session records, scoped primary reads and native transactional family revocation; issuance in development. Use only documented selected profiles; full qualification is pending."
+        },
+        "lifecycle_status": "active",
+        "maturity": "experimental",
+        "construction_styles": [
+          "new-config",
+          "plain-function",
+          "validated-value"
+        ],
+        "lifecycle_styles": [
+          "stateless"
+        ],
+        "ownership": {
+          "configuration": "caller",
+          "mutable_inputs": [
+            "borrow",
+            "copy",
+            "transfer"
+          ],
+          "runtime_resources": "caller",
+          "background_work": "none"
+        },
+        "optional_owned_dependencies": [],
+        "adapters": [],
+        "companions": [],
+        "supported_go": {
+          "minimum": "1.27.0",
+          "tested": [
+            "1.27.2"
+          ]
+        },
+        "supported_platforms": [
+          "portable-go"
+        ],
+        "supported_backends": [
+          "postgresql"
+        ],
+        "supported_protocols": [],
+        "documentation": {
+          "readme": "session/postgres/README.md",
+          "api": "session/postgres/README.md",
+          "adoption": "session/postgres/README.md",
+          "security": "SECURITY.md",
+          "compatibility": null,
+          "performance": null,
+          "examples": "session/postgres/README.md",
+          "faq": null,
+          "changelog": "session/postgres/CHANGELOG.md",
+          "pkg_go_dev": "https://pkg.go.dev/github.com/faustbrian/go-identity/session/postgres",
+          "ecosystem_index": "https://github.com/faustbrian/go-library-tools/blob/v2.1.2/docs/ecosystem/README.md"
+        },
+        "known_good_compatibility_sets": [],
+        "delivery": {
+          "implementation": "in-progress",
+          "hardening": "in-progress",
+          "release": "blocked"
+        }
       }
     }
   ]

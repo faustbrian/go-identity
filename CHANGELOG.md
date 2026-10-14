@@ -1,0 +1,296 @@
+# Changelog
+
+## Unreleased
+
+- Add distinct opaque recovery-code/browser command custody for native MFA
+  adapters. Recovery input cannot become an OTP submission or expose plaintext
+  through scalar metadata; construction alone grants no authentication or use.
+
+- Clarify that the existing authentication-attempt security subject may carry
+  a genuine issuer challenge in the shared canonical ID profile, not only a
+  pre-authentication transaction. Provenance remains the workflow owner's duty;
+  identifier digests and manufactured attempts remain forbidden.
+
+- Bind original password-reset Secret and proof before verifier generation,
+  using disjoint preparation-only custody. Preserve shared terminal lifetimes
+  and exact raw password bytes; generated execution remains separately selected.
+
+- Add exact enabled/disabled password predecessor checks for recovery without
+  admitting disabled credentials for authentication. Recovery still requires
+  independently verified factors, risk and atomic protected mutation.
+
+- Add distinct password-reset command custody for the replacement verifier and
+  original upstream capability proof. Preserve shared proof lifetime and keep
+  legacy change/signin/signup paths closed. Native atomic reset composition is
+  still required; structural construction does not grant mutation authority.
+
+- Register optional email confirmation HTTP composition without adding it to
+  base imports. Original-signup confirmation selects a real protected endpoint;
+  omitted features expose neither routes nor metadata. Full email HTTP lifecycle
+  and native composed qualification remain in development.
+
+- Add opaque identifier snapshots with exact tenant/user/record selection,
+  complete-partition validation, independent versions and explicit address
+  disclosure. Omitted values are not retained; diagnostics and implicit export
+  stay closed. Snapshot construction never grants current authority or ownership.
+
+- Add opaque original anonymous signup input carrying the shared password Secret
+  and pre-auth cookie before hash generation. Keep it distinct from generated
+  verifier custody; native journal admission and atomic execution remain required.
+
+- Add disjoint native password-signup custody for the prepared verifier and
+  original pre-auth cookie. Preserve exact bytes and scope; older accessors
+  cannot silently omit either input. Native policy and composition are required.
+
+- Add opaque password-signin command custody using the existing primitive
+  Secret owner and original pre-auth cookie. Native signin must explicitly
+  select the new metadata/custody pair; legacy feature execution stays closed.
+  Password bytes are not copied, normalized or persisted by this transport.
+
+- Add disjoint authenticated password-change command custody for the original
+  session bearer, upstream proof and encoded hash. Preserve complete versions
+  and timestamps; older feature/hash-only execution paths fail closed rather
+  than dropping authentication evidence. Native atomic admission remains
+  required and is not granted by command construction.
+
+- Add bounded opaque encoded-hash custody for existing-password change commands.
+  Preserve exact verifier bytes outside metadata and diagnostics; legacy
+  feature admission rejects this variant instead of discarding its material.
+  Native owners must explicitly select the new accessors and bind material to
+  the coordinator fingerprint. Hash policy, proof and complete password-change
+  workflow composition remain with their owners and under development.
+
+- Add private immutable recovery custody for owned journal/projection adapters.
+  Preserve authenticated original history and reject unresolved acknowledgements,
+  foreign ownership and superseded leases. This does not expose application
+  constructors, grant counter authority or publish a healthy projection.
+
+- Freeze bounded typed request intent before generated command values, retaining
+  exact versions, explicit options and private scalar custody. This does not
+  grant command execution or implement durable request-key admission by itself.
+
+- Add opaque, bounded HTTP-token retry keys with exact-byte keyed digests and
+  redacted diagnostics. Reject ambiguous transport bytes without normalization;
+  durable correlation and HTTP source enforcement remain adapter-owned.
+
+- Add opaque pre-auth-cookie and session-token feature commands without a
+  submitted OTP. Keep custody disjoint and out of projections/recovery;
+  native owners still prove possession and current primary authority.
+  Existing code-bearing commands retain their behavior and command intent.
+
+- Retain separately submitted session tokens in opaque OTP command custody,
+  disjoint from pre-auth cookies. Keep tokens out of scalar/recovery projections
+  and preserve code-only commands. Construction grants no authentication or
+  current validity; native session owners remain responsible for admission.
+
+- Retain separately submitted pre-auth cookies in opaque OTP command custody.
+  Keep bearer bytes out of scalar projections and preserve existing code-only
+  commands. Construction validates syntax, not cookie possession or admission.
+
+- Add opaque one-time-code custody to structural feature commands without
+  placing secrets in scalar metadata or projections. Preserve ordinary command
+  construction; verification, atomic consumption and durable admission remain
+  native adapter responsibilities.
+
+- Add explicitly anonymous-flow-targeted feature commands and recovery scope.
+  Keep flows separate from user identities and actual actors; preserve the
+  default user-only contract and legacy receipt JSON shape. Kernel commands
+  continue to require a user target.
+
+- Construct protected risk-decision audit records with closed allow/deny/
+  throttle/step-up classification, genuine attempt or user subjects and
+  preserved impersonation attribution, without fabricating provider evidence.
+  Construction remains distinct from required durable audit delivery.
+
+- Add configured human-only privacy-export request/recovery admission, original
+  opaque proof custody and retained-key receipt verification. Preserve known
+  command outcomes on transport, cancellation and denied disclosure; durable
+  PostgreSQL admission and export publication remain separate prerequisites.
+
+- Add exclusive queued privacy-export command receipts with full snapshot
+  replay, retained-key verification and exact request-intent matching. Preserve
+  existing receipt JSON and known command outcomes; ready publication still
+  requires its worker and durable lifecycle checks.
+
+- Add signed, immutable full-subject privacy-export request commands with exact
+  contributor profiles and bounded artifact policy. Construction does not
+  enable durable export execution; admission and dedicated receipts remain pending.
+
+- Add immutable version-1 privacy snapshot integrity and exact contributor/
+  fragment binding. Reject missing contributors, changed cuts and cross-scope
+  metadata without confusing authenticated metadata with durable admission.
+
+- Add the pure identifier final-access decision: conserve exact credential-to-
+  identifier dependencies across removal, replacement and primary switching,
+  preserving independent human methods without counting API keys as login.
+
+- Preserve original opaque identifier proof custody through admitted command
+  execution for native configured reverification, without persisting bearer
+  material or transferring or consuming the proof during admission.
+
+- Keep additive authorization contracts selected when consumers also depend on
+  the released v1.1.0 API, using the unchanged source with a compatible higher
+  pseudo-version and canonical module checksums.
+
+- Adopt the additive scoped authorization authority owner while retaining the
+  existing policy engine and Go 1.27 support.
+
+- Build protected delivery worker events through the shared typed security
+  profile, preserving original-command causation and authoritative status
+  versions without confusing local bookkeeping with provider confirmation.
+
+- Register an explicit unpadded HIBP security profile while preserving the
+  existing padded profile and rejecting unknown privacy-profile identifiers.
+
+- Preserve canonical prior audit event IDs as security-event causation, allowing
+  correctly linked query and match/rejection records without fabricated IDs.
+
+- Add the shared typed security-profile builder for HIBP actions, producing
+  canonical redacted audit records with protected retention and closed provider
+  fields. Reject unsafe attribution and identifier digests masquerading as
+  pre-auth attempts. Construction does not prove delivery or authorization.
+
+- Add exact credential eligibility checks and a narrow consistent-primary read
+  contract. Keep per-credential versions separate from the user-wide credential
+  epoch and aggregate CAS; blocked, disabled, expired or mismatched references
+  deny without resetting authority. Checking metadata is not proof validation
+  or session issuance.
+
+- Add an explicit safe structural feature receipt branch to CommandResult,
+  retaining exact operation/schema policy and outcome-specific primary-record
+  versions without credential-bearing payloads. Preserve historical kernel
+  receipt JSON bytes and reject mixed variants. Feature execution remains
+  disabled pending owned adapter admission and lifecycle phases.
+
+- Add an explicit immutable structural feature command branch with exact
+  operation binding and bounded named scalar input, preserving unsigned
+  authority versions, UTC instants and copied binary metadata. Kernel command
+  variants remain distinct; feature fingerprint, receipt and execution mapping
+  require their owned adapter phases and are not activated by construction.
+
+- Add storage-neutral feature operation descriptors and exact common command
+  binding validation, with explicit schema and record-target requirements.
+  Preserve the closed kernel command/receipt union; descriptor validation does
+  not activate feature execution or confer authorization.
+
+- Register the experimental session child module with shared remember/lifetime
+  and secure host-cookie policy. Durable session workflows remain in development.
+
+- Expose adapter-neutral command receipt validation, preserving the existing
+  closed outcome, scope, version and operation-specific payload invariants.
+
+- Align the module inventory with the Go 1.27 minimum and register the optional
+  PostgreSQL adapter as an independently releasable experimental module.
+
+- Add identity-owned identifier commands with exact signed one-use intent,
+  current-human session scope, bounded primary admission and record/action-
+  specific recovery. Separate all five transitions; conserve known commitment
+  after output/cancellation failures and unknown outcomes after lost replies.
+  Feature normalization/challenge ceremonies, durable uniqueness/reuse/final
+  access, atomic proof/risk/cascades, SQL and public composition remain pending.
+  Retain exact record and link-mode scope across every command receipt outcome;
+  recovery now binds operation/record/mode, including failed and pending results.
+  Trusted record command/proof builders require the matching binding metadata;
+  historical receipts without original scope fail closed rather than borrowing
+  the caller's requested record.
+
+- Add identity-owned account linking with explicit, opt-in verified implicit
+  and opt-in administrative paths. Bind signed one-use evidence to exact actor,
+  provider subject, command, continuation and authority/record choices; preserve
+  collisions, tombstones, independent access and known/unknown commit outcomes.
+  Add canonical proof-payload construction without treating it as authority.
+  Authorize exact account IDs before link/unlink recovery receipt reads,
+  overriding caller metadata and preserving account-specific policy denial.
+  Provider ceremonies, durable proof/risk/token-vault atomicity, SQL and public
+  feature/transport composition remain required integration work.
+- Add bounded identity-owned identifier and verification records, and copied
+  attach/verify/primary/replace/remove transitions with explicit authority and
+  record fences. Replacement clears verification and primary selection; removal
+  retains versioned retirement data for scoped reuse tombstones. Canonical
+  normalization, fresh proof consumption, tenant-wide uniqueness, final access,
+  durable commands and feature/transport composition remain pending.
+- Add current-subject account unlink command admission and scoped recovery.
+  Verify exact issuer/audience/session/command/version/provider-choice bindings
+  using signed one-use capabilities; preserve unknown or known committed
+  outcomes without claiming provider revocation success. Durable proof/risk
+  consumption, SQL and full public transport composition remain pending.
+- Add the identity-owned unlink state transition with aggregate, account,
+  social-link and credential fences. Recheck final usable access against locked
+  primary eligibility; produce copied next state and a tombstone version without
+  claiming a durable commit or provider cleanup. Data-only unlink preserves the
+  credential authority dimension.
+- Target Go 1.27, matching the current Golib module baseline.
+- Add tenant-bound account and non-secret credential metadata, current-subject
+  account reads with per-row policy/redaction and a shared final-access decision.
+  Preserve imported canonical IDs and federation URNs. Refuse removal when no
+  independent usable human login method remains; API keys and expired/disabled
+  methods do not qualify. Transactional link/unlink, pagination, fresh proofs
+  and provider cleanup remain unfinished integration work.
+
+- Add explicit versioned suspend/ban and restore/unban commands with registered
+  reasons, bounded absolute expiry, scoped recovery and distinct user authority
+  versions. Preserve historical replay and known commitment after output failure;
+  reject future versions and purpose substitution. Owner admission reports every
+  required consumer pending, never asynchronous revocation completion. Durable
+  SQL, consumer acknowledgements, audited expiry and keyed transport are pending.
+
+- Add self-service profile reads, versioned explicit-command updates and scoped
+  recovery with a distinct email/status/role-excluding projection. Require the
+  current human subject, current operation/field policy, bounded allowlisted
+  HTTPS images, privately copied output and replay-before-active/version CAS.
+  Preserve known commits after disclosure failure. Session/keyed transport,
+  durable adapters and full catalog/composition integration remain pending.
+
+- Add explicit-ID administrative typed-field updates and scoped recovery.
+  Preserve same-command replay before stale-version checks, retain original
+  known outcomes after output failure, and bind new writes to field policy and
+  a single aggregate-version advance. Creation/update recovery reject wrong
+  purposes. Reject future expected versions before mutation so authorization
+  cannot cross into a newer account state. Durable adapters, keyed admission
+  and self-service profile remain
+  unfinished integration work.
+
+- Add the five-member PolicySet and bounded typed risk, claims, retention and
+  redaction evaluation. Copy policy inputs/results, enforce current versions and
+  registered reasons, reject destructive legal-hold allows and incomplete field
+  partitions, and omit every failed decision. Existing upstream authorization
+  and read/create APIs remain unchanged; full workflow integration is pending.
+
+- Add authorized explicit-ID user creation and scoped command recovery through
+  storage-neutral UnitOfWork execute/recover contracts. Freeze typed command
+  payloads, reuse field enforcement and sample trusted time once. Preserve
+  committed/conflict/in-progress/unknown outcomes; withhold output after current
+  redaction failure or cancellation without inventing rollback. Durable adapters,
+  keyed transport admission and remaining lifecycle operations are still pending.
+
+- Add versioned typed additional-field schemas and bounded command preparation.
+  Preserve false, zero, empty strings/lists and full int64 values; normalize
+  through explicit versioned composition, enforce field permissions through the
+  existing authorization service and reject the whole request on invalid or
+  denied fields. Creation defaults and returned lists are privately copied.
+  This prepares values only; durable create/update commands remain in development.
+
+- Add tenant-scoped bounded user listing with stable-snapshot continuations,
+  confidential signed cursors and fresh collection/row authorization. Bind each
+  continuation to its viewer, filters, limit and policy; retain its original
+  expiry and withhold all partial output on cancellation or malformed pages.
+  The existing get-only constructor remains valid; directory composition adds
+  listing explicitly and requires an owned snapshot repository.
+
+- Add bounded user lookup through the upstream revision-fenced authorization
+  service, injected canonical-ID validation and typed redaction. Reject scope
+  mismatches before storage and never disclose users after cancellation,
+  policy failure or malformed repository output. A read-only constructor does
+  not require mutation/capability dependencies. Redaction decisions must carry
+  an explicitly registered reason; missing or unknown reasons deny disclosure.
+
+- Add tenant-bound user projections and closed lifecycle statuses, preserving
+  canonical directory IDs unchanged. Add bounded explicit status-policy
+  validation that denies terminal resurrection, unlisted edges and invalid
+  restriction durations without performing or authorizing a mutation.
+
+### Added
+
+- Distinct subject and pre-authentication transaction ID contracts with
+  cryptographic 128-bit generation, strict canonical reconstruction, decoded
+  byte ordering and stable redacted invalid-input/entropy errors.

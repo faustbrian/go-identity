@@ -1,0 +1,514 @@
+package mfahttp
+
+import (
+	"bytes"
+	"encoding/base64"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"log/slog"
+	"net/http"
+	"slices"
+	"strconv"
+	"time"
+
+	auth "github.com/faustbrian/go-authentication"
+	"github.com/faustbrian/go-authorization"
+	identity "github.com/faustbrian/go-identity"
+	identityhttp "github.com/faustbrian/go-identity/http"
+	"github.com/faustbrian/go-identity/mfa"
+	"github.com/faustbrian/go-identity/session"
+)
+
+// FactorUpdateConfig selects cookie-only native TOTP management without registering
+// a route. Sessions, original proof source, mutation and shared keyed quota
+// owners are borrowed, bounded and concurrency-safe. Exact origins and policy
+// revision are trusted startup inputs. MaximumAge is positive and at most five
+// minutes; MaximumDuration is 1ms..30s. Neither can renew original validity.
+type FactorUpdateConfig struct {
+	Network                     identityhttp.NetworkConfig
+	Sessions                    *session.SessionService
+	Proofs                      auth.ReauthenticationSource
+	Service                     mfa.FactorManagementService
+	Rate                        *identityhttp.KeyedSecretRateLimiter
+	Cookie                      session.CookiePolicy
+	TrustedOrigins              []identityhttp.Origin
+	PolicyRevision              authorization.Revision
+	Now                         func() time.Time
+	MaximumDuration, MaximumAge time.Duration
+	// Empty preserves rename-only compatibility. A closed copied selection may
+	// add Remove or Replace; both forbid name even when empty.
+	Actions []mfa.FactorUpdateAction
+	// ReplacementCodeCount must match the selected native replacement policy,
+	// is1..64 when Replace is selected, and must be zero otherwise.
+	ReplacementCodeCount uint32
+}
+
+type factorUpdateHTTPState struct {
+	base    enableState
+	origin  identityhttp.Origin
+	factor  mfa.FactorID
+	name    string
+	version uint64
+	action  mfa.FactorUpdateAction
+	target  mfa.FactorTarget
+}
+
+func factorUpdateActions(selected []mfa.FactorUpdateAction) ([]mfa.FactorUpdateAction, error) {
+	if len(selected) == 0 {
+		return []mfa.FactorUpdateAction{mfa.Rename}, nil
+	}
+	if len(selected) > 3 {
+		return nil, identityhttp.ErrInvalidInput
+	}
+	for i, action := range selected {
+		if action != mfa.Rename && action != mfa.Remove && action != mfa.Replace || slices.Contains(selected[:i], action) {
+			return nil, identityhttp.ErrInvalidInput
+		}
+	}
+	return slices.Clone(selected), nil
+}
+
+// NewFactorUpdateHandler owns POST /v1/mfa/factor-update without registration.
+// Closed JSON requires factorID, proofID, an explicitly selected action and
+// expectedVersion. Rename requires name; remove forbids it, even when empty.
+// One Idempotency-Key, actual cookie, exact Origin and synchronizer are required.
+// Subject, tenant, command, method and proof projections cannot be overridden.
+// Fresh known commit returns safe metadata, never a session or factor secret.
+func NewFactorUpdateHandler(c FactorUpdateConfig) (http.Handler, error) {
+	return NewFactorUpdateHandlerWithMiddleware(c, nil)
+}
+
+// NewFactorUpdateHandlerWithMiddleware preserves owned session/proof deadlines
+// through actual decode, authentication, shared quota and native mutation phases.
+func NewFactorUpdateHandlerWithMiddleware(c FactorUpdateConfig, m []identityhttp.MiddlewareDescriptor) (http.Handler, error) {
+	return newFactorMutationHandler(c, m, nil)
+}
+
+func newFactorMutationHandler(c FactorUpdateConfig, m []identityhttp.MiddlewareDescriptor, disable *DisableConfig) (http.Handler, error) {
+	operation, path := "identity.mfa.factor-update", "/v1/mfa/factor-update"
+	serviceMissing := enableNil(c.Service)
+	if disable != nil {
+		operation, path = "identity.mfa.disable", "/v1/mfa/disable"
+		serviceMissing = enableNil(disable.Service)
+	}
+	actions, err := factorUpdateActions(c.Actions)
+	if err != nil {
+		return nil, err
+	}
+	if slices.Contains(actions, mfa.Replace) {
+		if disable != nil || c.ReplacementCodeCount < 1 || c.ReplacementCodeCount > 64 {
+			return nil, identityhttp.ErrInvalidInput
+		}
+	} else if c.ReplacementCodeCount != 0 {
+		return nil, identityhttp.ErrInvalidInput
+	}
+	if !c.Sessions.Configured() || enableNil(c.Proofs) || serviceMissing || !c.Rate.Configured() || c.Now == nil || c.PolicyRevision == 0 || c.MaximumDuration < time.Millisecond || c.MaximumDuration > 30*time.Second || c.MaximumAge <= 0 || c.MaximumAge > 5*time.Minute {
+		return nil, identityhttp.ErrInvalidInput
+	}
+	network, err := identityhttp.NewNetworkResolver(c.Network)
+	if err != nil {
+		return nil, err
+	}
+	decoder, err := identityhttp.NewRequestDecoder(c.Network.Limits)
+	if err != nil {
+		return nil, err
+	}
+	cookie, err := c.Cookie.DeletionAttributes()
+	if err != nil {
+		return nil, identityhttp.ErrInvalidInput
+	}
+	origins, err := identityhttp.NewOriginGuard(identityhttp.OriginGuardConfig{Network: network, TrustedOrigins: c.TrustedOrigins, RefererFallback: identityhttp.RefererFallbackDeny})
+	if err != nil {
+		return nil, err
+	}
+	csrf, err := identityhttp.NewCSRFDecoder(identityhttp.CSRFDecoderConfig{Origins: origins, FormField: "csrf_token"})
+	if err != nil {
+		return nil, err
+	}
+	classify := func(err error) enableFailure {
+		f := enableFailure{status: 503, code: "unavailable"}
+		var specific enableFailure
+		var denied identity.ForbiddenError
+		var conflict identity.ConflictError
+		var busy identity.InProgressError
+		switch {
+		case errors.As(err, &specific):
+			return specific
+		case errors.Is(err, identityhttp.ErrInvalidInput):
+			f = enableFailure{status: 400, code: "invalid_request"}
+		case errors.As(err, &denied):
+			f = enableFailure{status: 403, code: "denied"}
+		case errors.As(err, &conflict):
+			f = enableFailure{status: 409, code: "conflict"}
+		case errors.As(err, &busy):
+			f = enableFailure{status: 409, code: "in_progress", retry: busy.RetryAfter}
+		}
+		return f
+	}
+	fail := func(w http.ResponseWriter, f enableFailure, observation map[string]any) {
+		if observation == nil {
+			observation = map[string]any{"commitOutcome": "none"}
+		}
+		observation["error"] = f.code
+		if f.status == 405 {
+			w.Header().Set("Allow", http.MethodPost)
+		}
+		if f.retry > 0 {
+			w.Header().Set("Retry-After", strconv.FormatInt(int64((min(max(f.retry, time.Second), time.Hour)+time.Second-1)/time.Second), 10))
+		}
+		w.WriteHeader(f.status)
+		_ = json.NewEncoder(w).Encode(observation)
+	}
+	reject := func(w http.ResponseWriter, _ *http.Request, err error) { fail(w, classify(err), nil) }
+	h, err := identityhttp.NewOperationPipeline(identityhttp.OperationPipelineConfig[factorUpdateHTTPState]{MaximumDuration: c.MaximumDuration, Middleware: m, Reject: reject,
+		Decode: func(r *http.Request) (factorUpdateHTTPState, error) {
+			s := factorUpdateHTTPState{}
+			if r.URL.Path != path || r.URL.EscapedPath() != r.URL.Path {
+				return s, enableFailure{status: 404, code: "not_found"}
+			}
+			if r.Method != http.MethodPost {
+				return s, enableFailure{status: 405, code: "method_not_allowed"}
+			}
+			if r.URL.RawQuery != "" || r.URL.ForceQuery || len(r.Trailer) != 0 {
+				return s, identityhttp.ErrInvalidInput
+			}
+			facts, err := network.Resolve(r)
+			if err != nil || facts.Realm() != identityhttp.RealmTenant {
+				return s, enableFailure{status: 421, code: "misdirected_request"}
+			}
+			if facts.Scheme() != "https" {
+				return s, identityhttp.ErrInvalidInput
+			}
+			s.base.facts = facts
+			key, present, err := decoder.IdempotencyKey(r, identityhttp.HeaderRequired)
+			if err != nil || !present {
+				return s, identityhttp.ErrInvalidInput
+			}
+			s.base.key = key
+			if _, _, err := decoder.Bearer(r, identityhttp.HeaderForbidden); err != nil {
+				return s, identityhttp.ErrInvalidInput
+			}
+			s.base.bearer, present, err = decoder.CookieBearer(r, cookie.Name, identityhttp.HeaderRequired)
+			if err != nil || !present {
+				return s, identityhttp.ErrInvalidInput
+			}
+			s.base.csrf, _, err = identityhttp.DecodeCSRF(csrf, r, session.ParseCSRFToken)
+			if err != nil {
+				return s, enableFailure{status: 403, code: "origin_or_csrf_denied"}
+			}
+			s.origin, err = origins.Check(r)
+			if err != nil {
+				return s, enableFailure{status: 403, code: "origin_or_csrf_denied"}
+			}
+			token, err := session.ParseToken(s.base.bearer.Token())
+			if err != nil {
+				return s, identityhttp.ErrInvalidInput
+			}
+			s.base.credential, err = session.NewCredential(session.CredentialCookie, token)
+			if err != nil {
+				return s, identityhttp.ErrInvalidInput
+			}
+			body, err := identityhttp.DecodeJSON[map[string]json.RawMessage](decoder, r)
+			if disable != nil {
+				if err != nil {
+					return s, identityhttp.ErrInvalidInput
+				}
+				return decodeDisableBody(s, body)
+			}
+			if err != nil || len(body) < 4 || len(body) > 5 {
+				return s, identityhttp.ErrInvalidInput
+			}
+			var factor, proof, action string
+			for name, dst := range map[string]*string{"factorID": &factor, "proofID": &proof, "action": &action} {
+				raw, ok := body[name]
+				if !ok || len(raw) < 2 || raw[0] != '"' || json.Unmarshal(raw, dst) != nil {
+					return s, identityhttp.ErrInvalidInput
+				}
+			}
+			switch action {
+			case "rename":
+				s.action = mfa.Rename
+				raw, ok := body["name"]
+				if !ok || len(body) != 5 || len(raw) < 2 || raw[0] != '"' || json.Unmarshal(raw, &s.name) != nil {
+					return s, identityhttp.ErrInvalidInput
+				}
+			case "remove", "replace":
+				s.action = mfa.Remove
+				if action == "replace" {
+					s.action = mfa.Replace
+				}
+				if _, present := body["name"]; present || len(body) != 4 {
+					return s, identityhttp.ErrInvalidInput
+				}
+			default:
+				return s, identityhttp.ErrInvalidInput
+			}
+			if !slices.Contains(actions, s.action) {
+				return s, identityhttp.ErrInvalidInput
+			}
+			id, err := identity.ParseCommandID(factor)
+			if err != nil {
+				return s, identityhttp.ErrInvalidInput
+			}
+			s.factor = mfa.FactorID(id)
+			id, err = identity.ParseCommandID(proof)
+			if err != nil {
+				return s, identityhttp.ErrInvalidInput
+			}
+			s.base.proofID = auth.ProofID(id)
+			if raw, ok := body["expectedVersion"]; !ok || json.Unmarshal(raw, &s.version) != nil || s.version == 0 || s.version == ^uint64(0) {
+				return s, identityhttp.ErrInvalidInput
+			}
+			// The public request owns the same bounded presentation policy. Use
+			// display validation here without fabricating factor authority.
+			projection := mfa.FactorProjection{ID: s.factor, Method: "totp", Label: s.name, State: mfa.FactorActive, Version: s.version, CreatedAt: c.Now()}
+			if (mfa.ListResult{Factors: []mfa.FactorProjection{projection}}).ValidateAt(c.Now()) != nil {
+				return s, identityhttp.ErrInvalidInput
+			}
+			return s, nil
+		},
+		Authenticate: func(r *http.Request, s factorUpdateHTTPState) (factorUpdateHTTPState, error) {
+			read, err := c.Sessions.Get(r.Context(), session.GetRequest{TenantID: s.base.facts.TenantID(), Credential: s.base.credential})
+			if err != nil {
+				return s, identityhttp.ErrUnavailable
+			}
+			if !read.Authenticated {
+				return s, enableFailure{status: 401, code: "denied"}
+			}
+			b, err := read.Session.Bindings()
+			if err != nil || b.TenantID != s.base.facts.TenantID() || read.ValidateAt(c.Now()) != nil {
+				return s, identityhttp.ErrUnavailable
+			}
+			s.base.read, s.base.user = read, b.UserID
+			return s, nil
+		},
+		Admit: func(r *http.Request, s factorUpdateHTTPState) error {
+			out, err := c.Rate.Admit(r.Context(), s.base.facts, identityhttp.KeyedSecretRateRequest{OperationID: operation, UserID: s.base.user, IdempotencyKey: s.base.key})
+			if errors.Is(err, identityhttp.ErrRateLimited) {
+				return enableFailure{status: 429, code: "rate_limited", retry: out.RetryAfter}
+			}
+			if err != nil || !out.Allowed || s.base.read.ValidateAt(c.Now()) != nil {
+				return identityhttp.ErrUnavailable
+			}
+			return nil
+		},
+		Handle: func(w http.ResponseWriter, r *http.Request, s factorUpdateHTTPState) {
+			if s.base.read.ValidateAt(c.Now()) != nil {
+				reject(w, r, identityhttp.ErrUnavailable)
+				return
+			}
+			record, err := c.Proofs.Reauthentication(r.Context(), s.base.proofID)
+			if r.Context().Err() != nil || err != nil && !errors.Is(err, auth.ErrInvalidProof) {
+				reject(w, r, identityhttp.ErrUnavailable)
+				return
+			}
+			b, bindErr := s.base.read.Session.Bindings()
+			p := record.Proof
+			use := auth.ReauthenticationUse{ProofUse: auth.ProofUse{Tenant: string(s.base.facts.TenantID()), Subject: string(s.base.user), Purpose: auth.Purpose(operation), Audience: p.Proof.Audience, Now: c.Now()}, SessionID: b.SessionID, SessionVersion: b.Version, Action: operation, MaximumAge: c.MaximumAge}
+			if err != nil || bindErr != nil || p.Proof.ID != s.base.proofID || p.Proof.Method != "totp" || p.Proof.Assurance != auth.AssuranceMultiFactor || p.Validate(use) != nil {
+				reject(w, r, identity.ForbiddenError{})
+				return
+			}
+			if s.base.read.ValidateAt(c.Now()) != nil {
+				reject(w, r, identityhttp.ErrUnavailable)
+				return
+			}
+			caller := authorization.DecisionContext{PolicyRevision: c.PolicyRevision, Request: authorization.Request{Tenant: authorization.TenantID(b.TenantID), Subject: authorization.Subject{Kind: authorization.SubjectUser, ID: authorization.SubjectID(b.UserID)}, Action: authorization.Action(operation), Resource: authorization.Resource{Type: "identity.user", ID: authorization.ResourceID(b.UserID)}}}
+			if disable != nil {
+				request := mfa.DisableRequest{TenantID: b.TenantID, Target: s.target, FactorID: s.factor, FactorProof: p.Proof, Session: s.base.bearer, CSRFToken: s.base.csrf, Caller: caller, Origin: string(s.origin), Network: s.base.facts.ClientIP().String(), IdempotencyKey: s.base.key}
+				if request.Validate() != nil {
+					reject(w, r, identityhttp.ErrInvalidInput)
+					return
+				}
+				out, err := disable.Service.Disable(r.Context(), request)
+				observation := enableObservation(mfa.EnableResult{CommandID: out.CommandID, Outcome: out.Outcome})
+				if _, parseErr := identity.ParseCommandID(string(out.CommandID)); parseErr != nil {
+					delete(observation, "commandID")
+				}
+				if err != nil || r.Context().Err() != nil {
+					fail(w, classify(err), observation)
+					return
+				}
+				freshUse := use
+				freshUse.ProofUse.Now = c.Now()
+				if _, parseErr := identity.ParseCommandID(string(out.CommandID)); parseErr != nil || out.Outcome != identity.CommitOutcomeCommitted || !validDisableFactors(out, request, c.Now()) || s.base.read.ValidateAt(c.Now()) != nil || p.Validate(freshUse) != nil {
+					fail(w, enableFailure{status: 503, code: "unavailable"}, observation)
+					return
+				}
+				data, err := disableBody(out)
+				if err != nil {
+					fail(w, classify(err), observation)
+					return
+				}
+				defer clear(data)
+				start := c.Now()
+				writeSecretJSON(w, r, data, observation, func() bool {
+					at := c.Now()
+					latest := use
+					latest.ProofUse.Now = at
+					return !at.Before(start) && s.base.read.ValidateAt(at) == nil && p.Validate(latest) == nil
+				})
+				return
+			}
+			request := mfa.FactorUpdateRequest{TenantID: b.TenantID, FactorID: s.factor, Action: s.action, Name: s.name, ExpectedVersion: s.version, FactorProof: p.Proof, Session: s.base.bearer, CSRFToken: s.base.csrf, Caller: caller, Origin: string(s.origin), Network: s.base.facts.ClientIP().String(), IdempotencyKey: s.base.key}
+			if request.Validate() != nil {
+				reject(w, r, identityhttp.ErrInvalidInput)
+				return
+			}
+			out, err := c.Service.FactorUpdate(r.Context(), request)
+			defer func() {
+				if out.Replacement != nil {
+					for _, code := range out.Replacement.RecoveryMaterial.Codes {
+						code.Destroy()
+					}
+					clear(out.Replacement.RecoveryMaterial.Codes)
+				}
+			}()
+			safeObservation := mfa.EnableResult{Outcome: out.Outcome}
+			if _, parseErr := identity.ParseCommandID(string(out.CommandID)); parseErr == nil {
+				safeObservation.CommandID = out.CommandID
+			}
+			observation := enableObservation(safeObservation)
+			if err != nil || r.Context().Err() != nil {
+				fail(w, classify(err), observation)
+				return
+			}
+			freshUse := use
+			freshUse.ProofUse.Now = c.Now()
+			wantedState := mfa.FactorActive
+			if s.action == mfa.Remove {
+				wantedState = mfa.FactorRevoked
+			}
+			matched := out.Factor.ID == s.factor && out.Factor.Version == s.version+1 && out.Replacement == nil
+			if s.action == mfa.Replace {
+				wantedState = mfa.FactorPending
+				pending := out.Replacement
+				matched = pending != nil && out.Factor.ID != s.factor && out.Factor.Version == 1 && pending.Enrollment.ID == mfa.EnrollmentID(out.Factor.ID) && pending.Enrollment.FactorMethod == "totp" && pending.Enrollment.Version == 1 && c.Now().Before(pending.Enrollment.ExpiresAt) && len(pending.RecoveryMaterial.Codes) == int(c.ReplacementCodeCount)
+			}
+			if _, err := identity.ParseCommandID(string(out.CommandID)); err != nil || out.Outcome != identity.CommitOutcomeCommitted || !matched || out.Factor.Method != "totp" || out.Factor.State != wantedState || out.Factor.Label != s.name || (mfa.ListResult{Factors: []mfa.FactorProjection{out.Factor}}).ValidateAt(c.Now()) != nil || s.base.read.ValidateAt(c.Now()) != nil || p.Validate(freshUse) != nil {
+				fail(w, enableFailure{status: 503, code: "unavailable"}, observation)
+				return
+			}
+			data, err := factorUpdateBody(out)
+			if err != nil {
+				fail(w, classify(err), observation)
+				return
+			}
+			defer clear(data[:cap(data)])
+			start := c.Now()
+			writeSecretJSON(w, r, data, observation, func() bool {
+				at := c.Now()
+				freshUse := use
+				freshUse.ProofUse.Now = at
+				return !at.Before(start) && s.base.read.ValidateAt(at) == nil && p.Validate(freshUse) == nil && (out.Replacement == nil || at.Before(out.Replacement.Enrollment.ExpiresAt))
+			})
+		},
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &enablePipeline{pipeline: h}, nil
+}
+
+func factorUpdateBody(out mfa.FactorUpdateResult) ([]byte, error) {
+	type factor struct {
+		ID         mfa.FactorID    `json:"id"`
+		Method     string          `json:"method"`
+		Label      string          `json:"label"`
+		State      mfa.FactorState `json:"state"`
+		CreatedAt  time.Time       `json:"createdAt"`
+		LastUsedAt *time.Time      `json:"lastUsedAt,omitempty"`
+		Version    uint64          `json:"version"`
+	}
+	f := factor{ID: out.Factor.ID, Method: out.Factor.Method, Label: out.Factor.Label, State: out.Factor.State, CreatedAt: out.Factor.CreatedAt.UTC(), Version: out.Factor.Version}
+	if !out.Factor.LastUsedAt.IsZero() {
+		v := out.Factor.LastUsedAt.UTC()
+		f.LastUsedAt = &v
+	}
+	if out.Replacement != nil {
+		return replacementFactorBody(out, f)
+	}
+	var buffer bytes.Buffer
+	encoder := json.NewEncoder(&buffer)
+	encoder.SetEscapeHTML(false)
+	if encoder.Encode(struct {
+		Outcome   string             `json:"commitOutcome"`
+		CommandID identity.CommandID `json:"commandID"`
+		Factor    factor             `json:"factor"`
+	}{"committed", out.CommandID, f}) != nil || buffer.Len() > 4096 {
+		return nil, identityhttp.ErrUnavailable
+	}
+	return buffer.Bytes(), nil
+}
+
+func replacementFactorBody(out mfa.FactorUpdateResult, factor any) ([]byte, error) {
+	pending := out.Replacement
+	if pending == nil || len(pending.RecoveryMaterial.Codes) < 1 || len(pending.RecoveryMaterial.Codes) > 64 {
+		return nil, identityhttp.ErrUnavailable
+	}
+	metadata, err := json.Marshal(map[string]any{"commitOutcome": "committed", "commandID": out.CommandID, "factor": factor, "replacement": map[string]any{"enrollmentID": pending.Enrollment.ID, "factorMethod": "totp", "expiresAt": pending.Enrollment.ExpiresAt.UTC(), "version": pending.Enrollment.Version}})
+	if err != nil || len(metadata) < 2 || len(metadata) > 2048 {
+		clear(metadata)
+		return nil, identityhttp.ErrUnavailable
+	}
+	// Allocate the exact bounded canonical-code allowance before borrowing
+	// plaintext, avoiding abandoned backing arrays during append growth.
+	data := make([]byte, len(metadata)-2, len(metadata)+len(pending.RecoveryMaterial.Codes)*25+32)
+	copy(data, metadata[:len(metadata)-2])
+	clear(metadata)
+	accepted := false
+	defer func() {
+		if !accepted {
+			clear(data[:cap(data)])
+		}
+	}()
+	data = append(data, `,"recoveryCodes":[`...)
+	var seen [64][16]byte
+	defer clear(seen[:])
+	for i, code := range pending.RecoveryMaterial.Codes {
+		if i > 0 {
+			data = append(data, ',')
+		}
+		if code.Len() != 22 || code.Use(func(raw []byte) error {
+			var decoded [16]byte
+			var canonical [22]byte
+			defer clear(decoded[:])
+			defer clear(canonical[:])
+			n, err := base64.RawURLEncoding.Decode(decoded[:], raw)
+			if err != nil || n != len(decoded) {
+				return identityhttp.ErrInvalidInput
+			}
+			base64.RawURLEncoding.Encode(canonical[:], decoded[:])
+			if !bytes.Equal(canonical[:], raw) || slices.Contains(seen[:i], decoded) {
+				return identityhttp.ErrInvalidInput
+			}
+			seen[i] = decoded
+			data = append(data, '"')
+			data = append(data, raw...)
+			data = append(data, '"')
+			return nil
+		}) != nil {
+			return nil, identityhttp.ErrUnavailable
+		}
+	}
+	data = append(data, ']', '}', '}', '\n')
+	accepted = true
+	return data, nil
+}
+
+// Format redacts borrowed configuration and rate custody.
+func (FactorUpdateConfig) Format(s fmt.State, _ rune) {
+	_, _ = s.Write([]byte("mfahttp.FactorUpdateConfig(redacted)"))
+}
+
+// MarshalJSON rejects implicit configuration export.
+func (FactorUpdateConfig) MarshalJSON() ([]byte, error) { return nil, session.ErrSecretSerialization }
+
+// MarshalText rejects implicit configuration export.
+func (FactorUpdateConfig) MarshalText() ([]byte, error) { return nil, session.ErrSecretSerialization }
+
+// LogValue emits only a fixed redaction marker.
+func (FactorUpdateConfig) LogValue() slog.Value {
+	return slog.StringValue("mfahttp.FactorUpdateConfig(redacted)")
+}
