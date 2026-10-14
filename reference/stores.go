@@ -33,11 +33,15 @@ type ReferenceDependencies struct {
 }
 
 // StoreConfiguration contains selected adapter configuration exactly once.
-// Velocity is required; OTP and Delivery must be selected together. Zero is
+// Select exactly one of Velocity and DurableAdmission. OTP and Delivery must
+// be selected together. Zero is
 // invalid. Construction copies configuration. Concurrent input mutation during
 // construction is forbidden. No optional feature is silently enabled.
 type StoreConfiguration struct {
 	Velocity VelocityStoreConfiguration
+	// DurableAdmission selects durable PostgreSQL-only risk admission. It is
+	// mutually exclusive with Velocity and enables no HTTP feature by itself.
+	DurableAdmission *DurableAdmissionConfiguration
 	// OTP selects public Send and its mandatory delivery owner. Nil preserves
 	// the recovery-only profile. No caller evaluator or domain store is accepted.
 	OTP      *OTPSendConfiguration
@@ -149,6 +153,7 @@ type storeState struct {
 	features   *featureState
 	migrations *MigrationApplyPolicy
 	httpRate   *httpRateState
+	durable    bool
 }
 
 type tenantRecovery struct {
@@ -171,6 +176,9 @@ func ComposeStores(c StoreConfiguration, d ReferenceDependencies) (StoreSet, err
 	httpRate, err := composeHTTPRate(c.HTTPRate, d.PostgreSQL)
 	if err != nil {
 		return StoreSet{}, err
+	}
+	if c.DurableAdmission != nil {
+		return composeDurableAdmission(c, d, migrationPolicy, httpRate)
 	}
 	v := c.Velocity
 	if len(v.Tenants) < 1 || len(v.Tenants) > 128 || v.Batch < 1 || v.Batch > 1000 || v.MaxRecords < 1 || v.MaxRecords > 100000 || v.RecoveryTimeout <= 0 || v.RecoveryTimeout >= v.LeaseDuration {
@@ -239,6 +247,9 @@ func (s StoreSet) RecoverVelocity(ctx context.Context, tenant string) (store ris
 		return nil, err
 	}
 	state := s.state
+	if state.durable {
+		return nil, risk.ErrInvalidVelocityRecovery
+	}
 	state.mu.Lock()
 	t := state.tenants[tenant]
 	if state.closed || t == nil || t.busy {
@@ -454,8 +465,10 @@ func (s StoreSet) Close(ctx context.Context) error {
 	}
 	drained := state.drained
 	state.mu.Unlock()
-	if err := state.native.Close(ctx); err != nil {
-		return err
+	if !state.durable {
+		if err := state.native.Close(ctx); err != nil {
+			return err
+		}
 	}
 	select {
 	case <-drained:

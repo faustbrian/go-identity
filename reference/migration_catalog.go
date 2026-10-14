@@ -8,6 +8,7 @@ import (
 	auditpg "github.com/faustbrian/go-audit/postgres"
 	identity "github.com/faustbrian/go-identity"
 	passwordpg "github.com/faustbrian/go-identity/password/postgres"
+	riskpg "github.com/faustbrian/go-identity/risk/postgres"
 	sessionpg "github.com/faustbrian/go-identity/session/postgres"
 	migrations "github.com/faustbrian/go-migrations/v3"
 	ratepg "github.com/faustbrian/go-rate-limit/v2/postgres"
@@ -69,6 +70,13 @@ func (s StoreSet) migrationCatalog(ctx context.Context) ([]migrationHistory, err
 		shared.owners[v] = owner
 	}
 	catalog := []migrationHistory{shared}
+	if s.state.durable {
+		steps, err := (riskpg.DurableCounterMigrationSource{Schema: s.state.config.Schema, Version: 1}).Load(ctx)
+		if err != nil {
+			return nil, err
+		}
+		catalog = append(catalog, migrationHistory{namespace: "identity_durable_admission", history: steps, owners: map[migrations.Version]ModuleID{1: "identity/risk/postgres"}, guards: []migrationGuard{{version: 1, schema: s.state.config.Schema, tables: []string{"durable_counter_scopes", "durable_counter_keys", "durable_counter_windows", "durable_counter_aliases", "durable_counter_attempts"}}}})
+	}
 	if s.state.httpRate != nil {
 		// Keep the native owner's version/SQL and an independent ledger. Enabling
 		// admission later must not rewrite an already-applied identity prefix.

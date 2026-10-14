@@ -233,6 +233,7 @@ func proveReferenceSignupGraph(t *testing.T, competing bool, protected ...bool) 
 }
 
 type signupGraphExtensions struct {
+	postgresBaseline                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       bool
 	disable, disableAll, disablePending, disableHTTP, mfaEnrollment, mfaListing, mfaListHTTP, mfaListStandalone, mfaListDenials, mfaListRecheck, activeStepUp, activeStepUpHTTP, factorManagement, factorReplacement, factorReplacementDelayed, factorReplacementRollback, factorReplacementConfirmationFault, factorReplacementConfirmationRace, factorReplacementPredecessorUse, factorReplacementRecovery, factorManagementHTTP, factorManagementRace, factorManagementDenials, factorManagementClear, factorRemoval, factorRemovalReset, factorRemovalLocks, regeneration, regenerationHTTP, regenerationRace, regenerationDenials, passwordMFA, passwordRecovery, recoveryRace, completionCommitFault bool
 	replacementContinuationDenial                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          string
 	replacementSourceMethod                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                string
@@ -248,7 +249,7 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 	}
 	ctx, cancel := context.WithTimeout(t.Context(), budget)
 	defer cancel()
-	f := newLiveStoresProfile(t, ctx, false)
+	f := newLiveStoresProfile(t, ctx, false, extensions.postgresBaseline)
 	f.disable, f.disableAll = extensions.disable, extensions.disableAll
 	f.disablePending = extensions.disablePending
 	f.disableHTTP = extensions.disableHTTP
@@ -438,6 +439,9 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 	}
 	messages := make(chan string, 4)
 	deps.DeliverySender = nativeBrowserCodeSender{codes: messages}
+	if extensions.postgresBaseline {
+		selectDurableReferenceAdmission(&c)
+	}
 	for _, namespace := range []string{"", "other-users"} {
 		invalid, selected := c, *c.PasswordSignup
 		selected.Native.AuthorizationNamespace = namespace
@@ -514,6 +518,9 @@ END $$`); err != nil {
 		panic("unused")
 	}}
 	config := reference.ReferenceConfig{Profile: reference.PostgresWithValkey, Policies: policies, HTTP: identityhttp.TransportPolicy{Network: identityhttp.NetworkConfig{Limits: identityhttp.Limits{MaximumHeaderBytes: 32768, MaximumURLBytes: 4096, MaximumBodyBytes: 16384, MaximumDecodedBytes: 16384, MaximumFields: 64, MaximumDepth: 8}, MaximumForwardedHops: 1, TenantHosts: []identityhttp.TenantHost{{Host: "127.0.0.1", TenantID: otpTenant}}, PublicHosts: []string{"localhost"}}, HandlerTimeout: 4 * time.Second, Document: identityhttp.DocumentConfig{Title: "Registration reference", Version: "1"}}, Migration: reference.MigrationPolicy{LockTimeout: time.Second, CommandRetention: time.Hour}, Workers: reference.WorkerPolicy{MaxConcurrency: 1, LeaseDuration: time.Minute, DrainTimeout: time.Second}, Tenant: reference.TenantPolicy{Resolver: &nativeServerTenant{}}}
+	if extensions.postgresBaseline {
+		config.Profile = reference.PostgresOnly
+	}
 	server, err := reference.NewServer(config, deps, features)
 	if err != nil {
 		if invalid, ok := err.(identity.InvalidInputError); ok {
@@ -629,13 +636,15 @@ END $$`); err != nil {
 	if _, err := stores.RecoverVelocity(ctx, otpTenant); err == nil {
 		t.Fatal("fresh journal fabricated coverage")
 	}
-	// Historical velocity warmup is explicit; account and flow creation are not.
-	if _, err := f.pool.Raw().Exec(ctx, "UPDATE risk_store.velocity_epochs SET journal_started_at=clock_timestamp()-interval '61 minutes' WHERE tenant_id=$1 AND state='replaying'", otpTenant); err != nil {
-		t.Fatal(err)
-	}
-	wait(ctx, t, 11*time.Second)
-	if _, err := stores.RecoverVelocity(ctx, otpTenant); err != nil {
-		t.Fatal("native velocity activation", err)
+	if !extensions.postgresBaseline {
+		// Conditional historical coverage proof belongs only to the legacy lane.
+		if _, err := f.pool.Raw().Exec(ctx, "UPDATE risk_store.velocity_epochs SET journal_started_at=clock_timestamp()-interval '61 minutes' WHERE tenant_id=$1 AND state='replaying'", otpTenant); err != nil {
+			t.Fatal(err)
+		}
+		wait(ctx, t, 11*time.Second)
+		if _, err := stores.RecoverVelocity(ctx, otpTenant); err != nil {
+			t.Fatal("native velocity activation", err)
+		}
 	}
 	if r := server.Readiness(ctx); !r.Ready {
 		t.Fatal("selected native readiness", r.Failures)
@@ -729,7 +738,7 @@ CREATE TRIGGER registration_fixture_fail BEFORE INSERT ON identity.delivery_inte
 	r, p := invoke("/v1/password/signup", body, "registration-original-key", cookies)
 	var signup passwordhttp.SignupResponse
 	if r.StatusCode != 200 || json.Unmarshal(p, &signup) != nil || !signup.VerificationRequired || signup.CommitOutcome != "committed" || len(r.Cookies()) != 0 {
-		t.Fatal("native public signup", r.StatusCode)
+		t.Fatal("native public signup", r.StatusCode, signup.Error, signup.CommitOutcome)
 	}
 	var users, passwords, factors, deliveries, grants int
 	if err := f.pool.Raw().QueryRow(ctx, `SELECT (SELECT count(*) FROM identity.users),(SELECT count(*) FROM identity_password.credentials),(SELECT count(*) FROM identity_mfa.factor_authorities WHERE active_factors=0 AND version=1),(SELECT count(*) FROM identity.delivery_intents),(SELECT count(*) FROM capability_identity_one_use)`).Scan(&users, &passwords, &factors, &deliveries, &grants); err != nil || users != 1 || passwords != 1 || factors != 1 || deliveries != 1 || grants != 1 {

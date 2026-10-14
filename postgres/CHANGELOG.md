@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Admit sealed original/generated password-signup commands through the existing
+  native feature selector instead of the intentionally unavailable generic
+  accessor. Preserve registered-owner, transaction and invocation-lifetime
+  checks; this fixes registration failing before its protected mutation.
+
 - Reconcile abandoned native secondary-OTP preparations without replaying a
   code, browser cookie or generated credential. Preserve live leases and
   original protected attempt charges; only claim/journal exclusion, validated

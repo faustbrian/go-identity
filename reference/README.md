@@ -1,5 +1,9 @@
 # Identity reference composition
 
+For the runnable PostgreSQL registration/verification/signin/session/logout
+backend, see [BASELINE.md](BASELINE.md). It is an explicit local profile, not
+a UI, production deployment or whole-platform release.
+
 ## Native password/secondary-OTP login
 
 Select `PasswordSigninConfiguration.OTP` with `PasswordOTPConfiguration` and

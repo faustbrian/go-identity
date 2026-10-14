@@ -14,8 +14,8 @@ import (
 )
 
 // DeploymentProfile selects authoritative PostgreSQL with optional Valkey.
-// Zero is invalid. The current velocity-backed graph requires Valkey; the
-// PostgreSQL-only graph remains a required, unimplemented deployment profile.
+// Zero is invalid. PostgreSQL-only selects durable admission; the optional
+// Valkey profile keeps its explicit native recovery and coverage requirements.
 type DeploymentProfile uint8
 
 const (
@@ -109,7 +109,7 @@ type Server struct {
 func NewServer(c ReferenceConfig, d ReferenceDependencies, f FeatureSet) (*Server, error) {
 	invalid := identity.InvalidInputError{Field: "reference_server"}
 	s := f.state
-	if s == nil || d.PostgreSQL == nil || d.PostgreSQL != s.pool || c.Profile != PostgresWithValkey || c.Bootstrap.Enabled || c.Migration.ApplyOnStartup || c.Migration.LockTimeout < time.Millisecond || c.Migration.LockTimeout > 5*time.Minute || c.Migration.CommandRetention < time.Hour || c.Migration.CommandRetention > 87600*time.Hour || c.Workers.MaxConcurrency < 1 || c.Workers.MaxConcurrency > 1024 || c.Workers.LeaseDuration < time.Second || c.Workers.LeaseDuration > time.Hour || c.Workers.DrainTimeout < time.Second || c.Workers.DrainTimeout > time.Hour || nilServerDependency(c.Tenant.Resolver) || len(c.ProviderConfiguration) > 64 {
+	if s == nil || d.PostgreSQL == nil || d.PostgreSQL != s.pool || !matchingProfile(c.Profile, s.durable) || c.Bootstrap.Enabled || c.Migration.ApplyOnStartup || c.Migration.LockTimeout < time.Millisecond || c.Migration.LockTimeout > 5*time.Minute || c.Migration.CommandRetention < time.Hour || c.Migration.CommandRetention > 87600*time.Hour || c.Workers.MaxConcurrency < 1 || c.Workers.MaxConcurrency > 1024 || c.Workers.LeaseDuration < time.Second || c.Workers.LeaseDuration > time.Hour || c.Workers.DrainTimeout < time.Second || c.Workers.DrainTimeout > time.Hour || nilServerDependency(c.Tenant.Resolver) || len(c.ProviderConfiguration) > 64 {
 		return nil, invalid
 	}
 	for i, p := range c.ProviderConfiguration {
@@ -215,6 +215,10 @@ func NewServer(c ReferenceConfig, d ReferenceDependencies, f FeatureSet) (*Serve
 	}
 	server.handler, server.document = handler, document
 	return server, nil
+}
+
+func matchingProfile(profile DeploymentProfile, durable bool) bool {
+	return durable && profile == PostgresOnly || !durable && profile == PostgresWithValkey
 }
 
 func sameServerAuthorization(a, b any) bool {

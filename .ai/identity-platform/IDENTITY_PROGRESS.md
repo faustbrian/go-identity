@@ -1,6 +1,6 @@
 # Identity Platform Progress
 
-Prepared on 2026-10-14. Implementation is not activated by this file.
+Implementation activated by the user on 2026-10-14. B1 is active.
 
 ## Live ownership and update rule
 
@@ -12,8 +12,19 @@ Historical planning ledgers and evidence stay at their original locations.
 
 ## Current state
 
-- Next deliverable: B1, a runnable PostgreSQL authentication backend, then B2
-  reset and B3 fresh reauthentication/password change. None is demonstrated yet.
+- Active deliverable: B1, a runnable PostgreSQL authentication backend, then B2
+  reset and B3 fresh reauthentication/password change. The complete fresh
+  PostgreSQL-only B1 HTTP journey now passes locally with captured delivery and
+  existing rollback/replay/CSRF/isolation checks. It does not backdate history.
+  The runnable HTTPS consumer also passes locally using the command's public
+  graph, real PostgreSQL, private captured delivery and a synthetic HIBP IO
+  seam. It proves wrong/unverified-password denial, CSRF, saved-cookie revocation
+  and clean shutdown. Reproducible source wiring and walkthrough now exist;
+  the frozen source-runner integration passed. Independent review found two
+  filesystem-durability defects; their new failure/recovery regressions failed
+  before correction and now pass with the affected command under race.
+  Complete final re-review and main delivery remain open;
+  B1 is not closed. No new whole-unit verification is claimed.
 - Existing runtime source checkpoint: identity main `ef377dd`. Adopt it;
   documentation commits do not restart its implementation or invalidate
   unchanged runtime proof. Verify live Git state on activation.
@@ -31,6 +42,9 @@ Historical planning ledgers and evidence stay at their original locations.
   The later pass is not runtime/full-history qualification and does not repair
   that old result. Assess B1's actual affected checks; isolate a reproduced
   delivery failure, not a dashboard cleanup or new planning/tooling programme.
+  B1 changed-content secrets and local repository/config/cohesion/docs/offline
+  specification checks passed. Whole-history secrets still fail on unchanged
+  committed history; full-release qualification remains pending.
 - Closed Tools PR #338 stays closed. No historical evidence import, Tools-main
   planning publication or completion of the retired repair goal is required.
 - Full target remains 67 units, 19 journey categories and 10 shared-issuer cases.
@@ -45,7 +59,7 @@ restart old slices merely to fill this table; adopt applicable prior proof.
 
 | ID | Consumer outcome / owning units | Current disposition |
 | --- | --- | --- |
-| B1 | Runnable registration/verification/signin/session/logout baseline: identity, identity/postgres, identity/password, identity/password/postgres, identity/session, identity/session/postgres, identity/delivery, identity/delivery/postgres, identity/http, identity/reference; required primitive contracts | Not demonstrated |
+| B1 | Runnable registration/verification/signin/session/logout baseline: identity, identity/postgres, identity/password, identity/password/postgres, identity/session, identity/session/postgres, identity/delivery, identity/delivery/postgres, identity/http, identity/reference; required primitive contracts | Full journey and runnable HTTPS consumer locally proven; final checks/review/main delivery pending |
 | B2 | Reset and required session invalidation using the baseline owners plus identity/risk/hibp | Not demonstrated |
 | B3 | Password change and fresh reauthentication through baseline owners | Not demonstrated |
 | M04 | Email add/change/verify/list/get/remove with session/lifecycle policy: identity/email | Closure not reassessed |

@@ -81,8 +81,12 @@ func newLiveStores(t *testing.T, ctx context.Context) liveStores {
 	return newLiveStoresProfile(t, ctx, true)
 }
 
-func newLiveStoresProfile(t *testing.T, ctx context.Context, install bool) liveStores {
+func newLiveStoresProfile(t *testing.T, ctx context.Context, install bool, postgresOnly ...bool) liveStores {
 	t.Helper()
+	if len(postgresOnly) > 1 {
+		t.Fatal("ambiguous fixture profile")
+	}
+	durable := len(postgresOnly) == 1 && postgresOnly[0]
 	port := func(name string) string {
 		value := os.Getenv(name)
 		n, err := strconv.Atoi(value)
@@ -103,9 +107,12 @@ func newLiveStoresProfile(t *testing.T, ctx context.Context, install bool) liveS
 		}
 		return value
 	}
-	password := strings.TrimSpace(string(read("IDENTITY_REFERENCE_PASSWORD_FILE")))
-	if len(password) != 44 || strings.ContainsAny(password, "'\\\n\r") {
-		t.Fatal("generated base64 fixture credential required")
+	password := ""
+	if !durable {
+		password = strings.TrimSpace(string(read("IDENTITY_REFERENCE_PASSWORD_FILE")))
+		if len(password) != 44 || strings.ContainsAny(password, "'\\\n\r") {
+			t.Fatal("generated base64 fixture credential required")
+		}
 	}
 	dsn := "host=127.0.0.1 port=" + port("IDENTITY_REFERENCE_POSTGRES_PORT") + " user=postgres password='" + password + "' dbname=identity_test sslmode=disable search_path=public"
 	admin, err := pgx.Connect(ctx, dsn)
@@ -155,15 +162,26 @@ func newLiveStoresProfile(t *testing.T, ctx context.Context, install bool) liveS
 	if err != nil {
 		t.Fatal("invalid fixture key")
 	}
-	credential, err := riskvalkey.NewCredential("default", []byte(password))
-	if err != nil {
-		t.Fatal("invalid fixture credential")
-	}
 	c := reference.StoreConfiguration{Velocity: reference.VelocityStoreConfiguration{
-		Native: riskvalkey.VelocityRecoveryConfig{Namespace: name, ReplaySecret: bytes.Repeat([]byte{7}, 32), Policy: policy, Keys: []risk.CounterDigestKey{key}, Endpoint: "rediss://" + net.JoinHostPort("localhost", port("IDENTITY_REFERENCE_VALKEY_PORT")), TLS: &tls.Config{ServerName: "localhost", MinVersion: tls.VersionTLS12}, TrustPEM: read("IDENTITY_REFERENCE_TRUST_FILE"), Credential: credential, Timeout: time.Second, PoolSize: 4, Topology: "standalone"},
+		Native: riskvalkey.VelocityRecoveryConfig{Namespace: name, ReplaySecret: bytes.Repeat([]byte{7}, 32), Policy: policy, Keys: []risk.CounterDigestKey{key}},
 		Schema: "risk_store", Tenants: []string{"tenant", "other"}, PrimaryTimeout: time.Second, LeaseDuration: 5 * time.Second, RecoveryTimeout: 4 * time.Second, Batch: 100, MaxRecords: 10000,
 	}}
-	stores, err := reference.ComposeStores(c, reference.ReferenceDependencies{PostgreSQL: pool})
+	if !durable {
+		credential, err := riskvalkey.NewCredential("default", []byte(password))
+		if err != nil {
+			t.Fatal("invalid fixture credential")
+		}
+		c.Velocity.Native.Endpoint = "rediss://" + net.JoinHostPort("localhost", port("IDENTITY_REFERENCE_VALKEY_PORT"))
+		c.Velocity.Native.TLS = &tls.Config{ServerName: "localhost", MinVersion: tls.VersionTLS12}
+		c.Velocity.Native.TrustPEM = read("IDENTITY_REFERENCE_TRUST_FILE")
+		c.Velocity.Native.Credential = credential
+		c.Velocity.Native.Timeout, c.Velocity.Native.PoolSize, c.Velocity.Native.Topology = time.Second, 4, "standalone"
+	}
+	selected := c
+	if durable {
+		selectDurableReferenceAdmission(&selected)
+	}
+	stores, err := reference.ComposeStores(selected, reference.ReferenceDependencies{PostgreSQL: pool})
 	if err != nil {
 		t.Fatal("owned composition failed", err)
 	}
@@ -194,6 +212,14 @@ func newLiveStoresProfile(t *testing.T, ctx context.Context, install bool) liveS
 		}
 	}
 	return liveStores{stores: stores, pool: pool, config: c}
+}
+
+// Helpers share policy setup, not an overlapping runtime owner. This conversion
+// precedes public composition, which receives only the selected durable lane.
+func selectDurableReferenceAdmission(c *reference.StoreConfiguration) {
+	v := c.Velocity
+	c.DurableAdmission = &reference.DurableAdmissionConfiguration{Schema: v.Schema, Namespace: v.Native.Namespace, Policy: v.Native.Policy, Keys: v.Native.Keys, ReplayKey: v.Native.ReplaySecret, Tenants: v.Tenants, MaximumRecords: 10000, Timeout: v.PrimaryTimeout}
+	c.Velocity = reference.VelocityStoreConfiguration{}
 }
 
 func TestReferenceFreshPrimaryAndNativeRemainUnavailable(t *testing.T) {

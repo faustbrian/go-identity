@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Explicitly select PostgreSQL-only admission without changing the existing
+  Valkey recovery lane. Native bootstrap and password registration/verification/
+  signin/session/logout work on a fresh primary without fabricated history.
+- Add an explicitly local-only HTTPS baseline command with separate init,
+  operator migration, serving and consumer-exercise operations; private stable
+  keys, default Argon2id, required HIBP and captured mail remain on the path.
+  The development runner uses committed supplier sources, not public-release
+  installation. See BASELINE.md for the selected profile and remaining scope.
+
 - Exercise native email secondary-OTP enrollment/confirmation through actual
   encrypted delivery and selected HTTP login with public session admission,
   credential-free replay and factor-authority invalidation. This supersedes

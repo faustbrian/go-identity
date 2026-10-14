@@ -1,0 +1,29 @@
+{
+  "purpose": "Temporary B1 development wiring to committed local suppliers; not public-download or release qualification",
+  "sources": [
+    {"repository":"go-audit","revision":"314cd6a3dfb03c1575b77a13a11f9d3f9a787c01","modules":["."]},
+    {"repository":"go-audit","revision":"21ad3d11d3b2a24b83e16dd31ef79df222beb9c3","modules":["postgres"]},
+    {"repository":"go-authentication","revision":"7fc797d91317caaae90c98e29443fa4560db739f","modules":["."]},
+    {"repository":"go-authorization","revision":"60ed4b3229d83dabc40b3e81235ee7a69a95c4b1","modules":["."]},
+    {"repository":"go-capability","revision":"c13f373468a40cdf6f2be4a99768e95568955438","modules":[".","postgres/identity"]},
+    {"repository":"go-clock","revision":"1b60c95930d5912b4e8060b51894387fafd74635","modules":["."]},
+    {"repository":"go-identifier","revision":"6503365429c839a88ee951b0fd10844c53e5f804","modules":["."]},
+    {"repository":"go-password","revision":"c5746af64a6f6be44c4244ebd3d0463120da183f","modules":["."]},
+    {"repository":"go-postgres","revision":"61261695bcc7db86becda200859edb54d00fd498","modules":["."]},
+    {"repository":"go-secret-envelope","revision":"22fc4a2d925dfad2023437c9ef4ed862d501d4d0","modules":["."]},
+    {"repository":"go-rate-limit","revision":"5dd986e00e78a9fd0530a37c57641914d8a47e55","modules":["."]},
+    {"repository":"go-http-middleware","revision":"626faadc123f34d1b125b88006811b2a9092055d","modules":["."]},
+    {"repository":"go-migrations","revision":"ffa4a2848318d745a86e72c053efdae415cc09ee","modules":["."]},
+    {"repository":"go-migrations","revision":"7eabbeb156f8569805d68fee74860df2ff9b2b97","modules":["."]},
+    {"repository":"go-http-client","revision":"02502a99b9676870d59cd05abd9b46ceeb12a101","modules":["."]},
+    {"repository":"go-cache","revision":"af6aaed3c69848b5d3bcc65c9de1efd8f88c17f6","modules":["."]},
+    {"repository":"go-jsonrpc","revision":"9812dee1bae988287b8aa2a7c6244598781a50b3","modules":["."]},
+    {"repository":"go-service","revision":"5ec87210a869a42f09cea1c368692c68e1e9a8cc","modules":["."]},
+    {"repository":"go-cli","revision":"21c94982866b5429ccc16a26c6fa7c6e2d281dde","modules":["."]},
+    {"repository":"go-correlation","revision":"9943fef0495a97345d097dad9f052b595e54fafb","modules":["."]},
+    {"repository":"go-json-schema","revision":"af8f3943a40789e48db6e543a4163d6b9b20165f","modules":["."]},
+    {"repository":"go-json-schema","revision":"7012bdc0d01caf32f5180940393325b818f48619","modules":["."]},
+    {"repository":"go-openapi","revision":"10992c0fceb6c237939a08bfd732a9787a4904b8","modules":["."]},
+    {"repository":"go-transactional-outbox","revision":"83268cc69a53938c8b44bdfc97354687f352f8b4","modules":[".","postgres/identity"]}
+  ]
+}

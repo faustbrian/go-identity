@@ -47,7 +47,9 @@ func (c *Coordinator) invokeFeatureInputAdmission(ctx context.Context, w Work, c
 	if err = ctx.Err(); err != nil {
 		return w.fail(ctx, err)
 	}
-	spec, ok := command.Feature()
+	// Use the same closed selector as plan admission: sealed password variants
+	// deliberately refuse the legacy generic accessor without losing metadata.
+	spec, ok := commandFeature(command)
 	entry, selectErr := c.registry.selectFeatureOperation(*p.feature)
 	phase, owned := entry.contributor.(FeatureInputAdmissionContributor)
 	if !ok || selectErr != nil || !owned || spec.Binding != p.binding || spec.Operation != p.feature.Operation {

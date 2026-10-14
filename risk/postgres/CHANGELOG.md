@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add durable PostgreSQL fixed-window admission with transactional multi-counter
+  charges, authenticated original replay, retained key-rotation continuity and
+  explicit tenant/capacity bounds. Fresh installations need no Valkey history.
+  Apply the independent DurableCounterMigrationSource before selecting this
+  store; existing protected counters and Valkey histories remain unchanged.
+
 - Preserve original code/browser custody through secondary OTP completion
   counter mapping. Select `MFAOTPCompletionCounterMigrationSource` after the
   existing completion/recovery/login-send histories before charging that lane.
