@@ -1,8 +1,8 @@
 # Identity Implementation — Current Milestone
 
-Activated on 2026-10-14. B1 and B2 are closed; B3 is active.
+Activated on 2026-10-14. B1, B2 and B3 are closed; M04 email lifecycle is next.
 
-## Active: B3 fresh password reauthentication and change
+## Closed: B3 fresh password reauthentication and change
 
 - Base: main 0675bfd; adopt delivered B1/B2 and the existing native
   verification/keyed-change/cookie/session-effect owners. Supplier pins remain
@@ -58,6 +58,19 @@ Activated on 2026-10-14. B1 and B2 are closed; B3 is active.
   carries the successfully reset credential/version into change. The corrected
   combined journey and standalone reset/change race cases pass (39.395s total);
   complete review of the corrected full diff remains pending.
+- Closure: /root/b3_complete_review (GPT-6.1 Sol medium) approved complete
+  tree dbd3b48006664109723059a7c79eea603a7684d1 against ca43e21. Corrected
+  command unit race passes (9.411s); command vet and local docs pass. Source
+  24b1b0842f32e831fc16933749899ef2310aba1a is on origin/main. Its initial CI
+  run 38558305428 timed out during cold secret-scanner compilation, not an
+  identity runtime test. The independently reviewed one-file CI repair
+  47a3ee0eb50104556fb9c6f636c3e3616cd20a06 prepares the exact pinned scanner
+  in isolated verifier-only caches, preserving the fatal forty-second scan
+  and cleanup. Cold local rehearsal passed; Required CI succeeded on 47a3ee0
+  in run 38559659144. That repair's reviewed tree is aef50df4, same reviewer.
+  B3 is closed: 3/39 consumer milestones delivered. No Tools source changed;
+  no whole-unit, public-download, release or production qualification is
+  claimed. Disposable PostgreSQL is stopped. Next: M04 email lifecycle.
 
 ## Closed: B2 emailed-capability password reset
 
