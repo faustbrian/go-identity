@@ -31,6 +31,7 @@ type resetCompleteWork struct {
 	last         password.ResetCompleteRequest
 	outcome      identity.CommitOutcome
 	err          error
+	noReceipt    bool
 }
 
 func (s *resetCompleteWork) ResetCompletionRateSource(ctx context.Context, p capability.Proof, c authorization.DecisionContext) (identity.UserID, identity.CredentialID, string, time.Duration, error) {
@@ -54,6 +55,9 @@ func (s *resetCompleteWork) ResetComplete(ctx context.Context, r password.ResetC
 	}); err != nil {
 		s.t.Error(err)
 	}
+	if s.noReceipt {
+		return password.ResetCompleteResult{}, s.err
+	}
 	if s.outcome != 0 && s.outcome != identity.CommitOutcomeCommitted {
 		return password.ResetCompleteResult{CommandID: r.CommandID, Outcome: s.outcome}, s.err
 	}
@@ -61,7 +65,7 @@ func (s *resetCompleteWork) ResetComplete(ctx context.Context, r password.ResetC
 }
 
 func TestResetCompleteSelectedTransport(t *testing.T) {
-	for _, mode := range []string{"success", "key", "authorization", "unknown-field", "duplicate-json", "query", "source-denied", "rate-outage", "origin", "unknown", "native-conflict", "foreign-conflict", "committed-error"} {
+	for _, mode := range []string{"success", "key", "authorization", "unknown-field", "duplicate-json", "query", "source-denied", "rate-outage", "origin", "unknown", "native-conflict", "foreign-conflict", "committed-error", "native-denied", "native-invalid-proof"} {
 		t.Run(mode, func(t *testing.T) {
 			f, signup, _, device := newSignup(t)
 			rate, err := identityhttp.NewChallengeVerificationRateLimiter(identityhttp.ChallengeVerificationRateConfig{Shared: f.rate, Namespace: "reset-verify", Now: f.clock.Now, Key: [32]byte{8}, MaximumDuration: time.Second})
@@ -130,6 +134,10 @@ func TestResetCompleteSelectedTransport(t *testing.T) {
 				work.err = context.Canceled
 				want = 503
 				entered = true
+			case "native-denied":
+				work.noReceipt, work.err, want, entered = true, identity.ForbiddenError{}, 403, true
+			case "native-invalid-proof":
+				work.noReceipt, work.err, want, entered = true, password.ErrInvalidReset, 403, true
 			}
 			r.Body = signupBody(r, body+"}")
 			h, err := passwordhttp.NewResetCompleteHandler(c)

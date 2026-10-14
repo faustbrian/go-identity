@@ -59,6 +59,19 @@ func (s *ResetService) ResetRequestRateSource(ctx context.Context, input identif
 // No mutation, debit, reservation, retry or goroutine occurs. Proof and primary
 // pool remain borrowed. Calls are bounded, concurrent-safe and redact failures.
 func (s *ResetService) ResetCompletionRateSource(ctx context.Context, proof capability.Proof, caller authorization.DecisionContext) (user identity.UserID, credential identity.CredentialID, challenge string, lifetime time.Duration, err error) {
+	return s.resetRateSource(ctx, proof, caller, "identity.password.reset-complete")
+}
+
+// ResetInspectionRateSource returns authenticated original metadata for the
+// read-only inspection budget, never usable authority. Terminal provenance may
+// be read for charging; ResetInspect separately requires current unused state.
+// Bounds, borrowed ownership, redaction and zero-on-error semantics match
+// ResetCompletionRateSource; the caller must use the distinct inspection action.
+func (s *ResetService) ResetInspectionRateSource(ctx context.Context, proof capability.Proof, caller authorization.DecisionContext) (identity.UserID, identity.CredentialID, string, time.Duration, error) {
+	return s.resetRateSource(ctx, proof, caller, "identity.password.reset-inspect")
+}
+
+func (s *ResetService) resetRateSource(ctx context.Context, proof capability.Proof, caller authorization.DecisionContext, action authorization.Action) (user identity.UserID, credential identity.CredentialID, challenge string, lifetime time.Duration, err error) {
 	if ctx == nil || s == nil || s.config == nil || s.pool == nil || s.issuer == nil {
 		return "", "", "", 0, password.ErrPasswordWork
 	}
@@ -99,7 +112,7 @@ func (s *ResetService) ResetCompletionRateSource(ctx context.Context, proof capa
 	if dc.Request.Resource.ID == "" {
 		dc.Request.Resource.ID = authorization.ResourceID(origin.UserID)
 	}
-	if dc.Validate() != nil || dc.Request.Tenant != authorization.TenantID(origin.TenantID) || dc.Request.Action != "identity.password.reset-complete" || dc.Request.Resource.Type != "identity.user" || dc.Request.Resource.ID != authorization.ResourceID(origin.UserID) || dc.PolicyRevision != authorization.Revision(policy.PolicyVersion) {
+	if dc.Validate() != nil || dc.Request.Tenant != authorization.TenantID(origin.TenantID) || dc.Request.Action != action || dc.Request.Resource.Type != "identity.user" || dc.Request.Resource.ID != authorization.ResourceID(origin.UserID) || dc.PolicyRevision != authorization.Revision(policy.PolicyVersion) {
 		return "", "", "", 0, identity.ForbiddenError{}
 	}
 	dc.Request.Environment.Time = now.UTC()

@@ -5,6 +5,21 @@ import (
 	"testing"
 )
 
+func TestBaselineResetRequiresExplicitFeatureSelection(t *testing.T) {
+	for _, operation := range []string{"serve", "migrate", "exercise-reset"} {
+		args := []string{operation, "--local-capture", "--password-reset", "--directory", "private-run"}
+		if operation != "exercise-reset" {
+			args = append(args, "--dsn-file", "private-dsn")
+		}
+		if _, err := parseOptions(args); err != nil {
+			t.Fatal("explicit reset profile rejected", err)
+		}
+	}
+	if _, err := parseOptions([]string{"exercise-reset", "--local-capture", "--directory", "private-run"}); err == nil {
+		t.Fatal("reset exercise accepted without explicit feature selection")
+	}
+}
+
 func TestLocalCaptureRequiresExplicitLoopbackSelection(t *testing.T) {
 	valid := []string{"serve", "--local-capture", "--directory", "private-run", "--dsn-file", "private-dsn", "--origin", "https://127.0.0.1:8443"}
 	if _, err := parseOptions(valid); err != nil {

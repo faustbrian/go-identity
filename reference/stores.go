@@ -422,7 +422,7 @@ func (s StoreSet) Close(ctx context.Context) error {
 		state.httpRate.limiter.Close()
 	}
 	if state.features != nil && state.features.httpPasswordReset != nil {
-		state.features.httpPasswordReset.rate.Close()
+		state.features.httpPasswordReset.close()
 	}
 	if state.features != nil && state.features.httpRegistrationVerification != nil {
 		state.features.httpRegistrationVerification.rate.Close()

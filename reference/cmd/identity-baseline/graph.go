@@ -8,6 +8,8 @@ import (
 	"net/url"
 	"time"
 
+	"github.com/faustbrian/go-audit"
+	auditpg "github.com/faustbrian/go-audit/postgres"
 	"github.com/faustbrian/go-authorization"
 	"github.com/faustbrian/go-capability"
 	issuerpg "github.com/faustbrian/go-capability/postgres/identity"
@@ -42,13 +44,14 @@ type baselineGraph struct {
 	server   *reference.Server
 	hibp     *hibp.Client
 	http     *httpclient.Client
+	audits   *localAuditCustody
 }
 
 func (g *baselineGraph) close(ctx context.Context) error {
 	if g == nil {
 		return nil
 	}
-	return errors.Join(g.stores.Close(ctx), g.hibp.Close(ctx), g.http.Close())
+	return errors.Join(g.stores.Close(ctx), g.hibp.Close(ctx), g.http.Close(), g.audits.Close())
 }
 
 type fixedTenant struct{}
@@ -57,7 +60,7 @@ func (*fixedTenant) ResolveTenant(ctx context.Context) (identity.TenantID, error
 	return baselineTenant, ctx.Err()
 }
 
-func baselineRiskPolicy(version uint64, screening bool) (risk.Policy, error) {
+func baselineRiskPolicy(version uint64, screening, reset bool) (risk.Policy, error) {
 	c := risk.PolicyConfig{Version: version, Limits: risk.VelocityLimits{MaxDimensions: 4, MaxCounters: 16, MaxWindow: time.Hour, MaxLimit: 120, KeyBytes: 64, RetryAfterMax: time.Hour}, Profiles: []risk.Profile{
 		{Class: risk.Authentication, Phase: risk.BeforeCredential, Dimensions: []risk.Dimension{risk.TenantDimension, risk.NetworkDimension, risk.DeviceDimension, risk.IdentifierDimension}, Window: 5 * time.Minute, Limit: 10, ThresholdAction: risk.Throttle, EvidenceTTL: 5 * time.Minute, Unknown: risk.DenyUnknown, MaxCounters: 4, RequiredSignals: []string{"velocity"}},
 		{Class: risk.CredentialMutation, Phase: risk.ReserveWithCommand, Dimensions: []risk.Dimension{risk.TenantDimension, risk.SubjectDimension, risk.SessionDimension, risk.NetworkDimension}, Window: 15 * time.Minute, Limit: 5, ThresholdAction: risk.Deny, EvidenceTTL: 15 * time.Minute, Unknown: risk.DenyUnknown, MaxCounters: 4, RequiredSignals: []string{"velocity"}},
@@ -66,6 +69,9 @@ func baselineRiskPolicy(version uint64, screening bool) (risk.Policy, error) {
 	}}
 	if screening {
 		c.HIBP = risk.HIBPPolicy{CacheTTL: time.Hour, Operations: []risk.Action{"identity.password.signup"}}
+		if reset {
+			c.HIBP.Operations = append(c.HIBP.Operations, "identity.password.reset-complete")
+		}
 	}
 	return risk.NewPolicy(c)
 }
@@ -82,7 +88,7 @@ func buildBaseline(ctx context.Context, o options, secrets credentials, pool *da
 func composeBaseline(ctx context.Context, o options, secrets credentials, pool *database.Pool, sender delivery.Sender, outbound http.RoundTripper) (_ *baselineGraph, err error) {
 	key := func(name string) [32]byte { return secrets.Keys[name] }
 	bytes := func(name string) []byte { k := key(name); return append([]byte(nil), k[:]...) }
-	authorize, err := baselineAuthorization()
+	authorize, err := baselineAuthorization(o.passwordReset)
 	if err != nil {
 		return nil, err
 	}
@@ -92,15 +98,15 @@ func composeBaseline(ctx context.Context, o options, secrets credentials, pool *
 	if err != nil {
 		return nil, err
 	}
-	policy, err := baselineRiskPolicy(3, false)
+	policy, err := baselineRiskPolicy(3, false, false)
 	if err != nil {
 		return nil, err
 	}
-	protectedPolicy, err := baselineRiskPolicy(9, false)
+	protectedPolicy, err := baselineRiskPolicy(9, false, false)
 	if err != nil {
 		return nil, err
 	}
-	screeningPolicy, err := baselineRiskPolicy(3, true)
+	screeningPolicy, err := baselineRiskPolicy(3, true, o.passwordReset)
 	if err != nil {
 		return nil, err
 	}
@@ -282,6 +288,48 @@ func composeBaseline(ctx context.Context, o options, secrets credentials, pool *
 	}
 	configured.HTTPPasswordSignup = &reference.HTTPPasswordSignupConfiguration{ActorID: baselineActor, PolicyRevision: 9}
 	configured.HTTPRegistrationVerification = &reference.HTTPRegistrationVerificationConfiguration{Origin: o.origin, ActorID: baselineActor, PolicyRevision: 9, VerificationNamespace: "local-registration", VerificationKey: key("verification-http")}
+	if o.passwordReset {
+		audits, err := auditpg.New(pool.Raw(), auditpg.Config{})
+		if err != nil {
+			return nil, err
+		}
+		g.audits, err = openLocalAuditCustody(o.directory, audits)
+		if err != nil {
+			return nil, err
+		}
+		observed, err := hibp.NewObservedChecker(g.hibp, hibp.ObservationConfig{Delivery: audit.RecorderConfig{Sink: g.audits, Mode: audit.DeliveryFailClosed}, AuditTimeout: time.Second})
+		if err != nil {
+			return nil, err
+		}
+		resetProvider, err := hibp.NewObservedSignalProvider(observed, screeningPolicy)
+		if err != nil {
+			return nil, err
+		}
+		resetCollect := func(ctx context.Context, original identity.CommandBinding, challenge string, binding risk.Context, candidate primitive.Secret) ([]risk.Signal, error) {
+			attempt, err := identity.ParsePreAuthTransactionID(challenge)
+			if err != nil {
+				return nil, err
+			}
+			correlation, err := identity.ParseCommandID(original.CorrelationID)
+			if err != nil {
+				return nil, err
+			}
+			if original.ActorKind != authorization.SubjectServiceAccount || binding.Attempt != string(original.CommandID) || binding.Tenant != string(original.TenantID) || string(binding.Operation) != original.OperationID || original.OperationID != "identity.password.reset-complete" {
+				return nil, hibp.ErrInvalidRequest
+			}
+			signal, err := resetProvider.Assess(ctx, hibp.CheckRequest{OperationID: original.OperationID, Action: binding.Operation, TenantID: original.TenantID, ReplayID: original.CommandID, Purpose: "reset", SubjectScope: "password-reset", PolicyVersion: "local-baseline-v1", Candidate: candidate, Attribution: &hibp.SecurityAttribution{CommandID: original.CommandID, CorrelationID: correlation, Actor: audit.ActorInput{Kind: audit.ActorSystem, ID: string(original.ActorID)}, AttemptID: attempt, PolicyID: original.PolicyID, PolicyVersion: original.PolicyVersion}})
+			return []risk.Signal{signal}, err
+		}
+		configured.Delivery.Templates = append(configured.Delivery.Templates, delivery.Template{ID: "password-reset", Version: 1, Channel: delivery.ChannelEmail, Locale: "en", Body: "{{.link}}", ContentType: "text/plain", RequiredVariables: []string{"link"}, VariableSchema: []delivery.VariableSchema{{Name: "link", Kind: "url", Sensitive: true}}, AllowedOrigins: []string{o.origin}, MaxRenderedBytes: 4096})
+		configured.PasswordReset = &reference.PasswordResetConfiguration{Native: passwordpg.ResetConfig{
+			Repository: signin.Repository, ConfigurationID: "local-reset-v1", PolicyID: baselineResetPolicy, GlobalAuthorityID: "deployment", AuthorizationNamespace: "users", Origins: []string{o.origin}, ActiveEnvelopeKeyID: "delivery-envelope", IdentifierKey: key("identifier"), Session: storage, Coordinator: coordinator,
+			Profile:   password.ResetProfileConfig{Issuer: o.origin, Audience: "reset", MaximumLifetime: 5 * time.Minute, Callbacks: []string{o.origin + "/reset"}, CurrentBindingKeyVersion: 1, RetainedBindingKeys: map[uint32][32]byte{1: key("capability-binding")}},
+			Issuer:    issuerpg.IssuerConfig{Crypto: capability.ServiceConfig{Signer: signer, Resolver: resolver, Clock: time.Now, Limits: capability.DefaultLimits()}, Audience: "reset", CurrentReplayKeyVersion: 1, RetainedReplayKeys: map[uint32][32]byte{1: key("capability-replay")}, PreparationTimeout: time.Second},
+			Screening: password.HashPreparationConfig{Primitive: crypto, MinimumBytes: 12, MaximumBytes: 128, Timeout: 3 * time.Second, DummyHash: dummy, Policy: screeningPolicy, Now: time.Now}, CollectReset: resetCollect, Risk: signin.Risk,
+			Request: &passwordpg.ResetRequestConfig{Address: address, RequestKeys: requestKeys, Lifetime: 5 * time.Minute, IssuanceCustody: issuerpg.IssuancePreparationConfig{Deployment: "deployment", ActiveEnvelopeKey: "capability-envelope", EnvelopeKeys: map[string][]byte{"capability-envelope": bytes("capability-envelope")}, VerificationKeys: []issuerpg.PreparationVerificationKey{{ID: "local-baseline", HMAC: bytes("capability-signing")}}, Clock: time.Now}, Delivery: passwordpg.SignupDeliveryConfig{Resolver: resolver, Endpoint: o.origin + "/password/reset", TemplateID: "password-reset", TemplateVersion: 1, ProviderVersion: 1, Locales: []string{"en"}, ScopeKey: key("verification-scope"), Timeout: time.Second}},
+		}}
+		configured.HTTPPasswordReset = &reference.HTTPPasswordResetConfiguration{ActorID: baselineActor, PolicyRevision: 9, CallbackURL: o.origin + "/reset", VerificationNamespace: "local-reset", VerificationKey: key("verification-http"), Inspect: true}
+	}
 	configured.Session = &reference.SessionConfiguration{Native: sessionpg.SignOutServiceConfig{Execution: sessionpg.IssueExecutorConfig{Repository: storage, Profile: sessionpg.IssueAdmissionConfig(signin.Profile), Coordinator: coordinator, Authorization: authorize, Clock: clock.System{}, PolicyID: "session-signout", PolicyVersion: 9, AuditRetentionVersion: 1}, Validation: session.ServiceConfig{Profile: session.StorageStatefulOpaque, Audience: "local-baseline", MaximumDuration: 2 * time.Second, ClockUncertainty: time.Millisecond, LookupKeys: []session.DigestKey{lookup}}, Cookie: sessionCookie, MaximumDuration: 4 * time.Second}, CSRFKeys: []session.CSRFKey{csrf}}
 	configured.HTTPSession = &reference.HTTPSessionConfiguration{Transport: session.CredentialCookie, TrustedOrigins: []identityhttp.Origin{identityhttp.Origin(o.origin)}, RateNamespace: "local-session", EmergencyMaximumKeys: 128, Degraded: func(ctx context.Context, _ identityhttp.SafeRateEvent) error { return ctx.Err() }}
 	dependencies := reference.ReferenceDependencies{PostgreSQL: pool, EnvelopeKeys: envelope, DeliverySender: sender}

@@ -69,11 +69,12 @@ type OriginalCommandSecretRateRequest struct {
 // invalid. Rate admission neither grants authentication/authorization nor
 // bypasses the protected workflow's cumulative risk/abuse policy.
 type KeyedSecretRateLimiter struct {
-	shared             *ratelimit.StrictService
-	config             KeyedSecretRateConfig
-	operations         map[string]bool
-	originalOperations map[string]bool
-	closed             *atomic.Bool
+	shared               *ratelimit.StrictService
+	config               KeyedSecretRateConfig
+	operations           map[string]bool
+	originalOperations   map[string]bool
+	inspectionOperations map[string]bool
+	closed               *atomic.Bool
 }
 
 // NewKeyedSecretRateLimiter freezes canonical keyed rate.secret selection.
@@ -93,6 +94,7 @@ func NewKeyedSecretRateLimiter(c KeyedSecretRateConfig) (*KeyedSecretRateLimiter
 	}
 	operations := make(map[string]bool)
 	originalOperations := make(map[string]bool)
+	inspectionOperations := make(map[string]bool)
 	for id, row := range readCatalog() {
 		if row.Rate == "rate.secret" && row.Idempotency == "keyed" && row.Exposure != "direct" {
 			operations[id] = true
@@ -103,8 +105,11 @@ func NewKeyedSecretRateLimiter(c KeyedSecretRateConfig) (*KeyedSecretRateLimiter
 		if row.Rate == "rate.secret" && originalCommand && row.Exposure != "direct" {
 			originalOperations[id] = true
 		}
+		if row.Rate == "rate.secret" && row.Idempotency == "repeat" && row.Exposure != "direct" {
+			inspectionOperations[id] = true
+		}
 	}
-	return &KeyedSecretRateLimiter{shared: shared, config: c, operations: operations, originalOperations: originalOperations, closed: &atomic.Bool{}}, nil
+	return &KeyedSecretRateLimiter{shared: shared, config: c, operations: operations, originalOperations: originalOperations, inspectionOperations: inspectionOperations, closed: &atomic.Bool{}}, nil
 }
 
 // Configured reports structural, observed nonterminal owner validity without
@@ -158,7 +163,47 @@ func (l *KeyedSecretRateLimiter) AdmitOriginalCommand(ctx context.Context, facts
 	return l.admitSecret(ctx, facts, r.UserID, r.ChallengeID, r.ChallengeLifetime, command)
 }
 
-func (l *KeyedSecretRateLimiter) admitSecret(ctx context.Context, facts NetworkFacts, user identity.UserID, challenge string, lifetime time.Duration, command string) (out AuthRateResult, err error) {
+func (l *KeyedSecretRateLimiter) admitSecret(ctx context.Context, facts NetworkFacts, user identity.UserID, challenge string, lifetime time.Duration, command string) (AuthRateResult, error) {
+	return l.admitSecretBuckets(ctx, facts, user, challenge, lifetime, command, true, true)
+}
+
+// AdmitInspectionIP charges the canonical secret IP10/10m bucket before any
+// cryptographic or primary-source lookup for a repeatable secret inspection.
+// Each invocation gets a fresh native debit identity; client retry keys are not
+// accepted. Earlier deadlines win, unknown/closed/cancelled results deny, and no
+// authority or ownership is established. Follow successful admission with
+// AdmitInspectionSubject using the authenticated original source, not body IDs.
+func (l *KeyedSecretRateLimiter) AdmitInspectionIP(ctx context.Context, facts NetworkFacts, operation string) (AuthRateResult, error) {
+	if !l.Configured() || ctx == nil || !facts.Valid() || facts.Realm() != RealmTenant || !l.inspectionOperations[operation] {
+		return AuthRateResult{}, ErrInvalidInput
+	}
+	command, err := identity.NewCommandID()
+	if err != nil {
+		return AuthRateResult{}, ErrRateUnavailable
+	}
+	correlation := l.digest("inspection-ip", l.config.Namespace, string(facts.TenantID()), operation, string(command))
+	return l.admitSecretBuckets(ctx, facts, "", "", 0, correlation, true, false)
+}
+
+// AdmitInspectionSubject atomically charges subject10/10m and original
+// challenge5/lifetime after the same attempt's successful AdmitInspectionIP.
+// The shared challenge-source metadata shape is reused, not rate.verify limits.
+// Signed lifetime is unchanged, never remaining expiry. Each read gets fresh
+// debit correlation: inspection replay must not become a free cached read.
+// No IP recount, proof consumption, local fallback or automatic retry occurs.
+func (l *KeyedSecretRateLimiter) AdmitInspectionSubject(ctx context.Context, facts NetworkFacts, r ChallengeVerificationRateRequest) (AuthRateResult, error) {
+	if !l.Configured() || ctx == nil || !facts.Valid() || facts.Realm() != RealmTenant || !l.inspectionOperations[r.OperationID] || !ascii(string(r.UserID), 128, false) || !rateIdentifier(r.ChallengeID) || len(r.ChallengeID) > 256 || r.ChallengeLifetime < time.Second || r.ChallengeLifetime > 24*time.Hour || r.ChallengeLifetime%time.Microsecond != 0 {
+		return AuthRateResult{}, ErrInvalidInput
+	}
+	command, err := identity.NewCommandID()
+	if err != nil {
+		return AuthRateResult{}, ErrRateUnavailable
+	}
+	correlation := l.digest("inspection-subject", l.config.Namespace, string(facts.TenantID()), r.OperationID, string(command))
+	return l.admitSecretBuckets(ctx, facts, r.UserID, r.ChallengeID, r.ChallengeLifetime, correlation, false, true)
+}
+
+func (l *KeyedSecretRateLimiter) admitSecretBuckets(ctx context.Context, facts NetworkFacts, user identity.UserID, challenge string, lifetime time.Duration, command string, ip, subject bool) (out AuthRateResult, err error) {
 	defer func() {
 		if recover() != nil {
 			out, err = AuthRateResult{}, ErrRateUnavailable
@@ -169,8 +214,14 @@ func (l *KeyedSecretRateLimiter) admitSecret(ctx context.Context, facts NetworkF
 		capacity    uint64
 		period      time.Duration
 	}
-	buckets := []bucket{{"secret-ip", facts.ClientIP().String(), 10, 10 * time.Minute}, {"secret-subject", l.digest("subject", string(facts.TenantID()), string(user)), 10, 10 * time.Minute}}
-	if challenge != "" {
+	buckets := make([]bucket, 0, 3)
+	if ip {
+		buckets = append(buckets, bucket{"secret-ip", facts.ClientIP().String(), 10, 10 * time.Minute})
+	}
+	if subject {
+		buckets = append(buckets, bucket{"secret-subject", l.digest("subject", string(facts.TenantID()), string(user)), 10, 10 * time.Minute})
+	}
+	if subject && challenge != "" {
 		buckets = append(buckets, bucket{"secret-challenge", l.digest("challenge", string(facts.TenantID()), challenge), 5, lifetime})
 	}
 	requests := make([]ratelimit.Request, len(buckets))

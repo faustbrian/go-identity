@@ -30,6 +30,35 @@ func (f FeatureSet) PasswordReset() (password.ResetService, error) {
 
 type composedPasswordReset struct{ state *storeState }
 
+// PasswordResetInspection returns the selected read-only reset owner without
+// IO. It preserves the same initialized tenant/graph lifetime as PasswordReset;
+// callers gain neither a proof reservation nor permission for later completion.
+func (f FeatureSet) PasswordResetInspection() (password.ResetInspectionService, error) {
+	owner, err := f.PasswordReset()
+	if err != nil {
+		return nil, err
+	}
+	return owner.(composedPasswordReset), nil
+}
+
+func (f composedPasswordReset) ResetInspect(ctx context.Context, r password.ResetInspectRequest) (password.ResetInspectResult, error) {
+	w, done, err := f.enter(ctx, r.TenantID)
+	if err != nil {
+		return password.ResetInspectResult{}, err
+	}
+	defer done()
+	return f.state.features.reset.ResetInspect(w, r)
+}
+
+func (f composedPasswordReset) ResetInspectionRateSource(ctx context.Context, proof capability.Proof, caller authorization.DecisionContext) (identity.UserID, identity.CredentialID, string, time.Duration, error) {
+	w, done, err := f.enter(ctx, identity.TenantID(caller.Request.Tenant))
+	if err != nil {
+		return "", "", "", 0, err
+	}
+	defer done()
+	return f.state.features.reset.ResetInspectionRateSource(w, proof, caller)
+}
+
 func (f composedPasswordReset) enter(ctx context.Context, tenant identity.TenantID) (context.Context, func(), error) {
 	w, done, err := f.state.enterFeature(ctx, true)
 	if err != nil {

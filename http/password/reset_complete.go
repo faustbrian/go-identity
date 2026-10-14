@@ -325,6 +325,18 @@ func NewResetCompleteHandlerWithMiddleware(c ResetCompleteConfig, m []identityht
 			a.out.CommitOutcome = "unknown"
 			a.out.Recovery = &ResetCompleteRecovery{TenantID: s.request.TenantID, UserID: s.rate.UserID, CredentialID: s.credential, ActorID: c.ActorID, ActorKind: authorization.SubjectServiceAccount}
 			result, err := c.Service.ResetComplete(r.Context(), s.request)
+			// Current authority can deny before the native owner returns a
+			// command receipt (for example, a consumed proof under a new
+			// command). Preserve that denial without inventing NotCommitted
+			// for historical work. Original recovery stays unknown; successor
+			// and session success remain absent.
+			if result == (password.ResetCompleteResult{}) && r.Context().Err() == nil {
+				var denied identity.ForbiddenError
+				if errors.As(err, &denied) || errors.Is(err, password.ErrInvalidReset) {
+					reject(w, r, err)
+					return
+				}
+			}
 			if result.Validate() != nil || result.CommandID != s.request.CommandID {
 				reject(w, r, identityhttp.ErrUnavailable)
 				return

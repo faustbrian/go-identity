@@ -1,10 +1,11 @@
-# Runnable password authentication baseline (B1)
+# Runnable password authentication and reset backend (B1/B2)
 
 This is a **local, loopback-only backend**, not a UI or a production deployment.
 It composes public owners and real PostgreSQL for registration, verification,
 password signin, authenticated session reads and logout. Nothing seeds a user or
-substitutes a domain store. HTTP features are explicitly selected; reset/change,
-OTP signin, MFA and other login methods are not enabled here.
+substitutes a domain store. HTTP features are explicitly selected; reset is an
+additional opt-in profile. Password change, OTP signin, MFA and other login
+methods are not enabled here.
 
 ## Prerequisites and source boundary
 
@@ -128,5 +129,73 @@ IDENTITY_RISK_POSTGRES_TEST_DSN='host=127.0.0.1 port=55439 user=postgres dbname=
   ruby scripts/identity-baseline.rb "$(dirname "$PWD")" integration
 ```
 
-These proofs do not close the platform: reset is B2, password change is B3, and
-full unit/release qualification and the other retained milestones remain.
+## Opt into emailed password reset (B2)
+
+Keep the same private directory, database and exact HTTPS origin. Stop the B1
+server without removing the disposable database, then migrate and restart with
+the explicit selection. Do not initialize or replace the stable private keys.
+The operator completes or resumes the baseline's original migration request
+before preparing reset. It retains a separate migration-request-reset.json;
+partial reset retries reuse that original input, not a newly planned command.
+
+```sh
+ruby scripts/identity-baseline.rb "$collection" migrate --password-reset \
+  --local-capture --directory "$baseline_parent/app" \
+  --dsn-file "$baseline_parent/postgres.dsn"
+ruby scripts/identity-baseline.rb "$collection" serve --password-reset \
+  --local-capture --directory "$baseline_parent/app" \
+  --dsn-file "$baseline_parent/postgres.dsn"
+```
+
+In the second terminal, with the same private directory selected:
+
+```sh
+ruby scripts/identity-baseline.rb "$(dirname "$PWD")" exercise-reset --password-reset \
+  --local-capture --directory "$baseline_parent/app"
+```
+
+The consumer registers/verifies a fresh account and signs in twice. It then
+requests reset and reads the actual captured link, inspects twice without
+consumption, explicitly completes and replays the same command, rejects changed
+replay and a new command using the consumed proof, and proves both saved original
+session cookies are denied. The old password cannot sign in; the new password
+can. Reset itself issues no session or cookie; signin remains a separate action.
+The final new session is logged out and its saved cookie is also denied.
+
+Selected routes are POST /v1/password/reset-request,
+POST /v1/password/reset/inspect and POST /v1/password/reset-complete. Tokens
+belong only in bounded POST bodies, never inspection URLs or query parameters.
+Inspection returns only advisory valid/invalid state and cannot authorize later
+completion. Required HIBP screening, current account/recipient/factor checks,
+atomic one-use, credential replacement and all-session revocation remain native
+owner responsibilities. This profile supports only current known-empty MFA
+authority at the original signed generation; it is not MFA bypass or administrative
+recovery. Default serving without --password-reset advertises none of these routes.
+
+### Recover uncertain required audit delivery
+
+The selected local host durably retains the exact redacted native HIBP audit
+records in private `app/audit-custody/` before PostgreSQL append. An uncertain
+primary acknowledgement still denies password screening; local custody is not
+permission to complete reset. It survives process restart and cannot recreate
+record IDs, repeat HIBP screening or perform credential/session effects.
+
+Stop the local server, retain its existing private directory/database, and run:
+
+```sh
+ruby scripts/identity-baseline.rb "$collection" reconcile-audits --password-reset \
+  --local-capture --directory "$baseline_parent/app" \
+  --dsn-file "$baseline_parent/postgres.dsn"
+```
+
+This bounded operation submits unchanged original records through the native
+idempotent audit append protocol. It reapplies the native privacy policy without
+changing canonical bytes, and removes custody only after confirmed primary
+acceptance or duplicate acknowledgement. Then restart the selected server.
+There is no background recovery loop or production audit-delivery service here.
+At most 256 batches of one or two records are retained; full capacity or an
+unavailable filesystem denies new required audit delivery rather than evicting
+unconfirmed records. Do not edit or delete pending files to manufacture success.
+
+These proofs do not close the platform: password change is B3, and full
+unit/release qualification and the other retained milestones remain.

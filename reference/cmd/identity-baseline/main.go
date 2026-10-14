@@ -55,7 +55,7 @@ func runBaseline(ctx context.Context, args []string, output io.Writer) (err erro
 	if err != nil {
 		return err
 	}
-	if o.operation == "exercise" {
+	if o.operation == "exercise" || o.operation == "exercise-reset" {
 		return exerciseBaseline(ctx, o, secrets, output)
 	}
 	dsn, err := readPrivateFile(o.dsnFile, 16384)
@@ -86,6 +86,27 @@ func runBaseline(ctx context.Context, args []string, output io.Writer) (err erro
 		return err
 	}
 	defer func() { err = errors.Join(err, sender.Close()) }()
+	if o.operation == "migrate" && o.passwordReset {
+		// Optional migrations get a separate original request, only after the
+		// unchanged baseline request is complete. Resume an existing reset
+		// request directly; reverting to the smaller profile after its suffix
+		// is installed would misclassify that managed history as foreign.
+		if _, statErr := os.Lstat(filepath.Join(o.directory, "migration-request-reset.json")); errors.Is(statErr, os.ErrNotExist) {
+			base := o
+			base.passwordReset = false
+			predecessor, buildErr := buildBaseline(ctx, base, secrets, pool, sender)
+			if buildErr != nil {
+				return buildErr
+			}
+			migrateErr := migrateBaseline(ctx, predecessor.stores, o.directory)
+			closeErr := predecessor.close(ctx)
+			if migrateErr != nil || closeErr != nil {
+				return errors.Join(migrateErr, closeErr)
+			}
+		} else if statErr != nil {
+			return errCredentials
+		}
+	}
 	graph, err := buildBaseline(ctx, o, secrets, pool, sender)
 	if err != nil {
 		return err
@@ -96,10 +117,19 @@ func runBaseline(ctx context.Context, args []string, output io.Writer) (err erro
 		err = errors.Join(err, graph.close(bounded))
 	}()
 	if o.operation == "migrate" {
-		if err := migrateBaseline(ctx, graph.stores, o.directory); err != nil {
+		if err := migrateSelectedBaseline(ctx, graph.stores, o.directory, o.passwordReset); err != nil {
 			return err
 		}
 		_, err := io.WriteString(output, "migrations compatible; no account created or serving started\n")
+		return err
+	}
+	if o.operation == "reconcile-audits" {
+		bounded, stop := context.WithTimeout(ctx, 10*time.Second)
+		defer stop()
+		if graph.audits == nil || graph.audits.Reconcile(bounded) != nil {
+			return errLocalProfile
+		}
+		_, err := io.WriteString(output, "original audit records reconciled; no identity or credential effects\n")
 		return err
 	}
 	startup, stop := context.WithTimeout(ctx, 10*time.Second)
@@ -147,9 +177,21 @@ func migrateBaseline(ctx context.Context, stores reference.StoreSet, directory s
 	return migrateBaselineWithSync(ctx, stores, directory, syncDirectory)
 }
 
+func migrateSelectedBaseline(ctx context.Context, stores reference.StoreSet, directory string, reset bool) error {
+	name := "migration-request.json"
+	if reset {
+		name = "migration-request-reset.json"
+	}
+	return migrateBaselineWithRequest(ctx, stores, directory, name, syncDirectory)
+}
+
 // A filesystem acknowledgement seam allows failure proof without replacing
 // the native migration owner or its database effects.
 func migrateBaselineWithSync(ctx context.Context, stores reference.StoreSet, directory string, acknowledge func(string) error) error {
+	return migrateBaselineWithRequest(ctx, stores, directory, "migration-request.json", acknowledge)
+}
+
+func migrateBaselineWithRequest(ctx context.Context, stores reference.StoreSet, directory, name string, acknowledge func(string) error) error {
 	checked, err := stores.ReferenceMigrationCheck(ctx, reference.ReferenceMigrationCheckRequest{Modules: baselineModules})
 	if err != nil {
 		return err
@@ -167,7 +209,7 @@ func migrateBaselineWithSync(ctx context.Context, stores reference.StoreSet, dir
 	// Persist the application's original operator input before side effects.
 	// The existing migration owner, not this file, decides progress and recovery.
 	// A rerun reuses the exact original plan/key; it never replans a partial apply.
-	path := filepath.Join(directory, "migration-request.json")
+	path := filepath.Join(directory, name)
 	var request operatorRequest
 	if _, err := os.Lstat(path); errors.Is(err, os.ErrNotExist) {
 		plan, err := stores.ReferenceMigrationPlan(ctx, reference.ReferenceMigrationPlanRequest{Modules: baselineModules})

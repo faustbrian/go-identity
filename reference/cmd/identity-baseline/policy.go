@@ -10,14 +10,17 @@ import (
 const (
 	baselineTenant = "AAAAAAAAAAAAAAAAAAAAAQ"
 	baselineActor  = "AAAAAAAAAAAAAAAAAAAAAw"
+	// The security-event profile requires the actual policy's canonical opaque
+	// identifier, not a human-readable label or a fabricated per-check identity.
+	baselineResetPolicy = "AAAAAAAAAAAAAAAAAAAABQ"
 )
 
 // This is the selected application's finite policy, evaluated by the existing
 // authorization engine. Native owners still prove current account, credential,
 // original-flow and session ownership inside their protected transactions.
-type baselineEvaluator struct{}
+type baselineEvaluator struct{ reset bool }
 
-func (*baselineEvaluator) Evaluate(ctx context.Context, r authorization.Request) (authorization.Decision, error) {
+func (e *baselineEvaluator) Evaluate(ctx context.Context, r authorization.Request) (authorization.Decision, error) {
 	deny := authorization.Decision{Outcome: authorization.Deny}
 	if err := ctx.Err(); err != nil {
 		return deny, err
@@ -34,6 +37,10 @@ func (*baselineEvaluator) Evaluate(ctx context.Context, r authorization.Request)
 			allow = r.Resource.Type == "identity.request-admission" && string(r.Resource.ID) == string(r.Action) || r.Resource.Type == "identity.anonymous-flow" && r.Resource.ID != "" || r.Resource.Type == "identity.user" && r.Resource.ID != ""
 		case "identity.user.create", "identity.email.verification-confirm":
 			allow = r.Resource.Type == "identity.user" && r.Resource.ID != ""
+		case "identity.password.reset-request", "identity.password.reset-request.recover":
+			allow = e.reset && (r.Resource.Type == "identity.request-admission" && string(r.Resource.ID) == string(r.Action) || r.Resource.Type == "identity.anonymous-flow" && r.Resource.ID != "" || r.Resource.Type == "identity.user" && r.Resource.ID != "")
+		case "identity.password.reset-complete", "identity.password.reset-complete.recover", "identity.password.reset-inspect":
+			allow = e.reset && r.Resource.Type == "identity.user" && r.Resource.ID != ""
 		}
 	}
 	if r.Subject.Kind == authorization.SubjectServiceAccount && r.Subject.ID == "baseline-worker" && r.Action == "identity.delivery.process" {
@@ -48,8 +55,8 @@ func (*baselineEvaluator) Evaluate(ctx context.Context, r authorization.Request)
 	return deny, nil
 }
 
-func baselineAuthorization() (authorization.Service, error) {
-	snapshot, err := authorization.NewSnapshot(9, authorization.DenyOverrides, authorization.PolicyDefinition{ID: "local-baseline", Revision: 9, Evaluator: &baselineEvaluator{}})
+func baselineAuthorization(reset bool) (authorization.Service, error) {
+	snapshot, err := authorization.NewSnapshot(9, authorization.DenyOverrides, authorization.PolicyDefinition{ID: "local-baseline", Revision: 9, Evaluator: &baselineEvaluator{reset: reset}})
 	if err != nil {
 		return nil, errLocalProfile
 	}

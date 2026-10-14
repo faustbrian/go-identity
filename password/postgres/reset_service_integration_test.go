@@ -216,6 +216,39 @@ func testPublicResetCompletion(t *testing.T, ctx context.Context, pool *database
 	defer secret.Destroy()
 	caller := authorization.DecisionContext{Request: authorization.Request{Tenant: signinTestTenant, Subject: authorization.Subject{ID: signinTestActor, Kind: authorization.SubjectServiceAccount}, Action: "identity.password.reset-complete", Resource: authorization.Resource{Type: "identity.user", ID: authorization.ResourceID(user)}, Environment: authorization.Environment{Time: time.Now().UTC()}}, PolicyRevision: 3, CorrelationID: string(id)}
 	request := password.ResetCompleteRequest{TenantID: signinTestTenant, CommandID: id, Token: proof, NewPassword: secret, Caller: caller, Origin: "https://identity.test", Network: "192.0.2.1", Device: "synthetic-device"}
+	inspect := func(r password.ResetCompleteRequest) (password.ResetInspectResult, error) {
+		c := r.Caller.Clone()
+		c.Request.Action = "identity.password.reset-inspect"
+		return service.ResetInspect(ctx, password.ResetInspectRequest{TenantID: r.TenantID, Token: r.Token, Caller: c, Origin: r.Origin})
+	}
+	for range 2 {
+		if result, err := inspect(request); err != nil || !result.Valid || calls != 0 || proof.ValidateBounds(32, 4096) != nil {
+			t.Fatal("native repeated inspection consumed proof or reached password work")
+		}
+	}
+	t.Run("expired inspection", func(t *testing.T) {
+		originalIssuer := service.issuer
+		future := issuerConfig
+		future.Crypto.Clock = func() time.Time { return origin.ExpiresAt }
+		service.issuer, err = issuerpg.NewIssuer(future)
+		if err != nil {
+			t.Fatal("expired-clock issuer configuration rejected")
+		}
+		defer func() { service.issuer = originalIssuer }()
+		if result, err := inspect(request); err != nil || result.Valid || calls != 0 {
+			t.Fatal("expired original proof retained positive inspection")
+		}
+	})
+	t.Run("cancelled inspection", func(t *testing.T) {
+		cancelled, stop := context.WithCancel(ctx)
+		stop()
+		c := caller.Clone()
+		c.Request.Action = "identity.password.reset-inspect"
+		result, err := service.ResetInspect(cancelled, password.ResetInspectRequest{TenantID: request.TenantID, Token: proof, Caller: c, Origin: request.Origin})
+		if !errors.Is(err, context.Canceled) || result.Valid || calls != 0 {
+			t.Fatal("cancelled inspection returned positive state or performed password work")
+		}
+	})
 	for _, mode := range []string{"foreign-origin", "foreign-target", "foreign-tenant", "unissued", "enrolled", "audit-rollback"} {
 		t.Run(mode, func(t *testing.T) {
 			denied := request
@@ -321,6 +354,10 @@ func testPublicResetCompletion(t *testing.T, ctx context.Context, pool *database
 				}()
 			}
 			before := calls
+			inspected, inspectionErr := inspect(denied)
+			if calls != before || mode != "audit-rollback" && inspected.Valid || mode == "audit-rollback" && (inspectionErr != nil || !inspected.Valid) {
+				t.Fatal("native inspection accepted ineligible authority or performed password work")
+			}
 			result, e := service.ResetComplete(ctx, denied)
 			if e == nil || result.Outcome == identity.CommitOutcomeCommitted {
 				t.Fatal("public reset denial committed", e)
@@ -366,6 +403,9 @@ func testPublicResetCompletion(t *testing.T, ctx context.Context, pool *database
 	}
 	if again, err := service.ResetComplete(ctx, request); err != nil || again != completed || calls != callsBefore+1 {
 		t.Fatal("public reset replay changed receipt or regenerated", err)
+	}
+	if result, err := inspect(request); err != nil || result.Valid || calls != callsBefore+1 {
+		t.Fatal("consumed reset proof retained positive inspection or repeated password work")
 	}
 	changed, _ := primitive.NewSecret([]byte("synthetic-conflicting-public-reset"))
 	defer changed.Destroy()

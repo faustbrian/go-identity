@@ -8,7 +8,7 @@ import (
 )
 
 func TestBaselinePolicyIsRevisionAndTenantFenced(t *testing.T) {
-	service, err := baselineAuthorization()
+	service, err := baselineAuthorization(false)
 	if err != nil {
 		t.Fatal(err)
 	}

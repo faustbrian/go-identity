@@ -201,7 +201,7 @@ func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDepen
 	retainedResetHTTP := false
 	defer func() {
 		if httpPasswordReset != nil && !retainedResetHTTP {
-			httpPasswordReset.rate.Close()
+			httpPasswordReset.close()
 		}
 	}()
 	httpPasswordSignin, err := composePasswordSigninHTTP(c, httpPreAuth)

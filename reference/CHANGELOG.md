@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- Add explicitly selected emailed-capability password reset to the runnable
+  PostgreSQL backend: captured delivery, repeatable non-consuming inspection,
+  explicit completion, required all-session revocation and replacement-password
+  signin. HIBP screening and security auditing remain fail closed.
+  Baseline-to-reset migration retains separate original operator requests;
+  default B1 routes and private credential custody remain unchanged.
+  Retain original HIBP audit records before primary append; uncertain delivery
+  denies screening and survives restart for explicit native idempotent recovery
+  with `reconcile-audits --password-reset` in the private local-only host.
+
 - Explicitly select PostgreSQL-only admission without changing the existing
   Valkey recovery lane. Native bootstrap and password registration/verification/
   signin/session/logout work on a fresh primary without fabricated history.

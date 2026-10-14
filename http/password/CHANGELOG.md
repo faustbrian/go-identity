@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add opt-in POST /v1/password/reset/inspect with bounded body-only proof input,
+  exact Origin, no-store advisory state and shared secret quotas on every read.
+  No subject, redirect, session, reservation or completion is returned.
+  Preserve native reset-completion denials before a receipt exists without
+  inventing rollback or erasing original recovery ambiguity.
+
 - Add opt-in password-first MFA challenge responses. Deliver the native proof
   once through `X-MFA-Token`, never JSON or a session cookie; error, ambiguity,
   replay, expiry and failed final response commitment withhold credentials.

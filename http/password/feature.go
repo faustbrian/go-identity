@@ -22,6 +22,7 @@ import (
 type FeatureConfig struct {
 	ResetRequest                    *ResetRequestConfig
 	ResetComplete                   *ResetCompleteConfig
+	ResetInspect                    *ResetInspectConfig
 	Signup                          *SignupConfig
 	Signin                          *SigninConfig
 	Change                          *ChangeConfig
@@ -70,10 +71,17 @@ func NewFeatureWithMiddleware(c FeatureConfig, middleware []identityhttp.Middlew
 	if c.CookieVerification != nil {
 		verificationProfiles++
 	}
-	if (c.ResetComplete == nil && c.ResetRequest == nil && c.Signup == nil && c.Signin == nil && c.Change == nil && verificationProfiles == 0) || verificationProfiles > 1 {
+	if (c.ResetComplete == nil && c.ResetRequest == nil && c.ResetInspect == nil && c.Signup == nil && c.Signin == nil && c.Change == nil && verificationProfiles == 0) || verificationProfiles > 1 {
 		return identityhttp.Feature{}, identityhttp.ErrInvalidInput
 	}
 	var ops []identityhttp.OperationDescriptor
+	if c.ResetInspect != nil {
+		op, err := resetInspectOperation(*c.ResetInspect, middleware)
+		if err != nil {
+			return identityhttp.Feature{}, err
+		}
+		ops = append(ops, op)
+	}
 	if c.ResetComplete != nil {
 		op, err := resetCompleteOperation(*c.ResetComplete, middleware)
 		if err != nil {

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Add a separate borrowed-proof reset inspection port returning only advisory
+  valid/invalid state. Inspection grants no reservation or future completion
+  permission and preserves the existing reset service interface.
+
 - Add a closed password-first MFA challenge result, separate from authenticated
   session results. Challenge history cannot carry session cookies or CSRF, and
   replay cannot redeliver the challenge proof. Native login wiring is ongoing.

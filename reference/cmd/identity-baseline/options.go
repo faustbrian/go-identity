@@ -14,6 +14,7 @@ var errLocalProfile = errors.New("baseline: explicit local capture configuration
 type options struct {
 	operation, directory, dsnFile, origin, address string
 	localCapture                                   bool
+	passwordReset                                  bool
 }
 
 func parseOptions(args []string) (options, error) {
@@ -22,7 +23,7 @@ func parseOptions(args []string) (options, error) {
 		return out, errLocalProfile
 	}
 	out.operation = args[0]
-	if out.operation != "init" && out.operation != "migrate" && out.operation != "serve" && out.operation != "exercise" {
+	if out.operation != "init" && out.operation != "migrate" && out.operation != "serve" && out.operation != "exercise" && out.operation != "exercise-reset" && out.operation != "reconcile-audits" {
 		return out, errLocalProfile
 	}
 	flags := flag.NewFlagSet("identity-baseline", flag.ContinueOnError)
@@ -31,6 +32,7 @@ func parseOptions(args []string) (options, error) {
 	flags.StringVar(&out.dsnFile, "dsn-file", "", "private PostgreSQL DSN file")
 	flags.StringVar(&out.origin, "origin", "https://127.0.0.1:8443", "exact loopback HTTPS origin")
 	flags.BoolVar(&out.localCapture, "local-capture", false, "explicit local file-delivery profile, never a production mode")
+	flags.BoolVar(&out.passwordReset, "password-reset", false, "explicit emailed-capability reset profile")
 	if err := flags.Parse(args[1:]); err != nil || flags.NArg() != 0 || !out.localCapture || out.directory == "" || len(out.directory) > 4096 || len(out.dsnFile) > 4096 {
 		return options{}, errLocalProfile
 	}
@@ -52,7 +54,10 @@ func parseOptions(args []string) (options, error) {
 		// externally reachable bind. The public origin remains unchanged.
 		out.address = net.JoinHostPort("127.0.0.1", port)
 	}
-	if out.operation != "init" && out.operation != "exercise" && out.dsnFile == "" {
+	if (out.operation == "exercise-reset" || out.operation == "reconcile-audits") && !out.passwordReset {
+		return options{}, errLocalProfile
+	}
+	if out.operation != "init" && out.operation != "exercise" && out.operation != "exercise-reset" && out.dsnFile == "" {
 		return options{}, errLocalProfile
 	}
 	return out, nil

@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Inspect original unused emailed-reset issuance against current recipient,
+  credential, account, authorization and MFA generation without mutation or
+  password work. Used, expired, unissued and ineligible proofs expose no
+  positive state; unavailable owners deny. Expose distinct trusted inspection
+  quota metadata without treating historical provenance as current permission.
+
 - Keep cross-owner workflow acceptance in the downstream reference module so
   testing the password adapter no longer requires a cyclic reference dependency.
 

@@ -93,6 +93,10 @@ func TestPasswordResetSelectionAndGraphLifetime(t *testing.T) {
 	if err != nil || service == nil {
 		t.Fatal("selected reset did not expose public workflow", err)
 	}
+	inspection, err := (FeatureSet{state: state}).PasswordResetInspection()
+	if err != nil || inspection == nil {
+		t.Fatal("selected reset did not expose read-only inspection")
+	}
 	deny := func() {
 		t.Helper()
 		if _, err := service.ResetRequest(t.Context(), password.ResetRequestRequest{}); err == nil {
@@ -100,6 +104,9 @@ func TestPasswordResetSelectionAndGraphLifetime(t *testing.T) {
 		}
 		if _, err := service.ResetComplete(t.Context(), password.ResetCompleteRequest{}); err == nil {
 			t.Fatal("inactive/foreign graph admitted completion")
+		}
+		if result, err := inspection.ResetInspect(t.Context(), password.ResetInspectRequest{}); err == nil || result.Valid {
+			t.Fatal("inactive/foreign graph returned positive inspection")
 		}
 		if _, err := service.RecoverResetRequest(t.Context(), identity.RecoveryQuery{}, authorization.DecisionContext{}); err == nil {
 			t.Fatal("inactive/foreign graph admitted request recovery")
@@ -157,6 +164,24 @@ func TestPasswordResetSelectedServerRoutes(t *testing.T) {
 	}
 	if !seen["identity.password.reset-request"] || !seen["identity.password.reset-complete"] || len(seen) != 5 {
 		t.Fatal("selected reset routes absent or unrelated feature enabled")
+	}
+	f.state.features.httpPasswordReset.config.Inspect = true
+	inspectionRate, err := identityhttp.NewKeyedSecretRateLimiter(identityhttp.KeyedSecretRateConfig{Shared: rate.backend, Namespace: selection.HTTPRate.Namespace, Key: selection.HTTPRate.IdentifierKey, Now: time.Now, MaximumDuration: time.Second})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = inspectionRate.Close() })
+	f.state.features.httpPasswordReset.inspectRate = inspectionRate
+	s, err = NewServer(c, d, f)
+	if err != nil || len(s.OpenAPI().Operations()) != 6 {
+		t.Fatal("explicit inspection selection failed", err)
+	}
+	seenInspection := false
+	for _, operation := range s.OpenAPI().Operations() {
+		seenInspection = seenInspection || operation.Record.OperationID == "identity.password.reset-inspect"
+	}
+	if !seenInspection {
+		t.Fatal("explicit inspection missing from selected metadata")
 	}
 	f.state.features.httpPasswordReset = nil
 	s, err = NewServer(c, d, f)

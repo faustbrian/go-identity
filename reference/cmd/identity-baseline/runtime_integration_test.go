@@ -7,6 +7,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -20,9 +21,87 @@ import (
 	"testing"
 	"time"
 
+	"github.com/faustbrian/go-audit"
+	auditpg "github.com/faustbrian/go-audit/postgres"
 	database "github.com/faustbrian/go-postgres"
 	"github.com/jackc/pgx/v5"
 )
+
+func TestBaselineAuditReconciliationPreservesOriginalNativeRecord(t *testing.T) {
+	ctx, cancel := context.WithTimeout(t.Context(), 40*time.Second)
+	defer cancel()
+	dsn, _ := baselineTestDatabase(t, ctx)
+	directory := filepath.Join(t.TempDir(), "baseline")
+	var output bytes.Buffer
+	if err := runBaseline(ctx, []string{"init", "--local-capture", "--directory", directory}, &output); err != nil {
+		t.Fatal(err)
+	}
+	dsnFile := filepath.Join(directory, "postgres.dsn")
+	if err := os.WriteFile(dsnFile, []byte(dsn), 0600); err != nil {
+		t.Fatal("fixture connection custody unavailable")
+	}
+	args := []string{"migrate", "--password-reset", "--local-capture", "--directory", directory, "--dsn-file", dsnFile}
+	if err := runBaseline(ctx, args, &output); err != nil {
+		t.Fatal("native reset migrations unavailable", err)
+	}
+	pool, err := database.New(ctx, database.Config{DSN: dsn})
+	if err != nil {
+		t.Fatal("fixture native pool unavailable")
+	}
+	defer pool.Close(context.Background())
+	store, err := auditpg.New(pool.Raw(), auditpg.Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	record := custodyRecord(t)
+	canonical, err := audit.CanonicalJSON(record)
+	if err != nil {
+		t.Fatal(err)
+	}
+	custody, err := openLocalAuditCustody(directory, lostAuditAcknowledgement{store})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Fault only the acknowledgement after actual PostgreSQL COMMIT. The
+	// operator must resubmit exact original records after this owner closes.
+	if _, err := custody.Append(ctx, record); err == nil || audit.AppendOutcomeOf(err) != audit.AppendUnknown {
+		t.Fatal("uncertain audit acknowledgement became accepted evidence")
+	}
+	if err := custody.Close(); err != nil {
+		t.Fatal(err)
+	}
+	spool := filepath.Join(directory, "audit-custody")
+	entries, err := os.ReadDir(spool)
+	if err != nil || len(entries) != 1 {
+		t.Fatal("uncertain original audit lost durable custody")
+	}
+	name := entries[0].Name()
+	args[0] = "reconcile-audits"
+	for range 2 {
+		if err := runBaseline(ctx, args, &output); err != nil {
+			t.Fatal("original audit reconciliation unavailable", err)
+		}
+	}
+	tenant, err := audit.Tenant(baselineTenant)
+	if err != nil {
+		t.Fatal(err)
+	}
+	query, err := audit.NewQuery(audit.QueryInput{Tenant: tenant, RecordID: record.ID(), Limit: 2})
+	if err != nil {
+		t.Fatal(err)
+	}
+	page, err := store.Query(ctx, query)
+	if err != nil || len(page.Records) != 1 {
+		t.Fatal("operator lost or duplicated the original native audit record")
+	}
+	recovered, err := audit.CanonicalJSON(page.Records[0])
+	if err != nil || !bytes.Equal(canonical, recovered) {
+		t.Fatal("operator regenerated original audit identity or bytes")
+	}
+	if _, err := os.Lstat(filepath.Join(spool, name)); !errors.Is(err, os.ErrNotExist) {
+		t.Fatal("confirmed native record retained stale local custody")
+	}
+}
 
 func TestBaselineMigrationRequiresDurableRequestBeforeApply(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 40*time.Second)
@@ -152,9 +231,27 @@ END LOOP; END $$`); err != nil {
 }
 
 func TestBaselineRunnableHTTPSConsumerAndShutdown(t *testing.T) {
+	proveBaselineRuntime(t, false)
+}
+
+func TestBaselineResetJourneyAndOriginalSessionRevocation(t *testing.T) {
+	proveBaselineRuntime(t, true)
+}
+
+func TestBaselineResetUpgradePreservesPopulatedBaselineAndOperatorCustody(t *testing.T) {
+	proveBaselineRuntimeWithUpgrade(t, true, true)
+}
+
+func proveBaselineRuntime(t *testing.T, reset bool) {
+	t.Helper()
+	proveBaselineRuntimeWithUpgrade(t, reset, false)
+}
+
+func proveBaselineRuntimeWithUpgrade(t *testing.T, reset, upgrade bool) {
+	t.Helper()
 	ctx, stop := context.WithTimeout(context.Background(), 40*time.Second)
 	defer stop()
-	dsn, _ := baselineTestDatabase(t, ctx)
+	dsn, connection := baselineTestDatabase(t, ctx)
 	directory := filepath.Join(t.TempDir(), "baseline")
 	if err := initializeCredentials(directory, time.Now()); err != nil {
 		t.Fatal(err)
@@ -190,13 +287,49 @@ func TestBaselineRunnableHTTPSConsumerAndShutdown(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer mailbox.Close()
+	if upgrade {
+		proveBaselineRuntimeStage(t, ctx, directory, secrets, pool, mailbox, outbound, false)
+		var users int
+		if err := connection.QueryRow(ctx, `SELECT count(*) FROM identity.users`).Scan(&users); err != nil || users != 1 {
+			t.Fatal("baseline journey did not populate the original account")
+		}
+	}
+	var original []byte
+	if upgrade {
+		original, err = readPrivateFile(filepath.Join(directory, "migration-request.json"), 1<<20)
+		if err != nil {
+			t.Fatal("baseline original operator custody missing")
+		}
+	}
+	proveBaselineRuntimeStage(t, ctx, directory, secrets, pool, mailbox, outbound, reset)
+	if reset {
+		var effects int
+		if err := connection.QueryRow(ctx, `SELECT count(*) FROM session_store.password_resets`).Scan(&effects); err != nil || effects != 1 {
+			t.Fatal("reset journey did not commit its native all-session effect")
+		}
+	}
+	if upgrade {
+		after, err := readPrivateFile(filepath.Join(directory, "migration-request.json"), 1<<20)
+		var users int
+		if err != nil || !bytes.Equal(original, after) || connection.QueryRow(ctx, `SELECT count(*) FROM identity.users`).Scan(&users) != nil || users != 2 {
+			t.Fatal("reset upgrade replaced original custody or existing account")
+		}
+	}
+}
+
+func proveBaselineRuntimeStage(t *testing.T, ctx context.Context, directory string, secrets credentials, pool *database.Pool, mailbox *localMailbox, outbound *http.Transport, reset bool) {
+	t.Helper()
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal("owned loopback listener unavailable")
 	}
 	defer listener.Close()
 	origin := "https://" + listener.Addr().String()
-	o, err := parseOptions([]string{"serve", "--local-capture", "--directory", directory, "--dsn-file", "private-dsn", "--origin", origin})
+	args := []string{"serve", "--local-capture", "--directory", directory, "--dsn-file", "private-dsn", "--origin", origin}
+	if reset {
+		args = append(args, "--password-reset")
+	}
+	o, err := parseOptions(args)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -205,7 +338,7 @@ func TestBaselineRunnableHTTPSConsumerAndShutdown(t *testing.T) {
 		t.Fatal("native command graph rejected", err)
 	}
 	defer graph.close(context.Background())
-	if err := migrateBaseline(ctx, graph.stores, directory); err != nil {
+	if err := migrateSelectedBaseline(ctx, graph.stores, directory, reset); err != nil {
 		t.Fatal("fresh native command migrations rejected", err)
 	}
 	if err := graph.features.Initialize(ctx); err != nil || !graph.server.Readiness(ctx).Ready {
@@ -263,5 +396,25 @@ func TestBaselineOperatorCommandInstallsRealNativeMigrations(t *testing.T) {
 	}
 	if !strings.Contains(output.String(), "migrations compatible") {
 		t.Fatal(fmt.Sprint("missing bounded operator outcome"))
+	}
+	original, err := readPrivateFile(filepath.Join(directory, "migration-request.json"), 1<<20)
+	if err != nil {
+		t.Fatal("operator did not retain baseline custody")
+	}
+	resetArgs := append(append([]string(nil), args...), "--password-reset")
+	for range 2 {
+		if err := runBaseline(ctx, resetArgs, &output); err != nil {
+			t.Fatal("opt-in reset operator migration or exact retry failed", err)
+		}
+	}
+	after, err := readPrivateFile(filepath.Join(directory, "migration-request.json"), 1<<20)
+	reset, resetErr := readPrivateFile(filepath.Join(directory, "migration-request-reset.json"), 1<<20)
+	var baseRequest, resetRequest operatorRequest
+	if err != nil || resetErr != nil || !bytes.Equal(original, after) || json.Unmarshal(original, &baseRequest) != nil || json.Unmarshal(reset, &resetRequest) != nil || baseRequest.Command == resetRequest.Command {
+		t.Fatal("optional migration replaced baseline original-command custody")
+	}
+	var installed bool
+	if err := database.QueryRow(ctx, `SELECT to_regclass('session_store.password_resets') IS NOT NULL`).Scan(&installed); err != nil || !installed {
+		t.Fatal("reset command did not install the actual session-effect owner")
 	}
 }

@@ -1,6 +1,6 @@
 # Identity Platform Progress
 
-Implementation activated by the user on 2026-10-14. B1 is closed; B2 is next.
+Implementation activated by the user on 2026-10-14. B1 is closed; B2 is active.
 
 ## Live ownership and update rule
 
@@ -12,7 +12,25 @@ Historical planning ledgers and evidence stay at their original locations.
 
 ## Current state
 
-- Delivered: B1, a runnable PostgreSQL authentication backend. Next is B2
+- B2 now passes the local public HTTPS reset journey: two saved original
+  sessions, captured request delivery, repeated non-consuming inspection,
+  committed completion/exact replay, changed replay and consumed-proof denial,
+  both original sessions denied, old-password denial and new-password signin.
+  Populated B1-to-reset upgrade preserves the account and original operator
+  request; separate reset migration retry passes. Native selected reset checks
+  cover expired/unissued/foreign proofs, current factors, rollback/recovery and
+  no repeated password work. B2 is uncommitted and pending final affected
+  checks, independent review, push and Required CI; it is not milestone closure.
+  Independent review requested changes for lost original HIBP audit recovery
+  custody after an uncertain primary acknowledgement. The correction retains
+  exact native records before append while still denying screening, and its
+  restart/real-PostgreSQL reconciliation now passes. Final affected correction
+  checks and a new complete review remain pending; B2 is not delivered.
+  A subsequent review's at-capacity crash finding was reproduced and corrected;
+  the 256-batch restart and affected reference race suites now pass.
+  Overall remains a rough low-confidence 5-10% estimate, not measured effort.
+
+- Delivered: B1, a runnable PostgreSQL authentication backend. Active is B2
   reset, then B3 fresh reauthentication/password change. The complete fresh
   PostgreSQL-only B1 HTTP journey now passes locally with captured delivery and
   existing rollback/replay/CSRF/isolation checks. It does not backdate history.
@@ -62,7 +80,7 @@ restart old slices merely to fill this table; adopt applicable prior proof.
 | ID | Consumer outcome / owning units | Current disposition |
 | --- | --- | --- |
 | B1 | Runnable registration/verification/signin/session/logout baseline: identity, identity/postgres, identity/password, identity/password/postgres, identity/session, identity/session/postgres, identity/delivery, identity/delivery/postgres, identity/http, identity/reference; required primitive contracts | Closed: reviewed native PostgreSQL/HTTPS journey, reproducible source-consumer walkthrough, main 90d4f2c and Required CI 38527264686; public-download/full-unit qualification pending |
-| B2 | Reset and required session invalidation using the baseline owners plus identity/risk/hibp | Not demonstrated |
+| B2 | Reset and required session invalidation using the baseline owners plus identity/risk/hibp | Local full HTTPS reset/two-session revocation and populated upgrade pass; final affected checks, independent review and main delivery pending |
 | B3 | Password change and fresh reauthentication through baseline owners | Not demonstrated |
 | M04 | Email add/change/verify/list/get/remove with session/lifecycle policy: identity/email | Closure not reassessed |
 | M05 | Username availability/signin/rename: identity/username, stable identifier contracts | Closure not reassessed |

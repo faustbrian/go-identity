@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add repeatable secret-inspection admission with IP quota before native source
+  reads, then atomic subject/challenge quotas. Each inspection charges fresh
+  native debit identities against the existing shared secret budgets rather
+  than gaining free retry reads or independent per-route allowances.
+
 - Admit explicitly selected disable only with exact original stored-session CSRF
   policy. Variant/login CSRF, renewable token age and administrator-reset scope
   remain distinct; selection alone supplies no mutation authority.

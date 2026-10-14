@@ -24,11 +24,15 @@ type HTTPPasswordResetConfiguration struct {
 	CallbackURL           string
 	VerificationNamespace string
 	VerificationKey       [32]byte
+	// Inspect explicitly selects the additional read-only token inspection route.
+	// False preserves the existing request/completion-only HTTP contract.
+	Inspect bool
 }
 
 type passwordResetHTTPState struct {
 	config          HTTPPasswordResetConfiguration
 	rate            *identityhttp.ChallengeVerificationRateLimiter
+	inspectRate     *identityhttp.KeyedSecretRateLimiter
 	maximumDuration time.Duration
 }
 
@@ -49,7 +53,27 @@ func composePasswordResetHTTP(c StoreConfiguration, device *preAuthHTTPState, ra
 	if err != nil {
 		return nil, invalid
 	}
-	return &passwordResetHTTPState{config: p, rate: limiter, maximumDuration: n.Repository.MaximumDuration}, nil
+	var inspection *identityhttp.KeyedSecretRateLimiter
+	if p.Inspect {
+		inspection, err = identityhttp.NewKeyedSecretRateLimiter(identityhttp.KeyedSecretRateConfig{Shared: rate.backend, Namespace: c.HTTPRate.Namespace, Key: c.HTTPRate.IdentifierKey, Now: time.Now, MaximumDuration: c.HTTPRate.MaximumDuration})
+		if err != nil {
+			_ = limiter.Close()
+			return nil, invalid
+		}
+	}
+	return &passwordResetHTTPState{config: p, rate: limiter, inspectRate: inspection, maximumDuration: n.Repository.MaximumDuration}, nil
+}
+
+func (h *passwordResetHTTPState) close() {
+	if h == nil {
+		return
+	}
+	if h.rate != nil {
+		_ = h.rate.Close()
+	}
+	if h.inspectRate != nil {
+		_ = h.inspectRate.Close()
+	}
 }
 
 func (s *Server) passwordResetHTTPConfig(network identityhttp.NetworkConfig, f FeatureSet) (passwordhttp.FeatureConfig, error) {
@@ -70,7 +94,11 @@ func (s *Server) passwordResetHTTPConfig(network identityhttp.NetworkConfig, f F
 	c := h.config
 	request := passwordhttp.ResetRequestConfig{Network: network, Service: native, Rate: s.state.httpRate.limiter, Origin: identityhttp.Origin(p.deployment.Origin), CallbackURL: c.CallbackURL, Device: *p.device, ActorID: c.ActorID, PolicyRevision: c.PolicyRevision, Now: time.Now, MaximumDuration: h.maximumDuration}
 	complete := passwordhttp.ResetCompleteConfig{Network: network, Service: native, Rate: h.rate, Origin: identityhttp.Origin(p.deployment.Origin), Device: *p.device, ActorID: c.ActorID, PolicyRevision: c.PolicyRevision, Now: time.Now, MaximumDuration: h.maximumDuration}
-	return passwordhttp.FeatureConfig{ResetRequest: &request, ResetComplete: &complete}, nil
+	selected := passwordhttp.FeatureConfig{ResetRequest: &request, ResetComplete: &complete}
+	if c.Inspect {
+		selected.ResetInspect = &passwordhttp.ResetInspectConfig{Network: network, Service: native, Rate: h.inspectRate, Origin: identityhttp.Origin(p.deployment.Origin), ActorID: c.ActorID, PolicyRevision: c.PolicyRevision, MaximumDuration: h.maximumDuration}
+	}
+	return selected, nil
 }
 
 // Format hides deployment keys and policy internals.

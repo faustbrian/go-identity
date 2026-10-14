@@ -1,6 +1,78 @@
 # Identity Implementation — Current Milestone
 
-Activated on 2026-10-14. B1 is closed; B2 reset is next.
+Activated on 2026-10-14. B1 is closed; B2 reset is active.
+
+## Active: B2 emailed-capability password reset
+
+- Base: identity main `04118b2`, adopting B1 and existing native reset workflows.
+  Same committed supplier source pins as `reference/LOCAL_SOURCES.json`.
+- Outcome: explicit reset selection on the runnable PostgreSQL backend;
+  request → private captured delivery → repeated read-only inspection → explicit
+  completion → old-password denial → new-password signin → all original sessions
+  denied. No automatic signin and no scanner-triggered consumption.
+- Owners: password and password/postgres native issuer/current-account/factor
+  admission and coordinated mutation; session/postgres atomic all-session effect;
+  existing capability ValidateIssuedProof and one-use owner; delivery, risk/HIBP,
+  HTTP typed transport and reference composition. No replacement domain store.
+- Selection: email capability recovery only, with current known-empty MFA
+  authority and unchanged signed generation. Reset is opt-in; B1 default routes
+  and credential custody remain compatible. OTP/admin recovery and B3 are excluded.
+- Named gaps from one bounded source pass: CLI reset composition/authorization,
+  reset-attributed HIBP collector, consumer walkthrough and public read-only
+  reset inspection. Inspection returns only valid/invalid state, never a subject,
+  reservation or future permission; completion repeats authoritative checks.
+- Finite acceptance: full public HTTPS journey and captured mail; indistinguishable
+  unknown/ineligible request results; repeated inspection does not consume; used,
+  stale-factor, foreign-purpose/tenant, expired and invalid proofs deny; origin and
+  input bounds; wrong/old password denial; exact replay and conflicting-input
+  rejection; required session revocation; HIBP breach/outage denial before hashing;
+  atomic rollback, native original-command recovery and affected shutdown checks.
+- Focused checks: new command B2 and inspector regressions red/green; affected
+  password/native/HTTP/reference tests under race with real task-owned PostgreSQL;
+  selected existing reset factor/replay/rollback/disconnect tests and B1 direct-
+  consumer regression. Reuse unchanged counter/kernel proof and supplier pins.
+- Close after one independent complete-final-diff review, affected current
+  checks, changelogs and ordinary main delivery with Required CI. No tooling,
+  historical qualification, unrelated recovery variants or new approval machinery.
+- Current local proof: the full HTTPS reset journey now passes, including two
+  saved sessions and changed/consumed-token attempts. The HIBP composition now
+  supplies the security profile's actual canonical policy and system actor;
+  screening/audit remain fail closed. Native early denial before a receipt
+  remains denial, not a fabricated rollback or an erased recovery ambiguity.
+  Populated upgrade and exact operator reset retry pass. New inspection wire
+  denial assertions failed before matching shared-router error shapes and now
+  pass. Selected native reset/factor/recovery tests pass; an attempted entire
+  legacy signin fixture fails from overlapping fixture histories/expectations
+  and is not claimed green. No unrelated fixture/tooling repair is included.
+  B2 still requires final affected checks, complete review and main delivery.
+- Final affected local checks pass: password and password-HTTP race suites;
+  reference unit race suite and all Baseline command integration cases;
+  native reset migrations and selected native reset/factor/recovery/screening
+  cases; shared secret-rate regressions; bounded JSON fuzzing; published
+  configuration/repository/cohesion/docs/offline specification checks.
+  The broader HTTP suite's response-extension case also fails on unchanged
+  B1 source with the same pinned suppliers, so it is a retained broader
+  qualification gap, not a green whole-suite claim or a reset implementation
+  repair. Complete review, changed-content secrets and main delivery remain.
+- Complete review of tree `392e9c47` requested changes for one concrete B2
+  defect: a lost primary HIBP audit acknowledgement denied screening but the
+  collector's safe error projection discarded original event recovery custody.
+  The local command now durably retains exact native redacted records before
+  append and offers bounded explicit native reconciliation after restart.
+  Primary acknowledgement is still required for usable screening; no command,
+  event-ID or authorization engine is added. Restart reconciliation failed
+  before the native privacy policy was reapplied, then passed unchanged-byte
+  recovery against the real PostgreSQL command. Final correction checks and
+  new complete review remain pending; prior review is not approval.
+- The next complete review found a concrete at-capacity publication-crash
+  defect: a complete batch and its staging alias could exceed the directory
+  entry limit and prevent reconciliation. The 256-batch crash regression
+  failed before correction, then passed under race. Recovery now removes
+  only exact private staging names under the local filesystem gate and counts
+  complete batches; native append IO remains outside that gate. Original
+  lost-acknowledgement, privacy/cancellation, directory-sync denial/retry and
+  reference unit race tests pass. No timeout or primary-acknowledgement policy
+  was relaxed. Complete final review of the resulting full diff remains.
 
 ## Closed: B1 runnable authentication baseline
 
