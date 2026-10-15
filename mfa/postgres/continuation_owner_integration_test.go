@@ -14,9 +14,9 @@ import (
 
 	"github.com/faustbrian/go-audit"
 	auditpostgres "github.com/faustbrian/go-audit/postgres"
-	auth "github.com/faustbrian/go-authentication"
-	"github.com/faustbrian/go-authorization"
-	"github.com/faustbrian/go-capability"
+	auth "github.com/faustbrian/go-authentication/v2"
+	"github.com/faustbrian/go-authorization/v3"
+	"github.com/faustbrian/go-capability/v2"
 	identitycapability "github.com/faustbrian/go-capability/postgres/identity"
 	"github.com/faustbrian/go-clock"
 	identity "github.com/faustbrian/go-identity"
@@ -24,7 +24,7 @@ import (
 	identitypostgres "github.com/faustbrian/go-identity/postgres"
 	"github.com/faustbrian/go-identity/session"
 	database "github.com/faustbrian/go-postgres"
-	identityoutbox "github.com/faustbrian/go-transactional-outbox/v2/postgres/identity"
+	identityoutbox "github.com/faustbrian/go-transactional-outbox/postgres/identity"
 )
 
 // The native magic-link invocation and prior primary/factor bootstrap are fixture seams.
@@ -199,11 +199,11 @@ INSERT INTO identity_mfa.factor_authorities VALUES('tenant-a','mfa-user',2,1,dec
 			if err != nil {
 				t.Fatal(err)
 			}
-			keys, err := capability.NewKeySet([]capability.Key{{ID: "signing-v1", Verifier: verifier}})
+			keys, err := capability.NewKeySet([]capability.Key{{Issuer: "https://identity.example.test", ID: "signing-v1", Verifier: verifier}})
 			if err != nil {
 				t.Fatal(err)
 			}
-			issuer, err := identitycapability.NewIssuer(identitycapability.IssuerConfig{Crypto: capability.ServiceConfig{Signer: signer, Resolver: keys, Clock: func() time.Time { return now }, Limits: capability.DefaultLimits()}, Audience: "identity", CurrentReplayKeyVersion: 1, RetainedReplayKeys: map[uint32][32]byte{1: {1}}, PreparationTimeout: time.Second})
+			issuer, err := identitycapability.NewIssuer(identitycapability.IssuerConfig{Crypto: capability.ServiceConfig{Issuer: "https://identity.example.test", Signer: signer, Resolver: keys, Clock: func() time.Time { return now }, Limits: capability.DefaultLimits()}, Audience: "identity", CurrentReplayKeyVersion: 1, RetainedReplayKeys: map[uint32][32]byte{1: {1}}, PreparationTimeout: time.Second})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -217,7 +217,7 @@ INSERT INTO identity_mfa.factor_authorities VALUES('tenant-a','mfa-user',2,1,dec
 				t.Fatal(err)
 			}
 			defer proof.Transfer(context.Background(), func(context.Context, []byte) error { return nil })
-			grant, err := capability.Verify(ctx, token, keys, capability.VerifyOptions{Now: now, Limits: capability.DefaultLimits()})
+			grant, err := capability.Verify(ctx, token, keys, capability.VerifyOptions{Issuer: "https://identity.example.test", Now: now, Limits: capability.DefaultLimits()})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -399,7 +399,7 @@ INSERT INTO identity_mfa.factor_authorities VALUES('tenant-a','mfa-user',2,1,dec
 			if err != nil {
 				t.Fatal("child proof unavailable")
 			}
-			childGrant, err := capability.Verify(ctx, childToken, keys, capability.VerifyOptions{Now: now, Limits: capability.DefaultLimits()})
+			childGrant, err := capability.Verify(ctx, childToken, keys, capability.VerifyOptions{Issuer: "https://identity.example.test", Now: now, Limits: capability.DefaultLimits()})
 			if err != nil {
 				t.Fatal("child verification unavailable")
 			}

@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"time"
 
-	auth "github.com/faustbrian/go-authentication"
+	auth "github.com/faustbrian/go-authentication/v2"
 	identity "github.com/faustbrian/go-identity"
 	database "github.com/faustbrian/go-postgres"
 	"github.com/jackc/pgx/v5"

@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	auth "github.com/faustbrian/go-authentication"
+	auth "github.com/faustbrian/go-authentication/v2"
 )
 
 func TestFactorVerificationSourceCannotReadWithoutNativePrimary(t *testing.T) {

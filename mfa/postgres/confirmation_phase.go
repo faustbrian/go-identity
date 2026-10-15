@@ -9,7 +9,7 @@ import (
 
 	identity "github.com/faustbrian/go-identity"
 	kernel "github.com/faustbrian/go-identity/postgres"
-	primitive "github.com/faustbrian/go-password"
+	primitive "github.com/faustbrian/go-password/v2"
 	envelope "github.com/faustbrian/go-secret-envelope"
 )
 

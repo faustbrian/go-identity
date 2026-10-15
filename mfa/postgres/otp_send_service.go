@@ -9,7 +9,7 @@ import (
 	"net/url"
 	"slices"
 
-	"github.com/faustbrian/go-authorization"
+	"github.com/faustbrian/go-authorization/v3"
 	identity "github.com/faustbrian/go-identity"
 	"github.com/faustbrian/go-identity/delivery"
 	"github.com/faustbrian/go-identity/mfa"

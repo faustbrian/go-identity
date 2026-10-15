@@ -6,7 +6,7 @@ import (
 
 	identity "github.com/faustbrian/go-identity"
 	"github.com/faustbrian/go-identity/mfa"
-	primitive "github.com/faustbrian/go-password"
+	primitive "github.com/faustbrian/go-password/v2"
 )
 
 func TestFactorManagementRequiresNativePrimaryProofAndSessionOwners(t *testing.T) {

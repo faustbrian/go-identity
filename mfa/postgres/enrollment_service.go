@@ -15,7 +15,7 @@ import (
 	"unicode/utf8"
 
 	auditpg "github.com/faustbrian/go-audit/postgres"
-	"github.com/faustbrian/go-authorization"
+	"github.com/faustbrian/go-authorization/v3"
 	identity "github.com/faustbrian/go-identity"
 	"github.com/faustbrian/go-identity/mfa"
 	kernel "github.com/faustbrian/go-identity/postgres"
@@ -25,7 +25,7 @@ import (
 	database "github.com/faustbrian/go-postgres"
 	envelope "github.com/faustbrian/go-secret-envelope"
 	"github.com/faustbrian/go-secret-envelope/adapters/keyring"
-	lifecyclepg "github.com/faustbrian/go-transactional-outbox/v2/postgres/identity"
+	lifecyclepg "github.com/faustbrian/go-transactional-outbox/postgres/identity"
 )
 
 // TOTPEnrollmentConfig selects first-factor enrollment with an explicit native

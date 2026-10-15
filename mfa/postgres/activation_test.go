@@ -5,11 +5,11 @@ import (
 	"context"
 	"testing"
 
-	auth "github.com/faustbrian/go-authentication"
+	auth "github.com/faustbrian/go-authentication/v2"
 	identity "github.com/faustbrian/go-identity"
 	"github.com/faustbrian/go-identity/mfa"
 	kernel "github.com/faustbrian/go-identity/postgres"
-	primitive "github.com/faustbrian/go-password"
+	primitive "github.com/faustbrian/go-password/v2"
 )
 
 func TestPendingTOTPActivationCannotUseUnregisteredWork(t *testing.T) {

@@ -2,6 +2,28 @@
 
 ## Unreleased
 
+- Compose current public kernel, delivery, risk, audit and outbox owners with
+  matching authentication v2, authorization v3 and capability v2 types.
+
+- Adopt capability v2 public proof/grant types and explicit trusted issuer
+  policy. Update capability imports and issuer-owned keys/configuration; token
+  framing and native transaction/recovery ownership remain unchanged.
+
+- Fence original known-empty factors for exact native managed change-confirm,
+  without inferring absence, initializing factors or renewing their authority.
+
+- Admit the distinct native email resend schema only for its original self-user
+  actor and exact known-empty factor generation, without factor initialization.
+
+- Admit the currently authorized caller for the closed managed-link confirmation
+  profile while retaining the signed recipient's original known-empty factor
+  generation. Request/change/removal remain self-user actions; confirmation does
+  not impersonate the original session or renew factor authority.
+
+- Fence known-empty factor authority for the exact registered self-user managed
+  email owner during preparation and execution. Missing, enrolled or changed
+  factor state denies; no absence is inferred or enrollment generation renewed.
+
 - Append optional continuation-owned OTP-send attribution so verification can
   restore its exact committed source without a caller-selected factor or a
   replacement challenge. Existing scopes, versions, attempts and timestamps

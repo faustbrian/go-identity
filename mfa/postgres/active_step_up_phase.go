@@ -12,13 +12,13 @@ import (
 	"time"
 
 	"github.com/faustbrian/go-audit"
-	auth "github.com/faustbrian/go-authentication"
-	"github.com/faustbrian/go-authorization"
+	auth "github.com/faustbrian/go-authentication/v2"
+	"github.com/faustbrian/go-authorization/v3"
 	identity "github.com/faustbrian/go-identity"
 	"github.com/faustbrian/go-identity/mfa"
 	kernel "github.com/faustbrian/go-identity/postgres"
 	"github.com/faustbrian/go-identity/risk"
-	primitive "github.com/faustbrian/go-password"
+	primitive "github.com/faustbrian/go-password/v2"
 	envelope "github.com/faustbrian/go-secret-envelope"
 )
 

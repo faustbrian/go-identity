@@ -10,17 +10,17 @@ import (
 
 	"github.com/faustbrian/go-audit"
 	auditpg "github.com/faustbrian/go-audit/postgres"
-	auth "github.com/faustbrian/go-authentication"
-	"github.com/faustbrian/go-authorization"
-	"github.com/faustbrian/go-capability"
+	auth "github.com/faustbrian/go-authentication/v2"
+	"github.com/faustbrian/go-authorization/v3"
+	"github.com/faustbrian/go-capability/v2"
 	capabilitypg "github.com/faustbrian/go-capability/postgres/identity"
 	identity "github.com/faustbrian/go-identity"
 	"github.com/faustbrian/go-identity/mfa"
 	kernel "github.com/faustbrian/go-identity/postgres"
-	password "github.com/faustbrian/go-password"
+	password "github.com/faustbrian/go-password/v2"
 	database "github.com/faustbrian/go-postgres"
 	envelope "github.com/faustbrian/go-secret-envelope"
-	outbox "github.com/faustbrian/go-transactional-outbox/v2/postgres/identity"
+	outbox "github.com/faustbrian/go-transactional-outbox/postgres/identity"
 )
 
 // Native operation/policy admission are fixture seams, not
