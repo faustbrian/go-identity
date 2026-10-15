@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/faustbrian/go-authorization"
+	"github.com/faustbrian/go-authorization/v3"
 	identity "github.com/faustbrian/go-identity"
 	"github.com/faustbrian/go-identity/session"
 )
@@ -38,10 +38,14 @@ type verificationRecoveryState struct{ read func() identity.RecoveryQuery }
 // bounded identifiers. It performs no IO, normalization or authorization.
 // Caller-supplied correlation cannot prove that a command exists or committed.
 func NewVerificationRecovery(q identity.RecoveryQuery) (VerificationRecovery, error) {
+	return newEmailRecovery(q, "identity.email.verification-confirm")
+}
+
+func newEmailRecovery(q identity.RecoveryQuery, action string) (VerificationRecovery, error) {
 	if _, err := identity.ParseCommandID(string(q.CommandID)); err != nil {
 		return VerificationRecovery{}, ErrInvalidVerification
 	}
-	if !verificationID(string(q.TenantID)) || !verificationID(string(q.UserID)) || !verificationID(q.RecordID) || !verificationID(string(q.ActorID)) || q.OperationID != "identity.email.verification-confirm" || q.AnonymousFlowID != "" || q.LinkMode != 0 {
+	if !verificationID(string(q.TenantID)) || !verificationID(string(q.UserID)) || !verificationID(q.RecordID) || !verificationID(string(q.ActorID)) || q.OperationID != action || q.AnonymousFlowID != "" || q.LinkMode != 0 {
 		return VerificationRecovery{}, ErrInvalidVerification
 	}
 	switch q.ActorKind {
@@ -55,7 +59,7 @@ func NewVerificationRecovery(q identity.RecoveryQuery) (VerificationRecovery, er
 	q.ActorID = identity.ActorID(strings.Clone(string(q.ActorID)))
 	q.ActorKind = authorization.SubjectKind(strings.Clone(string(q.ActorKind)))
 	q.RecordID = strings.Clone(q.RecordID)
-	q.OperationID = "identity.email.verification-confirm"
+	q.OperationID = action
 	return VerificationRecovery{state: &verificationRecoveryState{read: func() identity.RecoveryQuery { return q }}}, nil
 }
 

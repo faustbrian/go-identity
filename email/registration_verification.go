@@ -16,8 +16,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/faustbrian/go-capability"
-	identifier "github.com/faustbrian/go-identifier"
+	"github.com/faustbrian/go-capability/v2"
+	identifier "github.com/faustbrian/go-identifier/v2"
 	identity "github.com/faustbrian/go-identity"
 )
 
@@ -219,7 +219,7 @@ func (p *RegistrationVerificationPolicy) Authorize(grant capability.Grant, s Reg
 	if err != nil || shapeErr != nil || !verificationID(g.ID) || now.IsZero() || now.Before(g.NotBefore) || !now.Before(g.ExpiresAt) || g.Version != 1 || g.Issuer != expected.Issuer || g.Bearer || g.MaxUses != 1 || len(g.Audiences) != 1 || len(g.Caveats) != len(expected.Caveats) || !g.IssuedAt.Equal(expected.IssuedAt) || !g.NotBefore.Equal(expected.NotBefore) || !g.ExpiresAt.Equal(expected.ExpiresAt) || g.CorrelationID != expected.CorrelationID {
 		return ErrInvalidVerification
 	}
-	if grant.Authorize(capability.Use{Audience: p.state.audience, Subject: expected.Subject, Resource: expected.Resource, Operation: expected.Operation, Tenant: expected.Tenant, Caveats: expected.Caveats}) != nil {
+	if grant.Authorize(capability.Use{Issuer: expected.Issuer, Audience: p.state.audience, Subject: expected.Subject, Resource: expected.Resource, Operation: expected.Operation, Tenant: expected.Tenant, Caveats: expected.Caveats}) != nil {
 		return ErrInvalidVerification
 	}
 	return nil

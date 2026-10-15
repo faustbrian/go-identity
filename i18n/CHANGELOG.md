@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Bind locale composition to the current public identity kernel contracts;
+  locale precedence and stored preference semantics are unchanged.
+
+- Align owned capability dependencies with the v2 issuer-scoped contracts.
+
 - Add canonical catalog/resolver constructors, configured fallback chains and
   bounded preference policy with tenant/version/notice validation and explicit
   unknown-write outcomes. No fallback is persisted by reads or resolution.

@@ -28,6 +28,14 @@ func (p CommandCounterPolicy) PrepareVerification(scope Context, subject Subject
 	return p.prepareCapabilityCounter(scope, subject, capabilityID, primaryTime, "identity.email.verification-confirm")
 }
 
+// PrepareEmailChange selects the separate new-address-confirmation counter
+// lane. Only an authenticated original change grant supplies capabilityID and
+// subject.User; no historical session is fabricated. Bounds, policy ownership,
+// immutable primary time and cancellation semantics match PrepareVerification.
+func (p CommandCounterPolicy) PrepareEmailChange(scope Context, subject Subject, capabilityID string, primaryTime time.Time) (CounterCommand, error) {
+	return p.prepareCapabilityCounter(scope, subject, capabilityID, primaryTime, "identity.email.change-confirm")
+}
+
 func (p CommandCounterPolicy) prepareCapabilityCounter(scope Context, subject Subject, capabilityID string, primaryTime time.Time, operation Action) (CounterCommand, error) {
 	return p.prepareBoundCounter(scope, subject, capabilityID, CapabilityDimension, primaryTime, operation)
 }
@@ -67,6 +75,12 @@ func (p CommandCounterPolicy) prepareBoundCounter(scope Context, subject Subject
 // still owns current row/key-history checks and transactional allowance.
 func (p CommandCounterPolicy) ValidateVerification(command CounterCommand, scope Context, subject Subject, capabilityID string, primaryTime time.Time) error {
 	return p.validateCapabilityCounter(command, scope, subject, capabilityID, primaryTime, "identity.email.verification-confirm")
+}
+
+// ValidateEmailChange conserves the exact original change grant and observation
+// lifetime. Verification-only or another protected action cannot borrow it.
+func (p CommandCounterPolicy) ValidateEmailChange(command CounterCommand, scope Context, subject Subject, capabilityID string, primaryTime time.Time) error {
+	return p.validateCapabilityCounter(command, scope, subject, capabilityID, primaryTime, "identity.email.change-confirm")
 }
 
 func (p CommandCounterPolicy) validateCapabilityCounter(command CounterCommand, scope Context, subject Subject, capabilityID string, primaryTime time.Time, operation Action) error {

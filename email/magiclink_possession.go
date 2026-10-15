@@ -9,7 +9,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/faustbrian/go-capability"
+	"github.com/faustbrian/go-capability/v2"
 	identity "github.com/faustbrian/go-identity"
 )
 
@@ -138,7 +138,7 @@ func (p *MagicLinkPossessionPolicy) Authorize(grant capability.Grant, s MagicLin
 		"magiclink.creation-digest":      hex.EncodeToString(s.CreationDigest[:]),
 		"magiclink.email-policy-version": strconv.FormatUint(s.PolicyVersion, 10),
 	}
-	if grant.Authorize(capability.Use{Audience: p.state.audience, Subject: string(s.UserID), Tenant: string(s.TenantID), Resource: "identity.magiclink/" + string(s.IdentifierID), Operation: "identity.magic-link.consume", Caveats: caveats}) != nil {
+	if grant.Authorize(capability.Use{Issuer: p.state.issuer, Audience: p.state.audience, Subject: string(s.UserID), Tenant: string(s.TenantID), Resource: "identity.magiclink/" + string(s.IdentifierID), Operation: "identity.magic-link.consume", Caveats: caveats}) != nil {
 		return ErrInvalidVerification
 	}
 	return nil

@@ -11,9 +11,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/faustbrian/go-authorization"
-	"github.com/faustbrian/go-capability"
-	identifier "github.com/faustbrian/go-identifier"
+	"github.com/faustbrian/go-authorization/v3"
+	"github.com/faustbrian/go-capability/v2"
+	identifier "github.com/faustbrian/go-identifier/v2"
 	identity "github.com/faustbrian/go-identity"
 	email "github.com/faustbrian/go-identity/email"
 )
@@ -42,13 +42,13 @@ func registrationGrant(t testing.TB, p capability.Payload) capability.Grant {
 	key := bytes.Repeat([]byte{9}, 32)
 	signer, _ := capability.NewHMACSHA256Signer("signing", key)
 	verifier, _ := capability.NewHMACSHA256Verifier(key)
-	keys, _ := capability.NewKeySet([]capability.Key{{ID: "signing", Verifier: verifier}})
+	keys, _ := capability.NewKeySet([]capability.Key{{Issuer: p.Issuer, ID: "signing", Verifier: verifier}})
 	p.ID = "issued-grant"
 	wire, err := capability.Issue(context.Background(), p, signer, capability.DefaultLimits())
 	if err != nil {
 		t.Fatal("actual capability signing failed", err)
 	}
-	grant, err := capability.Verify(context.Background(), wire, keys, capability.VerifyOptions{Now: p.IssuedAt, Limits: capability.DefaultLimits()})
+	grant, err := capability.Verify(context.Background(), wire, keys, capability.VerifyOptions{Issuer: p.Issuer, Now: p.IssuedAt, Limits: capability.DefaultLimits()})
 	if err != nil {
 		t.Fatal("actual capability verification failed", err)
 	}

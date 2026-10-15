@@ -1,9 +1,20 @@
 # Email
 
-Email-owned address parsing, canonical comparison and original signup mailbox
-verification grant policy. This development checkpoint does **not** implement
-scanner-safe confirmation, address mutation, persistence, delivery or
-authentication. Those remain requirements of this module.
+Email-owned address parsing, canonical comparison, original signup mailbox
+verification contracts and authorized address reads. Native password-signup
+confirmation is composed by the existing password adapter and reference backend;
+the core does not own persistence, mail transport or password authentication.
+The full add/change/removal lifecycle remains under development.
+
+`VerificationSendService` and `ChangeRequestService` are storage-neutral keyed
+request ports. They borrow original password/session/CSRF custody, bind exact self
+scope and callback, and leave command/address choice, atomic proof use, delivery
+and replay to the native owner. `ChangeRequestRequest` explicitly selects
+`NotifyCurrentAddress`; no omitted proof policy silently becomes a weaker one.
+Queued results mean committed local intent, not delivery, verification or signin.
+Native password PostgreSQL and reference implementations of these new request
+ports remain pending delivery. Persistence and HTTP are not mandatory
+dependencies of the foundation contracts provided here.
 
 ## Quick start
 
@@ -54,6 +65,72 @@ this deliberately restricted identity parser is not full mailbox/SMTP conformanc
 
 ## Tradeoffs, security and FAQ
 
+### Primary email changes
+
+`ChangeProfile` explicitly selects current-address and session policy. Zero denies.
+`RequirePrimaryAddress` needs a verified primary; `PrimaryOrSoleVerifiedAddress`
+also permits establishing the first primary when exactly one pre-existing verified
+email exists. It never invents or promotes the old address, chooses by ordering or
+uses the candidate as the notification recipient. Independent identifier and
+verification versions remain bound to original intent.
+
+`ChangeConfirmRequest` and `ChangeRecovery` select `identity.email.change-confirm`,
+not verification-only history. Original fresh-password authorization and new-address
+possession must commit with verified primary selection, old-address notification
+and `InvalidateIdentifierSessions`. Confirmation issues no session/cookie. A fresh
+commit can disclose the verified primary under policy; replay and recovery expose
+only original metadata. Rollback recovery preserves both known noncommit and its
+original failure cause; an aborted grant cannot be resurrected.
+
+Native change-service delivery in `password/postgres`, opt-in management HTTP
+composition, safe removal and stronger-factor profiles remain under development.
+
+### Authorized address reads
+
+`NewAddressQueryService` composes the existing primary identifier repository,
+authorization service and redaction callback with `identity.UserQueryConfig`.
+It owns no database, goroutines, sessions or verification tokens. The query
+port accepts a trusted current caller from authenticated composition; caller
+IDs, groups and resource attributes must never be decoded from public input.
+Storage implementations are platform-owned adapters, not missing application
+domain stores. Delivery of the selected PostgreSQL/reference consumer proof
+remains pending; these core contracts alone do not demonstrate that journey.
+
+`AddressGet` and `AddressList` require exact action, tenant, target and policy
+scope before primary access and repeat policy against observed status and
+versions. Omitted `TargetSubjectID` means the authenticated human's own subject;
+an explicit other target requires the authorization engine's administrator
+policy. An administrator role string or target-selection field grants nothing.
+Absent, forbidden, non-email and cross-tenant get targets return the same
+redacted `identity.ForbiddenError`. Dependency failures and malformed primary
+partitions return `identity.UnavailableError`, never partial observations.
+
+Reads retain the kernel's original canonical/display text and independent user,
+identifier-authority, identifier and verification versions. They do not
+normalize stored addresses, create verification or establish current validity
+leases. The callback selects exactly both address values or neither using
+`canonical_value` and `display_value` under the configured policy/version and
+registered reason. A partial or malformed selection fails closed; metadata
+already requires current query authorization. Explicit `Values()` disclosure
+belongs only in an authorized no-store response, not logs or caches.
+
+List limits are 1..100 with a default of 25. The primary partition is complete
+and capped at 128 identifiers; an unavailable partition is never truncated.
+Non-email rows are filtered without skipping email pagination positions. The
+opaque cursor is bounded to 512 bytes and binds tenant, target, actor, operation,
+policy and effective page size. A changed user/identifier-authority version
+returns a conflict: restart pagination rather than mixing snapshots. Cursors
+are not signed credentials and grant no authority; each page is separately
+authorized and read from primary storage. Diagnostics redact; implicit JSON/text
+export is refused. HTTP owns the eventual explicit wire representation.
+
+These read-only results report `CommitOutcomeNotCommitted` on success because
+there is no mutation to commit. A successful read is not a command receipt or
+proof of verification ownership. Cancellation, earlier deadlines and callback
+panics return no partial data. This checkpoint is not the full email lifecycle:
+add/resend/change/removal, their atomic effects and opt-in query HTTP composition
+remain in the active M04 implementation.
+
 ### Explicit confirmation input
 
 `VerificationConfirmRequest.Validate` admits a borrowed live opaque proof of
@@ -63,9 +140,10 @@ before rendering, and caller collections before copying attribute sets. Neither
 success nor repeated validation authenticates the proof, proves callback
 allowlisting, consumes one-use authority, commits verification or issues a
 session. A concurrent proof transfer invalidates custody after observation.
-The eventual native service must check the exact original intent and current
-policy and coordinate every effect. The native typed service binding and HTTP
-implementation remain pending.
+The native service checks the exact original intent and current policy and
+coordinates every effect. The existing password signup adapter implements the
+typed registration-only binding; the reference backend selects its scanner-safe
+inspection and explicit HTTP confirmation without automatic session issuance.
 
 `RegistrationVerificationService` is the narrow original-signup,
 require-before-signin port. Its result conserves observed commit status even
@@ -89,6 +167,17 @@ redacts and JSON/text serialization denies; explicit field projections and
 private enclosing diagnostic fields remain sensitive and must not be logged.
 
 ### Signup verification grants
+
+Authenticated address management uses `NewManagedVerificationPolicy` and
+`ManagedVerificationSpec`, not a fabricated anonymous signup. It reuses the
+bounded address/issuer/callback/key configuration but has its own `management-v1`
+commitment. Exact original actor, session, request, address versions and token
+generation are bound; verification-send and change-request select different
+confirmation actions. `Authorize` checks an already authenticated grant and
+exclusive original expiry only. Native workflows must still perform current
+authority/factor/risk checks, persist issued state and encrypted delivery, and
+consume atomically with the actual directory mutation. This policy alone is
+neither a delivery service nor a safe confirmation endpoint.
 
 `NewMagicLinkPossessionPolicy` is a separate signup-by-link policy; it does not
 widen password registration verification. It freezes the address comparison,

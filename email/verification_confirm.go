@@ -9,8 +9,8 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/faustbrian/go-authorization"
-	"github.com/faustbrian/go-capability"
+	"github.com/faustbrian/go-authorization/v3"
+	"github.com/faustbrian/go-capability/v2"
 	identity "github.com/faustbrian/go-identity"
 )
 
@@ -41,6 +41,10 @@ type VerificationConfirmRequest struct {
 // establish current scope, proof validity and atomic one-use domain effects.
 // All malformed inputs return the same redacted ErrInvalidVerification.
 func (r VerificationConfirmRequest) Validate() error {
+	return r.validate("identity.email.verification-confirm")
+}
+
+func (r VerificationConfirmRequest) validate(action authorization.Action) error {
 	if _, err := identity.ParseCommandID(string(r.CommandID)); err != nil {
 		return ErrInvalidVerification
 	}
@@ -50,7 +54,7 @@ func (r VerificationConfirmRequest) Validate() error {
 	if _, valid := verificationURL(&r.Callback, 2048); !valid {
 		return ErrInvalidVerification
 	}
-	if validateVerificationCaller(r.TenantID, r.Caller) != nil || len(r.Network) > 128 {
+	if validateEmailCaller(r.TenantID, r.Caller, action) != nil || len(r.Network) > 128 {
 		return ErrInvalidVerification
 	}
 	address, err := netip.ParseAddr(r.Network)
@@ -61,8 +65,12 @@ func (r VerificationConfirmRequest) Validate() error {
 }
 
 func validateVerificationCaller(tenant identity.TenantID, caller authorization.DecisionContext) error {
+	return validateEmailCaller(tenant, caller, "identity.email.verification-confirm")
+}
+
+func validateEmailCaller(tenant identity.TenantID, caller authorization.DecisionContext, action authorization.Action) error {
 	c := caller.Request
-	if !verificationID(string(tenant)) || c.Tenant != authorization.TenantID(tenant) || c.Action != "identity.email.verification-confirm" || c.Resource.Type != "identity.user" || !verificationID(string(c.Subject.ID)) || (c.Resource.ID != "" && !verificationID(string(c.Resource.ID))) || c.Environment.Time.Location() != time.UTC {
+	if !verificationID(string(tenant)) || c.Tenant != authorization.TenantID(tenant) || c.Action != action || c.Resource.Type != "identity.user" || !verificationID(string(c.Subject.ID)) || (c.Resource.ID != "" && !verificationID(string(c.Resource.ID))) || c.Environment.Time.Location() != time.UTC {
 		return ErrInvalidVerification
 	}
 	switch c.Subject.Kind {

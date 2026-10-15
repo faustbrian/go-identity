@@ -8,7 +8,7 @@ import (
 	"sync"
 	"testing"
 
-	identifier "github.com/faustbrian/go-identifier"
+	identifier "github.com/faustbrian/go-identifier/v2"
 	email "github.com/faustbrian/go-identity/email"
 )
 

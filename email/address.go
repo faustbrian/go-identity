@@ -11,7 +11,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	identifier "github.com/faustbrian/go-identifier"
+	identifier "github.com/faustbrian/go-identifier/v2"
 )
 
 // ErrInvalidAddress denies an unusable mailbox without including its input.

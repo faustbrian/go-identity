@@ -2,6 +2,54 @@
 
 ## Unreleased
 
+- Validate the complete kernel identifier partition before selecting an original
+  change-notification address, rejecting duplicate canonical records rather
+  than choosing a primary from inconsistent state.
+
+- Use current public identity/delivery/session source and the identifier v2
+  normalization contract. Callers constructing address policy must import
+  `go-identifier/v2`; fixed profile identity, persisted canonical records and
+  selected email workflow behavior remain unchanged.
+
+- Adopt capability v2 public proof/grant types and explicit trusted issuer
+  policy. Update capability imports and issuer-owned keys/configuration; token
+  framing and native transaction/recovery ownership remain unchanged.
+
+- Add storage-neutral keyed verification-send and change-request ports with
+  explicit original primary custody, self scope and change proof policy. Native
+  owners choose the winning command/address and preserve original outcomes;
+  queued means committed local delivery intent, not verification or signin.
+
+- Add explicit pure email-removal policy over the existing kernel transition.
+  Losing the last verified signin/recovery email denies; a retained verified
+  nonprimary address is not silently promoted. Native credential/factor admission,
+  token retirement and atomic lifecycle/session effects remain required.
+
+- Add explicit new-address-confirmed change policy and separate typed confirmation
+  and recovery contracts. Require a verified primary or explicitly allow a sole
+  verified old address for initial-primary establishment; ambiguity denies.
+  Signed change intent binds the exact old address, independent predecessors and
+  selected session policy. Verification-only links and recovery stay separate.
+
+- Select a signed stable management mailbox family for native resend
+  supersession. Fresh request/session/key metadata cannot escape the family,
+  and its full original intent remains independently bound. Legacy unselected
+  four-caveat links remain unchanged; signing, cooldown and atomic replacement
+  belong to native workflow/transaction owners.
+
+- Add a distinct authenticated email-management link profile. Bind original
+  request, actor/session and pending-address versions without publishing the
+  mailbox, allowing a signup link to authorize management, renewing expiry or
+  consuming through validation. Change links and ordinary verification links
+  have separate confirmation actions.
+
+- Add authorized email address list/get over the primary identifier repository.
+  Preserve original address/verification versions, filter non-email records,
+  require current owner or explicit administrator policy and bounded disclosure,
+  and bind pagination to exact scope and unchanged primary versions. Absent and
+  forbidden addresses remain indistinguishable. Reads do not claim a committed
+  mutation; full email lifecycle and HTTP composition remain under development.
+
 - Add explicit email-owned prospective magic-link mailbox-possession policy.
   Match the existing authenticated grant to original account, address, creation,
   browser, callback, expiry and selected policy without issuing another token.

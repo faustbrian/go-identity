@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/faustbrian/go-capability"
+	"github.com/faustbrian/go-capability/v2"
 	identity "github.com/faustbrian/go-identity"
 	email "github.com/faustbrian/go-identity/email"
 )
@@ -32,14 +32,14 @@ func possessionGrant(t testing.TB, p capability.Payload) capability.Grant {
 	key := bytes.Repeat([]byte{18}, 32)
 	signer, _ := capability.NewHMACSHA256Signer("mailbox", key)
 	verifier, _ := capability.NewHMACSHA256Verifier(key)
-	resolver, _ := capability.NewKeySet([]capability.Key{{ID: "mailbox", Verifier: verifier}})
+	resolver, _ := capability.NewKeySet([]capability.Key{{Issuer: p.Issuer, ID: "mailbox", Verifier: verifier}})
 	limits := capability.DefaultLimits()
 	limits.MaxCaveats = 18
 	wire, err := capability.Issue(context.Background(), p, signer, limits)
 	if err != nil {
 		t.Fatal("real signing failed", err)
 	}
-	g, err := capability.Verify(context.Background(), wire, resolver, capability.VerifyOptions{Now: p.IssuedAt, Limits: limits})
+	g, err := capability.Verify(context.Background(), wire, resolver, capability.VerifyOptions{Issuer: p.Issuer, Now: p.IssuedAt, Limits: limits})
 	if err != nil {
 		t.Fatal("real verification failed", err)
 	}

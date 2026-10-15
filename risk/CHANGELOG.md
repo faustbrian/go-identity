@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Bind risk assessment to the current public identity kernel contracts without
+  changing action limits or granting authentication authority.
+
+- Align owned capability dependencies with the v2 issuer-scoped contracts.
+
+- Select separate proof-bound email-change confirmation counters without a
+  fabricated session. Preserve canonical protected limits, original observation
+  lifetime and exact action/subject/grant identity; verification-only stays closed.
+
 - Support original-continuation secondary OTP completion under the protected
   anonymous MFA counter policy, preserving limits, original freshness and
   child/subject isolation without inventing an authenticated session.

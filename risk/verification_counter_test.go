@@ -12,6 +12,35 @@ type verificationCounterPolicy interface {
 	ValidateVerification(CounterCommand, Context, Subject, string, time.Time) error
 }
 
+func TestEmailChangeCountersKeepDistinctProofBoundAction(t *testing.T) {
+	key, _ := NewCounterDigestKey(7, bytes.Repeat([]byte{0x31}, 32))
+	policy, _ := NewCommandCounterPolicy(CommandCounterPolicyConfig{Policy: testPolicy(t), Keys: []CounterDigestKey{key}})
+	owner, ok := any(policy).(interface {
+		PrepareEmailChange(Context, Subject, string, time.Time) (CounterCommand, error)
+		ValidateEmailChange(CounterCommand, Context, Subject, string, time.Time) error
+	})
+	if !ok {
+		t.Fatal("new-address confirmation cannot charge genuine proof-bound counters")
+	}
+	now := testContext().Now.UTC().Truncate(time.Microsecond)
+	scope := Context{Tenant: "tenant", Operation: "identity.email.change-confirm", Attempt: "attempt"}
+	subject := Subject{User: "user", Network: "127.0.0.1"}
+	command, err := owner.PrepareEmailChange(scope, subject, "change-grant", now)
+	if err != nil || owner.ValidateEmailChange(command, scope, subject, "change-grant", now) != nil {
+		t.Fatal("genuine change counters failed", err)
+	}
+	if policy.ValidateVerification(command, scope, subject, "change-grant", now) == nil {
+		t.Fatal("change aliased verification-only")
+	}
+	if owner.ValidateEmailChange(command, scope, subject, "other-grant", now) == nil || owner.ValidateEmailChange(command, scope, subject, "change-grant", now.Add(15*time.Minute)) == nil {
+		t.Fatal("changed proof or expired evidence admitted")
+	}
+	scope.Operation = "identity.email.verification-confirm"
+	if _, err := owner.PrepareEmailChange(scope, subject, "change-grant", now); err == nil {
+		t.Fatal("change widened verification API")
+	}
+}
+
 // Signup confirmation has no authenticated session. Its real signed grant ID
 // must select a distinct counter dimension, not masquerade as a session. These
 // pure projections grant neither proof authentication nor allowance/consumption.
