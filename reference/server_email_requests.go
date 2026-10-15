@@ -22,9 +22,11 @@ import (
 // PolicyRevision are trusted deployment policy; ActorID is required only for
 // change confirmation. Request routes preserve the original proof/cookie/CSRF
 // custody. Change selects new-address proof plus required old-address notice,
-// never old-address confirmation, automatic signin or removal.
+// never old-address confirmation or automatic signin. AddressRemove separately
+// selects native protected self-removal; no link delivery is implied.
 type HTTPEmailRequestsConfiguration struct {
 	VerificationSend, ChangeRequest, ChangeConfirm bool
+	AddressRemove                                  bool
 	Origin                                         string
 	ActorID                                        identity.ActorID
 	PolicyRevision                                 authorization.Revision
@@ -53,14 +55,14 @@ func composeEmailRequestsHTTP(c StoreConfiguration, owner *emailState, proof *pa
 	}
 	invalid := identity.InvalidInputError{Field: "reference_http_email_requests"}
 	p := *c.HTTPEmailRequests
-	if !p.VerificationSend && !p.ChangeRequest && !p.ChangeConfirm || owner == nil || c.Email == nil || c.Session == nil || c.Session.Native.Execution.Clock == nil || c.OTP == nil || rate == nil || c.HTTPRate == nil || p.PolicyRevision == 0 || uint64(p.PolicyRevision) != c.OTP.RequestKeys.Policy.PolicyVersion {
+	if !p.VerificationSend && !p.ChangeRequest && !p.ChangeConfirm && !p.AddressRemove || owner == nil || c.Email == nil || c.Session == nil || c.Session.Native.Execution.Clock == nil || c.OTP == nil || rate == nil || c.HTTPRate == nil || p.PolicyRevision == 0 || uint64(p.PolicyRevision) != c.OTP.RequestKeys.Policy.PolicyVersion {
 		return nil, invalid
 	}
 	u, err := url.Parse(p.Origin)
 	if err != nil || u.Scheme != "https" || u.Host == "" || u.User != nil || u.Path != "" || u.RawQuery != "" || u.ForceQuery || u.Fragment != "" || u.Opaque != "" || u.String() != p.Origin {
 		return nil, invalid
 	}
-	if p.VerificationSend || p.ChangeRequest {
+	if p.VerificationSend || p.ChangeRequest || p.AddressRemove {
 		if proof == nil || proof.proofs == nil || proof.cookie == nil {
 			return nil, invalid
 		}
@@ -73,6 +75,9 @@ func composeEmailRequestsHTTP(c StoreConfiguration, owner *emailState, proof *pa
 			}
 		}
 	}
+	if p.AddressRemove && (c.Email.Removal == nil || owner.removal == nil || c.Email.Removal.Primary.Transport != session.CredentialCookie) {
+		return nil, invalid
+	}
 	if p.VerificationSend && owner.verificationRequests == nil || p.ChangeRequest && owner.changeRequests == nil || p.ChangeConfirm && (owner.change == nil || p.ActorID == "") {
 		return nil, invalid
 	}
@@ -84,7 +89,7 @@ func composeEmailRequestsHTTP(c StoreConfiguration, owner *emailState, proof *pa
 		}
 	}()
 	now := c.Session.Native.Execution.Clock.Now
-	if p.ChangeRequest {
+	if p.ChangeRequest || p.AddressRemove {
 		if change != nil {
 			out.secret = change.rate
 		} else {
@@ -123,8 +128,15 @@ func (s *Server) selectEmailRequests(network identityhttp.NetworkConfig, f Featu
 	}
 	c := h.config
 	request := emailhttp.RequestConfig{Network: network, Cookie: state.session.config.Cookie, Origin: identityhttp.Origin(c.Origin), PolicyRevision: c.PolicyRevision, MaximumDuration: state.timeout}
-	if c.VerificationSend || c.ChangeRequest {
+	if c.VerificationSend || c.ChangeRequest || c.AddressRemove {
 		request.Proofs = state.passwordVerification.proofs
+	}
+	if c.AddressRemove {
+		owner, err := f.EmailRemoval()
+		if err != nil {
+			return err
+		}
+		selection.AddressRemove = &emailhttp.RemovalConfig{Network: network, Proofs: state.passwordVerification.proofs, Service: owner, Rate: h.secret, Cookie: state.session.config.Cookie, Origin: identityhttp.Origin(c.Origin), PolicyRevision: c.PolicyRevision, MaximumDuration: state.timeout}
 	}
 	if c.VerificationSend {
 		owner, err := f.EmailVerificationRequests()
@@ -157,7 +169,7 @@ func (s *Server) selectEmailRequests(network identityhttp.NetworkConfig, f Featu
 // The original proof repository is read before the guarded native request port.
 // Join the whole transport to graph cancellation so shutdown cannot leave that
 // earlier read outside request draining.
-func (s *Server) guardEmailRequestLifetime(next http.Handler) http.Handler {
+func (s *Server) guardEmailRequestLifetime(operation string, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ctx, done, err := s.state.enterFeature(r.Context(), true)
 		if err != nil {
@@ -165,7 +177,11 @@ func (s *Server) guardEmailRequestLifetime(next http.Handler) http.Handler {
 			w.Header().Set("Cache-Control", "no-store")
 			w.Header().Set("X-Content-Type-Options", "nosniff")
 			w.WriteHeader(http.StatusServiceUnavailable)
-			_ = json.NewEncoder(w).Encode(emailhttp.RequestResponse{CommitOutcome: "none", Error: "unavailable"})
+			if operation == "identity.email.address-remove" {
+				_ = json.NewEncoder(w).Encode(emailhttp.RemovalResponse{CommitOutcome: "none", Error: "unavailable"})
+			} else {
+				_ = json.NewEncoder(w).Encode(emailhttp.RequestResponse{CommitOutcome: "none", Error: "unavailable"})
+			}
 			return
 		}
 		defer done()

@@ -65,11 +65,11 @@ func (referenceRegistrationPolicy) Decide(ctx context.Context, c authorization.D
 	}
 	if string(c.Request.Tenant) == otpTenant && c.PolicyRevision == 9 && c.Request.Subject.Kind == authorization.SubjectUser && c.Request.Resource.Type == "identity.user" && string(c.Request.Resource.ID) == string(c.Request.Subject.ID) {
 		switch c.Request.Action {
-		case "identity.mfa.enable", "identity.mfa.totp-uri", "identity.mfa.totp-verify", "identity.mfa.recovery-regenerate", "identity.mfa.list", "identity.mfa.factor-update", "identity.mfa.disable", "identity.email.verification-send", "identity.email.change-request", "identity.email.address-get", "identity.email.address-list":
+		case "identity.mfa.enable", "identity.mfa.totp-uri", "identity.mfa.totp-verify", "identity.mfa.recovery-regenerate", "identity.mfa.list", "identity.mfa.factor-update", "identity.mfa.disable", "identity.email.verification-send", "identity.email.change-request", "identity.email.address-remove", "identity.email.address-remove.recover", "identity.email.address-get", "identity.email.address-list":
 			return authorization.Decision{Outcome: authorization.Allow, Revision: 9}, nil
 		}
 	}
-	if string(c.Request.Tenant) == otpTenant && c.PolicyRevision == 9 && c.Request.Subject.Kind == authorization.SubjectUser && (c.Request.Action == "identity.mfa.enable" || c.Request.Action == "identity.mfa.factor-update" || c.Request.Action == "identity.mfa.disable" || c.Request.Action == "identity.email.verification-send" || c.Request.Action == "identity.email.change-request") && c.Request.Resource.Type == "identity.request-admission" && string(c.Request.Resource.ID) == string(c.Request.Action) {
+	if string(c.Request.Tenant) == otpTenant && c.PolicyRevision == 9 && c.Request.Subject.Kind == authorization.SubjectUser && (c.Request.Action == "identity.mfa.enable" || c.Request.Action == "identity.mfa.factor-update" || c.Request.Action == "identity.mfa.disable" || c.Request.Action == "identity.email.verification-send" || c.Request.Action == "identity.email.change-request" || c.Request.Action == "identity.email.address-remove") && c.Request.Resource.Type == "identity.request-admission" && string(c.Request.Resource.ID) == string(c.Request.Action) {
 		return authorization.Decision{Outcome: authorization.Allow, Revision: 9}, nil
 	}
 	return (referenceResetPolicy{}).Decide(ctx, c)
@@ -233,6 +233,7 @@ func proveReferenceSignupGraph(t *testing.T, competing bool, protected ...bool) 
 }
 
 type signupGraphExtensions struct {
+	emailRemoval                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           bool
 	emailManagementChange                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  bool
 	emailChangeCase                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        string
 	emailManagementResend                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  bool
@@ -281,7 +282,7 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 	c, deps, worker := otpGraphConfiguration(t, f.config)
 	deps.PostgreSQL = f.pool
 	if extensions.completionCommitFault {
-		f.completionFault = &completionCommitFault{factorProof: extensions.activeStepUp, regeneration: extensions.regeneration, factorManagement: extensions.factorManagement || extensions.disable, replacementConfirmation: extensions.factorReplacementConfirmationFault}
+		f.completionFault = &completionCommitFault{factorProof: extensions.activeStepUp, regeneration: extensions.regeneration, factorManagement: extensions.factorManagement || extensions.disable, replacementConfirmation: extensions.factorReplacementConfirmationFault, emailRemoval: extensions.emailRemoval}
 		faultPool, err := database.Connect(ctx, database.Config{DSN: f.pool.Raw().Config().ConnConfig.ConnString(), MaxConns: 4, Configure: func(pc *database.PoolConfig) error { pc.ConnConfig.DialFunc = f.completionFault.dial; return nil }})
 		if err != nil {
 			t.Fatal("completion fault pool unavailable")
@@ -310,11 +311,15 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 	key, _ := session.NewBrowserDeviceKey(1, bytes.Repeat([]byte{107}, 32))
 	cookie, _ := session.NewCookiePolicy(session.CookieConfig{Name: "__Host-identity_device", SameSite: http.SameSiteLaxMode})
 	c.HTTPPreAuth = &reference.HTTPPreAuthConfiguration{Lifetime: session.LifetimeConfig{Default: session.BrowserSession, AbsoluteTTL: time.Hour, IdleTTL: 30 * time.Minute, RefreshAfter: time.Minute, FreshFor: 15 * time.Minute}, Device: &session.BrowserDeviceConfig{Namespace: "reference-registration", Keys: []session.BrowserDeviceKey{key}, ActiveVersion: 1, Lifetime: 24 * time.Hour, Cookie: cookie}}
-	configureReferencePasswordReset(t, &c, origin, f.pool, !extensions.factorRemoval, extensions.factorRemoval, extensions.factorRemovalReset)
+	resetRiskVersion := uint64(3)
+	if extensions.emailRemoval {
+		resetRiskVersion = 9
+	}
+	configureReferencePasswordResetPolicy(t, &c, origin, f.pool, resetRiskVersion, !extensions.factorRemoval && !extensions.emailRemoval, extensions.factorRemoval || extensions.emailRemoval, extensions.factorRemovalReset || extensions.emailRemoval)
 	selectedReset := c.PasswordReset
 	selectedResetHTTP := c.HTTPPasswordReset
 	calls := configureReferenceRegistration(t, &c, origin)
-	if extensions.factorRemoval {
+	if extensions.factorRemoval || extensions.emailRemoval {
 		c.PasswordReset = selectedReset
 		c.PasswordReset.Native.Coordinator.QueryPolicy = c.OTP.Signin.Coordinator.QueryPolicy
 		c.PasswordReset.Native.Coordinator.AdmissionPolicy = c.OTP.Signin.Coordinator.QueryPolicy
@@ -452,8 +457,17 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 		selectDurableReferenceAdmission(&c)
 	}
 	var emailUpgrade *reference.StoreConfiguration
-	if extensions.emailChangeCase == "graph" || extensions.emailChangeCase == "graph-upgrade" || extensions.emailChangeCase == "shared-http" || extensions.emailChangeCase == "keyed-graph" || extensions.emailChangeCase == "request-http" {
+	if extensions.emailRemoval || extensions.emailChangeCase == "graph" || extensions.emailChangeCase == "graph-upgrade" || extensions.emailChangeCase == "shared-http" || extensions.emailChangeCase == "keyed-graph" || extensions.emailChangeCase == "request-http" {
 		calls = configureReferenceEmailGraph(t, &c, origin, extensions.emailManagementChange)
+		if extensions.emailRemoval {
+			configureReferenceEmailRemoval(t, &c)
+			if extensions.emailChangeCase == "removal-primary" {
+				configureReferenceEmailRemovalPrimary(&c)
+			}
+			if extensions.emailChangeCase == "removal-http" || extensions.emailChangeCase == "removal-only-http" {
+				c.HTTPEmailRequests = &reference.HTTPEmailRequestsConfiguration{AddressRemove: true, Origin: origin, PolicyRevision: 9}
+			}
+		}
 		if extensions.emailChangeCase == "keyed-graph" || extensions.emailChangeCase == "request-http" {
 			keys, err := kernel.NewRequestKeyConfig("reference-managed-email", [32]byte{219}, c.OTP.RequestKeys.Policy)
 			if err != nil {
@@ -480,7 +494,7 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 			c.HTTPRegistrationVerification.ManagedAddresses = true
 			c.HTTPEmailAddresses = &reference.HTTPEmailAddressesConfiguration{Get: true, List: true}
 		}
-		if extensions.emailChangeCase == "graph-upgrade" {
+		if extensions.emailChangeCase == "graph-upgrade" || extensions.emailChangeCase == "removal-upgrade" {
 			selected := c
 			emailUpgrade = &selected
 			c.Email, c.PasswordVerification = nil, nil
@@ -568,6 +582,9 @@ END $$`); err != nil {
 			t.Error("owned audit cleanup", err)
 		}
 	})
+	if extensions.emailChangeCase == "removal-only-http" {
+		proveEmailRemovalIndependentRateMigrations(t, ctx, f, c, deps, worker, modules)
+	}
 	migrationRequest := applyRequest(t, ctx, stores, modules)
 	migrationResult, migrationErr := stores.ReferenceMigrationApply(ctx, migrationRequest)
 	if extensions.factorReplacement && migrationErr != nil && migrationResult.Result.State() == reference.MigrationApplyUnknown {
@@ -603,7 +620,7 @@ END $$`); err != nil {
 		seen[op.Record.OperationID] = true
 	}
 	wantOperations := 8
-	for action, selected := range map[string]bool{"identity.email.verification-send": c.HTTPEmailRequests != nil && c.HTTPEmailRequests.VerificationSend, "identity.email.change-request": c.HTTPEmailRequests != nil && c.HTTPEmailRequests.ChangeRequest, "identity.email.change-confirm": c.HTTPEmailRequests != nil && c.HTTPEmailRequests.ChangeConfirm} {
+	for action, selected := range map[string]bool{"identity.email.verification-send": c.HTTPEmailRequests != nil && c.HTTPEmailRequests.VerificationSend, "identity.email.change-request": c.HTTPEmailRequests != nil && c.HTTPEmailRequests.ChangeRequest, "identity.email.change-confirm": c.HTTPEmailRequests != nil && c.HTTPEmailRequests.ChangeConfirm, "identity.email.address-remove": c.HTTPEmailRequests != nil && c.HTTPEmailRequests.AddressRemove} {
 		if selected {
 			wantOperations++
 			if !seen[action] {
@@ -795,6 +812,12 @@ END $$`); err != nil {
 				managementFeatures = upgradeReferenceEmailGraph(t, ctx, f, managementConfig, deps, worker, modules, user, migrationRequest)
 			}
 			var change *referenceEmailChangeOptions
+			if extensions.emailRemoval {
+				f.emailRemovalMode = extensions.emailChangeCase
+				f.afterEmailRemovalPreparation = func(token capability.Proof, pending identity.IdentifierID, r passwordpg.EmailManagementRequest, current []*http.Cookie, currentCSRF string) {
+					proveReferenceEmailRemoval(t, ctx, f, managementFeatures, workers, client, network.URL, origin, messages, user, token, pending, r, current, currentCSRF, readSession, fresh)
+				}
+			}
 			if extensions.emailManagementChange {
 				change = &referenceEmailChangeOptions{readSession: readSession, recipients: noticeRecipients, mode: extensions.emailChangeCase}
 			}

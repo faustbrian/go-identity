@@ -69,17 +69,25 @@ func referencePasswordLogin(t *testing.T, ctx context.Context, f liveStores, cli
 		t.Fatal("native HTTP password initiation", response.StatusCode, flow.Error, flow.CommitOutcome, "prepared", flow.FlowID != "")
 	}
 	var flowCookie *http.Cookie
+	issuedDevice := false
 	for _, cookie := range response.Cookies() {
 		if !cookie.Secure || !cookie.HttpOnly || cookie.Path != "/" || cookie.Domain != "" || strings.Contains(string(wire), cookie.Value) {
 			t.Fatal("password original cookie custody")
 		}
 		if cookie.Name == "__Host-identity_flow" {
 			flowCookie = cookie
+		} else if cookie.Name == "__Host-identity_device" && len(device) == 0 {
+			device = append(device, cookie)
+			issuedDevice = true
 		} else {
 			t.Fatal("unexpected password original cookie")
 		}
 	}
-	if flowCookie == nil || len(response.Cookies()) != 1 || len(device) != 1 {
+	wantCookies := 1
+	if issuedDevice {
+		wantCookies++
+	}
+	if flowCookie == nil || len(response.Cookies()) != wantCookies || len(device) != 1 {
 		t.Fatal("password original/device custody")
 	}
 	original, err := sessionpg.ReadPreAuth(ctx, referenceOriginalFlowReader{pool: f.pool}, c.Session, otpTenant, flow.FlowID)

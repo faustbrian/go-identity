@@ -2,7 +2,10 @@ package reference
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 
@@ -13,13 +16,33 @@ import (
 	"github.com/faustbrian/go-identity/risk"
 )
 
+func TestEmailLifetimeRejectionKeepsOperationResponse(t *testing.T) {
+	for _, removal := range []bool{false, true} {
+		path, field := "/v1/email/verification-send", "queued"
+		operation := "identity.email.verification-send"
+		if removal {
+			path, field = "/v1/email/address-remove", "removed"
+			operation = "identity.email.address-remove"
+		}
+		s := &Server{state: &storeState{closed: true}}
+		called := false
+		h := s.guardEmailRequestLifetime(operation, http.HandlerFunc(func(http.ResponseWriter, *http.Request) { called = true }))
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, httptest.NewRequest(http.MethodPost, "https://tenant.example"+path, nil))
+		var out map[string]any
+		if json.Unmarshal(w.Body.Bytes(), &out) != nil || w.Code != http.StatusServiceUnavailable || called || len(out) != 3 || out[field] != false || out["commitOutcome"] != "none" || out["error"] != "unavailable" || w.Header().Get("Cache-Control") != "no-store" {
+			t.Fatal("lifetime rejection violated operation response shape", path)
+		}
+	}
+}
+
 func TestEmailSelectionAndGraphLifetime(t *testing.T) {
-	if owner, err := composeEmail(StoreConfiguration{}, ReferenceDependencies{}, risk.Evaluator{}, nil); err != nil || owner != nil {
+	if owner, err := composeEmail(StoreConfiguration{}, ReferenceDependencies{}, risk.Evaluator{}, nil, nil, nil); err != nil || owner != nil {
 		t.Fatal("unselected email acquired dependencies", err)
 	}
-	for _, config := range []*EmailConfiguration{{}, {Verification: &EmailManagementConfiguration{}}, {Change: &EmailManagementConfiguration{}}, {Addresses: &EmailAddressConfiguration{}}} {
+	for _, config := range []*EmailConfiguration{{}, {Verification: &EmailManagementConfiguration{}}, {Change: &EmailManagementConfiguration{}}, {Addresses: &EmailAddressConfiguration{}}, {Removal: &EmailRemovalConfiguration{}}} {
 		c := StoreConfiguration{Email: config}
-		if owner, err := composeEmail(c, ReferenceDependencies{}, risk.Evaluator{}, nil); err == nil || owner != nil {
+		if owner, err := composeEmail(c, ReferenceDependencies{}, risk.Evaluator{}, nil, nil, nil); err == nil || owner != nil {
 			t.Fatal("selected email accepted absent native authority")
 		}
 		if err := (&storeState{}).composeFeatureStores(c, ReferenceDependencies{}); err == nil {
@@ -38,6 +61,9 @@ func TestEmailSelectionAndGraphLifetime(t *testing.T) {
 	if owner, err := f.EmailChange(); err == nil || owner != nil {
 		t.Fatal("unselected graph exported change")
 	}
+	if owner, err := f.EmailRemoval(); err == nil || owner != nil {
+		t.Fatal("unselected graph exported removal")
+	}
 	if owner, err := f.EmailAddresses(); err == nil || owner != nil {
 		t.Fatal("unselected graph exported address queries")
 	}
@@ -47,7 +73,11 @@ func TestEmailSelectionAndGraphLifetime(t *testing.T) {
 	if owner, err := f.EmailChangeRequests(); err == nil || owner != nil {
 		t.Fatal("unselected graph exported portable change")
 	}
-	s.features.email = &emailState{verification: &passwordpg.EmailManagementService{}, change: &passwordpg.EmailManagementService{}, addresses: &email.AddressQueryService{}, verificationRequests: &passwordpg.EmailRequestWorkflow{}, changeRequests: &passwordpg.EmailRequestWorkflow{}}
+	s.features.email = &emailState{verification: &passwordpg.EmailManagementService{}, change: &passwordpg.EmailManagementService{}, addresses: &email.AddressQueryService{}, verificationRequests: &passwordpg.EmailRequestWorkflow{}, changeRequests: &passwordpg.EmailRequestWorkflow{}, removal: &passwordpg.EmailRemovalService{}}
+	removal, err := f.EmailRemoval()
+	if err != nil {
+		t.Fatal(err)
+	}
 	portableVerification, err := f.EmailVerificationRequests()
 	if err != nil {
 		t.Fatal(err)
@@ -70,6 +100,15 @@ func TestEmailSelectionAndGraphLifetime(t *testing.T) {
 	}
 	deny := func() {
 		t.Helper()
+		if _, err := removal.AddressRemove(t.Context(), email.AddressRemoveRequest{TenantID: "foreign"}); err == nil {
+			t.Fatal("foreign/inactive graph removed address")
+		}
+		if _, err := removal.AddressRemoveRecover(t.Context(), identity.RecoveryQuery{TenantID: "foreign"}, authorization.DecisionContext{}); err == nil {
+			t.Fatal("foreign/inactive graph disclosed removal outcome")
+		}
+		if user, err := removal.AddressRemoveRateSource(t.Context(), email.AddressRemoveRequest{TenantID: "foreign"}); err == nil || user != "" {
+			t.Fatal("foreign/inactive graph disclosed removal rate scope")
+		}
 		if _, err := portableVerification.VerificationSend(t.Context(), email.VerificationSendRequest{TenantID: "foreign"}); err == nil {
 			t.Fatal("portable request escaped graph/tenant lifetime")
 		}
@@ -124,7 +163,7 @@ func TestEmailRequestSelectionRequiresNativeOwners(t *testing.T) {
 	if owner, err := composeEmailRequestsHTTP(StoreConfiguration{}, nil, nil, nil, nil, nil); err != nil || owner != nil {
 		t.Fatal("unselected request acquired resources", err)
 	}
-	for _, selected := range []HTTPEmailRequestsConfiguration{{}, {VerificationSend: true}, {ChangeRequest: true}, {ChangeConfirm: true}} {
+	for _, selected := range []HTTPEmailRequestsConfiguration{{}, {VerificationSend: true}, {ChangeRequest: true}, {ChangeConfirm: true}, {AddressRemove: true}} {
 		c := StoreConfiguration{HTTPEmailRequests: &selected}
 		if owner, err := composeEmailRequestsHTTP(c, nil, nil, nil, nil, nil); err == nil || owner != nil {
 			t.Fatal("request accepted absent native owners")

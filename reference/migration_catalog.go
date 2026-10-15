@@ -86,7 +86,7 @@ func (s StoreSet) migrationCatalog(ctx context.Context) ([]migrationHistory, err
 			return nil, err
 		}
 		owned := migrationHistory{namespace: "identity_http_rate", history: []migrations.Migration{step}, owners: map[migrations.Version]ModuleID{step.Version(): "rate-limit/postgres"}, guards: []migrationGuard{{version: step.Version(), schema: "public", tables: []string{"rate_limit_states", "rate_limit_states_expires_at_idx"}}}}
-		if s.state.features != nil && (s.state.features.httpPasswordReset != nil || s.state.features.httpRegistrationVerification != nil || s.state.features.httpPasswordVerification != nil || s.state.features.httpPasswordChange != nil || s.state.features.httpMagicLink != nil && s.state.features.httpMagicLink.config.Consume) {
+		if s.state.features != nil && (s.state.features.httpPasswordReset != nil || s.state.features.httpRegistrationVerification != nil || s.state.features.httpPasswordVerification != nil || s.state.features.httpPasswordChange != nil || s.state.features.httpEmailRequests != nil && s.state.features.httpEmailRequests.secret != nil || s.state.features.httpMagicLink != nil && s.state.features.httpMagicLink.config.Consume) {
 			native := ratepg.AtomicSchemaMigration()
 			atomic, err := migrations.NewMigration(migrations.Version(native.Version), native.Name, migrations.TransactionModeDefault, native.Up, native.Down)
 			if err != nil {
@@ -209,9 +209,15 @@ func (s StoreSet) migrationCatalog(ctx context.Context) ([]migrationHistory, err
 		}
 	}
 	if e := s.state.features.email; e != nil {
-		catalog, err = emailMigrationCatalog(ctx, catalog, s.state.config.Schema, e.verification != nil || e.change != nil, e.change != nil)
+		catalog, err = emailMigrationCatalog(ctx, catalog, s.state.config.Schema, e.verification != nil || e.change != nil || e.removal != nil, e.change != nil)
 		if err != nil {
 			return nil, err
+		}
+		if e.removal != nil {
+			catalog, err = emailRemovalMigrationCatalog(ctx, catalog)
+			if err != nil {
+				return nil, err
+			}
 		}
 	}
 	if s.state.features.passwordChange != nil {

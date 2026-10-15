@@ -94,3 +94,20 @@ func emailMigrationCatalog(ctx context.Context, catalog []migrationHistory, risk
 	}
 	return result, nil
 }
+
+func emailRemovalMigrationCatalog(ctx context.Context, catalog []migrationHistory) ([]migrationHistory, error) {
+	if len(catalog) == 0 {
+		return nil, identity.InvalidInputError{Field: "reference_email_removal_migrations"}
+	}
+	if slices.ContainsFunc(catalog, func(h migrationHistory) bool { return h.namespace == "identity_identifier_removal" }) {
+		return catalog, nil
+	}
+	// This alters existing status admission tables. A table-presence guard would
+	// incorrectly mark a populated pre-removal installation as already upgraded.
+	base := catalog[0].history
+	full, err := (kernel.IdentifierRemovalCascadeMigrationSource{Base: fixedMigrationSource(base), Version: 1702}).Load(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return append(slices.Clone(catalog), migrationHistory{namespace: "identity_identifier_removal", history: full[len(base):], owners: map[migrations.Version]ModuleID{1702: "identity/postgres"}}), nil
+}

@@ -6,8 +6,8 @@ a UI, production deployment or whole-platform release.
 
 ## Selected native email management
 
-`StoreConfiguration.Email` independently selects `Verification`, `Change` and
-`Addresses`. `FeatureSet.EmailVerification()`, `EmailChange()` and
+`StoreConfiguration.Email` independently selects `Verification`, `Change`,
+`Addresses` and `Removal`. `FeatureSet.EmailVerification()`, `EmailChange()` and
 `EmailAddresses()` expose only their selected native workflows; none enables an
 HTTP route. An empty selection or missing required authority fails construction.
 Handles require initialized graph custody and an allowed tenant, and deny after
@@ -77,8 +77,25 @@ applies the configured session effects and queues the original old-address
 notice. Native typed recovery retains original metadata without repeating effects
 or replaying credentials. Apply the selected forward histories with the existing
 operator migration API before initialization; installed native prefixes are not
-rewritten. Safe removal and stronger-factor profiles remain separate unfinished
-work. Selected local runtime proof does not imply whole-unit qualification.
+rewritten. Stronger-factor profiles remain separate unfinished work. Selected
+local runtime proof does not imply whole-unit qualification.
+
+For safe removal select `EmailRemovalConfiguration` and call
+`FeatureSet.EmailRemoval()`. Actual `PasswordVerification`, `PasswordSignin`,
+complete `PasswordReset`, session and known-empty MFA authority are required.
+The graph supplies native proof, risk/counters and key owners. Native config
+defines reuse, original request custody and complete pending cascade policy.
+Authority scopes/material limits must be compatible. Retain signed targets on
+new verification grants; unclassified live history denies removal.
+
+Separately enable `HTTPEmailRequestsConfiguration.AddressRemove` with trusted
+HTTPS Origin/current revision for its canonical route/OpenAPI; other request
+flags may stay false. It borrows the keyed secret limiter and includes original
+proof reads in graph cancellation/draining, with no authentication issuance.
+Selected operator migrations install the native forward cascade suffix without
+rewriting populated baseline history. See the
+[wire example](../http/email/README.md#safe-self-removal). Pending cascade
+correlation is not asynchronous consumer closure.
 
 ## Native password/secondary-OTP login
 

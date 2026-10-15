@@ -20,6 +20,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/faustbrian/go-capability/v2"
 	identity "github.com/faustbrian/go-identity"
 	"github.com/faustbrian/go-identity/email"
 	passwordpg "github.com/faustbrian/go-identity/password/postgres"
@@ -34,6 +35,8 @@ import (
 )
 
 type liveStores struct {
+	afterEmailRemovalPreparation       func(capability.Proof, identity.IdentifierID, passwordpg.EmailManagementRequest, []*http.Cookie, string)
+	emailRemovalMode                   string
 	afterManagedConfirmation           func(email.VerificationConfirmRequest, identity.IdentifierID)
 	afterManagedChangeConfirmation     func(email.ChangeConfirmRequest, string)
 	emailRequestHTTP                   func(passwordpg.EmailManagementRequest, bool, bool) (passwordpg.EmailManagementResult, error)

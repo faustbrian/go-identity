@@ -21,11 +21,25 @@ import (
 // EmailConfiguration selects native email capabilities, not HTTP. Nil entries
 // expose no handle or feature. Management uses the selected password verification
 // owner's original proof/session authority; address reads use the graph's
-// authorization and disclosure policy. No UI, removal or auto-signin is enabled.
+// authorization and disclosure policy. Removal requires actual selected password
+// signin/reset owners. No UI or auto-signin is enabled.
 type EmailConfiguration struct {
 	Verification *EmailManagementConfiguration
 	Change       *EmailManagementConfiguration
 	Addresses    *EmailAddressConfiguration
+	Removal      *EmailRemovalConfiguration
+}
+
+// EmailRemovalConfiguration selects protected native self-removal without HTTP.
+// Primary.Action/CSRFKeys and Native counters/provider evaluator/keys/policy must
+// be absent; the graph supplies those actual owners. Both password signin and
+// emailed reset request/completion must be selected. Native.Domain defines the
+// explicit primary/recovery, reuse and pending lifecycle admission policy.
+// Borrowed configuration callbacks/resources must remain concurrency-safe.
+type EmailRemovalConfiguration struct {
+	Native   passwordpg.EmailRemovalConfig
+	Primary  passwordpg.EmailPrimaryConfig
+	Counters riskpg.Config
 }
 
 // EmailManagementConfiguration selects one delivered-link native workflow.
@@ -62,6 +76,7 @@ type emailState struct {
 	confirmation                         *passwordpg.EmailVerificationRouter
 	keyedVerification, keyedChange       *passwordpg.KeyedEmailManagementService
 	verificationRequests, changeRequests *passwordpg.EmailRequestWorkflow
+	removal                              *passwordpg.EmailRemovalService
 }
 
 func validateEmailSelection(c StoreConfiguration) error {
@@ -70,16 +85,19 @@ func validateEmailSelection(c StoreConfiguration) error {
 	}
 	e := c.Email
 	invalid := identity.InvalidInputError{Field: "reference_email"}
-	if e.Verification == nil && e.Change == nil && e.Addresses == nil || c.Session == nil || c.OTP == nil {
+	if e.Verification == nil && e.Change == nil && e.Addresses == nil && e.Removal == nil || c.Session == nil || c.OTP == nil {
 		return invalid
 	}
 	if (e.Verification != nil || e.Change != nil) && (c.PasswordVerification == nil || c.Delivery == nil) {
 		return invalid
 	}
+	if e.Removal != nil && (c.PasswordVerification == nil || c.PasswordSignin == nil || c.PasswordReset == nil) {
+		return invalid
+	}
 	return nil
 }
 
-func composeEmail(c StoreConfiguration, d ReferenceDependencies, evaluation risk.Evaluator, proof *passwordVerificationState) (*emailState, error) {
+func composeEmail(c StoreConfiguration, d ReferenceDependencies, evaluation risk.Evaluator, proof *passwordVerificationState, signin *passwordpg.SigninService, reset *passwordpg.ResetService) (*emailState, error) {
 	if c.Email == nil {
 		return nil, nil
 	}
@@ -112,6 +130,10 @@ func composeEmail(c StoreConfiguration, d ReferenceDependencies, evaluation risk
 	if err != nil {
 		return nil, err
 	}
+	state.removal, err = composeEmailRemoval(c, d, evaluation, proof, signin, reset)
+	if err != nil {
+		return nil, err
+	}
 	for _, slot := range []struct {
 		selected *EmailManagementConfiguration
 		native   *passwordpg.EmailManagementService
@@ -140,6 +162,41 @@ func composeEmail(c StoreConfiguration, d ReferenceDependencies, evaluation risk
 		}
 	}
 	return state, nil
+}
+
+func composeEmailRemoval(c StoreConfiguration, d ReferenceDependencies, evaluation risk.Evaluator, proof *passwordVerificationState, signin *passwordpg.SigninService, reset *passwordpg.ResetService) (*passwordpg.EmailRemovalService, error) {
+	if c.Email.Removal == nil {
+		return nil, nil
+	}
+	invalid := identity.InvalidInputError{Field: "reference_email_removal"}
+	keys, ok := d.EnvelopeKeys.(*keyring.Provider)
+	if !ok || keys == nil || proof == nil || proof.native == nil || signin == nil || reset == nil {
+		return nil, invalid
+	}
+	selected := c.Email.Removal
+	p, n := selected.Primary, selected.Native
+	if p.Action != "" || len(p.CSRFKeys) != 0 || n.Counters != nil || n.Risk.Evaluation != (risk.Evaluator{}) || len(n.Risk.Keys) != 0 || n.CounterPolicy != (risk.Policy{}) || n.MaximumDuration > c.OTP.Timeout || selected.Counters.Schema != c.Velocity.Schema || selected.Counters.CommandCounters == nil || selected.Counters.PolicyVersion != c.OTP.RequestKeys.Policy.PolicyVersion || n.Keyed.RequestKeys.Policy.PolicyVersion != c.OTP.RequestKeys.Policy.PolicyVersion {
+		return nil, invalid
+	}
+	p.Action = "identity.email.address-remove"
+	if p.Transport == session.CredentialCookie {
+		p.CSRFKeys = slices.Clone(c.PasswordVerification.CSRFKeys)
+	}
+	primary, err := passwordpg.NewEmailPrimarySource(proof.native, p)
+	if err != nil {
+		return nil, invalid
+	}
+	counters, err := riskpg.NewRepository(selected.Counters)
+	if err != nil {
+		return nil, invalid
+	}
+	n.Counters, n.CounterPolicy = counters, selected.Counters.CommandCounters.Policy
+	n.Risk.Evaluation, n.Risk.Keys = evaluation, slices.Clone(c.OTP.RiskKeys)
+	native, err := passwordpg.NewEmailRemovalService(primary, signin, reset, n, keys)
+	if err != nil {
+		return nil, invalid
+	}
+	return native, nil
 }
 
 func composeManagedEmail(c StoreConfiguration, d ReferenceDependencies, evaluation risk.Evaluator, proof *passwordVerificationState, selected *EmailManagementConfiguration, action string) (*passwordpg.EmailManagementService, error) {
@@ -235,5 +292,20 @@ func (EmailAddressConfiguration) MarshalJSON() ([]byte, error) {
 
 // MarshalText denies implicit policy text export.
 func (EmailAddressConfiguration) MarshalText() ([]byte, error) {
+	return nil, email.ErrSensitiveSerialization
+}
+
+// Format redacts retained proof, key and policy custody.
+func (EmailRemovalConfiguration) Format(s fmt.State, _ rune) {
+	_, _ = io.WriteString(s, "reference.EmailRemovalConfiguration(redacted)")
+}
+
+// MarshalJSON denies implicit configuration export.
+func (EmailRemovalConfiguration) MarshalJSON() ([]byte, error) {
+	return nil, email.ErrSensitiveSerialization
+}
+
+// MarshalText denies implicit configuration export.
+func (EmailRemovalConfiguration) MarshalText() ([]byte, error) {
 	return nil, email.ErrSensitiveSerialization
 }

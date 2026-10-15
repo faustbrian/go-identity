@@ -53,6 +53,10 @@ func (referenceResetPolicy) Decide(ctx context.Context, c authorization.Decision
 }
 
 func configureReferencePasswordReset(t *testing.T, c *reference.StoreConfiguration, origin string, pool *database.Pool, signupOnly ...bool) {
+	configureReferencePasswordResetPolicy(t, c, origin, pool, 3, signupOnly...)
+}
+
+func configureReferencePasswordResetPolicy(t *testing.T, c *reference.StoreConfiguration, origin string, pool *database.Pool, riskVersion uint64, signupOnly ...bool) {
 	t.Helper()
 	query := kernel.CommandQueryPolicy{Authorization: referenceResetPolicy{}, Clock: clock.System{}, PolicyVersion: 9}
 	c.OTP.RequestKeys.Policy = query
@@ -73,7 +77,7 @@ func configureReferencePasswordReset(t *testing.T, c *reference.StoreConfigurati
 	}
 	// Only provider IO is substituted; the owned HIBP client derives exact-byte
 	// prefixes, parses responses and supplies caller-bound neutral evidence.
-	riskConfig := risk.PolicyConfig{Version: 3, HIBP: risk.HIBPPolicy{CacheTTL: time.Hour, Operations: []risk.Action{"identity.password.reset-complete"}}, Limits: risk.VelocityLimits{MaxDimensions: 4, MaxCounters: 16, MaxWindow: time.Hour, MaxLimit: 120, KeyBytes: 64, RetryAfterMax: time.Hour}, Profiles: []risk.Profile{
+	riskConfig := risk.PolicyConfig{Version: riskVersion, HIBP: risk.HIBPPolicy{CacheTTL: time.Hour, Operations: []risk.Action{"identity.password.reset-complete"}}, Limits: risk.VelocityLimits{MaxDimensions: 4, MaxCounters: 16, MaxWindow: time.Hour, MaxLimit: 120, KeyBytes: 64, RetryAfterMax: time.Hour}, Profiles: []risk.Profile{
 		{Class: risk.Authentication, Phase: risk.BeforeCredential, Dimensions: []risk.Dimension{risk.TenantDimension, risk.NetworkDimension, risk.DeviceDimension, risk.IdentifierDimension}, Window: 5 * time.Minute, Limit: 10, ThresholdAction: risk.Throttle, EvidenceTTL: 5 * time.Minute, Unknown: risk.DenyUnknown, MaxCounters: 4, RequiredSignals: []string{"velocity"}},
 		{Class: risk.CredentialMutation, Phase: risk.ReserveWithCommand, Dimensions: []risk.Dimension{risk.TenantDimension, risk.SubjectDimension, risk.SessionDimension, risk.NetworkDimension}, Window: 15 * time.Minute, Limit: 5, ThresholdAction: risk.Deny, EvidenceTTL: 15 * time.Minute, Unknown: risk.DenyUnknown, MaxCounters: 4, RequiredSignals: []string{"velocity"}},
 		{Class: risk.Privileged, Phase: risk.ReserveWithCommand, Dimensions: []risk.Dimension{risk.TenantDimension, risk.ActorDimension, risk.ResourceDimension, risk.NetworkDimension}, Window: time.Hour, Limit: 20, ThresholdAction: risk.Deny, EvidenceTTL: 15 * time.Minute, Unknown: risk.DenyUnknown, MaxCounters: 4, RequiredSignals: []string{"velocity"}},

@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Independently compose native safe email removal and opt-in HTTPS/OpenAPI.
+  Borrow actual selected password signin/reset/proof owners, install native
+  forward cascade history and retain graph shutdown/deadline custody. Native
+  selection alone exposes no route; removal never silently selects a new primary.
+  Independently selected keyed email HTTP installs its atomic-rate history;
+  shutdown rejection preserves the operation's closed response shape.
+
 - Run the baseline against pinned public modules with `GOWORK=off`, without
   sibling supplier archives or historical source replacements. Existing runner
   arguments remain accepted; the collection argument no longer selects code.

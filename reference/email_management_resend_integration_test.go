@@ -76,6 +76,13 @@ func proveReferenceEmailManagementResend(t *testing.T, ctx context.Context, f li
 		if err != nil {
 			t.Fatal("selected graph original proof owner", err)
 		}
+		if f.emailRemovalMode == "removal-primary" {
+			service, err = features.EmailChange()
+			if err != nil {
+				t.Fatal(err)
+			}
+			target.Action = "identity.email.change-request"
+		}
 	} else {
 		history, err := (passwordpg.EmailReauthenticationMigrationSource{}).Load(ctx)
 		if err != nil {
@@ -200,7 +207,12 @@ func proveReferenceEmailManagementResend(t *testing.T, ctx context.Context, f li
 	}
 	initial := request(cookies, csrfWire)
 	initial.Address = "additional@example.invalid"
-	result, err := service.VerificationSend(ctx, initial)
+	call := service.VerificationSend
+	if f.emailRemovalMode == "removal-primary" {
+		initial.Address = "primary@example.invalid"
+		call = service.ChangeRequest
+	}
+	result, err := call(ctx, initial)
 	if err != nil || result.Outcome != identity.CommitOutcomeCommitted {
 		t.Fatal("genuine account pending add", result.Outcome, err)
 	}
@@ -227,6 +239,38 @@ func proveReferenceEmailManagementResend(t *testing.T, ctx context.Context, f li
 		}
 	}
 	old := capture()
+	if f.afterEmailRemovalPreparation != nil {
+		if f.emailRemovalMode == "removal-primary" {
+			id, _ := identity.NewCommandID()
+			callback, _ := url.Parse(initial.CallbackURL)
+			caller := authorization.DecisionContext{PolicyRevision: 9, CorrelationID: string(id), Request: authorization.Request{Tenant: otpTenant, Subject: authorization.Subject{Kind: authorization.SubjectServiceAccount, ID: "AAAAAAAAAAAAAAAAAAAAAw"}, Action: "identity.email.change-confirm", Resource: authorization.Resource{Type: "identity.user", ID: authorization.ResourceID(user)}}}
+			out, err := service.ChangeConfirm(ctx, email.ChangeConfirmRequest{TenantID: otpTenant, CommandID: id, Token: old, Callback: *callback, Caller: caller, Network: "127.0.0.1"})
+			if err != nil || out.Outcome != identity.CommitOutcomeCommitted {
+				t.Fatal("actual primary designation", err)
+			}
+			if _, err := workers.ProcessDeliveryOne(ctx, 0); err != nil {
+				t.Fatal("old-address notice delivery", err)
+			}
+			select {
+			case <-messages:
+			case <-ctx.Done():
+				t.Fatal("old-address notice missing")
+			}
+		} else if f.emailRemovalMode != "removal-pending" {
+			id, _ := identity.NewCommandID()
+			callback, _ := url.Parse(initial.CallbackURL)
+			caller := authorization.DecisionContext{PolicyRevision: 9, CorrelationID: string(id), Request: authorization.Request{Tenant: otpTenant, Subject: authorization.Subject{Kind: authorization.SubjectServiceAccount, ID: "AAAAAAAAAAAAAAAAAAAAAw"}, Action: "identity.email.verification-confirm", Resource: authorization.Resource{Type: "identity.user", ID: authorization.ResourceID(user)}}}
+			confirmed, err := service.VerificationConfirm(ctx, email.VerificationConfirmRequest{TenantID: otpTenant, CommandID: id, Token: old, Callback: *callback, Caller: caller, Network: "127.0.0.1"})
+			if err != nil || confirmed.Outcome != identity.CommitOutcomeCommitted {
+				t.Fatal("actual surviving-address verification", err)
+			}
+		}
+		cookies, csrfWire = freshLogin()
+		target.Action = "identity.email.address-remove"
+		caller.Request.Action = "identity.email.address-remove"
+		f.afterEmailRemovalPreparation(old, initial.Primary.AddressID, request(cookies, csrfWire), cookies, csrfWire)
+		return
+	}
 	cookies, csrfWire = freshLogin()
 	resend := request(cookies, csrfWire)
 	resend.Primary.AddressID = initial.Primary.AddressID

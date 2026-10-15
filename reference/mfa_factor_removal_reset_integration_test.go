@@ -25,8 +25,15 @@ import (
 
 // The account, password, email, factor and sessions all came from preceding
 // public operations. Only provider IO and the bounded mail sender are synthetic.
-func proveReferenceEmailResetAfterRemoval(t *testing.T, ctx context.Context, f liveStores, features reference.FeatureSet, workers reference.WorkerSet, client *http.Client, base, origin string, browser []*http.Cookie, messages <-chan string, user identity.UserID) {
+func proveReferenceEmailResetAfterRemoval(t *testing.T, ctx context.Context, f liveStores, features reference.FeatureSet, workers reference.WorkerSet, client *http.Client, base, origin string, browser []*http.Cookie, messages <-chan string, user identity.UserID, addresses ...string) {
 	t.Helper()
+	address := "registered@example.invalid"
+	if len(addresses) > 1 {
+		t.Fatal("ambiguous remaining recovery address")
+	}
+	if len(addresses) == 1 {
+		address = addresses[0]
+	}
 	owner, err := features.PasswordReset()
 	if err != nil {
 		t.Fatal("selected native recovery owner unavailable", err)
@@ -34,7 +41,7 @@ func proveReferenceEmailResetAfterRemoval(t *testing.T, ctx context.Context, f l
 	command, _ := identity.NewCommandID()
 	key, _ := identity.NewIdempotencyKey([]byte("factor-removal-email-reset"))
 	caller := authorization.DecisionContext{PolicyRevision: 9, CorrelationID: string(command), Request: authorization.Request{Tenant: otpTenant, Subject: authorization.Subject{Kind: authorization.SubjectServiceAccount, ID: "AAAAAAAAAAAAAAAAAAAAAw"}, Action: "identity.password.reset-request", Resource: authorization.Resource{Type: "identity.request-admission", ID: "identity.password.reset-request"}, Environment: authorization.Environment{Time: time.Now().UTC()}}}
-	request := password.ResetRequestRequest{TenantID: otpTenant, CommandID: command, Identifier: identifier.Input("registered@example.invalid"), CallbackURL: origin + "/reset", IdempotencyKey: key, Caller: caller, Origin: origin, Network: "127.0.0.1", Device: "reference-removal-reset"}
+	request := password.ResetRequestRequest{TenantID: otpTenant, CommandID: command, Identifier: identifier.Input(address), CallbackURL: origin + "/reset", IdempotencyKey: key, Caller: caller, Origin: origin, Network: "127.0.0.1", Device: "reference-removal-reset"}
 	invoke := func(path, key string, body any) []byte {
 		t.Helper()
 		wire, err := json.Marshal(body)
@@ -137,18 +144,29 @@ func proveReferenceEmailResetAfterRemoval(t *testing.T, ctx context.Context, f l
 	}
 	proveResetHIBPEvents(t, ctx, f, completion, "AAAAAAAAAAAAAAAAAAAACQ", "synthetic-reference-new-password")
 	var effects, removed, activeCodes, activeFactors int
-	if err := f.pool.Raw().QueryRow(ctx, `SELECT
+	expectedRemoved := 1
+	if len(addresses) == 1 {
+		expectedRemoved = 0
+		// Email-only composition owns factor authority but does not install TOTP
+		// or recovery-code storage merely to prove a known-empty factor set.
+		err = f.pool.Raw().QueryRow(ctx, `SELECT
+(SELECT count(*) FROM session_store.password_resets WHERE tenant_id=$1 AND user_id=$2),
+(SELECT active_factors FROM identity_mfa.factor_authorities WHERE tenant_id=$1 AND user_id=$2)`, otpTenant, string(user)).Scan(&effects, &activeFactors)
+	} else {
+		err = f.pool.Raw().QueryRow(ctx, `SELECT
 (SELECT count(*) FROM session_store.password_resets WHERE tenant_id=$1 AND user_id=$2),
 (SELECT count(*) FROM identity_mfa.totp_factors WHERE tenant_id=$1 AND user_id=$2 AND state=3 AND encrypted_secret IS NULL AND last_step IS NULL),
 (SELECT count(*) FROM identity_mfa.recovery_sets WHERE tenant_id=$1 AND user_id=$2 AND state IN(1,2)),
-(SELECT active_factors FROM identity_mfa.factor_authorities WHERE tenant_id=$1 AND user_id=$2)`, otpTenant, string(user)).Scan(&effects, &removed, &activeCodes, &activeFactors); err != nil || effects != 1 || removed != 1 || activeCodes != 0 || activeFactors != 0 {
+(SELECT active_factors FROM identity_mfa.factor_authorities WHERE tenant_id=$1 AND user_id=$2)`, otpTenant, string(user)).Scan(&effects, &removed, &activeCodes, &activeFactors)
+	}
+	if err != nil || effects != 1 || removed != expectedRemoved || activeCodes != 0 || activeFactors != 0 {
 		t.Fatal("post-removal reset repeated effects or resurrected factor authority", err)
 	}
-	old, _ := referencePasswordLogin(t, ctx, f, client, base, origin, browser, f.removalSignin, "synthetic-registration-password", "registered@example.invalid")
+	old, _ := referencePasswordLogin(t, ctx, f, client, base, origin, browser, f.removalSignin, "synthetic-registration-password", address)
 	if old.SignedIn {
 		t.Fatal("old password obtained a session after post-removal reset")
 	}
-	current, token := referencePasswordLogin(t, ctx, f, client, base, origin, browser, f.removalSignin, "synthetic-reference-new-password", "registered@example.invalid")
+	current, token := referencePasswordLogin(t, ctx, f, client, base, origin, browser, f.removalSignin, "synthetic-reference-new-password", address)
 	if !current.SignedIn {
 		t.Fatal("selected recovery did not restore usable password login")
 	}

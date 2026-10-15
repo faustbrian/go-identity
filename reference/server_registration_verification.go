@@ -126,8 +126,8 @@ func (s *Server) emailFeature(network identityhttp.NetworkConfig, f FeatureSet) 
 		return nil, err
 	}
 	for i := range ops {
-		if id := ops[i].Record.OperationID; id == "identity.email.verification-send" || id == "identity.email.change-request" {
-			ops[i].Handler = s.guardEmailRequestLifetime(ops[i].Handler)
+		if id := ops[i].Record.OperationID; id == "identity.email.verification-send" || id == "identity.email.change-request" || id == "identity.email.address-remove" {
+			ops[i].Handler = s.guardEmailRequestLifetime(id, ops[i].Handler)
 		}
 	}
 	feature, err = identityhttp.NewFeature(identityhttp.FeatureConfig{ID: "identity/email", Operations: ops})

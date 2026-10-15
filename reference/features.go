@@ -404,7 +404,7 @@ func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDepen
 	if err != nil {
 		return err
 	}
-	emailOwner, err := composeEmail(c, d, evaluator, passwordVerificationOwner)
+	emailOwner, err := composeEmail(c, d, evaluator, passwordVerificationOwner, passwordSigninOwner, resetOwner)
 	if err != nil {
 		return err
 	}
