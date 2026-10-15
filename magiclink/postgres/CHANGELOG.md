@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+- Compose supported envelope v2 custody and matching public native participants.
+  Callers supplying envelope/keyring services must use `/v2` types; stored
+  ciphertext, original authority lifetimes and transaction ownership stay intact.
+
+- Use current public workflow, HTTP and native participants with matching
+  primitive-major values; retain original issuance, proof and journal custody.
+
+- Adopt identifier v2 input and normalization types through public source
+  dependencies. Callers sharing these typed values must use `go-identifier/v2`;
+  stored profile/version bindings and selected workflow behavior are unchanged.
+
+- Adopt capability v2 public proof/grant types and explicit trusted issuer
+  policy. Update capability imports and issuer-owned keys/configuration; token
+  framing and native transaction/recovery ownership remain unchanged.
+
 - Enable explicitly configured public signup-by-link through original browser
   request, encrypted delivery and atomic account/session creation. Existing
   verified accounts sign in without duplicate creation. Authenticate prospective

@@ -8,9 +8,9 @@ import (
 
 	"github.com/faustbrian/go-audit"
 	auditpg "github.com/faustbrian/go-audit/postgres"
-	auth "github.com/faustbrian/go-authentication"
-	"github.com/faustbrian/go-authorization"
-	authoritypg "github.com/faustbrian/go-authorization/postgres"
+	auth "github.com/faustbrian/go-authentication/v2"
+	"github.com/faustbrian/go-authorization/v3"
+	authoritypg "github.com/faustbrian/go-authorization/v3/postgres"
 	issuerpg "github.com/faustbrian/go-capability/postgres/identity"
 	identity "github.com/faustbrian/go-identity"
 	"github.com/faustbrian/go-identity/mfa"
@@ -20,8 +20,8 @@ import (
 	"github.com/faustbrian/go-identity/risk"
 	"github.com/faustbrian/go-identity/session"
 	sessionpg "github.com/faustbrian/go-identity/session/postgres"
-	primitive "github.com/faustbrian/go-password"
-	lifecyclepg "github.com/faustbrian/go-transactional-outbox/v2/postgres/identity"
+	primitive "github.com/faustbrian/go-password/v2"
+	lifecyclepg "github.com/faustbrian/go-transactional-outbox/postgres/identity"
 )
 
 type signinMFAChallengePhase struct {

@@ -2,6 +2,81 @@
 
 ## Unreleased
 
+- Compose supported envelope v2 custody and matching public native participants.
+  Callers supplying envelope/keyring services must use `/v2` types; stored
+  ciphertext, original authority lifetimes and transaction ownership stay intact.
+
+- Use current public workflow, HTTP and native participants with matching
+  primitive-major values; retain original credential, proof and journal custody.
+
+- Adopt identifier v2 input and normalization types through public source
+  dependencies. Callers sharing these typed values must use `go-identifier/v2`;
+  stored profile/version bindings and selected workflow behavior are unchanged.
+
+- Adopt capability v2 public proof/grant types and explicit trusted issuer
+  policy. Update capability imports and issuer-owned keys/configuration; token
+  framing and native transaction/recovery ownership remain unchanged.
+
+- Add opt-in durable keyed email add/resend/change requests. Matching retries
+  restore original encrypted command/address, proof/session and counter intent
+  before live reads, returning the original result without signing or delivering
+  again. Changed submitted intent conflicts. New addresses are server-selected;
+  native unkeyed APIs, one-use consumption and transactional ownership stay intact.
+
+- Add a shared email-confirmation router over the actual signup and managed-add
+  owners. Authenticate signed profile and persisted issuance before choosing
+  exactly one source; preserve exact replay without failed-source fallback,
+  proof consumption during classification, new signing authority or auto-login.
+
+- Supply change-confirm transport rate metadata from the exact original native
+  change request. Verification-only service/caller selection cannot borrow it;
+  the read preserves original grant lifetime and does not consume or authorize.
+
+- Complete native new-address confirmation with atomic primary selection,
+  identifier-session invalidation and old-address notification. Require explicit
+  `ChangeProfile` and notification configuration for change-request. Preserve
+  original proof/callback/policy, exact metadata replay and proof-free request/
+  confirmation recovery; rollback cannot expose successful effects or revive an
+  aborted grant. This selected profile issues no replacement session.
+
+- Replace pending email links through explicit fresh-password resend with a
+  durable mailbox-family cooldown, atomic successor delivery and predecessor
+  invalidation. Scanner reads remain non-consuming; confirmation retains the
+  acknowledged successor versions. Proof-free request recovery discloses only
+  original scoped metadata. Zero ResendInterval leaves replacement disabled.
+
+- Supply authenticated management grant identity/lifetime for native HTTP rate
+  selection without charging counters or granting use. Confirmation retries keep
+  original audit correlation despite fresh transport attempts, while changed
+  protected intent remains fenced by the complete command fingerprint.
+
+- Confirm original managed-email links through the native coordinator with
+  atomic address verification, one-use consumption and audit/lifecycle effects.
+  Preserve exact-command metadata replay and proof-free scoped recovery; source
+  credential/authorization invalidation denies inspection and execution. This
+  verification-only profile does not change the primary address or issue sessions.
+
+- Authenticate original encrypted managed-email intent for current confirmation
+  authority and expose non-consuming boolean link inspection. Check current
+  issued state, account, address versions, original factor generation, callback
+  and mandatory providers without refreshing the original credential lifetime.
+  Inspection neither consumes a proof nor authorizes the pending confirmation.
+
+- Add native password-origin managed-email request composition. Use original
+  fresh proof, known-empty MFA and protected risk/counters to attach a pending
+  address with original one-use issuance and encrypted delivery in the existing
+  journal/coordinator. Retained generation is restored, never replaced on retry.
+  No session, automatic signin, resend or confirmation endpoint is implied.
+
+- Add native original-password reauthentication admission for selected email
+  add/change/removal actions. Bind exact actor/session/action and command intent,
+  enforce explicit bearer or cookie/CSRF policy, and consume the existing proof
+  record atomically through the email owner's coordinator Work. Opt-in
+  `EmailReauthenticationMigrationSource` extends consumption with version 9
+  without rewriting the eight existing migrations or enabling an HTTP feature.
+  This primary port does not implement email domain, factor/risk or recovery
+  policy; those remain required in the owning email workflow.
+
 - Optionally attribute password-change screening to the original native
   command and signed verification proof, with a trusted configured policy ID.
   Existing collectors and the default keyed profile retain their original

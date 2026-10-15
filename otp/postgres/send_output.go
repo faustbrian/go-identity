@@ -11,7 +11,7 @@ import (
 	identity "github.com/faustbrian/go-identity"
 	deliverypg "github.com/faustbrian/go-identity/delivery/postgres"
 	kernel "github.com/faustbrian/go-identity/postgres"
-	envelope "github.com/faustbrian/go-secret-envelope"
+	envelope "github.com/faustbrian/go-secret-envelope/v2"
 )
 
 const maximumSendOutput = 1 << 20

@@ -20,7 +20,7 @@ import (
 	deliverypg "github.com/faustbrian/go-identity/delivery/postgres"
 	"github.com/faustbrian/go-identity/otp"
 	kernel "github.com/faustbrian/go-identity/postgres"
-	envelope "github.com/faustbrian/go-secret-envelope"
+	envelope "github.com/faustbrian/go-secret-envelope/v2"
 )
 
 // Private composition until recipient resolution and authentication risk are

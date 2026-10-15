@@ -14,7 +14,7 @@ import (
 	"github.com/faustbrian/go-identity/magiclink"
 	kernel "github.com/faustbrian/go-identity/postgres"
 	"github.com/faustbrian/go-identity/risk"
-	envelope "github.com/faustbrian/go-secret-envelope"
+	envelope "github.com/faustbrian/go-secret-envelope/v2"
 )
 
 const maximumRequestOutput = 1 << 20

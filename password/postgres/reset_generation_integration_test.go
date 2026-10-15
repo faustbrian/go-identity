@@ -11,15 +11,15 @@ import (
 	"testing"
 	"time"
 
-	auth "github.com/faustbrian/go-authentication"
-	"github.com/faustbrian/go-capability"
+	auth "github.com/faustbrian/go-authentication/v2"
+	"github.com/faustbrian/go-capability/v2"
 	identity "github.com/faustbrian/go-identity"
 	password "github.com/faustbrian/go-identity/password"
 	kernel "github.com/faustbrian/go-identity/postgres"
 	"github.com/faustbrian/go-identity/risk"
-	primitive "github.com/faustbrian/go-password"
-	envelope "github.com/faustbrian/go-secret-envelope"
-	"github.com/faustbrian/go-secret-envelope/adapters/keyring"
+	primitive "github.com/faustbrian/go-password/v2"
+	envelope "github.com/faustbrian/go-secret-envelope/v2"
+	"github.com/faustbrian/go-secret-envelope/v2/adapters/keyring"
 )
 
 type resetGenerationOwner interface {
@@ -60,8 +60,8 @@ func TestResetGenerationPreservesOriginalProofAndSignedScope(t *testing.T) {
 	}
 	signer, _ := capability.NewHMACSHA256Signer("synthetic-reset", []byte(strings.Repeat("x", 32)))
 	verifier, _ := capability.NewHMACSHA256Verifier([]byte(strings.Repeat("x", 32)))
-	resolver, _ := capability.NewKeySet([]capability.Key{{ID: "synthetic-reset", Verifier: verifier}})
-	engine, _ := capability.NewService(capability.ServiceConfig{Signer: signer, Resolver: resolver, Clock: func() time.Time { return now }, Limits: capability.DefaultLimits()})
+	resolver, _ := capability.NewKeySet([]capability.Key{{Issuer: "https://identity.test", ID: "synthetic-reset", Verifier: verifier}})
+	engine, _ := capability.NewService(capability.ServiceConfig{Issuer: "https://identity.test", Signer: signer, Resolver: resolver, Clock: func() time.Time { return now }, Limits: capability.DefaultLimits()})
 	payload, err := profile.Payload(original)
 	if err != nil {
 		t.Fatal(err)

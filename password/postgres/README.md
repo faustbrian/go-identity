@@ -1,5 +1,136 @@
 # Password PostgreSQL adapter
 
+## Managed email request adapter
+
+`NewKeyedEmailManagementService(native, keyedConfig)` optionally adds durable
+request correlation to the same native owner. Construct `keyedConfig` with
+`NewKeyedEmailManagementConfig(requestKeys, independentIntentKey)` and install
+kernel `RequestKeyMigrationSource` plus `RequestKeyPreparationMigrationSource`.
+Retain the namespace/lookup/intent keys, original policy configuration and
+decrypting envelope keys through mapping retention. There is no new journal.
+
+Its `VerificationSend`, `VerificationResend` and `ChangeRequest` take exactly one
+`identity.IdempotencyKey`. Command IDs must be empty; add/change address IDs must
+also be empty because the winning input selects them server-side. Resend names
+the existing pending address. Exact submitted address/callback/network and
+borrowed bearer/proof/CSRF intent are bound; changed intent conflicts. Matching
+retries restore encrypted original session/proof, address/version, previous
+recipient and counter instants before live lookup. They return historical
+metadata even after original proof consumption, without fresh token generation,
+provider assessment or delivery. Retained signer eligibility and original
+bearer/CSRF possession remain mandatory. Fresh execution still repeats native
+current authority and atomically consumes proof/effects. Raw bearer, CSRF and
+initiating key are not retained. A different retry key is not a retry.
+
+Unkeyed request behavior below remains available for trusted native callers.
+For known original scope use the existing proof-free request recovery methods;
+after an ambiguous keyed call retry the exact original request/key, never create
+a substitute command. Busy/unknown exposes no address or successful versions.
+
+`RequestRateSource` supplies only the authenticated user/canonical destination
+for the HTTP rate owner's keyed projection. Call it before mutable session
+lookup so a committed retry is not rejected merely because its original session
+epoch is stale. It reads exact retained input first; absent mappings allow only
+bounded source preparation, not durable mapping creation, counters, signing,
+provider assessment or delivery. The result is sensitive metadata, not current
+session/mutation authority. Corrupt/conflicting history never chooses a fresh
+source, and errors return no subject or destination.
+
+For `identity.email.change-request`, select `EmailManagementConfig.Change` and
+`ChangeNotification` together. Choose `RequirePrimaryAddress` or the explicit
+`PrimaryOrSoleVerifiedAddress` establishment policy, plus
+`InvalidateIdentifierSessions`. Missing/ambiguous old authority denies. Install
+the risk adapter's `EmailChangeCounterMigrationSource` after selected counter
+history; it preserves existing windows and selected dimension constraints.
+
+`ChangeRequest` retains original old-address identity/independent versions in
+authenticated encrypted output and signed link intent. `ChangeConfirm` repeats
+current policy/factors/credential authority, atomically verifies/promotes the
+candidate, demotes the previous primary if present, advances identifier authority
+and stages one encrypted old-address notice. Existing stateful sessions then deny;
+this profile issues no replacement cookie. Renderers receive no proof or candidate
+address for the notice and run outside SQL; the existing worker sends after commit.
+
+Use `ChangeRequestRecover` for original pending-request metadata and `ChangeRecover`
+for exact confirmation history without old proof/session. Exact confirmation replay
+cannot duplicate notification or expose a fresh address. A known failed command
+returns noncommit with its retained typed failure cause; it is not an unknown commit
+or renewed permission. New-address links that terminally abort stay unusable.
+
+Select `EmailManagementConfig.ResendInterval` explicitly to enable
+`VerificationResend`: 30 seconds through 10 minutes; zero disables it. A selected
+initial request signs the mailbox family so its unused links can be replaced.
+Legacy unselected links and signup grants are not superseded. Install the existing
+kernel `CounterPreparationMigrationSource`, email password-proof migration and
+capability adapter migration 004 before selection. Signing/rendering stay outside
+SQL; the common family fence precedes account/factor/domain locks. The actual
+committed issuance creation time owns cooldown, not the password proof's time.
+
+Resend targets the unchanged pending, non-primary mailbox. Supply a fresh original
+action-bound proof and current session/synchronizer; an identifier change can
+invalidate the old source session, so use genuine login, not a promoted epoch.
+An omitted `Address` uses stored canonical identity; a different address denies.
+The protected transaction advances both pending versions, invalidates older
+selected unused links and enqueues one encrypted delivery. Cooldown denial or
+late rollback preserves the old link and does not consume the primary proof.
+Scanner reads consume nothing; explicit confirmation uses the original successor
+versions. Request retries still require live primary authority. After uncertainty
+or lost source authority, use `VerificationSendRecover` with exact original scope
+and current disclosure policy: it returns historical metadata, not another link,
+address ownership, session or fresh permission. Busy/unknown returns no address.
+
+`NewEmailManagementService` composes the email owner's selected password-origin
+request with the original `EmailPrimarySource`, kernel identifiers, real MFA,
+protected counters/provider admission, capability issuer and encrypted delivery.
+`VerificationSend` attaches a new pending address; `ChangeRequest` attaches its
+change candidate without replacing the verified primary. Source action, policy,
+normalization, callback allowlist, templates and providers are frozen startup
+configuration. Requests cannot select actors, authority versions or clocks.
+
+Generation uses the existing acknowledged preparation journal. Original issuer
+and delivery checkpoints restore without another token transfer or expiry
+renewal. A commit reports queued custody, not that a sender ran. Process through
+the owned delivery worker outside the mutation transaction. Missing/enrolled MFA
+denies the selected single-factor profile. Missing authority is never interpreted
+as "no MFA".
+`ReadManagedVerification` is a trusted native seam for authenticating the
+signed issuance origin and original encrypted intent. Its current caller must
+be authorized for the signed user and exact confirmation action; it must not
+impersonate the historical human or restore that user's session. Returned intent
+is sensitive and is not a public response or current authority.
+
+`ValidateManagedVerification` is scanner-safe boolean inspection. It checks
+original callback, current unused issued state, active account, exact pending
+address/verification versions, original credential and authorization epochs,
+original known-empty factor generation and
+mandatory provider facts. Repeated inspection does not consume, reserve, charge
+protected counters, send another message or extend any original time. Its entire
+read budget is at most20s; success is an observation, not an execution ticket or
+durable validity lease. Explicit confirmation must repeat protected admission.
+
+`VerificationConfirm` authenticates that original intent again and atomically
+verifies the pending address with one-use proof, protected counters and required
+audit/lifecycle effects. The historical session need not remain live; its source
+credential, authorization and factor authority must remain valid. Exact-command
+replay returns metadata only. `VerificationRecover` uses current scoped authority
+and the original recovery correlation, not the consumed proof or a new execution.
+Unknown outcomes remain unknown. An aborted proof reservation is terminally
+released; retry with a fresh authorized delivery, not a resurrected grant.
+
+`ManagedVerificationRateSource` authenticates the original signed subject,
+actual grant ID and immutable signed lifetime for HTTP rate admission, including
+consumed provenance needed for exact-command replay. It charges no counter and
+grants no execution authority. The optional `http/email` managed-confirmation
+selection consumes this seam and `VerificationConfirm`; the password adapter
+does not import HTTP. Retries preserve the first command's audit correlation,
+but changed proof/callback/protected-counter intent still denies or conflicts.
+
+Install every selected history named by the constructor, including verification
+counter history through its capability dimension. Resend and primary change
+require their explicit profiles described above; safe removal is a separate
+workflow. The reference module supplies selected application composition. No
+automatic signin or session issuance occurs.
+
 The selected recovery source below also admits exact native `identity.mfa.disable`
 with a closed one/all target. It borrows the same complete request/completion,
 HIBP and delivery composition; it does not translate disable to factor-update
@@ -375,6 +506,48 @@ The base bearer service is not mutated. Synchronizers remain reusable and unchan
 and concurrent valid non-keyed invocations issue distinct original proofs.
 Scoped recovery returns only history, without password/token/proof redelivery.
 HTTP origin/channel enforcement and complete release qualification remain pending.
+
+### Email-management primary admission
+
+`NewEmailPrimarySource` selects exactly one startup-allowlisted
+`identity.password.verify` target: `identity.email.verification-send`,
+`identity.email.change-request` or `identity.email.address-remove`. Audience is
+explicit; proof age is positive and capped at five minutes. Transport must be
+explicit too: cookie requires retained synchronizer keys and the original
+session-bound token; bearer rejects synchronizer keys/tokens rather than falling
+back to ambient cookie authority. Dependencies are borrowed and concurrent-safe.
+
+`Prepare` authenticates the original bearer and signed password proof using the
+existing authentication validator and native record source. It retains the
+original session, action, credential/version and exclusive expiry, not a renewed
+session or boolean clearance. `Original` and `Deadline` disclose that unchanged
+intermediate custody, never current permission. `Command` freezes exact command,
+address, original session and proof digest plus bounded typed domain fields.
+Implicit formatting/serialization redacts or denies custody export.
+
+The registered native email owner calls `Admit`/`Consume` in its protected Work
+and `Check` in its final callback. Current directory, password reference,
+authorization version, session/family and selected synchronizer are fenced in
+that same transaction. Consumption uses the existing password record and
+exclusive one-use lock, checking original expiry again after waiting. A rollback
+rolls back proof use; a second command cannot consume a committed use. The
+coordinator owns required audit/lifecycle staging and closure. Propagate every
+error; neither preparation nor a consumer marker proves the complete email
+transition or its outcome after an ambiguous commit.
+
+Install `EmailReauthenticationMigrationSource` in `identity_password` before
+protected email use. It includes the unchanged eight predecessors plus opt-in
+version 9, widening only the named consumption purposes while preserving the
+original foreign keys, one-use index and populated records. Use the existing
+bounded migration runner; changing the CHECK constraint requires a table lock
+and validates retained rows, so plan the upgrade for the table's actual size and
+traffic. Default `MigrationSource` remains unchanged; no new route is enabled.
+
+The email workflow separately owns current factor/risk/admission policy, request
+keys, address comparison/collision, delivery, required token/session/lifecycle
+effects and complete recovery. This port is not a finished email-change service.
+
+### Original password reauthentication
 
 `NewReauthenticationService(pool, config)` composes the real password verifier,
 primary session lookup, kernel coordinator, authorization engine, risk admission,

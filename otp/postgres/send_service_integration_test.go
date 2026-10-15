@@ -28,8 +28,8 @@ import (
 	sessionpg "github.com/faustbrian/go-identity/session/postgres"
 	migrations "github.com/faustbrian/go-migrations/v3"
 	database "github.com/faustbrian/go-postgres"
-	envelope "github.com/faustbrian/go-secret-envelope"
-	"github.com/faustbrian/go-secret-envelope/adapters/keyring"
+	envelope "github.com/faustbrian/go-secret-envelope/v2"
+	"github.com/faustbrian/go-secret-envelope/v2/adapters/keyring"
 	lifecyclepg "github.com/faustbrian/go-transactional-outbox/postgres/identity"
 	outboxpg "github.com/faustbrian/go-transactional-outbox/v2/postgres"
 )

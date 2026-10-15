@@ -7,8 +7,8 @@ import (
 	"time"
 
 	"github.com/faustbrian/go-audit"
-	"github.com/faustbrian/go-authorization"
-	authoritypg "github.com/faustbrian/go-authorization/postgres"
+	"github.com/faustbrian/go-authorization/v3"
+	authoritypg "github.com/faustbrian/go-authorization/v3/postgres"
 	issuerpg "github.com/faustbrian/go-capability/postgres/identity"
 	identity "github.com/faustbrian/go-identity"
 	deliverypg "github.com/faustbrian/go-identity/delivery/postgres"

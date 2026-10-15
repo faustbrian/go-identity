@@ -24,7 +24,7 @@ import (
 	"github.com/faustbrian/go-openapi/v2/parse"
 	"github.com/faustbrian/go-openapi/v2/validate"
 	ratepg "github.com/faustbrian/go-rate-limit/v2/postgres"
-	"github.com/faustbrian/go-secret-envelope/adapters/keyring"
+	"github.com/faustbrian/go-secret-envelope/v2/adapters/keyring"
 )
 
 // Real selected transport, native workflow and strict primary rate owner. The

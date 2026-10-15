@@ -12,8 +12,8 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/faustbrian/go-capability"
 	issuerpg "github.com/faustbrian/go-capability/postgres/identity"
+	"github.com/faustbrian/go-capability/v2"
 	identity "github.com/faustbrian/go-identity"
 	"github.com/faustbrian/go-identity/delivery"
 	deliverypg "github.com/faustbrian/go-identity/delivery/postgres"
@@ -183,7 +183,7 @@ func (p *requestPhase) generateDelivery(ctx context.Context, generation uint64, 
 		if index != 0 || len(out.deliveryWire) != 0 {
 			return invalid()
 		}
-		grant, e := capability.Verify(ctx, string(token), c.Issuer.Crypto.Resolver, capability.VerifyOptions{Now: time.Now().UTC(), Limits: c.Issuer.Crypto.Limits})
+		grant, e := capability.Verify(ctx, string(token), c.Issuer.Crypto.Resolver, capability.VerifyOptions{Issuer: c.Issuer.Crypto.Issuer, Now: time.Now().UTC(), Limits: c.Issuer.Crypto.Limits})
 		if e != nil {
 			return invalid()
 		}

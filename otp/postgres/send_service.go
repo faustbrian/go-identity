@@ -18,7 +18,7 @@ import (
 	kernel "github.com/faustbrian/go-identity/postgres"
 	"github.com/faustbrian/go-identity/risk"
 	database "github.com/faustbrian/go-postgres"
-	envelope "github.com/faustbrian/go-secret-envelope"
+	envelope "github.com/faustbrian/go-secret-envelope/v2"
 	lifecyclepg "github.com/faustbrian/go-transactional-outbox/postgres/identity"
 	"github.com/jackc/pgx/v5"
 )

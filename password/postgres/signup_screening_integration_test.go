@@ -13,7 +13,7 @@ import (
 	identity "github.com/faustbrian/go-identity"
 	password "github.com/faustbrian/go-identity/password"
 	"github.com/faustbrian/go-identity/risk"
-	primitive "github.com/faustbrian/go-password"
+	primitive "github.com/faustbrian/go-password/v2"
 )
 
 type signupHashOwner interface {

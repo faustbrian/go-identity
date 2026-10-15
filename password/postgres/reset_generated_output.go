@@ -13,7 +13,7 @@ import (
 	identity "github.com/faustbrian/go-identity"
 	password "github.com/faustbrian/go-identity/password"
 	"github.com/faustbrian/go-identity/risk"
-	envelope "github.com/faustbrian/go-secret-envelope"
+	envelope "github.com/faustbrian/go-secret-envelope/v2"
 )
 
 // This private projection exists only inside the existing preparation journal's

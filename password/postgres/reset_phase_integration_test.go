@@ -14,23 +14,23 @@ import (
 
 	"github.com/faustbrian/go-audit"
 	auditpg "github.com/faustbrian/go-audit/postgres"
-	auth "github.com/faustbrian/go-authentication"
-	"github.com/faustbrian/go-authorization"
-	authoritypg "github.com/faustbrian/go-authorization/postgres"
-	"github.com/faustbrian/go-capability"
+	auth "github.com/faustbrian/go-authentication/v2"
+	"github.com/faustbrian/go-authorization/v3"
+	authoritypg "github.com/faustbrian/go-authorization/v3/postgres"
 	capabilitypg "github.com/faustbrian/go-capability/postgres/identity"
-	"github.com/faustbrian/go-identifier"
+	"github.com/faustbrian/go-capability/v2"
+	"github.com/faustbrian/go-identifier/v2"
 	identity "github.com/faustbrian/go-identity"
 	password "github.com/faustbrian/go-identity/password"
 	kernel "github.com/faustbrian/go-identity/postgres"
 	"github.com/faustbrian/go-identity/risk"
 	"github.com/faustbrian/go-identity/session"
 	sessionpg "github.com/faustbrian/go-identity/session/postgres"
-	primitive "github.com/faustbrian/go-password"
+	primitive "github.com/faustbrian/go-password/v2"
 	database "github.com/faustbrian/go-postgres"
-	envelope "github.com/faustbrian/go-secret-envelope"
-	"github.com/faustbrian/go-secret-envelope/adapters/keyring"
-	lifecyclepg "github.com/faustbrian/go-transactional-outbox/v2/postgres/identity"
+	envelope "github.com/faustbrian/go-secret-envelope/v2"
+	"github.com/faustbrian/go-secret-envelope/v2/adapters/keyring"
+	lifecyclepg "github.com/faustbrian/go-transactional-outbox/postgres/identity"
 )
 
 type resetFailingAudit struct{ *auditpg.IdentityContributor }
@@ -115,8 +115,8 @@ func testNativeResetCompletion(t *testing.T, ctx context.Context, pool *database
 	}
 	signer, _ := capability.NewHMACSHA256Signer("reset-test", bytes.Repeat([]byte{31}, 32))
 	verifier, _ := capability.NewHMACSHA256Verifier(bytes.Repeat([]byte{31}, 32))
-	resolver, _ := capability.NewKeySet([]capability.Key{{ID: "reset-test", Verifier: verifier}})
-	engine, err := capability.NewService(capability.ServiceConfig{Signer: signer, Resolver: resolver, Clock: time.Now, Limits: capability.DefaultLimits()})
+	resolver, _ := capability.NewKeySet([]capability.Key{{Issuer: "https://identity.test", ID: "reset-test", Verifier: verifier}})
+	engine, err := capability.NewService(capability.ServiceConfig{Issuer: "https://identity.test", Signer: signer, Resolver: resolver, Clock: time.Now, Limits: capability.DefaultLimits()})
 	if err != nil {
 		t.Fatal(err)
 	}

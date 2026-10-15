@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Compose supported envelope v2 custody and matching public native participants.
+  Callers supplying envelope/keyring services must use `/v2` types; stored
+  ciphertext, original authority lifetimes and transaction ownership stay intact.
+
 - Compose current public kernel, delivery, risk, MFA and session participants
   with authentication v2 and authorization v3 values; attempts stay atomic.
 

@@ -13,7 +13,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/faustbrian/go-capability"
+	"github.com/faustbrian/go-capability/v2"
 	"github.com/faustbrian/go-clock"
 	identity "github.com/faustbrian/go-identity"
 	identityhttp "github.com/faustbrian/go-identity/http"
@@ -22,7 +22,7 @@ import (
 	sessionpg "github.com/faustbrian/go-identity/session/postgres"
 	database "github.com/faustbrian/go-postgres"
 	ratepg "github.com/faustbrian/go-rate-limit/v2/postgres"
-	envelope "github.com/faustbrian/go-secret-envelope"
+	envelope "github.com/faustbrian/go-secret-envelope/v2"
 )
 
 // This extends the native journey with the real selected router, decoder,

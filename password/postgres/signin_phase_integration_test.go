@@ -19,9 +19,9 @@ import (
 
 	"github.com/faustbrian/go-audit"
 	auditpg "github.com/faustbrian/go-audit/postgres"
-	auth "github.com/faustbrian/go-authentication"
-	"github.com/faustbrian/go-authorization"
-	authoritypg "github.com/faustbrian/go-authorization/postgres"
+	auth "github.com/faustbrian/go-authentication/v2"
+	"github.com/faustbrian/go-authorization/v3"
+	authoritypg "github.com/faustbrian/go-authorization/v3/postgres"
 	identity "github.com/faustbrian/go-identity"
 	mfapg "github.com/faustbrian/go-identity/mfa/postgres"
 	password "github.com/faustbrian/go-identity/password"
@@ -30,10 +30,10 @@ import (
 	"github.com/faustbrian/go-identity/session"
 	sessionpg "github.com/faustbrian/go-identity/session/postgres"
 	migrations "github.com/faustbrian/go-migrations/v3"
-	primitive "github.com/faustbrian/go-password"
+	primitive "github.com/faustbrian/go-password/v2"
 	database "github.com/faustbrian/go-postgres"
+	lifecyclepg "github.com/faustbrian/go-transactional-outbox/postgres/identity"
 	outboxpg "github.com/faustbrian/go-transactional-outbox/v2/postgres"
-	lifecyclepg "github.com/faustbrian/go-transactional-outbox/v2/postgres/identity"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -154,15 +154,64 @@ func (t signinTestTx) Exec(ctx context.Context, sql string, args ...any) (int64,
 }
 
 func TestNativeSigninPhaseIntegration(t *testing.T) {
+	// Public services and low-level phases each own a fresh database. Their
+	// independent migrations and zero-effect assertions cannot share the state
+	// left by a preceding service journey, including after a fatal assertion.
+	for _, scenario := range []string{"public native service", "password MFA challenge", "native signup material", "native signup prepared input", "phase"} {
+		t.Run(scenario, func(t *testing.T) { testNativeSigninPhaseIntegration(t, scenario) })
+	}
+}
+
+func testNativeSigninPhaseIntegration(t *testing.T, scenario string) {
 	port, file := os.Getenv("IDENTITY_REFERENCE_POSTGRES_PORT"), os.Getenv("IDENTITY_REFERENCE_PASSWORD_FILE")
 	material, err := os.ReadFile(file)
 	if err != nil || port == "" {
 		t.Fatal("disposable primary required")
 	}
-	dsn := (&url.URL{Scheme: "postgres", User: url.UserPassword("postgres", strings.TrimSpace(string(material))), Host: net.JoinHostPort("127.0.0.1", port), Path: "/identity_test", RawQuery: "sslmode=disable"}).String()
+	endpoint := &url.URL{Scheme: "postgres", User: url.UserPassword("postgres", strings.TrimSpace(string(material))), Host: net.JoinHostPort("127.0.0.1", port), Path: "/identity_test", RawQuery: "sslmode=disable"}
 	clear(material)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
+	baseDSN := endpoint.String()
+	fixtureID, err := identity.NewCommandID()
+	if err != nil {
+		t.Fatal("fixture identity unavailable")
+	}
+	fixtureDatabase := pgx.Identifier{"password_phase_" + string(fixtureID)}.Sanitize()
+	admin, err := pgx.Connect(ctx, baseDSN)
+	if err != nil {
+		t.Fatal("fixture administration unavailable")
+	}
+	_, createErr := admin.Exec(ctx, "CREATE DATABASE "+fixtureDatabase)
+	closeErr := admin.Close(ctx)
+	if createErr != nil {
+		t.Fatal("isolated fixture creation failed")
+	}
+	auditRolesReserved := false
+	t.Cleanup(func() {
+		cleanup, stop := context.WithTimeout(context.Background(), 3*time.Second)
+		defer stop()
+		admin, err := pgx.Connect(cleanup, baseDSN)
+		if err != nil {
+			t.Error("fixture cleanup connection unavailable")
+			return
+		}
+		_, dropErr := admin.Exec(cleanup, "DROP DATABASE "+fixtureDatabase)
+		// Roles are cluster-wide, unlike the fresh database. Remove only the
+		// three roles this fixture atomically reserved, after their objects go.
+		if dropErr == nil && auditRolesReserved {
+			_, dropErr = admin.Exec(cleanup, "DROP ROLE audit_writer, audit_reader, audit_retention")
+		}
+		closeErr := admin.Close(cleanup)
+		if dropErr != nil || closeErr != nil {
+			t.Error("isolated fixture cleanup failed")
+		}
+	})
+	if closeErr != nil {
+		t.Fatal("fixture administration cleanup failed")
+	}
+	endpoint.Path = "/password_phase_" + string(fixtureID)
+	dsn := endpoint.String()
 	pool, err := database.Connect(ctx, database.Config{DSN: dsn, MaxConns: 4})
 	if err != nil {
 		t.Fatal("primary unavailable")
@@ -200,6 +249,7 @@ func TestNativeSigninPhaseIntegration(t *testing.T) {
 	if _, err = pool.Raw().Exec(ctx, auditpg.FreshInstallPreflightSQL()); err != nil {
 		t.Fatal("audit install", err)
 	}
+	auditRolesReserved = true
 	for _, source := range []fs.FS{auditpg.Migrations(), outboxpg.Migrations(), lifecyclepg.Migrations()} {
 		files, e := fs.ReadDir(source, ".")
 		if e != nil {
@@ -265,18 +315,22 @@ INSERT INTO authorization_subject_authorities VALUES('AAAAAAAAAAAAAAAAAAAAAQ','u
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Run("public native service", func(t *testing.T) {
+	if scenario == "public native service" {
 		testPublicNativeSignin(t, ctx, pool, policy, crypto, hash, sessionConfig, profile)
-	})
-	t.Run("password MFA challenge", func(t *testing.T) {
+		return
+	}
+	if scenario == "password MFA challenge" {
 		testPublicPasswordMFAChallenge(t, ctx, pool, policy, crypto, hash, sessionConfig, profile)
-	})
-	t.Run("native signup material", func(t *testing.T) {
+		return
+	}
+	if scenario == "native signup material" {
 		testNativeSignupMaterial(t, ctx, pool, policy, crypto, kernel.DirectoryAuthorityMigrationSource{Base: base, Version: 13, GlobalAuthorityID: "signin-deployment", TenantIDs: []identity.TenantID{signinTestTenant}})
-	})
-	t.Run("native signup prepared input", func(t *testing.T) {
+		return
+	}
+	if scenario == "native signup prepared input" {
 		testNativeSignupKeyInput(t, ctx, pool, policy, kernel.DirectoryAuthorityMigrationSource{Base: base, Version: 13, GlobalAuthorityID: "signin-deployment", TenantIDs: []identity.TenantID{signinTestTenant}}, sessionConfig)
-	})
+		return
+	}
 	for _, mode := range []string{"commit", "rollback", "stale-credential", "expired-delivery", "expired-audit", "risk-clock-callback", "expired-risk"} {
 		t.Run(mode, func(t *testing.T) {
 			r, _, flowKey, _ := nativeSigninFlow(t)

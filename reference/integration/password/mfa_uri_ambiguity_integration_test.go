@@ -13,7 +13,7 @@ import (
 	mfapg "github.com/faustbrian/go-identity/mfa/postgres"
 	passworddb "github.com/faustbrian/go-identity/password/postgres"
 	database "github.com/faustbrian/go-postgres"
-	"github.com/faustbrian/go-secret-envelope/adapters/keyring"
+	"github.com/faustbrian/go-secret-envelope/v2/adapters/keyring"
 )
 
 func testPublicTOTPURIAmbiguity(t *testing.T, ctx context.Context, pool *database.Pool, source *passworddb.ReauthenticationService, verification passworddb.ReauthenticationRequest, enable mfa.EnableRequest, enroller *mfapg.TOTPEnrollmentService, cfg mfapg.TOTPEnrollmentConfig, keys *keyring.Provider, primary *passworddb.MFAEnablePrimarySource, reveal mfa.TotpUriRequest, before bool) {

@@ -10,10 +10,10 @@ import (
 	"testing"
 	"time"
 
-	auth "github.com/faustbrian/go-authentication"
-	"github.com/faustbrian/go-authorization"
+	auth "github.com/faustbrian/go-authentication/v2"
+	"github.com/faustbrian/go-authorization/v3"
 	"github.com/faustbrian/go-clock"
-	identifier "github.com/faustbrian/go-identifier"
+	identifier "github.com/faustbrian/go-identifier/v2"
 	identity "github.com/faustbrian/go-identity"
 	"github.com/faustbrian/go-identity/email"
 	"github.com/faustbrian/go-identity/magiclink"
@@ -23,7 +23,7 @@ import (
 	"github.com/faustbrian/go-identity/session"
 	sessionpg "github.com/faustbrian/go-identity/session/postgres"
 	database "github.com/faustbrian/go-postgres"
-	"github.com/faustbrian/go-secret-envelope/adapters/keyring"
+	"github.com/faustbrian/go-secret-envelope/v2/adapters/keyring"
 )
 
 // Intermediate native journal integration, not public signup delivery. The

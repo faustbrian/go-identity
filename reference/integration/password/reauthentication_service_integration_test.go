@@ -19,9 +19,9 @@ import (
 
 	"github.com/faustbrian/go-audit"
 	auditpg "github.com/faustbrian/go-audit/postgres"
-	auth "github.com/faustbrian/go-authentication"
-	"github.com/faustbrian/go-authorization"
-	authoritypg "github.com/faustbrian/go-authorization/postgres"
+	auth "github.com/faustbrian/go-authentication/v2"
+	"github.com/faustbrian/go-authorization/v3"
+	authoritypg "github.com/faustbrian/go-authorization/v3/postgres"
 	"github.com/faustbrian/go-clock"
 	identity "github.com/faustbrian/go-identity"
 	password "github.com/faustbrian/go-identity/password"
@@ -30,10 +30,11 @@ import (
 	"github.com/faustbrian/go-identity/risk"
 	"github.com/faustbrian/go-identity/session"
 	sessionpg "github.com/faustbrian/go-identity/session/postgres"
-	primitive "github.com/faustbrian/go-password"
+	primitive "github.com/faustbrian/go-password/v2"
 	database "github.com/faustbrian/go-postgres"
+	lifecyclepg "github.com/faustbrian/go-transactional-outbox/postgres/identity"
 	outboxpg "github.com/faustbrian/go-transactional-outbox/v2/postgres"
-	lifecyclepg "github.com/faustbrian/go-transactional-outbox/v2/postgres/identity"
+	"github.com/jackc/pgx/v5"
 )
 
 // Counter/audit delivery doubles exist only at their external risk boundaries.
@@ -105,8 +106,11 @@ func reauthenticationRisk(t *testing.T, f *reauthenticationRiskFixture) risk.Aut
 	return risk.AuthenticationAdmissionCustodyConfig{Evaluation: evaluation, ConfigurationID: "native-reauth-test-v1", Keys: []risk.EvidenceKey{evidence}}
 }
 
-func testNativeReauthenticationService(t *testing.T, ctx context.Context, pool *database.Pool, policy primitive.Policy, crypto *primitive.Service, hash primitive.EncodedHash, otpConfirmation string) {
+func testNativeReauthenticationService(t *testing.T, ctx context.Context, pool *database.Pool, policy primitive.Policy, crypto *primitive.Service, hash primitive.EncodedHash, otpConfirmation string, emailProfile ...string) {
 	t.Helper()
+	if len(emailProfile) > 1 {
+		t.Fatal("ambiguous native email fixture profile")
+	}
 	base := kernel.CredentialReplacementMigrationSource{Base: kernel.CredentialMigrationSource{Base: kernel.StatusMigrationSource{Base: kernel.MigrationSource{}, Version: 10}, Version: 11}, Version: 12}
 	history, err := (kernel.DirectoryAuthorityMigrationSource{Base: base, Version: 13, GlobalAuthorityID: "reauth-deployment", TenantIDs: []identity.TenantID{"AAAAAAAAAAAAAAAAAAAAAQ"}}).Load(ctx)
 	if err != nil {
@@ -129,8 +133,12 @@ func testNativeReauthenticationService(t *testing.T, ctx context.Context, pool *
 	if _, err = pool.Raw().Exec(ctx, csrfHistory[0].UpSQL()); err != nil {
 		t.Fatal("session CSRF migration failed")
 	}
-	if _, err = pool.Raw().Exec(ctx, auditpg.FreshInstallPreflightSQL()); err != nil {
-		t.Fatal("audit installation failed", err)
+	// Isolated email databases borrow only the cluster-wide roles already
+	// reserved by their enclosing fixture; all tables and authority are fresh.
+	if len(emailProfile) == 0 {
+		if _, err = pool.Raw().Exec(ctx, auditpg.FreshInstallPreflightSQL()); err != nil {
+			t.Fatal("audit installation failed", err)
+		}
 	}
 	for _, source := range []fs.FS{auditpg.Migrations(), outboxpg.Migrations(), lifecyclepg.Migrations()} {
 		files, err := fs.ReadDir(source, ".")
@@ -215,6 +223,14 @@ INSERT INTO authorization_subject_authorities VALUES('AAAAAAAAAAAAAAAAAAAAAQ','u
 	defer secret.Destroy()
 	caller := authorization.DecisionContext{Request: authorization.Request{Subject: authorization.Subject{ID: "AAAAAAAAAAAAAAAAAAAAAg", Kind: authorization.SubjectUser}}}
 	request := passworddb.ReauthenticationRequest{TenantID: "AAAAAAAAAAAAAAAAAAAAAQ", Session: auth.NewBearerCredential(wire), Password: secret, Target: configuration.Targets[0], Caller: caller, Network: "192.0.2.1", Device: "device"}
+	if len(emailProfile) == 1 {
+		if emailProfile[0] == "primary" {
+			testNativeEmailPrimary(t, ctx, pool, configuration, request)
+		} else {
+			testNativeEmailManagement(t, ctx, pool, configuration, request, emailProfile[0])
+		}
+		return
+	}
 	workflow, err := passworddb.NewVerificationWorkflow(service)
 	if err != nil {
 		t.Fatal("portable native composition failed", err)
@@ -559,4 +575,34 @@ INSERT INTO authorization_subject_authorities VALUES('AAAAAAAAAAAAAAAAAAAAAQ','u
 		return
 	}
 	t.Run("native-password-change", func(t *testing.T) { testNativePasswordChange(t, ctx, pool, configuration, service, request) })
+	for _, profile := range []string{"primary", "management", "keyed", "http", "rollback", "credential", "authorization"} {
+		name := "native-email-management"
+		if profile == "primary" {
+			name = "native-email-primary"
+		} else if profile != "management" {
+			name += "-" + profile
+		}
+		t.Run(name, func(t *testing.T) {
+			// Each profile installs its independent history and mutates real
+			// account/session epochs. Sharing a database would invalidate the
+			// next profile's original authority and repeat non-idempotent DDL.
+			id, err := identity.NewCommandID()
+			if err != nil {
+				t.Fatal("email fixture identity unavailable")
+			}
+			databaseName := "email_profile_" + string(id)
+			quoted := pgx.Identifier{databaseName}.Sanitize()
+			if _, err := pool.Raw().Exec(ctx, "CREATE DATABASE "+quoted); err != nil {
+				t.Fatal("email fixture creation failed")
+			}
+			t.Cleanup(func() {
+				cleanup, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+				defer cancel()
+				if _, err := pool.Raw().Exec(cleanup, "DROP DATABASE "+quoted); err != nil {
+					t.Error("email fixture cleanup failed")
+				}
+			})
+			testPrimaryPasswordCredentialIntegration(t, databaseName, "", profile)
+		})
+	}
 }

@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/faustbrian/go-capability"
+	"github.com/faustbrian/go-capability/v2"
 	identity "github.com/faustbrian/go-identity"
 	"github.com/faustbrian/go-identity/magiclink"
 	kernel "github.com/faustbrian/go-identity/postgres"

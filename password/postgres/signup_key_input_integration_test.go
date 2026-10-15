@@ -12,10 +12,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/faustbrian/go-capability"
 	issuerpg "github.com/faustbrian/go-capability/postgres/identity"
+	"github.com/faustbrian/go-capability/v2"
 	"github.com/faustbrian/go-clock"
-	identifier "github.com/faustbrian/go-identifier"
+	identifier "github.com/faustbrian/go-identifier/v2"
 	identity "github.com/faustbrian/go-identity"
 	delivery "github.com/faustbrian/go-identity/delivery"
 	deliverypg "github.com/faustbrian/go-identity/delivery/postgres"
@@ -25,10 +25,10 @@ import (
 	"github.com/faustbrian/go-identity/risk"
 	"github.com/faustbrian/go-identity/session"
 	sessionpg "github.com/faustbrian/go-identity/session/postgres"
-	primitive "github.com/faustbrian/go-password"
+	primitive "github.com/faustbrian/go-password/v2"
 	database "github.com/faustbrian/go-postgres"
-	envelope "github.com/faustbrian/go-secret-envelope"
-	"github.com/faustbrian/go-secret-envelope/adapters/keyring"
+	envelope "github.com/faustbrian/go-secret-envelope/v2"
+	"github.com/faustbrian/go-secret-envelope/v2/adapters/keyring"
 )
 
 type signupNativeKeyInput interface {
@@ -161,8 +161,8 @@ func testNativeSignupKeyInput(t *testing.T, ctx context.Context, pool *database.
 	signingKey := bytes.Repeat([]byte{88}, 32)
 	signer, _ := capability.NewHMACSHA256Signer("email-signing", signingKey)
 	verifier, _ := capability.NewHMACSHA256Verifier(signingKey)
-	resolver, _ := capability.NewKeySet([]capability.Key{{ID: "email-signing", Verifier: verifier}})
-	issuer, err := issuerpg.NewIssuer(issuerpg.IssuerConfig{Crypto: capability.ServiceConfig{Signer: signer, Resolver: resolver, Clock: time.Now, Limits: capability.DefaultLimits()}, Audience: "email", CurrentReplayKeyVersion: 1, RetainedReplayKeys: map[uint32][32]byte{1: {61}}, PreparationTimeout: time.Second})
+	resolver, _ := capability.NewKeySet([]capability.Key{{Issuer: "https://issuer.example.test", ID: "email-signing", Verifier: verifier}})
+	issuer, err := issuerpg.NewIssuer(issuerpg.IssuerConfig{Crypto: capability.ServiceConfig{Issuer: "https://issuer.example.test", Signer: signer, Resolver: resolver, Clock: time.Now, Limits: capability.DefaultLimits()}, Audience: "email", CurrentReplayKeyVersion: 1, RetainedReplayKeys: map[uint32][32]byte{1: {61}}, PreparationTimeout: time.Second})
 	if err != nil {
 		t.Fatal(err)
 	}

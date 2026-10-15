@@ -27,8 +27,8 @@ import (
 	kernel "github.com/faustbrian/go-identity/postgres"
 	migrations "github.com/faustbrian/go-migrations/v3"
 	database "github.com/faustbrian/go-postgres"
-	envelope "github.com/faustbrian/go-secret-envelope"
-	"github.com/faustbrian/go-secret-envelope/adapters/keyring"
+	envelope "github.com/faustbrian/go-secret-envelope/v2"
+	"github.com/faustbrian/go-secret-envelope/v2/adapters/keyring"
 	outboxpg "github.com/faustbrian/go-transactional-outbox/v2/postgres"
 	"github.com/jackc/pgx/v5"
 )

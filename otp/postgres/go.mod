@@ -10,16 +10,16 @@ require (
 	github.com/faustbrian/go-clock v1.2.0
 	github.com/faustbrian/go-identity v0.0.0-20261015054516-5afeba0ac471
 	github.com/faustbrian/go-identity/delivery v0.0.0-20261015061706-1f0b46ab1053
-	github.com/faustbrian/go-identity/delivery/postgres v0.0.0-20261015070015-9684f45e8539
-	github.com/faustbrian/go-identity/mfa/postgres v0.0.0-20261015095023-c2503b8fbd9c
-	github.com/faustbrian/go-identity/otp v0.0.0-20261015092135-af758fe32cc8
+	github.com/faustbrian/go-identity/delivery/postgres v0.0.0-20261015104034-f16881100907
+	github.com/faustbrian/go-identity/mfa/postgres v0.0.0-20261015110443-ed660e780fdc
+	github.com/faustbrian/go-identity/otp v0.0.0-20261015110443-ed660e780fdc
 	github.com/faustbrian/go-identity/postgres v0.0.0-20261015060432-bdc73de10a74
 	github.com/faustbrian/go-identity/risk v0.0.0-20261015085833-f43df0429695
-	github.com/faustbrian/go-identity/session v0.0.0-20261015061706-1f0b46ab1053
-	github.com/faustbrian/go-identity/session/postgres v0.0.0-20261015095852-40f3c12e76ac
+	github.com/faustbrian/go-identity/session v0.0.0-20261015104034-f16881100907
+	github.com/faustbrian/go-identity/session/postgres v0.0.0-20261015111007-7e7470a9e511
 	github.com/faustbrian/go-migrations/v3 v3.0.0-20261001014304-a461b18b6b24
 	github.com/faustbrian/go-postgres v1.1.1-0.20260912090843-61261695bcc7
-	github.com/faustbrian/go-secret-envelope v1.0.0
+	github.com/faustbrian/go-secret-envelope/v2 v2.0.1
 	github.com/faustbrian/go-transactional-outbox/postgres/identity v0.0.0-20261015064732-3aaa84f79f74
 	github.com/faustbrian/go-transactional-outbox/v2 v2.0.2-0.20261015062550-37ea15436ae9
 	github.com/jackc/pgx/v5 v5.11.0
@@ -27,8 +27,8 @@ require (
 
 require (
 	github.com/faustbrian/go-capability/v2 v2.0.2-0.20261015044219-caab644d2fec // indirect
-	github.com/faustbrian/go-identity/mfa v0.0.0-20261015092135-af758fe32cc8 // indirect
-	github.com/faustbrian/go-identity/risk/postgres v0.0.0-20261015094324-5d5bf8236eb3 // indirect
+	github.com/faustbrian/go-identity/mfa v0.0.0-20261015110443-ed660e780fdc // indirect
+	github.com/faustbrian/go-identity/risk/postgres v0.0.0-20261015104034-f16881100907 // indirect
 	github.com/faustbrian/go-migrations/v2 v2.0.0 // indirect
 	github.com/faustbrian/go-password/v2 v2.0.2-0.20261015050515-4eb0fefa60ff // indirect
 	github.com/jackc/pgpassfile v1.0.0 // indirect

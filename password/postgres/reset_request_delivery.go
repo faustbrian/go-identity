@@ -10,8 +10,8 @@ import (
 	"slices"
 	"time"
 
-	"github.com/faustbrian/go-capability"
 	issuerpg "github.com/faustbrian/go-capability/postgres/identity"
+	"github.com/faustbrian/go-capability/v2"
 	identity "github.com/faustbrian/go-identity"
 	"github.com/faustbrian/go-identity/delivery"
 	deliverypg "github.com/faustbrian/go-identity/delivery/postgres"
@@ -110,7 +110,7 @@ func (r *Repository) generateResetRequestDelivery(ctx context.Context, b identit
 		if index != 0 || len(out.deliveryWire) != 0 {
 			return password.ErrPasswordWork
 		}
-		grant, err := capability.Verify(ctx, string(token), c.resolver, capability.VerifyOptions{Now: time.Now().UTC(), Limits: capability.DefaultLimits()})
+		grant, err := capability.Verify(ctx, string(token), c.resolver, capability.VerifyOptions{Issuer: payload.Issuer, Now: time.Now().UTC(), Limits: capability.DefaultLimits()})
 		if err != nil || c.profile.Authorize(grant, origin, time.Now().UTC()) != nil {
 			return password.ErrPasswordWork
 		}

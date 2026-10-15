@@ -11,7 +11,7 @@ import (
 	"github.com/faustbrian/go-identity/otp"
 	kernel "github.com/faustbrian/go-identity/postgres"
 	"github.com/faustbrian/go-identity/session"
-	envelope "github.com/faustbrian/go-secret-envelope"
+	envelope "github.com/faustbrian/go-secret-envelope/v2"
 )
 
 func issuanceOperation(subject identity.FeatureSubjectRequirement) identity.FeatureOperation {

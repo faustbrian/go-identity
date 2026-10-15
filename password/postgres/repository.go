@@ -13,7 +13,7 @@ import (
 
 	identity "github.com/faustbrian/go-identity"
 	password "github.com/faustbrian/go-identity/password"
-	primitive "github.com/faustbrian/go-password"
+	primitive "github.com/faustbrian/go-password/v2"
 	database "github.com/faustbrian/go-postgres"
 	"github.com/jackc/pgx/v5/pgtype"
 )

@@ -7,7 +7,7 @@ import (
 	"encoding/json"
 	"io"
 
-	auth "github.com/faustbrian/go-authentication"
+	auth "github.com/faustbrian/go-authentication/v2"
 	password "github.com/faustbrian/go-identity/password"
 )
 

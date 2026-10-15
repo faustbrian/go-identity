@@ -18,13 +18,13 @@ import (
 
 	"github.com/faustbrian/go-audit"
 	auditpg "github.com/faustbrian/go-audit/postgres"
-	auth "github.com/faustbrian/go-authentication"
-	"github.com/faustbrian/go-authorization"
-	authoritypg "github.com/faustbrian/go-authorization/postgres"
-	"github.com/faustbrian/go-capability"
+	auth "github.com/faustbrian/go-authentication/v2"
+	"github.com/faustbrian/go-authorization/v3"
+	authoritypg "github.com/faustbrian/go-authorization/v3/postgres"
 	issuerpg "github.com/faustbrian/go-capability/postgres/identity"
+	"github.com/faustbrian/go-capability/v2"
 	"github.com/faustbrian/go-clock"
-	"github.com/faustbrian/go-identifier"
+	"github.com/faustbrian/go-identifier/v2"
 	identity "github.com/faustbrian/go-identity"
 	"github.com/faustbrian/go-identity/delivery"
 	deliverypg "github.com/faustbrian/go-identity/delivery/postgres"
@@ -37,10 +37,10 @@ import (
 	sessionpg "github.com/faustbrian/go-identity/session/postgres"
 	migrations "github.com/faustbrian/go-migrations/v3"
 	database "github.com/faustbrian/go-postgres"
-	envelope "github.com/faustbrian/go-secret-envelope"
-	"github.com/faustbrian/go-secret-envelope/adapters/keyring"
+	envelope "github.com/faustbrian/go-secret-envelope/v2"
+	"github.com/faustbrian/go-secret-envelope/v2/adapters/keyring"
+	lifecyclepg "github.com/faustbrian/go-transactional-outbox/postgres/identity"
 	outboxpg "github.com/faustbrian/go-transactional-outbox/v2/postgres"
-	lifecyclepg "github.com/faustbrian/go-transactional-outbox/v2/postgres/identity"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -240,13 +240,13 @@ INSERT INTO identity_mfa.factor_authorities VALUES('AAAAAAAAAAAAAAAAAAAAAQ','AAA
 	}
 	signer, _ := capability.NewHMACSHA256Signer("magic-test", bytes.Repeat([]byte{93}, 32))
 	verifier, _ := capability.NewHMACSHA256Verifier(bytes.Repeat([]byte{93}, 32))
-	resolver, _ := capability.NewKeySet([]capability.Key{{ID: "magic-test", Verifier: verifier}})
+	resolver, _ := capability.NewKeySet([]capability.Key{{Issuer: "https://issuer.test", ID: "magic-test", Verifier: verifier}})
 	normalization, _ := identifier.NewNormalizationProfile(identifier.NormalizationProfileSpec{ID: "magic-email", Version: 1, Unicode: identifier.UnicodeNormalizationNFC, MaximumBytes: 512})
 	address, _ := email.NewAddressParser(email.AddressPolicy{MaximumBytes: 512, Canonicalization: normalization})
 	policy := kernel.CommandQueryPolicy{Authorization: requestTestPolicy{}, Clock: clock.System{}, PolicyVersion: 3}
 	requestKeys, _ := kernel.NewRequestKeyConfig("magic-test", [32]byte{94}, policy)
 	flowKey, _ := session.NewDigestKey(1, bytes.Repeat([]byte{95}, 32))
-	config := RequestConfig{MaximumDuration: 3 * time.Second, ConfigurationID: "magic-test", PolicyID: "login", GlobalAuthorityID: "magic-deployment", IssuerURL: "https://issuer.test", Origins: []string{"https://app.test"}, Callbacks: []string{"https://app.test/login"}, Lifetime: time.Minute, Address: address, Coordinator: kernel.CoordinatorConfig{MaximumDuration: 2 * time.Second, LeaseDuration: time.Minute, CurrentFingerprintKeyVersion: 1, RetainedFingerprintKeys: map[uint32][32]byte{1: {96}}, AdmissionPolicy: &policy, QueryPolicy: &policy}, RequestKeys: requestKeys, Issuer: issuerpg.IssuerConfig{Crypto: capability.ServiceConfig{Signer: signer, Resolver: resolver, Clock: time.Now, Limits: capability.DefaultLimits()}, Audience: "identity", CurrentReplayKeyVersion: 1, RetainedReplayKeys: map[uint32][32]byte{1: {97}}, PreparationTimeout: time.Second}, IssuanceCustody: issuerpg.IssuancePreparationConfig{Deployment: "magic-test", ActiveEnvelopeKey: "magic-issuer", EnvelopeKeys: map[string][]byte{"magic-issuer": bytes.Repeat([]byte{98}, 32)}, VerificationKeys: []issuerpg.PreparationVerificationKey{{ID: "magic-test", HMAC: bytes.Repeat([]byte{93}, 32)}}, Clock: time.Now}, Risk: requestTestRisk(t), Session: storage, CookieKeys: map[uint32]session.DigestKey{1: flowKey}, IntentKey: [32]byte{99}, ActiveEnvelopeKeyID: "magic-mail", Delivery: RequestDeliveryConfig{Owner: mail, Renderer: renderer, Endpoint: "https://app.test/magic", TemplateID: "magic-link", TemplateVersion: 1, ProviderVersion: 1, Locales: []string{"en"}, ScopeKey: [32]byte{100}, Timeout: time.Second}}
+	config := RequestConfig{MaximumDuration: 3 * time.Second, ConfigurationID: "magic-test", PolicyID: "login", GlobalAuthorityID: "magic-deployment", IssuerURL: "https://issuer.test", Origins: []string{"https://app.test"}, Callbacks: []string{"https://app.test/login"}, Lifetime: time.Minute, Address: address, Coordinator: kernel.CoordinatorConfig{MaximumDuration: 2 * time.Second, LeaseDuration: time.Minute, CurrentFingerprintKeyVersion: 1, RetainedFingerprintKeys: map[uint32][32]byte{1: {96}}, AdmissionPolicy: &policy, QueryPolicy: &policy}, RequestKeys: requestKeys, Issuer: issuerpg.IssuerConfig{Crypto: capability.ServiceConfig{Issuer: "https://issuer.test", Signer: signer, Resolver: resolver, Clock: time.Now, Limits: capability.DefaultLimits()}, Audience: "identity", CurrentReplayKeyVersion: 1, RetainedReplayKeys: map[uint32][32]byte{1: {97}}, PreparationTimeout: time.Second}, IssuanceCustody: issuerpg.IssuancePreparationConfig{Deployment: "magic-test", ActiveEnvelopeKey: "magic-issuer", EnvelopeKeys: map[string][]byte{"magic-issuer": bytes.Repeat([]byte{98}, 32)}, VerificationKeys: []issuerpg.PreparationVerificationKey{{ID: "magic-test", HMAC: bytes.Repeat([]byte{93}, 32)}}, Clock: time.Now}, Risk: requestTestRisk(t), Session: storage, CookieKeys: map[uint32]session.DigestKey{1: flowKey}, IntentKey: [32]byte{99}, ActiveEnvelopeKeyID: "magic-mail", Delivery: RequestDeliveryConfig{Owner: mail, Renderer: renderer, Endpoint: "https://app.test/magic", TemplateID: "magic-link", TemplateVersion: 1, ProviderVersion: 1, Locales: []string{"en"}, ScopeKey: [32]byte{100}, Timeout: time.Second}}
 	service, err := NewRequestService(pool, config, keys)
 	if err != nil {
 		t.Fatal("public composition", err)

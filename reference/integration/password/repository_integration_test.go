@@ -18,7 +18,7 @@ import (
 	kernel "github.com/faustbrian/go-identity/postgres"
 	migrations "github.com/faustbrian/go-migrations/v3"
 	migrationdb "github.com/faustbrian/go-migrations/v3/postgres"
-	primitive "github.com/faustbrian/go-password"
+	primitive "github.com/faustbrian/go-password/v2"
 	database "github.com/faustbrian/go-postgres"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/stdlib"
@@ -28,7 +28,7 @@ func TestPrimaryPasswordCredentialIntegration(t *testing.T) {
 	testPrimaryPasswordCredentialIntegration(t, "identity_test", "")
 }
 
-func testPrimaryPasswordCredentialIntegration(t *testing.T, databaseName string, otpConfirmation string) {
+func testPrimaryPasswordCredentialIntegration(t *testing.T, databaseName string, otpConfirmation string, emailProfile ...string) {
 	port, passwordFile := os.Getenv("IDENTITY_REFERENCE_POSTGRES_PORT"), os.Getenv("IDENTITY_REFERENCE_PASSWORD_FILE")
 	credential, err := os.ReadFile(passwordFile)
 	if err != nil || port == "" || passwordFile == "" {
@@ -148,7 +148,7 @@ INSERT INTO identity.credential_references(tenant_id,user_id,credential_id,kind,
 	testNativePasswordReplacement(t, ctx, pool, policy, hash)
 	testNativeReauthenticationRead(t, ctx, pool, repo)
 	testNativeSigninRead(t, ctx, pool, repo)
-	testNativeReauthenticationService(t, ctx, pool, policy, crypto, hash, otpConfirmation)
+	testNativeReauthenticationService(t, ctx, pool, policy, crypto, hash, otpConfirmation, emailProfile...)
 	_, err = repo.ReadPasswordCredential(ctx, password.CredentialKey{TenantID: "absent", SubjectID: key.SubjectID})
 	if !errors.Is(err, password.ErrCredentialAbsent) {
 		t.Fatal("missing scope not classified")

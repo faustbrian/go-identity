@@ -14,12 +14,12 @@ import (
 	"testing"
 	"time"
 
-	auth "github.com/faustbrian/go-authentication"
-	"github.com/faustbrian/go-authorization"
-	"github.com/faustbrian/go-capability"
+	auth "github.com/faustbrian/go-authentication/v2"
+	"github.com/faustbrian/go-authorization/v3"
 	capabilitypg "github.com/faustbrian/go-capability/postgres/identity"
+	"github.com/faustbrian/go-capability/v2"
 	"github.com/faustbrian/go-clock"
-	"github.com/faustbrian/go-identifier"
+	"github.com/faustbrian/go-identifier/v2"
 	identity "github.com/faustbrian/go-identity"
 	"github.com/faustbrian/go-identity/delivery"
 	deliverypg "github.com/faustbrian/go-identity/delivery/postgres"
@@ -36,9 +36,9 @@ import (
 	"github.com/faustbrian/go-identity/session"
 	sessionpg "github.com/faustbrian/go-identity/session/postgres"
 	migrations "github.com/faustbrian/go-migrations/v3"
-	primitive "github.com/faustbrian/go-password"
+	primitive "github.com/faustbrian/go-password/v2"
 	database "github.com/faustbrian/go-postgres"
-	"github.com/faustbrian/go-secret-envelope/adapters/keyring"
+	"github.com/faustbrian/go-secret-envelope/v2/adapters/keyring"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -124,8 +124,8 @@ func testPublicPasswordOTPLoginSend(t *testing.T, ctx context.Context, pool *dat
 	defer clear(childKey)
 	childSigner, _ := capability.NewHMACSHA256Signer("otp-child", childKey)
 	childVerifier, _ := capability.NewHMACSHA256Verifier(childKey)
-	childKeys, _ := capability.NewKeySet([]capability.Key{{ID: "otp-child", Verifier: childVerifier}})
-	issuer := capabilitypg.IssuerConfig{Crypto: capability.ServiceConfig{Signer: childSigner, Resolver: childKeys, Clock: time.Now, Limits: capability.DefaultLimits()}, Audience: source.Profile.Audience, CurrentReplayKeyVersion: 1, RetainedReplayKeys: map[uint32][32]byte{1: {116}}, PreparationTimeout: time.Second}
+	childKeys, _ := capability.NewKeySet([]capability.Key{{Issuer: "https://identity.test", ID: "otp-child", Verifier: childVerifier}})
+	issuer := capabilitypg.IssuerConfig{Crypto: capability.ServiceConfig{Issuer: "https://identity.test", Signer: childSigner, Resolver: childKeys, Clock: time.Now, Limits: capability.DefaultLimits()}, Audience: source.Profile.Audience, CurrentReplayKeyVersion: 1, RetainedReplayKeys: map[uint32][32]byte{1: {116}}, PreparationTimeout: time.Second}
 	challenge := passwordpg.MFAChallengeConfig{Lifetime: time.Minute, MaxAttempts: 3, IssuerURL: "https://identity.test", AllowedMethods: []string{"otp"}, Issuer: issuer, Custody: capabilitypg.IssuancePreparationConfig{Deployment: "reauth-deployment", ActiveEnvelopeKey: "otp-child-envelope", EnvelopeKeys: map[string][]byte{"otp-child-envelope": bytes.Repeat([]byte{117}, 32)}, VerificationKeys: []capabilitypg.PreparationVerificationKey{{ID: "otp-child", HMAC: childKey}}, Clock: time.Now}}
 	c.ProofTTL, challenge.Lifetime = 2*time.Minute, 2*time.Minute
 	primary, err := passwordpg.NewMFASigninService(pool, c, challenge)

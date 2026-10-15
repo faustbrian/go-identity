@@ -10,7 +10,7 @@ import (
 	"slices"
 	"time"
 
-	"github.com/faustbrian/go-capability"
+	"github.com/faustbrian/go-capability/v2"
 	identity "github.com/faustbrian/go-identity"
 	"github.com/faustbrian/go-identity/delivery"
 	deliverypg "github.com/faustbrian/go-identity/delivery/postgres"
@@ -67,7 +67,13 @@ func (r *Repository) prepareSignupDelivery(ctx context.Context, spec email.Regis
 	}
 	work, stop := context.WithTimeout(ctx, c.timeout)
 	defer stop()
-	grant, err := capability.Verify(work, string(token), c.resolver, capability.VerifyOptions{Now: now, Limits: capability.DefaultLimits()})
+	// The policy produces this expected issuer from trusted configuration;
+	// never choose a verification namespace by parsing the submitted token.
+	expected, err := c.policy.Payload(spec)
+	if err != nil {
+		return prepared, password.ErrPasswordWork
+	}
+	grant, err := capability.Verify(work, string(token), c.resolver, capability.VerifyOptions{Issuer: expected.Issuer, Now: now, Limits: capability.DefaultLimits()})
 	if work.Err() != nil {
 		return prepared, work.Err()
 	}

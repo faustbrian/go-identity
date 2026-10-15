@@ -9,7 +9,7 @@ import (
 	"time"
 
 	password "github.com/faustbrian/go-identity/password"
-	primitive "github.com/faustbrian/go-password"
+	primitive "github.com/faustbrian/go-password/v2"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 

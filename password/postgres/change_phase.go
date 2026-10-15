@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/faustbrian/go-audit"
-	auth "github.com/faustbrian/go-authentication"
+	auth "github.com/faustbrian/go-authentication/v2"
 	identity "github.com/faustbrian/go-identity"
 	password "github.com/faustbrian/go-identity/password"
 	kernel "github.com/faustbrian/go-identity/postgres"
@@ -169,11 +169,11 @@ func (p *passwordChangePhase) consume(ctx context.Context, w kernel.Work, b iden
 	return consumeReauthenticationRecord(ctx, w, b, p.record, p.checkTime)
 }
 
-// Both protected actions use the same password-owned record and exclusive
+// The named protected actions share the same password-owned record and exclusive
 // consumer lock. The calling native phase must first fence its current owners;
 // checkTime rechecks original expiry after waiting, never renews it.
 func consumeReauthenticationRecord(ctx context.Context, w kernel.Work, b identity.CommandBinding, record auth.SignedReauthenticationRecord, checkTime func(context.Context, kernel.Work) error) error {
-	if ctx == nil || checkTime == nil || record.Proof.Proof.Tenant != string(b.TenantID) || record.Proof.Proof.Subject != string(b.UserID) || record.Proof.Action != b.OperationID || (b.OperationID != "identity.password.change" && b.OperationID != "identity.mfa.enable") {
+	if ctx == nil || checkTime == nil || record.Proof.Proof.Tenant != string(b.TenantID) || record.Proof.Proof.Subject != string(b.UserID) || record.Proof.Action != b.OperationID || !reauthenticationConsumptionAction(b.OperationID) {
 		return identity.ForbiddenError{}
 	}
 	expected, err := encodeReauthenticationRecord(record)
@@ -227,6 +227,15 @@ WHERE p.proof_id=$1 AND p.tenant_id=$2 AND p.user_id=$3 AND c.state='committed' 
 		return identity.ForbiddenError{}
 	}
 	return nil
+}
+
+func reauthenticationConsumptionAction(action string) bool {
+	switch action {
+	case "identity.password.change", "identity.mfa.enable", "identity.email.verification-send", "identity.email.change-request", "identity.email.address-remove":
+		return true
+	default:
+		return false
+	}
 }
 
 func (p *passwordChangePhase) RecoverParticipant(ctx context.Context, w kernel.RecoveryWork) (kernel.RecoveryStatus, error) {

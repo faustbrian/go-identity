@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/faustbrian/go-authorization"
-	"github.com/faustbrian/go-capability"
+	"github.com/faustbrian/go-authorization/v3"
+	"github.com/faustbrian/go-capability/v2"
 	identity "github.com/faustbrian/go-identity"
 	"github.com/faustbrian/go-identity/magiclink"
 )
@@ -79,7 +79,7 @@ func signConsumptionScope(t *testing.T, payload capability.Payload, now time.Tim
 	t.Helper()
 	signer, _ := capability.NewHMACSHA256Signer("test", []byte(strings.Repeat("x", 32)))
 	verifier, _ := capability.NewHMACSHA256Verifier([]byte(strings.Repeat("x", 32)))
-	keys, _ := capability.NewKeySet([]capability.Key{{ID: "test", Verifier: verifier}})
+	keys, _ := capability.NewKeySet([]capability.Key{{Issuer: payload.Issuer, ID: "test", Verifier: verifier}})
 	limits := capability.DefaultLimits()
 	if len(configured) != 0 {
 		limits = configured[0]
@@ -88,7 +88,7 @@ func signConsumptionScope(t *testing.T, payload capability.Payload, now time.Tim
 	if err != nil {
 		t.Fatal(err)
 	}
-	grant, err := capability.Verify(context.Background(), token, keys, capability.VerifyOptions{Now: now, Limits: limits})
+	grant, err := capability.Verify(context.Background(), token, keys, capability.VerifyOptions{Issuer: payload.Issuer, Now: now, Limits: limits})
 	if err != nil {
 		t.Fatal(err)
 	}

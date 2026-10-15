@@ -13,21 +13,21 @@ import (
 	"time"
 
 	auditpg "github.com/faustbrian/go-audit/postgres"
-	auth "github.com/faustbrian/go-authentication"
-	"github.com/faustbrian/go-authorization"
-	"github.com/faustbrian/go-capability"
+	auth "github.com/faustbrian/go-authentication/v2"
+	"github.com/faustbrian/go-authorization/v3"
 	issuerpg "github.com/faustbrian/go-capability/postgres/identity"
+	"github.com/faustbrian/go-capability/v2"
 	identity "github.com/faustbrian/go-identity"
 	deliverypg "github.com/faustbrian/go-identity/delivery/postgres"
 	mfapg "github.com/faustbrian/go-identity/mfa/postgres"
 	password "github.com/faustbrian/go-identity/password"
 	kernel "github.com/faustbrian/go-identity/postgres"
 	"github.com/faustbrian/go-identity/risk"
-	primitive "github.com/faustbrian/go-password"
+	primitive "github.com/faustbrian/go-password/v2"
 	database "github.com/faustbrian/go-postgres"
-	envelope "github.com/faustbrian/go-secret-envelope"
-	"github.com/faustbrian/go-secret-envelope/adapters/keyring"
-	lifecyclepg "github.com/faustbrian/go-transactional-outbox/v2/postgres/identity"
+	envelope "github.com/faustbrian/go-secret-envelope/v2"
+	"github.com/faustbrian/go-secret-envelope/v2/adapters/keyring"
+	lifecyclepg "github.com/faustbrian/go-transactional-outbox/postgres/identity"
 )
 
 // This explicit request fixture only invokes real durable issuance/factor
@@ -108,8 +108,8 @@ func testPublicResetCompletion(t *testing.T, ctx context.Context, pool *database
 	}
 	signer, _ := capability.NewHMACSHA256Signer("public-reset", bytes.Repeat([]byte{93}, 32))
 	verifier, _ := capability.NewHMACSHA256Verifier(bytes.Repeat([]byte{93}, 32))
-	resolver, _ := capability.NewKeySet([]capability.Key{{ID: "public-reset", Verifier: verifier}})
-	issuerConfig := issuerpg.IssuerConfig{Crypto: capability.ServiceConfig{Signer: signer, Resolver: resolver, Clock: time.Now, Limits: capability.DefaultLimits()}, Audience: "reset", CurrentReplayKeyVersion: 1, RetainedReplayKeys: map[uint32][32]byte{1: {94}}, PreparationTimeout: time.Second}
+	resolver, _ := capability.NewKeySet([]capability.Key{{Issuer: "https://identity.test", ID: "public-reset", Verifier: verifier}})
+	issuerConfig := issuerpg.IssuerConfig{Crypto: capability.ServiceConfig{Issuer: "https://identity.test", Signer: signer, Resolver: resolver, Clock: time.Now, Limits: capability.DefaultLimits()}, Audience: "reset", CurrentReplayKeyVersion: 1, RetainedReplayKeys: map[uint32][32]byte{1: {94}}, PreparationTimeout: time.Second}
 	issuer, err := issuerpg.NewIssuer(issuerConfig)
 	if err != nil {
 		t.Fatal(err)

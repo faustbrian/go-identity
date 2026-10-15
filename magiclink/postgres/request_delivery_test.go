@@ -7,9 +7,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/faustbrian/go-authorization"
-	"github.com/faustbrian/go-capability"
+	"github.com/faustbrian/go-authorization/v3"
 	issuerpg "github.com/faustbrian/go-capability/postgres/identity"
+	"github.com/faustbrian/go-capability/v2"
 	identity "github.com/faustbrian/go-identity"
 	"github.com/faustbrian/go-identity/magiclink"
 	kernel "github.com/faustbrian/go-identity/postgres"
@@ -101,7 +101,7 @@ func TestSignedRequestPayloadRetainsOriginalAuthority(t *testing.T) {
 	}
 	signer, _ := capability.NewHMACSHA256Signer("test", []byte(strings.Repeat("x", 32)))
 	verifier, _ := capability.NewHMACSHA256Verifier([]byte(strings.Repeat("x", 32)))
-	keys, _ := capability.NewKeySet([]capability.Key{{ID: "test", Verifier: verifier}})
+	keys, _ := capability.NewKeySet([]capability.Key{{Issuer: payload.Issuer, ID: "test", Verifier: verifier}})
 	payload.ID = string(id)
 	token, err := capability.Issue(context.Background(), payload, signer, capability.DefaultLimits())
 	if err != nil {
@@ -110,7 +110,7 @@ func TestSignedRequestPayloadRetainsOriginalAuthority(t *testing.T) {
 	if len(token)+len("https://app.test/magic#token=") > 2048 {
 		t.Fatalf("ordinary signed profile cannot fit the delivery URL: %d bytes", len(token))
 	}
-	grant, err := capability.Verify(context.Background(), token, keys, capability.VerifyOptions{Now: now, Limits: capability.DefaultLimits()})
+	grant, err := capability.Verify(context.Background(), token, keys, capability.VerifyOptions{Issuer: payload.Issuer, Now: now, Limits: capability.DefaultLimits()})
 	if err != nil || grant.Payload().Caveats["magiclink.canonical-email"] != r.Identifier.CanonicalValue {
 		t.Fatal("signed primary-recipient profile cannot be verified", err)
 	}

@@ -5,11 +5,11 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/faustbrian/go-authorization"
+	"github.com/faustbrian/go-authorization/v3"
 	identity "github.com/faustbrian/go-identity"
 	password "github.com/faustbrian/go-identity/password"
 	kernel "github.com/faustbrian/go-identity/postgres"
-	primitive "github.com/faustbrian/go-password"
+	primitive "github.com/faustbrian/go-password/v2"
 )
 
 func replacementFixture(t *testing.T) (identity.FeatureCommandSpec, kernel.CredentialReplacementIntent, string, primitive.Policy) {

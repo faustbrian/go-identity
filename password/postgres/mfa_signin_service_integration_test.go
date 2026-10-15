@@ -11,16 +11,16 @@ import (
 	"testing"
 	"time"
 
-	auth "github.com/faustbrian/go-authentication"
-	"github.com/faustbrian/go-capability"
+	auth "github.com/faustbrian/go-authentication/v2"
 	issuerpg "github.com/faustbrian/go-capability/postgres/identity"
+	"github.com/faustbrian/go-capability/v2"
 	identity "github.com/faustbrian/go-identity"
 	"github.com/faustbrian/go-identity/mfa"
 	mfapg "github.com/faustbrian/go-identity/mfa/postgres"
 	password "github.com/faustbrian/go-identity/password"
 	"github.com/faustbrian/go-identity/session"
 	sessionpg "github.com/faustbrian/go-identity/session/postgres"
-	primitive "github.com/faustbrian/go-password"
+	primitive "github.com/faustbrian/go-password/v2"
 	database "github.com/faustbrian/go-postgres"
 )
 
@@ -72,8 +72,8 @@ func testPublicPasswordMFAChallenge(t *testing.T, ctx context.Context, pool *dat
 	signing := bytes.Repeat([]byte{91}, 32)
 	signer, _ := capability.NewHMACSHA256Signer("mfa-signing", signing)
 	verifier, _ := capability.NewHMACSHA256Verifier(signing)
-	keys, _ := capability.NewKeySet([]capability.Key{{ID: "mfa-signing", Verifier: verifier}})
-	mc := MFAChallengeConfig{Lifetime: time.Minute, MaxAttempts: 3, IssuerURL: "https://identity.test", Issuer: issuerpg.IssuerConfig{Crypto: capability.ServiceConfig{Signer: signer, Resolver: keys, Clock: time.Now, Limits: capability.DefaultLimits()}, Audience: profile.Audience, CurrentReplayKeyVersion: 1, RetainedReplayKeys: map[uint32][32]byte{1: {92}}, PreparationTimeout: time.Second}, Custody: issuerpg.IssuancePreparationConfig{Deployment: "password-mfa-test", ActiveEnvelopeKey: "mfa-envelope", EnvelopeKeys: map[string][]byte{"mfa-envelope": bytes.Repeat([]byte{93}, 32)}, VerificationKeys: []issuerpg.PreparationVerificationKey{{ID: "mfa-signing", HMAC: signing}}, Clock: time.Now}}
+	keys, _ := capability.NewKeySet([]capability.Key{{Issuer: "https://identity.test", ID: "mfa-signing", Verifier: verifier}})
+	mc := MFAChallengeConfig{Lifetime: time.Minute, MaxAttempts: 3, IssuerURL: "https://identity.test", Issuer: issuerpg.IssuerConfig{Crypto: capability.ServiceConfig{Issuer: "https://identity.test", Signer: signer, Resolver: keys, Clock: time.Now, Limits: capability.DefaultLimits()}, Audience: profile.Audience, CurrentReplayKeyVersion: 1, RetainedReplayKeys: map[uint32][32]byte{1: {92}}, PreparationTimeout: time.Second}, Custody: issuerpg.IssuancePreparationConfig{Deployment: "password-mfa-test", ActiveEnvelopeKey: "mfa-envelope", EnvelopeKeys: map[string][]byte{"mfa-envelope": bytes.Repeat([]byte{93}, 32)}, VerificationKeys: []issuerpg.PreparationVerificationKey{{ID: "mfa-signing", HMAC: signing}}, Clock: time.Now}}
 	service, err := NewMFASigninService(pool, c, mc)
 	if err != nil {
 		t.Fatal("native MFA composition denied", err)

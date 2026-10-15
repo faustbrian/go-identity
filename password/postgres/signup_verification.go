@@ -5,8 +5,8 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/faustbrian/go-capability"
 	issuerpg "github.com/faustbrian/go-capability/postgres/identity"
+	"github.com/faustbrian/go-capability/v2"
 	identity "github.com/faustbrian/go-identity"
 	email "github.com/faustbrian/go-identity/email"
 	password "github.com/faustbrian/go-identity/password"

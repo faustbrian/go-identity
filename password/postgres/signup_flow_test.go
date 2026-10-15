@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	auth "github.com/faustbrian/go-authentication"
+	auth "github.com/faustbrian/go-authentication/v2"
 	password "github.com/faustbrian/go-identity/password"
 	"github.com/faustbrian/go-identity/session"
 )

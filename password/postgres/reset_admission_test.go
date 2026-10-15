@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	auth "github.com/faustbrian/go-authentication"
-	"github.com/faustbrian/go-capability"
+	auth "github.com/faustbrian/go-authentication/v2"
+	"github.com/faustbrian/go-capability/v2"
 	identity "github.com/faustbrian/go-identity"
 	password "github.com/faustbrian/go-identity/password"
 	kernel "github.com/faustbrian/go-identity/postgres"
@@ -36,11 +36,11 @@ func TestPasswordResetOriginalMaterialBindsSignedPredecessors(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	resolver, err := capability.NewKeySet([]capability.Key{{ID: "synthetic-reset", Verifier: verifier}})
+	resolver, err := capability.NewKeySet([]capability.Key{{Issuer: "https://identity.test", ID: "synthetic-reset", Verifier: verifier}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	engine, err := capability.NewService(capability.ServiceConfig{Signer: signer, Resolver: resolver, Clock: func() time.Time { return at }, Limits: capability.DefaultLimits()})
+	engine, err := capability.NewService(capability.ServiceConfig{Issuer: "https://identity.test", Signer: signer, Resolver: resolver, Clock: func() time.Time { return at }, Limits: capability.DefaultLimits()})
 	if err != nil {
 		t.Fatal(err)
 	}

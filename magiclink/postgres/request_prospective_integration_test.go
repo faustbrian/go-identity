@@ -12,9 +12,9 @@ import (
 	"time"
 
 	"github.com/faustbrian/go-audit"
-	"github.com/faustbrian/go-capability"
 	issuerpg "github.com/faustbrian/go-capability/postgres/identity"
-	identifier "github.com/faustbrian/go-identifier"
+	"github.com/faustbrian/go-capability/v2"
+	identifier "github.com/faustbrian/go-identifier/v2"
 	identity "github.com/faustbrian/go-identity"
 	"github.com/faustbrian/go-identity/delivery"
 	deliverypg "github.com/faustbrian/go-identity/delivery/postgres"
@@ -23,8 +23,8 @@ import (
 	kernel "github.com/faustbrian/go-identity/postgres"
 	"github.com/faustbrian/go-identity/risk"
 	"github.com/faustbrian/go-identity/session"
-	envelope "github.com/faustbrian/go-secret-envelope"
-	"github.com/faustbrian/go-secret-envelope/adapters/keyring"
+	envelope "github.com/faustbrian/go-secret-envelope/v2"
+	"github.com/faustbrian/go-secret-envelope/v2/adapters/keyring"
 )
 
 // Real signing/rendering/encrypted owner custody without a database mutation.
@@ -57,8 +57,8 @@ func TestProspectiveRequestPreparationRetainsOriginalCreation(t *testing.T) {
 	limits.MaxCaveats = 18
 	signer, _ := capability.NewHMACSHA256Signer("magic-test", bytes.Repeat([]byte{93}, 32))
 	verifier, _ := capability.NewHMACSHA256Verifier(bytes.Repeat([]byte{93}, 32))
-	resolver, _ := capability.NewKeySet([]capability.Key{{ID: "magic-test", Verifier: verifier}})
-	config.Issuer = issuerpg.IssuerConfig{Crypto: capability.ServiceConfig{Signer: signer, Resolver: resolver, Clock: time.Now, Limits: limits}, Audience: "identity", CurrentReplayKeyVersion: 1, RetainedReplayKeys: map[uint32][32]byte{1: {97}}, PreparationTimeout: time.Second}
+	resolver, _ := capability.NewKeySet([]capability.Key{{Issuer: config.IssuerURL, ID: "magic-test", Verifier: verifier}})
+	config.Issuer = issuerpg.IssuerConfig{Crypto: capability.ServiceConfig{Issuer: config.IssuerURL, Signer: signer, Resolver: resolver, Clock: time.Now, Limits: limits}, Audience: "identity", CurrentReplayKeyVersion: 1, RetainedReplayKeys: map[uint32][32]byte{1: {97}}, PreparationTimeout: time.Second}
 	config.IssuanceCustody = issuerpg.IssuancePreparationConfig{Deployment: "magic-test", ActiveEnvelopeKey: "magic-issuer", EnvelopeKeys: map[string][]byte{"magic-issuer": bytes.Repeat([]byte{98}, 32)}, VerificationKeys: []issuerpg.PreparationVerificationKey{{ID: "magic-test", HMAC: bytes.Repeat([]byte{93}, 32)}}, Clock: time.Now}
 	keys, _ := keyring.New(map[string][]byte{"magic-mail": bytes.Repeat([]byte{91}, 32)})
 	crypto, _ := envelope.NewService(keys)

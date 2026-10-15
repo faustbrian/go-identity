@@ -16,8 +16,8 @@ import (
 	"github.com/faustbrian/go-identity/risk"
 	"github.com/faustbrian/go-identity/session"
 	sessionpg "github.com/faustbrian/go-identity/session/postgres"
-	primitive "github.com/faustbrian/go-password"
-	envelope "github.com/faustbrian/go-secret-envelope"
+	primitive "github.com/faustbrian/go-password/v2"
+	envelope "github.com/faustbrian/go-secret-envelope/v2"
 )
 
 // One private participant is registered once per synchronous Change invocation.
