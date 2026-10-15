@@ -54,6 +54,10 @@ type StagedLifecycle struct {
 	BeforeVersion uint64
 	AfterVersion  uint64
 	OccurredAt    time.Time
+	// Cascade references the exact pending identity-owner admission, not any
+	// consumer acknowledgement. Both fields are omitted for non-cascade events.
+	CascadeID         identity.CascadeID `json:",omitempty"`
+	CascadeGeneration uint64             `json:",omitempty"`
 }
 
 type workLifecycle struct {

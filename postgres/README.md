@@ -7,6 +7,24 @@ stored database history remain unchanged.
 
 ## Pending managed email attachment
 
+### Native safe removal
+
+`EmailRemovalContributor` supplies frozen `EmailRemovalIntent` and the enlisted
+`EmailRemovalDomain`. The coordinator alone locks the complete partition and
+applies the existing directory writer. Native Apply owns original proof,
+factor/risk and actual remaining signin/reset eligibility, with capability
+retirement through `Work.EmailRemovalScope`. That scope denies foreign,
+reconstructed, unprepared, already-applied and returned invocations.
+
+Install `IdentifierRemovalCascadeMigrationSource` after status admission and
+identifier-retirement histories. It extends the existing identity-owned cascade
+tables without another journal or rewriting installed source. All ten versioned
+consumer contracts are required; unavailable adapters stay pending, never
+implicitly acknowledged/not-applicable. Cascade policy versions share the status
+namespace: incompatible definitions require distinct versions. Admission retains
+exact identifier authority, event, generation, legal hold/version and deadline
+atomically. The pending receipt is not consumer closure/whole-unit qualification.
+
 The distinct `identity.email.verification-send.resend-v1` declaration reuses
 `EmailAttachmentContributor` for `IdentifierRestartVerification`. Its intent
 requires `ExistingCanonicalAddress` and exact identifier/verification versions;

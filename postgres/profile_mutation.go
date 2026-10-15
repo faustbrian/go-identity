@@ -192,6 +192,9 @@ func matchesDomainResult(w Work, result identity.CommandResult) bool {
 		return w.state.creation == nil && w.state.profile == nil && w.state.update == nil && w.state.feature == nil && result.User == owned.User && result.ExpectedVersion == owned.ExpectedVersion && result.Revocation != nil && owned.Revocation != nil && result.Revocation.CascadeID == owned.Revocation.CascadeID && result.Revocation.Generation == owned.Revocation.Generation && result.Revocation.AuthorityVersion == owned.Revocation.AuthorityVersion && result.Revocation.Status == owned.Revocation.Status && slices.Equal(result.Revocation.Owners, owned.Revocation.Owners) && slices.Equal(result.Revocation.ExternalLimitations, owned.Revocation.ExternalLimitations)
 	}
 	if w.state.feature != nil {
+		if w.state.feature.Operation == emailRemovalOperation() && (w.state.emailRemoval == nil || !w.state.emailRemoval.applied || !matchesEmailRemovalCascade(result.Cascade, w.state.emailRemoval.cascade) || result.Feature == nil || result.Feature.BeforeVersion != w.state.execution.reservation.plan.lifecycle.BeforeVersion || result.Feature.AfterVersion != w.state.execution.reservation.plan.lifecycle.AfterVersion) {
+			return false
+		}
 		if managedEmailConfirmationOperation(w.state.feature.Operation) && (w.state.managedEmailVerification == nil || !w.state.managedEmailVerification.applied || result.Feature == nil || result.Feature.BeforeVersion != w.state.execution.reservation.plan.lifecycle.BeforeVersion || result.Feature.AfterVersion != w.state.execution.reservation.plan.lifecycle.AfterVersion) {
 			return false
 		}

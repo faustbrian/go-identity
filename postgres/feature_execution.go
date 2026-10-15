@@ -60,6 +60,14 @@ func validateFeatureCommand(phase FeatureExecutionContributor, command identity.
 	if err := phase.ValidateFeatureCommand(command, plan); err != nil {
 		return err
 	}
+	if plan.Feature != nil && plan.Feature.Operation == emailRemovalOperation() {
+		p, ok := phase.(EmailRemovalContributor)
+		if !ok {
+			return invalidEmailRemoval()
+		}
+		_, _, err := emailRemovalCommand(p, command, plan)
+		return err
+	}
 	if plan.Feature != nil && emailAttachmentOperation(plan.Feature.Operation) {
 		p, ok := phase.(EmailAttachmentContributor)
 		if !ok {
@@ -151,6 +159,11 @@ func (r *ContributorRegistry) admitFeaturePlanMode(b identity.CommandBinding, fi
 	}
 	if _, ok := feature.contributor.(FeatureExecutionContributor); !ok {
 		return nil, invalidPlan()
+	}
+	if p.Feature.Operation == emailRemovalOperation() {
+		if _, ok := feature.contributor.(EmailRemovalContributor); !ok {
+			return nil, invalidPlan()
+		}
 	}
 	if emailAttachmentOperation(p.Feature.Operation) {
 		if _, ok := feature.contributor.(EmailAttachmentContributor); !ok {
@@ -491,6 +504,11 @@ func (c *Coordinator) ApplyFeature(ctx context.Context, w Work, command identity
 			return result, e
 		}
 	}
+	if p.feature.Operation == emailRemovalOperation() {
+		if e := prepareEmailRemoval(ctx, w, command); e != nil {
+			return result, e
+		}
+	}
 	if credentialReplacementOperation(p.feature.Operation) {
 		if e := prepareCredentialReplacement(ctx, w, command); e != nil {
 			return result, e
@@ -551,6 +569,11 @@ func (c *Coordinator) ApplyFeature(ctx context.Context, w Work, command identity
 			return result, e
 		}
 	}
+	if w.state.emailRemoval != nil {
+		if e := applyEmailRemoval(ctx, w); e != nil {
+			return result, e
+		}
+	}
 	if w.state.managedEmailVerification != nil {
 		if e := applyManagedEmailVerification(ctx, w); e != nil {
 			return result, e
@@ -569,6 +592,13 @@ func (c *Coordinator) ApplyFeature(ctx context.Context, w Work, command identity
 		return result, e
 	}
 	result = identity.CommandResult{Binding: p.binding, Outcome: identity.CommitOutcomeCommitted, AuditEventID: success[0].ID(), Feature: &receipt}
+	if p.feature.Operation == emailRemovalOperation() {
+		if e := admitIdentifierRemovalCascade(ctx, w); e != nil {
+			return identity.CommandResult{}, e
+		}
+		copy := w.state.emailRemoval.cascade.Clone()
+		result.Cascade = &copy
+	}
 	if result.Validate() != nil {
 		return identity.CommandResult{}, w.fail(ctx, identity.InvalidInputError{Field: "feature_receipt"})
 	}

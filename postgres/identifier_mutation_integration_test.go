@@ -370,6 +370,17 @@ func TestIdentifierMutationIntegration(t *testing.T) {
 			}
 		}
 	})
+	t.Run("native email removal storage", func(t *testing.T) {
+		history := IdentifierRemovalCascadeMigrationSource{Base: StatusMigrationSource{Base: IdentifierMutationMigrationSource{Base: MigrationSource{}, Version: 10}, Version: 11}, Version: 12}
+		runner, err := migrations.NewRunner(history, backend)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := runner.Up(ctx); err != nil {
+			t.Fatal("forward identifier cascade migration", err)
+		}
+		testNativeEmailRemovalStorage(t, ctx, pool, repo, policy)
+	})
 	t.Run("all transitions and preserved verification", func(t *testing.T) {
 		apply(t, command(t, identity.IdentifierAttach, "a", "first@example.test"))
 		state := read(t, "tenant-a", "user-a")

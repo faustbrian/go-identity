@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add typed native email removal through the existing partition-locked directory
+  writer. Commit exact retirement, identifier authority, audit/lifecycle and the
+  complete pending consumer manifest together. Install the forward identifier
+  cascade migration after status admission; existing histories remain unchanged.
+
 - Adopt authentication v2, authorization v3, password v2 and the matching
   identity kernel source. Consumers supplying primitive values must use those
   major imports. Correct the existing migrations pseudo-version to Go's
