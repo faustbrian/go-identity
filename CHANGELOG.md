@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Add an exact versioned removal-with-primary proposal that advances aggregate
+  authority once and preserves the surviving address's verification age.
+
 - Retain exact pending identifier-removal cascade admission in committed native
   self-removal receipts. Preserve prior JSON shapes when no cascade is present;
   unrelated or noncommitted outcomes cannot claim cleanup admission/completion.

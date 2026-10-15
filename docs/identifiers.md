@@ -72,6 +72,16 @@ All record/state/change/mutation formatters redact diagnostic output; explicit
 data serialization still requires the owning operation's authorization and
 field redaction. No bearer or challenge payload appears in these records.
 
+`ApplyIdentifierRemovalWithPrimary` composes removal with an explicit
+`IdentifierPrimarySelection`. It requires the removed current primary and a
+different already-verified same-kind record with exact independent versions.
+It advances aggregate/authority once and the replacement identifier once,
+preserving verification version/time. It neither selects by ordering nor grants
+permission. The native caller must bind the selection separately from the base
+`IdentifierIntentDigest` and commit under the full partition lock with required
+proof, session, audit and lifecycle effects. Zero selection is invalid here;
+ordinary removal keeps its existing behavior and original digest bytes.
+
 `ApplyIdentifierChange` is the identity-owned pure apply step for a complete
 locked primary partition (maximum 128 records, strict ascending ID order,
 matching verification order). It returns independent copied collections or
