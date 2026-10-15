@@ -4,6 +4,57 @@ Activated on 2026-10-14. B1, B2 and B3 are closed; M04 email lifecycle is active
 
 ## Active: M04 email lifecycle; safe-removal profile delivered
 
+- Replacement-primary profile closed (2026-10-15 14:47 UTC): reference
+  `4a10c0f722593b4e6d7a333364dca13523bbf5cf` is on origin/main; Required
+  `38754176873` passes. Parent verified exact committed 36-path source digest
+  `2e97b8acddfa5e84dc2f17f33594dacaf742f791f85c7fb1d0c3b1651df7e2c4`
+  unchanged from independent `/root/m04_replacement_final_review` APPROVE;
+  final reference7 digest `49a7bcce65b3d77752e82323661811794ee4e6a994390267d2a63460b3089f68`.
+  Root `2d1115c`, email/kernel `03bac9a` and native password/HTTP `85ed1e5`
+  public pins are independently revalidated and main/CI green. GOWORK-off real
+  SQL/race14profiles PASS38.739s; reference/cmd race9.896s/9.103s, taggedvet,
+  selected secrets, local planning/docs/diff checks pass. Public
+  `go run github.com/faustbrian/go-identity/reference/cmd/identity-baseline@v0.0.0-20261015144451-4a10c0f72259 init`
+  with local capture/private directory succeeds without a database or listener.
+  This closes the frozen profile; do not add neighboring variants to its diff
+  or repeat unchanged verification. Full M04/units remain open, count3/39.
+  Next bounded mapping: current administrative email authority and independent
+  actor/target proof/transaction contracts, then freeze one supported next path.
+
+- Replacement publication checkpoint (2026-10-15 14:37 UTC): complete source
+  review `/root/m04_replacement_final_review` APPROVE binds base `8be20a7` and
+  26-path digest `00e350175f10133188af4aee068d2a973511948175262d922f6fcbf1ede60929`.
+  Root4 subset digest `9267aa9ef5746b32994fbbbd25cf38be0f86d029f658fa792f4e985285f7563b`
+  is committed/pushed as `2d1115c` (`20261015143552`), root public source/race/vet
+  pass; Required `38752841914` is running. Email/kernel pins are advancing to
+  that public root, then native password/HTTP, then reference. No local source
+  replacement will remain in public delivery. All 14 removal SQL/race profiles
+  pass36.221s; full six affected modules' race/vet, schema/input regressions,
+  legacy custody byte compatibility, non-inferred selection and bounded decoder
+  fuzz (2030executions/8.473s) pass; selected secrets/structure/docs pass. Public
+  nested composition and reviewed final pin closure remain; do not close yet.
+
+- Frozen next profile (2026-10-15 14:25 UTC): explicit versioned replacement
+  primary in password/known-empty-MFA self-removal, through the existing native
+  `AddressRemove` and opt-in reference HTTPS endpoint. Consumer nominates one
+  different already-verified email belonging to the same partition; removal
+  and promotion commit together, aggregate/authority advance once, verification
+  age is never renewed, and existing token/session/audit/cascade/replay custody
+  remains atomic. Reject absent/unverified/self/foreign/stale/overflow targets,
+  extraneous replacement fields in old dispositions and changed keyed replay.
+  Prove real registration/add/verify/primary -> removal/promotion -> retained
+  signin/reset, rollback, contention and unknown recovery; no new migrations,
+  private stores or replacement engine. Admin, stronger MFA, OTP/auto-signin,
+  async closure and full-unit qualification stay outside this finite profile.
+  Owners: root pure transition, email request, kernel locked preparation/writer,
+  native password original intent, HTTP decoder/OpenAPI and reference journey.
+  Adopt source baseline `8be20a7` / runtime `1ae0790`, native `038260b`, kernel
+  `65ce0f3`, public email `5e4052e`, capability `ab21810`, outbox `5c13952`.
+  Focus: root/email/kernel/native/HTTP unit race and tagged vet; real reference
+  `TestReferencePostgresEmailRemoval*` SQL/race via disposable loopback PG;
+  bounded changed decoder fuzz; public dependency/consumer proof, changed-content
+  secrets, local structure/docs, one complete independent review, main/CI delivery.
+
 - Safe-removal profile closed (2026-10-15 14:18 UTC): reference `1ae0790`
   is delivered on origin/main, Required `38749879283` green. Independent native
   `/root/m04_removal_native_final_review` APPROVE binds base `31b51a9`, precursor
@@ -24,7 +75,7 @@ Activated on 2026-10-14. B1, B2 and B3 are closed; M04 email lifecycle is active
   Asynchronous consumer completion is not claimed; legacy Valkey/MFA attempts
   without their TLS fixture remain unverified. Full delivered count stays 3/39.
 
-- Next consumer gap: explicitly nominate a verified replacement primary during
+- Prior replacement-profile intent (now delivered above): explicitly nominate a verified replacement primary during
   safe self-removal and apply that exact versioned promotion in the same native
   transaction. Current delivered requests deliberately support only preserving
   an existing primary or leaving it unassigned; do not weaken those semantics
