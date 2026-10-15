@@ -3,13 +3,11 @@
 package postgres
 
 import (
-	"encoding/base64"
 	"errors"
 	"sync"
 	"testing"
 	"time"
 
-	identity "github.com/faustbrian/go-identity"
 	"github.com/faustbrian/go-identity/otp"
 	"github.com/jackc/pgx/v5"
 )
@@ -87,7 +85,7 @@ func TestNativeIssuanceReplacementAndRollback(t *testing.T) {
 						return err
 					}
 				}
-				binding := identity.CommandBinding{CommandID: identity.CommandID(base64.RawURLEncoding.EncodeToString(command)), TenantID: "tenant", UserID: "user", OperationID: "identity.otp.send", RecordID: scope.Scope.ChallengeID}
+				binding := storageIssuanceBinding(t, command, scope.Scope.ChallengeID)
 				if fail {
 					// Fail the actual INSERT after family append and predecessor
 					// revocation, not an earlier mocked callback.

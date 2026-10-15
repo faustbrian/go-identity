@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/faustbrian/go-authorization/v3"
 	identity "github.com/faustbrian/go-identity"
 	"github.com/faustbrian/go-identity/otp"
 	migrations "github.com/faustbrian/go-migrations/v3"
@@ -76,7 +77,7 @@ func TestNativeChallengeIssuanceStorage(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	binding := identity.CommandBinding{CommandID: identity.CommandID(base64.RawURLEncoding.EncodeToString(issue)), TenantID: "tenant", UserID: "user", OperationID: "identity.otp.send", RecordID: "new-challenge"}
+	binding := storageIssuanceBinding(t, issue, "new-challenge")
 	write := func() error {
 		tx, err := db.Begin(ctx)
 		if err != nil {
@@ -161,6 +162,23 @@ func installIssuanceStorage(t *testing.T, ctx context.Context, db *pgx.Conn) loc
 		t.Fatal(err)
 	}
 	return p
+}
+
+// The storage fixture must pass the same structural scope check as its real
+// native caller. These metadata fields provide no authentication or admission.
+func storageIssuanceBinding(t *testing.T, command []byte, target string) identity.CommandBinding {
+	t.Helper()
+	op := issuanceOperation(identity.FeatureSubjectUser)
+	binding := identity.CommandBinding{
+		CommandID: identity.CommandID(base64.RawURLEncoding.EncodeToString(command)),
+		TenantID:  "tenant", UserID: "user", ActorID: "service", ActorKind: authorization.SubjectServiceAccount,
+		OperationID: op.OperationID, SchemaID: op.SchemaID, SchemaVersion: op.SchemaVersion,
+		PolicyID: "policy", PolicyVersion: 1, CorrelationID: "correlation", RecordID: target,
+	}
+	if err := binding.ValidateFor(op); err != nil {
+		t.Fatal("invalid issuance storage fixture binding", err)
+	}
+	return binding
 }
 
 func pendingIssuance(t *testing.T, ctx context.Context, db *pgx.Conn, n byte) []byte {

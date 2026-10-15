@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	auth "github.com/faustbrian/go-authentication"
-	authoritypg "github.com/faustbrian/go-authorization/postgres"
+	auth "github.com/faustbrian/go-authentication/v2"
+	authoritypg "github.com/faustbrian/go-authorization/v3/postgres"
 	identity "github.com/faustbrian/go-identity"
 	"github.com/faustbrian/go-identity/otp"
 	kernel "github.com/faustbrian/go-identity/postgres"

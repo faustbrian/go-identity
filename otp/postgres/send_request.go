@@ -3,7 +3,7 @@ package postgres
 import (
 	"context"
 
-	auth "github.com/faustbrian/go-authentication"
+	auth "github.com/faustbrian/go-authentication/v2"
 	identity "github.com/faustbrian/go-identity"
 )
 

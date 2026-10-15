@@ -12,7 +12,7 @@ import (
 	"strconv"
 	"time"
 
-	authoritypg "github.com/faustbrian/go-authorization/postgres"
+	authoritypg "github.com/faustbrian/go-authorization/v3/postgres"
 	identity "github.com/faustbrian/go-identity"
 	"github.com/faustbrian/go-identity/delivery"
 	deliverypg "github.com/faustbrian/go-identity/delivery/postgres"

@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	auth "github.com/faustbrian/go-authentication"
+	auth "github.com/faustbrian/go-authentication/v2"
 	"github.com/faustbrian/go-identity/otp"
 	"github.com/jackc/pgx/v5"
 )

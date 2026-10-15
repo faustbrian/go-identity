@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	authority "github.com/faustbrian/go-authorization/postgres"
+	authority "github.com/faustbrian/go-authorization/v3/postgres"
 	identity "github.com/faustbrian/go-identity"
 	"github.com/faustbrian/go-identity/otp"
 	kernel "github.com/faustbrian/go-identity/postgres"

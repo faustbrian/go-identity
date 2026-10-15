@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	authoritypg "github.com/faustbrian/go-authorization/postgres"
+	authoritypg "github.com/faustbrian/go-authorization/v3/postgres"
 	identity "github.com/faustbrian/go-identity"
 	deliverypg "github.com/faustbrian/go-identity/delivery/postgres"
 	kernel "github.com/faustbrian/go-identity/postgres"

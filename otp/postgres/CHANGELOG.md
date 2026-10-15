@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Compose current public kernel, delivery, risk, MFA and session participants
+  with authentication v2 and authorization v3 values; attempts stay atomic.
+
 - Restore the actual original MFA login issuance into an opaque consuming
   completion owner. Preparation and restart retain original challenge, purpose,
   attempt/version, code binding, browser and authority without comparing,

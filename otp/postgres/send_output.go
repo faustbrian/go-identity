@@ -7,7 +7,7 @@ import (
 	"encoding/binary"
 	"strconv"
 
-	auth "github.com/faustbrian/go-authentication"
+	auth "github.com/faustbrian/go-authentication/v2"
 	identity "github.com/faustbrian/go-identity"
 	deliverypg "github.com/faustbrian/go-identity/delivery/postgres"
 	kernel "github.com/faustbrian/go-identity/postgres"

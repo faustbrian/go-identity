@@ -8,7 +8,7 @@ import (
 	"encoding/binary"
 	"reflect"
 
-	auth "github.com/faustbrian/go-authentication"
+	auth "github.com/faustbrian/go-authentication/v2"
 	identity "github.com/faustbrian/go-identity"
 	kernel "github.com/faustbrian/go-identity/postgres"
 	envelope "github.com/faustbrian/go-secret-envelope"
