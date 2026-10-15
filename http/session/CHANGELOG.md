@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Compose current session custody backed by supported envelope v2. Existing
+  workflow/HTTP contracts and original credential lifetimes are unchanged.
+
 - Bind session transport to current public HTTP and session owners, using
   authentication v2 and authorization v3 values without changing admission.
 

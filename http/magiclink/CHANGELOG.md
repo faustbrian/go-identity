@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Compose current session custody backed by supported envelope v2. Existing
+  workflow/HTTP contracts and original credential lifetimes are unchanged.
+
 - Bind magic-link transport to public workflow/HTTP/session owners and current
   primitive majors without changing original-link custody or admission.
 

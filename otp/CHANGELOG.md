@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Compose current session custody backed by supported envelope v2. Existing
+  workflow/HTTP contracts and original credential lifetimes are unchanged.
+
 - Use authentication v2 and authorization v3 public values with current identity,
   delivery and session contracts. Composed callers must use matching major-version
   types; original challenge custody and purpose/attempt policy remain unchanged.

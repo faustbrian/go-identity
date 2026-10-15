@@ -10,7 +10,7 @@ import (
 	identity "github.com/faustbrian/go-identity"
 	kernel "github.com/faustbrian/go-identity/postgres"
 	primitive "github.com/faustbrian/go-password/v2"
-	envelope "github.com/faustbrian/go-secret-envelope"
+	envelope "github.com/faustbrian/go-secret-envelope/v2"
 )
 
 func (p *totpURIPhase) admitConfirmation(ctx context.Context, w kernel.Work) error {

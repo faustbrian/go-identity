@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Compose current session custody backed by supported envelope v2. Existing
+  workflow/HTTP contracts and original credential lifetimes are unchanged.
+
 - Bind MFA transport to public MFA/HTTP/session owners and current primitive
   majors; composed callers must use matching opaque proof and password types.
 

@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Compose current session custody backed by supported envelope v2. Existing
+  workflow/HTTP contracts and original credential lifetimes are unchanged.
+
 - Validate the complete kernel identifier partition before selecting an original
   change-notification address, rejecting duplicate canonical records rather
   than choosing a primary from inconsistent state.

@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Compose current session custody backed by supported envelope v2. Existing
+  workflow/HTTP contracts and original credential lifetimes are unchanged.
+
 - Bind password transport to current public owners and primitive major versions;
   callers must pass matching authentication, proof and password values.
 

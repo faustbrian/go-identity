@@ -10,7 +10,7 @@ require (
 	github.com/faustbrian/go-identity/delivery v0.0.0-20261015061706-1f0b46ab1053
 	github.com/faustbrian/go-identity/http v0.0.0-20261015092135-af758fe32cc8
 	github.com/faustbrian/go-identity/mfa v0.0.0-20261015092135-af758fe32cc8
-	github.com/faustbrian/go-identity/session v0.0.0-20261015061706-1f0b46ab1053
+	github.com/faustbrian/go-identity/session v0.0.0-20261015104034-f16881100907
 	github.com/faustbrian/go-password/v2 v2.0.2-0.20261015050515-4eb0fefa60ff
 	github.com/faustbrian/go-rate-limit/v2 v2.0.1-0.20261015090634-0ebce3975fe1
 	github.com/felixge/httpsnoop v1.1.0
@@ -24,7 +24,7 @@ require (
 	github.com/faustbrian/go-identifier/v2 v2.0.3-0.20261015083104-9892f17723c0 // indirect
 	github.com/faustbrian/go-json-schema/v2 v2.0.0 // indirect
 	github.com/faustbrian/go-openapi/v2 v2.0.3-0.20261015044355-77bfaaffc820 // indirect
-	github.com/faustbrian/go-secret-envelope v1.0.0 // indirect
+	github.com/faustbrian/go-secret-envelope/v2 v2.0.1 // indirect
 	go.yaml.in/yaml/v3 v3.0.5 // indirect
 	golang.org/x/crypto v0.57.0 // indirect
 	golang.org/x/net v0.59.0 // indirect

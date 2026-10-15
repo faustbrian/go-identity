@@ -22,8 +22,8 @@ github.com/faustbrian/go-identity v0.0.0-20261015054516-5afeba0ac471 h1:/WRZC0q7
 github.com/faustbrian/go-identity v0.0.0-20261015054516-5afeba0ac471/go.mod h1:CaT22sYyoJNiv7Dk9qMNHsDon97tytbbpjMq7/2ztcM=
 github.com/faustbrian/go-identity/http v0.0.0-20261015092135-af758fe32cc8 h1:V6t0GN0m+1jwRb3cJB5Qhepl08kzJcHf1H/fqaAnWUA=
 github.com/faustbrian/go-identity/http v0.0.0-20261015092135-af758fe32cc8/go.mod h1:xt1p+KJpdN9eOPkpZf/LCYQdO/eInaveL7loKPFYcw8=
-github.com/faustbrian/go-identity/session v0.0.0-20261015061706-1f0b46ab1053 h1:tMN7FwqQ9vgHxh5e0az0LDLbhKctGm215i32fc/K17k=
-github.com/faustbrian/go-identity/session v0.0.0-20261015061706-1f0b46ab1053/go.mod h1:GkK14CmYDR2GpuVBmxOd5ALlFAKv3bKiaNzWtxbKJvk=
+github.com/faustbrian/go-identity/session v0.0.0-20261015104034-f16881100907 h1:Kqzvu08TLEr890C5ObGAakU5MmjB6LddB4cjVxF/OiA=
+github.com/faustbrian/go-identity/session v0.0.0-20261015104034-f16881100907/go.mod h1:NBreLFQkvdM4rXtArd++mg7h4abmowUHB5rqnWc7vSQ=
 github.com/faustbrian/go-json-schema/v2 v2.0.0 h1:88kzwDCcP8Xo3SaDyUzc6oWtl83id9P6uY/gjgyQ/74=
 github.com/faustbrian/go-json-schema/v2 v2.0.0/go.mod h1:ikxluAloOz0MuH7up4K9tIpKVGO/Y8z72wQ/hpvwHn4=
 github.com/faustbrian/go-jsonrpc v1.1.1 h1:vxUzoj5o2CvlXtQDRKbyb8aP9FXvE+j937jEWMARORc=
@@ -34,8 +34,8 @@ github.com/faustbrian/go-password/v2 v2.0.2-0.20261015050515-4eb0fefa60ff h1:8BI
 github.com/faustbrian/go-password/v2 v2.0.2-0.20261015050515-4eb0fefa60ff/go.mod h1:Tqc83xc8RVAsi6JAW3dkKM1OFVos7cfayeNHBbWstsA=
 github.com/faustbrian/go-rate-limit/v2 v2.0.1-0.20261015090634-0ebce3975fe1 h1:wClLzW8mUPmV7ilNALEIP0wJZ8LFWjb0nmGKh7LmDGw=
 github.com/faustbrian/go-rate-limit/v2 v2.0.1-0.20261015090634-0ebce3975fe1/go.mod h1:RqjJW3CAgGnotSWzmYuWdBcU1xeupY5F/IhjDXgthyg=
-github.com/faustbrian/go-secret-envelope v1.0.0 h1:z1AqUglQLov5f9PxlHwn9lUCeRP063AtSMlwDjq/8WI=
-github.com/faustbrian/go-secret-envelope v1.0.0/go.mod h1:mk06procHoz9QhU9QJ1eWaLw3ZPO2o59g4s/5u0/X9k=
+github.com/faustbrian/go-secret-envelope/v2 v2.0.1 h1:1GHj2WZhKZihdhlbsU12o7T5kaA9z7IOy/1RQGu3RhA=
+github.com/faustbrian/go-secret-envelope/v2 v2.0.1/go.mod h1:X8VgGx/HsaHif3pNbS6A35sYg3SzF1+8A1YIZMd6Lnw=
 github.com/felixge/httpsnoop v1.1.0 h1:3YtUj32ZZkqZtt3sZZsClsymw/QDuVfpNhoA31zeORc=
 github.com/felixge/httpsnoop v1.1.0/go.mod h1:Zqxgdd+1Rkcz8euOqdr7lqgCRJztwr5hp9vDSi5UZCE=
 github.com/go-logr/logr v1.4.4 h1:tG4xh9yMsRCAiodLVTxyrkzSZ9+o0L1Kg/+cPVcbP/8=

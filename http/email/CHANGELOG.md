@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Compose current session custody backed by supported envelope v2. Existing
+  workflow/HTTP contracts and original credential lifetimes are unchanged.
+
 - Preserve final address-disclosure validation through synchronous middleware
   unwind. Buffered responses cannot reveal personal data after operation timeout,
   parent cancellation, expired session authority, failure-status replacement or

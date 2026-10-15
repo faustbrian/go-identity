@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Compose current session custody backed by supported envelope v2. Existing
+  workflow/HTTP contracts and original credential lifetimes are unchanged.
+
 - Bind OTP transport to the public OTP/HTTP/session owners and current primitive
   majors; preserve selected admission, attempt and cookie policies.
 

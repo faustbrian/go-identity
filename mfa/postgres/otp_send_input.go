@@ -16,7 +16,7 @@ import (
 	"github.com/faustbrian/go-identity/delivery"
 	"github.com/faustbrian/go-identity/mfa"
 	kernel "github.com/faustbrian/go-identity/postgres"
-	envelope "github.com/faustbrian/go-secret-envelope"
+	envelope "github.com/faustbrian/go-secret-envelope/v2"
 	"github.com/jackc/pgx/v5"
 )
 
