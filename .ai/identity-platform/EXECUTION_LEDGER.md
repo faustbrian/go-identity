@@ -1,6 +1,779 @@
 # Identity Implementation — Current Milestone
 
-Activated on 2026-10-14. B1, B2 and B3 are closed; M04 email lifecycle is next.
+Activated on 2026-10-14. B1, B2 and B3 are closed; M04 email lifecycle is active.
+
+## Active: M04 email lifecycle; safe-removal profile delivered
+
+- Safe-removal profile closed (2026-10-15 14:18 UTC): reference `1ae0790`
+  is delivered on origin/main, Required `38749879283` green. Independent native
+  `/root/m04_removal_native_final_review` APPROVE binds base `31b51a9`, precursor
+  head `d81001e` and exact 68-path source digest
+  `28b579212985f41cfa87d42093ea3dc362f3836278e0d2000dd0af0d7f379fe4`;
+  committed bytes are unchanged. Nine actual PostgreSQL removal/race profiles
+  pass (25.749s); reference unit race 13.837s, command 8.931s, tagged vet,
+  changed-content secrets and all local planning/doc checks pass. Five B1/B2/B3
+  public CLI/runtime journeys and populated upgrades pass (61.830s). Public
+  `go run github.com/faustbrian/go-identity/reference/cmd/identity-baseline@v0.0.0-20261015141547-1ae0790cd201 init`
+  with explicit local capture/private directory resolves authenticated public
+  dependencies and initializes, without local replacements or sibling source.
+  Selected native/HTTP self-removal preserves remaining actual signin/reset,
+  required session effects, original replay/recovery and pending cascade identity.
+  This closes the frozen profile now; do not reopen it for neighboring variants.
+  Full M04 remains open for explicit primary replacement, admin/stronger-factor,
+  OTP/auto-signin, privacy/lifecycle completeness and whole-unit qualification.
+  Asynchronous consumer completion is not claimed; legacy Valkey/MFA attempts
+  without their TLS fixture remain unverified. Full delivered count stays 3/39.
+
+- Next consumer gap: explicitly nominate a verified replacement primary during
+  safe self-removal and apply that exact versioned promotion in the same native
+  transaction. Current delivered requests deliberately support only preserving
+  an existing primary or leaving it unassigned; do not weaken those semantics
+  or infer a replacement by ordering. Map the existing identifier mutation/
+  version/persistence owner once, then freeze the finite profile before coding.
+
+- Integration checkpoint (2026-10-15 14:07 UTC): native password removal/base
+  HTTP `038260b` and opt-in email HTTP `d81001e` are independently approved,
+  on origin/main and Required green. Capability `ab21810` and outbox `9663e96`
+  are also on origin/main with exact-source and main Required green. Final
+  reference normal public-dependency removal SQL/race passes (24.426s); unit/
+  command race and tagged vet pass. Integrated review requested two concrete
+  reference fixes: independently selected keyed email must install atomic rate
+  history, and removal lifetime rejection must emit its own closed response.
+  Both have red/green regressions; independent operator/rate/HTTPS removal now
+  passes (5.437s). B1/B2/B3 public CLI regressions are running, followed by final
+  affected reference verification and one complete final-diff re-review. Earlier
+  email HTTPS regressions passed; extra legacy Valkey-backed MFA/reset attempts
+  lacked their TLS fixture and are not passing evidence. No M04/profile closure
+  or whole-unit qualification yet; delivered full milestones remain 3/39.
+
+- Public prerequisite checkpoint (2026-10-15 13:41 UTC): kernel `65ce0f3`
+  is on main with Required `38743441315` green. Outbox projection `5c13952`
+  and capability target-retirement `ab21810` are independently approved local
+  main commits, not yet delivered to origin/main. Public-source unit/race/vet
+  and full native SQL/race pass (outbox 4.729s; capability 7.726s). A first
+  temporary-ref creation failed CI's zero-before classifier, not runtime tests.
+  Capability now qualifies through the existing seeded `chore/identity-custody-ci`
+  (`38744543417`). Outbox's separately seeded `chore/identity-outbox-removal-ci`
+  is allowed by reviewed one-line CI commit `9663e96`; all checks/permissions
+  remain unchanged. Wait for eligible green source checks, push these exact main
+  commits, then bind native password/HTTP/reference public dependencies and close
+  the complete-profile review. Do not restart unchanged tests or tooling work.
+
+- Removal checkpoint (2026-10-15 13:33 UTC): all eight real PostgreSQL/HTTP
+  removal profiles pass with race (23.366s), including primary disposition,
+  denial/rollback, exact replay, competing attempts, lost commit acknowledgement,
+  populated upgrade and actual remaining-address signin/reset. Independent
+  review approves public root/email `5e4052e` (main/Required green) and kernel
+  `65ce0f3` (main, Required pending). A real regression reproduced downstream
+  outbox loss of cascade correlation; the minimal optional-field projection
+  preserves old event bytes and now passes the removal journeys, public-source
+  adapter race/vet and full native SQL/race (4.729s). Adapter prerequisite review
+  is active. Native capability, password, HTTP/reference public pins and final
+  complete-profile review/delivery remain; M04 stays open, delivered 3/39.
+
+- Native removal checkpoint (2026-10-15 12:55 UTC): both actual PostgreSQL/
+  reference journeys pass with race: verified-address and pending removal retain
+  real remaining-address signin/reset, reject removed-address signin and old
+  sessions, preserve original retry/recovery/cascade admission, and retire the
+  target pending link. Combined risk revisions and optional factor-storage test
+  composition are corrected without bypasses. Local source workspace only;
+  HTTP, remaining failure/concurrency cases, public pins, review and delivery
+  remain. No milestone or whole-unit qualification closes.
+
+- Delivered-link profile closed (2026-10-15 11:56 UTC): reference `31b51a9`
+  is on origin/main, Required `38730702735` green; independent complete review
+  approves exact committed patch `6abae994`. Public-source email HTTPS/upgrade,
+  B1/B2/B3 regressions, final race/vet and fresh-cache documented runner init pass.
+  This closes the frozen link profile, not M04 or whole-unit qualification.
+- Safe-removal profile: authenticated human with known-empty MFA, fresh original
+  password proof, exact expected address/version, reason and explicit primary/
+  recovery disposition. Supported native removal and opt-in HTTP/reference must
+  keep an actual verified password signin/reset path; revoke only target-bound
+  unused grants and apply required identifier/session, audit and lifecycle effects
+  in the existing Work/partition lock. Preserve original retry/recovery custody.
+  Existing bounded mapping/QA/token-boundary reports remain inputs; no new plan
+  chain. Exclude administrator/stronger-MFA variants, never silently downgrade.
+  Prove success then remaining-address signin/reset; last-path/wrong/stale/cross-
+  scope denial; exact-target grant retirement; rollback/replay/unknown/contention.
+  Use focused native PostgreSQL/race, API/HTTP/reference integration and changed
+  parser fuzz, then one independent complete-diff review and main/Required delivery.
+
+- Public consumer checkpoint (2026-10-15 11:51 UTC): native delivered-link
+  workflows `456332d` are on main with green Required. The normal public module
+  graph (`GOWORK=off`, no replacements) passes selected email HTTPS request,
+  change, shared signup/managed confirmation, read and populated-upgrade journeys
+  (86.257s), plus five B1/B2/B3 and populated upgrade journeys (50.967s). Final
+  reference unit race (8.951s), command unit race (8.025s), tagged vet, selected
+  secrets and planning checks pass. Complete reference review and fresh-cache
+  documented runner initialization remain before delivery/profile closure.
+  Capability `401a89a` and migrations `8b5ef1e` are on main, eligible push CI and
+  main CI green. The required-check obstacle was dispatch-event eligibility,
+  solved using bounded push carriers without bypassing checks or protection.
+  Native email fixture isolation/required previous-address intent were corrected
+  without weakening production guards; combined real SQL passes (14.407s).
+  Safe removal remains next; M04 stays open and delivered remains 3/39.
+
+- Public custody checkpoint (2026-10-15 11:09 UTC): lower session/delivery/risk
+  owners `f168811` and workflow/HTTP/native MFA `ed660e7` are on main with green
+  Required. Independent review found the previously selected envelope v1.0.0
+  lacked retained provider-cause containment; supported envelope v2.0.1 restores
+  it. Cross-version ciphertext/AAD and error-containment probes pass. Native
+  session v2 composition passes public-source unit race (1.822s), real SQL race
+  (29.755s), vet, selected secrets and review; its delivery is next. Native
+  capability `401a89a` and migrations `ca105f2` are reviewed public candidates,
+  awaiting their own protected-main qualification/delivery. Reuse unchanged
+  runtime evidence; do not change Tools or protection. Password/magic-link/OTP
+  and final reference public composition remain in progress. No profile closes;
+  safe removal follows delivered-link closure, and delivered remains 3/39.
+
+- Native dependency checkpoint (2026-10-15 10:22 UTC): MFA `c2503b8`, session
+  `40f3c12` and OTP `4cfde77` are pushed to main with green hosted Required.
+  Complete public-source race/vet, real PostgreSQL suites and independent
+  final-diff reviews pass; OTP issuance fixtures now supply the required
+  structural command metadata without changing admission or production SQL.
+  Magic-link public-source unit race (1.370s), real SQL race (7.612s), vet and
+  original-output fuzz (10,000x) pass; its 25-path source batch is under review.
+  Password unit race passes (2.312s), but integration compilation proves the
+  pinned migration version lacks `ForNamespace`. Current upstream main also
+  lacks the retained namespaced/discovery/atomic/resumable APIs consumed by the
+  actual reference bootstrap. Port that existing additive owner implementation
+  onto current migration main, preserving its engine/APIs/dependencies; do not
+  bypass the native runner or replace it in tests. Then prove password/native
+  and final public reference composition. Selected magic-link source snapshot
+  scanning is clean; the unscoped historical scan still fails and is not a
+  delivered-history qualification. No M04 profile closes: delivered stays 3/39.
+
+- Public transport checkpoint (2026-10-15 09:46 UTC): `5d5bf82` is on main;
+  hosted Required `38715052759` passes. It delivers selected email reads,
+  keyed verification/change request transport and distinct link confirmations,
+  plus child HTTP/HIBP/risk public bindings. All nine affected module race/vet
+  checks pass; real risk PostgreSQL race passes (26.780s), selected parser fuzz
+  passes. Complete independent review found premature disclosure-guard cleanup
+  and missing operation-owned deadline custody during buffered middleware unwind.
+  Both regressions failed before their fixes; buffering race x20 (2.342s), full
+  email race (14.515s), vet and new complete independent review now pass. Exact
+  committed patch is the approved `61ef1ab3` digest. The old HTTP prose scanner
+  false positive was clarified in `6275648`; its hosted check also passes.
+  Native MFA adapter now passes standalone public-source race/vet (1.464s);
+  real SQL proof precedes its review/delivery, then session/OTP/password adapters
+  and reference. No new consumer milestone closes: delivered remains 3/39.
+
+- Public-owner checkpoint (2026-10-15 09:25 UTC): workflow/HTTP bindings are
+  reviewed and pushed as `af758fe`; hosted Required is running. Password,
+  magic-link, MFA, OTP and HTTP pass standalone public-source race/vet; six
+  selected parser fuzz runs pass. Email/risk/i18n foundation `f43df04` and
+  rate-limit atomic admission plus saturation `0ebce39` are on main with green
+  hosted checks and independent source reviews. Real PostgreSQL atomic replay,
+  rollback, raw-byte intent and refill regressions pass. Next dependency wave
+  binds child HTTP, HIBP and risk adapters before native workflow composition.
+  HIBP's unavailable historical HTTP-client revision is replaced with released
+  v2.1.0; borrowed transport/redirect/privacy behavior needs affected proof.
+  Delivered remains 3/39. Final public M04 HTTPS proof, subsequent safe removal,
+  authentication fixture scanning and whole-unit qualification remain open.
+
+- Prerequisite checkpoint (2026-10-15 08:39 UTC): capability `2bb797e` and
+  identifier `9892f17` are on origin/main; exact-source hosted CI, complete native
+  local checks and complete independent reviews pass. Email public-download
+  unit race passes (1.550s); risk/i18n standalone race/vet passes (1.487s/1.305s).
+  HTTP's actual public rate-limit main `ba14272` lacks the consumed optional
+  atomic batch service and PostgreSQL migration. One bounded map identifies only
+  the additive API/native implementation, retained replay tests and shared token
+  refill-horizon correction; existing engines/dependencies/docs remain intact.
+  Port tests first fail on the missing public methods/types, then full native
+  unit race/vet passes. Real isolated PostgreSQL atomic/replay/intent/conflict/
+  lost-ack/rollback/overlap/burst tests pass (1.184s); receipt fuzz passes 10,000x.
+  The disposable PostgreSQL cluster is stopped/removed. Native API/static/docs
+  qualification, complete independent review and main delivery are next, followed
+  by the frozen M04 public HTTP/reference binding/proof. No removal expansion
+  before closing that delivered-link profile. Delivered still 3/39; authentication
+  central fixture scanning and whole-unit qualification remain unresolved.
+
+- Prerequisite checkpoint (2026-10-15 08:06 UTC): native delivery/PostgreSQL
+  `9684f45` and native outbox `2f1e128` are on origin/main, applicable hosted
+  CI green. Public dependency downloads, real PostgreSQL/race and complete
+  independent reviews pass. Capability participant `f06ff01` plus GoDoc
+  `c539674` is committed/publicly resolvable on its CI ref, not main. Its final
+  post-verification context fence destroys prepared custody on cancellation;
+  four cancellation/deadline one/two-grant regressions failed before the fix,
+  then full integration/race 14.030s, fuzz, API/source-docs and review passed.
+  Native CI required minimal Go1.27.2 workspace and locally visible integer
+  framing bounds; corrected source passes integration/race 21.852s and pinned
+  gosec. Native check then timed out in cold local-test at 1m; rebalanced the
+  existing 3m total to root 1m/native 2m without removing any selected check.
+  Current full native rerun remains pending. Identifier current v2 main
+  `429f747` lacked normalization, unlike retained unavailable old sources.
+  Its additive port is committed `54d59e6`, independently approved and normally
+  downloadable as `v2.0.3-0.20261015075448-54d59e67717e`, not on main yet.
+  Full module race, API/docs/workflow, official corpora and exact offline
+  generation pass. Review found inherited byte-index IDNA hyphen validation;
+  nine public cases failed before fixing rune positions, then race/corpora
+  passed (4.535s), and final fuzz with regression seeds passed (11.311s).
+  Hosted CI flagged five range conversions; corrected through the existing
+  generator/provenance with upstream inputs untouched. New race/corpora 2.023s,
+  source-docs/secrets/reproduction pass; final native check/review pending.
+  Released identifier families/dependencies remain unchanged. This is the M04
+  prerequisite, not a new milestone or historical evidence migration. Final
+  public HTTPS composition and safe removal remain; delivered still 3/39.
+
+- Prerequisite checkpoint (2026-10-15 06:47 UTC): identity PostgreSQL `bdc73de`
+  plus documentation `3bfdb5b`, delivery/session `1f0b46a` plus `608e4cd`, audit
+  PostgreSQL `d62df28` and outbox preparation `37ea154` are on origin/main,
+  eligible source CI green. Native outbox candidate `b9956143` (complete patch
+  digest prefix, not a commit) passes standalone real PostgreSQL/race 8.009s,
+  vet and independent complete review. Review reproduced a remote-fallback DSN
+  guard bypass; both test entries now use shared primary/fallback validation,
+  with red/green regression. No runtime contributor change was needed.
+  New independent child modules use repository-relative paths, not the root
+  engine's `/v2` before their directory. Native outbox publication and consumer
+  repins precede the final M04 HTTP/reference proof and safe removal. Still
+  3/39; authentication central fixture scanning/full-unit qualification open.
+
+- Public PostgreSQL checkpoint (2026-10-15 06:02 UTC): root `5afeba0` and
+  authorization `a9fe820` are on their mains with applicable CI green.
+  PostgreSQL consumes authenticated public current-major dependencies with
+  `GOWORK=off`: unit race 4.742s, vet (including integration-tagged code),
+  identifier-mutation SQL race 1.890s and broad native SQL race 29.539s pass.
+  Test-only repairs preserve production migration bytes: stop downgrading
+  preparation constraints, isolate recovery tenants/fingerprints, use real
+  migration history, and replace an inherited denial-only MFA success fixture
+  with a live SQL/code precheck. Complete adapter review is active before
+  commit. Authentication's synthetic-JWT central scan failure remains open;
+  no Tools edit/release/bypass occurred. An unscoped docs check found inherited
+  exported-field comment gaps; full-unit docs are not qualified. M04 stays
+  open, delivered 3/39. All completed disposable PostgreSQL clusters are removed.
+
+- Public-source compatibility checkpoint (2026-10-15 05:41 UTC): identity root
+  now passes standalone public-download race (1.600s), without GOWORK supplier
+  substitutions, on the reviewed authentication v2/authorization v3/password v2
+  contracts. Native PostgreSQL race passes on the matching local imports
+  (5.856s). These caller changes remain uncommitted. Password `4eb0fef` is on
+  main with CI green. Authentication `d9f5132` and authorization `a9fe820` are
+  reviewed committed candidates on CI-only refs, not main. Authorization's
+  latest failure was setup-go archive download; failed-job-only retry is live.
+  Authentication's central history scan flags six pinned synthetic JWT vectors;
+  repository exceptions cannot change that policy. The exact central fixture
+  exception requires a Tools release; scoped publication authority is requested,
+  not assumed. Continue integration meanwhile. Audit contributor/migrations and
+  least-privilege grants pass native race plus real PostgreSQL replay/rollback/
+  retention/coordinator checks (1.979s); its source and major-version caller
+  updates remain local. A fixture now names its audit-only operation rather
+  than impersonating protected session issuance. Full M04 remains open, 3/39;
+  no full-unit or composed shared-issuer qualification is claimed. Both owned
+  PostgreSQL runs have stopped and removed their isolated clusters.
+
+- Dependency delivery correction (2026-10-15 05:04 UTC): PostgreSQL source
+  `1abac9f` follows root `8c06f54` on identity main; native race/vet, focused
+  real PostgreSQL/fuzz and independent source review pass. Both hosted Required
+  planning/secrets runs pass. Capability root `5d37bc9` and OpenAPI `77bfaaf`
+  are on their mains with eligible exact-source push CI. The consumer profile
+  is not closed: public download exposed unavailable old primitive revisions,
+  and current authentication v2/authorization v3/password v2/audit-PostgreSQL
+  lack consumed retained extensions. Preserve current engines and port only
+  needed typed contracts with their existing coverage; this is a prerequisite
+  of the same frozen outcome, not a historical-record or Tools programme.
+  Password Secret/Parameters currently pass standalone full race/vet, two
+  bounded fuzz targets and source/conformance guards on v2; final review is
+  active before delivery. Audit root v1.0.0 remains public and unchanged.
+  Adapter registration also exposed copied historical benchmark flags without
+  a native typed operation; do not call that inventory or unit qualification
+  passing. Resolve the actual new-module contract before adapter delivery,
+  without silently bypassing or inventing a passing benchmark. Keep removal
+  after the delivered link profile. Disposable PostgreSQL is stopped/removed.
+
+- Prerequisite delivery (2026-10-15 04:49 UTC): root kernel source `8c06f54`
+  is on origin/main with native root race/vet and independent full-root review
+  approved; hosted Required 38683294730 passes its planning/secrets contract.
+  It does not certify runtime or public-download qualification. Root public
+  dependency resolution still encounters inherited unavailable supplier pins.
+  The PostgreSQL prerequisite now selects that actual root source and the
+  authenticated capability v2 source `caab644`; its focused verification and
+  independent complete-module review are active before the adapter/back-
+  dependant pins advance. Capability/OpenAPI eligible push CI remains live;
+  manually dispatched green checks were correctly rejected by protection.
+  No rule/check bypass, PR or Tools change. M04 remains open, delivered 3/39.
+
+- Request HTTP/reference checkpoint (2026-10-15 04:32 UTC): storage-neutral
+  email request ports now forward to the actual keyed native owner. Opt-in
+  `HTTPEmailRequests` composes add/resend/change-request and change-confirm in
+  the canonical email feature, sharing strict rate ownership and guarding whole
+  request lifetime before proof reads. Closed cookie/Origin/CSRF/key inputs and
+  original-outcome responses expose no mailbox, credentials or recovery route.
+  Both real reference PostgreSQL/HTTPS consumer selectors
+  `TestReferencePostgresEmail{Requests,ChangeRequests}HTTPS` pass together under
+  race (37.242s): real signup/signin/proof, add/resend/cooldown/supersession,
+  successor verification, two primary changes, old notices, replay and saved
+  session denial/new-address signin. Initial missing-config compile failure and
+  native-clock wiring failure were corrected; keyed address IDs are asserted
+  from the actual original request result, not a caller-selected fixture ID.
+  Email, HTTP/email and reference unit race pass (1.324s/10.065s/8.598s); exact
+  HTTP stored-CSRF policy test passes (1.366s); bounded real handler body fuzz
+  passes (6.386s). Capability v2 root custody APIs and native adapter are now
+  ported; identity source imports and trusted issuer gates use v2. Both actual
+  M04 HTTPS journeys pass on v2 (37.478s), native adapter composition/consumption
+  including supersession/rollback/retirement passes (7.235s), and baseline plus
+  combined reset/password-change command journeys pass (20.695s). Affected
+  direct-consumer unit race passes; current full HTTP race passes (13.372s).
+  The OpenAPI failure was upstream extension misclassification. Its narrow fix
+  and named-map regressions pass native race/vet/fuzz and independent review.
+  Root v2 custody and the OpenAPI fix are separately independently approved and
+  committed as capability `189b41d` and OpenAPI `8de9186`. Direct main pushes
+  were rejected because Required must run first; exact-source CI-only refs
+  carry those commits without PRs or protection changes (runs 38681971480 and
+  38681972006). Main delivery remains pending. Adapter/module source pins and
+  complete M04 final review/delivery still remain; identity M04 is uncommitted.
+  No new milestone closes, and no public-download or whole-unit qualification
+  is claimed. Removal remains subsequent. Current task-owned loopback
+  PostgreSQL/workspace/caches remain live for this bounded verification session.
+
+- Keyed native/reference checkpoint (2026-10-15 03:31 UTC): implemented
+  `KeyedEmailManagementService` over the existing immutable request mapping and
+  sole email preparation/transaction. Add/change select winning server command/
+  address; resend retains its exact target. Encrypted original session/proof,
+  CSRF, domain/previous-address versions, factor generation and counter instants
+  restore before live primary reads. Exact retries return original metadata;
+  changed intent conflicts without another grant or message. A focused regression
+  exposed original-signer replacement being accepted by name alone; retained
+  record signature verification now denies it. Concurrent same-key add converges
+  on one address/grant/delivery. Existing immutable mapping rejects replacement.
+  `RequestRateSource`/graph `RequestRateSourceKeyed` reads original custody before
+  live session lookup, including spent-proof/provider-outage retries; absent
+  history permits only source reads, no durable mapping or issuance. It grants
+  no current authority and returns no metadata on conflict/error.
+  Native race selector `TestPrimaryPasswordCredentialIntegration/native-email-management-keyed`
+  passes (1.979s). Real signup/signin/cookie graph selectors
+  `TestReferencePostgresEmail{ChangeGraph,KeyedChangeGraph,KeyedResendGraph}` pass
+  together under race (40.276s): add/resend cooldown/rollback/supersession,
+  original replay, two primary changes, old notice/session invalidation and
+  new-address signin. Native password/reference unit race pass (2.112s/8.675s),
+  both vets/diff check pass; bounded `FuzzKeyedEmailOriginalInput` passes (6.312s).
+  No tooling, second journal or crypto authority was added. These results use
+  the retained-v1 supplier and local/uncommitted identity tree; no final profile
+  review, main delivery or whole-unit qualification. Delivered remains 3/39.
+  Next: portable email-owned request port and opt-in HTTP/reference request
+  handlers. Authenticate retained proof/possession and rate metadata before
+  mutable session lookup, not the reverse; use canonical verification-send
+  (add/resend) and change-request IDs. Select change-confirm reference transport,
+  then final review, approved capability v2 migration/compatibility and delivery.
+  Keep removal after this profile's delivery. Native fixture selectors need
+  separate disposable database state; their cluster-global audit roles must be
+  cleaned before switching to reference graph fixtures, not fixed in Tools.
+  The owned PostgreSQL, workspace wrapper/supplier archives, all three Go
+  caches and exact scratch are stopped/removed; all run handles are terminal.
+
+- Address-read HTTP checkpoint (2026-10-15 03:02 UTC): actual reference HTTPS
+  list/get now uses native session/query owners, current human-self scope and one
+  shared safe limiter. Standalone safe-rate selection enables no HTTP session
+  route; get-only exposes no list route. Real PostgreSQL selectors
+  `TestReferencePostgresEmail{QueriesHTTPS,QueriesStandaloneHTTPS,GetOnlyHTTPS,QueriesGraph}`
+  pass under race (9.041s), covering native versions, credential/target/query
+  denials and no identity mutation. The shared signup/managed-confirmation test
+  now also selects/runs address reads in that same server; race passes (33.830s).
+  HTTP/email unit race (6.898s), reference unit race (8.432s), both vets/diff check
+  pass. New query fuzz passes (6.267s) with bounded native decoding. Redaction,
+  expiry/cancellation, changed-status/body and streaming response guards pass;
+  a blocked-self projection regression failed before its transport correction.
+  Native512-byte values and100-row JSON-escaped pages remain bounded without
+  truncation. Co-selected reads initially exposed duplicate OpenAPI scheme names;
+  operation-owned names now pass real construction. No core validator was changed.
+  Still local/uncommitted, 3/39 delivered, no whole-unit qualification. Next:
+  keyed add/resend/change requests and selected change reference transport, then
+  final review, capability v2 compatibility and main delivery.
+- Keyed-request handoff: bounded mapper `/root/m04_email_http_map` confirms the
+  existing `ResolvePreparedRequestKey`/`RequestKeyPreparationContributor` mapping
+  must restore winning command/address, original session/signed-proof/CSRF,
+  domain versions/previous address, link instants, factor/counter input and exact
+  request intent before today's primary lookup. Current email `request` still
+  does live `Prepare` first; reconstruct local authenticated original input, then
+  reuse the existing email phase/sole journal. Mapping may read/encrypt but cannot
+  sign links, assess providers, charge counters or mutate. No new journal/cache/
+  crypto authority is needed. Retain the native report; do not restart mapping.
+
+- Shared HTTP checkpoint (2026-10-15 02:40 UTC): the real reference server now
+  explicitly selects one signup/managed-add verification route. The native router
+  authenticates persisted issuance plus signed profile/confirm-action before
+  dispatch; selected-owner errors never try another source. Signup verification
+  and genuine add/resend successor verification pass on that same HTTPS server,
+  with wrong origin/callback, signature tampering, exact replay and consumed-link
+  second-command denial. `TestReferencePostgresEmailManagementSharedHTTPS` passes
+  under race (33.789s); HTTP/email and password/postgres unit race pass (6.777s,
+  2.012s); reference unit race passes (8.886s); all three affected vets and diff
+  check pass. New native/router configuration APIs supplied red before support.
+  Real testing exposed receipt-free native Forbidden being converted to an outage;
+  its focused regression failed, then passed while retaining unknown/no recovery
+  and continuing to reject malformed claimed commits. Reference CORS's documented
+  plain-text origin denial remains unchanged. Reused bounded mapping from
+  `/root/m04_email_http_map`; no new crypto/receipt/cache or tooling owner.
+  Still local/uncommitted and retained-v1; keyed request/read HTTP, selected change
+  reference transport, final review, v2 compatibility and main delivery remain.
+  M04 remains open, delivered 3/39; no new unit or release qualification.
+  The isolated PostgreSQL, private supplier workspace/archives, Go caches and
+  exact task scratch are stopped/removed (02:42 UTC); all run handles are terminal.
+
+- Native reference checkpoint (2026-10-15 02:23 UTC): `StoreConfiguration.Email`
+  selects graph-owned verification/change/address handles, actual native forward
+  histories, original proof, risk and encrypted delivery. Unselected/missing,
+  inactive/foreign/closed authority denies. Real consumer race selectors
+  `TestReferencePostgresEmail{ManagementGraph,ChangeGraph,ChangeGraphUpgrade,Queries,QueriesGraph}`
+  pass (42.310s), including actual resend cooldown, new-address confirmation,
+  old notice/session effects, query-only selection and populated upgrade/retry
+  without rewriting original operator custody. Reference unit race passes
+  (8.374s), reference vet/diff check pass. Earlier missing-reference API tests
+  supplied red; graph failures exposed inconsistent fixture risk revisions,
+  corrected without relaxing native validation. Complete source/catalog changes
+  use a new operator command, not rewritten historical requests. HTTP/native
+  profile remains incomplete/uncommitted: close keyed management/read transport
+  and authentic common verification dispatch, then final review, v2 compatibility
+  and main delivery. No milestone/unit closure or new percentage is claimed.
+  Its isolated PostgreSQL, temporary supplier workspace/archives, disposable Go
+  caches and exact task scratch are stopped/removed (02:24 UTC).
+
+- HTTP checkpoint (2026-10-15 01:55 UTC): public change-confirm now runs the
+  shared bounded protected pipeline with its distinct native action, result and
+  original recovery; no verification recovery is constructed for a change.
+  `FeatureConfig` groups verification and change under one email feature identity
+  and rejects ambiguous verification owners. Managed wire metadata no longer
+  describes signup. Native `ChangeConfirmationRateSource` supplies exact original
+  change challenge metadata without borrowing verification-only admission.
+  New API/grouping/source regressions failed before support. HTTP/email unit race
+  passes (6.870s); password/postgres unit race passes (1.976s); both vets and diff
+  check pass. Actual PostgreSQL signup/signin -> primary change over real TLS
+  passes origin/callback denial, fresh/replay, native original recovery, old notice,
+  saved-session denial and fresh new-address signin for both sole-verified and
+  existing-primary cases. Reference selectors `TestReferencePostgresEmailManagementChange`
+  and `TestReferencePostgresEmailChangeHTTPS` pass under race (7.072s). The latter
+  mounts the public feature with the actual native owner, not a fake domain store;
+  FeatureSet-owned management configuration is still absent, not silently proved.
+  Next: reference native owners/selected migrations/lifetime handles; then close
+  keyed add/change/read HTTP and one authentic signup/managed verification route.
+  Native typed recovery suffices unless recovery HTTP is explicitly selected;
+  do not invent missing canonical inspect/recovery operation IDs. Existing native
+  M04/B1-B3 evidence remains applicable only to unchanged inputs. No final review,
+  profile/milestone delivery, v2 compatibility, commit or push is claimed.
+  All bounded-run test handles are terminal; isolated PostgreSQL, supplier
+  workspace/archives, Go caches and exact task scratch are removed (01:56 UTC).
+
+- Closure correction (2026-10-15 01:39 UTC): M04 has passed two six-hour active
+  windows since B3 without a delivered profile. The concrete drag is combining
+  already working add/resend/change with new removal storage/orchestration before
+  transport/delivery closure. Split successive complete consumer profiles without
+  dropping any M04 obligation or changing 3/39: first finish selected opt-in
+  HTTP/reference list/get, add/resend/verify and password-authorized primary
+  change/old notice, review and deliver it; then finish safe removal against that
+  working backend. Retain all removal code and original acceptance. Do not expand
+  removal further before closing the first profile. Capability v2 compatibility
+  remains mandatory before owning-main delivery; no retained-v1 overlay on v2 main.
+- Removal prerequisite (2026-10-15 01:38 UTC): opt-in issuer retention now stores
+  the authenticated signed verification Resource in forward migration 005.
+  Default issuance SQL remains unchanged. Real public signup issuance proves
+  original target retention, default-null compatibility and late rollback. Native
+  SQL proves exact tenant/user/identifier unused issued/reserved retirement,
+  exclusion of other targets/subjects/tenants/purposes/used grants, populated
+  upgrade, rollback, and fail-closed active unclassified/originless history.
+  Revocation conserves original reservation/origin; exact revoked-unused evidence
+  is negative for recovery and unanimous terminal reconciliation preserves
+  revocation. No new journal/fence/transaction or public removal service exists.
+  Bounded mapper `/root/m04_removal_contract_map` and QA `/root/m04_removal_qa`
+  found no requirement contradiction; their native reports remain in this thread.
+  Focused red failed on missing APIs, then supplier unit race passed (1.320s).
+  Full `TestNativeConsumptionIntegration` plus public registration
+  `success|target-retention|target-retention-rollback` passed under race (5.521s);
+  supplier vet and diff check passed. These are retained-v1 local prerequisites,
+  not public removal acceptance, v2 compatibility, final review or delivery.
+  The owned PostgreSQL, runner, supplier workspace and Go caches are terminal
+  and removed; exact path absence was verified (01:40 UTC). Shared resources
+  were untouched. Next is first-profile HTTP/reference closure, not more removal.
+
+- Current checkpoint (2026-10-15 01:08 UTC): actual PostgreSQL signup/signin now
+  reaches native ChangeRequest -> captured link -> scanner reads -> ChangeConfirm
+  -> old-address notice -> new-address signin. Explicit sole-verified policy
+  establishes the first primary without promoting the old signup address;
+  a second genuine change replaces an existing primary. Original old-address
+  versions/policy are signed and encrypted. Candidate verification/primary and
+  directory authority advance once; old verification/time is preserved. Saved
+  post-request sessions deny after success; replay/recovery disclose metadata only.
+  Real race acceptance passes: success (2.54s), late rollback (2.12s), concurrent
+  confirmation (2.17s), via `go -C reference test -race -tags=integration -run
+  '^TestReferencePostgresEmail(ChangeRollback|ChangeConcurrentConfirmation|ManagementChange)$' -count=1 -v .`.
+  Rollback preserves original/pending addresses and the current session, emits no
+  success effects/notice, retains the failure audit/cause and terminally releases
+  the aborted grant. Two competing confirmations have one winner. Root/kernel/
+  password/MFA/risk adapters pass affected unit race; email's latest unit race
+  passes (1.267s). Email/password/MFA/risk adapter vet passes. Known pre-existing
+  kernel test-fixture copy-lock vet gap remains. Fixed-depth change-plan decoding
+  retains signup/verification bytes; its selected fuzz run passes (11.283s).
+  Bounded mapping/QA `/root/m04_change_boundaries` and `/root/m04_change_qa` supplied
+  original-address/security cases; no planning restart or evidence tooling was
+  added. Source remains local/uncommitted, retained-v1 wired, no full final review
+  or new milestone/unit closure. The interrupted earlier race handle/fixtures
+  were absent; no result was assumed. Removal, remaining denial/unknown partitions,
+  full management HTTP/reference composition, v2 migration and main delivery remain.
+- Removal boundary: `/root/m04_removal_token_boundary` confirms verified nonprimary
+  email already supports native password signin and reset. The existing complete
+  user/identifier partition lock serializes native issuance/confirmation/removal;
+  no new target fence is justified. Capability rows currently lack signed Resource,
+  so exact-target retirement needs capability-owned retained target metadata and a
+  closed same-Work seam. Do not retire all subject grants, omit unclassified legacy
+  rows, erase reservation/origin evidence or introduce a replacement store.
+- Bounded run closed (2026-10-15 01:20 UTC): pure `RemovalProfile` now rejects
+  losing the last verified email and permits retaining an eligible nonprimary
+  alternative without inventing a primary. Its regression failed before support;
+  selected policy/change-contract race tests pass (1.231s). This is not a native
+  removal service or accepted removal journey. Native credential/factor checks,
+  exact-target token retirement and coordinated mutation remain next. All tests
+  are terminal; isolated PostgreSQL is stopped and the database, supplier
+  archives/workspace, owned Go caches and task fixture are removed. No shared or
+  pre-existing resources were removed. The goal remains active.
+
+- Current checkpoint (2026-10-14 17:57 UTC): public native add/resend now passes
+  after actual HTTPS signup, captured signup verification and genuine signin.
+  Fresh login/password proof after the identifier epoch change does not bypass
+  the configured 30s test cooldown. Actual time advances; no authority or signed
+  timestamps are promoted. Late replacement failure preserves the predecessor
+  and original primary proof; a new command succeeds using that unspent proof.
+  Captured successor delivery, predecessor inspection/explicit-confirm denial,
+  repeated non-consuming successor reads, atomic successor2/2 -> verified3/3,
+  proof-free committed-request recovery and foreign recovery denial all pass.
+  The original verified signin address retains its exact versions/flags. Native
+  fixture SQL confirms exactly two selected grants, one use, and no rolled-back
+  successor. `go -C reference test -race -tags=integration -run
+  '^TestReferencePostgresEmailManagementResend$' -count=1 -v .` passes (32.20s).
+  Public API and successor-field regressions failed before support. Bounded
+  read-only medium mapping/QA reports `/root/m04_resend_mapping` and
+  `/root/m04_resend_qa` found no requirement contradiction. Their remaining
+  contention/authority/replay partitions are implementation work, not acceptance.
+  Selected protected preparation uses existing forward histories, not a new
+  migration engine. Capability cooldown reads database creation time, not old
+  password-proof time, under the common pre-domain family fence.
+  Request recovery is historical metadata; it does not resurrect a source
+  session. Primary change/removal, contention, final review and full reference
+  signup/management HTTP dispatch remain. Local retained-v1 supplier wiring is
+  not committed/public-download qualification; v2 migration precedes main delivery.
+  No new milestone or unit is closed; all M04 source remains uncommitted.
+  Final focused password-adapter race passes (2.166s), kernel unit race passes
+  (3.019s; known earlier kernel test-fixture copy-lock diagnostic means explicit
+  vet remains pending), MFA adapter race passes (1.311s), retained capability
+  adapter race passes (1.392s); password adapter explicit vet passes. No aggregate
+  unit qualification or independent final-diff review is claimed.
+  The isolated PostgreSQL cluster is stopped and the hold-open runner is terminal;
+  its database, synthetic credentials, supplier archives/workspace and all owned
+  Go caches are removed. No pre-existing/shared resources were removed.
+
+- Current checkpoint (2026-10-14 16:28 UTC): native managed request -> captured
+  delivery -> non-consuming inspection -> explicit atomic verification passes
+  locally under race. Exact-command replay returns metadata only; a second command
+  cannot reuse the proof. Public recovery observes the original committed result
+  without the proof. Late SQL failure rolls back provisional proof/address writes
+  and recovery reports noncommit; the aborted grant is terminally released, not
+  resurrected. Credential and authorization changes deny inspection and execution.
+  The credential-inspection regression failed before its admission correction.
+  Final native selector
+  `go -C reference test -race -tags=integration -run '^TestPrimaryPasswordCredentialIntegration$/^native-email-management$' -count=1 -v ./integration/password`
+  passes (2.151s); the separate `native-email-management-rollback` selector passes
+  (1.942s). Credential/authorization denial selectors pass (2.061s/1.981s).
+  Kernel unit race passes (3.182s), password-adapter race (1.884s) and vet pass,
+  MFA-adapter race passes (1.253s). Existing feature decoder fuzz now includes
+  distinct signup/management seeds and passes a bounded two-worker 10s run
+  (11.346s); deterministic cross-profile/trailing/truncated denial passes. Unchanged
+  kernel explicit-vet fixture copy-lock diagnostic remains pending qualification,
+  not a blocker to this development boundary.
+  Capability adapter race (1.290s) and vet pass against local supplier source.
+  Resend, primary swap/removal, real-signup and HTTP composition remain.
+  No additional milestone, independent final review or commit/push is claimed.
+- User-approved delivery sequence: finish M04 locally using retained v1 capability
+  adapter in the existing feature/identity-platform worktree at c13f373. Capability
+  remote main 3d8677d is v2 and lacks that adapter. Before main delivery, port the
+  adapter and affected consumers to v2 with direct compatibility proof; do not
+  overlay v1 history on v2 main or touch the unrelated dirty capability checkout.
+  Local runs consume the uncommitted adapter changes through disposable workspace
+  composition; these are not committed-pin or public-download qualification.
+- Managed-confirmation HTTP checkpoint (2026-10-14 16:44 UTC): native managed
+  rate-source API preserves original grant ID/lifetime before and after use,
+  rejects callback substitution/cancellation and performs no debit. Its native
+  regression failed before the API existed. Explicit managed HTTP constructors
+  select that provenance owner; shared transport retains origin, typed middleware,
+  bounded JSON/rate ordering and no-session response custody. Their focused test
+  failed before the constructors existed. Real TLS + native PostgreSQL rate,
+  capability and directory owners now pass (`native-email-management-http`,
+  2.436s), including origin/callback denial, verified projection, exact replay and
+  protected-intent conflict. The HTTP retry regression exposed fresh correlation
+  changing the command fingerprint; restoring only the original acknowledged
+  correlation fixes it without bypassing proof/callback/counter comparison.
+  Separate final rollback/credential/authorization selectors pass
+  (1.963s/1.983s/1.987s). Password/postgres unit race passes (2.206s); HTTP/email
+  unit race and compiled examples pass (4.847s); both explicit vets pass.
+  The original PostgreSQL B1 baseline passes (3.680s) after the shared plan/codec
+  changes. This is the selected native confirmation endpoint, not full reference
+  dispatch of signup and management links or real-signup-to-management proof.
+  Resend, primary swap/removal and complete graph composition remain next.
+  No independent review, commit/main delivery or M04 closure is claimed.
+  The bounded run's isolated PostgreSQL is stopped; its database/credential,
+  immutable supplier archives, temporary workspace and Go caches are removed.
+  The owned hold-open runner is terminal; no shared/user resources were removed.
+- Base: main c02025c. The bounded /root/m04_entrypoint_map investigation is
+  complete. Adopt native identifiers, original password reauthentication,
+  capability issuance/consumption, delivery and the sole PostgreSQL coordinator.
+  External suppliers retain reference/LOCAL_SOURCES.json committed pins.
+- Resend prerequisite checkpoint (2026-10-14 17:22 UTC): bounded supplier map
+  `/root/m04_resend_supplier_map` established that the existing capability family
+  columns/participant can be reused. No replacement store or journal was added.
+  New managed-family and selected-consumption tests failed before their APIs/fence
+  existed. Explicit signed mailbox scope is stable across new commands/session/
+  key/time metadata, while original intent and signup separation remain enforced.
+  Legacy four-caveat management payloads remain unchanged; explicit selection adds
+  exactly one checked `email.supersession` caveat. Capability migration 004 extends
+  the populated existing shape/index without altering 003. Native selected test
+  `go test -race -tags=integration -run '^TestNativeConsumptionIntegration$/^magic-link_supersession_preserves_recovery_and_rolls_back$' -count=1 -v github.com/faustbrian/go-capability/postgres/identity`
+  passes (1.548s): old schema rejects the managed scope before upgrade; rollback
+  preserves predecessors; commit invalidates older issued/reserved unused grants;
+  consumed, unselected and other families remain unchanged; old consumption denies
+  without erasing reserved recovery evidence. This is native adapter SQL evidence,
+  not complete public resend/issuance/delivery or current-authority composition.
+  Root IdentifierRestartVerification now advances only pending non-primary
+  identifier/verification versions, preserving value and unrelated primary;
+  generic identifier operations remain closed. The distinct resend native schema
+  reuses EmailAttachmentContributor/shared private writer with exact mailbox and
+  target predecessors. Both new domain/field regressions failed before support.
+  Root/email/kernel unit race pass (1.577s/1.285s/2.907s), supplier unit race passes
+  (1.395s); root/email/supplier vets pass. Existing email intent fuzz now covers
+  selected and legacy grants and passes a bounded two-worker 10s run (11.285s).
+  Public VerificationResend and 60s reference cooldown are NOT implemented yet.
+  Next: acquire the common family fence before domain locks; wire fresh-primary
+  resend, protected cooldown and atomic replacement delivery; reconstruct successor
+  versions and permit managed confirmation beyond initial1/1 while keeping signup
+  unchanged. Then prove the full public predecessor-denial/successor-consumption
+  journey. No independent review, commit/push or milestone closure is claimed.
+  The bounded run's isolated PostgreSQL is stopped; task-owned database, temporary
+  workspace, supplier archives and Go caches are removed, with absence verified.
+- Consumer outcome: authenticated add/resend -> captured new-address link ->
+  repeated non-consuming inspection -> explicit verification; safe self/admin
+  list/get; fresh-password-authorized change -> captured new-address link ->
+  atomic verified primary swap -> old-address notification; fresh authorized
+  removal preserving a permitted verified signin and recovery path. Prove the
+  public native APIs and opt-in reference HTTP composition with real PostgreSQL.
+- Selected profile: current password-authenticated humans with known-empty MFA;
+  no auto-signin, no OTP participant, no administrative mutation. Old-address
+  confirmation is explicitly not required in this profile; original fresh
+  password proof and new-address possession are required, old notification is
+  selected. OTP, stronger factors, auto-signin and other policies remain owed
+  within M04; this first profile is not full row or unit qualification.
+- Owners: email storage-neutral orchestration/projections/policy; kernel
+  PostgreSQL identifiers, uniqueness, retirement and lifecycle admission;
+  password/postgres original action-bound proof issuance/one-use; session native
+  current admission and required effects; existing capability and delivery
+  participants; reference only composition and HTTP only typed transport.
+- Finite acceptance: actual add/verify/change/list/get/remove journey, explicit
+  self/admin policy and indistinguishable forbidden/absent/cross-tenant reads,
+  bounded versioned pagination, signed action/subject/session/version/freshness
+  denial, scanner-safe validation, resend supersession/cooldown, collision/CAS
+  winner, last-signin/recovery denial, required session/token invalidation,
+  original audit/privacy history, rollback and native exact-command unknown
+  recovery. An event alone is not a completed lifecycle cascade.
+- Affected checks: email native unit/race tests; root identifier/access tests;
+  native PostgreSQL identifier and password-proof integration; selected
+  reference email journey and B1/B2/B3 consumer compatibility, changed hostile
+  input fuzzing, affected migrations/docs/current secrets. One complete
+  independent final-diff review after the coherent profile passes, affected
+  changelogs, then ordinary main delivery and Required CI. No Tools migration
+  or global requalification is a prerequisite.
+- Catalog correction: read-only AddressGet/List cannot claim a committed
+  mutation. Their required Outcome is NotCommitted; successful authoritative
+  observation and safe projection are reported separately. Requests also need
+  trusted caller and exact target-user context, absent from the old minimal
+  catalog, without deriving authority from browser-controlled IDs.
+- First implementation checkpoint: the new email-owned AddressQueryService
+  implements authorized self/explicit-admin list/get over the existing primary
+  IdentifierRepository. Focused behavior failed before implementation, then
+  passed; complete email unit race passed (1.263s) with the committed supplier
+  composition. Real PostgreSQL registration -> delivery -> verification ->
+  signin -> original session admission -> public email list/get -> logout passes
+  in TestReferencePostgresEmailQueries (5.924s). This is native API proof, not
+  email query HTTP or mutation delivery. Bounded cursor fuzz passed (10.318s).
+  No new milestone/unit is closed, no independent final review or commit/push
+  yet. Add/change/remove and their coordinated proof/lifecycle effects are next.
+- Final bounded read checkpoint: exact-disclosure denial cases and fuzz seeds
+  added; email unit race passes (1.247s), vet passes, final native PostgreSQL
+  query journey passes (3.603s), bounded two-worker cursor fuzz passes (10.287s).
+  git diff --check passes. The isolated PostgreSQL cluster is stopped and its
+  owned cache/supplier/database scratch is removed. No shared resources touched.
+  Native commands: email `go test -race -count=1 ./...`, `go vet ./...`,
+  `go test -run '^$' -fuzz '^FuzzAddressQueryCursorAdmission$' -fuzztime=10s -parallel=2 .`;
+  reference `go test -race -tags=integration -run '^TestReferencePostgresEmailQueries$' -count=1 -v .`.
+- Native proof checkpoint: EmailPrimarySource authenticates the existing signed
+  password proof for exact allowlisted email actions; its opaque admission
+  preserves original session/credential/action/expiry and binds command intent.
+  Prepare failed before implementation (1.447s), then passed. Protected
+  consumption exposed the installed proof-table CHECK permitting only password
+  change/MFA enable. New opt-in EmailReauthenticationMigrationSource appends
+  version 9 without changing default history 1-8, FK custody or one-use index.
+  The real runner upgrades populated proof history and retries; the native
+  coordinator test passes (2.368s): atomic rollback, committed proof/effect/audit
+  and denial of a second command. Its tiny SQL effect is an adapter contract
+  seam, not email domain delivery or recovery. Password/postgres unit race
+  passes (2.032s); vet passes. Final focused native email test passes after
+  diagnostic removal (1.878s); the affected existing native password-change
+  regression passes separately on unchanged default history (4.116s), including
+  proof-lock expiry, ambiguity, cookie fences and keyed replay/conflict cases.
+  Cookie/domain/factor/risk/reference composition remains
+  required; no new milestone, independent review, commit or push is claimed.
+- Native proof commands: password/postgres `go test -race -count=1 ./...` and
+  `go vet ./...`; reference
+  `go test -race -tags=integration -run '^TestPrimaryPasswordCredentialIntegration$/^native-email-primary$' -count=1 -v ./integration/password`
+  and the same command selecting `^native-password-change$`. Each integration
+  run used its fresh owned database/roles, not existing services. The final
+  database is stopped and owned cache/supplier/credential scratch is removed.
+  No shared/user resources were accessed or deleted. Work remains local and
+  uncommitted on main; continue with actual email domain/delivery integration.
+
+- Pending-address checkpoint: typed EmailAttachmentContributor now maps the
+  frozen managed intent to the exact enlisted EmailAttachmentDomain. The sole
+  coordinator applies the shared private identifier writer; generic Begin stays
+  closed. The native password integration now uses a real pending email, not
+  the old test-only SQL effect. It passes under race (1.964s): stale user/identifier
+  epochs and canonical collision deny without consumption; failure after all
+  provisional writes rolls back proof/address/epochs; success preserves the old
+  verified primary, advances exact directory versions and commits required audit;
+  the original stale/used proof cannot create another effect. Existing private
+  identifier persistence integration also passes (1.788s), covering retirement,
+  cooldown, complete partitions, tenant exclusion and contention. Kernel unit
+  race passes (3.048s). Explicit kernel vet fails on unchanged
+  mfa_send_counter_scope_test.go:79 copying reservationState's atomic.Bool;
+  no pass or final qualification is claimed for that check.
+- Managed-link checkpoint: ManagedVerificationPolicy reuses the bounded real
+  parser/configuration and existing capability signer, with a separate keyed
+  management-v1 intent frame. Tests reject request/session/address/version/action
+  substitutions and cross-use of signup links, retain original key/expiry custody,
+  and keep validation non-consuming. Email unit race passes (1.266s), email vet
+  passes, and bounded two-worker intent fuzz passes (11.286s). Command selectors:
+  reference native-email-primary as above; kernel
+  `go test -race -tags=integration -run '^TestIdentifierMutationIntegration$' -count=1 -v .`;
+  email `go test -run '^$' -fuzz '^FuzzManagedVerificationOriginalIntent$' -fuzztime=10s -parallel=2 .`.
+  These are local prerequisites, not a completed email journey. Next: native
+  original-command issuance and encrypted delivery alongside attachment, followed
+  by inspection/confirmation/change/removal and opt-in HTTP. All local M04 work
+  remains uncommitted; full-profile review, delivery and qualification are pending.
+  The owned PostgreSQL cluster is stopped; all supplier/cache/credential/database
+  scratch from this bounded run is removed and absence verified.
+
+- Request-to-captured-link checkpoint: EmailManagementService now composes the
+  original password proof, current known-empty MFA, native protected counters,
+  retained provider-only risk, kernel pending attachment, capability issuer and
+  encrypted delivery through ExecutePreparedFeature. The kernel's final-declaration
+  regression failed before the narrow managed-email issuance extension, then
+  passed; unrelated features and recipient overrides still deny. Native runtime
+  passes under race (1.941s): real password comparison -> pending address plus
+  issued grant/encrypted intent -> owned PostgreSQL worker -> captured new-address
+  link -> real signature/scope validation. Repeated processing and used/stale
+  proof create no second message. This adapter test has explicit pre-existing
+  account/MFA fixture state; it is not the real-signup consumer/HTTP journey or
+  live-provider delivery. Kernel unit race passes (3.025s), password-adapter
+  race passes (2.085s) and vet passes, MFA-adapter race passes (1.341s). The old
+  kernel vet copy-lock diagnostic remains. All work is still uncommitted; no
+  new milestone or unit qualification is closed. Next: non-consuming managed-link
+  inspection and explicit atomic confirmation, then the retained change/removal,
+  resend, consumer/HTTP and recovery cases. Native selector: reference
+  `go test -race -tags=integration -run '^TestPrimaryPasswordCredentialIntegration$/^native-email-management$' -count=1 -v ./integration/password`.
+  The owned PostgreSQL cluster is stopped and all bounded-run supplier/cache/
+  credential/database scratch is removed. No shared services were accessed.
 
 ## Closed: B3 fresh password reauthentication and change
 
