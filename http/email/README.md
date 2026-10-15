@@ -26,7 +26,23 @@ JSON are required (versions are canonical decimal strings, never floats):
 
 The sample proof ID grants no authority: supply the actual retained fresh password
 proof for this action/session/configured audience. Use `preserve-primary` only
-for a nonprimary target; removal never chooses a replacement. Native policy denies
+for a nonprimary target; removal never infers a replacement. To remove the current
+primary and nominate a verified replacement, use `"primaryDisposition":
+"replace-primary"` and add exactly these three fields to the request:
+
+```json
+{
+  "replacementAddressID": "owned-verified-replacement-id",
+  "expectedReplacementIdentifierVersion": "5",
+  "expectedReplacementVerificationVersion": "7"
+}
+```
+
+Those are additional fields, not a separate request. Both versions come from the
+replacement's address projection; the native owner checks the exact current
+verified same-subject record under the removal lock. Missing, stale, self-target
+or foreign replacements deny; old dispositions reject replacement fields. Native
+policy denies
 losing the last actual signin/reset path. Unknown/duplicate fields, body identity/
 policy overrides, query/trailers, bearer and weaker-factor fallback deny.
 

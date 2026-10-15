@@ -246,7 +246,7 @@ func newAddressRemoveHandler(c RemovalConfig, m []identityhttp.MiddlewareDescrip
 
 func decodeRemovalFields(fields map[string]json.RawMessage, r *email.AddressRemoveRequest) (auth.ProofID, error) {
 	invalid := identityhttp.ErrInvalidInput
-	if len(fields) != 7 {
+	if len(fields) != 7 && len(fields) != 10 {
 		return "", invalid
 	}
 	values := map[string]*string{}
@@ -286,7 +286,29 @@ func decodeRemovalFields(fields map[string]json.RawMessage, r *email.AddressRemo
 		r.PrimaryDisposition = email.PreserveRemainingPrimary
 	case "leave-unassigned":
 		r.PrimaryDisposition = email.LeavePrimaryUnassigned
+	case "replace-primary":
+		r.PrimaryDisposition = email.ReplacePrimaryWithVerifiedEmail
+		var replacement, rv, vv string
+		if len(fields) != 10 || !readString(fields, "replacementAddressID", &replacement) || !readString(fields, "expectedReplacementIdentifierVersion", &rv) || !readString(fields, "expectedReplacementVerificationVersion", &vv) {
+			return "", invalid
+		}
+		selected, e := identity.ParseIdentifierID(replacement)
+		if e != nil || selected == target {
+			return "", invalid
+		}
+		r.ReplacementPrimary.ID = selected
+		r.ReplacementPrimary.ExpectedIdentifierVersion, e = parse(rv)
+		if e != nil {
+			return "", invalid
+		}
+		r.ReplacementPrimary.ExpectedVerificationVersion, e = parse(vv)
+		if e != nil {
+			return "", invalid
+		}
 	default:
+		return "", invalid
+	}
+	if primary != "replace-primary" && len(fields) != 7 {
 		return "", invalid
 	}
 	if recovery != "preserve-verified-email" {

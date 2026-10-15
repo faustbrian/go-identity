@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Bind an explicit versioned replacement primary to original safe-removal
+  custody, replay and the same protected mutation; stale or substituted
+  replacement intent cannot reuse an outcome or renew verification freshness.
+
 - Compose safe password-authenticated email removal with actual selected signin
   and reset owners, compatible authority/hash policies and known-empty MFA.
   Preserve original keyed proof/session custody, conserve a usable verified email,

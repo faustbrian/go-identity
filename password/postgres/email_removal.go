@@ -299,12 +299,18 @@ func (s *EmailRemovalService) prepareRemoval(ctx context.Context, r email.Addres
 	op := emailPrimaryOperation("identity.email.address-remove")
 	b := identity.CommandBinding{CommandID: id, TenantID: r.TenantID, UserID: bindings.UserID, ActorID: identity.ActorID(bindings.UserID), ActorKind: authorization.SubjectUser, RecordID: string(r.AddressID), OperationID: op.OperationID, SchemaID: op.SchemaID, SchemaVersion: 1, PolicyID: s.config().PolicyID, PolicyVersion: s.primary.source.c.Coordinator.AdmissionPolicy.PolicyVersion, CorrelationID: string(id)}
 	intent := kernel.EmailRemovalIntent{Change: identity.IdentifierChange{TenantID: r.TenantID, UserID: bindings.UserID, ID: r.AddressID, Action: identity.IdentifierRemove, ExpectedUserVersion: state.User.Version, ExpectedAuthorityVersion: state.AuthorityVersion, ExpectedIdentifierVersion: r.ExpectedIdentifierVersion, ExpectedVerificationVersion: r.ExpectedVerificationVersion}, ComparisonProfile: s.config().Domain.Directory.ComparisonProfile, Reason: string(r.Reason), LeavePrimaryUnassigned: r.PrimaryDisposition == email.LeavePrimaryUnassigned}
+	intent.ReplacementPrimary = r.ReplacementPrimary
 	policy := email.RemovalProfile{Sessions: email.InvalidateIdentifierSessions, Recovery: r.RecoveryDisposition}
 	if _, err := policy.PlanRemoval(state, intent.Change, time.Now().UTC()); err != nil {
 		return nil, err
 	}
+	if intent.ReplacementPrimary != (identity.IdentifierPrimarySelection{}) {
+		if _, err := identity.ApplyIdentifierRemovalWithPrimary(state, intent.Change, intent.ReplacementPrimary, time.Now().UTC()); err != nil {
+			return nil, err
+		}
+	}
 	for _, record := range state.Identifiers {
-		if record.ID == r.AddressID && record.Primary && !intent.LeavePrimaryUnassigned {
+		if record.ID == r.AddressID && record.Primary && !intent.LeavePrimaryUnassigned && intent.ReplacementPrimary == (identity.IdentifierPrimarySelection{}) {
 			return nil, identity.ForbiddenError{}
 		}
 	}

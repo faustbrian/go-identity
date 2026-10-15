@@ -130,6 +130,51 @@ func TestEmailRemovalHTTPPendingCascadeNoCredentials(t *testing.T) {
 	}
 }
 
+func TestEmailRemovalHTTPExplicitReplacement(t *testing.T) {
+	for _, mode := range []string{"selected", "missing-id", "missing-version", "unknown", "old-disposition", "noncanonical", "self"} {
+		t.Run(mode, func(t *testing.T) {
+			c, owner, r := removalFixture(t)
+			wire, _ := io.ReadAll(r.Body)
+			var body map[string]string
+			_ = json.Unmarshal(wire, &body)
+			body["primaryDisposition"] = "replace-primary"
+			body["replacementAddressID"] = "remaining-address"
+			body["expectedReplacementIdentifierVersion"] = "5"
+			body["expectedReplacementVerificationVersion"] = "7"
+			switch mode {
+			case "missing-id":
+				delete(body, "replacementAddressID")
+			case "missing-version":
+				delete(body, "expectedReplacementVerificationVersion")
+			case "unknown":
+				body["override"] = "foreign"
+			case "old-disposition":
+				body["primaryDisposition"] = "leave-unassigned"
+			case "noncanonical":
+				body["expectedReplacementIdentifierVersion"] = "05"
+			case "self":
+				body["replacementAddressID"] = "target-address"
+			}
+			wire, _ = json.Marshal(body)
+			r.Body = io.NopCloser(strings.NewReader(string(wire)))
+			r.ContentLength = int64(len(wire))
+			h, err := emailhttp.NewAddressRemoveHandler(c)
+			if err != nil {
+				t.Fatal(err)
+			}
+			w := httptest.NewRecorder()
+			h.ServeHTTP(w, r)
+			if mode == "selected" {
+				if w.Code != 200 || owner.removals != 1 || owner.last.PrimaryDisposition != email.ReplacePrimaryWithVerifiedEmail || owner.last.ReplacementPrimary.ID != "remaining-address" || owner.last.ReplacementPrimary.ExpectedIdentifierVersion != 5 || owner.last.ReplacementPrimary.ExpectedVerificationVersion != 7 {
+					t.Fatal("explicit replacement did not reach selected native removal", w.Code)
+				}
+			} else if w.Code < 400 || owner.removals != 0 || owner.rates != 0 {
+				t.Fatal("invalid replacement reached owner", w.Code)
+			}
+		})
+	}
+}
+
 func TestEmailRemovalHTTPRejectsForeignOutcomeWithoutCorrelation(t *testing.T) {
 	c, owner, r := removalFixture(t)
 	owner.foreign = true

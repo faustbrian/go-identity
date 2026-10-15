@@ -9,6 +9,7 @@ import (
 )
 
 func FuzzEmailRemovalBody(f *testing.F) {
+	f.Add(`{"proofID":"AAAAAAAAAAAAAAAAAAAAAQ","addressID":"target-address","expectedIdentifierVersion":"1","expectedVerificationVersion":"1","reason":"user-requested","primaryDisposition":"replace-primary","recoveryDisposition":"preserve-verified-email","replacementAddressID":"remaining-address","expectedReplacementIdentifierVersion":"5","expectedReplacementVerificationVersion":"7"}`)
 	for _, seed := range []string{`{}`, `null`, `{"proofID":null}`, `{"proofID":"AAAAAAAAAAAAAAAAAAAAAQ","proofID":"duplicate"}`, `{"tenantID":"foreign"}`, `{"proofID":"AAAAAAAAAAAAAAAAAAAAAQ","addressID":"target-address","expectedIdentifierVersion":"1","expectedVerificationVersion":"1","reason":"user-requested","primaryDisposition":"leave-unassigned","recoveryDisposition":"preserve-verified-email"}`} {
 		f.Add(seed)
 	}

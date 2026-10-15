@@ -60,6 +60,9 @@ func (s *EmailRemovalService) requestIntent(r email.AddressRemoveRequest) (ident
 		{Name: "bearer", Value: identity.FeatureValue{Kind: identity.FeatureBytes, Bytes: digest("bearer", []byte(r.Primary.Session.Token()))}},
 		{Name: "network", Value: identity.FeatureValue{Kind: identity.FeatureBytes, Bytes: digest("network", []byte(r.Network))}},
 	}
+	if r.ReplacementPrimary != (identity.IdentifierPrimarySelection{}) {
+		fields = append(fields, identity.FeatureField{Name: "replacement-identifier", Value: identity.FeatureValue{Kind: identity.FeatureText, Text: string(r.ReplacementPrimary.ID)}}, identity.FeatureField{Name: "replacement-identifier-version", Value: identity.FeatureValue{Kind: identity.FeatureUint64, Uint64: r.ReplacementPrimary.ExpectedIdentifierVersion}}, identity.FeatureField{Name: "replacement-verification-version", Value: identity.FeatureValue{Kind: identity.FeatureUint64, Uint64: r.ReplacementPrimary.ExpectedVerificationVersion}})
+	}
 	switch s.primary.config.Transport {
 	case session.CredentialCookie:
 		state, err := r.Primary.CSRFToken.Digest(s.csrf, session.CSRFBinding{TenantID: r.TenantID, SessionID: "email-removal-intent", SessionVersion: 1})

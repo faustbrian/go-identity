@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Accept explicit replacement-primary removal with three required versioned
+  replacement fields. Keep seven-field legacy requests unchanged; mixed,
+  incomplete or ambiguous profiles deny and selected OpenAPI matches them.
+
 - Add opt-in cookie-only safe email removal with closed versioned input,
   original password-proof custody and canonical keyed secret-rate admission.
   Responses preserve original outcome/pending cascade metadata without issuing
