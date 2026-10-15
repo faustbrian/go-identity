@@ -212,9 +212,9 @@ func (w OTPFinalizeWork) PreAuthCookie(p OTPReservationContributor) (authenticat
 	return w.state.preAuthCookie(p, otpFinalize)
 }
 
-// SessionToken lends the separately submitted original session bearer only
-// during exact-owner finalization. Secret-handling, missing/foreign/returned
-// denial and authority limits match OTPApplyWork.SessionToken. No code is lent.
+// SessionToken lends the original session bearer to its registered reservation
+// owner during finalization. Its custody and authority rules are identical to
+// OTPApplyWork.SessionToken. It does not provide the submitted code.
 func (w OTPFinalizeWork) SessionToken(p OTPReservationContributor) (authentication.BearerCredential, error) {
 	return w.state.sessionToken(p, otpFinalize)
 }
