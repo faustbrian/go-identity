@@ -12,6 +12,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -33,6 +34,19 @@ import (
 	primitive "github.com/faustbrian/go-password/v2"
 	ratepg "github.com/faustbrian/go-rate-limit/v2/postgres"
 )
+
+func emailRemovalReplacesPrimary(mode string) bool { return strings.HasPrefix(mode, "removal-replace") }
+func emailRemovalCreatesPrimary(mode string) bool {
+	return mode == "removal-primary" || emailRemovalReplacesPrimary(mode)
+}
+
+func TestReferencePostgresEmailRemovalReplacementPrimary(t *testing.T) {
+	for _, mode := range []string{"removal-replace", "removal-replace-http", "removal-replace-rollback", "removal-replace-contention", "removal-replace-unknown"} {
+		t.Run(mode, func(t *testing.T) {
+			proveReferenceSignupGraphExtensions(t, false, signupGraphExtensions{postgresBaseline: true, emailManagementResend: true, emailRemoval: true, emailChangeCase: mode, completionCommitFault: mode == "removal-replace-unknown"})
+		})
+	}
+}
 
 func TestReferencePostgresEmailRemovalKeepsVerifiedSigninReset(t *testing.T) {
 	proveReferenceSignupGraphExtensions(t, false, signupGraphExtensions{postgresBaseline: true, emailManagementResend: true, emailRemoval: true, emailChangeCase: "removal"})
@@ -184,7 +198,7 @@ func proveReferenceEmailRemoval(t *testing.T, ctx context.Context, f liveStores,
 		t.Fatal("selected removal bootstrap omitted native cascade migration", err)
 	}
 	target, remaining := "registered@example.invalid", "additional@example.invalid"
-	if f.emailRemovalMode == "removal-primary" {
+	if emailRemovalCreatesPrimary(f.emailRemovalMode) {
 		target, remaining = "primary@example.invalid", "registered@example.invalid"
 	}
 	if f.emailRemovalMode == "removal-pending" {
@@ -209,13 +223,28 @@ func proveReferenceEmailRemoval(t *testing.T, ctx context.Context, f liveStores,
 	}
 	key, _ := identity.NewIdempotencyKey([]byte("original-email-removal"))
 	r := email.AddressRemoveRequest{TenantID: otpTenant, AddressID: identity.IdentifierID(address), ExpectedIdentifierVersion: version, ExpectedVerificationVersion: verification, Reason: "user-requested", PrimaryDisposition: disposition, RecoveryDisposition: email.PreserveVerifiedEmailRecovery, IdempotencyKey: key, Primary: email.RequestPrimary{Session: source.Primary.Session, Proof: source.Primary.Proof, CSRFToken: source.Primary.CSRFToken}, Caller: source.Primary.Caller, Network: "127.0.0.1"}
-	if f.emailRemovalMode == "removal-primary" {
+	var replacementAt time.Time
+	var previousUser, previousAuthority uint64
+	if emailRemovalReplacesPrimary(f.emailRemovalMode) {
+		var id, iv, vv, uv, av string
+		if err := f.pool.Raw().QueryRow(ctx, `SELECT i.identifier_id,i.version::text,i.verification_version::text,i.verified_at,u.version::text,u.identifier_version::text FROM identity.identifiers i JOIN identity.users u USING(tenant_id,user_id) WHERE i.tenant_id=$1 AND i.user_id=$2 AND i.canonical_value=$3 AND i.verified AND NOT i.is_primary`, otpTenant, string(user), remaining).Scan(&id, &iv, &vv, &replacementAt, &uv, &av); err != nil {
+			t.Fatal("actual versioned replacement unavailable", err)
+		}
+		r.PrimaryDisposition = email.ReplacePrimaryWithVerifiedEmail
+		r.ReplacementPrimary.ID = identity.IdentifierID(id)
+		r.ReplacementPrimary.ExpectedIdentifierVersion, _ = strconv.ParseUint(iv, 10, 64)
+		r.ReplacementPrimary.ExpectedVerificationVersion, _ = strconv.ParseUint(vv, 10, 64)
+		previousUser, _ = strconv.ParseUint(uv, 10, 64)
+		previousAuthority, _ = strconv.ParseUint(av, 10, 64)
+	}
+	if emailRemovalCreatesPrimary(f.emailRemovalMode) {
 		var primary bool
 		if err := f.pool.Raw().QueryRow(ctx, `SELECT is_primary FROM identity.identifiers WHERE tenant_id=$1 AND user_id=$2 AND identifier_id=$3`, otpTenant, string(user), address).Scan(&primary); err != nil || !primary {
 			t.Fatal("primary removal fixture never designated actual primary", err)
 		}
 		denied := r
 		denied.PrimaryDisposition = email.PreserveRemainingPrimary
+		denied.ReplacementPrimary = identity.IdentifierPrimarySelection{}
 		denied.IdempotencyKey, _ = identity.NewIdempotencyKey([]byte("primary-removal-without-disposition"))
 		if out, err := owner.AddressRemove(ctx, denied); err == nil || out.Outcome == identity.CommitOutcomeCommitted || !readSession(cookies) {
 			t.Fatal("removed primary without explicit disposition", err)
@@ -231,6 +260,7 @@ func proveReferenceEmailRemoval(t *testing.T, ctx context.Context, f liveStores,
 (SELECT count(*) FROM identity.identifiers WHERE tenant_id=u.tenant_id AND user_id=u.user_id),
 (SELECT count(*) FROM identity.identifier_retirements WHERE tenant_id=u.tenant_id AND user_id=u.user_id),
 (SELECT count(*) FROM identity.status_cascades WHERE tenant_id=u.tenant_id AND user_id=u.user_id),
+(SELECT COALESCE(jsonb_agg(jsonb_build_array(identifier_id,version,verification_version,is_primary) ORDER BY identifier_id),'[]') FROM identity.identifiers WHERE tenant_id=u.tenant_id AND user_id=u.user_id),
 (SELECT COALESCE(sum(uses),0) FROM capability_identity_one_use WHERE tenant_id=u.tenant_id AND subject_id=u.user_id),
 (SELECT count(*) FROM capability_identity_one_use WHERE tenant_id=u.tenant_id AND subject_id=u.user_id AND state='revoked'))::text
 FROM identity.users u WHERE tenant_id=$1 AND user_id=$2`, otpTenant, string(user)).Scan(&metadata)
@@ -240,7 +270,29 @@ FROM identity.users u WHERE tenant_id=$1 AND user_id=$2`, otpTenant, string(user
 		return metadata
 	}
 	before := snapshot()
-	if f.emailRemovalMode == "removal-rollback" {
+	if emailRemovalReplacesPrimary(f.emailRemovalMode) {
+		for _, mode := range []string{"self", "absent", "identifier-version", "verification-version", "old-disposition"} {
+			bad := r
+			bad.Caller = r.Caller.Clone()
+			bad.IdempotencyKey, _ = identity.NewIdempotencyKey([]byte("replacement-denied-" + mode))
+			switch mode {
+			case "self":
+				bad.ReplacementPrimary.ID = r.AddressID
+			case "absent":
+				bad.ReplacementPrimary.ID = "absent-address"
+			case "identifier-version":
+				bad.ReplacementPrimary.ExpectedIdentifierVersion++
+			case "verification-version":
+				bad.ReplacementPrimary.ExpectedVerificationVersion++
+			case "old-disposition":
+				bad.PrimaryDisposition = email.LeavePrimaryUnassigned
+			}
+			if out, err := owner.AddressRemove(ctx, bad); err == nil || out.Outcome == identity.CommitOutcomeCommitted || snapshot() != before || !readSession(cookies) {
+				t.Fatal("invalid replacement changed protected state", mode, err)
+			}
+		}
+	}
+	if f.emailRemovalMode == "removal-rollback" || f.emailRemovalMode == "removal-replace-rollback" {
 		for _, mode := range []string{"tenant", "actor", "stale-address", "stale-verification", "proof-action", "primary", "cancel"} {
 			invalid := r
 			invalid.Caller = r.Caller.Clone()
@@ -292,7 +344,14 @@ CREATE TRIGGER fail_removal_manifest BEFORE INSERT ON identity.status_consumers 
 		if r.PrimaryDisposition == email.LeavePrimaryUnassigned {
 			primary = "leave-unassigned"
 		}
-		body, _ := json.Marshal(map[string]string{"proofID": string(r.Primary.Proof.Proof.ID), "addressID": string(r.AddressID), "expectedIdentifierVersion": strconv.FormatUint(r.ExpectedIdentifierVersion, 10), "expectedVerificationVersion": strconv.FormatUint(r.ExpectedVerificationVersion, 10), "reason": string(r.Reason), "primaryDisposition": primary, "recoveryDisposition": "preserve-verified-email"})
+		fields := map[string]string{"proofID": string(r.Primary.Proof.Proof.ID), "addressID": string(r.AddressID), "expectedIdentifierVersion": strconv.FormatUint(r.ExpectedIdentifierVersion, 10), "expectedVerificationVersion": strconv.FormatUint(r.ExpectedVerificationVersion, 10), "reason": string(r.Reason), "primaryDisposition": primary, "recoveryDisposition": "preserve-verified-email"}
+		if r.PrimaryDisposition == email.ReplacePrimaryWithVerifiedEmail {
+			fields["primaryDisposition"] = "replace-primary"
+			fields["replacementAddressID"] = string(r.ReplacementPrimary.ID)
+			fields["expectedReplacementIdentifierVersion"] = strconv.FormatUint(r.ReplacementPrimary.ExpectedIdentifierVersion, 10)
+			fields["expectedReplacementVerificationVersion"] = strconv.FormatUint(r.ReplacementPrimary.ExpectedVerificationVersion, 10)
+		}
+		body, _ := json.Marshal(fields)
 		request, err := http.NewRequestWithContext(ctx, http.MethodPost, base+"/v1/email/address-remove", bytes.NewReader(body))
 		if err != nil {
 			t.Fatal(err)
@@ -319,11 +378,11 @@ CREATE TRIGGER fail_removal_manifest BEFORE INSERT ON identity.status_consumers 
 		}
 		return wire
 	}
-	if f.emailRemovalMode == "removal-http" || f.emailRemovalMode == "removal-only-http" {
+	if f.emailRemovalMode == "removal-http" || f.emailRemovalMode == "removal-only-http" || f.emailRemovalMode == "removal-replace-http" {
 		originalHTTP = invokeHTTP()
 	}
 	var result identity.CommandResult
-	if f.emailRemovalMode == "removal-contention" {
+	if f.emailRemovalMode == "removal-contention" || f.emailRemovalMode == "removal-replace-contention" {
 		type attempt struct {
 			request email.AddressRemoveRequest
 			result  identity.CommandResult
@@ -369,6 +428,14 @@ CREATE TRIGGER fail_removal_manifest BEFORE INSERT ON identity.status_consumers 
 	if err != nil || result.Outcome != identity.CommitOutcomeCommitted || result.Validate() != nil || result.Cascade == nil || result.Cascade.Status != identity.RevocationPending || len(result.Cascade.Owners) != 10 {
 		t.Fatal("actual protected removal", result.Outcome, err)
 	}
+	if emailRemovalReplacesPrimary(f.emailRemovalMode) {
+		var iv, vv, uv, av string
+		var at time.Time
+		var primary bool
+		if err := f.pool.Raw().QueryRow(ctx, `SELECT i.version::text,i.verification_version::text,i.verified_at,i.is_primary,u.version::text,u.identifier_version::text FROM identity.identifiers i JOIN identity.users u USING(tenant_id,user_id) WHERE i.tenant_id=$1 AND i.user_id=$2 AND i.identifier_id=$3`, otpTenant, string(user), string(r.ReplacementPrimary.ID)).Scan(&iv, &vv, &at, &primary, &uv, &av); err != nil || !primary || iv != strconv.FormatUint(r.ReplacementPrimary.ExpectedIdentifierVersion+1, 10) || vv != strconv.FormatUint(r.ReplacementPrimary.ExpectedVerificationVersion, 10) || !at.Equal(replacementAt) || uv != strconv.FormatUint(previousUser+1, 10) || av != strconv.FormatUint(previousAuthority+1, 10) {
+			t.Fatal("removal/promotion lost one atomic generation or renewed verification", err)
+		}
+	}
 	var publishedCascade, publishedGeneration string
 	var published int
 	if err := f.pool.Raw().QueryRow(ctx, `SELECT count(*),COALESCE(min(convert_from(payload,'UTF8')::jsonb->>'cascade_id'),''),COALESCE(min(convert_from(payload,'UTF8')::jsonb->>'cascade_generation'),'')
@@ -402,6 +469,10 @@ FROM public.outbox_messages WHERE metadata->>'identity.command_id'=$1 AND topic=
 	}
 	changed := r
 	changed.ExpectedIdentifierVersion++
+	if emailRemovalReplacesPrimary(f.emailRemovalMode) {
+		changed = r
+		changed.ReplacementPrimary.ExpectedIdentifierVersion++
+	}
 	if out, err := owner.AddressRemove(ctx, changed); err == nil || out.Outcome == identity.CommitOutcomeCommitted {
 		t.Fatal("same-key changed input reused removal outcome")
 	}

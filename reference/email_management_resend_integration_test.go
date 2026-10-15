@@ -76,7 +76,7 @@ func proveReferenceEmailManagementResend(t *testing.T, ctx context.Context, f li
 		if err != nil {
 			t.Fatal("selected graph original proof owner", err)
 		}
-		if f.emailRemovalMode == "removal-primary" {
+		if emailRemovalCreatesPrimary(f.emailRemovalMode) {
 			service, err = features.EmailChange()
 			if err != nil {
 				t.Fatal(err)
@@ -208,7 +208,7 @@ func proveReferenceEmailManagementResend(t *testing.T, ctx context.Context, f li
 	initial := request(cookies, csrfWire)
 	initial.Address = "additional@example.invalid"
 	call := service.VerificationSend
-	if f.emailRemovalMode == "removal-primary" {
+	if emailRemovalCreatesPrimary(f.emailRemovalMode) {
 		initial.Address = "primary@example.invalid"
 		call = service.ChangeRequest
 	}
@@ -240,7 +240,7 @@ func proveReferenceEmailManagementResend(t *testing.T, ctx context.Context, f li
 	}
 	old := capture()
 	if f.afterEmailRemovalPreparation != nil {
-		if f.emailRemovalMode == "removal-primary" {
+		if emailRemovalCreatesPrimary(f.emailRemovalMode) {
 			id, _ := identity.NewCommandID()
 			callback, _ := url.Parse(initial.CallbackURL)
 			caller := authorization.DecisionContext{PolicyRevision: 9, CorrelationID: string(id), Request: authorization.Request{Tenant: otpTenant, Subject: authorization.Subject{Kind: authorization.SubjectServiceAccount, ID: "AAAAAAAAAAAAAAAAAAAAAw"}, Action: "identity.email.change-confirm", Resource: authorization.Resource{Type: "identity.user", ID: authorization.ResourceID(user)}}}

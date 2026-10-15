@@ -85,6 +85,10 @@ For safe removal select `EmailRemovalConfiguration` and call
 complete `PasswordReset`, session and known-empty MFA authority are required.
 The graph supplies native proof, risk/counters and key owners. Native config
 defines reuse, original request custody and complete pending cascade policy.
+For explicit primary replacement, use the native request's
+`ReplacePrimaryWithVerifiedEmail` disposition and `ReplacementPrimary` with the
+exact surviving verified address ID and both versions. Promotion commits with
+removal and does not renew verification age; HTTP exposes the same closed profile.
 Authority scopes/material limits must be compatible. Retain signed targets on
 new verification grants; unclassified live history denies removal.
 

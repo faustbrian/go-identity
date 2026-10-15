@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Preserve explicit versioned replacement-primary removal through native and
+  opt-in HTTPS composition, including rollback, contention and original recovery.
+
 - Independently compose native safe email removal and opt-in HTTPS/OpenAPI.
   Borrow actual selected password signin/reset/proof owners, install native
   forward cascade history and retain graph shutdown/deadline custody. Native

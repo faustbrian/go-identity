@@ -461,10 +461,10 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 		calls = configureReferenceEmailGraph(t, &c, origin, extensions.emailManagementChange)
 		if extensions.emailRemoval {
 			configureReferenceEmailRemoval(t, &c)
-			if extensions.emailChangeCase == "removal-primary" {
+			if emailRemovalCreatesPrimary(extensions.emailChangeCase) {
 				configureReferenceEmailRemovalPrimary(&c)
 			}
-			if extensions.emailChangeCase == "removal-http" || extensions.emailChangeCase == "removal-only-http" {
+			if extensions.emailChangeCase == "removal-http" || extensions.emailChangeCase == "removal-only-http" || extensions.emailChangeCase == "removal-replace-http" {
 				c.HTTPEmailRequests = &reference.HTTPEmailRequestsConfiguration{AddressRemove: true, Origin: origin, PolicyRevision: 9}
 			}
 		}
