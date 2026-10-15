@@ -4,14 +4,14 @@ go 1.27.0
 
 require (
 	github.com/faustbrian/go-audit v1.0.0
-	github.com/faustbrian/go-authentication v1.2.2-0.20261006180804-0f9f7eac1f1d
-	github.com/faustbrian/go-authorization v1.1.1-0.20261005011349-60ed4b3229d8
+	github.com/faustbrian/go-authentication/v2 v2.0.2-0.20261015052822-d9f5132c7f68
+	github.com/faustbrian/go-authorization/v3 v3.0.1-0.20261015052455-a55bbebb1060
 	github.com/faustbrian/go-capability/v2 v2.0.2-0.20261015044219-caab644d2fec
-	github.com/faustbrian/go-clock v1.0.0
-	github.com/faustbrian/go-password v1.0.1-0.20261001082808-a3dbd862340c
+	github.com/faustbrian/go-clock v1.2.0
+	github.com/faustbrian/go-password/v2 v2.0.2-0.20261015050515-4eb0fefa60ff
 )
 
 require (
-	golang.org/x/crypto v0.54.0 // indirect
-	golang.org/x/text v0.41.0 // indirect
+	golang.org/x/crypto v0.57.0 // indirect
+	golang.org/x/sys v0.48.0 // indirect
 )

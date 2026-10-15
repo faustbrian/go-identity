@@ -1,6 +1,6 @@
 package identity
 
-import authentication "github.com/faustbrian/go-authentication"
+import authentication "github.com/faustbrian/go-authentication/v2"
 
 // NewFeatureOneTimeCodeCommand freezes structural feature intent and one opaque
 // submitted code for a trusted native adapter. Code bytes never enter FeatureValue

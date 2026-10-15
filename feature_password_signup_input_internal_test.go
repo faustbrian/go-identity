@@ -3,8 +3,8 @@ package identity
 import (
 	"testing"
 
-	"github.com/faustbrian/go-authentication"
-	primitive "github.com/faustbrian/go-password"
+	"github.com/faustbrian/go-authentication/v2"
+	primitive "github.com/faustbrian/go-password/v2"
 )
 
 func TestPasswordSignupInputMixedCustodyDeniesAllVariants(t *testing.T) {

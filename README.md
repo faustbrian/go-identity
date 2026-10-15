@@ -1,5 +1,11 @@
 # identity
 
+The experimental identity API composes authentication v2, authorization v3,
+capability v2 and password v2. Consumers supplying those primitives' public
+values must use the matching major-version imports. Go 1.27 is required.
+Development source pins do not imply a tagged platform release or completed
+cross-module qualification; the live identity progress record lists pending work.
+
 Experimental Go 1.27 backend libraries; no published release or complete
 identity-platform qualification is claimed. Start with the
 [documentation index](docs/README.md), [reference composition](reference/README.md)

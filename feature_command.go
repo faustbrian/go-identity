@@ -6,10 +6,10 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/faustbrian/go-authentication"
-	"github.com/faustbrian/go-authorization"
+	"github.com/faustbrian/go-authentication/v2"
+	"github.com/faustbrian/go-authorization/v3"
 	"github.com/faustbrian/go-capability/v2"
-	primitive "github.com/faustbrian/go-password"
+	primitive "github.com/faustbrian/go-password/v2"
 )
 
 // FeatureKind selects exactly one named command scalar. Zero/unknown kinds are

@@ -1,6 +1,6 @@
 package identity
 
-import "github.com/faustbrian/go-authorization"
+import "github.com/faustbrian/go-authorization/v3"
 
 // FeatureRecordRequirement fixes whether an operation has one exact record
 // target. It is a schema decision, not inferred from submitted input. Zero and

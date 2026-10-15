@@ -2,7 +2,7 @@ package identity
 
 import (
 	"github.com/faustbrian/go-capability/v2"
-	primitive "github.com/faustbrian/go-password"
+	primitive "github.com/faustbrian/go-password/v2"
 )
 
 // NewFeaturePasswordResetInputCommand freezes original password-reset input

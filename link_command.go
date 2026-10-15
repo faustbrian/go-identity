@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/faustbrian/go-authorization"
+	"github.com/faustbrian/go-authorization/v3"
 	"github.com/faustbrian/go-capability/v2"
 )
 

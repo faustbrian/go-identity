@@ -13,7 +13,7 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	"github.com/faustbrian/go-authorization"
+	"github.com/faustbrian/go-authorization/v3"
 )
 
 // AccountID is an exact case-sensitive directory ID of at most 128 UTF-8 bytes.

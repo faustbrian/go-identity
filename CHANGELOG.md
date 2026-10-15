@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Adopt the current authentication v2, authorization v3 and password v2
+  identity contracts. Experimental consumers must update their primitive imports
+  to those majors when supplying proof, policy or secret values. Root dependency
+  pins now resolve public committed source rather than unavailable revisions;
+  existing credential validation, password and policy engines remain upstream.
+
 - Adopt capability v2 public proof/grant types and explicit trusted issuer
   policy. Update capability imports and issuer-owned keys/configuration; token
   framing and native transaction/recovery ownership remain unchanged.

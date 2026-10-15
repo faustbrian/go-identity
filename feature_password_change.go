@@ -3,7 +3,7 @@ package identity
 import (
 	"time"
 
-	"github.com/faustbrian/go-authentication"
+	"github.com/faustbrian/go-authentication/v2"
 )
 
 // NewFeaturePasswordChangeCommand freezes existing-password change metadata,

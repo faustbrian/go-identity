@@ -5,7 +5,7 @@ import (
 	"errors"
 	"strconv"
 
-	"github.com/faustbrian/go-authorization"
+	"github.com/faustbrian/go-authorization/v3"
 )
 
 // UpdateUserCommand is a whole-value typed-field update, never a status,

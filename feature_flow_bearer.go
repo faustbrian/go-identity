@@ -4,7 +4,7 @@ import (
 	"encoding/base64"
 	"strings"
 
-	"github.com/faustbrian/go-authentication"
+	"github.com/faustbrian/go-authentication/v2"
 )
 
 // NewFeaturePreAuthCommand freezes a feature command with only its submitted

@@ -4,7 +4,7 @@ import (
 	"encoding/base64"
 	"strings"
 
-	authentication "github.com/faustbrian/go-authentication"
+	authentication "github.com/faustbrian/go-authentication/v2"
 )
 
 // NewFeatureOneTimeCodeSessionCommand freezes an OTP submission with a separate

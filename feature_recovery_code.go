@@ -1,6 +1,6 @@
 package identity
 
-import authentication "github.com/faustbrian/go-authentication"
+import authentication "github.com/faustbrian/go-authentication/v2"
 
 // NewFeatureRecoveryCodePreAuthCommand freezes a distinct recovery-code
 // submission and its original canonical browser cookie for a trusted adapter.

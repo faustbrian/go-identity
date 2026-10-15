@@ -5,7 +5,7 @@ import (
 	"io"
 	"time"
 
-	"github.com/faustbrian/go-authorization"
+	"github.com/faustbrian/go-authorization/v3"
 )
 
 // PrivacyExportStatus is the closed export-job state, not a command commit

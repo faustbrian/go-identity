@@ -3,7 +3,7 @@ package identity
 import (
 	"strings"
 
-	"github.com/faustbrian/go-authentication"
+	"github.com/faustbrian/go-authentication/v2"
 )
 
 // NewFeaturePasswordSignupCommand freezes prepared encoded verifier material

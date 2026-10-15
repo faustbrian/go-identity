@@ -1,8 +1,8 @@
 package identity
 
 import (
-	"github.com/faustbrian/go-authentication"
-	primitive "github.com/faustbrian/go-password"
+	"github.com/faustbrian/go-authentication/v2"
+	primitive "github.com/faustbrian/go-password/v2"
 )
 
 // NewFeaturePasswordSigninCommand freezes structural signin metadata with the
