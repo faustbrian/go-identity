@@ -13,7 +13,7 @@ import (
 
 	identity "github.com/faustbrian/go-identity"
 	"github.com/faustbrian/go-identity/session"
-	envelope "github.com/faustbrian/go-secret-envelope"
+	envelope "github.com/faustbrian/go-secret-envelope/v2"
 )
 
 func csrfRecord(t *testing.T, original session.Session, key session.CSRFKey) (session.Session, session.CSRFToken) {

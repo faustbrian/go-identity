@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Use supported secret-envelope v2 internally for original admission custody,
+  preserving stored formats and containing arbitrary provider diagnostics.
+  Byte-key configuration and public admission contracts are unchanged.
+
 - Use current public kernel, audit and outbox participants with authentication
   v2 and authorization v3 values; retain the same native transaction boundary.
 

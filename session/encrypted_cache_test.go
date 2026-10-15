@@ -13,8 +13,8 @@ import (
 	"time"
 
 	"github.com/faustbrian/go-identity/session"
-	envelope "github.com/faustbrian/go-secret-envelope"
-	"github.com/faustbrian/go-secret-envelope/adapters/keyring"
+	envelope "github.com/faustbrian/go-secret-envelope/v2"
+	"github.com/faustbrian/go-secret-envelope/v2/adapters/keyring"
 )
 
 func TestEncryptedCacheRestartPreservesOriginalDeadline(t *testing.T) {

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Use supported secret-envelope v2 services for encrypted delivery custody.
+  Service constructors now accept `/v2` types; encrypted record/key formats
+  remain unchanged and arbitrary provider diagnostics stay contained.
+
 - Adopt current authorization-v3, capability-v2 and outbox-v2 contracts with
   authenticated public dependency pins. Callers must use authorization-v3
   types; the optional lifecycle adapter has its own repository-relative module

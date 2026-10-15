@@ -479,7 +479,7 @@ service described above, not this low-level preparation seam.
 
 The owned workflow will authorize and prepare rendering before opening the
 original identity transaction. Recipient, locale, subject, body and content
-type are encrypted through `go-secret-envelope`; this module does not implement
+type are encrypted through `go-secret-envelope/v2`; this module does not implement
 an encryption algorithm. Canonical non-secret AAD binds deployment, original
 command, tenant, human/service actor, user/resource, command schema/policy,
 effect/index/purpose, template version, provider configuration, delivery policy,
@@ -522,7 +522,7 @@ Worker recovery reconstructs the original scope from the installed 28-field
 user or 29-field anonymous AAD profile, rather than introducing a second
 command authority. The reader is bounded to 16KiB and requires the exact
 canonical field set, numeric spelling, digest and expiry. Its framing is pinned
-to `go-secret-envelope` revision `22fc4a2d925d`, `context.go`; a canonical rebuild
+to `go-secret-envelope/v2` v2.0.1, `context.go`; a canonical rebuild
 through that module's public `NewContext` must match byte-for-byte. Changes to
 that upstream encoding require an explicitly versioned persistence migration,
 not reinterpretation of installed rows. Restored scope is authenticated locally

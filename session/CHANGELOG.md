@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Use the supported secret-envelope v2 implementation for encrypted cache
+  custody, preserving provider/entropy diagnostic containment and stored wire
+  formats. Callers constructing the cache codec must use envelope `/v2` types.
+
 - Adopt authentication v2, authorization v3 and the matching identity kernel.
   Update caller-supplied primitive values to those major imports; session
   issuance, expiry, rotation and revocation behavior remain unchanged.

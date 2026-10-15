@@ -12,7 +12,7 @@ require (
 	github.com/faustbrian/go-identity/postgres v0.0.0-20261015060432-bdc73de10a74
 	github.com/faustbrian/go-migrations/v3 v3.0.0-20261001014304-a461b18b6b24
 	github.com/faustbrian/go-postgres v1.1.1-0.20260912090843-61261695bcc7
-	github.com/faustbrian/go-secret-envelope v1.0.0
+	github.com/faustbrian/go-secret-envelope/v2 v2.0.1
 	github.com/faustbrian/go-transactional-outbox/postgres/identity v0.0.0-20261015064732-3aaa84f79f74
 	github.com/faustbrian/go-transactional-outbox/v2 v2.0.2-0.20261015062550-37ea15436ae9
 	github.com/jackc/pgx/v5 v5.11.0

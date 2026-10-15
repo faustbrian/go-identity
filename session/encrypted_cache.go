@@ -10,7 +10,7 @@ import (
 	"time"
 
 	identity "github.com/faustbrian/go-identity"
-	envelope "github.com/faustbrian/go-secret-envelope"
+	envelope "github.com/faustbrian/go-secret-envelope/v2"
 )
 
 // EncryptedCacheConfig binds a deployment's encrypted positive-cache profile.

@@ -19,7 +19,7 @@ import (
 	"github.com/faustbrian/go-identity/delivery"
 	identitypostgres "github.com/faustbrian/go-identity/postgres"
 	database "github.com/faustbrian/go-postgres"
-	secretenvelope "github.com/faustbrian/go-secret-envelope"
+	secretenvelope "github.com/faustbrian/go-secret-envelope/v2"
 	identityoutbox "github.com/faustbrian/go-transactional-outbox/postgres/identity"
 )
 

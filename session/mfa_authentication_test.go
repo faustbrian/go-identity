@@ -10,8 +10,8 @@ import (
 	auth "github.com/faustbrian/go-authentication/v2"
 	identity "github.com/faustbrian/go-identity"
 	"github.com/faustbrian/go-identity/session"
-	envelope "github.com/faustbrian/go-secret-envelope"
-	"github.com/faustbrian/go-secret-envelope/adapters/keyring"
+	envelope "github.com/faustbrian/go-secret-envelope/v2"
+	"github.com/faustbrian/go-secret-envelope/v2/adapters/keyring"
 )
 
 func mfaMagicLinkSession(t testing.TB) (session.SessionSpec, session.MagicLinkAuthentication, session.MFAAuthenticationSpec) {

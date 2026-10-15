@@ -10,8 +10,8 @@ import (
 
 	"github.com/faustbrian/go-identity/delivery"
 	deliverypostgres "github.com/faustbrian/go-identity/delivery/postgres"
-	secretenvelope "github.com/faustbrian/go-secret-envelope"
-	"github.com/faustbrian/go-secret-envelope/adapters/keyring"
+	secretenvelope "github.com/faustbrian/go-secret-envelope/v2"
+	"github.com/faustbrian/go-secret-envelope/v2/adapters/keyring"
 )
 
 func TestPreparationCheckpointRestoresOriginalEncryptedEffect(t *testing.T) {

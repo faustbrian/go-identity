@@ -11,7 +11,7 @@ import (
 	"strconv"
 
 	"github.com/faustbrian/go-identity/delivery"
-	secretenvelope "github.com/faustbrian/go-secret-envelope"
+	secretenvelope "github.com/faustbrian/go-secret-envelope/v2"
 )
 
 // Cursor custody is separate from expired send payloads: an unresolved provider

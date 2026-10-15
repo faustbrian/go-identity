@@ -21,7 +21,7 @@ import (
 	identity "github.com/faustbrian/go-identity"
 	"github.com/faustbrian/go-identity/delivery"
 	identitypostgres "github.com/faustbrian/go-identity/postgres"
-	secretenvelope "github.com/faustbrian/go-secret-envelope"
+	secretenvelope "github.com/faustbrian/go-secret-envelope/v2"
 )
 
 const custodyHeader = "IDEP1"

@@ -16,8 +16,8 @@ import (
 	deliverypostgres "github.com/faustbrian/go-identity/delivery/postgres"
 	identitypostgres "github.com/faustbrian/go-identity/postgres"
 	migrations "github.com/faustbrian/go-migrations/v3"
-	secretenvelope "github.com/faustbrian/go-secret-envelope"
-	"github.com/faustbrian/go-secret-envelope/adapters/keyring"
+	secretenvelope "github.com/faustbrian/go-secret-envelope/v2"
+	"github.com/faustbrian/go-secret-envelope/v2/adapters/keyring"
 )
 
 func publicStagingFixture(t *testing.T) (*deliverypostgres.Contributor, deliverypostgres.ContributorConfig, identity.CommandBinding, deliverypostgres.IntentInput) {

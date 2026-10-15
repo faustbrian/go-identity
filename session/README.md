@@ -836,7 +836,7 @@ Persist only the returned caller-owned ciphertext. On reuse call
 `codec.Get(ctx, originalRequest, ciphertext)`; the original opaque credential
 is still required. Never log ciphertext, key references or decoded projections.
 
-Use `github.com/faustbrian/go-secret-envelope` with a concurrent-safe bounded
+Use `github.com/faustbrian/go-secret-envelope/v2` with a concurrent-safe bounded
 key provider. The codec does not invent encryption or accept client-selected
 keys. Configure issuer, environment and a positive deployment epoch explicitly;
 changing these invalidates all prior cached custody. Rotate the active key

@@ -13,7 +13,7 @@ import (
 	"github.com/faustbrian/go-authorization/v3"
 	"github.com/faustbrian/go-identity/delivery"
 	database "github.com/faustbrian/go-postgres"
-	envelope "github.com/faustbrian/go-secret-envelope"
+	envelope "github.com/faustbrian/go-secret-envelope/v2"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
