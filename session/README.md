@@ -629,8 +629,9 @@ release checks remain pending.
   exact authenticating credential ID/version and original proof projection.
   Anonymous state cannot assert credential proof, factor or passkey authority.
   The snapshot's aggregate credential dimension remains separate from the
-  exact credential's version. The future issuer must validate live proof,
-  credential, factor/passkey applicability and exact derived scope keys.
+  exact credential's version. The future issuer must validate live proof and
+  the credential. It must also check each applicable factor or passkey and
+  the exact derived authority scope.
 - `NewIssueCommand` freezes exact root `CommandBinding` plus one new version1
   session, preserving family version. `IssueOperation` declares its v1 mapping.
   `Issue` exposes the native projection; `ValidateIssueAt` rechecks temporal
