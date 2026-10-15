@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Compose safe password-authenticated email removal with actual selected signin
+  and reset owners, compatible authority/hash policies and known-empty MFA.
+  Preserve original keyed proof/session custody, conserve a usable verified email,
+  retire only unused target grants and atomically invalidate old identifier
+  authority. Exact retries/recovery retain original pending cascade correlation.
+
 - Compose supported envelope v2 custody and matching public native participants.
   Callers supplying envelope/keyring services must use `/v2` types; stored
   ciphertext, original authority lifetimes and transaction ownership stay intact.

@@ -1,5 +1,33 @@
 # Password PostgreSQL adapter
 
+## Safe email removal
+
+`NewEmailRemovalService(primary, signin, reset, config, keyring)` requires actual
+password `SigninService` and complete emailed `ResetService` on the same pool.
+Their global/authorization scopes must match primary admission; selected material
+and verifier limits must cover its accepted range. Address counts, eligibility
+booleans or substitute stores cannot establish this. Select original password
+proof action `identity.email.address-remove`, explicit audience/age and transport.
+Known-empty MFA is required; unavailable/enrolled factor authority denies.
+
+`EmailRemovalConfig` supplies directory reuse/cascade policy, request-key/intent
+custody, protected provider/counter policy and local envelope key. Retain original
+configuration/keys through request retention. Install native email proof, MFA
+authority, capability target-retention and kernel request/preparation/status/
+retirement/identifier-cascade histories. Set issuer
+`RetainEmailVerificationTargets` for new verification links; unclassified live
+historical grants conservatively deny instead of guessing unsigned targets.
+
+`AddressRemove` binds exact address/versions, reason and primary/recovery
+disposition. It conserves a verified address actually eligible for selected
+signin/reset under the sole native Work. Required proof/token, directory/session,
+audit and pending lifecycle effects are atomic. No provider IO/callback runs
+under directory locks; no primary or authentication is silently issued.
+Exact retries preserve the original result after session epoch invalidation.
+`AddressRemoveRateSource` authenticates retained possession before transport
+admission without removal or renewed freshness. `AddressRemoveRecover` uses
+original scoped correlation and current query policy, not historical proof.
+
 ## Managed email request adapter
 
 `NewKeyedEmailManagementService(native, keyedConfig)` optionally adds durable

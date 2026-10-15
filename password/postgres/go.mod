@@ -7,21 +7,21 @@ require (
 	github.com/faustbrian/go-audit/postgres v1.0.2-0.20261015062502-d62df280d85e
 	github.com/faustbrian/go-authentication/v2 v2.0.2-0.20261015052822-d9f5132c7f68
 	github.com/faustbrian/go-authorization/v3 v3.0.1-0.20261015052455-a55bbebb1060
-	github.com/faustbrian/go-capability/postgres/identity v0.0.0-20261015105007-401a89a5f012
+	github.com/faustbrian/go-capability/postgres/identity v0.0.0-20261015133614-ab21810bd410
 	github.com/faustbrian/go-capability/v2 v2.0.2-0.20261015044219-caab644d2fec
 	github.com/faustbrian/go-clock v1.2.0
 	github.com/faustbrian/go-identifier/v2 v2.0.3-0.20261015083104-9892f17723c0
-	github.com/faustbrian/go-identity v0.0.0-20261015054516-5afeba0ac471
+	github.com/faustbrian/go-identity v0.0.0-20261015131925-5e4052e61d26
 	github.com/faustbrian/go-identity/delivery v0.0.0-20261015061706-1f0b46ab1053
 	github.com/faustbrian/go-identity/delivery/postgres v0.0.0-20261015104034-f16881100907
-	github.com/faustbrian/go-identity/email v0.0.0-20261015110443-ed660e780fdc
+	github.com/faustbrian/go-identity/email v0.0.0-20261015131925-5e4052e61d26
 	github.com/faustbrian/go-identity/http v0.0.0-20261015092135-af758fe32cc8
 	github.com/faustbrian/go-identity/http/email v0.0.0-20261015110443-ed660e780fdc
 	github.com/faustbrian/go-identity/http/password v0.0.0-20261015110443-ed660e780fdc
 	github.com/faustbrian/go-identity/mfa v0.0.0-20261015110443-ed660e780fdc
 	github.com/faustbrian/go-identity/mfa/postgres v0.0.0-20261015110443-ed660e780fdc
 	github.com/faustbrian/go-identity/password v0.0.0-20261015110443-ed660e780fdc
-	github.com/faustbrian/go-identity/postgres v0.0.0-20261015060432-bdc73de10a74
+	github.com/faustbrian/go-identity/postgres v0.0.0-20261015133117-65ce0f3d8faf
 	github.com/faustbrian/go-identity/risk v0.0.0-20261015085833-f43df0429695
 	github.com/faustbrian/go-identity/risk/postgres v0.0.0-20261015104034-f16881100907
 	github.com/faustbrian/go-identity/session v0.0.0-20261015104034-f16881100907
@@ -32,7 +32,7 @@ require (
 	github.com/faustbrian/go-postgres v1.1.1-0.20260912090843-61261695bcc7
 	github.com/faustbrian/go-rate-limit/v2 v2.0.1-0.20261015090634-0ebce3975fe1
 	github.com/faustbrian/go-secret-envelope/v2 v2.0.1
-	github.com/faustbrian/go-transactional-outbox/postgres/identity v0.0.0-20261015064732-3aaa84f79f74
+	github.com/faustbrian/go-transactional-outbox/postgres/identity v0.0.0-20261015133445-5c139522d060
 	github.com/faustbrian/go-transactional-outbox/v2 v2.0.2-0.20261015062550-37ea15436ae9
 	github.com/jackc/pgx/v5 v5.11.0
 )

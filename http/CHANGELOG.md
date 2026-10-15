@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Admit explicitly selected email removal under exact stored-session CSRF
+  protection. Alternate headers, token-age claims and Referer fallback remain
+  rejected; base HTTP still supplies no email workflow or route automatically.
+
 - Use authentication v2 credential/principal values and the current public
   atomic shared-rate owner. Composed callers must use matching major-version
   types; bounded emergency admission still refuses key churn at capacity.

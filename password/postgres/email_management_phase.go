@@ -265,8 +265,12 @@ func (p *emailManagementPhase) CheckFeatureCommit(ctx context.Context, w kernel.
 	return p.check(ctx, w, c)
 }
 func (p *emailManagementPhase) RecoverParticipant(ctx context.Context, w kernel.RecoveryWork) (kernel.RecoveryStatus, error) {
-	b, f, _, err := w.FeatureScope(p)
-	if err != nil || f.Contributor != p.Descriptor() {
+	return recoverEmailPrimaryUse(ctx, w, p)
+}
+
+func recoverEmailPrimaryUse(ctx context.Context, w kernel.RecoveryWork, owner kernel.FeatureExecutionContributor) (kernel.RecoveryStatus, error) {
+	b, f, _, err := w.FeatureScope(owner)
+	if err != nil || f.Contributor != owner.Descriptor() || !slices.Contains(owner.FeatureOperations(), f.Operation) {
 		return kernel.RecoveryUnknown, password.ErrPasswordWork
 	}
 	key, err := base64.RawURLEncoding.Strict().DecodeString(string(b.CommandID))

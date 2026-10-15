@@ -18,7 +18,7 @@ import (
 func TestCanonicalEmailStoredSynchronizerPolicy(t *testing.T) {
 	handler := http.HandlerFunc(func(http.ResponseWriter, *http.Request) {})
 	stored := identityhttp.CSRFPolicy{Mode: identityhttp.CSRFSessionState, TokenHeader: "X-CSRF-Token", RefererFallback: identityhttp.RefererFallbackDeny}
-	for _, operation := range []string{"identity.email.verification-send", "identity.email.change-request"} {
+	for _, operation := range []string{"identity.email.verification-send", "identity.email.change-request", "identity.email.address-remove"} {
 		if _, err := identityhttp.NewCanonicalOperation(identityhttp.CanonicalOperationConfig{Owner: "identity/email", OperationID: operation, Handler: handler, CSRF: stored, MaximumSerializedBytes: 16384}); err != nil {
 			t.Fatal("exact stored synchronizer rejected", operation, err)
 		}
