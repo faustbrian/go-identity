@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Support explicit verified replacement-primary selection during safe removal.
+  Require its independent versions; old dispositions reject replacement fields.
+
 - Add keyed safe self-removal requests with exact identifier/verification
   predecessors, registered reasons and explicit primary/recovery disposition.
   Native execution must conserve actual remaining signin/reset eligibility;

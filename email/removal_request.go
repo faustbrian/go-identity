@@ -21,6 +21,9 @@ const (
 	// another address. Remaining verified addresses must actually support the
 	// selected signin/reset profile; the native owner checks this atomically.
 	LeavePrimaryUnassigned
+	// ReplacePrimaryWithVerifiedEmail removes the current primary and promotes
+	// only ReplacementPrimary's exact already-verified record in the same commit.
+	ReplacePrimaryWithVerifiedEmail
 )
 
 // AddressRemoveRequest selects one keyed, freshly authenticated self-removal.
@@ -37,11 +40,14 @@ type AddressRemoveRequest struct {
 	ExpectedVerificationVersion uint64
 	Reason                      identity.PolicyReason
 	PrimaryDisposition          RemovalPrimaryDisposition
-	RecoveryDisposition         RemovalRecoveryPolicy
-	IdempotencyKey              identity.IdempotencyKey
-	Primary                     RequestPrimary
-	Caller                      authorization.DecisionContext
-	Network                     string
+	// ReplacementPrimary must be zero except with ReplacePrimaryWithVerifiedEmail.
+	// Its independent versions bind the caller's explicit safe projection.
+	ReplacementPrimary  identity.IdentifierPrimarySelection
+	RecoveryDisposition RemovalRecoveryPolicy
+	IdempotencyKey      identity.IdempotencyKey
+	Primary             RequestPrimary
+	Caller              authorization.DecisionContext
+	Network             string
 }
 
 // AddressRemovalService owns keyed protected self-removal and original command
@@ -72,7 +78,14 @@ func (r AddressRemoveRequest) Validate() error {
 	if _, err := identity.ParseIdentifierID(string(r.AddressID)); err != nil {
 		return ErrInvalidRemoval
 	}
-	if r.ExpectedIdentifierVersion == 0 || r.ExpectedIdentifierVersion == ^uint64(0) || r.ExpectedVerificationVersion == 0 || r.ExpectedVerificationVersion == ^uint64(0) || (r.PrimaryDisposition != PreserveRemainingPrimary && r.PrimaryDisposition != LeavePrimaryUnassigned) || r.RecoveryDisposition != PreserveVerifiedEmailRecovery || !removalReason(r.Reason) {
+	if r.ExpectedIdentifierVersion == 0 || r.ExpectedIdentifierVersion == ^uint64(0) || r.ExpectedVerificationVersion == 0 || r.ExpectedVerificationVersion == ^uint64(0) || (r.PrimaryDisposition != PreserveRemainingPrimary && r.PrimaryDisposition != LeavePrimaryUnassigned && r.PrimaryDisposition != ReplacePrimaryWithVerifiedEmail) || r.RecoveryDisposition != PreserveVerifiedEmailRecovery || !removalReason(r.Reason) {
+		return ErrInvalidRemoval
+	}
+	if r.PrimaryDisposition == ReplacePrimaryWithVerifiedEmail {
+		if r.ReplacementPrimary.Validate() != nil || r.ReplacementPrimary.ID == r.AddressID {
+			return ErrInvalidRemoval
+		}
+	} else if r.ReplacementPrimary != (identity.IdentifierPrimarySelection{}) {
 		return ErrInvalidRemoval
 	}
 	if err := validateRequestPrimary(r.TenantID, r.Primary, r.Caller, r.Network, nil, r.IdempotencyKey, "identity.email.address-remove"); err != nil {

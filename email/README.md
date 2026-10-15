@@ -7,6 +7,20 @@ verification versions, registered reason, original key and action-bound fresh
 `RequestPrimary`. Choose `PreserveRemainingPrimary` for a nonprimary target or
 explicitly `LeavePrimaryUnassigned`; no replacement is chosen by ordering.
 The selected recovery disposition is `PreserveVerifiedEmailRecovery`.
+Alternatively choose `ReplacePrimaryWithVerifiedEmail` and supply
+`ReplacementPrimary` with an exact different verified email ID and its independent
+identifier/verification versions. The native owner promotes only that record in
+the removal transaction, without renewing verification. Replacement fields with
+other dispositions deny; unverified, foreign, missing or stale records deny.
+
+The selected implementation refines planning contract
+`contract:operation:identity.email.address-remove:v1`: its optional
+`ReplacementPrimaryID` is represented by `ReplacementPrimary`, which also binds
+both independent predecessor versions. The catalog's single `ExpectedVersion`
+maps to the removed address's identifier and verification fences; `ActorReason`
+maps to the registered, bounded `Reason` code, never free-form audit text.
+The existing keyed owner allocates/reuses the stable command ID; callers keep
+the original key and complete intent rather than inventing another command.
 
 `AddressRemovalService` is implemented by the native password PostgreSQL owner
 and reference graph. It conserves actual selected password signin/reset eligibility

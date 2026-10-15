@@ -20,6 +20,9 @@ type EmailRemovalIntent struct {
 	ComparisonProfile      string
 	Reason                 string
 	LeavePrimaryUnassigned bool
+	// ReplacementPrimary is omitted from legacy original custody when zero.
+	// A selected value is independent exact intent, never an inferred successor.
+	ReplacementPrimary identity.IdentifierPrimarySelection `json:",omitzero"`
 }
 
 // EmailRemovalContributor supplies immutable removal intent and the existing
@@ -84,19 +87,26 @@ func EmailRemovalFields(i EmailRemovalIntent) ([]identity.FeatureField, error) {
 	if _, err := identity.ParseIdentifierID(i.ComparisonProfile); err != nil {
 		return nil, invalidEmailRemoval()
 	}
+	if i.ReplacementPrimary != (identity.IdentifierPrimarySelection{}) && (i.LeavePrimaryUnassigned || i.ReplacementPrimary.Validate() != nil || i.ReplacementPrimary.ID == c.ID) {
+		return nil, invalidEmailRemoval()
+	}
 	text := func(n, v string) identity.FeatureField {
 		return identity.FeatureField{Name: "email-removal." + n, Value: identity.FeatureValue{Kind: identity.FeatureText, Text: v}}
 	}
 	number := func(n string, v uint64) identity.FeatureField {
 		return identity.FeatureField{Name: "email-removal." + n, Value: identity.FeatureValue{Kind: identity.FeatureUint64, Uint64: v}}
 	}
-	return []identity.FeatureField{
+	fields := []identity.FeatureField{
 		text("tenant", string(c.TenantID)), text("user", string(c.UserID)), text("identifier", string(c.ID)),
 		text("comparison-profile", i.ComparisonProfile), text("reason", i.Reason),
 		number("user-version", c.ExpectedUserVersion), number("authority-version", c.ExpectedAuthorityVersion),
 		number("identifier-version", c.ExpectedIdentifierVersion), number("verification-version", c.ExpectedVerificationVersion),
 		{Name: "email-removal.leave-primary-unassigned", Value: identity.FeatureValue{Kind: identity.FeatureBool, Bool: i.LeavePrimaryUnassigned}},
-	}, nil
+	}
+	if i.ReplacementPrimary != (identity.IdentifierPrimarySelection{}) {
+		fields = append(fields, text("replacement-identifier", string(i.ReplacementPrimary.ID)), number("replacement-identifier-version", i.ReplacementPrimary.ExpectedIdentifierVersion), number("replacement-verification-version", i.ReplacementPrimary.ExpectedVerificationVersion))
+	}
+	return fields, nil
 }
 
 func emailRemovalCommand(p EmailRemovalContributor, c identity.Command, plan CommandPlan) (EmailRemovalIntent, *EmailRemovalDomain, error) {
@@ -202,7 +212,7 @@ func prepareEmailRemoval(ctx context.Context, w Work, c identity.Command) error 
 	remaining := false
 	for _, a := range before.Identifiers {
 		if a.ID == i.Change.ID {
-			if a.Kind != identity.IdentifierEmail || a.Primary && !i.LeavePrimaryUnassigned {
+			if a.Kind != identity.IdentifierEmail || a.Primary && !i.LeavePrimaryUnassigned && i.ReplacementPrimary == (identity.IdentifierPrimarySelection{}) {
 				return w.fail(ctx, identity.ForbiddenError{})
 			}
 		} else if a.Kind == identity.IdentifierEmail && a.Verified {
@@ -213,6 +223,9 @@ func prepareEmailRemoval(ctx context.Context, w Work, c identity.Command) error 
 		return w.fail(ctx, identity.FinalAccessError{})
 	}
 	mutation, err := identity.ApplyIdentifierChange(before, i.Change, now)
+	if i.ReplacementPrimary != (identity.IdentifierPrimarySelection{}) {
+		mutation, err = identity.ApplyIdentifierRemovalWithPrimary(before, i.Change, i.ReplacementPrimary, now)
+	}
 	if err != nil {
 		return w.fail(ctx, err)
 	}

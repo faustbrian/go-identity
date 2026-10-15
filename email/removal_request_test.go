@@ -25,6 +25,28 @@ func TestAddressRemovalRequiresOriginalProofAndExplicitDisposition(t *testing.T)
 	if err := r.Validate(); err != nil {
 		t.Fatal("selected bounded removal denied", err)
 	}
+	selected := r
+	selected.PrimaryDisposition = email.ReplacePrimaryWithVerifiedEmail
+	selected.ReplacementPrimary = identity.IdentifierPrimarySelection{ID: "remaining", ExpectedIdentifierVersion: 5, ExpectedVerificationVersion: 7}
+	if selected.Validate() != nil {
+		t.Fatal("explicit bounded replacement denied")
+	}
+	for _, mode := range []string{"missing", "self", "zero-version", "old-disposition"} {
+		bad := selected
+		switch mode {
+		case "missing":
+			bad.ReplacementPrimary = identity.IdentifierPrimarySelection{}
+		case "self":
+			bad.ReplacementPrimary.ID = bad.AddressID
+		case "zero-version":
+			bad.ReplacementPrimary.ExpectedVerificationVersion = 0
+		case "old-disposition":
+			bad.PrimaryDisposition = email.LeavePrimaryUnassigned
+		}
+		if bad.Validate() == nil {
+			t.Fatal("replacement intent lost exact disposition", mode)
+		}
+	}
 	for name, alter := range map[string]func(*email.AddressRemoveRequest){
 		"target":       func(r *email.AddressRemoveRequest) { r.AddressID = "" },
 		"version":      func(r *email.AddressRemoveRequest) { r.ExpectedIdentifierVersion = 0 },

@@ -1,14 +1,57 @@
 package postgres
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
+	"encoding/json"
 	"testing"
 
 	auth "github.com/faustbrian/go-authentication/v2"
 	"github.com/faustbrian/go-authorization/v3"
 	identity "github.com/faustbrian/go-identity"
 )
+
+func TestEmailRemovalReplacementFingerprintAndLegacyCustody(t *testing.T) {
+	i := EmailRemovalIntent{Change: identity.IdentifierChange{TenantID: "tenant", UserID: "user", ID: "address", Action: identity.IdentifierRemove, ExpectedUserVersion: 9, ExpectedAuthorityVersion: 4, ExpectedIdentifierVersion: 2, ExpectedVerificationVersion: 3}, ComparisonProfile: "email-v1", Reason: "user-requested"}
+	type wire EmailRemovalIntent
+	old := struct {
+		Change                    identity.IdentifierChange
+		ComparisonProfile, Reason string
+		LeavePrimaryUnassigned    bool
+	}{i.Change, i.ComparisonProfile, i.Reason, i.LeavePrimaryUnassigned}
+	current, _ := json.Marshal(wire(i))
+	legacy, _ := json.Marshal(old)
+	if !bytes.Equal(current, legacy) {
+		t.Fatal("unselected replacement rewrote original legacy custody")
+	}
+	i.ReplacementPrimary = identity.IdentifierPrimarySelection{ID: "remaining", ExpectedIdentifierVersion: 5, ExpectedVerificationVersion: 7}
+	fields, err := EmailRemovalFields(i)
+	if err != nil || len(fields) != 13 {
+		t.Fatal("replacement omitted exact fingerprint", err)
+	}
+	seen := map[string]identity.FeatureValue{}
+	for _, f := range fields {
+		seen[f.Name] = f.Value
+	}
+	if seen["email-removal.replacement-identifier"].Text != "remaining" || seen["email-removal.replacement-identifier-version"].Uint64 != 5 || seen["email-removal.replacement-verification-version"].Uint64 != 7 {
+		t.Fatal("replacement predecessors not bound")
+	}
+	for _, mode := range []string{"self", "zero", "conflicting"} {
+		bad := i
+		switch mode {
+		case "self":
+			bad.ReplacementPrimary.ID = i.Change.ID
+		case "zero":
+			bad.ReplacementPrimary.ExpectedVerificationVersion = 0
+		case "conflicting":
+			bad.LeavePrimaryUnassigned = true
+		}
+		if _, err := EmailRemovalFields(bad); err == nil {
+			t.Fatal("invalid replacement intent admitted", mode)
+		}
+	}
+}
 
 func TestEmailRemovalFieldsBindExactOriginalPredecessors(t *testing.T) {
 	i := EmailRemovalIntent{Change: identity.IdentifierChange{

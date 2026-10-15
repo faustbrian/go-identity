@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Atomically promote an explicitly nominated verified replacement during native
+  primary-email removal. Bind both independent predecessor versions, preserve
+  legacy original-input encoding and reuse existing migrations and CAS writes.
+
 - Add typed native email removal through the existing partition-locked directory
   writer. Commit exact retirement, identifier authority, audit/lifecycle and the
   complete pending consumer manifest together. Install the forward identifier
