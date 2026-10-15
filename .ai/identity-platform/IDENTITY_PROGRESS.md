@@ -3,6 +3,22 @@
 Implementation activated by the user on 2026-10-14. B1, B2 and B3 are closed;
 M04 email lifecycle is active.
 
+- Administrative-read profile closed (2026-10-15 15:27 UTC): native `6f013f9`
+  and HTTP `15b4764` are on main with Required CI green. Reference `91397a7`
+  is on origin/main with Required `38760195512` green; its public published
+  runner initialization succeeds without a database/listener. Consumers
+  can explicitly authorize real actor A to list/get B's email addresses through
+  native/opt-in HTTPS with mandatory PostgreSQL access audit; failed/unknown
+  acknowledgements withhold data. Default self routes stay closed to overrides.
+  Six public-dependency SQL/HTTPS/race journeys pass13.355s, affected public
+  race/vet and bounded query fuzz pass, and complete independent source review
+  approves the final public dependency graph. Primary versions, commands and
+  one-use usage remain unchanged by reads. Full M04 remains open: administrative
+  removal/stronger-factor, OTP/auto-signin, privacy/lifecycle completeness and
+  full-unit qualification remain. Still3/39 full milestones; no Tools changes,
+  tags or deployment. Runtime checks are local; hosted CI proves structure and
+  changed-content secrets, not whole-platform runtime qualification.
+
 - Replacement-primary profile closed (2026-10-15 14:47 UTC): reference
   `4a10c0f` is on origin/main with Required `38754176873` green. Public consumers
   can nominate the exact verified replacement and atomically remove/promote it

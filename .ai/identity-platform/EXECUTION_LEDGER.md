@@ -2,7 +2,52 @@
 
 Activated on 2026-10-14. B1, B2 and B3 are closed; M04 email lifecycle is active.
 
-## Active: M04 email lifecycle; safe-removal profile delivered
+## Active: M04 email lifecycle; administrative-read profile delivered
+
+- Administrative-read profile closed (2026-10-15 15:27 UTC): native `6f013f9`
+  and HTTP `15b4764` are on main, Required `38759536861`/`38759823377` green.
+  Reference `91397a7` is on origin/main with Required `38760195512` green.
+  Published runner `v0.0.0-20261015152518-91397a78110d` initialization succeeds
+  with GOWORK off and no database/listener opened. Six public SQL/HTTPS/race query
+  profiles PASS13.355s; reference/command race8.557s/6.775s and tagged vet pass.
+  Distinct genuinely registered actors/targets prove exact permission, durable
+  safe audit, acknowledgement failure, self preservation and unchanged primary
+  identity/verification/command/one-use state. Native public race1.293s,
+  HTTP public race13.017s and vet pass; query fuzz18771exec/6.395s passes.
+  Selected secrets/structure/docs pass. Independent native reviewer
+  `/root/m04_admin_reads_final_review` APPROVE binds original base `08ab596`,
+  source22 `4bdf04391e7620f504a4893915b2e70187b8971378a28aa4153ac5fafa6e1bd2`,
+  final reference11 `fca2d6ba485934a52daef551c0ae47587b4aa7eb59ef5846313351491cf41b0f`
+  and committed public26 `05b52fd5d9c1bbe9abdfc747313bd923af1a8a1b3ac1fd9330b19ce975fed013`.
+  The final committed source matches the approved public26 digest exactly.
+  This frozen profile is closed; reuse its unchanged runtime evidence.
+  Admin removal still needs genuine independent actor-scoped proof admission;
+  stronger-factor, OTP/auto-signin and privacy/lifecycle completeness remain.
+  Full M04 stays open, delivered full milestones3/39; no new unit qualification.
+
+- Frozen M04 administrative-read profile (2026-10-15 14:59 UTC): authenticated
+  human A can explicitly target B for native and opt-in HTTPS email list/get,
+  only under current tenant/action/target authorization and safe redaction.
+  Existing native query/repository already separates actor/target; HTTP is self
+  only. Add required fail-closed administrative access audit at the shared query
+  owner, backed by existing audit/PG in reference; no new journal or domain store.
+  Audit errors/unknown ack, current permission/session failure, stale policy,
+  foreign/absent targets, cross-scope cursors, cancellation/shutdown deny output.
+  Preserve self routes, no credentials/refresh/mutation, disabled target override
+  rejection and current shared safe-rate ownership. No risk-profile override or
+  unselected risk-evaluator bypass is introduced. Admin removal remains separate:
+  native original session/credential/proof admission is still actor=self and
+  cannot be relabelled into actor-scoped proof inside target-scoped Work.
+  Bounded map `/root/m04_admin_boundary` is retained; do not restart it.
+  Owners: email query/audit contract, HTTP email decode/projection/OpenAPI and
+  reference native/HTTP/audit composition; existing session, authorization,
+  audit/PG and primary repository. Baseline main `08ab596`, runtime `4a10c0f`,
+  root `2d1115c`, email/PG `03bac9a`, HTTP `85ed1e5`, audit/PG `d62df28`.
+  Tests: focused audit-required red/green, native/HTTP contract+schema/race,
+  changed query fuzz, real public reference PostgreSQL/HTTPS with distinct real
+  actor/target, durable safe audit and negative/cleanup cases; affected vet,
+  public pins/consumer, secrets/structure/docs, one independent complete review,
+  ordinary main/Required delivery. No broader qualification or other profile.
 
 - Replacement-primary profile closed (2026-10-15 14:47 UTC): reference
   `4a10c0f722593b4e6d7a333364dca13523bbf5cf` is on origin/main; Required
