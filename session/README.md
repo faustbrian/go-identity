@@ -1,5 +1,9 @@
 # Session
 
+This experimental module uses authentication v2, authorization v3 and the
+matching identity kernel. Supply primitive values from those major imports;
+older-major types are not interchangeable.
+
 ## Historical magic-link authentication
 
 Use `NewMagicLinkAuthentication` with the original consuming command, request,

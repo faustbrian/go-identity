@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Adopt authorization v3 and the matching identity kernel. Callers providing
+  authorization scopes must use the v3 types; delivery behavior is unchanged.
+
 ### Added
 
 - Explicit command-bound Queue composition: owned adapters authorize and resolve

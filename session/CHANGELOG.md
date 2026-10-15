@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Adopt authentication v2, authorization v3 and the matching identity kernel.
+  Update caller-supplied primitive values to those major imports; session
+  issuance, expiry, rotation and revocation behavior remain unchanged.
+
+- Align owned capability dependencies with the v2 issuer-scoped contracts.
+
 - Preserve explicit secondary-OTP provenance in original-primary MFA sessions,
   disjoint from TOTP and recovery-set metadata. Password-MFA issuance binds the
   OTP operation and retains primary time/remember policy; substituted receipts,

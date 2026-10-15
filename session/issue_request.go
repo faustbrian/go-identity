@@ -6,7 +6,7 @@ import (
 	"io"
 	"time"
 
-	authentication "github.com/faustbrian/go-authentication"
+	authentication "github.com/faustbrian/go-authentication/v2"
 )
 
 // ErrInvalidIssueRequest rejects a zero, anonymous or proof-mismatched request

@@ -1,5 +1,9 @@
 # Identity delivery
 
+This experimental module uses authorization v3 and the matching identity
+kernel. Supply `github.com/faustbrian/go-authorization/v3` scope values rather
+than values from earlier major imports.
+
 ## Owned command-bound Queue composition
 
 The PostgreSQL adapter exposes `EnqueueService.NewQueue(WorkerConfig)`. Pass the
