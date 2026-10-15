@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/faustbrian/go-capability"
-	"github.com/faustbrian/go-capability/memory"
+	"github.com/faustbrian/go-capability/v2"
+	memory "github.com/faustbrian/go-capability/v2/adapters/memory"
 	"github.com/faustbrian/go-identity/magiclink"
 )
 
@@ -31,11 +31,11 @@ func inspectionFixture(t testing.TB) (capability.Service, capability.Payload, ma
 	if err != nil {
 		t.Fatal(err)
 	}
-	keys, err := capability.NewKeySet([]capability.Key{{ID: "test-key", Verifier: verifier}})
+	keys, err := capability.NewKeySet([]capability.Key{{Issuer: "https://issuer.example.test", ID: "test-key", Verifier: verifier}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	s, err := capability.NewService(capability.ServiceConfig{Signer: signer, Resolver: keys, Clock: func() time.Time { return now }, Limits: capability.DefaultLimits()})
+	s, err := capability.NewService(capability.ServiceConfig{Issuer: "https://issuer.example.test", Signer: signer, Resolver: keys, Clock: func() time.Time { return now }, Limits: capability.DefaultLimits()})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -111,7 +111,18 @@ func TestInspectionRejectsForeignSignedAuthority(t *testing.T) {
 				p.Caveats[k] = v
 			}
 			change(&p)
-			proof, _, err := s.Issue(context.Background(), p)
+			var proof capability.Proof
+			var err error
+			if name == "issuer" {
+				signer, _ := capability.NewHMACSHA256Signer("test-key", []byte("0123456789abcdef0123456789abcdef"))
+				wire, e := capability.Issue(context.Background(), p, signer, capability.DefaultLimits())
+				if e != nil {
+					t.Fatal(e)
+				}
+				proof, err = capability.ParseProof(wire, capability.DefaultLimits())
+			} else {
+				proof, _, err = s.Issue(context.Background(), p)
+			}
 			if err != nil {
 				t.Fatal(err)
 			}

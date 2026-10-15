@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/faustbrian/go-identity/risk"
-	primitive "github.com/faustbrian/go-password"
+	primitive "github.com/faustbrian/go-password/v2"
 )
 
 var creatingActions = []risk.Action{"identity.password.signup", "identity.username.signup", "identity.password.set", "identity.password.change", "identity.password.reset-complete", "identity.otp.password-reset", "identity.phone.password-reset-complete", "identity.admin.user-password-set"}
@@ -159,8 +159,12 @@ func TestPasswordScreeningRejectsFailuresBeforeHashing(t *testing.T) {
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 			clock := now
-			entropy := &failingEntropy{}
-			service, err := primitive.NewTestService(w.primitive.Policy(), entropy)
+			hashCalls := 0
+			service, err := primitive.New(w.primitive.Policy(), primitive.WithObserver(workObservation(func(_ context.Context, event primitive.Observation) {
+				if event.Operation == primitive.OperationHash {
+					hashCalls++
+				}
+			})))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -198,7 +202,7 @@ func TestPasswordScreeningRejectsFailuresBeforeHashing(t *testing.T) {
 				cancel()
 			}
 			hash, _, err := work.newScreenedHash(ctx, secret, s, binding)
-			if hash.String() != "" || err == nil || entropy.reads != 0 {
+			if hash.String() != "" || err == nil || hashCalls != 0 {
 				t.Fatal("invalid screening reached hashing")
 			}
 			if scenario == "canceled" && !errors.Is(err, context.Canceled) {

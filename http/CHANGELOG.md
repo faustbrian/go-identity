@@ -2,6 +2,24 @@
 
 ## Unreleased
 
+- Use authentication v2 credential/principal values and the current public
+  atomic shared-rate owner. Composed callers must use matching major-version
+  types; bounded emergency admission still refuses key churn at capacity.
+
+- Adopt the current public CORS v2 engine and OpenAPI validation correction.
+  Browser origin, credential and header restrictions remain explicit; consumer
+  CORS policies do not acquire new grants through this dependency migration.
+
+- Adopt identifier v2 input and normalization types through public source
+  dependencies. Callers sharing these typed values must use `go-identifier/v2`;
+  stored profile/version bindings and selected workflow behavior are unchanged.
+
+- Align owned capability dependencies with the v2 issuer-scoped contracts.
+
+- Admit selected email verification-send and change-request under the exact
+  original stored-session synchronizer policy. Independently aged tokens,
+  alternate headers and Referer fallback remain rejected for that profile.
+
 - Add repeatable secret-inspection admission with IP quota before native source
   reads, then atomic subject/challenge quotas. Each inspection charges fresh
   native debit identities against the existing shared secret budgets rather

@@ -10,7 +10,7 @@ import (
 	"time"
 
 	identity "github.com/faustbrian/go-identity"
-	primitive "github.com/faustbrian/go-password"
+	primitive "github.com/faustbrian/go-password/v2"
 )
 
 type verificationReadFunc func(context.Context, CredentialKey) (CredentialSnapshot, error)

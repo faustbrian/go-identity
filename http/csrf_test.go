@@ -11,7 +11,7 @@ import (
 	"sync"
 	"testing"
 
-	auth "github.com/faustbrian/go-authentication"
+	auth "github.com/faustbrian/go-authentication/v2"
 	identityhttp "github.com/faustbrian/go-identity/http"
 )
 

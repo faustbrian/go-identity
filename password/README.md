@@ -135,7 +135,7 @@ if err := policy.CheckPassword(secret); err != nil { return err }
 ```
 
 Here `password` is `github.com/faustbrian/go-identity/password`; `primitive` is
-`github.com/faustbrian/go-password`. Production workflows must still enforce
+`github.com/faustbrian/go-password/v2`. Production workflows must still enforce
 configured HIBP/risk, account status, verification and transactional authority
 before hashing or committing. This checkpoint cannot replace those workflows.
 

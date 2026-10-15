@@ -4,11 +4,10 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"io"
 	"testing"
 	"time"
 
-	primitive "github.com/faustbrian/go-password"
+	primitive "github.com/faustbrian/go-password/v2"
 )
 
 func testPasswordWork(t *testing.T) passwordWork {
@@ -120,17 +119,23 @@ func TestPasswordWorkCancellationAndDestructionDiscardOutput(t *testing.T) {
 	}
 }
 
-type failingEntropy struct{ reads int }
-
-func (r *failingEntropy) Read([]byte) (int, error) {
-	r.reads++
-	return 0, io.ErrUnexpectedEOF
-}
-
-func TestPasswordScreeningPrecedesEntropyAndCannotLeakPanic(t *testing.T) {
+func TestPasswordScreeningPrecedesHashingAndCannotLeakPanic(t *testing.T) {
 	w := testPasswordWork(t)
-	entropy := &failingEntropy{}
-	service, err := primitive.NewTestService(w.primitive.Policy(), entropy)
+	admission, err := primitive.NewAdmission(1, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	if err := admission.Shutdown(ctx); err != nil {
+		t.Fatal(err)
+	}
+	hashCalls := 0
+	service, err := primitive.New(w.primitive.Policy(), primitive.WithAdmission(admission), primitive.WithObserver(workObservation(func(_ context.Context, event primitive.Observation) {
+		if event.Operation == primitive.OperationHash {
+			hashCalls++
+		}
+	})))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -142,13 +147,13 @@ func TestPasswordScreeningPrecedesEntropyAndCannotLeakPanic(t *testing.T) {
 		func(context.Context, primitive.Secret) error { panic("private diagnostic") },
 	} {
 		hash, err := w.newHash(context.Background(), secret, screen)
-		if hash.String() != "" || !errors.Is(err, ErrPasswordWork) || entropy.reads != 0 {
+		if hash.String() != "" || !errors.Is(err, ErrPasswordWork) || hashCalls != 0 {
 			t.Fatal("hashing ran before successful screening")
 		}
 	}
 	hash, err := w.newHash(context.Background(), secret, func(context.Context, primitive.Secret) error { return nil })
-	if hash.String() != "" || !errors.Is(err, ErrPasswordWork) || entropy.reads != 1 {
-		t.Fatal("entropy failure yielded hash")
+	if hash.String() != "" || !errors.Is(err, ErrPasswordWork) || hashCalls != 1 {
+		t.Fatal("primitive admission failure yielded hash or skipped work")
 	}
 }
 

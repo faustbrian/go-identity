@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/faustbrian/go-identity/risk"
-	primitive "github.com/faustbrian/go-password"
+	primitive "github.com/faustbrian/go-password/v2"
 )
 
 func TestPublicHashPreparationRequiresCompletedOwnedScreening(t *testing.T) {

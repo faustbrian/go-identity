@@ -11,8 +11,8 @@ import (
 	"testing"
 	"time"
 
-	auth "github.com/faustbrian/go-authentication"
-	"github.com/faustbrian/go-capability"
+	auth "github.com/faustbrian/go-authentication/v2"
+	"github.com/faustbrian/go-capability/v2"
 	identity "github.com/faustbrian/go-identity"
 	"github.com/faustbrian/go-identity/mfa"
 	"github.com/faustbrian/go-identity/session"
@@ -51,7 +51,7 @@ func TestContinuationAuthenticatesFullOriginalCapabilityScopeReadOnly(t *testing
 	if err != nil {
 		t.Fatal(err)
 	}
-	keys, err := capability.NewKeySet([]capability.Key{{ID: "test-key", Verifier: verifier}})
+	keys, err := capability.NewKeySet([]capability.Key{{Issuer: "https://issuer.test", ID: "test-key", Verifier: verifier}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -61,7 +61,7 @@ func TestContinuationAuthenticatesFullOriginalCapabilityScopeReadOnly(t *testing
 		if err != nil {
 			t.Fatal(err)
 		}
-		grant, err := capability.Verify(context.Background(), token, keys, capability.VerifyOptions{Now: spec.IssuedAt, Limits: capability.DefaultLimits()})
+		grant, err := capability.Verify(context.Background(), token, keys, capability.VerifyOptions{Issuer: "https://issuer.test", Now: spec.IssuedAt, Limits: capability.DefaultLimits()})
 		if err != nil {
 			t.Fatal(err)
 		}

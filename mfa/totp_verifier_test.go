@@ -8,9 +8,9 @@ import (
 	"testing"
 	"time"
 
-	auth "github.com/faustbrian/go-authentication"
+	auth "github.com/faustbrian/go-authentication/v2"
 	identity "github.com/faustbrian/go-identity"
-	password "github.com/faustbrian/go-password"
+	password "github.com/faustbrian/go-password/v2"
 )
 
 func TestTOTPVerifierOwnedSecretAndOpaqueCode(t *testing.T) {

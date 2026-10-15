@@ -587,9 +587,11 @@
       "version": "0.0.0",
       "tag_prefix": "http/v",
       "owned_dependencies": [
-        "github.com/faustbrian/go-authentication",
-        "github.com/faustbrian/go-identifier",
+        "github.com/faustbrian/go-authentication/v2",
+        "github.com/faustbrian/go-http-middleware/v2",
+        "github.com/faustbrian/go-identifier/v2",
         "github.com/faustbrian/go-identity",
+        "github.com/faustbrian/go-openapi/v2",
         "github.com/faustbrian/go-rate-limit/v2"
       ],
       "reverse_owned_dependencies": [],
@@ -1659,7 +1661,12 @@
       "version": "0.0.0",
       "tag_prefix": "magiclink/v",
       "owned_dependencies": [
-        "github.com/faustbrian/go-capability"
+        "github.com/faustbrian/go-authentication/v2",
+        "github.com/faustbrian/go-authorization/v3",
+        "github.com/faustbrian/go-capability/v2",
+        "github.com/faustbrian/go-identity",
+        "github.com/faustbrian/go-identity/email",
+        "github.com/faustbrian/go-identity/session"
       ],
       "reverse_owned_dependencies": [],
       "external_runtime_dependencies": [],
@@ -1942,7 +1949,13 @@
       "version": "0.0.0",
       "tag_prefix": "mfa/v",
       "owned_dependencies": [
-        "github.com/faustbrian/go-identity"
+        "github.com/faustbrian/go-authentication/v2",
+        "github.com/faustbrian/go-authorization/v3",
+        "github.com/faustbrian/go-capability/v2",
+        "github.com/faustbrian/go-identity",
+        "github.com/faustbrian/go-identity/delivery",
+        "github.com/faustbrian/go-identity/session",
+        "github.com/faustbrian/go-password/v2"
       ],
       "reverse_owned_dependencies": [
         "github.com/faustbrian/go-identity/mfa/postgres"
@@ -2215,9 +2228,10 @@
       "version": "0.0.0",
       "tag_prefix": "otp/v",
       "owned_dependencies": [
-        "github.com/faustbrian/go-authentication",
-        "github.com/faustbrian/go-authorization",
+        "github.com/faustbrian/go-authentication/v2",
+        "github.com/faustbrian/go-authorization/v3",
         "github.com/faustbrian/go-identity",
+        "github.com/faustbrian/go-identity/delivery",
         "github.com/faustbrian/go-identity/session"
       ],
       "reverse_owned_dependencies": [],
@@ -2499,13 +2513,14 @@
       "version": "0.0.0",
       "tag_prefix": "password/v",
       "owned_dependencies": [
-        "github.com/faustbrian/go-authentication",
-        "github.com/faustbrian/go-authorization",
+        "github.com/faustbrian/go-authentication/v2",
+        "github.com/faustbrian/go-authorization/v3",
+        "github.com/faustbrian/go-capability/v2",
+        "github.com/faustbrian/go-identifier/v2",
         "github.com/faustbrian/go-identity",
         "github.com/faustbrian/go-identity/risk",
         "github.com/faustbrian/go-identity/session",
-        "github.com/faustbrian/go-identifier",
-        "github.com/faustbrian/go-password"
+        "github.com/faustbrian/go-password/v2"
       ],
       "reverse_owned_dependencies": [],
       "external_runtime_dependencies": [],

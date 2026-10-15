@@ -11,7 +11,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	identityidentifier "github.com/faustbrian/go-identifier"
+	identityidentifier "github.com/faustbrian/go-identifier/v2"
 	identity "github.com/faustbrian/go-identity"
 )
 

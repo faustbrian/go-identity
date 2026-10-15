@@ -5,7 +5,7 @@ import (
 	"errors"
 	"time"
 
-	primitive "github.com/faustbrian/go-password"
+	primitive "github.com/faustbrian/go-password/v2"
 )
 
 // ErrPasswordWork is a redacted pre-mutation failure. It carries no dependency

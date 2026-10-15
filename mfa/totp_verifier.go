@@ -7,9 +7,9 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	auth "github.com/faustbrian/go-authentication"
+	auth "github.com/faustbrian/go-authentication/v2"
 	identity "github.com/faustbrian/go-identity"
-	password "github.com/faustbrian/go-password"
+	password "github.com/faustbrian/go-password/v2"
 )
 
 // TOTPProfile selects an exact stored RFC 6238 profile. Algorithm is one of

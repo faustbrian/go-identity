@@ -3,11 +3,20 @@ module github.com/faustbrian/go-identity/mfa
 go 1.27.0
 
 require (
-	github.com/faustbrian/go-authentication v1.2.2-0.20261009190006-7fc797d91317
-	github.com/faustbrian/go-authorization v1.1.1-0.20261005011349-60ed4b3229d8
-	github.com/faustbrian/go-capability v1.0.1-0.20261010235105-f1b4eb9d0c3a
-	github.com/faustbrian/go-identity v0.0.0-20261011052554-3ca77f9f25c7
-	github.com/faustbrian/go-identity/delivery v0.0.0-20261004192212-c70512ebfb31
-	github.com/faustbrian/go-identity/session v0.0.0-20261011102605-954333fbc307
-	github.com/faustbrian/go-password v1.0.1-0.20261001082808-a3dbd862340c
+	github.com/faustbrian/go-authentication/v2 v2.0.2-0.20261015052822-d9f5132c7f68
+	github.com/faustbrian/go-authorization/v3 v3.0.1-0.20261015052455-a55bbebb1060
+	github.com/faustbrian/go-capability/v2 v2.0.2-0.20261015044219-caab644d2fec
+	github.com/faustbrian/go-identity v0.0.0-20261015054516-5afeba0ac471
+	github.com/faustbrian/go-identity/delivery v0.0.0-20261015061706-1f0b46ab1053
+	github.com/faustbrian/go-identity/session v0.0.0-20261015061706-1f0b46ab1053
+	github.com/faustbrian/go-password/v2 v2.0.2-0.20261015050515-4eb0fefa60ff
+)
+
+require (
+	github.com/faustbrian/go-audit v1.0.0 // indirect
+	github.com/faustbrian/go-clock v1.2.0 // indirect
+	github.com/faustbrian/go-secret-envelope v1.0.0 // indirect
+	golang.org/x/crypto v0.57.0 // indirect
+	golang.org/x/net v0.59.0 // indirect
+	golang.org/x/sys v0.48.0 // indirect
 )

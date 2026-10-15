@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+- Use current authentication v2 and authorization v3 public values with the
+  published identity, risk and session contracts. Composed callers must use
+  matching major-version types; password work and screening policy are unchanged.
+
+- Adopt identifier v2 input and normalization types through public source
+  dependencies. Callers sharing these typed values must use `go-identifier/v2`;
+  stored profile/version bindings and selected workflow behavior are unchanged.
+
+- Adopt capability v2 public proof/grant types and explicit trusted issuer
+  policy. Update capability imports and issuer-owned keys/configuration; token
+  framing and native transaction/recovery ownership remain unchanged.
+
 - Add a separate borrowed-proof reset inspection port returning only advisory
   valid/invalid state. Inspection grants no reservation or future completion
   permission and preserves the existing reset service interface.

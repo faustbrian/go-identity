@@ -434,6 +434,12 @@ func validOperation(owner ModuleID, op OperationDescriptor, catalog map[string]c
 		if (r.OperationID == "identity.mfa.enable" || r.OperationID == "identity.mfa.totp-uri" || r.OperationID == "identity.mfa.recovery-regenerate" || r.OperationID == "identity.mfa.factor-update" || r.OperationID == "identity.mfa.disable") && r.CSRFOrigin.Mode == CSRFSessionState && r.CSRFOrigin.TokenHeader == "X-CSRF-Token" && r.CSRFOrigin.RefererFallback == RefererFallbackDeny {
 			csrfMatches = true
 		}
+		// Selected email requests authenticate the original stored synchronizer
+		// in their native transaction. This is stricter than the public send
+		// origin minimum, not an independently aged token or a bearer fallback.
+		if (r.OperationID == "identity.email.verification-send" || r.OperationID == "identity.email.change-request") && r.CSRFOrigin.Mode == CSRFSessionState && r.CSRFOrigin.TokenHeader == "X-CSRF-Token" && r.CSRFOrigin.RefererFallback == RefererFallbackDeny {
+			csrfMatches = true
+		}
 		if r.OperationID == "identity.mfa.totp-verify" && (r.CSRFOrigin.Mode == CSRFSessionState || r.CSRFOrigin.Mode == CSRFVariantOriginSessionState) && r.CSRFOrigin.TokenHeader == "X-CSRF-Token" && r.CSRFOrigin.RefererFallback == RefererFallbackDeny {
 			csrfMatches = true
 		}

@@ -9,7 +9,7 @@ import (
 	"log/slog"
 	"unicode/utf8"
 
-	primitive "github.com/faustbrian/go-password"
+	primitive "github.com/faustbrian/go-password/v2"
 )
 
 var (

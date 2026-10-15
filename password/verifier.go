@@ -8,7 +8,7 @@ import (
 	"time"
 
 	identity "github.com/faustbrian/go-identity"
-	primitive "github.com/faustbrian/go-password"
+	primitive "github.com/faustbrian/go-password/v2"
 )
 
 // ErrCredentialAbsent is the owned repository's missing exact credential result.

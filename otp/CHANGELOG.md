@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Use authentication v2 and authorization v3 public values with current identity,
+  delivery and session contracts. Composed callers must use matching major-version
+  types; original challenge custody and purpose/attempt policy remain unchanged.
+
 - Add an explicit MFA-continuation authorization arm that retains original
   consumed-primary correlation without reopening ordinary pre-auth or treating
   partial authentication as a session. Its purpose-bound consuming attempts

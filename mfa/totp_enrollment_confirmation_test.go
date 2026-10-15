@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	auth "github.com/faustbrian/go-authentication"
-	"github.com/faustbrian/go-authorization"
+	auth "github.com/faustbrian/go-authentication/v2"
+	"github.com/faustbrian/go-authorization/v3"
 	"github.com/faustbrian/go-identity/mfa"
 	"github.com/faustbrian/go-identity/session"
 )

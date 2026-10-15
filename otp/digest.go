@@ -11,7 +11,7 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	auth "github.com/faustbrian/go-authentication"
+	auth "github.com/faustbrian/go-authentication/v2"
 )
 
 var (

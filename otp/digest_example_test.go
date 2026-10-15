@@ -3,7 +3,7 @@ package otp_test
 import (
 	"fmt"
 
-	auth "github.com/faustbrian/go-authentication"
+	auth "github.com/faustbrian/go-authentication/v2"
 	"github.com/faustbrian/go-identity/otp"
 )
 

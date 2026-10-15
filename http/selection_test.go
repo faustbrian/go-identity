@@ -15,6 +15,30 @@ import (
 	identityhttp "github.com/faustbrian/go-identity/http"
 )
 
+func TestCanonicalEmailStoredSynchronizerPolicy(t *testing.T) {
+	handler := http.HandlerFunc(func(http.ResponseWriter, *http.Request) {})
+	stored := identityhttp.CSRFPolicy{Mode: identityhttp.CSRFSessionState, TokenHeader: "X-CSRF-Token", RefererFallback: identityhttp.RefererFallbackDeny}
+	for _, operation := range []string{"identity.email.verification-send", "identity.email.change-request"} {
+		if _, err := identityhttp.NewCanonicalOperation(identityhttp.CanonicalOperationConfig{Owner: "identity/email", OperationID: operation, Handler: handler, CSRF: stored, MaximumSerializedBytes: 16384}); err != nil {
+			t.Fatal("exact stored synchronizer rejected", operation, err)
+		}
+		for _, mutate := range []func(*identityhttp.CSRFPolicy){
+			func(p *identityhttp.CSRFPolicy) { p.TokenHeader = "X-Other" },
+			func(p *identityhttp.CSRFPolicy) { p.TokenMaximumAge = time.Minute },
+			func(p *identityhttp.CSRFPolicy) { p.RefererFallback = identityhttp.RefererFallbackSameOriginHTTPS },
+		} {
+			policy := stored
+			mutate(&policy)
+			if _, err := identityhttp.NewCanonicalOperation(identityhttp.CanonicalOperationConfig{Owner: "identity/email", OperationID: operation, Handler: handler, CSRF: policy, MaximumSerializedBytes: 16384}); err == nil {
+				t.Fatal("weaker/independently aged policy accepted", operation)
+			}
+		}
+	}
+	if _, err := identityhttp.NewCanonicalOperation(identityhttp.CanonicalOperationConfig{Owner: "identity/email", OperationID: "identity.email.verification-confirm", Handler: handler, CSRF: stored, MaximumSerializedBytes: 16384}); err == nil {
+		t.Fatal("stored request exception leaked to confirmation")
+	}
+}
+
 // HTTPSEL-01/06/07: selecting no feature exposes nothing; selecting probes
 // returns real owned handlers, not fabricated domain-route placeholders.
 func TestSelectedProbeOperations(t *testing.T) {

@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/faustbrian/go-capability"
+	"github.com/faustbrian/go-capability/v2"
 )
 
 // Intent is the original closed issuance intent. Consumption cannot reinterpret it.

@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Use authentication v2, authorization v3 and password v2 public values with
+  current identity, delivery and session contracts. Composed callers must use
+  matching major-version types; selected factor policies remain unchanged.
+
+- Adopt capability v2 public proof/grant types and explicit trusted issuer
+  policy. Update capability imports and issuer-owned keys/configuration; token
+  framing and native transaction/recovery ownership remain unchanged.
+
 - Let secondary OTP send's native request-key owner assign the command identity;
   return it with the historical result instead of requiring a competing
   caller-selected command. Sending still proves no factor or login authority.

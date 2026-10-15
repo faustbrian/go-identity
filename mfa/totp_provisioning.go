@@ -13,7 +13,7 @@ import (
 	"unicode/utf8"
 
 	identity "github.com/faustbrian/go-identity"
-	password "github.com/faustbrian/go-password"
+	password "github.com/faustbrian/go-password/v2"
 )
 
 // EnrollmentID identifies one pending factor enrollment, not authentication

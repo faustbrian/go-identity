@@ -4,7 +4,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/faustbrian/go-authentication"
+	"github.com/faustbrian/go-authentication/v2"
 )
 
 // CookieBearer acquires only the exact case-sensitive selected cookie into

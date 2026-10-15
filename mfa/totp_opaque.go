@@ -4,7 +4,7 @@ import (
 	"crypto/hmac"
 	"time"
 
-	auth "github.com/faustbrian/go-authentication"
+	auth "github.com/faustbrian/go-authentication/v2"
 )
 
 // totpOpaqueMatchingStep never extracts the submitted code. The trusted native

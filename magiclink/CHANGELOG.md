@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Use authentication v2 and authorization v3 public values with current identity,
+  email and session contracts. Composed callers must use matching major-version
+  types; original link custody, expiry and consumption policy are unchanged.
+
+- Adopt capability v2 public proof/grant types and explicit trusted issuer
+  policy. Update capability imports and issuer-owned keys/configuration; token
+  framing and native transaction/recovery ownership remain unchanged.
+
 - Add an explicit challenge-only consuming result with reveal-once MFA proof
   custody and original method/expiry metadata. A continuation is not a session;
   retry and recovery never redeliver its credential or renew its lifetime.

@@ -7,11 +7,11 @@ import (
 	"time"
 	"unicode/utf8"
 
-	auth "github.com/faustbrian/go-authentication"
-	"github.com/faustbrian/go-authorization"
+	auth "github.com/faustbrian/go-authentication/v2"
+	"github.com/faustbrian/go-authorization/v3"
 	identity "github.com/faustbrian/go-identity"
 	"github.com/faustbrian/go-identity/session"
-	primitive "github.com/faustbrian/go-password"
+	primitive "github.com/faustbrian/go-password/v2"
 )
 
 // SignupRequest borrows the exact raw password, original pre-auth cookie and

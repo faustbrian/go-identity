@@ -8,12 +8,12 @@ import (
 	"time"
 	"unicode/utf8"
 
-	auth "github.com/faustbrian/go-authentication"
-	"github.com/faustbrian/go-authorization"
-	"github.com/faustbrian/go-identifier"
+	auth "github.com/faustbrian/go-authentication/v2"
+	"github.com/faustbrian/go-authorization/v3"
+	"github.com/faustbrian/go-identifier/v2"
 	identity "github.com/faustbrian/go-identity"
 	"github.com/faustbrian/go-identity/session"
-	primitive "github.com/faustbrian/go-password"
+	primitive "github.com/faustbrian/go-password/v2"
 )
 
 // SigninRequest preserves borrowed raw password and actual original pre-auth

@@ -11,8 +11,8 @@ import (
 	"testing"
 	"time"
 
-	auth "github.com/faustbrian/go-authentication"
-	"github.com/faustbrian/go-capability"
+	auth "github.com/faustbrian/go-authentication/v2"
+	"github.com/faustbrian/go-capability/v2"
 	identity "github.com/faustbrian/go-identity"
 	"github.com/faustbrian/go-identity/password"
 )
@@ -38,11 +38,11 @@ func signResetGrant(t *testing.T, payload capability.Payload, now time.Time) cap
 	if err != nil {
 		t.Fatal(err)
 	}
-	resolver, err := capability.NewKeySet([]capability.Key{{ID: "reset-fixture", Verifier: verifier}})
+	resolver, err := capability.NewKeySet([]capability.Key{{Issuer: payload.Issuer, ID: "reset-fixture", Verifier: verifier}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	service, err := capability.NewService(capability.ServiceConfig{Signer: signer, Resolver: resolver, Clock: func() time.Time { return now }, Limits: capability.DefaultLimits()})
+	service, err := capability.NewService(capability.ServiceConfig{Issuer: payload.Issuer, Signer: signer, Resolver: resolver, Clock: func() time.Time { return now }, Limits: capability.DefaultLimits()})
 	if err != nil {
 		t.Fatal(err)
 	}

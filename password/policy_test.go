@@ -8,7 +8,7 @@ import (
 	"testing"
 
 	password "github.com/faustbrian/go-identity/password"
-	primitive "github.com/faustbrian/go-password"
+	primitive "github.com/faustbrian/go-password/v2"
 )
 
 func TestRegistrationPolicyBoundsAndDisabled(t *testing.T) {

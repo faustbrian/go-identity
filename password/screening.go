@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/faustbrian/go-identity/risk"
-	primitive "github.com/faustbrian/go-password"
+	primitive "github.com/faustbrian/go-password/v2"
 )
 
 // passwordScreening is frozen trusted service composition. collect is the
