@@ -15,9 +15,9 @@ require (
 	github.com/faustbrian/go-identity v0.0.0-20261015143552-2d1115cbb081
 	github.com/faustbrian/go-identity/delivery v0.0.0-20261015061706-1f0b46ab1053
 	github.com/faustbrian/go-identity/delivery/postgres v0.0.0-20261015104034-f16881100907
-	github.com/faustbrian/go-identity/email v0.0.0-20261015143823-03bac9ad6d9f
+	github.com/faustbrian/go-identity/email v0.0.0-20261015152054-6f013f9be2e4
 	github.com/faustbrian/go-identity/http v0.0.0-20261015134730-038260b86666
-	github.com/faustbrian/go-identity/http/email v0.0.0-20261015144054-85ed1e5b7330
+	github.com/faustbrian/go-identity/http/email v0.0.0-20261015152250-15b47640692a
 	github.com/faustbrian/go-identity/http/magiclink v0.0.0-20261015110443-ed660e780fdc
 	github.com/faustbrian/go-identity/http/mfa v0.0.0-20261015110443-ed660e780fdc
 	github.com/faustbrian/go-identity/http/otp v0.0.0-20261015110443-ed660e780fdc

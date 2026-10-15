@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Compose optional administrative email list/get with the existing PostgreSQL
+  audit owner. Select `Email.Addresses.AdministrativeAudit` and independently
+  opt into HTTP `AdministrativeTargets`; missing audit composition denies startup.
+  Audit failure withholds data, without changing self reads or issuing sessions.
+
 - Preserve explicit versioned replacement-primary removal through native and
   opt-in HTTPS composition, including rollback, contention and original recovery.
 

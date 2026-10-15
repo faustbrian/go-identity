@@ -31,9 +31,9 @@ func TestReferencePostgresEmailGetOnlyHTTPS(t *testing.T) {
 
 // Actual native registration, delivered verification and signin precede all
 // requests. Session/rate/query ownership comes only from reference composition.
-func proveReferenceEmailQueriesHTTPS(t *testing.T, ctx context.Context, f liveStores, client *http.Client, base string, cookies []*http.Cookie, user identity.UserID, address identity.IdentifierID, list bool) {
+func proveReferenceEmailQueriesHTTPS(t *testing.T, ctx context.Context, f liveStores, client *http.Client, base string, cookies []*http.Cookie, user identity.UserID, address identity.IdentifierID, list, administrative bool) {
 	t.Helper()
-	for _, mode := range []string{"list", "get", "missing", "cookie", "authorization", "key", "user", "duplicate", "limit", "cursor", "body", "host", "method", "duplicate-cookie"} {
+	for _, mode := range []string{"list", "get", "missing", "cookie", "authorization", "key", "user", "target", "duplicate", "limit", "cursor", "body", "host", "method", "duplicate-cookie"} {
 		path, want := "/v1/email/address-get?addressID="+url.QueryEscape(string(address)), 200
 		var reader io.Reader
 		switch mode {
@@ -52,6 +52,12 @@ func proveReferenceEmailQueriesHTTPS(t *testing.T, ctx context.Context, f liveSt
 		case "user":
 			path += "&userID=other"
 			want = 400
+		case "target":
+			path += "&targetSubjectID=other"
+			want = 400
+			if administrative {
+				want = 403
+			}
 		case "duplicate":
 			path += "&addressID=other"
 			want = 400

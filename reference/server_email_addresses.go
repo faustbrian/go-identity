@@ -22,18 +22,23 @@ type EmailAddressStandaloneRateConfiguration struct {
 	Degraded             func(context.Context, identityhttp.SafeRateEvent) error
 }
 
-// HTTPEmailAddressesConfiguration independently selects cookie self get/list.
+// HTTPEmailAddressesConfiguration independently selects cookie get/list. Self
+// reads are the default; administrative targets require explicit native auditing.
 // Native Email.Addresses/session owners are required, not their HTTP routes.
 // Existing safe HTTP routes share exactly one limiter/emergency budget. Leave
 // StandaloneRate nil when one is already selected; otherwise supply it explicitly.
 // Selecting neither operation or conflicting rate ownership fails construction.
 type HTTPEmailAddressesConfiguration struct {
-	Get, List      bool
-	StandaloneRate *EmailAddressStandaloneRateConfiguration
+	Get, List bool
+	// AdministrativeTargets advertises and accepts targetSubjectID only when
+	// native required auditing is selected. It grants no authorization.
+	AdministrativeTargets bool
+	StandaloneRate        *EmailAddressStandaloneRateConfiguration
 }
 
 type emailAddressesHTTPState struct {
 	get, list, owned bool
+	administrative   bool
 	rate             *identityhttp.SafeRateLimiter
 	now              func() time.Time
 	timeout          time.Duration
@@ -49,7 +54,11 @@ func composeEmailAddressesHTTP(c StoreConfiguration, owner *emailState, sessions
 	if !p.Get && !p.List || c.Email == nil || c.Email.Addresses == nil || owner == nil || owner.addresses == nil || sessions == nil || sessions.reader == nil || c.Session == nil || c.Session.Native.Execution.Clock == nil || shared == nil || c.HTTPRate == nil {
 		return nil, invalid
 	}
+	if p.AdministrativeTargets && !owner.addresses.AdministrativeQueriesConfigured() {
+		return nil, invalid
+	}
 	out := &emailAddressesHTTPState{get: p.Get, list: p.List, now: c.Session.Native.Execution.Clock.Now, timeout: c.Email.Addresses.Native.MaximumDuration, revision: authorization.Revision(c.Email.Addresses.Native.PolicyVersion)}
+	out.administrative = p.AdministrativeTargets
 	if existing != nil {
 		out.rate = existing.rate
 	} else if mfa != nil {
@@ -86,7 +95,7 @@ func (s *Server) emailAddressHTTPConfig(network identityhttp.NetworkConfig, f Fe
 	if sessions == nil {
 		return nil, identity.InvalidInputError{Field: "reference_http_email_addresses"}
 	}
-	return &emailhttp.AddressQueryConfig{Network: network, Sessions: sessions.reader, Service: owner, Rate: h.rate, Cookie: sessions.config.Cookie, PolicyRevision: h.revision, Now: h.now, MaximumDuration: h.timeout}, nil
+	return &emailhttp.AddressQueryConfig{Network: network, Sessions: sessions.reader, Service: owner, Rate: h.rate, Cookie: sessions.config.Cookie, PolicyRevision: h.revision, Now: h.now, MaximumDuration: h.timeout, AdministrativeTargets: h.administrative}, nil
 }
 
 // Format redacts borrowed policy callbacks.

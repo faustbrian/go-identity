@@ -153,9 +153,15 @@ func registrationScreening(t *testing.T, policy risk.Policy, selected ...string)
 	}, &calls
 }
 
-func configureReferenceRegistration(t *testing.T, c *reference.StoreConfiguration, origin string) *atomic.Int32 {
+func configureReferenceRegistration(t *testing.T, c *reference.StoreConfiguration, origin string, selected ...authorization.Service) *atomic.Int32 {
 	t.Helper()
 	query := kernel.CommandQueryPolicy{Authorization: referenceRegistrationPolicy{}, Clock: clock.System{}, PolicyVersion: 9}
+	if len(selected) > 1 {
+		t.Fatal("ambiguous application authorization policy")
+	}
+	if len(selected) == 1 {
+		query.Authorization = selected[0]
+	}
 	c.OTP.RequestKeys.Policy = query
 	c.OTP.Signin.Coordinator.QueryPolicy = &query
 	c.PasswordSignin.Native.Coordinator.QueryPolicy, c.PasswordSignin.Native.Coordinator.AdmissionPolicy = &query, &query
@@ -233,6 +239,7 @@ func proveReferenceSignupGraph(t *testing.T, competing bool, protected ...bool) 
 }
 
 type signupGraphExtensions struct {
+	administrativeEmailQueries                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             bool
 	emailRemoval                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           bool
 	emailManagementChange                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  bool
 	emailChangeCase                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        string
@@ -318,7 +325,17 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 	configureReferencePasswordResetPolicy(t, &c, origin, f.pool, resetRiskVersion, !extensions.factorRemoval && !extensions.emailRemoval, extensions.factorRemoval || extensions.emailRemoval, extensions.factorRemovalReset || extensions.emailRemoval)
 	selectedReset := c.PasswordReset
 	selectedResetHTTP := c.HTTPPasswordReset
-	calls := configureReferenceRegistration(t, &c, origin)
+	var selectedAuthorization authorization.Service = referenceRegistrationPolicy{}
+	if extensions.administrativeEmailQueries {
+		f.adminEmailGrant = &administrativeEmailGrant{}
+		selectedAuthorization = f.adminEmailGrant
+	}
+	calls := configureReferenceRegistration(t, &c, origin, selectedAuthorization)
+	if extensions.administrativeEmailQueries {
+		c.Email = &reference.EmailConfiguration{Addresses: referenceEmailQueryConfiguration()}
+		c.Email.Addresses.AdministrativeAudit = &reference.EmailAddressAuditConfiguration{MaximumDuration: time.Second}
+		c.HTTPEmailAddresses = &reference.HTTPEmailAddressesConfiguration{Get: true, List: true, AdministrativeTargets: true}
+	}
 	if extensions.factorRemoval || extensions.emailRemoval {
 		c.PasswordReset = selectedReset
 		c.PasswordReset.Native.Coordinator.QueryPolicy = c.OTP.Signin.Coordinator.QueryPolicy
@@ -510,6 +527,26 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 					return nil
 				}}
 				f.emailQueriesStandalone = true
+			}
+		}
+	}
+	if extensions.administrativeEmailQueries {
+		for _, mode := range []string{"missing", "zero", "over-budget"} {
+			invalid, selectedEmail, selectedAddresses := c, *c.Email, *c.Email.Addresses
+			selectedEmail.Addresses, invalid.Email = &selectedAddresses, &selectedEmail
+			switch mode {
+			case "missing":
+				selectedAddresses.AdministrativeAudit = nil
+			case "zero":
+				selectedAddresses.AdministrativeAudit = &reference.EmailAddressAuditConfiguration{}
+			case "over-budget":
+				selectedAddresses.AdministrativeAudit = &reference.EmailAddressAuditConfiguration{MaximumDuration: time.Minute}
+			}
+			if graph, err := reference.ComposeStores(invalid, deps); err == nil {
+				bounded, stop := context.WithTimeout(context.Background(), time.Second)
+				_ = graph.Close(bounded)
+				stop()
+				t.Fatal("administrative HTTP accepted missing or unbounded required audit", mode)
 			}
 		}
 	}
@@ -784,7 +821,7 @@ END $$`); err != nil {
 	}
 	if c.HTTPEmailAddresses != nil {
 		f.afterEmailQueries = func(cookies []*http.Cookie, user identity.UserID, address identity.IdentifierID) {
-			proveReferenceEmailQueriesHTTPS(t, ctx, f, client, network.URL, cookies, user, address, c.HTTPEmailAddresses.List)
+			proveReferenceEmailQueriesHTTPS(t, ctx, f, client, network.URL, cookies, user, address, c.HTTPEmailAddresses.List, c.HTTPEmailAddresses.AdministrativeTargets)
 		}
 	}
 	if extensions.emailChangeCase == "shared-http" || extensions.emailChangeCase == "request-http" && !extensions.emailManagementChange {
@@ -1000,6 +1037,10 @@ CREATE TRIGGER registration_fixture_fail BEFORE INSERT ON identity.delivery_inte
 	}
 	if f.afterEmailQueries != nil {
 		f.afterEmailQueries(r.Cookies(), correlation.UserID, identity.IdentifierID(correlation.RecordID))
+	}
+	if f.adminEmailGrant != nil {
+		proveAdministrativeEmailReads(t, ctx, f, features, workers, client, base, origin, messages, invoke, issue, r.Cookies(), r.Header.Get("X-CSRF-Token"), signed.SessionID, correlation.UserID)
+		return
 	}
 	if f.emailQueriesStandalone {
 		return

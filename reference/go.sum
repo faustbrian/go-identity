@@ -69,10 +69,14 @@ github.com/faustbrian/go-identity/delivery/postgres v0.0.0-20261015104034-f16881
 github.com/faustbrian/go-identity/delivery/postgres v0.0.0-20261015104034-f16881100907/go.mod h1:2YBtrqktF4lVGs0LyLWmeYZ78ZGdzanYddXxSV+m5R0=
 github.com/faustbrian/go-identity/email v0.0.0-20261015143823-03bac9ad6d9f h1:IlkN2X4TfRG0a4nBfPNxU/O88Y+TElIDDBo1X9JuiI0=
 github.com/faustbrian/go-identity/email v0.0.0-20261015143823-03bac9ad6d9f/go.mod h1:QgrYEo0nEzVmXP2snE0+9I5ML7zj2JolWkKP8+ZjWqc=
+github.com/faustbrian/go-identity/email v0.0.0-20261015152054-6f013f9be2e4 h1:aWCfySLf3th93S7rhcCAlJgYgrAoYn9dsFDDYl0MbpM=
+github.com/faustbrian/go-identity/email v0.0.0-20261015152054-6f013f9be2e4/go.mod h1:h2dkytj3mMFFaCBPomkfYaB3MAfai9cDsSMl6qYjpqM=
 github.com/faustbrian/go-identity/http v0.0.0-20261015134730-038260b86666 h1:R2b54X0wt21V/IWbX3kqt/FrmugPE1JmyMG4D1rxMEE=
 github.com/faustbrian/go-identity/http v0.0.0-20261015134730-038260b86666/go.mod h1:xt1p+KJpdN9eOPkpZf/LCYQdO/eInaveL7loKPFYcw8=
 github.com/faustbrian/go-identity/http/email v0.0.0-20261015144054-85ed1e5b7330 h1:kaEqBucXNCnOullpLdFriSlEy71Y34hDoyUTDiTdTZk=
 github.com/faustbrian/go-identity/http/email v0.0.0-20261015144054-85ed1e5b7330/go.mod h1:a0+GwMbjAWWkHa669mGEuD+vwKOV25i01bBphiuvVtw=
+github.com/faustbrian/go-identity/http/email v0.0.0-20261015152250-15b47640692a h1:xaRmk07t2+qQPZlY4IHpBKFppRUwwILFzG8ZZy6cOIA=
+github.com/faustbrian/go-identity/http/email v0.0.0-20261015152250-15b47640692a/go.mod h1:5Zr0wVEPTHamDJUug4B01v3tv/C2CipMeSGDy4Y0Az8=
 github.com/faustbrian/go-identity/http/magiclink v0.0.0-20261015110443-ed660e780fdc h1:BDf9OWPtRlXQsS3TAG5MT59MY39ySk6mpbF2RKnj+m4=
 github.com/faustbrian/go-identity/http/magiclink v0.0.0-20261015110443-ed660e780fdc/go.mod h1:gkLqiYkDubr7axA3bsbhazYUMNFTcGTAC4cXG65D6+E=
 github.com/faustbrian/go-identity/http/mfa v0.0.0-20261015110443-ed660e780fdc h1:Fxxvpz3A7DFSzIeI3SjofGTp+8JUOYK4ud+Pr0GXceg=

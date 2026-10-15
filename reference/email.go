@@ -322,6 +322,18 @@ func (f FeatureSet) EmailAddresses() (*EmailAddressService, error) {
 	return &EmailAddressService{state: s}, nil
 }
 
+// AdministrativeQueriesConfigured reports live required-audit composition only,
+// never a permission or identity-validity guarantee. A closed graph denies.
+func (s *EmailAddressService) AdministrativeQueriesConfigured() bool {
+	if s == nil || s.state == nil {
+		return false
+	}
+	state := s.state
+	state.mu.Lock()
+	defer state.mu.Unlock()
+	return !state.closed && state.features != nil && state.features.composed && state.features.email != nil && state.features.email.addresses.AdministrativeQueriesConfigured()
+}
+
 // AddressGet delegates current owner/admin policy and safe projection.
 func (s *EmailAddressService) AddressGet(ctx context.Context, r email.AddressGetRequest) (email.AddressGetResult, error) {
 	if s == nil || s.state == nil {

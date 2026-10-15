@@ -4,7 +4,9 @@ import (
 	"fmt"
 	"io"
 	"slices"
+	"time"
 
+	auditpg "github.com/faustbrian/go-audit/postgres"
 	identity "github.com/faustbrian/go-identity"
 	"github.com/faustbrian/go-identity/delivery"
 	deliverypg "github.com/faustbrian/go-identity/delivery/postgres"
@@ -68,7 +70,15 @@ type EmailManagementConfiguration struct {
 type EmailAddressConfiguration struct {
 	Native identity.UserQueryConfig
 	Redact identity.RedactFunc
+	// AdministrativeAudit explicitly selects required access auditing through
+	// the existing native PostgreSQL audit owner, not another domain store.
+	AdministrativeAudit *EmailAddressAuditConfiguration
 }
+
+// EmailAddressAuditConfiguration bounds required administrative acknowledgements
+// within the query deadline. No retries, detached writes or fail-open fallback
+// are selected. The graph borrows its existing PostgreSQL pool.
+type EmailAddressAuditConfiguration struct{ MaximumDuration time.Duration }
 
 type emailState struct {
 	verification, change                 *passwordpg.EmailManagementService
@@ -116,7 +126,15 @@ func composeEmail(c StoreConfiguration, d ReferenceDependencies, evaluation risk
 			return nil, invalid
 		}
 		a.Native.Clock = c.Session.Native.Execution.Clock
-		state.addresses, err = email.NewAddressQueryService(repository, c.OTP.RequestKeys.Policy.Authorization, a.Redact, a.Native)
+		if a.AdministrativeAudit != nil {
+			sink, e := auditpg.New(d.PostgreSQL.Raw(), auditpg.Config{})
+			if e != nil {
+				return nil, invalid
+			}
+			state.addresses, err = email.NewAuditedAddressQueryService(repository, c.OTP.RequestKeys.Policy.Authorization, a.Redact, a.Native, email.AdministrativeReadAuditConfig{Sink: sink, MaximumDuration: a.AdministrativeAudit.MaximumDuration})
+		} else {
+			state.addresses, err = email.NewAddressQueryService(repository, c.OTP.RequestKeys.Policy.Authorization, a.Redact, a.Native)
+		}
 		if err != nil {
 			return nil, invalid
 		}

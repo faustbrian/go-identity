@@ -52,6 +52,18 @@ one owner; no source failure falls back to the other. False preserves signup-onl
 HTTP behavior. This flag selects no add/resend/read/change/removal route.
 
 Select `HTTPEmailAddressesConfiguration.Get` and/or `.List` separately for native
+reads. To enable administrative targets, select
+`Email.Addresses.AdministrativeAudit` with a positive acknowledgement budget
+within `Email.Addresses.Native.MaximumDuration`; the graph constructs the existing
+PostgreSQL audit adapter using its borrowed pool and installed audit migrations.
+Independently select `HTTPEmailAddressesConfiguration.AdministrativeTargets`
+to accept and advertise `targetSubjectID`. Native-only selection opens no route,
+and HTTP selection without auditing fails startup. The actual authorizer must
+grant actor/action/tenant/target; configuration is not a permission. Required audit
+failure withholds data; self reads remain unchanged. No new store, worker,
+credential or mutation is introduced.
+
+The default HTTP profile remains
 cookie-authenticated self reads. Native `Email.Addresses` and session composition
 are required, but HTTP session routes are not. Existing HTTP session/MFA-list safe
 routes lend their actual limiter, including its emergency budget. Leave
