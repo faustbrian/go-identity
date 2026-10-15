@@ -3,7 +3,7 @@ package identity
 import (
 	"strings"
 
-	"github.com/faustbrian/go-capability"
+	"github.com/faustbrian/go-capability/v2"
 )
 
 // NewFeaturePasswordResetCommand retains prepared replacement verifier material

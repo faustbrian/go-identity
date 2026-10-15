@@ -21,6 +21,91 @@ func identifierFixture() (IdentifierState, IdentifierChange, time.Time) {
 	return state, change, now
 }
 
+func TestIdentifierVerifyPrimaryIsOneAtomicTransition(t *testing.T) {
+	state, attach, now := identifierFixture()
+	pending, err := ApplyIdentifierChange(state, attach, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	before := pending.State
+	before.Identifiers = slices.Clone(before.Identifiers)
+	before.Verifications = slices.Clone(before.Verifications)
+	change := IdentifierChange{TenantID: attach.TenantID, UserID: attach.UserID, ID: attach.ID, Action: IdentifierVerifyPrimary, ExpectedUserVersion: 5, ExpectedAuthorityVersion: 3, ExpectedIdentifierVersion: 1, ExpectedVerificationVersion: 1}
+	got, err := ApplyIdentifierChange(pending.State, change, now.Add(time.Minute))
+	if err != nil {
+		t.Fatal("pending email has no atomic verified-primary transition", err)
+	}
+	if got.State.User.Version != 6 || got.State.AuthorityVersion != 4 || got.State.Identifiers[0].Primary || !got.State.Identifiers[0].Verified || got.State.Identifiers[0].Version != 4 || got.State.Verifications[0] != before.Verifications[0] || !got.State.Identifiers[1].Primary || !got.State.Identifiers[1].Verified || got.State.Identifiers[1].Version != 2 || got.State.Verifications[1].Version != 2 || !got.State.Verifications[1].VerifiedAt.Equal(now.Add(time.Minute)) {
+		t.Fatal("verification and primary effects were not conserved atomically")
+	}
+	if !reflect.DeepEqual(before, pending.State) || got.Retired != nil || got.RetiredVerification != nil {
+		t.Fatal("input or unrelated identifier history changed")
+	}
+	if _, err := IdentifierIntentDigest(change); err != nil {
+		t.Fatal("native compound intent cannot be committed", err)
+	}
+	if identifierOperation(change.Action) != "" {
+		t.Fatal("generic identifier operation exposed native verification policy")
+	}
+	change.ExpectedUserVersion, change.ExpectedAuthorityVersion = 6, 4
+	change.ExpectedIdentifierVersion, change.ExpectedVerificationVersion = 2, 2
+	if _, err := ApplyIdentifierChange(got.State, change, now.Add(2*time.Minute)); err == nil {
+		t.Fatal("verified-primary action replayed without its native command owner")
+	}
+}
+
+func TestIdentifierRestartVerificationPreservesPendingIdentityAndFencesHistory(t *testing.T) {
+	state, attach, now := identifierFixture()
+	pending, err := ApplyIdentifierChange(state, attach, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	change := IdentifierChange{TenantID: attach.TenantID, UserID: attach.UserID, ID: attach.ID, Action: IdentifierRestartVerification, ExpectedUserVersion: 5, ExpectedAuthorityVersion: 3, ExpectedIdentifierVersion: 1, ExpectedVerificationVersion: 1}
+	before := pending.State
+	before.Identifiers = slices.Clone(before.Identifiers)
+	before.Verifications = slices.Clone(before.Verifications)
+	got, err := ApplyIdentifierChange(pending.State, change, now.Add(time.Minute))
+	if err != nil {
+		t.Fatal("pending verification has no restart transition", err)
+	}
+	if got.State.User.Version != 6 || got.State.AuthorityVersion != 4 || got.Retired != nil || got.RetiredVerification != nil || got.State.Identifiers[0] != pending.State.Identifiers[0] || got.State.Verifications[0] != pending.State.Verifications[0] {
+		t.Fatal("restart changed primary, retirement or unrelated verification")
+	}
+	i, v := got.State.Identifiers[1], got.State.Verifications[1]
+	if i.ID != attach.ID || i.CanonicalValue != attach.CanonicalValue || i.Verified || i.Primary || i.Version != 2 || v.State != VerificationPending || v.Version != 2 || !v.VerifiedAt.IsZero() || !reflect.DeepEqual(pending.State, before) {
+		t.Fatal("restart granted possession, changed identity or mutated input")
+	}
+	if digest, err := IdentifierIntentDigest(change); err != nil || digest == ([32]byte{}) {
+		t.Fatal("restart intent has no complete native binding", err)
+	}
+	if result, err := ApplyIdentifierChange(got.State, change, now.Add(time.Minute)); err == nil || !reflect.DeepEqual(result, IdentifierMutation{}) {
+		t.Fatal("stale restart retained authority")
+	}
+	for _, action := range []IdentifierAction{IdentifierVerify, IdentifierMakePrimary} {
+		invalid := pending.State
+		if action == IdentifierVerify {
+			verified := change
+			verified.Action = IdentifierVerify
+			result, err := ApplyIdentifierChange(invalid, verified, now)
+			if err != nil {
+				t.Fatal(err)
+			}
+			invalid = result.State
+		}
+		if action == IdentifierMakePrimary {
+			invalid = state
+			change.ID, change.ExpectedIdentifierVersion, change.ExpectedVerificationVersion = "a", 3, 2
+		}
+		change.ExpectedUserVersion, change.ExpectedAuthorityVersion = invalid.User.Version, invalid.AuthorityVersion
+		if action == IdentifierVerify {
+			change.ExpectedIdentifierVersion, change.ExpectedVerificationVersion = 2, 2
+		}
+		if result, err := ApplyIdentifierChange(invalid, change, now); err == nil || !reflect.DeepEqual(result, IdentifierMutation{}) {
+			t.Fatal("verified/primary identity was downgraded to pending")
+		}
+	}
+}
+
 func TestIdentifierLifecycle(t *testing.T) {
 	state, change, now := identifierFixture()
 	attached, err := ApplyIdentifierChange(state, change, now)

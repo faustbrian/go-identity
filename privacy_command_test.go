@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/faustbrian/go-authorization"
-	"github.com/faustbrian/go-capability"
+	"github.com/faustbrian/go-capability/v2"
 )
 
 func privacyRequestFixture() PrivacyExportRequestCommand {
@@ -28,9 +28,9 @@ func signPrivacyCommand(t *testing.T, c *PrivacyExportRequestCommand) {
 	t.Helper()
 	signer, _ := capability.NewHMACSHA256Signer("privacy-key", []byte("0123456789abcdef0123456789abcdef"))
 	verifier, _ := capability.NewHMACSHA256Verifier([]byte("0123456789abcdef0123456789abcdef"))
-	keys, _ := capability.NewKeySet([]capability.Key{{ID: "privacy-key", Verifier: verifier}})
+	keys, _ := capability.NewKeySet([]capability.Key{{Issuer: "https://identity.example", ID: "privacy-key", Verifier: verifier}})
 	now := queryClock{}.Now()
-	caps, err := capability.NewService(capability.ServiceConfig{Signer: signer, Resolver: keys, Clock: func() time.Time { return now }, Limits: capability.DefaultLimits()})
+	caps, err := capability.NewService(capability.ServiceConfig{Issuer: "https://identity.example", Signer: signer, Resolver: keys, Clock: func() time.Time { return now }, Limits: capability.DefaultLimits()})
 	if err != nil {
 		t.Fatal(err)
 	}

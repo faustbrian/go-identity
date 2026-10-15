@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"github.com/faustbrian/go-authorization"
-	"github.com/faustbrian/go-capability"
+	"github.com/faustbrian/go-capability/v2"
 )
 
 // AccountLinkCommand is frozen structural intent for the sole durable owner.
@@ -64,7 +64,7 @@ func NewAccountLinkCommand(s AccountLinkCommand) (Command, error) {
 		return Command{}, InvalidInputError{Field: "link_command"}
 	}
 	p := s.Proof.Payload()
-	if !validDirectoryID(p.ID) || p.Bearer || p.MaxUses != 1 || len(p.Audiences) != 1 || len(p.Caveats) != 8 || s.Proof.Authorize(capability.Use{Audience: p.Audiences[0], Subject: string(s.Binding.UserID), Tenant: string(s.Binding.TenantID), Resource: string(s.Change.Account.ID), Operation: "identity.account.link-token", Caveats: linkCaveats(s)}) != nil {
+	if !validDirectoryID(p.ID) || p.Bearer || p.MaxUses != 1 || len(p.Audiences) != 1 || len(p.Caveats) != 8 || s.Proof.Authorize(capability.Use{Issuer: p.Issuer, Audience: p.Audiences[0], Subject: string(s.Binding.UserID), Tenant: string(s.Binding.TenantID), Resource: string(s.Change.Account.ID), Operation: "identity.account.link-token", Caveats: linkCaveats(s)}) != nil {
 		return Command{}, InvalidInputError{Field: "link_proof"}
 	}
 	s.Change = cloneLinkChange(s.Change)

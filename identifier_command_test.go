@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/faustbrian/go-authorization"
-	"github.com/faustbrian/go-capability"
+	"github.com/faustbrian/go-capability/v2"
 )
 
 func TestIdentifierCommandCommitsAndRecoversExactChange(t *testing.T) {
@@ -182,7 +182,18 @@ func TestIdentifierCommandRejectsSignedWrongAuthority(t *testing.T) {
 			}
 			p := g.Payload()
 			alter(&p)
-			r.Proof, _, e = caps.Issue(context.Background(), p)
+			if name == "issuer" {
+				// A foreign issuer can sign a structurally valid token. The
+				// application's configured verifier must still refuse it.
+				signer, _ := capability.NewHMACSHA256Signer("identifier-key", []byte("0123456789abcdef0123456789abcdef"))
+				wire, err := capability.Issue(context.Background(), p, signer, capability.DefaultLimits())
+				if err != nil {
+					t.Fatal(err)
+				}
+				r.Proof, e = capability.ParseProof(wire, capability.DefaultLimits())
+			} else {
+				r.Proof, _, e = caps.Issue(context.Background(), p)
+			}
 			if e != nil {
 				t.Fatal("bad fixture", e)
 			}
@@ -563,8 +574,8 @@ func identifierCommandFixture(t *testing.T) (*IdentifierService, *identifierOwne
 	o := &identifierOwner{state: state}
 	signer, _ := capability.NewHMACSHA256Signer("identifier-key", []byte("0123456789abcdef0123456789abcdef"))
 	verifier, _ := capability.NewHMACSHA256Verifier([]byte("0123456789abcdef0123456789abcdef"))
-	keys, _ := capability.NewKeySet([]capability.Key{{ID: "identifier-key", Verifier: verifier}})
-	caps, e := capability.NewService(capability.ServiceConfig{Signer: signer, Resolver: keys, Clock: func() time.Time { return queryClock{}.Now() }, Limits: capability.DefaultLimits()})
+	keys, _ := capability.NewKeySet([]capability.Key{{Issuer: "https://identity.example", ID: "identifier-key", Verifier: verifier}})
+	caps, e := capability.NewService(capability.ServiceConfig{Issuer: "https://identity.example", Signer: signer, Resolver: keys, Clock: func() time.Time { return queryClock{}.Now() }, Limits: capability.DefaultLimits()})
 	if e != nil {
 		t.Fatal(e)
 	}

@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/faustbrian/go-authorization"
-	"github.com/faustbrian/go-capability"
+	"github.com/faustbrian/go-capability/v2"
 )
 
 // PrivacyExportConfig freezes trusted policy, proof trust and retained snapshot

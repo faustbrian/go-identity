@@ -9,7 +9,7 @@ import (
 	"testing"
 
 	"github.com/faustbrian/go-authorization"
-	"github.com/faustbrian/go-capability"
+	"github.com/faustbrian/go-capability/v2"
 )
 
 func TestIdentifierServiceCarriesOriginalProofWithoutTransferringCustody(t *testing.T) {

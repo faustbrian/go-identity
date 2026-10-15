@@ -8,6 +8,8 @@ github.com/faustbrian/go-cache v1.0.0 h1:/B3O6vnO7nNKaHo7OyneRzKt0v4usW2cDfjK/ns
 github.com/faustbrian/go-cache v1.0.0/go.mod h1:bV7c5/FSwYGqUaeqgnWTyZnAzEhwGQL4C1tFdu4Smrk=
 github.com/faustbrian/go-capability v1.0.1-0.20261002040645-174b128867a4 h1:ETYvtnrzgprM74djP4W1okumk9Rqmluorl/VdOvSdsg=
 github.com/faustbrian/go-capability v1.0.1-0.20261002040645-174b128867a4/go.mod h1:W33r26ntFpto2D1ejgqu36KwyDEofO4YdtFOkWwgo9k=
+github.com/faustbrian/go-capability/v2 v2.0.2-0.20261015044219-caab644d2fec h1:zsKeLj0VkOz+wRjKvvACtVF4MO229KsUXIw9CR0jywY=
+github.com/faustbrian/go-capability/v2 v2.0.2-0.20261015044219-caab644d2fec/go.mod h1:ssUHOHCArf/XQ+xfzVOmiDsV3eTPJeS2hyFH5uhqIJE=
 github.com/faustbrian/go-clock v1.0.0 h1:F7YEouU94Zu2mExFBep7JWEa8nMz7WzWi/SPrDz2yJY=
 github.com/faustbrian/go-clock v1.0.0/go.mod h1:WKZ5p79IKGNTZGDp2L81cYjbsEjv3+9U0be7uwS8t6Y=
 github.com/faustbrian/go-jsonrpc v1.0.0 h1:iQ/YxMkjKBlWyTPCYxQzuBBIV/73ImYWKNVGG7hZr8s=

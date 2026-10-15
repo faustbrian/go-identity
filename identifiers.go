@@ -140,6 +140,16 @@ const (
 	IdentifierMakePrimary
 	IdentifierReplace
 	IdentifierRemove
+	// IdentifierRestartVerification advances only an existing pending,
+	// non-primary verification generation. Native resend must authorize fresh
+	// proof and atomically replace delivery/capability custody; generic identifier
+	// commands do not expose this feature-specific transition.
+	IdentifierRestartVerification
+	// IdentifierVerifyPrimary verifies one pending email and selects it as
+	// primary in one native transition. The feature owner must prove original
+	// new-address possession and current change policy; generic identifier
+	// commands do not expose this compound action.
+	IdentifierVerifyPrimary
 )
 
 // IdentifierChange is bounded intent and exact optimistic fences. Attach and
@@ -205,7 +215,7 @@ func (IdentifierMutation) Format(s fmt.State, verb rune) {
 // verification time is UTC truncated to microseconds, never a new proof lifetime.
 func ApplyIdentifierChange(state IdentifierState, change IdentifierChange, now time.Time) (IdentifierMutation, error) {
 	zero := IdentifierMutation{}
-	if !validDirectoryID(string(change.TenantID)) || !validDirectoryID(string(change.UserID)) || !validDirectoryID(string(change.ID)) || change.Action < IdentifierAttach || change.Action > IdentifierRemove || !unlinkVersion(change.ExpectedUserVersion) || !unlinkVersion(change.ExpectedAuthorityVersion) || state.validate(change.TenantID, change.UserID, now) != nil {
+	if !validDirectoryID(string(change.TenantID)) || !validDirectoryID(string(change.UserID)) || !validDirectoryID(string(change.ID)) || change.Action < IdentifierAttach || change.Action > IdentifierVerifyPrimary || !unlinkVersion(change.ExpectedUserVersion) || !unlinkVersion(change.ExpectedAuthorityVersion) || state.validate(change.TenantID, change.UserID, now) != nil {
 		return zero, InvalidInputError{Field: "identifier_change"}
 	}
 	if !state.User.Status.AllowsAuthentication() {
@@ -259,30 +269,36 @@ func ApplyIdentifierChange(state IdentifierState, change IdentifierChange, now t
 		}
 		result.State.Identifiers = slices.Insert(next.Identifiers, position, Identifier{ID: change.ID, UserID: change.UserID, Kind: change.Kind, CanonicalValue: change.CanonicalValue, DisplayValue: change.DisplayValue, Version: 1})
 		result.State.Verifications = slices.Insert(next.Verifications, position, Verification{IdentifierID: change.ID, State: VerificationPending, Version: 1})
-	case IdentifierVerify:
+	case IdentifierRestartVerification:
+		if next.Identifiers[index].Verified || next.Identifiers[index].Primary || next.Verifications[index].State != VerificationPending {
+			return zero, ForbiddenError{}
+		}
+		result.State.Identifiers[index].Version++
+		result.State.Verifications[index].Version++
+	case IdentifierVerify, IdentifierVerifyPrimary:
 		if next.Verifications[index].State != VerificationPending {
 			return zero, ConflictError{}
+		}
+		if change.Action == IdentifierVerifyPrimary && next.Identifiers[index].Kind != IdentifierEmail {
+			return zero, InvalidInputError{Field: "identifier_kind"}
 		}
 		result.State.Identifiers[index].Verified = true
 		result.State.Identifiers[index].Version++
 		result.State.Verifications[index].State = VerificationVerified
 		result.State.Verifications[index].VerifiedAt = now.UTC().Truncate(time.Microsecond)
 		result.State.Verifications[index].Version++
+		if change.Action == IdentifierVerifyPrimary {
+			if err := selectIdentifierPrimary(&result.State, index, false); err != nil {
+				return zero, err
+			}
+		}
 	case IdentifierMakePrimary:
 		if !next.Identifiers[index].Verified || next.Identifiers[index].Primary {
 			return zero, ConflictError{}
 		}
-		for j, i := range next.Identifiers {
-			if i.Kind == next.Identifiers[index].Kind && i.Primary {
-				if !unlinkVersion(i.Version) {
-					return zero, ConflictError{}
-				}
-				result.State.Identifiers[j].Primary = false
-				result.State.Identifiers[j].Version++
-			}
+		if err := selectIdentifierPrimary(&result.State, index, true); err != nil {
+			return zero, err
 		}
-		result.State.Identifiers[index].Primary = true
-		result.State.Identifiers[index].Version++
 	case IdentifierReplace, IdentifierRemove:
 		old, verification := next.Identifiers[index], next.Verifications[index]
 		result.Retired, result.RetiredVerification = &old, &verification
@@ -299,6 +315,23 @@ func ApplyIdentifierChange(state IdentifierState, change IdentifierChange, now t
 		}
 	}
 	return result, nil
+}
+
+func selectIdentifierPrimary(next *IdentifierState, index int, advanceTarget bool) error {
+	for j, i := range next.Identifiers {
+		if i.Kind == next.Identifiers[index].Kind && i.Primary {
+			if !unlinkVersion(i.Version) {
+				return ConflictError{}
+			}
+			next.Identifiers[j].Primary = false
+			next.Identifiers[j].Version++
+		}
+	}
+	next.Identifiers[index].Primary = true
+	if advanceTarget {
+		next.Identifiers[index].Version++
+	}
+	return nil
 }
 
 func (s IdentifierState) validate(tenant TenantID, user UserID, now time.Time) error {

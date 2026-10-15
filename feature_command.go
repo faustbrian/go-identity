@@ -8,7 +8,7 @@ import (
 
 	"github.com/faustbrian/go-authentication"
 	"github.com/faustbrian/go-authorization"
-	"github.com/faustbrian/go-capability"
+	"github.com/faustbrian/go-capability/v2"
 	primitive "github.com/faustbrian/go-password"
 )
 

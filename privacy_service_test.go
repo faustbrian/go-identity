@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/faustbrian/go-authorization"
-	"github.com/faustbrian/go-capability"
+	"github.com/faustbrian/go-capability/v2"
 )
 
 // This boundary owner proves service admission and observation, not PostgreSQL
@@ -109,8 +109,8 @@ func privacyServiceFixture(t *testing.T) (*PrivacyExportService, PrivacyExportRe
 	config.Query.PolicyID = intent.Binding.PolicyID
 	signer, _ := capability.NewHMACSHA256Signer("privacy-key", []byte("0123456789abcdef0123456789abcdef"))
 	verifier, _ := capability.NewHMACSHA256Verifier([]byte("0123456789abcdef0123456789abcdef"))
-	keys, _ := capability.NewKeySet([]capability.Key{{ID: "privacy-key", Verifier: verifier}})
-	caps, err := capability.NewService(capability.ServiceConfig{Signer: signer, Resolver: keys, Clock: func() time.Time { return queryClock{}.Now() }, Limits: capability.DefaultLimits()})
+	keys, _ := capability.NewKeySet([]capability.Key{{Issuer: "https://identity.example", ID: "privacy-key", Verifier: verifier}})
+	caps, err := capability.NewService(capability.ServiceConfig{Issuer: "https://identity.example", Signer: signer, Resolver: keys, Clock: func() time.Time { return queryClock{}.Now() }, Limits: capability.DefaultLimits()})
 	if err != nil {
 		t.Fatal(err)
 	}

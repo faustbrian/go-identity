@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/faustbrian/go-authorization"
-	"github.com/faustbrian/go-capability"
+	"github.com/faustbrian/go-capability/v2"
 )
 
 // CommandID is a canonical nonzero random 128-bit command identity. It is not

@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/faustbrian/go-authorization"
-	"github.com/faustbrian/go-capability"
+	"github.com/faustbrian/go-capability/v2"
 )
 
 func linkState(t *testing.T) (AccountLinkState, AccountLinkChange) {
@@ -168,7 +168,16 @@ func TestAccountLinkRejectsWrongSignedAuthorityAndLifetimes(t *testing.T) {
 			s, o, r, caps, p := linkCommandFixture(t)
 			alter(&p)
 			var e error
-			r.Proof, _, e = caps.Issue(context.Background(), p)
+			if name == "wrong issuer" {
+				signer, _ := capability.NewHMACSHA256Signer("link-key", []byte("0123456789abcdef0123456789abcdef"))
+				wire, err := capability.Issue(context.Background(), p, signer, capability.DefaultLimits())
+				if err != nil {
+					t.Fatal(err)
+				}
+				r.Proof, e = capability.ParseProof(wire, capability.DefaultLimits())
+			} else {
+				r.Proof, _, e = caps.Issue(context.Background(), p)
+			}
 			if e != nil {
 				t.Fatal(e)
 			}
@@ -513,8 +522,8 @@ func linkCommandFixture(t *testing.T) (*AccountLinkService, *linkOwner, AccountL
 	now := queryClock{}.Now()
 	signer, _ := capability.NewHMACSHA256Signer("link-key", []byte("0123456789abcdef0123456789abcdef"))
 	verifier, _ := capability.NewHMACSHA256Verifier([]byte("0123456789abcdef0123456789abcdef"))
-	keys, _ := capability.NewKeySet([]capability.Key{{ID: "link-key", Verifier: verifier}})
-	caps, e := capability.NewService(capability.ServiceConfig{Signer: signer, Resolver: keys, Clock: func() time.Time { return now }, Limits: capability.DefaultLimits()})
+	keys, _ := capability.NewKeySet([]capability.Key{{Issuer: "https://identity.example", ID: "link-key", Verifier: verifier}})
+	caps, e := capability.NewService(capability.ServiceConfig{Issuer: "https://identity.example", Signer: signer, Resolver: keys, Clock: func() time.Time { return now }, Limits: capability.DefaultLimits()})
 	if e != nil {
 		t.Fatal(e)
 	}

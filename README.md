@@ -11,6 +11,17 @@ The schema-v2 module inventory describes current ownership and partial delivery.
 Its gate flags preserve the existing development selection; unconfigured release
 operations are not passes or exemptions from full-platform qualification.
 
+## Capability v2 compatibility
+
+Public proof/grant contracts use `github.com/faustbrian/go-capability/v2` and
+the separately selected `github.com/faustbrian/go-capability/v2/postgres/identity`
+adapter. Configure `ServiceConfig.Issuer`, each verifier key's `Issuer` and
+attempted authorization from trusted deployment/application policy, never a
+parsed token claim. Existing `cap1` bytes and identity one-use/recovery histories
+retain their formats; verification still does not consume a proof. The root
+capability PostgreSQL legacy-store migration is separate from the identity
+adapter's coordinator-owned ledger and must not be applied to those tables.
+
 ## Original password-reset preparation
 
 `NewFeaturePasswordResetInputCommand` borrows the primitive replacement `Secret`

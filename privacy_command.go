@@ -8,7 +8,7 @@ import (
 	"slices"
 	"time"
 
-	"github.com/faustbrian/go-capability"
+	"github.com/faustbrian/go-capability/v2"
 )
 
 const privacyExportRequestOperation = "identity.privacy-export.request"
@@ -109,7 +109,7 @@ func NewPrivacyExportRequestCommand(c PrivacyExportRequestCommand) (Command, err
 		return Command{}, InvalidInputError{Field: "privacy_export_command"}
 	}
 	p := c.Proof.Payload()
-	if !validDirectoryID(p.ID) || p.Bearer || p.MaxUses != 1 || len(p.Audiences) != 1 || len(p.Caveats) != 1 || c.Proof.Authorize(capability.Use{Audience: p.Audiences[0], Subject: string(c.Binding.UserID), Tenant: string(c.Binding.TenantID), Resource: string(c.Binding.UserID), Operation: privacyExportRequestOperation, Caveats: privacyExportCaveats(c)}) != nil {
+	if !validDirectoryID(p.ID) || p.Bearer || p.MaxUses != 1 || len(p.Audiences) != 1 || len(p.Caveats) != 1 || c.Proof.Authorize(capability.Use{Issuer: p.Issuer, Audience: p.Audiences[0], Subject: string(c.Binding.UserID), Tenant: string(c.Binding.TenantID), Resource: string(c.Binding.UserID), Operation: privacyExportRequestOperation, Caveats: privacyExportCaveats(c)}) != nil {
 		return Command{}, InvalidInputError{Field: "privacy_export_proof"}
 	}
 	c.Projections = slices.Clone(c.Projections)

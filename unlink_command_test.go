@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/faustbrian/go-authorization"
-	"github.com/faustbrian/go-capability"
+	"github.com/faustbrian/go-capability/v2"
 )
 
 type unlinkOwner struct {
@@ -65,8 +65,8 @@ func unlinkCommandFixture(t *testing.T) (*AccountUnlinkService, *unlinkOwner, Ac
 	key := []byte("0123456789abcdef0123456789abcdef")
 	signer, _ := capability.NewHMACSHA256Signer("unlink-key", key)
 	verifier, _ := capability.NewHMACSHA256Verifier(key)
-	keys, _ := capability.NewKeySet([]capability.Key{{ID: "unlink-key", Verifier: verifier}})
-	caps, e := capability.NewService(capability.ServiceConfig{Signer: signer, Resolver: keys, Clock: func() time.Time { return now }, Limits: capability.DefaultLimits()})
+	keys, _ := capability.NewKeySet([]capability.Key{{Issuer: "https://identity.example", ID: "unlink-key", Verifier: verifier}})
+	caps, e := capability.NewService(capability.ServiceConfig{Issuer: "https://identity.example", Signer: signer, Resolver: keys, Clock: func() time.Time { return now }, Limits: capability.DefaultLimits()})
 	if e != nil {
 		t.Fatal(e)
 	}

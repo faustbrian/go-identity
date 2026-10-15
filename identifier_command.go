@@ -13,7 +13,7 @@ import (
 	"time"
 
 	"github.com/faustbrian/go-authorization"
-	"github.com/faustbrian/go-capability"
+	"github.com/faustbrian/go-capability/v2"
 )
 
 func identifierOperation(a IdentifierAction) string {
@@ -43,7 +43,7 @@ func identifierAction(op string) IdentifierAction {
 }
 
 func validIdentifierChange(c IdentifierChange) bool {
-	if !validDirectoryID(string(c.TenantID)) || !validDirectoryID(string(c.UserID)) || !validDirectoryID(string(c.ID)) || identifierOperation(c.Action) == "" || !unlinkVersion(c.ExpectedUserVersion) || !unlinkVersion(c.ExpectedAuthorityVersion) {
+	if !validDirectoryID(string(c.TenantID)) || !validDirectoryID(string(c.UserID)) || !validDirectoryID(string(c.ID)) || identifierOperation(c.Action) == "" && c.Action != IdentifierRestartVerification && c.Action != IdentifierVerifyPrimary || !unlinkVersion(c.ExpectedUserVersion) || !unlinkVersion(c.ExpectedAuthorityVersion) {
 		return false
 	}
 	if c.Action == IdentifierAttach || c.Action == IdentifierReplace {
@@ -111,7 +111,7 @@ func NewIdentifierCommand(c IdentifierCommand) (Command, error) {
 		return Command{}, InvalidInputError{Field: "identifier_command"}
 	}
 	p := c.Proof.Payload()
-	if !validDirectoryID(p.ID) || p.Bearer || p.MaxUses != 1 || len(p.Audiences) != 1 || len(p.Caveats) != 6 || c.Proof.Authorize(capability.Use{Audience: p.Audiences[0], Subject: string(c.Change.UserID), Tenant: string(c.Change.TenantID), Resource: string(c.Change.ID), Operation: c.Binding.OperationID, Caveats: identifierCaveats(c)}) != nil {
+	if !validDirectoryID(p.ID) || p.Bearer || p.MaxUses != 1 || len(p.Audiences) != 1 || len(p.Caveats) != 6 || c.Proof.Authorize(capability.Use{Issuer: p.Issuer, Audience: p.Audiences[0], Subject: string(c.Change.UserID), Tenant: string(c.Change.TenantID), Resource: string(c.Change.ID), Operation: c.Binding.OperationID, Caveats: identifierCaveats(c)}) != nil {
 		return Command{}, InvalidInputError{Field: "identifier_proof"}
 	}
 	return Command{identifier: &c}, nil

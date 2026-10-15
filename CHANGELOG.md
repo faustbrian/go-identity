@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+- Adopt capability v2 public proof/grant types and explicit trusted issuer
+  policy. Update capability imports and issuer-owned keys/configuration; token
+  framing and native transaction/recovery ownership remain unchanged.
+
+- Add native atomic pending-email verification and primary selection. Advance
+  candidate verification, demote an old primary without renewing its verification,
+  and advance directory authority once. Generic identifier operations stay closed.
+
+- Add a native-only pending verification restart transition. Advance exact
+  identifier/verification and directory predecessors without changing mailbox,
+  primary state or granting possession. Verified/primary identities deny;
+  generic identifier commands retain their existing closed operation set.
+
 - Add distinct opaque recovery-code/browser command custody for native MFA
   adapters. Recovery input cannot become an OTP submission or expose plaintext
   through scalar metadata; construction alone grants no authentication or use.
