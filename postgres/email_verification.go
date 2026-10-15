@@ -46,10 +46,18 @@ func (EmailVerificationIntent) MarshalJSON() ([]byte, error) { return nil, inval
 // Only the initial pending signup email profile is supported here; session
 // management, OTP, resend, replacement and address removal are distinct flows.
 func EmailVerificationFields(s EmailVerificationIntent) ([]identity.FeatureField, error) {
+	return emailVerificationFields(s, false)
+}
+
+func emailVerificationFields(s EmailVerificationIntent, managed bool) ([]identity.FeatureField, error) {
 	c := s.Change
 	i := identity.Identifier{ID: c.ID, UserID: c.UserID, Kind: identity.IdentifierEmail, CanonicalValue: s.CanonicalAddress, Version: 1}
 	u := identity.User{ID: c.UserID, TenantID: c.TenantID, Status: identity.StatusActive, Version: 1}
-	if u.Validate(c.TenantID) != nil || i.Validate(c.UserID) != nil || c.Action != identity.IdentifierVerify || c.Kind != "" || c.CanonicalValue != "" || c.DisplayValue != "" || c.ExpectedUserVersion == 0 || c.ExpectedUserVersion == ^uint64(0) || c.ExpectedAuthorityVersion == 0 || c.ExpectedAuthorityVersion == ^uint64(0) || c.ExpectedIdentifierVersion != 1 || c.ExpectedVerificationVersion != 1 {
+	validVersions := c.ExpectedIdentifierVersion > 0 && c.ExpectedIdentifierVersion < ^uint64(0) && c.ExpectedVerificationVersion > 0 && c.ExpectedVerificationVersion < ^uint64(0)
+	if !managed {
+		validVersions = c.ExpectedIdentifierVersion == 1 && c.ExpectedVerificationVersion == 1
+	}
+	if u.Validate(c.TenantID) != nil || i.Validate(c.UserID) != nil || c.Action != identity.IdentifierVerify || c.Kind != "" || c.CanonicalValue != "" || c.DisplayValue != "" || c.ExpectedUserVersion == 0 || c.ExpectedUserVersion == ^uint64(0) || c.ExpectedAuthorityVersion == 0 || c.ExpectedAuthorityVersion == ^uint64(0) || !validVersions {
 		return nil, invalidEmailVerification()
 	}
 	if _, err := identity.ParseIdentifierID(s.ComparisonProfile); err != nil {

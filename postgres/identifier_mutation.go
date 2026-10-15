@@ -121,17 +121,34 @@ func (r *Repository) applyIdentifierMutation(ctx context.Context, w Work, comman
 	if err = c.runCapabilityExecution(ctx, w, false); err != nil {
 		return zero, err
 	}
+	if err := persistIdentifierMutation(ctx, w, spec.Binding, spec.Change, state, mutation, policy, now); err != nil {
+		return zero, err
+	}
+	if err = ctx.Err(); err != nil {
+		return zero, w.fail(ctx, err)
+	}
+	digest, _ := identity.IdentifierIntentDigest(spec.Change)
+	w.state.identifier = &identifierWorkResult{user: mutation.State.User, receipt: identity.IdentifierReceipt{IdentifierID: spec.Change.ID, Action: spec.Change.Action, ExpectedAuthorityVersion: state.AuthorityVersion, AuthorityVersion: mutation.State.AuthorityVersion, IntentDigest: digest}, proofConsumed: true}
+	return mutation, nil
+}
+
+// The kernel owns the common CAS writer. Callers must already hold the complete
+// partition and tenant fence and have computed the mutation from that partition.
+// Proof/session/factor admission belongs to the enclosing typed native phase;
+// this private function neither consumes nor grants authority or closes Work.
+func persistIdentifierMutation(ctx context.Context, w Work, binding identity.CommandBinding, change identity.IdentifierChange, state identity.IdentifierState, mutation identity.IdentifierMutation, policy identifierMutationPolicy, now time.Time) error {
+	fail := func(err error) error { return w.fail(ctx, err) }
 	if mutation.Retired != nil {
 		retired := mutation.Retired
 		v := mutation.RetiredVerification
-		digest := identifierReuseDigest(policy.keys[policy.currentKeyVersion], spec.Change.TenantID, retired.Kind, retired.CanonicalValue)
+		digest := identifierReuseDigest(policy.keys[policy.currentKeyVersion], change.TenantID, retired.Kind, retired.CanonicalValue)
 		until := now.Add(policy.reuseCooldown)
 		if !postgresExactTime(until) {
 			return fail(invalidWork())
 		}
-		n, e := w.Exec(ctx, `INSERT INTO identity.identifier_retirements(tenant_id,user_id,identifier_id,kind,record_version,verification_version,removed,command_id,key_version,value_digest,retired_at,reuse_until) VALUES($1,$2,$3,$4,$5::numeric,$6::numeric,$7,$8,$9,$10,$11,$12)`, string(spec.Change.TenantID), string(spec.Change.UserID), string(retired.ID), string(retired.Kind), retired.Version, v.Version, spec.Change.Action == identity.IdentifierRemove, string(spec.Binding.CommandID), policy.currentKeyVersion, digest[:], now, until)
+		n, e := w.Exec(ctx, `INSERT INTO identity.identifier_retirements(tenant_id,user_id,identifier_id,kind,record_version,verification_version,removed,command_id,key_version,value_digest,retired_at,reuse_until) VALUES($1,$2,$3,$4,$5::numeric,$6::numeric,$7,$8,$9,$10,$11,$12)`, string(change.TenantID), string(change.UserID), string(retired.ID), string(retired.Kind), retired.Version, v.Version, change.Action == identity.IdentifierRemove, string(binding.CommandID), policy.currentKeyVersion, digest[:], now, until)
 		if e != nil {
-			return zero, e
+			return e
 		}
 		if n != 1 {
 			return fail(identity.ConflictError{})
@@ -141,19 +158,19 @@ func (r *Repository) applyIdentifierMutation(ctx context.Context, w Work, comman
 	for _, old := range state.Identifiers {
 		index := slices.IndexFunc(mutation.State.Identifiers, func(i identity.Identifier) bool { return i.ID == old.ID })
 		if old.Primary && index >= 0 && !mutation.State.Identifiers[index].Primary {
-			n, e := w.Exec(ctx, `UPDATE identity.identifiers SET is_primary=false WHERE tenant_id=$1 AND user_id=$2 AND identifier_id=$3 AND version=$4::numeric`, string(spec.Change.TenantID), string(spec.Change.UserID), string(old.ID), old.Version)
+			n, e := w.Exec(ctx, `UPDATE identity.identifiers SET is_primary=false WHERE tenant_id=$1 AND user_id=$2 AND identifier_id=$3 AND version=$4::numeric`, string(change.TenantID), string(change.UserID), string(old.ID), old.Version)
 			if e != nil {
-				return zero, e
+				return e
 			}
 			if n != 1 {
 				return fail(identity.ConflictError{})
 			}
 		}
 	}
-	if spec.Change.Action == identity.IdentifierRemove {
-		n, e := w.Exec(ctx, `DELETE FROM identity.identifiers WHERE tenant_id=$1 AND user_id=$2 AND identifier_id=$3 AND version=$4::numeric AND verification_version=$5::numeric`, string(spec.Change.TenantID), string(spec.Change.UserID), string(spec.Change.ID), spec.Change.ExpectedIdentifierVersion, spec.Change.ExpectedVerificationVersion)
+	if change.Action == identity.IdentifierRemove {
+		n, e := w.Exec(ctx, `DELETE FROM identity.identifiers WHERE tenant_id=$1 AND user_id=$2 AND identifier_id=$3 AND version=$4::numeric AND verification_version=$5::numeric`, string(change.TenantID), string(change.UserID), string(change.ID), change.ExpectedIdentifierVersion, change.ExpectedVerificationVersion)
 		if e != nil {
-			return zero, e
+			return e
 		}
 		if n != 1 {
 			return fail(identity.ConflictError{})
@@ -169,7 +186,7 @@ func (r *Repository) applyIdentifierMutation(ctx context.Context, w Work, comman
 		if !vi.VerifiedAt.IsZero() {
 			at = vi.VerifiedAt
 		}
-		args := []any{string(spec.Change.TenantID), string(spec.Change.UserID), string(next.ID), string(next.Kind), next.CanonicalValue, next.DisplayValue, next.Verified, next.Primary, next.Version, int16(vi.State), vi.Version, at}
+		args := []any{string(change.TenantID), string(change.UserID), string(next.ID), string(next.Kind), next.CanonicalValue, next.DisplayValue, next.Verified, next.Primary, next.Version, int16(vi.State), vi.Version, at}
 		sql := `INSERT INTO identity.identifiers(tenant_id,user_id,identifier_id,kind,canonical_value,display_value,verified,is_primary,version,verification_state,verification_version,verified_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9::numeric,$10,$11::numeric,$12)`
 		if oldIndex >= 0 {
 			sql = `UPDATE identity.identifiers SET kind=$4,canonical_value=$5,display_value=$6,verified=$7,is_primary=$8,version=$9::numeric,verification_state=$10,verification_version=$11::numeric,verified_at=$12 WHERE tenant_id=$1 AND user_id=$2 AND identifier_id=$3 AND version=$13::numeric AND verification_version=$14::numeric`
@@ -177,25 +194,20 @@ func (r *Repository) applyIdentifierMutation(ctx context.Context, w Work, comman
 		}
 		n, e := w.Exec(ctx, sql, args...)
 		if e != nil {
-			return zero, e
+			return e
 		}
 		if n != 1 {
 			return fail(identity.ConflictError{})
 		}
 	}
-	n, err := w.Exec(ctx, `UPDATE identity.users SET version=$4::numeric,identifier_version=$5::numeric WHERE tenant_id=$1 AND user_id=$2 AND status='active' AND version=$3::numeric AND identifier_version=$6::numeric`, string(spec.Change.TenantID), string(spec.Change.UserID), state.User.Version, mutation.State.User.Version, mutation.State.AuthorityVersion, state.AuthorityVersion)
+	n, err := w.Exec(ctx, `UPDATE identity.users SET version=$4::numeric,identifier_version=$5::numeric WHERE tenant_id=$1 AND user_id=$2 AND status='active' AND version=$3::numeric AND identifier_version=$6::numeric`, string(change.TenantID), string(change.UserID), state.User.Version, mutation.State.User.Version, mutation.State.AuthorityVersion, state.AuthorityVersion)
 	if err != nil {
-		return zero, err
+		return err
 	}
 	if n != 1 {
 		return fail(identity.ConflictError{})
 	}
-	if err = ctx.Err(); err != nil {
-		return zero, w.fail(ctx, err)
-	}
-	digest, _ := identity.IdentifierIntentDigest(spec.Change)
-	w.state.identifier = &identifierWorkResult{user: mutation.State.User, receipt: identity.IdentifierReceipt{IdentifierID: spec.Change.ID, Action: spec.Change.Action, ExpectedAuthorityVersion: state.AuthorityVersion, AuthorityVersion: mutation.State.AuthorityVersion, IntentDigest: digest}, proofConsumed: true}
-	return mutation, nil
+	return nil
 }
 
 // Finalization follows every provisional domain/audit/outbox effect and must

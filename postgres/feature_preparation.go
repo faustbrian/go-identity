@@ -421,12 +421,12 @@ func preparationFinalDeclaration(b identity.CommandBinding, original, final Comm
 	} else if final.Capability != nil {
 		return false
 	}
-	// Only closed anonymous signup, reset or magic-link profiles add issuance.
+	// Only closed signup, reset, magic-link and managed-email profiles add issuance.
 	// Their selected targets are admitted by distinct native transaction fences;
 	// original admission stays issuance-free and cannot introduce consumption.
 	withoutIssuance := final
 	withoutIssuance.CapabilityIssuance = nil
-	if final.CapabilityIssuance != nil && (!validCapabilityIssuancePlan(final.CapabilityIssuance) || final.MFAContinuation == nil && final.CapabilityIssuance.RegistrationUserID == "" && final.CapabilityIssuance.ResetRecipientUserID == "" && final.CapabilityIssuance.MagicLinkRecipientUserID == "" || !validRegistrationIssuance(b, final) || !validResetRecipientIssuance(b, final) || !validMagicLinkRecipientIssuance(b, final) || !validMFAContinuationIssuance(b, final)) {
+	if final.CapabilityIssuance != nil && (!validCapabilityIssuancePlan(final.CapabilityIssuance) || final.MFAContinuation == nil && final.CapabilityIssuance.RegistrationUserID == "" && final.CapabilityIssuance.ResetRecipientUserID == "" && final.CapabilityIssuance.MagicLinkRecipientUserID == "" && !validManagedEmailIssuance(b, final) || !validRegistrationIssuance(b, final) || !validResetRecipientIssuance(b, final) || !validMagicLinkRecipientIssuance(b, final) || !validMFAContinuationIssuance(b, final)) {
 		return false
 	}
 	if final.Feature == nil || final.Lifecycle == nil || preparationProtected(withoutIssuance) || *original.Feature != *final.Feature || *original.Lifecycle != *final.Lifecycle || original.SubjectType != final.SubjectType || original.SignupAcceptance != final.SignupAcceptance || original.MagicLinkRequestAcceptance != final.MagicLinkRequestAcceptance || len(original.Audits) != len(final.Audits) {

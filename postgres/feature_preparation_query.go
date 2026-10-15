@@ -72,6 +72,12 @@ func (c *Coordinator) QueryFeaturePreparation(ctx context.Context, q identity.Re
 	if operation == nil || *operation != feature.Operation {
 		return nil, 0, identity.ForbiddenError{}
 	}
+	return c.readFeaturePreparation(ctx, q, binding, feature, owner, observed)
+}
+
+// Both readers conserve the exact original journal output. Authorization and
+// permissible historical/current scope differences are established separately.
+func (c *Coordinator) readFeaturePreparation(ctx context.Context, q identity.RecoveryQuery, binding identity.CommandBinding, feature FeatureRegistration, owner FeaturePreparationContributor, observed commandObservation) ([]byte, uint64, error) {
 	if observed.state == nil || observed.until == nil || !postgresExactTime(*observed.until) || !postgresExactTime(observed.now) || len(observed.fingerprint) != 32 || observed.fingerprintKeyVersion < 1 || observed.fingerprintKeyVersion > math.MaxUint32 {
 		return nil, 0, identity.UnavailableError{}
 	}
@@ -93,9 +99,10 @@ func (c *Coordinator) QueryFeaturePreparation(ctx context.Context, q identity.Re
 	}
 	id, _ := base64.RawURLEncoding.DecodeString(string(q.CommandID))
 	var output []byte
+	defer func() { clear(output) }()
 	var original, started, current string
 	var profile int16
-	err = c.pool.Raw().QueryRow(ctx, `SELECT
+	err := c.pool.Raw().QueryRow(ctx, `SELECT
 CASE WHEN octet_length(j.preparation_ciphertext) BETWEEN 1 AND 1048576 THEN j.preparation_ciphertext END,
 coalesce(j.preparation_ciphertext_generation::text,''),coalesce(j.preparation_started_generation::text,''),j.generation::text,coalesce(j.preparation_profile,0)
 FROM identity.identity_command_id_claims c JOIN identity.commands j ON j.command_id=c.command_id AND j.tenant_id=c.tenant_id AND j.purpose=c.purpose

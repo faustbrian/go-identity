@@ -1,5 +1,41 @@
 # Identity PostgreSQL
 
+## Pending managed email attachment
+
+The distinct `identity.email.verification-send.resend-v1` declaration reuses
+`EmailAttachmentContributor` for `IdentifierRestartVerification`. Its intent
+requires `ExistingCanonicalAddress` and exact identifier/verification versions;
+attachment leaves that field empty. Resend preserves the pending mailbox and
+advances its verification generation through the same private writer. The native
+owner must still enforce fresh authority, cooldown and shared family fencing,
+and commit replacement issuance/encrypted delivery together. This storage seam
+does not supply a complete public resend service.
+
+`ManagedEmailVerificationContributor` supplies exact authenticated original
+management intent for `identity.email.verification-confirm.managed-v1`. The
+coordinator uses the same identifier writer and capability transaction, while
+keeping signup verification and generic execution closed to this profile.
+`ManagedEmailVerificationFields` binds the original request, mailbox and pending
+predecessors. Only a pending non-primary address can transition to verified;
+this profile performs no primary swap or session issuance. Recovery reconciles
+all enlisted owners; a changed/missing successor is not proof of noncommit.
+
+`EmailAttachmentContributor` is the typed native port for authenticated
+`identity.email.verification-send` and `identity.email.change-request` attachment
+under their version-one native schemas. It maps frozen `EmailAttachmentFields`
+and an immutable `EmailAttachmentDomain` tied to the exact enlisted repository.
+The coordinator locks the complete partition, checks optimistic versions and
+canonical reuse restrictions, then applies the shared kernel-owned CAS writer
+after native admission. The new address remains pending/non-primary and the
+existing verified primary is unchanged. Proof and required audit/lifecycle writes
+roll back with late final-admission failure. Generic identifier Begin stays closed.
+
+The native email owner must provide original fresh-proof/session/factor/risk
+checks and enlisted capability issuance/encrypted delivery. This kernel port is
+not an application-written email workflow, delivery service or verification
+endpoint. Original command recovery must remain scoped and cannot infer a
+committed receipt merely because an address currently exists.
+
 ## Anonymous MFA login-send counter source
 
 `MFALoginSendCounterContributor` lets the registered native MFA owner lend its
@@ -416,6 +452,22 @@ a session/bearer. Native orchestration must separately authenticate original
 possession and current disclosure scope. Historical outcomes grant no authority
 or credential redelivery; unavailable reconciliation preserves Unknown rather
 than inferring rollback. Existing recovery profiles remain separate.
+
+## Committed managed-email origin reads
+
+`QueryManagedEmailPreparation` authorizes the actual current confirmation
+caller before reading the original committed management request. Signed origin,
+tenant, user and address must match its historical self-user native operation.
+Only verification-send -> verification-confirm and change-request ->
+change-confirm are admitted. The exact registered preparation owner must first
+authenticate the issued proof, then authenticate/decrypt output and authorize
+original intent. No historical live session or original-actor impersonation is
+needed. Original binding and journal generation are preserved, not renewed.
+
+Returned ciphertext is an owned sensitive copy; clear it after use. Reads grant
+no mailbox ownership, remaining proof use or mutation permission. Noncommitted,
+foreign, retired and corrupt history fail closed. Existing preparation histories
+suffice; generic original-actor query/recovery rules are unchanged.
 
 ## Request-key correlation before command preparation
 

@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/faustbrian/go-capability"
+	"github.com/faustbrian/go-capability/v2"
 	identity "github.com/faustbrian/go-identity"
 	database "github.com/faustbrian/go-postgres"
 )
@@ -98,7 +98,7 @@ func liveCapabilityReservation(t *testing.T, p Contributor) (*Coordinator, ident
 	if err != nil {
 		t.Fatal(err)
 	}
-	keys, err := capability.NewKeySet([]capability.Key{{ID: "proof-key", Verifier: verifier}})
+	keys, err := capability.NewKeySet([]capability.Key{{Issuer: "https://identity.example.test", ID: "proof-key", Verifier: verifier}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -106,7 +106,7 @@ func liveCapabilityReservation(t *testing.T, p Contributor) (*Coordinator, ident
 	if err != nil {
 		t.Fatal(err)
 	}
-	spec.Proof, err = capability.Verify(context.Background(), token, keys, capability.VerifyOptions{Now: now, Limits: capability.DefaultLimits()})
+	spec.Proof, err = capability.Verify(context.Background(), token, keys, capability.VerifyOptions{Issuer: "https://identity.example.test", Now: now, Limits: capability.DefaultLimits()})
 	if err != nil {
 		t.Fatal(err)
 	}

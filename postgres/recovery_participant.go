@@ -210,6 +210,27 @@ func (r *Repository) RecoverParticipant(ctx context.Context, recovery RecoveryWo
 	}
 	b, err := recovery.Scope()
 	if err == nil && recovery.state.plan.feature != nil {
+		if managedEmailConfirmationOperation(recovery.state.plan.feature.Operation) {
+			return recoverManagedEmailVerification(ctx, recovery)
+		}
+		if emailAttachmentOperation(recovery.state.plan.feature.Operation) {
+			if recovery.state.plan.feature.Operation == emailResendOperation() {
+				return recoverManagedEmailVerification(ctx, recovery)
+			}
+			rows, err := recovery.Query(ctx, `SELECT EXISTS(SELECT 1 FROM identity.identifiers WHERE tenant_id=$1 AND identifier_id=$2)`, string(b.TenantID), b.RecordID)
+			if err != nil {
+				return RecoveryUnknown, err
+			}
+			defer rows.Close()
+			var exists bool
+			if !rows.Next() || rows.Scan(&exists) != nil || rows.Next() || rows.Err() != nil {
+				return RecoveryUnknown, identity.UnavailableError{}
+			}
+			if exists {
+				return RecoveryUnknown, nil
+			}
+			return RecoveryNotCommitted, nil
+		}
 		if recovery.state.plan.magicLinkRegistration != nil {
 			return recoverMagicLinkRegistration(ctx, recovery)
 		}

@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/faustbrian/go-authorization"
-	"github.com/faustbrian/go-capability"
+	"github.com/faustbrian/go-capability/v2"
 	identity "github.com/faustbrian/go-identity"
 )
 
@@ -104,7 +104,7 @@ func TestPrivacyClaimBindsOriginalIntentAndProof(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	resolver, err := capability.NewKeySet([]capability.Key{{ID: "privacy-key", Verifier: verifier}})
+	resolver, err := capability.NewKeySet([]capability.Key{{Issuer: "https://identity.example.test", ID: "privacy-key", Verifier: verifier}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -114,7 +114,7 @@ func TestPrivacyClaimBindsOriginalIntentAndProof(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	otherProof, err := capability.Verify(ctx, token, resolver, capability.VerifyOptions{Now: time.Unix(1000, 0), Limits: capability.DefaultLimits()})
+	otherProof, err := capability.Verify(ctx, token, resolver, capability.VerifyOptions{Issuer: "https://identity.example.test", Now: time.Unix(1000, 0), Limits: capability.DefaultLimits()})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -165,7 +165,7 @@ func TestPrivacyClaimRejectsInvalidEncodingInputs(t *testing.T) {
 	}
 	bad = spec
 	p := spec.Proof.Payload()
-	p.Issuer = string(bytes.Repeat([]byte{'a'}, 257))
+	p.Audiences = []string{string(bytes.Repeat([]byte{'a'}, 257))}
 	limits := capability.DefaultLimits()
 	limits.MaxFieldBytes = 512
 	bad.Proof = recordGrantWithLimits(t, p, "privacy-key", limits)

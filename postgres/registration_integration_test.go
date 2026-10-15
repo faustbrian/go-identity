@@ -13,7 +13,7 @@ import (
 	"time"
 
 	auth "github.com/faustbrian/go-authentication"
-	"github.com/faustbrian/go-capability"
+	"github.com/faustbrian/go-capability/v2"
 	identity "github.com/faustbrian/go-identity"
 	migrations "github.com/faustbrian/go-migrations/v3"
 	migrationdb "github.com/faustbrian/go-migrations/v3/postgres"

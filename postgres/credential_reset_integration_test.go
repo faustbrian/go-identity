@@ -13,7 +13,7 @@ import (
 	"time"
 
 	"github.com/faustbrian/go-authorization"
-	"github.com/faustbrian/go-capability"
+	"github.com/faustbrian/go-capability/v2"
 	"github.com/faustbrian/go-clock"
 	identity "github.com/faustbrian/go-identity"
 	primitive "github.com/faustbrian/go-password"
@@ -171,11 +171,11 @@ CREATE TABLE IF NOT EXISTS identity.capability_recovery_fixture(tenant_id text N
 			if err != nil {
 				t.Fatal(err)
 			}
-			keys, err := capability.NewKeySet([]capability.Key{{ID: "reset-fixture", Verifier: verifier}})
+			keys, err := capability.NewKeySet([]capability.Key{{Issuer: "https://issuer.example", ID: "reset-fixture", Verifier: verifier}})
 			if err != nil {
 				t.Fatal(err)
 			}
-			service, err := capability.NewService(capability.ServiceConfig{Signer: signer, Resolver: keys, Clock: time.Now, Limits: capability.DefaultLimits()})
+			service, err := capability.NewService(capability.ServiceConfig{Issuer: "https://issuer.example", Signer: signer, Resolver: keys, Clock: time.Now, Limits: capability.DefaultLimits()})
 			if err != nil {
 				t.Fatal(err)
 			}

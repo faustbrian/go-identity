@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/faustbrian/go-audit"
-	"github.com/faustbrian/go-capability"
+	"github.com/faustbrian/go-capability/v2"
 	identity "github.com/faustbrian/go-identity"
 	database "github.com/faustbrian/go-postgres"
 )
@@ -161,8 +161,8 @@ func testIssuanceExecution(t *testing.T, ctx context.Context, pool *database.Poo
 				t.Fatal(err)
 			}
 			grant, err := capability.Verify(ctx, token, capability.ResolverFunc(func(context.Context, string, capability.Algorithm) (capability.ResolvedKey, error) {
-				return capability.ResolvedKey{Verifier: verifier}, nil
-			}), capability.VerifyOptions{Now: now, Limits: limits})
+				return capability.ResolvedKey{Issuer: "https://issuer.example", Verifier: verifier}, nil
+			}), capability.VerifyOptions{Issuer: "https://issuer.example", Now: now, Limits: limits})
 			if err != nil {
 				t.Fatal(err)
 			}

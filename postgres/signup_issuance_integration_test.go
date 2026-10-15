@@ -14,7 +14,7 @@ import (
 	"time"
 
 	auth "github.com/faustbrian/go-authentication"
-	"github.com/faustbrian/go-capability"
+	"github.com/faustbrian/go-capability/v2"
 	identity "github.com/faustbrian/go-identity"
 	primitive "github.com/faustbrian/go-password"
 	database "github.com/faustbrian/go-postgres"
@@ -157,8 +157,8 @@ func testSignupCapabilityIssuance(t *testing.T, ctx context.Context, pool *datab
 				t.Fatal(err)
 			}
 			phase.grant, err = capability.Verify(ctx, token, capability.ResolverFunc(func(context.Context, string, capability.Algorithm) (capability.ResolvedKey, error) {
-				return capability.ResolvedKey{Verifier: verifier}, nil
-			}), capability.VerifyOptions{Now: now, Limits: capability.DefaultLimits()})
+				return capability.ResolvedKey{Issuer: "https://issuer.example", Verifier: verifier}, nil
+			}), capability.VerifyOptions{Issuer: "https://issuer.example", Now: now, Limits: capability.DefaultLimits()})
 			if err != nil {
 				t.Fatal(err)
 			}

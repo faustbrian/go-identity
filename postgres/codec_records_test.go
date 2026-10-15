@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/faustbrian/go-authorization"
-	"github.com/faustbrian/go-capability"
+	"github.com/faustbrian/go-capability/v2"
 	identity "github.com/faustbrian/go-identity"
 )
 
@@ -28,7 +28,7 @@ func recordGrantWithLimits(t *testing.T, p capability.Payload, keyID string, lim
 	if e != nil {
 		t.Fatal("synthetic verifier")
 	}
-	resolver, e := capability.NewKeySet([]capability.Key{{ID: keyID, Verifier: verifier}})
+	resolver, e := capability.NewKeySet([]capability.Key{{Issuer: p.Issuer, ID: keyID, Verifier: verifier}})
 	if e != nil {
 		t.Fatal("synthetic keys")
 	}
@@ -38,7 +38,7 @@ func recordGrantWithLimits(t *testing.T, p capability.Payload, keyID string, lim
 	if e != nil {
 		t.Fatal("synthetic issuance")
 	}
-	grant, e := capability.Verify(ctx, token, resolver, capability.VerifyOptions{Now: time.Unix(1000, 0), Limits: limits})
+	grant, e := capability.Verify(ctx, token, resolver, capability.VerifyOptions{Issuer: p.Issuer, Now: time.Unix(1000, 0), Limits: limits})
 	if e != nil {
 		t.Fatal("synthetic verification")
 	}
@@ -48,7 +48,9 @@ func recordGrantWithLimits(t *testing.T, p capability.Payload, keyID string, lim
 func TestRecordCommandCodecProofBounds(t *testing.T) {
 	s, _ := recordLink(t, identity.AccountLinkExplicit, nil, nil, "proof-key").LinkAccount()
 	p := s.Proof.Payload()
-	p.Issuer = string(bytes.Repeat([]byte{'a'}, 257))
+	// V2 independently bounds key-owner issuers to 256 bytes. Audience remains
+	// admissible under broader parser limits and proves our narrower codec bound.
+	p.Audiences = []string{string(bytes.Repeat([]byte{'a'}, 257))}
 	limits := capability.DefaultLimits()
 	limits.MaxFieldBytes = 512
 	s.Proof = recordGrantWithLimits(t, p, "proof-key", limits)

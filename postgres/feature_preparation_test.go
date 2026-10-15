@@ -18,6 +18,76 @@ func TestPreparedFeatureRejectsUnownedInputs(t *testing.T) {
 	}
 }
 
+func TestPreparedManagedEmailAddsOnlyOriginalUserIssuanceAndDelivery(t *testing.T) {
+	_, _, base := featurePlanFixture(t)
+	b := codecBinding()
+	b.ActorID = identity.ActorID(b.UserID)
+	b.OperationID = "identity.email.verification-send"
+	b.SchemaID = b.OperationID + ".native-v1"
+	b.RecordID = "managed-email"
+	base.SubjectType = "identifier"
+	base.Feature = &FeatureRegistration{Contributor: ContributorDescriptor{Owner: "identity/email/postgres", ContractID: "identity.email", Version: 1}, Operation: identity.FeatureOperation{Owner: "identity/email", OperationID: b.OperationID, SchemaID: b.SchemaID, SchemaVersion: 1, RecordRequirement: identity.FeatureRecordRequired}}
+	base.Contributors[3] = base.Feature.Contributor
+	base.Lifecycle = &LifecyclePlan{EventType: "identifier.attached.v1", BeforeVersion: 0, AfterVersion: 1}
+	base.Audits[0].RetentionClass = "protected"
+	final := base
+	final.CapabilityIssuance = issuanceTestPlan()
+	final.Delivery = deliveryTestPlan()
+	final.Delivery.Intents[0].SubjectID = string(b.UserID)
+	final.Delivery.Intents[0].Purpose = "identity.email.verification-request"
+	final.Delivery.Intents[0].ExpiresAt = final.CapabilityIssuance.Grants[0].ExpiresAt
+	final.Contributors = append(append([]ContributorDescriptor(nil), base.Contributors...), final.CapabilityIssuance.Contributor, final.Delivery.Contributor)
+	if !preparationFinalDeclaration(b, base, final) {
+		t.Fatal("original authenticated email cannot retain generated issuance/delivery")
+	}
+	for name, mutate := range map[string]func(*CommandPlan){
+		"signup-recipient":     func(p *CommandPlan) { p.CapabilityIssuance.RegistrationUserID = "another-user" },
+		"reset-recipient":      func(p *CommandPlan) { p.CapabilityIssuance.ResetRecipientUserID = "another-user" },
+		"magic-link-recipient": func(p *CommandPlan) { p.CapabilityIssuance.MagicLinkRecipientUserID = "another-user" },
+		"mfa-recipient":        func(p *CommandPlan) { p.CapabilityIssuance.MFAContinuationUserID = "another-user" },
+		"different-purpose":    func(p *CommandPlan) { p.CapabilityIssuance.Grants[0].Purpose = "identity.password.reset-complete" },
+		"missing-delivery":     func(p *CommandPlan) { p.Delivery = nil; p.Contributors = p.Contributors[:len(p.Contributors)-1] },
+		"additional-grant": func(p *CommandPlan) {
+			g := p.CapabilityIssuance.Grants[0]
+			g.CapabilityID = "other-grant"
+			g.ReplayDigest[0]++
+			g.ProofFingerprint[0]++
+			p.CapabilityIssuance.Grants = append(p.CapabilityIssuance.Grants, g)
+		},
+		"recipient-expansion": func(p *CommandPlan) { p.Delivery.Intents = append(p.Delivery.Intents, p.Delivery.Intents[0]) },
+	} {
+		t.Run(name, func(t *testing.T) {
+			changed := final
+			changed.CapabilityIssuance = cloneCapabilityIssuancePlan(final.CapabilityIssuance)
+			changed.Delivery = cloneDeliveryPlan(final.Delivery)
+			changed.Contributors = append([]ContributorDescriptor(nil), final.Contributors...)
+			mutate(&changed)
+			if preparationFinalDeclaration(b, base, changed) {
+				t.Fatal("managed preparation widened its original recipient/profile")
+			}
+		})
+	}
+	foreign := b
+	foreign.ActorID = "another-human"
+	if preparationFinalDeclaration(foreign, base, final) {
+		t.Fatal("another actor selected command-user issuance")
+	}
+	foreign = b
+	foreign.UserID = ""
+	if preparationFinalDeclaration(foreign, base, final) {
+		t.Fatal("missing original user selected issuance")
+	}
+	_, command, unrelated := featurePlanFixture(t)
+	spec, _ := command.Feature()
+	unrelatedFinal := unrelated
+	unrelatedFinal.CapabilityIssuance = issuanceTestPlan()
+	unrelatedFinal.Delivery = deliveryTestPlan()
+	unrelatedFinal.Contributors = append(append([]ContributorDescriptor(nil), unrelated.Contributors...), unrelatedFinal.CapabilityIssuance.Contributor, unrelatedFinal.Delivery.Contributor)
+	if preparationFinalDeclaration(spec.Binding, unrelated, unrelatedFinal) {
+		t.Fatal("unrelated feature gained authenticated issuance")
+	}
+}
+
 func TestPreparationMagicLinkConservesOriginalConsumption(t *testing.T) {
 	b, original := magicLinkConsumptionPlanFixture(t)
 	if preparationProtected(original) || !preparationFinalDeclaration(b, original, original) {

@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/faustbrian/go-capability"
+	"github.com/faustbrian/go-capability/v2"
 )
 
 func TestMagicLinkProspectiveIssuanceBindsCreationWithoutExistingRecipient(t *testing.T) {

@@ -12,7 +12,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/faustbrian/go-capability"
+	"github.com/faustbrian/go-capability/v2"
 	identity "github.com/faustbrian/go-identity"
 )
 
@@ -107,8 +107,8 @@ func (p *signupPreparationPhase) RestoreFeaturePreparation(ctx context.Context, 
 		return identity.Command{}, CommandPlan{}, err
 	}
 	p.grant, err = capability.Verify(ctx, string(plain), capability.ResolverFunc(func(context.Context, string, capability.Algorithm) (capability.ResolvedKey, error) {
-		return capability.ResolvedKey{Verifier: verifier}, nil
-	}), capability.VerifyOptions{Now: time.Now().UTC(), Limits: capability.DefaultLimits()})
+		return capability.ResolvedKey{Issuer: "https://issuer.example", Verifier: verifier}, nil
+	}), capability.VerifyOptions{Issuer: "https://issuer.example", Now: time.Now().UTC(), Limits: capability.DefaultLimits()})
 	if err != nil {
 		return identity.Command{}, CommandPlan{}, err
 	}

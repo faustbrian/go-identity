@@ -76,8 +76,7 @@ func TestMFALoginSendCounterScopeRequiresRegisteredNativeSource(t *testing.T) {
 			copyPlan := *plan
 			copyFeature := *plan.feature
 			copyPlan.feature = &copyFeature
-			copyReservation := *w.state.execution.reservation
-			copyReservation.plan = &copyPlan
+			copyReservation := reservationState{coordinator: c, plan: &copyPlan, journal: journalReservation{generation: 1}}
 			copyExecution := *w.state.execution
 			copyExecution.reservation = &copyReservation
 			copyWork.execution = &copyExecution

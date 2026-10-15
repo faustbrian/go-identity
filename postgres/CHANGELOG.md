@@ -2,6 +2,41 @@
 
 ## Unreleased
 
+- Adopt capability v2 public proof/grant types and explicit trusted issuer
+  policy. Update capability imports and issuer-owned keys/configuration; token
+  framing and native transaction/recovery ownership remain unchanged.
+
+- Conserve original old-email predecessors under the complete partition lock for
+  native change requests and confirmation. Verify/promote through the shared
+  identifier writer and require old notification in the distinct persisted change
+  plan. Fixed-depth decoding cannot alias signup or verification-only history.
+
+- Fence selected managed-email request/confirmation families before directory
+  locks and retain exact successor versions in managed confirmation and recovery.
+  The initial-only registration confirmation contract remains unchanged.
+
+- Bind pending verification restart to a distinct native resend schema and exact
+  mailbox/version predecessors through the shared identifier writer. Resend
+  cannot become attachment, possession or primary selection; complete protected
+  native orchestration and issuance/delivery remain required.
+
+- Verify pending managed addresses through a distinct typed native profile,
+  preserving shared identifier CAS, original proof consumption and recovery.
+  Persisted management plans cannot alias signup verification or enter generic
+  execution; required directory, capability, audit and lifecycle effects share
+  the sole transaction.
+
+- Read committed native email-management preparation for the actual currently
+  authorized confirmation caller. Preserve the signed original user/address,
+  historical human actor, request-to-confirmation mapping and encrypted journal
+  generation without requiring the historical session or renewing proof custody.
+
+- Attach pending managed email addresses through a typed native email owner and
+  the sole coordinator. Preserve exact directory predecessors, canonical reuse
+  restrictions, current verified primary and atomic proof/audit/lifecycle effects;
+  generic identifier execution remains unavailable. This storage contract does
+  not itself deliver or confirm a link.
+
 - Admit sealed original/generated password-signup commands through the existing
   native feature selector instead of the intentionally unavailable generic
   accessor. Preserve registered-owner, transaction and invocation-lifetime

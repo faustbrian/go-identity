@@ -60,6 +60,14 @@ func validateFeatureCommand(phase FeatureExecutionContributor, command identity.
 	if err := phase.ValidateFeatureCommand(command, plan); err != nil {
 		return err
 	}
+	if plan.Feature != nil && emailAttachmentOperation(plan.Feature.Operation) {
+		p, ok := phase.(EmailAttachmentContributor)
+		if !ok {
+			return invalidEmailAttachment()
+		}
+		_, _, err := emailAttachmentCommand(p, command, plan)
+		return err
+	}
 	if plan.MFAContinuation != nil && passwordMFAOperation(plan) {
 		return validateMFAContinuation(phase, command, plan)
 	}
@@ -76,6 +84,14 @@ func validateFeatureCommand(phase FeatureExecutionContributor, command identity.
 				return invalidCredentialReset()
 			}
 			_, err := credentialResetCommand(p, command, plan)
+			return err
+		}
+		if plan.Feature != nil && managedEmailConfirmationOperation(plan.Feature.Operation) {
+			p, ok := phase.(ManagedEmailVerificationContributor)
+			if !ok {
+				return invalidEmailVerification()
+			}
+			_, _, err := managedEmailVerificationCommand(p, command, plan)
 			return err
 		}
 		p, ok := phase.(EmailVerificationContributor)
@@ -115,7 +131,7 @@ func (r *ContributorRegistry) admitFeaturePlanMode(b identity.CommandBinding, fi
 	if p.MagicLinkRegistration != nil && (r == nil || r.state == nil) {
 		return nil, invalidPlan()
 	}
-	if p.Capability != nil && (p.Feature == nil || p.Feature.Operation != registrationEmailVerificationOperation() && p.Feature.Operation != credentialResetOperation() && p.Feature.Operation != magicLinkConsumeOperation() && !validMFACompletionPlan(b, p)) {
+	if p.Capability != nil && (p.Feature == nil || p.Feature.Operation != registrationEmailVerificationOperation() && !managedEmailConfirmationOperation(p.Feature.Operation) && p.Feature.Operation != credentialResetOperation() && p.Feature.Operation != magicLinkConsumeOperation() && !validMFACompletionPlan(b, p)) {
 		return nil, invalidPlan()
 	}
 	digest, err := FeaturePlanDigest(b, fingerprint, p)
@@ -135,6 +151,11 @@ func (r *ContributorRegistry) admitFeaturePlanMode(b identity.CommandBinding, fi
 	}
 	if _, ok := feature.contributor.(FeatureExecutionContributor); !ok {
 		return nil, invalidPlan()
+	}
+	if emailAttachmentOperation(p.Feature.Operation) {
+		if _, ok := feature.contributor.(EmailAttachmentContributor); !ok {
+			return nil, invalidPlan()
+		}
 	}
 	if otpFeatureInputAdmissionRequired(p) {
 		if _, ok := feature.contributor.(FeatureInputAdmissionContributor); !ok {
@@ -210,6 +231,10 @@ func (r *ContributorRegistry) admitFeaturePlanMode(b identity.CommandBinding, fi
 				if _, ok := feature.contributor.(FeatureAdmissionPreparationContributor); !ok {
 					return nil, invalidPlan()
 				}
+			}
+		} else if managedEmailConfirmationOperation(p.Feature.Operation) {
+			if _, ok := feature.contributor.(ManagedEmailVerificationContributor); !ok {
+				return nil, invalidPlan()
 			}
 		} else if _, ok := feature.contributor.(EmailVerificationContributor); !ok {
 			return nil, invalidPlan()
@@ -424,6 +449,9 @@ func (c *Coordinator) ApplyFeature(ctx context.Context, w Work, command identity
 		}
 		w.state.execution.featureAbortAudits[class] = records
 	}
+	if e = lockManagedEmailFamily(ctx, w, command); e != nil {
+		return result, e
+	}
 	if e = c.checkCommandCounters(ctx, w, command); e != nil {
 		return result, e
 	}
@@ -458,6 +486,11 @@ func (c *Coordinator) ApplyFeature(ctx context.Context, w Work, command identity
 			return result, e
 		}
 	}
+	if emailAttachmentOperation(p.feature.Operation) {
+		if e := prepareEmailAttachment(ctx, w, command); e != nil {
+			return result, e
+		}
+	}
 	if credentialReplacementOperation(p.feature.Operation) {
 		if e := prepareCredentialReplacement(ctx, w, command); e != nil {
 			return result, e
@@ -474,6 +507,10 @@ func (c *Coordinator) ApplyFeature(ctx context.Context, w Work, command identity
 			}
 		} else if p.feature.Operation == credentialResetOperation() {
 			if e := prepareCredentialReset(ctx, w, command); e != nil {
+				return result, e
+			}
+		} else if managedEmailConfirmationOperation(p.feature.Operation) {
+			if e := prepareManagedEmailVerification(ctx, w, command); e != nil {
 				return result, e
 			}
 		} else if e := prepareEmailVerification(ctx, w, command); e != nil {
@@ -506,6 +543,16 @@ func (c *Coordinator) ApplyFeature(ctx context.Context, w Work, command identity
 	}
 	if w.state.emailVerification != nil {
 		if e := applyEmailVerification(ctx, w); e != nil {
+			return result, e
+		}
+	}
+	if w.state.emailAttachment != nil {
+		if e := applyEmailAttachment(ctx, w); e != nil {
+			return result, e
+		}
+	}
+	if w.state.managedEmailVerification != nil {
+		if e := applyManagedEmailVerification(ctx, w); e != nil {
 			return result, e
 		}
 	}

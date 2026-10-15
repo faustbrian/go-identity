@@ -35,6 +35,66 @@ func emailVerificationPlanFixture(t *testing.T) (identity.CommandBinding, Comman
 	return b, p
 }
 
+func TestManagedEmailVerificationPlanCannotAliasSignup(t *testing.T) {
+	b, p := emailVerificationPlanFixture(t)
+	b.SchemaID = managedEmailVerificationOperation().SchemaID
+	p.Feature.Operation = managedEmailVerificationOperation()
+	wire, err := encodeFeaturePlan(b, [32]byte{1}, p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	decoded, err := decodeFeaturePlan(b, [32]byte{1}, wire)
+	if err != nil || decoded.Feature == nil || decoded.Feature.Operation != managedEmailVerificationOperation() || decoded.Capability == nil || *decoded.Capability != *p.Capability {
+		t.Fatal("managed plan lost original consumption scope", err)
+	}
+	for _, other := range [][]byte{bytes.Replace(wire, cborText("identity-managed-email-proof-v1"), cborText("identity-registration-email-proof-v1"), 1), append(bytes.Clone(wire), 0), wire[:len(wire)-1]} {
+		if _, err := decodeFeaturePlan(b, [32]byte{1}, other); err == nil {
+			t.Fatal("foreign or corrupt managed history admitted")
+		}
+	}
+	registration := b
+	registration.SchemaID = registrationEmailVerificationOperation().SchemaID
+	if _, err := decodeFeaturePlan(registration, [32]byte{1}, wire); err == nil {
+		t.Fatal("managed plan reinterpreted as signup")
+	}
+}
+
+func TestManagedEmailChangePlanRequiresAtomicOldNotification(t *testing.T) {
+	b, p := emailVerificationPlanFixture(t)
+	b.OperationID, b.SchemaID = "identity.email.change-confirm", "identity.email.change-confirm.managed-v1"
+	p.Feature.Operation.OperationID, p.Feature.Operation.SchemaID = b.OperationID, b.SchemaID
+	p.Lifecycle.EventType = "identifier.primary-changed.v1"
+	p.Delivery = deliveryTestPlan()
+	p.Delivery.Intents[0].SubjectID = string(b.UserID)
+	p.Delivery.Intents[0].Purpose = "identity.email.change-notification"
+	p.Contributors = append(p.Contributors, p.Delivery.Contributor)
+	wire, err := encodeFeaturePlan(b, [32]byte{1}, p)
+	if err != nil {
+		t.Fatal("selected primary change with old notification denied", err)
+	}
+	decoded, err := decodeFeaturePlan(b, [32]byte{1}, wire)
+	if err != nil || decoded.Delivery == nil || decoded.Capability == nil || !reflect.DeepEqual(decoded.Contributors, p.Contributors) || *decoded.Capability != *p.Capability || !reflect.DeepEqual(decoded.Delivery, p.Delivery) {
+		t.Fatal("change lost atomic notification or original proof", err)
+	}
+	// A delivery base cannot recursively contain a proof envelope. The
+	// supported shape is exactly proof -> delivery -> ordinary feature.
+	nestedDelivery := cborMap(map[string][]byte{"base": cborBytes(wire), "profile": cborText("identity-delivery-plan-v1"), "delivery": encodeDeliveryPlan(p.Delivery)})
+	owner := ContributorDescriptor{Owner: "capability/postgres", ContractID: "capability.one-use", Version: 1}
+	nestedProof := cborMap(map[string][]byte{"base": cborBytes(nestedDelivery), "profile": cborText("identity-managed-email-change-proof-v1"), "version": cborUint(1), "capability": encodeCapabilityPlan(p.Capability), "contributor": cborMap(map[string][]byte{"owner": cborText(owner.Owner), "contract_id": cborText(owner.ContractID), "version": cborUint(uint64(owner.Version))})})
+	if _, err := decodeFeaturePlan(b, [32]byte{1}, nestedProof); err == nil {
+		t.Fatal("recursive proof/delivery base admitted")
+	}
+	p.Delivery = nil
+	p.Contributors = p.Contributors[:len(p.Contributors)-1]
+	if _, err := encodeFeaturePlan(b, [32]byte{1}, p); err == nil {
+		t.Fatal("change silently omitted old notification")
+	}
+	b.OperationID, b.SchemaID = "identity.email.verification-confirm", "identity.email.verification-confirm.managed-v1"
+	if _, err := decodeFeaturePlan(b, [32]byte{1}, wire); err == nil {
+		t.Fatal("change became verification-only")
+	}
+}
+
 func TestEmailVerificationConsumptionPlanRejectsForeignProfiles(t *testing.T) {
 	for name, mutate := range map[string]func(*CommandPlan){
 		"purpose alias":            func(p *CommandPlan) { p.Capability.Purpose = "identity.email.verification-confirm" },

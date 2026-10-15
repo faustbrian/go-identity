@@ -7,7 +7,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/faustbrian/go-capability"
+	"github.com/faustbrian/go-capability/v2"
 	identity "github.com/faustbrian/go-identity"
 )
 

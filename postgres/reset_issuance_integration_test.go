@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/faustbrian/go-audit"
-	"github.com/faustbrian/go-capability"
+	"github.com/faustbrian/go-capability/v2"
 	identity "github.com/faustbrian/go-identity"
 	database "github.com/faustbrian/go-postgres"
 )
@@ -174,8 +174,8 @@ INSERT INTO identity.credential_references(tenant_id,user_id,credential_id,kind,
 				t.Fatal("synthetic signing", err)
 			}
 			phase.grant, err = capability.Verify(ctx, token, capability.ResolverFunc(func(context.Context, string, capability.Algorithm) (capability.ResolvedKey, error) {
-				return capability.ResolvedKey{Verifier: verifier}, nil
-			}), capability.VerifyOptions{Now: now, Limits: capability.DefaultLimits()})
+				return capability.ResolvedKey{Issuer: "https://reset.test", Verifier: verifier}, nil
+			}), capability.VerifyOptions{Issuer: "https://reset.test", Now: now, Limits: capability.DefaultLimits()})
 			if err != nil {
 				t.Fatal("synthetic verification", err)
 			}

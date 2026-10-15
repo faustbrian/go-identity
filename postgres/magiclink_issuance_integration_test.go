@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/faustbrian/go-capability"
+	"github.com/faustbrian/go-capability/v2"
 	identity "github.com/faustbrian/go-identity"
 	database "github.com/faustbrian/go-postgres"
 )
@@ -137,8 +137,8 @@ INSERT INTO identity.identifiers(tenant_id,user_id,identifier_id,kind,canonical_
 				t.Fatal("synthetic signing", err)
 			}
 			phase.grant, err = capability.Verify(ctx, token, capability.ResolverFunc(func(context.Context, string, capability.Algorithm) (capability.ResolvedKey, error) {
-				return capability.ResolvedKey{Verifier: verifier}, nil
-			}), capability.VerifyOptions{Now: now, Limits: capability.DefaultLimits()})
+				return capability.ResolvedKey{Issuer: "https://magic.test", Verifier: verifier}, nil
+			}), capability.VerifyOptions{Issuer: "https://magic.test", Now: now, Limits: capability.DefaultLimits()})
 			if err != nil {
 				t.Fatal("synthetic verification", err)
 			}

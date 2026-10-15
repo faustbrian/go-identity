@@ -9,6 +9,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	identity "github.com/faustbrian/go-identity"
 )
@@ -303,17 +304,55 @@ func FuzzDecodeFeaturePlan(f *testing.F) {
 	}
 	f.Add(wire)
 	f.Add([]byte{})
-	f.Fuzz(func(t *testing.T, input []byte) {
-		got, err := decodeFeaturePlan(s.Binding, [32]byte{1}, input)
-		if err != nil {
-			if !reflect.DeepEqual(got, CommandPlan{}) {
-				t.Fatal("partial plan")
-			}
-			return
+	bindings := []identity.CommandBinding{s.Binding}
+	// Exercise both persisted email-proof profiles through their real binding.
+	// A valid seed for one must never be interpreted as the other's history.
+	for _, op := range []identity.FeatureOperation{registrationEmailVerificationOperation(), managedEmailVerificationOperation(), managedEmailChangeOperation()} {
+		b := s.Binding
+		b.OperationID, b.SchemaID, b.SchemaVersion, b.RecordID = op.OperationID, op.SchemaID, op.SchemaVersion, "identifier-a"
+		g := CommandPlan{
+			Feature: &FeatureRegistration{Operation: op, Contributor: ContributorDescriptor{Owner: "identity/email/postgres", ContractID: "identity.email", Version: 1}},
+			Contributors: []ContributorDescriptor{
+				{Owner: "identity/postgres", ContractID: "identity.domain", Version: 1},
+				{Owner: "audit/postgres", ContractID: "audit.records", Version: 1},
+				{Owner: "outbox/postgres", ContractID: "identity.lifecycle", Version: 1},
+				{Owner: "identity/email/postgres", ContractID: "identity.email", Version: 1},
+				{Owner: "identity/risk/postgres", ContractID: "identity.risk.store", Version: 1},
+				{Owner: "capability/postgres", ContractID: "capability.one-use", Version: 1},
+			},
+			SubjectType:     "identifier",
+			Audits:          []AuditPlan{{Required: true, EventType: "email.verified", SchemaVersion: 1, BindingDigest: [32]byte{2}, RetentionClass: "protected", RetentionPolicyVersion: 1, RequiredRecordCount: 1, MaxRecordBytes: 8192, MaxAggregateBytes: 16384}},
+			Lifecycle:       &LifecyclePlan{EventType: "identifier.verified.v1", BeforeVersion: 1, AfterVersion: 2},
+			CommandCounters: &CommandCounterPlan{PolicyVersion: 1, Fingerprint: [32]byte{5}},
+			Capability:      &CapabilityPlan{CapabilityID: "proof-a", Purpose: "identity.identifier.verify", ReplayDigest: [32]byte{3}, ReplayKeyVersion: 1, ProofFingerprint: [32]byte{4}, ExpiresAt: time.Unix(1800000000, 0).UTC(), MaxUses: 1},
 		}
-		encoded, err := encodeFeaturePlan(s.Binding, [32]byte{1}, got)
-		if err != nil || !bytes.Equal(encoded, input) || got.Digest != sha256.Sum256(input) {
-			t.Fatal("noncanonical observation")
+		if op == managedEmailChangeOperation() {
+			g.Lifecycle.EventType = "identifier.primary-changed.v1"
+			g.Delivery = deliveryTestPlan()
+			g.Delivery.Intents[0].Purpose = "identity.email.change-notification"
+			g.Delivery.Intents[0].SubjectID = string(b.UserID)
+			g.Contributors = append(g.Contributors, g.Delivery.Contributor)
+		}
+		wire, err := encodeFeaturePlan(b, [32]byte{1}, g)
+		if err != nil {
+			f.Fatal(err)
+		}
+		f.Add(wire)
+		bindings = append(bindings, b)
+	}
+	f.Fuzz(func(t *testing.T, input []byte) {
+		for _, b := range bindings {
+			got, err := decodeFeaturePlan(b, [32]byte{1}, input)
+			if err != nil {
+				if !reflect.DeepEqual(got, CommandPlan{}) {
+					t.Fatal("partial plan")
+				}
+				continue
+			}
+			encoded, err := encodeFeaturePlan(b, [32]byte{1}, got)
+			if err != nil || !bytes.Equal(encoded, input) || got.Digest != sha256.Sum256(input) {
+				t.Fatal("noncanonical observation")
+			}
 		}
 	})
 }
