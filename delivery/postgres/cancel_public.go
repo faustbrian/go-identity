@@ -11,7 +11,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/faustbrian/go-authorization"
+	"github.com/faustbrian/go-authorization/v3"
 	identity "github.com/faustbrian/go-identity"
 	"github.com/faustbrian/go-identity/delivery"
 	identitypostgres "github.com/faustbrian/go-identity/postgres"

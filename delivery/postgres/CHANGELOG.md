@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Adopt current authorization-v3, capability-v2 and outbox-v2 contracts with
+  authenticated public dependency pins. Callers must use authorization-v3
+  types; the optional lifecycle adapter has its own repository-relative module
+  path, independent of the root outbox engine's major version. Existing
+  delivery custody, transaction behavior and migration bytes are unchanged.
+
 - `NewUninitializedEnqueueService` supports side-effect-free deployment
   composition followed by explicit bounded `Initialize`. Retained policy and
   namespace registration remain immutable; failed or uncertain startup enables

@@ -14,7 +14,7 @@ import (
 	"github.com/faustbrian/go-identity/delivery"
 	identitypostgres "github.com/faustbrian/go-identity/postgres"
 	database "github.com/faustbrian/go-postgres"
-	identityoutbox "github.com/faustbrian/go-transactional-outbox/v2/postgres/identity"
+	identityoutbox "github.com/faustbrian/go-transactional-outbox/postgres/identity"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 

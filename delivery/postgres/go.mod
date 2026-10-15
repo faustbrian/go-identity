@@ -4,26 +4,35 @@ go 1.27.0
 
 require (
 	github.com/faustbrian/go-audit v1.0.0
-	github.com/faustbrian/go-audit/postgres v1.0.1-0.20261003012155-21ad3d11d3b2
-	github.com/faustbrian/go-authorization v1.0.1-0.20261001103722-a74c24b38463
-	github.com/faustbrian/go-clock v1.0.0
-	github.com/faustbrian/go-identity v0.0.0-20261004182158-24b21c46d3ca
-	github.com/faustbrian/go-identity/delivery v0.0.0-20261004192212-c70512ebfb31
-	github.com/faustbrian/go-identity/postgres v0.0.0-20261004044757-c3d7931906e0
-	github.com/faustbrian/go-migrations/v3 v3.0.2-0.20261001014304-a461b18b6b24
+	github.com/faustbrian/go-audit/postgres v1.0.2-0.20261015062502-d62df280d85e
+	github.com/faustbrian/go-authorization/v3 v3.0.1-0.20261015052455-a55bbebb1060
+	github.com/faustbrian/go-clock v1.2.0
+	github.com/faustbrian/go-identity v0.0.0-20261015054516-5afeba0ac471
+	github.com/faustbrian/go-identity/delivery v0.0.0-20261015061706-1f0b46ab1053
+	github.com/faustbrian/go-identity/postgres v0.0.0-20261015060432-bdc73de10a74
+	github.com/faustbrian/go-migrations/v3 v3.0.0-20261001014304-a461b18b6b24
 	github.com/faustbrian/go-postgres v1.1.1-0.20260912090843-61261695bcc7
-	github.com/faustbrian/go-secret-envelope v1.0.1-0.20260913112010-22fc4a2d925d
-	github.com/faustbrian/go-transactional-outbox/v2 v2.0.0-20261002184451-72a9fe57a638
-	github.com/faustbrian/go-transactional-outbox/v2/postgres/identity v0.0.0-20261002184451-72a9fe57a638
-	github.com/jackc/pgx/v5 v5.10.0
+	github.com/faustbrian/go-secret-envelope v1.0.0
+	github.com/faustbrian/go-transactional-outbox/postgres/identity v0.0.0-20261015064732-3aaa84f79f74
+	github.com/faustbrian/go-transactional-outbox/v2 v2.0.2-0.20261015062550-37ea15436ae9
+	github.com/jackc/pgx/v5 v5.11.0
 )
 
 require (
-	github.com/faustbrian/go-capability v1.0.1-0.20261002040645-174b128867a4 // indirect
+	github.com/faustbrian/go-authentication/v2 v2.0.2-0.20261015052822-d9f5132c7f68 // indirect
+	github.com/faustbrian/go-capability/v2 v2.0.2-0.20261015044219-caab644d2fec // indirect
+	github.com/faustbrian/go-migrations/v2 v2.0.0 // indirect
+	github.com/faustbrian/go-password/v2 v2.0.2-0.20261015050515-4eb0fefa60ff // indirect
 	github.com/jackc/pgpassfile v1.0.0 // indirect
 	github.com/jackc/pgservicefile v0.0.0-20240606120523-5a60cdf6a761 // indirect
 	github.com/jackc/puddle/v2 v2.2.2 // indirect
+	github.com/mfridman/interpolate v0.0.2 // indirect
+	github.com/pressly/goose/v3 v3.27.1 // indirect
+	github.com/sethvargo/go-retry v0.3.0 // indirect
+	go.uber.org/multierr v1.11.0 // indirect
+	golang.org/x/crypto v0.57.0 // indirect
 	golang.org/x/net v0.59.0 // indirect
 	golang.org/x/sync v0.23.0 // indirect
+	golang.org/x/sys v0.48.0 // indirect
 	golang.org/x/text v0.42.0 // indirect
 )

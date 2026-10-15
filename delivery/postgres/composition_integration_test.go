@@ -7,22 +7,21 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
-	"net/url"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/faustbrian/go-audit"
 	auditpostgres "github.com/faustbrian/go-audit/postgres"
-	"github.com/faustbrian/go-authorization"
+	"github.com/faustbrian/go-authorization/v3"
 	identity "github.com/faustbrian/go-identity"
 	"github.com/faustbrian/go-identity/delivery"
 	identitypostgres "github.com/faustbrian/go-identity/postgres"
 	migrations "github.com/faustbrian/go-migrations/v3"
 	migrationpostgres "github.com/faustbrian/go-migrations/v3/postgres"
 	database "github.com/faustbrian/go-postgres"
+	identityoutbox "github.com/faustbrian/go-transactional-outbox/postgres/identity"
 	outboxpostgres "github.com/faustbrian/go-transactional-outbox/v2/postgres"
-	identityoutbox "github.com/faustbrian/go-transactional-outbox/v2/postgres/identity"
 	"github.com/jackc/pgx/v5/stdlib"
 )
 
@@ -97,12 +96,10 @@ func testPublicComposition(t *testing.T, mode string) {
 	config := pool.Config().ConnConfig
 	// ConnString retains the original fixture database even after pgx's parsed
 	// Database field changes. The owned adapter must use this isolated database.
-	dsn, err := url.Parse(config.ConnString())
-	if err != nil {
-		t.Fatal("owned database configuration failed")
-	}
-	dsn.Path, dsn.RawPath = "/"+config.Database, ""
-	owned, err := database.Connect(ctx, database.Config{DSN: dsn.String(), MaxConns: 4})
+	owned, err := database.Connect(ctx, database.Config{DSN: config.ConnString(), MaxConns: 4, Configure: func(native *database.PoolConfig) error {
+		native.ConnConfig.Database = config.Database
+		return nil
+	}})
 	if err != nil {
 		t.Fatal("owned primary pool failed")
 	}

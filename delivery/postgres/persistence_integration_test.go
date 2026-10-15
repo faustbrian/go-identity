@@ -33,9 +33,9 @@ func intentDatabase(t *testing.T) (context.Context, *pgxpool.Pool) {
 
 func emptyIntentDatabase(t *testing.T) (context.Context, *pgxpool.Pool) {
 	t.Helper()
-	config, err := pgxpool.ParseConfig(os.Getenv("IDENTITY_TEST_POSTGRES_DSN"))
-	if err != nil || config.ConnConfig.Host != "127.0.0.1" || config.ConnConfig.Database != "identity_test" {
-		t.Fatal("task-owned PostgreSQL DSN required")
+	config, err := parseIntentTestPoolConfig(os.Getenv("IDENTITY_TEST_POSTGRES_DSN"))
+	if err != nil {
+		t.Fatal(err)
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	t.Cleanup(cancel)
@@ -71,6 +71,39 @@ func emptyIntentDatabase(t *testing.T) (context.Context, *pgxpool.Pool) {
 		t.Fatal("test database connection failed")
 	}
 	return ctx, pool
+}
+
+func parseIntentTestPoolConfig(dsn string) (*pgxpool.Config, error) {
+	config, err := pgxpool.ParseConfig(dsn)
+	if dsn == "" || err != nil || config.ConnConfig.Host != "127.0.0.1" || config.ConnConfig.Database != "identity_test" {
+		return nil, errors.New("task-owned PostgreSQL DSN required")
+	}
+	// Every fallback can execute the same DDL as the primary connection.
+	for _, fallback := range config.ConnConfig.Fallbacks {
+		if fallback.Host != "127.0.0.1" {
+			return nil, errors.New("task-owned loopback PostgreSQL fallback required")
+		}
+	}
+	return config, nil
+}
+
+func TestIntentTestPoolConfigRejectsRemoteFallbacks(t *testing.T) {
+	for _, host := range []string{"127.0.0.1,remote.invalid", "127.0.0.1,127.0.0.1,remote.invalid", "127.0.0.1,/tmp"} {
+		config, err := parseIntentTestPoolConfig("host=" + host + " dbname=identity_test")
+		if err == nil || config != nil {
+			t.Error("unsafe fallback admitted for disposable database creation")
+		}
+	}
+	for _, dsn := range []string{"host=127.0.0.1 dbname=identity_test", "host=127.0.0.1,127.0.0.1 dbname=identity_test"} {
+		if config, err := parseIntentTestPoolConfig(dsn); err != nil || config == nil {
+			t.Error("isolated loopback configuration rejected")
+		}
+	}
+	for _, dsn := range []string{"", "host='", "host=remote.invalid dbname=identity_test", "host=127.0.0.1 dbname=other"} {
+		if config, err := parseIntentTestPoolConfig(dsn); err == nil || config != nil {
+			t.Error("non-test configuration admitted")
+		}
+	}
 }
 
 func installIntentFoundation(t *testing.T, ctx context.Context, pool *pgxpool.Pool) {
