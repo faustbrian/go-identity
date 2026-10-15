@@ -109,9 +109,9 @@ type Route struct {
 }
 
 // OperationRecord is selected operation metadata. Owners contains 1..16 unique
-// module IDs with the accountable owner first. Strings are bounded at admission:
-// ID/OpenAPI ID 128, risk/idempotency 32, event semantics 4096 bytes. Canonical
-// records must match the pinned catalog exactly; extension IDs are namespaced.
+// module IDs with the accountable owner first. Admission limits are 128 bytes
+// for operation identifiers, 32 for risk/idempotency and 4096 for event semantics.
+// Canonical records must match the pinned catalog; extension IDs are namespaced.
 // This is neither full canonical coverage nor evidence of security enforcement.
 type OperationRecord struct {
 	OperationID                              string
