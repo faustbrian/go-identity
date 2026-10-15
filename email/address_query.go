@@ -59,15 +59,18 @@ type AddressListResult struct {
 // AddressQueryService owns authorized email reads, not storage, mutation,
 // credential validation or sessions. It owns no resources or goroutines.
 type AddressQueryService struct {
-	repo   identity.IdentifierRepository
-	auth   authorization.Service
-	redact identity.RedactFunc
-	config identity.UserQueryConfig
+	repo                identity.IdentifierRepository
+	auth                authorization.Service
+	redact              identity.RedactFunc
+	config              identity.UserQueryConfig
+	administrativeAudit *administrativeAddressAudit
 }
 
 // NewAddressQueryService composes platform-owned primary storage and existing
 // authorization/redaction contracts. All dependencies must honor bounded
 // contexts and support concurrent calls; callers retain their ownership.
+// This constructor selects self reads only. Use NewAuditedAddressQueryService
+// to enable administrative targets with required primary audit acknowledgement.
 func NewAddressQueryService(repo identity.IdentifierRepository, auth authorization.Service, redact identity.RedactFunc, config identity.UserQueryConfig) (*AddressQueryService, error) {
 	if nilAddressDependency(repo) || nilAddressDependency(auth) || nilAddressDependency(config.Clock) || redact == nil || config.ValidateCanonicalUserID == nil || config.MaximumDuration <= 0 || config.MaximumDuration > time.Minute || !verificationID(config.PolicyID) || config.PolicyVersion == 0 || len(config.RedactionReasons) == 0 || len(config.RedactionReasons) > 32 {
 		return nil, identity.InvalidInputError{Field: "email_query_configuration"}
@@ -83,7 +86,7 @@ func NewAddressQueryService(repo identity.IdentifierRepository, auth authorizati
 
 // AddressGet authorizes exact scope before primary IO and again against current
 // state. Absent, non-email, cross-tenant and forbidden targets are indistinguishable.
-func (s *AddressQueryService) AddressGet(ctx context.Context, request AddressGetRequest) (out AddressGetResult, err error) {
+func (s *AddressQueryService) addressGet(ctx context.Context, request AddressGetRequest) (out AddressGetResult, err error) {
 	defer func() {
 		if recover() != nil {
 			out, err = AddressGetResult{}, identity.UnavailableError{}
@@ -112,7 +115,7 @@ func (s *AddressQueryService) AddressGet(ctx context.Context, request AddressGet
 
 // AddressList returns only safe versioned email projections under current policy.
 // It never truncates an unavailable primary partition or consumes a bearer.
-func (s *AddressQueryService) AddressList(ctx context.Context, request AddressListRequest) (out AddressListResult, err error) {
+func (s *AddressQueryService) addressList(ctx context.Context, request AddressListRequest) (out AddressListResult, err error) {
 	defer func() {
 		if recover() != nil {
 			out, err = AddressListResult{}, identity.UnavailableError{}
@@ -188,6 +191,9 @@ func (s *AddressQueryService) read(ctx context.Context, tenant identity.TenantID
 	}
 	if !verificationID(string(target)) || caller.Request.Resource.ID != authorization.ResourceID(target) || caller.PolicyRevision != authorization.Revision(s.config.PolicyVersion) || validateEmailCaller(tenant, caller, action) != nil {
 		return zero, empty, time.Time{}, identity.ForbiddenError{}
+	}
+	if _, administrative := administrativeAddressTarget(target, caller); administrative && !s.AdministrativeQueriesConfigured() {
+		return zero, empty, time.Time{}, identity.UnavailableError{}
 	}
 	if err := s.config.ValidateCanonicalUserID(ctx, target); err != nil {
 		if cancelled := addressContextError(ctx); cancelled != nil {

@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/faustbrian/go-audit"
 	"github.com/faustbrian/go-authorization/v3"
 	identity "github.com/faustbrian/go-identity"
 	email "github.com/faustbrian/go-identity/email"
@@ -54,6 +55,10 @@ func (a *addressQueryAuthorizer) Decide(ctx context.Context, request authorizati
 }
 
 func addressQueryFixture(t *testing.T, selected ...identity.RedactFunc) (*email.AddressQueryService, *addressQueryRepo, *addressQueryAuthorizer, email.AddressListRequest) {
+	return addressQueryFixtureWithAudit(t, nil, selected...)
+}
+
+func addressQueryFixtureWithAudit(t *testing.T, auditing *addressAuditSink, selected ...identity.RedactFunc) (*email.AddressQueryService, *addressQueryRepo, *addressQueryAuthorizer, email.AddressListRequest) {
 	t.Helper()
 	now := (addressQueryClock{}).Now()
 	repo := &addressQueryRepo{state: identity.IdentifierState{
@@ -83,11 +88,15 @@ func addressQueryFixture(t *testing.T, selected ...identity.RedactFunc) (*email.
 	if len(selected) == 1 {
 		redact = selected[0]
 	}
-	service, err := email.NewAddressQueryService(repo, auth, redact, identity.UserQueryConfig{
+	config := identity.UserQueryConfig{
 		Clock: addressQueryClock{}, MaximumDuration: time.Second, PolicyID: "email-read", PolicyVersion: 1,
 		RedactionReasons:        []identity.PolicyReason{"address-visible"},
 		ValidateCanonicalUserID: func(context.Context, identity.UserID) error { return nil },
-	})
+	}
+	service, err := email.NewAddressQueryService(repo, auth, redact, config)
+	if auditing != nil {
+		service, err = email.NewAuditedAddressQueryService(repo, auth, redact, config, email.AdministrativeReadAuditConfig{Sink: auditing, MaximumDuration: time.Second})
+	}
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -212,7 +221,8 @@ func TestAddressQueriesDoNotDistinguishAbsentForbiddenOrForeign(t *testing.T) {
 }
 
 func TestAddressQueriesSupportExplicitAuthorizedAdministrator(t *testing.T) {
-	s, _, auth, request := addressQueryFixture(t)
+	sink := &addressAuditSink{}
+	s, _, auth, request := addressQueryFixtureWithAudit(t, sink)
 	request.TargetSubjectID = "owner"
 	request.Caller.Request.Subject.ID = "administrator"
 	out, err := s.AddressList(context.Background(), request)
@@ -223,6 +233,123 @@ func TestAddressQueriesSupportExplicitAuthorizedAdministrator(t *testing.T) {
 	out, err = s.AddressList(context.Background(), request)
 	if err == nil || out.Addresses != nil {
 		t.Fatal("administrator name granted authority")
+	}
+	if len(sink.records) != 2 || sink.records[0].Actor().ID() != "administrator" || sink.records[0].Subject().ID() != "owner" || sink.records[0].Outcome() != audit.OutcomeSucceeded || sink.records[1].Outcome() != audit.OutcomeDenied || sink.records[1].Subject().ID() != "undisclosed" {
+		t.Fatal("administrative disclosure or denial lost safe audit")
+	}
+}
+
+type addressAuditSink struct {
+	records  []audit.Record
+	mode     string
+	onAppend func()
+}
+
+func (s *addressAuditSink) Append(ctx context.Context, r audit.Record) (audit.AppendResult, error) {
+	if _, ok := ctx.Deadline(); !ok {
+		panic("unbounded audit")
+	}
+	if s.mode == "panic" {
+		panic("private one@example.test")
+	}
+	if s.mode == "unknown" {
+		return audit.AppendResult{}, audit.NewAppendError(audit.AppendUnknown, errors.New("private one@example.test"))
+	}
+	if s.onAppend != nil {
+		s.onAppend()
+	}
+	s.records = append(s.records, r)
+	if s.mode == "foreign" {
+		return audit.AppendResult{RecordID: "foreign", Status: audit.AppendAccepted}, nil
+	}
+	return audit.AppendResult{RecordID: r.ID(), Status: audit.AppendAccepted}, nil
+}
+
+func TestAdministrativeAddressReadPreservesCancellationAndCursorScope(t *testing.T) {
+	for _, mode := range []string{"actor", "snapshot", "policy", "cancel-audit"} {
+		t.Run(mode, func(t *testing.T) {
+			sink := &addressAuditSink{}
+			s, repo, _, r := addressQueryFixtureWithAudit(t, sink)
+			r.TargetSubjectID, r.Caller.Request.Subject.ID, r.Limit = "owner", "administrator", 1
+			first, err := s.AddressList(t.Context(), r)
+			if err != nil || first.NextCursor == "" {
+				t.Fatal("administrative page", err)
+			}
+			r.Cursor = first.NextCursor
+			ctx, stop := context.WithCancel(t.Context())
+			defer stop()
+			switch mode {
+			case "actor":
+				r.Caller.Request.Subject.ID = "other-administrator"
+			case "snapshot":
+				repo.state.User.Version++
+			case "policy":
+				r.Caller.PolicyRevision++
+			case "cancel-audit":
+				sink.onAppend = stop
+			}
+			out, err := s.AddressList(ctx, r)
+			if err == nil || out.Addresses != nil || out.NextCursor != "" {
+				t.Fatal("administrative cursor or cancelled audit disclosed a page")
+			}
+			if mode == "cancel-audit" && !errors.Is(err, context.Canceled) {
+				t.Fatal("audit cancellation lost caller authority", err)
+			}
+		})
+	}
+}
+func (s *addressAuditSink) AppendBatch(ctx context.Context, records []audit.Record) (audit.BatchResult, error) {
+	out := audit.BatchResult{}
+	for _, r := range records {
+		v, e := s.Append(ctx, r)
+		if e != nil {
+			return audit.BatchResult{}, e
+		}
+		out.Results = append(out.Results, v)
+	}
+	return out, nil
+}
+
+func TestAdministrativeAddressAuditFailuresWithholdProjection(t *testing.T) {
+	for _, mode := range []string{"unknown", "foreign", "panic"} {
+		t.Run(mode, func(t *testing.T) {
+			sink := &addressAuditSink{mode: mode}
+			s, _, _, r := addressQueryFixtureWithAudit(t, sink)
+			r.TargetSubjectID = "owner"
+			r.Caller.Request.Subject.ID = "administrator"
+			out, err := s.AddressList(t.Context(), r)
+			var unavailable identity.UnavailableError
+			if !errors.As(err, &unavailable) || out.Addresses != nil || strings.Contains(err.Error(), "example") {
+				t.Fatal("audit failure disclosed administrative projection", err)
+			}
+		})
+	}
+	sink := &addressAuditSink{}
+	s, _, _, r := addressQueryFixtureWithAudit(t, sink)
+	if _, err := s.AddressList(t.Context(), r); err != nil || len(sink.records) != 0 {
+		t.Fatal("self read became privileged audit", err)
+	}
+	r.TargetSubjectID = "owner"
+	r.Caller.Request.Subject.ID = "administrator"
+	r.Caller.Request.Action = "identity.email.address-get"
+	got, err := s.AddressGet(t.Context(), email.AddressGetRequest{TenantID: r.TenantID, TargetSubjectID: r.TargetSubjectID, AddressID: "a", Caller: r.Caller})
+	if err != nil || got.Address == (identity.IdentifierProjection{}) || len(sink.records) != 1 || sink.records[0].Action() != "identity.email.address-get" || !sink.records[0].RedactionApplied() {
+		t.Fatal("audited get lost primary acknowledgement", err)
+	}
+	wire, _ := json.Marshal(sink.records[0])
+	if strings.Contains(string(wire), "@example") || strings.Contains(string(wire), "cursor") {
+		t.Fatal("administrative audit retained address data")
+	}
+}
+
+func TestAdministrativeAddressesRequireAuditBeforePrimaryRead(t *testing.T) {
+	s, repo, _, r := addressQueryFixture(t)
+	r.TargetSubjectID = "owner"
+	r.Caller.Request.Subject.ID = "administrator"
+	out, err := s.AddressList(t.Context(), r)
+	var unavailable identity.UnavailableError
+	if !errors.As(err, &unavailable) || out.Addresses != nil || repo.reads != 0 {
+		t.Fatal("unaudited administrative query disclosed primary state", err)
 	}
 }
 

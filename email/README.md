@@ -125,6 +125,17 @@ composition, safe removal and stronger-factor profiles remain under development.
 
 `NewAddressQueryService` composes the existing primary identifier repository,
 authorization service and redaction callback with `identity.UserQueryConfig`.
+It selects self reads only. Administrative consumers must instead use
+`NewAuditedAddressQueryService` with `AdministrativeReadAuditConfig`: an existing
+`audit.Sink` and a positive `MaximumDuration` no longer than the query budget.
+The owner records administrative successes and policy denials using the existing
+audit recorder's fail-closed delivery. Only a validated primary acknowledgement
+allows disclosure; unavailable, unknown, forged and panicking acknowledgements
+withhold projections. The sink is borrowed and must honor cancellation and
+concurrent calls. There is no background write, retry journal or fail-open mode.
+Records retain safe actor/tenant/action/policy and authorized target metadata,
+not mailboxes, cursors or arbitrary denied target inputs. Self reads create no
+administrative access record. Configuration reports are not authorization.
 It owns no database, goroutines, sessions or verification tokens. The query
 port accepts a trusted current caller from authenticated composition; caller
 IDs, groups and resource attributes must never be decoded from public input.

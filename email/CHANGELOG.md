@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Require primary fail-closed audit acknowledgement for administrative address
+  reads through `NewAuditedAddressQueryService`. The existing query constructor
+  now selects self reads only; migrate administrative consumers to the audited
+  constructor. Audit failures/unknown acknowledgements withhold all projections.
+
 - Support explicit verified replacement-primary selection during safe removal.
   Require its independent versions; old dispositions reject replacement fields.
 
