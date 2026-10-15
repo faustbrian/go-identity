@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	authentication "github.com/faustbrian/go-authentication"
+	authentication "github.com/faustbrian/go-authentication/v2"
 	"github.com/faustbrian/go-identity/session"
 )
 

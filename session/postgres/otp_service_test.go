@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"testing"
 
-	authority "github.com/faustbrian/go-authorization/postgres"
+	authority "github.com/faustbrian/go-authorization/v3/postgres"
 	kernel "github.com/faustbrian/go-identity/postgres"
 	"github.com/faustbrian/go-identity/session"
 )

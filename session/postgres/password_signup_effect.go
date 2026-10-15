@@ -6,8 +6,8 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/faustbrian/go-authorization"
-	authority "github.com/faustbrian/go-authorization/postgres"
+	"github.com/faustbrian/go-authorization/v3"
+	authority "github.com/faustbrian/go-authorization/v3/postgres"
 
 	identity "github.com/faustbrian/go-identity"
 	kernel "github.com/faustbrian/go-identity/postgres"

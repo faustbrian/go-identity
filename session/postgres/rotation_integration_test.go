@@ -7,7 +7,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"errors"
-	"github.com/faustbrian/go-authorization"
+	"github.com/faustbrian/go-authorization/v3"
 	"net/http"
 	"strconv"
 	"testing"

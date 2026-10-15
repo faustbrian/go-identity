@@ -15,8 +15,8 @@ import (
 	"time"
 
 	"github.com/faustbrian/go-audit"
-	"github.com/faustbrian/go-authorization"
-	policyStore "github.com/faustbrian/go-authorization/postgres"
+	"github.com/faustbrian/go-authorization/v3"
+	policyStore "github.com/faustbrian/go-authorization/v3/postgres"
 	"github.com/faustbrian/go-clock"
 	identity "github.com/faustbrian/go-identity"
 	identitypostgres "github.com/faustbrian/go-identity/postgres"

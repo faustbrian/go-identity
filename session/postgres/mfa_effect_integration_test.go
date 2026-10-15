@@ -19,11 +19,11 @@ import (
 	"time"
 
 	"github.com/faustbrian/go-audit"
-	auth "github.com/faustbrian/go-authentication"
-	"github.com/faustbrian/go-authorization"
-	policy "github.com/faustbrian/go-authorization/postgres"
-	"github.com/faustbrian/go-capability"
+	auth "github.com/faustbrian/go-authentication/v2"
+	"github.com/faustbrian/go-authorization/v3"
+	policy "github.com/faustbrian/go-authorization/v3/postgres"
 	capabilitypg "github.com/faustbrian/go-capability/postgres/identity"
+	"github.com/faustbrian/go-capability/v2"
 	"github.com/faustbrian/go-clock"
 	identity "github.com/faustbrian/go-identity"
 	"github.com/faustbrian/go-identity/mfa"
@@ -33,7 +33,7 @@ import (
 	riskpg "github.com/faustbrian/go-identity/risk/postgres"
 	"github.com/faustbrian/go-identity/session"
 	migrations "github.com/faustbrian/go-migrations/v3"
-	password "github.com/faustbrian/go-password"
+	password "github.com/faustbrian/go-password/v2"
 	database "github.com/faustbrian/go-postgres"
 	envelope "github.com/faustbrian/go-secret-envelope"
 	"github.com/faustbrian/go-secret-envelope/adapters/keyring"
@@ -494,8 +494,8 @@ func testNativeMFASessionEffect(t *testing.T, ctx context.Context, pool *databas
 			key := []byte("0123456789abcdef0123456789abcdef")
 			signer, _ := capability.NewHMACSHA256Signer("sign-v1", key)
 			verifier, _ := capability.NewHMACSHA256Verifier(key)
-			keys, _ := capability.NewKeySet([]capability.Key{{ID: "sign-v1", Verifier: verifier}})
-			issuer, err := capabilitypg.NewIssuer(capabilitypg.IssuerConfig{Crypto: capability.ServiceConfig{Signer: signer, Resolver: keys, Clock: func() time.Time { return now }, Limits: capability.DefaultLimits()}, Audience: "service-a", CurrentReplayKeyVersion: 1, RetainedReplayKeys: map[uint32][32]byte{1: {1}}, PreparationTimeout: time.Second})
+			keys, _ := capability.NewKeySet([]capability.Key{{Issuer: "https://identity.example.test", ID: "sign-v1", Verifier: verifier}})
+			issuer, err := capabilitypg.NewIssuer(capabilitypg.IssuerConfig{Crypto: capability.ServiceConfig{Issuer: "https://identity.example.test", Signer: signer, Resolver: keys, Clock: func() time.Time { return now }, Limits: capability.DefaultLimits()}, Audience: "service-a", CurrentReplayKeyVersion: 1, RetainedReplayKeys: map[uint32][32]byte{1: {1}}, PreparationTimeout: time.Second})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -517,7 +517,7 @@ func testNativeMFASessionEffect(t *testing.T, ctx context.Context, pool *databas
 				t.Fatal(err)
 			}
 			defer parentProof.Transfer(context.Background(), func(context.Context, []byte) error { return nil })
-			parentGrant, err := capability.Verify(ctx, parentWire, keys, capability.VerifyOptions{Now: now, Limits: capability.DefaultLimits()})
+			parentGrant, err := capability.Verify(ctx, parentWire, keys, capability.VerifyOptions{Issuer: "https://identity.example.test", Now: now, Limits: capability.DefaultLimits()})
 			if err != nil {
 				t.Fatal(err)
 			}

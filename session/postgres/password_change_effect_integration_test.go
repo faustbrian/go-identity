@@ -13,9 +13,9 @@ import (
 	"time"
 
 	"github.com/faustbrian/go-audit"
-	authentication "github.com/faustbrian/go-authentication"
-	authorization "github.com/faustbrian/go-authorization"
-	policy "github.com/faustbrian/go-authorization/postgres"
+	authentication "github.com/faustbrian/go-authentication/v2"
+	authorization "github.com/faustbrian/go-authorization/v3"
+	policy "github.com/faustbrian/go-authorization/v3/postgres"
 	"github.com/faustbrian/go-clock"
 	identity "github.com/faustbrian/go-identity"
 	kernel "github.com/faustbrian/go-identity/postgres"

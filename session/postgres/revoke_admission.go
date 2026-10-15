@@ -3,8 +3,8 @@ package postgres
 import (
 	"context"
 
-	"github.com/faustbrian/go-authorization"
-	authorizationpg "github.com/faustbrian/go-authorization/postgres"
+	"github.com/faustbrian/go-authorization/v3"
+	authorizationpg "github.com/faustbrian/go-authorization/v3/postgres"
 	identity "github.com/faustbrian/go-identity"
 	mfapg "github.com/faustbrian/go-identity/mfa/postgres"
 	kernel "github.com/faustbrian/go-identity/postgres"

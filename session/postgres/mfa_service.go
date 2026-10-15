@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	policy "github.com/faustbrian/go-authorization/postgres"
+	policy "github.com/faustbrian/go-authorization/v3/postgres"
 	identity "github.com/faustbrian/go-identity"
 	mfapg "github.com/faustbrian/go-identity/mfa/postgres"
 	kernel "github.com/faustbrian/go-identity/postgres"

@@ -6,8 +6,8 @@ import (
 	"strings"
 	"time"
 
-	authorization "github.com/faustbrian/go-authorization"
-	authority "github.com/faustbrian/go-authorization/postgres"
+	authorization "github.com/faustbrian/go-authorization/v3"
+	authority "github.com/faustbrian/go-authorization/v3/postgres"
 	identity "github.com/faustbrian/go-identity"
 	kernel "github.com/faustbrian/go-identity/postgres"
 	"github.com/faustbrian/go-identity/session"

@@ -6,10 +6,10 @@ import (
 	"errors"
 	"testing"
 
-	auth "github.com/faustbrian/go-authentication"
+	auth "github.com/faustbrian/go-authentication/v2"
 	identity "github.com/faustbrian/go-identity"
 	"github.com/faustbrian/go-identity/session"
-	primitive "github.com/faustbrian/go-password"
+	primitive "github.com/faustbrian/go-password/v2"
 )
 
 func passwordSigninMappingFixture(t testing.TB, anonymous, csrf bool) (identity.FeatureCommandSpec, session.Session, primitive.Secret, auth.BearerCredential) {

@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Compose current public kernel, risk and MFA participants with matching
+  authentication v2 and authorization v3 values; session authority remains native.
+
+- Align owned capability dependencies with the v2 issuer-scoped contracts.
+
 - Add closed password/secondary-OTP session mapping and a same-Work completion
   effect requiring actual checked OTP/child custody and recorded shared MFA
   transition. Original credential, remember and optional synchronizer remain

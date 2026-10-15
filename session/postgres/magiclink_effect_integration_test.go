@@ -13,16 +13,16 @@ import (
 	"time"
 
 	"github.com/faustbrian/go-audit"
-	"github.com/faustbrian/go-authorization"
-	policy "github.com/faustbrian/go-authorization/postgres"
+	"github.com/faustbrian/go-authorization/v3"
+	policy "github.com/faustbrian/go-authorization/v3/postgres"
 	identitycapability "github.com/faustbrian/go-capability/postgres/identity"
 	identity "github.com/faustbrian/go-identity"
 	mfapg "github.com/faustbrian/go-identity/mfa/postgres"
 	kernel "github.com/faustbrian/go-identity/postgres"
 	"github.com/faustbrian/go-identity/session"
 	database "github.com/faustbrian/go-postgres"
+	lifecyclepg "github.com/faustbrian/go-transactional-outbox/postgres/identity"
 	outboxpg "github.com/faustbrian/go-transactional-outbox/v2/postgres"
-	lifecyclepg "github.com/faustbrian/go-transactional-outbox/v2/postgres/identity"
 )
 
 // This closed native feature/counter seam exercises real capability, pre-auth

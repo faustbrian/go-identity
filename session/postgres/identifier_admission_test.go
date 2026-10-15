@@ -7,9 +7,9 @@ import (
 	"strings"
 	"testing"
 
-	authentication "github.com/faustbrian/go-authentication"
-	authorization "github.com/faustbrian/go-authorization"
-	authority "github.com/faustbrian/go-authorization/postgres"
+	authentication "github.com/faustbrian/go-authentication/v2"
+	authorization "github.com/faustbrian/go-authorization/v3"
+	authority "github.com/faustbrian/go-authorization/v3/postgres"
 	identity "github.com/faustbrian/go-identity"
 	kernel "github.com/faustbrian/go-identity/postgres"
 	"github.com/faustbrian/go-identity/session"

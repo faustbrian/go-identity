@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	authority "github.com/faustbrian/go-authorization/postgres"
+	authority "github.com/faustbrian/go-authorization/v3/postgres"
 	identity "github.com/faustbrian/go-identity"
 	kernel "github.com/faustbrian/go-identity/postgres"
 	"github.com/faustbrian/go-identity/session"
