@@ -140,8 +140,10 @@ func validateRequestPrimary(tenant identity.TenantID, p RequestPrimary, caller a
 	if key == (identity.IdempotencyKey{}) || caller.Request.Subject.Kind != authorization.SubjectUser || caller.PolicyRevision == 0 || caller.Request.Resource.ID != authorization.ResourceID(caller.Request.Subject.ID) || validateEmailCaller(tenant, caller, action) != nil {
 		return ErrInvalidVerification
 	}
-	if _, ok := verificationURL(callback, 2048); !ok {
-		return ErrInvalidVerification
+	if callback != nil {
+		if _, ok := verificationURL(callback, 2048); !ok {
+			return ErrInvalidVerification
+		}
 	}
 	if len(network) > 128 {
 		return ErrInvalidVerification

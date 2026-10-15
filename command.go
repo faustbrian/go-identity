@@ -194,6 +194,9 @@ type CommandResult struct {
 	// Nil omission preserves historical receipt bytes. It is not a ready export
 	// or current authority; verify retained intent and the recorded evidence key.
 	PrivacyExport *PrivacyExportRequestReceipt `json:",omitempty"`
+	// Cascade is the committed feature owner's pending lifecycle admission.
+	// Nil omission preserves historical receipts. It is not consumer completion.
+	Cascade *LifecycleCascadeAdmission `json:",omitempty"`
 }
 
 // Validate checks the closed receipt shape, immutable operation binding,
@@ -254,6 +257,9 @@ func cloneUpdates(updates []AttributeUpdate) []AttributeUpdate {
 }
 
 func (r CommandResult) valid() bool {
+	if r.Cascade != nil && (r.Feature == nil || r.PrivacyExport != nil) {
+		return false
+	}
 	if r.PrivacyExport != nil || r.Binding.OperationID == privacyExportRequestOperation {
 		return validPrivacyExportResult(r)
 	}

@@ -1,5 +1,27 @@
 # Email
 
+## Safe self-removal
+
+`AddressRemoveRequest` names an exact address and independent identifier/
+verification versions, registered reason, original key and action-bound fresh
+`RequestPrimary`. Choose `PreserveRemainingPrimary` for a nonprimary target or
+explicitly `LeavePrimaryUnassigned`; no replacement is chosen by ordering.
+The selected recovery disposition is `PreserveVerifiedEmailRecovery`.
+
+`AddressRemovalService` is implemented by the native password PostgreSQL owner
+and reference graph. It conserves actual selected password signin/reset eligibility
+under current credential and known-empty MFA authority, not merely an address
+count. Exact-target unused-link retirement, identifier/session invalidation,
+audit and complete pending lifecycle admission commit with removal. Missing or
+enrolled factor authority never falls back to password-only permission.
+
+Exact retries preserve original key/input/proof/cookie/CSRF; changed intent
+conflicts. `AddressRemoveRecover` observes original scope under current query
+policy, not another mutation. `CommandResult.Cascade` is historical pending
+admission, not consumer acknowledgement/completed cleanup. Unknown is not rollback.
+`AddressRemovalRateSource` authenticates original possession for transport rate
+admission without removal or renewed freshness; returned subject metadata is sensitive.
+
 Email-owned address parsing, canonical comparison, original signup mailbox
 verification contracts and authorized address reads. Native password-signup
 confirmation is composed by the existing password adapter and reference backend;

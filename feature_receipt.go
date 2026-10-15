@@ -25,6 +25,10 @@ func validFeatureResult(r CommandResult) bool {
 	if r.Binding.ValidateFor(f.Operation) != nil || r.User != (User{}) || r.ExpectedVersion != 0 || r.Profile != nil || r.Revocation != nil || r.Unlink != nil || r.Link != nil || r.Identifier != nil || r.PrivacyExport != nil {
 		return false
 	}
+	removal := f.Operation == (FeatureOperation{Owner: "identity/email", OperationID: "identity.email.address-remove", SchemaID: "identity.email.address-remove.native-v1", SchemaVersion: 1, RecordRequirement: FeatureRecordRequired})
+	if r.Cascade != nil && (!removal || r.Outcome != CommitOutcomeCommitted || r.Cascade.Validate(r.Binding) != nil) || removal && r.Outcome == CommitOutcomeCommitted && r.Cascade == nil {
+		return false
+	}
 	switch r.Outcome {
 	case CommitOutcomeCommitted:
 		if r.RetryAfter != 0 || !validDirectoryID(r.AuditEventID) {

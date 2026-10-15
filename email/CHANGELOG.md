@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add keyed safe self-removal requests with exact identifier/verification
+  predecessors, registered reasons and explicit primary/recovery disposition.
+  Native execution must conserve actual remaining signin/reset eligibility;
+  pending cascade admission is not asynchronous cleanup completion.
+
 - Compose current session custody backed by supported envelope v2. Existing
   workflow/HTTP contracts and original credential lifetimes are unchanged.
 

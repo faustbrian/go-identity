@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Retain exact pending identifier-removal cascade admission in committed native
+  self-removal receipts. Preserve prior JSON shapes when no cascade is present;
+  unrelated or noncommitted outcomes cannot claim cleanup admission/completion.
+
 - Adopt the current authentication v2, authorization v3 and password v2
   identity contracts. Experimental consumers must update their primitive imports
   to those majors when supplying proof, policy or secret values. Root dependency
