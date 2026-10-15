@@ -12,8 +12,8 @@ import (
 	kernel "github.com/faustbrian/go-identity/postgres"
 	"github.com/faustbrian/go-identity/session"
 	database "github.com/faustbrian/go-postgres"
-	envelope "github.com/faustbrian/go-secret-envelope"
-	"github.com/faustbrian/go-secret-envelope/adapters/keyring"
+	envelope "github.com/faustbrian/go-secret-envelope/v2"
+	"github.com/faustbrian/go-secret-envelope/v2/adapters/keyring"
 )
 
 // Real primary reader coverage, not proof of public Send/Signin or issuance.

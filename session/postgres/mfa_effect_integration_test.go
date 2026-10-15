@@ -35,8 +35,8 @@ import (
 	migrations "github.com/faustbrian/go-migrations/v3"
 	password "github.com/faustbrian/go-password/v2"
 	database "github.com/faustbrian/go-postgres"
-	envelope "github.com/faustbrian/go-secret-envelope"
-	"github.com/faustbrian/go-secret-envelope/adapters/keyring"
+	envelope "github.com/faustbrian/go-secret-envelope/v2"
+	"github.com/faustbrian/go-secret-envelope/v2/adapters/keyring"
 )
 
 // Primary/policy admission and audit/lifecycle sinks are fixture seams.
