@@ -13,8 +13,8 @@ import (
 
 	"github.com/faustbrian/go-audit"
 	auditpg "github.com/faustbrian/go-audit/postgres"
-	"github.com/faustbrian/go-authorization"
-	policy "github.com/faustbrian/go-authorization/postgres"
+	"github.com/faustbrian/go-authorization/v3"
+	policy "github.com/faustbrian/go-authorization/v3/postgres"
 	identity "github.com/faustbrian/go-identity"
 	"github.com/faustbrian/go-identity/mfa"
 	mfapg "github.com/faustbrian/go-identity/mfa/postgres"
@@ -22,8 +22,8 @@ import (
 	kernel "github.com/faustbrian/go-identity/postgres"
 	"github.com/faustbrian/go-identity/risk"
 	sessionpg "github.com/faustbrian/go-identity/session/postgres"
-	envelope "github.com/faustbrian/go-secret-envelope"
-	lifecyclepg "github.com/faustbrian/go-transactional-outbox/v2/postgres/identity"
+	envelope "github.com/faustbrian/go-secret-envelope/v2"
+	lifecyclepg "github.com/faustbrian/go-transactional-outbox/postgres/identity"
 )
 
 type passwordOTPSendPhase struct {

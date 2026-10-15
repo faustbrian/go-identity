@@ -9,8 +9,8 @@ import (
 	deliverypg "github.com/faustbrian/go-identity/delivery/postgres"
 	passwordpg "github.com/faustbrian/go-identity/password/postgres"
 	"github.com/faustbrian/go-identity/risk"
-	envelope "github.com/faustbrian/go-secret-envelope"
-	"github.com/faustbrian/go-secret-envelope/adapters/keyring"
+	envelope "github.com/faustbrian/go-secret-envelope/v2"
+	"github.com/faustbrian/go-secret-envelope/v2/adapters/keyring"
 )
 
 // PasswordResetConfiguration selects native request/completion/recovery. Native

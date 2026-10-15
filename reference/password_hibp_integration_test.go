@@ -18,14 +18,14 @@ import (
 
 	audit "github.com/faustbrian/go-audit"
 	auditpg "github.com/faustbrian/go-audit/postgres"
-	"github.com/faustbrian/go-authorization"
+	"github.com/faustbrian/go-authorization/v3"
 	"github.com/faustbrian/go-clock"
-	httpclient "github.com/faustbrian/go-http-client"
+	httpclient "github.com/faustbrian/go-http-client/v2"
 	identity "github.com/faustbrian/go-identity"
 	passwordpg "github.com/faustbrian/go-identity/password/postgres"
 	"github.com/faustbrian/go-identity/risk"
 	"github.com/faustbrian/go-identity/risk/hibp"
-	primitive "github.com/faustbrian/go-password"
+	primitive "github.com/faustbrian/go-password/v2"
 	database "github.com/faustbrian/go-postgres"
 )
 

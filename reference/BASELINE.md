@@ -9,19 +9,19 @@ opt-in. OTP signin, MFA and other login methods are not enabled here.
 
 ## Prerequisites and source boundary
 
-- Go 1.27.2, Ruby, Git and tar; PostgreSQL binaries on PATH.
-- This identity checkout and the local Golib repositories named in
-  [LOCAL_SOURCES.json](LOCAL_SOURCES.json), containing those committed objects.
+- Go 1.27.2, Ruby and PostgreSQL binaries on PATH.
+- This identity checkout and normal access to its pinned public Go modules.
 - HTTPS access to HIBP's public range API. The command uses the real owned client,
   padded k-anonymity requests and fail-closed screening; it has no "pretend clean"
   option. Integration tests replace only external provider IO.
 
-The runner archives immutable supplier commits into its own temporary workspace,
-builds the command and cleans its source archives and Go caches when it exits.
-It does not change supplier checkouts or add permanent module replacements.
-Historical dependency revisions are not all publicly downloadable, so this is
-**development-source compatibility, not public-install/release qualification**.
-Consumers need not implement missing stores, migrations or handlers.
+The runner builds the reference module with `GOWORK=off` and its normal pinned
+public dependency graph, then cleans its private Go caches when it exits. It
+does not read sibling checkouts, replace modules or consume historical
+`LOCAL_SOURCES.json` wiring. The first collection argument is retained only for
+command compatibility and does not select dependencies. This is a runnable local
+backend, not full-unit or platform release qualification. Consumers need not
+implement missing stores, migrations or handlers.
 
 ## Run against a disposable local database
 

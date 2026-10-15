@@ -80,6 +80,11 @@ No goroutine, resource, callback, network operation or clock read is started.
 
 - Attach creates pending verification, never primary/verified. Duplicate IDs or
   same-kind canonical values in the partition conflict.
+- RestartVerification advances an existing pending non-primary record and its
+  verification generation without changing its value or proving possession.
+  Verified/primary records deny. This native resend transition has no generic
+  identifier operation; the feature must atomically authorize and commit its
+  replacement issuance/delivery, cooldown and predecessor invalidation.
 - Verify transitions pending to verified only after the feature owner proves
   the exact subject/value/version-bound challenge. This action is intent, not
   proof. Verification time uses the owner's sampled UTC instant, truncated to
@@ -88,6 +93,12 @@ No goroutine, resource, callback, network operation or clock read is started.
   **of that kind**, advancing each changed record without renewing verification.
   Email primary and phone primary are independent; primary is not default login
   permission. It is valid to have no primary for a kind.
+- VerifyPrimary is a native email-change transition: verify the pending candidate
+  and select it as primary in the same mutation. Its identifier and verification
+  versions advance once; an old primary is demoted without renewing verification.
+  Generic identifier commands do not expose it. The email owner must conserve
+  original change policy and new-address possession and commit notification and
+  required session effects atomically.
 - Replace preserves record ID/kind and requires a different canonical value.
   It resets verification and primary, advances both record versions, and
   returns original retirement metadata for the old-value reuse decision.

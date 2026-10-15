@@ -13,8 +13,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/faustbrian/go-capability"
 	issuerpg "github.com/faustbrian/go-capability/postgres/identity"
+	"github.com/faustbrian/go-capability/v2"
 	identity "github.com/faustbrian/go-identity"
 	"github.com/faustbrian/go-identity/delivery"
 	"github.com/faustbrian/go-identity/email"
@@ -62,7 +62,7 @@ func configureReferenceMagicLink(t *testing.T, c *reference.StoreConfiguration, 
 		t.Fatal(err)
 	}
 	verifier, _ := capability.NewHMACSHA256Verifier(key)
-	resolver, err := capability.NewKeySet([]capability.Key{{ID: "reference-magic", Verifier: verifier}})
+	resolver, err := capability.NewKeySet([]capability.Key{{Issuer: origin, ID: "reference-magic", Verifier: verifier}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -82,7 +82,7 @@ func configureReferenceMagicLink(t *testing.T, c *reference.StoreConfiguration, 
 	c.MagicLink = &reference.MagicLinkConfiguration{
 		Request: magicpg.RequestConfig{MaximumDuration: c.OTP.Timeout, ConfigurationID: "reference-magic-v1", PolicyID: "magic-login", GlobalAuthorityID: c.OTP.Store.GlobalAuthorityID, IssuerURL: origin, Origins: []string{origin}, Callbacks: []string{callback}, Lifetime: time.Minute, Address: address,
 			Coordinator: coordinator, RequestKeys: requestKeys,
-			Issuer:          issuerpg.IssuerConfig{Crypto: capability.ServiceConfig{Signer: signer, Resolver: resolver, Clock: time.Now, Limits: capability.DefaultLimits()}, Audience: c.OTP.Signin.Profile.Audience, CurrentReplayKeyVersion: 1, RetainedReplayKeys: map[uint32][32]byte{1: {183}}, PreparationTimeout: time.Second},
+			Issuer:          issuerpg.IssuerConfig{Crypto: capability.ServiceConfig{Issuer: origin, Signer: signer, Resolver: resolver, Clock: time.Now, Limits: capability.DefaultLimits()}, Audience: c.OTP.Signin.Profile.Audience, CurrentReplayKeyVersion: 1, RetainedReplayKeys: map[uint32][32]byte{1: {183}}, PreparationTimeout: time.Second},
 			IssuanceCustody: issuerpg.IssuancePreparationConfig{Deployment: "reference-magic", ActiveEnvelopeKey: "magic-issuer", EnvelopeKeys: map[string][]byte{"magic-issuer": bytes.Repeat([]byte{184}, 32)}, VerificationKeys: []issuerpg.PreparationVerificationKey{{ID: "reference-magic", HMAC: key}}, Clock: time.Now},
 			Risk:            risk.AuthenticationAdmissionCustodyConfig{ConfigurationID: "reference-magic-v1", Keys: c.OTP.RiskKeys}, Session: c.OTP.Signin.Session, CookieKeys: map[uint32]session.DigestKey{3: c.PasswordSignin.Native.FlowKeys[0]}, IntentKey: [32]byte{185}, ActiveEnvelopeKeyID: "issue-envelope",
 			Delivery: magicpg.RequestDeliveryConfig{Endpoint: origin + "/magic", TemplateID: "magic-link", TemplateVersion: 1, ProviderVersion: 1, Locales: []string{"en"}, ScopeKey: [32]byte{186}, Timeout: time.Second}},

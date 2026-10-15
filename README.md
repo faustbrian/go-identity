@@ -20,7 +20,7 @@ operations are not passes or exemptions from full-platform qualification.
 ## Capability v2 compatibility
 
 Public proof/grant contracts use `github.com/faustbrian/go-capability/v2` and
-the separately selected `github.com/faustbrian/go-capability/v2/postgres/identity`
+the separately selected `github.com/faustbrian/go-capability/postgres/identity`
 adapter. Configure `ServiceConfig.Issuer`, each verifier key's `Issuer` and
 attempted authorization from trusted deployment/application policy, never a
 parsed token claim. Existing `cap1` bytes and identity one-use/recovery histories

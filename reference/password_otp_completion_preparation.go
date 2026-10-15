@@ -7,14 +7,14 @@ import (
 	"strings"
 	"time"
 
-	"github.com/faustbrian/go-authorization"
+	"github.com/faustbrian/go-authorization/v3"
 	identity "github.com/faustbrian/go-identity"
 	mfapg "github.com/faustbrian/go-identity/mfa/postgres"
 	kernel "github.com/faustbrian/go-identity/postgres"
 	"github.com/faustbrian/go-identity/risk"
 	"github.com/faustbrian/go-identity/session"
 	sessionpg "github.com/faustbrian/go-identity/session/postgres"
-	envelope "github.com/faustbrian/go-secret-envelope"
+	envelope "github.com/faustbrian/go-secret-envelope/v2"
 )
 
 type passwordOTPCompletionAdmission struct{ phase *passwordOTPCompletionPhase }

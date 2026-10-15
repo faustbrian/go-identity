@@ -10,13 +10,13 @@ import (
 
 	"github.com/faustbrian/go-audit"
 	auditpg "github.com/faustbrian/go-audit/postgres"
-	auth "github.com/faustbrian/go-authentication"
-	"github.com/faustbrian/go-authorization"
-	"github.com/faustbrian/go-capability"
+	auth "github.com/faustbrian/go-authentication/v2"
+	"github.com/faustbrian/go-authorization/v3"
 	issuerpg "github.com/faustbrian/go-capability/postgres/identity"
+	"github.com/faustbrian/go-capability/v2"
 	"github.com/faustbrian/go-clock"
-	httpclient "github.com/faustbrian/go-http-client"
-	"github.com/faustbrian/go-identifier"
+	httpclient "github.com/faustbrian/go-http-client/v2"
+	"github.com/faustbrian/go-identifier/v2"
 	identity "github.com/faustbrian/go-identity"
 	"github.com/faustbrian/go-identity/delivery"
 	deliverypg "github.com/faustbrian/go-identity/delivery/postgres"
@@ -33,9 +33,9 @@ import (
 	riskpg "github.com/faustbrian/go-identity/risk/postgres"
 	"github.com/faustbrian/go-identity/session"
 	sessionpg "github.com/faustbrian/go-identity/session/postgres"
-	primitive "github.com/faustbrian/go-password"
+	primitive "github.com/faustbrian/go-password/v2"
 	database "github.com/faustbrian/go-postgres"
-	"github.com/faustbrian/go-secret-envelope/adapters/keyring"
+	"github.com/faustbrian/go-secret-envelope/v2/adapters/keyring"
 )
 
 type baselineGraph struct {
@@ -222,7 +222,7 @@ func composeBaseline(ctx context.Context, o options, secrets credentials, pool *
 	if err != nil {
 		return nil, err
 	}
-	resolver, err := capability.NewKeySet([]capability.Key{{ID: "local-baseline", Verifier: verifier}})
+	resolver, err := capability.NewKeySet([]capability.Key{{Issuer: o.origin, ID: "local-baseline", Verifier: verifier}})
 	if err != nil {
 		return nil, err
 	}
@@ -286,7 +286,7 @@ func composeBaseline(ctx context.Context, o options, secrets credentials, pool *
 			Screening: password.HashPreparationConfig{Primitive: crypto, MinimumBytes: 12, MaximumBytes: 128, Timeout: 3 * time.Second, DummyHash: dummy, Policy: screeningPolicy, Now: time.Now, Collect: collect}, Risk: signin.Risk, Coordinator: coordinator,
 			Verification: passwordpg.SignupVerificationConfig{Policy: verification, Lifetime: 5 * time.Minute}, Delivery: passwordpg.SignupDeliveryConfig{Resolver: resolver, Endpoint: o.origin + "/email/confirm", TemplateID: "registration", TemplateVersion: 1, ProviderVersion: 1, Locales: []string{"en"}, ScopeKey: key("verification-scope"), Timeout: time.Second},
 		},
-		Issuer:      issuerpg.IssuerConfig{Crypto: capability.ServiceConfig{Signer: signer, Resolver: resolver, Clock: time.Now, Limits: capability.DefaultLimits()}, Audience: "email", CurrentReplayKeyVersion: 1, RetainedReplayKeys: map[uint32][32]byte{1: key("capability-replay")}, PreparationTimeout: time.Second},
+		Issuer:      issuerpg.IssuerConfig{Crypto: capability.ServiceConfig{Issuer: o.origin, Signer: signer, Resolver: resolver, Clock: time.Now, Limits: capability.DefaultLimits()}, Audience: "email", CurrentReplayKeyVersion: 1, RetainedReplayKeys: map[uint32][32]byte{1: key("capability-replay")}, PreparationTimeout: time.Second},
 		Preparation: issuerpg.IssuancePreparationConfig{Deployment: "deployment", ActiveEnvelopeKey: "capability-envelope", EnvelopeKeys: map[string][]byte{"capability-envelope": bytes("capability-envelope")}, VerificationKeys: []issuerpg.PreparationVerificationKey{{ID: "local-baseline", HMAC: bytes("capability-signing")}}, Clock: time.Now},
 		Counters:    riskpg.Config{Schema: "risk_store", PolicyVersion: 9, EvidenceKeys: []risk.EvidenceKey{evidence}, EnvelopeKeys: map[string][]byte{"counter": bytes("counter-envelope")}, CurrentEnvelopeKey: "counter", CommandCounters: &risk.CommandCounterPolicyConfig{Policy: protectedPolicy, Keys: []risk.CounterDigestKey{digest}}}, PreAuth: preauth,
 	}
@@ -331,7 +331,7 @@ func composeBaseline(ctx context.Context, o options, secrets credentials, pool *
 		configured.PasswordReset = &reference.PasswordResetConfiguration{Native: passwordpg.ResetConfig{
 			Repository: signin.Repository, ConfigurationID: "local-reset-v1", PolicyID: baselineResetPolicy, GlobalAuthorityID: "deployment", AuthorizationNamespace: "users", Origins: []string{o.origin}, ActiveEnvelopeKeyID: "delivery-envelope", IdentifierKey: key("identifier"), Session: storage, Coordinator: coordinator,
 			Profile:   password.ResetProfileConfig{Issuer: o.origin, Audience: "reset", MaximumLifetime: 5 * time.Minute, Callbacks: []string{o.origin + "/reset"}, CurrentBindingKeyVersion: 1, RetainedBindingKeys: map[uint32][32]byte{1: key("capability-binding")}},
-			Issuer:    issuerpg.IssuerConfig{Crypto: capability.ServiceConfig{Signer: signer, Resolver: resolver, Clock: time.Now, Limits: capability.DefaultLimits()}, Audience: "reset", CurrentReplayKeyVersion: 1, RetainedReplayKeys: map[uint32][32]byte{1: key("capability-replay")}, PreparationTimeout: time.Second},
+			Issuer:    issuerpg.IssuerConfig{Crypto: capability.ServiceConfig{Issuer: o.origin, Signer: signer, Resolver: resolver, Clock: time.Now, Limits: capability.DefaultLimits()}, Audience: "reset", CurrentReplayKeyVersion: 1, RetainedReplayKeys: map[uint32][32]byte{1: key("capability-replay")}, PreparationTimeout: time.Second},
 			Screening: password.HashPreparationConfig{Primitive: crypto, MinimumBytes: 12, MaximumBytes: 128, Timeout: 3 * time.Second, DummyHash: dummy, Policy: screeningPolicy, Now: time.Now}, CollectReset: resetCollect, Risk: signin.Risk,
 			Request: &passwordpg.ResetRequestConfig{Address: address, RequestKeys: requestKeys, Lifetime: 5 * time.Minute, IssuanceCustody: issuerpg.IssuancePreparationConfig{Deployment: "deployment", ActiveEnvelopeKey: "capability-envelope", EnvelopeKeys: map[string][]byte{"capability-envelope": bytes("capability-envelope")}, VerificationKeys: []issuerpg.PreparationVerificationKey{{ID: "local-baseline", HMAC: bytes("capability-signing")}}, Clock: time.Now}, Delivery: passwordpg.SignupDeliveryConfig{Resolver: resolver, Endpoint: o.origin + "/password/reset", TemplateID: "password-reset", TemplateVersion: 1, ProviderVersion: 1, Locales: []string{"en"}, ScopeKey: key("verification-scope"), Timeout: time.Second}},
 		}}

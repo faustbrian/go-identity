@@ -12,8 +12,8 @@ import (
 	"slices"
 	"time"
 
-	"github.com/faustbrian/go-authorization"
-	policy "github.com/faustbrian/go-authorization/postgres"
+	"github.com/faustbrian/go-authorization/v3"
+	policy "github.com/faustbrian/go-authorization/v3/postgres"
 	identity "github.com/faustbrian/go-identity"
 	"github.com/faustbrian/go-identity/delivery"
 	"github.com/faustbrian/go-identity/mfa"
@@ -23,7 +23,7 @@ import (
 	kernel "github.com/faustbrian/go-identity/postgres"
 	"github.com/faustbrian/go-identity/session"
 	sessionpg "github.com/faustbrian/go-identity/session/postgres"
-	envelope "github.com/faustbrian/go-secret-envelope"
+	envelope "github.com/faustbrian/go-secret-envelope/v2"
 )
 
 // Explicit native projections live only inside existing authenticated request

@@ -17,7 +17,7 @@ import (
 	"github.com/faustbrian/go-identity/risk"
 	"github.com/faustbrian/go-identity/session"
 	sessionpg "github.com/faustbrian/go-identity/session/postgres"
-	envelope "github.com/faustbrian/go-secret-envelope"
+	envelope "github.com/faustbrian/go-secret-envelope/v2"
 )
 
 type magicTOTPStoredAdmission risk.PreparedProtectedProviderAdmission

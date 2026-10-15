@@ -10,7 +10,7 @@ import (
 	"github.com/faustbrian/go-identity/risk"
 	riskpg "github.com/faustbrian/go-identity/risk/postgres"
 	sessionpg "github.com/faustbrian/go-identity/session/postgres"
-	"github.com/faustbrian/go-secret-envelope/adapters/keyring"
+	"github.com/faustbrian/go-secret-envelope/v2/adapters/keyring"
 )
 
 // MagicLinkTOTPConfiguration selects native login completion, not HTTP,

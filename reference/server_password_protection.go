@@ -8,7 +8,7 @@ import (
 	"slices"
 	"time"
 
-	"github.com/faustbrian/go-authorization"
+	"github.com/faustbrian/go-authorization/v3"
 	identity "github.com/faustbrian/go-identity"
 	identityhttp "github.com/faustbrian/go-identity/http"
 	passwordhttp "github.com/faustbrian/go-identity/http/password"

@@ -17,8 +17,8 @@ import (
 	"testing"
 	"time"
 
-	auth "github.com/faustbrian/go-authentication"
-	"github.com/faustbrian/go-authorization"
+	auth "github.com/faustbrian/go-authentication/v2"
+	"github.com/faustbrian/go-authorization/v3"
 	identity "github.com/faustbrian/go-identity"
 	identityhttp "github.com/faustbrian/go-identity/http"
 	"github.com/faustbrian/go-identity/mfa"
@@ -29,7 +29,7 @@ import (
 	"github.com/faustbrian/go-identity/reference"
 	"github.com/faustbrian/go-identity/risk"
 	"github.com/faustbrian/go-identity/session"
-	primitive "github.com/faustbrian/go-password"
+	primitive "github.com/faustbrian/go-password/v2"
 )
 
 func TestReferenceNativeTOTPEnrollmentFromRealRegistration(t *testing.T) {

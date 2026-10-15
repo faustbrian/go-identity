@@ -8,14 +8,14 @@ import (
 
 	"github.com/faustbrian/go-audit"
 	auditpg "github.com/faustbrian/go-audit/postgres"
-	"github.com/faustbrian/go-authorization"
+	"github.com/faustbrian/go-authorization/v3"
 	capabilitypg "github.com/faustbrian/go-capability/postgres/identity"
 	identity "github.com/faustbrian/go-identity"
 	"github.com/faustbrian/go-identity/mfa"
 	kernel "github.com/faustbrian/go-identity/postgres"
 	"github.com/faustbrian/go-identity/risk"
 	"github.com/faustbrian/go-identity/session"
-	lifecyclepg "github.com/faustbrian/go-transactional-outbox/v2/postgres/identity"
+	lifecyclepg "github.com/faustbrian/go-transactional-outbox/postgres/identity"
 )
 
 func (p *magicTOTPPhase) compose() error {

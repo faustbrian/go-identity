@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	identifier "github.com/faustbrian/go-identifier"
+	identifier "github.com/faustbrian/go-identifier/v2"
 	email "github.com/faustbrian/go-identity/email"
 	otppg "github.com/faustbrian/go-identity/otp/postgres"
 	kernel "github.com/faustbrian/go-identity/postgres"

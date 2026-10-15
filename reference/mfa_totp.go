@@ -15,11 +15,11 @@ import (
 	"strings"
 	"time"
 
-	auth "github.com/faustbrian/go-authentication"
-	"github.com/faustbrian/go-authorization"
-	policy "github.com/faustbrian/go-authorization/postgres"
-	"github.com/faustbrian/go-capability"
+	auth "github.com/faustbrian/go-authentication/v2"
+	"github.com/faustbrian/go-authorization/v3"
+	policy "github.com/faustbrian/go-authorization/v3/postgres"
 	capabilitypg "github.com/faustbrian/go-capability/postgres/identity"
+	"github.com/faustbrian/go-capability/v2"
 	identity "github.com/faustbrian/go-identity"
 	magicpg "github.com/faustbrian/go-identity/magiclink/postgres"
 	"github.com/faustbrian/go-identity/mfa"
@@ -30,10 +30,10 @@ import (
 	riskpg "github.com/faustbrian/go-identity/risk/postgres"
 	"github.com/faustbrian/go-identity/session"
 	sessionpg "github.com/faustbrian/go-identity/session/postgres"
-	password "github.com/faustbrian/go-password"
+	password "github.com/faustbrian/go-password/v2"
 	database "github.com/faustbrian/go-postgres"
-	envelope "github.com/faustbrian/go-secret-envelope"
-	"github.com/faustbrian/go-secret-envelope/adapters/keyring"
+	envelope "github.com/faustbrian/go-secret-envelope/v2"
+	"github.com/faustbrian/go-secret-envelope/v2/adapters/keyring"
 )
 
 // MagicLinkTOTPCompletionConfig selects the original magic-link/TOTP native

@@ -2,6 +2,55 @@
 
 ## Unreleased
 
+- Run the baseline against pinned public modules with `GOWORK=off`, without
+  sibling supplier archives or historical source replacements. Existing runner
+  arguments remain accepted; the collection argument no longer selects code.
+
+- Compose supported envelope v2 custody and matching public native participants.
+  Callers supplying envelope/keyring services must use `/v2` types; stored
+  ciphertext, original authority lifetimes and transaction ownership stay intact.
+
+- Compose public current-major primitives and workflow adapters, including
+  HTTP-client v2 for the isolated HIBP transport. Configuration and consumers
+  must use matching opaque credential/proof/identifier types.
+
+- Adopt identifier v2 input and normalization types through public source
+  dependencies. Callers sharing these typed values must use `go-identifier/v2`;
+  stored profile/version bindings and selected workflow behavior are unchanged.
+
+- Adopt capability v2 public proof/grant types and explicit trusted issuer
+  policy. Update capability imports and issuer-owned keys/configuration; token
+  framing and native transaction/recovery ownership remain unchanged.
+
+- Independently select keyed email add/resend and primary-change request HTTPS,
+  plus change confirmation, over the native reference graph. Original signed
+  password proof, cookie and CSRF custody survive exact retries without renewing
+  authority. Share existing strict rate owners and graph shutdown/drain; disabled
+  operations expose neither handlers nor OpenAPI metadata.
+
+- Select keyed email management independently with `EmailManagementConfiguration.Keyed`.
+  Graph-lifetime-bound calls preserve original request correlation, current
+  transactional admission, cooldown and change/session/notification effects.
+  Unselected or wrong-profile keyed calls deny without unkeyed fallback.
+
+- Independently opt into native email address get/list HTTPS routes, retaining
+  original session validity, current self authorization and native value/version
+  disclosure. Reuse existing safe-route rate ownership or explicitly select its
+  standalone profile without enabling HTTP session routes. Omitted routes remain
+  absent from dispatch and OpenAPI; reads never issue or refresh credentials.
+
+- Opt into shared signup/managed-address HTTPS confirmation with
+  `HTTPRegistrationVerificationConfiguration.ManagedAddresses`. Require matching
+  native issuer/replay custody, authenticate the original signed profile and
+  retain one canonical route with no failed-source fallback or auto-login.
+
+- Explicitly select native email add/resend/verification, primary-address change
+  with old-address notice and session effects, and authorized address list/get.
+  Reference composition supplies real proof, risk, delivery and primary owners;
+  retained handles preserve initialization, tenant and shutdown admission.
+  Selected native migrations extend installed histories without rewriting their
+  prefixes. This selects no management HTTP routes, removal or automatic login.
+
 - Opt into fresh password verification and keyed password change in the
   runnable PostgreSQL backend, with required HIBP/audit delivery and atomic
   revoke-all session effects. New signing/intent keys and migration requests

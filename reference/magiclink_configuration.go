@@ -10,8 +10,8 @@ import (
 	magicpg "github.com/faustbrian/go-identity/magiclink/postgres"
 	kernel "github.com/faustbrian/go-identity/postgres"
 	"github.com/faustbrian/go-identity/risk"
-	envelope "github.com/faustbrian/go-secret-envelope"
-	"github.com/faustbrian/go-secret-envelope/adapters/keyring"
+	envelope "github.com/faustbrian/go-secret-envelope/v2"
+	"github.com/faustbrian/go-secret-envelope/v2/adapters/keyring"
 )
 
 // MagicLinkConfiguration selects native request and optional consumption, not

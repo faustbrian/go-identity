@@ -1,0 +1,161 @@
+package reference
+
+import (
+	"context"
+	"errors"
+	"testing"
+	"time"
+
+	"github.com/faustbrian/go-authorization/v3"
+	identity "github.com/faustbrian/go-identity"
+	"github.com/faustbrian/go-identity/email"
+	passwordpg "github.com/faustbrian/go-identity/password/postgres"
+	"github.com/faustbrian/go-identity/risk"
+)
+
+func TestEmailSelectionAndGraphLifetime(t *testing.T) {
+	if owner, err := composeEmail(StoreConfiguration{}, ReferenceDependencies{}, risk.Evaluator{}, nil); err != nil || owner != nil {
+		t.Fatal("unselected email acquired dependencies", err)
+	}
+	for _, config := range []*EmailConfiguration{{}, {Verification: &EmailManagementConfiguration{}}, {Change: &EmailManagementConfiguration{}}, {Addresses: &EmailAddressConfiguration{}}} {
+		c := StoreConfiguration{Email: config}
+		if owner, err := composeEmail(c, ReferenceDependencies{}, risk.Evaluator{}, nil); err == nil || owner != nil {
+			t.Fatal("selected email accepted absent native authority")
+		}
+		if err := (&storeState{}).composeFeatureStores(c, ReferenceDependencies{}); err == nil {
+			t.Fatal("selected email disappeared from an empty graph")
+		}
+	}
+	lifetime, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	drained := make(chan struct{})
+	close(drained)
+	s := &storeState{lifetime: lifetime, cancel: cancel, drained: drained, features: &featureState{composed: true, timeout: time.Second}}
+	f := FeatureSet{state: s}
+	if owner, err := f.EmailVerification(); err == nil || owner != nil {
+		t.Fatal("unselected graph exported verification")
+	}
+	if owner, err := f.EmailChange(); err == nil || owner != nil {
+		t.Fatal("unselected graph exported change")
+	}
+	if owner, err := f.EmailAddresses(); err == nil || owner != nil {
+		t.Fatal("unselected graph exported address queries")
+	}
+	if owner, err := f.EmailVerificationRequests(); err == nil || owner != nil {
+		t.Fatal("unselected graph exported portable verification")
+	}
+	if owner, err := f.EmailChangeRequests(); err == nil || owner != nil {
+		t.Fatal("unselected graph exported portable change")
+	}
+	s.features.email = &emailState{verification: &passwordpg.EmailManagementService{}, change: &passwordpg.EmailManagementService{}, addresses: &email.AddressQueryService{}, verificationRequests: &passwordpg.EmailRequestWorkflow{}, changeRequests: &passwordpg.EmailRequestWorkflow{}}
+	portableVerification, err := f.EmailVerificationRequests()
+	if err != nil {
+		t.Fatal(err)
+	}
+	portableChange, err := f.EmailChangeRequests()
+	if err != nil {
+		t.Fatal(err)
+	}
+	verification, err := f.EmailVerification()
+	if err != nil {
+		t.Fatal(err)
+	}
+	change, err := f.EmailChange()
+	if err != nil {
+		t.Fatal(err)
+	}
+	queries, err := f.EmailAddresses()
+	if err != nil {
+		t.Fatal(err)
+	}
+	deny := func() {
+		t.Helper()
+		if _, err := portableVerification.VerificationSend(t.Context(), email.VerificationSendRequest{TenantID: "foreign"}); err == nil {
+			t.Fatal("portable request escaped graph/tenant lifetime")
+		}
+		if user, destination, err := portableVerification.VerificationSendRateSource(t.Context(), email.VerificationSendRequest{TenantID: "foreign"}); err == nil || user != "" || destination != "" {
+			t.Fatal("portable source escaped graph/tenant lifetime")
+		}
+		if _, err := portableChange.ChangeRequest(t.Context(), email.ChangeRequestRequest{TenantID: "foreign"}); err == nil {
+			t.Fatal("portable change escaped graph/tenant lifetime")
+		}
+		if user, destination, err := portableChange.ChangeRequestRateSource(t.Context(), email.ChangeRequestRequest{TenantID: "foreign"}); err == nil || user != "" || destination != "" {
+			t.Fatal("portable change source escaped graph/tenant lifetime")
+		}
+		r := passwordpg.EmailManagementRequest{Primary: passwordpg.EmailPrimaryRequest{TenantID: "foreign"}}
+		for _, owner := range []*ManagedEmailService{verification, change} {
+			if _, err := owner.VerificationSendKeyed(t.Context(), r, identity.IdempotencyKey{}); err == nil {
+				t.Fatal("inactive/foreign graph admitted keyed verification")
+			}
+			if _, err := owner.ChangeRequestKeyed(t.Context(), r, identity.IdempotencyKey{}); err == nil {
+				t.Fatal("inactive/foreign graph admitted keyed change")
+			}
+			if user, address, err := owner.RequestRateSourceKeyed(t.Context(), r, identity.IdempotencyKey{}, false); err == nil || user != "" || address != "" {
+				t.Fatal("inactive/foreign graph disclosed keyed rate metadata")
+			}
+			if _, err := owner.VerificationSend(t.Context(), r); err == nil {
+				t.Fatal("inactive/foreign graph admitted verification")
+			}
+			if _, err := owner.ChangeRequest(t.Context(), r); err == nil {
+				t.Fatal("inactive/foreign graph admitted change")
+			}
+			if _, err := owner.VerificationSendRecover(t.Context(), identity.RecoveryQuery{TenantID: "foreign"}, authorization.DecisionContext{}); err == nil {
+				t.Fatal("inactive/foreign graph disclosed original receipt")
+			}
+		}
+		if _, err := queries.AddressGet(t.Context(), email.AddressGetRequest{TenantID: "foreign"}); err == nil {
+			t.Fatal("inactive/foreign graph disclosed address")
+		}
+		if s.active != 0 {
+			t.Fatal("email calls leaked graph lifetime admission")
+		}
+	}
+	deny()
+	s.features.ready = true
+	deny()
+	s.closed = true
+	deny()
+	if owner, err := f.EmailChange(); err == nil || owner != nil {
+		t.Fatal("closed graph exported new email handle")
+	}
+}
+
+func TestEmailRequestSelectionRequiresNativeOwners(t *testing.T) {
+	if owner, err := composeEmailRequestsHTTP(StoreConfiguration{}, nil, nil, nil, nil, nil); err != nil || owner != nil {
+		t.Fatal("unselected request acquired resources", err)
+	}
+	for _, selected := range []HTTPEmailRequestsConfiguration{{}, {VerificationSend: true}, {ChangeRequest: true}, {ChangeConfirm: true}} {
+		c := StoreConfiguration{HTTPEmailRequests: &selected}
+		if owner, err := composeEmailRequestsHTTP(c, nil, nil, nil, nil, nil); err == nil || owner != nil {
+			t.Fatal("request accepted absent native owners")
+		}
+		if err := (&storeState{}).composeFeatureStores(c, ReferenceDependencies{}); err == nil {
+			t.Fatal("request selection disappeared from empty graph")
+		}
+	}
+	for _, change := range []bool{false, true} {
+		h := composedEmailRequests{change: change}
+		if change {
+			if _, err := h.VerificationSend(t.Context(), email.VerificationSendRequest{}); err == nil {
+				t.Fatal("change handle used verification")
+			}
+		} else if _, err := h.ChangeRequest(t.Context(), email.ChangeRequestRequest{}); err == nil {
+			t.Fatal("verification handle used change")
+		}
+	}
+}
+
+func TestKeyedEmailHandleDoesNotSelectAnotherProfile(t *testing.T) {
+	// Profile selection is local and must reject before graph/lifetime work.
+	// Nil state distinguishes the wrong-profile guard from native execution.
+	change := &ManagedEmailService{change: true}
+	_, err := change.VerificationSendKeyed(t.Context(), passwordpg.EmailManagementRequest{}, identity.IdempotencyKey{})
+	var invalid identity.InvalidInputError
+	if !errors.As(err, &invalid) || invalid.Field != "reference_email_keyed" {
+		t.Fatal("change handle selected verification", err)
+	}
+	_, err = change.VerificationResendKeyed(t.Context(), passwordpg.EmailManagementRequest{}, identity.IdempotencyKey{})
+	if !errors.As(err, &invalid) || invalid.Field != "reference_email_keyed" {
+		t.Fatal("change handle selected resend", err)
+	}
+}

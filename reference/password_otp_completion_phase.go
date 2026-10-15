@@ -12,8 +12,8 @@ import (
 
 	"github.com/faustbrian/go-audit"
 	auditpg "github.com/faustbrian/go-audit/postgres"
-	"github.com/faustbrian/go-authorization"
-	policy "github.com/faustbrian/go-authorization/postgres"
+	"github.com/faustbrian/go-authorization/v3"
+	policy "github.com/faustbrian/go-authorization/v3/postgres"
 	capabilitypg "github.com/faustbrian/go-capability/postgres/identity"
 	identity "github.com/faustbrian/go-identity"
 	"github.com/faustbrian/go-identity/mfa"
@@ -22,8 +22,8 @@ import (
 	"github.com/faustbrian/go-identity/risk"
 	"github.com/faustbrian/go-identity/session"
 	sessionpg "github.com/faustbrian/go-identity/session/postgres"
-	envelope "github.com/faustbrian/go-secret-envelope"
-	lifecyclepg "github.com/faustbrian/go-transactional-outbox/v2/postgres/identity"
+	envelope "github.com/faustbrian/go-secret-envelope/v2"
+	lifecyclepg "github.com/faustbrian/go-transactional-outbox/postgres/identity"
 )
 
 type passwordOTPCompletionPhase struct {

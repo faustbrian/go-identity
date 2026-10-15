@@ -12,15 +12,15 @@ import (
 	"testing"
 	"time"
 
-	"github.com/faustbrian/go-authorization"
-	"github.com/faustbrian/go-capability"
-	"github.com/faustbrian/go-identifier"
+	"github.com/faustbrian/go-authorization/v3"
+	"github.com/faustbrian/go-capability/v2"
+	"github.com/faustbrian/go-identifier/v2"
 	identity "github.com/faustbrian/go-identity"
 	passwordhttp "github.com/faustbrian/go-identity/http/password"
 	"github.com/faustbrian/go-identity/password"
 	"github.com/faustbrian/go-identity/reference"
 	"github.com/faustbrian/go-identity/session"
-	primitive "github.com/faustbrian/go-password"
+	primitive "github.com/faustbrian/go-password/v2"
 )
 
 // The account, password, email, factor and sessions all came from preceding

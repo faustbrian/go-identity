@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/faustbrian/go-authorization"
+	"github.com/faustbrian/go-authorization/v3"
 )
 
 func TestBaselineChangeAdmitsOnlyItsNativeRequestAndSelfScope(t *testing.T) {

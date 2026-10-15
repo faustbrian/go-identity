@@ -19,12 +19,12 @@ import (
 	"time"
 
 	"github.com/faustbrian/go-audit"
-	auth "github.com/faustbrian/go-authentication"
-	"github.com/faustbrian/go-authorization"
-	"github.com/faustbrian/go-capability"
+	auth "github.com/faustbrian/go-authentication/v2"
+	"github.com/faustbrian/go-authorization/v3"
 	issuerpg "github.com/faustbrian/go-capability/postgres/identity"
+	"github.com/faustbrian/go-capability/v2"
 	"github.com/faustbrian/go-clock"
-	httpclient "github.com/faustbrian/go-http-client"
+	httpclient "github.com/faustbrian/go-http-client/v2"
 	identity "github.com/faustbrian/go-identity"
 	"github.com/faustbrian/go-identity/delivery"
 	"github.com/faustbrian/go-identity/email"
@@ -44,7 +44,7 @@ import (
 	riskpg "github.com/faustbrian/go-identity/risk/postgres"
 	"github.com/faustbrian/go-identity/session"
 	sessionpg "github.com/faustbrian/go-identity/session/postgres"
-	primitive "github.com/faustbrian/go-password"
+	primitive "github.com/faustbrian/go-password/v2"
 	database "github.com/faustbrian/go-postgres"
 )
 
@@ -56,7 +56,7 @@ func (referenceRegistrationPolicy) Decide(ctx context.Context, c authorization.D
 	}
 	if string(c.Request.Tenant) == otpTenant && c.PolicyRevision == 9 && c.Request.Subject.Kind == authorization.SubjectServiceAccount && c.Request.Subject.ID == "AAAAAAAAAAAAAAAAAAAAAw" {
 		switch c.Request.Action {
-		case "identity.password.signup", "identity.user.create", "identity.email.verification-confirm", "identity.password.signup.recover", "identity.magic-link.request", "identity.magic-link.consume", "identity.magic-link.request.recover", "identity.magic-link.consume.recover", "identity.mfa.totp-verify", "identity.mfa.totp-verify.recover", "identity.mfa.recovery-use", "identity.mfa.recovery-use.recover":
+		case "identity.password.signup", "identity.user.create", "identity.email.verification-confirm", "identity.email.change-confirm", "identity.password.signup.recover", "identity.magic-link.request", "identity.magic-link.consume", "identity.magic-link.request.recover", "identity.magic-link.consume.recover", "identity.mfa.totp-verify", "identity.mfa.totp-verify.recover", "identity.mfa.recovery-use", "identity.mfa.recovery-use.recover":
 			return authorization.Decision{Outcome: authorization.Allow, Revision: 9}, nil
 		}
 	}
@@ -65,11 +65,11 @@ func (referenceRegistrationPolicy) Decide(ctx context.Context, c authorization.D
 	}
 	if string(c.Request.Tenant) == otpTenant && c.PolicyRevision == 9 && c.Request.Subject.Kind == authorization.SubjectUser && c.Request.Resource.Type == "identity.user" && string(c.Request.Resource.ID) == string(c.Request.Subject.ID) {
 		switch c.Request.Action {
-		case "identity.mfa.enable", "identity.mfa.totp-uri", "identity.mfa.totp-verify", "identity.mfa.recovery-regenerate", "identity.mfa.list", "identity.mfa.factor-update", "identity.mfa.disable":
+		case "identity.mfa.enable", "identity.mfa.totp-uri", "identity.mfa.totp-verify", "identity.mfa.recovery-regenerate", "identity.mfa.list", "identity.mfa.factor-update", "identity.mfa.disable", "identity.email.verification-send", "identity.email.change-request", "identity.email.address-get", "identity.email.address-list":
 			return authorization.Decision{Outcome: authorization.Allow, Revision: 9}, nil
 		}
 	}
-	if string(c.Request.Tenant) == otpTenant && c.PolicyRevision == 9 && c.Request.Subject.Kind == authorization.SubjectUser && (c.Request.Action == "identity.mfa.enable" || c.Request.Action == "identity.mfa.factor-update" || c.Request.Action == "identity.mfa.disable") && c.Request.Resource.Type == "identity.request-admission" && string(c.Request.Resource.ID) == string(c.Request.Action) {
+	if string(c.Request.Tenant) == otpTenant && c.PolicyRevision == 9 && c.Request.Subject.Kind == authorization.SubjectUser && (c.Request.Action == "identity.mfa.enable" || c.Request.Action == "identity.mfa.factor-update" || c.Request.Action == "identity.mfa.disable" || c.Request.Action == "identity.email.verification-send" || c.Request.Action == "identity.email.change-request") && c.Request.Resource.Type == "identity.request-admission" && string(c.Request.Resource.ID) == string(c.Request.Action) {
 		return authorization.Decision{Outcome: authorization.Allow, Revision: 9}, nil
 	}
 	return (referenceResetPolicy{}).Decide(ctx, c)
@@ -187,7 +187,7 @@ func configureReferenceRegistration(t *testing.T, c *reference.StoreConfiguratio
 		t.Fatal(err)
 	}
 	verifier, _ := capability.NewHMACSHA256Verifier(bytes.Repeat([]byte{119}, 32))
-	resolver, err := capability.NewKeySet([]capability.Key{{ID: "reference-signup", Verifier: verifier}})
+	resolver, err := capability.NewKeySet([]capability.Key{{Issuer: origin, ID: "reference-signup", Verifier: verifier}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -209,7 +209,7 @@ func configureReferenceRegistration(t *testing.T, c *reference.StoreConfiguratio
 			id, err := identity.NewSubjectID()
 			return identity.UserID(id), err
 		}, Session: c.OTP.Signin.Session, FlowKeys: c.PasswordSignin.Native.FlowKeys, Origins: []string{origin}, CallbackURLs: []string{callback}, RegistrationDomain: kernel.PasswordRegistrationDomainConfig{ComparisonProfile: "reference-email-v1", CurrentIdentifierKeyVersion: 1, RetainedIdentifierKeys: map[uint32][32]byte{1: {122}}}, RequestKeys: requestKeys, IntentKey: [32]byte{123}, ActiveEnvelopeKeyID: "issue-envelope", Screening: screening, Risk: risk.AuthenticationAdmissionCustodyConfig{ConfigurationID: "reference-signup-v1", Keys: c.OTP.RiskKeys}, Coordinator: coordinator, Verification: passwordpg.SignupVerificationConfig{Policy: verification, Lifetime: time.Minute}, Delivery: passwordpg.SignupDeliveryConfig{Resolver: resolver, Endpoint: origin + "/email/confirm", TemplateID: "registration", TemplateVersion: 1, ProviderVersion: 1, Locales: []string{"en"}, ScopeKey: [32]byte{124}, Timeout: time.Second}},
-		Issuer:      issuerpg.IssuerConfig{Crypto: capability.ServiceConfig{Signer: signer, Resolver: resolver, Clock: time.Now, Limits: capability.DefaultLimits()}, Audience: "email", CurrentReplayKeyVersion: 1, RetainedReplayKeys: map[uint32][32]byte{1: {125}}, PreparationTimeout: time.Second},
+		Issuer:      issuerpg.IssuerConfig{Crypto: capability.ServiceConfig{Issuer: origin, Signer: signer, Resolver: resolver, Clock: time.Now, Limits: capability.DefaultLimits()}, Audience: "email", CurrentReplayKeyVersion: 1, RetainedReplayKeys: map[uint32][32]byte{1: {125}}, PreparationTimeout: time.Second},
 		Preparation: issuerpg.IssuancePreparationConfig{Deployment: "deployment", ActiveEnvelopeKey: "signup-issuer", EnvelopeKeys: map[string][]byte{"signup-issuer": bytes.Repeat([]byte{126}, 32)}, VerificationKeys: []issuerpg.PreparationVerificationKey{{ID: "reference-signup", HMAC: bytes.Repeat([]byte{119}, 32)}}, Clock: time.Now},
 		Counters:    riskpg.Config{Schema: c.Velocity.Schema, PolicyVersion: 9, EvidenceKeys: c.OTP.RiskKeys, EnvelopeKeys: map[string][]byte{"counter": bytes.Repeat([]byte{127}, 32)}, CurrentEnvelopeKey: "counter", CommandCounters: &risk.CommandCounterPolicyConfig{Policy: registrationRiskPolicy(t, 9, false), Keys: []risk.CounterDigestKey{digest}}},
 		PreAuth:     &reference.PasswordPreAuthConfiguration{ActorID: "AAAAAAAAAAAAAAAAAAAAAw", Origin: origin, CallbackURL: callback, FlowKeyIndex: 0, AuditRetentionVersion: 1, FlowTTL: 5 * time.Minute, TokenSize: 32, Cookie: c.OTP.PreAuth.Cookie},
@@ -233,6 +233,10 @@ func proveReferenceSignupGraph(t *testing.T, competing bool, protected ...bool) 
 }
 
 type signupGraphExtensions struct {
+	emailManagementChange                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  bool
+	emailChangeCase                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        string
+	emailManagementResend                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  bool
+	emailAddressQueries                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    bool
 	postgresBaseline                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       bool
 	disable, disableAll, disablePending, disableHTTP, mfaEnrollment, mfaListing, mfaListHTTP, mfaListStandalone, mfaListDenials, mfaListRecheck, activeStepUp, activeStepUpHTTP, factorManagement, factorReplacement, factorReplacementDelayed, factorReplacementRollback, factorReplacementConfirmationFault, factorReplacementConfirmationRace, factorReplacementPredecessorUse, factorReplacementRecovery, factorManagementHTTP, factorManagementRace, factorManagementDenials, factorManagementClear, factorRemoval, factorRemovalReset, factorRemovalLocks, regeneration, regenerationHTTP, regenerationRace, regenerationDenials, passwordMFA, passwordRecovery, recoveryRace, completionCommitFault bool
 	replacementContinuationDenial                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          string
@@ -439,8 +443,61 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 	}
 	messages := make(chan string, 4)
 	deps.DeliverySender = nativeBrowserCodeSender{codes: messages}
+	var noticeRecipients chan string
+	if extensions.emailManagementChange {
+		noticeRecipients = make(chan string, 4)
+		deps.DeliverySender = emailChangeCaptureSender{messages: messages, recipients: noticeRecipients}
+	}
 	if extensions.postgresBaseline {
 		selectDurableReferenceAdmission(&c)
+	}
+	var emailUpgrade *reference.StoreConfiguration
+	if extensions.emailChangeCase == "graph" || extensions.emailChangeCase == "graph-upgrade" || extensions.emailChangeCase == "shared-http" || extensions.emailChangeCase == "keyed-graph" || extensions.emailChangeCase == "request-http" {
+		calls = configureReferenceEmailGraph(t, &c, origin, extensions.emailManagementChange)
+		if extensions.emailChangeCase == "keyed-graph" || extensions.emailChangeCase == "request-http" {
+			keys, err := kernel.NewRequestKeyConfig("reference-managed-email", [32]byte{219}, c.OTP.RequestKeys.Policy)
+			if err != nil {
+				t.Fatal(err)
+			}
+			keyed, err := passwordpg.NewKeyedEmailManagementConfig(keys, [32]byte{220})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if extensions.emailManagementChange {
+				c.Email.Change.Keyed = &keyed
+			} else {
+				c.Email.Verification.Keyed = &keyed
+			}
+		}
+		if extensions.emailChangeCase == "request-http" {
+			c.HTTPEmailAddresses = &reference.HTTPEmailAddressesConfiguration{Get: true, List: true}
+			c.HTTPEmailRequests = &reference.HTTPEmailRequestsConfiguration{VerificationSend: !extensions.emailManagementChange, ChangeRequest: extensions.emailManagementChange, ChangeConfirm: extensions.emailManagementChange, Origin: origin, ActorID: c.HTTPRegistrationVerification.ActorID, PolicyRevision: c.HTTPRegistrationVerification.PolicyRevision}
+			if !extensions.emailManagementChange {
+				c.HTTPRegistrationVerification.ManagedAddresses = true
+			}
+		}
+		if extensions.emailChangeCase == "shared-http" {
+			c.HTTPRegistrationVerification.ManagedAddresses = true
+			c.HTTPEmailAddresses = &reference.HTTPEmailAddressesConfiguration{Get: true, List: true}
+		}
+		if extensions.emailChangeCase == "graph-upgrade" {
+			selected := c
+			emailUpgrade = &selected
+			c.Email, c.PasswordVerification = nil, nil
+		}
+	} else if extensions.emailChangeCase == "queries-graph" || extensions.emailChangeCase == "queries-http" || extensions.emailChangeCase == "queries-standalone-http" || extensions.emailChangeCase == "queries-get-http" {
+		c.Email = &reference.EmailConfiguration{Addresses: referenceEmailQueryConfiguration()}
+		if extensions.emailChangeCase != "queries-graph" {
+			c.HTTPEmailAddresses = &reference.HTTPEmailAddressesConfiguration{Get: true, List: extensions.emailChangeCase != "queries-get-http"}
+			if extensions.emailChangeCase == "queries-standalone-http" {
+				c.HTTPSession = nil
+				c.HTTPEmailAddresses.StandaloneRate = &reference.EmailAddressStandaloneRateConfiguration{Namespace: "reference-email-reads", EmergencyMaximumKeys: 128, Degraded: func(context.Context, identityhttp.SafeRateEvent) error {
+					t.Error("unexpected read-rate degradation")
+					return nil
+				}}
+				f.emailQueriesStandalone = true
+			}
+		}
 	}
 	for _, namespace := range []string{"", "other-users"} {
 		invalid, selected := c, *c.PasswordSignup
@@ -451,6 +508,19 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 			_ = graph.Close(bounded)
 			stop()
 			t.Fatal("registration accepted absent or mismatched signin authority namespace")
+		}
+	}
+	if c.HTTPRegistrationVerification != nil && c.HTTPRegistrationVerification.ManagedAddresses {
+		invalid, selectedEmail := c, *c.Email
+		selectedVerification := *selectedEmail.Verification
+		selectedVerification.Native.Issuer.Crypto.Issuer = "https://foreign-issuer.example"
+		selectedEmail.Verification = &selectedVerification
+		invalid.Email = &selectedEmail
+		if graph, err := reference.ComposeStores(invalid, deps); err == nil {
+			bounded, stop := context.WithTimeout(context.Background(), time.Second)
+			_ = graph.Close(bounded)
+			stop()
+			t.Fatal("shared confirmation accepted mismatched trusted issuer namespaces")
 		}
 	}
 	stores, err := reference.ComposeStores(c, deps)
@@ -533,6 +603,34 @@ END $$`); err != nil {
 		seen[op.Record.OperationID] = true
 	}
 	wantOperations := 8
+	for action, selected := range map[string]bool{"identity.email.verification-send": c.HTTPEmailRequests != nil && c.HTTPEmailRequests.VerificationSend, "identity.email.change-request": c.HTTPEmailRequests != nil && c.HTTPEmailRequests.ChangeRequest, "identity.email.change-confirm": c.HTTPEmailRequests != nil && c.HTTPEmailRequests.ChangeConfirm} {
+		if selected {
+			wantOperations++
+			if !seen[action] {
+				t.Fatal("selected email operation absent", action)
+			}
+		} else if seen[action] {
+			t.Fatal("unselected email operation advertised", action)
+		}
+	}
+	if c.HTTPEmailAddresses != nil {
+		if c.HTTPEmailAddresses.Get {
+			wantOperations++
+			if !seen["identity.email.address-get"] {
+				t.Fatal("selected address get missing")
+			}
+		}
+		if c.HTTPEmailAddresses.List {
+			wantOperations++
+			if !seen["identity.email.address-list"] {
+				t.Fatal("selected address list missing")
+			}
+		} else if seen["identity.email.address-list"] {
+			t.Fatal("unselected address list advertised")
+		}
+	} else if seen["identity.email.address-get"] || seen["identity.email.address-list"] {
+		t.Fatal("native email queries implicitly exposed HTTP")
+	}
 	if c.HTTPPasswordReset != nil {
 		wantOperations += 2
 		if !seen["identity.password.reset-request"] || !seen["identity.password.reset-complete"] {
@@ -667,13 +765,49 @@ END $$`); err != nil {
 			}
 		}
 	}
-	proveReferenceRegistration(t, ctx, f, features, workers, client, network.URL, origin, messages, calls, competing, changeScreens, extensions.mfaEnrollment, extensions.passwordMFA, extensions.passwordRecovery)
+	if c.HTTPEmailAddresses != nil {
+		f.afterEmailQueries = func(cookies []*http.Cookie, user identity.UserID, address identity.IdentifierID) {
+			proveReferenceEmailQueriesHTTPS(t, ctx, f, client, network.URL, cookies, user, address, c.HTTPEmailAddresses.List)
+		}
+	}
+	if extensions.emailChangeCase == "shared-http" || extensions.emailChangeCase == "request-http" && !extensions.emailManagementChange {
+		f.afterManagedConfirmation = func(r email.VerificationConfirmRequest, target identity.IdentifierID) {
+			proveReferenceSharedEmailConfirmationHTTPS(t, ctx, f, client, network.URL, origin, r, target)
+		}
+	}
+	if extensions.emailChangeCase == "request-http" {
+		selectedFixture := f
+		selectedFixture.config = c
+		f.emailRequestHTTP = func(r passwordpg.EmailManagementRequest, resend, change bool) (passwordpg.EmailManagementResult, error) {
+			return invokeSelectedEmailRequest(t, ctx, selectedFixture, client, network.URL, origin, r, resend, change)
+		}
+		if extensions.emailManagementChange {
+			f.afterManagedChangeConfirmation = func(r email.ChangeConfirmRequest, token string) {
+				proveSelectedEmailChangeConfirmation(t, ctx, client, network.URL, origin, r, token)
+			}
+		}
+	}
+	if extensions.emailManagementResend || extensions.emailManagementChange {
+		f.afterEmailSignin = func(ctx context.Context, user identity.UserID, cookies []*http.Cookie, csrf string, fresh func(...string) ([]*http.Cookie, string), readSession func([]*http.Cookie) bool) {
+			managementConfig, managementFeatures := c, features
+			if emailUpgrade != nil {
+				managementConfig = *emailUpgrade
+				managementFeatures = upgradeReferenceEmailGraph(t, ctx, f, managementConfig, deps, worker, modules, user, migrationRequest)
+			}
+			var change *referenceEmailChangeOptions
+			if extensions.emailManagementChange {
+				change = &referenceEmailChangeOptions{readSession: readSession, recipients: noticeRecipients, mode: extensions.emailChangeCase}
+			}
+			proveReferenceEmailManagementResend(t, ctx, f, managementConfig, deps, managementFeatures, workers, messages, origin, user, cookies, csrf, fresh, change)
+		}
+	}
+	proveReferenceRegistration(t, ctx, f, features, workers, client, network.URL, origin, messages, calls, competing, changeScreens, extensions.mfaEnrollment, extensions.passwordMFA, extensions.emailAddressQueries, c.Email != nil && c.Email.Addresses != nil, extensions.passwordRecovery)
 	if magic {
 		proveReferenceMagicLink(t, ctx, f, features, workers, client, network.URL, origin, messages, c, deps, len(protected) > 5 && protected[5])
 	}
 }
 
-func proveReferenceRegistration(t *testing.T, ctx context.Context, f liveStores, features reference.FeatureSet, workers reference.WorkerSet, client *http.Client, base, origin string, messages <-chan string, screens *atomic.Int32, competing bool, changeScreens *atomic.Int32, enrollment bool, passwordMFA bool, recoveryLogin ...bool) {
+func proveReferenceRegistration(t *testing.T, ctx context.Context, f liveStores, features reference.FeatureSet, workers reference.WorkerSet, client *http.Client, base, origin string, messages <-chan string, screens *atomic.Int32, competing bool, changeScreens *atomic.Int32, enrollment bool, passwordMFA bool, queryEmail bool, composedEmailQueries bool, recoveryLogin ...bool) {
 	t.Helper()
 	invoke := func(path string, body any, key string, cookies []*http.Cookie) (*http.Response, []byte) {
 		t.Helper()
@@ -837,6 +971,62 @@ CREATE TRIGGER registration_fixture_fail BEFORE INSERT ON identity.delivery_inte
 	var signed passwordhttp.SigninResponse
 	if r.StatusCode != 200 || json.Unmarshal(p, &signed) != nil || signed.CommitOutcome != "committed" || signed.SessionID == "" || len(r.Cookies()) != 1 {
 		t.Fatal("verified registration did not produce usable login", r.StatusCode, signed.CommitOutcome, signed.Error, signed.CommandID != "", signed.SessionID != "")
+	}
+	if queryEmail {
+		proveReferenceEmailQueries(t, ctx, f, features, r.Cookies(), correlation.UserID, identity.IdentifierID(correlation.RecordID), composedEmailQueries)
+	}
+	if f.afterEmailQueries != nil {
+		f.afterEmailQueries(r.Cookies(), correlation.UserID, identity.IdentifierID(correlation.RecordID))
+	}
+	if f.emailQueriesStandalone {
+		return
+	} // This profile deliberately has no HTTP session/logout routes.
+	if f.afterEmailSignin != nil {
+		freshLogin := func(address ...string) ([]*http.Cookie, string) {
+			flow, deviceCookies := issue("password")
+			body := make(map[string]any, len(loginBody))
+			for k, v := range loginBody {
+				body[k] = v
+			}
+			body["flowID"] = string(flow.FlowID)
+			if len(address) > 1 {
+				t.Fatal("ambiguous genuine login address")
+			}
+			if len(address) == 1 {
+				body["identifier"] = address[0]
+			}
+			response, payload := invoke("/v1/password/signin", body, "", deviceCookies)
+			var login passwordhttp.SigninResponse
+			if response.StatusCode != 200 || json.Unmarshal(payload, &login) != nil || !login.SignedIn || len(response.Cookies()) != 1 {
+				t.Fatal("fresh genuine login after email authority change", response.StatusCode, login.Error)
+			}
+			return response.Cookies(), response.Header.Get("X-CSRF-Token")
+		}
+		readSession := func(cookies []*http.Cookie) bool {
+			request, err := http.NewRequestWithContext(ctx, "GET", base+"/v1/session/get", nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, cookie := range cookies {
+				request.AddCookie(cookie)
+			}
+			response, err := client.Do(request)
+			if err != nil {
+				t.Fatal("actual saved-session read", err)
+			}
+			payload, err := io.ReadAll(io.LimitReader(response.Body, 16385))
+			closed := response.Body.Close()
+			var current sessionhttp.GetResponse
+			if err != nil || closed != nil || len(payload) > 16384 || json.Unmarshal(payload, &current) != nil {
+				t.Fatal("saved-session response cleanup/shape")
+			}
+			if !current.Authenticated && (current.Principal != nil || current.Session != nil) {
+				t.Fatal("denied session disclosed authentication")
+			}
+			return response.StatusCode == http.StatusOK && current.Authenticated && current.Session != nil
+		}
+		f.afterEmailSignin(ctx, correlation.UserID, r.Cookies(), r.Header.Get("X-CSRF-Token"), freshLogin, readSession)
+		return
 	}
 	if enrollment {
 		if f.regenerationDenials || f.factorManagementDenials || f.factorRemoval || strings.HasSuffix(f.replacementContinuationDenial, "other-session") {

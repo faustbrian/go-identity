@@ -10,7 +10,7 @@ import (
 	"github.com/faustbrian/go-identity/risk"
 	"github.com/faustbrian/go-identity/session"
 	sessionpg "github.com/faustbrian/go-identity/session/postgres"
-	"github.com/faustbrian/go-secret-envelope/adapters/keyring"
+	"github.com/faustbrian/go-secret-envelope/v2/adapters/keyring"
 )
 
 // PasswordTOTPConfiguration selects password-first native TOTP completion.

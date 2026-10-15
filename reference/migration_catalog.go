@@ -12,8 +12,8 @@ import (
 	sessionpg "github.com/faustbrian/go-identity/session/postgres"
 	migrations "github.com/faustbrian/go-migrations/v3"
 	ratepg "github.com/faustbrian/go-rate-limit/v2/postgres"
+	lifecyclepg "github.com/faustbrian/go-transactional-outbox/postgres/identity"
 	outboxpg "github.com/faustbrian/go-transactional-outbox/v2/postgres"
-	lifecyclepg "github.com/faustbrian/go-transactional-outbox/v2/postgres/identity"
 )
 
 // Module ownership is distinct from physical ledger ownership. The shared
@@ -204,6 +204,12 @@ func (s StoreSet) migrationCatalog(ctx context.Context) ([]migrationHistory, err
 	}
 	if s.state.features.passwordSignup != nil {
 		catalog, err = passwordSignupMigrationCatalog(ctx, catalog, s.state.config.Schema)
+		if err != nil {
+			return nil, err
+		}
+	}
+	if e := s.state.features.email; e != nil {
+		catalog, err = emailMigrationCatalog(ctx, catalog, s.state.config.Schema, e.verification != nil || e.change != nil, e.change != nil)
 		if err != nil {
 			return nil, err
 		}

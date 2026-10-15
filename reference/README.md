@@ -4,6 +4,82 @@ For the runnable PostgreSQL registration/verification/signin/session/logout
 backend, see [BASELINE.md](BASELINE.md). It is an explicit local profile, not
 a UI, production deployment or whole-platform release.
 
+## Selected native email management
+
+`StoreConfiguration.Email` independently selects `Verification`, `Change` and
+`Addresses`. `FeatureSet.EmailVerification()`, `EmailChange()` and
+`EmailAddresses()` expose only their selected native workflows; none enables an
+HTTP route. An empty selection or missing required authority fails construction.
+Handles require initialized graph custody and an allowed tenant, and deny after
+graph shutdown without taking ownership of the supplied PostgreSQL pool.
+
+Set `EmailManagementConfiguration.Keyed` explicitly for durable request
+correlation. The corresponding handle's `VerificationSendKeyed`,
+`VerificationResendKeyed` or `ChangeRequestKeyed` takes the native request plus
+its original `identity.IdempotencyKey`. Add/change use empty command/address IDs;
+resend keeps the exact pending address and leaves command ID empty. The kernel
+chooses and retains the winning command, and the native owner retains original
+encrypted authority/intent before execution. Matching retries return original
+metadata without another message, even when the original proof is spent.
+Unselected and wrong-profile calls deny; no call falls back to unkeyed work.
+Request-key query policy uses the graph's policy revision. Existing selected
+kernel histories already include request-key/preparation support. This native
+selection does not create request HTTP routes.
+
+The storage-neutral `FeatureSet.EmailVerificationRequests()` and
+`EmailChangeRequests()` ports use the same selected keyed native owners. They
+accept email-owned requests without a caller-selected command ID. Preserve the
+original idempotency key, signed password proof, session cookie, synchronizer,
+callback and candidate on retry; do not replace an uncertain request.
+
+Explicitly select `HTTPEmailRequestsConfiguration.VerificationSend`,
+`.ChangeRequest` and/or `.ChangeConfirm` for their canonical routes. Request
+routes require native keyed management and cookie password-proof custody, not
+the HTTP password-verification route. Configure the trusted HTTPS `Origin` and
+current `PolicyRevision`; confirmation also requires the trusted service
+`ActorID`. Change uses new-address possession plus required old-address notice.
+The graph borrows existing strict rate owners, guards the entire request lifetime
+including proof reads, and exposes no disabled route or OpenAPI operation.
+For add/resend confirmation also select `ManagedAddresses` as described below.
+
+Separately set `HTTPRegistrationVerificationConfiguration.ManagedAddresses`
+to accept both signup and managed-add links on the single existing verification
+route. It requires native `Email.Verification` and matching issuer audience,
+signer/resolver, limits, skew, revocation and retained replay custody. Both
+owners retain their bounded trusted clock policy and independently check current
+authority. The graph authenticates the original signed profile before choosing
+one owner; no source failure falls back to the other. False preserves signup-only
+HTTP behavior. This flag selects no add/resend/read/change/removal route.
+
+Select `HTTPEmailAddressesConfiguration.Get` and/or `.List` separately for native
+cookie-authenticated self reads. Native `Email.Addresses` and session composition
+are required, but HTTP session routes are not. Existing HTTP session/MFA-list safe
+routes lend their actual limiter, including its emergency budget. Leave
+`StandaloneRate` nil when borrowing; otherwise provide its explicit bounded
+fallback recorder, namespace and capacity. Conflicting budgets fail construction.
+Unselected reads have no route or OpenAPI capability. The selected read profile
+has no administrative target override, bearer fallback, refresh or mutation.
+
+Management requires selected password verification with its exact email action
+and audience, known-empty MFA, original current session authority and encrypted
+delivery. The graph supplies the actual proof, protected counter, risk, template
+and delivery owners. The provider evaluator and protected counters must use the
+same immutable risk policy, not independently constructed copies with matching
+version numbers. Password screening must use that risk revision too. Cookie
+management uses the existing password verification synchronizer keys; it has no
+CSRF-free fallback. Address reads separately require explicit canonical-ID and
+disclosure policy and use the graph's actual authorizer and primary repository.
+
+Add/resend creates a pending address and delivered verification link, not a
+session. Resend enforces the original committed cooldown and invalidates the
+predecessor only on commit. Primary change verifies the selected new address,
+applies the configured session effects and queues the original old-address
+notice. Native typed recovery retains original metadata without repeating effects
+or replaying credentials. Apply the selected forward histories with the existing
+operator migration API before initialization; installed native prefixes are not
+rewritten. Safe removal and stronger-factor profiles remain separate unfinished
+work. Selected local runtime proof does not imply whole-unit qualification.
+
 ## Native password/secondary-OTP login
 
 Select `PasswordSigninConfiguration.OTP` with `PasswordOTPConfiguration` and

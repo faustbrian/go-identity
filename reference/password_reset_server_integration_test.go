@@ -16,11 +16,11 @@ import (
 	"time"
 
 	audit "github.com/faustbrian/go-audit"
-	"github.com/faustbrian/go-authorization"
-	"github.com/faustbrian/go-capability"
+	"github.com/faustbrian/go-authorization/v3"
 	issuerpg "github.com/faustbrian/go-capability/postgres/identity"
+	"github.com/faustbrian/go-capability/v2"
 	"github.com/faustbrian/go-clock"
-	"github.com/faustbrian/go-identifier"
+	"github.com/faustbrian/go-identifier/v2"
 	identity "github.com/faustbrian/go-identity"
 	"github.com/faustbrian/go-identity/delivery"
 	email "github.com/faustbrian/go-identity/email"
@@ -33,7 +33,7 @@ import (
 	"github.com/faustbrian/go-identity/risk"
 	"github.com/faustbrian/go-identity/session"
 	sessionpg "github.com/faustbrian/go-identity/session/postgres"
-	primitive "github.com/faustbrian/go-password"
+	primitive "github.com/faustbrian/go-password/v2"
 	database "github.com/faustbrian/go-postgres"
 )
 
@@ -96,7 +96,7 @@ func configureReferencePasswordReset(t *testing.T, c *reference.StoreConfigurati
 	if err != nil {
 		t.Fatal(err)
 	}
-	resolver, err := capability.NewKeySet([]capability.Key{{ID: "reference-reset", Verifier: verifier}})
+	resolver, err := capability.NewKeySet([]capability.Key{{Issuer: origin, ID: "reference-reset", Verifier: verifier}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -127,7 +127,7 @@ func configureReferencePasswordReset(t *testing.T, c *reference.StoreConfigurati
 	c.PasswordReset = &reference.PasswordResetConfiguration{Native: passwordpg.ResetConfig{
 		Repository: passwordpg.Config{MaximumDuration: 3 * time.Second, HashPolicy: policy}, ConfigurationID: "reference-reset-observed-v1", PolicyID: "AAAAAAAAAAAAAAAAAAAACQ", GlobalAuthorityID: "deployment", AuthorizationNamespace: "users", Origins: []string{origin}, ActiveEnvelopeKeyID: "issue-envelope", IdentifierKey: [32]byte{97}, Session: c.OTP.Signin.Session, Coordinator: coordinator,
 		Profile:      password.ResetProfileConfig{Issuer: origin, Audience: "reset", MaximumLifetime: 2 * time.Minute, Callbacks: []string{callback}, CurrentBindingKeyVersion: 1, RetainedBindingKeys: map[uint32][32]byte{1: {95}}},
-		Issuer:       issuerpg.IssuerConfig{Crypto: capability.ServiceConfig{Signer: signer, Resolver: resolver, Clock: time.Now, Limits: capability.DefaultLimits()}, Audience: "reset", CurrentReplayKeyVersion: 1, RetainedReplayKeys: map[uint32][32]byte{1: {94}}, PreparationTimeout: time.Second},
+		Issuer:       issuerpg.IssuerConfig{Crypto: capability.ServiceConfig{Issuer: origin, Signer: signer, Resolver: resolver, Clock: time.Now, Limits: capability.DefaultLimits()}, Audience: "reset", CurrentReplayKeyVersion: 1, RetainedReplayKeys: map[uint32][32]byte{1: {94}}, PreparationTimeout: time.Second},
 		Screening:    password.HashPreparationConfig{Primitive: crypto, MinimumBytes: 8, MaximumBytes: 128, Timeout: time.Second, DummyHash: dummy, Policy: screeningPolicy, Now: time.Now},
 		CollectReset: collector,
 		Risk:         risk.AuthenticationAdmissionCustodyConfig{ConfigurationID: "reference-reset-v1", Keys: c.OTP.RiskKeys},

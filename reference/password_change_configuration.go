@@ -8,7 +8,7 @@ import (
 	"github.com/faustbrian/go-identity/password"
 	passwordpg "github.com/faustbrian/go-identity/password/postgres"
 	riskpg "github.com/faustbrian/go-identity/risk/postgres"
-	"github.com/faustbrian/go-secret-envelope/adapters/keyring"
+	"github.com/faustbrian/go-secret-envelope/v2/adapters/keyring"
 )
 
 // PasswordChangeConfiguration selects native keyed credential replacement, not

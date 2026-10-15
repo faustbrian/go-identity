@@ -37,7 +37,7 @@ func resetKernelDependent(namespace string) bool {
 	switch namespace {
 	case "identity_password", "identity_mfa", "identity_capability", "identity_reset_session", "identity_password_session", "identity_registration", "identity_registration_counters", "identity_password_change_session", "identity_password_change_kernel", "identity_registration_session", "identity_magiclink_session", "identity_magiclink_mfa_session", "identity_mfa_counters":
 		return true
-	case "identity_password_mfa_session", "identity_mfa_otp", "identity_mfa_otp_counters", "identity_mfa_otp_session":
+	case "identity_password_mfa_session", "identity_mfa_otp", "identity_mfa_otp_counters", "identity_mfa_otp_session", "identity_email_change_counters":
 		return true
 	default:
 		return false

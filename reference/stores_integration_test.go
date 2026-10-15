@@ -12,6 +12,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"net/http"
 	"os"
 	"strconv"
 	"strings"
@@ -20,6 +21,7 @@ import (
 	"time"
 
 	identity "github.com/faustbrian/go-identity"
+	"github.com/faustbrian/go-identity/email"
 	passwordpg "github.com/faustbrian/go-identity/password/postgres"
 	"github.com/faustbrian/go-identity/reference"
 	"github.com/faustbrian/go-identity/risk"
@@ -32,6 +34,12 @@ import (
 )
 
 type liveStores struct {
+	afterManagedConfirmation           func(email.VerificationConfirmRequest, identity.IdentifierID)
+	afterManagedChangeConfirmation     func(email.ChangeConfirmRequest, string)
+	emailRequestHTTP                   func(passwordpg.EmailManagementRequest, bool, bool) (passwordpg.EmailManagementResult, error)
+	afterEmailQueries                  func([]*http.Cookie, identity.UserID, identity.IdentifierID)
+	emailQueriesStandalone             bool
+	afterEmailSignin                   func(context.Context, identity.UserID, []*http.Cookie, string, func(...string) ([]*http.Cookie, string), func([]*http.Cookie) bool)
 	disable                            bool
 	disableAll                         bool
 	disablePending                     bool

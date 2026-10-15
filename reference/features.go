@@ -9,7 +9,7 @@ import (
 
 	"github.com/faustbrian/go-audit"
 	auditpg "github.com/faustbrian/go-audit/postgres"
-	"github.com/faustbrian/go-authorization"
+	"github.com/faustbrian/go-authorization/v3"
 	identity "github.com/faustbrian/go-identity"
 	"github.com/faustbrian/go-identity/delivery"
 	deliverypg "github.com/faustbrian/go-identity/delivery/postgres"
@@ -20,7 +20,7 @@ import (
 	kernel "github.com/faustbrian/go-identity/postgres"
 	"github.com/faustbrian/go-identity/risk"
 	"github.com/faustbrian/go-identity/session"
-	envelope "github.com/faustbrian/go-secret-envelope"
+	envelope "github.com/faustbrian/go-secret-envelope/v2"
 )
 
 // OTPSendConfiguration selects the native public Send workflow. It has the
@@ -101,10 +101,13 @@ type featureState struct {
 	httpMFAFactorUpdate          *mfaFactorUpdateHTTPState
 	httpMFADisable               *mfaDisableHTTPState
 	httpMFAList                  *mfaListHTTPState
+	httpEmailAddresses           *emailAddressesHTTPState
+	httpEmailRequests            *emailRequestsHTTPState
 	passwordSignin               *passwordpg.SigninService
 	passwordSignup               *passwordpg.SignupService
 	session                      *sessionState
 	passwordVerification         *passwordVerificationState
+	email                        *emailState
 	mfaEnrollment                *mfaEnrollmentState
 	passwordChange               *passwordChangeState
 	httpPasswordVerification     *passwordVerificationHTTPState
@@ -131,6 +134,15 @@ type featureState struct {
 }
 
 func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDependencies) error {
+	if c.HTTPEmailRequests != nil && (c.Email == nil || c.Session == nil || c.OTP == nil || c.HTTPRate == nil) {
+		return identity.InvalidInputError{Field: "reference_http_email_requests"}
+	}
+	if c.HTTPEmailAddresses != nil && (c.Email == nil || c.Email.Addresses == nil || c.Session == nil) {
+		return identity.InvalidInputError{Field: "reference_http_email_addresses"}
+	}
+	if err := validateEmailSelection(c); err != nil {
+		return err
+	}
 	if c.HTTPMFADisable != nil && (c.MFAEnrollment == nil || c.MFAEnrollment.Disable == nil || c.Session == nil) {
 		return identity.InvalidInputError{Field: "reference_http_mfa_disable"}
 	}
@@ -392,6 +404,16 @@ func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDepen
 	if err != nil {
 		return err
 	}
+	emailOwner, err := composeEmail(c, d, evaluator, passwordVerificationOwner)
+	if err != nil {
+		return err
+	}
+	if c.HTTPRegistrationVerification != nil && c.HTTPRegistrationVerification.ManagedAddresses {
+		emailOwner.confirmation, err = passwordpg.NewEmailVerificationRouter(passwordSignupOwner, emailOwner.verification)
+		if err != nil {
+			return err
+		}
+	}
 	passwordChangeOwner, err := composePasswordChange(c, d, passwordVerificationOwner)
 	if err != nil {
 		return err
@@ -488,6 +510,24 @@ func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDepen
 			httpMFAList.rate.Close()
 		}
 	}()
+	httpEmailAddresses, err := composeEmailAddressesHTTP(c, emailOwner, sessionOwner, httpSession, httpMFAList, s.httpRate)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if httpEmailAddresses != nil && httpEmailAddresses.owned && !retainedResetHTTP {
+			httpEmailAddresses.rate.Close()
+		}
+	}()
+	httpEmailRequests, err := composeEmailRequestsHTTP(c, emailOwner, passwordVerificationOwner, s.httpRate, httpPasswordChange, httpRegistrationVerification)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if httpEmailRequests != nil && !retainedResetHTTP {
+			httpEmailRequests.close()
+		}
+	}()
 	signupPreauthOwner, err := composeSignupPreAuth(d.PostgreSQL, c.PasswordSignup)
 	if err != nil {
 		return err
@@ -520,6 +560,7 @@ func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDepen
 	s.features.passwordSignup = passwordSignupOwner
 	s.features.session = sessionOwner
 	s.features.passwordVerification = passwordVerificationOwner
+	s.features.email = emailOwner
 	s.features.passwordChange = passwordChangeOwner
 	s.features.mfaEnrollment = mfaEnrollmentOwner
 	s.features.httpPasswordVerification = httpPasswordVerification
@@ -540,6 +581,8 @@ func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDepen
 	s.features.httpMFAFactorUpdate = httpMFAFactorUpdate
 	s.features.httpMFADisable = httpMFADisable
 	s.features.httpMFAList = httpMFAList
+	s.features.httpEmailAddresses = httpEmailAddresses
+	s.features.httpEmailRequests = httpEmailRequests
 	retainedResetHTTP = true
 	return nil
 }

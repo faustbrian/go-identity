@@ -5,7 +5,7 @@ import (
 	"reflect"
 	"testing"
 
-	auth "github.com/faustbrian/go-authentication"
+	auth "github.com/faustbrian/go-authentication/v2"
 	"github.com/faustbrian/go-identity/mfa"
 	kernel "github.com/faustbrian/go-identity/postgres"
 	"github.com/faustbrian/go-identity/session"

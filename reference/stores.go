@@ -18,7 +18,7 @@ import (
 	riskpostgres "github.com/faustbrian/go-identity/risk/postgres"
 	riskvalkey "github.com/faustbrian/go-identity/risk/valkey"
 	database "github.com/faustbrian/go-postgres"
-	envelope "github.com/faustbrian/go-secret-envelope"
+	envelope "github.com/faustbrian/go-secret-envelope/v2"
 )
 
 // ReferenceDependencies supplies deployment resources, never domain stores or
@@ -70,6 +70,12 @@ type StoreConfiguration struct {
 	Session *SessionConfiguration
 	// PasswordVerification selects native reauthentication/proof recovery, not HTTP.
 	PasswordVerification *PasswordVerificationConfiguration
+	// Email selects native management and/or address queries without HTTP.
+	Email *EmailConfiguration
+	// HTTPEmailAddresses independently selects safe address reads, not mutations.
+	HTTPEmailAddresses *HTTPEmailAddressesConfiguration
+	// HTTPEmailRequests independently selects keyed request/confirmation routes.
+	HTTPEmailRequests *HTTPEmailRequestsConfiguration
 	// MFAEnrollment selects native first-factor enrollment management, not HTTP.
 	MFAEnrollment *MFAEnrollmentConfiguration
 	// HTTPMFAEnrollment independently selects native cookie enrollment HTTP.
@@ -432,6 +438,12 @@ func (s StoreSet) Close(ctx context.Context) error {
 	}
 	if state.features != nil && state.features.httpMFAList != nil && state.features.httpMFAList.owned {
 		state.features.httpMFAList.rate.Close()
+	}
+	if state.features != nil && state.features.httpEmailAddresses != nil && state.features.httpEmailAddresses.owned {
+		state.features.httpEmailAddresses.rate.Close()
+	}
+	if state.features != nil && state.features.httpEmailRequests != nil {
+		state.features.httpEmailRequests.close()
 	}
 	if state.features != nil && state.features.httpPasswordVerification != nil {
 		state.features.httpPasswordVerification.rate.Close()
