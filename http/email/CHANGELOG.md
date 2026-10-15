@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add opt-in cookie-only safe email removal with closed versioned input,
+  original password-proof custody and canonical keyed secret-rate admission.
+  Responses preserve original outcome/pending cascade metadata without issuing
+  credentials. Missing owners and unsupported authority overrides fail closed.
+  Reject wrongly scoped owner outcomes before exposing command correlation.
+
 - Compose current session custody backed by supported envelope v2. Existing
   workflow/HTTP contracts and original credential lifetimes are unchanged.
 

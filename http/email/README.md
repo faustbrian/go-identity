@@ -3,6 +3,40 @@
 Experimental Go 1.27 backend library, not a UI or complete email product.
 Base `identity/http` does not import this optional module.
 
+## Safe self-removal
+
+Select `FeatureConfig.AddressRemove` with `RemovalConfig`, or use
+`NewAddressRemoveHandler`. Borrow the native removal/rate-source owner, original
+password-proof repository, shared keyed secret limiter, cookie policy and trusted
+network/origin/revision. This selects only `POST /v1/email/address-remove`.
+Exactly one session cookie, `Origin`, `X-CSRF-Token`, `Idempotency-Key` and closed
+JSON are required (versions are canonical decimal strings, never floats):
+
+```json
+{
+  "proofID": "AAAAAAAAAAAAAAAAAAAAAQ",
+  "addressID": "owned-address-id",
+  "expectedIdentifierVersion": "2",
+  "expectedVerificationVersion": "2",
+  "reason": "user-requested",
+  "primaryDisposition": "leave-unassigned",
+  "recoveryDisposition": "preserve-verified-email"
+}
+```
+
+The sample proof ID grants no authority: supply the actual retained fresh password
+proof for this action/session/configured audience. Use `preserve-primary` only
+for a nonprimary target; removal never chooses a replacement. Native policy denies
+losing the last actual signin/reset path. Unknown/duplicate fields, body identity/
+policy overrides, query/trailers, bearer and weaker-factor fallback deny.
+
+Original possession precedes shared secret admission; native current authority
+is checked atomically. Exact retry after session invalidation retains the
+original result. No-store responses contain `removed`, `commandID`,
+`commitOutcome` and pending `cascadeID`/`cascadeGeneration`/`cascadeStatus`.
+Pending means admission, not completed cleanup; unknown is not rollback. No
+credentials/redirect or HTTP recovery endpoint are implicitly enabled.
+
 ## Authenticated self address reads
 
 Select `FeatureConfig.AddressGet` and/or `AddressList` with `AddressQueryConfig`.

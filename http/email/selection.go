@@ -15,7 +15,8 @@ import (
 // selecting both denies rather than guessing provenance or retrying an owner.
 // ChangeConfirmation is a distinct action and may be selected alongside either.
 // Request selectors separately enable cookie-only add/resend or change. No
-// selector here enables removal, OTP or automatic signin.
+// AddressRemove independently selects protected safe self-removal. No selector
+// enables OTP or automatic signin.
 // Construction borrows service/limiter lifetimes and copies their configuration;
 // callers must not mutate inputs concurrently with construction.
 type FeatureConfig struct {
@@ -29,6 +30,7 @@ type FeatureConfig struct {
 	AddressList          *AddressQueryConfig
 	VerificationRequest  *RequestConfig
 	ChangeRequest        *RequestConfig
+	AddressRemove        *RemovalConfig
 }
 
 // NewFeature contributes the actual selected handlers in one identity/email
@@ -51,10 +53,22 @@ func NewFeatureWithMiddleware(c FeatureConfig, m []identityhttp.MiddlewareDescri
 	if c.ProfiledConfirmation != nil {
 		selections++
 	}
-	if selections > 1 || selections == 0 && c.ChangeConfirmation == nil && c.AddressGet == nil && c.AddressList == nil && c.VerificationRequest == nil && c.ChangeRequest == nil {
+	if selections > 1 || selections == 0 && c.ChangeConfirmation == nil && c.AddressGet == nil && c.AddressList == nil && c.VerificationRequest == nil && c.ChangeRequest == nil && c.AddressRemove == nil {
 		return identityhttp.Feature{}, identityhttp.ErrInvalidInput
 	}
 	ops := make([]identityhttp.OperationDescriptor, 0, 2)
+	if c.AddressRemove != nil {
+		h, err := newAddressRemoveHandler(*c.AddressRemove, m)
+		if err != nil {
+			return identityhttp.Feature{}, err
+		}
+		op, err := identityhttp.NewCanonicalOperation(identityhttp.CanonicalOperationConfig{Owner: "identity/email", OperationID: "identity.email.address-remove", Handler: h, CSRF: identityhttp.CSRFPolicy{Mode: identityhttp.CSRFSessionState, TokenHeader: "X-CSRF-Token", RefererFallback: identityhttp.RefererFallbackDeny}, MaximumSerializedBytes: 16384})
+		if err != nil {
+			return identityhttp.Feature{}, err
+		}
+		op.Wire = removalWire(*c.AddressRemove)
+		ops = append(ops, op)
+	}
 	for _, selected := range []struct {
 		config *RequestConfig
 		change bool

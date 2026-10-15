@@ -1,0 +1,166 @@
+package emailhttp_test
+
+import (
+	"context"
+	"encoding/json"
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+
+	"github.com/faustbrian/go-authorization/v3"
+	identity "github.com/faustbrian/go-identity"
+	"github.com/faustbrian/go-identity/email"
+	identityhttp "github.com/faustbrian/go-identity/http"
+	emailhttp "github.com/faustbrian/go-identity/http/email"
+)
+
+// These doubles prove transport custody, not native signature or SQL authority.
+type removalOwner struct {
+	*requestOwner
+	removals, rates int
+	last            email.AddressRemoveRequest
+	invalid         bool
+	foreign         bool
+}
+
+func (s *removalOwner) AddressRemoveRateSource(ctx context.Context, r email.AddressRemoveRequest) (identity.UserID, error) {
+	s.rates++
+	if err := r.Validate(); err != nil {
+		return "", err
+	}
+	return identity.UserID(r.Caller.Request.Subject.ID), ctx.Err()
+}
+func (s *removalOwner) AddressRemove(_ context.Context, r email.AddressRemoveRequest) (identity.CommandResult, error) {
+	s.removals++
+	s.last = r
+	if s.invalid {
+		return identity.CommandResult{}, nil
+	}
+	id, _ := identity.NewCommandID()
+	op := identity.FeatureOperation{Owner: "identity/email", OperationID: "identity.email.address-remove", SchemaID: "identity.email.address-remove.native-v1", SchemaVersion: 1, RecordRequirement: identity.FeatureRecordRequired}
+	b := identity.CommandBinding{CommandID: id, TenantID: r.TenantID, UserID: identity.UserID(r.Caller.Request.Subject.ID), ActorID: identity.ActorID(r.Caller.Request.Subject.ID), ActorKind: authorization.SubjectUser, RecordID: string(r.AddressID), OperationID: op.OperationID, SchemaID: op.SchemaID, SchemaVersion: 1, PolicyID: "email-removal", PolicyVersion: 9, CorrelationID: string(id)}
+	if s.foreign {
+		b.TenantID = "foreign"
+	}
+	cascade, _ := identity.NewCascadeID()
+	c := &identity.LifecycleCascadeAdmission{CascadeID: cascade, Generation: 1, Kind: identity.IdentifierRemovalCascade, TenantID: b.TenantID, UserID: b.UserID, IdentifierID: r.AddressID, AuthorityVersion: 2, ManifestVersion: "identity-lifecycle-consumers-v1", Status: identity.RevocationPending}
+	for _, id := range identity.IdentifierRemovalConsumers() {
+		c.Owners = append(c.Owners, identity.RevocationOwnerReceipt{Owner: id, Status: identity.RevocationPending})
+	}
+	return identity.CommandResult{Binding: b, Outcome: identity.CommitOutcomeCommitted, AuditEventID: "removal-audit", Feature: &identity.FeatureReceipt{Operation: op, BeforeVersion: r.ExpectedIdentifierVersion, AfterVersion: r.ExpectedIdentifierVersion + 1}, Cascade: c}, nil
+}
+func (s *removalOwner) AddressRemoveRecover(context.Context, identity.RecoveryQuery, authorization.DecisionContext) (identity.CommandResult, error) {
+	return identity.CommandResult{}, identity.ForbiddenError{}
+}
+
+func removalFixture(t *testing.T) (emailhttp.RemovalConfig, *removalOwner, *http.Request) {
+	t.Helper()
+	base, source, r := emailRequestFixture(t, true)
+	source.proof.Action = "identity.email.address-remove"
+	owner := &removalOwner{requestOwner: source}
+	r.URL.Path = "/v1/email/address-remove"
+	r.RequestURI = r.URL.Path
+	body := `{"proofID":"AAAAAAAAAAAAAAAAAAAAAQ","addressID":"target-address","expectedIdentifierVersion":"1","expectedVerificationVersion":"1","reason":"user-requested","primaryDisposition":"leave-unassigned","recoveryDisposition":"preserve-verified-email"}`
+	r.Body = io.NopCloser(strings.NewReader(body))
+	r.ContentLength = int64(len(body))
+	return emailhttp.RemovalConfig{Network: base.Network, Proofs: owner, Service: owner, Rate: base.SecretRate, Cookie: base.Cookie, Origin: base.Origin, PolicyRevision: 9, MaximumDuration: base.MaximumDuration}, owner, r
+}
+
+func TestEmailRemovalHTTPClosedInput(t *testing.T) {
+	for _, mode := range []string{"origin", "csrf", "key", "bearer", "query", "duplicate", "override", "version", "null", "disposition", "method"} {
+		t.Run(mode, func(t *testing.T) {
+			c, owner, r := removalFixture(t)
+			switch mode {
+			case "origin":
+				r.Header.Set("Origin", "https://foreign.example")
+			case "csrf":
+				r.Header.Del("X-CSRF-Token")
+			case "key":
+				r.Header.Del("Idempotency-Key")
+			case "bearer":
+				r.Header.Set("Authorization", "Bearer invalid")
+			case "query":
+				r.URL.RawQuery = "tenantID=foreign"
+			case "method":
+				r.Method = http.MethodDelete
+			default:
+				wire, _ := io.ReadAll(r.Body)
+				body := string(wire)
+				switch mode {
+				case "duplicate":
+					body = strings.TrimSuffix(body, "}") + `,"proofID":"AAAAAAAAAAAAAAAAAAAAAQ"}`
+				case "override":
+					body = strings.TrimSuffix(body, "}") + `,"tenantID":"foreign"}`
+				case "version":
+					body = strings.Replace(body, `"expectedIdentifierVersion":"1"`, `"expectedIdentifierVersion":"01"`, 1)
+				case "null":
+					body = strings.Replace(body, `"reason":"user-requested"`, `"reason":null`, 1)
+				case "disposition":
+					body = strings.Replace(body, "leave-unassigned", "choose-first", 1)
+				}
+				r.Body = io.NopCloser(strings.NewReader(body))
+				r.ContentLength = int64(len(body))
+			}
+			h, err := emailhttp.NewAddressRemoveHandler(c)
+			if err != nil {
+				t.Fatal(err)
+			}
+			w := httptest.NewRecorder()
+			h.ServeHTTP(w, r)
+			if w.Code < 400 || owner.removals != 0 || owner.rates != 0 || len(w.Result().Cookies()) != 0 || w.Header().Get("X-CSRF-Token") != "" {
+				t.Fatal("invalid removal reached native authority", w.Code)
+			}
+		})
+	}
+}
+
+func TestEmailRemovalHTTPPendingCascadeNoCredentials(t *testing.T) {
+	c, owner, r := removalFixture(t)
+	h, err := emailhttp.NewAddressRemoveHandler(c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, r)
+	var out emailhttp.RemovalResponse
+	if json.Unmarshal(w.Body.Bytes(), &out) != nil || w.Code != 200 || !out.Removed || out.CommitOutcome != "committed" || out.CascadeID == "" || out.CascadeStatus != "pending" || out.CascadeGeneration != 1 || owner.removals != 1 || owner.rates != 1 || owner.last.Validate() != nil || len(w.Result().Cookies()) != 0 || w.Header().Get("Cache-Control") != "no-store" || w.Header().Get("X-CSRF-Token") != "" {
+		t.Fatal("removal lost original response custody", w.Code)
+	}
+}
+
+func TestEmailRemovalHTTPRejectsForeignOutcomeWithoutCorrelation(t *testing.T) {
+	c, owner, r := removalFixture(t)
+	owner.foreign = true
+	h, err := emailhttp.NewAddressRemoveHandler(c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, r)
+	var out emailhttp.RemovalResponse
+	if json.Unmarshal(w.Body.Bytes(), &out) != nil || w.Code != 503 || out.Removed || out.CommandID != "" || out.CascadeID != "" || out.CommitOutcome != "unknown" || owner.removals != 1 {
+		t.Fatal("foreign outcome disclosed correlation or claimed commit", w.Code)
+	}
+}
+
+func TestEmailRemovalSelectedFeatureDocumentsHandler(t *testing.T) {
+	c, owner, r := removalFixture(t)
+	f, err := emailhttp.NewFeature(emailhttp.FeatureConfig{AddressRemove: &c})
+	if err != nil {
+		t.Fatal(err)
+	}
+	h, doc, err := identityhttp.NewDocumentedHandler(t.Context(), identityhttp.DocumentConfig{Title: "Email removal", Version: "1"}, identityhttp.FeatureServices{Features: []identityhttp.Feature{f}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(doc.JSON()), "/v1/email/address-remove") || strings.Contains(string(doc.JSON()), "/v1/email/change-request") {
+		t.Fatal("selection advertises incorrect routes")
+	}
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, r)
+	if w.Code != 200 || owner.removals != 1 {
+		t.Fatal("documented removal route not usable", w.Code)
+	}
+}

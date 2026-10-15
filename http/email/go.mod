@@ -6,10 +6,10 @@ require (
 	github.com/faustbrian/go-authentication/v2 v2.0.2-0.20261015052822-d9f5132c7f68
 	github.com/faustbrian/go-authorization/v3 v3.0.1-0.20261015052455-a55bbebb1060
 	github.com/faustbrian/go-capability/v2 v2.0.2-0.20261015044219-caab644d2fec
-	github.com/faustbrian/go-identity v0.0.0-20261015054516-5afeba0ac471
+	github.com/faustbrian/go-identity v0.0.0-20261015131925-5e4052e61d26
 	github.com/faustbrian/go-identity/delivery v0.0.0-20261015061706-1f0b46ab1053
-	github.com/faustbrian/go-identity/email v0.0.0-20261015085833-f43df0429695
-	github.com/faustbrian/go-identity/http v0.0.0-20261015092135-af758fe32cc8
+	github.com/faustbrian/go-identity/email v0.0.0-20261015131925-5e4052e61d26
+	github.com/faustbrian/go-identity/http v0.0.0-20261015134730-038260b86666
 	github.com/faustbrian/go-identity/session v0.0.0-20261015104034-f16881100907
 	github.com/faustbrian/go-openapi/v2 v2.0.3-0.20261015044355-77bfaaffc820
 	github.com/faustbrian/go-rate-limit/v2 v2.0.1-0.20261015090634-0ebce3975fe1
