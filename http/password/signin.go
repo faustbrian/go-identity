@@ -13,14 +13,14 @@ import (
 	"strings"
 	"time"
 
-	auth "github.com/faustbrian/go-authentication"
-	"github.com/faustbrian/go-authorization"
-	"github.com/faustbrian/go-identifier"
+	auth "github.com/faustbrian/go-authentication/v2"
+	"github.com/faustbrian/go-authorization/v3"
+	"github.com/faustbrian/go-identifier/v2"
 	identity "github.com/faustbrian/go-identity"
 	identityhttp "github.com/faustbrian/go-identity/http"
 	"github.com/faustbrian/go-identity/password"
 	"github.com/faustbrian/go-identity/session"
-	primitive "github.com/faustbrian/go-password"
+	primitive "github.com/faustbrian/go-password/v2"
 )
 
 // SigninService is the borrowed native workflow and original-flow rate-source

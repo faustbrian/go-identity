@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/faustbrian/go-authorization"
+	"github.com/faustbrian/go-authorization/v3"
 	"github.com/faustbrian/go-clock"
 	identity "github.com/faustbrian/go-identity"
 	identitypostgres "github.com/faustbrian/go-identity/postgres"

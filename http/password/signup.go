@@ -13,12 +13,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/faustbrian/go-authorization"
+	"github.com/faustbrian/go-authorization/v3"
 	identity "github.com/faustbrian/go-identity"
 	identityhttp "github.com/faustbrian/go-identity/http"
 	"github.com/faustbrian/go-identity/password"
 	"github.com/faustbrian/go-identity/session"
-	primitive "github.com/faustbrian/go-password"
+	primitive "github.com/faustbrian/go-password/v2"
 )
 
 // SignupService is the borrowed native signup/recovery owner with the frozen

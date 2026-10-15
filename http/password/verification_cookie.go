@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/faustbrian/go-authorization"
+	"github.com/faustbrian/go-authorization/v3"
 	identityhttp "github.com/faustbrian/go-identity/http"
 	"github.com/faustbrian/go-identity/password"
 	"github.com/faustbrian/go-identity/session"

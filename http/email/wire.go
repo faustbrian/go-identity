@@ -6,6 +6,10 @@ import (
 )
 
 func confirmationWire() *identityhttp.WireOperation {
+	return confirmationWireFor("identity.email.verification-confirm", "Original-signup require-before-signin no-session profile.")
+}
+
+func confirmationWireFor(action, profile string) *identityhttp.WireOperation {
 	text := func(min, max int) any { return map[string]any{"type": "string", "minLength": min, "maxLength": max} }
 	object := func(required []string, fields map[string]any) any {
 		return map[string]any{"type": "object", "additionalProperties": false, "required": required, "properties": fields}
@@ -54,6 +58,8 @@ func confirmationWire() *identityhttp.WireOperation {
 	token["writeOnly"] = true
 	token["description"] = "Original signed one-use email capability; body only, never a URL, cookie or reusable session."
 	definition := map[string]any{"operationId": "identity.email.verification-confirm", "description": "Original-signup require-before-signin no-session profile. Exact HTTPS mapped tenant and Origin; closed body capability, original callback and stable confirmation command. Reject Authorization, Idempotency-Key, query/trailers and replacement identity. Ambient cookies grant no authority. Trusted IP budget precedes proof/source work, followed by original subject/grant budgets and one native confirmation. Unknown remains unknown; original command replay returns metadata only. Recovery correlation grants no authority and no recovery route is selected.", "security": []any{}, "parameters": []any{map[string]any{"name": "Origin", "in": "header", "required": true, "schema": text(1, 2048)}}, "requestBody": map[string]any{"required": true, "content": map[string]any{"application/json": map[string]any{"schema": object([]string{"token", "callback", "commandID"}, map[string]any{"token": token, "callback": text(1, 2048), "commandID": id})}}}, "responses": responses}
+	definition["operationId"] = action
+	definition["description"] = profile + " Exact HTTPS mapped tenant and Origin; closed body capability, original callback and stable command. Reject Authorization, Idempotency-Key, query/trailers and identity overrides. IP admission precedes proof/source authentication, then original subject/grant budgets. Unknown stays unknown; exact replay returns metadata only. No cookie, session or redirect is issued; recovery correlation grants no authority."
 	data, _ := json.Marshal(definition)
 	return &identityhttp.WireOperation{Definition: data}
 }

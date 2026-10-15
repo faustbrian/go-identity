@@ -13,8 +13,8 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/faustbrian/go-authorization"
-	"github.com/faustbrian/go-capability"
+	"github.com/faustbrian/go-authorization/v3"
+	"github.com/faustbrian/go-capability/v2"
 	identity "github.com/faustbrian/go-identity"
 	email "github.com/faustbrian/go-identity/email"
 	identityhttp "github.com/faustbrian/go-identity/http"
@@ -186,7 +186,54 @@ func NewConfirmationHandler(c ConfirmationConfig) (http.Handler, error) {
 // NewConfirmationHandlerWithMiddleware binds hooks to real Decode,
 // Authenticate, Admit and Handle phases without replacing original custody.
 func NewConfirmationHandlerWithMiddleware(c ConfirmationConfig, m []identityhttp.MiddlewareDescriptor) (http.Handler, error) {
-	if nilService(c.Service) || !c.Rate.Configured() || c.Now == nil || c.MaximumDuration < time.Millisecond || c.MaximumDuration > 30*time.Second {
+	if nilService(c.Service) {
+		return nil, identityhttp.ErrInvalidInput
+	}
+	return newConfirmationHandler(c, m, c.Service, c.Service.RegistrationVerificationRateSource)
+}
+
+type confirmationExecutor interface {
+	VerificationConfirm(context.Context, email.VerificationConfirmRequest) (email.VerificationConfirmResult, error)
+}
+
+type confirmationRateSource func(context.Context, capability.Proof, string, authorization.DecisionContext) (identity.UserID, string, time.Duration, error)
+
+// This transport-only projection conserves the typed native result's original
+// recovery action. It never constructs a verification recovery for a change,
+// substitutes authority or turns a malformed committed result into rollback.
+type confirmationExecutionResult struct {
+	Outcome    identity.CommitOutcome
+	Address    identity.IdentifierProjection
+	Recovery   identity.RecoveryQuery
+	Replayed   bool
+	RetryAfter time.Duration
+	valid      bool
+}
+
+type confirmationExecution func(context.Context, email.VerificationConfirmRequest) (confirmationExecutionResult, error)
+
+// The wire, origin, rate ordering and response custody are shared transport
+// policy. Selection still freezes each native owner's distinct provenance read.
+func newConfirmationHandler(c ConfirmationConfig, m []identityhttp.MiddlewareDescriptor, service confirmationExecutor, source confirmationRateSource) (http.Handler, error) {
+	if nilService(service) {
+		return nil, identityhttp.ErrInvalidInput
+	}
+	execute := func(ctx context.Context, request email.VerificationConfirmRequest) (confirmationExecutionResult, error) {
+		out, err := service.VerificationConfirm(ctx, request)
+		q, bindingErr := out.Recovery.Bindings()
+		return confirmationExecutionResult{Outcome: out.Outcome, Address: out.Address, Recovery: q, Replayed: out.Replayed, RetryAfter: out.RetryAfter, valid: out.Validate() == nil && bindingErr == nil}, err
+	}
+	return newConfirmationOperation(c, m, execute, source, "identity.email.verification-confirm")
+}
+
+func newConfirmationOperation(c ConfirmationConfig, m []identityhttp.MiddlewareDescriptor, execute confirmationExecution, source confirmationRateSource, action string) (http.Handler, error) {
+	path := "/v1/email/verification-confirm"
+	if action == "identity.email.change-confirm" {
+		path = "/v1/email/change-confirm"
+	} else if action != "identity.email.verification-confirm" {
+		return nil, identityhttp.ErrInvalidInput
+	}
+	if execute == nil || source == nil || !c.Rate.Configured() || c.Now == nil || c.MaximumDuration < time.Millisecond || c.MaximumDuration > 30*time.Second {
 		return nil, identityhttp.ErrInvalidInput
 	}
 	network, err := identityhttp.NewNetworkResolver(c.Network)
@@ -202,7 +249,7 @@ func NewConfirmationHandlerWithMiddleware(c ConfirmationConfig, m []identityhttp
 		return nil, err
 	}
 	caller := func(tenant identity.TenantID, now time.Time) authorization.DecisionContext {
-		return authorization.DecisionContext{PolicyRevision: c.PolicyRevision, Request: authorization.Request{Tenant: authorization.TenantID(tenant), Subject: authorization.Subject{Kind: authorization.SubjectServiceAccount, ID: authorization.SubjectID(c.ActorID)}, Action: "identity.email.verification-confirm", Resource: authorization.Resource{Type: "identity.user"}, Environment: authorization.Environment{Time: now.UTC()}}}
+		return authorization.DecisionContext{PolicyRevision: c.PolicyRevision, Request: authorization.Request{Tenant: authorization.TenantID(tenant), Subject: authorization.Subject{Kind: authorization.SubjectServiceAccount, ID: authorization.SubjectID(c.ActorID)}, Action: authorization.Action(action), Resource: authorization.Resource{Type: "identity.user"}, Environment: authorization.Environment{Time: now.UTC()}}}
 	}
 	if caller("configuration", time.Time{}).Validate() != nil {
 		return nil, identityhttp.ErrInvalidInput
@@ -232,7 +279,7 @@ func NewConfirmationHandlerWithMiddleware(c ConfirmationConfig, m []identityhttp
 	pipeline, err := identityhttp.NewOperationPipeline(identityhttp.OperationPipelineConfig[ConfirmationState]{MaximumDuration: c.MaximumDuration, Middleware: m, Reject: reject,
 		Decode: func(r *http.Request) (ConfirmationState, error) {
 			s := ConfirmationState{input: &confirmationInput{attempt: attemptFor(r)}}
-			if r.URL.Path != "/v1/email/verification-confirm" || r.URL.EscapedPath() != r.URL.Path {
+			if r.URL.Path != path || r.URL.EscapedPath() != r.URL.Path {
 				return s, failure{404, "not_found", 0}
 			}
 			if r.Method != http.MethodPost {
@@ -301,14 +348,18 @@ func NewConfirmationHandlerWithMiddleware(c ConfirmationConfig, m []identityhttp
 				return s, identityhttp.ErrInvalidInput
 			}
 			s.input.request.Token = proof
-			if s.input.request.Validate() != nil {
+			valid := s.input.request.Validate() == nil
+			if action == "identity.email.change-confirm" {
+				valid = email.ChangeConfirmRequest(s.input.request).Validate() == nil
+			}
+			if !valid {
 				return s, identityhttp.ErrInvalidInput
 			}
-			user, grant, lifetime, err := c.Service.RegistrationVerificationRateSource(r.Context(), proof, s.input.request.Callback.String(), s.input.request.Caller)
+			user, grant, lifetime, err := source(r.Context(), proof, s.input.request.Callback.String(), s.input.request.Caller)
 			if err != nil {
 				return s, ownerFailure(err)
 			}
-			s.input.rate = identityhttp.ChallengeVerificationRateRequest{OperationID: "identity.email.verification-confirm", UserID: user, ChallengeID: grant, ChallengeLifetime: lifetime}
+			s.input.rate = identityhttp.ChallengeVerificationRateRequest{OperationID: action, UserID: user, ChallengeID: grant, ChallengeLifetime: lifetime}
 			return s, nil
 		},
 		Admit: func(r *http.Request, s ConfirmationState) error {
@@ -319,14 +370,22 @@ func NewConfirmationHandlerWithMiddleware(c ConfirmationConfig, m []identityhttp
 			a.entered = true
 			a.out.CommandID = s.input.request.CommandID
 			a.out.CommitOutcome = "unknown"
-			result, err := c.Service.VerificationConfirm(r.Context(), s.input.request)
+			result, err := execute(r.Context(), s.input.request)
 			a.out.CommitOutcome = outcome(result.Outcome)
-			if result.Validate() != nil {
+			if !result.valid {
+				// A native owner can deny before creating an execution receipt.
+				// That is a refusal, not an outage or evidence of rollback. Do
+				// not accept partial/claimed receipts through this exception.
+				var denied identity.ForbiddenError
+				if errors.As(err, &denied) && result.Outcome == identity.CommitOutcomeInvalid && result.Address == (identity.IdentifierProjection{}) && result.Recovery == (identity.RecoveryQuery{}) && !result.Replayed && result.RetryAfter == 0 {
+					reject(w, r, ownerFailure(err))
+					return
+				}
 				reject(w, r, identityhttp.ErrUnavailable)
 				return
 			}
-			q, _ := result.Recovery.Bindings()
-			if q.TenantID != s.input.request.TenantID || q.UserID != s.input.rate.UserID || q.CommandID != s.input.request.CommandID || q.ActorID != c.ActorID || q.ActorKind != authorization.SubjectServiceAccount {
+			q := result.Recovery
+			if q.TenantID != s.input.request.TenantID || q.UserID != s.input.rate.UserID || q.CommandID != s.input.request.CommandID || q.ActorID != c.ActorID || q.ActorKind != authorization.SubjectServiceAccount || q.OperationID != action {
 				reject(w, r, identityhttp.ErrUnavailable)
 				return
 			}
@@ -388,7 +447,7 @@ func readString(fields map[string]json.RawMessage, key string, out *string) bool
 	raw, ok := fields[key]
 	return ok && string(raw) != "null" && json.Unmarshal(raw, out) == nil && *out != ""
 }
-func nilService(s ConfirmationService) bool {
+func nilService(s any) bool {
 	if s == nil {
 		return true
 	}

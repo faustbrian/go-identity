@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Bind OTP transport to the public OTP/HTTP/session owners and current primitive
+  majors; preserve selected admission, attempt and cookie policies.
+
+- Adopt identifier v2 input and normalization types through public source
+  dependencies. Callers sharing these typed values must use `go-identifier/v2`;
+  stored profile/version bindings and selected workflow behavior are unchanged.
+
 - Add explicitly selected email-signin Send transport and optional combined
   Send/signin/recovery feature. Original flow/device custody and header-only
   idempotency remain mandatory; safe acceptance never reveals recipient or

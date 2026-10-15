@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"time"
 
-	authorization "github.com/faustbrian/go-authorization"
+	authorization "github.com/faustbrian/go-authorization/v3"
 	identityhttp "github.com/faustbrian/go-identity/http"
 	"github.com/faustbrian/go-identity/session"
 )

@@ -14,10 +14,10 @@ import (
 	"testing"
 	"time"
 
-	httpclient "github.com/faustbrian/go-http-client"
+	httpclient "github.com/faustbrian/go-http-client/v2"
 	identity "github.com/faustbrian/go-identity"
 	"github.com/faustbrian/go-identity/risk"
-	password "github.com/faustbrian/go-password"
+	password "github.com/faustbrian/go-password/v2"
 )
 
 type testClock struct{ nanos atomic.Int64 }

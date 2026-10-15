@@ -13,7 +13,7 @@ import (
 	"testing"
 	"time"
 
-	authorization "github.com/faustbrian/go-authorization"
+	authorization "github.com/faustbrian/go-authorization/v3"
 	identityhttp "github.com/faustbrian/go-identity/http"
 	sessionhttp "github.com/faustbrian/go-identity/http/session"
 	"github.com/faustbrian/go-identity/session"

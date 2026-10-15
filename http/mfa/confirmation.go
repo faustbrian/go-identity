@@ -3,7 +3,7 @@ package mfahttp
 import (
 	"context"
 	"fmt"
-	"github.com/faustbrian/go-authorization"
+	"github.com/faustbrian/go-authorization/v3"
 	identityhttp "github.com/faustbrian/go-identity/http"
 	"github.com/faustbrian/go-identity/mfa"
 	"github.com/faustbrian/go-identity/session"

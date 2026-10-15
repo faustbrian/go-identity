@@ -13,7 +13,7 @@ import (
 	identity "github.com/faustbrian/go-identity"
 	identitypostgres "github.com/faustbrian/go-identity/postgres"
 	outboxpostgres "github.com/faustbrian/go-transactional-outbox/v2/postgres"
-	identityoutbox "github.com/faustbrian/go-transactional-outbox/v2/postgres/identity"
+	identityoutbox "github.com/faustbrian/go-transactional-outbox/postgres/identity"
 )
 
 // One owned fresh database shares the exact production schema across selected

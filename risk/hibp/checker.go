@@ -12,10 +12,10 @@ import (
 	"unicode/utf8"
 
 	clock "github.com/faustbrian/go-clock"
-	httpclient "github.com/faustbrian/go-http-client"
+	httpclient "github.com/faustbrian/go-http-client/v2"
 	identity "github.com/faustbrian/go-identity"
 	"github.com/faustbrian/go-identity/risk"
-	password "github.com/faustbrian/go-password"
+	password "github.com/faustbrian/go-password/v2"
 )
 
 // Outcome describes provider evidence, never password acceptance.

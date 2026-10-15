@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	password "github.com/faustbrian/go-password"
+	password "github.com/faustbrian/go-password/v2"
 )
 
 func TestCandidateUsesExactBorrowedBytes(t *testing.T) {

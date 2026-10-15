@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Bind session transport to current public HTTP and session owners, using
+  authentication v2 and authorization v3 values without changing admission.
+
+- Align owned capability dependencies with the v2 issuer-scoped contracts.
+
 - Allow opt-in named login-method profiles on original browser-flow initiation.
   Each selection retains its issuer's fixed action, callback and policy under
   the same origin, cookie, device and rate protections. Unselected names deny

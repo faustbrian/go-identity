@@ -3,6 +3,30 @@
 Experimental Go 1.27 backend library, not a UI or complete email product.
 Base `identity/http` does not import this optional module.
 
+## Authenticated self address reads
+
+Select `FeatureConfig.AddressGet` and/or `AddressList` with `AddressQueryConfig`.
+The graph borrows the actual native session reader, email query owner, one shared
+canonical safe-rate limiter, cookie policy and current authorization revision.
+Each route is independent; selection emits no mutation or verification route.
+
+- `GET /v1/email/address-get?addressID=...` selects one owned address.
+- `GET /v1/email/address-list?limit=25&cursor=...` selects a native page; omitted
+  limit defaults to25, explicit limit is1..100 and cursor is at most512 bytes.
+
+The selected profile is cookie-authenticated human self access, not administrative
+targeting or bearer fallback. Body/trailers, Authorization and idempotency headers
+deny, as do unknown/duplicate queries and user/tenant overrides. Missing/foreign/forbidden
+addresses are indistinguishable. Native canonical/display omission and independent
+identifier/verification versions are preserved; account blocks observed by the
+primary deny even while preliminary session evidence has time remaining.
+Responses are no-store credential-free JSON bounded to1MiB, preserving native
+512-byte value bounds without truncation. They issue no cookie, token, command,
+refresh or mutation. Final body delivery repeats original session validity and
+withholds personal data after expiry/cancellation or a changed failure status.
+Public direct constructors are `NewAddressGetHandler`/`NewAddressListHandler`;
+feature middleware attaches to their actual typed operation phases.
+
 ## Quick start and adoption
 
 Configure `ConfirmationConfig` with the native `password/postgres.SignupService`
@@ -12,6 +36,43 @@ hosts and HTTPS Origin, a deployment service actor/current query-policy revision
 a prompt trusted clock and 1ms..30s whole-call budget. Install the native owner's
 selected migrations, counters, keyring and original delivery/issuance policy.
 Borrowed owners must outlive handlers; drain before closing them.
+
+For an already-authenticated managed-address request's delivered link, select
+`ManagedConfirmationConfig` with native
+`password/postgres.EmailManagementService`, then call
+`NewManagedConfirmationFeature` or `NewManagedConfirmationHandler`. This uses
+the owner's `ManagedVerificationRateSource`, never signup provenance. The wire,
+origin/counter ordering and no-session response policy below are shared. Install
+both the rate backend's state and atomic-command histories before enabling it.
+Selection verifies a pending non-primary address only: add/resend/change/removal
+and their policies are separate native operations, not supplied by this handler.
+
+Both selections own the same canonical route. Do not register both features:
+composition rejects duplicate ownership instead of silently choosing one. A
+graph supporting both link families instead selects `ProfiledConfirmation` in
+`FeatureConfig`, using the native `password/postgres.EmailVerificationRouter`.
+The existing issuer authenticates the signature and persisted original issuance
+before its closed signed-profile switch. A selected-source error is terminal;
+there is no unsigned-token inference or failed-owner fallback. Historical
+provenance preserves exact-command replay without granting fresh validity.
+
+For new-address-confirmed primary changes, select `ChangeConfirmationConfig`
+with the native change-request `EmailManagementService`. Its separate
+`ChangeConfirmationRateSource` cannot borrow verification-only provenance.
+`NewChangeConfirmationFeature` exposes POST `/v1/email/change-confirm`; the body
+has the same token/callback/command shape below. The original password proof,
+new-address possession, primary transition, old-address notice and required
+session invalidation remain one native workflow. Confirmation issues no session.
+
+Select `NewFeature(FeatureConfig{SignupConfirmation: &signup,
+ChangeConfirmation: &change})` to compose both canonical operations under one
+feature identity. `ManagedConfirmation` may replace `SignupConfirmation`, but
+selecting both for the same verification route is invalid. Empty selection is
+invalid; omit the feature to expose no routes or metadata. `ProfiledConfirmation`
+is also mutually exclusive with either single-profile verification selection.
+Request transport is selected separately as described below; the shared
+confirmation router alone does not supply it. Complete reference feature
+delivery remains pending. Read transport is selected separately as above.
 
 Call `NewConfirmationFeature(config)` and contribute it to
 `identityhttp.FeatureServices`. Compose descriptors through `NewRouter` for
@@ -34,9 +95,45 @@ subject, challenge ID and policy lifetime are not body choices.
 
 ## API and semantics
 
+### Keyed cookie requests
+
+`RequestConfig` with `NewVerificationSendHandler` independently selects
+`POST /v1/email/verification-send`. Supply exactly `proofID`, `address` and
+`callback` in JSON; resend additionally supplies `addressID` and may omit
+`address` to resolve the exact retained pending target. `NewChangeRequestHandler`
+selects `POST /v1/email/change-request` with `proofID`, `newAddress` and `callback`,
+and requires explicit `NotifyCurrentAddress` startup policy. Select these through
+`FeatureConfig.VerificationRequest`/`.ChangeRequest` to combine with reads and
+confirmation in one email feature.
+
+Both require the configured session cookie, exact HTTPS Origin, `X-CSRF-Token`
+and `Idempotency-Key`. Body identity/policy/command overrides, bearer alternatives,
+duplicates and aliases deny. The signed original proof and native retained-input
+custody establish rate metadata before mutable session lookup; this does not
+renew proof/session freshness or grant fresh work without native admission.
+Verification requests use canonical shared delivery quotas; change uses shared
+keyed secret quotas. Native protected counters remain cumulative.
+
+202 `queued` means the original local delivery intent committed, not that mail
+was delivered or the address verified/changed. Responses contain command/outcome
+metadata only. 409 pending/conflict, 429 quota and 503 unavailable/unknown never
+claim rollback or expose a mailbox/session. Preserve the same original key and
+input on retry. Native typed recovery remains separate; no HTTP recovery route,
+redirect, automatic retry or signin is enabled. Add/resend and primary-change
+confirmation still require their separately selected native handlers.
+
+### Confirmation
+
 - `ConfirmationService`: consumer-owned native original-source/confirmation
   port, implemented by `SignupService` without an HTTP dependency.
 - `ConfirmationConfig`: immutable explicit no-session selection.
+- `ManagedConfirmationService`, `ManagedConfirmationConfig` and their handler/
+  feature constructors: explicit management-link selection with the same bounded
+  wire and middleware phases, without a signup or auto-signin fallback.
+- `ChangeConfirmationService`, `ChangeConfirmationConfig` and their constructors:
+  exact primary-change confirmation, original-action recovery and no credentials.
+- `FeatureConfig`/`NewFeature`: explicit operation grouping, never hidden
+  registration, inferred link ownership or an automatic signin selection.
 - `NewConfirmationHandler`, `NewConfirmationFeature` and their middleware
   variants: real execution; omission exposes no route or metadata.
 - `ConfirmationState.Attempt`: detached attempted metadata, not execution or
@@ -75,6 +172,7 @@ auto-signin requires original pre-auth/session transaction composition, not a
 transport flag. Does replay reveal the address again? No. Is an uncertain result
 safe to replace? No; retain original command scope and use native recovery.
 
-Address management, scanner/delivery HTTP, full auto-signin, native SQL-over-HTTP
-journey qualification, browser interoperability, exact coverage/mutation and
-remaining release gates are still pending. See [CHANGELOG.md](CHANGELOG.md).
+Removal, stronger-factor management, full auto-signin, browser interoperability,
+exact coverage/mutation and remaining release gates are still pending. Selected
+request/read/confirmation journeys have local native PostgreSQL/HTTPS evidence,
+not whole-unit qualification. See [CHANGELOG.md](CHANGELOG.md).

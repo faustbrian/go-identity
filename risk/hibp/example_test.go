@@ -11,11 +11,11 @@ import (
 
 	audit "github.com/faustbrian/go-audit"
 	"github.com/faustbrian/go-clock"
-	httpclient "github.com/faustbrian/go-http-client"
+	httpclient "github.com/faustbrian/go-http-client/v2"
 	identity "github.com/faustbrian/go-identity"
 	"github.com/faustbrian/go-identity/risk"
 	"github.com/faustbrian/go-identity/risk/hibp"
-	password "github.com/faustbrian/go-password"
+	password "github.com/faustbrian/go-password/v2"
 )
 
 // Offline fixtures make the example executable without a live provider or a

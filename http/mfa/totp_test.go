@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/faustbrian/go-capability"
+	"github.com/faustbrian/go-capability/v2"
 	identity "github.com/faustbrian/go-identity"
 	identityhttp "github.com/faustbrian/go-identity/http"
 	"github.com/faustbrian/go-identity/mfa"

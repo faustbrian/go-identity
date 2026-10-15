@@ -40,6 +40,19 @@ func (r *Repository) PrepareVerificationCommandCounters(c identity.Command, subj
 	return r.prepareCommandCounters(c, subject, capabilityID, "", primaryTime)
 }
 
+// PrepareEmailChangeCommandCounters selects only the managed-v1 change-confirm
+// profile. Signed original user/grant and trusted network must be conserved.
+// Install EmailChangeCounterMigrationSource; no live session is inferred. This
+// is pure preparation, not allowance, proof authentication or consumption.
+func (r *Repository) PrepareEmailChangeCommandCounters(c identity.Command, subject risk.Subject, capabilityID string, primaryTime time.Time) (identity.Command, identitypostgres.CommandCounterPlan, error) {
+	s, ok := c.Feature()
+	op := identity.FeatureOperation{Owner: "identity/email", OperationID: "identity.email.change-confirm", SchemaID: "identity.email.change-confirm.managed-v1", SchemaVersion: 1, RecordRequirement: identity.FeatureRecordRequired}
+	if !ok || s.Operation != op || capabilityID == "" {
+		return identity.Command{}, identitypostgres.CommandCounterPlan{}, risk.ErrInvalidCounterCommand
+	}
+	return r.prepareCommandCounters(c, subject, capabilityID, "", primaryTime)
+}
+
 // PrepareMFACompletionCommandCounters selects only anonymous native TOTP/OTP/recovery login
 // completion. It binds the signed continuation subject and child plan without
 // inventing an authenticated session or changing command user ownership.
@@ -204,6 +217,9 @@ type restoredCounter struct {
 
 func prepareNativeCounter(p risk.CommandCounterPolicy, scope risk.Context, subject risk.Subject, capabilityID string, at time.Time) (risk.CounterCommand, error) {
 	if capabilityID != "" {
+		if scope.Operation == "identity.email.change-confirm" {
+			return p.PrepareEmailChange(scope, subject, capabilityID, at)
+		}
 		if scope.Operation == "identity.mfa.otp-send" {
 			return p.PrepareMFALoginSend(scope, subject, capabilityID, at)
 		}
@@ -217,6 +233,9 @@ func prepareNativeCounter(p risk.CommandCounterPolicy, scope risk.Context, subje
 
 func (n restoredCounter) validateAt(at time.Time) error {
 	if n.capabilityID != "" {
+		if n.scope.Operation == "identity.email.change-confirm" {
+			return n.policy.ValidateEmailChange(n.command, n.scope, n.subject, n.capabilityID, at)
+		}
 		if n.scope.Operation == "identity.mfa.otp-send" {
 			return n.policy.ValidateMFALoginSend(n.command, n.scope, n.subject, n.capabilityID, at)
 		}

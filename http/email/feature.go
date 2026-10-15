@@ -1,6 +1,10 @@
 package emailhttp
 
-import identityhttp "github.com/faustbrian/go-identity/http"
+import (
+	"net/http"
+
+	identityhttp "github.com/faustbrian/go-identity/http"
+)
 
 // NewConfirmationFeature explicitly selects original-signup confirmation only.
 // Omission exposes no handler or metadata. This no-session profile does not
@@ -12,14 +16,14 @@ func NewConfirmationFeature(c ConfirmationConfig) (identityhttp.Feature, error) 
 // NewConfirmationFeatureWithMiddleware contributes the actual protected
 // operation pipeline and its concrete wire schema, not a placeholder handler.
 func NewConfirmationFeatureWithMiddleware(c ConfirmationConfig, m []identityhttp.MiddlewareDescriptor) (identityhttp.Feature, error) {
-	h, err := NewConfirmationHandlerWithMiddleware(c, m)
+	return NewFeatureWithMiddleware(FeatureConfig{SignupConfirmation: &c}, m)
+}
+
+func newEmailConfirmationOperation(h http.Handler, action, profile string) (identityhttp.OperationDescriptor, error) {
+	op, err := identityhttp.NewCanonicalOperation(identityhttp.CanonicalOperationConfig{Owner: "identity/email", OperationID: action, Handler: h, CSRF: identityhttp.CSRFPolicy{Mode: identityhttp.CSRFExactOrigin, RefererFallback: identityhttp.RefererFallbackDeny}, MaximumSerializedBytes: 16384})
 	if err != nil {
-		return identityhttp.Feature{}, err
+		return identityhttp.OperationDescriptor{}, err
 	}
-	op, err := identityhttp.NewCanonicalOperation(identityhttp.CanonicalOperationConfig{Owner: "identity/email", OperationID: "identity.email.verification-confirm", Handler: h, CSRF: identityhttp.CSRFPolicy{Mode: identityhttp.CSRFExactOrigin, RefererFallback: identityhttp.RefererFallbackDeny}, MaximumSerializedBytes: 16384})
-	if err != nil {
-		return identityhttp.Feature{}, err
-	}
-	op.Wire = confirmationWire()
-	return identityhttp.NewFeature(identityhttp.FeatureConfig{ID: "identity/email", Operations: []identityhttp.OperationDescriptor{op}})
+	op.Wire = confirmationWireFor(action, profile)
+	return op, nil
 }

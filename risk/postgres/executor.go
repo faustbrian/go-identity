@@ -11,7 +11,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/faustbrian/go-audit"
-	"github.com/faustbrian/go-authorization"
+	"github.com/faustbrian/go-authorization/v3"
 	identity "github.com/faustbrian/go-identity"
 	identitypostgres "github.com/faustbrian/go-identity/postgres"
 	"github.com/faustbrian/go-identity/risk"

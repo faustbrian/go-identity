@@ -1,3 +1,3 @@
-// Package emailhttp provides explicit original-signup email-confirmation
-// transport. Selection is opt-in; importing this module exposes no routes.
+// Package emailhttp provides opt-in email confirmation and authenticated address
+// reads. Importing it exposes no routes, administrative UI or automatic signin.
 package emailhttp

@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Bind the ephemeral counter adapter to the current public risk contracts;
+  fixed-window charges and provider-failure policy are unchanged.
+
 - Expose read-only current health for the original activated primary journal.
   Checks require exact native confirmed custody, server time and transport
   continuity, with fresh primary eligibility around native IO. No counter

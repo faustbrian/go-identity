@@ -14,7 +14,7 @@ import (
 	"testing"
 	"time"
 
-	identifier "github.com/faustbrian/go-identifier"
+	identifier "github.com/faustbrian/go-identifier/v2"
 	identity "github.com/faustbrian/go-identity"
 	email "github.com/faustbrian/go-identity/email"
 	identityhttp "github.com/faustbrian/go-identity/http"

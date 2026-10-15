@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Bind MFA transport to public MFA/HTTP/session owners and current primitive
+  majors; composed callers must use matching opaque proof and password types.
+
+- Adopt capability v2 public proof/grant types and explicit trusted issuer
+  policy. Update capability imports and issuer-owned keys/configuration; token
+  framing and native transaction/recovery ownership remain unchanged.
+
 - Cover the selected email secondary-OTP workflow through actual enrollment,
   delivered-code confirmation, HTTP send/verify, session/CSRF, public session
   read, credential-free replay and factor-authority invalidation. Full MFA

@@ -12,7 +12,7 @@ import (
 
 	identityhttp "github.com/faustbrian/go-identity/http"
 	"github.com/faustbrian/go-identity/mfa"
-	primitive "github.com/faustbrian/go-password"
+	primitive "github.com/faustbrian/go-password/v2"
 )
 
 type secretReaderOnly struct{ io.Reader }

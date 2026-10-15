@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- Bind password transport to current public owners and primitive major versions;
+  callers must pass matching authentication, proof and password values.
+
+- Adopt identifier v2 input and normalization types through public source
+  dependencies. Callers sharing these typed values must use `go-identifier/v2`;
+  stored profile/version bindings and selected workflow behavior are unchanged.
+
+- Adopt capability v2 public proof/grant types and explicit trusted issuer
+  policy. Update capability imports and issuer-owned keys/configuration; token
+  framing and native transaction/recovery ownership remain unchanged.
+
 - Add opt-in POST /v1/password/reset/inspect with bounded body-only proof input,
   exact Origin, no-store advisory state and shared secret quotas on every read.
   No subject, redirect, session, reservation or completion is returned.

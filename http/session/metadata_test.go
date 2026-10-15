@@ -16,8 +16,8 @@ import (
 	"testing"
 	"time"
 
-	authorization "github.com/faustbrian/go-authorization"
-	"github.com/faustbrian/go-authorization/acl"
+	authorization "github.com/faustbrian/go-authorization/v3"
+	"github.com/faustbrian/go-authorization/v3/acl"
 	identityhttp "github.com/faustbrian/go-identity/http"
 	sessionhttp "github.com/faustbrian/go-identity/http/session"
 	"github.com/faustbrian/go-identity/session"

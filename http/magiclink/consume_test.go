@@ -11,8 +11,8 @@ import (
 	"testing"
 	"time"
 
-	auth "github.com/faustbrian/go-authentication"
-	"github.com/faustbrian/go-capability"
+	auth "github.com/faustbrian/go-authentication/v2"
+	"github.com/faustbrian/go-capability/v2"
 	identity "github.com/faustbrian/go-identity"
 	identityhttp "github.com/faustbrian/go-identity/http"
 	magiclinkhttp "github.com/faustbrian/go-identity/http/magiclink"

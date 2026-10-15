@@ -13,7 +13,7 @@ import (
 	"time"
 
 	"github.com/faustbrian/go-audit"
-	authority "github.com/faustbrian/go-authorization/postgres"
+	authority "github.com/faustbrian/go-authorization/v3/postgres"
 	"github.com/faustbrian/go-clock"
 	identity "github.com/faustbrian/go-identity"
 	identitypostgres "github.com/faustbrian/go-identity/postgres"

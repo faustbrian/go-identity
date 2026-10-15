@@ -11,7 +11,7 @@ import (
 	identityhttp "github.com/faustbrian/go-identity/http"
 	"github.com/faustbrian/go-identity/password"
 	"github.com/faustbrian/go-identity/session"
-	primitive "github.com/faustbrian/go-password"
+	primitive "github.com/faustbrian/go-password/v2"
 )
 
 type signupAttempt struct {

@@ -15,7 +15,7 @@ import (
 
 	"github.com/faustbrian/go-audit"
 	auditpostgres "github.com/faustbrian/go-audit/postgres"
-	"github.com/faustbrian/go-authorization"
+	"github.com/faustbrian/go-authorization/v3"
 	"github.com/faustbrian/go-clock"
 	identity "github.com/faustbrian/go-identity"
 	identitypostgres "github.com/faustbrian/go-identity/postgres"
@@ -23,7 +23,7 @@ import (
 	migrations "github.com/faustbrian/go-migrations/v3"
 	migrationdb "github.com/faustbrian/go-migrations/v3/postgres"
 	database "github.com/faustbrian/go-postgres"
-	identityoutbox "github.com/faustbrian/go-transactional-outbox/v2/postgres/identity"
+	identityoutbox "github.com/faustbrian/go-transactional-outbox/postgres/identity"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/stdlib"
 )

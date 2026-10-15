@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"io"
 
-	password "github.com/faustbrian/go-password"
+	password "github.com/faustbrian/go-password/v2"
 )
 
 var errInvalidCandidate = errors.New("hibp: invalid candidate")

@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Use current public kernel, audit and outbox participants with authentication
+  v2 and authorization v3 values; retain the same native transaction boundary.
+
+- Add exact native managed email-change counter preparation and optional
+  `EmailChangeCounterMigrationSource`. Append the selected grant dimension while
+  retaining installed constraint expressions, populated allowance and timestamps;
+  no existing MFA/browser or verification counter history is rewritten.
+
 - Add durable PostgreSQL fixed-window admission with transactional multi-counter
   charges, authenticated original replay, retained key-rotation continuity and
   explicit tenant/capacity bounds. Fresh installations need no Valkey history.

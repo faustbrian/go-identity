@@ -1,7 +1,7 @@
 package mfahttp
 
 import (
-	auth "github.com/faustbrian/go-authentication"
+	auth "github.com/faustbrian/go-authentication/v2"
 	identity "github.com/faustbrian/go-identity"
 	identityhttp "github.com/faustbrian/go-identity/http"
 	"github.com/faustbrian/go-identity/mfa"

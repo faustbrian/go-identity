@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Bind magic-link transport to public workflow/HTTP/session owners and current
+  primitive majors without changing original-link custody or admission.
+
+- Adopt capability v2 public proof/grant types and explicit trusted issuer
+  policy. Update capability imports and issuer-owned keys/configuration; token
+  framing and native transaction/recovery ownership remain unchanged.
+
 - Preserve explicitly selected native proof-parsing limits for signup links;
   default and narrower profiles still reject oversized caveat sets before
   original-source lookup. Native signature/scope checks remain authoritative.

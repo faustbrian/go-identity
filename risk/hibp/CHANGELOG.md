@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Borrow the supported HTTP-client v2 transport without inheriting its cookies,
+  middleware, redirects or headers; retain bounded, padded range-only requests.
+
+- Use password v2 opaque candidate values and current public identity/risk
+  contracts. Composed callers must use matching major-version types; HIBP
+  privacy, failure policy and original provider-evidence expiry are unchanged.
+
 - Clarify observed attribution for authenticated issuer challenges as well as
   real pre-authentication transactions, using their unchanged canonical identity.
   Native reset can supply original binding/challenge through its attributed
