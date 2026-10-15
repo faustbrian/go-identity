@@ -9,7 +9,7 @@ import (
 )
 
 func FuzzAddressReadQuery(f *testing.F) {
-	for _, raw := range []string{"", "addressID=owned-address", "limit=100&cursor=opaque", "limit=01", "limit=1&LIMIT=2", "userID=other", "addressID=%00", "cursor=%FF", "limit=18446744073709551616"} {
+	for _, raw := range []string{"", "addressID=owned-address", "targetSubjectID=other-user", "addressID=owned-address&targetSubjectID=other-user", "targetSubjectID=other&targetSubjectID=second", "targetSubjectID=%00", "limit=100&cursor=opaque", "limit=01", "limit=1&LIMIT=2", "userID=other", "addressID=%00", "cursor=%FF", "limit=18446744073709551616"} {
 		f.Add(raw, true)
 		f.Add(raw, false)
 	}
@@ -28,12 +28,14 @@ func FuzzAddressReadQuery(f *testing.F) {
 		if err != nil {
 			return
 		}
-		out, err := decodeAddressQuery(values, get)
-		if err != nil {
-			return
-		}
-		if out.limit > 100 || len(out.cursor) > 512 || get && (out.id == "" || len(out.id) > 128 || out.limit != 0 || out.cursor != "") || !get && out.id != "" {
-			t.Fatal("query escaped selected native self-read bounds")
+		for _, admin := range []bool{false, true} {
+			out, err := decodeAddressQuery(values, get, admin)
+			if err != nil {
+				continue
+			}
+			if len(out.target) > 128 || !admin && out.target != "" || out.limit > 100 || len(out.cursor) > 512 || get && (out.id == "" || len(out.id) > 128 || out.limit != 0 || out.cursor != "") || !get && out.id != "" {
+				t.Fatal("query escaped selected native read bounds")
+			}
 		}
 	})
 }

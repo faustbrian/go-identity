@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Select administrative email list/get explicitly with `AdministrativeTargets`.
+  Require native auditing and current actor/action/target authorization; the
+  optional `targetSubjectID` never substitutes the authenticated actor. Default
+  self routes reject overrides and do not advertise the selector.
+
 - Accept explicit replacement-primary removal with three required versioned
   replacement fields. Keep seven-field legacy requests unchanged; mixed,
   incomplete or ambiguous profiles deny and selected OpenAPI matches them.

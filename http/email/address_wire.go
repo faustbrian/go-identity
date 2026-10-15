@@ -35,7 +35,12 @@ func addressQueryWire(c AddressQueryConfig, get bool) *identityhttp.WireOperatio
 		responses[status] = response(failure)
 	}
 	responses["429"].(map[string]any)["headers"] = map[string]any{"Retry-After": map[string]any{"schema": map[string]any{"type": "string", "pattern": "^[0-9]+$"}}}
-	definition, _ := json.Marshal(map[string]any{"operationId": action, "description": "Cookie-authenticated human self read. Exact HTTPS tenant and current native session/policy; no target-user override, Authorization, body, idempotency key, CSRF mutation, refresh or session issuance. Values remain subject to native disclosure policy; original session validity governs final delivery.", "parameters": parameters, "security": []any{map[string]any{schemeName: []string{}}}, "responses": responses})
+	description := "Cookie-authenticated human self read. Exact HTTPS tenant and current native session/policy; no target-user override, Authorization, body, idempotency key, CSRF mutation, refresh or session issuance. Values remain subject to native disclosure policy; original session validity governs final delivery."
+	if c.AdministrativeTargets {
+		parameters = append(parameters, parameter("targetSubjectID", false, id))
+		description = "Cookie-authenticated human self or explicitly authorized administrative read. Optional targetSubjectID selects the subject, never the actor or permission. Cross-subject reads require native primary audit acknowledgement. Exact HTTPS tenant and current session/policy; no Authorization, body, idempotency key, CSRF mutation, refresh or session issuance. Native disclosure policy and original session validity govern final delivery."
+	}
+	definition, _ := json.Marshal(map[string]any{"operationId": action, "description": description, "parameters": parameters, "security": []any{map[string]any{schemeName: []string{}}}, "responses": responses})
 	cookie, _ := c.Cookie.DeletionAttributes()
 	scheme, _ := json.Marshal(map[string]any{"type": "apiKey", "in": "cookie", "name": cookie.Name, "description": "Actual current native session; never issued, refreshed or extended by address reads."})
 	return &identityhttp.WireOperation{Definition: definition, SecuritySchemes: []identityhttp.WireComponent{{Name: schemeName, Definition: scheme}}}

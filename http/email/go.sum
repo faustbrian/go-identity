@@ -24,6 +24,8 @@ github.com/faustbrian/go-identity/delivery v0.0.0-20261015061706-1f0b46ab1053 h1
 github.com/faustbrian/go-identity/delivery v0.0.0-20261015061706-1f0b46ab1053/go.mod h1:gbHmgfef5iSUtki7ZEa7HnqngXCugftiOgDlPQGwYx0=
 github.com/faustbrian/go-identity/email v0.0.0-20261015143823-03bac9ad6d9f h1:IlkN2X4TfRG0a4nBfPNxU/O88Y+TElIDDBo1X9JuiI0=
 github.com/faustbrian/go-identity/email v0.0.0-20261015143823-03bac9ad6d9f/go.mod h1:QgrYEo0nEzVmXP2snE0+9I5ML7zj2JolWkKP8+ZjWqc=
+github.com/faustbrian/go-identity/email v0.0.0-20261015152054-6f013f9be2e4 h1:aWCfySLf3th93S7rhcCAlJgYgrAoYn9dsFDDYl0MbpM=
+github.com/faustbrian/go-identity/email v0.0.0-20261015152054-6f013f9be2e4/go.mod h1:h2dkytj3mMFFaCBPomkfYaB3MAfai9cDsSMl6qYjpqM=
 github.com/faustbrian/go-identity/http v0.0.0-20261015134730-038260b86666 h1:R2b54X0wt21V/IWbX3kqt/FrmugPE1JmyMG4D1rxMEE=
 github.com/faustbrian/go-identity/http v0.0.0-20261015134730-038260b86666/go.mod h1:xt1p+KJpdN9eOPkpZf/LCYQdO/eInaveL7loKPFYcw8=
 github.com/faustbrian/go-identity/session v0.0.0-20261015104034-f16881100907 h1:Kqzvu08TLEr890C5ObGAakU5MmjB6LddB4cjVxF/OiA=

@@ -41,6 +41,12 @@ func TestAddressWirePreservesNativeOmissionVersionsAndActiveSelfScope(t *testing
 				target = "other"
 			}
 			out, err := addressView(p, tenant, target, now)
+			if mode == "banned" {
+				admin, e := addressTargetView(p, tenant, target, now, true)
+				if e != nil || admin.UserID != user || admin.IdentifierID != "address-one" {
+					t.Fatal("administrative blocked-target inspection changed actor authority", e)
+				}
+			}
 			if mode != "visible" && mode != "omitted" && mode != "retained-long-value" {
 				if err == nil || out != (AddressView{}) {
 					t.Fatal("wire accepted foreign, future or blocked self disclosure")

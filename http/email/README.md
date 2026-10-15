@@ -64,8 +64,17 @@ Each route is independent; selection emits no mutation or verification route.
 - `GET /v1/email/address-list?limit=25&cursor=...` selects a native page; omitted
   limit defaults to25, explicit limit is1..100 and cursor is at most512 bytes.
 
-The selected profile is cookie-authenticated human self access, not administrative
-targeting or bearer fallback. Body/trailers, Authorization and idempotency headers
+The default profile is cookie-authenticated human self access, with no bearer
+fallback. Set `AddressQueryConfig.AdministrativeTargets` explicitly to accept
+optional `targetSubjectID` on either query. The service must implement
+`AdministrativeAddressQueryService` with native required auditing configured;
+otherwise construction fails. Selection never grants permission: the real
+session user remains the actor, the native authorization engine decides each
+target/action/tenant, and audit acknowledgement precedes disclosure. Selected
+OpenAPI alone advertises the selector. Without selection it is rejected.
+Explicitly authorized administrative queries may inspect blocked target users;
+the actor still needs an actual active session and current permission.
+Body/trailers, Authorization and idempotency headers
 deny, as do unknown/duplicate queries and user/tenant overrides. Missing/foreign/forbidden
 addresses are indistinguishable. Native canonical/display omission and independent
 identifier/verification versions are preserved; account blocks observed by the
