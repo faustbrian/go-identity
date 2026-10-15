@@ -157,9 +157,6 @@ func (p *preparedFeaturePhase) RecoverParticipant(ctx context.Context, w Recover
 }
 
 func testPreparedFeature(t *testing.T, ctx context.Context, pool *database.Pool, repo *Repository) {
-	if _, err := pool.Raw().Exec(ctx, preparationSchemaSQL); err != nil {
-		t.Fatal(err)
-	}
 	if _, err := pool.Raw().Exec(ctx, `CREATE TABLE IF NOT EXISTS public.identity_test_feature_audits(event_id text PRIMARY KEY,command_id text NOT NULL,event_index integer NOT NULL,retention_class text NOT NULL,UNIQUE(command_id,event_index));CREATE TABLE IF NOT EXISTS public.identity_test_lifecycle(event_id text PRIMARY KEY,command_id text NOT NULL UNIQUE);CREATE TABLE IF NOT EXISTS public.identity_test_feature(tenant_id text,record_id text,command_id text UNIQUE,value text,PRIMARY KEY(tenant_id,record_id));`); err != nil {
 		t.Fatal(err)
 	}

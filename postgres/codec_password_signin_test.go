@@ -9,9 +9,9 @@ import (
 	"errors"
 	"testing"
 
-	auth "github.com/faustbrian/go-authentication"
+	auth "github.com/faustbrian/go-authentication/v2"
 	identity "github.com/faustbrian/go-identity"
-	primitive "github.com/faustbrian/go-password"
+	primitive "github.com/faustbrian/go-password/v2"
 )
 
 func passwordSigninCodecSpec(anonymous bool) identity.FeatureCommandSpec {

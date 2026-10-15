@@ -5,7 +5,7 @@ import (
 	"encoding/base64"
 	"time"
 
-	authentication "github.com/faustbrian/go-authentication"
+	authentication "github.com/faustbrian/go-authentication/v2"
 	identity "github.com/faustbrian/go-identity"
 )
 

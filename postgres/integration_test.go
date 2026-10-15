@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/faustbrian/go-authorization"
+	"github.com/faustbrian/go-authorization/v3"
 	"github.com/faustbrian/go-clock"
 	identity "github.com/faustbrian/go-identity"
 	migrations "github.com/faustbrian/go-migrations/v3"
@@ -106,7 +106,30 @@ func TestPostgresIntegration(t *testing.T) {
 	t.Run("feature observation", func(t *testing.T) { testFeatureObservation(t, ctx, pool) })
 	t.Run("command admission", func(t *testing.T) { testCommandAdmissionPrimary(t, ctx, pool) })
 	t.Run("feature execution", func(t *testing.T) { testFeatureExecution(t, ctx, pool, repo) })
+	// Keep optional preparation in the real migration history. Installing it
+	// as raw fixture SQL and later appending it to reset history would attempt
+	// to create the same columns twice.
+	preparationHistory := PreparationMigrationSource{Base: MigrationSource{}, Version: 10}
+	preparedRunner, err := migrations.NewRunner(preparationHistory, backend)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := preparedRunner.Up(ctx); err != nil {
+		t.Fatal("preparation migration", err)
+	}
 	t.Run("prepared feature", func(t *testing.T) { testPreparedFeature(t, ctx, pool, repo) })
+	kernelHistory := AdmissionPreparationMigrationSource{Base: preparationHistory, Version: 11}
+	admissionRunner, err := migrations.NewRunner(kernelHistory, backend)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := admissionRunner.Up(ctx); err != nil {
+		t.Fatal("populated admission migration", err)
+	}
+	if _, err := admissionRunner.Up(ctx); err != nil {
+		t.Fatal("admission migration replay", err)
+	}
+	runner = admissionRunner
 	t.Run("command counters", func(t *testing.T) { testCommandCounterReservation(t, ctx, pool, repo) })
 	t.Run("OTP attempt denial", func(t *testing.T) { testOTPAttemptDenial(t, ctx, pool, repo) })
 	t.Run("MFA OTP shared denial", func(t *testing.T) { testMFAOTPAttemptDenial(t, ctx, pool, repo) })
@@ -123,7 +146,7 @@ func TestPostgresIntegration(t *testing.T) {
 				t.Fatal(e)
 			}
 		}
-		statusRunner, e := migrations.NewRunner(StatusMigrationSource{Base: MigrationSource{}, Version: 12}, backend)
+		statusRunner, e := migrations.NewRunner(StatusMigrationSource{Base: kernelHistory, Version: 12}, backend)
 		if e != nil {
 			t.Fatal(e)
 		}
@@ -154,7 +177,7 @@ func TestPostgresIntegration(t *testing.T) {
 		if got, e := repo.GetCredentialAuthority(ctx, q); e == nil || errors.Is(e, identity.ErrUserAbsent) || got != (identity.CredentialAuthorityRecord{}) {
 			t.Fatal("uninstalled credential schema supplied absence/authority", e)
 		}
-		credentialRunner, e := migrations.NewRunner(CredentialMigrationSource{Base: StatusMigrationSource{Base: MigrationSource{}, Version: 12}, Version: 13}, backend)
+		credentialRunner, e := migrations.NewRunner(CredentialMigrationSource{Base: StatusMigrationSource{Base: kernelHistory, Version: 12}, Version: 13}, backend)
 		if e != nil {
 			t.Fatal(e)
 		}
@@ -178,7 +201,7 @@ func TestPostgresIntegration(t *testing.T) {
 	t.Run("password hash upgrade", func(t *testing.T) { testPasswordHashUpgrade(t, ctx, pool, repo) })
 	t.Run("user authorization admission", func(t *testing.T) { testUserAuthorizationAdmission(t, ctx, pool, repo) })
 	t.Run("credential compromise transaction", func(t *testing.T) {
-		compromiseRunner, e := migrations.NewRunner(CredentialCompromiseMigrationSource{Base: CredentialMigrationSource{Base: StatusMigrationSource{Base: MigrationSource{}, Version: 12}, Version: 13}, Version: 14}, backend)
+		compromiseRunner, e := migrations.NewRunner(CredentialCompromiseMigrationSource{Base: CredentialMigrationSource{Base: StatusMigrationSource{Base: kernelHistory, Version: 12}, Version: 13}, Version: 14}, backend)
 		if e != nil {
 			t.Fatal(e)
 		}
@@ -192,7 +215,7 @@ func TestPostgresIntegration(t *testing.T) {
 		testCredentialCompromise(t, ctx, pool, repo)
 	})
 	t.Run("directory authority", func(t *testing.T) {
-		authorityRunner, e := migrations.NewRunner(DirectoryAuthorityMigrationSource{Base: CredentialCompromiseMigrationSource{Base: CredentialMigrationSource{Base: StatusMigrationSource{Base: MigrationSource{}, Version: 12}, Version: 13}, Version: 14}, Version: 15, GlobalAuthorityID: "deployment'\\opaque", TenantIDs: []identity.TenantID{"directory"}}, backend)
+		authorityRunner, e := migrations.NewRunner(DirectoryAuthorityMigrationSource{Base: CredentialCompromiseMigrationSource{Base: CredentialMigrationSource{Base: StatusMigrationSource{Base: kernelHistory, Version: 12}, Version: 13}, Version: 14}, Version: 15, GlobalAuthorityID: "deployment'\\opaque", TenantIDs: []identity.TenantID{"directory"}}, backend)
 		if e != nil {
 			t.Fatal(e)
 		}
@@ -348,7 +371,7 @@ func TestPostgresIntegration(t *testing.T) {
 		}
 	})
 	t.Run("credential replacement transaction", func(t *testing.T) {
-		base := DirectoryAuthorityMigrationSource{Base: CredentialCompromiseMigrationSource{Base: CredentialMigrationSource{Base: StatusMigrationSource{Base: MigrationSource{}, Version: 12}, Version: 13}, Version: 14}, Version: 15, GlobalAuthorityID: "deployment'\\opaque", TenantIDs: []identity.TenantID{"directory"}}
+		base := DirectoryAuthorityMigrationSource{Base: CredentialCompromiseMigrationSource{Base: CredentialMigrationSource{Base: StatusMigrationSource{Base: kernelHistory, Version: 12}, Version: 13}, Version: 14}, Version: 15, GlobalAuthorityID: "deployment'\\opaque", TenantIDs: []identity.TenantID{"directory"}}
 		replacementRunner, e := migrations.NewRunner(CredentialReplacementMigrationSource{Base: base, Version: 16}, backend)
 		if e != nil {
 			t.Fatal(e)
@@ -362,11 +385,9 @@ func TestPostgresIntegration(t *testing.T) {
 		testCredentialReplacement(t, ctx, pool, repo)
 	})
 	t.Run("credential reset transaction", func(t *testing.T) {
-		base := DirectoryAuthorityMigrationSource{Base: CredentialCompromiseMigrationSource{Base: CredentialMigrationSource{Base: StatusMigrationSource{Base: MigrationSource{}, Version: 12}, Version: 13}, Version: 14}, Version: 15, GlobalAuthorityID: "deployment'\\opaque", TenantIDs: []identity.TenantID{"directory"}}
+		base := DirectoryAuthorityMigrationSource{Base: CredentialCompromiseMigrationSource{Base: CredentialMigrationSource{Base: StatusMigrationSource{Base: kernelHistory, Version: 12}, Version: 13}, Version: 14}, Version: 15, GlobalAuthorityID: "deployment'\\opaque", TenantIDs: []identity.TenantID{"directory"}}
 		history := CredentialReplacementMigrationSource{Base: base, Version: 16}
-		resetHistory := CredentialResetMigrationSource{Base: history, Version: 17}
-		preparedHistory := PreparationMigrationSource{Base: resetHistory, Version: 18}
-		runner, err := migrations.NewRunner(AdmissionPreparationMigrationSource{Base: preparedHistory, Version: 19}, backend)
+		runner, err := migrations.NewRunner(CredentialResetMigrationSource{Base: history, Version: 17}, backend)
 		if err != nil {
 			t.Fatal(err)
 		}

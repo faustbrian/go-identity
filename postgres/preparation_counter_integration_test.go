@@ -152,10 +152,11 @@ func testPreparedCommandCounters(t *testing.T, ctx context.Context, pool *databa
 				// an actual counter-profile commit, not fabricated metadata.
 				testPreparedFeatureQuery(t, ctx, c, phase, command, plan, true)
 			}
+			generatedBeforeDenial := phase.generated.Load()
 			denied, deniedPlan := input()
 			d, _ := denied.Feature()
 			result, err = c.ExecutePreparedFeature(ctx, denied, deniedPlan)
-			if result.Outcome != identity.CommitOutcomeNotCommitted || !errors.As(err, new(identity.ForbiddenError)) || phase.generated.Load() != 1 {
+			if result.Outcome != identity.CommitOutcomeNotCommitted || !errors.As(err, new(identity.ForbiddenError)) || phase.generated.Load() != generatedBeforeDenial {
 				t.Fatal("counter denial generated output", result.Outcome, err)
 			}
 			var audits int
@@ -163,7 +164,7 @@ func testPreparedCommandCounters(t *testing.T, ctx context.Context, pool *databa
 				t.Fatal("denied charge/audit missing", e)
 			}
 			replay, e = c.ExecutePreparedFeature(ctx, denied, deniedPlan)
-			if e != nil || replay.Outcome != identity.CommitOutcomeNotCommitted || phase.generated.Load() != 1 {
+			if e != nil || replay.Outcome != identity.CommitOutcomeNotCommitted || phase.generated.Load() != generatedBeforeDenial {
 				t.Fatal("denied replay repeated generation", e)
 			}
 		})

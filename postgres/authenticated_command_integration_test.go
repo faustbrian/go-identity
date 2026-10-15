@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	authentication "github.com/faustbrian/go-authentication"
-	authorization "github.com/faustbrian/go-authorization"
+	authentication "github.com/faustbrian/go-authentication/v2"
+	authorization "github.com/faustbrian/go-authorization/v3"
 	"github.com/faustbrian/go-clock"
 	identity "github.com/faustbrian/go-identity"
 	database "github.com/faustbrian/go-postgres"

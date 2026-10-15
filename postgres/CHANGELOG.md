@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Adopt authentication v2, authorization v3, password v2 and the matching
+  identity kernel source. Consumers supplying primitive values must use those
+  major imports. Correct the existing migrations pseudo-version to Go's
+  canonical public version for the same source commit; no migration bytes or
+  stored ledger identity change.
+
 - Adopt capability v2 public proof/grant types and explicit trusted issuer
   policy. Update capability imports and issuer-owned keys/configuration; token
   framing and native transaction/recovery ownership remain unchanged.

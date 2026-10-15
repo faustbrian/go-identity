@@ -7,7 +7,7 @@ import (
 	"errors"
 	"time"
 
-	authorization "github.com/faustbrian/go-authorization"
+	authorization "github.com/faustbrian/go-authorization/v3"
 	identity "github.com/faustbrian/go-identity"
 	"github.com/jackc/pgx/v5"
 )

@@ -4,6 +4,7 @@ package postgres
 
 import (
 	"context"
+	"crypto/hmac"
 	"encoding/base64"
 	"errors"
 	"strconv"
@@ -12,7 +13,8 @@ import (
 	"time"
 
 	"github.com/faustbrian/go-audit"
-	"github.com/faustbrian/go-authorization"
+	"github.com/faustbrian/go-authentication/v2"
+	"github.com/faustbrian/go-authorization/v3"
 	"github.com/faustbrian/go-clock"
 	identity "github.com/faustbrian/go-identity"
 	database "github.com/faustbrian/go-postgres"
@@ -26,6 +28,52 @@ type sqlOTPDomain struct {
 	apply    OTPApplyWork
 	finalize OTPFinalizeWork
 	release  OTPReleaseWork
+}
+
+// Prepared MFA invokes the non-consuming precheck before reservation. Do not
+// inherit the denial-only unit probe here: this fixture represents a correct
+// synthetic submission against a live SQL challenge, not OTP cryptography or
+// production wrong-attempt accounting.
+func (p *sqlOTPDomain) RecordOTPAttemptDenial(ctx context.Context, w OTPAttemptWork) (OTPAttemptDisposition, error) {
+	b, err := w.Binding(p)
+	if err != nil {
+		return 0, err
+	}
+	if _, err := w.Binding(&sqlOTPDomain{}); err == nil {
+		return 0, invalidWork()
+	}
+	command, err := w.NativeCommand(p)
+	s, ok := command.Feature()
+	if err != nil || !ok || s.Binding != b.Command {
+		return 0, invalidWork()
+	}
+	code, ok := command.OneTimeCode()
+	if !ok {
+		return 0, invalidWork()
+	}
+	expected, err := authentication.NewOneTimeCode("123456")
+	if err != nil {
+		return 0, err
+	}
+	key, scope := [32]byte{1}, []byte(b.Command.CommandID)
+	got, err := code.KeyedDigest(key, scope)
+	if err != nil {
+		return 0, err
+	}
+	want, err := expected.KeyedDigest(key, scope)
+	if err != nil || !hmac.Equal(got[:], want[:]) {
+		return 0, identity.ForbiddenError{}
+	}
+	rows, err := w.Query(ctx, `SELECT version::text FROM public.otp_reservation_fixture WHERE tenant_id=$1 AND challenge_id=$2 AND state='issued' AND expiry>clock_timestamp() FOR UPDATE`, string(b.Command.TenantID), b.Plan.ChallengeID)
+	if err != nil {
+		return 0, err
+	}
+	defer rows.Close()
+	var version string
+	if !rows.Next() || rows.Scan(&version) != nil || rows.Next() || rows.Err() != nil || version != strconv.FormatUint(b.Plan.ExpectedVersion, 10) {
+		return 0, identity.ForbiddenError{}
+	}
+	return OTPAttemptUnchanged, nil
 }
 
 func (p *sqlOTPDomain) CheckOTP(ctx context.Context, w OTPApplyWork) error {

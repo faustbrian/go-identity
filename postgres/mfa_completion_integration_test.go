@@ -165,9 +165,9 @@ CREATE TABLE IF NOT EXISTS identity.capability_recovery_fixture(tenant_id text N
 	if _, err := pool.Raw().Exec(ctx, `CREATE TABLE IF NOT EXISTS public.otp_reservation_fixture(tenant_id text PRIMARY KEY,challenge_id text NOT NULL,state text NOT NULL,command_id text,fingerprint bytea,attempt_id text,generation numeric,version numeric NOT NULL,expiry timestamptz NOT NULL)`); err != nil {
 		t.Fatal(err)
 	}
-	for _, mode := range []string{"commit", "apply-denied", "commit-denied", "audit-failure", "outbox-failure", "finalize-failure", "competing-command", "prepared-otp", "prepared-otp-denied", "prepared-totp", "prepared-totp-denied", "counted-denied", "counted-unchanged", "counted-error", "counted-panic", "counted-zero", "counted-rows", "counted-audit-failure"} {
+	for _, mode := range []string{"commit", "apply-denied", "commit-denied", "audit-failure", "outbox-failure", "finalize-failure", "competing-command", "prepared-otp", "prepared-otp-denied", "prepared-otp-wrong", "prepared-totp", "prepared-totp-denied", "counted-denied", "counted-unchanged", "counted-error", "counted-panic", "counted-zero", "counted-rows", "counted-audit-failure"} {
 		t.Run(mode, func(t *testing.T) {
-			preparedOTP := mode == "prepared-otp" || mode == "prepared-otp-denied"
+			preparedOTP := strings.HasPrefix(mode, "prepared-otp")
 			preparedTOTP := mode == "prepared-totp" || mode == "prepared-totp-denied"
 			prepared := preparedOTP || preparedTOTP
 			counted := strings.HasPrefix(mode, "counted-")
@@ -195,7 +195,11 @@ CREATE TABLE IF NOT EXISTS identity.capability_recovery_fixture(tenant_id text N
 			command := featureCodecCommand(t, identity.FeatureCommandSpec{Binding: b, Operation: op, Fields: []identity.FeatureField{{Name: "proof-id", Value: identity.FeatureValue{Kind: identity.FeatureText, Text: p.Capability.CapabilityID}}}})
 			if prepared || counted {
 				s, _ := command.Feature()
-				command = codeCodecCommand(t, s, "123456")
+				code := "123456"
+				if mode == "prepared-otp-wrong" {
+					code = "654321"
+				}
+				command = codeCodecCommand(t, s, code)
 			}
 			native := &mfaCompletionAtomicPhase{mfaCompletionValidationParticipant: mfaCompletionValidationParticipant{magicLinkPreparationParticipant: magicLinkPreparationParticipant{outputPreparationParticipant: outputPreparationParticipant{scopeFeatureParticipant{operations: []identity.FeatureOperation{op}}}, expected: command, proof: *p.Capability}, completion: *p.MFACompletion}, operation: op, failApply: mode == "apply-denied", failCommit: mode == "commit-denied"}
 			if mode == "prepared-otp-denied" || mode == "prepared-totp-denied" {
@@ -332,7 +336,14 @@ CREATE TABLE IF NOT EXISTS identity.capability_recovery_fixture(tenant_id text N
 				if e := pool.Raw().QueryRow(ctx, `SELECT state,(SELECT count(*) FROM public.identity_test_mfa_completion WHERE command_id=$2) FROM public.otp_reservation_fixture WHERE tenant_id=$1`, string(b.TenantID), string(b.CommandID)).Scan(&state, &effects); e != nil {
 					t.Fatal(e)
 				}
-				if mode == "prepared-otp" {
+				if mode == "prepared-otp-wrong" {
+					// This success-path fixture has no durable wrong-attempt
+					// ledger. Its rejection must fail closed, not claim a
+					// classified denial or consume the legitimate challenge.
+					if err == nil || result.Outcome == identity.CommitOutcomeCommitted || state != "issued" || effects != 0 || otpOwner.calls.Load() != 0 {
+						t.Fatal("wrong prepared code reached consuming reservation", state, effects, err)
+					}
+				} else if mode == "prepared-otp" {
 					if err != nil || result.Outcome != identity.CommitOutcomeCommitted || state != "finalized" || effects != 1 {
 						t.Fatal("prepared OTP completion not atomic", state, effects, err)
 					}
@@ -340,7 +351,7 @@ CREATE TABLE IF NOT EXISTS identity.capability_recovery_fixture(tenant_id text N
 					if err != nil || result.Outcome != identity.CommitOutcomeCommitted || otpOwner.calls.Load() != 1 {
 						t.Fatal("prepared OTP replay compared again", err)
 					}
-				} else if err == nil || state != "released" || effects != 0 {
+				} else if err == nil || state != "released" || effects != 0 || otpOwner.calls.Load() != 1 {
 					t.Fatal("prepared OTP denial retained effects", state, effects, err)
 				}
 				return

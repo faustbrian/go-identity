@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	authority "github.com/faustbrian/go-authorization/postgres"
+	authority "github.com/faustbrian/go-authorization/v3/postgres"
 	identity "github.com/faustbrian/go-identity"
 	database "github.com/faustbrian/go-postgres"
 	"github.com/jackc/pgx/v5"

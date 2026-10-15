@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/faustbrian/go-authorization"
+	"github.com/faustbrian/go-authorization/v3"
 	"github.com/faustbrian/go-clock"
 	identity "github.com/faustbrian/go-identity"
 )
@@ -25,7 +25,10 @@ func (*preparedFeaturePhase) PrepareRequestKey(context.Context, RequestKeyPrepar
 func testPreparedFeatureQuery(t *testing.T, ctx context.Context, c *Coordinator, phase *preparedFeaturePhase, command identity.Command, plan CommandPlan, installed ...bool) {
 	t.Helper()
 	if len(installed) == 0 || !installed[0] {
-		if _, err := c.pool.Raw().Exec(ctx, requestKeySQL+requestKeyPreparationSQL); err != nil {
+		// Install only on the legacy fixture path. Counter-profile callers have
+		// already upgraded beyond admission; replaying this older check would
+		// reject their valid profile-3/4 history.
+		if _, err := c.pool.Raw().Exec(ctx, requestKeySQL+requestKeyPreparationSQL+admissionPreparationSchemaSQL); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -136,7 +139,7 @@ func testPreparedFeatureQuery(t *testing.T, ctx context.Context, c *Coordinator,
 	if snapshot() != before || phase.generated.Load() != 1 || phase.restored.Load() != 1 {
 		t.Fatal("query changed original workflow")
 	}
-	testOriginalInputQuery(t, ctx, c, phase, command, plan, digest, safe, input)
+	testOriginalInputQuery(t, ctx, c, phase, command, plan, fields, input)
 }
 
 type originalInputReader interface {
@@ -146,14 +149,11 @@ type originalInputReader interface {
 // SU-08: recovery needs only the immutable input, including before generation
 // and after a classified rollback. Real journal transitions remain the sole
 // outcome owner; an input read must never classify or execute the attempt.
-func testOriginalInputQuery(t *testing.T, ctx context.Context, c *Coordinator, phase *preparedFeaturePhase, command identity.Command, plan CommandPlan, digest [32]byte, safe, input []byte) {
+func testOriginalInputQuery(t *testing.T, ctx context.Context, c *Coordinator, phase *preparedFeaturePhase, command identity.Command, plan CommandPlan, fields []identity.FeatureField, input []byte) {
 	t.Helper()
 	reader, ok := any(c).(originalInputReader)
 	if !ok {
 		t.Fatal("kernel has no password-free original-input read")
-	}
-	if _, err := c.pool.Raw().Exec(ctx, admissionPreparationSchemaSQL); err != nil {
-		t.Fatal(err)
 	}
 	for _, state := range []string{"committed", "input-only", "pending", "started-without-output", "aborted"} {
 		t.Run(state, func(t *testing.T) {
@@ -163,6 +163,16 @@ func testOriginalInputQuery(t *testing.T, ctx context.Context, c *Coordinator, p
 			if state != "committed" {
 				s.Binding.CommandID, _ = identity.NewCommandID()
 				s.Binding.CorrelationID = string(s.Binding.CommandID)
+				// Each constructed state needs its own counter allowance. Sharing
+				// the committed tenant would exercise quota denial, not recovery.
+				s.Binding.TenantID = identity.TenantID("original-" + s.Binding.CommandID)
+			}
+			scope := RequestKeyScope{TenantID: s.Binding.TenantID, ActorID: s.Binding.ActorID, ActorKind: s.Binding.ActorKind, Method: "POST", RouteID: s.Binding.OperationID}
+			digest, safe, err := requestIntentFingerprint(scope, fields, 7, [32]byte{1})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if state != "committed" {
 				seed, err := securityMutationAudit(ctx, s.Binding, 0, 1, time.Now().UTC().Truncate(time.Microsecond), "committed", p.Audits[0].EventType, p.SubjectType, s.Binding.RecordID, p.Audits[0].RetentionClass, true)
 				if err != nil {
 					t.Fatal(err)

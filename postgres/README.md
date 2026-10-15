@@ -1,5 +1,10 @@
 # Identity PostgreSQL
 
+This experimental adapter uses authentication v2, authorization v3, capability
+v2 and password v2 together with the matching identity kernel. Update supplied
+primitive values to those major imports. Existing migration source bytes and
+stored database history remain unchanged.
+
 ## Pending managed email attachment
 
 The distinct `identity.email.verification-send.resend-v1` declaration reuses

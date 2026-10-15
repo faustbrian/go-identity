@@ -9,7 +9,7 @@ import (
 
 	identity "github.com/faustbrian/go-identity"
 	migrations "github.com/faustbrian/go-migrations/v3"
-	primitive "github.com/faustbrian/go-password"
+	primitive "github.com/faustbrian/go-password/v2"
 )
 
 func resetPlanFixture(t *testing.T) (identity.Command, CommandPlan, CredentialResetIntent) {
