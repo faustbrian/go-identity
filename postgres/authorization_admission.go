@@ -12,8 +12,10 @@ import (
 )
 
 // UserAuthorizationAdmission binds one user-domain authorization lifecycle epoch.
-// Scope.SubjectID must equal the immutable command's effective UserID, not its
-// actor or workload. Scope.PolicyNamespace comes from trusted native composition
+// Scope.SubjectID must equal the immutable command's effective UserID when used
+// with RequireActiveUserAuthorization, or its human ActorID with the explicitly
+// actor-bound RequireActiveActorAuthorization. Workload identities are excluded.
+// Scope.PolicyNamespace comes from trusted native composition
 // and must own user-ID uniqueness. Version is a positive full-width counter,
 // independent of policy revision. Native adapters must freeze every field into
 // their keyed command before reservation and compare that intent at execution.

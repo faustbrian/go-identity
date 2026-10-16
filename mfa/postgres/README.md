@@ -1,5 +1,10 @@
 # PostgreSQL MFA authority (in development)
 
+`RequireAdministrativeEmailFactors` fences both the actual human actor and target
+at their independently retained known-empty generations inside the existing
+email-removal Work. Acquire canonical subject locks first. Missing, changed or
+nonempty authority denies; this API never initializes factors or grants a proof.
+
 `NewOTPFactorReader` reads confirmed owned OTP factors and their exact verified
 recipients only under a real live OTP-enabled child grant. `Metadata` and
 `Recipient` are original version/recipient custody, not code verification or

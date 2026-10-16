@@ -12,6 +12,39 @@ import (
 	identity "github.com/faustbrian/go-identity"
 )
 
+func TestAdministrativeEmailRemovalBindsActorDirectoryWithoutChangingSelfCustody(t *testing.T) {
+	i := EmailRemovalIntent{Change: identity.IdentifierChange{TenantID: "tenant", UserID: "target", ID: "address", Action: identity.IdentifierRemove, ExpectedUserVersion: 9, ExpectedAuthorityVersion: 4, ExpectedIdentifierVersion: 2, ExpectedVerificationVersion: 3}, ComparisonProfile: "email-v1", Reason: "admin-requested"}
+	type wire EmailRemovalIntent
+	plain, err := json.Marshal(wire(i))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(plain, &fields); err != nil {
+		t.Fatal(err)
+	}
+	fields["Administration"] = json.RawMessage(`{"GlobalAuthorityID":"deployment","GlobalVersion":5,"TenantVersion":7}`)
+	plain, err = json.Marshal(fields)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var selected wire
+	if err := json.Unmarshal(plain, &selected); err != nil {
+		t.Fatal(err)
+	}
+	frozen, err := EmailRemovalFields(EmailRemovalIntent(selected))
+	if err != nil || len(frozen) != 13 {
+		t.Fatal("administrative removal omitted original actor directory scope/epochs", err)
+	}
+	seen := map[string]identity.FeatureValue{}
+	for _, f := range frozen {
+		seen[f.Name] = f.Value
+	}
+	if seen["email-removal.actor-global"].Text != "deployment" || seen["email-removal.actor-global-version"].Uint64 != 5 || seen["email-removal.actor-tenant-version"].Uint64 != 7 {
+		t.Fatal("actor directory evidence was not fingerprinted")
+	}
+}
+
 func TestEmailRemovalReplacementFingerprintAndLegacyCustody(t *testing.T) {
 	i := EmailRemovalIntent{Change: identity.IdentifierChange{TenantID: "tenant", UserID: "user", ID: "address", Action: identity.IdentifierRemove, ExpectedUserVersion: 9, ExpectedAuthorityVersion: 4, ExpectedIdentifierVersion: 2, ExpectedVerificationVersion: 3}, ComparisonProfile: "email-v1", Reason: "user-requested"}
 	type wire EmailRemovalIntent

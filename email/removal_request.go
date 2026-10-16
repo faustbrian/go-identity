@@ -34,7 +34,10 @@ const (
 // Network and Primary are trusted composition, not browser authority claims.
 // Retrying must retain this complete original input and idempotency key.
 type AddressRemoveRequest struct {
-	TenantID                    identity.TenantID
+	TenantID identity.TenantID
+	// TargetSubjectID explicitly selects a distinct administrative target.
+	// Omitted retains self scope; this selector never grants authorization.
+	TargetSubjectID             identity.UserID
 	AddressID                   identity.IdentifierID
 	ExpectedIdentifierVersion   uint64
 	ExpectedVerificationVersion uint64
@@ -88,7 +91,14 @@ func (r AddressRemoveRequest) Validate() error {
 	} else if r.ReplacementPrimary != (identity.IdentifierPrimarySelection{}) {
 		return ErrInvalidRemoval
 	}
-	if err := validateRequestPrimary(r.TenantID, r.Primary, r.Caller, r.Network, nil, r.IdempotencyKey, "identity.email.address-remove"); err != nil {
+	target := identity.UserID(r.Caller.Request.Subject.ID)
+	if r.TargetSubjectID != "" {
+		if _, err := identity.ParseIdentifierID(string(r.TargetSubjectID)); err != nil || r.TargetSubjectID == target {
+			return ErrInvalidRemoval
+		}
+		target = r.TargetSubjectID
+	}
+	if err := validateTargetRequestPrimary(r.TenantID, r.Primary, r.Caller, target, r.Network, nil, r.IdempotencyKey, "identity.email.address-remove"); err != nil {
 		return ErrInvalidRemoval
 	}
 	return nil

@@ -23,6 +23,27 @@ type EmailRemovalIntent struct {
 	// ReplacementPrimary is omitted from legacy original custody when zero.
 	// A selected value is independent exact intent, never an inferred successor.
 	ReplacementPrimary identity.IdentifierPrimarySelection `json:",omitzero"`
+	// Administration is nonzero only for a distinct human actor. It binds the
+	// original directory epochs used before canonical actor/target row locks.
+	// This is not an authorization decision or authentication proof.
+	Administration EmailRemovalAdministration `json:",omitzero"`
+}
+
+// EmailRemovalAdministration preserves original directory scope/epochs for
+// explicitly administrative removal. Tenant comes from Change/CommandBinding;
+// actor comes only from immutable ActorID. Zero retains the legacy self profile.
+// The entire value must be frozen in EmailRemovalFields and retained custody.
+type EmailRemovalAdministration struct {
+	GlobalAuthorityID            string
+	GlobalVersion, TenantVersion uint64
+}
+
+func (a EmailRemovalAdministration) directory(tenant identity.TenantID) DirectoryAuthorityAdmission {
+	return DirectoryAuthorityAdmission{Query: DirectoryAuthorityQuery{GlobalAuthorityID: a.GlobalAuthorityID, TenantID: tenant}, GlobalVersion: a.GlobalVersion, TenantVersion: a.TenantVersion}
+}
+
+func (a EmailRemovalAdministration) valid(tenant identity.TenantID) bool {
+	return a.directory(tenant).Query.Validate() == nil && a.GlobalVersion != 0 && a.TenantVersion != 0
 }
 
 // EmailRemovalContributor supplies immutable removal intent and the existing
@@ -106,12 +127,18 @@ func EmailRemovalFields(i EmailRemovalIntent) ([]identity.FeatureField, error) {
 	if i.ReplacementPrimary != (identity.IdentifierPrimarySelection{}) {
 		fields = append(fields, text("replacement-identifier", string(i.ReplacementPrimary.ID)), number("replacement-identifier-version", i.ReplacementPrimary.ExpectedIdentifierVersion), number("replacement-verification-version", i.ReplacementPrimary.ExpectedVerificationVersion))
 	}
+	if i.Administration != (EmailRemovalAdministration{}) {
+		if !i.Administration.valid(c.TenantID) {
+			return nil, invalidEmailRemoval()
+		}
+		fields = append(fields, text("actor-global", i.Administration.GlobalAuthorityID), number("actor-global-version", i.Administration.GlobalVersion), number("actor-tenant-version", i.Administration.TenantVersion))
+	}
 	return fields, nil
 }
 
 func emailRemovalCommand(p EmailRemovalContributor, c identity.Command, plan CommandPlan) (EmailRemovalIntent, *EmailRemovalDomain, error) {
 	s, ok := commandFeature(c)
-	if !ok || s.Operation != emailRemovalOperation() || plan.Feature == nil || plan.Feature.Operation != s.Operation || plan.Feature.Contributor != (ContributorDescriptor{Owner: "identity/email/postgres", ContractID: "identity.email", Version: 1}) || plan.SubjectType != "identifier" || plan.Capability != nil || plan.OTP != nil || plan.CapabilityIssuance != nil || plan.Delivery != nil || plan.Lifecycle == nil || plan.Lifecycle.EventType != "identifier.removed.v1" || s.Binding.ActorKind != authorization.SubjectUser || string(s.Binding.ActorID) != string(s.Binding.UserID) || len(plan.Audits) == 0 {
+	if !ok || s.Operation != emailRemovalOperation() || plan.Feature == nil || plan.Feature.Operation != s.Operation || plan.Feature.Contributor != (ContributorDescriptor{Owner: "identity/email/postgres", ContractID: "identity.email", Version: 1}) || plan.SubjectType != "identifier" || plan.Capability != nil || plan.OTP != nil || plan.CapabilityIssuance != nil || plan.Delivery != nil || plan.Lifecycle == nil || plan.Lifecycle.EventType != "identifier.removed.v1" || s.Binding.ActorKind != authorization.SubjectUser || len(plan.Audits) == 0 {
 		return EmailRemovalIntent{}, nil, invalidEmailRemoval()
 	}
 	if _, present := c.SessionToken(); !present {
@@ -124,6 +151,10 @@ func emailRemovalCommand(p EmailRemovalContributor, c identity.Command, plan Com
 	}
 	i, d, err := p.EmailRemoval(c)
 	if err != nil || d == nil || d.directory == nil || d.directory.repository == nil || !d.directory.reuse.valid() || d.cascade == nil || !slices.Contains(d.cascade.config.Reasons, i.Reason) || d.directory.comparison != i.ComparisonProfile || i.Change.TenantID != s.Binding.TenantID || i.Change.UserID != s.Binding.UserID || string(i.Change.ID) != s.Binding.RecordID || plan.Lifecycle.BeforeVersion != i.Change.ExpectedIdentifierVersion || plan.Lifecycle.AfterVersion != i.Change.ExpectedIdentifierVersion+1 {
+		return EmailRemovalIntent{}, nil, invalidEmailRemoval()
+	}
+	administrative := string(s.Binding.ActorID) != string(s.Binding.UserID)
+	if administrative != (i.Administration != (EmailRemovalAdministration{})) || administrative && !i.Administration.valid(s.Binding.TenantID) {
 		return EmailRemovalIntent{}, nil, invalidEmailRemoval()
 	}
 	fields, err := EmailRemovalFields(i)
@@ -204,6 +235,11 @@ func prepareEmailRemoval(ctx context.Context, w Work, c identity.Command) error 
 	i, d, err := emailRemovalCommand(phase, c, plan.snapshot())
 	if err != nil || d.directory.repository != repo {
 		return w.fail(ctx, invalidEmailRemoval())
+	}
+	if i.Administration != (EmailRemovalAdministration{}) {
+		if err := lockEmailRemovalSubjects(ctx, w, w.state.binding, i.Administration); err != nil {
+			return err
+		}
 	}
 	before, now, err := lockIdentifierPartition(ctx, w, i.Change)
 	if err != nil {

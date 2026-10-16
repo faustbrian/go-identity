@@ -137,7 +137,11 @@ func boundedRequestAddress(address AddressInput, optional bool) bool {
 }
 
 func validateRequestPrimary(tenant identity.TenantID, p RequestPrimary, caller authorization.DecisionContext, network string, callback *url.URL, key identity.IdempotencyKey, action authorization.Action) error {
-	if key == (identity.IdempotencyKey{}) || caller.Request.Subject.Kind != authorization.SubjectUser || caller.PolicyRevision == 0 || caller.Request.Resource.ID != authorization.ResourceID(caller.Request.Subject.ID) || validateEmailCaller(tenant, caller, action) != nil {
+	return validateTargetRequestPrimary(tenant, p, caller, identity.UserID(caller.Request.Subject.ID), network, callback, key, action)
+}
+
+func validateTargetRequestPrimary(tenant identity.TenantID, p RequestPrimary, caller authorization.DecisionContext, target identity.UserID, network string, callback *url.URL, key identity.IdempotencyKey, action authorization.Action) error {
+	if key == (identity.IdempotencyKey{}) || caller.Request.Subject.Kind != authorization.SubjectUser || caller.PolicyRevision == 0 || caller.Request.Resource.ID != authorization.ResourceID(target) || validateEmailCaller(tenant, caller, action) != nil {
 		return ErrInvalidVerification
 	}
 	if callback != nil {

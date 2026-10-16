@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Preserve distinct human actors in target-scoped pending email-removal cascade
+  receipts. Structural receipt validation grants no administrative authority.
+
 - Add an exact versioned removal-with-primary proposal that advances aggregate
   authority once and preserves the surviving address's verification age.
 

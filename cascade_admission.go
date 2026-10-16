@@ -45,8 +45,9 @@ func IdentifierRemovalConsumers() []string {
 }
 
 // Validate checks exact pending admission shape and command scope, not database
-// durability, current authority or consumer acknowledgement. The selected native
-// self-removal profile is the only supported feature admission here. Noncommitted
+// durability, current authority or consumer acknowledgement. Self and explicitly
+// authorized administrative removal retain the target's scope, not the actor's.
+// Native command admission owns authorization of a distinct human actor. Noncommitted
 // outcomes must not carry this receipt; CommandResult enforces that distinction.
 func (r LifecycleCascadeAdmission) Validate(b CommandBinding) error {
 	invalid := InvalidInputError{Field: "cascade_admission"}
@@ -57,7 +58,7 @@ func (r LifecycleCascadeAdmission) Validate(b CommandBinding) error {
 	if _, err := ParseCascadeID(string(r.CascadeID)); err != nil {
 		return invalid
 	}
-	if r.Generation != 1 || r.Kind != IdentifierRemovalCascade || r.TenantID != b.TenantID || r.UserID != b.UserID || string(r.IdentifierID) != b.RecordID || r.AuthorityVersion <= 1 || r.ManifestVersion != "identity-lifecycle-consumers-v1" || r.Status != RevocationPending || len(r.ExternalLimitations) != 0 || b.OperationID != "identity.email.address-remove" || b.SchemaID != "identity.email.address-remove.native-v1" || b.SchemaVersion != 1 || b.ActorKind != authorization.SubjectUser || string(b.ActorID) != string(b.UserID) {
+	if r.Generation != 1 || r.Kind != IdentifierRemovalCascade || r.TenantID != b.TenantID || r.UserID != b.UserID || string(r.IdentifierID) != b.RecordID || r.AuthorityVersion <= 1 || r.ManifestVersion != "identity-lifecycle-consumers-v1" || r.Status != RevocationPending || len(r.ExternalLimitations) != 0 || b.OperationID != "identity.email.address-remove" || b.SchemaID != "identity.email.address-remove.native-v1" || b.SchemaVersion != 1 || b.ActorKind != authorization.SubjectUser {
 		return invalid
 	}
 	for _, id := range []string{string(r.TenantID), string(r.UserID), string(r.IdentifierID)} {

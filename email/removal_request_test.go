@@ -3,12 +3,42 @@ package email_test
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/faustbrian/go-authorization/v3"
 	"strings"
 	"testing"
 
 	identity "github.com/faustbrian/go-identity"
 	"github.com/faustbrian/go-identity/email"
 )
+
+func TestAddressRemovalKeepsExplicitTargetSeparateFromFreshActor(t *testing.T) {
+	base := managedSendRequest(t)
+	base.Caller.Request.Action = "identity.email.address-remove"
+	base.Primary.Proof.Action = "identity.email.address-remove"
+	r := email.AddressRemoveRequest{TenantID: base.TenantID, TargetSubjectID: "target-user", AddressID: "target-address", ExpectedIdentifierVersion: 2, ExpectedVerificationVersion: 3, Reason: "admin-requested", PrimaryDisposition: email.LeavePrimaryUnassigned, RecoveryDisposition: email.PreserveVerifiedEmailRecovery, IdempotencyKey: base.IdempotencyKey, Primary: base.Primary, Caller: base.Caller, Network: base.Network}
+	r.Caller.Request.Resource.ID = authorization.ResourceID(r.TargetSubjectID)
+	if err := r.Validate(); err != nil {
+		t.Fatal("explicit administrative target lost its independent authenticated actor", err)
+	}
+	for _, mode := range []string{"omitted-target", "actor-substitution", "wrong-resource", "service-actor", "malformed-target"} {
+		bad := r
+		switch mode {
+		case "omitted-target":
+			bad.TargetSubjectID = ""
+		case "actor-substitution":
+			bad.Primary.Proof.Proof.Subject = string(r.TargetSubjectID)
+		case "wrong-resource":
+			bad.Caller.Request.Resource.ID = "other-target"
+		case "service-actor":
+			bad.Caller.Request.Subject.Kind = authorization.SubjectServiceAccount
+		case "malformed-target":
+			bad.TargetSubjectID = "invalid target"
+		}
+		if bad.Validate() == nil {
+			t.Fatal("target selector granted or substituted authority", mode)
+		}
+	}
+}
 
 func TestAddressRemovalRequiresOriginalProofAndExplicitDisposition(t *testing.T) {
 	base := managedSendRequest(t)

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Fence independent actor and target known-empty MFA generations inside native
+  administrative email removal. Missing, changed or enrolled authority denies;
+  no factor initialization or password-only downgrade is introduced.
+
 - Compose supported envelope v2 custody and matching public native participants.
   Callers supplying envelope/keyring services must use `/v2` types; stored
   ciphertext, original authority lifetimes and transaction ownership stay intact.

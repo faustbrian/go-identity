@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Fence human actor credential/authorization independently of the target during
+  administrative email removal. Lock directory authority and both user rows in
+  canonical order before participant admission; self-removal custody is unchanged.
+
 - Atomically promote an explicitly nominated verified replacement during native
   primary-email removal. Bind both independent predecessor versions, preserve
   legacy original-input encoding and reuse existing migrations and CAS writes.

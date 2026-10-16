@@ -2,6 +2,15 @@
 
 ## Safe self-removal
 
+For explicitly selected administrative removal, set `TargetSubjectID` to the
+other account. Keep `Caller.Request.Subject` and `Primary` bound to the actual
+administrator, and `Caller.Request.Resource` bound to that target. The native
+owner must independently enable this capability and authorize the exact current
+actor/action/tenant/target. Empty target keeps legacy self-removal. The selected
+password profile requires known-empty MFA for both accounts; enrolled or unknown
+authority denies without downgrade. Target session/capability effects never
+revoke or replace the administrator's session. This is a backend API, not a UI.
+
 `AddressRemoveRequest` names an exact address and independent identifier/
 verification versions, registered reason, original key and action-bound fresh
 `RequestPrimary`. Choose `PreserveRemainingPrimary` for a nonprimary target or

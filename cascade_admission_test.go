@@ -77,3 +77,15 @@ func TestRemovalReceiptRequiresExactPendingCascade(t *testing.T) {
 		t.Fatal("unrelated feature borrowed removal cascade")
 	}
 }
+
+func TestAdministrativeRemovalReceiptRetainsTargetCascadeAndDistinctHumanActor(t *testing.T) {
+	r := removalCascadeResult(t)
+	r.Binding.ActorID = "administrator"
+	if err := r.Validate(); err != nil {
+		t.Fatal("distinct human actor invalidated target-scoped historical cascade", err)
+	}
+	r.Cascade.UserID = identity.UserID(r.Binding.ActorID)
+	if r.Validate() == nil {
+		t.Fatal("actor substituted for cascade target")
+	}
+}

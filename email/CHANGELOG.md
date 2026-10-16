@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Support explicit administrative email-removal targets while retaining the
+  original actor's proof/session and exact target authorization. Empty target
+  preserves the self-removal contract; target selection grants no permission.
+
 - Require primary fail-closed audit acknowledgement for administrative address
   reads through `NewAuditedAddressQueryService`. The existing query constructor
   now selects self reads only; migrate administrative consumers to the audited

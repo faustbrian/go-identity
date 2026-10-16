@@ -9,6 +9,15 @@ stored database history remain unchanged.
 
 ### Native safe removal
 
+Administrative intents additionally freeze `EmailRemovalAdministration` with the
+actor's original global/tenant authority epochs. `RequireEmailRemovalSubjects`
+locks those authorities and both users in canonical order before either user's
+credential/factor/session checks; execution repeats this before identifier locks.
+Use `RequireActiveActorCredential` and `RequireActiveActorAuthorization` for
+the actual human actor, without replacing the target-scoped command binding.
+These fences grant no policy permission or proof. Native participants still own
+fresh original proof consumption, both MFA generations and exact target access.
+
 `EmailRemovalContributor` supplies frozen `EmailRemovalIntent` and the enlisted
 `EmailRemovalDomain`. The coordinator alone locks the complete partition and
 applies the existing directory writer. Native Apply owns original proof,
