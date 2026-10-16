@@ -2,7 +2,73 @@
 
 Activated on 2026-10-14. B1, B2 and B3 are closed; M04 email lifecycle is active.
 
-## Active: M04 email lifecycle; administrative-removal profile delivered
+## Active: M04 email lifecycle; pending-email OTP profile delivered
+
+- Pending-email OTP profile closed (2026-10-16 03:43 UTC): foundation
+  `cf3f5a4`, native/HTTP adapters `92f2dae` and reference `612ab05` are on
+  origin/main. Corrected adapter Required `38846434599` and exact reference
+  Required `38846764769` pass. Actual registered/verified/password-signed-in
+  consumers add a pending nonprimary address, independently issue/deliver its
+  code and verify it through native or explicitly selected reference HTTPS.
+  Exact identifier/audit/lifecycle effects and OTP consumption commit together;
+  old identifier-bound sessions deny. No primary replacement or session issuance.
+  Original Send and code-free recovery preserve original custody without
+  retargeting, comparison/debit, mutation or renewal. Current query authority
+  still controls historical disclosure. Missing/enrolled/changed factors deny.
+
+  Public dependencies with GOWORK off pass reference/runner race, tagged vet
+  and the real PostgreSQL/HTTPS/race selected journey set (70.044s):
+
+  ```sh
+  GOWORK=off go test -race -tags integration -count=1 -timeout=180s \
+    -run '^TestReferencePostgres(EmailOTPVerification|PasswordProtection|EmailManagementSharedHTTPS|EmailRemovalKeepsVerifiedSigninReset)$' .
+  ```
+
+  The thirteen OTP scenarios include native/direct HTTPS/selected reference,
+  factor denial, attempt exhaustion, authority withdrawal, rollback, code/code
+  and link/code contention and actual lost commit acknowledgement/recovery.
+  All affected owner race/static checks, bounded target/HTTP fuzz, scoped secrets,
+  catalog generator and local docs/structure pass. Complete independent source
+  review `/root/m04_emailotp_final_review` APPROVE binds base `5ff3fbb` and final
+  public84 snapshot `e18b895f4741d1f8a466cced509a8e3d354152b358ae2c299a0a4058e1e9aede`;
+  committed source matches that tree. Published runner
+  `v0.0.0-20261016034115-612ab051182e` initializes in an empty consumer directory
+  with GOWORK off and no database/listener or local source override.
+
+  The first prerequisite Required run `38845769882` failed on the public
+  inventory checksum misnamed `api_sha256`, not a credential. Native provenance
+  now names it `operation_inventory_sha256`; value/contracts and scanner controls
+  are unchanged. Scoped corrective CI passes; inherited full-history scanning
+  remains failed and is not full release qualification. No Tools/history repair,
+  scanner suppression, tag or deployment. Full M04 stays open: stronger-factor,
+  auto-signin, privacy/lifecycle completeness and final unit qualification remain.
+  Full delivered milestones3/39, no newly qualified unit.
+
+- Frozen managed-email OTP verification profile (2026-10-16 00:57 UTC), base
+  `5ff3fbb`: real registered/verified/password-signed-in user adds a pending
+  address through delivered management, requests a new purpose-bound code under
+  current original-session authority, captures delivery, submits the code and
+  reads the now-verified address. Select canonical `email_verification_otp`
+  before issuance and retain it through reservation, mutation and protected
+  audit. Link grants remain separate; no primary replacement, session issuance,
+  auto-signin, signup-wait continuation, phone or stronger-factor fallback.
+  Existing add owns its fresh password admission; verification-only code Send
+  does not add another password challenge. Known-empty MFA must remain genuine
+  and fenced; missing/enrolled/changed authority denies. Reuse OTP native Send,
+  counted reservation/check/finalize/release and kernel pending-identifier CAS;
+  no new store, replay journal or generic workflow engine. Owners: email/OTP
+  contracts, OTP PostgreSQL, kernel, MFA, native email orchestration, opt-in
+  HTTP/reference. Preserve legacy link schemas and released APIs. Suppliers
+  use current committed main contracts recorded in owning manifests. Bounded
+  mapper `/root/m04_otp_boundary` completed one pass plus correction removing
+  its unsupported second password-proof gate. Prove real full path, exact
+  selector/purpose/subject/target/version, current session/factor denial, wrong
+  attempt budgets/replay, link/code concurrency, rollback and original unknown
+  recovery. Focused TDD/native tests, real disposable PostgreSQL/HTTPS/race,
+  affected vet/fuzz, public pins/consumer proof, one complete independent review
+  and ordinary main/Required delivery close this profile; full M04 stays open.
+  OTP's own send command is its request provenance; no link grant or original
+  link-attachment command is required to authorize this distinct verification.
 
 - Administrative-removal profile closed (2026-10-16 00:43 UTC): foundation
   `9785b1c`, native password/HTTP `9ee4c44` and reference `ffc3b47` are on

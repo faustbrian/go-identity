@@ -3,6 +3,27 @@
 Implementation activated by the user on 2026-10-14. B1, B2 and B3 are closed;
 M04 email lifecycle is active.
 
+- Pending-email OTP profile closed (2026-10-16 03:43 UTC): source `cf3f5a4`,
+  native/HTTP `92f2dae` and reference `612ab05` are pushed to main; corrected
+  adapter/reference Required CI passes. Consumers can independently deliver and
+  submit a purpose-bound code for an existing pending nonprimary address via
+  native APIs or selected reference HTTPS. Verification, protected audit/lifecycle
+  and code consumption are atomic; old sessions deny. Original Send/recovery
+  retain metadata without retargeting, extra comparisons, address disclosure or
+  renewed authority. No login/session issuance or weaker-MFA fallback.
+
+  Thirteen OTP scenarios and affected password/link/retained-signin-reset
+  journeys pass against real PostgreSQL/HTTPS/race with public dependencies,
+  GOWORK off (70.044s). Affected owner/reference/runner race/static, bounded fuzz,
+  scoped secrets, docs/structure and complete independent source review pass.
+  The published runner initializes from an empty consumer directory without a
+  database/listener. A public inventory checksum false positive in the first
+  Required run was corrected by accurately naming private provenance; no scanner
+  weakening or history repair. Inherited full-history qualification still fails.
+  Full M04 remains open for stronger-factor, auto-signin, privacy/lifecycle and
+  final unit qualification. Full milestones3/39, no new qualified unit; rough
+  overall5–10%, low confidence, not a measured fraction. No Tools work or release.
+
 - Administrative-removal profile closed (2026-10-16 00:43 UTC): foundation
   `9785b1c`, native password/HTTP `9ee4c44` and reference `ffc3b47` are pushed
   to main with exact-head Required CI green. Consumers can explicitly authorize
