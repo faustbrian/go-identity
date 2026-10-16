@@ -44,6 +44,13 @@ func MagicLinkSigninSession(command identity.Command) (session.Session, error) {
 	if !ok || p.Operation != magicLinkSessionOperation() || p.Binding.UserID != "" || p.Binding.RecordID != "" || p.Binding.AnonymousFlowID == "" {
 		return deny()
 	}
+	return emailGrantSessionFromFeature(p)
+}
+
+// Shared scalar restoration preserves the same complete email-grant record;
+// each public entry point first admits its own disjoint operation/scope.
+func emailGrantSessionFromFeature(p identity.FeatureCommandSpec) (session.Session, error) {
+	deny := func() (session.Session, error) { return session.Session{}, session.ErrInvalidSessionCommand }
 	fields := make([]identity.FeatureField, 0, 64)
 	var user identity.UserID
 	for _, f := range p.Fields {

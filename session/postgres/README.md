@@ -1,5 +1,19 @@
 # PostgreSQL session storage
 
+## Registration verification signin
+
+`EmailVerificationSigninEffect` and `EmailVerificationSigninSession` support only
+the exact `identity.email.verification-signin` operation. The separately committed
+confirmation ID is its retained parent, not the new session ID. Install
+`EmailVerificationSigninMigrationSource` at an unused permanent version after
+`MagicLinkSigninMigrationSource`; set `MFASignin` only when the MFA issuance
+predecessor is already installed. Retain that immutable choice/history; do not
+insert an older purpose migration afterward. The forward extension preserves
+old rows and enforces one child per tenant/parent. It creates no replay journal.
+The native password owner supplies actual original-browser, risk and known-empty
+factor admission. Select the email-grant primary reader and matching revoke
+profile explicitly; this effect does not enable general magic-link login.
+
 ## Disable custody and disposition
 
 `PasswordActiveTOTPPrimarySource` separately implements `PrepareDisable` and

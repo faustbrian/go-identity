@@ -1,5 +1,20 @@
 # Email
 
+## Explicit registration verification and signin
+
+`RegistrationVerificationSigninService` is independently selected. Its request
+borrows the delivered original signup proof and original browser cookie, with
+trusted origin/network/device inputs. It accepts no new remember choice.
+`VerificationConfirmAndSignin` commits verification before attempting a distinct
+signin command; inspect both outcomes and the returned error. A committed
+verification is not rolled back by a later denied/unknown login. Replay and
+`VerificationSigninRecover` are metadata-only and cannot redeliver credentials.
+The initial native profile admits known-empty MFA only; enrolled/unknown state
+denies without fallback. Existing `RegistrationVerificationService` remains
+verification-only. Native composition is in `password/postgres`; typed operation,
+transaction and acceptance semantics are in
+[verification_signin_contracts.json](verification_signin_contracts.json).
+
 `ChangeRequestRequest` accepts the exact multi-factor TOTP projection for
 `identity.email.change-request` as well as the original password profile.
 `Validate` is structural, not signature validation or current authority. Only

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Add independently selected original-browser registration verification/signin
+  contracts, with separate verification and login outcomes and metadata-only
+  recovery. Existing confirmation results remain verification-only.
+
 - Accept the exact action-bound, multi-factor TOTP projection for email change
   requests. Structural validation grants no authority; explicitly selected native
   admission still authenticates, fences and consumes the original factor proof.

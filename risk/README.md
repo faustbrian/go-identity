@@ -812,7 +812,8 @@ not be concurrently modified. Standard Go memory-erasure guarantees apply.
 
 `catalog_generated.go` records SHA-256 identities for the owned MIT-licensed
 `PUBLIC_CONTRACTS.json` and `REFERENCE_CONFIGURATION.md` planning sources.
-The 329 canonical operations are each assigned exactly one explicit profile or
+The pinned canonical operations and explicit native additions in
+`native_operations.json` are each assigned exactly one explicit profile or
 closed fallback. Compiled numeric values are validation ceilings, not deployment
 defaults. Public GET fallbacks are neutral discovery/availability reads; SSO
 discovery remains an authentication fallback and denies. All sensitive reads
@@ -828,6 +829,12 @@ The script emits Go source to stdout; installing output is a reviewed source
 change. Review every new operation's fallback, authorization and mutation
 semantics and the source-profile ceilings; HTTP method alone is not an enduring
 authentication/security classifier. Changing policy never renews signal times.
+
+The distinct `identity.email.verification-signin` native command uses counted,
+audited Authentication admission. Its earlier verification command and managed
+address confirmations remain CredentialMutation operations. The generator binds
+the native additions' source checksum as well as both historical source inputs;
+adding this signin profile does not change unrelated classifications.
 
 ## Verification and tradeoffs
 

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Classify the distinct native post-verification signin command as counted,
+  audited Authentication admission. Verification-only and managed-address
+  confirmation retain their CredentialMutation policy.
+
 - Bind risk assessment to the current public identity kernel contracts without
   changing action limits or granting authentication authority.
 

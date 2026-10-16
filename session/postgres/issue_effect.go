@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"crypto/subtle"
+	"encoding/base64"
 	authentication "github.com/faustbrian/go-authentication/v2"
 	identity "github.com/faustbrian/go-identity"
 	kernel "github.com/faustbrian/go-identity/postgres"
@@ -94,8 +95,23 @@ func (r *Repository) writeIssuedSession(ctx context.Context, w kernel.Work, b id
 		digest = mfaOTPIssuanceDigest(digest, string(s.UserID), s.SessionID, s.FamilyID, recordDigest[:])
 	} else if b.OperationID == "identity.mfa.recovery-use" {
 		digest = mfaRecoveryIssuanceDigest(digest, string(s.UserID), s.SessionID, s.FamilyID, recordDigest[:])
+	} else if b.OperationID == "identity.email.verification-signin" {
+		digest = verificationIssuanceDigest(digest, string(s.UserID), s.SessionID, s.FamilyID, recordDigest[:])
 	}
-	n, err = w.Exec(ctx, `INSERT INTO `+r.schema+`.session_issuances(tenant_id,command_id,purpose,user_id,session_id,family_id,binding_digest,record_digest) VALUES($1,$2,$3,$4,$5,$6,$7,$8)`, string(b.TenantID), id, b.OperationID, string(s.UserID), s.SessionID, s.FamilyID, digest[:], recordDigest[:])
+	if b.OperationID == "identity.email.verification-signin" {
+		if _, err := identity.ParseCommandID(b.RecordID); err != nil {
+			return session.ErrInvalidSessionCommand
+		}
+		parent, err := base64.RawURLEncoding.Strict().DecodeString(b.RecordID)
+		if err != nil || len(parent) != 16 {
+			return session.ErrInvalidSessionCommand
+		}
+		// Only this selected forward profile needs the parent column. Legacy
+		// writes retain their SQL and work before its migration is installed.
+		n, err = w.Exec(ctx, `INSERT INTO `+r.schema+`.session_issuances(tenant_id,command_id,purpose,user_id,session_id,family_id,binding_digest,record_digest,verification_command_id) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)`, string(b.TenantID), id, b.OperationID, string(s.UserID), s.SessionID, s.FamilyID, digest[:], recordDigest[:], parent)
+	} else {
+		n, err = w.Exec(ctx, `INSERT INTO `+r.schema+`.session_issuances(tenant_id,command_id,purpose,user_id,session_id,family_id,binding_digest,record_digest) VALUES($1,$2,$3,$4,$5,$6,$7,$8)`, string(b.TenantID), id, b.OperationID, string(s.UserID), s.SessionID, s.FamilyID, digest[:], recordDigest[:])
+	}
 	if err != nil {
 		return err
 	}

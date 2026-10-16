@@ -23,6 +23,10 @@ import (
 // borrowed; no transaction, retries or goroutines are owned. MaximumDuration is
 // explicit, 1ms..5s; earlier cancellation wins and provider errors are redacted.
 func ReadEmailOTPFactors(ctx context.Context, pool *database.Pool, tenant identity.TenantID, user identity.UserID, maximumDuration time.Duration) (mfa.FactorAuthority, error) {
+	return readKnownEmptyPrimary(ctx, pool, tenant, user, maximumDuration)
+}
+
+func readKnownEmptyPrimary(ctx context.Context, pool *database.Pool, tenant identity.TenantID, user identity.UserID, maximumDuration time.Duration) (mfa.FactorAuthority, error) {
 	if ctx == nil || pool == nil || pool.Raw() == nil || maximumDuration < time.Millisecond || maximumDuration > 5*time.Second {
 		return mfa.FactorAuthority{}, invalidAuthority()
 	}

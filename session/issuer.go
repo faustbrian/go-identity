@@ -79,15 +79,16 @@ type IssuerConfig struct {
 // Dependencies remain borrowed and must outlive calls. Copies of preparations
 // share one execution claim; unrelated preparations can execute concurrently.
 type SessionIssuer struct {
-	executor    IssueExecutor
-	config      IssuerConfig
-	csrfKey     CSRFKey
-	otp         bool
-	password    bool
-	signup      bool
-	magicLink   bool
-	mfa         bool
-	mfaPassword bool
+	executor     IssueExecutor
+	config       IssuerConfig
+	csrfKey      CSRFKey
+	otp          bool
+	password     bool
+	signup       bool
+	magicLink    bool
+	verification bool
+	mfa          bool
+	mfaPassword  bool
 }
 
 // NewSessionIssuerWithCSRF selects the synchronizer profile with a dedicated

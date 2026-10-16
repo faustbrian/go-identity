@@ -1,0 +1,55 @@
+{
+  "profile": "original-browser-registration-link-signin-v1",
+  "requirement": "identity/email explicit verification auto-signin with original remember policy",
+  "operation": {
+    "owner": "identity/email",
+    "id": "identity.email.verification-signin",
+    "schema": "email-verification-signin",
+    "version": 1,
+    "record": "committed verification-confirm command ID",
+    "subject": "explicit original verified user",
+    "exposure": "library",
+    "risk": "authentication"
+  },
+  "request": {
+    "Confirmation": "VerificationConfirmRequest: original delivered registration grant and callback",
+    "Browser": "borrowed original signup browser cookie",
+    "Origin": "trusted exact HTTPS origin",
+    "Device": "trusted bounded current risk correlation, not identity authority",
+    "remember": "absent: recover resolved policy from authenticated encrypted signup intent"
+  },
+  "result": {
+    "Verification": "independent verification-only outcome and correlation",
+    "Issuance": "separate session-owned child outcome and reveal-once delivery",
+    "CSRFToken": "fresh committed child only",
+    "Recovery": "exact child scope; metadata-only, never execution or disclosure authority"
+  },
+  "transactions": [
+    "original verification-confirm commits address 1 -> 2, one-use grant, audit and lifecycle",
+    "only its fresh successful invocation may attempt linked session 0 -> 1 with audit and lifecycle",
+    "unique tenant/confirmation parent prevents two child issuances",
+    "current directory, recipient, authorization and original factor generation are fenced before final commit",
+    "unknown/replayed verification creates no child; unknown/replayed child reveals no credential"
+  ],
+  "authentication": "email possession, not password comparison or a renewed signup proof",
+  "factor_profile": "known-empty authoritative MFA only; enrolled/unknown deny without fallback; enrolled continuation remains separate required work",
+  "http": {
+    "selector": "emailhttp.FeatureConfig.VerificationSignin",
+    "operation": "identity.email.verification-confirm",
+    "route": "POST /v1/email/verification-confirm",
+    "body": ["token", "callback", "commandID"],
+    "cookies": "original signup flow and signed browser-device cookie",
+    "response": "parent confirmation plus optional child signin metadata; fresh secure HttpOnly cookie and X-CSRF-Token only",
+    "defaults": "verification-only; managed/address-change profiles acquire no login"
+  },
+  "acceptance": [
+    "browser and persistent original remember choices through native and selected HTTPS",
+    "real registration, captured delivery, verification, signin, primary read and logout",
+    "wrong original browser and absent HTTP browser/device deny",
+    "policy, missing/nonempty factors, blocked account and unavailable risk deny",
+    "rollback of either transaction preserves the other observed outcome accurately",
+    "contending confirmations produce one verification and at most one child",
+    "lost actual commit acknowledgements at both boundaries withhold credentials and retain recovery",
+    "default and shared managed confirmation remain verification-only"
+  ]
+}

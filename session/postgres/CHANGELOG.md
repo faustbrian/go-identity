@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Persist selected post-verification email-possession sessions with immutable
+  confirmation-parent lineage and at most one child per tenant/confirmation.
+  Install the forward `EmailVerificationSigninMigrationSource` after the
+  selected email-grant/MFA issuance history before enabling the new effect;
+  legacy rows, SQL paths and applied migration checksums are unchanged.
+
 - Add explicit original password/MFA admission expectations without weakening
   the single-factor profile. Native consumers must retain and fence the source
   session's original factor enrollment and authority, separately from any fresh

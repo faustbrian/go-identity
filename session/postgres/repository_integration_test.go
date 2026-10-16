@@ -240,6 +240,7 @@ func TestSessionPostgresIntegration(t *testing.T) {
 	}
 	t.Run("complete MFA primary record", func(t *testing.T) { testMFAPrimaryRecord(t, ctx, pool) })
 	t.Run("complete MFA issuance purposes", func(t *testing.T) { testMFASigninPurposes(t, ctx, pool) })
+	t.Run("verification signin migration", func(t *testing.T) { testVerificationSigninMigration(t, ctx, pool) })
 	t.Run("complete OTP primary record", func(t *testing.T) { testOTPPrimaryRecord(t, ctx, pool) })
 	t.Run("complete magic-link primary record", func(t *testing.T) { testMagicLinkPrimaryRecord(t, ctx, pool) })
 	t.Run("complete continued primary record", func(t *testing.T) { testContinuedPrimaryRecord(t, ctx, pool, native) })

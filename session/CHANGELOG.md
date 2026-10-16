@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Explicitly prepare post-registration-verification email-possession sessions,
+  bound to the distinct committed confirmation parent. Preserve original grant
+  expiry/remember policy and withhold credentials on replay, error or ambiguity;
+  native browser, risk, authorization and MFA admission remain mandatory.
+
 - Use the supported secret-envelope v2 implementation for encrypted cache
   custody, preserving provider/entropy diagnostic containment and stored wire
   formats. Callers constructing the cache codec must use envelope `/v2` types.

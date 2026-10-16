@@ -13,9 +13,10 @@ type magicLinkPreparationState struct {
 	bound   atomic.Bool
 }
 type magicLinkIssueRequestState struct {
-	command identity.Command
-	binding identity.CommandBinding
-	record  Session
+	command      identity.Command
+	binding      identity.CommandBinding
+	record       Session
+	verification bool
 }
 
 // NewMagicLinkSessionIssuer selects native consuming email-grant issuance.
@@ -60,6 +61,16 @@ func NewMagicLinkSessionIssuerWithCSRF(executor IssueExecutor, c IssuerConfig, k
 // once before reservation. Original grant expiry and remember policy are never
 // refreshed. Unsupported organization/factor/passkey profiles deny.
 func (s *SessionIssuer) PrepareMagicLink(b identity.CommandBinding, spec SessionSpec, metadata MagicLinkAuthentication) (out PreparedIssuance, err error) {
+	if s == nil || s.verification {
+		return out, ErrInvalidIssuance
+	}
+	return s.prepareEmailGrant(b, spec, metadata, magicLinkConsumeOperation())
+}
+
+// Both email-possession profiles share token, CSRF and lifetime custody, not
+// protocol admission. Their closed native commands and durable owners remain
+// distinct; a registration-verification grant is never a magic-link grant.
+func (s *SessionIssuer) prepareEmailGrant(b identity.CommandBinding, spec SessionSpec, metadata MagicLinkAuthentication, operation identity.FeatureOperation) (out PreparedIssuance, err error) {
 	defer func() {
 		if recover() != nil {
 			out, err = PreparedIssuance{}, ErrIssuerUnavailable
@@ -68,7 +79,7 @@ func (s *SessionIssuer) PrepareMagicLink(b identity.CommandBinding, spec Session
 	if s == nil || !s.magicLink || spec.Lookup != (TokenDigest{}) || spec.Version != 1 || !spec.LastActivityAt.Equal(spec.IssuedAt) {
 		return out, ErrInvalidIssuance
 	}
-	frozen, e := identity.NewFeatureCommand(identity.FeatureCommandSpec{Binding: b, Operation: magicLinkConsumeOperation()})
+	frozen, e := identity.NewFeatureCommand(identity.FeatureCommandSpec{Binding: b, Operation: operation})
 	if e != nil {
 		return out, ErrInvalidIssuance
 	}
@@ -104,6 +115,13 @@ func (s *SessionIssuer) PrepareMagicLink(b identity.CommandBinding, spec Session
 // this binding establishes neither possession nor permission. Request and
 // legacy proof routes remain unavailable for this ephemeral consuming profile.
 func (s *SessionIssuer) BindMagicLink(p PreparedIssuance, c identity.Command) (PreparedIssuance, error) {
+	if s == nil || s.verification {
+		return PreparedIssuance{}, ErrInvalidIssuance
+	}
+	return s.bindEmailGrant(p, c, magicLinkConsumeOperation())
+}
+
+func (s *SessionIssuer) bindEmailGrant(p PreparedIssuance, c identity.Command, operation identity.FeatureOperation) (PreparedIssuance, error) {
 	if s == nil || !s.magicLink || p.state == nil || p.state.owner != s || p.state.magicLink == nil {
 		return PreparedIssuance{}, ErrInvalidIssuance
 	}
@@ -114,13 +132,13 @@ func (s *SessionIssuer) BindMagicLink(p PreparedIssuance, c identity.Command) (P
 	_, cookie := c.PreAuthCookie()
 	_, code := c.OneTimeCode()
 	_, bearer := c.SessionToken()
-	if !ok || !cookie || code || bearer || f.Binding != p.state.magicLink.binding || f.Operation != magicLinkConsumeOperation() {
+	if !ok || !cookie || code || bearer || f.Binding != p.state.magicLink.binding || f.Operation != operation {
 		return PreparedIssuance{}, ErrInvalidIssuance
 	}
 	if !p.state.magicLink.bound.CompareAndSwap(false, true) {
 		return PreparedIssuance{}, ErrIssuanceAlreadyBound
 	}
-	r := IssueRequest{state: &issueRequestState{magicLink: &magicLinkIssueRequestState{command: c, binding: f.Binding, record: p.state.magicLink.record}}}
+	r := IssueRequest{state: &issueRequestState{magicLink: &magicLinkIssueRequestState{command: c, binding: f.Binding, record: p.state.magicLink.record, verification: s.verification}}}
 	return PreparedIssuance{state: &preparedIssuanceState{owner: s, request: r, token: p.state.token, csrf: p.state.csrf, magicLink: p.state.magicLink}}, nil
 }
 
@@ -129,7 +147,7 @@ func (s *SessionIssuer) BindMagicLink(p PreparedIssuance, c identity.Command) (P
 // deny. Never serialize it or use it for restart recovery; native recovery is
 // proof-free and cannot issue or renew credentials.
 func (r IssueRequest) MagicLinkCommand() (identity.Command, Session, bool) {
-	if r.state == nil || r.state.magicLink == nil {
+	if r.state == nil || r.state.magicLink == nil || r.state.magicLink.verification {
 		return identity.Command{}, Session{}, false
 	}
 	return r.state.magicLink.command, r.state.magicLink.record, true

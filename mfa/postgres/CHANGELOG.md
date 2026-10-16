@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Fence original known-empty primary factor generations for the exact native
+  post-registration-verification signin owner. Unknown, changed or nonempty
+  state denies without initialization, inferred absence or weaker-factor fallback.
+
 - Select email-action TOTP step-up with `TOTPActiveStepUpConfig.EmailChange`.
   Add opaque original-factor admission for the native email participant, with
   current enrollment/generation fences and atomic one-use consumption. Install

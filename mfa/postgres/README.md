@@ -1,5 +1,12 @@
 # PostgreSQL MFA authority (in development)
 
+The post-registration-verification signin profile uses
+`ReadEmailVerificationSigninFactors` and fences its unchanged generation with
+`RequireEmailVerificationSigninFactors` in Apply and final commit admission.
+Missing, nonempty, changed or corrupt primary state denies; nothing initializes
+or infers an empty account here. This is a known-empty profile, not enrolled MFA
+continuation or permission to downgrade a required factor.
+
 For TOTP-protected email change, explicitly set
 `TOTPActiveStepUpConfig.EmailChange` and install
 `EmailChangeFactorMigrationSource` after existing factor-proof history at a new

@@ -1,5 +1,16 @@
 # Session
 
+## Post-verification email-possession issuance
+
+`NewEmailVerificationSessionIssuerWithCSRF` is an explicit, disjoint issuer for
+native registration confirmation followed by signin. `PrepareEmailVerification`
+binds the child command to its committed confirmation parent (`RecordID`), the
+original signup/grant, verified address versions and original resolved Remember.
+It reuses historical email-grant provenance (`AuthenticationMagicLink`), not a
+password proof. The native owner must authenticate original browser possession
+and current account/authorization/risk/MFA before committing. Preparation alone
+grants no authority; replay, recovery, error and ambiguity disclose no token.
+
 This experimental module uses authentication v2, authorization v3 and the
 matching identity kernel. Supply primitive values from those major imports;
 older-major types are not interchangeable.

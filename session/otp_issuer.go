@@ -200,6 +200,9 @@ func (r IssueRequest) issuanceScope() (identity.CommandBinding, identity.Feature
 	}
 	if r.state.magicLink != nil {
 		p := r.state.magicLink
+		if p.verification {
+			return p.binding, emailVerificationSigninOperation(), p.record, true
+		}
 		return p.binding, magicLinkConsumeOperation(), p.record, true
 	}
 	if r.state.otp != nil {
@@ -221,7 +224,7 @@ func (s *SessionIssuer) validateRequestAt(r IssueRequest, now time.Time) error {
 		return ErrInvalidIssuance
 	}
 	if s.magicLink {
-		if r.state == nil || r.state.magicLink == nil || r.state.password != nil || r.state.otp != nil {
+		if r.state == nil || r.state.magicLink == nil || r.state.password != nil || r.state.otp != nil || r.state.magicLink.verification != s.verification {
 			return ErrInvalidIssuance
 		}
 		return validateMagicLinkIssuanceAt(r.state.magicLink.record, now)
