@@ -11,7 +11,9 @@ import (
 )
 
 // ManagedEmailVerificationIntent freezes exact pending-address predecessors and
-// authenticated original management request. It carries no caller/proof authority.
+// original request. Link profiles select authenticated management provenance;
+// the distinct OTP profile selects its independently issued OTP send command.
+// Neither selection carries caller/proof authority.
 // The initial managed link profile verifies a pending1/1 address without a primary
 // swap, session issuance, email sender or signup reinterpretation.
 type ManagedEmailVerificationIntent struct {
@@ -77,7 +79,11 @@ func (ManagedEmailVerificationIntent) MarshalJSON() ([]byte, error) {
 
 func managedEmailVerificationCommand(p ManagedEmailVerificationContributor, c identity.Command, plan CommandPlan) (ManagedEmailVerificationIntent, *EmailAttachmentDomain, error) {
 	s, ok := commandFeature(c)
-	if !ok || plan.Feature == nil || !managedEmailConfirmationOperation(s.Operation) || plan.Feature.Operation != s.Operation || plan.SubjectType != "identifier" || plan.Capability == nil || plan.Lifecycle == nil || plan.Lifecycle.BeforeVersion == 0 || plan.Lifecycle.BeforeVersion == ^uint64(0) || plan.Lifecycle.AfterVersion != plan.Lifecycle.BeforeVersion+1 {
+	otp := s.Operation == otpEmailVerificationOperation()
+	if !ok || plan.Feature == nil || !managedEmailConfirmationOperation(s.Operation) && !otp || plan.Feature.Operation != s.Operation || plan.SubjectType != "identifier" || !otp && plan.Capability == nil || plan.Lifecycle == nil || plan.Lifecycle.BeforeVersion == 0 || plan.Lifecycle.BeforeVersion == ^uint64(0) || plan.Lifecycle.AfterVersion != plan.Lifecycle.BeforeVersion+1 {
+		return ManagedEmailVerificationIntent{}, nil, invalidEmailVerification()
+	}
+	if otp && validateOTPEmailVerificationScope(s, plan) != nil {
 		return ManagedEmailVerificationIntent{}, nil, invalidEmailVerification()
 	}
 	i, d, err := p.ManagedEmailVerification(c)
@@ -85,6 +91,9 @@ func managedEmailVerificationCommand(p ManagedEmailVerificationContributor, c id
 		return ManagedEmailVerificationIntent{}, nil, invalidEmailVerification()
 	}
 	if (s.Operation == managedEmailChangeOperation()) != (i.Change.Action == identity.IdentifierVerifyPrimary) {
+		return ManagedEmailVerificationIntent{}, nil, invalidEmailVerification()
+	}
+	if otp && (i.Change.Action != identity.IdentifierVerify || i.RequestCommandID != identity.CommandID(plan.OTP.ChallengeID)) {
 		return ManagedEmailVerificationIntent{}, nil, invalidEmailVerification()
 	}
 	fields, err := ManagedEmailVerificationFields(i)
@@ -179,8 +188,17 @@ func applyManagedEmailVerification(ctx context.Context, w Work) error {
 	if p == nil || p.applied {
 		return w.fail(ctx, invalidEmailVerification())
 	}
-	if err := w.state.execution.coordinator.runCapabilityExecution(ctx, w, false); err != nil {
-		return err
+	if w.state.feature.Operation == otpEmailVerificationOperation() {
+		if w.state.otpCommand == nil {
+			return w.fail(ctx, invalidEmailVerification())
+		}
+		if err := w.state.execution.coordinator.runOTPExecution(ctx, w, *w.state.otpCommand, otpCheck); err != nil {
+			return err
+		}
+	} else {
+		if err := w.state.execution.coordinator.runCapabilityExecution(ctx, w, false); err != nil {
+			return err
+		}
 	}
 	if err := persistIdentifierMutation(ctx, w, w.state.binding, p.intent.Change, p.before, p.mutation, p.domain.reuse, p.at); err != nil {
 		return err
@@ -197,8 +215,10 @@ func (c *Coordinator) finalizeManagedEmailVerification(w Work) error {
 	if !p.applied || p.finalized {
 		return w.fail(w.state.ctx, invalidEmailVerification())
 	}
-	if err := c.runCapabilityExecution(w.state.ctx, w, true); err != nil {
-		return err
+	if w.state.feature.Operation != otpEmailVerificationOperation() {
+		if err := c.runCapabilityExecution(w.state.ctx, w, true); err != nil {
+			return err
+		}
 	}
 	p.finalized = true
 	return nil

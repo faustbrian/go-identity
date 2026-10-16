@@ -7,6 +7,7 @@ import (
 	"encoding/binary"
 
 	auth "github.com/faustbrian/go-authentication/v2"
+	authorization "github.com/faustbrian/go-authorization/v3"
 	identity "github.com/faustbrian/go-identity"
 )
 
@@ -35,6 +36,9 @@ type attemptCommandScope struct {
 // its real user remains inside purpose-bound OTP scope while the exact consuming
 // MFA command retains the original anonymous browser namespace. Ordinary OTP
 // signin/check operations cannot select that arm or substitute a live session.
+// Managed email verification binds its canonical workflow target to the real
+// identifier record, with complete original session custody and a self-user
+// actor. Only that exact consuming profile admits a structured record target.
 // Context/entropy/custody semantics are identical to Prepare. Invalid structural
 // or mismatched scope returns ErrInvalidAttempt without underlying input/errors.
 func (i AttemptIssuer) PrepareForCommand(ctx context.Context, b identity.CommandBinding, operation identity.FeatureOperation, c Continuation, mode AttemptMode, expectedVersion uint64, code auth.OneTimeCode) (AttemptCommand, error) {
@@ -68,6 +72,21 @@ func validAttemptCommandScope(b identity.CommandBinding, op identity.FeatureOper
 			b.UserID == "" && b.RecordID == "" && b.AnonymousFlowID == string(p.Binding.ID) &&
 			b.CommandID != binding.PrimaryCommandID && b.CommandID != binding.ContinuationID &&
 			scope.SubjectID == string(binding.SubjectID) && scope.TargetID == string(binding.ContinuationID)
+	}
+	if op == (identity.FeatureOperation{Owner: "identity/otp", OperationID: "identity.otp.email-verify",
+		SchemaID: "identity.otp.email-verify.managed-v1", SchemaVersion: 1, RecordRequirement: identity.FeatureRecordRequired}) {
+		target, err := ParseEmailVerificationTarget(scope.TargetID)
+		if err != nil {
+			return false
+		}
+		selected, _ := target.Bindings()
+		record, bound := c.state.bindings.Authorization.AuthenticatedSession()
+		original, sessionErr := record.Bindings()
+		return bound && sessionErr == nil && mode == AttemptModeConsume &&
+			scope.Purpose == PurposeEmailVerification && scope.Channel == ChannelEmail &&
+			string(b.UserID) == scope.SubjectID && b.AnonymousFlowID == "" &&
+			b.ActorKind == authorization.SubjectUser && string(b.ActorID) == scope.SubjectID &&
+			b.RecordID == string(selected.IdentifierID) && original.TenantID == b.TenantID && original.UserID == b.UserID
 	}
 	if string(b.UserID) != scope.SubjectID || op.RecordRequirement == identity.FeatureRecordRequired && b.RecordID != scope.TargetID {
 		return false

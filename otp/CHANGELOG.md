@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Add independent authenticated pending-email OTP verification and code-free
+  recovery contracts with canonical target/generation binding. Existing Send,
+  Check and Signin interfaces remain unchanged; verification issues no session.
+
 - Compose current session custody backed by supported envelope v2. Existing
   workflow/HTTP contracts and original credential lifetimes are unchanged.
 

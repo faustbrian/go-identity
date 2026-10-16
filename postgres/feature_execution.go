@@ -60,6 +60,14 @@ func validateFeatureCommand(phase FeatureExecutionContributor, command identity.
 	if err := phase.ValidateFeatureCommand(command, plan); err != nil {
 		return err
 	}
+	if plan.Feature != nil && plan.Feature.Operation == otpEmailVerificationOperation() {
+		p, ok := phase.(ManagedEmailVerificationContributor)
+		if !ok {
+			return invalidEmailVerification()
+		}
+		_, _, err := managedEmailVerificationCommand(p, command, plan)
+		return err
+	}
 	if plan.Feature != nil && plan.Feature.Operation == emailRemovalOperation() {
 		p, ok := phase.(EmailRemovalContributor)
 		if !ok {
@@ -479,6 +487,11 @@ func (c *Coordinator) ApplyFeature(ctx context.Context, w Work, command identity
 	if p.risk != nil {
 		w.state.riskCommand = &command
 	}
+	if p.feature.Operation == otpEmailVerificationOperation() {
+		if e = c.admitOTPFeatureInput(ctx, w, command, p); e != nil {
+			return result, e
+		}
+	}
 	if e = c.runCaptchaExecution(ctx, w, command, captchaCheck); e != nil {
 		return result, e
 	}
@@ -506,6 +519,11 @@ func (c *Coordinator) ApplyFeature(ctx context.Context, w Work, command identity
 	}
 	if p.feature.Operation == emailRemovalOperation() {
 		if e := prepareEmailRemoval(ctx, w, command); e != nil {
+			return result, e
+		}
+	}
+	if p.feature.Operation == otpEmailVerificationOperation() {
+		if e := prepareManagedEmailVerification(ctx, w, command); e != nil {
 			return result, e
 		}
 	}

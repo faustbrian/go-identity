@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Register pending-email OTP recovery as a separate native operation and allow
+  the exact OTP verification operations to select stored-session CSRF. Extend
+  the catalog generator with collision-rejecting optional native definitions;
+  existing canonical operation contracts remain unchanged.
+
 - Admit explicitly selected email removal under exact stored-session CSRF
   protection. Alternate headers, token-age claims and Referer fallback remain
   rejected; base HTTP still supplies no email workflow or route automatically.

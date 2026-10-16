@@ -102,6 +102,9 @@ func securityAuditBindingDigest(binding identity.CommandBinding, feature *identi
 		probe.Feature = &identity.FeatureReceipt{Operation: *feature}
 	}
 	attrs := record.Attributes()
+	if feature != nil && *feature == otpEmailVerificationOperation() && attrs["authentication.recovery_path"] != "email_verification_otp" {
+		return [32]byte{}, invalidAudit()
+	}
 	actor := record.Actor()
 	if probe.Validate() != nil || record.Context().TenantID() != string(binding.TenantID) || record.Context().CorrelationID() != binding.CorrelationID || attrs["command.id"] != string(binding.CommandID) || record.Policy().PolicyID != binding.PolicyID || record.Policy().Version != strconv.FormatUint(binding.PolicyVersion, 10) || actor.ID() != string(binding.ActorID) || actor.DelegatedBy() != (audit.Actor{}) {
 		return [32]byte{}, invalidAudit()
@@ -271,6 +274,10 @@ func validSecurityAuditRecord(r audit.Record, featureSubject string) bool {
 	}
 	for key, value := range attrs {
 		switch key {
+		case "authentication.recovery_path":
+			if value != "email_verification_otp" || r.Action() != "identity.otp.email-verify" || attrs["retention.class"] != "protected" || r.Subject().Type() != "identifier" {
+				return false
+			}
 		case "identity.profile", "command.id", "retention.class":
 		case "aggregate.id":
 			if !auditSafeID(value) {

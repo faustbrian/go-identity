@@ -213,7 +213,7 @@ func (r *Repository) RecoverParticipant(ctx context.Context, recovery RecoveryWo
 		if recovery.state.plan.feature.Operation == emailRemovalOperation() {
 			return recoverEmailRemoval(ctx, recovery)
 		}
-		if managedEmailConfirmationOperation(recovery.state.plan.feature.Operation) {
+		if managedEmailConfirmationOperation(recovery.state.plan.feature.Operation) || recovery.state.plan.feature.Operation == otpEmailVerificationOperation() {
 			return recoverManagedEmailVerification(ctx, recovery)
 		}
 		if emailAttachmentOperation(recovery.state.plan.feature.Operation) {

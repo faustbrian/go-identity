@@ -1,5 +1,12 @@
 # PostgreSQL MFA authority (in development)
 
+`ReadEmailOTPFactors` supplies only the actual known-empty factor generation
+for pending-email OTP preparation. `RequireEmailOTPFactors` must fence that same
+generation in the registered native OTP Send/completion Work. Missing, enrolled
+or changed authority denies before code use; neither method initializes account
+authority, grants a factor proof or weakens MFA. They borrow the existing pool
+or Work and retain its cancellation/lock lifetime.
+
 `RequireAdministrativeEmailFactors` fences both the actual human actor and target
 at their independently retained known-empty generations inside the existing
 email-removal Work. Acquire canonical subject locks first. Missing, changed or

@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Admit the exact native pending-email OTP verification profile through the
+  existing identifier writer and protected audit. Fence target before comparison
+  and permit only this transaction's persisted identifier successor in final
+  authority checks, without renewing other authority or session lifetime.
+
 - Fence human actor credential/authorization independently of the target during
   administrative email removal. Lock directory authority and both user rows in
   canonical order before participant admission; self-removal custody is unchanged.

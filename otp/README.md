@@ -1,5 +1,27 @@
 # otp
 
+## Pending-email verification, not signin
+
+`EmailVerificationService` is an optional independent workflow; existing Send,
+Check and Signin implementers are unchanged. `SendEmailVerification` takes an
+existing pending nonprimary address ID/version, original authenticated-session
+possession, trusted self-user authorization context and an idempotency key.
+`EmailVerify` submits the original Send command and opaque code. The native
+adapter must consume the code atomically with the exact identifier transition,
+audit/lifecycle and required session-authority effects. Neither operation issues
+a session or replaces a primary. Unknown/enrolled MFA must deny this selected
+known-empty-factor profile, never fall back to a weaker method.
+
+`EmailVerificationTarget` canonically binds `email_verification_otp`, the actual
+identifier and its identifier/verification/factor generations before issuance.
+It is not proof or permission. `EmailVerifyRecovery` is code-free original
+correlation; call `RecoverEmailVerify`, not another completion, after ambiguity.
+Recovery observes original status under current disclosure authority and never
+returns an address, compares a code, charges an attempt or renews a session.
+Requests, results and private source projections reject implicit serialization.
+See [native composition](postgres/README.md) and
+[reference configuration](../reference/README.md).
+
 ## Secondary MFA custody
 
 `NewMFAFlowAuthorization(original, binding)` retains the original tokenless

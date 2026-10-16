@@ -30,7 +30,7 @@ func TestCanonicalConditionalSelectsExactOriginPreAuthOnly(t *testing.T) {
 	if w.Code != 202 {
 		t.Fatal("selected handler missing")
 	}
-	for _, policy := range []identityhttp.CSRFPolicy{{Mode: identityhttp.CSRFNone}, {Mode: identityhttp.CSRFSessionState, TokenHeader: "X-CSRF-Token", RefererFallback: identityhttp.RefererFallbackDeny}, {Mode: identityhttp.CSRFExactOrigin, RefererFallback: identityhttp.RefererFallbackSameOriginHTTPS}} {
+	for _, policy := range []identityhttp.CSRFPolicy{{Mode: identityhttp.CSRFNone}, {Mode: identityhttp.CSRFSessionState, TokenHeader: "Wrong-Token", RefererFallback: identityhttp.RefererFallbackDeny}, {Mode: identityhttp.CSRFExactOrigin, RefererFallback: identityhttp.RefererFallbackSameOriginHTTPS}} {
 		invalid := c
 		invalid.CSRF = policy
 		if _, err := identityhttp.NewCanonicalOperation(invalid); err == nil {

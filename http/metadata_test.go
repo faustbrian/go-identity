@@ -163,7 +163,11 @@ func TestMetadataSelectedSnapshotAndCoverageAreDeterministicAndConcurrent(t *tes
 		t.Fatal("export reordered input or invoked feature")
 	}
 	selected := 0
+	verificationRecoveryUnselected := false
 	for _, row := range d.Coverage() {
+		if row.OperationID == "identity.otp.email-verify.recover" {
+			verificationRecoveryUnselected = row.Status == identityhttp.CoverageUnselectedRouted
+		}
 		if row.Status == identityhttp.CoverageSelectedRouted {
 			selected++
 			if row.RegisteredOperationID != row.OperationID {
@@ -174,7 +178,7 @@ func TestMetadataSelectedSnapshotAndCoverageAreDeterministicAndConcurrent(t *tes
 			}
 		}
 	}
-	if selected != 4 || len(d.Coverage()) != 332 {
+	if selected != 4 || len(d.Coverage()) != 333 || !verificationRecoveryUnselected {
 		t.Fatal("selection report mismatched", selected)
 	}
 	w := httptest.NewRecorder()

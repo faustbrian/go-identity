@@ -5,12 +5,22 @@
 require "json"
 require "digest"
 
-abort "usage: generate-http-catalog.rb API_OPERATIONS.md OPERATION_SEMANTICS.json PUBLIC_CONTRACTS.json OUTPUT" unless ARGV.length == 4
-api, semantics, contracts, output = ARGV
+abort "usage: generate-http-catalog.rb API_OPERATIONS.md OPERATION_SEMANTICS.json PUBLIC_CONTRACTS.json OUTPUT [NATIVE_CONTRACTS.json]" unless (4..5).cover?(ARGV.length)
+api, semantics, contracts, output, native_source = ARGV
 rows = JSON.parse(File.read(semantics)).fetch("operations")
 public_contracts = JSON.parse(File.read(contracts))
 typed = public_contracts.fetch("operations").to_h { |row| [row.fetch("id"), row] }
 types = public_contracts.fetch("types").to_h { |row| [row.fetch("id"), row.fetch("definition")] }
+if native_source
+  native = JSON.parse(File.read(native_source))
+  native_rows = native.fetch("semantics")
+  native_typed = native.fetch("operations").to_h { |row| [row.fetch("id"), row] }
+  native_types = native.fetch("types").to_h { |row| [row.fetch("id"), row.fetch("definition")] }
+  abort "native contract collision" unless (rows.map { |row| row.fetch("id") } & native_rows.map { |row| row.fetch("id") }).empty? && (typed.keys & native_typed.keys).empty? && (types.keys & native_types.keys).empty?
+  rows += native_rows
+  typed.merge!(native_typed)
+  types.merge!(native_types)
+end
 canonical = lambda do |value|
   case value
   when Hash then value.keys.sort.to_h { |key| [key, canonical.call(value.fetch(key))] }
@@ -39,5 +49,6 @@ result = {
   },
   "operations" => operations
 }
+result.fetch("provenance")["native_contracts_sha256"] = Digest::SHA256.file(native_source).hexdigest if native_source
 File.write(output, JSON.generate(canonical.call(result)) + "\n")
 puts "HTTP catalog: #{operations.length} canonical rows; no handler-completion claim"

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Add native known-empty factor generation reads/fences for pending-email OTP
+  issuance and completion. Missing, enrolled or changed authority denies;
+  these ports never initialize account authority or grant verification proof.
+
 - Fence independent actor and target known-empty MFA generations inside native
   administrative email removal. Missing, changed or enrolled authority denies;
   no factor initialization or password-only downgrade is introduced.

@@ -440,6 +440,12 @@ func validOperation(owner ModuleID, op OperationDescriptor, catalog map[string]c
 		if (r.OperationID == "identity.email.verification-send" || r.OperationID == "identity.email.change-request" || r.OperationID == "identity.email.address-remove") && r.CSRFOrigin.Mode == CSRFSessionState && r.CSRFOrigin.TokenHeader == "X-CSRF-Token" && r.CSRFOrigin.RefererFallback == RefererFallbackDeny {
 			csrfMatches = true
 		}
+		// The explicitly selected authenticated-session OTP verification profile
+		// narrows Send's union and strengthens verification/recovery with the
+		// original stored synchronizer. No independently aged token is invented.
+		if (r.OperationID == "identity.otp.send" || r.OperationID == "identity.otp.email-verify" || r.OperationID == "identity.otp.email-verify.recover") && r.CSRFOrigin.Mode == CSRFSessionState && r.CSRFOrigin.TokenHeader == "X-CSRF-Token" && r.CSRFOrigin.RefererFallback == RefererFallbackDeny {
+			csrfMatches = true
+		}
 		if r.OperationID == "identity.mfa.totp-verify" && (r.CSRFOrigin.Mode == CSRFSessionState || r.CSRFOrigin.Mode == CSRFVariantOriginSessionState) && r.CSRFOrigin.TokenHeader == "X-CSRF-Token" && r.CSRFOrigin.RefererFallback == RefererFallbackDeny {
 			csrfMatches = true
 		}

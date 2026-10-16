@@ -324,11 +324,15 @@ func securityMutationAudit(ctx context.Context, b identity.CommandBinding, befor
 	if e != nil {
 		return audit.Record{}, invalidAudit()
 	}
-	record, e := builder.Build(audit.RecordInput{OccurredAt: now, Action: action, Outcome: outcome, ReasonCode: reason, Actor: audit.ActorInput{Kind: actorKind, ID: string(b.ActorID)}, Subject: audit.SubjectInput{Type: kind, ID: target}, Context: audit.ContextInput{TenantID: string(b.TenantID), CorrelationID: b.CorrelationID}, Policy: audit.PolicyMetadata{PolicyID: b.PolicyID, Version: strconv.FormatUint(b.PolicyVersion, 10)}, Changes: changes, Attributes: map[string]string{"identity.profile": "identity.security.v1", "command.id": string(b.CommandID), "retention.class": retention, "aggregate.type": kind, "aggregate.id": target, "aggregate.before_version": strconv.FormatUint(before, 10), "aggregate.after_version": after}})
+	attributes := map[string]string{"identity.profile": "identity.security.v1", "command.id": string(b.CommandID), "retention.class": retention, "aggregate.type": kind, "aggregate.id": target, "aggregate.before_version": strconv.FormatUint(before, 10), "aggregate.after_version": after}
+	if feature && b.OperationID == "identity.otp.email-verify" && b.SchemaID == "identity.otp.email-verify.managed-v1" && b.SchemaVersion == 1 {
+		attributes["authentication.recovery_path"] = "email_verification_otp"
+	}
+	record, e := builder.Build(audit.RecordInput{OccurredAt: now, Action: action, Outcome: outcome, ReasonCode: reason, Actor: audit.ActorInput{Kind: actorKind, ID: string(b.ActorID)}, Subject: audit.SubjectInput{Type: kind, ID: target}, Context: audit.ContextInput{TenantID: string(b.TenantID), CorrelationID: b.CorrelationID}, Policy: audit.PolicyMetadata{PolicyID: b.PolicyID, Version: strconv.FormatUint(b.PolicyVersion, 10)}, Changes: changes, Attributes: attributes})
 	if e != nil {
 		return audit.Record{}, invalidAudit()
 	}
-	redactor, e := audit.NewRedactor(audit.RedactionRules{DropDescription: true, DropNetworkOrigin: true, DropUserAgent: true, AllowedAttributes: []string{"identity.profile", "command.id", "retention.class", "aggregate.type", "aggregate.id", "aggregate.before_version", "aggregate.after_version"}})
+	redactor, e := audit.NewRedactor(audit.RedactionRules{DropDescription: true, DropNetworkOrigin: true, DropUserAgent: true, AllowedAttributes: []string{"identity.profile", "command.id", "retention.class", "aggregate.type", "aggregate.id", "aggregate.before_version", "aggregate.after_version", "authentication.recovery_path"}})
 	if e != nil {
 		return audit.Record{}, invalidAudit()
 	}

@@ -7,6 +7,15 @@ stored database history remain unchanged.
 
 ## Pending managed email attachment
 
+The independently selected OTP profile uses `OTPEmailVerificationFields` and
+`RequireOTPEmailVerificationTarget` with the actual registered OTP contributor,
+not a capability/link substitute. It binds the original OTP Send, exact pending
+identifier/CAS and `email_verification_otp` before comparison. The user partition
+is locked before credential/factor/session rows. Only this Work's exact persisted
+identifier successor is admitted to its final authority checks; no original
+credential, user, authorization, session freshness or expiry is renewed. The
+shared directory writer and protected audit remain the mutation owners.
+
 ### Native safe removal
 
 Administrative intents additionally freeze `EmailRemovalAdministration` with the

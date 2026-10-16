@@ -408,6 +408,25 @@ they do not depend on a pretty printer's empty-collection formatting. Run
 `ruby scripts/generate-http-catalog_test.rb` from the repository root for the
 fixed empty-collection digest oracle.
 
+The generator accepts an optional fifth `NATIVE_CONTRACTS.json` input for
+new native-owned operation/semantics/type definitions not yet present in the
+preserved planning snapshot. Duplicate operation/type authority is rejected
+before replacing output; existing rows are not overridden. The pending-email
+OTP recovery source is `otp/email_verification_contracts.json` at repository root:
+
+```sh
+ruby scripts/generate-http-catalog.rb \
+  "$IDENTITY_PLAN/API_OPERATIONS.md" "$IDENTITY_PLAN/OPERATION_SEMANTICS.json" \
+  "$IDENTITY_PLAN/PUBLIC_CONTRACTS.json" /tmp/identity-http-catalog.json \
+  otp/email_verification_contracts.json
+```
+
+Review generated differences against the embedded native baseline before
+adoption. A newer planning input can also contain unrelated changes; registering
+one native operation does not authorize replacing previously retained contracts.
+The checked-in catalog retains those original rows and their source provenance
+alongside the new native source identity. It advertises no unselected handler.
+
 ## Bounded ordinary request parsing
 
 Construct one `NewRequestDecoder(Limits{...})` with every bound explicit.
