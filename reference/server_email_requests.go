@@ -30,6 +30,9 @@ type HTTPEmailRequestsConfiguration struct {
 	Origin                                         string
 	ActorID                                        identity.ActorID
 	PolicyRevision                                 authorization.Revision
+	// AdministrativeRemovalTargets selects targetSubjectID only for removal.
+	// The native removal owner must independently select this capability.
+	AdministrativeRemovalTargets bool
 }
 
 type emailRequestsHTTPState struct {
@@ -55,6 +58,9 @@ func composeEmailRequestsHTTP(c StoreConfiguration, owner *emailState, proof *pa
 	}
 	invalid := identity.InvalidInputError{Field: "reference_http_email_requests"}
 	p := *c.HTTPEmailRequests
+	if p.AdministrativeRemovalTargets && (!p.AddressRemove || owner == nil || owner.removal == nil || !owner.removal.AdministrativeRemovalConfigured()) {
+		return nil, invalid
+	}
 	if !p.VerificationSend && !p.ChangeRequest && !p.ChangeConfirm && !p.AddressRemove || owner == nil || c.Email == nil || c.Session == nil || c.Session.Native.Execution.Clock == nil || c.OTP == nil || rate == nil || c.HTTPRate == nil || p.PolicyRevision == 0 || uint64(p.PolicyRevision) != c.OTP.RequestKeys.Policy.PolicyVersion {
 		return nil, invalid
 	}
@@ -136,7 +142,7 @@ func (s *Server) selectEmailRequests(network identityhttp.NetworkConfig, f Featu
 		if err != nil {
 			return err
 		}
-		selection.AddressRemove = &emailhttp.RemovalConfig{Network: network, Proofs: state.passwordVerification.proofs, Service: owner, Rate: h.secret, Cookie: state.session.config.Cookie, Origin: identityhttp.Origin(c.Origin), PolicyRevision: c.PolicyRevision, MaximumDuration: state.timeout}
+		selection.AddressRemove = &emailhttp.RemovalConfig{Network: network, Proofs: state.passwordVerification.proofs, Service: owner, Rate: h.secret, Cookie: state.session.config.Cookie, Origin: identityhttp.Origin(c.Origin), PolicyRevision: c.PolicyRevision, MaximumDuration: state.timeout, AdministrativeTargets: c.AdministrativeRemovalTargets}
 	}
 	if c.VerificationSend {
 		owner, err := f.EmailVerificationRequests()

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Compose explicit native administrative email removal and independently opt-in
+  HTTP targets. Keep actor proof/session separate from target mutation, audit,
+  revocation and recovery; self-only composition remains the default.
+
 - Compose optional administrative email list/get with the existing PostgreSQL
   audit owner. Select `Email.Addresses.AdministrativeAudit` and independently
   opt into HTTP `AdministrativeTargets`; missing audit composition denies startup.

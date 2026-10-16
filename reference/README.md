@@ -1,5 +1,16 @@
 # Identity reference composition
 
+Administrative email removal is independently opt-in. Set
+`Email.Removal.Primary.AdministrativeTargets` for the native owner, and separately
+`HTTPEmailRequests.AdministrativeRemovalTargets` with `AddressRemove` for HTTP.
+HTTP selection requires native selection. Supply an actual authorizer granting
+the exact actor/action/tenant/target, not a role string or client override.
+The actor retains their original fresh password/session/CSRF; both accounts must
+have authoritative known-empty MFA for this selected profile. Target signin/reset
+eligibility, token retirement, session invalidation and audited pending cascade
+admission commit together without changing the actor's session. Empty target
+preserves self behavior; native selection alone exposes no HTTP capability.
+
 For the runnable PostgreSQL registration/verification/signin/session/logout
 backend, see [BASELINE.md](BASELINE.md). It is an explicit local profile, not
 a UI, production deployment or whole-platform release.

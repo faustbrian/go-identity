@@ -30,6 +30,7 @@ type administrativeEmailGrant struct {
 	mu            sync.Mutex
 	actor, target identity.UserID
 	deny          bool
+	removal       bool
 }
 
 func (p *administrativeEmailGrant) Decide(ctx context.Context, c authorization.DecisionContext) (authorization.Decision, error) {
@@ -37,7 +38,8 @@ func (p *administrativeEmailGrant) Decide(ctx context.Context, c authorization.D
 		return authorization.Decision{}, err
 	}
 	p.mu.Lock()
-	allowed := !p.deny && p.actor != "" && p.target != "" && c.PolicyRevision == 9 && c.Request.Tenant == otpTenant && c.Request.Subject.Kind == authorization.SubjectUser && c.Request.Subject.ID == authorization.SubjectID(p.actor) && c.Request.Resource.Type == "identity.user" && c.Request.Resource.ID == authorization.ResourceID(p.target) && (c.Request.Action == "identity.email.address-get" || c.Request.Action == "identity.email.address-list")
+	selectedAction := !p.removal && (c.Request.Action == "identity.email.address-get" || c.Request.Action == "identity.email.address-list") || p.removal && (c.Request.Action == "identity.email.address-remove" || c.Request.Action == "identity.email.address-remove.recover")
+	allowed := !p.deny && p.actor != "" && p.target != "" && c.PolicyRevision == 9 && c.Request.Tenant == otpTenant && c.Request.Subject.Kind == authorization.SubjectUser && c.Request.Subject.ID == authorization.SubjectID(p.actor) && c.Request.Resource.Type == "identity.user" && c.Request.Resource.ID == authorization.ResourceID(p.target) && selectedAction
 	p.mu.Unlock()
 	if allowed {
 		return authorization.Decision{Outcome: authorization.Allow, Revision: 9}, nil

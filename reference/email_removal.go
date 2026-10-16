@@ -12,14 +12,25 @@ import (
 	passwordpg "github.com/faustbrian/go-identity/password/postgres"
 )
 
-// EmailRemovalService binds native self-removal to the composed graph lifetime.
+// EmailRemovalService binds selected native removal to the composed graph lifetime.
 // It owns no pool, proof authority, journal or goroutine. Calls borrow request
 // custody until return; retained handles deny after graph Close. Zero denies.
 type EmailRemovalService struct{ state *storeState }
 
+// AdministrativeRemovalConfigured reports explicit live native selection, not
+// permission, authentication or renewed validity. Closed graphs deny.
+func (s *EmailRemovalService) AdministrativeRemovalConfigured() bool {
+	if s == nil || s.state == nil {
+		return false
+	}
+	s.state.mu.Lock()
+	defer s.state.mu.Unlock()
+	return !s.state.closed && s.state.features != nil && s.state.features.composed && s.state.features.email != nil && s.state.features.email.removal.AdministrativeRemovalConfigured()
+}
+
 var _ email.AddressRemovalService = (*EmailRemovalService)(nil)
 
-// EmailRemoval exposes only explicitly selected safe self-removal. No route is
+// EmailRemoval exposes only explicitly selected safe removal. No route is
 // created and no unsupported factor or recovery owner is silently substituted.
 func (f FeatureSet) EmailRemoval() (*EmailRemovalService, error) {
 	s := f.state

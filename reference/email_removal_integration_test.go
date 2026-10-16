@@ -223,6 +223,19 @@ func proveReferenceEmailRemoval(t *testing.T, ctx context.Context, f liveStores,
 	}
 	key, _ := identity.NewIdempotencyKey([]byte("original-email-removal"))
 	r := email.AddressRemoveRequest{TenantID: otpTenant, AddressID: identity.IdentifierID(address), ExpectedIdentifierVersion: version, ExpectedVerificationVersion: verification, Reason: "user-requested", PrimaryDisposition: disposition, RecoveryDisposition: email.PreserveVerifiedEmailRecovery, IdempotencyKey: key, Primary: email.RequestPrimary{Session: source.Primary.Session, Proof: source.Primary.Proof, CSRFToken: source.Primary.CSRFToken}, Caller: source.Primary.Caller, Network: "127.0.0.1"}
+	actor, actorCookies, actorCSRF := user, cookies, originalCSRF
+	var requireActorUnchanged func()
+	if strings.HasPrefix(f.emailRemovalMode, "removal-admin") {
+		r.Primary, actor, actorCookies, actorCSRF, requireActorUnchanged = prepareAdministrativeEmailRemoval(t, ctx, f, features, workers, client, base, origin, messages, user, readSession)
+		r.TargetSubjectID = user
+		r.Caller = authorization.DecisionContext{PolicyRevision: 9, Request: authorization.Request{Tenant: otpTenant, Subject: authorization.Subject{Kind: authorization.SubjectUser, ID: authorization.SubjectID(actor)}, Action: "identity.email.address-remove", Resource: authorization.Resource{Type: "identity.user", ID: authorization.ResourceID(user)}}}
+		if out, err := owner.AddressRemove(ctx, r); err == nil || out.Outcome == identity.CommitOutcomeCommitted || !readSession(cookies) {
+			t.Fatal("authenticated administrator without exact grant removed target", err)
+		}
+		f.adminEmailGrant.mu.Lock()
+		f.adminEmailGrant.actor, f.adminEmailGrant.target = actor, user
+		f.adminEmailGrant.mu.Unlock()
+	}
 	var replacementAt time.Time
 	var previousUser, previousAuthority uint64
 	if emailRemovalReplacesPrimary(f.emailRemovalMode) {
@@ -250,7 +263,7 @@ func proveReferenceEmailRemoval(t *testing.T, ctx context.Context, f liveStores,
 			t.Fatal("removed primary without explicit disposition", err)
 		}
 	}
-	if actual, err := owner.AddressRemoveRateSource(ctx, r); err != nil || actual != user {
+	if actual, err := owner.AddressRemoveRateSource(ctx, r); err != nil || actual != actor {
 		t.Fatal("removal lacks authenticated original rate scope", err)
 	}
 	snapshot := func() string {
@@ -270,6 +283,63 @@ FROM identity.users u WHERE tenant_id=$1 AND user_id=$2`, otpTenant, string(user
 		return metadata
 	}
 	before := snapshot()
+	proofConsumed := func() bool {
+		t.Helper()
+		var consumed bool
+		if err := f.pool.Raw().QueryRow(ctx, `SELECT consumed_command_id IS NOT NULL FROM identity_password.reauthentication_records WHERE tenant_id=$1 AND user_id=$2 AND proof_id=$3`, otpTenant, string(actor), string(r.Primary.Proof.Proof.ID)).Scan(&consumed); err != nil {
+			t.Fatal("original actor proof observation", err)
+		}
+		return consumed
+	}
+	if proofConsumed() {
+		t.Fatal("rate or source admission consumed original proof")
+	}
+	if f.emailRemovalMode == "removal-admin-rollback" {
+		// Rate-source admission above has retained the genuine original request.
+		// Withdraw only A's exact grant to B; A's general authority epoch and
+		// session remain unchanged and cannot substitute for target permission.
+		f.adminEmailGrant.mu.Lock()
+		f.adminEmailGrant.deny = true
+		f.adminEmailGrant.mu.Unlock()
+		out, denied := owner.AddressRemove(ctx, r)
+		f.adminEmailGrant.mu.Lock()
+		f.adminEmailGrant.deny = false
+		f.adminEmailGrant.mu.Unlock()
+		if denied == nil || out.Outcome == identity.CommitOutcomeCommitted || snapshot() != before || proofConsumed() || !readSession(cookies) {
+			t.Fatal("retained administrative request bypassed withdrawn target permission", denied)
+		}
+		// Denied preparation retains its own original journal, not rollback
+		// proof. A later independent request uses a new explicit key.
+		r.IdempotencyKey, _ = identity.NewIdempotencyKey([]byte("administrative-removal-after-restored-permission"))
+	}
+	if f.emailRemovalMode == "removal-admin-rollback" {
+		// Negative storage injection only: neither this count nor absence stands
+		// in for a genuine enrolled factor or authorizes a successful operation.
+		// Both identities were created with authoritative known-empty MFA by
+		// registration; restore only those exact original rows after each denial.
+		for _, subject := range []identity.UserID{actor, user} {
+			if _, err := f.pool.Raw().Exec(ctx, `UPDATE identity_mfa.factor_authorities SET active_factors=1 WHERE tenant_id=$1 AND user_id=$2 AND active_factors=0`, otpTenant, string(subject)); err != nil {
+				t.Fatal(err)
+			}
+			out, denied := owner.AddressRemove(ctx, r)
+			if _, err := f.pool.Raw().Exec(ctx, `UPDATE identity_mfa.factor_authorities SET active_factors=0 WHERE tenant_id=$1 AND user_id=$2 AND active_factors=1`, otpTenant, string(subject)); err != nil {
+				t.Fatal("original empty-factor authority restore", err)
+			}
+			if denied == nil || out.Outcome == identity.CommitOutcomeCommitted || snapshot() != before || !readSession(cookies) {
+				t.Fatal("nonempty actor or target factors downgraded to password-only", denied)
+			}
+		}
+		if _, err := f.pool.Raw().Exec(ctx, `ALTER TABLE identity_mfa.factor_authorities RENAME TO unavailable_factor_authorities`); err != nil {
+			t.Fatal(err)
+		}
+		out, denied := owner.AddressRemove(ctx, r)
+		if _, err := f.pool.Raw().Exec(ctx, `ALTER TABLE identity_mfa.unavailable_factor_authorities RENAME TO factor_authorities`); err != nil {
+			t.Fatal("original factor authority restoration", err)
+		}
+		if denied == nil || out.Outcome == identity.CommitOutcomeCommitted || snapshot() != before || !readSession(cookies) {
+			t.Fatal("unavailable factor authority inferred empty MFA", denied)
+		}
+	}
 	if emailRemovalReplacesPrimary(f.emailRemovalMode) {
 		for _, mode := range []string{"self", "absent", "identifier-version", "verification-version", "old-disposition"} {
 			bad := r
@@ -292,8 +362,12 @@ FROM identity.users u WHERE tenant_id=$1 AND user_id=$2`, otpTenant, string(user
 			}
 		}
 	}
-	if f.emailRemovalMode == "removal-rollback" || f.emailRemovalMode == "removal-replace-rollback" {
-		for _, mode := range []string{"tenant", "actor", "stale-address", "stale-verification", "proof-action", "primary", "cancel"} {
+	if f.emailRemovalMode == "removal-rollback" || f.emailRemovalMode == "removal-replace-rollback" || f.emailRemovalMode == "removal-admin-rollback" {
+		denials := []string{"tenant", "actor", "stale-address", "stale-verification", "proof-action", "primary", "cancel"}
+		if r.TargetSubjectID != "" {
+			denials = append(denials, "target", "foreign-target", "actor-session", "actor-proof", "actor-csrf", "stale-proof")
+		}
+		for _, mode := range denials {
 			invalid := r
 			invalid.Caller = r.Caller.Clone()
 			invalid.IdempotencyKey, _ = identity.NewIdempotencyKey([]byte("removal-denied-" + mode))
@@ -309,6 +383,19 @@ FROM identity.users u WHERE tenant_id=$1 AND user_id=$2`, otpTenant, string(user
 				invalid.ExpectedVerificationVersion++
 			case "proof-action":
 				invalid.Primary.Proof.Action = "identity.email.change-request"
+			case "target":
+				invalid.TargetSubjectID = actor
+			case "foreign-target":
+				invalid.TargetSubjectID = "absent-target"
+				invalid.Caller.Request.Resource.ID = "absent-target"
+			case "actor-session":
+				invalid.Primary.Session = source.Primary.Session
+			case "actor-proof":
+				invalid.Primary.Proof = source.Primary.Proof
+			case "actor-csrf":
+				invalid.Primary.CSRFToken = source.Primary.CSRFToken
+			case "stale-proof":
+				invalid.Primary.Proof.SessionVersion++
 			case "primary":
 				invalid.PrimaryDisposition = 0
 			case "cancel":
@@ -329,11 +416,27 @@ CREATE TRIGGER fail_removal_manifest BEFORE INSERT ON identity.status_consumers 
 			t.Fatal(err)
 		}
 		out, failed := owner.AddressRemove(ctx, r)
-		if failed == nil || out.Outcome == identity.CommitOutcomeCommitted || snapshot() != before || !readSession(cookies) {
+		if failed == nil || out.Outcome == identity.CommitOutcomeCommitted || snapshot() != before || !readSession(cookies) || proofConsumed() {
 			t.Fatal("late removal failure leaked protected effects", failed)
 		}
 		if _, err := f.pool.Raw().Exec(ctx, `DROP TRIGGER fail_removal_manifest ON identity.status_consumers; DROP FUNCTION public.fail_removal_manifest()`); err != nil {
 			t.Fatal(err)
+		}
+		if r.TargetSubjectID != "" {
+			// A known final rollback is terminal historical metadata, not an
+			// unfinished request. Withdrawing mutation permission must not turn
+			// its exact replay into another execution or change the outcome.
+			originalOutcome := out.Outcome
+			f.adminEmailGrant.mu.Lock()
+			f.adminEmailGrant.deny = true
+			f.adminEmailGrant.mu.Unlock()
+			out, denied := owner.AddressRemove(ctx, r)
+			f.adminEmailGrant.mu.Lock()
+			f.adminEmailGrant.deny = false
+			f.adminEmailGrant.mu.Unlock()
+			if denied != nil || out.Outcome != originalOutcome || out.Outcome == identity.CommitOutcomeCommitted || snapshot() != before || proofConsumed() || !readSession(cookies) {
+				t.Fatal("withdrawn grant changed terminal rollback receipt", out.Outcome, originalOutcome, denied)
+			}
 		}
 		r.IdempotencyKey, _ = identity.NewIdempotencyKey([]byte("new-attempt-after-proven-rollback"))
 	}
@@ -345,6 +448,9 @@ CREATE TRIGGER fail_removal_manifest BEFORE INSERT ON identity.status_consumers 
 			primary = "leave-unassigned"
 		}
 		fields := map[string]string{"proofID": string(r.Primary.Proof.Proof.ID), "addressID": string(r.AddressID), "expectedIdentifierVersion": strconv.FormatUint(r.ExpectedIdentifierVersion, 10), "expectedVerificationVersion": strconv.FormatUint(r.ExpectedVerificationVersion, 10), "reason": string(r.Reason), "primaryDisposition": primary, "recoveryDisposition": "preserve-verified-email"}
+		if r.TargetSubjectID != "" {
+			fields["targetSubjectID"] = string(r.TargetSubjectID)
+		}
 		if r.PrimaryDisposition == email.ReplacePrimaryWithVerifiedEmail {
 			fields["primaryDisposition"] = "replace-primary"
 			fields["replacementAddressID"] = string(r.ReplacementPrimary.ID)
@@ -358,9 +464,9 @@ CREATE TRIGGER fail_removal_manifest BEFORE INSERT ON identity.status_consumers 
 		}
 		request.Header.Set("Content-Type", "application/json")
 		request.Header.Set("Origin", origin)
-		request.Header.Set("X-CSRF-Token", originalCSRF)
+		request.Header.Set("X-CSRF-Token", actorCSRF)
 		request.Header.Set("Idempotency-Key", "original-email-removal")
-		for _, cookie := range cookies {
+		for _, cookie := range actorCookies {
 			request.AddCookie(cookie)
 		}
 		response, err := client.Do(request)
@@ -378,11 +484,11 @@ CREATE TRIGGER fail_removal_manifest BEFORE INSERT ON identity.status_consumers 
 		}
 		return wire
 	}
-	if f.emailRemovalMode == "removal-http" || f.emailRemovalMode == "removal-only-http" || f.emailRemovalMode == "removal-replace-http" {
+	if f.emailRemovalMode == "removal-http" || f.emailRemovalMode == "removal-only-http" || f.emailRemovalMode == "removal-replace-http" || f.emailRemovalMode == "removal-admin-http" {
 		originalHTTP = invokeHTTP()
 	}
 	var result identity.CommandResult
-	if f.emailRemovalMode == "removal-contention" || f.emailRemovalMode == "removal-replace-contention" {
+	if f.emailRemovalMode == "removal-contention" || f.emailRemovalMode == "removal-replace-contention" || f.emailRemovalMode == "removal-admin-contention" {
 		type attempt struct {
 			request email.AddressRemoveRequest
 			result  identity.CommandResult
@@ -421,12 +527,41 @@ CREATE TRIGGER fail_removal_manifest BEFORE INSERT ON identity.status_consumers 
 			if err == nil || result.Outcome != identity.CommitOutcomeUnknown || result.Cascade != nil || !f.completionFault.hit.Load() {
 				t.Fatal("lost removal acknowledgement claimed success or rollback", err)
 			}
-			q := identity.RecoveryQuery{CommandID: result.Binding.CommandID, TenantID: otpTenant, UserID: user, ActorID: identity.ActorID(user), ActorKind: authorization.SubjectUser, OperationID: "identity.email.address-remove", RecordID: address}
-			result, err = owner.AddressRemoveRecover(ctx, q, r.Caller)
+			if f.emailRemovalMode == "removal-admin-output-unknown" {
+				var pending int
+				if err := f.pool.Raw().QueryRow(ctx, `SELECT count(*) FROM identity.commands WHERE tenant_id=$1 AND purpose='identity.email.address-remove' AND state='pending' AND preparation_ciphertext IS NOT NULL AND command_plan IS NULL`, otpTenant).Scan(&pending); err != nil || pending != 1 || snapshot() != before || proofConsumed() {
+					t.Fatal("lost output acknowledgement did not retain genuine unfinished preparation", pending, err)
+				}
+				wait(ctx, t, 2*time.Second)
+				f.adminEmailGrant.mu.Lock()
+				f.adminEmailGrant.deny = true
+				f.adminEmailGrant.mu.Unlock()
+				denied, denyErr := owner.AddressRemove(ctx, r)
+				f.adminEmailGrant.mu.Lock()
+				f.adminEmailGrant.deny = false
+				f.adminEmailGrant.mu.Unlock()
+				if denyErr == nil || denied.Outcome == identity.CommitOutcomeCommitted || snapshot() != before || proofConsumed() {
+					t.Fatal("unfinished restored output bypassed withdrawn target permission", denied.Outcome, denyErr)
+				}
+				wait(ctx, t, 2*time.Second)
+				result, err = owner.AddressRemove(ctx, r)
+			} else {
+				q := identity.RecoveryQuery{CommandID: result.Binding.CommandID, TenantID: otpTenant, UserID: user, ActorID: identity.ActorID(actor), ActorKind: authorization.SubjectUser, OperationID: "identity.email.address-remove", RecordID: address}
+				result, err = owner.AddressRemoveRecover(ctx, q, r.Caller)
+			}
 		}
 	}
 	if err != nil || result.Outcome != identity.CommitOutcomeCommitted || result.Validate() != nil || result.Cascade == nil || result.Cascade.Status != identity.RevocationPending || len(result.Cascade.Owners) != 10 {
 		t.Fatal("actual protected removal", result.Outcome, err)
+	}
+	if result.Binding.UserID != user || result.Binding.ActorID != identity.ActorID(actor) || result.Cascade.UserID != user {
+		t.Fatal("administrative actor substituted for target effects")
+	}
+	if !proofConsumed() {
+		t.Fatal("committed removal did not consume original actor proof")
+	}
+	if requireActorUnchanged != nil {
+		requireActorUnchanged()
 	}
 	if emailRemovalReplacesPrimary(f.emailRemovalMode) {
 		var iv, vv, uv, av string
@@ -445,12 +580,24 @@ FROM public.outbox_messages WHERE metadata->>'identity.command_id'=$1 AND topic=
 	if readSession(cookies) {
 		t.Fatal("identifier removal retained old session authority")
 	}
-	if actual, err := owner.AddressRemoveRateSource(ctx, r); err != nil || actual != user {
+	if actual, err := owner.AddressRemoveRateSource(ctx, r); err != nil || actual != actor {
 		t.Fatal("rate scope renewed or lost original retry custody", err)
 	}
 	replay, err := owner.AddressRemove(ctx, r)
 	if err != nil || replay.Outcome != identity.CommitOutcomeCommitted || replay.Cascade == nil || replay.Cascade.CascadeID != result.Cascade.CascadeID || replay.Feature == nil || *replay.Feature != *result.Feature {
 		t.Fatal("spent-proof retry lost original admission", err)
+	}
+	if r.TargetSubjectID != "" {
+		f.adminEmailGrant.mu.Lock()
+		f.adminEmailGrant.deny = true
+		f.adminEmailGrant.mu.Unlock()
+		historical, historicalErr := owner.AddressRemove(ctx, r)
+		f.adminEmailGrant.mu.Lock()
+		f.adminEmailGrant.deny = false
+		f.adminEmailGrant.mu.Unlock()
+		if historicalErr != nil || historical.Outcome != identity.CommitOutcomeCommitted || historical.Cascade == nil || historical.Cascade.CascadeID != result.Cascade.CascadeID || historical.Binding != result.Binding {
+			t.Fatal("withdrawn mutation grant altered terminal original receipt", historicalErr)
+		}
 	}
 	if originalHTTP != nil {
 		if again := invokeHTTP(); !bytes.Equal(originalHTTP, again) {
@@ -462,7 +609,7 @@ FROM public.outbox_messages WHERE metadata->>'identity.command_id'=$1 AND topic=
 			t.Fatal("HTTP/native retry detached original admission")
 		}
 	}
-	q := identity.RecoveryQuery{CommandID: result.Binding.CommandID, TenantID: otpTenant, UserID: user, ActorID: identity.ActorID(user), ActorKind: authorization.SubjectUser, OperationID: "identity.email.address-remove", RecordID: address}
+	q := identity.RecoveryQuery{CommandID: result.Binding.CommandID, TenantID: otpTenant, UserID: user, ActorID: identity.ActorID(actor), ActorKind: authorization.SubjectUser, OperationID: "identity.email.address-remove", RecordID: address}
 	recovered, err := owner.AddressRemoveRecover(ctx, q, r.Caller)
 	if err != nil || recovered.Outcome != identity.CommitOutcomeCommitted || recovered.Cascade == nil || recovered.Cascade.CascadeID != result.Cascade.CascadeID {
 		t.Fatal("removal recovery repeated or lost original admission", err)
@@ -539,4 +686,7 @@ FROM public.outbox_messages WHERE metadata->>'identity.command_id'=$1 AND topic=
 		}
 	}
 	proveReferenceEmailResetAfterRemoval(t, ctx, f, features, workers, client, base, origin, current, messages, user, remaining)
+	if requireActorUnchanged != nil {
+		requireActorUnchanged()
+	}
 }

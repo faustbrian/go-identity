@@ -22,6 +22,7 @@ type completionCommitFault struct {
 	factorManagement        bool
 	replacementConfirmation bool
 	emailRemoval            bool
+	emailPreparation        bool
 	armed                   atomic.Bool
 	hit                     atomic.Bool
 }
@@ -82,6 +83,9 @@ func (c *completionCommitConn) Write(p []byte) (int, error) {
 	}
 	if c.fault.emailRemoval {
 		selected = bytes.Contains(p, []byte("INSERT INTO identity.status_consumers("))
+	}
+	if c.fault.emailPreparation {
+		selected = bytes.Contains(p, []byte("UPDATE identity.commands SET preparation_ciphertext="))
 	}
 	if c.fault.armed.Load() && selected {
 		c.mutation.Store(true)

@@ -46,6 +46,7 @@ import (
 	sessionpg "github.com/faustbrian/go-identity/session/postgres"
 	primitive "github.com/faustbrian/go-password/v2"
 	database "github.com/faustbrian/go-postgres"
+	"github.com/jackc/pgx/v5"
 )
 
 type referenceRegistrationPolicy struct{}
@@ -239,6 +240,7 @@ func proveReferenceSignupGraph(t *testing.T, competing bool, protected ...bool) 
 }
 
 type signupGraphExtensions struct {
+	administrativeEmailRemoval                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             bool
 	administrativeEmailQueries                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             bool
 	emailRemoval                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           bool
 	emailManagementChange                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  bool
@@ -290,7 +292,16 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 	deps.PostgreSQL = f.pool
 	if extensions.completionCommitFault {
 		f.completionFault = &completionCommitFault{factorProof: extensions.activeStepUp, regeneration: extensions.regeneration, factorManagement: extensions.factorManagement || extensions.disable, replacementConfirmation: extensions.factorReplacementConfirmationFault, emailRemoval: extensions.emailRemoval}
-		faultPool, err := database.Connect(ctx, database.Config{DSN: f.pool.Raw().Config().ConnConfig.ConnString(), MaxConns: 4, Configure: func(pc *database.PoolConfig) error { pc.ConnConfig.DialFunc = f.completionFault.dial; return nil }})
+		f.completionFault.emailPreparation = extensions.emailChangeCase == "removal-admin-output-unknown"
+		faultPool, err := database.Connect(ctx, database.Config{DSN: f.pool.Raw().Config().ConnConfig.ConnString(), MaxConns: 4, Configure: func(pc *database.PoolConfig) error {
+			pc.ConnConfig.DialFunc = f.completionFault.dial
+			if f.completionFault.emailPreparation {
+				// Keep parameterized extended queries, but send their SQL rather
+				// than a previously cached statement name to the fault boundary.
+				pc.ConnConfig.DefaultQueryExecMode = pgx.QueryExecModeDescribeExec
+			}
+			return nil
+		}})
 		if err != nil {
 			t.Fatal("completion fault pool unavailable")
 		}
@@ -326,8 +337,8 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 	selectedReset := c.PasswordReset
 	selectedResetHTTP := c.HTTPPasswordReset
 	var selectedAuthorization authorization.Service = referenceRegistrationPolicy{}
-	if extensions.administrativeEmailQueries {
-		f.adminEmailGrant = &administrativeEmailGrant{}
+	if extensions.administrativeEmailQueries || extensions.administrativeEmailRemoval {
+		f.adminEmailGrant = &administrativeEmailGrant{removal: extensions.administrativeEmailRemoval}
 		selectedAuthorization = f.adminEmailGrant
 	}
 	calls := configureReferenceRegistration(t, &c, origin, selectedAuthorization)
@@ -478,11 +489,17 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 		calls = configureReferenceEmailGraph(t, &c, origin, extensions.emailManagementChange)
 		if extensions.emailRemoval {
 			configureReferenceEmailRemoval(t, &c)
+			c.Email.Removal.Primary.AdministrativeTargets = extensions.administrativeEmailRemoval
+			if extensions.emailChangeCase == "removal-admin-output-unknown" {
+				// Exercise real lease expiry after a lost preparation-output
+				// acknowledgement, without editing durable clock/provenance rows.
+				c.PasswordVerification.Native.Coordinator.LeaseDuration = time.Second
+			}
 			if emailRemovalCreatesPrimary(extensions.emailChangeCase) {
 				configureReferenceEmailRemovalPrimary(&c)
 			}
-			if extensions.emailChangeCase == "removal-http" || extensions.emailChangeCase == "removal-only-http" || extensions.emailChangeCase == "removal-replace-http" {
-				c.HTTPEmailRequests = &reference.HTTPEmailRequestsConfiguration{AddressRemove: true, Origin: origin, PolicyRevision: 9}
+			if extensions.emailChangeCase == "removal-http" || extensions.emailChangeCase == "removal-only-http" || extensions.emailChangeCase == "removal-replace-http" || extensions.emailChangeCase == "removal-admin-http" {
+				c.HTTPEmailRequests = &reference.HTTPEmailRequestsConfiguration{AddressRemove: true, AdministrativeRemovalTargets: extensions.administrativeEmailRemoval, Origin: origin, PolicyRevision: 9}
 			}
 		}
 		if extensions.emailChangeCase == "keyed-graph" || extensions.emailChangeCase == "request-http" {
@@ -1038,7 +1055,7 @@ CREATE TRIGGER registration_fixture_fail BEFORE INSERT ON identity.delivery_inte
 	if f.afterEmailQueries != nil {
 		f.afterEmailQueries(r.Cookies(), correlation.UserID, identity.IdentifierID(correlation.RecordID))
 	}
-	if f.adminEmailGrant != nil {
+	if f.adminEmailGrant != nil && !f.adminEmailGrant.removal {
 		proveAdministrativeEmailReads(t, ctx, f, features, workers, client, base, origin, messages, invoke, issue, r.Cookies(), r.Header.Get("X-CSRF-Token"), signed.SessionID, correlation.UserID)
 		return
 	}
