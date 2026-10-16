@@ -30,6 +30,7 @@ class GenerateHTTPCatalogTest < Minitest::Test
       stdout, stderr, status = Open3.capture3(*command, native)
       assert status.success?, "native generation failed: #{stdout} #{stderr}"
       generated = JSON.parse(File.binread(output))
+      assert_equal Digest::SHA256.file(api).hexdigest, generated.fetch("provenance").fetch("operation_inventory_sha256")
       assert_equal %w[existing native], generated.fetch("operations").map { |item| item.fetch("id") }
       assert_equal baseline.fetch("operations").first, generated.fetch("operations").first
       assert_equal Digest::SHA256.file(native).hexdigest, generated.fetch("provenance").fetch("native_contracts_sha256")

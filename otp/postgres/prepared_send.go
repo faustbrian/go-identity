@@ -118,6 +118,10 @@ func newPreparedSendContributor(store *Contributor, d *deliverypg.Contributor, c
 	if c.publicAudit {
 		frame = append(frame, []byte("public-send-audit-v1\x00")...)
 	}
+	if store.emailVerification != nil {
+		frame = append(frame, []byte("email-verification-otp-v1\x00")...)
+		frame = append(frame, store.emailVerification.configuration[:]...)
+	}
 	copyOfStore := *store
 	copyOfStore.send = &preparedSendProfile{preparer: preparer, delivery: d, policy: c.preparation.Policy, template: c.preparation.TemplateID, templateVersion: c.preparation.TemplateVersion, provider: c.provider, contributors: append([]kernel.ContributorDescriptor(nil), c.contributors...), configuration: sha256.Sum256(frame), renderer: renderer, locales: append([]string(nil), c.preparation.LocaleChain...), publicAudit: c.publicAudit}
 	return &copyOfStore, nil
@@ -317,6 +321,9 @@ func (p *Contributor) ValidateFeaturePreparation(command identity.Command, plan 
 // Rechecks original primary authority/flow and DB expiry after lock waits;
 // generation and all domain effects remain outside this admission transaction.
 func (p *Contributor) AdmitFeaturePreparation(ctx context.Context, w kernel.Work, command identity.Command) error {
+	if p != nil && p.emailVerify != nil {
+		return p.emailVerify.AdmitFeaturePreparation(ctx, w, command)
+	}
 	return p.admitFeaturePreparation(ctx, w, command, p)
 }
 
@@ -332,10 +339,10 @@ func (p *Contributor) admitFeaturePreparation(ctx context.Context, w kernel.Work
 	if err != nil || b != spec.Binding || registration.Operation != spec.Operation {
 		return ErrInvalidCommand
 	}
-	return p.admitSendPrimary(ctx, w, r, flow, b, owner)
+	return p.admitSendPrimary(ctx, w, r, flow, b, owner, command)
 }
 
-func (p *Contributor) admitSendPrimary(ctx context.Context, w kernel.Work, r sendRequestRecord, flow nativeFlow, b identity.CommandBinding, owner kernel.FeatureExecutionContributor) error {
+func (p *Contributor) admitSendPrimary(ctx context.Context, w kernel.Work, r sendRequestRecord, flow nativeFlow, b identity.CommandBinding, owner kernel.FeatureExecutionContributor, command identity.Command) error {
 	a := r.authority
 	if err := w.RequireActiveDirectoryAuthority(ctx, owner, a.Directory); err != nil {
 		return err
@@ -359,6 +366,11 @@ func (p *Contributor) admitSendPrimary(ctx context.Context, w kernel.Work, r sen
 	}
 	if r.recipient != nil {
 		if err := w.RequireRecipient(ctx, owner, *r.recipient); err != nil {
+			return err
+		}
+	}
+	if p.emailVerification != nil {
+		if err := p.admitEmailVerificationSend(ctx, w, owner, command, r.continuation, r.recipient); err != nil {
 			return err
 		}
 	}

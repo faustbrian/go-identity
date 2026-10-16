@@ -164,6 +164,11 @@ func (p *issuanceContributor) applyIssuance(ctx context.Context, w kernel.Work, 
 		}
 	}
 	s, _ := custody.challenge.Bindings()
+	if p.store.emailVerification != nil {
+		if err := p.store.admitEmailVerificationSend(ctx, w, owner, command, s.Continuation, custody.recipient); err != nil {
+			return bad(err)
+		}
+	}
 	continuation, _ := s.Continuation.Bindings()
 	query := func(ctx context.Context, sql string, args ...any) (challengeRows, error) {
 		return w.Query(ctx, sql, args...)

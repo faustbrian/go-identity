@@ -130,7 +130,7 @@ func (p *authenticationSendContributor) admitSuppressedSend(ctx context.Context,
 	if err != nil || binding != spec.Binding || registration.Operation != spec.Operation {
 		return ErrInvalidCommand
 	}
-	return p.store.admitSendPrimary(ctx, w, r, flow, binding, p)
+	return p.store.admitSendPrimary(ctx, w, r, flow, binding, p, command)
 }
 
 func (p *authenticationSendContributor) applySuppressedSend(ctx context.Context, w kernel.Work, command identity.Command) (identity.FeatureReceipt, error) {

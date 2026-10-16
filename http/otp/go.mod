@@ -8,8 +8,8 @@ require (
 	github.com/faustbrian/go-identifier/v2 v2.0.3-0.20261015083104-9892f17723c0
 	github.com/faustbrian/go-identity v0.0.0-20261015054516-5afeba0ac471
 	github.com/faustbrian/go-identity/email v0.0.0-20261015085833-f43df0429695
-	github.com/faustbrian/go-identity/http v0.0.0-20261015092135-af758fe32cc8
-	github.com/faustbrian/go-identity/otp v0.0.0-20261015092135-af758fe32cc8
+	github.com/faustbrian/go-identity/http v0.0.0-20261016032901-cf3f5a466f92
+	github.com/faustbrian/go-identity/otp v0.0.0-20261016032901-cf3f5a466f92
 	github.com/faustbrian/go-identity/session v0.0.0-20261015104034-f16881100907
 	github.com/faustbrian/go-openapi/v2 v2.0.3-0.20261015044355-77bfaaffc820
 	github.com/faustbrian/go-rate-limit/v2 v2.0.1-0.20261015090634-0ebce3975fe1

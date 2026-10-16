@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add explicit cookie/Origin/synchronizer-protected pending-email OTP Send,
+  completion and code-free recovery handlers with concrete OpenAPI schemas and
+  original-source rate admission. This verification-only profile returns no
+  credentials or replacement session and rejects alternate identity/custody.
+
 - Compose current session custody backed by supported envelope v2. Existing
   workflow/HTTP contracts and original credential lifetimes are unchanged.
 

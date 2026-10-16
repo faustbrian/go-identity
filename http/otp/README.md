@@ -1,5 +1,36 @@
 # OTP HTTP transport
 
+## Pending-email verification
+
+`NewEmailVerificationFeature(EmailVerificationConfig)` independently selects
+three cookie-only operations. It requires the actual native email-verification
+service/source, strict delivery/challenge rate owners, secure session cookie,
+exact HTTPS Origin, retained synchronizer keys and trusted bounded clock/policy.
+The feature borrows owners and creates no storage, background work or session.
+
+| POST path | Exact JSON fields | Idempotency-Key |
+| --- | --- | --- |
+| `/v1/otp/send` | `flowID`, `addressID`, `addressVersion` | Required |
+| `/v1/otp/email-verify` | `flowID`, `sendCommandID`, `code` | Forbidden |
+| `/v1/otp/email-verify/recover` | `flowID`, `recovery` | Forbidden |
+
+Every request needs the original session cookie, `Origin` and `X-CSRF-Token`.
+Send also needs the existing signed `__Host-identity_device` cookie under the
+configured browser-device policy; it never mints a replacement. Caller-selected
+user/tenant/actor/purpose, Authorization, query/trailer alternatives, extra/null
+or duplicate JSON fields deny. Recovery carries the original code-free metadata
+returned by completion, never a submitted code.
+
+Send returns 202 acceptance, not verification or delivery. Only fresh committed
+completion returns `verified:true` and the exact address ID/version. Recovery
+returns original durability metadata without an address; denied originals remain
+`not_committed` and uncertainty remains `unknown`. No route emits cookies, tokens
+or synchronizers. Original session possession supports history after its own
+identifier-authority transition, but does not grant new mutation authority.
+This selected verification profile does not support pre-auth, primary replacement,
+stronger MFA, auto-signin or multiple Send purposes on the same route. Reference
+composition rejects conflicting OTP-signin Send selection explicitly.
+
 ## Email-signin Send
 
 `NewEmailSigninSendHandler(EmailSigninSendConfig)` selects only

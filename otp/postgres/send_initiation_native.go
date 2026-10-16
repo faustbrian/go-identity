@@ -109,6 +109,12 @@ func (p *Contributor) PrepareRequestKey(parent context.Context, k kernel.Request
 			return nil, identity.ForbiddenError{}
 		}
 	}
+	if p.emailVerification != nil {
+		r, err = p.resolveEmailVerificationSend(ctx, b, r)
+		if err != nil {
+			return nil, err
+		}
+	}
 	kind := identity.IdentifierEmail
 	if r.channel == otp.ChannelSMS {
 		kind = identity.IdentifierPhone

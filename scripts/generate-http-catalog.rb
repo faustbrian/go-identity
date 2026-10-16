@@ -43,7 +43,7 @@ result = {
   "schema_version" => 1,
   "provenance" => {
     "authority" => "API_OPERATIONS.md",
-    "api_sha256" => Digest::SHA256.file(api).hexdigest,
+    "operation_inventory_sha256" => Digest::SHA256.file(api).hexdigest,
     "semantics_sha256" => Digest::SHA256.file(semantics).hexdigest,
     "operation_contracts_sha256" => digest.call(operations)
   },

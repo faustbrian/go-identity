@@ -72,6 +72,8 @@ type sendInitiatingRequest struct {
 	channel                 otp.Channel
 	destination             otp.DestinationInput
 	target, network, device string
+	addressID               identity.IdentifierID
+	addressVersion          uint64
 }
 
 func (sendInitiatingRequest) Format(s fmt.State, _ rune) {
@@ -79,11 +81,17 @@ func (sendInitiatingRequest) Format(s fmt.State, _ rune) {
 }
 
 func (r sendInitiatingRequest) valid() bool {
-	if r.userID != "" && !initiationText(string(r.userID), 128) || !initiationText(r.flowID, 128) || !initiationText(r.target, 256) || !initiationText(r.device, 128) {
+	if r.userID != "" && !initiationText(string(r.userID), 128) || !initiationText(r.flowID, 128) || !initiationText(r.device, 128) {
 		return false
 	}
-	if _, err := otp.NewDestinationInput(r.destination.Value()); err != nil {
-		return false
+	if r.addressID != "" {
+		if _, err := identity.ParseIdentifierID(string(r.addressID)); err != nil || r.addressVersion == 0 || r.addressVersion == ^uint64(0) || r.target != "" || r.destination != (otp.DestinationInput{}) || r.purpose != otp.PurposeEmailVerification || r.channel != otp.ChannelEmail || r.flowKind != otp.FlowAuthorizationAuthenticatedSession {
+			return false
+		}
+	} else {
+		if _, err := otp.NewDestinationInput(r.destination.Value()); err != nil || !initiationText(r.target, 256) || r.addressVersion != 0 {
+			return false
+		}
 	}
 	address, err := netip.ParseAddr(r.network)
 	if err != nil || address.Zone() != "" || address.String() != r.network {
@@ -120,7 +128,7 @@ func (r sendInitiatingRequest) valid() bool {
 // bearer. Restoration must independently verify the separately submitted
 // credential against the complete original session/pre-auth record.
 func (p *Contributor) sendRequestIntent(r sendInitiatingRequest, bearer auth.BearerCredential) (identity.RequestIntent, error) {
-	if p == nil || p.send == nil || p.initiation == nil || !r.valid() {
+	if p == nil || p.send == nil || p.initiation == nil || !r.valid() || (p.emailVerification != nil) != (r.addressID != "") {
 		return identity.RequestIntent{}, ErrInvalidCommand
 	}
 	if _, err := session.ParseToken(bearer.Token()); err != nil {
@@ -134,15 +142,20 @@ func (p *Contributor) sendRequestIntent(r sendInitiatingRequest, bearer auth.Bea
 	text := func(name, value string) identity.FeatureField {
 		return identity.FeatureField{Name: name, Value: identity.FeatureValue{Kind: identity.FeatureText, Text: value}}
 	}
-	return identity.NewRequestIntent([]identity.FeatureField{
+	fields := []identity.FeatureField{
 		text("subject.user", string(r.userID)), text("flow.id", r.flowID),
 		{Name: "flow.kind", Value: identity.FeatureValue{Kind: identity.FeatureUint64, Uint64: uint64(r.flowKind)}},
 		text("purpose", string(r.purpose)), text("channel", string(r.channel)),
-		text("destination", r.destination.Value()), text("target", r.target),
 		text("risk.network", r.network), text("risk.device", r.device),
 		{Name: "bearer.commitment", Value: identity.FeatureValue{Kind: identity.FeatureBytes, Bytes: commitment}},
 		{Name: "configuration", Value: identity.FeatureValue{Kind: identity.FeatureBytes, Bytes: p.initiation.configuration[:]}},
-	})
+	}
+	if r.addressID != "" {
+		fields = append(fields, text("email.address-id", string(r.addressID)), identity.FeatureField{Name: "email.address-version", Value: identity.FeatureValue{Kind: identity.FeatureUint64, Uint64: r.addressVersion}})
+	} else {
+		fields = append(fields, text("destination", r.destination.Value()), text("target", r.target))
+	}
+	return identity.NewRequestIntent(fields)
 }
 
 func (p *Contributor) readSendRequestIntent(intent identity.RequestIntent) (sendInitiatingRequest, error) {
@@ -158,6 +171,11 @@ func (p *Contributor) readSendRequestIntent(intent identity.RequestIntent) (send
 	for _, field := range fields {
 		v := field.Value
 		switch field.Name {
+		case "email.address-version":
+			if p.emailVerification == nil || v.Kind != identity.FeatureUint64 {
+				return bad()
+			}
+			r.addressVersion = v.Uint64
 		case "flow.kind":
 			if v.Kind != identity.FeatureUint64 || v.Uint64 < 1 || v.Uint64 > 2 {
 				return bad()
@@ -183,6 +201,11 @@ func (p *Contributor) readSendRequestIntent(intent identity.RequestIntent) (send
 				return bad()
 			}
 			switch field.Name {
+			case "email.address-id":
+				if p.emailVerification == nil {
+					return bad()
+				}
+				r.addressID = identity.IdentifierID(v.Text)
 			case "subject.user":
 				r.userID = identity.UserID(v.Text)
 			case "flow.id":
@@ -208,7 +231,7 @@ func (p *Contributor) readSendRequestIntent(intent identity.RequestIntent) (send
 			}
 		}
 	}
-	if !r.valid() {
+	if !r.valid() || (p.emailVerification != nil) != (r.addressID != "") {
 		return bad()
 	}
 	return r, nil

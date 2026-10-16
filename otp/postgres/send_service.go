@@ -83,6 +83,10 @@ type SendService struct {
 // lockout/send-family/issuance, delivery and selected session/pre-auth schemas.
 // Then Initialize the stable key namespace. Incomplete configuration denies.
 func NewSendService(pool *database.Pool, c SendConfig, crypto *envelope.Service) (*SendService, error) {
+	return newSendService(pool, c, crypto, nil)
+}
+
+func newSendService(pool *database.Pool, c SendConfig, crypto *envelope.Service, email *emailVerificationProfile) (*SendService, error) {
 	if pool == nil || pool.Raw() == nil || crypto == nil || c.Timeout < time.Millisecond || c.Timeout > 5*time.Second || c.Store.Codec != nil {
 		return nil, ErrInvalidConfiguration
 	}
@@ -95,6 +99,7 @@ func NewSendService(pool *database.Pool, c SendConfig, crypto *envelope.Service)
 	if err != nil {
 		return nil, ErrInvalidConfiguration
 	}
+	store.emailVerification = email
 	deliveryOwner, err := deliverypg.NewContributor(c.Delivery, crypto)
 	if err != nil {
 		return nil, ErrInvalidConfiguration
@@ -201,7 +206,14 @@ func initializeIssuanceKeys(ctx context.Context, pool *database.Pool, store *Con
 // possession is checked on every call, including terminal replay. Public results
 // never distinguish suppression from issuance or queue acceptance from delivery.
 func (s *SendService) Send(ctx context.Context, r otp.SendRequest) (result otp.SendResult, err error) {
-	if ctx == nil || s == nil || s.owner == nil || s.coordinator == nil || r.Validate() != nil {
+	if r.Validate() != nil {
+		return result, ErrInvalidCommand
+	}
+	return s.send(ctx, r, nil)
+}
+
+func (s *SendService) send(ctx context.Context, r otp.SendRequest, email *otp.EmailVerificationSendRequest) (result otp.SendResult, err error) {
+	if ctx == nil || s == nil || s.owner == nil || s.coordinator == nil || email != nil && (s.owner.store.emailVerification == nil || email.Validate() != nil) {
 		return result, ErrInvalidCommand
 	}
 	ctx, stop := context.WithTimeout(ctx, s.timeout)
@@ -231,6 +243,9 @@ func (s *SendService) Send(ctx context.Context, r otp.SendRequest) (result otp.S
 	caller.Request.Resource = authorization.Resource{Type: "identity.request-admission", ID: "identity.otp.send"}
 	scope := kernel.RequestKeyScope{TenantID: r.TenantID, ActorID: identity.ActorID(caller.Request.Subject.ID), ActorKind: caller.Request.Subject.Kind, Method: "POST", RouteID: "identity.otp.send"}
 	request := sendInitiatingRequest{userID: r.UserID, flowKind: kind, flowID: id, purpose: r.Purpose, channel: r.Channel, destination: r.Destination, target: r.TargetID, network: r.Network, device: r.Device}
+	if email != nil {
+		request.addressID, request.addressVersion = email.AddressID, email.AddressVersion
+	}
 	intent, err := s.owner.store.sendRequestIntent(request, bearer)
 	if err != nil {
 		return result, ErrInvalidCommand

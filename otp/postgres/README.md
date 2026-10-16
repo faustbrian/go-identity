@@ -1,5 +1,38 @@
 # OTP PostgreSQL
 
+## Authenticated pending-email verification
+
+`NewEmailVerificationService` selects the self-user, password-session,
+known-empty-MFA, pending-nonprimary profile independently of OTP signin or email
+links. Supply `EmailVerificationConfig.Send` with email-verification purpose,
+actual session admission, original token keys, risk/delivery/template/codec and
+request-key owners, plus the existing email comparison domain and an explicit
+`CurrentAttemptKeyVersion` retained by the codec. Constructors perform no IO.
+Install selected kernel/session/MFA-authority/OTP consuming/delivery/audit/outbox
+migrations, then call `Initialize`; use reference composition to own this wiring.
+Missing factor authority is not initialized or treated as known-empty.
+
+Call `SendEmailVerification` with the pending address ID/version and original
+session possession. Preserve the same key and input on issuance retry. First
+preparation freezes the recipient and factor generation; a matching committed
+retry restores the original receipt without re-reading a now-verified address.
+Accepted issuance is not message delivery or verified ownership.
+
+Submit the captured opaque code with `EmailVerify`. Current session, target and
+factor fences precede comparison; counted wrong codes and successful consumption
+use the existing OTP transaction. The exact pending verification, protected audit
+selector `email_verification_otp`, lifecycle and identifier-authority increment
+commit together. Original sessions fail their old authority after success. The
+profile grants no primary swap, login, auto-signin, phone or MFA fallback.
+
+Retain original recovery metadata on ambiguous outcomes and use
+`RecoverEmailVerify`. Validated terminal noncommit is a successful metadata
+observation even when the original command aborted; current authorization,
+cancellation and unavailable/unresolved history still deny or remain unknown.
+No historical response returns an address or retries the mutation. Transport
+source methods authenticate original token possession and preserve original
+budget bindings, but are not current-session validation or reusable clearance.
+
 ## Native MFA login issuance
 
 `PrepareLoginSend` freezes the existing native code/bearer-free input with this

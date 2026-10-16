@@ -56,6 +56,8 @@ type Contributor struct {
 	send                      *preparedSendProfile
 	initiation                *sendInitiationProfile
 	signin                    *signinProfile
+	emailVerification         *emailVerificationProfile
+	emailVerify               *emailVerificationPhase
 }
 
 var _ kernel.OTPAttemptContributor = (*Contributor)(nil)

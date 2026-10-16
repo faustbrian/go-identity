@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Compose pending-nonprimary email OTP issuance, counted completion and original
+  metadata recovery with genuine known-empty MFA, original password-session
+  authority and atomic identifier/audit/lifecycle effects. Matching Send retries
+  preserve original custody after verification. This explicit profile selects no
+  primary replacement, stronger-factor fallback, pre-auth or auto-signin.
+
 - Compose supported envelope v2 custody and matching public native participants.
   Callers supplying envelope/keyring services must use `/v2` types; stored
   ciphertext, original authority lifetimes and transaction ownership stay intact.
