@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"slices"
+	"strconv"
 	"time"
 
 	issuerpg "github.com/faustbrian/go-capability/postgres/identity"
@@ -19,18 +20,21 @@ import (
 )
 
 type emailRemovalPhase struct {
-	service       *EmailRemovalService
-	request       email.AddressRemoveRequest
-	primary       EmailPrimaryAdmission
-	intent        kernel.EmailRemovalIntent
-	command       identity.Command
-	counter       kernel.CommandCounterPlan
-	factorVersion uint64
-	coordinator   *kernel.Coordinator
-	registry      *kernel.ContributorRegistry
-	admission     risk.ProtectedProviderAdmission
-	outputDigest  [32]byte
-	generation    uint64
+	service                 *EmailRemovalService
+	request                 email.AddressRemoveRequest
+	primary                 EmailPrimaryAdmission
+	intent                  kernel.EmailRemovalIntent
+	command                 identity.Command
+	counter                 kernel.CommandCounterPlan
+	factorVersion           uint64
+	actorFactorVersion      uint64
+	targetCredential        identity.CredentialID
+	targetCredentialVersion uint64
+	coordinator             *kernel.Coordinator
+	registry                *kernel.ContributorRegistry
+	admission               risk.ProtectedProviderAdmission
+	outputDigest            [32]byte
+	generation              uint64
 }
 
 var _ kernel.EmailRemovalContributor = (*emailRemovalPhase)(nil)
@@ -58,15 +62,29 @@ func (p *emailRemovalPhase) ValidateFeatureCommand(c identity.Command, plan kern
 		return password.ErrPasswordWork
 	}
 	matchedFactor, matchedProfile := false, false
+	matchedActor, matchedCredential, matchedCredentialVersion := false, false, false
 	for _, f := range spec.Fields {
 		switch f.Name {
 		case "email.removal.factor-version":
 			matchedFactor = f.Value.Kind == identity.FeatureUint64 && f.Value.Uint64 == p.factorVersion
 		case "email.removal.profile":
 			matchedProfile = f.Value.Kind == identity.FeatureBytes && slices.Equal(f.Value.Bytes, p.service.profile[:])
+		case "email.removal.actor-factor-version":
+			matchedActor = f.Value.Kind == identity.FeatureUint64 && f.Value.Uint64 == p.actorFactorVersion
+		case "email.removal.target-credential":
+			matchedCredential = f.Value.Kind == identity.FeatureText && f.Value.Text == string(p.targetCredential)
+		case "email.removal.target-credential-version":
+			matchedCredentialVersion = f.Value.Kind == identity.FeatureUint64 && f.Value.Uint64 == p.targetCredentialVersion
 		}
 	}
 	if !matchedFactor || !matchedProfile {
+		return password.ErrPasswordWork
+	}
+	if p.request.TargetSubjectID != "" {
+		if !p.service.AdministrativeRemovalConfigured() || p.actorFactorVersion == 0 || p.targetCredential == "" || p.targetCredentialVersion == 0 || !matchedActor || !matchedCredential || !matchedCredentialVersion {
+			return password.ErrPasswordWork
+		}
+	} else if matchedActor || matchedCredential || matchedCredentialVersion || p.actorFactorVersion != 0 || p.targetCredential != "" || p.targetCredentialVersion != 0 {
 		return password.ErrPasswordWork
 	}
 	return nil
@@ -81,7 +99,7 @@ func (p *emailRemovalPhase) AdmitFeaturePreparation(ctx context.Context, w kerne
 	if err := p.primary.Admit(ctx, w, p, c); err != nil {
 		return err
 	}
-	if _, err := mfapg.RequireManagedEmailFactors(ctx, w, p, c, p.factorVersion); err != nil {
+	if err := p.requireFactors(ctx, w, c); err != nil {
 		return err
 	}
 	return p.remainingRecovery(ctx, w)
@@ -172,6 +190,9 @@ func (p *emailRemovalPhase) PrepareFeatureAdmission(ctx context.Context, c ident
 	if c != p.command {
 		return nil, password.ErrPasswordWork
 	}
+	if err := p.authorizeAdministrativeTarget(ctx, c); err != nil {
+		return nil, err
+	}
 	scope, err := p.riskScope()
 	if err != nil {
 		return nil, err
@@ -186,6 +207,25 @@ func (p *emailRemovalPhase) PrepareFeatureAdmission(ctx context.Context, c ident
 	}
 	a := &emailRemovalAdmission{phase: p, admission: admission}
 	return a, a.Check(ctx)
+}
+
+// This policy callback runs only in the coordinator's out-of-transaction
+// preparation/restoration phase. Retained possession and actor epochs do not
+// confer current target permission. Terminal historical replay never enters
+// these phases; it preserves the existing original receipt contract.
+func (p *emailRemovalPhase) authorizeAdministrativeTarget(ctx context.Context, c identity.Command) error {
+	if p == nil || p.service == nil || ctx == nil || c != p.command {
+		return password.ErrPasswordWork
+	}
+	if p.request.TargetSubjectID == "" {
+		return nil
+	}
+	spec, ok := c.Feature()
+	if !ok || spec.Binding.UserID != p.request.TargetSubjectID {
+		return password.ErrPasswordWork
+	}
+	primary := p.service.primary
+	return primary.source.authorize(ctx, p.request.Caller, spec.Binding, ReauthenticationTarget{Purpose: "identity.password.verify", Action: primary.config.Action, Audience: primary.config.Audience})
 }
 func (*emailRemovalPhase) GenerateFeaturePreparation(context.Context, identity.Command, uint64) ([]byte, error) {
 	// The admission-bearing interface above is mandatory. The older generator
@@ -226,6 +266,9 @@ func (p *emailRemovalPhase) RestoreFeaturePreparation(ctx context.Context, c ide
 	return c, plan, err
 }
 func (p *emailRemovalPhase) RestoreFeatureAdmission(ctx context.Context, c identity.Command, generation uint64, wire []byte) (kernel.FeaturePreparationAdmission, error) {
+	if err := p.authorizeAdministrativeTarget(ctx, c); err != nil {
+		return nil, err
+	}
 	if _, _, err := p.RestoreFeaturePreparation(ctx, c, generation, wire); err != nil {
 		return nil, err
 	}
@@ -240,7 +283,7 @@ func (p *emailRemovalPhase) check(ctx context.Context, w kernel.Work, c identity
 	if err := p.primary.Check(ctx, w, p, c); err != nil {
 		return err
 	}
-	if _, err := mfapg.RequireManagedEmailFactors(ctx, w, p, c, p.factorVersion); err != nil {
+	if err := p.requireFactors(ctx, w, c); err != nil {
 		return err
 	}
 	if err := p.remainingRecovery(ctx, w); err != nil {
@@ -284,6 +327,14 @@ func (p *emailRemovalPhase) RecoverParticipant(ctx context.Context, w kernel.Rec
 	return recoverEmailPrimaryUse(ctx, w, p)
 }
 
+func (p *emailRemovalPhase) requireFactors(ctx context.Context, w kernel.Work, c identity.Command) error {
+	if p.request.TargetSubjectID != "" {
+		return mfapg.RequireAdministrativeEmailFactors(ctx, w, p, c, p.actorFactorVersion, p.factorVersion)
+	}
+	_, err := mfapg.RequireManagedEmailFactors(ctx, w, p, c, p.factorVersion)
+	return err
+}
+
 // The actual configured signin and reset parsers must both preserve the stored
 // canonical mailbox. Current root/password authority is locked by primary Admit;
 // the query retains exact active credential and surviving verified-email rows.
@@ -297,17 +348,21 @@ func (p *emailRemovalPhase) remainingRecovery(ctx context.Context, w kernel.Work
 	if err != nil {
 		return err
 	}
+	credential, version := identity.CredentialID(b.Authentication.CredentialID), original.EffectiveCredentialVersion()
+	if p.request.TargetSubjectID != "" {
+		credential, version = p.targetCredential, p.targetCredentialVersion
+	}
 	rows, err := w.Query(ctx, `SELECT i.canonical_value FROM identity.identifiers i
 JOIN identity.users u USING(tenant_id,user_id)
 JOIN identity.credential_references c USING(tenant_id,user_id)
 WHERE i.tenant_id=$1 AND i.user_id=$2 AND i.identifier_id<>$3 AND i.kind='email'
 AND i.verified AND i.verification_state=2 AND i.verified_at IS NOT NULL AND u.status='active'
-AND c.credential_id=$4 AND c.kind=1 AND c.owner='identity/password' AND c.enabled
+AND c.credential_id=$4 AND c.version=$5::numeric AND c.kind=1 AND c.owner='identity/password' AND c.enabled
 AND (c.expires_at IS NULL OR c.expires_at>clock_timestamp())
 AND NOT EXISTS(SELECT 1 FROM identity.credential_references other
  WHERE other.tenant_id=c.tenant_id AND other.user_id=c.user_id AND other.kind=1
  AND other.owner='identity/password' AND other.credential_id<>c.credential_id)
-ORDER BY i.is_primary DESC,i.identifier_id LIMIT 128 FOR SHARE OF u,i,c`, string(b.TenantID), string(b.UserID), string(p.intent.Change.ID), string(b.Authentication.CredentialID))
+ORDER BY i.is_primary DESC,i.identifier_id LIMIT 128 FOR SHARE OF u,i,c`, string(p.intent.Change.TenantID), string(p.intent.Change.UserID), string(p.intent.Change.ID), string(credential), strconv.FormatUint(version, 10))
 	if err != nil {
 		return err
 	}

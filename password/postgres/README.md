@@ -2,6 +2,22 @@
 
 ## Safe email removal
 
+For administrative targets, select `EmailPrimaryConfig.AdministrativeTargets`
+only for `identity.email.address-remove`. Supply
+`EmailPrimaryRequest.TargetSubjectID` (or the email-owned request's corresponding
+field), with the actual actor's original signed proof, cookie/bearer and CSRF
+custody. Current policy must grant the exact target action; the flag and ID are
+not authority. The sole Work fences actor credential/authorization, independent
+known-empty MFA states, and the target's actual remaining configured password
+signin/reset path. Target revocation never replaces the actor's session.
+Retries retain original input/proof and pending cascade identity; unknown is not
+rollback. Empty target retains legacy self custody and unsupported factors deny.
+Every unfinished preparation/restoration reevaluates exact target permission
+outside database locks; retained custody and a general actor epoch are not an
+Allow decision. Terminal keyed replay preserves original historical metadata,
+not permission to execute another mutation. Native recovery still has its own
+current disclosure policy.
+
 `NewEmailRemovalService(primary, signin, reset, config, keyring)` requires actual
 password `SigninService` and complete emailed `ResetService` on the same pool.
 Their global/authorization scopes must match primary admission; selected material

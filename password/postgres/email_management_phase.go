@@ -8,6 +8,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"github.com/faustbrian/go-authorization/v3"
 	"io"
 	"net/url"
 	"slices"
@@ -277,7 +278,11 @@ func recoverEmailPrimaryUse(ctx context.Context, w kernel.RecoveryWork, owner ke
 	if err != nil {
 		return kernel.RecoveryUnknown, password.ErrPasswordWork
 	}
-	rows, err := w.Query(ctx, `SELECT EXISTS(SELECT 1 FROM identity_password.reauthentication_records WHERE tenant_id=$1 AND user_id=$2 AND consumed_command_id=$3)`, string(b.TenantID), string(b.UserID), key)
+	proofOwner := b.UserID
+	if b.OperationID == "identity.email.address-remove" && b.ActorKind == authorization.SubjectUser && b.ActorID != "" {
+		proofOwner = identity.UserID(b.ActorID)
+	}
+	rows, err := w.Query(ctx, `SELECT EXISTS(SELECT 1 FROM identity_password.reauthentication_records WHERE tenant_id=$1 AND user_id=$2 AND consumed_command_id=$3)`, string(b.TenantID), string(proofOwner), key)
 	if err != nil {
 		return kernel.RecoveryUnknown, err
 	}

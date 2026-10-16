@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Explicitly compose administrative email removal using the actor's original
+  fresh password proof and target-specific permission. Preserve target signin/
+  reset eligibility and atomic revocation/cascade while leaving actor authority
+  unchanged; retain original keyed replay and uncertain-commit recovery.
+  Recheck exact target permission for unfinished retained preparation without
+  invoking application policy under database locks or altering terminal replay.
+
 - Bind an explicit versioned replacement primary to original safe-removal
   custody, replay and the same protected mutation; stale or substituted
   replacement intent cannot reuse an outcome or renew verification freshness.

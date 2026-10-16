@@ -5,6 +5,7 @@ import (
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"maps"
 	"slices"
@@ -26,8 +27,9 @@ import (
 	lifecyclepg "github.com/faustbrian/go-transactional-outbox/postgres/identity"
 )
 
-// EmailRemovalConfig selects the complete password/known-empty-MFA self-removal
-// profile. ConfigurationID versions borrowed policy/provider semantics. Domain
+// EmailRemovalConfig selects the password/known-empty-MFA removal profile.
+// EmailPrimaryConfig separately enables administrative targets. ConfigurationID
+// versions borrowed policy/provider semantics. Domain
 // supplies reuse and complete pending-cascade policy; original request keys,
 // configuration, evidence and decrypting keys must outlive retained requests.
 // MaximumDuration is positive <=1m. Keyed's dedicated intent key must be distinct
@@ -222,7 +224,7 @@ func (s *EmailRemovalService) AddressRemoveRateSource(ctx context.Context, r ema
 	if !ok {
 		return "", password.ErrPasswordWork
 	}
-	return spec.Binding.UserID, nil
+	return identity.UserID(spec.Binding.ActorID), nil
 }
 
 func (s *EmailRemovalService) resolveRemoval(ctx context.Context, r email.AddressRemoveRequest) (*emailRemovalPhase, error) {
@@ -251,7 +253,7 @@ func (s *EmailRemovalService) resolveRemoval(ctx context.Context, r email.Addres
 // query policy, never original password proof possession or another mutation.
 // Current address absence alone cannot prove commit. No session is issued.
 func (s *EmailRemovalService) AddressRemoveRecover(ctx context.Context, q identity.RecoveryQuery, caller authorization.DecisionContext) (identity.CommandResult, error) {
-	if ctx == nil || s == nil || s.config == nil || q.OperationID != "identity.email.address-remove" || q.ActorKind != authorization.SubjectUser || string(q.ActorID) != string(q.UserID) || q.UserID == "" || q.RecordID == "" || q.AnonymousFlowID != "" || q.LinkMode != 0 {
+	if ctx == nil || s == nil || s.config == nil || q.OperationID != "identity.email.address-remove" || q.ActorKind != authorization.SubjectUser || q.ActorID == "" || string(q.ActorID) != string(q.UserID) && !s.primary.config.AdministrativeTargets || q.UserID == "" || q.RecordID == "" || q.AnonymousFlowID != "" || q.LinkMode != 0 {
 		return identity.CommandResult{}, password.ErrPasswordWork
 	}
 	ctx, stop := context.WithTimeout(ctx, s.config().MaximumDuration)
@@ -268,7 +270,7 @@ func (s *EmailRemovalService) prepareRemoval(ctx context.Context, r email.Addres
 	if err := r.Validate(); err != nil {
 		return nil, err
 	}
-	primaryRequest := EmailPrimaryRequest{TenantID: r.TenantID, CommandID: id, AddressID: r.AddressID, Session: r.Primary.Session, Proof: r.Primary.Proof, CSRFToken: r.Primary.CSRFToken, Caller: r.Caller.Clone()}
+	primaryRequest := EmailPrimaryRequest{TenantID: r.TenantID, TargetSubjectID: r.TargetSubjectID, CommandID: id, AddressID: r.AddressID, Session: r.Primary.Session, Proof: r.Primary.Proof, CSRFToken: r.Primary.CSRFToken, Caller: r.Caller.Clone()}
 	primary, err := s.primary.Prepare(ctx, primaryRequest)
 	if err != nil {
 		return nil, err
@@ -281,24 +283,54 @@ func (s *EmailRemovalService) prepareRemoval(ctx context.Context, r email.Addres
 	if err != nil {
 		return nil, err
 	}
-	state, err := s.directory.GetIdentifierState(ctx, identity.IdentifierQuery{TenantID: r.TenantID, UserID: bindings.UserID, MaximumIdentifiers: 128})
+	subject, err := emailPrimarySubject(s.primary, primaryRequest, bindings.UserID)
+	if err != nil {
+		return nil, err
+	}
+	state, err := s.directory.GetIdentifierState(ctx, identity.IdentifierQuery{TenantID: r.TenantID, UserID: subject, MaximumIdentifiers: 128})
 	if err != nil {
 		return nil, err
 	}
 	vector, err := bindings.Authority.Bindings()
-	if err != nil || state.AuthorityVersion != vector.Identifier.Version {
+	if err != nil || r.TargetSubjectID == "" && state.AuthorityVersion != vector.Identifier.Version {
 		return nil, identity.ForbiddenError{}
 	}
-	factorVersion, enrolled, err := mfapg.ReadPasswordSigninFactors(ctx, s.primary.source.pool, r.TenantID, bindings.UserID, min(s.config().MaximumDuration, 5*time.Second))
+	factorVersion, enrolled, err := mfapg.ReadPasswordSigninFactors(ctx, s.primary.source.pool, r.TenantID, subject, min(s.config().MaximumDuration, 5*time.Second))
 	if err != nil {
 		return nil, err
 	}
 	if enrolled {
 		return nil, identity.ForbiddenError{}
 	}
+	var actorFactorVersion, targetCredentialVersion uint64
+	var targetCredential identity.CredentialID
+	if r.TargetSubjectID != "" {
+		actorFactorVersion, enrolled, err = mfapg.ReadPasswordSigninFactors(ctx, s.primary.source.pool, r.TenantID, bindings.UserID, min(s.config().MaximumDuration, 5*time.Second))
+		if err != nil {
+			return nil, err
+		}
+		if enrolled {
+			return nil, identity.ForbiddenError{}
+		}
+		material, e := s.signin.repository.ReadPasswordCredential(ctx, password.CredentialKey{TenantID: r.TenantID, SubjectID: subject})
+		if e != nil {
+			if errors.Is(e, password.ErrCredentialAbsent) {
+				return nil, identity.ForbiddenError{}
+			}
+			return nil, e
+		}
+		authority := material.Authority()
+		if authority.User.ID != subject || authority.User.Version != state.User.Version || identity.CheckCredentialAuthority(authority, authority.Credential, authority.AuthorityVersion, time.Now().UTC()) != nil {
+			return nil, identity.ForbiddenError{}
+		}
+		targetCredential, targetCredentialVersion = authority.Credential.ID, authority.Credential.Version
+	}
 	op := emailPrimaryOperation("identity.email.address-remove")
-	b := identity.CommandBinding{CommandID: id, TenantID: r.TenantID, UserID: bindings.UserID, ActorID: identity.ActorID(bindings.UserID), ActorKind: authorization.SubjectUser, RecordID: string(r.AddressID), OperationID: op.OperationID, SchemaID: op.SchemaID, SchemaVersion: 1, PolicyID: s.config().PolicyID, PolicyVersion: s.primary.source.c.Coordinator.AdmissionPolicy.PolicyVersion, CorrelationID: string(id)}
-	intent := kernel.EmailRemovalIntent{Change: identity.IdentifierChange{TenantID: r.TenantID, UserID: bindings.UserID, ID: r.AddressID, Action: identity.IdentifierRemove, ExpectedUserVersion: state.User.Version, ExpectedAuthorityVersion: state.AuthorityVersion, ExpectedIdentifierVersion: r.ExpectedIdentifierVersion, ExpectedVerificationVersion: r.ExpectedVerificationVersion}, ComparisonProfile: s.config().Domain.Directory.ComparisonProfile, Reason: string(r.Reason), LeavePrimaryUnassigned: r.PrimaryDisposition == email.LeavePrimaryUnassigned}
+	b := identity.CommandBinding{CommandID: id, TenantID: r.TenantID, UserID: subject, ActorID: identity.ActorID(bindings.UserID), ActorKind: authorization.SubjectUser, RecordID: string(r.AddressID), OperationID: op.OperationID, SchemaID: op.SchemaID, SchemaVersion: 1, PolicyID: s.config().PolicyID, PolicyVersion: s.primary.source.c.Coordinator.AdmissionPolicy.PolicyVersion, CorrelationID: string(id)}
+	intent := kernel.EmailRemovalIntent{Change: identity.IdentifierChange{TenantID: r.TenantID, UserID: subject, ID: r.AddressID, Action: identity.IdentifierRemove, ExpectedUserVersion: state.User.Version, ExpectedAuthorityVersion: state.AuthorityVersion, ExpectedIdentifierVersion: r.ExpectedIdentifierVersion, ExpectedVerificationVersion: r.ExpectedVerificationVersion}, ComparisonProfile: s.config().Domain.Directory.ComparisonProfile, Reason: string(r.Reason), LeavePrimaryUnassigned: r.PrimaryDisposition == email.LeavePrimaryUnassigned}
+	if r.TargetSubjectID != "" {
+		intent.Administration = kernel.EmailRemovalAdministration{GlobalAuthorityID: s.primary.source.c.Profile.GlobalAuthorityID, GlobalVersion: vector.Global.Version, TenantVersion: vector.Tenant.Version}
+	}
 	intent.ReplacementPrimary = r.ReplacementPrimary
 	policy := email.RemovalProfile{Sessions: email.InvalidateIdentifierSessions, Recovery: r.RecoveryDisposition}
 	if _, err := policy.PlanRemoval(state, intent.Change, time.Now().UTC()); err != nil {
@@ -319,15 +351,24 @@ func (s *EmailRemovalService) prepareRemoval(ctx context.Context, r email.Addres
 		return nil, err
 	}
 	fields = append(fields, identity.FeatureField{Name: "email.removal.factor-version", Value: identity.FeatureValue{Kind: identity.FeatureUint64, Uint64: factorVersion}}, identity.FeatureField{Name: "email.removal.profile", Value: identity.FeatureValue{Kind: identity.FeatureBytes, Bytes: slices.Clone(s.profile[:])}})
+	if r.TargetSubjectID != "" {
+		fields = append(fields, identity.FeatureField{Name: "email.removal.actor-factor-version", Value: identity.FeatureValue{Kind: identity.FeatureUint64, Uint64: actorFactorVersion}}, identity.FeatureField{Name: "email.removal.target-credential", Value: identity.FeatureValue{Kind: identity.FeatureText, Text: string(targetCredential)}}, identity.FeatureField{Name: "email.removal.target-credential-version", Value: identity.FeatureValue{Kind: identity.FeatureUint64, Uint64: targetCredentialVersion}})
+	}
 	command, err := primary.Command(b, fields)
 	if err != nil {
 		return nil, err
 	}
-	command, counter, err := s.config().Counters.PrepareCommandCounters(command, risk.Subject{User: string(bindings.UserID), Session: bindings.SessionID, Network: r.Network}, r.Primary.Proof.Proof.IssuedAt.UTC().Truncate(time.Microsecond))
+	command, counter, err := s.config().Counters.PrepareCommandCounters(command, risk.Subject{User: string(subject), Session: bindings.SessionID, Network: r.Network}, r.Primary.Proof.Proof.IssuedAt.UTC().Truncate(time.Microsecond))
 	if err != nil {
 		return nil, err
 	}
-	return &emailRemovalPhase{service: s, request: r, primary: primary, intent: intent, command: command, counter: counter, factorVersion: factorVersion}, nil
+	return &emailRemovalPhase{service: s, request: r, primary: primary, intent: intent, command: command, counter: counter, factorVersion: factorVersion, actorFactorVersion: actorFactorVersion, targetCredential: targetCredential, targetCredentialVersion: targetCredentialVersion}, nil
+}
+
+// AdministrativeRemovalConfigured reports explicit native capability selection,
+// never caller permission, authentication or fresh authority.
+func (s *EmailRemovalService) AdministrativeRemovalConfigured() bool {
+	return s != nil && s.primary != nil && s.primary.config.AdministrativeTargets
 }
 
 // Format hides borrowed owners, keys and configuration custody.

@@ -271,6 +271,17 @@ func restoreEmailPrimary(source *EmailPrimarySource, request EmailPrimaryRequest
 	if err != nil {
 		return EmailPrimaryAdmission{}, password.ErrPasswordWork
 	}
+	if _, err := emailPrimarySubject(source, request, user); err != nil {
+		return EmailPrimaryAdmission{}, err
+	}
+	selectedTarget, present := values["email.primary.target-subject"]
+	if request.TargetSubjectID != "" {
+		if !present || selectedTarget.Kind != identity.FeatureText || selectedTarget.Text != string(request.TargetSubjectID) {
+			return EmailPrimaryAdmission{}, identity.ForbiddenError{}
+		}
+	} else if present {
+		return EmailPrimaryAdmission{}, identity.ForbiddenError{}
+	}
 	record, err := decodeReauthenticationRecord(request.Proof.Proof.ID, string(request.TenantID), string(user), proof)
 	if err != nil || record.Proof != request.Proof || record.Issuer != source.source.c.Issuer || record.Environment != source.source.c.Environment || record.CredentialID != spec.Authentication.CredentialID || record.CredentialVersion != original.EffectiveCredentialVersion() || len(source.source.c.VerificationKeys[record.KeyID]) != ed25519.PublicKeySize {
 		return EmailPrimaryAdmission{}, identity.ForbiddenError{}

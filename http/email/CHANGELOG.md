@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Opt into administrative removal with `RemovalConfig.AdministrativeTargets`
+  and a matching native owner. Accept optional `targetSubjectID` without changing
+  the authenticated actor; disabled routes reject and omit the selector.
+
 - Select administrative email list/get explicitly with `AdministrativeTargets`.
   Require native auditing and current actor/action/target authorization; the
   optional `targetSubjectID` never substitutes the authenticated actor. Default

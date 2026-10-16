@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -23,7 +24,11 @@ type removalOwner struct {
 	last            email.AddressRemoveRequest
 	invalid         bool
 	foreign         bool
+	administrative  bool
+	substituteActor bool
 }
+
+func (s *removalOwner) AdministrativeRemovalConfigured() bool { return s.administrative }
 
 func (s *removalOwner) AddressRemoveRateSource(ctx context.Context, r email.AddressRemoveRequest) (identity.UserID, error) {
 	s.rates++
@@ -41,6 +46,12 @@ func (s *removalOwner) AddressRemove(_ context.Context, r email.AddressRemoveReq
 	id, _ := identity.NewCommandID()
 	op := identity.FeatureOperation{Owner: "identity/email", OperationID: "identity.email.address-remove", SchemaID: "identity.email.address-remove.native-v1", SchemaVersion: 1, RecordRequirement: identity.FeatureRecordRequired}
 	b := identity.CommandBinding{CommandID: id, TenantID: r.TenantID, UserID: identity.UserID(r.Caller.Request.Subject.ID), ActorID: identity.ActorID(r.Caller.Request.Subject.ID), ActorKind: authorization.SubjectUser, RecordID: string(r.AddressID), OperationID: op.OperationID, SchemaID: op.SchemaID, SchemaVersion: 1, PolicyID: "email-removal", PolicyVersion: 9, CorrelationID: string(id)}
+	if r.TargetSubjectID != "" {
+		b.UserID = r.TargetSubjectID
+	}
+	if s.substituteActor {
+		b.ActorID = identity.ActorID(b.UserID)
+	}
 	if s.foreign {
 		b.TenantID = "foreign"
 	}
@@ -50,6 +61,51 @@ func (s *removalOwner) AddressRemove(_ context.Context, r email.AddressRemoveReq
 		c.Owners = append(c.Owners, identity.RevocationOwnerReceipt{Owner: id, Status: identity.RevocationPending})
 	}
 	return identity.CommandResult{Binding: b, Outcome: identity.CommitOutcomeCommitted, AuditEventID: "removal-audit", Feature: &identity.FeatureReceipt{Operation: op, BeforeVersion: r.ExpectedIdentifierVersion, AfterVersion: r.ExpectedIdentifierVersion + 1}, Cascade: c}, nil
+}
+
+func TestAdministrativeRemovalTransportKeepsStoredProofActorAndExactTarget(t *testing.T) {
+	for _, mode := range []string{"selected", "disabled", "missing-native", "substituted-result"} {
+		t.Run(mode, func(t *testing.T) {
+			c, owner, r := removalFixture(t)
+			c.AdministrativeTargets = mode != "disabled"
+			owner.administrative = mode != "missing-native"
+			owner.substituteActor = mode == "substituted-result"
+			body := `{"proofID":"AAAAAAAAAAAAAAAAAAAAAQ","targetSubjectID":"other-user","addressID":"target-address","expectedIdentifierVersion":"1","expectedVerificationVersion":"1","reason":"user-requested","primaryDisposition":"leave-unassigned","recoveryDisposition":"preserve-verified-email"}`
+			r.Body = io.NopCloser(strings.NewReader(body))
+			r.ContentLength = int64(len(body))
+			h, err := emailhttp.NewAddressRemoveHandler(c)
+			if mode == "missing-native" {
+				if err == nil || h != nil {
+					t.Fatal("missing administrative owner admitted")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			w := httptest.NewRecorder()
+			h.ServeHTTP(w, r)
+			want := 200
+			if mode == "disabled" {
+				want = 400
+			}
+			if mode == "substituted-result" {
+				want = 503
+			}
+			if w.Code != want || len(w.Result().Cookies()) != 0 {
+				t.Fatal("administrative transport boundary", mode, w.Code)
+			}
+			if mode == "disabled" {
+				if owner.removals != 0 || owner.rates != 0 || owner.reads != 0 {
+					t.Fatal("disabled targeting reached authority")
+				}
+				return
+			}
+			if owner.last.TargetSubjectID != "other-user" || owner.last.Caller.Request.Resource.ID != "other-user" || string(owner.last.Caller.Request.Subject.ID) != owner.proof.Proof.Subject || owner.last.Caller.Request.Subject.ID == "other-user" {
+				t.Fatal("target replaced stored proof actor")
+			}
+		})
+	}
 }
 func (s *removalOwner) AddressRemoveRecover(context.Context, identity.RecoveryQuery, authorization.DecisionContext) (identity.CommandResult, error) {
 	return identity.CommandResult{}, identity.ForbiddenError{}
@@ -191,21 +247,29 @@ func TestEmailRemovalHTTPRejectsForeignOutcomeWithoutCorrelation(t *testing.T) {
 }
 
 func TestEmailRemovalSelectedFeatureDocumentsHandler(t *testing.T) {
-	c, owner, r := removalFixture(t)
-	f, err := emailhttp.NewFeature(emailhttp.FeatureConfig{AddressRemove: &c})
-	if err != nil {
-		t.Fatal(err)
-	}
-	h, doc, err := identityhttp.NewDocumentedHandler(t.Context(), identityhttp.DocumentConfig{Title: "Email removal", Version: "1"}, identityhttp.FeatureServices{Features: []identityhttp.Feature{f}})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(string(doc.JSON()), "/v1/email/address-remove") || strings.Contains(string(doc.JSON()), "/v1/email/change-request") {
-		t.Fatal("selection advertises incorrect routes")
-	}
-	w := httptest.NewRecorder()
-	h.ServeHTTP(w, r)
-	if w.Code != 200 || owner.removals != 1 {
-		t.Fatal("documented removal route not usable", w.Code)
+	for _, selected := range []bool{false, true} {
+		t.Run(strconv.FormatBool(selected), func(t *testing.T) {
+			c, owner, r := removalFixture(t)
+			c.AdministrativeTargets, owner.administrative = selected, selected
+			f, err := emailhttp.NewFeature(emailhttp.FeatureConfig{AddressRemove: &c})
+			if err != nil {
+				t.Fatal(err)
+			}
+			h, doc, err := identityhttp.NewDocumentedHandler(t.Context(), identityhttp.DocumentConfig{Title: "Email removal", Version: "1"}, identityhttp.FeatureServices{Features: []identityhttp.Feature{f}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !strings.Contains(string(doc.JSON()), "/v1/email/address-remove") || strings.Contains(string(doc.JSON()), "/v1/email/change-request") {
+				t.Fatal("selection advertises incorrect routes")
+			}
+			if strings.Contains(string(doc.JSON()), "targetSubjectID") != selected {
+				t.Fatal("administrative selector metadata differs from selected handler")
+			}
+			w := httptest.NewRecorder()
+			h.ServeHTTP(w, r)
+			if w.Code != 200 || owner.removals != 1 {
+				t.Fatal("documented removal route not usable", w.Code)
+			}
+		})
 	}
 }

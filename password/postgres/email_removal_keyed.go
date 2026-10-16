@@ -23,18 +23,24 @@ import (
 type storedEmailRemovalIntent kernel.EmailRemovalIntent
 type storedRemovalKeyBinding kernel.RequestKeyPreparationBinding
 type keyedEmailRemovalInput struct {
-	Schema        uint8
-	Spec          identity.FeatureCommandSpec
-	Intent        storedEmailRemovalIntent
-	Counter       storedEmailCounter
-	FactorVersion uint64
-	Proof         []byte
-	RequestInput  []identity.FeatureField
+	Schema                  uint8
+	Spec                    identity.FeatureCommandSpec
+	Intent                  storedEmailRemovalIntent
+	Counter                 storedEmailCounter
+	FactorVersion           uint64
+	Proof                   []byte
+	RequestInput            []identity.FeatureField
+	ActorFactorVersion      uint64                `json:",omitzero"`
+	TargetCredential        identity.CredentialID `json:",omitzero"`
+	TargetCredentialVersion uint64                `json:",omitzero"`
 }
 
 func (s *EmailRemovalService) requestIntent(r email.AddressRemoveRequest) (identity.RequestIntent, error) {
 	if err := r.Validate(); err != nil {
 		return identity.RequestIntent{}, err
+	}
+	if r.TargetSubjectID != "" && !s.AdministrativeRemovalConfigured() {
+		return identity.RequestIntent{}, identity.ForbiddenError{}
 	}
 	proof, err := json.Marshal(r.Primary.Proof)
 	if err != nil || len(proof) > maximumReauthenticationRecordBytes {
@@ -59,6 +65,9 @@ func (s *EmailRemovalService) requestIntent(r email.AddressRemoveRequest) (ident
 		{Name: "proof", Value: identity.FeatureValue{Kind: identity.FeatureBytes, Bytes: digest("proof", proof)}},
 		{Name: "bearer", Value: identity.FeatureValue{Kind: identity.FeatureBytes, Bytes: digest("bearer", []byte(r.Primary.Session.Token()))}},
 		{Name: "network", Value: identity.FeatureValue{Kind: identity.FeatureBytes, Bytes: digest("network", []byte(r.Network))}},
+	}
+	if r.TargetSubjectID != "" {
+		fields = append(fields, identity.FeatureField{Name: "target-subject", Value: identity.FeatureValue{Kind: identity.FeatureText, Text: string(r.TargetSubjectID)}})
 	}
 	if r.ReplacementPrimary != (identity.IdentifierPrimarySelection{}) {
 		fields = append(fields, identity.FeatureField{Name: "replacement-identifier", Value: identity.FeatureValue{Kind: identity.FeatureText, Text: string(r.ReplacementPrimary.ID)}}, identity.FeatureField{Name: "replacement-identifier-version", Value: identity.FeatureValue{Kind: identity.FeatureUint64, Uint64: r.ReplacementPrimary.ExpectedIdentifierVersion}}, identity.FeatureField{Name: "replacement-verification-version", Value: identity.FeatureValue{Kind: identity.FeatureUint64, Uint64: r.ReplacementPrimary.ExpectedVerificationVersion}})
@@ -121,7 +130,7 @@ func (p *emailRemovalPhase) PrepareRequestKey(ctx context.Context, k kernel.Requ
 	}
 	spec, ok := prepared.command.Feature()
 	fields, has := intent.Fields()
-	if !ok || !has || spec.Binding.ActorID != k.Scope.ActorID || spec.Binding.TenantID != k.Scope.TenantID || spec.Binding.ActorKind != k.Scope.ActorKind || spec.Binding.UserID != identity.UserID(k.Scope.ActorID) {
+	if !ok || !has || spec.Binding.ActorID != k.Scope.ActorID || spec.Binding.TenantID != k.Scope.TenantID || spec.Binding.ActorKind != k.Scope.ActorKind || spec.Binding.UserID != removalRequestSubject(p.request) {
 		return nil, identity.ForbiddenError{}
 	}
 	proof, err := encodeReauthenticationRecord(prepared.primary.custody().record)
@@ -130,6 +139,7 @@ func (p *emailRemovalPhase) PrepareRequestKey(ctx context.Context, k kernel.Requ
 	}
 	defer clear(proof)
 	input := keyedEmailRemovalInput{Schema: 1, Spec: spec, Intent: storedEmailRemovalIntent(prepared.intent), Counter: storedEmailCounter(prepared.counter), FactorVersion: prepared.factorVersion, Proof: proof, RequestInput: fields}
+	input.ActorFactorVersion, input.TargetCredential, input.TargetCredentialVersion = prepared.actorFactorVersion, prepared.targetCredential, prepared.targetCredentialVersion
 	plain, err := json.Marshal(input)
 	defer clear(plain)
 	if err != nil || len(plain) > maximumKeyedPasswordCustody-4096 {
@@ -167,7 +177,7 @@ func (p *emailRemovalPhase) restoreRequestKey(ctx context.Context, k kernel.Requ
 	}
 	defer clear(input.Proof)
 	b := input.Spec.Binding
-	if b.CommandID != k.Admission.CommandID || b.TenantID != k.Scope.TenantID || b.ActorID != k.Scope.ActorID || b.ActorKind != k.Scope.ActorKind || b.UserID != identity.UserID(k.Scope.ActorID) || b.ValidateFor(k.Feature.Operation) != nil || input.Spec.Operation != k.Feature.Operation {
+	if b.CommandID != k.Admission.CommandID || b.TenantID != k.Scope.TenantID || b.ActorID != k.Scope.ActorID || b.ActorKind != k.Scope.ActorKind || b.UserID != removalRequestSubject(p.request) || b.ValidateFor(k.Feature.Operation) != nil || input.Spec.Operation != k.Feature.Operation {
 		return password.ErrPasswordWork
 	}
 	current, err := p.service.requestIntent(p.request)
@@ -188,7 +198,7 @@ func (p *emailRemovalPhase) restoreRequestKey(ctx context.Context, k kernel.Requ
 		return password.ErrPasswordWork
 	}
 	r := p.request
-	primary, err := restoreEmailPrimary(p.service.primary, EmailPrimaryRequest{TenantID: r.TenantID, CommandID: b.CommandID, AddressID: r.AddressID, Session: r.Primary.Session, Proof: r.Primary.Proof, CSRFToken: r.Primary.CSRFToken, Caller: r.Caller.Clone()}, input.Spec.Fields, input.Proof)
+	primary, err := restoreEmailPrimary(p.service.primary, EmailPrimaryRequest{TenantID: r.TenantID, TargetSubjectID: r.TargetSubjectID, CommandID: b.CommandID, AddressID: r.AddressID, Session: r.Primary.Session, Proof: r.Primary.Proof, CSRFToken: r.Primary.CSRFToken, Caller: r.Caller.Clone()}, input.Spec.Fields, input.Proof)
 	if err != nil {
 		return err
 	}
@@ -208,5 +218,20 @@ func (p *emailRemovalPhase) restoreRequestKey(ctx context.Context, k kernel.Requ
 		return password.ErrPasswordWork
 	}
 	p.primary, p.intent, p.command, p.counter, p.factorVersion = primary, intent, command, counter, input.FactorVersion
+	p.actorFactorVersion, p.targetCredential, p.targetCredentialVersion = input.ActorFactorVersion, input.TargetCredential, input.TargetCredentialVersion
+	if r.TargetSubjectID != "" {
+		if !p.service.AdministrativeRemovalConfigured() || b.UserID == identity.UserID(b.ActorID) || p.actorFactorVersion == 0 || p.targetCredential == "" || p.targetCredentialVersion == 0 || intent.Administration == (kernel.EmailRemovalAdministration{}) {
+			return password.ErrPasswordWork
+		}
+	} else if p.actorFactorVersion != 0 || p.targetCredential != "" || p.targetCredentialVersion != 0 || intent.Administration != (kernel.EmailRemovalAdministration{}) {
+		return password.ErrPasswordWork
+	}
 	return nil
+}
+
+func removalRequestSubject(r email.AddressRemoveRequest) identity.UserID {
+	if r.TargetSubjectID != "" {
+		return r.TargetSubjectID
+	}
+	return identity.UserID(r.Caller.Request.Subject.ID)
 }

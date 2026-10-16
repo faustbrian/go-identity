@@ -26,7 +26,26 @@ type RemovalService interface {
 	email.AddressRemovalRateSource
 }
 
-// RemovalConfig selects cookie-only human self-removal. Original signed proof
+// AdministrativeRemovalService reports actual native capability selection.
+// It remains responsible for current actor/target authorization and original
+// actor proof admission in the protected target transaction.
+type AdministrativeRemovalService interface {
+	RemovalService
+	AdministrativeRemovalConfigured() bool
+}
+
+func administrativeRemovalConfigured(s RemovalService) (ok bool) {
+	defer func() {
+		if recover() != nil {
+			ok = false
+		}
+	}()
+	owner, ok := s.(AdministrativeRemovalService)
+	return ok && owner.AdministrativeRemovalConfigured()
+}
+
+// RemovalConfig selects cookie-only human self-removal and optional explicitly
+// authorized administrative targets. Original signed proof
 // records must remain available through request retention. Native Service owns
 // signature, cookie/CSRF, current factor/recovery authority and mutation. All
 // owners are borrowed, concurrent-safe and bounded; no session lookup/issuance
@@ -40,6 +59,9 @@ type RemovalConfig struct {
 	Origin          identityhttp.Origin
 	PolicyRevision  authorization.Revision
 	MaximumDuration time.Duration
+	// AdministrativeTargets explicitly selects targetSubjectID; it grants no
+	// authority and requires the service's native administrative capability.
+	AdministrativeTargets bool
 }
 
 // RemovalResponse exposes original outcome and pending cascade correlation only.
@@ -82,6 +104,9 @@ func NewAddressRemoveHandler(c RemovalConfig) (http.Handler, error) {
 
 func newAddressRemoveHandler(c RemovalConfig, m []identityhttp.MiddlewareDescriptor) (http.Handler, error) {
 	if nilService(c.Proofs) || nilService(c.Service) || !c.Rate.Configured() || c.PolicyRevision == 0 || c.MaximumDuration < time.Millisecond || c.MaximumDuration > 30*time.Second {
+		return nil, identityhttp.ErrInvalidInput
+	}
+	if c.AdministrativeTargets && !administrativeRemovalConfigured(c.Service) {
 		return nil, identityhttp.ErrInvalidInput
 	}
 	cookie, err := c.Cookie.DeletionAttributes()
@@ -166,7 +191,7 @@ func newAddressRemoveHandler(c RemovalConfig, m []identityhttp.MiddlewareDescrip
 			if err != nil {
 				return s, identityhttp.ErrInvalidInput
 			}
-			s.proofID, err = decodeRemovalFields(fields, &s.request)
+			s.proofID, err = decodeRemovalFields(fields, &s.request, c.AdministrativeTargets)
 			if err != nil {
 				return s, err
 			}
@@ -183,7 +208,11 @@ func newAddressRemoveHandler(c RemovalConfig, m []identityhttp.MiddlewareDescrip
 			}
 			s.request.Primary.Proof = record.Proof
 			user := identity.UserID(record.Proof.Proof.Subject)
-			s.request.Caller = authorization.DecisionContext{PolicyRevision: c.PolicyRevision, Request: authorization.Request{Tenant: authorization.TenantID(s.request.TenantID), Subject: authorization.Subject{Kind: authorization.SubjectUser, ID: authorization.SubjectID(user)}, Action: action, Resource: authorization.Resource{Type: "identity.user", ID: authorization.ResourceID(user)}}}
+			target := user
+			if s.request.TargetSubjectID != "" {
+				target = s.request.TargetSubjectID
+			}
+			s.request.Caller = authorization.DecisionContext{PolicyRevision: c.PolicyRevision, Request: authorization.Request{Tenant: authorization.TenantID(s.request.TenantID), Subject: authorization.Subject{Kind: authorization.SubjectUser, ID: authorization.SubjectID(user)}, Action: action, Resource: authorization.Resource{Type: "identity.user", ID: authorization.ResourceID(target)}}}
 			if s.request.Validate() != nil {
 				return s, failure{403, "denied", 0}
 			}
@@ -205,8 +234,12 @@ func newAddressRemoveHandler(c RemovalConfig, m []identityhttp.MiddlewareDescrip
 			out.CommitOutcome = "unknown"
 			result, err := c.Service.AddressRemove(r.Context(), s.request)
 			b := result.Binding
+			target := identity.UserID(s.request.Caller.Request.Subject.ID)
+			if s.request.TargetSubjectID != "" {
+				target = s.request.TargetSubjectID
+			}
 			if result.Outcome != identity.CommitOutcomeInvalid {
-				if result.Validate() != nil || b.OperationID != action || b.SchemaID != action+".native-v1" || b.SchemaVersion != 1 || b.TenantID != s.request.TenantID || b.UserID != identity.UserID(s.request.Caller.Request.Subject.ID) || b.ActorID != identity.ActorID(b.UserID) || b.ActorKind != authorization.SubjectUser || b.RecordID != string(s.request.AddressID) {
+				if result.Validate() != nil || b.OperationID != action || b.SchemaID != action+".native-v1" || b.SchemaVersion != 1 || b.TenantID != s.request.TenantID || b.UserID != target || b.ActorID != identity.ActorID(s.request.Caller.Request.Subject.ID) || b.ActorKind != authorization.SubjectUser || b.RecordID != string(s.request.AddressID) {
 					reject(w, r, identityhttp.ErrUnavailable)
 					return
 				}
@@ -244,9 +277,29 @@ func newAddressRemoveHandler(c RemovalConfig, m []identityhttp.MiddlewareDescrip
 	return &confirmationPipeline{pipeline: &removalPipeline{pipeline: pipeline}}, nil
 }
 
-func decodeRemovalFields(fields map[string]json.RawMessage, r *email.AddressRemoveRequest) (auth.ProofID, error) {
+func decodeRemovalFields(fields map[string]json.RawMessage, r *email.AddressRemoveRequest, administrative ...bool) (auth.ProofID, error) {
 	invalid := identityhttp.ErrInvalidInput
-	if len(fields) != 7 && len(fields) != 10 {
+	if r == nil || len(administrative) > 1 {
+		return "", invalid
+	}
+	r.TargetSubjectID = ""
+	extra := 0
+	if _, present := fields["targetSubjectID"]; present {
+		if len(administrative) != 1 || !administrative[0] {
+			return "", invalid
+		}
+		var target string
+		if !readString(fields, "targetSubjectID", &target) {
+			return "", invalid
+		}
+		id, err := identity.ParseIdentifierID(target)
+		if err != nil {
+			return "", invalid
+		}
+		r.TargetSubjectID = identity.UserID(id)
+		extra = 1
+	}
+	if len(fields) != 7+extra && len(fields) != 10+extra {
 		return "", invalid
 	}
 	values := map[string]*string{}
@@ -289,7 +342,7 @@ func decodeRemovalFields(fields map[string]json.RawMessage, r *email.AddressRemo
 	case "replace-primary":
 		r.PrimaryDisposition = email.ReplacePrimaryWithVerifiedEmail
 		var replacement, rv, vv string
-		if len(fields) != 10 || !readString(fields, "replacementAddressID", &replacement) || !readString(fields, "expectedReplacementIdentifierVersion", &rv) || !readString(fields, "expectedReplacementVerificationVersion", &vv) {
+		if len(fields) != 10+extra || !readString(fields, "replacementAddressID", &replacement) || !readString(fields, "expectedReplacementIdentifierVersion", &rv) || !readString(fields, "expectedReplacementVerificationVersion", &vv) {
 			return "", invalid
 		}
 		selected, e := identity.ParseIdentifierID(replacement)
@@ -308,7 +361,7 @@ func decodeRemovalFields(fields map[string]json.RawMessage, r *email.AddressRemo
 	default:
 		return "", invalid
 	}
-	if primary != "replace-primary" && len(fields) != 7 {
+	if primary != "replace-primary" && len(fields) != 7+extra {
 		return "", invalid
 	}
 	if recovery != "preserve-verified-email" {

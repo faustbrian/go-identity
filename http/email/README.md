@@ -1,5 +1,13 @@
 # Email HTTP integration
 
+For administrative removal, explicitly select
+`RemovalConfig.AdministrativeTargets` with a matching native capability. Optional
+`targetSubjectID` selects another account; the original signed password proof,
+session cookie and CSRF still identify the actual administrator. Native policy
+must grant the current exact target action. Default handlers reject and do not
+advertise this field. Selected requests retain normal keyed replay/recovery and
+no-store outcomes; no credential, session or UI is issued by removal.
+
 Experimental Go 1.27 backend library, not a UI or complete email product.
 Base `identity/http` does not import this optional module.
 

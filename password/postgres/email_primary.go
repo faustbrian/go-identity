@@ -27,19 +27,23 @@ type EmailPrimaryConfig struct {
 	MaximumAge       time.Duration
 	Transport        session.CredentialKind
 	CSRFKeys         []session.CSRFKey
+	// AdministrativeTargets enables distinct-target address removal only.
+	// Actual target authorization and actor-scoped primary fences remain required.
+	AdministrativeTargets bool
 }
 
 // EmailPrimaryRequest borrows the original signed password reauthentication
 // and source credential for one stable command/address. Tenant and Caller are
 // trusted authenticated composition. Neither IDs nor this request grant access.
 type EmailPrimaryRequest struct {
-	TenantID  identity.TenantID
-	CommandID identity.CommandID
-	AddressID identity.IdentifierID
-	Session   auth.BearerCredential
-	Proof     auth.ReauthenticationProof
-	Caller    authorization.DecisionContext
-	CSRFToken session.CSRFToken
+	TenantID        identity.TenantID
+	TargetSubjectID identity.UserID
+	CommandID       identity.CommandID
+	AddressID       identity.IdentifierID
+	Session         auth.BearerCredential
+	Proof           auth.ReauthenticationProof
+	Caller          authorization.DecisionContext
+	CSRFToken       session.CSRFToken
 }
 
 // EmailPrimarySource supplies the password owner's email-management admission.
@@ -68,6 +72,9 @@ type emailPrimaryCustody struct {
 // NewEmailPrimarySource validates composition without IO or proof issuance.
 func NewEmailPrimarySource(source *ReauthenticationService, config EmailPrimaryConfig) (*EmailPrimarySource, error) {
 	if source == nil || source.repository == nil || !source.repository.configuredWriter() || source.sessions == nil || source.c.Verifier.Now == nil || config.MaximumAge <= 0 || config.MaximumAge > 5*time.Minute || emailPrimaryOperation(config.Action).Owner == "" || !reauthenticationText(config.Audience, 256) {
+		return nil, password.ErrPasswordWork
+	}
+	if config.AdministrativeTargets && config.Action != "identity.email.address-remove" {
 		return nil, password.ErrPasswordWork
 	}
 	target := ReauthenticationTarget{Purpose: "identity.password.verify", Action: config.Action, Audience: config.Audience}
@@ -144,8 +151,12 @@ func (s *EmailPrimarySource) Prepare(ctx context.Context, request EmailPrimaryRe
 	if err != nil {
 		return out, password.ErrPasswordWork
 	}
+	subject, err := emailPrimarySubject(s, request, bindings.UserID)
+	if err != nil {
+		return out, err
+	}
 	target := ReauthenticationTarget{Purpose: "identity.password.verify", Action: s.config.Action, Audience: s.config.Audience}
-	binding := identity.CommandBinding{CommandID: request.CommandID, TenantID: request.TenantID, UserID: bindings.UserID, ActorID: identity.ActorID(bindings.UserID), ActorKind: authorization.SubjectUser, RecordID: string(request.AddressID), OperationID: target.Action}
+	binding := identity.CommandBinding{CommandID: request.CommandID, TenantID: request.TenantID, UserID: subject, ActorID: identity.ActorID(bindings.UserID), ActorKind: authorization.SubjectUser, RecordID: string(request.AddressID), OperationID: target.Action}
 	if err := s.source.authorize(bounded, request.Caller, binding, target); err != nil {
 		return out, err
 	}
@@ -163,7 +174,9 @@ func (s *EmailPrimarySource) Prepare(ctx context.Context, request EmailPrimaryRe
 		}
 		return out, identity.ForbiddenError{}
 	}
-	if _, _, _, err := sessionpg.OriginalSessionAdmission(s.source.c.Profile, original, binding); err != nil {
+	actorBinding := binding
+	actorBinding.UserID = bindings.UserID
+	if _, _, _, err := sessionpg.OriginalSessionAdmission(s.source.c.Profile, original, actorBinding); err != nil {
 		return out, identity.ForbiddenError{}
 	}
 	state := emailPrimaryCustody{source: s, request: request, original: original, record: record, use: use}
@@ -186,6 +199,9 @@ func (s *EmailPrimarySource) Prepare(ctx context.Context, request EmailPrimaryRe
 		identity.FeatureField{Name: "email.primary.maximum-age-nanos", Value: identity.FeatureValue{Kind: identity.FeatureUint64, Uint64: uint64(s.config.MaximumAge)}},
 		identity.FeatureField{Name: "email.primary.cookie", Value: identity.FeatureValue{Kind: identity.FeatureBool, Bool: s.config.Transport == session.CredentialCookie}},
 	)
+	if request.TargetSubjectID != "" {
+		state.fields = append(state.fields, identity.FeatureField{Name: "email.primary.target-subject", Value: identity.FeatureValue{Kind: identity.FeatureText, Text: string(request.TargetSubjectID)}})
+	}
 	if s.config.Transport == session.CredentialCookie {
 		csrf, err := original.CSRFState().Bindings()
 		if err != nil {
@@ -206,6 +222,22 @@ func (s *EmailPrimarySource) Prepare(ctx context.Context, request EmailPrimaryRe
 		return out, err
 	}
 	return EmailPrimaryAdmission{custody: func() emailPrimaryCustody { return state }}, nil
+}
+
+func emailPrimarySubject(source *EmailPrimarySource, request EmailPrimaryRequest, actor identity.UserID) (identity.UserID, error) {
+	if source == nil || actor == "" {
+		return "", identity.ForbiddenError{}
+	}
+	if request.TargetSubjectID == "" {
+		return actor, nil
+	}
+	if !source.config.AdministrativeTargets || source.config.Action != "identity.email.address-remove" || request.TargetSubjectID == actor {
+		return "", identity.ForbiddenError{}
+	}
+	if _, err := identity.ParseIdentifierID(string(request.TargetSubjectID)); err != nil {
+		return "", identity.ForbiddenError{}
+	}
+	return request.TargetSubjectID, nil
 }
 
 // Original returns the retained immutable source session, not fresh authority.
@@ -284,7 +316,8 @@ func (a EmailPrimaryAdmission) command(binding identity.CommandBinding, addition
 		}
 		op = managedResendOperation()
 	}
-	if err != nil || binding.CommandID != state.request.CommandID || binding.TenantID != state.request.TenantID || binding.UserID != original.UserID || binding.ActorID != identity.ActorID(original.UserID) || binding.ActorKind != authorization.SubjectUser || binding.RecordID != string(state.request.AddressID) || binding.OperationID != op.OperationID || binding.SchemaID != op.SchemaID || binding.SchemaVersion != op.SchemaVersion {
+	subject, subjectErr := emailPrimarySubject(state.source, state.request, original.UserID)
+	if err != nil || subjectErr != nil || binding.CommandID != state.request.CommandID || binding.TenantID != state.request.TenantID || binding.UserID != subject || binding.ActorID != identity.ActorID(original.UserID) || binding.ActorKind != authorization.SubjectUser || binding.RecordID != string(state.request.AddressID) || binding.OperationID != op.OperationID || binding.SchemaID != op.SchemaID || binding.SchemaVersion != op.SchemaVersion {
 		return identity.Command{}, identity.ForbiddenError{}
 	}
 	if len(state.fields) > 128 || len(additional) > 128-len(state.fields) {
@@ -353,18 +386,33 @@ func (a EmailPrimaryAdmission) Admit(ctx context.Context, work kernel.Work, owne
 	if err != nil {
 		return err
 	}
-	directory, credential, policy, err := sessionpg.OriginalSessionAdmission(state.source.source.c.Profile, state.original, binding)
+	actorBinding := binding
+	actorBinding.UserID = identity.UserID(binding.ActorID)
+	directory, credential, policy, err := sessionpg.OriginalSessionAdmission(state.source.source.c.Profile, state.original, actorBinding)
 	if err != nil {
 		return identity.ForbiddenError{}
 	}
-	if err := work.RequireActiveDirectoryAuthority(ctx, owner, directory); err != nil {
+	if state.request.TargetSubjectID != "" {
+		if err := work.RequireEmailRemovalSubjects(ctx, owner, command, kernel.EmailRemovalAdministration{GlobalAuthorityID: directory.Query.GlobalAuthorityID, GlobalVersion: directory.GlobalVersion, TenantVersion: directory.TenantVersion}); err != nil {
+			return err
+		}
+	} else if err := work.RequireActiveDirectoryAuthority(ctx, owner, directory); err != nil {
 		return err
 	}
-	if _, err := work.RequireActiveCredential(ctx, owner, credential); err != nil {
-		return err
-	}
-	if err := work.RequireActiveUserAuthorization(ctx, owner, policy); err != nil {
-		return err
+	if state.request.TargetSubjectID != "" {
+		if _, err := work.RequireActiveActorCredential(ctx, owner, credential); err != nil {
+			return err
+		}
+		if err := work.RequireActiveActorAuthorization(ctx, owner, policy); err != nil {
+			return err
+		}
+	} else {
+		if _, err := work.RequireActiveCredential(ctx, owner, credential); err != nil {
+			return err
+		}
+		if err := work.RequireActiveUserAuthorization(ctx, owner, policy); err != nil {
+			return err
+		}
 	}
 	if err := sessionpg.RequireSession(ctx, work, state.source.source.c.Session, state.original); err != nil {
 		return err
@@ -391,6 +439,11 @@ func (a EmailPrimaryAdmission) Consume(ctx context.Context, work kernel.Work, ow
 	state, binding, err := a.scope(ctx, work, owner, command)
 	if err != nil {
 		return err
+	}
+	// Only the proof-owner lookup uses the verified actor. The actual Work,
+	// command ID/purpose, domain mutation, audit and recovery stay target-scoped.
+	if state.request.TargetSubjectID != "" {
+		binding.UserID = identity.UserID(binding.ActorID)
 	}
 	return consumeReauthenticationRecord(ctx, work, binding, state.record, func(ctx context.Context, work kernel.Work) error {
 		now, err := work.DatabaseTime(ctx)
