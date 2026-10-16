@@ -96,7 +96,7 @@ func managedEmailVerificationCommand(p ManagedEmailVerificationContributor, c id
 	if s.Operation == otpEmailVerificationOperation() && (i.Change.Action != identity.IdentifierVerify || i.RequestCommandID != identity.CommandID(plan.OTP.ChallengeID)) {
 		return ManagedEmailVerificationIntent{}, nil, invalidEmailVerification()
 	}
-	if s.Operation == otpEmailChangeOperation() && (!i.Previous.Primary || i.RequestCommandID == identity.CommandID(plan.OTP.ChallengeID)) {
+	if s.Operation == otpEmailChangeOperation() && (!i.Previous.Primary && !i.Previous.AllowInitialPrimary || i.RequestCommandID == identity.CommandID(plan.OTP.ChallengeID)) {
 		return ManagedEmailVerificationIntent{}, nil, invalidEmailVerification()
 	}
 	fields, err := ManagedEmailVerificationFields(i)

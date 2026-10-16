@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Add explicit first-primary OTP fields while preserving existing primary-only
+  fields. Lock the no-primary, sole-verified predecessor partition before code
+  comparison; promotion retains the old mailbox and its verification history.
+
 - Admit required notification custody at OTP preparation only for the exact
   genuine-primary change operation. Verification-only/check/other consuming
   profiles remain delivery-free. Original change recovery uses its own current

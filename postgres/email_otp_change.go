@@ -9,11 +9,13 @@ import (
 )
 
 // RequireOTPEmailChangeTarget locks and checks the exact original pending
-// candidate and verified previous primary before any OTP comparison or debit.
+// candidate and verified predecessor before any OTP comparison or debit.
 // Only the registered change-specific input-admission owner may call it during
 // the existing coordinator Work. It writes nothing, grants no reservation and
-// cannot authorize a verification-only or initial-primary variant. Lock lifetime
-// and cancellation match RequireOTPEmailVerificationTarget.
+// cannot authorize verification-only mutation. Explicit initial-primary intents
+// additionally require no primary and exactly one verified predecessor under the
+// same partition lock. Lock lifetime and cancellation match
+// RequireOTPEmailVerificationTarget.
 func (w Work) RequireOTPEmailChangeTarget(ctx context.Context, owner ManagedEmailVerificationContributor, command identity.Command) error {
 	return w.requireOTPEmailTarget(ctx, owner, command, otpEmailChangeOperation())
 }
@@ -33,7 +35,27 @@ func otpEmailMutationOperation(op identity.FeatureOperation) bool {
 // or initial-primary establishment. Include fields before fingerprinting and
 // consuming reservation. No IO, normalization or credential work occurs here.
 func OTPEmailChangeFields(i ManagedEmailVerificationIntent, send identity.CommandID) ([]identity.FeatureField, error) {
-	if i.Change.Action != identity.IdentifierVerifyPrimary || !i.Previous.Primary || i.RequestCommandID == send {
+	if !i.Previous.Primary {
+		return nil, invalidEmailVerification()
+	}
+	return otpEmailChangeFields(i, send)
+}
+
+// OTPEmailInitialPrimaryFields explicitly selects first-primary establishment
+// from an original sole-verified/no-primary change policy. Existing replacement
+// fields remain primary-only. This encodes intent, not authority: the registered
+// owner and locked complete partition must prove the original predecessor,
+// zero primaries and exactly one verified old email before comparison or debit.
+// Fingerprinting, protected notice and consuming protocol match replacement.
+func OTPEmailInitialPrimaryFields(i ManagedEmailVerificationIntent, send identity.CommandID) ([]identity.FeatureField, error) {
+	if i.Previous.Primary || !i.Previous.AllowInitialPrimary {
+		return nil, invalidEmailVerification()
+	}
+	return otpEmailChangeFields(i, send)
+}
+
+func otpEmailChangeFields(i ManagedEmailVerificationIntent, send identity.CommandID) ([]identity.FeatureField, error) {
+	if i.Change.Action != identity.IdentifierVerifyPrimary || i.RequestCommandID == send {
 		return nil, invalidEmailVerification()
 	}
 	if _, err := identity.ParseCommandID(string(send)); err != nil {

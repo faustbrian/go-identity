@@ -16,6 +16,13 @@ identifier successor is admitted to its final authority checks; no original
 credential, user, authorization, session freshness or expiry is renewed. The
 shared directory writer and protected audit remain the mutation owners.
 
+Primary-change OTP uses `OTPEmailChangeFields` for genuine replacement and the
+additive `OTPEmailInitialPrimaryFields` for explicitly selected first-primary
+establishment. Both authenticate the original change and independent Send;
+`RequireOTPEmailChangeTarget` locks the complete partition before comparison.
+Initial establishment requires the original sole verified predecessor and no
+primary, preserves the old row's versions and cannot reinterpret a generic add.
+
 ### Native safe removal
 
 Administrative intents additionally freeze `EmailRemovalAdministration` with the

@@ -70,6 +70,35 @@ func TestOTPEmailChangePreparationEnlistsOnlyItsRequiredNotice(t *testing.T) {
 	}
 }
 
+func TestOTPEmailInitialPrimaryRequiresExplicitFields(t *testing.T) {
+	owner, spec, plan := otpEmailChangeFixture(t)
+	owner.intent.Previous.Primary = false
+	owner.intent.Previous.AllowInitialPrimary = true
+	send := identity.CommandID(plan.OTP.ChallengeID)
+	if _, err := OTPEmailChangeFields(owner.intent, send); err == nil {
+		t.Fatal("existing primary-only fields acquired initial authority")
+	}
+	var err error
+	spec.Fields, err = OTPEmailInitialPrimaryFields(owner.intent, send)
+	if err != nil {
+		t.Fatal("explicit initial-primary fields denied", err)
+	}
+	command, err := identity.NewFeatureCommand(spec)
+	if err != nil || validateFeatureCommand(owner, command, plan) != nil {
+		t.Fatal("explicit initial-primary intent cannot reach the shared writer", err)
+	}
+	for _, previous := range []ManagedEmailPrevious{
+		{},
+		{ID: "old-primary", CanonicalAddress: "old@example.test", IdentifierVersion: 3, VerificationVersion: 2, Primary: true, AllowInitialPrimary: true},
+		{ID: "old-primary", CanonicalAddress: "old@example.test", IdentifierVersion: 3, VerificationVersion: 2},
+	} {
+		owner.intent.Previous = previous
+		if _, err := OTPEmailInitialPrimaryFields(owner.intent, send); err == nil {
+			t.Fatal("initial-primary fields inferred missing or replacement policy")
+		}
+	}
+}
+
 func otpEmailChangeFixture(t *testing.T) (*emailOTPMapper, identity.FeatureCommandSpec, CommandPlan) {
 	t.Helper()
 	owner, spec, plan := otpEmailFixture(t)
