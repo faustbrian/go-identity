@@ -33,6 +33,10 @@ type EmailConfiguration struct {
 	Removal         *EmailRemovalConfiguration
 	OTPVerification *EmailOTPVerificationConfiguration
 	OTPChange       *EmailOTPChangeConfiguration
+	// OTPChangeInitialPrimary explicitly permits the existing sole-verified,
+	// no-primary change policy through OTP. OTPChange must also be selected.
+	// Zero preserves genuine-primary-only behavior and enables no HTTP route.
+	OTPChangeInitialPrimary bool
 }
 
 // EmailRemovalConfiguration selects protected native self-removal without HTTP.
@@ -100,6 +104,9 @@ func validateEmailSelection(c StoreConfiguration) error {
 	}
 	e := c.Email
 	invalid := identity.InvalidInputError{Field: "reference_email"}
+	if e.OTPChangeInitialPrimary && e.OTPChange == nil {
+		return invalid
+	}
 	if e.Verification == nil && e.Change == nil && e.Addresses == nil && e.Removal == nil && e.OTPVerification == nil && e.OTPChange == nil || c.Session == nil || c.OTP == nil {
 		return invalid
 	}

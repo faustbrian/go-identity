@@ -26,6 +26,7 @@ import (
 const emailChangeNotice = "Your primary email address was changed."
 
 type referenceEmailChangeOptions struct {
+	initialPrimary   bool
 	readSession      func([]*http.Cookie) bool
 	recipients       <-chan string
 	mode             string
@@ -188,7 +189,13 @@ func proveReferenceEmailChangeJourney(t *testing.T, ctx context.Context, f liveS
 		if !options.readSession(currentCookies) {
 			t.Fatal("post-request source session unavailable")
 		}
-		if n == 1 && options.otpChange != nil {
+		if (n == 1 || options.initialPrimary) && options.otpChange != nil {
+			if options.initialPrimary {
+				var primaries, verified int
+				if err := f.pool.Raw().QueryRow(ctx, `SELECT count(*) FILTER(WHERE is_primary),count(*) FILTER(WHERE verified) FROM identity.identifiers WHERE tenant_id=$1 AND user_id=$2`, otpTenant, string(user)).Scan(&primaries, &verified); err != nil || n != 0 || primaries != 0 || verified != 1 {
+					t.Fatal("initial OTP fixture already promoted or lacks sole verified predecessor", err)
+				}
+			}
 			if options.mode == "otp-change-https" || options.mode == "otp-change-reference-https" {
 				proveReferenceEmailOTPChangeHTTPS(t, ctx, f, options, workers, messages, user, intent, currentCookies, currentCSRF, previousAddress, previousID, oldVersion, oldVerification, verifiedAt)
 			} else if !proveReferenceEmailOTPChange(t, ctx, f, service, workers, messages, options, user, intent, currentCookies, currentCSRF, previousAddress, previousID, oldVersion, oldVerification, verifiedAt, proof) {

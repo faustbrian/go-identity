@@ -37,6 +37,14 @@ func TestReferencePostgresEmailOTPPrimaryChange(t *testing.T) {
 	}
 }
 
+func TestReferencePostgresEmailOTPInitialPrimary(t *testing.T) {
+	for _, mode := range []string{"otp-change", "otp-change-initial-unselected", "otp-change-initial-ambiguous", "otp-change-initial-primary-present", "otp-change-factor-generation", "otp-change-origin-revoked-send", "otp-change-origin-revoked-confirm", "otp-change-candidate-stale", "otp-change-previous-stale", "otp-change-rollback", "otp-change-unknown", "otp-change-contention", "otp-change-link-race", "otp-change-https", "otp-change-reference-https"} {
+		t.Run(mode, func(t *testing.T) {
+			proveReferenceSignupGraphExtensions(t, false, signupGraphExtensions{postgresBaseline: true, emailManagementChange: true, emailChangeCase: mode, emailOTPInitialPrimary: true, completionCommitFault: mode == "otp-change-unknown"})
+		})
+	}
+}
+
 func configureReferenceEmailOTPChange(t *testing.T, c *reference.StoreConfiguration) {
 	t.Helper()
 	profile, err := otp.NewCodeProfile(otp.CodeProfileSpec{Purpose: otp.PurposeEmailChange, Alphabet: "0123456789", Length: 6, TTL: 5 * time.Minute, ResendInterval: 30 * time.Second, MaximumSends: 3, Attempts: 3, Replacement: otp.ReplacePrevious})
@@ -75,6 +83,10 @@ func assertEmailChangeOTPRecipient(t *testing.T, ctx context.Context, captured <
 
 func proveReferenceEmailOTPChange(t *testing.T, ctx context.Context, f liveStores, links emailManagementConsumer, workers reference.WorkerSet, messages <-chan string, options referenceEmailChangeOptions, user identity.UserID, origin passwordpg.EmailManagementRequest, cookies []*http.Cookie, csrf, oldAddress, oldID string, oldVersion, oldVerification uint64, oldVerified time.Time, link capability.Proof) bool {
 	t.Helper()
+	retainedVersion := oldVersion
+	if !options.initialPrimary {
+		retainedVersion++
+	}
 	service := options.otpChange
 	var token string
 	for _, cookie := range cookies {
@@ -149,8 +161,12 @@ func proveReferenceEmailOTPChange(t *testing.T, ctx context.Context, f liveStore
 		}
 		return false
 	}
-	if options.mode == "otp-change-generic" {
+	if options.mode == "otp-change-generic" || options.mode == "otp-change-initial-unselected" {
 		var before, after, primary, notices int
+		var noticesBefore int
+		if err := f.pool.Raw().QueryRow(ctx, `SELECT count(*) FROM identity.delivery_intents WHERE purpose='identity.email.change-notification'`).Scan(&noticesBefore); err != nil {
+			t.Fatal(err)
+		}
 		if err := f.pool.Raw().QueryRow(ctx, `SELECT count(*) FROM otp_store.challenges`).Scan(&before); err != nil {
 			t.Fatal(err)
 		}
@@ -163,10 +179,10 @@ func proveReferenceEmailOTPChange(t *testing.T, ctx context.Context, f liveStore
 		if err := f.pool.Raw().QueryRow(ctx, `SELECT count(*) FROM otp_store.challenges`).Scan(&after); err != nil || after != before {
 			t.Fatal("generic origin denial issued OTP state", err)
 		}
-		if err := f.pool.Raw().QueryRow(ctx, `SELECT count(*) FROM identity.identifiers WHERE tenant_id=$1 AND user_id=$2 AND identifier_id=$3 AND version=$4 AND verification_version=$5 AND is_primary AND verified_at=$6`, otpTenant, string(user), oldID, oldVersion, oldVerification, oldVerified).Scan(&primary); err != nil || primary != 1 {
+		if err := f.pool.Raw().QueryRow(ctx, `SELECT count(*) FROM identity.identifiers WHERE tenant_id=$1 AND user_id=$2 AND identifier_id=$3 AND version=$4 AND verification_version=$5 AND is_primary=$7 AND verified_at=$6`, otpTenant, string(user), oldID, oldVersion, oldVerification, oldVerified, !options.initialPrimary).Scan(&primary); err != nil || primary != 1 {
 			t.Fatal("generic origin denial changed genuine primary", err)
 		}
-		if err := f.pool.Raw().QueryRow(ctx, `SELECT count(*) FROM identity.delivery_intents WHERE purpose='identity.email.change-notification'`).Scan(&notices); err != nil || notices != 1 || !options.readSession(cookies) {
+		if err := f.pool.Raw().QueryRow(ctx, `SELECT count(*) FROM identity.delivery_intents WHERE purpose='identity.email.change-notification'`).Scan(&notices); err != nil || notices != noticesBefore || !options.readSession(cookies) {
 			t.Fatal("generic origin denial notified or invalidated session", err)
 		}
 		return false
@@ -221,7 +237,7 @@ func proveReferenceEmailOTPChange(t *testing.T, ctx context.Context, f liveStore
 	if err := f.pool.Raw().QueryRow(ctx, `SELECT count(*) FROM identity.delivery_intents WHERE purpose='identity.email.change-notification'`).Scan(&notices); err != nil || notices != beforeNotices {
 		t.Fatal("OTP request notified before confirmation", err)
 	}
-	if err := f.pool.Raw().QueryRow(ctx, `SELECT count(*) FROM identity.identifiers WHERE tenant_id=$1 AND user_id=$2 AND identifier_id=$3 AND version=$4 AND verification_version=$5 AND is_primary AND verified_at=$6`, otpTenant, string(user), oldID, oldVersion, oldVerification, oldVerified).Scan(&untouched); err != nil || untouched != 1 {
+	if err := f.pool.Raw().QueryRow(ctx, `SELECT count(*) FROM identity.identifiers WHERE tenant_id=$1 AND user_id=$2 AND identifier_id=$3 AND version=$4 AND verification_version=$5 AND is_primary=$7 AND verified_at=$6`, otpTenant, string(user), oldID, oldVersion, oldVerification, oldVerified, !options.initialPrimary).Scan(&untouched); err != nil || untouched != 1 {
 		t.Fatal("OTP request replaced original primary", err)
 	}
 	if _, err := workers.ProcessDeliveryOne(ctx, 0); err != nil {
@@ -258,7 +274,7 @@ func proveReferenceEmailOTPChange(t *testing.T, ctx context.Context, f liveStore
 	assertUnchanged := func(attempts int) {
 		t.Helper()
 		assertEmailOTPUnchanged(t, ctx, f, user, origin.Primary.AddressID, sent.CommandID, attempts)
-		if err := f.pool.Raw().QueryRow(ctx, `SELECT count(*) FROM identity.identifiers WHERE tenant_id=$1 AND user_id=$2 AND identifier_id=$3 AND version=$4 AND verification_version=$5 AND is_primary AND verified_at=$6`, otpTenant, string(user), oldID, oldVersion, oldVerification, oldVerified).Scan(&untouched); err != nil || untouched != 1 {
+		if err := f.pool.Raw().QueryRow(ctx, `SELECT count(*) FROM identity.identifiers WHERE tenant_id=$1 AND user_id=$2 AND identifier_id=$3 AND version=$4 AND verification_version=$5 AND is_primary=$7 AND verified_at=$6`, otpTenant, string(user), oldID, oldVersion, oldVerification, oldVerified, !options.initialPrimary).Scan(&untouched); err != nil || untouched != 1 {
 			t.Fatal("denied/rolled-back OTP changed original primary", err)
 		}
 		if err := f.pool.Raw().QueryRow(ctx, `SELECT count(*) FROM identity.delivery_intents WHERE purpose='identity.email.change-notification'`).Scan(&notices); err != nil || notices != beforeNotices {
@@ -267,6 +283,38 @@ func proveReferenceEmailOTPChange(t *testing.T, ctx context.Context, f liveStore
 		if !options.readSession(cookies) {
 			t.Fatal("denied/rolled-back OTP invalidated original session")
 		}
+	}
+	snapshot := func() string {
+		t.Helper()
+		var state string
+		if err := f.pool.Raw().QueryRow(ctx, `SELECT jsonb_build_object('identifiers',(SELECT jsonb_agg(to_jsonb(i) ORDER BY identifier_id) FROM identity.identifiers i WHERE tenant_id=$1 AND user_id=$2),'users',(SELECT jsonb_agg(to_jsonb(u)) FROM identity.users u WHERE tenant_id=$1 AND user_id=$2),'notices',(SELECT count(*) FROM identity.delivery_intents WHERE purpose='identity.email.change-notification'),'lifecycle',(SELECT count(*) FROM public.identity_outbox_bindings))::text`, otpTenant, string(user)).Scan(&state); err != nil {
+			t.Fatal(err)
+		}
+		return state
+	}
+	if options.mode == "otp-change-initial-ambiguous" || options.mode == "otp-change-initial-primary-present" {
+		// An owned authoritative-row fault isolates the partition fence: no
+		// epoch/session changes may hide its absence behind another denial.
+		// This supplies no positive ownership or execution authority.
+		sql := `INSERT INTO identity.identifiers(tenant_id,user_id,identifier_id,kind,canonical_value,verified,is_primary,version,verification_state,verification_version,verified_at) SELECT tenant_id,user_id,'intervening-verified','email','intervening@example.invalid',verified,false,version,verification_state,verification_version,verified_at FROM identity.identifiers WHERE tenant_id=$1 AND user_id=$2 AND identifier_id=$3`
+		if options.mode == "otp-change-initial-primary-present" {
+			sql = `UPDATE identity.identifiers SET is_primary=true WHERE tenant_id=$1 AND user_id=$2 AND identifier_id=$3`
+		}
+		if _, err := f.pool.Raw().Exec(ctx, sql, otpTenant, string(user), oldID); err != nil {
+			t.Fatal("owned predecessor partition fault", err)
+		}
+		baseline := snapshot()
+		for _, input := range []auth.OneTimeCode{wrong, code} {
+			confirmation.Code = input
+			if out, err := service.EmailChangeConfirm(ctx, confirmation); err == nil || out.Outcome == identity.CommitOutcomeCommitted || out.Address != (identity.IdentifierProjection{}) {
+				t.Fatal("changed first-primary partition admitted OTP")
+			}
+			var used, failed int
+			if err := f.pool.Raw().QueryRow(ctx, `SELECT used_attempts,failed_attempts FROM otp_store.challenges WHERE tenant_id=$1 AND challenge_id=$2`, otpTenant, string(sent.CommandID)).Scan(&used, &failed); err != nil || used != 0 || failed != 0 || snapshot() != baseline || !options.readSession(cookies) {
+				t.Fatal("partition denial compared/debited or changed authority", err)
+			}
+		}
+		return false
 	}
 	if options.mode == "otp-change-candidate-stale" || options.mode == "otp-change-previous-stale" {
 		intervening := origin
@@ -310,16 +358,8 @@ func proveReferenceEmailOTPChange(t *testing.T, ctx context.Context, f liveStore
 		if err := f.pool.Raw().QueryRow(ctx, `SELECT version FROM identity.identifiers WHERE tenant_id=$1 AND user_id=$2 AND identifier_id=$3`, otpTenant, string(user), string(origin.Primary.AddressID)).Scan(&candidateVersion); err != nil {
 			t.Fatal(err)
 		}
-		if err := f.pool.Raw().QueryRow(ctx, `SELECT version FROM identity.identifiers WHERE tenant_id=$1 AND user_id=$2 AND identifier_id=$3`, otpTenant, string(user), oldID).Scan(&previousVersion); err != nil || previousVersion != oldVersion+1 || candidateVersion != map[bool]uint64{true: 2, false: 1}[options.mode == "otp-change-candidate-stale"] {
+		if err := f.pool.Raw().QueryRow(ctx, `SELECT version FROM identity.identifiers WHERE tenant_id=$1 AND user_id=$2 AND identifier_id=$3`, otpTenant, string(user), oldID).Scan(&previousVersion); err != nil || previousVersion != retainedVersion || candidateVersion != map[bool]uint64{true: 2, false: 1}[options.mode == "otp-change-candidate-stale"] {
 			t.Fatal("intervening mutation did not isolate expected stale input", err)
-		}
-		snapshot := func() string {
-			t.Helper()
-			var state string
-			if err := f.pool.Raw().QueryRow(ctx, `SELECT jsonb_build_object('identifiers',(SELECT jsonb_agg(to_jsonb(i) ORDER BY identifier_id) FROM identity.identifiers i WHERE tenant_id=$1 AND user_id=$2),'users',(SELECT jsonb_agg(to_jsonb(u)) FROM identity.users u WHERE tenant_id=$1 AND user_id=$2),'notices',(SELECT count(*) FROM identity.delivery_intents WHERE purpose='identity.email.change-notification'),'lifecycle',(SELECT count(*) FROM public.identity_outbox_bindings))::text`, otpTenant, string(user)).Scan(&state); err != nil {
-				t.Fatal(err)
-			}
-			return state
 		}
 		baseline := snapshot()
 		for _, input := range []auth.OneTimeCode{wrong, code} {
@@ -455,6 +495,12 @@ func proveReferenceEmailOTPChange(t *testing.T, ctx context.Context, f liveStore
 	var confirmed otp.EmailChangeResult
 	var linkWinner email.ChangeConfirmResult
 	if options.mode == "otp-change-contention" || options.mode == "otp-change-link-race" {
+		if options.mode == "otp-change-link-race" {
+			c := authorization.DecisionContext{PolicyRevision: 9, CorrelationID: "link-race-preflight", Request: authorization.Request{Tenant: otpTenant, Subject: authorization.Subject{Kind: authorization.SubjectServiceAccount, ID: "AAAAAAAAAAAAAAAAAAAAAw"}, Action: "identity.email.change-confirm", Resource: authorization.Resource{Type: "identity.user", ID: authorization.ResourceID(user)}}}
+			if valid, err := links.ValidateManagedVerification(ctx, link, origin.CallbackURL, c); err != nil || !valid {
+				t.Fatal("link contender is not independently valid", err)
+			}
+		}
 		var group sync.WaitGroup
 		var completed [2]bool
 		var attempts [2]otp.EmailChangeResult
@@ -529,6 +575,9 @@ func proveReferenceEmailOTPChange(t *testing.T, ctx context.Context, f liveStore
 		if err := f.pool.Raw().QueryRow(ctx, `SELECT count(*) FROM identity.identifiers WHERE tenant_id=$1 AND user_id=$2 AND identifier_id=$3 AND version=2 AND verification_version=2 AND is_primary AND verified`, otpTenant, string(user), string(origin.Primary.AddressID)).Scan(&primary); err != nil || primary != 1 {
 			t.Fatal("unknown recovery did not preserve sole primary successor", err)
 		}
+		if err := f.pool.Raw().QueryRow(ctx, `SELECT count(*) FROM identity.identifiers WHERE tenant_id=$1 AND user_id=$2 AND identifier_id=$3 AND version=$4 AND verification_version=$5 AND verified AND NOT is_primary AND verified_at=$6`, otpTenant, string(user), oldID, retainedVersion, oldVerification, oldVerified).Scan(&primary); err != nil || primary != 1 {
+			t.Fatal("unknown recovery rewrote original old address history", err)
+		}
 		if err := f.pool.Raw().QueryRow(ctx, `SELECT count(*) FROM identity.delivery_intents WHERE purpose='identity.email.change-notification'`).Scan(&notices); err != nil || notices != beforeNotices+1 {
 			t.Fatal("ambiguous recovery omitted or duplicated original notice", err)
 		}
@@ -553,7 +602,7 @@ func proveReferenceEmailOTPChange(t *testing.T, ctx context.Context, f liveStore
 	if err := f.pool.Raw().QueryRow(ctx, `SELECT count(*) FROM identity.identifiers WHERE tenant_id=$1 AND user_id=$2 AND is_primary`, otpTenant, string(user)).Scan(&primaries); err != nil || primaries != 1 {
 		t.Fatal("ambiguous primary", err)
 	}
-	if err := f.pool.Raw().QueryRow(ctx, `SELECT count(*) FROM identity.identifiers WHERE tenant_id=$1 AND user_id=$2 AND identifier_id=$3 AND version=$4 AND verification_version=$5 AND verified AND NOT is_primary AND verified_at=$6`, otpTenant, string(user), oldID, oldVersion+1, oldVerification, oldVerified).Scan(&retained); err != nil || retained != 1 {
+	if err := f.pool.Raw().QueryRow(ctx, `SELECT count(*) FROM identity.identifiers WHERE tenant_id=$1 AND user_id=$2 AND identifier_id=$3 AND version=$4 AND verification_version=$5 AND verified AND NOT is_primary AND verified_at=$6`, otpTenant, string(user), oldID, retainedVersion, oldVerification, oldVerified).Scan(&retained); err != nil || retained != 1 {
 		t.Fatal("OTP swap changed verification history", err)
 	}
 	if options.readSession(cookies) {

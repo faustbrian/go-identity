@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Select first-primary OTP establishment with `Email.OTPChangeInitialPrimary`
+  alongside native OTP change and the explicit sole-verified change policy.
+  Native and HTTPS consumers share atomic promotion/notification/session effects;
+  HTTP remains independently opt-in and existing defaults stay replacement-only.
+
 - Independently select primary-email OTP request/confirmation/recovery over
   HTTPS with `HTTPEmailOTPChange`. Preserve original committed change authority,
   strict keyed/challenge rate admission, stored-session CSRF, atomic old-address

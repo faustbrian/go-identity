@@ -261,7 +261,11 @@ func proveReferenceEmailOTPChangeHTTPS(t *testing.T, ctx context.Context, f live
 	if err := f.pool.Raw().QueryRow(ctx, `SELECT count(*) FROM identity.identifiers WHERE tenant_id=$1 AND user_id=$2 AND is_primary`, otpTenant, string(user)).Scan(&primaries); err != nil || primaries != 1 {
 		t.Fatal("HTTP change ambiguous primary", err)
 	}
-	if err := f.pool.Raw().QueryRow(ctx, `SELECT count(*) FROM identity.identifiers WHERE tenant_id=$1 AND user_id=$2 AND identifier_id=$3 AND version=$4 AND verification_version=$5 AND verified AND NOT is_primary AND verified_at=$6`, otpTenant, string(user), oldID, oldVersion+1, oldVerification, oldVerified).Scan(&retained); err != nil || retained != 1 {
+	retainedVersion := oldVersion
+	if !options.initialPrimary {
+		retainedVersion++
+	}
+	if err := f.pool.Raw().QueryRow(ctx, `SELECT count(*) FROM identity.identifiers WHERE tenant_id=$1 AND user_id=$2 AND identifier_id=$3 AND version=$4 AND verification_version=$5 AND verified AND NOT is_primary AND verified_at=$6`, otpTenant, string(user), oldID, retainedVersion, oldVerification, oldVerified).Scan(&retained); err != nil || retained != 1 {
 		t.Fatal("HTTP change rewrote old verification history", err)
 	}
 	if err := f.pool.Raw().QueryRow(ctx, `SELECT used_attempts,failed_attempts FROM otp_store.challenges WHERE tenant_id=$1 AND challenge_id=$2`, otpTenant, string(sent.CommandID)).Scan(&used, &failed); err != nil || used != 2 || failed != 1 {

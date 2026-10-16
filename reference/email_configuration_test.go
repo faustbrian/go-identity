@@ -42,7 +42,7 @@ func TestEmailSelectionAndGraphLifetime(t *testing.T) {
 	if owner, err := composeEmail(StoreConfiguration{}, ReferenceDependencies{}, risk.Evaluator{}, nil, nil, nil); err != nil || owner != nil {
 		t.Fatal("unselected email acquired dependencies", err)
 	}
-	for _, config := range []*EmailConfiguration{{}, {Verification: &EmailManagementConfiguration{}}, {Change: &EmailManagementConfiguration{}}, {Addresses: &EmailAddressConfiguration{}}, {Removal: &EmailRemovalConfiguration{}}, {OTPVerification: &EmailOTPVerificationConfiguration{}}} {
+	for _, config := range []*EmailConfiguration{{}, {Verification: &EmailManagementConfiguration{}}, {Change: &EmailManagementConfiguration{}}, {Addresses: &EmailAddressConfiguration{}}, {Removal: &EmailRemovalConfiguration{}}, {OTPVerification: &EmailOTPVerificationConfiguration{}}, {OTPChangeInitialPrimary: true}} {
 		c := StoreConfiguration{Email: config}
 		if owner, err := composeEmail(c, ReferenceDependencies{}, risk.Evaluator{}, nil, nil, nil); err == nil || owner != nil {
 			t.Fatal("selected email accepted absent native authority")

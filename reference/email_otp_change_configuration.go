@@ -14,7 +14,9 @@ import (
 // change. It requires Email.Change with its old-address notice, actual password
 // session authority and an independent request-key namespace. The graph supplies
 // the original native owner; callers cannot substitute origin custody. Native
-// selection enables no HTTP route, initial-primary transition or automatic login.
+// selection enables no HTTP route or automatic login. First-primary establishment
+// additionally requires Email.OTPChangeInitialPrimary and the original explicit
+// sole-verified change policy; zero retains genuine-primary replacement only.
 type EmailOTPChangeConfiguration EmailOTPVerificationConfiguration
 
 func composeEmailOTPChange(c StoreConfiguration, d ReferenceDependencies, base otppg.SendConfig, crypto *envelope.Service, e *emailState) (*otppg.EmailChangeService, error) {
@@ -26,7 +28,7 @@ func composeEmailOTPChange(c StoreConfiguration, d ReferenceDependencies, base o
 	if err != nil {
 		return nil, err
 	}
-	return otppg.NewEmailChangeService(d.PostgreSQL, otppg.EmailChangeConfig{Send: base, Domain: n.Domain, Source: e.change, CurrentAttemptKeyVersion: n.CurrentAttemptKeyVersion}, crypto)
+	return otppg.NewEmailChangeService(d.PostgreSQL, otppg.EmailChangeConfig{Send: base, Domain: n.Domain, Source: e.change, CurrentAttemptKeyVersion: n.CurrentAttemptKeyVersion, AllowInitialPrimary: c.Email.OTPChangeInitialPrimary}, crypto)
 }
 
 // Format redacts retained session/request keys and deployment configuration.

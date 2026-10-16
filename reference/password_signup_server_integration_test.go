@@ -240,6 +240,7 @@ func proveReferenceSignupGraph(t *testing.T, competing bool, protected ...bool) 
 }
 
 type signupGraphExtensions struct {
+	emailOTPInitialPrimary                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 bool
 	administrativeEmailRemoval                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             bool
 	administrativeEmailQueries                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             bool
 	emailRemoval                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           bool
@@ -494,6 +495,7 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 		calls = configureReferenceEmailGraph(t, &c, origin, extensions.emailManagementChange)
 		if strings.HasPrefix(extensions.emailChangeCase, "otp-change") {
 			configureReferenceEmailOTPChange(t, &c)
+			c.Email.OTPChangeInitialPrimary = extensions.emailOTPInitialPrimary && extensions.emailChangeCase != "otp-change-initial-unselected"
 			if extensions.emailChangeCase == "otp-change-generic" {
 				verification := *c.Email.Change
 				verification.Native.Change = nil
@@ -941,7 +943,7 @@ END $$`); err != nil {
 				}
 			}
 			if extensions.emailManagementChange {
-				change = &referenceEmailChangeOptions{readSession: readSession, recipients: noticeRecipients, mode: extensions.emailChangeCase, deliveries: changeDeliveries}
+				change = &referenceEmailChangeOptions{readSession: readSession, recipients: noticeRecipients, mode: extensions.emailChangeCase, deliveries: changeDeliveries, initialPrimary: extensions.emailOTPInitialPrimary}
 				if extensions.emailChangeCase == "otp-change-reference-https" {
 					change.httpChange = &emailOTPHTTPSSelection{client: client, base: network.URL, origin: origin, server: server}
 				} else if strings.HasPrefix(extensions.emailChangeCase, "otp-change") && strings.Contains(string(server.OpenAPI().JSON()), "/v1/otp/email-change") {

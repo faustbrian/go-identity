@@ -38,7 +38,13 @@ code delivery and consuming `EmailChangeConfirm`. Success replaces one genuine
 primary, notifies its original old address after confirmation, and invalidates
 old identifier-bound sessions. `RecoverEmailChange` observes original metadata
 under its distinct current disclosure permission without comparison or effects.
-Initial-primary, stronger-factor and auto-signin variants are not enabled.
+To establish a first primary for an account with exactly one verified email and
+no primary, additionally set `Email.OTPChangeInitialPrimary = true` and select
+`email.PrimaryOrSoleVerifiedAddress` on the original change owner. The old
+verified mailbox and its identifier/verification history stay unchanged; the
+new address becomes the sole primary with the same notice and session effects.
+Neither setting alone enables this transition. Default selection remains
+genuine-primary-only. Stronger-factor and auto-signin variants are not enabled.
 This native selection alone exposes no HTTP capability. Independently set
 `HTTPEmailOTPChange` with `HTTPEmailOTPChangeConfiguration` to select the three
 [public OTP change routes](../http/otp/README.md). Supply exact HTTPS Origin,
