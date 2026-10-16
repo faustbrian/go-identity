@@ -107,6 +107,7 @@ type featureState struct {
 	httpEmailOTPChange           *emailOTPChangeHTTPState
 	passwordSignin               *passwordpg.SigninService
 	passwordSignup               *passwordpg.SignupService
+	verificationSignin           *passwordpg.VerificationSigninService
 	session                      *sessionState
 	passwordVerification         *passwordVerificationState
 	email                        *emailState
@@ -404,6 +405,10 @@ func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDepen
 	if err != nil {
 		return err
 	}
+	verificationSigninOwner, err := composeVerificationSignin(c, passwordSignupOwner)
+	if err != nil {
+		return err
+	}
 	sessionOwner, err := composeSession(c, d)
 	if err != nil {
 		return err
@@ -597,6 +602,7 @@ func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDepen
 	}
 	s.features = &featureState{migrations: migrationConfig, otp: otpOwner, signin: signinOwner, reset: resetOwner, passwordSignin: passwordSigninOwner, passwordPreauth: passwordPreauthOwner, preauth: preauthOwner, delivery: deliveryOwner, sender: d.DeliverySender, timeout: o.Timeout, provider: o.ProviderVersion, deliverySlots: make(chan struct{}, int(capacity)), authorize: o.RequestKeys.Policy.Authorization, httpPreAuth: httpPreAuth, httpEmailSignin: httpEmailSignin, httpPasswordReset: httpPasswordReset, httpPasswordSignin: httpPasswordSignin}
 	s.features.passwordSignup = passwordSignupOwner
+	s.features.verificationSignin = verificationSigninOwner
 	s.features.session = sessionOwner
 	s.features.passwordVerification = passwordVerificationOwner
 	s.features.email = emailOwner

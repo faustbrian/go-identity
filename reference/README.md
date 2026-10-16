@@ -1,5 +1,28 @@
 # Identity reference composition
 
+## Original-browser registration verification and signin
+
+Set `PasswordSignup.VerificationSignin` to a native
+`passwordpostgres.VerificationSigninConfig` with the existing session issuer/CSRF
+and matching email-grant authority/audience. Keep the signup authorization
+namespace and selected `Session` read/logout composition consistent. The graph
+installs the native email-grant record predecessors and an independent forward
+verification-signin suffix; existing history/checksums are preserved.
+
+`FeatureSet.RegistrationVerificationSignin()` provides the guarded native port.
+Independently set `HTTPRegistrationVerification.Signin = true` to select the
+original-browser profile of the existing confirmation route. HTTP signup
+initiation and signed browser-device custody must also be selected. This
+registration-only selection rejects `ManagedAddresses`; default/shared managed
+confirmation remains verification-only. No extra endpoint is implicitly exposed.
+
+The complete journey is registration, captured delivery, verification, fresh
+email-possession signin, primary session read and logout. Both original browser
+and persistent remember choices are retained. Verification commits first; later
+login denial/ambiguity conserves that known outcome. Replay and metadata recovery
+never create replacement credentials. Known-empty MFA is required; enrolled
+continuation, other auto-signin variants and full M04 qualification remain work.
+
 ## TOTP-protected primary-email change
 
 Select `Email.TOTPChange`, `Email.Change` and

@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Select native registration verification/signin with
+  `PasswordSignup.VerificationSignin`, independently selecting its HTTPS profile
+  with `HTTPRegistrationVerification.Signin`. Compose real migrations, original
+  browser/remember custody, risk/MFA/authorization and primary session read/logout.
+  The known-empty-MFA registration profile cannot be combined with shared managed
+  confirmation; defaults do not enable login or additional HTTP capabilities.
+
 - Select genuine-primary email change with `Email.TOTPChange` and native
   `MFAEnrollment.ActiveStepUp.EmailChange`. Compose the actual factor-proof
   owner, forward use-purpose migration and earliest original deadline; preserve

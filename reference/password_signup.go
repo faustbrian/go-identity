@@ -115,3 +115,39 @@ func (f composedPasswordSignup) RegistrationVerificationRateSource(ctx context.C
 
 var _ passwordhttp.SignupService = composedPasswordSignup{}
 var _ email.RegistrationVerificationService = composedPasswordSignup{}
+
+// RegistrationVerificationSignin returns only the independently selected native
+// original-browser registration confirmation/signin profile. Default signup,
+// managed-address confirmation, scanner inspection and HTTP remain unchanged.
+// Calls retain graph lifetime/tenant admission; recovery is metadata-only.
+func (f FeatureSet) RegistrationVerificationSignin() (email.RegistrationVerificationSigninService, error) {
+	if err := f.registrationSelected(); err != nil {
+		return nil, err
+	}
+	f.state.mu.Lock()
+	defer f.state.mu.Unlock()
+	if f.state.features.verificationSignin == nil {
+		return nil, identity.UnavailableError{}
+	}
+	return composedVerificationSignin{state: f.state}, nil
+}
+
+type composedVerificationSignin struct{ state *storeState }
+
+func (f composedVerificationSignin) VerificationConfirmAndSignin(ctx context.Context, r email.VerificationSigninRequest) (email.VerificationSigninResult, error) {
+	w, done, err := (composedPasswordReset{state: f.state}).enter(ctx, r.Confirmation.TenantID)
+	if err != nil {
+		return email.VerificationSigninResult{}, err
+	}
+	defer done()
+	return f.state.features.verificationSignin.VerificationConfirmAndSignin(w, r)
+}
+
+func (f composedVerificationSignin) VerificationSigninRecover(ctx context.Context, q identity.RecoveryQuery, caller authorization.DecisionContext) (identity.CommandResult, error) {
+	w, done, err := (composedPasswordReset{state: f.state}).enter(ctx, q.TenantID)
+	if err != nil {
+		return identity.CommandResult{}, err
+	}
+	defer done()
+	return f.state.features.verificationSignin.VerificationSigninRecover(w, q, caller)
+}

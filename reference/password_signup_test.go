@@ -28,6 +28,9 @@ func TestPasswordSignupGraphSelection(t *testing.T) {
 	if service, err := selected.RegistrationVerification(); err == nil || service != nil {
 		t.Fatal("empty graph exposed confirmation")
 	}
+	if service, err := (FeatureSet{}).RegistrationVerificationSignin(); err == nil || service != nil {
+		t.Fatal("empty graph exposed automatic signin")
+	}
 	if service, err := selected.SignupPreAuth(); err == nil || service != nil {
 		t.Fatal("empty graph exposed signup initiation")
 	}
@@ -40,6 +43,9 @@ func TestPasswordSignupGraphLifetime(t *testing.T) {
 	close(drained)
 	state := &storeState{lifetime: lifetime, cancel: cancel, drained: drained, features: &featureState{composed: true, timeout: time.Second, passwordSignup: &passwordpg.SignupService{}}}
 	f := FeatureSet{state: state}
+	if service, err := f.RegistrationVerificationSignin(); err == nil || service != nil {
+		t.Fatal("ordinary registration implicitly enabled automatic signin")
+	}
 	owner, err := f.PasswordSignup()
 	if err != nil {
 		t.Fatal(err)

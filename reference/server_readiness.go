@@ -159,7 +159,7 @@ func readinessSchemaPresent(ctx context.Context, state *storeState, catalog []mi
 // sources assembled in migrations.go; do not infer SQL or copy migration DDL.
 func readinessCatalogGuards(state *storeState, history migrationHistory) []migrationGuard {
 	guards := slices.Clone(history.guards)
-	if state.features != nil && (state.features.migrations.magicSessionSchema != "" || state.features.migrations.passwordTOTP || state.features.migrations.passwordRecovery) {
+	if state.features != nil && (state.features.migrations.magicSessionSchema != "" || state.features.migrations.passwordTOTP || state.features.migrations.passwordRecovery || state.features.verificationSignin != nil) {
 		schema := state.features.migrations.magicSessionSchema
 		if schema == "" {
 			schema = state.features.migrations.passwordSigninSchema
@@ -204,6 +204,12 @@ func readinessCatalogGuards(state *storeState, history migrationHistory) []migra
 						guards[i].constraints[j] = "sessions.session_record_binding_v8"
 					case "sessions.session_credential_continuation_v4":
 						guards[i].constraints[j] = "sessions.session_credential_continuation_v5"
+					}
+				}
+				if state.features.verificationSignin != nil {
+					switch guards[i].constraints[j] {
+					case "session_issuances.session_issuances_purpose_v5", "session_issuances.session_issuances_purpose_v6":
+						guards[i].constraints[j] = "session_issuances.session_issuances_purpose_v7"
 					}
 				}
 			}

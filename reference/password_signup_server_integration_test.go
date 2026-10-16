@@ -57,7 +57,7 @@ func (referenceRegistrationPolicy) Decide(ctx context.Context, c authorization.D
 	}
 	if string(c.Request.Tenant) == otpTenant && c.PolicyRevision == 9 && c.Request.Subject.Kind == authorization.SubjectServiceAccount && c.Request.Subject.ID == "AAAAAAAAAAAAAAAAAAAAAw" {
 		switch c.Request.Action {
-		case "identity.password.signup", "identity.user.create", "identity.email.verification-confirm", "identity.email.change-confirm", "identity.password.signup.recover", "identity.magic-link.request", "identity.magic-link.consume", "identity.magic-link.request.recover", "identity.magic-link.consume.recover", "identity.mfa.totp-verify", "identity.mfa.totp-verify.recover", "identity.mfa.recovery-use", "identity.mfa.recovery-use.recover":
+		case "identity.password.signup", "identity.user.create", "identity.email.verification-confirm", "identity.email.verification-signin", "identity.email.change-confirm", "identity.password.signup.recover", "identity.magic-link.request", "identity.magic-link.consume", "identity.magic-link.request.recover", "identity.magic-link.consume.recover", "identity.mfa.totp-verify", "identity.mfa.totp-verify.recover", "identity.mfa.recovery-use", "identity.mfa.recovery-use.recover":
 			return authorization.Decision{Outcome: authorization.Allow, Revision: 9}, nil
 		}
 	}
@@ -240,6 +240,7 @@ func proveReferenceSignupGraph(t *testing.T, competing bool, protected ...bool) 
 }
 
 type signupGraphExtensions struct {
+	verificationSignin                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     string
 	emailOTPInitialPrimary                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 bool
 	administrativeEmailRemoval                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             bool
 	administrativeEmailQueries                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             bool
@@ -295,6 +296,7 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 		f.completionFault = &completionCommitFault{factorProof: extensions.activeStepUp, regeneration: extensions.regeneration, factorManagement: extensions.factorManagement || extensions.disable, replacementConfirmation: extensions.factorReplacementConfirmationFault, emailRemoval: extensions.emailRemoval}
 		f.completionFault.emailPreparation = extensions.emailChangeCase == "removal-admin-output-unknown"
 		f.completionFault.emailVerification = extensions.emailChangeCase == "otp-verification-unknown" || extensions.emailChangeCase == "otp-change-unknown"
+		f.completionFault.registrationVerification = extensions.verificationSignin == "verification-unknown"
 		if strings.HasPrefix(extensions.emailChangeCase, "totp-change") {
 			f.completionFault.factorProof = false
 			f.completionFault.emailFactorUse = extensions.emailChangeCase == "totp-change-unknown-request"
@@ -302,7 +304,7 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 		}
 		faultPool, err := database.Connect(ctx, database.Config{DSN: f.pool.Raw().Config().ConnConfig.ConnString(), MaxConns: 4, Configure: func(pc *database.PoolConfig) error {
 			pc.ConnConfig.DialFunc = f.completionFault.dial
-			if f.completionFault.emailPreparation || f.completionFault.emailVerification || f.completionFault.emailFactorUse {
+			if f.completionFault.emailPreparation || f.completionFault.emailVerification || f.completionFault.emailFactorUse || f.completionFault.registrationVerification {
 				// Keep parameterized extended queries, but send their SQL rather
 				// than a previously cached statement name to the fault boundary.
 				pc.ConnConfig.DefaultQueryExecMode = pgx.QueryExecModeDescribeExec
@@ -344,6 +346,17 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 	selectedReset := c.PasswordReset
 	selectedResetHTTP := c.HTTPPasswordReset
 	var selectedAuthorization authorization.Service = referenceRegistrationPolicy{}
+	var verificationExpiryClock *verificationSigninExpiryClock
+	if strings.HasPrefix(extensions.verificationSignin, "policy-denied") {
+		selectedAuthorization = verificationSigninDenyPolicy{}
+	}
+	if extensions.verificationSignin == "late-factor" {
+		selectedAuthorization = verificationSigninLateFactorPolicy{pool: f.pool}
+	}
+	if strings.HasPrefix(extensions.verificationSignin, "late-issuer-expiry") {
+		verificationExpiryClock = &verificationSigninExpiryClock{}
+		selectedAuthorization = verificationSigninExpiryPolicy{clock: verificationExpiryClock}
+	}
 	if extensions.administrativeEmailQueries || extensions.administrativeEmailRemoval {
 		f.adminEmailGrant = &administrativeEmailGrant{removal: extensions.administrativeEmailRemoval}
 		selectedAuthorization = f.adminEmailGrant
@@ -364,6 +377,13 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 		}
 	}
 	signin := c.PasswordSignin.Native
+	if extensions.verificationSignin != "" {
+		c.PasswordSignup.VerificationSignin = &passwordpg.VerificationSigninConfig{Profile: sessionpg.MagicLinkAdmissionConfig{GlobalAuthorityID: signin.Profile.GlobalAuthorityID, PolicyNamespace: signin.Profile.PolicyNamespace, Audience: signin.Profile.Audience}, Issuance: signin.Issuance, CSRFKey: signin.CSRFKey}
+		if verificationExpiryClock != nil {
+			c.PasswordSignup.VerificationSignin.Issuance.Clock = verificationExpiryClock
+		}
+		c.HTTPRegistrationVerification.Signin = strings.HasSuffix(extensions.verificationSignin, "-http")
+	}
 	f.removalSignin = signin
 	c.Session = &reference.SessionConfiguration{Native: sessionpg.SignOutServiceConfig{Execution: sessionpg.IssueExecutorConfig{Repository: signin.Session, Profile: sessionpg.IssueAdmissionConfig(signin.Profile), Coordinator: signin.Coordinator, Authorization: c.OTP.RequestKeys.Policy.Authorization, Clock: clock.System{}, PolicyID: "session-signout", PolicyVersion: 9, AuditRetentionVersion: 1}, Validation: session.ServiceConfig{Profile: session.StorageStatefulOpaque, Audience: signin.Profile.Audience, MaximumDuration: 2 * time.Second, ClockUncertainty: time.Millisecond, LookupKeys: []session.DigestKey{signin.Issuance.LookupKey}}, Cookie: signin.Issuance.Cookie, MaximumDuration: 3 * time.Second}, CSRFKeys: []session.CSRFKey{signin.CSRFKey}}
 	c.HTTPSession = &reference.HTTPSessionConfiguration{Transport: session.CredentialCookie, TrustedOrigins: []identityhttp.Origin{identityhttp.Origin(origin)}, RateNamespace: "reference-session", EmergencyMaximumKeys: 128, Degraded: func(context.Context, identityhttp.SafeRateEvent) error {
@@ -1064,6 +1084,10 @@ END $$`); err != nil {
 			}
 			proveReferenceEmailManagementResend(t, ctx, f, managementConfig, deps, managementFeatures, workers, messages, origin, user, cookies, csrf, fresh, change)
 		}
+	}
+	if extensions.verificationSignin != "" {
+		proveReferenceVerificationSignin(t, ctx, f, features, workers, client, network.URL, origin, messages, extensions.verificationSignin)
+		return
 	}
 	proveReferenceRegistration(t, ctx, f, features, workers, client, network.URL, origin, messages, calls, competing, changeScreens, extensions.mfaEnrollment, extensions.passwordMFA, extensions.emailAddressQueries, c.Email != nil && c.Email.Addresses != nil, extensions.passwordRecovery)
 	if magic {

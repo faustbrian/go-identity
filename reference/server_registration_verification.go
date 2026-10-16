@@ -32,6 +32,11 @@ type HTTPRegistrationVerificationConfiguration struct {
 	// with the same complete issuer trust/replay configuration. No other email
 	// HTTP operation is implied; false preserves signup-only behavior.
 	ManagedAddresses bool
+	// Signin explicitly selects original-browser registration verification then
+	// signin. Native PasswordSignup.VerificationSignin, compatible Session and
+	// HTTP signup initiation/device custody are required. ManagedAddresses cannot
+	// be combined in this registration-only profile; defaults issue no session.
+	Signin bool
 }
 
 // Format redacts deployment custody.
@@ -63,6 +68,9 @@ func composeRegistrationVerificationHTTP(c StoreConfiguration, rate *httpRateSta
 		return nil, invalid
 	}
 	p, n := *c.HTTPRegistrationVerification, c.PasswordSignup.Native
+	if p.Signin && (p.ManagedAddresses || c.PasswordSignup.VerificationSignin == nil || c.Session == nil || c.HTTPPreAuth == nil || c.HTTPPreAuth.Device == nil || c.HTTPPasswordSignup == nil || c.PasswordSignup.PreAuth == nil) {
+		return nil, invalid
+	}
 	if p.ManagedAddresses {
 		if c.Email == nil || c.Email.Verification == nil {
 			return nil, invalid
@@ -114,7 +122,18 @@ func (s *Server) emailFeature(network identityhttp.NetworkConfig, f FeatureSet) 
 				return nil, e
 			}
 			// Only this sealed graph constructs the guarded native handle.
-			selection.SignupConfirmation = &emailhttp.ConfirmationConfig{Network: network, Service: owner.(composedPasswordSignup), Rate: h.rate, Origin: identityhttp.Origin(c.Origin), ActorID: c.ActorID, PolicyRevision: c.PolicyRevision, Now: time.Now, MaximumDuration: s.state.features.timeout}
+			base := emailhttp.ConfirmationConfig{Network: network, Service: owner.(composedPasswordSignup), Rate: h.rate, Origin: identityhttp.Origin(c.Origin), ActorID: c.ActorID, PolicyRevision: c.PolicyRevision, Now: time.Now, MaximumDuration: s.state.features.timeout}
+			if c.Signin {
+				signin, err := f.RegistrationVerificationSignin()
+				if err != nil {
+					return nil, err
+				}
+				p := s.state.features.httpPreAuth
+				flow := s.state.features.httpPasswordSignup.preauth
+				selection.VerificationSignin = &emailhttp.VerificationSigninConfig{Confirmation: base, Service: signin, FlowCookie: flow.Cookie, SessionCookie: s.state.features.session.config.Cookie, Device: *p.device, Audience: s.state.features.session.readerAudience}
+			} else {
+				selection.SignupConfirmation = &base
+			}
 		}
 	}
 	feature, err := emailhttp.NewFeature(selection)

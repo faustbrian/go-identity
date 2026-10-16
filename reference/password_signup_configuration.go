@@ -31,6 +31,21 @@ type PasswordSignupConfiguration struct {
 	// PreAuth selects fixed signup initiation using Native's keys and policy.
 	// Nil disables initiation, without disabling direct signup/confirmation.
 	PreAuth *PasswordPreAuthConfiguration
+	// VerificationSignin independently selects original-browser registration
+	// confirmation followed by native email-possession signin. Nil preserves
+	// verification-only behavior. It enables no HTTP route; Session must select
+	// compatible primary read/logout. Enrolled or unknown MFA remains denied.
+	VerificationSignin *passwordpg.VerificationSigninConfig
+}
+
+func composeVerificationSignin(c StoreConfiguration, signup *passwordpg.SignupService) (*passwordpg.VerificationSigninService, error) {
+	if c.PasswordSignup == nil || c.PasswordSignup.VerificationSignin == nil {
+		return nil, nil
+	}
+	if signup == nil || c.Session == nil || c.PasswordSignin == nil || c.PasswordSignup.Native.Session != c.Session.Native.Execution.Repository {
+		return nil, identity.InvalidInputError{Field: "reference_verification_signin"}
+	}
+	return passwordpg.NewVerificationSigninService(signup, *c.PasswordSignup.VerificationSignin)
 }
 
 func composePasswordSignup(c StoreConfiguration, d ReferenceDependencies, evaluation risk.Evaluator) (*passwordpg.SignupService, error) {

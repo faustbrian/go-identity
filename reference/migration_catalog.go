@@ -272,16 +272,24 @@ func (s StoreSet) migrationCatalog(ctx context.Context) ([]migrationHistory, err
 				return nil, err
 			}
 		}
-		return s.activeStepUpMigrationCatalog(ctx, catalog)
+		catalog, err = s.activeStepUpMigrationCatalog(ctx, catalog)
+		if err != nil {
+			return nil, err
+		}
+		return s.verificationSigninMigrationCatalog(ctx, catalog)
 	}
 	if s.state.features.mfaEnrollment != nil {
 		catalog, err = mfaEnrollmentMigrationCatalog(ctx, catalog, s.state.config.Schema)
 		if err != nil {
 			return nil, err
 		}
-		return s.activeStepUpMigrationCatalog(ctx, catalog)
+		catalog, err = s.activeStepUpMigrationCatalog(ctx, catalog)
+		if err != nil {
+			return nil, err
+		}
+		return s.verificationSigninMigrationCatalog(ctx, catalog)
 	}
-	return catalog, nil
+	return s.verificationSigninMigrationCatalog(ctx, catalog)
 }
 
 func (g migrationGuard) exists(ctx context.Context, s *storeState) (bool, error) {

@@ -30,11 +30,12 @@ type SessionConfiguration struct {
 }
 
 type sessionState struct {
-	reader *session.SessionService
-	bearer *session.SignOutService
-	cookie *session.CookieSignOutService
-	revoke *sessionpg.RevokeOneExecutor
-	config sessionpg.SignOutServiceConfig
+	reader         *session.SessionService
+	bearer         *session.SignOutService
+	cookie         *session.CookieSignOutService
+	revoke         *sessionpg.RevokeOneExecutor
+	config         sessionpg.SignOutServiceConfig
+	readerAudience string
 }
 
 func composeSession(c StoreConfiguration, d ReferenceDependencies) (*sessionState, error) {
@@ -89,7 +90,7 @@ func composeSession(c StoreConfiguration, d ReferenceDependencies) (*sessionStat
 	if err != nil {
 		return nil, invalid
 	}
-	state := &sessionState{reader: reader, bearer: bearer, revoke: revoke, config: n}
+	state := &sessionState{reader: reader, bearer: bearer, revoke: revoke, config: n, readerAudience: n.Validation.Audience}
 	if len(c.Session.CSRFKeys) > 0 {
 		executor, err := sessionpg.NewCookieRevokeOneExecutor(d.PostgreSQL, execution, c.Session.CSRFKeys)
 		if err != nil {
@@ -142,6 +143,14 @@ func sessionAdmissionSelection(c StoreConfiguration) (sessionpg.SingleFactorSess
 		if sessionpg.OTPAdmissionConfig(profile) != common || m.Request.Session != e.Repository || !sessionIssuanceMatches(n, m.Consume.Issuer, m.Consume.CSRF) {
 			return deny()
 		}
+		selected.MagicLink = &profile
+	}
+	if p := c.PasswordSignup; p != nil && p.VerificationSignin != nil {
+		v := *p.VerificationSignin
+		if sessionpg.OTPAdmissionConfig(v.Profile) != common || p.Native.Session != e.Repository || !sessionIssuanceMatches(n, v.Issuance, v.CSRFKey) {
+			return deny()
+		}
+		profile := v.Profile
 		selected.MagicLink = &profile
 	}
 	return selected, nil
