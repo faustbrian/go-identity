@@ -2,7 +2,241 @@
 
 Activated on 2026-10-14. B1, B2 and B3 are closed; M04 email lifecycle is active.
 
-## Active: M04 email lifecycle; pending-email OTP profile delivered
+## Active: M04 email lifecycle; primary-change OTP profile delivered
+
+- Primary-change OTP public checkpoint (2026-10-16 07:44 UTC): foundation
+  `33c559f`, native/HTTP `7cda935` and reference `43b46d1` are pushed to main.
+  Exact-head Required runs `38866905876`, `38867896232`, `38868744890` pass;
+  these prove planning and changed-range secrets, not hosted runtime or full
+  history. Current source93-path digest:
+  `b56306657ef01598f1f60af9b5ec1878d0f11fcdee9898c2bd84e2de649da45d`.
+  Native regression `/root/primary_otp_regression_origin_fix` approves the
+  corrected84-path runtime; complete correctness `/root/primary_otp_correctness_review`
+  approves the final93-path public graph; `/root/primary_otp_go_compatibility`
+  approves its native91-path predecessor. Unchanged source proofs are retained.
+  Public `GOWORK=off go test -race ./...` and `go vet ./...` pass in
+  password/postgres (2.061s), otp/postgres (1.570s), http/otp (14.637s), reference
+  (8.540s) and reference/cmd/identity-baseline (7.116s); tagged reference vet passes.
+  Final real public-dependency PG18/race/HTTPS command, from reference:
+  ```sh
+  env IDENTITY_TEST_GOWORK=off \
+    /opt/homebrew/bin/ruby /private/tmp/identity-m04-emailchangeotp.wh2pt9/postgres-run.rb \
+    test -race -tags integration \
+    -run '^TestReferencePostgres(Baseline|EmailOTPPrimaryChange|EmailOTPVerification|EmailManagementChange|EmailChangeRollback|EmailChangeConcurrentConfirmation|EmailChangeHTTPS|EmailChangeOriginalCustody|EmailRemovalKeepsVerifiedSigninReset)$' \
+    -count=1 -timeout=240s .
+  ```
+  passes102.162s, including18 primary-change cases. The runner is disposable
+  historical execution context, not an installed consumer prerequisite.
+  All PG fixtures stop and are removed. Pinned gitleaks8.30.1 selected-file scan
+  passes; scanner scratch is removed. The published reference runner at
+  `v0.0.0-20261016074031-43b46d1d8e3b` initializes successfully from an empty
+  consumer directory with GOWORK off, public proxy/sumdb and no local overrides;
+  it creates private configuration, not a database/listener. Consumer scratch
+  is removed. Native `/root/primary_otp_delivery_audit` APPROVES selected-profile
+  closure at actual public `43b46d1`, independently matching source, original
+  native role reports and remote CI; runtime results remain parent-executed.
+  This profile is closed. Full M04/unit/history qualification remains open;
+  full milestones remain3/39, with no new qualified unit. No tags, release,
+  deployment or whole-platform completion claim.
+
+- Final issuance expiry regression (2026-10-16 07:16 UTC): the bounded real
+  PostgreSQL/race case now crosses original validity during the success journal
+  write, after earlier delivery/current-flow checks. Actual source passes6.187s;
+  a disposable Go overlay omitting only the final native hook fails6.724s with
+  issuance committed after expiry. The case asserts rollback of challenge,
+  send-family, delivery, success audit/lifecycle and intact primary/newer session.
+  No production source change or new planning machinery. The prior final
+  affected selector completed successfully98.887s at84-path digest `f92bdc7e`.
+  Only the two reference test inputs changed since; coverage follow-up and
+  complete final-diff source review precede public pin/adoption delivery.
+
+- Original-session focused green (2026-10-16 07:04 UTC): native red cases now
+  pass with real PostgreSQL/race, alongside happy path, selected reference HTTPS
+  and actual unknown-commit recovery (15.257s). OTP-native race/vet and tagged
+  reference vet pass after the final issuance commit hook was added. Original
+  session/family checks run in preparation, actual issuance and consuming
+  admission/final commit; restored preparation does not avoid the final fence.
+  Effective expiry conserves original session idle/absolute and change deadline.
+  Recovery remains historical and the revoked-origin denial receipt is readable.
+  Current84-path source digest:
+  `f92bdc7ec963499f4d74c00faad44c0dfa8a12e29fe8b5ec70ae6af8d7519db4`.
+  Full affected reference selector is running against this final fix; unchanged
+  parser/lower-owner results remain retained. No source approval or new main
+  delivery claimed yet; no additional QA plan or verification machinery.
+
+- Original-session correction in progress (2026-10-16 06:54 UTC): complete
+  source reviewer `/root/primary_otp_correctness_review` requested changes for
+  one introduced defect: a newer signin bypassed initiating-session/family
+  revocation or expiry. Two actual PostgreSQL red cases reproduced issuance
+  after original-family revocation and an extra wrong-code debit (6.101s).
+  OTP native now invokes the existing session owner's exact-record/family/time
+  fence at issuance and consuming admission/final checks, and conserves the
+  original earliest deadline; metadata recovery does not acquire that gate.
+  Pure original expiry minus/exact/plus tests pass. Initial positive rerun
+  exposed existing whole-second capability not-before versus finer session
+  issuance precision; derivation now uses exact retained session activity time,
+  not a fresh timestamp or rounded grant timestamp. No security guard was
+  relaxed. Focused real corrected regression is running; source approval and
+  delivery remain open, not inferred from prior coverage/source audits.
+
+- Corrected final local checkpoint (2026-10-16 06:33 UTC): all15 primary-change
+  cases plus retained pending OTP/link/origin selector pass together89.224s.
+  Valid OTP/OTP and link/OTP contention repeat3times29.851s. Shared kernel's real
+  identifier mutation/canonical collision/version/rollback suite passes1.767s.
+  All use disposable PG18/race. Final tagged reference vet passes. The new
+  sender assertion covers native and both selected HTTPS paths. No new source
+  changes beyond the reviewed coverage corrections;81-path digest remains
+  `cb798679be09664cd8207d52e0388d17c4011ad36a770149b9b93db0b7f872fd`.
+  Fresh native coverage audit `/root/primary_otp_regression_final` is pending;
+  final correctness, public native/reference pins and main/Required delivery
+  remain. Prior source checks remain scoped as originally executed, not rerun
+  solely for a new note/HEAD. No full M04/unit qualification claimed.
+
+- Review correction (2026-10-16 06:28 UTC): native regression reviewer
+  `/root/primary_otp_regression_review` requested decisive stale-input evidence.
+  Supported link confirmation now separately changes the original candidate
+  and changes only its previous primary via a different genuine fresh-password
+  request. Wrong and correct OTP submissions deny without debit or any further
+  directory/notice/lifecycle/session effect against the post-mutation baseline.
+  Actual sender observations now bind OTP body to the original candidate mailbox.
+  Those cases, both HTTPS selections and corrected link/OTP race pass24.332s.
+  The new test exposed missing correlation in the original link-racer fixture;
+  earlier link/OTP contention claims are withdrawn and superseded by this valid
+  competitor run. No production guard was weakened. Go compatibility audit
+  `/root/primary_otp_go_compatibility` approved source ownership/API compatibility
+  at the previous81-path snapshot; only reference test inputs changed since.
+  Updated81-path source digest:
+  `cb798679be09664cd8207d52e0388d17c4011ad36a770149b9b93db0b7f872fd`.
+  Lower email/OTP/kernel/MFA/HTTP modules also pass race/vet with GOWORK off and
+  public dependencies. Full affected reference regression is running; fresh
+  coverage/final correctness, native public repins and main delivery remain.
+
+- Primary-change OTP final local regression checkpoint (2026-10-16 06:16 UTC):
+  affected nine modules pass `go test -race ./...` and `go vet ./...`, including
+  reference runner. Reference PostgreSQL/race selector `EmailOTPPrimaryChange`,
+  `EmailOTPVerification`, `EmailManagementChange`, `EmailChangeRollback`,
+  `EmailChangeConcurrentConfirmation`, `EmailChangeHTTPS` and
+  `EmailChangeOriginalCustody` passes together (83.480s). Changed HTTP closed-input
+  fuzz passes5.349s; target and origin-command fuzz pass5.310s/5.196s. Native and
+  combined catalog digests, generator regression and planning/docs checks pass.
+  Selected current-file secret scan passes; inherited full-history gap remains.
+  Source snapshot excluding `.ai/`:81paths,
+  `6b3079d0f139fed7b8d28f21c5a1ec3eea25c69362aa6658c2f344d4b14ce79c`.
+  Native regression and Go compatibility audits are active; final correctness,
+  public-source pins/consumer proof and main delivery remain. Development
+  GOWORK results do not prove public module qualification or complete M04.
+
+- Primary-change OTP transport checkpoint (2026-10-16 06:14 UTC), still local
+  on `6b2ff5d`: documented direct HTTPS and independently selected reference
+  HTTPS journeys pass with real PostgreSQL/race. Native-only selection remains
+  unadvertised. Original expiry/exhaustion pass together (8.833s); a real generic
+  committed pending-add cannot disclose a replacement destination or issue OTP
+  state (3.877s), preserving primary/session/notice. Typed recovery definitions
+  now use the existing native catalog input/digest format, preserving every old
+  embedded operation row; generator/digest checks pass. Affected email, OTP,
+  kernel, password-native, OTP-native and MFA-native race/vet pass; HTTP and
+  HTTP/OTP race pass after extending the exact unselected-recovery fixture.
+  Remaining: affected reference/retained journeys, bounded parsing fuzz,
+  independent final audits, public pins/consumer proof and main delivery. No new
+  milestone/unit qualification; no Tools work or history repair.
+
+- Primary-change OTP native checkpoint (2026-10-16 05:26 UTC), local/uncommitted
+  on base `6b2ff5d`: `otp.EmailChangeService` and the real native adapter now
+  compose original committed change provenance, independent issuance, consuming
+  confirmation, original-old-address notice and metadata-only recovery. The
+  selected reference graph owns native source/notice/session/risk/migrations
+  and exposes a shutdown-bounded handle with no HTTP route. Original request
+  admission is not re-consumed and its validity is not renewed. Call-local
+  completion phases preserve concurrent isolation; the kernel admits notice
+  delivery only for the exact primary-change OTP operation, not verification.
+
+  The first real journey exposed two separate closed selectors: structured
+  consuming-attempt scope and the required notice at kernel preparation. Each
+  received a reproduced focused regression and an exact profile-specific fix;
+  no gate was loosened. An additional reproduced restoration test now fences
+  original comparison/key-domain configuration; existing legacy profile framing
+  is unchanged. Native configuration/service diagnostics and implicit export
+  are redacted. New core/public request validation, original custody, distinct
+  audit/plan/target guards and source/factor authority remain mandatory.
+
+  Local development workspace results (not public dependency qualification):
+  eight real PostgreSQL/race primary-change scenarios pass, and OTP/OTP plus
+  link/OTP contention pass three repeated runs (20.135s). The new scenarios and
+  retained pending-email OTP suite pass together (54.385s); affected focused
+  owner race and tagged vet pass. The latest additive domain-custody fix has
+  its own red/green restoration regression and native race pass; the eight
+  primary-change cases pass again (22.232s) with that fix; affected native/reference
+  tagged vet and final diff checks pass. PostgreSQL fixtures and all owned Go
+  build/module/temp caches were removed after the bounded run. The small active
+  workspace/runner and original QA input remain needed for the unfinished profile.
+  The original map/QA inputs below remain
+  unchanged; no replanning, worker implementation or receipt framework.
+
+  Next: selected opt-in HTTP/reference composition and remaining frozen
+  expiry/attempt/origin/transport partitions, then regression/correctness/Go/
+  delivery audits, public dependencies and coherent main delivery. Do not close
+  M04 or commit prerequisites as a delivered slice. Full milestones remain3/39;
+  no newly qualified unit, no Tools change and no release/deployment claim.
+
+- Primary-change OTP development checkpoint (2026-10-16 04:36 UTC), still
+  uncommitted on base `6b2ff5d`: code-independent `email.ChangeOriginSource` is
+  implemented by the real password-native change owner and exposed through the
+  selected reference graph. Standalone and keyed graph PostgreSQL/race journeys
+  read authentic committed custody before link delivery and after completion;
+  exact ciphertext digest, original session/policy/old address/times, foreign or
+  noncommitted denial and database custody immutability are exercised. Target
+  framing now retains a bounded original-command locator plus intent digest,
+  allowing reconstruction without a new correlation store. Existing OTP digest
+  and legacy custody formats are unchanged.
+  The shared kernel now admits only the distinct consuming OTP primary-change
+  operation, with separate original-change/send/attempt identities, actual old
+  primary, required enlisted notice, distinct audit selector and exact persisted
+  successor admission. Pure tests cover denial/commit audit, declaration/plan
+  roundtrip and scope substitutions; this is NOT a real OTP-change journey yet.
+  Fresh native `/root/emailchange_native_map` and one bounded native
+  `/root/emailchange_native_qa` pass precede further source writes under the
+  replacement workflow; the initial target files predate that policy. QA's
+  original artifact is `/tmp/emailchange-native-qa.etjggm/qa-plan.json`, producer
+  digest `ef4971c756baace7b99cb9e68937d3b509eace0ba2ff992b435e4c774b03a1d1`.
+  Affected email/OTP/kernel/password-native race tests and tagged vet pass;
+  formatting/diff checks pass. Owned Go caches were removed and no PostgreSQL
+  fixture remains; the small owned workspace/runner and live QA input are retained
+  for this unfinished profile, not a new evidence framework. Changed-target and
+  locator fuzz each pass5s. Source custody plus retained verification/code-code/
+  link-code contention PostgreSQL/race selection passes13.084s using the owned
+  development workspace, NOT public dependency pins. Expected missing-API,
+  closed-origin mapping, missing selector and unenlisted-notice red states were
+  observed. Next implement native change Send/completion/recovery and real notice
+  composition, then selected HTTP/reference journeys and remaining frozen cases.
+  Full independent regression/correctness/Go/delivery audits, public pins and main
+  delivery remain pending; do not commit this prerequisite as a delivered slice.
+  No package worker, Tools change, new verification machinery or milestone closure.
+
+- Frozen primary-change OTP profile (2026-10-16 03:58 UTC), base `6b2ff5d`:
+  genuine verified primary -> existing keyed fresh-password change request ->
+  independent new-address OTP request/delivery -> consuming confirmation ->
+  one new primary, old-primary demotion/notice and old-session denial. Public
+  OTP change APIs require the original committed change origin; ordinary added
+  pending addresses cannot become replacement authority. Preserve notify-old
+  AFTER confirmation and original change/session/factor validity without a new
+  proof, clock renewal or link-to-OTP reinterpretation. Link and OTP completion
+  may race but have one successor. Exclude current-address OTP, initial-primary
+  establishment, stronger-factor users, auto-signin and phone from this profile;
+  those remain full-goal obligations, not implicit fallbacks. One bounded map
+  `/root/m04_otp_boundary` identifies the existing password-owned primary/source,
+  email change policy/shared kernel writer and OTP consuming owners. Add a
+  storage-neutral original-change source backed by the real committed encrypted
+  request, not a delivered link or caller-supplied previous address. Native
+  reference selects it and independent HTTP routes; no private journal/store.
+  Reuse public kernel/OTP/MFA `cf3f5a4`, OTP/HTTP adapters `92f2dae`, password
+  `9ee4c44`, email `9785b1c` and reference `612ab05`. Prove fresh/wrong/stale
+  proof, exact origin/candidate/previous/purpose/tenant/session, known-empty
+  factor generations, finite attempts, collision/version change, replay,
+  code/link contention, atomic notice/audit/lifecycle/finalize rollback and lost
+  commit acknowledgement with metadata-only original recovery. TDD affected
+  owners plus real PostgreSQL/HTTPS/race reference journey, bounded changed-input
+  fuzz/static, public dependencies/consumer, one complete independent review and
+  main/Required delivery close this profile; full M04 remains open.
 
 - Pending-email OTP profile closed (2026-10-16 03:43 UTC): foundation
   `cf3f5a4`, native/HTTP adapters `92f2dae` and reference `612ab05` are on

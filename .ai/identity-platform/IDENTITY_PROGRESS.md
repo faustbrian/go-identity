@@ -3,6 +3,66 @@
 Implementation activated by the user on 2026-10-14. B1, B2 and B3 are closed;
 M04 email lifecycle is active.
 
+- Primary-email OTP profile closed (2026-10-16 07:44 UTC): foundation
+  `33c559f`, native/HTTP `7cda935`, reference `43b46d1`; all exact-head Required
+  checks pass. Consumers can use genuine fresh-password change provenance,
+  independently deliver a new-address OTP, atomically replace the primary,
+  notify its original old mailbox and invalidate old sessions through native
+  APIs or explicitly selected HTTPS. Original revoked/expired authority cannot
+  be renewed by newer signin; recovery remains metadata-only. Public-dependency
+  PostgreSQL/HTTPS/race and published empty-consumer initialization pass.
+  Independent source and delivery audits approve. Full M04, stronger-factor/initial-primary/
+  auto-signin/privacy variants and unit qualification remain; full milestones
+  still3/39, no new qualified unit. Overall estimate remains rough5–10%, low
+  confidence, based on delivered baseline plus partial email lifecycle rather
+  than files/tests or an equally weighted milestone percentage.
+
+- Initiating-session security fix (2026-10-16 07:04 UTC): real regressions first
+  reproduced new issuance and an extra code debit after original-family
+  revocation despite a newer valid signin. The corrected native guard now
+  blocks both, conserves original expiry, and preserves metadata-only recovery.
+  Happy path, selected HTTPS and unknown-commit checks pass15.257s. This is
+  implementation progress, not a delivered slice: final affected regression,
+  re-review, public pins and main delivery remain. Full milestones3/39, no new
+  fully qualified unit; overall rough5–10%, low confidence.
+
+- Primary-change review checkpoint (2026-10-16 06:28 UTC): supported intervening
+  candidate/previous-primary changes now prove wrong and correct stale OTPs deny
+  without debit or additional protected effects; actual OTP recipient is observed
+  at delivery. Both HTTPS paths and a corrected valid link/OTP race pass24.332s.
+  Earlier race evidence had an invalid link competitor and is superseded, not
+  retained as proof. Public lower-module checks pass; updated reference regression,
+  final review, public native/reference pins and main delivery remain. No new full
+  milestone/unit closure; still3/39 and rough5–10% whole-goal estimate.
+
+- Primary-email OTP replacement now also works through documented direct HTTPS
+  and explicitly selected reference HTTPS (2026-10-16 06:14 UTC). Real native
+  expiry/exhaustion and generic-pending-origin denial pass without renewing
+  authority or changing primary/session/notice on denial. Existing canonical
+  operation contracts are preserved; distinct recovery has typed native input.
+  This slice remains local/uncommitted pending final regression/review, public
+  dependencies and main delivery. Full milestones remain3/39, no new fully
+  qualified unit; rough whole-goal estimate5–10%, low confidence.
+
+- Primary-email OTP replacement now works locally through native reference
+  composition (2026-10-16 05:26 UTC). A real verified/password-signed-in user
+  performs a keyed fresh-password change request, independently receives the
+  new-address code, confirms one primary replacement, receives one notice at
+  the original old address and observes old-session denial. Code-free recovery
+  does not compare/debit again, disclose an address or renew authority. Eight
+  real PostgreSQL/race scenarios cover genuine success, missing/enrolled/changed
+  MFA, late rollback, lost actual commit acknowledgement, OTP/OTP and link/OTP
+  contention; both contention scenarios also pass three repeated runs. Foreign,
+  noncommitted and wrong-possession sources deny without issuing OTP state.
+  Retained pending-email OTP journeys pass with the common native orchestration.
+  Domain configuration is frozen into issuance custody; changed comparison/key
+  configuration cannot restore old preparation. Focused owner race/static and
+  redaction tests pass. These are development-workspace results, not clean public
+  dependency qualification. All changes remain local/uncommitted; opt-in HTTP,
+  remaining expiry/attempt/origin partitions, independent reviews, public pins
+  and main delivery remain. Full milestones3/39, no newly qualified unit; rough
+  overall5–10%, low confidence. No Tools work or historical-evidence repair.
+
 - Pending-email OTP profile closed (2026-10-16 03:43 UTC): source `cf3f5a4`,
   native/HTTP `92f2dae` and reference `612ab05` are pushed to main; corrected
   adapter/reference Required CI passes. Consumers can independently deliver and
