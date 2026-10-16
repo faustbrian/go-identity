@@ -122,6 +122,10 @@ func newPreparedSendContributor(store *Contributor, d *deliverypg.Contributor, c
 		frame = append(frame, []byte("email-verification-otp-v1\x00")...)
 		frame = append(frame, store.emailVerification.configuration[:]...)
 	}
+	if store.emailChangeDomain != nil {
+		frame = append(frame, []byte("email-change-otp-domain-v1\x00")...)
+		frame = append(frame, store.emailChangeDomain.configuration[:]...)
+	}
 	copyOfStore := *store
 	copyOfStore.send = &preparedSendProfile{preparer: preparer, delivery: d, policy: c.preparation.Policy, template: c.preparation.TemplateID, templateVersion: c.preparation.TemplateVersion, provider: c.provider, contributors: append([]kernel.ContributorDescriptor(nil), c.contributors...), configuration: sha256.Sum256(frame), renderer: renderer, locales: append([]string(nil), c.preparation.LocaleChain...), publicAudit: c.publicAudit}
 	return &copyOfStore, nil
@@ -374,6 +378,11 @@ func (p *Contributor) admitSendPrimary(ctx context.Context, w kernel.Work, r sen
 			return err
 		}
 	}
+	if p.emailChange != nil {
+		if err := p.admitEmailChangeSend(ctx, w, owner, command, r); err != nil {
+			return err
+		}
+	}
 	now, err := w.DatabaseTime(ctx)
 	if err != nil {
 		return err
@@ -384,7 +393,7 @@ func (p *Contributor) admitSendPrimary(ctx context.Context, w kernel.Work, r sen
 			return err
 		}
 	}
-	if now.Before(r.issuedAt) || !now.Before(r.expiresAt) || p.flowTime(flow, now) != nil {
+	if now.Before(r.issuedAt) || !now.Before(r.expiresAt) || p.flowTime(flow, now) != nil || p.emailChange != nil && !p.emailChange.validAt(now) {
 		return ErrInvalidCommand
 	}
 	return nil

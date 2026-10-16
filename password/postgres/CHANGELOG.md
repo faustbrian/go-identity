@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Expose the original native change-notice participant and bounded preparation
+  for OTP composition. Current exact confirmation authority authenticates the
+  committed old-address policy before rendering; no caller mailbox, SQL staging
+  or notification send occurs at this preparation boundary.
+
+- Read authenticated original email-change custody independently of a delivered
+  link through `ReadChangeOrigin`. Preserve original intent, session, versions
+  and validity under current disclosure policy without issuing or consuming.
+
 - Explicitly compose administrative email removal using the actor's original
   fresh password proof and target-specific permission. Preserve target signin/
   reset eligibility and atomic revocation/cascade while leaving actor authority

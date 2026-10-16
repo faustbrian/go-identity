@@ -78,20 +78,29 @@ type EmailVerificationResponse struct {
 
 type emailVerificationResponseKey struct{}
 type emailVerificationHTTPState struct {
-	facts     identityhttp.NetworkFacts
-	flow      otp.SendFlow
-	csrf      session.CSRFToken
-	device    session.BrowserDevice
-	address   identity.IdentifierID
-	version   uint64
-	key       identity.IdempotencyKey
-	send      identity.CommandID
-	code      auth.OneTimeCode
-	recovery  otp.EmailVerifyRecovery
-	user      identity.UserID
-	caller    authorization.DecisionContext
-	out       *EmailVerificationResponse
-	challenge otp.EmailVerificationChallenge
+	facts          identityhttp.NetworkFacts
+	flow           otp.SendFlow
+	csrf           session.CSRFToken
+	device         session.BrowserDevice
+	address        identity.IdentifierID
+	origin         identity.CommandID
+	version        uint64
+	key            identity.IdempotencyKey
+	send           identity.CommandID
+	code           auth.OneTimeCode
+	recovery       otp.EmailVerifyRecovery
+	changeRecovery otp.EmailChangeRecovery
+	user           identity.UserID
+	caller         authorization.DecisionContext
+	out            *EmailVerificationResponse
+	challenge      emailOTPChallenge
+}
+
+// Private projection checks share transport mechanics, not workflow authority.
+type emailOTPChallenge struct {
+	identifier                             identity.IdentifierID
+	identifierVersion, verificationVersion uint64
+	lifetime                               time.Duration
 }
 
 func (emailVerificationHTTPState) Format(s fmt.State, _ rune) {
@@ -128,7 +137,17 @@ func NewEmailVerifyRecoveryHandler(c EmailVerificationConfig) (http.Handler, err
 }
 
 func newEmailVerificationHandler(c EmailVerificationConfig, mode int, m []identityhttp.MiddlewareDescriptor) (http.Handler, error) {
-	if mode < 0 || mode > 2 || nilOwner(c.Service) || nilOwner(c.Source) || c.PolicyRevision == 0 || c.Now == nil || c.MaximumDuration < time.Millisecond || c.MaximumDuration > 30*time.Second || len(c.CSRFKeys) < 1 || len(c.CSRFKeys) > 16 || mode == 0 && !c.DeliveryRate.Configured() || mode != 0 && !c.VerificationRate.Configured() {
+	return newEmailOTPHandler(c, nil, mode, m)
+}
+
+func newEmailOTPHandler(c EmailVerificationConfig, change *EmailChangeConfig, mode int, m []identityhttp.MiddlewareDescriptor) (http.Handler, error) {
+	owners := !nilOwner(c.Service) && !nilOwner(c.Source)
+	requestRate := c.DeliveryRate.Configured()
+	if change != nil {
+		owners = !nilOwner(change.Service) && !nilOwner(change.Source)
+		requestRate = change.RequestRate.Configured()
+	}
+	if mode < 0 || mode > 2 || !owners || c.PolicyRevision == 0 || c.Now == nil || c.MaximumDuration < time.Millisecond || c.MaximumDuration > 30*time.Second || len(c.CSRFKeys) < 1 || len(c.CSRFKeys) > 16 || mode == 0 && !requestRate || mode != 0 && !c.VerificationRate.Configured() {
 		return nil, identityhttp.ErrInvalidInput
 	}
 	keys := make(map[uint32]session.CSRFKey, len(c.CSRFKeys))
@@ -167,6 +186,10 @@ func newEmailVerificationHandler(c EmailVerificationConfig, mode int, m []identi
 	}
 	paths := [...]string{"/v1/otp/send", "/v1/otp/email-verify", "/v1/otp/email-verify/recover"}
 	actions := [...]authorization.Action{"identity.otp.send", "identity.otp.email-verify", "identity.otp.email-verify.recover"}
+	if change != nil {
+		paths = [3]string{"/v1/otp/email-change-request", "/v1/otp/email-change-confirm", "/v1/otp/email-change-confirm/recover"}
+		actions = [3]authorization.Action{"identity.otp.email-change-request", "identity.otp.email-change-confirm", "identity.otp.email-change-confirm.recover"}
+	}
 	response := func(r *http.Request) *EmailVerificationResponse {
 		if out, ok := r.Context().Value(emailVerificationResponseKey{}).(*EmailVerificationResponse); ok {
 			return out
@@ -179,7 +202,16 @@ func newEmailVerificationHandler(c EmailVerificationConfig, mode int, m []identi
 		if code != "" {
 			out.Accepted, out.Verified, out.AddressID, out.AddressVersion = false, false, "", 0
 		}
-		data, err := json.Marshal(out)
+		var response any = out
+		if change != nil {
+			var recovery *EmailChangeRecovery
+			if out.Recovery != nil {
+				v := EmailChangeRecovery(*out.Recovery)
+				recovery = &v
+			}
+			response = EmailChangeResponse{Accepted: out.Accepted, Changed: out.Verified, CommandID: out.CommandID, CommitOutcome: out.CommitOutcome, AddressID: out.AddressID, AddressVersion: out.AddressVersion, Recovery: recovery, Error: out.Error}
+		}
+		data, err := json.Marshal(response)
 		if err != nil || len(data) > 16384 {
 			status, data = 503, []byte(`{"error":"unavailable"}`)
 		}
@@ -219,6 +251,12 @@ func newEmailVerificationHandler(c EmailVerificationConfig, mode int, m []identi
 	}
 	asVerify := func(s emailVerificationHTTPState) otp.EmailVerifyRequest {
 		return otp.EmailVerifyRequest{TenantID: s.facts.TenantID(), UserID: s.user, Caller: s.caller, Flow: s.flow, SendCommandID: s.send, Code: s.code}
+	}
+	asChangeRequest := func(s emailVerificationHTTPState) otp.EmailChangeRequest {
+		return otp.EmailChangeRequest{TenantID: s.facts.TenantID(), UserID: s.user, OriginCommandID: s.origin, AddressID: s.address, Caller: s.caller, Flow: s.flow, Network: s.facts.ClientIP().String(), Device: s.device.DeviceID(), IdempotencyKey: s.key}
+	}
+	asChangeConfirm := func(s emailVerificationHTTPState) otp.EmailChangeConfirmRequest {
+		return otp.EmailChangeConfirmRequest{TenantID: s.facts.TenantID(), UserID: s.user, Caller: s.caller, Flow: s.flow, SendCommandID: s.send, Code: s.code}
 	}
 	pipeline, err := identityhttp.NewOperationPipeline(identityhttp.OperationPipelineConfig[emailVerificationHTTPState]{MaximumDuration: c.MaximumDuration, Middleware: m, Reject: reject,
 		Decode: func(r *http.Request) (s emailVerificationHTTPState, err error) {
@@ -265,7 +303,11 @@ func newEmailVerificationHandler(c EmailVerificationConfig, mode int, m []identi
 			var flowID string
 			switch mode {
 			case 0:
-				if !recoveryFields(fields, map[string]any{"flowID": &flowID, "addressID": &s.address, "addressVersion": &s.version}) {
+				selected := map[string]any{"flowID": &flowID, "addressID": &s.address, "addressVersion": &s.version}
+				if change != nil {
+					selected = map[string]any{"flowID": &flowID, "addressID": &s.address, "originCommandID": &s.origin}
+				}
+				if !recoveryFields(fields, selected) {
 					return s, identityhttp.ErrInvalidInput
 				}
 				device, found, err := decoder.CookieBearer(r, "__Host-identity_device", identityhttp.HeaderRequired)
@@ -294,7 +336,11 @@ func newEmailVerificationHandler(c EmailVerificationConfig, mode int, m []identi
 				if err != nil {
 					return s, identityhttp.ErrInvalidInput
 				}
-				s.recovery, err = otp.NewEmailVerifyRecovery(otp.CheckRecoveryBindings(b))
+				if change != nil {
+					s.changeRecovery, err = otp.NewEmailChangeRecovery(otp.CheckRecoveryBindings(b))
+				} else {
+					s.recovery, err = otp.NewEmailVerifyRecovery(otp.CheckRecoveryBindings(b))
+				}
 				if err != nil {
 					return s, identityhttp.ErrInvalidInput
 				}
@@ -311,7 +357,13 @@ func newEmailVerificationHandler(c EmailVerificationConfig, mode int, m []identi
 					return s, err
 				}
 			}
-			original, err := c.Source.EmailVerificationSession(r.Context(), s.facts.TenantID(), s.flow)
+			var original session.Session
+			var err error
+			if change != nil {
+				original, err = change.Source.EmailChangeSession(r.Context(), s.facts.TenantID(), s.flow)
+			} else {
+				original, err = c.Source.EmailVerificationSession(r.Context(), s.facts.TenantID(), s.flow)
+			}
 			if err != nil {
 				return s, err
 			}
@@ -334,25 +386,54 @@ func newEmailVerificationHandler(c EmailVerificationConfig, mode int, m []identi
 			s.user = b.UserID
 			s.caller = authorization.DecisionContext{PolicyRevision: c.PolicyRevision, Request: authorization.Request{Tenant: authorization.TenantID(b.TenantID), Subject: authorization.Subject{Kind: authorization.SubjectUser, ID: authorization.SubjectID(b.UserID)}, Action: actions[mode], Resource: authorization.Resource{Type: "identity.user", ID: authorization.ResourceID(b.UserID)}}}
 			if mode == 1 {
-				request := asVerify(s)
-				if request.Validate() != nil {
-					return s, identityhttp.ErrInvalidInput
-				}
-				s.challenge, err = c.Source.EmailVerificationChallenge(r.Context(), request)
-				if err != nil {
-					return s, err
-				}
-				if s.challenge.UserID != s.user {
-					return s, identityhttp.ErrUnavailable
-				}
-				if _, err := s.challenge.Target.Bindings(); err != nil {
-					return s, identityhttp.ErrUnavailable
+				if change != nil {
+					request := asChangeConfirm(s)
+					if request.Validate() != nil {
+						return s, identityhttp.ErrInvalidInput
+					}
+					original, err := change.Source.EmailChangeChallenge(r.Context(), request)
+					if err != nil {
+						return s, err
+					}
+					target, err := original.Target.Bindings()
+					if err != nil || original.UserID != s.user {
+						return s, identityhttp.ErrUnavailable
+					}
+					s.challenge = emailOTPChallenge{target.IdentifierID, target.IdentifierVersion, target.VerificationVersion, original.Lifetime}
+				} else {
+					request := asVerify(s)
+					if request.Validate() != nil {
+						return s, identityhttp.ErrInvalidInput
+					}
+					original, err := c.Source.EmailVerificationChallenge(r.Context(), request)
+					if err != nil {
+						return s, err
+					}
+					target, err := original.Target.Bindings()
+					if err != nil || original.UserID != s.user {
+						return s, identityhttp.ErrUnavailable
+					}
+					s.challenge = emailOTPChallenge{target.IdentifierID, target.IdentifierVersion, target.VerificationVersion, original.Lifetime}
 				}
 			}
 			return s, nil
 		},
 		Admit: func(r *http.Request, s emailVerificationHTTPState) error {
 			if mode == 0 {
+				if change != nil {
+					request := asChangeRequest(s)
+					if request.Validate() != nil {
+						return identityhttp.ErrInvalidInput
+					}
+					destination, err := change.Source.EmailChangeSendDestination(r.Context(), request)
+					if err != nil {
+						return err
+					}
+					if destination.Value() == "" {
+						return identityhttp.ErrUnavailable
+					}
+					return signinRateError(change.RequestRate.Admit(r.Context(), s.facts, identityhttp.KeyedSecretRateRequest{OperationID: string(actions[0]), UserID: s.user, IdempotencyKey: s.key}))
+				}
 				request := asSend(s)
 				if request.Validate() != nil {
 					return identityhttp.ErrInvalidInput
@@ -364,14 +445,23 @@ func newEmailVerificationHandler(c EmailVerificationConfig, mode int, m []identi
 				return signinRateError(c.DeliveryRate.Admit(r.Context(), s.facts, identityhttp.AuthRateRequest{OperationID: "identity.otp.send", Identifier: destination.Value(), UserID: s.user}))
 			}
 			if mode == 2 {
+				if change != nil {
+					return (otp.EmailChangeRecoveryRequest{TenantID: s.facts.TenantID(), UserID: s.user, Caller: s.caller, Flow: s.flow, Recovery: s.changeRecovery}).Validate()
+				}
 				return (otp.EmailVerifyRecoveryRequest{TenantID: s.facts.TenantID(), UserID: s.user, Caller: s.caller, Flow: s.flow, Recovery: s.recovery}).Validate()
 			}
-			return signinRateError(c.VerificationRate.AdmitChallenge(r.Context(), s.facts, identityhttp.ChallengeVerificationRateRequest{OperationID: "identity.otp.email-verify", UserID: s.user, ChallengeID: string(s.send), ChallengeLifetime: s.challenge.Lifetime}))
+			return signinRateError(c.VerificationRate.AdmitChallenge(r.Context(), s.facts, identityhttp.ChallengeVerificationRateRequest{OperationID: string(actions[1]), UserID: s.user, ChallengeID: string(s.send), ChallengeLifetime: s.challenge.lifetime}))
 		},
 		Handle: func(w http.ResponseWriter, r *http.Request, s emailVerificationHTTPState) {
 			s.out.CommitOutcome = "unknown"
 			if mode == 0 {
-				result, err := c.Service.SendEmailVerification(r.Context(), asSend(s))
+				var result otp.SendResult
+				var err error
+				if change != nil {
+					result, err = change.Service.EmailChangeRequest(r.Context(), asChangeRequest(s))
+				} else {
+					result, err = c.Service.SendEmailVerification(r.Context(), asSend(s))
+				}
 				s.out.CommandID, s.out.CommitOutcome = result.CommandID, outcome(result.Outcome)
 				if err != nil {
 					reject(w, r, err)
@@ -387,7 +477,20 @@ func newEmailVerificationHandler(c EmailVerificationConfig, mode int, m []identi
 			}
 			var result otp.EmailVerifyResult
 			var err error
-			if mode == 1 {
+			if change != nil {
+				var actual otp.EmailChangeResult
+				if mode == 1 {
+					actual, err = change.Service.EmailChangeConfirm(r.Context(), asChangeConfirm(s))
+				} else {
+					actual, err = change.Service.RecoverEmailChange(r.Context(), otp.EmailChangeRecoveryRequest{TenantID: s.facts.TenantID(), UserID: s.user, Caller: s.caller, Flow: s.flow, Recovery: s.changeRecovery})
+				}
+				// Common private response bookkeeping only; these values never
+				// enter the verification workflow or establish interchangeable proof.
+				result = otp.EmailVerifyResult{CommandID: actual.CommandID, Outcome: actual.Outcome, Address: actual.Address, Replayed: actual.Replayed, RetryAfter: actual.RetryAfter}
+				if b, e := actual.Recovery.Bindings(); e == nil {
+					result.Recovery, _ = otp.NewEmailVerifyRecovery(b)
+				}
+			} else if mode == 1 {
 				result, err = c.Service.EmailVerify(r.Context(), asVerify(s))
 			} else {
 				result, err = c.Service.RecoverEmailVerify(r.Context(), otp.EmailVerifyRecoveryRequest{TenantID: s.facts.TenantID(), UserID: s.user, Caller: s.caller, Flow: s.flow, Recovery: s.recovery})
@@ -398,6 +501,9 @@ func newEmailVerificationHandler(c EmailVerificationConfig, mode int, m []identi
 			}
 			if mode == 2 {
 				original, _ := s.recovery.Bindings()
+				if change != nil {
+					original, _ = s.changeRecovery.Bindings()
+				}
 				observed, e := result.Recovery.Bindings()
 				if e != nil || observed != original || result.CommandID != original.Attempt.CommandID || !result.Replayed || result.Address != (identity.IdentifierProjection{}) || err != nil {
 					reject(w, r, identityhttp.ErrUnavailable)
@@ -415,8 +521,8 @@ func newEmailVerificationHandler(c EmailVerificationConfig, mode int, m []identi
 				return
 			}
 			view, e := result.Address.Bindings()
-			target, targetErr := s.challenge.Target.Bindings()
-			if e != nil || targetErr != nil || result.Outcome != identity.CommitOutcomeCommitted || result.Replayed || view.TenantID != s.facts.TenantID() || view.UserID != s.user || !view.Verified || view.Primary || view.IdentifierID != target.IdentifierID || view.IdentifierVersion != target.IdentifierVersion+1 || view.VerificationVersion != target.VerificationVersion+1 || s.out.Recovery == nil {
+			target := s.challenge
+			if e != nil || result.Outcome != identity.CommitOutcomeCommitted || result.Replayed || view.TenantID != s.facts.TenantID() || view.UserID != s.user || !view.Verified || view.Primary != (change != nil) || view.IdentifierID != target.identifier || view.IdentifierVersion != target.identifierVersion+1 || view.VerificationVersion != target.verificationVersion+1 || s.out.Recovery == nil {
 				reject(w, r, identityhttp.ErrUnavailable)
 				return
 			}

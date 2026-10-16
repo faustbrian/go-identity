@@ -21,11 +21,15 @@ import (
 // submitting another attempt. Earlier cancellation wins; observed commit remains
 // committed even if subsequent projection/disclosure fails.
 func (s *EmailVerificationService) EmailVerify(ctx context.Context, r otp.EmailVerifyRequest) (out otp.EmailVerifyResult, err error) {
-	if ctx == nil || s == nil || s.sender == nil || s.coordinator == nil {
-		return out, ErrInvalidCommand
-	}
 	if err := r.Validate(); err != nil {
 		return out, err
+	}
+	return s.emailVerify(ctx, r)
+}
+
+func (s *EmailVerificationService) emailVerify(ctx context.Context, r otp.EmailVerifyRequest) (out otp.EmailVerifyResult, err error) {
+	if ctx == nil || s == nil || s.sender == nil || s.coordinator == nil {
+		return out, ErrInvalidCommand
 	}
 	ctx, stop := context.WithTimeout(ctx, s.sender.timeout)
 	defer stop()
@@ -47,14 +51,13 @@ func (s *EmailVerificationService) EmailVerify(ctx context.Context, r otp.EmailV
 		return out, identity.ForbiddenError{}
 	}
 	scope, err := issued.Continuation.Bindings()
-	if err != nil || scope.Scope.Purpose != otp.PurposeEmailVerification || scope.Scope.Channel != otp.ChannelEmail || scope.Scope.ChallengeID != string(r.SendCommandID) {
+	if err != nil || scope.Scope.Purpose != s.purpose() || scope.Scope.Channel != otp.ChannelEmail || scope.Scope.ChallengeID != string(r.SendCommandID) {
 		return out, identity.ForbiddenError{}
 	}
-	target, err := otp.ParseEmailVerificationTarget(scope.Scope.TargetID)
+	selected, err := s.selectedTarget(scope.Scope.TargetID)
 	if err != nil {
 		return out, err
 	}
-	selected, _ := target.Bindings()
 	if custody.recipient.Identifier.ID != selected.IdentifierID || custody.recipient.Identifier.Version != selected.IdentifierVersion || custody.recipient.Verification.Version != selected.VerificationVersion || custody.recipient.Identifier.Verified || custody.recipient.Identifier.Primary {
 		return out, identity.ForbiddenError{}
 	}
@@ -75,7 +78,7 @@ func (s *EmailVerificationService) EmailVerify(ctx context.Context, r otp.EmailV
 	if err != nil || version == 0 || strconv.FormatUint(version, 10) != encodedVersion {
 		return out, ErrUnavailable
 	}
-	spec.Operation = emailVerificationOperation()
+	spec.Operation = s.operation()
 	spec.Binding.OperationID, spec.Binding.SchemaID, spec.Binding.SchemaVersion = spec.Operation.OperationID, spec.Operation.SchemaID, spec.Operation.SchemaVersion
 	spec.Binding.RecordID = string(selected.IdentifierID)
 	spec.Binding.CommandID, err = identity.NewCommandID()
@@ -84,8 +87,15 @@ func (s *EmailVerificationService) EmailVerify(ctx context.Context, r otp.EmailV
 	}
 	spec.Binding.CorrelationID = string(spec.Binding.CommandID)
 	out.CommandID = spec.Binding.CommandID
-	i := kernel.ManagedEmailVerificationIntent{Change: identity.IdentifierChange{TenantID: r.TenantID, UserID: r.UserID, ID: selected.IdentifierID, Action: identity.IdentifierVerify, ExpectedUserVersion: custody.recipient.User.Version, ExpectedAuthorityVersion: custody.authority.IdentifierAuthorityVersion, ExpectedIdentifierVersion: selected.IdentifierVersion, ExpectedVerificationVersion: selected.VerificationVersion}, CanonicalAddress: scope.Scope.Destination.Value(), ComparisonProfile: s.profile.comparison, RequestCommandID: r.SendCommandID}
-	spec.Fields, err = kernel.OTPEmailVerificationFields(i, r.SendCommandID)
+	i, err := s.mutationIntent(spec.Binding, selected, custody.recipient.User.Version, custody.authority.IdentifierAuthorityVersion, scope.Scope.Destination.Value(), r.SendCommandID)
+	if err != nil {
+		return out, err
+	}
+	if s.change != nil {
+		spec.Fields, err = kernel.OTPEmailChangeFields(i, r.SendCommandID)
+	} else {
+		spec.Fields, err = kernel.OTPEmailVerificationFields(i, r.SendCommandID)
+	}
 	if err != nil {
 		return out, err
 	}
@@ -112,6 +122,13 @@ func (s *EmailVerificationService) EmailVerify(ctx context.Context, r otp.EmailV
 	out.Recovery, err = otp.NewEmailVerifyRecovery(otp.CheckRecoveryBindings{SendCommandID: r.SendCommandID, Attempt: recovery, ExpectedVersion: version, DigestKeyVersion: otpPlan.DigestKeyVersion, ScopeDigest: otpPlan.ScopeDigest})
 	if err != nil {
 		return out, err
+	}
+	if s.change != nil {
+		prepared, err := s.prepareNotification(ctx, spec.Binding)
+		if err != nil {
+			return out, err
+		}
+		s.notification = &prepared
 	}
 	plan, err := s.completionPlan(command, otpPlan, selected.VerificationVersion)
 	if err != nil {
@@ -166,7 +183,7 @@ func (s *EmailVerificationService) committedAddress(ctx context.Context, origina
 	}
 	projection, err := identity.NewIdentifierProjection(identity.IdentifierProjectionSpec{TenantID: i.TenantID, UserID: i.UserID, IdentifierID: i.ID, State: state, Values: identity.IdentifierValuesOmitted, ObservedAt: now.UTC()})
 	b, e := projection.Bindings()
-	if err != nil || e != nil || !b.Verified || b.Primary || b.IdentifierVersion != i.ExpectedIdentifierVersion+1 || b.VerificationVersion != i.ExpectedVerificationVersion+1 {
+	if err != nil || e != nil || !b.Verified || b.Primary != (s.change != nil) || b.IdentifierVersion != i.ExpectedIdentifierVersion+1 || b.VerificationVersion != i.ExpectedVerificationVersion+1 {
 		return identity.IdentifierProjection{}, identity.ForbiddenError{}
 	}
 	return projection, nil
@@ -178,12 +195,16 @@ func (s *EmailVerificationService) completionPlan(command identity.Command, atte
 		return kernel.CommandPlan{}, ErrInvalidCommand
 	}
 	b := spec.Binding
+	path, event := otp.EmailVerificationRecoveryPath, "identifier.verified.v1"
+	if s.change != nil {
+		path, event = otp.EmailChangeRecoveryPath, "identifier.primary-changed.v1"
+	}
 	when := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 	builder, err := audit.NewBuilder(audit.BuilderConfig{Clock: func() time.Time { return when }, IDGenerator: func() (string, error) { return "otp-email-binding", nil }})
 	if err != nil {
 		return kernel.CommandPlan{}, ErrInvalidCommand
 	}
-	record, err := builder.Build(audit.RecordInput{OccurredAt: when, Action: b.OperationID, Outcome: audit.OutcomeSucceeded, ReasonCode: "completed", Actor: audit.ActorInput{Kind: audit.ActorHuman, ID: string(b.ActorID)}, Subject: audit.SubjectInput{Type: "identifier", ID: b.RecordID}, Context: audit.ContextInput{TenantID: string(b.TenantID), CorrelationID: b.CorrelationID}, Policy: audit.PolicyMetadata{PolicyID: b.PolicyID, Version: strconv.FormatUint(b.PolicyVersion, 10)}, Changes: audit.ChangeSetInput{NoChange: true}, Attributes: map[string]string{"identity.profile": "identity.security.v1", "command.id": string(b.CommandID), "aggregate.type": "identifier", "aggregate.id": b.RecordID, "aggregate.before_version": strconv.FormatUint(before, 10), "aggregate.after_version": strconv.FormatUint(before+1, 10), "retention.class": "protected", "authentication.recovery_path": otp.EmailVerificationRecoveryPath}})
+	record, err := builder.Build(audit.RecordInput{OccurredAt: when, Action: b.OperationID, Outcome: audit.OutcomeSucceeded, ReasonCode: "completed", Actor: audit.ActorInput{Kind: audit.ActorHuman, ID: string(b.ActorID)}, Subject: audit.SubjectInput{Type: "identifier", ID: b.RecordID}, Context: audit.ContextInput{TenantID: string(b.TenantID), CorrelationID: b.CorrelationID}, Policy: audit.PolicyMetadata{PolicyID: b.PolicyID, Version: strconv.FormatUint(b.PolicyVersion, 10)}, Changes: audit.ChangeSetInput{NoChange: true}, Attributes: map[string]string{"identity.profile": "identity.security.v1", "command.id": string(b.CommandID), "aggregate.type": "identifier", "aggregate.id": b.RecordID, "aggregate.before_version": strconv.FormatUint(before, 10), "aggregate.after_version": strconv.FormatUint(before+1, 10), "retention.class": "protected", "authentication.recovery_path": path}})
 	if err != nil {
 		return kernel.CommandPlan{}, ErrInvalidCommand
 	}
@@ -192,5 +213,16 @@ func (s *EmailVerificationService) completionPlan(command identity.Command, atte
 		return kernel.CommandPlan{}, err
 	}
 	owner := s.owner.Descriptor()
-	return kernel.CommandPlan{Contributors: s.registry.Descriptors(), Feature: &kernel.FeatureRegistration{Operation: spec.Operation, Contributor: owner}, SubjectType: "identifier", OTP: &attempt, Lifecycle: &kernel.LifecyclePlan{EventType: "identifier.verified.v1", BeforeVersion: before, AfterVersion: before + 1}, Audits: []kernel.AuditPlan{{EventType: b.OperationID, SchemaVersion: 1, BindingDigest: digest, Required: true, RequiredRecordCount: 1, MaxRecordBytes: 16384, MaxAggregateBytes: 16384, RetentionPolicyVersion: 1, RetentionClass: "protected"}}}, nil
+	plan := kernel.CommandPlan{Contributors: s.registry.Descriptors(), Feature: &kernel.FeatureRegistration{Operation: spec.Operation, Contributor: owner}, SubjectType: "identifier", OTP: &attempt, Lifecycle: &kernel.LifecyclePlan{EventType: event, BeforeVersion: before, AfterVersion: before + 1}, Audits: []kernel.AuditPlan{{EventType: b.OperationID, SchemaVersion: 1, BindingDigest: digest, Required: true, RequiredRecordCount: 1, MaxRecordBytes: 16384, MaxAggregateBytes: 16384, RetentionPolicyVersion: 1, RetentionClass: "protected"}}}
+	if s.change != nil {
+		if s.notification == nil {
+			return kernel.CommandPlan{}, ErrInvalidCommand
+		}
+		prepared, err := s.notification.Plan()
+		if err != nil {
+			return kernel.CommandPlan{}, err
+		}
+		plan.Delivery = &prepared
+	}
+	return plan, nil
 }

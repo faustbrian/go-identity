@@ -169,6 +169,12 @@ func (p *issuanceContributor) applyIssuance(ctx context.Context, w kernel.Work, 
 			return bad(err)
 		}
 	}
+	if p.store.emailChange != nil {
+		original := sendRequestRecord{continuation: s.Continuation, recipient: custody.recipient, authority: a, expiresAt: s.ExpiresAt}
+		if err := p.store.admitEmailChangeSend(ctx, w, owner, command, original); err != nil {
+			return bad(err)
+		}
+	}
 	continuation, _ := s.Continuation.Bindings()
 	query := func(ctx context.Context, sql string, args ...any) (challengeRows, error) {
 		return w.Query(ctx, sql, args...)

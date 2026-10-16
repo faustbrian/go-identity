@@ -39,6 +39,15 @@ func NewEmailVerificationFeatureWithMiddleware(c EmailVerificationConfig, m []id
 }
 
 func emailVerificationWire(c EmailVerificationConfig, mode int) *identityhttp.WireOperation {
+	return emailOTPWire(c, mode, false)
+}
+
+func emailOTPWire(c EmailVerificationConfig, mode int, change bool) *identityhttp.WireOperation {
+	completed := "verified"
+	prefix := "IdentityEmailOTP"
+	if change {
+		completed, prefix = "changed", "IdentityEmailOTPChange"
+	}
 	text := func(max int) map[string]any {
 		return map[string]any{"type": "string", "minLength": 1, "maxLength": max}
 	}
@@ -62,21 +71,33 @@ func emailVerificationWire(c EmailVerificationConfig, mode int) *identityhttp.Wi
 		idName, success = "identity.otp.send", "202"
 		required = append(required, "addressID", "addressVersion")
 		fields["addressID"], fields["addressVersion"] = text(128), map[string]any{"type": "integer", "minimum": 1, "maximum": ^uint64(0) - 1}
+		if change {
+			idName = "identity.otp.email-change-request"
+			required = []string{"flowID", "originCommandID", "addressID"}
+			delete(fields, "addressVersion")
+			fields["originCommandID"] = id
+		}
 		parameters = append(parameters, map[string]any{"name": "Idempotency-Key", "in": "header", "required": true, "schema": map[string]any{"type": "string", "pattern": "^[!#$%&'*+.^_`|~0-9A-Za-z-]{1,256}$"}})
 	} else if mode == 1 {
+		if change {
+			idName = "identity.otp.email-change-confirm"
+		}
 		required = append(required, "sendCommandID", "code")
 		fields["sendCommandID"], fields["code"] = id, map[string]any{"type": "string", "minLength": 1, "maxLength": 128, "writeOnly": true, "description": "Opaque submitted code under the selected native code profile; never returned or logged."}
 	} else {
 		idName = "identity.otp.email-verify.recover"
+		if change {
+			idName = "identity.otp.email-change-confirm.recover"
+		}
 		required = append(required, "recovery")
 		fields["recovery"] = recovery
 	}
-	result := object([]string{"accepted", "verified", "commitOutcome"}, map[string]any{"accepted": map[string]any{"type": "boolean"}, "verified": map[string]any{"type": "boolean"}, "commandID": id, "commitOutcome": map[string]any{"type": "string", "enum": []string{"none", "not_committed", "committed", "unknown", "conflict", "in_progress"}}, "addressID": text(128), "addressVersion": map[string]any{"type": "integer", "minimum": 1, "maximum": ^uint64(0)}, "recovery": recovery, "error": map[string]any{"type": "string", "enum": []string{"invalid_request", "denied", "origin_or_csrf_denied", "not_found", "method_not_allowed", "misdirected_request", "rate_limited", "conflict", "in_progress", "unavailable"}}})
+	result := object([]string{"accepted", completed, "commitOutcome"}, map[string]any{"accepted": map[string]any{"type": "boolean"}, completed: map[string]any{"type": "boolean"}, "commandID": id, "commitOutcome": map[string]any{"type": "string", "enum": []string{"none", "not_committed", "committed", "unknown", "conflict", "in_progress"}}, "addressID": text(128), "addressVersion": map[string]any{"type": "integer", "minimum": 1, "maximum": ^uint64(0)}, "recovery": recovery, "error": map[string]any{"type": "string", "enum": []string{"invalid_request", "denied", "origin_or_csrf_denied", "not_found", "method_not_allowed", "misdirected_request", "rate_limited", "conflict", "in_progress", "unavailable"}}})
 	// These assertions bind the shared response shape to each selected arm;
 	// history cannot masquerade as a new verification or address disclosure.
 	props := result["properties"].(map[string]any)
 	if mode == 0 {
-		props["verified"] = map[string]any{"const": false}
+		props[completed] = map[string]any{"const": false}
 		delete(props, "addressID")
 		delete(props, "addressVersion")
 		delete(props, "recovery")
@@ -84,12 +105,12 @@ func emailVerificationWire(c EmailVerificationConfig, mode int) *identityhttp.Wi
 		props["accepted"] = map[string]any{"const": false}
 	}
 	if mode == 2 {
-		props["verified"] = map[string]any{"const": false}
+		props[completed] = map[string]any{"const": false}
 		delete(props, "addressID")
 		delete(props, "addressVersion")
 	}
-	successFields := map[string]any{"accepted": map[string]any{"const": mode == 0}, "verified": map[string]any{"const": mode == 1}, "commandID": id, "commitOutcome": map[string]any{"const": "committed"}}
-	successRequired := []string{"accepted", "verified", "commandID", "commitOutcome"}
+	successFields := map[string]any{"accepted": map[string]any{"const": mode == 0}, completed: map[string]any{"const": mode == 1}, "commandID": id, "commitOutcome": map[string]any{"const": "committed"}}
+	successRequired := []string{"accepted", completed, "commandID", "commitOutcome"}
 	if mode != 0 {
 		successFields["recovery"] = recovery
 		successRequired = append(successRequired, "recovery")
@@ -101,10 +122,10 @@ func emailVerificationWire(c EmailVerificationConfig, mode int) *identityhttp.Wi
 	if mode == 2 {
 		successFields["commitOutcome"] = map[string]any{"type": "string", "enum": []string{"committed", "not_committed"}}
 	}
-	props["accepted"], props["verified"] = map[string]any{"const": false}, map[string]any{"const": false}
+	props["accepted"], props[completed] = map[string]any{"const": false}, map[string]any{"const": false}
 	delete(props, "addressID")
 	delete(props, "addressVersion")
-	result["required"] = []string{"accepted", "verified", "commitOutcome", "error"}
+	result["required"] = []string{"accepted", completed, "commitOutcome", "error"}
 	failureSchema := map[string]any{"oneOf": []any{object([]string{"error"}, map[string]any{"error": props["error"]}), result}}
 	response := func(schema any) any {
 		return map[string]any{"description": "Credential-free original status. No-store/nosniff; no Set-Cookie, CSRF response token, session or code. Unknown does not prove rollback.", "content": map[string]any{"application/json": map[string]any{"schema": schema}}}
@@ -115,13 +136,17 @@ func emailVerificationWire(c EmailVerificationConfig, mode int) *identityhttp.Wi
 	}
 	// The shared router's earlier CORS owner may reject before feature JSON.
 	responses["403"].(map[string]any)["content"].(map[string]any)["text/plain"] = map[string]any{"schema": map[string]any{"type": "string", "const": "identity.http.origin_denied\n"}}
-	security := map[string]any{"IdentityEmailOTPSession": []any{}}
+	security := map[string]any{prefix + "Session": []any{}}
 	if mode == 0 {
-		security["IdentityEmailOTPDevice"] = []any{}
+		security[prefix+"Device"] = []any{}
 	}
-	definition, _ := json.Marshal(map[string]any{"operationId": idName, "description": "Selected authenticated self-user email_verification_otp profile only. Exact HTTPS tenant host, Origin, original password-session cookie and stored synchronizer are mandatory. No body identity/purpose/factor overrides, Authorization, query, trailers, primary replacement or automatic signin. Send alone requires header idempotency and a scoped device cookie; completion/recovery forbid idempotency. Native owners retain current authority, attempt accounting, atomic identifier effects and original metadata recovery.", "security": []any{security}, "parameters": parameters, "requestBody": map[string]any{"required": true, "content": map[string]any{"application/json": map[string]any{"schema": object(required, fields)}}}, "responses": responses})
+	description := "Selected authenticated self-user email_verification_otp profile only. Exact HTTPS tenant host, Origin, original password-session cookie and stored synchronizer are mandatory. No body identity/purpose/factor overrides, Authorization, query, trailers, primary replacement or automatic signin. Send alone requires header idempotency and a scoped device cookie; completion/recovery forbid idempotency. Native owners retain current authority, attempt accounting, atomic identifier effects and original metadata recovery."
+	if change {
+		description = "Selected genuine-primary email_change_otp profile. The actual committed origin owns already-consumed fresh-password admission, original old-address policy and validity. Request independently issues a new-address code, not a replacement. Exact HTTPS tenant host, original password-session cookie, Origin and stored synchronizer are mandatory. No mailbox, identity, purpose, factor or command override; no Authorization/query/trailer. Request requires Idempotency-Key, scoped device and canonical keyed rate.secret; consuming confirmation/recovery forbid idempotency. Atomic native replacement, old-address notice, session invalidation and code-free recovery issue no session or automatic signin. Initial-primary and stronger-factor profiles are not enabled."
+	}
+	definition, _ := json.Marshal(map[string]any{"operationId": idName, "description": description, "security": []any{security}, "parameters": parameters, "requestBody": map[string]any{"required": true, "content": map[string]any{"application/json": map[string]any{"schema": object(required, fields)}}}, "responses": responses})
 	cookie, _ := c.Cookie.DeletionAttributes()
 	sessionScheme, _ := json.Marshal(map[string]any{"type": "apiKey", "in": "cookie", "name": cookie.Name})
 	deviceScheme, _ := json.Marshal(map[string]any{"type": "apiKey", "in": "cookie", "name": "__Host-identity_device"})
-	return &identityhttp.WireOperation{Definition: definition, SecuritySchemes: []identityhttp.WireComponent{{Name: "IdentityEmailOTPSession", Definition: sessionScheme}, {Name: "IdentityEmailOTPDevice", Definition: deviceScheme}}}
+	return &identityhttp.WireOperation{Definition: definition, SecuritySchemes: []identityhttp.WireComponent{{Name: prefix + "Session", Definition: sessionScheme}, {Name: prefix + "Device", Definition: deviceScheme}}}
 }

@@ -58,6 +58,8 @@ type Contributor struct {
 	signin                    *signinProfile
 	emailVerification         *emailVerificationProfile
 	emailVerify               *emailVerificationPhase
+	emailChange               *emailChangeSendProfile
+	emailChangeDomain         *emailVerificationProfile
 }
 
 var _ kernel.OTPAttemptContributor = (*Contributor)(nil)

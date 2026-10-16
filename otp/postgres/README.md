@@ -1,5 +1,34 @@
 # OTP PostgreSQL
 
+## Authenticated primary-email change
+
+`NewEmailChangeService` independently selects a purpose-bound new-address code
+for an actual committed password-native change request. `EmailChangeConfig.Source`
+is that original native `EmailManagementService`, including its required
+old-address notice owner/policy. `Send` selects email-change purpose, actual
+password-session admission and independent request keys; `Domain` and
+`CurrentAttemptKeyVersion` retain the comparison and attempt owners. Use reference
+composition for selected migrations and startup custody.
+
+Call `EmailChangeRequest` with original change command/candidate, actual current
+session possession and a stable issuance key. The original request already owns
+fresh-password admission; sending a code neither repeats that proof nor renews
+its validity. `EmailChangeConfirm` consumes the independently delivered code and
+atomically promotes one new primary, demotes the original primary, stages the
+original-old-address notice and advances session authority with audit/lifecycle.
+`RecoverEmailChange` uses original code-free correlation and current disclosure
+permission; it never compares, debits, returns an address or repeats effects.
+Link and OTP may contend, but only one replacement can commit. Generic added
+pending addresses, initial-primary establishment, stronger factors and automatic
+signin are not this profile. Native selection alone enables no HTTP route.
+
+A later signin supplies additional current session possession, not replacement
+authority for the initiating session. Its exact original session/family remains
+locked and active through issuance and consuming commit, and original idle and
+absolute expiry cap the challenge without renewing activity or password proof.
+Revocation or expiry denies new issuance/comparison/debit/replacement; original
+authorized recovery remains code-free historical observation.
+
 ## Authenticated pending-email verification
 
 `NewEmailVerificationService` selects the self-user, password-session,

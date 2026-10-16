@@ -94,6 +94,45 @@ func TestPreparedSendStableOwnerGeneratesAndRestoresOriginal(t *testing.T) {
 	}
 }
 
+func TestPreparedPrimaryChangeRejectsChangedDomainOnRestore(t *testing.T) {
+	p, original, _ := preparedSendFixture(t)
+	config := preparedSendConfig{preparation: otp.SendPreparationConfig{Policy: p.send.policy, Renderer: p.send.renderer, TemplateID: p.send.template, TemplateVersion: p.send.templateVersion, LocaleChain: p.send.locales}, provider: p.send.provider, contributors: p.send.contributors, templates: preparedSendTemplates("{{.code}}")}
+	// Original output restoration is configuration-bound. A changed comparison
+	// or retained identifier key must not reinterpret an already issued change.
+	first := *p
+	first.emailChangeDomain = &emailVerificationProfile{configuration: [32]byte{3}}
+	old, err := newPreparedSendContributor(&first, issuanceDeliveryOwner(t), config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	second := first
+	second.emailChangeDomain = &emailVerificationProfile{configuration: [32]byte{4}}
+	changed, err := newPreparedSendContributor(&second, issuanceDeliveryOwner(t), config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r, _, err := p.originalPreparedSend(context.Background(), original)
+	if err != nil {
+		t.Fatal(err)
+	}
+	spec, _ := original.Feature()
+	bearer, _ := original.SessionToken()
+	frozen, err := old.mapPreparedSendRequest(context.Background(), r, spec.Binding, bearer)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wire, err := old.GenerateFeaturePreparation(context.Background(), frozen, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := old.RestoreFeaturePreparation(context.Background(), frozen, 1, wire); err != nil {
+		t.Fatal("unchanged primary-change owner lost original output", err)
+	}
+	if _, _, err := changed.RestoreFeaturePreparation(context.Background(), frozen, 1, wire); err == nil {
+		t.Fatal("changed primary-change comparison/key domain restored original custody")
+	}
+}
+
 func TestPreparedSendRejectsChangedOriginalAndCancellation(t *testing.T) {
 	p, original, _ := preparedSendFixture(t)
 	wire, err := p.GenerateFeaturePreparation(context.Background(), original, 1)

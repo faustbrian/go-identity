@@ -3,12 +3,14 @@ package postgres
 import (
 	"context"
 	"math"
+	"reflect"
 	"strings"
 
 	identity "github.com/faustbrian/go-identity"
 	mfapg "github.com/faustbrian/go-identity/mfa/postgres"
 	"github.com/faustbrian/go-identity/otp"
 	kernel "github.com/faustbrian/go-identity/postgres"
+	sessionpg "github.com/faustbrian/go-identity/session/postgres"
 )
 
 type emailVerificationPhase struct{ service *EmailVerificationService }
@@ -28,7 +30,7 @@ func (p *emailVerificationPhase) intent(command identity.Command) (kernel.Manage
 		return bad()
 	}
 	s, ok := command.Feature()
-	if !ok || s.Operation != emailVerificationOperation() {
+	if !ok || s.Operation != p.service.operation() {
 		return bad()
 	}
 	custody, err := p.service.owner.codec.restoreCustody(s)
@@ -36,17 +38,16 @@ func (p *emailVerificationPhase) intent(command identity.Command) (kernel.Manage
 		return bad()
 	}
 	scope, err := custody.record.Attempt.Continuation.Bindings()
-	if err != nil || scope.Scope.Purpose != otp.PurposeEmailVerification || scope.Scope.Channel != otp.ChannelEmail || scope.Scope.TenantID != string(s.Binding.TenantID) || scope.Scope.SubjectID != string(s.Binding.UserID) || scope.Scope.PolicyVersion != s.Binding.PolicyVersion {
+	if err != nil || scope.Scope.Purpose != p.service.purpose() || scope.Scope.Channel != otp.ChannelEmail || scope.Scope.TenantID != string(s.Binding.TenantID) || scope.Scope.SubjectID != string(s.Binding.UserID) || scope.Scope.PolicyVersion != s.Binding.PolicyVersion {
 		return bad()
 	}
 	if _, bound := scope.Authorization.AuthenticatedSession(); !bound {
 		return bad()
 	}
-	target, err := otp.ParseEmailVerificationTarget(scope.Scope.TargetID)
+	selected, err := p.service.selectedTarget(scope.Scope.TargetID)
 	if err != nil {
 		return bad()
 	}
-	selected, _ := target.Bindings()
 	if string(selected.IdentifierID) != s.Binding.RecordID || scope.Scope.ChallengeID == string(s.Binding.CommandID) {
 		return bad()
 	}
@@ -59,7 +60,16 @@ func (p *emailVerificationPhase) intent(command identity.Command) (kernel.Manage
 	if version == 0 || version == math.MaxUint64 || custody.authority.Credential.Kind != identity.CredentialPassword {
 		return bad()
 	}
-	i := kernel.ManagedEmailVerificationIntent{Change: identity.IdentifierChange{TenantID: s.Binding.TenantID, UserID: s.Binding.UserID, ID: selected.IdentifierID, Action: identity.IdentifierVerify, ExpectedUserVersion: version, ExpectedAuthorityVersion: custody.authority.IdentifierAuthorityVersion, ExpectedIdentifierVersion: selected.IdentifierVersion, ExpectedVerificationVersion: selected.VerificationVersion}, CanonicalAddress: scope.Scope.Destination.Value(), ComparisonProfile: p.service.profile.comparison, RequestCommandID: identity.CommandID(scope.Scope.ChallengeID)}
+	i, err := p.service.mutationIntent(s.Binding, selected, version, custody.authority.IdentifierAuthorityVersion, scope.Scope.Destination.Value(), identity.CommandID(scope.Scope.ChallengeID))
+	if err != nil {
+		return bad()
+	}
+	if p.service.change != nil {
+		original, err := newEmailChangeSendProfile(p.service.sender.owner.store, *p.service.change)
+		if err != nil || *custody.authority != original.authority {
+			return bad()
+		}
+	}
 	return i, *custody.authority, selected, nil
 }
 
@@ -87,8 +97,25 @@ func (p *Contributor) CheckFeatureCommit(ctx context.Context, w kernel.Work, com
 
 func (p *emailVerificationPhase) ValidateFeatureCommand(command identity.Command, plan kernel.CommandPlan) error {
 	s, ok := command.Feature()
-	if !ok || plan.Feature == nil || plan.Feature.Operation != emailVerificationOperation() || plan.Feature.Contributor != p.service.owner.Descriptor() || plan.OTP == nil || plan.OTP.Mode != kernel.OTPConsume || plan.SubjectType != "identifier" || plan.Lifecycle == nil || plan.Lifecycle.EventType != "identifier.verified.v1" || plan.Capability != nil || plan.CapabilityIssuance != nil || plan.Delivery != nil || plan.RiskEvidence != nil || plan.CommandCounters != nil || plan.CaptchaEvidence != nil || plan.CaptchaReplayReservation || len(plan.Audits) != 1 || plan.Audits[0].EventType != s.Binding.OperationID || !plan.Audits[0].Required || plan.Audits[0].RetentionClass != "protected" {
+	event := "identifier.verified.v1"
+	if p.service.change != nil {
+		event = "identifier.primary-changed.v1"
+	}
+	if !ok || plan.Feature == nil || plan.Feature.Operation != p.service.operation() || plan.Feature.Contributor != p.service.owner.Descriptor() || plan.OTP == nil || plan.OTP.Mode != kernel.OTPConsume || plan.SubjectType != "identifier" || plan.Lifecycle == nil || plan.Lifecycle.EventType != event || plan.Capability != nil || plan.CapabilityIssuance != nil || plan.RiskEvidence != nil || plan.CommandCounters != nil || plan.CaptchaEvidence != nil || plan.CaptchaReplayReservation || len(plan.Audits) != 1 || plan.Audits[0].EventType != s.Binding.OperationID || !plan.Audits[0].Required || plan.Audits[0].RetentionClass != "protected" {
 		return ErrInvalidCommand
+	}
+	if p.service.change == nil {
+		if plan.Delivery != nil {
+			return ErrInvalidCommand
+		}
+	} else {
+		if p.service.notification == nil || p.service.notificationOwner == nil {
+			return ErrInvalidCommand
+		}
+		expected, err := p.service.notification.Plan()
+		if err != nil || !reflect.DeepEqual(plan.Delivery, &expected) {
+			return ErrInvalidCommand
+		}
 	}
 	if _, _, _, err := p.intent(command); err != nil {
 		return err
@@ -116,7 +143,11 @@ func (p *emailVerificationPhase) require(ctx context.Context, w kernel.Work, com
 		return err
 	}
 	if input {
-		if err := w.RequireOTPEmailVerificationTarget(ctx, owner, command); err != nil {
+		check := w.RequireOTPEmailVerificationTarget
+		if p.service.change != nil {
+			check = w.RequireOTPEmailChangeTarget
+		}
+		if err := check(ctx, owner, command); err != nil {
 			return err
 		}
 	}
@@ -164,9 +195,20 @@ func (p *emailVerificationPhase) require(ctx context.Context, w kernel.Work, com
 	if err := requireNativeFlow(ctx, w, p.service.owner, flow, nil); err != nil {
 		return err
 	}
+	if p.service.change != nil {
+		if err := sessionpg.RequireSession(ctx, w, owner.session.store, p.service.change.Session); err != nil {
+			return err
+		}
+	}
 	now, err := w.DatabaseTime(ctx)
 	if err != nil {
 		return err
+	}
+	if p.service.change != nil {
+		expiry, err := originalChangeExpiry(*p.service.change)
+		if err != nil || now.Before(p.service.change.Spec.IssuedAt) || !now.Before(expiry) {
+			return identity.ForbiddenError{}
+		}
 	}
 	return p.service.owner.flowTime(flow, now)
 }
@@ -186,5 +228,13 @@ func (p *emailVerificationPhase) ApplyFeature(ctx context.Context, w kernel.Work
 	if err != nil {
 		return identity.FeatureReceipt{}, err
 	}
-	return identity.FeatureReceipt{Operation: emailVerificationOperation(), BeforeVersion: i.Change.ExpectedVerificationVersion, AfterVersion: i.Change.ExpectedVerificationVersion + 1}, nil
+	if p.service.change != nil {
+		if p.service.notification == nil {
+			return identity.FeatureReceipt{}, ErrInvalidCommand
+		}
+		if err := p.service.notificationOwner.Stage(ctx, w, *p.service.notification); err != nil {
+			return identity.FeatureReceipt{}, err
+		}
+	}
+	return identity.FeatureReceipt{Operation: p.service.operation(), BeforeVersion: i.Change.ExpectedVerificationVersion, AfterVersion: i.Change.ExpectedVerificationVersion + 1}, nil
 }

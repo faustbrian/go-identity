@@ -2410,6 +2410,7 @@
         "github.com/faustbrian/go-identity",
         "github.com/faustbrian/go-identity/delivery",
         "github.com/faustbrian/go-identity/delivery/postgres",
+        "github.com/faustbrian/go-identity/email",
         "github.com/faustbrian/go-identity/mfa/postgres",
         "github.com/faustbrian/go-identity/otp",
         "github.com/faustbrian/go-identity/postgres",

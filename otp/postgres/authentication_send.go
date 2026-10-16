@@ -466,6 +466,24 @@ func (p *authenticationSendContributor) ApplyFeature(ctx context.Context, w kern
 	return phase.applyIssuance(ctx, w, restored, p)
 }
 
+// A retained preparation is not live originating-session authority. Recheck
+// exact original records and time after every enlisted effect and journal write,
+// including retries that restore generation without repeating preparation.
+// Other existing Send profiles retain their original commit behavior.
+func (p *authenticationSendContributor) CheckFeatureCommit(ctx context.Context, w kernel.Work, command identity.Command) error {
+	if p == nil || p.store == nil {
+		return ErrInvalidCommand
+	}
+	if p.store.emailChange == nil {
+		return nil
+	}
+	original, err := p.store.originalFromGenerated(ctx, command)
+	if err != nil {
+		return err
+	}
+	return p.store.admitFeaturePreparation(ctx, w, original, p)
+}
+
 var _ kernel.FeatureAdmissionPreparationContributor = (*authenticationSendContributor)(nil)
 
 func (p *authenticationSendContributor) RecoverParticipant(ctx context.Context, w kernel.RecoveryWork) (kernel.RecoveryStatus, error) {

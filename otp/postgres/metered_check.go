@@ -26,7 +26,7 @@ func (p *Contributor) FeatureOperations() []identity.FeatureOperation {
 		return nil
 	}
 	if p.emailVerify != nil {
-		return []identity.FeatureOperation{emailVerificationOperation()}
+		return []identity.FeatureOperation{p.emailVerify.service.operation()}
 	}
 	ops := []identity.FeatureOperation{checkOperation(identity.FeatureSubjectUser), checkOperation(identity.FeatureSubjectAnonymousFlow)}
 	if p.send != nil {
@@ -45,7 +45,7 @@ func (p *Contributor) FeatureOperations() []identity.FeatureOperation {
 // Validation proves no current primary authority or durable outcome.
 func (p *Contributor) ValidateFeatureCommand(command identity.Command, plan kernel.CommandPlan) error {
 	spec, ok := command.Feature()
-	if p != nil && p.emailVerify != nil && ok && spec.Operation == emailVerificationOperation() {
+	if p != nil && p.emailVerify != nil && ok && spec.Operation == p.emailVerify.service.operation() {
 		return p.emailVerify.ValidateFeatureCommand(command, plan)
 	}
 	if p != nil && p.signin != nil && ok && spec.Operation == signinOperation(spec.Operation.SubjectRequirement) {
@@ -68,7 +68,7 @@ func (p *Contributor) ValidateFeatureCommand(command identity.Command, plan kern
 // ApplyFeature runs a privately configured Send or consuming Signin only in its
 // coordinator-owned transaction. Checks remain exclusive to the metered phase.
 func (p *Contributor) ApplyFeature(ctx context.Context, w kernel.Work, command identity.Command) (identity.FeatureReceipt, error) {
-	if spec, ok := command.Feature(); p != nil && p.emailVerify != nil && ok && spec.Operation == emailVerificationOperation() {
+	if spec, ok := command.Feature(); p != nil && p.emailVerify != nil && ok && spec.Operation == p.emailVerify.service.operation() {
 		return p.emailVerify.ApplyFeature(ctx, w, command)
 	}
 	if spec, ok := command.Feature(); p != nil && p.signin != nil && ok && spec.Operation == signinOperation(spec.Operation.SubjectRequirement) {

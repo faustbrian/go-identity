@@ -1,5 +1,36 @@
 # OTP HTTP transport
 
+## Primary-email replacement
+
+`NewEmailChangeFeature(EmailChangeConfig)` independently selects the following
+cookie-only routes. Supply the actual `otp.EmailChangeService` and
+`EmailChangeRateSource`, a retained keyed-secret request limiter and verification
+limiter, secure session/device cookies, exact HTTPS Origin and stored-session
+synchronizer keys. The feature borrows these owners; it creates no workflow store.
+
+| POST path | Exact JSON fields | Idempotency-Key |
+| --- | --- | --- |
+| `/v1/otp/email-change-request` | `flowID`, `originCommandID`, `addressID` | Required |
+| `/v1/otp/email-change-confirm` | `flowID`, `sendCommandID`, `code` | Forbidden |
+| `/v1/otp/email-change-confirm/recover` | `flowID`, `recovery` | Forbidden |
+
+First perform the existing fresh-password keyed email-change request. Use its
+committed command/candidate as the origin, then independently request/deliver
+the OTP. A generic pending-address addition is not replacement authority.
+Every route requires the original session cookie, exact Origin and
+`X-CSRF-Token`; request also requires the existing signed device cookie.
+Request returns safe 202 acceptance, not delivery or replacement. Only fresh
+committed confirmation returns `changed:true` with the exact address ID/version.
+Recovery returns original durability metadata without address/session credentials,
+code comparison, another attempt debit, notification or renewed validity.
+
+Success replaces one genuine primary, queues a notice to its original old
+mailbox and invalidates old identifier-bound sessions. No route emits cookies
+or synchronizers. Unknown outcomes retain code-free recovery: do not resubmit
+the consuming confirmation to find out whether it committed. Initial-primary,
+stronger-factor, current-address OTP and auto-signin are not selected. Ordinary
+pending-email verification and link confirmation retain their distinct profiles.
+
 ## Pending-email verification
 
 `NewEmailVerificationFeature(EmailVerificationConfig)` independently selects

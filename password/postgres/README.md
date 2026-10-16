@@ -143,6 +143,15 @@ be authorized for the signed user and exact confirmation action; it must not
 impersonate the historical human or restore that user's session. Returned intent
 is sensitive and is not a public response or current authority.
 
+`ReadChangeOrigin` implements `email.ChangeOriginSource` for independently issued
+OTP change workflows. It authenticates the committed change request directly,
+without a delivered link or another password proof. Current exact OTP-change
+disclosure policy is required. Candidate, old-address policy, original session,
+factor/directory generations, expiry and the exact retained-ciphertext digest
+remain original, including after completion. These are private provenance, not
+current authority: consuming workflows still fence current state and original
+validity atomically. Generic pending attachment cannot supply this provenance.
+
 `ValidateManagedVerification` is scanner-safe boolean inspection. It checks
 original callback, current unused issued state, active account, exact pending
 address/verification versions, original credential and authorization epochs,

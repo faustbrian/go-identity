@@ -142,6 +142,16 @@ func (p *Contributor) PrepareRequestKey(parent context.Context, k kernel.Request
 	if flowExpiry.Before(expires) {
 		expires = flowExpiry
 	}
+	if p.emailChange != nil {
+		original := p.emailChange.origin.Spec
+		target, _ := p.emailChange.target.ScopeTarget()
+		if r.purpose != otp.PurposeEmailChange || r.target != target || r.destination.Value() != original.Payload.CanonicalAddress.Record().Value || b.TenantID != original.Binding.TenantID || b.UserID != original.Binding.UserID || a != p.emailChange.authority || !p.emailChange.validAt(now) {
+			return nil, identity.ForbiddenError{}
+		}
+		if p.emailChange.expiresAt.Before(expires) {
+			expires = p.emailChange.expiresAt
+		}
+	}
 	continuation, err := otp.NewContinuation(otp.DigestScopeSpec{TenantID: string(b.TenantID), SubjectID: string(b.UserID), Purpose: r.purpose, Channel: r.channel, Destination: r.destination, ChallengeID: b.RecordID, TargetID: r.target, PolicyVersion: b.PolicyVersion, Generation: 1}, flow, remember)
 	if err != nil {
 		return nil, ErrInvalidCommand

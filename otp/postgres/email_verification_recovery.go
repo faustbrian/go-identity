@@ -22,11 +22,15 @@ var _ otp.EmailVerificationService = (*EmailVerificationService)(nil)
 // directory, user, credential and authorization epochs remain current and fenced.
 // Successful recovery is metadata-only; Address is always absent.
 func (s *EmailVerificationService) RecoverEmailVerify(ctx context.Context, r otp.EmailVerifyRecoveryRequest) (out otp.EmailVerifyResult, err error) {
-	if ctx == nil || s == nil || s.sender == nil || s.coordinator == nil {
-		return out, ErrInvalidCommand
-	}
 	if err := r.Validate(); err != nil {
 		return out, err
+	}
+	return s.recoverEmailVerify(ctx, r)
+}
+
+func (s *EmailVerificationService) recoverEmailVerify(ctx context.Context, r otp.EmailVerifyRecoveryRequest) (out otp.EmailVerifyResult, err error) {
+	if ctx == nil || s == nil || s.sender == nil || s.coordinator == nil {
+		return out, ErrInvalidCommand
 	}
 	ctx, stop := context.WithTimeout(ctx, s.sender.timeout)
 	defer stop()
@@ -49,14 +53,13 @@ func (s *EmailVerificationService) RecoverEmailVerify(ctx context.Context, r otp
 		return out, ErrInvalidCommand
 	}
 	scope, err := issued.Continuation.Bindings()
-	if err != nil || scope.Scope.Purpose != otp.PurposeEmailVerification || scope.Scope.Channel != otp.ChannelEmail || scope.Scope.ChallengeID != string(b.SendCommandID) {
+	if err != nil || scope.Scope.Purpose != s.purpose() || scope.Scope.Channel != otp.ChannelEmail || scope.Scope.ChallengeID != string(b.SendCommandID) {
 		return out, identity.ForbiddenError{}
 	}
-	target, err := otp.ParseEmailVerificationTarget(scope.Scope.TargetID)
+	selected, err := s.selectedTarget(scope.Scope.TargetID)
 	if err != nil {
 		return out, err
 	}
-	selected, _ := target.Bindings()
 	if selected.IdentifierID != custody.recipient.Identifier.ID {
 		return out, identity.ForbiddenError{}
 	}
@@ -71,7 +74,7 @@ func (s *EmailVerificationService) RecoverEmailVerify(ctx context.Context, r otp
 	}
 	defer clear(raw)
 	plan := kernel.OTPAttemptPlan{AttemptID: string(b.Attempt.AttemptID), AttemptFingerprint: [32]byte(raw), FingerprintKeyVersion: b.Attempt.FingerprintKeyVersion, ChallengeID: string(b.SendCommandID), ScopeDigest: b.ScopeDigest, DigestKeyVersion: b.DigestKeyVersion, ExpectedVersion: b.ExpectedVersion, Mode: kernel.OTPConsume}
-	q := checkQuery(f.Binding, b.Attempt.CommandID, emailVerificationOperation().OperationID, false)
+	q := checkQuery(f.Binding, b.Attempt.CommandID, s.operation().OperationID, false)
 	q.RecordID = string(selected.IdentifierID)
 	caller := s.source.planCaller(r.Caller, q)
 	receipt, err := s.coordinator.RecoverOTPFeatureCommand(ctx, q, plan, caller)
@@ -86,7 +89,7 @@ func (s *EmailVerificationService) RecoverEmailVerify(ctx context.Context, r otp
 	// validated terminal NotCommitted receipt. Current query/IO failures return
 	// zero or Unknown instead. Normalize only exact, validated original history;
 	// cancellation and current disclosure failures remain errors below.
-	if receipt.Validate() != nil || receipt.Feature == nil || receipt.Feature.Operation != emailVerificationOperation() || receipt.Binding.CommandID != b.Attempt.CommandID || receipt.Binding.TenantID != r.TenantID || receipt.Binding.UserID != r.UserID || receipt.Binding.RecordID != string(selected.IdentifierID) {
+	if receipt.Validate() != nil || receipt.Feature == nil || receipt.Feature.Operation != s.operation() || receipt.Binding.CommandID != b.Attempt.CommandID || receipt.Binding.TenantID != r.TenantID || receipt.Binding.UserID != r.UserID || receipt.Binding.RecordID != string(selected.IdentifierID) {
 		return out, ErrUnavailable
 	}
 	after, err := s.authorizeRecovery(ctx, r.Caller, f.Binding, custody.authority)
@@ -112,7 +115,7 @@ func (s *EmailVerificationService) authorizeRecovery(ctx context.Context, caller
 	// either epoch into executable original session/OTP authority.
 	c := caller.Clone()
 	c.PolicyRevision = authorization.Revision(s.queryPolicy.PolicyVersion)
-	c.Request.Action = "identity.otp.email-verify.recover"
+	c.Request.Action = authorization.Action(s.operation().OperationID + ".recover")
 	c.Request.Resource = authorization.Resource{Type: "identity.user", ID: authorization.ResourceID(binding.UserID)}
 	decision, err := s.queryPolicy.Authorization.Decide(ctx, c)
 	if ctx.Err() != nil {

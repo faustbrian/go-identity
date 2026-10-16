@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- Fence initiating-session and family revocation and original idle/absolute
+  expiry during primary-change issuance, attempt admission and final commit.
+  A later signin cannot extend that authority; metadata-only history remains
+  available under its separate current disclosure policy.
+
+- Compose separately issued new-address OTPs with genuine committed primary
+  change provenance, current password-session/known-empty-MFA admission, atomic
+  primary replacement, original-old-address notice and metadata-only recovery.
+  Original source validity is not renewed. Ordinary pending verification and
+  initial-primary, stronger-factor and auto-signin profiles remain distinct.
+
 - Compose pending-nonprimary email OTP issuance, counted completion and original
   metadata recovery with genuine known-empty MFA, original password-session
   authority and atomic identifier/audit/lifecycle effects. Matching Send retries

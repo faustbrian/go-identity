@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"maps"
 	"slices"
 	"time"
 
@@ -74,6 +75,8 @@ type SendService struct {
 	timeout              time.Duration
 	requestPolicyVersion uint64
 	digestVersions       []uint32
+	participants         []kernel.Contributor
+	coordinatorConfig    kernel.CoordinatorConfig
 }
 
 // NewSendService validates pure startup composition and owns all native
@@ -83,10 +86,10 @@ type SendService struct {
 // lockout/send-family/issuance, delivery and selected session/pre-auth schemas.
 // Then Initialize the stable key namespace. Incomplete configuration denies.
 func NewSendService(pool *database.Pool, c SendConfig, crypto *envelope.Service) (*SendService, error) {
-	return newSendService(pool, c, crypto, nil)
+	return newSendService(pool, c, crypto, nil, nil)
 }
 
-func newSendService(pool *database.Pool, c SendConfig, crypto *envelope.Service, email *emailVerificationProfile) (*SendService, error) {
+func newSendService(pool *database.Pool, c SendConfig, crypto *envelope.Service, email, changeDomain *emailVerificationProfile) (*SendService, error) {
 	if pool == nil || pool.Raw() == nil || crypto == nil || c.Timeout < time.Millisecond || c.Timeout > 5*time.Second || c.Store.Codec != nil {
 		return nil, ErrInvalidConfiguration
 	}
@@ -100,6 +103,7 @@ func newSendService(pool *database.Pool, c SendConfig, crypto *envelope.Service,
 		return nil, ErrInvalidConfiguration
 	}
 	store.emailVerification = email
+	store.emailChangeDomain = changeDomain
 	deliveryOwner, err := deliverypg.NewContributor(c.Delivery, crypto)
 	if err != nil {
 		return nil, ErrInvalidConfiguration
@@ -129,7 +133,8 @@ func newSendService(pool *database.Pool, c SendConfig, crypto *envelope.Service,
 	if err != nil {
 		return nil, ErrInvalidConfiguration
 	}
-	registry, err := kernel.NewContributorRegistry([]kernel.Contributor{repo, auditOwner, lifecycleOwner, owner, deliveryOwner})
+	participants := []kernel.Contributor{repo, auditOwner, lifecycleOwner, owner, deliveryOwner}
+	registry, err := kernel.NewContributorRegistry(participants)
 	if err != nil {
 		return nil, ErrInvalidConfiguration
 	}
@@ -146,7 +151,26 @@ func newSendService(pool *database.Pool, c SendConfig, crypto *envelope.Service,
 		versions = append(versions, version)
 	}
 	slices.Sort(versions)
-	return &SendService{pool: pool, owner: owner, coordinator: coordinator, registry: registry, requestKeys: c.RequestKeys, timeout: c.Timeout, requestPolicyVersion: c.RequestKeys.Policy.PolicyVersion, digestVersions: versions}, nil
+	return &SendService{pool: pool, owner: owner, coordinator: coordinator, registry: registry, requestKeys: c.RequestKeys, timeout: c.Timeout, requestPolicyVersion: c.RequestKeys.Policy.PolicyVersion, digestVersions: versions, participants: participants, coordinatorConfig: snapshotSendCoordinator(c.Coordinator)}, nil
+}
+
+// Own configuration used when selecting an invocation-local native phase. The
+// coordinator still owns the same journal/keys; no request can select a policy.
+func snapshotSendCoordinator(c kernel.CoordinatorConfig) kernel.CoordinatorConfig {
+	c.RetainedFingerprintKeys = maps.Clone(c.RetainedFingerprintKeys)
+	if c.QueryPolicy != nil {
+		p := *c.QueryPolicy
+		c.QueryPolicy = &p
+	}
+	if c.AdmissionPolicy != nil {
+		p := *c.AdmissionPolicy
+		c.AdmissionPolicy = &p
+	}
+	if c.FinalAuthentication != nil {
+		p := *c.FinalAuthentication
+		c.FinalAuthentication = &p
+	}
+	return c
 }
 
 // Initialize installs only the configured stable lockout-key binding and
