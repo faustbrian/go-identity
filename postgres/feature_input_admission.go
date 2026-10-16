@@ -21,7 +21,7 @@ type FeatureInputAdmissionContributor interface {
 }
 
 func otpFeatureInputAdmissionRequired(p CommandPlan) bool {
-	return p.OTP != nil && p.Feature != nil && (p.Feature.Operation.Owner == "identity/mfa" || p.Feature.Operation == otpEmailVerificationOperation())
+	return p.OTP != nil && p.Feature != nil && (p.Feature.Operation.Owner == "identity/mfa" || otpEmailMutationOperation(p.Feature.Operation))
 }
 
 // Existing OTP signin/check profiles retain their owner-specific admission.

@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+- Admit required notification custody at OTP preparation only for the exact
+  genuine-primary change operation. Verification-only/check/other consuming
+  profiles remain delivery-free. Original change recovery uses its own current
+  disclosure action without gaining mutation or fresh session authority.
+
+- Allow the exact OTP email-change request/confirm actions to read a committed
+  native change origin under current disclosure policy. Ordinary verification,
+  resend, foreign and noncommitted origins remain unavailable as change custody.
+
+- Add a distinct OTP primary-replacement declaration through the existing
+  identifier writer. Require separate change/send origins, actual old primary,
+  consuming OTP, protected change audit and atomic old-address notice; ordinary
+  pending-email verification remains nonprimary-only. Native composition is pending.
+
 - Admit the exact native pending-email OTP verification profile through the
   existing identifier writer and protected audit. Fence target before comparison
   and permit only this transaction's persisted identifier successor in final

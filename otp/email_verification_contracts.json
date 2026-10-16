@@ -3,18 +3,59 @@
     {
       "id": "identity.otp.email-verify.recover",
       "owner": "identity/otp",
-      "declared_owners": ["identity/otp", "identity/email"],
-      "method": {"interface": "go:identity/otp:EmailVerificationService", "name": "RecoverEmailVerify", "signature": "RecoverEmailVerify(context.Context, EmailVerifyRecoveryRequest) (EmailVerifyResult, error)"},
+      "declared_owners": [
+        "identity/otp",
+        "identity/email"
+      ],
+      "method": {
+        "interface": "go:identity/otp:EmailVerificationService",
+        "name": "RecoverEmailVerify",
+        "signature": "RecoverEmailVerify(context.Context, EmailVerifyRecoveryRequest) (EmailVerifyResult, error)"
+      },
       "request_type": "identity.otp.email-verify.recover.request",
       "result_type": "identity.otp.email-verify.recover.result",
-      "error_types": ["identity.otp.email-verify.recover.errors"],
-      "transport": {"exposure": "both", "http_method": "POST", "http_path": "/v1/otp/email-verify/recover", "openapi_operation_id": "identity.otp.email-verify.recover"}
+      "error_types": [
+        "identity.otp.email-verify.recover.errors"
+      ],
+      "transport": {
+        "exposure": "both",
+        "http_method": "POST",
+        "http_path": "/v1/otp/email-verify/recover",
+        "openapi_operation_id": "identity.otp.email-verify.recover"
+      }
+    },
+    {
+      "id": "identity.otp.email-change-confirm.recover",
+      "owner": "identity/otp",
+      "declared_owners": [
+        "identity/otp",
+        "identity/email"
+      ],
+      "method": {
+        "interface": "go:identity/otp:EmailChangeService",
+        "name": "RecoverEmailChange",
+        "signature": "RecoverEmailChange(context.Context, EmailChangeRecoveryRequest) (EmailChangeResult, error)"
+      },
+      "request_type": "identity.otp.email-change-confirm.recover.request",
+      "result_type": "identity.otp.email-change-confirm.recover.result",
+      "error_types": [
+        "identity.otp.email-change-confirm.recover.errors"
+      ],
+      "transport": {
+        "exposure": "both",
+        "http_method": "POST",
+        "http_path": "/v1/otp/email-change-confirm/recover",
+        "openapi_operation_id": "identity.otp.email-change-confirm.recover"
+      }
     }
   ],
   "semantics": [
     {
       "id": "identity.otp.email-verify.recover",
-      "owners": ["identity/otp", "identity/email"],
+      "owners": [
+        "identity/otp",
+        "identity/email"
+      ],
       "access": "original authenticated-session possession and current historical disclosure policy",
       "authorization": "original session possession plus current self-user historical disclosure policy; not executable session authority",
       "csrf_origin": "CSRF",
@@ -23,6 +64,25 @@
       "http_method": "POST",
       "http_path": "/v1/otp/email-verify/recover",
       "openapi_operation_id": "identity.otp.email-verify.recover",
+      "idempotency": "read",
+      "idempotency_transport": "Idempotency-Key and request.IdempotencyKey forbidden",
+      "rate_policy": "rate.verify",
+      "risk_class": "auth"
+    },
+    {
+      "id": "identity.otp.email-change-confirm.recover",
+      "owners": [
+        "identity/otp",
+        "identity/email"
+      ],
+      "access": "original authenticated-session possession and current historical disclosure policy",
+      "authorization": "original session possession plus current self-user historical disclosure policy; not executable session authority",
+      "csrf_origin": "CSRF",
+      "event_semantics": "Original code-free primary-email change correlation observes the existing consuming command under current self-user disclosure policy and original session possession/CSRF. Committed and denied terminal history are metadata only; no address projection, code comparison/debit, primary replacement, notification, resend or credential issuance. Unknown remains unknown. Recovery applies verification IP admission only, not another challenge debit.",
+      "exposure": "both",
+      "http_method": "POST",
+      "http_path": "/v1/otp/email-change-confirm/recover",
+      "openapi_operation_id": "identity.otp.email-change-confirm.recover",
       "idempotency": "read",
       "idempotency_transport": "Idempotency-Key and request.IdempotencyKey forbidden",
       "rate_policy": "rate.verify",
@@ -38,11 +98,36 @@
         "name": "EmailVerifyRecoveryRequest",
         "schema_id": "identity.otp.email-verify.recover.request",
         "fields": [
-          {"name": "TenantID", "type": "identity.TenantID", "required": true, "semantics": "Exact original tenant, agreeing with retained recovery and trusted transport host."},
-          {"name": "UserID", "type": "identity.UserID", "required": true, "semantics": "Original nonanonymous self user. HTTP derives it only from authenticated original session possession."},
-          {"name": "Caller", "type": "authorization.DecisionContext", "required": true, "semantics": "Trusted exact self-user recovery action and current disclosure policy, not original command authority."},
-          {"name": "Flow", "type": "otp.SendFlow", "required": true, "semantics": "Original actual authenticated-session token and session ID; neither renewed nor required to remain executable for history."},
-          {"name": "Recovery", "type": "otp.EmailVerifyRecovery", "required": true, "semantics": "Exact original Send, attempt, command, fingerprint/key, expected version and scope/digest-key correlation, with no code."}
+          {
+            "name": "TenantID",
+            "type": "identity.TenantID",
+            "required": true,
+            "semantics": "Exact original tenant, agreeing with retained recovery and trusted transport host."
+          },
+          {
+            "name": "UserID",
+            "type": "identity.UserID",
+            "required": true,
+            "semantics": "Original nonanonymous self user. HTTP derives it only from authenticated original session possession."
+          },
+          {
+            "name": "Caller",
+            "type": "authorization.DecisionContext",
+            "required": true,
+            "semantics": "Trusted exact self-user recovery action and current disclosure policy, not original command authority."
+          },
+          {
+            "name": "Flow",
+            "type": "otp.SendFlow",
+            "required": true,
+            "semantics": "Original actual authenticated-session token and session ID; neither renewed nor required to remain executable for history."
+          },
+          {
+            "name": "Recovery",
+            "type": "otp.EmailVerifyRecovery",
+            "required": true,
+            "semantics": "Exact original Send, attempt, command, fingerprint/key, expected version and scope/digest-key correlation, with no code."
+          }
         ]
       }
     },
@@ -54,12 +139,42 @@
         "name": "EmailVerifyResult",
         "schema_id": "identity.otp.email-verify.recover.result",
         "fields": [
-          {"name": "CommandID", "type": "identity.CommandID", "required": false, "semantics": "Original consuming command only; no replacement command is allocated."},
-          {"name": "Outcome", "type": "identity.CommitOutcome", "required": true, "semantics": "Observed original durability, independent of subsequent current-authorization or disclosure failure. Unknown is never rollback."},
-          {"name": "Address", "type": "identity.IdentifierProjection", "required": false, "semantics": "Always zero during recovery, including committed history."},
-          {"name": "Recovery", "type": "otp.EmailVerifyRecovery", "required": false, "semantics": "Unchanged original code-free correlation, never permission to resubmit."},
-          {"name": "Replayed", "type": "bool", "required": true, "semantics": "True for an original historical observation, not an executed mutation."},
-          {"name": "RetryAfter", "type": "time.Duration", "required": false, "semantics": "Bounded original pending receipt delay; no automatic retry or new attempt."}
+          {
+            "name": "CommandID",
+            "type": "identity.CommandID",
+            "required": false,
+            "semantics": "Original consuming command only; no replacement command is allocated."
+          },
+          {
+            "name": "Outcome",
+            "type": "identity.CommitOutcome",
+            "required": true,
+            "semantics": "Observed original durability, independent of subsequent current-authorization or disclosure failure. Unknown is never rollback."
+          },
+          {
+            "name": "Address",
+            "type": "identity.IdentifierProjection",
+            "required": false,
+            "semantics": "Always zero during recovery, including committed history."
+          },
+          {
+            "name": "Recovery",
+            "type": "otp.EmailVerifyRecovery",
+            "required": false,
+            "semantics": "Unchanged original code-free correlation, never permission to resubmit."
+          },
+          {
+            "name": "Replayed",
+            "type": "bool",
+            "required": true,
+            "semantics": "True for an original historical observation, not an executed mutation."
+          },
+          {
+            "name": "RetryAfter",
+            "type": "time.Duration",
+            "required": false,
+            "semantics": "Bounded original pending receipt delay; no automatic retry or new attempt."
+          }
         ]
       }
     },
@@ -71,10 +186,145 @@
         "name": "EmailVerifyRecoveryError",
         "schema_id": "identity.otp.email-verify.recover.errors",
         "variants": [
-          {"identity": "invalid", "type": "otp.ErrInvalidAttempt", "semantics": "Malformed original recovery or mixed subject/session namespace."},
-          {"identity": "denied", "type": "identity.ForbiddenError", "semantics": "Original possession or current self-user disclosure authority denies. Historical denial is an observed result, not this current authorization error."},
-          {"identity": "conflict", "type": "identity.ConflictError", "semantics": "Retained original plan/correlation mismatch; never adopt a replacement."},
-          {"identity": "unavailable", "type": "error", "semantics": "Bounded native storage/custody/cancellation failure; retain any observed original outcome without inferring rollback."}
+          {
+            "identity": "invalid",
+            "type": "otp.ErrInvalidAttempt",
+            "semantics": "Malformed original recovery or mixed subject/session namespace."
+          },
+          {
+            "identity": "denied",
+            "type": "identity.ForbiddenError",
+            "semantics": "Original possession or current self-user disclosure authority denies. Historical denial is an observed result, not this current authorization error."
+          },
+          {
+            "identity": "conflict",
+            "type": "identity.ConflictError",
+            "semantics": "Retained original plan/correlation mismatch; never adopt a replacement."
+          },
+          {
+            "identity": "unavailable",
+            "type": "error",
+            "semantics": "Bounded native storage/custody/cancellation failure; retain any observed original outcome without inferring rollback."
+          }
+        ]
+      }
+    },
+    {
+      "id": "identity.otp.email-change-confirm.recover.request",
+      "owner": "identity/otp",
+      "category": "operation_request",
+      "definition": {
+        "name": "EmailChangeRecoveryRequest",
+        "schema_id": "identity.otp.email-change-confirm.recover.request",
+        "fields": [
+          {
+            "name": "TenantID",
+            "type": "identity.TenantID",
+            "required": true,
+            "semantics": "Exact original tenant, agreeing with retained recovery and trusted transport host."
+          },
+          {
+            "name": "UserID",
+            "type": "identity.UserID",
+            "required": true,
+            "semantics": "Original nonanonymous self user. HTTP derives it only from authenticated original session possession."
+          },
+          {
+            "name": "Caller",
+            "type": "authorization.DecisionContext",
+            "required": true,
+            "semantics": "Trusted exact self-user recovery action and current disclosure policy, not original command authority."
+          },
+          {
+            "name": "Flow",
+            "type": "otp.SendFlow",
+            "required": true,
+            "semantics": "Original actual authenticated-session token and session ID; neither renewed nor required to remain executable for history."
+          },
+          {
+            "name": "Recovery",
+            "type": "otp.EmailChangeRecovery",
+            "required": true,
+            "semantics": "Exact original Send, attempt, command, fingerprint/key, expected version and scope/digest-key correlation, with no code."
+          }
+        ]
+      }
+    },
+    {
+      "id": "identity.otp.email-change-confirm.recover.result",
+      "owner": "identity/otp",
+      "category": "operation_result",
+      "definition": {
+        "name": "EmailChangeResult",
+        "schema_id": "identity.otp.email-change-confirm.recover.result",
+        "fields": [
+          {
+            "name": "CommandID",
+            "type": "identity.CommandID",
+            "required": false,
+            "semantics": "Original consuming command only; no replacement command is allocated."
+          },
+          {
+            "name": "Outcome",
+            "type": "identity.CommitOutcome",
+            "required": true,
+            "semantics": "Observed original durability, independent of subsequent current-authorization or disclosure failure. Unknown is never rollback."
+          },
+          {
+            "name": "Address",
+            "type": "identity.IdentifierProjection",
+            "required": false,
+            "semantics": "Always zero during recovery, including committed history."
+          },
+          {
+            "name": "Recovery",
+            "type": "otp.EmailChangeRecovery",
+            "required": false,
+            "semantics": "Unchanged original code-free correlation, never permission to resubmit."
+          },
+          {
+            "name": "Replayed",
+            "type": "bool",
+            "required": true,
+            "semantics": "True for an original historical observation, not an executed mutation."
+          },
+          {
+            "name": "RetryAfter",
+            "type": "time.Duration",
+            "required": false,
+            "semantics": "Bounded original pending receipt delay; no automatic retry or new attempt."
+          }
+        ]
+      }
+    },
+    {
+      "id": "identity.otp.email-change-confirm.recover.errors",
+      "owner": "identity/otp",
+      "category": "operation_errors",
+      "definition": {
+        "name": "EmailChangeRecoveryError",
+        "schema_id": "identity.otp.email-change-confirm.recover.errors",
+        "variants": [
+          {
+            "identity": "invalid",
+            "type": "otp.ErrInvalidAttempt",
+            "semantics": "Malformed original recovery or mixed subject/session namespace."
+          },
+          {
+            "identity": "denied",
+            "type": "identity.ForbiddenError",
+            "semantics": "Original possession or current self-user disclosure authority denies. Historical denial is an observed result, not this current authorization error."
+          },
+          {
+            "identity": "conflict",
+            "type": "identity.ConflictError",
+            "semantics": "Retained original plan/correlation mismatch; never adopt a replacement."
+          },
+          {
+            "identity": "unavailable",
+            "type": "error",
+            "semantics": "Bounded native storage/custody/cancellation failure; retain any observed original outcome without inferring rollback."
+          }
         ]
       }
     }

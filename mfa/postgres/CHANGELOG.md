@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Fence the exact native primary-email OTP confirmation against its original
+  known-empty factor generation before any comparison or debit. Other OTP
+  operations cannot borrow this admission; no factor authority is initialized.
+
 - Add native known-empty factor generation reads/fences for pending-email OTP
   issuance and completion. Missing, enrolled or changed authority denies;
   these ports never initialize account authority or grant verification proof.

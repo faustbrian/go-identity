@@ -79,21 +79,24 @@ func (ManagedEmailVerificationIntent) MarshalJSON() ([]byte, error) {
 
 func managedEmailVerificationCommand(p ManagedEmailVerificationContributor, c identity.Command, plan CommandPlan) (ManagedEmailVerificationIntent, *EmailAttachmentDomain, error) {
 	s, ok := commandFeature(c)
-	otp := s.Operation == otpEmailVerificationOperation()
+	otp := otpEmailMutationOperation(s.Operation)
 	if !ok || plan.Feature == nil || !managedEmailConfirmationOperation(s.Operation) && !otp || plan.Feature.Operation != s.Operation || plan.SubjectType != "identifier" || !otp && plan.Capability == nil || plan.Lifecycle == nil || plan.Lifecycle.BeforeVersion == 0 || plan.Lifecycle.BeforeVersion == ^uint64(0) || plan.Lifecycle.AfterVersion != plan.Lifecycle.BeforeVersion+1 {
 		return ManagedEmailVerificationIntent{}, nil, invalidEmailVerification()
 	}
-	if otp && validateOTPEmailVerificationScope(s, plan) != nil {
+	if s.Operation == otpEmailVerificationOperation() && validateOTPEmailVerificationScope(s, plan) != nil || s.Operation == otpEmailChangeOperation() && validateOTPEmailChangeScope(s, plan) != nil {
 		return ManagedEmailVerificationIntent{}, nil, invalidEmailVerification()
 	}
 	i, d, err := p.ManagedEmailVerification(c)
 	if err != nil || d == nil || d.repository == nil || !d.reuse.valid() || d.comparison != i.ComparisonProfile || i.Change.TenantID != s.Binding.TenantID || i.Change.UserID != s.Binding.UserID || string(i.Change.ID) != s.Binding.RecordID || i.RequestCommandID == s.Binding.CommandID || i.Change.ExpectedVerificationVersion != plan.Lifecycle.BeforeVersion {
 		return ManagedEmailVerificationIntent{}, nil, invalidEmailVerification()
 	}
-	if (s.Operation == managedEmailChangeOperation()) != (i.Change.Action == identity.IdentifierVerifyPrimary) {
+	if (s.Operation == managedEmailChangeOperation() || s.Operation == otpEmailChangeOperation()) != (i.Change.Action == identity.IdentifierVerifyPrimary) {
 		return ManagedEmailVerificationIntent{}, nil, invalidEmailVerification()
 	}
-	if otp && (i.Change.Action != identity.IdentifierVerify || i.RequestCommandID != identity.CommandID(plan.OTP.ChallengeID)) {
+	if s.Operation == otpEmailVerificationOperation() && (i.Change.Action != identity.IdentifierVerify || i.RequestCommandID != identity.CommandID(plan.OTP.ChallengeID)) {
+		return ManagedEmailVerificationIntent{}, nil, invalidEmailVerification()
+	}
+	if s.Operation == otpEmailChangeOperation() && (!i.Previous.Primary || i.RequestCommandID == identity.CommandID(plan.OTP.ChallengeID)) {
 		return ManagedEmailVerificationIntent{}, nil, invalidEmailVerification()
 	}
 	fields, err := ManagedEmailVerificationFields(i)
@@ -188,7 +191,7 @@ func applyManagedEmailVerification(ctx context.Context, w Work) error {
 	if p == nil || p.applied {
 		return w.fail(ctx, invalidEmailVerification())
 	}
-	if w.state.feature.Operation == otpEmailVerificationOperation() {
+	if otpEmailMutationOperation(w.state.feature.Operation) {
 		if w.state.otpCommand == nil {
 			return w.fail(ctx, invalidEmailVerification())
 		}
@@ -215,7 +218,7 @@ func (c *Coordinator) finalizeManagedEmailVerification(w Work) error {
 	if !p.applied || p.finalized {
 		return w.fail(w.state.ctx, invalidEmailVerification())
 	}
-	if w.state.feature.Operation != otpEmailVerificationOperation() {
+	if !otpEmailMutationOperation(w.state.feature.Operation) {
 		if err := c.runCapabilityExecution(w.state.ctx, w, true); err != nil {
 			return err
 		}

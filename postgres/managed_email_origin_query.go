@@ -11,11 +11,14 @@ import (
 
 // QueryManagedEmailPreparation reads original encrypted output for a committed
 // native email-management request. The caller and q name current disclosure
-// authority for verification-confirm or change-confirm, not the historical
-// human's session. q.CommandID is the authenticated issuance origin; tenant,
-// user and RecordID must be its signed scope. The exact registered preparation
-// owner must first authenticate the issued proof, then authenticate/decrypt the
-// returned output and authorize its original email intent. This read itself
+// authority for verification-confirm, change-confirm or the closed OTP change
+// request/confirm actions, not the historical human's session. q.CommandID names
+// the original request; tenant, user and RecordID must match its committed scope.
+// Link workflows first authenticate issued proof. Independent OTP change
+// workflows instead authenticate original encrypted request custody through the
+// exact registered preparation owner; a pending address alone is insufficient.
+// The owner must authenticate/decrypt returned output and validate its original
+// email intent. This read itself
 // grants no mailbox ownership, credential use or current session authority.
 //
 // Only self-user native-v1 verification-send and change-request origins match
@@ -107,7 +110,7 @@ func managedEmailOriginOperation(feature FeatureRegistration, confirm string) bo
 	switch confirm {
 	case "identity.email.verification-confirm":
 		request = "identity.email.verification-send"
-	case "identity.email.change-confirm":
+	case "identity.email.change-confirm", "identity.otp.email-change-request", "identity.otp.email-change-confirm", "identity.otp.email-change-confirm.recover":
 		request = "identity.email.change-request"
 	default:
 		return false

@@ -23,6 +23,8 @@ import (
 // actor/user must be the same human; administration and anonymous signup are
 // distinct profiles. Payload.Version is the positive token generation, not a
 // directory or session epoch. This metadata is sensitive intent, not admission.
+// Independent change workflows may read it as original-request provenance;
+// doing so cannot reinterpret a management link as an OTP.
 type ManagedVerificationSpec struct {
 	Binding                                identity.CommandBinding
 	IdentifierID                           identity.IdentifierID

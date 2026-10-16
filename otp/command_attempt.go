@@ -38,7 +38,10 @@ type attemptCommandScope struct {
 // signin/check operations cannot select that arm or substitute a live session.
 // Managed email verification binds its canonical workflow target to the real
 // identifier record, with complete original session custody and a self-user
-// actor. Only that exact consuming profile admits a structured record target.
+// actor. Primary-email change separately binds an opaque original-change
+// commitment and real record under its exact consuming operation. Its native
+// owner must authenticate the original output and reconstruct the full target;
+// locating an origin or preparing an attempt is not replacement authority.
 // Context/entropy/custody semantics are identical to Prepare. Invalid structural
 // or mismatched scope returns ErrInvalidAttempt without underlying input/errors.
 func (i AttemptIssuer) PrepareForCommand(ctx context.Context, b identity.CommandBinding, operation identity.FeatureOperation, c Continuation, mode AttemptMode, expectedVersion uint64, code auth.OneTimeCode) (AttemptCommand, error) {
@@ -87,6 +90,19 @@ func validAttemptCommandScope(b identity.CommandBinding, op identity.FeatureOper
 			string(b.UserID) == scope.SubjectID && b.AnonymousFlowID == "" &&
 			b.ActorKind == authorization.SubjectUser && string(b.ActorID) == scope.SubjectID &&
 			b.RecordID == string(selected.IdentifierID) && original.TenantID == b.TenantID && original.UserID == b.UserID
+	}
+	if op == (identity.FeatureOperation{Owner: "identity/otp", OperationID: "identity.otp.email-change-confirm",
+		SchemaID: "identity.otp.email-change-confirm.managed-v1", SchemaVersion: 1, RecordRequirement: identity.FeatureRecordRequired}) {
+		origin, err := EmailChangeOriginCommand(scope.TargetID)
+		_, identifierErr := identity.ParseIdentifierID(b.RecordID)
+		record, bound := c.state.bindings.Authorization.AuthenticatedSession()
+		original, sessionErr := record.Bindings()
+		return err == nil && identifierErr == nil && bound && sessionErr == nil && mode == AttemptModeConsume &&
+			scope.Purpose == PurposeEmailChange && scope.Channel == ChannelEmail &&
+			string(b.UserID) == scope.SubjectID && b.AnonymousFlowID == "" &&
+			b.ActorKind == authorization.SubjectUser && string(b.ActorID) == scope.SubjectID &&
+			b.RecordID != scope.TargetID && b.CommandID != origin && string(b.CommandID) != scope.ChallengeID &&
+			string(origin) != scope.ChallengeID && original.TenantID == b.TenantID && original.UserID == b.UserID
 	}
 	if string(b.UserID) != scope.SubjectID || op.RecordRequirement == identity.FeatureRecordRequired && b.RecordID != scope.TargetID {
 		return false

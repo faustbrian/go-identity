@@ -61,8 +61,9 @@ func ReadEmailOTPFactors(ctx context.Context, pool *database.Pool, tenant identi
 }
 
 // RequireEmailOTPFactors fences the original known-empty factor generation for
-// the exact registered authenticated-session OTP sender or native email-verify
-// owner. It is valid in preparation, Apply and final checks. The factor lock
+// the exact registered authenticated-session OTP sender, native email-verify
+// or email-change-confirm owner. It is valid in preparation, Apply and final
+// checks. The factor lock
 // remains held until the sole coordinator Work closes. It grants no session,
 // code, address or mutation authority and never renews original validity.
 func RequireEmailOTPFactors(ctx context.Context, w kernel.Work, owner kernel.FeatureExecutionContributor, command identity.Command, expectedVersion uint64) (mfa.FactorAuthority, error) {
@@ -79,8 +80,10 @@ func RequireEmailOTPFactors(ctx context.Context, w kernel.Work, owner kernel.Fea
 	}
 	send := identity.FeatureOperation{Owner: "identity/otp", OperationID: "identity.otp.send", SchemaID: "identity-otp-send", SchemaVersion: 1, RecordRequirement: identity.FeatureRecordRequired}
 	verify := identity.FeatureOperation{Owner: "identity/otp", OperationID: "identity.otp.email-verify", SchemaID: "identity.otp.email-verify.managed-v1", SchemaVersion: 1, RecordRequirement: identity.FeatureRecordRequired}
+	change := identity.FeatureOperation{Owner: "identity/otp", OperationID: "identity.otp.email-change-confirm", SchemaID: "identity.otp.email-change-confirm.managed-v1", SchemaVersion: 1, RecordRequirement: identity.FeatureRecordRequired}
 	valid := f.Operation == send && f.Contributor == (kernel.ContributorDescriptor{Owner: "identity/otp/postgres", ContractID: "identity.otp.store", Version: 1})
 	valid = valid || f.Operation == verify && f.Contributor == (kernel.ContributorDescriptor{Owner: "identity/otp/postgres", ContractID: "identity.otp.store", Version: 1})
+	valid = valid || f.Operation == change && f.Contributor == (kernel.ContributorDescriptor{Owner: "identity/otp/postgres", ContractID: "identity.otp.store", Version: 1})
 	if !valid {
 		return mfa.FactorAuthority{}, invalidAuthority()
 	}

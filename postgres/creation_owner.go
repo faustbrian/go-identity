@@ -328,6 +328,9 @@ func securityMutationAudit(ctx context.Context, b identity.CommandBinding, befor
 	if feature && b.OperationID == "identity.otp.email-verify" && b.SchemaID == "identity.otp.email-verify.managed-v1" && b.SchemaVersion == 1 {
 		attributes["authentication.recovery_path"] = "email_verification_otp"
 	}
+	if feature && b.OperationID == "identity.otp.email-change-confirm" && b.SchemaID == "identity.otp.email-change-confirm.managed-v1" && b.SchemaVersion == 1 {
+		attributes["authentication.recovery_path"] = "email_change_otp"
+	}
 	record, e := builder.Build(audit.RecordInput{OccurredAt: now, Action: action, Outcome: outcome, ReasonCode: reason, Actor: audit.ActorInput{Kind: actorKind, ID: string(b.ActorID)}, Subject: audit.SubjectInput{Type: kind, ID: target}, Context: audit.ContextInput{TenantID: string(b.TenantID), CorrelationID: b.CorrelationID}, Policy: audit.PolicyMetadata{PolicyID: b.PolicyID, Version: strconv.FormatUint(b.PolicyVersion, 10)}, Changes: changes, Attributes: attributes})
 	if e != nil {
 		return audit.Record{}, invalidAudit()

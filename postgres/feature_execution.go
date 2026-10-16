@@ -60,7 +60,7 @@ func validateFeatureCommand(phase FeatureExecutionContributor, command identity.
 	if err := phase.ValidateFeatureCommand(command, plan); err != nil {
 		return err
 	}
-	if plan.Feature != nil && plan.Feature.Operation == otpEmailVerificationOperation() {
+	if plan.Feature != nil && otpEmailMutationOperation(plan.Feature.Operation) {
 		p, ok := phase.(ManagedEmailVerificationContributor)
 		if !ok {
 			return invalidEmailVerification()
@@ -487,7 +487,7 @@ func (c *Coordinator) ApplyFeature(ctx context.Context, w Work, command identity
 	if p.risk != nil {
 		w.state.riskCommand = &command
 	}
-	if p.feature.Operation == otpEmailVerificationOperation() {
+	if otpEmailMutationOperation(p.feature.Operation) {
 		if e = c.admitOTPFeatureInput(ctx, w, command, p); e != nil {
 			return result, e
 		}
@@ -522,7 +522,7 @@ func (c *Coordinator) ApplyFeature(ctx context.Context, w Work, command identity
 			return result, e
 		}
 	}
-	if p.feature.Operation == otpEmailVerificationOperation() {
+	if otpEmailMutationOperation(p.feature.Operation) {
 		if e := prepareManagedEmailVerification(ctx, w, command); e != nil {
 			return result, e
 		}

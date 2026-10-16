@@ -408,6 +408,14 @@ they do not depend on a pretty printer's empty-collection formatting. Run
 `ruby scripts/generate-http-catalog_test.rb` from the repository root for the
 fixed empty-collection digest oracle.
 
+Native email OTP recovery definitions live in
+`otp/email_verification_contracts.json` at the repository root; pass it as the
+generator's optional fifth input. Definitions and semantics bind the distinct
+verification and primary-change recovery methods, not their HTTP wire schemas.
+The primary-change addition preserves existing embedded operation rows and
+records the new native-source and combined-operation digests. Unrelated drift
+in the historical planning snapshot is not adopted by this scoped addition.
+
 The generator accepts an optional fifth `NATIVE_CONTRACTS.json` input for
 new native-owned operation/semantics/type definitions not yet present in the
 preserved planning snapshot. Duplicate operation/type authority is rejected

@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add a storage-neutral original-change source for native OTP orchestration.
+  Preserve the committed candidate, previous-address policy, original session,
+  generations and expiry without requiring or reinterpreting a delivered link.
+  Returned private provenance is not current replacement authority.
+
 - Support explicit administrative email-removal targets while retaining the
   original actor's proof/session and exact target authorization. Empty target
   preserves the self-removal contract; target selection grants no permission.

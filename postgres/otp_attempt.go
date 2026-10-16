@@ -206,11 +206,17 @@ func (c *Coordinator) prepareOTPAttempt(b identity.CommandBinding, command ident
 	fail := func() (claimRequest, CommandPlan, *admittedKernelPlan, error) {
 		return claimRequest{}, CommandPlan{}, nil, invalidPlan()
 	}
-	if c == nil || c.registry == nil || c.registry.state == nil || c.keys.current == 0 || p.OTP == nil || p.Delivery != nil || p.CapabilityIssuance != nil {
+	if c == nil || c.registry == nil || c.registry.state == nil || c.keys.current == 0 || p.OTP == nil || p.CapabilityIssuance != nil {
 		return fail()
 	}
 	s, ok := command.Feature()
 	if _, custody := command.OneTimeCode(); !ok || !custody {
+		return fail()
+	}
+	// Only genuine-primary OTP replacement carries its required old-address
+	// notice. Preparation binds it but the denial/reservation phases cannot
+	// stage it. Every other consuming/check profile remains delivery-free.
+	if p.Delivery != nil && validateOTPEmailChangeScope(s, p) != nil {
 		return fail()
 	}
 	q, snapshot, admitted, err := c.prepareFeature(b, command, s, p)

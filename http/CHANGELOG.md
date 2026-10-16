@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Register independent primary-email OTP recovery and admit only the exact
+  selected change operations under stored-session CSRF. Canonical recovery
+  contracts retain metadata-only outcomes and distinct disclosure authority.
+
 - Name the embedded operation-inventory source digest explicitly as provenance,
   avoiding classification as an API credential. Digest values and operation
   contracts are unchanged; the private generator metadata is not a secret.

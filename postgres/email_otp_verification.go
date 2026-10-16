@@ -20,6 +20,10 @@ func otpEmailVerificationOperation() identity.FeatureOperation {
 // deadlocks. It checks pending target/CAS input but writes nothing, compares no
 // code, grants no reservation and retains no handle beyond the existing Work.
 func (w Work) RequireOTPEmailVerificationTarget(ctx context.Context, owner ManagedEmailVerificationContributor, command identity.Command) error {
+	return w.requireOTPEmailTarget(ctx, owner, command, otpEmailVerificationOperation())
+}
+
+func (w Work) requireOTPEmailTarget(ctx context.Context, owner ManagedEmailVerificationContributor, command identity.Command, operation identity.FeatureOperation) error {
 	if err := w.usable(); err != nil {
 		return err
 	}
@@ -28,7 +32,7 @@ func (w Work) RequireOTPEmailVerificationTarget(ctx context.Context, owner Manag
 	}
 	b, registration, _, err := w.FeatureScope(owner)
 	p := w.state.featurePreparationPlan
-	if err != nil || p == nil || w.state.featurePreparationCommand == nil || *w.state.featurePreparationCommand != command || p.binding != b || registration.Operation != otpEmailVerificationOperation() {
+	if err != nil || p == nil || w.state.featurePreparationCommand == nil || *w.state.featurePreparationCommand != command || p.binding != b || registration.Operation != operation {
 		return w.fail(ctx, invalidEmailVerification())
 	}
 	i, domain, err := managedEmailVerificationCommand(owner, command, p.snapshot())
@@ -48,6 +52,11 @@ func (w Work) RequireOTPEmailVerificationTarget(ctx context.Context, owner Manag
 	if err != nil {
 		return err
 	}
+	if operation == otpEmailChangeOperation() {
+		if err := checkPreviousEmail(state, i.Previous, i.Change.ID); err != nil {
+			return w.fail(ctx, err)
+		}
+	}
 	for _, address := range state.Identifiers {
 		if address.ID == i.Change.ID && address.Kind == identity.IdentifierEmail && address.CanonicalValue == i.CanonicalAddress && !address.Verified && !address.Primary {
 			return nil
@@ -62,7 +71,7 @@ func (w Work) RequireOTPEmailVerificationTarget(ctx context.Context, owner Manag
 // proof or admits an arbitrary newer snapshot. The original supplied epoch must
 // still match the frozen predecessor on every call.
 func otpEmailVerificationCredential(w Work, b identity.CommandBinding, original CredentialAdmission) (CredentialAdmission, error) {
-	if w.state == nil || w.state.feature == nil || w.state.feature.Operation != otpEmailVerificationOperation() || w.state.managedEmailVerification == nil || !w.state.managedEmailVerification.applied {
+	if w.state == nil || w.state.feature == nil || !otpEmailMutationOperation(w.state.feature.Operation) || w.state.managedEmailVerification == nil || !w.state.managedEmailVerification.applied {
 		return original, nil
 	}
 	p := w.state.managedEmailVerification

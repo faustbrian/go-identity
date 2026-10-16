@@ -53,3 +53,28 @@ func TestManagedEmailOriginHasClosedConfirmationMapping(t *testing.T) {
 		}
 	}
 }
+
+func TestOTPChangeOriginCannotSelectGenericPendingVerification(t *testing.T) {
+	change := FeatureRegistration{Contributor: ContributorDescriptor{Owner: "identity/email/postgres", ContractID: "identity.email", Version: 1}, Operation: identity.FeatureOperation{Owner: "identity/email", OperationID: "identity.email.change-request", SchemaID: "identity.email.change-request.native-v1", SchemaVersion: 1, RecordRequirement: identity.FeatureRecordRequired}}
+	verification := change
+	verification.Operation.OperationID = "identity.email.verification-send"
+	verification.Operation.SchemaID = "identity.email.verification-send.native-v1"
+	for _, action := range []string{"identity.otp.email-change-request", "identity.otp.email-change-confirm", "identity.otp.email-change-confirm.recover"} {
+		if !managedEmailOriginOperation(change, action) {
+			t.Fatal("OTP change cannot read its actual committed change origin")
+		}
+		if managedEmailOriginOperation(verification, action) {
+			t.Fatal("ordinary pending verification became replacement authority")
+		}
+		resend := verification
+		resend.Operation = emailResendOperation()
+		if managedEmailOriginOperation(resend, action) {
+			t.Fatal("resend origin became replacement authority")
+		}
+	}
+	for _, action := range []string{"identity.otp.send", "identity.otp.email-verify", "identity.otp.signin", "identity.otp.email-change-request.recover"} {
+		if managedEmailOriginOperation(change, action) {
+			t.Fatal("unselected OTP action disclosed change custody")
+		}
+	}
+}

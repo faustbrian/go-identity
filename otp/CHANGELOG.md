@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+- Expose bounded original change/session sources for transport rate admission
+  without code comparison, attempt debit or renewed authority. Add explicit
+  typed primary-change recovery catalog definitions alongside existing OTP
+  verification recovery; existing operation contracts are preserved.
+
+- Add distinct authenticated primary-email change issuance, consuming-confirm
+  and code-free recovery contracts. Exact consuming scope binds genuine original
+  change correlation, a real identifier and original self-user session; generic
+  verification, check-only and link/code aliases cannot select that profile.
+
+- Bind email-change targets to authentic original request ciphertext and exact
+  candidate/factor generations. A bounded command locator permits native origin
+  reconstruction without another store; parsing itself grants no authority.
+  Complete primary-replacement orchestration remains under development.
+
 - Add independent authenticated pending-email OTP verification and code-free
   recovery contracts with canonical target/generation binding. Existing Send,
   Check and Signin interfaces remain unchanged; verification issues no session.
