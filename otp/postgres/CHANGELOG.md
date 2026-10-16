@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add opt-in first-primary establishment from a genuine sole-verified email
+  change request. Commit OTP consumption, promotion, old-address notice and
+  session invalidation atomically; retain metadata-only recovery and keep the
+  default profile genuine-primary-only.
+
 - Fence initiating-session and family revocation and original idle/absolute
   expiry during primary-change issuance, attempt admission and final commit.
   A later signin cannot extend that authority; metadata-only history remains

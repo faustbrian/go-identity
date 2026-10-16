@@ -33,15 +33,32 @@ type EmailChangeSource interface {
 	PrepareOTPChangeNotification(context.Context, identity.CommandBinding, identity.RecoveryQuery, authorization.DecisionContext) (deliverypg.PreparedDelivery, error)
 }
 
-// EmailChangeConfig selects genuine-primary, new-address-only OTP replacement.
+// EmailInitialPrimaryChangeSource is the additional original-owner notice port
+// required only by AllowInitialPrimary. It preserves existing source implementors
+// and their replacement-only notification contract. Preparation authenticates
+// the original sole-verified policy and retains its old mailbox; it grants no
+// current mutation authority, performs no staging and obeys caller cancellation.
+type EmailInitialPrimaryChangeSource interface {
+	EmailChangeSource
+	PrepareOTPInitialPrimaryNotification(context.Context, identity.CommandBinding, identity.RecoveryQuery, authorization.DecisionContext) (deliverypg.PreparedDelivery, error)
+}
+
+// EmailChangeConfig selects genuine-primary, new-address-only OTP replacement
+// and optionally explicit first-primary establishment.
 // Send must use PurposeEmailChange and actual password-session authority. Source
 // owns already-consumed fresh-password admission and old-address notice policy.
-// Configuration does not enable HTTP, signin, initial-primary or MFA fallback.
+// Configuration does not enable HTTP, signin or MFA fallback. Initial-primary
+// establishment requires both AllowInitialPrimary and the original sole-verified
+// change policy; neither is inferred from a missing primary.
 type EmailChangeConfig struct {
 	Send                     SendConfig
 	Domain                   kernel.EmailAttachmentDomainConfig
 	Source                   EmailChangeSource
 	CurrentAttemptKeyVersion uint32
+	// AllowInitialPrimary additionally selects first-primary establishment from
+	// a committed PrimaryOrSoleVerifiedAddress origin. Zero retains replacement
+	// only; Source must also implement EmailInitialPrimaryChangeSource.
+	AllowInitialPrimary bool
 }
 
 // EmailChangeService composes existing issuance, attempts, original change
@@ -52,6 +69,7 @@ type EmailChangeConfig struct {
 type EmailChangeService struct {
 	base        *EmailVerificationService
 	source      EmailChangeSource
+	initial     EmailInitialPrimaryChangeSource
 	notice      *deliverypg.Contributor
 	coordinator kernel.CoordinatorConfig
 }
@@ -65,6 +83,14 @@ func NewEmailChangeService(pool *database.Pool, c EmailChangeConfig, crypto *env
 	p, _, err := c.Send.Policy.Bindings()
 	if err != nil || p.Purpose != otp.PurposeEmailChange || c.Source == nil || c.Send.Session == nil || c.Send.Session.Profile.CredentialKind != identity.CredentialPassword || c.Send.Store.PreAuthCookieKeys != nil {
 		return nil, ErrInvalidConfiguration
+	}
+	var initial EmailInitialPrimaryChangeSource
+	if c.AllowInitialPrimary {
+		var ok bool
+		initial, ok = c.Source.(EmailInitialPrimaryChangeSource)
+		if !ok {
+			return nil, ErrInvalidConfiguration
+		}
 	}
 	notice := c.Source.EmailChangeNotificationOwner()
 	if notice == nil {
@@ -83,7 +109,7 @@ func NewEmailChangeService(pool *database.Pool, c EmailChangeConfig, crypto *env
 		return nil, err
 	}
 	base := &EmailVerificationService{sender: sender, source: source, profile: domain, queryPolicy: *c.Send.Coordinator.QueryPolicy}
-	return &EmailChangeService{base: base, source: c.Source, notice: notice, coordinator: snapshotSendCoordinator(c.Send.Coordinator)}, nil
+	return &EmailChangeService{base: base, source: c.Source, initial: initial, notice: notice, coordinator: snapshotSendCoordinator(c.Send.Coordinator)}, nil
 }
 
 // Initialize binds existing stable OTP keys only; it creates no domain record.
@@ -142,7 +168,7 @@ func (p *emailChangeSendProfile) validAt(now time.Time) bool {
 }
 
 func newEmailChangeSendProfile(p *Contributor, original email.ChangeOrigin) (*emailChangeSendProfile, error) {
-	if p == nil || p.session == nil || !original.Spec.Previous.Primary || original.Spec.ChangeProfile.Validate() != nil || original.UserVersion == 0 || original.UserVersion >= ^uint64(0)-1 || original.IdentifierAuthorityVersion == 0 || original.IdentifierAuthorityVersion >= ^uint64(0)-1 {
+	if p == nil || p.session == nil || !original.Spec.Previous.Primary && original.Spec.ChangeProfile.CurrentAddress != email.PrimaryOrSoleVerifiedAddress || original.Spec.ChangeProfile.Validate() != nil || original.UserVersion == 0 || original.UserVersion >= ^uint64(0)-1 || original.IdentifierAuthorityVersion == 0 || original.IdentifierAuthorityVersion >= ^uint64(0)-1 {
 		return nil, identity.ForbiddenError{}
 	}
 	directory, credential, policy, err := sessionpg.OriginalSessionAdmission(p.session.profile, original.Session, original.Spec.Binding)
@@ -159,6 +185,15 @@ func newEmailChangeSendProfile(p *Contributor, original email.ChangeOrigin) (*em
 	}
 	authority := AttemptAuthority{Directory: directory, Credential: credential.Credential, UserAuthorityVersion: credential.UserAuthorityVersion, IdentifierAuthorityVersion: credential.IdentifierAuthorityVersion + 1, CredentialAuthorityVersion: credential.CredentialAuthorityVersion, UserAuthorization: policy}
 	return &emailChangeSendProfile{origin: original, target: target, authority: authority, expiresAt: expires}, nil
+}
+
+// Immutable source facts remain readable for historical recovery after disabling
+// initial execution. Only live request/challenge/confirmation require selection.
+func (s *EmailChangeService) admitProfile(origin email.ChangeOrigin) error {
+	if s == nil || !origin.Spec.Previous.Primary && s.initial == nil {
+		return identity.ForbiddenError{}
+	}
+	return nil
 }
 
 // Select a call-local original phase while retaining every codec, key, policy,
@@ -223,6 +258,9 @@ func (s *EmailChangeService) EmailChangeRequest(ctx context.Context, r otp.Email
 	if err != nil {
 		return out, err
 	}
+	if err := s.admitProfile(origin); err != nil {
+		return out, err
+	}
 	sender, err := s.base.sender.withEmailChange(origin)
 	if err != nil {
 		return out, err
@@ -269,6 +307,12 @@ func (s *EmailChangeService) completion(ctx context.Context, tenant identity.Ten
 	base.change = &original
 	base.notificationOwner = s.notice
 	base.prepareNotification = func(ctx context.Context, b identity.CommandBinding) (deliverypg.PreparedDelivery, error) {
+		if !original.Spec.Previous.Primary {
+			if s.initial == nil {
+				return deliverypg.PreparedDelivery{}, identity.ForbiddenError{}
+			}
+			return s.initial.PrepareOTPInitialPrimaryNotification(ctx, b, q, caller)
+		}
 		return s.source.PrepareOTPChangeNotification(ctx, b, q, caller)
 	}
 	owner := *s.base.sender.owner.store
@@ -313,6 +357,9 @@ func (s *EmailChangeService) EmailChangeConfirm(ctx context.Context, r otp.Email
 	}()
 	base, err := s.completion(ctx, r.TenantID, r.UserID, r.Caller, r.Flow, r.SendCommandID)
 	if err != nil {
+		return out, err
+	}
+	if err := s.admitProfile(*base.change); err != nil {
 		return out, err
 	}
 	result, err := base.emailVerify(ctx, otp.EmailVerifyRequest{TenantID: r.TenantID, UserID: r.UserID, Caller: r.Caller, Flow: r.Flow, SendCommandID: r.SendCommandID, Code: r.Code})

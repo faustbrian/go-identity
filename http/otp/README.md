@@ -27,8 +27,12 @@ code comparison, another attempt debit, notification or renewed validity.
 Success replaces one genuine primary, queues a notice to its original old
 mailbox and invalidates old identifier-bound sessions. No route emits cookies
 or synchronizers. Unknown outcomes retain code-free recovery: do not resubmit
-the consuming confirmation to find out whether it committed. Initial-primary,
-stronger-factor, current-address OTP and auto-signin are not selected. Ordinary
+the consuming confirmation to find out whether it committed. With the native
+`AllowInitialPrimary` opt-in and original `PrimaryOrSoleVerifiedAddress` policy,
+the same routes can establish the first primary from a sole verified old mailbox.
+That old mailbox retains its identifier/verification history; notice and session
+effects are unchanged. HTTP selection alone cannot enable that native profile.
+Stronger-factor, current-address OTP and auto-signin are not selected. Ordinary
 pending-email verification and link confirmation retain their distinct profiles.
 
 ## Pending-email verification

@@ -12,13 +12,16 @@ import (
 	"github.com/faustbrian/go-identity/session"
 )
 
-// EmailChangeConfig explicitly selects genuine-primary, new-address OTP change.
+// EmailChangeConfig explicitly selects new-address OTP change through the
+// native service's selected replacement or first-primary profile.
 // The native original change owns already-consumed fresh-password admission;
 // HTTP cannot invent or renew it. RequestRate enforces canonical keyed
 // rate.secret, while VerificationRate owns IP/challenge verification budgets.
 // Cookie/Origin/stored CSRF/device configuration is trusted and immutable.
 // Owners are borrowed, concurrency-safe and bounded; construction performs no
-// IO. This profile issues no session and admits no initial-primary/MFA fallback.
+// IO. This profile issues no session or MFA fallback. First-primary establishment
+// additionally requires the native opt-in and original sole-verified policy;
+// transport selection alone cannot enable it.
 type EmailChangeConfig struct {
 	Network          identityhttp.NetworkConfig
 	Service          otp.EmailChangeService

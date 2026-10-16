@@ -152,6 +152,12 @@ remain original, including after completion. These are private provenance, not
 current authority: consuming workflows still fence current state and original
 validity atomically. Generic pending attachment cannot supply this provenance.
 
+`PrepareOTPChangeNotification` retains its genuine-primary-only contract.
+`PrepareOTPInitialPrimaryNotification` is the separate optional notice port for
+an explicitly enabled first-primary OTP consumer. It authenticates the original
+sole-verified change policy and renders/seals the retained old-mailbox notice;
+neither method stages delivery, grants current authority or renews the origin.
+
 `ValidateManagedVerification` is scanner-safe boolean inspection. It checks
 original callback, current unused issued state, active account, exact pending
 address/verification versions, original credential and authorization epochs,

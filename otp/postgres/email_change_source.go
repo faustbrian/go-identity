@@ -43,6 +43,9 @@ func (s *EmailChangeService) EmailChangeSendDestination(ctx context.Context, r o
 	if err != nil {
 		return out, err
 	}
+	if err := s.admitProfile(origin); err != nil {
+		return out, err
+	}
 	if _, err := newEmailChangeSendProfile(s.base.sender.owner.store, origin); err != nil {
 		return out, err
 	}
@@ -72,6 +75,9 @@ func (s *EmailChangeService) EmailChangeChallenge(ctx context.Context, r otp.Ema
 	}()
 	base, err := s.completion(ctx, r.TenantID, r.UserID, r.Caller, r.Flow, r.SendCommandID)
 	if err != nil {
+		return out, err
+	}
+	if err := s.admitProfile(*base.change); err != nil {
 		return out, err
 	}
 	original, custody, flow, err := s.base.source.restoreSource(ctx, r.TenantID, r.UserID, r.Caller, r.Flow, r.SendCommandID)

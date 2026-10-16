@@ -19,8 +19,18 @@ original-old-address notice and advances session authority with audit/lifecycle.
 `RecoverEmailChange` uses original code-free correlation and current disclosure
 permission; it never compares, debits, returns an address or repeats effects.
 Link and OTP may contend, but only one replacement can commit. Generic added
-pending addresses, initial-primary establishment, stronger factors and automatic
-signin are not this profile. Native selection alone enables no HTTP route.
+pending addresses, stronger factors and automatic signin are not this profile.
+Native selection alone enables no HTTP route.
+
+First-primary establishment is separately selected with
+`EmailChangeConfig.AllowInitialPrimary = true`. The source must implement
+`EmailInitialPrimaryChangeSource` and the committed original change must select
+`email.PrimaryOrSoleVerifiedAddress`. Before comparing any code, the protected
+transaction checks that there is still no primary and exactly one verified old
+mailbox. Success preserves that mailbox's identifier and verification versions,
+promotes only the candidate and commits the same notice/session effects. Zero
+configuration retains replacement-only behavior. Disabling initial execution
+does not erase original metadata-only recovery.
 
 A later signin supplies additional current session possession, not replacement
 authority for the initiating session. Its exact original session/family remains

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Document first-primary OTP establishment through an explicitly selected native
+  profile and original sole-verified change policy. HTTP selection alone still
+  grants no such authority and existing routes/responses remain unchanged.
+
 - Add opt-in genuine-primary email-change OTP request, consuming confirmation
   and code-free recovery features/handlers. Require original committed change
   provenance, current cookie/CSRF/rate authority and independent code delivery;

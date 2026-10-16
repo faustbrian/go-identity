@@ -119,6 +119,20 @@ func (s *EmailManagementService) EmailChangeNotificationOwner() *deliverypg.Cont
 // Invoke before opening SQL Work, then stage with EmailChangeNotificationOwner
 // in the sole protected commit. Returned custody is private and immutable.
 func (s *EmailManagementService) PrepareOTPChangeNotification(ctx context.Context, b identity.CommandBinding, q identity.RecoveryQuery, caller authorization.DecisionContext) (deliverypg.PreparedDelivery, error) {
+	return s.prepareOTPChangeNotification(ctx, b, q, caller, false)
+}
+
+// PrepareOTPInitialPrimaryNotification selects the original sole verified old
+// mailbox for explicitly enabled first-primary OTP establishment. It requires
+// an authenticated committed change origin permitting initial-primary policy,
+// never a generic pending attachment or a caller-selected old mailbox. It
+// renders/seals outside Work; the existing notice owner stages it atomically.
+// Existing PrepareOTPChangeNotification remains genuine-primary-only.
+func (s *EmailManagementService) PrepareOTPInitialPrimaryNotification(ctx context.Context, b identity.CommandBinding, q identity.RecoveryQuery, caller authorization.DecisionContext) (deliverypg.PreparedDelivery, error) {
+	return s.prepareOTPChangeNotification(ctx, b, q, caller, true)
+}
+
+func (s *EmailManagementService) prepareOTPChangeNotification(ctx context.Context, b identity.CommandBinding, q identity.RecoveryQuery, caller authorization.DecisionContext, initial bool) (deliverypg.PreparedDelivery, error) {
 	op := identity.FeatureOperation{Owner: "identity/otp", OperationID: "identity.otp.email-change-confirm", SchemaID: "identity.otp.email-change-confirm.managed-v1", SchemaVersion: 1, RecordRequirement: identity.FeatureRecordRequired}
 	if ctx == nil || s == nil || s.EmailChangeNotificationOwner() == nil || b.ValidateFor(op) != nil || b.TenantID != q.TenantID || b.UserID != q.UserID || b.RecordID != q.RecordID || b.ActorKind != authorization.SubjectUser || string(b.ActorID) != string(b.UserID) || q.OperationID != op.OperationID {
 		return deliverypg.PreparedDelivery{}, password.ErrPasswordWork
@@ -127,7 +141,7 @@ func (s *EmailManagementService) PrepareOTPChangeNotification(ctx context.Contex
 	if err != nil {
 		return deliverypg.PreparedDelivery{}, err
 	}
-	if !original.Spec.Previous.Primary {
+	if original.Spec.Previous.Primary == initial || initial && original.Spec.ChangeProfile.CurrentAddress != email.PrimaryOrSoleVerifiedAddress {
 		return deliverypg.PreparedDelivery{}, identity.ForbiddenError{}
 	}
 	return s.prepareChangeNotification(ctx, b, original.Spec)

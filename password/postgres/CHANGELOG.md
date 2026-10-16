@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Prepare the original old-mailbox notice for explicitly selected first-primary
+  OTP establishment. Authenticate the committed sole-verified change policy;
+  existing replacement-only preparation remains unchanged.
+
 - Expose the original native change-notice participant and bounded preparation
   for OTP composition. Current exact confirmation authority authenticates the
   committed old-address policy before rendering; no caller mailbox, SQL staging

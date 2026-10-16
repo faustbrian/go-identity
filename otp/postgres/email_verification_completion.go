@@ -92,7 +92,11 @@ func (s *EmailVerificationService) emailVerify(ctx context.Context, r otp.EmailV
 		return out, err
 	}
 	if s.change != nil {
-		spec.Fields, err = kernel.OTPEmailChangeFields(i, r.SendCommandID)
+		if i.Previous.Primary {
+			spec.Fields, err = kernel.OTPEmailChangeFields(i, r.SendCommandID)
+		} else {
+			spec.Fields, err = kernel.OTPEmailInitialPrimaryFields(i, r.SendCommandID)
+		}
 	} else {
 		spec.Fields, err = kernel.OTPEmailVerificationFields(i, r.SendCommandID)
 	}
