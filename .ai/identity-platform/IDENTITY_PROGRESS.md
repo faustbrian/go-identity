@@ -3,6 +3,36 @@
 Implementation activated by the user on 2026-10-14. B1, B2 and B3 are closed;
 M04 email lifecycle is active.
 
+- Registration verification-to-signin source delivered (2026-10-16
+  13:04 UTC): foundation `af740fb`, native/HTTP `ad15f57` and reference
+  `88c8106` are pushed to main; all three exact-head Required checks pass.
+  Original-browser link confirmation can immediately establish a separately
+  committed email-possession session, retaining the original remember choice,
+  then reach authenticated read/logout through native and selected HTTPS.
+  Verification-only defaults are unchanged. Failed/unknown signin cannot erase
+  committed verification or disclose replacement credentials; current MFA and
+  original expiry are fenced. Independent source/coverage/public-pin reviews,
+  public-only PostgreSQL/race/HTTPS acceptance and an empty public-consumer
+  runner initialization pass; test execution was primary-observed.
+  This closes the selected known-empty-MFA profile, not full M04: enrolled
+  continuation, other email/privacy variants and final qualification remain.
+  Full milestones stay3/39; no newly qualified unit. Whole-goal estimate stays
+  rough5–10%, low confidence, based on baseline/reset/password-change and partial
+  email lifecycle rather than a measured effort fraction.
+
+- Registration verification-to-signin implemented locally (2026-10-16
+  12:44 UTC): original-browser link confirmation now reaches a separately
+  committed email-possession session, authenticated read and logout, retaining
+  the original browser/persistent choice through native and selected HTTPS.
+  Sixteen selected scenarios plus retained baseline/shared-email journeys pass
+  PostgreSQL/race; failure, replay and changed-MFA paths disclose no credentials
+  and preserve independently committed verification. Independent coverage and
+  contract findings are resolved. Complete source review, authenticated public
+  module pins, public-only runtime and main delivery remain; not yet delivered.
+  Whole-goal estimate remains rough5–10%, low confidence;3/39 milestones and
+  no newly qualified unit. Most capability families and final qualification
+  are still outstanding.
+
 - TOTP-protected email-change profile delivered (2026-10-16 11:30 UTC):
   `a462729`, `a2bc669`, `0d3608f` and reference `c3744e2` are on public main;
   all exact-head Required checks pass. Real password/TOTP or recovery signin,

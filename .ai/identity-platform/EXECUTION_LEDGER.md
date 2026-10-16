@@ -4,6 +4,108 @@ Activated on 2026-10-14. B1, B2 and B3 are closed; M04 email lifecycle is active
 
 ## Active: M04 email lifecycle; replacement and first-primary OTP profiles delivered
 
+- Verification-signin public delivery checkpoint (2026-10-16 13:04 UTC):
+  foundation `af740fb`, native/HTTP `ad15f57` and reference `88c8106` are
+  pushed to main. Their exact-head Required runs `38903808865`, `38904329285`
+  and `38904854986` pass (planning/changed-range secrets, not hosted runtime).
+  Consumers can select original-browser registration-link confirmation followed
+  by a distinct email-possession signin, preserving the original remember
+  choice, then read the authenticated session and log out through native or
+  explicitly selected HTTPS APIs. Defaults remain verification-only. Enrolled
+  MFA continuation and other unselected M04 profiles remain owed.
+  Public-only `GOWORK=off`, readonly reference/runner race passes10.303s/9.737s;
+  ordinary and integration-tagged vet pass. Real PG18/race/HTTPS selector
+  `^TestReferencePostgres(VerificationSignin|Baseline|EmailManagementSharedHTTPS)$`
+  passes79.711s, including all18 selected profiles and retained consumers.
+  The final review's pre-executor expiry regression failed4.483s before the
+  native correction and passes5.053s afterward: the known parent commitment
+  and both recovery scopes survive without a child session or credentials.
+  Current18-profile workspace run passes38.380s; affected native public-only
+  race/vet pass2.184s, HTTP-email12.927s. Unchanged foundation/owner, populated
+  migration and bounded mapping-fuzz results retain their earlier scope.
+  Regression `/root/verification_signin_regression`, complete correctness
+  `/root/verification_signin_correctness` and public-pin
+  `/root/verification_signin_go` approve their native bounded reports. Public
+  A/B archive and compiler-input bytes/checksums match their owning commits;
+  final71-path SHA-256 is
+  `49396dd153fe1113451635c6cf572c1ac27ac333a909bb7477f36f1e143a6621`.
+  Published runner `v0.0.0-20261016130230-88c81066b084` initializes from an
+  empty external consumer using authenticated public modules and no overrides;
+  this proves build/private configuration, not runtime. Runtime results were
+  primary-executed, not independently rerun. Whole M04 remains open; still3/39 milestones
+  and no newly qualified unit. No Tools change, release, tag or deployment.
+
+- Verification-signin review checkpoint (2026-10-16 12:44 UTC), base
+  `5b04d62`: all16 selected cases plus retained baseline/shared-email HTTPS
+  pass real PG18/race in69.803s. New late-factor callback changes actual primary
+  authority after its preliminary read; removing only the protected factor
+  fence makes that test disclose a credential and fail2.334s. The original
+  fence is restored. Selected HTTPS denial first failed403/committed/false;
+  it now conserves the known parent commitment while withholding address and
+  credentials, with durable-state and replay assertions. Both new cases pass
+  together9.172s. Affected HTTP-email/reference/runner race and ordinary/tagged
+  vet pass. Active mapping fuzz passed16158 executions. Native regression
+  `/root/verification_signin_regression` and Go-contract
+  `/root/verification_signin_go` approve their bounded corrected source;
+  complete correctness review is running before prerequisite commits. Exact
+  unchanged65-path non-note SHA-256:
+  `2b9be84a35ba827482eb87125e9289806b37db2f8f8a8140c091748c67374b64`.
+  Public pins/runtime and delivery remain pending; full milestones still3/39.
+
+- Verification-signin local checkpoint (2026-10-16 12:30 UTC), base `5b04d62`:
+  the real registration/delivery/confirmation/signin/read/logout path passes
+  for browser and persistent remember choices, through native and explicitly
+  selected HTTPS. Fourteen PostgreSQL/race cases pass26.873s, including wrong
+  browser, unavailable risk, denied authorization, blocked account, missing/
+  nonempty factor authority, rollback, contention and actual lost commit
+  acknowledgements at both transaction boundaries. The authorization-denial
+  test first exposed a missing explicit policy decision; its corrected check
+  precedes issuance and retains the pre-callback policy epoch. Verification
+  success survives later login failure; replay/recovery withhold credentials.
+  Eight affected owners/reference/runner race tests and vet passed with the
+  task workspace; five foundation modules also pass public-only/GOWORK-off
+  race/vet. Pinned structure/docs and changed-source secret commands exit zero;
+  active mapping fuzz and final review/public repins remain pending. The
+  baseline/shared-email combined run passed those retained journeys but exposed
+  a malformed new HTTPS logout fixture (empty body); the corrected14-case run
+  above includes actual HTTPS get/logout. No public-pin/runtime or delivery
+  claim yet. Exact65-path non-note candidate SHA-256:
+  `5bfefb2d8177e4ec870c550be2f0986c7591c40b54b52e5a6195d6d5e2060683`.
+  Full M04 remains open; full milestones still3/39, no new unit qualification.
+
+- Frozen next profile (2026-10-16, base `5b04d62`): explicit original-browser
+  registration-link confirmation followed by fresh email-possession signin.
+  Preserve the original resolved browser/persistent remember choice, not a
+  confirmation-time default. Default registration and managed-address
+  confirmation remain verification-only. Actual native PostgreSQL and selected
+  HTTPS/reference must reach authenticated session read/logout; scanner Validate
+  remains read-only. Reuse session-owned email-grant custody, not a fabricated
+  password proof, separate workflow engine or replay journal.
+  Verification commits before the linked signin command; its known outcome is
+  retained if later login fails. Only a fresh original confirmation invocation
+  may attempt signin; replay/unknown/recovery disclose no login credentials.
+  Bind original signup/browser/callback/tenant/subject, exact grant and verified
+  address versions; apply current account/authorization/risk/MFA checks and deny
+  unavailable or unsupported factor policy without single-factor fallback.
+  The first selected profile admits known-empty MFA; completing an enrolled
+  account's factor continuation remains required subsequent profile work, not
+  permission to omit MFA. No immediate-signup login, OTP verification, address
+  change login or UI is selected here. Owners: email typed contract,
+  password/postgres signup confirmation/origin, existing session core/native
+  issuance/reader, HTTP email and reference composition; consumed public sources
+  are the current committed graph at `5b04d62` (selected prerequisite pins
+  remain in each existing go.mod). One native mapper
+  `/root/verification_signin_map` and bounded QA
+  `/root/verification_signin_qa` found no pre-write contradiction; original QA
+  SHA-256 `caeff2f10ad0b6377e81c38c6e4a6e271251d3cca848ebf6a42b48614964b6c1`.
+  Prove issuer profile isolation/reveal-once/expiry, native and HTTPS signup ->
+  delivery -> confirm/signin -> session read/logout for both remember choices,
+  wrong browser/scope, current denial, rollback/contention/unknown and unchanged
+  verification-only/shared consumers. Run affected owner race/vet, real PG
+  selectors named VerificationSignin plus baseline/shared-email regressions,
+  public dependency/consumer proof, changed-input fuzz, scoped secrets/structure
+  and one complete final-diff independent review. No new whole-unit closure.
+
 - TOTP-link profile closed (2026-10-16 11:30 UTC): core `a462729`, native/HTTP
   `a2bc669`, password-native `0d3608f` and reference `c3744e2` are pushed to main.
   Exact-head Required runs `38891868753`, `38892569108`, `38893064317` and
