@@ -68,6 +68,23 @@ func TestAuthenticatedTOTPIsDisjointFromLoginAndEnrollment(t *testing.T) {
 	}
 }
 
+func TestAuthenticatedTOTPEmailChangeKeepsExactActionAndSession(t *testing.T) {
+	r := authenticatedTOTPRequest(t)
+	r.StepUp.Purpose = "identity.email.change-request"
+	if err := r.Validate(); err != nil {
+		t.Fatal("email-action TOTP step-up cannot reach its selected native owner", err)
+	}
+	for _, purpose := range []auth.Purpose{"identity.email.change-confirm", "identity.email.address-remove", "identity.password.change"} {
+		bad := r
+		step := *r.StepUp
+		bad.StepUp = &step
+		bad.StepUp.Purpose = purpose
+		if bad.Validate() == nil {
+			t.Fatal("email step-up expanded to an unselected protected action")
+		}
+	}
+}
+
 func TestContinuationProofPreservesOriginalSessionActionAndProjection(t *testing.T) {
 	r := regenerationRequest()
 	original := auth.ReauthenticationProof{Proof: r.FactorProof, SessionID: "source-session", SessionVersion: 7, Action: string(r.FactorProof.Purpose)}

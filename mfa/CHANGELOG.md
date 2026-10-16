@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Allow the explicit `identity.email.change-request` active-TOTP proof purpose.
+  This does not authorize email mutation or enable a native or HTTP feature.
+
 - Compose current session custody backed by supported envelope v2. Existing
   workflow/HTTP contracts and original credential lifetimes are unchanged.
 

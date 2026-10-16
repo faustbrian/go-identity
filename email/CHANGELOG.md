@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Accept the exact action-bound, multi-factor TOTP projection for email change
+  requests. Structural validation grants no authority; explicitly selected native
+  admission still authenticates, fences and consumes the original factor proof.
+  Verification-send and removal remain password-only.
+
 - Add a storage-neutral original-change source for native OTP orchestration.
   Preserve the committed candidate, previous-address policy, original session,
   generations and expiry without requiring or reinterpreting a delivered link.

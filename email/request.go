@@ -17,7 +17,7 @@ import (
 	"github.com/faustbrian/go-identity/session"
 )
 
-// RequestPrimary borrows original password/session proof and, for the selected
+// RequestPrimary borrows original password or selected TOTP/session proof and, for the selected
 // cookie profile, its synchronizer. It is not current authority. Native owners
 // authenticate the signed record, original possession and fresh current policy
 // and atomically consume the proof with the protected mutation. Do not log its
@@ -160,8 +160,17 @@ func validateTargetRequestPrimary(tenant identity.TenantID, p RequestPrimary, ca
 		return ErrInvalidVerification
 	}
 	proof := p.Proof
-	use := auth.ReauthenticationUse{ProofUse: auth.ProofUse{Tenant: string(tenant), Subject: string(caller.Request.Subject.ID), Purpose: "identity.password.verify", Audience: proof.Proof.Audience, Now: proof.Proof.IssuedAt}, SessionID: proof.SessionID, SessionVersion: proof.SessionVersion, Action: string(action), MaximumAge: 5 * time.Minute}
-	if proof.Validate(use) != nil || proof.Proof.Method != "password" || proof.Proof.Assurance != auth.AssuranceSingleFactor {
+	purpose := auth.Purpose("identity.password.verify")
+	passwordProfile := proof.Proof.Method == "password" && proof.Proof.Assurance == auth.AssuranceSingleFactor
+	// Only change-request has an active-TOTP profile. This structural check
+	// grants no authority: the selected native owner authenticates and consumes
+	// original evidence; password-only owners still reject enrolled factors.
+	totpProfile := action == "identity.email.change-request" && proof.Proof.Method == "totp" && proof.Proof.Assurance == auth.AssuranceMultiFactor
+	if totpProfile {
+		purpose = "identity.email.change-request"
+	}
+	use := auth.ReauthenticationUse{ProofUse: auth.ProofUse{Tenant: string(tenant), Subject: string(caller.Request.Subject.ID), Purpose: purpose, Audience: proof.Proof.Audience, Now: proof.Proof.IssuedAt}, SessionID: proof.SessionID, SessionVersion: proof.SessionVersion, Action: string(action), MaximumAge: 5 * time.Minute}
+	if proof.Validate(use) != nil || !passwordProfile && !totpProfile {
 		return ErrInvalidVerification
 	}
 	return nil

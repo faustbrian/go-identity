@@ -1,5 +1,11 @@
 # Email
 
+`ChangeRequestRequest` accepts the exact multi-factor TOTP projection for
+`identity.email.change-request` as well as the original password profile.
+`Validate` is structural, not signature validation or current authority. Only
+an explicitly selected native TOTP owner may authenticate and atomically consume
+that proof. Verification-send and removal retain their password-only contracts.
+
 ## Safe self-removal
 
 For explicitly selected administrative removal, set `TargetSubjectID` to the

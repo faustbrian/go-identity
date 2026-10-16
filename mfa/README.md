@@ -1,5 +1,11 @@
 # MFA (in development)
 
+Active TOTP step-up may explicitly target `identity.email.change-request`.
+The returned proof is action/session/audience-bound and is not email mutation
+authority. The selected native email owner must authenticate its original
+signed record, fence current factor/session policy and consume it atomically
+with the protected request. Other management actions retain distinct purposes.
+
 ## Selected secondary email-OTP workflow
 
 OTP enable input must explicitly select `OTPEnrollmentSelection` with an existing

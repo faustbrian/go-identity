@@ -78,3 +78,35 @@ func TestEmailKeyedRequestHasClosedSelfScope(t *testing.T) {
 		}
 	}
 }
+
+func TestEmailChangeRequestAcceptsOnlyExactTOTPProjection(t *testing.T) {
+	r := managedSendRequest(t)
+	r.Primary.Proof.Action = "identity.email.change-request"
+	r.Primary.Proof.Proof.Purpose = "identity.email.change-request"
+	r.Primary.Proof.Proof.Method = "totp"
+	r.Primary.Proof.Proof.Assurance = auth.AssuranceMultiFactor
+	r.Caller.Request.Action = "identity.email.change-request"
+	change := email.ChangeRequestRequest{TenantID: r.TenantID, NewAddress: r.Address, Callback: r.Callback, IdempotencyKey: r.IdempotencyKey, Primary: r.Primary, Caller: r.Caller.Clone(), Network: r.Network, CurrentAddressProofPolicy: email.NotifyCurrentAddress}
+	if err := change.Validate(); err != nil {
+		t.Fatal("exact action-bound TOTP projection rejected before native admission", err)
+	}
+	for name, mutate := range map[string]func(*auth.ReauthenticationProof){
+		"single-factor":    func(p *auth.ReauthenticationProof) { p.Proof.Assurance = auth.AssuranceSingleFactor },
+		"password-purpose": func(p *auth.ReauthenticationProof) { p.Proof.Purpose = "identity.password.verify" },
+		"other-action":     func(p *auth.ReauthenticationProof) { p.Action = "identity.mfa.disable" },
+		"password-method":  func(p *auth.ReauthenticationProof) { p.Proof.Method = "password" },
+	} {
+		t.Run(name, func(t *testing.T) {
+			bad := change
+			mutate(&bad.Primary.Proof)
+			if bad.Validate() == nil {
+				t.Fatal("mixed factor profile admitted")
+			}
+		})
+	}
+	r.Primary.Proof.Action = "identity.email.verification-send"
+	r.Caller.Request.Action = "identity.email.verification-send"
+	if r.Validate() == nil {
+		t.Fatal("email change factor widened verification-send")
+	}
+}
