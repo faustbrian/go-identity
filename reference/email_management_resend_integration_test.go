@@ -9,6 +9,7 @@ import (
 	"errors"
 	"net/http"
 	"net/url"
+	"strings"
 	"testing"
 	"time"
 
@@ -174,7 +175,7 @@ func proveReferenceEmailManagementResend(t *testing.T, ctx context.Context, f li
 		}
 	}
 	caller := authorization.DecisionContext{PolicyRevision: 9, Request: authorization.Request{Tenant: otpTenant, Subject: authorization.Subject{Kind: authorization.SubjectUser, ID: authorization.SubjectID(user)}, Action: authorization.Action(target.Action), Resource: authorization.Resource{Type: "identity.user", ID: authorization.ResourceID(user)}}}
-	request := func(cookies []*http.Cookie, csrfWire string) passwordpg.EmailManagementRequest {
+	requestFor := func(cookies []*http.Cookie, csrfWire, action string) passwordpg.EmailManagementRequest {
 		t.Helper()
 		secret, err := primitive.NewSecret([]byte("synthetic-registration-password"))
 		if err != nil {
@@ -189,14 +190,34 @@ func proveReferenceEmailManagementResend(t *testing.T, ctx context.Context, f li
 		proofCaller.Request.Action = "identity.password.verify"
 		proofCaller.Request.Resource = authorization.Resource{Type: "identity.request-admission", ID: "identity.password.verify"}
 		bearer := auth.NewBearerCredential(cookies[0].Value)
-		proof, err := proofOwner.Verify(ctx, password.CookieVerificationRequest{Request: password.VerificationRequest{TenantID: otpTenant, Session: bearer, Password: secret, Target: password.VerificationTarget{Purpose: target.Purpose, Action: target.Action, Audience: target.Audience}, Caller: proofCaller, Network: "127.0.0.1", Device: "managed-consumer"}, CSRFToken: csrf})
+		proof, err := proofOwner.Verify(ctx, password.CookieVerificationRequest{Request: password.VerificationRequest{TenantID: otpTenant, Session: bearer, Password: secret, Target: password.VerificationTarget{Purpose: target.Purpose, Action: action, Audience: target.Audience}, Caller: proofCaller, Network: "127.0.0.1", Device: "managed-consumer"}, CSRFToken: csrf})
 		if err != nil {
 			t.Fatal("fresh cookie-bound password proof", err)
 		}
 		id, _ := identity.NewCommandID()
-		return passwordpg.EmailManagementRequest{Primary: passwordpg.EmailPrimaryRequest{TenantID: otpTenant, CommandID: id, AddressID: "managed-candidate", Session: bearer, CSRFToken: csrf, Proof: proof.Proof, Caller: caller}, CallbackURL: origin + "/login", Network: "127.0.0.1"}
+		selectedCaller := caller.Clone()
+		selectedCaller.Request.Action = authorization.Action(action)
+		return passwordpg.EmailManagementRequest{Primary: passwordpg.EmailPrimaryRequest{TenantID: otpTenant, CommandID: id, AddressID: "managed-candidate", Session: bearer, CSRFToken: csrf, Proof: proof.Proof, Caller: selectedCaller}, CallbackURL: origin + "/login", Network: "127.0.0.1"}
+	}
+	request := func(cookies []*http.Cookie, csrfWire string) passwordpg.EmailManagementRequest {
+		return requestFor(cookies, csrfWire, target.Action)
 	}
 	if change != nil {
+		if strings.HasPrefix(change.mode, "otp-change") {
+			var err error
+			change.otpChange, err = features.EmailOTPChange()
+			if err != nil {
+				t.Fatal("selected OTP change workflow", err)
+			}
+			change.features = features
+			change.configuration = c
+			change.newChangeRequest = request
+			if change.mode == "otp-change-generic" {
+				change.genericRequest = func(cookies []*http.Cookie, csrf string) passwordpg.EmailManagementRequest {
+					return requestFor(cookies, csrf, "identity.email.verification-send")
+				}
+			}
+		}
 		proveReferenceEmailChangeJourney(t, ctx, f, service, workers, messages, *change, origin, user, cookies, csrfWire, freshLogin, request)
 		return
 	}

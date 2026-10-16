@@ -132,7 +132,7 @@ func (s StoreSet) migrationCatalog(ctx context.Context) ([]migrationHistory, err
 	if c.authenticatedSchema != "" && c.authenticatedSchema != c.sessionSchema {
 		catalog[0].guards = append(catalog[0].guards, migrationGuard{version: 1210, schema: c.authenticatedSchema})
 	}
-	if c.signinSchema != "" || s.state.features.email != nil && s.state.features.email.otpVerification != nil {
+	if c.signinSchema != "" || s.state.features.email != nil && (s.state.features.email.otpVerification != nil || s.state.features.email.otpChange != nil) {
 		catalog[0].guards = append(catalog[0].guards, migrationGuard{version: 1400, schema: c.otpSchema, columns: []string{"challenges.consumer_envelope", "challenges.consumer_owner", "challenges.consumer_record_requirement", "challenges.consumer_subject_requirement"}, functions: []string{"guard_original_custody"}})
 	}
 	if c.signinSchema != "" {
@@ -224,7 +224,7 @@ func (s StoreSet) migrationCatalog(ctx context.Context) ([]migrationHistory, err
 				return nil, err
 			}
 		}
-		if e.otpVerification != nil {
+		if e.otpVerification != nil || e.otpChange != nil {
 			catalog, err = emailOTPFactorMigrationCatalog(ctx, catalog)
 			if err != nil {
 				return nil, err

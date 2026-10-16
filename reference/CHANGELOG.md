@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+- Independently select primary-email OTP request/confirmation/recovery over
+  HTTPS with `HTTPEmailOTPChange`. Preserve original committed change authority,
+  strict keyed/challenge rate admission, stored-session CSRF, atomic old-address
+  notification and session invalidation. Native selection alone remains unrouted.
+
+- Independently select genuine-primary OTP change through `Email.OTPChange` and
+  the existing native change/notice owner. Preserve original fresh-password
+  admission, selected migrations, graph lifetime, atomic notification/session
+  effects and code-free recovery. This selection exposes no HTTP route.
+
+- Expose the selected graph-lifetime-bound original email-change source for
+  native OTP composition. It discloses no HTTP capability and does not itself
+  authorize replacement, issue a challenge or renew original custody.
+
 - Independently compose native pending-email OTP verification and opt-in HTTP
   routes with selected migrations, delivery, strict rate storage and current
   session/factor authority. OTP signin is no longer an incidental password/session

@@ -66,7 +66,7 @@ func (referenceRegistrationPolicy) Decide(ctx context.Context, c authorization.D
 	}
 	if string(c.Request.Tenant) == otpTenant && c.PolicyRevision == 9 && c.Request.Subject.Kind == authorization.SubjectUser && c.Request.Resource.Type == "identity.user" && string(c.Request.Resource.ID) == string(c.Request.Subject.ID) {
 		switch c.Request.Action {
-		case "identity.mfa.enable", "identity.mfa.totp-uri", "identity.mfa.totp-verify", "identity.mfa.recovery-regenerate", "identity.mfa.list", "identity.mfa.factor-update", "identity.mfa.disable", "identity.email.verification-send", "identity.email.change-request", "identity.email.address-remove", "identity.email.address-remove.recover", "identity.email.address-get", "identity.email.address-list", "identity.otp.send", "identity.otp.email-verify", "identity.otp.email-verify.recover":
+		case "identity.mfa.enable", "identity.mfa.totp-uri", "identity.mfa.totp-verify", "identity.mfa.recovery-regenerate", "identity.mfa.list", "identity.mfa.factor-update", "identity.mfa.disable", "identity.email.verification-send", "identity.email.change-request", "identity.email.address-remove", "identity.email.address-remove.recover", "identity.email.address-get", "identity.email.address-list", "identity.otp.send", "identity.otp.email-verify", "identity.otp.email-verify.recover", "identity.otp.email-change-request", "identity.otp.email-change-confirm", "identity.otp.email-change-confirm.recover":
 			return authorization.Decision{Outcome: authorization.Allow, Revision: 9}, nil
 		}
 	}
@@ -293,7 +293,7 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 	if extensions.completionCommitFault {
 		f.completionFault = &completionCommitFault{factorProof: extensions.activeStepUp, regeneration: extensions.regeneration, factorManagement: extensions.factorManagement || extensions.disable, replacementConfirmation: extensions.factorReplacementConfirmationFault, emailRemoval: extensions.emailRemoval}
 		f.completionFault.emailPreparation = extensions.emailChangeCase == "removal-admin-output-unknown"
-		f.completionFault.emailVerification = extensions.emailChangeCase == "otp-verification-unknown"
+		f.completionFault.emailVerification = extensions.emailChangeCase == "otp-verification-unknown" || extensions.emailChangeCase == "otp-change-unknown"
 		faultPool, err := database.Connect(ctx, database.Config{DSN: f.pool.Raw().Config().ConnConfig.ConnString(), MaxConns: 4, Configure: func(pc *database.PoolConfig) error {
 			pc.ConnConfig.DialFunc = f.completionFault.dial
 			if f.completionFault.emailPreparation || f.completionFault.emailVerification {
@@ -478,16 +478,45 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 	messages := make(chan string, 4)
 	deps.DeliverySender = nativeBrowserCodeSender{codes: messages}
 	var noticeRecipients chan string
+	var changeDeliveries chan emailChangeDelivery
 	if extensions.emailManagementChange {
 		noticeRecipients = make(chan string, 4)
-		deps.DeliverySender = emailChangeCaptureSender{messages: messages, recipients: noticeRecipients}
+		if strings.HasPrefix(extensions.emailChangeCase, "otp-change") {
+			changeDeliveries = make(chan emailChangeDelivery, 16)
+		}
+		deps.DeliverySender = emailChangeCaptureSender{messages: messages, recipients: noticeRecipients, deliveries: changeDeliveries}
 	}
 	if extensions.postgresBaseline {
 		selectDurableReferenceAdmission(&c)
 	}
 	var emailUpgrade *reference.StoreConfiguration
-	if extensions.emailRemoval || extensions.emailChangeCase == "graph" || extensions.emailChangeCase == "graph-upgrade" || extensions.emailChangeCase == "shared-http" || extensions.emailChangeCase == "keyed-graph" || extensions.emailChangeCase == "request-http" || strings.HasPrefix(extensions.emailChangeCase, "otp-verification") {
+	if extensions.emailRemoval || extensions.emailChangeCase == "graph" || extensions.emailChangeCase == "graph-upgrade" || extensions.emailChangeCase == "shared-http" || extensions.emailChangeCase == "keyed-graph" || extensions.emailChangeCase == "request-http" || extensions.emailChangeCase == "change-origin-graph" || strings.HasPrefix(extensions.emailChangeCase, "otp-change") || strings.HasPrefix(extensions.emailChangeCase, "otp-verification") {
 		calls = configureReferenceEmailGraph(t, &c, origin, extensions.emailManagementChange)
+		if strings.HasPrefix(extensions.emailChangeCase, "otp-change") {
+			configureReferenceEmailOTPChange(t, &c)
+			if extensions.emailChangeCase == "otp-change-generic" {
+				verification := *c.Email.Change
+				verification.Native.Change = nil
+				verification.Native.ChangeNotification = nil
+				c.Email.Verification = &verification
+				target := c.PasswordVerification.Native.Targets[0]
+				target.Action = "identity.email.verification-send"
+				c.PasswordVerification.Native.Targets = append(c.PasswordVerification.Native.Targets, target)
+			}
+			if extensions.emailChangeCase == "otp-change-expiry" || extensions.emailChangeCase == "otp-change-final-expiry" {
+				c.Email.Change.Native.Lifetime = 3 * time.Second
+			}
+			if extensions.emailChangeCase == "otp-change-final-expiry" {
+				// Leave the real command/risk/current-session budgets longer than
+				// original change validity so only the final original fence denies.
+				c.OTP.Timeout = 5 * time.Second
+				c.OTP.Coordinator.MaximumDuration = 5 * time.Second
+				c.OTP.Coordinator.LeaseDuration = 6 * time.Second
+			}
+			if extensions.emailChangeCase == "otp-change-reference-https" {
+				c.HTTPEmailOTPChange = &reference.HTTPEmailOTPChangeConfiguration{Origin: origin, Device: *c.HTTPPreAuth.Device, PolicyRevision: 9}
+			}
+		}
 		if strings.HasPrefix(extensions.emailChangeCase, "otp-verification") {
 			configureReferenceEmailOTP(t, &c)
 			if extensions.emailChangeCase == "otp-verification-no-otp-signin" {
@@ -512,7 +541,7 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 				c.HTTPEmailRequests = &reference.HTTPEmailRequestsConfiguration{AddressRemove: true, AdministrativeRemovalTargets: extensions.administrativeEmailRemoval, Origin: origin, PolicyRevision: 9}
 			}
 		}
-		if extensions.emailChangeCase == "keyed-graph" || extensions.emailChangeCase == "request-http" {
+		if extensions.emailChangeCase == "keyed-graph" || extensions.emailChangeCase == "request-http" || extensions.emailChangeCase == "change-origin-graph" || strings.HasPrefix(extensions.emailChangeCase, "otp-change") {
 			keys, err := kernel.NewRequestKeyConfig("reference-managed-email", [32]byte{219}, c.OTP.RequestKeys.Policy)
 			if err != nil {
 				t.Fatal(err)
@@ -812,6 +841,16 @@ END $$`); err != nil {
 	} else if seen["identity.otp.email-verify"] || seen["identity.otp.email-verify.recover"] {
 		t.Fatal("unselected email OTP route advertised")
 	}
+	if c.HTTPEmailOTPChange != nil {
+		wantOperations += 3
+		for _, id := range []string{"identity.otp.email-change-request", "identity.otp.email-change-confirm", "identity.otp.email-change-confirm.recover"} {
+			if !seen[id] {
+				t.Fatal("selected primary-change OTP route missing", id)
+			}
+		}
+	} else if seen["identity.otp.email-change-request"] || seen["identity.otp.email-change-confirm"] || seen["identity.otp.email-change-confirm.recover"] {
+		t.Fatal("native primary-change OTP implicitly advertised HTTP")
+	}
 	if !seen["identity.password.signup"] || !seen["identity.email.verification-confirm"] || !seen["identity.password.signin"] || (c.HTTPSession != nil && (!seen["identity.session.get"] || !seen["identity.session.signout"])) || len(seen) != wantOperations {
 		t.Fatal("selected public registration routes missing")
 	}
@@ -902,7 +941,12 @@ END $$`); err != nil {
 				}
 			}
 			if extensions.emailManagementChange {
-				change = &referenceEmailChangeOptions{readSession: readSession, recipients: noticeRecipients, mode: extensions.emailChangeCase}
+				change = &referenceEmailChangeOptions{readSession: readSession, recipients: noticeRecipients, mode: extensions.emailChangeCase, deliveries: changeDeliveries}
+				if extensions.emailChangeCase == "otp-change-reference-https" {
+					change.httpChange = &emailOTPHTTPSSelection{client: client, base: network.URL, origin: origin, server: server}
+				} else if strings.HasPrefix(extensions.emailChangeCase, "otp-change") && strings.Contains(string(server.OpenAPI().JSON()), "/v1/otp/email-change") {
+					t.Fatal("native primary change implicitly exposed HTTP metadata")
+				}
 			}
 			proveReferenceEmailManagementResend(t, ctx, f, managementConfig, deps, managementFeatures, workers, messages, origin, user, cookies, csrf, fresh, change)
 		}

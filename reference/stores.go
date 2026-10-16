@@ -57,6 +57,8 @@ type StoreConfiguration struct {
 	HTTPEmailSignin *HTTPEmailSigninConfiguration
 	// HTTPEmailOTPVerification independently selects authenticated email OTP.
 	HTTPEmailOTPVerification *HTTPEmailOTPVerificationConfiguration
+	// HTTPEmailOTPChange independently selects genuine-primary email OTP routes.
+	HTTPEmailOTPChange *HTTPEmailOTPChangeConfiguration
 	// PasswordReset selects native request/completion/recovery over this graph's
 	// existing primary risk, delivery and session owners. Nil selects none.
 	PasswordReset *PasswordResetConfiguration
@@ -449,6 +451,9 @@ func (s StoreSet) Close(ctx context.Context) error {
 	}
 	if state.features != nil && state.features.httpEmailOTPVerification != nil {
 		state.features.httpEmailOTPVerification.rate.Close()
+	}
+	if state.features != nil && state.features.httpEmailOTPChange != nil {
+		state.features.httpEmailOTPChange.close()
 	}
 	if state.features != nil && state.features.httpPasswordVerification != nil {
 		state.features.httpPasswordVerification.rate.Close()

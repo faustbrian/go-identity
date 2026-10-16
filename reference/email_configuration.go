@@ -32,6 +32,7 @@ type EmailConfiguration struct {
 	Addresses       *EmailAddressConfiguration
 	Removal         *EmailRemovalConfiguration
 	OTPVerification *EmailOTPVerificationConfiguration
+	OTPChange       *EmailOTPChangeConfiguration
 }
 
 // EmailRemovalConfiguration selects protected native self-removal without HTTP.
@@ -90,6 +91,7 @@ type emailState struct {
 	verificationRequests, changeRequests *passwordpg.EmailRequestWorkflow
 	removal                              *passwordpg.EmailRemovalService
 	otpVerification                      *otppg.EmailVerificationService
+	otpChange                            *otppg.EmailChangeService
 }
 
 func validateEmailSelection(c StoreConfiguration) error {
@@ -98,13 +100,16 @@ func validateEmailSelection(c StoreConfiguration) error {
 	}
 	e := c.Email
 	invalid := identity.InvalidInputError{Field: "reference_email"}
-	if e.Verification == nil && e.Change == nil && e.Addresses == nil && e.Removal == nil && e.OTPVerification == nil || c.Session == nil || c.OTP == nil {
+	if e.Verification == nil && e.Change == nil && e.Addresses == nil && e.Removal == nil && e.OTPVerification == nil && e.OTPChange == nil || c.Session == nil || c.OTP == nil {
 		return invalid
 	}
 	if (e.Verification != nil || e.Change != nil) && (c.PasswordVerification == nil || c.Delivery == nil) {
 		return invalid
 	}
 	if e.Removal != nil && (c.PasswordVerification == nil || c.PasswordSignin == nil || c.PasswordReset == nil) {
+		return invalid
+	}
+	if e.OTPChange != nil && (e.Change == nil || e.Change.Native.ChangeNotification == nil || c.PasswordSignin == nil || c.Delivery == nil) {
 		return invalid
 	}
 	return nil

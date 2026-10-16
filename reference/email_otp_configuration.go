@@ -36,27 +36,39 @@ type EmailOTPVerificationConfiguration struct {
 
 func composeEmailOTPVerification(c StoreConfiguration, d ReferenceDependencies, base otppg.SendConfig, crypto *envelope.Service) (*otppg.EmailVerificationService, error) {
 	invalid := identity.InvalidInputError{Field: "reference_email_otp"}
-	if c.Email == nil || c.Email.OTPVerification == nil || c.Session == nil || c.PasswordSignin == nil || c.OTP == nil {
+	if c.Email == nil || c.Email.OTPVerification == nil {
 		return nil, invalid
 	}
 	n := *c.Email.OTPVerification
+	base, err := emailOTPSendConfig(c, n, base, "identity.otp.email-verify")
+	if err != nil {
+		return nil, err
+	}
+	return otppg.NewEmailVerificationService(d.PostgreSQL, otppg.EmailVerificationConfig{Send: base, Domain: n.Domain, CurrentAttemptKeyVersion: n.CurrentAttemptKeyVersion}, crypto)
+}
+
+func emailOTPSendConfig(c StoreConfiguration, n EmailOTPVerificationConfiguration, base otppg.SendConfig, action string) (otppg.SendConfig, error) {
+	invalid := identity.InvalidInputError{Field: "reference_email_otp"}
+	if c.Session == nil || c.PasswordSignin == nil || c.OTP == nil {
+		return otppg.SendConfig{}, invalid
+	}
 	if n.RequestKeys.Namespace == c.OTP.RequestKeys.Namespace || n.RequestKeys.Policy.PolicyVersion != c.OTP.RequestKeys.Policy.PolicyVersion || !sameServerAuthorization(n.RequestKeys.Policy.Authorization, c.OTP.RequestKeys.Policy.Authorization) || !emailOTPSessionKeysMatch(c, n.SessionKeys) {
-		return nil, invalid
+		return otppg.SendConfig{}, invalid
 	}
 	base.Policy, base.TemplateID, base.TemplateVersion = n.Policy, n.TemplateID, n.TemplateVersion
 	base.LocaleChain = append([]string(nil), n.LocaleChain...)
 	base.RequestKeys, base.IntentKey, base.IdentifierKey = n.RequestKeys, n.IntentKey, n.IdentifierKey
 	for _, policy := range []*kernel.CommandQueryPolicy{base.Coordinator.QueryPolicy, base.Coordinator.AdmissionPolicy} {
 		if policy != nil && (policy.PolicyVersion != n.RequestKeys.Policy.PolicyVersion || !sameServerAuthorization(policy.Authorization, n.RequestKeys.Policy.Authorization)) {
-			return nil, invalid
+			return otppg.SendConfig{}, invalid
 		}
 	}
 	policy := n.RequestKeys.Policy
 	base.Coordinator.QueryPolicy, base.Coordinator.AdmissionPolicy = &policy, &policy
 	base.Store.PreAuth, base.Store.PreAuthCookieKeys = sessionpg.Config{}, nil
 	base.Session = &otppg.SessionAdmissionConfig{Store: c.Session.Native.Execution.Repository, Profile: c.PasswordSignin.Native.Profile, RetainedTokenKeys: n.SessionKeys, FreshnessLimit: n.FreshnessLimit}
-	base.PreAuthAction = "identity.otp.email-verify"
-	return otppg.NewEmailVerificationService(d.PostgreSQL, otppg.EmailVerificationConfig{Send: base, Domain: n.Domain, CurrentAttemptKeyVersion: n.CurrentAttemptKeyVersion}, crypto)
+	base.PreAuthAction = action
+	return base, nil
 }
 
 func emailOTPSessionKeysMatch(c StoreConfiguration, keys map[uint32][]byte) bool {

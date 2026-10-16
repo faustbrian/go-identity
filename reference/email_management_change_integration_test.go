@@ -26,9 +26,16 @@ import (
 const emailChangeNotice = "Your primary email address was changed."
 
 type referenceEmailChangeOptions struct {
-	readSession func([]*http.Cookie) bool
-	recipients  <-chan string
-	mode        string
+	readSession      func([]*http.Cookie) bool
+	recipients       <-chan string
+	mode             string
+	otpChange        *reference.EmailOTPChangeService
+	features         reference.FeatureSet
+	configuration    reference.StoreConfiguration
+	httpChange       *emailOTPHTTPSSelection
+	genericRequest   func([]*http.Cookie, string) passwordpg.EmailManagementRequest
+	newChangeRequest func([]*http.Cookie, string) passwordpg.EmailManagementRequest
+	deliveries       <-chan emailChangeDelivery
 }
 
 // Only the external sender seam is controlled. Native domain, session,
@@ -36,9 +43,19 @@ type referenceEmailChangeOptions struct {
 type emailChangeCaptureSender struct {
 	messages   chan<- string
 	recipients chan<- string
+	deliveries chan<- emailChangeDelivery
 }
 
+type emailChangeDelivery struct{ body, recipient string }
+
 func (s emailChangeCaptureSender) Send(ctx context.Context, a delivery.Attempt) (delivery.DeliveryResult, error) {
+	if s.deliveries != nil {
+		select {
+		case s.deliveries <- emailChangeDelivery{a.Body, a.Recipient}:
+		case <-ctx.Done():
+			return delivery.DeliveryResult{}, ctx.Err()
+		}
+	}
 	if a.Body == emailChangeNotice {
 		select {
 		case s.recipients <- a.Recipient:
@@ -98,6 +115,9 @@ func proveReferenceEmailChangeJourney(t *testing.T, ctx context.Context, f liveS
 	previousID, previousAddress := "", "registered@example.invalid"
 	for n, candidate := range []string{"new-primary@example.invalid", "replacement-primary@example.invalid"} {
 		intent := request(cookies, csrf)
+		if n == 1 && options.genericRequest != nil {
+			intent = options.genericRequest(cookies, csrf)
+		}
 		intent.Address = email.AddressInput(candidate)
 		if n == 1 {
 			intent.Primary.AddressID = "managed-second-candidate"
@@ -108,13 +128,34 @@ func proveReferenceEmailChangeJourney(t *testing.T, ctx context.Context, f liveS
 		if err := f.pool.Raw().QueryRow(ctx, `SELECT identifier_id,version,verification_version,is_primary,verified_at FROM identity.identifiers WHERE tenant_id=$1 AND user_id=$2 AND canonical_value=$3`, otpTenant, string(user), previousAddress).Scan(&previousID, &oldVersion, &oldVerification, &oldPrimary, &verifiedAt); err != nil || oldPrimary != (n == 1) {
 			t.Fatal("real original-address profile mismatch", err)
 		}
-		pending, err := service.ChangeRequest(ctx, intent)
+		requestOwner := service.ChangeRequest
+		if n == 1 && options.genericRequest != nil {
+			verification, err := options.features.EmailVerification()
+			if err != nil {
+				t.Fatal("selected generic pending-add owner", err)
+			}
+			requestOwner = verification.VerificationSend
+		}
+		pending, err := requestOwner(ctx, intent)
 		if err != nil || pending.Outcome != identity.CommitOutcomeCommitted {
 			t.Fatal("public native change request", pending.Outcome, err)
 		}
 		intent.Primary.CommandID, intent.Primary.AddressID = pending.CommandID, pending.AddressID
+		var originalCustody func()
+		if options.mode == "change-origin" || options.mode == "change-origin-graph" {
+			originalCustody = proveReferenceChangeOrigin(t, ctx, f, service, intent, email.PreviousAddress{ID: identity.IdentifierID(previousID), CanonicalAddress: previousAddress, IdentifierVersion: oldVersion, VerificationVersion: oldVerification, Primary: oldPrimary})
+		}
 		query := identity.RecoveryQuery{CommandID: intent.Primary.CommandID, TenantID: otpTenant, UserID: user, ActorID: identity.ActorID(user), ActorKind: authorization.SubjectUser, OperationID: "identity.email.change-request", RecordID: string(intent.Primary.AddressID)}
-		observed, e := service.ChangeRequestRecover(ctx, query, intent.Primary.Caller)
+		observe := service.ChangeRequestRecover
+		if n == 1 && options.genericRequest != nil {
+			verification, err := options.features.EmailVerification()
+			if err != nil {
+				t.Fatal(err)
+			}
+			query.OperationID = "identity.email.verification-send"
+			observe = verification.VerificationSendRecover
+		}
+		observed, e := observe(ctx, query, intent.Primary.Caller)
 		if e != nil || observed.Outcome != identity.CommitOutcomeCommitted || observed.AddressID != intent.Primary.AddressID || observed.IdentifierVersion != 1 {
 			t.Fatal("pending change request has no original metadata recovery", e)
 		}
@@ -147,10 +188,26 @@ func proveReferenceEmailChangeJourney(t *testing.T, ctx context.Context, f liveS
 		if !options.readSession(currentCookies) {
 			t.Fatal("post-request source session unavailable")
 		}
+		if n == 1 && options.otpChange != nil {
+			if options.mode == "otp-change-https" || options.mode == "otp-change-reference-https" {
+				proveReferenceEmailOTPChangeHTTPS(t, ctx, f, options, workers, messages, user, intent, currentCookies, currentCSRF, previousAddress, previousID, oldVersion, oldVerification, verifiedAt)
+			} else if !proveReferenceEmailOTPChange(t, ctx, f, service, workers, messages, options, user, intent, currentCookies, currentCSRF, previousAddress, previousID, oldVersion, oldVerification, verifiedAt, proof) {
+				return
+			}
+			latest, _ := freshLogin(candidate)
+			if !options.readSession(latest) {
+				t.Fatal("OTP replacement primary cannot authenticate a fresh session")
+			}
+			return
+		}
 		caller := authorization.DecisionContext{PolicyRevision: 9, CorrelationID: "reference-change-confirm", Request: authorization.Request{Tenant: otpTenant, Subject: authorization.Subject{Kind: authorization.SubjectServiceAccount, ID: "AAAAAAAAAAAAAAAAAAAAAw"}, Action: "identity.email.change-confirm", Resource: authorization.Resource{Type: "identity.user", ID: authorization.ResourceID(user)}}}
+		wantLifetime := 5 * time.Minute
+		if options.configuration.Email != nil && options.configuration.Email.Change != nil {
+			wantLifetime = options.configuration.Email.Change.Native.Lifetime
+		}
 		for range 2 {
 			rateUser, challenge, lifetime, err := service.ChangeConfirmationRateSource(ctx, proof, intent.CallbackURL, caller)
-			if err != nil || rateUser != user || challenge == "" || lifetime != 5*time.Minute {
+			if err != nil || rateUser != user || challenge == "" || lifetime != wantLifetime {
 				t.Fatal("native change transport has no original challenge-rate source", err)
 			}
 		}
@@ -301,6 +358,9 @@ func proveReferenceEmailChangeJourney(t *testing.T, ctx context.Context, f liveS
 			t.Fatal("old notification duplicated or absent", err)
 		}
 		cookies, csrf = freshLogin(candidate)
+		if originalCustody != nil {
+			originalCustody()
+		}
 		if !options.readSession(cookies) {
 			t.Fatal("new verified primary cannot authenticate a fresh session")
 		}

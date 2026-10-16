@@ -242,6 +242,19 @@ func (s *ManagedEmailService) ReadManagedVerification(ctx context.Context, p cap
 	return owner.ReadManagedVerification(w, p, caller)
 }
 
+// ReadChangeOrigin exposes native original change custody under the selected
+// graph lifetime and current exact disclosure policy. This trusted workflow port
+// is not HTTP inspection, session authentication or replacement authorization;
+// no delivered link or new proof is required and no original times are renewed.
+func (s *ManagedEmailService) ReadChangeOrigin(ctx context.Context, q identity.RecoveryQuery, caller authorization.DecisionContext) (email.ChangeOrigin, error) {
+	w, owner, done, err := s.enter(ctx, q.TenantID)
+	if err != nil {
+		return email.ChangeOrigin{}, err
+	}
+	defer done()
+	return owner.ReadChangeOrigin(w, q, caller)
+}
+
 // ValidateManagedVerification is a non-consuming bounded current-state read.
 func (s *ManagedEmailService) ValidateManagedVerification(ctx context.Context, p capability.Proof, callback string, caller authorization.DecisionContext) (bool, error) {
 	w, owner, done, err := s.enter(ctx, identity.TenantID(caller.Request.Tenant))

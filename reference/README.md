@@ -18,11 +18,35 @@ a UI, production deployment or whole-platform release.
 ## Selected native email management
 
 `StoreConfiguration.Email` independently selects `Verification`, `Change`,
-`Addresses`, `Removal` and `OTPVerification`. `FeatureSet.EmailVerification()`, `EmailChange()` and
+`Addresses`, `Removal`, `OTPVerification` and `OTPChange`. `FeatureSet.EmailVerification()`, `EmailChange()` and
 `EmailAddresses()` expose only their selected native workflows; none enables an
 HTTP route. An empty selection or missing required authority fails construction.
 Handles require initialized graph custody and an allowed tenant, and deny after
 graph shutdown without taking ownership of the supplied PostgreSQL pool.
+
+### Primary-email OTP replacement
+
+Select `Email.OTPChange` with `EmailOTPChangeConfiguration` alongside actual
+`Email.Change`/old-address notice and password-session composition. Its policy is
+email-change, with its own request-key namespace, retained password-session keys,
+existing comparison domain and code template. Apply selected migrations and
+initialize the graph before `FeatureSet.EmailOTPChange()` calls.
+
+The native journey is the existing keyed fresh-password change request, an
+independent `EmailChangeRequest` naming that committed command/candidate, captured
+code delivery and consuming `EmailChangeConfirm`. Success replaces one genuine
+primary, notifies its original old address after confirmation, and invalidates
+old identifier-bound sessions. `RecoverEmailChange` observes original metadata
+under its distinct current disclosure permission without comparison or effects.
+Initial-primary, stronger-factor and auto-signin variants are not enabled.
+This native selection alone exposes no HTTP capability. Independently set
+`HTTPEmailOTPChange` with `HTTPEmailOTPChangeConfiguration` to select the three
+[public OTP change routes](../http/otp/README.md). Supply exact HTTPS Origin,
+the existing browser-device policy and policy revision. Native change/notice,
+session and strong `HTTPRate` storage are required, not their other HTTP routes.
+The graph owns limiter shutdown and selected rate migrations. Nil HTTP selection
+advertises no route or OpenAPI capability. The documented handlers can also be
+composed directly without the reference server.
 
 ### Pending-email OTP verification
 

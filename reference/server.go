@@ -177,6 +177,30 @@ func NewServer(c ReferenceConfig, d ReferenceDependencies, f FeatureSet) (*Serve
 	if selected != nil {
 		contributions = append(contributions, *selected)
 	}
+	selected, err = server.emailOTPChangeFeature(c.HTTP.Network, f)
+	if err != nil {
+		return nil, invalid
+	}
+	if selected != nil {
+		// Owned OTP factories declare no transport-feature dependencies; their
+		// native dependencies are explicit constructor inputs. Join disjoint
+		// operations under their one canonical owner, never duplicate its ID.
+		joined := false
+		for n, existing := range contributions {
+			if existing.ID() == "identity/otp" {
+				combined, err := identityhttp.NewFeature(identityhttp.FeatureConfig{ID: "identity/otp", Operations: append(existing.Operations(), selected.Operations()...)})
+				if err != nil {
+					return nil, invalid
+				}
+				contributions[n] = combined
+				joined = true
+				break
+			}
+		}
+		if !joined {
+			contributions = append(contributions, *selected)
+		}
+	}
 	selected, err = server.passwordFeature(c.HTTP.Network, f)
 	if err != nil {
 		return nil, invalid

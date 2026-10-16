@@ -49,11 +49,17 @@ func composeEmailOTPVerificationHTTP(c StoreConfiguration, owner *emailState, se
 		return nil, nil
 	}
 	invalid := identity.InvalidInputError{Field: "reference_http_email_otp"}
-	if c.HTTPEmailSignin != nil || owner == nil || owner.otpVerification == nil || sessions == nil || sessions.reader == nil || c.Email == nil || c.Email.OTPVerification == nil || c.Session == nil || c.Session.Native.Execution.Clock == nil || shared == nil || c.HTTPRate == nil {
+	if c.HTTPEmailSignin != nil || owner == nil || owner.otpVerification == nil || c.Email == nil || c.Email.OTPVerification == nil {
 		return nil, invalid
 	}
 	p := *c.HTTPEmailOTPVerification
-	if p.PolicyRevision == 0 || uint64(p.PolicyRevision) != c.Email.OTPVerification.RequestKeys.Policy.PolicyVersion {
+	return composeEmailOTPHTTPState(c, p, c.Email.OTPVerification.RequestKeys.Policy.PolicyVersion, sessions, shared)
+}
+
+// Shared cookie/Origin/device/rate composition selects no workflow or route.
+func composeEmailOTPHTTPState(c StoreConfiguration, p HTTPEmailOTPVerificationConfiguration, revision uint64, sessions *sessionState, shared *httpRateState) (*emailOTPVerificationHTTPState, error) {
+	invalid := identity.InvalidInputError{Field: "reference_http_email_otp"}
+	if sessions == nil || sessions.reader == nil || c.Session == nil || c.Session.Native.Execution.Clock == nil || shared == nil || c.HTTPRate == nil || p.PolicyRevision == 0 || uint64(p.PolicyRevision) != revision {
 		return nil, invalid
 	}
 	u, err := url.Parse(p.Origin)
