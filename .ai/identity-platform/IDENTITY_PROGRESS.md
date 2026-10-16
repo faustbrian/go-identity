@@ -3,6 +3,23 @@
 Implementation activated by the user on 2026-10-14. B1, B2 and B3 are closed;
 M04 email lifecycle is active.
 
+- First-primary OTP profile closed (2026-10-16 08:57 UTC): foundation
+  `099b837`, native `80e379c`, reference `ed8135f` are pushed to main and
+  exact-head Required CI passes. A normal verified/password-signed-in account
+  with no primary can explicitly establish one using genuine fresh-password
+  change provenance and an independently delivered new-address OTP. Native and
+  separately selected HTTPS paths preserve the old mailbox/history, notify it
+  after confirmation, invalidate old sessions and retain metadata-only recovery.
+  Default configurations still deny this transition. Public-dependency real
+  PostgreSQL/HTTPS/race acceptance, affected owner checks and published-runner
+  initialization pass; complete source/pin review and delivery audit approve.
+  Tests are parent-executed, not auditor-rerun. This closes a usable profile,
+  not full M04 or unit qualification. Full milestones remain3/39; no new
+  qualified unit. Overall estimate is still rough5–10%, low confidence:
+  complete baseline/reset/password-change plus partial email lifecycle are
+  delivered; most platform capability families and final qualification remain.
+  No Tools changes, historical migration, release, deployment or production claim.
+
 - Primary-email OTP profile closed (2026-10-16 07:44 UTC): foundation
   `33c559f`, native/HTTP `7cda935`, reference `43b46d1`; all exact-head Required
   checks pass. Consumers can use genuine fresh-password change provenance,

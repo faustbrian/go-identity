@@ -2,7 +2,80 @@
 
 Activated on 2026-10-14. B1, B2 and B3 are closed; M04 email lifecycle is active.
 
-## Active: M04 email lifecycle; primary-change OTP profile delivered
+## Active: M04 email lifecycle; replacement and first-primary OTP profiles delivered
+
+- First-primary OTP profile closed (2026-10-16 08:57 UTC): foundation
+  `099b83763b22e670387887e7ac30e41834dc9529`, native
+  `80e379c107f1ac5d06443a4739addf030117978d`, reference
+  `ed8135ff489a8cad23e858fd25235edc175af131` are pushed to main.
+  Exact-head Required runs `38875143600`, `38875686033`, `38876522791`
+  pass (planning/changed-range secrets, not hosted runtime/full history).
+  Final31-path non-note source diff from `8048d93` is SHA-256
+  `7fcf1b6c06ab0eac585a567baf655f2b144f9030aa43ac82f2f053482c2743ff`.
+  Consumers explicitly enable `Email.OTPChangeInitialPrimary` alongside
+  native OTP change and original sole-verified change policy. Real B1 accounts
+  with no primary can independently receive/confirm a new-address code, retain
+  the old verified mailbox unchanged, commit one primary/notice/session effect
+  and recover metadata without another comparison or authority renewal.
+  Default remains genuine-primary-only; HTTP remains separately selected.
+  Native regression, complete final source/pin review and Go-compatibility
+  principals `/root/initial_otp_regression_review`,
+  `/root/initial_otp_correctness_review`, `/root/initial_otp_go_compatibility`
+  approve their recorded source boundaries; `/root/initial_otp_delivery_audit`
+  independently approves selected-profile delivery at `ed8135f` after reading
+  those native reports and refreshing remote/CI at08:56:07 UTC.
+  Parent-executed public `GOWORK=off go test -race ./...` and `go vet ./...`
+  pass: kernel3.064s, password-native2.233s, OTP-native1.910s, reference9.022s,
+  command7.791s; tagged reference vet passes. Final real PG18/race/HTTPS
+  frozen selector (baseline,15 initial,18 replacement, pending OTP/link and
+  retained signin/reset) passes175.238s. Initial contention count3 passes27.573s.
+  Published runner `v0.0.0-20261016085133-ed8135ff489a` initializes private
+  configuration with public proxy/sumdb and no local workspace overrides;
+  no database/listener is opened. Init proves public build/configuration,
+  not OTP runtime. Pinned gitleaks8.30.1 changed-source and pin-diff scans pass.
+  Auditors did not rerun tests or independently inspect terminal custody;
+  runtime evidence remains parent-observed. Full M04, stronger-factor/
+  auto-signin/privacy variants, full-history and unit qualification stay open;
+  full milestones remain3/39, no new qualified unit. No release/deployment claim.
+
+- Frozen next profile (2026-10-16 08:00 UTC), base `8048d93`: explicit native
+  first-primary OTP establishment under original `PrimaryOrSoleVerifiedAddress`
+  policy. Start with actual B1 verified/password-signed-in user, zero primaries
+  and sole verified old mailbox; genuine keyed fresh-password original request,
+  independent candidate-only code delivery, consuming establish-one-primary,
+  retain unchanged old verification/identifier history, original-old notice,
+  old-session denial and metadata-only recovery through native and selected
+  HTTPS. Zero/unselected preserves genuine-primary-only behavior. Exclude only
+  this profile's stronger factors/current-address OTP/auto-signin/phone/privacy;
+  full67-unit scope and full M04 obligations remain.
+  Behavioral/security/persistence/public-contract extension; owners are existing
+  kernel, password-native origin/notice, OTP-native, reference and HTTP consumer.
+  Consumed public source: kernel/email `33c559f`, native/HTTP `7cda935`, reference
+  `43b46d1`; no new engine/store/protocol or speculative dependency.
+  Native mapper `/root/initial_primary_otp_map` and one bounded QA producer
+  `/root/initial_primary_otp_qa` at this base identify no pre-write blocker.
+  QA artifact SHA-256 `9d3510454277dc565207d4db09da1f342c0a85d1709b425c3557405917d6f171`.
+  Frozen proving set: `TestReferencePostgresEmailOTPInitialPrimary` real PG/race
+  success, default/strict/ambiguous denial, stale source/factor, late rollback,
+  unknown recovery, valid OTP/link contention and both HTTPS compositions;
+  affected owner race/vet and directly affected retained primary/link/verification
+  cases, public-pin consumer checks, changed-content secrets, docs and one final
+  complete-diff review. Reuse unchanged parser/crypto/normalization evidence.
+  First red must reach OTP at n=0; prior n=1-after-link fixture is not proof.
+
+- First-primary local checkpoint (2026-10-16 08:29 UTC): genuine n=0 red
+  denied at OTP destination before extension; additive kernel API compile red
+  also observed. Final selected PG18/race regression, including baseline,
+  all15 initial-primary cases, retained18 replacement cases, pending OTP/link
+  and retained signin/reset, passes140.285s. Isolated partition faults prove
+  ambiguity and unexpected primary deny before debit without epoch changes;
+  genuine intervening link mutations prove stale-source denial. Four affected
+  owner race/vet and tagged reference vet pass. Runtime/source diff from
+  `8048d93`, excluding live notes: SHA-256
+  `09e0199e7d1102728d9ad3d561664a8af95c1a0530394f59a789c5164dba5003`.
+  Native Go source audit `/root/initial_otp_go_compatibility` approves defaults
+  and additive contracts; staged kernel/native/reference public repins,
+  coverage/final review and actual public-path delivery remain pending.
 
 - Primary-change OTP public checkpoint (2026-10-16 07:44 UTC): foundation
   `33c559f`, native/HTTP `7cda935` and reference `43b46d1` are pushed to main.
