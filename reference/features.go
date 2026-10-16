@@ -413,7 +413,11 @@ func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDepen
 	if err != nil {
 		return err
 	}
-	emailOwner, err := composeEmail(c, d, evaluator, passwordVerificationOwner, passwordSigninOwner, resetOwner)
+	mfaEnrollmentOwner, err := composeMFAEnrollment(c, d, passwordVerificationOwner, evaluator, resetOwner)
+	if err != nil {
+		return err
+	}
+	emailOwner, err := composeEmail(c, d, evaluator, passwordVerificationOwner, passwordSigninOwner, resetOwner, mfaEnrollmentOwner)
 	if err != nil {
 		return err
 	}
@@ -436,10 +440,6 @@ func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDepen
 		}
 	}
 	passwordChangeOwner, err := composePasswordChange(c, d, passwordVerificationOwner)
-	if err != nil {
-		return err
-	}
-	mfaEnrollmentOwner, err := composeMFAEnrollment(c, d, passwordVerificationOwner, evaluator, resetOwner)
 	if err != nil {
 		return err
 	}

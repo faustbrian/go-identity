@@ -11,6 +11,7 @@ import (
 	"github.com/faustbrian/go-identity/delivery"
 	deliverypg "github.com/faustbrian/go-identity/delivery/postgres"
 	"github.com/faustbrian/go-identity/email"
+	mfapg "github.com/faustbrian/go-identity/mfa/postgres"
 	otppg "github.com/faustbrian/go-identity/otp/postgres"
 	passwordpg "github.com/faustbrian/go-identity/password/postgres"
 	kernel "github.com/faustbrian/go-identity/postgres"
@@ -37,6 +38,12 @@ type EmailConfiguration struct {
 	// no-primary change policy through OTP. OTPChange must also be selected.
 	// Zero preserves genuine-primary-only behavior and enables no HTTP route.
 	OTPChangeInitialPrimary bool
+	// TOTPChange selects active-TOTP proof admission for Change only. It
+	// requires explicit MFA ActiveStepUp.EmailChange, a genuine verified primary
+	// and matching proof audience. Zero retains password/known-empty admission.
+	// The selected link cannot outlive original proof/freshness/session custody.
+	// New-address OTP and initial-primary variants are not selected by this flag.
+	TOTPChange bool
 }
 
 // EmailRemovalConfiguration selects protected native self-removal without HTTP.
@@ -96,6 +103,7 @@ type emailState struct {
 	removal                              *passwordpg.EmailRemovalService
 	otpVerification                      *otppg.EmailVerificationService
 	otpChange                            *otppg.EmailChangeService
+	changeProofs                         *mfapg.FactorVerificationSource
 }
 
 func validateEmailSelection(c StoreConfiguration) error {
@@ -105,6 +113,9 @@ func validateEmailSelection(c StoreConfiguration) error {
 	e := c.Email
 	invalid := identity.InvalidInputError{Field: "reference_email"}
 	if e.OTPChangeInitialPrimary && e.OTPChange == nil {
+		return invalid
+	}
+	if e.TOTPChange && (e.Change == nil || e.OTPChange != nil || c.MFAEnrollment == nil || c.MFAEnrollment.ActiveStepUp == nil || !c.MFAEnrollment.ActiveStepUp.EmailChange || e.Change.Native.Change == nil || e.Change.Native.Change.CurrentAddress != email.RequirePrimaryAddress || e.Change.Primary.Audience != c.MFAEnrollment.ActiveStepUp.Audience) {
 		return invalid
 	}
 	if e.Verification == nil && e.Change == nil && e.Addresses == nil && e.Removal == nil && e.OTPVerification == nil && e.OTPChange == nil || c.Session == nil || c.OTP == nil {
@@ -122,7 +133,7 @@ func validateEmailSelection(c StoreConfiguration) error {
 	return nil
 }
 
-func composeEmail(c StoreConfiguration, d ReferenceDependencies, evaluation risk.Evaluator, proof *passwordVerificationState, signin *passwordpg.SigninService, reset *passwordpg.ResetService) (*emailState, error) {
+func composeEmail(c StoreConfiguration, d ReferenceDependencies, evaluation risk.Evaluator, proof *passwordVerificationState, signin *passwordpg.SigninService, reset *passwordpg.ResetService, mfaOwner *mfaEnrollmentState) (*emailState, error) {
 	if c.Email == nil {
 		return nil, nil
 	}
@@ -155,11 +166,25 @@ func composeEmail(c StoreConfiguration, d ReferenceDependencies, evaluation risk
 		}
 	}
 	var err error
-	state.verification, err = composeManagedEmail(c, d, evaluation, proof, c.Email.Verification, "identity.email.verification-send")
+	state.verification, err = composeManagedEmail(c, d, evaluation, proof, c.Email.Verification, "identity.email.verification-send", nil)
 	if err != nil {
 		return nil, err
 	}
-	state.change, err = composeManagedEmail(c, d, evaluation, proof, c.Email.Change, "identity.email.change-request")
+	var factor *mfapg.EmailChangeFactorSource
+	if c.Email.TOTPChange {
+		if mfaOwner == nil || mfaOwner.stepup == nil {
+			return nil, invalid
+		}
+		factor, err = mfapg.NewEmailChangeFactorSource(mfaOwner.stepup)
+		if err != nil {
+			return nil, invalid
+		}
+		state.changeProofs, err = mfapg.NewFactorVerificationSource(d.PostgreSQL, min(c.Email.Change.Native.MaximumDuration, 5*time.Second))
+		if err != nil {
+			return nil, invalid
+		}
+	}
+	state.change, err = composeManagedEmail(c, d, evaluation, proof, c.Email.Change, "identity.email.change-request", factor)
 	if err != nil {
 		return nil, err
 	}
@@ -232,7 +257,7 @@ func composeEmailRemoval(c StoreConfiguration, d ReferenceDependencies, evaluati
 	return native, nil
 }
 
-func composeManagedEmail(c StoreConfiguration, d ReferenceDependencies, evaluation risk.Evaluator, proof *passwordVerificationState, selected *EmailManagementConfiguration, action string) (*passwordpg.EmailManagementService, error) {
+func composeManagedEmail(c StoreConfiguration, d ReferenceDependencies, evaluation risk.Evaluator, proof *passwordVerificationState, selected *EmailManagementConfiguration, action string, factor *mfapg.EmailChangeFactorSource) (*passwordpg.EmailManagementService, error) {
 	if selected == nil {
 		return nil, nil
 	}
@@ -249,7 +274,13 @@ func composeManagedEmail(c StoreConfiguration, d ReferenceDependencies, evaluati
 	if p.Transport == session.CredentialCookie {
 		p.CSRFKeys = slices.Clone(c.PasswordVerification.CSRFKeys)
 	}
-	primary, err := passwordpg.NewEmailPrimarySource(proof.native, p)
+	var primary *passwordpg.EmailPrimarySource
+	var err error
+	if factor != nil {
+		primary, err = passwordpg.NewEmailTOTPPrimarySource(proof.native, factor, p)
+	} else {
+		primary, err = passwordpg.NewEmailPrimarySource(proof.native, p)
+	}
 	if err != nil {
 		return nil, identity.InvalidInputError{Field: "reference_email_primary"}
 	}

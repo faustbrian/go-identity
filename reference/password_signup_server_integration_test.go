@@ -295,9 +295,14 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 		f.completionFault = &completionCommitFault{factorProof: extensions.activeStepUp, regeneration: extensions.regeneration, factorManagement: extensions.factorManagement || extensions.disable, replacementConfirmation: extensions.factorReplacementConfirmationFault, emailRemoval: extensions.emailRemoval}
 		f.completionFault.emailPreparation = extensions.emailChangeCase == "removal-admin-output-unknown"
 		f.completionFault.emailVerification = extensions.emailChangeCase == "otp-verification-unknown" || extensions.emailChangeCase == "otp-change-unknown"
+		if strings.HasPrefix(extensions.emailChangeCase, "totp-change") {
+			f.completionFault.factorProof = false
+			f.completionFault.emailFactorUse = extensions.emailChangeCase == "totp-change-unknown-request"
+			f.completionFault.emailVerification = extensions.emailChangeCase == "totp-change-unknown-confirm"
+		}
 		faultPool, err := database.Connect(ctx, database.Config{DSN: f.pool.Raw().Config().ConnConfig.ConnString(), MaxConns: 4, Configure: func(pc *database.PoolConfig) error {
 			pc.ConnConfig.DialFunc = f.completionFault.dial
-			if f.completionFault.emailPreparation || f.completionFault.emailVerification {
+			if f.completionFault.emailPreparation || f.completionFault.emailVerification || f.completionFault.emailFactorUse {
 				// Keep parameterized extended queries, but send their SQL rather
 				// than a previously cached statement name to the fault boundary.
 				pc.ConnConfig.DefaultQueryExecMode = pgx.QueryExecModeDescribeExec
@@ -443,7 +448,12 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 		configureReferencePasswordMFA(t, &c, origin)
 	}
 	if extensions.passwordRecovery {
+		totp := c.PasswordSignin.TOTP
 		configureReferencePasswordRecovery(t, &c, origin)
+		if extensions.passwordMFA {
+			c.PasswordSignin.TOTP = totp
+			c.HTTPMFA.PasswordTOTPVerify = true
+		}
 	}
 	magic := len(protected) > 1 && protected[1]
 	if magic {
@@ -482,7 +492,7 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 	var changeDeliveries chan emailChangeDelivery
 	if extensions.emailManagementChange {
 		noticeRecipients = make(chan string, 4)
-		if strings.HasPrefix(extensions.emailChangeCase, "otp-change") {
+		if strings.HasPrefix(extensions.emailChangeCase, "otp-change") || strings.HasPrefix(extensions.emailChangeCase, "totp-change") {
 			changeDeliveries = make(chan emailChangeDelivery, 16)
 		}
 		deps.DeliverySender = emailChangeCaptureSender{messages: messages, recipients: noticeRecipients, deliveries: changeDeliveries}
@@ -491,8 +501,37 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 		selectDurableReferenceAdmission(&c)
 	}
 	var emailUpgrade *reference.StoreConfiguration
-	if extensions.emailRemoval || extensions.emailChangeCase == "graph" || extensions.emailChangeCase == "graph-upgrade" || extensions.emailChangeCase == "shared-http" || extensions.emailChangeCase == "keyed-graph" || extensions.emailChangeCase == "request-http" || extensions.emailChangeCase == "change-origin-graph" || strings.HasPrefix(extensions.emailChangeCase, "otp-change") || strings.HasPrefix(extensions.emailChangeCase, "otp-verification") {
+	if extensions.emailRemoval || extensions.emailChangeCase == "graph" || extensions.emailChangeCase == "graph-upgrade" || extensions.emailChangeCase == "shared-http" || extensions.emailChangeCase == "keyed-graph" || extensions.emailChangeCase == "request-http" || extensions.emailChangeCase == "change-origin-graph" || strings.HasPrefix(extensions.emailChangeCase, "totp-change") || strings.HasPrefix(extensions.emailChangeCase, "otp-change") || strings.HasPrefix(extensions.emailChangeCase, "otp-verification") {
+		var retainedTargets []passwordpg.ReauthenticationTarget
+		if strings.HasPrefix(extensions.emailChangeCase, "totp-change") {
+			retainedTargets = append(retainedTargets, c.PasswordVerification.Native.Targets...)
+		}
 		calls = configureReferenceEmailGraph(t, &c, origin, extensions.emailManagementChange)
+		if strings.HasPrefix(extensions.emailChangeCase, "totp-change") {
+			// Email graph supplies its own proof configuration. Add the genuine
+			// enrollment target to that final configuration, not its predecessor.
+			c.PasswordVerification.Native.Targets = append(c.PasswordVerification.Native.Targets, retainedTargets...)
+			// This selected graph has one durable risk policy. MFA counters must
+			// bind that policy too, not the superseded velocity-only fixture.
+			counter := *c.PasswordSignup.Counters.CommandCounters
+			owners := []struct {
+				config *riskpg.Config
+				action risk.Action
+			}{{&c.MFAEnrollment.Native.Counters, "identity.mfa.enable"}, {&c.PasswordSignin.Recovery.Counters, "identity.mfa.recovery-use"}}
+			if c.PasswordSignin.TOTP != nil {
+				owners = append(owners, struct {
+					config *riskpg.Config
+					action risk.Action
+				}{&c.PasswordSignin.TOTP.Counters, "identity.mfa.totp-verify"})
+			}
+			for _, selected := range owners {
+				admitted, err := counter.Policy.Admit(selected.action)
+				if err != nil {
+					t.Fatal("selected email MFA policy", err)
+				}
+				selected.config.CommandCounters, selected.config.PolicyVersion = &counter, admitted.PolicyVersion
+			}
+		}
 		if strings.HasPrefix(extensions.emailChangeCase, "otp-change") {
 			configureReferenceEmailOTPChange(t, &c)
 			c.Email.OTPChangeInitialPrimary = extensions.emailOTPInitialPrimary && extensions.emailChangeCase != "otp-change-initial-unselected"
@@ -944,6 +983,79 @@ END $$`); err != nil {
 			}
 			if extensions.emailManagementChange {
 				change = &referenceEmailChangeOptions{readSession: readSession, recipients: noticeRecipients, mode: extensions.emailChangeCase, deliveries: changeDeliveries, initialPrimary: extensions.emailOTPInitialPrimary}
+				if strings.HasPrefix(extensions.emailChangeCase, "totp-change") {
+					change.totpEnrollment = func(saved []*http.Cookie, savedCSRF string, defaultRequest passwordpg.EmailManagementRequest) {
+						selected := managementConfig
+						e, native := *selected.Email, *selected.Email.Change
+						e.TOTPChange = true
+						native.Primary.Audience = selected.MFAEnrollment.ActiveStepUp.Audience
+						requestKeys, err := kernel.NewRequestKeyConfig("reference-managed-email", [32]byte{219}, selected.OTP.RequestKeys.Policy)
+						if err != nil {
+							t.Fatal(err)
+						}
+						keyed, err := passwordpg.NewKeyedEmailManagementConfig(requestKeys, [32]byte{220})
+						if err != nil {
+							t.Fatal(err)
+						}
+						native.Keyed = &keyed
+						profile := *native.Native.Change
+						profile.CurrentAddress = email.RequirePrimaryAddress
+						native.Native.Change = &profile
+						e.Change, selected.Email = &native, &e
+						mfa, step := *selected.MFAEnrollment, *selected.MFAEnrollment.ActiveStepUp
+						step.EmailChange = true
+						if extensions.emailChangeCase == "totp-change-expiry" {
+							step.TTL = 5 * time.Second
+						}
+						mfa.ActiveStepUp, selected.MFAEnrollment = &step, &mfa
+						httpSelected := extensions.emailChangeCase == "totp-change-http" || extensions.emailChangeCase == "totp-change-mfa-http"
+						if httpSelected {
+							selected.HTTPMFAActiveStepUp = &reference.HTTPMFAActiveStepUpConfiguration{Purposes: []auth.Purpose{"identity.email.change-request"}, TrustedOrigins: []identityhttp.Origin{identityhttp.Origin(origin)}, VerificationNamespace: "reference-email-totp-step-up", VerificationKey: [32]byte{195}}
+							selected.HTTPEmailRequests = &reference.HTTPEmailRequestsConfiguration{ChangeRequest: true, ChangeConfirm: true, Origin: origin, ActorID: c.HTTPRegistrationVerification.ActorID, PolicyRevision: 9}
+						}
+						upgraded := upgradeReferenceEmailGraph(t, ctx, f, selected, deps, worker, modules, user, migrationRequest)
+						sessions, err := upgraded.Sessions()
+						if err != nil {
+							t.Fatal(err)
+						}
+						token, _ := session.ParseToken(saved[0].Value)
+						credential, _ := session.NewCredential(session.CredentialCookie, token)
+						current, err := sessions.Get(ctx, session.GetRequest{TenantID: otpTenant, Credential: credential})
+						if err != nil || !current.Authenticated {
+							t.Fatal("genuine primary bootstrap lost session", err)
+						}
+						binding, _ := current.Session.Bindings()
+						local := f
+						local.config = selected
+						local.emailTOTPChange = true
+						selectedClient, selectedBase := client, network.URL
+						var browserProof auth.ProofID
+						if httpSelected {
+							httpOwner, err := reference.NewServer(config, deps, upgraded)
+							if err != nil {
+								t.Fatal("selected email TOTP HTTP graph", err)
+							}
+							https := httptest.NewTLSServer(httpOwner.Handler())
+							t.Cleanup(https.Close)
+							// Keep the genuine deployment origin/Host while directing only
+							// the test TCP connection to the separately selected router.
+							// A second port is cross-origin to the existing CORS policy.
+							transport := https.Client().Transport.(*http.Transport).Clone()
+							transport.DialContext = func(ctx context.Context, network, _ string) (net.Conn, error) {
+								return (&net.Dialer{}).DialContext(ctx, network, https.Listener.Addr().String())
+							}
+							selectedClient = &http.Client{Transport: transport}
+							selectedClient.Timeout = 10 * time.Second
+							t.Cleanup(selectedClient.CloseIdleConnections)
+							local.activeStepUpHTTP = true
+							local.afterEmailFactorHTTP = func(id auth.ProofID) { browserProof = id }
+						}
+						local.afterEmailFactor = func(proof auth.ReauthenticationProof, cookies []*http.Cookie, csrf string, codes []string) {
+							proveReferenceEmailTOTPChange(t, ctx, local, upgraded, managementFeatures, workers, selectedClient, selectedBase, origin, messages, noticeRecipients, changeDeliveries, user, proof, cookies, csrf, codes, defaultRequest, browserProof, extensions.emailChangeCase)
+						}
+						proveReferenceMFAEnrollment(t, ctx, local, upgraded, selectedClient, selectedBase, origin, saved, savedCSRF, binding.SessionID, false)
+					}
+				}
 				if extensions.emailChangeCase == "otp-change-reference-https" {
 					change.httpChange = &emailOTPHTTPSSelection{client: client, base: network.URL, origin: origin, server: server}
 				} else if strings.HasPrefix(extensions.emailChangeCase, "otp-change") && strings.Contains(string(server.OpenAPI().JSON()), "/v1/otp/email-change") {

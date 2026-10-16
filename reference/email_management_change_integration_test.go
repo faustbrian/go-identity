@@ -37,6 +37,7 @@ type referenceEmailChangeOptions struct {
 	genericRequest   func([]*http.Cookie, string) passwordpg.EmailManagementRequest
 	newChangeRequest func([]*http.Cookie, string) passwordpg.EmailManagementRequest
 	deliveries       <-chan emailChangeDelivery
+	totpEnrollment   func([]*http.Cookie, string, passwordpg.EmailManagementRequest)
 }
 
 // Only the external sender seam is controlled. Native domain, session,
@@ -365,6 +366,10 @@ func proveReferenceEmailChangeJourney(t *testing.T, ctx context.Context, f liveS
 			t.Fatal("old notification duplicated or absent", err)
 		}
 		cookies, csrf = freshLogin(candidate)
+		if options.totpEnrollment != nil {
+			options.totpEnrollment(cookies, csrf, request(cookies, csrf))
+			return
+		}
 		if originalCustody != nil {
 			originalCustody()
 		}

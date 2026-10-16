@@ -54,14 +54,15 @@ type MFAEnrollmentConfiguration struct {
 }
 
 type mfaEnrollmentState struct {
-	enable     *mfapg.TOTPEnrollmentService
-	uri        *mfapg.TOTPURIService
-	confirm    *mfapg.TOTPConfirmationService
-	stepup     *mfapg.TOTPActiveStepUpService
-	regenerate *mfapg.RecoveryRegenerationService
-	listing    *mfa.ListService
-	manage     *mfapg.FactorUpdateService
-	disable    *mfapg.DisableService
+	enable      *mfapg.TOTPEnrollmentService
+	uri         *mfapg.TOTPURIService
+	confirm     *mfapg.TOTPConfirmationService
+	stepup      *mfapg.TOTPActiveStepUpService
+	regenerate  *mfapg.RecoveryRegenerationService
+	listing     *mfa.ListService
+	manage      *mfapg.FactorUpdateService
+	disable     *mfapg.DisableService
+	emailChange bool
 }
 
 func composeMFAEnrollment(c StoreConfiguration, d ReferenceDependencies, verification *passwordVerificationState, evaluation risk.Evaluator, reset *passwordpg.ResetService) (*mfaEnrollmentState, error) {
@@ -125,6 +126,7 @@ func composeMFAEnrollment(c StoreConfiguration, d ReferenceDependencies, verific
 		if err != nil {
 			return nil, invalid
 		}
+		state.emailChange = selected.EmailChange
 		if p.Regeneration != nil {
 			if p.Regeneration.Primary != nil || p.Regeneration.Sessions != nil {
 				return nil, invalid

@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Select genuine-primary email change with `Email.TOTPChange` and native
+  `MFAEnrollment.ActiveStepUp.EmailChange`. Compose the actual factor-proof
+  owner, forward use-purpose migration and earliest original deadline; preserve
+  atomic notification/session effects and metadata-only retries/recovery.
+  Independently opt into HTTPS step-up and email request/confirmation.
+  PostgreSQL-only composition now supplies its selected durable admission policy
+  to feature owners, and recovery-counter history retains selected email-change
+  capability counters through an additive migration.
+
 - Select first-primary OTP establishment with `Email.OTPChangeInitialPrimary`
   alongside native OTP change and the explicit sole-verified change policy.
   Native and HTTPS consumers share atomic promotion/notification/session effects;

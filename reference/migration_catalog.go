@@ -261,7 +261,7 @@ func (s StoreSet) migrationCatalog(ctx context.Context) ([]migrationHistory, err
 			return nil, err
 		}
 		if c.passwordRecovery || c.passwordOTP {
-			catalog, err = recoveryCompletionMigrationCatalog(ctx, catalog, c.passwordSigninSchema, s.state.config.Schema)
+			catalog, err = recoveryCompletionMigrationCatalog(ctx, catalog, c.passwordSigninSchema, s.state.config.Schema, s.state.features.email != nil && s.state.features.email.change != nil)
 			if err != nil {
 				return nil, err
 			}

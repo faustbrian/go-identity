@@ -20,6 +20,7 @@ import (
 	"testing"
 	"time"
 
+	auth "github.com/faustbrian/go-authentication/v2"
 	"github.com/faustbrian/go-capability/v2"
 	identity "github.com/faustbrian/go-identity"
 	"github.com/faustbrian/go-identity/email"
@@ -45,6 +46,9 @@ type liveStores struct {
 	afterEmailQueries                  func([]*http.Cookie, identity.UserID, identity.IdentifierID)
 	emailQueriesStandalone             bool
 	afterEmailSignin                   func(context.Context, identity.UserID, []*http.Cookie, string, func(...string) ([]*http.Cookie, string), func([]*http.Cookie) bool)
+	emailTOTPChange                    bool
+	afterEmailFactor                   func(auth.ReauthenticationProof, []*http.Cookie, string, []string)
+	afterEmailFactorHTTP               func(auth.ProofID)
 	disable                            bool
 	disableAll                         bool
 	disablePending                     bool

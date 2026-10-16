@@ -66,6 +66,17 @@ func (s StoreSet) activeStepUpMigrationCatalog(ctx context.Context, catalog []mi
 				catalog[i].guards = append(catalog[i].guards, migrationGuard{version: 12, schema: "identity_mfa", tables: []string{"factor_update_effects"}, columns: []string{"totp_factors.replaces_factor_id", "totp_factors.replaces_version", "factor_update_effects.replacement_factor_id"}})
 			}
 		}
+		if s.state.features.mfaEnrollment.emailChange {
+			steps, err = (mfapg.EmailChangeFactorMigrationSource{Base: fixedMigrationSource(catalog[i].history), Version: 13}).Load(ctx)
+			if err != nil {
+				return nil, err
+			}
+			owners[13] = "identity/mfa/postgres"
+			catalog[i].history = steps
+			// This suffix alters an existing check, creating no new relation.
+			// The version8 table cannot attest version13; the migration ledger
+			// owns its execution/checksum, like the email counter ALTER suffix.
+		}
 		if s.state.features.mfaEnrollment.regenerate != nil || s.state.features.mfaEnrollment.manage != nil || s.state.features.mfaEnrollment.disable != nil {
 			schema := s.state.features.migrations.passwordSigninSchema
 			steps, err := (sessionpg.MFARecoverySessionMigrationSource{Schema: schema, Version: 1}).Load(ctx)

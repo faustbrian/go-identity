@@ -64,12 +64,17 @@ func composeMFAActiveStepUpHTTP(c StoreConfiguration, owner *mfaEnrollmentState,
 		return nil, invalid
 	}
 	h := *c.HTTPMFAActiveStepUp
-	if len(h.Purposes) > 3 {
+	if len(h.Purposes) > 4 {
 		return nil, invalid
 	}
 	h.Purposes = slices.Clone(h.Purposes)
 	for i, purpose := range h.Purposes {
-		if purpose != "identity.mfa.recovery-regenerate" && purpose != "identity.mfa.factor-update" && purpose != "identity.mfa.disable" || slices.Contains(h.Purposes[:i], purpose) {
+		if purpose != "identity.mfa.recovery-regenerate" && purpose != "identity.mfa.factor-update" && purpose != "identity.mfa.disable" && purpose != "identity.email.change-request" || slices.Contains(h.Purposes[:i], purpose) {
+			return nil, invalid
+		}
+		// HTTP selection cannot grant a purpose withheld by the native owner;
+		// EmailConfiguration.TOTPChange requires this same explicit selection.
+		if purpose == "identity.email.change-request" && !owner.emailChange {
 			return nil, invalid
 		}
 	}

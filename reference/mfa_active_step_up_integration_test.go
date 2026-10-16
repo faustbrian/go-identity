@@ -81,12 +81,19 @@ func proveReferenceActiveStepUp(t *testing.T, ctx context.Context, f liveStores,
 	if f.disable {
 		r.StepUp.Purpose = "identity.mfa.disable"
 	}
+	if f.emailTOTPChange {
+		r.StepUp.Purpose = "identity.email.change-request"
+	}
 	rateSource, ok := service.(mfahttp.ActiveStepUpService)
 	if !ok {
 		t.Fatal("selected step-up has no native original quota source")
 	}
 	lifetime, until, err := rateSource.ActiveStepUpRateSource(ctx, r)
-	if err != nil || lifetime != time.Minute || until.IsZero() || until.After(time.Now().Add(20*time.Second)) {
+	expectedLifetime := time.Minute
+	if f.emailTOTPChange {
+		expectedLifetime = f.config.MFAEnrollment.ActiveStepUp.TTL
+	}
+	if err != nil || lifetime != expectedLifetime || until.IsZero() || until.After(time.Now().Add(20*time.Second)) {
 		t.Fatal("step-up quota renewed original validity or lost fixed policy", err)
 	}
 	wrong := r
@@ -117,16 +124,19 @@ func proveReferenceActiveStepUp(t *testing.T, ctx context.Context, f liveStores,
 		}
 	}
 	r.CommandID, _ = identity.NewCommandID()
-	if f.completionFault != nil && !f.regeneration && !f.factorManagement && !f.disable {
+	if f.completionFault != nil && !f.regeneration && !f.factorManagement && !f.disable && !f.emailTOTPChange {
 		f.completionFault.armed.Store(true)
 	}
 	if f.activeStepUpHTTP {
-		proveReferenceActiveStepUpHTTP(t, ctx, client, base, origin, bearer, csrfWire, cookieName, r.CommandID, factor, codeWire, r.StepUp.Purpose)
+		wireID := proveReferenceActiveStepUpHTTP(t, ctx, client, base, origin, bearer, csrfWire, cookieName, r.CommandID, factor, codeWire, r.StepUp.Purpose)
+		if f.afterEmailFactorHTTP != nil {
+			f.afterEmailFactorHTTP(wireID)
+		}
 	} else {
 		out, err = service.TotpVerify(ctx, r)
 	}
 	proof := out.StepUpProof.Bindings()
-	if f.completionFault != nil && !f.regeneration && !f.factorManagement && !f.disable {
+	if f.completionFault != nil && !f.regeneration && !f.factorManagement && !f.disable && !f.emailTOTPChange {
 		if err == nil || out.Outcome != identity.CommitOutcomeUnknown || proof.Proof.ID != "" || !f.completionFault.hit.Load() {
 			t.Fatal("lost factor-proof commit acknowledgement disclosed proof", out.Outcome, err)
 		}
@@ -138,7 +148,7 @@ func proveReferenceActiveStepUp(t *testing.T, ctx context.Context, f liveStores,
 		t.Fatal(err)
 	}
 	signed, err := source.Reauthentication(ctx, auth.ProofID(r.CommandID))
-	if f.activeStepUpHTTP || f.completionFault != nil && !f.regeneration && !f.factorManagement && !f.disable {
+	if f.activeStepUpHTTP || f.completionFault != nil && !f.regeneration && !f.factorManagement && !f.disable && !f.emailTOTPChange {
 		proof = signed.Proof
 	}
 	if err != nil || signed.Proof != proof {
@@ -174,8 +184,9 @@ func proveReferenceActiveStepUp(t *testing.T, ctx context.Context, f liveStores,
 	return proof
 }
 
-func proveReferenceActiveStepUpHTTP(t *testing.T, ctx context.Context, client *http.Client, base, origin, bearer, csrf, cookieName string, command identity.CommandID, factor mfa.FactorID, code string, purpose auth.Purpose) {
+func proveReferenceActiveStepUpHTTP(t *testing.T, ctx context.Context, client *http.Client, base, origin, bearer, csrf, cookieName string, command identity.CommandID, factor mfa.FactorID, code string, purpose auth.Purpose) auth.ProofID {
 	t.Helper()
+	var original auth.ProofID
 	for _, attempt := range []string{"missing-csrf", "fresh", "replay"} {
 		body := `{"commandID":"` + string(command) + `","factorID":"` + string(factor) + `","code":"` + code + `"}`
 		if purpose != "identity.mfa.recovery-regenerate" {
@@ -212,8 +223,10 @@ func proveReferenceActiveStepUpHTTP(t *testing.T, ctx context.Context, client *h
 			if response.StatusCode != 200 || !result.Verified || result.CommitOutcome != "committed" || result.CommandID != string(command) || result.ProofID != string(command) {
 				t.Fatal("fresh public step-up failed", response.StatusCode)
 			}
+			original = auth.ProofID(result.ProofID)
 		} else if response.StatusCode == 200 || result.Verified || result.ProofID != "" {
 			t.Fatal("denied/replayed step-up disclosed proof", attempt, response.StatusCode)
 		}
 	}
+	return original
 }

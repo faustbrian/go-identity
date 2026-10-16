@@ -24,6 +24,7 @@ type completionCommitFault struct {
 	emailRemoval            bool
 	emailPreparation        bool
 	emailVerification       bool
+	emailFactorUse          bool
 	armed                   atomic.Bool
 	hit                     atomic.Bool
 }
@@ -90,6 +91,9 @@ func (c *completionCommitConn) Write(p []byte) (int, error) {
 	}
 	if c.fault.emailVerification {
 		selected = bytes.Contains(p, []byte("UPDATE identity.identifiers SET kind="))
+	}
+	if c.fault.emailFactorUse {
+		selected = bytes.Contains(p, []byte("UPDATE identity_mfa.factor_verifications SET used_command_id="))
 	}
 	if c.fault.armed.Load() && selected {
 		c.mutation.Store(true)

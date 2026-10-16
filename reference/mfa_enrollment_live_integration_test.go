@@ -159,7 +159,7 @@ func proveReferenceMFAEnrollment(t *testing.T, ctx context.Context, f liveStores
 		}
 		var out enrollmentHTTPObservation
 		if json.NewDecoder(io.LimitReader(response.Body, 32769)).Decode(&out) != nil {
-			t.Fatal("enrollment response malformed")
+			t.Fatal("enrollment response malformed", response.StatusCode, response.Header.Get("Content-Type"))
 		}
 		return response.StatusCode, out
 	}
@@ -220,44 +220,50 @@ func proveReferenceMFAEnrollment(t *testing.T, ctx context.Context, f liveStores
 		t.Fatal(err)
 	}
 	var verifiedEmails, primaryEmails int64
-	if f.pool.Raw().QueryRow(ctx, `SELECT count(*),count(*) FILTER(WHERE is_primary) FROM identity.identifiers WHERE tenant_id=$1 AND user_id=$2 AND verified AND kind='email'`, otpTenant, string(spec.UserID)).Scan(&verifiedEmails, &primaryEmails) != nil || verifiedEmails != 1 || primaryEmails != 0 {
-		t.Fatal("registration did not retain its sole verified non-primary address")
+	wantVerified, wantPrimary := int64(1), int64(0)
+	if f.emailTOTPChange {
+		wantVerified, wantPrimary = 2, 1 // Supported bootstrap retained the old verified mailbox.
+	}
+	if f.pool.Raw().QueryRow(ctx, `SELECT count(*),count(*) FILTER(WHERE is_primary) FROM identity.identifiers WHERE tenant_id=$1 AND user_id=$2 AND verified AND kind='email'`, otpTenant, string(spec.UserID)).Scan(&verifiedEmails, &primaryEmails) != nil || verifiedEmails != wantVerified || primaryEmails != wantPrimary {
+		t.Fatal("enrollment did not retain genuine predecessor identifier state")
 	}
 	command, _ := identity.NewCommandID()
 	caller.Request.Action = "identity.mfa.totp-uri"
 	r := mfa.TotpUriRequest{TenantID: otpTenant, CommandID: command, EnrollmentID: pending.Enrollment.ID, Session: enable.Session, CSRFToken: csrf, Caller: caller, Origin: origin, Network: enable.Network}
-	// These temporary directory fixtures isolate label policy only. They neither
-	// create an account nor substitute for registration/verification authority.
-	var identifier string
-	var verifiedAt time.Time
-	if f.pool.Raw().QueryRow(ctx, `SELECT identifier_id,verified_at FROM identity.identifiers WHERE tenant_id=$1 AND user_id=$2 AND verified AND kind='email'`, otpTenant, string(spec.UserID)).Scan(&identifier, &verifiedAt) != nil {
-		t.Fatal("original label state unavailable")
-	}
-	if _, err := f.pool.Raw().Exec(ctx, `UPDATE identity.identifiers SET verified=false,verification_state=1,verified_at=NULL WHERE tenant_id=$1 AND user_id=$2 AND identifier_id=$3`, otpTenant, string(spec.UserID), identifier); err != nil {
-		t.Fatal("unverified label fixture unavailable")
-	}
-	noLabel := r
-	noLabel.CommandID, _ = identity.NewCommandID()
-	denied, denyErr := uriOwner.TotpUri(ctx, noLabel)
-	if _, err := f.pool.Raw().Exec(ctx, `UPDATE identity.identifiers SET verified=true,verification_state=2,verified_at=$4 WHERE tenant_id=$1 AND user_id=$2 AND identifier_id=$3`, otpTenant, string(spec.UserID), identifier, verifiedAt); err != nil {
-		t.Fatal("original label restore failed")
-	}
-	if denyErr == nil || denied.URI.URI != "" {
-		t.Fatal("unverified identifier labeled disclosed factor")
-	}
-	other, _ := identity.NewSubjectID()
-	if _, err := f.pool.Raw().Exec(ctx, `INSERT INTO identity.identifiers(tenant_id,user_id,identifier_id,kind,canonical_value,verified,is_primary,version,verification_state,verification_version,verified_at) VALUES($1,$2,$3,'email','other-label@example.invalid',true,false,1,2,1,clock_timestamp())`, otpTenant, string(spec.UserID), string(other)); err != nil {
-		t.Fatal("ambiguous label fixture unavailable")
-	}
-	ambiguous := r
-	ambiguous.CommandID, _ = identity.NewCommandID()
-	denied, denyErr = uriOwner.TotpUri(ctx, ambiguous)
-	if _, err := f.pool.Raw().Exec(ctx, `DELETE FROM identity.identifiers WHERE tenant_id=$1 AND user_id=$2 AND identifier_id=$3`, otpTenant, string(spec.UserID), string(other)); err != nil {
-		t.Fatal("ambiguous label fixture cleanup failed")
-	}
-	if denyErr == nil || denied.URI.URI != "" {
-		t.Fatal("ambiguous non-primary identifiers labeled disclosed factor")
-	}
+	if !f.emailTOTPChange {
+		// These temporary directory fixtures isolate label policy only. They neither
+		// create an account nor substitute for registration/verification authority.
+		var identifier string
+		var verifiedAt time.Time
+		if f.pool.Raw().QueryRow(ctx, `SELECT identifier_id,verified_at FROM identity.identifiers WHERE tenant_id=$1 AND user_id=$2 AND verified AND kind='email'`, otpTenant, string(spec.UserID)).Scan(&identifier, &verifiedAt) != nil {
+			t.Fatal("original label state unavailable")
+		}
+		if _, err := f.pool.Raw().Exec(ctx, `UPDATE identity.identifiers SET verified=false,verification_state=1,verified_at=NULL WHERE tenant_id=$1 AND user_id=$2 AND identifier_id=$3`, otpTenant, string(spec.UserID), identifier); err != nil {
+			t.Fatal("unverified label fixture unavailable")
+		}
+		noLabel := r
+		noLabel.CommandID, _ = identity.NewCommandID()
+		denied, denyErr := uriOwner.TotpUri(ctx, noLabel)
+		if _, err := f.pool.Raw().Exec(ctx, `UPDATE identity.identifiers SET verified=true,verification_state=2,verified_at=$4 WHERE tenant_id=$1 AND user_id=$2 AND identifier_id=$3`, otpTenant, string(spec.UserID), identifier, verifiedAt); err != nil {
+			t.Fatal("original label restore failed")
+		}
+		if denyErr == nil || denied.URI.URI != "" {
+			t.Fatal("unverified identifier labeled disclosed factor")
+		}
+		other, _ := identity.NewSubjectID()
+		if _, err := f.pool.Raw().Exec(ctx, `INSERT INTO identity.identifiers(tenant_id,user_id,identifier_id,kind,canonical_value,verified,is_primary,version,verification_state,verification_version,verified_at) VALUES($1,$2,$3,'email','other-label@example.invalid',true,false,1,2,1,clock_timestamp())`, otpTenant, string(spec.UserID), string(other)); err != nil {
+			t.Fatal("ambiguous label fixture unavailable")
+		}
+		ambiguous := r
+		ambiguous.CommandID, _ = identity.NewCommandID()
+		denied, denyErr = uriOwner.TotpUri(ctx, ambiguous)
+		if _, err := f.pool.Raw().Exec(ctx, `DELETE FROM identity.identifiers WHERE tenant_id=$1 AND user_id=$2 AND identifier_id=$3`, otpTenant, string(spec.UserID), string(other)); err != nil {
+			t.Fatal("ambiguous label fixture cleanup failed")
+		}
+		if denyErr == nil || denied.URI.URI != "" {
+			t.Fatal("ambiguous non-primary identifiers labeled disclosed factor")
+		}
+	} // Genuine-primary email acceptance reuses, rather than repeats, sole-label fault coverage.
 	source, ok := uriOwner.(interface {
 		TotpUriRateSource(context.Context, mfa.TotpUriRequest) (time.Duration, time.Time, error)
 	})
@@ -443,8 +449,10 @@ func proveReferenceMFAEnrollment(t *testing.T, ctx context.Context, f liveStores
 					t.Fatal("MFA-origin fixture did not reach a fresh TOTP period")
 				}
 				timer.Stop()
-				if _, err := f.stores.RecoverVelocity(ctx, otpTenant); err != nil {
-					t.Fatal("native velocity recovery after MFA-origin wait failed", err)
+				if f.config.DurableAdmission == nil {
+					if _, err := f.stores.RecoverVelocity(ctx, otpTenant); err != nil {
+						t.Fatal("native velocity recovery after MFA-origin wait failed", err)
+					}
 				}
 			} else {
 				_, sourceBearer, sourceCSRF = proveReplacementRecoveryLogin(t, ctx, features, client, base, origin, out.RecoveryCodes[0], true)
@@ -453,6 +461,16 @@ func proveReferenceMFAEnrollment(t *testing.T, ctx context.Context, f liveStores
 			csrfWire = sourceCSRF
 		}
 		proof := proveReferenceActiveStepUp(t, ctx, f, features, cookies[0].Value, csrfWire, origin, mfa.FactorID(pending.Enrollment.ID), secret, client, base, cookies[0].Name)
+		if f.afterEmailFactor != nil {
+			remaining := out.RecoveryCodes
+			if f.replacementSourceMethod != "" && f.replacementSourceMethod != "totp" {
+				// The real initiating recovery signin already consumed the first
+				// code. Later session-revocation proof must use a different code.
+				remaining = remaining[1:]
+			}
+			f.afterEmailFactor(proof, cookies, csrfWire, remaining)
+			return
+		}
 		if f.disable {
 			proveReferenceDisable(t, ctx, f, features, cookies[0].Value, csrfWire, origin, mfa.FactorID(pending.Enrollment.ID), proof, client, base, cookies[0].Name)
 			return

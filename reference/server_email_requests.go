@@ -159,6 +159,9 @@ func (s *Server) selectEmailRequests(network identityhttp.NetworkConfig, f Featu
 			return err
 		}
 		config := request
+		if state.email.changeProofs != nil {
+			config.Proofs = state.email.changeProofs
+		}
 		config.Change, config.SecretRate, config.CurrentAddressProofPolicy = owner, h.secret, email.NotifyCurrentAddress
 		selection.ChangeRequest = &config
 	}

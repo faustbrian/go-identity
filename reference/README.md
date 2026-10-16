@@ -1,5 +1,33 @@
 # Identity reference composition
 
+## TOTP-protected primary-email change
+
+Select `Email.TOTPChange`, `Email.Change` and
+`MFAEnrollment.ActiveStepUp.EmailChange` with matching proof audience and
+`email.RequirePrimaryAddress`. The account must have a genuine verified primary
+and confirmed TOTP enrollment. The shared graph supplies the original factor
+proof, session, authorization, transaction, delivery and forward migration owners.
+Apply the selected migration plan before serving; populated rows are preserved.
+The source may be a retained password session or a genuine password/TOTP or
+password/recovery session. Both the source session's original factor and the
+fresh action proof's factor remain subject to current-authority checks.
+
+Obtain an active-TOTP proof for exactly `identity.email.change-request`; submit
+it with the original session and CSRF custody to the keyed change request.
+Deliver the new-address link through the ordinary sender, validate it without
+consumption, then explicitly confirm. Promotion, old-address notice and required
+session effects are atomic. No replacement session or auto-signin is issued.
+The link cannot outlive original proof age/expiry/session validity; revocation,
+enrollment or factor-generation changes deny, even with a newer valid login.
+Exact retries and recovery disclose only original metadata, not fresh secrets.
+
+HTTP is independent: select `HTTPMFAActiveStepUp.Purposes` containing that exact
+purpose and `HTTPEmailRequests.ChangeRequest`/`ChangeConfirm`. Send the proof ID
+returned by `/v1/mfa/totp-verify` with `X-MFA-Variant: step-up`, then use the email
+endpoints with the original cookie, CSRF and idempotency key. Native selection
+alone exposes no route. This profile does not select initial-primary change,
+new-address OTP, other factor methods, privacy or login.
+
 Administrative email removal is independently opt-in. Set
 `Email.Removal.Primary.AdministrativeTargets` for the native owner, and separately
 `HTTPEmailRequests.AdministrativeRemovalTargets` with `AddressRemove` for HTTP.
