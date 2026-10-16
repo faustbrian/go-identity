@@ -3,6 +3,33 @@
 Implementation activated by the user on 2026-10-14. B1, B2 and B3 are closed;
 M04 email lifecycle is active.
 
+- Administrative-removal profile closed (2026-10-16 00:43 UTC): foundation
+  `9785b1c`, native password/HTTP `9ee4c44` and reference `ffc3b47` are pushed
+  to main with exact-head Required CI green. Consumers can explicitly authorize
+  real actor A to remove B's versioned email via native/opt-in HTTPS, using A's
+  original fresh password proof/session while preserving A's authority. B's
+  old sessions/removed signin deny and remaining configured signin/reset works.
+  Exact grant withdrawal denies unfinished/recovered preparation; terminal
+  historical replay remains available. Eight real public-dependency PostgreSQL/
+  HTTPS/race journeys, affected race/vet, bounded fuzz, secrets and structure
+  pass; complete independent review approves the published source graph. The
+  published runner initializes with no local overrides or database/listener.
+  Full M04 stays open: stronger-factor, OTP/auto-signin, privacy/lifecycle
+  completeness and unit qualification remain. Full milestones remain3/39;
+  overall estimate5–10%, low confidence, not a measured fraction of effort.
+
+- Administrative removal local checkpoint (2026-10-16 00:28 UTC): genuine
+  administrator/target PostgreSQL/HTTPS journeys pass under race, including
+  native/HTTP removal, rollback, contention, unknown commit and lost preparation
+  acknowledgement. Target sessions/removed signin deny, remaining signin/reset
+  works, and actor authority/session/proof ownership remain independent. Exact
+  grant withdrawal denies both original and restored unfinished preparation;
+  committed/known-rollback historical replay remains unchanged. First independent
+  review identified that permission gap; both real regressions were reproduced
+  and corrected outside database locks. Complete corrected review, public pins
+  and main delivery remain pending. Nothing from this profile is pushed yet;
+  full M04 stays open, delivered full milestones remain 3/39, no unit qualification.
+
 - Administrative-read profile closed (2026-10-15 15:27 UTC): native `6f013f9`
   and HTTP `15b4764` are on main with Required CI green. Reference `91397a7`
   is on origin/main with Required `38760195512` green; its public published
@@ -585,7 +612,7 @@ restart old slices merely to fill this table; adopt applicable prior proof.
 | B1 | Runnable registration/verification/signin/session/logout baseline: identity, identity/postgres, identity/password, identity/password/postgres, identity/session, identity/session/postgres, identity/delivery, identity/delivery/postgres, identity/http, identity/reference; required primitive contracts | Closed: reviewed native PostgreSQL/HTTPS journey, reproducible consumer walkthrough, main 90d4f2c and Required CI 38527264686. Public-dependency journeys and published runner initialization subsequently pass at 1ae0790; full-unit qualification pending. |
 | B2 | Reset and required session invalidation using the baseline owners plus identity/risk/hibp | Closed: reviewed native PostgreSQL/HTTPS reset, two-session revocation, original audit recovery and populated upgrade; main fd439aa and Required CI 38547848026; full-unit/release qualification pending |
 | B3 | Password change and fresh reauthentication through baseline owners | Closed: reviewed PostgreSQL/HTTPS verification/change, two-session revocation, populated upgrade, original auditing, rollback/recovery and combined reset/change; main 24b1b08 plus CI-only 47a3ee0, Required CI 38559659144; full-unit/release qualification pending |
-| M04 | Email add/change/verify/list/get/remove with session/lifecycle policy: identity/email | Delivered profiles: public PostgreSQL/HTTPS list/get, keyed add/resend/verification/primary change (`31b51a9`), safe password/known-empty-MFA removal (`1ae0790`) and explicit atomic replacement-primary removal (`4a10c0f`), independently reviewed with main CI green. Administrator/stronger-factor, OTP/auto-signin, privacy/lifecycle completeness and final qualification remain; full row not closed. |
+| M04 | Email add/change/verify/list/get/remove with session/lifecycle policy: identity/email | Delivered profiles: public PostgreSQL/HTTPS list/get, keyed add/resend/verification/primary change (`31b51a9`), safe password/known-empty-MFA removal (`1ae0790`), explicit atomic replacement-primary removal (`4a10c0f`), audited administrator reads (`91397a7`) and actor-separated administrative removal (`ffc3b47`), independently reviewed with main CI green. Stronger-factor, OTP/auto-signin, privacy/lifecycle completeness and final qualification remain; full row not closed. |
 | M05 | Username availability/signin/rename: identity/username, stable identifier contracts | Closure not reassessed |
 | M06 | Delivered magic-link signin and session: identity/magiclink | Closure not reassessed |
 | M07 | Purpose-bound email OTP request/delivery/completion: identity/otp, identity/otp/postgres | Closure not reassessed |

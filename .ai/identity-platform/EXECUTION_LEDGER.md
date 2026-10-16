@@ -2,7 +2,72 @@
 
 Activated on 2026-10-14. B1, B2 and B3 are closed; M04 email lifecycle is active.
 
-## Active: M04 email lifecycle; administrative-read profile delivered
+## Active: M04 email lifecycle; administrative-removal profile delivered
+
+- Administrative-removal profile closed (2026-10-16 00:43 UTC): foundation
+  `9785b1c`, native password/HTTP `9ee4c44` and reference `ffc3b47` are on
+  origin/main; exact-head Required runs `38829897110`, `38830322339` and
+  `38830970598` pass. Actual authorized A removes B's versioned email with A's
+  fresh one-use proof/session preserved separately from B's atomic mutation,
+  audit/cascade, token retirement and session invalidation. B's remaining
+  configured signin/reset works; A's session/authority stays unchanged.
+  Current exact target grants are checked for original/restored unfinished
+  preparation outside SQL locks; terminal historical replay stays unchanged.
+  GOWORK-off public-dependency PostgreSQL/HTTPS tests pass all eight selected
+  journeys in 30.019s using the disposable PostgreSQL fixture and this command:
+
+  ```sh
+  go test -race -tags integration -count=1 -timeout=180s \
+    -run '^TestReferencePostgres(AdministrativeEmailRemoval|EmailRemovalKeepsVerifiedSigninReset|AdministrativeEmailQueriesHTTPS)$' .
+  ```
+
+  Affected owner/reference/command race and tagged vet, bounded removal fuzz,
+  changed-content secrets and planning checks pass. Independent complete review
+  `/root/m04_admin_removal_final_review` APPROVE covers original base `d877f24`,
+  corrected source46 `c34b719f77d333975a2dccce6d6569168aaf1d66254a37bdf88b5861278ff84d`
+  and final public52 `d35c1c5367fd99b2e5f7d6b70a6f4f24a017f75b869ea343c319d3462f426314`;
+  the final tree matched that reviewed snapshot before publication. Published
+  runner `v0.0.0-20261016004146-ffc3b47efb33` initializes from an empty consumer
+  directory with GOWORK off, no database/listener or local source overrides.
+  Full M04 stays open: stronger-factor, OTP/auto-signin, privacy/lifecycle
+  completeness and final unit qualification remain. Full milestones3/39;
+  no new qualified unit, Tools change, tag or deployment. Reuse unchanged proof.
+
+- Local administrative-removal checkpoint (2026-10-16 00:28 UTC): eight selected
+  real PostgreSQL/HTTPS/race journeys pass30.408s (six administrative modes plus
+  self removal/admin reads). Independent review of snapshot `5d7c8eba` requested
+  changes for missing exact target permission on retained work. Original-input
+  withdrawal and genuinely retained-output withdrawal both reproduced commit
+  before the correction; current checks run only in out-of-transaction
+  preparation/restoration, not locked callbacks or terminal historical replay.
+  All affected module race/tagged vet, bounded removal fuzz and local docs/
+  structure passed before that correction; affected reruns/final review and
+  public pin/main delivery remain. Root/email/kernel/MFA public GOWORK-off race
+  checks pass; no Tools change or new evidence machinery. Full M04 stays open.
+
+- Frozen administrative-removal profile (2026-10-15 15:34 UTC): explicitly
+  selected native/HTTPS administrator A removes B's exact versioned email using
+  A's original fresh action-bound password proof/session/CSRF, with authoritative
+  known-empty MFA for A and B. Current exact tenant/actor/action/target policy is
+  mandatory. Preserve B's actual remaining configured password signin/reset,
+  target session invalidation, token retirement, atomic audit/cascade and keyed
+  replay/unknown recovery; A's sessions and credentials remain unchanged.
+  Preserve legacy self requests/custody bytes and closed disabled HTTP selection.
+  Add narrow actor credential/authorization admission using existing kernel
+  checks, deterministic cross-subject row locking before either subject's locks,
+  and actor proof consumption in the existing password record/transaction.
+  No new proof/store/replay engine. Stronger MFA/OTP/admin impersonation are not
+  selected; enrolled/unknown factors deny, never weaken to password-only.
+  Reuse bounded `/root/m04_admin_boundary` map at main `d877f24`; suppliers root
+  `2d1115c`, kernel `03bac9a`, password/PG `85ed1e5`, MFA/PG `ed660e7`, email
+  `6f013f9`, HTTP/email `15b4764`. Owners: kernel/email/MFA/password/HTTP/reference.
+  Prove two genuine accounts, target retained signin/reset and revoked target
+  sessions, actor preservation, missing grant, wrong/stale actor proof, active
+  factors, foreign target, changed-key input, rollback/one-use, contention and
+  original ambiguous recovery. TDD focused native/API tests; disposable real
+  PostgreSQL/HTTPS race; affected module race/tagged vet, changed-input fuzz,
+  public pins/consumer proof, selected secrets/docs/structure, one complete
+  independent review, ordinary main/Required delivery. M04 stays open.
 
 - Administrative-read profile closed (2026-10-15 15:27 UTC): native `6f013f9`
   and HTTP `15b4764` are on main, Required `38759536861`/`38759823377` green.
