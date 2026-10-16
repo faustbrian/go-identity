@@ -4,6 +4,97 @@ Activated on 2026-10-14. B1, B2 and B3 are closed; M04 email lifecycle is active
 
 ## Active: M04 email lifecycle; replacement and first-primary OTP profiles delivered
 
+- TOTP-link profile closed (2026-10-16 11:30 UTC): core `a462729`, native/HTTP
+  `a2bc669`, password-native `0d3608f` and reference `c3744e2` are pushed to main.
+  Exact-head Required runs `38891868753`, `38892569108`, `38893064317` and
+  `38894070689` pass (planning/changed-range secrets, not hosted runtime).
+  Genuine password/TOTP and password/recovery signin now reach the independently
+  delivered new-address link, scanner-safe validation, explicit primary swap,
+  retained history, actual old-address notice and required session denial.
+  Original source and fresh action proof retain separate factor provenance;
+  stale/revoked/expired authority cannot be renewed by another signin or retry.
+  Complete74-path non-note source from `082b922` is SHA-256
+  `73425f616f6c6892671a6235bd823dba711868fbf2bdf790e2284b005f404394`.
+  Native regression `/root/totp_email_origin_regression`, complete correctness
+  `/root/totp_email_origin_correctness` and Go public-graph
+  `/root/totp_email_mfa_origin_go` approve that exact source. Native delivery
+  `/root/totp_email_delivery_audit` accepts selected-profile delivery after
+  independently checking those reports, source, remote and CI at11:30:27 UTC.
+  Parent-executed public-only, workspace-disabled reference/runner race passes
+  8.972s/8.100s; ordinary and integration-tagged vet pass. The frozen real
+  PG18/race/HTTPS selector recorded above passes130.776s, including retained
+  baseline/email/factor consumers. Published runner
+  `v0.0.0-20261016112854-c3744e21db76` initializes from an empty consumer with
+  authenticated public dependencies and no local overrides; this proves build/
+  private configuration, not runtime. Pinned planning and staged-current-secret
+  checks pass; unchanged bounded fuzz/owner checks retain original evidence.
+  Auditors did not rerun or witness primary terminal tests. This closes only
+  the frozen TOTP/link profile: full M04, other factor/auto-signin/privacy
+  variants, full-history and whole-unit qualification remain open; still3/39
+  milestones, no new qualified unit. No Tools changes, tags or deployment.
+
+- Review correction (2026-10-16 10:59 UTC), base `082b922`: the genuine
+  MFA-origin regression reproduced Forbidden from SFA-only session derivation.
+  Explicit native MFA-session mapping now preserves the original factor in
+  preparation/restoration/confirmation; scanner and protected checks fence both
+  source and fresh-proof factors. Real password/TOTP and password/recovery
+  initiating sessions, including selected HTTPS, pass. Their combined HTTP
+  graph also exposed duplicate browser-scheme declarations: a focused router
+  regression failed, and all15 native MFA route selections now compose.
+  Final PG18/race frozen selector above passes147.313s; affected mfa/postgres,
+  session/postgres, password/postgres, http/mfa, http/email and reference/runner
+  race tests and vet pass, including tagged reference vet. Pinned planning and
+  changed-current-file secret checks pass. Source62-path digest excluding notes:
+  `9db2cfc093ff60fea8c66efc2a7ff58be916282a333665dea48ba60d974cd6a9`.
+  Native Go source audit `/root/totp_email_mfa_origin_go` approves its bounded
+  source contract. Implemented-coverage/final review, public pins and main/CI
+  delivery remain; this slice is still local, full milestones remain3/39.
+
+- TOTP-link local checkpoint (2026-10-16 10:31 UTC), base `082b922`: actual
+  native and selected HTTPS journey passes with original browser-returned proof
+  ID, independent delivery, primary swap, original-old notice and denial of a
+  genuinely valid post-request MFA session. Actual stale enrollment/factor and
+  original-family revocation deny; original expiry and metadata-only retries,
+  rollback, request/link contention and both lost actual commit acknowledgements
+  are covered. A red originating-family test exposed missing selected link
+  custody; scanner discovery and protected confirmation now check that original
+  session owner, without changing the legacy password profile.
+  Native PG18/race `go test -race -tags integration -run
+  '^TestReferencePostgres(EmailTOTPChange|RetainedEmailFactorConsumers|Baseline|EmailManagementChange|EmailChangeConcurrentConfirmation)$'
+  -count=1 -timeout=240s .` passes100.583s in reference. Affected owner unit/race
+  and vet pass in mfa, email, mfa/postgres, password/postgres, http/mfa,
+  http/email and reference/runner (MFA-native vet still pending final sweep).
+  Source56-path digest (excluding these notes):
+  `53b9b0e1a22fce565804aa5bf52da4aef6255f11e08fa53f22a26d385ebb6990`.
+  Final hostile-input fuzz/static/scoped-secret checks, independent review,
+  staged public dependency pins and main delivery remain; no full M04 or unit
+  closure. This slice is local/uncommitted, not new delivered milestone progress.
+
+- Frozen next profile (2026-10-16 09:13 UTC), base `082b922`: actual enrolled
+  TOTP account with an existing verified primary; explicit email-action active
+  step-up, protected change request, independently delivered new-address link,
+  scanner-safe validation, explicit confirmation, original-old notice,
+  identifier-session denial and metadata-only recovery. Preserve original
+  session/action/audience/assurance, factor enrollment/authority and earliest
+  deadline; factor-proof use and request attachment/delivery commit together.
+  Default password/known-empty profiles continue to deny enrolled accounts.
+  Exclude only this profile's OTP/security-key factors, new-address OTP,
+  initial-primary, auto-signin and privacy; complete67-unit scope stays intact.
+  Owners: existing MFA core/native proof store, password-native email workflow,
+  kernel coordinator, HTTP MFA/email and reference composition. Public inputs:
+  MFA core `ed660e7`, MFA-native/email `33c559f`, password-native `80e379c`,
+  kernel `099b837`, reference `ed8135f`. No substitute proof/transaction store.
+  Native mapper `/root/email_totp_change_map` and bounded QA producer
+  `/root/email_totp_change_qa` establish no pre-write contradiction/blocker.
+  QA file SHA-256:
+  `1004ffb4dc2e4739fb5eae7750aa8dd44f9bef26654ed708db1e16740eb8a01d`.
+  Prove `TestReferencePostgresEmailTOTPChange` native/TLS success, exact wrong/
+  stale/foreign/replayed proof and source/factor denial, one-use contention,
+  late rollback and lost actual commit recovery; populated forward migration,
+  directly affected password/MFA/link consumers, affected owner race/vet,
+  changed hostile seeds only, public pins, changed-content secrets and final
+  independent review. Reuse unchanged TOTP crypto/RFC and parsing evidence.
+
 - First-primary OTP profile closed (2026-10-16 08:57 UTC): foundation
   `099b83763b22e670387887e7ac30e41834dc9529`, native
   `80e379c107f1ac5d06443a4739addf030117978d`, reference

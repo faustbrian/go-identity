@@ -3,6 +3,41 @@
 Implementation activated by the user on 2026-10-14. B1, B2 and B3 are closed;
 M04 email lifecycle is active.
 
+- TOTP-protected email-change profile delivered (2026-10-16 11:30 UTC):
+  `a462729`, `a2bc669`, `0d3608f` and reference `c3744e2` are on public main;
+  all exact-head Required checks pass. Real password/TOTP or recovery signin,
+  fresh email-action proof, independent link delivery/confirmation, primary
+  replacement, old-address notice and old-session denial work through native
+  and explicitly selected HTTPS APIs. Public-dependency PostgreSQL/race/HTTPS
+  regression and published empty-consumer initialization pass; independent
+  source/pin and delivery reviews accept this bounded profile. Full M04 remains
+  open for other factor/auto-signin/privacy/lifecycle requirements and final
+  qualification. Full milestones remain3/39; no newly qualified unit. Overall
+  estimate remains rough5–10%, low confidence, based on the delivered baseline,
+  reset/password-change and partial email lifecycle, not a measured effort share.
+
+- TOTP email-change correction (2026-10-16 10:59 UTC): real MFA-origin signin
+  now reaches request, independent link delivery/confirmation, old-address
+  notice and session denial. Review had exposed an SFA-only derivation that
+  the prior enrollment-session tests missed. Both password/TOTP and recovery
+  signin are now covered, including selected HTTPS; combined MFA route boot is
+  also repaired. Final affected PG18/race regression passes147.313s and native
+  module race/vet checks pass. Independent final review, public dependency pins
+  and main delivery remain. No newly delivered milestone: still3/39, rough
+  whole-goal5–10% estimate with low confidence, not a measured effort fraction.
+
+- TOTP-protected email-change local checkpoint (2026-10-16 10:36 UTC): genuine
+  confirmed TOTP now supports original-session-bound request, independently
+  delivered link, primary replacement, old-address notice and required session
+  denial through native and explicitly selected HTTPS APIs. PostgreSQL/race
+  acceptance passes, including rollback, contention, actual stale authority,
+  original expiry and lost-commit recovery; affected owner race/static,
+  bounded fuzz and changed-source secret checks pass. Source compatibility and
+  implemented-coverage audits approve their bounded source scope; complete
+  correctness review, public module pins/consumer proof and main delivery remain.
+  This is local/uncommitted, not delivered: full milestones remain3/39,
+  full M04 and all remaining platform families/qualification stay open.
+
 - First-primary OTP profile closed (2026-10-16 08:57 UTC): foundation
   `099b837`, native `80e379c`, reference `ed8135f` are pushed to main and
   exact-head Required CI passes. A normal verified/password-signed-in account
@@ -710,7 +745,7 @@ restart old slices merely to fill this table; adopt applicable prior proof.
 | B1 | Runnable registration/verification/signin/session/logout baseline: identity, identity/postgres, identity/password, identity/password/postgres, identity/session, identity/session/postgres, identity/delivery, identity/delivery/postgres, identity/http, identity/reference; required primitive contracts | Closed: reviewed native PostgreSQL/HTTPS journey, reproducible consumer walkthrough, main 90d4f2c and Required CI 38527264686. Public-dependency journeys and published runner initialization subsequently pass at 1ae0790; full-unit qualification pending. |
 | B2 | Reset and required session invalidation using the baseline owners plus identity/risk/hibp | Closed: reviewed native PostgreSQL/HTTPS reset, two-session revocation, original audit recovery and populated upgrade; main fd439aa and Required CI 38547848026; full-unit/release qualification pending |
 | B3 | Password change and fresh reauthentication through baseline owners | Closed: reviewed PostgreSQL/HTTPS verification/change, two-session revocation, populated upgrade, original auditing, rollback/recovery and combined reset/change; main 24b1b08 plus CI-only 47a3ee0, Required CI 38559659144; full-unit/release qualification pending |
-| M04 | Email add/change/verify/list/get/remove with session/lifecycle policy: identity/email | Delivered profiles: public PostgreSQL/HTTPS list/get, keyed add/resend/verification/primary change (`31b51a9`), safe password/known-empty-MFA removal (`1ae0790`), explicit atomic replacement-primary removal (`4a10c0f`), audited administrator reads (`91397a7`) and actor-separated administrative removal (`ffc3b47`), independently reviewed with main CI green. Stronger-factor, OTP/auto-signin, privacy/lifecycle completeness and final qualification remain; full row not closed. |
+| M04 | Email add/change/verify/list/get/remove with session/lifecycle policy: identity/email | Delivered public PostgreSQL/HTTPS profiles: list/get, keyed add/resend/verification/primary change (`31b51a9`), safe self/replacement-primary removal (`1ae0790`, `4a10c0f`), administrator reads/removal (`91397a7`, `ffc3b47`), pending-address OTP verification (`612ab05`), new-primary OTP replacement/establishment (`43b46d1`, `ed8135f`) and TOTP-protected link change from genuine MFA sessions (`c3744e2`). Independent reviews and exact-head main CI pass for those profiles. Other factor, auto-signin, privacy/lifecycle completeness and final qualification remain; full row not closed. |
 | M05 | Username availability/signin/rename: identity/username, stable identifier contracts | Closure not reassessed |
 | M06 | Delivered magic-link signin and session: identity/magiclink | Closure not reassessed |
 | M07 | Purpose-bound email OTP request/delivery/completion: identity/otp, identity/otp/postgres | Closure not reassessed |
