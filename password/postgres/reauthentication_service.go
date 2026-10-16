@@ -425,6 +425,10 @@ func (s *ReauthenticationService) lookup(ctx context.Context, tenant identity.Te
 }
 
 func (s *ReauthenticationService) authorize(ctx context.Context, caller authorization.DecisionContext, b identity.CommandBinding, target ReauthenticationTarget) error {
+	return s.authorizeProofMethod(ctx, caller, b, target, "password", "single-factor", 1)
+}
+
+func (s *ReauthenticationService) authorizeProofMethod(ctx context.Context, caller authorization.DecisionContext, b identity.CommandBinding, target ReauthenticationTarget, method, profile string, count int64) error {
 	c := caller.Clone()
 	if string(c.Request.Subject.ID) != string(b.ActorID) || c.Request.Subject.Kind != authorization.SubjectUser {
 		return identity.ForbiddenError{}
@@ -442,10 +446,10 @@ func (s *ReauthenticationService) authorize(ctx context.Context, caller authoriz
 	if c.Request.Attributes == nil {
 		c.Request.Attributes = authorization.Attributes{}
 	}
-	c.Request.Attributes["identity.authentication.method"] = authorization.StringValue("password")
-	c.Request.Attributes["identity.authentication.profile"] = authorization.StringValue("single-factor")
+	c.Request.Attributes["identity.authentication.method"] = authorization.StringValue(method)
+	c.Request.Attributes["identity.authentication.profile"] = authorization.StringValue(profile)
 	c.Request.Attributes["identity.authentication.phase"] = authorization.StringValue("proposed")
-	c.Request.Attributes["identity.authentication.factor-count"] = authorization.IntValue(1)
+	c.Request.Attributes["identity.authentication.factor-count"] = authorization.IntValue(count)
 	c.Request.Attributes["identity.authentication.target-purpose"] = authorization.StringValue(string(target.Purpose))
 	c.Request.Attributes["identity.authentication.target-action"] = authorization.StringValue(target.Action)
 	c.Request.Attributes["identity.authentication.target-audience"] = authorization.StringValue(target.Audience)

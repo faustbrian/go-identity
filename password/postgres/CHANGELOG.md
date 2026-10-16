@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Add explicitly selected TOTP-protected primary-email change through
+  `NewEmailTOTPPrimarySource`. Original signed factor proof, session family,
+  enrollment/generation and earliest deadline remain binding through delivery
+  and confirmation. Request effects consume the proof atomically; retries and
+  recovery return original metadata without renewing authority. Existing
+  password/known-empty-MFA profiles still reject enrolled accounts.
+
 - Prepare the original old-mailbox notice for explicitly selected first-primary
   OTP establishment. Authenticate the committed sole-verified change policy;
   existing replacement-only preparation remains unchanged.

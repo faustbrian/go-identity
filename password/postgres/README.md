@@ -1,5 +1,22 @@
 # Password PostgreSQL adapter
 
+## TOTP-protected email change
+
+`NewEmailTOTPPrimarySource` explicitly composes the existing session/CSRF and
+authorization owner with MFA's `EmailChangeFactorSource`. Select only self-user
+`identity.email.change-request` and a matching proof audience, then construct the
+ordinary managed/keyed email service with `email.RequirePrimaryAddress`.
+Install the MFA email-use forward migration first; reference composition owns
+this wiring when `Email.TOTPChange` is selected. The actual original TOTP proof
+must be consumed with pending attachment and delivery, and its enrollment,
+factor generation, original session family and earliest deadline remain binding
+through confirmation. Recovery/retries do not renew that authority. Default
+password admission continues to require authoritative known-empty MFA.
+The selected source accepts retained password sessions and genuine
+password/TOTP or password/recovery sessions. An MFA-origin session's own
+factor enrollment remains binding separately from the fresh step-up factor;
+neither is dropped or substituted during keyed restoration or confirmation.
+
 ## Safe email removal
 
 For administrative targets, select `EmailPrimaryConfig.AdministrativeTargets`

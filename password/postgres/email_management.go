@@ -107,6 +107,11 @@ func NewEmailManagementService(primary *EmailPrimarySource, c EmailManagementCon
 		if c.Change == nil || c.Change.Validate() != nil || c.ChangeNotification == nil || c.ChangeNotification.validate() != nil {
 			return nil, password.ErrPasswordWork
 		}
+		if primary.factor != nil && c.Change.CurrentAddress != email.RequirePrimaryAddress {
+			// The selected TOTP profile is genuine-primary replacement only;
+			// initial establishment is a distinct email goal acceptance profile.
+			return nil, password.ErrPasswordWork
+		}
 		profile, notice := *c.Change, *c.ChangeNotification
 		notice.Locales = slices.Clone(notice.Locales)
 		c.Change, c.ChangeNotification = &profile, &notice
@@ -166,7 +171,8 @@ func NewEmailManagementService(primary *EmailPrimarySource, c EmailManagementCon
 		Locales                                                                          []string
 		Change                                                                           *email.ChangeProfile            `json:",omitempty"`
 		Notification                                                                     *emailChangeNotificationProfile `json:",omitempty"`
-	}{"identity-managed-email-v1", c.ConfigurationID, primary.config.Action, c.PolicyID, c.Verification.Audience, c.Domain.ComparisonProfile, c.Delivery.Endpoint, c.Delivery.TemplateID, primary.source.c.Coordinator.AdmissionPolicy.PolicyVersion, c.Delivery.ProviderVersion, c.Delivery.TemplateVersion, c.Lifetime, primary.config.MaximumAge, c.ResendInterval, c.Delivery.Locales, c.Change, changeNotificationProfile(c.ChangeNotification)})
+		TOTP                                                                             bool                            `json:",omitempty"`
+	}{"identity-managed-email-v1", c.ConfigurationID, primary.config.Action, c.PolicyID, c.Verification.Audience, c.Domain.ComparisonProfile, c.Delivery.Endpoint, c.Delivery.TemplateID, primary.source.c.Coordinator.AdmissionPolicy.PolicyVersion, c.Delivery.ProviderVersion, c.Delivery.TemplateVersion, c.Lifetime, primary.config.MaximumAge, c.ResendInterval, c.Delivery.Locales, c.Change, changeNotificationProfile(c.ChangeNotification), primary.factor != nil})
 	if err != nil {
 		return nil, password.ErrPasswordWork
 	}
@@ -294,8 +300,14 @@ func (s *EmailManagementService) prepareRequest(ctx context.Context, r EmailMana
 	if err != nil {
 		return out, err
 	}
-	if enrolled {
+	if s.primary.factor == nil && enrolled {
 		return out, identity.ForbiddenError{}
+	}
+	if s.primary.factor != nil {
+		version, err := admission.custody().factor.AuthorityVersion()
+		if err != nil || !enrolled || version != factorVersion {
+			return out, identity.ForbiddenError{}
+		}
 	}
 	op := emailPrimaryOperation(action)
 	identifierVersion, verificationVersion := uint64(1), uint64(1)
@@ -357,6 +369,17 @@ func (s *EmailManagementService) prepareRequest(ctx context.Context, r EmailMana
 	}
 	at := r.Primary.Proof.Proof.IssuedAt.UTC().Truncate(time.Second)
 	link := email.ManagedVerificationSpec{Binding: b, IdentifierID: r.Primary.AddressID, IdentifierVersion: identifierVersion, VerificationVersion: verificationVersion, Payload: email.CapabilityPayload{TenantID: b.TenantID, SubjectID: identity.SubjectID(b.UserID), CanonicalAddress: address.Canonical(), Purpose: "identity.identifier.verify", Redirect: *callback, Version: verificationVersion}, IssuedAt: at, ExpiresAt: at.Add(s.config().Lifetime), SessionID: bindings.SessionID, SessionVersion: bindings.Version}
+	if s.primary.factor != nil {
+		// The frozen TOTP email profile conserves the earliest original proof,
+		// freshness and session deadline; delivered capability seconds round down.
+		until, err := admission.Deadline()
+		if err != nil {
+			return out, err
+		}
+		if until.Before(link.ExpiresAt) {
+			link.ExpiresAt = until.UTC().Truncate(time.Second)
+		}
+	}
 	if s.config().Change != nil {
 		link.Previous, link.ChangeProfile = previous, *s.config().Change
 	}

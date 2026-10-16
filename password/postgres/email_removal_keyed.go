@@ -198,7 +198,7 @@ func (p *emailRemovalPhase) restoreRequestKey(ctx context.Context, k kernel.Requ
 		return password.ErrPasswordWork
 	}
 	r := p.request
-	primary, err := restoreEmailPrimary(p.service.primary, EmailPrimaryRequest{TenantID: r.TenantID, TargetSubjectID: r.TargetSubjectID, CommandID: b.CommandID, AddressID: r.AddressID, Session: r.Primary.Session, Proof: r.Primary.Proof, CSRFToken: r.Primary.CSRFToken, Caller: r.Caller.Clone()}, input.Spec.Fields, input.Proof)
+	primary, err := restoreEmailPrimary(ctx, p.service.primary, EmailPrimaryRequest{TenantID: r.TenantID, TargetSubjectID: r.TargetSubjectID, CommandID: b.CommandID, AddressID: r.AddressID, Session: r.Primary.Session, Proof: r.Primary.Proof, CSRFToken: r.Primary.CSRFToken, Caller: r.Caller.Clone()}, input.Spec.Fields, input.Proof)
 	if err != nil {
 		return err
 	}

@@ -15,6 +15,7 @@ import (
 	mfapg "github.com/faustbrian/go-identity/mfa/postgres"
 	kernel "github.com/faustbrian/go-identity/postgres"
 	"github.com/faustbrian/go-identity/risk"
+	sessionpg "github.com/faustbrian/go-identity/session/postgres"
 	lifecyclepg "github.com/faustbrian/go-transactional-outbox/postgres/identity"
 )
 
@@ -53,11 +54,13 @@ func (s *EmailManagementService) VerificationConfirm(ctx context.Context, r emai
 }
 
 // ChangeConfirm authenticates original new-address possession and fresh
-// password-change intent, then atomically verifies/promotes the candidate,
+// password- or explicitly selected TOTP-change intent, then atomically verifies/promotes the candidate,
 // invalidates old identifier-bound sessions and stages old-address notification.
 // It issues no authentication cookie. Unknown/rollback do not imply success;
 // exact replay returns metadata and never duplicates the notice. Scope, bounded
 // cancellation, current MFA/risk admission and custody match VerificationConfirm.
+// The selected TOTP profile additionally requires the initiating session/family
+// and original factor proof's earliest deadline; a newer login cannot replace it.
 func (s *EmailManagementService) ChangeConfirm(ctx context.Context, r email.ChangeConfirmRequest) (out email.ChangeConfirmResult, err error) {
 	if ctx == nil || s == nil || s.config == nil || s.primary == nil || s.primary.config.Action != "identity.email.change-request" || r.Validate() != nil {
 		return out, email.ErrInvalidVerification
@@ -428,8 +431,21 @@ func (p *managedEmailConfirmationPhase) check(ctx context.Context, w kernel.Work
 	if err := w.RequireActiveUserAuthorization(ctx, p, p.original.Authorization); err != nil {
 		return err
 	}
-	if _, err := mfapg.RequireManagedEmailFactors(ctx, w, p, c, p.original.FactorVersion); err != nil {
-		return err
+	if p.service.primary.factor != nil {
+		if err := sessionpg.RequireSession(ctx, w, p.service.primary.source.c.Session, p.original.Session); err != nil {
+			return err
+		}
+		version, err := p.original.FactorProof.AuthorityVersion()
+		if err != nil || version != p.original.FactorVersion {
+			return identity.ForbiddenError{}
+		}
+		if err := p.original.FactorProof.CheckConsumed(ctx, w, p, c, p.spec.Binding.CommandID); err != nil {
+			return err
+		}
+	} else {
+		if _, err := mfapg.RequireManagedEmailFactors(ctx, w, p, c, p.original.FactorVersion); err != nil {
+			return err
+		}
 	}
 	now, err := w.DatabaseTime(ctx)
 	if err != nil {

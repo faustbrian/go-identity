@@ -110,6 +110,17 @@ func (p *emailManagementPhase) AdmitFeaturePreparation(ctx context.Context, w ke
 	if err := p.primary.Admit(ctx, w, p, c); err != nil {
 		return err
 	}
+	return p.checkFactors(ctx, w, c)
+}
+
+func (p *emailManagementPhase) checkFactors(ctx context.Context, w kernel.Work, c identity.Command) error {
+	if p.service.primary.factor != nil {
+		v, err := p.primary.custody().factor.AuthorityVersion()
+		if err != nil || v != p.factorVersion {
+			return identity.ForbiddenError{}
+		}
+		return p.primary.custody().factor.CheckAuthority(ctx, w, p, c)
+	}
 	_, err := mfapg.RequireManagedEmailFactors(ctx, w, p, c, p.factorVersion)
 	return err
 }
@@ -216,7 +227,7 @@ func (p *emailManagementPhase) check(ctx context.Context, w kernel.Work, c ident
 	if err := p.primary.Check(ctx, w, p, c); err != nil {
 		return err
 	}
-	if _, err := mfapg.RequireManagedEmailFactors(ctx, w, p, c, p.factorVersion); err != nil {
+	if err := p.checkFactors(ctx, w, c); err != nil {
 		return err
 	}
 	now, err := w.DatabaseTime(ctx)
@@ -263,9 +274,21 @@ func (p *emailManagementPhase) ApplyFeature(ctx context.Context, w kernel.Work, 
 	return identity.FeatureReceipt{Operation: spec.Operation, BeforeVersion: before, AfterVersion: after}, nil
 }
 func (p *emailManagementPhase) CheckFeatureCommit(ctx context.Context, w kernel.Work, c identity.Command) error {
+	if p.service.primary.factor != nil {
+		spec, ok := c.Feature()
+		if !ok {
+			return password.ErrPasswordWork
+		}
+		if err := p.primary.custody().factor.CheckConsumed(ctx, w, p, c, spec.Binding.CommandID); err != nil {
+			return err
+		}
+	}
 	return p.check(ctx, w, c)
 }
 func (p *emailManagementPhase) RecoverParticipant(ctx context.Context, w kernel.RecoveryWork) (kernel.RecoveryStatus, error) {
+	if p.service.primary.factor != nil {
+		return mfapg.RecoverEmailChangeUse(ctx, w, p)
+	}
 	return recoverEmailPrimaryUse(ctx, w, p)
 }
 

@@ -1,7 +1,9 @@
 package passwordpostgres
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"time"
 
@@ -11,6 +13,7 @@ import (
 	identity "github.com/faustbrian/go-identity"
 	mfapg "github.com/faustbrian/go-identity/mfa/postgres"
 	"github.com/faustbrian/go-identity/risk"
+	sessionpg "github.com/faustbrian/go-identity/session/postgres"
 )
 
 // ValidateManagedVerification inspects a delivered management link without
@@ -114,8 +117,16 @@ func (s *EmailManagementService) ValidateManagedVerification(ctx context.Context
 	if err != nil {
 		return false, err
 	}
-	if enrolled || original.FactorVersion == 0 || factor != original.FactorVersion {
+	if (s.primary.factor == nil && enrolled || s.primary.factor != nil && !enrolled) || original.FactorVersion == 0 || factor != original.FactorVersion {
 		return false, identity.ForbiddenError{}
+	}
+	if s.primary.factor != nil {
+		if err := s.checkOriginalFactorSession(ctx, original); err != nil {
+			return false, err
+		}
+		if err := s.primary.factor.CheckCurrent(ctx, original.FactorProof, spec.Binding.CommandID); err != nil {
+			return false, err
+		}
 	}
 	matched := false
 	for n, identifier := range state.Identifiers {
@@ -147,4 +158,47 @@ func (s *EmailManagementService) ValidateManagedVerification(ctx context.Context
 		return false, err
 	}
 	return true, nil
+}
+
+// Active-factor change retains the initiating session's own validity, not a
+// newer login. Its attachment has changed identifier authority, so ordinary
+// Get authentication is not the right test: compare only the session owner's
+// exact record, active family and original lifetime, then fence other owners
+// separately. Explicit confirmation repeats this under protected Work locks.
+func (s *EmailManagementService) checkOriginalFactorSession(ctx context.Context, original managedEmailOriginAdmission) error {
+	spec, err := original.Session.Bindings()
+	if err != nil {
+		return identity.ForbiddenError{}
+	}
+	stored, err := s.primary.source.sessions.Get(ctx, spec.TenantID, spec.SessionID)
+	if err != nil {
+		if errors.Is(err, sessionpg.ErrRecordAbsent) {
+			return identity.ForbiddenError{}
+		}
+		return err
+	}
+	if stored.Revoked || stored.FamilyRevoked || stored.CurrentFamilyVersion != spec.FamilyVersion {
+		return identity.ForbiddenError{}
+	}
+	expected, err := sessionpg.OriginalSessionFields(original.Session)
+	if err != nil {
+		return identity.ForbiddenError{}
+	}
+	actual, err := sessionpg.OriginalSessionFields(stored.Session)
+	if err != nil {
+		return identity.UnavailableError{}
+	}
+	want, err := json.Marshal(expected)
+	defer clear(want)
+	if err != nil {
+		return identity.UnavailableError{}
+	}
+	got, err := json.Marshal(actual)
+	defer clear(got)
+	now := s.primary.source.c.Coordinator.QueryPolicy.Clock.Now()
+	lifetime, lifetimeErr := original.Session.Lifetime(now)
+	if err != nil || !bytes.Equal(want, got) || lifetimeErr != nil || !now.Before(lifetime.ExpiresAt) {
+		return identity.ForbiddenError{}
+	}
+	return ctx.Err()
 }

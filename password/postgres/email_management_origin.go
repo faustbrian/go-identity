@@ -5,14 +5,18 @@ import (
 	"context"
 	"net/url"
 	"strings"
+	"time"
 
+	auth "github.com/faustbrian/go-authentication/v2"
 	"github.com/faustbrian/go-authorization/v3"
 	issuerpg "github.com/faustbrian/go-capability/postgres/identity"
 	"github.com/faustbrian/go-capability/v2"
 	identity "github.com/faustbrian/go-identity"
 	email "github.com/faustbrian/go-identity/email"
+	mfapg "github.com/faustbrian/go-identity/mfa/postgres"
 	password "github.com/faustbrian/go-identity/password"
 	kernel "github.com/faustbrian/go-identity/postgres"
+	"github.com/faustbrian/go-identity/session"
 	sessionpg "github.com/faustbrian/go-identity/session/postgres"
 )
 
@@ -43,6 +47,8 @@ type managedEmailOriginAdmission struct {
 	Directory                                     kernel.DirectoryAuthorityAdmission
 	Credential                                    kernel.CredentialAdmission
 	Authorization                                 kernel.UserAuthorizationAdmission
+	FactorProof                                   mfapg.EmailChangeFactorAdmission
+	Session                                       session.Session
 }
 
 func (s *EmailManagementService) readManagedVerification(ctx context.Context, proof capability.Proof, caller authorization.DecisionContext, originalAdmission *managedEmailOriginAdmission) (spec email.ManagedVerificationSpec, replayVersion uint32, err error) {
@@ -104,6 +110,42 @@ func (s *EmailManagementService) readManagedVerification(ctx context.Context, pr
 	if s.policy.Authorize(grant, spec, s.primary.source.c.Coordinator.QueryPolicy.Clock.Now()) != nil {
 		return spec, 0, identity.ForbiddenError{}
 	}
+	if s.primary.factor != nil {
+		// Original fields are authenticated by the committed email preparation,
+		// not candidate request metadata; restoring them never renews authority.
+		values := make(map[string]identity.FeatureValue, len(stored.Spec.Fields))
+		var fields []identity.FeatureField
+		for _, f := range stored.Spec.Fields {
+			values[f.Name] = f.Value
+			if strings.HasPrefix(f.Name, "source-session.") {
+				fields = append(fields, f)
+			}
+		}
+		original, err := sessionpg.OriginalSessionFromFields(spec.Binding.TenantID, spec.Binding.UserID, fields)
+		if err != nil {
+			return spec, 0, err
+		}
+		factor, err := restoreEmailFactor(ctx, s.primary, spec.Binding.TenantID, spec.Binding.UserID, original, values)
+		if err != nil {
+			return spec, 0, err
+		}
+		record, err := factor.Original()
+		if err != nil {
+			return spec, 0, err
+		}
+		retained := emailPrimaryCustody{source: s.primary, original: original, record: record, factor: factor}
+		if err := s.checkFactorLinkDeadline(EmailPrimaryAdmission{custody: func() emailPrimaryCustody { return retained }}, spec); err != nil {
+			return spec, 0, err
+		}
+		version, err := factor.AuthorityVersion()
+		v := values["email.management.factor-version"]
+		if err != nil || v.Kind != identity.FeatureUint64 || version != v.Uint64 {
+			return spec, 0, identity.ForbiddenError{}
+		}
+		if originalAdmission != nil {
+			originalAdmission.FactorProof = factor
+		}
+	}
 	if originalAdmission != nil {
 		var fields []identity.FeatureField
 		for _, f := range stored.Spec.Fields {
@@ -124,7 +166,7 @@ func (s *EmailManagementService) readManagedVerification(ctx context.Context, pr
 		if sessionErr != nil {
 			return spec, 0, password.ErrPasswordWork
 		}
-		dir, credential, auth, admissionErr := sessionpg.OriginalSessionAdmission(s.primary.source.c.Profile, original, spec.Binding)
+		dir, credential, auth, admissionErr := s.primary.originalAdmission(original, spec.Binding)
 		if admissionErr != nil || originalAdmission.UserVersion == 0 || originalAdmission.UserVersion == ^uint64(0) || originalAdmission.IdentifierVersion == 0 || originalAdmission.IdentifierVersion == ^uint64(0) || credential.IdentifierAuthorityVersion != originalAdmission.IdentifierVersion {
 			return spec, 0, password.ErrPasswordWork
 		}
@@ -132,6 +174,7 @@ func (s *EmailManagementService) readManagedVerification(ctx context.Context, pr
 		// substitute today's epochs: unrelated changes invalidate this intent.
 		credential.IdentifierAuthorityVersion++
 		originalAdmission.Directory, originalAdmission.Credential, originalAdmission.Authorization = dir, credential, auth
+		originalAdmission.Session = original
 	}
 	return spec, version, nil
 }
@@ -166,7 +209,8 @@ func (s *EmailManagementService) managedVerificationIntent(stored emailManagemen
 		}
 		identifierVersion, verificationVersion = i.Uint64+1, v.Uint64+1
 	}
-	if canonical.Kind != identity.FeatureText || callback.Kind != identity.FeatureText || profile.Kind != identity.FeatureBytes || !bytes.Equal(profile.Bytes, s.profile[:]) || factor.Kind != identity.FeatureUint64 || factor.Uint64 == 0 || stored.TokenGeneration != verificationVersion || stored.ExpiresAt.Sub(stored.IssuedAt) != s.config().Lifetime {
+	lifetime := stored.ExpiresAt.Sub(stored.IssuedAt)
+	if canonical.Kind != identity.FeatureText || callback.Kind != identity.FeatureText || profile.Kind != identity.FeatureBytes || !bytes.Equal(profile.Bytes, s.profile[:]) || factor.Kind != identity.FeatureUint64 || factor.Uint64 == 0 || stored.TokenGeneration != verificationVersion || s.primary.factor == nil && lifetime != s.config().Lifetime || s.primary.factor != nil && (lifetime <= 0 || lifetime > s.config().Lifetime) {
 		return email.ManagedVerificationSpec{}, password.ErrPasswordWork
 	}
 	address, err := s.address.Parse(email.AddressInput(canonical.Text))
@@ -201,4 +245,34 @@ func (s *EmailManagementService) managedVerificationIntent(stored emailManagemen
 		}
 	}
 	return spec, nil
+}
+
+func restoreEmailFactor(ctx context.Context, source *EmailPrimarySource, tenant identity.TenantID, user identity.UserID, original session.Session, values map[string]identity.FeatureValue) (mfapg.EmailChangeFactorAdmission, error) {
+	b, err := original.Bindings()
+	id, digest, age := values["email.primary.proof.id"], values["email.primary.proof.digest"], values["email.primary.maximum-age-nanos"]
+	if err != nil || source == nil || source.factor == nil || b.TenantID != tenant || b.UserID != user || id.Kind != identity.FeatureText || digest.Kind != identity.FeatureBytes || len(digest.Bytes) != 32 || age.Kind != identity.FeatureUint64 || age.Uint64 != uint64(source.config.MaximumAge) {
+		return mfapg.EmailChangeFactorAdmission{}, password.ErrPasswordWork
+	}
+	use := auth.ReauthenticationUse{ProofUse: auth.ProofUse{Tenant: string(tenant), Subject: string(user), Purpose: "identity.email.change-request", Audience: source.config.Audience}, SessionID: b.SessionID, SessionVersion: b.Version, Action: source.config.Action, MaximumAge: source.config.MaximumAge}
+	var d [32]byte
+	copy(d[:], digest.Bytes)
+	return source.factor.Restore(ctx, auth.ProofID(id.Text), d, use, original)
+}
+
+func (s *EmailManagementService) checkFactorLinkDeadline(a EmailPrimaryAdmission, spec email.ManagedVerificationSpec) error {
+	if s.primary.factor == nil {
+		return nil
+	}
+	until, err := a.Deadline()
+	if err != nil {
+		return err
+	}
+	want := spec.IssuedAt.Add(s.config().Lifetime)
+	if until.Before(want) {
+		want = until.UTC().Truncate(time.Second)
+	}
+	if !spec.ExpiresAt.Equal(want) {
+		return identity.ForbiddenError{}
+	}
+	return nil
 }

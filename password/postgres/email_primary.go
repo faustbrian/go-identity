@@ -13,6 +13,7 @@ import (
 	auth "github.com/faustbrian/go-authentication/v2"
 	"github.com/faustbrian/go-authorization/v3"
 	identity "github.com/faustbrian/go-identity"
+	mfapg "github.com/faustbrian/go-identity/mfa/postgres"
 	password "github.com/faustbrian/go-identity/password"
 	kernel "github.com/faustbrian/go-identity/postgres"
 	"github.com/faustbrian/go-identity/session"
@@ -32,7 +33,7 @@ type EmailPrimaryConfig struct {
 	AdministrativeTargets bool
 }
 
-// EmailPrimaryRequest borrows the original signed password reauthentication
+// EmailPrimaryRequest borrows the original signed selected reauthentication
 // and source credential for one stable command/address. Tenant and Caller are
 // trusted authenticated composition. Neither IDs nor this request grant access.
 type EmailPrimaryRequest struct {
@@ -46,12 +47,13 @@ type EmailPrimaryRequest struct {
 	CSRFToken       session.CSRFToken
 }
 
-// EmailPrimarySource supplies the password owner's email-management admission.
+// EmailPrimarySource supplies explicitly composed email-management admission.
 // It owns no transaction, store, retry, cache or goroutine.
 type EmailPrimarySource struct {
 	source    *ReauthenticationService
 	config    EmailPrimaryConfig
 	validator *auth.AuthorityAuthenticator
+	factor    *mfapg.EmailChangeFactorSource
 }
 
 // EmailPrimaryAdmission is opaque original custody, not mutation permission.
@@ -67,10 +69,37 @@ type emailPrimaryCustody struct {
 	use      auth.ReauthenticationUse
 	fields   []identity.FeatureField
 	csrfKey  session.CSRFKey
+	factor   mfapg.EmailChangeFactorAdmission
+}
+
+// Select from frozen provenance, never fall back after a denied MFA mapping.
+// The factor participant separately fences the session's original enrollment
+// as well as the fresh action proof; the legacy password profile stays SFA-only.
+func (s *EmailPrimarySource) originalAdmission(original session.Session, binding identity.CommandBinding) (kernel.DirectoryAuthorityAdmission, kernel.CredentialAdmission, kernel.UserAuthorizationAdmission, error) {
+	if s.factor != nil && original.MFAAuthentication() != (session.MFAAuthentication{}) {
+		return sessionpg.OriginalMFAPasswordSessionAdmission(s.source.c.Profile, original, binding)
+	}
+	return sessionpg.OriginalSessionAdmission(s.source.c.Profile, original, binding)
 }
 
 // NewEmailPrimarySource validates composition without IO or proof issuance.
 func NewEmailPrimarySource(source *ReauthenticationService, config EmailPrimaryConfig) (*EmailPrimarySource, error) {
+	return newEmailPrimarySource(source, nil, config)
+}
+
+// NewEmailTOTPPrimarySource explicitly selects fresh active-TOTP evidence for
+// self-user email change. The existing source supplies real primary-session,
+// CSRF and authorization owners, not password proof authority. Factor owns the
+// signed original proof/current enrollment/atomic consumption. No fallback to
+// password or known-empty MFA is permitted; other email actions remain separate.
+func NewEmailTOTPPrimarySource(source *ReauthenticationService, factor *mfapg.EmailChangeFactorSource, config EmailPrimaryConfig) (*EmailPrimarySource, error) {
+	if factor == nil || config.Action != "identity.email.change-request" || config.AdministrativeTargets {
+		return nil, password.ErrPasswordWork
+	}
+	return newEmailPrimarySource(source, factor, config)
+}
+
+func newEmailPrimarySource(source *ReauthenticationService, factor *mfapg.EmailChangeFactorSource, config EmailPrimaryConfig) (*EmailPrimarySource, error) {
 	if source == nil || source.repository == nil || !source.repository.configuredWriter() || source.sessions == nil || source.c.Verifier.Now == nil || config.MaximumAge <= 0 || config.MaximumAge > 5*time.Minute || emailPrimaryOperation(config.Action).Owner == "" || !reauthenticationText(config.Audience, 256) {
 		return nil, password.ErrPasswordWork
 	}
@@ -78,7 +107,7 @@ func NewEmailPrimarySource(source *ReauthenticationService, config EmailPrimaryC
 		return nil, password.ErrPasswordWork
 	}
 	target := ReauthenticationTarget{Purpose: "identity.password.verify", Action: config.Action, Audience: config.Audience}
-	if !slices.Contains(source.c.Targets, target) {
+	if factor == nil && !slices.Contains(source.c.Targets, target) {
 		return nil, password.ErrPasswordWork
 	}
 	switch config.Transport {
@@ -104,6 +133,9 @@ func NewEmailPrimarySource(source *ReauthenticationService, config EmailPrimaryC
 		return nil, password.ErrPasswordWork
 	}
 	config.CSRFKeys = slices.Clone(config.CSRFKeys)
+	if factor != nil {
+		return &EmailPrimarySource{source: source, config: config, factor: factor}, nil
+	}
 	keys := make([]auth.AuthorityKey, 0, len(source.c.VerificationKeys))
 	for id, key := range source.c.VerificationKeys {
 		keys = append(keys, auth.AuthorityKey{ID: id, PublicKey: key})
@@ -123,7 +155,7 @@ func (s *EmailPrimarySource) Prepare(ctx context.Context, request EmailPrimaryRe
 			out, err = EmailPrimaryAdmission{}, password.ErrPasswordWork
 		}
 	}()
-	if ctx == nil || s == nil || s.source == nil || s.validator == nil {
+	if ctx == nil || s == nil || s.source == nil || s.validator == nil && s.factor == nil {
 		return out, password.ErrPasswordWork
 	}
 	bounded, cancel := context.WithTimeout(ctx, s.source.c.Repository.MaximumDuration)
@@ -156,30 +188,50 @@ func (s *EmailPrimarySource) Prepare(ctx context.Context, request EmailPrimaryRe
 		return out, err
 	}
 	target := ReauthenticationTarget{Purpose: "identity.password.verify", Action: s.config.Action, Audience: s.config.Audience}
+	if s.factor != nil {
+		target.Purpose = "identity.email.change-request"
+	}
 	binding := identity.CommandBinding{CommandID: request.CommandID, TenantID: request.TenantID, UserID: subject, ActorID: identity.ActorID(bindings.UserID), ActorKind: authorization.SubjectUser, RecordID: string(request.AddressID), OperationID: target.Action}
-	if err := s.source.authorize(bounded, request.Caller, binding, target); err != nil {
+	method, profile, count := "password", "single-factor", int64(1)
+	if s.factor != nil {
+		method, profile, count = "totp", "multi-factor", 2
+	}
+	if err := s.source.authorizeProofMethod(bounded, request.Caller, binding, target, method, profile, count); err != nil {
 		return out, err
 	}
 	use := auth.ReauthenticationUse{ProofUse: auth.ProofUse{Tenant: string(request.TenantID), Subject: string(bindings.UserID), Purpose: target.Purpose, Audience: target.Audience}, SessionID: bindings.SessionID, SessionVersion: bindings.Version, Action: target.Action, MaximumAge: s.config.MaximumAge}
-	if s.validator.ValidateReauthenticationProof(bounded, request.Proof, use) != nil {
-		if err := bounded.Err(); err != nil {
+	var factor mfapg.EmailChangeFactorAdmission
+	var record auth.SignedReauthenticationRecord
+	if s.factor != nil {
+		factor, err = s.factor.Prepare(bounded, request.Proof, use, original)
+		if err != nil {
 			return out, err
 		}
-		return out, identity.ForbiddenError{}
-	}
-	record, err := s.source.repository.Reauthentication(bounded, request.Proof.Proof.ID)
-	if err != nil || record.Proof != request.Proof || record.Issuer != s.source.c.Issuer || record.Environment != s.source.c.Environment || record.CredentialID != bindings.Authentication.CredentialID || record.CredentialVersion != original.EffectiveCredentialVersion() {
-		if err := bounded.Err(); err != nil {
+		record, err = factor.Original()
+		if err != nil {
 			return out, err
 		}
-		return out, identity.ForbiddenError{}
+	} else {
+		if s.validator.ValidateReauthenticationProof(bounded, request.Proof, use) != nil {
+			if err := bounded.Err(); err != nil {
+				return out, err
+			}
+			return out, identity.ForbiddenError{}
+		}
+		record, err = s.source.repository.Reauthentication(bounded, request.Proof.Proof.ID)
+		if err != nil || record.Proof != request.Proof || record.Issuer != s.source.c.Issuer || record.Environment != s.source.c.Environment || record.CredentialID != bindings.Authentication.CredentialID || record.CredentialVersion != original.EffectiveCredentialVersion() {
+			if err := bounded.Err(); err != nil {
+				return out, err
+			}
+			return out, identity.ForbiddenError{}
+		}
 	}
 	actorBinding := binding
 	actorBinding.UserID = bindings.UserID
-	if _, _, _, err := sessionpg.OriginalSessionAdmission(s.source.c.Profile, original, actorBinding); err != nil {
+	if _, _, _, err := s.originalAdmission(original, actorBinding); err != nil {
 		return out, identity.ForbiddenError{}
 	}
-	state := emailPrimaryCustody{source: s, request: request, original: original, record: record, use: use}
+	state := emailPrimaryCustody{source: s, request: request, original: original, record: record, use: use, factor: factor}
 	if err := state.checkTime(s.source.c.Verifier.Now()); err != nil {
 		return out, err
 	}
@@ -187,12 +239,18 @@ func (s *EmailPrimarySource) Prepare(ctx context.Context, request EmailPrimaryRe
 	if err != nil {
 		return out, err
 	}
-	payload, err := encodeReauthenticationRecord(record)
+	var digest [32]byte
+	if s.factor != nil {
+		digest, err = factor.Digest()
+	} else {
+		var payload []byte
+		payload, err = encodeReauthenticationRecord(record)
+		digest = sha256.Sum256(payload)
+		clear(payload)
+	}
 	if err != nil {
 		return out, err
 	}
-	digest := sha256.Sum256(payload)
-	clear(payload)
 	state.fields = append(fields,
 		identity.FeatureField{Name: "email.primary.proof.digest", Value: identity.FeatureValue{Kind: identity.FeatureBytes, Bytes: slices.Clone(digest[:])}},
 		identity.FeatureField{Name: "email.primary.proof.id", Value: identity.FeatureValue{Kind: identity.FeatureText, Text: string(record.Proof.Proof.ID)}},
@@ -388,7 +446,7 @@ func (a EmailPrimaryAdmission) Admit(ctx context.Context, work kernel.Work, owne
 	}
 	actorBinding := binding
 	actorBinding.UserID = identity.UserID(binding.ActorID)
-	directory, credential, policy, err := sessionpg.OriginalSessionAdmission(state.source.source.c.Profile, state.original, actorBinding)
+	directory, credential, policy, err := state.source.originalAdmission(state.original, actorBinding)
 	if err != nil {
 		return identity.ForbiddenError{}
 	}
@@ -422,6 +480,11 @@ func (a EmailPrimaryAdmission) Admit(ctx context.Context, work kernel.Work, owne
 			return err
 		}
 	}
+	if state.source.factor != nil {
+		if err := state.factor.Admit(ctx, work, owner, command); err != nil {
+			return err
+		}
+	}
 	return a.Check(ctx, work, owner, command)
 }
 
@@ -439,6 +502,9 @@ func (a EmailPrimaryAdmission) Consume(ctx context.Context, work kernel.Work, ow
 	state, binding, err := a.scope(ctx, work, owner, command)
 	if err != nil {
 		return err
+	}
+	if state.source.factor != nil {
+		return state.factor.Consume(ctx, work, owner, command)
 	}
 	// Only the proof-owner lookup uses the verified actor. The actual Work,
 	// command ID/purpose, domain mutation, audit and recovery stay target-scoped.

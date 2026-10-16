@@ -21,6 +21,9 @@ func TestEmailPrimaryZeroCannotProduceOrConsumeAuthority(t *testing.T) {
 	if source, err := NewEmailPrimarySource(nil, EmailPrimaryConfig{}); err == nil || source != nil {
 		t.Fatal("zero configuration admitted")
 	}
+	if source, err := NewEmailTOTPPrimarySource(nil, nil, EmailPrimaryConfig{Action: "identity.email.change-request"}); err == nil || source != nil {
+		t.Fatal("unconfigured TOTP email source admitted")
+	}
 	var admission EmailPrimaryAdmission
 	if _, err := admission.Original(); err == nil {
 		t.Fatal("zero original admitted")

@@ -321,7 +321,11 @@ func (s *KeyedEmailManagementService) requestIntent(ctx context.Context, r Email
 }
 
 func (s *KeyedEmailManagementService) proofUse(r EmailManagementRequest, now time.Time) auth.ReauthenticationUse {
-	return auth.ReauthenticationUse{ProofUse: auth.ProofUse{Tenant: string(r.Primary.TenantID), Subject: string(r.Primary.Caller.Request.Subject.ID), Purpose: "identity.password.verify", Audience: s.native.primary.config.Audience, Now: now}, SessionID: r.Primary.Proof.SessionID, SessionVersion: r.Primary.Proof.SessionVersion, Action: s.native.primary.config.Action, MaximumAge: s.native.primary.config.MaximumAge}
+	purpose := auth.Purpose("identity.password.verify")
+	if s.native.primary.factor != nil {
+		purpose = "identity.email.change-request"
+	}
+	return auth.ReauthenticationUse{ProofUse: auth.ProofUse{Tenant: string(r.Primary.TenantID), Subject: string(r.Primary.Caller.Request.Subject.ID), Purpose: purpose, Audience: s.native.primary.config.Audience, Now: now}, SessionID: r.Primary.Proof.SessionID, SessionVersion: r.Primary.Proof.SessionVersion, Action: s.native.primary.config.Action, MaximumAge: s.native.primary.config.MaximumAge}
 }
 
 // Format redacts borrowed native owners and keyed configuration.
