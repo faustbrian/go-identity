@@ -90,6 +90,11 @@ func TestSessionSelectionMatchesEverySelectedIssuer(t *testing.T) {
 	if err != nil || selected.MagicLink != nil {
 		t.Fatal("request-only selection acquired session authority", err)
 	}
+	c.OTP.Signin = nil
+	selected, err = sessionAdmissionSelection(c)
+	if err != nil || selected.Verified == nil || selected.OTP != nil {
+		t.Fatal("password session selection implicitly required or admitted OTP signin", err)
+	}
 }
 
 func TestSessionSelectionMatchesIssuedKeyMaterial(t *testing.T) {

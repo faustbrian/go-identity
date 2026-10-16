@@ -69,7 +69,9 @@ func (s storeMigrationSource) Load(ctx context.Context) ([]migrations.Migration,
 	if err := s.state.features.migrations.validateNamespaces(s.state.config.Schema); err != nil {
 		return nil, err
 	}
-	return s.state.features.migrations.load(ctx, fixedMigrationSource(legacy))
+	c := s.state.features.migrations
+	c.emailOTP = s.state.features.email != nil && s.state.features.email.otpVerification != nil
+	return c.load(ctx, fixedMigrationSource(legacy))
 }
 
 // This source stores only immutable upstream values, never copied SQL literals.
@@ -97,6 +99,7 @@ type featureMigrationConfig struct {
 	passwordMFA, passwordTOTP                               bool
 	passwordRecovery                                        bool
 	passwordOTP                                             bool
+	emailOTP                                                bool
 	mfaEnrollment                                           bool
 	magicSignup                                             bool
 	preauthIssue                                            bool
@@ -116,6 +119,11 @@ func (c featureMigrationConfig) validateNamespaces(riskSchema string) error {
 }
 
 func (c featureMigrationConfig) load(ctx context.Context, base migrations.Source) ([]migrations.Migration, error) {
+	// Password sessions consume the same permanent native record-format prefix.
+	// Selecting that storage history does not construct or advertise OTP signin.
+	if c.signinSchema == "" && c.passwordSigninSchema != "" {
+		c.signinSchema = c.passwordSigninSchema
+	}
 	if c.sessionSchema == "" && c.authenticatedSchema == "" {
 		return nil, identity.InvalidInputError{Field: "reference_session_migrations"}
 	}
@@ -182,6 +190,13 @@ func (c featureMigrationConfig) load(ctx context.Context, base migrations.Source
 		return nil, err
 	}
 	history = append(history, next)
+	if c.signinSchema != "" || c.emailOTP {
+		next, err := (otppostgres.ConsumingMigrationSource{Schema: c.otpSchema, Version: 1400}).Load(ctx)
+		if err != nil {
+			return nil, err
+		}
+		history = append(history, next...)
+	}
 	if c.signinSchema == "" {
 		return history, nil
 	}
@@ -201,7 +216,6 @@ func (c featureMigrationConfig) load(ctx context.Context, base migrations.Source
 		owned = owned[1:] // The exact upstream base is already selected above.
 	}
 	for _, source := range []migrations.Source{
-		otppostgres.ConsumingMigrationSource{Schema: c.otpSchema, Version: 1400},
 		fixedMigrationSource(owned),
 		sessionpostgres.PreAuthReleaseMigrationSource{Schema: c.sessionSchema, Version: 1413},
 		sessionpostgres.CSRFMigrationSource{Schema: c.signinSchema, Version: 1414},

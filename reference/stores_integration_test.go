@@ -36,6 +36,7 @@ import (
 
 type liveStores struct {
 	adminEmailGrant                    *administrativeEmailGrant
+	afterManagedPending                func(capability.Proof, identity.IdentifierID, []*http.Cookie, string, string)
 	afterEmailRemovalPreparation       func(capability.Proof, identity.IdentifierID, passwordpg.EmailManagementRequest, []*http.Cookie, string)
 	emailRemovalMode                   string
 	afterManagedConfirmation           func(email.VerificationConfirmRequest, identity.IdentifierID)

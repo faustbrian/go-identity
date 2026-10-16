@@ -239,6 +239,11 @@ func proveReferenceEmailManagementResend(t *testing.T, ctx context.Context, f li
 		}
 	}
 	old := capture()
+	if f.afterManagedPending != nil {
+		cookies, csrfWire = freshLogin()
+		f.afterManagedPending(old, initial.Primary.AddressID, cookies, csrfWire, initial.CallbackURL)
+		return
+	}
 	if f.afterEmailRemovalPreparation != nil {
 		if emailRemovalCreatesPrimary(f.emailRemovalMode) {
 			id, _ := identity.NewCommandID()

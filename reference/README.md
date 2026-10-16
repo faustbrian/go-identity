@@ -18,11 +18,45 @@ a UI, production deployment or whole-platform release.
 ## Selected native email management
 
 `StoreConfiguration.Email` independently selects `Verification`, `Change`,
-`Addresses` and `Removal`. `FeatureSet.EmailVerification()`, `EmailChange()` and
+`Addresses`, `Removal` and `OTPVerification`. `FeatureSet.EmailVerification()`, `EmailChange()` and
 `EmailAddresses()` expose only their selected native workflows; none enables an
 HTTP route. An empty selection or missing required authority fails construction.
 Handles require initialized graph custody and an allowed tenant, and deny after
 graph shutdown without taking ownership of the supplied PostgreSQL pool.
+
+### Pending-email OTP verification
+
+Select `Email.OTPVerification` with `EmailOTPVerificationConfiguration` and call
+`FeatureSet.EmailOTPVerification()`. The native graph supplies actual OTP,
+session, factor-authority, risk, delivery, audit/lifecycle and migration owners.
+Configure email-verification attempt policy, the existing comparison domain,
+retained session keys matching the password issuer, explicit freshness,
+`CurrentAttemptKeyVersion`, dedicated request-key namespace/intent keys and a
+selected code template/locale. OTP signin and link HTTP routes are not required;
+original known-empty factor authority must come from real account creation.
+Apply the graph's selected migrations, then initialize custody before use.
+
+The consumer journey is registration/verification/password signin, managed
+pending address addition, independent delivered OTP Send, code completion and
+verified-address projection. Addition retains its fresh password admission;
+verification Send does not demand a second password proof. Success invalidates
+old identifier-bound session authority and issues no replacement session.
+Known-empty MFA, self-user and pending-nonprimary are explicit scope limits.
+
+Independently select `HTTPEmailOTPVerificationConfiguration` for the three
+[public OTP routes](../http/otp/README.md). Configure exact HTTPS Origin, actual
+existing browser-device policy and current policy revision. Native email OTP,
+session and `HTTPRate` storage are mandatory; their other HTTP routes are not.
+Nil selection advertises no route/OpenAPI capability. Simultaneous
+`HTTPEmailSignin` selects a conflicting Send profile and is rejected, not merged
+or silently weakened. The selected migration source includes OTP consuming
+custody even with `OTP.Signin=nil`; later selecting signin preserves installed
+shared history. The graph owns limiter shutdown but borrows the primary pool.
+
+Preserve original Send keys and completion recovery metadata. Recovery reports
+committed/noncommitted/unknown original history under current authorization,
+without comparing/debiting, returning an address or renewing executable authority.
+Do not resubmit a completion to recover an uncertain commit.
 
 Set `EmailManagementConfiguration.Keyed` explicitly for durable request
 correlation. The corresponding handle's `VerificationSendKeyed`,

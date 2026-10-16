@@ -86,7 +86,7 @@ func (s StoreSet) migrationCatalog(ctx context.Context) ([]migrationHistory, err
 			return nil, err
 		}
 		owned := migrationHistory{namespace: "identity_http_rate", history: []migrations.Migration{step}, owners: map[migrations.Version]ModuleID{step.Version(): "rate-limit/postgres"}, guards: []migrationGuard{{version: step.Version(), schema: "public", tables: []string{"rate_limit_states", "rate_limit_states_expires_at_idx"}}}}
-		if s.state.features != nil && (s.state.features.httpPasswordReset != nil || s.state.features.httpRegistrationVerification != nil || s.state.features.httpPasswordVerification != nil || s.state.features.httpPasswordChange != nil || s.state.features.httpEmailRequests != nil && s.state.features.httpEmailRequests.secret != nil || s.state.features.httpMagicLink != nil && s.state.features.httpMagicLink.config.Consume) {
+		if s.state.features != nil && (s.state.features.httpPasswordReset != nil || s.state.features.httpRegistrationVerification != nil || s.state.features.httpPasswordVerification != nil || s.state.features.httpPasswordChange != nil || s.state.features.httpEmailRequests != nil && s.state.features.httpEmailRequests.secret != nil || s.state.features.httpEmailOTPVerification != nil || s.state.features.httpMagicLink != nil && s.state.features.httpMagicLink.config.Consume) {
 			native := ratepg.AtomicSchemaMigration()
 			atomic, err := migrations.NewMigration(migrations.Version(native.Version), native.Name, migrations.TransactionModeDefault, native.Up, native.Down)
 			if err != nil {
@@ -102,6 +102,9 @@ func (s StoreSet) migrationCatalog(ctx context.Context) ([]migrationHistory, err
 		return catalog, nil
 	}
 	c := s.state.features.migrations
+	if c.signinSchema == "" && c.passwordSigninSchema != "" {
+		c.signinSchema = c.passwordSigninSchema
+	}
 	if c.preauthIssue {
 		// Initiation and consuming Signin are independently selectable. A later
 		// shared-ledger allocation would prevent enabling earlier Signin steps
@@ -129,9 +132,11 @@ func (s StoreSet) migrationCatalog(ctx context.Context) ([]migrationHistory, err
 	if c.authenticatedSchema != "" && c.authenticatedSchema != c.sessionSchema {
 		catalog[0].guards = append(catalog[0].guards, migrationGuard{version: 1210, schema: c.authenticatedSchema})
 	}
+	if c.signinSchema != "" || s.state.features.email != nil && s.state.features.email.otpVerification != nil {
+		catalog[0].guards = append(catalog[0].guards, migrationGuard{version: 1400, schema: c.otpSchema, columns: []string{"challenges.consumer_envelope", "challenges.consumer_owner", "challenges.consumer_record_requirement", "challenges.consumer_subject_requirement"}, functions: []string{"guard_original_custody"}})
+	}
 	if c.signinSchema != "" {
 		catalog[0].guards = append(catalog[0].guards,
-			migrationGuard{version: 1400, schema: c.otpSchema, columns: []string{"challenges.consumer_envelope", "challenges.consumer_owner", "challenges.consumer_record_requirement", "challenges.consumer_subject_requirement"}, functions: []string{"guard_original_custody"}},
 			migrationGuard{version: 1411, schema: c.signinSchema, tables: []string{"family_revocations"}},
 			migrationGuard{version: 1412, schema: c.signinSchema, tables: []string{"session_issuances"}})
 		if c.signinSchema != c.sessionSchema && c.signinSchema != c.authenticatedSchema {
@@ -215,6 +220,12 @@ func (s StoreSet) migrationCatalog(ctx context.Context) ([]migrationHistory, err
 		}
 		if e.removal != nil {
 			catalog, err = emailRemovalMigrationCatalog(ctx, catalog)
+			if err != nil {
+				return nil, err
+			}
+		}
+		if e.otpVerification != nil {
+			catalog, err = emailOTPFactorMigrationCatalog(ctx, catalog)
 			if err != nil {
 				return nil, err
 			}

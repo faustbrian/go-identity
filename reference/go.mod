@@ -16,22 +16,22 @@ require (
 	github.com/faustbrian/go-identity/delivery v0.0.0-20261015061706-1f0b46ab1053
 	github.com/faustbrian/go-identity/delivery/postgres v0.0.0-20261015104034-f16881100907
 	github.com/faustbrian/go-identity/email v0.0.0-20261016003032-9785b1c5a551
-	github.com/faustbrian/go-identity/http v0.0.0-20261015134730-038260b86666
+	github.com/faustbrian/go-identity/http v0.0.0-20261016033711-92f2dae55d48
 	github.com/faustbrian/go-identity/http/email v0.0.0-20261016003511-9ee4c4431508
 	github.com/faustbrian/go-identity/http/magiclink v0.0.0-20261015110443-ed660e780fdc
 	github.com/faustbrian/go-identity/http/mfa v0.0.0-20261015110443-ed660e780fdc
-	github.com/faustbrian/go-identity/http/otp v0.0.0-20261015110443-ed660e780fdc
+	github.com/faustbrian/go-identity/http/otp v0.0.0-20261016033711-92f2dae55d48
 	github.com/faustbrian/go-identity/http/password v0.0.0-20261015110443-ed660e780fdc
 	github.com/faustbrian/go-identity/http/session v0.0.0-20261015110443-ed660e780fdc
 	github.com/faustbrian/go-identity/magiclink v0.0.0-20261015110443-ed660e780fdc
 	github.com/faustbrian/go-identity/magiclink/postgres v0.0.0-20261015113658-456332dee9d2
 	github.com/faustbrian/go-identity/mfa v0.0.0-20261015110443-ed660e780fdc
-	github.com/faustbrian/go-identity/mfa/postgres v0.0.0-20261016003032-9785b1c5a551
-	github.com/faustbrian/go-identity/otp v0.0.0-20261015110443-ed660e780fdc
-	github.com/faustbrian/go-identity/otp/postgres v0.0.0-20261015113658-456332dee9d2
+	github.com/faustbrian/go-identity/mfa/postgres v0.0.0-20261016032901-cf3f5a466f92
+	github.com/faustbrian/go-identity/otp v0.0.0-20261016032901-cf3f5a466f92
+	github.com/faustbrian/go-identity/otp/postgres v0.0.0-20261016033711-92f2dae55d48
 	github.com/faustbrian/go-identity/password v0.0.0-20261015110443-ed660e780fdc
 	github.com/faustbrian/go-identity/password/postgres v0.0.0-20261016003511-9ee4c4431508
-	github.com/faustbrian/go-identity/postgres v0.0.0-20261016003032-9785b1c5a551
+	github.com/faustbrian/go-identity/postgres v0.0.0-20261016032901-cf3f5a466f92
 	github.com/faustbrian/go-identity/risk v0.0.0-20261015085833-f43df0429695
 	github.com/faustbrian/go-identity/risk/hibp v0.0.0-20261015094324-5d5bf8236eb3
 	github.com/faustbrian/go-identity/risk/postgres v0.0.0-20261015104034-f16881100907

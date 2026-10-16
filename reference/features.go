@@ -103,6 +103,7 @@ type featureState struct {
 	httpMFAList                  *mfaListHTTPState
 	httpEmailAddresses           *emailAddressesHTTPState
 	httpEmailRequests            *emailRequestsHTTPState
+	httpEmailOTPVerification     *emailOTPVerificationHTTPState
 	passwordSignin               *passwordpg.SigninService
 	passwordSignup               *passwordpg.SignupService
 	session                      *sessionState
@@ -134,6 +135,9 @@ type featureState struct {
 }
 
 func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDependencies) error {
+	if c.HTTPEmailOTPVerification != nil && (c.Email == nil || c.Email.OTPVerification == nil || c.Session == nil || c.OTP == nil || c.HTTPRate == nil) {
+		return identity.InvalidInputError{Field: "reference_http_email_otp"}
+	}
 	if c.HTTPEmailRequests != nil && (c.Email == nil || c.Session == nil || c.OTP == nil || c.HTTPRate == nil) {
 		return identity.InvalidInputError{Field: "reference_http_email_requests"}
 	}
@@ -176,19 +180,19 @@ func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDepen
 	if c.PasswordChange != nil && c.PasswordVerification == nil {
 		return identity.InvalidInputError{Field: "reference_password_change"}
 	}
-	if c.PasswordVerification != nil && (c.Session == nil || c.PasswordSignin == nil || c.OTP == nil || c.OTP.Signin == nil) {
+	if c.PasswordVerification != nil && (c.Session == nil || c.PasswordSignin == nil || c.OTP == nil) {
 		return identity.InvalidInputError{Field: "reference_password_verification"}
 	}
 	if c.HTTPSession != nil && c.Session == nil {
 		return identity.InvalidInputError{Field: "reference_http_session"}
 	}
-	if c.Session != nil && (c.OTP == nil || c.OTP.Signin == nil) {
+	if c.Session != nil && (c.OTP == nil || c.OTP.Signin == nil && c.PasswordSignin == nil) {
 		return identity.InvalidInputError{Field: "reference_session"}
 	}
 	if c.PasswordSignup != nil && (c.OTP == nil || c.Delivery == nil) {
 		return identity.InvalidInputError{Field: "reference_password_signup"}
 	}
-	if c.PasswordSignin != nil && (c.OTP == nil || c.OTP.Signin == nil) {
+	if c.PasswordSignin != nil && c.OTP == nil {
 		return identity.InvalidInputError{Field: "reference_password_signin"}
 	}
 	if c.PasswordReset != nil && (c.OTP == nil || c.Delivery == nil) {
@@ -307,13 +311,14 @@ func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDepen
 	if err != nil {
 		return err
 	}
-	otpOwner, err := otppg.NewSendService(d.PostgreSQL, otppg.SendConfig{
+	otpConfig := otppg.SendConfig{
 		Store: o.Store, Codec: o.Codec, Session: o.Session, Delivery: c.Delivery.Enqueue.Custody,
 		Coordinator: o.Coordinator, RequestKeys: o.RequestKeys, Risk: risk.AuthenticationAdmissionCustodyConfig{Evaluation: evaluator, ConfigurationID: o.ConfigurationID, Keys: o.RiskKeys},
 		Policy: o.Policy, TemplateID: o.TemplateID, TemplateVersion: o.TemplateVersion, LocaleChain: o.LocaleChain, Templates: c.Delivery.Templates,
 		ProviderVersion: o.ProviderVersion, PolicyID: o.PolicyID, PolicyVersion: o.PolicyVersion, PreAuthAction: o.PreAuthAction,
 		IntentKey: o.IntentKey, IdentifierKey: o.IdentifierKey, Timeout: o.Timeout,
-	}, crypto)
+	}
+	otpOwner, err := otppg.NewSendService(d.PostgreSQL, otpConfig, crypto)
 	if err != nil {
 		return err
 	}
@@ -407,6 +412,12 @@ func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDepen
 	emailOwner, err := composeEmail(c, d, evaluator, passwordVerificationOwner, passwordSigninOwner, resetOwner)
 	if err != nil {
 		return err
+	}
+	if emailOwner != nil && c.Email.OTPVerification != nil {
+		emailOwner.otpVerification, err = composeEmailOTPVerification(c, d, otpConfig, crypto)
+		if err != nil {
+			return err
+		}
 	}
 	if c.HTTPRegistrationVerification != nil && c.HTTPRegistrationVerification.ManagedAddresses {
 		emailOwner.confirmation, err = passwordpg.NewEmailVerificationRouter(passwordSignupOwner, emailOwner.verification)
@@ -528,6 +539,15 @@ func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDepen
 			httpEmailRequests.close()
 		}
 	}()
+	httpEmailOTPVerification, err := composeEmailOTPVerificationHTTP(c, emailOwner, sessionOwner, s.httpRate)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if httpEmailOTPVerification != nil && !retainedResetHTTP {
+			httpEmailOTPVerification.rate.Close()
+		}
+	}()
 	signupPreauthOwner, err := composeSignupPreAuth(d.PostgreSQL, c.PasswordSignup)
 	if err != nil {
 		return err
@@ -583,6 +603,7 @@ func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDepen
 	s.features.httpMFAList = httpMFAList
 	s.features.httpEmailAddresses = httpEmailAddresses
 	s.features.httpEmailRequests = httpEmailRequests
+	s.features.httpEmailOTPVerification = httpEmailOTPVerification
 	retainedResetHTTP = true
 	return nil
 }
@@ -718,6 +739,11 @@ func (f FeatureSet) Initialize(ctx context.Context) error {
 	}
 	if err := s.features.otp.Initialize(w); err != nil {
 		return err
+	}
+	if e := s.features.email; e != nil && e.otpVerification != nil {
+		if err := e.otpVerification.Initialize(w); err != nil {
+			return err
+		}
 	}
 	if otp := s.features.passwordOTP; otp != nil {
 		if otp.state == nil || otp.state() == nil {

@@ -66,11 +66,11 @@ func (referenceRegistrationPolicy) Decide(ctx context.Context, c authorization.D
 	}
 	if string(c.Request.Tenant) == otpTenant && c.PolicyRevision == 9 && c.Request.Subject.Kind == authorization.SubjectUser && c.Request.Resource.Type == "identity.user" && string(c.Request.Resource.ID) == string(c.Request.Subject.ID) {
 		switch c.Request.Action {
-		case "identity.mfa.enable", "identity.mfa.totp-uri", "identity.mfa.totp-verify", "identity.mfa.recovery-regenerate", "identity.mfa.list", "identity.mfa.factor-update", "identity.mfa.disable", "identity.email.verification-send", "identity.email.change-request", "identity.email.address-remove", "identity.email.address-remove.recover", "identity.email.address-get", "identity.email.address-list":
+		case "identity.mfa.enable", "identity.mfa.totp-uri", "identity.mfa.totp-verify", "identity.mfa.recovery-regenerate", "identity.mfa.list", "identity.mfa.factor-update", "identity.mfa.disable", "identity.email.verification-send", "identity.email.change-request", "identity.email.address-remove", "identity.email.address-remove.recover", "identity.email.address-get", "identity.email.address-list", "identity.otp.send", "identity.otp.email-verify", "identity.otp.email-verify.recover":
 			return authorization.Decision{Outcome: authorization.Allow, Revision: 9}, nil
 		}
 	}
-	if string(c.Request.Tenant) == otpTenant && c.PolicyRevision == 9 && c.Request.Subject.Kind == authorization.SubjectUser && (c.Request.Action == "identity.mfa.enable" || c.Request.Action == "identity.mfa.factor-update" || c.Request.Action == "identity.mfa.disable" || c.Request.Action == "identity.email.verification-send" || c.Request.Action == "identity.email.change-request" || c.Request.Action == "identity.email.address-remove") && c.Request.Resource.Type == "identity.request-admission" && string(c.Request.Resource.ID) == string(c.Request.Action) {
+	if string(c.Request.Tenant) == otpTenant && c.PolicyRevision == 9 && c.Request.Subject.Kind == authorization.SubjectUser && (c.Request.Action == "identity.mfa.enable" || c.Request.Action == "identity.mfa.factor-update" || c.Request.Action == "identity.mfa.disable" || c.Request.Action == "identity.email.verification-send" || c.Request.Action == "identity.email.change-request" || c.Request.Action == "identity.email.address-remove" || c.Request.Action == "identity.otp.send") && c.Request.Resource.Type == "identity.request-admission" && string(c.Request.Resource.ID) == string(c.Request.Action) {
 		return authorization.Decision{Outcome: authorization.Allow, Revision: 9}, nil
 	}
 	return (referenceResetPolicy{}).Decide(ctx, c)
@@ -293,9 +293,10 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 	if extensions.completionCommitFault {
 		f.completionFault = &completionCommitFault{factorProof: extensions.activeStepUp, regeneration: extensions.regeneration, factorManagement: extensions.factorManagement || extensions.disable, replacementConfirmation: extensions.factorReplacementConfirmationFault, emailRemoval: extensions.emailRemoval}
 		f.completionFault.emailPreparation = extensions.emailChangeCase == "removal-admin-output-unknown"
+		f.completionFault.emailVerification = extensions.emailChangeCase == "otp-verification-unknown"
 		faultPool, err := database.Connect(ctx, database.Config{DSN: f.pool.Raw().Config().ConnConfig.ConnString(), MaxConns: 4, Configure: func(pc *database.PoolConfig) error {
 			pc.ConnConfig.DialFunc = f.completionFault.dial
-			if f.completionFault.emailPreparation {
+			if f.completionFault.emailPreparation || f.completionFault.emailVerification {
 				// Keep parameterized extended queries, but send their SQL rather
 				// than a previously cached statement name to the fault boundary.
 				pc.ConnConfig.DefaultQueryExecMode = pgx.QueryExecModeDescribeExec
@@ -485,8 +486,17 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 		selectDurableReferenceAdmission(&c)
 	}
 	var emailUpgrade *reference.StoreConfiguration
-	if extensions.emailRemoval || extensions.emailChangeCase == "graph" || extensions.emailChangeCase == "graph-upgrade" || extensions.emailChangeCase == "shared-http" || extensions.emailChangeCase == "keyed-graph" || extensions.emailChangeCase == "request-http" {
+	if extensions.emailRemoval || extensions.emailChangeCase == "graph" || extensions.emailChangeCase == "graph-upgrade" || extensions.emailChangeCase == "shared-http" || extensions.emailChangeCase == "keyed-graph" || extensions.emailChangeCase == "request-http" || strings.HasPrefix(extensions.emailChangeCase, "otp-verification") {
 		calls = configureReferenceEmailGraph(t, &c, origin, extensions.emailManagementChange)
+		if strings.HasPrefix(extensions.emailChangeCase, "otp-verification") {
+			configureReferenceEmailOTP(t, &c)
+			if extensions.emailChangeCase == "otp-verification-no-otp-signin" {
+				c.OTP.Signin = nil
+			}
+			if extensions.emailChangeCase == "otp-verification-reference-https" {
+				c.HTTPEmailOTPVerification = &reference.HTTPEmailOTPVerificationConfiguration{Origin: origin, Device: *c.HTTPPreAuth.Device, PolicyRevision: 9}
+			}
+		}
 		if extensions.emailRemoval {
 			configureReferenceEmailRemoval(t, &c)
 			c.Email.Removal.Primary.AdministrativeTargets = extensions.administrativeEmailRemoval
@@ -792,6 +802,16 @@ END $$`); err != nil {
 	} else if seen["identity.mfa.disable"] {
 		t.Fatal("native disable implicitly exposed HTTP")
 	}
+	if c.HTTPEmailOTPVerification != nil {
+		wantOperations += 3
+		for _, id := range []string{"identity.otp.send", "identity.otp.email-verify", "identity.otp.email-verify.recover"} {
+			if !seen[id] {
+				t.Fatal("selected native email OTP route missing")
+			}
+		}
+	} else if seen["identity.otp.email-verify"] || seen["identity.otp.email-verify.recover"] {
+		t.Fatal("unselected email OTP route advertised")
+	}
 	if !seen["identity.password.signup"] || !seen["identity.email.verification-confirm"] || !seen["identity.password.signin"] || (c.HTTPSession != nil && (!seen["identity.session.get"] || !seen["identity.session.signout"])) || len(seen) != wantOperations {
 		t.Fatal("selected public registration routes missing")
 	}
@@ -866,6 +886,15 @@ END $$`); err != nil {
 				managementFeatures = upgradeReferenceEmailGraph(t, ctx, f, managementConfig, deps, worker, modules, user, migrationRequest)
 			}
 			var change *referenceEmailChangeOptions
+			if strings.HasPrefix(extensions.emailChangeCase, "otp-verification") {
+				f.afterManagedPending = func(old capability.Proof, pending identity.IdentifierID, current []*http.Cookie, currentCSRF, callback string) {
+					if extensions.emailChangeCase == "otp-verification-reference-https" {
+						proveReferenceEmailOTPVerification(t, ctx, f, managementFeatures, workers, messages, user, pending, current, readSession, extensions.emailChangeCase, old, callback, managementConfig, currentCSRF, emailOTPHTTPSSelection{client: client, base: network.URL, origin: origin, server: server})
+						return
+					}
+					proveReferenceEmailOTPVerification(t, ctx, f, managementFeatures, workers, messages, user, pending, current, readSession, extensions.emailChangeCase, old, callback, managementConfig, currentCSRF)
+				}
+			}
 			if extensions.emailRemoval {
 				f.emailRemovalMode = extensions.emailChangeCase
 				f.afterEmailRemovalPreparation = func(token capability.Proof, pending identity.IdentifierID, r passwordpg.EmailManagementRequest, current []*http.Cookie, currentCSRF string) {

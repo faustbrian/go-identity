@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Independently compose native pending-email OTP verification and opt-in HTTP
+  routes with selected migrations, delivery, strict rate storage and current
+  session/factor authority. OTP signin is no longer an incidental password/session
+  bootstrap prerequisite; installed shared consuming history remains stable.
+  Conflicting OTP-signin Send HTTP selection fails instead of choosing a profile.
+
 - Compose explicit native administrative email removal and independently opt-in
   HTTP targets. Keep actor proof/session separate from target mutation, audit,
   revocation and recovery; self-only composition remains the default.

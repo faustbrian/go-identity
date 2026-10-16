@@ -168,6 +168,15 @@ func NewServer(c ReferenceConfig, d ReferenceDependencies, f FeatureSet) (*Serve
 	if selected != nil {
 		contributions = append(contributions, *selected)
 	}
+	// Email OTP verification is a separately selected profile, never a fallback
+	// branch of public OTP signin or a prerequisite of password endpoints.
+	selected, err = server.emailOTPVerificationFeature(c.HTTP.Network, f)
+	if err != nil {
+		return nil, invalid
+	}
+	if selected != nil {
+		contributions = append(contributions, *selected)
+	}
 	selected, err = server.passwordFeature(c.HTTP.Network, f)
 	if err != nil {
 		return nil, invalid

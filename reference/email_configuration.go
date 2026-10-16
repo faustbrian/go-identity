@@ -11,6 +11,7 @@ import (
 	"github.com/faustbrian/go-identity/delivery"
 	deliverypg "github.com/faustbrian/go-identity/delivery/postgres"
 	"github.com/faustbrian/go-identity/email"
+	otppg "github.com/faustbrian/go-identity/otp/postgres"
 	passwordpg "github.com/faustbrian/go-identity/password/postgres"
 	kernel "github.com/faustbrian/go-identity/postgres"
 	"github.com/faustbrian/go-identity/risk"
@@ -26,10 +27,11 @@ import (
 // authorization and disclosure policy. Removal requires actual selected password
 // signin/reset owners. No UI or auto-signin is enabled.
 type EmailConfiguration struct {
-	Verification *EmailManagementConfiguration
-	Change       *EmailManagementConfiguration
-	Addresses    *EmailAddressConfiguration
-	Removal      *EmailRemovalConfiguration
+	Verification    *EmailManagementConfiguration
+	Change          *EmailManagementConfiguration
+	Addresses       *EmailAddressConfiguration
+	Removal         *EmailRemovalConfiguration
+	OTPVerification *EmailOTPVerificationConfiguration
 }
 
 // EmailRemovalConfiguration selects protected native self-removal without HTTP.
@@ -87,6 +89,7 @@ type emailState struct {
 	keyedVerification, keyedChange       *passwordpg.KeyedEmailManagementService
 	verificationRequests, changeRequests *passwordpg.EmailRequestWorkflow
 	removal                              *passwordpg.EmailRemovalService
+	otpVerification                      *otppg.EmailVerificationService
 }
 
 func validateEmailSelection(c StoreConfiguration) error {
@@ -95,7 +98,7 @@ func validateEmailSelection(c StoreConfiguration) error {
 	}
 	e := c.Email
 	invalid := identity.InvalidInputError{Field: "reference_email"}
-	if e.Verification == nil && e.Change == nil && e.Addresses == nil && e.Removal == nil || c.Session == nil || c.OTP == nil {
+	if e.Verification == nil && e.Change == nil && e.Addresses == nil && e.Removal == nil && e.OTPVerification == nil || c.Session == nil || c.OTP == nil {
 		return invalid
 	}
 	if (e.Verification != nil || e.Change != nil) && (c.PasswordVerification == nil || c.Delivery == nil) {

@@ -12,6 +12,8 @@ import (
 	"github.com/faustbrian/go-authorization/v3"
 	identity "github.com/faustbrian/go-identity"
 	"github.com/faustbrian/go-identity/email"
+	"github.com/faustbrian/go-identity/otp"
+	otppg "github.com/faustbrian/go-identity/otp/postgres"
 	passwordpg "github.com/faustbrian/go-identity/password/postgres"
 	"github.com/faustbrian/go-identity/risk"
 )
@@ -40,7 +42,7 @@ func TestEmailSelectionAndGraphLifetime(t *testing.T) {
 	if owner, err := composeEmail(StoreConfiguration{}, ReferenceDependencies{}, risk.Evaluator{}, nil, nil, nil); err != nil || owner != nil {
 		t.Fatal("unselected email acquired dependencies", err)
 	}
-	for _, config := range []*EmailConfiguration{{}, {Verification: &EmailManagementConfiguration{}}, {Change: &EmailManagementConfiguration{}}, {Addresses: &EmailAddressConfiguration{}}, {Removal: &EmailRemovalConfiguration{}}} {
+	for _, config := range []*EmailConfiguration{{}, {Verification: &EmailManagementConfiguration{}}, {Change: &EmailManagementConfiguration{}}, {Addresses: &EmailAddressConfiguration{}}, {Removal: &EmailRemovalConfiguration{}}, {OTPVerification: &EmailOTPVerificationConfiguration{}}} {
 		c := StoreConfiguration{Email: config}
 		if owner, err := composeEmail(c, ReferenceDependencies{}, risk.Evaluator{}, nil, nil, nil); err == nil || owner != nil {
 			t.Fatal("selected email accepted absent native authority")
@@ -67,13 +69,20 @@ func TestEmailSelectionAndGraphLifetime(t *testing.T) {
 	if owner, err := f.EmailAddresses(); err == nil || owner != nil {
 		t.Fatal("unselected graph exported address queries")
 	}
+	if owner, err := f.EmailOTPVerification(); err == nil || owner != nil {
+		t.Fatal("unselected graph exported email OTP")
+	}
 	if owner, err := f.EmailVerificationRequests(); err == nil || owner != nil {
 		t.Fatal("unselected graph exported portable verification")
 	}
 	if owner, err := f.EmailChangeRequests(); err == nil || owner != nil {
 		t.Fatal("unselected graph exported portable change")
 	}
-	s.features.email = &emailState{verification: &passwordpg.EmailManagementService{}, change: &passwordpg.EmailManagementService{}, addresses: &email.AddressQueryService{}, verificationRequests: &passwordpg.EmailRequestWorkflow{}, changeRequests: &passwordpg.EmailRequestWorkflow{}, removal: &passwordpg.EmailRemovalService{}}
+	s.features.email = &emailState{verification: &passwordpg.EmailManagementService{}, change: &passwordpg.EmailManagementService{}, addresses: &email.AddressQueryService{}, verificationRequests: &passwordpg.EmailRequestWorkflow{}, changeRequests: &passwordpg.EmailRequestWorkflow{}, removal: &passwordpg.EmailRemovalService{}, otpVerification: &otppg.EmailVerificationService{}}
+	emailOTP, err := f.EmailOTPVerification()
+	if err != nil {
+		t.Fatal(err)
+	}
 	removal, err := f.EmailRemoval()
 	if err != nil {
 		t.Fatal(err)
@@ -100,6 +109,15 @@ func TestEmailSelectionAndGraphLifetime(t *testing.T) {
 	}
 	deny := func() {
 		t.Helper()
+		if _, err := emailOTP.SendEmailVerification(t.Context(), otp.EmailVerificationSendRequest{TenantID: "foreign"}); err == nil {
+			t.Fatal("foreign/inactive graph issued email OTP")
+		}
+		if _, err := emailOTP.EmailVerify(t.Context(), otp.EmailVerifyRequest{TenantID: "foreign"}); err == nil {
+			t.Fatal("foreign/inactive graph verified email")
+		}
+		if _, err := emailOTP.RecoverEmailVerify(t.Context(), otp.EmailVerifyRecoveryRequest{TenantID: "foreign"}); err == nil {
+			t.Fatal("foreign/inactive graph disclosed email OTP recovery")
+		}
 		if _, err := removal.AddressRemove(t.Context(), email.AddressRemoveRequest{TenantID: "foreign"}); err == nil {
 			t.Fatal("foreign/inactive graph removed address")
 		}
@@ -156,6 +174,22 @@ func TestEmailSelectionAndGraphLifetime(t *testing.T) {
 	deny()
 	if owner, err := f.EmailChange(); err == nil || owner != nil {
 		t.Fatal("closed graph exported new email handle")
+	}
+	if owner, err := f.EmailOTPVerification(); err == nil || owner != nil {
+		t.Fatal("closed graph exported email OTP handle")
+	}
+}
+
+func TestEmailOTPHTTPSelectionRequiresNativeOwners(t *testing.T) {
+	if owner, err := composeEmailOTPVerificationHTTP(StoreConfiguration{}, nil, nil, nil); err != nil || owner != nil {
+		t.Fatal("unselected email OTP HTTP acquired resources", err)
+	}
+	c := StoreConfiguration{HTTPEmailOTPVerification: &HTTPEmailOTPVerificationConfiguration{}}
+	if owner, err := composeEmailOTPVerificationHTTP(c, nil, nil, nil); err == nil || owner != nil {
+		t.Fatal("email OTP HTTP accepted absent native owners")
+	}
+	if err := (&storeState{}).composeFeatureStores(c, ReferenceDependencies{}); err == nil {
+		t.Fatal("email OTP HTTP silently disappeared from empty graph")
 	}
 }
 

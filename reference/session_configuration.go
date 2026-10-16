@@ -42,12 +42,12 @@ func composeSession(c StoreConfiguration, d ReferenceDependencies) (*sessionStat
 		return nil, nil
 	}
 	invalid := identity.InvalidInputError{Field: "reference_session"}
-	if c.OTP == nil || c.OTP.Signin == nil || d.PostgreSQL == nil {
+	if c.OTP == nil || d.PostgreSQL == nil {
 		return nil, invalid
 	}
 	n, o := c.Session.Native, c.OTP
 	e := n.Execution
-	if n.Validation.Clock != nil || e.Profile.GlobalAuthorityID != o.Store.GlobalAuthorityID || e.Profile.PolicyNamespace != o.Store.UserPolicyNamespace || e.Repository.Schema != o.Signin.Session.Schema || e.Repository.MaximumDuration > o.Timeout || e.Coordinator.MaximumDuration > o.Timeout || n.MaximumDuration > o.Timeout || e.PolicyVersion != o.RequestKeys.Policy.PolicyVersion || !sameServerAuthorization(e.Authorization, o.RequestKeys.Policy.Authorization) {
+	if n.Validation.Clock != nil || e.Profile.GlobalAuthorityID != o.Store.GlobalAuthorityID || e.Profile.PolicyNamespace != o.Store.UserPolicyNamespace || o.Signin != nil && e.Repository.Schema != o.Signin.Session.Schema || e.Repository.MaximumDuration > o.Timeout || e.Coordinator.MaximumDuration > o.Timeout || n.MaximumDuration > o.Timeout || e.PolicyVersion != o.RequestKeys.Policy.PolicyVersion || !sameServerAuthorization(e.Authorization, o.RequestKeys.Policy.Authorization) {
 		return nil, invalid
 	}
 	selection, err := sessionAdmissionSelection(c)
@@ -118,17 +118,19 @@ func sessionAdmissionSelection(c StoreConfiguration) (sessionpg.SingleFactorSess
 	deny := func() (sessionpg.SingleFactorSessionAdmissionConfig, error) {
 		return sessionpg.SingleFactorSessionAdmissionConfig{}, invalid
 	}
-	if c.Session == nil || c.OTP == nil || c.OTP.Signin == nil {
+	if c.Session == nil || c.OTP == nil || c.OTP.Signin == nil && c.PasswordSignin == nil {
 		return deny()
 	}
 	n, e := *c.Session, c.Session.Native.Execution
 	verified := sessionpg.IdentifierAdmissionConfig(e.Profile)
 	common := sessionpg.OTPAdmissionConfig{GlobalAuthorityID: verified.GlobalAuthorityID, PolicyNamespace: verified.PolicyNamespace, Audience: verified.Audience}
-	otp := c.OTP.Signin
-	if otp.Profile != common || otp.Session != e.Repository || !sessionIssuanceMatches(n, otp.Issuer, otp.CSRFKey) {
-		return deny()
+	selected := sessionpg.SingleFactorSessionAdmissionConfig{Verified: &verified}
+	if otp := c.OTP.Signin; otp != nil {
+		if otp.Profile != common || otp.Session != e.Repository || !sessionIssuanceMatches(n, otp.Issuer, otp.CSRFKey) {
+			return deny()
+		}
+		selected.OTP = &common
 	}
-	selected := sessionpg.SingleFactorSessionAdmissionConfig{Verified: &verified, OTP: &common}
 	if c.PasswordSignin != nil {
 		p := c.PasswordSignin.Native
 		if p.Profile != verified || p.Session != e.Repository || !sessionIssuanceMatches(n, p.Issuance, p.CSRFKey) {

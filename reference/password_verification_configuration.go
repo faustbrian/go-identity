@@ -37,7 +37,7 @@ func composePasswordVerification(c StoreConfiguration, d ReferenceDependencies, 
 		return nil, nil
 	}
 	invalid := identity.InvalidInputError{Field: "reference_password_verification"}
-	if c.Session == nil || c.PasswordSignin == nil || c.OTP == nil || c.OTP.Signin == nil || d.PostgreSQL == nil {
+	if c.Session == nil || c.PasswordSignin == nil || c.OTP == nil || d.PostgreSQL == nil {
 		return nil, invalid
 	}
 	n, o := c.PasswordVerification.Native, c.OTP
