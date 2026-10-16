@@ -472,8 +472,14 @@ func (s *SigninService) authorizeProfile(ctx context.Context, caller authorizati
 }
 
 func (s *SigninService) authority(ctx context.Context, recipient kernel.RecipientRecord, sessionID, familyID string) (session.AuthoritySnapshot, error) {
-	q := kernel.DirectoryAuthorityQuery{GlobalAuthorityID: s.c.Profile.GlobalAuthorityID, TenantID: recipient.User.TenantID}
-	directory, err := s.domain.GetDirectoryAuthority(ctx, q)
+	return recipientSessionAuthority(ctx, s.domain, s.policyAuthority, s.c.Profile.GlobalAuthorityID, s.c.Profile.PolicyNamespace, recipient, sessionID, familyID)
+}
+
+// Shared primary authority projection; authentication provenance and current
+// transaction admission remain owned by each disjoint signin profile.
+func recipientSessionAuthority(ctx context.Context, domain *kernel.Repository, policyAuthority *authoritypg.AuthorityStore, globalID, namespace string, recipient kernel.RecipientRecord, sessionID, familyID string) (session.AuthoritySnapshot, error) {
+	q := kernel.DirectoryAuthorityQuery{GlobalAuthorityID: globalID, TenantID: recipient.User.TenantID}
+	directory, err := domain.GetDirectoryAuthority(ctx, q)
 	if err != nil || !directory.Enabled {
 		return session.AuthoritySnapshot{}, readerFailure(ctx)
 	}
@@ -485,8 +491,8 @@ func (s *SigninService) authority(ctx context.Context, recipient kernel.Recipien
 	if err != nil {
 		return session.AuthoritySnapshot{}, password.ErrPasswordWork
 	}
-	scope := authoritypg.AuthorityScope{TenantID: authorization.TenantID(q.TenantID), SubjectID: authorization.SubjectID(recipient.User.ID), PolicyNamespace: s.c.Profile.PolicyNamespace}
-	policy, err := s.policyAuthority.Get(ctx, scope)
+	scope := authoritypg.AuthorityScope{TenantID: authorization.TenantID(q.TenantID), SubjectID: authorization.SubjectID(recipient.User.ID), PolicyNamespace: namespace}
+	policy, err := policyAuthority.Get(ctx, scope)
 	if err != nil {
 		return session.AuthoritySnapshot{}, readerFailure(ctx)
 	}

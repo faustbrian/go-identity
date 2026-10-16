@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Independently select original-browser registration verification followed by
+  a separately committed email-possession signin. Recover original remember
+  policy from encrypted signup custody; require current counted risk, explicit
+  authorization and known-empty MFA. Preserve known verification success when
+  login fails, and never mint or redeliver credentials on replay/recovery.
+
 - Add explicitly selected TOTP-protected primary-email change through
   `NewEmailTOTPPrimarySource`. Original signed factor proof, session family,
   enrollment/generation and earliest deadline remain binding through delivery

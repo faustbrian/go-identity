@@ -1,5 +1,22 @@
 # Email HTTP integration
 
+## Explicit original-browser verification and signin
+
+Select `FeatureConfig.VerificationSignin` instead of `SignupConfirmation` for
+this registration-only profile of `POST /v1/email/verification-confirm`. Supply
+the real native signin service and original registration rate source, exact
+origin/actor/policy, signup flow-cookie policy, signed browser-device config and
+matching session cookie/audience. The closed body is unchanged: `token`,
+`callback`, `commandID`; no identity or remember override is accepted. Original
+flow/device cookies are required and never treated as authenticated sessions.
+
+The response preserves the verification outcome and optional distinct `signin`
+command outcome/recovery. Only a fresh error-free committed login delivers one
+secure HttpOnly cookie and `X-CSRF-Token`. Neither is in JSON or redirects;
+replay/unknown/failure never redelivers them. Selected OpenAPI describes this
+profile. Default, shared managed-address and primary-change confirmation stay
+verification-only; conflicting verification-route selectors reject at startup.
+
 For administrative removal, explicitly select
 `RemovalConfig.AdministrativeTargets` with a matching native capability. Optional
 `targetSubjectID` selects another account; the original signed password proof,

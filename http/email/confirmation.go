@@ -13,11 +13,13 @@ import (
 	"strconv"
 	"time"
 
+	auth "github.com/faustbrian/go-authentication/v2"
 	"github.com/faustbrian/go-authorization/v3"
 	"github.com/faustbrian/go-capability/v2"
 	identity "github.com/faustbrian/go-identity"
 	email "github.com/faustbrian/go-identity/email"
 	identityhttp "github.com/faustbrian/go-identity/http"
+	"github.com/faustbrian/go-identity/session"
 )
 
 // ConfirmationService is the consumer-owned original-signup confirmation port.
@@ -89,6 +91,9 @@ type ConfirmationResponse struct {
 	Address       *ConfirmedAddress     `json:"address,omitempty"`
 	Recovery      *ConfirmationRecovery `json:"recovery,omitempty"`
 	Error         string                `json:"error,omitempty"`
+	// Signin is present only for the explicitly selected registration-signin
+	// profile. Its outcome is independent of the verification command above.
+	Signin *VerificationSigninResponse `json:"signin,omitempty"`
 }
 
 // ConfirmationRecovery is detached original receipt correlation. It grants no
@@ -103,16 +108,20 @@ type ConfirmationRecovery struct {
 }
 
 type confirmationAttempt struct {
-	out     ConfirmationResponse
-	entered bool
+	out          ConfirmationResponse
+	entered      bool
+	cookie, csrf string
 }
 type attemptKey struct{}
 type confirmationInput struct {
-	facts   identityhttp.NetworkFacts
-	request email.VerificationConfirmRequest
-	token   string
-	rate    identityhttp.ChallengeVerificationRateRequest
-	attempt *confirmationAttempt
+	facts        identityhttp.NetworkFacts
+	request      email.VerificationConfirmRequest
+	token        string
+	rate         identityhttp.ChallengeVerificationRateRequest
+	attempt      *confirmationAttempt
+	browser      auth.BearerCredential
+	device       string
+	deviceExpiry time.Time
 }
 
 // ConfirmationState retains private immutable request custody for synchronous
@@ -133,6 +142,10 @@ func (s ConfirmationState) Attempt() (ConfirmationResponse, bool) {
 	if out.Recovery != nil {
 		copy := *out.Recovery
 		out.Recovery = &copy
+	}
+	if out.Signin != nil {
+		copy := *out.Signin
+		out.Signin = &copy
 	}
 	return out, a.entered
 }
@@ -208,9 +221,10 @@ type confirmationExecutionResult struct {
 	Replayed   bool
 	RetryAfter time.Duration
 	valid      bool
+	signin     *email.VerificationSigninResult
 }
 
-type confirmationExecution func(context.Context, email.VerificationConfirmRequest) (confirmationExecutionResult, error)
+type confirmationExecution func(context.Context, *confirmationInput) (confirmationExecutionResult, error)
 
 // The wire, origin, rate ordering and response custody are shared transport
 // policy. Selection still freezes each native owner's distinct provenance read.
@@ -218,15 +232,15 @@ func newConfirmationHandler(c ConfirmationConfig, m []identityhttp.MiddlewareDes
 	if nilService(service) {
 		return nil, identityhttp.ErrInvalidInput
 	}
-	execute := func(ctx context.Context, request email.VerificationConfirmRequest) (confirmationExecutionResult, error) {
-		out, err := service.VerificationConfirm(ctx, request)
+	execute := func(ctx context.Context, input *confirmationInput) (confirmationExecutionResult, error) {
+		out, err := service.VerificationConfirm(ctx, input.request)
 		q, bindingErr := out.Recovery.Bindings()
 		return confirmationExecutionResult{Outcome: out.Outcome, Address: out.Address, Recovery: q, Replayed: out.Replayed, RetryAfter: out.RetryAfter, valid: out.Validate() == nil && bindingErr == nil}, err
 	}
-	return newConfirmationOperation(c, m, execute, source, "identity.email.verification-confirm")
+	return newConfirmationOperation(c, m, execute, source, "identity.email.verification-confirm", nil)
 }
 
-func newConfirmationOperation(c ConfirmationConfig, m []identityhttp.MiddlewareDescriptor, execute confirmationExecution, source confirmationRateSource, action string) (http.Handler, error) {
+func newConfirmationOperation(c ConfirmationConfig, m []identityhttp.MiddlewareDescriptor, execute confirmationExecution, source confirmationRateSource, action string, signin *VerificationSigninConfig) (http.Handler, error) {
 	path := "/v1/email/verification-confirm"
 	if action == "identity.email.change-confirm" {
 		path = "/v1/email/change-confirm"
@@ -256,8 +270,14 @@ func newConfirmationOperation(c ConfirmationConfig, m []identityhttp.MiddlewareD
 	}
 	reject := func(w http.ResponseWriter, r *http.Request, err error) {
 		a := attemptFor(r)
-		a.out.Confirmed = false
+		// Selected signin is a separate transaction: rejecting its delivery
+		// cannot undo an already validated parent verification commitment.
+		a.out.Confirmed = signin != nil && a.out.Confirmed
 		a.out.Address = nil
+		a.cookie, a.csrf = "", ""
+		if a.out.Signin != nil {
+			a.out.Signin.SignedIn, a.out.Signin.SessionID = false, ""
+		}
 		f := failure{503, "unavailable", 0}
 		if errors.Is(err, identityhttp.ErrInvalidInput) || errors.Is(err, email.ErrInvalidVerification) {
 			f = failure{400, "invalid_request", 0}
@@ -334,6 +354,13 @@ func newConfirmationOperation(c ConfirmationConfig, m []identityhttp.MiddlewareD
 			// Native audit binding requires correlation, but client headers must
 			// neither select it nor replace the original durable workflow command.
 			s.input.request.Caller.CorrelationID = string(correlation)
+			if signin != nil {
+				browser, device, err := signin.browserInput(r, decoder, facts, now)
+				if err != nil {
+					return s, err
+				}
+				s.input.browser, s.input.device, s.input.deviceExpiry = browser, device.DeviceID(), device.ExpiresAt()
+			}
 			return s, nil
 		},
 		Authenticate: func(r *http.Request, s ConfirmationState) (ConfirmationState, error) {
@@ -370,7 +397,7 @@ func newConfirmationOperation(c ConfirmationConfig, m []identityhttp.MiddlewareD
 			a.entered = true
 			a.out.CommandID = s.input.request.CommandID
 			a.out.CommitOutcome = "unknown"
-			result, err := execute(r.Context(), s.input.request)
+			result, err := execute(r.Context(), s.input)
 			a.out.CommitOutcome = outcome(result.Outcome)
 			if !result.valid {
 				// A native owner can deny before creating an execution receipt.
@@ -391,6 +418,14 @@ func newConfirmationOperation(c ConfirmationConfig, m []identityhttp.MiddlewareD
 			}
 			a.out.Recovery = &ConfirmationRecovery{TenantID: q.TenantID, UserID: q.UserID, RecordID: q.RecordID, ActorID: q.ActorID, ActorKind: q.ActorKind}
 			a.out.Replayed = result.Replayed
+			if signin != nil {
+				a.out.Confirmed = result.Outcome == identity.CommitOutcomeCommitted
+			}
+			if signin != nil && result.signin != nil && result.signin.Issuance.CommandID != "" {
+				issued := result.signin.Issuance
+				child := result.signin.Recovery
+				a.out.Signin = &VerificationSigninResponse{CommandID: issued.CommandID, CommitOutcome: outcome(issued.CommitOutcome), Replayed: issued.Replayed, Recovery: ConfirmationRecovery{TenantID: child.TenantID, UserID: child.UserID, RecordID: child.RecordID, ActorID: child.ActorID, ActorKind: child.ActorKind}}
+			}
 			if r.Context().Err() != nil || errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 				reject(w, r, ownerFailure(err))
 				return
@@ -433,6 +468,21 @@ func newConfirmationOperation(c ConfirmationConfig, m []identityhttp.MiddlewareD
 				}
 			}
 			a.out.Confirmed = true
+			if signin != nil && result.signin != nil && result.signin.Issuance.Token != (session.Token{}) {
+				if !c.Now().Before(s.input.deviceExpiry) {
+					reject(w, r, identityhttp.ErrUnavailable)
+					return
+				}
+				cookie, csrf, err := signin.delivery(s.input.request, *result.signin, c.Now())
+				if err != nil || a.out.Signin == nil {
+					reject(w, r, identityhttp.ErrUnavailable)
+					return
+				}
+				a.cookie, a.csrf = cookie, csrf
+				a.out.Signin.SignedIn = true
+				spec, _ := result.signin.Issuance.Session.Bindings()
+				a.out.Signin.SessionID = spec.SessionID
+			}
 			w.WriteHeader(200)
 			json.NewEncoder(w).Encode(a.out)
 		},

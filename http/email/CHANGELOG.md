@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Explicitly select original-browser registration verification/signin on the
+  canonical confirmation route. Require original signup and signed device
+  cookies; return independent command outcomes and issue cookie/CSRF only after
+  fresh error-free committed login. Default/managed confirmation remains
+  verification-only; ambiguous/replayed calls disclose no credentials.
+
 - Adopt exact action-bound TOTP email-change validation. Supply the explicitly
   selected native factor-proof and change-request owners; structural transport
   validation grants no authority or fallback to a weaker proof.

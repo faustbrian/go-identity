@@ -55,12 +55,12 @@ func NewChangeConfirmationHandlerWithMiddleware(c ChangeConfirmationConfig, m []
 		return nil, identityhttp.ErrInvalidInput
 	}
 	transport := ConfirmationConfig{Network: c.Network, Rate: c.Rate, Origin: c.Origin, ActorID: c.ActorID, PolicyRevision: c.PolicyRevision, Now: c.Now, MaximumDuration: c.MaximumDuration}
-	execute := func(ctx context.Context, request email.VerificationConfirmRequest) (confirmationExecutionResult, error) {
-		out, err := c.Service.ChangeConfirm(ctx, email.ChangeConfirmRequest(request))
+	execute := func(ctx context.Context, input *confirmationInput) (confirmationExecutionResult, error) {
+		out, err := c.Service.ChangeConfirm(ctx, email.ChangeConfirmRequest(input.request))
 		q, bindingErr := out.Recovery.Bindings()
 		return confirmationExecutionResult{Outcome: out.Outcome, Address: out.Address, Recovery: q, Replayed: out.Replayed, RetryAfter: out.RetryAfter, valid: out.Validate() == nil && bindingErr == nil}, err
 	}
-	return newConfirmationOperation(transport, m, execute, c.Service.ChangeConfirmationRateSource, "identity.email.change-confirm")
+	return newConfirmationOperation(transport, m, execute, c.Service.ChangeConfirmationRateSource, "identity.email.change-confirm", nil)
 }
 
 // NewChangeConfirmationFeature selects only the canonical change-confirm

@@ -1,5 +1,23 @@
 # Password PostgreSQL adapter
 
+## Original-browser verification and signin
+
+Explicitly compose `NewVerificationSigninService(signup, config)` over the native
+signup owner. `VerificationSigninConfig` supplies the session issuer/CSRF key and
+email-grant audience/authority profile; its policy namespace must be the one
+initialized by signup. Install the session owner's forward verification-signin
+migration and select compatible session read/logout. Existing `SignupService`
+confirmation remains verification-only.
+
+`VerificationConfirmAndSignin` authenticates the original encrypted signup intent
+and browser cookie, recovers its remember choice, commits verification, then
+attempts one distinct email-possession signin with current counted risk, explicit
+authorization and known-empty MFA. It never reuses the signup password result.
+Inspect both outcomes and the error: failed/unknown login does not erase committed
+verification. Replay and `VerificationSigninRecover` cannot mint or redeliver
+credentials. Ordinary signin is the recovery path after missed credential
+delivery. Enrolled MFA continuation is not supported by this selected profile.
+
 ## TOTP-protected email change
 
 `NewEmailTOTPPrimarySource` explicitly composes the existing session/CSRF and

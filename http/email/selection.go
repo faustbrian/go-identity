@@ -20,7 +20,10 @@ import (
 // Construction borrows service/limiter lifetimes and copies their configuration;
 // callers must not mutate inputs concurrently with construction.
 type FeatureConfig struct {
-	SignupConfirmation  *ConfirmationConfig
+	SignupConfirmation *ConfirmationConfig
+	// VerificationSignin is an alternative original-browser registration
+	// profile of that same route. Other confirmation profiles remain cookie-free.
+	VerificationSignin  *VerificationSigninConfig
 	ManagedConfirmation *ManagedConfirmationConfig
 	// ProfiledConfirmation explicitly selects authenticated dispatch of both
 	// profiles. It is mutually exclusive with either single-profile selection.
@@ -47,6 +50,9 @@ func NewFeatureWithMiddleware(c FeatureConfig, m []identityhttp.MiddlewareDescri
 	if c.SignupConfirmation != nil {
 		selections++
 	}
+	if c.VerificationSignin != nil {
+		selections++
+	}
 	if c.ManagedConfirmation != nil {
 		selections++
 	}
@@ -57,6 +63,18 @@ func NewFeatureWithMiddleware(c FeatureConfig, m []identityhttp.MiddlewareDescri
 		return identityhttp.Feature{}, identityhttp.ErrInvalidInput
 	}
 	ops := make([]identityhttp.OperationDescriptor, 0, 2)
+	if c.VerificationSignin != nil {
+		h, err := newVerificationSigninHandler(*c.VerificationSignin, m)
+		if err != nil {
+			return identityhttp.Feature{}, err
+		}
+		op, err := newEmailConfirmationOperation(h, "identity.email.verification-confirm", "Explicit original-browser registration confirmation then separately committed email-possession signin.")
+		if err != nil {
+			return identityhttp.Feature{}, err
+		}
+		op.Wire = verificationSigninWire()
+		ops = append(ops, op)
+	}
 	if c.AddressRemove != nil {
 		h, err := newAddressRemoveHandler(*c.AddressRemove, m)
 		if err != nil {

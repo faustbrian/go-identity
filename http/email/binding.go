@@ -38,6 +38,13 @@ func (p *confirmationPipeline) ServeHTTP(w http.ResponseWriter, r *http.Request)
 		w.Header().Set("Content-Type", "application/json")
 		w.Header().Set("Cache-Control", "no-store")
 		w.Header().Set("X-Content-Type-Options", "nosniff")
+		if r != nil {
+			a := attemptFor(r)
+			if a.out.Signin != nil && a.out.Signin.SignedIn && a.cookie != "" && a.csrf != "" {
+				w.Header().Set("Set-Cookie", a.cookie)
+				w.Header().Set("X-CSRF-Token", a.csrf)
+			}
+		}
 	}
 	protect()
 	defer protect()
