@@ -173,6 +173,13 @@ and requires explicit `NotifyCurrentAddress` startup policy. Select these throug
 `FeatureConfig.VerificationRequest`/`.ChangeRequest` to combine with reads and
 confirmation in one email feature.
 
+Change requests may use the exact `identity.email.change-request` multi-factor
+TOTP proof when both the proof source and native service explicitly select that
+profile. The proof source reads original committed factor evidence; the native
+owner authenticates, fences and consumes it with the protected request. This selects
+neither a step-up route nor password fallback, and other email actions retain
+their original proof profiles.
+
 Both require the configured session cookie, exact HTTPS Origin, `X-CSRF-Token`
 and `Idempotency-Key`. Body identity/policy/command overrides, bearer alternatives,
 duplicates and aliases deny. The signed original proof and native retained-input

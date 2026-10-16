@@ -32,6 +32,12 @@ func RequireTOTPSessionFactor(ctx context.Context, w kernel.Work, owner kernel.F
 	if _, err := identity.ParseCommandID(factorID); err != nil {
 		return invalidAuthority()
 	}
+	return requireTOTPSessionFactor(ctx, w, b, user, factorID, expected)
+}
+
+// Callers must first establish their exact registered consumer scope. This
+// shared owner fence does not widen the exported session/MFA action allowlist.
+func requireTOTPSessionFactor(ctx context.Context, w kernel.Work, b identity.CommandBinding, user identity.UserID, factorID string, expected TOTPSessionFactorState) error {
 	rows, err := w.Query(ctx, `SELECT user_id FROM identity.users WHERE tenant_id=$1 AND user_id=$2 AND status='active' FOR SHARE`, string(b.TenantID), string(user))
 	if err != nil {
 		return identity.UnavailableError{}

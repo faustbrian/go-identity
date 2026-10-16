@@ -1,6 +1,7 @@
 package mfahttp
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"log/slog"
@@ -212,6 +213,28 @@ func NewFeatureWithMiddleware(c FeatureConfig, m []identityhttp.MiddlewareDescri
 		}
 		op.Wire = uriWire(*c.URI)
 		operations = append(operations, op)
+	}
+	// The login methods share the same original flow/device cookie contract.
+	// HTTP's document owner requires one declaration per global component, so
+	// keep these two canonical declarations once without merging other schemes
+	// or allowing conflicting definitions to hide a composition error.
+	browser := make(map[string][]byte, 2)
+	for i := range operations {
+		wire := operations[i].Wire
+		kept := wire.SecuritySchemes[:0]
+		for _, component := range wire.SecuritySchemes {
+			if component.Name == "MFAOriginalFlow" || component.Name == "MFABrowserDevice" {
+				if previous, exists := browser[component.Name]; exists {
+					if !bytes.Equal(previous, component.Definition) {
+						return identityhttp.Feature{}, identityhttp.ErrInvalidInput
+					}
+					continue
+				}
+				browser[component.Name] = component.Definition
+			}
+			kept = append(kept, component)
+		}
+		wire.SecuritySchemes = kept
 	}
 	return identityhttp.NewFeature(identityhttp.FeatureConfig{ID: "identity/mfa", Operations: operations})
 }

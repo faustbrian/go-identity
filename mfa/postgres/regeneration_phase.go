@@ -229,6 +229,24 @@ func (p *recoveryRegenerationPhase) lockProof(ctx context.Context, w kernel.Work
 	i := p.input
 	b := i.Binding
 	record := i.Record
+	if err := lockFactorVerificationUse(ctx, w, record, b, used); err != nil {
+		return err
+	}
+	now, err := w.DatabaseTime(ctx)
+	if err != nil {
+		return err
+	}
+	proof := record.Original.Proof
+	use := auth.ReauthenticationUse{ProofUse: auth.ProofUse{Tenant: string(b.TenantID), Subject: string(b.UserID), Purpose: "identity.mfa.recovery-regenerate", Audience: p.state.stepup.config.Audience, Now: now}, SessionID: proof.SessionID, SessionVersion: proof.SessionVersion, Action: b.OperationID, MaximumAge: p.state.config.MaximumAge}
+	if proof.Validate(use) != nil || !now.Before(i.Until) {
+		return identity.ForbiddenError{}
+	}
+	return nil
+}
+
+// The existing MFA evidence owner supplies the same exclusive original-record
+// and use-marker fence to its explicitly registered protected consumers.
+func lockFactorVerificationUse(ctx context.Context, w kernel.Work, record factorVerificationRecord, b identity.CommandBinding, used bool) error {
 	rows, err := w.Query(ctx, `SELECT v.record,v.used_command_id,v.used_purpose FROM identity_mfa.factor_verifications v
 JOIN identity.commands j ON j.tenant_id=v.tenant_id AND j.command_id=v.command_id AND j.purpose=v.purpose
 JOIN identity.identity_command_id_claims c ON c.command_id=j.command_id AND c.tenant_id=j.tenant_id AND c.purpose=j.purpose
@@ -265,15 +283,6 @@ WHERE v.tenant_id=$1 AND v.user_id=$2 AND v.proof_id=$3 AND v.factor_id=$4 AND v
 		}
 	} else if usedID != nil || purpose != nil {
 		return identity.ConflictError{}
-	}
-	now, err := w.DatabaseTime(ctx)
-	if err != nil {
-		return err
-	}
-	proof := record.Original.Proof
-	use := auth.ReauthenticationUse{ProofUse: auth.ProofUse{Tenant: string(b.TenantID), Subject: string(b.UserID), Purpose: "identity.mfa.recovery-regenerate", Audience: p.state.stepup.config.Audience, Now: now}, SessionID: proof.SessionID, SessionVersion: proof.SessionVersion, Action: b.OperationID, MaximumAge: p.state.config.MaximumAge}
-	if proof.Validate(use) != nil || !now.Before(i.Until) {
-		return identity.ForbiddenError{}
 	}
 	return nil
 }

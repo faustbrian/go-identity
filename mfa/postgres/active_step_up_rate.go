@@ -19,7 +19,7 @@ func (s *TOTPActiveStepUpService) ActiveStepUpRateSource(ctx context.Context, r 
 		return 0, time.Time{}, invalidAuthority()
 	}
 	state := s.state()
-	if !slices.Contains(state.config.AllowedOrigins, r.Origin) {
+	if !slices.Contains(state.config.AllowedOrigins, r.Origin) || r.StepUp.Purpose == "identity.email.change-request" && !state.config.EmailChange {
 		return 0, time.Time{}, identity.ForbiddenError{}
 	}
 	ctx, stop := context.WithTimeout(ctx, state.shared.config.MaximumDuration)

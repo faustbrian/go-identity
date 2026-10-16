@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Select email-action TOTP step-up with `TOTPActiveStepUpConfig.EmailChange`.
+  Add opaque original-factor admission for the native email participant, with
+  current enrollment/generation fences and atomic one-use consumption. Install
+  the forward `EmailChangeFactorMigrationSource` after factor-proof history;
+  existing evidence, use markers and MFA-only defaults are preserved.
+
 - Fence the exact native primary-email OTP confirmation against its original
   known-empty factor generation before any comparison or debit. Other OTP
   operations cannot borrow this admission; no factor authority is initialized.

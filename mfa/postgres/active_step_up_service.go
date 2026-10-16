@@ -85,8 +85,8 @@ func factorEvidenceKeyID(id string) bool {
 	return true
 }
 
-// TOTPActiveStepUpConfig explicitly selects authenticated TOTP for recovery
-// regeneration. Issuer/environment/audience and lifetime are startup policy,
+// TOTPActiveStepUpConfig explicitly selects authenticated TOTP for management
+// actions. Issuer/environment/audience and lifetime are startup policy,
 // never request overrides. Comparison and signing keys must be independent of
 // lookup, envelope, recovery and command keys. Origins are exact HTTPS origins.
 // Counters, risk, coordinator and encryption use the borrowed enrollment graph.
@@ -99,6 +99,10 @@ type TOTPActiveStepUpConfig struct {
 	VerificationKeys              map[string]ed25519.PublicKey
 	Issuer, Environment, Audience string
 	TTL                           time.Duration
+	// EmailChange explicitly permits identity.email.change-request proof
+	// issuance. Zero preserves the existing MFA-only action set. This grants
+	// no email mutation authority; its owner must consume the original proof.
+	EmailChange bool
 }
 
 // TOTPActiveStepUpService verifies a real enrolled factor and persists original
@@ -166,7 +170,8 @@ func NewTOTPActiveStepUpService(enrollment *TOTPEnrollmentService, c TOTPActiveS
 		Comparison                         [32]byte
 		Version                            uint32
 		TTL                                time.Duration
-	}{s.shared.identity, c.AllowedOrigins, c.Issuer, c.Environment, c.Audience, id, key, sha256.Sum256(c.ComparisonKey[:]), c.ComparisonKeyVersion, c.TTL})
+		EmailChange                        bool `json:",omitempty"`
+	}{s.shared.identity, c.AllowedOrigins, c.Issuer, c.Environment, c.Audience, id, key, sha256.Sum256(c.ComparisonKey[:]), c.ComparisonKeyVersion, c.TTL, c.EmailChange})
 	if err != nil {
 		return nil, invalidAuthority()
 	}
@@ -212,7 +217,7 @@ func (s *TOTPActiveStepUpService) TotpVerify(ctx context.Context, r mfa.TotpVeri
 		return out, invalidAuthority()
 	}
 	state := s.state()
-	if !slices.Contains(state.config.AllowedOrigins, r.Origin) {
+	if !slices.Contains(state.config.AllowedOrigins, r.Origin) || r.StepUp.Purpose == "identity.email.change-request" && !state.config.EmailChange {
 		return out, identity.ForbiddenError{}
 	}
 	ctx, stop := context.WithTimeout(ctx, state.shared.config.MaximumDuration)

@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add explicit original password/MFA admission expectations without weakening
+  the single-factor profile. Native consumers must retain and fence the source
+  session's original factor enrollment and authority, separately from any fresh
+  action proof, and preserve the original session/family and validity.
+
 - Compose supported envelope v2 custody and matching public native participants.
   Callers supplying envelope/keyring services must use `/v2` types; stored
   ciphertext, original authority lifetimes and transaction ownership stay intact.

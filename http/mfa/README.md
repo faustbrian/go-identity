@@ -1,5 +1,19 @@
 # MFA HTTP transport
 
+To issue an email-change TOTP step-up proof, independently select
+`ActiveStepUpConfig.Purposes: []auth.Purpose{"identity.email.change-request"}`
+over an explicitly selected native issuer. Submit the exact purpose to
+`POST /v1/mfa/totp-verify` with `X-MFA-Variant: step-up`, the original cookie and
+CSRF token, factor ID, command ID and TOTP code. The fresh response's proof ID
+may be submitted to the separately selected email-change request endpoint.
+This enables neither email routes nor another factor fallback; empty purposes
+retain recovery regeneration only. Replays disclose no replacement proof.
+
+TOTP, recovery-use and secondary-OTP login/send may be selected together.
+Their shared browser-cookie schemes are declared once in the composed OpenAPI
+document; each standalone selection remains self-contained. This changes no
+native authentication dispatch or factor fallback.
+
 ## Password-origin secondary OTP login
 
 `NewOTPSendHandler(OTPSendConfig)` / `FeatureConfig.OTPSend` independently

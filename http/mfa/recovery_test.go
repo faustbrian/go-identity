@@ -10,6 +10,7 @@ import (
 	"time"
 
 	identity "github.com/faustbrian/go-identity"
+	identityhttp "github.com/faustbrian/go-identity/http"
 	"github.com/faustbrian/go-identity/mfa"
 	"github.com/faustbrian/go-identity/session"
 )
@@ -18,6 +19,39 @@ type recoveryNative struct {
 	rate         *strictRate
 	reads, calls int
 	result       func(mfa.RecoveryUseRequest) (mfa.RecoveryUseResult, error)
+}
+
+func TestRecoveryAndPasswordTOTPComposeOneBrowserContract(t *testing.T) {
+	base, native, _, _ := handlerFixture(t)
+	recovery := RecoveryUseConfig{PasswordPrimary: true, Network: base.Network, Service: &recoveryNative{rate: native.rate}, Rate: base.Rate, Origin: base.Origin, CallbackURL: base.CallbackURL, SessionCookie: base.SessionCookie, Device: base.Device, ActorID: base.ActorID, PolicyRevision: base.PolicyRevision, Audience: base.Audience, Now: base.Now, MaximumDuration: base.MaximumDuration}
+	otp, _, _, _, _ := otpHandlerFixture(t)
+	send, _, _, _ := otpSendFixture(t)
+	for selected := 1; selected < 16; selected++ {
+		selection := FeatureConfig{}
+		if selected&1 != 0 {
+			selection.PasswordTOTPVerify = &base
+		}
+		if selected&2 != 0 {
+			selection.RecoveryUse = &recovery
+		}
+		if selected&4 != 0 {
+			selection.OTPVerify = &otp
+		}
+		if selected&8 != 0 {
+			selection.OTPSend = &send
+		}
+		feature, err := NewFeature(selection)
+		if err != nil {
+			t.Fatal(err)
+		}
+		operations, err := identityhttp.NewOperationDescriptors(identityhttp.FeatureServices{Features: []identityhttp.Feature{feature}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, _, err := identityhttp.NewRouter(identityhttp.TransportPolicy{Network: base.Network, HandlerTimeout: time.Second, Document: identityhttp.DocumentConfig{Title: "MFA", Version: "1"}}, operations, nil); err != nil {
+			t.Fatal("selected MFA browser contract cannot boot", "selection", selected, err)
+		}
+	}
 }
 
 func (s *recoveryNative) RecoveryVerificationRateSource(_ context.Context, r mfa.RecoveryUseRequest) (identity.UserID, string, time.Duration, error) {

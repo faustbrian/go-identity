@@ -29,7 +29,7 @@ func TestActiveStepUpHTTPRequiresNativeComposition(t *testing.T) {
 }
 
 func TestActiveStepUpHTTPConservesProofAndAuthenticatedVariant(t *testing.T) {
-	for _, mode := range []string{"fresh", "management", "unselected-purpose", "null-purpose", "replay", "unknown", "expired", "foreign-proof", "missing-variant", "enrollment-variant", "duplicate-variant", "foreign-fields"} {
+	for _, mode := range []string{"fresh", "management", "email-change", "unselected-email", "unselected-purpose", "null-purpose", "replay", "unknown", "expired", "foreign-proof", "missing-variant", "enrollment-variant", "duplicate-variant", "foreign-fields"} {
 		t.Run(mode, func(t *testing.T) {
 			c, _, reader, clock, r := uriFixture(t)
 			factor, _ := identity.NewCommandID()
@@ -41,6 +41,9 @@ func TestActiveStepUpHTTPConservesProofAndAuthenticatedVariant(t *testing.T) {
 			case "management":
 				proof.Proof.Purpose = "identity.mfa.factor-update"
 				proof.Action = "identity.mfa.factor-update"
+			case "email-change":
+				proof.Proof.Purpose = "identity.email.change-request"
+				proof.Action = "identity.email.change-request"
 			case "replay":
 				proof = auth.ReauthenticationProof{}
 			case "unknown":
@@ -66,11 +69,16 @@ func TestActiveStepUpHTTPConservesProofAndAuthenticatedVariant(t *testing.T) {
 			if mode == "management" {
 				config.Purposes = []auth.Purpose{"identity.mfa.recovery-regenerate", "identity.mfa.factor-update"}
 			}
+			if mode == "email-change" {
+				config.Purposes = []auth.Purpose{"identity.email.change-request"}
+			}
 			r.URL.Path = "/v1/mfa/totp-verify"
 			r.RequestURI = r.URL.RequestURI()
 			r.Header.Set("X-MFA-Variant", "step-up")
 			body := `{"commandID":"` + string(command) + `","factorID":"` + string(factor) + `","code":"123456"}`
 			switch mode {
+			case "email-change", "unselected-email":
+				body = strings.TrimSuffix(body, "}") + `,"purpose":"identity.email.change-request"}`
 			case "management", "unselected-purpose":
 				body = strings.TrimSuffix(body, "}") + `,"purpose":"identity.mfa.factor-update"}`
 			case "null-purpose":
@@ -96,12 +104,15 @@ func TestActiveStepUpHTTPConservesProofAndAuthenticatedVariant(t *testing.T) {
 			if w.Header().Get("Set-Cookie") != "" || w.Header().Get("X-CSRF-Token") != "" || w.Header().Get("Cache-Control") != "no-store" {
 				t.Fatal("step-up issued a session or cacheable output")
 			}
-			if mode == "fresh" || mode == "management" {
+			if mode == "fresh" || mode == "management" || mode == "email-change" {
 				if w.Code != 200 || owner.calls != 1 || owner.last.StepUp == nil || !strings.Contains(w.Body.String(), `"proofID":"`+string(command)+`"`) {
 					t.Fatal("fresh authenticated factor proof unavailable", w.Code)
 				}
 				if mode == "management" && owner.last.StepUp.Purpose != "identity.mfa.factor-update" {
 					t.Fatal("selected purpose changed at native boundary")
+				}
+				if mode == "email-change" && owner.last.StepUp.Purpose != "identity.email.change-request" {
+					t.Fatal("selected email purpose changed at native boundary")
 				}
 				feature, err := NewFeature(FeatureConfig{ActiveStepUp: &config})
 				if err != nil {
@@ -117,7 +128,7 @@ func TestActiveStepUpHTTPConservesProofAndAuthenticatedVariant(t *testing.T) {
 			} else if w.Code == 200 || strings.Contains(w.Body.String(), `"proofID"`) {
 				t.Fatal("invalid/replayed result disclosed proof", mode, w.Code)
 			}
-			if strings.Contains(mode, "variant") || mode == "foreign-fields" || mode == "unselected-purpose" || mode == "null-purpose" {
+			if strings.Contains(mode, "variant") || mode == "foreign-fields" || mode == "unselected-purpose" || mode == "unselected-email" || mode == "null-purpose" {
 				if owner.calls != 0 || owner.reads != 0 {
 					t.Fatal("another variant acquired active-factor custody")
 				}

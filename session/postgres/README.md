@@ -496,6 +496,13 @@ dimensions and performs no IO. It neither authenticates a bearer nor grants
 permission. Native participants must separately authenticate possession, use
 primary `RequireSession` checks, and recheck original freshness after waits.
 
+`OriginalMFAPasswordSessionAdmission` is the explicit password/MFA counterpart.
+It preserves the password-primary linkage and factor authority scope; it does
+not turn MFA provenance into a single-factor record. Consumers must additionally
+fence the original session's factor ID, enrollment and account-wide generation
+through the actual factor owner, even if a fresh action proof uses another
+factor. It performs no IO and grants no authentication or mutation permission.
+
 ### Canonical pre-auth state
 
 Install `PreAuthMigrationSource` after the base session schema in the single

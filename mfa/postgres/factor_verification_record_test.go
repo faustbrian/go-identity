@@ -84,7 +84,7 @@ func TestFactorVerificationRecordPreservesSignedOriginalAndOwnerEpoch(t *testing
 }
 
 func TestFactorVerificationCodecKeepsExactManagementPurpose(t *testing.T) {
-	for _, purpose := range []auth.Purpose{"identity.mfa.factor-update", "identity.mfa.disable"} {
+	for _, purpose := range []auth.Purpose{"identity.mfa.factor-update", "identity.mfa.disable", "identity.email.change-request"} {
 		r := factorVerificationFixture(t)
 		r.Original.Proof.Proof.Purpose = purpose
 		r.Original.Proof.Action = string(purpose)
@@ -110,7 +110,7 @@ func TestFactorVerificationCodecKeepsExactManagementPurpose(t *testing.T) {
 		clear(publicKey)
 		clear(frame)
 	}
-	for _, purpose := range []auth.Purpose{"identity.mfa.enable", "identity.admin.mfa-reset", "identity.mfa.list", "identity.mfa.factor-update.extra"} {
+	for _, purpose := range []auth.Purpose{"identity.mfa.enable", "identity.admin.mfa-reset", "identity.mfa.list", "identity.mfa.factor-update.extra", "identity.email.change-confirm", "identity.email.address-remove"} {
 		r := factorVerificationFixture(t)
 		r.Original.Proof.Proof.Purpose = purpose
 		r.Original.Proof.Action = string(purpose)

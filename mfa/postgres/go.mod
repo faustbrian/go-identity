@@ -13,7 +13,7 @@ require (
 	github.com/faustbrian/go-identity v0.0.0-20261015054516-5afeba0ac471
 	github.com/faustbrian/go-identity/delivery v0.0.0-20261015061706-1f0b46ab1053
 	github.com/faustbrian/go-identity/delivery/postgres v0.0.0-20261015104034-f16881100907
-	github.com/faustbrian/go-identity/mfa v0.0.0-20261015092135-af758fe32cc8
+	github.com/faustbrian/go-identity/mfa v0.0.0-20261016110849-a4627291653b
 	github.com/faustbrian/go-identity/postgres v0.0.0-20261015060432-bdc73de10a74
 	github.com/faustbrian/go-identity/risk v0.0.0-20261015085833-f43df0429695
 	github.com/faustbrian/go-identity/risk/postgres v0.0.0-20261015104034-f16881100907

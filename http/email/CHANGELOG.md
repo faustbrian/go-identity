@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Adopt exact action-bound TOTP email-change validation. Supply the explicitly
+  selected native factor-proof and change-request owners; structural transport
+  validation grants no authority or fallback to a weaker proof.
+
 - Opt into administrative removal with `RemovalConfig.AdministrativeTargets`
   and a matching native owner. Accept optional `targetSubjectID` without changing
   the authenticated actor; disabled routes reject and omit the selector.

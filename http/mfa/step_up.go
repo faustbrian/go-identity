@@ -30,7 +30,7 @@ type ActiveStepUpService interface {
 // for concurrent use. Cookie/exact origins/revision/Now are trusted startup
 // policy. MaximumDuration is 1ms..30s; earlier caller deadlines win.
 type ActiveStepUpConfig struct {
-	// Purposes selects exact native management targets (at most three).
+	// Purposes selects exact native management targets (at most four).
 	// Empty preserves recovery regeneration. Non-default targets require an
 	// explicit body purpose; unselected actions deny, never fall back.
 	Purposes        []auth.Purpose
@@ -76,12 +76,12 @@ func NewActiveStepUpHandlerWithMiddleware(c ActiveStepUpConfig, m []identityhttp
 	if len(c.Purposes) == 0 {
 		c.Purposes = []auth.Purpose{"identity.mfa.recovery-regenerate"}
 	}
-	if len(c.Purposes) > 3 {
+	if len(c.Purposes) > 4 {
 		return nil, identityhttp.ErrInvalidInput
 	}
 	c.Purposes = slices.Clone(c.Purposes)
 	for i, purpose := range c.Purposes {
-		if purpose != "identity.mfa.recovery-regenerate" && purpose != "identity.mfa.factor-update" && purpose != "identity.mfa.disable" || slices.Contains(c.Purposes[:i], purpose) {
+		if purpose != "identity.mfa.recovery-regenerate" && purpose != "identity.mfa.factor-update" && purpose != "identity.mfa.disable" && purpose != "identity.email.change-request" || slices.Contains(c.Purposes[:i], purpose) {
 			return nil, identityhttp.ErrInvalidInput
 		}
 	}

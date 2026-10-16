@@ -67,7 +67,7 @@ func encodeFactorVerificationRecord(r factorVerificationRecord) ([]byte, error) 
 
 func nativeFactorEvidencePurpose(p auth.Purpose) bool {
 	switch p {
-	case "identity.mfa.recovery-regenerate", "identity.mfa.factor-update", "identity.mfa.disable":
+	case "identity.mfa.recovery-regenerate", "identity.mfa.factor-update", "identity.mfa.disable", "identity.email.change-request":
 		return true
 	default:
 		return false

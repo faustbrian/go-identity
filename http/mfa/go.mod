@@ -9,7 +9,7 @@ require (
 	github.com/faustbrian/go-identity v0.0.0-20261015054516-5afeba0ac471
 	github.com/faustbrian/go-identity/delivery v0.0.0-20261015061706-1f0b46ab1053
 	github.com/faustbrian/go-identity/http v0.0.0-20261015092135-af758fe32cc8
-	github.com/faustbrian/go-identity/mfa v0.0.0-20261015092135-af758fe32cc8
+	github.com/faustbrian/go-identity/mfa v0.0.0-20261016110849-a4627291653b
 	github.com/faustbrian/go-identity/session v0.0.0-20261015104034-f16881100907
 	github.com/faustbrian/go-password/v2 v2.0.2-0.20261015050515-4eb0fefa60ff
 	github.com/faustbrian/go-rate-limit/v2 v2.0.1-0.20261015090634-0ebce3975fe1

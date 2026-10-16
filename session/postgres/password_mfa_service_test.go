@@ -75,10 +75,20 @@ func TestPasswordMFASessionAdmissionRetainsCredentialAndFactor(t *testing.T) {
 	action := command.Binding
 	action.OperationID, action.SchemaID, action.SchemaVersion = "identity.mfa.totp-verify", "mfa-totp-step-up", 1
 	for _, candidate := range []session.Session{record, recoveryRecord} {
+		directory, primary, policy, err := OriginalMFAPasswordSessionAdmission(profile, candidate, command.Binding)
+		if err != nil || primary != credential || directory.GlobalVersion != 1 || directory.TenantVersion != 2 || policy.Version != 8 {
+			t.Fatal("explicit original MFA profile lost primary owner expectations", err)
+		}
+		if _, _, _, err := OriginalSessionAdmission(profile, candidate, command.Binding); err == nil {
+			t.Fatal("original single-factor profile admitted MFA")
+		}
 		got, err := guard.admission(candidate, action)
 		if err != nil || got.credential == nil || got.factor == nil || got.credential.Credential != credential.Credential || got.factor.FactorAuthorityVersion != 7 {
 			t.Fatal("authenticated factor action lost original credential or factor", err)
 		}
+	}
+	if _, _, _, err := OriginalMFAPasswordSessionAdmission(profile, original, command.Binding); err == nil {
+		t.Fatal("original MFA profile upgraded a single-factor record")
 	}
 	for _, mutation := range []string{"actor", "schema", "operation", "tenant"} {
 		bad := action
@@ -112,6 +122,9 @@ func TestPasswordMFASessionAdmissionRetainsCredentialAndFactor(t *testing.T) {
 	}
 	if _, _, _, err := passwordMFASessionAdmission(profile, foreign, command.Binding, s.SessionID, s.Version); err == nil {
 		t.Fatal("foreign factor admitted")
+	}
+	if _, _, _, err := OriginalMFAPasswordSessionAdmission(profile, foreign, command.Binding); err == nil {
+		t.Fatal("original MFA profile erased a foreign factor scope")
 	}
 }
 

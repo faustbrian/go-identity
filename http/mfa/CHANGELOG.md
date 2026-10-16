@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Compose selected TOTP, recovery and secondary-OTP login routes with one
+  shared browser-cookie declaration. Standalone selections remain complete;
+  conflicting definitions and global duplicate components still fail closed.
+
+- Allow explicit selection of `identity.email.change-request` on active-TOTP
+  step-up. Default purpose selection remains MFA recovery regeneration, and
+  email mutations require the independently selected email owner and transport.
+
 - Compose current session custody backed by supported envelope v2. Existing
   workflow/HTTP contracts and original credential lifetimes are unchanged.
 

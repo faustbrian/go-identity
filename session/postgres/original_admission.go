@@ -37,3 +37,21 @@ func OriginalSessionAdmission(profile IdentifierAdmissionConfig, original sessio
 	}
 	return sessionAdmissionBindings(profile, original, binding, s.SessionID, s.Version)
 }
+
+// OriginalMFAPasswordSessionAdmission derives the exact original password and
+// authorization expectations of a completed password/MFA session. It retains
+// the native password-primary linkage and factor scope checks; single-factor,
+// organization and passkey records deny. This explicit profile does not broaden
+// OriginalSessionAdmission. No IO, authentication or freshness renewal occurs.
+//
+// Callers must separately authenticate possession, fence the original MFA
+// factor ID/enrollment/authority through its native owner, require this same
+// original session/family, and recheck validity in protected Work. Returned
+// expectations alone grant no permission. Immutable reads are concurrency-safe.
+func OriginalMFAPasswordSessionAdmission(profile IdentifierAdmissionConfig, original session.Session, binding identity.CommandBinding) (kernel.DirectoryAuthorityAdmission, kernel.CredentialAdmission, kernel.UserAuthorizationAdmission, error) {
+	s, err := original.Bindings()
+	if err != nil {
+		return kernel.DirectoryAuthorityAdmission{}, kernel.CredentialAdmission{}, kernel.UserAuthorizationAdmission{}, identity.ForbiddenError{}
+	}
+	return passwordMFASessionAdmission(profile, original, binding, s.SessionID, s.Version)
+}

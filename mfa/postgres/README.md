@@ -1,5 +1,21 @@
 # PostgreSQL MFA authority (in development)
 
+For TOTP-protected email change, explicitly set
+`TOTPActiveStepUpConfig.EmailChange` and install
+`EmailChangeFactorMigrationSource` after existing factor-proof history at a new
+forward version. `NewEmailChangeFactorSource` borrows that selected issuer.
+Its opaque admission authenticates exact original signed evidence; it is not
+an authorization ticket. The registered email owner must call `Admit`/`Consume`
+inside protected request Work and `CheckConsumed` on confirmation and final
+checks. It must separately fence original session, directory, credential and
+authorization policy. `Prepare` and `Restore` also take the consumer's frozen
+original session: a password/TOTP or password/recovery source retains its own
+factor enrollment and authority, even when step-up used a different factor.
+Protected checks and scanner discovery validate both original factor bindings.
+Reuse of the proof store/use marker is atomic with the
+email mutation; no second store, automatic verification consumption or fallback
+is provided. Zero/unselected configuration retains MFA-management-only purposes.
+
 `ReadEmailOTPFactors` supplies only the actual known-empty factor generation
 for pending-email OTP preparation. `RequireEmailOTPFactors` must fence that same
 generation in the registered native OTP Send/completion Work. Missing, enrolled
