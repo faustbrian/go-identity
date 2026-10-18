@@ -15,6 +15,14 @@ verification-only. Native composition is in `password/postgres`; typed operation
 transaction and acceptance semantics are in
 [verification_signin_contracts.json](verification_signin_contracts.json).
 
+An explicitly TOTP-enabled native owner may instead return `Challenge` after
+verification commits. That pending result contains no session, cookie or CSRF
+token. Its opaque proof is fresh-delivery-only; replay and recovery never mint
+another proof. Complete through the selected verification-origin TOTP owner,
+using the original signup browser and immutable challenge deadline/remember
+choice. Default known-empty admission and verification-only services do not
+implicitly select this capability.
+
 `ChangeRequestRequest` accepts the exact multi-factor TOTP projection for
 `identity.email.change-request` as well as the original password profile.
 `Validate` is structural, not signature validation or current authority. Only

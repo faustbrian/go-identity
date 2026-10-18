@@ -14,6 +14,9 @@ func passwordMFAOperation(p CommandPlan) bool {
 }
 
 func encodeMFAContinuationPlanMode(b identity.CommandBinding, fp [32]byte, p CommandPlan, allowUngenerated bool) ([]byte, error) {
+	if emailVerificationMFAOperation(p) {
+		return encodePrimaryMFAPlanMode(b, fp, p, "email-verification", allowUngenerated)
+	}
 	if passwordMFAOperation(p) {
 		return encodePasswordMFAPlanMode(b, fp, p, allowUngenerated)
 	}
@@ -21,6 +24,9 @@ func encodeMFAContinuationPlanMode(b identity.CommandBinding, fp [32]byte, p Com
 }
 
 func decodeMFAContinuationPlanMode(b identity.CommandBinding, fp [32]byte, data []byte, allowUngenerated bool) (CommandPlan, error) {
+	if b.OperationID == "identity.email.verification-signin" {
+		return decodePrimaryMFAPlanMode(b, fp, data, "email-verification", allowUngenerated)
+	}
 	if b.OperationID == "identity.password.signin" {
 		return decodePasswordMFAPlanMode(b, fp, data, allowUngenerated)
 	}
@@ -28,6 +34,9 @@ func decodeMFAContinuationPlanMode(b identity.CommandBinding, fp [32]byte, data 
 }
 
 func validMFAContinuationPlanMode(b identity.CommandBinding, p CommandPlan, allowUngenerated bool) bool {
+	if emailVerificationMFAOperation(p) {
+		return validEmailVerificationMFAPlanMode(b, p, allowUngenerated)
+	}
 	if passwordMFAOperation(p) {
 		return validPasswordMFAPlanMode(b, p, allowUngenerated)
 	}
@@ -59,7 +68,14 @@ func validPasswordMFAPlanMode(b identity.CommandBinding, p CommandPlan, allowUng
 // comparison/browser custody and bound the child by original primary expiry.
 // Unlike magic-link consumption it has no primary capability participant.
 func encodePasswordMFAPlanMode(b identity.CommandBinding, fp [32]byte, p CommandPlan, allowUngenerated bool) ([]byte, error) {
-	if !validPasswordMFAPlanMode(b, p, allowUngenerated) {
+	return encodePrimaryMFAPlanMode(b, fp, p, "password", allowUngenerated)
+}
+
+// Both non-consuming primary owners use the same bounded envelope grammar.
+// The origin discriminator and domain-separated profile remain mandatory, so
+// reuse preserves password's historical bytes without relabeling email proof.
+func encodePrimaryMFAPlanMode(b identity.CommandBinding, fp [32]byte, p CommandPlan, origin string, allowUngenerated bool) ([]byte, error) {
+	if !validPrimaryMFAPlanMode(b, p, origin, allowUngenerated) {
 		return nil, invalidPlan()
 	}
 	for _, a := range p.Audits {
@@ -69,12 +85,12 @@ func encodePasswordMFAPlanMode(b identity.CommandBinding, fp [32]byte, p Command
 	}
 	base := p
 	base.MFAContinuation = nil
-	profile := "identity-password-mfa-preparation-v1"
+	profile := "identity-" + origin + "-mfa-preparation-v1"
 	if ungeneratedMFAContinuation(p.MFAContinuation) {
-		profile = "identity-password-mfa-ungenerated-v1"
+		profile = "identity-" + origin + "-mfa-ungenerated-v1"
 	}
 	if p.CapabilityIssuance != nil {
-		profile = "identity-password-mfa-challenge-v1"
+		profile = "identity-" + origin + "-mfa-challenge-v1"
 	}
 	var wire []byte
 	var err error
@@ -92,7 +108,7 @@ func encodePasswordMFAPlanMode(b identity.CommandBinding, fp [32]byte, p Command
 		issued, expires = 0, 0
 	}
 	out := cborMap(map[string][]byte{
-		"base": cborBytes(wire), "origin": cborText("password"), "profile": cborText(profile), "version": cborUint(1),
+		"base": cborBytes(wire), "origin": cborText(origin), "profile": cborText(profile), "version": cborUint(1),
 		"challenge": cborMap(map[string][]byte{"id": cborText(string(m.ID)), "user_id": cborText(string(m.UserID)), "scope_digest": cborBytes(m.ScopeDigest[:]), "policy_version": cborUint(m.PolicyVersion), "factor_version": cborUint(m.FactorVersion), "issued_at": cborUint(issued), "expires_at": cborUint(expires)}),
 	})
 	if len(out) > 65536 {
@@ -102,6 +118,10 @@ func encodePasswordMFAPlanMode(b identity.CommandBinding, fp [32]byte, p Command
 }
 
 func decodePasswordMFAPlanMode(b identity.CommandBinding, fp [32]byte, data []byte, allowUngenerated bool) (CommandPlan, error) {
+	return decodePrimaryMFAPlanMode(b, fp, data, "password", allowUngenerated)
+}
+
+func decodePrimaryMFAPlanMode(b identity.CommandBinding, fp [32]byte, data []byte, origin string, allowUngenerated bool) (CommandPlan, error) {
 	fail := func() (CommandPlan, error) { return CommandPlan{}, identity.UnavailableError{} }
 	if len(data) == 0 || len(data) > 65536 {
 		return fail()
@@ -115,9 +135,9 @@ func decodePasswordMFAPlanMode(b identity.CommandBinding, fp [32]byte, data []by
 	}
 	var p CommandPlan
 	var err error
-	profile := "identity-password-mfa-preparation-v1"
+	profile := "identity-" + origin + "-mfa-preparation-v1"
 	if r.data[0] == 0xa4 {
-		profile = "identity-password-mfa-challenge-v1"
+		profile = "identity-" + origin + "-mfa-challenge-v1"
 		decodeBase := func(b identity.CommandBinding, fp [32]byte, wire []byte) (CommandPlan, error) {
 			if len(wire) == 0 || wire[0] != 0xa8 && wire[0] != 0xa9 {
 				return fail()
@@ -133,10 +153,10 @@ func decodePasswordMFAPlanMode(b identity.CommandBinding, fp [32]byte, data []by
 	}
 	r.data = r.data[int(n):]
 	r.key("origin")
-	r.consume(cborText("password"))
+	r.consume(cborText(origin))
 	r.key("profile")
 	actual := r.string(128)
-	ungenerated := allowUngenerated && p.CapabilityIssuance == nil && actual == "identity-password-mfa-ungenerated-v1"
+	ungenerated := allowUngenerated && p.CapabilityIssuance == nil && actual == "identity-"+origin+"-mfa-ungenerated-v1"
 	if actual != profile && !ungenerated {
 		return fail()
 	}
@@ -166,7 +186,7 @@ func decodePasswordMFAPlanMode(b identity.CommandBinding, fp [32]byte, data []by
 		return fail()
 	}
 	p.MFAContinuation = m
-	canonical, err := encodePasswordMFAPlanMode(b, fp, p, allowUngenerated)
+	canonical, err := encodePrimaryMFAPlanMode(b, fp, p, origin, allowUngenerated)
 	if err != nil || !bytes.Equal(canonical, data) {
 		return fail()
 	}

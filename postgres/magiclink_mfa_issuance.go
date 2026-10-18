@@ -7,17 +7,23 @@ import (
 	identity "github.com/faustbrian/go-identity"
 )
 
-// A signed child cannot select a customer merely from an anonymous command or
-// target declaration. Only the currently invoked native challenge owner can
-// borrow its already-consumed primary custody; the complete MFA scope digest
-// also fixes methods, browser, remember policy and original primary expiry.
+// A signed child cannot select a customer merely from a command or target
+// declaration. Only the currently invoked native challenge owner can borrow
+// its original primary scope. Verification's parent committed separately;
+// password comparison and magic-link consumption retain their distinct owners.
+// The scope digest fixes methods, browser, remember and original primary expiry.
 func magicLinkMFAIssuanceSubject(w Work, payload capability.Payload) (identity.UserID, error) {
 	if w.state == nil || w.state.issuance == nil || w.state.issuance.plan == nil {
 		return "", invalidWork()
 	}
 	var m MFAContinuationPlan
 	var err error
-	if owner, ok := w.state.featureInvocation.(PasswordMFAChallengeContributor); ok && w.state.execution != nil && w.state.execution.reservation != nil && passwordMFAOperation(w.state.execution.reservation.plan.snapshot()) {
+	if owner, ok := w.state.featureInvocation.(EmailVerificationMFAChallengeContributor); ok && w.state.execution != nil && w.state.execution.reservation != nil && emailVerificationMFAOperation(w.state.execution.reservation.plan.snapshot()) {
+		if payload.CorrelationID != w.state.binding.RecordID {
+			return "", invalidWork()
+		}
+		m, err = w.EmailVerificationMFAChallenge(owner)
+	} else if owner, ok := w.state.featureInvocation.(PasswordMFAChallengeContributor); ok && w.state.execution != nil && w.state.execution.reservation != nil && passwordMFAOperation(w.state.execution.reservation.plan.snapshot()) {
 		m, err = w.PasswordMFAChallenge(owner)
 	} else if owner, ok := w.state.featureInvocation.(MagicLinkMFAChallengeContributor); ok {
 		m, err = w.MagicLinkMFAChallenge(owner)

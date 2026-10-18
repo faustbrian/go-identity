@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Coordinate verification-origin MFA challenge issuance separately from its
+  committed verification parent, with typed historical scope and recovery.
+
 - Add explicit first-primary OTP fields while preserving existing primary-only
   fields. Lock the no-primary, sole-verified predecessor partition before code
   comparison; promotion retains the old mailbox and its verification history.

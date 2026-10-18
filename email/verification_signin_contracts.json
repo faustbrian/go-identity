@@ -22,7 +22,8 @@
     "Verification": "independent verification-only outcome and correlation",
     "Issuance": "separate session-owned child outcome and reveal-once delivery",
     "CSRFToken": "fresh committed child only",
-    "Recovery": "exact child scope; metadata-only, never execution or disclosure authority"
+    "Recovery": "exact child scope; metadata-only, never execution or disclosure authority",
+    "Challenge": "optional explicitly selected pending TOTP continuation: ID, Method, original ExpiresAt and fresh-only opaque Proof; mutually exclusive with session/cookie/CSRF"
   },
   "transactions": [
     "original verification-confirm commits address 1 -> 2, one-use grant, audit and lifecycle",
@@ -32,14 +33,27 @@
     "unknown/replayed verification creates no child; unknown/replayed child reveals no credential"
   ],
   "authentication": "email possession, not password comparison or a renewed signup proof",
-  "factor_profile": "known-empty authoritative MFA only; enrolled/unknown deny without fallback; enrolled continuation remains separate required work",
+  "factor_profile": "default known-empty authoritative MFA only; enrolled/unknown deny without fallback",
+  "enrolled_totp": {
+    "selection": "passwordpostgres.VerificationSigninConfig.TOTP plus independently composed verification-origin TOTP completion; reference PasswordSignup.VerificationTOTP",
+    "known_empty": "unchanged direct session path; unavailable, corrupt or unsupported factor authority denies",
+    "challenge": "separate committed child C after verification V; exact original signup browser, confirmation ID, tenant/user, policy/factor generations, remember and earliest original expiry",
+    "completion": "identity.mfa.totp-verify F authenticates the genuine enrolled factor and protected original parent custody, then atomically commits replay/attempt state, child use, audit/lifecycle and one MFA email-possession session",
+    "provenance": "email possession plus real TOTP, never manufactured password comparison or magic-link consumption",
+    "recovery": "original V/C/F outcomes reconcile metadata only; no replacement proof, password, factor secret, session credential or renewed freshness",
+    "migrations": "reference VerificationSessionLineage must permanently select VerificationBeforeMFA or MFABeforeVerification; preserve applied histories and add only native forward suffixes",
+    "excluded_methods": ["secondary OTP", "recovery codes", "WebAuthn", "trusted devices"]
+  },
   "http": {
     "selector": "emailhttp.FeatureConfig.VerificationSignin",
     "operation": "identity.email.verification-confirm",
     "route": "POST /v1/email/verification-confirm",
     "body": ["token", "callback", "commandID"],
     "cookies": "original signup flow and signed browser-device cookie",
-    "response": "parent confirmation plus optional child signin metadata; fresh secure HttpOnly cookie and X-CSRF-Token only",
+    "response": "parent confirmation plus optional child signin metadata; only fresh authenticated completion delivers secure HttpOnly cookie and X-CSRF-Token",
+    "pending_totp_selection": "emailhttp.VerificationSigninConfig.MFAContinuation explicitly permits pending challenge delivery; no session/cookie/CSRF",
+    "pending_totp_proof": "fresh original proof only in X-MFA-Token, never JSON/redirect/replay; expiry/cancellation/error withholds it without erasing committed verification",
+    "totp_completion": "separately selected mfahttp.FeatureConfig.VerificationTOTPVerify or reference HTTPMFA.VerificationTOTPVerify; POST /v1/mfa/totp-verify always requires singleton X-MFA-Variant: verification and original signup flow/device custody; no absent-header or cross-primary fallback",
     "defaults": "verification-only; managed/address-change profiles acquire no login"
   },
   "acceptance": [
@@ -50,6 +64,11 @@
     "rollback of either transaction preserves the other observed outcome accurately",
     "contending confirmations produce one verification and at most one child",
     "lost actual commit acknowledgements at both boundaries withhold credentials and retain recovery",
-    "default and shared managed confirmation remain verification-only"
+    "default and shared managed confirmation remain verification-only",
+    "genuine enrolled TOTP native/HTTPS browser and persistent choices: V -> pending C -> actual factor F -> authenticated read -> logout",
+    "pending C reveals no session/cookie/CSRF; wrong browser/variant/code deny and exhaustion revokes the shared budget without child use or session",
+    "late parent/account/identifier/policy/factor changes and original absolute expiry deny before protected completion",
+    "C/F rollback, same/distinct-command contention, real lost commit acknowledgements and interrupted durable preparation preserve atomic effects and metadata-only recovery",
+    "populated verification-first and MFA-first upgrades preserve native migration records, original issuance/session/operator custody and retained session reads; later password/magic-link composition stays forward-only and unmanaged suffixes deny"
   ]
 }

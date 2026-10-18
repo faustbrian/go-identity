@@ -6,8 +6,10 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	auth "github.com/faustbrian/go-authentication/v2"
+	"github.com/faustbrian/go-capability/v2"
 	identity "github.com/faustbrian/go-identity"
 	"github.com/faustbrian/go-identity/email"
 	"github.com/faustbrian/go-identity/session"
@@ -42,6 +44,58 @@ func TestVerificationSigninRequiresExplicitOriginalBrowserCustody(t *testing.T) 
 	}
 	if (email.VerificationSigninResult{}).Validate() == nil {
 		t.Fatal("unobserved verification became signin")
+	}
+}
+
+func TestVerificationSigninPendingMFAIsNotAnAuthenticatedSession(t *testing.T) {
+	q := verificationRecoveryQuery(t)
+	recovery, err := email.NewVerificationRecovery(q)
+	if err != nil {
+		t.Fatal(err)
+	}
+	id, _ := identity.NewCommandID()
+	challenge, _ := identity.NewCommandID()
+	proof := confirmationRequest(t).Token
+	result := email.VerificationSigninResult{Verification: email.VerificationConfirmResult{Outcome: identity.CommitOutcomeCommitted, Recovery: recovery, Address: verifiedProjection(t, q)}, Issuance: session.IssueResult{CommandID: id, CommitOutcome: identity.CommitOutcomeCommitted}, Recovery: identity.RecoveryQuery{CommandID: id, TenantID: q.TenantID, UserID: q.UserID, ActorID: q.ActorID, ActorKind: q.ActorKind, RecordID: string(q.CommandID), OperationID: "identity.email.verification-signin"}, Challenge: &email.VerificationMFAChallenge{ID: challenge, Method: "totp", ExpiresAt: time.Date(2026, 10, 18, 0, 0, 0, 0, time.UTC), Proof: proof}}
+	if result.Validate() != nil {
+		t.Fatal("well-formed pending-only result rejected")
+	}
+	for _, change := range []func(*email.VerificationSigninResult){
+		func(r *email.VerificationSigninResult) { r.Challenge.ID = r.Recovery.CommandID },
+		func(r *email.VerificationSigninResult) { r.Challenge.ID = q.CommandID },
+		func(r *email.VerificationSigninResult) { r.Challenge.Method = "otp" },
+		func(r *email.VerificationSigninResult) {
+			r.Challenge.ExpiresAt = r.Challenge.ExpiresAt.Add(time.Nanosecond)
+		},
+		func(r *email.VerificationSigninResult) { r.Issuance.Replayed = true },
+		func(r *email.VerificationSigninResult) { r.Issuance.Cookie.Name = "premature-session" },
+		func(r *email.VerificationSigninResult) { r.Issuance.Token, _ = session.NewToken(32) },
+		func(r *email.VerificationSigninResult) { r.CSRFToken, _ = session.NewCSRFToken() },
+		func(r *email.VerificationSigninResult) { r.Issuance.CommitOutcome = identity.CommitOutcomeUnknown },
+	} {
+		bad := result
+		c := *result.Challenge
+		bad.Challenge = &c
+		change(&bad)
+		if bad.Validate() == nil {
+			t.Fatal("pending challenge accepted conflicting origin, session custody or outcome")
+		}
+	}
+	replay := result
+	c := *result.Challenge
+	replay.Challenge = &c
+	replay.Issuance.Replayed = true
+	replay.Challenge.Proof = capability.Proof{}
+	if replay.Validate() != nil {
+		t.Fatal("credential-free pending replay metadata rejected")
+	}
+	for _, value := range []any{result, *result.Challenge} {
+		if _, err := json.Marshal(value); err == nil {
+			t.Fatal("implicit pending credential export permitted")
+		}
+	}
+	if fmt.Sprintf("%+v", *result.Challenge) != "email.VerificationMFAChallenge(redacted)" {
+		t.Fatal("challenge formatting disclosed custody")
 	}
 }
 

@@ -19,6 +19,10 @@ func (c *Coordinator) QueryPasswordMFAChallenge(ctx context.Context, q identity.
 	if q.OperationID != "identity.password.signin" || q.UserID != "" || q.AnonymousFlowID == "" || q.RecordID != "" {
 		return MFAContinuationPlan{}, CommandRecord{}, false, identity.InvalidInputError{Field: "password_mfa_query"}
 	}
+	return c.queryPrimaryMFAChallenge(ctx, q, caller, false)
+}
+
+func (c *Coordinator) queryPrimaryMFAChallenge(ctx context.Context, q identity.RecoveryQuery, caller authorization.DecisionContext, verification bool) (MFAContinuationPlan, CommandRecord, bool, error) {
 	var original MFAContinuationPlan
 	var present bool
 	receipt, err := c.queryCommandReceiptChecked(ctx, q, caller, func(observed commandObservation) error {
@@ -33,7 +37,11 @@ func (c *Coordinator) QueryPasswordMFAChallenge(ctx context.Context, q identity.
 		if plan.MFAContinuation == nil {
 			return nil
 		}
-		if !passwordMFAOperation(plan) || plan.CapabilityIssuance == nil {
+		matched := passwordMFAOperation(plan)
+		if verification {
+			matched = emailVerificationMFAOperation(plan)
+		}
+		if !matched || plan.CapabilityIssuance == nil {
 			return identity.UnavailableError{}
 		}
 		present = true

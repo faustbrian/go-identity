@@ -39,6 +39,36 @@ func NewMFAPasswordSessionIssuer(executor IssueExecutor, c IssuerConfig) (*Sessi
 	return newMFASessionIssuer(executor, c, true)
 }
 
+// NewMFAVerificationSessionIssuer selects TOTP completion of a separately
+// committed registration-verification primary. This is not magic-link consume
+// or password comparison. The native executor must authenticate the original
+// confirmation, signup/browser, child and actual factor under the sole Work.
+// Email-possession metadata retains its shared storage shape and original time.
+// No IO, proof creation or factor authentication occurs during construction.
+func NewMFAVerificationSessionIssuer(executor IssueExecutor, c IssuerConfig) (*SessionIssuer, error) {
+	s, err := newMFASessionIssuer(executor, c, false)
+	if err != nil {
+		return nil, err
+	}
+	s.mfaVerification = true
+	return s, nil
+}
+
+// NewMFAVerificationSessionIssuerWithCSRF retains synchronizer custody until
+// one fresh exact committed issue. Replay, denial, recovery and unknown outcomes
+// disclose neither credential. Verification primary does not enable other origins.
+func NewMFAVerificationSessionIssuerWithCSRF(executor IssueExecutor, c IssuerConfig, key CSRFKey) (*SessionIssuer, error) {
+	if key.key.state == nil {
+		return nil, ErrInvalidIssuer
+	}
+	s, err := NewMFAVerificationSessionIssuer(executor, c)
+	if err != nil {
+		return nil, err
+	}
+	s.csrfKey = key
+	return s, nil
+}
+
 func newMFASessionIssuer(executor IssueExecutor, c IssuerConfig, passwordPrimary bool) (*SessionIssuer, error) {
 	if c.Authority != nil {
 		return nil, ErrInvalidIssuer
@@ -89,8 +119,23 @@ func NewMFAMagicLinkSessionIssuerWithCSRF(executor IssueExecutor, c IssuerConfig
 // original remember policy and continuation expiry are never renewed. BindMFA
 // must freeze the same final opaque command before any reservation/execution.
 func (s *SessionIssuer) PrepareMFAMagicLink(b identity.CommandBinding, spec SessionSpec, primary MagicLinkAuthentication, metadata MFAAuthentication) (out PreparedIssuance, err error) {
-	if s == nil || s.mfaPassword {
+	if s == nil || s.mfaPassword || s.mfaVerification {
 		return out, ErrInvalidIssuance
+	}
+	return s.prepareMFA(b, spec, primary, metadata)
+}
+
+// PrepareMFAVerification freezes original email-possession and TOTP provenance
+// only on the explicit verification-MFA issuer. Native execution must prove the
+// separate verification parent; structural metadata is never authentication.
+// Freshness, Remember and absolute primary/continuation deadlines cannot renew.
+func (s *SessionIssuer) PrepareMFAVerification(b identity.CommandBinding, spec SessionSpec, primary MagicLinkAuthentication, metadata MFAAuthentication) (PreparedIssuance, error) {
+	if s == nil || !s.mfaVerification || s.mfaPassword {
+		return PreparedIssuance{}, ErrInvalidIssuance
+	}
+	m, err := metadata.Bindings()
+	if err != nil || m.Method != "totp" {
+		return PreparedIssuance{}, ErrInvalidIssuance
 	}
 	return s.prepareMFA(b, spec, primary, metadata)
 }

@@ -38,10 +38,7 @@ func encodeFeaturePlanMode(binding identity.CommandBinding, fingerprint [32]byte
 		return encodeMFACompletionPlan(binding, fingerprint, p)
 	}
 	if p.MFAContinuation != nil {
-		if passwordMFAOperation(p) {
-			return encodePasswordMFAPlanMode(binding, fingerprint, p, false)
-		}
-		return encodeMagicLinkMFAPlan(binding, fingerprint, p)
+		return encodeMFAContinuationPlanMode(binding, fingerprint, p, false)
 	}
 	if !proofBase && p.CapabilityIssuance != nil && p.CapabilityIssuance.MFAContinuationUserID != "" {
 		return nil, invalidPlan()

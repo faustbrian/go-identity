@@ -28,6 +28,44 @@ func continuationFixture(t *testing.T) mfa.ContinuationSpec {
 	return mfa.ContinuationSpec{ID: "AAAAAAAAAAAAAAAAAAAAAQ", PrimaryProofID: auth.ProofID("primary-proof"), PrimaryProofDigest: [32]byte{1}, PrimaryProofExpiresAt: now.Add(3 * time.Minute), TenantID: "tenant", SubjectID: identity.SubjectID("subject"), SourcePreAuthID: "bbbbbbbbbbbbbbbbbbbbbg", Origin: "https://app.test", AllowedMethods: []string{"totp", "recovery-code"}, PolicyVersion: 3, FactorVersion: 7, RememberPolicy: remember, Purpose: "identity.mfa.complete", Audience: "identity", IssuedAt: now, ExpiresAt: now.Add(2 * time.Minute), MaxAttempts: 3, AttemptsRemaining: 3, State: mfa.Pending, Version: 1}
 }
 
+func TestContinuationVerificationParentIsImmutableSignedScope(t *testing.T) {
+	legacy := continuationFixture(t)
+	original, err := mfa.NewPartialAuthContinuation(legacy)
+	if err != nil {
+		t.Fatal(err)
+	}
+	oldDigest, _ := original.ScopeDigest()
+	oldPayload, _ := original.CapabilityPayload("https://issuer.test")
+	if oldPayload.CorrelationID != "" {
+		t.Fatal("legacy continuation acquired verification origin")
+	}
+	legacy.VerificationCommandID = "AwMDAwMDAwMDAwMDAwMDAw"
+	selected, err := mfa.NewPartialAuthContinuation(legacy)
+	if err != nil {
+		t.Fatal(err)
+	}
+	digest, _ := selected.ScopeDigest()
+	payload, _ := selected.CapabilityPayload("https://issuer.test")
+	if digest == oldDigest || payload.CorrelationID != string(legacy.VerificationCommandID) || payload.ExpiresAt != oldPayload.ExpiresAt || payload.ID != oldPayload.ID {
+		t.Fatal("verification discriminator lost scope binding or renewed child")
+	}
+	after, err := selected.RecordAttempt("totp", legacy.IssuedAt.Add(time.Second), 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	afterDigest, _ := after.ScopeDigest()
+	if afterDigest != digest {
+		t.Fatal("attempt changed immutable verification origin")
+	}
+	for _, id := range []identity.CommandID{identity.CommandID(legacy.ID), identity.CommandID(legacy.PrimaryProofID), "malformed"} {
+		s := legacy
+		s.VerificationCommandID = id
+		if _, err := mfa.NewPartialAuthContinuation(s); err == nil {
+			t.Fatal("self/primary/malformed verification origin accepted")
+		}
+	}
+}
+
 func TestContinuationAuthenticatesFullOriginalCapabilityScopeReadOnly(t *testing.T) {
 	spec := continuationFixture(t)
 	c, err := mfa.NewPartialAuthContinuation(spec)

@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Explicitly prepare verification-origin TOTP sessions from retained verified
+  email possession and actual factor evidence, preserving original remember.
+
 - Explicitly prepare post-registration-verification email-possession sessions,
   bound to the distinct committed confirmation parent. Preserve original grant
   expiry/remember policy and withhold credentials on replay, error or ambiguity;

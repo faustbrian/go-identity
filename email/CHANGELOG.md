@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Represent explicitly selected verification-origin TOTP as a pending-only
+  challenge, distinct from authenticated session issuance and replay metadata.
+
 - Add independently selected original-browser registration verification/signin
   contracts, with separate verification and login outcomes and metadata-only
   recovery. Existing confirmation results remain verification-only.

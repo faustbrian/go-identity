@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Bind verification-origin continuations to their separately committed
+  confirmation without changing existing password/magic-link scope bytes.
+
 - Allow the explicit `identity.email.change-request` active-TOTP proof purpose.
   This does not authorize email mutation or enable a native or HTTP feature.
 

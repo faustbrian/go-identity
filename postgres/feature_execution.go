@@ -84,7 +84,7 @@ func validateFeatureCommand(phase FeatureExecutionContributor, command identity.
 		_, _, err := emailAttachmentCommand(p, command, plan)
 		return err
 	}
-	if plan.MFAContinuation != nil && passwordMFAOperation(plan) {
+	if plan.MFAContinuation != nil && (passwordMFAOperation(plan) || emailVerificationMFAOperation(plan)) {
 		return validateMFAContinuation(phase, command, plan)
 	}
 	if plan.Capability != nil {
@@ -187,7 +187,11 @@ func (r *ContributorRegistry) admitFeaturePlanMode(b identity.CommandBinding, fi
 		}
 	}
 	if p.MFAContinuation != nil {
-		if passwordMFAOperation(p) {
+		if emailVerificationMFAOperation(p) {
+			if _, ok := feature.contributor.(EmailVerificationMFAChallengeContributor); !ok {
+				return nil, invalidPlan()
+			}
+		} else if passwordMFAOperation(p) {
 			if _, ok := feature.contributor.(PasswordMFAChallengeContributor); !ok {
 				return nil, invalidPlan()
 			}

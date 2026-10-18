@@ -8,9 +8,11 @@ import (
 	"net/http"
 	"net/url"
 	"reflect"
+	"time"
 
 	auth "github.com/faustbrian/go-authentication/v2"
 	"github.com/faustbrian/go-authorization/v3"
+	"github.com/faustbrian/go-capability/v2"
 	identity "github.com/faustbrian/go-identity"
 	"github.com/faustbrian/go-identity/session"
 )
@@ -62,6 +64,36 @@ type VerificationSigninResult struct {
 	Issuance     session.IssueResult
 	CSRFToken    session.CSRFToken
 	Recovery     identity.RecoveryQuery
+	// Challenge is present only for an explicitly selected committed MFA child.
+	// Pending MFA is not signin: session, cookie and synchronizer stay absent.
+	// Proof is revealed once on fresh success, never replay or recovery.
+	Challenge *VerificationMFAChallenge
+}
+
+// VerificationMFAChallenge carries one original pending TOTP continuation,
+// not an authenticated session. ExpiresAt is the immutable earliest primary,
+// browser and configured MFA deadline. Explicit field projections are sensitive.
+type VerificationMFAChallenge struct {
+	ID        identity.CommandID
+	Method    string
+	ExpiresAt time.Time
+	Proof     capability.Proof
+}
+
+// Format redacts child credential and correlation.
+func (VerificationMFAChallenge) Format(s fmt.State, _ rune) {
+	_, _ = s.Write([]byte("email.VerificationMFAChallenge(redacted)"))
+}
+
+// MarshalJSON denies implicit child credential export; HTTP owns explicit reveal.
+func (VerificationMFAChallenge) MarshalJSON() ([]byte, error) { return nil, ErrSensitiveSerialization }
+
+// MarshalText denies implicit textual credential export.
+func (VerificationMFAChallenge) MarshalText() ([]byte, error) { return nil, ErrSensitiveSerialization }
+
+// LogValue redacts structured diagnostics.
+func (VerificationMFAChallenge) LogValue() slog.Value {
+	return slog.StringValue("email.VerificationMFAChallenge(redacted)")
 }
 
 // Validate checks structural outcome/disclosure consistency only. The native
@@ -72,7 +104,7 @@ func (r VerificationSigninResult) Validate() error {
 		return ErrInvalidVerification
 	}
 	if emptyVerificationSession(r.Issuance) {
-		if r.CSRFToken != (session.CSRFToken{}) || r.Recovery != (identity.RecoveryQuery{}) {
+		if r.CSRFToken != (session.CSRFToken{}) || r.Recovery != (identity.RecoveryQuery{}) || r.Challenge != nil {
 			return ErrInvalidVerification
 		}
 		return nil
@@ -85,6 +117,13 @@ func (r VerificationSigninResult) Validate() error {
 	}
 	if _, err := identity.ParseCommandID(string(q.CommandID)); err != nil {
 		return ErrInvalidVerification
+	}
+	if r.Challenge != nil {
+		c := r.Challenge
+		if _, err := identity.ParseCommandID(string(c.ID)); err != nil || c.ID == q.CommandID || c.ID == v.CommandID || c.Method != "totp" || c.ExpiresAt.IsZero() || c.ExpiresAt.Location() != time.UTC || c.ExpiresAt.Nanosecond() != 0 || issued.CommitOutcome != identity.CommitOutcomeCommitted || issued.Session != (session.Session{}) || issued.Token != (session.Token{}) || !reflect.DeepEqual(issued.Cookie, http.Cookie{}) || r.CSRFToken != (session.CSRFToken{}) || issued.Replayed && c.Proof != (capability.Proof{}) {
+			return ErrInvalidVerification
+		}
+		return nil
 	}
 	if issued.Session != (session.Session{}) {
 		s, err := issued.Session.Bindings()
