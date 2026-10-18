@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Pin verification-first versus MFA-first session migration lineage when
+  enabling verification TOTP. Existing migration bytes and populated issuance
+  rows remain unchanged; verification-first gains a separate forward suffix.
+
+- Compose verification-origin pending TOTP and actual session completion,
+  preserving original signup/browser/remember custody through native APIs and
+  separately selected HTTPS confirmation and verification routes.
+
 - Select native registration verification/signin with
   `PasswordSignup.VerificationSignin`, independently selecting its HTTPS profile
   with `HTTPRegistrationVerification.Signin`. Compose real migrations, original

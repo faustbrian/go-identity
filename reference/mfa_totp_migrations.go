@@ -11,7 +11,7 @@ import (
 // Completion extends the already selected native histories in owner order. It
 // never copies a store or resets old windows/session rows. The verification
 // predecessor is required even in graphs that do not expose registration.
-func magicLinkTOTPRequiredMigrations(ctx context.Context, catalog []migrationHistory, schema, riskSchema string) ([]migrationHistory, error) {
+func magicLinkTOTPRequiredMigrations(ctx context.Context, catalog []migrationHistory, schema, riskSchema string, verificationFirst bool) ([]migrationHistory, error) {
 	hasVerification := false
 	for _, history := range catalog {
 		if history.namespace == "identity_registration_counters" {
@@ -25,11 +25,21 @@ func magicLinkTOTPRequiredMigrations(ctx context.Context, catalog []migrationHis
 		}
 		catalog = append(catalog, migrationHistory{namespace: "identity_registration_counters", history: steps, owners: map[migrations.Version]ModuleID{1: "identity/risk/postgres"}})
 	}
-	steps, err := (riskpg.MFACompletionCounterMigrationSource{Schema: riskSchema, Version: 1}).Load(ctx)
-	if err != nil {
-		return nil, err
+	hasCounters, hasSession := false, false
+	for _, h := range catalog {
+		hasCounters = hasCounters || h.namespace == "identity_mfa_counters"
+		hasSession = hasSession || h.namespace == "identity_magiclink_mfa_session"
 	}
-	catalog = append(catalog, migrationHistory{namespace: "identity_mfa_counters", history: steps, owners: map[migrations.Version]ModuleID{1: "identity/risk/postgres"}})
+	if !hasCounters {
+		steps, err := (riskpg.MFACompletionCounterMigrationSource{Schema: riskSchema, Version: 1}).Load(ctx)
+		if err != nil {
+			return nil, err
+		}
+		catalog = append(catalog, migrationHistory{namespace: "identity_mfa_counters", history: steps, owners: map[migrations.Version]ModuleID{1: "identity/risk/postgres"}})
+	}
+	if verificationFirst || hasSession {
+		return catalog, nil
+	}
 	profile, err := (sessionpg.MFAMigrationSource{Schema: schema, Version: 1}).Load(ctx)
 	if err != nil {
 		return nil, err

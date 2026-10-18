@@ -23,6 +23,9 @@ type HTTPMFAConfiguration struct {
 	// PasswordTOTPVerify independently selects password-primary completion.
 	// When both are selected, X-MFA-Variant: password chooses its native owner.
 	PasswordTOTPVerify bool
+	// VerificationTOTPVerify independently selects original-signup verification
+	// completion, always through singleton X-MFA-Variant: verification.
+	VerificationTOTPVerify bool
 	// PasswordRecoveryUse independently selects original password recovery.
 	PasswordRecoveryUse bool
 	// PasswordOTPVerify independently selects the native original-send OTP owner.
@@ -37,17 +40,18 @@ type HTTPMFAConfiguration struct {
 }
 
 type mfaHTTPState struct {
-	config   HTTPMFAConfiguration
-	preauth  MagicLinkPreAuthConfiguration
-	cookie   session.CookiePolicy
-	audience string
-	timeout  time.Duration
-	rate     *identityhttp.ChallengeVerificationRateLimiter
-	password *passwordTOTPHTTPProfile
-	recovery *passwordTOTPHTTPProfile
-	otp      *passwordTOTPHTTPProfile
-	send     *passwordTOTPHTTPProfile
-	delivery *identityhttp.AuthRateLimiter
+	config       HTTPMFAConfiguration
+	preauth      MagicLinkPreAuthConfiguration
+	cookie       session.CookiePolicy
+	audience     string
+	timeout      time.Duration
+	rate         *identityhttp.ChallengeVerificationRateLimiter
+	password     *passwordTOTPHTTPProfile
+	verification *passwordTOTPHTTPProfile
+	recovery     *passwordTOTPHTTPProfile
+	otp          *passwordTOTPHTTPProfile
+	send         *passwordTOTPHTTPProfile
+	delivery     *identityhttp.AuthRateLimiter
 }
 
 type passwordTOTPHTTPProfile struct {
@@ -61,11 +65,22 @@ func composeMFAHTTP(c StoreConfiguration, base *preAuthHTTPState, rate *httpRate
 		return nil, nil
 	}
 	invalid := identity.InvalidInputError{Field: "reference_http_mfa"}
-	if (!c.HTTPMFA.TOTPVerify && !c.HTTPMFA.PasswordTOTPVerify && !c.HTTPMFA.PasswordRecoveryUse && !c.HTTPMFA.PasswordOTPVerify && !c.HTTPMFA.PasswordOTPSend) || base == nil || base.device == nil || rate == nil || c.HTTPRate == nil {
+	if (!c.HTTPMFA.TOTPVerify && !c.HTTPMFA.PasswordTOTPVerify && !c.HTTPMFA.VerificationTOTPVerify && !c.HTTPMFA.PasswordRecoveryUse && !c.HTTPMFA.PasswordOTPVerify && !c.HTTPMFA.PasswordOTPSend) || base == nil || base.device == nil || rate == nil || c.HTTPRate == nil {
 		return nil, invalid
 	}
 	h := *c.HTTPMFA
 	out := &mfaHTTPState{config: h}
+	if h.VerificationTOTPVerify {
+		if c.PasswordSignup == nil || c.PasswordSignup.PreAuth == nil || c.PasswordSignup.VerificationSignin == nil || c.PasswordSignup.VerificationSignin.TOTP == nil || c.PasswordSignup.VerificationTOTP == nil {
+			return nil, invalid
+		}
+		n, p := c.PasswordSignup.Native, *c.PasswordSignup.PreAuth
+		if p.Origin != base.deployment.Origin || p.ActorID != h.ActorID || n.Coordinator.QueryPolicy == nil || n.Coordinator.AdmissionPolicy == nil || uint64(h.PolicyRevision) != n.Coordinator.QueryPolicy.PolicyVersion || uint64(h.PolicyRevision) != n.Coordinator.AdmissionPolicy.PolicyVersion {
+			return nil, invalid
+		}
+		selected := c.PasswordSignup.VerificationSignin
+		out.verification = &passwordTOTPHTTPProfile{origin: p.Origin, callback: p.CallbackURL, audience: selected.Profile.Audience, cookie: selected.Issuance.Cookie, timeout: c.PasswordSignup.VerificationTOTP.MaximumDuration}
+	}
 	if h.TOTPVerify {
 		if c.MagicLink == nil || c.MagicLink.TOTP == nil || c.MagicLink.PreAuth == nil || c.MagicLink.Consume == nil || c.MagicLink.Consume.MFA == nil || !c.MagicLink.Request.MFAContinuation {
 			return nil, invalid
@@ -118,7 +133,7 @@ func composeMFAHTTP(c StoreConfiguration, base *preAuthHTTPState, rate *httpRate
 	if (authorization.DecisionContext{PolicyRevision: h.PolicyRevision, Request: authorization.Request{Tenant: "configuration", Subject: authorization.Subject{Kind: authorization.SubjectServiceAccount, ID: authorization.SubjectID(h.ActorID)}, Action: "identity.mfa.totp-verify", Resource: authorization.Resource{Type: "identity.mfa-continuation", ID: "configuration"}}}).Validate() != nil {
 		return nil, invalid
 	}
-	if h.TOTPVerify || h.PasswordTOTPVerify || h.PasswordRecoveryUse || h.PasswordOTPVerify {
+	if h.TOTPVerify || h.PasswordTOTPVerify || h.VerificationTOTPVerify || h.PasswordRecoveryUse || h.PasswordOTPVerify {
 		limiter, err := identityhttp.NewChallengeVerificationRateLimiter(identityhttp.ChallengeVerificationRateConfig{Shared: rate.backend, Namespace: h.VerificationNamespace, Key: h.VerificationKey, Now: time.Now, MaximumDuration: c.HTTPRate.MaximumDuration})
 		if err != nil {
 			return nil, invalid
@@ -191,6 +206,18 @@ func (s *Server) mfaFeature(network identityhttp.NetworkConfig, f FeatureSet) (*
 		selection := mfahttp.TOTPVerifyConfig{Network: network, Service: native, Rate: h.rate, Origin: identityhttp.Origin(p.origin), CallbackURL: p.callback, SessionCookie: p.cookie, Device: *s.state.features.httpPreAuth.device, ActorID: h.config.ActorID, PolicyRevision: h.config.PolicyRevision, Audience: p.audience, Now: time.Now, MaximumDuration: p.timeout}
 		config.PasswordTOTPVerify = &selection
 	}
+	if h != nil && h.verification != nil {
+		owner, err := f.VerificationTOTP()
+		if err != nil {
+			return nil, err
+		}
+		native, ok := owner.(mfahttp.TOTPVerifyService)
+		if !ok {
+			return nil, identity.InvalidInputError{Field: "reference_http_verification_totp"}
+		}
+		p := h.verification
+		config.VerificationTOTPVerify = &mfahttp.TOTPVerifyConfig{Network: network, Service: native, Rate: h.rate, Origin: identityhttp.Origin(p.origin), CallbackURL: p.callback, SessionCookie: p.cookie, Device: *s.state.features.httpPreAuth.device, ActorID: h.config.ActorID, PolicyRevision: h.config.PolicyRevision, Audience: p.audience, Now: time.Now, MaximumDuration: p.timeout}
+	}
 	if h != nil && h.recovery != nil {
 		owner, err := f.PasswordRecovery()
 		if err != nil {
@@ -246,7 +273,7 @@ func (s *Server) mfaFeature(network identityhttp.NetworkConfig, f FeatureSet) (*
 			operations[i].Handler = s.guardSessionLifetime(operations[i].Handler)
 		}
 		if operations[i].Record.OperationID == "identity.mfa.enable" || operations[i].Record.OperationID == "identity.mfa.totp-uri" || operations[i].Record.OperationID == "identity.mfa.recovery-regenerate" || (operations[i].Record.OperationID == "identity.mfa.totp-verify" && (config.EnrollmentConfirmation != nil || config.ActiveStepUp != nil)) {
-			operations[i].Handler = &mfaEnrollmentLifetimeHandler{state: s.state, next: operations[i].Handler, operation: operations[i].Record.OperationID, stepup: config.ActiveStepUp != nil, stepupOnly: config.ActiveStepUp != nil && config.EnrollmentConfirmation == nil && config.TOTPVerify == nil && config.PasswordTOTPVerify == nil}
+			operations[i].Handler = &mfaEnrollmentLifetimeHandler{state: s.state, next: operations[i].Handler, operation: operations[i].Record.OperationID, stepup: config.ActiveStepUp != nil, stepupOnly: config.ActiveStepUp != nil && config.EnrollmentConfirmation == nil && config.TOTPVerify == nil && config.PasswordTOTPVerify == nil && config.VerificationTOTPVerify == nil}
 		}
 	}
 	feature, err = identityhttp.NewFeature(identityhttp.FeatureConfig{ID: "identity/mfa", Operations: operations})

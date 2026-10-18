@@ -9,7 +9,7 @@ func TestPasswordTOTPHistoryExtendsOriginalPrefixesWithoutDuplicateOwners(t *tes
 	if err != nil {
 		t.Fatal(err)
 	}
-	after, err := passwordTOTPMigrationCatalog(t.Context(), before, "session_store", "risk_store", true)
+	after, err := passwordTOTPMigrationCatalog(t.Context(), before, "session_store", "risk_store", true, false)
 	if err != nil {
 		t.Fatal(err)
 	}

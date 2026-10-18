@@ -72,7 +72,7 @@ func (p verificationSigninLateFactorPolicy) Decide(ctx context.Context, c author
 
 func proveVerificationSigninFault(t *testing.T, ctx context.Context, f liveStores, owner email.RegistrationVerificationSigninService, request email.VerificationSigninRequest, signup identity.CommandID, profile string) bool {
 	t.Helper()
-	if profile == "browser" || profile == "persistent" || strings.HasSuffix(profile, "-http") {
+	if profile == "browser" || profile == "persistent" || strings.HasPrefix(profile, "upgrade") || profile == "empty-totp" || strings.HasSuffix(profile, "-http") {
 		return false
 	}
 	command, _ := base64.RawURLEncoding.DecodeString(string(signup))

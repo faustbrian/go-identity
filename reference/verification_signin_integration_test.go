@@ -64,7 +64,7 @@ func proveReferenceVerificationSignin(t *testing.T, ctx context.Context, f liveS
 		}
 		return response, payload
 	}
-	remember := strings.HasPrefix(profile, "persistent")
+	remember := strings.Contains(profile, "persistent")
 	r, wire := post("/v1/session/preauth-issue", map[string]any{"method": "signup", "remember": remember}, "", nil)
 	var flow sessionhttp.PreAuthResponse
 	if r.StatusCode != 200 || json.Unmarshal(wire, &flow) != nil || !flow.Issued {
@@ -114,6 +114,14 @@ func proveReferenceVerificationSignin(t *testing.T, ctx context.Context, f liveS
 	wrong.Browser = auth.NewBearerCredential("AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE")
 	if denied, err := owner.VerificationConfirmAndSignin(ctx, wrong); err == nil || denied.Verification.Outcome != identity.CommitOutcomeInvalid || denied.Issuance.Token != (session.Token{}) {
 		t.Fatal("foreign browser verified or authenticated")
+	}
+	if strings.HasPrefix(profile, "totp-") {
+		if strings.HasSuffix(profile, "-http") {
+			proveReferenceVerificationMFAHTTPS(t, ctx, f, features, request, cookies, u.Query().Get("token"), client, base, origin, profile)
+			return
+		}
+		proveReferenceVerificationMFASignin(t, ctx, f, features, owner, request, client, base, origin, profile)
+		return
 	}
 	if proveVerificationSigninFault(t, ctx, f, owner, request, signup.CommandID, profile) {
 		return
@@ -240,6 +248,9 @@ func proveReferenceVerificationSignin(t *testing.T, ctx context.Context, f liveS
 	current, err := sessions.Get(ctx, session.GetRequest{TenantID: otpTenant, Credential: credential})
 	if err != nil || !current.Authenticated {
 		t.Fatal("issued verification session cannot authenticate", err)
+	}
+	if f.afterVerificationSignin != nil {
+		f.afterVerificationSignin(credential)
 	}
 	again, err := owner.VerificationConfirmAndSignin(ctx, request)
 	if err != nil || !again.Verification.Replayed || again.Issuance.Token != (session.Token{}) || again.CSRFToken != (session.CSRFToken{}) {

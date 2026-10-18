@@ -45,11 +45,18 @@ func (p *magicTOTPPhase) AdmitFeaturePreparation(ctx context.Context, w kernel.W
 	if err = p.browser(ctx, c, now); err != nil {
 		return err
 	}
-	primary, err := p.input.primaryCommandID()
+	primary, err := p.input.browserCommandID()
 	if err != nil {
 		return err
 	}
-	if err = sessionpg.RequireMFAConsumedPreAuth(ctx, w, p, c, p.state.config.Session, p.input.flow, primary); err != nil {
+	requireBrowser := sessionpg.RequireMFAConsumedPreAuth
+	if p.input.verificationPrimary != nil {
+		requireBrowser = sessionpg.RequireMFAVerificationConsumedPreAuth
+	}
+	if err = requireBrowser(ctx, w, p, c, p.state.config.Session, p.input.flow, primary); err != nil {
+		return err
+	}
+	if err = p.verificationParent(ctx, w, c); err != nil {
 		return err
 	}
 	if err = w.RequireActiveDirectoryAuthority(ctx, p, p.directoryAdmission()); err != nil {
@@ -168,6 +175,8 @@ func (a *magicTOTPAdmission) Generate(ctx context.Context, generation uint64) ([
 	if p.input.passwordPrimary != nil {
 		spec.Authentication = p.input.passwordPrimary.Authentication
 		p.prepared, err = p.issuer.PrepareMFAPassword(f.Binding, spec, mfa)
+	} else if p.input.verificationPrimary != nil {
+		p.prepared, err = p.issuer.PrepareMFAVerification(f.Binding, spec, p.input.primary.Authentication, mfa)
 	} else {
 		p.prepared, err = p.issuer.PrepareMFAMagicLink(f.Binding, spec, p.input.primary.Authentication, mfa)
 	}

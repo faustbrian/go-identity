@@ -20,8 +20,45 @@ The complete journey is registration, captured delivery, verification, fresh
 email-possession signin, primary session read and logout. Both original browser
 and persistent remember choices are retained. Verification commits first; later
 login denial/ambiguity conserves that known outcome. Replay and metadata recovery
-never create replacement credentials. Known-empty MFA is required; enrolled
-continuation, other auto-signin variants and full M04 qualification remain work.
+never create replacement credentials. The default selection requires known-empty
+MFA; it does not bypass enrolled factors.
+
+### Optional verification-origin TOTP
+
+Set `PasswordSignup.VerificationSignin.TOTP` to a native `MFAChallengeConfig`
+with only `totp`, the actual capability issuer, encrypted preparation custody,
+bounded lifetime and attempt budget. Also select
+`PasswordSignup.VerificationTOTP` with the completion counter policy, independent
+comparison key and retained envelope/risk keys. The graph supplies the actual
+signup browser keys, verification primary and transaction/session owners.
+Pin `PasswordSignup.VerificationSessionLineage` once: `VerificationBeforeMFA`
+for a verification-only installation (or a fresh verification-first graph),
+`MFABeforeVerification` for an installation that already applied native MFA
+session migrations before verification signin. Keep that migration lineage when
+selecting other MFA methods later. It describes installed history, not desired
+factor policy. New verification-TOTP composition rejects an omitted lineage;
+an incorrect lineage fails compatibility rather than rewriting applied history.
+
+`FeatureSet.RegistrationVerificationSignin()` then returns `Challenge` rather
+than an authenticated session for a genuinely enrolled factor. Preserve its
+original proof and immutable deadline; complete through
+`FeatureSet.VerificationTOTP()` with the original signup browser/pre-auth ID,
+challenge ID, enrolled factor and actual code. The resulting email-possession
+MFA session supports the ordinary session read/logout ports. Wrong codes share
+the original budget; current parent/account/identifier/factor/policy changes
+deny. A failed or ambiguous child cannot undo committed email verification.
+Metadata recovery cannot replace lost credentials or restart their deadlines.
+
+HTTP is separately opt-in: `HTTPRegistrationVerification.Signin` selects
+confirmation, and `HTTPMFA.VerificationTOTPVerify` selects completion. Pending
+confirmation returns `signin.challengeRequired`, its ID/method/expiry and
+reveal-once `X-MFA-Token`, without an authenticated cookie or synchronizer. Send
+the proof, challenge/factor/pre-auth IDs, code and original callback to
+`POST /v1/mfa/totp-verify` with the original browser/device cookies and exactly
+`X-MFA-Variant: verification`. Omitting that header never selects this owner.
+Only successful completion delivers the session cookie and `X-CSRF-Token`.
+Native selection alone exposes no route. Secondary OTP, recovery, WebAuthn and
+trusted-device completion are not selected by this TOTP-only configuration.
 
 ## TOTP-protected primary-email change
 

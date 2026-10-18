@@ -108,6 +108,9 @@ type featureState struct {
 	passwordSignin               *passwordpg.SigninService
 	passwordSignup               *passwordpg.SignupService
 	verificationSignin           *passwordpg.VerificationSigninService
+	verificationSigninMFA        bool
+	verificationSessionLineage   VerificationSessionLineage
+	verificationTOTP             *magicLinkTOTPService
 	session                      *sessionState
 	passwordVerification         *passwordVerificationState
 	email                        *emailState
@@ -409,6 +412,10 @@ func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDepen
 	if err != nil {
 		return err
 	}
+	verificationTOTP, err := composeVerificationTOTP(c, d, verificationSigninOwner, evaluator)
+	if err != nil {
+		return err
+	}
 	sessionOwner, err := composeSession(c, d)
 	if err != nil {
 		return err
@@ -603,6 +610,11 @@ func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDepen
 	s.features = &featureState{migrations: migrationConfig, otp: otpOwner, signin: signinOwner, reset: resetOwner, passwordSignin: passwordSigninOwner, passwordPreauth: passwordPreauthOwner, preauth: preauthOwner, delivery: deliveryOwner, sender: d.DeliverySender, timeout: o.Timeout, provider: o.ProviderVersion, deliverySlots: make(chan struct{}, int(capacity)), authorize: o.RequestKeys.Policy.Authorization, httpPreAuth: httpPreAuth, httpEmailSignin: httpEmailSignin, httpPasswordReset: httpPasswordReset, httpPasswordSignin: httpPasswordSignin}
 	s.features.passwordSignup = passwordSignupOwner
 	s.features.verificationSignin = verificationSigninOwner
+	s.features.verificationTOTP = verificationTOTP
+	s.features.verificationSigninMFA = c.PasswordSignup != nil && c.PasswordSignup.VerificationSignin != nil && c.PasswordSignup.VerificationSignin.TOTP != nil
+	if c.PasswordSignup != nil {
+		s.features.verificationSessionLineage = c.PasswordSignup.VerificationSessionLineage
+	}
 	s.features.session = sessionOwner
 	s.features.passwordVerification = passwordVerificationOwner
 	s.features.email = emailOwner

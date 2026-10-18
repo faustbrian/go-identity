@@ -159,6 +159,19 @@ func readinessSchemaPresent(ctx context.Context, state *storeState, catalog []mi
 // sources assembled in migrations.go; do not infer SQL or copy migration DDL.
 func readinessCatalogGuards(state *storeState, history migrationHistory) []migrationGuard {
 	guards := slices.Clone(history.guards)
+	if state.features != nil && state.features.verificationSigninMFA {
+		for i := range guards {
+			if guards[i].schema != "identity_mfa" {
+				continue
+			}
+			guards[i].constraints = slices.Clone(guards[i].constraints)
+			for j, name := range guards[i].constraints {
+				if name == "continuations.continuations_origin_purpose_check" {
+					guards[i].constraints[j] = "continuations.continuations_origin_purpose_v2"
+				}
+			}
+		}
+	}
 	if state.features != nil && (state.features.migrations.magicSessionSchema != "" || state.features.migrations.passwordTOTP || state.features.migrations.passwordRecovery || state.features.verificationSignin != nil) {
 		schema := state.features.migrations.magicSessionSchema
 		if schema == "" {
@@ -180,7 +193,7 @@ func readinessCatalogGuards(state *storeState, history migrationHistory) []migra
 				case "sessions.session_credential_continuation_v1":
 					guards[i].constraints[j] = "sessions.session_credential_continuation_v2"
 				}
-				if state.features.migrations.magicTOTP || state.features.migrations.passwordTOTP || state.features.migrations.passwordRecovery {
+				if state.features.migrations.magicTOTP || state.features.migrations.passwordTOTP || state.features.migrations.passwordRecovery || state.features.verificationTOTP != nil {
 					switch guards[i].constraints[j] {
 					case "session_issuances.session_issuances_purpose_v5":
 						guards[i].constraints[j] = "session_issuances.session_issuances_purpose_v6"
@@ -210,6 +223,12 @@ func readinessCatalogGuards(state *storeState, history migrationHistory) []migra
 					switch guards[i].constraints[j] {
 					case "session_issuances.session_issuances_purpose_v5", "session_issuances.session_issuances_purpose_v6":
 						guards[i].constraints[j] = "session_issuances.session_issuances_purpose_v7"
+					}
+				}
+				if state.features.verificationSessionLineage == VerificationBeforeMFA && (state.features.verificationTOTP != nil || state.features.migrations.magicTOTP || state.features.migrations.passwordTOTP || state.features.migrations.passwordRecovery || state.features.migrations.passwordOTP) {
+					switch guards[i].constraints[j] {
+					case "session_issuances.session_issuances_purpose_v5", "session_issuances.session_issuances_purpose_v6", "session_issuances.session_issuances_purpose_v7":
+						guards[i].constraints[j] = "session_issuances.session_issuances_purpose_v8"
 					}
 				}
 			}

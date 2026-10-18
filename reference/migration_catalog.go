@@ -34,6 +34,9 @@ type migrationGuard struct {
 	columns     []string // table.column; only columns first introduced by this step
 	functions   []string
 	constraints []string // table.constraint; only constraints introduced by this step
+	// constraintValue distinguishes a new allowance when the native migration
+	// deliberately reuses an existing CHECK name instead of creating an object.
+	constraintValue string
 }
 
 func (s StoreSet) migrationCatalog(ctx context.Context) ([]migrationHistory, error) {
@@ -45,7 +48,7 @@ func (s StoreSet) migrationCatalog(ctx context.Context) ([]migrationHistory, err
 		{version: 1, schema: "identity"}, {version: 1000, schema: s.state.config.Schema},
 	}}
 	shared.guards = append(shared.guards, sharedSuffixGuards(s.state.config.Schema)...)
-	if s.state.features != nil && s.state.features.migrations.magicTOTP {
+	if s.state.features != nil && s.state.features.migrations.magicTOTP && s.state.features.verificationSessionLineage != VerificationBeforeMFA {
 		shared.guards = append(shared.guards, migrationGuard{version: 1019, schema: "identity", columns: []string{"commands.preparation_declaration"}})
 	}
 	for _, step := range history {
@@ -249,14 +252,14 @@ func (s StoreSet) migrationCatalog(ctx context.Context) ([]migrationHistory, err
 			}
 		}
 		if c.magicTOTP {
-			catalog, err = magicLinkTOTPRequiredMigrations(ctx, catalog, c.magicSessionSchema, s.state.config.Schema)
+			catalog, err = magicLinkTOTPRequiredMigrations(ctx, catalog, c.magicSessionSchema, s.state.config.Schema, s.state.features.verificationSessionLineage == VerificationBeforeMFA)
 			if err != nil {
 				return nil, err
 			}
 		}
 	}
 	if c.passwordMFA {
-		catalog, err = passwordTOTPMigrationCatalog(ctx, catalog, c.passwordSigninSchema, s.state.config.Schema, c.passwordTOTP || c.passwordRecovery || c.passwordOTP)
+		catalog, err = passwordTOTPMigrationCatalog(ctx, catalog, c.passwordSigninSchema, s.state.config.Schema, c.passwordTOTP || c.passwordRecovery || c.passwordOTP, s.state.features.verificationSessionLineage == VerificationBeforeMFA)
 		if err != nil {
 			return nil, err
 		}
@@ -302,7 +305,7 @@ func (g migrationGuard) exists(ctx context.Context, s *storeState) (bool, error)
 	 OR EXISTS(SELECT 1 FROM pg_catalog.pg_roles WHERE rolname=ANY($4::text[]))
 	 OR EXISTS(SELECT 1 FROM pg_catalog.pg_attribute a JOIN pg_catalog.pg_class c ON c.oid=a.attrelid JOIN pg_catalog.pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname=$1 AND NOT a.attisdropped AND (c.relname::text||'.'||a.attname::text)=ANY($5::text[]))
 	 OR EXISTS(SELECT 1 FROM pg_catalog.pg_proc p JOIN pg_catalog.pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname=$1 AND p.proname=ANY($6::text[]))
-	 OR EXISTS(SELECT 1 FROM pg_catalog.pg_constraint k JOIN pg_catalog.pg_class c ON c.oid=k.conrelid JOIN pg_catalog.pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname=$1 AND (c.relname::text||'.'||k.conname::text)=ANY($7::text[]))`, g.schema, len(g.tables) == 0 && len(g.columns) == 0 && len(g.functions) == 0 && len(g.constraints) == 0, g.tables, g.roles, g.columns, g.functions, g.constraints).Scan(&exists)
+	 OR EXISTS(SELECT 1 FROM pg_catalog.pg_constraint k JOIN pg_catalog.pg_class c ON c.oid=k.conrelid JOIN pg_catalog.pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname=$1 AND (c.relname::text||'.'||k.conname::text)=ANY($7::text[]) AND ($8::text='' OR position($8::text IN pg_catalog.pg_get_constraintdef(k.oid))>0))`, g.schema, len(g.tables) == 0 && len(g.columns) == 0 && len(g.functions) == 0 && len(g.constraints) == 0, g.tables, g.roles, g.columns, g.functions, g.constraints, g.constraintValue).Scan(&exists)
 	return exists, err
 }
 

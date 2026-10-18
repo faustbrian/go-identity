@@ -11,7 +11,7 @@ import (
 
 // Preserve the common MFA prefix and fixed future enrollment allocations even
 // when password login selects it first. These tables do not enable any API.
-func passwordTOTPMigrationCatalog(ctx context.Context, catalog []migrationHistory, schema, riskSchema string, completion bool) ([]migrationHistory, error) {
+func passwordTOTPMigrationCatalog(ctx context.Context, catalog []migrationHistory, schema, riskSchema string, completion, verificationFirst bool) ([]migrationHistory, error) {
 	var err error
 	catalog, err = mfaEnrollmentMigrationCatalog(ctx, catalog, riskSchema)
 	if err != nil {
@@ -37,7 +37,10 @@ func passwordTOTPMigrationCatalog(ctx context.Context, catalog []migrationHistor
 		owners[v] = owner
 	}
 	owners[7] = "identity/mfa/postgres"
-	catalog[index] = migrationHistory{namespace: h.namespace, history: full, owners: owners, guards: append(append([]migrationGuard(nil), h.guards...), migrationGuard{version: 7, schema: "identity_mfa", constraints: []string{"continuations.continuations_origin_purpose_check"}})}
+	// PasswordContinuationMigrationSource reuses version2's CHECK name. Its
+	// newly allowed password operation, not that predecessor name alone, detects
+	// an unmanaged version7 installation without rejecting ordinary upgrades.
+	catalog[index] = migrationHistory{namespace: h.namespace, history: full, owners: owners, guards: append(append([]migrationGuard(nil), h.guards...), migrationGuard{version: 7, schema: "identity_mfa", constraints: []string{"continuations.continuations_origin_purpose_check"}, constraintValue: "identity.password.signin"})}
 	if !completion {
 		return catalog, nil
 	}
@@ -59,7 +62,7 @@ func passwordTOTPMigrationCatalog(ctx context.Context, catalog []migrationHistor
 		existing = existing || h.namespace == "identity_magiclink_mfa_session"
 	}
 	if !existing {
-		catalog, err = magicLinkTOTPRequiredMigrations(ctx, catalog, schema, riskSchema)
+		catalog, err = magicLinkTOTPRequiredMigrations(ctx, catalog, schema, riskSchema, verificationFirst)
 		if err != nil {
 			return nil, err
 		}

@@ -130,7 +130,7 @@ func (s *Server) emailFeature(network identityhttp.NetworkConfig, f FeatureSet) 
 				}
 				p := s.state.features.httpPreAuth
 				flow := s.state.features.httpPasswordSignup.preauth
-				selection.VerificationSignin = &emailhttp.VerificationSigninConfig{Confirmation: base, Service: signin, FlowCookie: flow.Cookie, SessionCookie: s.state.features.session.config.Cookie, Device: *p.device, Audience: s.state.features.session.readerAudience}
+				selection.VerificationSignin = &emailhttp.VerificationSigninConfig{MFAContinuation: s.state.features.verificationSigninMFA, Confirmation: base, Service: signin, FlowCookie: flow.Cookie, SessionCookie: s.state.features.session.config.Cookie, Device: *p.device, Audience: s.state.features.session.readerAudience}
 			} else {
 				selection.SignupConfirmation = &base
 			}

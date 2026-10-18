@@ -34,9 +34,32 @@ type PasswordSignupConfiguration struct {
 	// VerificationSignin independently selects original-browser registration
 	// confirmation followed by native email-possession signin. Nil preserves
 	// verification-only behavior. It enables no HTTP route; Session must select
-	// compatible primary read/logout. Enrolled or unknown MFA remains denied.
+	// compatible primary read/logout. Enrolled MFA requires explicit TOTP
+	// selection; unknown factor authority always denies.
 	VerificationSignin *passwordpg.VerificationSigninConfig
+	// VerificationTOTP selects completion of the explicitly TOTP-enabled
+	// verification-signin primary. It enables no HTTP route or other MFA method.
+	VerificationTOTP *VerificationTOTPConfiguration
+	// VerificationSessionLineage pins the installed session-migration order,
+	// not an authentication policy. Pin it when enabling verification TOTP and
+	// retain it through later feature selection. Zero preserves legacy selection
+	// only; new verification-TOTP composition requires an explicit lineage.
+	VerificationSessionLineage VerificationSessionLineage
 }
+
+// VerificationSessionLineage identifies immutable shipped session history.
+// Choosing the wrong lineage fails migration compatibility; it never rewrites
+// an applied checksum or infers history from current authentication toggles.
+type VerificationSessionLineage uint8
+
+const (
+	// VerificationBeforeMFA retains the verification-only v7 issuance prefix,
+	// then adds a new forward MFA session suffix. Use for verification-first DBs.
+	VerificationBeforeMFA VerificationSessionLineage = iota + 1
+	// MFABeforeVerification retains the shipped MFA v6 then verification v7
+	// sequence. Use only for databases originally installed in that order.
+	MFABeforeVerification
+)
 
 func composeVerificationSignin(c StoreConfiguration, signup *passwordpg.SignupService) (*passwordpg.VerificationSigninService, error) {
 	if c.PasswordSignup == nil || c.PasswordSignup.VerificationSignin == nil {
@@ -44,6 +67,10 @@ func composeVerificationSignin(c StoreConfiguration, signup *passwordpg.SignupSe
 	}
 	if signup == nil || c.Session == nil || c.PasswordSignin == nil || c.PasswordSignup.Native.Session != c.Session.Native.Execution.Repository {
 		return nil, identity.InvalidInputError{Field: "reference_verification_signin"}
+	}
+	lineage := c.PasswordSignup.VerificationSessionLineage
+	if lineage > MFABeforeVerification || c.PasswordSignup.VerificationSignin.TOTP != nil && lineage == 0 {
+		return nil, identity.InvalidInputError{Field: "reference_verification_session_lineage"}
 	}
 	return passwordpg.NewVerificationSigninService(signup, *c.PasswordSignup.VerificationSignin)
 }

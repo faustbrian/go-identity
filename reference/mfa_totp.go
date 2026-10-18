@@ -91,6 +91,7 @@ type magicLinkTOTPState struct {
 	pool           *database.Pool
 	request        *magicpg.RequestService
 	password       *passwordpg.SigninService
+	verification   *passwordpg.VerificationSigninService
 	config         MagicLinkTOTPCompletionConfig
 	issuer         *capabilitypg.Issuer
 	directory      *kernel.Repository
@@ -120,19 +121,25 @@ func newPasswordTOTPService(pool *database.Pool, primary *passwordpg.SigninServi
 }
 
 func newNativeTOTPService(pool *database.Pool, request *magicpg.RequestService, passwordPrimary *passwordpg.SigninService, c MagicLinkTOTPCompletionConfig, passwordProfile sessionpg.IdentifierAdmissionConfig, keys *keyring.Provider) (*magicLinkTOTPService, error) {
-	return newNativeMFAService(pool, request, passwordPrimary, c, passwordProfile, keys, nil)
+	return newNativeMFAService(pool, request, passwordPrimary, nil, c, passwordProfile, keys, nil)
 }
 
 func newNativeRecoveryService(pool *database.Pool, request *magicpg.RequestService, passwordPrimary *passwordpg.SigninService, c MagicLinkTOTPCompletionConfig, passwordProfile sessionpg.IdentifierAdmissionConfig, keys *keyring.Provider, recoveryKeys map[uint32][32]byte) (*magicLinkTOTPService, error) {
 	if recoveryKeys == nil {
 		return nil, invalidTOTPCompletion()
 	}
-	return newNativeMFAService(pool, request, passwordPrimary, c, passwordProfile, keys, recoveryKeys)
+	return newNativeMFAService(pool, request, passwordPrimary, nil, c, passwordProfile, keys, recoveryKeys)
 }
 
-func newNativeMFAService(pool *database.Pool, request *magicpg.RequestService, passwordPrimary *passwordpg.SigninService, c MagicLinkTOTPCompletionConfig, passwordProfile sessionpg.IdentifierAdmissionConfig, keys *keyring.Provider, recoveryKeys map[uint32][32]byte) (*magicLinkTOTPService, error) {
+func newNativeMFAService(pool *database.Pool, request *magicpg.RequestService, passwordPrimary *passwordpg.SigninService, verification *passwordpg.VerificationSigninService, c MagicLinkTOTPCompletionConfig, passwordProfile sessionpg.IdentifierAdmissionConfig, keys *keyring.Provider, recoveryKeys map[uint32][32]byte) (*magicLinkTOTPService, error) {
 	recovery := recoveryKeys != nil
-	if pool == nil || pool.Raw() == nil || (request == nil) == (passwordPrimary == nil) || keys == nil || c.MaximumDuration < time.Millisecond || c.MaximumDuration > 5*time.Second || c.Coordinator.QueryPolicy == nil || c.Coordinator.AdmissionPolicy == nil || c.Coordinator.MaximumDuration <= 0 || c.Coordinator.MaximumDuration > c.MaximumDuration || c.Session.MaximumDuration <= 0 || c.Session.MaximumDuration > c.MaximumDuration || !recovery && c.ComparisonKeyVersion == 0 || len(c.CookieKeys) == 0 || len(c.CookieKeys) > 32 || c.Issuer.Audience != c.Profile.Audience {
+	origins := 0
+	for _, present := range []bool{request != nil, passwordPrimary != nil, verification != nil} {
+		if present {
+			origins++
+		}
+	}
+	if pool == nil || pool.Raw() == nil || origins != 1 || verification != nil && recovery || keys == nil || c.MaximumDuration < time.Millisecond || c.MaximumDuration > 5*time.Second || c.Coordinator.QueryPolicy == nil || c.Coordinator.AdmissionPolicy == nil || c.Coordinator.MaximumDuration <= 0 || c.Coordinator.MaximumDuration > c.MaximumDuration || c.Session.MaximumDuration <= 0 || c.Session.MaximumDuration > c.MaximumDuration || !recovery && c.ComparisonKeyVersion == 0 || len(c.CookieKeys) == 0 || len(c.CookieKeys) > 32 || c.Issuer.Audience != c.Profile.Audience {
 		return nil, invalidTOTPCompletion()
 	}
 	if c.Counters.CommandCounters == nil {
@@ -161,7 +168,7 @@ func newNativeMFAService(pool *database.Pool, request *magicpg.RequestService, p
 	c.Coordinator.RetainedFingerprintKeys = maps.Clone(c.Coordinator.RetainedFingerprintKeys)
 	query, admission := *c.Coordinator.QueryPolicy, *c.Coordinator.AdmissionPolicy
 	c.Coordinator.QueryPolicy, c.Coordinator.AdmissionPolicy = &query, &admission
-	s := &magicLinkTOTPState{pool: pool, request: request, password: passwordPrimary, config: c}
+	s := &magicLinkTOTPState{pool: pool, request: request, password: passwordPrimary, verification: verification, config: c}
 	if recovery {
 		s.recoveryKeys, err = mfapg.NewRecoveryVerificationKeys(recoveryKeys)
 		if err != nil {
@@ -223,6 +230,8 @@ func newNativeMFAService(pool *database.Pool, request *magicpg.RequestService, p
 		} else {
 			s.effect, err = sessionpg.NewMFAPasswordTOTPCompletionEffect(c.Session, passwordProfile)
 		}
+	} else if verification != nil {
+		s.effect, err = sessionpg.NewMFAVerificationTOTPCompletionEffect(c.Session, c.Profile)
 	} else {
 		if recovery {
 			s.recoveryEffect, err = sessionpg.NewMFARecoveryCompletionEffect(c.Session, c.Profile)
@@ -244,6 +253,8 @@ func newNativeMFAService(pool *database.Pool, request *magicpg.RequestService, p
 	// executor below cannot disclose anything without a reconciled exact receipt.
 	if passwordPrimary != nil {
 		_, err = session.NewMFAPasswordSessionIssuerWithCSRF(&magicTOTPDelivery{}, c.SessionIssuer, c.CSRF)
+	} else if verification != nil {
+		_, err = session.NewMFAVerificationSessionIssuerWithCSRF(&magicTOTPDelivery{}, c.SessionIssuer, c.CSRF)
 	} else {
 		_, err = session.NewMFAMagicLinkSessionIssuerWithCSRF(&magicTOTPDelivery{}, c.SessionIssuer, c.CSRF)
 	}
@@ -254,27 +265,35 @@ func newNativeMFAService(pool *database.Pool, request *magicpg.RequestService, p
 }
 
 type magicTOTPInput struct {
-	request         mfa.TotpVerifyRequest
-	recovery        *mfa.RecoveryUseRequest
-	command         identity.Command
-	continuation    mfa.PartialAuthContinuation
-	scope           mfa.ContinuationSpec
-	child           kernel.CapabilityPlan
-	flow            session.PreAuthTransaction
-	primary         magicpg.MFAMagicLinkPrimary
-	passwordPrimary *passwordpg.MFAPasswordPrimary
-	recipient       kernel.RecipientRecord
-	directory       kernel.DirectoryAuthorityRecord
-	policy          policy.AuthorityRecord
-	snapshot        mfapg.TOTPFactorSnapshot
-	secret          password.Secret
-	comparison      []byte
-	historical      *identity.CommandResult
-	historyError    error
-	missingFactor   bool
-	rateUser        identity.UserID
-	rateChallenge   string
-	rateLifetime    time.Duration
+	request             mfa.TotpVerifyRequest
+	recovery            *mfa.RecoveryUseRequest
+	command             identity.Command
+	continuation        mfa.PartialAuthContinuation
+	scope               mfa.ContinuationSpec
+	child               kernel.CapabilityPlan
+	flow                session.PreAuthTransaction
+	primary             nativeMFAEmailPrimary
+	passwordPrimary     *passwordpg.MFAPasswordPrimary
+	verificationPrimary *passwordpg.MFAVerificationPrimary
+	recipient           kernel.RecipientRecord
+	directory           kernel.DirectoryAuthorityRecord
+	policy              policy.AuthorityRecord
+	snapshot            mfapg.TOTPFactorSnapshot
+	secret              password.Secret
+	comparison          []byte
+	historical          *identity.CommandResult
+	historyError        error
+	missingFactor       bool
+	rateUser            identity.UserID
+	rateChallenge       string
+	rateLifetime        time.Duration
+}
+
+// Email-possession metadata is shared storage vocabulary, not a magic-link
+// consumption assertion. The distinct native origin above authenticates it.
+type nativeMFAEmailPrimary struct {
+	Recipient      kernel.RecipientRecord
+	Authentication session.MagicLinkAuthentication
 }
 
 func (i *magicTOTPInput) primaryCommandID() (identity.CommandID, error) {
@@ -289,6 +308,13 @@ func (i *magicTOTPInput) primaryCommandID() (identity.CommandID, error) {
 	}
 	p, err := i.primary.Authentication.Bindings()
 	return p.CommandID, err
+}
+
+func (i *magicTOTPInput) browserCommandID() (identity.CommandID, error) {
+	if i != nil && i.verificationPrimary != nil {
+		return i.verificationPrimary.SignupCommandID, nil
+	}
+	return i.primaryCommandID()
 }
 
 func (i *magicTOTPInput) passwordCredential() (kernel.CredentialAdmission, error) {
@@ -463,8 +489,9 @@ func (s *magicLinkTOTPService) readNativeMFAInput(ctx context.Context, r nativeM
 	if err != nil || flow.Check(time.Now().UTC(), f.Binding, digest) != nil {
 		return nil, identity.ForbiddenError{}
 	}
-	var primary magicpg.MFAMagicLinkPrimary
+	var primary nativeMFAEmailPrimary
 	var passwordPrimary *passwordpg.MFAPasswordPrimary
+	var verificationPrimary *passwordpg.MFAVerificationPrimary
 	var current kernel.RecipientRecord
 	if state.password != nil {
 		verified, err := state.password.ReadMFAPasswordPrimary(ctx, r.Proof, continuation, flow, r.Caller)
@@ -475,6 +502,16 @@ func (s *magicLinkTOTPService) readNativeMFAInput(ctx context.Context, r nativeM
 			return nil, identity.ForbiddenError{}
 		}
 		passwordPrimary, current = &verified, verified.Recipient
+	} else if state.verification != nil {
+		verified, err := state.verification.ReadMFAVerificationPrimary(ctx, r.Proof, continuation, flow, r.Caller)
+		if err != nil {
+			return nil, err
+		}
+		if verified.CommandID != primaryID {
+			return nil, identity.ForbiddenError{}
+		}
+		verificationPrimary, current = &verified, verified.Recipient
+		primary = nativeMFAEmailPrimary{Recipient: verified.Recipient, Authentication: verified.Authentication}
 	} else {
 		parent, err := state.issuer.ReadMFAMagicLinkParent(ctx, state.pool, r.Proof, string(c.PrimaryProofID), c.PrimaryProofDigest, c.PrimaryProofExpiresAt)
 		if err != nil {
@@ -484,7 +521,9 @@ func (s *magicLinkTOTPService) readNativeMFAInput(ctx context.Context, r nativeM
 		if err != nil || bindings.PrimaryCommandID != primaryID {
 			return nil, identity.ForbiddenError{}
 		}
-		primary, err = state.request.ReadMFAMagicLinkPrimary(ctx, parent, flow, c.IssuedAt, r.Caller)
+		verified, readErr := state.request.ReadMFAMagicLinkPrimary(ctx, parent, flow, c.IssuedAt, r.Caller)
+		err = readErr
+		primary = nativeMFAEmailPrimary(verified)
 		if err != nil {
 			return nil, err
 		}
@@ -512,6 +551,12 @@ func (s *magicLinkTOTPService) readNativeMFAInput(ctx context.Context, r nativeM
 	}
 	if passwordPrimary != nil {
 		a, err := passwordPrimary.Authority.Bindings()
+		if err != nil || directory.GlobalVersion != a.Global.Version || directory.TenantVersion != a.Tenant.Version || epoch.Version != a.Authorization.Version {
+			return nil, identity.ForbiddenError{}
+		}
+	}
+	if verificationPrimary != nil {
+		a, err := verificationPrimary.Authority.Bindings()
 		if err != nil || directory.GlobalVersion != a.Global.Version || directory.TenantVersion != a.Tenant.Version || epoch.Version != a.Authorization.Version {
 			return nil, identity.ForbiddenError{}
 		}
@@ -545,6 +590,7 @@ func (s *magicLinkTOTPService) readNativeMFAInput(ctx context.Context, r nativeM
 	out = r.preparedInput()
 	out.command, out.continuation, out.scope, out.child, out.flow = command, continuation, c, child, flow
 	out.primary, out.passwordPrimary, out.recipient, out.directory, out.policy = primary, passwordPrimary, current, directory, epoch
+	out.verificationPrimary = verificationPrimary
 	if r.recovery != nil {
 		return out, nil
 	}

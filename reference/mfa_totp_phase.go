@@ -142,12 +142,21 @@ func (p *magicTOTPPhase) RecordMFATOTPAttemptDenial(ctx context.Context, w kerne
 	if err = p.browser(ctx, command, now); err != nil {
 		return 0, err
 	}
-	primary, err := p.input.primaryCommandID()
+	primary, err := p.input.browserCommandID()
 	if err != nil {
 		return 0, err
 	}
-	if err = sessionpg.RequireMFAConsumedPreAuthAttempt(ctx, w, p, p.state.config.Session, p.input.flow, primary); err != nil {
+	requireBrowser := sessionpg.RequireMFAConsumedPreAuthAttempt
+	if p.input.verificationPrimary != nil {
+		requireBrowser = sessionpg.RequireMFAVerificationConsumedPreAuthAttempt
+	}
+	if err = requireBrowser(ctx, w, p, p.state.config.Session, p.input.flow, primary); err != nil {
 		return 0, err
+	}
+	if p.input.verificationPrimary != nil {
+		if err = p.state.issuer.RequireVerificationMFATOTPParentAttempt(ctx, w, p, p.input.verificationPrimary.Parent); err != nil {
+			return 0, err
+		}
 	}
 	if err = w.RequireActiveDirectoryAuthority(ctx, p, p.directoryAdmission()); err != nil {
 		return 0, err
@@ -224,11 +233,18 @@ func (p *magicTOTPPhase) ApplyFeature(ctx context.Context, w kernel.Work, comman
 	if err = p.browser(ctx, command, now); err != nil {
 		return identity.FeatureReceipt{}, err
 	}
-	primary, err := p.input.primaryCommandID()
+	primary, err := p.input.browserCommandID()
 	if err != nil {
 		return identity.FeatureReceipt{}, err
 	}
-	if err = sessionpg.RequireMFAConsumedPreAuth(ctx, w, p, command, p.state.config.Session, p.input.flow, primary); err != nil {
+	requireBrowser := sessionpg.RequireMFAConsumedPreAuth
+	if p.input.verificationPrimary != nil {
+		requireBrowser = sessionpg.RequireMFAVerificationConsumedPreAuth
+	}
+	if err = requireBrowser(ctx, w, p, command, p.state.config.Session, p.input.flow, primary); err != nil {
+		return identity.FeatureReceipt{}, err
+	}
+	if err = p.verificationParent(ctx, w, command); err != nil {
 		return identity.FeatureReceipt{}, err
 	}
 	if err = w.RequireActiveDirectoryAuthority(ctx, p, p.directoryAdmission()); err != nil {
@@ -302,6 +318,9 @@ func (p *magicTOTPPhase) CheckFeatureCommit(ctx context.Context, w kernel.Work, 
 	if command != p.command || !p.applied {
 		return identity.ForbiddenError{}
 	}
+	if err := p.verificationParent(ctx, w, command); err != nil {
+		return err
+	}
 	now, err := w.DatabaseTime(ctx)
 	if err != nil {
 		return err
@@ -315,6 +334,13 @@ func (p *magicTOTPPhase) CheckFeatureCommit(ctx context.Context, w kernel.Work, 
 		return identity.ForbiddenError{}
 	}
 	return p.check(ctx, now)
+}
+
+func (p *magicTOTPPhase) verificationParent(ctx context.Context, w kernel.Work, command identity.Command) error {
+	if p.input.verificationPrimary == nil {
+		return nil
+	}
+	return p.state.issuer.RequireVerificationMFATOTPParent(ctx, w, p, command, p.input.verificationPrimary.Parent)
 }
 
 func (p *magicTOTPPhase) RecoverParticipant(ctx context.Context, w kernel.RecoveryWork) (kernel.RecoveryStatus, error) {

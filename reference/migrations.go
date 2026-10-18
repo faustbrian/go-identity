@@ -70,6 +70,12 @@ func (s storeMigrationSource) Load(ctx context.Context) ([]migrations.Migration,
 		return nil, err
 	}
 	c := s.state.features.migrations
+	if s.state.features.verificationSessionLineage == VerificationBeforeMFA {
+		// This lineage installed counter preparation in its forward namespace.
+		// Adding magic-link MFA later must not insert legacy shared version1019
+		// before an already-applied OTP/session prefix or duplicate that DDL.
+		c.magicTOTP = false
+	}
 	c.emailOTP = s.state.features.email != nil && (s.state.features.email.otpVerification != nil || s.state.features.email.otpChange != nil)
 	return c.load(ctx, fixedMigrationSource(legacy))
 }

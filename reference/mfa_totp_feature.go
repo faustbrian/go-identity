@@ -44,11 +44,32 @@ func (f FeatureSet) PasswordTOTP() (mfa.TOTPCompletionService, error) {
 }
 
 type composedMagicTOTP struct {
-	state    *storeState
-	password bool
+	state        *storeState
+	password     bool
+	verification bool
+}
+
+// VerificationTOTP returns only explicitly selected verification-origin TOTP
+// completion. It cannot consume a magic link/password primary or select HTTP,
+// enrollment, recovery codes or trusted devices. Graph lifetime and tenant
+// admission remain mandatory; retained handles deny after Close.
+func (f FeatureSet) VerificationTOTP() (mfa.TOTPCompletionService, error) {
+	s := f.state
+	if s == nil {
+		return nil, invalidTOTPCompletion()
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.closed || s.features == nil || !s.features.composed || s.features.verificationTOTP == nil {
+		return nil, identity.UnavailableError{}
+	}
+	return composedMagicTOTP{state: s, verification: true}, nil
 }
 
 func (f composedMagicTOTP) owner() *magicLinkTOTPService {
+	if f.verification {
+		return f.state.features.verificationTOTP
+	}
 	if f.password {
 		return f.state.features.passwordTOTP
 	}

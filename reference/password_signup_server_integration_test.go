@@ -292,11 +292,17 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 	f.mfaListRecheck = extensions.mfaListRecheck
 	c, deps, worker := otpGraphConfiguration(t, f.config)
 	deps.PostgreSQL = f.pool
+	if strings.HasPrefix(extensions.verificationSignin, "totp-") {
+		var traced *database.Pool
+		traced, f.verificationMFAHook = newVerificationMFAEnrollmentTrace(t, ctx, f.pool)
+		deps.PostgreSQL = traced
+	}
 	if extensions.completionCommitFault {
 		f.completionFault = &completionCommitFault{factorProof: extensions.activeStepUp, regeneration: extensions.regeneration, factorManagement: extensions.factorManagement || extensions.disable, replacementConfirmation: extensions.factorReplacementConfirmationFault, emailRemoval: extensions.emailRemoval}
 		f.completionFault.emailPreparation = extensions.emailChangeCase == "removal-admin-output-unknown"
 		f.completionFault.emailVerification = extensions.emailChangeCase == "otp-verification-unknown" || extensions.emailChangeCase == "otp-change-unknown"
 		f.completionFault.registrationVerification = extensions.verificationSignin == "verification-unknown"
+		f.completionFault.mfaChallenge = extensions.verificationSignin == "totp-child-unknown"
 		if strings.HasPrefix(extensions.emailChangeCase, "totp-change") {
 			f.completionFault.factorProof = false
 			f.completionFault.emailFactorUse = extensions.emailChangeCase == "totp-change-unknown-request"
@@ -304,6 +310,9 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 		}
 		faultPool, err := database.Connect(ctx, database.Config{DSN: f.pool.Raw().Config().ConnConfig.ConnString(), MaxConns: 4, Configure: func(pc *database.PoolConfig) error {
 			pc.ConnConfig.DialFunc = f.completionFault.dial
+			if f.verificationMFAHook != nil {
+				pc.ConnConfig.Tracer = f.verificationMFAHook
+			}
 			if f.completionFault.emailPreparation || f.completionFault.emailVerification || f.completionFault.emailFactorUse || f.completionFault.registrationVerification {
 				// Keep parameterized extended queries, but send their SQL rather
 				// than a previously cached statement name to the fault boundary.
@@ -346,6 +355,18 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 	selectedReset := c.PasswordReset
 	selectedResetHTTP := c.HTTPPasswordReset
 	var selectedAuthorization authorization.Service = referenceRegistrationPolicy{}
+	if extensions.verificationSignin == "totp-original-expiry" {
+		f.verificationMFAOriginalExpiry = &verificationMFAOriginalExpiryPolicy{pool: f.pool}
+		selectedAuthorization = f.verificationMFAOriginalExpiry
+	}
+	if strings.HasPrefix(extensions.verificationSignin, "totp-late-") {
+		f.verificationMFALateAuthority = &verificationMFALateAuthorityPolicy{pool: f.pool, mode: extensions.verificationSignin}
+		selectedAuthorization = f.verificationMFALateAuthority
+	}
+	if extensions.verificationSignin == "totp-withdrawn-parent" {
+		f.verificationMFAWithdrawnParent = &verificationMFAWithdrawnParentPolicy{pool: f.pool}
+		selectedAuthorization = f.verificationMFAWithdrawnParent
+	}
 	var verificationExpiryClock *verificationSigninExpiryClock
 	if strings.HasPrefix(extensions.verificationSignin, "policy-denied") {
 		selectedAuthorization = verificationSigninDenyPolicy{}
@@ -379,6 +400,31 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 	signin := c.PasswordSignin.Native
 	if extensions.verificationSignin != "" {
 		c.PasswordSignup.VerificationSignin = &passwordpg.VerificationSigninConfig{Profile: sessionpg.MagicLinkAdmissionConfig{GlobalAuthorityID: signin.Profile.GlobalAuthorityID, PolicyNamespace: signin.Profile.PolicyNamespace, Audience: signin.Profile.Audience}, Issuance: signin.Issuance, CSRFKey: signin.CSRFKey}
+		if extensions.verificationSignin == "upgrade-mfa-first" {
+			c.PasswordSignup.VerificationSessionLineage = reference.MFABeforeVerification
+		}
+		if strings.HasPrefix(extensions.verificationSignin, "totp-") || extensions.verificationSignin == "empty-totp" {
+			c.PasswordSignup.VerificationSessionLineage = reference.VerificationBeforeMFA
+			if extensions.verificationSignin == "totp-original-expiry" {
+				c.PasswordSignup.Native.Verification.Lifetime = 3 * time.Second
+			}
+			issuer := c.PasswordSignup.Issuer
+			issuer.Audience = signin.Profile.Audience
+			c.PasswordSignup.VerificationSignin.TOTP = &passwordpg.MFAChallengeConfig{Lifetime: time.Minute, MaxAttempts: 3, IssuerURL: origin, Issuer: issuer, Custody: c.PasswordSignup.Preparation}
+			counters := c.PasswordSignup.Counters
+			commands := *counters.CommandCounters
+			commands.Policy, commands.Keys = c.Velocity.Native.Policy, c.Velocity.Native.Keys
+			counters.CommandCounters = &commands
+			admitted, err := commands.Policy.Admit("identity.mfa.totp-verify")
+			if err != nil {
+				t.Fatal(err)
+			}
+			counters.PolicyVersion = admitted.PolicyVersion
+			c.PasswordSignup.VerificationTOTP = &reference.VerificationTOTPConfiguration{MaximumDuration: c.OTP.Timeout, ConfigurationID: "reference-verification-totp-v1", PolicyID: "verification-totp", Counters: counters, RiskKeys: c.OTP.RiskKeys, ComparisonKey: [32]byte{188}, ComparisonKeyVersion: 1, ActiveEnvelopeKeyID: "issue-envelope"}
+			if strings.HasSuffix(extensions.verificationSignin, "-http") {
+				c.HTTPMFA = &reference.HTTPMFAConfiguration{VerificationTOTPVerify: true, ActorID: c.HTTPPasswordSignup.ActorID, PolicyRevision: c.HTTPPasswordSignup.PolicyRevision, VerificationNamespace: "reference-verification-totp-http", VerificationKey: [32]byte{189}}
+			}
+		}
 		if verificationExpiryClock != nil {
 			c.PasswordSignup.VerificationSignin.Issuance.Clock = verificationExpiryClock
 		}
@@ -943,6 +989,14 @@ END $$`); err != nil {
 		if c.MagicLink.TOTP != nil {
 			targets = []struct{ table, name string }{{"session_issuances", "session_issuances_purpose_v6"}, {"sessions", "session_credential_continuation_v3"}, {"sessions", "session_record_binding_v6"}}
 		}
+		if c.PasswordSignup.VerificationSignin != nil {
+			// Verification replaces the predecessor purpose constraint. Probe
+			// its actual selected successor, not the deliberately removed name.
+			targets[0].name = "session_issuances_purpose_v7"
+			if c.PasswordSignup.VerificationSessionLineage == reference.VerificationBeforeMFA && c.PasswordSignup.VerificationTOTP != nil {
+				targets[0].name = "session_issuances_purpose_v8"
+			}
+		}
 		for _, target := range targets {
 			if _, err := f.pool.Raw().Exec(ctx, "ALTER TABLE session_store."+target.table+" RENAME CONSTRAINT "+target.name+" TO magic_fixture_missing"); err != nil {
 				t.Fatal(err)
@@ -1086,6 +1140,12 @@ END $$`); err != nil {
 		}
 	}
 	if extensions.verificationSignin != "" {
+		f.config = c
+		if extensions.verificationSignin == "upgrade" || extensions.verificationSignin == "upgrade-mfa-first" {
+			f.afterVerificationSignin = func(credential session.Credential) {
+				proveVerificationMFAPopulatedUpgrade(t, ctx, f, c, deps, worker, modules, config, origin, migrationRequest, credential)
+			}
+		}
 		proveReferenceVerificationSignin(t, ctx, f, features, workers, client, network.URL, origin, messages, extensions.verificationSignin)
 		return
 	}

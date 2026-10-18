@@ -66,6 +66,18 @@ func composeSession(c StoreConfiguration, d ReferenceDependencies) (*sessionStat
 		profile := *selection.MagicLink
 		mfa = &profile
 	}
+	if c.PasswordSignup != nil && c.PasswordSignup.VerificationTOTP != nil {
+		if c.PasswordSignup.VerificationSignin == nil || c.PasswordSignup.VerificationSignin.TOTP == nil || selection.MagicLink == nil {
+			return nil, invalid
+		}
+		// Both native origins retain verified-email-grant plus actual-factor
+		// session vocabulary. This selects reading/revocation, not magic-link login.
+		profile := c.PasswordSignup.VerificationSignin.Profile
+		if mfa != nil && *mfa != profile || profile != *selection.MagicLink {
+			return nil, invalid
+		}
+		mfa = &profile
+	}
 	if c.PasswordSignin != nil && (c.PasswordSignin.TOTP != nil || c.PasswordSignin.Recovery != nil || c.PasswordSignin.OTP != nil) {
 		if c.PasswordSignin.MFA == nil || selection.Verified == nil {
 			return nil, invalid

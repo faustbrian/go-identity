@@ -17,6 +17,7 @@ import (
 // The database receives COMMIT, but its acknowledgement never reaches pgx.
 // No SQL values, proof bytes, cookies or credentials are recorded or logged.
 type completionCommitFault struct {
+	mfaChallenge             bool
 	factorProof              bool
 	regeneration             bool
 	factorManagement         bool
@@ -95,6 +96,9 @@ func (c *completionCommitConn) Write(p []byte) (int, error) {
 	}
 	if c.fault.registrationVerification {
 		selected = bytes.Contains(p, []byte("UPDATE identity.identifiers SET verified=true,version=version+1"))
+	}
+	if c.fault.mfaChallenge {
+		selected = bytes.Contains(p, []byte("INSERT INTO identity_mfa.continuations("))
 	}
 	if c.fault.emailFactorUse {
 		selected = bytes.Contains(p, []byte("UPDATE identity_mfa.factor_verifications SET used_command_id="))

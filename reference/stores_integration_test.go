@@ -28,6 +28,7 @@ import (
 	"github.com/faustbrian/go-identity/reference"
 	"github.com/faustbrian/go-identity/risk"
 	riskvalkey "github.com/faustbrian/go-identity/risk/valkey"
+	"github.com/faustbrian/go-identity/session"
 	migrations "github.com/faustbrian/go-migrations/v3"
 	migrationdb "github.com/faustbrian/go-migrations/v3/postgres"
 	database "github.com/faustbrian/go-postgres"
@@ -36,6 +37,11 @@ import (
 )
 
 type liveStores struct {
+	afterVerificationSignin            func(session.Credential)
+	verificationMFAOriginalExpiry      *verificationMFAOriginalExpiryPolicy
+	verificationMFALateAuthority       *verificationMFALateAuthorityPolicy
+	verificationMFAWithdrawnParent     *verificationMFAWithdrawnParentPolicy
+	verificationMFAHook                *verificationMFAEnrollmentTrace
 	adminEmailGrant                    *administrativeEmailGrant
 	afterManagedPending                func(capability.Proof, identity.IdentifierID, []*http.Cookie, string, string)
 	afterEmailRemovalPreparation       func(capability.Proof, identity.IdentifierID, passwordpg.EmailManagementRequest, []*http.Cookie, string)

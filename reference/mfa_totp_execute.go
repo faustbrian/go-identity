@@ -40,6 +40,8 @@ func (p *magicTOTPPhase) compose() error {
 	// composed owner selects the profile without requiring secret custody.
 	if p.state.password != nil {
 		p.issuer, err = session.NewMFAPasswordSessionIssuerWithCSRF(p.delivery, p.state.config.SessionIssuer, p.state.config.CSRF)
+	} else if p.state.verification != nil {
+		p.issuer, err = session.NewMFAVerificationSessionIssuerWithCSRF(p.delivery, p.state.config.SessionIssuer, p.state.config.CSRF)
 	} else {
 		p.issuer, err = session.NewMFAMagicLinkSessionIssuerWithCSRF(p.delivery, p.state.config.SessionIssuer, p.state.config.CSRF)
 	}
