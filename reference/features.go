@@ -106,10 +106,12 @@ type featureState struct {
 	httpEmailAddresses           *emailAddressesHTTPState
 	httpEmailRequests            *emailRequestsHTTPState
 	httpEmailOTPVerification     *emailOTPVerificationHTTPState
+	httpPhoneVerification        *emailOTPVerificationHTTPState
 	httpEmailOTPChange           *emailOTPChangeHTTPState
 	passwordSignin               *passwordpg.SigninService
 	passwordSignup               *passwordpg.SignupService
 	username                     *usernameState
+	phone                        *phoneState
 	httpUsername                 *usernameHTTPState
 	registrationConfirmation     *passwordpg.EmailVerificationRouter
 	verificationSignin           *passwordpg.VerificationSigninService
@@ -210,6 +212,12 @@ func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDepen
 	}
 	if c.HTTPUsername != nil && (c.Username == nil || c.OTP == nil) {
 		return identity.InvalidInputError{Field: "reference_http_username"}
+	}
+	if c.Phone != nil && (c.OTP == nil || c.Delivery == nil || c.Session == nil || c.PasswordVerification == nil || c.PasswordSignin == nil) {
+		return identity.InvalidInputError{Field: "reference_phone"}
+	}
+	if c.HTTPPhoneVerification != nil && c.Phone == nil {
+		return identity.InvalidInputError{Field: "reference_http_phone"}
 	}
 	if c.PasswordSignin != nil && c.OTP == nil {
 		return identity.InvalidInputError{Field: "reference_password_signin"}
@@ -447,6 +455,10 @@ func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDepen
 	if err != nil {
 		return err
 	}
+	phoneOwner, err := composePhone(c, d, evaluator, passwordVerificationOwner)
+	if err != nil {
+		return err
+	}
 	if usernameOwner != nil && usernameOwner.totp != nil {
 		migrationConfig.passwordMFA, migrationConfig.passwordTOTP = true, true
 	}
@@ -619,6 +631,15 @@ func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDepen
 			httpEmailOTPVerification.rate.Close()
 		}
 	}()
+	httpPhoneVerification, err := composePhoneVerificationHTTP(c, phoneOwner, sessionOwner, s.httpRate)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if httpPhoneVerification != nil && !retainedResetHTTP {
+			httpPhoneVerification.rate.Close()
+		}
+	}()
 	httpEmailOTPChange, err := composeEmailOTPChangeHTTP(c, emailOwner, sessionOwner, s.httpRate)
 	if err != nil {
 		return err
@@ -659,6 +680,7 @@ func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDepen
 	s.features = &featureState{migrations: migrationConfig, otp: otpOwner, signin: signinOwner, reset: resetOwner, passwordSignin: passwordSigninOwner, passwordPreauth: passwordPreauthOwner, preauth: preauthOwner, delivery: deliveryOwner, sender: d.DeliverySender, timeout: o.Timeout, provider: o.ProviderVersion, deliverySlots: make(chan struct{}, int(capacity)), authorize: o.RequestKeys.Policy.Authorization, httpPreAuth: httpPreAuth, httpEmailSignin: httpEmailSignin, httpPasswordReset: httpPasswordReset, httpPasswordSignin: httpPasswordSignin}
 	s.features.passwordSignup = passwordSignupOwner
 	s.features.username = usernameOwner
+	s.features.phone = phoneOwner
 	s.features.httpUsername = httpUsername
 	s.features.registrationConfirmation = registrationConfirmation
 	s.features.verificationSignin = verificationSigninOwner
@@ -693,6 +715,7 @@ func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDepen
 	s.features.httpEmailAddresses = httpEmailAddresses
 	s.features.httpEmailRequests = httpEmailRequests
 	s.features.httpEmailOTPVerification = httpEmailOTPVerification
+	s.features.httpPhoneVerification = httpPhoneVerification
 	s.features.httpEmailOTPChange = httpEmailOTPChange
 	retainedResetHTTP = true
 	return nil
@@ -728,7 +751,8 @@ type WorkerSet struct {
 
 // ComposeWorkers composes 1..128 real bounded native delivery workers from the
 // selected provider and store graph. Each selected tenant must have a worker
-// for the OTP provider. Duplicate tenant/provider pairs deny. Native scope and
+// for the OTP provider and any independently selected phone provider. Duplicate
+// tenant/provider pairs deny. Native scope and
 // current authorization policy requirements are validated by the owning adapter.
 // All construction is pure; unsuccessful validation leaves the stage retryable.
 func ComposeWorkers(stores StoreSet, providers ProviderSet, configs ...deliverypg.WorkerConfig) (WorkerSet, error) {
@@ -764,7 +788,7 @@ func ComposeWorkers(stores StoreSet, providers ProviderSet, configs ...deliveryp
 		return WorkerSet{}, identity.InvalidInputError{Field: "reference_workers"}
 	}
 	for tenant := range s.tenants {
-		if !seen[tenant][f.provider] {
+		if !seen[tenant][f.provider] || f.phone != nil && !seen[tenant][f.phone.provider] {
 			return WorkerSet{}, identity.InvalidInputError{Field: "reference_workers"}
 		}
 	}
@@ -829,6 +853,11 @@ func (f FeatureSet) Initialize(ctx context.Context) error {
 	}
 	if err := s.features.otp.Initialize(w); err != nil {
 		return err
+	}
+	if s.features.phone != nil {
+		if err := s.features.phone.owner.Initialize(w); err != nil {
+			return err
+		}
 	}
 	if e := s.features.email; e != nil && e.otpVerification != nil {
 		if err := e.otpVerification.Initialize(w); err != nil {

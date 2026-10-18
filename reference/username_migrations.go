@@ -115,7 +115,7 @@ func (s StoreSet) usernameMigrationCatalog(ctx context.Context, catalog []migrat
 		}
 		appendLast("identity_username_session", "identity/session/postgres", steps, migrationGuard{version: 1, schema: schema, constraints: []string{"session_issuances.session_issuances_purpose_username_v1"}})
 	}
-	if u.rename != nil {
+	if u.rename != nil || s.state.features.phone != nil {
 		catalog, err = counterPreparationMigrationCatalog(ctx, catalog)
 		if err != nil {
 			return nil, err

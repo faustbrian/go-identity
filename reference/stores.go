@@ -57,6 +57,8 @@ type StoreConfiguration struct {
 	HTTPEmailSignin *HTTPEmailSigninConfiguration
 	// HTTPEmailOTPVerification independently selects authenticated email OTP.
 	HTTPEmailOTPVerification *HTTPEmailOTPVerificationConfiguration
+	// HTTPPhoneVerification selects only cookie enrollment/confirmation/recovery.
+	HTTPPhoneVerification *HTTPPhoneVerificationConfiguration
 	// HTTPEmailOTPChange independently selects genuine-primary email OTP routes.
 	HTTPEmailOTPChange *HTTPEmailOTPChangeConfiguration
 	// PasswordReset selects native request/completion/recovery over this graph's
@@ -73,6 +75,8 @@ type StoreConfiguration struct {
 	// Username independently selects native username owners; nil leaves all
 	// username handles and migrations disabled without changing email profiles.
 	Username *UsernameConfiguration
+	// Phone selects native existing-account phone enrollment, not HTTP or login.
+	Phone *PhoneConfiguration
 	// Session selects native primary reads and self-signout, not HTTP.
 	Session *SessionConfiguration
 	// PasswordVerification selects native reauthentication/proof recovery, not HTTP.
@@ -456,6 +460,9 @@ func (s StoreSet) Close(ctx context.Context) error {
 	}
 	if state.features != nil && state.features.httpEmailOTPVerification != nil {
 		state.features.httpEmailOTPVerification.rate.Close()
+	}
+	if state.features != nil && state.features.httpPhoneVerification != nil {
+		state.features.httpPhoneVerification.rate.Close()
 	}
 	if state.features != nil && state.features.httpEmailOTPChange != nil {
 		state.features.httpEmailOTPChange.close()

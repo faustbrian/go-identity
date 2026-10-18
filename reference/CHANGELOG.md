@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Compose optional existing-account phone enrollment and SMS verification through
+  the native password/proof, OTP, delivery and transactional identity owners.
+  Select cookie HTTP send/verify/original recovery separately; require the chosen
+  SMS worker and install forward native histories before serving. Verification
+  invalidates previous session authority; no replacement session or phone login
+  is implicit. Existing migration bytes and unrelated selections are preserved.
+
 - Fence HTTP email OTP signin against actual known-empty MFA authority through
   counted attempts and protected consumption. Select its MFA-authority history;
   missing/enrolled/changed state denies instead of relying on permissive policy.

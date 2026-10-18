@@ -77,6 +77,7 @@ func (s storeMigrationSource) Load(ctx context.Context) ([]migrations.Migration,
 		c.magicTOTP = false
 	}
 	c.emailOTP = s.state.features.email != nil && (s.state.features.email.otpVerification != nil || s.state.features.email.otpChange != nil)
+	c.phoneOTP = s.state.features.phone != nil
 	return c.load(ctx, fixedMigrationSource(legacy))
 }
 
@@ -107,6 +108,7 @@ type featureMigrationConfig struct {
 	passwordRecovery                                        bool
 	passwordOTP                                             bool
 	emailOTP                                                bool
+	phoneOTP                                                bool
 	mfaEnrollment                                           bool
 	magicSignup                                             bool
 	preauthIssue                                            bool
@@ -197,7 +199,7 @@ func (c featureMigrationConfig) load(ctx context.Context, base migrations.Source
 		return nil, err
 	}
 	history = append(history, next)
-	if c.signinSchema != "" || c.emailOTP {
+	if c.signinSchema != "" || c.emailOTP || c.phoneOTP {
 		next, err := (otppostgres.ConsumingMigrationSource{Schema: c.otpSchema, Version: 1400}).Load(ctx)
 		if err != nil {
 			return nil, err

@@ -1,5 +1,12 @@
 # Identity reference composition
 
+## Optional existing-account phone verification
+
+See [phone enrollment and consumer journey](PHONE.md) for native/HTTP selection,
+fresh password-action proof, encrypted SMS delivery, counted verification and
+code-free original recovery. Phone signup, signin, reset and replacement are not
+enabled by this selection.
+
 ## Optional delivered email OTP signin
 
 See [email OTP composition and consumer journey](EMAIL_OTP.md) for native/HTTP

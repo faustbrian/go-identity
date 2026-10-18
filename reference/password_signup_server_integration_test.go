@@ -27,6 +27,7 @@ import (
 	httpclient "github.com/faustbrian/go-http-client/v2"
 	identity "github.com/faustbrian/go-identity"
 	"github.com/faustbrian/go-identity/delivery"
+	deliverypg "github.com/faustbrian/go-identity/delivery/postgres"
 	"github.com/faustbrian/go-identity/email"
 	identityhttp "github.com/faustbrian/go-identity/http"
 	emailhttp "github.com/faustbrian/go-identity/http/email"
@@ -54,6 +55,9 @@ type referenceRegistrationPolicy struct{}
 func (referenceRegistrationPolicy) Decide(ctx context.Context, c authorization.DecisionContext) (authorization.Decision, error) {
 	if err := ctx.Err(); err != nil {
 		return authorization.Decision{}, err
+	}
+	if string(c.Request.Tenant) == otpTenant && c.PolicyRevision == 9 && c.Request.Subject.Kind == authorization.SubjectUser && (c.Request.Action == "identity.phone.send-verification" || c.Request.Action == "identity.phone.verify" || c.Request.Action == "identity.phone.verify.recover") {
+		return authorization.Decision{Outcome: authorization.Allow, Revision: 9}, nil
 	}
 	if string(c.Request.Tenant) == otpTenant && c.PolicyRevision == 9 && c.Request.Subject.Kind == authorization.SubjectServiceAccount && c.Request.Subject.ID == "AAAAAAAAAAAAAAAAAAAAAw" {
 		switch c.Request.Action {
@@ -243,6 +247,8 @@ func proveReferenceSignupGraph(t *testing.T, competing bool, protected ...bool) 
 }
 
 type signupGraphExtensions struct {
+	phoneEnrollment bool
+
 	emailSignin                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            string
 	usernameTOTPOnly                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       bool
 	usernameTOTPPersistent                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 bool
@@ -597,6 +603,9 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 	if extensions.postgresBaseline {
 		selectDurableReferenceAdmission(&c)
 	}
+	if extensions.phoneEnrollment {
+		configureReferencePhone(t, &c, origin)
+	}
 	var emailUpgrade *reference.StoreConfiguration
 	if extensions.emailRemoval || extensions.emailChangeCase == "graph" || extensions.emailChangeCase == "graph-upgrade" || extensions.emailChangeCase == "shared-http" || extensions.emailChangeCase == "keyed-graph" || extensions.emailChangeCase == "request-http" || extensions.emailChangeCase == "change-origin-graph" || strings.HasPrefix(extensions.emailChangeCase, "totp-change") || strings.HasPrefix(extensions.emailChangeCase, "otp-change") || strings.HasPrefix(extensions.emailChangeCase, "otp-verification") {
 		var retainedTargets []passwordpg.ReauthenticationTarget
@@ -795,7 +804,16 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 	if err != nil {
 		t.Fatal(err)
 	}
-	workers, err := reference.ComposeWorkers(stores, providers, worker)
+	workerConfigs := []deliverypg.WorkerConfig{worker}
+	if extensions.phoneEnrollment {
+		if _, err := reference.ComposeWorkers(stores, providers, worker); err == nil {
+			t.Fatal("phone graph accepted no selected SMS worker")
+		}
+		smsWorker := worker
+		smsWorker.ProviderConfigVersion = c.Phone.Issuance.ProviderVersion
+		workerConfigs = append(workerConfigs, smsWorker)
+	}
+	workers, err := reference.ComposeWorkers(stores, providers, workerConfigs...)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -858,6 +876,16 @@ END $$`); err != nil {
 		seen[op.Record.OperationID] = true
 	}
 	wantOperations := 8
+	if c.HTTPPhoneVerification != nil {
+		wantOperations += 3
+		for _, id := range []string{"identity.phone.send-verification", "identity.phone.verify", "identity.phone.verify.recover"} {
+			if !seen[id] {
+				t.Fatal("selected phone operation missing", id)
+			}
+		}
+	} else if seen["identity.phone.send-verification"] || seen["identity.phone.verify"] || seen["identity.phone.verify.recover"] {
+		t.Fatal("native phone selection implicitly advertised HTTP")
+	}
 	if c.HTTPEmailSignin != nil {
 		wantOperations += 3
 		for _, id := range []string{"identity.otp.send", "identity.otp.signin", "identity.otp.signin.recover"} {
@@ -1108,6 +1136,11 @@ END $$`); err != nil {
 			f.afterManagedChangeConfirmation = func(r email.ChangeConfirmRequest, token string) {
 				proveSelectedEmailChangeConfirmation(t, ctx, client, network.URL, origin, r, token)
 			}
+		}
+	}
+	if extensions.phoneEnrollment {
+		f.afterEmailSignin = func(ctx context.Context, user identity.UserID, cookies []*http.Cookie, csrf string, fresh func(...string) ([]*http.Cookie, string), readSession func([]*http.Cookie) bool) {
+			proveReferencePhoneHTTPS(t, ctx, f, features, workers, messages, client, network.URL, origin, server, user, cookies, csrf, fresh, readSession)
 		}
 	}
 	if extensions.emailManagementResend || extensions.emailManagementChange {
