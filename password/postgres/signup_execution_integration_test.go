@@ -89,7 +89,7 @@ func (*signupExecutionFixture) RecoverParticipant(context.Context, kernel.Recove
 	return kernel.RecoveryUnknown, password.ErrPasswordWork
 }
 
-func testNativeSignupGeneratedExecution(t *testing.T, ctx context.Context, pool *database.Pool, repository *Repository, directory *kernel.Repository, request password.SignupRequest, selected kernel.PasswordRegistrationIntent, flow session.PreAuthTransaction, flowKey session.DigestKey, storage sessionpg.Config, at time.Time, generation signupGenerationPreparation, riskConfig risk.AuthenticationAdmissionCustodyConfig, base kernel.DirectoryAuthorityMigrationSource) {
+func installNativeSignupExecutionHistory(t *testing.T, ctx context.Context, pool *database.Pool, base kernel.DirectoryAuthorityMigrationSource) {
 	t.Helper()
 	registration := kernel.PasswordSignupAcceptanceMigrationSource{Base: kernel.PasswordRegistrationMigrationSource{Base: kernel.IdentifierMutationMigrationSource{Base: base, Version: 16}, Version: 17}, Version: 18}
 	preparation := kernel.PreparationMigrationSource{Base: registration, Version: 19}
@@ -134,6 +134,11 @@ func testNativeSignupGeneratedExecution(t *testing.T, ctx context.Context, pool 
 			}
 		}
 	}
+}
+
+func testNativeSignupGeneratedExecution(t *testing.T, ctx context.Context, pool *database.Pool, repository *Repository, directory *kernel.Repository, request password.SignupRequest, selected kernel.PasswordRegistrationIntent, flow session.PreAuthTransaction, flowKey session.DigestKey, storage sessionpg.Config, at time.Time, generation signupGenerationPreparation, riskConfig risk.AuthenticationAdmissionCustodyConfig, base kernel.DirectoryAuthorityMigrationSource) {
+	t.Helper()
+	installNativeSignupExecutionHistory(t, ctx, pool, base)
 	for _, mode := range []string{"commit", "neutral", "rollback"} {
 		t.Run(mode, func(t *testing.T) {
 			r := request

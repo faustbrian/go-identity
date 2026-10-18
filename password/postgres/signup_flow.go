@@ -23,7 +23,11 @@ func (*Repository) admitSignupFlow(r password.SignupRequest, flow session.PreAut
 	b, i := s.Binding, s.Binding.Intent
 	actual, aerr := r.RememberPolicy.Bindings()
 	original, oerr := i.Remember.Bindings()
-	if b.ID != r.PreAuthID || i.TenantID != r.TenantID || i.Action != "identity.password.signup" || i.Origin != r.Origin || i.CallbackURL != r.CallbackURL || i.PolicyID != policy || i.PolicyVersion != version || aerr != nil || oerr != nil || actual != original {
+	op := passwordSignupOperation()
+	if r.Username != "" {
+		op = usernameSignupOperation()
+	}
+	if b.ID != r.PreAuthID || i.TenantID != r.TenantID || i.Action != op.OperationID || r.Caller.Request.Action != authorization.Action(op.OperationID) || i.Origin != r.Origin || i.CallbackURL != r.CallbackURL || i.PolicyID != policy || i.PolicyVersion != version || aerr != nil || oerr != nil || actual != original {
 		return password.ErrPasswordWork
 	}
 	token, err := session.ParseToken(r.Cookie.Token())
@@ -108,7 +112,7 @@ func signupFlowCommand(w kernel.Work, owner kernel.FeatureExecutionContributor, 
 	// before final scope. It consumes the same flow without authenticating the
 	// existing account or attaching any credential, delivery or session effect.
 	validEvent := transition.EventType == "user.created.v1" || final && transition.EventType == "identity.password.signup.accepted.v1"
-	if err != nil || !metadata || !custody || b != s.Binding || f.Operation != s.Operation || f.Contributor != (kernel.ContributorDescriptor{Owner: "identity/password/postgres", ContractID: "identity.password", Version: 1}) || s.Operation.OperationID != "identity.password.signup" || s.Operation.SubjectRequirement != identity.FeatureSubjectAnonymousFlow || s.Operation.RecordRequirement != identity.FeatureRecordOmitted || !validEvent || transition.BeforeVersion != 0 || transition.AfterVersion != 0 || b.UserID != "" || b.AnonymousFlowID != string(request.PreAuthID) || b.TenantID != request.TenantID || b.ActorID != identity.ActorID(request.Caller.Request.Subject.ID) || b.ActorKind != request.Caller.Request.Subject.Kind || request.Caller.Request.Tenant != authorization.TenantID(b.TenantID) || request.Caller.Request.Action != authorization.Action(b.OperationID) || cookie.Token() != request.Cookie.Token() {
+	if err != nil || !metadata || !custody || b != s.Binding || f.Operation != s.Operation || f.Contributor != (kernel.ContributorDescriptor{Owner: "identity/password/postgres", ContractID: "identity.password", Version: 1}) || !signupOperation(s.Operation) || !validEvent || transition.BeforeVersion != 0 || transition.AfterVersion != 0 || b.UserID != "" || b.AnonymousFlowID != string(request.PreAuthID) || b.TenantID != request.TenantID || b.ActorID != identity.ActorID(request.Caller.Request.Subject.ID) || b.ActorKind != request.Caller.Request.Subject.Kind || request.Caller.Request.Tenant != authorization.TenantID(b.TenantID) || request.Caller.Request.Action != authorization.Action(b.OperationID) || cookie.Token() != request.Cookie.Token() {
 		return identity.CommandBinding{}, password.ErrPasswordWork
 	}
 	return b, nil

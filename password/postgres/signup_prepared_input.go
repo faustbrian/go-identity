@@ -31,6 +31,7 @@ type signupPreparedInput struct {
 	Flow         signupOriginalFlow
 	RequestInput []identity.FeatureField
 	OccurredAt   time.Time
+	Username     *identity.Identifier `json:",omitempty"`
 }
 
 // Byte projections keep valid UTF-8 strings lossless while bounding JSON's
@@ -124,7 +125,7 @@ func validateSignupPreparedInput(k kernel.RequestKeyPreparationBinding, profile 
 		return kernel.PasswordRegistrationIntent{}, session.PreAuthTransaction{}, password.ErrPasswordWork
 	}
 	b := input.Binding
-	if input.Schema != 1 || b.ValidateFor(passwordSignupOperation()) != nil || b.CommandID != k.Admission.CommandID || b.TenantID != k.Scope.TenantID || b.ActorID != k.Scope.ActorID || b.ActorKind != k.Scope.ActorKind || b.PolicyVersion != k.PolicyVersion || b.CorrelationID != string(b.CommandID) || b.PolicyID != input.Flow.Policy || b.AnonymousFlowID != string(input.Flow.ID) || input.Flow.Tenant != b.TenantID || input.Flow.Action != b.OperationID || input.Flow.PolicyVersion != b.PolicyVersion || input.OccurredAt.IsZero() || input.OccurredAt.Before(input.Flow.IssuedAt) || !input.OccurredAt.Before(input.Flow.ExpiresAt) {
+	if input.Schema != 1 || !signupOperation(k.Feature.Operation) || b.ValidateFor(k.Feature.Operation) != nil || (b.OperationID == "identity.username.signup") != (input.Username != nil) || k.Scope.RouteID != b.OperationID || b.CommandID != k.Admission.CommandID || b.TenantID != k.Scope.TenantID || b.ActorID != k.Scope.ActorID || b.ActorKind != k.Scope.ActorKind || b.PolicyVersion != k.PolicyVersion || b.CorrelationID != string(b.CommandID) || b.PolicyID != input.Flow.Policy || b.AnonymousFlowID != string(input.Flow.ID) || input.Flow.Tenant != b.TenantID || input.Flow.Action != b.OperationID || input.Flow.PolicyVersion != b.PolicyVersion || input.OccurredAt.IsZero() || input.OccurredAt.Before(input.Flow.IssuedAt) || !input.OccurredAt.Before(input.Flow.ExpiresAt) {
 		return bad()
 	}
 	storedCreation, err := restoreSignupCreation(input.Creation)
@@ -139,6 +140,9 @@ func validateSignupPreparedInput(k kernel.RequestKeyPreparationBinding, profile 
 		return bad()
 	}
 	selected := kernel.PasswordRegistrationIntent{Creation: storedCreation, Identifier: input.Identifier, Credential: input.Credential, ComparisonProfile: input.Comparison}
+	if input.Username != nil {
+		selected.Username = *input.Username
+	}
 	if _, err := kernel.PasswordRegistrationFields(selected); err != nil {
 		return bad()
 	}
@@ -198,6 +202,10 @@ func (r *Repository) retainSignupInput(ctx context.Context, crypto *envelope.Ser
 		return nil, password.ErrPasswordWork
 	}
 	input := signupPreparedInput{Schema: 1, Binding: b, Creation: storeSignupCreation(selected.Creation), Identifier: selected.Identifier, Credential: selected.Credential, Comparison: selected.ComparisonProfile, Flow: projection, RequestInput: fields, OccurredAt: at.UTC()}
+	if selected.Username != (identity.Identifier{}) {
+		name := selected.Username
+		input.Username = &name
+	}
 	frozen, _, err := validateSignupPreparedInput(k, profile, input, intent)
 	if err != nil {
 		return nil, err

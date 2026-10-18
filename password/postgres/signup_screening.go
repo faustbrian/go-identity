@@ -17,7 +17,10 @@ import (
 // keyed preparation journal owns whether generation may run, not this helper.
 // Returned facts belong only in that owner's authenticated encrypted output.
 func (*Repository) prepareSignupHash(ctx context.Context, c password.HashPreparationConfig, original risk.AuthenticationAdmission, scope risk.Context, candidate primitive.Secret) (hash primitive.EncodedHash, facts []risk.Signal, err error) {
-	return prepareAuthenticationHash(ctx, c, original, scope, candidate, "identity.password.signup")
+	if scope.Operation != "identity.password.signup" && scope.Operation != "identity.username.signup" {
+		return hash, nil, password.ErrPasswordWork
+	}
+	return prepareAuthenticationHash(ctx, c, original, scope, candidate, scope.Operation)
 }
 
 // Reset and signup share the canonical Authentication lane. The exact action
@@ -46,7 +49,7 @@ func prepareAuthenticationHash(ctx context.Context, c password.HashPreparationCo
 		return hash, nil, err
 	}
 	p := original.Prepared()
-	if (action != "identity.password.signup" && action != "identity.password.reset-complete") || scope.Operation != action || scope.Tenant != p.Scope.Tenant || scope.Operation != p.Scope.Operation || scope.Attempt != p.Scope.Attempt || scope.IndependentFactor != p.Scope.IndependentFactor || len(p.Signals) == 0 || len(p.Signals) > 31 {
+	if (action != "identity.password.signup" && action != "identity.username.signup" && action != "identity.password.reset-complete") || scope.Operation != action || scope.Tenant != p.Scope.Tenant || scope.Operation != p.Scope.Operation || scope.Attempt != p.Scope.Attempt || scope.IndependentFactor != p.Scope.IndependentFactor || len(p.Signals) == 0 || len(p.Signals) > 31 {
 		return hash, nil, password.ErrPasswordWork
 	}
 	admission, err := c.Policy.Admit(scope.Operation)
@@ -107,7 +110,10 @@ func prepareAuthenticationHash(ctx context.Context, c password.HashPreparationCo
 // authenticated outside Work; these immutable facts cannot be renewed here.
 // This does not establish current flow/account/field authority or one-time use.
 func checkSignupScreening(ctx context.Context, policy risk.Policy, original risk.Context, facts []risk.Signal, now time.Time) error {
-	return checkAuthenticationScreening(ctx, policy, original, facts, now, "identity.password.signup")
+	if original.Operation != "identity.password.signup" && original.Operation != "identity.username.signup" {
+		return password.ErrPasswordWork
+	}
+	return checkAuthenticationScreening(ctx, policy, original, facts, now, original.Operation)
 }
 
 func (*Repository) checkResetScreening(ctx context.Context, policy risk.Policy, original risk.Context, facts []risk.Signal, now time.Time) error {
@@ -115,7 +121,7 @@ func (*Repository) checkResetScreening(ctx context.Context, policy risk.Policy, 
 }
 
 func checkAuthenticationScreening(ctx context.Context, policy risk.Policy, original risk.Context, facts []risk.Signal, now time.Time, action risk.Action) error {
-	if ctx == nil || now.IsZero() || now.Before(original.Now) || (action != "identity.password.signup" && action != "identity.password.reset-complete") || original.Operation != action {
+	if ctx == nil || now.IsZero() || now.Before(original.Now) || (action != "identity.password.signup" && action != "identity.username.signup" && action != "identity.password.reset-complete") || original.Operation != action {
 		return password.ErrPasswordWork
 	}
 	if err := ctx.Err(); err != nil {

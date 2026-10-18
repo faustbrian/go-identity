@@ -55,7 +55,7 @@ func (r *Repository) generateSignupOutput(ctx context.Context, original identity
 	}()
 	spec, ok := original.PasswordSignupInputFeature()
 	candidate, cookie, custody := original.PasswordSignupInputCustody()
-	if ctx == nil || !r.configuredWriter() || !ok || !custody || spec.Operation != passwordSignupOperation() || generation == 0 || c.profile == ([32]byte{}) || c.crypto == nil || c.codec == nil || c.verification.issuer == nil || c.verification.policy == nil || c.delivery.policy != c.verification.policy || c.delivery.owner == nil || !reauthenticationText(c.envelopeKey, 256) {
+	if ctx == nil || !r.configuredWriter() || !ok || !custody || !signupOperation(spec.Operation) || generation == 0 || c.profile == ([32]byte{}) || c.crypto == nil || c.codec == nil || c.verification.issuer == nil || c.verification.policy == nil || c.delivery.policy != c.verification.policy || c.delivery.owner == nil || !reauthenticationText(c.envelopeKey, 256) {
 		return nil, password.ErrPasswordWork
 	}
 	if err := ctx.Err(); err != nil {

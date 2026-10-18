@@ -31,6 +31,13 @@ func testPublicRegistrationConfirmation(t *testing.T, ctx context.Context, sourc
 		riskpg.CounterMigrationSource{Base: riskpg.ReservationMigrationSource{Base: riskpg.IssuanceIDMigrationSource{Base: riskpg.MigrationSource{Schema: schema, Version: 41}, Version: 42}, Version: 43}, Version: 44},
 		riskpg.VerificationCounterMigrationSource{Schema: schema, Version: 45},
 	} {
+		if c.Username != nil {
+			if _, registration := migrationSource.(kernel.EmailVerificationMigrationSource); registration {
+				// The username consumer installed the real predecessor and forward
+				// purpose extension before its original registration.
+				continue
+			}
+		}
 		history, err := migrationSource.Load(ctx)
 		if err != nil {
 			t.Fatal(err)
@@ -177,7 +184,20 @@ func testPublicRegistrationConfirmation(t *testing.T, ctx context.Context, sourc
 		t.Fatal("consumed proof still passed scanner validation")
 	}
 	state, err := service.directory.GetIdentifierState(ctx, identity.IdentifierQuery{TenantID: identity.TenantID(grant.Payload().Tenant), UserID: identity.UserID(grant.Payload().Subject), MaximumIdentifiers: 128})
-	if err != nil || !state.Identifiers[0].Verified || state.Identifiers[0].Version != 2 || state.Verifications[0].Version != 2 || state.User.Version != 2 || state.AuthorityVersion != 2 {
+	verified, verification := false, false
+	for _, actual := range state.Identifiers {
+		if string(actual.ID) == grant.Payload().Resource {
+			verified = actual.Verified && actual.Version == 2 && actual.Kind == identity.IdentifierEmail
+		} else if actual.Kind != identity.IdentifierUsername || actual.Verified || actual.Version != 1 {
+			t.Fatal("confirmation changed supplementary username")
+		}
+	}
+	for _, actual := range state.Verifications {
+		if string(actual.IdentifierID) == grant.Payload().Resource {
+			verification = actual.Version == 2
+		}
+	}
+	if err != nil || !verified || !verification || state.User.Version != 2 || state.AuthorityVersion != 2 {
 		t.Fatal("confirmation lost exact pending-address transition", err)
 	}
 	var consumed, retained bool

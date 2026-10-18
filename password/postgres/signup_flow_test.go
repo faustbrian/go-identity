@@ -27,6 +27,27 @@ func nativeSignupFlow(t testing.TB) (password.SignupRequest, session.PreAuthTran
 	return password.SignupRequest{TenantID: r.TenantID, PreAuthID: r.PreAuthID, Cookie: r.Cookie, Email: "person@example.test", Password: r.Password, RememberPolicy: r.Remember, Origin: r.Origin, CallbackURL: r.CallbackURL, Caller: r.Caller, Network: r.Network}, flow, key, now
 }
 
+func TestUsernameSignupFlowRetainsDistinctOriginalAction(t *testing.T) {
+	r, legacy, key, now := nativeSignupFlow(t)
+	r.Username = "Straße"
+	r.Caller.Request.Action, r.Caller.Request.Resource.ID = "identity.username.signup", "identity.username.signup"
+	s, _ := legacy.Bindings()
+	s.Binding.Intent.Action = "identity.username.signup"
+	token, _ := session.ParseToken(r.Cookie.Token())
+	s.Cookie, _ = token.PreAuthDigest(key, s.Binding)
+	flow, err := session.NewPreAuthTransaction(s)
+	if err != nil || (&Repository{}).admitSignupFlow(r, flow, key, "login", 3, now) != nil {
+		t.Fatal("original username flow cannot enter existing native signup", err)
+	}
+	if (&Repository{}).admitSignupFlow(r, legacy, key, "login", 3, now) == nil {
+		t.Fatal("username signup relabeled a password origin")
+	}
+	r.Username = ""
+	if (&Repository{}).admitSignupFlow(r, flow, key, "login", 3, now) == nil {
+		t.Fatal("password signup borrowed a username origin")
+	}
+}
+
 // SU04: exact original possession and intent must survive every continuation;
 // no signup input may reuse a signin flow or renew the original timeline.
 func TestSignupFlowRequiresOriginalPossessionAndIntent(t *testing.T) {

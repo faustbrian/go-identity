@@ -12,6 +12,7 @@ import (
 	kernel "github.com/faustbrian/go-identity/postgres"
 	"github.com/faustbrian/go-identity/session"
 	sessionpg "github.com/faustbrian/go-identity/session/postgres"
+	username "github.com/faustbrian/go-identity/username"
 	envelope "github.com/faustbrian/go-secret-envelope/v2"
 )
 
@@ -34,6 +35,7 @@ type signupKeyPreparation struct {
 	flowKeys           []session.DigestKey
 	origins, callbacks []string
 	selectUser         func(context.Context) (identity.UserID, error)
+	username           *username.Policy
 }
 
 // The kernel may invoke this outside SQL for discarded missing-key candidates.
@@ -55,6 +57,13 @@ func (r *Repository) prepareSignupKeyInput(ctx context.Context, k kernel.Request
 		}
 	}()
 	if ctx == nil || !r.configuredWriter() || request.Validate() != nil || config.selectUser == nil || config.fields == nil || config.policyVersion != k.PolicyVersion || len(config.flowKeys) == 0 || len(config.flowKeys) > 16 || request.TenantID != k.Scope.TenantID || identity.ActorID(request.Caller.Request.Subject.ID) != k.Scope.ActorID || request.Caller.Request.Subject.Kind != k.Scope.ActorKind || !slices.Contains(config.origins, request.Origin) || !slices.Contains(config.callbacks, request.CallbackURL) {
+		return nil, password.ErrPasswordWork
+	}
+	op := passwordSignupOperation()
+	if config.username != nil {
+		op = usernameSignupOperation()
+	}
+	if (config.username != nil) != (request.Username != "") || k.Feature.Operation != op || request.Caller.Request.Action != authorization.Action(op.OperationID) {
 		return nil, password.ErrPasswordWork
 	}
 	ctx, stop := context.WithTimeout(ctx, r.maximumDuration)
@@ -84,9 +93,8 @@ func (r *Repository) prepareSignupKeyInput(ctx context.Context, k kernel.Request
 	if err != nil || ctx.Err() != nil {
 		return nil, readerFailure(ctx)
 	}
-	op := passwordSignupOperation()
 	b := identity.CommandBinding{CommandID: k.Admission.CommandID, TenantID: k.Scope.TenantID, ActorID: k.Scope.ActorID, ActorKind: k.Scope.ActorKind, AnonymousFlowID: string(request.PreAuthID), OperationID: op.OperationID, SchemaID: op.SchemaID, SchemaVersion: op.SchemaVersion, PolicyID: config.policyID, PolicyVersion: config.policyVersion, CorrelationID: string(k.Admission.CommandID)}
-	selected, err := r.prepareSignupCreation(ctx, request, b, user, config.fields, config.address, config.schemaID, config.schemaVersion, config.comparison)
+	selected, err := r.prepareSignupCreation(ctx, request, b, user, config.fields, config.address, config.schemaID, config.schemaVersion, config.comparison, config.username)
 	if err != nil {
 		return nil, err
 	}
@@ -97,6 +105,23 @@ func passwordSignupOperation() identity.FeatureOperation {
 	return identity.FeatureOperation{Owner: "identity/password", OperationID: "identity.password.signup", SchemaID: "password-signup", SchemaVersion: 1, SubjectRequirement: identity.FeatureSubjectAnonymousFlow, RecordRequirement: identity.FeatureRecordOmitted}
 }
 
+func usernameSignupOperation() identity.FeatureOperation {
+	op := passwordSignupOperation()
+	op.Owner, op.OperationID, op.SchemaID = "identity/username", "identity.username.signup", "username-signup"
+	return op
+}
+
+func signupOperation(op identity.FeatureOperation) bool {
+	return op == passwordSignupOperation() || op == usernameSignupOperation()
+}
+
+func signupBindingOperation(b identity.CommandBinding) identity.FeatureOperation {
+	if b.OperationID == "identity.username.signup" {
+		return usernameSignupOperation()
+	}
+	return passwordSignupOperation()
+}
+
 // Only the native request-key preparation owner selects user and the frozen
 // processor/address/schema composition. Requested fields are not preapproved.
 // Creation keeps the actual ingress actor; it must never obtain FieldWriteSelf
@@ -104,7 +129,7 @@ func passwordSignupOperation() identity.FeatureOperation {
 // to its anonymous flow even though structural creation names the new account.
 // No provider, password work, verification issuance or SQL mutation occurs here.
 // The kernel must still fence the same prepared attributes in the final Work.
-func (*Repository) prepareSignupCreation(ctx context.Context, r password.SignupRequest, b identity.CommandBinding, user identity.UserID, fields *identity.AttributeProcessor, address email.AddressParser, schemaID string, schemaVersion uint32, comparison string) (intent kernel.PasswordRegistrationIntent, err error) {
+func (*Repository) prepareSignupCreation(ctx context.Context, r password.SignupRequest, b identity.CommandBinding, user identity.UserID, fields *identity.AttributeProcessor, address email.AddressParser, schemaID string, schemaVersion uint32, comparison string, names *username.Policy) (intent kernel.PasswordRegistrationIntent, err error) {
 	defer func() {
 		if recover() != nil {
 			err = password.ErrPasswordWork
@@ -116,7 +141,11 @@ func (*Repository) prepareSignupCreation(ctx context.Context, r password.SignupR
 			intent = kernel.PasswordRegistrationIntent{}
 		}
 	}()
-	if ctx == nil || fields == nil || r.Validate() != nil || b.ValidateFor(passwordSignupOperation()) != nil || b.TenantID != r.TenantID || b.ActorID != identity.ActorID(r.Caller.Request.Subject.ID) || b.ActorKind != r.Caller.Request.Subject.Kind || b.AnonymousFlowID != string(r.PreAuthID) || schemaVersion == 0 {
+	op := passwordSignupOperation()
+	if names != nil {
+		op = usernameSignupOperation()
+	}
+	if ctx == nil || fields == nil || (names != nil) != (r.Username != "") || r.Validate() != nil || b.ValidateFor(op) != nil || b.TenantID != r.TenantID || b.ActorID != identity.ActorID(r.Caller.Request.Subject.ID) || b.ActorKind != r.Caller.Request.Subject.Kind || b.AnonymousFlowID != string(r.PreAuthID) || schemaVersion == 0 {
 		return intent, password.ErrPasswordWork
 	}
 	if err := ctx.Err(); err != nil {
@@ -151,6 +180,21 @@ func (*Repository) prepareSignupCreation(ctx context.Context, r password.SignupR
 		Identifier:        identity.Identifier{ID: identity.IdentifierID(user), UserID: user, Kind: identity.IdentifierEmail, CanonicalValue: parsed.Canonical().Record().Value, DisplayValue: parsed.Display(), Version: 1},
 		Credential:        identity.CredentialRef{ID: "password", TenantID: b.TenantID, UserID: user, Kind: identity.CredentialPassword, Owner: "identity/password", Version: 1},
 		ComparisonProfile: comparison,
+	}
+	if names != nil {
+		name, err := names.Validate(ctx, r.Username)
+		if err != nil {
+			return intent, err
+		}
+		// Identifier IDs are tenant-wide, not per-user labels. Generate an
+		// independent structural ID before retaining the winning keyed input;
+		// retries restore it instead of generating another reservation target.
+		id, err := identity.NewSubjectID()
+		if err != nil {
+			return intent, password.ErrPasswordWork
+		}
+		record := name.Record()
+		intent.Username = identity.Identifier{ID: identity.IdentifierID(id), UserID: user, Kind: identity.IdentifierUsername, CanonicalValue: record.Canonical, DisplayValue: record.Display, Version: 1, NormalizationProfile: string(record.ProfileID), NormalizationVersion: record.ProfileVersion}
 	}
 	if _, err := kernel.PasswordRegistrationFields(intent); err != nil {
 		return intent, err

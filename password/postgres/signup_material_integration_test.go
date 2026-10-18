@@ -240,7 +240,7 @@ func testNativeSignupMaterial(t *testing.T, ctx context.Context, pool *database.
 				if addressErr != nil {
 					t.Fatal(addressErr)
 				}
-				intent, err = repository.prepareSignupCreation(ctx, r, b, identity.UserID(user), processor, address, schema.ID, schema.Version, "email-v1")
+				intent, err = repository.prepareSignupCreation(ctx, r, b, identity.UserID(user), processor, address, schema.ID, schema.Version, "email-v1", nil)
 				if err != nil {
 					t.Fatal("native selected account preparation", err)
 				}

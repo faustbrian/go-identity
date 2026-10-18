@@ -26,6 +26,7 @@ import (
 	riskpg "github.com/faustbrian/go-identity/risk/postgres"
 	"github.com/faustbrian/go-identity/session"
 	sessionpg "github.com/faustbrian/go-identity/session/postgres"
+	username "github.com/faustbrian/go-identity/username"
 	database "github.com/faustbrian/go-postgres"
 	envelope "github.com/faustbrian/go-secret-envelope/v2"
 	"github.com/faustbrian/go-secret-envelope/v2/adapters/keyring"
@@ -74,6 +75,10 @@ type SignupDeliveryConfig struct {
 // This initial profile requires verified email and issues no session; immediate
 // session and MFA continuation profiles remain in development and are denied.
 type SignupConfig struct {
+	// Username explicitly selects email-plus-username registration under the
+	// distinct username signup operation. Nil preserves password-only behavior.
+	// Borrow the immutable policy; ConfigurationID pins custom callback semantics.
+	Username *username.Policy
 	// AuthorizationNamespace explicitly initializes the new user's policy epoch
 	// through the authorization owner in the protected signup transaction. Select
 	// the namespace consumed by signin/session admission. Empty preserves legacy
@@ -125,6 +130,9 @@ var _ password.SignupService = (*SignupService)(nil)
 // migrations or password work. Local keyring custody excludes remote decrypt
 // callbacks under the kernel's restoration locks. Zero/mixed profiles deny.
 func NewSignupService(pool *database.Pool, c SignupConfig, keys *keyring.Provider) (*SignupService, error) {
+	if c.Username != nil && c.Username.ReservedVersion() == 0 {
+		return nil, password.ErrPasswordWork
+	}
 	if c.AuthorizationNamespace != "" && (authoritypg.AuthorityScope{TenantID: "tenant", SubjectID: "user", PolicyNamespace: c.AuthorizationNamespace}).Validate() != nil {
 		return nil, password.ErrPasswordWork
 	}
@@ -204,6 +212,19 @@ func NewSignupService(pool *database.Pool, c SignupConfig, keys *keyring.Provide
 		profile = sha256.Sum256(frame)
 		clear(frame)
 	}
+	if c.Username != nil {
+		frame, err = json.Marshal(struct {
+			Profile                          [32]byte
+			UsernameProfile                  string
+			UsernameVersion, ReservedVersion uint32
+			ReservedChecksum                 string
+		}{profile, string(username.ProfileID), username.ProfileVersion, c.Username.ReservedVersion(), c.Username.ReservedChecksum()})
+		if err != nil {
+			return nil, password.ErrPasswordWork
+		}
+		profile = sha256.Sum256(frame)
+		clear(frame)
+	}
 	s := &SignupService{pool: pool, repository: repository, directory: directory, domain: domain, crypto: crypto, custody: custody, config: func() SignupConfig { return c }, profile: profile}
 	if _, _, err := s.coordinator(&signupPhase{service: s}); err != nil {
 		return nil, password.ErrPasswordWork
@@ -231,7 +252,14 @@ func (s *SignupService) coordinator(p *signupPhase) (*kernel.Coordinator, *kerne
 
 func (s *SignupService) keyPreparation() signupKeyPreparation {
 	c := s.config()
-	return signupKeyPreparation{profile: s.profile, crypto: s.crypto, envelopeKey: c.ActiveEnvelopeKeyID, policyID: c.PolicyID, policyVersion: c.RequestKeys.Policy.PolicyVersion, schemaID: c.FieldSchema.ID, schemaVersion: c.FieldSchema.Version, comparison: c.RegistrationDomain.ComparisonProfile, fields: c.Fields, address: c.Address, flowStorage: c.Session, flowKeys: c.FlowKeys, origins: c.Origins, callbacks: c.CallbackURLs, selectUser: c.SelectUser}
+	return signupKeyPreparation{profile: s.profile, crypto: s.crypto, envelopeKey: c.ActiveEnvelopeKeyID, policyID: c.PolicyID, policyVersion: c.RequestKeys.Policy.PolicyVersion, schemaID: c.FieldSchema.ID, schemaVersion: c.FieldSchema.Version, comparison: c.RegistrationDomain.ComparisonProfile, fields: c.Fields, address: c.Address, flowStorage: c.Session, flowKeys: c.FlowKeys, origins: c.Origins, callbacks: c.CallbackURLs, selectUser: c.SelectUser, username: c.Username}
+}
+
+func (s *SignupService) operation() identity.FeatureOperation {
+	if s != nil && s.config != nil && s.config().Username != nil {
+		return usernameSignupOperation()
+	}
+	return passwordSignupOperation()
 }
 
 func (s *SignupService) generation() signupGenerationPreparation {
@@ -248,6 +276,9 @@ func (s *SignupService) Signup(ctx context.Context, r password.SignupRequest) (r
 		return result, password.ErrPasswordWork
 	}
 	c := s.config()
+	if (c.Username != nil) != (r.Username != "") || r.Caller.Request.Action != authorization.Action(s.operation().OperationID) {
+		return result, password.ErrPasswordWork
+	}
 	ctx, stop := context.WithTimeout(ctx, c.Repository.MaximumDuration)
 	defer stop()
 	defer func() {
@@ -271,7 +302,7 @@ func (s *SignupService) Signup(ctx context.Context, r password.SignupRequest) (r
 		return result, password.ErrPasswordWork
 	}
 	p.coordinator, p.registry = coordinator, registry
-	scope := kernel.RequestKeyScope{TenantID: r.TenantID, ActorID: identity.ActorID(r.Caller.Request.Subject.ID), ActorKind: r.Caller.Request.Subject.Kind, Method: "POST", RouteID: passwordSignupOperation().OperationID}
+	scope := kernel.RequestKeyScope{TenantID: r.TenantID, ActorID: identity.ActorID(r.Caller.Request.Subject.ID), ActorKind: r.Caller.Request.Subject.Kind, Method: "POST", RouteID: s.operation().OperationID}
 	caller := r.Caller.Clone()
 	caller.PolicyRevision = authorization.Revision(c.RequestKeys.Policy.PolicyVersion)
 	caller.Request.Resource = authorization.Resource{Type: "identity.request-admission", ID: authorization.ResourceID(scope.RouteID)}

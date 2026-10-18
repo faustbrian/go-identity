@@ -184,7 +184,7 @@ func signupExecutionPlan(coordinator *kernel.Coordinator, registry *kernel.Contr
 	if !ok {
 		spec, ok = command.PasswordSignupFeature()
 	}
-	if !ok || spec.Operation != passwordSignupOperation() {
+	if !ok || !signupOperation(spec.Operation) {
 		return kernel.CommandPlan{}, password.ErrPasswordWork
 	}
 	b, op := spec.Binding, spec.Operation

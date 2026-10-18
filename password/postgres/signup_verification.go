@@ -47,7 +47,7 @@ func (r *Repository) prepareSignupVerification(ctx context.Context, b identity.C
 			spec, prepared = email.RegistrationVerificationSpec{}, issuerpg.PreparedIssuance{}
 		}
 	}()
-	if ctx == nil || !r.configuredWriter() || c.policy == nil || c.issuer == nil || c.lifetime <= 0 || c.lifetime > 24*time.Hour || c.lifetime%time.Second != 0 || b.ValidateFor(passwordSignupOperation()) != nil {
+	if ctx == nil || !r.configuredWriter() || c.policy == nil || c.issuer == nil || c.lifetime <= 0 || c.lifetime > 24*time.Hour || c.lifetime%time.Second != 0 || b.ValidateFor(signupBindingOperation(b)) != nil {
 		return spec, prepared, password.ErrPasswordWork
 	}
 	if err := ctx.Err(); err != nil {
@@ -74,7 +74,7 @@ func signupVerificationSpec(b identity.CommandBinding, selected kernel.PasswordR
 	bad := func() (email.RegistrationVerificationSpec, error) {
 		return email.RegistrationVerificationSpec{}, password.ErrPasswordWork
 	}
-	if c.lifetime <= 0 || c.lifetime > 24*time.Hour || c.lifetime%time.Second != 0 || b.ValidateFor(passwordSignupOperation()) != nil {
+	if c.lifetime <= 0 || c.lifetime > 24*time.Hour || c.lifetime%time.Second != 0 || b.ValidateFor(signupBindingOperation(b)) != nil {
 		return bad()
 	}
 	original, err := flow.Bindings()

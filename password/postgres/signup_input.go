@@ -65,7 +65,7 @@ func signupFlowState(original signupOriginalFlow) (session.PreAuthTransaction, e
 // cookie or retry key in this projection, and no new replay/storage authority.
 func (*Repository) signupInputAAD(k kernel.RequestKeyPreparationBinding, profile [32]byte) (envelope.Context, error) {
 	bad := func() (envelope.Context, error) { return envelope.Context{}, password.ErrPasswordWork }
-	if profile == ([32]byte{}) || !reauthenticationText(k.Namespace, 128) || !reauthenticationText(string(k.Scope.TenantID), 128) || !reauthenticationText(string(k.Scope.ActorID), 128) || k.Scope.Method != "POST" || k.Scope.RouteID != passwordSignupOperation().OperationID || k.Feature.Operation != passwordSignupOperation() || k.Feature.Contributor != (kernel.ContributorDescriptor{Owner: "identity/password/postgres", ContractID: "identity.password", Version: 1}) || k.PolicyVersion == 0 || k.IntentDigest == ([32]byte{}) || k.Admission.FingerprintKeyVersion == 0 {
+	if profile == ([32]byte{}) || !reauthenticationText(k.Namespace, 128) || !reauthenticationText(string(k.Scope.TenantID), 128) || !reauthenticationText(string(k.Scope.ActorID), 128) || k.Scope.Method != "POST" || k.Scope.RouteID != k.Feature.Operation.OperationID || !signupOperation(k.Feature.Operation) || k.Feature.Contributor != (kernel.ContributorDescriptor{Owner: "identity/password/postgres", ContractID: "identity.password", Version: 1}) || k.PolicyVersion == 0 || k.IntentDigest == ([32]byte{}) || k.Admission.FingerprintKeyVersion == 0 {
 		return bad()
 	}
 	if _, err := identity.ParseCommandID(string(k.Admission.CommandID)); err != nil {

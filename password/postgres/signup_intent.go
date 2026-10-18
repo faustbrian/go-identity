@@ -71,7 +71,10 @@ func (*Repository) signupRequestIntent(ctx context.Context, r password.SignupReq
 		Remember                         session.RememberPolicySpec
 		Policy                           password.RegistrationPolicy
 		Fields                           []identity.AttributeUpdate
-	}{string(r.TenantID), string(r.Caller.Request.Subject.ID), string(r.Caller.Request.Subject.Kind), string(r.Caller.Request.Action), string(r.PreAuthID), string(r.Email), r.Origin, r.CallbackURL, r.Network, r.Device, remember, policy, fields})
+		// Omission preserves the legacy password-only request commitment. Raw
+		// spelling remains bound even when two names have the same canonical form.
+		Username string `json:",omitempty"`
+	}{string(r.TenantID), string(r.Caller.Request.Subject.ID), string(r.Caller.Request.Subject.Kind), string(r.Caller.Request.Action), string(r.PreAuthID), string(r.Email), r.Origin, r.CallbackURL, r.Network, r.Device, remember, policy, fields, r.Username})
 	defer clear(frame)
 	if err != nil {
 		return identity.RequestIntent{}, password.ErrPasswordWork

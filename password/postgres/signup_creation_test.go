@@ -15,10 +15,11 @@ import (
 	email "github.com/faustbrian/go-identity/email"
 	password "github.com/faustbrian/go-identity/password"
 	kernel "github.com/faustbrian/go-identity/postgres"
+	username "github.com/faustbrian/go-identity/username"
 )
 
 type signupCreationOwner interface {
-	prepareSignupCreation(context.Context, password.SignupRequest, identity.CommandBinding, identity.UserID, *identity.AttributeProcessor, email.AddressParser, string, uint32, string) (kernel.PasswordRegistrationIntent, error)
+	prepareSignupCreation(context.Context, password.SignupRequest, identity.CommandBinding, identity.UserID, *identity.AttributeProcessor, email.AddressParser, string, uint32, string, *username.Policy) (kernel.PasswordRegistrationIntent, error)
 }
 
 type signupFieldPolicy struct {
@@ -121,7 +122,7 @@ func TestSignupCreationUsesRealFieldAndAddressOwners(t *testing.T) {
 			if !present {
 				t.Fatal("native signup has no owned field/address preparation")
 			}
-			intent, err := owner.prepareSignupCreation(ctx, r, b, user, processor, address, schema.ID, schema.Version, "email-v1")
+			intent, err := owner.prepareSignupCreation(ctx, r, b, user, processor, address, schema.ID, schema.Version, "email-v1", nil)
 			if mode == "allow" {
 				// Identifier IDs are tenant-wide, not per-account labels. A literal
 				// "email" would collide with every other user's first address.

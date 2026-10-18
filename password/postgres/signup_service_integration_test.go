@@ -22,6 +22,7 @@ import (
 	"github.com/faustbrian/go-identity/risk"
 	"github.com/faustbrian/go-identity/session"
 	sessionpg "github.com/faustbrian/go-identity/session/postgres"
+	username "github.com/faustbrian/go-identity/username"
 	primitive "github.com/faustbrian/go-password/v2"
 	database "github.com/faustbrian/go-postgres"
 	"github.com/faustbrian/go-secret-envelope/v2/adapters/keyring"
@@ -30,7 +31,7 @@ import (
 
 // SU01/05/07/08: public methods, real journal and all effect owners; callbacks
 // replace only provider observations and canonical ID selection, never stores.
-func testNativePublicSignup(t *testing.T, ctx context.Context, pool *database.Pool, policy primitive.Policy, original signupKeyPreparation, schema identity.AttributeSchema, keys *keyring.Provider, generation signupGenerationPreparation, riskConfig risk.AuthenticationAdmissionCustodyConfig, request password.SignupRequest) {
+func testNativePublicSignup(t *testing.T, ctx context.Context, pool *database.Pool, policy primitive.Policy, original signupKeyPreparation, schema identity.AttributeSchema, keys *keyring.Provider, generation signupGenerationPreparation, riskConfig risk.AuthenticationAdmissionCustodyConfig, request password.SignupRequest, withUsername bool) {
 	t.Helper()
 	history, err := (kernel.AdmissionPreparationMigrationSource{Base: kernel.PreparationMigrationSource{Base: kernel.MigrationSource{}, Version: 21}, Version: 22}).Load(ctx)
 	if err != nil {
@@ -62,6 +63,14 @@ func testNativePublicSignup(t *testing.T, ctx context.Context, pool *database.Po
 		id, err := identity.NewSubjectID()
 		return identity.UserID(id), err
 	}
+	if withUsername {
+		c.Username, err = username.NewPolicy(username.ReferencePolicySpec())
+		if err != nil {
+			t.Fatal(err)
+		}
+		c.ConfigurationID = "public-username-signup-v1"
+		c.AuthorizationNamespace = "users"
+	}
 	service, err := NewSignupService(pool, c, keys)
 	if err != nil {
 		t.Fatal("public signup composition", err)
@@ -76,6 +85,11 @@ func testNativePublicSignup(t *testing.T, ctx context.Context, pool *database.Po
 		s, _ := f.Bindings()
 		s.Binding.ID, _ = identity.NewPreAuthTransactionID()
 		s.Binding.Intent.TenantID = r.TenantID
+		if withUsername {
+			r.Username = "Straße"
+			r.Caller.Request.Action, r.Caller.Request.Resource.ID = "identity.username.signup", "identity.username.signup"
+			s.Binding.Intent.Action = "identity.username.signup"
+		}
 		s.Binding.IssuedAt = time.Now().UTC().Truncate(time.Microsecond)
 		s.Binding.ExpiresAt = s.Binding.IssuedAt.Add(5 * time.Minute)
 		r.PreAuthID = s.Binding.ID
@@ -86,6 +100,10 @@ func testNativePublicSignup(t *testing.T, ctx context.Context, pool *database.Po
 			t.Fatal(err)
 		}
 		return r
+	}
+	if withUsername {
+		testPublicUsernameRegistration(t, ctx, pool, service, c, keys, fresh)
+		return
 	}
 	t.Run("http", func(t *testing.T) {
 		testNativeSignupHTTP(t, ctx, service, c, keys, fresh, &screens)

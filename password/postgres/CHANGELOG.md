@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Add explicit `SignupConfig.Username` for required-email username registration
+  using the existing password engine and one transaction. Preserve raw retry
+  intent, exact operation/flow and comparison profile through verification,
+  neutral collisions and recovery. Nil keeps legacy password signup unchanged;
+  username signin, availability, rename and HTTP composition are not supplied by
+  this registration selection.
+
 - Adopt comparison-bound identifier and original username password custody
   contracts while preserving authenticated historical signup-input decoding.
   Native username authentication remains in development; existing password

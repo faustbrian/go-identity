@@ -37,7 +37,7 @@ func signupScreeningPolicy(t *testing.T) risk.Policy {
 		{Class: risk.Privileged, Phase: risk.ReserveWithCommand, Dimensions: []risk.Dimension{risk.TenantDimension, risk.ActorDimension, risk.ResourceDimension, risk.NetworkDimension}, Window: time.Hour, Limit: 20, ThresholdAction: risk.Deny, EvidenceTTL: 15 * time.Minute, Unknown: risk.DenyUnknown, MaxCounters: 4, RequiredSignals: []string{"status", "velocity"}},
 		{Class: risk.StateNeutralRead, Phase: risk.BeforeReturn, Dimensions: []risk.Dimension{risk.TenantDimension, risk.SubjectOrNetworkDimension}, Window: time.Minute, Limit: 120, ThresholdAction: risk.Throttle, EvidenceTTL: time.Minute, Unknown: risk.StepUpWithIndependentFactor, MaxCounters: 2, RequiredSignals: []string{"status", "velocity"}},
 	}
-	p, err := risk.NewPolicy(risk.PolicyConfig{Version: 3, Profiles: profiles, HIBP: risk.HIBPPolicy{CacheTTL: time.Hour, Operations: []risk.Action{"identity.password.signup", "identity.password.reset-complete"}}, Limits: risk.VelocityLimits{MaxDimensions: 4, MaxCounters: 16, MaxWindow: time.Hour, MaxLimit: 120, KeyBytes: 64, RetryAfterMax: time.Hour}})
+	p, err := risk.NewPolicy(risk.PolicyConfig{Version: 3, Profiles: profiles, HIBP: risk.HIBPPolicy{CacheTTL: time.Hour, Operations: []risk.Action{"identity.password.signup", "identity.username.signup", "identity.password.reset-complete"}}, Limits: risk.VelocityLimits{MaxDimensions: 4, MaxCounters: 16, MaxWindow: time.Hour, MaxLimit: 120, KeyBytes: 64, RetryAfterMax: time.Hour}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -63,7 +63,7 @@ func TestSignupScreeningPreservesOriginalRiskBeforeHash(t *testing.T) {
 		t.Fatal(err)
 	}
 	policy := signupScreeningPolicy(t)
-	for _, action := range []string{"identity.password.signup", "identity.password.reset-complete"} {
+	for _, action := range []string{"identity.password.signup", "identity.username.signup", "identity.password.reset-complete"} {
 		t.Run(action, func(t *testing.T) {
 			for _, mode := range []string{"clean", "breached", "unavailable", "missing", "foreign-hibp", "extra-status", "provider-error", "provider-panic", "expired-during-provider", "expired-during-hash", "backward-clock", "short-password", "destroyed-password", "foreign-attempt", "foreign-tenant", "foreign-action", "factor-override", "missing-admission", "cancelled"} {
 				t.Run(mode, func(t *testing.T) {

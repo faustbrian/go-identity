@@ -51,7 +51,7 @@ func (r *Repository) prepareSignupDelivery(ctx context.Context, spec email.Regis
 			prepared = deliverypg.PreparedDelivery{}
 		}
 	}()
-	if ctx == nil || !r.configuredWriter() || c.owner == nil || c.renderer == nil || c.resolver == nil || c.policy == nil || c.scopeKey == ([32]byte{}) || c.templateVersion == 0 || c.providerVersion == 0 || !reauthenticationText(c.template, 128) || !reauthenticationText(c.endpoint, 2048) || len(c.locales) == 0 || len(c.locales) > 16 || c.timeout <= 0 || c.timeout > 5*time.Second || len(token) == 0 || len(token) > capability.DefaultLimits().MaxTokenBytes || spec.Binding.ValidateFor(passwordSignupOperation()) != nil || now.IsZero() {
+	if ctx == nil || !r.configuredWriter() || c.owner == nil || c.renderer == nil || c.resolver == nil || c.policy == nil || c.scopeKey == ([32]byte{}) || c.templateVersion == 0 || c.providerVersion == 0 || !reauthenticationText(c.template, 128) || !reauthenticationText(c.endpoint, 2048) || len(c.locales) == 0 || len(c.locales) > 16 || c.timeout <= 0 || c.timeout > 5*time.Second || len(token) == 0 || len(token) > capability.DefaultLimits().MaxTokenBytes || spec.Binding.ValidateFor(signupBindingOperation(spec.Binding)) != nil || now.IsZero() {
 		return prepared, password.ErrPasswordWork
 	}
 	if err := ctx.Err(); err != nil {

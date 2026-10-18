@@ -162,6 +162,10 @@ func TestNativeSigninPhaseIntegration(t *testing.T) {
 	}
 }
 
+func TestNativeUsernameSignupIntegration(t *testing.T) {
+	testNativeSigninPhaseIntegration(t, "username signup")
+}
+
 func testNativeSigninPhaseIntegration(t *testing.T, scenario string) {
 	port, file := os.Getenv("IDENTITY_REFERENCE_POSTGRES_PORT"), os.Getenv("IDENTITY_REFERENCE_PASSWORD_FILE")
 	material, err := os.ReadFile(file)
@@ -327,8 +331,8 @@ INSERT INTO authorization_subject_authorities VALUES('AAAAAAAAAAAAAAAAAAAAAQ','u
 		testNativeSignupMaterial(t, ctx, pool, policy, crypto, kernel.DirectoryAuthorityMigrationSource{Base: base, Version: 13, GlobalAuthorityID: "signin-deployment", TenantIDs: []identity.TenantID{signinTestTenant}})
 		return
 	}
-	if scenario == "native signup prepared input" {
-		testNativeSignupKeyInput(t, ctx, pool, policy, kernel.DirectoryAuthorityMigrationSource{Base: base, Version: 13, GlobalAuthorityID: "signin-deployment", TenantIDs: []identity.TenantID{signinTestTenant}}, sessionConfig)
+	if scenario == "native signup prepared input" || scenario == "username signup" {
+		testNativeSignupKeyInput(t, ctx, pool, policy, kernel.DirectoryAuthorityMigrationSource{Base: base, Version: 13, GlobalAuthorityID: "signin-deployment", TenantIDs: []identity.TenantID{signinTestTenant}}, sessionConfig, scenario == "username signup")
 		return
 	}
 	for _, mode := range []string{"commit", "rollback", "stale-credential", "expired-delivery", "expired-audit", "risk-clock-callback", "expired-risk"} {

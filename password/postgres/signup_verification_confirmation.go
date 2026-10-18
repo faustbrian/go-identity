@@ -103,6 +103,9 @@ func (s *SignupService) confirmRegistrationVerification(ctx context.Context, pro
 	}
 	at = at.UTC().Truncate(time.Microsecond)
 	p.intent = kernel.EmailVerificationIntent{Change: identity.IdentifierChange{TenantID: q.TenantID, UserID: q.UserID, ID: spec.IdentifierID, Action: identity.IdentifierVerify, ExpectedUserVersion: state.User.Version, ExpectedAuthorityVersion: state.AuthorityVersion, ExpectedIdentifierVersion: spec.IdentifierVersion, ExpectedVerificationVersion: spec.VerificationVersion}, CanonicalAddress: spec.Payload.CanonicalAddress.Record().Value, ComparisonProfile: c.RegistrationDomain.ComparisonProfile, RegistrationCommandID: origin}
+	if spec.Binding.OperationID == "identity.username.signup" {
+		p.intent.RegistrationOperation = spec.Binding.OperationID
+	}
 	fields, err := kernel.EmailVerificationFields(p.intent)
 	if err != nil {
 		return result, err

@@ -1,5 +1,27 @@
 # Password PostgreSQL adapter
 
+## Explicit email-plus-username registration
+
+Set `SignupConfig.Username` to a configured immutable `username.Policy` and send
+the exact `identity.username.signup` action with both Email and Username. This
+selects atomic email/username/password registration and ordinary captured email
+verification, not username-only accounts or immediate sessions. Nil selects the
+unchanged password-signup action and rejects supplementary username input.
+
+Install kernel normalization and username-registration/email-verification
+suffixes and MFA's username-signup suffix after their documented predecessors.
+Use the same authorization namespace as the intended signin/session profile.
+Version custom validator semantics with ConfigurationID and retain the original
+configuration and cryptographic keys for recovery. Validation happens during
+original keyed preparation; retries restore its exact name and server-selected
+identifier ID, not a newly normalized or reserved name. Same-key spelling changes
+conflict even if canonical names are equal. Occupied names return the same safe
+verification acknowledgement without creating partial accounts or delivery.
+Actual native delivery/verification preserve the distinct original operation.
+This selection does not provide username signin, availability, rename or HTTP
+routes; those remain separate composition work, not capabilities implied by a
+non-nil policy.
+
 ## Optional link-confirmation hooks
 
 Select an immutable `email.VerificationHooks` on

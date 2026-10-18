@@ -37,11 +37,11 @@ var _ kernel.RecoveryContributor = (*signupPhase)(nil)
 func (*signupPhase) Descriptor() kernel.ContributorDescriptor {
 	return kernel.ContributorDescriptor{Owner: "identity/password/postgres", ContractID: "identity.password", Version: 1}
 }
-func (*signupPhase) FeatureOperations() []identity.FeatureOperation {
-	return []identity.FeatureOperation{passwordSignupOperation()}
+func (p *signupPhase) FeatureOperations() []identity.FeatureOperation {
+	return []identity.FeatureOperation{p.service.operation()}
 }
 func (p *signupPhase) registration() kernel.FeatureRegistration {
-	return kernel.FeatureRegistration{Contributor: p.Descriptor(), Operation: passwordSignupOperation()}
+	return kernel.FeatureRegistration{Contributor: p.Descriptor(), Operation: p.service.operation()}
 }
 func (p *signupPhase) PrepareRequestKey(ctx context.Context, k kernel.RequestKeyPreparationBinding, intent identity.RequestIntent) ([]byte, error) {
 	if p == nil || p.service == nil || p.request == nil {
@@ -55,7 +55,7 @@ func (p *signupPhase) initialize(r password.SignupRequest, b identity.CommandBin
 	if err != nil {
 		return err
 	}
-	command, err := identity.NewFeaturePasswordSignupInputCommand(identity.FeatureCommandSpec{Binding: b, Operation: passwordSignupOperation(), Fields: fields}, r.Password, r.Cookie)
+	command, err := identity.NewFeaturePasswordSignupInputCommand(identity.FeatureCommandSpec{Binding: b, Operation: p.service.operation(), Fields: fields}, r.Password, r.Cookie)
 	if err != nil {
 		return err
 	}
@@ -211,7 +211,7 @@ func (p *signupPhase) RecoverParticipant(ctx context.Context, w kernel.RecoveryW
 		return kernel.RecoveryUnknown, password.ErrPasswordWork
 	}
 	b, f, transition, err := w.FeatureScope(p)
-	if err != nil || f != p.registration() || b.OperationID != passwordSignupOperation().OperationID || b.UserID != "" || b.AnonymousFlowID == "" || transition.BeforeVersion != 0 || transition.AfterVersion != 0 || transition.EventType != "user.created.v1" && transition.EventType != "identity.password.signup.accepted.v1" {
+	if err != nil || f != p.registration() || b.OperationID != p.service.operation().OperationID || b.UserID != "" || b.AnonymousFlowID == "" || transition.BeforeVersion != 0 || transition.AfterVersion != 0 || transition.EventType != "user.created.v1" && transition.EventType != "identity.password.signup.accepted.v1" {
 		return kernel.RecoveryUnknown, password.ErrPasswordWork
 	}
 	id, err := base64.RawURLEncoding.Strict().DecodeString(string(b.CommandID))

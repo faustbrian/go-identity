@@ -110,3 +110,27 @@ func TestSignupIntentBindsRawCustodyAndAllRequestedIntent(t *testing.T) {
 		t.Fatal("disabled signup admitted intent")
 	}
 }
+
+func TestUsernameSignupIntentBindsExactRawSupplementaryName(t *testing.T) {
+	r, _, _, _ := nativeSignupFlow(t)
+	r.IdempotencyKey, _ = identity.NewIdempotencyKey(bytes.Repeat([]byte{71}, 32))
+	r.Caller.Request.Action = "identity.username.signup"
+	r.Caller.Request.Resource.ID = "identity.username.signup"
+	r.Username = "Straße"
+	owner := &Repository{}
+	policy := password.RegistrationPolicy{Enabled: true, MinimumBytes: 8, MaximumBytes: 128, RequireVerifiedEmail: true}
+	original, err := owner.signupRequestIntent(context.Background(), r, [32]byte{1}, [32]byte{2}, policy)
+	if err != nil {
+		t.Fatal(err)
+	}
+	first, _ := original.Fields()
+	for _, raw := range []string{"STRASSE", "other-name"} {
+		changed := r
+		changed.Username = raw
+		next, err := owner.signupRequestIntent(context.Background(), changed, [32]byte{1}, [32]byte{2}, policy)
+		fields, ok := next.Fields()
+		if err != nil || !ok || reflect.DeepEqual(first, fields) {
+			t.Fatal("different raw username reused original signup mapping", err)
+		}
+	}
+}

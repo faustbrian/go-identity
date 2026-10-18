@@ -74,7 +74,7 @@ const maximumSignupOutput = 1 << 20
 
 func signupOutputAAD(original identity.Command, generation uint64, profile [32]byte) (envelope.Context, error) {
 	spec, ok := original.PasswordSignupInputFeature()
-	if !ok || spec.Operation != passwordSignupOperation() || spec.Binding.ValidateFor(passwordSignupOperation()) != nil || generation == 0 || profile == ([32]byte{}) {
+	if !ok || !signupOperation(spec.Operation) || spec.Binding.ValidateFor(spec.Operation) != nil || generation == 0 || profile == ([32]byte{}) {
 		return envelope.Context{}, password.ErrPasswordWork
 	}
 	frame, err := json.Marshal(struct {
@@ -95,7 +95,7 @@ func signupOutputAAD(original identity.Command, generation uint64, profile [32]b
 // expired history must never be replaced by newly generated facts or tokens.
 func (r *Repository) validateSignupOutput(original identity.Command, issuer *issuerpg.Issuer, out signupGeneratedOutput) error {
 	spec, ok := original.PasswordSignupInputFeature()
-	if r == nil || issuer == nil || !ok || out.Schema != 1 || r.policy.Algorithm() == "" || len(out.Hash) > int(r.policy.Limits().EncodedHashBytes) || len(out.Facts) == 0 || len(out.Facts) > 32 || len(out.Admission.Signals) == 0 || len(out.Admission.Signals) > 31 || out.Admission.KeyVersion == 0 || out.Admission.PolicyVersion == 0 || out.Admission.Signature == ([32]byte{}) || out.Admission.ProofDigest == ([32]byte{}) || !reauthenticationText(out.Admission.CounterFingerprint, 256) || out.Admission.Scope.Tenant != string(spec.Binding.TenantID) || out.Admission.Scope.Operation != "identity.password.signup" || out.Admission.Scope.Attempt != string(spec.Binding.CommandID) || len(out.IssuanceWire) == 0 || len(out.IssuanceWire) > 512<<10 || len(out.DeliveryWire) > 512<<10 || len(out.IssuanceWire)+len(out.DeliveryWire) > 512<<10 || len(out.Issuance.Grants) != 1 {
+	if r == nil || issuer == nil || !ok || !signupOperation(spec.Operation) || out.Schema != 1 || r.policy.Algorithm() == "" || len(out.Hash) > int(r.policy.Limits().EncodedHashBytes) || len(out.Facts) == 0 || len(out.Facts) > 32 || len(out.Admission.Signals) == 0 || len(out.Admission.Signals) > 31 || out.Admission.KeyVersion == 0 || out.Admission.PolicyVersion == 0 || out.Admission.Signature == ([32]byte{}) || out.Admission.ProofDigest == ([32]byte{}) || !reauthenticationText(out.Admission.CounterFingerprint, 256) || out.Admission.Scope.Tenant != string(spec.Binding.TenantID) || out.Admission.Scope.Operation != risk.Action(spec.Binding.OperationID) || out.Admission.Scope.Attempt != string(spec.Binding.CommandID) || len(out.IssuanceWire) == 0 || len(out.IssuanceWire) > 512<<10 || len(out.DeliveryWire) > 512<<10 || len(out.IssuanceWire)+len(out.DeliveryWire) > 512<<10 || len(out.Issuance.Grants) != 1 {
 		return password.ErrPasswordWork
 	}
 	hash, err := primitive.ParseEncodedHash(out.Hash, r.policy.Limits())
@@ -125,7 +125,7 @@ func (r *Repository) validateSignupOutput(original identity.Command, issuer *iss
 	}
 	for _, facts := range [][]risk.Signal{out.Admission.Signals, out.Facts} {
 		for _, fact := range facts {
-			if fact.Tenant != string(spec.Binding.TenantID) || fact.Operation != "identity.password.signup" || fact.Attempt != string(spec.Binding.CommandID) || !reauthenticationText(fact.Name, 128) {
+			if fact.Tenant != string(spec.Binding.TenantID) || fact.Operation != risk.Action(spec.Binding.OperationID) || fact.Attempt != string(spec.Binding.CommandID) || !reauthenticationText(fact.Name, 128) {
 				return password.ErrPasswordWork
 			}
 		}
