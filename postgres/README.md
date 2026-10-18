@@ -1,5 +1,22 @@
 # Identity PostgreSQL
 
+## Username lookup and protected admission
+
+`ResolveUsername` reads one tenant-scoped canonical username only when its stored
+normalization profile/version matches `UsernameQuery`. Legacy unbound names,
+absent, inactive and revoked users/names return the same suppressed record.
+Pending username state is permitted; it proves neither a verified delivery
+channel nor authentication. Install status and credential-authority histories
+alongside identifier metadata before using this reader.
+
+The workflow must independently verify its required email, password and factor
+policy, then call `Work.RequireUsername` on the exact original record during its
+registered native invocation. The fence locks current user and identifier rows
+until transaction termination, denies changed ownership/profile/versions and
+poisons the Work on failure. It grants no lease, session or new freshness.
+The exact username password-signin profile may apply an atomic password hash
+upgrade through the existing credential owner, not a separate write path.
+
 ## Username registration provenance
 
 The exact `identity.username.signup`/`username-signup` v1 and

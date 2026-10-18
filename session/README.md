@@ -1,5 +1,12 @@
 # Session
 
+The prospective password issuer also accepts the closed
+`identity.username.signin`/`username-signin` v1 binding without relabeling it.
+It retains the same original password/cookie custody and session projection.
+The native workflow must still establish current username ownership, actual
+password comparison, risk, verification and factor policy before committing.
+This structural support alone does not expose a username login route.
+
 ## Post-verification email-possession issuance
 
 `NewEmailVerificationSessionIssuerWithCSRF` is an explicit, disjoint issuer for

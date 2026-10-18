@@ -142,7 +142,8 @@ INSERT INTO identity.identifiers(tenant_id,user_id,identifier_id,kind,canonical_
 	if err != nil || len(bound.Identifiers) != 1 || bound.Identifiers[0].NormalizationProfile != "identity.username.latin-v1" || bound.Identifiers[0].NormalizationVersion != 1 || bound.Identifiers[0].CanonicalValue != "strasse" || bound.Identifiers[0].DisplayValue != "Straße" {
 		t.Fatal("primary read lost complete persisted normalization identity", err)
 	}
-	retirements, err := migrations.NewRunner(IdentifierMutationMigrationSource{Base: source, Version: 11}, backend)
+	retirementSource := IdentifierMutationMigrationSource{Base: source, Version: 11}
+	retirements, err := migrations.NewRunner(retirementSource, backend)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -202,4 +203,14 @@ INSERT INTO identity.identifiers(tenant_id,user_id,identifier_id,kind,canonical_
 			t.Fatal("commit/rollback did not preserve exact bound directory state", err)
 		}
 	}
+	// Authentication discovery additionally requires the real status and
+	// credential epochs, not defaults inferred from absent authority storage.
+	authorities, err := migrations.NewRunner(CredentialMigrationSource{Base: StatusMigrationSource{Base: retirementSource, Version: 12}, Version: 13}, backend)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := authorities.Up(ctx); err != nil {
+		t.Fatal("username discovery authority histories", err)
+	}
+	t.Run("username-primary-lookup", func(t *testing.T) { testUsernameLookupPostgres(t, ctx, pool, repository) })
 }

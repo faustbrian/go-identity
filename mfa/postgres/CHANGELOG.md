@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Fence the exact native username-password signin profile against known-empty
+  factor authority. Nonempty, missing or changed generations deny without
+  creating factor state or selecting a weaker authentication method.
+
 - Initialize known-empty factor authority for exact native username signup only
   after the real account's same-transaction registration binding exists. Append
   `UsernameSignupMigrationSource` after installed factor histories; preserve old

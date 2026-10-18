@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Preserve exact username-signin operation and paired password custody during
+  prospective session preparation and commit-gated delivery. This mapping
+  does not replace native username, credential, risk or current-factor admission.
+
 - Explicitly prepare verification-origin TOTP sessions from retained verified
   email possession and actual factor evidence, preserving original remember.
 

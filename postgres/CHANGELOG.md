@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add exact comparison-bound username lookup and transaction-scoped admission
+  without admitting usernames as verified channels. Fence original ownership
+  and security epochs; allow the closed username-signin profile to perform an
+  atomic credential hash upgrade through the existing owner.
+
 - Retain exact username signup/signin password custody through the existing
   password contributor, without route relabeling or generic cross-owner aliases.
   Add forward registration/email-verification purpose storage and exact origin

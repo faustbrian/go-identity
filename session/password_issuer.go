@@ -64,6 +64,8 @@ func NewPasswordSessionIssuerWithCSRF(executor IssueExecutor, c IssuerConfig, ke
 // issue a full session when MFA/verification remains required. No IO occurs.
 // Issue rejects unbound preparations. Map the exact Session projection into the
 // password-owned native command, then BindPassword once before reservation.
+// The closed username-signin profile retains its original operation and uses
+// the same password custody; preparation does not prove username ownership.
 func (s *SessionIssuer) PreparePassword(b identity.CommandBinding, spec SessionSpec) (out PreparedIssuance, err error) {
 	if s == nil || s.signup {
 		return out, ErrInvalidIssuance
@@ -143,6 +145,9 @@ func (r IssueRequest) PasswordCommand() (identity.Command, Session, bool) {
 
 func passwordSigninOperation(b identity.CommandBinding) identity.FeatureOperation {
 	d := identity.FeatureOperation{Owner: "identity/password", OperationID: "identity.password.signin", SchemaID: "password-signin", SchemaVersion: 1, RecordRequirement: identity.FeatureRecordOmitted}
+	if b.OperationID == "identity.username.signin" {
+		d.Owner, d.OperationID, d.SchemaID = "identity/username", "identity.username.signin", "username-signin"
+	}
 	if b.AnonymousFlowID != "" {
 		d.SubjectRequirement = identity.FeatureSubjectAnonymousFlow
 	}

@@ -94,7 +94,8 @@ func requirePasswordSigninFactors(ctx context.Context, w kernel.Work, owner kern
 	}
 	s, ok := command.PasswordSigninFeature()
 	b, f, life, err := w.FeatureScope(owner)
-	if err != nil || !ok || s.Binding != b || s.Operation != f.Operation || b.OperationID != "identity.password.signin" || f.Contributor != (kernel.ContributorDescriptor{Owner: "identity/password/postgres", ContractID: "identity.password", Version: 1}) {
+	profile := f.Operation.Owner == "identity/password" && b.OperationID == "identity.password.signin" && f.Operation.SchemaID == "password-signin" || !challenge && f.Operation.Owner == "identity/username" && b.OperationID == "identity.username.signin" && f.Operation.SchemaID == "username-signin"
+	if err != nil || !ok || !profile || f.Operation.SchemaVersion != 1 || f.Operation.RecordRequirement != identity.FeatureRecordOmitted || f.Operation.SubjectRequirement > identity.FeatureSubjectAnonymousFlow || b.ValidateFor(f.Operation) != nil || s.Binding != b || s.Operation != f.Operation || f.Contributor != (kernel.ContributorDescriptor{Owner: "identity/password/postgres", ContractID: "identity.password", Version: 1}) {
 		return invalidAuthority()
 	}
 	if challenge {

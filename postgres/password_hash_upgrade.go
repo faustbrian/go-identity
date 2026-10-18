@@ -93,6 +93,9 @@ func PasswordHashUpgradeFields(s PasswordHashUpgradeIntent) ([]identity.FeatureF
 
 func decodePasswordHashUpgrade(s identity.FeatureCommandSpec) (PasswordHashUpgradeIntent, error) {
 	op := identity.FeatureOperation{Owner: "identity/password", OperationID: "identity.password.signin", SchemaID: "password-signin", SchemaVersion: 1, RecordRequirement: identity.FeatureRecordOmitted}
+	if s.Binding.OperationID == "identity.username.signin" {
+		op.Owner, op.OperationID, op.SchemaID = "identity/username", "identity.username.signin", "username-signin"
+	}
 	if s.Binding.AnonymousFlowID != "" {
 		op.SubjectRequirement = identity.FeatureSubjectAnonymousFlow
 	}

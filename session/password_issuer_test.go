@@ -90,6 +90,47 @@ func committedPasswordIssue(t testing.TB, r session.IssueRequest) session.IssueE
 	return session.IssueExecution{Receipt: identity.CommandResult{Binding: f.Binding, Outcome: identity.CommitOutcomeCommitted, AuditEventID: "audit", Feature: &identity.FeatureReceipt{Operation: f.Operation}}, Session: record}
 }
 
+func TestUsernameSigninIssuerPreservesOriginalOperation(t *testing.T) {
+	issuer, original, command, executor, _, secret := passwordIssuerFixture(t, true)
+	executor.execute = func(_ context.Context, request session.IssueRequest) (session.IssueExecution, error) {
+		actual, _, ok := request.PasswordCommand()
+		if !ok {
+			t.Fatal("username issuance lost password custody")
+		}
+		actualFeature, _ := actual.PasswordSigninFeature()
+		if actualFeature.Binding.OperationID != "identity.username.signin" || actualFeature.Operation.SchemaID != "username-signin" {
+			t.Fatal("username issuance relabeled the original operation")
+		}
+		return committedPasswordIssue(t, request), nil
+	}
+	record, ok := original.Session()
+	if !ok {
+		t.Fatal("original session projection missing")
+	}
+	spec, _ := record.Bindings()
+	spec.Lookup = session.TokenDigest{}
+	f, _ := command.PasswordSigninFeature()
+	f.Operation.Owner, f.Operation.OperationID, f.Operation.SchemaID = "identity/username", "identity.username.signin", "username-signin"
+	f.Binding.OperationID, f.Binding.SchemaID = f.Operation.OperationID, f.Operation.SchemaID
+	_, cookie, _ := command.PasswordSigninCustody()
+	selected, err := identity.NewFeaturePasswordSigninCommand(f, secret, cookie)
+	if err != nil {
+		t.Fatal(err)
+	}
+	prepared, err := issuer.PreparePassword(f.Binding, spec)
+	if err != nil {
+		t.Fatal("username signin cannot prepare its original session", err)
+	}
+	bound, err := issuer.BindPassword(prepared, selected)
+	if err != nil {
+		t.Fatal("username signin lost paired password custody", err)
+	}
+	result, err := issuer.Issue(context.Background(), bound)
+	if err != nil || result.CommitOutcome != identity.CommitOutcomeCommitted {
+		t.Fatal("username session rejected after exact original commit", err)
+	}
+}
+
 func TestPasswordIssuerBindsOnceAndDeliversOnlyExactOriginalCommit(t *testing.T) {
 	for _, anonymous := range []bool{false, true} {
 		issuer, p, c, _, _, password := passwordIssuerFixture(t, anonymous)

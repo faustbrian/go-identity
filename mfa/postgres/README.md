@@ -9,6 +9,12 @@ historical magic-link suffix. It preserves all old rows and purpose arms and
 backfills nothing. Actual signin still reads/fences current factor authority;
 this initialization is not a proof, MFA bypass or permission to issue a session.
 
+`RequirePasswordSigninFactors` also admits the exact native
+`identity.username.signin`/`username-signin` v1 password custody for known-empty
+factor admission. The owning password contributor must lock and fence the
+original generation through Apply and final commit. This does not enable a
+username MFA challenge: nonempty, missing or changed factor authority denies.
+
 The post-registration-verification signin profile uses
 `ReadEmailVerificationSigninFactors` and fences its unchanged generation with
 `RequireEmailVerificationSigninFactors` in Apply and final commit admission.
