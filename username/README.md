@@ -1,5 +1,24 @@
 # Username policy
 
+`RenameService` owns keyed self-rename through
+`password/postgres.NewUsernameRenameService`. Supply the already selected native
+action-proof source, fixed policy, concrete risk/counter configuration and local
+keyring. `RenameRequest` carries trusted tenant/caller/network, the exact username
+identifier and observed versions, original bearer/proof/CSRF custody and a retry
+key. It cannot choose another user's target. Preserve the raw spelling and all
+original fields for matching retries; a case-only spelling change is still a
+different input for the same key.
+
+The native reference profile uses a thirty-day old-name cooldown. Display-only
+edits preserve verification and create no retirement; canonical changes reset
+verification and retire the old canonical value. Both advance identifier
+authority and invalidate existing identifier-bound sessions. Subsequent signin
+uses the new canonical value. A fresh proof and known-empty current MFA state
+are required; enrolled-factor continuation is not silently approximated.
+Cookie transport also requires the original synchronizer. Recovery and matching
+terminal retries return original metadata, never credentials or a second rename.
+Username HTTP/reference composition remains a separate selection.
+
 `AvailabilityService` is the advisory workflow port. Its native implementation
 is `password/postgres.NewUsernameAvailabilityService`: supply the same fixed
 username policy, actual durable counter/audit/identifier configuration and

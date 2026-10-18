@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Add the bounded self-rename request, service and transport rate-source
+  contracts with exact original proof/session, comparison intent and version
+  predecessors. Implicit serialization omits the candidate and credentials.
+
 - Add the advisory availability service/request contract with explicit trusted
   tenant/network scope, redacted input and stable denied/throttled/unavailable
   errors. A positive observation grants no reservation or authentication.
