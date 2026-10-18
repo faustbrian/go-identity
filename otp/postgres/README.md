@@ -1,5 +1,23 @@
 # OTP PostgreSQL
 
+## Optional email-confirmation hooks
+
+Set `EmailVerificationConfig.VerificationHooks` or independently
+`EmailChangeConfig.VerificationHooks` to an immutable `email.VerificationHooks`.
+Nil preserves existing behavior. Select bounded cooperative callbacks; retain
+original versioned send policy/configuration for dependent command history.
+Before runs outside SQL before durable wrong-code metering or reservation;
+rejection/error leaves the code and protected identity untouched. Final current
+session, factor, directory and expiry checks remain mandatory. After runs only
+after a fresh known commit and before address projection. Observer error
+preserves committed outcome and code-free recovery without disclosing the
+address. Wrong codes, rollback, unknown acknowledgement and historical recovery
+never run success observers. These callbacks do not provide durable external
+delivery; use the existing coordinated outbox for that purpose. Change hooks
+also cover explicitly selected first-primary establishment, with the same
+atomic notification and session effects. Configuring link hooks selects none
+of these OTP callbacks implicitly.
+
 ## Authenticated primary-email change
 
 `NewEmailChangeService` independently selects a purpose-bound new-address code

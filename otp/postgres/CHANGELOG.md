@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add optional email OTP verification/change confirmation hooks, independently
+  selected per workflow. Veto precedes durable attempt metering; observers see
+  only fresh known commits, and failures preserve original metadata recovery
+  without confidential projection or duplicate notification/session effects.
+
 - Add opt-in first-primary establishment from a genuine sole-verified email
   change request. Commit OTP consumption, promotion, old-address notice and
   session invalidation atomically; retain metadata-only recovery and keep the

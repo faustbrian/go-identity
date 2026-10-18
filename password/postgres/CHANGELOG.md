@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add independently selected new-address link confirmation hooks, including
+  configured TOTP changes. Rejection precedes reservation; observer failure
+  preserves committed primary/session/notification effects and recovery while
+  withholding the address. Existing verification-only hook selection is unchanged.
+
 - Add optional ordered before/after callbacks to original-signup and managed
   pending-address link verification. Run outside protected SQL, preserve known
   commit/recovery on observer failure and withhold confidential projections.

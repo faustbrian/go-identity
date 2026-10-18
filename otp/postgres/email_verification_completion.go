@@ -142,6 +142,13 @@ func (s *EmailVerificationService) emailVerify(ctx context.Context, r otp.EmailV
 	if err != nil {
 		return out, err
 	}
+	// Wrong-code denial is already durable metering. Application veto must
+	// precede that owner boundary, not just the later correct-code reservation.
+	if s.hooks != nil {
+		if err := s.hooks.Before(ctx, spec.Binding); err != nil {
+			return out, err
+		}
+	}
 	denial, err := s.coordinator.RecordOTPAttemptDenial(ctx, spec.Binding, command, plan)
 	var conflict identity.ConflictError
 	if denial.Outcome != identity.CommitOutcomeConflict || !errors.As(err, &conflict) {
@@ -167,6 +174,11 @@ func (s *EmailVerificationService) emailVerify(ctx context.Context, r otp.EmailV
 	}
 	out.Outcome, out.RetryAfter = receipt.Outcome, receipt.RetryAfter
 	if err == nil && out.Outcome == identity.CommitOutcomeCommitted {
+		if s.hooks != nil {
+			if err := s.hooks.After(ctx, spec.Binding); err != nil {
+				return out, err
+			}
+		}
 		out.Address, err = s.committedAddress(ctx, i)
 	}
 	return out, err

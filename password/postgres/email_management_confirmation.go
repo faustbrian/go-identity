@@ -240,7 +240,10 @@ func (s *EmailManagementService) confirmManaged(ctx context.Context, r email.Ver
 		return out, err
 	}
 	hooks := s.config().VerificationHooks
-	selectHooks := hooks != nil && observed.Absent && s.primary.config.Action == "identity.email.verification-send"
+	if s.primary.config.Action == "identity.email.change-request" {
+		hooks = s.config().ChangeHooks
+	}
+	selectHooks := hooks != nil && observed.Absent
 	if selectHooks {
 		if err := hooks.Before(ctx, b); err != nil {
 			return out, err

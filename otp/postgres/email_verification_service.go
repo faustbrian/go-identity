@@ -29,6 +29,10 @@ type EmailVerificationConfig struct {
 	Send                     SendConfig
 	Domain                   kernel.EmailAttachmentDomainConfig
 	CurrentAttemptKeyVersion uint32
+	// VerificationHooks runs before durable attempt metering and after a fresh
+	// known commit. Nil preserves existing behavior. Retain configured callback
+	// policy with the deployment's versioned Send configuration.
+	VerificationHooks *email.VerificationHooks
 }
 
 type emailVerificationProfile struct {
@@ -56,6 +60,7 @@ type EmailVerificationService struct {
 	notification        *deliverypg.PreparedDelivery
 	notificationOwner   *deliverypg.Contributor
 	prepareNotification func(context.Context, identity.CommandBinding) (deliverypg.PreparedDelivery, error)
+	hooks               *email.VerificationHooks
 }
 
 // NewEmailVerificationService validates and freezes native composition without
@@ -82,7 +87,7 @@ func NewEmailVerificationService(pool *database.Pool, c EmailVerificationConfig,
 	}
 	completion := *sender.owner.store
 	completion.send = nil
-	s := &EmailVerificationService{sender: sender, source: source, profile: p, owner: &completion, queryPolicy: *c.Send.Coordinator.QueryPolicy}
+	s := &EmailVerificationService{sender: sender, source: source, profile: p, owner: &completion, queryPolicy: *c.Send.Coordinator.QueryPolicy, hooks: c.VerificationHooks}
 	completion.emailVerify = &emailVerificationPhase{service: s}
 	audits, err := auditpg.NewIdentityContributor(auditpg.Config{})
 	if err != nil {

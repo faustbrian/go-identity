@@ -45,7 +45,10 @@ type EmailManagementConfig struct {
 	Verification       email.RegistrationVerificationConfig
 	// VerificationHooks selects link verification only, not change or OTP.
 	// Nil preserves existing behavior; version callback semantics in ConfigurationID.
-	VerificationHooks   *email.VerificationHooks
+	VerificationHooks *email.VerificationHooks
+	// ChangeHooks independently selects new-address link confirmation, including
+	// the explicitly configured TOTP-change profile. Nil disables these hooks.
+	ChangeHooks         *email.VerificationHooks
 	Issuer              issuerpg.IssuerConfig
 	IssuanceCustody     issuerpg.IssuancePreparationConfig
 	Delivery            SignupDeliveryConfig

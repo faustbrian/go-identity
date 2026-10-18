@@ -55,6 +55,9 @@ type EmailChangeConfig struct {
 	Domain                   kernel.EmailAttachmentDomainConfig
 	Source                   EmailChangeSource
 	CurrentAttemptKeyVersion uint32
+	// VerificationHooks independently selects new-address OTP confirmation,
+	// including selected first-primary establishment. Nil disables callbacks.
+	VerificationHooks *email.VerificationHooks
 	// AllowInitialPrimary additionally selects first-primary establishment from
 	// a committed PrimaryOrSoleVerifiedAddress origin. Zero retains replacement
 	// only; Source must also implement EmailInitialPrimaryChangeSource.
@@ -108,7 +111,7 @@ func NewEmailChangeService(pool *database.Pool, c EmailChangeConfig, crypto *env
 	if err != nil {
 		return nil, err
 	}
-	base := &EmailVerificationService{sender: sender, source: source, profile: domain, queryPolicy: *c.Send.Coordinator.QueryPolicy}
+	base := &EmailVerificationService{sender: sender, source: source, profile: domain, queryPolicy: *c.Send.Coordinator.QueryPolicy, hooks: c.VerificationHooks}
 	return &EmailChangeService{base: base, source: c.Source, initial: initial, notice: notice, coordinator: snapshotSendCoordinator(c.Send.Coordinator)}, nil
 }
 

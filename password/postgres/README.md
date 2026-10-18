@@ -1,13 +1,15 @@
 # Password PostgreSQL adapter
 
-## Optional link-verification hooks
+## Optional link-confirmation hooks
 
 Select an immutable `email.VerificationHooks` on
 `SignupConfig.Verification.Hooks` or
 `EmailManagementConfig.VerificationHooks`. Nil preserves existing behavior.
 Version callback semantics with the enclosing `ConfigurationID` and retain
-original configurations for recovery. Management selection applies only to
-pending-address verification links, not OTP or primary-email change.
+original configurations for recovery. `VerificationHooks` remains restricted to
+pending-address verification links. Independently select
+`EmailManagementConfig.ChangeHooks` for new-address change links, including the
+selected TOTP-change profile. Neither field implicitly enables OTP hooks.
 
 Before runs outside SQL before reservation; rejection leaves no command claim,
 proof use or protected change. Final native authority/expiry checks still apply.
