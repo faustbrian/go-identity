@@ -63,7 +63,9 @@ Before factor verification or charging a denial, compare the submitted original
 cookie against its retained digest and call `RequireMFAConsumedPreAuth` or
 `RequireMFAConsumedPreAuthAttempt` under the exact sealed native owner. These
 guards lock the already-consumed flow and its committed primary command, matching
-the original fingerprint and generation. They neither consume it again nor
+the original fingerprint and generation. The original action remains exactly
+magic-link, email-password or username-password signin; none is relabeled as
+another origin. They neither consume it again nor
 renew its absolute expiry. The attempt guard runs before the shared budget is
 charged; the existing coordinator retains wrong-code receipts for retry safety.
 

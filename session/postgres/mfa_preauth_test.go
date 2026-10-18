@@ -87,7 +87,7 @@ func TestMFAConsumedPreAuthPasswordAndMagicLinkOrigins(t *testing.T) {
 	now := time.Now().UTC()
 	original := testPreAuth(t, now)
 	spec, _ := original.Bindings()
-	for _, action := range []string{"identity.password.signin", "identity.magic-link.consume", "identity.password.reset.complete"} {
+	for _, action := range []string{"identity.password.signin", "identity.username.signin", "identity.magic-link.consume", "identity.password.reset.complete"} {
 		t.Run(action, func(t *testing.T) {
 			spec.Binding.Intent.Action = action
 			flow, err := session.NewPreAuthTransaction(spec)

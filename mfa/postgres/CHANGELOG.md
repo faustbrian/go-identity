@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Fence and persist explicitly selected username/password TOTP challenges in
+  the original factor authority and shared attempt store. Append
+  `UsernameContinuationMigrationSource` after the selected password or
+  verification predecessor; existing scopes, attempts and deadlines are retained.
+  This does not enable secondary OTP, recovery or trusted-device fallback.
+
 - Fence original actor/target known-empty MFA generations for selected native
   username rename and organization ownership transfer. The protected owner must
   bind both versions and repeat admission through final commit; missing, changed

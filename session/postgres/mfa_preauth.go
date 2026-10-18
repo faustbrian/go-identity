@@ -160,7 +160,7 @@ func requireMFAConsumedPreAuthMode[R SessionRows](ctx context.Context, q Session
 	}
 	defer stop()
 	primaryPurpose := s.Binding.Intent.Action
-	validPurpose := primaryPurpose == "identity.magic-link.consume" || primaryPurpose == "identity.password.signin"
+	validPurpose := primaryPurpose == "identity.magic-link.consume" || primaryPurpose == "identity.password.signin" || primaryPurpose == "identity.username.signin"
 	if verification {
 		validPurpose = primaryPurpose == "identity.password.signup"
 	}

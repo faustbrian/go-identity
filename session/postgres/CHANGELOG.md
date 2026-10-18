@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Retain the exact consumed username-signin browser origin during MFA
+  completion and denial accounting. Match its original committed command,
+  fingerprint, generation, cookie and exclusive expiry without consuming or
+  renewing the primary again. Existing password and email origins are unchanged.
+
 - Restore the existing session projection from exact username-signin paired
   password commands without rewriting their original scope. Native workflow
   admission and forward issuance-purpose storage remain separately required.

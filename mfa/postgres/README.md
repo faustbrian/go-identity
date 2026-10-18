@@ -27,6 +27,13 @@ this initialization is not a proof, MFA bypass or permission to issue a session.
 factor admission. The owning password contributor must lock and fence the
 original generation through Apply and final commit. This does not enable a
 username MFA challenge: nonempty, missing or changed factor authority denies.
+The separate `RequirePasswordSigninFactorMethods` challenge path admits exact
+username/TOTP-only custody, and `PersistPasswordContinuation` retains that
+original action and immutable scope. Install `UsernameContinuationMigrationSource`
+after password continuations, with `VerificationSignin` set only when that
+verification-origin predecessor is installed. Mismatched history fails rather
+than silently adopting or rewriting a constraint. These seams do not compare
+passwords, enroll factors, issue sessions or enable another fallback method.
 
 The post-registration-verification signin profile uses
 `ReadEmailVerificationSigninFactors` and fences its unchanged generation with
