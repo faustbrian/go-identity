@@ -1,6 +1,101 @@
 # Identity Implementation — Current Milestone
 
-## Live checkpoint — 2026-10-18 18:24 UTC
+## Live checkpoint — 2026-10-18 19:34 UTC
+
+M05 selected consumer milestone CLOSED: assigned required-email Latin-v1
+signup/verification/username-password signin, advisory availability, fresh-proof
+rename and opt-in enrolled-TOTP signin/session-read/logout are delivered.
+Read-only native username_m05_closure_audit independently reconciled actual APIs,
+assertions and assigned requirements at4315bbf; no missing consumer operation.
+Primary verified current public-source identity, canonical/external consumer
+results, native final-review scope and exact-source green CI before closure.
+Consumer denominator is now4/39 (10.3% unweighted); whole-goal effort estimate
+approximately12% lowconfidence, not a measured ratio. Broader catalog EmailPolicy
+alternatives, no-email signup, automatic confirmation-signin, enrolled-factor
+rename and full owning-unit/release qualification are not claimed. Next finite
+primary lane: adopt existing M06 magic-link implementation/evidence and finish
+only its concrete missing assigned journey requirements; no username expansion.
+
+Selected username-TOTP profile CLOSED: reference4315bbfafc9ccc579119209ff3528b23887361c1
+main-pushed, Required39158872298 SUCCESS; independent final21 APPROVE by
+username_reference_final_review, F1 resolved. Canonical GOWORKoff reference
+ordinaryrace8.919s/cmd6.645s/taggedvet0; realPG/race13996 PASS48.976s including
+standalone(no email-MFA), coexistence, primary/completion recovery and withdrawal.
+Authenticated publicreference origin/subdir/checksums and all264Go/manifests match.
+Separate external module uses only65 downloaded public external test fixtures,
+actual public reference/dependencies and no replacements: PG/race8771 PASS31.145s
+for `^TestReferencePostgresUsernameTOTP.*HTTPS$`; fixture0|0, PG54839 stopped/data
+removed. Task scratch remains only until the bounded M05 source/evidence audit
+finishes; no more Go runs needed for this closed profile. The read-only
+username_m05_closure_audit checks assigned username requirements against actual
+APIs/tests and retained delivery, not full-unit release qualification. No writes,
+Go/services or fresh implementation assignment; parent retains final count.
+
+### Earlier checkpoint — 19:25 UTC (superseded by delivery above)
+
+Native username/TOTP prerequisites and opt-in HTTP are delivered through
+`3b0fd6bc90e5e74956430aeec4bf24868acbc82f`; Required39157935841 SUCCESS.
+Independent username_native_http_review APPROVE frozen23 `7cc3e6dc...`.
+Canonical ordinary races password2.054s/HTTP-MFA16.361s/HTTP-password25.680s,
+tagged vets all exit0; paired realPG/race22789 PASS46.564s, fixture0|0/stopped.
+All279 public producer Go/manifests match; reference adopts actual public pins,
+no local supplier workspace. The review's direct primary RecoverSignin coverage
+action is included in reference's restarted-graph test, separately from TOTP
+completion recovery. Reference review found F1: independently selected username
+TOTP omitted the shared session reader/revoker. Standalone real-PG/race59129
+reproduces the unreadable committed session (exit1,4.511s); shared selector
+correction passes54261(6.008s), including read/logout with email MFA disabled.
+Complete21 final `5601b2020491a8b90ff477356e8ceec9514d69d7b9a313d80b5561aba2793d7e`
+is frozen for the same independent reviewer; affected canonical race/vet/PG13996
+running. Earlier public-dependency batch55228 passed46.409s but did not cover F1.
+Reference publication/CI/downloaded-consumer proof remain; no full milestone or
+unit qualification closed. MFA/session predecessor Required39157051465 SUCCESS.
+
+Continuation19:02UTC: issuer2c3f8e2a0d49f97ba6f1542147172fc794fa3db7
+and kernel7f09d96f898335e4fc028dbe71a8586046ecf725 independently APPROVE,
+main-pushed, Required39155728384/39156466058 SUCCESS. Actual public suppliers
+authenticated and adopted; issuer clone removed, canonical dirty checkout untouched.
+Workspace now contains only six downstream local modules. Actual public-supplier
+username browser/persistent+unknown+authority-withdrawal+native purpose-upgrade
+PG/race2874 PASS26.381s. Original password/verification TOTP PG/race30620
+PASS17.105; seven affected ordinaryrace19791 exit0/taggedvet50588 exit0.
+Canonical GOWORKoff MFA/session ordinaryrace23333 PASS1.294/1.790/taggedvet0.
+Kernel GOWORKoff race1212 PASS3.323 and bounded original-frame fuzz12290exec PASS.
+No unit/milestone closed; downstream source/pins/review/delivery still pending.
+Thirteen-file MFA/session candidate8ec998858746eeba3826eab8f8bb5db78655e0107b5fe5275879f38c44521f87
+independently APPROVE by username_mfa_session_review; committed/main-pushed as
+78327201075d0a35c15450cf9e9a63d6324085a3; Required39157051465 queued at19:04.
+Public MFA/session adoption and remaining native/HTTP/reference delivery pending.
+Own PG54839 last fixture0|0/stopped/data gone; adjacent task caches retained.
+
+Primary18:44UTC: actual username/TOTP HTTPS normal, lost-COMMIT recovery and
+user/identifier/factor withdrawal batch51796 PASS6.254s (five scenarios).
+Same actual graph creates account, confirms email, signs in and enrolls TOTP;
+no seeded primary/factor/session. Wrong-browser/code, cross-password origin,
+rollback/recovery and session read/logout pass; withdrawals leave session count,
+attempts and child use unchanged. OwnPG54839 DB/roles0|0, stopped/data removed.
+Two actual missing native origins reproduced: capability issuer RED49770 ->
+focusedGREEN74316 .265s/fullGOWORKoffrace89890 3.454s; session consumed-browser
+guard RED50606 -> GREEN21967 .250s. Capability changes only in own clean-main
+clone under /private/tmp/identity-username-totp-runtime.fXKmI1/capability-main;
+canonical dirty capability branch untouched. Independent five-file issuer review
+running; complete primary review/public pins/delivery still pending. Paired
+workspace8 includes that issuer+kernel/MFA/session/password/HTTP/reference;
+not canonical public-dependency proof. Username/originalpassword race13820 running.
+
+Previous goal turn: progress; recipient invitation listing and OAuth discovery
+were delivered, with actual public-module PostgreSQL consumers and green CI.
+Organization successor readiness only: organization_teams inspects one finite
+invitation-resend outcome against main93df26f and its public consumer9.430s;
+no writes/Go/services/Git until the consumed issuance/revocation/command contracts
+are confirmed. Root/postgres sources only, missing shared contracts return to
+primary; preserve others' work. Primary owns integration/review/pins/delivery.
+Readiness found actual kernel send/version1-only issuance and acceptance codecs;
+resend is parked pending that parent-owned extension, not secretly stubbed.
+OAuth worker now checks device-flow readiness only at main7292fbe/public-native
+consumer9.210s; no writes/Go/services/Git. Same root/postgres/device sources,
+existing actual native session/consent/issuance owners, no new authority engine;
+report consumed contracts and missing behavior before execution assignment.
 
 Continuation18:24UTC: OAuth discovery delivered root127c7dbf145b39f8cd2e201afa393da6905e9f5a /
 native7292fbe3191d075dc2ce28c584fcf95812f11763, main-pushed; final Required39153819434
