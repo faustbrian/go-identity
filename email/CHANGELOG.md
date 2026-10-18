@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Extend optional verification callbacks to exact managed-change and email OTP
+  verification/change operation/schema pairs. Native selection remains explicit
+  per workflow; other operations cannot reuse a confirmation schema.
+
 - Add optional read-only link-verification callback policy with ordered bounded
   execution, explicit rejection and known-commit-only observation. Constructing
   the policy alone enables no native workflow or HTTP route.

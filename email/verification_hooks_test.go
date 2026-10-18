@@ -138,3 +138,32 @@ func TestVerificationHooksDenyOtherWorkflowAndMalformedBindingsBeforeCallbacks(t
 		t.Fatal("malformed operation reached callbacks")
 	}
 }
+
+func TestVerificationHooksSelectExactConfirmationOperationSchemaPairs(t *testing.T) {
+	hooks, err := email.NewVerificationHooks([]identity.Hook{verificationHook{}}, email.VerificationHooksConfig{MaximumDuration: time.Second})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, selected := range []struct{ operation, schema string }{
+		{"identity.email.verification-confirm", "identity.email.verification-confirm.native-v1"},
+		{"identity.email.verification-confirm", "identity.email.verification-confirm.managed-v1"},
+		{"identity.email.change-confirm", "identity.email.change-confirm.managed-v1"},
+		{"identity.otp.email-verify", "identity.otp.email-verify.managed-v1"},
+		{"identity.otp.email-change-confirm", "identity.otp.email-change-confirm.managed-v1"},
+	} {
+		t.Run(selected.operation+"/"+selected.schema, func(t *testing.T) {
+			b := verificationHookBinding(t)
+			b.OperationID, b.SchemaID = selected.operation, selected.schema
+			if err := hooks.Before(t.Context(), b); err != nil {
+				t.Fatal("supported confirmation rejected", err)
+			}
+			if err := hooks.After(t.Context(), b); err != nil {
+				t.Fatal("supported commit observation rejected", err)
+			}
+			b.OperationID = "identity.otp.signin"
+			if hooks.Before(t.Context(), b) == nil || hooks.After(t.Context(), b) == nil {
+				t.Fatal("schema granted another operation")
+			}
+		})
+	}
+}

@@ -16,7 +16,7 @@ type VerificationHooksConfig struct {
 	Reasons         []identity.PolicyReason
 }
 
-// VerificationHooks is optional immutable link-confirmation callback policy.
+// VerificationHooks is optional immutable email-confirmation callback policy.
 // It borrows concurrency-safe hooks and owns no resources or transaction. It
 // discloses only command/user/identifier correlation, never an address, proof,
 // password or execution authority. Every field is read-only: verification
@@ -25,11 +25,14 @@ type VerificationHooksConfig struct {
 type VerificationHooks struct{ runner *identity.HookRunner }
 
 // NewVerificationHooks fixes safe metadata for original-signup and managed
-// pending-address link confirmation. It selects neither OTP nor email change.
-// Before must run before reservation outside SQL, and After only after a fresh
-// known committed result and transaction closure. Adapters must never invoke
-// these callbacks for scanner validation, replay, recovery, rollback or unknown
-// outcomes. These methods validate shape, not that transaction placement.
+// link confirmation, managed email change, and purpose-bound email OTP
+// verification/change. Each native workflow must select hooks independently;
+// configuring link verification does not implicitly enable change or OTP hooks.
+// Before must run before reservation or durable attempt metering outside SQL;
+// a fresh attempt may subsequently roll back or become unknown. After runs
+// only after a fresh known committed result and transaction closure, never on
+// rollback or unknown outcome. Neither runs for scanner validation, replay or
+// recovery. These methods validate shape, not transaction placement.
 func NewVerificationHooks(hooks []identity.Hook, config VerificationHooksConfig) (*VerificationHooks, error) {
 	runner, err := identity.NewHookRunner(hooks, identity.HookRunnerConfig{
 		MaximumDuration: config.MaximumDuration,
@@ -50,12 +53,19 @@ func (h *VerificationHooks) operation(ctx context.Context, b identity.CommandBin
 	if h == nil || h.runner == nil || ctx == nil {
 		return identity.OperationContext{}, ErrInvalidVerification
 	}
+	owner, operation := "identity/email", "identity.email.verification-confirm"
 	switch b.SchemaID {
 	case "identity.email.verification-confirm.native-v1", "identity.email.verification-confirm.managed-v1":
+	case "identity.email.change-confirm.managed-v1":
+		operation = "identity.email.change-confirm"
+	case "identity.otp.email-verify.managed-v1":
+		owner, operation = "identity/otp", "identity.otp.email-verify"
+	case "identity.otp.email-change-confirm.managed-v1":
+		owner, operation = "identity/otp", "identity.otp.email-change-confirm"
 	default:
 		return identity.OperationContext{}, ErrInvalidVerification
 	}
-	op := identity.FeatureOperation{Owner: "identity/email", OperationID: "identity.email.verification-confirm", SchemaID: b.SchemaID, SchemaVersion: 1, RecordRequirement: identity.FeatureRecordRequired}
+	op := identity.FeatureOperation{Owner: owner, OperationID: operation, SchemaID: b.SchemaID, SchemaVersion: 1, RecordRequirement: identity.FeatureRecordRequired}
 	if b.ValidateFor(op) != nil {
 		return identity.OperationContext{}, ErrInvalidVerification
 	}
