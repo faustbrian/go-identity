@@ -189,7 +189,7 @@ func (r *ContributorRegistry) admitFeaturePlanMode(b identity.CommandBinding, fi
 		if _, ok := feature.contributor.(OrganizationInvitationIssuanceContributor); !ok {
 			return nil, invalidPlan()
 		}
-		if !preparation && !validOrganizationInvitationIssuance(b, p) {
+		if preparation && !validOrganizationInvitationPreparation(b, p) || !preparation && !validOrganizationInvitationIssuance(b, p) {
 			return nil, invalidPlan()
 		}
 	}

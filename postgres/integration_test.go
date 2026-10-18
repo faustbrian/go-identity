@@ -134,6 +134,7 @@ func TestPostgresIntegration(t *testing.T) {
 	t.Run("OTP attempt denial", func(t *testing.T) { testOTPAttemptDenial(t, ctx, pool, repo) })
 	t.Run("MFA OTP shared denial", func(t *testing.T) { testMFAOTPAttemptDenial(t, ctx, pool, repo) })
 	t.Run("MFA OTP prepared declaration", func(t *testing.T) { testMFAOTPPreparedDeclaration(t, ctx, pool, repo) })
+	t.Run("organization invitation preparation", func(t *testing.T) { testOrganizationInvitationPreparation(t, ctx, pool, repo) })
 	t.Run("OTP reservation", func(t *testing.T) { testOTPReservation(t, ctx, pool, repo) })
 	t.Run("OTP execution", func(t *testing.T) { testOTPExecution(t, ctx, pool, repo) })
 	t.Run("owned creation service", func(t *testing.T) { testCreationOwner(t, ctx, pool, repo) })

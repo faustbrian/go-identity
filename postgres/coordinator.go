@@ -428,6 +428,10 @@ func (c *Coordinator) reservePreparedCommand(ctx context.Context, binding identi
 }
 
 func (c *Coordinator) freezePlan(ctx context.Context, tx pgx.Tx, binding identity.CommandBinding, q claimRequest, d claimDisposition, p CommandPlan) (*admittedKernelPlan, error) {
+	return c.freezePlanMode(ctx, tx, binding, q, d, p, false)
+}
+
+func (c *Coordinator) freezePlanMode(ctx context.Context, tx pgx.Tx, binding identity.CommandBinding, q claimRequest, d claimDisposition, p CommandPlan, preparation bool) (*admittedKernelPlan, error) {
 	id, _ := base64.RawURLEncoding.DecodeString(string(q.commandID))
 	var fingerprint []byte
 	if err := tx.QueryRow(ctx, `SELECT fingerprint FROM identity.identity_command_id_claims WHERE command_id=$1`, id).Scan(&fingerprint); err != nil {
@@ -448,7 +452,7 @@ func (c *Coordinator) freezePlan(ctx context.Context, tx pgx.Tx, binding identit
 	p.Digest = sha256.Sum256(encoded)
 	var admitted *admittedKernelPlan
 	if p.Feature != nil {
-		admitted, err = c.registry.admitFeaturePlan(binding, retained, p)
+		admitted, err = c.registry.admitFeaturePlanMode(binding, retained, p, preparation)
 	} else {
 		admitted, err = c.registry.admitKernelPlan(binding, retained, p)
 	}

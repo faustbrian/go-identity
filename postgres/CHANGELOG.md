@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Preserve code-free invitation declarations through counter preparation,
+  denied receipts and restart recovery without admitting them as final token
+  issuance. Generated issuance still requires the complete native final plan.
+
 - Add closed native organization invitation issuance and one-use acceptance
   profiles. Fence the existing verified recipient and original grant scope in
   the sole transaction, preserving exact expiry and actual membership versions.

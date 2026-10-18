@@ -180,7 +180,7 @@ func (c *Coordinator) recoverCommandReceiptChecked(ctx context.Context, q identi
 	}
 	var admitted *admittedKernelPlan
 	if result.Feature != nil {
-		admitted, e = c.registry.admitFeaturePlan(result.Binding, fingerprint, plan)
+		admitted, e = c.registry.admitFeaturePlanMode(result.Binding, fingerprint, plan, preparationOnly)
 	} else {
 		admitted, e = c.registry.admitKernelPlan(result.Binding, fingerprint, plan)
 	}
@@ -271,8 +271,8 @@ func (c *Coordinator) recoverCommandReceiptChecked(ctx context.Context, q identi
 		}
 	}
 	// All negative evidence was collected while old writers and tenant mutations
-	// were excluded. For preparation-only MFA OTP, final attachment and all
-	// consuming reservations/domain effects commit together: its absence under
+	// were excluded. For preparation-only MFA OTP and invitation send, final
+	// attachment and all consuming/domain effects commit together: its absence under
 	// these locks proves none began. Takeover fenced any late generator. The
 	// separately committed protected attempt charge remains; no participant is
 	// released or a competing command's OTP/child touched.
@@ -338,7 +338,7 @@ func readRecoveryObservation(ctx context.Context, tx pgx.Tx, id []byte) (command
 	err := tx.QueryRow(ctx, `SELECT coalesce(c.tenant_id::text,''),coalesce(c.purpose,''),c.safe_fields,c.retired,j.state,j.lease_until,clock_timestamp(),j.result_version,j.terminal_class,j.result,j.command_plan,c.fingerprint
 FROM identity.identity_command_id_claims c LEFT JOIN identity.commands j ON j.command_id=c.command_id AND j.tenant_id=c.tenant_id AND j.purpose=c.purpose WHERE c.command_id=$1`, id).Scan(&o.tenant, &o.purpose, &o.scope, &o.retired, &o.state, &o.until, &o.now, &o.resultVersion, &o.class, &o.result, &o.plan, &o.fingerprint)
 	if err == nil {
-		err = readObservedMFAOTPPreparation(ctx, tx, id, &o)
+		err = readObservedCounterPreparation(ctx, tx, id, &o)
 	}
 	return o, err
 }

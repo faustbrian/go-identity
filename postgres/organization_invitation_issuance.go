@@ -26,6 +26,19 @@ type organizationInvitationRecipientAdmission struct {
 	recipient RecipientRecord
 }
 
+// The existing preparation journal freezes this declaration before token
+// generation. It can prove an unfinished/denied attempt, never final issuance.
+func validOrganizationInvitationPreparation(b identity.CommandBinding, p CommandPlan) bool {
+	return b.ActorKind == authorization.SubjectUser && p.Feature != nil &&
+		p.Feature.Operation == organizationInvitationSendOperation() &&
+		p.Feature.Contributor == organizationInvitationDescriptor() && b.ValidateFor(p.Feature.Operation) == nil &&
+		p.SubjectType == "invitation" && p.CommandCounters != nil &&
+		p.Lifecycle != nil && *p.Lifecycle == (LifecyclePlan{EventType: "invitation.created.v1", BeforeVersion: 0, AfterVersion: 1}) &&
+		len(p.Audits) == 1 && p.Audits[0].EventType == "identity.organization.create_invitation" && p.Audits[0].RetentionClass == "protected" &&
+		!preparationProtected(p) && p.Delivery == nil && p.MFAContinuation == nil && p.MFACompletion == nil &&
+		p.MagicLinkRegistration == nil && !p.SignupAcceptance && !p.MagicLinkRequestAcceptance
+}
+
 func validOrganizationInvitationIssuance(b identity.CommandBinding, p CommandPlan) bool {
 	if b.ActorKind != authorization.SubjectUser {
 		return false

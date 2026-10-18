@@ -51,5 +51,6 @@ func (c *Coordinator) freezePreparationCounters(ctx context.Context, tx pgx.Tx, 
 	} else if !bytes.Equal(stored, wire) {
 		return nil, identity.ConflictError{}
 	}
-	return c.registry.admitFeaturePlan(p.binding, retained, declaration)
+	// This remains the original code-free declaration, not generated issuance.
+	return c.registry.admitFeaturePlanMode(p.binding, retained, declaration, true)
 }

@@ -117,20 +117,20 @@ FROM identity.identity_command_id_claims c LEFT JOIN identity.commands j
 ON j.command_id=c.command_id AND j.tenant_id=c.tenant_id AND j.purpose=c.purpose
 WHERE c.command_id=$1`, key).Scan(&observed.tenant, &observed.purpose, &observed.scope, &observed.retired, &observed.state, &observed.until, &observed.now, &observed.resultVersion, &observed.class, &observed.result, &observed.plan, &observed.fingerprint, &observed.fingerprintKeyVersion)
 	if err == nil {
-		err = readObservedMFAOTPPreparation(ctx, c.pool.Raw(), key, &observed)
+		err = readObservedCounterPreparation(ctx, c.pool.Raw(), key, &observed)
 	}
 	return observed, err
 }
 
-// Preparation columns are opt-in migrations. Only this native command's
+// Preparation columns are opt-in migrations. Only these closed commands'
 // unattached branch reads them; ordinary kernel/history queries need no feature
 // schema. The second read must match the first immutable claim and journal
 // snapshot. A concurrent attachment causes retry, never false noncommit proof.
-func readObservedMFAOTPPreparation(ctx context.Context, reader interface {
+func readObservedCounterPreparation(ctx context.Context, reader interface {
 	QueryRow(context.Context, string, ...any) pgx.Row
 }, id []byte, observed *commandObservation) error {
 	_, feature, err := decodeObservedScope(observed.scope)
-	if err != nil || observed.plan != nil || feature == nil || feature.OperationID != "identity.mfa.otp-verify" || observed.state == nil || observed.until == nil || (*observed.state != "pending" && *observed.state != "aborted") {
+	if err != nil || observed.plan != nil || feature == nil || feature.OperationID != "identity.mfa.otp-verify" && *feature != organizationInvitationSendOperation() || observed.state == nil || observed.until == nil || (*observed.state != "pending" && *observed.state != "aborted") {
 		return nil
 	}
 	return reader.QueryRow(ctx, `SELECT j.preparation_profile,CASE WHEN octet_length(j.preparation_declaration) BETWEEN 1 AND 65536 THEN j.preparation_declaration END
@@ -301,7 +301,17 @@ func observedCommandPlan(binding identity.CommandBinding, feature *identity.Feat
 	}
 	fp := [32]byte(observed.fingerprint)
 	if observed.plan == nil {
-		if feature == nil || feature.OperationID != "identity.mfa.otp-verify" || observed.state == nil || (*observed.state != "pending" && *observed.state != "aborted") || observed.preparationProfile == nil || (*observed.preparationProfile != 3 && *observed.preparationProfile != 4) {
+		if feature == nil || observed.state == nil || (*observed.state != "pending" && *observed.state != "aborted") || observed.preparationProfile == nil || (*observed.preparationProfile != 3 && *observed.preparationProfile != 4) {
+			return CommandPlan{}, false, identity.UnavailableError{}
+		}
+		if *feature == organizationInvitationSendOperation() {
+			plan, err := decodeFeaturePlan(binding, fp, observed.declaration)
+			if err != nil || !validOrganizationInvitationPreparation(binding, plan) {
+				return CommandPlan{}, false, identity.UnavailableError{}
+			}
+			return plan, true, nil
+		}
+		if feature.OperationID != "identity.mfa.otp-verify" {
 			return CommandPlan{}, false, identity.UnavailableError{}
 		}
 		_, plan, err := decodeMFAOTPPreparation(binding, fp, observed.declaration)

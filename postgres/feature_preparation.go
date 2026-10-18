@@ -555,7 +555,7 @@ func (c *Coordinator) startFeaturePreparation(ctx context.Context, original iden
 	if denied {
 		// A denied attempt has no generated command. Persist its original frozen
 		// plan so ordinary receipt queries and recovery retain complete evidence.
-		if _, err := c.freezePlan(ctx, tx, p.binding, q, claimNew, p.snapshot()); err != nil {
+		if _, err := c.freezePlanMode(ctx, tx, p.binding, q, claimNew, p.snapshot(), true); err != nil {
 			return preparationReservation{}, result, err
 		}
 	}
