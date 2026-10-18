@@ -198,6 +198,7 @@ func TestPostgresIntegration(t *testing.T) {
 		testCredentialAuthority(t, ctx, pool, repo)
 	})
 	t.Run("locked credential admission", func(t *testing.T) { testLockedCredentialAdmission(t, ctx, pool, repo) })
+	t.Run("locked target user admission", func(t *testing.T) { testLockedTargetUserAdmission(t, ctx, pool, repo) })
 	t.Run("password hash upgrade", func(t *testing.T) { testPasswordHashUpgrade(t, ctx, pool, repo) })
 	t.Run("user authorization admission", func(t *testing.T) { testUserAuthorizationAdmission(t, ctx, pool, repo) })
 	t.Run("credential compromise transaction", func(t *testing.T) {

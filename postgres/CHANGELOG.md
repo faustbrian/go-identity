@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Add command-bound active target-user admission for native feature adapters,
+  checking the exact user record version under the existing lifecycle lock
+  without treating that aggregate version as a security epoch.
+
 - Coordinate verification-origin MFA challenge issuance separately from its
   committed verification parent, with typed historical scope and recovery.
 

@@ -30,6 +30,7 @@ type featureExecutionPhase struct {
 	beforeAdmission                                 func(context.Context, Work) error
 	ignoreAdmissionDenial                           bool
 	afterAdmission                                  func(context.Context, Work) error
+	targetCheck                                     func(context.Context, Work, *featureExecutionPhase) error
 }
 
 func (*featureExecutionPhase) Descriptor() ContributorDescriptor {
@@ -104,6 +105,11 @@ func (*featureExecutionAuditPhase) RecoverParticipant(ctx context.Context, w Rec
 }
 func (p *featureExecutionPhase) ApplyFeature(ctx context.Context, w Work, command identity.Command) (identity.FeatureReceipt, error) {
 	p.calls++
+	if p.targetCheck != nil {
+		if err := p.targetCheck(ctx, w, p); err != nil {
+			return identity.FeatureReceipt{}, err
+		}
+	}
 	if p.admission != nil {
 		if p.beforeAdmission != nil {
 			if err := p.beforeAdmission(ctx, w); err != nil {
