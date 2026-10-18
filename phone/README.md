@@ -1,0 +1,116 @@
+# Phone number policy
+
+This module provides bounded number canonicalization, **not** phone ownership,
+verification history, SMS transport, deliverability, carrier intelligence,
+authentication, risk decisions, signup, signin or recovery. Those composing
+owners must enforce their own tenant scope, uniqueness and transactional proofs.
+It requires Go 1.27.0 or later.
+
+```go
+policy, err := phone.NewNumberPolicy(phone.NumberPolicySpec{
+    Profile: phone.CurrentNumberProfile(),
+    MaximumInputBytes: 64,
+})
+if err != nil { return err }
+number, err := policy.Canonicalize(ctx, "+12025550123")
+if err != nil { return err }
+record, err := number.Record() // sensitive explicit persistence projection
+```
+
+## Frozen comparison and input policy
+
+Select `CurrentNumberProfile()` explicitly. The supported profile ID is
+`identity.phone.e164-ascii-v1.metadata-v9.0.40`, version 1, metadata `v9.0.40`.
+Its ID already binds metadata, so a native identifier owner storing profile ID
+and version need not invent a concatenation. Store the complete `NumberRecord`
+for restoration, including its exact profile and optional display provenance.
+Equality compares E.164 and all profile fields, never display. Byte-equal E.164
+under different metadata profiles is not automatically a proven profile match.
+
+ASCII-v1 accepts only `+` followed by ASCII digits for international input.
+It requires an exact E.164 fixed point and at most 15 digits. There is no
+trimming, separator removal, Unicode digit folding, vanity expansion, RFC3966
+URL extraction or extension handling. These deliberate restrictions prevent
+the parser's user-friendly repair/extraction rules from changing an identity.
+Formatted phone numbers are unsupported in this first named profile.
+
+National input is disabled unless `AllowNational` is true and `DefaultRegion`
+is an explicitly supported uppercase two-letter region. It must contain only
+ASCII digits, be valid for that region and exactly match the digits in the
+metadata's NATIONAL format (including its national prefix). IDD prefixes,
+missing-plus inferred country codes and omitted national-prefix variants deny.
+International input is always parsed with an empty region, even when national
+input is enabled. Shared calling-code territories remain distinct for national
+validation; non-geographic country code `001` is not a default region.
+Short codes and structurally invalid numbers deny. These checks describe the
+selected profile, not every possible valid telephony presentation or dial plan.
+
+`MaximumInputBytes` must be 16..128 and bounds raw bytes before upstream work;
+E.164 output is independently bounded to 16 bytes including `+`. Retaining
+original display is disabled unless `PreserveDisplay` is explicit. Retained
+display obeys the input bound. `NationalRegion` is retained only with original
+national display. Restoration rejects mismatched original display/region,
+noncanonical E.164, incompatible profiles and unsupported metadata, rather than
+guessing. An absent display stays absent; restoration never invents it.
+
+## Ownership, privacy and concurrency
+
+`NumberPolicy` and its `Number` results are immutable and support concurrent
+callers without owned goroutines, callbacks or IO. Nil/zero policy denies;
+zero Number cannot project a usable destination or record. Nil context denies,
+and cancellation before or after bounded parsing returns a redacted error.
+There is no global default policy.
+
+`Number` uses closure-backed private state so ordinary `fmt`, enclosing private
+fields, and `slog` do not reveal digits. Implicit JSON/text serialization denies.
+`Record`, `DeliveryNumber` and `Display` explicitly expose PII: do not log them.
+`NumberRecord` deliberately permits persistence serialization, but direct
+formatting and structured logging redact; its exported fields remain sensitive.
+Protect stored records, tenant-bind lookups, escape displays, and include them
+in the owning application's privacy export/deletion policy. No record field is
+a verification fact. A valid number can be recycled or ported and is never
+ownership, verified status, SMS deliverability, risk evidence or authority.
+
+The upstream parser exposes process-global metadata override/mutation APIs.
+Applications using this profile must not call `metadata.Use` or mutate upstream
+metadata collections/maps. This module never does so or exposes upstream
+objects. The supported concurrency/profile contract assumes those globals
+retain their embedded pinned state; it cannot defend against other trusted
+in-process code deliberately replacing upstream internals.
+
+## Provenance and upgrades
+
+The parser is pinned to
+[`github.com/nyaruka/phonenumbers/v2@v2.0.14`](https://github.com/nyaruka/phonenumbers/tree/v2.0.14),
+origin commit `d586aeb6aac459d04c2f2b61ab9e4d7c8a9c7d43`.
+Authenticated Go module content checksum:
+`h1:hgxmpkDTy/rvl/3yx5oPXiRHWZmkw8Tbd6WkBpavJBA=`;
+go.mod checksum: `h1:ch3CB5vKpdcQXyRLWm+ELlEdiUwagKR6pYvXgVXRiN0=`.
+Download/verify through `proxy.golang.org` and `sum.golang.org`; `go.sum` binds
+the source. No private parser, copied metadata or vendored dataset is maintained.
+
+The downloaded and
+[official tagged metadata/version.go](https://github.com/nyaruka/phonenumbers/blob/v2.0.14/metadata/version.go)
+both identify upstream metadata **v9.0.40**; the constructor checks that binding.
+This is independent of Java-code synchronization: upstream
+[SYNC.md](https://github.com/nyaruka/phonenumbers/blob/v2.0.14/SYNC.md)
+records code synchronization against v9.0.38. Upstream's
+[ParseAndKeepRawInput/MaybeExtractCountryCode](https://github.com/nyaruka/phonenumbers/blob/v2.0.14/phonenumberutil.go)
+and country-code source enum document the inference that this profile denies.
+`IsValidNumber` is structural metadata validity, not proof that a number is used.
+
+The Go port's [LICENSE](https://github.com/nyaruka/phonenumbers/blob/v2.0.14/LICENSE)
+is MIT; Google-derived protobuf files retain Apache-2.0 notices.
+The runtime dependency `google.golang.org/protobuf@v1.36.11` is BSD-3-Clause.
+Preserve upstream copyright/license notices when redistributing dependencies.
+Test-only upstream dependencies in go.sum are not added as runtime imports.
+
+A metadata/parser upgrade requires authenticated source, license and behavior
+review, a new immutable comparison profile binding, regression/fuzz proof and
+an explicit migration/reverification decision by the owning lifecycle service.
+Do not overwrite old profile IDs, relabel old records, merge lookups across
+profiles automatically, or restore old records under new metadata. Preserve
+the old interpreter in an explicitly supported version or migrate through an
+audited owner operation; newly invalid/changed numbers deny pending that choice.
+Reverification must independently establish present ownership, with recycling,
+porting and recovery risk policy; canonicalization never supplies that proof.

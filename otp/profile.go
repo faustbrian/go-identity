@@ -30,6 +30,9 @@ const (
 	PurposeSignin Purpose = "signin"
 	// PurposeEmailVerification proves the exact issued email-address binding.
 	PurposeEmailVerification Purpose = "email-verification"
+	// PurposePhoneVerification proves the exact issued SMS phone binding. It
+	// cannot authorize email verification, account signin or password recovery.
+	PurposePhoneVerification Purpose = "phone-verification"
 	// PurposePasswordReset permits the exact issued password-recovery workflow.
 	PurposePasswordReset Purpose = "password-reset"
 	// PurposeEmailChange confirms the exact issued address change.
@@ -112,7 +115,7 @@ func NewCodeProfile(s CodeProfileSpec) (CodeProfile, error) {
 
 func validPurpose(p Purpose) bool {
 	switch p {
-	case PurposeSignin, PurposeEmailVerification, PurposePasswordReset, PurposeEmailChange, PurposeMFA, PurposeStepUp:
+	case PurposeSignin, PurposeEmailVerification, PurposePhoneVerification, PurposePasswordReset, PurposeEmailChange, PurposeMFA, PurposeStepUp:
 		return true
 	default:
 		return false

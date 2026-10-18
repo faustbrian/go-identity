@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Add a distinct SMS-only phone-verification purpose with workflow-separated
+  code digests. This primitive does not enable phone enrollment or signin.
+
 - Expose bounded original change/session sources for transport rate admission
   without code comparison, attempt debit or renewed authority. Add explicit
   typed primary-change recovery catalog definitions alongside existing OTP

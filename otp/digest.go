@@ -103,6 +103,7 @@ type DigestScope struct{ binding string }
 func NewDigestScope(s DigestScopeSpec) (DigestScope, error) {
 	if !boundedText(s.TenantID, 256, false) || !validPurpose(s.Purpose) ||
 		!boundedText(s.SubjectID, 256, true) || (s.Channel != ChannelEmail && s.Channel != ChannelSMS) ||
+		s.Purpose == PurposePhoneVerification && s.Channel != ChannelSMS ||
 		!boundedText(s.Destination.value, 320, false) || !boundedText(s.ChallengeID, 256, false) ||
 		!boundedText(s.TargetID, 256, false) || s.PolicyVersion == 0 || s.Generation == 0 || s.AuthorizationBinding == ([32]byte{}) {
 		return DigestScope{}, ErrInvalidDigest
