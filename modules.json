@@ -4443,6 +4443,136 @@
           "release": "blocked"
         }
       }
+    },
+    {
+      "directory": "risk/captcha/captchafox",
+      "module_path": "github.com/faustbrian/go-identity/risk/captcha/captchafox",
+      "go_version": "1.27.0",
+      "packages": [
+        {
+          "module_directory": "risk/captcha/captchafox",
+          "directory": ".",
+          "name": "captchafox",
+          "import_path": "github.com/faustbrian/go-identity/risk/captcha/captchafox",
+          "kind": "public",
+          "production": true,
+          "executable": true,
+          "coverage_required": true,
+          "build_required": true,
+          "build_tags": []
+        }
+      ],
+      "purpose": "Bounded CaptchaFox Siteverify Free provider facts; no policy or replay authority.",
+      "lifecycle": "experimental",
+      "kind": "optional adapter",
+      "releasable": true,
+      "family": "service-edge",
+      "version": "0.0.0",
+      "tag_prefix": "risk/captcha/captchafox/v",
+      "owned_dependencies": [
+        "github.com/faustbrian/go-clock",
+        "github.com/faustbrian/go-http-client/v2",
+        "github.com/faustbrian/go-identity/risk",
+        "github.com/faustbrian/go-identity/risk/captcha"
+      ],
+      "reverse_owned_dependencies": [],
+      "external_runtime_dependencies": [],
+      "required_services": [],
+      "build_tags": [],
+      "test_tags": [],
+      "interoperability_tools": [],
+      "specifications": [],
+      "conformance_corpora": [],
+      "family_label": "Service Edge",
+      "family_description": "Request-edge policy, identity, access decisions, routing, middleware, and process lifecycle.",
+      "family_order": 2,
+      "gates": {
+        "api_compatibility": false,
+        "benchmarks": false,
+        "conformance": false,
+        "coverage": false,
+        "documentation": true,
+        "fuzz": false,
+        "interoperability": false,
+        "lint": false,
+        "mutation": false,
+        "race": false,
+        "security": false,
+        "tests": false
+      },
+      "goal_status": "in-progress",
+      "goal_files": [],
+      "goal_evidence": [],
+      "provenance": [],
+      "cohesion": {
+        "family": "service-edge",
+        "secondary_capabilities": [
+          "identity-and-access"
+        ],
+        "responsibility": "Fixed bounded CaptchaFox Siteverify verification and normalized private provider facts through the existing neutral risk callback.",
+        "non_goals": [
+          "Own widgets, provisioning, policy decisions, token replay authority, canonical security-event delivery or durable issuance.",
+          "Claim live provider interoperability, unimplemented profiles, reference composition or full platform qualification."
+        ],
+        "public_package_identifier": "captchafox",
+        "primary_entry_packages": [
+          "github.com/faustbrian/go-identity/risk/captcha/captchafox"
+        ],
+        "package_selection": {
+          "github.com/faustbrian/go-identity/risk/captcha/captchafox": "Experimental explicit Siteverify Free adapter. Use documented profile and ownership; full qualification and reference integration remain pending."
+        },
+        "lifecycle_status": "active",
+        "maturity": "experimental",
+        "construction_styles": [
+          "new-config",
+          "validated-value"
+        ],
+        "lifecycle_styles": [
+          "close"
+        ],
+        "ownership": {
+          "configuration": "caller",
+          "mutable_inputs": [
+            "borrow",
+            "copy"
+          ],
+          "runtime_resources": "caller",
+          "background_work": "none"
+        },
+        "optional_owned_dependencies": [],
+        "adapters": [],
+        "companions": [],
+        "supported_go": {
+          "minimum": "1.27.0",
+          "tested": [
+            "1.27.2"
+          ]
+        },
+        "supported_platforms": [
+          "portable-go"
+        ],
+        "supported_backends": [],
+        "supported_protocols": [],
+        "documentation": {
+          "readme": "risk/captcha/captchafox/README.md",
+          "api": "risk/captcha/captchafox/README.md",
+          "adoption": "risk/captcha/captchafox/README.md",
+          "security": "SECURITY.md",
+          "compatibility": null,
+          "performance": null,
+          "examples": "risk/captcha/captchafox/README.md",
+          "faq": null,
+          "changelog": "risk/captcha/captchafox/CHANGELOG.md",
+          "pkg_go_dev": "https://pkg.go.dev/github.com/faustbrian/go-identity/risk/captcha/captchafox",
+          "ecosystem_index": "https://github.com/faustbrian/go-library-tools/blob/v2.1.2/docs/ecosystem/README.md"
+        },
+        "known_good_compatibility_sets": [],
+        "delivery": {
+          "implementation": "in-progress",
+          "hardening": "in-progress",
+          "release": "blocked"
+        }
+      }
     }
   ]
 }
