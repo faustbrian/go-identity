@@ -28,6 +28,7 @@ use (
 	./risk/captcha
 	./risk/captcha/turnstile
 	./risk/captcha/recaptcha
+	./risk/captcha/hcaptcha
 	./risk/postgres
 	./risk/valkey
 	./session
