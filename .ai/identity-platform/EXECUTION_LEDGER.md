@@ -1,14 +1,186 @@
 # Identity Implementation — Current Milestone
 
+## Parallel successor: native organization team membership
+
+Owner organization_teams, GPT-6.1 Sol high, fork none, no children. Exact writable
+scope in go-organization/main at152a232: root/postgres Go production/tests,
+README/CHANGELOG/docs and new forward module-local migrations. No root manifests,
+integration pins, CI/tooling, identity/session/reference/HTTP or Git writes.
+Consume its unchanged public6d66f39 core and152a232 native profile plus the exact
+existing public identity/session/kernel/risk/outbox pins. Their actual native
+PG/race22.268s and downloaded consumer17.091s prove consumed current-session,
+member/owner/version, sole Work and audit/outbox contracts, not absent features.
+Finite outcome: authenticated owner/admin creates a bounded team, adds an actual
+organization member, lists team/member/mine views, removes member, and subsequent
+removed/nonmember/cross-tenant access denies. Current organization/member policy
+and session are rechecked; team membership advances the organization policy
+epoch and uses the sole existing coordinator/recovery/audit/outbox. Explicit
+startup quotas, exact versions, concurrent duplicates, rollback, ambiguous
+commit/recovery and populated forward migration must be proven through public
+native methods, not fake stores. Team mutation has no independent role grant.
+Exclude dynamic roles, active-team/session selection, federation and HTTP;
+full M23 remains open. Check actual consumed boundaries once, then implement;
+request missing owner behavior, never invent a substitute. Primary owns first
+public-boundary alignment, final integration/pins/Git and acceptance. Worker
+waits for the exclusive heavy-test lane before any Go/service run.
+
+## Primary active: M05 username consumer
+
+Bounded map/QA completed against88ef041 and public identifier9892f177.
+Selected first complete profile: required email plus atomic supplementary
+username reservation, ordinary captured verification, username/password signin
+to the genuine session pipeline, advisory limited availability, and fresh-proof
+rename through the existing coordinator. Both input and canonical lengths use
+3..32 codepoints and at most128 UTF-8 bytes; fixed Unicode15.1 NFC/full-fold,
+Latin/Common single-script policy, no whitespace, canonical exact reserved v1
+set from REFERENCE_CONFIGURATION198–202. Persist exact comparison profile and
+version. Unbound historical identifiers remain unbound, not silently normalized.
+Tenant/kind/canonical uniqueness remains identity-owned. Retain the prior name
+for30days; a same-canonical display edit preserves ownership and verification
+but requires the same fresh proof and emits the same protected update lifecycle.
+No private identifier table, password engine or independent transaction owner.
+Username-only/no-email signup remains an explicit later profile, not delivered.
+
+Implementation inputs: native mapper username_map and bounded QA username_qa
+af9c591b identify12 concrete observable partitions. Focused new normalization
+unit/property/fuzz plus actual public PG18/race signup, availability, signin,
+fresh rename, tenant/collision/contention/rollback/replay/unknown cases; selected
+HTTPS journey includes origin/preauth/CSRF, disabled absence and session logout.
+Do not repeat delivered M04 or primitive qualification for unrelated HEAD edits.
+Primary owns shared identity/password/PostgreSQL/HTTP/reference work and root
+manifests/pins. A bounded username_policy worker owns only new username/**:
+fixed-profile parsing/validation, opaque canonical/display custody, reserved-set
+policy, custom bounded validators and module-local tests/docs/go.mod. It consumes
+published identifier9892f177, not a private normalizer, database or password
+engine. This component is part of M05, not a separately delivered milestone.
+Parent integrates its first public API boundary before adding other consumers.
+Canonicalizer/profile binding and errors must fit the kernel pair above. No
+worker Git operations or shared files; heavy tests wait for the parent's lane.
+
+Flow ownership decision: authoritative mapping keys include the canonical public
+route and require it to equal the selected operation. Username signup/signin
+therefore extend the existing closed password-engine profiles with the exact
+username operations, consistently through preauth, risk, command/fingerprint,
+key preparation and recovery. A wrapper that silently rewrites username to
+password route is not sufficient. Keep the same coordinator/journal, password
+proof and session owners; do not add a second engine or route-binding authority.
+The retained mapper confirmed this against OPERATION_SEMANTICS6026–6062 and
+TRANSACTION_CONTRACT102–105/122–133; this is a concrete implementation boundary,
+not a new planning/review programme.
+
+Implementation checkpoint09:24UTC: root ordinary race1.586s plus velocity1.201s
+and vet0 pass. Development root/native workspace PG18.6/race6.510s/taggedvet0
+passes exact metadata upgrade/read/CAS/rollback and retained identifier/signup
+tests, including supplementary username registration collision, independent
+connections, neutral acceptance, audit/outbox/native rollback and lost COMMIT.
+These storage seam tests do not substitute for genuine username/password/session
+or HTTP acceptance. Root/native changelogs and metadata docs are updated.
+Native initial closed-Work scan rejected new pgtype destinations as designed;
+the storage decoder now uses allowed nullable scalar destinations, not a weaker
+Work boundary, and the full affected selection passes. Registration fields
+now freeze both names and comparison bindings before the sole atomic creation.
+
+Username policy prerequisite is reviewed/pushed as7f53201, Required39115559726
+succeeds. Its final whole-policy race1.295s/vet0 and retained bounded fuzz/provenance
+checks pass. A separate consumer using the actual downloaded public module,
+without workspace/replacements, passes race1.197s for normalization/profile,
+equality/restore, enrollment-only reserved/custom decisions and private-format
+redaction. This is policy adoption, not the complete username login journey.
+Private review caught an unsafe unpublished Canonical accessor: the existing
+primitive's inline value can leak through an unexported enclosing fmt field.
+The delivered Name keeps Canonical private, adds Name.Equal and exposes bytes
+only through explicit sensitive Record; final independent review approves.
+No primitive engine rewrite or wrapper is needed for that API; the broader
+existing primitive/email diagnostic exposure remains a final-qualification
+finding to resolve, not claimed fixed by removing the new accessor. Do not
+mark identifier or affected consumers fully qualified until it is resolved.
+
+Checkpoint09:57UTC: root/password contracts31fca27 and native persistence/
+historical-compatibility bb8a8b0 are reviewed/pushed, exact Required39116660625/
+39117167622 succeeds. Root exact username signup/signin custody keeps the
+original operation; raw supplementary input/recovery cannot relabel it. Optional
+comparison metadata and atomic email-plus-username registration remain kernel-
+owned. Actual full username native workflow/session/HTTP composition remains
+unfinished; structural acceptance does not enable those routes.
+
+Independent review caught neutral email collision skipping subsequent username
+guards; three real-PG composed active-ID/retired-ID/missing-key regressions failed
+0.526s, then pass after both candidates are classified. Parent also reproduced
+legacy canonical JSON incompatibility0.248s; absent bindings now omit zero fields,
+and actual native AEAD restoration of independently encoded historical input
+passes. Corrected complete26 review aac55443 and final16 source/pin review
+ff6430f5 both APPROVE. Final root race1.560s/velocity1.205s/vet0 and password
+race1.338s/vet0 pass. Canonical public-root kernel PG18.6/race6.848s/taggedvet0
+and public-root/password native ordinary race2.182s/taggedvet0 pass.
+
+A separate module pins the actual downloaded username7f53201 and kernelbb8a8b0,
+with no workspace/replacements. Public policy validation plus real populated
+PostgreSQL upgrade/replay/read passes race1.371s; old identifiers remain unchanged
+and bound username canonical/display/profile/revision survive. This is actual
+public policy/storage adoption, not registration/password/session acceptance.
+Downloaded affected root/password/native compiler sources match reviewed Git.
+Changed-content secret scans pass; task-owned PostgreSQL has no residual fixture
+databases/roles and is stopped, and its cache/fixture directory is removed.
+
+Primary owns the complete username signup/availability/password-signin/rename
+consumer in go-identity/main, not a policy-only delivery. No other writer owns
+these paths. Required owners: new username nested module; existing identity
+identifier, password and native PostgreSQL owners; opt-in HTTP/reference and
+root manifests/integration pins as the actual journey requires. Preserve B1–B3
+and all delivered email profiles. Remaining M04 privacy/lifecycle obligations
+remain open; they are not an unrelated release-qualification wall for M05.
+
+Use the actual public identifier/v2 prerequisite9892f17723c0 with its implemented
+fixed Unicode15.1 normalization and bounded-arithmetic correction. The local
+go-identifier/main checkout4631132 was stale; remote object9892f17 was fetched
+and inspected, not merged, modified or replaced. Retained6503365 is historical
+implementation, not missing work to rebuild or salvage. The current published
+normalization API, existing focused evidence and direct-consumer proof unlock
+development; final primitive qualification is a distinct remaining boundary.
+
+Freeze after one bounded ownership/test pass: atomically reserve normalized
+username with genuine identity/password signup, rate-limited non-authoritative
+availability, same-canonicalizer password/session signin, fresh-authorized
+rename with documented prior-name disposition, collision/tenant isolation and
+denial/rollback/replay/unknown handling. Preserve canonical/display separation,
+versioned normalization, custom validation/cancellation, privacy and enumeration
+resistance. Existing real PostgreSQL/HTTPS reference harness is the consumer
+oracle, not application-written stores or a process-local uniqueness map.
+At the initial mapping checkpoint no username module or source edits existed.
+First implementation now adds exact identifier normalization binding and intent
+coverage; focused root tests pass0.276s after the expected absent-API red.
+Durable storage, actual reservation/signin/rename and selected HTTP remain work,
+not delivered behavior. Parent retains implementation and final acceptance;
+the independent OAuth introspection profile is closed separately below.
+
 ## Next independent lane: authenticated opaque-token introspection
 
-Readiness finding: the worker identified a genuinely missing public session-owner
-revalidation seam for a retained original password session without its bearer.
-Primary owns checking/extending that session boundary; worker must not copy the
-private primary reader or manufacture current authority. Independent core/parser
-work can proceed, while native current-source-session acceptance waits for the
-implemented, focused-proven and published owner contract. This is part of the
-introspection outcome, not a replacement auth engine or speculative extra lane.
+Closed08:55UTC: root6e1d2a47ddef/native66e0e479 are independently reviewed,
+pushed to origin/main and exact Required39112523877/39113109840 succeed.
+Native pins public v0.0.0-20261018084256-6e1d2a47ddef without replacement.
+Canonical public-root selected introspection+confidential+browser-withdrawal
+PG18.6/race passes96.083s; taggedvet exits0. Separate clean consumer pins actual
+downloaded native v0.0.0-20261018085159-66e0e4793f91 and passes genuine
+introspection/revocation/reuse plus user-block-before-cascade cases18.784s.
+Downloaded compiler input matches reviewed source. Native final reviewer
+oauth_introspection_review approves complete8 paths48d38d29; root7 prerequisite
+approval retained. Changed-content gitleaks35.36KB passes. No whole M30/M32,
+HTTP/resource-server/cache/workload or full unit qualification is claimed.
+Task-owned PG/caches have been removed after the bounded run. Worker stopped.
+
+Contract correction before any session-owner production write: a complete
+bearer-free live-session reader is absent, but introspection does not need it.
+The committed OAuth phase341–392 and browser-withdrawal regression distinguish
+approved grant authentication from browser authentication: only pending browser
+interactions require the live source session. Approved grants retain original
+root directory/user/identifier/credential/authorization expectations. Existing
+public owner reads and CheckCredentialAuthority express those checks. Browser
+logout alone therefore preserves an otherwise active approved grant; password/
+credential withdrawal and OAuth family revocation still deny. No new session API
+or substitute engine was added. Native mapper explicitly withdrew the mistaken
+dependency claim; QA57af8307 is historical/withdrawn, corrected bounded native
+QA1b7ba42a applies. This concrete source-backed correction changes no whole-goal
+security requirement and stops unnecessary owner work before it begins.
 
 Assigned owner: oauth_introspection, GPT-6.1 Sol high, in go-oauth-server/main
 at47f61eb. Writable scope: existing root/postgres protocol and native source,
@@ -23,8 +195,9 @@ Finite outcome: explicit opt-in configured confidential-owning-client RFC7662
 introspection of actual issued opaque access/refresh tokens; separate current
 client-secret authentication, active-only least metadata, inactive/unknown/foreign
 tokens return only Active=false. Public/unauthenticated/disabled calls fail closed
-before token lookup. Recheck actual primary grant, original subject/session/
-credential/authority, scope/resource/issuer/environment and expiration. Prove
+before token lookup. Recheck actual primary grant and original root subject/
+directory/identifier/credential/authorization, scope/resource/issuer/environment
+and expiration, preserving the approved grant after browser-only logout. Prove
 access-vs-family revocation, refresh reuse and blocking/withdrawal denial without
 stale fallback or renewed freshness; retain 30s/20s shared-issuer bounds. Preserve
 existing selected code/refresh/revoke behavior and all unsupported-profile denial.

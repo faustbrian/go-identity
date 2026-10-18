@@ -1,6 +1,6 @@
 # Identity Platform Progress
 
-## TL;DR — updated 2026-10-18 08:16 UTC
+## TL;DR — updated 2026-10-18 09:57 UTC
 
 **Estimated whole-goal completion: approximately 10–12%, with low confidence.**
 The working authentication baseline, thirteen email profiles and selected native
@@ -64,6 +64,14 @@ This is an effort/scope estimate, not a measured percentage or an ETA.
   Confidential Token/Revoke/Recover require actual current configured secret
   verification; adding a confidential client preserves installed public grants.
   Startup secret/version configuration is not hot or fleet-wide secret rotation.
+  Explicitly selected confidential owning clients can also introspect their
+  actual opaque access/refresh tokens through the native adapter. Current
+  subject/grant authority, blocking and expiry are checked; unknown/foreign/
+  inactive results disclose no metadata. Browser-only logout does not revoke
+  an independent approved grant. Root `6e1d2a4` and native `66e0e47` are pushed
+  with green Required CI; canonical PostgreSQL/race and separate downloaded
+  consumer checks pass. This is read-only introspection, not a cached resource-
+  authorization verifier, HTTP composition or completed M30/M32.
   Workload grants, client management, OIDC, device, restricted exchange and complete
   reference/HTTP/provider qualification remain outside this delivered profile.
 
@@ -81,6 +89,29 @@ This is an effort/scope estimate, not a measured percentage or an ETA.
 
 ### Immediate delivery state and next action
 
+- Native owning-client introspection is closed: root `6e1d2a4` and native
+  `66e0e47` are reviewed/pushed, Required39112523877/39113109840 succeeds.
+  Canonical public-root PG18.6/race96.083s and taggedvet0 pass; a separate
+  consumer using the downloaded native adapter passes real-PG/race18.784s.
+  Source inputs match the reviewed commit, and owned PostgreSQL/caches are
+  removed. Full M30/M32, resource-verifier/HTTP and final unit gates remain.
+- M05 username is active: fixed normalization/validation policy7f53201 is
+  independently reviewed/pushed with green Required39115559726; a separate
+  actual downloaded-policy consumer passes race1.197s. Atomic email-plus-username
+  reservation/normalization-storage and exact original-operation password
+  custody prerequisites are now reviewed/pushed as31fca27/bb8a8b0, with green
+  Required39116660625/39117167622. Canonical real-PG/race6.848s and native
+  password race2.182s/taggedvet0 pass. A separate actual downloaded-policy/kernel
+  consumer passes real-PG/race1.371s for populated upgrade/replay and bound reads,
+  preserving old identifiers. Primary is connecting the genuine password/session/
+  reference journey; complete username signup/signin, availability and fresh-
+  authorized rename are not delivered yet. No new milestone or qualified unit.
+- An independent GPT-6.1 Sol high worker owns the finite native organization
+  team create/add-member/list/remove consumer on go-organization/main152a232.
+  Existing public current-session/membership/coordinator contracts are sufficient;
+  the expected missing-API regression is captured. No team outcome is delivered
+  yet. Shared identity/session/reference contracts and final acceptance remain
+  primary-owned; heavy checks are serialized.
 - Remaining confirmation hooks are closed: email `8130ced`, native adapters
   `f9de2fd` and reference `ca26306` are independently reviewed and pushed.
   Required CI 39109239579/39110169561/39110688213 succeeds. Public-native,
