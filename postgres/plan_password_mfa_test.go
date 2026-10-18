@@ -104,3 +104,56 @@ func TestPasswordMFAPlanRetainsChallengeWithoutInventingPrimaryCapability(t *tes
 		}
 	}
 }
+
+func TestUsernameMFAChallengeRetainsOriginalAction(t *testing.T) {
+	b, p := passwordMFAPlanFixture(t)
+	b.OperationID, b.SchemaID = "identity.username.signin", "username-signin"
+	p.Feature.Operation.Owner = "identity/username"
+	p.Feature.Operation.OperationID, p.Feature.Operation.SchemaID = b.OperationID, b.SchemaID
+	wire, err := encodeFeaturePlan(b, [32]byte{1}, p)
+	if err != nil {
+		t.Fatal("username password comparison cannot prepare its original MFA challenge", err)
+	}
+	got, err := decodeFeaturePlan(b, [32]byte{1}, wire)
+	if err != nil || got.Feature == nil || got.Feature.Operation != p.Feature.Operation || got.MFAContinuation == nil || *got.MFAContinuation != *p.MFAContinuation {
+		t.Fatal("username MFA challenge cannot recover its exact original operation", err)
+	}
+	if !bytes.Contains(wire, []byte("identity-username-mfa-challenge-v1")) {
+		t.Fatal("username challenge reused a different origin's stored profile")
+	}
+	foreign := b
+	foreign.OperationID, foreign.SchemaID = "identity.password.signin", "password-signin"
+	if _, err := decodeFeaturePlan(foreign, [32]byte{1}, wire); err == nil {
+		t.Fatal("username challenge was reinterpreted as email-password signin")
+	}
+	for _, origin := range []string{"password", "magic-link", "email-verification"} {
+		changed := bytes.ReplaceAll(wire, []byte("identity-username-mfa-challenge-v1"), []byte("identity-"+origin+"-mfa-challenge-v1"))
+		if _, err := decodeFeaturePlan(b, [32]byte{1}, changed); err == nil {
+			t.Fatal("changed origin profile was accepted", origin)
+		}
+	}
+}
+
+func FuzzUsernameMFAOriginalChallenge(f *testing.F) {
+	f.Add(uint32(0), byte(0))
+	f.Add(uint32(1), byte(255))
+	f.Fuzz(func(t *testing.T, index uint32, change byte) {
+		b, p := passwordMFAPlanFixture(t)
+		b.OperationID, b.SchemaID = "identity.username.signin", "username-signin"
+		p.Feature.Operation.Owner = "identity/username"
+		p.Feature.Operation.OperationID, p.Feature.Operation.SchemaID = b.OperationID, b.SchemaID
+		wire, err := encodeFeaturePlan(b, [32]byte{1}, p)
+		if err != nil {
+			t.Fatal(err)
+		}
+		wire[uint64(index)%uint64(len(wire))] ^= change
+		decoded, err := decodeFeaturePlan(b, [32]byte{1}, wire)
+		if err != nil {
+			return
+		}
+		again, err := encodeFeaturePlan(b, [32]byte{1}, decoded)
+		if err != nil || !bytes.Equal(wire, again) || decoded.Feature.Operation.OperationID != "identity.username.signin" {
+			t.Fatal("accepted original username challenge lost canonical action custody")
+		}
+	})
+}

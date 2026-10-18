@@ -27,7 +27,7 @@ func decodeMFAContinuationPlanMode(b identity.CommandBinding, fp [32]byte, data 
 	if b.OperationID == "identity.email.verification-signin" {
 		return decodePrimaryMFAPlanMode(b, fp, data, "email-verification", allowUngenerated)
 	}
-	if b.OperationID == "identity.password.signin" {
+	if b.OperationID == "identity.password.signin" || b.OperationID == "identity.username.signin" {
 		return decodePasswordMFAPlanMode(b, fp, data, allowUngenerated)
 	}
 	return decodeMagicLinkMFAPlanMode(b, fp, data, allowUngenerated)
@@ -68,7 +68,20 @@ func validPasswordMFAPlanMode(b identity.CommandBinding, p CommandPlan, allowUng
 // comparison/browser custody and bound the child by original primary expiry.
 // Unlike magic-link consumption it has no primary capability participant.
 func encodePasswordMFAPlanMode(b identity.CommandBinding, fp [32]byte, p CommandPlan, allowUngenerated bool) ([]byte, error) {
-	return encodePrimaryMFAPlanMode(b, fp, p, "password", allowUngenerated)
+	return encodePrimaryMFAPlanMode(b, fp, p, passwordMFAOrigin(b.OperationID), allowUngenerated)
+}
+
+// Username and email-password compare the same credential kind but retain
+// distinct original flows. Never retag password's installed preparation bytes.
+func passwordMFAOrigin(operation string) string {
+	switch operation {
+	case "identity.password.signin":
+		return "password"
+	case "identity.username.signin":
+		return "username"
+	default:
+		return ""
+	}
 }
 
 // Both non-consuming primary owners use the same bounded envelope grammar.
@@ -118,7 +131,7 @@ func encodePrimaryMFAPlanMode(b identity.CommandBinding, fp [32]byte, p CommandP
 }
 
 func decodePasswordMFAPlanMode(b identity.CommandBinding, fp [32]byte, data []byte, allowUngenerated bool) (CommandPlan, error) {
-	return decodePrimaryMFAPlanMode(b, fp, data, "password", allowUngenerated)
+	return decodePrimaryMFAPlanMode(b, fp, data, passwordMFAOrigin(b.OperationID), allowUngenerated)
 }
 
 func decodePrimaryMFAPlanMode(b identity.CommandBinding, fp [32]byte, data []byte, origin string, allowUngenerated bool) (CommandPlan, error) {

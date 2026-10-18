@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Preserve exact username-signin MFA challenge preparation and query history
+  under its distinct original profile. Existing password, magic-link and
+  verification command bytes remain unchanged; cross-origin decoding denies.
+
 - Add typed native username rename intent and the sole atomic identifier/CAS
   writer, preserving display-only verification and keyed predecessor cooldowns.
   The registered workflow still owns fresh proof, current factor/risk policy and
