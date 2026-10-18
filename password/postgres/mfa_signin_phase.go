@@ -29,6 +29,7 @@ type signinMFAChallengePhase struct {
 	command      identity.Command
 	request      password.SigninRequest
 	recipient    kernel.RecipientRecord
+	username     kernel.UsernameRecord
 	material     password.CredentialSnapshot
 	flow         session.PreAuthTransaction
 	key          session.DigestKey
@@ -46,8 +47,11 @@ var _ kernel.PasswordMFAChallengeContributor = (*signinMFAChallengePhase)(nil)
 func (*signinMFAChallengePhase) Descriptor() kernel.ContributorDescriptor {
 	return kernel.ContributorDescriptor{Owner: "identity/password/postgres", ContractID: "identity.password", Version: 1}
 }
-func (*signinMFAChallengePhase) FeatureOperations() []identity.FeatureOperation {
-	return []identity.FeatureOperation{signinOperation()}
+func (p *signinMFAChallengePhase) FeatureOperations() []identity.FeatureOperation {
+	if p == nil || p.service == nil {
+		return nil
+	}
+	return []identity.FeatureOperation{p.service.operation()}
 }
 func (p *signinMFAChallengePhase) matches(c identity.Command) bool {
 	if p == nil || p.service == nil || p.service.mfa == nil || c != p.command {
@@ -55,7 +59,7 @@ func (p *signinMFAChallengePhase) matches(c identity.Command) bool {
 	}
 	f, ok := c.PasswordSigninFeature()
 	secret, cookie, custody := c.PasswordSigninCustody()
-	return ok && custody && secret.Len() > 0 && f.Operation == signinOperation() && cookie.Token() == p.request.Cookie.Token()
+	return ok && custody && secret.Len() > 0 && f.Operation == p.service.operation() && cookie.Token() == p.request.Cookie.Token()
 }
 func (p *signinMFAChallengePhase) scope() (kernel.MFAContinuationPlan, error) {
 	s, err := p.continuation.Bindings()
@@ -79,11 +83,15 @@ func (p *signinMFAChallengePhase) ValidatePasswordMFAChallenge(c identity.Comman
 	return nil
 }
 func (p *signinMFAChallengePhase) ValidateFeatureCommand(c identity.Command, plan kernel.CommandPlan) error {
-	if !p.matches(c) || p.recipient.Validate() != nil || p.recipient.Suppressed || plan.SubjectType != "authentication_attempt" || plan.Feature == nil || plan.Feature.Contributor != p.Descriptor() || plan.Feature.Operation != signinOperation() || plan.MFAContinuation == nil || plan.Capability != nil || plan.CapabilityIssuance == nil || len(plan.CapabilityIssuance.Grants) != 1 || plan.Lifecycle == nil || plan.Lifecycle.EventType != "mfa.challenge.created.v1" || plan.Lifecycle.BeforeVersion != 0 || plan.Lifecycle.AfterVersion != 0 || len(plan.Audits) != 1 {
+	if !p.matches(c) || p.recipient.Validate() != nil || p.recipient.Suppressed || plan.SubjectType != "authentication_attempt" || plan.Feature == nil || plan.Feature.Contributor != p.Descriptor() || plan.Feature.Operation != p.service.operation() || plan.MFAContinuation == nil || plan.Capability != nil || plan.CapabilityIssuance == nil || len(plan.CapabilityIssuance.Grants) != 1 || plan.Lifecycle == nil || plan.Lifecycle.EventType != "mfa.challenge.created.v1" || plan.Lifecycle.BeforeVersion != 0 || plan.Lifecycle.AfterVersion != 0 || len(plan.Audits) != 1 {
 		return password.ErrPasswordWork
 	}
 	if err := p.ValidatePasswordMFAChallenge(c, *plan.MFAContinuation); err != nil {
 		return err
+	}
+	state := signinPhase{operation: p.service.operation(), username: p.username, recipient: p.recipient, factorVersion: plan.MFAContinuation.FactorVersion}
+	if state.validateUsernameFields() != nil || p.primary.Profile != p.service.mfaPrimaryProfile() {
+		return password.ErrPasswordWork
 	}
 	metadata, err := p.prepared.Plan()
 	if err != nil || metadata.MFAContinuationUserID != p.recipient.User.ID || len(metadata.Grants) != 1 || metadata.Grants[0] != plan.CapabilityIssuance.Grants[0] {
@@ -173,6 +181,11 @@ func (p *signinMFAChallengePhase) ApplyFeature(ctx context.Context, w kernel.Wor
 		}
 	} else if _, err := w.RequireRecipientCredential(ctx, p, p.recipient, credential); err != nil {
 		return identity.FeatureReceipt{}, err
+	}
+	if s.c.Username != nil {
+		if err := w.RequireUsername(ctx, p, p.username); err != nil {
+			return identity.FeatureReceipt{}, err
+		}
 	}
 	policy := authoritypg.AuthorityScope{TenantID: authorization.TenantID(b.TenantID), SubjectID: authorization.SubjectID(p.recipient.User.ID), PolicyNamespace: s.c.Profile.PolicyNamespace}
 	if err := authoritypg.RequireAuthority(ctx, w, policy, a.Authorization.Version, s.c.Repository.MaximumDuration); err != nil {
@@ -279,7 +292,7 @@ func (p *signinMFAChallengePhase) RecoverParticipant(ctx context.Context, w kern
 	if err != nil {
 		return kernel.RecoveryUnknown, err
 	}
-	rows, err := w.Query(ctx, `SELECT p.record,p.record_digest,c.scope_digest FROM identity_password.mfa_primary_records p LEFT JOIN identity_mfa.continuations c ON c.tenant_id=p.tenant_id AND c.origin_purpose=p.purpose AND c.origin_command_id=p.command_id AND c.continuation_id=$3 WHERE p.tenant_id=$1 AND p.command_id=$2 AND p.purpose='identity.password.signin'`, string(b.TenantID), cmd, string(m.ID))
+	rows, err := w.Query(ctx, `SELECT p.record,p.record_digest,c.scope_digest FROM identity_password.mfa_primary_records p LEFT JOIN identity_mfa.continuations c ON c.tenant_id=p.tenant_id AND c.origin_purpose=p.purpose AND c.origin_command_id=p.command_id AND c.continuation_id=$3 WHERE p.tenant_id=$1 AND p.command_id=$2 AND p.purpose=$4`, string(b.TenantID), cmd, string(m.ID), p.service.operation().OperationID)
 	if err != nil {
 		return kernel.RecoveryUnknown, err
 	}
@@ -295,8 +308,8 @@ func (p *signinMFAChallengePhase) RecoverParticipant(ctx context.Context, w kern
 		return kernel.RecoveryUnknown, password.ErrPasswordWork
 	}
 	defer clear(wire)
-	_, sum, err := decodeMFASigninPrimary(wire, p.service.c.VerificationKeys, p.service.c.Issuer, p.service.c.Environment, auth.ProofID(b.CommandID), string(b.TenantID), string(m.UserID))
-	if err != nil || len(digest) != 32 || len(scope) != 32 || string(digest) != string(sum[:]) || string(scope) != string(m.ScopeDigest[:]) {
+	primary, sum, err := decodeMFASigninPrimary(wire, p.service.c.VerificationKeys, p.service.c.Issuer, p.service.c.Environment, auth.ProofID(b.CommandID), string(b.TenantID), string(m.UserID))
+	if err != nil || primary.Profile != p.service.mfaPrimaryProfile() || len(digest) != 32 || len(scope) != 32 || string(digest) != string(sum[:]) || string(scope) != string(m.ScopeDigest[:]) {
 		return kernel.RecoveryUnknown, password.ErrPasswordWork
 	}
 	return kernel.RecoveryCommitted, nil

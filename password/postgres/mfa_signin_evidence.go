@@ -16,6 +16,7 @@ import (
 )
 
 const mfaSigninPrimaryProfile = "identity-password-mfa-primary-v1"
+const usernameMFASigninPrimaryProfile = "identity-username-mfa-primary-v1"
 
 // This owner-native non-final record is deliberately not SignedSignInRecord.
 // It cannot enter SignInSource or mint an AuthenticatedProof. Only the password
@@ -43,7 +44,7 @@ func mfaSigninPrimaryFrame(r mfaSigninPrimary) ([]byte, error) {
 	if _, err := session.NewAuthoritySnapshot(r.Authority); err != nil || r.Authority.Factor.Present || r.Authority.Organization.Present || r.Authority.Passkey.Present {
 		return nil, password.ErrPasswordWork
 	}
-	if r.Profile != mfaSigninPrimaryProfile || r.State != auth.SignInStateChallengeRequired || !reauthenticationText(r.Issuer, 128) || !reauthenticationText(r.Environment, 128) || !reauthenticationText(r.CredentialID, 128) || !reauthenticationText(r.KeyID, 128) || r.ProofVersion == 0 || r.CredentialVersion == 0 || r.Proof.Method != "password" || r.Proof.Assurance != auth.AssuranceSingleFactor || r.Proof.Purpose != session.PasswordMFAPrimaryPurpose || r.Proof.ExpiresAt.Sub(r.Proof.IssuedAt) > 5*time.Minute {
+	if r.Profile != mfaSigninPrimaryProfile && r.Profile != usernameMFASigninPrimaryProfile || r.State != auth.SignInStateChallengeRequired || !reauthenticationText(r.Issuer, 128) || !reauthenticationText(r.Environment, 128) || !reauthenticationText(r.CredentialID, 128) || !reauthenticationText(r.KeyID, 128) || r.ProofVersion == 0 || r.CredentialVersion == 0 || r.Proof.Method != "password" || r.Proof.Assurance != auth.AssuranceSingleFactor || r.Proof.Purpose != session.PasswordMFAPrimaryPurpose || r.Proof.ExpiresAt.Sub(r.Proof.IssuedAt) > 5*time.Minute {
 		return nil, password.ErrPasswordWork
 	}
 	if _, err := identity.ParseCommandID(string(r.Proof.ID)); err != nil {
@@ -62,7 +63,13 @@ func mfaSigninPrimaryFrame(r mfaSigninPrimary) ([]byte, error) {
 	}
 	// The distinct domain and non-final purpose prevent this signature from
 	// authenticating an upstream completed-signin record, even after retagging.
-	return append([]byte("golib/identity/password/mfa-primary-v1\x00"), wire...), nil
+	domain := "golib/identity/password/mfa-primary-v1\x00"
+	if r.Profile == usernameMFASigninPrimaryProfile {
+		// Preserve installed password signatures while binding username's exact
+		// original flow under its own non-final comparison-evidence domain.
+		domain = "golib/identity/username/mfa-primary-v1\x00"
+	}
+	return append([]byte(domain), wire...), nil
 }
 
 func (k SigninSigningKey) signMFAPrimary(r mfaSigninPrimary) (mfaSigninPrimary, error) {

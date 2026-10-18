@@ -31,6 +31,15 @@ func persistMFASigninPrimary(ctx context.Context, w kernel.Work, owner kernel.Pa
 	if err != nil {
 		return err
 	}
+	profile := mfaSigninPrimaryProfile
+	if b.OperationID == "identity.username.signin" {
+		profile = usernameMFASigninPrimaryProfile
+	} else if b.OperationID != "identity.password.signin" {
+		return password.ErrPasswordWork
+	}
+	if r.Profile != profile {
+		return identity.ForbiddenError{}
+	}
 	c, err := continuation.Bindings()
 	if err != nil {
 		return password.ErrPasswordWork

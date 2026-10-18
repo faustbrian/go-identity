@@ -1,15 +1,89 @@
 package passwordhttp_test
 
 import (
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
+	auth "github.com/faustbrian/go-authentication/v2"
+	"github.com/faustbrian/go-capability/v2"
+	identity "github.com/faustbrian/go-identity"
 	identityhttp "github.com/faustbrian/go-identity/http"
 	passwordhttp "github.com/faustbrian/go-identity/http/password"
 	"github.com/faustbrian/go-identity/password"
 )
+
+func TestUsernameSigninSelectedTOTPChallengeNeverDeliversSession(t *testing.T) {
+	for _, mode := range []string{"fresh", "disabled", "replay", "unknown", "expired"} {
+		t.Run(mode, func(t *testing.T) {
+			f, c, owner, device := newSignin(t)
+			c.MFAContinuation = mode != "disabled"
+			q, flow, err := owner.result.Recovery.Bindings()
+			if err != nil {
+				t.Fatal(err)
+			}
+			q.OperationID = "identity.username.signin"
+			owner.result.Recovery, err = password.NewSigninRecovery(q, flow)
+			if err != nil {
+				t.Fatal(err)
+			}
+			now := c.Now()
+			signer, _ := capability.NewHMACSHA256Signer("test", []byte(strings.Repeat("x", 32)))
+			wire, err := capability.Issue(t.Context(), capability.Payload{Version: 1, ID: "AwMDAwMDAwMDAwMDAwMDAw", Issuer: "https://issuer.test", Tenant: "tenant-a", Subject: "user-a", Audiences: []string{c.Audience}, Resource: "identity.mfa/user-a", Operation: "identity.mfa.complete", IssuedAt: now, NotBefore: now, ExpiresAt: now.Add(time.Minute), MaxUses: 1}, signer, capability.DefaultLimits())
+			if err != nil {
+				t.Fatal(err)
+			}
+			proof, err := capability.ParseProof(wire, capability.DefaultLimits())
+			if err != nil {
+				t.Fatal(err)
+			}
+			owner.canonical = "strasse"
+			owner.result.State = auth.SignInStateChallengeRequired
+			owner.result.Issuance.CommitOutcome = identity.CommitOutcomeCommitted
+			owner.result.Challenge = password.MFAChallengeResult{ID: "AwMDAwMDAwMDAwMDAwMDAw", Proof: proof, Method: "totp", ExpiresAt: now.Add(time.Minute)}
+			if mode == "replay" {
+				owner.result.Issuance.Replayed = true
+				owner.result.Challenge.Proof = capability.Proof{}
+			}
+			if mode == "unknown" {
+				owner.result.Issuance.CommitOutcome = identity.CommitOutcomeUnknown
+			}
+			if mode == "expired" {
+				owner.result.Challenge.ExpiresAt = now
+			}
+			feature, err := passwordhttp.NewUsernameFeature(passwordhttp.UsernameFeatureConfig{Signin: &c})
+			if err != nil {
+				t.Fatal(err)
+			}
+			h, err := identityhttp.NewSelectedHandler(identityhttp.FeatureServices{Features: []identityhttp.Feature{feature}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			r := signinRequest(f, device)
+			r.URL.Path, r.RequestURI = "/v1/username/signin", "/v1/username/signin"
+			r.Body = signupBody(r, `{"flowID":"AQEBAQEBAQEBAQEBAQEBAQ","username":"Straße","password":"synthetic-password","callbackURL":""}`)
+			w := httptest.NewRecorder()
+			h.ServeHTTP(w, r)
+			if w.Header().Get("Set-Cookie") != "" || w.Header().Get("X-CSRF-Token") != "" || strings.Contains(w.Body.String(), wire) || strings.Contains(w.Body.String(), "user-a") {
+				t.Fatal("username partial authentication released session or secret body")
+			}
+			var response map[string]any
+			if json.Unmarshal(w.Body.Bytes(), &response) != nil {
+				t.Fatal("invalid challenge response")
+			}
+			if mode == "fresh" {
+				if w.Code != http.StatusOK || w.Header().Get("X-MFA-Token") != wire || response["challengeRequired"] != true || response["signedIn"] != false || owner.last.Caller.Request.Action != "identity.username.signin" {
+					t.Fatal("selected username challenge missing or relabeled", w.Code)
+				}
+			} else if w.Code == http.StatusOK || w.Header().Get("X-MFA-Token") != "" || response["challengeRequired"] == true {
+				t.Fatal("unselected or historical username challenge was delivered", mode, w.Code)
+			}
+		})
+	}
+}
 
 func TestUsernameSignupRetainsDistinctOriginalActionAndRawName(t *testing.T) {
 	f, c, owner, device := newSignup(t)
@@ -80,7 +154,7 @@ func TestUsernameHandlersDoNotAliasPasswordRoutes(t *testing.T) {
 		t.Fatal("username selection aliased password route")
 	}
 	if out, err := passwordhttp.NewUsernameSigninHandler(passwordhttp.SigninConfig{MFAContinuation: true}); err == nil || out != nil {
-		t.Fatal("username advertised unsupported enrolled-MFA continuation")
+		t.Fatal("unconfigured username continuation acquired a handler")
 	}
 }
 

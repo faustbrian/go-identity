@@ -25,7 +25,9 @@ func NewUsernameSignupHandlerWithMiddleware(c SignupConfig, m []identityhttp.Mid
 // NewUsernameSigninHandler selects only POST /v1/username/signin with closed
 // username/password input and original username-signin browser custody. The
 // native owner supplies canonical rate input and enumeration-safe comparison.
-// This profile supports known-empty MFA only; MFAContinuation is rejected.
+// MFAContinuation explicitly permits only challenge-only native results, never
+// a session before the selected native factor completion. Zero retains the
+// known-empty profile; native enrolled/unknown authority must deny, not fall back.
 func NewUsernameSigninHandler(c SigninConfig) (http.Handler, error) {
 	return NewUsernameSigninHandlerWithMiddleware(c, nil)
 }
@@ -34,8 +36,5 @@ func NewUsernameSigninHandler(c SigninConfig) (http.Handler, error) {
 // without duplicating credential delivery or weakening shared cookie custody.
 // Hooks receive SigninState; borrowed owners must outlive concurrent requests.
 func NewUsernameSigninHandlerWithMiddleware(c SigninConfig, m []identityhttp.MiddlewareDescriptor) (http.Handler, error) {
-	if c.MFAContinuation {
-		return nil, identityhttp.ErrInvalidInput
-	}
 	return newSigninHandler(c, m, true)
 }

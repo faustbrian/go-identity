@@ -23,9 +23,6 @@ func signinOperation(c SigninConfig, m []identityhttp.MiddlewareDescriptor) (ide
 	return signinOperationProfile(c, m, false)
 }
 func signinOperationProfile(c SigninConfig, m []identityhttp.MiddlewareDescriptor, usernameProfile bool) (identityhttp.OperationDescriptor, error) {
-	if usernameProfile && c.MFAContinuation {
-		return identityhttp.OperationDescriptor{}, identityhttp.ErrInvalidInput
-	}
 	owner, action := identityhttp.ModuleID("identity/password"), "identity.password.signin"
 	if usernameProfile {
 		owner, action = "identity/username", "identity.username.signin"
@@ -94,6 +91,9 @@ func signinWireProfile(c SigninConfig, usernameProfile bool) *identityhttp.WireO
 	}
 	if c.MFAContinuation {
 		definition["description"] = "Explicit password-first MFA selection. Original flow/cookie, mapped HTTPS tenant/Origin, callback, remember and signed device remain mandatory. Correct password commits either the selected single-factor session or a challenge-only X-MFA-Token; partial authentication cannot issue a session. Native current factor/risk/credential authority is decisive. Replay, ambiguity, errors, cancellation and expired response commitment withhold credentials. Recovery preserves original metadata without proof redelivery."
+		if usernameProfile {
+			definition["description"] = "Explicit username/password-first TOTP selection retains the exact original username-signin flow, browser/device custody and remember choice. Current username and credential/factor authority are native. Correct password commits either an authoritative known-empty-factor session or a challenge-only X-MFA-Token. No session or synchronizer accompanies the challenge. Ambiguity, replay, cancellation, errors and expiry never redeliver custody or fall back to another primary."
+		}
 	}
 	data, _ := json.Marshal(definition)
 	wire := &identityhttp.WireOperation{Definition: data}

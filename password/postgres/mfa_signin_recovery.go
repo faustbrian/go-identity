@@ -29,7 +29,7 @@ func (s *SigninService) recoverMFASignin(ctx context.Context, r password.SigninR
 		return password.SigninResult{}, receiptErr
 	}
 	spec, _ := flow.Bindings()
-	if receipt.Feature.Operation != signinOperation() || receipt.Binding.PolicyID != spec.Binding.Intent.PolicyID || receipt.Binding.PolicyVersion != spec.Binding.Intent.PolicyVersion || receipt.Binding.AnonymousFlowID != string(spec.Binding.ID) {
+	if receipt.Feature.Operation != s.operation() || receipt.Binding.PolicyID != spec.Binding.Intent.PolicyID || receipt.Binding.PolicyVersion != spec.Binding.Intent.PolicyVersion || receipt.Binding.AnonymousFlowID != string(spec.Binding.ID) {
 		return password.SigninResult{}, identity.ForbiddenError{}
 	}
 	out := password.SigninResult{State: auth.SignInStateRejected, Recovery: r.Recovery, Issuance: session.IssueResult{CommandID: q.CommandID, CommitOutcome: receipt.Outcome, RetryAfter: receipt.RetryAfter, Replayed: true}}
@@ -65,13 +65,13 @@ func (s *SigninService) requireMFASigninHistory(ctx context.Context, b identity.
 		return password.ErrPasswordWork
 	}
 	var wire, digest []byte
-	err = s.pool.Raw().QueryRow(ctx, `SELECT CASE WHEN octet_length(record)<=$4 THEN record ELSE ''::bytea END,record_digest FROM identity_password.mfa_primary_records WHERE tenant_id=$1 AND purpose='identity.password.signin' AND command_id=$2 AND user_id=$3 AND proof_id=$5`, string(b.TenantID), cmd, string(scope.UserID), maximumSigninRecordBytes, string(b.CommandID)).Scan(&wire, &digest)
+	err = s.pool.Raw().QueryRow(ctx, `SELECT CASE WHEN octet_length(record)<=$4 THEN record ELSE ''::bytea END,record_digest FROM identity_password.mfa_primary_records WHERE tenant_id=$1 AND purpose=$6 AND command_id=$2 AND user_id=$3 AND proof_id=$5`, string(b.TenantID), cmd, string(scope.UserID), maximumSigninRecordBytes, string(b.CommandID), s.operation().OperationID).Scan(&wire, &digest)
 	defer clear(wire)
 	if err != nil {
 		return readerFailure(ctx)
 	}
 	primary, sum, err := decodeMFASigninPrimary(wire, s.c.VerificationKeys, s.c.Issuer, s.c.Environment, auth.ProofID(b.CommandID), string(b.TenantID), string(scope.UserID))
-	if err != nil || len(digest) != sha256.Size || subtle.ConstantTimeCompare(digest, sum[:]) != 1 || !primary.Proof.IssuedAt.Equal(scope.IssuedAt) || !primary.Proof.ExpiresAt.Equal(scope.ExpiresAt) {
+	if err != nil || primary.Profile != s.mfaPrimaryProfile() || len(digest) != sha256.Size || subtle.ConstantTimeCompare(digest, sum[:]) != 1 || !primary.Proof.IssuedAt.Equal(scope.IssuedAt) || !primary.Proof.ExpiresAt.Equal(scope.ExpiresAt) {
 		return password.ErrPasswordWork
 	}
 	return nil

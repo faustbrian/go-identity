@@ -88,10 +88,21 @@ registration and select the exact `identity.username.signin` action and original
 pre-auth intent. Nil retains email signin. The native owner discovers the exact
 stored canonical name, independently requires an actual verified email (not
 necessarily primary), compares the real password and requires known-empty MFA.
-Username state itself is not mailbox verification. Nonempty or missing factor
-authority denies; this selection does not provide username MFA continuation.
-Use `NewSigninService`; `NewMFASigninService` rejects username selection at
-startup because its challenge custody and recovery use the password operation.
+Username state itself is not mailbox verification. With `NewSigninService`,
+nonempty or missing factor authority denies. `NewMFASigninService` still rejects
+username selection: its original custody belongs to the email-password action.
+For an explicitly selected enrolled-TOTP profile use
+`NewUsernameMFASigninService(pool, config, challenge)`. It requires Username and
+empty or TOTP-only `AllowedMethods`. Install `UsernameMFAMigrationSource` after
+the selected password history and MFA's `UsernameContinuationMigrationSource`
+with its exact installed verification/password predecessor before serving.
+Its signed non-final primary has a distinct username domain; it cannot be retagged
+as completed authentication or another login origin. The actual completion owner
+must authenticate the original child/browser and current authority, then compare
+the factor and atomically consume it with the session. Known-empty accounts keep
+ordinary single-factor signin; enrolled accounts receive no session from challenge
+creation. Unknown or unsupported factor state denies. Recovery returns original
+metadata, not replacement proof.
 Both signup and signin copy the selected policy at construction; replacing the
 caller's complete policy value later cannot change the frozen configuration.
 Validator callbacks remain borrowed and must follow their documented contract.

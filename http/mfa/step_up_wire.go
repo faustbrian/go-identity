@@ -62,7 +62,7 @@ func selectedVerifyWire(c FeatureConfig) *identityhttp.WireOperation {
 		return selectedBaseVerifyWire(c)
 	}
 	active := stepUpWire(*c.ActiveStepUp)
-	if c.TOTPVerify == nil && c.PasswordTOTPVerify == nil && c.VerificationTOTPVerify == nil && c.EnrollmentConfirmation == nil {
+	if c.TOTPVerify == nil && c.PasswordTOTPVerify == nil && c.VerificationTOTPVerify == nil && c.UsernameTOTPVerify == nil && c.EnrollmentConfirmation == nil {
 		return active
 	}
 	base := selectedBaseVerifyWire(c)
@@ -102,6 +102,9 @@ func selectedVerifyWire(c FeatureConfig) *identityhttp.WireOperation {
 			if c.VerificationTOTPVerify != nil {
 				values = append(values, "verification")
 			}
+			if c.UsernameTOTPVerify != nil {
+				values = append(values, "username")
+			}
 			p["schema"] = map[string]any{"type": "string", "enum": values}
 			p["required"] = c.TOTPVerify == nil && c.PasswordTOTPVerify == nil
 		case "X-CSRF-Token":
@@ -115,7 +118,7 @@ func selectedVerifyWire(c FeatureConfig) *identityhttp.WireOperation {
 					}
 				}
 			}
-			for _, login := range []*TOTPVerifyConfig{c.TOTPVerify, c.PasswordTOTPVerify, c.VerificationTOTPVerify} {
+			for _, login := range []*TOTPVerifyConfig{c.TOTPVerify, c.PasswordTOTPVerify, c.VerificationTOTPVerify, c.UsernameTOTPVerify} {
 				if login != nil && !slices.Contains(values, login.Origin) {
 					values = append(values, login.Origin)
 				}

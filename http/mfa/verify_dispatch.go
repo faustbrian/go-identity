@@ -11,8 +11,8 @@ import (
 // value selects authenticated factor confirmation. Do not inspect/reparse body
 // or infer a variant from ambient cookies, proof shape or failed authentication.
 type verifyDispatch struct {
-	login, password, verification, enrollment, stepup http.Handler
-	passwordDefault                                   bool
+	login, password, verification, username, enrollment, stepup http.Handler
+	passwordDefault                                             bool
 }
 
 func (h *verifyDispatch) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -43,6 +43,8 @@ func (h *verifyDispatch) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				selected = h.password
 			} else if len(values) == 1 && values[0] == "verification" {
 				selected = h.verification
+			} else if len(values) == 1 && values[0] == "username" {
+				selected = h.username
 			} else if len(values) == 1 && values[0] == "step-up" {
 				selected = h.stepup
 			} else {
@@ -68,11 +70,17 @@ func (h *verifyDispatch) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *verifyDispatch) WithOperationMiddleware(m []identityhttp.MiddlewareDescriptor) (http.Handler, error) {
-	if h == nil || h.login == nil && h.enrollment == nil && h.password == nil && h.verification == nil && h.stepup == nil {
+	if h == nil || h.login == nil && h.enrollment == nil && h.password == nil && h.verification == nil && h.username == nil && h.stepup == nil {
 		return nil, identityhttp.ErrInvalidInput
 	}
 	out := &verifyDispatch{passwordDefault: h.passwordDefault}
 	var err error
+	if h.username != nil {
+		out.username, err = identityhttp.WithOperationMiddleware(h.username, m)
+		if err != nil {
+			return nil, err
+		}
+	}
 	if h.verification != nil {
 		out.verification, err = identityhttp.WithOperationMiddleware(h.verification, m)
 		if err != nil {

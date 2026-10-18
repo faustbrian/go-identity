@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add explicit `NewUsernameMFASigninService` for username/password followed by
+  confirmed TOTP. Preserve original username/browser/remember custody and
+  current name, credential and factor epochs, with no session before completion.
+  Install the forward `UsernameMFAMigrationSource` after password history and
+  the matching MFA continuation suffix. Existing factories keep their behavior.
+
 - Add explicit coexisting email/username registration confirmation routing from
   authenticated persisted issuance origin. The shared route selects only its
   original native owner; missing or ambiguous origins deny without fallback.

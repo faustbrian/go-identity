@@ -63,15 +63,35 @@ type signinMFAComposition struct {
 // only a committed continuation. Missing/unsupported factor state denies.
 // The existing NewSigninService remains unchanged. Pool and policy collaborators
 // are borrowed and must outlive bounded concurrent calls. No session is issued
-// before actual second-factor completion. Username selection is unsupported;
-// use NewSigninService for the known-empty-factor username profile.
+// before actual second-factor completion. This factory rejects Username; use
+// NewUsernameMFASigninService for that explicitly selected TOTP profile, or
+// NewSigninService for the known-empty-factor username profile.
 func NewMFASigninService(pool *database.Pool, c SigninConfig, m MFAChallengeConfig) (*SigninService, error) {
-	// MFA challenge custody and recovery retain the password operation. Until
-	// username continuation is selected, reject the mixed profile at startup
-	// rather than issue an original username outcome that cannot be recovered.
+	// Keep the existing password factory bound to its original operation. The
+	// separate username factory selects its own immutable challenge provenance.
 	if c.Username != nil {
 		return nil, password.ErrPasswordWork
 	}
+	return newMFASigninService(pool, c, m)
+}
+
+// NewUsernameMFASigninService explicitly selects username/password followed by
+// confirmed TOTP. Username must be configured; AllowedMethods is empty or only
+// "totp". The existing password factory and known-empty username profile retain
+// their contracts. The original username flow, current name and identifier
+// authority are fenced with the comparison and continuation in one Work.
+// Known-empty factor authority retains ordinary SFA. Enrolled users receive no
+// session or final authentication proof before actual TOTP completion; unknown
+// or unsupported factor state denies instead of falling back.
+// Pool and policy collaborators are borrowed for bounded concurrent calls.
+func NewUsernameMFASigninService(pool *database.Pool, c SigninConfig, m MFAChallengeConfig) (*SigninService, error) {
+	if c.Username == nil || len(m.AllowedMethods) > 1 || len(m.AllowedMethods) == 1 && m.AllowedMethods[0] != "totp" {
+		return nil, password.ErrPasswordWork
+	}
+	return newMFASigninService(pool, c, m)
+}
+
+func newMFASigninService(pool *database.Pool, c SigninConfig, m MFAChallengeConfig) (*SigninService, error) {
 	methods, methodErr := freezeMFACompletionMethods(m.AllowedMethods)
 	if methodErr != nil {
 		return nil, methodErr
@@ -98,7 +118,14 @@ func NewMFASigninService(pool *database.Pool, c SigninConfig, m MFAChallengeConf
 	return s, nil
 }
 
-func (s *SigninService) signinMFA(ctx context.Context, r password.SigninRequest, b identity.CommandBinding, recipient kernel.RecipientRecord, material password.CredentialSnapshot, flow session.PreAuthTransaction, key session.DigestKey, admission risk.AuthenticationAdmission, authority session.AuthoritySnapshot, factor uint64, upgrade *kernel.PasswordHashUpgradeIntent, replacement primitive.EncodedHash, out password.SigninResult) (password.SigninResult, error) {
+func (s *SigninService) mfaPrimaryProfile() string {
+	if s.c.Username != nil {
+		return usernameMFASigninPrimaryProfile
+	}
+	return mfaSigninPrimaryProfile
+}
+
+func (s *SigninService) signinMFA(ctx context.Context, r password.SigninRequest, b identity.CommandBinding, recipient kernel.RecipientRecord, username kernel.UsernameRecord, material password.CredentialSnapshot, flow session.PreAuthTransaction, key session.DigestKey, admission risk.AuthenticationAdmission, authority session.AuthoritySnapshot, factor uint64, upgrade *kernel.PasswordHashUpgradeIntent, replacement primitive.EncodedHash, out password.SigninResult) (password.SigninResult, error) {
 	at := s.c.Issuance.Clock.Now().UTC().Truncate(time.Second)
 	until := at.Add(min(s.c.ProofTTL, s.mfa.config.Lifetime))
 	f, _ := flow.Bindings()
@@ -114,7 +141,7 @@ func (s *SigninService) signinMFA(ctx context.Context, r password.SigninRequest,
 		version++
 	}
 	vector, _ := authority.Bindings()
-	primary, err := s.c.SigningKey.signMFAPrimary(mfaSigninPrimary{Profile: mfaSigninPrimaryProfile, State: auth.SignInStateChallengeRequired, Issuer: s.c.Issuer, Environment: s.c.Environment, ProofVersion: 1, CredentialID: string(m.Credential.ID), CredentialVersion: version, IdentifierID: recipient.Identifier.ID, IdentifierVersion: recipient.Identifier.Version, VerificationVersion: recipient.Verification.Version, Authority: vector, Proof: auth.Proof{ID: auth.ProofID(b.CommandID), Tenant: string(b.TenantID), Subject: string(recipient.User.ID), Method: "password", Assurance: auth.AssuranceSingleFactor, Purpose: session.PasswordMFAPrimaryPurpose, Audience: s.c.Profile.Audience, IssuedAt: at, ExpiresAt: until}})
+	primary, err := s.c.SigningKey.signMFAPrimary(mfaSigninPrimary{Profile: s.mfaPrimaryProfile(), State: auth.SignInStateChallengeRequired, Issuer: s.c.Issuer, Environment: s.c.Environment, ProofVersion: 1, CredentialID: string(m.Credential.ID), CredentialVersion: version, IdentifierID: recipient.Identifier.ID, IdentifierVersion: recipient.Identifier.Version, VerificationVersion: recipient.Verification.Version, Authority: vector, Proof: auth.Proof{ID: auth.ProofID(b.CommandID), Tenant: string(b.TenantID), Subject: string(recipient.User.ID), Method: "password", Assurance: auth.AssuranceSingleFactor, Purpose: session.PasswordMFAPrimaryPurpose, Audience: s.c.Profile.Audience, IssuedAt: at, ExpiresAt: until}})
 	if err != nil {
 		return out, fmt.Errorf("password MFA primary: %w", err)
 	}
@@ -174,11 +201,14 @@ func (s *SigninService) signinMFA(ctx context.Context, r password.SigninRequest,
 		fields = append(fields, extra...)
 		fields = append(fields, signinRehashCommitment(replacement))
 	}
-	command, err := identity.NewFeaturePasswordSigninCommand(identity.FeatureCommandSpec{Binding: b, Operation: signinOperation(), Fields: fields}, r.Password, r.Cookie)
+	if s.c.Username != nil {
+		fields = append(fields, usernameSigninFields(username)...)
+	}
+	command, err := identity.NewFeaturePasswordSigninCommand(identity.FeatureCommandSpec{Binding: b, Operation: s.operation(), Fields: fields}, r.Password, r.Cookie)
 	if err != nil {
 		return out, err
 	}
-	p := &signinMFAChallengePhase{service: s, command: command, request: r, recipient: recipient, material: material, flow: flow, key: key, admission: admission, authority: vector, primary: primary, continuation: continuation, prepared: prepared, upgrade: upgrade, replacement: replacement}
+	p := &signinMFAChallengePhase{service: s, command: command, request: r, recipient: recipient, username: username, material: material, flow: flow, key: key, admission: admission, authority: vector, primary: primary, continuation: continuation, prepared: prepared, upgrade: upgrade, replacement: replacement}
 	coordinator, registry, err := s.mfaCoordinator(p)
 	if err != nil {
 		return out, fmt.Errorf("password MFA coordinator: %w", err)

@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Explicitly select native username/password MFA challenges with
+  `SigninConfig.MFAContinuation`. Fresh committed challenges disclose only the
+  original proof header and metadata, never session or CSRF credentials; the
+  unselected known-empty-factor profile remains unchanged.
+
 - Add explicitly selected username signup, signin, advisory availability and
   protected cookie rename transport through the existing native owners.
   Username routes have distinct actions and wire schemas; email routes remain

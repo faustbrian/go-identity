@@ -15,6 +15,43 @@ type nativeMFAPrimarySigner interface {
 	signMFAPrimary(mfaSigninPrimary) (mfaSigninPrimary, error)
 }
 
+func TestUsernameMFAPrimaryDoesNotRetagPasswordEvidence(t *testing.T) {
+	key, err := NewSigninSigningKey("primary", ed25519.NewKeyFromSeed(make([]byte, ed25519.SeedSize)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Date(2026, 10, 12, 12, 0, 0, 0, time.UTC)
+	p := mfaSigninPrimary{Profile: "identity-username-mfa-primary-v1", State: auth.SignInStateChallengeRequired, Issuer: "issuer", Environment: "test", Proof: auth.Proof{ID: "AwMDAwMDAwMDAwMDAwMDAw", Tenant: "tenant", Subject: "user", Method: "password", Assurance: auth.AssuranceSingleFactor, Purpose: session.PasswordMFAPrimaryPurpose, Audience: "identity", IssuedAt: now, ExpiresAt: now.Add(time.Minute)}, ProofVersion: 1, CredentialID: "password", CredentialVersion: 3, IdentifierID: "email", IdentifierVersion: 1, VerificationVersion: 1}
+	binding := func(key string) session.AuthorityBinding { return session.AuthorityBinding{ScopeKey: key, Version: 1} }
+	p.Authority = session.AuthoritySnapshotSpec{Global: binding("global"), Tenant: binding("tenant"), User: binding("user"), Identifier: binding("identifier"), Credential: binding("credential"), SessionFamily: binding("family"), Session: binding("session"), Authorization: binding("authorization")}
+	keys := map[string]ed25519.PublicKey{"primary": ed25519.NewKeyFromSeed(make([]byte, ed25519.SeedSize)).Public().(ed25519.PublicKey)}
+	for _, profile := range []string{mfaSigninPrimaryProfile, "identity-username-mfa-primary-v1"} {
+		p.Profile = profile
+		signed, err := key.signMFAPrimary(p)
+		if err != nil {
+			t.Fatal("original selected MFA primary profile cannot be signed", profile, err)
+		}
+		wire, _, err := encodeMFASigninPrimary(signed)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if restored, _, err := decodeMFASigninPrimary(wire, keys, p.Issuer, p.Environment, p.Proof.ID, p.Proof.Tenant, p.Proof.Subject); err != nil || restored.Profile != profile {
+			t.Fatal("original primary profile cannot survive recovery", err)
+		}
+		other := "identity-username-mfa-primary-v1"
+		if other == profile {
+			other = mfaSigninPrimaryProfile
+		}
+		changed := bytes.Replace(wire, []byte(profile), []byte(other), 1)
+		if _, _, err := decodeMFASigninPrimary(changed, keys, p.Issuer, p.Environment, p.Proof.ID, p.Proof.Tenant, p.Proof.Subject); err == nil {
+			t.Fatal("stored password and username primary profiles can be relabeled")
+		}
+		if _, err := decodeSigninRecord(signed.Proof.ID, signed.Proof.Tenant, signed.Proof.Subject, wire); err == nil {
+			t.Fatal("pending username primary became completed authentication")
+		}
+	}
+}
+
 func TestPasswordMFAPrimaryEvidenceCannotBecomeFinalSigninProof(t *testing.T) {
 	key, err := NewSigninSigningKey("primary", ed25519.NewKeyFromSeed(make([]byte, ed25519.SeedSize)))
 	if err != nil {

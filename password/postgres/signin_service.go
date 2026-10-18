@@ -314,7 +314,7 @@ func (s *SigninService) Signin(ctx context.Context, r password.SigninRequest) (o
 		if err != nil {
 			return out, err
 		}
-		if s.c.Username != nil && challengeRequired {
+		if s.c.Username != nil && s.mfa == nil && challengeRequired {
 			return out, identity.ForbiddenError{}
 		}
 	}
@@ -368,7 +368,7 @@ func (s *SigninService) Signin(ctx context.Context, r password.SigninRequest) (o
 		}
 	}
 	if challengeRequired {
-		result, e := s.signinMFA(ctx, r, b, recipient, observation.last, flow, key, admission, authority, factorVersion, upgrade, replacement, out)
+		result, e := s.signinMFA(ctx, r, b, recipient, usernameRecord, observation.last, flow, key, admission, authority, factorVersion, upgrade, replacement, out)
 		if e != nil {
 			return result, fmt.Errorf("password MFA: %w", e)
 		}

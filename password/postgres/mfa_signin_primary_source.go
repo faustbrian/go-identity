@@ -74,7 +74,7 @@ func (s *SigninService) ReadMFAPasswordPrimary(ctx context.Context, proof capabi
 		return deny()
 	}
 	f, err := flow.Bindings()
-	if err != nil || f.Binding.ID != scope.SourcePreAuthID || f.Binding.Intent.TenantID != scope.TenantID || f.Binding.Intent.Action != "identity.password.signin" || f.Binding.Intent.PolicyID != s.c.PolicyID || f.Binding.Intent.Origin != scope.Origin {
+	if err != nil || f.Binding.ID != scope.SourcePreAuthID || f.Binding.Intent.TenantID != scope.TenantID || f.Binding.Intent.Action != s.operation().OperationID || f.Binding.Intent.PolicyID != s.c.PolicyID || f.Binding.Intent.Origin != scope.Origin {
 		return deny()
 	}
 	stored, err := sessionpg.ReadPreAuth(ctx, s.pool.Raw(), s.c.Session, scope.TenantID, scope.SourcePreAuthID)
@@ -92,10 +92,10 @@ func (s *SigninService) ReadMFAPasswordPrimary(ctx context.Context, proof capabi
 	if f != original {
 		return deny()
 	}
-	q := identity.RecoveryQuery{CommandID: origin, TenantID: scope.TenantID, AnonymousFlowID: string(scope.SourcePreAuthID), ActorID: identity.ActorID(caller.Request.Subject.ID), ActorKind: caller.Request.Subject.Kind, OperationID: "identity.password.signin"}
+	q := identity.RecoveryQuery{CommandID: origin, TenantID: scope.TenantID, AnonymousFlowID: string(scope.SourcePreAuthID), ActorID: identity.ActorID(caller.Request.Subject.ID), ActorKind: caller.Request.Subject.Kind, OperationID: s.operation().OperationID}
 	disclosure := caller.Clone()
 	disclosure.PolicyRevision = authorization.Revision(s.c.Coordinator.QueryPolicy.PolicyVersion)
-	disclosure.Request.Action = "identity.password.signin"
+	disclosure.Request.Action = authorization.Action(s.operation().OperationID)
 	disclosure.Request.Resource = authorization.Resource{Type: "identity.anonymous-flow", ID: authorization.ResourceID(q.AnonymousFlowID)}
 	p := &signinMFAChallengePhase{service: s}
 	coordinator, _, err := s.mfaCoordinator(p)
@@ -112,13 +112,13 @@ func (s *SigninService) ReadMFAPasswordPrimary(ctx context.Context, proof capabi
 		return deny()
 	}
 	var wire, storedDigest []byte
-	err = s.pool.Raw().QueryRow(ctx, `SELECT CASE WHEN octet_length(record)<=$4 THEN record ELSE ''::bytea END,record_digest FROM identity_password.mfa_primary_records WHERE tenant_id=$1 AND user_id=$2 AND command_id=$3 AND purpose='identity.password.signin' AND proof_id=$5`, string(scope.TenantID), string(scope.SubjectID), cmd, maximumSigninRecordBytes, string(origin)).Scan(&wire, &storedDigest)
+	err = s.pool.Raw().QueryRow(ctx, `SELECT CASE WHEN octet_length(record)<=$4 THEN record ELSE ''::bytea END,record_digest FROM identity_password.mfa_primary_records WHERE tenant_id=$1 AND user_id=$2 AND command_id=$3 AND purpose=$6 AND proof_id=$5`, string(scope.TenantID), string(scope.SubjectID), cmd, maximumSigninRecordBytes, string(origin), s.operation().OperationID).Scan(&wire, &storedDigest)
 	defer clear(wire)
 	if err != nil {
 		return MFAPasswordPrimary{}, readerFailure(ctx)
 	}
 	primary, sum, err := decodeMFASigninPrimary(wire, s.c.VerificationKeys, s.c.Issuer, s.c.Environment, scope.PrimaryProofID, string(scope.TenantID), string(scope.SubjectID))
-	if err != nil || len(storedDigest) != 32 || subtle.ConstantTimeCompare(storedDigest, sum[:]) != 1 || sum != scope.PrimaryProofDigest || !primary.Proof.IssuedAt.Equal(scope.IssuedAt) || !primary.Proof.ExpiresAt.Equal(scope.PrimaryProofExpiresAt) {
+	if err != nil || primary.Profile != s.mfaPrimaryProfile() || len(storedDigest) != 32 || subtle.ConstantTimeCompare(storedDigest, sum[:]) != 1 || sum != scope.PrimaryProofDigest || !primary.Proof.IssuedAt.Equal(scope.IssuedAt) || !primary.Proof.ExpiresAt.Equal(scope.PrimaryProofExpiresAt) {
 		return deny()
 	}
 	now := s.c.Issuance.Clock.Now()
