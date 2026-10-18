@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- Add explicit username-password signin through the existing native password,
+  risk, factor and session owners. Require a separately verified email and
+  known-empty MFA; preserve original action/flow, remember choice, current name
+  authority and atomic hash upgrade. Append forward password/session purposes;
+  restart recovery returns metadata without reissuing credentials. Nil keeps
+  email signin unchanged. The MFA constructor rejects unsupported username
+  selection at startup; username HTTP, availability and rename remain unselected.
+
+- Snapshot selected username policy values at signup/signin construction so
+  later replacement of caller-owned policy storage cannot change frozen rules.
+
 - Add explicit `SignupConfig.Username` for required-email username registration
   using the existing password engine and one transaction. Preserve raw retry
   intent, exact operation/flow and comparison profile through verification,

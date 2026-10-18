@@ -51,6 +51,11 @@ func signinCurrentHash(hash primitive.EncodedHash, policy primitive.Policy) bool
 
 func (p *signinPhase) validateRehashFields(fields []identity.FeatureField) error {
 	expected := map[string]identity.FeatureValue{}
+	if p.operation.OperationID == "identity.username.signin" {
+		for _, f := range usernameSigninFields(p.username) {
+			expected[f.Name] = f.Value
+		}
+	}
 	if p.factorVersion != 0 {
 		expected["password.factor-version"] = identity.FeatureValue{Kind: identity.FeatureUint64, Uint64: p.factorVersion}
 	}

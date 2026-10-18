@@ -1,5 +1,35 @@
 # Password PostgreSQL adapter
 
+## Explicit username password signin
+
+Set `SigninConfig.Username` to the same immutable comparison policy used for
+registration and select the exact `identity.username.signin` action and original
+pre-auth intent. Nil retains email signin. The native owner discovers the exact
+stored canonical name, independently requires an actual verified email (not
+necessarily primary), compares the real password and requires known-empty MFA.
+Username state itself is not mailbox verification. Nonempty or missing factor
+authority denies; this selection does not provide username MFA continuation.
+Use `NewSigninService`; `NewMFASigninService` rejects username selection at
+startup because its challenge custody and recovery use the password operation.
+Both signup and signin copy the selected policy at construction; replacing the
+caller's complete policy value later cannot change the frozen configuration.
+Validator callbacks remain borrowed and must follow their documented contract.
+
+Install kernel identifier metadata/status/credential-authority histories,
+`UsernameSigninMigrationSource{Base: passwordHistory, Version: nextVersion}`
+and the session owner's corresponding forward suffix with its exact installed
+purpose predecessor. Old migration bytes and completed email signin purposes
+remain unchanged. Do not apply an older purpose suffix after username selection.
+
+Original username operation, browser possession, remember choice, risk decision,
+name/recipient/credential/factor epochs and actual password proof remain bound
+through the sole session transaction, including atomic hash upgrades. Unknown,
+invalid, unverified and wrong-password attempts share credential-free rejection.
+The returned session works with the existing native reader and logout. Restart
+recovery checks original cookie/current policy and returns metadata only; it
+cannot reconstruct a bearer, cookie, synchronizer or password comparison.
+Availability, rename and username HTTP/reference selection remain separate work.
+
 ## Explicit email-plus-username registration
 
 Set `SignupConfig.Username` to a configured immutable `username.Policy` and send

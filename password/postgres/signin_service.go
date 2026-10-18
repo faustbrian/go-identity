@@ -31,6 +31,7 @@ import (
 	"github.com/faustbrian/go-identity/risk"
 	"github.com/faustbrian/go-identity/session"
 	sessionpg "github.com/faustbrian/go-identity/session/postgres"
+	username "github.com/faustbrian/go-identity/username"
 	primitive "github.com/faustbrian/go-password/v2"
 	database "github.com/faustbrian/go-postgres"
 	lifecyclepg "github.com/faustbrian/go-transactional-outbox/postgres/identity"
@@ -49,6 +50,9 @@ import (
 // Hash upgrades are atomic with original signin. Other-factor continuation
 // remains in development and must be denied by the selected single-factor policy.
 type SigninConfig struct {
+	// Username selects exact username signin. Nil retains email signin. This
+	// profile requires verified email and known-empty native MFA state.
+	Username                      *username.Policy
 	Repository                    Config
 	Verifier                      password.VerifierConfig
 	Session                       sessionpg.Config
@@ -93,6 +97,15 @@ var _ password.SigninService = (*SigninService)(nil)
 // authorization, password, pre-auth, session/CSRF, audit and lifecycle histories
 // before use. Zero, absent keys and inconsistent profiles return ErrPasswordWork.
 func NewSigninService(pool *database.Pool, c SigninConfig) (*SigninService, error) {
+	if c.Username != nil && c.Username.ReservedVersion() == 0 {
+		return nil, password.ErrPasswordWork
+	}
+	if c.Username != nil {
+		// Keep the startup selection even if its caller later replaces the
+		// complete policy value; private policy state itself is immutable.
+		snapshot := *c.Username
+		c.Username = &snapshot
+	}
 	if pool == nil || pool.Raw() == nil || c.Verifier.Repository != nil || c.Verifier.Now == nil || c.Coordinator.QueryPolicy == nil || c.Coordinator.AdmissionPolicy == nil || c.SigningKey.apply == nil || c.SigningKey.public == nil || c.Profile.Validate() != nil || c.Profile.AuthenticationMethod != "password" || c.Profile.CredentialKind != identity.CredentialPassword || c.Profile.CredentialOwner != "identity/password" || !reauthenticationText(c.Issuer, 256) || !reauthenticationText(c.Environment, 128) || !reauthenticationText(c.PolicyID, 128) || c.ProofTTL <= 0 || c.ProofTTL > 15*time.Minute || len(c.IdentifierKey) < 32 || len(c.IdentifierKey) > 64 || len(c.FlowKeys) == 0 || len(c.FlowKeys) > 16 || len(c.VerificationKeys) == 0 || len(c.VerificationKeys) > 16 || c.Issuance.Clock == nil || c.Issuance.Authority != nil || !signinURLs(c.Origins, true) || !signinURLs(c.CallbackURLs, false) {
 		return nil, password.ErrPasswordWork
 	}
@@ -159,7 +172,7 @@ func NewSigninService(pool *database.Pool, c SigninConfig) (*SigninService, erro
 		return nil, password.ErrPasswordWork
 	}
 	s := &SigninService{pool: pool, repository: r, domain: domain, policyAuthority: policy, effect: effect, sessions: sessions, address: address, custody: custody, c: c}
-	if _, _, err = s.coordinator(&signinPhase{operation: signinOperation()}); err != nil {
+	if _, _, err = s.coordinator(&signinPhase{operation: s.operation()}); err != nil {
 		return nil, password.ErrPasswordWork
 	}
 	return s, nil
@@ -188,6 +201,14 @@ func signinURLs(values []string, origin bool) bool {
 
 func signinOperation() identity.FeatureOperation {
 	return identity.FeatureOperation{Owner: "identity/password", OperationID: "identity.password.signin", SchemaID: "password-signin", SchemaVersion: 1, SubjectRequirement: identity.FeatureSubjectAnonymousFlow, RecordRequirement: identity.FeatureRecordOmitted}
+}
+
+func (s *SigninService) operation() identity.FeatureOperation {
+	op := signinOperation()
+	if s.c.Username != nil {
+		op.Owner, op.OperationID, op.SchemaID = "identity/username", "identity.username.signin", "username-signin"
+	}
+	return op
 }
 
 // Signin performs counted/audited risk admission before real raw-byte comparison,
@@ -219,6 +240,9 @@ func (s *SigninService) Signin(ctx context.Context, r password.SigninRequest) (o
 	if err = ctx.Err(); err != nil {
 		return out, err
 	}
+	if r.Caller.Request.Action != authorization.Action(s.operation().OperationID) {
+		return out, identity.ForbiddenError{}
+	}
 	if !slices.Contains(s.c.Origins, r.Origin) || !slices.Contains(s.c.CallbackURLs, r.CallbackURL) {
 		return out, identity.ForbiddenError{}
 	}
@@ -230,7 +254,7 @@ func (s *SigninService) Signin(ctx context.Context, r password.SigninRequest) (o
 	if err != nil {
 		return out, password.ErrPasswordWork
 	}
-	op := signinOperation()
+	op := s.operation()
 	b := identity.CommandBinding{CommandID: id, TenantID: r.TenantID, AnonymousFlowID: string(r.PreAuthID), ActorID: identity.ActorID(r.Caller.Request.Subject.ID), ActorKind: r.Caller.Request.Subject.Kind, OperationID: op.OperationID, PolicyID: s.c.PolicyID, PolicyVersion: s.c.Coordinator.AdmissionPolicy.PolicyVersion, SchemaID: op.SchemaID, SchemaVersion: op.SchemaVersion, CorrelationID: string(id)}
 	recovery, err := password.NewSigninRecovery(identity.RecoveryQuery{CommandID: id, TenantID: b.TenantID, AnonymousFlowID: b.AnonymousFlowID, ActorID: b.ActorID, ActorKind: b.ActorKind, OperationID: b.OperationID}, r.PreAuthID)
 	if err != nil {
@@ -240,11 +264,7 @@ func (s *SigninService) Signin(ctx context.Context, r password.SigninRequest) (o
 	if err = s.authorize(ctx, r.Caller, b, ""); err != nil {
 		return out, err
 	}
-	address, parseErr := s.address.Parse(email.AddressInput(r.Identifier))
-	canonical := string(r.Identifier)
-	if parseErr == nil {
-		canonical = address.Canonical().Record().Value
-	}
+	canonical, parseErr := s.canonicalSigninIdentifier(ctx, r.Identifier)
 	mac := hmac.New(sha256.New, s.c.IdentifierKey)
 	_, _ = io.WriteString(mac, "identity-password-signin-counter-v1\x00"+string(r.TenantID)+"\x00"+canonical)
 	scope := risk.Context{Tenant: string(r.TenantID), Operation: risk.Action(b.OperationID), Attempt: string(id)}
@@ -258,9 +278,14 @@ func (s *SigninService) Signin(ctx context.Context, r password.SigninRequest) (o
 		return out, readerFailure(ctx)
 	}
 	var recipient kernel.RecipientRecord
+	var usernameRecord kernel.UsernameRecord
 	var selected identity.UserID
 	if parseErr == nil {
-		recipient, err = s.domain.ResolveRecipient(ctx, kernel.RecipientQuery{TenantID: r.TenantID, Kind: identity.IdentifierEmail, CanonicalValue: canonical, Eligibility: kernel.RecipientVerified})
+		if s.c.Username != nil {
+			usernameRecord, recipient, err = s.resolveUsernameSignin(ctx, r.TenantID, canonical)
+		} else {
+			recipient, err = s.domain.ResolveRecipient(ctx, kernel.RecipientQuery{TenantID: r.TenantID, Kind: identity.IdentifierEmail, CanonicalValue: canonical, Eligibility: kernel.RecipientVerified})
+		}
 		if err != nil {
 			return out, readerFailure(ctx)
 		}
@@ -284,10 +309,13 @@ func (s *SigninService) Signin(ctx context.Context, r password.SigninRequest) (o
 	}
 	var factorVersion uint64
 	var challengeRequired bool
-	if s.mfa != nil {
+	if s.mfa != nil || s.c.Username != nil {
 		factorVersion, challengeRequired, err = mfapg.ReadPasswordSigninFactors(ctx, s.pool, r.TenantID, selected, s.c.Repository.MaximumDuration)
 		if err != nil {
 			return out, err
+		}
+		if s.c.Username != nil && challengeRequired {
+			return out, identity.ForbiddenError{}
 		}
 	}
 	sessionID, err := identity.NewCommandID()
@@ -388,6 +416,9 @@ func (s *SigninService) Signin(ctx context.Context, r password.SigninRequest) (o
 	if factorVersion != 0 {
 		fields = append(fields, identity.FeatureField{Name: "password.factor-version", Value: identity.FeatureValue{Kind: identity.FeatureUint64, Uint64: factorVersion}})
 	}
+	if s.c.Username != nil {
+		fields = append(fields, usernameSigninFields(usernameRecord)...)
+	}
 	command, err := identity.NewFeaturePasswordSigninCommand(identity.FeatureCommandSpec{Binding: b, Operation: op, Fields: fields}, r.Password, r.Cookie)
 	if err != nil {
 		return out, password.ErrPasswordWork
@@ -397,6 +428,7 @@ func (s *SigninService) Signin(ctx context.Context, r password.SigninRequest) (o
 		return out, password.ErrPasswordWork
 	}
 	phase := &signinPhase{operation: op, expected: command, effect: s.effect, recipient: recipient, material: observation.last, request: r, flow: flow, flowKey: key, record: signed, verificationKeys: s.c.VerificationKeys, admission: admission, maximumHashBytes: int(s.c.Repository.HashPolicy.Limits().EncodedHashBytes), upgrade: upgrade, replacement: replacement, hashPolicy: s.c.Repository.HashPolicy, factorVersion: factorVersion}
+	phase.username = usernameRecord
 	coordinator, registry, err := s.coordinator(phase)
 	if err != nil {
 		return out, password.ErrPasswordWork
@@ -550,7 +582,7 @@ func (s *SigninService) RecoverSignin(ctx context.Context, r password.SigninReco
 	}
 	spec, _ := flow.Bindings()
 	i := spec.Binding.Intent
-	if q.UserID != "" || q.AnonymousFlowID != string(flowID) || i.Action != q.OperationID || i.Action != "identity.password.signin" || i.TenantID != q.TenantID || i.Origin != r.Origin || !slices.Contains(s.c.Origins, i.Origin) || !slices.Contains(s.c.CallbackURLs, i.CallbackURL) || i.PolicyID != s.c.PolicyID {
+	if q.UserID != "" || q.AnonymousFlowID != string(flowID) || i.Action != q.OperationID || i.Action != s.operation().OperationID || i.TenantID != q.TenantID || i.Origin != r.Origin || !slices.Contains(s.c.Origins, i.Origin) || !slices.Contains(s.c.CallbackURLs, i.CallbackURL) || i.PolicyID != s.c.PolicyID {
 		return out, identity.ForbiddenError{}
 	}
 	token, e := session.ParseToken(r.Cookie.Token())
@@ -567,7 +599,7 @@ func (s *SigninService) RecoverSignin(ctx context.Context, r password.SigninReco
 	if !possessed {
 		return out, identity.ForbiddenError{}
 	}
-	phase := &signinPhase{operation: signinOperation(), effect: s.effect, verificationKeys: s.c.VerificationKeys}
+	phase := &signinPhase{operation: s.operation(), effect: s.effect, verificationKeys: s.c.VerificationKeys}
 	coordinator, _, e := s.coordinator(phase)
 	if e != nil {
 		return out, password.ErrPasswordWork

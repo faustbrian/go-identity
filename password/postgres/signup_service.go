@@ -77,7 +77,7 @@ type SignupDeliveryConfig struct {
 type SignupConfig struct {
 	// Username explicitly selects email-plus-username registration under the
 	// distinct username signup operation. Nil preserves password-only behavior.
-	// Borrow the immutable policy; ConfigurationID pins custom callback semantics.
+	// The policy value is copied; ConfigurationID pins borrowed callback semantics.
 	Username *username.Policy
 	// AuthorizationNamespace explicitly initializes the new user's policy epoch
 	// through the authorization owner in the protected signup transaction. Select
@@ -132,6 +132,12 @@ var _ password.SignupService = (*SignupService)(nil)
 func NewSignupService(pool *database.Pool, c SignupConfig, keys *keyring.Provider) (*SignupService, error) {
 	if c.Username != nil && c.Username.ReservedVersion() == 0 {
 		return nil, password.ErrPasswordWork
+	}
+	if c.Username != nil {
+		// The policy's private collections are immutable, but callers can still
+		// replace the whole value behind their pointer after startup.
+		snapshot := *c.Username
+		c.Username = &snapshot
 	}
 	if c.AuthorizationNamespace != "" && (authoritypg.AuthorityScope{TenantID: "tenant", SubjectID: "user", PolicyNamespace: c.AuthorizationNamespace}).Validate() != nil {
 		return nil, password.ErrPasswordWork

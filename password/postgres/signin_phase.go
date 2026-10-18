@@ -27,6 +27,7 @@ type signinPhase struct {
 	expected         identity.Command
 	effect           *sessionpg.PasswordSigninEffect
 	recipient        kernel.RecipientRecord
+	username         kernel.UsernameRecord
 	material         password.CredentialSnapshot
 	request          password.SigninRequest
 	flow             session.PreAuthTransaction
@@ -69,6 +70,9 @@ func (p *signinPhase) ValidateFeatureCommand(c identity.Command, plan kernel.Com
 		return password.ErrPasswordWork
 	}
 	f, _ := c.PasswordSigninFeature()
+	if p.validateUsernameFields() != nil {
+		return password.ErrPasswordWork
+	}
 	scope := p.admission.Prepared().Scope
 	if scope.Tenant != string(f.Binding.TenantID) || scope.Operation != risk.Action(f.Binding.OperationID) || scope.Attempt != string(f.Binding.CommandID) || p.request.TenantID != f.Binding.TenantID {
 		return password.ErrPasswordWork
@@ -77,7 +81,7 @@ func (p *signinPhase) ValidateFeatureCommand(c identity.Command, plan kernel.Com
 		return password.ErrPasswordWork
 	}
 	a := plan.Audits[0]
-	if a.EventType != "identity.password.signin" || !a.Required || a.RequiredRecordCount != 1 || a.SchemaVersion != 1 || a.RetentionClass != "protected" {
+	if a.EventType != f.Operation.OperationID || !a.Required || a.RequiredRecordCount != 1 || a.SchemaVersion != 1 || a.RetentionClass != "protected" {
 		return password.ErrPasswordWork
 	}
 	s, err := sessionpg.PasswordSigninSession(c)
@@ -133,6 +137,11 @@ func (p *signinPhase) ApplyFeature(ctx context.Context, w kernel.Work, c identit
 	}
 	if err != nil {
 		return identity.FeatureReceipt{}, err
+	}
+	if p.operation.OperationID == "identity.username.signin" {
+		if err := w.RequireUsername(ctx, p, p.username); err != nil {
+			return identity.FeatureReceipt{}, err
+		}
 	}
 	if p.factorVersion != 0 {
 		if err := mfapg.RequirePasswordSigninFactors(ctx, w, p, c, p.recipient.User.ID, p.factorVersion, false); err != nil {
@@ -266,7 +275,7 @@ func (p *signinPhase) RecoverParticipant(ctx context.Context, w kernel.RecoveryW
 		return kernel.RecoveryUnknown, password.ErrPasswordWork
 	}
 	b, f, transition, err := w.FeatureScope(p)
-	if err != nil || f.Operation != p.operation || f.Operation.OperationID != "identity.password.signin" || transition.EventType != "session.created.v1" || transition.BeforeVersion != 0 || transition.AfterVersion != 0 {
+	if err != nil || f.Operation != p.operation || (f.Operation.OperationID != "identity.password.signin" && f.Operation.OperationID != "identity.username.signin") || transition.EventType != "session.created.v1" || transition.BeforeVersion != 0 || transition.AfterVersion != 0 {
 		return kernel.RecoveryUnknown, password.ErrPasswordWork
 	}
 	effect, err := p.effect.Recover(ctx, w, p)
@@ -277,7 +286,7 @@ func (p *signinPhase) RecoverParticipant(ctx context.Context, w kernel.RecoveryW
 	if err != nil || len(id) != 16 {
 		return kernel.RecoveryUnknown, password.ErrPasswordWork
 	}
-	rows, err := w.Query(ctx, `SELECT proof_id,user_id,CASE WHEN octet_length(record)<=$3 THEN record ELSE ''::bytea END FROM identity_password.signin_records WHERE tenant_id=$1 AND purpose='identity.password.signin' AND command_id=$2`, string(b.TenantID), id, maximumSigninRecordBytes)
+	rows, err := w.Query(ctx, `SELECT proof_id,user_id,CASE WHEN octet_length(record)<=$3 THEN record ELSE ''::bytea END FROM identity_password.signin_records WHERE tenant_id=$1 AND purpose=$4 AND command_id=$2`, string(b.TenantID), id, maximumSigninRecordBytes, b.OperationID)
 	if err != nil {
 		return kernel.RecoveryUnknown, err
 	}

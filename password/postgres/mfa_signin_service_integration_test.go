@@ -20,6 +20,7 @@ import (
 	password "github.com/faustbrian/go-identity/password"
 	"github.com/faustbrian/go-identity/session"
 	sessionpg "github.com/faustbrian/go-identity/session/postgres"
+	"github.com/faustbrian/go-identity/username"
 	primitive "github.com/faustbrian/go-password/v2"
 	database "github.com/faustbrian/go-postgres"
 )
@@ -77,6 +78,14 @@ func testPublicPasswordMFAChallenge(t *testing.T, ctx context.Context, pool *dat
 	service, err := NewMFASigninService(pool, c, mc)
 	if err != nil {
 		t.Fatal("native MFA composition denied", err)
+	}
+	usernameConfig := c
+	usernameConfig.Username, err = username.NewPolicy(username.ReferencePolicySpec())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if mixed, err := NewMFASigninService(pool, usernameConfig, mc); err == nil || mixed != nil {
+		t.Fatal("unsupported username/MFA selection admitted a service whose original username outcome cannot recover")
 	}
 	r, _, _, _ := nativeSigninFlow(t)
 	r.TenantID, r.Caller.Request.Tenant, r.Caller.Request.Subject.ID = signinTestTenant, signinTestTenant, signinTestActor

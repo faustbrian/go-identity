@@ -5,7 +5,6 @@ import (
 	"slices"
 
 	identity "github.com/faustbrian/go-identity"
-	"github.com/faustbrian/go-identity/email"
 	"github.com/faustbrian/go-identity/password"
 )
 
@@ -41,12 +40,15 @@ func (s *SigninService) SigninRateSource(ctx context.Context, r password.SigninR
 	if !slices.Contains(s.c.Origins, r.Origin) || !slices.Contains(s.c.CallbackURLs, r.CallbackURL) {
 		return "", identity.ForbiddenError{}
 	}
+	if string(r.Caller.Request.Action) != s.operation().OperationID {
+		return "", identity.ForbiddenError{}
+	}
 	if _, _, err = s.flow(ctx, r); err != nil {
 		return "", err
 	}
-	address, parseErr := s.address.Parse(email.AddressInput(r.Identifier))
+	canonical, parseErr := s.canonicalSigninIdentifier(ctx, r.Identifier)
 	if parseErr != nil {
 		return string(r.Identifier), nil
 	}
-	return address.Canonical().Record().Value, nil
+	return canonical, nil
 }

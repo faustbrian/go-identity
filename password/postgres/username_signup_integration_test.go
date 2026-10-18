@@ -11,6 +11,7 @@ import (
 	mfapg "github.com/faustbrian/go-identity/mfa/postgres"
 	password "github.com/faustbrian/go-identity/password"
 	kernel "github.com/faustbrian/go-identity/postgres"
+	"github.com/faustbrian/go-identity/username"
 	migrations "github.com/faustbrian/go-migrations/v3"
 	database "github.com/faustbrian/go-postgres"
 	"github.com/faustbrian/go-secret-envelope/v2/adapters/keyring"
@@ -35,7 +36,18 @@ func testPublicUsernameRegistration(t *testing.T, ctx context.Context, pool *dat
 		}
 	}
 	r := fresh("username-signup@example.test", 'U')
+	// Replacing caller-owned policy storage after construction must not replace
+	// the native service's frozen enrollment rules under the same configuration.
+	originalPolicy := *c.Username
+	replacementSpec := username.ReferencePolicySpec()
+	replacementSpec.Validators = []username.Validator{func(context.Context, username.Name) error { return username.ErrValidation }}
+	replacement, err := username.NewPolicy(replacementSpec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	*c.Username = *replacement
 	result, err := service.Signup(ctx, r)
+	*c.Username = originalPolicy
 	if err != nil || result.Outcome != identity.CommitOutcomeCommitted || !result.VerificationRequired || result.SubjectID != "" || result.SessionID != "" {
 		_, _, recoveryErr := result.Recovery.Bindings()
 		t.Logf("username failure phase: recovery-prepared=%t outcome=%d", recoveryErr == nil, result.Outcome)
@@ -83,5 +95,7 @@ func testPublicUsernameRegistration(t *testing.T, ctx context.Context, pool *dat
 	if _, err := pool.Raw().Exec(ctx, `DELETE FROM signin_sessions.preauth_transactions WHERE flow_id=$1`, string(r.PreAuthID)); err != nil {
 		t.Fatal(err)
 	}
+	testPublicUsernamePasswordSignin(t, ctx, pool, c, r, false)
 	testPublicSignupVerificationOrigin(t, ctx, service, c, r, q.CommandID, keys)
+	testPublicUsernamePasswordSignin(t, ctx, pool, c, r, true)
 }

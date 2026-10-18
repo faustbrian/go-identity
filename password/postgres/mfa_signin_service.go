@@ -63,8 +63,15 @@ type signinMFAComposition struct {
 // only a committed continuation. Missing/unsupported factor state denies.
 // The existing NewSigninService remains unchanged. Pool and policy collaborators
 // are borrowed and must outlive bounded concurrent calls. No session is issued
-// before actual second-factor completion.
+// before actual second-factor completion. Username selection is unsupported;
+// use NewSigninService for the known-empty-factor username profile.
 func NewMFASigninService(pool *database.Pool, c SigninConfig, m MFAChallengeConfig) (*SigninService, error) {
+	// MFA challenge custody and recovery retain the password operation. Until
+	// username continuation is selected, reject the mixed profile at startup
+	// rather than issue an original username outcome that cannot be recovered.
+	if c.Username != nil {
+		return nil, password.ErrPasswordWork
+	}
 	methods, methodErr := freezeMFACompletionMethods(m.AllowedMethods)
 	if methodErr != nil {
 		return nil, methodErr
