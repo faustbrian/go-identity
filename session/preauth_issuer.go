@@ -47,6 +47,9 @@ type PreAuthPrepareInput struct {
 	TenantID      identity.TenantID
 	CorrelationID string
 	Remember      RememberPolicy
+	// IdentifierBinding is the workflow owner's original canonical-identifier
+	// commitment. It is retained unchanged, not computed or authenticated here.
+	IdentifierBinding [32]byte
 }
 
 // PreAuthIssuer owns original entropy and commit-gated flow-cookie delivery.
@@ -140,7 +143,7 @@ func (s *PreAuthIssuer) Prepare(input PreAuthPrepareInput) (out PreparedPreAuthI
 
 func (s *PreAuthIssuer) original(i PreAuthPrepareInput, id identity.PreAuthTransactionID, nonce [32]byte, now time.Time, digest TokenDigest) (PreAuthIssueCommand, error) {
 	c := s.config
-	record, err := NewPreAuthTransaction(PreAuthTransactionSpec{Binding: PreAuthBinding{ID: id, Intent: PreAuthIntent{TenantID: i.TenantID, Action: c.Action, Origin: c.Origin, CallbackURL: c.CallbackURL, Nonce: nonce, Remember: i.Remember, PolicyID: c.PolicyID, PolicyVersion: c.PolicyVersion}, IssuedAt: now, ExpiresAt: now.Add(c.FlowTTL)}, Cookie: digest, Version: 1})
+	record, err := NewPreAuthTransaction(PreAuthTransactionSpec{Binding: PreAuthBinding{ID: id, Intent: PreAuthIntent{TenantID: i.TenantID, Action: c.Action, Origin: c.Origin, CallbackURL: c.CallbackURL, Nonce: nonce, Remember: i.Remember, PolicyID: c.PolicyID, PolicyVersion: c.PolicyVersion, IdentifierBinding: i.IdentifierBinding}, IssuedAt: now, ExpiresAt: now.Add(c.FlowTTL)}, Cookie: digest, Version: 1})
 	return PreAuthIssueCommand{CommandID: i.CommandID, CorrelationID: strings.Clone(i.CorrelationID), Record: record}, err
 }
 

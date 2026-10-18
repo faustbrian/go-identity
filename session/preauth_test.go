@@ -191,6 +191,42 @@ func TestPreAuthCookieFramingIndependentVector(t *testing.T) {
 	}
 }
 
+func TestPreAuthIdentifierBindingCannotBeSubstitutedOrErased(t *testing.T) {
+	token, key, legacy := preAuthFixture(t)
+	spec := legacy
+	spec.Binding.Intent.IdentifierBinding = [32]byte{91}
+	var err error
+	spec.Cookie, err = token.PreAuthDigest(key, spec.Binding)
+	if err != nil || spec.Cookie == legacy.Cookie {
+		t.Fatal("identifier-bound flow reused unbound cookie domain")
+	}
+	// Independently framed with Ruby pack/OpenSSL::HMAC using the documented
+	// bound domain, original scalar order and 32-byte identifier commitment.
+	if hex.EncodeToString(spec.Cookie.Sum[:]) != "dcc1061eaeef6c8012e43cef2fee725d29551c6fd9cc37abd6850609292fa8bc" {
+		t.Fatal("identifier-bound cookie framing changed")
+	}
+	record, err := NewPreAuthTransaction(spec)
+	if err != nil || record.Check(spec.Binding.IssuedAt, spec.Binding, spec.Cookie) != nil {
+		t.Fatal("original identifier-bound flow denied")
+	}
+	for _, identifier := range [][32]byte{{}, {92}} {
+		changed := spec.Binding
+		changed.Intent.IdentifierBinding = identifier
+		digest, err := token.PreAuthDigest(key, changed)
+		if err != nil || digest == spec.Cookie || !errors.Is(record.Check(spec.Binding.IssuedAt, changed, digest), ErrPreAuthDenied) {
+			t.Fatal("changed or erased canonical identifier binding admitted")
+		}
+	}
+	projection, err := record.Bindings()
+	if err != nil || projection.Binding.Intent.IdentifierBinding != spec.Binding.Intent.IdentifierBinding {
+		t.Fatal("identifier commitment lost in original custody")
+	}
+	projection.Binding.Intent.IdentifierBinding[0]++
+	if record.Check(spec.Binding.IssuedAt, spec.Binding, spec.Cookie) != nil {
+		t.Fatal("projected identifier commitment mutated retained original")
+	}
+}
+
 func TestPreAuthRejectsMalformedBindings(t *testing.T) {
 	token, key, spec := preAuthFixture(t)
 	for _, change := range []func(*PreAuthBinding){

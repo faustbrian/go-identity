@@ -234,6 +234,15 @@ consumers must not implement private stores to bridge those gaps.
 
 ## Canonical pre-auth continuation
 
+`PreAuthPrepareInput.IdentifierBinding` optionally retains a server-derived,
+tenant/purpose/comparison-profile-bound commitment to the canonical identifier.
+The flow owner computes and requires it before credential verification; it is
+not plaintext, a client-selected hash or authentication. It remains in the
+immutable `PreAuthIntent` and its equality check. Bound flows use a separate
+cookie-digest domain; zero keeps the exact existing unbound cookie framing.
+Changing or clearing a retained commitment cannot reuse original possession.
+Persistence must retain it unchanged; never silently load a bound flow as legacy.
+
 `PreAuthTransaction` freezes the original ID, tenant, action, exact origin,
 callback/no-redirect choice, server nonce, selected policy, resolved remember
 policy and original issued/exclusive-expiry times. General configured TTL is

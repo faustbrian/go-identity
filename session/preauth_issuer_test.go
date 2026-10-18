@@ -120,6 +120,21 @@ func TestPreAuthIssuerOwnsOriginalPreparationAndDelivery(t *testing.T) {
 	}
 }
 
+func TestPreAuthIssuerRetainsIdentifierCommitment(t *testing.T) {
+	issuer, _, _, _ := preAuthIssuerFixture(t)
+	_, _, fixture := preAuthFixture(t)
+	binding := [32]byte{93}
+	p, err := issuer.Prepare(PreAuthPrepareInput{CommandID: "AgICAgICAgICAgICAgICAg", TenantID: fixture.Binding.Intent.TenantID, CorrelationID: "identifier-bound", Remember: fixture.Binding.Intent.Remember, IdentifierBinding: binding})
+	if err != nil {
+		t.Fatal("bound original initiation denied", err)
+	}
+	command, ok := p.Command()
+	spec, err := command.Record.Bindings()
+	if !ok || err != nil || spec.Binding.Intent.IdentifierBinding != binding {
+		t.Fatal("issuer replaced or omitted original canonical identifier commitment")
+	}
+}
+
 func TestPreAuthIssuerNeverDeliversHistoricalOrFailedExecution(t *testing.T) {
 	for _, mode := range []string{"replay", "error", "cancel", "expired", "subsecond", "substitution", "panic", "not-committed", "unknown", "conflict", "pending"} {
 		t.Run(mode, func(t *testing.T) {

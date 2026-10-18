@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Retain an optional original canonical-identifier commitment in pre-auth
+  issuance, equality checks and a separate cookie-digest domain. Unbound flows
+  preserve their existing byte framing and APIs; selected identifier-bound
+  workflows must compare the original commitment before credential work.
+
 - Preserve exact username-signin operation and paired password custody during
   prospective session preparation and commit-gated delivery. This mapping
   does not replace native username, credential, risk or current-factor admission.

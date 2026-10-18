@@ -41,6 +41,12 @@ type PreAuthIntent struct {
 	Remember                    RememberPolicy
 	PolicyID                    string
 	PolicyVersion               uint64
+	// IdentifierBinding is an optional server-derived commitment to the exact
+	// canonical identifier, tenant, purpose and comparison profile. Zero retains
+	// legacy unbound intent. A selected identifier-bound workflow must require
+	// and compare this commitment before credential work; its presence alone is
+	// not authentication. Never use plaintext identifiers or client-chosen hashes.
+	IdentifierBinding [32]byte
 }
 
 // PreAuthBinding preserves the original flow identity and timeline. ID alone
@@ -170,6 +176,9 @@ func preAuthURL(raw string, origin bool) bool {
 // policy strings, nonce, uint64 policy version, UTC RFC3339Nano issued/expiry
 // strings, resolved uint8 remember choice and four uint64 nanosecond durations,
 // then uint8 decoded token size and token bytes, all integers big-endian.
+// With nonzero IdentifierBinding, the domain is instead
+// golib-preauth-cookie-identifier-v1 NUL and its exact 32 bytes follow the four
+// durations, before token size/bytes. Zero retains every legacy framing byte.
 // No key fallback, raw-cookie storage, automatic disclosure, time sample or
 // validity renewal occurs. Compute only from authenticated original intent;
 // possession of the result is not an alternate credential or one-use proof.
@@ -183,7 +192,14 @@ func (t Token) PreAuthDigest(k DigestKey, b PreAuthBinding) (TokenDigest, error)
 	// Token constructors guarantee canonical bounded immutable wire bytes.
 	raw, _ := base64.RawURLEncoding.DecodeString(t.state.wire)
 	defer clear(raw)
-	frame := []byte("golib-preauth-cookie-v1\x00")
+	// Keep the existing cookie framing byte-for-byte for unbound flows. Bound
+	// flows have a separate domain so clearing the commitment cannot preserve
+	// a valid original cookie (phone password-preauth's substitution boundary).
+	domain := "golib-preauth-cookie-v1\x00"
+	if b.Intent.IdentifierBinding != ([32]byte{}) {
+		domain = "golib-preauth-cookie-identifier-v1\x00"
+	}
+	frame := []byte(domain)
 	frame = binary.BigEndian.AppendUint32(frame, k.state.version)
 	i := b.Intent
 	for _, s := range []string{string(b.ID), string(i.TenantID), i.Action, i.Origin, i.CallbackURL, i.PolicyID} {
@@ -200,6 +216,9 @@ func (t Token) PreAuthDigest(k DigestKey, b PreAuthBinding) (TokenDigest, error)
 	frame = append(frame, byte(remember.Choice))
 	for _, d := range []time.Duration{remember.AbsoluteTTL, remember.IdleTTL, remember.RefreshAfter, remember.FreshFor} {
 		frame = binary.BigEndian.AppendUint64(frame, uint64(d))
+	}
+	if i.IdentifierBinding != ([32]byte{}) {
+		frame = append(frame, i.IdentifierBinding[:]...)
 	}
 	frame = append(frame, byte(len(raw)))
 	frame = append(frame, raw...)
