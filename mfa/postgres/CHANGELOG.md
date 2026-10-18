@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Fence the original known-empty MFA generation in every native OTP-only
+  signin attempt, reservation, protected admission and finalization phase.
+  Missing, enrolled or changed authority denies without initialization or
+  fallback; historical recovery and release remain unchanged.
+
 - Fence and persist explicitly selected username/password TOTP challenges in
   the original factor authority and shared attempt store. Append
   `UsernameContinuationMigrationSource` after the selected password or

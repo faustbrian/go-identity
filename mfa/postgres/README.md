@@ -474,3 +474,19 @@ old factor/code sets, advances the epoch and revokes every bounded subject sessi
 Historical recovery authenticates retained effects without reviving a session or
 repeating URI/code delivery. Multi-factor/device/admin replacement is not provided
 by this selected sole-TOTP profile.
+
+## Native OTP-only signin admission
+
+`ReadOTPSigninFactors` supplies preliminary known-empty state for the exact
+native `identity.otp.signin`/`identity-otp-signin` v1 consume profile. Freeze the
+original positive generation in encrypted native signin custody. The native
+owner must call `RequireOTPSigninAttemptFactors` before comparison or charging,
+`RequireOTPSigninReservationFactors` before reservation/rebind,
+`RequireOTPSigninApplyFactors` during protected admission, and
+`RequireOTPSigninFinalizeFactors` before finalization. Each accepts only its
+exact live opaque phase and registered native owner; no general Work is exposed.
+Supply the actual recipient authenticated by original custody, not the anonymous
+flow identifier. Missing, enrolled, corrupt or changed factor state denies; the
+same MFA row stays locked until the coordinator transaction closes. These guards
+never initialize state, enable weaker-factor fallback, renew authority, or alter
+historical recovery/release. Propagate every error to the coordinator.

@@ -130,7 +130,13 @@ func readKnownEmptyFactors(ctx context.Context, w kernel.Work, b identity.Comman
 }
 
 func readFactorAuthority(ctx context.Context, w kernel.Work, b identity.CommandBinding, user identity.UserID, expectedVersion uint64) (mfa.FactorAuthority, error) {
-	rows, err := w.Query(ctx, `SELECT version::text,active_factors FROM identity_mfa.factor_authorities WHERE tenant_id=$1 AND user_id=$2 FOR UPDATE`, string(b.TenantID), string(user))
+	return readFactorAuthorityQuery(ctx, w.Query, b, user, expectedVersion)
+}
+
+type factorAuthorityQuery func(context.Context, string, ...any) (*kernel.WorkRows, error)
+
+func readFactorAuthorityQuery(ctx context.Context, query factorAuthorityQuery, b identity.CommandBinding, user identity.UserID, expectedVersion uint64) (mfa.FactorAuthority, error) {
+	rows, err := query(ctx, `SELECT version::text,active_factors FROM identity_mfa.factor_authorities WHERE tenant_id=$1 AND user_id=$2 FOR UPDATE`, string(b.TenantID), string(user))
 	if err != nil {
 		return mfa.FactorAuthority{}, identity.UnavailableError{}
 	}
