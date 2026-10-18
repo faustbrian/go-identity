@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Adopt the current native password/session dependency contracts, including
+  action-bound reauthentication admission. Existing feature selections and
+  routes remain unchanged; username rename and organization transfer still
+  require their owning workflows and explicit composition.
+
 - Compose independently configured hooks for managed change links and email OTP
   verification/change, including existing TOTP and first-primary profiles.
   Preserve commit/recovery and suppress address disclosure on observer failure;
