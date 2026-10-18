@@ -1,5 +1,20 @@
 # Identity reference composition
 
+## Optional link-verification hooks
+
+Set `PasswordSignup.Native.Verification.Hooks` or
+`Email.Verification.Native.VerificationHooks` to an immutable
+`email.NewVerificationHooks` selection. The graph passes it to the actual native
+owner; no HTTP middleware, new route or implicit feature is added. Nil is
+disabled. Change the enclosing native `ConfigurationID` when callback semantics
+change and retain original configurations for recovery.
+
+Callbacks receive read-only correlation, not addresses or credentials. Before
+may reject before reservation. After observes a fresh known commit outside SQL;
+an error retains verification/recovery but suppresses address projection and
+following signin. Replay and recovery never retry callbacks. Unknown/rollback
+do not invoke After. OTP and email-change callback profiles are not selected.
+
 ## Original-browser registration verification and signin
 
 Set `PasswordSignup.VerificationSignin` to a native

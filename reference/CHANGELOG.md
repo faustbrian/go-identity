@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Compose explicitly selected signup and managed-link verification callbacks
+  through native configuration, without new HTTP routes or default behavior.
+  Preserve committed verification/recovery on observer failure; do not retry
+  callbacks on replay, recovery or ambiguous results.
+
 - Pin verification-first versus MFA-first session migration lineage when
   enabling verification TOTP. Existing migration bytes and populated issuance
   rows remain unchanged; verification-first gains a separate forward suffix.

@@ -240,6 +240,7 @@ func proveReferenceSignupGraph(t *testing.T, competing bool, protected ...bool) 
 }
 
 type signupGraphExtensions struct {
+	verificationHooks                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      string
 	verificationSignin                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     string
 	emailOTPInitialPrimary                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 bool
 	administrativeEmailRemoval                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             bool
@@ -301,7 +302,7 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 		f.completionFault = &completionCommitFault{factorProof: extensions.activeStepUp, regeneration: extensions.regeneration, factorManagement: extensions.factorManagement || extensions.disable, replacementConfirmation: extensions.factorReplacementConfirmationFault, emailRemoval: extensions.emailRemoval}
 		f.completionFault.emailPreparation = extensions.emailChangeCase == "removal-admin-output-unknown"
 		f.completionFault.emailVerification = extensions.emailChangeCase == "otp-verification-unknown" || extensions.emailChangeCase == "otp-change-unknown"
-		f.completionFault.registrationVerification = extensions.verificationSignin == "verification-unknown"
+		f.completionFault.registrationVerification = extensions.verificationSignin == "verification-unknown" || extensions.verificationHooks == "unknown"
 		f.completionFault.mfaChallenge = extensions.verificationSignin == "totp-child-unknown"
 		if strings.HasPrefix(extensions.emailChangeCase, "totp-change") {
 			f.completionFault.factorProof = false
@@ -737,6 +738,10 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 			t.Fatal("shared confirmation accepted mismatched trusted issuer namespaces")
 		}
 	}
+	var verificationHooks *referenceVerificationHooks
+	if extensions.verificationHooks != "" {
+		verificationHooks = configureReferenceVerificationHooks(t, &c, f, extensions.verificationHooks)
+	}
 	stores, err := reference.ComposeStores(c, deps)
 	if err != nil {
 		var invalid identity.InvalidInputError
@@ -1020,6 +1025,11 @@ END $$`); err != nil {
 			proveReferenceSharedEmailConfirmationHTTPS(t, ctx, f, client, network.URL, origin, r, target)
 		}
 	}
+	if strings.HasPrefix(extensions.verificationHooks, "managed-") {
+		f.afterManagedConfirmation = func(r email.VerificationConfirmRequest, _ identity.IdentifierID) {
+			proveManagedVerificationHooks(t, ctx, features, verificationHooks, r)
+		}
+	}
 	if extensions.emailChangeCase == "request-http" {
 		selectedFixture := f
 		selectedFixture.config = c
@@ -1138,6 +1148,10 @@ END $$`); err != nil {
 			}
 			proveReferenceEmailManagementResend(t, ctx, f, managementConfig, deps, managementFeatures, workers, messages, origin, user, cookies, csrf, fresh, change)
 		}
+	}
+	if extensions.verificationHooks != "" && !strings.HasPrefix(extensions.verificationHooks, "managed-") {
+		proveReferenceVerificationHooks(t, ctx, f, features, workers, client, network.URL, origin, messages, verificationHooks)
+		return
 	}
 	if extensions.verificationSignin != "" {
 		f.config = c
