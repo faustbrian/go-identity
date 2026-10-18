@@ -1,6 +1,93 @@
 # Identity Implementation — Current Milestone
 
+## Parallel successor: configured workload client credentials
+
+Checkpoint12:23UTC: frozen native workload profile delivered. Root476cce3/
+docd2b0740 and native28444edfd819cc5b5bf64424ee8641b465cebb38 match remote
+main; Required39126209191/39126680619 succeeds. Separate actual downloaded
+public native/root, no replaces, machine-only access issuance/introspection/
+revocation consumer passes real-PG18.6/race4.380s. Canonical native actual476
+root workload+retained human flow/migrations passed81.978s, taggedvet0;
+independent13 final public-pin review1c020ab0 APPROVE. No full M32/HTTP claim.
+
+Checkpoint12:16UTC: workload policy alias regressions RED0.217s/1.488s are
+corrected; final21 snapshot028d3f6f independently APPROVE. Root476cce3 pushed;
+documentation-only successord2b0740 Required39126209191 succeeds after two
+spellings corrected (476 had passed runtime checks, not complete CI). Actual
+public476 root native GOWORKoff PG18.6/race workload plus retained human/
+confidential/introspection/refresh/revoke/migration selection passes81.978s;
+taggedvet0. Native13 public-pin snapshot1c020ab0 APPROVE; publication closing. Keep actual
+unknown/conflict semantics: duplicate in-flight revoke may return unavailable/
+Conflict, never invented completion/pending. No kernel query expansion needed.
+Native public root pin and canonical downloaded consumer/CI remain pending.
+
+Owner oauth_authorization_code, GPT-6.1 Sol high, fork none, no children.
+go-oauth-server/main66e0e4793f915f9ab88ca9a7975c1739fc3384b9 is clean and
+matches remote. Own root/postgres Go source/tests, module-local manifests and
+docs/changelogs, forward native migrations. No root manifests/workspace/CI,
+other repositories, shared identity/session/risk contracts or Git operations.
+Consume current published core6e1d2a4/native66e0e47 and their unchanged actual
+public pins: existing confidential Basic validation, native grants/introspection/
+revocation have real-PG/race96.083s and downloaded consumer18.784s proof.
+Finite profile: explicitly configured platform/workload-owned confidential client
+obtains bounded client-credentials access, then its owning client introspects
+and revokes it. No refresh token or manufactured human session/account. Tenant,
+owner/workload, allowed scopes/audiences and lifetime come from trusted startup
+registration; client input cannot select arbitrary humans or customer tenants.
+Use the existing Golib protocol/coordinator/issuer and original grant lineage;
+preserve public/code/refresh flows, current credential/revocation/blocking and
+same-Work audit effects. Prove wrong credentials/client/scope/audience/tenant,
+withdrawal, expiry, contention/replay/rollback/ambiguous recovery, populated
+upgrade and actual public native consumer. No OIDC, exchange, dynamic client
+management, organization delegation, HTTP or full M32 claim. First do one bounded
+consumed-contract pass; request missing upstream ownership rather than inventing
+it. Primary owns alignment, cross-module pins/reference, final review/Git and
+acceptance. Wait for the exclusive heavy lane before any Go/service run.
+
 ## Parallel successor: native organization team membership
+
+Checkpoint12:16UTC: frozen native lifecycle profile is delivered root
+e1ef03d77b3609b28c948cbc70165d2e0329f966 and native
+dc12ee75145874796017eaed8a0903663e3f4b42. Required39124272324/39124935558
+succeeds. Exact source reviews7663528a/cf44cf71 APPROVE. Actual GOWORKoff
+public-root native PG18.6/race41.963s and taggedvet0 pass. Separate consumer
+downloads actual public nativedc12ee7/root e1ef03d; selected genuine password-
+session/team lifecycle journey passes PG18.6/race16.460s. Worker resources removed.
+This is not full M23/dynamic-role/HTTP/reference or full-unit qualification.
+
+Successor assignment, organization_teams (GPT-6.1 Sol high, no children):
+go-organization/main d5b058bec0e756f5f0e4bf8ebb71d958639427d9 is clean and
+matches remote. Own root/postgres source/tests, module-local manifests,
+docs/changelogs and forward migrations only; no Git, root manifests/workspace,
+CI/tooling, other repositories or shared identity/session/reference changes.
+Consume delivered coree28502d/natived5b058b and unchanged public authority pins;
+affected native PG/race48.870s and downloaded genuine consumer16.233s pass.
+Finite outcome: current authenticated owner/admin gets a team, updates its
+bounded name with expected organization/team versions, and deletes it through
+the sole native coordinator. Deletion terminally disables existing membership
+bindings and cannot be undone by later member readmission or reused team IDs;
+retained audit/recovery remains valid. Exact current session/member/org policy
+and scoped authority are fenced through commit and recovery. Prove stale and
+cross-tenant denial, ordinary-member limits, concurrent update/delete/member
+changes, rollback, lost acknowledgement, populated forward upgrade and genuine
+password-session consumer. Keep existing membership APIs compatible. No dynamic
+roles, active-team selection, federation, HTTP or full M23 closure. One bounded
+consumed-contract pass then tests/code; primary owns first-boundary alignment,
+pins/Git/final acceptance and independent review. Heavy checks require the
+primary's exclusive lane grant; OAuth currently holds it.
+
+Finite native team profile delivered 2026-10-18 10:42 UTC: reviewed coree28502d/
+natived5b058b pushed to main, Required39119579015/39120039161 succeeds.
+Actual GOWORKoff public-root full affected PG/race48.870s and taggedvet0 pass;
+separate module using downloaded public native/root passes genuine password-
+session/team/recovery consumer PG/race16.233s. Independent complete source
+review approves finalb8e16da6 and native-pinb63147fd. Its callback-withdrawal
+finding is fixed:30 real-PG cases RED15.325s -> GREEN22.389s, affected worker
+race59.861s; newly issued genuine session still recovers exact original outcome.
+Root post-dead-code cleanup race1.249s. No pending team writer or worker resource.
+This closes the frozen membership-only native profile, not dynamic roles,
+active-team/session selection, organization HTTP/reference or full M23/unit gates.
+Shared primary-owned isolated PG/caches remain only for the active username run.
 
 Owner organization_teams, GPT-6.1 Sol high, fork none, no children. Exact writable
 scope in go-organization/main at152a232: root/postgres Go production/tests,
@@ -25,6 +112,66 @@ public-boundary alignment, final integration/pins/Git and acceptance. Worker
 waits for the exclusive heavy-test lane before any Go/service run.
 
 ## Primary active: M05 username consumer
+
+Checkpoint12:32UTC: finite native username signin profile delivered. Reviewed
+kernel/MFA/sessioncore6fadb5e, session-nativee3b8aff and password-native
+1a83b189953e3fea779436683385bd97f1f7769c are pushed to main, Required
+39126898589/39127255016/39127504485 succeeds. Full41 sourceb8b4b38a,
+session9 public-pinf30aac93 and finalpassword18a5ac60e1 independently APPROVE.
+Canonical GOWORKoff native ordinary race2.233s and actual public-dependency
+genuine username+retained signin/MFA PG18.6/race21.094s, taggedvet0 pass.
+Separate actual downloaded native public-API/comparison/forward-migration
+consumer passes race1.297s; this is not a second complete PostgreSQL journey.
+The mixed MFA constructor regression RED0.702s -> GREEN20.860s is retained.
+No leftover task databases/roles; primary PG54743 stopped after proof. Owned
+cache cleanup follows this checkpoint. Next M05 work is availability/fresh
+rename/HTTP-reference, not restarting delivered registration/signin.
+
+Checkpoint12:16UTC: independent39 review found accepted Username+MFA startup
+could execute username SFA but its password-only challenge query prevented
+original recovery. New valid-config regression RED0.702s; constructor now
+explicitly rejects this unsupported mixed selection before IO. Known-empty
+username NewSigninService remains supported, existing password MFA unchanged.
+Full native signin-phase plus genuine username PG/race20.860s and taggedvet0
+pass. Complete final41 review follows; no new feature or engine introduced.
+
+Checkpoint11:57UTC: actual username registration -> captured verification ->
+password signin -> session read -> logout now passes local PG18.6/race3.375s,
+including exact-operation recovery after lost COMMIT, browser/persistent remember,
+changed-name/MFA/foreign-flow denial, required-outbox rollback and atomic rehash.
+Retained public email signin/MFA challenge passes8.883s. Affected ordinary root
+packages postgres/session/session-postgres/MFA-postgres/password-postgres race
+pass4.357/1.675/2.083/1.414/3.244s. The missing lookup API and actual initial
+verified-email rejection reds are retained; primary-only verified-email mismatch
+is fixed without changing verification or primary-address policy. New migration
+typed-nil regression RED0.286s -> GREEN0.274s. Final external username-policy
+snapshot regression is ready; review and canonical prerequisite/native pins
+remain before publication. No availability/rename/HTTP/reference/full M05 claim.
+
+Checkpoint11:15UTC: required-email username signup through actual captured
+delivery/confirmation is reviewed/pushed native0fff653; Required39122126394
+succeeds. Kernel provenancea6a9da9/Required39121367625 and email/MFAe38aa40/
+Required39121739859 are published. Fresh canonical GOWORKoff native ordinary
+race2.155s, genuine username+screening PG18.6/race2.812s and taggedvet0 pass.
+Independent final29 review912d410d APPROVE; staged24/11 prerequisite reviews
+694f8546/e6d0aed5 APPROVE. This closes that native registration profile, not
+M05, username signin, availability, rename, HTTP/reference or full unit gates.
+No new downloaded-native complete consumer is claimed. Actual published
+dependencies, not the development workspace, supply the final native gates.
+
+Continue actual username signin next. Existing session preparation/mapping
+retains its exact original operation: RED0.212/0.236s -> GREEN0.276/0.244s;
+affected ordinary race1.628/1.882s passes locally, publication pending.
+Channel RecipientQuery intentionally accepts only email/phone; username lookup
+must not weaken that boundary or pretend pending username state is verified
+email. New kernel ResolveUsername/RequireUsername selects exact stored profile
+and ownership, reusing primary identifiers and user/identifier locks. A distinct
+verified-email recipient and genuine password/factor/session admission remain
+mandatory for this selected profile. Missing-API RED0.697s is captured; new
+source and native admission tests are in progress. OAuth holds the current
+exclusive heavy lane; primary edits source only until its bounded gate ends.
+The now-unused task capability clone/build cache were removed; the primary
+isolated PG54743 and current username caches remain necessary for this slice.
 
 Bounded map/QA completed against88ef041 and public identifier9892f177.
 Selected first complete profile: required email plus atomic supplementary

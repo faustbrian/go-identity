@@ -1,12 +1,12 @@
 # Identity Platform Progress
 
-## TL;DR — updated 2026-10-18 09:57 UTC
+## TL;DR — updated 2026-10-18 12:32 UTC
 
 **Estimated whole-goal completion: approximately 10–12%, with low confidence.**
-The working authentication baseline, thirteen email profiles and selected native
-organization membership/invitation/metadata journeys are delivered, alongside a selected
-OAuth code/PKCE flow with configured confidential clients and four CAPTCHA
-adapters. Most platform families and final package qualification are not closed;
+The working authentication baseline, thirteen email profiles, native username
+authentication, organization/team lifecycle, selected OAuth code/PKCE and machine
+credentials, and four CAPTCHA adapters are delivered as bounded profiles.
+Most platform families and final package qualification are not closed;
 queued work is not counted as delivered.
 This is an effort/scope estimate, not a measured percentage or an ETA.
 
@@ -19,12 +19,25 @@ This is an effort/scope estimate, not a measured percentage or an ETA.
 | Last full milestone closure | **14 October:** B3 password change. |
 | Last complete email-profile delivery | **18 October:** independently selected hooks for managed change links and email OTP verification/change, including first-primary and TOTP paths. Pushed reference `ca26306`, Required CI 39110688213 passes; all 30 selected public-native PostgreSQL/race cases pass. |
 | Delivered organization profile | **Native organization invitations:** genuine owner send → captured delivery → verified recipient acceptance → membership, including rollback, contention, policy withdrawal and fresh-session interrupted-send recovery. Pushed `6847272`, green Required CI and actual downloaded-module PostgreSQL/race consumer proof. This is partial M22, not the complete organization family. |
+| Delivered username profile | **Required-email username registration and signin:** atomic signup → captured verification → username/password signin → session read → logout. Native `1a83b18` and its prerequisites are reviewed/pushed; Required CI 39127504485 succeeds. Canonical public-dependency PostgreSQL/race journey and separate downloaded-API compatibility pass. Availability, rename and HTTP/reference remain unfinished; M05 is not closed. |
 | Current unfinished deliverables | M04 lifecycle/privacy contribution, retained factor-profile limits and final qualification remain open; confirmation-hook variants are delivered. Full M22/M30/M35, organization HTTP/reference selection and final package qualification remain open. Next lanes must consume proven contracts, not restart delivered profiles. |
 
 ### What consumers can already do
 
 - Register, receive/confirm verification, sign in, read a session and log out.
 - Reset or change a password, with old-password denial and session invalidation.
+- Explicitly select required-email username registration using the existing
+  native password service: reserve email and normalized username atomically,
+  retain exact retry spelling and comparison profile, receive the actual
+  verification email and confirm only that email. Neutral name collisions do
+  not leave durable partial accounts, credentials or queued delivery. Native
+  `1a83b18` also supplies username/password signin through the existing session
+  owner, including browser/persistent remember, metadata-only restart/lost-commit
+  recovery and atomic hash upgrade. Its prerequisites are reviewed/pushed with
+  green CI; the canonical public-dependency PostgreSQL/race journey passes.
+  A separate downloaded-API check proves public composition and forward-history
+  compatibility, not another standalone PostgreSQL journey. Availability, rename
+  and HTTP/reference are not supplied yet; username MFA continuation is unselected.
 - Manage email through delivered profiles: (1) list/get/add/resend/link verification/
   primary change, (2) safe self-removal, (3) explicit replacement-primary removal,
   (4) audited administrative reads, (5) administrative removal, (6) pending-address
@@ -54,6 +67,18 @@ This is an effort/scope estimate, not a measured percentage or an ETA.
   concurrent-update exclusion, late-authority denial and authorized lost-commit
   recovery are proven, including genuine password-issued sessions. This is a
   native profile, not organization HTTP/reference composition or full M22.
+- Current owners/administrators can create bounded native teams and add/list/
+  remove actual organization members. Removed or readmitted members cannot
+  revive old team bindings. Current session, organization policy and scoped
+  authority are checked through commit and after recovery callbacks; a separate
+  genuine session can recover the original outcome. Reviewed root `e28502d`
+  and native `d5b058b` are pushed with green Required CI. Canonical affected
+  PostgreSQL/race and a separate downloaded-native consumer pass. This is
+  membership-only, not dynamic roles, HTTP/reference selection or full M23.
+  Successor roote1ef03d/nativedc12ee7 also delivers native team read, versioned
+  name update and terminal deletion without resurrecting old IDs/bindings.
+  Both Required runs and a downloaded-native genuine-session lifecycle
+  PostgreSQL/race consumer pass; full M23 remains open.
 - Select bounded Turnstile, reCAPTCHA v3, hCaptcha Publisher/Pro or CaptchaFox Free
   provider-fact adapters. Durable risk/canonical-event/reference composition and live-provider
   qualification remain open.
@@ -72,8 +97,14 @@ This is an effort/scope estimate, not a measured percentage or an ETA.
   with green Required CI; canonical PostgreSQL/race and separate downloaded
   consumer checks pass. This is read-only introspection, not a cached resource-
   authorization verifier, HTTP composition or completed M30/M32.
-  Workload grants, client management, OIDC, device, restricted exchange and complete
-  reference/HTTP/provider qualification remain outside this delivered profile.
+  A separately selected workload profile is now delivered: configured Basic
+  clients issue bounded access-only machine grants, introspect and revoke
+  without any human signup/session/consent. Root476cce3/docd2b0740 and native
+  28444ed are pushed; Required39126209191/39126680619 succeeds. Canonical
+  native public-root PostgreSQL/race81.978s and a separate actual downloaded-
+  native consumer4.380s pass. Current directory/service-account authority and
+  original lineage remain binding. Client management, OIDC, device, restricted
+  exchange and complete reference/HTTP/provider qualification remain open.
 
 ### What remains before the whole goal is done
 
@@ -89,6 +120,28 @@ This is an effort/scope estimate, not a measured percentage or an ETA.
 
 ### Immediate delivery state and next action
 
+- Frozen native username profile is delivered: kernel/MFA/sessioncore6fadb5e,
+  native-sessione3b8aff and native-password1a83b18 are reviewed/pushed, Required
+  CI39126898589/39127255016/39127504485 succeeds. Canonical public-dependency
+  native ordinary race2.233s, complete username plus retained signin/MFA
+  PostgreSQL/race21.094s and taggedvet0 pass. Separate downloaded public-API/
+  normalization/forward-history compatibility passes race1.297s; it is not a
+  separate complete PostgreSQL consumer journey. Availability, fresh-proof
+  rename and HTTP/reference remain before full M05 closure. Disposable
+  PostgreSQL has no leftover databases/roles and is stopped.
+- Native team get/update/terminal deletion is delivered: roote1ef03d
+  and nativedc12ee7, Required39124272324/39124935558 succeeds. Canonical actual
+  public-root PostgreSQL/race41.963s and taggedvet0 pass. A separate consumer
+  using the downloaded native archive passes the genuine password-session/team
+  lifecycle journey with PostgreSQL/race16.460s. Full M23,
+  dynamic roles and HTTP/reference remain open.
+- OAuth workload policy ownership is corrected and independently approved.
+  Root476cce3 is pushed; documentation-only successord2b0740 has green Required
+  CI39126209191 after fixing two spelling failures. Canonical actual public-root
+  native28444ed is pushed, Required39126680619 succeeds. Public-root workload
+  plus retained human-flow PostgreSQL/race81.978s and taggedvet0 pass; separate
+  downloaded-native machine issuance/introspection/revocation consumer passes
+  PostgreSQL/race4.380s. Frozen native profile delivered; full M32 is open.
 - Native owning-client introspection is closed: root `6e1d2a4` and native
   `66e0e47` are reviewed/pushed, Required39112523877/39113109840 succeeds.
   Canonical public-root PG18.6/race96.083s and taggedvet0 pass; a separate
@@ -103,15 +156,17 @@ This is an effort/scope estimate, not a measured percentage or an ETA.
   Required39116660625/39117167622. Canonical real-PG/race6.848s and native
   password race2.182s/taggedvet0 pass. A separate actual downloaded-policy/kernel
   consumer passes real-PG/race1.371s for populated upgrade/replay and bound reads,
-  preserving old identifiers. Primary is connecting the genuine password/session/
-  reference journey; complete username signup/signin, availability and fresh-
-  authorized rename are not delivered yet. No new milestone or qualified unit.
-- An independent GPT-6.1 Sol high worker owns the finite native organization
-  team create/add-member/list/remove consumer on go-organization/main152a232.
-  Existing public current-session/membership/coordinator contracts are sufficient;
-  the expected missing-API regression is captured. No team outcome is delivered
-  yet. Shared identity/session/reference contracts and final acceptance remain
-  primary-owned; heavy checks are serialized.
+  preserving old identifiers. These remain prerequisites of the delivered native
+  username journey above; availability, fresh-authorized rename and HTTP/reference
+  are the remaining M05 work. No additional full milestone or qualified unit.
+- The finite native organization team profile is delivered as `e28502d`/
+  `d5b058b`, Required39119579015/39120039161 succeeds. Public-root affected
+  PostgreSQL/race48.870s/taggedvet0 and a separate downloaded-native genuine
+  password-session consumer16.233s pass. Complete independent review's recovery
+  withdrawal finding is resolved and its30 denial regressions pass. No full
+  milestone or unit qualification is added. Its team-lifecycle successor and
+  OAuth workload profile are also delivered above; the primary continues M05,
+  not another repetition of registration or team membership.
 - Remaining confirmation hooks are closed: email `8130ced`, native adapters
   `f9de2fd` and reference `ca26306` are independently reviewed and pushed.
   Required CI 39109239579/39110169561/39110688213 succeeds. Public-native,
@@ -1053,8 +1108,8 @@ restart old slices merely to fill this table; adopt applicable prior proof.
 | B1 | Runnable registration/verification/signin/session/logout baseline: identity, identity/postgres, identity/password, identity/password/postgres, identity/session, identity/session/postgres, identity/delivery, identity/delivery/postgres, identity/http, identity/reference; required primitive contracts | Closed: reviewed native PostgreSQL/HTTPS journey, reproducible consumer walkthrough, main 90d4f2c and Required CI 38527264686. Public-dependency journeys and published runner initialization subsequently pass at 1ae0790; full-unit qualification pending. |
 | B2 | Reset and required session invalidation using the baseline owners plus identity/risk/hibp | Closed: reviewed native PostgreSQL/HTTPS reset, two-session revocation, original audit recovery and populated upgrade; main fd439aa and Required CI 38547848026; full-unit/release qualification pending |
 | B3 | Password change and fresh reauthentication through baseline owners | Closed: reviewed PostgreSQL/HTTPS verification/change, two-session revocation, populated upgrade, original auditing, rollback/recovery and combined reset/change; main 24b1b08 plus CI-only 47a3ee0, Required CI 38559659144; full-unit/release qualification pending |
-| M04 | Email add/change/verify/list/get/remove with session/lifecycle policy: identity/email | Eleven delivered public PostgreSQL/HTTPS profiles, including known-empty-MFA verification-to-signin (`88c8106`) and genuinely enrolled verification→TOTP→session/read/logout (`02c6195`), with independent review and exact-head main CI. Original verification hooks and email lifecycle/privacy contribution remain missing; selected factor limits and full qualification remain open. The enrolled continuation is delivered, not a remaining prerequisite. Full row not closed. |
-| M05 | Username availability/signin/rename: identity/username, stable identifier contracts | Closure not reassessed |
+| M04 | Email add/change/verify/list/get/remove with session/lifecycle policy: identity/email | Thirteen delivered profiles, including enrolled verification→TOTP→session/read/logout and independently selected verification/change hooks (latest reference `ca26306`, green Required CI). Lifecycle/privacy contribution, retained factor-profile limits and final qualification remain open. Full row not closed. |
+| M05 | Username availability/signin/rename: identity/username, stable identifier contracts | Native required-email signup/verification/username-password signin/session-read/logout delivered as `1a83b18`, with public-dependency PostgreSQL/race, independent review, green CI and downloaded-API compatibility. Availability, fresh-proof rename and HTTP/reference remain open; full row not closed. |
 | M06 | Delivered magic-link signin and session: identity/magiclink | Closure not reassessed |
 | M07 | Purpose-bound email OTP request/delivery/completion: identity/otp, identity/otp/postgres | Closure not reassessed |
 | M08 | Verified phone enrollment/change, OTP/password signin and reset: identity/phone, OTP/password owners | Closure not reassessed |
@@ -1072,16 +1127,16 @@ restart old slices merely to fill this table; adopt applicable prior proof.
 | M20 | Bounded OAuth proxy callback to the intended application: identity/oauth/proxy | Closure not reassessed |
 | M21 | User/organization API-key issue/import/verify/rotate/revoke: identity/apikey, identity/apikey/postgres, identity/apikey/valkey | Closure not reassessed |
 | M22 | Organization create/manage/join/invite/remove and authority lifecycle: organization, organization/postgres | Closure not reassessed |
-| M23 | Teams and dynamic roles/permissions enforcement: organization, authorization contracts | Closure not reassessed |
+| M23 | Teams and dynamic roles/permissions enforcement: organization, authorization contracts | Native team creation/membership/read/update/terminal deletion delivered through `dc12ee7`, with green CI and downloaded-native genuine-session PostgreSQL/race proof. Dynamic roles/permissions and HTTP/reference remain; full row not closed. |
 | M24 | Bans/session administration and bounded audited impersonation: identity, session, identity/impersonation, identity/impersonation/postgres | Closure not reassessed |
 | M25 | Verified domain/provider registration and federation policy: sso, sso/domain-verification, sso/postgres | Closure not reassessed |
 | M26 | Enterprise OIDC/OAuth federation, mapping/JIT/linking and session: sso/oidc, sso/oauth2 | Closure not reassessed |
 | M27 | SAML federation including replay/lifecycle policy: sso/saml | Closure not reassessed |
 | M28 | Authorized SCIM discovery/User CRUD/filter/PATCH/pagination: scim, scim/postgres | Closure not reassessed |
 | M29 | SCIM Groups, organization reconciliation and deprovisioning effects: scim/organization and organization owners | Closure not reassessed |
-| M30 | OAuth client/consent, authorization-code/S256 grants and refresh rotation: oauth-server, oauth-server/postgres | Closure not reassessed |
+| M30 | OAuth client/consent, authorization-code/S256 grants and refresh rotation: oauth-server, oauth-server/postgres | Selected native configured public/confidential code/S256, consent, refresh, revocation and owning-client introspection delivered. Dynamic client/consent management and complete HTTP/reference remain; full row not closed. |
 | M31 | OIDC discovery/JWKS/ID-token/userinfo consumers: oauth-server/oidc | Closure not reassessed |
-| M32 | Workload client-credentials issuance, introspection and revocation: OAuth server owners | Closure not reassessed |
+| M32 | Workload client-credentials issuance, introspection and revocation: OAuth server owners | Configured access-only native machine profile delivered as `28444ed`, green CI and downloaded-native PostgreSQL/race consumer. Full row qualification/composition not closed. |
 | M33 | Restricted token exchange with lineage/non-expanding authority and bounded cache validity: OAuth server, authentication, API-key and organization owners; SI-01 through SI-10 | Closure not reassessed |
 | M34 | Device authorization to issuance/expiry/denial: oauth-server/device, optional native PostgreSQL composition | Closure not reassessed |
 | M35 | Action-bound risk/velocity/admission and every selected CAPTCHA provider: identity/risk, identity/risk/postgres, identity/risk/valkey, identity/risk/captcha, identity/risk/captcha/recaptcha, identity/risk/captcha/turnstile, identity/risk/captcha/hcaptcha, identity/risk/captcha/captchafox; HIBP remains required when setting passwords | Closure not reassessed |
