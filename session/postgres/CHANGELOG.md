@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add a forward MFA issuance-purpose extension for populated verification-first
+  history without replaying or changing older purpose migrations.
+
+- Fence already-consumed signup browser custody during selected verification-
+  origin TOTP completion without reactivating or consuming signup again.
+
 - Persist selected post-verification email-possession sessions with immutable
   confirmation-parent lineage and at most one child per tenant/confirmation.
   Install the forward `EmailVerificationSigninMigrationSource` after the

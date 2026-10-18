@@ -14,6 +14,16 @@ The native password owner supplies actual original-browser, risk and known-empty
 factor admission. Select the email-grant primary reader and matching revoke
 profile explicitly; this effect does not enable general magic-link login.
 
+Verification-origin TOTP completion explicitly uses
+`NewMFAVerificationTOTPCompletionEffect` with the actual MFA owner, consumed
+original signup authority and separately committed verification parent. It
+preserves email-possession provenance rather than manufacturing password proof.
+For verification-first installations append
+`EmailVerificationMFASigninMigrationSource` after the unchanged verification
+history; do not replay the older MFA issuance migration. Existing MFA-first
+installations retain their original history. The reference graph requires a
+permanent explicit lineage selection and composes matching session read/logout.
+
 ## Disable custody and disposition
 
 `PasswordActiveTOTPPrimarySource` separately implements `PrepareDisable` and

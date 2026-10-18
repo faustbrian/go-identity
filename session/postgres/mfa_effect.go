@@ -23,10 +23,11 @@ import (
 // callback, pool or goroutine. Configuration is immutable; independent calls
 // require separate serial Work handles. It is not a public MFA login service.
 type MFATOTPCompletionEffect struct {
-	native   Repository
-	config   Config
-	profile  MagicLinkAdmissionConfig
-	password *IdentifierAdmissionConfig
+	native       Repository
+	config       Config
+	profile      MagicLinkAdmissionConfig
+	password     *IdentifierAdmissionConfig
+	verification bool
 }
 
 // Format redacts correlated deployment configuration for every verb.
@@ -56,6 +57,20 @@ func NewMFATOTPCompletionEffect(c Config, p MagicLinkAdmissionConfig) (*MFATOTPC
 	c.Schema = strings.Clone(c.Schema)
 	p.GlobalAuthorityID, p.PolicyNamespace, p.Audience = strings.Clone(p.GlobalAuthorityID), strings.Clone(p.PolicyNamespace), strings.Clone(p.Audience)
 	return &MFATOTPCompletionEffect{native: Repository{schema: pgx.Identifier{c.Schema}.Sanitize(), maximumDuration: c.MaximumDuration}, config: c, profile: p}, nil
+}
+
+// NewMFAVerificationTOTPCompletionEffect selects separately committed
+// registration-verification provenance, not magic-link/password origin. It
+// shares email-possession session storage but requires its immutable explicit
+// verification-parent scope. The native owner authenticates that parent and
+// original signup browser independently before this transaction can issue.
+func NewMFAVerificationTOTPCompletionEffect(c Config, p MagicLinkAdmissionConfig) (*MFATOTPCompletionEffect, error) {
+	e, err := NewMFATOTPCompletionEffect(c, p)
+	if err != nil {
+		return nil, err
+	}
+	e.verification = true
+	return e, nil
 }
 
 // NewMFAPasswordTOTPCompletionEffect selects genuine password-primary/TOTP
@@ -140,6 +155,9 @@ func (e *MFATOTPCompletionEffect) applyNativeMFA(ctx context.Context, w kernel.W
 	scope, factor, primaryCommand, err := read(bounded)
 	if err != nil {
 		return identity.FeatureReceipt{}, err
+	}
+	if e.verification != (scope.VerificationCommandID != "") {
+		return deny()
 	}
 	s, _ := record.Bindings()
 	a, _ := s.Authority.Bindings()

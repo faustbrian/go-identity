@@ -78,10 +78,32 @@ INSERT INTO verification_session.session_issuances VALUES('tenant-a','identity.p
 					t.Fatal("selected MFA purpose lost", err)
 				}
 			} else {
+				if _, err := tx.Exec(ctx, "SAVEPOINT before_mfa"); err != nil {
+					t.Fatal(err)
+				}
 				_, err := tx.Exec(ctx, `INSERT INTO verification_session.session_issuances VALUES('tenant-a','identity.mfa.totp-verify',NULL)`)
 				var denied *pgconn.PgError
 				if !errors.As(err, &denied) || denied.Code != "23514" {
 					t.Fatal("unselected MFA purpose widened", err)
+				}
+				if _, err = tx.Exec(ctx, "ROLLBACK TO SAVEPOINT before_mfa"); err != nil {
+					t.Fatal(err)
+				}
+				forward, e := (EmailVerificationMFASigninMigrationSource{Schema: "verification_session", Version: 20}).Load(ctx)
+				if e != nil {
+					t.Fatal(e)
+				}
+				if _, e = tx.Exec(ctx, forward[0].UpSQL()); e != nil {
+					t.Fatal("populated verification-first MFA extension", e)
+				}
+				for _, purpose := range []string{"identity.mfa.totp-verify", "identity.mfa.otp-verify", "identity.mfa.recovery-use", "identity.mfa.security-key-assert-verify"} {
+					if _, e = tx.Exec(ctx, `INSERT INTO verification_session.session_issuances VALUES('tenant-a',$1,NULL)`, purpose); e != nil {
+						t.Fatal("forward MFA purpose absent", e)
+					}
+				}
+				var parents, old int
+				if e = tx.QueryRow(ctx, `SELECT count(*) FILTER(WHERE verification_command_id IS NOT NULL),count(*) FILTER(WHERE purpose IN('identity.password.signin','identity.magic-link.consume')) FROM verification_session.session_issuances`).Scan(&parents, &old); e != nil || parents != 2 || old != 2 {
+					t.Fatal("forward MFA extension changed populated verification/legacy rows", e)
 				}
 			}
 		})

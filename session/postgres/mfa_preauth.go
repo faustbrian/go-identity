@@ -147,6 +147,10 @@ func RequireMFAOTPConsumedPreAuth[R SessionRows](ctx context.Context, q SessionQ
 // All callers use owned bounded native readers; clock callbacks here remain
 // private and never replace original primary freshness with caller input.
 func requireMFAConsumedPreAuth[R SessionRows](ctx context.Context, q SessionQueryer[R], databaseTime func(context.Context) (time.Time, error), b identity.CommandBinding, c Config, original session.PreAuthTransaction, primary identity.CommandID) error {
+	return requireMFAConsumedPreAuthMode(ctx, q, databaseTime, b, c, original, primary, false)
+}
+
+func requireMFAConsumedPreAuthMode[R SessionRows](ctx context.Context, q SessionQueryer[R], databaseTime func(context.Context) (time.Time, error), b identity.CommandBinding, c Config, original session.PreAuthTransaction, primary identity.CommandID, verification bool) error {
 	if _, err := identity.ParseCommandID(string(primary)); err != nil || primary == b.CommandID {
 		return identity.ForbiddenError{}
 	}
@@ -156,7 +160,11 @@ func requireMFAConsumedPreAuth[R SessionRows](ctx context.Context, q SessionQuer
 	}
 	defer stop()
 	primaryPurpose := s.Binding.Intent.Action
-	if s.Binding.Intent.TenantID != b.TenantID || string(s.Binding.ID) != b.AnonymousFlowID || (primaryPurpose != "identity.magic-link.consume" && primaryPurpose != "identity.password.signin") {
+	validPurpose := primaryPurpose == "identity.magic-link.consume" || primaryPurpose == "identity.password.signin"
+	if verification {
+		validPurpose = primaryPurpose == "identity.password.signup"
+	}
+	if s.Binding.Intent.TenantID != b.TenantID || string(s.Binding.ID) != b.AnonymousFlowID || !validPurpose {
 		return identity.ForbiddenError{}
 	}
 	primaryBytes, _ := base64.RawURLEncoding.DecodeString(string(primary))
