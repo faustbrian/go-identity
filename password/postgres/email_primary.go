@@ -54,6 +54,9 @@ type EmailPrimarySource struct {
 	config    EmailPrimaryConfig
 	validator *auth.AuthorityAuthenticator
 	factor    *mfapg.EmailChangeFactorSource
+	// action selects the closed non-email adapters of the same password owner.
+	// Public email constructors never select it; their framing stays unchanged.
+	action bool
 }
 
 // EmailPrimaryAdmission is opaque original custody, not mutation permission.
@@ -100,10 +103,18 @@ func NewEmailTOTPPrimarySource(source *ReauthenticationService, factor *mfapg.Em
 }
 
 func newEmailPrimarySource(source *ReauthenticationService, factor *mfapg.EmailChangeFactorSource, config EmailPrimaryConfig) (*EmailPrimarySource, error) {
-	if source == nil || source.repository == nil || !source.repository.configuredWriter() || source.sessions == nil || source.c.Verifier.Now == nil || config.MaximumAge <= 0 || config.MaximumAge > 5*time.Minute || emailPrimaryOperation(config.Action).Owner == "" || !reauthenticationText(config.Audience, 256) {
+	return newPrimarySource(source, factor, config, false)
+}
+
+func newPrimarySource(source *ReauthenticationService, factor *mfapg.EmailChangeFactorSource, config EmailPrimaryConfig, action bool) (*EmailPrimarySource, error) {
+	op, maximumAge := emailPrimaryOperation(config.Action), 5*time.Minute
+	if action {
+		op, maximumAge = actionPrimaryOperation(config.Action), 15*time.Minute
+	}
+	if source == nil || source.repository == nil || !source.repository.configuredWriter() || source.sessions == nil || source.c.Verifier.Now == nil || config.MaximumAge <= 0 || config.MaximumAge > maximumAge || op.Owner == "" || !reauthenticationText(config.Audience, 256) {
 		return nil, password.ErrPasswordWork
 	}
-	if config.AdministrativeTargets && config.Action != "identity.email.address-remove" {
+	if config.AdministrativeTargets && !(config.Action == "identity.email.address-remove" && !action || config.Action == "identity.organization.owner-transfer" && action) {
 		return nil, password.ErrPasswordWork
 	}
 	target := ReauthenticationTarget{Purpose: "identity.password.verify", Action: config.Action, Audience: config.Audience}
@@ -144,7 +155,7 @@ func newEmailPrimarySource(source *ReauthenticationService, factor *mfapg.EmailC
 	if err != nil {
 		return nil, password.ErrPasswordWork
 	}
-	return &EmailPrimarySource{source: source, config: config, validator: validator}, nil
+	return &EmailPrimarySource{source: source, config: config, validator: validator, action: action}, nil
 }
 
 // Prepare authenticates original bearer and signed action/session-bound proof.
@@ -252,13 +263,13 @@ func (s *EmailPrimarySource) Prepare(ctx context.Context, request EmailPrimaryRe
 		return out, err
 	}
 	state.fields = append(fields,
-		identity.FeatureField{Name: "email.primary.proof.digest", Value: identity.FeatureValue{Kind: identity.FeatureBytes, Bytes: slices.Clone(digest[:])}},
-		identity.FeatureField{Name: "email.primary.proof.id", Value: identity.FeatureValue{Kind: identity.FeatureText, Text: string(record.Proof.Proof.ID)}},
-		identity.FeatureField{Name: "email.primary.maximum-age-nanos", Value: identity.FeatureValue{Kind: identity.FeatureUint64, Uint64: uint64(s.config.MaximumAge)}},
-		identity.FeatureField{Name: "email.primary.cookie", Value: identity.FeatureValue{Kind: identity.FeatureBool, Bool: s.config.Transport == session.CredentialCookie}},
+		identity.FeatureField{Name: s.fieldPrefix() + "proof.digest", Value: identity.FeatureValue{Kind: identity.FeatureBytes, Bytes: slices.Clone(digest[:])}},
+		identity.FeatureField{Name: s.fieldPrefix() + "proof.id", Value: identity.FeatureValue{Kind: identity.FeatureText, Text: string(record.Proof.Proof.ID)}},
+		identity.FeatureField{Name: s.fieldPrefix() + "maximum-age-nanos", Value: identity.FeatureValue{Kind: identity.FeatureUint64, Uint64: uint64(s.config.MaximumAge)}},
+		identity.FeatureField{Name: s.fieldPrefix() + "cookie", Value: identity.FeatureValue{Kind: identity.FeatureBool, Bool: s.config.Transport == session.CredentialCookie}},
 	)
 	if request.TargetSubjectID != "" {
-		state.fields = append(state.fields, identity.FeatureField{Name: "email.primary.target-subject", Value: identity.FeatureValue{Kind: identity.FeatureText, Text: string(request.TargetSubjectID)}})
+		state.fields = append(state.fields, identity.FeatureField{Name: s.fieldPrefix() + "target-subject", Value: identity.FeatureValue{Kind: identity.FeatureText, Text: string(request.TargetSubjectID)}})
 	}
 	if s.config.Transport == session.CredentialCookie {
 		csrf, err := original.CSRFState().Bindings()
@@ -289,7 +300,7 @@ func emailPrimarySubject(source *EmailPrimarySource, request EmailPrimaryRequest
 	if request.TargetSubjectID == "" {
 		return actor, nil
 	}
-	if !source.config.AdministrativeTargets || source.config.Action != "identity.email.address-remove" || request.TargetSubjectID == actor {
+	if !source.config.AdministrativeTargets || !(source.config.Action == "identity.email.address-remove" && !source.action || source.config.Action == "identity.organization.owner-transfer" && source.action) || request.TargetSubjectID == actor {
 		return "", identity.ForbiddenError{}
 	}
 	if _, err := identity.ParseIdentifierID(string(request.TargetSubjectID)); err != nil {
@@ -342,6 +353,27 @@ func emailPrimaryOperation(action string) identity.FeatureOperation {
 	}
 }
 
+func (s *EmailPrimarySource) operation() identity.FeatureOperation {
+	if s.action {
+		return actionPrimaryOperation(s.config.Action)
+	}
+	return emailPrimaryOperation(s.config.Action)
+}
+
+func (s *EmailPrimarySource) fieldPrefix() string {
+	if s.action {
+		return "password.action-primary."
+	}
+	return "email.primary."
+}
+
+func (s *EmailPrimarySource) descriptor() kernel.ContributorDescriptor {
+	if s.action {
+		return actionPrimaryDescriptor(s.config.Action)
+	}
+	return kernel.ContributorDescriptor{Owner: "identity/email/postgres", ContractID: "identity.email", Version: 1}
+}
+
 func (s emailPrimaryCustody) checkTime(now time.Time) error {
 	use := s.use
 	use.ProofUse.Now = now
@@ -367,7 +399,7 @@ func (a EmailPrimaryAdmission) command(binding identity.CommandBinding, addition
 	}
 	state := a.custody()
 	original, err := state.original.Bindings()
-	op := emailPrimaryOperation(state.source.config.Action)
+	op := state.source.operation()
 	if resend {
 		if state.source.config.Action != "identity.email.verification-send" {
 			return identity.Command{}, identity.ForbiddenError{}
@@ -395,7 +427,7 @@ func (a EmailPrimaryAdmission) scope(ctx context.Context, work kernel.Work, owne
 	state := a.custody()
 	binding, feature, _, err := work.FeatureScope(owner)
 	resend := state.source.config.Action == "identity.email.verification-send" && feature.Operation == managedResendOperation()
-	if err != nil || feature.Contributor != (kernel.ContributorDescriptor{Owner: "identity/email/postgres", ContractID: "identity.email", Version: 1}) || !resend && feature.Operation != emailPrimaryOperation(state.source.config.Action) {
+	if err != nil || feature.Contributor != state.source.descriptor() || !resend && feature.Operation != state.source.operation() {
 		return emailPrimaryCustody{}, identity.CommandBinding{}, identity.ForbiddenError{}
 	}
 	spec, ok := command.Feature()
@@ -450,7 +482,7 @@ func (a EmailPrimaryAdmission) Admit(ctx context.Context, work kernel.Work, owne
 	if err != nil {
 		return identity.ForbiddenError{}
 	}
-	if state.request.TargetSubjectID != "" {
+	if state.request.TargetSubjectID != "" && !state.source.action {
 		if err := work.RequireEmailRemovalSubjects(ctx, owner, command, kernel.EmailRemovalAdministration{GlobalAuthorityID: directory.Query.GlobalAuthorityID, GlobalVersion: directory.GlobalVersion, TenantVersion: directory.TenantVersion}); err != nil {
 			return err
 		}

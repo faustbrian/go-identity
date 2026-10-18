@@ -265,7 +265,7 @@ func restoreEmailPrimary(ctx context.Context, source *EmailPrimarySource, reques
 		if strings.HasPrefix(field.Name, "source-session.") {
 			originalFields = append(originalFields, field)
 		}
-		if strings.HasPrefix(field.Name, "source-session.") || strings.HasPrefix(field.Name, "email.primary.") {
+		if strings.HasPrefix(field.Name, "source-session.") || strings.HasPrefix(field.Name, source.fieldPrefix()) {
 			primaryFields = append(primaryFields, field)
 		}
 	}
@@ -281,7 +281,7 @@ func restoreEmailPrimary(ctx context.Context, source *EmailPrimarySource, reques
 	if _, err := emailPrimarySubject(source, request, user); err != nil {
 		return EmailPrimaryAdmission{}, err
 	}
-	selectedTarget, present := values["email.primary.target-subject"]
+	selectedTarget, present := values[source.fieldPrefix()+"target-subject"]
 	if request.TargetSubjectID != "" {
 		if !present || selectedTarget.Kind != identity.FeatureText || selectedTarget.Text != string(request.TargetSubjectID) {
 			return EmailPrimaryAdmission{}, identity.ForbiddenError{}
@@ -319,7 +319,7 @@ func restoreEmailPrimary(ctx context.Context, source *EmailPrimarySource, reques
 		}
 		digest = sha256.Sum256(proof)
 	}
-	d, id, age, cookie := values["email.primary.proof.digest"], values["email.primary.proof.id"], values["email.primary.maximum-age-nanos"], values["email.primary.cookie"]
+	d, id, age, cookie := values[source.fieldPrefix()+"proof.digest"], values[source.fieldPrefix()+"proof.id"], values[source.fieldPrefix()+"maximum-age-nanos"], values[source.fieldPrefix()+"cookie"]
 	if d.Kind != identity.FeatureBytes || !bytes.Equal(d.Bytes, digest[:]) || id.Kind != identity.FeatureText || id.Text != string(record.Proof.Proof.ID) || age.Kind != identity.FeatureUint64 || age.Uint64 != uint64(source.config.MaximumAge) || cookie.Kind != identity.FeatureBool || cookie.Bool != (source.config.Transport == session.CredentialCookie) {
 		return EmailPrimaryAdmission{}, password.ErrPasswordWork
 	}
@@ -336,7 +336,13 @@ func restoreEmailPrimary(ctx context.Context, source *EmailPrimarySource, reques
 	if !matched {
 		return EmailPrimaryAdmission{}, identity.ForbiddenError{}
 	}
-	state := emailPrimaryCustody{source: source, request: request, original: original, record: record, use: auth.ReauthenticationUse{ProofUse: auth.ProofUse{Tenant: string(request.TenantID), Subject: string(user), Purpose: "identity.password.verify", Audience: source.config.Audience}, SessionID: spec.SessionID, SessionVersion: spec.Version, Action: source.config.Action, MaximumAge: source.config.MaximumAge}, fields: slices.Clone(primaryFields)}
+	retainedFields := slices.Clone(primaryFields)
+	// Public action restoration accepts caller-owned fields. The retained
+	// immutable command provenance must survive their reuse or secure clearing.
+	for index := range retainedFields {
+		retainedFields[index].Value.Bytes = slices.Clone(retainedFields[index].Value.Bytes)
+	}
+	state := emailPrimaryCustody{source: source, request: request, original: original, record: record, use: auth.ReauthenticationUse{ProofUse: auth.ProofUse{Tenant: string(request.TenantID), Subject: string(user), Purpose: "identity.password.verify", Audience: source.config.Audience}, SessionID: spec.SessionID, SessionVersion: spec.Version, Action: source.config.Action, MaximumAge: source.config.MaximumAge}, fields: retainedFields}
 	if source.factor != nil {
 		state.factor = factor
 		state.use.ProofUse.Purpose = "identity.email.change-request"

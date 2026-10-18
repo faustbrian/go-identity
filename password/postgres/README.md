@@ -72,6 +72,27 @@ replay, recovery, unknown results and rollback never invoke observers. A failed
 attempt that passed reservation retains the existing anti-abuse charge; a hook
 rejection precedes that charge. Use the durable outbox for external delivery.
 
+## Action-bound protected operations
+
+`NewActionPrimarySource` explicitly selects `identity.username.update` or
+`identity.organization.owner-transfer` over the existing reauthentication owner.
+Configure the exact issuance target/audience, a maximum age of at most fifteen
+minutes and bearer or cookie transport; cookies require retained CSRF keys.
+Install `ActionReauthenticationMigrationSource{Base: installedHistory, Version:
+nextVersion}` in the existing password namespace first. Do not replace an
+installed selected history with a shorter prefix.
+
+`Prepare` authenticates the original session and signed proof; `Command` retains
+bounded typed original provenance. An immutable native contributor can call
+`RestoreCommand` without IO or a request-state map. Inside the sole coordinator
+Work it must `Admit`, atomically `Consume`, and finally `Check`, alongside its
+own current domain, authorization, factor and risk policy. Distinct actor/target
+rows must be locked in canonical order before admission. `Recover` reconciles
+the password-owned consumer marker only; combine it with domain/effect evidence.
+Restoration and recovery never renew original freshness or mint credentials.
+This is an adapter seam, not a username or organization workflow implementation;
+the selected profile accepts single-factor password sessions only.
+
 ## Original-browser verification and signin
 
 Explicitly compose `NewVerificationSigninService(signup, config)` over the native

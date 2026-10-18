@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Add explicitly selected, action-bound password reauthentication admission for
+  username update and organization ownership transfer. Preserve the verified
+  actor independently of the target, exact signed provenance and original
+  freshness across restart; consume the existing one-use proof atomically with
+  protected effects. Append `ActionReauthenticationMigrationSource` after the
+  installed password history before selecting either operation. Existing email
+  admission and installed migration bytes remain unchanged.
+
 - Add explicit username-password signin through the existing native password,
   risk, factor and session owners. Require a separately verified email and
   known-empty MFA; preserve original action/flow, remember choice, current name
