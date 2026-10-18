@@ -17,7 +17,55 @@ import (
 	identity "github.com/faustbrian/go-identity"
 	"github.com/faustbrian/go-identity/otp"
 	"github.com/faustbrian/go-identity/phone"
+	"github.com/faustbrian/go-identity/session"
 )
+
+func TestPhoneCompletionRetainsCurrentCSRFWithoutDiagnosticDisclosure(t *testing.T) {
+	submission := verificationRequest(t)
+	token, err := session.NewCSRFToken()
+	if err != nil {
+		t.Fatal(err)
+	}
+	submission.CSRFToken = token
+	request, err := phone.NewVerificationRequest(submission)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := request.Bindings()
+	if err != nil || got.CSRFToken != token {
+		t.Fatal("completion lost current synchronizer custody", err)
+	}
+	caller := submission.Caller.Clone()
+	caller.Request.Action = "identity.phone.verify.recover"
+	recovery, err := phone.NewVerificationRecoveryRequest(phone.VerificationRecoveryRequestSpec{
+		TenantID: submission.TenantID, UserID: submission.UserID, Caller: caller,
+		Flow: submission.Flow, Recovery: phoneRecovery(t, submission), CSRFToken: token,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	retained, err := recovery.Bindings()
+	if err != nil || retained.CSRFToken != token {
+		t.Fatal("recovery lost current synchronizer custody", err)
+	}
+	wire, err := token.Reveal()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, handle := range []any{request, recovery} {
+		for _, verb := range []string{"%v", "%+v", "%#v", "%q"} {
+			if strings.Contains(fmt.Sprintf(verb, struct{ private any }{handle}), wire) {
+				t.Fatal("phone completion exposed current synchronizer in nested diagnostics")
+			}
+		}
+	}
+	// A bearer selection has no synchronizer. Structural input must retain that
+	// valid representation; native transport selection authenticates either case.
+	submission.CSRFToken = session.CSRFToken{}
+	if _, err := phone.NewVerificationRequest(submission); err != nil {
+		t.Fatal("bearer completion incorrectly required cookie synchronizer", err)
+	}
+}
 
 func enrollmentRequest(t *testing.T) phone.EnrollmentRequestSpec {
 	t.Helper()

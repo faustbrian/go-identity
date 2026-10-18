@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Carry explicit current CSRF synchronizers on verification and recovery
+  requests so native cookie admission can validate the caller's request.
+  Bearer requests retain the structurally valid zero-token representation.
+
 - Make existing-account verification requests and results opaque immutable
   custody, preventing nested diagnostics from traversing original proof, flow
   bearer or result correlation. Explicit Spec constructors/projections retain

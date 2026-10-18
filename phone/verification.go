@@ -148,6 +148,9 @@ type VerificationRequest struct {
 // It is a new logical code submission against the original
 // authenticated-session Send. The native owner selects attempt/command IDs and
 // authenticates original subject, number, purpose, session and absolute limits.
+// CSRFToken is the current request synchronizer for cookie admission; zero is
+// structurally valid for bearer admission. The native transport selection owns
+// authentication and must not recover or infer a raw synchronizer from storage.
 // A repeat Verify is a new submission, not recovery of an ambiguous attempt.
 type VerificationRequestSpec struct {
 	TenantID      identity.TenantID
@@ -156,6 +159,7 @@ type VerificationRequestSpec struct {
 	Flow          otp.SendFlow
 	SendCommandID identity.CommandID
 	Code          auth.OneTimeCode
+	CSRFToken     session.CSRFToken
 }
 
 // NewVerificationRequest validates bounded scope before copying it and cloning
@@ -248,12 +252,15 @@ type VerificationRecoveryRequest struct {
 // It observes an original ambiguous attempt under
 // current recovery/disclosure policy and original session possession. It never
 // carries a code, compares again, charges another attempt or renews authority.
+// CSRFToken is current cookie-request custody, not a stored or renewed token;
+// zero remains structural input for the separately selected bearer profile.
 type VerificationRecoveryRequestSpec struct {
-	TenantID identity.TenantID
-	UserID   identity.UserID
-	Caller   authorization.DecisionContext
-	Flow     otp.SendFlow
-	Recovery VerificationRecovery
+	TenantID  identity.TenantID
+	UserID    identity.UserID
+	Caller    authorization.DecisionContext
+	Flow      otp.SendFlow
+	Recovery  VerificationRecovery
+	CSRFToken session.CSRFToken
 }
 
 // NewVerificationRecoveryRequest validates bounded original scope before copying

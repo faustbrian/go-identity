@@ -20,6 +20,10 @@ original proof/session, current account/factor/risk policy and uniqueness, and
 coordinate identifier, purpose-bound OTP, delivery and audit in one transaction.
 
 Verification and recovery accept authenticated-session OTP flows only.
+Both requests carry the current `CSRFToken` for cookie-authenticated admission;
+zero remains structurally valid for the bearer profile. Native transport
+selection must authenticate that synchronizer, never infer it from retained
+session state or treat the field's presence as permission.
 `VerificationRecovery` wraps the OTP owner's original code-free attempt
 correlation; send and consuming command IDs cannot alias. Its explicit Bindings
 projection is sensitive correlation, not a recovery capability or permission to
