@@ -1,5 +1,19 @@
 # PostgreSQL MFA authority (in development)
 
+`ReadPhoneFactors` supplies preliminary actual known-empty factor metadata for
+the selected existing-account phone enrollment profile. Freeze that positive
+generation as the `phone.factor-version` uint64 field in the original command.
+`RequirePhoneFactors` admits only the exact self-user `identity/phone/postgres`
+owner's `identity.phone.send-verification` and `identity.phone.verify` native-v1
+schemas under `identity.phone` contract v1. It rejects changed/missing generation
+fields and unknown `phone.factor-*` variants. Acquire original account/session
+locks first and call the guard in every protected admission phase, mutation and
+final precommit check; its actual factor row lock lasts until Work closes.
+Missing, enrolled, changed or corrupt authority denies without initialization,
+weaker fallback, proof issuance or renewal of original validity. The selected
+native owner must retain the original field through preparation and completion;
+these seams do not themselves implement phone or OTP enrollment.
+
 `RequireActionPrimaryFactors` supplies the selected known-empty-factor fence for
 native username rename and organization ownership transfer. Freeze actual
 `ReadPasswordSigninFactors` generations as `action-primary.actor-factor-version`

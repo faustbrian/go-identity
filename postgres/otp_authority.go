@@ -160,7 +160,7 @@ func (h OTPApplyWork) RequireActiveCredential(ctx context.Context, p OTPReservat
 	if err != nil {
 		return time.Time{}, err
 	}
-	expected, err = otpEmailVerificationCredential(w, b, expected)
+	expected, err = otpMutationCredential(w, b, expected)
 	if err != nil {
 		return time.Time{}, otpAuthorityFailure(ctx, w, err)
 	}
@@ -202,7 +202,7 @@ func (h OTPFinalizeWork) RequireActiveCredential(ctx context.Context, p OTPReser
 	if err != nil {
 		return time.Time{}, err
 	}
-	expected, err = otpEmailVerificationCredential(w, b, expected)
+	expected, err = otpMutationCredential(w, b, expected)
 	if err != nil {
 		return time.Time{}, otpAuthorityFailure(ctx, w, err)
 	}
@@ -256,7 +256,7 @@ func (h OTPApplyWork) RequireActiveUserAuthority(ctx context.Context, p OTPReser
 	if err != nil {
 		return err
 	}
-	expected, err = otpEmailVerificationUser(w, b, expected)
+	expected, err = otpMutationUser(w, b, expected)
 	if err != nil {
 		return otpAuthorityFailure(ctx, w, err)
 	}
@@ -271,7 +271,7 @@ func (h OTPFinalizeWork) RequireActiveUserAuthority(ctx context.Context, p OTPRe
 	if err != nil {
 		return err
 	}
-	expected, err = otpEmailVerificationUser(w, b, expected)
+	expected, err = otpMutationUser(w, b, expected)
 	if err != nil {
 		return otpAuthorityFailure(ctx, w, err)
 	}

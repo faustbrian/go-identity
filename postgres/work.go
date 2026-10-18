@@ -79,6 +79,7 @@ type workState struct {
 	emailVerification         *emailVerificationProgress
 	emailAttachment           *emailAttachmentProgress
 	phoneEnrollment           *phoneEnrollmentProgress
+	phoneVerification         *phoneVerificationProgress
 	usernameRename            *usernameRenameProgress
 	emailRemoval              *emailRemovalProgress
 	managedEmailVerification  *managedEmailVerificationProgress
@@ -298,6 +299,7 @@ func invalidateWork(w Work) {
 	w.state.emailVerification = nil
 	w.state.emailAttachment = nil
 	w.state.phoneEnrollment = nil
+	w.state.phoneVerification = nil
 	w.state.usernameRename = nil
 	w.state.emailRemoval = nil
 	w.state.managedEmailVerification = nil

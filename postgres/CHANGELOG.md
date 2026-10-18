@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add closed initial-phone confirmation admission and the OTP-backed identifier
+  verification transition. Bind the original enrollment and exact pending
+  number/profile/CAS before code metering; only the kernel's own persisted
+  successor advances final OTP identifier expectations. Native orchestration,
+  actual possession, factor/risk policy and public transport remain required.
+
 - Add a closed pending-phone enrollment participant to the sole coordinator.
   Bind exact metadata/profile and directory predecessors, conserve original
   candidate custody for OTP/SMS issuance, and commit only the applied pending

@@ -2608,6 +2608,33 @@ separate pending profiles; this effect cannot enable or restore credentials.
 
 ## Integration testing
 
+### Initial phone confirmation participant
+
+`PhoneVerificationContributor` selects only `identity.phone.verify.native-v1`
+under the logical `identity/phone/postgres` owner. Use `PhoneVerificationFields`
+with the original committed enrollment command, canonical number, immutable
+normalization profile and exact pending identifier/verification versions 1/1.
+The selected `PhoneEnrollmentDomain` must borrow the same enlisted repository.
+The operation requires an authenticated-session command, consuming OTP, protected
+audit and `identifier.verified.v1` 1→2; it neither issues a session nor changes a
+primary number. No new migration or transaction owner is introduced.
+
+Input admission calls `RequirePhoneVerificationTarget` before credential,
+session and factor locks. It exclusively locks and compares the original user/
+identifier partition before an OTP comparison can charge an attempt. Kernel
+preparation does not write possession; Apply rechecks the actual enlisted OTP
+reservation before persisting verification in the coordinator transaction.
+Final OTP checks may map only that Work's exact persisted identifier successor;
+all other authority dimensions and original validity times remain unchanged.
+Current rows never reconstruct historical success during recovery.
+
+These are trusted storage/admission contracts, not a complete phone endpoint.
+The native workflow must authenticate original enrollment/session possession,
+derive only the enrollment's exact authority successor, enforce factor/risk/
+CSRF policy and provide code-free unknown-outcome recovery. Ordinary session
+validation is not relaxed. The focused storage test deliberately does not claim
+genuine caller, SMS or complete OTP interoperability.
+
 The private identifier storage path provisionally consumes its enlisted
 capability through the same Work after locked state/cooldown checks and before
 identifier writes. Only the owned exact identifier receipt can reach Commit;

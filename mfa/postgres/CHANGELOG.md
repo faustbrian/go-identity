@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Fence the original known-empty MFA generation for selected native self-user
+  phone verification sending and completion. Bind `phone.factor-version` into
+  original command intent and repeat the actual row fence through final commit;
+  missing, enrolled or changed authority denies without initialization or fallback.
+
 - Fence the original known-empty MFA generation in every native OTP-only
   signin attempt, reservation, protected admission and finalization phase.
   Missing, enrolled or changed authority denies without initialization or

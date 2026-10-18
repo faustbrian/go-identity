@@ -215,4 +215,5 @@ INSERT INTO identity.identifiers(tenant_id,user_id,identifier_id,kind,canonical_
 	t.Run("username-primary-lookup", func(t *testing.T) { testUsernameLookupPostgres(t, ctx, pool, repository) })
 	t.Run("username-native-rename", func(t *testing.T) { testUsernameRenamePostgres(t, ctx, pool, repository) })
 	t.Run("phone-native-enrollment", func(t *testing.T) { testPhoneEnrollmentPostgres(t, ctx, pool, repository) })
+	t.Run("phone-native-verification", func(t *testing.T) { testPhoneVerificationPostgres(t, ctx, pool, repository) })
 }
