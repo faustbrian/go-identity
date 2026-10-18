@@ -1,6 +1,6 @@
 # Identity Platform Progress
 
-## TL;DR — updated 2026-10-18 15:47 UTC
+## TL;DR — updated 2026-10-18 16:45 UTC
 
 **Estimated whole-goal completion: approximately 10–12%, with low confidence.**
 The working authentication baseline, thirteen email profiles, native username
@@ -10,7 +10,21 @@ Most platform families and final package qualification are not closed;
 queued work is not counted as delivered.
 This is an effort/scope estimate, not a measured percentage or an ETA.
 
-**Latest usable native outcomes:** username rename (`afe3f92`) and organization
+**Latest delivery:** current-subject organization listing (`956176f` root /
+`804dbe8` PostgreSQL). Current members receive only visible active organizations
+in bounded stable pages; late policy/session/membership withdrawal discloses no
+partial page. Independently reviewed, main-pushed, Required CI green, canonical
+public-root PostgreSQL/race checks pass, and the actual downloaded native
+genuine-session consumer passes (16.886s). This remains partial M22.
+
+**Current local work:** username signup/signin/availability/rename HTTP source
+has independent approval and passes full transport race tests. The native
+PostgreSQL router also proves original rename recovery after session invalidation.
+Reference native composition is being connected; migrations and the complete
+HTTPS journey are unfinished. These local changes are not delivered M05.
+The organization worker is implementing invitation cancellation in parallel.
+
+**Other recent usable native outcomes:** username rename (`afe3f92`) and organization
 self-leave (`f54f10a`) are independently reviewed, pushed to their owning main
 branches and have green Required CI. Clean public-module PostgreSQL/race checks
 pass for both. Rename enforces original action-bound proof, current MFA/CSRF,
@@ -33,7 +47,7 @@ qualification is claimed by these native deliveries.
 | Full package scope | **67 units: 61 product units + 6 primitive extensions.** No additional full-unit qualification has closed during this implementation run. The older 2/67 verified baseline is historical, not a current cross-repository audit. |
 | Last full milestone closure | **14 October:** B3 password change. |
 | Last complete email-profile delivery | **18 October:** independently selected hooks for managed change links and email OTP verification/change, including first-primary and TOTP paths. Pushed reference `ca26306`, Required CI 39110688213 passes; all 30 selected public-native PostgreSQL/race cases pass. |
-| Delivered organization profiles | **Native invitations, metadata, team lifecycle, ownership transfer and self-leave.** Root `96552b9` / native `f54f10a` adds self-only departure with last-owner, current authority, scoped denial and readmission/team fences. Green CI; canonical PostgreSQL/race and downloaded-native genuine-session checks pass. This is partial M22/M23, not the complete organization family. |
+| Delivered organization profiles | **Native invitations, metadata, team lifecycle, ownership transfer, self-leave and current-subject organization listing.** Root `956176f` / native `804dbe8` adds bounded policy-filtered pages with original freshness and post-callback primary/scoped authority checks. Green CI; canonical PostgreSQL/race and downloaded-native genuine-session checks pass. This is partial M22/M23, not the complete organization family. |
 | Delivered username profiles | **Required-email username registration/signin, advisory availability and protected rename.** Native `afe3f92` adds atomic proof/name/cooldown/audit effects, original retry/recovery, issued-cookie CSRF and old-session denial. Green CI; canonical and downloaded-native PostgreSQL/race checks pass. HTTP/reference remain unfinished; M05 is not closed. |
 | Current unfinished deliverables | M04 lifecycle/privacy contribution, retained factor-profile limits and final qualification remain open; confirmation-hook variants are delivered. Full M22/M30/M35, organization HTTP/reference selection and final package qualification remain open. Next lanes must consume proven contracts, not restart delivered profiles. |
 

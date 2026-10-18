@@ -2,6 +2,86 @@
 
 ## Live checkpoint — 2026-10-18 15:47 UTC
 
+Continuation16:28UTC: organization listing root956176f/native804dbe8 now
+reviewed and main-pushed. Canonical public-root native ordinaryrace1.269s,
+affected real-PG listing/genuine23.476s and taggedvet pass; root Required39144641598
+passes, native CI/downloaded-native consumer pending. Primary M05 HTTP handlers
+for signup/signin/availability/rename are written with focused test-first
+custody/denial/ambiguity proof; reference/real HTTPS remain unfinished.
+Base HTTP synchronizer selection1dbef22 is independently approved/pushed,
+full base race13.453s/vet0 and Required39144944457 pass. No full M05/M22 closure.
+
+Continuation16:44UTC: listing delivered with Required39144943365 success and
+downloaded native genuine-session PG/race16.886s; all45 native Go/manifests match
+actual public804dbe8, original publicroot7 match956176f. Disposable54786 cluster,
+DB/roles and complete cache removed. HTTP/password17-path source b30ba754 is
+independently APPROVE (username_http_final_review), publicdeps GOWORKoff full
+race38.407s/vet0 and boundedfuzz3.329s (five executions including four seeds).
+New native SQL-over-username-router retry proof passes4.302s/race in genuine
+signup/verification/signin/rename journey, using temporary workspace only for
+own HTTP/password+password/postgres; original invalidated cookie and consumed
+proof recover committed metadata through real PG rate/proof/rename owners.
+This is not yet downloaded-public HTTP or complete reference/HTTPS proof.
+Task54787 PG is stopped, DB/roles0|0, data/credential/logs removed; only bounded
+HTTP/reference compile caches retained while adjacent work remains active.
+Reference optional native username graph/guarded handles and original-action
+preauth are written after missing-API RED; focused green next after worker slot.
+Remaining same M05 outcome: full migration wiring and explicit HTTP/reference,
+genuine HTTPS signup->delivery->confirmation->username signin->proof->rename->
+new signin/session/logout, security failures, final coherent review/publication.
+Concrete original-owner issue to exercise in that journey: native signup
+confirmation restores an operation/profile-specific encrypted signup input;
+base email SignupService cannot stand in for username SignupService. Extend
+the existing native verification router to select the actual authenticated
+stored registration origin, never reference-owned proof routing or error-based
+fallback. Preserve both email and username owners in the same graph.
+
+Next organization assignment: organization_teams (GPT-6.1 Sol high/no children),
+base main804dbe8, owns go-organization root/postgres Go/tests/docs/changelogs
+and module-local manifests only. Finite M22 invitation.cancel: a current
+authorized org owner/admin cancels one exact pending invitation/version,
+atomically records terminal state/audit/outbox and makes its prior proof
+unusable; accept/cancel contention has one winning terminal effect. Preserve
+last-owner/global-session/org-key independence and existing send/accept/recovery
+bytes. Native original-command retries/recovery retain exact outcomes under
+current authority, no resurrected invitation or repeated delivery. Use existing
+command/coordinator, invitation, issuer, delivery and scoped-authority owners;
+no private revocation/proof/store engine. Full invitation lists/resend/expiry,
+HTTP/reference and complete M22 are excluded from this finite batch, not goal.
+Consume current reviewed organization804dbe8 plus its committed public supplier
+pins/genuine-session proof; report any concrete missing upstream behavior.
+Focus root/native TDD, affected real-PG/race/genuine invitation consumer and
+bounded hostile input tests; primary inspects first boundary/coherent batch,
+owns heavy-lane scheduling, independent final review, public pins and delivery.
+
+Continuation15:52UTC: primary owns the existing M05 HTTP/reference boundary,
+consuming nativeafe3f92, usernamed825f04, MFAe5fc9b8 and kernel620e885 public
+contracts and their recorded canonical/downloaded PostgreSQL proof. Deliver
+explicit username signup/signin/availability/rename routes and metadata,
+original-action preauth, actual native bootstrap/migrations and HTTPS consumer
+signup->capturedverification->username signin->proof->rename->new signin->logout.
+Preserve email routes, closed bounded input, exact Origin/cookie/CSRF, counted
+risk, neutral collisions/denial, current factors and original keyed recovery;
+nil selections expose neither route nor metadata. No new normalization/proof/
+transaction engine or enrolled-MFA fallback. Focus affected HTTP/root/reference
+tests and tagged real PostgreSQL/race, selected public-consumer proof and one
+complete final-diff review; no preflight or unrelated qualification rerun.
+
+Successor organization lane: organization_teams, GPT-6.1 Sol high/no children,
+owns go-organization root/postgres Go/tests/docs/changelogs and module-local
+manifests only; base mainf54f10a/root96552b9, canonical/public-native genuine
+selfleave proof16.366s/18.331s and green Required39141524573. Finite M22 outcome:
+current authenticated human lists only organizations visible through current
+active membership and current policy, with bounded stable keyset pagination.
+No arbitrary target user/tenant, archived/removed/foreign leakage or session
+selection changes; deny on canceled/expired/current-withdrawn authority. Reuse
+existing session/organization/scoped-authority owners; no private directory,
+cache, cursor authority engine, HTTP/dynamic roles or fullM22 claim. Prove
+multiple genuine organizations, pages, removed/readmitted membership, tenant/
+policy/session denial and late withdrawal through native public methods.
+Focused core/native tests, genuine-session PostgreSQL/race and taggedvet;
+primary owns public pins/final review/Git. Heavy checks wait for explicit grant.
+
 Selected native rename delivered: public username d825f044ef943bc1dc4c8257b068901828edccd2
 and password-native afe3f92781e9fb15c7a31abfb25a0ec0ffb498b0 are reviewed/pushed
 with Required39141423803/39141726590 green. Independent username_rename_review
