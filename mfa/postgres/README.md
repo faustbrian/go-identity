@@ -1,5 +1,18 @@
 # PostgreSQL MFA authority (in development)
 
+`RequireActionPrimaryFactors` supplies the selected known-empty-factor fence for
+native username rename and organization ownership transfer. Freeze actual
+`ReadPasswordSigninFactors` generations as `action-primary.actor-factor-version`
+and `action-primary.target-factor-version` uint64 command fields. Rename is self-
+only; transfer binds distinct actor and target. Freeze the bounded observations
+before original intent. In every protected preparation stage that exists, and
+at least in mutation and final admission, acquire user/credential locks in
+canonical subject order before this guard. No separate preparation transaction
+is required. It locks actual factor rows at their original versions;
+first-factor activation, changed generation or unavailable state denies even
+if the original password session remains live. No MFA-bearing transfer/rename
+profile, proof issuance or factor initialization is enabled by this guard.
+
 Required-email username signup reuses `InitializeSignup` under the exact native
 password contributor's `identity.username.signup`/`username-signup` v1 scope.
 It requires actual account creation and original registration evidence in the

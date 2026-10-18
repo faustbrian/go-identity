@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Fence original actor/target known-empty MFA generations for selected native
+  username rename and organization ownership transfer. The protected owner must
+  bind both versions and repeat admission through final commit; missing, changed
+  or enrolled state denies without inferring weaker policy from the session.
+
 - Fence the exact native username-password signin profile against known-empty
   factor authority. Nonempty, missing or changed generations deny without
   creating factor state or selecting a weaker authentication method.
