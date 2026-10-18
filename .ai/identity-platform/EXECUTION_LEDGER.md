@@ -1,6 +1,55 @@
 # Identity Implementation — Current Milestone
 
-## Live checkpoint — 2026-10-18 19:34 UTC
+## Live checkpoint — 2026-10-18 19:49 UTC
+
+M06 selected consumer milestone CLOSED: reference647ac4b9d1866f24010b915b38f5b8ff06f0a45e
+main-pushed, Required39160360457 SUCCESS. Existing-account signin, optional new
+signup and existing-account signup intent use actual public registration,
+encrypted delivery, capability/risk/session and HTTPS owners. Scanner GET,
+supersession, foreign browser, session read/logout and original replay pass.
+Actual final-COMMIT-ack loss passes for signin/signup: committed account/session/
+use effects exactly once, credential-free recovery and original retry.
+Independent magiclink_reference_final_review APPROVE finalfive digest702b8ccba7466c828307d0d282b952e755640825acb62b3ce708656613654be6,
+basef9c499b; no source or manifest changes after review. Canonical affected
+ordinaryrace reference9.143/cmd7.391 and taggedvet0; finalPG/race22090 PASS19.056s.
+Authenticated publicreference v0.0.0-20261018194714-647ac4b9d186 origin/subdir/
+checksum verified, all265Go/manifests byte-match. External consumer uses only66
+downloaded external fixtures plus actual public reference/dependencies, no
+replace/GOWORKoff: PG/race38137 PASS18.108s; fixture0|0/stopped/data removed.
+Downloaded native456332d with its own older public pins also passes focused
+denial/late-factor/audit-rollback/signup-collision matrix60567(3.995s); it is not
+represented as the reference graph's newer-dependency denial execution. Native
+fixture retained two audit roles inside its disposable cluster, then whole
+cluster stopped/data removed. Local planning-check lacked golib; hosted pinned
+Required ran planning/secrets successfully. No provider delivery, genuine
+magic-link-TOTP enrollment or full-unit/release qualification claim.
+Consumer denominator5/39(12.8% unweighted); effort estimate~13% lowconfidence.
+Next finite primary lane M07 purpose-bound emailOTP request/delivery/completion;
+retain existing implementation and finish concrete gaps only. No new package
+worker has been assigned; organization resend/OAuthdevice still need real shared
+prerequisites. M06 scratch is removed at this checkpoint before the next lane.
+
+### Earlier M06 selection — retained context
+
+M06 frozen19:38UTC: retain public magic-link request -> actual queued delivery ->
+scanner-safe landing -> superseding resend -> explicit consume -> session read/
+logout for existing verified signin-only, signup-new and signup-existing profiles.
+Primary owns reference/magiclink_postgres_integration_test.go, MAGICLINK.md,
+affected reference README/changelog and these progress notes. Adopt mainf9c499b;
+consume actual public magiclink/coreed660e7, native456332d, issuer2c3f8e2,
+kernel7f09d96, MFA/session7832720 and existing delivery/risk owners in reference's
+normal public manifests. No other writer or new domain engine. Add PostgreSQL-
+only wrappers around existing real registration/delivery/HTTP assertions, not
+seeded accounts or fake stores. Preserve all native scanner/supersession/replay,
+wrong-browser/redirect/current-authority and atomic use/session/audit recovery
+invariants; inspect/reuse native denial/rollback/recovery proof where unchanged.
+Selected profile is browser SFA plus optional signup; enrolled factors must deny
+unless the separate existing MFA profile is explicitly composed. No new MFA
+variant, provider, UI or full-unit qualification. Focused `go test -race
+-tags=integration -run '^TestReferencePostgresMagicLinkHTTPS$' -count=1 -v .`,
+affected reference ordinary race/tagged vet, independent final diff and actual
+downloaded-reference consumer; no whole-repository gate or Tools migration.
+Prior M05 disposable PG54839 and complete runtime/cache scratch are removed.
 
 M05 selected consumer milestone CLOSED: assigned required-email Latin-v1
 signup/verification/username-password signin, advisory availability, fresh-proof

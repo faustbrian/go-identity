@@ -1,9 +1,9 @@
 # Identity Platform Progress
 
-## TL;DR — updated 2026-10-18 19:34 UTC
+## TL;DR — updated 2026-10-18 19:49 UTC
 
-**Estimated whole-goal completion: approximately 12%, with low confidence.**
-**Consumer milestones: 4/39 closed** (10.3% unweighted); full scope remains
+**Estimated whole-goal completion: approximately 13%, with low confidence.**
+**Consumer milestones: 5/39 closed** (12.8% unweighted); full scope remains
 67 units. Consumer delivery is separate from complete unit/release qualification.
 The working authentication baseline, thirteen email profiles, native username
 authentication, organization/team lifecycle, selected OAuth code/PKCE and machine
@@ -12,7 +12,18 @@ Most platform families and final package qualification are not closed;
 queued work is not counted as delivered.
 This is an effort/scope estimate, not a measured percentage or an ETA.
 
-**Latest delivery:** username/password -> genuine enrolled TOTP -> authenticated
+**Latest delivery:** M06 magic-link signin/signup -> captured encrypted delivery ->
+scanner-safe explicit consumption -> authenticated session read/logout. Existing
+signin, new signup and signup-intent login of an existing account pass through
+actual public owners. Lost-COMMIT acknowledgement recovery withholds credentials
+and cannot duplicate accounts, sessions or token use. Independently reviewed,
+main-pushed `647ac4b`, Required CI 39160360457 green; canonical PostgreSQL/race
+19.056s and separate downloaded-reference consumer 18.108s pass. This closes the
+selected browser single-factor/signup milestone, not enrolled-TOTP variants,
+real provider delivery or whole-unit qualification. No production engine was
+rewritten: this adoption connected existing behavior to reproducible consumer proof.
+
+**Previous delivery:** username/password -> genuine enrolled TOTP -> authenticated
 session read/logout (`4315bbf` reference, `3b0fd6b` native password/HTTP).
 Independent review is approved, both commits are main-pushed and Required CI
 green. Canonical public-dependency PostgreSQL/race passes 48.976s; a separate
@@ -61,14 +72,14 @@ M22, not the complete organization family.
 original-registration confirmation routing (`ac96ffd`) are reviewed, main-pushed
 and CI green. Actual public-module PostgreSQL/race proof covers original rename
 recovery after session invalidation and both registration confirmation profiles.
-**Current position (19:34 UTC):** M05 is closed after bounded independent
-source/assertion reconciliation found no missing assigned consumer operation.
-No unit/release qualification is inferred from that closure. Next, adopt the
-existing M06 magic-link implementation and finish only concrete missing journey
-requirements; do not restart delivered authentication or add username variants.
+**Current position (19:49 UTC):** M05 and the selected M06 consumer journey are
+closed. No unit/release qualification is inferred from either closure. Next,
+adopt the existing M07 purpose-bound email OTP implementation and finish only
+concrete missing request/delivery/completion requirements; do not restart
+delivered authentication or add neighboring magic-link variants.
 Both parallel listing/discovery deliveries are closed as selected profiles;
 resend/device successors need shared prerequisites and have not started.
-M05 adds one complete consumer milestone; no additional unit is marked verified.
+M06 adds one complete consumer milestone; no additional unit is marked verified.
 
 **Other recent usable native outcomes:** username rename (`afe3f92`) and organization
 self-leave (`f54f10a`) are independently reviewed, pushed to their owning main
@@ -78,8 +89,8 @@ thirty-day cooldown and identifier-session invalidation, including lost-COMMIT
 recovery. Leave tombstones only the authenticated member, protects the final
 owner and cannot revive old team bindings after readmission.
 
-**Next acceptance boundary:** the retained M06 delivered magic-link signin/session
-journey. Inspect its existing implementation/evidence once, then close it if
+**Next acceptance boundary:** M07 purpose-bound email OTP request/delivery/
+completion. Inspect its existing implementation/evidence once, then close it if
 complete or implement only the demonstrated missing outcomes.
 Recipient invitation listing, OAuth discovery and the username
 reference outcome are closed as selected profiles.
@@ -89,11 +100,11 @@ whole-unit qualification is claimed.
 
 | Measure | Current position |
 | --- | --- |
-| Complete consumer milestones | **4/39 closed**: B1 authentication, B2 reset, B3 password change, M05 selected username journey. The unweighted count is 10.3%; it is not the whole-goal effort estimate. |
-| Remaining milestones | **35/39 not closed**: M04 and M06–M39. Existing implementation is not assumed absent. |
+| Complete consumer milestones | **5/39 closed**: B1 authentication, B2 reset, B3 password change, M05 selected username journey, M06 selected magic-link journey. The unweighted count is 12.8%; it is not the whole-goal effort estimate. |
+| Remaining milestones | **34/39 not closed**: M04 and M07–M39. Existing implementation is not assumed absent. |
 | Additional delivered behavior | **13 email-lifecycle profiles**, listed below. These are partial M04 deliveries, not thirteen additional closed milestones. |
 | Full package scope | **67 units: 61 product units + 6 primitive extensions.** No additional full-unit qualification has closed during this implementation run. The older 2/67 verified baseline is historical, not a current cross-repository audit. |
-| Last full consumer milestone closure | **18 October:** M05 selected username journey, through public reference `4315bbf`, independent final review, green CI and downloaded-reference PostgreSQL consumer. |
+| Last full consumer milestone closure | **18 October:** M06 selected magic-link journey, through public reference `647ac4b`, independent final review, green CI and downloaded-reference PostgreSQL consumer. |
 | Last complete email-profile delivery | **18 October:** independently selected hooks for managed change links and email OTP verification/change, including first-primary and TOTP paths. Pushed reference `ca26306`, Required CI 39110688213 passes; all 30 selected public-native PostgreSQL/race cases pass. |
 | Delivered organization profiles | **Native invitations, metadata, team lifecycle, ownership transfer, self-leave and current-subject organization listing.** Root `956176f` / native `804dbe8` adds bounded policy-filtered pages with original freshness and post-callback primary/scoped authority checks. Green CI; canonical PostgreSQL/race and downloaded-native genuine-session checks pass. This is partial M22/M23, not the complete organization family. |
 | Delivered username profiles | **M05 consumer profile closed:** required-email registration/signin, advisory availability, protected rename and explicitly selected TOTP signin through `4315bbf`. Original retry/recovery, CSRF, session effects and independent/coexisting selections are proven through real PostgreSQL and public modules. Broader catalog profiles and package qualification remain open. |
@@ -102,6 +113,12 @@ whole-unit qualification is claimed.
 ### What consumers can already do
 
 - Register, receive/confirm verification, sign in, read a session and log out.
+- Explicitly select magic-link signin or optional signup through public native/
+  HTTP reference owners. Receive the committed encrypted delivery, consume only
+  by an original-browser POST, read the resulting session and log out. Scanner
+  GETs do not consume; supersession, replay and ambiguous commitment cannot
+  create duplicate accounts/sessions or redeliver credentials. See
+  [the consumer guide](../../reference/MAGICLINK.md).
 - Reset or change a password, with old-password denial and session invalidation.
 - Explicitly select required-email username registration using the existing
   native password service: reserve email and normalized username atomically,
@@ -1219,7 +1236,7 @@ restart old slices merely to fill this table; adopt applicable prior proof.
 | B3 | Password change and fresh reauthentication through baseline owners | Closed: reviewed PostgreSQL/HTTPS verification/change, two-session revocation, populated upgrade, original auditing, rollback/recovery and combined reset/change; main 24b1b08 plus CI-only 47a3ee0, Required CI 38559659144; full-unit/release qualification pending |
 | M04 | Email add/change/verify/list/get/remove with session/lifecycle policy: identity/email | Thirteen delivered profiles, including enrolled verification→TOTP→session/read/logout and independently selected verification/change hooks (latest reference `ca26306`, green Required CI). Lifecycle/privacy contribution, retained factor-profile limits and final qualification remain open. Full row not closed. |
 | M05 | Username availability/signin/rename: identity/username, stable identifier contracts | Closed selected consumer profile: required-email Latin-v1 signup/verification/signin, metered advisory availability, fresh-proof rename/session invalidation and opt-in TOTP signin. Reference `4315bbf`, independent final review, green Required CI, canonical public-dependency PostgreSQL/race 48.976s and downloaded-reference consumer 31.145s. Broader typed-catalog variants and whole-unit/release qualification remain pending. |
-| M06 | Delivered magic-link signin and session: identity/magiclink | Closure not reassessed |
+| M06 | Delivered magic-link signin and session: identity/magiclink | Closed: selected browser-SFA signin/optional-signup public-reference journey `647ac4b`; independent review, green CI and downloaded-module PostgreSQL consumer. Full-unit qualification remains open. |
 | M07 | Purpose-bound email OTP request/delivery/completion: identity/otp, identity/otp/postgres | Closure not reassessed |
 | M08 | Verified phone enrollment/change, OTP/password signin and reset: identity/phone, OTP/password owners | Closure not reassessed |
 | M09 | Anonymous session, self-deletion and collision-safe permanent upgrade: identity/anonymous, identity/anonymous/postgres | Closure not reassessed |
