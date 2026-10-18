@@ -12,6 +12,11 @@ import (
 )
 
 func TestEmailVerificationRouterRequiresRealOwners(t *testing.T) {
+	for _, c := range []struct{ email, username *passwordpg.SignupService }{{}, {email: &passwordpg.SignupService{}}, {username: &passwordpg.SignupService{}}, {email: &passwordpg.SignupService{}, username: &passwordpg.SignupService{}}} {
+		if s, err := passwordpg.NewRegistrationVerificationRouter(c.email, c.username, nil); err == nil || s != nil {
+			t.Fatal("absent registration owners enabled shared confirmation")
+		}
+	}
 	for _, c := range []struct {
 		signup  *passwordpg.SignupService
 		managed *passwordpg.EmailManagementService

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Add explicit coexisting email/username registration confirmation routing from
+  authenticated persisted issuance origin. The shared route selects only its
+  original native owner; missing or ambiguous origins deny without fallback.
+
 - Adopt the public opt-in username HTTP integration in the native consumer
   graph, preserving original cookie/proof/key recovery after identifier-session
   invalidation. Native workflow APIs and stored command formats are unchanged.

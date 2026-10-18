@@ -1,5 +1,17 @@
 # Password PostgreSQL adapter
 
+## Coexisting registration confirmation
+
+`NewRegistrationVerificationRouter(emailSignup, usernameSignup, managed)` selects
+the two distinct native registration profiles on one canonical confirmation
+route; `managed` may be nil to deny managed-address links. All selected owners
+must share the primary pool and compatible issuer trust/replay policy. The
+existing issuer authenticates signed issuance provenance before one bounded
+primary lookup selects its exact persisted registration purpose. It never tries
+another owner after a failure, renews freshness or consumes outside the existing
+native confirmation transaction. Missing/ambiguous origins deny. The original
+`NewEmailVerificationRouter` constructor keeps its existing selection contract.
+
 ## Explicit protected username rename
 
 Compose `NewUsernameRenameService(primary, policy, config, localKeys)` with an

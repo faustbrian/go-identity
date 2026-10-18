@@ -26,7 +26,7 @@ import (
 
 // The original token comes from the actual delivery worker's sender boundary.
 // All identity, capability, command, risk and rate owners remain native.
-func testRegistrationConfirmationHTTP(t *testing.T, ctx context.Context, service *SignupService, c SignupConfig, token, callback, expectedAddress string, caller authorization.DecisionContext, grant capability.Grant, command identity.CommandID) {
+func testRegistrationConfirmationHTTP(t *testing.T, ctx context.Context, service *SignupService, c SignupConfig, token, callback, expectedAddress string, caller authorization.DecisionContext, grant capability.Grant, command identity.CommandID, router *EmailVerificationRouter) {
 	t.Helper()
 	for _, migration := range []ratepg.Migration{ratepg.SchemaMigration(), ratepg.AtomicSchemaMigration()} {
 		if _, err := service.pool.Raw().Exec(ctx, migration.Up); err != nil {
@@ -50,7 +50,7 @@ func testRegistrationConfirmationHTTP(t *testing.T, ctx context.Context, service
 	}
 	defer rate.Close()
 	network := identityhttp.NetworkConfig{Limits: identityhttp.Limits{MaximumHeaderBytes: 32768, MaximumURLBytes: 1024, MaximumBodyBytes: 8192, MaximumDecodedBytes: 8192, MaximumFields: 32, MaximumDepth: 4}, MaximumForwardedHops: 1, TenantHosts: []identityhttp.TenantHost{{Host: "auth.example.test", TenantID: identity.TenantID(grant.Payload().Tenant)}}}
-	feature, err := emailhttp.NewConfirmationFeature(emailhttp.ConfirmationConfig{Network: network, Service: service, Rate: rate, Origin: "https://auth.example.test", ActorID: identity.ActorID(caller.Request.Subject.ID), PolicyRevision: authorization.Revision(c.Coordinator.QueryPolicy.PolicyVersion), Now: time.Now, MaximumDuration: 5 * time.Second})
+	feature, err := emailhttp.NewFeature(emailhttp.FeatureConfig{ProfiledConfirmation: &emailhttp.ProfiledConfirmationConfig{Network: network, Service: router, Rate: rate, Origin: "https://auth.example.test", ActorID: identity.ActorID(caller.Request.Subject.ID), PolicyRevision: authorization.Revision(c.Coordinator.QueryPolicy.PolicyVersion), Now: time.Now, MaximumDuration: 5 * time.Second}})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -16,6 +16,7 @@ import (
 	kernel "github.com/faustbrian/go-identity/postgres"
 	"github.com/faustbrian/go-identity/risk"
 	riskpg "github.com/faustbrian/go-identity/risk/postgres"
+	"github.com/faustbrian/go-identity/username"
 	migrations "github.com/faustbrian/go-migrations/v3"
 	"github.com/faustbrian/go-secret-envelope/v2/adapters/keyring"
 )
@@ -73,6 +74,33 @@ func testPublicRegistrationConfirmation(t *testing.T, ctx context.Context, sourc
 	if err != nil {
 		t.Fatal(err)
 	}
+	// Coexisting registration profiles have distinct encrypted input ownership.
+	// The shared route must select the authenticated original, not try one owner
+	// and fall back after its query/decryption fails.
+	alternate := c
+	if c.Username == nil {
+		alternate.Username, err = username.NewPolicy(username.ReferencePolicySpec())
+		if err != nil {
+			t.Fatal(err)
+		}
+	} else {
+		alternate.Username = nil
+	}
+	alternateOwner, err := NewSignupService(source.pool, alternate, keys)
+	if err != nil {
+		t.Fatal("coexisting registration owner", err)
+	}
+	emailOwner, usernameOwner := service, alternateOwner
+	if c.Username != nil {
+		emailOwner, usernameOwner = alternateOwner, service
+	}
+	router, err := NewRegistrationVerificationRouter(emailOwner, usernameOwner, nil)
+	if err != nil {
+		t.Fatal("coexisting registration router", err)
+	}
+	if _, err := NewRegistrationVerificationRouter(usernameOwner, emailOwner, nil); err == nil {
+		t.Fatal("registration router accepted swapped profile owners")
+	}
 	owner, ok := any(service).(registrationVerificationConfirmer)
 	if !ok {
 		t.Fatal("native signup owner has no explicit registration confirmation")
@@ -92,6 +120,9 @@ func testPublicRegistrationConfirmation(t *testing.T, ctx context.Context, sourc
 		}
 	}
 	assertRateSource()
+	if user, challenge, lifetime, err := router.VerificationRateSource(ctx, proof, callback, caller); err != nil || user != identity.UserID(grant.Payload().Subject) || challenge != grant.Payload().ID || lifetime != grant.Payload().ExpiresAt.Sub(grant.Payload().IssuedAt) {
+		t.Fatal("shared route lost original registration profile", err)
+	}
 	for _, change := range []func(*authorization.DecisionContext, *string){
 		func(_ *authorization.DecisionContext, target *string) {
 			*target = "https://foreign.example.test/finish"
@@ -106,11 +137,17 @@ func testPublicRegistrationConfirmation(t *testing.T, ctx context.Context, sourc
 		if err == nil || user != "" || challenge != "" || lifetime != 0 {
 			t.Fatal("foreign rate source disclosed original binding")
 		}
+		if user, challenge, lifetime, err := router.VerificationRateSource(ctx, proof, target, wrong); err == nil || user != "" || challenge != "" || lifetime != 0 {
+			t.Fatal("profiled rate source disclosed foreign original binding")
+		}
 	}
 	canceled, stop := context.WithCancel(ctx)
 	stop()
 	if user, challenge, lifetime, err := rateSource.RegistrationVerificationRateSource(canceled, proof, callback, caller); err == nil || user != "" || challenge != "" || lifetime != 0 {
 		t.Fatal("canceled rate source disclosed original binding")
+	}
+	if user, challenge, lifetime, err := router.VerificationRateSource(canceled, proof, callback, caller); err == nil || user != "" || challenge != "" || lifetime != 0 {
+		t.Fatal("canceled profiled source disclosed original binding")
 	}
 	id, _ := identity.NewCommandID()
 	if result, err := owner.ConfirmRegistrationVerification(ctx, proof, "https://foreign.example.test/finish", id, "2001:db8::1", caller); err == nil || result.Outcome == identity.CommitOutcomeCommitted {
@@ -134,7 +171,7 @@ func testPublicRegistrationConfirmation(t *testing.T, ctx context.Context, sourc
 	if err != nil {
 		t.Fatal("original confirmation intent unavailable", err)
 	}
-	testRegistrationConfirmationHTTP(t, ctx, service, c, deliveredToken, callback, original.Payload.CanonicalAddress.Record().Value, caller, grant, id)
+	testRegistrationConfirmationHTTP(t, ctx, service, c, deliveredToken, callback, original.Payload.CanonicalAddress.Record().Value, caller, grant, id, router)
 	confirmed, err := typed.VerificationConfirm(ctx, request)
 	if err != nil || confirmed.Validate() != nil || confirmed.Outcome != identity.CommitOutcomeCommitted || !confirmed.Replayed || confirmed.Address != (identity.IdentifierProjection{}) {
 		t.Fatal("typed recovery of HTTP confirmation re-disclosed address", confirmed.Outcome, err)
