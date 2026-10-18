@@ -1,3 +1,4 @@
 {
-  "identity.email.verification-signin": "authentication"
+  "identity.email.verification-signin": "authentication",
+  "identity.oauth-server.continue": "privileged"
 }

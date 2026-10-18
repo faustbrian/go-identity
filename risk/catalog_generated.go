@@ -2,7 +2,7 @@
 // Owned Golib planning sources (MIT); regenerate and review all classifications.
 // PUBLIC_CONTRACTS.json SHA-256: 3364b210cb3b5753ff7dd85f11763691519c546bdd6b4220e5e544ae2bf01e05
 // REFERENCE_CONFIGURATION.md SHA-256: dc766c02baefab3b9ebd86b897891b9ea505518ea19363e2b1e083183375a514
-// risk/native_operations.json SHA-256: 019f83cf854ea0c20268447811d3c41a55f38c6650cc70e32bfcc11503b162bf
+// risk/native_operations.json SHA-256: 392ecb8d7d61c21a5f86f4134bfe126dc13c6dede30ba87313ad06b491bb7d72
 package risk
 
 import "time"
@@ -122,7 +122,7 @@ var canonicalOperations = map[Action]ProfileClass{
 	"identity.oauth-server.consent-get":                 DefaultDeny,
 	"identity.oauth-server.consent-list":                DefaultDeny,
 	"identity.oauth-server.consent-update":              Privileged,
-	"identity.oauth-server.continue":                    DefaultDeny,
+	"identity.oauth-server.continue":                    Privileged,
 	"identity.oauth-server.device-approve":              Privileged,
 	"identity.oauth-server.device-authorize":            Privileged,
 	"identity.oauth-server.device-deny":                 Privileged,

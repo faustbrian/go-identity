@@ -812,12 +812,18 @@ not be concurrently modified. Standard Go memory-erasure guarantees apply.
 
 `catalog_generated.go` records SHA-256 identities for the owned MIT-licensed
 `PUBLIC_CONTRACTS.json` and `REFERENCE_CONFIGURATION.md` planning sources.
-The pinned canonical operations and explicit native additions in
+The pinned canonical operations and explicit native classifications in
 `native_operations.json` are each assigned exactly one explicit profile or
 closed fallback. Compiled numeric values are validation ceilings, not deployment
 defaults. Public GET fallbacks are neutral discovery/availability reads; SSO
 discovery remains an authentication fallback and denies. All sensitive reads
 and unclassified mutations conservatively deny.
+
+OAuth consent continuation (`identity.oauth-server.continue`) uses the existing
+Privileged profile, like authorization, token exchange and revocation. It
+requires actor/resource/network-bound counters in the owning transaction; clean
+provider facts alone are not consent or issuance authority. Native entries may
+fill an omitted matrix classification, never override an explicit pinned class.
 
 Regenerate from the selected current planning snapshot, then format the output:
 

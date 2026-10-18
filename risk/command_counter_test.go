@@ -49,6 +49,47 @@ func TestCommandCounterPolicySeparatesProtectedAuthority(t *testing.T) {
 	}
 }
 
+func TestOAuthConsentContinuationRequiresProtectedAdmission(t *testing.T) {
+	p := testPolicy(t)
+	c := testContext()
+	c.Operation = "identity.oauth-server.continue"
+	admitted, err := p.Admit(c.Operation)
+	if err != nil || admitted.Preflight != "" || admitted.Profile.Class != Privileged || admitted.Profile.Phase != ReserveWithCommand {
+		t.Fatal("consent continuation lacks its protected operation profile", err)
+	}
+	for _, signals := range [][]Signal{nil, {testSignal(c, "status", SignalClean)}, {testSignal(c, "status", SignalClean), testSignal(c, "captcha", SignalUnavailable)}} {
+		assessment, err := p.Assess(context.Background(), c, signals)
+		if err != nil || assessment.Decision.Action != Deny {
+			t.Fatal("missing or unavailable consent signals bypassed denial", err)
+		}
+	}
+	assessment, err := p.Assess(context.Background(), c, []Signal{testSignal(c, "status", SignalClean), testSignal(c, "captcha", SignalClean)})
+	if err != nil || assessment.Decision.Action != Allow {
+		t.Fatal("verified consent signals cannot reach protected reservation", err)
+	}
+	key, _ := NewCounterDigestKey(7, bytes.Repeat([]byte{0x31}, 32))
+	counters, err := NewCommandCounterPolicy(CommandCounterPolicyConfig{Policy: p, Keys: []CounterDigestKey{key}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	subject := Subject{Actor: "actor", Resource: "consent", Network: "192.0.2.1"}
+	command, err := counters.Prepare(c, subject, c.Now)
+	if err != nil || command.Bindings().Phase != ReserveWithCommand || len(command.Bindings().Targets) != 4 || counters.Validate(command, c, subject, c.Now) != nil {
+		t.Fatal("consent continuation cannot reserve exact protected counters", err)
+	}
+	changed := subject
+	changed.Resource = "other-consent"
+	if counters.Validate(command, c, changed, c.Now) == nil {
+		t.Fatal("consent counter scope changed")
+	}
+	for _, action := range []Action{"identity.oauth-server.Continue", "identity.oauth-server.continue ", "identity.oauth-server.consent", "identity.oauth-server.unknown"} {
+		c.Operation = action
+		if _, err := counters.Prepare(c, subject, c.Now); err == nil {
+			t.Fatal("consent alias admitted", action)
+		}
+	}
+}
+
 func TestCommandCounterPolicyClosedProfilesAndBounds(t *testing.T) {
 	key, _ := NewCounterDigestKey(7, bytes.Repeat([]byte{0x31}, 32))
 	p, _ := NewCommandCounterPolicy(CommandCounterPolicyConfig{Policy: testPolicy(t), Keys: []CounterDigestKey{key}})

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Classify OAuth consent continuation as a protected privileged operation with
+  transaction-owned counters and mandatory provider signals. Unlisted aliases
+  remain denied; this admission grants no consent or authentication authority.
+
 - Classify the distinct native post-verification signin command as counted,
   audited Authentication admission. Verification-only and managed-address
   confirmation retain their CredentialMutation policy.
