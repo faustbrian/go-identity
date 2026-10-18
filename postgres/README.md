@@ -1,5 +1,38 @@
 # Identity PostgreSQL
 
+## Pending phone enrollment
+
+`NewPhoneEnrollmentDomain` freezes the phone owner's exact metadata-bound
+normalization profile and positive identifier recycling cooldown. Install
+`IdentifierNormalizationMigrationSource` and `IdentifierMutationMigrationSource`
+in the selected history; no existing identifier is relabeled or reverified.
+`PhoneEnrollmentFields` binds the new candidate, tenant, subject, record and
+original user/identifier-authority predecessors before fingerprinting.
+
+The closed `identity.phone.send-verification.native-v1` profile requires a
+`PhoneEnrollmentContributor` under `identity/phone/postgres` / `identity.phone`
+version one, a self-bound original session, `identifier.attached.v1` lifecycle
+0→1 and required protected audits. It cannot consume an OTP or capability:
+this initiation profile issues a challenge; confirmation is a separate flow.
+
+The coordinator locks and checks the original directory and number reservation,
+then invokes the native owner while those original epochs still hold. The
+owner must check/consume its actual action-bound fresh proof, current session,
+factor and risk policy and stage its purpose-bound OTP/SMS delivery in the same
+Work. `Work.RequirePhoneEnrollmentCandidate` accepts only that exact prepared
+candidate during this invocation, before the kernel mutation. It does not
+fabricate an existing or verified `RecipientRecord` or establish authority.
+The kernel then persists a **pending, non-primary, unverified** phone and bumps
+the user/identifier epochs through the existing CAS writer. Errors roll back
+all enlisted effects; absent kernel apply cannot produce a committed receipt.
+The final native check conserves original validity, not a newer admission.
+
+Recovery treats an existing target as unknown, never as proof of commitment.
+Only target absence can contribute negative evidence; all other participants
+and the original command journal must independently reconcile the outcome.
+Construction, fields and the storage participant alone are not a public phone
+enrollment service, OTP verifier, delivery sender or HTTP endpoint.
+
 ## Native username rename and advisory discovery
 
 `NewUsernameRenameDomain` freezes the explicit comparison profile, retained

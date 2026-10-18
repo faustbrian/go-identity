@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Extend explicitly selected action-bound password admission to self-only phone
+  verification enrollment. Preserve original signed proof/session custody,
+  freshness, one-use consumption and stored framing; other phone actions remain
+  unsupported.
+
 - Add explicit `NewUsernameMFASigninService` for username/password followed by
   confirmed TOTP. Preserve original username/browser/remember custody and
   current name, credential and factor epochs, with no session before completion.

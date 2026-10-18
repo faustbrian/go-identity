@@ -17,8 +17,9 @@ import (
 	"github.com/faustbrian/go-identity/session"
 )
 
-// ActionPrimaryConfig selects username update or organization ownership transfer
-// and its explicit signed-proof audience. MaximumAge is positive and at most
+// ActionPrimaryConfig selects username update, phone verification enrollment,
+// or organization ownership transfer and its explicit signed-proof audience.
+// MaximumAge is positive and at most
 // fifteen minutes. Transport explicitly selects bearer or cookie; cookies need
 // retained CSRF keys. The source's exact issuance target must already be allowed.
 // This selected profile supports original single-factor password sessions only.
@@ -31,8 +32,9 @@ type ActionPrimaryConfig struct {
 
 // ActionPrimaryRequest borrows the original bearer and action-specific proof.
 // Caller and TenantID come from trusted composition. RecordID identifies the
-// protected username or organization, not the password credential. Ownership
-// transfer requires a distinct TargetSubjectID; username update is self-only.
+// protected username, phone or organization, not the password credential.
+// Ownership transfer requires a distinct TargetSubjectID; username update and
+// phone verification enrollment are self-only and omit TargetSubjectID.
 // IDs and structural proof fields do not independently grant any authority.
 type ActionPrimaryRequest struct {
 	TenantID        identity.TenantID
@@ -46,7 +48,7 @@ type ActionPrimaryRequest struct {
 }
 
 // ActionPrimarySource composes the existing password proof/session owners for
-// two closed native operation profiles. It owns no transaction, cache, retry,
+// closed native operation profiles. It owns no transaction, cache, retry,
 // journal or goroutine. Its borrowed pool must outlive all concurrent calls.
 type ActionPrimarySource struct{ primary *EmailPrimarySource }
 
@@ -79,6 +81,8 @@ func actionPrimaryOperation(action string) identity.FeatureOperation {
 	switch action {
 	case "identity.username.update":
 		return identity.FeatureOperation{Owner: "identity/username", OperationID: action, SchemaID: action + ".native-v1", SchemaVersion: 1, RecordRequirement: identity.FeatureRecordRequired}
+	case "identity.phone.send-verification":
+		return identity.FeatureOperation{Owner: "identity/phone", OperationID: action, SchemaID: action + ".native-v1", SchemaVersion: 1, RecordRequirement: identity.FeatureRecordRequired}
 	case "identity.organization.owner-transfer":
 		return identity.FeatureOperation{Owner: "organization", OperationID: action, SchemaID: "organization-membership", SchemaVersion: 1, RecordRequirement: identity.FeatureRecordRequired}
 	default:
@@ -90,6 +94,8 @@ func actionPrimaryDescriptor(action string) kernel.ContributorDescriptor {
 	switch action {
 	case "identity.username.update":
 		return kernel.ContributorDescriptor{Owner: "identity/username/postgres", ContractID: "identity.username", Version: 1}
+	case "identity.phone.send-verification":
+		return kernel.ContributorDescriptor{Owner: "identity/phone/postgres", ContractID: "identity.phone", Version: 1}
 	case "identity.organization.owner-transfer":
 		return kernel.ContributorDescriptor{Owner: "organization/postgres", ContractID: "organization.membership", Version: 1}
 	default:
@@ -101,7 +107,7 @@ func (s *ActionPrimarySource) request(r ActionPrimaryRequest) (EmailPrimaryReque
 	if s == nil || s.primary == nil || !s.primary.action || actionPrimaryOperation(s.primary.config.Action).Owner == "" {
 		return EmailPrimaryRequest{}, password.ErrPasswordWork
 	}
-	if s.primary.config.Action == "identity.organization.owner-transfer" && r.TargetSubjectID == "" || s.primary.config.Action == "identity.username.update" && r.TargetSubjectID != "" {
+	if s.primary.config.Action == "identity.organization.owner-transfer" && r.TargetSubjectID == "" || (s.primary.config.Action == "identity.username.update" || s.primary.config.Action == "identity.phone.send-verification") && r.TargetSubjectID != "" {
 		return EmailPrimaryRequest{}, identity.ForbiddenError{}
 	}
 	return EmailPrimaryRequest{TenantID: r.TenantID, TargetSubjectID: r.TargetSubjectID, CommandID: r.CommandID, AddressID: identity.IdentifierID(r.RecordID), Session: r.Session, Proof: r.Proof, Caller: r.Caller, CSRFToken: r.CSRFToken}, nil

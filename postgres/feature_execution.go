@@ -109,6 +109,14 @@ func validateFeatureCommand(phase FeatureExecutionContributor, command identity.
 		_, _, err := emailAttachmentCommand(p, command, plan)
 		return err
 	}
+	if plan.Feature != nil && plan.Feature.Operation == phoneEnrollmentOperation() {
+		p, ok := phase.(PhoneEnrollmentContributor)
+		if !ok {
+			return invalidPhoneEnrollment()
+		}
+		_, _, err := phoneEnrollmentCommand(p, command, plan)
+		return err
+	}
 	if plan.MFAContinuation != nil && (passwordMFAOperation(plan) || emailVerificationMFAOperation(plan)) {
 		return validateMFAContinuation(phase, command, plan)
 	}
@@ -216,6 +224,11 @@ func (r *ContributorRegistry) admitFeaturePlanMode(b identity.CommandBinding, fi
 	}
 	if emailAttachmentOperation(p.Feature.Operation) {
 		if _, ok := feature.contributor.(EmailAttachmentContributor); !ok {
+			return nil, invalidPlan()
+		}
+	}
+	if p.Feature.Operation == phoneEnrollmentOperation() {
+		if _, ok := feature.contributor.(PhoneEnrollmentContributor); !ok {
 			return nil, invalidPlan()
 		}
 	}
@@ -595,6 +608,11 @@ func (c *Coordinator) ApplyFeature(ctx context.Context, w Work, command identity
 			return result, e
 		}
 	}
+	if p.feature.Operation == phoneEnrollmentOperation() {
+		if e := preparePhoneEnrollment(ctx, w, command); e != nil {
+			return result, e
+		}
+	}
 	if p.feature.Operation == emailRemovalOperation() {
 		if e := prepareEmailRemoval(ctx, w, command); e != nil {
 			return result, e
@@ -674,6 +692,11 @@ func (c *Coordinator) ApplyFeature(ctx context.Context, w Work, command identity
 	}
 	if w.state.emailAttachment != nil {
 		if e := applyEmailAttachment(ctx, w); e != nil {
+			return result, e
+		}
+	}
+	if w.state.phoneEnrollment != nil {
+		if e := applyPhoneEnrollment(ctx, w); e != nil {
 			return result, e
 		}
 	}

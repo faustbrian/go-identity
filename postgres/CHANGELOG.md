@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add a closed pending-phone enrollment participant to the sole coordinator.
+  Bind exact metadata/profile and directory predecessors, conserve original
+  candidate custody for OTP/SMS issuance, and commit only the applied pending
+  identifier. Native phone orchestration must still supply proof, session,
+  factors, risk and delivery; this is not a standalone verification service.
+
 - Preserve exact username-signin MFA challenge preparation and query history
   under its distinct original profile. Existing password, magic-link and
   verification command bytes remain unchanged; cross-origin decoding denies.
