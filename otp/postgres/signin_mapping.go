@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"crypto/subtle"
+	"encoding/binary"
 	"encoding/json"
 	"slices"
 	"strings"
@@ -19,6 +20,7 @@ import (
 )
 
 const signinCustodyPrefix = "identity-otp-signin-custody-v1\x00"
+const signinFactorCustodyPrefix = "identity-otp-signin-custody-v2\x00"
 
 func signinOperation(subject identity.FeatureSubjectRequirement) identity.FeatureOperation {
 	return identity.FeatureOperation{Owner: "identity/otp", OperationID: "identity.otp.signin", SchemaID: "identity-otp-signin", SchemaVersion: 1, RecordRequirement: identity.FeatureRecordOmitted, SubjectRequirement: subject}
@@ -28,11 +30,11 @@ func signinOperation(subject identity.FeatureSubjectRequirement) identity.Featur
 // original encrypted custody and resolving current single-factor policy. It
 // freezes the selected recipient and complete prospective session before the
 // sole coordinator fingerprints the consuming command. This is not a grant.
-func (c *AttemptCodec) mapSigninCommand(ctx context.Context, attempt otp.AttemptCommand, version uint32, spec identity.FeatureCommandSpec, cookie auth.BearerCredential, original issuanceCustody, record session.Session) (identity.Command, kernel.OTPAttemptPlan, error) {
+func (c *AttemptCodec) mapSigninCommand(ctx context.Context, attempt otp.AttemptCommand, version uint32, spec identity.FeatureCommandSpec, cookie auth.BearerCredential, original issuanceCustody, record session.Session, factors ...uint64) (identity.Command, kernel.OTPAttemptPlan, error) {
 	fail := func(err error) (identity.Command, kernel.OTPAttemptPlan, error) {
 		return identity.Command{}, kernel.OTPAttemptPlan{}, err
 	}
-	if ctx == nil || c == nil || c.crypto == nil || len(spec.Fields) != 0 || original.recipient == nil {
+	if ctx == nil || c == nil || c.crypto == nil || len(spec.Fields) != 0 || original.recipient == nil || len(factors) > 1 {
 		return fail(ErrInvalidCommand)
 	}
 	bounded, cancel := context.WithTimeout(ctx, c.maximumDuration)
@@ -54,9 +56,19 @@ func (c *AttemptCodec) mapSigninCommand(ctx context.Context, attempt otp.Attempt
 	}
 	challenge := encodeIssuanceRecord(original.challenge)
 	defer clear(challenge)
-	plain := appendAuthorityText([]byte(signinCustodyPrefix), string(challenge))
+	var factorVersion uint64
+	prefix := signinCustodyPrefix
+	if len(factors) == 1 && factors[0] != 0 {
+		factorVersion, prefix = factors[0], signinFactorCustodyPrefix
+	}
+	plain := appendAuthorityText([]byte(prefix), string(challenge))
 	plain = appendSendRecipient(plain, *original.recipient)
 	plain = append(plain, digest[:]...)
+	if factorVersion != 0 {
+		// Freeze the preliminary MFA epoch inside existing encrypted custody.
+		// A later empty generation must not replace the one policy observed.
+		plain = binary.BigEndian.AppendUint64(plain, factorVersion)
+	}
 	defer clear(plain)
 	if len(plain) > 8192 {
 		return fail(ErrInvalidCommand)
@@ -105,8 +117,20 @@ func signinSessionDigest(record session.Session) ([32]byte, error) {
 // Restore authenticates only immutable original intent. Live primary policy,
 // code comparison and consumption remain the existing native phase owners.
 func (c *AttemptCodec) restoreSignin(command identity.Command, plan kernel.OTPAttemptPlan) (session.Session, kernel.RecipientRecord, error) {
-	fail := func() (session.Session, kernel.RecipientRecord, error) {
-		return session.Session{}, kernel.RecipientRecord{}, ErrInvalidCommand
+	record, recipient, _, err := c.restoreSigninWithFactors(command, plan)
+	return record, recipient, err
+}
+
+func (c *AttemptCodec) restoreSigninWithFactors(command identity.Command, plan kernel.OTPAttemptPlan) (session.Session, kernel.RecipientRecord, uint64, error) {
+	return c.restoreSigninCustody(command, plan, true)
+}
+
+// Protected apply/finalize phases intentionally have no submitted-code access.
+// They authenticate retained records, while counted/reservation phases must
+// additionally authenticate the separately borrowed exact submission.
+func (c *AttemptCodec) restoreSigninCustody(command identity.Command, plan kernel.OTPAttemptPlan, withCode bool) (session.Session, kernel.RecipientRecord, uint64, error) {
+	fail := func() (session.Session, kernel.RecipientRecord, uint64, error) {
+		return session.Session{}, kernel.RecipientRecord{}, 0, ErrInvalidCommand
 	}
 	spec, ok := command.Feature()
 	if c == nil || c.crypto == nil || !ok || plan.Mode != kernel.OTPConsume || spec.Operation != signinOperation(spec.Operation.SubjectRequirement) {
@@ -130,11 +154,22 @@ func (c *AttemptCodec) restoreSignin(command identity.Command, plan kernel.OTPAt
 	}
 	// Matching the whole plan also authenticates the attempt's original code
 	// commitment; neither a caller's version nor an independently decoded ID wins.
-	attempt, err := c.restoreAttempt(command, plan)
+	retained, err := c.restoreRecord(spec)
 	if err != nil {
 		return fail()
 	}
-	ab, _ := attempt.Bindings()
+	wantPlan, err := c.recordPlan(retained, plan.DigestKeyVersion)
+	if err != nil || wantPlan != plan {
+		return fail()
+	}
+	ab := retained.Attempt
+	if withCode {
+		attempt, err := c.restoreAttempt(command, plan)
+		if err != nil {
+			return fail()
+		}
+		ab, _ = attempt.Bindings()
+	}
 	authority, err := c.restoreAuthority(spec)
 	if err != nil {
 		return fail()
@@ -158,10 +193,15 @@ func (c *AttemptCodec) restoreSignin(command identity.Command, plan kernel.OTPAt
 		return fail()
 	}
 	defer clear(plain)
-	if len(plain) > 8192 || !bytes.HasPrefix(plain, []byte(signinCustodyPrefix)) {
+	prefix := signinCustodyPrefix
+	withFactors := bytes.HasPrefix(plain, []byte(signinFactorCustodyPrefix))
+	if withFactors {
+		prefix = signinFactorCustodyPrefix
+	}
+	if len(plain) > 8192 || !bytes.HasPrefix(plain, []byte(prefix)) {
 		return fail()
 	}
-	r := recordReader{data: plain[len(signinCustodyPrefix):], ok: true}
+	r := recordReader{data: plain[len(prefix):], ok: true}
 	challenge, err := decodeIssuanceRecord([]byte(r.text(8192)))
 	if err != nil {
 		return fail()
@@ -171,6 +211,17 @@ func (c *AttemptCodec) restoreSignin(command identity.Command, plan kernel.OTPAt
 		return fail()
 	}
 	digest := r.take(sha256.Size)
+	var factorVersion uint64
+	if withFactors {
+		wire := r.take(8)
+		if !r.ok {
+			return fail()
+		}
+		factorVersion = binary.BigEndian.Uint64(wire)
+		if factorVersion == 0 {
+			return fail()
+		}
+	}
 	if !r.ok || len(r.data) != 0 {
 		return fail()
 	}
@@ -178,7 +229,7 @@ func (c *AttemptCodec) restoreSignin(command identity.Command, plan kernel.OTPAt
 	if err != nil || subtle.ConstantTimeCompare(digest, want[:]) != 1 || c.validateSigninSelection(spec, ab, plan.DigestKeyVersion, challenge, recipient, authority, record) != nil || ctx.Err() != nil {
 		return fail()
 	}
-	return record, recipient, nil
+	return record, recipient, factorVersion, nil
 }
 
 func (c *AttemptCodec) validateSigninSelection(spec identity.FeatureCommandSpec, attempt otp.AttemptBindings, version uint32, original otp.Challenge, recipient kernel.RecipientRecord, authority AttemptAuthority, record session.Session) error {

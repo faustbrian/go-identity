@@ -190,6 +190,18 @@ APIs, stores and migrations are unchanged. HTTP integration remains pending.
 
 ## Public consuming Signin
 
+`SigninConfig.RequireKnownEmptyFactors` additionally composes actual native MFA
+authority. Missing or enrolled state denies before comparison. The original
+known-empty generation is retained inside version-2 encrypted signin custody
+and fenced by the MFA owner before counted denial, reservation, protected apply
+and finalization. A later empty generation cannot replace it. Install the MFA
+authority history first; only its owning registration/enrollment workflows may
+initialize account state. Never backfill unknown accounts as empty. Code-free
+recovery and proven-noncommit cleanup remain independent of new live execution.
+The version-1 policy-only profile and API remain supported unchanged; its
+authorizer is still responsible for authoritative additional-factor policy.
+Reference HTTP email signin always selects the native factor-fenced profile.
+
 Opt into `NewSigninService(sender, SigninConfig{...})` over an initialized
 native Send service configured for `otp.PurposeSignin` and pre-auth transactions.
 Existing Send-only and Check composition is unchanged. The service borrows the

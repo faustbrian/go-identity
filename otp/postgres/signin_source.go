@@ -48,6 +48,10 @@ func (s *SigninService) ResolveSigninSource(ctx context.Context, r otp.SigninSou
 	if err := s.source.requireCurrent(ctx, spec.Binding, custody.authority, flow); err != nil {
 		return result, err
 	}
+	factorVersion, err := s.readSigninFactors(ctx, *custody.recipient)
+	if err != nil {
+		return result, err
+	}
 	if _, err := s.authorizeRecipient(ctx, r.Caller, *custody.recipient, false); err != nil {
 		return result, err
 	}
@@ -64,6 +68,13 @@ func (s *SigninService) ResolveSigninSource(ctx context.Context, r otp.SigninSou
 	}
 	if err := s.source.requireCurrent(ctx, spec.Binding, custody.authority, flow); err != nil {
 		return result, err
+	}
+	currentFactorVersion, err := s.readSigninFactors(ctx, *custody.recipient)
+	if err != nil {
+		return result, err
+	}
+	if currentFactorVersion != factorVersion {
+		return result, identity.ForbiddenError{}
 	}
 	return otp.NewSigninSource(otp.SigninSourceBindings{TenantID: spec.Binding.TenantID, SendCommandID: r.SendCommandID, Channel: continuation.Scope.Channel, Destination: continuation.Scope.Destination})
 }

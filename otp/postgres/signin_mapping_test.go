@@ -165,6 +165,49 @@ func TestSigninMappingRetainsOriginalRecipientAndCompleteSession(t *testing.T) {
 	}
 }
 
+func TestSigninMappingRetainsExactFactorGeneration(t *testing.T) {
+	c, attempt, spec, cookie, original, record := signinMappingFixture(t)
+	for _, generation := range []uint64{0, 17} {
+		command, plan, err := c.mapSigninCommand(context.Background(), attempt, 3, spec, cookie, original, record, generation)
+		if err != nil {
+			t.Fatal(err)
+		}
+		restarted, err := NewAttemptCodec(codecConfig())
+		if err != nil {
+			t.Fatal(err)
+		}
+		got, recipient, version, err := restarted.restoreSigninWithFactors(command, plan)
+		if err != nil || version != generation || !reflect.DeepEqual(recipient, *original.recipient) || !reflect.DeepEqual(got, record) {
+			t.Fatal("signin custody changed original factor/session generation", err)
+		}
+		frozen, _ := command.Feature()
+		codeFree, err := identity.NewFeatureCommand(frozen)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, _, _, err := restarted.restoreSigninWithFactors(codeFree, plan); err == nil {
+			t.Fatal("counted restoration accepted missing submitted code")
+		}
+		if _, _, version, err := restarted.restoreSigninCustody(codeFree, plan, false); err != nil || version != generation {
+			t.Fatal("protected code-free phase lost authenticated custody", err)
+		}
+		for _, nativeMode := range []bool{false, true} {
+			owner := &Contributor{codec: restarted, signin: &signinProfile{knownEmptyFactors: nativeMode}}
+			user, epoch, err := owner.signinFactors(command, plan)
+			if nativeMode && generation == 0 {
+				if err == nil {
+					t.Fatal("native factor mode executed legacy unfenced custody")
+				}
+			} else if err != nil || user != original.recipient.User.ID || epoch != generation {
+				t.Fatal("restart changed original native factor fence", err)
+			}
+		}
+	}
+	if _, _, err := c.mapSigninCommand(context.Background(), attempt, 3, spec, cookie, original, record, 1, 2); err == nil {
+		t.Fatal("ambiguous factor generation accepted")
+	}
+}
+
 func TestSigninMappingRejectsSubstitutedOriginalInputs(t *testing.T) {
 	c, attempt, spec, cookie, original, record := signinMappingFixture(t)
 	for _, mutate := range []func(*issuanceCustody){

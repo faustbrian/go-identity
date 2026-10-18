@@ -12,8 +12,38 @@ import (
 )
 
 type signinProfile struct {
-	effect  *sessionpg.OTPSigninEffect
-	profile sessionpg.OTPAdmissionConfig
+	knownEmptyFactors bool
+	effect            *sessionpg.OTPSigninEffect
+	profile           sessionpg.OTPAdmissionConfig
+}
+
+// Execution in native factor mode cannot borrow old policy-only custody. V2
+// custody keeps its fence even when restarted with policy-only configuration.
+func (p *Contributor) signinFactors(command identity.Command, plan kernel.OTPAttemptPlan) (identity.UserID, uint64, error) {
+	f, ok := command.Feature()
+	if p == nil || p.signin == nil || !ok || f.Operation != signinOperation(f.Operation.SubjectRequirement) {
+		return "", 0, nil
+	}
+	_, recipient, version, err := p.codec.restoreSigninWithFactors(command, plan)
+	if err != nil || p.signin.knownEmptyFactors && version == 0 {
+		return "", 0, ErrInvalidCommand
+	}
+	return recipient.User.ID, version, nil
+}
+
+func (p *Contributor) signinFactorsFromSpec(spec identity.FeatureCommandSpec, plan kernel.OTPAttemptPlan) (identity.UserID, uint64, error) {
+	if p == nil || p.signin == nil || spec.Operation != signinOperation(spec.Operation.SubjectRequirement) {
+		return "", 0, nil
+	}
+	command, err := identity.NewFeatureCommand(spec)
+	if err != nil {
+		return "", 0, err
+	}
+	_, recipient, version, err := p.codec.restoreSigninCustody(command, plan, false)
+	if err != nil || p.signin.knownEmptyFactors && version == 0 {
+		return "", 0, ErrInvalidCommand
+	}
+	return recipient.User.ID, version, nil
 }
 
 // Keep the raw Contributor as every OTP and feature phase's exact owner. A

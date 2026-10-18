@@ -6,6 +6,7 @@ import (
 
 	authoritypg "github.com/faustbrian/go-authorization/v3/postgres"
 	identity "github.com/faustbrian/go-identity"
+	mfapg "github.com/faustbrian/go-identity/mfa/postgres"
 	"github.com/faustbrian/go-identity/otp"
 	kernel "github.com/faustbrian/go-identity/postgres"
 	sessionpg "github.com/faustbrian/go-identity/session/postgres"
@@ -200,6 +201,10 @@ func (p *Contributor) recordCountedAttempt(ctx context.Context, w kernel.OTPAtte
 	if err != nil {
 		return 0, err
 	}
+	user, factorVersion, err := p.signinFactors(command, b.Plan)
+	if err != nil {
+		return 0, err
+	}
 	if err = w.RequireActiveDirectoryAuthority(ctx, p, authority.Directory); err != nil {
 		return 0, err
 	}
@@ -220,6 +225,11 @@ func (p *Contributor) recordCountedAttempt(ctx context.Context, w kernel.OTPAtte
 	flow, err := p.authenticateFlow(ctx, command, b.Plan)
 	if err != nil {
 		return 0, err
+	}
+	if factorVersion != 0 {
+		if err := mfapg.RequireOTPSigninAttemptFactors(ctx, w, p, user, factorVersion); err != nil {
+			return 0, err
+		}
 	}
 	if err = requireNativeFlow(ctx, w, p, flow, nil); err != nil {
 		return 0, err

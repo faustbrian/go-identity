@@ -14,6 +14,7 @@ import (
 	"github.com/faustbrian/go-authorization/v3"
 	authoritypg "github.com/faustbrian/go-authorization/v3/postgres"
 	identity "github.com/faustbrian/go-identity"
+	mfapg "github.com/faustbrian/go-identity/mfa/postgres"
 	"github.com/faustbrian/go-identity/otp"
 	kernel "github.com/faustbrian/go-identity/postgres"
 	"github.com/faustbrian/go-identity/session"
@@ -32,6 +33,12 @@ import (
 // attributes are service-owned, never caller assertions. No policy engine,
 // factor store or application workflow callback is accepted here.
 type SigninConfig struct {
+	// RequireKnownEmptyFactors selects native MFA-owner admission in addition
+	// to authorization policy. Missing/enrolled state denies; the original
+	// generation is authenticated in custody and fenced in protected phases.
+	// False preserves policy-only consumers, whose policy must enforce factors.
+	// Neither mode enables MFA continuation.
+	RequireKnownEmptyFactors bool
 	Coordinator              kernel.CoordinatorConfig
 	CurrentAttemptKeyVersion uint32
 	Session                  sessionpg.Config
@@ -79,6 +86,7 @@ func NewSigninService(sender *SendService, c SigninConfig) (*SigninService, erro
 	if err != nil {
 		return nil, err
 	}
+	owner.signin.knownEmptyFactors = c.RequireKnownEmptyFactors
 	repo, err := kernel.NewRepository(sender.pool, kernel.Config{MaximumDuration: sender.timeout})
 	if err != nil {
 		return nil, ErrInvalidConfiguration
@@ -169,6 +177,10 @@ func (s *SigninService) Signin(ctx context.Context, r otp.SigninRequest) (result
 	}
 	// Observe the selected user's epoch BEFORE evaluation. A later protected
 	// comparison rejects a policy change rather than adopting a newer epoch.
+	factorVersion, err := s.readSigninFactors(ctx, *custody.recipient)
+	if err != nil {
+		return result, err
+	}
 	authority, err := s.authorizeRecipient(ctx, r.Caller, *custody.recipient, false)
 	if err != nil {
 		return result, err
@@ -207,7 +219,7 @@ func (s *SigninService) Signin(ctx context.Context, r otp.SigninRequest) (result
 	}
 	record, _ := prepared.Session()
 	_, _, cookie, _ := r.Flow.Bindings()
-	command, _, err := s.owner.codec.mapSigninCommand(ctx, attempt, issued.Digest.KeyVersion, spec, cookie, custody, record)
+	command, _, err := s.owner.codec.mapSigninCommand(ctx, attempt, issued.Digest.KeyVersion, spec, cookie, custody, record, factorVersion)
 	if err != nil {
 		return result, err
 	}
@@ -226,6 +238,17 @@ func (s *SigninService) Signin(ctx context.Context, r otp.SigninRequest) (result
 		result.CSRFToken, err = prepared.CSRFToken()
 	}
 	return result, err
+}
+
+func (s *SigninService) readSigninFactors(ctx context.Context, recipient kernel.RecipientRecord) (uint64, error) {
+	if !s.owner.signin.knownEmptyFactors {
+		return 0, nil
+	}
+	state, err := mfapg.ReadOTPSigninFactors(ctx, s.sender.pool, recipient.Query.TenantID, recipient.User.ID, min(s.sender.timeout, 5*time.Second))
+	if err != nil {
+		return 0, err
+	}
+	return state.Version(), nil
 }
 
 // authorizeRecipient uses the existing policy engine, not a new MFA flag or

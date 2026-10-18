@@ -9,6 +9,7 @@ import (
 
 	auth "github.com/faustbrian/go-authentication/v2"
 	identity "github.com/faustbrian/go-identity"
+	mfapg "github.com/faustbrian/go-identity/mfa/postgres"
 	kernel "github.com/faustbrian/go-identity/postgres"
 	"github.com/faustbrian/go-identity/session"
 	sessionpg "github.com/faustbrian/go-identity/session/postgres"
@@ -32,6 +33,15 @@ func (p *Contributor) CheckOTP(ctx context.Context, w kernel.OTPApplyWork) error
 	spec, err := w.CommandSpec(p)
 	if err != nil {
 		return err
+	}
+	user, factorVersion, err := p.signinFactorsFromSpec(spec, b.Plan)
+	if err != nil {
+		return err
+	}
+	if factorVersion != 0 {
+		if err := mfapg.RequireOTPSigninApplyFactors(ctx, w, p, user, factorVersion); err != nil {
+			return err
+		}
 	}
 	cookie, err := w.PreAuthCookie(p)
 	if err != nil {
@@ -58,6 +68,15 @@ func (p *Contributor) FinalizeOTP(ctx context.Context, w kernel.OTPFinalizeWork)
 	spec, err := w.CommandSpec(p)
 	if err != nil {
 		return err
+	}
+	user, factorVersion, err := p.signinFactorsFromSpec(spec, b.Plan)
+	if err != nil {
+		return err
+	}
+	if factorVersion != 0 {
+		if err := mfapg.RequireOTPSigninFinalizeFactors(ctx, w, p, user, factorVersion); err != nil {
+			return err
+		}
 	}
 	cookie, err := w.PreAuthCookie(p)
 	if err != nil {

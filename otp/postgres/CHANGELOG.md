@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add explicit native known-empty-factor signin admission. Freeze the original
+  MFA generation in encrypted custody and fence it through counted attempts,
+  reservation and protected finalization; unknown/enrolled/changed state denies
+  without comparing or charging another code. Preserve existing policy-only
+  consumers, original v1 custody and code-free historical recovery.
+
 - Add optional email OTP verification/change confirmation hooks, independently
   selected per workflow. Veto precedes durable attempt metering; observers see
   only fresh known commits, and failures preserve original metadata recovery

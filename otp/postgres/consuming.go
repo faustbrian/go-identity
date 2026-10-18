@@ -6,6 +6,7 @@ import (
 	"time"
 
 	identity "github.com/faustbrian/go-identity"
+	mfapg "github.com/faustbrian/go-identity/mfa/postgres"
 	"github.com/faustbrian/go-identity/otp"
 	kernel "github.com/faustbrian/go-identity/postgres"
 	"github.com/jackc/pgx/v5"
@@ -120,6 +121,9 @@ func (p *Contributor) ReserveOTP(ctx context.Context, w kernel.OTPReservationWor
 	if err = p.requireConsumingAuthority(ctx, w, b, a); err != nil {
 		return err
 	}
+	if err := p.requireSigninReservationFactors(ctx, w, command, b.Plan); err != nil {
+		return err
+	}
 	flow, err := p.authenticateFlow(ctx, command, b.Plan)
 	if err != nil {
 		return err
@@ -183,6 +187,9 @@ func (p *Contributor) RebindOTP(ctx context.Context, w kernel.OTPReservationWork
 	if err = p.requireConsumingAuthority(ctx, w, b, a); err != nil {
 		return err
 	}
+	if err := p.requireSigninReservationFactors(ctx, w, command, b.Plan); err != nil {
+		return err
+	}
 	flow, err := p.authenticateFlow(ctx, command, b.Plan)
 	if err != nil {
 		return err
@@ -219,6 +226,14 @@ func (p *Contributor) RebindOTP(ctx context.Context, w kernel.OTPReservationWork
 		return err
 	}
 	return rebindReservation(ctx, w.Exec, row, b, now)
+}
+
+func (p *Contributor) requireSigninReservationFactors(ctx context.Context, w kernel.OTPReservationWork, command identity.Command, plan kernel.OTPAttemptPlan) error {
+	user, version, err := p.signinFactors(command, plan)
+	if err != nil || version == 0 {
+		return err
+	}
+	return mfapg.RequireOTPSigninReservationFactors(ctx, w, p, user, version)
 }
 
 // Caller holds exact reservation exclusion. Recovery/release authenticate this
