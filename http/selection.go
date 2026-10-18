@@ -428,6 +428,12 @@ func validOperation(owner ModuleID, op OperationDescriptor, catalog map[string]c
 		if r.OperationID == "identity.password.verify" && (r.CSRFOrigin.Mode == CSRFNone || (r.CSRFOrigin.Mode == CSRFSessionState && r.CSRFOrigin.RefererFallback == RefererFallbackDeny)) {
 			csrfMatches = true
 		}
+		// Native username rename checks the original issued synchronizer under
+		// mutation fences, including exact retries after identifier-session
+		// invalidation. It does not issue an independently aged CSRF token.
+		if r.OperationID == "identity.username.update" && r.CSRFOrigin.Mode == CSRFSessionState && r.CSRFOrigin.TokenHeader == "X-CSRF-Token" && r.CSRFOrigin.RefererFallback == RefererFallbackDeny {
+			csrfMatches = true
+		}
 		// Native cookie-only MFA enrollment authenticates the synchronizer
 		// against original session state under mutation fences. It never issues
 		// a separately aged CSRF token or admits an origin-only/bearer fallback.

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Permit the explicitly selected native username-rename stored-synchronizer
+  profile without inventing an independent CSRF token-age promise. Exact
+  trusted Origin and the canonical token header remain required.
+
 - Register independent primary-email OTP recovery and admit only the exact
   selected change operations under stored-session CSRF. Canonical recovery
   contracts retain metadata-only outcomes and distinct disclosure authority.
