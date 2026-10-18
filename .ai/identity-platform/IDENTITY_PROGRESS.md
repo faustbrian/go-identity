@@ -1,7 +1,105 @@
 # Identity Platform Progress
 
+## TL;DR — updated 2026-10-18 01:47 UTC
+
+**Estimated whole-goal completion: approximately 5–10%, with low confidence.**
+The working authentication baseline and substantial email functionality are
+delivered; most platform families and final package qualification are not closed.
+This is an effort/scope estimate, not a measured percentage or an ETA.
+
+| Measure | Current position |
+| --- | --- |
+| Complete consumer milestones | **3/39 closed**: B1 authentication, B2 reset, B3 password change. The unweighted count is 7.7%; it is not the whole-goal effort estimate. |
+| Remaining milestones | **36/39 not closed**: M04 is partially delivered; M05–M39 have not been accepted as complete. Existing implementation is not assumed absent. |
+| Additional delivered behavior | **10 email-lifecycle profiles**, listed below. These are partial M04 deliveries, not ten additional closed milestones. |
+| Full package scope | **67 units: 61 product units + 6 primitive extensions.** No additional full-unit qualification has closed during this implementation run. The older 2/67 verified baseline is historical, not a current cross-repository audit. |
+| Last full milestone closure | **14 October:** B3 password change. |
+| Last complete email-profile delivery | **16 October:** registration verification followed by original-browser signin. |
+| Current unfinished deliverable | Verification → enrolled TOTP → authenticated session read/logout, through native APIs and selected HTTPS. Local journeys pass, but complete public delivery is **not finished**. |
+
+### What consumers can already do
+
+- Register, receive/confirm verification, sign in, read a session and log out.
+- Reset or change a password, with old-password denial and session invalidation.
+- Manage email through delivered profiles: (1) list/get/add/resend/link verification/
+  primary change, (2) safe self-removal, (3) explicit replacement-primary removal,
+  (4) audited administrative reads, (5) administrative removal, (6) pending-address
+  OTP verification, (7) primary replacement by OTP, (8) first-primary establishment
+  by OTP, (9) TOTP-protected email change, and (10) verification-to-signin when
+  current authoritative MFA state is known empty.
+
+### What remains before the whole goal is done
+
+- Finish M04, including the current enrolled-TOTP continuation, remaining factor/
+  privacy/lifecycle requirements and qualification.
+- Close username, passwordless/phone/anonymous, complete MFA/recovery/trusted-device,
+  WebAuthn/passkey and social-OAuth milestones.
+- Close API-key, organization/team/role, administration/privacy, enterprise SSO/
+  SAML/SCIM and OAuth/OIDC-server/exchange/device milestones.
+- Complete broader risk/CAPTCHA, localization, advanced sessions, reference/consumer
+  composition and all mandatory package, journey and shared-issuer qualification.
+
+### Immediate delivery state and next action
+
+- Identity prerequisites `bb569ec` and `615ac00` are pushed to main with their
+  exact-head Required CI passing.
+- The capability prerequisite is on its CI-only branch, **not main**. Its missing
+  public-field documentation is corrected in `5f5eef1`; required CI remains owed.
+- The populated MFA-first upgrade intermittently fails during router construction;
+  its cause remains unproved. Later passing reruns do not close that gap.
+- **Next:** finish prerequisite publication and public adapter pins, resolve the
+  router failure, then prove/review/deliver this complete TOTP profile. Do not
+  count another milestone or inflate the estimate for prerequisite commits.
+
+Maintain this dashboard first at material checkpoints and at least every six
+hours of active work. Use the [milestone table](#consumer-outcomes-39-unweighted)
+for the full task breakdown; the history below is not the current status.
+
+<details>
+<summary>Detailed execution history — historical checkpoints, not current totals</summary>
+
 Implementation activated by the user on 2026-10-14. B1, B2 and B3 are closed;
 M04 email lifecycle is active.
+
+- Verification/TOTP prerequisites (2026-10-18 01:31 UTC): foundation
+  `bb569ec` is committed/pushed on identity main and passes public-dependency
+  focused tests/static checks; its Required CI is pending. Independent review
+  approves the lower contracts but rejects complete-slice readiness because
+  an intermittent populated MFA-first router-construction failure reproduced.
+  Later narrow diagnostics passed without establishing the cause. Adapter and
+  reference delivery remain unfinished; full milestone count stays3/39.
+
+- Verification/TOTP checkpoint (2026-10-18 01:21 UTC): both real populated
+  upgrade histories now pass together, preserving existing sessions, issuance
+  and migration records. Retained native/HTTPS magic-link and genuine password
+  MFA journeys also pass. Reference race/static checks finish successfully.
+  The implemented slice remains local/uncommitted pending independent review,
+  public dependency pins, clean-consumer/runtime proof and main delivery; no new
+  full milestone or unit closes. Earlier intermittent constructor/setup errors
+  have not reproduced in the focused reruns, but their causes are not proven.
+
+- Verification/TOTP checkpoint (2026-10-18 00:53 UTC): real expiry, late
+  authority denial, concurrent completion and interrupted-preparation recovery
+  now pass locally. The combined regression exposed a wrong test expectation
+  for exhaustion, not a new product defect: the corrected check proves terminal
+  revocation, no remaining attempts, no child use and no additional session.
+  Three retained Valkey-profile tests did not run because their disposable
+  service inputs were absent; those remain unverified. Full populated reference
+  upgrade, remaining affected checks, independent final review/public pins and
+  main delivery remain. The slice is uncommitted; no new milestone closes.
+
+- Verification/TOTP working locally (2026-10-18 00:31 UTC): original signup
+  browser -> committed email verification -> pending TOTP -> genuine enrolled
+  factor -> session read/logout now passes both native APIs and selected HTTPS,
+  preserving browser/persistent choice. Wrong browser/unselected HTTP variants
+  deny; wrong code spends one shared attempt; replay and actual lost challenge/
+  session commit acknowledgements disclose no replacement credentials. A real
+  post-snapshot parent-custody defect was reproduced and corrected with protected
+  current checks. Source remains uncommitted; remaining failure/migration/
+  compatibility checks, independent review and main delivery are not complete.
+  No new full milestone/unit closes:3/39 delivered. Whole-goal estimate remains
+  rough5–10%, low confidence, based on delivered baseline/reset/password-change
+  and partial email lifecycle, not code or test counts.
 
 - Registration verification-to-signin source delivered (2026-10-16
   13:04 UTC): foundation `af740fb`, native/HTTP `ad15f57` and reference
@@ -764,6 +862,8 @@ Historical planning ledgers and evidence stay at their original locations.
   The complete prompt is IMPLEMENTATION_GOAL.md in the preserved planning
   snapshot supplied by the user. No specification/history migration is needed.
 
+</details>
+
 ## Consumer outcomes (39, unweighted)
 
 The rows below record actual milestone closure, not helpers or release counts.
@@ -775,7 +875,7 @@ restart old slices merely to fill this table; adopt applicable prior proof.
 | B1 | Runnable registration/verification/signin/session/logout baseline: identity, identity/postgres, identity/password, identity/password/postgres, identity/session, identity/session/postgres, identity/delivery, identity/delivery/postgres, identity/http, identity/reference; required primitive contracts | Closed: reviewed native PostgreSQL/HTTPS journey, reproducible consumer walkthrough, main 90d4f2c and Required CI 38527264686. Public-dependency journeys and published runner initialization subsequently pass at 1ae0790; full-unit qualification pending. |
 | B2 | Reset and required session invalidation using the baseline owners plus identity/risk/hibp | Closed: reviewed native PostgreSQL/HTTPS reset, two-session revocation, original audit recovery and populated upgrade; main fd439aa and Required CI 38547848026; full-unit/release qualification pending |
 | B3 | Password change and fresh reauthentication through baseline owners | Closed: reviewed PostgreSQL/HTTPS verification/change, two-session revocation, populated upgrade, original auditing, rollback/recovery and combined reset/change; main 24b1b08 plus CI-only 47a3ee0, Required CI 38559659144; full-unit/release qualification pending |
-| M04 | Email add/change/verify/list/get/remove with session/lifecycle policy: identity/email | Delivered public PostgreSQL/HTTPS profiles: list/get, keyed add/resend/verification/primary change (`31b51a9`), safe self/replacement-primary removal (`1ae0790`, `4a10c0f`), administrator reads/removal (`91397a7`, `ffc3b47`), pending-address OTP verification (`612ab05`), new-primary OTP replacement/establishment (`43b46d1`, `ed8135f`) and TOTP-protected link change from genuine MFA sessions (`c3744e2`). Independent reviews and exact-head main CI pass for those profiles. Other factor, auto-signin, privacy/lifecycle completeness and final qualification remain; full row not closed. |
+| M04 | Email add/change/verify/list/get/remove with session/lifecycle policy: identity/email | Delivered public PostgreSQL/HTTPS profiles: list/get, keyed add/resend/verification/primary change (`31b51a9`), safe self/replacement-primary removal (`1ae0790`, `4a10c0f`), administrator reads/removal (`91397a7`, `ffc3b47`), pending-address OTP verification (`612ab05`), new-primary OTP replacement/establishment (`43b46d1`, `ed8135f`), TOTP-protected link change from genuine MFA sessions (`c3744e2`) and known-empty-MFA registration verification-to-signin (`88c8106`). Independent reviews and exact-head main CI pass for those delivered profiles. Enrolled verification/TOTP continuation, other factor/privacy/lifecycle completeness and final qualification remain; full row not closed. |
 | M05 | Username availability/signin/rename: identity/username, stable identifier contracts | Closure not reassessed |
 | M06 | Delivered magic-link signin and session: identity/magiclink | Closure not reassessed |
 | M07 | Purpose-bound email OTP request/delivery/completion: identity/otp, identity/otp/postgres | Closure not reassessed |
