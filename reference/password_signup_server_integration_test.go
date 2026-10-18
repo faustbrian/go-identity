@@ -243,6 +243,7 @@ func proveReferenceSignupGraph(t *testing.T, competing bool, protected ...bool) 
 }
 
 type signupGraphExtensions struct {
+	emailSignin                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            string
 	usernameTOTPOnly                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       bool
 	usernameTOTPPersistent                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 bool
 	usernameTOTPWithdrawal                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 string
@@ -369,6 +370,9 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 	selectedReset := c.PasswordReset
 	selectedResetHTTP := c.HTTPPasswordReset
 	var selectedAuthorization authorization.Service = referenceRegistrationPolicy{}
+	if extensions.emailSignin == "changed" {
+		selectedAuthorization = &otpSigninFactorChangePolicy{pool: f.pool}
+	}
 	if extensions.username {
 		selectedAuthorization = referenceUsernamePolicy{}
 	}
@@ -586,6 +590,9 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 			c.PasswordSignin.MFA, c.PasswordSignin.TOTP, c.PasswordSignin.Recovery, c.PasswordSignin.OTP = nil, nil, nil, nil
 			c.HTTPMFA.PasswordTOTPVerify = false
 		}
+	}
+	if extensions.emailSignin != "" {
+		c.HTTPEmailSignin = &reference.HTTPEmailSigninConfiguration{ActorID: "AAAAAAAAAAAAAAAAAAAAAw", PolicyRevision: 9, TargetID: "login", Address: c.PasswordSignin.Native.Address}
 	}
 	if extensions.postgresBaseline {
 		selectDurableReferenceAdmission(&c)
@@ -851,6 +858,14 @@ END $$`); err != nil {
 		seen[op.Record.OperationID] = true
 	}
 	wantOperations := 8
+	if c.HTTPEmailSignin != nil {
+		wantOperations += 3
+		for _, id := range []string{"identity.otp.send", "identity.otp.signin", "identity.otp.signin.recover"} {
+			if !seen[id] {
+				t.Fatal("selected email OTP signin route missing", id)
+			}
+		}
+	}
 	if extensions.username {
 		wantOperations += 5
 		for _, id := range []string{"identity.username.signup", "identity.username.signin", "identity.username.available", "identity.username.update", "identity.password.verify"} {
@@ -1221,6 +1236,9 @@ END $$`); err != nil {
 		return
 	}
 	proveReferenceRegistration(t, ctx, f, features, workers, client, network.URL, origin, messages, calls, competing, changeScreens, extensions.mfaEnrollment, extensions.passwordMFA, extensions.emailAddressQueries, c.Email != nil && c.Email.Addresses != nil, extensions.passwordRecovery)
+	if extensions.emailSignin != "" {
+		proveReferenceEmailOTPSignin(t, ctx, f, features, workers, client, network.URL, origin, messages, extensions.emailSignin)
+	}
 	if magic {
 		proveReferenceMagicLink(t, ctx, f, features, workers, client, network.URL, origin, messages, c, deps, len(protected) > 5 && protected[5])
 	}

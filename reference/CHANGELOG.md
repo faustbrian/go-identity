@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Fence HTTP email OTP signin against actual known-empty MFA authority through
+  counted attempts and protected consumption. Select its MFA-authority history;
+  missing/enrolled/changed state denies instead of relying on permissive policy.
+  Existing accounts need owner-provisioned state, never inferred-empty backfill.
+  Add the PostgreSQL browser/persistent signin and recovery consumer journey.
+
 - Provide the PostgreSQL-only magic-link consumer journey and adoption guide
   for existing-account signin, optional signup and existing-account signup intent.
   Reuse native capability, delivery, risk and session owners with explicit HTTP

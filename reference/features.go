@@ -60,6 +60,8 @@ type OTPSendConfiguration struct {
 	// session/CSRF keys and the matching deployment authority namespace. The
 	// selected session namespace may share the pre-auth or authenticated store.
 	// Additional-factor policy must deny until the MFA profile is composed.
+	// HTTPEmailSignin additionally selects native known-empty generation fencing
+	// even if the supplied native config retains policy-only compatibility mode.
 	Signin *otppg.SigninConfig
 	// PreAuth explicitly enables original flow initiation. Nil preserves the
 	// existing externally initiated Send profile without exposing an issuer.
@@ -341,7 +343,14 @@ func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDepen
 	}
 	var signinOwner *otppg.SigninService
 	if o.Signin != nil {
-		signinOwner, err = otppg.NewSigninService(otpOwner, *o.Signin)
+		signinConfig := *o.Signin
+		if c.HTTPEmailSignin != nil {
+			// Public email login must compose real native factor authority;
+			// a permissive application authorizer cannot downgrade enrolled MFA.
+			signinConfig.RequireKnownEmptyFactors = true
+		}
+		migrationConfig.otpSigninFactors = signinConfig.RequireKnownEmptyFactors
+		signinOwner, err = otppg.NewSigninService(otpOwner, signinConfig)
 		if err != nil {
 			return err
 		}

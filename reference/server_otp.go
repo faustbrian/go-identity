@@ -21,6 +21,10 @@ import (
 // deployment values, not request-controlled authority. The revision must match
 // the native Send and signin query policies, with one exact authorization handle.
 // Audience and session cookie are taken from the selected native issuer.
+// This HTTP profile always selects native known-empty MFA generation fencing;
+// missing or enrolled state denies rather than relying on a permissive callback.
+// Apply its selected MFA-authority history before serving. Existing accounts
+// require actual owner-provisioned factor state; absence is never backfilled.
 type HTTPEmailSigninConfiguration struct {
 	Address        email.AddressPolicy
 	ActorID        identity.ActorID

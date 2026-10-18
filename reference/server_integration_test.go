@@ -5,6 +5,7 @@ package reference_test
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -133,7 +134,7 @@ func testNativeServerOriginalFlow(t *testing.T, consuming, reset bool) {
 	installOTPGraphFixture(t, ctx, f, baseStores)
 	modules := []reference.ModuleID{"identity/session/postgres", "rate-limit/postgres"}
 	if consuming {
-		modules = []reference.ModuleID{"identity/postgres", "identity/risk/postgres", "identity/otp/postgres", "identity/session/postgres", "identity/delivery/postgres", "authorization/postgres", "audit/postgres", "outbox/postgres", "outbox/postgres/identity", "rate-limit/postgres"}
+		modules = []reference.ModuleID{"identity/postgres", "identity/risk/postgres", "identity/otp/postgres", "identity/session/postgres", "identity/delivery/postgres", "authorization/postgres", "audit/postgres", "outbox/postgres", "outbox/postgres/identity", "rate-limit/postgres", "identity/mfa/postgres"}
 	}
 	if reset {
 		modules = []reference.ModuleID{"identity/postgres", "identity/risk/postgres", "identity/otp/postgres", "identity/session/postgres", "identity/delivery/postgres", "authorization/postgres", "audit/postgres", "outbox/postgres", "outbox/postgres/identity", "rate-limit/postgres", "identity/password/postgres", "identity/mfa/postgres", "capability/postgres/identity"}
@@ -141,6 +142,31 @@ func testNativeServerOriginalFlow(t *testing.T, consuming, reset bool) {
 	request := applyRequest(t, ctx, stores, modules)
 	if out, err := stores.ReferenceMigrationApply(ctx, request); err != nil || out.Result.State() != reference.MigrationApplied {
 		t.Fatal("native selected migration", err)
+	}
+	if consuming {
+		// This legacy component case already supplies a pre-existing account
+		// fixture, not signup proof. Explicitly give it known-empty factor state.
+		// The separate PostgreSQL-only journey creates both through real signup.
+		seed, err := identity.NewCommandID()
+		if err != nil {
+			t.Fatal(err)
+		}
+		id, err := base64.RawURLEncoding.DecodeString(string(seed))
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, row := range []struct {
+			sql  string
+			args []any
+		}{
+			{`INSERT INTO identity.identity_command_id_claims(command_id,tenant_id,purpose,fingerprint,fingerprint_key_version,safe_fields) VALUES($1,$2,'identity.password.signup',$3,1,$4)`, []any{id, otpTenant, bytes.Repeat([]byte{1}, 32), []byte{1}}},
+			{`INSERT INTO identity.commands(command_id,tenant_id,purpose) VALUES($1,$2,'identity.password.signup')`, []any{id, otpTenant}},
+			{`INSERT INTO identity_mfa.factor_authorities(tenant_id,user_id,version,active_factors,initialized_command_id,initialized_purpose) VALUES($1,'AAAAAAAAAAAAAAAAAAAAAg',1,0,$2,'identity.password.signup')`, []any{otpTenant, id}},
+		} {
+			if _, err := f.pool.Raw().Exec(ctx, row.sql, row.args...); err != nil {
+				t.Fatal("explicit pre-existing factor fixture", err)
+			}
+		}
 	}
 	tenant := &nativeServerTenant{}
 	policies := identity.PolicySet{Authorize: c.OTP.RequestKeys.Policy.Authorization,

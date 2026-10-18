@@ -224,6 +224,12 @@ func (s StoreSet) baseMigrationCatalog(ctx context.Context) ([]migrationHistory,
 			return nil, err
 		}
 	}
+	if c.otpSigninFactors {
+		catalog, err = emailOTPFactorMigrationCatalog(ctx, catalog)
+		if err != nil {
+			return nil, err
+		}
+	}
 	if e := s.state.features.email; e != nil {
 		catalog, err = emailMigrationCatalog(ctx, catalog, s.state.config.Schema, e.verification != nil || e.change != nil || e.removal != nil, e.change != nil)
 		if err != nil {

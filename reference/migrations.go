@@ -94,6 +94,7 @@ func (s fixedMigrationSource) Load(ctx context.Context) ([]migrations.Migration,
 }
 
 type featureMigrationConfig struct {
+	otpSigninFactors                                        bool
 	otpSchema, sessionSchema, global                        string
 	authenticatedSchema                                     string
 	signinSchema                                            string

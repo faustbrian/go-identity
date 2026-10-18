@@ -8,7 +8,8 @@ import (
 	migrations "github.com/faustbrian/go-migrations/v3"
 )
 
-// Reuse the common native MFA authority prefix, not link/password proof or
+// OTP signin and email verification reuse the common native MFA authority
+// prefix, not link/password proof or
 // capability histories. Signup or existing enrollment may already own a longer
 // prefix in this permanent namespace. No factor is inferred or initialized.
 func emailOTPFactorMigrationCatalog(ctx context.Context, catalog []migrationHistory) ([]migrationHistory, error) {

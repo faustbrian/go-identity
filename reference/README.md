@@ -1,5 +1,11 @@
 # Identity reference composition
 
+## Optional delivered email OTP signin
+
+See [email OTP composition and consumer journey](EMAIL_OTP.md) for native/HTTP
+selection, actual queued delivery, counted consumption, known-empty MFA fencing,
+browser/persistent sessions and code-free original outcome recovery.
+
 ## Optional delivered magic-link authentication
 
 See [magic-link composition and consumer journey](MAGICLINK.md) for native/HTTP
