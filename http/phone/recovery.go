@@ -31,6 +31,19 @@ type RecoveryAttempt struct {
 	FingerprintKeyVersion uint32                 `json:"fingerprintKeyVersion"`
 }
 
+// MarshalJSON explicitly projects code-free attempt correlation. The native
+// AttemptID and AttemptFingerprint intentionally reject implicit serialization;
+// this selected HTTP response, like the OTP transport, owns their wire export.
+func (r RecoveryAttempt) MarshalJSON() ([]byte, error) {
+	return json.Marshal(struct {
+		TenantID              identity.TenantID  `json:"tenantID"`
+		CommandID             identity.CommandID `json:"commandID"`
+		AttemptID             string             `json:"attemptID"`
+		Fingerprint           string             `json:"fingerprint"`
+		FingerprintKeyVersion uint32             `json:"fingerprintKeyVersion"`
+	}{r.TenantID, r.CommandID, string(r.AttemptID), string(r.Fingerprint), r.FingerprintKeyVersion})
+}
+
 func closedFields(input map[string]json.RawMessage, fields map[string]any) bool {
 	if len(input) != len(fields) {
 		return false
