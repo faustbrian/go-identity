@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Add explicitly selected username signup, signin, advisory availability and
+  protected cookie rename transport through the existing native owners.
+  Username routes have distinct actions and wire schemas; email routes remain
+  unchanged. Preserve original retry/proof/CSRF custody and disclose no fresh
+  credentials on errors, ambiguity or historical replay. Enrolled-MFA username
+  signin remains unselected rather than silently downgraded.
+
 - Compose current session custody backed by supported envelope v2. Existing
   workflow/HTTP contracts and original credential lifetimes are unchanged.
 

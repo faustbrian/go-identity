@@ -117,6 +117,14 @@ func NewSigninHandler(c SigninConfig) (http.Handler, error) {
 // Hooks observe safe attempt metadata, cannot replace input or mint credentials,
 // and must not retain sensitive request headers or request-local state.
 func NewSigninHandlerWithMiddleware(c SigninConfig, middleware []identityhttp.MiddlewareDescriptor) (http.Handler, error) {
+	return newSigninHandler(c, middleware, false)
+}
+
+func newSigninHandler(c SigninConfig, middleware []identityhttp.MiddlewareDescriptor, usernameProfile bool) (http.Handler, error) {
+	action, route, identifierField := "identity.password.signin", "/v1/password/signin", "identifier"
+	if usernameProfile {
+		action, route, identifierField = "identity.username.signin", "/v1/username/signin", "username"
+	}
 	if nilOwner(c.Service) || !c.Rate.Configured() || c.Now == nil || c.MaximumDuration < time.Millisecond || c.MaximumDuration > 30*time.Second || c.Audience == "" || len(c.Audience) > 256 || len(c.CallbackURL) > 2048 {
 		return nil, identityhttp.ErrInvalidInput
 	}
@@ -164,7 +172,7 @@ func NewSigninHandlerWithMiddleware(c SigninConfig, middleware []identityhttp.Mi
 		return nil, identityhttp.ErrInvalidInput
 	}
 	caller := func(tenant identity.TenantID, correlation string) authorization.DecisionContext {
-		return authorization.DecisionContext{CorrelationID: correlation, PolicyRevision: c.PolicyRevision, Request: authorization.Request{Subject: authorization.Subject{Kind: authorization.SubjectServiceAccount, ID: authorization.SubjectID(c.ActorID)}, Tenant: authorization.TenantID(tenant), Action: "identity.password.signin", Resource: authorization.Resource{Type: "identity.request-admission", ID: "identity.password.signin"}}}
+		return authorization.DecisionContext{CorrelationID: correlation, PolicyRevision: c.PolicyRevision, Request: authorization.Request{Subject: authorization.Subject{Kind: authorization.SubjectServiceAccount, ID: authorization.SubjectID(c.ActorID)}, Tenant: authorization.TenantID(tenant), Action: authorization.Action(action), Resource: authorization.Resource{Type: "identity.request-admission", ID: authorization.ResourceID(action)}}}
 	}
 	if caller("configuration", "").Validate() != nil {
 		return nil, identityhttp.ErrInvalidInput
@@ -196,7 +204,7 @@ func NewSigninHandlerWithMiddleware(c SigninConfig, middleware []identityhttp.Mi
 	pipeline, err := identityhttp.NewOperationPipeline(identityhttp.OperationPipelineConfig[SigninState]{MaximumDuration: c.MaximumDuration, Middleware: middleware, Reject: reject,
 		Decode: func(r *http.Request) (SigninState, error) {
 			s := SigninState{attempt: signinAttemptFor(r)}
-			if r.URL.Path != "/v1/password/signin" || r.URL.EscapedPath() != r.URL.Path {
+			if r.URL.Path != route || r.URL.EscapedPath() != r.URL.Path {
 				return s, failure{status: 404, code: "not_found"}
 			}
 			if r.Method != http.MethodPost {
@@ -246,7 +254,7 @@ func NewSigninHandlerWithMiddleware(c SigninConfig, middleware []identityhttp.Mi
 				return s, identityhttp.ErrInvalidInput
 			}
 			var flowID, identifierText, value, callback string
-			for name, dst := range map[string]*string{"flowID": &flowID, "identifier": &identifierText, "password": &value, "callbackURL": &callback} {
+			for name, dst := range map[string]*string{"flowID": &flowID, identifierField: &identifierText, "password": &value, "callbackURL": &callback} {
 				raw, ok := body[name]
 				if !ok || string(raw) == "null" || json.Unmarshal(raw, dst) != nil {
 					return s, identityhttp.ErrInvalidInput
@@ -266,7 +274,7 @@ func NewSigninHandlerWithMiddleware(c SigninConfig, middleware []identityhttp.Mi
 				return s, identityhttp.ErrInvalidInput
 			}
 			id, err := identity.ParsePreAuthTransactionID(flowID)
-			if err != nil || callback != c.CallbackURL || len(value) == 0 || len(value) > 1<<20 {
+			if err != nil || callback != c.CallbackURL || len(value) == 0 || len(value) > 1<<20 || usernameProfile && len(identifierText) > 128 {
 				return s, identityhttp.ErrInvalidInput
 			}
 			input, err := identifier.NewInput(identifierText)
@@ -296,7 +304,7 @@ func NewSigninHandlerWithMiddleware(c SigninConfig, middleware []identityhttp.Mi
 			return s, nil
 		},
 		Authenticate: func(r *http.Request, s SigninState) (SigninState, error) {
-			if err := signinRateError(c.Rate.AdmitSigninIP(r.Context(), s.facts, "identity.password.signin")); err != nil {
+			if err := signinRateError(c.Rate.AdmitSigninIP(r.Context(), s.facts, action)); err != nil {
 				return s, err
 			}
 			canonical, err := c.Service.SigninRateSource(r.Context(), s.request)
@@ -310,7 +318,7 @@ func NewSigninHandlerWithMiddleware(c SigninConfig, middleware []identityhttp.Mi
 			if !s.device.ExpiresAt().After(c.Now()) {
 				return identityhttp.ErrUnavailable
 			}
-			return signinRateError(c.Rate.AdmitSigninIdentifier(r.Context(), s.facts, identityhttp.AuthRateRequest{OperationID: "identity.password.signin", Identifier: s.identifier}))
+			return signinRateError(c.Rate.AdmitSigninIdentifier(r.Context(), s.facts, identityhttp.AuthRateRequest{OperationID: action, Identifier: s.identifier}))
 		},
 		Handle: func(w http.ResponseWriter, r *http.Request, s SigninState) {
 			if !s.device.ExpiresAt().After(c.Now()) {
@@ -328,7 +336,7 @@ func NewSigninHandlerWithMiddleware(c SigninConfig, middleware []identityhttp.Mi
 				return
 			}
 			q, flow, e := result.Recovery.Bindings()
-			if e != nil || flow != s.request.PreAuthID || q.TenantID != s.request.TenantID || q.UserID != "" || q.AnonymousFlowID != string(flow) || q.ActorID != c.ActorID || q.ActorKind != authorization.SubjectServiceAccount {
+			if e != nil || q.OperationID != action || flow != s.request.PreAuthID || q.TenantID != s.request.TenantID || q.UserID != "" || q.AnonymousFlowID != string(flow) || q.ActorID != c.ActorID || q.ActorKind != authorization.SubjectServiceAccount {
 				reject(w, r, identityhttp.ErrUnavailable)
 				return
 			}

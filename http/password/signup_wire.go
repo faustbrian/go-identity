@@ -19,18 +19,28 @@ func NewSignupFeatureWithMiddleware(c SignupConfig, m []identityhttp.MiddlewareD
 	return NewFeatureWithMiddleware(FeatureConfig{Signup: &c}, m)
 }
 func signupOperation(c SignupConfig, m []identityhttp.MiddlewareDescriptor) (identityhttp.OperationDescriptor, error) {
-	h, err := NewSignupHandlerWithMiddleware(c, m)
+	return signupOperationProfile(c, m, false)
+}
+func signupOperationProfile(c SignupConfig, m []identityhttp.MiddlewareDescriptor, usernameProfile bool) (identityhttp.OperationDescriptor, error) {
+	owner, action := identityhttp.ModuleID("identity/password"), "identity.password.signup"
+	if usernameProfile {
+		owner, action = "identity/username", "identity.username.signup"
+	}
+	h, err := newSignupHandler(c, m, usernameProfile)
 	if err != nil {
 		return identityhttp.OperationDescriptor{}, err
 	}
-	op, err := identityhttp.NewCanonicalOperation(identityhttp.CanonicalOperationConfig{Owner: "identity/password", OperationID: "identity.password.signup", Handler: h, CSRF: identityhttp.CSRFPolicy{Mode: identityhttp.CSRFExactOrigin, RefererFallback: identityhttp.RefererFallbackDeny}, MaximumSerializedBytes: 16384})
+	op, err := identityhttp.NewCanonicalOperation(identityhttp.CanonicalOperationConfig{Owner: owner, OperationID: action, Handler: h, CSRF: identityhttp.CSRFPolicy{Mode: identityhttp.CSRFExactOrigin, RefererFallback: identityhttp.RefererFallbackDeny}, MaximumSerializedBytes: 16384})
 	if err != nil {
 		return identityhttp.OperationDescriptor{}, err
 	}
-	op.Wire = signupWire(c)
+	op.Wire = signupWireProfile(c, usernameProfile)
 	return op, nil
 }
 func signupWire(c SignupConfig) *identityhttp.WireOperation {
+	return signupWireProfile(c, false)
+}
+func signupWireProfile(c SignupConfig, usernameProfile bool) *identityhttp.WireOperation {
 	text := func(max any) any { return map[string]any{"type": "string", "minLength": 1, "maxLength": max} }
 	object := func(required []string, p map[string]any) map[string]any {
 		return map[string]any{"type": "object", "additionalProperties": false, "required": required, "properties": p}
@@ -83,9 +93,18 @@ func signupWire(c SignupConfig) *identityhttp.WireOperation {
 	}
 	request := object([]string{"flowID", "email", "password", "callbackURL"}, map[string]any{"flowID": id, "email": text(4096), "password": map[string]any{"type": "string", "minLength": 1, "maxLength": min(c.Network.Limits.MaximumDecodedBytes, uint64(1<<20)), "writeOnly": true}, "callbackURL": map[string]any{"type": "string", "maxLength": 2048}, "remember": map[string]any{"type": "boolean"}, "allowedFields": map[string]any{"type": "array", "maxItems": min(len(c.FieldSchema.Fields), 64), "items": item}})
 	definition := map[string]any{"operationId": "identity.password.signup", "description": "Selected required-email-verification signup; no session or existing-account identity. Original flow and signed device, exact mapped HTTPS tenant/Origin, callback and remember choice. Exactly one byte-exact Idempotency-Key header, no alternate channel. IP admission precedes native normalization then shared identifier admission and one native keyed signup. Native field policy and original custody remain authoritative. Keyed replay retains original history even after live-flow deletion; no automatic retry, credential delivery or renewal. Immediate-session/MFA signup profiles remain unavailable, not downgraded.", "security": []any{map[string]any{"PasswordSignupOriginalFlow": []string{}, "PasswordSignupBrowserDevice": []string{}}}, "parameters": []any{map[string]any{"name": "Origin", "in": "header", "required": true, "schema": text(2048)}, map[string]any{"name": "Idempotency-Key", "in": "header", "required": true, "schema": map[string]any{"type": "string", "minLength": 1, "maxLength": 256, "pattern": "^[!#$%&'*+.^_`|~0-9A-Za-z-]+$"}, "description": "Original tenant/actor/operation/intent-bound key; never log, return or replace after ambiguity."}}, "requestBody": map[string]any{"required": true, "content": map[string]any{"application/json": map[string]any{"schema": request}}}, "responses": responses}
+	prefix := "Password"
+	if usernameProfile {
+		prefix = "Username"
+		request["required"] = []string{"flowID", "email", "username", "password", "callbackURL"}
+		request["properties"].(map[string]any)["username"] = text(128)
+		definition["operationId"] = "identity.username.signup"
+		definition["description"] = "Explicit required-email plus username registration. The original username-signup flow, exact HTTPS tenant/Origin, signed browser device, remember choice and byte-exact Idempotency-Key remain bound. Native enrollment validates the raw name once and atomically reserves normalized username/email with the password and verification delivery; collisions return neutral verification acknowledgement without a partial account. Replay preserves original metadata, never account identity, session credentials or renewed proof. No username-only or enrolled-MFA signup fallback."
+		definition["security"] = []any{map[string]any{"UsernameSignupOriginalFlow": []string{}, "UsernameSignupBrowserDevice": []string{}}}
+	}
 	data, _ := json.Marshal(definition)
 	wire := &identityhttp.WireOperation{Definition: data}
-	for _, s := range []struct{ name, cookie string }{{"PasswordSignupOriginalFlow", "__Host-identity_flow"}, {"PasswordSignupBrowserDevice", "__Host-identity_device"}} {
+	for _, s := range []struct{ name, cookie string }{{prefix + "SignupOriginalFlow", "__Host-identity_flow"}, {prefix + "SignupBrowserDevice", "__Host-identity_device"}} {
 		data, _ := json.Marshal(map[string]any{"type": "apiKey", "in": "cookie", "name": s.cookie, "description": "Original browser custody, not account identity, session or execution permission."})
 		wire.SecuritySchemes = append(wire.SecuritySchemes, identityhttp.WireComponent{Name: s.name, Definition: data})
 	}

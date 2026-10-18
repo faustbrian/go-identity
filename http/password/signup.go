@@ -107,6 +107,14 @@ func NewSignupHandler(c SignupConfig) (http.Handler, error) {
 // observe safe attempt metadata, but cannot replace original input/key custody,
 // manufacture credentials or retain request-local sensitive state.
 func NewSignupHandlerWithMiddleware(c SignupConfig, m []identityhttp.MiddlewareDescriptor) (http.Handler, error) {
+	return newSignupHandler(c, m, false)
+}
+
+func newSignupHandler(c SignupConfig, m []identityhttp.MiddlewareDescriptor, usernameProfile bool) (http.Handler, error) {
+	action, route := "identity.password.signup", "/v1/password/signup"
+	if usernameProfile {
+		action, route = "identity.username.signup", "/v1/username/signup"
+	}
 	if nilOwner(c.Service) || !c.Rate.Configured() || c.Now == nil || c.MaximumDuration < time.Millisecond || c.MaximumDuration > 30*time.Second || c.FieldSchema.Validate() != nil || len(c.CallbackURL) > 2048 {
 		return nil, identityhttp.ErrInvalidInput
 	}
@@ -141,7 +149,7 @@ func NewSignupHandlerWithMiddleware(c SignupConfig, m []identityhttp.MiddlewareD
 		return nil, identityhttp.ErrInvalidInput
 	}
 	caller := func(tenant identity.TenantID, correlation string) authorization.DecisionContext {
-		return authorization.DecisionContext{CorrelationID: correlation, PolicyRevision: c.PolicyRevision, Request: authorization.Request{Subject: authorization.Subject{Kind: authorization.SubjectServiceAccount, ID: authorization.SubjectID(c.ActorID)}, Tenant: authorization.TenantID(tenant), Action: "identity.password.signup", Resource: authorization.Resource{Type: "identity.request-admission", ID: "identity.password.signup"}}}
+		return authorization.DecisionContext{CorrelationID: correlation, PolicyRevision: c.PolicyRevision, Request: authorization.Request{Subject: authorization.Subject{Kind: authorization.SubjectServiceAccount, ID: authorization.SubjectID(c.ActorID)}, Tenant: authorization.TenantID(tenant), Action: authorization.Action(action), Resource: authorization.Resource{Type: "identity.request-admission", ID: authorization.ResourceID(action)}}}
 	}
 	if caller("configuration", "").Validate() != nil {
 		return nil, identityhttp.ErrInvalidInput
@@ -168,7 +176,7 @@ func NewSignupHandlerWithMiddleware(c SignupConfig, m []identityhttp.MiddlewareD
 	pipeline, err := identityhttp.NewOperationPipeline(identityhttp.OperationPipelineConfig[SignupState]{MaximumDuration: c.MaximumDuration, Middleware: m, Reject: reject,
 		Decode: func(r *http.Request) (SignupState, error) {
 			s := SignupState{attempt: signupAttemptFor(r)}
-			if r.URL.Path != "/v1/password/signup" || r.URL.EscapedPath() != r.URL.Path {
+			if r.URL.Path != route || r.URL.EscapedPath() != r.URL.Path {
 				return s, failure{status: 404, code: "not_found"}
 			}
 			if r.Method != http.MethodPost {
@@ -215,6 +223,10 @@ func NewSignupHandlerWithMiddleware(c SignupConfig, m []identityhttp.MiddlewareD
 			for name := range body {
 				switch name {
 				case "flowID", "email", "password", "callbackURL", "remember", "allowedFields":
+				case "username":
+					if !usernameProfile {
+						return s, identityhttp.ErrInvalidInput
+					}
 				default:
 					return s, identityhttp.ErrInvalidInput
 				}
@@ -223,6 +235,13 @@ func NewSignupHandlerWithMiddleware(c SignupConfig, m []identityhttp.MiddlewareD
 			for name, dst := range map[string]*string{"flowID": &flowID, "email": &address, "password": &value, "callbackURL": &callback} {
 				raw, ok := body[name]
 				if !ok || string(raw) == "null" || json.Unmarshal(raw, dst) != nil {
+					return s, identityhttp.ErrInvalidInput
+				}
+			}
+			var username string
+			if usernameProfile {
+				raw, ok := body["username"]
+				if !ok || string(raw) == "null" || json.Unmarshal(raw, &username) != nil || len(username) == 0 || len(username) > 128 {
 					return s, identityhttp.ErrInvalidInput
 				}
 			}
@@ -264,7 +283,7 @@ func NewSignupHandlerWithMiddleware(c SignupConfig, m []identityhttp.MiddlewareD
 			if err != nil {
 				return s, identityhttp.ErrUnavailable
 			}
-			s.request = password.SignupRequest{TenantID: facts.TenantID(), PreAuthID: id, Cookie: bearer, Email: input, Password: secret, AllowedFields: updates, RememberPolicy: remember, Origin: string(c.Origin), CallbackURL: callback, Caller: caller(facts.TenantID(), string(correlation)), Network: facts.ClientIP().String(), Device: s.device.DeviceID(), IdempotencyKey: key}
+			s.request = password.SignupRequest{TenantID: facts.TenantID(), PreAuthID: id, Cookie: bearer, Email: input, Username: username, Password: secret, AllowedFields: updates, RememberPolicy: remember, Origin: string(c.Origin), CallbackURL: callback, Caller: caller(facts.TenantID(), string(correlation)), Network: facts.ClientIP().String(), Device: s.device.DeviceID(), IdempotencyKey: key}
 			if s.request.Validate() != nil {
 				return s, identityhttp.ErrInvalidInput
 			}
@@ -272,7 +291,7 @@ func NewSignupHandlerWithMiddleware(c SignupConfig, m []identityhttp.MiddlewareD
 			return s, nil
 		},
 		Authenticate: func(r *http.Request, s SignupState) (SignupState, error) {
-			if err := signinRateError(c.Rate.AdmitSignupIP(r.Context(), s.facts, "identity.password.signup")); err != nil {
+			if err := signinRateError(c.Rate.AdmitSignupIP(r.Context(), s.facts, action)); err != nil {
 				return s, err
 			}
 			canonical, err := c.Service.SignupRateSource(r.Context(), s.request.Email)
@@ -286,7 +305,7 @@ func NewSignupHandlerWithMiddleware(c SignupConfig, m []identityhttp.MiddlewareD
 			if !s.device.ExpiresAt().After(c.Now()) {
 				return identityhttp.ErrUnavailable
 			}
-			return signinRateError(c.Rate.AdmitSignupIdentifier(r.Context(), s.facts, identityhttp.AuthRateRequest{OperationID: "identity.password.signup", Identifier: s.identifier}))
+			return signinRateError(c.Rate.AdmitSignupIdentifier(r.Context(), s.facts, identityhttp.AuthRateRequest{OperationID: action, Identifier: s.identifier}))
 		},
 		Handle: func(w http.ResponseWriter, r *http.Request, s SignupState) {
 			if !s.device.ExpiresAt().After(c.Now()) {
@@ -310,7 +329,7 @@ func NewSignupHandlerWithMiddleware(c SignupConfig, m []identityhttp.MiddlewareD
 				return
 			}
 			q, flow, e := result.Recovery.Bindings()
-			if e != nil || flow != s.request.PreAuthID || q.TenantID != s.request.TenantID || q.UserID != "" || q.AnonymousFlowID != string(flow) || q.ActorID != c.ActorID || q.ActorKind != authorization.SubjectServiceAccount {
+			if e != nil || q.OperationID != action || flow != s.request.PreAuthID || q.TenantID != s.request.TenantID || q.UserID != "" || q.AnonymousFlowID != string(flow) || q.ActorID != c.ActorID || q.ActorKind != authorization.SubjectServiceAccount {
 				reject(w, r, identityhttp.ErrUnavailable)
 				return
 			}

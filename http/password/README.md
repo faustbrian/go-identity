@@ -295,3 +295,33 @@ qualification remain pending.
   recovery without new keys or resubmitted secrets.
 
 See [release notes](CHANGELOG.md) and Go documentation for the public contract.
+
+### Explicit username selection
+
+`NewUsernameFeature(UsernameFeatureConfig{...})` contributes the separate
+`identity/username` owner. Select only needed `Signup`, `Signin`, `Available`
+and `Rename` configurations; nil entries expose neither routes nor metadata.
+Existing `NewFeature` password routes may coexist and are never relabeled.
+
+Signup/signin use the corresponding username-enabled native password owner,
+original username-specific pre-auth flow and signed browser device. Signup
+requires email plus username and returns neutral verification acknowledgement.
+Signin accepts `username` instead of `identifier`; the selected profile requires
+authoritative known-empty MFA. `MFAContinuation` is rejected, not downgraded.
+
+Availability accepts only one bounded query `username` and calls the native
+durable risk/audit/occupancy owner on every attempt. Its no-store boolean is
+advisory, not a reservation or account-status disclosure.
+
+Rename requires the original session cookie, exact trusted `Origin`, sole
+`X-CSRF-Token` and original `Idempotency-Key`, plus closed JSON `proofID`,
+`identifierID`, `expectedIdentifierVersion`, `expectedVerificationVersion` and
+`username`. Select the actual native rename service and original native signed
+proof repository, never consumer-written stores. Original proof/request custody
+is authenticated before shared rate admission. There is intentionally no new
+current-session read before original-key resolution: a committed rename already
+invalidates identifier-bound sessions, but exact retries must retain metadata.
+Native mutation independently checks current authority/MFA/CSRF and atomic
+proof/name/cooldown/session effects. Responses never reissue credentials or
+grant automatic retry permission. Full reference/HTTPS qualification remains
+pending until its separately selected composition is delivered.
