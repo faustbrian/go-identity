@@ -1,6 +1,125 @@
 # Identity Implementation — Current Milestone
 
-## Live checkpoint — 2026-10-18 15:47 UTC
+## Live checkpoint — 2026-10-18 17:49 UTC
+
+Latest delivery17:49UTC: reference27 source15160754 is committed/pushed as
+db193b6cd7f698f6e7f88eeadedee3797a7f2cab; remote main exact verified.
+Required39151159259 SUCCESS. Independent username_reference_final_review
+APPROVE complete27; F1/F2/F3 resolved, no unresolved finding. Final realPG/race
+fivecases12.215s and ordinaryreference9.925/command9.501/taggedvet0 retained.
+Actual publicreference v0.0.0-20261018174645-db193b6cd7f6 authenticated origin
+db193b6/subdirreference, sumh1:PcohQcXL4ZyCn2QMaNQ7W3LDyn/2u0Wm5DIhJegiOFk=,
+gomodsumh1:3occqeut8nQGawlfenvDzara3iocHYwNfoBaQm20Ag0=. All262 public
+Go/manifests match; actual downloaded-reference TestUsername*/race1.511s PASS.
+That downloaded check is ordinary/API/migration proof, not a second published
+PostgreSQL journey. Native confirmation recovery and rename-only selection are
+source-reviewed, not separately runtime-exercised. Selected reference slice is
+closed; fullM05/fullunit/finalplatform qualification remain open. No release,
+tag, deployment or production claim. Primary ownPG54787 stopped after fixture
+DB/roles0/0; taskcachecleanup follows this checkpoint commit. Heavy lane returned
+to organization_teams for finite list-mine native race/query/index proof; initial
+actualnativeconsumer3.249s passed. No successor scope added to that lane.
+
+Continuation17:24UTC: invitation cancellation delivered roota3a9254/native51a9b5e,
+Required39147572540/39147970752 SUCCESS. Independent organization_cancel_final_review
+APPROVE frozen19 deb9f2a7 and public-root native15 35754a9f. Parent actual-public
+GOWORKoff cancellation+populatedmigration PG/race14.628s, ordinaryrace1.278s/vet0;
+actual downloadednative genuinecancellation PG/race13.794s. All46 native public
+Go/manifests match; rootpublica3a9254 origin/checksum verified. Existing queued
+mail may arrive but cancelled pending/versionfence denies its old proof; current
+actor/member/session/scoped authority and original freshness gate receipt replay.
+Organization worktree clean; no successor package worker assigned yet.
+
+Primary username HTTP91ea1f9 and public-native consumer42d9222 are main-pushed,
+Required39146736255/39147398304 SUCCESS. Canonical publicHTTP PG/race4.215s/vet0;
+actual downloadednative original consumer3.949s, all178 Go/manifests match.
+Native shared registration router ac96ffd is also independently reviewed/pushed,
+Required39148185559 SUCCESS, source6 48c76d17: authenticated persisted original
+purpose selects exact email/username input owner, no fallback or new proof engine.
+MissingfactoryRED->usernamePGgreen1.518; finalusernamePG/race4.143s,
+oldemailPG/race5.685s, ordinaryrace2.048/vet0; downloadednative3.914s and178files
+match. NewRegistrationVerificationRouter optionally omits managed owner; that
+denial is source-reviewed, not separately runtime-exercised.
+
+Reference remains local/unreviewed. Added native/HTTP username selections,
+guarded original-action flow handles, shared original confirmation and forward
+migration composition. Six native predecessor generation cases RED->GREEN0.436;
+required lockout-prefix RED retained, then full ordinaryrace9.302s (command7.582)
+and vet0 before latest integration/readiness edits. Actual HTTPS test now exists:
+TestReferencePostgresUsernameHTTPS uses existing real graph/worker fixture,
+selected signup->capturedmail->confirm->signin->proof->rename->newsignin/logout.
+Concrete constructor mismatch corrected in fixture: protected counter/evaluator
+must share the exact policy object; signup HIBP screening must also retain its
+risk revision9. Native safety checks unchanged. Readiness initially required
+removed purpose constraints; actual native successor mapping now preserves
+historical collision guards and tests missing successors deny. Real journey
+currently reaches signup/unverifiedsignin; test-owned explicit delivery-worker
+step corrected after a bounded missing-delivery failure. Continue that exact
+test/remaining native inputs, not another discovery or preflight. It uses actual
+publicnative ac96ffd. Full M05 and final reference review/publication are open.
+Continuation17:32UTC: full username reference HTTPS journey now passes5.211s/race
+(case3.76), through samegraph email+username registrations/confirmations, native
+public identifier snapshot for actualauthenticatedself, freshproof, CSRFdenial,
+rename/originalretry, oldsession/oldname denial andnewsignin/logout. Earlier
+sharedmanagedemailHTTPS+username41.841s andbaseline/passwordprotection6.370s
+retainunchangedinputs. Finalordinaryrace9.789s/command8.121s/taggedvet0; native
+publicac96ffixturearchives178filesmatch. Independent username_reference_final_review
+is reviewing final25 source d01199af17b06dffe0484eb18b0a55791ed1dd0be12b878885889fbe53277fb5
+atbaseac96ffd. Source frozen; no extra variants during review. Publication and
+actual downloaded reference qualification remain pending. No M05/fullunit closure.
+
+Successor organization lane assignment17:32UTC: organization_teams retains
+GPT-6.1 Sol high/nochildren; root/postgres Go/tests/docs/changelogs/modulelocal
+manifests only, base main51a9b5e. Finite existing catalog action
+identity.organization.invitation.list-mine: authenticated current self lists
+only their recipient-bound invitations through actual native session/directory
+owners, no organization-membership prerequisite, arbitrarytarget or proof/token/
+email disclosure. Cover all existing lifecycle states using explicit documented
+visibility/filter semantics; do not silently substitute an admin org listing.
+Stable bounded pagination and current authority after callbacks/cancellation
+must withhold partial/stale projections. No issuance/mutation/session selection,
+HTTP/reference/resend/dynamicroles/domain authority or fullM22 claim. Consume
+reviewedpublicroota3a9254/native51a9b5e and existing actualpublicsupplier pins;
+canonicalpublicPG14.628s/downloadednative13.794s andRequired39147970752 green.
+Use existing public query/session/organization/delivery owners; no duplicate
+directory/auth/token engine. Check exact typed operation/protocol rows before
+the firstpublicboundary; report a concrete missingupstreamcontract ratherthan
+inventing authority. Focus TDD, actualgenuine session/recipient pagination and
+wrongsubject/tenant/status/latewithdrawal, root/native race/vet andboundedcursor
+fuzz; explain new query/index bounds using actualschema. Primaryowns integration,
+crossmodulepins/Git/independentreview/delivery andchecks firstboundary/testedbatch.
+Heavy lane granted for bounded initialroot/nativeTDD whileprimaryreviewwaits;
+worker must report/release eachrun anduseown disposablePG54789/caches, never
+parentPG54787. No successor work until this operation is integrated/accepted.
+
+Continuation17:46UTC: reviewer username_reference_final_review REQUEST_CHANGES
+on prior25 d01199af: availability's separately selected counter schema missing,
+availability/rename cooldown history missing without signup/email, and native-only
+username registration lacks its own public confirmation/recovery handle.
+All accepted against actual suppliers. Genuine independent availability RED
+after selected migrations: counters=false/retirements=false; first native-counter
+fix exposes cooldown failure counters=true/retirements=false; shared existing
+IdentifierMutation1600 owner reuse then GREEN0.762s. Missing confirmation API
+RED -> guarded original-owner handle; actual native-only original preauth/signup/
+delivery/confirmation/signin passes1.957s. Native test supplies trusted direct
+device provenance, not browser credentials or an application authority store.
+Final publicdeps GOWORKoff realPG/race fivecases12.215s: baseline2.36,
+passwordprotection3.37, independentavailability0.57, nativeregistration0.98,
+usernameHTTPS3.48. Ordinary reference race9.925/command9.501/taggedvet0.
+New27 source15160754f528b876275d334c234de73783ed505e9e401d13caf313afeaa2c25e
+is frozen for complete final-diff re-review; no reference commit/publication yet.
+Organization first ListMine boundary inspected: optional reader preserves old
+Repository; exact current verified-recipient ID/version, self policy, original
+session deadline, bounded1..200 pages across retained lifecycle states, late
+withdrawal withholds all projection. Existing tenant/invitation PK is unique
+across organizations; cursor must retain exact tenant/self bindings. Initial
+missing-API RED -> rootGREEN0.236/rootrace1.301. Heavy lane now assigned to its
+native RED/GREEN using ownPG54789/caches; parent11768terminal and no liveGo.
+
+Task scratch /private/tmp/identity-username-http.ufoyPp remains for pending public
+reference consumer proof. All primary fixture databases/audit roles cleaned
+(0/0); owned loopbackPG54787 is being stopped after the bounded integration run.
+Remove task-owned caches/scratch at publication boundary, including interruption.
 
 Continuation16:28UTC: organization listing root956176f/native804dbe8 now
 reviewed and main-pushed. Canonical public-root native ordinaryrace1.269s,

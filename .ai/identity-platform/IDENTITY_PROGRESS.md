@@ -1,6 +1,6 @@
 # Identity Platform Progress
 
-## TL;DR — updated 2026-10-18 16:45 UTC
+## TL;DR — updated 2026-10-18 17:49 UTC
 
 **Estimated whole-goal completion: approximately 10–12%, with low confidence.**
 The working authentication baseline, thirteen email profiles, native username
@@ -10,19 +10,32 @@ Most platform families and final package qualification are not closed;
 queued work is not counted as delivered.
 This is an effort/scope estimate, not a measured percentage or an ETA.
 
-**Latest delivery:** current-subject organization listing (`956176f` root /
-`804dbe8` PostgreSQL). Current members receive only visible active organizations
-in bounded stable pages; late policy/session/membership withdrawal discloses no
-partial page. Independently reviewed, main-pushed, Required CI green, canonical
-public-root PostgreSQL/race checks pass, and the actual downloaded native
-genuine-session consumer passes (16.886s). This remains partial M22.
+**Latest delivery:** optional username reference composition (`db193b6`),
+independently reviewed, main-pushed and Required CI green. Real PostgreSQL/race
+proves the full HTTPS journey through signup, original email confirmation,
+signin, fresh-proof rename, old-session denial, new-name signin and logout.
+Native-only registration/confirmation/signin and availability with independent
+counter schema also pass. The actual downloaded public module matches all 262
+Go/manifests; its username checks pass. This is the selected reference slice,
+not complete M05 or full package qualification.
 
-**Current local work:** username signup/signin/availability/rename HTTP source
-has independent approval and passes full transport race tests. The native
-PostgreSQL router also proves original rename recovery after session invalidation.
-Reference native composition is being connected; migrations and the complete
-HTTPS journey are unfinished. These local changes are not delivered M05.
-The organization worker is implementing invitation cancellation in parallel.
+**Other latest delivery:** organization invitation cancellation (`a3a9254` root /
+`51a9b5e` PostgreSQL). Current owners/admins can terminally cancel an exact pending
+invitation; its old proof cannot admit membership. Current authority remains
+required for original receipt recovery, including prepared replay. Independently
+reviewed, main-pushed and Required CI green; actual public-root PostgreSQL/race
+checks and downloaded-native genuine cancellation consumer pass. This is partial
+M22, not the complete organization family.
+
+**Username transport is delivered:** signup/signin/availability/rename HTTP
+(`91ea1f9`), public native HTTP consumer (`42d9222`) and shared email/username
+original-registration confirmation routing (`ac96ffd`) are reviewed, main-pushed
+and CI green. Actual public-module PostgreSQL/race proof covers original rename
+recovery after session invalidation and both registration confirmation profiles.
+**Current parallel work:** recipient-owned invitation listing without requiring
+organization membership. Its genuine native consumer passes locally; the worker
+is checking affected race/query/index behavior before independent review and
+publication. It is not counted as delivered.
 
 **Other recent usable native outcomes:** username rename (`afe3f92`) and organization
 self-leave (`f54f10a`) are independently reviewed, pushed to their owning main
@@ -32,10 +45,10 @@ thirty-day cooldown and identifier-session invalidation, including lost-COMMIT
 recovery. Leave tombstones only the authenticated member, protects the final
 owner and cannot revive old team bindings after readmission.
 
-**Next acceptance boundary:** connect the delivered username signup/signin,
-availability and rename owners to opt-in HTTP/reference, and prove the complete
-HTTPS journey. Do not add neighboring native variants before closing that
-selected M05 outcome. Organization HTTP/dynamic roles and complete OAuth
+**Next acceptance boundary:** close recipient-owned invitation listing, then
+continue the remaining supported authentication profiles from the delivered
+backend. The selected username reference outcome is now closed.
+Organization HTTP/dynamic roles and complete OAuth
 composition remain separate work. No additional full milestone or full-unit
 qualification is claimed by these native deliveries.
 
@@ -48,7 +61,7 @@ qualification is claimed by these native deliveries.
 | Last full milestone closure | **14 October:** B3 password change. |
 | Last complete email-profile delivery | **18 October:** independently selected hooks for managed change links and email OTP verification/change, including first-primary and TOTP paths. Pushed reference `ca26306`, Required CI 39110688213 passes; all 30 selected public-native PostgreSQL/race cases pass. |
 | Delivered organization profiles | **Native invitations, metadata, team lifecycle, ownership transfer, self-leave and current-subject organization listing.** Root `956176f` / native `804dbe8` adds bounded policy-filtered pages with original freshness and post-callback primary/scoped authority checks. Green CI; canonical PostgreSQL/race and downloaded-native genuine-session checks pass. This is partial M22/M23, not the complete organization family. |
-| Delivered username profiles | **Required-email username registration/signin, advisory availability and protected rename.** Native `afe3f92` adds atomic proof/name/cooldown/audit effects, original retry/recovery, issued-cookie CSRF and old-session denial. Green CI; canonical and downloaded-native PostgreSQL/race checks pass. HTTP/reference remain unfinished; M05 is not closed. |
+| Delivered username profiles | **Required-email username registration/signin, advisory availability and protected rename.** Native `afe3f92` adds atomic proof/name/cooldown/audit effects, original retry/recovery, issued-cookie CSRF and old-session denial. Opt-in HTTP and reference `db193b6` are delivered with real PostgreSQL HTTPS proof, independent native profiles and green CI. M05's remaining scope and package qualification are not closed. |
 | Current unfinished deliverables | M04 lifecycle/privacy contribution, retained factor-profile limits and final qualification remain open; confirmation-hook variants are delivered. Full M22/M30/M35, organization HTTP/reference selection and final package qualification remain open. Next lanes must consume proven contracts, not restart delivered profiles. |
 
 ### What consumers can already do
@@ -73,7 +86,7 @@ qualification is claimed by these native deliveries.
   preserve verification, canonical changes retire the old name for thirty days,
   and both invalidate identifier-bound sessions. Actual cookie/CSRF, current MFA,
   contention, rollback and lost-COMMIT recovery pass through the existing owners.
-  HTTP/reference remain unfinished; MFA continuation is unselected.
+  Opt-in HTTP/reference composition is delivered; MFA continuation is unselected.
 - Manage email through delivered profiles: (1) list/get/add/resend/link verification/
   primary change, (2) safe self-removal, (3) explicit replacement-primary removal,
   (4) audited administrative reads, (5) administrative removal, (6) pending-address
