@@ -12,9 +12,10 @@ import (
 )
 
 // Config selects an explicit immutable provider profile and bounded call policy.
-// Zero is invalid. The initial supported profile is Turnstile Siteverify v0/free,
-// with hostname/action/challenge-time support and no origin, score or remote-IP
-// disclosure. No endpoint or provider is inferred from omitted configuration.
+// Zero is invalid. Supported profiles are Turnstile Siteverify v0/free and
+// reCAPTCHA classic Siteverify v3/standard. Both bind hostname/action/challenge
+// time; only reCAPTCHA exposes score. Neither discloses remote IP or has origin
+// evidence. No endpoint or provider is inferred from omitted configuration.
 // Lifetime is 1s..2m, ChallengeMaxAge 1s..5m and Timeout 1s..15s. MaxTokenBytes
 // is 1..8192; the provider additionally enforces its documented character limit.
 // MaxConcurrent (1..256) bounds complete calls without a growing admission queue.
@@ -32,7 +33,22 @@ type Config struct {
 }
 
 func (c Config) valid() bool {
-	if c.Provider != "turnstile" || c.API != "siteverify" || c.Version != "v0" || c.Tier != "free" || c.APIProfile != "siteverify/v0" || !ascii(c.SiteKey, 512, false) || !ascii(c.ConfigurationVersion, 64, false) || len(c.Hostnames) < 1 || len(c.Hostnames) > 32 || len(c.Origins) != 0 || c.RemoteIPDisclosure || !action(c.ExpectedAction) || c.MaxTokenBytes < 1 || c.MaxTokenBytes > 8192 || c.MaxConcurrent < 1 || c.MaxConcurrent > 256 || c.Timeout < time.Second || c.Timeout > 15*time.Second || c.Lifetime < time.Second || c.Lifetime > 2*time.Minute || c.ChallengeMaxAge < time.Second || c.ChallengeMaxAge > 5*time.Minute || nilDependency(c.Clock) || !optionalString(c.ExpectedCData, 255) {
+	if !ascii(c.SiteKey, 512, false) || !ascii(c.ConfigurationVersion, 64, false) || len(c.Hostnames) < 1 || len(c.Hostnames) > 32 || len(c.Origins) != 0 || c.RemoteIPDisclosure || c.MaxTokenBytes < 1 || c.MaxTokenBytes > 8192 || c.MaxConcurrent < 1 || c.MaxConcurrent > 256 || c.Timeout < time.Second || c.Timeout > 15*time.Second || c.Lifetime < time.Second || c.Lifetime > 2*time.Minute || c.ChallengeMaxAge < time.Second || c.ChallengeMaxAge > 5*time.Minute || nilDependency(c.Clock) || !optionalString(c.ExpectedCData, 255) {
+		return false
+	}
+	switch c.Provider {
+	case "turnstile":
+		if c.API != "siteverify" || c.Version != "v0" || c.Tier != "free" || c.APIProfile != "siteverify/v0" || !action(c.ExpectedAction) {
+			return false
+		}
+	case "recaptcha":
+		// Google's v3 Actions contract allows alphanumerics, slash and underscore;
+		// its Token Restrictions cap challenge validity at two minutes.
+		// https://developers.google.com/recaptcha/docs/v3
+		if c.API != "classic_siteverify" || c.Version != "v3" || c.Tier != "standard" || c.APIProfile != "classic_siteverify/v3" || !recaptchaAction(c.ExpectedAction) || c.ChallengeMaxAge > 2*time.Minute || c.ExpectedCData.Available {
+			return false
+		}
+	default:
 		return false
 	}
 	for i, host := range c.Hostnames {
@@ -62,7 +78,19 @@ func (c Config) Capabilities() ProviderCapabilities {
 	if !c.valid() {
 		return ProviderCapabilities{}
 	}
-	return ProviderCapabilities{Hostname: true, Action: true, ChallengeTime: true, ProviderIdempotency: true}
+	return ProviderCapabilities{Hostname: true, Action: true, ChallengeTime: true, ProviderIdempotency: c.Provider == "turnstile", Score: c.Provider == "recaptcha"}
+}
+
+func recaptchaAction(value string) bool {
+	if len(value) < 1 || len(value) > 64 {
+		return false
+	}
+	for _, b := range []byte(value) {
+		if !(b >= 'a' && b <= 'z' || b >= 'A' && b <= 'Z' || b >= '0' && b <= '9' || b == '_' || b == '/') {
+			return false
+		}
+	}
+	return true
 }
 
 func ascii(value string, maximum int, empty bool) bool {

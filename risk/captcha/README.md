@@ -2,9 +2,9 @@
 
 Experimental, Go 1.27. This module supplies a stateless neutral verifier and the
 exact callback consumed by the existing identity/risk CAPTCHA-evidence issuer.
-The initial selected profile is Turnstile Siteverify v0/free; its transport
-adapter is delivered separately from this neutral prerequisite.
-Reserved native members do not implement or advertise the other three providers.
+Selected profiles are Turnstile Siteverify v0/free and reCAPTCHA classic
+Siteverify v3/standard; transport adapters are independent nested modules.
+Reserved hCaptcha and CaptchaFox members do not implement those providers.
 
 `OutcomeSolved` is a provider fact, not permission to perform an operation.
 The risk owner derives keyed replay identity, authenticates the original command
@@ -24,6 +24,8 @@ It accepts no caller-selected replay fingerprint and returns no evidence bearer.
 - `Config.Capabilities()` reports the supported configured profile, or zero
   capabilities for an invalid configuration. Turnstile supports hostname,
   action, challenge time and provider transport idempotency, not origin or score.
+  reCAPTCHA v3 adds score but has no provider idempotency or origin evidence;
+  this module never compares scores to a policy threshold.
 
 The [public consumer tests](verifier_test.go) construct the actual opaque
 `risk.FlowContext`, preserve it and its canonical command ID unchanged, and assign
@@ -33,11 +35,21 @@ adapter owns its POST/response/neutral/risk-callback tests.
 
 ## Configuration and ownership
 
-The initial exact selection is provider `turnstile`, API `siteverify`, version
+The Turnstile selection is provider `turnstile`, API `siteverify`, version
 `v0`, tier `free`, API profile `siteverify/v0`, plus an explicit public site key,
 configuration version, canonical hostname set and expected action. Origins must
 be empty and remote-IP disclosure must be false. Optional expected cdata binds
 only when explicitly available. There are no inferred endpoints or defaults.
+
+The additive reCAPTCHA selection is provider `recaptcha`, API
+`classic_siteverify`, version `v3`, tier `standard`, API profile
+`classic_siteverify/v3`. It requires hostname/action/challenge time and finite
+score in [0,1] for solved evidence. A score of zero is still a provider fact;
+only identity/risk owns score policy. Expected action is 1..64 alphanumeric,
+slash or underscore bytes (Google's documented alphabet, within the reference
+64-byte budget). Expected cdata, origins and remote-IP disclosure are forbidden.
+V2 and Enterprise are not implemented. Its original challenge expires after at
+most two minutes; the selected configured age may shorten that bound.
 
 Timeout is 1..15 seconds, evidence lifetime 1 second..2 minutes, challenge age
 1 second..5 minutes, token byte limit 1..8192, and concurrent calls 1..256. The
@@ -80,8 +92,8 @@ prerequisite; this is not the complete canonical CAPTCHA service. No independent
 event builder or durability authority is substituted. Reference/HTTP selection,
 durable consumer integration, live provider qualification, complete coverage and
 mutation/release gates remain separate work. Other providers, Enterprise,
-origin/score profiles, remote-IP disclosure, endpoint overrides and browser UI
-are not implemented by this first profile.
+origin profiles, remote-IP disclosure, endpoint overrides and browser UI
+are not implemented by these profiles.
 
 The historical planning constructor requiring a neutral transaction coordinator
 and caller-visible replay fingerprint is not implemented: current ownership puts

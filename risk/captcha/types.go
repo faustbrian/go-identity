@@ -55,7 +55,8 @@ type OptionalTime struct {
 }
 
 // ProviderEvidenceKind is a closed native-envelope discriminator. Only the
-// Turnstile profile is implemented initially; other members grant no capability.
+// Turnstile and reCAPTCHA v3 profiles are implemented; reserved members grant no
+// capability.
 type ProviderEvidenceKind uint8
 
 const (
@@ -81,8 +82,12 @@ type TurnstileEvidence struct {
 	ErrorCodesAvailable, MetadataAvailable bool
 }
 
-// RecaptchaEvidence reserves its closed native member without implementing a profile.
-type RecaptchaEvidence struct{ ErrorCodes []string }
+// RecaptchaEvidence retains bounded native classic Siteverify codes, including
+// safe unknown codes on unusable results. Absent and present-empty stay distinct.
+type RecaptchaEvidence struct {
+	ErrorCodes          []string
+	ErrorCodesAvailable bool
+}
 
 // HCaptchaEvidence reserves its closed native member without implementing a profile.
 type HCaptchaEvidence struct{ ErrorCodes []string }
@@ -175,3 +180,9 @@ func (TurnstileEvidence) Format(s fmt.State, _ rune) {
 }
 func (TurnstileEvidence) MarshalJSON() ([]byte, error) { return nil, errSensitive }
 func (TurnstileEvidence) MarshalText() ([]byte, error) { return nil, errSensitive }
+
+func (RecaptchaEvidence) Format(s fmt.State, _ rune) {
+	_, _ = io.WriteString(s, "captcha.RecaptchaEvidence(redacted)")
+}
+func (RecaptchaEvidence) MarshalJSON() ([]byte, error) { return nil, errSensitive }
+func (RecaptchaEvidence) MarshalText() ([]byte, error) { return nil, errSensitive }

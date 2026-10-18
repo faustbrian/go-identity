@@ -3,6 +3,7 @@ package captcha
 import (
 	"context"
 	"errors"
+	"math"
 	"slices"
 	"time"
 	"unicode/utf8"
@@ -22,8 +23,8 @@ type Client struct {
 }
 
 // New copies validated configuration and borrows a concurrent-safe verifier.
-// Only the selected Turnstile v0/free profile is implemented; other profiles
-// fail closed. Returned provider facts are revalidated before risk projection.
+// Only explicitly supported profiles are implemented; other selections fail
+// closed. Returned provider facts are revalidated before risk projection.
 func New(config Config, provider Verifier) (*Client, error) {
 	if !config.valid() || nilDependency(provider) {
 		return nil, ErrInvalidConfiguration
@@ -157,7 +158,11 @@ func expired(ctx context.Context) error {
 
 func (c *Client) sameProfile(e ProviderEvidence) bool {
 	p := c.config
-	return e.Provider == p.Provider && e.API == p.API && e.Version == p.Version && e.Tier == p.Tier && e.APIProfile == p.APIProfile && e.SiteKey == p.SiteKey && e.ConfigurationVersion == p.ConfigurationVersion && e.Kind == EvidenceTurnstile
+	kind := EvidenceTurnstile
+	if p.Provider == "recaptcha" {
+		kind = EvidenceRecaptcha
+	}
+	return e.Provider == p.Provider && e.API == p.API && e.Version == p.Version && e.Tier == p.Tier && e.APIProfile == p.APIProfile && e.SiteKey == p.SiteKey && e.ConfigurationVersion == p.ConfigurationVersion && e.Kind == kind
 }
 
 // Validate shape before any error, cancellation or binding-mismatch return can
@@ -179,6 +184,9 @@ func validNativeUnion(e ProviderEvidence) bool {
 }
 
 func (c *Client) validEnvelope(e ProviderEvidence) bool {
+	if c.config.Provider == "recaptcha" {
+		return e.Recaptcha != nil && validNativeUnion(e) && !e.Origin.Available && e.Origin.Value == "" && optionalString(e.Hostname, 253) && optionalString(e.Action, 64) && (!e.Action.Available || e.Action.Value == "" || recaptchaAction(e.Action.Value)) && (e.ChallengeTime.Available || e.ChallengeTime.Value.IsZero()) && (!e.Success || e.ScoreAvailable) && !math.IsNaN(e.Score) && !math.IsInf(e.Score, 0) && e.Score >= 0 && e.Score <= 1 && (e.ScoreAvailable || e.Score == 0) && (e.Recaptcha.ErrorCodesAvailable || len(e.Recaptcha.ErrorCodes) == 0)
+	}
 	if e.Turnstile == nil || e.Recaptcha != nil || e.HCaptcha != nil || e.CaptchaFox != nil || e.Origin.Available || e.Origin.Value != "" || e.ScoreAvailable || e.Score != 0 || !optionalString(e.Hostname, 253) || !optionalString(e.Action, 32) || !optionalString(e.Turnstile.CData, 255) || !optionalString(e.Turnstile.EphemeralID, 256) || e.Turnstile.EphemeralID.Available || !e.ChallengeTime.Available && !e.ChallengeTime.Value.IsZero() || len(e.ReasonCodes) > 16 || len(e.Turnstile.ErrorCodes) > 16 {
 		return false
 	}
@@ -222,7 +230,7 @@ func boundedResult(r ProviderResult) bool {
 	for _, field := range []struct {
 		value   string
 		maximum int
-	}{{r.CommandID, 22}, {e.Provider, 32}, {e.API, 64}, {e.Version, 32}, {e.Tier, 32}, {e.APIProfile, 128}, {e.SiteKey, 512}, {e.ConfigurationVersion, 64}, {e.Hostname.Value, 253}, {e.Origin.Value, 512}, {e.Action.Value, 32}} {
+	}{{r.CommandID, 22}, {e.Provider, 32}, {e.API, 64}, {e.Version, 32}, {e.Tier, 32}, {e.APIProfile, 128}, {e.SiteKey, 512}, {e.ConfigurationVersion, 64}, {e.Hostname.Value, 253}, {e.Origin.Value, 512}, {e.Action.Value, 64}} {
 		if !ascii(field.value, field.maximum, true) {
 			return false
 		}
