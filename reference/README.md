@@ -1,5 +1,11 @@
 # Identity reference composition
 
+## Optional delivered magic-link authentication
+
+See [magic-link composition and consumer journey](MAGICLINK.md) for native/HTTP
+selection, signin-only and optional signup, real queued delivery, scanner-safe
+explicit consumption, supersession and session/logout through public owners.
+
 ## Optional username authentication
 
 See [username composition and consumer journey](USERNAME.md) for native/HTTP

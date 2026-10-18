@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/faustbrian/go-authorization/v3"
 	issuerpg "github.com/faustbrian/go-capability/postgres/identity"
 	"github.com/faustbrian/go-capability/v2"
 	identity "github.com/faustbrian/go-identity"
@@ -251,8 +252,47 @@ func proveReferenceMagicLink(t *testing.T, ctx context.Context, f liveStores, fe
 	if count, left := before(); count != sessions || left != 1 {
 		t.Fatal("foreign browser mutated protected effects")
 	}
+	if f.completionFault != nil {
+		f.completionFault.armed.Store(true)
+	}
 	r, payload = invoke("/v1/magic-link/consume", body, browser, "")
 	var result magichttp.ConsumeResponse
+	if f.completionFault != nil {
+		// The existing loopback-driver fault drops only the final COMMIT ack.
+		// Actual identity/capability/session writes still reach PostgreSQL.
+		if r.StatusCode != http.StatusServiceUnavailable || json.Unmarshal(payload, &result) != nil || result.CommitOutcome != "unknown" || result.SignedIn || result.SessionID != "" || result.ChallengeRequired || len(r.Cookies()) != 0 || r.Header.Get("X-CSRF-Token") != "" || !f.completionFault.hit.Load() {
+			t.Fatal("ambiguous magic-link commit redelivered credentials or hid outcome", r.StatusCode)
+		}
+		if count, left := before(); count != sessions+1 || left != 0 {
+			t.Fatal("lost commit acknowledgement split magic-link use/session effects")
+		}
+		wantAccounts := accounts
+		if prospective {
+			wantAccounts++
+		}
+		if accountCount() != wantAccounts {
+			t.Fatal("ambiguous signup created missing or duplicate accounts")
+		}
+		owner, err := features.MagicLinkConsume()
+		if err != nil {
+			t.Fatal(err)
+		}
+		query := identity.RecoveryQuery{TenantID: otpTenant, CommandID: consumeID, AnonymousFlowID: string(flow.FlowID), ActorID: config.HTTPMagicLink.ActorID, ActorKind: authorization.SubjectServiceAccount, OperationID: "identity.magic-link.consume"}
+		caller := authorization.DecisionContext{PolicyRevision: config.HTTPMagicLink.PolicyRevision, Request: authorization.Request{Tenant: authorization.TenantID(otpTenant), Subject: authorization.Subject{Kind: query.ActorKind, ID: authorization.SubjectID(query.ActorID)}, Action: "identity.magic-link.consume", Resource: authorization.Resource{Type: "identity.anonymous-flow", ID: authorization.ResourceID(flow.FlowID)}}}
+		history, err := owner.RecoverConsume(ctx, query, caller)
+		if err != nil || history.Outcome != identity.CommitOutcomeCommitted || history.Session.CommandID != consumeID || !history.Session.Replayed || history.Session.Token != (session.Token{}) || history.Session.Cookie.Name != "" || history.CSRFToken != (session.CSRFToken{}) {
+			t.Fatal("magic-link unknown recovery lost original metadata or redelivered custody", err)
+		}
+		r, payload = invoke("/v1/magic-link/consume", body, browser, "")
+		var retry magichttp.ConsumeResponse
+		if r.StatusCode != http.StatusConflict || json.Unmarshal(payload, &retry) != nil || retry.CommitOutcome != "committed" || retry.SignedIn || len(r.Cookies()) != 0 || r.Header.Get("X-CSRF-Token") != "" {
+			t.Fatal("ambiguous magic-link retry regenerated credentials", r.StatusCode)
+		}
+		if count, left := before(); count != sessions+1 || left != 0 || accountCount() != wantAccounts {
+			t.Fatal("magic-link recovery/retry repeated account, session or use effects")
+		}
+		return
+	}
 	if config.MagicLink.TOTP != nil {
 		if r.StatusCode != http.StatusOK || json.Unmarshal(payload, &result) != nil || result.SignedIn || !result.ChallengeRequired || len(r.Cookies()) != 0 || r.Header.Get("X-CSRF-Token") != "" {
 			t.Fatal("reference enrolled primary did not return challenge only", r.StatusCode, result.Error, "signed-in", result.SignedIn, "challenge", result.ChallengeRequired, "cookies", len(r.Cookies()), "csrf-present", r.Header.Get("X-CSRF-Token") != "")

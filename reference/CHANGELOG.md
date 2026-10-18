@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Provide the PostgreSQL-only magic-link consumer journey and adoption guide
+  for existing-account signin, optional signup and existing-account signup intent.
+  Reuse native capability, delivery, risk and session owners with explicit HTTP
+  selection, scanner-safe consumption, supersession and credential-free recovery.
+
 - Compose explicit username/password TOTP through the existing native primary,
   factor, risk and session owners. `Username.TOTP` selects native composition;
   `HTTPMFA.UsernameTOTPVerify` independently selects its exact transport arm.
