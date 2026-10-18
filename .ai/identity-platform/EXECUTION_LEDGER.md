@@ -2,7 +2,345 @@
 
 Activated on 2026-10-14. B1, B2 and B3 are closed; M04 email lifecycle is active.
 
+## Parallel execution — activated 2026-10-18 02:00 UTC
+
+Current goal: attachment 5c2261be-11e8-4ad4-b9f5-c0b28922b911; all subagents
+use GPT-6.1 Sol high, isolated context, no worker-created agents. Primary stays
+on verification/TOTP/session delivery and owns shared contracts, reference/HTTP,
+integration pins, root manifests, Git operations in this repo and aggregate notes.
+Existing frozen TOTP acceptance and valid results below are retained, not reset.
+
+- HIBP lane delivered: `75e10d9` is pushed to main; Required CI 39089352453
+  passes. A reproduced deadline-during-body-cleanup defect now rejects and never
+  caches expired provider evidence. Native final focused race (three repeats),
+  full module race and vet pass; independent `/root/hibp_deadline_review`
+  APPROVE covers the six-file final snapshot. This is a bounded bugfix, not full
+  HIBP unit qualification or another milestone closure. Prior lane contract:
+  leaf owner writes only risk/hibp/**, preserving its existing API
+  and implementation. Consumed committed floors: risk f43df0429695, identity
+  5afeba0ac471, password/v2 4eb0fefa60ff, HTTP-client/v2 v2.1.0. Existing B2/B3
+  password-provider composition is the prior consumer proof; lane checks its
+  applicability and closes demonstrated remaining HIBP contract gaps only.
+  Acceptance: exact candidate/prefix privacy, bounded matching and unavailable/
+  cancellation/cache behavior through public checker/signal APIs; native focused
+  tests, hostile-input cases and unchanged consumer/API proof. No password or
+  reference edits, commits, pushes, root metadata or shared risk edits by worker.
+- CAPTCHA lane (same leaf owner reassigned): writes only risk/captcha/**,
+  initially neutral core plus turnstile/**. Consumes committed risk
+  f43df0429695 CaptchaVerificationRequest/CaptchaObservation and existing
+  issuer/replay ownership. Finite outcome: explicit Siteverify v0/free profile,
+  bounded verified provider facts and exact issuer callback; official fixtures
+  prove binding, expiry, malformed/partial/throttled/ambiguous/canceled results,
+  token custody and no remote-address disclosure. No policy decision, replay
+  store, canonical event builder or shared API duplication. Primary owns shared
+  event support, manifests and later password/reference composition. Provider
+  fan-out waits for integrated behavior-tested neutral contracts.
+- Organization lane: preparing go-organization root + postgres ownership for
+  durable create/get/membership admission/read/removal, scoped access and last-
+  owner protection. Before writes, report actual consumed committed identity,
+  session, delivery, authorization and capability symbols/pins and their focused
+  proof; missing authority is an upstream request, not a stub. Finite public
+  PostgreSQL success/denial/rollback/contention tests and consumer example are
+  required. No identity/SSO/SCIM/tools edits or invented transaction owner.
+- OAuth-server lane: preparing go-oauth-server root + postgres ownership for
+  authenticated subject -> consent/code/S256 -> tokens/refresh/revocation. Before
+  writes, report exact consumed committed subject/session/risk/capability APIs
+  and focused proof. No substitute session authority, organization delegation,
+  API-key exchange, OIDC/device, social OAuth or identity edits in this slice.
+  Finite real PostgreSQL protocol/replay/unknown-outcome proof and public consumer
+  are required; protocol-only scaffolding is not milestone delivery.
+
+Primary checks first public boundaries, coherent tested batches and integration;
+two-hour active-worker checkpoints. Local compile/service-heavy tests serialize
+through primary permission messages; workers may inspect/code meanwhile.
+Primary accepts integration only after applicable independent complete-diff
+review, actual consumer acceptance and required CI. No new evidence machinery.
+
+Organization's concrete upstream dependency: primary owns additive
+Work.RequireActiveTargetUser admission in identity/postgres, binding exact
+tenant/target user and original aggregate record version under the existing
+user SHARE lock. It is active-existence/version admission, not three security
+epochs or actor authorization. Membership Add requires it; Remove must still
+allow authorized removal of an inactive target. Prove invalid/foreign/returned
+custody denial and real PostgreSQL active/stale/blocked/missing/lock/rollback
+behavior, then independently review/commit before organization consumes it.
+No new transaction owner, public unscoped user-epoch reader or source rewrite.
+The six-file prerequisite is now reviewed APPROVE by
+`/root/target_user_admission_review` and pushed as `4035a0e`; Required CI
+39090337306 passes. Full native postgres race3.650s/vet and the real
+PG18 guard subset1.626s pass. Organization may consume its published pin.
+
+TOTP public-adapter checkpoint (2026-10-18 02:32 UTC): capability supplier
+`07437fc` is on main with Required39088727607 passing. Session/postgres now
+consumes its public authenticated source and native kernel/session/mfa pins;
+public-only race1.919s/vet and both populated purpose histories under real
+PG18/race1.592s pass. Native nine-file adapter review APPROVE by
+`/root/verification_session_native_review` is bound to ordered file hashes
+`a102ac4dc4ef16475f00afb09bf7e577bef59016b6c887f16b89a63ba6be31a7`.
+The unchanged reviewed source is pushed as `bb37a49`; its CI is pending and
+password/reference public composition still owed. No complete reference-profile
+readiness claim. One final finite diagnostic run of both
+populated reference histories twice passes33.604s; all twelve router builds
+complete validation within0.87–1.44s without cancellation. Earlier router
+rejection remains causally unproved, not relabeled fixed. No runtime budgets or
+validation gates changed; temporary compiler-only diagnostics were removed.
+
 ## Active: M04 email lifecycle; replacement and first-primary OTP profiles delivered
+
+Verification/TOTP selected profile delivered (2026-10-18 03:14 UTC): all31
+reference paths are reviewed APPROVE by `/root/verification_reference_final_review`,
+sorted per-file SHA256 packet
+`8850de5d6f72c5a60df6ee5858587e2f2547a29040d87b868dc6b9e40c6c5a65`.
+Exact source is committed/pushed as `02c6195bd789118d988fae7a7d9aad5da31f9395`;
+Required39092789592 passes. Public native/HTTPS browser/persistent and exhaustion,
+known-empty, parent/current authority, contention, rollback, unknown/recovery and
+both populated histories have terminal focused proof; integration-tagged vet0.
+This closes the frozen verification -> enrolled TOTP -> session read/logout
+profile (11th email profile), not full M04 or additional whole-unit qualification.
+Earlier generic router rejection and setup deadline remain unclassified prior
+observations, not diagnosed fixes; bounded later outcomes and independent source
+review identify no remaining mandatory selected-slice gap. Do not reopen this
+accepted profile without a concrete changed input or defect.
+
+Organization main now adopts maintained upstream `0a8c9ad` without rewriting
+prepared implementation. Root prerequisite metadata is temporarily root-only
+so its native adapter can consume a real public commit rather than a future or
+placeholder version; full two-module metadata remains preserved for the native
+delivery. Independent first root review found post-policy read validity/cancel
+omission. All four deterministic Get/List expiry/cancel regressions fail before
+fix, then full root public race1.221s/vet and docs21/21 pass after the final guard.
+Corrected thirteen-path final review is active. Native code remains preserved.
+
+Organization root update (2026-10-18 03:22 UTC): corrected13-path review
+`/root/organization_core_final_review` APPROVE; ordered hash packet
+`c8616cbac8c5d3debae685342cddbc5f8ac5b3d23d7ce8dd39357c1e9ca8ba26`.
+Exact core is public/main `a875bb9e6e812274b1e233c0cc712090acb708fd`,
+Required39092986107 passes. Preserved native/two-module metadata restored;
+native consumes real public core revision without replacements. Standalone
+native race1.448s/vet0 and fresh isolated PG18/race3.211s/integrationvet0 pass;
+the exact disposable cluster is stopped/removed. Native final review finds
+quota sentinel sanitization causes incorrect dependency-failure classification;
+no quota bypass. Original organization worker owns only postgres/** correction,
+actual public quota red/green and denial audit proof. No new error journal or
+kernel framework; final native publication remains pending this concrete fix.
+
+Current parallel/public checkpoint (2026-10-18 03:08 UTC): native session
+`bb37a49` and password `6128551` are public/main with Required CI passing;
+reference consumes their real pins without sibling replacements. Public-only
+ordinary reference/baseline race11.109s/8.612s and vet pass. Actual PG18/race
+remaining TOTP cases (late authority, both contention modes, child/completion
+unknown, prepared recovery, both rollbacks, both populated histories) pass
+72.520s. Original expiry failed once during pending-child setup with context
+deadline, then focused7.220s and diagnostic three-repeat18.436s pass. Timing
+diagnostics added; no production budget or validation relaxation, no root-cause
+claim. Independent full reference review `/root/verification_reference_final_review`
+is active; prior intermittent router cause remains unproved.
+
+OAuth consumer prerequisite `26fb47a` classifies exact consent continuation as
+Privileged with existing transaction-owned counters; missing/unavailable required
+signals deny and scope/aliases remain closed. Genuine focused red/green, full
+risk public race1.421s/internalvelocity1.235s and vet pass. Independent six-path
+review `/root/oauth_consent_risk_review` APPROVE is bound to scoped binary diff
+`896c7154813f82af34785e8d6cc813fe474d0e6e9480259cfb3aa71f552f528f`;
+exact reviewed diff is pushed main. Required39092382688 passes. OAuth worker
+may consume this public pin; protected-provider custody remains unchanged and
+its selected velocity-only native profile must reject unsupported required
+providers rather than omit them. Full OAuth flow remains unproved.
+
+Organization native membership worker finished actual PG/race3.804s including
+last-owner and lost-COMMIT reconciliation; root race/vet/fuzz and metadata
+structure pass. Neutral CAPTCHA/Turnstile worker finished local race/fuzz/TLS
+provider-boundary proof. Both await primary-owned independent review, truthful
+module publication/pins and integration; neither closes a full milestone/unit.
+
+- Prerequisite delivery (2026-10-18 01:31 UTC): foundation contracts in
+  `bb569ec9d44caba5f0a350f0bab9249c0b8be92e` are committed/pushed to identity
+  main. Four owners pass public-only readonly race/vet (postgres4.112s,
+  session1.608s, mfa1.251s, email1.509s); Required39086815272 is pending.
+  Independent regression/source review finds no material source defect and
+  approves these dependency-low prerequisites, not the consumer slice.
+  Complete-slice review is REQUEST_CHANGES: repeated runtime69667 reproduced
+  MFA-first phase0 NewServer rejection at `reference_server_router`. Subsequent
+  diagnostic count2/count3 and collector-pressure runs pass, so the underlying
+  cause remains unproved. Temporary diagnostics are removed. Do not call the
+  selected runtime aggregate passing or close this profile. Supplier public
+  kernel pin is being qualified while reference failure remains open.
+
+- Current frozen verification/TOTP source (2026-10-18 01:21 UTC): both populated
+  migration lineages pass together under PostgreSQL18/race37.762s after the
+  configuration-copy correction; reference ordinary race10.642s, baseline
+  command race9.735s and ordinary/integration-tagged vet all finish successfully.
+  Independent implemented-regression audit is in progress before final review.
+  Earlier constructor/setup-timeout causes remain unproved; later passes are
+  not a causal diagnosis. Public pins, clean consumers and main delivery remain.
+
+- MFA-first populated upgrade and unmanaged native password-origin constraint
+  rejection now pass under PG18/race23.093s. The old predecessor name alone no
+  longer falsely marks version7 unmanaged; the actual unrecorded new allowance
+  still returns Conflict before writes. Both shipped session lineages retain
+  applied SQL/checksums. The upgrade fixture now separately clones the retained
+  pointer-bearing configuration before adding optional owners/templates; final
+  upgrade replay + reference race/vet runs are pending for that fixture change.
+  The owned email typed/protocol/acceptance catalog now records pending TOTP,
+  independent transport selectors, exact parent/session custody and finite
+  upgrade/security cases without importing historical planning files.
+
+- MFA-first populated upgrade exposed a separate actual guard defect: password
+  origin version7 deliberately reuses the predecessor's CHECK name, so
+  name-only collision discovery rejected an ordinary installed magic-link
+  continuation prefix. The existing guard now recognizes its newly allowed
+  operation value, preserving old SQL/checksums and explicit unmanaged-shape
+  denial. The new negative fixture applies the actual native suffix without
+  its ledger, requires Conflict, then restores the exact predecessor before
+  the public upgrade. Current MFA-first rerun is pending; the preceding run
+  reached both upgrades but its phase1 configuration duplicated an already
+  selected magic-link delivery template. That fixture now retains the original
+  selection rather than readding its template. Verification-first passes21.61s;
+  isolated totp-browser passes5.86s without changing any native deadline.
+
+- Full selected runtime completed117.881s with two failures, not a passing
+  batch: genuine totp-browser setup exceeded its original child deadline;
+  MFA-first setup's negative readiness fixture tried renaming removed v6 after
+  verification had correctly installed v7. PostgreSQL's logged failing DDL
+  proves the latter is a fixture-selection error, not a failed native migration.
+  Its probe now chooses the explicitly selected successor. The timed-out
+  browser case and both populated lineages are rerunning narrowly/serially.
+  Supplier ordinary/integration-tagged vet passes. Source compatibility report
+  `/root/verification_mfa_go` approves bounded source snapshot only; public pins,
+  current runtime, unexplained earlier NewServer error and delivery remain open.
+
+- Pinned golib2.5.1 config/repository/cohesion/offline-spec/local-doc checks
+  pass; docs rechecked after adoption notes. Changed-range and current-tree
+  secrets pass against identity base d2fc7ab (2026-10-18). These are scoped
+  source checks, not a whole-history/platform/runtime qualification claim.
+  One populated-upgrade run returned a generic NewServer invalid-input error
+  after the lineage fix; a diagnostic-only test update followed by the next
+  run passed without another production change. Its cause is not yet proven;
+  final selected runtime and independent source review retain that uncertainty.
+
+- Final affected-owner ordinary race, vet and integration-tagged vet batch
+  passes (2026-10-18): postgres3.730s, email1.313s, mfa/postgres1.321s,
+  password/postgres2.227s, session/postgres2.031s, reference10.981s and baseline
+  command9.359s, HTTP-MFA20.973s. Retained unchanged mfa/session/HTTP-email
+  race evidence remains as previously recorded. New reference migration-
+  lineage tests and wire tests are included; no whole-unit qualification claim.
+  Full selected verification/TOTP PG18/race runtime is now rerunning for the
+  final lineage correction, including both populated upgrade lineages.
+
+- Current HTTP-MFA unit/race suite passes19.441s. A new wire-contract test first
+  fails because verification selection omitted a separately selected enrollment
+  origin; preserving the complete selected-origin union corrects it. Callback
+  union and verification-only explicit-header metadata are covered too. This
+  changes advertised schema, not native authentication policy. Current affected
+  owner race/vet batch is running after final migration/wire/test edits.
+
+- Populated verification-first upgrade + known-empty TOTP selection now pass
+  PG18/race21.618s (2026-10-18). The real reference graph upgrades verification-
+  only populated history, then adds password and magic-link MFA, replays each
+  exact apply command, initializes/readies and reads the retained session while
+  preserving original migration rows, issuance/session records and original
+  operator custody. A real phase1 conflict first exposed legacy shared1019
+  being inserted after later migrations; explicit verification-first lineage
+  now retains its forward counter-preparation namespace instead. Legacy MFA-
+  first source remains selected unchanged. Early fixture-only configuration
+  errors were not production red evidence. Final owner/static/security checks,
+  independent review, public pins and main delivery remain pending.
+
+- Retained native/HTTPS magic-link TOTP and genuinely enrolled HTTPS password
+  TOTP consumers now pass PG18/Valkey9.1.0/TLS under race60.316s (2026-10-18).
+  The earlier missing-fixture failure is resolved by an isolated loopback-only
+  task-owned TLS Valkey; no existing services or credentials were used.
+
+- Changed verification-origin plan codec: new bounded active
+  `FuzzVerificationMFAPlan` passes2.356s (2026-10-18), exercising canonical
+  generated/ungenerated declarations and denial of password/magic-link origin
+  reinterpretation. No crypto/whole-repository fuzz qualification is claimed.
+
+- Verification/TOTP checkpoint (2026-10-18 00:53 UTC): protected late-account/
+  identifier/policy/factor rejection passes16.307s; real original expiry passes
+  8.793s; same/different-command completion contention passes under race20.101s.
+  A real cancellation after final preparation COMMIT initially left recovery
+  unable to reconcile; selecting the retained MFA owner now proves metadata-only
+  NotCommitted after actual lease expiry13.269s. Forward session lineage and
+  unchanged installed-prefix/composed-password tests pass1.618s; populated
+  issuance SQL upgrade passes0.527s. Full populated reference upgrade remains
+  unproved. Supplier unit/race passes3.607s.
+  Combined PG18/race regression failed184.766s: three retained Valkey-profile
+  tests lacked their disposable service files and never ran; new HTTPS exhaustion
+  incorrectly expected Completed instead of the existing Revoked terminal state.
+  Corrected named-state assertion passes6.372s with zero attempts/child uses and
+  no additional session. No production exhaustion change was needed. Other
+  selected verification/default/baseline/shared-email cases passed that run.
+  Remaining: properly provisioned retained consumers, current affected static/
+  fuzz/unit checks, full upgrade proof, independent final review, public pins
+  and main delivery. Source remains local/uncommitted;3/39 milestones delivered.
+
+- Affected-owner checkpoint (2026-10-18 00:36 UTC): serial native
+  `go test -p 1 -race -count=1 ./...` passes for postgres, email, mfa,
+  mfa/postgres, password/postgres, session, session/postgres, http/email,
+  http/mfa and reference (including baseline command). Pending-only HTTP
+  response-custody tests cover fresh/expired/cancelled/failed/unselected
+  delivery; original verification remains committed. Native child/completion
+  rollback integration passes3.866s. These pre-upgrade-fix results do not prove
+  the newly found populated migration transition: enabling TOTP reconstructs
+  prior verification SQL and a continuation guard mistakes an existing
+  predecessor for an unmanaged suffix. Bounded mapper
+  `/root/verification_mfa_upgrade_map` confirms both source defects and the
+  need for a forward-only session lineage, preserving both shipped histories.
+  Fix/test the actual upgrade; do not weaken checks or rerun unchanged owners.
+
+- Verification/TOTP local checkpoint (2026-10-18 00:31 UTC): the actual
+  PostgreSQL18 native and separately selected HTTPS journeys reach pending-only
+  challenge, real factor completion, session read and logout for browser and
+  persistent signup choices. Focused HTTPS acceptance passes3.408s, including
+  wrong-browser/unselected-variant denial, one counted wrong code followed by
+  correct completion and credential-free replay. Native success/remember and
+  actual lost completion-COMMIT acknowledgement/recovery pass3.806s; actual
+  lost challenge-COMMIT acknowledgement/repeated metadata recovery passes1.286s.
+  A new post-snapshot parent-envelope withdrawal regression first disclosed a
+  session (1.820s failure); supplier protected parent/challenge/history checks
+  now deny before factor comparison/debit and repeat in preparation/Apply/final
+  checks. Normal and withdrawn-parent cases pass together6.093s. Initial
+  retirement-fault attempts were invalid fixtures, not behavioral evidence;
+  the final withdrawal test verifies the changed durable fingerprint itself.
+  These are primary-executed local workspace results, not public-pin/main/CI
+  qualification. Current code is uncommitted. Q1 and parts of Q3/Q5/Q6/Q10 are
+  covered; completion/challenge rollback, original expiry, contention, remaining
+  result/codec/final-response cases, populated migration, retained consumers,
+  owner race/vet/fuzz, documentation/changelogs, review and delivery remain.
+  The current profile and whole M04 stay open; full milestones remain3/39.
+
+- Frozen next profile (2026-10-16, identity base `d2fc7ab`, capability base
+  `ab21810`): original-browser registration verification -> actual current-TOTP
+  continuation -> real factor completion -> authenticated session read/logout,
+  through native APIs and independently selected HTTPS. Verification remains a
+  separate committed parent; pending MFA never issues an authenticated session.
+  Preserve original signup browser, grant/primary deadline and remember choice;
+  current risk, authorization, recipient and factor generations are fenced in
+  the existing coordinator. Explicit TOTP selection also retains the unchanged
+  known-empty path; the default selection continues denying enrolled accounts.
+  No secondary OTP/recovery/WebAuthn/trusted-device completion, UI, unverified
+  signin, privacy-worker implementation or whole-unit closure is selected here.
+  Owners: email result, kernel MFA plan/phase contracts, native capability
+  issuer, MFA continuation storage, session primary/browser admission,
+  password/postgres verification owner, HTTP email/MFA and reference graph.
+  Identity uses its current public graph; capability's matching public adapter
+  is isolated on clean main at `/private/tmp/identity-verification-mfa.sTFsQO/capability-main`;
+  the unrelated dirty capability checkout is untouched.
+  Native mapper `/root/verification_mfa_map` completed the closed-origin and
+  supplier map. One QA plan `/root/verification_mfa_qa`, SHA-256
+  `c78fb7b621bf8d161c595e160fcc26021306087f3ed1e03b9576118b642391c6`,
+  supplies finite Q1-Q12 cases. Genuine enrollment will use public password
+  signin/fresh reauthentication/enable/provision/confirm after verification
+  commits, coordinated at the child risk boundary, never fabricated factors.
+  Prove native/HTTPS browser and persistent outcomes; pending-only disclosure;
+  wrong browser/scope/code, shared attempts, original expiry/current authority,
+  rollback/contention/lost acknowledgements, and retained password/magic-link
+  MFA and default consumers. Run affected owner race/vet, actual PG18 selectors
+  `VerificationMFASignin` plus retained `VerificationSignin`, baseline and
+  password/magic-link TOTP consumers; populated migration, changed-input fuzz,
+  public-only composition/consumer, scoped security/docs and final independent
+  review before main delivery. No new evidence machinery or plan series.
 
 - Verification-signin public delivery checkpoint (2026-10-16 13:04 UTC):
   foundation `af740fb`, native/HTTP `ad15f57` and reference `88c8106` are

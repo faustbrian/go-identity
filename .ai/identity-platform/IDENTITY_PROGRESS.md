@@ -1,6 +1,6 @@
 # Identity Platform Progress
 
-## TL;DR — updated 2026-10-18 01:47 UTC
+## TL;DR — updated 2026-10-18 03:14 UTC
 
 **Estimated whole-goal completion: approximately 5–10%, with low confidence.**
 The working authentication baseline and substantial email functionality are
@@ -11,11 +11,11 @@ This is an effort/scope estimate, not a measured percentage or an ETA.
 | --- | --- |
 | Complete consumer milestones | **3/39 closed**: B1 authentication, B2 reset, B3 password change. The unweighted count is 7.7%; it is not the whole-goal effort estimate. |
 | Remaining milestones | **36/39 not closed**: M04 is partially delivered; M05–M39 have not been accepted as complete. Existing implementation is not assumed absent. |
-| Additional delivered behavior | **10 email-lifecycle profiles**, listed below. These are partial M04 deliveries, not ten additional closed milestones. |
+| Additional delivered behavior | **11 email-lifecycle profiles**, listed below. These are partial M04 deliveries, not eleven additional closed milestones. |
 | Full package scope | **67 units: 61 product units + 6 primitive extensions.** No additional full-unit qualification has closed during this implementation run. The older 2/67 verified baseline is historical, not a current cross-repository audit. |
 | Last full milestone closure | **14 October:** B3 password change. |
-| Last complete email-profile delivery | **16 October:** registration verification followed by original-browser signin. |
-| Current unfinished deliverable | Verification → enrolled TOTP → authenticated session read/logout, through native APIs and selected HTTPS. Local journeys pass, but complete public delivery is **not finished**. |
+| Last complete email-profile delivery | **18 October:** verification → genuinely enrolled TOTP → authenticated session read/logout, native and opt-in HTTPS, browser and persistent sessions. Pushed `02c6195`, Required CI 39092789592 passes. |
+| Current unfinished deliverable | Remaining full M04 capability/qualification and publication of the locally implemented organization and CAPTCHA profiles; native OAuth consumer proof remains active. |
 
 ### What consumers can already do
 
@@ -26,12 +26,14 @@ This is an effort/scope estimate, not a measured percentage or an ETA.
   (4) audited administrative reads, (5) administrative removal, (6) pending-address
   OTP verification, (7) primary replacement by OTP, (8) first-primary establishment
   by OTP, (9) TOTP-protected email change, and (10) verification-to-signin when
-  current authoritative MFA state is known empty.
+  current authoritative MFA state is known empty, and (11) verification-to-signin
+  through genuine enrolled TOTP with atomic session effects, including HTTPS
+  browser/persistent, exhaustion, late-authority, recovery and populated upgrades.
 
 ### What remains before the whole goal is done
 
-- Finish M04, including the current enrolled-TOTP continuation, remaining factor/
-  privacy/lifecycle requirements and qualification.
+- Finish M04's remaining factor/privacy/lifecycle requirements and qualification;
+  the selected enrolled-TOTP continuation profile is delivered.
 - Close username, passwordless/phone/anonymous, complete MFA/recovery/trusted-device,
   WebAuthn/passkey and social-OAuth milestones.
 - Close API-key, organization/team/role, administration/privacy, enterprise SSO/
@@ -43,12 +45,43 @@ This is an effort/scope estimate, not a measured percentage or an ETA.
 
 - Identity prerequisites `bb569ec` and `615ac00` are pushed to main with their
   exact-head Required CI passing.
-- The capability prerequisite is on its CI-only branch, **not main**. Its missing
-  public-field documentation is corrected in `5f5eef1`; required CI remains owed.
+- The capability prerequisite is now on **main** at `07437fc`; exact-source
+  Required CI passes. Reviewed native session adapter `bb37a49` is pushed and
+  its public-only race/static and populated-history checks pass; Required CI
+  passes. Password/postgres continuation `6128551` is also pushed with Required
+  CI passing. Reference consumes both public pins in reviewed `02c6195`, now
+  pushed with Required CI passing.
+- HIBP now rejects and never caches provider results whose deadline expires
+  during response cleanup: reviewed fix `75e10d9` is on main with Required CI
+  passing. This does not close a further milestone or full-unit qualification.
+- Organization root/native membership and neutral CAPTCHA/Turnstile have local
+  implementations and focused race/service or provider-fixture proof; independent
+  review, public dependency publication and composition remain. OAuth root/native
+  source compiles; its complete native consumer flow is not yet proven.
+- Organization's exact active-target/version prerequisite `4035a0e` is pushed
+  with Required CI passing. Its native worker now consumes the public API;
+  actual PostgreSQL race proof now includes last-owner contention, scoped
+  recovery, whole-transition rollback and a real lost-COMMIT response. The
+  aborted-replay oracle was corrected against the upstream terminal-outcome
+  contract, not by changing production behavior. Review/publication remain.
+- OAuth consent continuation risk classification is reviewed and pushed in
+  `26fb47a`; full risk race/vet and Required CI 39092382688 pass.
 - The populated MFA-first upgrade intermittently fails during router construction;
   its cause remains unproved. Later passing reruns do not close that gap.
-- **Next:** finish prerequisite publication and public adapter pins, resolve the
-  router failure, then prove/review/deliver this complete TOTP profile. Do not
+- All selected TOTP authority/contention/recovery/rollback/populated-upgrade
+  cases pass on public dependencies under race (72.520s). Original-expiry failed
+  once at setup with a deadline error; diagnostic repeats pass (18.436s), but
+  its cause is not proven. Independent final reference review approves the
+  finite slice, with these observations retained, not relabeled fixed. No
+  production budgets changed. The selected profile is delivered, not full M04.
+- Organization review found and reproduced a post-policy read expiry/cancellation
+  gap. The corrected root passes all four regression cases and full race/vet;
+  independent corrected-final-diff review approves it. Root `a875bb9` is public
+  main with Required CI passing. Its real public pin now supports native standalone
+  race/vet and PostgreSQL/race3.211s. Native review found quota denials mislabeled
+  as dependency failures; that owning correction remains before publication.
+- **Next:** publish reviewed organization/CAPTCHA profiles with real public pins,
+  finish OAuth native consumer proof and select the next remaining M04 outcome. Do not
   count another milestone or inflate the estimate for prerequisite commits.
 
 Maintain this dashboard first at material checkpoints and at least every six
