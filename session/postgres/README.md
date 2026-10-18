@@ -1,5 +1,16 @@
 # PostgreSQL session storage
 
+`PasswordSigninSession` restores the same closed session fields from exact
+username-signin paired custody. It does not turn a username into a verified
+delivery address or supply the native workflow's current admission. Enabling
+native username signin also requires its forward issuance-purpose history;
+installing this structural mapping does not activate a login route.
+`UsernameSigninMigrationSource.Predecessor` selects the exact installed purpose
+history. For a v7 verification predecessor, retain its original `MFASignin`
+selection: that constraint has both verification-only and MFA-first variants.
+The distinct v8 verification-first/MFA successor already includes MFA. No older
+purpose migration may be installed after this suffix.
+
 ## Registration verification signin
 
 `EmailVerificationSigninEffect` and `EmailVerificationSigninSession` support only

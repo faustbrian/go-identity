@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Restore the existing session projection from exact username-signin paired
+  password commands without rewriting their original scope. Native workflow
+  admission and forward issuance-purpose storage remain separately required.
+
 - Add a forward MFA issuance-purpose extension for populated verification-first
   history without replaying or changing older purpose migrations.
 

@@ -47,6 +47,8 @@ func PasswordSigninSessionFields(record session.Session) ([]identity.FeatureFiel
 // call. No comparison, provenance, freshness renewal or recovery authority is
 // established: native execution must check the selected user and all owners in
 // the original Work before staging this record. Do not log correlated fields.
+// Exact username-signin custody uses the same projection without relabeling;
+// the native workflow additionally owns current username admission.
 func PasswordSigninSession(command identity.Command) (session.Session, error) {
 	deny := func() (session.Session, error) { return session.Session{}, session.ErrInvalidSessionCommand }
 	p, ok := command.PasswordSigninFeature()
@@ -96,6 +98,9 @@ func passwordSessionFromFeature(p identity.FeatureCommandSpec) (session.Session,
 
 func passwordSessionOperation(b identity.CommandBinding) identity.FeatureOperation {
 	op := identity.FeatureOperation{Owner: "identity/password", OperationID: "identity.password.signin", SchemaID: "password-signin", SchemaVersion: 1, RecordRequirement: identity.FeatureRecordOmitted}
+	if b.OperationID == "identity.username.signin" {
+		op.Owner, op.OperationID, op.SchemaID = "identity/username", "identity.username.signin", "username-signin"
+	}
 	if b.AnonymousFlowID != "" {
 		op.SubjectRequirement = identity.FeatureSubjectAnonymousFlow
 	}

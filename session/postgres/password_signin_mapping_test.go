@@ -106,6 +106,29 @@ func TestPasswordSigninMappingPreservesOriginalSession(t *testing.T) {
 	}
 }
 
+func TestUsernameSigninMappingPreservesOriginalSession(t *testing.T) {
+	spec, original, secret, cookie := passwordSigninMappingFixture(t, true, true)
+	spec.Operation.Owner, spec.Operation.OperationID, spec.Operation.SchemaID = "identity/username", "identity.username.signin", "username-signin"
+	spec.Binding.OperationID, spec.Binding.SchemaID = spec.Operation.OperationID, spec.Operation.SchemaID
+	command, err := identity.NewFeaturePasswordSigninCommand(spec, secret, cookie)
+	if err != nil {
+		t.Fatal(err)
+	}
+	restored, err := PasswordSigninSession(command)
+	if err != nil {
+		t.Fatal("username signin cannot restore the original session", err)
+	}
+	want, _, _ := encodeRecord(original)
+	got, _, _ := encodeRecord(restored)
+	if !bytes.Equal(got, want) {
+		t.Fatal("username signin changed the original session projection")
+	}
+	actual, _ := command.PasswordSigninFeature()
+	if actual.Binding != spec.Binding || actual.Operation != spec.Operation {
+		t.Fatal("session mapping relabeled the original username scope")
+	}
+}
+
 func TestPasswordSigninMappingRejectsForeignAndUnsupportedProfiles(t *testing.T) {
 	spec, _, p, cookie := passwordSigninMappingFixture(t, true, false)
 	for _, name := range []string{"session.result.tenant.id", "session.result.user.id", "session.result.proof.method", "session.result.proof.assurance", "session.result.unknown"} {
