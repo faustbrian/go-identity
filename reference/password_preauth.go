@@ -53,11 +53,15 @@ func composePasswordPreAuth(pool *database.Pool, selected *PasswordSigninConfigu
 	if uint64(p.FlowKeyIndex) >= uint64(len(n.FlowKeys)) || n.Coordinator.QueryPolicy == nil || n.Coordinator.AdmissionPolicy == nil || n.Coordinator.QueryPolicy.PolicyVersion != n.Coordinator.AdmissionPolicy.PolicyVersion || !slices.Contains(n.Origins, p.Origin) || !slices.Contains(n.CallbackURLs, p.CallbackURL) {
 		return nil, identity.InvalidInputError{Field: "reference_password_preauth"}
 	}
-	executor, err := sessionpg.NewPreAuthIssueExecutor(pool, sessionpg.PreAuthIssueExecutorConfig{Repository: n.Session, Coordinator: n.Coordinator, Authorization: n.Coordinator.QueryPolicy.Authorization, Clock: clock.System{}, ActorID: p.ActorID, Action: "identity.password.signin", Origin: p.Origin, CallbackURL: p.CallbackURL, PolicyID: n.PolicyID, PolicyVersion: n.Coordinator.AdmissionPolicy.PolicyVersion, AuditRetentionVersion: p.AuditRetentionVersion})
+	action := "identity.password.signin"
+	if n.Username != nil {
+		action = "identity.username.signin"
+	}
+	executor, err := sessionpg.NewPreAuthIssueExecutor(pool, sessionpg.PreAuthIssueExecutorConfig{Repository: n.Session, Coordinator: n.Coordinator, Authorization: n.Coordinator.QueryPolicy.Authorization, Clock: clock.System{}, ActorID: p.ActorID, Action: action, Origin: p.Origin, CallbackURL: p.CallbackURL, PolicyID: n.PolicyID, PolicyVersion: n.Coordinator.AdmissionPolicy.PolicyVersion, AuditRetentionVersion: p.AuditRetentionVersion})
 	if err != nil {
 		return nil, err
 	}
-	return session.NewPreAuthIssuer(executor, session.PreAuthIssuerConfig{ActorID: p.ActorID, Action: "identity.password.signin", Origin: p.Origin, CallbackURL: p.CallbackURL, PolicyID: n.PolicyID, PolicyVersion: n.Coordinator.AdmissionPolicy.PolicyVersion, Clock: clock.System{}, MaximumDuration: n.Session.MaximumDuration, FlowTTL: p.FlowTTL, LookupKey: n.FlowKeys[p.FlowKeyIndex], TokenSize: p.TokenSize, Cookie: p.Cookie})
+	return session.NewPreAuthIssuer(executor, session.PreAuthIssuerConfig{ActorID: p.ActorID, Action: action, Origin: p.Origin, CallbackURL: p.CallbackURL, PolicyID: n.PolicyID, PolicyVersion: n.Coordinator.AdmissionPolicy.PolicyVersion, Clock: clock.System{}, MaximumDuration: n.Session.MaximumDuration, FlowTTL: p.FlowTTL, LookupKey: n.FlowKeys[p.FlowKeyIndex], TokenSize: p.TokenSize, Cookie: p.Cookie})
 }
 
 // PasswordPreAuth returns the explicitly selected original password-flow owner.

@@ -107,6 +107,9 @@ type featureState struct {
 	httpEmailOTPChange           *emailOTPChangeHTTPState
 	passwordSignin               *passwordpg.SigninService
 	passwordSignup               *passwordpg.SignupService
+	username                     *usernameState
+	httpUsername                 *usernameHTTPState
+	registrationConfirmation     *passwordpg.EmailVerificationRouter
 	verificationSignin           *passwordpg.VerificationSigninService
 	verificationSigninMFA        bool
 	verificationSessionLineage   VerificationSessionLineage
@@ -199,6 +202,12 @@ func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDepen
 	}
 	if c.PasswordSignup != nil && (c.OTP == nil || c.Delivery == nil) {
 		return identity.InvalidInputError{Field: "reference_password_signup"}
+	}
+	if c.Username != nil && (c.OTP == nil || c.Delivery == nil) {
+		return identity.InvalidInputError{Field: "reference_username"}
+	}
+	if c.HTTPUsername != nil && (c.Username == nil || c.OTP == nil) {
+		return identity.InvalidInputError{Field: "reference_http_username"}
 	}
 	if c.PasswordSignin != nil && c.OTP == nil {
 		return identity.InvalidInputError{Field: "reference_password_signin"}
@@ -425,6 +434,10 @@ func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDepen
 	if err != nil {
 		return err
 	}
+	usernameOwner, err := composeUsername(c, d, evaluator, passwordVerificationOwner)
+	if err != nil {
+		return err
+	}
 	mfaEnrollmentOwner, err := composeMFAEnrollment(c, d, passwordVerificationOwner, evaluator, resetOwner)
 	if err != nil {
 		return err
@@ -445,8 +458,23 @@ func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDepen
 			return err
 		}
 	}
-	if c.HTTPRegistrationVerification != nil && c.HTTPRegistrationVerification.ManagedAddresses {
-		emailOwner.confirmation, err = passwordpg.NewEmailVerificationRouter(passwordSignupOwner, emailOwner.verification)
+	var registrationConfirmation *passwordpg.EmailVerificationRouter
+	if c.HTTPRegistrationVerification != nil && usernameOwner != nil && usernameOwner.signup != nil {
+		if c.HTTPRegistrationVerification.Signin {
+			// Automatic confirmation-signin remains registration-profile-specific;
+			// never substitute email custody for a username origin.
+			return identity.InvalidInputError{Field: "reference_username_verification_signin"}
+		}
+		var managed *passwordpg.EmailManagementService
+		if c.HTTPRegistrationVerification.ManagedAddresses {
+			managed = emailOwner.verification
+		}
+		registrationConfirmation, err = passwordpg.NewRegistrationVerificationRouter(passwordSignupOwner, usernameOwner.signup, managed)
+		if err != nil {
+			return err
+		}
+	} else if c.HTTPRegistrationVerification != nil && c.HTTPRegistrationVerification.ManagedAddresses {
+		registrationConfirmation, err = passwordpg.NewEmailVerificationRouter(passwordSignupOwner, emailOwner.verification)
 		if err != nil {
 			return err
 		}
@@ -514,6 +542,15 @@ func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDepen
 	defer func() {
 		if httpPasswordVerification != nil && !retainedResetHTTP {
 			httpPasswordVerification.rate.Close()
+		}
+	}()
+	httpUsername, err := composeUsernameHTTP(c, usernameOwner, httpPreAuth, passwordVerificationOwner, s.httpRate)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if httpUsername != nil && !retainedResetHTTP {
+			httpUsername.close()
 		}
 	}()
 	httpPasswordChange, err := composePasswordChangeHTTP(c, passwordChangeOwner, passwordVerificationOwner, s.httpRate)
@@ -609,6 +646,9 @@ func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDepen
 	}
 	s.features = &featureState{migrations: migrationConfig, otp: otpOwner, signin: signinOwner, reset: resetOwner, passwordSignin: passwordSigninOwner, passwordPreauth: passwordPreauthOwner, preauth: preauthOwner, delivery: deliveryOwner, sender: d.DeliverySender, timeout: o.Timeout, provider: o.ProviderVersion, deliverySlots: make(chan struct{}, int(capacity)), authorize: o.RequestKeys.Policy.Authorization, httpPreAuth: httpPreAuth, httpEmailSignin: httpEmailSignin, httpPasswordReset: httpPasswordReset, httpPasswordSignin: httpPasswordSignin}
 	s.features.passwordSignup = passwordSignupOwner
+	s.features.username = usernameOwner
+	s.features.httpUsername = httpUsername
+	s.features.registrationConfirmation = registrationConfirmation
 	s.features.verificationSignin = verificationSigninOwner
 	s.features.verificationTOTP = verificationTOTP
 	s.features.verificationSigninMFA = c.PasswordSignup != nil && c.PasswordSignup.VerificationSignin != nil && c.PasswordSignup.VerificationSignin.TOTP != nil

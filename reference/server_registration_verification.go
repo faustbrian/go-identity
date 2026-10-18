@@ -114,7 +114,7 @@ func (s *Server) emailFeature(network identityhttp.NetworkConfig, f FeatureSet) 
 	}
 	if h != nil {
 		c := h.config
-		if c.ManagedAddresses {
+		if s.state.features.registrationConfirmation != nil {
 			selection.ProfiledConfirmation = &emailhttp.ProfiledConfirmationConfig{Network: network, Service: composedEmailConfirmation{state: f.state}, Rate: h.rate, Origin: identityhttp.Origin(c.Origin), ActorID: c.ActorID, PolicyRevision: c.PolicyRevision, Now: time.Now, MaximumDuration: s.state.features.timeout}
 		} else {
 			owner, e := f.RegistrationVerification()
@@ -166,7 +166,7 @@ func (s composedEmailConfirmation) VerificationRateSource(ctx context.Context, p
 		return "", "", 0, err
 	}
 	defer done()
-	return s.state.features.email.confirmation.VerificationRateSource(w, proof, callback, caller)
+	return s.state.features.registrationConfirmation.VerificationRateSource(w, proof, callback, caller)
 }
 
 func (s composedEmailConfirmation) VerificationConfirm(ctx context.Context, r email.VerificationConfirmRequest) (email.VerificationConfirmResult, error) {
@@ -175,7 +175,7 @@ func (s composedEmailConfirmation) VerificationConfirm(ctx context.Context, r em
 		return email.VerificationConfirmResult{}, err
 	}
 	defer done()
-	return s.state.features.email.confirmation.VerificationConfirm(w, r)
+	return s.state.features.registrationConfirmation.VerificationConfirm(w, r)
 }
 
 var _ emailhttp.ProfiledConfirmationService = composedEmailConfirmation{}

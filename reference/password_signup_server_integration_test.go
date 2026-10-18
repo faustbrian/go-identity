@@ -76,7 +76,7 @@ func (referenceRegistrationPolicy) Decide(ctx context.Context, c authorization.D
 	return (referenceResetPolicy{}).Decide(ctx, c)
 }
 
-func registrationRiskPolicy(t *testing.T, version uint64, screening bool) risk.Policy {
+func registrationRiskPolicy(t *testing.T, version uint64, screening bool, username ...bool) risk.Policy {
 	t.Helper()
 	c := risk.PolicyConfig{Version: version, Limits: risk.VelocityLimits{MaxDimensions: 4, MaxCounters: 16, MaxWindow: time.Hour, MaxLimit: 120, KeyBytes: 64, RetryAfterMax: time.Hour}, Profiles: []risk.Profile{
 		{Class: risk.Authentication, Phase: risk.BeforeCredential, Dimensions: []risk.Dimension{risk.TenantDimension, risk.NetworkDimension, risk.DeviceDimension, risk.IdentifierDimension}, Window: 5 * time.Minute, Limit: 10, ThresholdAction: risk.Throttle, EvidenceTTL: 5 * time.Minute, Unknown: risk.DenyUnknown, MaxCounters: 4, RequiredSignals: []string{"velocity"}},
@@ -86,6 +86,9 @@ func registrationRiskPolicy(t *testing.T, version uint64, screening bool) risk.P
 	}}
 	if screening {
 		c.HIBP = risk.HIBPPolicy{CacheTTL: time.Hour, Operations: []risk.Action{"identity.password.signup", "identity.password.change"}}
+		if len(username) != 0 && username[0] {
+			c.HIBP.Operations = append(c.HIBP.Operations, "identity.username.signup")
+		}
 	}
 	p, err := risk.NewPolicy(c)
 	if err != nil {
@@ -240,6 +243,7 @@ func proveReferenceSignupGraph(t *testing.T, competing bool, protected ...bool) 
 }
 
 type signupGraphExtensions struct {
+	username                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               bool
 	confirmationHooks                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      string
 	verificationHooks                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      string
 	verificationSignin                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     string
@@ -357,6 +361,9 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 	selectedReset := c.PasswordReset
 	selectedResetHTTP := c.HTTPPasswordReset
 	var selectedAuthorization authorization.Service = referenceRegistrationPolicy{}
+	if extensions.username {
+		selectedAuthorization = referenceUsernamePolicy{}
+	}
 	if extensions.verificationSignin == "totp-original-expiry" {
 		f.verificationMFAOriginalExpiry = &verificationMFAOriginalExpiryPolicy{pool: f.pool}
 		selectedAuthorization = f.verificationMFAOriginalExpiry
@@ -564,6 +571,9 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 			changeDeliveries = make(chan emailChangeDelivery, 16)
 		}
 		deps.DeliverySender = emailChangeCaptureSender{messages: messages, recipients: noticeRecipients, deliveries: changeDeliveries}
+	}
+	if extensions.username {
+		configureReferenceUsername(t, &c, origin)
 	}
 	if extensions.postgresBaseline {
 		selectDurableReferenceAdmission(&c)
@@ -829,6 +839,14 @@ END $$`); err != nil {
 		seen[op.Record.OperationID] = true
 	}
 	wantOperations := 8
+	if extensions.username {
+		wantOperations += 5
+		for _, id := range []string{"identity.username.signup", "identity.username.signin", "identity.username.available", "identity.username.update", "identity.password.verify"} {
+			if !seen[id] {
+				t.Fatal("selected username route missing", id)
+			}
+		}
+	}
 	for action, selected := range map[string]bool{"identity.email.verification-send": c.HTTPEmailRequests != nil && c.HTTPEmailRequests.VerificationSend, "identity.email.change-request": c.HTTPEmailRequests != nil && c.HTTPEmailRequests.ChangeRequest, "identity.email.change-confirm": c.HTTPEmailRequests != nil && c.HTTPEmailRequests.ChangeConfirm, "identity.email.address-remove": c.HTTPEmailRequests != nil && c.HTTPEmailRequests.AddressRemove} {
 		if selected {
 			wantOperations++
@@ -992,6 +1010,20 @@ END $$`); err != nil {
 	}
 	if r := server.Readiness(ctx); !r.Ready {
 		t.Fatal("selected native readiness", r.Failures)
+	}
+	if extensions.username {
+		for _, target := range []struct{ table, constraint string }{{"identity.registration_bindings", "identity_registration_purpose_v3"}, {"identity_mfa.factor_authorities", "factor_authorities_initialized_purpose_v3"}, {"session_store.session_issuances", "session_issuances_purpose_username_v1"}} {
+			if _, err := f.pool.Raw().Exec(ctx, "ALTER TABLE "+target.table+" RENAME CONSTRAINT "+target.constraint+" TO username_fixture_missing"); err != nil {
+				t.Fatal(err)
+			}
+			missing := server.Readiness(ctx)
+			if _, err := f.pool.Raw().Exec(ctx, "ALTER TABLE "+target.table+" RENAME CONSTRAINT username_fixture_missing TO "+target.constraint); err != nil {
+				t.Fatal(err)
+			}
+			if missing.Ready || !server.Readiness(ctx).Ready {
+				t.Fatal("username readiness did not require its actual native successor", target.constraint)
+			}
+		}
 	}
 	if magic {
 		targets := []struct{ table, name string }{{"session_issuances", "session_issuances_purpose_v5"}, {"sessions", "session_credential_continuation_v2"}, {"sessions", "session_record_binding_v5"}}
@@ -1165,6 +1197,10 @@ END $$`); err != nil {
 			}
 		}
 		proveReferenceVerificationSignin(t, ctx, f, features, workers, client, network.URL, origin, messages, extensions.verificationSignin)
+		return
+	}
+	if extensions.username {
+		proveReferenceUsername(t, ctx, f, features, workers, client, network.URL, origin, messages)
 		return
 	}
 	proveReferenceRegistration(t, ctx, f, features, workers, client, network.URL, origin, messages, calls, competing, changeScreens, extensions.mfaEnrollment, extensions.passwordMFA, extensions.emailAddressQueries, c.Email != nil && c.Email.Addresses != nil, extensions.passwordRecovery)

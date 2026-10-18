@@ -157,6 +157,8 @@ func (s *Server) guardPasswordProtectionLifetime(next http.Handler, operation st
 			w.WriteHeader(http.StatusServiceUnavailable)
 			if operation == "identity.password.verify" {
 				_ = json.NewEncoder(w).Encode(passwordhttp.VerificationResponse{CommitOutcome: "none", Error: "unavailable"})
+			} else if operation == "identity.username.update" {
+				_ = json.NewEncoder(w).Encode(passwordhttp.UsernameRenameResponse{CommitOutcome: "none", Error: "unavailable"})
 			} else {
 				_ = json.NewEncoder(w).Encode(passwordhttp.ChangeResponse{CommitOutcome: "none", Error: "unavailable"})
 			}

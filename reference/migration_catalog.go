@@ -40,6 +40,14 @@ type migrationGuard struct {
 }
 
 func (s StoreSet) migrationCatalog(ctx context.Context) ([]migrationHistory, error) {
+	catalog, err := s.baseMigrationCatalog(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return s.usernameMigrationCatalog(ctx, catalog)
+}
+
+func (s StoreSet) baseMigrationCatalog(ctx context.Context) ([]migrationHistory, error) {
 	history, err := s.MigrationSource().Load(ctx)
 	if err != nil {
 		return nil, err
@@ -89,7 +97,7 @@ func (s StoreSet) migrationCatalog(ctx context.Context) ([]migrationHistory, err
 			return nil, err
 		}
 		owned := migrationHistory{namespace: "identity_http_rate", history: []migrations.Migration{step}, owners: map[migrations.Version]ModuleID{step.Version(): "rate-limit/postgres"}, guards: []migrationGuard{{version: step.Version(), schema: "public", tables: []string{"rate_limit_states", "rate_limit_states_expires_at_idx"}}}}
-		if s.state.features != nil && (s.state.features.httpPasswordReset != nil || s.state.features.httpRegistrationVerification != nil || s.state.features.httpPasswordVerification != nil || s.state.features.httpPasswordChange != nil || s.state.features.httpEmailRequests != nil && s.state.features.httpEmailRequests.secret != nil || s.state.features.httpEmailOTPVerification != nil || s.state.features.httpMagicLink != nil && s.state.features.httpMagicLink.config.Consume) {
+		if s.state.features != nil && (s.state.features.httpUsername != nil && s.state.features.httpUsername.rate != nil || s.state.features.httpPasswordReset != nil || s.state.features.httpRegistrationVerification != nil || s.state.features.httpPasswordVerification != nil || s.state.features.httpPasswordChange != nil || s.state.features.httpEmailRequests != nil && s.state.features.httpEmailRequests.secret != nil || s.state.features.httpEmailOTPVerification != nil || s.state.features.httpMagicLink != nil && s.state.features.httpMagicLink.config.Consume) {
 			native := ratepg.AtomicSchemaMigration()
 			atomic, err := migrations.NewMigration(migrations.Version(native.Version), native.Name, migrations.TransactionModeDefault, native.Up, native.Down)
 			if err != nil {
@@ -256,6 +264,15 @@ func (s StoreSet) migrationCatalog(ctx context.Context) ([]migrationHistory, err
 			if err != nil {
 				return nil, err
 			}
+		}
+	}
+	if u := s.state.features.username; u != nil && u.signup != nil && !(s.state.features.magicRequest != nil && c.magicSignup) {
+		// Install the retained registration/factor-purpose predecessor before
+		// later MFA history, without enabling a magic-link service. Username's
+		// final superset must never be replaced by this older suffix afterward.
+		catalog, err = magicLinkSignupMigrationCatalog(ctx, catalog)
+		if err != nil {
+			return nil, err
 		}
 	}
 	if c.passwordMFA {

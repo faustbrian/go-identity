@@ -95,6 +95,22 @@ func (s *Server) preAuthFeature(network identityhttp.NetworkConfig, f FeatureSet
 		c.Methods = append(c.Methods, sessionhttp.PreAuthMethod{Name: "signup", Service: owner, Action: "identity.password.signup", CallbackURL: selected.preauth.CallbackURL, PolicyID: selected.policy, PolicyVersion: selected.version})
 	}
 	var feature identityhttp.Feature
+	if username := s.state.features.httpUsername; username != nil {
+		if selected := username.signup; selected != nil {
+			owner, err := f.UsernameSignupPreAuth()
+			if err != nil {
+				return nil, err
+			}
+			c.Methods = append(c.Methods, sessionhttp.PreAuthMethod{Name: "username-signup", Service: owner, Action: "identity.username.signup", CallbackURL: selected.preauth.CallbackURL, PolicyID: selected.policy, PolicyVersion: selected.version})
+		}
+		if selected := username.signin; selected != nil {
+			owner, err := f.UsernameSigninPreAuth()
+			if err != nil {
+				return nil, err
+			}
+			c.Methods = append(c.Methods, sessionhttp.PreAuthMethod{Name: "username", Service: owner, Action: "identity.username.signin", CallbackURL: selected.preauth.CallbackURL, PolicyID: selected.policy, PolicyVersion: selected.version})
+		}
+	}
 	if selected := s.state.features.httpMagicLink; selected != nil {
 		owner, err := f.MagicLinkPreAuth()
 		if err != nil {

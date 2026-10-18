@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Compose explicitly selected username registration, signin, advisory availability
+  and protected rename through their actual native owners and opt-in HTTP routes.
+  Email and username registration retain distinct original custody on the shared
+  confirmation route. Install the selected forward migrations before serving;
+  existing histories are not rewritten. Username MFA continuation and automatic
+  confirmation-signin are not selected and never fall back to a weaker method.
+
 - Adopt the current native password/session dependency contracts, including
   action-bound reauthentication admission. Existing feature selections and
   routes remain unchanged; username rename and organization transfer still

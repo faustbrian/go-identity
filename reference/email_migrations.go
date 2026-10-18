@@ -22,18 +22,13 @@ func emailMigrationCatalog(ctx context.Context, catalog []migrationHistory, risk
 	if ctx == nil || len(catalog) == 0 || change && !management {
 		return nil, invalid
 	}
-	result := slices.Clone(catalog)
-	if slices.IndexFunc(result, func(h migrationHistory) bool { return h.namespace == "identity_registration" }) < 0 {
-		full, err := (kernel.IdentifierMutationMigrationSource{Base: fixedMigrationSource(result[0].history), Version: 1600}).Load(ctx)
-		if err != nil {
-			return nil, err
-		}
-		result = append(result, migrationHistory{namespace: "identity_registration", history: full[len(result[0].history):], owners: map[migrations.Version]ModuleID{1600: "identity/postgres"}, guards: []migrationGuard{{version: 1600, schema: "identity", tables: []string{"identifier_retirements"}}}})
+	result, err := identifierMutationMigrationCatalog(ctx, catalog)
+	if err != nil {
+		return nil, err
 	}
 	if !management {
 		return result, nil
 	}
-	var err error
 	result, err = counterPreparationMigrationCatalog(ctx, result)
 	if err != nil {
 		return nil, err
@@ -93,6 +88,23 @@ func emailMigrationCatalog(ctx context.Context, catalog []migrationHistory, risk
 		result = append(result, migrationHistory{namespace: "identity_email_change_counters", history: steps, owners: map[migrations.Version]ModuleID{1701: "identity/risk/postgres"}})
 	}
 	return result, nil
+}
+
+// Identifier cooldown is shared storage, not a selection of registration or
+// email workflows. Retain their original namespace, allocation and native SQL.
+func identifierMutationMigrationCatalog(ctx context.Context, catalog []migrationHistory) ([]migrationHistory, error) {
+	if len(catalog) == 0 {
+		return nil, identity.InvalidInputError{Field: "reference_identifier_migrations"}
+	}
+	result := slices.Clone(catalog)
+	if slices.ContainsFunc(result, func(h migrationHistory) bool { return h.namespace == "identity_registration" }) {
+		return result, nil
+	}
+	full, err := (kernel.IdentifierMutationMigrationSource{Base: fixedMigrationSource(result[0].history), Version: 1600}).Load(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return append(result, migrationHistory{namespace: "identity_registration", history: full[len(result[0].history):], owners: map[migrations.Version]ModuleID{1600: "identity/postgres"}, guards: []migrationGuard{{version: 1600, schema: "identity", tables: []string{"identifier_retirements"}}}}), nil
 }
 
 func emailRemovalMigrationCatalog(ctx context.Context, catalog []migrationHistory) ([]migrationHistory, error) {

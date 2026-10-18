@@ -264,5 +264,33 @@ func readinessCatalogGuards(state *storeState, history migrationHistory) []migra
 			migrationGuard{version: 3, schema: "identity_password", tables: []string{"reauthentication_records"}},
 			migrationGuard{version: 5, schema: "identity_password", tables: []string{"signin_records"}})
 	}
+	if state.features != nil && state.features.username != nil {
+		u := state.features.username
+		for i := range guards {
+			guards[i].constraints = slices.Clone(guards[i].constraints)
+			for j, name := range guards[i].constraints {
+				// Native forward migrations replace only these named predecessor
+				// constraints. Require the actual installed successor; do not
+				// alter historical collision guards or accept a missing constraint.
+				if u.signup != nil && guards[i].schema == "identity" {
+					switch name {
+					case "registration_bindings.identity_registration_purpose_v2":
+						guards[i].constraints[j] = "registration_bindings.identity_registration_purpose_v3"
+					case "registration_bindings.identity_registration_disposition_v2":
+						guards[i].constraints[j] = "registration_bindings.identity_registration_disposition_v3"
+					}
+				}
+				if u.signup != nil && guards[i].schema == "identity_mfa" && name == "factor_authorities.factor_authorities_initialized_purpose_v2" {
+					guards[i].constraints[j] = "factor_authorities.factor_authorities_initialized_purpose_v3"
+				}
+				if u.signin != nil && guards[i].schema == state.features.migrations.passwordSigninSchema {
+					switch name {
+					case "session_issuances.session_issuances_purpose_v3", "session_issuances.session_issuances_purpose_v4", "session_issuances.session_issuances_purpose_v5", "session_issuances.session_issuances_purpose_v6", "session_issuances.session_issuances_purpose_v7", "session_issuances.session_issuances_purpose_v8":
+						guards[i].constraints[j] = "session_issuances.session_issuances_purpose_username_v1"
+					}
+				}
+			}
+		}
+	}
 	return guards
 }

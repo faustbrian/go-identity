@@ -39,6 +39,8 @@ func resetKernelDependent(namespace string) bool {
 		return true
 	case "identity_password_mfa_session", "identity_mfa_otp", "identity_mfa_otp_counters", "identity_mfa_otp_session", "identity_email_change_counters":
 		return true
+	case "identity_username_kernel", "identity_username_registration", "identity_username_factors", "identity_username_password", "identity_username_session", "identity_username_actions":
+		return true
 	default:
 		return false
 	}

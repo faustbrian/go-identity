@@ -97,7 +97,6 @@ type EmailAddressAuditConfiguration struct{ MaximumDuration time.Duration }
 type emailState struct {
 	verification, change                 *passwordpg.EmailManagementService
 	addresses                            *email.AddressQueryService
-	confirmation                         *passwordpg.EmailVerificationRouter
 	keyedVerification, keyedChange       *passwordpg.KeyedEmailManagementService
 	verificationRequests, changeRequests *passwordpg.EmailRequestWorkflow
 	removal                              *passwordpg.EmailRemovalService

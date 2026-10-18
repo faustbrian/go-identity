@@ -1,5 +1,11 @@
 # Identity reference composition
 
+## Optional username authentication
+
+See [username composition and consumer journey](USERNAME.md) for native/HTTP
+selection, original registration confirmation, migration order, protected rename
+and explicit unsupported profiles. This is backend composition, not a UI.
+
 ## Optional email-confirmation hooks
 
 Independently select `Email.Change.Native.ChangeHooks` for managed change links

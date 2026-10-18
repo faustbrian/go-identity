@@ -70,6 +70,9 @@ type StoreConfiguration struct {
 	PasswordSignin *PasswordSigninConfiguration
 	// PasswordSignup selects native registration and confirmation, not HTTP.
 	PasswordSignup *PasswordSignupConfiguration
+	// Username independently selects native username owners; nil leaves all
+	// username handles and migrations disabled without changing email profiles.
+	Username *UsernameConfiguration
 	// Session selects native primary reads and self-signout, not HTTP.
 	Session *SessionConfiguration
 	// PasswordVerification selects native reauthentication/proof recovery, not HTTP.
@@ -110,6 +113,8 @@ type StoreConfiguration struct {
 	HTTPPasswordSignin *HTTPPasswordSigninConfiguration
 	// HTTPPasswordSignup explicitly selects browser signup, not confirmation.
 	HTTPPasswordSignup *HTTPPasswordSignupConfiguration
+	// HTTPUsername independently selects native username routes and flow methods.
+	HTTPUsername *HTTPUsernameConfiguration
 	// HTTPRegistrationVerification explicitly selects confirmation, not signup.
 	HTTPRegistrationVerification *HTTPRegistrationVerificationConfiguration
 	// HTTPMagicLink independently selects native magic-link routes and the named
@@ -460,6 +465,9 @@ func (s StoreSet) Close(ctx context.Context) error {
 	}
 	if state.features != nil && state.features.httpPasswordChange != nil {
 		state.features.httpPasswordChange.rate.Close()
+	}
+	if state.features != nil && state.features.httpUsername != nil {
+		state.features.httpUsername.close()
 	}
 	if state.features != nil && state.features.httpMagicLink != nil && state.features.httpMagicLink.rate != nil {
 		state.features.httpMagicLink.rate.Close()

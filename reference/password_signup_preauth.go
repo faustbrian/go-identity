@@ -18,7 +18,10 @@ func composeSignupPreAuth(pool *database.Pool, selected *PasswordSignupConfigura
 	if uint64(p.FlowKeyIndex) >= uint64(len(n.FlowKeys)) || n.Coordinator.QueryPolicy == nil || n.Coordinator.AdmissionPolicy == nil || n.Coordinator.QueryPolicy.PolicyVersion != n.Coordinator.AdmissionPolicy.PolicyVersion || !slices.Contains(n.Origins, p.Origin) || !slices.Contains(n.CallbackURLs, p.CallbackURL) {
 		return nil, identity.InvalidInputError{Field: "reference_signup_preauth"}
 	}
-	const action = "identity.password.signup"
+	action := "identity.password.signup"
+	if n.Username != nil {
+		action = "identity.username.signup"
+	}
 	executor, err := sessionpg.NewPreAuthIssueExecutor(pool, sessionpg.PreAuthIssueExecutorConfig{Repository: n.Session, Coordinator: n.Coordinator, Authorization: n.Coordinator.QueryPolicy.Authorization, Clock: clock.System{}, ActorID: p.ActorID, Action: action, Origin: p.Origin, CallbackURL: p.CallbackURL, PolicyID: n.PolicyID, PolicyVersion: n.Coordinator.AdmissionPolicy.PolicyVersion, AuditRetentionVersion: p.AuditRetentionVersion})
 	if err != nil {
 		return nil, err
