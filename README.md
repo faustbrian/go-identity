@@ -277,8 +277,30 @@ successor version and an audit ID. Mixed kernel payloads fail validation. Nil
 feature fields are omitted from JSON so historical kernel replay bytes remain
 unchanged. Validation does not prove a commit or enable feature execution;
 trusted durable adapters and feature-native result policy still own those claims.
-Remaining destructive lifecycle commands, durable repositories, complete policy composition,
-hooks, directory import and privacy workflows are not implemented yet.
+Remaining destructive lifecycle commands, durable repositories, complete policy
+composition, directory import and privacy workflows are not implemented yet.
+
+## Explicit workflow hooks
+
+`Hook` supplies typed `Before` and `After` callbacks. `NewHookRunner` copies their
+registration order, scalar field classifications, enrichment permissions and
+registered reason codes. The complete phase shares one bounded context; callbacks
+must cooperate with cancellation. They run synchronously without package locks,
+transactions or detached goroutines. Callback-context reentry is rejected.
+
+Before callbacks receive independent metadata copies, may reject, and may enrich
+only explicitly writable registered metadata. They cannot change operation,
+tenant, actor, correlation or original deadline. Native workflows must separately
+validate current authority and apply only their explicitly selected field policy.
+Concurrent pre-reservation attempts can call Before more than once; it must not
+perform durable side effects. Enabling this runner does not enable a workflow hook.
+
+After observes a transaction that has already closed. A callback failure is a
+redacted observation error, not rollback: the workflow must conserve its known
+commit/recovery result. Callbacks stop at the first error, are not automatically
+retried, and provide no exactly-once external-effect guarantee. Use the existing
+transactional outbox for durable external notifications. The selected native
+workflow owns success/replay/unknown eligibility and defaults to no callbacks.
 
 ## Quick start
 

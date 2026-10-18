@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add ordered bounded before/after hook contracts with registered scalar
+  metadata, read-only field policy, cancellation and callback-context reentry
+  denial. Hook errors cannot reclassify an already committed domain result;
+  concrete workflow selection remains explicit and is not enabled by default.
+
 - Preserve distinct human actors in target-scoped pending email-removal cascade
   receipts. Structural receipt validation grants no administrative authority.
 
