@@ -101,9 +101,11 @@ priority system/developer instructions remain controlling.
 
 ## Identity Platform Goal Inputs
 
-- After explicit user activation, the supplied IMPLEMENTATION_GOAL.md owns
-  identity milestone sequencing. Start B1 in this repository on main, adopt
-  existing code, then close B2 reset and B3 password change before expansion.
+- After explicit user activation, the latest user-approved identity goal owns
+  milestone sequencing. Its launch copy is /Users/brian/Desktop/GOAL_IDENTITY.md;
+  IMPLEMENTATION_GOAL.md in the preserved planning snapshot is synchronized.
+  Continue this repository on main, adopting pending work and valid B1-B3
+  completion evidence instead of restarting the authentication baseline.
 - Live milestone/progress notes are `.ai/identity-platform/EXECUTION_LEDGER.md`
   and `.ai/identity-platform/IDENTITY_PROGRESS.md`. Product goals/catalogs remain
   reference input in the preserved planning snapshot; do not migrate history.
@@ -111,6 +113,31 @@ priority system/developer instructions remain controlling.
   goal are not implementation prerequisites. Supporting-tool changes require a
   demonstrated blocker and the smallest isolated fix; security and required CI
   are not waived. Preparing these documents does not activate implementation.
+- Dependency-ready implementation lanes MAY proceed in parallel under one
+  persistent, hands-on primary. This supersedes older identity sole-writer and
+  sequential-milestone restrictions, without resuming a paused goal. All
+  subagents MUST use gpt-6.1-sol, medium reasoning and fork_turns="none";
+  workers MUST NOT spawn agents. At most six agents MAY be active, including
+  the primary and independent reviewer; start with at most three workers.
+- Each assignment MUST name non-overlapping owned paths, consumed committed
+  contracts and focused proof, a finite consumer outcome and checks. Missing
+  upstream authority MUST NOT be replaced by stubs or a private engine. The
+  primary MUST inspect the first implemented public boundary, coherent tested
+  batches and the pre-integration diff, and check active workers at least every
+  two hours of active work. Use existing notes, not another evidence framework.
+- Separate leaf-module workers MAY edit explicitly assigned disjoint paths
+  such as risk/hibp or risk/captcha/<provider> while the primary owns TOTP.
+  Shared kernel/session/risk contracts, reference/HTTP composition, cross-module
+  migration wiring, root manifests/workspace files, integration pins, CI/tool
+  configuration and aggregate notes MUST remain primary-owned. Workers MAY
+  own module-local manifests, tests, docs and migrations. Same-repository Git
+  operations MUST be serialized by the primary; workers MUST NOT stage, commit,
+  push or change branches. Local heavy checks MUST be serialized across lanes.
+- CAPTCHA provider lanes MUST wait for the integrated, focused-tested neutral
+  contract; SSO and SCIM MUST wait for their actually consumed organization/
+  synchronization contracts. A worker result MUST NOT count as accepted until
+  the primary reconciles integration and applicable acceptance, independent
+  final-diff review and delivery checks. Product and security scope is unchanged.
 
 ## Repository Structure
 
