@@ -212,6 +212,8 @@ func TestPasswordRegistrationIntegration(t *testing.T) {
 	t.Run("signup-issuance", func(t *testing.T) { testSignupCapabilityIssuance(t, ctx, pool, repo, domain, installAcceptance) })
 	var emailOrigin identity.CommandBinding
 	var emailIdentifier identity.Identifier
+	var usernameOrigin identity.CommandBinding
+	var usernameEmail identity.Identifier
 	var currentHistory migrations.Source = source
 	normalizationInstalled := false
 	for _, mode := range []string{"commit", "native-failure", "audit-failure", "outbox-failure", "foreign-command", "missing-domain", "duplicate-domain", "changed-intent", "changed-attributes", "changed-actor", "changed-actor-kind", "changed-command-id", "retired-identifier", "canonical-duplicate", "foreign-tenant-value", "concurrent", "disconnect-before", "disconnect-after", "schema-conflict", "accept-canonical-duplicate", "accept-retired-identifier", "accept-commit", "accept-concurrent", "accept-audit-failure", "accept-outbox-failure", "accept-native-failure", "accept-final-failure", "accept-structural-id", "accept-user-id", "accept-unknown-attribute", "accept-unknown-schema", "accept-schema-conflict", "accept-missing-key", "accept-disconnect-before", "accept-disconnect-after", "username-commit", "username-native-failure", "username-audit-failure", "username-outbox-failure", "username-canonical-duplicate", "username-accept-canonical-duplicate", "username-concurrent", "username-accept-concurrent", "username-disconnect-before", "username-disconnect-after", "username-accept-email-occupied-username-id", "username-accept-email-occupied-retired-username-id", "username-accept-email-occupied-username-key"} {
@@ -219,7 +221,7 @@ func TestPasswordRegistrationIntegration(t *testing.T) {
 			usernameSelected := strings.HasPrefix(mode, "username-")
 			profileMode := strings.TrimPrefix(mode, "username-")
 			scenario := strings.TrimPrefix(profileMode, "accept-")
-			if strings.HasPrefix(profileMode, "accept-") && !acceptanceInstalled {
+			if (strings.HasPrefix(profileMode, "accept-") || usernameSelected) && !acceptanceInstalled {
 				installAcceptance(t)
 			}
 			if acceptanceInstalled && !normalizationInstalled {
@@ -227,6 +229,8 @@ func TestPasswordRegistrationIntegration(t *testing.T) {
 			}
 			if usernameSelected && !normalizationInstalled {
 				currentHistory = IdentifierNormalizationMigrationSource{Base: currentHistory, Version: 14}
+				currentHistory = EmailVerificationMigrationSource{Base: currentHistory, Version: 15}
+				currentHistory = UsernameRegistrationMigrationSource{Base: currentHistory, Version: 16}
 				upgrade, e := migrations.NewRunner(currentHistory, backend)
 				if e != nil {
 					t.Fatal(e)
@@ -310,6 +314,9 @@ func TestPasswordRegistrationIntegration(t *testing.T) {
 				t.Fatal(err)
 			}
 			op := identity.FeatureOperation{Owner: "identity/password", OperationID: "identity.password.signup", SchemaID: "password-signup", SchemaVersion: 1, RecordRequirement: identity.FeatureRecordOmitted, SubjectRequirement: identity.FeatureSubjectAnonymousFlow}
+			if usernameSelected {
+				op.Owner, op.OperationID, op.SchemaID = "identity/username", "identity.username.signup", "username-signup"
+			}
 			b.UserID, b.AnonymousFlowID = "", string(b.CommandID)
 			b.OperationID, b.SchemaID, b.SchemaVersion = op.OperationID, op.SchemaID, op.SchemaVersion
 			cookie := auth.NewBearerCredential(base64.RawURLEncoding.EncodeToString(bytes.Repeat([]byte{7}, 32)))
@@ -631,6 +638,9 @@ func TestPasswordRegistrationIntegration(t *testing.T) {
 				}
 			}
 			if want == 1 {
+				if mode == "username-commit" {
+					usernameOrigin, usernameEmail = b, phase.intent.Identifier
+				}
 				if mode == "commit" {
 					emailOrigin, emailIdentifier = b, phase.intent.Identifier
 					t.Run("registration-origin-input", func(t *testing.T) {
@@ -691,7 +701,10 @@ func TestPasswordRegistrationIntegration(t *testing.T) {
 		if acceptanceInstalled && !normalizationInstalled {
 			confirmationBase = PasswordSignupAcceptanceMigrationSource{Base: source, Version: 13}
 		}
-		runner, e := migrations.NewRunner(EmailVerificationMigrationSource{Base: confirmationBase, Version: 40}, backend)
+		if !normalizationInstalled {
+			confirmationBase = EmailVerificationMigrationSource{Base: confirmationBase, Version: 40}
+		}
+		runner, e := migrations.NewRunner(confirmationBase, backend)
 		if e != nil {
 			t.Fatal(e)
 		}
@@ -699,6 +712,12 @@ func TestPasswordRegistrationIntegration(t *testing.T) {
 			t.Fatal(e)
 		}
 		testRegistrationEmailVerification(t, ctx, pool, repo, emailOrigin, emailIdentifier)
+	})
+	t.Run("registration-username-confirmation", func(t *testing.T) {
+		if usernameOrigin.CommandID == "" {
+			t.Fatal("select original username commit fixture with confirmation")
+		}
+		testRegistrationEmailVerification(t, ctx, pool, repo, usernameOrigin, usernameEmail)
 	})
 }
 

@@ -7,7 +7,9 @@ import identity "github.com/faustbrian/go-identity"
 // bounded local method returning 1..64 stable descriptors; no I/O, hooks or
 // runtime-generated request identities are allowed. Construction reads it once
 // and owns a copy. Each descriptor's Owner plus "/postgres" must exactly equal
-// the contributor's adapter Owner. All supported schema versions of an operation
+// the contributor's adapter Owner, except the closed username signup/signin
+// profiles which reuse identity/password/postgres's existing password engine.
+// All supported schema versions of an operation
 // belong to one exact contributor identity. A schema may declare distinct user
 // and anonymous-flow subjects; duplicates within either namespace are invalid.
 // Declaration is not authorization,
@@ -75,7 +77,7 @@ func (s *contributorRegistryState) registerFeatures(index int) error {
 		return invalidRegistry()
 	}
 	for _, operation := range operations {
-		if operation.Validate() != nil || entry.descriptor.Owner != operation.Owner+"/postgres" {
+		if operation.Validate() != nil || !featureContributorOwns(entry.descriptor, operation) {
 			return invalidRegistry()
 		}
 		key := featureKey(operation)
@@ -90,4 +92,14 @@ func (s *contributorRegistryState) registerFeatures(index int) error {
 		s.features = append(s.features, FeatureRegistration{Contributor: entry.descriptor, Operation: operation})
 	}
 	return nil
+}
+
+// Username owns its public workflow, not another password proof engine. Keep
+// this exception to the exact existing adapter and closed paired-custody tuples;
+// no arbitrary cross-owner operation, schema or future version is admitted.
+func featureContributorOwns(d ContributorDescriptor, op identity.FeatureOperation) bool {
+	if d.Owner == op.Owner+"/postgres" {
+		return true
+	}
+	return op.Owner == "identity/username" && (passwordRegistrationOperation(op) || passwordSigninOperation(op)) && d == (ContributorDescriptor{Owner: "identity/password/postgres", ContractID: "identity.password", Version: 1})
 }

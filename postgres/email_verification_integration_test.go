@@ -159,6 +159,9 @@ func testRegistrationEmailVerificationMode(t *testing.T, ctx context.Context, po
 		Change:           identity.IdentifierChange{TenantID: original.TenantID, UserID: identifier.UserID, ID: identifier.ID, Action: identity.IdentifierVerify, ExpectedUserVersion: 1, ExpectedAuthorityVersion: 1, ExpectedIdentifierVersion: 1, ExpectedVerificationVersion: 1},
 		CanonicalAddress: identifier.CanonicalValue, ComparisonProfile: "email-v1", RegistrationCommandID: original.CommandID,
 	}}
+	if original.OperationID == "identity.username.signup" {
+		native.intent.RegistrationOperation = original.OperationID
+	}
 	native.fail = mode == "native-failure"
 	cap := &emailVerificationCapabilityPhase{failFinalize: mode == "finalize-failure"}
 	counters := &emailVerificationCounterPhase{deny: mode == "counter-denied"}
@@ -171,7 +174,7 @@ func testRegistrationEmailVerificationMode(t *testing.T, ctx context.Context, po
 		t.Fatal(err)
 	}
 	b, plan := emailVerificationPlanFixture(t)
-	plan.Capability.CapabilityID = "email-proof-" + mode
+	plan.Capability.CapabilityID = "email-proof-" + original.OperationID + "-" + mode
 	b.TenantID, b.UserID, b.RecordID = original.TenantID, identifier.UserID, string(identifier.ID)
 	b.CommandID, err = identity.NewCommandID()
 	if err != nil {
@@ -197,6 +200,9 @@ func testRegistrationEmailVerificationMode(t *testing.T, ctx context.Context, po
 		return identity.FeatureField{Name: "email-verification." + n, Value: identity.FeatureValue{Kind: identity.FeatureUint64, Uint64: v}}
 	}
 	fields := []identity.FeatureField{text("tenant", string(b.TenantID)), text("user", string(b.UserID)), text("identifier", b.RecordID), text("canonical-address", native.intent.CanonicalAddress), text("comparison-profile", "email-v1"), text("registration-command", string(native.intent.RegistrationCommandID)), number("user-version", native.intent.Change.ExpectedUserVersion), number("authority-version", 1), number("identifier-version", 1), number("verification-version", 1)}
+	if original.OperationID == "identity.username.signup" {
+		fields = append(fields, text("registration-operation", "identity.username.signup"))
+	}
 	command := featureCodecCommand(t, identity.FeatureCommandSpec{Binding: b, Operation: native.FeatureOperations()[0], Fields: fields})
 	native.expected = command
 	plan.Contributors = registry.Descriptors()
@@ -272,7 +278,24 @@ func testRegistrationEmailVerificationMode(t *testing.T, ctx context.Context, po
 		t.Fatal("committed confirmation replay did not retain original receipt", err)
 	}
 	state, err := repo.GetIdentifierState(ctx, identity.IdentifierQuery{TenantID: b.TenantID, UserID: b.UserID, MaximumIdentifiers: 128})
-	if err != nil || state.User.Version != 2 || state.AuthorityVersion != 2 || len(state.Identifiers) != 1 || !state.Identifiers[0].Verified || state.Identifiers[0].Version != 2 || state.Verifications[0].Version != 2 {
+	wantIdentifiers := 1
+	if original.OperationID == "identity.username.signup" {
+		wantIdentifiers = 2
+	}
+	verified, verification := false, false
+	for _, actual := range state.Identifiers {
+		if actual.ID == identifier.ID {
+			verified = actual.Verified && actual.Version == 2 && actual.Kind == identity.IdentifierEmail
+		} else if actual.Kind != identity.IdentifierUsername || actual.Verified || actual.Version != 1 {
+			t.Fatal("email confirmation changed supplementary identifier")
+		}
+	}
+	for _, actual := range state.Verifications {
+		if actual.IdentifierID == identifier.ID {
+			verification = actual.Version == 2
+		}
+	}
+	if err != nil || state.User.Version != 2 || state.AuthorityVersion != 2 || len(state.Identifiers) != wantIdentifiers || !verified || !verification {
 		t.Fatal("committed confirmation did not verify exact original target", err)
 	}
 	var proofState string

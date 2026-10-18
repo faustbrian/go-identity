@@ -54,4 +54,16 @@ func TestEmailVerificationFields(t *testing.T) {
 	if _, err := intent.MarshalJSON(); err == nil {
 		t.Fatal("original intent serialized")
 	}
+	t.Run("username-origin", func(t *testing.T) {
+		selected := intent
+		selected.RegistrationOperation = "identity.username.signup"
+		bound, err := EmailVerificationFields(selected)
+		if err != nil || len(bound) != 11 || bound[10].Name != "email-verification.registration-operation" || bound[10].Value.Text != selected.RegistrationOperation {
+			t.Fatal("username verification did not freeze its exact original purpose", err)
+		}
+		selected.RegistrationOperation = "identity.magic-link.consume"
+		if _, err := EmailVerificationFields(selected); err == nil {
+			t.Fatal("registration link accepted a foreign original workflow")
+		}
+	})
 }

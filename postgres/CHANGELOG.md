@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Retain exact username signup/signin password custody through the existing
+  password contributor, without route relabeling or generic cross-owner aliases.
+  Add forward registration/email-verification purpose storage and exact origin
+  lookup; legacy password command bytes and installed migration history remain
+  unchanged. Native workflow composition still owns policy and public exposure.
+
 - Add optional forward identifier normalization metadata without reinterpreting
   existing values or requiring the migration for legacy reads. Preserve bound
   identity through locked reads, mutations and password registration. Selected

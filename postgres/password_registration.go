@@ -144,7 +144,8 @@ func PasswordRegistrationFields(s PasswordRegistrationIntent) ([]identity.Featur
 }
 
 func passwordRegistrationOperation(op identity.FeatureOperation) bool {
-	return op.Owner == "identity/password" && op.OperationID == "identity.password.signup" && op.SchemaID == "password-signup" && op.SchemaVersion == 1 && op.RecordRequirement == identity.FeatureRecordOmitted && op.SubjectRequirement <= identity.FeatureSubjectAnonymousFlow
+	profile := op.Owner == "identity/password" && op.OperationID == "identity.password.signup" && op.SchemaID == "password-signup" || op.Owner == "identity/username" && op.OperationID == "identity.username.signup" && op.SchemaID == "username-signup"
+	return profile && op.SchemaVersion == 1 && op.RecordRequirement == identity.FeatureRecordOmitted && op.SubjectRequirement <= identity.FeatureSubjectAnonymousFlow
 }
 
 // ApplyOrAccept is the opt-in anonymous signup registration branch. A true

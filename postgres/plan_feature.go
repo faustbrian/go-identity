@@ -95,7 +95,7 @@ func encodeFeaturePlanMode(binding identity.CommandBinding, fingerprint [32]byte
 	if p.CommandCounters != nil && (p.SubjectType == "" || p.RiskEvidence != nil || p.CommandCounters.PolicyVersion == 0 || p.CommandCounters.Fingerprint == ([32]byte{})) {
 		return nil, invalidPlan()
 	}
-	if p.Feature == nil || fingerprint == ([32]byte{}) || binding.ValidateFor(p.Feature.Operation) != nil || p.Feature.Contributor.Owner != p.Feature.Operation.Owner+"/postgres" || !validContributorDescriptor(p.Feature.Contributor) || p.Capability != nil || len(p.Contributors) != count || len(p.Audits) == 0 || len(p.Audits) > 64 || p.Lifecycle == nil || !featureEventName(p.Lifecycle.EventType) || validateRiskPlan(binding, p) != nil {
+	if p.Feature == nil || fingerprint == ([32]byte{}) || binding.ValidateFor(p.Feature.Operation) != nil || !featureContributorOwns(p.Feature.Contributor, p.Feature.Operation) || !validContributorDescriptor(p.Feature.Contributor) || p.Capability != nil || len(p.Contributors) != count || len(p.Audits) == 0 || len(p.Audits) > 64 || p.Lifecycle == nil || !featureEventName(p.Lifecycle.EventType) || validateRiskPlan(binding, p) != nil {
 		return nil, invalidPlan()
 	}
 	if p.SubjectType != "" && !auditName(p.SubjectType) {

@@ -66,7 +66,7 @@ func (c *Coordinator) QueryRegistrationPreparation(ctx context.Context, q identi
 	observed, observeErr := c.commandRead(ctx, q.CommandID)
 	id, _ := base64.RawURLEncoding.DecodeString(string(q.CommandID))
 	var registered bool
-	registrationErr := c.pool.Raw().QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM identity.registration_bindings WHERE tenant_id=$1 AND purpose='identity.password.signup' AND command_id=$2 AND user_id=$3)`, string(q.TenantID), id, string(q.UserID)).Scan(&registered)
+	registrationErr := c.pool.Raw().QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM identity.registration_bindings WHERE tenant_id=$1 AND purpose=$4 AND command_id=$2 AND user_id=$3)`, string(q.TenantID), id, string(q.UserID), feature.Operation.OperationID).Scan(&registered)
 	if ctx.Err() != nil {
 		return binding, nil, readFailure(ctx, ctx.Err())
 	}

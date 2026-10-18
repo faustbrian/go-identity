@@ -1,5 +1,24 @@
 # Identity PostgreSQL
 
+## Username registration provenance
+
+The exact `identity.username.signup`/`username-signup` v1 and
+`identity.username.signin`/`username-signin` v1 profiles reuse the registered
+`identity/password/postgres` contributor's paired custody and sole coordinator.
+No other cross-owner tuple is admitted. This registration is not an enabled
+workflow, proof of username policy, or HTTP exposure.
+
+For required-email username signup, install normalization binding, original
+registration/acceptance and email-verification histories, then append
+`UsernameRegistrationMigrationSource{Base: history, Version: nextVersion}`.
+Install any already-selected historical magic-link registration suffix first;
+this successor retains its disposition arm without activating that workflow.
+It adds no account, inferred origin, backfill, transaction owner or journal.
+Legacy password origins retain their exact bytes and empty operation selection.
+Username confirmation supplies `EmailVerificationIntent.RegistrationOperation`
+as `identity.username.signup`; this freezes its distinct original purpose in
+the command and retained foreign-key evidence. Never relabel the origin.
+
 This experimental adapter uses authentication v2, authorization v3, capability
 v2 and password v2 together with the matching identity kernel. Update supplied
 primitive values to those major imports. Existing migration source bytes and

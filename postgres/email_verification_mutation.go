@@ -52,7 +52,7 @@ func prepareEmailVerification(ctx context.Context, w Work, command identity.Comm
 	if err != nil {
 		return w.fail(ctx, invalidEmailVerification())
 	}
-	rows, err := w.Query(ctx, `SELECT EXISTS(SELECT 1 FROM identity.registration_bindings r JOIN identity.commands c USING(tenant_id,purpose,command_id) WHERE r.tenant_id=$1 AND r.purpose='identity.password.signup' AND r.command_id=$2 AND r.user_id=$3 AND r.identifier_id=$4 AND c.state='committed')`, string(intent.Change.TenantID), origin, string(intent.Change.UserID), string(intent.Change.ID))
+	rows, err := w.Query(ctx, `SELECT EXISTS(SELECT 1 FROM identity.registration_bindings r JOIN identity.commands c USING(tenant_id,purpose,command_id) WHERE r.tenant_id=$1 AND r.purpose=$5 AND r.command_id=$2 AND r.user_id=$3 AND r.identifier_id=$4 AND c.state='committed')`, string(intent.Change.TenantID), origin, string(intent.Change.UserID), string(intent.Change.ID), intent.registrationPurpose())
 	if err != nil {
 		return err
 	}
@@ -107,7 +107,7 @@ func applyEmailVerification(ctx context.Context, w Work) error {
 	if err != nil {
 		return w.fail(ctx, invalidEmailVerification())
 	}
-	n, err = w.Exec(ctx, `INSERT INTO identity.email_verifications(tenant_id,user_id,identifier_id,command_id,command_key,registration_command_key,before_user_version,after_user_version,before_authority_version,after_authority_version,verified_at) VALUES($1,$2,$3,$4,$5,$6,$7::numeric,$8::numeric,$9::numeric,$10::numeric,$11)`, string(c.TenantID), string(c.UserID), string(c.ID), string(w.state.binding.CommandID), key, origin, strconv.FormatUint(c.ExpectedUserVersion, 10), strconv.FormatUint(c.ExpectedUserVersion+1, 10), strconv.FormatUint(c.ExpectedAuthorityVersion, 10), strconv.FormatUint(c.ExpectedAuthorityVersion+1, 10), p.at)
+	n, err = w.Exec(ctx, `INSERT INTO identity.email_verifications(tenant_id,user_id,identifier_id,command_id,command_key,registration_command_key,before_user_version,after_user_version,before_authority_version,after_authority_version,verified_at,registration_purpose) VALUES($1,$2,$3,$4,$5,$6,$7::numeric,$8::numeric,$9::numeric,$10::numeric,$11,$12)`, string(c.TenantID), string(c.UserID), string(c.ID), string(w.state.binding.CommandID), key, origin, strconv.FormatUint(c.ExpectedUserVersion, 10), strconv.FormatUint(c.ExpectedUserVersion+1, 10), strconv.FormatUint(c.ExpectedAuthorityVersion, 10), strconv.FormatUint(c.ExpectedAuthorityVersion+1, 10), p.at, p.intent.registrationPurpose())
 	if err != nil {
 		return err
 	}

@@ -18,6 +18,9 @@ type EmailVerificationIntent struct {
 	CanonicalAddress      string
 	ComparisonProfile     string
 	RegistrationCommandID identity.CommandID
+	// Empty retains the original password-signup encoding. The only additional
+	// profile is the exact username-signup origin, never a caller-selected alias.
+	RegistrationOperation string
 }
 
 // EmailVerificationContributor is the native registration-link owner. Its pure
@@ -43,6 +46,8 @@ func (EmailVerificationIntent) MarshalJSON() ([]byte, error) { return nil, inval
 // EmailVerificationFields returns ten owned canonical fields for the native
 // confirmation command. Include all unchanged before fingerprinting. It checks
 // structural bounds, not normalization, cryptography or current authority.
+// A username signup adds an eleventh exact original-operation field; the empty
+// legacy selection retains its original bytes and password-signup meaning.
 // Only the initial pending signup email profile is supported here; session
 // management, OTP, resend, replacement and address removal are distinct flows.
 func EmailVerificationFields(s EmailVerificationIntent) ([]identity.FeatureField, error) {
@@ -66,13 +71,27 @@ func emailVerificationFields(s EmailVerificationIntent, managed bool) ([]identit
 	if _, err := identity.ParseCommandID(string(s.RegistrationCommandID)); err != nil {
 		return nil, invalidEmailVerification()
 	}
+	if s.RegistrationOperation != "" && s.RegistrationOperation != "identity.username.signup" || managed && s.RegistrationOperation != "" {
+		return nil, invalidEmailVerification()
+	}
 	text := func(n, v string) identity.FeatureField {
 		return identity.FeatureField{Name: "email-verification." + n, Value: identity.FeatureValue{Kind: identity.FeatureText, Text: v}}
 	}
 	number := func(n string, v uint64) identity.FeatureField {
 		return identity.FeatureField{Name: "email-verification." + n, Value: identity.FeatureValue{Kind: identity.FeatureUint64, Uint64: v}}
 	}
-	return []identity.FeatureField{text("tenant", string(c.TenantID)), text("user", string(c.UserID)), text("identifier", string(c.ID)), text("canonical-address", s.CanonicalAddress), text("comparison-profile", s.ComparisonProfile), text("registration-command", string(s.RegistrationCommandID)), number("user-version", c.ExpectedUserVersion), number("authority-version", c.ExpectedAuthorityVersion), number("identifier-version", c.ExpectedIdentifierVersion), number("verification-version", c.ExpectedVerificationVersion)}, nil
+	fields := []identity.FeatureField{text("tenant", string(c.TenantID)), text("user", string(c.UserID)), text("identifier", string(c.ID)), text("canonical-address", s.CanonicalAddress), text("comparison-profile", s.ComparisonProfile), text("registration-command", string(s.RegistrationCommandID)), number("user-version", c.ExpectedUserVersion), number("authority-version", c.ExpectedAuthorityVersion), number("identifier-version", c.ExpectedIdentifierVersion), number("verification-version", c.ExpectedVerificationVersion)}
+	if s.RegistrationOperation != "" {
+		fields = append(fields, text("registration-operation", s.RegistrationOperation))
+	}
+	return fields, nil
+}
+
+func (s EmailVerificationIntent) registrationPurpose() string {
+	if s.RegistrationOperation == "" {
+		return "identity.password.signup"
+	}
+	return s.RegistrationOperation
 }
 
 func emailVerificationCommand(p EmailVerificationContributor, command identity.Command, plan CommandPlan) (EmailVerificationIntent, error) {
