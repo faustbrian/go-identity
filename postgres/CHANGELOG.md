@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Add closed native organization invitation issuance and one-use acceptance
+  profiles. Fence the existing verified recipient and original grant scope in
+  the sole transaction, preserving exact expiry and actual membership versions.
+  Required invitation/membership outbox composition remains adapter-owned.
+
+- Stage independent OAuth consent creation/reconfirmation events alongside the
+  grant transition. Require the exact native mutation and dual-event outbox
+  owner; consent IDs and versions cannot be replaced by grant metadata.
+
 - Add command-bound active target-user admission for native feature adapters,
   checking the exact user record version under the existing lifecycle lock
   without treating that aggregate version as a security epoch.

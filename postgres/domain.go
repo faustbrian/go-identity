@@ -59,7 +59,7 @@ func (c *Coordinator) Begin(ctx context.Context, r Reservation) (Work, error) {
 	if r.state != nil && r.state.plan != nil && r.state.plan.captchaUse != nil && captchaExecutionParticipant(r.state.plan) == nil {
 		return Work{}, invalidWork()
 	}
-	if ctx == nil || c == nil || c.pool == nil || c.pool.Raw() == nil || r.state == nil || r.state.coordinator != c || r.state.plan.belongsTo(c.registry) != nil || r.state.plan.capability != nil && (r.state.plan.feature == nil || r.state.plan.feature.Operation != registrationEmailVerificationOperation() && !managedEmailConfirmationOperation(r.state.plan.feature.Operation) && r.state.plan.feature.Operation != credentialResetOperation() && r.state.plan.feature.Operation != magicLinkConsumeOperation() && r.state.plan.mfaCompletion == nil) || r.state.plan.risk != nil && riskExecutionParticipant(r.state.plan) == nil || r.state.plan.counters != nil && counterAdmissionParticipant(r.state.plan) == nil {
+	if ctx == nil || c == nil || c.pool == nil || c.pool.Raw() == nil || r.state == nil || r.state.coordinator != c || r.state.plan.belongsTo(c.registry) != nil || r.state.plan.capability != nil && (r.state.plan.feature == nil || r.state.plan.feature.Operation != registrationEmailVerificationOperation() && !managedEmailConfirmationOperation(r.state.plan.feature.Operation) && r.state.plan.feature.Operation != credentialResetOperation() && r.state.plan.feature.Operation != magicLinkConsumeOperation() && r.state.plan.feature.Operation != organizationInvitationAcceptOperation() && r.state.plan.mfaCompletion == nil) || r.state.plan.risk != nil && riskExecutionParticipant(r.state.plan) == nil || r.state.plan.counters != nil && counterAdmissionParticipant(r.state.plan) == nil {
 		return Work{}, invalidWork()
 	}
 	bounded, cancel := context.WithTimeout(ctx, c.maximumDuration)
@@ -296,7 +296,11 @@ func (c *Coordinator) Commit(w Work, result identity.CommandResult) (identity.Co
 	for _, entry := range w.state.execution.reservation.plan.contributors {
 		if entry.descriptor.Owner == "outbox/postgres" {
 			var err error
-			if w.state.execution.reservation.plan.magicLinkRegistration != nil {
+			if w.state.oauthConsent != nil {
+				err = entry.contributor.(OAuthConsentLifecycleContributor).PersistOAuthConsent(w.state.ctx, w)
+			} else if w.state.invitationMembership != nil {
+				err = entry.contributor.(OrganizationInvitationLifecycleContributor).PersistOrganizationInvitation(w.state.ctx, w)
+			} else if w.state.execution.reservation.plan.magicLinkRegistration != nil {
 				err = entry.contributor.(MagicLinkRegistrationLifecycleContributor).PersistMagicLinkRegistration(w.state.ctx, w)
 			} else if w.state.credentialReceipt != nil {
 				err = entry.contributor.(CredentialCompromiseLifecycleContributor).PersistCredentialCompromise(w.state.ctx, w)
@@ -379,6 +383,9 @@ func (c *Coordinator) Commit(w Work, result identity.CommandResult) (identity.Co
 		return c.Abort(w, err)
 	}
 	if err := c.finalizeMagicLinkConsumption(w); err != nil {
+		return c.Abort(w, err)
+	}
+	if err := c.finalizeOrganizationInvitationConsumption(w); err != nil {
 		return c.Abort(w, err)
 	}
 	if err := c.finalizeMFACompletionConsumption(w); err != nil {

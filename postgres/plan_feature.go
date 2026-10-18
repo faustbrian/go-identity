@@ -15,7 +15,7 @@ import (
 // that declaration complete. The coordinator alone computes authoritative keyed
 // intent and matches its frozen registry. Preparation grants no reservation,
 // Work or execution readiness. Only the exact native registration-email,
-// password-reset and magic-link profiles support original proof consumption
+// password-reset, magic-link and organization-invitation profiles support original proof consumption
 // through their typed atomic phases. Other capability/cascade inputs are rejected. Invalid
 // input returns redacted identity.InvalidInputError. Do not mutate inputs
 // concurrently with this call.
@@ -54,6 +54,9 @@ func encodeFeaturePlanMode(binding identity.CommandBinding, fingerprint [32]byte
 	}
 	if p.Feature != nil && passwordResetOperation(p.Feature.Operation) && !proofBase {
 		return encodeCredentialResetPlan(binding, fingerprint, p)
+	}
+	if p.Feature != nil && p.Feature.Operation == organizationInvitationAcceptOperation() && !proofBase {
+		return encodeOrganizationInvitationConsumptionPlan(binding, fingerprint, p)
 	}
 	if p.Capability != nil {
 		return encodeEmailVerificationPlan(binding, fingerprint, p)

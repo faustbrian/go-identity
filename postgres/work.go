@@ -43,6 +43,11 @@ type workState struct {
 	magicLinkRecipient        *magicLinkRecipientAdmission
 	magicLinkConsumed         bool
 	magicLinkFinalized        bool
+	invitationConsumed        bool
+	invitationFinalized       bool
+	invitationMembership      *OrganizationInvitationMembership
+	invitationRecipient       *organizationInvitationRecipientAdmission
+	oauthConsent              *OAuthConsentMutation
 	mfaConsumed               bool
 	mfaFinalized              bool
 	profile                   *identity.UserProfile

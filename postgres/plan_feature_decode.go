@@ -30,6 +30,9 @@ func decodeFeaturePlanMode(binding identity.CommandBinding, fingerprint [32]byte
 	if !proofBase && binding.OperationID == "identity.password.reset-complete" {
 		return decodeCredentialResetPlan(binding, fingerprint, encoded)
 	}
+	if !proofBase && binding.OperationID == "identity.organization.invitation.accept" {
+		return decodeOrganizationInvitationConsumptionPlan(binding, fingerprint, encoded)
+	}
 	if len(encoded) > 0 && encoded[0] == 0xa5 {
 		return decodeEmailVerificationPlan(binding, fingerprint, encoded)
 	}

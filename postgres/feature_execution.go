@@ -25,7 +25,7 @@ import (
 // Methods must support concurrent calls with independent serial-use handles.
 // Risk execution additionally requires its exact typed current-check/finalize
 // owner. The exact registration-email, password-reset and magic-link profiles
-// additionally require their typed atomic participants. Other capability/OTP
+// and organization invitation profiles require their typed atomic participants. Other capability/OTP
 // profiles remain rejected until their typed phases exist.
 type FeatureExecutionContributor interface {
 	FeatureContributor
@@ -60,6 +60,20 @@ func validateFeatureCommand(phase FeatureExecutionContributor, command identity.
 	if err := phase.ValidateFeatureCommand(command, plan); err != nil {
 		return err
 	}
+	if oauthConsentSelected(plan) {
+		owner, ok := phase.(OAuthConsentContributor)
+		if !ok {
+			return invalidPlan()
+		}
+		return owner.ValidateOAuthConsent(command)
+	}
+	if plan.Feature != nil && plan.Feature.Operation == organizationInvitationSendOperation() {
+		owner, ok := phase.(OrganizationInvitationIssuanceContributor)
+		if !ok {
+			return invalidPlan()
+		}
+		return owner.ValidateOrganizationInvitationIssuance(command, plan)
+	}
 	if plan.Feature != nil && otpEmailMutationOperation(plan.Feature.Operation) {
 		p, ok := phase.(ManagedEmailVerificationContributor)
 		if !ok {
@@ -88,6 +102,9 @@ func validateFeatureCommand(phase FeatureExecutionContributor, command identity.
 		return validateMFAContinuation(phase, command, plan)
 	}
 	if plan.Capability != nil {
+		if plan.Feature != nil && plan.Feature.Operation == organizationInvitationAcceptOperation() {
+			return validateOrganizationInvitationConsumption(phase, command, plan)
+		}
 		if plan.MFACompletion != nil {
 			return validateMFACompletion(phase, command, plan)
 		}
@@ -147,7 +164,7 @@ func (r *ContributorRegistry) admitFeaturePlanMode(b identity.CommandBinding, fi
 	if p.MagicLinkRegistration != nil && (r == nil || r.state == nil) {
 		return nil, invalidPlan()
 	}
-	if p.Capability != nil && (p.Feature == nil || p.Feature.Operation != registrationEmailVerificationOperation() && !managedEmailConfirmationOperation(p.Feature.Operation) && p.Feature.Operation != credentialResetOperation() && p.Feature.Operation != magicLinkConsumeOperation() && !validMFACompletionPlan(b, p)) {
+	if p.Capability != nil && (p.Feature == nil || p.Feature.Operation != registrationEmailVerificationOperation() && !managedEmailConfirmationOperation(p.Feature.Operation) && p.Feature.Operation != credentialResetOperation() && p.Feature.Operation != magicLinkConsumeOperation() && p.Feature.Operation != organizationInvitationAcceptOperation() && !validMFACompletionPlan(b, p)) {
 		return nil, invalidPlan()
 	}
 	digest, err := FeaturePlanDigest(b, fingerprint, p)
@@ -167,6 +184,14 @@ func (r *ContributorRegistry) admitFeaturePlanMode(b identity.CommandBinding, fi
 	}
 	if _, ok := feature.contributor.(FeatureExecutionContributor); !ok {
 		return nil, invalidPlan()
+	}
+	if p.Feature.Operation == organizationInvitationSendOperation() {
+		if _, ok := feature.contributor.(OrganizationInvitationIssuanceContributor); !ok {
+			return nil, invalidPlan()
+		}
+		if !preparation && !validOrganizationInvitationIssuance(b, p) {
+			return nil, invalidPlan()
+		}
 	}
 	if p.Feature.Operation == emailRemovalOperation() {
 		if _, ok := feature.contributor.(EmailRemovalContributor); !ok {
@@ -223,7 +248,11 @@ func (r *ContributorRegistry) admitFeaturePlanMode(b identity.CommandBinding, fi
 		}
 	}
 	if p.Capability != nil {
-		if p.MFACompletion != nil {
+		if p.Feature.Operation == organizationInvitationAcceptOperation() {
+			if _, ok := feature.contributor.(OrganizationInvitationConsumptionContributor); !ok {
+				return nil, invalidPlan()
+			}
+		} else if p.MFACompletion != nil {
 			if _, ok := feature.contributor.(MFACompletionContributor); !ok {
 				return nil, invalidPlan()
 			}
@@ -282,11 +311,35 @@ func (r *ContributorRegistry) admitFeaturePlanMode(b identity.CommandBinding, fi
 	if err != nil {
 		return nil, invalidPlan()
 	}
+	if oauthConsentSelected(p) {
+		if !validOAuthConsentProfile(b, p) {
+			return nil, invalidPlan()
+		}
+		if _, ok := feature.contributor.(OAuthConsentContributor); !ok {
+			return nil, invalidPlan()
+		}
+		for _, entry := range entries {
+			if entry.descriptor.Owner == "outbox/postgres" {
+				if _, ok := entry.contributor.(OAuthConsentLifecycleContributor); !ok {
+					return nil, invalidPlan()
+				}
+			}
+		}
+	}
 	if validateDeliveryContributor(b, p.Delivery, entries) != nil {
 		return nil, invalidPlan()
 	}
 	if validateIssuanceContributor(b, p.CapabilityIssuance, entries) != nil {
 		return nil, invalidPlan()
+	}
+	if p.Feature.Operation == organizationInvitationAcceptOperation() {
+		for _, entry := range entries {
+			if entry.descriptor.Owner == "outbox/postgres" {
+				if _, ok := entry.contributor.(OrganizationInvitationLifecycleContributor); !ok {
+					return nil, invalidPlan()
+				}
+			}
+		}
 	}
 	if credentialCompromiseOperation(p.Feature.Operation) {
 		if _, ok := feature.contributor.(CredentialCompromiseContributor); !ok {
@@ -537,7 +590,11 @@ func (c *Coordinator) ApplyFeature(ctx context.Context, w Work, command identity
 		}
 	}
 	if p.capability != nil {
-		if p.mfaCompletion != nil {
+		if p.feature.Operation == organizationInvitationAcceptOperation() {
+			if e := prepareOrganizationInvitationConsumption(ctx, w); e != nil {
+				return result, e
+			}
+		} else if p.mfaCompletion != nil {
 			if e := prepareMFACompletionConsumption(ctx, w); e != nil {
 				return result, e
 			}
@@ -569,6 +626,9 @@ func (c *Coordinator) ApplyFeature(ctx context.Context, w Work, command identity
 		return result, e
 	}
 	if w.state.rows != nil || receipt.Operation != p.feature.Operation || receipt.BeforeVersion != p.lifecycle.BeforeVersion || receipt.AfterVersion != p.lifecycle.AfterVersion {
+		return result, w.fail(ctx, identity.InvalidInputError{Field: "feature_receipt"})
+	}
+	if oauthConsentSelected(p.snapshot()) && w.state.oauthConsent == nil || p.feature.Operation == organizationInvitationAcceptOperation() && w.state.invitationMembership == nil {
 		return result, w.fail(ctx, identity.InvalidInputError{Field: "feature_receipt"})
 	}
 	if w.state.credentialIntent != nil {

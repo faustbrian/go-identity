@@ -5,6 +5,58 @@ v2 and password v2 together with the matching identity kernel. Update supplied
 primitive values to those major imports. Existing migration source bytes and
 stored database history remain unchanged.
 
+## Closed invitation and OAuth consent contributions
+
+Native organization invitation send uses the existing preparation journal,
+capability issuer and encrypted delivery effects, not another workflow owner.
+`OrganizationInvitationIssuanceContributor` must validate original owner/session,
+organization, recipient and limits before generation. In each protected Work,
+`RequireOrganizationInvitationRecipient` reuses primary recipient/authority locks
+and retains an invocation-bound verified-email selection. Apply must repeat the
+fence before `StageCapabilityIssuanceFor`; a preparation Work cannot grant later
+issuance. Final checks can call the existing `RequireRecipient` again without
+recording a second issuance selection. Original invitation expiry, recipient,
+member role and all five signed scope caveats must match; no subject override is
+added. The native owner separately enforces current owner and organization policy.
+
+Acceptance requires `OrganizationInvitationConsumptionContributor`, the actual
+one-use capability participant and `OrganizationInvitationLifecycleContributor`.
+`OrganizationInvitationConsumption` exposes original custody only during the
+exact owner's Apply, after provisional consumption. After successful native
+membership SQL, record `OrganizationInvitationMembership` with the real retained
+member version; `StagedOrganizationInvitationMembership` emits index1 alongside
+the primary index0 invitation1-to-2 event. Rejoining a removed member advances
+its actual tombstone, not invitation versions. No ignored recording failure can
+leave usable Work. Capability finalization, both events, audit and mutation must
+commit together; any failure rolls back. Metadata is not proof or a commit receipt.
+
+For the exact public-password OAuth continuation, `OAuthConsentContributor`
+records an independent `OAuthConsentMutation` after its actual successful SQL.
+The authenticated command freezes `oauth.consent-id`,
+`oauth.consent-before-version`, `oauth.consent-after-version` and
+`oauth.consent-created`; native validation also binds the original client.
+`OAuthConsentLifecycleContributor` persists primary grant index0 and the
+`StagedOAuthConsent` index1 event in the same outbox. Creation is
+`consent.created.v1`0-to-1; repeat explicit approval retains the consent ID and
+emits `consent.reconfirmed.v1` with its real positive predecessor. This does not
+invent a grant scope change, expose consent fields as permissions or acknowledge
+downstream consumption. Zero, foreign, wrong-phase or repeated mutation receipts
+deny; required secondary owners cannot be replaced by a single-event contributor.
+
+These are library prerequisites. Complete native invitation/OAuth consumers,
+their public dependency pins, real delivery/denial/replay/rollback acceptance and
+whole-unit qualification remain separate requirements; these declarations alone
+do not deliver either complete consumer milestone. Existing migrations and
+non-selected declaration encodings are unchanged.
+
+Scoped lifecycle-catalog additions for these profiles are
+`invitation.created.v1` (invitation0-to-1), `invitation.accepted.v1`
+(invitation1-to-2), and `consent.reconfirmed.v1` (independent retained consent
+successor). The existing `membership.created.v1` and `consent.created.v1`
+semantics remain unchanged. These safe informational envelopes do not alter
+current-authority epochs, grant membership or acknowledge cascade completion;
+consumers selecting the new transitions must register their exact event names.
+
 ## Pending managed email attachment
 
 The independently selected OTP profile uses `OTPEmailVerificationFields` and

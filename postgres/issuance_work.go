@@ -169,6 +169,13 @@ func (w Work) StageCapabilityIssuanceFor(p CapabilityIssuanceContributor, index 
 	}
 	v, payload := d.plan.Grants[index], grant.Payload()
 	subject := w.state.binding.UserID
+	if w.state.binding.OperationID == organizationInvitationSendOperation().OperationID {
+		var err error
+		subject, err = organizationInvitationIssuanceSubject(w.state, w.state.execution.reservation.plan.snapshot(), payload)
+		if err != nil {
+			return w.fail(w.state.ctx, err)
+		}
+	}
 	if d.plan.RegistrationUserID != "" {
 		created := w.state.registrationUser
 		if !validRegistrationIssuance(w.state.binding, w.state.execution.reservation.plan.snapshot()) || created == nil || created.ID != d.plan.RegistrationUserID || created.Validate(w.state.binding.TenantID) != nil || created.Status != identity.StatusActive || created.Version != 1 {
