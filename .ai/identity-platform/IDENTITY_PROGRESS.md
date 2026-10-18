@@ -1,6 +1,6 @@
 # Identity Platform Progress
 
-## TL;DR — updated 2026-10-18 21:47 UTC
+## TL;DR — updated 2026-10-18 22:23 UTC
 
 **Estimated whole-goal completion: approximately 15%, with low confidence.**
 **Consumer milestones: 6/39 closed** (15.4% unweighted); full scope remains
@@ -11,6 +11,17 @@ credentials, and four CAPTCHA adapters are delivered as bounded profiles.
 Most platform families and final package qualification are not closed;
 queued work is not counted as delivered.
 This is an effort/scope estimate, not a measured percentage or an ETA.
+
+**Current implementation:** native existing-account phone enrollment now passes
+the genuine PostgreSQL/SMS consumer in bearer and cookie profiles: fresh action
+proof -> pending phone -> captured encrypted SMS -> counted wrong-code denial ->
+atomic verification -> code-free recovery. Actual before/after-COMMIT connection
+faults, CSRF rejection, changed-input conflict, late factor withdrawal and
+post-query disclosure withdrawal pass (14.083s, race enabled). Native ordinary
+race passes 2.123s; tagged vet passes. Independent final review approves the
+complete native batch; commit/publication remains pending at this snapshot.
+HTTP/reference and broader M08 operations remain unfinished;
+the milestone count and whole-goal estimate do not increase for this checkpoint.
 
 **Latest delivery:** M07 email OTP -> captured encrypted delivery -> one consuming
 signin -> browser/persistent session read/logout, with original retry and

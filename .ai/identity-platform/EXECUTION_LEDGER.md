@@ -1,6 +1,51 @@
 # Identity Implementation — Current Milestone
 
-## Live checkpoint — 2026-10-18 21:11 UTC
+## Live checkpoint — 2026-10-18 22:23 UTC
+
+22:23 actual M08 native consumer GREEN: bearer/cookie x normal, before-COMMIT,
+lost-COMMIT-ack, late-send-factor and late-verify-factor; final9187 PASS14.083s
+with race and post-query disclosure denial. Genuine registration/email confirmation,
+signin and signed action proof precede actual pending-phone/OTP/encrypted-SMS
+owners; no seeded authentication/proof/code. Wrong code charges once; correct
+code and identifier verification commit atomically; original recovery reveals no
+code/session/projection. Real socket interruption observes Unknown, live lease
+InProgress and terminal rollback/commit without duplicated effects. Selected
+500ms test lease and actual RetryAfter bound reconciliation; no lease SQL forgery.
+Native ordinary race58740 PASS2.123s; integration-tagged vet exit0. Zero random
+DB leftovers; owned PG stopped/removed. Final18 c94f2efe36b4c9dea85d715d27d68e8cf27d743927e8ce58bdfcade6e774b0ad
+under independent phone_native_service_final_review; no native commit yet.
+Final independent review APPROVE, same18 fingerprint independently confirmed;
+no findings. In-session trace/safety audit retained in the reviewer's native
+report. Native-source approval does not certify HTTP/reference or publication.
+Actual consumer RED64351 located missing phone consumption action in shared
+password guard; SQL constraint also excluded it. Parent extended only the closed
+guard and added PhoneReauthenticationMigrationSource after action history; old
+SQL bytes/proof records remain unchanged. Native selected risk is the catalog's
+Authentication class, not protected CredentialMutation counters: actual durable
+counted/audited evaluator + OTP budgets, no replacement risk engine. Earlier
+21:50 counters wording is superseded by this consumed-contract correction.
+Worker source frozen; primary owns integration, shared correction and Git.
+HTTP/reference remains next; M08 broad workflows and full qualification remain
+open. Delivered count remains6/39, estimate~15% low confidence.
+
+21:50 next M08 implementation boundary: prerequisites23 committed/main-pushed
+8c1464f073aae4c6f0db609ac659b7bb20756915 after independent APPROVE; CI39169513675
+pending. phone_factor_authority next owns ONLY new password/postgres/
+phone_verification*.go production/unit files, EXCLUDING every *_integration_test.go,
+plus additive module README/CHANGELOG. Implement actual PhoneVerificationService
+existing-account Send/Verify/Recover through ActionPrimarySource, original keyed
+preparation, real OTP/delivery/counter/kernel owners and known-empty factor guard.
+Consumed phone+nativeOTP8c1464f, kernel/MFAa651d1b, password action-primary7323a83;
+focused unit/race/migration behavior above proves retained prerequisite semantics,
+not selected-phone Work. Parent owns public integration pins, genuine PostgreSQL
+journey/test files, HTTP/reference, shared contracts, Git and final acceptance.
+First consumer: genuine existing session + actual action proof -> pending phone
+and captured SMS -> wrong-code denial/single consuming verification -> durable
+verified phone. Same-key/recovery, current withdrawal, late checks and atomic
+rollback remain mandatory; no signup/signin/change/reset/enrolled-factor fallback.
+Use existing coordinator journals/crypto/risk, not a substitute engine. TDD focused
+zero/config/custody API checks; heavy runs serialized with parent; no child/Git.
+Parent inspects first public API and finite implementation before integration.
 
 21:47 review reconciliation: native/core review identified two actual defects,
 not new paperwork gates: enclosing-private fmt could expose bearer/number or

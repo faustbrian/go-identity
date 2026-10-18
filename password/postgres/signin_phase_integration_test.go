@@ -166,7 +166,7 @@ func TestNativeUsernameSignupIntegration(t *testing.T) {
 	testNativeSigninPhaseIntegration(t, "username signup")
 }
 
-func testNativeSigninPhaseIntegration(t *testing.T, scenario string) {
+func testNativeSigninPhaseIntegration(t *testing.T, scenario string, consumers ...nativeSignupConsumer) {
 	port, file := os.Getenv("IDENTITY_REFERENCE_POSTGRES_PORT"), os.Getenv("IDENTITY_REFERENCE_PASSWORD_FILE")
 	material, err := os.ReadFile(file)
 	if err != nil || port == "" {
@@ -331,8 +331,8 @@ INSERT INTO authorization_subject_authorities VALUES('AAAAAAAAAAAAAAAAAAAAAQ','u
 		testNativeSignupMaterial(t, ctx, pool, policy, crypto, kernel.DirectoryAuthorityMigrationSource{Base: base, Version: 13, GlobalAuthorityID: "signin-deployment", TenantIDs: []identity.TenantID{signinTestTenant}})
 		return
 	}
-	if scenario == "native signup prepared input" || scenario == "username signup" {
-		testNativeSignupKeyInput(t, ctx, pool, policy, kernel.DirectoryAuthorityMigrationSource{Base: base, Version: 13, GlobalAuthorityID: "signin-deployment", TenantIDs: []identity.TenantID{signinTestTenant}}, sessionConfig, scenario == "username signup")
+	if scenario == "native signup prepared input" || scenario == "username signup" || len(consumers) > 0 {
+		testNativeSignupKeyInput(t, ctx, pool, policy, kernel.DirectoryAuthorityMigrationSource{Base: base, Version: 13, GlobalAuthorityID: "signin-deployment", TenantIDs: []identity.TenantID{signinTestTenant}}, sessionConfig, scenario == "username signup", consumers...)
 		return
 	}
 	for _, mode := range []string{"commit", "rollback", "stale-credential", "expired-delivery", "expired-audit", "risk-clock-callback", "expired-risk"} {

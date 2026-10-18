@@ -1197,3 +1197,46 @@ retry key conflicts before provider work. Original outcome disclosure does not
 renew authentication or reauthorize a mutation. Complete password HTTP lifecycle
 and browser/release qualification remain
 in development; synthetic local provider seams are not HIBP interoperability.
+
+### Selected existing-account phone verification
+
+`NewPhoneVerificationService` implements `phone.VerificationService` using the
+existing action-bound password primary, native coordinator, phone identifier
+domain, MFA authority, authentication risk evaluator and SMS OTP issuer. Select
+`identity.phone.send-verification` on the primary, one complete `NumberPolicy`,
+explicit independent request/intent/identifier keys, retained envelope keys,
+`AuthenticationAdmissionCustodyConfig` with actual counted/audited evaluation,
+and a retained OTP attempt key version. Install those owners' migrations first,
+including `PhoneReauthenticationMigrationSource` after the installed
+`ActionReauthenticationMigrationSource` and all other password suffixes. The
+forward suffix preserves signed records and historical migration bytes while
+allowing this exact enrollment action in the existing one-use consumption
+constraint. `Initialize` checks the actual OTP issuer against the borrowed pool.
+
+Construct opaque requests with the phone package constructors. Send requires
+the original self-user session and original action proof; structural request
+validation is not authentication. Original keyed preparation freezes the
+server send command, number profile, factor generation, session/proof deadlines
+and encrypted native issuance input. Only acknowledged generation invokes the
+actual SMS issuer. Matching retry restores the original output without sending
+again; changing retained configuration or removing required keys fails closed.
+Enrollment attaches a pending, non-primary phone and invalidates the old
+identifier-bound session epoch without issuing a replacement session.
+
+Verify requires possession of that original source token, current selected
+CSRF synchronizer for cookie transport (zero for bearer), unchanged credential,
+directory, user, authorization and MFA authority, and exactly the pending
+identifier successor. A new submission creates one server-owned OTP attempt;
+the kernel target lock precedes durable wrong-code debit and reservation.
+Actual OTP consumption, phone verification, required audit and lifecycle outbox
+commit together. Only fresh known commitment returns a value-omitted identifier
+projection. Ambiguity uses the original opaque, code-free recovery custody;
+recovery evaluates current disclosure policy and returns metadata, never a new
+attempt, code debit, session or projection. `PhoneVerificationSession` resolves
+retained source possession for transport mapping only; it does not relax normal
+session validation or renew active authority.
+
+This selection does not implement phone signup, signin, reset, replacement,
+removal, primary selection or enrolled-factor fallback. Provider delivery,
+HTTP/browser composition and release qualification require their separate
+consumer evidence.

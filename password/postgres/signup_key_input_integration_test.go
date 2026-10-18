@@ -55,7 +55,7 @@ func (p *signupKeyInputFixture) PrepareRequestKey(ctx context.Context, k kernel.
 	return owner.prepareSignupKeyInput(ctx, k, p.request, i, p.config)
 }
 
-func testNativeSignupKeyInput(t *testing.T, ctx context.Context, pool *database.Pool, policy primitive.Policy, base kernel.DirectoryAuthorityMigrationSource, storage sessionpg.Config, withUsername bool) {
+func testNativeSignupKeyInput(t *testing.T, ctx context.Context, pool *database.Pool, policy primitive.Policy, base kernel.DirectoryAuthorityMigrationSource, storage sessionpg.Config, withUsername bool, consumers ...nativeSignupConsumer) {
 	t.Helper()
 	history, err := (kernel.RequestKeyPreparationMigrationSource{Base: kernel.RequestKeyMigrationSource{Base: base, Version: 14}, Version: 15}).Load(ctx)
 	if err != nil {
@@ -418,9 +418,9 @@ func testNativeSignupKeyInput(t *testing.T, ctx context.Context, pool *database.
 	if _, err := deliveryOwner.RestorePreparation(ctx, b, 2, generatedOutput.DeliveryWire); err != nil {
 		t.Fatal("native generated original message could not restore", err)
 	}
-	if withUsername {
+	if withUsername || len(consumers) > 0 {
 		installNativeSignupExecutionHistory(t, ctx, pool, base)
-		testNativePublicSignup(t, ctx, pool, policy, config, schema, keys, generationConfig, riskConfig, r, true)
+		testNativePublicSignup(t, ctx, pool, policy, config, schema, keys, generationConfig, riskConfig, r, withUsername, consumers...)
 		return
 	}
 	t.Run("native generated execution", func(t *testing.T) {

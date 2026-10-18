@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- Add selected existing-account phone enrollment and consuming SMS verification
+  through the existing native action-proof, session, MFA, authentication-risk,
+  OTP, coordinator and identifier owners. Preserve original keyed issuance,
+  cookie/bearer binding and code-free outcome recovery without renewing session
+  authority. Adoption requires explicit phone policy, independent retained keys,
+  actual counted/audited authentication risk and the native owners' migrations;
+  append `PhoneReauthenticationMigrationSource` after the installed action-proof
+  history before enabling enrollment. Retained proofs and historical migration
+  bytes remain unchanged; other phone workflows remain unsupported.
+
 - Extend explicitly selected action-bound password admission to self-only phone
   verification enrollment. Preserve original signed proof/session custody,
   freshness, one-use consumption and stored framing; other phone actions remain

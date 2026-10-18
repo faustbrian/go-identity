@@ -31,7 +31,9 @@ import (
 
 // SU01/05/07/08: public methods, real journal and all effect owners; callbacks
 // replace only provider observations and canonical ID selection, never stores.
-func testNativePublicSignup(t *testing.T, ctx context.Context, pool *database.Pool, policy primitive.Policy, original signupKeyPreparation, schema identity.AttributeSchema, keys *keyring.Provider, generation signupGenerationPreparation, riskConfig risk.AuthenticationAdmissionCustodyConfig, request password.SignupRequest, withUsername bool) {
+type nativeSignupConsumer func(*testing.T, context.Context, *database.Pool, *SignupService, SignupConfig, *keyring.Provider, func(string, byte) password.SignupRequest)
+
+func testNativePublicSignup(t *testing.T, ctx context.Context, pool *database.Pool, policy primitive.Policy, original signupKeyPreparation, schema identity.AttributeSchema, keys *keyring.Provider, generation signupGenerationPreparation, riskConfig risk.AuthenticationAdmissionCustodyConfig, request password.SignupRequest, withUsername bool, consumers ...nativeSignupConsumer) {
 	t.Helper()
 	history, err := (kernel.AdmissionPreparationMigrationSource{Base: kernel.PreparationMigrationSource{Base: kernel.MigrationSource{}, Version: 21}, Version: 22}).Load(ctx)
 	if err != nil {
@@ -100,6 +102,12 @@ func testNativePublicSignup(t *testing.T, ctx context.Context, pool *database.Po
 			t.Fatal(err)
 		}
 		return r
+	}
+	if len(consumers) > 0 {
+		for _, consumer := range consumers {
+			consumer(t, ctx, pool, service, c, keys, fresh)
+		}
+		return
 	}
 	if withUsername {
 		testPublicUsernameRegistration(t, ctx, pool, service, c, keys, fresh)
