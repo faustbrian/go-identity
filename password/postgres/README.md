@@ -1,5 +1,28 @@
 # Password PostgreSQL adapter
 
+## Explicit advisory username availability
+
+Compose `NewUsernameAvailabilityService(pool, policy, config)` with the fixed
+username policy and complete retained identifier-reuse keys used by signup and
+rename. Install the existing identifier retirement history, the actual audit
+schema and `risk/postgres.DurableCounterMigrationSource` in its selected schema.
+`Counters` borrows the same pool and contains explicit allowed tenants, stable
+namespace/replay custody, retained digest keys, capacity, timeout and a complete
+risk policy. Username availability uses its state-neutral read profile (at most
+120 attempts/minute and tenant plus trusted network dimensions). Supply all
+remaining mandatory `Sources`, a canonical `PolicyID` and bounded `OnAuditLoss`;
+the service constructs the real durable counter and fail-closed audit adapters.
+
+Call `Available(ctx, username.AvailabilityRequest{TenantID: trustedTenant,
+Username: candidate, Network: trustedNetwork})`. Each call receives a fresh
+server attempt and is charged before enrollment callbacks or occupancy lookup.
+Names are normalized with the frozen enrollment policy. Existing reservations
+or live cooldowns return `Available:false` without owner/status details; success
+is only an observation, never a promise of later reservation. Rate, risk,
+counter/audit/storage outages and cancellation cannot become an available name.
+No routes are enabled by construction. Username rename and selected HTTP/reference
+composition remain separate unfinished operations.
+
 ## Explicit username password signin
 
 Set `SigninConfig.Username` to the same immutable comparison policy used for
@@ -28,7 +51,8 @@ invalid, unverified and wrong-password attempts share credential-free rejection.
 The returned session works with the existing native reader and logout. Restart
 recovery checks original cookie/current policy and returns metadata only; it
 cannot reconstruct a bearer, cookie, synchronizer or password comparison.
-Availability, rename and username HTTP/reference selection remain separate work.
+Availability uses the separate constructor above. Rename and username
+HTTP/reference selection remain unfinished.
 
 ## Explicit email-plus-username registration
 

@@ -98,4 +98,5 @@ func testPublicUsernameRegistration(t *testing.T, ctx context.Context, pool *dat
 	testPublicUsernamePasswordSignin(t, ctx, pool, c, r, false)
 	testPublicSignupVerificationOrigin(t, ctx, service, c, r, q.CommandID, keys)
 	testPublicUsernamePasswordSignin(t, ctx, pool, c, r, true)
+	t.Run("native username availability", func(t *testing.T) { testNativeUsernameAvailability(t, ctx, pool, c, r) })
 }

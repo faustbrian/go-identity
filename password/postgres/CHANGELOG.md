@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add explicit native advisory username availability with actual durable
+  PostgreSQL quotas, canonical fail-closed risk audit and primary reservation/
+  cooldown reads. Server-generated attempts prevent caller replay from evading
+  quota. Unknown risk, unavailable counters/audit/storage and cancellation deny;
+  this selection creates no reservation, user or authentication session.
+
 - Add explicitly selected, action-bound password reauthentication admission for
   username update and organization ownership transfer. Preserve the verified
   actor independently of the target, exact signed provenance and original
