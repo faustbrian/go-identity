@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Explicitly continue registration verification into pending TOTP using the
+  original signup browser, remember choice, consumed parent and deadline.
+  Only actual factor completion can issue a session; defaults remain unchanged.
+
 - Independently select original-browser registration verification followed by
   a separately committed email-possession signin. Recover original remember
   policy from encrypted signup custody; require current counted risk, explicit

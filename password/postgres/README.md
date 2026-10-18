@@ -18,6 +18,18 @@ verification. Replay and `VerificationSigninRecover` cannot mint or redeliver
 credentials. Ordinary signin is the recovery path after missed credential
 delivery. Enrolled MFA continuation is not supported by this selected profile.
 
+To additionally support enrolled TOTP, explicitly set
+`VerificationSigninConfig.TOTP`. A fresh pending result supplies
+`VerificationMFAChallenge`, not an authenticated session. The native owner
+authenticates the original committed registration/confirmation, encrypted
+preparation and current authority through `ReadMFAVerificationPrimary`; the
+selected TOTP executor must repeat protected parent/factor checks during actual
+completion. Original browser, expiry and remember policy cannot be replaced.
+This selects no recovery/OTP/trusted-device fallback. Known-empty admission is
+retained; missing or unsupported factor authority denies. The reference graph
+composes these owners with `PasswordSignup.VerificationTOTP` and a permanent
+explicit `VerificationSessionLineage`.
+
 ## TOTP-protected email change
 
 `NewEmailTOTPPrimarySource` explicitly composes the existing session/CSRF and

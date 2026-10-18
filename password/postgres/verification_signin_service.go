@@ -14,6 +14,7 @@ import (
 	"github.com/faustbrian/go-audit"
 	"github.com/faustbrian/go-authorization/v3"
 	authoritypg "github.com/faustbrian/go-authorization/v3/postgres"
+	"github.com/faustbrian/go-capability/v2"
 	identity "github.com/faustbrian/go-identity"
 	"github.com/faustbrian/go-identity/email"
 	mfapg "github.com/faustbrian/go-identity/mfa/postgres"
@@ -28,12 +29,17 @@ import (
 // request policy. Issuance.Authority must be nil; Profile must select the same
 // authorization namespace initialized by signup and its exact session audience.
 // The signup service supplies bounded current authorization, counted/audited
-// Authentication risk, retained browser keys and the sole primary pool. Only
-// known-empty MFA is supported; enrolled/unknown accounts deny without fallback.
+// Authentication risk, retained browser keys and the sole primary pool.
+// Defaults admit only known-empty MFA; TOTP explicitly selects an enrolled
+// continuation. Unknown or unsupported factor state denies without fallback.
 type VerificationSigninConfig struct {
 	Profile  sessionpg.MagicLinkAdmissionConfig
 	Issuance session.IssuerConfig
 	CSRFKey  session.CSRFKey
+	// TOTP independently admits known-enrolled accounts to a pending challenge.
+	// Nil retains known-empty-only behavior. AllowedMethods must be empty or
+	// exactly totp; other MFA methods are not enabled by this profile.
+	TOTP *MFAChallengeConfig
 }
 
 // VerificationSigninService borrows the immutable native signup graph. Each
@@ -47,6 +53,7 @@ type VerificationSigninService struct {
 	c      VerificationSigninConfig
 	policy *authoritypg.AuthorityStore
 	effect *sessionpg.EmailVerificationSigninEffect
+	mfa    *signinMFAComposition
 }
 
 var _ email.RegistrationVerificationSigninService = (*VerificationSigninService)(nil)
@@ -70,7 +77,16 @@ func NewVerificationSigninService(signup *SignupService, c VerificationSigninCon
 	if _, err := session.NewEmailVerificationSessionIssuerWithCSRF(&verificationSigninPhase{}, c.Issuance, c.CSRFKey); err != nil {
 		return nil, email.ErrInvalidVerification
 	}
-	return &VerificationSigninService{signup: signup, c: c, policy: policy, effect: effect}, nil
+	s := &VerificationSigninService{signup: signup, c: c, policy: policy, effect: effect}
+	if c.TOTP != nil {
+		var err error
+		s.mfa, err = newVerificationMFAComposition(*c.TOTP, c.Profile.Audience)
+		if err != nil {
+			return nil, err
+		}
+		s.c.TOTP = nil
+	}
+	return s, nil
 }
 
 // VerificationConfirmAndSignin authenticates the original encrypted signup flow
@@ -96,6 +112,9 @@ func (s *VerificationSigninService) VerificationConfirmAndSignin(ctx context.Con
 		}
 		if err != nil {
 			out.Issuance.Token, out.Issuance.Cookie, out.CSRFToken = session.Token{}, http.Cookie{}, session.CSRFToken{}
+			if out.Challenge != nil {
+				out.Challenge.Proof = capability.Proof{}
+			}
 		}
 	}()
 	caller := r.Confirmation.Caller.Clone()
@@ -151,7 +170,11 @@ func (s *VerificationSigninService) VerificationConfirmAndSignin(ctx context.Con
 	if err != nil || recipient.Suppressed || recipient.User.ID != b.UserID || recipient.Identifier.ID != spec.IdentifierID || recipient.Identifier.Version != confirmation.Feature.AfterVersion || recipient.Verification.Version != confirmation.Feature.AfterVersion {
 		return out, identity.ForbiddenError{}
 	}
-	factor, err := mfapg.ReadEmailVerificationSigninFactors(ctx, s.signup.pool, b.TenantID, b.UserID, c.Repository.MaximumDuration)
+	factorReader := mfapg.ReadEmailVerificationSigninFactors
+	if s.mfa != nil {
+		factorReader = mfapg.ReadEmailVerificationMFAFactors
+	}
+	factor, err := factorReader(ctx, s.signup.pool, b.TenantID, b.UserID, c.Repository.MaximumDuration)
 	if err != nil {
 		return out, err
 	}
@@ -175,6 +198,12 @@ func (s *VerificationSigninService) VerificationConfirmAndSignin(ctx context.Con
 	// newer epoch read afterward; the session effect fences this exact vector.
 	if err := s.authorize(ctx, r.Confirmation.Caller, b); err != nil {
 		return out, err
+	}
+	if factor.RequireEmailRecovery(b.TenantID, b.UserID) != nil {
+		if s.mfa == nil {
+			return out, identity.ForbiddenError{}
+		}
+		return s.challengeVerification(ctx, verificationMFAInput{binding: b, request: r, origin: spec, flow: flow, primary: grant, recipient: recipient, confirmation: confirmation, factor: factor.Version(), admission: admission, subject: subject, authority: authority, at: now}, out)
 	}
 	metadata, err := session.NewMagicLinkAuthentication(session.MagicLinkAuthenticationSpec{CommandID: id, RequestCommandID: spec.Binding.CommandID, CapabilityID: grant.Payload().ID, IdentifierID: spec.IdentifierID, IdentifierVersion: recipient.Identifier.Version, VerificationVersion: recipient.Verification.Version, AuthenticatedAt: now, ValidUntil: grant.Payload().ExpiresAt})
 	if err != nil {
@@ -304,6 +333,20 @@ func (s *VerificationSigninService) VerificationSigninRecover(ctx context.Contex
 	c, _, err := s.coordinator(&verificationSigninPhase{service: s})
 	if err != nil {
 		return out, err
+	}
+	if s.mfa != nil {
+		_, observed, challenge, queryErr := c.QueryEmailVerificationMFAChallenge(ctx, q, caller)
+		// Only authorized original history selects a recovery owner. An absent
+		// final plan remains unknown; current factor state cannot guess its origin.
+		if queryErr != nil && observed.Validate() != nil {
+			return out, queryErr
+		}
+		if challenge {
+			c, _, err = s.mfaCoordinator(&verificationMFAChallengePhase{service: s})
+			if err != nil {
+				return out, err
+			}
+		}
 	}
 	return c.RecoverFeatureCommand(ctx, q, caller)
 }
