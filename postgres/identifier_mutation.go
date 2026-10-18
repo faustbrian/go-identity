@@ -192,6 +192,14 @@ func persistIdentifierMutation(ctx context.Context, w Work, binding identity.Com
 			sql = `UPDATE identity.identifiers SET kind=$4,canonical_value=$5,display_value=$6,verified=$7,is_primary=$8,version=$9::numeric,verification_state=$10,verification_version=$11::numeric,verified_at=$12 WHERE tenant_id=$1 AND user_id=$2 AND identifier_id=$3 AND version=$13::numeric AND verification_version=$14::numeric`
 			args = append(args, state.Identifiers[oldIndex].Version, state.Verifications[oldIndex].Version)
 		}
+		if next.NormalizationProfile != "" {
+			if oldIndex >= 0 {
+				sql = `UPDATE identity.identifiers SET kind=$4,canonical_value=$5,display_value=$6,verified=$7,is_primary=$8,version=$9::numeric,verification_state=$10,verification_version=$11::numeric,verified_at=$12,normalization_profile=$15,normalization_version=$16 WHERE tenant_id=$1 AND user_id=$2 AND identifier_id=$3 AND version=$13::numeric AND verification_version=$14::numeric`
+			} else {
+				sql = `INSERT INTO identity.identifiers(tenant_id,user_id,identifier_id,kind,canonical_value,display_value,verified,is_primary,version,verification_state,verification_version,verified_at,normalization_profile,normalization_version) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9::numeric,$10,$11::numeric,$12,$13,$14)`
+			}
+			args = append(args, next.NormalizationProfile, int64(next.NormalizationVersion))
+		}
 		n, e := w.Exec(ctx, sql, args...)
 		if e != nil {
 			return e
@@ -274,7 +282,7 @@ func lockIdentifierPartition(ctx context.Context, w Work, change identity.Identi
 	if err != nil {
 		return fail(err)
 	}
-	rows, err = w.Query(ctx, `SELECT identifier_id,kind,canonical_value,display_value,verified,is_primary,version::text,verification_state,verification_version::text,verified_at FROM identity.identifiers WHERE tenant_id=$1 AND user_id=$2 ORDER BY identifier_id LIMIT 129 FOR UPDATE`, string(change.TenantID), string(change.UserID))
+	rows, err = w.Query(ctx, `SELECT identifier_id,kind,canonical_value,display_value,verified,is_primary,version::text,verification_state,verification_version::text,verified_at,to_jsonb(i)->>'normalization_profile',to_jsonb(i)->>'normalization_version' FROM identity.identifiers i WHERE tenant_id=$1 AND user_id=$2 ORDER BY identifier_id LIMIT 129 FOR UPDATE`, string(change.TenantID), string(change.UserID))
 	if err != nil {
 		return fail(err)
 	}
@@ -285,7 +293,8 @@ func lockIdentifierPartition(ctx context.Context, w Work, change identity.Identi
 		var verified, primary bool
 		var state int16
 		var at *time.Time
-		if err = rows.Scan(&id, &kind, &canonical, &display, &verified, &primary, &version, &state, &vversion, &at); err != nil {
+		var normalizationProfile, normalizationVersion *string
+		if err = rows.Scan(&id, &kind, &canonical, &display, &verified, &primary, &version, &state, &vversion, &at, &normalizationProfile, &normalizationVersion); err != nil {
 			rows.Close()
 			return fail(err)
 		}
@@ -302,6 +311,12 @@ func lockIdentifierPartition(ctx context.Context, w Work, change identity.Identi
 		row.verified = pgtype.Bool{Bool: verified, Valid: true}
 		row.primary = pgtype.Bool{Bool: primary, Valid: true}
 		row.verificationState = pgtype.Int2{Int16: state, Valid: true}
+		if normalizationProfile != nil {
+			row.normalizationProfile = pgtype.Text{String: *normalizationProfile, Valid: true}
+		}
+		if normalizationVersion != nil {
+			row.normalizationVersion = pgtype.Text{String: *normalizationVersion, Valid: true}
+		}
 		if at != nil {
 			row.verifiedAt = pgtype.Timestamptz{Time: *at, Valid: true}
 		}

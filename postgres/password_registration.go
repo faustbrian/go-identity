@@ -13,7 +13,8 @@ import (
 )
 
 // PasswordRegistrationIntent contains prepared structural creation and one
-// owner-canonicalized, initially unverified identifier and password reference.
+// owner-canonicalized, initially unverified channel identifier and password
+// reference, optionally with one supplementary username in the same creation.
 // Creation uses the existing structural command shape solely for validation;
 // the durable command remains identity.password.signup. All versions start at
 // one. It contains no password, hash, possession proof or authentication grant.
@@ -24,6 +25,11 @@ type PasswordRegistrationIntent struct {
 	Identifier        identity.Identifier
 	Credential        identity.CredentialRef
 	ComparisonProfile string
+	// Username optionally reserves one supplementary, initially unverified
+	// username alongside the required email. Zero preserves legacy registration.
+	// The native feature must supply the exact normalization binding and include
+	// the returned fields in its original command; this is not a second signup.
+	Username identity.Identifier
 }
 
 // PasswordRegistrationDomainConfig selects the same retained identifier-reuse
@@ -107,6 +113,9 @@ func PasswordRegistrationFields(s PasswordRegistrationIntent) ([]identity.Featur
 	if s.Identifier.Validate(u) != nil || s.Identifier.Version != 1 || s.Identifier.Verified || s.Identifier.Primary || s.Identifier.Kind == identity.IdentifierProviderSubject || s.Credential.Validate(b.TenantID, u) != nil || s.Credential.Version != 1 || s.Credential.Kind != identity.CredentialPassword || s.Credential.Owner != "identity/password" {
 		return nil, invalidPasswordRegistration()
 	}
+	if s.Username != (identity.Identifier{}) && (s.Identifier.Kind != identity.IdentifierEmail || s.Username.Validate(u) != nil || s.Username.Kind != identity.IdentifierUsername || s.Username.ID == s.Identifier.ID || s.Username.Version != 1 || s.Username.Verified || s.Username.Primary || s.Username.NormalizationProfile == "") {
+		return nil, invalidPasswordRegistration()
+	}
 	if _, err := identity.ParseIdentifierID(s.ComparisonProfile); err != nil {
 		return nil, invalidPasswordRegistration()
 	}
@@ -124,7 +133,14 @@ func PasswordRegistrationFields(s PasswordRegistrationIntent) ([]identity.Featur
 	text := func(n, v string) identity.FeatureField {
 		return identity.FeatureField{Name: "registration." + n, Value: identity.FeatureValue{Kind: identity.FeatureText, Text: v}}
 	}
-	return []identity.FeatureField{text("user", string(u)), text("schema", b.SchemaID), {Name: "registration.schema-version", Value: identity.FeatureValue{Kind: identity.FeatureUint64, Uint64: uint64(b.SchemaVersion)}}, {Name: "registration.attributes", Value: identity.FeatureValue{Kind: identity.FeatureBytes, Bytes: h.Sum(nil)}}, text("identifier", string(s.Identifier.ID)), text("kind", string(s.Identifier.Kind)), text("canonical", s.Identifier.CanonicalValue), text("display", s.Identifier.DisplayValue), text("credential", string(s.Credential.ID)), text("comparison", s.ComparisonProfile)}, nil
+	fields := []identity.FeatureField{text("user", string(u)), text("schema", b.SchemaID), {Name: "registration.schema-version", Value: identity.FeatureValue{Kind: identity.FeatureUint64, Uint64: uint64(b.SchemaVersion)}}, {Name: "registration.attributes", Value: identity.FeatureValue{Kind: identity.FeatureBytes, Bytes: h.Sum(nil)}}, text("identifier", string(s.Identifier.ID)), text("kind", string(s.Identifier.Kind)), text("canonical", s.Identifier.CanonicalValue), text("display", s.Identifier.DisplayValue), text("credential", string(s.Credential.ID)), text("comparison", s.ComparisonProfile)}
+	if s.Identifier.NormalizationProfile != "" {
+		fields = append(fields, text("normalization-profile", s.Identifier.NormalizationProfile), identity.FeatureField{Name: "registration.normalization-version", Value: identity.FeatureValue{Kind: identity.FeatureUint64, Uint64: uint64(s.Identifier.NormalizationVersion)}})
+	}
+	if s.Username.ID != "" {
+		fields = append(fields, text("username-id", string(s.Username.ID)), text("username-canonical", s.Username.CanonicalValue), text("username-display", s.Username.DisplayValue), text("username-normalization-profile", s.Username.NormalizationProfile), identity.FeatureField{Name: "registration.username-normalization-version", Value: identity.FeatureValue{Kind: identity.FeatureUint64, Uint64: uint64(s.Username.NormalizationVersion)}})
+	}
+	return fields, nil
 }
 
 func passwordRegistrationOperation(op identity.FeatureOperation) bool {
@@ -245,9 +261,23 @@ func (d *PasswordRegistrationDomain) apply(ctx context.Context, w Work, p Featur
 		return identity.User{}, err
 	}
 	i := intent.Identifier
-	blocked, err := classifyIdentifierReuse(ctx, w, identity.IdentifierChange{Action: identity.IdentifierAttach, TenantID: b.TenantID, UserID: creation.Binding.UserID, ID: i.ID, Kind: i.Kind, CanonicalValue: i.CanonicalValue}, d.reuse, now, accept)
-	if err != nil {
-		return identity.User{}, err
+	identifiers := []identity.Identifier{i}
+	if intent.Username.ID != "" {
+		identifiers = append(identifiers, intent.Username)
+	}
+	blocked := false
+	for _, identifier := range identifiers {
+		occupied, err := classifyIdentifierReuse(ctx, w, identity.IdentifierChange{Action: identity.IdentifierAttach, TenantID: b.TenantID, UserID: creation.Binding.UserID, ID: identifier.ID, Kind: identifier.Kind, CanonicalValue: identifier.CanonicalValue}, d.reuse, now, accept)
+		if err != nil {
+			return identity.User{}, err
+		}
+		blocked = blocked || occupied
+		// A neutral collision cannot bypass another identifier's structural-ID
+		// reservation or unavailable retirement keys. Classify every candidate
+		// before accepting; the strict profile may retain its early conflict.
+		if blocked && !accept {
+			break
+		}
 	}
 	if blocked {
 		if !accept {
@@ -270,8 +300,10 @@ func (d *PasswordRegistrationDomain) apply(ctx context.Context, w Work, p Featur
 	if err != nil {
 		return identity.User{}, err
 	}
-	if _, err := w.Exec(ctx, `INSERT INTO identity.identifiers(tenant_id,user_id,identifier_id,kind,canonical_value,display_value,verified,is_primary,version,verification_state,verification_version) VALUES($1,$2,$3,$4,$5,$6,false,false,1,1,1)`, string(b.TenantID), string(user.ID), string(i.ID), string(i.Kind), i.CanonicalValue, i.DisplayValue); err != nil {
-		return identity.User{}, err
+	for _, identifier := range identifiers {
+		if err := insertRegistrationIdentifier(ctx, w, b.TenantID, user.ID, identifier); err != nil {
+			return identity.User{}, err
+		}
 	}
 	if _, err := w.Exec(ctx, `INSERT INTO identity.credential_references(tenant_id,user_id,credential_id,kind,owner,version,enabled) VALUES($1,$2,$3,1,'identity/password',1,true)`, string(b.TenantID), string(user.ID), string(intent.Credential.ID)); err != nil {
 		return identity.User{}, err
@@ -285,6 +317,23 @@ func (d *PasswordRegistrationDomain) apply(ctx context.Context, w Work, p Featur
 	}
 	w.state.registrationUser = &user
 	return user, nil
+}
+
+func insertRegistrationIdentifier(ctx context.Context, w Work, tenant identity.TenantID, user identity.UserID, identifier identity.Identifier) error {
+	sql := `INSERT INTO identity.identifiers(tenant_id,user_id,identifier_id,kind,canonical_value,display_value,verified,is_primary,version,verification_state,verification_version) VALUES($1,$2,$3,$4,$5,$6,false,false,1,1,1)`
+	args := []any{string(tenant), string(user), string(identifier.ID), string(identifier.Kind), identifier.CanonicalValue, identifier.DisplayValue}
+	if identifier.NormalizationProfile != "" {
+		sql = `INSERT INTO identity.identifiers(tenant_id,user_id,identifier_id,kind,canonical_value,display_value,verified,is_primary,version,verification_state,verification_version,normalization_profile,normalization_version) VALUES($1,$2,$3,$4,$5,$6,false,false,1,1,1,$7,$8)`
+		args = append(args, identifier.NormalizationProfile, int64(identifier.NormalizationVersion))
+	}
+	n, err := w.Exec(ctx, sql, args...)
+	if err != nil {
+		return err
+	}
+	if n != 1 {
+		return w.fail(ctx, identity.UnavailableError{})
+	}
+	return nil
 }
 
 func requireAbsentRegistrationUser(ctx context.Context, w Work, user identity.UserID) error {

@@ -212,11 +212,29 @@ func TestPasswordRegistrationIntegration(t *testing.T) {
 	t.Run("signup-issuance", func(t *testing.T) { testSignupCapabilityIssuance(t, ctx, pool, repo, domain, installAcceptance) })
 	var emailOrigin identity.CommandBinding
 	var emailIdentifier identity.Identifier
-	for _, mode := range []string{"commit", "native-failure", "audit-failure", "outbox-failure", "foreign-command", "missing-domain", "duplicate-domain", "changed-intent", "changed-attributes", "changed-actor", "changed-actor-kind", "changed-command-id", "retired-identifier", "canonical-duplicate", "foreign-tenant-value", "concurrent", "disconnect-before", "disconnect-after", "schema-conflict", "accept-canonical-duplicate", "accept-retired-identifier", "accept-commit", "accept-concurrent", "accept-audit-failure", "accept-outbox-failure", "accept-native-failure", "accept-final-failure", "accept-structural-id", "accept-user-id", "accept-unknown-attribute", "accept-unknown-schema", "accept-schema-conflict", "accept-missing-key", "accept-disconnect-before", "accept-disconnect-after"} {
+	var currentHistory migrations.Source = source
+	normalizationInstalled := false
+	for _, mode := range []string{"commit", "native-failure", "audit-failure", "outbox-failure", "foreign-command", "missing-domain", "duplicate-domain", "changed-intent", "changed-attributes", "changed-actor", "changed-actor-kind", "changed-command-id", "retired-identifier", "canonical-duplicate", "foreign-tenant-value", "concurrent", "disconnect-before", "disconnect-after", "schema-conflict", "accept-canonical-duplicate", "accept-retired-identifier", "accept-commit", "accept-concurrent", "accept-audit-failure", "accept-outbox-failure", "accept-native-failure", "accept-final-failure", "accept-structural-id", "accept-user-id", "accept-unknown-attribute", "accept-unknown-schema", "accept-schema-conflict", "accept-missing-key", "accept-disconnect-before", "accept-disconnect-after", "username-commit", "username-native-failure", "username-audit-failure", "username-outbox-failure", "username-canonical-duplicate", "username-accept-canonical-duplicate", "username-concurrent", "username-accept-concurrent", "username-disconnect-before", "username-disconnect-after", "username-accept-email-occupied-username-id", "username-accept-email-occupied-retired-username-id", "username-accept-email-occupied-username-key"} {
 		t.Run(mode, func(t *testing.T) {
-			scenario := strings.TrimPrefix(mode, "accept-")
-			if strings.HasPrefix(mode, "accept-") && !acceptanceInstalled {
+			usernameSelected := strings.HasPrefix(mode, "username-")
+			profileMode := strings.TrimPrefix(mode, "username-")
+			scenario := strings.TrimPrefix(profileMode, "accept-")
+			if strings.HasPrefix(profileMode, "accept-") && !acceptanceInstalled {
 				installAcceptance(t)
+			}
+			if acceptanceInstalled && !normalizationInstalled {
+				currentHistory = PasswordSignupAcceptanceMigrationSource{Base: source, Version: 13}
+			}
+			if usernameSelected && !normalizationInstalled {
+				currentHistory = IdentifierNormalizationMigrationSource{Base: currentHistory, Version: 14}
+				upgrade, e := migrations.NewRunner(currentHistory, backend)
+				if e != nil {
+					t.Fatal(e)
+				}
+				if _, e := upgrade.Up(ctx); e != nil {
+					t.Fatal(e)
+				}
+				normalizationInstalled = true
 			}
 			selectedPool, selectedRepo, selectedDomain := pool, repo, domain
 			var fault *registrationCommitFault
@@ -254,6 +272,9 @@ func TestPasswordRegistrationIntegration(t *testing.T) {
 				b.TenantID = "missing-retirement-key-test"
 			}
 			b.CommandID, _ = identity.NewCommandID()
+			if strings.HasPrefix(scenario, "email-occupied-") {
+				b.TenantID = identity.TenantID("username-guard-" + string(b.CommandID))
+			}
 			if scenario == "schema-conflict" {
 				b.TenantID = identity.TenantID("schema-conflict-" + string(b.CommandID))
 				different := storageSchema()
@@ -271,6 +292,11 @@ func TestPasswordRegistrationIntegration(t *testing.T) {
 			b.SchemaID = "fields"
 			creation := identity.CreateUserCommand{Binding: b, Status: identity.StatusActive, Attributes: storageValues()}
 			intent := PasswordRegistrationIntent{Creation: creation, Identifier: identity.Identifier{ID: identity.IdentifierID(u), UserID: identity.UserID(u), Kind: identity.IdentifierEmail, CanonicalValue: string(u) + "@example.test", Version: 1}, Credential: identity.CredentialRef{ID: "password", TenantID: b.TenantID, UserID: identity.UserID(u), Kind: identity.CredentialPassword, Owner: "identity/password", Version: 1}, ComparisonProfile: "email-v1"}
+			if usernameSelected {
+				intent.Username = identity.Identifier{ID: identity.IdentifierID("name-" + string(u)), UserID: identity.UserID(u), Kind: identity.IdentifierUsername,
+					CanonicalValue: "name-" + strings.ToLower(string(u)), DisplayValue: "Name-" + string(u), Version: 1,
+					NormalizationProfile: "identity.username.latin-v1", NormalizationVersion: 1}
+			}
 			// These are invalid original declarations, not substitutions after
 			// fingerprinting; neutral occupancy must not bypass owner policy.
 			if scenario == "unknown-attribute" {
@@ -293,7 +319,7 @@ func TestPasswordRegistrationIntegration(t *testing.T) {
 				t.Fatal(err)
 			}
 			phase := &registrationTestPhase{domain: selectedDomain, expected: command, intent: intent, fail: mode == "native-failure", foreign: mode == "foreign-command", skip: mode == "missing-domain", duplicate: mode == "duplicate-domain"}
-			phase.accept = strings.HasPrefix(mode, "accept-")
+			phase.accept = strings.HasPrefix(profileMode, "accept-")
 			phase.fail = scenario == "native-failure"
 			phase.finalFail = scenario == "final-failure"
 			if mode == "changed-intent" {
@@ -329,15 +355,33 @@ func TestPasswordRegistrationIntegration(t *testing.T) {
 						t.Fatal(e)
 					}
 				}
-				identifierID, canonical := old, intent.Identifier.CanonicalValue
+				identifierID, canonical, kind := old, intent.Identifier.CanonicalValue, identity.IdentifierEmail
+				if usernameSelected && !strings.HasPrefix(scenario, "email-occupied-") {
+					canonical, kind = intent.Username.CanonicalValue, identity.IdentifierUsername
+				}
 				if scenario == "structural-id" {
 					identifierID, canonical = string(intent.Identifier.ID), "different-"+canonical
 				}
 				if _, err := pool.Raw().Exec(ctx, `INSERT INTO identity.users(tenant_id,user_id,status,version) VALUES($1,$2,'active',1);`, string(tenant), old); err != nil {
 					t.Fatal(err)
 				}
-				if _, err := pool.Raw().Exec(ctx, `INSERT INTO identity.identifiers(tenant_id,user_id,identifier_id,kind,canonical_value,version,verification_state,verification_version) VALUES($1,$2,$3,'email',$4,1,1,1)`, string(tenant), old, identifierID, canonical); err != nil {
+				if _, err := pool.Raw().Exec(ctx, `INSERT INTO identity.identifiers(tenant_id,user_id,identifier_id,kind,canonical_value,version,verification_state,verification_version) VALUES($1,$2,$3,$4,$5,1,1,1)`, string(tenant), old, identifierID, string(kind), canonical); err != nil {
 					t.Fatal(err)
+				}
+				if scenario == "email-occupied-username-id" {
+					if _, e := pool.Raw().Exec(ctx, `INSERT INTO identity.identifiers(tenant_id,user_id,identifier_id,kind,canonical_value,version,verification_state,verification_version) VALUES($1,$2,$3,'username',$4,1,1,1)`, string(tenant), old, string(intent.Username.ID), "other-"+intent.Username.CanonicalValue); e != nil {
+						t.Fatal(e)
+					}
+				}
+				if scenario == "email-occupied-retired-username-id" || scenario == "email-occupied-username-key" {
+					retiredID, keyVersion := string(intent.Username.ID), 1
+					if scenario == "email-occupied-username-key" {
+						retiredID, keyVersion = "retired-"+retiredID, 2
+					}
+					digest := identifierReuseDigest([32]byte{1}, tenant, identity.IdentifierUsername, "other-"+intent.Username.CanonicalValue)
+					if _, e := pool.Raw().Exec(ctx, `INSERT INTO identity.identifier_retirements(tenant_id,user_id,identifier_id,kind,record_version,verification_version,removed,command_id,key_version,value_digest,retired_at,reuse_until) VALUES($1,$2,$3,'username',1,1,true,$4,$5,$6,clock_timestamp(),clock_timestamp()+interval '1 day')`, string(tenant), old, retiredID, string(b.CommandID), keyVersion, digest[:]); e != nil {
+						t.Fatal(e)
+					}
 				}
 			}
 			if scenario == "retired-identifier" || scenario == "missing-key" {
@@ -415,6 +459,10 @@ func TestPasswordRegistrationIntegration(t *testing.T) {
 				otherIntent.Creation.Binding.UserID = identity.UserID(otherUser)
 				otherIntent.Identifier.ID, otherIntent.Identifier.UserID = identity.IdentifierID(otherUser), identity.UserID(otherUser)
 				otherIntent.Credential.UserID = identity.UserID(otherUser)
+				if usernameSelected {
+					otherIntent.Username.ID, otherIntent.Username.UserID = identity.IdentifierID("name-"+string(otherUser)), identity.UserID(otherUser)
+					otherIntent.Identifier.CanonicalValue = "other-" + otherIntent.Identifier.CanonicalValue
+				}
 				otherFields, e := PasswordRegistrationFields(otherIntent)
 				if e != nil {
 					t.Fatal(e)
@@ -480,7 +528,11 @@ func TestPasswordRegistrationIntegration(t *testing.T) {
 					t.Fatal("race did not create exactly one account and one neutral acknowledgement")
 				}
 				var accounts int
-				if e := pool.Raw().QueryRow(ctx, `SELECT count(*) FROM identity.users u JOIN identity.identifiers i USING(tenant_id,user_id) JOIN identity.credential_references c USING(tenant_id,user_id) JOIN public.identity_test_registration_material m ON m.user_id=u.user_id WHERE u.tenant_id=$1 AND i.canonical_value=$2`, string(b.TenantID), intent.Identifier.CanonicalValue).Scan(&accounts); e != nil || accounts != 1 {
+				collisionValue, collisionKind := intent.Identifier.CanonicalValue, identity.IdentifierEmail
+				if usernameSelected {
+					collisionValue, collisionKind = intent.Username.CanonicalValue, identity.IdentifierUsername
+				}
+				if e := pool.Raw().QueryRow(ctx, `SELECT count(*) FROM identity.users u JOIN identity.identifiers i USING(tenant_id,user_id) JOIN identity.credential_references c USING(tenant_id,user_id) JOIN public.identity_test_registration_material m ON m.user_id=u.user_id WHERE u.tenant_id=$1 AND i.canonical_value=$2 AND i.kind=$3`, string(b.TenantID), collisionValue, string(collisionKind)).Scan(&accounts); e != nil || accounts != 1 {
 					t.Fatal("canonical race left partial or duplicate accounts", e)
 				}
 				var losingOrphans int
@@ -491,6 +543,13 @@ func TestPasswordRegistrationIntegration(t *testing.T) {
 				result, err = execute(c, b, command, plan)
 			}
 			expectNeutral := phase.accept && (scenario == "canonical-duplicate" || scenario == "retired-identifier" || scenario == "concurrent")
+			if strings.HasPrefix(scenario, "email-occupied-") {
+				var conflict identity.ConflictError
+				var unavailable identity.UnavailableError
+				if scenario == "email-occupied-username-key" && !errors.As(err, &unavailable) || scenario != "email-occupied-username-key" && !errors.As(err, &conflict) {
+					t.Fatal("neutral email occupancy bypassed supplementary username fail-closed guard", err)
+				}
+			}
 			if phase.accept && !expectNeutral && scenario != "commit" && fault == nil && err == nil {
 				t.Fatal("forbidden signup failure was neutralized")
 			}
@@ -555,10 +614,14 @@ func TestPasswordRegistrationIntegration(t *testing.T) {
 			}
 			var users, identifiers, references, material, bindings, emitted int
 			wantUsers := want
+			wantIdentifiers := want
+			if usernameSelected {
+				wantIdentifiers *= 2
+			}
 			if scenario == "user-id" {
 				wantUsers = 1
 			}
-			if err := pool.Raw().QueryRow(ctx, `SELECT (SELECT count(*) FROM identity.users WHERE tenant_id=$1 AND user_id=$2),(SELECT count(*) FROM identity.identifiers WHERE tenant_id=$1 AND user_id=$2 AND NOT verified AND NOT is_primary AND version=1 AND verification_state=1),(SELECT count(*) FROM identity.credential_references WHERE tenant_id=$1 AND user_id=$2 AND enabled AND version=1),(SELECT count(*) FROM public.identity_test_registration_material WHERE command_id=$3),(SELECT count(*) FROM identity.registration_bindings WHERE tenant_id=$1 AND user_id=$2),(SELECT count(*) FROM public.identity_test_lifecycle WHERE command_id=$3)`, string(b.TenantID), string(u), string(b.CommandID)).Scan(&users, &identifiers, &references, &material, &bindings, &emitted); err != nil || users != wantUsers || identifiers != want || references != want || material != want || bindings != want || emitted != wantEvents {
+			if err := pool.Raw().QueryRow(ctx, `SELECT (SELECT count(*) FROM identity.users WHERE tenant_id=$1 AND user_id=$2),(SELECT count(*) FROM identity.identifiers WHERE tenant_id=$1 AND user_id=$2 AND NOT verified AND NOT is_primary AND version=1 AND verification_state=1),(SELECT count(*) FROM identity.credential_references WHERE tenant_id=$1 AND user_id=$2 AND enabled AND version=1),(SELECT count(*) FROM public.identity_test_registration_material WHERE command_id=$3),(SELECT count(*) FROM identity.registration_bindings WHERE tenant_id=$1 AND user_id=$2),(SELECT count(*) FROM public.identity_test_lifecycle WHERE command_id=$3)`, string(b.TenantID), string(u), string(b.CommandID)).Scan(&users, &identifiers, &references, &material, &bindings, &emitted); err != nil || users != wantUsers || identifiers != wantIdentifiers || references != want || material != want || bindings != want || emitted != wantEvents {
 				t.Fatal("signup creation and required effects were not atomic", err)
 			}
 			if phase.accepted {
@@ -624,8 +687,8 @@ func TestPasswordRegistrationIntegration(t *testing.T) {
 		if emailOrigin.CommandID == "" {
 			t.Fatal("select original commit fixture with confirmation")
 		}
-		var confirmationBase migrations.Source = source
-		if acceptanceInstalled {
+		var confirmationBase migrations.Source = currentHistory
+		if acceptanceInstalled && !normalizationInstalled {
 			confirmationBase = PasswordSignupAcceptanceMigrationSource{Base: source, Version: 13}
 		}
 		runner, e := migrations.NewRunner(EmailVerificationMigrationSource{Base: confirmationBase, Version: 40}, backend)

@@ -3,6 +3,7 @@ package passwordpostgres
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"reflect"
 	"strconv"
 	"strings"
@@ -63,6 +64,57 @@ func TestSignupPreparedInputFreezesOriginalSelectedCreation(t *testing.T) {
 	if err != nil || got != b || !reflect.DeepEqual(creationAgain, selected) || s != again || !at.Equal(now) {
 		t.Fatal("original selected creation changed on restoration", err)
 	}
+	t.Run("retained-legacy-identifier-json", func(t *testing.T) {
+		// This eight-field projection is the shipped identifier encoder, not
+		// today's root struct. Authenticated historical input must still pass
+		// the native decoder's exact canonical-byte comparison after upgrading.
+		i := selected.Identifier
+		legacy, e := json.Marshal(struct {
+			ID             identity.IdentifierID
+			UserID         identity.UserID
+			Kind           identity.IdentifierKind
+			CanonicalValue string
+			DisplayValue   string
+			Verified       bool
+			Primary        bool
+			Version        uint64
+		}{i.ID, i.UserID, i.Kind, i.CanonicalValue, i.DisplayValue, i.Verified, i.Primary, i.Version})
+		if e != nil {
+			t.Fatal(e)
+		}
+		current, e := json.Marshal(i)
+		if e != nil {
+			t.Fatal(e)
+		}
+		aad, e := (&Repository{}).signupInputAAD(k, profile)
+		if e != nil {
+			t.Fatal(e)
+		}
+		sealed, e := envelope.ParseEnvelope(wire)
+		if e != nil {
+			t.Fatal(e)
+		}
+		plain, e := crypto.Decrypt(ctx, envelope.DecryptRequest{Envelope: sealed, Context: aad})
+		defer clear(plain)
+		if e != nil || bytes.Count(plain, current) != 1 {
+			t.Fatal("invalid original input fixture", e)
+		}
+		legacyPlain := bytes.Replace(plain, current, legacy, 1)
+		defer clear(legacyPlain)
+		retained, e := crypto.Encrypt(ctx, envelope.EncryptRequest{Plaintext: legacyPlain, KeyReference: "input", Context: aad})
+		if e != nil {
+			t.Fatal(e)
+		}
+		legacyWire, e := retained.MarshalBinary()
+		defer clear(legacyWire)
+		if e != nil {
+			t.Fatal(e)
+		}
+		bound, original, _, _, e := owner.restoreSignupInput(ctx, crypto, k, profile, legacyWire, intent)
+		if e != nil || bound != b || !reflect.DeepEqual(original, selected) {
+			t.Fatal("upgrade stranded authenticated legacy signup input", e)
+		}
+	})
 	fields, _ := intent.Fields()
 	fields[0].Value.Bytes[0] ^= 1
 	changed, _ := identity.NewRequestIntent(fields)

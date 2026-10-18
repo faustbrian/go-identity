@@ -5,6 +5,24 @@ v2 and password v2 together with the matching identity kernel. Update supplied
 primitive values to those major imports. Existing migration source bytes and
 stored database history remain unchanged.
 
+## Optional canonical-policy binding
+
+Compose `IdentifierNormalizationMigrationSource{Base: existingHistory,
+Version: nextVersion}` before selecting username support. The forward migration
+preserves existing values as explicitly unbound empty/zero metadata; it does
+not normalize or backfill legacy identities. Existing readers remain usable
+without this optional schema. Bound records retain the exact profile/revision
+through primary/locked reads and CAS writes; malformed or partial stored pairs
+fail closed. The feature owner, not this storage layer, proves canonicalization.
+
+`PasswordRegistrationIntent.Username` can reserve one supplementary username
+atomically with its required email, user, password reference and original
+registration receipt. Include `PasswordRegistrationFields` unchanged in the
+original command. Collision checks cover both values under the existing tenant
+fence; neutral occupancy creates neither account nor credential, and rollback
+removes every provisional row. This native storage capability is not by itself
+a public username signup service or authentication proof.
+
 ## Closed invitation and OAuth consent contributions
 
 Native organization invitation send uses the existing preparation journal,

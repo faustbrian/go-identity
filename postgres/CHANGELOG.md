@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add optional forward identifier normalization metadata without reinterpreting
+  existing values or requiring the migration for legacy reads. Preserve bound
+  identity through locked reads, mutations and password registration. Selected
+  registration can atomically reserve a supplementary username with its email;
+  native username workflow composition is still required before consumer use.
+
 - Retain exact original invitation-send organization correlation in the existing
   preparation journal and expose it to the current-authorized native owner for
   recovery before a domain row exists. Historical plans remain readable; absent

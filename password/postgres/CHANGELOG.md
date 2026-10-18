@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Adopt comparison-bound identifier and original username password custody
+  contracts while preserving authenticated historical signup-input decoding.
+  Native username authentication remains in development; existing password
+  signup and recovery retain their original stored scope and canonical bytes.
+
 - Add independently selected new-address link confirmation hooks, including
   configured TOTP changes. Rejection precedes reservation; observer failure
   preserves committed primary/session/notification effects and recovery while

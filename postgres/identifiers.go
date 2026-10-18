@@ -14,7 +14,8 @@ var _ identity.IdentifierRepository = (*Repository)(nil)
 const identifierSelect = `SELECT u.tenant_id,u.user_id,u.status,u.version::text,
  u.identifier_version::text,statement_timestamp(),
  i.identifier_id,i.kind,i.canonical_value,i.display_value,i.verified,i.is_primary,
- i.version::text,i.verification_state,i.verification_version::text,i.verified_at
+ i.version::text,i.verification_state,i.verification_version::text,i.verified_at,
+ to_jsonb(i)->>'normalization_profile',to_jsonb(i)->>'normalization_version'
  FROM identity.users u
  LEFT JOIN LATERAL (
   SELECT * FROM identity.identifiers
@@ -57,7 +58,7 @@ func (r *Repository) GetIdentifierState(ctx context.Context, q identity.Identifi
 	var state identity.IdentifierState
 	for rows.Next() {
 		var row identifierStorageRow
-		if err := rows.Scan(&row.tenant, &row.user, &row.status, &row.userVersion, &row.authority, &row.now, &row.id, &row.kind, &row.canonical, &row.display, &row.verified, &row.primary, &row.version, &row.verificationState, &row.verificationVersion, &row.verifiedAt); err != nil {
+		if err := rows.Scan(&row.tenant, &row.user, &row.status, &row.userVersion, &row.authority, &row.now, &row.id, &row.kind, &row.canonical, &row.display, &row.verified, &row.primary, &row.version, &row.verificationState, &row.verificationVersion, &row.verifiedAt, &row.normalizationProfile, &row.normalizationVersion); err != nil {
 			return identity.IdentifierState{}, readFailure(bounded, err)
 		}
 		user, authority, identifier, verification, present, err := decodeIdentifierRow(q, row)
@@ -96,6 +97,7 @@ type identifierStorageRow struct {
 	verified, primary                                          pgtype.Bool
 	verificationState                                          pgtype.Int2
 	verifiedAt                                                 pgtype.Timestamptz
+	normalizationProfile, normalizationVersion                 pgtype.Text
 }
 
 func decodeIdentifierRow(q identity.IdentifierQuery, row identifierStorageRow) (identity.User, uint64, identity.Identifier, identity.Verification, bool, error) {
@@ -112,7 +114,7 @@ func decodeIdentifierRow(q identity.IdentifierQuery, row identifierStorageRow) (
 		return fail()
 	}
 	if !row.id.Valid {
-		if row.kind.Valid || row.canonical.Valid || row.display.Valid || row.verified.Valid || row.primary.Valid || row.version.Valid || row.verificationState.Valid || row.verificationVersion.Valid || row.verifiedAt.Valid {
+		if row.kind.Valid || row.canonical.Valid || row.display.Valid || row.verified.Valid || row.primary.Valid || row.version.Valid || row.verificationState.Valid || row.verificationVersion.Valid || row.verifiedAt.Valid || row.normalizationProfile.Valid || row.normalizationVersion.Valid {
 			return fail()
 		}
 		return user, authority, identity.Identifier{}, identity.Verification{}, false, nil
@@ -125,6 +127,21 @@ func decodeIdentifierRow(q identity.IdentifierQuery, row identifierStorageRow) (
 		return fail()
 	}
 	identifier := identity.Identifier{ID: identity.IdentifierID(row.id.String), UserID: user.ID, Kind: identity.IdentifierKind(row.kind.String), CanonicalValue: row.canonical.String, DisplayValue: row.display.String, Verified: row.verified.Bool, Primary: row.primary.Bool, Version: version}
+	// The optional forward migration must not break shipped histories. JSON
+	// projection above observes both columns when installed without naming an
+	// absent legacy column. Neither absent columns nor explicit empty/zero rows
+	// authorize normalization; username admission requires its exact bound pair.
+	if row.normalizationProfile.Valid != row.normalizationVersion.Valid {
+		return fail()
+	}
+	if row.normalizationVersion.Valid {
+		normalizationVersion, err := strconv.ParseUint(row.normalizationVersion.String, 10, 32)
+		if err != nil || strconv.FormatUint(normalizationVersion, 10) != row.normalizationVersion.String {
+			return fail()
+		}
+		identifier.NormalizationProfile = row.normalizationProfile.String
+		identifier.NormalizationVersion = uint32(normalizationVersion)
+	}
 	verificationVersion, err := strconv.ParseUint(row.verificationVersion.String, 10, 64)
 	if err != nil || strconv.FormatUint(verificationVersion, 10) != row.verificationVersion.String || row.verificationState.Int16 < 1 || row.verificationState.Int16 > 3 || row.verifiedAt.Valid && row.verifiedAt.InfinityModifier != pgtype.Finite {
 		return fail()
