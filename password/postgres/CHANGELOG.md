@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Adopt the public opt-in username HTTP integration in the native consumer
+  graph, preserving original cookie/proof/key recovery after identifier-session
+  invalidation. Native workflow APIs and stored command formats are unchanged.
+
 - Add explicit keyed self-service username rename using existing action-bound
   password proof, current MFA authority, protected risk/counters and the sole
   coordinator. Display-only edits preserve verification; canonical changes

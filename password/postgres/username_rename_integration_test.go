@@ -448,6 +448,7 @@ func testNativeUsernameRename(t *testing.T, ctx context.Context, pool *database.
 			t.Fatal("exact rename retry lost original outcome", e)
 		}
 	}
+	testUsernameRenameHTTPRecovery(t, ctx, service, source, request, signinConfig.Issuance.Cookie, original.Origin, result)
 	for _, candidate := range []string{"different-name", "RENAMED-NAME"} {
 		changed := request
 		changed.Username = candidate
