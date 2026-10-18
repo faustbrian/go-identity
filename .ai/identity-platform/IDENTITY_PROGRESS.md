@@ -1,6 +1,6 @@
 # Identity Platform Progress
 
-## TL;DR — updated 2026-10-18 17:49 UTC
+## TL;DR — updated 2026-10-18 18:24 UTC
 
 **Estimated whole-goal completion: approximately 10–12%, with low confidence.**
 The working authentication baseline, thirteen email profiles, native username
@@ -10,7 +10,22 @@ Most platform families and final package qualification are not closed;
 queued work is not counted as delivered.
 This is an effort/scope estimate, not a measured percentage or an ETA.
 
-**Latest delivery:** optional username reference composition (`db193b6`),
+**Latest delivery:** recipient-owned invitation listing (`30e95ff` root /
+`93df26f` PostgreSQL), independently reviewed, main-pushed and Required CI green.
+Authenticated recipients can page through their own retained invitations without
+organization membership; current verified identifiers and late session/policy
+withdrawal control disclosure. Canonical public-root PostgreSQL/race passes
+9.148s; the downloaded native module's genuine consumer passes 9.430s. This
+closes the selected listing profile, not full M22 or package qualification.
+
+**Also delivered:** opt-in OAuth discovery (`127c7db` root / `7292fbe` PostgreSQL),
+independently reviewed and main-pushed, with final Required CI green. A genuine
+metadata-driven independent client completes consent -> code/S256 -> exchange ->
+refresh -> revocation through the actual public modules. Canonical native
+PostgreSQL/race passes 8.881s; the downloaded adapter consumer passes 9.210s.
+No shipped OAuth HTTP server, resource verifier, OIDC or full M30 claim follows.
+
+**Latest authentication delivery:** optional username reference composition (`db193b6`),
 independently reviewed, main-pushed and Required CI green. Real PostgreSQL/race
 proves the full HTTPS journey through signup, original email confirmation,
 signin, fresh-proof rename, old-session denial, new-name signin and logout.
@@ -32,10 +47,14 @@ M22, not the complete organization family.
 original-registration confirmation routing (`ac96ffd`) are reviewed, main-pushed
 and CI green. Actual public-module PostgreSQL/race proof covers original rename
 recovery after session invalidation and both registration confirmation profiles.
-**Current parallel work:** recipient-owned invitation listing without requiring
-organization membership. Its genuine native consumer passes locally; the worker
-is checking affected race/query/index behavior before independent review and
-publication. It is not counted as delivered.
+**Current work:** the primary is adding explicitly selected enrolled-TOTP
+continuation to username/password signin; its complete reference journey still
+fails on missing composition APIs. Two underlying journal/signature regressions
+have focused red/green evidence. The extended native code compiles and those
+evidence tests pass, but runtime wiring, HTTP/reference composition and the real
+TOTP journey remain unfinished. Both parallel listing/discovery deliveries are
+closed as selected profiles; no successor worker is assigned yet. No new complete
+milestone is counted.
 
 **Other recent usable native outcomes:** username rename (`afe3f92`) and organization
 self-leave (`f54f10a`) are independently reviewed, pushed to their owning main
@@ -45,9 +64,11 @@ thirty-day cooldown and identifier-session invalidation, including lost-COMMIT
 recovery. Leave tombstones only the authenticated member, protects the final
 owner and cannot revive old team bindings after readmission.
 
-**Next acceptance boundary:** close recipient-owned invitation listing, then
-continue the remaining supported authentication profiles from the delivered
-backend. The selected username reference outcome is now closed.
+**Next acceptance boundary:** prove username/password -> genuine enrolled TOTP ->
+authenticated session read/logout through the existing native owners and opt-in
+HTTPS reference. Preserve the delivered known-empty-factor profile and original
+email/TOTP behavior. Recipient invitation listing, OAuth discovery and the username
+reference outcome are closed as selected profiles.
 Organization HTTP/dynamic roles and complete OAuth
 composition remain separate work. No additional full milestone or full-unit
 qualification is claimed by these native deliveries.

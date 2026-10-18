@@ -1,6 +1,120 @@
 # Identity Implementation — Current Milestone
 
-## Live checkpoint — 2026-10-18 17:49 UTC
+## Live checkpoint — 2026-10-18 18:24 UTC
+
+Continuation18:24UTC: OAuth discovery delivered root127c7dbf145b39f8cd2e201afa393da6905e9f5a /
+native7292fbe3191d075dc2ce28c584fcf95812f11763, main-pushed; final Required39153819434
+SUCCESS on7292. Priorroot39153466164 passed tests/race but failed docs spelling
+at userinfo; prose-only correction nowqualified, no gate/config weakening.
+Independent oauth_discovery_final_review APPROVE complete11 final5fcee74894b0dd28921042dc7fe2fc3938a6428c1bc9ac3909c0afdda824027b;
+runtime/tests unchanged since original10 review; publicroot pin/checksums adopted.
+Actualpublicroot127c origin/sum verified/all21Go/manifests match. Canonical
+GOWORKoff native ordinaryrace1.273, genuine metadata-driven public+Basic
+PG/race8.881/taggedvet0. Actualpublicnative7292 origin/subdir/sum verified, all26
+Go/manifests match; external cleanconsumer11fixtures byteidenticaldownload,
+GOWORKoff/noReplace selected metadata-driven genuinePG/race9.210s.
+Consumer uses independent pinnedx/oauth2 and actual subject/session/consent,
+S256/code/exchange/rotation/revocation/audit/lifecycle owners. No shippedHTTP,
+resource-verifier/OIDC/fullM30/unit qualification claim. OwnDB/auditroles0|0,
+PG54837 stopped, entire /private/tmp/oauth-discovery.tHgx7L removed/absenceverified.
+OAuth lane has no successor assignment. Organization93df listing also delivered;
+the two finite parallel outcomes are closed, not another whole milestone.
+
+Primary18:21: native explicitusernameTOTP factory, exact original operation and
+signedprofile/currentname fences compile with own local kernel/MFA/native
+workspace; focused primaryevidence tests89715 PASS0.302s. Forward password/MFA
+username histories and reference explicitTOTP config/guardedhandle are written
+but not yet selected/runtimeproven. Remaining same frozen acceptance: finish
+reference migration/readiness, explicit HTTP username challenge+MFA dispatch/
+wire metadata, genuine enrolledTOTP session journey, denials/recovery/original
+emailTOTP compatibility, current finalreview, canonicalpublicpins/CI/delivery.
+Do not call this profile working or restart delivered username registration.
+
+Continuation18:18UTC: invitation ListMine delivered root30e95ff8763732d882a0e52a31d34a94b89fed37
+and native93df26f62e692ace57ff9b13480c264fbfacd729, both main-pushed;
+Required39152988628/39153345812 SUCCESS. Independent organization_invitation_mine_final_review
+APPROVE final15 e819906f9fb25ab20c19fd6b64dfb31d623d1df8b22978ec851736252a449d08;
+two nonblocking second-read/second-policy outage cases resolved (rootrace1.224).
+Canonical GOWORKoff native ordinaryrace exit0, genuine realPG/race9.148s,
+taggedvet0. Actual publicroot30e95 authenticated/checksum verified; all25 root
+Go/manifests match. Actual publicnative93df origin/subdir/checksum verified and
+all49 Go/manifests match; downloaded genuine ListMine PG/race9.430s.
+Both isolated runs clean DB/auditroles0|0 and stop/drop ownPG54789data/socket/log.
+Currentrecipient pagination, lifecycle, late cancellation/session/identifier
+withdrawal and populated concurrent-index path proven. No fullM22/unit/release
+closure. Organization lane has no successor assignment; integrate promptly.
+
+Primary usernameTOTP: kernel exact original-action decoder/query regression
+RED46195/16828 -> GREEN16711 0.277s; distinct non-final username signed-primary
+regression RED50603 -> GREEN93641 0.313s. Full real-reference test18177 reached
+expected APIabsence RED: UsernameTOTP/config/HTTP selection not yet declared.
+Native explicit usernameTOTP factory and operation/profile/current-name fences
+are being written; those later edits have not been compiled or runtime-proven.
+Forward native histories, composition/HTTP, realPG journey and finalreview remain
+unfinished. Preserve original password factory rejection and known-empty profile.
+
+OAuth discovery candidate10 final4181f95833695694c7d95658e6133387dccffc431fd60aeef5fef8811c6b54a3
+independently APPROVE by oauth_discovery_final_review; nonblocking RFC8414
+workload-only empty-array ambiguity documented with Reportederratum7793, no
+runtimechange. Root127c7dbf145b39f8cd2e201afa393da6905e9f5a is main-pushed.
+Rootrace1.255/vet0; paired native genuine metadata-driven public+Basic
+x/oauth2 code/S256/exchange/rotation/revoke PG/race8.924/vet0; endpointfuzz9.281s
+45154exec. Canonical native publicpin/consumer, native commit/CI and downloaded
+native proof remain pending; not delivered. Workercache /private/tmp/oauth-discovery.tHgx7L
+retained only for adjacent publication qualification; ownPG54837 stopped/data gone.
+Fingerprint clarification: worker ec9ae395 is sorted shasum-lines framing,
+reviewer original62cc659 is path/NUL/bytecount/NUL/rawbytes; same original10files,
+not source drift. Only standards prose changed to final4181f958.
+
+Primary successor selected17:54UTC: M05 username/password -> enrolled TOTP ->
+authenticated session read/logout, explicitly opt-in alongside unchanged
+known-empty username and existing email profiles. Own go-identity password/
+postgres, required kernel/MFA/session seams and HTTP/reference integration;
+no other writer may touch those paths. Consume committed main d373507 and
+its actual public native pins; retain db193b6 username proof/CI and existing
+email/TOTP proof. One bounded source pass: existing MFA challenge/primary/query
+owners currently bind password-only actions and reject username at construction.
+Extend those actual owners without a second proof/session engine or retagging
+legacy stored evidence. Preserve current identifier/factor/session epochs,
+original challenge/browser/remember custody and earliest expiry. Acceptance:
+real registered username plus genuine TOTP enrollment, challenge with no cookie,
+wrong/stale/cross-profile proof denial, valid completion/session/logout, exact
+recovery and current username/factor/account withdrawal, no SFA fallback.
+Use focused native/ref PostgreSQL/race, affected ordinary/vet and original
+email/TOTP direct consumers; one complete final-diff review before delivery.
+No recovery/OTP/trusted-device/automatic-confirmation-signin variant added.
+
+OAuth successor reserved17:54UTC: oauth_authorization_code, GPT-6.1 Sol high,
+no children, bounded first contract/readiness pass for existing catalog operation
+identity.oauth-server.resource-verify. Own go-oauth-server root/postgres Go/tests/
+docs/changelogs/module-local manifests, base mainf15beb46; parent owns Git,
+cross-repository pins, final acceptance/review and shared identity/authentication
+primitives. Native source f15beb46/root86b59733 are reviewed, main-pushed and
+genuine public-native PG/race17.633s proven. Finite target: selected opaque access
+token yields exact resource/scope principal under current root/client/owner/
+human-or-workload/tenant authority and original <=20s validity, with bounded
+refresh/denial and <=30s revocation guarantee; no refresh-token-as-access,
+new grants/exchange/device/OIDC/client management, HTTP/reference or private
+authorization engine. Use existing authentication authority/validity contracts;
+report actual missing upstream behavior rather than mint substitute authority.
+First report found an actual supplier gap: public authenticationd9f5132 exposes
+JWT-only AuthorityAuthenticator and cannot admit an opaque token into its opaque
+ResourcePrincipal; its existing customer profile also rejects workload owners.
+ResourceVerify remains required but cannot substitute fake JWTs or a private
+principal/validity engine. Its additive authentication prerequisite is parent-owned.
+No ResourceVerify production code was started.
+
+OAuth ready lane selected17:57UTC: same worker/paths/base, complete OAuth
+authorization-server discovery -> an independent standard-client consumer uses
+the exact advertised profile through genuine existing authorization-code/S256,
+token/refresh/revoke. Only implemented grant/auth/PKCE/scope/selected endpoints
+may be advertised; no OIDC/device/dynamicregistration/client CRUD claims, caller
+host inference, client/secret disclosure or HTTP framework. Use exact configured
+issuer/endpoint authorities, typed public projection and applicable RFC8414
+fixtures; no endpoint policy/provider engine invented. First implemented public
+boundary needs parent alignment; TDD, genuine public-native consumer, affected
+race/vet/hostile tests and one independent complete-diff review before parent
+Git/public-pin/CI delivery. Heavy lane is primary-owned after organization gates.
 
 Latest delivery17:49UTC: reference27 source15160754 is committed/pushed as
 db193b6cd7f698f6e7f88eeadedee3797a7f2cab; remote main exact verified.
