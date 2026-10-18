@@ -116,7 +116,7 @@ priority system/developer instructions remain controlling.
 - Dependency-ready implementation lanes MAY proceed in parallel under one
   persistent, hands-on primary. This supersedes older identity sole-writer and
   sequential-milestone restrictions, without resuming a paused goal. All
-  subagents MUST use gpt-6.1-sol, medium reasoning and fork_turns="none";
+  subagents MUST use gpt-6.1-sol, high reasoning and fork_turns="none";
   workers MUST NOT spawn agents. At most six agents MAY be active, including
   the primary and independent reviewer; start with at most three workers.
 - Each assignment MUST name non-overlapping owned paths, consumed committed
