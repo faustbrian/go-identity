@@ -1,24 +1,25 @@
 # Identity Platform Progress
 
-## TL;DR — updated 2026-10-18 06:24 UTC
+## TL;DR — updated 2026-10-18 07:19 UTC
 
 **Estimated whole-goal completion: approximately 10–12%, with low confidence.**
-The working authentication baseline, eleven email profiles and selected native
+The working authentication baseline, twelve email profiles and selected native
 organization membership/invitation journeys are delivered, alongside a selected
-OAuth code/PKCE flow and four CAPTCHA adapters. Most platform families and final
-package qualification are not closed; queued work is not counted as delivered.
+OAuth code/PKCE flow with configured confidential clients and four CAPTCHA
+adapters. Most platform families and final package qualification are not closed;
+queued work is not counted as delivered.
 This is an effort/scope estimate, not a measured percentage or an ETA.
 
 | Measure | Current position |
 | --- | --- |
 | Complete consumer milestones | **3/39 closed**: B1 authentication, B2 reset, B3 password change. The unweighted count is 7.7%; it is not the whole-goal effort estimate. |
 | Remaining milestones | **36/39 not closed**: M04 is partially delivered; M05–M39 have not been accepted as complete. Existing implementation is not assumed absent. |
-| Additional delivered behavior | **11 email-lifecycle profiles**, listed below. These are partial M04 deliveries, not eleven additional closed milestones. |
+| Additional delivered behavior | **12 email-lifecycle profiles**, listed below. These are partial M04 deliveries, not twelve additional closed milestones. |
 | Full package scope | **67 units: 61 product units + 6 primitive extensions.** No additional full-unit qualification has closed during this implementation run. The older 2/67 verified baseline is historical, not a current cross-repository audit. |
 | Last full milestone closure | **14 October:** B3 password change. |
-| Last complete email-profile delivery | **18 October:** verification → genuinely enrolled TOTP → authenticated session read/logout, native and opt-in HTTPS, browser and persistent sessions. Pushed `02c6195`, Required CI 39092789592 passes. |
-| Latest delivered profile | **Native organization invitations:** genuine owner send → captured delivery → verified recipient acceptance → membership, including rollback, contention, policy withdrawal and fresh-session interrupted-send recovery. Pushed `6847272`, green Required CI and actual downloaded-module PostgreSQL/race consumer proof. This is partial M22, not the complete organization family. |
-| Current unfinished deliverables | Primary: remaining M04 hooks/lifecycle/privacy. OAuth worker: configured confidential-client authentication on the delivered code/S256 flow. Full M22/M30/M35, organization HTTP/reference selection and final package qualification remain open. |
+| Last complete email-profile delivery | **18 October:** optional before/after hooks through signup and managed-link verification, preserving commit/recovery on observer failure. Pushed reference `e53b0d7`, Required CI 39107091680 passes; eleven actual public-native PostgreSQL/race cases pass. |
+| Delivered organization profile | **Native organization invitations:** genuine owner send → captured delivery → verified recipient acceptance → membership, including rollback, contention, policy withdrawal and fresh-session interrupted-send recovery. Pushed `6847272`, green Required CI and actual downloaded-module PostgreSQL/race consumer proof. This is partial M22, not the complete organization family. |
+| Current unfinished deliverables | Primary next: remaining M04 lifecycle/privacy and required hook variants. The link-hook and configured confidential OAuth profiles are delivered. Full M22/M30/M35, organization HTTP/reference selection and final package qualification remain open. |
 
 ### What consumers can already do
 
@@ -32,6 +33,12 @@ This is an effort/scope estimate, not a measured percentage or an ETA.
   current authoritative MFA state is known empty, and (11) verification-to-signin
   through genuine enrolled TOTP with atomic session effects, including HTTPS
   browser/persistent, exhaustion, late-authority, recovery and populated upgrades.
+- Explicitly configure ordered verification policy and success observation for
+  signup and managed-address links. Before may reject before reservation;
+  observer failure retains commit/recovery without confidential projection or
+  following signin. Native and existing HTTPS paths, scanner/replay/recovery,
+  rollback, unknown acknowledgement and final authority denial are covered.
+  This is profile (12); OTP/change hook variants and lifecycle/privacy remain.
 - Use genuine authenticated sessions for native organization create/get/add/list/
   remove, with last-owner protection and scoped denial. Owners can send member
   invitations to existing verified recipients, deliver through the actual queue,
@@ -41,16 +48,20 @@ This is an effort/scope estimate, not a measured percentage or an ETA.
 - Select bounded Turnstile, reCAPTCHA v3, hCaptcha Publisher/Pro or CaptchaFox Free
   provider-fact adapters. Durable risk/canonical-event/reference composition and live-provider
   qualification remain open.
-- Compose the native public-client authorization-code/S256 flow from a genuine
-  password session through independent consent, one-use exchange, refresh and
+- Compose native public or configured confidential-Basic authorization-code/S256
+  flows from a genuine password session through independent consent, one-use
+  exchange, refresh and
   revocation, with atomic audit/outbox effects and metadata-only recovery.
-  Confidential/workload grants, OIDC, device, restricted exchange and complete
+  Confidential Token/Revoke/Recover require actual current configured secret
+  verification; adding a confidential client preserves installed public grants.
+  Startup secret/version configuration is not hot or fleet-wide secret rotation.
+  Workload grants, client management, OIDC, device, restricted exchange and complete
   reference/HTTP/provider qualification remain outside this delivered profile.
 
 ### What remains before the whole goal is done
 
-- Finish M04 verification hooks and email lifecycle/privacy contribution, retained
-  factor-profile limits and qualification;
+- Finish M04 required remaining hook variants, email lifecycle/privacy
+  contribution, retained factor-profile limits and qualification;
   the selected enrolled-TOTP continuation profile is delivered.
 - Close username, passwordless/phone/anonymous, complete MFA/recovery/trusted-device,
   WebAuthn/passkey and social-OAuth milestones.
@@ -60,6 +71,29 @@ This is an effort/scope estimate, not a measured percentage or an ETA.
   composition and all mandatory package, journey and shared-issuer qualification.
 
 ### Immediate delivery state and next action
+
+- Verification-hook prerequisites root `9464527`, email `ad66e5e` and native
+  `0ffbde0` are independently reviewed/pushed; Required CI passes for each.
+  Reference now consumes those actual public versions with workspace disabled:
+  ordinary race11.502s/CLI9.597s, taggedvet0 and all eleven real-PG/race hook
+  cases93.043s pass. Native/public HTTP rejection, observer failure with known
+  commit, scanner/replay/recovery, rollback, lost acknowledgement and late
+  authority cases are exercised. Final six-path independent review approves
+  candidate5f358674; reference `e53b0d7` is pushed with Required39107091680
+  success. A separate clean consumer builds the actual published reference
+  version and both hook configuration paths without workspace/replacements.
+  That last proof is compilation, not another database boot. This finite
+  profile is closed; full M04 and package qualification remain open.
+- Configured confidential OAuth core `0fc6835` and native `47f61eb` are
+  independently reviewed/pushed with green Required CI. Actual public-root
+  native PG/race suite51.211s and taggedvet0 pass; original owning-module
+  race180.348s and parser fuzz466839 executions remain attributed to their
+  original run. The separate downloaded-native public consumer passes real
+  PostgreSQL/race17.125s for confidential code/S256/refresh/revoke, installed
+  public-grant compatibility and actual lost-COMMIT metadata-only recovery.
+  An initial scratch compile omitted two maintained fixture helpers; copying
+  them unchanged fixed the fixture, without repository edits. This finite
+  profile is closed, not full M30 or new package qualification.
 
 - Native invitations `6847272` are independently reviewed/pushed, Required
   39103645549 success. Actual public native/root/kernel consumer passes real-PG

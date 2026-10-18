@@ -1,5 +1,103 @@
 # Identity Implementation — Current Milestone
 
+## Accepted link-hook and confidential OAuth profiles — 2026-10-18 07:19 UTC
+
+Both finite profiles are closed; full M04/M30 and all 67-unit obligations stay
+active. No package qualification or new full milestone is claimed. Primary next
+addresses the retained M04 lifecycle/privacy contributor and required remaining
+hook variants after one bounded consumed-contract check; no new worker is
+assigned or upstream readiness assumed by this note.
+
+Verification hooks: root9464527/emailad66e5e/native0ffbde0/referencee53b0d7 are
+reviewed and pushed to main. Required39105190880/39105768536/39106536839/
+39107091680 all succeed. Final reference6 independent review5f358674 APPROVE;
+canonical GOWORKoff/readonly public modules run all11 actual PG18/race cases
+PASS93.043s, ordinaryreference11.502s/CLI9.597s, taggedvet0 and tidy0. Native
+public-only ordinaryrace2.092s/taggedvet0 pass. The actual public reference
+v0.0.0-20261018071701-e53b0d7bc3b0 builds in a separate clean consumer selecting
+both native configuration paths; this is packaging/compilation, not DB boot.
+Original runtime and managed-overlay REDs remain recorded below. Default nil,
+OTP/change exclusions, known-commit/error semantics and no-observer-on-history
+are unchanged. No historical evidence or Tools programme was created.
+
+OAuth confidential profile: ROOT9 0fc6835/native8 47f61eb are reviewed/pushed;
+Required39105902252/39106536793 succeed. Final native independent reviewa1afe18a
+APPROVE. Public-root canonical PG18/race8-case51.211s/taggedvet0/tidy0 pass;
+unchanged owningrace180.348s/rootrace1.235s/fuzz466839exec8.309s remain original.
+Separate external module pins actual publiccore0fc/native47f, no workspace or
+replacement. Two maintained genuine consumers pass PG18/race17.125s: full
+confidential flow plus installedpublicgrant compatibility, and lost-COMMIT
+authenticated metadata-only recovery/no redelivery. Initial scratch compile
+missed identity_fixture{,_graph}_test.go; copying those unchanged completed the
+maintained fixture without product edits. Source remains clean in OAuth repo.
+Startup-only secret configuration does not claim hot/fleet secret management;
+broader clients/workloads/OIDC/device/exchange/fullM30 remain open.
+
+All completed fixture databases/roles are gone. Disposable cache/consumer/PG
+cleanup follows this checkpoint before another bounded run. No task resource
+is retained as another deliverable, and no broad gate is rerun for this note.
+
+## Closed M04 link-verification hook scope — 2026-10-18 06:34 UTC
+
+Primary owns root hook contracts/runner, email-owned verification hook selection,
+password/postgres signup and managed-address link confirmation, and reference
+configuration/consumer tests/pins. Adopt identity main11a0281, password native
+6128551 and reference02c6195; existing genuine verification and policy/factor/
+capability/current-authority behavior remains unchanged. Outcome: explicitly
+configured ordered before-verification and after-known-success callbacks in
+the supported signup and managed link confirmation journeys, native and public
+reference composition. Default disabled, no new routes or hook work on scanner
+validation, replay/recovery, unknown or rolled-back outcomes. OTP and email-change
+hook profiles, lifecycle/privacy contributors and full M04 qualification remain
+later work; this does not close M04 by itself.
+
+Use the required identity.Hook/typed inputs: callbacks run outside SQL, receive
+only registered bounded scalar metadata, preserve immutable tenant/actor/operation
+and original deadline, deny callback-context reentry, redact errors/panics and
+respect cancellation. Verification uses read-only metadata: no enrichment can
+alter its subject/proof/address/authority. Before reject/error leaves no protected
+effects; final native checks still repeat current authority/expiry. After failure
+must conserve known commit/recovery, suppress confidential projection/signin and
+never pretend rollback or repeat observers through replay. Callbacks are bounded
+cooperative application policy/observation, not durable external delivery.
+
+One bounded investigation is complete. Root focused contract red/green/race/vet,
+then real PG reference acceptance for allow/reject/error, committed observer
+failure, replay/unknown/rollback and current-expiry denial; retain unchanged
+baseline/MFA evidence. Consumer/configuration defaults and public pins must be
+proved before one complete final review per required owner publication. No new
+verification tooling, unrelated variants or full-repository reruns.
+
+Checkpoint 06:53 UTC: root hook prerequisite9464527 is reviewed/pushed; Required
+39105190880 success. Independent complete four-path review approves hashes
+22ebef5d (hooks.go)/22e619d5 (hooks_test.go); concrete nil-notes regression failed
+0.209s before correction, final ordinary root race1.555s/internalvelocity1.209s.
+Prior unchanged parser fuzz26420exec and vet0 remain applicable. Email selection
+now consumes actual publicroot946; tidy0, ordinaryrace1.290s and vet0 pass.
+Independent six-path email review is pending. Native configuration fields and
+seven real reference cases are source-ready; execution remains deliberately
+unwired until the actual runtime regression. These prerequisites do not close
+the consumer profile or M04. OAuth confidential15 is frozen for independent
+review: rootrace1.235s/nativePG18race180.348s/vet0/fuzz466839exec8.309s; native
+still requires the new public own-root pin and actual public-consumer proof.
+
+Checkpoint 07:02 UTC: email policyad66e5e is independently reviewed/pushed;
+Required39105768536 success. Actual reference PostgreSQL signup missing-hook
+regression failed1.329s, then all seven rejection/commit-error/rollback/unknown/
+late-authority/replay cases passedrace20.454s after wiring. Both managed-link
+allow and observer-error consumers passedrace69.200s, including actual signup,
+password/session, resend/delivery, scanner reads, confirmation and recovery.
+Managed fixture independently failed31.602s with hook selection disabled only
+in a disposable Go overlay; production sources were untouched, overlay removed.
+An initial fault case omitted arming the existing COMMIT-loss seam; corrected.
+Existing reservation semantics intentionally retain one admitted failed-attempt
+charge, while pre-reservation hook rejection has zero charges; assertions now
+conserve that owner contract rather than changing it. Native canonical pins
+now select actual publicroot946/emailad66; affected public-only checks running.
+These tests are local owning-source/workspace composition, not yet downloaded
+public-native consumer delivery. OAuth reviewed ROOT9 is pushed0fc6835 with
+Required39105902252 success; native canonical pin adoption is pending proof.
+
 ## Accepted native invitation profile — 2026-10-18 06:24 UTC
 
 go-organization native6847272a5ba4da6a9e7be5275b77c7f5c53cf6c0 is committed,
