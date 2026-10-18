@@ -1,10 +1,12 @@
 # Identity Platform Progress
 
-## TL;DR — updated 2026-10-18 03:14 UTC
+## TL;DR — updated 2026-10-18 04:59 UTC
 
-**Estimated whole-goal completion: approximately 5–10%, with low confidence.**
-The working authentication baseline and substantial email functionality are
-delivered; most platform families and final package qualification are not closed.
+**Estimated whole-goal completion: approximately 10%, with low confidence.**
+The working authentication baseline, eleven email profiles and selected native
+organization membership are delivered. Most platform families and final package
+qualification are not closed; this estimate does not count queued reviews or
+unconnected invitation/OAuth implementations as delivered outcomes.
 This is an effort/scope estimate, not a measured percentage or an ETA.
 
 | Measure | Current position |
@@ -15,7 +17,7 @@ This is an effort/scope estimate, not a measured percentage or an ETA.
 | Full package scope | **67 units: 61 product units + 6 primitive extensions.** No additional full-unit qualification has closed during this implementation run. The older 2/67 verified baseline is historical, not a current cross-repository audit. |
 | Last full milestone closure | **14 October:** B3 password change. |
 | Last complete email-profile delivery | **18 October:** verification → genuinely enrolled TOTP → authenticated session read/logout, native and opt-in HTTPS, browser and persistent sessions. Pushed `02c6195`, Required CI 39092789592 passes. |
-| Current unfinished deliverable | Remaining full M04 capability/qualification and publication of the locally implemented organization and CAPTCHA profiles; native OAuth consumer proof remains active. |
+| Current unfinished deliverables | Invitation send/delivery/acceptance and OAuth consent/code/refresh are actively integrating the reviewed shared atomic contributions. Kernel, capability and outbox are public/main with green exact-source CI; no shared publication dependency remains. hCaptcha child/public consumer is delivered; CaptchaFox is the next active leaf. Remaining M04 hooks/lifecycle/privacy contributions are identified, not silently treated as complete. |
 
 ### What consumers can already do
 
@@ -29,10 +31,17 @@ This is an effort/scope estimate, not a measured percentage or an ETA.
   current authoritative MFA state is known empty, and (11) verification-to-signin
   through genuine enrolled TOTP with atomic session effects, including HTTPS
   browser/persistent, exhaustion, late-authority, recovery and populated upgrades.
+- Use genuine authenticated sessions for native organization create/get/add/list/
+  remove, with last-owner protection and scoped denial. Invitation preparation/
+  metadata APIs are public, but sending/accepting invitations is not yet delivered.
+- Select bounded Turnstile, reCAPTCHA v3 or hCaptcha Publisher/Pro provider-fact
+  adapters. Durable risk/canonical-event/reference composition and live-provider
+  qualification remain open.
 
 ### What remains before the whole goal is done
 
-- Finish M04's remaining factor/privacy/lifecycle requirements and qualification;
+- Finish M04 verification hooks and email lifecycle/privacy contribution, retained
+  factor-profile limits and qualification;
   the selected enrolled-TOTP continuation profile is delivered.
 - Close username, passwordless/phone/anonymous, complete MFA/recovery/trusted-device,
   WebAuthn/passkey and social-OAuth milestones.
@@ -45,7 +54,7 @@ This is an effort/scope estimate, not a measured percentage or an ETA.
 
 - Identity prerequisites `bb569ec` and `615ac00` are pushed to main with their
   exact-head Required CI passing.
-- The capability prerequisite is now on **main** at `07437fc`; exact-source
+- The capability prerequisite is now on **main** at `bf9ca8a`; exact-source
   Required CI passes. Reviewed native session adapter `bb37a49` is pushed and
   its public-only race/static and populated-history checks pass; Required CI
   passes. Password/postgres continuation `6128551` is also pushed with Required
@@ -54,10 +63,33 @@ This is an effort/scope estimate, not a measured percentage or an ETA.
 - HIBP now rejects and never caches provider results whose deadline expires
   during response cleanup: reviewed fix `75e10d9` is on main with Required CI
   passing. This does not close a further milestone or full-unit qualification.
-- Organization root/native membership and neutral CAPTCHA/Turnstile have local
-  implementations and focused race/service or provider-fixture proof; independent
-  review, public dependency publication and composition remain. OAuth root/native
-  source compiles; its complete native consumer flow is not yet proven.
+- Organization membership profile is reviewed and pushed as `d781363`: real HTTPS
+  signup/verification/password signin for two users drives native create/get/add/
+  list/remove; nonmember Get and removed-member Get/List deny. Full affected
+  public-only PostgreSQL/race suite passes9.893s and tagged vet passes; exact-head
+  hosted CI39094622600 passes. Root invitation preparation/read prerequisite
+  `d3aef10` is also public, Required39097597518 passes; native invitation
+  storage/read `5d143b4` is public with actual PostgreSQL/public-pin race2.176s
+  and Required39098233407 passing. Invitation send/accept, teams, domain
+  authority and the whole M22 row remain open.
+- OAuth has real PostgreSQL authorization/code/refresh, current-authority,
+  contention and lost-acknowledgement evidence. Independent review found refresh
+  reuse and consumed-refresh revocation defects; both have genuine focused
+  red→green proof. Actual independent consent lifecycle persistence is now
+  connected to actual public kernel4c83b9a and outboxf438090; changed source
+  is undergoing focused real-PG checks before final review/publication.
+  Earlier full native race88.158s is retained for its original source, not reused
+  as a claim that later lifecycle changes passed.
+- Neutral CAPTCHA1aacfcc/d05eba7, Turnstile d10a829 and reCAPTCHA21458ee are
+  public/main with Required CI passing. Turnstile's actual public module consumer
+  passes race1.254s; reCAPTCHA public consumer passes race1.292s. hCaptcha
+  Publisher/Pro neutral48ab343 and childcb04798 are reviewed/public/main with
+  Required CI passing; public-dependency child race3.286s/vet0 and docs0.237s
+  pass. Its postpublication actual public child consumer passes race1.256s.
+  Canonical audit and durable/reference consumers are not delivered by those
+  provider-fact modules; no M35 or whole-unit closure.
+
+### Earlier diagnostic checkpoints (historical, not current status)
 - Organization's exact active-target/version prerequisite `4035a0e` is pushed
   with Required CI passing. Its native worker now consumes the public API;
   actual PostgreSQL race proof now includes last-owner contention, scoped
@@ -66,8 +98,9 @@ This is an effort/scope estimate, not a measured percentage or an ETA.
   contract, not by changing production behavior. Review/publication remain.
 - OAuth consent continuation risk classification is reviewed and pushed in
   `26fb47a`; full risk race/vet and Required CI 39092382688 pass.
-- The populated MFA-first upgrade intermittently fails during router construction;
-  its cause remains unproved. Later passing reruns do not close that gap.
+- The earlier populated MFA-first router rejection remains an unclassified
+  observation; later selected checks and final review identify no outstanding
+  mandatory gap for the delivered TOTP profile. No diagnosed-fix claim is made.
 - All selected TOTP authority/contention/recovery/rollback/populated-upgrade
   cases pass on public dependencies under race (72.520s). Original-expiry failed
   once at setup with a deadline error; diagnostic repeats pass (18.436s), but
@@ -78,8 +111,10 @@ This is an effort/scope estimate, not a measured percentage or an ETA.
   gap. The corrected root passes all four regression cases and full race/vet;
   independent corrected-final-diff review approves it. Root `a875bb9` is public
   main with Required CI passing. Its real public pin now supports native standalone
-  race/vet and PostgreSQL/race3.211s. Native review found quota denials mislabeled
-  as dependency failures; that owning correction remains before publication.
+  race/vet and PostgreSQL/race3.211s. Native quota denial classification is now
+  corrected with genuine red/green and denial-audit proof. Final19-path review
+  `/root/organization_postgres_final_review` APPROVE includes the real login
+  consumer, current public pins and the unchanged corrected production code.
 - **Next:** publish reviewed organization/CAPTCHA profiles with real public pins,
   finish OAuth native consumer proof and select the next remaining M04 outcome. Do not
   count another milestone or inflate the estimate for prerequisite commits.
@@ -908,7 +943,7 @@ restart old slices merely to fill this table; adopt applicable prior proof.
 | B1 | Runnable registration/verification/signin/session/logout baseline: identity, identity/postgres, identity/password, identity/password/postgres, identity/session, identity/session/postgres, identity/delivery, identity/delivery/postgres, identity/http, identity/reference; required primitive contracts | Closed: reviewed native PostgreSQL/HTTPS journey, reproducible consumer walkthrough, main 90d4f2c and Required CI 38527264686. Public-dependency journeys and published runner initialization subsequently pass at 1ae0790; full-unit qualification pending. |
 | B2 | Reset and required session invalidation using the baseline owners plus identity/risk/hibp | Closed: reviewed native PostgreSQL/HTTPS reset, two-session revocation, original audit recovery and populated upgrade; main fd439aa and Required CI 38547848026; full-unit/release qualification pending |
 | B3 | Password change and fresh reauthentication through baseline owners | Closed: reviewed PostgreSQL/HTTPS verification/change, two-session revocation, populated upgrade, original auditing, rollback/recovery and combined reset/change; main 24b1b08 plus CI-only 47a3ee0, Required CI 38559659144; full-unit/release qualification pending |
-| M04 | Email add/change/verify/list/get/remove with session/lifecycle policy: identity/email | Delivered public PostgreSQL/HTTPS profiles: list/get, keyed add/resend/verification/primary change (`31b51a9`), safe self/replacement-primary removal (`1ae0790`, `4a10c0f`), administrator reads/removal (`91397a7`, `ffc3b47`), pending-address OTP verification (`612ab05`), new-primary OTP replacement/establishment (`43b46d1`, `ed8135f`), TOTP-protected link change from genuine MFA sessions (`c3744e2`) and known-empty-MFA registration verification-to-signin (`88c8106`). Independent reviews and exact-head main CI pass for those delivered profiles. Enrolled verification/TOTP continuation, other factor/privacy/lifecycle completeness and final qualification remain; full row not closed. |
+| M04 | Email add/change/verify/list/get/remove with session/lifecycle policy: identity/email | Eleven delivered public PostgreSQL/HTTPS profiles, including known-empty-MFA verification-to-signin (`88c8106`) and genuinely enrolled verification→TOTP→session/read/logout (`02c6195`), with independent review and exact-head main CI. Original verification hooks and email lifecycle/privacy contribution remain missing; selected factor limits and full qualification remain open. The enrolled continuation is delivered, not a remaining prerequisite. Full row not closed. |
 | M05 | Username availability/signin/rename: identity/username, stable identifier contracts | Closure not reassessed |
 | M06 | Delivered magic-link signin and session: identity/magiclink | Closure not reassessed |
 | M07 | Purpose-bound email OTP request/delivery/completion: identity/otp, identity/otp/postgres | Closure not reassessed |

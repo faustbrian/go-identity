@@ -1,5 +1,110 @@
 # Identity Implementation — Current Milestone
 
+## Active lanes and delivered prerequisites — 2026-10-18 04:59 UTC
+
+Primary delivered closed invitation/consent kernel4c83b9a on main, Required
+39098208831 success; native organization read/storage5d143b4 on main, Required
+39098233407 success. Neither is a completed invitation/OAuth journey.
+Capability helper3ef13c1 plus comment-only source-doc correctionbf9ca8a is
+reviewed; exact source-docs check has no findings, CI39098684728 passed and
+ordinary main push is remote-verified at bf9ca8a. Outbox actual paired lifecyclef438090
+is reviewed with public-only module race1.249s/vet0; CI39098605323 passed and
+ordinary main push is remote-verified at f438090. No protection or hook bypass.
+OAuth owner resumed own root/postgres code against actual kernel4c83/outboxf438:
+same-Work consent receipt is wired; focused real-PG checks are running after
+organization's public-dependency/API RED batch released the heavy lane.
+Organization owner resumed native invitation send/accept after real public
+kernel4c83/capbf9/outboxf438 downloads; actual native constructor/API RED captured.
+Private original envelope/replay-key custody must come only from issued receipt,
+with an additive forward migration; old null custody cannot authorize acceptance.
+
+hCaptcha neutral48ab343 and childcb04798 are on main with Required39098380886/
+39098813286 success. Final child13 snapshotcf9f31494d423eaf85ee0b2ae0b4e7d5b3afb72f06bfc895b063cb892f66a30f
+has independent APPROVE. Actual public neutral pin, child race3.286s/vet0,
+clean docs/example compilation0.237s and config/repository/cohesion32 checks
+pass. Postpublication GOWORKoff public child consumer passed race1.256s with
+actual childcb04798 and neutral48ab343, no replacements. Native provider facts
+are not canonical risk/reference/live-provider qualification or M35 completion.
+
+Next independent leaf assignment: /root/hibp_completion owns neutral
+risk/captcha/{config.go,types.go,verifier.go,new captchafox-specific tests,
+README.md,CHANGELOG.md} plus risk/captcha/captchafox/** only. Frozen outcome is
+explicit Siteverify2026-08-11/free facts and actual Verify/Observe risk callback,
+fixed HTTPS endpoint, configured sitekey/exact hostname policy, unsupported
+action/score/origin/Enterprise/remote-IP disclosure denied. Consume actual public
+neutral48ab343/risk1aacfcc/HTTP-client-v2.1.0 behavior and preserve all existing
+provider contracts. New neutral behavior is implemented in its owner, not a stub.
+Success/negative/error/binding/expiry/ambiguity/cancel/cleanup/redaction and
+bounded hostile parsing/TLS/concurrency are finite acceptance; focused RED/GREEN,
+affected module race/vet, short parser fuzz and public callback proof suffice for
+this experimental prerequisite, not full-unit/live qualification. Primary owns
+public neutral/child pins, registration, Git, review and canonical risk/reference
+integration. No worker touches shared risk/kernel/session/reference/HTTP/root
+metadata/CI/Git or other provider directories. Heavy tests remain serialized.
+
+OAuth focused real-PG public-supplier batch passed5.232s: independent consent
+creation/reconfirmation, real secondary-outbox-failure atomic rollback,
+deterministic refresh race family revocation, consumed-refresh revoke and
+genuine signup/consent/code/refresh/revoke. Its rollback oracle preserves the
+separate failed-attempt audit and requires zero provisional successful effects.
+Affected race/tagged-vet and complete final review remain, then reviewed root
+publication must precede native own-root canonical pin/public consumer proof.
+Completed prerequisite clones and unused prior-slice Valkey container/fixtures
+were removed; borrowed caches/PG remain live for the three implementation lanes.
+
+## Current implementation checkpoint — 2026-10-18 04:43 UTC
+
+Organization root invitation prerequisite d3aef10016de is public/main with
+Required39097597518 success. Reviewer /root/organization_invitation_prereq_review
+approved root8 packetbd8c14f783901d56cb3760d86f8d16371aecf262b478369688c269a6aa71e8ea;
+paired native14 source approved separately, current root/public native pin proof
+is underway. This does not deliver invitation send/accept or close M22.
+OAuth actual refresh reuse/revoke defects have focused PG RED2.592→GREEN3.001;
+actual missing consent event is RED1.687. Changed lifecycle source remains
+unfinished, so original full-race88.158s does not certify those later changes.
+Primary added closed invitation issuance/consumption and separate actual-member
+lifecycle plus closed OAuth consent receipt/lifecycle in existing Work; no core
+proof/session constructor or second journal needed. Final19 kernel paths are
+staged/frozen for /root/invitation_consent_supplier_review with capability helper4
+and real outbox forwarder4 paths. Kernel full race3.856s/vet0 and invitation
+fuzz33183exec8.309s pass; outbox paired module race1.256/vet0 passes. Public kernel/
+outbox adoption and actual complete native consumers remain owed. Whole existing
+kernel directory secret scan finds an existing issue; changed19-path staged scan
+passes, not a full-directory/release claim. Keep unrelated scans out of this slice.
+hCaptcha Publisher/Pro neutral6/provider10 candidate is frozen in independent
+review: prior-provider-preserving four-module race/vet pass, bounded fuzz116859
+exec9.263s passes; genuine missing-host sentinel RED0.177→GREEN0.174. Native
+provider facts are not canonical risk/reference or live-provider qualification.
+
+## Current parallel checkpoint — 2026-10-18 04:26 UTC
+
+reCAPTCHA provider21458ee is pushed with Required39096191415 success; its
+neutral prerequisite d05eba7 is public. Turnstile d10a829 and neutral1aacfcc
+are public/CI-green; the real public Turnstile module consumer passed race1.254s.
+Canonical CAPTCHA events and durable/reference composition remain open.
+OAuth source31 paths is frozen after full selected PG/race88.158s, root race,
+tagged vet and two8s parser fuzz passes; independent complete review is active.
+Native public own-root pin, registration and CI remain parent-owned pending work.
+Organization invitation acceptance is the current primary shared dependency:
+closed original-plan codec and exact native/outbox admission tests now pass
+0.296s (admission RED0.292s). Atomic execution and actual secondary membership
+lifecycle, issuance and end-to-end native consumer are still unfinished.
+
+Leaf owner /root/hibp_completion may now implement exactly hCaptcha Publisher/Pro
+Siteverify facts/callback, writing neutral risk/captcha files and hcaptcha/**
+only; exclude recaptcha/** and turnstile/** and all shared risk/kernel/reference,
+root manifests/Git/CI. Consume public neutral d05eba7, risk1aacfcc and
+HTTP-client/v2.1.0 with their retained behavioral/public consumer proof. Freeze
+one explicit Publisher/Pro API/tier/version/hostname/sitekey profile; unsupported
+Enterprise/action/origin/IP variants deny rather than fabricate evidence.
+Success/negative/binding/error/expiry/ambiguous/cancel/close/redaction and bounded
+hostile parser/TLS/race/direct Observe-to-risk callback are the acceptance;
+official contract sources must be pinned, live interoperability separately
+unverified. No policy threshold, authority/replay/event store or new engine.
+Primary integrates neutral prerequisite, public pins, root registration and
+canonical event/reference support; provider facts alone do not close M35.
+All workers GPT-6.1 Sol high/no children; heavy local runs remain serialized.
+
 Activated on 2026-10-14. B1, B2 and B3 are closed; M04 email lifecycle is active.
 
 ## Parallel execution — activated 2026-10-18 02:00 UTC
@@ -56,6 +161,36 @@ through primary permission messages; workers may inspect/code meanwhile.
 Primary accepts integration only after applicable independent complete-diff
 review, actual consumer acceptance and required CI. No new evidence machinery.
 
+CAPTCHA integration (2026-10-18 03:40 UTC): primary adopts the finished neutral
+and Turnstile source without restarting it. Neutral uses public risk af740fb;
+shared risk adds only an immutable trusted-flow projection, not replay authority.
+Actual transport regression holds command/token/config constant while changing
+each trusted flow dimension: eleven changed bindings reuse the same provider UUID
+before the fix (RED0.226s). Bind the original closed flow in the transport hash;
+full local Turnstile race passes1.271s. Risk race1.372s/internalvelocity1.222s and
+vet0 pass. Public neutral prerequisite and root registration will be reviewed
+together, committed before the child receives real public pins. A disposable
+external workspace is development-only; no releasable replace is permitted.
+Canonical event composition and durable/reference integration remain open;
+neither facts-only prerequisite closes M35 or qualifies a whole unit.
+
+Organization consumer gap closed locally (2026-10-18 03:40 UTC): new test obtains
+two genuine credentials through public signup, native captured verification
+delivery, confirmation and password signin, then real SessionService admission
+drives create/get/add/list/remove, nonmember Get denial and removed-member
+Get/List denial
+on the same primary. Focused actual PG proof passes1.742s. Prior partition
+fixtures remain useful but are not described as genuine login proof. Updated
+dependency candidate, final affected checks/review and native publication remain.
+
+OAuth first complete native success path passes2.171s: genuine login, consent,
+S256 exchange, rotation and reuse-family revocation. Required-provider rejection
+plus flow pass3.536s. Actual lost-final-COMMIT acknowledgment now reproduces a
+recovery-correlation gap (RED1.926s); OAuth worker retains its existing journal
+and fixes original command/grant correlation plus metadata-only recovery while
+organization uses the heavy lane. Full frozen fault/security acceptance and
+public source delivery are not yet closed.
+
 Organization's concrete upstream dependency: primary owns additive
 Work.RequireActiveTargetUser admission in identity/postgres, binding exact
 tenant/target user and original aggregate record version under the existing
@@ -84,6 +219,35 @@ populated reference histories twice passes33.604s; all twelve router builds
 complete validation within0.87–1.44s without cancellation. Earlier router
 rejection remains causally unproved, not relabeled fixed. No runtime budgets or
 validation gates changed; temporary compiler-only diagnostics were removed.
+
+## Successor lanes — 2026-10-18 03:47 UTC
+
+Organization selected membership profile is now reviewed/public main d781363,
+Required39094622600 passes; final19-file packet91bf04472da87010880567b391933d0ba58bf389cc12ceed48643cc93d625c0c
+matches the delivered source. Actual public-only full native PG/race9.893s,
+tagged vet0 and real signup/signin consumer are retained. Next organization
+owner receives only root/postgres for invitation send -> captured native delivery
+-> verified-recipient acceptance -> membership. Excludes teams, domain authority,
+HTTP and other invitation variants until separately selected. Consume existing
+public core/native d781363, capability07437fc, delivery/native owners and real
+session/target-admission contracts. One bounded dependency pass identifies exact
+required symbols before writes; no substitute token/delivery/transaction owner.
+Success/recipient/cross-org/expiry/replay/concurrent acceptance/rollback/unknown
+proof through public APIs and one complete final review precede publication.
+
+Neutral CAPTCHA prerequisite is reviewed/public main1aacfcc, Required39094737941
+passes. Final15-file packetf30b688ad6d0edd48bfa939a87f6d8c4efe4c4fa30380ce0cc2052e1d9e4ed8b
+includes the reproduced/fixed closed-union error path; public race1.202s/vet0,
+fresh docs/consumer0.227s. Primary keeps Turnstile integration and root manifests.
+Leaf owner may now extend only neutral risk/captcha files plus recaptcha/**,
+excluding turnstile/**: one explicit Google reCAPTCHA v3 standard Siteverify
+profile with native score/action facts and exact existing risk callback. Preserve
+the shipped Turnstile profile and API; score decisions stay risk-owned. Use actual
+public neutral/risk1aacfcc and HTTP-client/v2.1.0, bounded official-protocol parser/
+TLS/cancellation/concurrency/redaction checks and direct callback tests. No
+Enterprise/v2/other providers, widgets, alternate replay issuer or canonical
+audit machinery; shared audit integration remains primary-owned. Worker asks for
+genuine upstream gaps, never edits shared risk/kernel/manifest/Git state.
 
 ## Active: M04 email lifecycle; replacement and first-primary OTP profiles delivered
 
