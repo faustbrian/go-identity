@@ -1,5 +1,51 @@
 # Password PostgreSQL adapter
 
+## Explicit protected username rename
+
+Compose `NewUsernameRenameService(primary, policy, config, localKeys)` with an
+actual `NewActionPrimarySource` selecting `identity.username.update` and its
+explicit signed audience. The password verifier must allow that exact target;
+proof issuance does not itself change a name or consume the proof. The selected
+profile requires a real password session and independently known-empty current
+MFA authority, checked again under the protected transaction through commit.
+Cookie sources require retained CSRF keys and the original issued synchronizer;
+bearer sources reject unexpected CSRF custody rather than changing transport.
+
+`UsernameRenameConfig` supplies a versioned configuration/policy, bounded call
+duration, the fixed comparison profile, complete retained reuse keys and the
+reference thirty-day cooldown. Supply protected risk admission and native
+`risk/postgres.Config` with `EnforceLockouts:true` and its command counter policy;
+the service constructs the actual copied-key owner and rejects counter-only
+configuration. The selected counter schema and policy version remain bound to
+retained original commands. Also supply
+kernel request keys, a dedicated independent intent key and local envelope key.
+Install the existing identifier normalization/retirement, request input and
+admission preparation, protected counter/lockout, audit/outbox and password
+action-consumption histories before selection. Append
+`ActionReauthenticationMigrationSource` after the complete installed password
+history, including the selected username-signin suffix; do not replay an older
+purpose constraint after enabling it. Construction performs no migration/IO.
+
+Call `Rename` with the exact `username.RenameRequest`. Current self authority,
+proof, tenant, session, identifier/verification versions and policy must agree.
+Enrollment validation runs only when preparing a new original request. The
+existing encrypted request mapping freezes original intent; no bearer, CSRF or
+initiating retry key is stored there. Matching terminal retries restore that
+original before live reads and return credential-free metadata without rerunning
+enrollment or consuming another proof. Changing even case-only raw spelling
+under the same key conflicts. `RenameRecover` requires current query permission.
+
+Display-only edits preserve verification and do not retire the name. Canonical
+changes reset verification and reserve the retired name against reuse for
+exactly thirty elapsed days. Both advance the identifier authority epoch, so
+existing identifier-bound sessions fail their next authoritative validation.
+Sign in again with the current username. Proof consumption, name/cooldown and
+required audit/lifecycle effects commit atomically. Protected attempt charges
+commit before provider preparation and survive final rollback, so failures cannot
+evade the configured quota. Stale policy, factor activation, cancellation and
+required-effect failure never partially rename. No routes, administrative target
+or weaker MFA fallback are enabled.
+
 ## Explicit advisory username availability
 
 Compose `NewUsernameAvailabilityService(pool, policy, config)` with the fixed
@@ -20,8 +66,8 @@ Names are normalized with the frozen enrollment policy. Existing reservations
 or live cooldowns return `Available:false` without owner/status details; success
 is only an observation, never a promise of later reservation. Rate, risk,
 counter/audit/storage outages and cancellation cannot become an available name.
-No routes are enabled by construction. Username rename and selected HTTP/reference
-composition remain separate unfinished operations.
+No routes are enabled by construction. Rename has its separate explicit
+constructor above; selected HTTP/reference composition remains unfinished.
 
 ## Explicit username password signin
 
@@ -51,8 +97,8 @@ invalid, unverified and wrong-password attempts share credential-free rejection.
 The returned session works with the existing native reader and logout. Restart
 recovery checks original cookie/current policy and returns metadata only; it
 cannot reconstruct a bearer, cookie, synchronizer or password comparison.
-Availability uses the separate constructor above. Rename and username
-HTTP/reference selection remain unfinished.
+Availability and rename use their separate constructors above. Username
+HTTP/reference selection remains unfinished.
 
 ## Explicit email-plus-username registration
 

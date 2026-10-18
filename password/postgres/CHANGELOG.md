@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Add explicit keyed self-service username rename using existing action-bound
+  password proof, current MFA authority, protected risk/counters and the sole
+  coordinator. Display-only edits preserve verification; canonical changes
+  retire the previous name for thirty days. Both invalidate identifier-bound
+  sessions. Original retries/recovery are metadata-only; cookie selection
+  additionally binds its issued CSRF synchronizer.
+
 - Add explicit native advisory username availability with actual durable
   PostgreSQL quotas, canonical fail-closed risk audit and primary reservation/
   cooldown reads. Server-generated attempts prevent caller replay from evading
