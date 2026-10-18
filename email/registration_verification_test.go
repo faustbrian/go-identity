@@ -55,6 +55,32 @@ func registrationGrant(t testing.TB, p capability.Payload) capability.Grant {
 	return grant
 }
 
+func TestUsernameRegistrationVerificationKeepsOriginalPurposeBinding(t *testing.T) {
+	c, s := registrationVerificationFixture(t)
+	p, _ := email.NewRegistrationVerificationPolicy(c)
+	legacy, err := p.Payload(s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	original := s
+	s.Binding.OperationID, s.Binding.SchemaID = "identity.username.signup", "username-signup"
+	payload, err := p.Payload(s)
+	if err != nil {
+		t.Fatal("username registration cannot prepare its real mailbox proof", err)
+	}
+	if payload.Caveats["email.intent"] == legacy.Caveats["email.intent"] {
+		t.Fatal("distinct original signup operations share an intent")
+	}
+	grant := registrationGrant(t, payload)
+	if p.Authorize(grant, s, s.IssuedAt) != nil || p.Authorize(grant, original, s.IssuedAt) == nil {
+		t.Fatal("mailbox proof lost its exact original username operation")
+	}
+	s.Binding.SchemaID = "password-signup"
+	if _, err := p.Payload(s); err == nil {
+		t.Fatal("mixed origin schema accepted")
+	}
+}
+
 // EV01: the public email owner must not invent a logged-in session to issue a
 // new user's mailbox-ownership grant under the original anonymous signup.
 func TestRegistrationVerificationHasDistinctAnonymousOwnership(t *testing.T) {

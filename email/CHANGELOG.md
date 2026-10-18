@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Bind registration-verification grants to the exact username-signup origin
+  without changing retained password-signup proof bytes. Mixed operation/schema
+  pairs and cross-origin reuse deny; native issuance and confirmation still own
+  current authority and atomic effects.
+
 - Extend optional verification callbacks to exact managed-change and email OTP
   verification/change operation/schema pairs. Native selection remains explicit
   per workflow; other operations cannot reuse a confirmation schema.

@@ -167,6 +167,14 @@ func registrationVerificationOperation() identity.FeatureOperation {
 	return identity.FeatureOperation{Owner: "identity/password", OperationID: "identity.password.signup", SchemaID: "password-signup", SchemaVersion: 1, SubjectRequirement: identity.FeatureSubjectAnonymousFlow, RecordRequirement: identity.FeatureRecordOmitted}
 }
 
+func registrationVerificationOrigin(b identity.CommandBinding) identity.FeatureOperation {
+	op := registrationVerificationOperation()
+	if b.OperationID == "identity.username.signup" {
+		op.Owner, op.OperationID, op.SchemaID = "identity/username", "identity.username.signup", "username-signup"
+	}
+	return op
+}
+
 // Payload returns fresh caller-owned unsigned capability input with an empty ID:
 // the real issuer selects the grant ID. This grants no mailbox ownership, send,
 // current authorization or mutation authority. Neither entropy nor signing runs.
@@ -184,7 +192,7 @@ func (p *RegistrationVerificationPolicy) payload(s RegistrationVerificationSpec,
 	if !valid {
 		return capability.Payload{}, ErrInvalidVerification
 	}
-	if p == nil || p.state == nil || p.state.keys[version] == ([32]byte{}) || s.Binding.ValidateFor(registrationVerificationOperation()) != nil || s.Binding.TenantID != s.Payload.TenantID || !verificationID(string(s.Payload.SubjectID)) || !verificationID(string(s.IdentifierID)) || s.IdentifierVersion == 0 || s.IdentifierVersion == math.MaxUint64 || s.VerificationVersion == 0 || s.VerificationVersion == math.MaxUint64 || s.Payload.Version == 0 || s.Payload.Purpose != "identity.identifier.verify" || !p.state.redirect[redirect] || s.IssuedAt.IsZero() || s.IssuedAt.Unix() <= 0 || s.IssuedAt.Nanosecond() != 0 || s.ExpiresAt.Nanosecond() != 0 || s.ExpiresAt.UTC().Year() > 9999 || !s.ExpiresAt.After(s.IssuedAt) || s.ExpiresAt.Sub(s.IssuedAt) > p.state.lifetime {
+	if p == nil || p.state == nil || p.state.keys[version] == ([32]byte{}) || s.Binding.ValidateFor(registrationVerificationOrigin(s.Binding)) != nil || s.Binding.TenantID != s.Payload.TenantID || !verificationID(string(s.Payload.SubjectID)) || !verificationID(string(s.IdentifierID)) || s.IdentifierVersion == 0 || s.IdentifierVersion == math.MaxUint64 || s.VerificationVersion == 0 || s.VerificationVersion == math.MaxUint64 || s.Payload.Version == 0 || s.Payload.Purpose != "identity.identifier.verify" || !p.state.redirect[redirect] || s.IssuedAt.IsZero() || s.IssuedAt.Unix() <= 0 || s.IssuedAt.Nanosecond() != 0 || s.ExpiresAt.Nanosecond() != 0 || s.ExpiresAt.UTC().Year() > 9999 || !s.ExpiresAt.After(s.IssuedAt) || s.ExpiresAt.Sub(s.IssuedAt) > p.state.lifetime {
 		return capability.Payload{}, ErrInvalidVerification
 	}
 	record := s.Payload.CanonicalAddress.Record()
@@ -202,6 +210,17 @@ func (p *RegistrationVerificationPolicy) payload(s RegistrationVerificationSpec,
 		binary.BigEndian.PutUint32(length[:], uint32(len(value)))
 		_, _ = h.Write(length[:])
 		_, _ = io.WriteString(h, value)
+	}
+	// Password origins historically have a single fixed operation. Preserve
+	// their exact signed intent bytes; distinguish the new closed origin so a
+	// same-command proof cannot cross from username signup to password signup.
+	if s.Binding.OperationID == "identity.username.signup" {
+		for _, value := range []string{"username-origin-v1", s.Binding.OperationID, s.Binding.SchemaID, strconv.FormatUint(uint64(s.Binding.SchemaVersion), 10)} {
+			var length [4]byte
+			binary.BigEndian.PutUint32(length[:], uint32(len(value)))
+			_, _ = h.Write(length[:])
+			_, _ = io.WriteString(h, value)
+		}
 	}
 	return capability.Payload{Version: 1, Issuer: p.state.issuer, Audiences: []string{p.state.audience}, Subject: string(s.Payload.SubjectID), Resource: string(s.IdentifierID), Operation: string(s.Payload.Purpose), Tenant: string(s.Payload.TenantID), CorrelationID: s.Binding.CorrelationID, IssuedAt: s.IssuedAt.UTC(), NotBefore: s.IssuedAt.UTC(), ExpiresAt: s.ExpiresAt.UTC(), MaxUses: 1, Caveats: map[string]string{"email.confirm_operation": "identity.email.verification-confirm", "email.profile": "registration-v1", "email.intent": hex.EncodeToString(h.Sum(nil)), "email.binding_key_version": strconv.FormatUint(uint64(version), 10)}}, nil
 }

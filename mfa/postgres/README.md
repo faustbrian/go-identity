@@ -1,5 +1,14 @@
 # PostgreSQL MFA authority (in development)
 
+Required-email username signup reuses `InitializeSignup` under the exact native
+password contributor's `identity.username.signup`/`username-signup` v1 scope.
+It requires actual account creation and original registration evidence in the
+same Work; a caller-supplied user ID or missing state cannot initialize absence.
+Append `UsernameSignupMigrationSource` after factor authorities and any selected
+historical magic-link suffix. It preserves all old rows and purpose arms and
+backfills nothing. Actual signin still reads/fences current factor authority;
+this initialization is not a proof, MFA bypass or permission to issue a session.
+
 The post-registration-verification signin profile uses
 `ReadEmailVerificationSigninFactors` and fences its unchanged generation with
 `RequireEmailVerificationSigninFactors` in Apply and final commit admission.

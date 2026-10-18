@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Initialize known-empty factor authority for exact native username signup only
+  after the real account's same-transaction registration binding exists. Append
+  `UsernameSignupMigrationSource` after installed factor histories; preserve old
+  purposes and rows without inferring empty state for existing accounts.
+
 - Persist verification-origin TOTP continuations under the original factor
   authority and shared attempt budget; preserve existing origin interpretation.
 

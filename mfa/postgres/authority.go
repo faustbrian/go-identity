@@ -23,7 +23,8 @@ func InitializeSignup(ctx context.Context, w kernel.Work, owner kernel.FeatureEx
 		return err
 	}
 	b, f, life, err := w.FeatureScope(owner)
-	if err != nil || f.Contributor.Owner != "identity/password/postgres" || f.Contributor.ContractID != "identity.password" || f.Contributor.Version != 1 || f.Operation.Owner != "identity/password" || b.OperationID != "identity.password.signup" || life.EventType != "user.created.v1" || life.BeforeVersion != 0 || life.AfterVersion != 0 {
+	profile := f.Operation.Owner == "identity/password" && b.OperationID == "identity.password.signup" && f.Operation.SchemaID == "password-signup" || f.Operation.Owner == "identity/username" && b.OperationID == "identity.username.signup" && f.Operation.SchemaID == "username-signup"
+	if err != nil || !profile || f.Operation.SchemaVersion != 1 || f.Operation.RecordRequirement != identity.FeatureRecordOmitted || f.Operation.SubjectRequirement > identity.FeatureSubjectAnonymousFlow || b.ValidateFor(f.Operation) != nil || f.Contributor.Owner != "identity/password/postgres" || f.Contributor.ContractID != "identity.password" || f.Contributor.Version != 1 || life.EventType != "user.created.v1" || life.BeforeVersion != 0 || life.AfterVersion != 0 {
 		return invalidAuthority()
 	}
 	if _, err := identity.ParseIdentifierID(string(user)); err != nil {
@@ -37,8 +38,8 @@ func InitializeSignup(ctx context.Context, w kernel.Work, owner kernel.FeatureEx
 SELECT r.tenant_id,r.user_id,1,0,r.command_id,r.purpose
 FROM identity.registration_bindings r
 JOIN identity.users u ON u.tenant_id=r.tenant_id AND u.user_id=r.user_id
-WHERE r.tenant_id=$1 AND r.purpose='identity.password.signup' AND r.command_id=$2 AND r.user_id=$3
-AND u.status='active' AND u.version=1`, string(b.TenantID), id, string(user))
+WHERE r.tenant_id=$1 AND r.purpose=$4 AND r.command_id=$2 AND r.user_id=$3
+AND u.status='active' AND u.version=1`, string(b.TenantID), id, string(user), b.OperationID)
 	if err != nil {
 		return identity.UnavailableError{}
 	}

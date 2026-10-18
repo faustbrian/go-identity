@@ -1,5 +1,12 @@
 # Email
 
+Registration verification also accepts the exact anonymous
+`identity.username.signup`/`username-signup` v1 origin. Its keyed intent includes
+that distinct original operation; a password-signup proof cannot be retargeted
+to it or vice versa. Existing password-signup intent bytes are unchanged.
+Neither policy construction nor unsigned payload preparation reserves a name,
+creates an account, signs a proof, consumes it or enables an HTTP route.
+
 ## Optional verification callbacks
 
 `NewVerificationHooks` selects ordered `identity.Hook` callbacks for supported
