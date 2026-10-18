@@ -218,26 +218,40 @@ func NewMFAEnrollmentIssuer(c MFAEnrollmentIssuerConfig) (*MFAEnrollmentIssuer, 
 	if err != nil {
 		return nil, err
 	}
-	frame := append([]byte("identity-otp-mfa-enrollment-owner-v1\x00"), store.send.configuration[:]...)
+	configuration, err := sessionIssuanceConfiguration(store, c.Session, c.Policy, "identity-otp-mfa-enrollment-owner-v1\x00")
+	if err != nil {
+		return nil, err
+	}
+	return &MFAEnrollmentIssuer{store: store, configuration: configuration}, nil
+}
+
+// Keep retained MFA framing byte-identical while sharing immutable dependency
+// binding with separately closed session-authenticated issuance owners.
+func sessionIssuanceConfiguration(store *Contributor, c SessionAdmissionConfig, selected otp.AttemptPolicy, domain string) ([32]byte, error) {
+	profile, checks, err := selected.Bindings()
+	if err != nil {
+		return [32]byte{}, ErrInvalidConfiguration
+	}
+	frame := append([]byte(domain), store.send.configuration[:]...)
 	frame = append(frame, store.codec.configuration[:]...)
 	lockout := store.lockout.binding()
 	frame = append(frame, lockout[:]...)
-	for _, value := range []string{store.schema, store.global, store.namespace, c.Session.Store.Schema, c.Session.Profile.GlobalAuthorityID, c.Session.Profile.PolicyNamespace, c.Session.Profile.Audience, c.Session.Profile.AuthenticationMethod, c.Session.Profile.CredentialOwner} {
+	for _, value := range []string{store.schema, store.global, store.namespace, c.Store.Schema, c.Profile.GlobalAuthorityID, c.Profile.PolicyNamespace, c.Profile.Audience, c.Profile.AuthenticationMethod, c.Profile.CredentialOwner} {
 		frame = appendAuthorityText(frame, value)
 	}
-	frame = binary.BigEndian.AppendUint64(frame, uint64(c.Session.Store.MaximumDuration))
-	frame = binary.BigEndian.AppendUint64(frame, uint64(c.Session.FreshnessLimit))
-	frame = append(frame, byte(c.Session.Profile.CredentialKind))
-	versions := make([]uint32, 0, len(c.Session.RetainedTokenKeys))
-	for version := range c.Session.RetainedTokenKeys {
+	frame = binary.BigEndian.AppendUint64(frame, uint64(c.Store.MaximumDuration))
+	frame = binary.BigEndian.AppendUint64(frame, uint64(c.FreshnessLimit))
+	frame = append(frame, byte(c.Profile.CredentialKind))
+	versions := make([]uint32, 0, len(c.RetainedTokenKeys))
+	for version := range c.RetainedTokenKeys {
 		versions = append(versions, version)
 	}
 	slices.Sort(versions)
 	frame = binary.BigEndian.AppendUint32(frame, uint32(len(versions)))
 	for _, version := range versions {
 		frame = binary.BigEndian.AppendUint32(frame, version)
-		frame = binary.BigEndian.AppendUint32(frame, uint32(len(c.Session.RetainedTokenKeys[version])))
-		frame = append(frame, c.Session.RetainedTokenKeys[version]...)
+		frame = binary.BigEndian.AppendUint32(frame, uint32(len(c.RetainedTokenKeys[version])))
+		frame = append(frame, c.RetainedTokenKeys[version]...)
 	}
 	policy, err := json.Marshal(struct {
 		Profile otp.CodeProfileSpec
@@ -245,13 +259,13 @@ func NewMFAEnrollmentIssuer(c MFAEnrollmentIssuerConfig) (*MFAEnrollmentIssuer, 
 	}{profile, checks})
 	if err != nil {
 		clear(frame)
-		return nil, ErrInvalidConfiguration
+		return [32]byte{}, ErrInvalidConfiguration
 	}
 	frame = append(frame, policy...)
 	clear(policy)
 	configuration := sha256.Sum256(frame)
 	clear(frame)
-	return &MFAEnrollmentIssuer{store: store, configuration: configuration}, nil
+	return configuration, nil
 }
 
 // MFAEnrollmentSendInput is trusted original code-free preparation, not client

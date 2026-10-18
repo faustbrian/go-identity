@@ -33,12 +33,23 @@ func mfaLoginSendOperation() identity.FeatureOperation {
 	return identity.FeatureOperation{Owner: "identity/mfa", OperationID: "identity.mfa.otp-send", SchemaID: "mfa-otp-send", SchemaVersion: 1, RecordRequirement: identity.FeatureRecordRequired, SubjectRequirement: identity.FeatureSubjectAnonymousFlow}
 }
 
+func phoneEnrollmentSendOperation() identity.FeatureOperation {
+	return identity.FeatureOperation{Owner: "identity/phone", OperationID: "identity.phone.send-verification",
+		SchemaID: "identity.phone.send-verification.native-v1", SchemaVersion: 1, RecordRequirement: identity.FeatureRecordRequired}
+}
+
 func boundIssuanceOperation(b identity.CommandBinding) (identity.FeatureOperation, error) {
 	subject := identity.FeatureSubjectUser
 	if b.UserID == "" {
 		subject = identity.FeatureSubjectAnonymousFlow
 	}
 	op := issuanceOperation(subject)
+	if b.OperationID == phoneEnrollmentSendOperation().OperationID {
+		op = phoneEnrollmentSendOperation()
+		if b.UserID == "" || b.ActorID != identity.ActorID(b.UserID) || b.ActorKind != authorization.SubjectUser {
+			return identity.FeatureOperation{}, ErrInvalidCommand
+		}
+	}
 	if b.OperationID == mfaEnrollmentSendOperation().OperationID {
 		op = mfaEnrollmentSendOperation()
 		if b.UserID == "" {
@@ -71,6 +82,9 @@ func issuanceScopeMatches(b identity.CommandBinding, scope otp.DigestScopeSpec) 
 	}
 	if scope.SubjectID != string(b.UserID) {
 		return false
+	}
+	if op == phoneEnrollmentSendOperation() {
+		return scope.Purpose == otp.PurposePhoneVerification && scope.Channel == otp.ChannelSMS && scope.TargetID == b.RecordID && scope.ChallengeID == string(b.CommandID)
 	}
 	if op == mfaEnrollmentSendOperation() {
 		return scope.Purpose == otp.PurposeMFA && scope.TargetID == b.RecordID && scope.ChallengeID == string(b.CommandID)
@@ -121,7 +135,7 @@ func validIssuance(challenge otp.Challenge, spec identity.FeatureCommandSpec) bo
 		return false
 	}
 	if original, ok := b.Authorization.PreAuthTransaction(); ok {
-		if op == mfaEnrollmentSendOperation() || op == mfaLoginSendOperation() {
+		if op == mfaEnrollmentSendOperation() || op == mfaLoginSendOperation() || op == phoneEnrollmentSendOperation() {
 			return false
 		}
 		r, err := original.Bindings()

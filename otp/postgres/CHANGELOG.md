@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- Add a separately closed session-authenticated phone-verification SMS issuance
+  participant with exact kernel candidate custody and original encrypted-output
+  restoration. Reuse the existing generator, challenge and delivery owners;
+  a pending number is not a verified recipient. Add an opt-in forward purpose
+  migration preserving existing challenge state. Retain original enrollment
+  session custody for consuming confirmation while deriving only its exact
+  identifier-authority successor. Keep retained native inputs opaque, including
+  when nested diagnostic formatting bypasses their public formatter.
+  Complete phone service orchestration and
+  HTTP composition remain unavailable.
+
 - Add explicit native known-empty-factor signin admission. Freeze the original
   MFA generation in encrypted custody and fence it through counted attempts,
   reservation and protected finalization; unknown/enrolled/changed state denies

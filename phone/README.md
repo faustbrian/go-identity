@@ -6,6 +6,51 @@ authentication, risk decisions, signup, signin or recovery. Those composing
 owners must enforce their own tenant scope, uniqueness and transactional proofs.
 It requires Go 1.27.0 or later.
 
+## Existing-account verification contracts
+
+`VerificationService` defines separately selected native `SendVerification`,
+`Verify` and `RecoverVerification` operations; this module does not implement
+them. `EnrollmentRequest` carries the already canonicalized Number, original
+session/action proof, trusted self-user caller and network/device context.
+Structural validation bounds input and requires exact tenant, user and action;
+it does not authenticate caller assertions or proof signatures, prove freshness,
+or authorize a phone attachment. Bearer requests may omit CSRF; native cookie
+configuration owns synchronizer enforcement. The native owner must authenticate
+original proof/session, current account/factor/risk policy and uniqueness, and
+coordinate identifier, purpose-bound OTP, delivery and audit in one transaction.
+
+Verification and recovery accept authenticated-session OTP flows only.
+`VerificationRecovery` wraps the OTP owner's original code-free attempt
+correlation; send and consuming command IDs cannot alias. Its explicit Bindings
+projection is sensitive correlation, not a recovery capability or permission to
+resubmit. Recovery uses `identity.phone.verify.recover`, authenticates original
+custody and current query policy, and never compares another code. Results retain
+observed durability, replay state and original recovery independently of later
+disclosure errors; an unknown outcome must not be guessed to mean rollback.
+Requests, recovery and results are closure-backed opaque handles: even formatting
+an enclosing private field cannot traverse retained proof, bearer, number or
+correlation. Construct the three request and two result types with their explicit
+`New...` constructors and sensitive `...Spec` values; native consumers use
+`Bindings` for an explicit projection. Constructors validate before copying,
+clone Caller maps/groups, and return independent copies from each projection.
+Zero request handles deny; zero results may accompany errors but cannot project.
+Specs expose sensitive fields and are not opaque safe logging handles: never log
+or serialize them or place them in private diagnostic containers, even though
+their ordinary formatters redact. These handles reject implicit JSON/text
+serialization. Result construction checks exact native operation/binding and
+original tenant/record/recovery correlation; a verified-phone projection appears
+only for fresh committed nonreplayed verification, never unknown/replay history.
+
+Before cloning Caller, admission bounds IDs/groups/attribute names to 128 bytes,
+actions/resource types to 256, attribute strings/set entries to 4096, each group
+or set collection and attribute map to 64 entries, and the total Caller payload
+to 64 KiB. String-set cardinality is checked before requesting the copied set
+projection. These are this phone profile's limits, not generic authorization
+defaults. Native signature, proof freshness and current policy checks remain
+independently required. These contracts issue no session or suppression
+choice and do not implement signup, signin, replacement/removal or password
+recovery. Interface presence is not native workflow or milestone completion.
+
 ```go
 policy, err := phone.NewNumberPolicy(phone.NumberPolicySpec{
     Profile: phone.CurrentNumberProfile(),

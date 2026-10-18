@@ -1,5 +1,59 @@
 # OTP PostgreSQL
 
+## Phone enrollment issuance participant
+
+`NewPhoneEnrollmentIssuer` selects consuming-only `phone-verification` SMS
+generation through the existing OTP preparer, digest/send-family/lockout store
+and encrypted delivery participant. It does not select a phone service, route,
+signin, reset, MFA fallback or public pre-auth flow. The pending number is a
+kernel `PhoneEnrollmentIntent`, never an invented verified `RecipientRecord`.
+
+The native phone owner must freeze its genuine original session, candidate and
+authority before the existing coordinator acknowledges generation. Call
+`Generate` only after that acknowledgement and retain its encrypted output in
+the original preparation checkpoint. `Restore` preserves that exact output,
+candidate, original command, configuration, generation and expiry; retry cannot
+generate a replacement code. Enlist the exact `DeliveryContributor` and returned
+`Plan`. `Persist` requires the registered phone owner's synchronous Work and
+`RequirePhoneEnrollmentCandidate` before it writes the challenge and stages SMS.
+The native owner still supplies current session/CSRF, action-bound fresh proof,
+factor/risk admission and final checks. Neither this participant nor a successful
+preparation establishes phone ownership or delivery. Recovery contributes only
+retained issuance evidence, never a reconstructed successful receipt.
+
+`CaptureInput` derives expectations from the actual action-primary session,
+not a fresh directory snapshot. It is the sole public producer of the opaque
+`PhoneEnrollmentSendInput`; applications cannot supply replacement authority
+fields or inspect that handle through nested diagnostic formatting.
+Its original database time and action-proof
+deadline are supplied by the native owner; OTP/session expiry and original
+freshness can shorten them, never extend them. `RestoreEnrollmentConfirmation`
+requires the same committed preparation root/input/generation/output and frozen
+`phone.factor-version`. Its immutable confirmation returns the exact pending
+intent, fields and consuming OTP participant. `Prepare` creates a new logical
+submission against that original challenge; it is not ambiguity recovery.
+
+The original session and encrypted OTP authority stay byte-equivalent. A
+separate closed execution expectation derives only the enrollment's single
+identifier-epoch increment; the kernel can map only its own subsequent
+verification increment during finalization. Credential, account, directory,
+authorization and original times never renew. `Admit`/`Check` are actual Work
+checks, not a boolean clearance. The registered native phone owner must first
+lock its exact pending target, fence actual factors, enforce selected CSRF/risk
+and combine OTP consumption, verification, audit/outbox and receipt atomically.
+An ordinary OTP contributor cannot select this phone successor profile.
+
+Install the opt-in `PhonePurposeMigrationSource` after the ordinary OTP histories
+and before phone issuance. It adds `phone-verification` without changing installed
+migration bytes or existing rows. Its expected predecessor is the original
+`challenges_purpose_check`; a missing/renamed predecessor fails closed. The atomic
+ALTER needs an exclusive table lock and validates populated rows, bounded by a
+five-second lock timeout and thirty-second statement timeout. Schedule the
+selected migration accordingly; failure rolls back the suffix. Existing
+interpreters retain their original six purposes and deny unknown phone custody.
+The complete authenticated phone service and HTTP/reference composition are
+not yet supplied by these participants. No phone milestone closure is implied.
+
 ## Optional email-confirmation hooks
 
 Set `EmailVerificationConfig.VerificationHooks` or independently

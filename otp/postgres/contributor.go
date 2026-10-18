@@ -61,6 +61,7 @@ type Contributor struct {
 	emailVerify               *emailVerificationPhase
 	emailChange               *emailChangeSendProfile
 	emailChangeDomain         *emailVerificationProfile
+	phoneConfirmation         *phoneEnrollmentConfirmation
 }
 
 var _ kernel.OTPAttemptContributor = (*Contributor)(nil)
@@ -159,6 +160,9 @@ func (p *Contributor) original(command identity.Command, plan kernel.OTPAttemptP
 	} else if _, err = p.codec.authenticatePreAuth(ctx, p.preauth, command, plan); err != nil {
 		return bad()
 	}
+	if _, err := p.executionAuthority(spec, authority); err != nil {
+		return bad()
+	}
 	return a, authority, nil
 }
 
@@ -198,6 +202,11 @@ func (p *Contributor) recordCountedAttempt(ctx context.Context, w kernel.OTPAtte
 		return 0, err
 	}
 	a, authority, err := p.original(command, b.Plan)
+	if err != nil {
+		return 0, err
+	}
+	spec, _ := command.Feature()
+	authority, err = p.executionAuthority(spec, authority)
 	if err != nil {
 		return 0, err
 	}

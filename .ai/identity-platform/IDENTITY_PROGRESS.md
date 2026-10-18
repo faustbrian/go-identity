@@ -1,6 +1,6 @@
 # Identity Platform Progress
 
-## TL;DR — updated 2026-10-18 20:27 UTC
+## TL;DR — updated 2026-10-18 21:47 UTC
 
 **Estimated whole-goal completion: approximately 15%, with low confidence.**
 **Consumer milestones: 6/39 closed** (15.4% unweighted); full scope remains
@@ -82,13 +82,28 @@ M22, not the complete organization family.
 original-registration confirmation routing (`ac96ffd`) are reviewed, main-pushed
 and CI green. Actual public-module PostgreSQL/race proof covers original rename
 recovery after session invalidation and both registration confirmation profiles.
-**Current position (20:27 UTC):** M05, M06 and the selected M07 consumer journeys
-are closed. No unit/release qualification is inferred from these closures. Next,
-adopt existing M08 phone behavior and finish its concrete missing outcomes;
-do not restart delivered authentication or add neighboring email OTP variants.
-Both parallel listing/discovery deliveries are closed as selected profiles;
-resend/device successors need shared prerequisites and have not started.
-M07 adds one complete consumer milestone; no additional unit is marked verified.
+**Current position (21:37 UTC):** M08 is being implemented, not merely connected:
+there was no phone workflow to adopt. Number canonicalization and distinct SMS
+purpose are main-pushed (`5abf389`, workspace correction `b4557a2`, CI green);
+the actual downloaded phone consumer passes. Kernel pending-attachment/CAS and
+signed action-primary phone custody are independently reviewed, main-pushed
+`7323a83`, CI green. The worker completed that bounded password prerequisite
+while the primary implemented kernel/OTP behavior. Retained encrypted SMS
+generation/restoration and the populated forward purpose migration pass locally.
+Kernel initial verification/CAS, pre-debit target admission and the actual
+known-empty-MFA guard are reviewed, main-pushed `a651d1b`, CI green. Native OTP
+now preserves original session custody and derives only the exact enrollment
+successor; canonical race and selected real-PostgreSQL compatibility checks pass.
+That native/core API batch is uncommitted. Independent review found actual
+nested-diagnostic disclosure and pre-copy input-bound defects; fixes now pass
+focused/ordinary/race checks and independent final review is approved. Final selected
+PostgreSQL migration/old-session compatibility checks pass, not yet the selected
+phone protected workflow.
+The actual enrollment/confirmation service and selected HTTP/reference journey
+remain disconnected. **M08 is not closed** and the
+overall estimate remains ~15%, 6/39 consumer milestones. Full-unit qualification
+is not inferred from these prerequisite results. Organization resend and OAuth
+device successors still need their separate shared contracts.
 
 **Other recent usable native outcomes:** username rename (`afe3f92`) and organization
 self-leave (`f54f10a`) are independently reviewed, pushed to their owning main
@@ -98,9 +113,11 @@ thirty-day cooldown and identifier-session invalidation, including lost-COMMIT
 recovery. Leave tombstones only the authenticated member, protects the final
 owner and cannot revive old team bindings after readmission.
 
-**Next acceptance boundary:** M08 verified phone enrollment/change and selected
-OTP/password signin/reset. Inspect its existing implementation/evidence once,
-then implement only the missing complete consumer outcomes.
+**Next acceptance boundary:** complete the selected M08 existing-account journey:
+genuine session/action-bound fresh proof → captured SMS → atomic confirmation →
+durable verified phone, through public owners and opt-in HTTP/reference. Phone
+change/remove/signup, OTP/password signin/reset and privacy remain later M08
+obligations; the first enrollment profile does not close the entire row.
 Recipient invitation listing, OAuth discovery and the username
 reference outcome are closed as selected profiles.
 Organization HTTP/dynamic roles and complete OAuth composition remain separate

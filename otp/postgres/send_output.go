@@ -194,7 +194,7 @@ func (p *issuanceContributor) validateSendOutput(command identity.Command) error
 	if !ok {
 		return ErrInvalidCommand
 	}
-	if spec.Operation == mfaEnrollmentSendOperation() || spec.Operation == mfaLoginSendOperation() {
+	if spec.Operation == mfaEnrollmentSendOperation() || spec.Operation == mfaLoginSendOperation() || spec.Operation == phoneEnrollmentSendOperation() {
 		return p.validateIssuanceDelivery(command)
 	}
 	delivery, err := p.prepared.Plan()

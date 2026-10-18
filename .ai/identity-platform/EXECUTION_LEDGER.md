@@ -1,6 +1,224 @@
 # Identity Implementation — Current Milestone
 
-## Live checkpoint — 2026-10-18 20:27 UTC
+## Live checkpoint — 2026-10-18 21:11 UTC
+
+21:47 review reconciliation: native/core review identified two actual defects,
+not new paperwork gates: enclosing-private fmt could expose bearer/number or
+correlation, and Caller validation did not bound scalar/set/aggregate payloads
+before Clone. Genuine RED reproduced both. Parent closed native retained input
+with CaptureInput-only opaque custody; worker closed three requests/two results
+with explicit sensitive Specs/New/Bindings, independent Caller copies and bounded
+pre-copy traversal. Native regression/race81ca8f PASS1.678s. Final actualPG/race
+14265 PASS2.353s (populated purpose upgrade + seven old-session compatibility
+profiles), taggedvetexit0; zero randomDBs, PG stopped/deleted. Worker reports
+focusedGREEN.221s, ordinary.270s/race1.339s/vetpass, including all5 opaque handles
+and oversized Caller partitions. Complete final23 candidate
+e99b54a91a0d64567dcc2d6d8696152c3244ed727a18222830626ca07ea195e6
+returned to original independent reviewer; no commit yet. Its separate selected
+phone Work coverage request stays with the immediately following actual native
+consumer, not misrepresented by old-session compatibility results. Service and
+HTTP/reference remain disconnected; M08 unfinished, 6/39/~15% unchanged.
+Final review phone_native_protocol_review APPROVE, same final23 digest confirmed
+twice; F1/F2 resolved and F3 explicitly retained for the native consumer.
+
+21:37 native checkpoint: kernel/MFA16 finalreview APPROVE after both concrete
+coverage requests resolved, final contentadd309ae0514e1076fbdfb3a55d3ee3b8be462cf510bd75d1631c576cab723dd.
+Main-pusheda651d1b06dec28c846b0d50865c3b2f5c8a36b46, Required39168180999SUCCESS.
+Final actualPG/race1802 PASS1.788s; taggedvetexit0, zeroDBleftovers/PGstopped.
+Public kernelv0.0.0-20261018213041-a651d1b06dec origin/hash/subdir authenticated;
+sumh1:vF/+qy+MUC8rz2II2SdUBDV3iuS2qbN+/RCgoFGL4zk=; all450Go/manifests match.
+OTP native consumes actual public pin, no replacements. Native confirm stores old
+session/OTP custody and separately derives original attach+1, with kernel-own+2
+only after actual verify mutation. New CaptureInput derives original session
+dimensions and shortens expiry/freshness; never adopts current observations.
+RED bb2daa missingconfirmationAPI, b0f1bb missingCaptureInput; fixture wrong key1
+failed mapping89609, corrected to actual retained7 then9303PASS. Nested-private
+opaqueFmt leakRED27624(.249s) fixed with closure custody, not redaction bypass.
+Canonical native ordinaryrace32331PASS1.620s. Final actualPG/race48002 PASS2.760s
+includes populatedpurpose upgrade and seven verbose-confirmed oldsession paths:
+CSRFchanged/consume/wrongdenial/takeover/rollback/recoveryrevoked/identifierepoch.
+First selector60664ranonlymigration1.467s, not that matrix; corrected selector
+owns final claim. Taggedvetexit0, zeroDBleftovers/PGstopped/datadeleted.
+Worker finished neutral phone verification/recovery API, tests ordinary.237s,
+race1.346s/vetpass; six owned core paths remain uncommitted. New protocol/core23
+candidate af1dea3486f6f24eb5497b6bacce4acf56ec8d37beeb3cf77f8232379b676035
+under phone_native_protocol_review, no code delivery/phone workflow closure yet.
+Next implementation owner is password/postgres native PhoneVerificationService:
+reuse existing action-primary/request-key/provider-risk/counter/coordinator
+machinery, actual PhoneEnrollmentIssuer/Confirmation and sole kernel domain.
+This does not add a phone/postgres module/unit or application-written engine.
+After native consumer proof, select opt-in HTTP/reference and complete actual
+phone journey; broad M08 variants remain required. 6/39/~15% unchanged.
+
+21:22 continuation: prior status-only turn was no progress; resumed actual kernel
+confirmation implementation, not renewed discovery. PhoneVerification intent,
+exact pending target admission before OTP debit, kernel mutation and own-successor
+epoch mapping now compile; focused tests pass, whole kernel race3.466s. Initial
+RED70225 proves APIs absent. Real PostgreSQL storage/admission run71979 live;
+no complete phone consumer claim. MFA worker finished its four owned paths,
+focused/ordinary/race/vet pass and heavy slot released; native caller must bind
+original command in non-Apply admission. No review/delivery yet for these batches.
+
+Dependency-ready worker phone_factor_authority next owns ONLY phone/verification.go,
+phone/verification_test.go, phone/go.mod, phone/go.sum and additive phone README/
+CHANGELOG. Implement neutral bounded existing-account enrollment/confirmation/
+code-free recovery DTO/service contract consumed by parent native OTP adapter;
+no native stores/HTTP/session/risk/journal or package-closure claim. Exact source
+main7323a83; use public root/OTP/session/authentication revisions already pinned
+by OTP native. Core Number5abf389 supplies immutable metadata-bound Number.
+Parent owns actual workflow, integration pins and Git. TDD request validation,
+redaction, zero/scope/cancel contract tests; no heavy runs until parent releases
+slot71979. This is concurrent contract implementation within M08, not a new slice.
+
+21:13 continuation: previous turn progressed authoritative source/delivery,
+not a wait. New bounded scratch /private/tmp/identity-phone-journey.Ur2aVz owns
+build/modules/tmp; earlier scratch remains deleted. Session RequireSession
+checks only unchanged owned session/family/time, not current directory epochs;
+therefore no generic session API change is needed. Preserve old session/OTP
+custody for possession and derive phone-only execution expectations separately
+from authenticated committed source (+1 before verification, own+2 after).
+
+Dependency-ready phone_factor_authority worker owns ONLY new mfa/postgres/
+phone_authority.go, phone_authority_test.go and module README/CHANGELOG additions.
+Consumed committed MFA63cb08d/source main7323a83 known-empty primary reader and
+native Work scope/locking. Add ReadPhoneFactors and RequirePhoneFactors closed
+to identity.phone.send-verification.native-v1 and identity.phone.verify.native-v1,
+owner identity/phone/postgres contract identity.phone v1, self actor/subject only.
+No unknown/enrolled fallback or initialization. Reuse actual factor_authorities
+row and readKnownEmptyFactors; no stores/transactions/privateauthority. Worker
+uses TDD, focused ordinary/race/vet with the sole heavy slot initially; parent
+codes kernel phone verification without heavy execution. Parent retains actual
+PostgreSQL journey, shared integration and all Git. Same-codebase preservation,
+no children or Git. Bounded prerequisite, not standalone consumer closure.
+
+Current native phone prerequisite7323a83679638e30fc7c8e89febbc610a06a7c1f
+main-pushed, Required39165851423 SUCCESS. Independent final13 review APPROVE
+phone_enrollment_native_review content14192d43d812744d8183a6c7f23ac433ebb4ecce7ea790d4281b0f51892c1ac1;
+recovery coverage request resolved before commit. Public kernel
+v0.0.0-20261018210003-7323a8367963 authenticated origin/SHA/subdir,
+sumh1:h8/qGYjx4ZggvPIN3lVyeeY7NG6Rz4tz72iNrxpj5os=;
+all447Go/manifests byte-match. Local nativeOTP now consumes this actual public
+kernel and public OTP5abf389, no replacement; pending OTP changes uncommitted.
+
+NativeOTP WIP: closed phone issuance maps original session/SMS/purpose/candidate;
+new PhoneEnrollmentIssuer uses existing generator/output/delivery and requires
+kernel candidate during Persist. MFA constructor shares only configuration
+binding helper with byte-identical original MFA domain/framing. MappingRED86702
+FAIL0.306s -> focusedrace73108 PASS1.388s. Issuer APIRED22464 missing APIs;
+generation test then exposed missing closed-phone branch in existing send-output
+validation (ErrCodeUse), fixed exactallowlist only. Focusedrace50233 PASS1.394s;
+final ordinaryrace20307 PASS1.691s including zero/cancel/AEAD tamper/restoration
+and existing suite. Final taggedvet43941 exit0, then shared recordfuzz2160execs
+PASS4.335s. All results terminal/local, not independently reviewed nativeOTP.
+PhonePurposeMigrationSource adds only the enum suffix with bounded ALTER;
+populated actualPG/race76045 PASS1.453s. Initial fixture reused unique issue/scope
+bindings and failed23505; corrected independent IDs/digests and explicit23514
+purpose-constraint oracles. Existing row JSON unchanged; all6oldpurposes work,
+unknownpurpose and missingpredecessor deny. Fixture0leftoverDB/PGstopped/deleted.
+No actual newphone Persist/SMS/public-consumer journey has run yet. Do not count
+these helpers as M08 or whole-unit completion; 6/39/~15% unchanged.
+
+NEW concrete continuation boundary found from actual code, not broader scope:
+pending attach bumps user+identifier epochs, so ordinary Sessions().Get rejects
+the original session. phone_enrollment_boundary traced existing email handlers:
+OTP email change uses a new session plus original origin; managed link confirm
+derives exact own+1 epoch from authenticated committed original. Phone must
+retain original session/OTP custody and separately derive execution expectation
+ONLY from its committed send/candidate (+1 beforeconfirm, exact own+2 after).
+Keep all other authority and original times unchanged; no generic session
+relaxation/newer observation or fabricated RecipientRecord. Needed next:
+phone-native original-possession/origin seam, closed OTP/session/kernel successor
+guards, actual original action/factor/risk journal orchestration and confirmation,
+then genuine PG/HTTP/reference journey. Full M08 variants remain required.
+This is unfinished implementation, not a blocker. Native producer/reviewer
+agents stopped; no live service/Go process remains. Bounded scratch/cache
+/private/tmp/identity-phone-runtime.k73kmu fully removed after evidence capture;
+future runs need a newly owned scratch, not deleted paths below. Final scoped
+diff and all4newnative files pass gitleaks, gitdiffcheck clean. No nativeOTP
+review/commit/delivery or phonejourney closure is claimed.
+
+21:00 checkpoint: foundation5abf389 main-pushed; Required39165013765 failed
+only missingphone in go.work. Single registrationfixb4557a2 independently
+inspected, all35 workspace/catalog directories agree; Required39165230770
+SUCCESS. Actual public phonev0.0.0-20261018204834-5abf38983241 origin/SHA/subdir
+authenticated, all6Go/manifests byte-match. Separate downloaded-only consumer
+ordinaryrace46517 PASS1.391s, no replacements. No wholeM08/unit credit.
+
+Primary added kernel PhoneEnrollmentContributor/intent/domain/fields and exact
+Apply-only candidate guard, prepare/nativeApply/kernelpersist ordering, receipt
+gate and absence-only recovery. Fields/APIRED34344 previouscontext; new native
+receipt forgeryRED90705 FAIL0.282s -> fullkernelordinaryrace39538 PASS3.235s.
+ActualPG/race67380 PASS1.574s, then narrowreview recoverycoverage addition53120
+PASS1.500s; both run TestIdentifierNormalizationPopulatedUpgrade includingreal
+pending/collision/CAS/rollback/metadata/candidate-swap/postapply and actualfour
+kernelrecoveryvotes. Fixture0DB leftovers, PGstopped/dataremoved. These are
+private storage/custody tests, NOT genuinephoneauth/OTP/SMS consumer proof.
+Finaltaggedvet1454 exit0. Worker original signed phone-action custody RED->GREEN,
+ordinary/race2.038s/vet0 pass. Final13 content14192d43d812744d8183a6c7f23ac433ebb4ecce7ea790d4281b0f51892c1ac1
+under phone_enrollment_native_review; commit/push and publickerneladoption pending.
+Parent next nativeOTPphone issuance scope test RED86702 FAIL0.306s expected
+closedphoneoperation unsupported; new bounded self/session/SMS scope enabled
+locally, affectedtests73108 live. No livePG/Valkey. Scratch retained forbounded
+M08run. Original account MFA/session/risk, SMSatomicdelivery, confirmation and
+HTTP/reference remain unwired; 6/39/~15% unchanged. No newTools code or gates.
+
+Number/OTP prerequisite5abf389 main-pushed; frozen14 independent review
+phone_foundation_final_review APPROVE content52ff1cc4f5203c874cd96f690622a2efb0b858d52fa394360456503dd0ab32a1.
+Native phone ordinary/examples0.242s/race1.422s/vet0/moduleverify pass;
+FuzzNumberPolicy443524execs, parent OTP race1.255s/vet0 and scopefuzz341576execs
+pass. Hosted39165013765 and actual downloaded phone consumer remain pending.
+No M08 closure: kernel phone enrollment remains local unfinished work.
+
+Dependency-ready phone_action_primary worker owns ONLY password/postgres/
+action_primary.go, phone_action_primary_test.go, CHANGELOG.md. Extend the existing
+closed original signed-password/session source for identity.phone.send-verification,
+schema identity.phone.send-verification.native-v1, owner identity/phone,
+descriptor identity/phone/postgres contract identity.phone v1; self-only.
+Consumed main5abf389 existing ActionPrimarySource and original signed-proof/
+session custody already proven by username/organization callers. No new proof,
+store, journal or transaction; preserve existing profiles and stored framing.
+Finite outcome: exact original phone-action admission/command/restore refuses
+foreign action, actor/target, audience/session/profile, stale/zero custody and
+unsupported phone actions. Focused original-custody tests/race/vet; parent owns
+real PostgreSQL phone journey, kernel integration, public pins and all Git.
+Worker reads full identity-phone goal and source owner, writes test-first, no
+children/Git; preserve other writers. Heavy commands wait for parent slot grant.
+Parent continues kernel pending-attachment transaction while worker codes.
+
+M08 start: previous goal turn made progress (M07 native/reference delivered);
+progress-only1f9629d Required39163432397 SUCCESS, worktree initially clean.
+Phone module/workflows are absent, not an adoption-only fixture gap. Primary
+retains shared kernel/OTP/password/session/MFA/reference integration, manifests,
+heavy checks and all Git mutations. First consumer profile is existing-account
+phone enrollment: actual session/recent action-bound proof -> canonical number
+-> purpose-bound SMS intent -> exact OTP confirmation -> durable verified phone.
+No caller domain stores or weaker MFA/authority; OTP consumption and identifier
+mutation commit in the sole coordinator with risk/audit/outbox and original
+replay/unknown recovery. Opt-in HTTP/reference and genuine PostgreSQL consumer
+proof belong to the same outcome. Phone change/remove/signup/signin/password/
+reset, privacy/lifecycle and full M08/unit qualification remain required later;
+this first profile does not close M08. Existing B1-B3/M05-M07 are not reopened.
+Bounded source mapping will select exact consumed owner hooks before edits.
+
+Dependency-ready phone_number_policy worker owns only new phone/number*.go,
+phone/go.mod, phone/go.sum, phone/README.md and phone/CHANGELOG.md. Outcome:
+actual public versioned E.164 canonicalization with bounded explicit region and
+opaque redacted numbers, not fake verification or an interface-only workflow.
+Consume pinned maintained nyaruka/phonenumbers/v2 v2.0.14 (official tag metadata
+v9.0.40) through authenticated Go modules, not copied/generated private tables.
+Source goal identity-phone.md; preserve stable metadata/profile provenance,
+explicit national-input selection, reject extensions/short/vanity/ambiguous
+input, unknown versions, malformed restoration and implicit secret disclosure.
+Focused unit/example/race/vet and bounded hostile-input fuzz, external public
+API tests, reviewed before prerequisite publication; zero M08 closure credit.
+Parent inspects first public API, registers the module and owns downstream
+composition. No Git or children, no overlapping writes. Worker initially owns
+the only heavy slot; use task-owned /private/tmp/identity-phone-runtime.k73kmu
+build/modules/tmp with GOWORK=off, Go1.27; retain until parent cleanup.
+phone_enrollment_boundary read-only agent maps the current concrete owners,
+canonical preparation/consumption hooks and minimum missing behavior; no Go,
+writes, services or children. Parent waits for this bounded report, not a new
+preflight or approval series. No other worker is assigned.
 
 M07 selected email OTP consumer milestone CLOSED. Reference00ca1bb585eaa0d8ac3db618463d04b9500e52b8
 main-pushed; Required39163196267 SUCCESS. Independent complete final13 review

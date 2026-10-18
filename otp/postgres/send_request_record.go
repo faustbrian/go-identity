@@ -60,7 +60,7 @@ func (s sendRequestRecord) validate(binding identity.CommandBinding) error {
 		return nil
 	}
 	if original, ok := b.Authorization.PreAuthTransaction(); ok {
-		if op == mfaEnrollmentSendOperation() {
+		if op == mfaEnrollmentSendOperation() || op == phoneEnrollmentSendOperation() {
 			return ErrInvalidCommand
 		}
 		flow, err := original.Bindings()

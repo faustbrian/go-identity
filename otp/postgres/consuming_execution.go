@@ -112,7 +112,11 @@ func (p *Contributor) checkConsuming(ctx context.Context, w consumingWork, b ker
 	if err != nil {
 		return bad(err)
 	}
-	if err = p.requireConsumingAuthority(ctx, w, b, *c.authority); err != nil {
+	authority, err := p.executionAuthority(spec, *c.authority)
+	if err != nil {
+		return bad(err)
+	}
+	if err = p.requireConsumingAuthority(ctx, w, b, authority); err != nil {
 		return bad(err)
 	}
 	if err = requireNativeFlow(ctx, w, p, flow, &sessionpg.PreAuthUse{Command: b.Command, Fingerprint: b.Fingerprint, Generation: b.Generation}); err != nil {
@@ -137,7 +141,7 @@ func (p *Contributor) checkConsuming(ctx context.Context, w consumingWork, b ker
 	if err != nil || !bytes.Equal(wire, retained) {
 		return bad(ErrInvalidCommand)
 	}
-	now, err := p.consumingTime(ctx, w, *c.authority, flow)
+	now, err := p.consumingTime(ctx, w, authority, flow)
 	if err != nil {
 		return bad(err)
 	}

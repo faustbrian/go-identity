@@ -118,6 +118,11 @@ func (p *Contributor) ReserveOTP(ctx context.Context, w kernel.OTPReservationWor
 	if err != nil {
 		return err
 	}
+	originalSpec, _ := command.Feature()
+	a, err = p.executionAuthority(originalSpec, a)
+	if err != nil {
+		return err
+	}
 	if err = p.requireConsumingAuthority(ctx, w, b, a); err != nil {
 		return err
 	}
@@ -181,6 +186,11 @@ func (p *Contributor) RebindOTP(ctx context.Context, w kernel.OTPReservationWork
 		return err
 	}
 	_, a, err := p.original(command, b.Plan)
+	if err != nil {
+		return err
+	}
+	originalSpec, _ := command.Feature()
+	a, err = p.executionAuthority(originalSpec, a)
 	if err != nil {
 		return err
 	}

@@ -109,23 +109,30 @@ func (p *issuanceContributor) applyIssuance(ctx context.Context, w kernel.Work, 
 	}
 	spec, ok := command.Feature()
 	op, opErr := boundIssuanceOperation(binding)
-	if !ok || opErr != nil || binding != spec.Binding || registration.Operation != spec.Operation || spec.Operation != op || transition.EventType != "otp.sent.v1" {
+	if !ok || opErr != nil || binding != spec.Binding || registration.Operation != spec.Operation || spec.Operation != op {
 		return bad(ErrInvalidCommand)
 	}
 	if op == mfaEnrollmentSendOperation() {
-		if registration.Contributor != (kernel.ContributorDescriptor{Owner: "identity/mfa/postgres", ContractID: "identity.mfa", Version: 1}) || transition.BeforeVersion == 0 || transition.BeforeVersion == ^uint64(0) || transition.AfterVersion != transition.BeforeVersion+1 {
+		if transition.EventType != "otp.sent.v1" || registration.Contributor != (kernel.ContributorDescriptor{Owner: "identity/mfa/postgres", ContractID: "identity.mfa", Version: 1}) || transition.BeforeVersion == 0 || transition.BeforeVersion == ^uint64(0) || transition.AfterVersion != transition.BeforeVersion+1 {
 			return bad(ErrInvalidCommand)
 		}
 	} else if op == mfaLoginSendOperation() {
-		if registration.Contributor != (kernel.ContributorDescriptor{Owner: "identity/mfa/postgres", ContractID: "identity.mfa", Version: 1}) || transition.BeforeVersion != 0 || transition.AfterVersion != 1 {
+		if transition.EventType != "otp.sent.v1" || registration.Contributor != (kernel.ContributorDescriptor{Owner: "identity/mfa/postgres", ContractID: "identity.mfa", Version: 1}) || transition.BeforeVersion != 0 || transition.AfterVersion != 1 {
 			return bad(ErrInvalidCommand)
 		}
-	} else if registration.Contributor != p.Descriptor() || transition.BeforeVersion != 0 || transition.AfterVersion != 1 {
+	} else if op == phoneEnrollmentSendOperation() {
+		if transition.EventType != "identifier.attached.v1" || registration.Contributor != (kernel.ContributorDescriptor{Owner: "identity/phone/postgres", ContractID: "identity.phone", Version: 1}) || transition.BeforeVersion != 0 || transition.AfterVersion != 1 {
+			return bad(ErrInvalidCommand)
+		}
+	} else if transition.EventType != "otp.sent.v1" || registration.Contributor != p.Descriptor() || transition.BeforeVersion != 0 || transition.AfterVersion != 1 {
 		return bad(ErrInvalidCommand)
 	}
 	custody, flow, err := p.store.authenticateIssuance(ctx, command)
 	if err != nil {
 		return bad(err)
+	}
+	if op == phoneEnrollmentSendOperation() && custody.recipient != nil {
+		return bad(ErrInvalidCommand)
 	}
 	a := custody.authority
 	if err := w.RequireActiveDirectoryAuthority(ctx, owner, a.Directory); err != nil {
