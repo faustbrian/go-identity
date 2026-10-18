@@ -23,6 +23,9 @@ import (
 // SessionCookie/Audience must match the selected native issuer. No remember or
 // identity override is accepted. Borrowed services must outlive concurrent calls.
 type VerificationSigninConfig struct {
+	// MFAContinuation explicitly permits pending-only native TOTP challenge
+	// delivery. It selects no completion route and defaults to false.
+	MFAContinuation           bool
 	Confirmation              ConfirmationConfig
 	Service                   email.RegistrationVerificationSigninService
 	FlowCookie, SessionCookie session.CookiePolicy
@@ -35,12 +38,16 @@ type VerificationSigninConfig struct {
 // failed/unknown signin cannot erase the parent confirmation's known outcome.
 // Recovery is sensitive correlation, never permission to execute or mint again.
 type VerificationSigninResponse struct {
-	SignedIn      bool                 `json:"signedIn"`
-	CommandID     identity.CommandID   `json:"commandID"`
-	CommitOutcome string               `json:"commitOutcome"`
-	Replayed      bool                 `json:"replayed"`
-	SessionID     string               `json:"sessionID,omitempty"`
-	Recovery      ConfirmationRecovery `json:"recovery"`
+	SignedIn           bool                 `json:"signedIn"`
+	CommandID          identity.CommandID   `json:"commandID"`
+	CommitOutcome      string               `json:"commitOutcome"`
+	Replayed           bool                 `json:"replayed"`
+	SessionID          string               `json:"sessionID,omitempty"`
+	Recovery           ConfirmationRecovery `json:"recovery"`
+	ChallengeRequired  bool                 `json:"challengeRequired,omitempty"`
+	ChallengeID        identity.CommandID   `json:"challengeID,omitempty"`
+	ChallengeMethod    string               `json:"challengeMethod,omitempty"`
+	ChallengeExpiresAt time.Time            `json:"challengeExpiresAt,omitzero"`
 }
 
 // NewVerificationSigninHandler selects the complete original-browser profile.

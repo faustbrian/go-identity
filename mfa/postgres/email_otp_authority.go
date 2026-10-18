@@ -27,6 +27,17 @@ func ReadEmailOTPFactors(ctx context.Context, pool *database.Pool, tenant identi
 }
 
 func readKnownEmptyPrimary(ctx context.Context, pool *database.Pool, tenant identity.TenantID, user identity.UserID, maximumDuration time.Duration) (mfa.FactorAuthority, error) {
+	state, err := readPrimaryFactorState(ctx, pool, tenant, user, maximumDuration)
+	if err != nil {
+		return mfa.FactorAuthority{}, err
+	}
+	if err := state.RequireEmailRecovery(tenant, user); err != nil {
+		return mfa.FactorAuthority{}, err
+	}
+	return state, nil
+}
+
+func readPrimaryFactorState(ctx context.Context, pool *database.Pool, tenant identity.TenantID, user identity.UserID, maximumDuration time.Duration) (mfa.FactorAuthority, error) {
 	if ctx == nil || pool == nil || pool.Raw() == nil || maximumDuration < time.Millisecond || maximumDuration > 5*time.Second {
 		return mfa.FactorAuthority{}, invalidAuthority()
 	}
@@ -57,9 +68,6 @@ func readKnownEmptyPrimary(ctx context.Context, pool *database.Pool, tenant iden
 	state, err := mfa.NewFactorAuthority(mfa.AuthorityRecord{TenantID: tenant, UserID: user, Version: v, ActiveFactors: uint32(active)})
 	if err != nil {
 		return mfa.FactorAuthority{}, identity.UnavailableError{}
-	}
-	if err := state.RequireEmailRecovery(tenant, user); err != nil {
-		return mfa.FactorAuthority{}, err
 	}
 	return state, nil
 }

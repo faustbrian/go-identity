@@ -8,7 +8,7 @@ require (
 	github.com/faustbrian/go-capability/v2 v2.0.2-0.20261015044219-caab644d2fec
 	github.com/faustbrian/go-identity v0.0.0-20261016003032-9785b1c5a551
 	github.com/faustbrian/go-identity/delivery v0.0.0-20261015061706-1f0b46ab1053
-	github.com/faustbrian/go-identity/email v0.0.0-20261016125355-af740fb7fb76
+	github.com/faustbrian/go-identity/email v0.0.0-20261018013113-bb569ec9d44c
 	github.com/faustbrian/go-identity/http v0.0.0-20261015134730-038260b86666
 	github.com/faustbrian/go-identity/session v0.0.0-20261015104034-f16881100907
 	github.com/faustbrian/go-openapi/v2 v2.0.3-0.20261015044355-77bfaaffc820

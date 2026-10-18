@@ -7,6 +7,16 @@ Missing, nonempty, changed or corrupt primary state denies; nothing initializes
 or infers an empty account here. This is a known-empty profile, not enrolled MFA
 continuation or permission to downgrade a required factor.
 
+The separately selected enrolled-TOTP profile uses
+`ReadEmailVerificationMFAFactors` and `RequireEmailVerificationTOTPChallenge`.
+`PersistEmailVerificationContinuation` accepts only its exact native owner and
+retains the separately committed confirmation ID in the signed scope. Install
+`VerificationContinuationMigrationSource` after the existing password-origin
+continuation history, at a new permanent version. Legacy persistence methods
+reject verification-origin scopes. These APIs do not authenticate the original
+signup proof or issue a session; the capability/session/native owners must
+authenticate that parent and repeat current checks in the sole transaction.
+
 For TOTP-protected email change, explicitly set
 `TOTPActiveStepUpConfig.EmailChange` and install
 `EmailChangeFactorMigrationSource` after existing factor-proof history at a new

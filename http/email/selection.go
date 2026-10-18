@@ -72,7 +72,7 @@ func NewFeatureWithMiddleware(c FeatureConfig, m []identityhttp.MiddlewareDescri
 		if err != nil {
 			return identityhttp.Feature{}, err
 		}
-		op.Wire = verificationSigninWire()
+		op.Wire = verificationSigninWire(c.VerificationSignin.MFAContinuation)
 		ops = append(ops, op)
 	}
 	if c.AddressRemove != nil {

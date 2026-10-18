@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Select verification-origin TOTP completion with the explicit singleton
+  X-MFA-Variant: verification. It never becomes a default or fallback owner.
+
 - Compose selected TOTP, recovery and secondary-OTP login routes with one
   shared browser-cookie declaration. Standalone selections remain complete;
   conflicting definitions and global duplicate components still fail closed.

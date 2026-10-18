@@ -117,6 +117,14 @@ completion and no header selects magic-link. Password-only selection defaults to
 password. The standalone handler requires `TOTPVerifyConfig.PasswordPrimary`
 for password delivery. Profiles reject one another's authentication evidence;
 failure never falls back to another login owner.
+Select `FeatureConfig.VerificationTOTPVerify` for the registration-verification
+native completion owner. It always requires singleton
+`X-MFA-Variant: verification`, even when it is the only selected login profile.
+Supply the original signup flow/device cookies, the pending proof and exact
+verification callback. There is no absent-header or password/magic-link fallback.
+Fresh success delivers the session cookie/CSRF; pending verification itself does
+not. The reference graph exposes this only with
+`HTTPMFA.VerificationTOTPVerify` and actual native verification TOTP selection.
 Resources and callbacks remain borrowed; close them only after calls finish.
 `NewTOTPVerifyHandlerWithMiddleware` and `NewFeatureWithMiddleware` attach hooks
 to the actual decode, source, rate-admission and execution phases.

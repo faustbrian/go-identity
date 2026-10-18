@@ -5,6 +5,7 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"time"
 
 	identityhttp "github.com/faustbrian/go-identity/http"
 	"github.com/felixge/httpsnoop"
@@ -29,9 +30,10 @@ func (p *confirmationPipeline) ServeHTTP(w http.ResponseWriter, r *http.Request)
 	if r != nil {
 		r = r.WithContext(context.WithValue(r.Context(), attemptKey{}, &confirmationAttempt{out: ConfirmationResponse{CommitOutcome: "none"}}))
 	}
+	defer func() { attemptFor(r).challenge = "" }()
 	protect := func() {
 		for name := range w.Header() {
-			if strings.HasPrefix(name, http.TrailerPrefix) || strings.EqualFold(name, "Trailer") || strings.EqualFold(name, "Set-Cookie") || strings.EqualFold(name, "X-CSRF-Token") || strings.EqualFold(name, "Authorization") || strings.EqualFold(name, "Location") || strings.EqualFold(name, "Content-Type") || strings.EqualFold(name, "Cache-Control") || strings.EqualFold(name, "X-Content-Type-Options") {
+			if strings.HasPrefix(name, http.TrailerPrefix) || strings.EqualFold(name, "Trailer") || strings.EqualFold(name, "Set-Cookie") || strings.EqualFold(name, "X-CSRF-Token") || strings.EqualFold(name, "X-MFA-Token") || strings.EqualFold(name, "Authorization") || strings.EqualFold(name, "Location") || strings.EqualFold(name, "Content-Type") || strings.EqualFold(name, "Cache-Control") || strings.EqualFold(name, "X-Content-Type-Options") {
 				delete(w.Header(), name)
 			}
 		}
@@ -44,12 +46,30 @@ func (p *confirmationPipeline) ServeHTTP(w http.ResponseWriter, r *http.Request)
 				w.Header().Set("Set-Cookie", a.cookie)
 				w.Header().Set("X-CSRF-Token", a.csrf)
 			}
+			if a.out.Signin != nil && a.out.Signin.ChallengeRequired && !a.out.Signin.SignedIn && a.challenge != "" && a.ctx != nil && a.ctx.Err() == nil && a.deliveryFresh != nil && a.deliveryFresh() {
+				w.Header().Set("X-MFA-Token", a.challenge)
+			}
 		}
 	}
 	protect()
 	defer protect()
 	writer := httpsnoop.Wrap(w, httpsnoop.Hooks{WriteHeader: func(next httpsnoop.WriteHeaderFunc) httpsnoop.WriteHeaderFunc {
-		return func(status int) { protect(); next(status) }
+		return func(status int) {
+			a := attemptFor(r)
+			if a.out.Signin != nil && a.out.Signin.ChallengeRequired && (status != http.StatusOK || a.ctx == nil || a.ctx.Err() != nil || a.deliveryFresh == nil || !a.deliveryFresh()) {
+				a.challenge = ""
+				a.out.Address = nil
+				a.out.Signin.ChallengeRequired = false
+				a.out.Signin.ChallengeID, a.out.Signin.ChallengeMethod = "", ""
+				a.out.Signin.ChallengeExpiresAt = time.Time{}
+				a.out.Error = "unavailable"
+				if status == http.StatusOK {
+					status = http.StatusServiceUnavailable
+				}
+			}
+			protect()
+			next(status)
+		}
 	}, Write: func(next httpsnoop.WriteFunc) httpsnoop.WriteFunc {
 		return func(body []byte) (int, error) { protect(); return next(body) }
 	}, Flush: func(next httpsnoop.FlushFunc) httpsnoop.FlushFunc { return func() { protect(); next() } }, ReadFrom: func(next httpsnoop.ReadFromFunc) httpsnoop.ReadFromFunc {

@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Persist verification-origin TOTP continuations under the original factor
+  authority and shared attempt budget; preserve existing origin interpretation.
+
 - Fence original known-empty primary factor generations for the exact native
   post-registration-verification signin owner. Unknown, changed or nonempty
   state denies without initialization, inferred absence or weaker-factor fallback.

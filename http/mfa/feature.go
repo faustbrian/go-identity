@@ -33,7 +33,11 @@ type FeatureConfig struct {
 	// PasswordTOTPVerify selects the password-origin native owner explicitly.
 	// With both login owners, singleton X-MFA-Variant: password selects it;
 	// otherwise it is the selected default. Selection is never fallback after denial.
-	PasswordTOTPVerify     *TOTPVerifyConfig
+	PasswordTOTPVerify *TOTPVerifyConfig
+	// VerificationTOTPVerify selects only the native registration-verification
+	// email-possession owner. Singleton X-MFA-Variant: verification is always
+	// required, including when selected alone; no login fallback is introduced.
+	VerificationTOTPVerify *TOTPVerifyConfig
 	Enable                 *EnableConfig
 	URI                    *URIConfig
 	EnrollmentConfirmation *EnrollmentConfirmationConfig
@@ -49,7 +53,7 @@ func NewFeature(c FeatureConfig) (identityhttp.Feature, error) {
 // NewFeatureWithMiddleware binds hooks to actual owned phases without granting
 // credential output ownership or returning a partial feature on failure.
 func NewFeatureWithMiddleware(c FeatureConfig, m []identityhttp.MiddlewareDescriptor) (identityhttp.Feature, error) {
-	if c.Disable == nil && c.FactorUpdate == nil && c.List == nil && c.TOTPVerify == nil && c.PasswordTOTPVerify == nil && c.Enable == nil && c.URI == nil && c.EnrollmentConfirmation == nil && c.ActiveStepUp == nil && c.RecoveryUse == nil && c.RecoveryRegenerate == nil && c.OTPVerify == nil && c.OTPSend == nil {
+	if c.Disable == nil && c.FactorUpdate == nil && c.List == nil && c.TOTPVerify == nil && c.PasswordTOTPVerify == nil && c.VerificationTOTPVerify == nil && c.Enable == nil && c.URI == nil && c.EnrollmentConfirmation == nil && c.ActiveStepUp == nil && c.RecoveryUse == nil && c.RecoveryRegenerate == nil && c.OTPVerify == nil && c.OTPSend == nil {
 		return identityhttp.Feature{}, identityhttp.ErrInvalidInput
 	}
 	var operations []identityhttp.OperationDescriptor
@@ -137,7 +141,7 @@ func NewFeatureWithMiddleware(c FeatureConfig, m []identityhttp.MiddlewareDescri
 		op.Wire = recoveryWire(*c.RecoveryUse)
 		operations = append(operations, op)
 	}
-	if c.TOTPVerify != nil || c.PasswordTOTPVerify != nil || c.EnrollmentConfirmation != nil || c.ActiveStepUp != nil {
+	if c.TOTPVerify != nil || c.PasswordTOTPVerify != nil || c.VerificationTOTPVerify != nil || c.EnrollmentConfirmation != nil || c.ActiveStepUp != nil {
 		h := &verifyDispatch{passwordDefault: c.TOTPVerify == nil && c.PasswordTOTPVerify != nil}
 		var err error
 		policy := identityhttp.CSRFPolicy{Mode: identityhttp.CSRFExactOrigin, RefererFallback: identityhttp.RefererFallbackDeny}
@@ -168,7 +172,7 @@ func NewFeatureWithMiddleware(c FeatureConfig, m []identityhttp.MiddlewareDescri
 			}
 			policy.Mode = identityhttp.CSRFSessionState
 			policy.TokenHeader = "X-CSRF-Token"
-			if c.TOTPVerify != nil || c.PasswordTOTPVerify != nil {
+			if c.TOTPVerify != nil || c.PasswordTOTPVerify != nil || c.VerificationTOTPVerify != nil {
 				policy.Mode = identityhttp.CSRFVariantOriginSessionState
 			}
 		}
@@ -179,8 +183,17 @@ func NewFeatureWithMiddleware(c FeatureConfig, m []identityhttp.MiddlewareDescri
 			}
 			policy.Mode = identityhttp.CSRFSessionState
 			policy.TokenHeader = "X-CSRF-Token"
-			if c.TOTPVerify != nil || c.PasswordTOTPVerify != nil {
+			if c.TOTPVerify != nil || c.PasswordTOTPVerify != nil || c.VerificationTOTPVerify != nil {
 				policy.Mode = identityhttp.CSRFVariantOriginSessionState
+			}
+		}
+		if c.VerificationTOTPVerify != nil {
+			if c.VerificationTOTPVerify.PasswordPrimary {
+				return identityhttp.Feature{}, identityhttp.ErrInvalidInput
+			}
+			h.verification, err = NewTOTPVerifyHandlerWithMiddleware(*c.VerificationTOTPVerify, m)
+			if err != nil {
+				return identityhttp.Feature{}, err
 			}
 		}
 		op, err := identityhttp.NewCanonicalOperation(identityhttp.CanonicalOperationConfig{Owner: "identity/mfa", OperationID: "identity.mfa.totp-verify", Handler: h, CSRF: policy, MaximumSerializedBytes: 16384})

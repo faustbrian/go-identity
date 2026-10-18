@@ -2,6 +2,8 @@ package mfahttp
 
 import (
 	"encoding/json"
+	"slices"
+
 	identityhttp "github.com/faustbrian/go-identity/http"
 )
 
@@ -31,30 +33,97 @@ func confirmationWire(c EnrollmentConfirmationConfig) *identityhttp.WireOperatio
 }
 
 func selectedBaseVerifyWire(c FeatureConfig) *identityhttp.WireOperation {
-	passwordSelected := c.PasswordTOTPVerify != nil
-	if c.TOTPVerify == nil {
-		c.TOTPVerify = c.PasswordTOTPVerify
+	selected := c
+	if selected.TOTPVerify == nil {
+		selected.TOTPVerify = selected.PasswordTOTPVerify
 	}
-	wire := combinedVerifyWire(c)
-	if !passwordSelected {
+	if selected.TOTPVerify == nil {
+		selected.TOTPVerify = selected.VerificationTOTPVerify
+	}
+	wire := combinedVerifyWire(selected)
+	if c.PasswordTOTPVerify == nil && c.VerificationTOTPVerify == nil {
 		return wire
 	}
 	var definition map[string]any
 	_ = json.Unmarshal(wire.Definition, &definition)
-	definition["description"] = definition["description"].(string) + " Password-origin completion uses the explicitly selected native password owner, never magic-link substitution or authentication fallback. Singleton X-MFA-Variant: password selects it when both login owners are present; it is the default when selected alone."
+	if c.PasswordTOTPVerify != nil {
+		definition["description"] = definition["description"].(string) + " Password-origin completion uses the selected native owner. Singleton X-MFA-Variant: password selects it; it is the default only when magic-link login is absent."
+	}
+	if c.VerificationTOTPVerify != nil {
+		definition["description"] = definition["description"].(string) + " Registration-verification completion requires singleton X-MFA-Variant: verification and its separately selected native owner, original signup browser, confirmation and pending child. No primary fallback or new signup flow is permitted."
+	}
+	var variants []string
+	if c.EnrollmentConfirmation != nil {
+		variants = append(variants, "enrollment")
+	}
+	if c.PasswordTOTPVerify != nil {
+		variants = append(variants, "password")
+	}
+	if c.VerificationTOTPVerify != nil {
+		variants = append(variants, "verification")
+	}
 	parameters := definition["parameters"].([]any)
 	found := false
 	for _, parameter := range parameters {
 		p := parameter.(map[string]any)
 		if p["name"] == "X-MFA-Variant" {
-			p["schema"] = map[string]any{"type": "string", "enum": []string{"enrollment", "password"}}
+			p["schema"] = map[string]any{"type": "string", "enum": variants}
+			p["required"] = c.TOTPVerify == nil && c.PasswordTOTPVerify == nil
 			found = true
 		}
 	}
 	if !found {
-		parameters = append(parameters, map[string]any{"name": "X-MFA-Variant", "in": "header", "required": false, "schema": map[string]any{"const": "password"}})
+		parameters = append(parameters, map[string]any{"name": "X-MFA-Variant", "in": "header", "required": c.TOTPVerify == nil && c.PasswordTOTPVerify == nil, "schema": map[string]any{"type": "string", "enum": variants}})
 	}
 	definition["parameters"] = parameters
+	if c.VerificationTOTPVerify != nil {
+		var callbacks, origins []string
+		for _, login := range []*TOTPVerifyConfig{c.TOTPVerify, c.PasswordTOTPVerify, c.VerificationTOTPVerify} {
+			if login == nil {
+				continue
+			}
+			if !slices.Contains(callbacks, login.CallbackURL) {
+				callbacks = append(callbacks, login.CallbackURL)
+			}
+			if !slices.Contains(origins, string(login.Origin)) {
+				origins = append(origins, string(login.Origin))
+			}
+		}
+		if c.EnrollmentConfirmation != nil {
+			for _, origin := range c.EnrollmentConfirmation.TrustedOrigins {
+				if !slices.Contains(origins, string(origin)) {
+					origins = append(origins, string(origin))
+				}
+			}
+		}
+		// The header selects one real owner; the shared body schema must still
+		// describe every selected owner's callback, not only the default login.
+		var projectCallbacks func(any)
+		projectCallbacks = func(value any) {
+			switch v := value.(type) {
+			case map[string]any:
+				if properties, ok := v["properties"].(map[string]any); ok {
+					if _, exists := properties["callbackURL"]; exists {
+						properties["callbackURL"] = map[string]any{"type": "string", "enum": callbacks}
+					}
+				}
+				for _, child := range v {
+					projectCallbacks(child)
+				}
+			case []any:
+				for _, child := range v {
+					projectCallbacks(child)
+				}
+			}
+		}
+		projectCallbacks(definition["requestBody"])
+		for _, value := range parameters {
+			p := value.(map[string]any)
+			if p["name"] == "Origin" {
+				p["schema"] = map[string]any{"type": "string", "enum": origins}
+			}
+		}
+	}
 	wire.Definition, _ = json.Marshal(definition)
 	return wire
 }

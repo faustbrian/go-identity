@@ -36,6 +36,9 @@ func PersistMagicLinkContinuation(ctx context.Context, w kernel.Work, owner kern
 	if err != nil {
 		return invalidAuthority()
 	}
+	if s.VerificationCommandID != "" {
+		return identity.ForbiddenError{}
+	}
 	digest, err := c.ScopeDigest()
 	if err != nil || s.State != mfa.Pending || s.Version != 1 || s.ID != mfa.ContinuationID(challenge.ID) || s.SubjectID != identity.SubjectID(challenge.UserID) || s.TenantID != parent.Command.TenantID || string(s.SourcePreAuthID) != parent.Command.AnonymousFlowID || string(s.PrimaryProofID) != parent.Plan.CapabilityID || s.PrimaryProofDigest != parent.Plan.ProofFingerprint || !s.PrimaryProofExpiresAt.Equal(parent.Plan.ExpiresAt) || digest != challenge.ScopeDigest || s.PolicyVersion != challenge.PolicyVersion || s.FactorVersion != challenge.FactorVersion || !s.IssuedAt.Equal(challenge.IssuedAt) || !s.ExpiresAt.Equal(challenge.ExpiresAt) {
 		return identity.ForbiddenError{}
@@ -69,8 +72,47 @@ func PersistPasswordContinuation(ctx context.Context, w kernel.Work, owner kerne
 	if err != nil {
 		return invalidAuthority()
 	}
+	if s.VerificationCommandID != "" {
+		return identity.ForbiddenError{}
+	}
 	digest, err := c.ScopeDigest()
 	if err != nil || b.OperationID != "identity.password.signin" || s.State != mfa.Pending || s.Version != 1 || s.ID != mfa.ContinuationID(challenge.ID) || s.SubjectID != identity.SubjectID(challenge.UserID) || s.TenantID != b.TenantID || string(s.SourcePreAuthID) != b.AnonymousFlowID || string(s.PrimaryProofID) != string(b.CommandID) || digest != challenge.ScopeDigest || s.PolicyVersion != challenge.PolicyVersion || s.FactorVersion != challenge.FactorVersion || !s.IssuedAt.Equal(challenge.IssuedAt) || !s.ExpiresAt.Equal(challenge.ExpiresAt) {
+		return identity.ForbiddenError{}
+	}
+	return persistContinuation(ctx, w, c, b, fingerprint, generation)
+}
+
+// PersistEmailVerificationContinuation stores the original pending challenge
+// after separately committed verification, only in its exact native owner's
+// protected Apply. The owner must authenticate its parent and original browser
+// before this call. Full immutable scope, subject and current factor generation
+// must match; no parent consumption, password evidence or session is invented.
+// Duplicate insertion denies without resetting attempts or expiry. Every error
+// must abort the sole Work with its child issuance, audit and lifecycle effects.
+func PersistEmailVerificationContinuation(ctx context.Context, w kernel.Work, owner kernel.EmailVerificationMFAChallengeContributor, command identity.Command, c mfa.PartialAuthContinuation) error {
+	if ctx == nil || owner == nil {
+		return invalidAuthority()
+	}
+	if err := w.RequireFeatureCommand(ctx, owner, command); err != nil {
+		return err
+	}
+	challenge, err := w.EmailVerificationMFAChallenge(owner)
+	if err != nil {
+		return err
+	}
+	b, fingerprint, generation, err := w.FeatureCommandIdentity(owner)
+	if err != nil {
+		return err
+	}
+	s, err := c.Bindings()
+	if err != nil {
+		return invalidAuthority()
+	}
+	if string(s.VerificationCommandID) != b.RecordID {
+		return identity.ForbiddenError{}
+	}
+	digest, err := c.ScopeDigest()
+	if err != nil || s.State != mfa.Pending || s.Version != 1 || s.ID != mfa.ContinuationID(challenge.ID) || s.SubjectID != identity.SubjectID(b.UserID) || s.SubjectID != identity.SubjectID(challenge.UserID) || s.TenantID != b.TenantID || digest != challenge.ScopeDigest || s.PolicyVersion != challenge.PolicyVersion || s.FactorVersion != challenge.FactorVersion || !s.IssuedAt.Equal(challenge.IssuedAt) || !s.ExpiresAt.Equal(challenge.ExpiresAt) {
 		return identity.ForbiddenError{}
 	}
 	return persistContinuation(ctx, w, c, b, fingerprint, generation)

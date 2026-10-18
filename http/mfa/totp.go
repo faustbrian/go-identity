@@ -32,14 +32,17 @@ type TOTPVerifyService interface {
 	TotpVerificationRateSource(context.Context, mfa.TotpVerifyRequest) (identity.UserID, string, time.Duration, error)
 }
 
-// TOTPVerifyConfig selects the initial magic-link/TOTP browser completion
-// profile. Network, origin, callback, actor/revision, audience, device and session
+// TOTPVerifyConfig configures one native TOTP browser-completion owner, selected
+// by its FeatureConfig field. Verification-origin completion requires the
+// explicit verification selector and never acts as a default or fallback.
+// Network, origin, callback, actor/revision, audience, device and session
 // cookie match native issuance. Rate and Service are borrowed concurrent-safe
 // owners. Now is prompt and concurrent-safe; MaximumDuration is1ms..30s, with
 // earlier inbound deadlines winning. Construction performs no IO or issuance.
 type TOTPVerifyConfig struct {
 	// PasswordPrimary explicitly selects password-origin delivery. False retains
-	// the existing magic-link profile; neither profile accepts the other's evidence.
+	// email-possession delivery; the selected native owner still authenticates
+	// its exact magic-link or registration-verification origin without fallback.
 	PasswordPrimary bool
 	Network         identityhttp.NetworkConfig
 	Service         TOTPVerifyService

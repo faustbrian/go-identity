@@ -17,6 +17,14 @@ replay/unknown/failure never redelivers them. Selected OpenAPI describes this
 profile. Default, shared managed-address and primary-change confirmation stay
 verification-only; conflicting verification-route selectors reject at startup.
 
+To deliver a pending native TOTP result, explicitly enable
+`VerificationSigninConfig.MFAContinuation`. Fresh challenge metadata is in
+`signin`; the reveal-once proof is only in `X-MFA-Token`. No authenticated cookie
+or CSRF token is issued until genuine factor completion. Completion transport
+is separately selected through HTTP MFA's verification-origin profile; it is
+never enabled by this flag alone. Failed/expired/cancelled delivery and replay
+withhold the proof while preserving the known verification outcome.
+
 For administrative removal, explicitly select
 `RemovalConfig.AdministrativeTargets` with a matching native capability. Optional
 `targetSubjectID` selects another account; the original signed password proof,

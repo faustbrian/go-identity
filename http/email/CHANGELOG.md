@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Independently permit pending TOTP delivery after registration confirmation.
+  Fresh success exposes only challenge metadata and reveal-once X-MFA-Token;
+  errors, cancellation, expiry and replay cannot deliver authenticated custody.
+
 - Explicitly select original-browser registration verification/signin on the
   canonical confirmation route. Require original signup and signed device
   cookies; return independent command outcomes and issue cookie/CSRF only after

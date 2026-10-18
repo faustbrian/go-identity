@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"reflect"
 	"strconv"
+	"strings"
 	"time"
 
 	auth "github.com/faustbrian/go-authentication/v2"
@@ -108,9 +109,12 @@ type ConfirmationRecovery struct {
 }
 
 type confirmationAttempt struct {
-	out          ConfirmationResponse
-	entered      bool
-	cookie, csrf string
+	out           ConfirmationResponse
+	entered       bool
+	cookie, csrf  string
+	challenge     string
+	ctx           context.Context
+	deliveryFresh func() bool
 }
 type attemptKey struct{}
 type confirmationInput struct {
@@ -274,9 +278,12 @@ func newConfirmationOperation(c ConfirmationConfig, m []identityhttp.MiddlewareD
 		// cannot undo an already validated parent verification commitment.
 		a.out.Confirmed = signin != nil && a.out.Confirmed
 		a.out.Address = nil
-		a.cookie, a.csrf = "", ""
+		a.cookie, a.csrf, a.challenge = "", "", ""
 		if a.out.Signin != nil {
 			a.out.Signin.SignedIn, a.out.Signin.SessionID = false, ""
+			a.out.Signin.ChallengeRequired = false
+			a.out.Signin.ChallengeID, a.out.Signin.ChallengeMethod = "", ""
+			a.out.Signin.ChallengeExpiresAt = time.Time{}
 		}
 		f := failure{503, "unavailable", 0}
 		if errors.Is(err, identityhttp.ErrInvalidInput) || errors.Is(err, email.ErrInvalidVerification) {
@@ -468,6 +475,36 @@ func newConfirmationOperation(c ConfirmationConfig, m []identityhttp.MiddlewareD
 				}
 			}
 			a.out.Confirmed = true
+			if signin != nil && result.signin != nil && result.signin.Challenge != nil {
+				child := result.signin.Challenge
+				now := c.Now()
+				if !signin.MFAContinuation || a.out.Signin == nil || result.signin.Issuance.Replayed || child.Proof == (capability.Proof{}) || now.IsZero() || !now.Before(child.ExpiresAt) || child.ExpiresAt.After(now.Add(5*time.Minute)) || !now.Before(s.input.deviceExpiry) {
+					reject(w, r, identityhttp.ErrUnavailable)
+					return
+				}
+				a.ctx = r.Context()
+				if err := child.Proof.Transfer(r.Context(), func(_ context.Context, wire []byte) error {
+					if len(wire) < 32 || len(wire) > 4096 || strings.ContainsAny(string(wire), "\r\n") {
+						return identityhttp.ErrUnavailable
+					}
+					a.challenge = string(wire)
+					return nil
+				}); err != nil {
+					reject(w, r, identityhttp.ErrUnavailable)
+					return
+				}
+				a.deliveryFresh = func() (fresh bool) {
+					defer func() {
+						if recover() != nil {
+							fresh = false
+						}
+					}()
+					at := c.Now()
+					return !at.IsZero() && !at.Before(now) && at.Before(child.ExpiresAt) && at.Before(s.input.deviceExpiry)
+				}
+				a.out.Signin.ChallengeRequired = true
+				a.out.Signin.ChallengeID, a.out.Signin.ChallengeMethod, a.out.Signin.ChallengeExpiresAt = child.ID, child.Method, child.ExpiresAt
+			}
 			if signin != nil && result.signin != nil && result.signin.Issuance.Token != (session.Token{}) {
 				if !c.Now().Before(s.input.deviceExpiry) {
 					reject(w, r, identityhttp.ErrUnavailable)
