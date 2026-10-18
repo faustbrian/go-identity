@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Retain exact original invitation-send organization correlation in the existing
+  preparation journal and expose it to the current-authorized native owner for
+  recovery before a domain row exists. Historical plans remain readable; absent
+  original correlation never proves rollback or grants recovery authority.
+
 - Preserve code-free invitation declarations through counter preparation,
   denied receipts and restart recovery without admitting them as final token
   issuance. Generated issuance still requires the complete native final plan.

@@ -57,6 +57,9 @@ func validateFeatureCommand(phase FeatureExecutionContributor, command identity.
 			err = identity.UnavailableError{}
 		}
 	}()
+	if validateOrganizationInvitationOriginCommand(command, plan) != nil {
+		return invalidPlan()
+	}
 	if err := phase.ValidateFeatureCommand(command, plan); err != nil {
 		return err
 	}
@@ -464,7 +467,7 @@ func (r *ContributorRegistry) admitFeaturePlanMode(b identity.CommandBinding, fi
 		copy := *p.Capability
 		proof = &copy
 	}
-	return &admittedKernelPlan{mfaCompletion: cloneMFACompletionPlan(p.MFACompletion), mfaContinuation: cloneMFAContinuationPlan(p.MFAContinuation), magicLinkRequestAcceptance: p.MagicLinkRequestAcceptance, magicLinkRegistration: cloneMagicLinkRegistrationPlan(p.MagicLinkRegistration), registry: r.state, binding: b, digest: digest, contributors: entries, audits: append([]AuditPlan(nil), p.Audits...), lifecycle: &l, capability: proof, risk: risk, counters: counters, captchaReplay: p.CaptchaReplayReservation, captchaUse: cloneCaptchaEvidencePlan(p.CaptchaEvidence), otp: cloneOTPPlan(p.OTP), fingerprint: fingerprint, feature: &f, subjectType: p.SubjectType, delivery: cloneDeliveryPlan(p.Delivery), issuance: cloneCapabilityIssuancePlan(p.CapabilityIssuance), signupAcceptance: p.SignupAcceptance}, nil
+	return &admittedKernelPlan{invitationOrigin: cloneOrganizationInvitationOrigin(p.OrganizationInvitationOrigin), mfaCompletion: cloneMFACompletionPlan(p.MFACompletion), mfaContinuation: cloneMFAContinuationPlan(p.MFAContinuation), magicLinkRequestAcceptance: p.MagicLinkRequestAcceptance, magicLinkRegistration: cloneMagicLinkRegistrationPlan(p.MagicLinkRegistration), registry: r.state, binding: b, digest: digest, contributors: entries, audits: append([]AuditPlan(nil), p.Audits...), lifecycle: &l, capability: proof, risk: risk, counters: counters, captchaReplay: p.CaptchaReplayReservation, captchaUse: cloneCaptchaEvidencePlan(p.CaptchaEvidence), otp: cloneOTPPlan(p.OTP), fingerprint: fingerprint, feature: &f, subjectType: p.SubjectType, delivery: cloneDeliveryPlan(p.Delivery), issuance: cloneCapabilityIssuancePlan(p.CapabilityIssuance), signupAcceptance: p.SignupAcceptance}, nil
 }
 
 // ApplyFeature invokes only the frozen exact native adapter once through Work.

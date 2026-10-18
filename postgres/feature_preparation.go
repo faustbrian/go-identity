@@ -338,7 +338,7 @@ func (c *Coordinator) prepareFeaturePreparation(original identity.Command, p Com
 		}
 	}()
 	s, ok := commandFeature(original)
-	if !ok || p.Feature == nil || p.Feature.Operation != s.Operation || p.Delivery != nil || preparationProtected(p) || p.SubjectType == "" {
+	if !ok || p.Feature == nil || p.Feature.Operation != s.Operation || p.Delivery != nil || preparationProtected(p) || p.SubjectType == "" || validateOrganizationInvitationOriginCommand(original, p) != nil {
 		return q, nil, nil, invalidPreparation()
 	}
 	entry, e := c.registry.selectFeatureOperation(*p.Feature)
@@ -411,6 +411,9 @@ func consumptionAuthenticationPreparation(p CommandPlan) bool {
 }
 
 func preparationFinalDeclaration(b identity.CommandBinding, original, final CommandPlan) bool {
+	if (original.OrganizationInvitationOrigin == nil) != (final.OrganizationInvitationOrigin == nil) || original.OrganizationInvitationOrigin != nil && *original.OrganizationInvitationOrigin != *final.OrganizationInvitationOrigin {
+		return false
+	}
 	if original.Feature == nil || original.Lifecycle == nil || preparationProtected(original) || original.Delivery != nil {
 		return false
 	}

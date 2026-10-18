@@ -34,6 +34,9 @@ func encodeFeaturePlan(binding identity.CommandBinding, fingerprint [32]byte, p 
 // proofBase is private to fixed-depth, closed consumption envelopes. Public
 // preparation never admits their proof-free base as a standalone declaration.
 func encodeFeaturePlanMode(binding identity.CommandBinding, fingerprint [32]byte, p CommandPlan, proofBase bool) ([]byte, error) {
+	if p.OrganizationInvitationOrigin != nil && !validOrganizationInvitationOrigin(p) {
+		return nil, invalidPlan()
+	}
 	if p.MFACompletion != nil {
 		return encodeMFACompletionPlan(binding, fingerprint, p)
 	}
@@ -75,6 +78,9 @@ func encodeFeaturePlanMode(binding identity.CommandBinding, fingerprint [32]byte
 	}
 	if p.CapabilityIssuance != nil {
 		return encodeIssuanceWrappedPlan(binding, fingerprint, p, encodeFeaturePlan)
+	}
+	if p.OrganizationInvitationOrigin != nil {
+		return encodeOrganizationInvitationOrigin(binding, fingerprint, p)
 	}
 	if p.Feature != nil && (p.Feature.Operation.OperationID == "identity.phone.password-reset-complete" || p.Feature.Operation.OperationID == "identity.phone.password-reset-request" && (!riskInitiationOperation(p.Feature.Operation) || p.RiskEvidence == nil)) {
 		return nil, invalidPlan()
@@ -226,6 +232,7 @@ func (c *Coordinator) prepareFeature(binding identity.CommandBinding, command id
 	}
 	snapshot := CommandPlan{Contributors: append([]ContributorDescriptor(nil), p.Contributors...), Audits: append([]AuditPlan(nil), p.Audits...), Capability: p.Capability, SubjectType: p.SubjectType, CaptchaReplayReservation: p.CaptchaReplayReservation, SignupAcceptance: p.SignupAcceptance}
 	snapshot.MagicLinkRequestAcceptance = p.MagicLinkRequestAcceptance
+	snapshot.OrganizationInvitationOrigin = cloneOrganizationInvitationOrigin(p.OrganizationInvitationOrigin)
 	if p.Capability != nil {
 		copy := *p.Capability
 		snapshot.Capability = &copy

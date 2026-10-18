@@ -19,6 +19,17 @@ recording a second issuance selection. Original invitation expiry, recipient,
 member role and all five signed scope caveats must match; no subject override is
 added. The native owner separately enforces current owner and organization policy.
 
+Send owners additionally freeze `OrganizationInvitationOrigin` with the exact
+original command's `organization.id` and `organization.version`. The existing
+preparation declaration retains it before generation; final attachment cannot
+change it. `QueryOrganizationInvitationOrigin` lets that exact registered owner,
+under current command-query policy, resolve safe original organization metadata
+even when no invitation row or generated output exists. Authenticate a fresh
+session and current organization/action access separately before asking the sole
+coordinator to reconcile. The returned version is historical correlation, not
+current authority. Missing/legacy correlation fails closed; neither row absence
+nor this read proves noncommit, renews a lease or authorizes redelivery.
+
 Acceptance requires `OrganizationInvitationConsumptionContributor`, the actual
 one-use capability participant and `OrganizationInvitationLifecycleContributor`.
 `OrganizationInvitationConsumption` exposes original custody only during the

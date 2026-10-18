@@ -22,6 +22,10 @@ import (
 // admission profile; it is not sufficient for a future successful mutation
 // commit, which must require its lifecycle and full effect declarations.
 type CommandPlan struct {
+	// OrganizationInvitationOrigin retains original organization correlation in
+	// the invitation-send journal before any generated output or domain row.
+	// Nil preserves historical bytes; it cannot support origin lookup recovery.
+	OrganizationInvitationOrigin *OrganizationInvitationOriginPlan
 	// MFACompletion selects the closed session-producing factor profile, not
 	// enrollment verification or a caller-provided authentication proof.
 	MFACompletion *MFACompletionPlan
@@ -117,7 +121,7 @@ func KernelPlanDigest(binding identity.CommandBinding, fingerprint [32]byte, pla
 // The journal freezes the exact digest input, not a second serialization that
 // can disagree with admission or omit a participant field.
 func encodeKernelPlan(binding identity.CommandBinding, fingerprint [32]byte, plan CommandPlan) ([]byte, error) {
-	if plan.MFACompletion != nil || plan.MFAContinuation != nil || plan.MagicLinkRegistration != nil || plan.MagicLinkRequestAcceptance {
+	if plan.OrganizationInvitationOrigin != nil || plan.MFACompletion != nil || plan.MFAContinuation != nil || plan.MagicLinkRegistration != nil || plan.MagicLinkRequestAcceptance {
 		return nil, invalidPlan()
 	}
 	if plan.Delivery != nil {
@@ -202,6 +206,7 @@ func encodeKernelPlan(binding identity.CommandBinding, fingerprint [32]byte, pla
 // admittedKernelPlan never escapes the coordinator boundary. It freezes only
 // the supported kernel profile, not arbitrary callbacks or opaque input blobs.
 type admittedKernelPlan struct {
+	invitationOrigin           *OrganizationInvitationOriginPlan
 	mfaCompletion              *MFACompletionPlan
 	mfaContinuation            *MFAContinuationPlan
 	magicLinkRegistration      *MagicLinkRegistrationPlan

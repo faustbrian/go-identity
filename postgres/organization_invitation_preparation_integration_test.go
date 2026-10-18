@@ -61,6 +61,7 @@ func testOrganizationInvitationPreparation(t *testing.T, ctx context.Context, po
 		}
 		t.Run(name, func(t *testing.T) {
 			b, p := organizationInvitationSendPlanFixture(t)
+			p.OrganizationInvitationOrigin = &OrganizationInvitationOriginPlan{OrganizationID: "original-organization", OrganizationVersion: 7}
 			var err error
 			b.CommandID, err = identity.NewCommandID()
 			if err != nil {
@@ -80,7 +81,7 @@ func testOrganizationInvitationPreparation(t *testing.T, ctx context.Context, po
 				t.Fatal(err)
 			}
 			p.Contributors = registry.Descriptors()
-			command := featureCodecCommand(t, identity.FeatureCommandSpec{Binding: b, Operation: p.Feature.Operation, Fields: []identity.FeatureField{{Name: "organization.id", Value: identity.FeatureValue{Kind: identity.FeatureText, Text: "original-organization"}}}})
+			command := featureCodecCommand(t, identity.FeatureCommandSpec{Binding: b, Operation: p.Feature.Operation, Fields: []identity.FeatureField{{Name: "organization.id", Value: identity.FeatureValue{Kind: identity.FeatureText, Text: "original-organization"}}, {Name: "organization.version", Value: identity.FeatureValue{Kind: identity.FeatureUint64, Uint64: 7}}}})
 			seed, err := securityMutationAudit(ctx, b, 0, 1, time.Now().UTC().Truncate(time.Microsecond), "committed", p.Audits[0].EventType, p.SubjectType, b.RecordID, "protected", true)
 			if err != nil {
 				t.Fatal(err)
@@ -123,6 +124,10 @@ func testOrganizationInvitationPreparation(t *testing.T, ctx context.Context, po
 			}
 			if record.Outcome != want || record.Binding != b || denied && !errors.As(err, new(identity.ForbiddenError)) || !denied && err != nil {
 				t.Fatal("restart lost original preparation outcome", record.Outcome, err)
+			}
+			origin, history, err := fresh.QueryOrganizationInvitationOrigin(ctx, query, caller, owner)
+			if origin != *p.OrganizationInvitationOrigin || history.Binding != record.Binding || history.Outcome != record.Outcome || history.Feature == nil || record.Feature == nil || *history.Feature != *record.Feature || denied && !errors.As(err, new(identity.ForbiddenError)) || !denied && err != nil {
+				t.Fatal("restart lost original organization before domain insertion", origin, history.Outcome, err)
 			}
 			if !denied {
 				id, _ := base64.RawURLEncoding.DecodeString(string(b.CommandID))
