@@ -1,6 +1,6 @@
 # Identity Platform Progress
 
-## TL;DR — updated 2026-10-18 12:32 UTC
+## TL;DR — updated 2026-10-18 13:29 UTC
 
 **Estimated whole-goal completion: approximately 10–12%, with low confidence.**
 The working authentication baseline, thirteen email profiles, native username
@@ -9,6 +9,16 @@ credentials, and four CAPTCHA adapters are delivered as bounded profiles.
 Most platform families and final package qualification are not closed;
 queued work is not counted as delivered.
 This is an effort/scope estimate, not a measured percentage or an ETA.
+
+**Current parallel work:** primary username availability/rename; organization
+ownership-transfer worker; OAuth own-consent administration worker. The shared
+action-bound password admission prerequisite is reviewed/pushed as `4600452`
+with green CI and real PostgreSQL proof/atomic-consumption checks. Public
+reference adoption `8b45488` also has green CI and a downloaded-module
+PostgreSQL/race consumer proof. Organization has adopted that public pin.
+OAuth's native consent journey, failure/recovery/race/fuzz checks and independent
+source review pass; root API `86b5973` is pushed, while native public-pin
+qualification and publication remain. None closes another full milestone yet.
 
 | Measure | Current position |
 | --- | --- |

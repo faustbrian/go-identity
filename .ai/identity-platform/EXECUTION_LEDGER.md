@@ -1,5 +1,86 @@
 # Identity Implementation — Current Milestone
 
+## Live checkpoint — 2026-10-18 13:29 UTC
+
+Shared username/owner-transfer password admission is published as native
+4600452402d259dfebb36538dd992c90653f2b12; Required39131126531 succeeds.
+Public proxy/sumdb origin and native source/manifests match. Closed action/
+audience, actor-versus-target, original proof/session deadlines, pure typed
+restoration and existing atomic one-use owner are preserved. Reviewer
+action_primary_final_review APPROVE, eleven-path79369640; its byte-alias
+finding reproduced PG/raceRED1.213s and fixed. Final native ordinary race2.183s,
+taggedvet0, real action-proof/atomic-effect PG/race2.364s and retained email
+compatibility2.969s pass. These are adapter proofs, not completed workflows.
+Reference8b454884b7117d01292467b3393525786b717ddc is reviewed/pushed;
+Required39132220865 succeeds. Actual GOWORKoff downloaded-native action-proof
+PG/race2.195s, ordinary reference10.925s/cmd8.263s and taggedvet0 pass; no HTTP
+feature is enabled. The own PG data/credentials are removed. Nonblocking
+original-marker recovery coverage remains for
+the actual owner-transfer consumer/full qualification, not falsely completed.
+
+Organization worker has adopted the public native pin and prepared actual
+password-proof/genuine-session fixtures; root GREEN/native compile and PG
+journey await the serialized heavy slot. OAuth consent own-read/delete case
+passes2.397s and its finite denial/rollback/contention/lost-ack batch16.498s;
+final affected native race103.427s, taggedvet0 and cursorfuzz8.282s pass.
+Independent18-path049c47d3 review APPROVE; only five root API paths are
+published as86b59733e01cf41627b8ff5b8edc2ce5d8852a22. Native public-root
+pin/consumer qualification and publication remain pending. Source proof used
+own-root development overlay, not accepted native delivery.
+M05 primary remains availability/rename using kernel CAS/reuse ownership;
+pure root rename race1.595s is retained, actual workflow not yet implemented.
+Full milestones remain3/39; the whole-goal estimate remainsrough10–12%.
+
+## Next dependency-ready lanes — 2026-10-18 12:36 UTC
+
+Primary M05: continue delivered native1a83b18 on mainad1ea35; implement advisory
+rate-limited username availability and fresh password-proof rename, then selected
+HTTP/reference. Preserve existing paired signup/signin and fixed normalization.
+Use the identity identifier/CAS/retirement owner, current genuine session/MFA/
+password proof and one coordinator; no username store or second proof engine.
+The existing bounded M05 map/QA remains the input. Same-canonical display edits
+retain verification/ownership, actual renamed values get30day old-name cooldown.
+Prove concurrent signup/rename, stale/wrong proof/session/name/profile, rollback,
+replay/unknown recovery, current authority and real consumer signin after rename.
+Affected owners: root identifiers, username, kernel, native password/session and
+selected HTTP/reference only as needed. Existing consumed core31fca27,
+kernel/MFA/sessioncore6fadb5e, native-sessione3b8aff, native-password1a83b18
+have canonical PostgreSQL/race21.094s, independent review and green CI.
+
+Organization successor owner organization_teams, GPT-6.1 Sol high, no children:
+finite native owner-transfer journey in go-organization/maindc12ee7. Own root/
+postgres Go/tests, local migrations/manifests and docs/changelogs; no shared
+identity/session, root manifests/workspace/CI, Git or HTTP/reference writes.
+Consume current committed roote1ef03d/nativedc12ee7 and unchanged public pins;
+native authority/last-owner/team lifecycle has canonical PG/race41.963s and
+downloaded genuine-session consumer16.460s. Current owner transfers ownership
+atomically to an existing active member, conserves an owner and defines former
+owner disposition. Fence both memberships, organization/session/current policy,
+advance authority and audit/outbox once. Prove tenant/nonowner/self/stale denial,
+concurrent owner transitions/removal, rollback, lost-ack recovery and genuine
+password-session consumer. No dynamic roles, active-selection, federation or
+full M22 claim. Primary owns integration pins/final review/Git/acceptance.
+
+OAuth successor owner oauth_authorization_code, GPT-6.1 Sol high, no children:
+finite own-consent get/list/revoke journey in go-oauth-server/main28444ed.
+Own root/postgres Go/tests, local migrations/manifests and docs/changelogs;
+exclude other repos, shared identity/session, root manifests/workspace/CI,
+Git, HTTP/reference and unrelated client registration. Consume published
+root476cce3/docd2b0740/native28444ed and unchanged public pins; actual native
+current-authority/code/consent/refresh/revoke PG/race81.978s and downloaded
+workload consumer4.380s pass, retained human journey previously proven.
+Genuine current human session gets/lists only its approved consent and revokes
+it atomically so associated grant/access/refresh deny without revoking other
+consents. No arbitrary user/tenant or startup-client authority from request.
+Prove foreign/nonmember/stale session denial, limits/pagination, concurrent
+refresh/revoke, rollback/replay/lost-ack metadata recovery and genuine consumer.
+Preserve installed public/confidential/workload profiles. No OIDC/exchange,
+dynamic registration or full M30 claim. Primary owns final pins/review/delivery.
+
+Both workers inspect the actual consumed boundary once before code and report
+any missing upstream contract; do not invent authority. Local heavy checks are
+serialized; workers wait for explicit primary lane grant before Go/services.
+
 ## Parallel successor: configured workload client credentials
 
 Checkpoint12:23UTC: frozen native workload profile delivered. Root476cce3/
