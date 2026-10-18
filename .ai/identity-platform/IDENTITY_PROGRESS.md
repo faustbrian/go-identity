@@ -1,10 +1,10 @@
 # Identity Platform Progress
 
-## TL;DR — updated 2026-10-18 07:19 UTC
+## TL;DR — updated 2026-10-18 08:16 UTC
 
 **Estimated whole-goal completion: approximately 10–12%, with low confidence.**
-The working authentication baseline, twelve email profiles and selected native
-organization membership/invitation journeys are delivered, alongside a selected
+The working authentication baseline, thirteen email profiles and selected native
+organization membership/invitation/metadata journeys are delivered, alongside a selected
 OAuth code/PKCE flow with configured confidential clients and four CAPTCHA
 adapters. Most platform families and final package qualification are not closed;
 queued work is not counted as delivered.
@@ -14,12 +14,12 @@ This is an effort/scope estimate, not a measured percentage or an ETA.
 | --- | --- |
 | Complete consumer milestones | **3/39 closed**: B1 authentication, B2 reset, B3 password change. The unweighted count is 7.7%; it is not the whole-goal effort estimate. |
 | Remaining milestones | **36/39 not closed**: M04 is partially delivered; M05–M39 have not been accepted as complete. Existing implementation is not assumed absent. |
-| Additional delivered behavior | **12 email-lifecycle profiles**, listed below. These are partial M04 deliveries, not twelve additional closed milestones. |
+| Additional delivered behavior | **13 email-lifecycle profiles**, listed below. These are partial M04 deliveries, not thirteen additional closed milestones. |
 | Full package scope | **67 units: 61 product units + 6 primitive extensions.** No additional full-unit qualification has closed during this implementation run. The older 2/67 verified baseline is historical, not a current cross-repository audit. |
 | Last full milestone closure | **14 October:** B3 password change. |
-| Last complete email-profile delivery | **18 October:** optional before/after hooks through signup and managed-link verification, preserving commit/recovery on observer failure. Pushed reference `e53b0d7`, Required CI 39107091680 passes; eleven actual public-native PostgreSQL/race cases pass. |
+| Last complete email-profile delivery | **18 October:** independently selected hooks for managed change links and email OTP verification/change, including first-primary and TOTP paths. Pushed reference `ca26306`, Required CI 39110688213 passes; all 30 selected public-native PostgreSQL/race cases pass. |
 | Delivered organization profile | **Native organization invitations:** genuine owner send → captured delivery → verified recipient acceptance → membership, including rollback, contention, policy withdrawal and fresh-session interrupted-send recovery. Pushed `6847272`, green Required CI and actual downloaded-module PostgreSQL/race consumer proof. This is partial M22, not the complete organization family. |
-| Current unfinished deliverables | Primary next: remaining M04 lifecycle/privacy and required hook variants. The link-hook and configured confidential OAuth profiles are delivered. Full M22/M30/M35, organization HTTP/reference selection and final package qualification remain open. |
+| Current unfinished deliverables | M04 lifecycle/privacy contribution, retained factor-profile limits and final qualification remain open; confirmation-hook variants are delivered. Full M22/M30/M35, organization HTTP/reference selection and final package qualification remain open. Next lanes must consume proven contracts, not restart delivered profiles. |
 
 ### What consumers can already do
 
@@ -38,13 +38,22 @@ This is an effort/scope estimate, not a measured percentage or an ETA.
   observer failure retains commit/recovery without confidential projection or
   following signin. Native and existing HTTPS paths, scanner/replay/recovery,
   rollback, unknown acknowledgement and final authority denial are covered.
-  This is profile (12); OTP/change hook variants and lifecycle/privacy remain.
+  This is profile (12). Profile (13) adds independently configured managed-change
+  link and email OTP verification/change callbacks, including first-primary and
+  TOTP changes. Veto/error prevents durable wrong-code accounting; observer
+  failure preserves commit/recovery and withholds the address through native
+  and HTTPS paths. Lifecycle/privacy contribution remains undelivered.
 - Use genuine authenticated sessions for native organization create/get/add/list/
   remove, with last-owner protection and scoped denial. Owners can send member
   invitations to existing verified recipients, deliver through the actual queue,
   and recipients can accept atomically into membership/scoped authority. Current
   policy denial, concurrent acceptance, rollback and fresh-session/new-service
   interrupted-send recovery are proven through the downloaded public module.
+- Current owners/administrators can replace organization names/slugs with
+  tenant-scoped uniqueness and expected versions. Native audit/lifecycle effects,
+  concurrent-update exclusion, late-authority denial and authorized lost-commit
+  recovery are proven, including genuine password-issued sessions. This is a
+  native profile, not organization HTTP/reference composition or full M22.
 - Select bounded Turnstile, reCAPTCHA v3, hCaptcha Publisher/Pro or CaptchaFox Free
   provider-fact adapters. Durable risk/canonical-event/reference composition and live-provider
   qualification remain open.
@@ -60,7 +69,7 @@ This is an effort/scope estimate, not a measured percentage or an ETA.
 
 ### What remains before the whole goal is done
 
-- Finish M04 required remaining hook variants, email lifecycle/privacy
+- Finish M04 email lifecycle/privacy
   contribution, retained factor-profile limits and qualification;
   the selected enrolled-TOTP continuation profile is delivered.
 - Close username, passwordless/phone/anonymous, complete MFA/recovery/trusted-device,
@@ -71,6 +80,23 @@ This is an effort/scope estimate, not a measured percentage or an ETA.
   composition and all mandatory package, journey and shared-issuer qualification.
 
 ### Immediate delivery state and next action
+
+- Remaining confirmation hooks are closed: email `8130ced`, native adapters
+  `f9de2fd` and reference `ca26306` are independently reviewed and pushed.
+  Required CI 39109239579/39110169561/39110688213 succeeds. Public-native,
+  workspace-disabled reference race9.160s/runner6.788s, taggedvet0 and all30
+  actual PG18/race cases85.717s pass; the original development run104.224s is
+  separate evidence. Wrong-code placement counterfactual fails6.449s as expected.
+  A separate module builds the actual published reference version and all three
+  configuration paths without replacements; that proof is compilation, not
+  another database boot. No further hook variants are being added to this slice.
+- Organization metadata update is closed: root `6d66f39` and native `152a232`
+  are independently reviewed/pushed, Required39109587423/39110371962 succeeds.
+  Canonical public-root entire native PG18.6/race suite22.268s and taggedvet0
+  pass. A separate module using actual downloaded native/root versions passes
+  metadata and genuine password-session consumers under PG/race17.091s, including
+  rollback, current policy, concurrency, risk and lost-COMMIT recovery. No new
+  full milestone or full-unit qualification is claimed by either delivery.
 
 - Verification-hook prerequisites root `9464527`, email `ad66e5e` and native
   `0ffbde0` are independently reviewed/pushed; Required CI passes for each.

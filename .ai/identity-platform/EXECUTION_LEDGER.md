@@ -1,5 +1,147 @@
 # Identity Implementation — Current Milestone
 
+## Next independent lane: authenticated opaque-token introspection
+
+Readiness finding: the worker identified a genuinely missing public session-owner
+revalidation seam for a retained original password session without its bearer.
+Primary owns checking/extending that session boundary; worker must not copy the
+private primary reader or manufacture current authority. Independent core/parser
+work can proceed, while native current-source-session acceptance waits for the
+implemented, focused-proven and published owner contract. This is part of the
+introspection outcome, not a replacement auth engine or speculative extra lane.
+
+Assigned owner: oauth_introspection, GPT-6.1 Sol high, in go-oauth-server/main
+at47f61eb. Writable scope: existing root/postgres protocol and native source,
+tests, examples and owned docs/changelogs/module-local dependency files. No
+identity, root manifests/workspaces, CI/tooling or reference/HTTP writes; primary
+owns public integration pins and Git. Consume public root0fc6835 and native
+47f61eb, their unchanged committed identity/session/risk dependency graph and
+actual confidential-code/refresh/revoke public-consumer proof17.125s with green
+Required39105902252/39106536793. No readiness is inferred for absent owners.
+
+Finite outcome: explicit opt-in configured confidential-owning-client RFC7662
+introspection of actual issued opaque access/refresh tokens; separate current
+client-secret authentication, active-only least metadata, inactive/unknown/foreign
+tokens return only Active=false. Public/unauthenticated/disabled calls fail closed
+before token lookup. Recheck actual primary grant, original subject/session/
+credential/authority, scope/resource/issuer/environment and expiration. Prove
+access-vs-family revocation, refresh reuse and blocking/withdrawal denial without
+stale fallback or renewed freshness; retain 30s/20s shared-issuer bounds. Preserve
+existing selected code/refresh/revoke behavior and all unsupported-profile denial.
+
+Required evidence: pre-fix actual denial for selected authenticated consumer,
+correct typed/form validation, public/confidential/multiple-channel/wrong-secret
+denial, inactive redaction, genuine password-session code/consent/token to native
+introspection, revocation/expiry/current-authority and outage/cancellation cases;
+focused root/native race/vet, changed hostile parser fuzz, clean public pins and
+one independent complete-final-diff review. Exclude JWT/OIDC/device/workload/
+exchange, client administration/hot-secret rotation, caching and HTTP routes;
+they remain later obligations. Worker owns one complete native consumer outcome,
+not a parser-only prerequisite. First public boundary and tested batch return to
+primary for alignment. Heavy runs are serialized; worker receives the next lane.
+
+## Closed confirmation-hook and metadata slices — 2026-10-18 08:16 UTC
+
+Both finite consumer outcomes are accepted; do not reopen them for unchanged
+inputs. Email native13 review50ea980a APPROVE became f9de2fd, Required
+39110169561 success. Reference14 reviewb5f44e1b APPROVE became ca26306,
+Required39110688213 success. Canonical GOWORKoff public-native reference
+ordinaryrace9.160s/runner6.788s, taggedvet0, all30 actual PG18.6/race cases
+85.717s pass. Separate actual public-reference consumer builds all three
+configuration paths with no replacements; this is compilation, not DB boot.
+Selected observer failures preserve commit/recovery and zero address output;
+wrong-code vetoes preserve durable attempt accounting. Full M04 is not closed.
+
+Organization native11 review7ade86ba APPROVE became152a232; actual public
+root6d66f39 is pinned. Both exact-source Required39109587423/39110371962
+succeed. Entire canonical native PG/race22.268s/taggedvet0 and separate actual
+downloaded native/root metadata+genuine-password consumers PG/race17.091s pass.
+Original worker counterfactuals remain attributed to their producer. The worker
+has stopped; organization checkout is clean. Full M22/HTTP/reference and unit
+qualification remain open. Both repositories use main; no release/deployment.
+
+Published compiler inputs for the changed reference configuration and native
+confirmation owners, plus organization native execution/recovery/decoder, match
+their reviewed committed source byte for byte. Task-owned PostgreSQL and caches
+are being removed after this bounded run; retain the native terminal results,
+not scratch fixtures, as the original evidence.
+
+## M04 remaining confirmation hooks — 2026-10-18 07:30 UTC
+
+Checkpoint08:07UTC: all30 selected real PG18/race cases, including five HTTPS
+cases, pass104.224s in the development workspace. Wrong-code veto/error now
+assert unchanged used/failed attempts and challenge version; moving Before
+after denial metering in a disposable overlay fails both OTP consumers6.449s.
+Overlay removed. Independent implemented-coverage audit APPROVE; no remaining
+material coverage finding. Email prerequisite8130ced is pushed, Required
+39109239579 succeeds. Native modules now consume public email8130ced with
+GOWORKoff: OTP ordinaryrace1.634s/taggedvet0, password2.052s/taggedvet0.
+The thirteen native source/docs/pin paths are frozen for final independent
+review. Reference public-native adoption and canonical PG proof still follow
+native publication; no full-profile delivery is claimed prematurely.
+
+Organization root metadata prerequisite6d66f39 is reviewed/pushed with Required
+39109587423 success. Worker-native PostgreSQL suite9.496s, selectedrace7.283s
+and vet/taggedvet0 pass. Actual recovery-policy bypass RED and corrected0.724s
+pass, plus omitted-update/scoped-fence counterfactuals, establish regression
+sensitivity. Native implemented-coverage audit APPROVE. Native now pins actual
+public root6d66f39; canonical public-dependency checks are running. Worker has
+stopped writing and removed its own PostgreSQL/caches. Primary owns final
+native review/publication and public consumer proof. Neither M22 nor a further
+full unit is closed.
+
+Checkpoint07:47UTC: email exact-operation union regression failed0.245s for
+the three missing pairs, then full public-only email race1.800s/vet0 passed.
+Real PostgreSQL missing native callbacks were observed for link/change and both
+OTP engines (zero calls); compile-only fixture mistakes are not that runtime
+RED. First 21-case development race80.112s caught fixture assumptions: retained
+link journey commits two changes, and the OTP replacement fixture first does a
+link establishment. Restricting the special interceptor to its actual operation
+and retaining both link observations fixed the oracle. Affected11-case
+development PG/race passes62.581s, including genuine enrolled TOTP and known
+commit/error/recovery. Remaining selected HTTPS tests are written, not yet run.
+No canonical public native or final full profile delivery is claimed yet.
+Root/public Go and implemented-coverage audits are active. Organization worker
+has the exclusive heavy lane for its native red/green/recovery acceptance.
+
+Primary owns email verification policy, password/postgres managed-change,
+otp/postgres email verification/change completion, and reference configuration
+and real consumer tests. Adopt clean main184b5ad and the committed link-hook
+profile; do not rerun that unchanged profile without changed inputs. Outcome:
+explicit optional before/after confirmation callbacks for existing managed
+change links and email OTP verification/change (including existing first-primary
+and factor-selected paths). Nil selection preserves existing behavior. Before
+runs outside Work before attempt reservation/debit; After runs outside Work
+only for fresh known commits. Reject/error prevents protected effects; observer
+failure preserves commit/recovery and withholds address projection. Scanner,
+replay/recovery, rollback and unknown never invoke success observers. No proof,
+code, address or authority is disclosed to hooks. Actual current authority,
+OTP consumption, session effects and old-address notification remain owned by
+the existing transaction. Tests: closed operation/schema union; actual captured
+OTP/link consumer success, rejection and known-commit observer failure;
+rollback/unknown/current-authority/recovery partitions in the existing PG18
+reference harness. Focused affected race/vet and one final independent review
+before coherent publication; no new verification machinery.
+
+Retained lifecycle/privacy dependency: bounded read-only mapping found no
+public PostgreSQL privacy execution or anonymize/delete coordinator trigger;
+the existing allocation helpers are deliberately private. Email-only interface
+work cannot close those consumer outcomes. Keep the required contribution open
+and implement its owning trigger with that later consumer slice, rather than
+fabricate absent fragments or acknowledge pending cascades. This changes no
+product scope or M04 completion requirement.
+
+Independent lane reserved for organization metadata update: worker may own only
+go-organization root/postgres source/tests/docs and module-local dependencies,
+base6847272, consuming the existing real session, identity/kernel, risk and
+membership contracts at its current committed pins. Consumer outcome is owner/
+administrator-authorized bounded name/slug update with optimistic organization
+version, actual current membership/policy/session checks, same coordinator
+audit/outbox, exact retry/recovery, collision/rollback/late-denial tests. No
+domains/SSO, role engine, archive/delete or identity shared-contract changes.
+Primary owns cross-repository pins, final review, integration and Git delivery;
+worker requests missing upstream behavior and waits for heavy-test allocation.
+
 ## Accepted link-hook and confidential OAuth profiles — 2026-10-18 07:19 UTC
 
 Both finite profiles are closed; full M04/M30 and all 67-unit obligations stay
