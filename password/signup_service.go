@@ -54,7 +54,7 @@ func NewSignupRecovery(q identity.RecoveryQuery, flow identity.PreAuthTransactio
 	if _, err := identity.ParsePreAuthTransactionID(string(flow)); err != nil {
 		return SignupRecovery{}, ErrPasswordWork
 	}
-	if !boundedChangeText(string(q.TenantID)) || !boundedChangeText(string(q.ActorID)) || q.OperationID != "identity.password.signup" || q.RecordID != "" || q.LinkMode != 0 || q.UserID != "" || q.AnonymousFlowID != string(flow) {
+	if !boundedChangeText(string(q.TenantID)) || !boundedChangeText(string(q.ActorID)) || (q.OperationID != "identity.password.signup" && q.OperationID != "identity.username.signup") || q.RecordID != "" || q.LinkMode != 0 || q.UserID != "" || q.AnonymousFlowID != string(flow) {
 		return SignupRecovery{}, ErrPasswordWork
 	}
 	switch q.ActorKind {
@@ -93,7 +93,7 @@ type SignupRecoveryRequest struct {
 // It neither reads history nor compares the cookie with its retained digest.
 func (r SignupRecoveryRequest) Validate() error {
 	q, _, err := r.Recovery.Bindings()
-	if err != nil || q.ActorID != identity.ActorID(r.Caller.Request.Subject.ID) || q.ActorKind != r.Caller.Request.Subject.Kind || r.Caller.Request.Action != "identity.password.signup" || validateSigninProvenance(q.TenantID, r.Caller, r.Origin, r.Network, r.Device) != nil {
+	if err != nil || q.ActorID != identity.ActorID(r.Caller.Request.Subject.ID) || q.ActorKind != r.Caller.Request.Subject.Kind || r.Caller.Request.Action != authorization.Action(q.OperationID) || validateSigninProvenance(q.TenantID, r.Caller, r.Origin, r.Network, r.Device) != nil {
 		return ErrPasswordWork
 	}
 	if _, err := session.ParseToken(r.Cookie.Token()); err != nil {

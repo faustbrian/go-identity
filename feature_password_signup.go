@@ -8,7 +8,8 @@ import (
 
 // NewFeaturePasswordSignupCommand freezes prepared encoded verifier material
 // and the original pre-auth cookie in paired opaque custody. The closed native
-// profile is identity/password, identity.password.signup, password-signup v1,
+// profiles are identity/password, identity.password.signup, password-signup v1
+// and identity/username, identity.username.signup, username-signup v1,
 // record omitted, with explicit user or anonymous-flow scope. Hash transport
 // is exactly 1..16384 visible ASCII bytes; cookie transport follows
 // NewFeaturePreAuthCommand. Neither is normalized. Never pass plaintext here.
@@ -38,7 +39,8 @@ func NewFeaturePasswordSignupCommand(spec FeatureCommandSpec, encodedHash string
 }
 
 func passwordSignupOperation(op FeatureOperation) bool {
-	return op.Owner == "identity/password" && op.OperationID == "identity.password.signup" && op.SchemaID == "password-signup" && op.SchemaVersion == 1 && op.RecordRequirement == FeatureRecordOmitted && op.SubjectRequirement <= FeatureSubjectAnonymousFlow
+	selected := op.Owner == "identity/password" && op.OperationID == "identity.password.signup" && op.SchemaID == "password-signup" || op.Owner == "identity/username" && op.OperationID == "identity.username.signup" && op.SchemaID == "username-signup"
+	return selected && op.SchemaVersion == 1 && op.RecordRequirement == FeatureRecordOmitted && op.SubjectRequirement <= FeatureSubjectAnonymousFlow
 }
 
 func (c Command) validPasswordSignupVariant() bool {

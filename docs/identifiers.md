@@ -1,5 +1,26 @@
 # ID contracts
 
+## Versioned canonical identity
+
+`Identifier.NormalizationProfile` and `NormalizationVersion` retain the exact
+policy that produced canonical lookup bytes. The profile grammar is
+`[a-z0-9][a-z0-9._-]*`, at most128 ASCII bytes, with a positive uint32 revision.
+Both absent means an explicitly unbound historical record, not permission to
+normalize it using a new policy. Structural validation does not prove that the
+profile was actually applied; the owning feature must do so. Diagnostics remain
+redacted.
+
+Attach/replacement intent carries the complete pair. Bound replacement cannot
+silently omit it. Unbound signed-intent bytes retain the shipped encoding; a
+bound candidate adds the `normalization-v1` marker, profile and decimal revision
+as length-prefixed fields after the original eleven fields. Any profile/version
+change therefore changes the intent digest without rewriting old commands.
+
+The PostgreSQL adapter's optional `IdentifierNormalizationMigrationSource`
+appends columns with empty/zero historical state; select it before writing bound
+identifiers. Existing histories remain readable without this migration. It
+does not rewrite canonical/display bytes, verification or identifier authority.
+
 ## API and ownership
 
 `SubjectID` and `PreAuthTransactionID` are distinct comparable string types with

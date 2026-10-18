@@ -35,6 +35,13 @@ type Identifier struct {
 	Verified       bool
 	Primary        bool
 	Version        uint64
+	// NormalizationProfile and NormalizationVersion preserve the exact policy
+	// that produced CanonicalValue. Both absent denotes an existing unbound
+	// record, never permission to reinterpret it using today's policy.
+	// Omit absent bindings to preserve canonical JSON in existing authenticated
+	// signup-input envelopes; adding zero fields would make their byte check fail.
+	NormalizationProfile string `json:",omitempty"`
+	NormalizationVersion uint32 `json:",omitempty"`
 }
 
 // Validate checks the exact user, closed kind, bounded values and positive
@@ -42,10 +49,29 @@ type Identifier struct {
 // without verification. Canonical/display text is at most 512 UTF-8 bytes with
 // no C0/C1 controls; provider-subject spaces are preserved, not trimmed.
 func (i Identifier) Validate(user UserID) error {
-	if !validDirectoryID(string(i.ID)) || !validDirectoryID(string(user)) || i.UserID != user || !i.Kind.Valid() || !validIdentifierText(i.CanonicalValue) || i.DisplayValue != "" && !validIdentifierText(i.DisplayValue) || i.Version == 0 || i.Primary && !i.Verified {
+	if !validDirectoryID(string(i.ID)) || !validDirectoryID(string(user)) || i.UserID != user || !i.Kind.Valid() || !validIdentifierText(i.CanonicalValue) || i.DisplayValue != "" && !validIdentifierText(i.DisplayValue) || i.Version == 0 || i.Primary && !i.Verified || !validNormalizationBinding(i.NormalizationProfile, i.NormalizationVersion) {
 		return InvalidInputError{Field: "identifier"}
 	}
 	return nil
+}
+
+// Match the public identifier owner's persisted profile-ID grammar without
+// importing a normalization engine into the identity persistence contract.
+func validNormalizationBinding(profile string, version uint32) bool {
+	if profile == "" {
+		return version == 0
+	}
+	if len(profile) > 128 || version == 0 {
+		return false
+	}
+	for i := range len(profile) {
+		b := profile[i]
+		if b >= 'a' && b <= 'z' || b >= '0' && b <= '9' || i > 0 && (b == '.' || b == '_' || b == '-') {
+			continue
+		}
+		return false
+	}
+	return true
 }
 
 // Valid recognizes a persisted identifier kind. Empty is only an omitted list
@@ -167,6 +193,8 @@ type IdentifierChange struct {
 	Kind                        IdentifierKind
 	CanonicalValue              string
 	DisplayValue                string
+	NormalizationProfile        string `json:",omitempty"`
+	NormalizationVersion        uint32 `json:",omitempty"`
 	ExpectedUserVersion         uint64
 	ExpectedAuthorityVersion    uint64
 	ExpectedIdentifierVersion   uint64
@@ -226,10 +254,10 @@ func ApplyIdentifierChange(state IdentifierState, change IdentifierChange, now t
 	}
 	candidate := change.Action == IdentifierAttach || change.Action == IdentifierReplace
 	if candidate {
-		if !change.Kind.Valid() || !validIdentifierText(change.CanonicalValue) || change.DisplayValue != "" && !validIdentifierText(change.DisplayValue) {
+		if !change.Kind.Valid() || !validIdentifierText(change.CanonicalValue) || change.DisplayValue != "" && !validIdentifierText(change.DisplayValue) || !validNormalizationBinding(change.NormalizationProfile, change.NormalizationVersion) {
 			return zero, InvalidInputError{Field: "identifier_value"}
 		}
-	} else if change.Kind != "" || change.CanonicalValue != "" || change.DisplayValue != "" {
+	} else if change.Kind != "" || change.CanonicalValue != "" || change.DisplayValue != "" || change.NormalizationProfile != "" || change.NormalizationVersion != 0 {
 		return zero, InvalidInputError{Field: "identifier_value"}
 	}
 	index := slices.IndexFunc(state.Identifiers, func(i Identifier) bool { return i.ID == change.ID })
@@ -250,6 +278,9 @@ func ApplyIdentifierChange(state IdentifierState, change IdentifierChange, now t
 		if change.Action == IdentifierReplace && state.Identifiers[index].Kind != change.Kind {
 			return zero, InvalidInputError{Field: "identifier_kind"}
 		}
+		if change.Action == IdentifierReplace && state.Identifiers[index].NormalizationProfile != "" && change.NormalizationProfile == "" {
+			return zero, InvalidInputError{Field: "identifier_normalization"}
+		}
 	}
 	if candidate {
 		for _, i := range state.Identifiers {
@@ -267,7 +298,7 @@ func ApplyIdentifierChange(state IdentifierState, change IdentifierChange, now t
 		for position < len(next.Identifiers) && next.Identifiers[position].ID < change.ID {
 			position++
 		}
-		result.State.Identifiers = slices.Insert(next.Identifiers, position, Identifier{ID: change.ID, UserID: change.UserID, Kind: change.Kind, CanonicalValue: change.CanonicalValue, DisplayValue: change.DisplayValue, Version: 1})
+		result.State.Identifiers = slices.Insert(next.Identifiers, position, Identifier{ID: change.ID, UserID: change.UserID, Kind: change.Kind, CanonicalValue: change.CanonicalValue, DisplayValue: change.DisplayValue, Version: 1, NormalizationProfile: change.NormalizationProfile, NormalizationVersion: change.NormalizationVersion})
 		result.State.Verifications = slices.Insert(next.Verifications, position, Verification{IdentifierID: change.ID, State: VerificationPending, Version: 1})
 	case IdentifierRestartVerification:
 		if next.Identifiers[index].Verified || next.Identifiers[index].Primary || next.Verifications[index].State != VerificationPending {
@@ -310,7 +341,7 @@ func ApplyIdentifierChange(state IdentifierState, change IdentifierChange, now t
 			result.State.Identifiers = slices.Delete(next.Identifiers, index, index+1)
 			result.State.Verifications = slices.Delete(next.Verifications, index, index+1)
 		} else {
-			result.State.Identifiers[index] = Identifier{ID: change.ID, UserID: change.UserID, Kind: change.Kind, CanonicalValue: change.CanonicalValue, DisplayValue: change.DisplayValue, Version: old.Version + 1}
+			result.State.Identifiers[index] = Identifier{ID: change.ID, UserID: change.UserID, Kind: change.Kind, CanonicalValue: change.CanonicalValue, DisplayValue: change.DisplayValue, Version: old.Version + 1, NormalizationProfile: change.NormalizationProfile, NormalizationVersion: change.NormalizationVersion}
 			result.State.Verifications[index] = Verification{IdentifierID: change.ID, State: VerificationPending, Version: verification.Version + 1}
 		}
 	}

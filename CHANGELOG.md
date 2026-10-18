@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Preserve distinct username signup/signin operations in the existing opaque
+  password/pre-auth command custody. Native profile admission, original flow,
+  risk, persistence and session effects remain required; construction alone
+  neither authenticates nor enables a username endpoint.
+
+- Preserve an optional exact normalization profile and revision with identifiers
+  and signed mutation intent. Existing unbound identities keep their original
+  comparison bytes; bound replacements cannot silently discard their policy.
+
 - Add ordered bounded before/after hook contracts with registered scalar
   metadata, read-only field policy, cancellation and callback-context reentry
   denial. Hook errors cannot reclassify an already committed domain result;

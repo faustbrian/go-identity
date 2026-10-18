@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Preserve the original username signup/signin operation in password-owned
+  input and recovery custody. Supplementary signup username remains raw and
+  requires email; canonical reservation and authentication stay native-owned.
+  Legacy inputs remain unchanged; native username composition is in progress.
+
 - Compose current session custody backed by supported envelope v2. Existing
   workflow/HTTP contracts and original credential lifetimes are unchanged.
 

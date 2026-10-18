@@ -34,10 +34,15 @@ import (
 // use. Password remains caller-owned; destroy it only after the call returns.
 // Do not log explicit field projections, which bypass diagnostic redaction.
 type SignupRequest struct {
-	TenantID       identity.TenantID
-	PreAuthID      identity.PreAuthTransactionID
-	Cookie         auth.BearerCredential
-	Email          SignupAddressInput
+	TenantID  identity.TenantID
+	PreAuthID identity.PreAuthTransactionID
+	Cookie    auth.BearerCredential
+	Email     SignupAddressInput
+	// Username is raw supplementary input only for identity.username.signup.
+	// Empty preserves the legacy password-signup profile. The selected native
+	// username policy must normalize/validate and atomically reserve it alongside
+	// Email; this transport field provides neither ownership nor availability.
+	Username       string
 	Password       primitive.Secret
 	AllowedFields  []identity.AttributeUpdate
 	RememberPolicy session.RememberPolicy
@@ -54,7 +59,14 @@ type SignupRequest struct {
 // Success is not permission to create an account, admit a flow or issue a
 // session. Native policy must validate the exact original input independently.
 func (r SignupRequest) Validate() error {
-	if r.IdempotencyKey == (identity.IdempotencyKey{}) || r.Caller.Request.Action != "identity.password.signup" || r.Email.Validate() != nil || !validSignupFields(r.AllowedFields) {
+	action := authorization.Action("identity.password.signup")
+	if r.Username != "" {
+		action = "identity.username.signup"
+		if len(r.Username) > 128 || !utf8.ValidString(r.Username) {
+			return ErrPasswordWork
+		}
+	}
+	if r.IdempotencyKey == (identity.IdempotencyKey{}) || r.Caller.Request.Action != action || r.Email.Validate() != nil || !validSignupFields(r.AllowedFields) {
 		return ErrPasswordWork
 	}
 	// Reuse the shared original-flow transport/provenance boundary without

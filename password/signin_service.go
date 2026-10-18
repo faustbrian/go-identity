@@ -52,7 +52,7 @@ func NewSigninRecovery(q identity.RecoveryQuery, flow identity.PreAuthTransactio
 	if _, err := identity.ParsePreAuthTransactionID(string(flow)); err != nil {
 		return SigninRecovery{}, ErrPasswordWork
 	}
-	if !boundedChangeText(string(q.TenantID)) || !boundedChangeText(string(q.ActorID)) || q.OperationID != "identity.password.signin" || q.RecordID != "" || q.LinkMode != 0 || (q.UserID == "") == (q.AnonymousFlowID == "") {
+	if !boundedChangeText(string(q.TenantID)) || !boundedChangeText(string(q.ActorID)) || (q.OperationID != "identity.password.signin" && q.OperationID != "identity.username.signin") || q.RecordID != "" || q.LinkMode != 0 || (q.UserID == "") == (q.AnonymousFlowID == "") {
 		return SigninRecovery{}, ErrPasswordWork
 	}
 	if q.UserID != "" && !boundedChangeText(string(q.UserID)) || q.AnonymousFlowID != "" && q.AnonymousFlowID != string(flow) {
@@ -97,7 +97,7 @@ type SigninRecoveryRequest struct {
 // remain native primary checks; no history is disclosed by this method.
 func (r SigninRecoveryRequest) Validate() error {
 	q, _, err := r.Recovery.Bindings()
-	if err != nil || q.ActorID != identity.ActorID(r.Caller.Request.Subject.ID) || q.ActorKind != r.Caller.Request.Subject.Kind || validateSigninProvenance(q.TenantID, r.Caller, r.Origin, r.Network, r.Device) != nil {
+	if err != nil || q.ActorID != identity.ActorID(r.Caller.Request.Subject.ID) || q.ActorKind != r.Caller.Request.Subject.Kind || r.Caller.Request.Action != authorization.Action(q.OperationID) || validateSigninProvenance(q.TenantID, r.Caller, r.Origin, r.Network, r.Device) != nil {
 		return ErrPasswordWork
 	}
 	if _, err := session.ParseToken(r.Cookie.Token()); err != nil {

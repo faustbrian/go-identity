@@ -6,8 +6,10 @@ import (
 )
 
 // NewFeaturePasswordSignupInputCommand freezes original anonymous signup input
-// before a verifier exists. Only identity/password, identity.password.signup,
-// password-signup v1, record-omitted, anonymous-flow scope is supported. Cookie
+// before a verifier exists. The closed profiles are identity/password,
+// identity.password.signup, password-signup v1, and identity/username,
+// identity.username.signup, username-signup v1, both record-omitted with
+// anonymous-flow scope. Native execution remains explicitly selected. Cookie
 // transport follows NewFeaturePreAuthCommand's canonical base64url bounds.
 // Password length must be 1..1 MiB; registration policy may narrow these bounds.
 //

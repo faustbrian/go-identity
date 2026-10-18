@@ -47,10 +47,10 @@ func validIdentifierChange(c IdentifierChange) bool {
 		return false
 	}
 	if c.Action == IdentifierAttach || c.Action == IdentifierReplace {
-		if !c.Kind.Valid() || !validIdentifierText(c.CanonicalValue) || c.DisplayValue != "" && !validIdentifierText(c.DisplayValue) {
+		if !c.Kind.Valid() || !validIdentifierText(c.CanonicalValue) || c.DisplayValue != "" && !validIdentifierText(c.DisplayValue) || !validNormalizationBinding(c.NormalizationProfile, c.NormalizationVersion) {
 			return false
 		}
-	} else if c.Kind != "" || c.CanonicalValue != "" || c.DisplayValue != "" {
+	} else if c.Kind != "" || c.CanonicalValue != "" || c.DisplayValue != "" || c.NormalizationProfile != "" || c.NormalizationVersion != 0 {
 		return false
 	}
 	if c.Action == IdentifierAttach {
@@ -70,6 +70,11 @@ func IdentifierIntentDigest(c IdentifierChange) ([32]byte, error) {
 	h := sha256.New()
 	_, _ = io.WriteString(h, "identity-identifier-change-v1\x00")
 	fields := []string{string(c.TenantID), string(c.UserID), strconv.Itoa(int(c.Action)), string(c.ID), string(c.Kind), c.CanonicalValue, c.DisplayValue, strconv.FormatUint(c.ExpectedUserVersion, 10), strconv.FormatUint(c.ExpectedAuthorityVersion, 10), strconv.FormatUint(c.ExpectedIdentifierVersion, 10), strconv.FormatUint(c.ExpectedVerificationVersion, 10)}
+	// Preserve shipped unbound intent bytes. A bound candidate additionally
+	// commits the complete profile; neither bytes nor a revision alone suffice.
+	if c.NormalizationProfile != "" {
+		fields = append(fields, "normalization-v1", c.NormalizationProfile, strconv.FormatUint(uint64(c.NormalizationVersion), 10))
+	}
 	for _, field := range fields {
 		var size [4]byte
 		binary.BigEndian.PutUint32(size[:], uint32(len(field)))

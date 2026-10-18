@@ -14,6 +14,15 @@ the newly created user's namespace. Its cookie and trusted caller scope must be
 independently admitted against primary retained history; reconstruction is not
 execution or disclosure authority.
 
+Supplementary `SignupRequest.Username` selects the exact
+`identity.username.signup` input profile and still requires email. It remains
+raw, bounded UTF-8 input: the native username owner must apply its fixed policy
+and atomically reserve both names. Empty keeps the original password-signup
+profile; one route cannot relabel the other. Signup/signin recovery similarly
+preserves the exact original password or username operation and checks matching
+caller provenance. Structural acceptance does not enable a native username
+workflow or HTTP endpoint; those compositions remain in development.
+
 `SignupResult.Validate` distinguishes known commit, rollback, unknown, conflict
 and in-progress correlation without reading history or granting authority.
 Required-verification acknowledgements omit subject/session identity and all
