@@ -54,9 +54,9 @@ type OptionalTime struct {
 	Value     time.Time
 }
 
-// ProviderEvidenceKind is a closed native-envelope discriminator. Only the
-// Turnstile and reCAPTCHA v3 profiles are implemented; reserved members grant no
-// capability.
+// ProviderEvidenceKind is a closed native-envelope discriminator. Turnstile,
+// reCAPTCHA v3 and hCaptcha Publisher/Pro are implemented. The reserved CaptchaFox
+// member grants no capability.
 type ProviderEvidenceKind uint8
 
 const (
@@ -89,8 +89,18 @@ type RecaptchaEvidence struct {
 	ErrorCodesAvailable bool
 }
 
-// HCaptchaEvidence reserves its closed native member without implementing a profile.
-type HCaptchaEvidence struct{ ErrorCodes []string }
+// HCaptchaEvidence retains optional deprecated credit and bounded native codes.
+// Publisher/Pro has no documented returned sitekey or score reasons: those
+// fields stay unavailable, independently of the configured SiteKey attribution.
+// Unsupported closed native fields may remain attributable on unusable results.
+type HCaptchaEvidence struct {
+	ReturnedSiteKey         OptionalString
+	CreditAvailable, Credit bool
+	ErrorCodesAvailable     bool
+	ErrorCodes              []string
+	ScoreReasonsAvailable   bool
+	ScoreReasons            []string
+}
 
 // CaptchaFoxEvidence reserves its closed native member without implementing a profile.
 type CaptchaFoxEvidence struct{ ErrorCodes []string }
@@ -186,3 +196,9 @@ func (RecaptchaEvidence) Format(s fmt.State, _ rune) {
 }
 func (RecaptchaEvidence) MarshalJSON() ([]byte, error) { return nil, errSensitive }
 func (RecaptchaEvidence) MarshalText() ([]byte, error) { return nil, errSensitive }
+
+func (HCaptchaEvidence) Format(s fmt.State, _ rune) {
+	_, _ = io.WriteString(s, "captcha.HCaptchaEvidence(redacted)")
+}
+func (HCaptchaEvidence) MarshalJSON() ([]byte, error) { return nil, errSensitive }
+func (HCaptchaEvidence) MarshalText() ([]byte, error) { return nil, errSensitive }

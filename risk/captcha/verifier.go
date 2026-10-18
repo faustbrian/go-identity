@@ -130,7 +130,9 @@ func (c *Client) Verify(ctx context.Context, request VerifyRequest) (ProviderRes
 		return failed(result, result.Outcome, safeCause(result.Outcome))
 	}
 	evidence := &result.Evidence
-	if !evidence.HostnameMatched || !evidence.ActionMatched || c.config.ExpectedCData.Available && evidence.Turnstile.CData != c.config.ExpectedCData {
+	// Unsupported action profiles keep the field and match flag unavailable;
+	// they must not fabricate an empty successful comparison.
+	if !evidence.HostnameMatched || c.config.ExpectedAction != "" && !evidence.ActionMatched || c.config.ExpectedCData.Available && evidence.Turnstile.CData != c.config.ExpectedCData {
 		return failed(result, OutcomeBindingMismatch, ErrBindingMismatch)
 	}
 	if !evidence.ChallengeTime.Available || evidence.ChallengeTime.Value.IsZero() || evidence.ChallengeTime.Value.After(result.ObservedAt) || !now.Before(evidence.ChallengeTime.Value.Add(c.config.ChallengeMaxAge)) || result.ObservedAt.IsZero() || result.ObservedAt.Before(start) || result.ObservedAt.After(now) || result.ExpiresAt.IsZero() || !now.Before(result.ExpiresAt) || result.ExpiresAt.After(result.ObservedAt.Add(c.config.Lifetime)) {
@@ -161,6 +163,8 @@ func (c *Client) sameProfile(e ProviderEvidence) bool {
 	kind := EvidenceTurnstile
 	if p.Provider == "recaptcha" {
 		kind = EvidenceRecaptcha
+	} else if p.Provider == "hcaptcha" {
+		kind = EvidenceHCaptcha
 	}
 	return e.Provider == p.Provider && e.API == p.API && e.Version == p.Version && e.Tier == p.Tier && e.APIProfile == p.APIProfile && e.SiteKey == p.SiteKey && e.ConfigurationVersion == p.ConfigurationVersion && e.Kind == kind
 }
@@ -184,6 +188,17 @@ func validNativeUnion(e ProviderEvidence) bool {
 }
 
 func (c *Client) validEnvelope(e ProviderEvidence) bool {
+	if c.config.Provider == "hcaptcha" {
+		return e.HCaptcha != nil && validNativeUnion(e) &&
+			!e.Origin.Available && e.Origin.Value == "" &&
+			!e.Action.Available && e.Action.Value == "" &&
+			!e.ScoreAvailable && e.Score == 0 && optionalString(e.Hostname, 253) &&
+			(e.ChallengeTime.Available || e.ChallengeTime.Value.IsZero()) &&
+			!e.HCaptcha.ReturnedSiteKey.Available && e.HCaptcha.ReturnedSiteKey.Value == "" &&
+			(e.HCaptcha.CreditAvailable || !e.HCaptcha.Credit) &&
+			(e.HCaptcha.ErrorCodesAvailable || len(e.HCaptcha.ErrorCodes) == 0) &&
+			!e.HCaptcha.ScoreReasonsAvailable && len(e.HCaptcha.ScoreReasons) == 0
+	}
 	if c.config.Provider == "recaptcha" {
 		return e.Recaptcha != nil && validNativeUnion(e) && !e.Origin.Available && e.Origin.Value == "" && optionalString(e.Hostname, 253) && optionalString(e.Action, 64) && (!e.Action.Available || e.Action.Value == "" || recaptchaAction(e.Action.Value)) && (e.ChallengeTime.Available || e.ChallengeTime.Value.IsZero()) && (!e.Success || e.ScoreAvailable) && !math.IsNaN(e.Score) && !math.IsInf(e.Score, 0) && e.Score >= 0 && e.Score <= 1 && (e.ScoreAvailable || e.Score == 0) && (e.Recaptcha.ErrorCodesAvailable || len(e.Recaptcha.ErrorCodes) == 0)
 	}
@@ -215,6 +230,7 @@ func cloneResult(r ProviderResult) ProviderResult {
 	if r.Evidence.HCaptcha != nil {
 		copy := *r.Evidence.HCaptcha
 		copy.ErrorCodes = slices.Clone(copy.ErrorCodes)
+		copy.ScoreReasons = slices.Clone(copy.ScoreReasons)
 		r.Evidence.HCaptcha = &copy
 	}
 	if r.Evidence.CaptchaFox != nil {
@@ -246,7 +262,11 @@ func boundedResult(r ProviderResult) bool {
 		codes = append(codes, e.Recaptcha.ErrorCodes)
 	}
 	if e.HCaptcha != nil {
+		if !optionalString(e.HCaptcha.ReturnedSiteKey, 512) {
+			return false
+		}
 		codes = append(codes, e.HCaptcha.ErrorCodes)
+		codes = append(codes, e.HCaptcha.ScoreReasons)
 	}
 	if e.CaptchaFox != nil {
 		codes = append(codes, e.CaptchaFox.ErrorCodes)

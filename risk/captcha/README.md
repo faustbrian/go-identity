@@ -2,9 +2,9 @@
 
 Experimental, Go 1.27. This module supplies a stateless neutral verifier and the
 exact callback consumed by the existing identity/risk CAPTCHA-evidence issuer.
-Selected profiles are Turnstile Siteverify v0/free and reCAPTCHA classic
-Siteverify v3/standard; transport adapters are independent nested modules.
-Reserved hCaptcha and CaptchaFox members do not implement those providers.
+Selected profiles are Turnstile Siteverify v0/free, reCAPTCHA classic
+Siteverify v3/standard and hCaptcha Siteverify Publisher/Pro; transport adapters
+are independent nested modules. Reserved CaptchaFox does not implement that provider.
 
 `OutcomeSolved` is a provider fact, not permission to perform an operation.
 The risk owner derives keyed replay identity, authenticates the original command
@@ -50,6 +50,19 @@ slash or underscore bytes (Google's documented alphabet, within the reference
 64-byte budget). Expected cdata, origins and remote-IP disclosure are forbidden.
 V2 and Enterprise are not implemented. Its original challenge expires after at
 most two minutes; the selected configured age may shorten that bound.
+
+The hCaptcha selection is provider `hcaptcha`, API `siteverify`, reference
+contract revision `2026-08-11`, tier `publisher_pro`, API profile
+`siteverify/publisher_pro`. Expected action must be empty (unsupported), not the
+literal reference sentinel `unsupported`; no action or successful empty match
+is fabricated. Credit is optional deprecated native evidence. Returned-sitekey
+and score-reason availability remain explicit but unavailable for this documented
+tier; configured `SiteKey` is not a returned field. Score, cdata, origins and
+remote-IP disclosure are forbidden. Challenge age is at most two minutes.
+The provider posts expected `sitekey` for provider-side token binding. hCaptcha
+warns that its browser-derived hostname is not authentication; the local exact
+comparison is an additional consistency gate, not identity or site-key proof.
+Its `not-provided` hostname sentinel cannot be configured as a valid binding.
 
 Timeout is 1..15 seconds, evidence lifetime 1 second..2 minutes, challenge age
 1 second..5 minutes, token byte limit 1..8192, and concurrent calls 1..256. The

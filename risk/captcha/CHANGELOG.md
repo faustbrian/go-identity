@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Add the explicit hCaptcha Siteverify Publisher/Pro profile with optional
+  deprecated credit and native error-code availability. Action/score/origin and
+  undocumented returned-sitekey proof stay unavailable; prior profiles remain.
+
 - Add explicit reCAPTCHA classic Siteverify v3/standard evidence with score
   availability, native error-code availability and two-minute challenge bounds.
   Scores remain facts for risk-owned policy; Turnstile v0/free is unchanged.

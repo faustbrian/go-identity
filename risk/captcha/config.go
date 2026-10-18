@@ -12,10 +12,11 @@ import (
 )
 
 // Config selects an explicit immutable provider profile and bounded call policy.
-// Zero is invalid. Supported profiles are Turnstile Siteverify v0/free and
-// reCAPTCHA classic Siteverify v3/standard. Both bind hostname/action/challenge
-// time; only reCAPTCHA exposes score. Neither discloses remote IP or has origin
-// evidence. No endpoint or provider is inferred from omitted configuration.
+// Zero is invalid. Supported profiles are Turnstile Siteverify v0/free,
+// reCAPTCHA classic Siteverify v3/standard and hCaptcha Siteverify Publisher/Pro.
+// All bind hostname/challenge time; hCaptcha has no action, only reCAPTCHA has
+// score. None discloses remote IP or has origin evidence. No endpoint or
+// provider is inferred from omitted configuration.
 // Lifetime is 1s..2m, ChallengeMaxAge 1s..5m and Timeout 1s..15s. MaxTokenBytes
 // is 1..8192; the provider additionally enforces its documented character limit.
 // MaxConcurrent (1..256) bounds complete calls without a growing admission queue.
@@ -48,11 +49,25 @@ func (c Config) valid() bool {
 		if c.API != "classic_siteverify" || c.Version != "v3" || c.Tier != "standard" || c.APIProfile != "classic_siteverify/v3" || !recaptchaAction(c.ExpectedAction) || c.ChallengeMaxAge > 2*time.Minute || c.ExpectedCData.Available {
 			return false
 		}
+	case "hcaptcha":
+		// Publisher/Pro Siteverify documents hostname/challenge and optional credit,
+		// not action, origin or score. The reference pins this contract revision;
+		// 120s is the provider's documented default expiry, never extended here.
+		// https://docs.hcaptcha.com/#verify-the-user-response-server-side
+		if c.API != "siteverify" || c.Version != "2026-08-11" || c.Tier != "publisher_pro" || c.APIProfile != "siteverify/publisher_pro" || c.ExpectedAction != "" || c.ExpectedCData.Available || c.ChallengeMaxAge > 2*time.Minute {
+			return false
+		}
 	default:
 		return false
 	}
 	for i, host := range c.Hostnames {
 		if !hostname(host) || slices.Contains(c.Hostnames[:i], host) {
+			return false
+		}
+		// hCaptcha uses this literal when hostname reporting is suppressed;
+		// accepting it as a configured host would invent a positive binding.
+		// https://docs.hcaptcha.com/#verify-the-user-response-server-side
+		if c.Provider == "hcaptcha" && host == "not-provided" {
 			return false
 		}
 	}
@@ -78,7 +93,7 @@ func (c Config) Capabilities() ProviderCapabilities {
 	if !c.valid() {
 		return ProviderCapabilities{}
 	}
-	return ProviderCapabilities{Hostname: true, Action: true, ChallengeTime: true, ProviderIdempotency: c.Provider == "turnstile", Score: c.Provider == "recaptcha"}
+	return ProviderCapabilities{Hostname: true, Action: c.Provider != "hcaptcha", ChallengeTime: true, ProviderIdempotency: c.Provider == "turnstile", Score: c.Provider == "recaptcha"}
 }
 
 func recaptchaAction(value string) bool {
