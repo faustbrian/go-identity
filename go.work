@@ -11,6 +11,7 @@ use (
 	./http/mfa
 	./http/otp
 	./http/password
+	./http/phone
 	./http/session
 	./i18n
 	./magiclink

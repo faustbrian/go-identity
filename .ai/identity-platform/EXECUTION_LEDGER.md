@@ -2,6 +2,14 @@
 
 ## Live checkpoint — 2026-10-18 22:58 UTC
 
+23:02 producer431e97b2228d0d3f9a1ccd944bb739236e678765 main-pushed; Required
+39174527990 failed only repository registration: http/phone missing from go.work.
+Added exactly that existing module to workspace; no runtime source change or
+matrix restart. Config validation had passed; corrected exact-source CI pending.
+Reference graph phone-handle focused RED95630 -> GREEN3095 .396s using actual
+public native431e97b dependency. Graph native configuration/wrapper is uncommitted;
+selected migration catalog, HTTP selection and genuine HTTPS consumer remain.
+
 22:58 selected phone producer19 final APPROVE by phone_transport_native_review,
 exact b5def033399668c7e1ce03d5f93270e158a179a5905360188b34f8726bab3031.
 New opt-in http/phone module send/verify/code-free recovery, closed wire/OpenAPI,
