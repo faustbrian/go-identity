@@ -240,6 +240,7 @@ func proveReferenceSignupGraph(t *testing.T, competing bool, protected ...bool) 
 }
 
 type signupGraphExtensions struct {
+	confirmationHooks                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      string
 	verificationHooks                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      string
 	verificationSignin                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     string
 	emailOTPInitialPrimary                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 bool
@@ -739,6 +740,9 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 		}
 	}
 	var verificationHooks *referenceVerificationHooks
+	if extensions.confirmationHooks != "" {
+		f.confirmationHooks = configureRemainingConfirmationHooks(t, &c, f, extensions.confirmationHooks)
+	}
 	if extensions.verificationHooks != "" {
 		verificationHooks = configureReferenceVerificationHooks(t, &c, f, extensions.verificationHooks)
 	}

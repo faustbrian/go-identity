@@ -222,7 +222,11 @@ func proveReferenceEmailOTPHTTPS(t *testing.T, ctx context.Context, f liveStores
 		}
 	}
 	status, verified := invoke("/v1/otp/email-verify", verifyBody, "", nil)
-	if status != 200 || !verified.Verified || verified.Accepted || verified.AddressID != pending || verified.AddressVersion != 2 || verified.CommitOutcome != "committed" || verified.Recovery == nil {
+	if f.confirmationHooks != nil && f.confirmationHooks.mode == "after-error" {
+		if status != 503 || verified.Verified || verified.AddressID != "" || verified.AddressVersion != 0 || verified.CommitOutcome != "committed" || verified.Recovery == nil {
+			t.Fatal("HTTP observer failure lost commit/recovery or disclosed address", status)
+		}
+	} else if status != 200 || !verified.Verified || verified.Accepted || verified.AddressID != pending || verified.AddressVersion != 2 || verified.CommitOutcome != "committed" || verified.Recovery == nil {
 		t.Fatal("actual delivered-code HTTP verification", status)
 	}
 	if readSession(cookies) {

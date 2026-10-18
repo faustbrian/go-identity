@@ -1,6 +1,16 @@
 # Identity reference composition
 
-## Optional link-verification hooks
+## Optional email-confirmation hooks
+
+Independently select `Email.Change.Native.ChangeHooks` for managed change links
+(including configured TOTP changes), `Email.OTPVerification.VerificationHooks`
+for pending-address OTPs, or `Email.OTPChange.VerificationHooks` for new-address
+OTP changes including selected first-primary establishment. Nil disables each
+selection. The existing native transaction still owns identifier, proof,
+notification and session effects. A success-observer error preserves commit and
+original recovery while withholding the address; it is not rollback or a reason
+to submit another logical attempt. Recovery never repeats observers. No route
+or feature is implicitly enabled by supplying callbacks.
 
 Set `PasswordSignup.Native.Verification.Hooks` or
 `Email.Verification.Native.VerificationHooks` to an immutable
@@ -13,7 +23,8 @@ Callbacks receive read-only correlation, not addresses or credentials. Before
 may reject before reservation. After observes a fresh known commit outside SQL;
 an error retains verification/recovery but suppresses address projection and
 following signin. Replay and recovery never retry callbacks. Unknown/rollback
-do not invoke After. OTP and email-change callback profiles are not selected.
+do not invoke After. These existing verification fields do not select OTP or
+email-change callbacks.
 
 ## Original-browser registration verification and signin
 

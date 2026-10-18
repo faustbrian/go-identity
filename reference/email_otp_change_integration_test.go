@@ -263,6 +263,12 @@ func proveReferenceEmailOTPChange(t *testing.T, ctx context.Context, f liveStore
 	assertEmailChangeOTPRecipient(t, ctx, options.deliveries, deliveredCode, string(origin.Address), oldAddress)
 	caller.Request.Action = "identity.otp.email-change-confirm"
 	confirmation := otp.EmailChangeConfirmRequest{TenantID: otpTenant, UserID: user, Caller: caller, Flow: flow, SendCommandID: sent.CommandID, Code: wrong}
+	if f.confirmationHooks != nil && f.confirmationHooks.special() {
+		if !strings.HasPrefix(f.confirmationHooks.mode, "wrong-") {
+			confirmation.Code = code
+		}
+		return proveOTPChangeHookOutcome(t, ctx, f, service, confirmation, options.readSession, cookies)
+	}
 	challenge, err := service.EmailChangeChallenge(ctx, confirmation)
 	if err != nil || challenge.UserID != user || challenge.Lifetime <= 0 || challenge.Lifetime > 5*time.Minute {
 		t.Fatal("original change transport challenge", err)

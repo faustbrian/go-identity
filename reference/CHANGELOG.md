@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Compose independently configured hooks for managed change links and email OTP
+  verification/change, including existing TOTP and first-primary profiles.
+  Preserve commit/recovery and suppress address disclosure on observer failure;
+  callbacks select no additional HTTP features or authentication authority.
+
 - Compose explicitly selected signup and managed-link verification callbacks
   through native configuration, without new HTTP routes or default behavior.
   Preserve committed verification/recovery on observer failure; do not retry

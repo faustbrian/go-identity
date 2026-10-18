@@ -37,6 +37,7 @@ import (
 )
 
 type liveStores struct {
+	confirmationHooks                  *confirmationHookProbe
 	afterVerificationSignin            func(session.Credential)
 	verificationMFAOriginalExpiry      *verificationMFAOriginalExpiryPolicy
 	verificationMFALateAuthority       *verificationMFALateAuthorityPolicy

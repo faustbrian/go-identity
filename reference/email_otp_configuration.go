@@ -6,6 +6,7 @@ import (
 	"time"
 
 	identity "github.com/faustbrian/go-identity"
+	"github.com/faustbrian/go-identity/email"
 	"github.com/faustbrian/go-identity/otp"
 	otppg "github.com/faustbrian/go-identity/otp/postgres"
 	kernel "github.com/faustbrian/go-identity/postgres"
@@ -32,6 +33,9 @@ type EmailOTPVerificationConfiguration struct {
 	TemplateID               string
 	TemplateVersion          uint32
 	LocaleChain              []string
+	// VerificationHooks is explicit completion policy/observation, not delivery
+	// or send policy. Each OTP workflow selects it independently; nil disables.
+	VerificationHooks *email.VerificationHooks
 }
 
 func composeEmailOTPVerification(c StoreConfiguration, d ReferenceDependencies, base otppg.SendConfig, crypto *envelope.Service) (*otppg.EmailVerificationService, error) {
@@ -44,7 +48,7 @@ func composeEmailOTPVerification(c StoreConfiguration, d ReferenceDependencies, 
 	if err != nil {
 		return nil, err
 	}
-	return otppg.NewEmailVerificationService(d.PostgreSQL, otppg.EmailVerificationConfig{Send: base, Domain: n.Domain, CurrentAttemptKeyVersion: n.CurrentAttemptKeyVersion}, crypto)
+	return otppg.NewEmailVerificationService(d.PostgreSQL, otppg.EmailVerificationConfig{Send: base, Domain: n.Domain, CurrentAttemptKeyVersion: n.CurrentAttemptKeyVersion, VerificationHooks: n.VerificationHooks}, crypto)
 }
 
 func emailOTPSendConfig(c StoreConfiguration, n EmailOTPVerificationConfiguration, base otppg.SendConfig, action string) (otppg.SendConfig, error) {

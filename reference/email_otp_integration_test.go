@@ -8,6 +8,7 @@ import (
 	"encoding/base64"
 	"net/http"
 	"net/url"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -145,6 +146,13 @@ func proveReferenceEmailOTPVerification(t *testing.T, ctx context.Context, f liv
 	}
 	caller.Request.Action = "identity.otp.email-verify"
 	completion := otp.EmailVerifyRequest{TenantID: otpTenant, UserID: user, Caller: caller, Flow: flow, SendCommandID: sent.CommandID, Code: code}
+	if f.confirmationHooks != nil && f.confirmationHooks.special() {
+		if strings.HasPrefix(f.confirmationHooks.mode, "wrong-") {
+			completion.Code = wrong
+		}
+		proveOTPVerificationHookOutcome(t, ctx, f, service, completion, readSession, cookies)
+		return
+	}
 	source, err := service.EmailVerificationChallenge(ctx, completion)
 	if err != nil || source.UserID != user || source.Lifetime <= 0 || source.Lifetime > 5*time.Minute {
 		t.Fatal("authenticated original challenge budget source", err)

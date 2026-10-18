@@ -28,7 +28,7 @@ func composeEmailOTPChange(c StoreConfiguration, d ReferenceDependencies, base o
 	if err != nil {
 		return nil, err
 	}
-	return otppg.NewEmailChangeService(d.PostgreSQL, otppg.EmailChangeConfig{Send: base, Domain: n.Domain, Source: e.change, CurrentAttemptKeyVersion: n.CurrentAttemptKeyVersion, AllowInitialPrimary: c.Email.OTPChangeInitialPrimary}, crypto)
+	return otppg.NewEmailChangeService(d.PostgreSQL, otppg.EmailChangeConfig{Send: base, Domain: n.Domain, Source: e.change, CurrentAttemptKeyVersion: n.CurrentAttemptKeyVersion, AllowInitialPrimary: c.Email.OTPChangeInitialPrimary, VerificationHooks: n.VerificationHooks}, crypto)
 }
 
 // Format redacts retained session/request keys and deployment configuration.

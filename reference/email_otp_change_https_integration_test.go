@@ -241,7 +241,11 @@ func proveReferenceEmailOTPChangeHTTPS(t *testing.T, ctx context.Context, f live
 		}
 	}
 	status, changed := invoke("/v1/otp/email-change-confirm", confirm, "", nil)
-	if status != 200 || !changed.Changed || changed.Accepted || changed.CommitOutcome != "committed" || changed.AddressID != original.Primary.AddressID || changed.AddressVersion != 2 || changed.Recovery == nil {
+	if f.confirmationHooks != nil && f.confirmationHooks.mode == "after-error" {
+		if status != 503 || changed.Changed || changed.AddressID != "" || changed.AddressVersion != 0 || changed.CommitOutcome != "committed" || changed.Recovery == nil {
+			t.Fatal("HTTP change observer failure lost commit/recovery or disclosed address", status)
+		}
+	} else if status != 200 || !changed.Changed || changed.Accepted || changed.CommitOutcome != "committed" || changed.AddressID != original.Primary.AddressID || changed.AddressVersion != 2 || changed.Recovery == nil {
 		t.Fatal("actual primary-change HTTP confirmation", status, changed.Error)
 	}
 	if options.readSession(cookies) {

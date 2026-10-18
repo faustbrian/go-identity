@@ -276,6 +276,11 @@ func proveReferenceEmailChangeJourney(t *testing.T, ctx context.Context, f liveS
 			if winners != 1 {
 				t.Fatal("concurrent original proof did not have exactly one winner", winners)
 			}
+		} else if f.confirmationHooks != nil && f.confirmationHooks.operation == "identity.email.change-confirm" && f.confirmationHooks.special() {
+			if !proveManagedChangeHookOutcome(t, ctx, f, service, confirmation, options.readSession, currentCookies) {
+				return
+			}
+			confirmed, e = service.ChangeConfirm(ctx, confirmation)
 		} else if options.mode == "http" || f.afterManagedChangeConfirmation != nil {
 			if f.afterManagedChangeConfirmation != nil {
 				f.afterManagedChangeConfirmation(confirmation, deliveredToken)
@@ -300,7 +305,7 @@ func proveReferenceEmailChangeJourney(t *testing.T, ctx context.Context, f liveS
 		if e != nil || confirmed.Outcome != identity.CommitOutcomeCommitted || confirmed.Validate() != nil {
 			t.Fatal("atomic new-address confirmed change", confirmed.Outcome, e)
 		}
-		if options.mode != "http" && f.afterManagedChangeConfirmation == nil {
+		if options.mode != "http" && f.afterManagedChangeConfirmation == nil && !(f.confirmationHooks != nil && f.confirmationHooks.operation == "identity.email.change-confirm" && f.confirmationHooks.special()) {
 			projection, e := confirmed.Address.Bindings()
 			if e != nil || !projection.Primary || !projection.Verified || projection.IdentifierVersion != 2 || projection.VerificationVersion != 2 {
 				t.Fatal("candidate not verified/promoted once")
