@@ -91,8 +91,8 @@ The owning package must register only public-safe values. Schema validation
 does not detect secrets hidden in an otherwise valid string. `SafeParameter`
 formatting is redacted even for public-safe personal data. Unknown errors
 remain untranslated; the original typed error is neither altered nor replaced.
-Registry resolution currently returns message identity and parameters, not a
-localized error wrapper: preservation through rendering remains resolver work.
+Registry resolution returns message identity and parameters, not a localized
+error wrapper. The resolver below adds rendering and preserves the causal chain.
 
 See the compiled `ExampleErrorRegistry_Resolve` for an external-package example.
 
@@ -194,6 +194,28 @@ source. Header/default calls preserve original weights on normalized ranges. The
 rejects unavailable output keys and redacts callback errors/panics; cancellation
 is checked before/after calls. It cannot interrupt arbitrary caller code and
 does not create a goroutine to conceal that limitation.
+
+### Adapting an existing identity operation
+
+The compiled `ExampleDefaultResolver_Resolve_identityValidation` in
+[identity_consumer_test.go](identity_consumer_test.go) consumes the public
+`identity.User.Validate` operation and its real `identity.InvalidInputError`.
+An application-owned adapter registers `example.user.invalid` and the separate
+`user.invalid` message ID for the exact known `user_id` failure. It keeps the
+original error in `Unwrap`, so localization retains `errors.Is`/`errors.As` and
+the original typed field; it never classifies by diagnostic text. The example's
+machine identity is the application's explicit mapping, not a new kernel code.
+Unadapted errors, matching diagnostic strings and unrecognized field values do
+not acquire a translation or become public interpolation data.
+
+The example passes competing locale-source inputs, selects Finnish through
+regional lookup, and renders a deliberately bracketed safe
+field label through `html/template` only at the final HTML text boundary. The
+original typed parameter stays `<user ID>`; the final output contains
+`&lt;user ID&gt;`, not double-escaped entities. This proves an external-package,
+transport-neutral consumer path, not HTTP cookie authentication, durable
+preference storage, lifecycle export/deletion or reference-server integration.
+Transport/session owners must establish source trust before passing these inputs.
 
 `NewCatalog(locale, messages)` validates/canonicalizes a locale and copies
 bounded messages/schemas into an explicit initial version-1 catalog.
