@@ -1,6 +1,52 @@
 # Identity Implementation — Current Milestone
 
-## Live checkpoint — 2026-10-18 13:29 UTC
+## Live checkpoint — 2026-10-18 14:52 UTC
+
+OAuth native own-consent profile is reviewed/pushed asf15beb46a09663b3a93f4afe0981b9fcc3227cfa;
+Required39133593943 succeeds on that exact remote main. Public-root86b canonical
+selected consent PG/race57.936s/taggedvet0 pass; original unchanged retained
+matrix103.427s keeps its development-overlay identity. Worker-executed actual
+downloaded-native/root public consumer PG/race17.633s passes genuine-session
+get/list/withdrawal, denial of prior code/access/refresh, unrelated approvals,
+populated migration, metadata retry and reconfirmation. Native15ea42dca9 APPROVE;
+all owned PG/databases/roles/caches removed. This is partialM30, not HTTP/fullM30.
+
+Organization transfer's concrete factor/lock-order findings are resolved.
+Shared MFA fencee5fc9b8 is reviewed/pushed/CIgreen; actual activation RED2.631s
+->GREEN3.803s, full bounded factor matrix55.448s. Canonical lock-order
+RED2.353s ->GREEN5.970s in both ID directions. Final23 source190c6a74 APPROVE.
+Root8c996ae is pushed/Required39136285617green. Actual public-root native
+transfer/MFA/lock-order/genuine-consumer PG/race25.437s and taggedvet0 pass.
+Final native16 snapshot44987513 APPROVE; native177329868816ff5e59622fa2721c652cea1be9e6
+pushed/Required39137279788green. Separate external actualdownloadednative/root
+consumer PG/race18.756s proves genuine owner/newowner/oldowner/freshproof and
+separate-session metadata recovery plus current-factor activation denial.
+All40 native Go/test/manifests/migration archive paths match; no supplier delta.
+Worker PG54761 stopped, DB/roles0; entire taskcache/consumer/data removed.
+Selected native transfer delivered. No fullM22/M23 or HTTP claim.
+
+M05 availability plus rename-storage source30 snapshot707a1552 APPROVE.
+Native genuine username/signup/signin and actual quota/audit/occupancy/failure
+checks pass PG/race3.094s; ordinary native race2.144s, username1.310s,
+risk1.377s and taggedvet0. Counter/audit failures never promise a free name.
+The one native risk-catalog override makes username availability a metered
+state-neutral read; no planning-history migration. Producerba49ca6 is pushed/
+Required39136659373green. Actual downloaded root131 Go/manifests match;
+canonical kernel ordinary race3.621s and populated-upgrade PG/race1.665s,
+taggedvet0 pass. Final kernel13f9a79612 APPROVE ->620e885/Required39137204789green.
+Native8ec893614 APPROVE ->c640e0df05d351d94f4c325edffabcf45dae913e pushed/
+Required39137541438green. Canonical actualpublic native ordinaryrace2.192s,
+PG/race3.291s and taggedvet0 pass. Actualdownloadednative original genuine
+signup/verification/signin/availability PG/race3.278s passes; separate external
+public API selection/redaction race1.298s is compatibility, not a second full
+external database journey. All172 native Go/manifests archive bytes match.
+Compiled integration-test supplier module versions match; Go prunes unused
+transitive modules in the external consumer without changing selected versions.
+Native advisory availability delivered; native rename and HTTP/reference remain.
+Earlier storage/cooldown proof retains its original identity. Primary PG54777/
+data/password/log removed; bounded M05 caches remain active for rename continuation.
+
+## Retained prerequisite checkpoint — 2026-10-18 13:29 UTC
 
 Shared username/owner-transfer password admission is published as native
 4600452402d259dfebb36538dd992c90653f2b12; Required39131126531 succeeds.
@@ -18,17 +64,6 @@ feature is enabled. The own PG data/credentials are removed. Nonblocking
 original-marker recovery coverage remains for
 the actual owner-transfer consumer/full qualification, not falsely completed.
 
-Organization worker has adopted the public native pin and prepared actual
-password-proof/genuine-session fixtures; root GREEN/native compile and PG
-journey await the serialized heavy slot. OAuth consent own-read/delete case
-passes2.397s and its finite denial/rollback/contention/lost-ack batch16.498s;
-final affected native race103.427s, taggedvet0 and cursorfuzz8.282s pass.
-Independent18-path049c47d3 review APPROVE; only five root API paths are
-published as86b59733e01cf41627b8ff5b8edc2ce5d8852a22. Native public-root
-pin/consumer qualification and publication remain pending. Source proof used
-own-root development overlay, not accepted native delivery.
-M05 primary remains availability/rename using kernel CAS/reuse ownership;
-pure root rename race1.595s is retained, actual workflow not yet implemented.
 Full milestones remain3/39; the whole-goal estimate remainsrough10–12%.
 
 ## Next dependency-ready lanes — 2026-10-18 12:36 UTC

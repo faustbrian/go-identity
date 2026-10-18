@@ -1,6 +1,6 @@
 # Identity Platform Progress
 
-## TL;DR — updated 2026-10-18 13:29 UTC
+## TL;DR — updated 2026-10-18 14:52 UTC
 
 **Estimated whole-goal completion: approximately 10–12%, with low confidence.**
 The working authentication baseline, thirteen email profiles, native username
@@ -16,9 +16,19 @@ action-bound password admission prerequisite is reviewed/pushed as `4600452`
 with green CI and real PostgreSQL proof/atomic-consumption checks. Public
 reference adoption `8b45488` also has green CI and a downloaded-module
 PostgreSQL/race consumer proof. Organization has adopted that public pin.
-OAuth's native consent journey, failure/recovery/race/fuzz checks and independent
-source review pass; root API `86b5973` is pushed, while native public-pin
-qualification and publication remain. None closes another full milestone yet.
+OAuth native own-consent management is now reviewed/pushed as `f15beb4`, with
+green Required CI and a genuine-session downloaded-module PostgreSQL/race
+consumer. Shared current-MFA action protection is reviewed/pushed as `e5fc9b8`
+with green CI. Organization transfer root `8c996ae` and native `1773298` are
+reviewed/pushed with green CI. A separate downloaded-module external consumer
+proves real owner transfer, former-owner denial, metadata recovery and denial
+after factor activation. Username availability native `c640e0d` and its
+root/risk/username `ba49ca6` and kernel `620e885` dependencies are reviewed/pushed
+with green CI. Canonical and downloaded-native PostgreSQL journeys prove
+durable quota/audit/occupancy and outage denial; a separate external API check
+proves selection/redaction, not another complete database journey.
+Native rename and HTTP/reference are still unfinished. None closes another
+full milestone yet.
 
 | Measure | Current position |
 | --- | --- |
@@ -28,8 +38,8 @@ qualification and publication remain. None closes another full milestone yet.
 | Full package scope | **67 units: 61 product units + 6 primitive extensions.** No additional full-unit qualification has closed during this implementation run. The older 2/67 verified baseline is historical, not a current cross-repository audit. |
 | Last full milestone closure | **14 October:** B3 password change. |
 | Last complete email-profile delivery | **18 October:** independently selected hooks for managed change links and email OTP verification/change, including first-primary and TOTP paths. Pushed reference `ca26306`, Required CI 39110688213 passes; all 30 selected public-native PostgreSQL/race cases pass. |
-| Delivered organization profile | **Native organization invitations:** genuine owner send → captured delivery → verified recipient acceptance → membership, including rollback, contention, policy withdrawal and fresh-session interrupted-send recovery. Pushed `6847272`, green Required CI and actual downloaded-module PostgreSQL/race consumer proof. This is partial M22, not the complete organization family. |
-| Delivered username profile | **Required-email username registration and signin:** atomic signup → captured verification → username/password signin → session read → logout. Native `1a83b18` and its prerequisites are reviewed/pushed; Required CI 39127504485 succeeds. Canonical public-dependency PostgreSQL/race journey and separate downloaded-API compatibility pass. Availability, rename and HTTP/reference remain unfinished; M05 is not closed. |
+| Delivered organization profiles | **Native invitations, metadata, team lifecycle and ownership transfer.** Genuine owner transfer to an active member atomically changes roles/epochs, denies former-owner management and preserves exact metadata recovery. Root `8c996ae` / native `1773298`, green CI and external downloaded-module PostgreSQL/race proof. This is partial M22/M23, not the complete organization family. |
+| Delivered username profiles | **Required-email username registration/signin and advisory availability.** Actual signup → verification → signin → session/logout is joined by durable metered availability, canonical audit and primary occupancy/cooldown reads; outages never promise a free name. Native `c640e0d`, green CI, canonical and downloaded-native PostgreSQL/race proof plus external API compatibility. Rename and HTTP/reference remain unfinished; M05 is not closed. |
 | Current unfinished deliverables | M04 lifecycle/privacy contribution, retained factor-profile limits and final qualification remain open; confirmation-hook variants are delivered. Full M22/M30/M35, organization HTTP/reference selection and final package qualification remain open. Next lanes must consume proven contracts, not restart delivered profiles. |
 
 ### What consumers can already do
@@ -46,8 +56,11 @@ qualification and publication remain. None closes another full milestone yet.
   recovery and atomic hash upgrade. Its prerequisites are reviewed/pushed with
   green CI; the canonical public-dependency PostgreSQL/race journey passes.
   A separate downloaded-API check proves public composition and forward-history
-  compatibility, not another standalone PostgreSQL journey. Availability, rename
-  and HTTP/reference are not supplied yet; username MFA continuation is unselected.
+  compatibility, not another standalone PostgreSQL journey. Native `c640e0d`
+  adds explicit advisory availability with durable tenant/network quotas,
+  fail-closed canonical audit and actual canonical occupancy/cooldown checks.
+  It is not a reservation; counter/audit/storage failures never report a free
+  name. Rename and HTTP/reference remain unfinished; MFA continuation is unselected.
 - Manage email through delivered profiles: (1) list/get/add/resend/link verification/
   primary change, (2) safe self-removal, (3) explicit replacement-primary removal,
   (4) audited administrative reads, (5) administrative removal, (6) pending-address
@@ -77,6 +90,12 @@ qualification and publication remain. None closes another full milestone yet.
   concurrent-update exclusion, late-authority denial and authorized lost-commit
   recovery are proven, including genuine password-issued sessions. This is a
   native profile, not organization HTTP/reference composition or full M22.
+- A current owner with a fresh action-bound password proof can transfer
+  ownership to an existing active member. Roles and scoped authority change
+  atomically, the former owner loses management rights, and the last owner
+  remains protected. Current factor activation/generation changes deny through
+  commit. Native `1773298` has green CI and a separate external downloaded-module
+  genuine-session consumer; organization HTTP/full M22 remain unfinished.
 - Current owners/administrators can create bounded native teams and add/list/
   remove actual organization members. Removed or readmitted members cannot
   revive old team bindings. Current session, organization policy and scoped
@@ -115,6 +134,16 @@ qualification and publication remain. None closes another full milestone yet.
   native consumer4.380s pass. Current directory/service-account authority and
   original lineage remain binding. Client management, OIDC, device, restricted
   exchange and complete reference/HTTP/provider qualification remain open.
+- Read/list and withdraw a genuine session owner's OAuth consent through native
+  `f15beb4` and root `86b5973`. Withdrawal invalidates previous code/access/refresh
+  generations without affecting unrelated approvals; explicit reconfirmation
+  cannot resurrect old grants. Populated migration, authority/CSRF/freshness,
+  rollback/contention and metadata retry/recovery are covered. Native source is
+  independently reviewed/pushed with green Required39133593943; public-root
+  PostgreSQL/race57.936s and a separate downloaded-native consumer17.633s pass.
+  Adoption requires an exclusive forward migration and retirement of every
+  older/unselected accepting instance. HTTP, client administration, OIDC and
+  complete M30/provider qualification remain open.
 
 ### What remains before the whole goal is done
 
