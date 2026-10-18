@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Add optional read-only link-verification callback policy with ordered bounded
+  execution, explicit rejection and known-commit-only observation. Constructing
+  the policy alone enables no native workflow or HTTP route.
+
 - Represent explicitly selected verification-origin TOTP as a pending-only
   challenge, distinct from authenticated session issuance and replay metadata.
 

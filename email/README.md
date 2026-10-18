@@ -1,5 +1,24 @@
 # Email
 
+## Optional verification callbacks
+
+`NewVerificationHooks` selects ordered `identity.Hook` callbacks for supported
+native link confirmation. Configure it on the native signup or managed-address
+verification owner; constructing this policy alone enables no workflow. The
+selection is optional and must be disabled by default. Only command, user and
+identifier IDs are exposed as sensitive, read-only correlation. Addresses and
+credentials are never supplied, and enrichment is rejected.
+
+Before callbacks run outside SQL before reservation and may deny. They must be
+side-effect-free: concurrent attempts may invoke them more than once. Existing
+native authority, expiry and atomic consumption checks remain mandatory. After
+callbacks observe only fresh known commits outside SQL; their failure preserves
+commit/recovery while suppressing subsequent projection/signin. Scanner reads,
+replay, recovery, rollback and ambiguous results do not invoke them. Callbacks
+are cooperative and bounded; durable notifications belong in the outbox.
+Change the enclosing native configuration identity when callback semantics
+change. Native/reference selection is delivered separately from this policy.
+
 ## Explicit registration verification and signin
 
 `RegistrationVerificationSigninService` is independently selected. Its request
