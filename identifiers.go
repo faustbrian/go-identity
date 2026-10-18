@@ -176,13 +176,19 @@ const (
 	// new-address possession and current change policy; generic identifier
 	// commands do not expose this compound action.
 	IdentifierVerifyPrimary
+	// IdentifierRename changes an already comparison-bound username only. A
+	// display-only change preserves possession; a new canonical value retires
+	// the predecessor and resets verification like replacement. Native username
+	// admission must supply fresh proof and the old-name cooldown policy.
+	IdentifierRename
 )
 
-// IdentifierChange is bounded intent and exact optimistic fences. Attach and
-// Replace supply Kind/CanonicalValue/DisplayValue; other actions must omit
+// IdentifierChange is bounded intent and exact optimistic fences. Attach,
+// Replace and Rename supply Kind/CanonicalValue/DisplayValue; other actions omit
 // them. Attach must omit target versions; other actions require both exact
 // target versions. Replacement preserves ID/kind, resets verification and
-// primary, and retires the old value. It cannot edit display-only metadata.
+// primary, and retires the old value. Rename requires the exact existing
+// username comparison binding and preserves verification for display-only edits.
 // Trusted feature owners establish canonicalization, proof and reuse policy;
 // client input must never directly reach ApplyIdentifierChange.
 type IdentifierChange struct {
@@ -207,9 +213,10 @@ func (IdentifierChange) Format(s fmt.State, verb rune) {
 }
 
 // IdentifierMutation is privately copied proposed state, not a committed
-// outcome. Retired and RetiredVerification are present only for replacement
-// or removal. Removal advances their versions and revokes verification;
-// replacement retains the original pair for old-value reuse tombstone creation.
+// outcome. Retired and RetiredVerification are present only for replacement,
+// canonical-changing rename or removal. Removal advances their versions and
+// revokes verification; replacement/rename retain the original pair for
+// old-value reuse tombstone creation. Display-only rename retires nothing.
 // The adapter must derive a scoped keyed non-reversible reuse digest, never
 // persist canonical values in plaintext tombstones/events/audit. Legal storage
 // of current directory values remains a separate encrypted storage policy.
@@ -243,7 +250,7 @@ func (IdentifierMutation) Format(s fmt.State, verb rune) {
 // verification time is UTC truncated to microseconds, never a new proof lifetime.
 func ApplyIdentifierChange(state IdentifierState, change IdentifierChange, now time.Time) (IdentifierMutation, error) {
 	zero := IdentifierMutation{}
-	if !validDirectoryID(string(change.TenantID)) || !validDirectoryID(string(change.UserID)) || !validDirectoryID(string(change.ID)) || change.Action < IdentifierAttach || change.Action > IdentifierVerifyPrimary || !unlinkVersion(change.ExpectedUserVersion) || !unlinkVersion(change.ExpectedAuthorityVersion) || state.validate(change.TenantID, change.UserID, now) != nil {
+	if !validDirectoryID(string(change.TenantID)) || !validDirectoryID(string(change.UserID)) || !validDirectoryID(string(change.ID)) || change.Action < IdentifierAttach || change.Action > IdentifierRename || !unlinkVersion(change.ExpectedUserVersion) || !unlinkVersion(change.ExpectedAuthorityVersion) || state.validate(change.TenantID, change.UserID, now) != nil {
 		return zero, InvalidInputError{Field: "identifier_change"}
 	}
 	if !state.User.Status.AllowsAuthentication() {
@@ -252,7 +259,7 @@ func ApplyIdentifierChange(state IdentifierState, change IdentifierChange, now t
 	if state.User.Version != change.ExpectedUserVersion || state.AuthorityVersion != change.ExpectedAuthorityVersion {
 		return zero, ConflictError{}
 	}
-	candidate := change.Action == IdentifierAttach || change.Action == IdentifierReplace
+	candidate := change.Action == IdentifierAttach || change.Action == IdentifierReplace || change.Action == IdentifierRename
 	if candidate {
 		if !change.Kind.Valid() || !validIdentifierText(change.CanonicalValue) || change.DisplayValue != "" && !validIdentifierText(change.DisplayValue) || !validNormalizationBinding(change.NormalizationProfile, change.NormalizationVersion) {
 			return zero, InvalidInputError{Field: "identifier_value"}
@@ -281,9 +288,21 @@ func ApplyIdentifierChange(state IdentifierState, change IdentifierChange, now t
 		if change.Action == IdentifierReplace && state.Identifiers[index].NormalizationProfile != "" && change.NormalizationProfile == "" {
 			return zero, InvalidInputError{Field: "identifier_normalization"}
 		}
+		if change.Action == IdentifierRename {
+			old := state.Identifiers[index]
+			if old.Kind != IdentifierUsername || change.Kind != IdentifierUsername || change.DisplayValue == "" || old.NormalizationProfile == "" || change.NormalizationProfile != old.NormalizationProfile || change.NormalizationVersion != old.NormalizationVersion || state.Verifications[index].State == VerificationRevoked {
+				return zero, InvalidInputError{Field: "username_rename"}
+			}
+			if old.CanonicalValue == change.CanonicalValue && old.DisplayValue == change.DisplayValue {
+				return zero, ConflictError{}
+			}
+		}
 	}
 	if candidate {
 		for _, i := range state.Identifiers {
+			if change.Action == IdentifierRename && i.ID == change.ID {
+				continue
+			}
 			if i.Kind == change.Kind && i.CanonicalValue == change.CanonicalValue {
 				return zero, ConflictError{}
 			}
@@ -330,8 +349,15 @@ func ApplyIdentifierChange(state IdentifierState, change IdentifierChange, now t
 		if err := selectIdentifierPrimary(&result.State, index, true); err != nil {
 			return zero, err
 		}
-	case IdentifierReplace, IdentifierRemove:
+	case IdentifierRename, IdentifierReplace, IdentifierRemove:
 		old, verification := next.Identifiers[index], next.Verifications[index]
+		if change.Action == IdentifierRename && old.CanonicalValue == change.CanonicalValue {
+			// Display is not a new identifier or renewed possession. In
+			// particular do not retire this still-owned canonical value.
+			result.State.Identifiers[index].DisplayValue = change.DisplayValue
+			result.State.Identifiers[index].Version++
+			break
+		}
 		result.Retired, result.RetiredVerification = &old, &verification
 		if change.Action == IdentifierRemove {
 			result.Retired.Version++

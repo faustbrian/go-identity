@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Add the native-only comparison-bound username rename transition. Display-only
+  edits preserve verification; canonical changes retire the exact predecessor
+  and reset possession. Generic identifier commands do not expose this workflow.
+
 - Preserve distinct username signup/signin operations in the existing opaque
   password/pre-auth command custody. Native profile admission, original flow,
   risk, persistence and session effects remain required; construction alone

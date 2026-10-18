@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Require state-neutral read counters for username availability instead of
+  treating it as unmetered public discovery. Selected availability consumers
+  must honor the bounded tenant and trusted subject-or-network rate profile.
+
 - Expose an immutable copy of trusted CAPTCHA flow bindings for provider
   transport idempotency, without exporting token replay or admission authority.
 

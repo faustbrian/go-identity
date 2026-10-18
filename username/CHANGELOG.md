@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Add the advisory availability service/request contract with explicit trusted
+  tenant/network scope, redacted input and stable denied/throttled/unavailable
+  errors. A positive observation grants no reservation or authentication.
+
 - Add fixed Unicode 15.1 Latin-v1 username canonicalization with separate
   original display, explicit profile-bound persistence, before/after length
   limits, and versioned reserved/custom enrollment validation. Lookup and

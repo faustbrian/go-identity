@@ -1,5 +1,12 @@
 # Username policy
 
+`AvailabilityService` is the advisory workflow port. Its native implementation
+is `password/postgres.NewUsernameAvailabilityService`: supply the same fixed
+username policy, actual durable counter/audit/identifier configuration and
+bounded normalized risk sources. Tenant and network are trusted server-derived
+scope, not browser authority. Every call is a separate metered attempt, and an
+available result never reserves the name or overrides atomic signup/rename.
+
 `username` is the syntax/normalization and enrollment-validation component of
 the identity username workflow, not a store, signup service, or authentication
 engine. Use `Validate` once for signup/rename; use `Canonicalize` for signin and

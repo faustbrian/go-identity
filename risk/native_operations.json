@@ -1,4 +1,5 @@
 {
   "identity.email.verification-signin": "authentication",
-  "identity.oauth-server.continue": "privileged"
+  "identity.oauth-server.continue": "privileged",
+  "identity.username.available": "state_neutral_read"
 }

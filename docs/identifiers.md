@@ -133,6 +133,12 @@ No goroutine, resource, callback, network operation or clock read is started.
 - Replace preserves record ID/kind and requires a different canonical value.
   It resets verification and primary, advances both record versions, and
   returns original retirement metadata for the old-value reuse decision.
+- Rename is native username-only and requires the unchanged stored comparison
+  profile/version. A display-only edit advances the identifier but preserves
+  verification state/version/time and retires nothing. A new canonical value
+  has replacement's reset/retirement semantics. Exact no-ops, revoked names and
+  unbound historical names deny. Generic identifier commands cannot select this
+  transition; the workflow still owns fresh proof, policy and prior-name cooldown.
 - Remove returns version-advanced, non-primary/unverified retirement metadata
   and revoked verification, then removes the exact pair from the copied state.
 

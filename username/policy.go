@@ -48,6 +48,12 @@ const (
 	ErrCanceled Error = "username canceled"
 	// ErrDisclosure refuses implicit serialization of an opaque name.
 	ErrDisclosure Error = "username explicit projection required"
+	// ErrUnavailable denies discovery when required native authority is unavailable.
+	ErrUnavailable Error = "username unavailable"
+	// ErrThrottled denies this attempt after the configured durable rate limit.
+	ErrThrottled Error = "username rate limit exceeded"
+	// ErrDenied denies a selected risk policy without disclosing provider facts.
+	ErrDenied Error = "username denied"
 )
 
 // Error returns the stable diagnostic, never sensitive caller input.
