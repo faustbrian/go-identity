@@ -27,6 +27,7 @@ use (
 	./risk/hibp
 	./risk/captcha
 	./risk/captcha/turnstile
+	./risk/captcha/recaptcha
 	./risk/postgres
 	./risk/valkey
 	./session
