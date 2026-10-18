@@ -494,6 +494,14 @@ func proveReferenceMFAEnrollment(t *testing.T, ctx context.Context, f liveStores
 	if passwordMFA {
 		proveReferencePasswordMFAHTTP(t, ctx, f, features, client, base, origin, mfa.FactorID(pending.Enrollment.ID), secret)
 	}
+	if f.usernameTOTP {
+		proveReferencePasswordMFAHTTP(t, ctx, f, features, client, base, origin, mfa.FactorID(pending.Enrollment.ID), secret, "username")
+		if f.usernameTOTPWithdrawal != "" {
+			// Authority withdrawal is terminal for this fixture, including the
+			// initiating session; do not expect a fresh authenticated logout.
+			return
+		}
+	}
 	if len(recovery) > 0 && recovery[0] {
 		proveReferencePasswordRecoveryHTTP(t, ctx, f, features, client, base, origin, out.RecoveryCodes[0])
 		if f.mfaListing {

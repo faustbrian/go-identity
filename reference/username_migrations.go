@@ -136,6 +136,19 @@ func (s StoreSet) usernameMigrationCatalog(ctx context.Context, catalog []migrat
 			return nil, err
 		}
 		appendLast("identity_username_actions", "identity/password/postgres", steps, migrationGuard{version: 21, schema: "identity_password", constraints: []string{"reauthentication_records.reauthentication_consumption_complete"}, constraintValue: "identity.username.update"})
+		passwordHistory = steps
+	}
+	if u.totp != nil {
+		steps, err := (passwordpg.UsernameMFAMigrationSource{Base: fixedMigrationSource(passwordHistory), Version: 22}).Load(ctx)
+		if err != nil {
+			return nil, err
+		}
+		appendLast("identity_username_mfa_primary", "identity/password/postgres", steps, migrationGuard{version: 22, schema: "identity_password", constraints: []string{"mfa_primary_records.mfa_primary_records_purpose_v2"}})
+		continuations, err := (mfapg.UsernameContinuationMigrationSource{Version: 1, VerificationSignin: present("identity_verification_mfa")}).Load(ctx)
+		if err != nil {
+			return nil, err
+		}
+		appendLast("identity_username_mfa_continuation", "identity/mfa/postgres", continuations, migrationGuard{version: 1, schema: "identity_mfa", constraints: []string{"continuations.continuations_origin_purpose_username_v1"}})
 	}
 	return catalog, nil
 }

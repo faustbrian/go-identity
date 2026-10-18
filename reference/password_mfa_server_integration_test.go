@@ -35,6 +35,18 @@ func TestReferenceServerHTTPPasswordTOTPCommitRecovery(t *testing.T) {
 	proveReferenceSignupGraphExtensions(t, false, signupGraphExtensions{mfaEnrollment: true, passwordMFA: true, completionCommitFault: true}, true)
 }
 
+func TestReferencePostgresPasswordTOTPCompatibility(t *testing.T) {
+	for _, ambiguous := range []bool{false, true} {
+		name := "committed"
+		if ambiguous {
+			name = "lost-acknowledgement"
+		}
+		t.Run(name, func(t *testing.T) {
+			proveReferenceSignupGraphExtensions(t, false, signupGraphExtensions{postgresBaseline: true, mfaEnrollment: true, passwordMFA: true, completionCommitFault: ambiguous}, true)
+		})
+	}
+}
+
 func configureReferencePasswordMFA(t *testing.T, c *reference.StoreConfiguration, origin string) {
 	t.Helper()
 	issuer := c.PasswordSignup.Issuer
@@ -67,8 +79,12 @@ func passwordMFAFixtureCode(secret []byte, at time.Time) string {
 
 // Every account, factor, primary challenge and completed session is produced
 // through public native/HTTP owners. No identity/factor/session row is seeded.
-func proveReferencePasswordMFAHTTP(t *testing.T, ctx context.Context, f liveStores, features reference.FeatureSet, client *http.Client, base, origin string, factor mfa.FactorID, secret []byte) {
+func proveReferencePasswordMFAHTTP(t *testing.T, ctx context.Context, f liveStores, features reference.FeatureSet, client *http.Client, base, origin string, factor mfa.FactorID, secret []byte, profile ...string) {
 	t.Helper()
+	method, path, identifierKey, identifierValue := "password", "/v1/password/signin", "identifier", "registered@example.invalid"
+	if len(profile) == 1 && profile[0] == "username" {
+		method, path, identifierKey, identifierValue = "username", "/v1/username/signin", "username", "STRASSE"
+	}
 	invoke := func(path string, body any, cookies []*http.Cookie, variant string) (*http.Response, []byte) {
 		wire, err := json.Marshal(body)
 		if err != nil {
@@ -101,28 +117,81 @@ func proveReferencePasswordMFAHTTP(t *testing.T, ctx context.Context, f liveStor
 		}
 		return response, data
 	}
-	response, data := invoke("/v1/session/preauth-issue", map[string]string{"method": "password"}, nil, "")
+	flowInput := map[string]any{"method": method}
+	if method == "username" {
+		flowInput["remember"] = f.usernameTOTPPersistent
+	}
+	response, data := invoke("/v1/session/preauth-issue", flowInput, nil, "")
 	var flow sessionhttp.PreAuthResponse
 	if response.StatusCode != 200 || json.Unmarshal(data, &flow) != nil || !flow.Issued {
 		t.Fatal("MFA original flow unavailable", response.StatusCode)
 	}
 	cookies := response.Cookies()
-	response, data = invoke("/v1/password/signin", map[string]any{"flowID": flow.FlowID, "identifier": "registered@example.invalid", "password": "synthetic-registration-password", "callbackURL": origin + "/reset"}, cookies, "")
+	signinInput := map[string]any{"flowID": flow.FlowID, identifierKey: identifierValue, "password": "synthetic-registration-password", "callbackURL": origin + "/reset"}
+	if method == "username" {
+		signinInput["remember"] = f.usernameTOTPPersistent
+	}
+	response, data = invoke(path, signinInput, cookies, "")
 	var challenge passwordhttp.SigninResponse
 	if response.StatusCode != 200 || json.Unmarshal(data, &challenge) != nil || !challenge.ChallengeRequired || challenge.SignedIn || challenge.SessionID != "" || response.Header.Get("X-MFA-Token") == "" || len(response.Cookies()) != 0 || response.Header.Get("X-CSRF-Token") != "" {
 		t.Fatal("password primary did not deliver challenge-only result", response.StatusCode, challenge.Error)
 	}
 	proof := response.Header.Get("X-MFA-Token")
+	if method == "username" {
+		if f.usernamePrimaryRecovery == nil {
+			t.Fatal("username primary restart recovery was not selected")
+		}
+		f.usernamePrimaryRecovery(challenge, cookies)
+	}
 	command, _ := identity.NewCommandID()
 	code := passwordMFAFixtureCode(secret, time.Now().Add(30*time.Second))
 	body := map[string]any{"commandID": command, "preAuthID": flow.FlowID, "challengeID": challenge.ChallengeID, "factorID": factor, "token": proof, "code": code, "callbackURL": origin + "/reset", "trustDevice": false}
-	foreign, _ := invoke("/v1/session/preauth-issue", map[string]string{"method": "password"}, nil, "")
+	if method == "username" {
+		response, _ = invoke("/v1/mfa/totp-verify", body, cookies, "password")
+		want := http.StatusForbidden
+		if f.usernameTOTPOnly {
+			want = http.StatusBadRequest // No email-password completion arm is selected.
+		}
+		if response.StatusCode != want || len(response.Cookies()) != 0 || response.Header.Get("X-CSRF-Token") != "" {
+			t.Fatal("username challenge entered email-password completion", response.StatusCode)
+		}
+	}
+	foreign, _ := invoke("/v1/session/preauth-issue", map[string]string{"method": method}, nil, "")
 	if foreign.StatusCode != http.StatusOK {
 		t.Fatal("foreign browser setup unavailable")
 	}
-	response, _ = invoke("/v1/mfa/totp-verify", body, foreign.Cookies(), "password")
+	response, _ = invoke("/v1/mfa/totp-verify", body, foreign.Cookies(), method)
 	if response.StatusCode != http.StatusForbidden || len(response.Cookies()) != 0 || response.Header.Get("X-CSRF-Token") != "" {
 		t.Fatal("foreign browser completed password challenge", response.StatusCode)
+	}
+	if f.usernameTOTPWithdrawal != "" {
+		// These are deliberate authoritative invalidations of a genuinely issued
+		// challenge, not seeded accounts, factors or replacement authentication.
+		query := map[string]string{
+			"user":       `UPDATE identity.users SET status='suspended',authority_version=authority_version+1 WHERE tenant_id=$1 AND user_id=(SELECT user_id FROM identity_mfa.totp_factors WHERE tenant_id=$1 AND factor_id=$2)`,
+			"identifier": `UPDATE identity.users SET identifier_version=identifier_version+1 WHERE tenant_id=$1 AND user_id=(SELECT user_id FROM identity_mfa.totp_factors WHERE tenant_id=$1 AND factor_id=$2)`,
+			"factor":     `UPDATE identity_mfa.factor_authorities SET version=version+1 WHERE tenant_id=$1 AND user_id=(SELECT user_id FROM identity_mfa.totp_factors WHERE tenant_id=$1 AND factor_id=$2)`,
+		}[f.usernameTOTPWithdrawal]
+		var before int
+		if query == "" || method != "username" {
+			t.Fatal("unknown username authority withdrawal")
+		}
+		if err := f.pool.Raw().QueryRow(ctx, `SELECT count(*) FROM session_store.sessions`).Scan(&before); err != nil {
+			t.Fatal("withdrawal session baseline unavailable")
+		}
+		changed, err := f.pool.Raw().Exec(ctx, query, otpTenant, string(factor))
+		if err != nil || changed.RowsAffected() != 1 {
+			t.Fatal("authoritative withdrawal fixture failed")
+		}
+		response, _ = invoke("/v1/mfa/totp-verify", body, cookies, method)
+		if response.StatusCode != http.StatusForbidden || len(response.Cookies()) != 0 || response.Header.Get("X-CSRF-Token") != "" {
+			t.Fatal("withdrawn original authority completed username challenge", response.StatusCode)
+		}
+		var after, attempts, uses int
+		if err := f.pool.Raw().QueryRow(ctx, `SELECT (SELECT count(*) FROM session_store.sessions),c.attempts_remaining,p.uses FROM identity_mfa.continuations c JOIN public.capability_identity_one_use p ON p.tenant_id=c.tenant_id AND p.capability_id=c.continuation_id WHERE c.tenant_id=$1 AND c.continuation_id=$2`, otpTenant, string(challenge.ChallengeID)).Scan(&after, &attempts, &uses); err != nil || after != before || attempts != 3 || uses != 0 {
+			t.Fatal("withdrawn challenge changed session, attempt or one-use state")
+		}
+		return
 	}
 	wrongCommand, _ := identity.NewCommandID()
 	wrongCode := "000000"
@@ -130,7 +199,7 @@ func proveReferencePasswordMFAHTTP(t *testing.T, ctx context.Context, f liveStor
 		wrongCode = "000001"
 	}
 	wrong := map[string]any{"commandID": wrongCommand, "preAuthID": flow.FlowID, "challengeID": challenge.ChallengeID, "factorID": factor, "token": proof, "code": wrongCode, "callbackURL": origin + "/reset", "trustDevice": false}
-	response, _ = invoke("/v1/mfa/totp-verify", wrong, cookies, "password")
+	response, _ = invoke("/v1/mfa/totp-verify", wrong, cookies, method)
 	if response.StatusCode != http.StatusForbidden || len(response.Cookies()) != 0 || response.Header.Get("X-CSRF-Token") != "" {
 		t.Fatal("wrong password TOTP code did not deny without delivery", response.StatusCode)
 	}
@@ -152,7 +221,7 @@ func proveReferencePasswordMFAHTTP(t *testing.T, ctx context.Context, f liveStor
 		}
 	}
 	t.Cleanup(cleanup)
-	response, data = invoke("/v1/mfa/totp-verify", body, cookies, "password")
+	response, data = invoke("/v1/mfa/totp-verify", body, cookies, method)
 	var aborted struct {
 		CommitOutcome string
 		SignedIn      bool
@@ -168,6 +237,9 @@ func proveReferencePasswordMFAHTTP(t *testing.T, ctx context.Context, f liveStor
 		t.Fatal("rollback leaked session, lifecycle or factor replay advancement")
 	}
 	owner, err := features.PasswordTOTP()
+	if method == "username" {
+		owner, err = features.UsernameTOTP()
+	}
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -181,12 +253,13 @@ func proveReferencePasswordMFAHTTP(t *testing.T, ctx context.Context, f liveStor
 	command, _ = identity.NewCommandID()
 	// A proven abort retires its reserved one-use child; it cannot be revived by
 	// changing the completion command. Obtain a genuinely new password primary.
-	response, data = invoke("/v1/session/preauth-issue", map[string]string{"method": "password"}, nil, "")
+	response, data = invoke("/v1/session/preauth-issue", flowInput, nil, "")
 	if response.StatusCode != http.StatusOK || json.Unmarshal(data, &flow) != nil || !flow.Issued {
 		t.Fatal("replacement password flow unavailable")
 	}
 	cookies = response.Cookies()
-	response, data = invoke("/v1/password/signin", map[string]any{"flowID": flow.FlowID, "identifier": "registered@example.invalid", "password": "synthetic-registration-password", "callbackURL": origin + "/reset"}, cookies, "")
+	signinInput["flowID"] = flow.FlowID
+	response, data = invoke(path, signinInput, cookies, "")
 	challenge = passwordhttp.SigninResponse{}
 	if response.StatusCode != http.StatusOK || json.Unmarshal(data, &challenge) != nil || !challenge.ChallengeRequired || challenge.SignedIn || response.Header.Get("X-MFA-Token") == "" || len(response.Cookies()) != 0 {
 		t.Fatal("replacement password challenge unavailable", response.StatusCode)
@@ -196,7 +269,7 @@ func proveReferencePasswordMFAHTTP(t *testing.T, ctx context.Context, f liveStor
 	if f.completionFault != nil {
 		f.completionFault.armed.Store(true)
 	}
-	response, data = invoke("/v1/mfa/totp-verify", body, cookies, "password")
+	response, data = invoke("/v1/mfa/totp-verify", body, cookies, method)
 	var result struct {
 		SignedIn      bool
 		CommitOutcome string
@@ -219,7 +292,7 @@ func proveReferencePasswordMFAHTTP(t *testing.T, ctx context.Context, f liveStor
 		if err := f.pool.Raw().QueryRow(ctx, `SELECT (SELECT count(*) FROM session_store.sessions),(SELECT uses FROM public.capability_identity_one_use WHERE tenant_id=$1 AND capability_id=$2),(SELECT count(*) FROM public.identity_outbox_bindings WHERE command_id=$3)`, otpTenant, string(challenge.ChallengeID), commandBytes).Scan(&newSessions, &uses, &lifecycle); err != nil || newSessions != sessionsBefore+1 || uses != 1 || lifecycle != 1 {
 			t.Fatal("ambiguous commit did not conserve one session, use and lifecycle")
 		}
-		response, _ = invoke("/v1/mfa/totp-verify", body, cookies, "password")
+		response, _ = invoke("/v1/mfa/totp-verify", body, cookies, method)
 		if response.StatusCode == http.StatusOK || len(response.Cookies()) != 0 || response.Header.Get("X-CSRF-Token") != "" {
 			t.Fatal("ambiguous retry redelivered credentials")
 		}
@@ -245,7 +318,13 @@ func proveReferencePasswordMFAHTTP(t *testing.T, ctx context.Context, f liveStor
 	if err != nil || !observed.Authenticated || observed.Session.MFAAuthentication() == (session.MFAAuthentication{}) {
 		t.Fatal("completed password MFA session unreadable", err)
 	}
-	response, data = invoke("/v1/mfa/totp-verify", body, cookies, "password")
+	if method == "username" {
+		stored, err := observed.Session.Bindings()
+		if err != nil || (stored.Remember.Choice() == session.PersistentSession) != f.usernameTOTPPersistent || (completedCookies[0].MaxAge > 0) != f.usernameTOTPPersistent {
+			t.Fatal("username TOTP completion changed original remember policy")
+		}
+	}
+	response, data = invoke("/v1/mfa/totp-verify", body, cookies, method)
 	if response.StatusCode == 200 || len(response.Cookies()) != 0 || response.Header.Get("X-CSRF-Token") != "" {
 		t.Fatal("completion replay redelivered credentials")
 	}

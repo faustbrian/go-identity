@@ -16,8 +16,8 @@ import (
 // UsernameConfiguration independently selects native username operations, not
 // HTTP. Signup and Signin reuse the configured password owners' immutable
 // keys/policies with distinct username actions; the email owners stay selected
-// unchanged. Policy is frozen by each native owner. Username signin requires
-// authoritative known-empty MFA; it never falls back around enrolled factors.
+// unchanged. Policy is frozen by each native owner. Without TOTP, username signin
+// requires authoritative known-empty MFA; it never bypasses enrolled factors.
 // Availability and Rename supply native configuration, not consumer stores.
 // The graph supplies its pool, counted evaluator and original proof source.
 // Borrowed callbacks must be bounded/concurrent-safe and outlive graph calls.
@@ -26,6 +26,18 @@ type UsernameConfiguration struct {
 	Signup, Signin bool
 	Availability   *passwordpg.UsernameAvailabilityConfig
 	Rename         *UsernameRenameConfiguration
+	// TOTP selects the complete username-origin challenge/completion profile.
+	// Signin must be selected; no recovery, OTP or trusted-device fallback follows.
+	TOTP *UsernameTOTPConfiguration
+}
+
+// UsernameTOTPConfiguration explicitly composes genuine username/password
+// comparison with confirmed TOTP through the existing native owners. Challenge
+// only allows totp and Completion retains PasswordTOTPConfiguration's bounded
+// counter, envelope and key custody. Neither selection enables HTTP by itself.
+type UsernameTOTPConfiguration struct {
+	Challenge  passwordpg.MFAChallengeConfig
+	Completion PasswordTOTPConfiguration
 }
 
 // UsernameRenameConfiguration selects the existing action-specific password
@@ -42,6 +54,7 @@ type UsernameRenameConfiguration struct {
 type usernameState struct {
 	signup                       *passwordpg.SignupService
 	signin                       *passwordpg.SigninService
+	totp                         *magicLinkTOTPService
 	available                    *passwordpg.UsernameAvailabilityService
 	rename                       *passwordpg.UsernameRenameService
 	signupPreauth, signinPreauth *session.PreAuthIssuer
@@ -54,7 +67,7 @@ func composeUsername(c StoreConfiguration, d ReferenceDependencies, evaluation r
 	}
 	u := *c.Username
 	invalid := identity.InvalidInputError{Field: "reference_username"}
-	if u.Policy == nil || u.Policy.ReservedVersion() == 0 || d.PostgreSQL == nil || c.OTP == nil || !u.Signup && !u.Signin && u.Availability == nil && u.Rename == nil {
+	if u.Policy == nil || u.Policy.ReservedVersion() == 0 || d.PostgreSQL == nil || c.OTP == nil || !u.Signup && !u.Signin && u.Availability == nil && u.Rename == nil || u.TOTP != nil && !u.Signin {
 		return nil, invalid
 	}
 	state := &usernameState{}
@@ -85,9 +98,17 @@ func composeUsername(c StoreConfiguration, d ReferenceDependencies, evaluation r
 		selected, profile := c, *c.PasswordSignin
 		profile.Native.Username = u.Policy
 		profile.MFA, profile.TOTP, profile.Recovery, profile.OTP = nil, nil, nil, nil
+		if u.TOTP != nil {
+			challenge, completion := u.TOTP.Challenge, u.TOTP.Completion
+			profile.MFA, profile.TOTP = &challenge, &completion
+		}
 		selected.PasswordSignin = &profile
 		var err error
-		state.signin, err = composePasswordSignin(selected, d, evaluation)
+		state.signin, err = composeNativePasswordSignin(selected, d, evaluation, true)
+		if err != nil {
+			return nil, err
+		}
+		state.totp, err = composePasswordTOTP(selected, d, state.signin, evaluation)
 		if err != nil {
 			return nil, err
 		}
@@ -159,3 +180,19 @@ func (UsernameRenameConfiguration) MarshalJSON() ([]byte, error) { return nil, u
 
 // MarshalText refuses implicit configuration export.
 func (UsernameRenameConfiguration) MarshalText() ([]byte, error) { return nil, username.ErrDisclosure }
+
+// Format redacts challenge and completion keys for every formatting verb.
+func (UsernameTOTPConfiguration) Format(s fmt.State, _ rune) {
+	_, _ = io.WriteString(s, "reference.UsernameTOTPConfiguration(redacted)")
+}
+
+// LogValue redacts challenge and completion configuration.
+func (UsernameTOTPConfiguration) LogValue() slog.Value {
+	return slog.StringValue("reference.UsernameTOTPConfiguration(redacted)")
+}
+
+// MarshalJSON refuses implicit secret-bearing configuration export.
+func (UsernameTOTPConfiguration) MarshalJSON() ([]byte, error) { return nil, username.ErrDisclosure }
+
+// MarshalText refuses implicit textual configuration export.
+func (UsernameTOTPConfiguration) MarshalText() ([]byte, error) { return nil, username.ErrDisclosure }

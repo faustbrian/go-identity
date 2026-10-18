@@ -40,6 +40,10 @@ type PasswordSigninConfiguration struct {
 }
 
 func composePasswordSignin(c StoreConfiguration, d ReferenceDependencies, evaluator risk.Evaluator) (*passwordpg.SigninService, error) {
+	return composeNativePasswordSignin(c, d, evaluator, false)
+}
+
+func composeNativePasswordSignin(c StoreConfiguration, d ReferenceDependencies, evaluator risk.Evaluator, username bool) (*passwordpg.SigninService, error) {
 	if c.PasswordSignin == nil {
 		return nil, nil
 	}
@@ -63,6 +67,9 @@ func composePasswordSignin(c StoreConfiguration, d ReferenceDependencies, evalua
 	if c.PasswordSignin.MFA != nil {
 		if slices.Contains(c.PasswordSignin.MFA.AllowedMethods, "otp") != (c.PasswordSignin.OTP != nil) {
 			return nil, invalid
+		}
+		if username {
+			return passwordpg.NewUsernameMFASigninService(d.PostgreSQL, n, *c.PasswordSignin.MFA)
 		}
 		return passwordpg.NewMFASigninService(d.PostgreSQL, n, *c.PasswordSignin.MFA)
 	}

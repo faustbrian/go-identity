@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Compose explicit username/password TOTP through the existing native primary,
+  factor, risk and session owners. `Username.TOTP` selects native composition;
+  `HTTPMFA.UsernameTOTPVerify` independently selects its exact transport arm.
+  Username-only TOTP selection includes native session reading and signout
+  without enabling email-password MFA login.
+  Install the graph's forward primary/continuation histories before serving.
+  Retain current authority, original remember/browser intent, atomic completion
+  and metadata-only recovery; no recovery/OTP/trusted-device fallback is enabled.
+
 - Compose explicitly selected username registration, signin, advisory availability
   and protected rename through their actual native owners and opt-in HTTP routes.
   Email and username registration retain distinct original custody on the shared

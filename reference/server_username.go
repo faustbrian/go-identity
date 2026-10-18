@@ -19,7 +19,8 @@ import (
 // Availability borrows the native durable advisory owner. Rename independently
 // selects cookie-only protected transport with explicit origins and rate keys;
 // the graph supplies its actual signed proof source and session cookie policy.
-// Native username MFA continuation is not selected; enrolled/unknown state denies.
+// Native TOTP continuation is selected only by Username.TOTP; absent selection
+// preserves the known-empty profile and denies enrolled/unknown factor state.
 type HTTPUsernameConfiguration struct {
 	Signup, Signin, Availability bool
 	ActorID                      identity.ActorID
@@ -73,6 +74,10 @@ func composeUsernameHTTP(c StoreConfiguration, native *usernameState, original *
 		}
 		selected, profile := c, *c.PasswordSignin
 		profile.MFA, profile.TOTP, profile.Recovery, profile.OTP = nil, nil, nil, nil
+		if c.Username.TOTP != nil {
+			challenge, completion := c.Username.TOTP.Challenge, c.Username.TOTP.Completion
+			profile.MFA, profile.TOTP = &challenge, &completion
+		}
 		selected.PasswordSignin = &profile
 		selected.HTTPPasswordSignin = &HTTPPasswordSigninConfiguration{ActorID: h.ActorID, PolicyRevision: h.PolicyRevision}
 		var err error
@@ -119,6 +124,7 @@ func (s *Server) usernameFeature(network identityhttp.NetworkConfig, f FeatureSe
 			return nil, err
 		}
 		config.Signin = &passwordhttp.SigninConfig{Network: network, Service: owner.(composedUsernameSignin), Rate: s.state.httpRate.limiter, Origin: identityhttp.Origin(selected.preauth.Origin), CallbackURL: selected.preauth.CallbackURL, Lifetime: p.lifetime, FlowCookie: selected.preauth.Cookie, SessionCookie: selected.sessionCookie, Device: *p.device, ActorID: selected.config.ActorID, PolicyRevision: selected.config.PolicyRevision, Audience: selected.audience, Now: time.Now, MaximumDuration: s.state.features.timeout}
+		config.Signin.MFAContinuation = selected.mfaContinuation
 	}
 	if h.available {
 		owner, err := f.UsernameAvailability()

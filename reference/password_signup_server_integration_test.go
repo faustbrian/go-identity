@@ -243,6 +243,10 @@ func proveReferenceSignupGraph(t *testing.T, competing bool, protected ...bool) 
 }
 
 type signupGraphExtensions struct {
+	usernameTOTPOnly                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       bool
+	usernameTOTPPersistent                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 bool
+	usernameTOTPWithdrawal                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 string
+	usernameTOTP                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           bool
 	username                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               bool
 	confirmationHooks                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      string
 	verificationHooks                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      string
@@ -272,6 +276,10 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 	ctx, cancel := context.WithTimeout(t.Context(), budget)
 	defer cancel()
 	f := newLiveStoresProfile(t, ctx, false, extensions.postgresBaseline)
+	f.usernameTOTP = extensions.usernameTOTP
+	f.usernameTOTPOnly = extensions.usernameTOTPOnly
+	f.usernameTOTPWithdrawal = extensions.usernameTOTPWithdrawal
+	f.usernameTOTPPersistent = extensions.usernameTOTPPersistent
 	f.disable, f.disableAll = extensions.disable, extensions.disableAll
 	f.disablePending = extensions.disablePending
 	f.disableHTTP = extensions.disableHTTP
@@ -573,7 +581,11 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 		deps.DeliverySender = emailChangeCaptureSender{messages: messages, recipients: noticeRecipients, deliveries: changeDeliveries}
 	}
 	if extensions.username {
-		configureReferenceUsername(t, &c, origin)
+		configureReferenceUsername(t, &c, origin, extensions.usernameTOTP)
+		if extensions.usernameTOTPOnly {
+			c.PasswordSignin.MFA, c.PasswordSignin.TOTP, c.PasswordSignin.Recovery, c.PasswordSignin.OTP = nil, nil, nil, nil
+			c.HTTPMFA.PasswordTOTPVerify = false
+		}
 	}
 	if extensions.postgresBaseline {
 		selectDurableReferenceAdmission(&c)
@@ -1012,6 +1024,11 @@ END $$`); err != nil {
 		t.Fatal("selected native readiness", r.Failures)
 	}
 	if extensions.username {
+		if extensions.usernameTOTP {
+			f.usernamePrimaryRecovery = func(challenge passwordhttp.SigninResponse, cookies []*http.Cookie) {
+				proveReferenceUsernamePrimaryRecovery(t, ctx, c, deps, worker, challenge, cookies)
+			}
+		}
 		for _, target := range []struct{ table, constraint string }{{"identity.registration_bindings", "identity_registration_purpose_v3"}, {"identity_mfa.factor_authorities", "factor_authorities_initialized_purpose_v3"}, {"session_store.session_issuances", "session_issuances_purpose_username_v1"}} {
 			if _, err := f.pool.Raw().Exec(ctx, "ALTER TABLE "+target.table+" RENAME CONSTRAINT "+target.constraint+" TO username_fixture_missing"); err != nil {
 				t.Fatal(err)

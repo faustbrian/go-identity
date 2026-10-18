@@ -283,6 +283,12 @@ func readinessCatalogGuards(state *storeState, history migrationHistory) []migra
 				if u.signup != nil && guards[i].schema == "identity_mfa" && name == "factor_authorities.factor_authorities_initialized_purpose_v2" {
 					guards[i].constraints[j] = "factor_authorities.factor_authorities_initialized_purpose_v3"
 				}
+				if u.totp != nil && guards[i].schema == "identity_mfa" && (name == "continuations.continuations_origin_purpose_check" || name == "continuations.continuations_origin_purpose_v2") {
+					guards[i].constraints[j] = "continuations.continuations_origin_purpose_username_v1"
+				}
+				if u.totp != nil && guards[i].schema == "identity_password" && name == "mfa_primary_records.mfa_primary_records_purpose_check" {
+					guards[i].constraints[j] = "mfa_primary_records.mfa_primary_records_purpose_v2"
+				}
 				if u.signin != nil && guards[i].schema == state.features.migrations.passwordSigninSchema {
 					switch name {
 					case "session_issuances.session_issuances_purpose_v3", "session_issuances.session_issuances_purpose_v4", "session_issuances.session_issuances_purpose_v5", "session_issuances.session_issuances_purpose_v6", "session_issuances.session_issuances_purpose_v7", "session_issuances.session_issuances_purpose_v8":

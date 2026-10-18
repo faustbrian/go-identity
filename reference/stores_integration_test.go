@@ -24,6 +24,7 @@ import (
 	"github.com/faustbrian/go-capability/v2"
 	identity "github.com/faustbrian/go-identity"
 	"github.com/faustbrian/go-identity/email"
+	passwordhttp "github.com/faustbrian/go-identity/http/password"
 	passwordpg "github.com/faustbrian/go-identity/password/postgres"
 	"github.com/faustbrian/go-identity/reference"
 	"github.com/faustbrian/go-identity/risk"
@@ -37,6 +38,11 @@ import (
 )
 
 type liveStores struct {
+	usernameTOTPOnly                   bool
+	usernamePrimaryRecovery            func(passwordhttp.SigninResponse, []*http.Cookie)
+	usernameTOTPPersistent             bool
+	usernameTOTPWithdrawal             string
+	usernameTOTP                       bool
 	confirmationHooks                  *confirmationHookProbe
 	afterVerificationSignin            func(session.Credential)
 	verificationMFAOriginalExpiry      *verificationMFAOriginalExpiryPolicy

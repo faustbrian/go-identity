@@ -54,7 +54,9 @@ func (f FeatureSet) UsernameRegistrationVerification() (email.RegistrationVerifi
 }
 
 // UsernameSignin returns the distinct native username/password workflow.
-// The selected known-empty factor profile denies enrolled or unknown MFA state.
+// Without Username.TOTP, enrolled or unknown MFA state denies. The explicit
+// TOTP selection preserves known-empty signin but returns only a challenge for
+// an enrolled account; UsernameTOTP owns actual factor/session completion.
 func (f FeatureSet) UsernameSignin() (password.SigninService, error) {
 	u, err := f.selectedUsername()
 	if err != nil {

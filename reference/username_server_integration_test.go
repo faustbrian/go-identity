@@ -48,7 +48,7 @@ func (referenceUsernamePolicy) Decide(ctx context.Context, c authorization.Decis
 	return (referenceRegistrationPolicy{}).Decide(ctx, c)
 }
 
-func configureReferenceUsername(t *testing.T, c *reference.StoreConfiguration, origin string) {
+func configureReferenceUsername(t *testing.T, c *reference.StoreConfiguration, origin string, totp ...bool) {
 	t.Helper()
 	configureReferencePasswordProtection(t, c, origin)
 	c.PasswordChange, c.HTTPPasswordChange = nil, nil
@@ -91,10 +91,44 @@ func configureReferenceUsername(t *testing.T, c *reference.StoreConfiguration, o
 	counters.CommandCounters = &commands
 	c.Username = &reference.UsernameConfiguration{Policy: p, Signup: true, Signin: true, Availability: &available, Rename: &reference.UsernameRenameConfiguration{Primary: passwordpg.ActionPrimaryConfig{Action: target.Action, Audience: target.Audience, MaximumAge: 2 * time.Minute, Transport: session.CredentialCookie, CSRFKeys: c.PasswordVerification.CSRFKeys}, Native: passwordpg.UsernameRenameConfig{PolicyID: "reference-username-rename", ConfigurationID: "reference-username-rename-v1", MaximumDuration: 4 * time.Second, Domain: domain, RequestKeys: requestKeys, IntentKey: [32]byte{202}, Risk: risk.ProtectedProviderAdmissionCustodyConfig{ConfigurationID: "reference-username-rename-v1", Keys: c.OTP.RiskKeys}, Counters: counters, ActiveEnvelopeKeyID: "issue-envelope"}}}
 	c.HTTPUsername = &reference.HTTPUsernameConfiguration{Signup: true, Signin: true, Availability: true, ActorID: c.HTTPPasswordSignup.ActorID, PolicyRevision: 9, Rename: &reference.HTTPPasswordProtectionConfiguration{Transport: session.CredentialCookie, TrustedOrigins: []identityhttp.Origin{identityhttp.Origin(origin)}, RateNamespace: "reference-username-rename", RateKey: [32]byte{205}}}
+	if len(totp) == 1 && totp[0] {
+		configureReferenceMFAEnrollment(t, c, origin)
+		configureReferencePasswordMFA(t, c, origin)
+		c.Username.TOTP = &reference.UsernameTOTPConfiguration{Challenge: *c.PasswordSignin.MFA, Completion: *c.PasswordSignin.TOTP}
+		c.HTTPMFA.UsernameTOTPVerify = true
+	}
 }
 
 func TestReferencePostgresUsernameHTTPS(t *testing.T) {
 	proveReferenceSignupGraphExtensions(t, false, signupGraphExtensions{postgresBaseline: true, username: true})
+}
+
+func TestReferencePostgresUsernameTOTPHTTPS(t *testing.T) {
+	for _, persistent := range []bool{false, true} {
+		name := "browser"
+		if persistent {
+			name = "persistent"
+		}
+		t.Run(name, func(t *testing.T) {
+			proveReferenceSignupGraphExtensions(t, false, signupGraphExtensions{postgresBaseline: true, username: true, usernameTOTP: true, usernameTOTPPersistent: persistent})
+		})
+	}
+}
+
+func TestReferencePostgresUsernameTOTPCommitRecoveryHTTPS(t *testing.T) {
+	proveReferenceSignupGraphExtensions(t, false, signupGraphExtensions{postgresBaseline: true, username: true, usernameTOTP: true, completionCommitFault: true})
+}
+
+func TestReferencePostgresUsernameTOTPIndependentHTTPS(t *testing.T) {
+	proveReferenceSignupGraphExtensions(t, false, signupGraphExtensions{postgresBaseline: true, username: true, usernameTOTP: true, usernameTOTPOnly: true})
+}
+
+func TestReferencePostgresUsernameTOTPWithdrawalsHTTPS(t *testing.T) {
+	for _, authority := range []string{"user", "identifier", "factor"} {
+		t.Run(authority, func(t *testing.T) {
+			proveReferenceSignupGraphExtensions(t, false, signupGraphExtensions{postgresBaseline: true, username: true, usernameTOTP: true, usernameTOTPWithdrawal: authority})
+		})
+	}
 }
 
 // The existing graph/bootstrap/worker fixture supplies actual native owners.
@@ -240,6 +274,10 @@ func proveReferenceUsername(t *testing.T, ctx context.Context, f liveStores, fea
 	}
 	r, signed, browser := login("STRASSE", true)
 	currentCookies, currentCSRF := append(browser, r.Cookies()...), r.Header.Get("X-CSRF-Token")
+	if f.usernameTOTP {
+		proveReferenceMFAEnrollment(t, ctx, f, features, client, base, origin, r.Cookies(), currentCSRF, signed.SessionID, false)
+		return
+	}
 	readSession := func(cookies []*http.Cookie, want bool) sessionhttp.GetResponse {
 		t.Helper()
 		r, data := call("GET", "/v1/session/get", nil, "", "", cookies)

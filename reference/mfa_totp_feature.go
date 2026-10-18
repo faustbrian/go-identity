@@ -47,6 +47,23 @@ type composedMagicTOTP struct {
 	state        *storeState
 	password     bool
 	verification bool
+	username     bool
+}
+
+// UsernameTOTP returns only the explicitly selected username-origin TOTP owner.
+// It retains graph tenant, lifetime and shutdown guards and cannot select another
+// original primary, enroll factors or silently fall back to weaker methods.
+func (f FeatureSet) UsernameTOTP() (mfa.TOTPCompletionService, error) {
+	s := f.state
+	if s == nil {
+		return nil, identity.InvalidInputError{Field: "reference_username_totp"}
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.closed || s.features == nil || !s.features.composed || s.features.username == nil || s.features.username.totp == nil {
+		return nil, identity.UnavailableError{}
+	}
+	return composedMagicTOTP{state: s, username: true}, nil
 }
 
 // VerificationTOTP returns only explicitly selected verification-origin TOTP
@@ -67,6 +84,9 @@ func (f FeatureSet) VerificationTOTP() (mfa.TOTPCompletionService, error) {
 }
 
 func (f composedMagicTOTP) owner() *magicLinkTOTPService {
+	if f.username {
+		return f.state.features.username.totp
+	}
 	if f.verification {
 		return f.state.features.verificationTOTP
 	}

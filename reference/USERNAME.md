@@ -101,10 +101,10 @@ that unsupported combination rather than substituting email custody.
    or renewed proof. Changed input under the same key conflicts. Sign in under
    the new canonical name, read that session and sign out with issued CSRF.
 
-Enrolled or unknown MFA state denies the selected username signin/rename
-profile. There is no password-only fallback. Username-only registration,
-username MFA continuation and automatic confirmation-signin are not enabled by
-this profile. Native contracts retain their broader ownership; this document
+Without the TOTP selection below, enrolled or unknown MFA state denies this
+username signin/rename profile. There is no password-only fallback. Username-only
+registration and automatic confirmation-signin are not enabled by this profile.
+Native contracts retain their broader ownership; this document
 does not claim complete platform or release qualification.
 
 `TestReferencePostgresUsernameHTTPS` runs this journey through the actual
@@ -117,4 +117,40 @@ module with task-owned Go caches:
 
 ```sh
 go test -race -tags=integration -run '^TestReferencePostgresUsernameHTTPS$' -count=1 .
+```
+
+## Explicit username/password TOTP
+
+Set `Username.TOTP` to `UsernameTOTPConfiguration{Challenge: ..., Completion: ...}`
+alongside `Username.Signin`. Challenge retains `MFAChallengeConfig`'s actual
+issuer/custody keys, original expiry and TOTP-only methods. Completion retains
+`PasswordTOTPConfiguration`'s real native counters, policy identity and envelope
+keys. This selection supplies native `FeatureSet.UsernameTOTP()` independently
+of email-password TOTP; it selects no HTTP route or enrollment by itself.
+
+To select HTTPS, set `HTTPUsername.Signin` and
+`HTTPMFA.UsernameTOTPVerify`. Initiate the original `username` pre-auth method,
+then submit its real username/password/browser intent, retaining the same
+`remember` choice on signin. An enrolled user receives
+only challenge metadata and `X-MFA-Token`, not a session or CSRF token. Send the
+original child/browser plus enrolled factor/code to `/v1/mfa/totp-verify` with
+exact singleton `X-MFA-Variant: username`. Missing, duplicate or another origin's
+selector never falls back to username. Successful committed completion issues
+the original remember-policy session and CSRF token; ambiguity and historical
+recovery disclose no credentials.
+
+Apply the graph's additional `identity_username_mfa_primary` and
+`identity_username_mfa_continuation` histories before serving. These append
+constraints after the actual installed predecessors without changing legacy
+records or migration bytes. Readiness requires their live successor constraints.
+TOTP enrollment remains a separately selected genuine MFA workflow. Unknown
+authority, stale primary/child, current identifier/account/factor withdrawal or
+wrong browser/code denies; no secondary OTP, recovery, trusted-device or weaker
+factor fallback follows. Rename's known-empty-factor profile is unchanged.
+
+The focused PostgreSQL/HTTPS tests cover normal completion, wrong origin/browser/
+code, rollback and lost-acknowledgement recovery, and current authority withdrawal:
+
+```sh
+go test -race -tags=integration -run '^TestReferencePostgresUsernameTOTP.*HTTPS$' -count=1 .
 ```

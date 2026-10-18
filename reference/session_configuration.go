@@ -88,6 +88,18 @@ func composeSession(c StoreConfiguration, d ReferenceDependencies) (*sessionStat
 		}
 		passwordMFA = &profile
 	}
+	if u := c.Username; u != nil && u.TOTP != nil {
+		if !u.Signin || c.PasswordSignin == nil || selection.Verified == nil {
+			return nil, invalid
+		}
+		// Username's original primary remains password authentication. Select
+		// its actual MFA session reader/revoker without enabling email MFA login.
+		profile := c.PasswordSignin.Native.Profile
+		if profile != *selection.Verified || passwordMFA != nil && *passwordMFA != profile {
+			return nil, invalid
+		}
+		passwordMFA = &profile
+	}
 	reader, err := sessionpg.NewSelectedSessionService(d.PostgreSQL, sessionpg.SelectedSessionServiceConfig{Repository: e.Repository, Admission: sessionpg.SelectedSessionAdmissionConfig{SingleFactor: selection, MFAMagicLink: mfa, MFAPassword: passwordMFA}, Validation: validation})
 	if err != nil {
 		return nil, invalid
