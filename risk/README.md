@@ -321,6 +321,12 @@ subject or anonymous flow, challenge and canonical request fingerprint. Supply
 only server-resolved facts. Structural construction does not authenticate an
 actor or authorize evidence issuance.
 
+`FlowContext.Bindings()` returns a value copy of those original trusted fields
+for provider transport binding, rejecting zero contexts. It grants no authority
+and exposes no keyed token replay identity. Its request fingerprint is the
+original command-intent commitment, not the replay HMAC. Automatic diagnostics
+remain redacted and serialization is forbidden.
+
 `NewCaptchaReplayPolicy(CaptchaReplayPolicyConfig)` selects the existing risk
 policy, one closed provider ID, exact site/API-profile/configuration identity,
 explicit token byte ceiling and newest-first retained `CaptchaReplayKey` values.

@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Expose an immutable copy of trusted CAPTCHA flow bindings for provider
+  transport idempotency, without exporting token replay or admission authority.
+
 - Classify OAuth consent continuation as a protected privileged operation with
   transaction-owned counters and mandatory provider signals. Unlisted aliases
   remain denied; this admission grants no consent or authentication authority.

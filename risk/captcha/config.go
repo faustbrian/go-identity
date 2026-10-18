@@ -1,0 +1,115 @@
+package captcha
+
+import (
+	"fmt"
+	"io"
+	"reflect"
+	"slices"
+	"strings"
+	"time"
+
+	clock "github.com/faustbrian/go-clock"
+)
+
+// Config selects an explicit immutable provider profile and bounded call policy.
+// Zero is invalid. The initial supported profile is Turnstile Siteverify v0/free,
+// with hostname/action/challenge-time support and no origin, score or remote-IP
+// disclosure. No endpoint or provider is inferred from omitted configuration.
+// Lifetime is 1s..2m, ChallengeMaxAge 1s..5m and Timeout 1s..15s. MaxTokenBytes
+// is 1..8192; the provider additionally enforces its documented character limit.
+// MaxConcurrent (1..256) bounds complete calls without a growing admission queue.
+// Borrowed Clock must be bounded and concurrency-safe. Hostnames are canonical
+// lowercase ASCII DNS names, never wildcards or suffix matches.
+type Config struct {
+	Provider, API, Version, Tier, APIProfile, SiteKey, ConfigurationVersion string
+	Hostnames, Origins                                                      []string
+	ExpectedAction                                                          string
+	ExpectedCData                                                           OptionalString
+	RemoteIPDisclosure                                                      bool
+	MaxTokenBytes, MaxConcurrent                                            int
+	Timeout, Lifetime, ChallengeMaxAge                                      time.Duration
+	Clock                                                                   clock.Clock
+}
+
+func (c Config) valid() bool {
+	if c.Provider != "turnstile" || c.API != "siteverify" || c.Version != "v0" || c.Tier != "free" || c.APIProfile != "siteverify/v0" || !ascii(c.SiteKey, 512, false) || !ascii(c.ConfigurationVersion, 64, false) || len(c.Hostnames) < 1 || len(c.Hostnames) > 32 || len(c.Origins) != 0 || c.RemoteIPDisclosure || !action(c.ExpectedAction) || c.MaxTokenBytes < 1 || c.MaxTokenBytes > 8192 || c.MaxConcurrent < 1 || c.MaxConcurrent > 256 || c.Timeout < time.Second || c.Timeout > 15*time.Second || c.Lifetime < time.Second || c.Lifetime > 2*time.Minute || c.ChallengeMaxAge < time.Second || c.ChallengeMaxAge > 5*time.Minute || nilDependency(c.Clock) || !optionalString(c.ExpectedCData, 255) {
+		return false
+	}
+	for i, host := range c.Hostnames {
+		if !hostname(host) || slices.Contains(c.Hostnames[:i], host) {
+			return false
+		}
+	}
+	return true
+}
+
+func nilDependency(value any) bool {
+	if value == nil {
+		return true
+	}
+	v := reflect.ValueOf(value)
+	switch v.Kind() {
+	case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Pointer, reflect.Slice:
+		return v.IsNil()
+	default:
+		return false
+	}
+}
+
+// Capabilities returns only the supported selected profile, or zero for invalid
+// configuration. It does not claim provider availability or authorize issuance.
+func (c Config) Capabilities() ProviderCapabilities {
+	if !c.valid() {
+		return ProviderCapabilities{}
+	}
+	return ProviderCapabilities{Hostname: true, Action: true, ChallengeTime: true, ProviderIdempotency: true}
+}
+
+func ascii(value string, maximum int, empty bool) bool {
+	if len(value) > maximum || !empty && value == "" {
+		return false
+	}
+	for _, b := range []byte(value) {
+		if b < 33 || b > 126 {
+			return false
+		}
+	}
+	return true
+}
+
+func optionalString(value OptionalString, maximum int) bool {
+	return !value.Available && value.Value == "" || value.Available && ascii(value.Value, maximum, true)
+}
+
+func action(value string) bool {
+	if len(value) < 1 || len(value) > 32 {
+		return false
+	}
+	for _, b := range []byte(value) {
+		if !(b >= 'a' && b <= 'z' || b >= 'A' && b <= 'Z' || b >= '0' && b <= '9' || b == '_' || b == '-') {
+			return false
+		}
+	}
+	return true
+}
+
+func hostname(value string) bool {
+	if len(value) == 0 || len(value) > 253 {
+		return false
+	}
+	for _, label := range strings.Split(value, ".") {
+		if len(label) == 0 || len(label) > 63 || label[0] == '-' || label[len(label)-1] == '-' {
+			return false
+		}
+		for _, b := range []byte(label) {
+			if !(b >= 'a' && b <= 'z' || b >= '0' && b <= '9' || b == '-') {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+func (Config) Format(s fmt.State, _ rune)   { _, _ = io.WriteString(s, "captcha.Config(redacted)") }
+func (Config) MarshalJSON() ([]byte, error) { return nil, errSensitive }
+func (Config) MarshalText() ([]byte, error) { return nil, errSensitive }

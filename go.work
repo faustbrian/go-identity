@@ -25,6 +25,7 @@ use (
 	./reference
 	./risk
 	./risk/hibp
+	./risk/captcha
 	./risk/postgres
 	./risk/valkey
 	./session

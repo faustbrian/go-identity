@@ -14,6 +14,33 @@ func captchaFlowInput() FlowContextInput {
 	return FlowContextInput{Kind: FlowPreAuth, Tenant: "tenant", Operation: "identity.password.signin", AnonymousFlow: "anonymous", PreAuthTransaction: "transaction", ChallengeID: "challenge", RequestFingerprint: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"}
 }
 
+func TestCaptchaFlowBindingsConserveOriginalScopeWithoutAuthority(t *testing.T) {
+	if _, err := (FlowContext{}).Bindings(); !errors.Is(err, ErrInvalidCaptchaReplay) {
+		t.Fatal("zero flow exported a scope")
+	}
+	preauth := captchaFlowInput()
+	authenticated := preauth
+	authenticated.Kind, authenticated.Subject, authenticated.AnonymousFlow = FlowAuthenticated, "subject", ""
+	authenticated.PreAuthTransaction, authenticated.Session = "", "session"
+	administrator := authenticated
+	administrator.Kind, administrator.Actor = FlowAdministrator, "administrator"
+	for _, input := range []FlowContextInput{preauth, authenticated, administrator} {
+		flow, err := NewFlowContext(input)
+		if err != nil {
+			t.Fatal(err)
+		}
+		got, err := flow.Bindings()
+		if err != nil || got != input {
+			t.Fatal("original closed flow scope changed", err)
+		}
+		got.Tenant, got.ChallengeID, got.RequestFingerprint = "other", "other", ""
+		again, err := flow.Bindings()
+		if err != nil || again != input {
+			t.Fatal("returned scope mutation changed original flow", err)
+		}
+	}
+}
+
 func TestCaptchaReplayFramingRawBytesAndRotation(t *testing.T) {
 	c := captchaReplayConfig(t)
 	p, _ := NewCaptchaReplayPolicy(c)

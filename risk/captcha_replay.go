@@ -89,6 +89,18 @@ func NewFlowContext(in FlowContextInput) (FlowContext, error) {
 	return FlowContext{state: &flowContextState{input: in}}, nil
 }
 
+// Bindings returns a value copy of the original trusted server metadata for
+// provider transport binding. Zero returns ErrInvalidCaptchaReplay. The result
+// is not authentication, authorization or the keyed token replay identity;
+// RequestFingerprint identifies the original command intent only. Automatic
+// formatting and serialization remain redacted or forbidden.
+func (f FlowContext) Bindings() (FlowContextInput, error) {
+	if f.state == nil {
+		return FlowContextInput{}, ErrInvalidCaptchaReplay
+	}
+	return f.state.input, nil
+}
+
 // CaptchaReplayKey owns a copied versioned 32..128-byte replay HMAC secret.
 // Zero is invalid; copies share immutable private storage. Go cannot guarantee
 // erasure. This key is distinct from provider credentials or counter secrets.
