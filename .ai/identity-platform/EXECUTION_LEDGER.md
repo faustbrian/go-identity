@@ -1,6 +1,59 @@
 # Identity Implementation — Current Milestone
 
-## Live checkpoint — 2026-10-18 14:52 UTC
+## Live checkpoint — 2026-10-18 15:47 UTC
+
+Selected native rename delivered: public username d825f044ef943bc1dc4c8257b068901828edccd2
+and password-native afe3f92781e9fb15c7a31abfb25a0ec0ffb498b0 are reviewed/pushed
+with Required39141423803/39141726590 green. Independent username_rename_review
+approved final native10 cbdb7f34 after canonical public username/MFA adoption;
+the known pre-publication pin gap is resolved, not waived. Original proof,
+MFA activation, forced two-key contention, outbox rollback, display/canonical
+effects, issued-cookie CSRF, cooldown and lost-final-COMMIT-ACK are proven in
+the actual signup/verification/signin journey. Constructor counter-only-owner
+RED1.817s now denies; no quota weakening (the supported limit remains five).
+Canonical GOWORKoff ordinary race2.034s, PG18.6/race6.524s and taggedvet0 pass.
+Actual downloaded native original journey passes PG/race3.877s from an isolated
+public consumer; its separate public API/fail-closed check passes race1.348s,
+not a second external database journey. All177 native Go/manifests match the
+public archive. No HTTP/reference or fullM05 claim. Next: existing selected
+M05 HTTP/reference boundary, not another native feature variant.
+
+Selected native organization self-leave delivered: root96552b934088a990862a600091103722048cd3a7
+and nativef54f10a17b5bc9c0929767af167377d0447407e9 are reviewed/pushed with
+Required39141247339/39141524573 green. organization_leave_review APPROVE original15
+d5b24600 and final native11 e802d81b after publicrootadoption. Canonical native
+ordinaryrace1.341s, genuine/session+selfleave PG18.6/race16.366s and taggedvet0
+pass. Actual downloaded-native genuine/selfleave checks pass PG/race18.331s;
+separate external public API/fail-closed race1.253s. All42 native Go/manifests
+match public archive. Current-membership Recover denies after departure;
+unchanged bounded terminal replay returns historical metadata without removing
+a readmitted membership. Shared epoch/tombstone/owner/team fences hold; no new
+schema or private engine. Organization main is clean; no fullM22/M23/HTTP claim.
+PG54777 stopped after DB/auditroles0|0, credentials/data removed. Bounded native
+cache/consumer cleanup closes this run; source and existing evidence remain.
+
+Full milestones remain3/39; whole-goal estimate remainsrough10–12%, lowconfidence.
+
+Successor organization lane15:06UTC: owner organization_teams (GPT-6.1 Sol
+high/no children), exact go-organization root/postgres Go/tests/docs/changelogs
+and module-local manifests only, base main1773298/root8c996. Native transfer
+public consumer18.756s and canonical25.437s with green Required39137279788
+prove actual session/membership/scoped authority owners. Finite M22 successor:
+current member leaves their explicitly selected organization; tombstone and
+scoped epochs atomically deny later access/team bindings, preserve independent
+organization-owned authority, and protect the final owner/recovery administrator.
+No arbitrary target, role promotion, private session/store/transaction engine,
+HTTP/reference, active-selection, dynamic roles or whole-M22 claim. Reuse the
+existing typed removal/counter/audit/outbox/recovery owners with the distinct
+identity.organization.member.leave operation. Prove genuine-session public
+leave/current-denial, last-owner and concurrent leave/remove/transfer, rollback,
+current-policy/session withdrawal and non-disclosing original recovery. If
+required post-leave recovery needs an unavailable upstream disclosure contract,
+report it rather than invent current membership or bypass authorization.
+Focused root/native tests, selected real PostgreSQL/race and tagged vet; public
+consumer and independent final review before primary-owned publication. No
+shared identity/reference/root-workspace/CI/Git writes; heavy checks wait for
+the primary's explicit grant. Primary owns pins/integration/final acceptance.
 
 OAuth native own-consent profile is reviewed/pushed asf15beb46a09663b3a93f4afe0981b9fcc3227cfa;
 Required39133593943 succeeds on that exact remote main. Public-root86b canonical

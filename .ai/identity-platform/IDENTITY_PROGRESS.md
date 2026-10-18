@@ -1,6 +1,6 @@
 # Identity Platform Progress
 
-## TL;DR — updated 2026-10-18 14:52 UTC
+## TL;DR — updated 2026-10-18 15:47 UTC
 
 **Estimated whole-goal completion: approximately 10–12%, with low confidence.**
 The working authentication baseline, thirteen email profiles, native username
@@ -10,25 +10,20 @@ Most platform families and final package qualification are not closed;
 queued work is not counted as delivered.
 This is an effort/scope estimate, not a measured percentage or an ETA.
 
-**Current parallel work:** primary username availability/rename; organization
-ownership-transfer worker; OAuth own-consent administration worker. The shared
-action-bound password admission prerequisite is reviewed/pushed as `4600452`
-with green CI and real PostgreSQL proof/atomic-consumption checks. Public
-reference adoption `8b45488` also has green CI and a downloaded-module
-PostgreSQL/race consumer proof. Organization has adopted that public pin.
-OAuth native own-consent management is now reviewed/pushed as `f15beb4`, with
-green Required CI and a genuine-session downloaded-module PostgreSQL/race
-consumer. Shared current-MFA action protection is reviewed/pushed as `e5fc9b8`
-with green CI. Organization transfer root `8c996ae` and native `1773298` are
-reviewed/pushed with green CI. A separate downloaded-module external consumer
-proves real owner transfer, former-owner denial, metadata recovery and denial
-after factor activation. Username availability native `c640e0d` and its
-root/risk/username `ba49ca6` and kernel `620e885` dependencies are reviewed/pushed
-with green CI. Canonical and downloaded-native PostgreSQL journeys prove
-durable quota/audit/occupancy and outage denial; a separate external API check
-proves selection/redaction, not another complete database journey.
-Native rename and HTTP/reference are still unfinished. None closes another
-full milestone yet.
+**Latest usable native outcomes:** username rename (`afe3f92`) and organization
+self-leave (`f54f10a`) are independently reviewed, pushed to their owning main
+branches and have green Required CI. Clean public-module PostgreSQL/race checks
+pass for both. Rename enforces original action-bound proof, current MFA/CSRF,
+thirty-day cooldown and identifier-session invalidation, including lost-COMMIT
+recovery. Leave tombstones only the authenticated member, protects the final
+owner and cannot revive old team bindings after readmission.
+
+**Next acceptance boundary:** connect the delivered username signup/signin,
+availability and rename owners to opt-in HTTP/reference, and prove the complete
+HTTPS journey. Do not add neighboring native variants before closing that
+selected M05 outcome. Organization HTTP/dynamic roles and complete OAuth
+composition remain separate work. No additional full milestone or full-unit
+qualification is claimed by these native deliveries.
 
 | Measure | Current position |
 | --- | --- |
@@ -38,8 +33,8 @@ full milestone yet.
 | Full package scope | **67 units: 61 product units + 6 primitive extensions.** No additional full-unit qualification has closed during this implementation run. The older 2/67 verified baseline is historical, not a current cross-repository audit. |
 | Last full milestone closure | **14 October:** B3 password change. |
 | Last complete email-profile delivery | **18 October:** independently selected hooks for managed change links and email OTP verification/change, including first-primary and TOTP paths. Pushed reference `ca26306`, Required CI 39110688213 passes; all 30 selected public-native PostgreSQL/race cases pass. |
-| Delivered organization profiles | **Native invitations, metadata, team lifecycle and ownership transfer.** Genuine owner transfer to an active member atomically changes roles/epochs, denies former-owner management and preserves exact metadata recovery. Root `8c996ae` / native `1773298`, green CI and external downloaded-module PostgreSQL/race proof. This is partial M22/M23, not the complete organization family. |
-| Delivered username profiles | **Required-email username registration/signin and advisory availability.** Actual signup → verification → signin → session/logout is joined by durable metered availability, canonical audit and primary occupancy/cooldown reads; outages never promise a free name. Native `c640e0d`, green CI, canonical and downloaded-native PostgreSQL/race proof plus external API compatibility. Rename and HTTP/reference remain unfinished; M05 is not closed. |
+| Delivered organization profiles | **Native invitations, metadata, team lifecycle, ownership transfer and self-leave.** Root `96552b9` / native `f54f10a` adds self-only departure with last-owner, current authority, scoped denial and readmission/team fences. Green CI; canonical PostgreSQL/race and downloaded-native genuine-session checks pass. This is partial M22/M23, not the complete organization family. |
+| Delivered username profiles | **Required-email username registration/signin, advisory availability and protected rename.** Native `afe3f92` adds atomic proof/name/cooldown/audit effects, original retry/recovery, issued-cookie CSRF and old-session denial. Green CI; canonical and downloaded-native PostgreSQL/race checks pass. HTTP/reference remain unfinished; M05 is not closed. |
 | Current unfinished deliverables | M04 lifecycle/privacy contribution, retained factor-profile limits and final qualification remain open; confirmation-hook variants are delivered. Full M22/M30/M35, organization HTTP/reference selection and final package qualification remain open. Next lanes must consume proven contracts, not restart delivered profiles. |
 
 ### What consumers can already do
@@ -60,7 +55,11 @@ full milestone yet.
   adds explicit advisory availability with durable tenant/network quotas,
   fail-closed canonical audit and actual canonical occupancy/cooldown checks.
   It is not a reservation; counter/audit/storage failures never report a free
-  name. Rename and HTTP/reference remain unfinished; MFA continuation is unselected.
+  name. Native `afe3f92` also supplies fresh-proof self-rename: display edits
+  preserve verification, canonical changes retire the old name for thirty days,
+  and both invalidate identifier-bound sessions. Actual cookie/CSRF, current MFA,
+  contention, rollback and lost-COMMIT recovery pass through the existing owners.
+  HTTP/reference remain unfinished; MFA continuation is unselected.
 - Manage email through delivered profiles: (1) list/get/add/resend/link verification/
   primary change, (2) safe self-removal, (3) explicit replacement-primary removal,
   (4) audited administrative reads, (5) administrative removal, (6) pending-address
@@ -96,6 +95,13 @@ full milestone yet.
   remains protected. Current factor activation/generation changes deny through
   commit. Native `1773298` has green CI and a separate external downloaded-module
   genuine-session consumer; organization HTTP/full M22 remain unfinished.
+- An authenticated member can leave only their explicitly selected organization
+  through native `f54f10a`. The last recovery-capable owner cannot leave; scoped
+  membership/team authority is withdrawn without revoking global sessions or
+  independent organization-owned credentials. Readmission does not revive old
+  team bindings. Current-membership recovery denies the departed member; bounded
+  exact terminal retries retain historical metadata without removing a newer
+  membership. Canonical and downloaded-native genuine-session checks pass.
 - Current owners/administrators can create bounded native teams and add/list/
   remove actual organization members. Removed or readmitted members cannot
   revive old team bindings. Current session, organization policy and scoped
@@ -1148,7 +1154,7 @@ restart old slices merely to fill this table; adopt applicable prior proof.
 | B2 | Reset and required session invalidation using the baseline owners plus identity/risk/hibp | Closed: reviewed native PostgreSQL/HTTPS reset, two-session revocation, original audit recovery and populated upgrade; main fd439aa and Required CI 38547848026; full-unit/release qualification pending |
 | B3 | Password change and fresh reauthentication through baseline owners | Closed: reviewed PostgreSQL/HTTPS verification/change, two-session revocation, populated upgrade, original auditing, rollback/recovery and combined reset/change; main 24b1b08 plus CI-only 47a3ee0, Required CI 38559659144; full-unit/release qualification pending |
 | M04 | Email add/change/verify/list/get/remove with session/lifecycle policy: identity/email | Thirteen delivered profiles, including enrolled verification→TOTP→session/read/logout and independently selected verification/change hooks (latest reference `ca26306`, green Required CI). Lifecycle/privacy contribution, retained factor-profile limits and final qualification remain open. Full row not closed. |
-| M05 | Username availability/signin/rename: identity/username, stable identifier contracts | Native required-email signup/verification/username-password signin/session-read/logout delivered as `1a83b18`, with public-dependency PostgreSQL/race, independent review, green CI and downloaded-API compatibility. Availability, fresh-proof rename and HTTP/reference remain open; full row not closed. |
+| M05 | Username availability/signin/rename: identity/username, stable identifier contracts | Native required-email signup/verification/username-password signin/session-read/logout, metered advisory availability and fresh-proof rename delivered through `afe3f92`; independent review, green CI, canonical public-dependency and downloaded-native PostgreSQL/race checks pass. Selected HTTP/reference journey remains open; full row not closed. |
 | M06 | Delivered magic-link signin and session: identity/magiclink | Closure not reassessed |
 | M07 | Purpose-bound email OTP request/delivery/completion: identity/otp, identity/otp/postgres | Closure not reassessed |
 | M08 | Verified phone enrollment/change, OTP/password signin and reset: identity/phone, OTP/password owners | Closure not reassessed |
@@ -1165,7 +1171,7 @@ restart old slices merely to fill this table; adopt applicable prior proof.
 | M19 | Verified One Tap to identity/session: identity/oauth/onetap | Closure not reassessed |
 | M20 | Bounded OAuth proxy callback to the intended application: identity/oauth/proxy | Closure not reassessed |
 | M21 | User/organization API-key issue/import/verify/rotate/revoke: identity/apikey, identity/apikey/postgres, identity/apikey/valkey | Closure not reassessed |
-| M22 | Organization create/manage/join/invite/remove and authority lifecycle: organization, organization/postgres | Closure not reassessed |
+| M22 | Organization create/manage/join/invite/remove and authority lifecycle: organization, organization/postgres | Native creation/membership/invitations/metadata/ownership transfer/self-leave delivered through `f54f10a`, with independent review, green CI and canonical/downloaded-native genuine-session PostgreSQL/race proof. Organization HTTP/reference, active selection and remaining lifecycle/role requirements are not closed. |
 | M23 | Teams and dynamic roles/permissions enforcement: organization, authorization contracts | Native team creation/membership/read/update/terminal deletion delivered through `dc12ee7`, with green CI and downloaded-native genuine-session PostgreSQL/race proof. Dynamic roles/permissions and HTTP/reference remain; full row not closed. |
 | M24 | Bans/session administration and bounded audited impersonation: identity, session, identity/impersonation, identity/impersonation/postgres | Closure not reassessed |
 | M25 | Verified domain/provider registration and federation policy: sso, sso/domain-verification, sso/postgres | Closure not reassessed |
