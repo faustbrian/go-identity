@@ -1,12 +1,12 @@
 # Identity Platform Progress
 
-## TL;DR — updated 2026-10-18 04:59 UTC
+## TL;DR — updated 2026-10-18 05:46 UTC
 
 **Estimated whole-goal completion: approximately 10%, with low confidence.**
 The working authentication baseline, eleven email profiles and selected native
 organization membership are delivered. Most platform families and final package
 qualification are not closed; this estimate does not count queued reviews or
-unconnected invitation/OAuth implementations as delivered outcomes.
+unfinished invitation implementations as delivered outcomes.
 This is an effort/scope estimate, not a measured percentage or an ETA.
 
 | Measure | Current position |
@@ -17,7 +17,7 @@ This is an effort/scope estimate, not a measured percentage or an ETA.
 | Full package scope | **67 units: 61 product units + 6 primitive extensions.** No additional full-unit qualification has closed during this implementation run. The older 2/67 verified baseline is historical, not a current cross-repository audit. |
 | Last full milestone closure | **14 October:** B3 password change. |
 | Last complete email-profile delivery | **18 October:** verification → genuinely enrolled TOTP → authenticated session read/logout, native and opt-in HTTPS, browser and persistent sessions. Pushed `02c6195`, Required CI 39092789592 passes. |
-| Current unfinished deliverables | Invitation send/delivery/acceptance and OAuth consent/code/refresh are actively integrating the reviewed shared atomic contributions. Kernel, capability and outbox are public/main with green exact-source CI; no shared publication dependency remains. hCaptcha child/public consumer is delivered; CaptchaFox is the next active leaf. Remaining M04 hooks/lifecycle/privacy contributions are identified, not silently treated as complete. |
+| Current unfinished deliverables | The selected OAuth code/S256 profile and all four CAPTCHA provider adapters are reviewed/public with green CI and real public-consumer proof; full M30/M35 remain open. Invitation send/delivery/acceptance tests now advance to rollback/recovery cases; native final acceptance and delivery remain. Remaining M04 hooks/lifecycle/privacy work is not silently treated as complete. |
 
 ### What consumers can already do
 
@@ -34,9 +34,14 @@ This is an effort/scope estimate, not a measured percentage or an ETA.
 - Use genuine authenticated sessions for native organization create/get/add/list/
   remove, with last-owner protection and scoped denial. Invitation preparation/
   metadata APIs are public, but sending/accepting invitations is not yet delivered.
-- Select bounded Turnstile, reCAPTCHA v3 or hCaptcha Publisher/Pro provider-fact
-  adapters. Durable risk/canonical-event/reference composition and live-provider
+- Select bounded Turnstile, reCAPTCHA v3, hCaptcha Publisher/Pro or CaptchaFox Free
+  provider-fact adapters. Durable risk/canonical-event/reference composition and live-provider
   qualification remain open.
+- Compose the native public-client authorization-code/S256 flow from a genuine
+  password session through independent consent, one-use exchange, refresh and
+  revocation, with atomic audit/outbox effects and metadata-only recovery.
+  Confidential/workload grants, OIDC, device, restricted exchange and complete
+  reference/HTTP/provider qualification remain outside this delivered profile.
 
 ### What remains before the whole goal is done
 
@@ -72,20 +77,22 @@ This is an effort/scope estimate, not a measured percentage or an ETA.
   storage/read `5d143b4` is public with actual PostgreSQL/public-pin race2.176s
   and Required39098233407 passing. Invitation send/accept, teams, domain
   authority and the whole M22 row remain open.
-- OAuth has real PostgreSQL authorization/code/refresh, current-authority,
-  contention and lost-acknowledgement evidence. Independent review found refresh
-  reuse and consumed-refresh revocation defects; both have genuine focused
-  red→green proof. Actual independent consent lifecycle persistence is now
-  connected to actual public kernel4c83b9a and outboxf438090; changed source
-  is undergoing focused real-PG checks before final review/publication.
-  Earlier full native race88.158s is retained for its original source, not reused
-  as a claim that later lifecycle changes passed.
+- OAuth core `a7762b9` and native adapter `92689f2` are independently reviewed and
+  pushed. The selected public-client authorization/code/S256/refresh/revocation
+  profile has actual public-core PostgreSQL/race consumer proof26.037s and tagged
+  vet passing, including independent consent lifecycle, rollback and ambiguous
+  commit recovery. Required39101419937 passes. The actual downloaded native
+  module's four real-PG/race consumers pass24.150s and clean external construction
+  passes1.232s without replacements. Full M30/provider qualification remains open.
 - Neutral CAPTCHA1aacfcc/d05eba7, Turnstile d10a829 and reCAPTCHA21458ee are
   public/main with Required CI passing. Turnstile's actual public module consumer
   passes race1.254s; reCAPTCHA public consumer passes race1.292s. hCaptcha
   Publisher/Pro neutral48ab343 and childcb04798 are reviewed/public/main with
   Required CI passing; public-dependency child race3.286s/vet0 and docs0.237s
   pass. Its postpublication actual public child consumer passes race1.256s.
+  CaptchaFox Free neutralb43abdf/child911f261 are also reviewed/public/main with
+  Required39101323444 passing; public-only race3.700s/vet0/docs0.256s and actual
+  published-child external callback consumer race1.242s pass.
   Canonical audit and durable/reference consumers are not delivered by those
   provider-fact modules; no M35 or whole-unit closure.
 

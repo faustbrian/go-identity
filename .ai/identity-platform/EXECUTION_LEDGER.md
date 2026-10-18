@@ -1,5 +1,50 @@
 # Identity Implementation — Current Milestone
 
+## Current parallel delivery checkpoint — 2026-10-18 05:46 UTC
+
+CaptchaFox neutral b43abdf and child911f261 are main/public with Required
+39099874763/39101323444 success. Independent final child13 review approved
+snapshot623f5fc7bb0abe8b5556b383b1bb2d239dd6f583aba4fee4a727f12436f26117.
+Public-only child race3.700s/vet0, docs0.256s and actual postpublication external
+consumer race1.242s pass. Its synthetic transport proves public POST/callback
+composition, not live-provider interoperability or canonical risk/reference
+events. All four selected provider adapters are now public; M35 remains open.
+
+OAuth corea7762b9 and native92689f2 are reviewed and pushed to main. Native22
+final snapshot10e86eeb4bc9e670168e45074b8ab81d2c26e51a1882bb1c0771b7d6d2284b06
+has independent APPROVE. Actual public-core real-PG selected consumer race
+passed26.037s and taggedvet0. Structural/localdocs/native docs compilation pass;
+untagged [no test files] is compilation only. Root Required39100201891 passed;
+native Required39101419937 also passed. Actual downloaded native92689/roota776
+public-module consumer construction passed1.232s; the four selected genuine
+PostgreSQL/race consumers passed24.150s without replacements/workspace bindings.
+This is the finite public-client code/S256 profile, not full M30 qualification.
+
+Primary fixed actual invitation original-preparation admission in kernel2530ece,
+now public/main with Required39101224042 success. Owning real-PG RED0.540s becomes
+GREEN0.470s; affected integration/race including MFA1.803s, full ordinary kernel
+race3.207s and taggedvet0 pass. Independent kernel11 final review APPROVE binds
+02de8c82e58f9de7cc5cc57ea6974f514c0d944404c3bd95b021dff0e9ca9223.
+Counter freezing, denial and fenced restart recovery preserve original mode;
+final generated attachment/execution remain strict. Native organization worker
+adopts the actual2530 public pin: invitation send now commits. A separate native
+status-authorization revision/configuration mismatch is corrected in its own
+unpublished service. Genuine send/delivery/concurrent acceptance, lifecycle and
+replay tests advance to the rollback scenario; the worker is correcting its
+unsupported assumption that terminal-released proof can be reused under a new
+command. The public capability contract explicitly forbids that reuse. No shared
+authority is relaxed; complete send/delivery/acceptance is not yet accepted.
+
+Only /root/organization_membership is an active implementation worker; primary
+owns integration/public consumer delivery and the remaining M04 work. OAuth and
+leaf workers finished their assigned source. Reviews are bounded/read-only;
+all use GPT-6.1 Sol high, no children. Local heavy lanes remain serialized.
+No whole milestone or full-unit qualification closes at this checkpoint.
+Both isolated postpublication consumer directories and the primary-only old
+PostgreSQL cluster were removed; no audit roles or worker databases remained.
+The organization worker still borrows the bounded build/module/tmp cache paths;
+retain only until that borrower finishes, then remove the exact task-owned root.
+
 ## Active lanes and delivered prerequisites — 2026-10-18 04:59 UTC
 
 Primary delivered closed invitation/consent kernel4c83b9a on main, Required
