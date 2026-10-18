@@ -44,6 +44,9 @@ type SignupVerificationConfig struct {
 	// signup/scanner behavior unchanged but disables confirmation execution.
 	// Install the forward verification counter migration before selecting it.
 	Counters *riskpg.Repository
+	// Hooks optionally selects email-owned link-confirmation policy. Nil keeps
+	// existing behavior; callback semantics belong to SignupConfig.ConfigurationID.
+	Hooks *email.VerificationHooks
 }
 
 // SignupDeliveryConfig selects encrypted email preparation, not a sender.

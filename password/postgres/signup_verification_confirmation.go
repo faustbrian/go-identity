@@ -126,6 +126,11 @@ func (s *SignupService) confirmRegistrationVerification(ctx context.Context, pro
 	if err != nil {
 		return result, err
 	}
+	if c.Verification.Hooks != nil {
+		if err := c.Verification.Hooks.Before(ctx, b); err != nil {
+			return result, err
+		}
+	}
 	reservation, result, err := coordinator.ReserveCommand(ctx, b, command, plan)
 	if err != nil || reservation == (kernel.Reservation{}) {
 		// Another invocation can commit after admission but before reservation.
@@ -144,7 +149,16 @@ func (s *SignupService) confirmRegistrationVerification(ctx context.Context, pro
 	if err != nil {
 		return coordinator.Abort(work, err)
 	}
-	return coordinator.Commit(work, result)
+	result, err = coordinator.Commit(work, result)
+	if err != nil || result.Outcome != identity.CommitOutcomeCommitted {
+		return result, err
+	}
+	if c.Verification.Hooks != nil {
+		// The sole coordinator has closed Work. Observation failure must retain
+		// this committed receipt, not authorize rollback or replayed disclosure.
+		err = c.Verification.Hooks.After(ctx, b)
+	}
+	return result, err
 }
 
 func confirmationReservationReplayed(reservation kernel.Reservation, result identity.CommandResult, err error) bool {

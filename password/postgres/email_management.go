@@ -40,9 +40,12 @@ type EmailManagementConfig struct {
 	ResendInterval time.Duration
 	// Change and ChangeNotification are selected together only for
 	// change-request. Nil leaves that profile unavailable, not partially usable.
-	Change              *email.ChangeProfile
-	ChangeNotification  *EmailChangeNotificationConfig
-	Verification        email.RegistrationVerificationConfig
+	Change             *email.ChangeProfile
+	ChangeNotification *EmailChangeNotificationConfig
+	Verification       email.RegistrationVerificationConfig
+	// VerificationHooks selects link verification only, not change or OTP.
+	// Nil preserves existing behavior; version callback semantics in ConfigurationID.
+	VerificationHooks   *email.VerificationHooks
 	Issuer              issuerpg.IssuerConfig
 	IssuanceCustody     issuerpg.IssuancePreparationConfig
 	Delivery            SignupDeliveryConfig

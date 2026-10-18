@@ -1,5 +1,23 @@
 # Password PostgreSQL adapter
 
+## Optional link-verification hooks
+
+Select an immutable `email.VerificationHooks` on
+`SignupConfig.Verification.Hooks` or
+`EmailManagementConfig.VerificationHooks`. Nil preserves existing behavior.
+Version callback semantics with the enclosing `ConfigurationID` and retain
+original configurations for recovery. Management selection applies only to
+pending-address verification links, not OTP or primary-email change.
+
+Before runs outside SQL before reservation; rejection leaves no command claim,
+proof use or protected change. Final native authority/expiry checks still apply.
+After runs outside SQL only after a fresh known commit. Its failure preserves
+the committed outcome and recovery but withholds address projection and any
+following verification-signin attempt. It is not rollback. Scanner validation,
+replay, recovery, unknown results and rollback never invoke observers. A failed
+attempt that passed reservation retains the existing anti-abuse charge; a hook
+rejection precedes that charge. Use the durable outbox for external delivery.
+
 ## Original-browser verification and signin
 
 Explicitly compose `NewVerificationSigninService(signup, config)` over the native

@@ -239,6 +239,13 @@ func (s *EmailManagementService) confirmManaged(ctx context.Context, r email.Ver
 	if err != nil {
 		return out, err
 	}
+	hooks := s.config().VerificationHooks
+	selectHooks := hooks != nil && observed.Absent && s.primary.config.Action == "identity.email.verification-send"
+	if selectHooks {
+		if err := hooks.Before(ctx, b); err != nil {
+			return out, err
+		}
+	}
 	reservation, result, err := coordinator.ReserveCommand(ctx, b, command, plan)
 	if err == nil && reservation != (kernel.Reservation{}) {
 		work, e := coordinator.Begin(ctx, reservation)
@@ -264,6 +271,11 @@ func (s *EmailManagementService) confirmManaged(ctx context.Context, r email.Ver
 	out.Recovery = q
 	if err != nil || result.Outcome != identity.CommitOutcomeCommitted || out.Replayed {
 		return out, err
+	}
+	if selectHooks {
+		if err := hooks.After(ctx, b); err != nil {
+			return out, err
+		}
 	}
 	state, err := s.directory.GetIdentifierState(ctx, identity.IdentifierQuery{TenantID: b.TenantID, UserID: b.UserID, MaximumIdentifiers: 128})
 	if err != nil {

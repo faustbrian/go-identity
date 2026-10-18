@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add optional ordered before/after callbacks to original-signup and managed
+  pending-address link verification. Run outside protected SQL, preserve known
+  commit/recovery on observer failure and withhold confidential projections.
+  Defaults, scanner validation, replay and recovery remain callback-free.
+
 - Explicitly continue registration verification into pending TOTP using the
   original signup browser, remember choice, consumed parent and deadline.
   Only actual factor completion can issue a session; defaults remain unchanged.
