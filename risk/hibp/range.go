@@ -1,5 +1,6 @@
 // Package hibp implements privacy-preserving Pwned Passwords boundaries.
-// The network checker and risk composition are still in development.
+// Its bounded checker returns provider evidence and neutral risk signals,
+// never a password acceptance decision.
 package hibp
 
 import (

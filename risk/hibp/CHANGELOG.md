@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Discard provider responses when the bounded request expires during body
+  cleanup or before publication, rather than return or cache usable screening
+  evidence after that deadline. Neutral risk signals remain unavailable.
+
 - Borrow the supported HTTP-client v2 transport without inheriting its cookies,
   middleware, redirects or headers; retain bounded, padded range-only requests.
 

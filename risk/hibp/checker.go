@@ -393,8 +393,15 @@ func (c *Client) fetch(ctx context.Context, prefix [5]byte, f *flight) {
 		<-c.slots
 	case <-ctx.Done():
 	}
-	f.cancel()
 	c.mu.Lock()
+	// read includes deferred body cleanup; expiry there or while awaiting mu
+	// must not publish or cache success after the bounded provider operation.
+	// Compare the monotonic deadline too: its cancellation timer may run later.
+	deadline, bounded := ctx.Deadline()
+	if err == nil && (ctx.Err() != nil || (bounded && !time.Now().Before(deadline))) {
+		data, err = rangeData{}, ErrProviderUnavailable
+	}
+	f.cancel()
 	// Abandoned work cannot populate a cache or absorb a later caller.
 	if c.flights[prefix] == f {
 		delete(c.flights, prefix)

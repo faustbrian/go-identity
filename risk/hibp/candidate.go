@@ -14,7 +14,7 @@ import (
 var errInvalidCandidate = errors.New("hibp: invalid candidate")
 
 // Neither the candidate suffix nor a complete digest has a public projection.
-// The future checker clears this transient value once matching is complete.
+// The checker clears this transient value once matching is complete.
 type candidate struct {
 	prefix [5]byte
 	suffix [35]byte

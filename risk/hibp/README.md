@@ -1,7 +1,8 @@
 # HIBP password screening
 
-Experimental, Go 1.27. Scoped password screening is implemented; complete
-identity-risk/password workflow integration remains unfinished.
+Experimental, Go 1.27. Scoped password screening and selected reference password
+reset/change composition are implemented; complete module qualification and
+broader identity-risk/password workflow integration remain unfinished.
 There is no public prefix-input API or password acceptance decision.
 
 ## Quick start and API reference
@@ -93,8 +94,9 @@ owns its shared provider-work limit.
 The observed wrapper owns no goroutines. The underlying Client's `Close` drains
 provider work, not separately bounded synchronous audit/observer callbacks.
 The host must wait for its calling goroutines before shutting down borrowed
-audit/telemetry dependencies. Real durable integration, reference selection and
-provider interoperability remain required before release.
+audit/telemetry dependencies. The selected reference reset/change journeys use
+native PostgreSQL/audit composition. Broader reference selection and provider
+interoperability remain required before full qualification.
 
 ## Implemented privacy boundary
 
@@ -146,9 +148,10 @@ observation plus cache TTL, and the adapter samples a separate trusted local
 comparison time. Derived expiry is capped by both original provider validity
 and the consuming operation's assessment TTL; cached provider age is not reset.
 
-This is provider-to-policy composition, not password-workflow completion or
-permission to perform a mutation. Full purpose/subject/workflow custody, durable
-event composition, reference telemetry selection and release gates remain unfinished.
+This is provider-to-policy composition, not permission to perform a mutation.
+The selected reference reset/change workflows consume the original bound screening
+result and deny mutation on unavailable evidence. Additional workflow profiles,
+reference telemetry selection and release gates remain unfinished.
 
 ## Checker lifecycle
 
@@ -189,19 +192,24 @@ Eviction releases references rather than clearing data concurrent waiters use.
 Clock regression fails closed. Each checker has an isolated cache/coalescing
 namespace. Deadlines include queueing; there are no automatic retries. Individual
 cancellation leaves other waiters intact; the last caller cancels shared work.
+Expiry during response-body cleanup or before result publication also discards
+the range and cannot populate the cache or produce clean neutral evidence.
 Callers and cancellation-draining flights are bounded. `(*Client).Close(ctx)`
 rejects new work, clears the cache, cancels requests and waits for owned goroutines.
 If its context expires, shutdown continues; call Close again to await completion.
 
 ## Remaining integration and release evidence
 
-Complete password workflow, durable audit and reference telemetry composition
-remain unfinished. Local TLS fixtures are not live-provider interoperability evidence.
+Selected reference password reset/change and native audit composition have public
+consumer integration coverage in `reference/password_hibp_integration_test.go`
+and their owning journeys. These checks are not full-module qualification;
+additional workflow/reference telemetry composition remains unfinished.
+Local TLS fixtures are not live-provider interoperability evidence.
 Do not substitute checker success for risk allowance.
 
-The password dependency pins committed Secret ownership at `c5746af64a6f`.
-Local development uses disposable external workspace wiring; no permanent
-replace directive is included. Publication, clean-consumer/API, exact coverage,
+The password v2 dependency pins committed Secret ownership at `4eb0fefa60ff`.
+The module uses committed public dependency versions without permanent replace
+directives. Publication, isolated clean-consumer/API, exact coverage,
 mutation, interoperability and other release gates remain pending.
 
 ## Tradeoffs and FAQ
