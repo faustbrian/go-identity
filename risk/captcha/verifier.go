@@ -165,6 +165,8 @@ func (c *Client) sameProfile(e ProviderEvidence) bool {
 		kind = EvidenceRecaptcha
 	} else if p.Provider == "hcaptcha" {
 		kind = EvidenceHCaptcha
+	} else if p.Provider == "captchafox" {
+		kind = EvidenceCaptchaFox
 	}
 	return e.Provider == p.Provider && e.API == p.API && e.Version == p.Version && e.Tier == p.Tier && e.APIProfile == p.APIProfile && e.SiteKey == p.SiteKey && e.ConfigurationVersion == p.ConfigurationVersion && e.Kind == kind
 }
@@ -188,6 +190,16 @@ func validNativeUnion(e ProviderEvidence) bool {
 }
 
 func (c *Client) validEnvelope(e ProviderEvidence) bool {
+	if c.config.Provider == "captchafox" {
+		return e.CaptchaFox != nil && validNativeUnion(e) &&
+			!e.Origin.Available && e.Origin.Value == "" &&
+			!e.Action.Available && e.Action.Value == "" &&
+			!e.ScoreAvailable && e.Score == 0 && optionalString(e.Hostname, 253) &&
+			(e.ChallengeTime.Available || e.ChallengeTime.Value.IsZero()) &&
+			(e.CaptchaFox.ErrorCodesAvailable || len(e.CaptchaFox.ErrorCodes) == 0) &&
+			(!e.Success || !e.CaptchaFox.ErrorCodesAvailable) &&
+			(e.Success || !e.ChallengeTime.Available)
+	}
 	if c.config.Provider == "hcaptcha" {
 		return e.HCaptcha != nil && validNativeUnion(e) &&
 			!e.Origin.Available && e.Origin.Value == "" &&

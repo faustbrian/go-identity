@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Add the explicit CaptchaFox Siteverify Free profile with native failure-code
+  availability and unchanged risk callback custody; unsupported action, score,
+  origin, Enterprise insights and remote-IP disclosure fail closed.
+
 - Add the explicit hCaptcha Siteverify Publisher/Pro profile with optional
   deprecated credit and native error-code availability. Action/score/origin and
   undocumented returned-sitekey proof stay unavailable; prior profiles remain.

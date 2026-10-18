@@ -54,9 +54,8 @@ type OptionalTime struct {
 	Value     time.Time
 }
 
-// ProviderEvidenceKind is a closed native-envelope discriminator. Turnstile,
-// reCAPTCHA v3 and hCaptcha Publisher/Pro are implemented. The reserved CaptchaFox
-// member grants no capability.
+// ProviderEvidenceKind is a closed native-envelope discriminator. Implemented
+// profiles are Turnstile, reCAPTCHA v3, hCaptcha Publisher/Pro and CaptchaFox Free.
 type ProviderEvidenceKind uint8
 
 const (
@@ -102,8 +101,13 @@ type HCaptchaEvidence struct {
 	ScoreReasons            []string
 }
 
-// CaptchaFoxEvidence reserves its closed native member without implementing a profile.
-type CaptchaFoxEvidence struct{ ErrorCodes []string }
+// CaptchaFoxEvidence retains bounded native failure codes, preserving absent
+// versus present-empty. The Free profile has no Enterprise insights, returned
+// sitekey, action, score or origin evidence; those are never inferred.
+type CaptchaFoxEvidence struct {
+	ErrorCodes          []string
+	ErrorCodesAvailable bool
+}
 
 // ProviderEvidence retains bounded authentic native fields and match facts. All
 // values are evidence only; provider success alone is not a trusted binding.
@@ -202,3 +206,9 @@ func (HCaptchaEvidence) Format(s fmt.State, _ rune) {
 }
 func (HCaptchaEvidence) MarshalJSON() ([]byte, error) { return nil, errSensitive }
 func (HCaptchaEvidence) MarshalText() ([]byte, error) { return nil, errSensitive }
+
+func (CaptchaFoxEvidence) Format(s fmt.State, _ rune) {
+	_, _ = io.WriteString(s, "captcha.CaptchaFoxEvidence(redacted)")
+}
+func (CaptchaFoxEvidence) MarshalJSON() ([]byte, error) { return nil, errSensitive }
+func (CaptchaFoxEvidence) MarshalText() ([]byte, error) { return nil, errSensitive }

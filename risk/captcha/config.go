@@ -13,9 +13,10 @@ import (
 
 // Config selects an explicit immutable provider profile and bounded call policy.
 // Zero is invalid. Supported profiles are Turnstile Siteverify v0/free,
-// reCAPTCHA classic Siteverify v3/standard and hCaptcha Siteverify Publisher/Pro.
-// All bind hostname/challenge time; hCaptcha has no action, only reCAPTCHA has
-// score. None discloses remote IP or has origin evidence. No endpoint or
+// reCAPTCHA classic Siteverify v3/standard, hCaptcha Siteverify Publisher/Pro and
+// CaptchaFox Siteverify/free. All bind hostname/challenge time; hCaptcha and
+// CaptchaFox have no action; only reCAPTCHA has score. None discloses remote IP
+// or has origin evidence. No endpoint or
 // provider is inferred from omitted configuration.
 // Lifetime is 1s..2m, ChallengeMaxAge 1s..5m and Timeout 1s..15s. MaxTokenBytes
 // is 1..8192; the provider additionally enforces its documented character limit.
@@ -57,6 +58,14 @@ func (c Config) valid() bool {
 		if c.API != "siteverify" || c.Version != "2026-08-11" || c.Tier != "publisher_pro" || c.APIProfile != "siteverify/publisher_pro" || c.ExpectedAction != "" || c.ExpectedCData.Available || c.ChallengeMaxAge > 2*time.Minute {
 			return false
 		}
+	case "captchafox":
+		// The Free response has no action, score, origin or Enterprise insights.
+		// No numeric provider TTL is documented: ChallengeMaxAge is an explicit
+		// bounded local policy, not a claim about provider token validity.
+		// https://docs.captchafox.com/en/getting-started#verification-response
+		if c.API != "siteverify" || c.Version != "2026-08-11" || c.Tier != "free" || c.APIProfile != "siteverify/free" || c.ExpectedAction != "" || c.ExpectedCData.Available {
+			return false
+		}
 	default:
 		return false
 	}
@@ -93,7 +102,7 @@ func (c Config) Capabilities() ProviderCapabilities {
 	if !c.valid() {
 		return ProviderCapabilities{}
 	}
-	return ProviderCapabilities{Hostname: true, Action: c.Provider != "hcaptcha", ChallengeTime: true, ProviderIdempotency: c.Provider == "turnstile", Score: c.Provider == "recaptcha"}
+	return ProviderCapabilities{Hostname: true, Action: c.Provider == "turnstile" || c.Provider == "recaptcha", ChallengeTime: true, ProviderIdempotency: c.Provider == "turnstile", Score: c.Provider == "recaptcha"}
 }
 
 func recaptchaAction(value string) bool {

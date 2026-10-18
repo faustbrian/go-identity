@@ -3,8 +3,8 @@
 Experimental, Go 1.27. This module supplies a stateless neutral verifier and the
 exact callback consumed by the existing identity/risk CAPTCHA-evidence issuer.
 Selected profiles are Turnstile Siteverify v0/free, reCAPTCHA classic
-Siteverify v3/standard and hCaptcha Siteverify Publisher/Pro; transport adapters
-are independent nested modules. Reserved CaptchaFox does not implement that provider.
+Siteverify v3/standard, hCaptcha Siteverify Publisher/Pro and CaptchaFox Siteverify
+Free; transport adapters are independent nested modules.
 
 `OutcomeSolved` is a provider fact, not permission to perform an operation.
 The risk owner derives keyed replay identity, authenticates the original command
@@ -63,6 +63,16 @@ The provider posts expected `sitekey` for provider-side token binding. hCaptcha
 warns that its browser-derived hostname is not authentication; the local exact
 comparison is an additional consistency gate, not identity or site-key proof.
 Its `not-provided` hostname sentinel cannot be configured as a valid binding.
+
+The CaptchaFox selection is provider `captchafox`, API `siteverify`, reference
+contract revision `2026-08-11`, tier `free`, API profile `siteverify/free`. Expected
+action must be empty (unsupported). Score, origin, cdata, remote-IP disclosure
+and Enterprise insights are unsupported. Configured sitekey is posted for
+provider-side binding, not fabricated as a returned field. Hostname is optional
+on the wire, but usable evidence requires an exact configured host match.
+Challenge timestamps are success-only and error codes failure-only, including
+present-empty error arrays. Challenge age is an explicit local bound (1s..5m),
+not an inferred numeric provider TTL; all original lifetime/expiry caps remain.
 
 Timeout is 1..15 seconds, evidence lifetime 1 second..2 minutes, challenge age
 1 second..5 minutes, token byte limit 1..8192, and concurrent calls 1..256. The
