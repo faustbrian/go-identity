@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Expose the exact original issued lifetime on restored phone enrollment
+  confirmations. Preserve shortened deadlines across retries without renewing
+  validity or granting current verification admission.
+
 - Add a separately closed session-authenticated phone-verification SMS issuance
   participant with exact kernel candidate custody and original encrypted-output
   restoration. Reuse the existing generator, challenge and delivery owners;

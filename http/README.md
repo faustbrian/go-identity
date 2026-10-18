@@ -435,6 +435,14 @@ one native operation does not authorize replacing previously retained contracts.
 The checked-in catalog retains those original rows and their source provenance
 alongside the new native source identity. It advertises no unselected handler.
 
+Phone verification recovery's native definitions are owned by
+`phone/verification_contracts.json`. The embedded catalog retains all earlier
+rows unchanged and adds that original-session, code-free recovery contract with
+its own source digest. The selected existing-account phone profile permits only
+the original stored `X-CSRF-Token` synchronizer with exact Origin and denied
+Referer fallback; it neither issues an independently aged token nor enables
+phone signup/signin/reset or any handler by registration alone.
+
 ## Bounded ordinary request parsing
 
 Construct one `NewRequestDecoder(Limits{...})` with every bound explicit.

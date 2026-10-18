@@ -1,6 +1,6 @@
 # Identity Platform Progress
 
-## TL;DR — updated 2026-10-18 22:23 UTC
+## TL;DR — updated 2026-10-18 22:45 UTC
 
 **Estimated whole-goal completion: approximately 15%, with low confidence.**
 **Consumer milestones: 6/39 closed** (15.4% unweighted); full scope remains
@@ -18,9 +18,13 @@ proof -> pending phone -> captured encrypted SMS -> counted wrong-code denial ->
 atomic verification -> code-free recovery. Actual before/after-COMMIT connection
 faults, CSRF rejection, changed-input conflict, late factor withdrawal and
 post-query disclosure withdrawal pass (14.083s, race enabled). Native ordinary
-race passes 2.123s; tagged vet passes. Independent final review approves the
-complete native batch; commit/publication remains pending at this snapshot.
-HTTP/reference and broader M08 operations remain unfinished;
+race passes 2.123s; tagged vet passes. Independently reviewed native `752b4cf`
+is main-pushed and Required CI green. The actual downloaded public adapter's
+same ten-profile PostgreSQL/race consumer passes 12.905s.
+HTTP handlers and closed input are being implemented; original issued-lifetime
+metadata and exact stored-session CSRF selection pass focused race/vet and
+independent prerequisite review. The complete HTTP/reference journey and broader
+M08 operations remain unfinished;
 the milestone count and whole-goal estimate do not increase for this checkpoint.
 
 **Latest delivery:** M07 email OTP -> captured encrypted delivery -> one consuming

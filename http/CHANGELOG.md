@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Admit the explicitly selected native stored-session CSRF profile for phone
+  enrollment, confirmation and code-free recovery. Register the direct recovery
+  contract without enabling any handler, route or advertised capability by
+  default. Other phone workflows and release qualification remain pending.
+
 - Permit the explicitly selected native username-rename stored-synchronizer
   profile without inventing an independent CSRF token-age promise. Exact
   trusted Origin and the canonical token header remain required.

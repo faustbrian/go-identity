@@ -33,6 +33,13 @@ requires the same committed preparation root/input/generation/output and frozen
 intent, fields and consuming OTP participant. `Prepare` creates a new logical
 submission against that original challenge; it is not ambiguity recovery.
 
+`PhoneEnrollmentConfirmation.Lifetime` returns the authenticated original
+`ExpiresAt - IssuedAt` interval, including a shortened original deadline, for
+consumers that need the issued lifetime. Repeated restoration does not renew or
+round it. Zero or invalid retained metadata returns the redacted
+`ErrInvalidCommand`. This is issuance metadata, not remaining validity, current
+admission, code possession or authority to verify the number.
+
 The original session and encrypted OTP authority stay byte-equivalent. A
 separate closed execution expectation derives only the enrollment's single
 identifier-epoch increment; the kernel can map only its own subsequent

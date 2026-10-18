@@ -452,6 +452,12 @@ func validOperation(owner ModuleID, op OperationDescriptor, catalog map[string]c
 		if (r.OperationID == "identity.otp.send" || r.OperationID == "identity.otp.email-verify" || r.OperationID == "identity.otp.email-verify.recover" || r.OperationID == "identity.otp.email-change-request" || r.OperationID == "identity.otp.email-change-confirm" || r.OperationID == "identity.otp.email-change-confirm.recover") && r.CSRFOrigin.Mode == CSRFSessionState && r.CSRFOrigin.TokenHeader == "X-CSRF-Token" && r.CSRFOrigin.RefererFallback == RefererFallbackDeny {
 			csrfMatches = true
 		}
+		// Existing-account phone enrollment/confirmation authenticates its
+		// original stored synchronizer even after its identifier epoch changes.
+		// This explicit cookie profile grants no public/pre-auth fallback.
+		if (r.OperationID == "identity.phone.send-verification" || r.OperationID == "identity.phone.verify" || r.OperationID == "identity.phone.verify.recover") && r.CSRFOrigin.Mode == CSRFSessionState && r.CSRFOrigin.TokenHeader == "X-CSRF-Token" && r.CSRFOrigin.RefererFallback == RefererFallbackDeny {
+			csrfMatches = true
+		}
 		if r.OperationID == "identity.mfa.totp-verify" && (r.CSRFOrigin.Mode == CSRFSessionState || r.CSRFOrigin.Mode == CSRFVariantOriginSessionState) && r.CSRFOrigin.TokenHeader == "X-CSRF-Token" && r.CSRFOrigin.RefererFallback == RefererFallbackDeny {
 			csrfMatches = true
 		}

@@ -6,6 +6,7 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
+	"time"
 
 	auth "github.com/faustbrian/go-authentication/v2"
 	identity "github.com/faustbrian/go-identity"
@@ -121,6 +122,24 @@ func (c PhoneEnrollmentConfirmation) FactorVersion() (uint64, error) {
 		return 0, ErrInvalidCommand
 	}
 	return p.factors, nil
+}
+
+// Lifetime returns the authenticated original challenge's exact issued duration,
+// not its remaining time or current admission. Restoration cannot renew it.
+// Zero or invalid retained metadata returns ErrInvalidCommand without values.
+func (c PhoneEnrollmentConfirmation) Lifetime() (time.Duration, error) {
+	p := c.state()
+	if p == nil || !nativeTime(p.issued.IssuedAt) || !nativeTime(p.issued.ExpiresAt) {
+		return 0, ErrInvalidCommand
+	}
+	profile, _, err := p.issued.Policy.Bindings()
+	lifetime := p.issued.ExpiresAt.Sub(p.issued.IssuedAt)
+	// Challenge issuance permits an earlier expiry, never an extension beyond
+	// its frozen profile TTL (otp.NewChallenge); preserve that exact interval.
+	if err != nil || lifetime <= 0 || lifetime > 24*time.Hour || lifetime > profile.TTL || lifetime%time.Microsecond != 0 {
+		return 0, ErrInvalidCommand
+	}
+	return lifetime, nil
 }
 
 func (p *phoneEnrollmentConfirmation) fields() ([]identity.FeatureField, error) {

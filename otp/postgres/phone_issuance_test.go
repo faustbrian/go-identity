@@ -216,6 +216,118 @@ func TestPhoneEnrollmentIssuerRestoresOriginalSMSWithoutVerifiedRecipient(t *tes
 	}
 }
 
+func TestPhoneEnrollmentConfirmationLifetimeRetainsOriginalIssuance(t *testing.T) {
+	for _, shortened := range []bool{false, true} {
+		name := "original"
+		if shortened {
+			name = "shortened"
+		}
+		t.Run(name, func(t *testing.T) {
+			codec, draft, spec, bearer, authority := phoneEnrollmentIssuanceFixture(t)
+			challenge, _ := draft.Bindings()
+			if shortened {
+				challenge.ExpiresAt = challenge.IssuedAt.Add(37*time.Second + 11*time.Microsecond)
+			}
+			want := challenge.ExpiresAt.Sub(challenge.IssuedAt)
+			native, _, _, _ := nativeSessionFixture(t)
+			native.Codec = codec
+			candidate := kernel.PhoneEnrollmentIntent{Change: identity.IdentifierChange{
+				TenantID: spec.Binding.TenantID, UserID: spec.Binding.UserID, ID: identity.IdentifierID(spec.Binding.RecordID),
+				Action: identity.IdentifierAttach, Kind: identity.IdentifierPhone, CanonicalValue: "+12025550123",
+				NormalizationProfile: "identity.phone.e164-ascii-v1.metadata-v9.0.40", NormalizationVersion: 1,
+				ExpectedUserVersion: 9, ExpectedAuthorityVersion: authority.IdentifierAuthorityVersion,
+			}}
+			fields, err := kernel.PhoneEnrollmentFields(candidate)
+			if err != nil {
+				t.Fatal(err)
+			}
+			spec.Fields = append(fields, identity.FeatureField{Name: "phone.factor-version", Value: identity.FeatureValue{Kind: identity.FeatureUint64, Uint64: 9}})
+			root, err := identity.NewFeatureSessionCommand(spec, bearer)
+			if err != nil {
+				t.Fatal(err)
+			}
+			templates := preparedSendTemplates("{{.code}}")
+			templates[0].Channel, templates[0].Subject = delivery.ChannelSMS, ""
+			issuer, err := NewPhoneEnrollmentIssuer(PhoneEnrollmentIssuerConfig{Store: native.ContributorConfig, Session: *native.Session,
+				Delivery: issuanceDeliveryOwner(t), Policy: challenge.Policy, TemplateID: "otp-code", TemplateVersion: 1,
+				ProviderVersion: 1, LocaleChain: []string{"en"}, Templates: templates})
+			if err != nil {
+				t.Fatal(err)
+			}
+			input := newPhoneEnrollmentSendInput(phoneEnrollmentSendInput{Candidate: candidate, Continuation: challenge.Continuation,
+				Authority: authority, IssuedAt: challenge.IssuedAt, ExpiresAt: challenge.ExpiresAt})
+			wire, err := issuer.Generate(context.Background(), root, input, 1)
+			if err != nil {
+				t.Fatal("original SMS generation failed", err)
+			}
+			for range 2 {
+				confirmation, err := issuer.RestoreEnrollmentConfirmation(context.Background(), root, input, 1, wire)
+				if err != nil {
+					t.Fatal("original SMS restoration failed", err)
+				}
+				if got, err := confirmation.Lifetime(); err != nil || got != want {
+					t.Fatal("confirmation did not preserve the exact original issuance lifetime", err)
+				}
+				if _, err := confirmation.MarshalJSON(); !errors.Is(err, otp.ErrSensitiveSerialization) {
+					t.Fatal("confirmation allowed implicit JSON disclosure")
+				}
+				if _, err := confirmation.MarshalText(); !errors.Is(err, otp.ErrSensitiveSerialization) {
+					t.Fatal("confirmation allowed implicit text disclosure")
+				}
+				for _, verb := range []string{"%s", "%v", "%#v"} {
+					out := fmt.Sprintf(verb, confirmation)
+					if !strings.Contains(out, "redacted") || strings.Contains(out, candidate.Change.CanonicalValue) ||
+						strings.Contains(out, bearer.Token()) || strings.Contains(out, challenge.IssuedAt.Format(time.RFC3339Nano)) ||
+						strings.Contains(out, challenge.ExpiresAt.Format(time.RFC3339Nano)) {
+						t.Fatal("confirmation diagnostics disclosed retained issuance values")
+					}
+				}
+			}
+		})
+	}
+}
+
+func TestPhoneEnrollmentConfirmationLifetimeDeniesInvalidMetadata(t *testing.T) {
+	_, draft, _, _, _ := phoneEnrollmentIssuanceFixture(t)
+	issued, _ := draft.Bindings()
+	cases := map[string]func(*otp.ChallengeSpec){
+		"missing-issued": func(s *otp.ChallengeSpec) { s.IssuedAt = time.Time{} },
+		"missing-expiry": func(s *otp.ChallengeSpec) { s.ExpiresAt = time.Time{} },
+		"zero":           func(s *otp.ChallengeSpec) { s.ExpiresAt = s.IssuedAt },
+		"negative":       func(s *otp.ChallengeSpec) { s.ExpiresAt = s.IssuedAt.Add(-time.Microsecond) },
+		"over-day":       func(s *otp.ChallengeSpec) { s.ExpiresAt = s.IssuedAt.Add(24*time.Hour + time.Microsecond) },
+		"over-profile":   func(s *otp.ChallengeSpec) { s.ExpiresAt = s.IssuedAt.Add(6 * time.Minute) },
+		"issued-nanos":   func(s *otp.ChallengeSpec) { s.IssuedAt = s.IssuedAt.Add(time.Nanosecond) },
+		"expiry-nanos":   func(s *otp.ChallengeSpec) { s.ExpiresAt = s.ExpiresAt.Add(time.Nanosecond) },
+		"both-nanos": func(s *otp.ChallengeSpec) {
+			s.IssuedAt = s.IssuedAt.Add(time.Nanosecond)
+			s.ExpiresAt = s.ExpiresAt.Add(time.Nanosecond)
+		},
+		"outside-year": func(s *otp.ChallengeSpec) {
+			s.IssuedAt = time.Date(10000, 1, 1, 0, 0, 0, 0, time.UTC)
+			s.ExpiresAt = s.IssuedAt.Add(time.Minute)
+		},
+		"zero-policy": func(s *otp.ChallengeSpec) { s.Policy = otp.AttemptPolicy{} },
+	}
+	for name, mutate := range cases {
+		t.Run(name, func(t *testing.T) {
+			bad := issued
+			mutate(&bad)
+			confirmation := PhoneEnrollmentConfirmation{read: func() *phoneEnrollmentConfirmation {
+				return &phoneEnrollmentConfirmation{issued: bad}
+			}}
+			if got, err := confirmation.Lifetime(); got != 0 || err != ErrInvalidCommand {
+				t.Fatal("invalid original lifetime did not deny with the unchanged redacted error")
+			}
+		})
+	}
+	for _, confirmation := range []PhoneEnrollmentConfirmation{{}, {read: func() *phoneEnrollmentConfirmation { return nil }}} {
+		if got, err := confirmation.Lifetime(); got != 0 || err != ErrInvalidCommand {
+			t.Fatal("zero confirmation supplied an original lifetime")
+		}
+	}
+}
+
 func TestPhoneEnrollmentIssuerZeroDenies(t *testing.T) {
 	var issuer PhoneEnrollmentIssuer
 	if err := issuer.Initialize(context.Background(), nil); err == nil {

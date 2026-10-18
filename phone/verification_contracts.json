@@ -1,0 +1,64 @@
+{
+  "operations": [{
+    "id": "identity.phone.verify.recover",
+    "owner": "identity/phone",
+    "declared_owners": ["identity/phone"],
+    "method": {"interface": "go:identity/phone:VerificationService", "name": "RecoverVerification", "signature": "RecoverVerification(context.Context, VerificationRecoveryRequest) (VerificationResult, error)"},
+    "request_type": "identity.phone.verify.recover.request",
+    "result_type": "identity.phone.verify.recover.result",
+    "error_types": ["identity.phone.verify.recover.errors"],
+    "transport": {"exposure": "both", "http_method": "POST", "http_path": "/v1/phone/verify/recover", "openapi_operation_id": "identity.phone.verify.recover"}
+  }],
+  "semantics": [{
+    "id": "identity.phone.verify.recover",
+    "owners": ["identity/phone"],
+    "access": "original authenticated-session possession and current historical disclosure policy",
+    "authorization": "original session possession plus current self-user historical disclosure policy; not executable session authority",
+    "csrf_origin": "CSRF",
+    "event_semantics": "Original code-free phone-verification correlation observes or reconciles only the retained consuming command. Committed and not-committed terminal history are metadata observations after current disclosure authorization; unknown stays unknown. No phone projection, code comparison or attempt debit, SMS resend, new verification, session or credential delivery. Cookie transport requires exact Origin and the original stored-session synchronizer after identifier authority changes. Recovery uses verification IP admission only, never another challenge debit.",
+    "exposure": "both", "http_method": "POST", "http_path": "/v1/phone/verify/recover", "openapi_operation_id": "identity.phone.verify.recover",
+    "idempotency": "read", "idempotency_transport": "Idempotency-Key and request.IdempotencyKey forbidden",
+    "rate_policy": "rate.verify", "risk_class": "auth"
+  }],
+  "types": [{
+    "id": "identity.phone.verify.recover.request", "owner": "identity/phone", "category": "operation_request",
+    "definition": {
+      "name": "VerificationRecoveryRequest", "schema_id": "identity.phone.verify.recover.request",
+      "representation": "Opaque constructor-only handle; the fields describe the explicit VerificationRecoveryRequestSpec projection, not automatic JSON.",
+      "fields": [
+        {"name": "TenantID", "type": "identity.TenantID", "required": true, "semantics": "Exact original tenant from trusted transport resolution, agreeing with recovery custody."},
+        {"name": "UserID", "type": "identity.UserID", "required": true, "semantics": "Original self subject authenticated by actual source-session possession, never claimed JSON."},
+        {"name": "Caller", "type": "authorization.DecisionContext", "required": true, "semantics": "Trusted current self-user historical disclosure action/policy; original command fields do not grant authority."},
+        {"name": "Flow", "type": "otp.SendFlow", "required": true, "semantics": "Exact original authenticated-session ID and token possession; not renewed executable session authority."},
+        {"name": "Recovery", "type": "phone.VerificationRecovery", "required": true, "semantics": "Opaque original send/consuming command, attempt, fingerprint generation, expected version and scope/digest-key correlation. No submitted code."},
+        {"name": "CSRFToken", "type": "session.CSRFToken", "required": false, "semantics": "Current request synchronizer required by selected cookie mode. Zero is structural input only for explicitly selected bearer mode; neither source nor storage supplies a replacement."}
+      ]
+    }
+  }, {
+    "id": "identity.phone.verify.recover.result", "owner": "identity/phone", "category": "operation_result",
+    "definition": {
+      "name": "VerificationResult", "schema_id": "identity.phone.verify.recover.result",
+      "representation": "Opaque result with explicit VerificationResultSpec projection. Zero accompanies a failure without authenticated observed history.",
+      "fields": [
+        {"name": "Binding", "type": "identity.CommandBinding", "required": true, "semantics": "Exact original consuming command and tenant/user/action/record correlation, never a replacement."},
+        {"name": "Outcome", "type": "identity.CommitOutcome", "required": true, "semantics": "Original observed durability. Live leases may remain in progress; unavailable reconciliation remains unknown, never fabricated rollback."},
+        {"name": "Identifier", "type": "identity.IdentifierProjection", "required": false, "semantics": "Always zero during recovery, including committed history."},
+        {"name": "Recovery", "type": "phone.VerificationRecovery", "required": true, "semantics": "Unchanged original code-free correlation, not code-comparison or retry authority."},
+        {"name": "Replayed", "type": "bool", "required": true, "semantics": "True for an authenticated historical observation, not fresh verification."},
+        {"name": "RetryAfter", "type": "time.Duration", "required": false, "semantics": "Bounded original pending receipt delay. No automatic retry or replacement attempt."}
+      ]
+    }
+  }, {
+    "id": "identity.phone.verify.recover.errors", "owner": "identity/phone", "category": "operation_errors",
+    "definition": {
+      "name": "VerificationRecoveryError", "schema_id": "identity.phone.verify.recover.errors",
+      "variants": [
+        {"identity": "invalid", "type": "phone.ErrInvalidVerification", "semantics": "Malformed or cross-scope original recovery request."},
+        {"identity": "denied", "type": "identity.ForbiddenError", "semantics": "Original possession, current synchronizer or current historical disclosure authority denies. Withhold result on post-query disclosure withdrawal."},
+        {"identity": "conflict", "type": "identity.ConflictError", "semantics": "Original retained command/attempt scope conflicts; never adopt new correlation."},
+        {"identity": "unknown", "type": "identity.UnknownCommitError", "semantics": "Original outcome remains unknown with authenticated unchanged recovery custody."},
+        {"identity": "unavailable", "type": "error", "semantics": "Bounded native storage/custody/cancellation failure; never infer rollback, repeat comparison or issue credentials."}
+      ]
+    }
+  }]
+}

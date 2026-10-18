@@ -1,6 +1,40 @@
 # Identity Implementation — Current Milestone
 
-## Live checkpoint — 2026-10-18 22:23 UTC
+## Live checkpoint — 2026-10-18 22:45 UTC
+
+22:45 HTTP/native prerequisite11 reviewed APPROVE by phone_http_prerequisites_review,
+exact aggregate d435aeb9e122c2e62a8ee20dd32f0b6c96feaa24a0dd0e2f04fd764e09c238d5.
+Original native confirmation lifetime has missing-method RED and actual repeated
+generation/restoration GREEN, including shortened37s+11us and malformed custody;
+parent focused race1.377s, vet0. Root HTTP stored-profile RED -> affected ordinary
+race13.722s/vet0. All333 prior catalog rows preserved, exactly one original phone
+recovery row added; disabled metadata remains unselected. No implicit routes.
+Primary HTTP handlers have closed-input RED/GREEN; feature selection first fails
+missing factory, now implementation waits for public rootHTTP prerequisite pin.
+Recovery-array test reproduced stdlib []byte accepting base64 strings; explicit
+array guard now passes. Real reference/native rate-source integration remains
+required; no selected HTTP or broadM08 completion claimed. Worker finished and
+stopped; primary owns integration and Git. Estimate~15%,6/39 unchanged.
+
+22:32 native M08 checkpoint delivered: 752b4cf1a371ab6a5a691362c51a5fe7c54942a9
+main-pushed, Required39172243522SUCCESS. Published native v0.0.0-20261018222625-752b4cf1a371
+origin/subdir/hash/checksums authenticated; all190Go/manifests match. Actual
+downloaded-native PostgreSQL/race ten-profile consumer80688 PASS12.905s; zeroDBs,
+ownedPG and exact task caches removed. No HTTP/reference or broadM08 closure.
+Next finite profile: opt-in cookie phone send/verify/code-free recovery with
+original password proof, strict origin/current CSRF, trusted tenant and native
+destination/challenge rate inputs, closed JSON, no sessions or implicit routes.
+Primary owns http/phone implementation, base HTTP selection, native rate-source
+ports, reference/migration wiring, manifests, pins and Git. Genuine reference
+HTTPS journey remains required before this selected profile is delivered.
+OTP metadata worker owns ONLY otp/postgres/phone_confirmation.go and
+phone_issuance_test.go plus additive native README/CHANGELOG: expose immutable
+original challenge lifetime from restored authenticated issuance, not current
+time, caller configuration or private SQL. Consumes committed752b4cf source;
+existing real issuer restore behavior proved by native phone consumer above.
+Pure metadata RED/GREEN, zero/immutable/truncated-original scope, focused native
+ordinary race/vet; no services/Git/children and no heavy run until parent grants
+the slot. This is one consumed native boundary, not a new product or milestone.
 
 22:23 actual M08 native consumer GREEN: bearer/cookie x normal, before-COMMIT,
 lost-COMMIT-ack, late-send-factor and late-verify-factor; final9187 PASS14.083s
