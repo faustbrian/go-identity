@@ -213,4 +213,5 @@ INSERT INTO identity.identifiers(tenant_id,user_id,identifier_id,kind,canonical_
 		t.Fatal("username discovery authority histories", err)
 	}
 	t.Run("username-primary-lookup", func(t *testing.T) { testUsernameLookupPostgres(t, ctx, pool, repository) })
+	t.Run("username-native-rename", func(t *testing.T) { testUsernameRenamePostgres(t, ctx, pool, repository) })
 }

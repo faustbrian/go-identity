@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add typed native username rename intent and the sole atomic identifier/CAS
+  writer, preserving display-only verification and keyed predecessor cooldowns.
+  The registered workflow still owns fresh proof, current factor/risk policy and
+  final checks. Add advisory primary occupancy/cooldown reads that fail closed
+  on unavailable retained-key history; these reads are not reservations.
+
 - Add exact comparison-bound username lookup and transaction-scoped admission
   without admitting usernames as verified channels. Fence original ownership
   and security epochs; allow the closed username-signin profile to perform an

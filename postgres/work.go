@@ -78,6 +78,7 @@ type workState struct {
 	resetFinalized            bool
 	emailVerification         *emailVerificationProgress
 	emailAttachment           *emailAttachmentProgress
+	usernameRename            *usernameRenameProgress
 	emailRemoval              *emailRemovalProgress
 	managedEmailVerification  *managedEmailVerificationProgress
 	counterCommand            *identity.Command
@@ -295,6 +296,7 @@ func invalidateWork(w Work) {
 	w.state.featureApplyCommand = nil
 	w.state.emailVerification = nil
 	w.state.emailAttachment = nil
+	w.state.usernameRename = nil
 	w.state.emailRemoval = nil
 	w.state.managedEmailVerification = nil
 	w.state.riskCommand = nil

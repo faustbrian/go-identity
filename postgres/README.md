@@ -1,5 +1,24 @@
 # Identity PostgreSQL
 
+## Native username rename and advisory discovery
+
+`NewUsernameRenameDomain` freezes the explicit comparison profile, retained
+identifier-reuse keys and cooldown. `UsernameRenameFields` binds every original
+user/identifier/verification predecessor. The exact registered native username
+contributor must supply real password/session/factor/risk admission; the kernel
+alone swaps the owned identifier and writes keyed retirement history. The
+`identifier.updated.v1` lifecycle and required protected audit share that Work.
+Same-canonical display edits preserve possession/time and create no retirement;
+actual canonical changes reset possession and conserve the original cooldown.
+This typed storage seam is not a standalone public rename workflow.
+
+`domain.UsernameAvailable` reads primary occupancy and live keyed cooldowns.
+Historical/unbound or inactive-account reservations still block uniqueness;
+missing historical keys or schema deny. Supply only an exact canonical value
+and profile, never an owner-exclusion selector. The owning workflow must enforce
+trusted tenant/network rate policy before exposing this advisory result. It
+locks/reserves nothing and cannot promise a later signup or rename will succeed.
+
 ## Username lookup and protected admission
 
 `ResolveUsername` reads one tenant-scoped canonical username only when its stored

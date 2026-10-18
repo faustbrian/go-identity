@@ -210,6 +210,9 @@ func (r *Repository) RecoverParticipant(ctx context.Context, recovery RecoveryWo
 	}
 	b, err := recovery.Scope()
 	if err == nil && recovery.state.plan.feature != nil {
+		if recovery.state.plan.feature.Operation == usernameRenameOperation() {
+			return recoverUsernameRename(ctx, recovery)
+		}
 		if recovery.state.plan.feature.Operation == emailRemovalOperation() {
 			return recoverEmailRemoval(ctx, recovery)
 		}

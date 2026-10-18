@@ -93,6 +93,14 @@ func validateFeatureCommand(phase FeatureExecutionContributor, command identity.
 		_, _, err := emailRemovalCommand(p, command, plan)
 		return err
 	}
+	if plan.Feature != nil && plan.Feature.Operation == usernameRenameOperation() {
+		p, ok := phase.(UsernameRenameContributor)
+		if !ok {
+			return invalidUsernameRename()
+		}
+		_, _, err := usernameRenameCommand(p, command, plan)
+		return err
+	}
 	if plan.Feature != nil && emailAttachmentOperation(plan.Feature.Operation) {
 		p, ok := phase.(EmailAttachmentContributor)
 		if !ok {
@@ -198,6 +206,11 @@ func (r *ContributorRegistry) admitFeaturePlanMode(b identity.CommandBinding, fi
 	}
 	if p.Feature.Operation == emailRemovalOperation() {
 		if _, ok := feature.contributor.(EmailRemovalContributor); !ok {
+			return nil, invalidPlan()
+		}
+	}
+	if p.Feature.Operation == usernameRenameOperation() {
+		if _, ok := feature.contributor.(UsernameRenameContributor); !ok {
 			return nil, invalidPlan()
 		}
 	}
@@ -572,6 +585,11 @@ func (c *Coordinator) ApplyFeature(ctx context.Context, w Work, command identity
 			return result, e
 		}
 	}
+	if p.feature.Operation == usernameRenameOperation() {
+		if e := prepareUsernameRename(ctx, w, command); e != nil {
+			return result, e
+		}
+	}
 	if emailAttachmentOperation(p.feature.Operation) {
 		if e := prepareEmailAttachment(ctx, w, command); e != nil {
 			return result, e
@@ -646,6 +664,11 @@ func (c *Coordinator) ApplyFeature(ctx context.Context, w Work, command identity
 	}
 	if w.state.emailVerification != nil {
 		if e := applyEmailVerification(ctx, w); e != nil {
+			return result, e
+		}
+	}
+	if w.state.usernameRename != nil {
+		if e := applyUsernameRename(ctx, w); e != nil {
 			return result, e
 		}
 	}
