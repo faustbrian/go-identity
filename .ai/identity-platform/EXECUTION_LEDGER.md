@@ -1,6 +1,39 @@
 # Identity Implementation — Current Milestone
 
-## Live checkpoint — 2026-10-18 22:58 UTC
+## Live checkpoint — 2026-10-18 23:34 UTC
+
+Phone reference20 delivered cc2142229fc70289b7d4568dbfcfaa77ece2551d main,
+Required39176981277SUCCESS. Independent phone_reference_final_review final
+APPROVE ce8f9b62258438181e36049eedd76a3b8929f2082dea72c9dd915dddc84a9c1d.
+F1 phone-only atomic-rate history had correct RED missinghistory0, fixed at native
+catalog owner; F2 adoption guide now uses actual selected Check/Plan/Apply.
+Final ordinary reference race8.597s/integrationvet0, selected PG18.6/race
+phone+baseline+username forwardpurpose6.773s. Actual downloaded reference
+v0.0.0-20261018233246-cc2142229fc7 genuine phone HTTPS PG/race passes4.359s;
+273Go/manifests byte-equal source, originHashcc21422 authenticated via proxy/SumDB.
+Complete real register/verify/signin/freshproof/SMS/wrongcode/verify/recovery/
+session-denial/freshsignin/logout consumer accepted. No public phone login/reset/
+replacement/removal or broadM08 closure.6/39,~15% and67unit scope unchanged.
+All taskPG fixtures stopped/removed; disposable Go caches removed after proof.
+
+Reference phone20 frozen for phone_reference_final_review at HEAD6bcebc2:
+lexical path+NUL+rawcontent+NUL SHA256
+083e06e8d7bca4fcb0129417269a82dc1c99ca1eacfe5f263ed98f9609f94821.
+Actual public-module phone HTTPS full journey passes4.416s; selected PG18.6/race
+phone+baseline+username forward purposes passes6.692s; ordinary reference race
+passes8.529s; integration-tagged vet0. External sender/HIBP only are controlled;
+no domain rows invented. Graph/migration focused race1.606s. Reference remains
+local/uncommitted; no broadM08 closure,6/39 and~15% unchanged.
+The actual wrong-code consumer first returned503 after used/failed counts1/1.
+HTTP explicit response recovery embedded opaque non-serializable attempt types.
+Focused serialization regression RED all3outcomes -> GREEN whole transport race
+2.577s/vet0. Three-file wire fix independently APPROVE by
+phone_wire_projection_review, exact binarydiff
+2d756fc79345edefad6e3e952335b99e2b0ece9926a80c621c6f4ce9ebc01001;
+committed/main-pushed6bcebc2010069484c30988ec92750b155dbcec0d,
+Required39176529550SUCCESS. Reference consumes its authenticated public module.
+Workspace correctioncec18a2 Required39174806194SUCCESS; prior431e97b CI failure
+retains its original result. All PG runs terminal and clusters removed by trap.
 
 23:02 producer431e97b2228d0d3f9a1ccd944bb739236e678765 main-pushed; Required
 39174527990 failed only repository registration: http/phone missing from go.work.

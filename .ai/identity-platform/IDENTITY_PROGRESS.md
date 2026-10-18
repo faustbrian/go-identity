@@ -1,6 +1,6 @@
 # Identity Platform Progress
 
-## TL;DR — updated 2026-10-18 22:58 UTC
+## TL;DR — updated 2026-10-18 23:34 UTC
 
 **Estimated whole-goal completion: approximately 15%, with low confidence.**
 **Consumer milestones: 6/39 closed** (15.4% unweighted); full scope remains
@@ -12,24 +12,22 @@ Most platform families and final package qualification are not closed;
 queued work is not counted as delivered.
 This is an effort/scope estimate, not a measured percentage or an ETA.
 
-**Current implementation:** native existing-account phone enrollment now passes
-the genuine PostgreSQL/SMS consumer in bearer and cookie profiles: fresh action
-proof -> pending phone -> captured encrypted SMS -> counted wrong-code denial ->
-atomic verification -> code-free recovery. Actual before/after-COMMIT connection
-faults, CSRF rejection, changed-input conflict, late factor withdrawal and
-post-query disclosure withdrawal pass (14.083s, race enabled). Native ordinary
-race passes 2.123s; tagged vet passes. Independently reviewed native `752b4cf`
-is main-pushed and Required CI green. The actual downloaded public adapter's
-same ten-profile PostgreSQL/race consumer passes 12.905s.
-Opt-in cookie HTTP handlers, closed JSON/OpenAPI and native read-only rate-source
-ports now pass focused checks and independent final review: transport race
-2.868s/vet, bounded fuzz 265 executions, native ten-profile PostgreSQL/race
-13.148s and ordinary race 1.980s/tagged vet. Source ports preserve original keyed
-destination/lifetime without creating preparation, comparing codes or charging
-attempts. The producer batch is ready for main delivery at this snapshot;
-reference composition and its full HTTPS consumer remain unfinished, as do
-broader M08 operations;
-the milestone count and whole-goal estimate do not increase for this checkpoint.
+**Newest delivered behavior:** an existing account can enroll and verify a phone
+through the actual reference HTTPS backend: register/email-confirm/signin ->
+fresh action proof -> captured encrypted SMS -> counted wrong-code denial ->
+atomic phone verification -> code-free original recovery -> old-session denial
+-> fresh signin/logout. Native bearer/cookie owners and optional cookie HTTP
+compose without a substitute domain engine. See [adoption guide](../../reference/PHONE.md).
+Independent final review approved `cc21422`, main-pushed with Required CI
+39176981277 green. Selected PostgreSQL/race phone/baseline/username compatibility
+passes 6.773s; ordinary reference race passes 8.597s, integration vet exits 0.
+The actual downloaded reference module's genuine phone consumer passes 4.359s;
+all 273 Go/manifests match committed source. Review's independent HTTP atomic-rate
+migration omission and migration-guide defect are fixed. HTTP response-custody
+serialization regression is separately delivered in `6bcebc2`, CI green.
+**Still open in M08:** phone change/removal, signup/signin/password-reset profiles
+and full phone-unit qualification. This accepted enrollment profile does not
+close broad M08; whole-goal estimate and 6/39 count remain unchanged.
 
 **Latest delivery:** M07 email OTP -> captured encrypted delivery -> one consuming
 signin -> browser/persistent session read/logout, with original retry and
