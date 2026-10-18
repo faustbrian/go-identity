@@ -1,5 +1,81 @@
 # Identity Implementation — Current Milestone
 
+## Accepted native invitation profile — 2026-10-18 06:24 UTC
+
+go-organization native6847272a5ba4da6a9e7be5275b77c7f5c53cf6c0 is committed,
+pushed to main and clean; Required39103645549 success. The complete nineteen-path
+candidate e916396c6c06f3c6a3e29a7395471b6ca8f35ff666cb90ee38446bde7e879413
+has independent /root/organization_core_final_review APPROVE. Current external
+policy and before-row interrupted-send recovery findings are resolved, not waived.
+Root policy8d91c42 and kernel origin538b443 are public with green Required CI.
+Kernel11 review4411b928 APPROVE, ordinaryrace3.664s/taggedvet0/originfuzz10279,
+selected owning PG/race1.577s. Native genuine RED2.950s→GREEN3.802s, ordinary
+race1.308s/full retained PG18 race17.167s/taggedvet0. Structural/docs/secrets pass.
+
+Actual postpublication external module pins native
+v0.0.0-20261018061938-6847272a5ba4, root8d91/kernel538b, no replacements or
+workspace/sibling resolution. Copied maintained external consumer fixtures plus
+their literal migration/ID/COMMIT-response-loss helpers compile0.415s, then real
+PG18/race TestOrganizationGenuinePasswordConsumer PASS15.292s. This proves genuine
+signup/verification/password sessions→owner send→captured encrypted delivery→
+concurrent recipient acceptance→membership/scoped authority, paired lifecycle,
+rollback/replay/current-policy denial and new-service/fresh-session ambiguous
+recovery, including both acknowledged stages before a domain row exists.
+An initial scratch-fixture compile omitted common helpers; adding the unchanged
+maintained helpers corrected fixture completeness, without repository edits.
+
+This closes this finite native profile, not full M22, teams/roles, resend/cancel,
+organization HTTP/reference selection or unit release qualification. Primary
+returns to the remaining M04 hooks; OAuth successor source lane is active.
+/root/organization_membership finished and owns no live process/resource. Public
+consumer PostgreSQL was stopped/deleted; remaining bounded caches/scratch are
+being removed before another primary Go run. No package qualification inflated.
+
+## OAuth successor lane — 2026-10-18 06:18 UTC
+
+The public-client code/S256 profile is accepted as a bounded delivery at OAuth
+corea7762b9/native92689f2 with Required39100201891/39101419937 success and actual
+downloaded-module real-PG/race consumer24.150s. Full M30 remains open.
+/root/oauth_authorization_code may resume one successor profile: configured
+platform-owned confidential clients using client_secret_basic for the existing
+code/S256, refresh and revocation journey, preserving public-client behavior.
+Owned paths: go-oauth-server root Go source/tests/module-local go.mod/go.sum,
+docs and changelog, and postgres native source/tests/docs/module-local pins.
+Exclude root modules.json/packages.json/go.work, CI, other repositories and
+shared identity/session/risk/kernel contracts; primary owns those integrations
+and all Git delivery. Worker uses GPT-6.1 Sol high, no children, preserves others.
+First bounded contract mapping identifies actual secret verification/retention
+and current-client authority seams; missing upstream behavior is requested,
+not privately replaced. No speculative client credentials, organization/API-key
+exchange, OIDC, dynamic registration or management-family expansion.
+Acceptance: real signup/session→consent→S256 exchange/refresh/revoke for the
+confidential client, wrong/foreign/missing/duplicate/downgraded authentication
+denial before effects, reveal/redaction and current configured secret policy,
+rollback/contention/unknown metadata, unchanged public flow and additive state
+compatibility where changed. Focused red/green, affected race/vet/protocol parser
+fuzz and actual public-supplier PG consumer suffice before one final review;
+full-unit qualification remains separate. Worker reports first public boundary
+and coherent test result, obtains the heavy lane before Go/services, and waits
+for primary acceptance/publication rather than starting another profile.
+
+## Invitation review corrections — 2026-10-18 06:00 UTC
+
+Independent complete nineteen-path review /root/organization_core_final_review
+returned REQUEST_CHANGES for snapshot5050a5d: execution omits current external
+action policy; preparation-only send recovery requires an absent invitation row.
+Primary owns go-organization root policy regression/fix and existing kernel
+original-correlation/recovery boundary. /root/organization_membership resumes
+only its existing postgres invitation source/tests/docs/pins; no root/shared/Git
+edits, no children, GPT-6.1 Sol high. Existing nineteen-path work is preserved.
+First worker action is bounded source mapping and a genuine missing-row recovery
+regression; heavy Go/PG checks wait for the primary lane. No new journal or
+caller-selected organization authority. Acceptance adds Allow→Deny between
+prepare/execute with zero protected effects, plus new-service/fresh-session
+reconciliation after acknowledged preparation without an invitation row.
+Retain previous happy-path/rollback/migration evidence; rerun affected cases,
+native race/vet and complete final review before public delivery. These are
+concrete defects inside the frozen send/delivery/accept profile, not a new plan.
+
 ## Current parallel delivery checkpoint — 2026-10-18 05:46 UTC
 
 CaptchaFox neutral b43abdf and child911f261 are main/public with Required

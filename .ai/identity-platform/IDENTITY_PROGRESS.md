@@ -1,12 +1,12 @@
 # Identity Platform Progress
 
-## TL;DR — updated 2026-10-18 05:46 UTC
+## TL;DR — updated 2026-10-18 06:24 UTC
 
-**Estimated whole-goal completion: approximately 10%, with low confidence.**
+**Estimated whole-goal completion: approximately 10–12%, with low confidence.**
 The working authentication baseline, eleven email profiles and selected native
-organization membership are delivered. Most platform families and final package
-qualification are not closed; this estimate does not count queued reviews or
-unfinished invitation implementations as delivered outcomes.
+organization membership/invitation journeys are delivered, alongside a selected
+OAuth code/PKCE flow and four CAPTCHA adapters. Most platform families and final
+package qualification are not closed; queued work is not counted as delivered.
 This is an effort/scope estimate, not a measured percentage or an ETA.
 
 | Measure | Current position |
@@ -17,7 +17,8 @@ This is an effort/scope estimate, not a measured percentage or an ETA.
 | Full package scope | **67 units: 61 product units + 6 primitive extensions.** No additional full-unit qualification has closed during this implementation run. The older 2/67 verified baseline is historical, not a current cross-repository audit. |
 | Last full milestone closure | **14 October:** B3 password change. |
 | Last complete email-profile delivery | **18 October:** verification → genuinely enrolled TOTP → authenticated session read/logout, native and opt-in HTTPS, browser and persistent sessions. Pushed `02c6195`, Required CI 39092789592 passes. |
-| Current unfinished deliverables | The selected OAuth code/S256 profile and all four CAPTCHA provider adapters are reviewed/public with green CI and real public-consumer proof; full M30/M35 remain open. Invitation send/delivery/acceptance tests now advance to rollback/recovery cases; native final acceptance and delivery remain. Remaining M04 hooks/lifecycle/privacy work is not silently treated as complete. |
+| Latest delivered profile | **Native organization invitations:** genuine owner send → captured delivery → verified recipient acceptance → membership, including rollback, contention, policy withdrawal and fresh-session interrupted-send recovery. Pushed `6847272`, green Required CI and actual downloaded-module PostgreSQL/race consumer proof. This is partial M22, not the complete organization family. |
+| Current unfinished deliverables | Primary: remaining M04 hooks/lifecycle/privacy. OAuth worker: configured confidential-client authentication on the delivered code/S256 flow. Full M22/M30/M35, organization HTTP/reference selection and final package qualification remain open. |
 
 ### What consumers can already do
 
@@ -32,8 +33,11 @@ This is an effort/scope estimate, not a measured percentage or an ETA.
   through genuine enrolled TOTP with atomic session effects, including HTTPS
   browser/persistent, exhaustion, late-authority, recovery and populated upgrades.
 - Use genuine authenticated sessions for native organization create/get/add/list/
-  remove, with last-owner protection and scoped denial. Invitation preparation/
-  metadata APIs are public, but sending/accepting invitations is not yet delivered.
+  remove, with last-owner protection and scoped denial. Owners can send member
+  invitations to existing verified recipients, deliver through the actual queue,
+  and recipients can accept atomically into membership/scoped authority. Current
+  policy denial, concurrent acceptance, rollback and fresh-session/new-service
+  interrupted-send recovery are proven through the downloaded public module.
 - Select bounded Turnstile, reCAPTCHA v3, hCaptcha Publisher/Pro or CaptchaFox Free
   provider-fact adapters. Durable risk/canonical-event/reference composition and live-provider
   qualification remain open.
@@ -56,6 +60,14 @@ This is an effort/scope estimate, not a measured percentage or an ETA.
   composition and all mandatory package, journey and shared-issuer qualification.
 
 ### Immediate delivery state and next action
+
+- Native invitations `6847272` are independently reviewed/pushed, Required
+  39103645549 success. Actual public native/root/kernel consumer passes real-PG
+  race15.292s without replacements; native entire retained PG race17.167s,
+  ordinaryrace1.308s and taggedvet0 pass. Root policy `8d91c42` and kernel original
+  correlation `538b443` are reviewed/public with green Required CI. Both concrete
+  review findings have real failing regressions and corrected public-consumer
+  proof. Full M22 and unit qualification remain open; do not restart this profile.
 
 - Identity prerequisites `bb569ec` and `615ac00` are pushed to main with their
   exact-head Required CI passing.
