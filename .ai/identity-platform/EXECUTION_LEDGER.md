@@ -1,6 +1,130 @@
 # Identity Implementation — Current Milestone
 
-## Live checkpoint — 2026-10-18 19:49 UTC
+## Live checkpoint — 2026-10-18 20:27 UTC
+
+M07 selected email OTP consumer milestone CLOSED. Reference00ca1bb585eaa0d8ac3db618463d04b9500e52b8
+main-pushed; Required39163196267 SUCCESS. Independent complete final13 review
+email_otp_reference_final_review APPROVE content6254ba2521d7faa3a100bbee78dc3d221eedda3a748337ad3f8a17a2943e7800,
+base8008afd; no source edits after review. MFA63cb08d and native8008afd both
+reviewed/main-pushed/Requiredgreen. Canonical reference ordinaryrace9.200s,
+cmd7.507s/taggedvet0 and six actual PG/race profiles17.905s pass. Actual public
+referencev0.0.0-20261018202450-00ca1bb585ea origin/subdir/SHA authenticated,
+sumh1:8kRh42z7p5PHQ0NJy81QzzViU9G3R7kvQltvSBqpS5o=,
+gomodsumh1:K/RXIkoCUQXLbewjae4eoaNWGjppPv4DNpxG43nO//s=;
+all266Go/manifests byte-match. Separate consumer copies only67 downloaded
+external tests/manifests and requires actual public reference, no replacements:
+PG/race57299 PASS18.347s, six profiles, fixture0|0/PGstopped/dataremoved.
+First copy retained read-only cache mode; task-owned consumer manifests made
+writable before module edit, no test ran in that failed preparation. Genuine
+registration/verification supplies account/factor state; genuine TOTP enrollment
+proves no weaker OTP session. Normal/persistent signin read/logout, metering,
+scanner/browser/origin/replay, actual lostACK and code-free history all pass.
+6/39 consumer milestones closed, whole-goal estimate~15% low confidence;
+no additional full-unit qualification. Native review N1 remains non-blocking
+test hardening, not an inferred covered phase or a proven bypass. Next M08
+adopts existing phone contracts; no worker assignment or phone writes yet.
+Own scratch/cache cleanup follows now; no service or heavy command remains live.
+
+### Retained M07 implementation checkpoints (superseded by closure above)
+
+Native8008afdfd3509bc244f36aafbef578107dadf7fe main-pushed, exact reviewed
+patch retained, Required39162835555 SUCCESS. Actual public adapter121Go/manifests
+byte-match; canonical reference now pins it and public MFA63cb08d. Canonical
+reference ordinaryrace72644 PASS9.200s/cmd7.507s and taggedvet0. Its following
+direct script invocation failed permission126 before PG, corrected invocation
+via /bin/sh9851 six actual PG/race cases PASS17.905s; fixture0|0/stopped/deleted.
+Bounded native attempt-record fuzz92995 PASS6.503s/87537execs, no source changes.
+Reference final13 frozen content6254ba2521d7faa3a100bbee78dc3d221eedda3a748337ad3f8a17a2943e7800
+with email_otp_reference_final_review; no other runtime command live. Its final
+review, main delivery and downloaded-reference consumer remain; M07 not closed.
+DB boundary inspected: same authoritative PK(tenant_id,user_id), bounded one-row
+FOR UPDATE per native phase, no new schema/index, retry or durable-write owner;
+existing configureKernelWork takes tenant exclusion before aggregate access.
+No latency/throughput or production performance claim is made.
+
+Native final12 independent review by otp_native_final_review APPROVE exact
+patch3c076a18958654f2c0aa1a5371f41b88b8853f0dc92b3bbd0dffd9c105ea4faa,
+base63cb08d. No material finding/readiness gap; one non-blocking coverage request
+N1 accepted for later native test hardening: wrong-code changed-epoch zero-charge
+and post-reservation epoch withdrawal with rollback/release. Current changed
+reference case denies before counting, so neither later phase is claimed covered
+by that case. Source review confirms all fences and tenant/factor locking remain;
+no runtime bypass demonstrated. Deliver frozen approved native batch without
+expanding production scope. Paired reference ordinaryrace56552 PASS9.171s,
+cmd7.741s/taggedvet0; public-native repin, canonical reference checks, independent
+reference review and actual downloaded-reference consumer remain. M07 not closed.
+
+M07 actual MFA downgrade corrected in paired graph: pre-fix genuinely enrolled
+OTP-only200 failure37501(4.296s) -> six selected browser/persistent/unknown/
+enrolled/missing/changed-epoch profiles PASS89843(20.012s), repeated97528six
+PASS18.60s. That combined97528 invocation failed only its additional legacy
+case's absent fixture inputs; no aggregate pass claimed. Own TLSValkey legacy
+case first exposed required MFA history/readiness, then explicit pre-existing
+account fixture/history corrected and5375 PASS23.780s, PG/roles0|0/stopped;
+ownedValkeycontainer/TLScredentialsremoved. New public journey never seeds users,
+factors, browser flows, challenges or sessions; enrolled case genuinely enrolls.
+MFA prerequisite63cb08d9930aa2c0067aa691527d369dc6818da9 main-pushed,
+Required39162135426 SUCCESS, independent finalfive APPROVE by
+otp_mfa_guards_final_review at patchaef83d4a5dd71dd9aa8b0ae9061449f16836a5974ddf9c83673837d56ff08df0.
+All147 published Go/manifests match; nativeOTP consumes actual public MFA pin.
+Current native final12 patch3c076a18958654f2c0aa1a5371f41b88b8853f0dc92b3bbd0dffd9c105ea4faa
+is frozen for otp_native_final_review. CanonicalGOWORKoff ordinaryrace87921
+PASS1.647s/taggedvet0; actual native PG/race79803 PASS13.161s covers retained
+Send/suppression/maxsends, check/expiry/budget/race, user/anonymous browser/
+persistent signin, source withdrawal, competing codes, rollback, actual lostACK
+success/wrong-code and policy/expiry waits. Native fixture left two audit roles
+inside its owned cluster, then whole cluster stopped/dataremoved. New native mode
+has encrypted v2 originalfactor epoch; old v1/policy API remains supported,
+v2 stays fenced even if config changes. Protected code-free phase restoration
+authenticates retained records rather than requiring a borrowed submitted code.
+Recovery/release remain unchanged. Raw native/reference publication and final
+reference review/clean-consumer still pending; no M07 closure or new unit count.
+Own caches retained only for this bounded M07 run; reference ordinaryrace/vet
+session56552 is the only heavy command currently live.
+
+M07 concrete defect found: genuine registration/verification/TOTP enrollment ->
+emailOTP signin returned200 under otherwise-valid authorization (real PG/race
+37501 FAIL4.296s). Existing native mode delegates MFA to policy only; canonical
+composition must select an additive native known-empty-factor mode, preserving
+policy-only API consumers. Freeze original MFA epoch in encrypted signin custody
+and fence same row/generation before counted attempts, reservation and final
+protected commit. Never replace it with a later empty generation. Code-free
+history/release keep original recovery semantics. No kernel API changes needed.
+Bounded read-only otp_factor_boundary confirmed four concrete typed OTPWork
+guards, not widening unrelated MFA guards or exposing general Work.
+Assigned independent MFA prerequisite writer owns only mfa/postgres/
+otp_signin_authority.go, otp_signin_authority_test.go, authority.go's private
+factor-query extraction, and corresponding README/CHANGELOG. Consumes current
+public kernel7f09d96 and MFA corebb569ec. Outcome: exact OTP owner/phase-bound
+known-empty fence over existing authoritative row; parent owns native OTP mode,
+reference integration, heavy checks and all Git delivery. No worker Go runs
+without parent slot, no children/Git mutations, preserve all other work.
+
+Previous goal turn: progress; M06 consumer milestone delivered and closed.
+Progress-only successor9dad64c Required39160527147 SUCCESS; worktree clean.
+M07 frozen selected lane: existing verified account -> original anonymous
+email-OTP browser flow -> enumeration-safe Send -> actual encrypted delivery ->
+one consuming signin -> session read/logout. Browser/persistent policies,
+wrong-browser/origin/code denial, counted attempts, code-free recovery and actual
+lost-COMMIT acknowledgement must preserve original authority/custody exactly.
+Primary owns reference email-OTP journey tests, shared registration test setup
+only as needed, consumer guide/README/changelog and live notes. Adopt9dad64c,
+actual public OTP33c559f/nativef9de2fd, kernel7f09d96, session7832720, existing
+risk/delivery/HTTPOTP80e379c; no local supplier substitute or new OTP engine.
+Bounded source pass found existing native Send/Signin and opt-in HTTP support;
+legacy reference signin fixtures seed accounts and omit session-read/logout,
+so add genuine registration/verification consumer proof rather than restarts.
+Existing email verify/change profiles remain retained; phone, factor-MFA,
+reset-specific OTP and generic-step-up profiles are not inferred from signin.
+Use own PG54847 plus disposable caches; focused reference
+`go test -race -tags=integration -run '^TestReferencePostgresEmailOTPSigninHTTPS$'
+-count=1 -v .`, affected ordinary race/taggedvet, native purpose/attempt/rollback/
+authority proof where prior input identity is unproven, one independent final
+diff and actual downloaded-reference consumer. Fix only demonstrated missing
+behavior; preserve unknown/replay and no-MFA-downgrade invariants. No other
+writer or new worker assignment. Full-unit qualification remains separate.
+
+### Completed M06 checkpoint — 19:49 UTC
 
 M06 selected consumer milestone CLOSED: reference647ac4b9d1866f24010b915b38f5b8ff06f0a45e
 main-pushed, Required39160360457 SUCCESS. Existing-account signin, optional new
