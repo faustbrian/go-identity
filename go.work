@@ -21,6 +21,7 @@ use (
 	./otp/postgres
 	./password
 	./password/postgres
+	./phone
 	./postgres
 	./reference
 	./risk
