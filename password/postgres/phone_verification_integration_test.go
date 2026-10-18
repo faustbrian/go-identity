@@ -358,6 +358,16 @@ func testNativePhoneEnrollment(t *testing.T, ctx context.Context, pool *database
 	if outcome == "late-send-factor" {
 		beforeStatus = withdrawFactor
 	}
+	for range 2 {
+		destination, err := service.PhoneEnrollmentDestination(ctx, enrollment)
+		if err != nil || !destination.Equal(number) {
+			t.Fatal("native rate source did not authenticate original enrollment destination", err)
+		}
+	}
+	var rateCommands, ratePhones, rateCodes int
+	if err := pool.Raw().QueryRow(ctx, `SELECT (SELECT count(*) FROM identity.commands WHERE purpose=$1),(SELECT count(*) FROM identity.identifiers WHERE kind='phone'),(SELECT count(*) FROM phone_codes.challenges)`, phonePrimaryAction).Scan(&rateCommands, &ratePhones, &rateCodes); err != nil || rateCommands != 0 || ratePhones != 0 || rateCodes != 0 {
+		t.Fatal("preliminary rate-source read allocated enrollment, phone or challenge", err)
+	}
 	sent, err := service.SendVerification(ctx, enrollment)
 	if outcome == "late-send-factor" {
 		if err == nil {
@@ -394,6 +404,9 @@ func testNativePhoneEnrollment(t *testing.T, ctx context.Context, pool *database
 	if err != nil || !replay.Replayed || replay.Binding != send.Binding || replay.IdentifierID != send.IdentifierID {
 		t.Fatal("phone retry replaced original send", err)
 	}
+	if destination, err := service.PhoneEnrollmentDestination(ctx, enrollment); err != nil || !destination.Equal(number) {
+		t.Fatal("spent-proof retry lost original rate destination", err)
+	}
 	changed, err := enrollment.Bindings()
 	if err != nil {
 		t.Fatal(err)
@@ -410,6 +423,11 @@ func testNativePhoneEnrollment(t *testing.T, ctx context.Context, pool *database
 	var conflict identity.ConflictError
 	if !errors.As(err, &conflict) {
 		t.Fatal("same enrollment key did not conflict on a changed phone number")
+	}
+	if destination, err := service.PhoneEnrollmentDestination(ctx, conflicting); !errors.As(err, &conflict) {
+		t.Fatal("rate lookup adopted changed same-key input")
+	} else if _, e := destination.Record(); e == nil {
+		t.Fatal("conflicting rate lookup returned destination custody")
 	}
 	var pendingVerified, pendingPrimary bool
 	var pendingVersion, pendingVerificationVersion uint64
@@ -462,6 +480,9 @@ func testNativePhoneEnrollment(t *testing.T, ctx context.Context, pool *database
 		if err != nil {
 			t.Fatal(err)
 		}
+		if lifetime, err := service.PhoneVerificationLifetime(ctx, bad); err == nil || lifetime != 0 {
+			t.Fatal("foreign synchronizer disclosed original rate lifetime")
+		}
 		if _, err := service.Verify(ctx, bad); err == nil {
 			t.Fatal("foreign synchronizer consumed a phone challenge")
 		}
@@ -480,6 +501,17 @@ func testNativePhoneEnrollment(t *testing.T, ctx context.Context, pool *database
 	completion, err := phone.NewVerificationRequest(phone.VerificationRequestSpec{TenantID: original.TenantID, UserID: original.UserID, Caller: caller, Flow: completionFlow, SendCommandID: send.Binding.CommandID, Code: wrongCode, CSRFToken: csrf})
 	if err != nil {
 		t.Fatal(err)
+	}
+	originalLifetime, err := service.PhoneVerificationLifetime(ctx, completion)
+	if err != nil || originalLifetime <= 0 || originalLifetime > 5*time.Minute {
+		t.Fatal("native source did not authenticate the issued challenge lifetime", err)
+	}
+	if repeated, err := service.PhoneVerificationLifetime(ctx, completion); err != nil || repeated != originalLifetime {
+		t.Fatal("rate lookup renewed or shortened original issuance metadata", err)
+	}
+	var rateAttempts int
+	if err := pool.Raw().QueryRow(ctx, `SELECT used_attempts+failed_attempts FROM phone_codes.challenges WHERE tenant_id=$1 AND challenge_id=$2`, string(original.TenantID), string(send.Binding.CommandID)).Scan(&rateAttempts); err != nil || rateAttempts != 0 {
+		t.Fatal("lifetime lookup compared or charged the supplied wrong code", err)
 	}
 	if outcome == "late-verify-factor" {
 		beforeStatus = withdrawFactor

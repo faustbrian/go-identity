@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Authenticate original phone enrollment destination and issued challenge
+  lifetime for shared transport admission without creating a command mapping,
+  consuming proof/code, charging an attempt or renewing retained validity.
+
 - Add selected existing-account phone enrollment and consuming SMS verification
   through the existing native action-proof, session, MFA, authentication-risk,
   OTP, coordinator and identifier owners. Preserve original keyed issuance,

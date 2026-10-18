@@ -1,5 +1,16 @@
 # Password PostgreSQL adapter
 
+`PhoneVerificationService.PhoneEnrollmentDestination` authenticates the complete
+original keyed phone input before transport delivery admission. Absent mappings
+perform native preliminary reads only, with an unretained candidate ID; existing
+mappings preserve spent-proof retries and deny changed/corrupt input without
+falling back. It creates no durable mapping, pending phone, challenge or SMS.
+`PhoneVerificationLifetime` restores actual committed original issuance and checks
+the pending source before returning its exact issued duration. Repeated reads do
+not renew validity, compare a submitted code or charge an attempt. Neither port
+grants mutation authority; Send/Verify retain independent transactional guards.
+All metadata remains sensitive, borrowed-owner/context bounded and zero on error.
+
 ## Coexisting registration confirmation
 
 `NewRegistrationVerificationRouter(emailSignup, usernameSignup, managed)` selects

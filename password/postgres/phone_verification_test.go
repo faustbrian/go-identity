@@ -17,6 +17,14 @@ func TestPhoneVerificationRequiresActualNativeOwners(t *testing.T) {
 		t.Fatal("missing native owners exposed phone verification")
 	}
 	for _, service := range []*PhoneVerificationService{nil, {}} {
+		if number, err := service.PhoneEnrollmentDestination(context.Background(), phone.EnrollmentRequest{}); err == nil {
+			t.Fatal("zero service supplied destination metadata")
+		} else if _, e := number.Record(); e == nil {
+			t.Fatal("zero service returned valid destination custody with an error")
+		}
+		if duration, err := service.PhoneVerificationLifetime(context.Background(), phone.VerificationRequest{}); err == nil || duration != 0 {
+			t.Fatal("zero service supplied original challenge lifetime")
+		}
 		if result, err := service.SendVerification(context.Background(), phone.EnrollmentRequest{}); err == nil {
 			t.Fatal("zero service supplied enrollment")
 		} else if _, e := result.Bindings(); e == nil {

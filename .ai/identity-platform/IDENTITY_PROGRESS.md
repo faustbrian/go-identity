@@ -1,6 +1,6 @@
 # Identity Platform Progress
 
-## TL;DR — updated 2026-10-18 22:45 UTC
+## TL;DR — updated 2026-10-18 22:58 UTC
 
 **Estimated whole-goal completion: approximately 15%, with low confidence.**
 **Consumer milestones: 6/39 closed** (15.4% unweighted); full scope remains
@@ -21,10 +21,14 @@ post-query disclosure withdrawal pass (14.083s, race enabled). Native ordinary
 race passes 2.123s; tagged vet passes. Independently reviewed native `752b4cf`
 is main-pushed and Required CI green. The actual downloaded public adapter's
 same ten-profile PostgreSQL/race consumer passes 12.905s.
-HTTP handlers and closed input are being implemented; original issued-lifetime
-metadata and exact stored-session CSRF selection pass focused race/vet and
-independent prerequisite review. The complete HTTP/reference journey and broader
-M08 operations remain unfinished;
+Opt-in cookie HTTP handlers, closed JSON/OpenAPI and native read-only rate-source
+ports now pass focused checks and independent final review: transport race
+2.868s/vet, bounded fuzz 265 executions, native ten-profile PostgreSQL/race
+13.148s and ordinary race 1.980s/tagged vet. Source ports preserve original keyed
+destination/lifetime without creating preparation, comparing codes or charging
+attempts. The producer batch is ready for main delivery at this snapshot;
+reference composition and its full HTTPS consumer remain unfinished, as do
+broader M08 operations;
 the milestone count and whole-goal estimate do not increase for this checkpoint.
 
 **Latest delivery:** M07 email OTP -> captured encrypted delivery -> one consuming

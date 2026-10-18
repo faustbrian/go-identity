@@ -1,6 +1,25 @@
 # Identity Implementation — Current Milestone
 
-## Live checkpoint — 2026-10-18 22:45 UTC
+## Live checkpoint — 2026-10-18 22:58 UTC
+
+22:58 selected phone producer19 final APPROVE by phone_transport_native_review,
+exact b5def033399668c7e1ce03d5f93270e158a179a5905360188b34f8726bab3031.
+New opt-in http/phone module send/verify/code-free recovery, closed wire/OpenAPI,
+exact original-session CSRF, device/action proof, strong shared rates and no
+credentials; native read-only destination/original-lifetime ports. Newmodule
+registration stays within identity/http logical unit, not a changed67 denominator.
+Actual native10 PG18.6/race3284 PASS13.148s, no preliminary phone command/target/code
+allocation, spent-proof retries, changed-key conflict, currentCSRF and exact
+uncharged lifetime. PG stopped/removed by normal/failure trap. Native ordinary
+race8467 PASS1.980s/taggedvet0; transport final race89687 PASS2.868s/vet0/fuzz265
+executions4.495s. Review's interior-null wire finding reproduced RED92451 then
+fixed via raw-item/non-null uint8 validation; same final19 independently approved.
+Prerequisite89ab570 main-pushed/Required39173659556SUCCESS. Actual public HTTP and
+nativeOTP inputs authenticated from origin89ab570 and SumDB before graph adoption.
+Producer commit/publication next. Disjoint reference/phone_test.go has expected
+missing-API RED95630; primary now adding lifetime-bound graph composition, not
+another phone engine. Reference fields/migrations/HTTPS proof remain unaccepted;
+M08 remains open, estimate~15%,6/39 unchanged.
 
 22:45 HTTP/native prerequisite11 reviewed APPROVE by phone_http_prerequisites_review,
 exact aggregate d435aeb9e122c2e62a8ee20dd32f0b6c96feaa24a0dd0e2f04fd764e09c238d5.
