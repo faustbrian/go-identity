@@ -22,7 +22,7 @@ func (w Work) SelectResetRecipientCredential(ctx context.Context, owner FeatureP
 	if ctx == nil || err != nil || !passwordResetRequestOperation(f.Operation) || f.Contributor.Owner != "identity/password/postgres" || f.Contributor.ContractID != "identity.password" || f.Contributor.Version != 1 || b.UserID != "" || q.UserID != "" || q.TenantID != b.TenantID || q.Kind != identity.IdentifierEmail || q.Eligibility != RecipientVerified || q.Validate() != nil {
 		return recipient, credential, false, invalidWork()
 	}
-	rows, err := w.Query(ctx, recipientSelect, string(q.TenantID), string(q.Kind), q.CanonicalValue)
+	rows, err := w.Query(ctx, recipientSelection(q), string(q.TenantID), string(q.Kind), q.CanonicalValue)
 	if err != nil {
 		return recipient, credential, false, err
 	}

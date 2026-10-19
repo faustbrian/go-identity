@@ -148,6 +148,9 @@ func passwordSigninOperation(b identity.CommandBinding) identity.FeatureOperatio
 	if b.OperationID == "identity.username.signin" {
 		d.Owner, d.OperationID, d.SchemaID = "identity/username", "identity.username.signin", "username-signin"
 	}
+	if b.OperationID == "identity.phone.password-signin" {
+		d.Owner, d.OperationID, d.SchemaID = "identity/phone", "identity.phone.password-signin", "phone-password-signin"
+	}
 	if b.AnonymousFlowID != "" {
 		d.SubjectRequirement = identity.FeatureSubjectAnonymousFlow
 	}

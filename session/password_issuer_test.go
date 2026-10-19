@@ -131,6 +131,47 @@ func TestUsernameSigninIssuerPreservesOriginalOperation(t *testing.T) {
 	}
 }
 
+func TestPhonePasswordSigninIssuerPreservesOriginalOperation(t *testing.T) {
+	issuer, original, command, executor, _, secret := passwordIssuerFixture(t, true)
+	executor.execute = func(_ context.Context, request session.IssueRequest) (session.IssueExecution, error) {
+		actual, _, ok := request.PasswordCommand()
+		if !ok {
+			t.Fatal("phone password issuance lost original paired custody")
+		}
+		projection, _ := actual.PasswordSigninFeature()
+		if projection.Binding.OperationID != "identity.phone.password-signin" || projection.Operation.SchemaID != "phone-password-signin" {
+			t.Fatal("phone password issuance relabeled its original operation")
+		}
+		return committedPasswordIssue(t, request), nil
+	}
+	record, ok := original.Session()
+	if !ok {
+		t.Fatal("original session projection missing")
+	}
+	spec, _ := record.Bindings()
+	spec.Lookup = session.TokenDigest{}
+	feature, _ := command.PasswordSigninFeature()
+	feature.Operation.Owner, feature.Operation.OperationID, feature.Operation.SchemaID = "identity/phone", "identity.phone.password-signin", "phone-password-signin"
+	feature.Binding.OperationID, feature.Binding.SchemaID = feature.Operation.OperationID, feature.Operation.SchemaID
+	_, cookie, _ := command.PasswordSigninCustody()
+	selected, err := identity.NewFeaturePasswordSigninCommand(feature, secret, cookie)
+	if err != nil {
+		t.Fatal(err)
+	}
+	prepared, err := issuer.PreparePassword(feature.Binding, spec)
+	if err != nil {
+		t.Fatal("phone password signin cannot prepare its original session", err)
+	}
+	bound, err := issuer.BindPassword(prepared, selected)
+	if err != nil {
+		t.Fatal("phone password signin lost original paired custody", err)
+	}
+	result, err := issuer.Issue(context.Background(), bound)
+	if err != nil || result.CommitOutcome != identity.CommitOutcomeCommitted {
+		t.Fatal("phone password session denied after exact original commit", err)
+	}
+}
+
 func TestPasswordIssuerBindsOnceAndDeliversOnlyExactOriginalCommit(t *testing.T) {
 	for _, anonymous := range []bool{false, true} {
 		issuer, p, c, _, _, password := passwordIssuerFixture(t, anonymous)

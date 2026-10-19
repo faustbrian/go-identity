@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Fence known-empty native MFA authority for the exact phone/password signin
+  owner and command. Phone challenge continuations remain unsupported and deny;
+  no factor state is initialized or inferred from absence.
+
 - Fence the original known-empty MFA generation for selected native self-user
   phone verification sending and completion. Bind `phone.factor-version` into
   original command intent and repeat the actual row fence through final commit;

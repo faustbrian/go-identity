@@ -28,6 +28,23 @@ type resetSelectionNative struct {
 
 type resetSelectionAudit struct{ recoveryAuditPhase }
 
+// This trusted preparation participant exercises only the kernel selector.
+// It does not generate reset material or substitute for the native workflow.
+type resetSelectionPreparation struct{ resetIssuancePhase }
+
+func (*resetSelectionPreparation) ValidateFeaturePreparation(identity.Command, CommandPlan) error {
+	return invalidPreparation()
+}
+func (*resetSelectionPreparation) AdmitFeaturePreparation(context.Context, Work, identity.Command) error {
+	return invalidPreparation()
+}
+func (*resetSelectionPreparation) GenerateFeaturePreparation(context.Context, identity.Command, uint64) ([]byte, error) {
+	return nil, invalidPreparation()
+}
+func (*resetSelectionPreparation) RestoreFeaturePreparation(context.Context, identity.Command, uint64, []byte) (identity.Command, CommandPlan, error) {
+	return identity.Command{}, CommandPlan{}, invalidPreparation()
+}
+
 func (p *resetSelectionAudit) PersistAudits(ctx context.Context, w Work) error {
 	if err := p.recoveryAuditPhase.PersistAudits(ctx, w); err != nil {
 		return err
@@ -107,6 +124,46 @@ INSERT INTO identity.identifiers(tenant_id,user_id,identifier_id,kind,canonical_
 INSERT INTO identity.credential_references(tenant_id,user_id,credential_id,kind,owner,version,enabled) VALUES('reset-selection','existing-user','password',1,'identity/password',5,true)`); err != nil {
 		t.Fatal(err)
 	}
+	t.Run("normalized preparation selection", func(t *testing.T) {
+		for _, mode := range []string{"matching", "mismatched", "legacy"} {
+			t.Run(mode, func(t *testing.T) {
+				bounded, cancel := context.WithTimeout(ctx, 3*time.Second)
+				defer cancel()
+				tx, err := pool.Raw().Begin(bounded)
+				if err != nil {
+					t.Fatal(err)
+				}
+				defer func() { _ = tx.Rollback(ctx) }()
+				// Roll back this schema addition too: legacy callers and later
+				// migration fixtures must not depend on this optional profile.
+				if _, err := tx.Exec(bounded, `ALTER TABLE identity.identifiers ADD COLUMN IF NOT EXISTS normalization_profile text NOT NULL DEFAULT '', ADD COLUMN IF NOT EXISTS normalization_version bigint NOT NULL DEFAULT 0;
+UPDATE identity.identifiers SET normalization_profile='identity.email.fixture-v1',normalization_version=1 WHERE tenant_id='reset-selection'`); err != nil {
+					t.Fatal(err)
+				}
+				b, plan, _ := resetIssuanceFixture(t)
+				b.TenantID = "reset-selection"
+				owner := &resetSelectionPreparation{resetIssuancePhase{operation: plan.Feature.Operation}}
+				work := Work{state: &workState{tx: tx, ctx: bounded, cancel: cancel, binding: b, feature: plan.Feature, lifecycle: &workLifecycle{plan: *plan.Lifecycle}, featureInvocation: owner}}
+				q := RecipientQuery{TenantID: b.TenantID, Kind: identity.IdentifierEmail, CanonicalValue: "reset-selection@example.test", Eligibility: RecipientVerified, NormalizationProfile: "identity.email.fixture-v1", NormalizationVersion: 1}
+				if mode == "mismatched" {
+					q.NormalizationVersion = 2
+				} else if mode == "legacy" {
+					q.NormalizationProfile, q.NormalizationVersion = "", 0
+				}
+				recipient, credential, enabled, err := work.SelectResetRecipientCredential(bounded, owner, q)
+				if err != nil {
+					t.Fatal("valid reset query failed selection", err)
+				}
+				if mode == "mismatched" {
+					if !recipient.Suppressed || credential != (CredentialAdmission{}) || enabled {
+						t.Fatal("incompatible normalization selected a reset credential")
+					}
+				} else if recipient.Suppressed || recipient.Query != q || recipient.Identifier.NormalizationProfile != q.NormalizationProfile || credential.Credential.ID != "password" || !enabled {
+					t.Fatal("reset selection lost the requested profile or credential")
+				}
+			})
+		}
+	})
 	for _, mode := range []string{"commit", "disabled-recovery", "missing-fence", "stale-credential", "stale-identifier", "blocked-user", "wrong-subject", "wrong-origin", "wrong-identifier", "issuer-failure", "lifecycle-failure"} {
 		t.Run(mode, func(t *testing.T) {
 			if _, err := pool.Raw().Exec(ctx, `UPDATE identity.users SET status='active' WHERE tenant_id='reset-selection'; UPDATE identity.credential_references SET version=5,enabled=true WHERE tenant_id='reset-selection'; UPDATE identity.identifiers SET version=7 WHERE tenant_id='reset-selection'`); err != nil {

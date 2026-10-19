@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Prepare and bind sessions from the exact phone/password signin profile,
+  preserving paired custody and original operation without admitting phone OTP.
+
 - Retain an optional original canonical-identifier commitment in pre-auth
   issuance, equality checks and a separate cookie-digest domain. Unbound flows
   preserve their existing byte framing and APIs; selected identifier-bound

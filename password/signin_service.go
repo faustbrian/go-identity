@@ -52,7 +52,7 @@ func NewSigninRecovery(q identity.RecoveryQuery, flow identity.PreAuthTransactio
 	if _, err := identity.ParsePreAuthTransactionID(string(flow)); err != nil {
 		return SigninRecovery{}, ErrPasswordWork
 	}
-	if !boundedChangeText(string(q.TenantID)) || !boundedChangeText(string(q.ActorID)) || (q.OperationID != "identity.password.signin" && q.OperationID != "identity.username.signin") || q.RecordID != "" || q.LinkMode != 0 || (q.UserID == "") == (q.AnonymousFlowID == "") {
+	if !boundedChangeText(string(q.TenantID)) || !boundedChangeText(string(q.ActorID)) || (q.OperationID != "identity.password.signin" && q.OperationID != "identity.username.signin" && q.OperationID != "identity.phone.password-signin") || q.RecordID != "" || q.LinkMode != 0 || (q.UserID == "") == (q.AnonymousFlowID == "") {
 		return SigninRecovery{}, ErrPasswordWork
 	}
 	if q.UserID != "" && !boundedChangeText(string(q.UserID)) || q.AnonymousFlowID != "" && q.AnonymousFlowID != string(flow) {

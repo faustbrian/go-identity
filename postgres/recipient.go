@@ -32,6 +32,12 @@ type RecipientQuery struct {
 	Kind           identity.IdentifierKind
 	CanonicalValue string
 	Eligibility    RecipientEligibility
+	// An optional exact stored comparison binding. Both zero retain the legacy
+	// channel projection unchanged; both present require this persisted pair.
+	// Absent or different stored profiles suppress discovery, never reinterpret
+	// byte-equal canonical values using today's normalization policy.
+	NormalizationProfile string `json:",omitempty"`
+	NormalizationVersion uint32 `json:",omitempty"`
 }
 
 // Validate bounds input before SQL. Only email/phone channel identifiers are
@@ -41,7 +47,7 @@ func (q RecipientQuery) Validate() error {
 	if q.UserID != "" {
 		user.ID = q.UserID
 	}
-	i := identity.Identifier{ID: "recipient-scope", UserID: user.ID, Kind: q.Kind, CanonicalValue: q.CanonicalValue, Version: 1}
+	i := identity.Identifier{ID: "recipient-scope", UserID: user.ID, Kind: q.Kind, CanonicalValue: q.CanonicalValue, Version: 1, NormalizationProfile: q.NormalizationProfile, NormalizationVersion: q.NormalizationVersion}
 	if user.Validate(q.TenantID) != nil || i.Validate(user.ID) != nil || q.Kind != identity.IdentifierEmail && q.Kind != identity.IdentifierPhone || q.Eligibility != RecipientVerified && q.Eligibility != RecipientPendingOrVerified {
 		return invalidRecipient()
 	}
@@ -89,7 +95,7 @@ func (r RecipientRecord) Validate() error {
 		}
 		return nil
 	}
-	if r.User.Validate(r.Query.TenantID) != nil || r.User.Status != identity.StatusActive || r.Query.UserID != "" && r.User.ID != r.Query.UserID || r.Identifier.Validate(r.User.ID) != nil || r.Identifier.Kind != r.Query.Kind || r.Identifier.CanonicalValue != r.Query.CanonicalValue || !postgresExactTime(r.ObservedAt) || r.Verification.Validate(r.Identifier, r.ObservedAt) != nil || !recipientEligible(r.Query.Eligibility, r.Verification.State) || r.UserAuthorityVersion == 0 || r.IdentifierAuthorityVersion == 0 || r.CredentialAuthorityVersion == 0 {
+	if r.User.Validate(r.Query.TenantID) != nil || r.User.Status != identity.StatusActive || r.Query.UserID != "" && r.User.ID != r.Query.UserID || r.Identifier.Validate(r.User.ID) != nil || r.Identifier.Kind != r.Query.Kind || r.Identifier.CanonicalValue != r.Query.CanonicalValue || !recipientNormalizationMatches(r.Query, r.Identifier) || !postgresExactTime(r.ObservedAt) || r.Verification.Validate(r.Identifier, r.ObservedAt) != nil || !recipientEligible(r.Query.Eligibility, r.Verification.State) || r.UserAuthorityVersion == 0 || r.IdentifierAuthorityVersion == 0 || r.CredentialAuthorityVersion == 0 {
 		return invalidRecipient()
 	}
 	return nil
@@ -102,15 +108,32 @@ func recipientEligible(policy RecipientEligibility, state identity.VerificationS
 
 // The unique tenant/kind/canonical index bounds this read independently of user
 // directory size. Explicit columns preserve populated-schema compatibility.
-const recipientColumns = `SELECT u.tenant_id,u.user_id,u.status,u.version::text,
+const recipientProjection = `SELECT u.tenant_id,u.user_id,u.status,u.version::text,
  u.identifier_version::text,clock_timestamp(),
  i.identifier_id,i.kind,i.canonical_value,i.display_value,i.verified,i.is_primary,
  i.version::text,i.verification_state,i.verification_version::text,i.verified_at,
- u.authority_version::text,u.credential_version::text
+ u.authority_version::text,u.credential_version::text`
+
+const recipientJoin = `
  FROM identity.identifiers i JOIN identity.users u
  ON u.tenant_id=i.tenant_id AND u.user_id=i.user_id`
 
-const recipientSelect = recipientColumns + ` WHERE i.tenant_id=$1 AND i.kind=$2 AND i.canonical_value=$3 LIMIT 2`
+const recipientColumns = recipientProjection + recipientJoin
+const recipientWhere = ` WHERE i.tenant_id=$1 AND i.kind=$2 AND i.canonical_value=$3 LIMIT 2`
+const recipientSelect = recipientColumns + recipientWhere
+
+func recipientSelection(q RecipientQuery) string {
+	if q.NormalizationProfile == "" {
+		return recipientSelect
+	}
+	// JSON projection preserves installed pre-normalization schemas. Missing
+	// columns stay absent, not silently replaced by the requested profile.
+	return recipientProjection + `,to_jsonb(i)->>'normalization_profile',to_jsonb(i)->>'normalization_version'` + recipientJoin + recipientWhere
+}
+
+func recipientNormalizationMatches(q RecipientQuery, i identity.Identifier) bool {
+	return q.NormalizationProfile == "" || i.NormalizationProfile == q.NormalizationProfile && i.NormalizationVersion == q.NormalizationVersion
+}
 
 type recipientRows interface {
 	Next() bool
@@ -133,7 +156,7 @@ func (r *Repository) ResolveRecipient(ctx context.Context, q RecipientQuery) (Re
 	if err := bounded.Err(); err != nil {
 		return RecipientRecord{}, readFailure(bounded, err)
 	}
-	rows, err := r.pool.Raw().Query(bounded, recipientSelect, string(q.TenantID), string(q.Kind), q.CanonicalValue)
+	rows, err := r.pool.Raw().Query(bounded, recipientSelection(q), string(q.TenantID), string(q.Kind), q.CanonicalValue)
 	if err != nil {
 		return RecipientRecord{}, readFailure(bounded, err)
 	}
@@ -165,10 +188,15 @@ func readRecipientSelection(q RecipientQuery, rows recipientRows, discoverCanoni
 	var verified, primary bool
 	var verificationState int16
 	var verifiedAt *time.Time
+	var normalizationProfile, normalizationVersion *string
 	// Work deliberately excludes driver scanner callbacks. The inner join and
 	// schema make all identifier columns except verified_at non-null; decode
 	// through its closed scalar profile before constructing the shared row.
-	if err := rows.Scan(&row.tenant, &row.user, &row.status, &row.userVersion, &row.authority, &row.now, &id, &kind, &canonical, &display, &verified, &primary, &version, &verificationState, &verificationVersion, &verifiedAt, &user, &credential); err != nil {
+	dest := []any{&row.tenant, &row.user, &row.status, &row.userVersion, &row.authority, &row.now, &id, &kind, &canonical, &display, &verified, &primary, &version, &verificationState, &verificationVersion, &verifiedAt, &user, &credential}
+	if q.NormalizationProfile != "" {
+		dest = append(dest, &normalizationProfile, &normalizationVersion)
+	}
+	if err := rows.Scan(dest...); err != nil {
 		return RecipientRecord{}, err
 	}
 	text := func(v string) pgtype.Text { return pgtype.Text{String: v, Valid: true} }
@@ -176,6 +204,12 @@ func readRecipientSelection(q RecipientQuery, rows recipientRows, discoverCanoni
 	row.version, row.verificationVersion = text(version), text(verificationVersion)
 	row.verified, row.primary = pgtype.Bool{Bool: verified, Valid: true}, pgtype.Bool{Bool: primary, Valid: true}
 	row.verificationState = pgtype.Int2{Int16: verificationState, Valid: true}
+	if normalizationProfile != nil {
+		row.normalizationProfile = text(*normalizationProfile)
+	}
+	if normalizationVersion != nil {
+		row.normalizationVersion = text(*normalizationVersion)
+	}
 	if verifiedAt != nil {
 		row.verifiedAt = pgtype.Timestamptz{Time: *verifiedAt, Valid: true}
 	}
@@ -202,7 +236,7 @@ func decodeRecipient(q RecipientQuery, row identifierStorageRow, userAuthority, 
 	if err != nil || !present || ue != nil || ce != nil || ua == 0 || ca == 0 || strconv.FormatUint(ua, 10) != userAuthority || strconv.FormatUint(ca, 10) != credentialAuthority {
 		return bad()
 	}
-	if u.Status != identity.StatusActive || q.UserID != "" && u.ID != q.UserID || !recipientEligible(q.Eligibility, v.State) {
+	if u.Status != identity.StatusActive || q.UserID != "" && u.ID != q.UserID || !recipientEligible(q.Eligibility, v.State) || !recipientNormalizationMatches(q, i) {
 		return RecipientRecord{Query: q, Suppressed: true}, nil
 	}
 	// Pool and fixed transaction codecs can use different location pointers
@@ -250,7 +284,7 @@ func (w Work) requireRecipient(ctx context.Context, b identity.CommandBinding, e
 		// reader poisons Work. Cleanup must not erase this denied admission.
 		return w.fail(ctx, err)
 	}
-	rows, err := w.Query(ctx, recipientSelect+" FOR SHARE OF i", string(b.TenantID), string(expected.Query.Kind), expected.Query.CanonicalValue)
+	rows, err := w.Query(ctx, recipientSelection(expected.Query)+" FOR SHARE OF i", string(b.TenantID), string(expected.Query.Kind), expected.Query.CanonicalValue)
 	if err != nil {
 		return w.fail(ctx, err)
 	}

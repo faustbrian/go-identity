@@ -71,6 +71,29 @@ func TestSigninRecoveryKeepsOriginalNamespace(t *testing.T) {
 	}
 }
 
+func TestPhonePasswordSigninRecoveryRetainsDistinctOriginalOperation(t *testing.T) {
+	for _, anonymous := range []bool{false, true} {
+		original := signinRecovery(t, anonymous)
+		query, flow, _ := original.Bindings()
+		query.OperationID = "identity.phone.password-signin"
+		recovery, err := password.NewSigninRecovery(query, flow)
+		if err != nil {
+			t.Fatal("phone password signin lost original recovery namespace", err)
+		}
+		got, gotFlow, err := recovery.Bindings()
+		if err != nil || got != query || gotFlow != flow {
+			t.Fatal("phone password recovery was relabeled or retargeted")
+		}
+		for _, operation := range []string{"identity.phone.signin", "identity.phone.verify", "identity.phone.password-reset-complete"} {
+			changed := query
+			changed.OperationID = operation
+			if _, err := password.NewSigninRecovery(changed, flow); err == nil {
+				t.Fatal("another phone workflow became password-signin recovery")
+			}
+		}
+	}
+}
+
 // Compile the consuming port from an external package without importing SQL.
 type signinPort struct{}
 

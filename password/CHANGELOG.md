@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Preserve distinct phone/password signin correlation during password-free
+  recovery. Other phone verification, OTP and reset operations cannot use it.
+
 - Preserve the original username signup/signin operation in password-owned
   input and recovery custody. Supplementary signup username remains raw and
   requires email; canonical reservation and authentication stay native-owned.

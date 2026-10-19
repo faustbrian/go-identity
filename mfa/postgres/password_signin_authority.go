@@ -95,7 +95,14 @@ func requirePasswordSigninFactors(ctx context.Context, w kernel.Work, owner kern
 	s, ok := command.PasswordSigninFeature()
 	b, f, life, err := w.FeatureScope(owner)
 	username := f.Operation.Owner == "identity/username" && b.OperationID == "identity.username.signin" && f.Operation.SchemaID == "username-signin"
-	profile := f.Operation.Owner == "identity/password" && b.OperationID == "identity.password.signin" && f.Operation.SchemaID == "password-signin" || username
+	phone := f.Operation.Owner == "identity/phone" && b.OperationID == "identity.phone.password-signin" && f.Operation.SchemaID == "phone-password-signin"
+	profile := f.Operation.Owner == "identity/password" && b.OperationID == "identity.password.signin" && f.Operation.SchemaID == "password-signin" || username || phone
+	// This phone profile supports only known-empty authority. Enrolled phone
+	// continuations need their own original challenge binding, never a password
+	// or username challenge relabeled after comparison.
+	if phone && challenge {
+		return invalidAuthority()
+	}
 	if username && challenge && (len(methods) != 1 || methods[0] != "totp") {
 		return invalidAuthority()
 	}

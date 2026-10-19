@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Allow explicit stored normalization binding during recipient discovery and
+  protected admission. Missing or incompatible profiles suppress selection;
+  profile changes deny the original transaction. Unselected legacy channel
+  projections and pre-normalization schemas retain their existing behavior.
+
 - Retain exact phone/password-signin paired custody and hash-upgrade fences in
   the existing coordinator. Only the existing password participant may own this
   closed phone profile; scalar metadata cannot replace password/cookie custody.

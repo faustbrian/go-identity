@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Derive a canonical-number, comparison-profile, tenant and purpose-bound
+  password-preauth identifier commitment. This does not accept an OTP, verify
+  a password or enable login; the native workflow must compare original intent.
+
 - Carry explicit current CSRF synchronizers on verification and recovery
   requests so native cookie admission can validate the caller's request.
   Bearer requests retain the structurally valid zero-token representation.

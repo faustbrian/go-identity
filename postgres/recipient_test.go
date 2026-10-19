@@ -69,6 +69,54 @@ func TestRecipientResolutionPreservesCanonicalAndSuppressesIneligible(t *testing
 	}
 }
 
+func TestRecipientRequiresExplicitStoredNormalizationWithoutReinterpreting(t *testing.T) {
+	query := RecipientQuery{TenantID: "tenant", Kind: identity.IdentifierPhone, CanonicalValue: "+12025550123", Eligibility: RecipientVerified, NormalizationProfile: "identity.phone.fixture-v1", NormalizationVersion: 1}
+	row := recipientRowFixture()
+	row.kind.String, row.canonical.String, row.display.String = "phone", query.CanonicalValue, ""
+	row.normalizationProfile = pgtype.Text{String: query.NormalizationProfile, Valid: true}
+	row.normalizationVersion = pgtype.Text{String: "1", Valid: true}
+	selected, err := decodeRecipient(query, row, "19", "23")
+	if err != nil || selected.Suppressed || selected.Identifier.NormalizationProfile != query.NormalizationProfile || selected.Identifier.NormalizationVersion != query.NormalizationVersion {
+		t.Fatal("matching stored profile was lost", err)
+	}
+	for _, mode := range []string{"absent-columns", "unbound", "other-profile", "other-version"} {
+		changed := row
+		switch mode {
+		case "absent-columns":
+			changed.normalizationProfile, changed.normalizationVersion = pgtype.Text{}, pgtype.Text{}
+		case "unbound":
+			changed.normalizationProfile.String, changed.normalizationVersion.String = "", "0"
+		case "other-profile":
+			changed.normalizationProfile.String = "identity.phone.fixture-v2"
+		case "other-version":
+			changed.normalizationVersion.String = "2"
+		}
+		got, err := decodeRecipient(query, changed, "19", "23")
+		if err != nil || !got.Suppressed || got.User != (identity.User{}) || got.Identifier != (identity.Identifier{}) || got.Query != query {
+			t.Fatal("incompatible stored profile was reinterpreted or disclosed", mode, err)
+		}
+	}
+	for _, change := range []func(*RecipientQuery){
+		func(q *RecipientQuery) { q.NormalizationVersion = 0 },
+		func(q *RecipientQuery) { q.NormalizationProfile = "" },
+		func(q *RecipientQuery) { q.NormalizationProfile = "INVALID PROFILE" },
+	} {
+		bad := query
+		change(&bad)
+		if bad.Validate() == nil {
+			t.Fatal("invalid requested normalization binding admitted")
+		}
+	}
+	// Omitting the new selection is not a silent upgrade of historical readers.
+	legacy := query
+	legacy.NormalizationProfile, legacy.NormalizationVersion = "", 0
+	oldRow := row
+	oldRow.normalizationProfile, oldRow.normalizationVersion = pgtype.Text{}, pgtype.Text{}
+	if got, err := decodeRecipient(legacy, oldRow, "19", "23"); err != nil || got.Suppressed || got.Identifier.NormalizationProfile != "" {
+		t.Fatal("legacy recipient semantics changed", err)
+	}
+}
+
 func TestRecipientRejectsCorruptionAndInvalidInvocation(t *testing.T) {
 	q := RecipientQuery{TenantID: "tenant", Kind: identity.IdentifierEmail, CanonicalValue: "Canonical@example.test", Eligibility: RecipientVerified}
 	for _, change := range []func(*identifierStorageRow){

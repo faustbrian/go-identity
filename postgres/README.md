@@ -934,6 +934,15 @@ resolved user separate from the anonymous command binding. Signin/reset require
 Missing, inactive, foreign-subject and ineligible records return `Suppressed`
 without a selected identity. Infrastructure errors remain errors.
 
+When the workflow requires a versioned comparison policy, explicitly set both
+`RecipientQuery.NormalizationProfile` and `NormalizationVersion` from that
+owner. Discovery and the same protected reread retain the actual persisted pair;
+absent/unbound/incompatible pairs suppress selection even when canonical bytes
+match. The phone/password profile requires this selection. Neither a missing
+optional schema nor a legacy row may be relabeled by the query. Omitting both
+fields preserves the historical channel projection and retained old intent;
+it does not prove a current normalization profile.
+
 Freeze the selected record into original workflow custody. The exact native
 feature invocation calls `Work.RequireRecipient` before staging delivery:
 primary user and identifier locks fence original versions until commit/abort,

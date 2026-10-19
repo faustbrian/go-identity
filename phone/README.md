@@ -102,6 +102,22 @@ national display. Restoration rejects mismatched original display/region,
 noncanonical E.164, incompatible profiles and unsupported metadata, rather than
 guessing. An absent display stays absent; restoration never invents it.
 
+## Password-signin original target binding
+
+`PasswordSigninIdentifierBinding(number, tenant, key)` computes an opaque,
+domain-separated commitment over the canonical E.164 number and its fixed
+profile/version, tenant and distinct password-signin action. Supply a 32..64-byte
+deployment-owned independent key. Display and national spelling are not identity.
+The helper borrows the immutable key for this call and owns no database or IO.
+It proves neither phone ownership nor a password, factor or authenticated user.
+
+Trusted initiation passes this server-derived value into the actual session
+pre-auth issuer's `IdentifierBinding`; the selected native password owner must
+recompute it before comparison. Do not accept a commitment supplied by a client
+or reuse an OTP-login flow. The session issuer binds it to the original cookie,
+remember choice and deadline; copying the commitment cannot retarget that flow.
+The native password adapter's adoption guide documents selected composition.
+
 ## Ownership, privacy and concurrency
 
 `NumberPolicy` and its `Number` results are immutable and support concurrent
