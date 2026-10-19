@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Explicitly select verified-phone/password signin with closed `phoneNumber`
+  input and its original target-bound browser flow. Reuse native verification,
+  rate, session and recovery owners; no enrollment, OTP or MFA fallback route is
+  enabled. Email and username transport contracts remain unchanged.
+
 - Explicitly select native username/password MFA challenges with
   `SigninConfig.MFAContinuation`. Fresh committed challenges disclose only the
   original proof header and metadata, never session or CSRF credentials; the

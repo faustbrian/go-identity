@@ -117,13 +117,32 @@ func NewSigninHandler(c SigninConfig) (http.Handler, error) {
 // Hooks observe safe attempt metadata, cannot replace input or mint credentials,
 // and must not retain sensitive request headers or request-local state.
 func NewSigninHandlerWithMiddleware(c SigninConfig, middleware []identityhttp.MiddlewareDescriptor) (http.Handler, error) {
-	return newSigninHandler(c, middleware, false)
+	return newSigninHandler(c, middleware, emailSigninProfile)
 }
 
-func newSigninHandler(c SigninConfig, middleware []identityhttp.MiddlewareDescriptor, usernameProfile bool) (http.Handler, error) {
+type signinProfile uint8
+
+const (
+	emailSigninProfile signinProfile = iota
+	usernameSigninProfile
+	phoneSigninProfile
+)
+
+func newSigninHandler(c SigninConfig, middleware []identityhttp.MiddlewareDescriptor, profile signinProfile) (http.Handler, error) {
 	action, route, identifierField := "identity.password.signin", "/v1/password/signin", "identifier"
-	if usernameProfile {
+	switch profile {
+	case usernameSigninProfile:
 		action, route, identifierField = "identity.username.signin", "/v1/username/signin", "username"
+	case phoneSigninProfile:
+		action, route, identifierField = "identity.phone.password-signin", "/v1/phone/password-signin", "phoneNumber"
+		// The native phone owner deliberately selects authoritative known-empty
+		// factors; it cannot mint the email/username TOTP continuation contract.
+		if c.MFAContinuation {
+			return nil, identityhttp.ErrInvalidInput
+		}
+	case emailSigninProfile:
+	default:
+		return nil, identityhttp.ErrInvalidInput
 	}
 	if nilOwner(c.Service) || !c.Rate.Configured() || c.Now == nil || c.MaximumDuration < time.Millisecond || c.MaximumDuration > 30*time.Second || c.Audience == "" || len(c.Audience) > 256 || len(c.CallbackURL) > 2048 {
 		return nil, identityhttp.ErrInvalidInput
@@ -274,7 +293,7 @@ func newSigninHandler(c SigninConfig, middleware []identityhttp.MiddlewareDescri
 				return s, identityhttp.ErrInvalidInput
 			}
 			id, err := identity.ParsePreAuthTransactionID(flowID)
-			if err != nil || callback != c.CallbackURL || len(value) == 0 || len(value) > 1<<20 || usernameProfile && len(identifierText) > 128 {
+			if err != nil || callback != c.CallbackURL || len(value) == 0 || len(value) > 1<<20 || profile == usernameSigninProfile && len(identifierText) > 128 {
 				return s, identityhttp.ErrInvalidInput
 			}
 			input, err := identifier.NewInput(identifierText)
@@ -309,6 +328,10 @@ func newSigninHandler(c SigninConfig, middleware []identityhttp.MiddlewareDescri
 			}
 			canonical, err := c.Service.SigninRateSource(r.Context(), s.request)
 			if err != nil || r.Context().Err() != nil {
+				var denied identity.ForbiddenError
+				if profile == phoneSigninProfile && errors.As(err, &denied) && r.Context().Err() == nil {
+					return s, failure{status: 403, code: "denied"}
+				}
 				return s, identityhttp.ErrUnavailable
 			}
 			s.identifier = canonical
@@ -345,6 +368,11 @@ func newSigninHandler(c SigninConfig, middleware []identityhttp.MiddlewareDescri
 			a.out.Recovery = &SigninRecovery{q.CommandID, q.TenantID, flow, q.ActorID, q.ActorKind}
 			a.out.SessionID = result.SessionID
 			if err != nil || r.Context().Err() != nil {
+				var denied identity.ForbiddenError
+				if profile == phoneSigninProfile && result.Issuance.CommitOutcome == identity.CommitOutcomeNotCommitted && errors.As(err, &denied) && r.Context().Err() == nil {
+					reject(w, r, failure{status: 403, code: "denied"})
+					return
+				}
 				reject(w, r, identityhttp.ErrUnavailable)
 				return
 			}

@@ -36,5 +36,5 @@ func NewUsernameSigninHandler(c SigninConfig) (http.Handler, error) {
 // without duplicating credential delivery or weakening shared cookie custody.
 // Hooks receive SigninState; borrowed owners must outlive concurrent requests.
 func NewUsernameSigninHandlerWithMiddleware(c SigninConfig, m []identityhttp.MiddlewareDescriptor) (http.Handler, error) {
-	return newSigninHandler(c, m, true)
+	return newSigninHandler(c, m, usernameSigninProfile)
 }

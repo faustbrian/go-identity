@@ -5,9 +5,9 @@ go 1.27.0
 require (
 	github.com/faustbrian/go-authentication/v2 v2.0.2-0.20261015052822-d9f5132c7f68
 	github.com/faustbrian/go-authorization/v3 v3.0.1-0.20261015052455-a55bbebb1060
-	github.com/faustbrian/go-identity v0.0.0-20261015054516-5afeba0ac471
+	github.com/faustbrian/go-identity v0.0.0-20261019000410-c5205a35b05c
 	github.com/faustbrian/go-identity/http v0.0.0-20261015092135-af758fe32cc8
-	github.com/faustbrian/go-identity/session v0.0.0-20261015104034-f16881100907
+	github.com/faustbrian/go-identity/session v0.0.0-20261019005456-2fb03512d8a1
 	github.com/faustbrian/go-openapi/v2 v2.0.3-0.20261015044355-77bfaaffc820
 	github.com/faustbrian/go-rate-limit/v2 v2.0.1-0.20261015090634-0ebce3975fe1
 	github.com/felixge/httpsnoop v1.1.0

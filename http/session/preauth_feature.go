@@ -23,7 +23,7 @@ func NewPreAuthFeatureWithMiddleware(c PreAuthConfig, middleware []identityhttp.
 	if err != nil {
 		return identityhttp.Feature{}, err
 	}
-	return preAuthFeature(h, false, c.Methods)
+	return preAuthFeature(h, false, c)
 }
 
 // NewPreAuthFeatureWithBrowserDevice selects original flow initiation with
@@ -40,15 +40,15 @@ func NewPreAuthFeatureWithBrowserDeviceAndMiddleware(c PreAuthConfig, devices se
 	if err != nil {
 		return identityhttp.Feature{}, err
 	}
-	return preAuthFeature(h, true, c.Methods)
+	return preAuthFeature(h, true, c)
 }
 
-func preAuthFeature(h http.Handler, device bool, methods []PreAuthMethod) (identityhttp.Feature, error) {
+func preAuthFeature(h http.Handler, device bool, config PreAuthConfig) (identityhttp.Feature, error) {
 	op, err := identityhttp.NewCanonicalOperation(identityhttp.CanonicalOperationConfig{Owner: "identity/session", OperationID: "identity.session.preauth-issue", Handler: h, CSRF: identityhttp.CSRFPolicy{Mode: identityhttp.CSRFExactOrigin, RefererFallback: identityhttp.RefererFallbackDeny}, MaximumSerializedBytes: 16384})
 	if err != nil {
 		return identityhttp.Feature{}, err
 	}
-	op.Wire = preAuthWireProfile(device, methods...)
+	op.Wire = preAuthWireProfile(device, !preAuthNil(config.IdentifierBinder), config.Methods...)
 	return identityhttp.NewFeature(identityhttp.FeatureConfig{ID: "identity/session", Operations: []identityhttp.OperationDescriptor{op}})
 }
 

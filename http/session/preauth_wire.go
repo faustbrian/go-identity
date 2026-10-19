@@ -7,10 +7,10 @@ import (
 )
 
 func preAuthWire() *identityhttp.WireOperation {
-	return preAuthWireProfile(false)
+	return preAuthWireProfile(false, false)
 }
 
-func preAuthWireProfile(device bool, methods ...PreAuthMethod) *identityhttp.WireOperation {
+func preAuthWireProfile(device, bindBase bool, methods ...PreAuthMethod) *identityhttp.WireOperation {
 	text := func(max int) any { return map[string]any{"type": "string", "minLength": 1, "maxLength": max} }
 	object := func(required []string, fields map[string]any) map[string]any {
 		return map[string]any{"type": "object", "additionalProperties": false, "required": required, "properties": fields}
@@ -62,6 +62,25 @@ func preAuthWireProfile(device bool, methods ...PreAuthMethod) *identityhttp.Wir
 		schema := definition["requestBody"].(map[string]any)["content"].(map[string]any)["application/json"].(map[string]any)["schema"].(map[string]any)
 		schema["properties"].(map[string]any)["method"] = map[string]any{"type": "string", "enum": names, "description": "Exact selected login-method name. Absent retains the default deployment profile. Selects a fixed issuer; cannot override action, callback, origin or policy."}
 		definition["description"] = definition["description"].(string) + " Optional method selects only an explicitly configured fixed profile; unknown, null or empty method denies before preparation."
+	}
+	var boundMethods []string
+	for _, method := range methods {
+		if !preAuthNil(method.IdentifierBinder) {
+			boundMethods = append(boundMethods, method.Name)
+		}
+	}
+	if bindBase || len(boundMethods) != 0 {
+		schema := definition["requestBody"].(map[string]any)["content"].(map[string]any)["application/json"].(map[string]any)["schema"].(map[string]any)
+		schema["properties"].(map[string]any)["identifier"] = text(1024)
+		var selected []any
+		if bindBase {
+			selected = append(selected, map[string]any{"not": map[string]any{"required": []string{"method"}}})
+		}
+		if len(boundMethods) != 0 {
+			selected = append(selected, map[string]any{"required": []string{"method"}, "properties": map[string]any{"method": map[string]any{"enum": boundMethods}}})
+		}
+		schema["allOf"] = []any{map[string]any{"if": map[string]any{"anyOf": selected}, "then": map[string]any{"required": []string{"identifier"}}, "else": map[string]any{"not": map[string]any{"required": []string{"identifier"}}}}}
+		definition["description"] = definition["description"].(string) + " Only selected target-bound profiles require identifier. Their trusted owner canonicalizes and binds that original target after IP admission, before preparation; a client-supplied binding is forbidden. Unbound profiles reject identifier."
 	}
 	data, _ := json.Marshal(definition)
 	return &identityhttp.WireOperation{Definition: data}

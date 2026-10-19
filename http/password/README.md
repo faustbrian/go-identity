@@ -5,6 +5,25 @@ Go 1.27. Base `identity/http` does not import this optional module.
 
 ## Adoption and API
 
+### Verified-phone password signin
+
+Select `NewPhoneSigninFeature(signinConfig)` or `NewPhoneSigninHandler` with
+the native phone-enabled password owner. The route is exactly
+`POST /v1/phone/password-signin`, with `flowID`, `phoneNumber`, `password`,
+`callbackURL` and optional boolean `remember`. First obtain the original
+phone-target-bound flow through the shared initiation route's explicitly
+selected `phone-password` method. Its trusted binder derives the canonical
+target; a caller-chosen digest is never accepted.
+
+Exact HTTPS tenant/Origin, original flow and signed device cookies, callback
+and remember policy remain mandatory. Native current phone/profile, account,
+credential and known-empty-factor authority are decisive. `MFAContinuation`
+must be false; no OTP, enrollment or phone-MFA route follows from selection.
+Only fresh known commitment delivers the original session cookie and CSRF.
+If also selecting phone enrollment, combine operation descriptors under one
+`identity/phone` feature instead of registering that owner twice. The reference
+composition supplies this wiring without another domain workflow or store.
+
 ### Browser password-reset request
 
 Select `FeatureConfig.ResetRequest` with `ResetRequestConfig`. Supply the native

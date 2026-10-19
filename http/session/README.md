@@ -53,6 +53,16 @@ selected OpenAPI lists only configured names. With no Methods, the additional
 field remains forbidden. Callers own each borrowed issuer's lifetime and must
 not mutate configuration or service state concurrently with construction.
 
+Target-bound methods additionally select `PreAuthMethod.IdentifierBinder`.
+The phone/password profile requires the reference's `PhoneSigninPreAuth()`
+handle as both issuer and binder. Its request is
+`{"method":"phone-password","identifier":"+12025550123","remember":false}`.
+The trusted owner canonicalizes and derives the original tenant/action-bound
+HMAC after IP admission and before preparation, without account lookup. The
+HTTP adapter verifies the prepared intent preserves that exact binding. Never
+accept a client-supplied digest. Unbound methods reject `identifier`; selecting
+`PreAuthConfig.IdentifierBinder` applies the same contract to the base profile.
+
 The native issuer resolves the original five-minute flow independently of final
 session persistence. Remember is resolved once through Lifetime before Prepare
 and checked unchanged in the original command. Only an exact fresh committed,

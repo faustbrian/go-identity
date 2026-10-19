@@ -20,14 +20,16 @@ func NewSigninFeatureWithMiddleware(c SigninConfig, m []identityhttp.MiddlewareD
 }
 
 func signinOperation(c SigninConfig, m []identityhttp.MiddlewareDescriptor) (identityhttp.OperationDescriptor, error) {
-	return signinOperationProfile(c, m, false)
+	return signinOperationProfile(c, m, emailSigninProfile)
 }
-func signinOperationProfile(c SigninConfig, m []identityhttp.MiddlewareDescriptor, usernameProfile bool) (identityhttp.OperationDescriptor, error) {
+func signinOperationProfile(c SigninConfig, m []identityhttp.MiddlewareDescriptor, profile signinProfile) (identityhttp.OperationDescriptor, error) {
 	owner, action := identityhttp.ModuleID("identity/password"), "identity.password.signin"
-	if usernameProfile {
+	if profile == usernameSigninProfile {
 		owner, action = "identity/username", "identity.username.signin"
+	} else if profile == phoneSigninProfile {
+		owner, action = "identity/phone", "identity.phone.password-signin"
 	}
-	h, err := newSigninHandler(c, m, usernameProfile)
+	h, err := newSigninHandler(c, m, profile)
 	if err != nil {
 		return identityhttp.OperationDescriptor{}, err
 	}
@@ -35,14 +37,14 @@ func signinOperationProfile(c SigninConfig, m []identityhttp.MiddlewareDescripto
 	if err != nil {
 		return identityhttp.OperationDescriptor{}, err
 	}
-	op.Wire = signinWireProfile(c, usernameProfile)
+	op.Wire = signinWireProfile(c, profile)
 	return op, nil
 }
 
 func signinWire(c SigninConfig) *identityhttp.WireOperation {
-	return signinWireProfile(c, false)
+	return signinWireProfile(c, emailSigninProfile)
 }
-func signinWireProfile(c SigninConfig, usernameProfile bool) *identityhttp.WireOperation {
+func signinWireProfile(c SigninConfig, profile signinProfile) *identityhttp.WireOperation {
 	text := func(max any) any { return map[string]any{"type": "string", "minLength": 1, "maxLength": max} }
 	object := func(required []string, fields map[string]any) map[string]any {
 		return map[string]any{"type": "object", "additionalProperties": false, "required": required, "properties": fields}
@@ -79,7 +81,7 @@ func signinWireProfile(c SigninConfig, usernameProfile bool) *identityhttp.WireO
 	request := object([]string{"flowID", "identifier", "password", "callbackURL"}, map[string]any{"flowID": id, "identifier": text(1024), "password": map[string]any{"type": "string", "minLength": 1, "maxLength": min(c.Network.Limits.MaximumDecodedBytes, uint64(1<<20)), "writeOnly": true}, "callbackURL": map[string]any{"type": "string", "maxLength": 2048}, "remember": map[string]any{"type": "boolean"}})
 	definition := map[string]any{"operationId": "identity.password.signin", "description": "Selected verified-email single-factor browser password profile; MFA continuation remains unavailable and native factor policy must deny rather than downgrade. Original pre-auth cookie/flowID, exact HTTPS tenant/Origin, callback and remember choice; signed device supplies correlation only. IP admission precedes native normalization/custody, then shared identifier budget and one non-keyed native signin. No Authorization, retry key, query, trailers, client identity or credential alternative. Only fresh error-free known commit delivers original session and synchronizer; ambiguity retains password-free recovery without retry or renewal.", "security": []any{map[string]any{"PasswordSigninOriginalFlow": []string{}, "PasswordSigninBrowserDevice": []string{}}}, "parameters": []any{map[string]any{"name": "Origin", "in": "header", "required": true, "schema": text(2048)}}, "requestBody": map[string]any{"required": true, "content": map[string]any{"application/json": map[string]any{"schema": request}}}, "responses": responses}
 	prefix := "Password"
-	if usernameProfile {
+	if profile == usernameSigninProfile {
 		prefix = "Username"
 		request["required"] = []string{"flowID", "username", "password", "callbackURL"}
 		properties := request["properties"].(map[string]any)
@@ -89,9 +91,19 @@ func signinWireProfile(c SigninConfig, usernameProfile bool) *identityhttp.WireO
 		definition["description"] = "Explicit username/password browser signin with its original username-signin flow/cookie, mapped HTTPS tenant/Origin, signed device and remember choice. Native canonicalization supplies the shared rate identity; unknown, wrong, invalid and unverified names do not disclose accounts. Current authoritative MFA must be known empty; no factor fallback is selected. Only fresh known commitment delivers the original session cookie and synchronizer. Ambiguity and recovery never redeliver credentials or renew proof."
 		definition["security"] = []any{map[string]any{"UsernameSigninOriginalFlow": []string{}, "UsernameSigninBrowserDevice": []string{}}}
 	}
+	if profile == phoneSigninProfile {
+		prefix = "PhonePassword"
+		request["required"] = []string{"flowID", "phoneNumber", "password", "callbackURL"}
+		properties := request["properties"].(map[string]any)
+		delete(properties, "identifier")
+		properties["phoneNumber"] = text(1024)
+		definition["operationId"] = "identity.phone.password-signin"
+		definition["description"] = "Explicit verified-phone/password browser signin. The original phone-password pre-auth flow must already bind this exact canonical phone target under the native owner's keyed policy; retargeting denies before identifier rate, lookup or comparison. Exact HTTPS tenant/Origin, callback, remember and signed device remain mandatory. Current native account, stored phone profile, credential and known-empty-factor authority are decisive; enrolled or unknown factors deny, never fall back. Only fresh known commitment delivers the original session cookie and synchronizer; ambiguous or historical recovery does not redeliver credentials."
+		definition["security"] = []any{map[string]any{"PhonePasswordSigninOriginalFlow": []string{}, "PhonePasswordSigninBrowserDevice": []string{}}}
+	}
 	if c.MFAContinuation {
 		definition["description"] = "Explicit password-first MFA selection. Original flow/cookie, mapped HTTPS tenant/Origin, callback, remember and signed device remain mandatory. Correct password commits either the selected single-factor session or a challenge-only X-MFA-Token; partial authentication cannot issue a session. Native current factor/risk/credential authority is decisive. Replay, ambiguity, errors, cancellation and expired response commitment withhold credentials. Recovery preserves original metadata without proof redelivery."
-		if usernameProfile {
+		if profile == usernameSigninProfile {
 			definition["description"] = "Explicit username/password-first TOTP selection retains the exact original username-signin flow, browser/device custody and remember choice. Current username and credential/factor authority are native. Correct password commits either an authoritative known-empty-factor session or a challenge-only X-MFA-Token. No session or synchronizer accompanies the challenge. Ambiguity, replay, cancellation, errors and expiry never redeliver custody or fall back to another primary."
 		}
 	}

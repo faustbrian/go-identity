@@ -57,7 +57,7 @@ func NewUsernameFeatureWithMiddleware(c UsernameFeatureConfig, middleware []iden
 		operations = append(operations, op)
 	}
 	if c.Signin != nil {
-		op, err := signinOperationProfile(*c.Signin, middleware, true)
+		op, err := signinOperationProfile(*c.Signin, middleware, usernameSigninProfile)
 		if err != nil {
 			return identityhttp.Feature{}, err
 		}

@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Select original target-bound initiation with a trusted identifier binder.
+  Phone/password requires the binder, derives custody after shared IP admission
+  and verifies the prepared intent before issue. Unselected methods still
+  reject identifiers; selected OpenAPI describes the dependent input contract.
+
 - Compose current session custody backed by supported envelope v2. Existing
   workflow/HTTP contracts and original credential lifetimes are unchanged.
 
