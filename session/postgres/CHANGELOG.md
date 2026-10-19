@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Restore the original session projection from closed phone/password signin
+  commands and retain its password-specific issuance commitment for recovery.
+  Install the forward phone/password purpose suffix against the exact selected
+  predecessor history; username signin is optional and old rows stay unchanged.
+
 - Preserve optional original identifier commitments in pre-auth record storage
   and command custody, including restart/retry conflict checks. Legacy unbound
   bytes remain unchanged; old binaries fail closed on bound records rather than

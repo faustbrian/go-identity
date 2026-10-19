@@ -129,6 +129,25 @@ func TestUsernameSigninMappingPreservesOriginalSession(t *testing.T) {
 	}
 }
 
+func TestPhonePasswordSigninMappingPreservesOriginalSession(t *testing.T) {
+	spec, original, secret, cookie := passwordSigninMappingFixture(t, true, true)
+	spec.Operation.Owner, spec.Operation.OperationID, spec.Operation.SchemaID = "identity/phone", "identity.phone.password-signin", "phone-password-signin"
+	spec.Binding.OperationID, spec.Binding.SchemaID = spec.Operation.OperationID, spec.Operation.SchemaID
+	command, err := identity.NewFeaturePasswordSigninCommand(spec, secret, cookie)
+	if err != nil {
+		t.Fatal(err)
+	}
+	restored, err := PasswordSigninSession(command)
+	if err != nil {
+		t.Fatal("phone password signin cannot restore original session custody", err)
+	}
+	want, _, _ := encodeRecord(original)
+	got, _, _ := encodeRecord(restored)
+	if !bytes.Equal(want, got) {
+		t.Fatal("phone password session changed identity, authority, remember or CSRF")
+	}
+}
+
 func TestPasswordSigninMappingRejectsForeignAndUnsupportedProfiles(t *testing.T) {
 	spec, _, p, cookie := passwordSigninMappingFixture(t, true, false)
 	for _, name := range []string{"session.result.tenant.id", "session.result.user.id", "session.result.proof.method", "session.result.proof.assurance", "session.result.unknown"} {

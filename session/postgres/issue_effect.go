@@ -83,7 +83,7 @@ func (r *Repository) writeIssuedSession(ctx context.Context, w kernel.Work, b id
 	recordDigest := sha256.Sum256(payload)
 	if b.OperationID == "identity.otp.signin" {
 		digest = otpIssuanceDigest(digest, string(s.UserID), s.SessionID, s.FamilyID, recordDigest[:])
-	} else if b.OperationID == "identity.password.signin" || b.OperationID == "identity.username.signin" {
+	} else if b.OperationID == "identity.password.signin" || b.OperationID == "identity.username.signin" || b.OperationID == "identity.phone.password-signin" {
 		digest = passwordIssuanceDigest(digest, string(s.UserID), s.SessionID, s.FamilyID, recordDigest[:])
 	} else if b.OperationID == "identity.password.signup" {
 		digest = passwordSignupIssuanceDigest(digest, string(s.UserID), s.SessionID, s.FamilyID, recordDigest[:])
