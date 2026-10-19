@@ -1,9 +1,9 @@
 # Identity Platform Progress
 
-## TL;DR — updated 2026-10-19 02:00 UTC
+## TL;DR — updated 2026-10-19 05:25 UTC
 
-**Estimated whole-goal completion: approximately 15%, with low confidence.**
-**Consumer milestones: 6/39 closed** (15.4% unweighted); full scope remains
+**Estimated whole-goal completion: approximately 20%, with low confidence.**
+**Consumer milestones: 8/39 closed** (20.5% unweighted); full scope remains
 67 units. Consumer delivery is separate from complete unit/release qualification.
 The working authentication baseline, thirteen email profiles, native username
 authentication, organization/team lifecycle, selected OAuth code/PKCE and machine
@@ -11,6 +11,30 @@ credentials, and four CAPTCHA adapters are delivered as bounded profiles.
 Most platform families and final package qualification are not closed;
 queued work is not counted as delivered.
 This is an effort/scope estimate, not a measured percentage or an ETA.
+M10's existing confirmed-TOTP enrollment/signin consumer is now counted after
+source/acceptance reconciliation; this corrects a stale row, not new development.
+
+**Active M08 profile, not delivered:** phone SMS-code signin. Prerequisites
+`60bd1ec` and native adapter `c50fb10` are independently reviewed, main-pushed,
+Required CI green and publicly downloadable. The actual public native module
+matches all 130 Go/manifests. Its genuine enrollment -> encrypted SMS -> signin
+-> session read/logout consumer passes PostgreSQL/race without local workspace
+substitutions (39.514s), including late authority, contention, real lost-COMMIT
+recovery and populated migration histories. Native publication has independent
+delivery approval. The public-pinned caller is reviewed and main-pushed
+`2d4f755`, Required39202608349 green, with independent delivery approval.
+HTTP prerequisites are reviewed/main-pushed `807a786`, Required39203184983
+green. The actual public HTTP dependency is adopted; canonical standalone OTP
+HTTP race/vet/module verification pass. Review caught a real mixed email/phone
+OpenAPI scheme collision before HTTP publication; its mixed-selection RED now
+passes with separate names and unchanged cookies, as does the complete affected
+module race suite (22.053s). Corrected HTTP is independently approved,
+main-pushed `b88e709`, Required39204171362 green and publicly downloadable.
+The actual downloaded module's mixed phone/email route/schema/dispatch test
+passes with race detection (2.967s); independent delivery audit matches the
+approved source and public artifact. The complete native-to-HTTPS reference
+journey remains implementation work, so M08 is not closed. Earlier enrollment
+fixture intermittency is unexplained; these passes do not prove stability.
 
 **Current outcome:** native verified-phone/password signin is main-pushed
 `650d24f`, Required CI green, and exercised through its downloaded public module.
@@ -30,13 +54,18 @@ phone/password plus combined username/TOTP PostgreSQL/HTTPS consumer passes with
 race detection (13.824s). The selected phone/password consumer slice is delivered.
 M08 still includes later OTP/reset/change/removal profiles and is not closed.
 
-**Parallel delivery:** selected identified-user WebAuthn none/ES256 root and
-PostgreSQL adapter are independently reviewed and main-pushed in go-webauthn
-`3ad12d2`, Required run 39185441961 green. Canonical public-root PG/race,
-commit-loss and actual Chrome/WPT consumer checks pass. The downloaded native
-module authenticates to that exact commit and all eight Go/manifests match. No full
-M15, passkey/session integration, whole-unit or release claim. Worker resources
-and the publication task cache are removed.
+**Parallel delivery — M15 selected profile closed:** identified-user WebAuthn
+none/ES256 registration/assertion and durable credential validation are reviewed
+and main-pushed `75a475e` in go-webauthn. Current Required 39188665554 attempt 2
+passes after the first scanner timeout; no source or scanner bypass intervened.
+Canonical public-root PG/race, real commit-loss and actual Chrome/WPT results
+retain their original execution identities. New actual account-suspension
+characterization passes PG/race (1.659s) and tagged vet: valid responses deny with
+no credential/success-effect mutation or ceremony consumption. Independent final
+review and delivery audit approve the bounded claim; the actual public native
+module matches all nine Go/manifests. No M16/passkey/session integration,
+whole-unit qualification, tagged release or production claim. Worker resources
+are removed. Primary now implements selected phone SMS-code signin.
 
 ### Earlier checkpoints — historical evidence, not current pending state
 
@@ -230,11 +259,11 @@ whole-unit qualification is claimed.
 
 | Measure | Current position |
 | --- | --- |
-| Complete consumer milestones | **6/39 closed**: B1 authentication, B2 reset, B3 password change, M05 selected username journey, M06 selected magic-link journey, M07 selected email OTP journey. The unweighted count is 15.4%; it is not the whole-goal effort estimate. |
-| Remaining milestones | **33/39 not closed**: M04 and M08–M39. Existing implementation is not assumed absent. |
+| Complete consumer milestones | **8/39 closed**: B1 authentication, B2 reset, B3 password change, M05 selected username journey, M06 selected magic-link journey, M07 selected email OTP journey, M10 confirmed TOTP enrollment/signin, M15 selected WebAuthn ceremony. The unweighted count is 20.5%; it is not the whole-goal effort estimate. |
+| Remaining milestones | **31/39 not closed**: M04, M08–M09, M11–M14 and M16–M39. Existing implementation is not assumed absent. |
 | Additional delivered behavior | **13 email-lifecycle profiles**, listed below. These are partial M04 deliveries, not thirteen additional closed milestones. |
 | Full package scope | **67 units: 61 product units + 6 primitive extensions.** No additional full-unit qualification has closed during this implementation run. The older 2/67 verified baseline is historical, not a current cross-repository audit. |
-| Last full consumer milestone closure | **18 October:** M07 selected email OTP journey, through public reference `00ca1bb`, independent final review, green CI and downloaded-reference PostgreSQL consumer. |
+| Last consumer milestone closure | **19 October:** M15 selected identified-user none/ES256 WebAuthn ceremony and durable validation, `75a475e`, independent final review/delivery audit, public artifact and green CI. M10 was also reconciled from already-delivered TOTP consumer evidence rather than newly implemented. |
 | Last complete email-profile delivery | **18 October:** independently selected hooks for managed change links and email OTP verification/change, including first-primary and TOTP paths. Pushed reference `ca26306`, Required CI 39110688213 passes; all 30 selected public-native PostgreSQL/race cases pass. |
 | Delivered organization profiles | **Native invitations, metadata, team lifecycle, ownership transfer, self-leave and current-subject organization listing.** Root `956176f` / native `804dbe8` adds bounded policy-filtered pages with original freshness and post-callback primary/scoped authority checks. Green CI; canonical PostgreSQL/race and downloaded-native genuine-session checks pass. This is partial M22/M23, not the complete organization family. |
 | Delivered username profiles | **M05 consumer profile closed:** required-email registration/signin, advisory availability, protected rename and explicitly selected TOTP signin through `4315bbf`. Original retry/recovery, CSRF, session effects and independent/coexisting selections are proven through real PostgreSQL and public modules. Broader catalog profiles and package qualification remain open. |
@@ -1373,14 +1402,14 @@ restart old slices merely to fill this table; adopt applicable prior proof.
 | M05 | Username availability/signin/rename: identity/username, stable identifier contracts | Closed selected consumer profile: required-email Latin-v1 signup/verification/signin, metered advisory availability, fresh-proof rename/session invalidation and opt-in TOTP signin. Reference `4315bbf`, independent final review, green Required CI, canonical public-dependency PostgreSQL/race 48.976s and downloaded-reference consumer 31.145s. Broader typed-catalog variants and whole-unit/release qualification remain pending. |
 | M06 | Delivered magic-link signin and session: identity/magiclink | Closed: selected browser-SFA signin/optional-signup public-reference journey `647ac4b`; independent review, green CI and downloaded-module PostgreSQL consumer. Full-unit qualification remains open. |
 | M07 | Purpose-bound email OTP request/delivery/completion: identity/otp, identity/otp/postgres | Closed selected email-signin profile: genuine registration/verification, original browser, encrypted delivery, counted consumption, session read/logout and code-free unknown recovery. Native `8008afd` and reference `00ca1bb`, independent reviews, green Required CI and actual downloaded-reference PostgreSQL consumer. OTP-MFA/phone/reset variants and full-unit qualification remain separate. |
-| M08 | Verified phone enrollment/change, OTP/password signin and reset: identity/phone, OTP/password owners | Closure not reassessed |
+| M08 | Verified phone enrollment/change, OTP/password signin and reset: identity/phone, OTP/password owners | Enrollment/verification and separately selected phone/password signin are delivered through reference `d65ed4c`, independent review, green CI and actual downloaded-reference PostgreSQL/HTTPS consumer. OTP signin, reset/change/removal and full qualification remain open. |
 | M09 | Anonymous session, self-deletion and collision-safe permanent upgrade: identity/anonymous, identity/anonymous/postgres | Closure not reassessed |
-| M10 | Confirmed TOTP enrollment and TOTP signin: identity/mfa, identity/mfa/postgres | Closure not reassessed |
+| M10 | Confirmed TOTP enrollment and TOTP signin: identity/mfa, identity/mfa/postgres | Closed selected cookie/password-primary TOTP profile, including username-primary composition: genuine registration, fresh proof, pending enrollment, reveal-once URI, explicit confirmation, challenge-only primary, TOTP completion and usable session/read/logout. Reviewed/pushed reference `4315bbf` and `02c6195`, green CI and original canonical/downloaded consumers retained. Fresh source audit at `d65ed4c` found the closure row stale; current downloaded combined phone/username/TOTP consumer also passes (13.824s). Broader MFA profiles and unit/release qualification remain separate. |
 | M11 | Confirmed secondary-OTP enrollment, delivered-code signin and session: MFA/OTP/password/session owners | Selected email profile proven; full milestone not closed |
 | M12 | Factor listing/update/removal/disable/replacement with fresh proof: MFA owners | Closure not reassessed |
 | M13 | Recovery-code reveal/use/regeneration and independently approved administrative recovery: MFA owners | Closure not reassessed |
 | M14 | Trusted-device issuance/use/revocation and step-up: MFA/session owners | Closure not reassessed |
-| M15 | WebAuthn register/assert ceremony and durable credential validation: webauthn, webauthn/postgres | Closure not reassessed |
+| M15 | WebAuthn register/assert ceremony and durable credential validation: webauthn, webauthn/postgres | Closed selected identified-user none/ES256 profile: reviewed/pushed `75a475e`, canonical public-root PG/race, real commit-loss recovery and actual Chrome/WPT consumer; account-suspension negative proof PG/race 1.659s, tagged vet, actual public native byte equivalence and exact green Required CI. Independent native review and delivery audit retained. Other protocol profiles, M16 and full unit/release qualification remain pending. |
 | M16 | Passkey-first registration, discoverable signin and credential management: passkey, passkey/postgres | Closure not reassessed |
 | M17 | Social OAuth authorization-code/S256 callback to session: identity/oauth, identity/oauth/postgres, identity/oauth/providers | Closure not reassessed |
 | M18 | Social account linking/unlinking and stored provider-token refresh: OAuth owners | Closure not reassessed |

@@ -1,5 +1,156 @@
 # Identity Implementation — Current Milestone
 
+## M15 selected consumer CLOSED — 2026-10-19 03:49 UTC
+
+`go-webauthn` clean main and remote main are
+`75a475e3bc30dfc0067a3f72d4591e6b782c00a4`. Required 39188665554 attempt 2
+SUCCESS (planning/structure/secrets, not runtime CI); first attempt was scanner
+timeout124, unchanged-source rerun passed. Selected identified-user none/ES256
+ceremony/durable validation consumer is closed, not M16 or whole-unit release.
+New test first proves active assertion, then suspends actual subject after
+issuing valid assertion/registration; both deny without verified evidence,
+complete credential/counter/version/usage or success-effect changes, and both
+ceremonies stay unconsumed. Worker actual PG18.6/Go1.27.2 GOWORKoff race PASS
+1.659s, native taggedvet0; task resources removed. Complete final fourpath
+snapshot f19fa13a independently APPROVE by webauthn_ceremony_final_review.
+Fresh webauthn_selected_delivery_audit authenticated native worker/reviewer
+reports, reconstructed original4cd81f31/publicpin898d6474/finalf19fa13a sources,
+verified clean exactremote/CI and compared public native9 Go/manifests.
+Public `v0.0.0-20261019020947-75a475e3bc30` origin75a475e, content sum
+`h1:3WORCIUMdFkqi84xYh0v1ZjZBZHvjR9wBnkIePTPs2w=` and module sum
+`h1:EL4WDDMtQXy0nvcqG4hBmJjLn7nzNIadVREIgtq5B3Y=`. Injected rootLICENSE
+matches owning root. Earlier canonical PG3.455/lostCOMMIT1.972/ChromeWPT2.047
+and rootrace2.034 retain original producer identities, not new executions.
+Count8/39 (20.5% unweighted), effort estimate~20% low confidence. Full unit,
+tagged release, production and passkey/session composition remain unqualified.
+
+## Primary successor — selected verified-phone SMS-code signin
+
+Primary owns phone/OTP/session contracts and native adapters, then opt-in
+HTTP/reference composition; no other writer owns these paths. Consume the
+delivered phone policy/enrollment `2fb0351`, native password consumer `650d24f`,
+OTP signin `8008afd`, session `6d77f3a` and reference `d65ed4c`, retaining their
+public source/evidence identities. Outcome: genuinely verified existing phone
+-> canonical target-bound original pre-auth -> encrypted SMS delivery -> one
+consuming `identity.phone.signin` -> browser/persistent session read/logout.
+Reuse actual OTP risk/attempt/consumption/coordinator and session owners, not a
+second engine or an alias to password signin. Keep generic email OTP APIs and
+stored encodings compatible. Phone owns canonicalization/profile and workflow
+entry; native OTP owns code custody/counting; session owns reveal-once issuance.
+Require matching stored phone profile, known-empty native factors and original
+number/tenant/purpose/remember custody before credential work. Exclude signup,
+MFA continuation, reset and number change/removal from this selected profile.
+Prove absent/unverified/wrong code, retarget/cross-tenant/purpose/remember denial,
+late phone/account/factor withdrawal, counted attempts, atomic rollback,
+one-use contention, original code-free lost-COMMIT recovery and compatibility
+through real public owners. Focused RED/GREEN, affected ordinary race/tagged vet,
+actual PostgreSQL/HTTPS and downloaded consumer; independent complete final diff,
+explicit main commit/push/Required CI. No full-repository or Tools/history rerun.
+Primary owns the serialized heavy slot; the WebAuthn lane is finished.
+Local checkpoint 2026-10-19 04:22 UTC: genuine native phone SMS-code
+browser/persistent login -> session/read -> code-free recovery -> logout passes.
+The full selected PG18.6/Go1.27.2 workspace race matrix passes (30.587s), including
+wrong-code/exhaustion, scope/profile/factor denials, protected rollback, concurrent
+submissions, real successful/denied COMMIT-ACK loss and 28 populated session
+purpose histories. Kernel delegation RED0.238 -> GREEN/race1.290; new purpose
+configuration REDmissingAPI -> GREEN0.245. No public pin, native final review,
+HTTP/reference completion or delivery credit yet. Two prior full runs failed in
+the unchanged enrollment setup; a 500ms fixture lease is a source-supported
+hypothesis, not a confirmed cause. Failure diagnostics now retain original error
+and aggregate journal lease state; latest complete run passes, not a stability
+claim. Native verification and public adoption continue without a Tools rerun.
+
+2026-10-19 04:46 UTC: prerequisite21 paths independently reviewed, committed and
+main-pushed `60bd1ec`; Required39200100466 SUCCESS. Delivery audit independently
+bound committed bytes to original approved42-path source. Native adapter now
+selects authenticated public owners; standalone race2.026, taggedvet0,
+moduleverifyPASS and real PG/race22profiles+28histories56.832 pass. New native
+original-source lookup is noncharging; post-SMS account/phone withdrawal denies.
+Bounded active fuzz passes both new custody profiles. Fresh native regression
+audit approves25-path snapshot9779f28a; complete native publication review pending.
+
+2026-10-19 05:00 UTC: native21 publication reviewed APPROVE at bdc805a9,
+committed/main-pushed `c50fb10`, Required39201572923 SUCCESS. Independent delivery
+audit directly received both native reviews and matched21committed and130public
+Go/manifests. Actual public native caller GOWORKoff/modreadonly ordinaryrace
+2.222s and complete PG/race39.514s PASS. Caller tests/public pins are under final
+review. Phone HTTP issuance/consume/recovery focusedrace6.234s PASS; combined
+opt-in routes/actual response schema REDmissingAPI -> GREEN/race2.026s. Full
+affected HTTP checks running; reference composition remains implementation work.
+M08/whole-unit closure and estimate8/39/~20% remain unchanged.
+
+05:07 UTC publiccaller7paths independently APPROVE at79822638, main-pushed
+`2d4f755`; Required39202608349 SUCCESS and native delivery audit approves exact
+source/remote/reviews/CI. PhoneHTTP boundedsendfuzz5.418s/951exec PASS; affected
+workspaceHTTPOTP18.135/session20.133/root16.396 race pass, canonicalroot16.839/
+session20.893 readonlyrace pass, three-modulevet0. HTTP prerequisites regression
+APPROVE60fd8c67; Go compatibility no concrete backwards defect at76da85d3,
+correctly retains pending publicrootcatalogpin. Correctness review/publishing
+rootcatalog, then downstream public HTTP qualification and reference remain.
+Superseded raw native review snapshot removed after both native/caller audits;
+committed sources and native reports retain provenance. No new milestone credit.
+
+05:19 UTC HTTPprereq9 reviewed APPROVE60fd8c67, main-pushed`807a786`,
+Required39203184983 SUCCESS. Actualpublicroot pin adopted byHTTPOTP; canonical
+readonlyrace18.038/vet0/moduleverifyPASS72362, publicorigin/73Go/manifests/catalog
+bytes independently verified bycompatibility role. FirstfinalHTTP review F1:
+mixedemail+phone selection collided onsharedsecuritycomponentnames. Reproduced
+RED1.28364956, namespacedphone definitions/referenceswithoutchangingcookies,
+mixedselection+bothownerdispatch GREEN3.01697969. FullaffectedstandaloneHTTPOTP
+race22.053/vet0PASS72049. Corrected12snapshota62196f6 undercoverage review;
+completefinalreview pending.
+unchangednativePG/fuzz retain originalexecutionidentity. No restart/newQAplan,
+PG/fullrepo rerun ormilestonecredit; reference stillneedsimplementation.
+Earlier local HTTP checkpoint, now superseded: target-binder regression
+RED0.373 -> GREEN2.214; distinct consuming/recovery
+phone handlers and retained generic OTP checks pass local race5.494. HTTP
+Send/selected metadata/reference and final downloaded consumer remain open.
+
+05:25 UTC corrected12 HTTPOTP independently APPROVEa62196f6 and main-pushed
+`b88e709`; Required39204171362 SUCCESS. Publicnativeversion
+v0.0.0-20261019052145-b88e7097fe0f originexact; all29Go/manifests byteequal,
+independentlyconfirmedbydeliveryauditor. Actualdownloadedmodule mixedphone/email
+route/schema/ownerdispatch racePASS2.967s89056. Bothnativecorrectness/regression
+reports receiveddirectly andcommittedsource/remote/CI/publicartifact match.
+Earlier15ececapproval/review is supersededbycorrectedcandidate, not a passing
+recordforF1. Native+HTTPdelivery establishedseparately; genuinecombinedreference
+journey remains unfinished. M08 andwhole-unitqualification remain open;8/39/~20%.
+
+## M10 closure reconciliation — 2026-10-19 02:04 UTC
+
+Independent read-only `totp_milestone_closure_check` at source `d65ed4c` traced
+actual public enrollment/URI/confirmation/password and username TOTP signin,
+native atomic phase and final session/read/logout assertions. No missing
+selected consumer operation found; the roadmap's unreassessed row was stale.
+Primary inspected real registration/proof/enrollment and usable-session/logout
+oracles and retained approved/published reference `4315bbf`/`02c6195` delivery,
+original canonical/downloaded runtime evidence and exact-source green CI.
+The current public `d65ed4c` combined phone/username/TOTP PostgreSQL consumer
+(13.824s) exercises the same genuine enrollment and usable MFA-session helper.
+Close M10's selected cookie/password-primary and username-primary TOTP consumer;
+factor management/recovery/trust, other alternatives and full-unit gates remain.
+Count is 7/39 (17.9% unweighted), effort estimate approximately 15–20% low
+confidence. This reconciles already delivered work, not a new code delivery.
+
+## Parallel selected WebAuthn authority proof — 2026-10-19 02:04 UTC
+
+Worker `webauthn_ceremony` (GPT-6.1 Sol high, no children) owns only
+`go-webauthn/postgres/ceremony_integration_test.go` or a new adjacent
+`ceremony_authority_integration_test.go`, plus native changelog if needed.
+Consume committed main `3ad12d2`, public root `531225a`, kernel/root identity
+`46d7a68` and the existing native coordinator/store; no shared identity, root
+protocol, module pins, CI or Git mutation. Finish the selected identified-user
+none/ES256 register/assert consumer's current-account authority denial and
+rollback proof. Existing positive/recovery/Chrome proof remains unchanged.
+Suspend the actual subject after ceremony issuance and before finalization;
+assert denial and no challenge/credential counter/usage/success-effect mutation.
+Characterize first; reproduce/fix only a demonstrated defect through its owner,
+not a substitute account/transaction engine. Worker requests any production
+write expansion. Smallest check: focused actual PostgreSQL/race authority tests
+and tagged native vet with task-owned disposable caches/cluster. Worker has the
+heavy slot until terminal. Primary owns integration, independent final review,
+main commit/push/CI and selected-profile closure; no M16 or whole-unit claim.
+
 ## Current checkpoint — 2026-10-19 02:00 UTC
 
 Phone native `650d24f` and HTTP `422b56d` are main-pushed with green Required CI.
