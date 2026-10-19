@@ -46,6 +46,12 @@ func boundIssuanceOperation(b identity.CommandBinding) (identity.FeatureOperatio
 	op := issuanceOperation(subject)
 	if b.OperationID == phoneEnrollmentSendOperation().OperationID {
 		op = phoneEnrollmentSendOperation()
+		if b.SchemaID == phoneChangeSendOperation().SchemaID {
+			op = phoneChangeSendOperation()
+			if b.RecordID != string(b.CommandID) {
+				return identity.FeatureOperation{}, ErrInvalidCommand
+			}
+		}
 		if b.UserID == "" || b.ActorID != identity.ActorID(b.UserID) || b.ActorKind != authorization.SubjectUser {
 			return identity.FeatureOperation{}, ErrInvalidCommand
 		}
@@ -82,6 +88,12 @@ func issuanceScopeMatches(b identity.CommandBinding, scope otp.DigestScopeSpec) 
 	}
 	if scope.SubjectID != string(b.UserID) {
 		return false
+	}
+	if op == phoneChangeSendOperation() {
+		// A replacement send creates only this challenge. Its OTP target is
+		// the independently retained old identifier, which send does not mutate.
+		_, targetErr := identity.ParseIdentifierID(scope.TargetID)
+		return targetErr == nil && scope.Purpose == otp.PurposePhoneVerification && scope.Channel == otp.ChannelSMS && scope.ChallengeID == string(b.CommandID)
 	}
 	if op == phoneEnrollmentSendOperation() {
 		return scope.Purpose == otp.PurposePhoneVerification && scope.Channel == otp.ChannelSMS && scope.TargetID == b.RecordID && scope.ChallengeID == string(b.CommandID)
@@ -135,7 +147,7 @@ func validIssuance(challenge otp.Challenge, spec identity.FeatureCommandSpec) bo
 		return false
 	}
 	if original, ok := b.Authorization.PreAuthTransaction(); ok {
-		if op == mfaEnrollmentSendOperation() || op == mfaLoginSendOperation() || op == phoneEnrollmentSendOperation() {
+		if op == mfaEnrollmentSendOperation() || op == mfaLoginSendOperation() || phoneSMSIssuance(op) {
 			return false
 		}
 		r, err := original.Bindings()

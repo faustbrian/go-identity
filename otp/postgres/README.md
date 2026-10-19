@@ -45,6 +45,34 @@ history lifetime. This native selection enables no HTTP route automatically.
 
 ## Phone enrollment issuance participant
 
+### New-number SMS for replacement
+
+`NewPhoneChangeIssuer` separately selects
+`identity.phone.send-verification.change.native-v1`. It uses the ordinary
+phone-verification OTP profile and shared generator/digest/send-family/delivery
+owners, but **does not attach or alter an identifier**. `CaptureInput` binds the
+new destination and exact independently selected old verified recipient, the
+original session, send command and absolute limits. The old recipient is not
+the new destination and cannot be used as evidence that the new number is
+verified. `Generate` follows acknowledged preparation; `Restore` keeps the same
+generation/output/old snapshot. `Persist` rechecks the old recipient in the
+registered native Work before challenge/delivery persistence. It creates no
+replacement phone, verified status or session. Native action proof, current
+factor/recovery/risk/CSRF checks and final fencing remain required; this
+participant alone does not enable complete phone change or an HTTP route.
+
+`RestoreChangeConfirmation` consumes only the original committed native
+preparation. It preserves both target versions, the original factor generation,
+session and challenge interval; send has not advanced an identifier epoch.
+Its consuming participant accepts only `identity.phone.update.native-v1`,
+alongside separately native-owned fresh action-proof fields. That native owner
+must validate/admit those fields before code metering and atomically consume the
+proof with OTP and replacement. The kernel alone derives its own persisted +1
+successor for the final fence. `Prepare` creates a new submission, not recovery;
+original ambiguous completion must be reconciled without another code comparison.
+
+### Existing enrollment
+
 `NewPhoneEnrollmentIssuer` selects consuming-only `phone-verification` SMS
 generation through the existing OTP preparer, digest/send-family/lockout store
 and encrypted delivery participant. It does not select a phone service, route,

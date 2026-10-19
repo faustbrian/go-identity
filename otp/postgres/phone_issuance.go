@@ -50,6 +50,7 @@ type PhoneEnrollmentIssuer struct{ read func() *phoneEnrollmentIssuer }
 type phoneEnrollmentIssuer struct {
 	store         *Contributor
 	configuration [32]byte
+	replacement   bool
 }
 
 func (s *PhoneEnrollmentIssuer) state() *phoneEnrollmentIssuer {
@@ -63,6 +64,10 @@ func (s *PhoneEnrollmentIssuer) state() *phoneEnrollmentIssuer {
 // IO, entropy or rendering. Install the selected OTP/session/delivery histories
 // and Initialize before use. This constructor does not enable an HTTP feature.
 func NewPhoneEnrollmentIssuer(c PhoneEnrollmentIssuerConfig) (*PhoneEnrollmentIssuer, error) {
+	return newPhoneSMSIssuer(c, false)
+}
+
+func newPhoneSMSIssuer(c PhoneEnrollmentIssuerConfig, replacement bool) (*PhoneEnrollmentIssuer, error) {
 	profile, checks, err := c.Policy.Bindings()
 	if err != nil || profile.Purpose != otp.PurposePhoneVerification || checks.Enabled || c.Delivery == nil {
 		return nil, ErrInvalidConfiguration
@@ -79,11 +84,15 @@ func NewPhoneEnrollmentIssuer(c PhoneEnrollmentIssuerConfig) (*PhoneEnrollmentIs
 	if err != nil {
 		return nil, err
 	}
-	configuration, err := sessionIssuanceConfiguration(store, c.Session, c.Policy, "identity-otp-phone-enrollment-owner-v1\x00")
+	profileID := "identity-otp-phone-enrollment-owner-v1\x00"
+	if replacement {
+		profileID = "identity-otp-phone-change-owner-v1\x00"
+	}
+	configuration, err := sessionIssuanceConfiguration(store, c.Session, c.Policy, profileID)
 	if err != nil {
 		return nil, err
 	}
-	p := &phoneEnrollmentIssuer{store: store, configuration: configuration}
+	p := &phoneEnrollmentIssuer{store: store, configuration: configuration, replacement: replacement}
 	return &PhoneEnrollmentIssuer{read: func() *phoneEnrollmentIssuer { return p }}, nil
 }
 
@@ -129,6 +138,8 @@ type PhoneEnrollmentSendInput struct {
 
 type phoneEnrollmentSendInput struct {
 	Candidate           kernel.PhoneEnrollmentIntent
+	replacement         *kernel.PhoneChangeIntent
+	previous            *kernel.RecipientRecord
 	Continuation        otp.Continuation
 	Authority           AttemptAuthority
 	IssuedAt, ExpiresAt time.Time
@@ -153,8 +164,20 @@ func (i PhoneEnrollmentSendInput) state() phoneEnrollmentSendInput {
 // Never pass an application-reconstructed session as authentication evidence;
 // protected Persist independently checks the original stored session and epochs.
 func (s *PhoneEnrollmentIssuer) CaptureInput(ctx context.Context, b identity.CommandBinding, candidate kernel.PhoneEnrollmentIntent, original session.Session, at, until time.Time) (PhoneEnrollmentSendInput, error) {
+	if s.state() == nil || s.state().replacement {
+		return PhoneEnrollmentSendInput{}, ErrInvalidCommand
+	}
+	return s.captureInput(ctx, b, phoneEnrollmentSendInput{Candidate: candidate}, original, at, until)
+}
+
+func (s *PhoneEnrollmentIssuer) captureInput(ctx context.Context, b identity.CommandBinding, input phoneEnrollmentSendInput, original session.Session, at, until time.Time) (PhoneEnrollmentSendInput, error) {
 	p := s.state()
-	if ctx == nil || p == nil || p.store == nil || p.store.session == nil || p.store.send == nil || b.ValidateFor(phoneEnrollmentSendOperation()) != nil ||
+	op := phoneEnrollmentSendOperation()
+	if p != nil && p.replacement {
+		op = phoneChangeSendOperation()
+	}
+	if ctx == nil || p == nil || p.store == nil || p.store.session == nil || p.store.send == nil || b.ValidateFor(op) != nil ||
+		p.replacement != (input.replacement != nil) ||
 		!nativeTime(at) || !nativeTime(until) || !until.After(at) {
 		return PhoneEnrollmentSendInput{}, ErrInvalidCommand
 	}
@@ -171,12 +194,16 @@ func (s *PhoneEnrollmentIssuer) CaptureInput(ctx context.Context, b identity.Com
 	if err != nil {
 		return PhoneEnrollmentSendInput{}, ErrInvalidCommand
 	}
-	destination, err := otp.NewDestinationInput(candidate.Change.CanonicalValue)
+	change, err := input.change()
+	if err != nil {
+		return PhoneEnrollmentSendInput{}, err
+	}
+	destination, err := otp.NewDestinationInput(change.CanonicalValue)
 	if err != nil {
 		return PhoneEnrollmentSendInput{}, ErrInvalidCommand
 	}
 	continuation, err := otp.NewContinuation(otp.DigestScopeSpec{TenantID: string(b.TenantID), SubjectID: string(b.UserID), Purpose: otp.PurposePhoneVerification,
-		Channel: otp.ChannelSMS, Destination: destination, ChallengeID: string(b.CommandID), TargetID: b.RecordID, PolicyVersion: b.PolicyVersion, Generation: 1}, flow, session.RememberPolicy{})
+		Channel: otp.ChannelSMS, Destination: destination, ChallengeID: string(b.CommandID), TargetID: string(change.ID), PolicyVersion: b.PolicyVersion, Generation: 1}, flow, session.RememberPolicy{})
 	if err != nil {
 		return PhoneEnrollmentSendInput{}, ErrInvalidCommand
 	}
@@ -191,14 +218,15 @@ func (s *PhoneEnrollmentIssuer) CaptureInput(ctx context.Context, b identity.Com
 			until = bound.UTC().Truncate(time.Microsecond)
 		}
 	}
-	input := newPhoneEnrollmentSendInput(phoneEnrollmentSendInput{Candidate: candidate, Continuation: continuation, Authority: authority, IssuedAt: at, ExpiresAt: until})
-	if _, err := input.record(p.store.send.policy, b); err != nil {
+	input.Continuation, input.Authority, input.IssuedAt, input.ExpiresAt = continuation, authority, at, until
+	retained := newPhoneEnrollmentSendInput(input)
+	if _, err := retained.record(p.store.send.policy, b); err != nil {
 		return PhoneEnrollmentSendInput{}, err
 	}
 	if err := ctx.Err(); err != nil {
 		return PhoneEnrollmentSendInput{}, err
 	}
-	return input, nil
+	return retained, nil
 }
 
 func (i PhoneEnrollmentSendInput) record(policy otp.AttemptPolicy, b identity.CommandBinding) (sendRequestRecord, error) {
@@ -207,11 +235,15 @@ func (i PhoneEnrollmentSendInput) record(policy otp.AttemptPolicy, b identity.Co
 	if err != nil {
 		return sendRequestRecord{}, ErrInvalidCommand
 	}
-	if _, err := kernel.PhoneEnrollmentFields(s.Candidate); err != nil {
+	change, err := s.change()
+	if err != nil {
 		return sendRequestRecord{}, ErrInvalidCommand
 	}
-	change := s.Candidate.Change
-	if change.TenantID != b.TenantID || change.UserID != b.UserID || string(change.ID) != b.RecordID || change.CanonicalValue != c.Scope.Destination.Value() || change.ExpectedAuthorityVersion != s.Authority.IdentifierAuthorityVersion {
+	if change.TenantID != b.TenantID || change.UserID != b.UserID || string(change.ID) != c.Scope.TargetID || change.CanonicalValue != c.Scope.Destination.Value() || change.ExpectedAuthorityVersion != s.Authority.IdentifierAuthorityVersion {
+		return sendRequestRecord{}, ErrInvalidCommand
+	}
+	if s.replacement == nil && string(change.ID) != b.RecordID ||
+		s.replacement != nil && (b.RecordID != string(b.CommandID) || s.replacement.SendCommandID != b.CommandID || !s.previousMatches()) {
 		return sendRequestRecord{}, ErrInvalidCommand
 	}
 	r := sendRequestRecord{continuation: s.Continuation, policy: policy, authority: s.Authority, issuedAt: s.IssuedAt, expiresAt: s.ExpiresAt}
@@ -233,10 +265,14 @@ func (s *PhoneEnrollmentIssuer) original(ctx context.Context, root identity.Comm
 		return bad(err)
 	}
 	spec, ok := root.Feature()
-	if !ok || spec.Operation != phoneEnrollmentSendOperation() {
+	op, prefix, profile := phoneEnrollmentSendOperation(), "phone-enrollment.", "identity-otp-phone-enrollment-send-v1"
+	if p.replacement {
+		op, prefix, profile = phoneChangeSendOperation(), "phone-change.", "identity-otp-phone-change-send-v1"
+	}
+	if !ok || spec.Operation != op || p.replacement != (input.state().replacement != nil) {
 		return bad(ErrInvalidCommand)
 	}
-	fields, err := kernel.PhoneEnrollmentFields(input.state().Candidate)
+	fields, err := input.state().fields()
 	if err != nil {
 		return bad(ErrInvalidCommand)
 	}
@@ -245,7 +281,7 @@ func (s *PhoneEnrollmentIssuer) original(ctx context.Context, root identity.Comm
 		if otpField(actual.Name) {
 			return bad(ErrInvalidCommand)
 		}
-		if !strings.HasPrefix(actual.Name, "phone-enrollment.") {
+		if !strings.HasPrefix(actual.Name, prefix) {
 			continue
 		}
 		if seen[actual.Name] {
@@ -280,6 +316,18 @@ func (s *PhoneEnrollmentIssuer) original(ctx context.Context, root identity.Comm
 		return bad(err)
 	}
 	defer clear(wire)
+	if p.replacement {
+		// The old recipient is not the new SMS destination and must not enter
+		// OTP's verified-destination slot. Bind its independent exact snapshot
+		// into this new profile's authenticated output instead. Keep existing
+		// enrollment framing byte-for-byte unchanged for retained commands.
+		previous := appendSendRecipient(nil, *input.state().previous)
+		wrapped := appendAuthorityText([]byte("identity-phone-change-send-input-v1\x00"), string(wire))
+		clear(wire)
+		wire = appendAuthorityText(wrapped, string(previous))
+		clear(previous)
+		defer clear(wire)
+	}
 	frame, err := json.Marshal(struct {
 		Binding       identity.CommandBinding
 		Operation     identity.FeatureOperation
@@ -294,7 +342,7 @@ func (s *PhoneEnrollmentIssuer) original(ctx context.Context, root identity.Comm
 	}
 	digest := sha256.Sum256(frame)
 	clear(frame)
-	aad, err := envelope.NewContext(map[string]string{"profile": "identity-otp-phone-enrollment-send-v1", "binding": base64.RawURLEncoding.EncodeToString(digest[:]), "generation": strconv.FormatUint(generation, 10)})
+	aad, err := envelope.NewContext(map[string]string{"profile": profile, "binding": base64.RawURLEncoding.EncodeToString(digest[:]), "generation": strconv.FormatUint(generation, 10)})
 	return record, aad, err
 }
 
@@ -321,6 +369,7 @@ type preparedPhoneEnrollmentSend struct {
 	generated identity.Command
 	root      identity.FeatureCommandSpec
 	candidate kernel.PhoneEnrollmentIntent
+	previous  *kernel.RecipientRecord
 }
 
 func (p PreparedPhoneEnrollmentSend) state() *preparedPhoneEnrollmentSend {
@@ -359,7 +408,7 @@ func (s *PhoneEnrollmentIssuer) Restore(ctx context.Context, root identity.Comma
 	if err != nil || !reflect.DeepEqual(got, expected) {
 		return PreparedPhoneEnrollmentSend{}, ErrInvalidCommand
 	}
-	p := &preparedPhoneEnrollmentSend{phase: phase, generated: generated, root: spec, candidate: input.state().Candidate}
+	p := &preparedPhoneEnrollmentSend{phase: phase, generated: generated, root: spec, candidate: input.state().Candidate, previous: input.state().previous}
 	return PreparedPhoneEnrollmentSend{read: func() *preparedPhoneEnrollmentSend { return p }}, nil
 }
 
@@ -387,8 +436,14 @@ func (p PreparedPhoneEnrollmentSend) Persist(ctx context.Context, w kernel.Work,
 	if !ok || !reflect.DeepEqual(spec, state.root) {
 		return ErrInvalidCommand
 	}
-	if err := w.RequirePhoneEnrollmentCandidate(ctx, owner, root, state.candidate); err != nil {
-		return err
+	if state.previous != nil {
+		if err := w.RequireRecipient(ctx, owner, *state.previous); err != nil {
+			return err
+		}
+	} else {
+		if err := w.RequirePhoneEnrollmentCandidate(ctx, owner, root, state.candidate); err != nil {
+			return err
+		}
 	}
 	_, err := state.phase.applyIssuance(ctx, w, state.generated, owner)
 	return err

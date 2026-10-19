@@ -124,6 +124,10 @@ func (p *issuanceContributor) applyIssuance(ctx context.Context, w kernel.Work, 
 		if transition.EventType != "identifier.attached.v1" || registration.Contributor != (kernel.ContributorDescriptor{Owner: "identity/phone/postgres", ContractID: "identity.phone", Version: 1}) || transition.BeforeVersion != 0 || transition.AfterVersion != 1 {
 			return bad(ErrInvalidCommand)
 		}
+	} else if op == phoneChangeSendOperation() {
+		if transition.EventType != "otp.sent.v1" || registration.Contributor != (kernel.ContributorDescriptor{Owner: "identity/phone/postgres", ContractID: "identity.phone", Version: 1}) || transition.BeforeVersion != 0 || transition.AfterVersion != 1 {
+			return bad(ErrInvalidCommand)
+		}
 	} else if transition.EventType != "otp.sent.v1" || registration.Contributor != p.Descriptor() || transition.BeforeVersion != 0 || transition.AfterVersion != 1 {
 		return bad(ErrInvalidCommand)
 	}
@@ -131,7 +135,7 @@ func (p *issuanceContributor) applyIssuance(ctx context.Context, w kernel.Work, 
 	if err != nil {
 		return bad(err)
 	}
-	if op == phoneEnrollmentSendOperation() && custody.recipient != nil {
+	if phoneSMSIssuance(op) && custody.recipient != nil {
 		return bad(ErrInvalidCommand)
 	}
 	a := custody.authority

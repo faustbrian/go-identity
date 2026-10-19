@@ -27,12 +27,20 @@ type PhoneEnrollmentConfirmation struct {
 }
 
 type phoneEnrollmentConfirmation struct {
-	store     *Contributor
-	source    identity.FeatureCommandSpec
-	candidate kernel.PhoneEnrollmentIntent
-	issued    otp.ChallengeSpec
-	original  AttemptAuthority
-	factors   uint64
+	store       *Contributor
+	source      identity.FeatureCommandSpec
+	candidate   kernel.PhoneEnrollmentIntent
+	issued      otp.ChallengeSpec
+	original    AttemptAuthority
+	factors     uint64
+	replacement *kernel.PhoneChangeIntent
+}
+
+func (p *phoneEnrollmentConfirmation) operation() identity.FeatureOperation {
+	if p != nil && p.replacement != nil {
+		return phoneChangeConfirmationOperation()
+	}
+	return phoneConfirmationOperation()
 }
 
 func phoneConfirmationOperation() identity.FeatureOperation {
@@ -53,6 +61,9 @@ func (c PhoneEnrollmentConfirmation) state() *phoneEnrollmentConfirmation {
 // never caller-provided fields. No IO, code comparison, entropy or freshness
 // renewal occurs; mutable current state is not adopted as original evidence.
 func (s *PhoneEnrollmentIssuer) RestoreEnrollmentConfirmation(ctx context.Context, root identity.Command, input PhoneEnrollmentSendInput, generation uint64, output []byte) (PhoneEnrollmentConfirmation, error) {
+	if s.state() == nil || s.state().replacement {
+		return PhoneEnrollmentConfirmation{}, ErrInvalidCommand
+	}
 	prepared, err := s.Restore(ctx, root, input, generation, output)
 	if err != nil {
 		return PhoneEnrollmentConfirmation{}, err
@@ -143,6 +154,13 @@ func (c PhoneEnrollmentConfirmation) Lifetime() (time.Duration, error) {
 }
 
 func (p *phoneEnrollmentConfirmation) fields() ([]identity.FeatureField, error) {
+	if p != nil && p.replacement != nil {
+		fields, err := kernel.PhoneChangeFields(*p.replacement)
+		if err != nil || p.factors == 0 {
+			return nil, ErrInvalidCommand
+		}
+		return append(fields, identity.FeatureField{Name: "phone.factor-version", Value: identity.FeatureValue{Kind: identity.FeatureUint64, Uint64: p.factors}}), nil
+	}
 	i, err := p.intent()
 	if err != nil {
 		return nil, err
@@ -171,12 +189,16 @@ func (c PhoneEnrollmentConfirmation) Contributor() kernel.OTPExecutionContributo
 }
 
 func (p *phoneEnrollmentConfirmation) matches(spec identity.FeatureCommandSpec) error {
-	if p == nil || spec.Operation != phoneConfirmationOperation() {
+	if p == nil || spec.Operation != p.operation() {
 		return ErrInvalidCommand
 	}
 	b, source := spec.Binding, p.source.Binding
+	target := source.RecordID
+	if p.replacement != nil {
+		target = string(p.replacement.Change.ID)
+	}
 	if b.ValidateFor(spec.Operation) != nil || b.CommandID == source.CommandID || b.TenantID != source.TenantID || b.UserID != source.UserID ||
-		b.ActorID != source.ActorID || b.ActorKind != source.ActorKind || b.RecordID != source.RecordID ||
+		b.ActorID != source.ActorID || b.ActorKind != source.ActorKind || b.RecordID != target ||
 		b.PolicyID != source.PolicyID || b.PolicyVersion != source.PolicyVersion || b.LinkMode != source.LinkMode {
 		return ErrInvalidCommand
 	}
@@ -186,6 +208,20 @@ func (p *phoneEnrollmentConfirmation) matches(spec identity.FeatureCommandSpec) 
 	}
 	static := make([]identity.FeatureField, 0, len(expected))
 	for _, f := range spec.Fields {
+		// Replacement has its own fresh action-primary proof, independent of
+		// the send's proof. That native owner validates these additional fields;
+		// OTP authenticates the whole command envelope but owns neither the
+		// password proof nor its source-session projection. Enrollment keeps
+		// its existing exact no-additional-fields grammar.
+		if p.replacement != nil && (f.Name == "phone.profile" || strings.HasPrefix(f.Name, "source-session.") || strings.HasPrefix(f.Name, "password.action-primary.")) {
+			continue
+		}
+		if p.replacement != nil && (f.Name == "counter.network" || f.Name == "counter.session" || f.Name == "counter.prepared-at" || f.Name == "counter.key-versions") {
+			// These four fields have the registered command-counter owner. Its
+			// complete projection/plan checks remain mandatory in native Work;
+			// do not grant arbitrary counter.* extensions OTP admission.
+			continue
+		}
 		if !otpField(f.Name) {
 			static = append(static, f)
 		}
@@ -214,6 +250,14 @@ func (p *phoneEnrollmentConfirmation) executionAuthority(spec identity.FeatureCo
 	if err := p.matches(spec); err != nil || original != p.original {
 		return AttemptAuthority{}, ErrInvalidCommand
 	}
+	if p.replacement != nil {
+		if p.replacement.Change.ExpectedAuthorityVersion != original.IdentifierAuthorityVersion {
+			return AttemptAuthority{}, ErrInvalidCommand
+		}
+		// Sending replacement SMS writes no identifier. Only the kernel's
+		// eventual protected replacement may derive the +1 final expectation.
+		return original, nil
+	}
 	i, err := p.intent()
 	if err != nil {
 		return AttemptAuthority{}, err
@@ -225,7 +269,7 @@ func (p *phoneEnrollmentConfirmation) executionAuthority(spec identity.FeatureCo
 }
 
 func (p *Contributor) executionAuthority(spec identity.FeatureCommandSpec, original AttemptAuthority) (AttemptAuthority, error) {
-	if spec.Operation == phoneConfirmationOperation() {
+	if spec.Operation == phoneConfirmationOperation() || spec.Operation == phoneChangeConfirmationOperation() {
 		if p == nil || p.phoneConfirmation == nil {
 			return AttemptAuthority{}, ErrInvalidCommand
 		}
@@ -313,7 +357,7 @@ func (c PhoneEnrollmentConfirmation) require(ctx context.Context, w kernel.Work,
 	}
 	b, f, _, err := w.FeatureScope(owner)
 	spec, ok := command.Feature()
-	if err != nil || !ok || spec.Binding != b || f.Operation != phoneConfirmationOperation() ||
+	if err != nil || !ok || spec.Binding != b || f.Operation != p.operation() ||
 		f.Contributor != (kernel.ContributorDescriptor{Owner: "identity/phone/postgres", ContractID: "identity.phone", Version: 1}) {
 		return ErrInvalidCommand
 	}

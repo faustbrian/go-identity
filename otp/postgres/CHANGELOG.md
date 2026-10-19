@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- Restore phone-replacement attempts from authenticated native request-key
+  custody without allocating another attempt or renewing original validity.
+
+- Add separately selected new-number SMS preparation for verified-phone change.
+  Preserve the exact old verified recipient independently of the new OTP
+  destination, recheck it in the owning Work and leave identifiers unchanged
+  during send. Original generation, encrypted output and absolute deadlines
+  remain fixed; existing enrollment framing stays unchanged. Full phone-change
+  orchestration and HTTP selection are separate requirements.
+
 - Add explicit existing-account phone SMS-code signin over native OTP attempts,
   encrypted delivery and atomic session effects. Bind the original canonical
   target and stored number profile, require known-empty native factors, and
