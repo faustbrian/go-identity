@@ -8,7 +8,9 @@ import identity "github.com/faustbrian/go-identity"
 // runtime-generated request identities are allowed. Construction reads it once
 // and owns a copy. Each descriptor's Owner plus "/postgres" must exactly equal
 // the contributor's adapter Owner, except the closed username signup/signin
-// profiles which reuse identity/password/postgres's existing password engine.
+// profiles also admit the exact existing identity/password/postgres participant.
+// Closed phone/password-signin v1 exclusively selects that password participant;
+// a generic same-owner declaration cannot override this profile's native owner.
 // All supported schema versions of an operation
 // belong to one exact contributor identity. A schema may declare distinct user
 // and anonymous-flow subjects; duplicates within either namespace are invalid.
@@ -94,10 +96,15 @@ func (s *contributorRegistryState) registerFeatures(index int) error {
 	return nil
 }
 
-// Username owns its public workflow, not another password proof engine. Keep
+// Username and phone own their workflows, not another password proof engine. Keep
 // this exception to the exact existing adapter and closed paired-custody tuples;
 // no arbitrary cross-owner operation, schema or future version is admitted.
 func featureContributorOwns(d ContributorDescriptor, op identity.FeatureOperation) bool {
+	// This closed phone profile reuses password's verifier and transaction
+	// participant. A generic same-owner registration must not replace it.
+	if op.Owner == "identity/phone" && passwordSigninOperation(op) {
+		return d == (ContributorDescriptor{Owner: "identity/password/postgres", ContractID: "identity.password", Version: 1})
+	}
 	if d.Owner == op.Owner+"/postgres" {
 		return true
 	}

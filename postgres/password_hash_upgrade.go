@@ -96,6 +96,9 @@ func decodePasswordHashUpgrade(s identity.FeatureCommandSpec) (PasswordHashUpgra
 	if s.Binding.OperationID == "identity.username.signin" {
 		op.Owner, op.OperationID, op.SchemaID = "identity/username", "identity.username.signin", "username-signin"
 	}
+	if s.Binding.OperationID == "identity.phone.password-signin" {
+		op.Owner, op.OperationID, op.SchemaID = "identity/phone", "identity.phone.password-signin", "phone-password-signin"
+	}
 	if s.Binding.AnonymousFlowID != "" {
 		op.SubjectRequirement = identity.FeatureSubjectAnonymousFlow
 	}

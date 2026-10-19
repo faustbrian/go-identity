@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Retain exact phone/password-signin paired custody and hash-upgrade fences in
+  the existing coordinator. Only the existing password participant may own this
+  closed phone profile; scalar metadata cannot replace password/cookie custody.
+  No phone login route or credential authority is created by this extension.
+
 - Add closed initial-phone confirmation admission and the OTP-backed identifier
   verification transition. Bind the original enrollment and exact pending
   number/profile/CAS before code metering; only the kernel's own persisted

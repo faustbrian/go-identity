@@ -5,7 +5,7 @@ import identity "github.com/faustbrian/go-identity"
 // An operation name alone does not select this custody profile: other already
 // registered signin schemas (including consuming CAPTCHA) retain their mapping.
 func passwordSigninOperation(op identity.FeatureOperation) bool {
-	profile := op.Owner == "identity/password" && op.OperationID == "identity.password.signin" && op.SchemaID == "password-signin" || op.Owner == "identity/username" && op.OperationID == "identity.username.signin" && op.SchemaID == "username-signin"
+	profile := op.Owner == "identity/password" && op.OperationID == "identity.password.signin" && op.SchemaID == "password-signin" || op.Owner == "identity/username" && op.OperationID == "identity.username.signin" && op.SchemaID == "username-signin" || op.Owner == "identity/phone" && op.OperationID == "identity.phone.password-signin" && op.SchemaID == "phone-password-signin"
 	return profile && op.SchemaVersion == 1 && op.RecordRequirement == identity.FeatureRecordOmitted && op.SubjectRequirement <= identity.FeatureSubjectAnonymousFlow
 }
 
