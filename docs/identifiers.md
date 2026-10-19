@@ -23,6 +23,18 @@ does not rewrite canonical/display bytes, verification or identifier authority.
 
 ## API and ownership
 
+`IdentifierReplaceVerifiedPhone` is a feature-only pure transition for an already
+verified, comparison-bound phone. It preserves primary selection, retires the
+old value and advances aggregate, authority, record and verification versions
+exactly once. It does not expose a generic identifier command or prove new-number
+possession: the native phone workflow must consume the original purpose-bound
+OTP and enforce recent proof, current session/factor/risk/recovery policy, required
+notices and the pending `lifecycle.cascade.identifier_change` in the same owning
+transaction. Normal `IdentifierReplace` still clears verification and primary.
+Metadata/profile changes and unverified predecessors are not this transition.
+The phone-update feature receipt admits only its exact self-user pending change
+cascade; it cannot borrow a removal receipt or acknowledge downstream cleanup.
+
 `SubjectID` and `PreAuthTransactionID` are distinct comparable string types with
 invalid empty zero values. Their constructors (`NewSubjectID` and
 `NewPreAuthTransactionID`) read exactly 16 cryptographic-random bytes and reject

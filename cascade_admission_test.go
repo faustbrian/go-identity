@@ -25,6 +25,72 @@ func removalCascadeResult(t *testing.T) identity.CommandResult {
 	return r
 }
 
+func TestPhoneChangeReceiptRequiresExactPendingChangeCascade(t *testing.T) {
+	makeResult := func() identity.CommandResult {
+		r := removalCascadeResult(t)
+		op := identity.FeatureOperation{Owner: "identity/phone", OperationID: "identity.phone.update", SchemaID: "identity.phone.update.native-v1", SchemaVersion: 1, RecordRequirement: identity.FeatureRecordRequired}
+		r.Binding.OperationID, r.Binding.SchemaID = op.OperationID, op.SchemaID
+		r.Feature.Operation = op
+		r.Cascade.Kind = identity.IdentifierChangeCascade
+		return r
+	}
+	if err := makeResult().Validate(); err != nil {
+		t.Fatal("phone change denied exact pending cascade", err)
+	}
+	for name, mutate := range map[string]func(*identity.CommandResult){
+		"absent":             func(r *identity.CommandResult) { r.Cascade = nil },
+		"removal-kind":       func(r *identity.CommandResult) { r.Cascade.Kind = identity.IdentifierRemovalCascade },
+		"foreign-actor":      func(r *identity.CommandResult) { r.Binding.ActorID = "foreign" },
+		"foreign-target":     func(r *identity.CommandResult) { r.Cascade.IdentifierID = "other" },
+		"missing-consumer":   func(r *identity.CommandResult) { r.Cascade.Owners = r.Cascade.Owners[:9] },
+		"fake-ack":           func(r *identity.CommandResult) { r.Cascade.Owners[0].Status = identity.RevocationCompleted },
+		"double-record-step": func(r *identity.CommandResult) { r.Feature.AfterVersion++ },
+	} {
+		t.Run(name, func(t *testing.T) {
+			r := makeResult()
+			mutate(&r)
+			if r.Validate() == nil {
+				t.Fatal("invalid change admission or version step accepted")
+			}
+		})
+	}
+	for _, outcome := range []identity.CommitOutcome{identity.CommitOutcomeUnknown, identity.CommitOutcomeNotCommitted} {
+		r := makeResult()
+		r.Outcome, r.AuditEventID = outcome, ""
+		r.Feature.BeforeVersion, r.Feature.AfterVersion = 0, 0
+		if r.Validate() == nil {
+			t.Fatal("uncommitted result invented change cascade")
+		}
+	}
+}
+
+func TestPhoneChangeReceiptsRejectUnsupportedProfilesWithoutGenericFallback(t *testing.T) {
+	for name, change := range map[string]func(*identity.CommandResult){
+		"schema": func(r *identity.CommandResult) {
+			r.Feature.Operation.SchemaID, r.Binding.SchemaID = "identity.phone.update.other", "identity.phone.update.other"
+		},
+		"version": func(r *identity.CommandResult) {
+			r.Feature.Operation.SchemaVersion, r.Binding.SchemaVersion = 2, 2
+		},
+		"owner": func(r *identity.CommandResult) { r.Feature.Operation.Owner = "identity/other" },
+		"record-policy": func(r *identity.CommandResult) {
+			r.Feature.Operation.RecordRequirement, r.Binding.RecordID = identity.FeatureRecordOmitted, ""
+			r.Feature.BeforeVersion, r.Feature.AfterVersion = 0, 0
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			r := removalCascadeResult(t)
+			r.Binding.OperationID, r.Binding.SchemaID = "identity.phone.update", "identity.phone.update.native-v1"
+			r.Feature.Operation = identity.FeatureOperation{Owner: "identity/phone", OperationID: r.Binding.OperationID, SchemaID: r.Binding.SchemaID, SchemaVersion: 1, RecordRequirement: identity.FeatureRecordRequired}
+			r.Cascade = nil
+			change(&r)
+			if err := r.Validate(); err == nil {
+				t.Fatal("unsupported phone-update profile fabricated generic success")
+			}
+		})
+	}
+}
+
 func TestRemovalReceiptRequiresExactPendingCascade(t *testing.T) {
 	r := removalCascadeResult(t)
 	if err := r.Validate(); err != nil {

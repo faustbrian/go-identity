@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add opaque authenticated phone-change initiation input binding both canonical
+  numbers and exact verified-identifier predecessors. Sending must preserve the
+  old number until purpose-bound confirmation; this input alone enables no
+  workflow, OTP issuance or public route.
+
 - Add separately selected, opaque self-removal request and original-outcome
   recovery contracts. Removal requires action-bound recent authentication and
   an independent usable recovery method; it does not consume an OTP or issue

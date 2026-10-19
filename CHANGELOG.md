@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add a feature-only verified-phone replacement transition with exact one-step
+  versions, original-value retirement and preserved primary selection. Existing
+  generic replacement still clears verification. Phone-update receipts require
+  their own pending identifier-change cascade, not a removal receipt.
+
 - Recognize exact self-user phone-removal command receipts only with their
   matching pending identifier-removal cascade. Existing email administration
   and status admission retain their separate authority rules.

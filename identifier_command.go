@@ -43,14 +43,17 @@ func identifierAction(op string) IdentifierAction {
 }
 
 func validIdentifierChange(c IdentifierChange) bool {
-	if !validDirectoryID(string(c.TenantID)) || !validDirectoryID(string(c.UserID)) || !validDirectoryID(string(c.ID)) || identifierOperation(c.Action) == "" && c.Action != IdentifierRestartVerification && c.Action != IdentifierVerifyPrimary && c.Action != IdentifierRename || !unlinkVersion(c.ExpectedUserVersion) || !unlinkVersion(c.ExpectedAuthorityVersion) {
+	if !validDirectoryID(string(c.TenantID)) || !validDirectoryID(string(c.UserID)) || !validDirectoryID(string(c.ID)) || identifierOperation(c.Action) == "" && c.Action != IdentifierRestartVerification && c.Action != IdentifierVerifyPrimary && c.Action != IdentifierRename && c.Action != IdentifierReplaceVerifiedPhone || !unlinkVersion(c.ExpectedUserVersion) || !unlinkVersion(c.ExpectedAuthorityVersion) {
 		return false
 	}
-	if c.Action == IdentifierAttach || c.Action == IdentifierReplace || c.Action == IdentifierRename {
+	if c.Action == IdentifierAttach || c.Action == IdentifierReplace || c.Action == IdentifierRename || c.Action == IdentifierReplaceVerifiedPhone {
 		if !c.Kind.Valid() || !validIdentifierText(c.CanonicalValue) || c.DisplayValue != "" && !validIdentifierText(c.DisplayValue) || !validNormalizationBinding(c.NormalizationProfile, c.NormalizationVersion) {
 			return false
 		}
 		if c.Action == IdentifierRename && (c.Kind != IdentifierUsername || c.DisplayValue == "" || c.NormalizationProfile == "") {
+			return false
+		}
+		if c.Action == IdentifierReplaceVerifiedPhone && (c.Kind != IdentifierPhone || c.NormalizationProfile == "") {
 			return false
 		}
 	} else if c.Kind != "" || c.CanonicalValue != "" || c.DisplayValue != "" || c.NormalizationProfile != "" || c.NormalizationVersion != 0 {

@@ -25,9 +25,12 @@ func validFeatureResult(r CommandResult) bool {
 	if r.Binding.ValidateFor(f.Operation) != nil || r.User != (User{}) || r.ExpectedVersion != 0 || r.Profile != nil || r.Revocation != nil || r.Unlink != nil || r.Link != nil || r.Identifier != nil || r.PrivacyExport != nil {
 		return false
 	}
-	removalOperation := identifierRemovalFeatureOperation(f.Operation.OperationID)
-	removal := removalOperation.Owner != "" && f.Operation == removalOperation
-	if r.Cascade != nil && (!removal || r.Outcome != CommitOutcomeCommitted || r.Cascade.Validate(r.Binding) != nil) || removal && r.Outcome == CommitOutcomeCommitted && r.Cascade == nil {
+	cascadeOperation := identifierLifecycleFeatureOperation(f.Operation.OperationID)
+	if f.Operation.OperationID == "identity.phone.update" && f.Operation != cascadeOperation {
+		return false
+	}
+	requiresCascade := cascadeOperation.Owner != "" && f.Operation == cascadeOperation
+	if r.Cascade != nil && (!requiresCascade || r.Outcome != CommitOutcomeCommitted || r.Cascade.Validate(r.Binding) != nil) || requiresCascade && r.Outcome == CommitOutcomeCommitted && r.Cascade == nil {
 		return false
 	}
 	switch r.Outcome {

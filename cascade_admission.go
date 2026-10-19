@@ -15,11 +15,14 @@ const (
 	// IdentifierRemovalCascade starts cleanup after the identifier authority
 	// mutation. Old-address authentication must already deny at admission.
 	IdentifierRemovalCascade LifecycleCascadeKind = "lifecycle.cascade.identifier_remove"
+	// IdentifierChangeCascade starts cleanup after atomic identifier replacement.
+	// The old value is already retired and cannot authenticate during cleanup.
+	IdentifierChangeCascade LifecycleCascadeKind = "lifecycle.cascade.identifier_change"
 )
 
 // LifecycleCascadeAdmission is a historical pending owner admission, never
 // authentication authority or asynchronous completion. Generation is initially
-// one; AuthorityVersion is the identifier dimension for IdentifierRemovalCascade.
+// one; AuthorityVersion is the identifier dimension for removal and change.
 // Owners retains the exact manifest including unavailable consumers. Scope IDs
 // are pseudonymous personal data; explicit JSON is for protected receipt storage
 // or authorized projection. Treat values as immutable; Clone copies collections.
@@ -44,6 +47,11 @@ func IdentifierRemovalConsumers() []string {
 	return []string{"identity/password", "identity/email", "identity/phone", "identity/magiclink", "identity/otp", "organization", "identity/delivery", "sso", "identity/risk", "audit"}
 }
 
+// IdentifierChangeConsumers returns the exact version-one change manifest.
+// Its consumers match the removal set in LIFECYCLE_CONSUMERS.md; neither set
+// acknowledges asynchronous completion merely because replacement committed.
+func IdentifierChangeConsumers() []string { return IdentifierRemovalConsumers() }
+
 // Validate checks exact pending admission shape and command scope, not database
 // durability, current authority or consumer acknowledgement. Self and explicitly
 // authorized administrative removal retain the target's scope, not the actor's.
@@ -51,14 +59,18 @@ func IdentifierRemovalConsumers() []string {
 // outcomes must not carry this receipt; CommandResult enforces that distinction.
 func (r LifecycleCascadeAdmission) Validate(b CommandBinding) error {
 	invalid := InvalidInputError{Field: "cascade_admission"}
-	op := identifierRemovalFeatureOperation(b.OperationID)
-	if b.ValidateFor(op) != nil || b.OperationID == "identity.phone.remove" && string(b.ActorID) != string(b.UserID) {
+	op := identifierLifecycleFeatureOperation(b.OperationID)
+	if b.ValidateFor(op) != nil || op.Owner == "identity/phone" && string(b.ActorID) != string(b.UserID) {
 		return invalid
 	}
 	if _, err := ParseCascadeID(string(r.CascadeID)); err != nil {
 		return invalid
 	}
-	if r.Generation != 1 || r.Kind != IdentifierRemovalCascade || r.TenantID != b.TenantID || r.UserID != b.UserID || string(r.IdentifierID) != b.RecordID || r.AuthorityVersion <= 1 || r.ManifestVersion != "identity-lifecycle-consumers-v1" || r.Status != RevocationPending || len(r.ExternalLimitations) != 0 || b.ActorKind != authorization.SubjectUser {
+	kind := IdentifierRemovalCascade
+	if b.OperationID == "identity.phone.update" {
+		kind = IdentifierChangeCascade
+	}
+	if r.Generation != 1 || r.Kind != kind || r.TenantID != b.TenantID || r.UserID != b.UserID || string(r.IdentifierID) != b.RecordID || r.AuthorityVersion <= 1 || r.ManifestVersion != "identity-lifecycle-consumers-v1" || r.Status != RevocationPending || len(r.ExternalLimitations) != 0 || b.ActorKind != authorization.SubjectUser {
 		return invalid
 	}
 	for _, id := range []string{string(r.TenantID), string(r.UserID), string(r.IdentifierID)} {
@@ -67,6 +79,9 @@ func (r LifecycleCascadeAdmission) Validate(b CommandBinding) error {
 		}
 	}
 	consumers := IdentifierRemovalConsumers()
+	if kind == IdentifierChangeCascade {
+		consumers = IdentifierChangeConsumers()
+	}
 	if len(r.Owners) != len(consumers) {
 		return invalid
 	}
@@ -78,15 +93,15 @@ func (r LifecycleCascadeAdmission) Validate(b CommandBinding) error {
 	return nil
 }
 
-// Only these exact native owners may admit this shared removal cascade. Phone
-// removal remains self-only; adding another feature is not implicit permission
+// Only these exact native owners may admit a shared identifier cascade. Phone
+// mutations remain self-only; adding another feature is not implicit permission
 // to borrow its receipt or acknowledge any downstream cleanup.
-func identifierRemovalFeatureOperation(operation string) FeatureOperation {
+func identifierLifecycleFeatureOperation(operation string) FeatureOperation {
 	var owner string
 	switch operation {
 	case "identity.email.address-remove":
 		owner = "identity/email"
-	case "identity.phone.remove":
+	case "identity.phone.remove", "identity.phone.update":
 		owner = "identity/phone"
 	default:
 		return FeatureOperation{}

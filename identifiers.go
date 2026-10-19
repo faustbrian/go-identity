@@ -181,11 +181,17 @@ const (
 	// the predecessor and resets verification like replacement. Native username
 	// admission must supply fresh proof and the old-name cooldown policy.
 	IdentifierRename
+	// IdentifierReplaceVerifiedPhone is a feature-only atomic replacement after
+	// actual new-number OTP consumption. It preserves primary selection and
+	// retires the original value while advancing each version exactly once.
+	// Generic identifier commands do not expose this action; the native phone
+	// owner must bind proof, current authority, OTP and all required effects.
+	IdentifierReplaceVerifiedPhone
 )
 
 // IdentifierChange is bounded intent and exact optimistic fences. Attach,
-// Replace and Rename supply Kind/CanonicalValue/DisplayValue; other actions omit
-// them. Attach must omit target versions; other actions require both exact
+// Replace, Rename and ReplaceVerifiedPhone supply Kind/CanonicalValue/DisplayValue;
+// other actions omit them. Attach must omit target versions; other actions require both exact
 // target versions. Replacement preserves ID/kind, resets verification and
 // primary, and retires the old value. Rename requires the exact existing
 // username comparison binding and preserves verification for display-only edits.
@@ -250,7 +256,7 @@ func (IdentifierMutation) Format(s fmt.State, verb rune) {
 // verification time is UTC truncated to microseconds, never a new proof lifetime.
 func ApplyIdentifierChange(state IdentifierState, change IdentifierChange, now time.Time) (IdentifierMutation, error) {
 	zero := IdentifierMutation{}
-	if !validDirectoryID(string(change.TenantID)) || !validDirectoryID(string(change.UserID)) || !validDirectoryID(string(change.ID)) || change.Action < IdentifierAttach || change.Action > IdentifierRename || !unlinkVersion(change.ExpectedUserVersion) || !unlinkVersion(change.ExpectedAuthorityVersion) || state.validate(change.TenantID, change.UserID, now) != nil {
+	if !validDirectoryID(string(change.TenantID)) || !validDirectoryID(string(change.UserID)) || !validDirectoryID(string(change.ID)) || change.Action < IdentifierAttach || change.Action > IdentifierReplaceVerifiedPhone || !unlinkVersion(change.ExpectedUserVersion) || !unlinkVersion(change.ExpectedAuthorityVersion) || state.validate(change.TenantID, change.UserID, now) != nil {
 		return zero, InvalidInputError{Field: "identifier_change"}
 	}
 	if !state.User.Status.AllowsAuthentication() {
@@ -259,7 +265,7 @@ func ApplyIdentifierChange(state IdentifierState, change IdentifierChange, now t
 	if state.User.Version != change.ExpectedUserVersion || state.AuthorityVersion != change.ExpectedAuthorityVersion {
 		return zero, ConflictError{}
 	}
-	candidate := change.Action == IdentifierAttach || change.Action == IdentifierReplace || change.Action == IdentifierRename
+	candidate := change.Action == IdentifierAttach || change.Action == IdentifierReplace || change.Action == IdentifierRename || change.Action == IdentifierReplaceVerifiedPhone
 	if candidate {
 		if !change.Kind.Valid() || !validIdentifierText(change.CanonicalValue) || change.DisplayValue != "" && !validIdentifierText(change.DisplayValue) || !validNormalizationBinding(change.NormalizationProfile, change.NormalizationVersion) {
 			return zero, InvalidInputError{Field: "identifier_value"}
@@ -287,6 +293,12 @@ func ApplyIdentifierChange(state IdentifierState, change IdentifierChange, now t
 		}
 		if change.Action == IdentifierReplace && state.Identifiers[index].NormalizationProfile != "" && change.NormalizationProfile == "" {
 			return zero, InvalidInputError{Field: "identifier_normalization"}
+		}
+		if change.Action == IdentifierReplaceVerifiedPhone {
+			old := state.Identifiers[index]
+			if old.Kind != IdentifierPhone || change.Kind != IdentifierPhone || !old.Verified || state.Verifications[index].State != VerificationVerified || old.NormalizationProfile == "" || change.NormalizationProfile != old.NormalizationProfile || change.NormalizationVersion != old.NormalizationVersion {
+				return zero, InvalidInputError{Field: "phone_replacement"}
+			}
 		}
 		if change.Action == IdentifierRename {
 			old := state.Identifiers[index]
@@ -349,7 +361,7 @@ func ApplyIdentifierChange(state IdentifierState, change IdentifierChange, now t
 		if err := selectIdentifierPrimary(&result.State, index, true); err != nil {
 			return zero, err
 		}
-	case IdentifierRename, IdentifierReplace, IdentifierRemove:
+	case IdentifierRename, IdentifierReplace, IdentifierRemove, IdentifierReplaceVerifiedPhone:
 		old, verification := next.Identifiers[index], next.Verifications[index]
 		if change.Action == IdentifierRename && old.CanonicalValue == change.CanonicalValue {
 			// Display is not a new identifier or renewed possession. In
@@ -369,6 +381,12 @@ func ApplyIdentifierChange(state IdentifierState, change IdentifierChange, now t
 		} else {
 			result.State.Identifiers[index] = Identifier{ID: change.ID, UserID: change.UserID, Kind: change.Kind, CanonicalValue: change.CanonicalValue, DisplayValue: change.DisplayValue, Version: old.Version + 1, NormalizationProfile: change.NormalizationProfile, NormalizationVersion: change.NormalizationVersion}
 			result.State.Verifications[index] = Verification{IdentifierID: change.ID, State: VerificationPending, Version: verification.Version + 1}
+			if change.Action == IdentifierReplaceVerifiedPhone {
+				result.State.Identifiers[index].Verified = true
+				result.State.Identifiers[index].Primary = old.Primary
+				result.State.Verifications[index].State = VerificationVerified
+				result.State.Verifications[index].VerifiedAt = now.UTC().Truncate(time.Microsecond)
+			}
 		}
 	}
 	return result, nil
