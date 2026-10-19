@@ -1,8 +1,9 @@
-# Existing-account phone enrollment
+# Existing-account phone enrollment and password signin
 
 This optional backend profile attaches and verifies a phone on an existing,
-verified account. It is not phone signup, signin, password reset, replacement,
-removal or an MFA method. Unknown/enrolled/changed factor authority denies the
+verified account. Password signin is separately selected below; phone signup,
+OTP signin, reset, replacement, removal and MFA remain unselected.
+Unknown/enrolled/changed factor authority denies the
 single-factor enrollment profile; it never falls back to weaker authentication.
 
 ## Explicit selection
@@ -68,6 +69,49 @@ rate backend. Native selection alone exposes no route or advertised capability.
 Retain original keys/configuration across supported command history. Never log
 phone numbers, proofs, delivered codes, cookies or explicit recovery correlation.
 
+## Independently selected phone/password signin
+
+Set `StoreConfiguration.PhoneSignin = &PhoneSigninConfiguration{Policy: policy}`
+to compose verified-phone login with the existing `PasswordSignin` native keys,
+policy, verifier, original-flow issuer and session configuration. This selection
+does not require `Phone` enrollment or `HTTPPhoneVerification`; an already
+verified phone must still carry the matching stored canonical profile. No phone,
+account or missing factor authority is invented during login. Configured email
+and username owners remain separate.
+
+`FeatureSet.PhoneSignin()` exposes native signin/recovery;
+`PhoneSigninPreAuth()` exposes its guarded issuer and lookup-free canonical
+target binder. Direct callers derive the nonzero binding with
+`BindPreAuthIdentifier` before Prepare. Never accept a client-selected binding.
+The native workflow independently rechecks the exact original target before
+identifier risk, account discovery and raw password comparison, and fences
+current phone/credential/account/factor authority within atomic issuance.
+
+Separately select `HTTPPhoneSignin` with the trusted service actor/revision,
+shared HTTP pre-auth/device and rate configuration. Then:
+
+1. Send `{"method":"phone-password","identifier":"+12025550123","remember":false}`
+   to `POST /v1/session/preauth-issue` with the exact configured Origin. Keep the
+   original flow/device cookies and returned flow ID. The trusted graph derives
+   the target binding after IP admission; no account is looked up here.
+2. Send `{flowID, phoneNumber, password, callbackURL, remember}` to
+   `POST /v1/phone/password-signin`. Callback and remember must match that
+   original flow. Retargeting or cookie/action substitution denies; it cannot
+   redirect attribution or reach credential work under another number.
+3. Only fresh known commitment delivers one session cookie and `X-CSRF-Token`.
+   Use the existing selected session read/signout routes. Browser and persistent
+   remember choices retain their native cookie and session lifetimes.
+
+Retain password-free recovery metadata and original custody after ambiguity;
+native `RecoverSignin` observes that original attempt without password retry,
+token redelivery or deadline renewal. Enrolled or unavailable factors deny;
+phone-origin MFA continuation is not selected. Disabled HTTP selection exposes
+neither the route nor initiation method/schema. Install the selected native
+phone/password and session provenance suffixes after all selected predecessor
+histories using the graph migration APIs; do not copy or replay older SQL.
+This checkpoint qualifies adding phone signin after those selected histories;
+enabling additional predecessor profiles afterwards is not yet qualified.
+
 ## Reproduce the selected HTTPS journey
 
 Use [the disposable baseline setup](BASELINE.md), its explicit loopback port and
@@ -76,6 +120,9 @@ task-owned build/module/temporary caches. From this module:
 ```sh
 GOWORK=off go test -race -tags=integration \
   -run '^TestReferencePostgresPhoneEnrollmentHTTPS$' -count=1 -v .
+
+GOWORK=off go test -race -tags=integration \
+  -run '^TestReferencePostgresPhonePasswordSigninHTTPS$' -count=1 -v .
 ```
 
 The test uses real public registration, proof, session, OTP, PostgreSQL and

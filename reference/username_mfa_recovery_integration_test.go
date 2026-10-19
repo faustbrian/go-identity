@@ -22,7 +22,7 @@ import (
 
 // Restart actual composition against the original durable challenge. This is
 // primary RecoverSignin, not TOTP completion recovery or another password attempt.
-func proveReferenceUsernamePrimaryRecovery(t *testing.T, ctx context.Context, c reference.StoreConfiguration, deps reference.ReferenceDependencies, worker deliverypg.WorkerConfig, challenge passwordhttp.SigninResponse, cookies []*http.Cookie) {
+func proveReferenceUsernamePrimaryRecovery(t *testing.T, ctx context.Context, c reference.StoreConfiguration, deps reference.ReferenceDependencies, worker deliverypg.WorkerConfig, challenge passwordhttp.SigninResponse, cookies []*http.Cookie, additionalWorkers ...deliverypg.WorkerConfig) {
 	t.Helper()
 	stores, err := reference.ComposeStores(c, deps)
 	if err != nil {
@@ -39,7 +39,7 @@ func proveReferenceUsernamePrimaryRecovery(t *testing.T, ctx context.Context, c 
 	if err != nil {
 		t.Fatal(err)
 	}
-	workers, err := reference.ComposeWorkers(stores, providers, worker)
+	workers, err := reference.ComposeWorkers(stores, providers, append([]deliverypg.WorkerConfig{worker}, additionalWorkers...)...)
 	if err != nil {
 		t.Fatal(err)
 	}

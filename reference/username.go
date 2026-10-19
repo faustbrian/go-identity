@@ -65,7 +65,7 @@ func (f FeatureSet) UsernameSignin() (password.SigninService, error) {
 	if u.signin == nil {
 		return nil, identity.UnavailableError{}
 	}
-	return composedUsernameSignin{state: f.state, owner: u.signin}, nil
+	return composedIdentifierSignin{state: f.state, owner: u.signin}, nil
 }
 
 // UsernameAvailability returns the selected durable advisory owner. Each call
@@ -186,12 +186,14 @@ func (f composedUsernameSignup) VerificationRecover(ctx context.Context, r email
 
 var _ email.RegistrationVerificationService = composedUsernameSignup{}
 
-type composedUsernameSignin struct {
+// Distinct native profiles share lifetime admission, not identifier lookup or
+// authentication authority. The retained native owner decides their semantics.
+type composedIdentifierSignin struct {
 	state *storeState
 	owner *passwordpg.SigninService
 }
 
-func (f composedUsernameSignin) Signin(ctx context.Context, r password.SigninRequest) (password.SigninResult, error) {
+func (f composedIdentifierSignin) Signin(ctx context.Context, r password.SigninRequest) (password.SigninResult, error) {
 	w, done, err := (composedPasswordReset{state: f.state}).enter(ctx, r.TenantID)
 	if err != nil {
 		return password.SigninResult{}, err
@@ -199,7 +201,7 @@ func (f composedUsernameSignin) Signin(ctx context.Context, r password.SigninReq
 	defer done()
 	return f.owner.Signin(w, r)
 }
-func (f composedUsernameSignin) RecoverSignin(ctx context.Context, r password.SigninRecoveryRequest) (password.SigninResult, error) {
+func (f composedIdentifierSignin) RecoverSignin(ctx context.Context, r password.SigninRecoveryRequest) (password.SigninResult, error) {
 	q, _, err := r.Recovery.Bindings()
 	if err != nil {
 		return password.SigninResult{}, err
@@ -211,7 +213,7 @@ func (f composedUsernameSignin) RecoverSignin(ctx context.Context, r password.Si
 	defer done()
 	return f.owner.RecoverSignin(w, r)
 }
-func (f composedUsernameSignin) SigninRateSource(ctx context.Context, r password.SigninRequest) (string, error) {
+func (f composedIdentifierSignin) SigninRateSource(ctx context.Context, r password.SigninRequest) (string, error) {
 	w, done, err := (composedPasswordReset{state: f.state}).enter(ctx, r.TenantID)
 	if err != nil {
 		return "", err

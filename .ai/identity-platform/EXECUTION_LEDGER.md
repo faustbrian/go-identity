@@ -1,5 +1,65 @@
 # Identity Implementation — Current Milestone
 
+## Current checkpoint — 2026-10-19 01:54 UTC
+
+Phone native `650d24f` and HTTP `422b56d` are main-pushed with green Required CI.
+The actual published HTTP modules match all 69 reviewed Go/manifests. Reference
+now consumes those public versions without replacements. Its canonical
+`GOWORK=off` ordinary race suite passes (8.918s), tagged vet passes, and the real
+PostgreSQL/race phone journey plus combined username/TOTP and baseline profiles
+pass (15.946s). This includes genuine SMS verification, original target binding,
+wrong-password/retarget/replay denial, metadata-only recovery and browser/
+persistent session read/logout. The complete corrected source has independent
+APPROVE (`d4e61ed9`); final reference22 public-pin snapshot `5430a606` is under
+retained review reconciliation. Reference publication/downloaded consumer/CI remain.
+
+Review F1 was a real combined-profile readiness defect: the probe required a
+password constraint replaced by the phone migration. Actual PostgreSQL/race
+reproduced `schema_incompatible` (RED 6.841s); the owning guard fix and combined
+known-empty/TOTP tests pass (GREEN 10.504s), including missing-successor probes.
+Existing HTTP module race/vet results remain valid (33.636s and 18.584s).
+Selected planning checks and staged-source secret scans pass. Full-history
+secrets still fail on 11 mapped unchanged paths; no full-history qualification
+or Tools/history repair is claimed. Every task PostgreSQL cluster is removed.
+
+WebAuthn's selected none/ES256 root/native profile is independently reviewed,
+main-pushed `3ad12d2`, Required CI green. Canonical public-root PG/race, real
+commit loss and actual Chrome/WPT pass; the downloaded native module matches
+all eight Go/manifests. Its worker resources and publication cache are removed.
+Full M15, passkeys/session composition and unit/release qualification remain.
+Whole-goal estimate remains approximately 15%, with 6/39 milestones closed.
+
+## M08 continuation — selected phone/password HTTP/reference consumer
+
+Native source650d24f is main-pushed, Required39183404562SUCCESS. Actual downloaded
+native v0.0.0-20261019010116-650d24fc4a95 matches196Go/manifests; selected sessions,
+missing/late stored-profile and actual lost-COMMIT PG/race PASS7.026s. Original
+canonical complete18-profile25.280s retains its own identity. Old phone-native
+scratch/caches/PG are removed; no new milestone/unit closure follows.
+
+Freeze the remaining consumer composition: method phone-password on the existing
+POST /v1/session/preauth-issue accepts a bounded raw identifier only for its
+explicitly selected target-bound owner; trusted canonicalization derives the
+original HMAC binding after shared IP admission and before native preparation.
+POST /v1/phone/password-signin accepts phoneNumber/password with original browser
+custody and never aliases OTP or email/username routes. HTTP/session and
+HTTP/password own transport only; reference supplies the actual phone binder,
+native password/session/MFA owners and last purpose suffixes after selected
+histories. Native phone signin must not require enabling phone enrollment HTTP.
+Disabled selection exposes no route, method or schema; no phone MFA continuation
+is advertised. Shared base HTTP keeps no concrete phone/storage dependency.
+
+Prove focused RED/GREEN transport contracts, binding substitution/missing/zero/
+owner-mismatch denial before issuance, literal schema/runtime agreement, and real
+reference PostgreSQL HTTPS register/email-verify/enroll-SMS/phone-verify -> original
+phone-bound start -> password signin -> session read/logout with both remember
+choices. Preserve uniform wrong/absent/unverified/enrolled-factor denial,
+original retry/recovery, cookie/Origin/device rules, migration readiness and
+existing email/username compatibility. Reuse delivered native security proof;
+one independent complete HTTP/reference final review, then public-pin adoption
+and downloaded reference consumer. OTP login, reset/change/removal and fullM08
+remain later profiles, not new scope for this frozen signin composition.
+
 ## Live checkpoint — 2026-10-19 01:00 UTC
 
 Phone corrected source independently APPROVE complete42 snapshot28b18a67.

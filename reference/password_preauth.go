@@ -56,6 +56,8 @@ func composePasswordPreAuth(pool *database.Pool, selected *PasswordSigninConfigu
 	action := "identity.password.signin"
 	if n.Username != nil {
 		action = "identity.username.signin"
+	} else if n.Phone != nil {
+		action = "identity.phone.password-signin"
 	}
 	executor, err := sessionpg.NewPreAuthIssueExecutor(pool, sessionpg.PreAuthIssueExecutorConfig{Repository: n.Session, Coordinator: n.Coordinator, Authorization: n.Coordinator.QueryPolicy.Authorization, Clock: clock.System{}, ActorID: p.ActorID, Action: action, Origin: p.Origin, CallbackURL: p.CallbackURL, PolicyID: n.PolicyID, PolicyVersion: n.Coordinator.AdmissionPolicy.PolicyVersion, AuditRetentionVersion: p.AuditRetentionVersion})
 	if err != nil {

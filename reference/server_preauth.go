@@ -118,6 +118,13 @@ func (s *Server) preAuthFeature(network identityhttp.NetworkConfig, f FeatureSet
 		}
 		c.Methods = append(c.Methods, sessionhttp.PreAuthMethod{Name: "magic-link", Service: owner, Action: "identity.magic-link.consume", CallbackURL: selected.preauth.CallbackURL, PolicyID: selected.policy, PolicyVersion: selected.version})
 	}
+	if selected := s.state.features.httpPhoneSignin; selected != nil {
+		owner, err := f.PhoneSigninPreAuth()
+		if err != nil {
+			return nil, err
+		}
+		c.Methods = append(c.Methods, sessionhttp.PreAuthMethod{Name: "phone-password", Service: owner, IdentifierBinder: owner, Action: "identity.phone.password-signin", CallbackURL: selected.preauth.CallbackURL, PolicyID: selected.policy, PolicyVersion: selected.version})
+	}
 	if h.device != nil {
 		feature, err = sessionhttp.NewPreAuthFeatureWithBrowserDevice(c, *h.device)
 	} else {

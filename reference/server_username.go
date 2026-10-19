@@ -123,7 +123,7 @@ func (s *Server) usernameFeature(network identityhttp.NetworkConfig, f FeatureSe
 		if err != nil {
 			return nil, err
 		}
-		config.Signin = &passwordhttp.SigninConfig{Network: network, Service: owner.(composedUsernameSignin), Rate: s.state.httpRate.limiter, Origin: identityhttp.Origin(selected.preauth.Origin), CallbackURL: selected.preauth.CallbackURL, Lifetime: p.lifetime, FlowCookie: selected.preauth.Cookie, SessionCookie: selected.sessionCookie, Device: *p.device, ActorID: selected.config.ActorID, PolicyRevision: selected.config.PolicyRevision, Audience: selected.audience, Now: time.Now, MaximumDuration: s.state.features.timeout}
+		config.Signin = &passwordhttp.SigninConfig{Network: network, Service: owner.(composedIdentifierSignin), Rate: s.state.httpRate.limiter, Origin: identityhttp.Origin(selected.preauth.Origin), CallbackURL: selected.preauth.CallbackURL, Lifetime: p.lifetime, FlowCookie: selected.preauth.Cookie, SessionCookie: selected.sessionCookie, Device: *p.device, ActorID: selected.config.ActorID, PolicyRevision: selected.config.PolicyRevision, Audience: selected.audience, Now: time.Now, MaximumDuration: s.state.features.timeout}
 		config.Signin.MFAContinuation = selected.mfaContinuation
 	}
 	if h.available {

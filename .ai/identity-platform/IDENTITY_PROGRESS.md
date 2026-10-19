@@ -1,6 +1,6 @@
 # Identity Platform Progress
 
-## TL;DR — updated 2026-10-19 01:00 UTC
+## TL;DR — updated 2026-10-19 01:54 UTC
 
 **Estimated whole-goal completion: approximately 15%, with low confidence.**
 **Consumer milestones: 6/39 closed** (15.4% unweighted); full scope remains
@@ -12,7 +12,32 @@ Most platform families and final package qualification are not closed;
 queued work is not counted as delivered.
 This is an effort/scope estimate, not a measured percentage or an ETA.
 
-**Current work:** phone/password signin after verified enrollment. Original
+**Current outcome:** native verified-phone/password signin is main-pushed
+`650d24f`, Required CI green, and exercised through its downloaded public module.
+HTTP/session and HTTP/password are main-pushed `422b56d`, Required CI green;
+their public modules match all 69 reviewed Go/manifests. The real reference
+PostgreSQL/HTTPS journey now passes against those public dependencies for browser
+and persistent sessions: genuine registration/email confirmation, encrypted SMS
+delivery/phone verification, target-bound initiation, password signin, session
+read and logout. Retargeting and replay disclose no credentials. Focused HTTP
+schema/binding and reference migration/lifetime tests pass. Independent review's
+combined-username readiness defect is fixed and proven RED -> GREEN, including
+username TOTP and missing-successor probes. Canonical reference ordinary race
+and actual PostgreSQL/race pass. Final public-pin review and reference delivery
+remain; no current source defect is known. M08
+still includes later OTP/reset/change/removal profiles and is not closed.
+
+**Parallel delivery:** selected identified-user WebAuthn none/ES256 root and
+PostgreSQL adapter are independently reviewed and main-pushed in go-webauthn
+`3ad12d2`, Required run 39185441961 green. Canonical public-root PG/race,
+commit-loss and actual Chrome/WPT consumer checks pass. The downloaded native
+module authenticates to that exact commit and all eight Go/manifests match. No full
+M15, passkey/session integration, whole-unit or release claim. Worker resources
+and the publication task cache are removed.
+
+### Earlier checkpoints — historical evidence, not current pending state
+
+**Previous phone-native evidence:** phone/password signin after verified enrollment. Original
 identifier-bound pre-auth custody now passes core/native race and the actual
 PostgreSQL component journey for legacy and bound browser/persistent flows,
 including changed-command conflict, durable read and credential-free recovery.
@@ -52,7 +77,7 @@ error identity and exactly-once HTML escaping are proven. This is a bounded
 M36 consumer profile, not durable preferences, localized HTTP/delivery or M36
 closure. That worker finished.
 
-**Active parallel implementation:** a GPT-6.1 Sol high worker is building the
+**Previous WebAuthn implementation evidence:** a GPT-6.1 Sol high worker was building the
 selected WebAuthn none-attestation/ES256 registration-to-assertion PostgreSQL
 profile. Its committed-contract check found no missing upstream owner; the
 primary inspected its initial public service/store boundary. The first actual

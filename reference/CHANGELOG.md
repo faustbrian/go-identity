@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Independently select native verified-phone/password signin and its opt-in
+  HTTP route plus target-bound initiation method. Compose current native phone,
+  password, MFA and session authority; preserve forward migration histories,
+  browser/persistent session reading/logout and credential-free recovery.
+  Phone enrollment and its HTTP routes are not implicit login dependencies.
+
 - Compose optional existing-account phone enrollment and SMS verification through
   the native password/proof, OTP, delivery and transactional identity owners.
   Select cookie HTTP send/verify/original recovery separately; require the chosen

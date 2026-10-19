@@ -298,5 +298,25 @@ func readinessCatalogGuards(state *storeState, history migrationHistory) []migra
 			}
 		}
 	}
+	if state.features != nil && state.features.phoneSignin != nil {
+		for i := range guards {
+			guards[i].constraints = slices.Clone(guards[i].constraints)
+			for j, name := range guards[i].constraints {
+				// The phone suffix replaces both provenance constraints. Keep
+				// predecessor histories immutable but require their real installed
+				// successors, including the username password-record guard.
+				if guards[i].schema == "identity_password" && name == "signin_records.signin_records_purpose_v2" {
+					guards[i].constraints[j] = "signin_records.signin_records_purpose_phone_v1"
+				}
+				if guards[i].schema != state.features.migrations.passwordSigninSchema {
+					continue
+				}
+				switch name {
+				case "session_issuances.session_issuances_purpose_v3", "session_issuances.session_issuances_purpose_v4", "session_issuances.session_issuances_purpose_v5", "session_issuances.session_issuances_purpose_v6", "session_issuances.session_issuances_purpose_v7", "session_issuances.session_issuances_purpose_v8", "session_issuances.session_issuances_purpose_username_v1":
+					guards[i].constraints[j] = "session_issuances.session_issuances_purpose_phone_password_v1"
+				}
+			}
+		}
+	}
 	return guards
 }

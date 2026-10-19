@@ -248,6 +248,7 @@ func proveReferenceSignupGraph(t *testing.T, competing bool, protected ...bool) 
 
 type signupGraphExtensions struct {
 	phoneEnrollment bool
+	phonePassword   bool
 
 	emailSignin                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            string
 	usernameTOTPOnly                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       bool
@@ -381,6 +382,9 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 	}
 	if extensions.username {
 		selectedAuthorization = referenceUsernamePolicy{}
+	}
+	if extensions.phonePassword {
+		selectedAuthorization = referencePhoneSigninPolicy{}
 	}
 	if extensions.verificationSignin == "totp-original-expiry" {
 		f.verificationMFAOriginalExpiry = &verificationMFAOriginalExpiryPolicy{pool: f.pool}
@@ -605,6 +609,10 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 	}
 	if extensions.phoneEnrollment {
 		configureReferencePhone(t, &c, origin)
+	}
+	if extensions.phonePassword {
+		c.PhoneSignin = &reference.PhoneSigninConfiguration{Policy: c.Phone.Policy}
+		c.HTTPPhoneSignin = &reference.HTTPPasswordSigninConfiguration{ActorID: c.HTTPPasswordSignin.ActorID, PolicyRevision: c.HTTPPasswordSignin.PolicyRevision}
 	}
 	var emailUpgrade *reference.StoreConfiguration
 	if extensions.emailRemoval || extensions.emailChangeCase == "graph" || extensions.emailChangeCase == "graph-upgrade" || extensions.emailChangeCase == "shared-http" || extensions.emailChangeCase == "keyed-graph" || extensions.emailChangeCase == "request-http" || extensions.emailChangeCase == "change-origin-graph" || strings.HasPrefix(extensions.emailChangeCase, "totp-change") || strings.HasPrefix(extensions.emailChangeCase, "otp-change") || strings.HasPrefix(extensions.emailChangeCase, "otp-verification") {
@@ -876,6 +884,14 @@ END $$`); err != nil {
 		seen[op.Record.OperationID] = true
 	}
 	wantOperations := 8
+	if c.HTTPPhoneSignin != nil {
+		wantOperations++
+		if !seen["identity.phone.password-signin"] {
+			t.Fatal("selected phone/password operation missing")
+		}
+	} else if seen["identity.phone.password-signin"] {
+		t.Fatal("unselected phone/password operation advertised")
+	}
 	if c.HTTPPhoneVerification != nil {
 		wantOperations += 3
 		for _, id := range []string{"identity.phone.send-verification", "identity.phone.verify", "identity.phone.verify.recover"} {
@@ -1069,10 +1085,15 @@ END $$`); err != nil {
 	if extensions.username {
 		if extensions.usernameTOTP {
 			f.usernamePrimaryRecovery = func(challenge passwordhttp.SigninResponse, cookies []*http.Cookie) {
-				proveReferenceUsernamePrimaryRecovery(t, ctx, c, deps, worker, challenge, cookies)
+				proveReferenceUsernamePrimaryRecovery(t, ctx, c, deps, worker, challenge, cookies, workerConfigs[1:]...)
 			}
 		}
-		for _, target := range []struct{ table, constraint string }{{"identity.registration_bindings", "identity_registration_purpose_v3"}, {"identity_mfa.factor_authorities", "factor_authorities_initialized_purpose_v3"}, {"session_store.session_issuances", "session_issuances_purpose_username_v1"}} {
+		targets := []struct{ table, constraint string }{{"identity.registration_bindings", "identity_registration_purpose_v3"}, {"identity_mfa.factor_authorities", "factor_authorities_initialized_purpose_v3"}, {"session_store.session_issuances", "session_issuances_purpose_username_v1"}}
+		if extensions.phonePassword {
+			targets[2].constraint = "session_issuances_purpose_phone_password_v1"
+			targets = append(targets, struct{ table, constraint string }{"identity_password.signin_records", "signin_records_purpose_phone_v1"})
+		}
+		for _, target := range targets {
 			if _, err := f.pool.Raw().Exec(ctx, "ALTER TABLE "+target.table+" RENAME CONSTRAINT "+target.constraint+" TO username_fixture_missing"); err != nil {
 				t.Fatal(err)
 			}
@@ -1140,7 +1161,11 @@ END $$`); err != nil {
 	}
 	if extensions.phoneEnrollment {
 		f.afterEmailSignin = func(ctx context.Context, user identity.UserID, cookies []*http.Cookie, csrf string, fresh func(...string) ([]*http.Cookie, string), readSession func([]*http.Cookie) bool) {
-			proveReferencePhoneHTTPS(t, ctx, f, features, workers, messages, client, network.URL, origin, server, user, cookies, csrf, fresh, readSession)
+			var afterVerified func()
+			if extensions.phonePassword {
+				afterVerified = func() { proveReferencePhonePasswordHTTPS(t, ctx, f, features, client, network.URL, origin, c.PasswordSignin.PreAuth.CallbackURL, *c.HTTPPreAuth.Device, user, readSession) }
+			}
+			proveReferencePhoneHTTPS(t, ctx, f, features, workers, messages, client, network.URL, origin, server, user, cookies, csrf, fresh, readSession, afterVerified)
 		}
 	}
 	if extensions.emailManagementResend || extensions.emailManagementChange {

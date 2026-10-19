@@ -77,6 +77,12 @@ type StoreConfiguration struct {
 	Username *UsernameConfiguration
 	// Phone selects native existing-account phone enrollment, not HTTP or login.
 	Phone *PhoneConfiguration
+	// PhoneSignin independently selects existing verified-phone/password login.
+	// Enrollment and its HTTP routes are not dependencies of this selection.
+	PhoneSignin *PhoneSigninConfiguration
+	// HTTPPhoneSignin enables only phone/password signin and its bound original
+	// pre-auth method; the native owner and shared browser admission are required.
+	HTTPPhoneSignin *HTTPPasswordSigninConfiguration
 	// Session selects native primary reads and self-signout, not HTTP.
 	Session *SessionConfiguration
 	// PasswordVerification selects native reauthentication/proof recovery, not HTTP.

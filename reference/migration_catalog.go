@@ -48,7 +48,11 @@ func (s StoreSet) migrationCatalog(ctx context.Context) ([]migrationHistory, err
 	if err != nil {
 		return nil, err
 	}
-	return s.phoneMigrationCatalog(ctx, catalog)
+	catalog, err = s.phoneMigrationCatalog(ctx, catalog)
+	if err != nil {
+		return nil, err
+	}
+	return s.phoneSigninMigrationCatalog(ctx, catalog)
 }
 
 func (s StoreSet) baseMigrationCatalog(ctx context.Context) ([]migrationHistory, error) {

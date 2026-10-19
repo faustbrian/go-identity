@@ -112,6 +112,8 @@ type featureState struct {
 	passwordSignup               *passwordpg.SignupService
 	username                     *usernameState
 	phone                        *phoneState
+	phoneSignin                  *phoneSigninState
+	httpPhoneSignin              *passwordSigninHTTPState
 	httpUsername                 *usernameHTTPState
 	registrationConfirmation     *passwordpg.EmailVerificationRouter
 	verificationSignin           *passwordpg.VerificationSigninService
@@ -218,6 +220,9 @@ func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDepen
 	}
 	if c.HTTPPhoneVerification != nil && c.Phone == nil {
 		return identity.InvalidInputError{Field: "reference_http_phone"}
+	}
+	if c.PhoneSignin != nil && (c.PasswordSignin == nil || c.Session == nil || c.OTP == nil) || c.HTTPPhoneSignin != nil && c.PhoneSignin == nil {
+		return identity.InvalidInputError{Field: "reference_phone_signin"}
 	}
 	if c.PasswordSignin != nil && c.OTP == nil {
 		return identity.InvalidInputError{Field: "reference_password_signin"}
@@ -459,6 +464,14 @@ func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDepen
 	if err != nil {
 		return err
 	}
+	phoneSigninOwner, err := composePhoneSignin(c, d, evaluator)
+	if err != nil {
+		return err
+	}
+	httpPhoneSignin, err := composePhoneSigninHTTP(c, phoneSigninOwner, httpPreAuth)
+	if err != nil {
+		return err
+	}
 	if usernameOwner != nil && usernameOwner.totp != nil {
 		migrationConfig.passwordMFA, migrationConfig.passwordTOTP = true, true
 	}
@@ -681,6 +694,8 @@ func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDepen
 	s.features.passwordSignup = passwordSignupOwner
 	s.features.username = usernameOwner
 	s.features.phone = phoneOwner
+	s.features.phoneSignin = phoneSigninOwner
+	s.features.httpPhoneSignin = httpPhoneSignin
 	s.features.httpUsername = httpUsername
 	s.features.registrationConfirmation = registrationConfirmation
 	s.features.verificationSignin = verificationSigninOwner
