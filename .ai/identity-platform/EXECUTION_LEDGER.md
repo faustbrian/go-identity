@@ -1,6 +1,214 @@
 # Identity Implementation — Current Milestone
 
-## Live checkpoint — 2026-10-18 23:34 UTC
+## Live checkpoint — 2026-10-19 01:00 UTC
+
+Phone corrected source independently APPROVE complete42 snapshot28b18a67.
+Upstream22 main-pushed2fb03512d8a12ffd89d1695b5978f72ee5edc7ba, Required39182921848SUCCESS.
+Native session final7 independently APPROVE8328455f; canonical ordinary race1.861s
+and taggedvet0, main-pushed6d77f3abd45352c2bd6cf66367df1722250f1227,
+Required39183120302SUCCESS. Public session88/MFA149/kernel451 and nativeSession235
+Go/manifests match their committed source. Native password final17 snapshot
+3aaad62d8fc0cf354c7f809d2fc8ea55a2ad77b003a22f84c88f9bcf51b7ad5e
+selects rootc520,phone/password/session/MFA/kernel2fb0351,nativeSession6d77f3a.
+GOWORK=off canonical tidy/wholeordinaryrace2.138s/taggedvet0 and COMPLETE18-profile
+genuine phone enrollment->password signin->session/read/logout, adverse authority,
+rehash/outbox rollback/concurrency/real lostACK plus6populatedhistories PG/race
+PASS25.280s. No local replacement; sourceequal public phone10/password40. Native
+password final-pin review independently APPROVE before publication; HTTP/reference
+not connected, M08 open, ~15%6/39 unchanged. Own taskPG stopped/deleted.
+
+WebAuthn independent full28 REQUEST_CHANGES: F1 native recovery flattens kernel
+UnknownCommitError/zero receipt to Invalid+Unavailable during ambiguous recovery
+commit. Primary verified the native->kernel->public forwarding divergence; worker
+assigned actual reconciliation-ACK-loss RED/GREEN. F2 wrong-key/changed-signed-byte
+negative oracle and F3 distinct-ceremony credentialCAS oracle are characterization
+gaps, not known bypasses; F4 unreachable extension replacement is minor cleanup.
+All are in the same frozen ceremony profile. Worker has heavy slot; primary Go/
+service checks terminal. Public pins/registries/review/delivery remain primary-owned.
+
+## Previous checkpoint — 2026-10-19 00:53 UTC
+
+Phone final42 corrected-source snapshot28b18a67573d5c5a4fe5265fc453f4c48b3b7fbbe8145d3167c3a5291c336a83
+is under retained review reconciliation. F1 stored normalization bypass reproduced
+three real PG/race RED4.266s -> GREEN4.981s, complete18-profile native consumer
+PASS22.387s. Explicit query profile reads actual stored metadata, absent/foreign
+profiles suppress and late changes deny; zero-selection legacy projection stays
+unchanged. Affected kernel/password-native/session-native race1.182/1.361/1.314s
+and taggedvet0 passed. F2 public optional reset selection reproduced two profile
+RED0.742s with legacy passing; one-line query-aware projection fixes it, entire
+reset-recipient-issuance PG/race PASS1.588s. MFA adapter now requires published
+rootc520/kernel38974, canonical tidy/race1.306s/taggedvet0; publickernel451
+Go/manifests exactly match committed38974. Sessioncore canonical rootc520
+race1.702s/vet0 retained. Phone workflow still needs final public dependency pins,
+delivery and HTTP/reference composition; ~15%,6/39 unchanged.
+
+WebAuthn worker final28 frozen80f1e282bdfe10e2ccd66cd1f81f0552327a57f2a547c30a54f71a086b9b3608
+at base630c7e5, under independent webauthn_ceremony_final_review. Root standalone
+race1.982s/vet0, bounded CBOR294576/JSON42419 fuzz; native expanded PG/race3.253s,
+actual Chrome155/WPT registration->assertion PG/race2.251s, restart-strengthened
+actual lost-COMMIT recovery1.855s/taggedvet0 reported by worker. Local external
+workspace selects only unpublished WebAuthn root/native; identity dependencies
+are public declared pins. Native public-root adoption/sums/consumer and final
+delivery remain, not M15 closure. Worker caches/clusters removed, slot released.
+
+## Previous checkpoint — 2026-10-19 00:39 UTC
+
+Phone native32 frozen at HEAD38974dc for phone_password_native_final_review:
+sorted path+NUL+rawbytes+NUL SHA256
+197008970a780afdaa503fd10539499bf59ae5b0b0d48a3d5e56545601ed0351.
+Actual PG18/race selected14-fixture consumer PASS17.339s: genuine enrollment,
+phone/password browser+persistent signin/read/restart history/logout, unknown/
+wrong/unverified/suspended uniform denial, original retarget/foreign tenant,
+enrolled/missing/late factor and late phone denial, outbox rollback, atomic
+rehash and actual lost-COMMIT recovery. Added original-browser contention plus
+six populated verification/MFA/optional-username histories PASS5.170s; fixture
+parent/session identities corrected before that pass. Ordinary full affected
+race: phone1.452s/password1.304s/session1.552s/mfa-postgres1.301s/session-postgres
+1.988s/password-postgres2.116s. Integration-tagged vet all6 exit0. All use task
+development workspace; canonical public pins/consumer/CI still required.
+All own PG clusters stopped/deleted. HTTP/reference selected phone login remains
+unfinished, whole M08 not closed, estimate~15%/6-of-39 unchanged.
+
+WebAuthn worker reports expanded native adversity PASS2.328s and actual
+committed-ack loss PASS1.593s. Chrome155 first create raised NotAllowedError
+before WPT oracle/core verification; source at exact Chromium revision ties
+credProtect support to virtual authenticator hasCredBlob capability. Worker
+corrected only that task fixture and is rerunning the browser consumer; no
+production weakening, independent interoperability not claimed yet.
+
+Native kernel phone prerequisite independently APPROVE final7 digest3a48cafc;
+review F1 alternate same-owner admission reproduced RED then fixed by checking
+the closed password owner before generic owner delegation. Canonical affected
+race1.337s/taggedvet0, main-pushed38974dc9c3b901f593c2d537268f4276f6beb9ab,
+Required39179585048SUCCESS. No actual phone signin closure follows.
+Phone binding helper/guard focused race passes1.484s/1.466s; later native
+discovery/factor edits still require execution. Three real REDs in recovery,
+session issuer and native mapping (.284s/.336s/.400s) now GREEN affected race
+1.241s/1.232s/1.411s in task development workspace. These changes are local.
+New native consumer extends genuine registration/email verification/fresh proof/
+captured SMS/phone verification to phone/password signin, original recovery and
+actual session reading. Its first actual PG RED is browser/persistent native
+not-committed1.678s; missing native factor/purpose support is implementation
+work, not a blocker. No fabricated domain rows.
+
+WebAuthn worker reports first actual PG18/race registration/assertion consumer
+PASS1.696s after correcting zero-reservation admission and scalar SQL JSON input.
+Task cluster/caches removed, heavy slot released. Original replay/restart keeps
+challenge and Verified* outputs withheld; one credential and four effect sets.
+Primary requested preservation of original ceremony/command/RP/deadline context
+in opaque verified results. Affected source changes and remaining hostile,
+contention/rollback/ambiguity/interoperability checks remain worker-owned.
+No M15 closure or source review claimed. Whole estimate~15%,6/39 unchanged.
+
+Preauth prerequisite delivery: core6 independently APPROVE at original14
+snapshot8cf063c1, main-pushed7f0a19ecb2f7f18761c2927a025deb1d0017282f.
+Its Required39178624295 failed generic-api-key in the framing doc comment,
+not a credential. Reworded exact prose without suppression; native11 final
+APPROVE59663e7e, main-pushed6f08283d57ce870976e5a5127c7c144667ba32b0,
+Required39178921327SUCCESS. Actual public core88Go/manifests and native234
+match committed source; canonical native race1.884s/taggedvet0/PG1.717s,
+downloaded native PGconsumer1.729s PASS, alltaskPG stopped/deleted.
+Public native v0.0.0-20261019000131-6f08283d57ce, no local replacements.
+
+Phone root3 exact paired-custody profile: RED invalidinput.253s -> affected
+phone/password/username race1.248s/vet0; independent APPROVE12f3a198.
+Main-pushedc5205a35b05c57684cdae9b24260ad804247ad88,
+Required39179107325SUCCESS; actualpublic root132Go/manifests equal source.
+Native kernel7 (closed codec/owner/rehash + public root pin) frozen SHA256
+08236bc18a8518158ace13499a84d3e0ddc3c09b4183b8d84d993af7d5850781
+under preauth_identifier_final_review. Three actual REDs.302s: missing paired
+custody admitted, exact owner denied, original rehash denied. Development
+workspace green1.344s retained; canonical public-root race1.380s/taggedvet0.
+Phone service/session/MFA/migration/reference composition remains unfinished.
+
+M15 worker readiness accepted: actual committed generic Feature/Work/coordinator
+contracts at46d7a68 require no shared kernel/session/risk extension for ceremony-
+only profile. One bounded native-contract pass, not interface-only substitution.
+Primary inspected actual service_test.go and full contracts.go: explicit trusted
+tenant/RP/subject context (not authentication), opaque provisional transitions,
+durable create/load/finalize/recover bridge, commit-gated reveal/evidence.
+Flagged actual private-enclosing-wrapper fmt traversal risk for Challenge tests.
+Worker owns source, no Git/children; first constructor missing-package RED is
+construction-only, not ceremony acceptance. Slot released; compile/service-heavy
+runs remain serialized. No M15 milestone or full-unit closure.
+
+Parallel M15 readiness/implementation lane: webauthn_ceremony owns only
+go-webauthn root *.go, go.mod/go.sum, README/CHANGELOG/docs and postgres/**;
+no AGENTS/tool/CI/root registry changes. Start from clean main630c7e5e. One
+bounded consumed-contract check must identify actual committed identity,
+authentication/capability/identifier and native Work interfaces before code;
+report concrete upstream gaps rather than inventing substitute authority.
+Parent inspects first public boundary before continuation. Frozen candidate
+outcome is none-attestation ES256 registration then assertion with real native
+PostgreSQL atomic challenge/credential/counter state and code-free recovery;
+explicit tenant/RP/origin, UP/UV, backup/counter, hostile parsing/typed extensions,
+one-use/concurrent/replay/rollback checks. No session, passkey UX, metadata
+network, other attestation/algorithms or fullM15/unit claims. Worker must confirm
+this profile against complete goal/protocol/transaction inputs; unsupported
+variants fail closed, full goal scope retained. Go1.27, focused TDD/race/vet/fuzz,
+pinned official/independent authenticator fixtures and real PG proof; request
+serialized heavy-check slot, no child/Git/service mutation without slot. Primary
+owns generic shared kernel contracts, root manifests, final review/public pins
+and later reference integration. At unresolved upstream gap, stop at exact
+boundary and return finite report, not a parser-only substitute milestone.
+
+Preauth identifier custody14 frozen for independent preauth_identifier_final_review
+at HEAD46d7a68: sorted relativepath+NUL+rawcontent+NUL SHA256
+8cf063c1c3760a0b48076b089caf8a0d70ba5d3187c60dcecd89dc2473e9443b.
+Core entire race1.609s/vet0; native entire race1.772s/taggedvet0;
+native canonical-record active fuzz4.325s/9executions PASS (bounded smoke,
+not a broad campaign). Actual PG18.6/race original core/native issuance profiles
+legacy+bound browser/persistent/read/changed-command/restart PASS1.894s.
+Fixture first lacked public.outbox_messages because role identity's same-named
+schema precedes public; pin upstream unqualified migration to actual public
+adapter schema, no production outbox/migration changes. Native execution uses
+task-local session workspace: public-core delivery/repin/canonical qualification
+still required, not claimed. Phone/password service/composition remains open.
+
+i18n_consumer and independent i18n_consumer_review finished; final APPROVE,
+two-file snapshots unchanged, main-pushed46d7a68f6b9650b39f5efe53e88cad2b034b398b,
+Required39178082723SUCCESS exact source. Primary focused consumer/example PASS
+.234s; worker entire/race/vet and two3s fuzz targets PASS, own caches removed.
+No runtime/manifests changed. Finite public identity-error localization adopted;
+no durable-preference/HTTP/delivery/fullM36 qualification.6/39/~15% unchanged.
+
+Completed M36 leaf lane assignment: i18n_consumer worker owned ONLY i18n/**, including its
+local manifests/tests/docs. Adopt existing locale/catalog/error registry; finite
+outcome is transport-neutral explicit/session/cookie/Accept-Language/default
+selection and safe registered-error translation preserving errors.Is/As,
+machine/original identity and typed parameters, demonstrated with public identity
+errors. Existing root dependency and goal-owned interfaces are consumed as pinned
+in i18n/go.mod; no new upstream authority or store is needed for this pure profile.
+One bounded requirement/source pass, fix concrete gaps under TDD, then actual
+public consumer/example and focused i18n race/vet/hostile-parser fuzz. No shared
+manifests/HTTP/reference/session/kernel/registry outside this module, no preference
+database engine, no speculative catalogs or whole-M36 closure. Primary owns later
+localized HTTP/delivery/persistence integration and independent final acceptance.
+Worker must preserve concurrent edits, request serialized heavy-check slot,
+report first public boundary/tested batch, and must not spawn/stage/commit/push.
+
+Next frozen M08 profile: distinct phone/password signin after real verified-phone
+enrollment, original canonical-number-bound password preauth, browser/persistent
+session read/logout and code-free original recovery. Primary owns session/core
+and native preauth commitment, root/kernel/password/session/MFA selection and
+native proof, then opt-in reference/HTTP. Consumed committed enrollment/profile
+cc21422, native431e97b and original password/session owners remain authoritative.
+Read-only phone_password_boundary mapped actual phone RecipientQuery/Work guards;
+no new credential/session/transaction store is needed. First required extension:
+an optional server-derived identifier commitment in original session preauth,
+cookie digest, durable record and existing command mapping; legacy zero profile
+keeps exact encodings. Phone owner will compute/require canonical tenant/profile/
+action-bound commitment before password verification; OTP flows cannot substitute.
+Acceptance: genuine enrollment -> target-bound flow -> canonical phone/password
+-> actual session/logout; remember preserved; unknown/wrong/unverified/other-tenant
+uniform denial; target/action/cookie/expiry substitution denied before comparison;
+current account/phone/credential/factor changes deny, atomic rehash/session effects
+and original unknown recovery preserve custody. First profile requires known-empty
+native MFA and denies enrolled factors; phone-origin TOTP continuation remains
+required subsequent M08 scope, never weaker fallback. No phone OTP login/reset/
+replacement/removal closure follows. Focused TDD at preauth cookie/store/map,
+native verifier/PG and real reference HTTPS; bounded race/vet and independent
+complete-final-diff review, public dependencies and main CI. No full-repo reruns.
 
 Phone reference20 delivered cc2142229fc70289b7d4568dbfcfaa77ece2551d main,
 Required39176981277SUCCESS. Independent phone_reference_final_review final

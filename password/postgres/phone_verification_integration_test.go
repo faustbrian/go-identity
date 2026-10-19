@@ -133,7 +133,7 @@ func phoneNativeAuthenticationRisk(t *testing.T, ctx context.Context, pool *data
 	return risk.AuthenticationAdmissionCustodyConfig{Evaluation: evaluation, ConfigurationID: "phone-native-risk-v1", Keys: []risk.EvidenceKey{key}}
 }
 
-func testNativePhoneEnrollment(t *testing.T, ctx context.Context, pool *database.Pool, _ *SignupService, c SignupConfig, keys *keyring.Provider, fresh func(string, byte) password.SignupRequest, transport session.CredentialKind, outcome string) {
+func testNativePhoneEnrollment(t *testing.T, ctx context.Context, pool *database.Pool, _ *SignupService, c SignupConfig, keys *keyring.Provider, fresh func(string, byte) password.SignupRequest, transport session.CredentialKind, outcome string, consumers ...func(SigninConfig, *phone.NumberPolicy, password.SignupRequest, identity.UserID)) {
 	t.Helper()
 	var beforeStatus func(context.Context, risk.Context) error
 	counted := phoneNativeAuthenticationRisk(t, ctx, pool, func(ctx context.Context, c risk.Context) error {
@@ -662,5 +662,8 @@ func testNativePhoneEnrollment(t *testing.T, ctx context.Context, pool *database
 		if _, err := service.RecoverVerification(ctx, foreign); err == nil {
 			t.Fatal("foreign synchronizer disclosed original phone recovery")
 		}
+	}
+	for _, consume := range consumers {
+		consume(signinConfig, numberPolicy, registration, original.UserID)
 	}
 }

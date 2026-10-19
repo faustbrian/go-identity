@@ -92,6 +92,48 @@ counter/audit/storage outages and cancellation cannot become an available name.
 No routes are enabled by construction. Rename has its separate explicit
 constructor above; selected HTTP/reference composition remains unfinished.
 
+## Explicit phone password signin
+
+Set `SigninConfig.Phone` to the fixed `phone.NumberPolicy` used for enrollment;
+leave `Username` nil. `NewSigninService` selects only
+`identity.phone.password-signin`. It canonicalizes to E.164, discovers the exact
+tenant-bound verified phone and uses the ordinary password verifier and shared
+counted risk, account/credential, session and transaction owners. It does not
+accept an OTP or turn phone possession into authentication.
+Discovery and protected admission require the persisted phone profile/version
+to match. Legacy unbound and incompatible metadata profiles deny even when
+E.164 bytes match; migrate/reverify explicitly rather than reinterpreting them.
+
+Before comparison, trusted initiation must canonicalize the original number,
+call `phone.PasswordSigninIdentifierBinding(number, tenant, IdentifierKey)` and
+pass that nonzero value as `session.PreAuthPrepareInput.IdentifierBinding` to
+the actual original-flow issuer configured for `identity.phone.password-signin`.
+The native service recomputes and checks it before rate identity or password
+work. Never accept a client-supplied commitment; the raw bounded number is the
+input. Original cookie, origin, callback, remember and policy checks still apply.
+Zero/unbound legacy flows and OTP flows cannot substitute for this profile.
+Use independent retained identifier-binding key material; rotate it only with
+an explicit policy for outstanding five-minute flows.
+
+Install `PhonePasswordSigninMigrationSource{Base: passwordHistory,
+Version: nextVersion, UsernameSignin: usernameInstalled}` after the completed
+password-record history, and the session adapter's same-named suffix after its
+exact installed purpose profile. The session suffix's `Predecessor`/`MFASignin`
+describe that selected history; `UsernameSignin` says whether its optional
+username suffix is already installed. These choices must match actual history;
+wrong selections fail rather than dropping unknown constraints. Install logout's
+ordinary revocation history separately. Old records and migration bytes remain
+unchanged; do not run older purpose suffixes after this extension.
+
+This selected phone profile requires **known-empty native MFA authority**.
+Missing, enrolled or changed authority denies; it is never initialized or inferred
+from absence. Phone-origin TOTP/OTP continuation remains unsupported and cannot
+use either MFA factory. `RecoverSignin` retains the exact original operation and
+returns authorized historical metadata only, including after restart or commit
+ambiguity; it never reissues credentials or repeats password comparison.
+Phone OTP login, phone reset/change/removal and HTTP/reference selection are
+separate unfinished profiles, not enabled by this constructor.
+
 ## Explicit username password signin
 
 Set `SigninConfig.Username` to the same immutable comparison policy used for

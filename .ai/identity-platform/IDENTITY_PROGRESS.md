@@ -1,6 +1,6 @@
 # Identity Platform Progress
 
-## TL;DR — updated 2026-10-18 23:34 UTC
+## TL;DR — updated 2026-10-19 01:00 UTC
 
 **Estimated whole-goal completion: approximately 15%, with low confidence.**
 **Consumer milestones: 6/39 closed** (15.4% unweighted); full scope remains
@@ -11,6 +11,63 @@ credentials, and four CAPTCHA adapters are delivered as bounded profiles.
 Most platform families and final package qualification are not closed;
 queued work is not counted as delivered.
 This is an effort/scope estimate, not a measured percentage or an ETA.
+
+**Current work:** phone/password signin after verified enrollment. Original
+identifier-bound pre-auth custody now passes core/native race and the actual
+PostgreSQL component journey for legacy and bound browser/persistent flows,
+including changed-command conflict, durable read and credential-free recovery.
+The integration fixture's role-dependent outbox installation schema is fixed.
+Pre-auth core/native custody is independently reviewed and main-pushed
+(`7f0a19e`, `6f08283`); final Required CI is green. Canonical public-pin PostgreSQL
+proof passes 1.717s and the downloaded native consumer passes 1.729s. The exact
+phone/password command is separately reviewed, main-pushed `c5205a3`, CI green.
+Its native coordinator delegation/paired-custody/rehash mapping is independently
+reviewed and main-pushed `38974dc`, Required CI green. Review caught and fixed
+an alternate-owner admission defect before delivery. Phone canonical-target
+binding, native discovery/password verification, session issuance/read/logout
+and credential-free restart recovery now pass locally through the genuine
+enrollment consumer, for browser and persistent sessions. The selected denial,
+late-authority, atomic rehash/outbox rollback and real lost-COMMIT matrix passes
+PostgreSQL/race 17.339s. Concurrent use of one browser and six populated history
+profiles additionally pass 5.170s; affected six-module race/vet checks pass.
+Independent review reproduced a stored normalization-profile bypass. Explicit
+stored-profile discovery and transactional fences now deny missing, incompatible
+and late-changed profiles: three real RED cases -> GREEN; complete 18-profile
+native PostgreSQL/race passes 22.387s. Review's optional reset-query projection
+inconsistency also reproduces RED -> GREEN in the actual Work selector; the full
+affected reset-recipient issuance matrix passes 1.588s. Published minimum
+root/kernel pins are adopted by the MFA adapter; its standalone race/vet pass.
+The corrected complete source has independent approval. Upstream admission is
+main-pushed `2fb0351`, session provenance/migration `6d77f3a`; both Required CI
+runs pass. The final native password adapter now selects real public dependencies
+without replacements: whole ordinary race 2.138s, tagged vet exit 0, and the
+complete genuine phone-signin PostgreSQL/race matrix passes 25.280s. Independent
+final public-pin review approves; native publication/CI is pending. HTTP/reference composition and
+full M08 remain open; no additional milestone is closed.
+
+**Parallel result:** public identity-error localization consumer and adoption
+guidance are independently reviewed, main-pushed `46d7a68` and Required CI
+39178082723 green. Locale precedence/fallback, typed safe parameters, original
+error identity and exactly-once HTML escaping are proven. This is a bounded
+M36 consumer profile, not durable preferences, localized HTTP/delivery or M36
+closure. That worker finished.
+
+**Active parallel implementation:** a GPT-6.1 Sol high worker is building the
+selected WebAuthn none-attestation/ES256 registration-to-assertion PostgreSQL
+profile. Its committed-contract check found no missing upstream owner; the
+primary inspected its initial public service/store boundary. The first actual
+PostgreSQL/race none/ES256 registration -> signed assertion round-trip passes
+(worker-reported 1.696s), including restart/original recovery and credential
+withholding on replay. Expanded adverse/counter/contention/outbox checks pass
+2.328s; a real committed-acknowledgement-loss check passes 1.593s. Latest expanded
+native adversity passes 3.253s; actual Chrome/WPT registration/assertion through
+PostgreSQL passes 2.251s; restart-strengthened lost-ack recovery passes 1.855s,
+tagged vet exits 0. These are worker-reported local results, not independently
+reviewed or public-native adoption. The first complete independent review found
+that native recovery erased an ambiguous reconciliation commit's classification.
+The worker is reproducing/fixing that defect and adding negative signature and
+two-ceremony credential-CAS oracles within the same finite profile. Public-root/
+native publication remains. No M15 closure.
 
 **Newest delivered behavior:** an existing account can enroll and verify a phone
 through the actual reference HTTPS backend: register/email-confirm/signin ->
@@ -99,7 +156,7 @@ M22, not the complete organization family.
 original-registration confirmation routing (`ac96ffd`) are reviewed, main-pushed
 and CI green. Actual public-module PostgreSQL/race proof covers original rename
 recovery after session invalidation and both registration confirmation profiles.
-**Current position (21:37 UTC):** M08 is being implemented, not merely connected:
+**Historical position (21:37 UTC, superseded by delivery above):** M08 was being implemented, not merely connected:
 there was no phone workflow to adopt. Number canonicalization and distinct SMS
 purpose are main-pushed (`5abf389`, workspace correction `b4557a2`, CI green);
 the actual downloaded phone consumer passes. Kernel pending-attachment/CAS and
@@ -130,11 +187,13 @@ thirty-day cooldown and identifier-session invalidation, including lost-COMMIT
 recovery. Leave tombstones only the authenticated member, protects the final
 owner and cannot revive old team bindings after readmission.
 
-**Next acceptance boundary:** complete the selected M08 existing-account journey:
-genuine session/action-bound fresh proof → captured SMS → atomic confirmation →
-durable verified phone, through public owners and opt-in HTTP/reference. Phone
-change/remove/signup, OTP/password signin/reset and privacy remain later M08
-obligations; the first enrollment profile does not close the entire row.
+**Next acceptance boundary:** complete selected M08 phone/password signin:
+verified phone → original canonical-number-bound pre-auth → normal password
+verification/risk/current authority → authenticated session read/logout, with
+browser/persistent remember preserved. This first profile requires native
+known-empty MFA and denies enrolled factors; phone-origin TOTP remains later
+M08 work, never a weaker fallback. Phone change/remove/signup, OTP signin/reset
+and privacy also remain M08 obligations; enrollment does not close the row.
 Recipient invitation listing, OAuth discovery and the username
 reference outcome are closed as selected profiles.
 Organization HTTP/dynamic roles and complete OAuth composition remain separate

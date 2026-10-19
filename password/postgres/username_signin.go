@@ -14,6 +14,13 @@ import (
 )
 
 func (s *SigninService) canonicalSigninIdentifier(ctx context.Context, raw identifier.Input) (string, error) {
+	if s.c.Phone != nil {
+		number, err := s.c.Phone.Canonicalize(ctx, string(raw))
+		if err != nil {
+			return string(raw), err
+		}
+		return number.DeliveryNumber()
+	}
 	if s.c.Username != nil {
 		name, err := s.c.Username.Canonicalize(ctx, string(raw))
 		if err != nil {

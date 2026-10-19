@@ -63,13 +63,13 @@ type signinMFAComposition struct {
 // only a committed continuation. Missing/unsupported factor state denies.
 // The existing NewSigninService remains unchanged. Pool and policy collaborators
 // are borrowed and must outlive bounded concurrent calls. No session is issued
-// before actual second-factor completion. This factory rejects Username; use
+// before actual second-factor completion. This factory rejects Username/Phone; use
 // NewUsernameMFASigninService for that explicitly selected TOTP profile, or
 // NewSigninService for the known-empty-factor username profile.
 func NewMFASigninService(pool *database.Pool, c SigninConfig, m MFAChallengeConfig) (*SigninService, error) {
 	// Keep the existing password factory bound to its original operation. The
 	// separate username factory selects its own immutable challenge provenance.
-	if c.Username != nil {
+	if c.Username != nil || c.Phone != nil {
 		return nil, password.ErrPasswordWork
 	}
 	return newMFASigninService(pool, c, m)

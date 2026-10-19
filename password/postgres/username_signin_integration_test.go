@@ -178,7 +178,7 @@ func testPublicUsernamePasswordSignin(t *testing.T, ctx context.Context, pool *d
 				t.Fatal(err)
 			}
 			if mode == "disconnect-after" {
-				testUsernameSigninLostCommit(t, ctx, pool, config, request)
+				testPasswordSigninLostCommit(t, ctx, pool, config, request)
 				return
 			}
 			originalPolicy := *config.Username
@@ -359,7 +359,7 @@ func testUsernameSigninVerificationHistories(t *testing.T, ctx context.Context, 
 	}
 }
 
-func testUsernameSigninLostCommit(t *testing.T, ctx context.Context, pool *database.Pool, config SigninConfig, request password.SigninRequest) {
+func testPasswordSigninLostCommit(t *testing.T, ctx context.Context, pool *database.Pool, config SigninConfig, request password.SigninRequest) {
 	t.Helper()
 	fault := &signinCommitFault{}
 	faulted, err := database.Connect(ctx, database.Config{DSN: pool.Raw().Config().ConnConfig.ConnString(), MaxConns: 3, Configure: func(c *database.PoolConfig) error { c.ConnConfig.DialFunc = fault.dial; return nil }})
@@ -382,7 +382,7 @@ func testUsernameSigninLostCommit(t *testing.T, ctx context.Context, pool *datab
 		t.Fatal("username commit interruption disclosed credentials or fabricated its outcome")
 	}
 	query, _, err := original.Recovery.Bindings()
-	if err != nil || query.OperationID != "identity.username.signin" {
+	if err != nil || query.OperationID != string(request.Caller.Request.Action) {
 		t.Fatal("username ambiguity lost exact original recovery scope", err)
 	}
 	id, err := base64.RawURLEncoding.Strict().DecodeString(string(query.CommandID))

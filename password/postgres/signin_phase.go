@@ -73,6 +73,9 @@ func (p *signinPhase) ValidateFeatureCommand(c identity.Command, plan kernel.Com
 	if p.validateUsernameFields() != nil {
 		return password.ErrPasswordWork
 	}
+	if p.operation.OperationID == "identity.phone.password-signin" && p.factorVersion == 0 {
+		return password.ErrPasswordWork
+	}
 	scope := p.admission.Prepared().Scope
 	if scope.Tenant != string(f.Binding.TenantID) || scope.Operation != risk.Action(f.Binding.OperationID) || scope.Attempt != string(f.Binding.CommandID) || p.request.TenantID != f.Binding.TenantID {
 		return password.ErrPasswordWork
@@ -275,7 +278,7 @@ func (p *signinPhase) RecoverParticipant(ctx context.Context, w kernel.RecoveryW
 		return kernel.RecoveryUnknown, password.ErrPasswordWork
 	}
 	b, f, transition, err := w.FeatureScope(p)
-	if err != nil || f.Operation != p.operation || (f.Operation.OperationID != "identity.password.signin" && f.Operation.OperationID != "identity.username.signin") || transition.EventType != "session.created.v1" || transition.BeforeVersion != 0 || transition.AfterVersion != 0 {
+	if err != nil || f.Operation != p.operation || (f.Operation.OperationID != "identity.password.signin" && f.Operation.OperationID != "identity.username.signin" && f.Operation.OperationID != "identity.phone.password-signin") || transition.EventType != "session.created.v1" || transition.BeforeVersion != 0 || transition.AfterVersion != 0 {
 		return kernel.RecoveryUnknown, password.ErrPasswordWork
 	}
 	effect, err := p.effect.Recover(ctx, w, p)

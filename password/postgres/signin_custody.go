@@ -106,7 +106,7 @@ func admitSigninFlow(r password.SigninRequest, flow session.PreAuthTransaction, 
 	action := string(r.Caller.Request.Action)
 	actualRemember, rememberErr := r.Remember.Bindings()
 	originalRemember, originalErr := i.Remember.Bindings()
-	if b.ID != r.PreAuthID || i.TenantID != r.TenantID || (action != "identity.password.signin" && action != "identity.username.signin") || i.Action != action || i.Origin != r.Origin || i.CallbackURL != r.CallbackURL || i.PolicyID != policyID || i.PolicyVersion != policyVersion || rememberErr != nil || originalErr != nil || actualRemember != originalRemember {
+	if b.ID != r.PreAuthID || i.TenantID != r.TenantID || (action != "identity.password.signin" && action != "identity.username.signin" && action != "identity.phone.password-signin") || i.Action != action || i.Origin != r.Origin || i.CallbackURL != r.CallbackURL || i.PolicyID != policyID || i.PolicyVersion != policyVersion || rememberErr != nil || originalErr != nil || actualRemember != originalRemember {
 		return password.ErrPasswordWork
 	}
 	token, err := session.ParseToken(r.Cookie.Token())

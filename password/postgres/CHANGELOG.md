@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Select phone/password signin independently of email/username, retaining the
+  canonical-number commitment in original pre-auth before discovery or password
+  work. Resolve only the exact verified phone recipient and require known-empty
+  native factor authority; phone-origin MFA continuation is not selected yet.
+  Install the forward completed-record and session-purpose suffixes against
+  exact predecessor histories. Preserve remember, atomic rehash, original
+  metadata-only recovery and ordinary session read/logout through existing owners.
+
 - Authenticate original phone enrollment destination and issued challenge
   lifetime for shared transport admission without creating a command mapping,
   consuming proof/code, charging an attempt or renewing retained validity.

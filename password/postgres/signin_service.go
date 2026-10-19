@@ -27,6 +27,7 @@ import (
 	email "github.com/faustbrian/go-identity/email"
 	mfapg "github.com/faustbrian/go-identity/mfa/postgres"
 	password "github.com/faustbrian/go-identity/password"
+	phone "github.com/faustbrian/go-identity/phone"
 	kernel "github.com/faustbrian/go-identity/postgres"
 	"github.com/faustbrian/go-identity/risk"
 	"github.com/faustbrian/go-identity/session"
@@ -52,7 +53,10 @@ import (
 type SigninConfig struct {
 	// Username selects exact username signin. Nil retains email signin. This
 	// profile requires verified email and known-empty native MFA state.
-	Username                      *username.Policy
+	Username *username.Policy
+	// Phone selects distinct canonical phone/password signin. It is mutually
+	// exclusive with Username and requires original identifier-bound pre-auth.
+	Phone                         *phone.NumberPolicy
 	Repository                    Config
 	Verifier                      password.VerifierConfig
 	Session                       sessionpg.Config
@@ -97,6 +101,13 @@ var _ password.SigninService = (*SigninService)(nil)
 // authorization, password, pre-auth, session/CSRF, audit and lifecycle histories
 // before use. Zero, absent keys and inconsistent profiles return ErrPasswordWork.
 func NewSigninService(pool *database.Pool, c SigninConfig) (*SigninService, error) {
+	if c.Phone != nil {
+		if c.Username != nil || c.Phone.Profile() != phone.CurrentNumberProfile() {
+			return nil, password.ErrPasswordWork
+		}
+		snapshot := *c.Phone
+		c.Phone = &snapshot
+	}
 	if c.Username != nil && c.Username.ReservedVersion() == 0 {
 		return nil, password.ErrPasswordWork
 	}
@@ -208,6 +219,9 @@ func (s *SigninService) operation() identity.FeatureOperation {
 	if s.c.Username != nil {
 		op.Owner, op.OperationID, op.SchemaID = "identity/username", "identity.username.signin", "username-signin"
 	}
+	if s.c.Phone != nil {
+		op.Owner, op.OperationID, op.SchemaID = "identity/phone", "identity.phone.password-signin", "phone-password-signin"
+	}
 	return op
 }
 
@@ -284,7 +298,15 @@ func (s *SigninService) Signin(ctx context.Context, r password.SigninRequest) (o
 		if s.c.Username != nil {
 			usernameRecord, recipient, err = s.resolveUsernameSignin(ctx, r.TenantID, canonical)
 		} else {
-			recipient, err = s.domain.ResolveRecipient(ctx, kernel.RecipientQuery{TenantID: r.TenantID, Kind: identity.IdentifierEmail, CanonicalValue: canonical, Eligibility: kernel.RecipientVerified})
+			kind := identity.IdentifierEmail
+			query := kernel.RecipientQuery{TenantID: r.TenantID, Eligibility: kernel.RecipientVerified, CanonicalValue: canonical}
+			if s.c.Phone != nil {
+				kind = identity.IdentifierPhone
+				profile := s.c.Phone.Profile()
+				query.NormalizationProfile, query.NormalizationVersion = profile.ID, profile.Version
+			}
+			query.Kind = kind
+			recipient, err = s.domain.ResolveRecipient(ctx, query)
 		}
 		if err != nil {
 			return out, readerFailure(ctx)
@@ -309,12 +331,12 @@ func (s *SigninService) Signin(ctx context.Context, r password.SigninRequest) (o
 	}
 	var factorVersion uint64
 	var challengeRequired bool
-	if s.mfa != nil || s.c.Username != nil {
+	if s.mfa != nil || s.c.Username != nil || s.c.Phone != nil {
 		factorVersion, challengeRequired, err = mfapg.ReadPasswordSigninFactors(ctx, s.pool, r.TenantID, selected, s.c.Repository.MaximumDuration)
 		if err != nil {
 			return out, err
 		}
-		if s.c.Username != nil && s.mfa == nil && challengeRequired {
+		if (s.c.Username != nil || s.c.Phone != nil) && s.mfa == nil && challengeRequired {
 			return out, identity.ForbiddenError{}
 		}
 	}
@@ -458,6 +480,9 @@ func (s *SigninService) flow(ctx context.Context, r password.SigninRequest) (ses
 	for _, key := range s.c.FlowKeys {
 		digest, err := probe.PreAuthDigest(key, spec.Binding)
 		if err == nil && digest.KeyVersion == spec.Cookie.KeyVersion && admitSigninFlow(r, flow, key, s.c.PolicyID, s.c.Coordinator.AdmissionPolicy.PolicyVersion, s.c.Issuance.Clock.Now()) == nil {
+			if s.c.Phone != nil && s.requirePhoneSigninTarget(ctx, r, flow) != nil {
+				return session.PreAuthTransaction{}, session.DigestKey{}, identity.ForbiddenError{}
+			}
 			return flow, key, nil
 		}
 	}

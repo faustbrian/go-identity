@@ -44,7 +44,7 @@ func (r *Repository) SignInAuthentication(ctx context.Context, id auth.ProofID) 
 CASE WHEN octet_length(p.record)<=$2 THEN p.record ELSE ''::bytea END
 FROM identity_password.signin_records p
 JOIN identity.commands c USING(tenant_id,purpose,command_id)
-WHERE p.proof_id=$1 AND p.purpose IN('identity.password.signin','identity.username.signin') AND c.state='committed' LIMIT 2`, string(id), maximumSigninRecordBytes)
+WHERE p.proof_id=$1 AND p.purpose IN('identity.password.signin','identity.username.signin','identity.phone.password-signin') AND c.state='committed' LIMIT 2`, string(id), maximumSigninRecordBytes)
 	if err != nil {
 		return auth.SignedSignInRecord{}, readerFailure(bounded)
 	}
