@@ -30,8 +30,20 @@ type identifierRemovalCascadePolicy struct {
 }
 
 func freezeIdentifierRemovalCascade(c IdentifierRemovalCascadeConfig) (*identifierRemovalCascadePolicy, error) {
+	return freezeIdentifierCascade(c, "identity-identifier-removal-policy-v1", identity.IdentifierRemovalConsumers())
+}
+
+// IdentifierChangeCascadeConfig uses the same bounded consumer-policy shape as
+// removal. Its definition is separately purpose-bound; retain a distinct policy
+// version when both definitions share one tenant's policy namespace.
+type IdentifierChangeCascadeConfig = IdentifierRemovalCascadeConfig
+
+func freezeIdentifierChangeCascade(c IdentifierChangeCascadeConfig) (*identifierRemovalCascadePolicy, error) {
+	return freezeIdentifierCascade(c, "identity-identifier-change-policy-v1", identity.IdentifierChangeConsumers())
+}
+
+func freezeIdentifierCascade(c IdentifierRemovalCascadeConfig, profile string, ids []string) (*identifierRemovalCascadePolicy, error) {
 	invalid := func() (*identifierRemovalCascadePolicy, error) { return nil, invalidEmailRemoval() }
-	ids := identity.IdentifierRemovalConsumers()
 	if c.PolicyVersion == 0 || len(c.Reasons) == 0 || len(c.Reasons) > 32 || c.MaximumDuration <= 0 || c.MaximumDuration > 87600*time.Hour || c.MaximumDuration%time.Microsecond != 0 || len(c.ConsumerContracts) != len(ids) {
 		return invalid()
 	}
@@ -54,7 +66,7 @@ func freezeIdentifierRemovalCascade(c IdentifierRemovalCascadeConfig) (*identifi
 		encoded = append(encoded, cborMap(map[string][]byte{"id": cborText(id), "version": cborUint(uint64(contract.Version)), "fingerprint": cborBytes(contract.Fingerprint[:])}))
 	}
 	c.ConsumerContracts = contracts
-	definition := cborMap(map[string][]byte{"profile": cborText("identity-identifier-removal-policy-v1"), "manifest": cborText("identity-lifecycle-consumers-v1"), "consumers": cborArray(encoded), "reasons": cborArray(reasons), "duration": cborUint(uint64(c.MaximumDuration))})
+	definition := cborMap(map[string][]byte{"profile": cborText(profile), "manifest": cborText("identity-lifecycle-consumers-v1"), "consumers": cborArray(encoded), "reasons": cborArray(reasons), "duration": cborUint(uint64(c.MaximumDuration))})
 	return &identifierRemovalCascadePolicy{config: c, definition: definition}, nil
 }
 
@@ -68,7 +80,11 @@ func admitIdentifierRemovalCascade(ctx context.Context, w Work) error {
 		return w.fail(ctx, invalidEmailRemoval())
 	}
 	b, event, policy := w.state.binding, w.state.lifecycle.record, p.domain.cascade
-	if event.CommandID != b.CommandID || event.EventType != "identifier.removed.v1" || event.SubjectID != b.RecordID || !slices.Contains(policy.config.Reasons, p.intent.Reason) {
+	kind, eventType, consumers := identity.IdentifierRemovalCascade, "identifier.removed.v1", identity.IdentifierRemovalConsumers()
+	if w.state.feature.Operation == phoneChangeOperation() {
+		kind, eventType, consumers = identity.IdentifierChangeCascade, "identifier.changed.v1", identity.IdentifierChangeConsumers()
+	}
+	if event.CommandID != b.CommandID || event.EventType != eventType || event.SubjectID != b.RecordID || !slices.Contains(policy.config.Reasons, p.intent.Reason) {
 		return w.fail(ctx, invalidEmailRemoval())
 	}
 	version := strconv.FormatUint(policy.config.PolicyVersion, 10)
@@ -114,15 +130,15 @@ func admitIdentifierRemovalCascade(ctx context.Context, w Work) error {
 	if err != nil {
 		return w.fail(ctx, invalidEmailRemoval())
 	}
-	count, err := w.Exec(ctx, `INSERT INTO identity.status_cascades(cascade_id,tenant_id,user_id,command_id,command_key,operation,generation,manifest_version,policy_version,authority_version,aggregate_version,trigger_event_id,trigger_event_type,trigger_schema_version,requested_at,deadline,legal_hold,legal_hold_version,state,cascade_kind,authority_dimension,identifier_id) VALUES($1,$2,$3,$4,$5,$6,1,'identity-lifecycle-consumers-v1',$7::numeric,$8::numeric,$9::numeric,$10,'identifier.removed.v1',1,$11,$12,$13,$14::numeric,'pending','lifecycle.cascade.identifier_remove','identifier',$15)`, string(id), string(b.TenantID), string(b.UserID), string(b.CommandID), key, b.OperationID, version, p.mutation.State.AuthorityVersion, p.mutation.State.User.Version, event.ID, now, deadline, hold, holdVersion, b.RecordID)
+	count, err := w.Exec(ctx, `INSERT INTO identity.status_cascades(cascade_id,tenant_id,user_id,command_id,command_key,operation,generation,manifest_version,policy_version,authority_version,aggregate_version,trigger_event_id,trigger_event_type,trigger_schema_version,requested_at,deadline,legal_hold,legal_hold_version,state,cascade_kind,authority_dimension,identifier_id) VALUES($1,$2,$3,$4,$5,$6,1,'identity-lifecycle-consumers-v1',$7::numeric,$8::numeric,$9::numeric,$10,$16,1,$11,$12,$13,$14::numeric,'pending',$17,'identifier',$15)`, string(id), string(b.TenantID), string(b.UserID), string(b.CommandID), key, b.OperationID, version, p.mutation.State.AuthorityVersion, p.mutation.State.User.Version, event.ID, now, deadline, hold, holdVersion, b.RecordID, eventType, string(kind))
 	if err != nil {
 		return err
 	}
 	if count != 1 {
 		return w.fail(ctx, identity.ConflictError{})
 	}
-	receipt := identity.LifecycleCascadeAdmission{CascadeID: id, Generation: 1, Kind: identity.IdentifierRemovalCascade, TenantID: b.TenantID, UserID: b.UserID, IdentifierID: identity.IdentifierID(b.RecordID), AuthorityVersion: p.mutation.State.AuthorityVersion, ManifestVersion: "identity-lifecycle-consumers-v1", Status: identity.RevocationPending}
-	for n, consumer := range identity.IdentifierRemovalConsumers() {
+	receipt := identity.LifecycleCascadeAdmission{CascadeID: id, Generation: 1, Kind: kind, TenantID: b.TenantID, UserID: b.UserID, IdentifierID: identity.IdentifierID(b.RecordID), AuthorityVersion: p.mutation.State.AuthorityVersion, ManifestVersion: "identity-lifecycle-consumers-v1", Status: identity.RevocationPending}
+	for n, consumer := range consumers {
 		contract := policy.config.ConsumerContracts[consumer]
 		count, err := w.Exec(ctx, `INSERT INTO identity.status_consumers(tenant_id,cascade_id,ordinal,consumer_id,contract_version,contract_fingerprint,state) VALUES($1,$2,$3,$4,$5,$6,'pending')`, string(b.TenantID), string(id), n, consumer, uint64(contract.Version), contract.Fingerprint[:])
 		if err != nil {
@@ -150,6 +166,8 @@ func identifierRemovalProgressFor(w Work) *emailRemovalProgress {
 		return w.state.emailRemoval
 	case phoneRemovalOperation():
 		return w.state.phoneRemoval
+	case phoneChangeOperation():
+		return w.state.phoneChange
 	default:
 		return nil
 	}

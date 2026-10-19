@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Add the exact consuming verified-phone replacement transition: lock the
+  original target before OTP metering, atomically retire its old value and
+  persist the verified successor, and admit a pending identifier-change cascade.
+  Install the forward phone-change cascade constraint migration before selecting
+  this profile. Genuine proof/session/recovery/risk and OTP/delivery orchestration
+  remain the native workflow owners' responsibility; no route is enabled.
+
 - Add exact typed phone-removal admission, directory/tombstone CAS and pending
   identifier-removal cascade through the existing coordinator. Install the
   forward cascade constraint suffix without rewriting existing email/status

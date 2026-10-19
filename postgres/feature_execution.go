@@ -101,6 +101,14 @@ func validateFeatureCommand(phase FeatureExecutionContributor, command identity.
 		_, _, err := phoneRemovalCommand(p, command, plan)
 		return err
 	}
+	if plan.Feature != nil && plan.Feature.Operation == phoneChangeOperation() {
+		p, ok := phase.(PhoneChangeContributor)
+		if !ok {
+			return invalidPhoneChange()
+		}
+		_, _, err := phoneChangeCommand(p, command, plan)
+		return err
+	}
 	if plan.Feature != nil && plan.Feature.Operation == usernameRenameOperation() {
 		p, ok := phase.(UsernameRenameContributor)
 		if !ok {
@@ -235,6 +243,11 @@ func (r *ContributorRegistry) admitFeaturePlanMode(b identity.CommandBinding, fi
 	}
 	if p.Feature.Operation == phoneRemovalOperation() {
 		if _, ok := feature.contributor.(PhoneRemovalContributor); !ok {
+			return nil, invalidPlan()
+		}
+	}
+	if p.Feature.Operation == phoneChangeOperation() {
+		if _, ok := feature.contributor.(PhoneChangeContributor); !ok {
 			return nil, invalidPlan()
 		}
 	}
@@ -654,6 +667,11 @@ func (c *Coordinator) ApplyFeature(ctx context.Context, w Work, command identity
 			return result, e
 		}
 	}
+	if p.feature.Operation == phoneChangeOperation() {
+		if e := preparePhoneChange(ctx, w, command); e != nil {
+			return result, e
+		}
+	}
 	if otpEmailMutationOperation(p.feature.Operation) {
 		if e := prepareManagedEmailVerification(ctx, w, command); e != nil {
 			return result, e
@@ -751,6 +769,11 @@ func (c *Coordinator) ApplyFeature(ctx context.Context, w Work, command identity
 			return result, e
 		}
 	}
+	if w.state.phoneChange != nil {
+		if e := applyPhoneChange(ctx, w); e != nil {
+			return result, e
+		}
+	}
 	if w.state.managedEmailVerification != nil {
 		if e := applyManagedEmailVerification(ctx, w); e != nil {
 			return result, e
@@ -769,7 +792,7 @@ func (c *Coordinator) ApplyFeature(ctx context.Context, w Work, command identity
 		return result, e
 	}
 	result = identity.CommandResult{Binding: p.binding, Outcome: identity.CommitOutcomeCommitted, AuditEventID: success[0].ID(), Feature: &receipt}
-	if p.feature.Operation == emailRemovalOperation() || p.feature.Operation == phoneRemovalOperation() {
+	if p.feature.Operation == emailRemovalOperation() || p.feature.Operation == phoneRemovalOperation() || p.feature.Operation == phoneChangeOperation() {
 		if e := admitIdentifierRemovalCascade(ctx, w); e != nil {
 			return identity.CommandResult{}, e
 		}

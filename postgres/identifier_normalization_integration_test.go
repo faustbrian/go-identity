@@ -205,7 +205,8 @@ INSERT INTO identity.identifiers(tenant_id,user_id,identifier_id,kind,canonical_
 	}
 	// Authentication discovery additionally requires the real status and
 	// credential epochs, not defaults inferred from absent authority storage.
-	authorities, err := migrations.NewRunner(CredentialMigrationSource{Base: StatusMigrationSource{Base: retirementSource, Version: 12}, Version: 13}, backend)
+	authoritySource := CredentialMigrationSource{Base: StatusMigrationSource{Base: retirementSource, Version: 12}, Version: 13}
+	authorities, err := migrations.NewRunner(authoritySource, backend)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -216,4 +217,16 @@ INSERT INTO identity.identifiers(tenant_id,user_id,identifier_id,kind,canonical_
 	t.Run("username-native-rename", func(t *testing.T) { testUsernameRenamePostgres(t, ctx, pool, repository) })
 	t.Run("phone-native-enrollment", func(t *testing.T) { testPhoneEnrollmentPostgres(t, ctx, pool, repository) })
 	t.Run("phone-native-verification", func(t *testing.T) { testPhoneVerificationPostgres(t, ctx, pool, repository) })
+	cascadeSource := PhoneChangeCascadeMigrationSource{Base: PhoneRemovalCascadeMigrationSource{Base: IdentifierRemovalCascadeMigrationSource{Base: authoritySource, Version: 14}, Version: 15}, Version: 16}
+	cascades, err := migrations.NewRunner(cascadeSource, backend)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := cascades.Up(ctx); err != nil {
+		t.Fatal("populated phone change cascade upgrade", err)
+	}
+	if _, err := cascades.Up(ctx); err != nil {
+		t.Fatal("phone change cascade migration replay", err)
+	}
+	t.Run("phone-native-change", func(t *testing.T) { testPhoneChangePostgres(t, ctx, pool, repository) })
 }

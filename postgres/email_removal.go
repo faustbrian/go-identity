@@ -273,8 +273,9 @@ func applyEmailRemoval(ctx context.Context, w Work) error {
 	return applyIdentifierRemoval(ctx, w, w.state.emailRemoval)
 }
 
-// Both admitted removal owners use the one directory CAS and retirement writer.
-// Each owner must prepare its typed target before this private shared mutation.
+// Admitted identifier-lifecycle owners use the one CAS and retirement writer.
+// Each must prepare its exact typed target before this private shared mutation;
+// the computed mutation, not the historical helper name, selects replacement.
 func applyIdentifierRemoval(ctx context.Context, w Work, p *emailRemovalProgress) error {
 	if p == nil || p.applied {
 		return w.fail(ctx, invalidEmailRemoval())

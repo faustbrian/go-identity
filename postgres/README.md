@@ -192,6 +192,30 @@ establishment. Both authenticate the original change and independent Send;
 Initial establishment requires the original sole verified predecessor and no
 primary, preserves the old row's versions and cannot reinterpret a generic add.
 
+### Native verified-phone replacement
+
+`NewPhoneChangeDomain` selects the existing directory/recycling owner and a
+purpose-bound `IdentifierChangeCascadeConfig`. Retain a distinct policy version
+from removal when both are installed in the same tenant. Apply
+`PhoneChangeCascadeMigrationSource` after its phone-removal predecessor and all
+other selected migrations before enabling replacement.
+
+The exact `identity.phone.update.native-v1` participant must implement
+`PhoneChangeContributor`, preserve both numbers/profile bindings and original
+send custody in `PhoneChangeFields`, and use `RequirePhoneChangeTarget` during
+input admission before any OTP comparison or debit. The sole coordinator applies
+one versioned verified replacement, retires the old canonical value under the
+existing keyed cooldown policy, and admits ten **pending** identifier-change
+consumers. It never acknowledges downstream cleanup or creates a second journal.
+Only this Work's own persisted successor can advance OTP's final identifier
+expectation. Historical recovery cannot infer success from today's directory.
+
+The actual native phone owner must still prove new-number OTP possession,
+recent action-bound authentication, current session/factors/risk, independent
+recovery, session effects and the encrypted old-number notification in the same
+transaction. This directory extension is not that workflow or an HTTP route;
+ordinary replacement and existing enrollment/removal semantics are unchanged.
+
 ### Native safe removal
 
 Administrative intents additionally freeze `EmailRemovalAdministration` with the

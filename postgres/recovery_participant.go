@@ -210,6 +210,9 @@ func (r *Repository) RecoverParticipant(ctx context.Context, recovery RecoveryWo
 	}
 	b, err := recovery.Scope()
 	if err == nil && recovery.state.plan.feature != nil {
+		if recovery.state.plan.feature.Operation == phoneChangeOperation() {
+			return recoverPhoneChange(ctx, recovery)
+		}
 		if recovery.state.plan.feature.Operation == phoneVerificationOperation() {
 			return recoverPhoneVerification(ctx, recovery)
 		}

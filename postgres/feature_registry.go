@@ -101,6 +101,12 @@ func (s *contributorRegistryState) registerFeatures(index int) error {
 // this exception to the exact existing adapter and closed paired-custody tuples;
 // no arbitrary cross-owner operation, schema or future version is admitted.
 func featureContributorOwns(d ContributorDescriptor, op identity.FeatureOperation) bool {
+	// Reserve the operation before generic same-owner registration. An unknown
+	// schema must not skip the typed replacement/OTP/cascade path and report
+	// success as a generic feature with no identifier mutation.
+	if op.OperationID == "identity.phone.update" {
+		return op == phoneChangeOperation() && d == (ContributorDescriptor{Owner: "identity/phone/postgres", ContractID: "identity.phone", Version: 1})
+	}
 	// Phone owns this workflow, but the existing OTP participant exclusively
 	// owns its counted attempt and consuming transaction. Do not admit a second
 	// phone storage engine or a generic cross-owner delegation.

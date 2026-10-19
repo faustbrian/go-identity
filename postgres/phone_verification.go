@@ -270,6 +270,9 @@ func otpPhoneVerificationCredential(w Work, b identity.CommandBinding, original 
 }
 
 func otpMutationCredential(w Work, b identity.CommandBinding, original CredentialAdmission) (CredentialAdmission, error) {
+	if w.state != nil && w.state.feature != nil && w.state.feature.Operation == phoneChangeOperation() {
+		return otpPhoneChangeCredential(w, b, original)
+	}
 	if w.state != nil && w.state.feature != nil && w.state.feature.Operation == phoneVerificationOperation() {
 		return otpPhoneVerificationCredential(w, b, original)
 	}
