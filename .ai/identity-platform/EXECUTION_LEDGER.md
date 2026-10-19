@@ -42,6 +42,59 @@ Latest affected constructor/target regression pass: phone race1.357s and kernel
 phone/change/removal/enrollment/verification/cascade race1.218s. No genuine
 phone-replacement transaction or consumer is claimed by those unit results.
 
+2026-10-19 10:16 UTC: root/phone request contracts delivered at cb4384b (Required
+39235977563 SUCCESS); downloaded root matches all174 committed files. Native
+directory apply, retirement, pending change cascade and negative recovery now
+pass actual PG/race1.985s; this deliberately synthetic OTP fixture proves kernel
+storage/order, not genuine phone authentication. Final native race3.925s/tagged
+vet/planning/changed-input secrets pass. Independent complete29 review approved
+f7ce51d4 after fixing an unsupported-schema generic fallback: actual registry and
+receipt regressions failed before the operation was reserved. No extra review
+factory or tooling programme. Native public-root repin/publication is pending;
+OTP issuance/consumption, fresh update proof, recovery/session/notice workflow and
+HTTP/reference remain the next implementation, not a completed M08 profile.
+
+2026-10-19 10:27 UTC: native directory prerequisite33871a2 is pushed to main;
+Required39236952770 SUCCESS. Native20 publication addendum2ce7a743 APPROVE,
+reconstructing the exact original29 approval. Against actual public root with
+GOWORKoff: native full race3.924s, populated PG/race1.799s, tagged readonly vet
+exit0 and module verification pass; planning/changed-input secrets pass. Actual
+public native v0.0.0-20261019102154-33871a282ea4 has exact origin and all465 files
+match its committed source; phone@cb4384b likewise23 files. Native sum
+h1:DH3o7G+Cy88vOhPVSPNu0DxY8zCzdnMiuU/Rkx5+EEA=.
+No redundant runtime rerun for byte-identical downloaded storage code. Genuine
+OTP/proof workflow adoption remains next. Completion request now requires a
+separate identity.phone.update proof bound to the original send session; absent
+API RED then focused green0.277s. That new request code is local, not reviewed or
+delivered. No new profile/milestone credit for this contract or storage boundary.
+
+## Parallel M22 — authorized static member-role update
+
+Next worker assignment: go-organization root and postgres only, main51f98f3;
+no shared identity/session/risk/capability changes, Git operations or children.
+Consume existing committed genuine-session member admission/removal, owner
+transfer, organization policy epochs and scoped authority fences. Freeze one
+native public-API outcome: authorized owner/administrator updates an exact active
+member's static role; resulting permission checks use the new authoritative role
+and version, with last-owner/recovery-administrator safety, no escalation by an
+administrator and no unknown-role grants. Exact original retry/code-free unknown
+recovery, current actor/session/target fences, canonical audit/lifecycle, rollback,
+role-update/removal/owner-transfer contention and tenant isolation are required.
+Read the complete organization goals and precise member.update catalog in one
+bounded pass; report missing upstream authority instead of substituting it.
+Exclude dynamic roles, metadata, invitations, domain claims and HTTP/reference
+from this profile. Existing static roles remain compatible; do not silently
+rewrite policies or public Role values. Focused TDD/root/native checks, real
+genuine-session PostgreSQL consumer and affected compatibility checks; heavy
+runs require primary coordination. Primary owns aggregate notes, integration,
+independent final-diff review and main delivery. This is not full M22/M23 closure.
+
+First worker boundary: core absent-API RED, complete root green0.252s; native
+implementation underway. Static owners remain recovery-capable administrators
+per existing delivered contract; owner-transfer remains a distinct proof-bound
+exchange. Exact self-demotion historical recovery follows existing owner-transfer
+current-membership/session/query-policy checks, not renewed mutation authority.
+
 ## Parallel M22 — recipient-owned invitation rejection
 
 Worker owns only `/Users/brian/Developer/golib/go-organization` root and postgres
@@ -100,6 +153,26 @@ Exclude resend, roles, HTTP/reference and shared identity changes. No Git or
 children; primary retains source/public-pin review, publication and integration.
 Coordinate heavy runs; retain only resources needed for the bounded review/
 public-consumer continuation until primary confirms cleanup, not indefinitely.
+
+2026-10-19 10:16 UTC: selected explicit native expiry CLOSED. Root a2f65b2 and
+native 51f98f3 are on origin/main, Required39235179590/39235831361 SUCCESS.
+Complete21 review approved54536b91; native publication-pin addendum3f5ae778
+approved after authentic public-root adoption. The sole reason-fingerprint oracle
+finding was corrected with one frozen-session mapping test; exact omission fails,
+production restored byte-identically. Genuine expiry race12.490s and retained
+invitation consumers22.677s pass. GOWORKoff public-root native PG/race13.994s,
+ordinary race1.348s, tagged vet and module verification pass. Public native
+v0.0.0-20261019101245-51f98f323382 matches all55 immutable files; root53 likewise.
+Independent example.com/organization-expiry-consumer with no replacements and
+unchanged external public fixtures passes actual PG/race13.030s, including old
+proof denial, natural expired1 versus terminal expired2, rollback, contention,
+lost-COMMIT recovery and current administrator withdrawal. Public module sum
+h1:TdpgaTzLUGe9xqVQ3jZG+T5xEcV52F4ep2r9RTkx79s=.
+Apply the forward expiry migration before enabling it. HTTP/reference, resend,
+remaining organization lifecycle and whole M22/qualification remain open.
+Risk prerequisite23c09bf is also main-pushed/Required39232512699 green/public;
+its exact protected classification preserves signals, scoped counters and all
+separate organization authority. No full milestone/unit was newly counted.
 
 ## Parallel native WebAuthn discoverable-credential lane
 

@@ -1,6 +1,6 @@
 # Identity Platform Progress
 
-## TL;DR — updated 2026-10-19 09:32 UTC
+## TL;DR — updated 2026-10-19 10:27 UTC
 
 **Estimated whole-goal completion: approximately 20%, with low confidence.**
 **Consumer milestones: 8/39 closed** (20.5% unweighted); full scope remains
@@ -13,6 +13,14 @@ queued work is not counted as delivered.
 This is an effort/scope estimate, not a measured percentage or an ETA.
 M10's existing confirmed-TOTP enrollment/signin consumer is now counted after
 source/acceptance reconciliation; this corrects a stale row, not new development.
+
+**Newly delivered organization profile:** authorized administrators can explicitly
+expire an invitation with a registered reason, before or after its deadline.
+Terminal expired2 invalidates the original proof; natural expired1 stays a
+projection. Root `a2f65b2` and native `51f98f3` are reviewed, pushed and CI-green.
+A separate downloaded-module consumer passes real PostgreSQL/race expiry,
+including rollback, contention and lost-commit recovery (13.030s). Apply the
+forward expiry migration before enabling it. M22 and HTTP/reference remain open.
 
 **Newly delivered organization profile:** the intended verified recipient can
 reject an invitation without membership or bearer proof. Durable rejection
@@ -27,8 +35,14 @@ the remaining M22 lifecycle remain open; this is not a new full milestone.
 **Active implementation:** verified-phone replacement, from authenticated
 new-number SMS to atomic replacement, old-number denial and retained recovery.
 Its compound directory transition and exact request/consuming-plan contracts
-are coded and unit/race tested; native persistence/OTP orchestration and the
-HTTP/reference consumer are still pending. No delivery is counted for it yet.
+are reviewed and root/phone contracts are pushed at `cb4384b`, with green CI.
+Native CAS/retirement/pending-cascade storage is reviewed and main-pushed at
+`33871a2`, with green Required CI and a byte-matched public artifact. Real
+PostgreSQL/race proves the directory prerequisite, not genuine phone possession.
+Actual OTP/proof/session/recovery orchestration and HTTP/reference remain pending.
+No phone-replacement profile is counted as delivered yet. The independent
+organization worker is implementing static member-role updates; no shared phone
+files are assigned to it.
 
 **Newly delivered M08 profile — phone self-removal:** fresh action-bound proof
 removes the verified phone atomically with its retirement, pending cascade and
