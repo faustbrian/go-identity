@@ -219,6 +219,9 @@ func (r *Repository) RecoverParticipant(ctx context.Context, recovery RecoveryWo
 		if recovery.state.plan.feature.Operation == emailRemovalOperation() {
 			return recoverEmailRemoval(ctx, recovery)
 		}
+		if recovery.state.plan.feature.Operation == phoneRemovalOperation() {
+			return recoverPhoneRemoval(ctx, recovery)
+		}
 		if managedEmailConfirmationOperation(recovery.state.plan.feature.Operation) || otpEmailMutationOperation(recovery.state.plan.feature.Operation) {
 			return recoverManagedEmailVerification(ctx, recovery)
 		}

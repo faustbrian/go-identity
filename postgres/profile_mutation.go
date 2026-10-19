@@ -204,6 +204,9 @@ func matchesDomainResult(w Work, result identity.CommandResult) bool {
 		if w.state.feature.Operation == emailRemovalOperation() && (w.state.emailRemoval == nil || !w.state.emailRemoval.applied || !matchesEmailRemovalCascade(result.Cascade, w.state.emailRemoval.cascade) || result.Feature == nil || result.Feature.BeforeVersion != w.state.execution.reservation.plan.lifecycle.BeforeVersion || result.Feature.AfterVersion != w.state.execution.reservation.plan.lifecycle.AfterVersion) {
 			return false
 		}
+		if w.state.feature.Operation == phoneRemovalOperation() && (w.state.phoneRemoval == nil || !w.state.phoneRemoval.applied || !matchesEmailRemovalCascade(result.Cascade, w.state.phoneRemoval.cascade) || result.Feature == nil || result.Feature.BeforeVersion != w.state.execution.reservation.plan.lifecycle.BeforeVersion || result.Feature.AfterVersion != w.state.execution.reservation.plan.lifecycle.AfterVersion) {
+			return false
+		}
 		if (managedEmailConfirmationOperation(w.state.feature.Operation) || otpEmailMutationOperation(w.state.feature.Operation)) && (w.state.managedEmailVerification == nil || !w.state.managedEmailVerification.applied || result.Feature == nil || result.Feature.BeforeVersion != w.state.execution.reservation.plan.lifecycle.BeforeVersion || result.Feature.AfterVersion != w.state.execution.reservation.plan.lifecycle.AfterVersion) {
 			return false
 		}

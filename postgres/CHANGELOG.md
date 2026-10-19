@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add exact typed phone-removal admission, directory/tombstone CAS and pending
+  identifier-removal cascade through the existing coordinator. Install the
+  forward cascade constraint suffix without rewriting existing email/status
+  histories; no downstream cleanup acknowledgement is fabricated.
+
 - Bind the closed phone SMS-code signin profile exclusively to the existing
   native OTP participant. Alternate owners, schema versions and record profiles
   cannot replace its consuming transaction; generic OTP/password ownership stays

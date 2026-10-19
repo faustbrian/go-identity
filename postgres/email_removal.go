@@ -270,7 +270,12 @@ func prepareEmailRemoval(ctx context.Context, w Work, c identity.Command) error 
 }
 
 func applyEmailRemoval(ctx context.Context, w Work) error {
-	p := w.state.emailRemoval
+	return applyIdentifierRemoval(ctx, w, w.state.emailRemoval)
+}
+
+// Both admitted removal owners use the one directory CAS and retirement writer.
+// Each owner must prepare its typed target before this private shared mutation.
+func applyIdentifierRemoval(ctx context.Context, w Work, p *emailRemovalProgress) error {
 	if p == nil || p.applied {
 		return w.fail(ctx, invalidEmailRemoval())
 	}
@@ -282,11 +287,15 @@ func applyEmailRemoval(ctx context.Context, w Work) error {
 }
 
 func recoverEmailRemoval(ctx context.Context, w RecoveryWork) (RecoveryStatus, error) {
+	return recoverIdentifierRemoval(ctx, w, "email")
+}
+
+func recoverIdentifierRemoval(ctx context.Context, w RecoveryWork, kind string) (RecoveryStatus, error) {
 	b, err := w.Scope()
 	if err != nil || w.state.plan.lifecycle == nil {
 		return RecoveryUnknown, invalidEmailRemoval()
 	}
-	rows, err := w.Query(ctx, `SELECT EXISTS(SELECT 1 FROM identity.identifiers i WHERE i.tenant_id=$1 AND i.user_id=$2 AND i.identifier_id=$3 AND i.kind='email' AND i.version=$4 AND NOT EXISTS(SELECT 1 FROM identity.identifier_retirements r WHERE r.tenant_id=i.tenant_id AND r.identifier_id=i.identifier_id))`, string(b.TenantID), string(b.UserID), b.RecordID, w.state.plan.lifecycle.BeforeVersion)
+	rows, err := w.Query(ctx, `SELECT EXISTS(SELECT 1 FROM identity.identifiers i WHERE i.tenant_id=$1 AND i.user_id=$2 AND i.identifier_id=$3 AND i.kind=$5 AND i.version=$4 AND NOT EXISTS(SELECT 1 FROM identity.identifier_retirements r WHERE r.tenant_id=i.tenant_id AND r.identifier_id=i.identifier_id))`, string(b.TenantID), string(b.UserID), b.RecordID, w.state.plan.lifecycle.BeforeVersion, kind)
 	if err != nil {
 		return RecoveryUnknown, err
 	}

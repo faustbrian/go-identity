@@ -82,6 +82,7 @@ type workState struct {
 	phoneVerification         *phoneVerificationProgress
 	usernameRename            *usernameRenameProgress
 	emailRemoval              *emailRemovalProgress
+	phoneRemoval              *emailRemovalProgress
 	managedEmailVerification  *managedEmailVerificationProgress
 	counterCommand            *identity.Command
 	riskCommand               *identity.Command

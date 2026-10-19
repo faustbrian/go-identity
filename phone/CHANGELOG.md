@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add separately selected, opaque self-removal request and original-outcome
+  recovery contracts. Removal requires action-bound recent authentication and
+  an independent usable recovery method; it does not consume an OTP or issue
+  a replacement session.
+
 - Describe the native phone signin Send and historical-recovery contracts for
   independently selected HTTP composition, without enabling routes by metadata.
 

@@ -25,7 +25,7 @@ func phoneFactorFixture(t *testing.T, operation string) (identity.FeatureCommand
 }
 
 func TestPhoneFactorScopePreservesFrozenOriginalGeneration(t *testing.T) {
-	for _, operation := range []string{"identity.phone.send-verification", "identity.phone.verify"} {
+	for _, operation := range []string{"identity.phone.send-verification", "identity.phone.verify", "identity.phone.remove"} {
 		t.Run(operation, func(t *testing.T) {
 			s, registration := phoneFactorFixture(t, operation)
 			command, err := identity.NewFeatureCommand(s)
@@ -51,7 +51,7 @@ func TestPhoneFactorScopePreservesFrozenOriginalGeneration(t *testing.T) {
 }
 
 func TestPhoneFactorScopeRejectsSubstitutedOwnerActionAndVersion(t *testing.T) {
-	for _, operation := range []string{"identity.phone.send-verification", "identity.phone.verify"} {
+	for _, operation := range []string{"identity.phone.send-verification", "identity.phone.verify", "identity.phone.remove"} {
 		for _, mode := range []string{"missing-version", "changed-version", "version-kind", "unknown-factor-field", "unknown-factor-suffix", "foreign-actor", "service-actor", "foreign-owner", "foreign-contract", "contract-version", "foreign-operation-owner", "other-action", "managed-schema", "schema-version", "record-omitted", "anonymous-subject", "invocation-tenant", "invocation-user", "invocation-record", "invocation-operation", "zero-command"} {
 			t.Run(operation+"/"+mode, func(t *testing.T) {
 				s, registration := phoneFactorFixture(t, operation)
@@ -79,7 +79,7 @@ func TestPhoneFactorScopeRejectsSubstitutedOwnerActionAndVersion(t *testing.T) {
 				case "foreign-operation-owner":
 					s.Operation.Owner = "identity/otp"
 				case "other-action":
-					s.Operation.OperationID = "identity.phone.remove"
+					s.Operation.OperationID = "identity.phone.update"
 					s.Operation.SchemaID = s.Operation.OperationID + ".native-v1"
 					s.Binding.OperationID, s.Binding.SchemaID = s.Operation.OperationID, s.Operation.SchemaID
 				case "managed-schema":
@@ -111,7 +111,7 @@ func TestPhoneFactorScopeRejectsSubstitutedOwnerActionAndVersion(t *testing.T) {
 				case "invocation-record":
 					binding.RecordID = "foreign"
 				case "invocation-operation":
-					registration.Operation.OperationID = "identity.phone.remove"
+					registration.Operation.OperationID = "identity.phone.update"
 				case "zero-command":
 					command = identity.Command{}
 				}

@@ -25,7 +25,7 @@ func ReadPhoneFactors(ctx context.Context, pool *database.Pool, tenant identity.
 }
 
 // RequirePhoneFactors fences the original known-empty factor generation for the
-// exact registered self-user native phone send-verification or verify owner.
+// exact registered self-user native phone send-verification, verify or remove owner.
 // The command must retain phone.factor-version as uint64 equal to expectedVersion;
 // unknown phone.factor-* fields deny. Acquire original account/session locks
 // first and repeat this check in every protected admission phase and final
@@ -62,7 +62,7 @@ func phoneFactorSubject(command identity.Command, b identity.CommandBinding, f k
 		return "", invalidAuthority()
 	}
 	switch s.Operation.OperationID {
-	case "identity.phone.send-verification", "identity.phone.verify":
+	case "identity.phone.send-verification", "identity.phone.verify", "identity.phone.remove":
 	default:
 		return "", invalidAuthority()
 	}

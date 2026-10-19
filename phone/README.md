@@ -120,6 +120,20 @@ The native password adapter's adoption guide documents selected composition.
 
 ## Ownership, privacy and concurrency
 
+`RemovalService` is independently selected self-service removal, not number
+replacement or recovery. Construct its opaque `RemoveRequest` from a canonical
+`Number`, exact identifier/verification versions, original bearer and signed
+password proof for `identity.phone.remove`, CSRF where applicable, registered
+reason and stable idempotency key. These selectors alone grant no authority.
+The native owner must authenticate the original proof, current phone/factor
+authority and an actual independent recovery path. It atomically removes and
+retires the phone, consumes proof, advances identifier authority and queues the
+required old-channel notice and pending lifecycle cascade. Old identifier-bound
+sessions deny; physical session cleanup and external SMS delivery are separate.
+No OTP is consumed and no session is issued. Preserve original request custody
+on retry; use `RecoverRemoval` for an uncertain original outcome, not a new
+mutation. `RemoveRequestSpec` projections are sensitive and must not be logged.
+
 `NumberPolicy` and its `Number` results are immutable and support concurrent
 callers without owned goroutines, callbacks or IO. Nil/zero policy denies;
 zero Number cannot project a usable destination or record. Nil context denies,

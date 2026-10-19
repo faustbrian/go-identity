@@ -63,7 +63,7 @@ func freezeIdentifierRemovalCascade(c IdentifierRemovalCascadeConfig) (*identifi
 // cascade/policy/consumer storage and coordinator transaction. No consumer is
 // acknowledged and no asynchronous completion is inferred from owner admission.
 func admitIdentifierRemovalCascade(ctx context.Context, w Work) error {
-	p := w.state.emailRemoval
+	p := identifierRemovalProgressFor(w)
 	if p == nil || !p.applied || p.cascade != nil || p.domain == nil || p.domain.cascade == nil || w.state.lifecycle == nil || w.state.lifecycle.record == nil {
 		return w.fail(ctx, invalidEmailRemoval())
 	}
@@ -139,4 +139,18 @@ func admitIdentifierRemovalCascade(ctx context.Context, w Work) error {
 	p.cascade = &receipt
 	event.CascadeID, event.CascadeGeneration = id, 1
 	return nil
+}
+
+func identifierRemovalProgressFor(w Work) *emailRemovalProgress {
+	if w.state == nil || w.state.feature == nil {
+		return nil
+	}
+	switch w.state.feature.Operation {
+	case emailRemovalOperation():
+		return w.state.emailRemoval
+	case phoneRemovalOperation():
+		return w.state.phoneRemoval
+	default:
+		return nil
+	}
 }

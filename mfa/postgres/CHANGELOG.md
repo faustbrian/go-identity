@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Fence current known-empty factor generation for the exact authenticated
+  phone-removal owner. Missing, enrolled or changed authority denies removal;
+  no OTP consumption or weaker factor fallback is selected.
+
 - Enforce native known-empty factor authority for the closed phone SMS-code
   signin command, retaining its original generation through consuming phases.
   Phone OTP cannot select an email/password owner or bypass an enrolled factor.

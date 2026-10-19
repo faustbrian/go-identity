@@ -107,3 +107,26 @@ func TestCanonicalOperationOwnsPolicyAndDirectSchemaBindings(t *testing.T) {
 		}
 	}
 }
+
+func TestPhoneRemovalStoredSynchronizerContract(t *testing.T) {
+	c := identityhttp.CanonicalOperationConfig{Owner: "identity/phone", OperationID: "identity.phone.remove", Handler: http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}), CSRF: identityhttp.CSRFPolicy{Mode: identityhttp.CSRFSessionState, TokenHeader: "X-CSRF-Token", RefererFallback: identityhttp.RefererFallbackDeny}, MaximumSerializedBytes: 16384}
+	op, err := identityhttp.NewCanonicalOperation(c)
+	if err != nil || op.Route.CSRF != c.CSRF || op.Record.Idempotency != "keyed" || op.Record.RatePolicy != "rate.secret" {
+		t.Fatal("original-session phone removal contract rejected", err)
+	}
+	for _, change := range []func(*identityhttp.CanonicalOperationConfig){
+		func(c *identityhttp.CanonicalOperationConfig) { c.CSRF.Mode = identityhttp.CSRFNone },
+		func(c *identityhttp.CanonicalOperationConfig) { c.CSRF.Mode = identityhttp.CSRFExactOrigin },
+		func(c *identityhttp.CanonicalOperationConfig) { c.CSRF.TokenHeader = "X-Other-Token" },
+		func(c *identityhttp.CanonicalOperationConfig) {
+			c.CSRF.RefererFallback = identityhttp.RefererFallbackSameOriginHTTPS
+		},
+		func(c *identityhttp.CanonicalOperationConfig) { c.CSRF.TokenMaximumAge = 1 },
+	} {
+		bad := c
+		change(&bad)
+		if _, err := identityhttp.NewCanonicalOperation(bad); err == nil {
+			t.Fatal("weaker or independently aged phone removal custody accepted")
+		}
+	}
+}

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Admit explicitly selected phone self-removal under its native original-session
+  synchronizer profile, with exact token header and Origin, no Referer fallback
+  and no independently renewable token age. Selection enables no route by default.
+
 - Describe separately selected phone SMS-code issuance and original signin
   recovery without changing retained operation contracts or enabling routes.
 
