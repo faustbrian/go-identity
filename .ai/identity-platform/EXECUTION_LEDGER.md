@@ -68,7 +68,21 @@ separate identity.phone.update proof bound to the original send session; absent
 API RED then focused green0.277s. That new request code is local, not reviewed or
 delivered. No new profile/milestone credit for this contract or storage boundary.
 
-## Parallel M22 — authorized static member-role update
+2026-10-19 10:59 UTC: replacement OTP issuing/consuming custody and fresh
+update-proof mapping are local, not reviewed or delivered. New-number sends
+now bind their challenge as the audit/lifecycle aggregate independently of the
+unchanged old-phone target. The focused regression failed before capture;
+complete OTP-native race1.884s and tagged vet pass after the correction. Existing
+enrollment bytes/profile remain unchanged. Native end-to-end orchestration,
+HTTP/reference and the full replacement consumer still remain to implement.
+The native proof owner now also selects the exact non-attaching send schema
+through an immutable private clone, preserving enrollment framing and the same
+signed send action. Missing-selector RED then combined ActionPrimary/change-send
+race1.340s and tagged vet pass. Fresh identity.phone.update proof support is
+local too. No native PhoneChangeService or complete consumer exists yet; do not
+count these helpers or publish them as a finished replacement workflow.
+
+## Parallel M22 — authorized static member-role update — selected profile CLOSED
 
 Next worker assignment: go-organization root and postgres only, main51f98f3;
 no shared identity/session/risk/capability changes, Git operations or children.
@@ -94,6 +108,49 @@ implementation underway. Static owners remain recovery-capable administrators
 per existing delivered contract; owner-transfer remains a distinct proof-bound
 exchange. Exact self-demotion historical recovery follows existing owner-transfer
 current-membership/session/query-policy checks, not renewed mutation authority.
+
+2026-10-19 10:59 UTC: root5f52a2e and native93f15a5 are reviewed, main-pushed
+and exact Required39240299585/39241170153 SUCCESS. Original complete17 review
+8e8e6b56 and final native12 e03318d0 APPROVE; actual public-root adoption resolves
+the missing-API gap. GOWORKoff actual PostgreSQL/race role suite24.149s,
+native ordinary race1.337s, tagged readonly vet/module verification, planning
+and changed-input secrets pass. Authentic public native
+v0.0.0-20261019105727-93f15a5cd9f7 matches all57 committed files; its external
+genuine-session PostgreSQL/race consumer passes10.719s without replacements.
+Root public artifact has55 files including dotfiles; earlier50 count excluded
+dotfiles (reviewer verified all55). Existing schemas suffice. Earlier broader
+aggregate failed at password signin503 before role behavior and remains failed/
+unexplained, not fixed or waived. Full M22/M23/HTTP/reference/qualification remain
+open; 8/39 closed is unchanged.
+
+## Parallel M22 — invitation resend with predecessor supersession
+
+Worker owns go-organization root and postgres only from committed main93f15a5;
+no identity/kernel/session/risk/capability shared-contract edits, Git operations
+or children. Others share the codebase; preserve their changes. Consume the
+already delivered real-session invitation-send/delivery/capability custody,
+invitation versions and terminal rejection/cancel/expiry behavior. One native
+public outcome: currently authorized administrator resends an exact pending
+invitation under explicit policy, atomically issuing/delivering one successor
+proof and superseding the predecessor; old proof can no longer accept. Exact
+original replay/reconstructed unknown recovery must not issue again, renew
+deadlines or duplicate delivery/audit/lifecycle. Deny foreign/stale/terminal/
+unauthorized requests; preserve intended recipient and explicit role policy.
+Prove real-session send -> resend -> old-proof denial -> new-proof accept,
+reconstruction, current authority, rollback, contention and lost-COMMIT against
+actual PostgreSQL through supported APIs. First inspect actual committed owner
+seams once; report concrete missing authority instead of inventing it. Exclude
+domains, dynamic roles, archive/delete and HTTP/reference. Worker owns module-
+local source/tests/docs/migrations; primary owns integration, aggregate notes,
+independent final-diff review and delivery. Use focused TDD/checks; coordinate
+heavy compilation/services with primary. This does not close all M22.
+
+First consumed-contract check found a real native dependency: the kernel's
+invitation issuance/recipient/origin profiles permit send only, first version1
+and created0->1. Canonical resend requires its own operation/audit, next invitation
+version and supersession. Worker may advance independent core semantics/tests,
+but native continuation waits for primary-owned additive kernel support and
+its committed focused proof; no resend-as-send or second proof engine is allowed.
 
 ## Parallel M22 — recipient-owned invitation rejection
 

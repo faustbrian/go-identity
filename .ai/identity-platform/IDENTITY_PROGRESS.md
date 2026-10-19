@@ -1,6 +1,6 @@
 # Identity Platform Progress
 
-## TL;DR — updated 2026-10-19 10:27 UTC
+## TL;DR — updated 2026-10-19 10:59 UTC
 
 **Estimated whole-goal completion: approximately 20%, with low confidence.**
 **Consumer milestones: 8/39 closed** (20.5% unweighted); full scope remains
@@ -13,6 +13,15 @@ queued work is not counted as delivered.
 This is an effort/scope estimate, not a measured percentage or an ETA.
 M10's existing confirmed-TOTP enrollment/signin consumer is now counted after
 source/acceptance reconciliation; this corrects a stale row, not new development.
+
+**Newly delivered organization profile:** authorized static member-role changes
+now atomically update membership/scoped authority and organization policy, with
+last-owner protection, current-role enforcement and original recovery. Root
+`5f52a2e` and native `93f15a5` are independently approved, main-pushed and exact
+Required-CI green. Actual public-root PostgreSQL/race suite passes (24.149s);
+the downloaded adapter's genuine-session consumer passes (10.719s), with no
+local replacements. Existing schemas suffice. Full M22/M23 and HTTP/reference
+remain open. The earlier broader suite's signin503 remains unexplained, not fixed.
 
 **Newly delivered organization profile:** authorized administrators can explicitly
 expire an invitation with a registered reason, before or after its deadline.
@@ -41,8 +50,10 @@ Native CAS/retirement/pending-cascade storage is reviewed and main-pushed at
 PostgreSQL/race proves the directory prerequisite, not genuine phone possession.
 Actual OTP/proof/session/recovery orchestration and HTTP/reference remain pending.
 No phone-replacement profile is counted as delivered yet. The independent
-organization worker is implementing static member-role updates; no shared phone
-files are assigned to it.
+organization worker's next assigned profile is invitation resend with predecessor
+supersession; static role updates are delivered. Native resend needs additive
+kernel support for successor issuance; the worker cannot bypass that dependency.
+No shared phone files are assigned to it.
 
 **Newly delivered M08 profile — phone self-removal:** fresh action-bound proof
 removes the verified phone atomically with its retirement, pending cascade and
