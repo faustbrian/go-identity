@@ -56,7 +56,7 @@ func TestPhoneChangeCommandRequiresExactConsumingAndNoticePlan(t *testing.T) {
 		SubjectType: "identifier", Lifecycle: &LifecyclePlan{EventType: "identifier.changed.v1", BeforeVersion: 2, AfterVersion: 3},
 		OTP:      &OTPAttemptPlan{Mode: OTPConsume, ChallengeID: string(i.SendCommandID)},
 		Delivery: &DeliveryPlan{Intents: []DeliveryIntentPlan{{Purpose: "identity.phone.change-notification", SubjectID: string(b.UserID)}}},
-		Audits:   []AuditPlan{{EventType: "identity.identifier.change", Required: true, RetentionClass: "protected"}}}
+		Audits:   []AuditPlan{{EventType: "identity.identifier.change", Required: true, RetentionClass: "standard"}}}
 	build := func(fields []identity.FeatureField) identity.Command {
 		t.Helper()
 		command, err := identity.NewFeatureSessionCommand(identity.FeatureCommandSpec{Binding: b, Operation: op, Fields: fields}, auth.NewBearerCredential(base64.RawURLEncoding.EncodeToString(make([]byte, 32))))
@@ -93,6 +93,9 @@ func TestPhoneChangeCommandRequiresExactConsumingAndNoticePlan(t *testing.T) {
 		},
 		func(p *CommandPlan) {
 			p.Audits = []AuditPlan{{EventType: "identity.phone.update", Required: true, RetentionClass: "protected"}}
+		},
+		func(p *CommandPlan) {
+			p.Audits = []AuditPlan{{EventType: "identity.identifier.change", Required: true, RetentionClass: "protected"}}
 		},
 	} {
 		p := plan

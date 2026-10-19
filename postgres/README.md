@@ -226,6 +226,9 @@ existing keyed cooldown policy, and admits ten **pending** identifier-change
 consumers. It never acknowledges downstream cleanup or creates a second journal.
 Only this Work's own persisted successor can advance OTP's final identifier
 expectation. Historical recovery cannot infer success from today's directory.
+The self-only consuming profile requires the canonical
+`identity.identifier.change` audit with standard retention; an unrelated action
+or a protected-retention declaration does not match this selected profile.
 
 The actual native phone owner must still prove new-number OTP possession,
 recent action-bound authentication, current session/factors/risk, independent

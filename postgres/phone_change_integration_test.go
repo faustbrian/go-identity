@@ -105,7 +105,7 @@ func testPhoneChangePostgres(t *testing.T, ctx context.Context, pool *database.P
 				lifecycle:    &LifecyclePlan{EventType: "identifier.changed.v1", BeforeVersion: i.Change.ExpectedIdentifierVersion, AfterVersion: i.Change.ExpectedIdentifierVersion + 1},
 				otp:          &OTPAttemptPlan{Mode: OTPConsume, ChallengeID: string(i.SendCommandID)},
 				delivery:     &DeliveryPlan{Intents: []DeliveryIntentPlan{{Purpose: "identity.phone.change-notification", SubjectID: string(b.UserID)}}},
-				audits:       []AuditPlan{{EventType: "identity.identifier.change", Required: true, RetentionClass: "protected"}},
+				audits:       []AuditPlan{{EventType: "identity.identifier.change", Required: true, RetentionClass: "standard"}},
 				contributors: []registeredContributor{{descriptor: repo.Descriptor(), contributor: repo}, {descriptor: feature.Contributor, contributor: owner}, {descriptor: probe.Descriptor(), contributor: probe}}}
 			tx, err := pool.Raw().Begin(ctx)
 			if err != nil {

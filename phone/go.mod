@@ -5,7 +5,7 @@ go 1.27.0
 require (
 	github.com/faustbrian/go-authentication/v2 v2.0.2-0.20261015052822-d9f5132c7f68
 	github.com/faustbrian/go-authorization/v3 v3.0.1-0.20261015052455-a55bbebb1060
-	github.com/faustbrian/go-identity v0.0.0-20261019081856-91beaaf22510
+	github.com/faustbrian/go-identity v0.0.0-20261019101357-cb4384b7977d
 	github.com/faustbrian/go-identity/otp v0.0.0-20261018204834-5abf38983241
 	github.com/faustbrian/go-identity/session v0.0.0-20261015104034-f16881100907
 	github.com/nyaruka/phonenumbers/v2 v2.0.14

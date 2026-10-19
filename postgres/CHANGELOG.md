@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Require the phone-replacement consuming profile's canonical identifier-change
+  event with standard self-service audit retention.
+
+- Admit the exact phone-replacement consuming OTP plan with its required
+  old-number notice. Denial and reservation still cannot stage delivery;
+  complete registered phone-domain and notice validation remains mandatory.
+
 - Admit the exact organization invitation-resend preparation, successor-grant
   and history profile through the existing coordinator. Bind the positive
   invitation predecessor/successor, canonical standard-retention resend audit

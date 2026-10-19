@@ -135,7 +135,7 @@ func phoneChangeCommand(owner PhoneChangeContributor, command identity.Command, 
 	if _, present := command.SessionToken(); !present {
 		return PhoneChangeIntent{}, nil, invalidPhoneChange()
 	}
-	if audit := plan.Audits[0]; !audit.Required || audit.RetentionClass != "protected" || audit.EventType != "identity.identifier.change" {
+	if audit := plan.Audits[0]; !audit.Required || audit.RetentionClass != "standard" || audit.EventType != "identity.identifier.change" {
 		return PhoneChangeIntent{}, nil, invalidPhoneChange()
 	}
 	i, d, err := owner.PhoneChange(command)

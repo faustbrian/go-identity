@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+- Require a retry key for replacement completion so the native owner can
+  preserve one server-owned attempt across lost responses and wrong-code
+  denials. Changed bound input under that key conflicts.
+
+- Add separately selected `ChangeService`, correlated `UpdateResult` and opaque
+  code-free `UpdateRecoveryRequest` contracts. Committed replacement requires
+  its real pending identifier-change cascade; history is not a new session.
+
+- Bind replacement completion to the original SMS command/session and a
+  distinct password proof for `identity.phone.update`. Keep code and caller
+  custody opaque; the native workflow still owns actual proof/OTP admission.
+
 - Add opaque authenticated phone-change initiation input binding both canonical
   numbers and exact verified-identifier predecessors. Sending must preserve the
   old number until purpose-bound confirmation; this input alone enables no

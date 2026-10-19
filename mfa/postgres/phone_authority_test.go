@@ -25,7 +25,7 @@ func phoneFactorFixture(t *testing.T, operation string) (identity.FeatureCommand
 }
 
 func TestPhoneFactorScopePreservesFrozenOriginalGeneration(t *testing.T) {
-	for _, operation := range []string{"identity.phone.send-verification", "identity.phone.verify", "identity.phone.remove"} {
+	for _, operation := range []string{"identity.phone.send-verification", "identity.phone.verify", "identity.phone.remove", "identity.phone.update"} {
 		t.Run(operation, func(t *testing.T) {
 			s, registration := phoneFactorFixture(t, operation)
 			command, err := identity.NewFeatureCommand(s)
@@ -51,7 +51,7 @@ func TestPhoneFactorScopePreservesFrozenOriginalGeneration(t *testing.T) {
 }
 
 func TestPhoneFactorScopeRejectsSubstitutedOwnerActionAndVersion(t *testing.T) {
-	for _, operation := range []string{"identity.phone.send-verification", "identity.phone.verify", "identity.phone.remove"} {
+	for _, operation := range []string{"identity.phone.send-verification", "identity.phone.verify", "identity.phone.remove", "identity.phone.update"} {
 		for _, mode := range []string{"missing-version", "changed-version", "version-kind", "unknown-factor-field", "unknown-factor-suffix", "foreign-actor", "service-actor", "foreign-owner", "foreign-contract", "contract-version", "foreign-operation-owner", "other-action", "managed-schema", "schema-version", "record-omitted", "anonymous-subject", "invocation-tenant", "invocation-user", "invocation-record", "invocation-operation", "zero-command"} {
 			t.Run(operation+"/"+mode, func(t *testing.T) {
 				s, registration := phoneFactorFixture(t, operation)
@@ -79,7 +79,7 @@ func TestPhoneFactorScopeRejectsSubstitutedOwnerActionAndVersion(t *testing.T) {
 				case "foreign-operation-owner":
 					s.Operation.Owner = "identity/otp"
 				case "other-action":
-					s.Operation.OperationID = "identity.phone.update"
+					s.Operation.OperationID = "identity.phone.unsupported"
 					s.Operation.SchemaID = s.Operation.OperationID + ".native-v1"
 					s.Binding.OperationID, s.Binding.SchemaID = s.Operation.OperationID, s.Operation.SchemaID
 				case "managed-schema":
@@ -111,7 +111,7 @@ func TestPhoneFactorScopeRejectsSubstitutedOwnerActionAndVersion(t *testing.T) {
 				case "invocation-record":
 					binding.RecordID = "foreign"
 				case "invocation-operation":
-					registration.Operation.OperationID = "identity.phone.update"
+					registration.Operation.OperationID = "identity.phone.unsupported"
 				case "zero-command":
 					command = identity.Command{}
 				}
@@ -119,6 +119,32 @@ func TestPhoneFactorScopeRejectsSubstitutedOwnerActionAndVersion(t *testing.T) {
 					t.Fatal("substituted phone factor authority admitted")
 				}
 			})
+		}
+	}
+}
+
+func TestPhoneReplacementSendFactorProfileRemainsExact(t *testing.T) {
+	s, registration := phoneFactorFixture(t, "identity.phone.send-verification")
+	s.Operation.SchemaID = "identity.phone.send-verification.change.native-v1"
+	s.Binding.SchemaID = s.Operation.SchemaID
+	registration.Operation = s.Operation
+	command, err := identity.NewFeatureCommand(s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if user, err := phoneFactorSubject(command, s.Binding, registration, 7); err != nil || user != "user" {
+		t.Fatal("exact non-attaching replacement send lost original factor fence", err)
+	}
+	for _, schema := range []string{"identity.phone.send-verification.change.native-v2", "identity.phone.send-verification.change.managed-v1", "identity.phone.update.change.native-v1"} {
+		bad := s
+		bad.Operation.SchemaID, bad.Binding.SchemaID = schema, schema
+		registration.Operation = bad.Operation
+		command, err := identity.NewFeatureCommand(bad)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := phoneFactorSubject(command, bad.Binding, registration, 7); err == nil {
+			t.Fatal("replacement alias fabricated factor authority")
 		}
 	}
 }

@@ -213,10 +213,12 @@ func (c *Coordinator) prepareOTPAttempt(b identity.CommandBinding, command ident
 	if _, custody := command.OneTimeCode(); !ok || !custody {
 		return fail()
 	}
-	// Only genuine-primary OTP replacement carries its required old-address
-	// notice. Preparation binds it but the denial/reservation phases cannot
-	// stage it. Every other consuming/check profile remains delivery-free.
-	if p.Delivery != nil && validateOTPEmailChangeScope(s, p) != nil {
+	// Only exact email/phone replacement carries its required old-destination
+	// notice. Full prepareFeature validation still requires the registered
+	// domain owner and exact consuming/notice plan (phoneChangeCommand). The
+	// denial/reservation phases cannot stage delivery; all other OTP profiles
+	// remain delivery-free.
+	if p.Delivery != nil && s.Operation != phoneChangeOperation() && validateOTPEmailChangeScope(s, p) != nil {
 		return fail()
 	}
 	q, snapshot, admitted, err := c.prepareFeature(b, command, s, p)

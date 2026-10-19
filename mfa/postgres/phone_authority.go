@@ -25,7 +25,8 @@ func ReadPhoneFactors(ctx context.Context, pool *database.Pool, tenant identity.
 }
 
 // RequirePhoneFactors fences the original known-empty factor generation for the
-// exact registered self-user native phone send-verification, verify or remove owner.
+// exact registered self-user native phone enrollment, replacement or removal
+// owner, including replacement's non-attaching send schema.
 // The command must retain phone.factor-version as uint64 equal to expectedVersion;
 // unknown phone.factor-* fields deny. Acquire original account/session locks
 // first and repeat this check in every protected admission phase and final
@@ -62,11 +63,16 @@ func phoneFactorSubject(command identity.Command, b identity.CommandBinding, f k
 		return "", invalidAuthority()
 	}
 	switch s.Operation.OperationID {
-	case "identity.phone.send-verification", "identity.phone.verify", "identity.phone.remove":
+	case "identity.phone.send-verification", "identity.phone.verify", "identity.phone.remove", "identity.phone.update":
 	default:
 		return "", invalidAuthority()
 	}
 	op := identity.FeatureOperation{Owner: "identity/phone", OperationID: s.Operation.OperationID, SchemaID: s.Operation.OperationID + ".native-v1", SchemaVersion: 1, RecordRequirement: identity.FeatureRecordRequired}
+	// Replacement sends deliberately have no pending-identifier attachment.
+	// Admit only that exact profile; arbitrary send aliases remain unsupported.
+	if op.OperationID == "identity.phone.send-verification" && s.Operation.SchemaID == "identity.phone.send-verification.change.native-v1" {
+		op.SchemaID = s.Operation.SchemaID
+	}
 	if s.Operation != op {
 		return "", invalidAuthority()
 	}

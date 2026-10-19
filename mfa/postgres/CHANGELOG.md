@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Fence the original known-empty factor generation for exact verified-phone
+  replacement and its non-attaching SMS request. Unknown aliases, changed
+  generations and enrolled factors still deny without fallback or initialization.
+
 - Fence current known-empty factor generation for the exact authenticated
   phone-removal owner. Missing, enrolled or changed authority denies removal;
   no OTP consumption or weaker factor fallback is selected.

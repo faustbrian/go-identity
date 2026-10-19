@@ -8,6 +8,33 @@ It requires Go 1.27.0 or later.
 
 ## Existing-account verification contracts
 
+Verified-phone replacement has distinct input custody: `ChangeRequest` binds
+both canonical numbers and exact old identifier/verification versions to the
+SMS request; sending must not retire the old number. `UpdateRequest` identifies
+that original send and requires original authenticated-session possession plus
+a separate recent password proof for `identity.phone.update`, not the proof
+used to request SMS. The native workflow must authenticate current authority,
+recovery eligibility, reason policy and OTP before atomically replacing the
+number with required session/notification/lifecycle effects. Structural request
+validation is not that workflow or evidence of phone possession.
+
+Completion also requires an `IdempotencyKey`: identical retries preserve the
+original server command and OTP attempt, including wrong-code denials. Changed
+code, proof or other bound intent under that key conflicts; a genuinely new
+submission uses a new key and must pass current admission again.
+
+`ChangeService` separately selects `SendChange`, `Update` and `RecoverUpdate`.
+`UpdateResult` retains the original command result and opaque, code-free OTP
+correlation, including ambiguity. A committed result includes a pending
+identifier-change cascade, not completed physical cleanup or new credentials.
+For an ambiguous submission retain the original `VerificationRecovery` and
+session `SendFlow`; construct `UpdateRecoveryRequest` with the exact self-user
+`identity.phone.update.recover` caller and current cookie synchronizer, without
+another code or fresh proof. Native current query policy still controls history
+disclosure after the identifier epoch changes. An identical keyed retry can
+also identify history if the original response, including recovery, was lost;
+it does not compare another code or renew authentication.
+
 `VerificationService` defines separately selected native `SendVerification`,
 `Verify` and `RecoverVerification` operations; this module does not implement
 them. `EnrollmentRequest` carries the already canonicalized Number, original
