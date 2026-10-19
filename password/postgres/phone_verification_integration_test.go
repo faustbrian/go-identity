@@ -390,6 +390,9 @@ func testNativePhoneEnrollment(t *testing.T, ctx context.Context, pool *database
 		var retained, started, generated, planned int
 		diagnosticErr := pool.Raw().QueryRow(ctx, `SELECT count(*), count(*) FILTER (WHERE preparation_started_generation IS NOT NULL), count(*) FILTER (WHERE preparation_ciphertext IS NOT NULL), count(*) FILTER (WHERE command_plan IS NOT NULL) FROM identity.commands WHERE purpose=$1`, phonePrimaryAction).Scan(&retained, &started, &generated, &planned)
 		t.Logf("phone send custody counts retained=%d started=%d generated=%d planned=%d; query error=%v", retained, started, generated, planned, diagnosticErr)
+		var pending, expired, committed int
+		diagnosticErr = pool.Raw().QueryRow(ctx, `SELECT count(*) FILTER (WHERE state='pending'),count(*) FILTER (WHERE state='pending' AND lease_until<=clock_timestamp()),count(*) FILTER (WHERE state='committed') FROM identity.commands WHERE purpose=$1`, phonePrimaryAction).Scan(&pending, &expired, &committed)
+		t.Logf("phone send journal pending=%d expired=%d committed=%d; query error=%v", pending, expired, committed, diagnosticErr)
 		t.Fatal("actual phone send", err)
 	}
 	send, err := sent.Bindings()
@@ -517,6 +520,7 @@ func testNativePhoneEnrollment(t *testing.T, ctx context.Context, pool *database
 		beforeStatus = withdrawFactor
 	}
 	denied, err := service.Verify(ctx, completion)
+	verificationErr := err
 	if err == nil {
 		t.Fatal("wrong SMS code verified a phone")
 	}
@@ -532,7 +536,7 @@ func testNativePhoneEnrollment(t *testing.T, ctx context.Context, pool *database
 		return
 	}
 	if err := pool.Raw().QueryRow(ctx, `SELECT c.used_attempts,c.failed_attempts,i.verified FROM phone_codes.challenges c JOIN identity.identifiers i ON i.tenant_id=c.tenant_id AND i.identifier_id=$2 WHERE c.tenant_id=$1 AND c.challenge_id=$3`, string(original.TenantID), string(send.IdentifierID), string(send.Binding.CommandID)).Scan(&attempts, &failures, &verified); err != nil || attempts != 1 || failures != 1 || verified {
-		t.Fatal("wrong-code denial was not one atomic charge without verification", err)
+		t.Fatalf("wrong-code denial was not one atomic charge without verification: used=%d failed=%d verified=%t verification-error=%v query-error=%v", attempts, failures, verified, verificationErr, err)
 	}
 	actualCode, err := auth.NewOneTimeCode(code)
 	code = ""

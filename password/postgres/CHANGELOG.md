@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Adopt the public native phone SMS-code signin adapter and its matching phone,
+  coordinator, factor and session owners. Existing password signin is unchanged;
+  the public adapter can now be composed with genuine verified-phone enrollment
+  without local module replacements.
+
 - Select phone/password signin independently of email/username, retaining the
   canonical-number commitment in original pre-auth before discovery or password
   work. Resolve only the exact verified phone recipient and require known-empty
