@@ -237,7 +237,7 @@ func TestPhoneActionPrimaryRejectsForeignOrTamperedOriginal(t *testing.T) {
 }
 
 func TestPhoneActionPrimaryKeepsOtherProfilesClosed(t *testing.T) {
-	for _, action := range []string{"identity.phone.verify", "identity.phone.signin", "identity.phone.update", "identity.phone.remove", "identity.phone.password-signin", "identity.phone.password-reset-request", "identity.phone.password-reset-complete"} {
+	for _, action := range []string{"identity.phone.verify", "identity.phone.signin", "identity.phone.update", "identity.phone.password-signin", "identity.phone.password-reset-request", "identity.phone.password-reset-complete"} {
 		source, request, fields, _ := phonePrimaryFixture(t, action)
 		if _, err := source.Restore(context.Background(), request, fields); err == nil {
 			t.Fatal("unsupported phone action accepted")
@@ -256,5 +256,34 @@ func TestPhoneActionPrimaryKeepsOtherProfilesClosed(t *testing.T) {
 		if _, err := source.RestoreCommand(context.Background(), command, request.Caller, request.CSRFToken); err != nil {
 			t.Fatal("existing restart profile changed", err)
 		}
+	}
+}
+
+func TestPhoneRemovalActionPrimaryConservesOriginalScope(t *testing.T) {
+	source, request, fields, binding := phonePrimaryFixture(t, "identity.phone.remove")
+	admission, err := source.Restore(context.Background(), request, fields)
+	if err != nil {
+		t.Fatal("signed original phone-removal custody rejected", err)
+	}
+	command, err := admission.Command(binding, nil)
+	if err != nil {
+		t.Fatal("phone removal could not construct its own protected command", err)
+	}
+	if _, err := source.RestoreCommand(context.Background(), command, request.Caller, request.CSRFToken); err != nil {
+		t.Fatal("phone removal lost original restart custody", err)
+	}
+	for name, change := range map[string]func(*ActionPrimaryRequest){
+		"target":  func(r *ActionPrimaryRequest) { r.TargetSubjectID = "foreign" },
+		"tenant":  func(r *ActionPrimaryRequest) { r.TenantID = "foreign" },
+		"session": func(r *ActionPrimaryRequest) { r.Proof.SessionVersion++ },
+		"action":  func(r *ActionPrimaryRequest) { r.Proof.Action = phonePrimaryAction },
+	} {
+		t.Run(name, func(t *testing.T) {
+			candidate := request
+			change(&candidate)
+			if _, err := source.Restore(context.Background(), candidate, fields); err == nil {
+				t.Fatal("substituted phone-removal scope accepted")
+			}
+		})
 	}
 }

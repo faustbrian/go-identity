@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- Compose fresh password-authenticated phone self-removal with exact current
+  phone/factor authority, real retained email/password signin/reset owners and
+  one encrypted old-number notice. Proof use, protected admission, removal and
+  pending lifecycle effects are atomic; retained request custody supports
+  original code-free outcome recovery. Install the forward proof-consumption
+  and kernel phone-removal histories before selection.
+
+- Require email/password signin, not a phone- or username-only owner, when
+  retaining the recovery path for email or phone removal. Phone removal emits
+  the canonical identifier-removal security action without a synonymous event.
+
 - Adopt the public native phone SMS-code signin adapter and its matching phone,
   coordinator, factor and session owners. Existing password signin is unchanged;
   the public adapter can now be composed with genuine verified-phone enrollment

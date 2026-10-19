@@ -1,8 +1,9 @@
-# Explicit phone-enrollment HTTP profile
+# Explicit authenticated phone HTTP profiles
 
 Go 1.27. This optional module selects existing-account **cookie-only** enrollment,
 SMS verification and original, code-free recovery. It supplies no UI. Signup,
-signin, reset, replacement, removal and enrolled-MFA continuation are not enabled.
+signin, reset, replacement and enrolled-MFA continuation are not enabled.
+Self-removal is separately opt-in as described below.
 Full phone-platform qualification remains unfinished.
 
 Construct `NewVerificationFeature(VerificationConfig{...})` and pass its feature
@@ -52,3 +53,25 @@ phases rather than wrapping them with a second authentication/rate execution.
 OpenAPI describes the selected closed wire profile, separately from direct Go
 contract summaries. Optional number-display/national parsing policy remains owned
 by the actual pinned native number policy; transport does not redefine E.164.
+
+## Independent self-removal
+
+`NewRemovalFeature(RemovalConfig{...})` selects only `POST /v1/phone/remove`.
+Supply the actual signed-proof repository, native `RemovalService`, immutable
+number policy, cookie/Origin configuration and shared keyed-secret limiter.
+The native owner authenticates current proof/session/factor/recovery authority
+and commits removal and required effects; this transport cannot replace it.
+
+The request requires the session cookie, exact Origin, `X-CSRF-Token` and exactly
+one `Idempotency-Key`. Closed JSON contains `number`, `identifierID`,
+`expectedIdentifierVersion`, `expectedVerificationVersion`, `proofID`, `reason`.
+Versions are canonical positive decimal strings below uint64 maximum, not JSON
+numbers. Tenant/user, OTP, command/body-key and suppression overrides reject.
+
+Success contains only original command and pending cascade correlation, never
+a phone, proof, code, session or CSRF credential. Matching original-key retries
+remain usable after removal invalidates the old session. Unknown is not rollback;
+retain original custody and use native code-free reconciliation, not a new
+logical mutation. Pending cleanup and SMS delivery do not restore old-phone
+authority. See the concrete reference module's phone guide for composition,
+required migrations, independent recovery policy and a runnable consumer.

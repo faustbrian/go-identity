@@ -2,7 +2,9 @@ package passwordpostgres
 
 import (
 	password "github.com/faustbrian/go-identity/password"
+	"github.com/faustbrian/go-identity/phone"
 	sessionpg "github.com/faustbrian/go-identity/session/postgres"
+	"github.com/faustbrian/go-identity/username"
 	primitive "github.com/faustbrian/go-password/v2"
 	"testing"
 )
@@ -30,7 +32,7 @@ func TestEmailRemovalRequiresCompatibleRemainingOwners(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, mode := range []string{"compatible", "signin-global", "reset-global", "signin-policy", "reset-policy", "password-bound", "hash-bound", "primitive-bound"} {
+	for _, mode := range []string{"compatible", "signin-phone", "signin-username", "signin-global", "reset-global", "signin-policy", "reset-policy", "password-bound", "hash-bound", "primitive-bound"} {
 		t.Run(mode, func(t *testing.T) {
 			profile := sessionpg.IdentifierAdmissionConfig{GlobalAuthorityID: "deployment", PolicyNamespace: "users"}
 			primary := &EmailPrimarySource{source: &ReauthenticationService{repository: &Repository{policy: policy}, c: ReauthenticationConfig{Profile: profile, Verifier: password.VerifierConfig{Primitive: crypto, MaximumBytes: 128}}}}
@@ -38,6 +40,17 @@ func TestEmailRemovalRequiresCompatibleRemainingOwners(t *testing.T) {
 			config := ResetConfig{GlobalAuthorityID: "deployment", AuthorizationNamespace: "users"}
 			reset := &ResetService{repository: &Repository{policy: policy}, config: func() ResetConfig { return config }}
 			switch mode {
+			case "signin-phone":
+				signin.c.Phone, err = phone.NewNumberPolicy(phone.NumberPolicySpec{Profile: phone.CurrentNumberProfile(), MaximumInputBytes: 64})
+				if err != nil {
+					t.Fatal(err)
+				}
+			case "signin-username":
+				p, e := username.NewPolicy(username.ReferencePolicySpec())
+				if e != nil {
+					t.Fatal(e)
+				}
+				signin.c.Username = p
 			case "signin-global":
 				signin.c.Profile.GlobalAuthorityID = "other"
 			case "reset-global":

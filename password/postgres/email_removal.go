@@ -128,7 +128,7 @@ func NewEmailRemovalService(primary *EmailPrimarySource, signin *SigninService, 
 }
 
 func compatibleRemovalOwners(primary *EmailPrimarySource, signin *SigninService, reset *ResetService) bool {
-	if primary == nil || primary.source == nil || primary.source.repository == nil || signin == nil || signin.repository == nil || reset == nil || reset.repository == nil || reset.config == nil {
+	if primary == nil || primary.source == nil || primary.source.repository == nil || signin == nil || signin.repository == nil || signin.c.Phone != nil || signin.c.Username != nil || reset == nil || reset.repository == nil || reset.config == nil {
 		return false
 	}
 	source := primary.source
