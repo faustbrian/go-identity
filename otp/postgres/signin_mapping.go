@@ -26,6 +26,17 @@ func signinOperation(subject identity.FeatureSubjectRequirement) identity.Featur
 	return identity.FeatureOperation{Owner: "identity/otp", OperationID: "identity.otp.signin", SchemaID: "identity-otp-signin", SchemaVersion: 1, RecordRequirement: identity.FeatureRecordOmitted, SubjectRequirement: subject}
 }
 
+func phoneSigninOperation(subject identity.FeatureSubjectRequirement) identity.FeatureOperation {
+	return identity.FeatureOperation{Owner: "identity/phone", OperationID: "identity.phone.signin", SchemaID: "identity.phone.signin.native-v1", SchemaVersion: 1, RecordRequirement: identity.FeatureRecordOmitted, SubjectRequirement: subject}
+}
+
+func signinOperationForBinding(binding identity.CommandBinding, subject identity.FeatureSubjectRequirement) identity.FeatureOperation {
+	if binding.OperationID == "identity.phone.signin" {
+		return phoneSigninOperation(subject)
+	}
+	return signinOperation(subject)
+}
+
 // Only the owned public workflow calls this mapping after restoring Send's
 // original encrypted custody and resolving current single-factor policy. It
 // freezes the selected recipient and complete prospective session before the
@@ -133,7 +144,7 @@ func (c *AttemptCodec) restoreSigninCustody(command identity.Command, plan kerne
 		return session.Session{}, kernel.RecipientRecord{}, 0, ErrInvalidCommand
 	}
 	spec, ok := command.Feature()
-	if c == nil || c.crypto == nil || !ok || plan.Mode != kernel.OTPConsume || spec.Operation != signinOperation(spec.Operation.SubjectRequirement) {
+	if c == nil || c.crypto == nil || !ok || plan.Mode != kernel.OTPConsume || spec.Operation != signinOperationForBinding(spec.Binding, spec.Operation.SubjectRequirement) {
 		return fail()
 	}
 	var wire []byte
@@ -235,11 +246,14 @@ func (c *AttemptCodec) restoreSigninCustody(command identity.Command, plan kerne
 func (c *AttemptCodec) validateSigninSelection(spec identity.FeatureCommandSpec, attempt otp.AttemptBindings, version uint32, original otp.Challenge, recipient kernel.RecipientRecord, authority AttemptAuthority, record session.Session) error {
 	fail := func() error { return ErrInvalidCommand }
 	issued, err := original.Bindings()
-	if err != nil || version != issued.Digest.KeyVersion || issued.State != otp.ChallengeIssued || issued.Version != 1 || issued.UsedAttempts != 0 || issued.FailedAttempts != 0 || issued.Checks != 0 || attempt.CommandID != spec.Binding.CommandID || attempt.Mode != otp.AttemptModeConsume || spec.Operation != signinOperation(spec.Operation.SubjectRequirement) || spec.Binding.ValidateFor(spec.Operation) != nil {
+	if err != nil || version != issued.Digest.KeyVersion || issued.State != otp.ChallengeIssued || issued.Version != 1 || issued.UsedAttempts != 0 || issued.FailedAttempts != 0 || issued.Checks != 0 || attempt.CommandID != spec.Binding.CommandID || attempt.Mode != otp.AttemptModeConsume || spec.Operation != signinOperationForBinding(spec.Binding, spec.Operation.SubjectRequirement) || spec.Binding.ValidateFor(spec.Operation) != nil {
 		return fail()
 	}
 	b, err := issued.Continuation.Bindings()
 	if err != nil || b.Scope.Purpose != otp.PurposeSignin || validateSendRecipient(recipient, b.Scope, spec.Binding) != nil || !bytes.Equal(appendSendContinuation(nil, issued.Continuation), appendSendContinuation(nil, attempt.Continuation)) {
+		return fail()
+	}
+	if spec.Binding.OperationID == "identity.phone.signin" && (b.Scope.Channel != otp.ChannelSMS || recipient.Identifier.Kind != identity.IdentifierPhone || recipient.Query.NormalizationProfile == "") {
 		return fail()
 	}
 	preauth, ok := b.Authorization.PreAuthTransaction()
@@ -248,6 +262,9 @@ func (c *AttemptCodec) validateSigninSelection(spec identity.FeatureCommandSpec,
 	}
 	flow, err := preauth.Bindings()
 	if err != nil || spec.Binding.UserID == "" && spec.Binding.AnonymousFlowID != string(flow.Binding.ID) {
+		return fail()
+	}
+	if spec.Binding.OperationID == "identity.phone.signin" && (flow.Binding.Intent.Action != "identity.phone.signin" || flow.Binding.Intent.IdentifierBinding == ([32]byte{})) {
 		return fail()
 	}
 	s, err := record.Bindings()

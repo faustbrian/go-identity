@@ -123,7 +123,12 @@ func (p *Contributor) PrepareRequestKey(parent context.Context, k kernel.Request
 	if r.purpose == otp.PurposeEmailVerification || r.purpose == otp.PurposeEmailChange {
 		eligibility = kernel.RecipientPendingOrVerified
 	}
-	recipient, err := p.initiation.kernel.ResolveRecipient(ctx, kernel.RecipientQuery{TenantID: b.TenantID, UserID: b.UserID, Kind: kind, CanonicalValue: r.destination.Value(), Eligibility: eligibility})
+	query := kernel.RecipientQuery{TenantID: b.TenantID, UserID: b.UserID, Kind: kind, CanonicalValue: r.destination.Value(), Eligibility: eligibility}
+	if p.phoneSignin != nil {
+		profile := p.phoneSignin.policy.Profile()
+		query.NormalizationProfile, query.NormalizationVersion = profile.ID, profile.Version
+	}
+	recipient, err := p.initiation.kernel.ResolveRecipient(ctx, query)
 	if err != nil {
 		return nil, err
 	}
@@ -186,6 +191,11 @@ func (p *Contributor) readInitiatingFlow(ctx context.Context, b identity.Command
 		binding, err := original.Bindings()
 		if err != nil || binding.Binding.Intent.Action != p.initiation.config.preAuthAction {
 			return bad(identity.ForbiddenError{})
+		}
+		if p.phoneSignin != nil {
+			if err := p.phoneSignin.requireOriginalTarget(ctx, b.TenantID, r, binding.Binding); err != nil {
+				return bad(err)
+			}
 		}
 		flow, err := otp.NewBoundPreAuthAuthorization(original)
 		if err != nil {

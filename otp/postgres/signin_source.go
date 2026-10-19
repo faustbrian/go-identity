@@ -41,6 +41,9 @@ func (s *SigninService) ResolveSigninSource(ctx context.Context, r otp.SigninSou
 	if err != nil || custody.recipient == nil {
 		return result, identity.ForbiddenError{}
 	}
+	if err := s.owner.requireSigninRecipient(*custody.recipient); err != nil {
+		return result, err
+	}
 	continuation, err := issued.Continuation.Bindings()
 	if err != nil || continuation.Scope.Purpose != otp.PurposeSignin {
 		return result, identity.ForbiddenError{}

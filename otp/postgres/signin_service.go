@@ -87,6 +87,9 @@ func NewSigninService(sender *SendService, c SigninConfig) (*SigninService, erro
 		return nil, err
 	}
 	owner.signin.knownEmptyFactors = c.RequireKnownEmptyFactors
+	if owner.signin.phone {
+		owner.signin.knownEmptyFactors = true
+	}
 	repo, err := kernel.NewRepository(sender.pool, kernel.Config{MaximumDuration: sender.timeout})
 	if err != nil {
 		return nil, ErrInvalidConfiguration
@@ -150,6 +153,9 @@ func (s *SigninService) Signin(ctx context.Context, r otp.SigninRequest) (result
 	if err != nil || custody.recipient == nil {
 		return result, identity.ForbiddenError{}
 	}
+	if err := s.owner.requireSigninRecipient(*custody.recipient); err != nil {
+		return result, err
+	}
 	continuation, _ := issued.Continuation.Bindings()
 	if continuation.Scope.Purpose != otp.PurposeSignin {
 		return result, identity.ForbiddenError{}
@@ -157,7 +163,7 @@ func (s *SigninService) Signin(ctx context.Context, r otp.SigninRequest) (result
 	if err := s.source.requireCurrent(ctx, spec.Binding, custody.authority, flow); err != nil {
 		return result, err
 	}
-	spec.Operation = signinOperation(spec.Operation.SubjectRequirement)
+	spec.Operation = s.owner.signin.operation(spec.Operation.SubjectRequirement)
 	spec.Binding.OperationID, spec.Binding.SchemaID, spec.Binding.RecordID = spec.Operation.OperationID, spec.Operation.SchemaID, ""
 	spec.Binding.CommandID, err = identity.NewCommandID()
 	if err != nil {
@@ -165,7 +171,7 @@ func (s *SigninService) Signin(ctx context.Context, r otp.SigninRequest) (result
 	}
 	spec.Binding.CorrelationID = string(spec.Binding.CommandID)
 	spec.Fields = nil
-	q := checkQuery(spec.Binding, spec.Binding.CommandID, "identity.otp.signin", false)
+	q := checkQuery(spec.Binding, spec.Binding.CommandID, string(spec.Operation.OperationID), false)
 	caller := s.source.planCaller(r.Caller, q)
 	caller.PolicyRevision = authorization.Revision(s.policy.PolicyVersion)
 	admission, err := s.coordinator.ObserveCommandAdmission(ctx, q, caller)
@@ -271,9 +277,9 @@ func (s *SigninService) authorizeRecipient(ctx context.Context, caller authoriza
 	}
 	c.PolicyRevision = authorization.Revision(policy.PolicyVersion)
 	c.Request.Tenant = scope.TenantID
-	c.Request.Action = "identity.otp.signin"
+	c.Request.Action = authorization.Action(s.owner.signin.operation(identity.FeatureSubjectAnonymousFlow).OperationID)
 	if history {
-		c.Request.Action = "identity.otp.signin.recover"
+		c.Request.Action += ".recover"
 	}
 	c.Request.Resource = authorization.Resource{Type: "identity.user", ID: authorization.ResourceID(recipient.User.ID)}
 	// Strip every reserved namespace from every caller-controlled attribute map.
@@ -380,7 +386,7 @@ func (e signinExecutor) ExecuteIssue(ctx context.Context, request session.IssueR
 	if err != nil {
 		return session.IssueExecution{}, err
 	}
-	plan, err := otpFeaturePlan(s.registry, s.owner, command, attempt, "otp_signin", "otp.signin", "otp.signed-in.v1")
+	plan, err := otpFeaturePlan(s.registry, s.owner, command, attempt, "otp_signin", s.owner.signin.auditEvent(), s.owner.signin.lifecycleEvent())
 	if err != nil {
 		return session.IssueExecution{}, err
 	}
@@ -462,7 +468,7 @@ func (s *SigninService) RecoverSignin(ctx context.Context, r otp.SigninRecoveryR
 	fingerprint, _ := base64.RawURLEncoding.Strict().DecodeString(string(b.Attempt.Fingerprint))
 	defer clear(fingerprint)
 	plan := kernel.OTPAttemptPlan{AttemptID: string(b.Attempt.AttemptID), AttemptFingerprint: [32]byte(fingerprint), FingerprintKeyVersion: b.Attempt.FingerprintKeyVersion, ChallengeID: string(b.SendCommandID), ScopeDigest: b.ScopeDigest, DigestKeyVersion: b.DigestKeyVersion, ExpectedVersion: b.ExpectedVersion, Mode: kernel.OTPConsume}
-	q := checkQuery(f.Binding, b.Attempt.CommandID, "identity.otp.signin", false)
+	q := checkQuery(f.Binding, b.Attempt.CommandID, string(s.owner.signin.operation(f.Operation.SubjectRequirement).OperationID), false)
 	receipt, err := s.coordinator.RecoverOTPFeatureCommand(ctx, q, plan, s.source.planCaller(r.Caller, q))
 	if receipt.Feature == nil {
 		return result, err

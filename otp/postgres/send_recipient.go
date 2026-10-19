@@ -11,6 +11,7 @@ import (
 )
 
 const issuanceRecipientRecordPrefix = "identity-otp-recipient-issuance-v1\x00"
+const profiledRecipientPrefix = "IORP2\x00"
 
 func unwrapRecipientIssuance(data []byte) ([]byte, *kernel.RecipientRecord, error) {
 	if bytes.HasPrefix(data, []byte(issuanceRecordPrefix)) || bytes.HasPrefix(data, []byte(csrfIssuanceRecordPrefix)) || bytes.HasPrefix(data, []byte(mfaIssuanceRecordPrefix)) {
@@ -57,6 +58,16 @@ func validateSendRecipient(r kernel.RecipientRecord, scope otp.DigestScopeSpec, 
 }
 
 func appendSendRecipient(out []byte, r kernel.RecipientRecord) []byte {
+	// The first legacy field is a bounded uint32-length tenant. This marker
+	// cannot be such a length, so old unprofiled bytes remain exactly unchanged
+	// and old readers fail closed on new exact-profile custody.
+	if r.Query.NormalizationProfile != "" {
+		out = append(out, []byte(profiledRecipientPrefix)...)
+		out = appendAuthorityText(out, r.Query.NormalizationProfile)
+		out = binary.BigEndian.AppendUint32(out, r.Query.NormalizationVersion)
+		out = appendAuthorityText(out, r.Identifier.NormalizationProfile)
+		out = binary.BigEndian.AppendUint32(out, r.Identifier.NormalizationVersion)
+	}
 	for _, text := range []string{string(r.Query.TenantID), string(r.Query.UserID), string(r.Query.Kind), r.Query.CanonicalValue, string(r.User.ID), string(r.User.TenantID), string(r.User.Status), string(r.Identifier.ID), string(r.Identifier.UserID), string(r.Identifier.Kind), r.Identifier.CanonicalValue, r.Identifier.DisplayValue, string(r.Verification.IdentifierID)} {
 		out = appendAuthorityText(out, text)
 	}
@@ -83,9 +94,22 @@ func appendSendRecipient(out []byte, r kernel.RecipientRecord) []byte {
 func readSendRecipient(r *recordReader) (kernel.RecipientRecord, error) {
 	bad := func() (kernel.RecipientRecord, error) { return kernel.RecipientRecord{}, ErrInvalidCommand }
 	selected := kernel.RecipientRecord{}
+	profiled := bytes.HasPrefix(r.data, []byte(profiledRecipientPrefix))
+	var queryProfile, identifierProfile string
+	var queryVersion, identifierVersion uint32
+	if profiled {
+		r.data = r.data[len(profiledRecipientPrefix):]
+		queryProfile, queryVersion = r.text(256), r.u32()
+		identifierProfile, identifierVersion = r.text(256), r.u32()
+		if queryProfile == "" || queryVersion == 0 || identifierProfile != queryProfile || identifierVersion != queryVersion {
+			return bad()
+		}
+	}
 	selected.Query = kernel.RecipientQuery{TenantID: identity.TenantID(r.text(256)), UserID: identity.UserID(r.text(256)), Kind: identity.IdentifierKind(r.text(32)), CanonicalValue: r.text(512)}
 	selected.User = identity.User{ID: identity.UserID(r.text(256)), TenantID: identity.TenantID(r.text(256)), Status: identity.Status(r.text(32))}
 	selected.Identifier = identity.Identifier{ID: identity.IdentifierID(r.text(256)), UserID: identity.UserID(r.text(256)), Kind: identity.IdentifierKind(r.text(32)), CanonicalValue: r.text(512), DisplayValue: r.text(512)}
+	selected.Query.NormalizationProfile, selected.Query.NormalizationVersion = queryProfile, queryVersion
+	selected.Identifier.NormalizationProfile, selected.Identifier.NormalizationVersion = identifierProfile, identifierVersion
 	selected.Verification.IdentifierID = identity.IdentifierID(r.text(256))
 	selected.Query.Eligibility = kernel.RecipientEligibility(r.u8())
 	selected.Verification.State = identity.VerificationState(r.u8())

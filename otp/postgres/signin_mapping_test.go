@@ -1,6 +1,7 @@
 package postgres
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"reflect"
@@ -17,7 +18,7 @@ import (
 )
 
 // This fixture proves native mapping/custody, not the composed public login.
-func signinMappingFixture(t *testing.T) (*AttemptCodec, otp.AttemptCommand, identity.FeatureCommandSpec, auth.BearerCredential, issuanceCustody, session.Session) {
+func signinMappingFixture(t *testing.T, phoneProfile ...bool) (*AttemptCodec, otp.AttemptCommand, identity.FeatureCommandSpec, auth.BearerCredential, issuanceCustody, session.Session) {
 	t.Helper()
 	c, challenge, spec, cookie, authority := issuanceCustodyFixture(t, false)
 	draft, _ := challenge.Bindings()
@@ -25,11 +26,40 @@ func signinMappingFixture(t *testing.T) (*AttemptCodec, otp.AttemptCommand, iden
 	continuation.Scope.ChallengeID = "AgICAgICAgICAgICAgICAg"
 	continuation.Scope.AuthorizationBinding = [32]byte{}
 	var err error
+	isPhone := len(phoneProfile) == 1 && phoneProfile[0]
+	if isPhone {
+		continuation.Scope.Channel = otp.ChannelSMS
+		continuation.Scope.Destination, err = otp.NewDestinationInput("+12025550123")
+		if err != nil {
+			t.Fatal(err)
+		}
+		original, _ := continuation.Authorization.PreAuthTransaction()
+		binding, _ := original.Bindings()
+		binding.Binding.Intent.Action = "identity.phone.signin"
+		binding.Binding.Intent.IdentifierBinding = [32]byte{19}
+		token, _ := session.ParseToken(cookie.Token())
+		key, _ := session.NewDigestKey(3, bytes.Repeat([]byte{0x56}, 32))
+		binding.Cookie, err = token.PreAuthDigest(key, binding.Binding)
+		if err != nil {
+			t.Fatal(err)
+		}
+		original, err = session.NewPreAuthTransaction(binding)
+		if err != nil {
+			t.Fatal(err)
+		}
+		continuation.Authorization, err = otp.NewBoundPreAuthAuthorization(original)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
 	draft.Continuation, err = otp.NewContinuation(continuation.Scope, continuation.Authorization, continuation.RememberPolicy)
 	if err != nil {
 		t.Fatal(err)
 	}
 	spec.Operation = signinOperation(spec.Operation.SubjectRequirement)
+	if isPhone {
+		spec.Operation = phoneSigninOperation(spec.Operation.SubjectRequirement)
+	}
 	spec.Binding.OperationID, spec.Binding.SchemaID, spec.Binding.RecordID = spec.Operation.OperationID, spec.Operation.SchemaID, ""
 	spec.Fields = nil
 	code, _ := auth.NewOneTimeCode("123456")
@@ -60,6 +90,11 @@ func signinMappingFixture(t *testing.T) (*AttemptCodec, otp.AttemptCommand, iden
 		Verification:         identity.Verification{IdentifierID: id, State: identity.VerificationVerified, VerifiedAt: draft.IssuedAt, Version: 3},
 		UserAuthorityVersion: 4, IdentifierAuthorityVersion: 5, CredentialAuthorityVersion: 6, ObservedAt: draft.IssuedAt,
 	}
+	if isPhone {
+		r.Query.Kind, r.Identifier.Kind = identity.IdentifierPhone, identity.IdentifierPhone
+		r.Query.NormalizationProfile, r.Identifier.NormalizationProfile = "identity.phone.e164-ascii-v1.metadata-v9.0.40", "identity.phone.e164-ascii-v1.metadata-v9.0.40"
+		r.Query.NormalizationVersion, r.Identifier.NormalizationVersion = 1, 1
+	}
 	if err := r.Validate(); err != nil {
 		t.Fatal(err)
 	}
@@ -78,7 +113,7 @@ func signinMappingFixture(t *testing.T) (*AttemptCodec, otp.AttemptCommand, iden
 	if flow.Binding.ExpiresAt.Before(until) {
 		until = flow.Binding.ExpiresAt
 	}
-	metadata, err := session.NewOTPAuthentication(session.OTPAuthenticationSpec{CommandID: spec.Binding.CommandID, SendCommandID: identity.CommandID(continuation.Scope.ChallengeID), ChallengeID: continuation.Scope.ChallengeID, AttemptID: string(ab.AttemptID), IdentifierID: id, IdentifierKind: identity.IdentifierEmail, IdentifierVersion: 9, VerificationVersion: 3, AuthenticatedAt: draft.IssuedAt, ValidUntil: until})
+	metadata, err := session.NewOTPAuthentication(session.OTPAuthenticationSpec{CommandID: spec.Binding.CommandID, SendCommandID: identity.CommandID(continuation.Scope.ChallengeID), ChallengeID: continuation.Scope.ChallengeID, AttemptID: string(ab.AttemptID), IdentifierID: id, IdentifierKind: r.Identifier.Kind, IdentifierVersion: 9, VerificationVersion: 3, AuthenticatedAt: draft.IssuedAt, ValidUntil: until})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -87,6 +122,33 @@ func signinMappingFixture(t *testing.T) (*AttemptCodec, otp.AttemptCommand, iden
 		t.Fatal(err)
 	}
 	return c, a, spec, cookie, issuanceCustody{challenge: challenge, authority: authority, recipient: &r}, record
+}
+
+func TestPhoneSigninMappingRetainsDistinctOriginalScope(t *testing.T) {
+	c, attempt, spec, cookie, original, record := signinMappingFixture(t, true)
+	command, plan, err := c.mapSigninCommand(context.Background(), attempt, 3, spec, cookie, original, record, 17)
+	if err != nil {
+		t.Fatal("phone consuming intent rejected", err)
+	}
+	restarted, err := NewAttemptCodec(codecConfig())
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, recipient, version, err := restarted.restoreSigninWithFactors(command, plan)
+	if err != nil || version != 17 || !reflect.DeepEqual(recipient, *original.recipient) || !reflect.DeepEqual(got, record) {
+		t.Fatal("phone consuming custody lost target/profile/factors/session", err)
+	}
+	changed, _ := command.Feature()
+	changed.Operation = signinOperation(changed.Operation.SubjectRequirement)
+	changed.Binding.OperationID, changed.Binding.SchemaID = changed.Operation.OperationID, changed.Operation.SchemaID
+	code, _ := command.OneTimeCode()
+	foreign, err := identity.NewFeatureOneTimeCodePreAuthCommand(changed, code, cookie)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := restarted.restoreSignin(foreign, plan); err == nil {
+		t.Fatal("phone custody entered generic email OTP operation")
+	}
 }
 
 func TestSigninMappingRetainsOriginalRecipientAndCompleteSession(t *testing.T) {

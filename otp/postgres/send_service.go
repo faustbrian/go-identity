@@ -89,7 +89,7 @@ func NewSendService(pool *database.Pool, c SendConfig, crypto *envelope.Service)
 	return newSendService(pool, c, crypto, nil, nil)
 }
 
-func newSendService(pool *database.Pool, c SendConfig, crypto *envelope.Service, email, changeDomain *emailVerificationProfile) (*SendService, error) {
+func newSendService(pool *database.Pool, c SendConfig, crypto *envelope.Service, email, changeDomain *emailVerificationProfile, phoneProfile ...*phoneSigninProfile) (*SendService, error) {
 	if pool == nil || pool.Raw() == nil || crypto == nil || c.Timeout < time.Millisecond || c.Timeout > 5*time.Second || c.Store.Codec != nil {
 		return nil, ErrInvalidConfiguration
 	}
@@ -104,6 +104,12 @@ func newSendService(pool *database.Pool, c SendConfig, crypto *envelope.Service,
 	}
 	store.emailVerification = email
 	store.emailChangeDomain = changeDomain
+	if len(phoneProfile) > 1 || len(phoneProfile) == 1 && (phoneProfile[0] == nil || email != nil || changeDomain != nil) {
+		return nil, ErrInvalidConfiguration
+	}
+	if len(phoneProfile) == 1 {
+		store.phoneSignin = phoneProfile[0]
+	}
 	deliveryOwner, err := deliverypg.NewContributor(c.Delivery, crypto)
 	if err != nil {
 		return nil, ErrInvalidConfiguration

@@ -62,6 +62,7 @@ type Contributor struct {
 	emailChange               *emailChangeSendProfile
 	emailChangeDomain         *emailVerificationProfile
 	phoneConfirmation         *phoneEnrollmentConfirmation
+	phoneSignin               *phoneSigninProfile
 }
 
 var _ kernel.OTPAttemptContributor = (*Contributor)(nil)
@@ -315,7 +316,7 @@ func (p *Contributor) RecoverParticipant(ctx context.Context, w kernel.RecoveryW
 	if _, registration, _, err := w.FeatureScope(p); err == nil && p.send != nil && registration.Operation == issuanceOperation(registration.Operation.SubjectRequirement) {
 		return (&issuanceContributor{store: p}).recoverIssuance(ctx, w, p)
 	}
-	if _, registration, _, err := w.FeatureScope(p); err == nil && p.signin != nil && registration.Operation == signinOperation(registration.Operation.SubjectRequirement) {
+	if _, registration, _, err := w.FeatureScope(p); err == nil && p.signin != nil && registration.Operation == p.signin.operation(registration.Operation.SubjectRequirement) {
 		return p.recoverSignin(ctx, w)
 	}
 	return p.recoverConsuming(ctx, w)

@@ -126,6 +126,10 @@ func newPreparedSendContributor(store *Contributor, d *deliverypg.Contributor, c
 		frame = append(frame, []byte("email-change-otp-domain-v1\x00")...)
 		frame = append(frame, store.emailChangeDomain.configuration[:]...)
 	}
+	if store.phoneSignin != nil {
+		frame = append(frame, []byte("phone-otp-signin-v1\x00")...)
+		frame = append(frame, store.phoneSignin.configuration[:]...)
+	}
 	copyOfStore := *store
 	copyOfStore.send = &preparedSendProfile{preparer: preparer, delivery: d, policy: c.preparation.Policy, template: c.preparation.TemplateID, templateVersion: c.preparation.TemplateVersion, provider: c.provider, contributors: append([]kernel.ContributorDescriptor(nil), c.contributors...), configuration: sha256.Sum256(frame), renderer: renderer, locales: append([]string(nil), c.preparation.LocaleChain...), publicAudit: c.publicAudit}
 	return &copyOfStore, nil

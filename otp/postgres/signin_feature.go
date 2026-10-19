@@ -13,15 +13,23 @@ import (
 
 type signinProfile struct {
 	knownEmptyFactors bool
+	phone             bool
 	effect            *sessionpg.OTPSigninEffect
 	profile           sessionpg.OTPAdmissionConfig
+}
+
+func (p *signinProfile) operation(subject identity.FeatureSubjectRequirement) identity.FeatureOperation {
+	if p != nil && p.phone {
+		return phoneSigninOperation(subject)
+	}
+	return signinOperation(subject)
 }
 
 // Execution in native factor mode cannot borrow old policy-only custody. V2
 // custody keeps its fence even when restarted with policy-only configuration.
 func (p *Contributor) signinFactors(command identity.Command, plan kernel.OTPAttemptPlan) (identity.UserID, uint64, error) {
 	f, ok := command.Feature()
-	if p == nil || p.signin == nil || !ok || f.Operation != signinOperation(f.Operation.SubjectRequirement) {
+	if p == nil || p.signin == nil || !ok || f.Operation != p.signin.operation(f.Operation.SubjectRequirement) {
 		return "", 0, nil
 	}
 	_, recipient, version, err := p.codec.restoreSigninWithFactors(command, plan)
@@ -32,7 +40,7 @@ func (p *Contributor) signinFactors(command identity.Command, plan kernel.OTPAtt
 }
 
 func (p *Contributor) signinFactorsFromSpec(spec identity.FeatureCommandSpec, plan kernel.OTPAttemptPlan) (identity.UserID, uint64, error) {
-	if p == nil || p.signin == nil || spec.Operation != signinOperation(spec.Operation.SubjectRequirement) {
+	if p == nil || p.signin == nil || spec.Operation != p.signin.operation(spec.Operation.SubjectRequirement) {
 		return "", 0, nil
 	}
 	command, err := identity.NewFeatureCommand(spec)
@@ -59,13 +67,13 @@ func newSigninContributor(base *Contributor, config sessionpg.Config, profile se
 	}
 	owned := *base
 	owned.send = nil
-	owned.signin = &signinProfile{effect: effect, profile: profile}
+	owned.signin = &signinProfile{effect: effect, profile: profile, phone: base.phoneSignin != nil}
 	return &owned, nil
 }
 
 func (p *Contributor) validateSigninCommand(command identity.Command, plan kernel.CommandPlan) error {
 	f, ok := command.Feature()
-	if p == nil || p.signin == nil || !ok || f.Operation != signinOperation(f.Operation.SubjectRequirement) || plan.Feature == nil || plan.Feature.Contributor != p.Descriptor() || plan.Feature.Operation != f.Operation || plan.OTP == nil || plan.OTP.Mode != kernel.OTPConsume || plan.SubjectType != "otp_signin" || plan.Lifecycle == nil || plan.Lifecycle.EventType != "otp.signed-in.v1" || plan.Lifecycle.BeforeVersion != 0 || plan.Lifecycle.AfterVersion != 0 || len(plan.Audits) != 1 || plan.Audits[0].EventType != "otp.signin" || plan.IdentifierAdmission != nil || plan.RiskEvidence != nil || plan.CommandCounters != nil || plan.CaptchaEvidence != nil || plan.CaptchaReplayReservation || plan.Capability != nil || plan.Delivery != nil || plan.CapabilityIssuance != nil {
+	if p == nil || p.signin == nil || !ok || f.Operation != p.signin.operation(f.Operation.SubjectRequirement) || plan.Feature == nil || plan.Feature.Contributor != p.Descriptor() || plan.Feature.Operation != f.Operation || plan.OTP == nil || plan.OTP.Mode != kernel.OTPConsume || plan.SubjectType != "otp_signin" || plan.Lifecycle == nil || plan.Lifecycle.EventType != p.signin.lifecycleEvent() || plan.Lifecycle.BeforeVersion != 0 || plan.Lifecycle.AfterVersion != 0 || len(plan.Audits) != 1 || plan.Audits[0].EventType != p.signin.auditEvent() || plan.IdentifierAdmission != nil || plan.RiskEvidence != nil || plan.CommandCounters != nil || plan.CaptchaEvidence != nil || plan.CaptchaReplayReservation || plan.Capability != nil || plan.Delivery != nil || plan.CapabilityIssuance != nil {
 		return ErrInvalidCommand
 	}
 	if err := p.ValidateOTPAttemptCommand(command, *plan.OTP); err != nil {
@@ -76,6 +84,20 @@ func (p *Contributor) validateSigninCommand(command identity.Command, plan kerne
 		return err
 	}
 	return p.requireSigninProfile(record)
+}
+
+func (p *signinProfile) auditEvent() string {
+	if p != nil && p.phone {
+		return "phone.signin"
+	}
+	return "otp.signin"
+}
+
+func (p *signinProfile) lifecycleEvent() string {
+	if p != nil && p.phone {
+		return "phone.signed-in.v1"
+	}
+	return "otp.signed-in.v1"
 }
 
 // Compare every owner-derived key, not just epochs. In particular the original
@@ -108,6 +130,23 @@ func (p *Contributor) requireSigninProfile(record session.Session) error {
 	return nil
 }
 
+func (p *Contributor) requireSigninRecipient(recipient kernel.RecipientRecord) error {
+	if p == nil || p.signin == nil {
+		return ErrInvalidCommand
+	}
+	if !p.signin.phone {
+		return nil
+	}
+	if p.phoneSignin == nil || p.phoneSignin.policy == nil || recipient.Suppressed {
+		return identity.ForbiddenError{}
+	}
+	profile := p.phoneSignin.policy.Profile()
+	if recipient.Identifier.Kind != identity.IdentifierPhone || recipient.Query.NormalizationProfile != profile.ID || recipient.Query.NormalizationVersion != profile.Version || recipient.Identifier.NormalizationProfile != profile.ID || recipient.Identifier.NormalizationVersion != profile.Version {
+		return identity.ForbiddenError{}
+	}
+	return nil
+}
+
 func (p *Contributor) applySignin(ctx context.Context, w kernel.Work, command identity.Command) (identity.FeatureReceipt, error) {
 	if ctx == nil || p == nil || p.signin == nil {
 		return identity.FeatureReceipt{}, ErrInvalidCommand
@@ -121,6 +160,9 @@ func (p *Contributor) applySignin(ctx context.Context, w kernel.Work, command id
 		return identity.FeatureReceipt{}, err
 	}
 	if err := p.requireSigninProfile(record); err != nil {
+		return identity.FeatureReceipt{}, err
+	}
+	if err := p.requireSigninRecipient(recipient); err != nil {
 		return identity.FeatureReceipt{}, err
 	}
 	// The effect borrows this very invocation. Any error is propagated so its

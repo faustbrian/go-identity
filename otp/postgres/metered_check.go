@@ -33,7 +33,7 @@ func (p *Contributor) FeatureOperations() []identity.FeatureOperation {
 		ops = append(ops, issuanceOperation(identity.FeatureSubjectUser), issuanceOperation(identity.FeatureSubjectAnonymousFlow))
 	}
 	if p.signin != nil {
-		ops = append(ops, signinOperation(identity.FeatureSubjectUser), signinOperation(identity.FeatureSubjectAnonymousFlow))
+		ops = append(ops, p.signin.operation(identity.FeatureSubjectUser), p.signin.operation(identity.FeatureSubjectAnonymousFlow))
 	}
 	return ops
 }
@@ -48,7 +48,7 @@ func (p *Contributor) ValidateFeatureCommand(command identity.Command, plan kern
 	if p != nil && p.emailVerify != nil && ok && spec.Operation == p.emailVerify.service.operation() {
 		return p.emailVerify.ValidateFeatureCommand(command, plan)
 	}
-	if p != nil && p.signin != nil && ok && spec.Operation == signinOperation(spec.Operation.SubjectRequirement) {
+	if p != nil && p.signin != nil && ok && spec.Operation == p.signin.operation(spec.Operation.SubjectRequirement) {
 		return p.validateSigninCommand(command, plan)
 	}
 	if p != nil && p.send != nil && ok && spec.Operation == issuanceOperation(spec.Operation.SubjectRequirement) {
@@ -71,7 +71,7 @@ func (p *Contributor) ApplyFeature(ctx context.Context, w kernel.Work, command i
 	if spec, ok := command.Feature(); p != nil && p.emailVerify != nil && ok && spec.Operation == p.emailVerify.service.operation() {
 		return p.emailVerify.ApplyFeature(ctx, w, command)
 	}
-	if spec, ok := command.Feature(); p != nil && p.signin != nil && ok && spec.Operation == signinOperation(spec.Operation.SubjectRequirement) {
+	if spec, ok := command.Feature(); p != nil && p.signin != nil && ok && spec.Operation == p.signin.operation(spec.Operation.SubjectRequirement) {
 		return p.applySignin(ctx, w, command)
 	}
 	if p != nil && p.send != nil {

@@ -85,6 +85,13 @@ func FuzzSendRecipientFrame(f *testing.F) {
 		UserAuthorityVersion: 1, IdentifierAuthorityVersion: 1, CredentialAuthorityVersion: 1, ObservedAt: now,
 	}
 	f.Add(appendSendRecipient(nil, r))
+	r.Query.Kind, r.Identifier.Kind = identity.IdentifierPhone, identity.IdentifierPhone
+	r.Query.CanonicalValue, r.Identifier.CanonicalValue = "+12025550123", "+12025550123"
+	r.Identifier.ID, r.Verification.IdentifierID = "phone", "phone"
+	r.Query.NormalizationProfile, r.Identifier.NormalizationProfile = "identity.phone.e164-ascii-v1.metadata-v9.0.40", "identity.phone.e164-ascii-v1.metadata-v9.0.40"
+	r.Query.NormalizationVersion, r.Identifier.NormalizationVersion = 1, 1
+	f.Add(appendSendRecipient(nil, r))
+	f.Add([]byte(profiledRecipientPrefix))
 	f.Add([]byte{})
 	f.Add(bytes.Repeat([]byte{255}, 8192))
 	f.Fuzz(func(t *testing.T, data []byte) {

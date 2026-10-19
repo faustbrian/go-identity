@@ -1,5 +1,48 @@
 # OTP PostgreSQL
 
+## Existing-account phone SMS-code signin
+
+`NewPhoneSigninService` selects a separate `identity.phone.signin` workflow;
+it does not turn generic email OTP into phone authentication. It reuses this
+module's durable attempts, encrypted delivery, current native MFA authority and
+the session owner's atomic issuance. An already verified phone with the exact
+stored normalization profile and known-empty native factors is required.
+Enrollment, password login, reset and MFA continuation are separate selections.
+
+1. Install the ordinary OTP/delivery/session histories and the selected
+   `session/postgres.PhoneOTPSigninMigrationSource` after the actual installed
+   session-purpose predecessor and optional username/phone-password suffixes.
+   Apply migrations through the existing bounded runner before enabling calls;
+   constructors and `Initialize` do not install schema or backfill authority.
+2. Supply `PhoneSigninConfig` with an immutable phone number policy and genuine
+   native `SendConfig`/`SigninConfig`. Send must select consuming-only
+   `PurposeSignin`, `PreAuthAction: "identity.phone.signin"`, and a nonzero
+   `IdentifierKey`. Authenticated-session Send selection is not permitted.
+   Call `Initialize` to bind the retained key metadata before serving.
+3. Canonicalize the number with that policy. Trusted initiation derives
+   `phone.OTPSigninIdentifierBinding` using the same tenant and identifier key,
+   then uses the existing session issuer to retain it in the original pre-auth
+   intent. Never accept a browser-provided commitment or select the account
+   from a caller user ID. The original intent owns remember policy and expiry.
+4. Construct `phone.SigninSendRequest` and call `SendSignin`. Accepted includes
+   suppressed recipients and proves neither ownership nor delivery. Process the
+   existing encrypted delivery queue through its sender seam. `Signin` accepts
+   the original flow, returned Send command and submitted code; only a fresh
+   committed result may reveal its session/CSRF credentials.
+5. Trusted HTTP rate admission may call `ResolveSigninSource` with the original
+   flow and Send command. It authenticates current original scope without code
+   comparison or attempt debit; it is not a public discovery endpoint or a grant.
+   After ambiguity use original `RecoverSignin` with action
+   `identity.phone.signin.recover`, not another code submission. Recovery returns
+   history without regenerating SMS, tokens or CSRF material.
+
+Roll all participating readers forward before producing this profile's new
+target/profile-bound custody. Existing unbound/unprofiled bytes remain unchanged,
+but old readers deliberately reject the new frames. Disabling new initiation
+does not make old-reader rollback able to reconcile retained new histories;
+keep compatible recovery readers and the original keys/profiles for the retained
+history lifetime. This native selection enables no HTTP route automatically.
+
 ## Phone enrollment issuance participant
 
 `NewPhoneEnrollmentIssuer` selects consuming-only `phone-verification` SMS

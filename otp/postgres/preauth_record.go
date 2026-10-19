@@ -1,6 +1,7 @@
 package postgres
 
 import (
+	"bytes"
 	"encoding/binary"
 	"time"
 
@@ -8,12 +9,21 @@ import (
 	"github.com/faustbrian/go-identity/session"
 )
 
+const identifierBoundPreAuthRecordPrefix = "IOPB2\x00"
+
 // This bounded scalar projection is private encrypted command custody, not a
 // second pre-auth store or admission proof. The canonical primary row and every
 // active-state/cookie/reservation comparison remain owned by session/postgres.
 func appendPreAuthRecord(out []byte, record session.PreAuthTransaction) []byte {
 	s, _ := record.Bindings()
 	b, i := s.Binding, s.Binding.Intent
+	// Legacy records start with a bounded uint16-length flow ID. This marker
+	// is not a valid legacy length. Keep old bytes unchanged and make bound
+	// records fail closed in old readers rather than dropping original intent.
+	if i.IdentifierBinding != ([32]byte{}) {
+		out = append(out, []byte(identifierBoundPreAuthRecordPrefix)...)
+		out = append(out, i.IdentifierBinding[:]...)
+	}
 	for _, value := range []string{string(b.ID), string(i.TenantID), i.Action, i.Origin, i.CallbackURL, i.PolicyID, b.IssuedAt.UTC().Format(time.RFC3339Nano), b.ExpiresAt.UTC().Format(time.RFC3339Nano)} {
 		out = binary.BigEndian.AppendUint16(out, uint16(len(value)))
 		out = append(out, value...)
@@ -33,6 +43,13 @@ func appendPreAuthRecord(out []byte, record session.PreAuthTransaction) []byte {
 func readPreAuthRecord(r *recordReader) (session.PreAuthTransaction, error) {
 	s := session.PreAuthTransactionSpec{}
 	b, i := &s.Binding, &s.Binding.Intent
+	if bytes.HasPrefix(r.data, []byte(identifierBoundPreAuthRecordPrefix)) {
+		r.data = r.data[len(identifierBoundPreAuthRecordPrefix):]
+		copy(i.IdentifierBinding[:], r.take(32))
+		if !r.ok || i.IdentifierBinding == ([32]byte{}) {
+			return session.PreAuthTransaction{}, ErrInvalidCommand
+		}
+	}
 	b.ID = identity.PreAuthTransactionID(r.text(22))
 	i.TenantID = identity.TenantID(r.text(128))
 	i.Action, i.Origin, i.CallbackURL, i.PolicyID = r.text(128), r.text(2048), r.text(2048), r.text(128)

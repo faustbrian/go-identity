@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Add explicit existing-account phone SMS-code signin over native OTP attempts,
+  encrypted delivery and atomic session effects. Bind the original canonical
+  target and stored number profile, require known-empty native factors, and
+  preserve code-free original recovery without redelivering credentials. Install
+  the selected forward phone OTP session-purpose and OTP-record migrations before
+  use. Generic email OTP APIs and legacy unprofiled custody bytes are unchanged;
+  older readers reject the new profile rather than discarding its bindings.
+
 - Expose the exact original issued lifetime on restored phone enrollment
   confirmations. Preserve shortened deadlines across retries without renewing
   validity or granting current verification admission.
