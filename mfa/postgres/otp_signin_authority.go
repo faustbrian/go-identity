@@ -125,6 +125,11 @@ func validateOTPSigninFactorRequest(ctx context.Context, user identity.UserID, e
 
 func validateOTPSigninFactorScope(b identity.CommandBinding, spec identity.FeatureCommandSpec, descriptor kernel.ContributorDescriptor, plan kernel.OTPAttemptPlan, user identity.UserID) error {
 	op := identity.FeatureOperation{Owner: "identity/otp", OperationID: "identity.otp.signin", SchemaID: "identity-otp-signin", SchemaVersion: 1, RecordRequirement: identity.FeatureRecordOmitted, SubjectRequirement: spec.Operation.SubjectRequirement}
+	// Phone orchestration reuses the exact OTP native participant and live
+	// phase handles, not the password workflow or a caller factor assertion.
+	if b.OperationID == "identity.phone.signin" {
+		op.Owner, op.OperationID, op.SchemaID = "identity/phone", "identity.phone.signin", "identity.phone.signin.native-v1"
+	}
 	if descriptor != (kernel.ContributorDescriptor{Owner: "identity/otp/postgres", ContractID: "identity.otp.store", Version: 1}) || spec.Operation != op || b != spec.Binding || b.ValidateFor(op) != nil || plan.Mode != kernel.OTPConsume || b.UserID != "" && b.UserID != user {
 		return invalidAuthority()
 	}

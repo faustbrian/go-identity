@@ -20,7 +20,7 @@ func otpIssuerFixture(t testing.TB, anonymous, csrf bool) (*session.SessionIssue
 	return otpIssuerPolicyFixture(t, anonymous, csrf, session.BrowserSession)
 }
 
-func otpIssuerPolicyFixture(t testing.TB, anonymous, csrf bool, choice session.RememberChoice) (*session.SessionIssuer, session.PreparedIssuance, identity.Command, *issueExecutor, *mutableIssueClock) {
+func otpIssuerPolicyFixture(t testing.TB, anonymous, csrf bool, choice session.RememberChoice, phone ...bool) (*session.SessionIssuer, session.PreparedIssuance, identity.Command, *issueExecutor, *mutableIssueClock) {
 	t.Helper()
 	spec, p := otpSession(t)
 	var err error
@@ -36,6 +36,11 @@ func otpIssuerPolicyFixture(t testing.TB, anonymous, csrf bool, choice session.R
 	b.CommandID, b.OperationID, b.SchemaID, b.RecordID = p.CommandID, "identity.otp.signin", "identity-otp-signin", ""
 	b.ActorID, b.ActorKind = "login-service", authorization.SubjectServiceAccount
 	d := identity.FeatureOperation{Owner: "identity/otp", OperationID: b.OperationID, SchemaID: b.SchemaID, SchemaVersion: 1, RecordRequirement: identity.FeatureRecordOmitted}
+	if len(phone) == 1 && phone[0] {
+		b.OperationID, b.SchemaID = "identity.phone.signin", "identity.phone.signin.native-v1"
+		d.Owner, d.OperationID, d.SchemaID = "identity/phone", b.OperationID, b.SchemaID
+		p.IdentifierKind = identity.IdentifierPhone
+	}
 	if anonymous {
 		b.UserID, b.AnonymousFlowID = "", "original-preauth"
 		d.SubjectRequirement = identity.FeatureSubjectAnonymousFlow
@@ -74,6 +79,62 @@ func otpIssuerPolicyFixture(t testing.TB, anonymous, csrf bool, choice session.R
 		t.Fatal(err)
 	}
 	return issuer, prepared, command, executor, clock
+}
+
+func TestOTPIssuerPhoneSigninRetainsDistinctPurposeAndRemember(t *testing.T) {
+	for _, choice := range []session.RememberChoice{session.BrowserSession, session.PersistentSession} {
+		t.Run(map[session.RememberChoice]string{session.BrowserSession: "browser", session.PersistentSession: "persistent"}[choice], func(t *testing.T) {
+			issuer, prepared, command, _, _ := otpIssuerPolicyFixture(t, true, true, choice, true)
+			f, _ := command.Feature()
+			original, _ := prepared.Session()
+			originalSpec, _ := original.Bindings()
+			originalOTP, _ := original.OTPAuthentication().Bindings()
+			if f.Operation.Owner != "identity/phone" || f.Binding.OperationID != "identity.phone.signin" || originalOTP.IdentifierKind != identity.IdentifierPhone {
+				t.Fatal("phone signin lost its owning operation or identifier kind")
+			}
+			changed := f
+			changed.Binding.OperationID, changed.Operation.OperationID = "identity.otp.signin", "identity.otp.signin"
+			changed.Binding.SchemaID, changed.Operation.SchemaID = "identity-otp-signin", "identity-otp-signin"
+			changed.Operation.Owner = "identity/otp"
+			code, _ := command.OneTimeCode()
+			cookie, _ := command.PreAuthCookie()
+			other, err := identity.NewFeatureOneTimeCodePreAuthCommand(changed, code, cookie)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := issuer.BindOTP(prepared, other); !errors.Is(err, session.ErrInvalidIssuance) {
+				t.Fatal("phone preparation accepted another OTP workflow", err)
+			}
+			bound, err := issuer.BindOTP(prepared, command)
+			if err != nil {
+				t.Fatal("phone preparation rejected original consuming custody", err)
+			}
+			result, err := issuer.Issue(context.Background(), bound)
+			if err != nil || result.CommitOutcome != identity.CommitOutcomeCommitted || result.Replayed {
+				t.Fatal("phone consuming commit failed", err)
+			}
+			resultSpec, _ := result.Session.Bindings()
+			resultOTP, _ := result.Session.OTPAuthentication().Bindings()
+			if resultOTP != originalOTP || resultSpec.Remember != originalSpec.Remember || resultSpec.Lookup != originalSpec.Lookup {
+				t.Fatal("phone issuance replaced original authentication/remember/token custody")
+			}
+			if _, err := bound.CSRFToken(); err != nil {
+				t.Fatal("fresh phone commit withheld its original CSRF token", err)
+			}
+		})
+	}
+}
+
+func TestOTPIssuerPhoneSigninRejectsEmailAuthentication(t *testing.T) {
+	issuer, prepared, command, _, _ := otpIssuerFixture(t, true, true)
+	original, _ := prepared.Session()
+	spec, _ := original.Bindings()
+	spec.Lookup = session.TokenDigest{}
+	f, _ := command.Feature()
+	f.Binding.OperationID, f.Binding.SchemaID = "identity.phone.signin", "identity.phone.signin.native-v1"
+	if _, err := issuer.PrepareOTP(f.Binding, spec, original.OTPAuthentication()); !errors.Is(err, session.ErrInvalidIssuance) {
+		t.Fatal("phone-owned signin accepted an email OTP authentication", err)
+	}
 }
 
 func committedOTPIssue(t testing.TB, r session.IssueRequest) session.IssueExecution {

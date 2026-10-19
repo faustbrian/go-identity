@@ -29,19 +29,25 @@ const ErrPasswordSigninBinding NumberError = "identity.phone.password_signin_bin
 // synchronous call; the caller retains its lifetime. No IO or callbacks run.
 // Invalid input returns a zero commitment and the redacted sentinel above.
 func PasswordSigninIdentifierBinding(number Number, tenant identity.TenantID, key []byte) ([32]byte, error) {
+	return signinIdentifierBinding(number, tenant, key, "identity-phone-password-signin-binding-v1\x00", "identity.phone.password-signin", ErrPasswordSigninBinding)
+}
+
+// Only the two fixed workflow entry points select a domain/action. Keep the
+// historical password frame unchanged while separating OTP initiation from it.
+func signinIdentifierBinding(number Number, tenant identity.TenantID, key []byte, domain, action string, invalid NumberError) ([32]byte, error) {
 	if len(key) < 32 || len(key) > 64 {
-		return [32]byte{}, ErrPasswordSigninBinding
+		return [32]byte{}, invalid
 	}
 	if _, err := identity.ParseIdentifierID(string(tenant)); err != nil {
-		return [32]byte{}, ErrPasswordSigninBinding
+		return [32]byte{}, invalid
 	}
 	record, err := number.Record()
 	if err != nil {
-		return [32]byte{}, ErrPasswordSigninBinding
+		return [32]byte{}, invalid
 	}
-	frame := []byte("identity-phone-password-signin-binding-v1\x00")
+	frame := []byte(domain)
 	frame = binary.BigEndian.AppendUint32(frame, record.Profile.Version)
-	for _, value := range []string{string(tenant), "identity.phone.password-signin", record.Profile.ID, record.Profile.MetadataVersion, record.E164} {
+	for _, value := range []string{string(tenant), action, record.Profile.ID, record.Profile.MetadataVersion, record.E164} {
 		frame = binary.BigEndian.AppendUint32(frame, uint32(len(value)))
 		frame = append(frame, value...)
 	}

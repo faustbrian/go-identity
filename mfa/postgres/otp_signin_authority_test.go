@@ -102,6 +102,32 @@ func TestOTPSigninFactorScopeRequiresExactConsumeProfileAndOriginalSubject(t *te
 	}
 }
 
+func TestPhoneOTPSigninFactorsRequireExactNativeConsumingScope(t *testing.T) {
+	for _, anonymous := range []bool{false, true} {
+		spec, descriptor, plan := otpSigninFactorScope(t, anonymous)
+		spec.Operation.Owner = "identity/phone"
+		spec.Operation.OperationID, spec.Binding.OperationID = "identity.phone.signin", "identity.phone.signin"
+		spec.Operation.SchemaID, spec.Binding.SchemaID = "identity.phone.signin.native-v1", "identity.phone.signin.native-v1"
+		if err := validateOTPSigninFactorScope(spec.Binding, spec, descriptor, plan, "recipient"); err != nil {
+			t.Fatal("native phone OTP scope cannot fence original factor generation", err)
+		}
+		wrong := spec
+		wrong.Operation.Owner = "identity/otp"
+		if validateOTPSigninFactorScope(wrong.Binding, wrong, descriptor, plan, "recipient") == nil {
+			t.Fatal("phone OTP factor guard accepted substituted workflow owner")
+		}
+		wrong = spec
+		wrong.Operation.OperationID, wrong.Binding.OperationID = "identity.phone.password-signin", "identity.phone.password-signin"
+		if validateOTPSigninFactorScope(wrong.Binding, wrong, descriptor, plan, "recipient") == nil {
+			t.Fatal("phone OTP factor guard accepted password workflow")
+		}
+		plan.Mode = kernel.OTPCheck
+		if validateOTPSigninFactorScope(spec.Binding, spec, descriptor, plan, "recipient") == nil {
+			t.Fatal("phone OTP factor guard accepted nonconsuming check")
+		}
+	}
+}
+
 type otpSigninFactorOwner struct{}
 
 func (*otpSigninFactorOwner) Descriptor() kernel.ContributorDescriptor {

@@ -11,6 +11,7 @@ import identity "github.com/faustbrian/go-identity"
 // profiles also admit the exact existing identity/password/postgres participant.
 // Closed phone/password-signin v1 exclusively selects that password participant;
 // a generic same-owner declaration cannot override this profile's native owner.
+// Closed phone SMS-code signin v1 instead selects the existing OTP participant.
 // All supported schema versions of an operation
 // belong to one exact contributor identity. A schema may declare distinct user
 // and anonymous-flow subjects; duplicates within either namespace are invalid.
@@ -100,6 +101,13 @@ func (s *contributorRegistryState) registerFeatures(index int) error {
 // this exception to the exact existing adapter and closed paired-custody tuples;
 // no arbitrary cross-owner operation, schema or future version is admitted.
 func featureContributorOwns(d ContributorDescriptor, op identity.FeatureOperation) bool {
+	// Phone owns this workflow, but the existing OTP participant exclusively
+	// owns its counted attempt and consuming transaction. Do not admit a second
+	// phone storage engine or a generic cross-owner delegation.
+	if op.Owner == "identity/phone" && op.OperationID == "identity.phone.signin" {
+		return op.SchemaID == "identity.phone.signin.native-v1" && op.SchemaVersion == 1 && op.RecordRequirement == identity.FeatureRecordOmitted &&
+			d == (ContributorDescriptor{Owner: "identity/otp/postgres", ContractID: "identity.otp.store", Version: 1})
+	}
 	// This closed phone profile reuses password's verifier and transaction
 	// participant. A generic same-owner registration must not replace it.
 	if op.Owner == "identity/phone" && passwordSigninOperation(op) {

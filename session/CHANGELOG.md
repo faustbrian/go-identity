@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Prepare and bind distinct phone OTP signin sessions only with phone
+  authentication provenance, preserving original remember and reveal-once
+  custody. Native consuming admission remains required before issuance.
+
 - Prepare and bind sessions from the exact phone/password signin profile,
   preserving paired custody and original operation without admitting phone OTP.
 

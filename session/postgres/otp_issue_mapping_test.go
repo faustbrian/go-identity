@@ -76,6 +76,42 @@ func TestOTPSigninMappingPreservesCompleteOriginalSession(t *testing.T) {
 	}
 }
 
+func TestPhoneOTPSigninMappingRetainsClosedPhoneOperation(t *testing.T) {
+	spec, original := otpSigninMappingFixture(t, true, true)
+	spec.Binding.OperationID, spec.Operation.OperationID = "identity.phone.signin", "identity.phone.signin"
+	spec.Binding.SchemaID, spec.Operation.SchemaID = "identity.phone.signin.native-v1", "identity.phone.signin.native-v1"
+	spec.Operation.Owner = "identity/phone"
+	metadata, _ := original.OTPAuthentication().Bindings()
+	if metadata.IdentifierKind != identity.IdentifierPhone {
+		t.Fatal("fixture does not contain original phone authentication")
+	}
+	command, err := identity.NewFeatureCommand(spec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	restored, err := OTPSigninSession(command)
+	if err != nil {
+		t.Fatal("closed phone OTP operation rejected", err)
+	}
+	before, _, _ := encodeRecord(original)
+	after, _, _ := encodeRecord(restored)
+	if !bytes.Equal(before, after) {
+		t.Fatal("phone OTP command changed original session/authentication/CSRF/remember")
+	}
+	for i := range spec.Fields {
+		if spec.Fields[i].Name == otpSessionPrefix+"otp.kind" {
+			spec.Fields[i].Value = identity.FeatureValue{Kind: identity.FeatureText, Text: "email"}
+		}
+	}
+	command, err = identity.NewFeatureCommand(spec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := OTPSigninSession(command); err == nil {
+		t.Fatal("phone-owned signin accepted email authentication metadata")
+	}
+}
+
 func TestOTPSigninMappingRejectsNoncanonicalScalars(t *testing.T) {
 	spec, _ := otpSigninMappingFixture(t, false, true)
 	for name, value := range map[string]identity.FeatureValue{

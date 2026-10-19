@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Enforce native known-empty factor authority for the closed phone SMS-code
+  signin command, retaining its original generation through consuming phases.
+  Phone OTP cannot select an email/password owner or bypass an enrolled factor.
+
 - Fence known-empty native MFA authority for the exact phone/password signin
   owner and command. Phone challenge continuations remain unsupported and deny;
   no factor state is initialized or inferred from absence.

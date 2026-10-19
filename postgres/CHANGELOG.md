@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Bind the closed phone SMS-code signin profile exclusively to the existing
+  native OTP participant. Alternate owners, schema versions and record profiles
+  cannot replace its consuming transaction; generic OTP/password ownership stays
+  unchanged.
+
 - Allow explicit stored normalization binding during recipient discovery and
   protected admission. Missing or incompatible profiles suppress selection;
   profile changes deny the original transaction. Unselected legacy channel

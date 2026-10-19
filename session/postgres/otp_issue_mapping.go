@@ -45,11 +45,24 @@ func OTPSigninSession(command identity.Command) (session.Session, error) {
 			values[name] = field.Value
 		}
 	}
-	return sessionRecordFromFields(p.Binding, values, true)
+	record, err := sessionRecordFromFields(p.Binding, values, true)
+	if err != nil {
+		return session.Session{}, err
+	}
+	if p.Binding.OperationID == "identity.phone.signin" {
+		metadata, err := record.OTPAuthentication().Bindings()
+		if err != nil || metadata.IdentifierKind != identity.IdentifierPhone {
+			return session.Session{}, session.ErrInvalidSessionCommand
+		}
+	}
+	return record, nil
 }
 
 func otpSessionOperation(b identity.CommandBinding) identity.FeatureOperation {
 	op := identity.FeatureOperation{Owner: "identity/otp", OperationID: "identity.otp.signin", SchemaID: "identity-otp-signin", SchemaVersion: 1, RecordRequirement: identity.FeatureRecordOmitted}
+	if b.OperationID == "identity.phone.signin" {
+		op.Owner, op.OperationID, op.SchemaID = "identity/phone", "identity.phone.signin", "identity.phone.signin.native-v1"
+	}
 	if b.AnonymousFlowID != "" {
 		op.SubjectRequirement = identity.FeatureSubjectAnonymousFlow
 	}

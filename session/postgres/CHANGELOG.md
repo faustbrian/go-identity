@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Decode the closed phone OTP signin session projection without accepting
+  email authentication metadata. Add the forward `PhoneOTPSigninMigrationSource`
+  after the explicitly selected password/signup/magic-link/MFA/verification
+  purpose history and any selected username or phone/password suffixes. Existing
+  rows and selected methods remain unchanged; no HTTP route is enabled.
+
 - Restore the original session projection from closed phone/password signin
   commands and retain its password-specific issuance commitment for recovery.
   Install the forward phone/password purpose suffix against the exact selected

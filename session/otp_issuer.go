@@ -51,7 +51,8 @@ func NewOTPSessionIssuerWithCSRF(executor IssueExecutor, c IssuerConfig, key CSR
 // binds its complete consuming intent. Lookup must be zero; Version must be1
 // and accepted activity must equal original issuance. Metadata is prospective,
 // not proof that a code was checked. The operation is the closed record-free v1
-// identity/otp signin schema; user scope must match the final user, or anonymous
+// identity/otp signin schema or the separately owned identity.phone.signin
+// schema with phone-only metadata; user scope must match the final user, or anonymous
 // scope must remain explicitly anonymous. The native effect must independently
 // bind that anonymous flow to its original eligible recipient, not caller input.
 // Actor is separate from the final user. Remember and authority are never reset.
@@ -73,7 +74,7 @@ func (s *SessionIssuer) PrepareOTP(b identity.CommandBinding, spec SessionSpec, 
 	projection, _ := frozen.Feature()
 	b = projection.Binding
 	p, e := metadata.Bindings()
-	if e != nil || b.CommandID != p.CommandID || b.TenantID != spec.TenantID || b.UserID != "" && b.UserID != spec.UserID {
+	if e != nil || b.CommandID != p.CommandID || b.TenantID != spec.TenantID || b.UserID != "" && b.UserID != spec.UserID || b.OperationID == "identity.phone.signin" && p.IdentifierKind != identity.IdentifierPhone {
 		return out, ErrInvalidIssuance
 	}
 	spec.Lookup = TokenDigest{KeyVersion: s.config.LookupKey.state.version, Sum: [32]byte{1}}
@@ -160,6 +161,9 @@ func (r IssueRequest) OTPCommand() (identity.Command, Session, bool) {
 
 func otpSigninOperation(b identity.CommandBinding) identity.FeatureOperation {
 	d := identity.FeatureOperation{Owner: "identity/otp", OperationID: "identity.otp.signin", SchemaID: "identity-otp-signin", SchemaVersion: 1, RecordRequirement: identity.FeatureRecordOmitted}
+	if b.OperationID == "identity.phone.signin" {
+		d.Owner, d.OperationID, d.SchemaID = "identity/phone", "identity.phone.signin", "identity.phone.signin.native-v1"
+	}
 	if b.AnonymousFlowID != "" {
 		d.SubjectRequirement = identity.FeatureSubjectAnonymousFlow
 	}

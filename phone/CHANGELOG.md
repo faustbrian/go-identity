@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Add an opaque existing-account SMS-code signin request and workflow contract.
+  Preserve canonical number and original pre-auth custody; no request field can
+  select user identity, challenge, code, session or remember policy.
+
+- Derive a separate canonical-target commitment for phone OTP signin, retaining
+  the exact tenant and stored-number profile without reusing password intent.
+  Native OTP admission and session composition remain separately required.
+
 - Derive a canonical-number, comparison-profile, tenant and purpose-bound
   password-preauth identifier commitment. This does not accept an OTP, verify
   a password or enable login; the native workflow must compare original intent.
