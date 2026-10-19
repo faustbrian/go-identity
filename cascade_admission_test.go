@@ -89,3 +89,40 @@ func TestAdministrativeRemovalReceiptRetainsTargetCascadeAndDistinctHumanActor(t
 		t.Fatal("actor substituted for cascade target")
 	}
 }
+
+func TestPhoneRemovalReceiptRequiresItsExactPendingSelfCascade(t *testing.T) {
+	makeResult := func() identity.CommandResult {
+		r := removalCascadeResult(t)
+		op := identity.FeatureOperation{Owner: "identity/phone", OperationID: "identity.phone.remove", SchemaID: "identity.phone.remove.native-v1", SchemaVersion: 1, RecordRequirement: identity.FeatureRecordRequired}
+		r.Binding.OperationID, r.Binding.SchemaID = op.OperationID, op.SchemaID
+		r.Feature.Operation = op
+		return r
+	}
+	if err := makeResult().Validate(); err != nil {
+		t.Fatal("phone removal lost its owning pending cascade", err)
+	}
+	for name, change := range map[string]func(*identity.CommandResult){
+		"absent":    func(r *identity.CommandResult) { r.Cascade = nil },
+		"actor":     func(r *identity.CommandResult) { r.Binding.ActorID = "foreign" },
+		"target":    func(r *identity.CommandResult) { r.Cascade.IdentifierID = "other" },
+		"completed": func(r *identity.CommandResult) { r.Cascade.Status = identity.RevocationCompleted },
+		"fake-ack":  func(r *identity.CommandResult) { r.Cascade.Owners[0].Status = identity.RevocationCompleted },
+		"other-operation": func(r *identity.CommandResult) {
+			r.Binding.OperationID = "identity.phone.update"
+			r.Binding.SchemaID = "identity.phone.update.native-v1"
+			r.Feature.Operation.OperationID, r.Feature.Operation.SchemaID = r.Binding.OperationID, r.Binding.SchemaID
+		},
+		"unknown": func(r *identity.CommandResult) {
+			r.Outcome, r.AuditEventID = identity.CommitOutcomeUnknown, ""
+			r.Feature.BeforeVersion, r.Feature.AfterVersion = 0, 0
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			r := makeResult()
+			change(&r)
+			if r.Validate() == nil {
+				t.Fatal("foreign or invented phone-removal cascade accepted")
+			}
+		})
+	}
+}

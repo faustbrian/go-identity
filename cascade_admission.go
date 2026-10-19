@@ -51,14 +51,14 @@ func IdentifierRemovalConsumers() []string {
 // outcomes must not carry this receipt; CommandResult enforces that distinction.
 func (r LifecycleCascadeAdmission) Validate(b CommandBinding) error {
 	invalid := InvalidInputError{Field: "cascade_admission"}
-	op := FeatureOperation{Owner: "identity/email", OperationID: "identity.email.address-remove", SchemaID: "identity.email.address-remove.native-v1", SchemaVersion: 1, RecordRequirement: FeatureRecordRequired}
-	if b.ValidateFor(op) != nil {
+	op := identifierRemovalFeatureOperation(b.OperationID)
+	if b.ValidateFor(op) != nil || b.OperationID == "identity.phone.remove" && string(b.ActorID) != string(b.UserID) {
 		return invalid
 	}
 	if _, err := ParseCascadeID(string(r.CascadeID)); err != nil {
 		return invalid
 	}
-	if r.Generation != 1 || r.Kind != IdentifierRemovalCascade || r.TenantID != b.TenantID || r.UserID != b.UserID || string(r.IdentifierID) != b.RecordID || r.AuthorityVersion <= 1 || r.ManifestVersion != "identity-lifecycle-consumers-v1" || r.Status != RevocationPending || len(r.ExternalLimitations) != 0 || b.OperationID != "identity.email.address-remove" || b.SchemaID != "identity.email.address-remove.native-v1" || b.SchemaVersion != 1 || b.ActorKind != authorization.SubjectUser {
+	if r.Generation != 1 || r.Kind != IdentifierRemovalCascade || r.TenantID != b.TenantID || r.UserID != b.UserID || string(r.IdentifierID) != b.RecordID || r.AuthorityVersion <= 1 || r.ManifestVersion != "identity-lifecycle-consumers-v1" || r.Status != RevocationPending || len(r.ExternalLimitations) != 0 || b.ActorKind != authorization.SubjectUser {
 		return invalid
 	}
 	for _, id := range []string{string(r.TenantID), string(r.UserID), string(r.IdentifierID)} {
@@ -76,6 +76,22 @@ func (r LifecycleCascadeAdmission) Validate(b CommandBinding) error {
 		}
 	}
 	return nil
+}
+
+// Only these exact native owners may admit this shared removal cascade. Phone
+// removal remains self-only; adding another feature is not implicit permission
+// to borrow its receipt or acknowledge any downstream cleanup.
+func identifierRemovalFeatureOperation(operation string) FeatureOperation {
+	var owner string
+	switch operation {
+	case "identity.email.address-remove":
+		owner = "identity/email"
+	case "identity.phone.remove":
+		owner = "identity/phone"
+	default:
+		return FeatureOperation{}
+	}
+	return FeatureOperation{Owner: owner, OperationID: operation, SchemaID: operation + ".native-v1", SchemaVersion: 1, RecordRequirement: FeatureRecordRequired}
 }
 
 // Clone returns caller-owned collections without changing admission identity.

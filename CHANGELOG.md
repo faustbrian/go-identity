@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Recognize exact self-user phone-removal command receipts only with their
+  matching pending identifier-removal cascade. Existing email administration
+  and status admission retain their separate authority rules.
+
 - Preserve the distinct phone/password-signin operation in opaque paired
   password/pre-auth custody. Phone OTP, signup and reset profiles cannot use
   this variant. Native phone discovery, identifier-bound original flow, risk,
