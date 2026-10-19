@@ -158,6 +158,10 @@ type phoneCurrentAuthority struct {
 }
 
 func (s *phoneVerificationService) currentPhoneSource(ctx context.Context, caller authorization.DecisionContext, source *phoneEnrollmentPhase, submission bool) (phoneCurrentAuthority, error) {
+	return s.currentPhoneSourceForAction(ctx, caller, source, submission, "identity.phone.verify.recover")
+}
+
+func (s *phoneVerificationService) currentPhoneSourceForAction(ctx context.Context, caller authorization.DecisionContext, source *phoneEnrollmentPhase, submission bool, recoveryAction authorization.Action) (phoneCurrentAuthority, error) {
 	bad := func(err error) (phoneCurrentAuthority, error) { return phoneCurrentAuthority{}, err }
 	b := sourceBinding(source.command)
 	original, err := source.primary.Original()
@@ -218,7 +222,7 @@ func (s *phoneVerificationService) currentPhoneSource(ctx context.Context, calle
 		policy := s.primary.primary.source.c.Coordinator.QueryPolicy
 		query := caller.Clone()
 		query.PolicyRevision = authorization.Revision(policy.PolicyVersion)
-		query.Request.Action = "identity.phone.verify.recover"
+		query.Request.Action = recoveryAction
 		query.Request.Resource = authorization.Resource{Type: "identity.user", ID: authorization.ResourceID(b.UserID)}
 		decision, e := policy.Authorization.Decide(ctx, query)
 		if ctx.Err() != nil {

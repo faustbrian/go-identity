@@ -473,16 +473,29 @@ func resetServiceAuditDeclaration(b identity.CommandBinding, op identity.Feature
 		target = b.AnonymousFlowID
 	}
 	action := b.OperationID
+	retention := "protected"
+	// SECURITY_EVENTS.md gives self-service identifier events standard
+	// retention. Select only these new native replacement schemas; older
+	// enrollment/removal records keep their original declaration and digest.
+	if op == phoneChangeSendingOperation() {
+		action, retention = "identity.identifier.request_verification", "standard"
+	}
+	if op == actionPrimaryOperation("identity.phone.update") {
+		retention = "standard"
+	}
 	if action == "identity.phone.remove" {
 		// The security-event taxonomy names the identifier transition; the
 		// feature command retains its distinct phone workflow identity.
 		action = "identity.identifier.remove"
 	}
+	if action == "identity.phone.update" {
+		action = "identity.identifier.change"
+	}
 	builder, err := audit.NewBuilder(audit.BuilderConfig{})
 	if err != nil {
 		return kernel.CommandPlan{}, password.ErrPasswordWork
 	}
-	seed, err := builder.Build(audit.RecordInput{OccurredAt: at.UTC().Truncate(time.Microsecond), Action: action, Outcome: audit.OutcomeSucceeded, Actor: audit.ActorInput{Kind: kind, ID: string(b.ActorID)}, Subject: audit.SubjectInput{Type: subject, ID: target}, Context: audit.ContextInput{TenantID: string(b.TenantID), CorrelationID: b.CorrelationID}, Policy: audit.PolicyMetadata{PolicyID: b.PolicyID, Version: strconv.FormatUint(b.PolicyVersion, 10)}, Changes: audit.ChangeSetInput{Redacted: true}, Attributes: map[string]string{"command.id": string(b.CommandID), "aggregate.type": subject, "aggregate.id": target, "aggregate.before_version": strconv.FormatUint(before, 10), "aggregate.after_version": strconv.FormatUint(after, 10), "retention.class": "protected"}})
+	seed, err := builder.Build(audit.RecordInput{OccurredAt: at.UTC().Truncate(time.Microsecond), Action: action, Outcome: audit.OutcomeSucceeded, Actor: audit.ActorInput{Kind: kind, ID: string(b.ActorID)}, Subject: audit.SubjectInput{Type: subject, ID: target}, Context: audit.ContextInput{TenantID: string(b.TenantID), CorrelationID: b.CorrelationID}, Policy: audit.PolicyMetadata{PolicyID: b.PolicyID, Version: strconv.FormatUint(b.PolicyVersion, 10)}, Changes: audit.ChangeSetInput{Redacted: true}, Attributes: map[string]string{"command.id": string(b.CommandID), "aggregate.type": subject, "aggregate.id": target, "aggregate.before_version": strconv.FormatUint(before, 10), "aggregate.after_version": strconv.FormatUint(after, 10), "retention.class": retention}})
 	if err != nil {
 		return kernel.CommandPlan{}, password.ErrPasswordWork
 	}
@@ -490,5 +503,5 @@ func resetServiceAuditDeclaration(b identity.CommandBinding, op identity.Feature
 	if err != nil {
 		return kernel.CommandPlan{}, err
 	}
-	return kernel.CommandPlan{Contributors: contributors, Feature: &kernel.FeatureRegistration{Contributor: kernel.ContributorDescriptor{Owner: "identity/password/postgres", ContractID: "identity.password", Version: 1}, Operation: op}, SubjectType: subject, Lifecycle: &kernel.LifecyclePlan{EventType: "password.reset.v1", BeforeVersion: before, AfterVersion: after}, Audits: []kernel.AuditPlan{{EventType: action, SchemaVersion: 1, Required: true, RequiredRecordCount: 1, MaxRecordBytes: 16384, MaxAggregateBytes: 16384, RetentionPolicyVersion: 1, RetentionClass: "protected", BindingDigest: digest}}}, nil
+	return kernel.CommandPlan{Contributors: contributors, Feature: &kernel.FeatureRegistration{Contributor: kernel.ContributorDescriptor{Owner: "identity/password/postgres", ContractID: "identity.password", Version: 1}, Operation: op}, SubjectType: subject, Lifecycle: &kernel.LifecyclePlan{EventType: "password.reset.v1", BeforeVersion: before, AfterVersion: after}, Audits: []kernel.AuditPlan{{EventType: action, SchemaVersion: 1, Required: true, RequiredRecordCount: 1, MaxRecordBytes: 16384, MaxAggregateBytes: 16384, RetentionPolicyVersion: 1, RetentionClass: retention, BindingDigest: digest}}}, nil
 }

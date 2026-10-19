@@ -220,13 +220,24 @@ rejection precedes that charge. Use the durable outbox for external delivery.
 
 ## Action-bound protected operations
 
-`NewActionPrimarySource` explicitly selects `identity.username.update` or
-`identity.organization.owner-transfer` over the existing reauthentication owner.
+`NewActionPrimarySource` explicitly selects `identity.username.update`,
+`identity.phone.send-verification`, `identity.phone.update`,
+`identity.phone.remove` or `identity.organization.owner-transfer` over the existing
+reauthentication owner. Phone update requires a distinct update-bound proof;
+the SMS-request proof cannot authorize replacement. Phone operations are
+self-only and reject a supplied target-subject override.
 Configure the exact issuance target/audience, a maximum age of at most fifteen
 minutes and bearer or cookie transport; cookies require retained CSRF keys.
 Install `ActionReauthenticationMigrationSource{Base: installedHistory, Version:
 nextVersion}` in the existing password namespace first. Do not replace an
 installed selected history with a shorter prefix.
+
+Before consuming `identity.phone.update`, append
+`PhoneChangeReauthenticationMigrationSource{Base: installedPhoneHistory,
+Version: nextVersion}`. It preserves installed action/phone/removal checksums
+and the existing one-use marker's foreign key and uniqueness. Selecting the
+separate removal workflow is not required. This schema suffix and proof source
+alone do not implement number replacement.
 
 `Prepare` authenticates the original session and signed proof; `Command` retains
 bounded typed original provenance. An immutable native contributor can call
@@ -236,7 +247,7 @@ own current domain, authorization, factor and risk policy. Distinct actor/target
 rows must be locked in canonical order before admission. `Recover` reconciles
 the password-owned consumer marker only; combine it with domain/effect evidence.
 Restoration and recovery never renew original freshness or mint credentials.
-This is an adapter seam, not a username or organization workflow implementation;
+This is an adapter seam, not a username, phone or organization workflow implementation;
 the selected profile accepts single-factor password sessions only.
 
 ## Original-browser verification and signin
@@ -1250,6 +1261,55 @@ retry key conflicts before provider work. Original outcome disclosure does not
 renew authentication or reauthorize a mutation. Complete password HTTP lifecycle
 and browser/release qualification remain
 in development; synthetic local provider seams are not HIBP interoperability.
+
+### Separately selected verified-phone replacement
+
+Compose `NewPhoneChangeService(sendPrimary, updatePrimary, emailSignin,
+emailReset, numberPolicy, config, envelopeKeys)`. The primaries select distinct
+`identity.phone.send-verification` and `identity.phone.update` proof audiences
+over the same real account/password/session owner. The email signin and reset
+owners must be genuinely configured and share that pool, not a phone-only
+fallback. Select known-empty MFA, explicit number recycling, one registered
+cascade reason, the required old-number SMS notice and independent retained
+request/intent/identifier/envelope keys. Authentication risk meters requesting
+SMS; protected-provider admission and the native command-counter policy share
+one real policy for consuming replacement.
+
+Apply `PhoneChangeReauthenticationMigrationSource` after the installed phone
+proof history (including removal if selected). Apply the kernel's
+`PhoneChangeCascadeMigrationSource` after its identifier/phone-removal cascade
+histories. These extend existing constraints without replacing old history or
+enabling HTTP routes. `Initialize` checks the real OTP issuer's retained store
+metadata. A separately enabled removal service is not a runtime prerequisite.
+
+`SendChange` retains both original numbers, exact old versions and original
+session/proof under its request key, then issues one new-number SMS. It leaves
+the old verified phone and directory/session epochs unchanged. `Update` requires
+the original sending session and a **new action-specific update proof**, together
+with original OTP possession. Each retry key names one logical submission;
+identical retries restore its original command/attempt without another code
+comparison or debit. Changed bound intent under that key conflicts. Wrong-code
+denial does not consume that fresh proof or mutate the phone.
+The same protected Work consumes proof/OTP, retires the old number, writes the
+verified successor, advances identifier authority and stages the old-number
+notice and pending cascade. Older identifier-bound sessions deny immediately;
+physical session cleanup/cascade acknowledgement remains separate. No new
+session is issued, and independent verified email/password recovery is retained.
+The new send and update schemas emit `identity.identifier.request_verification`
+and `identity.identifier.change` respectively with standard self-service audit
+retention; existing enrollment/removal history is unchanged.
+
+After an unknown result call `RecoverUpdate` with its exact original code-free
+correlation and possessed sending flow, or retry the unchanged original request
+and key when that response was lost. Never substitute another code or proof.
+Recovery rechecks current account/credential/disclosure policy before returning
+original history, including races where another keyed invocation finishes after
+the caller's initial absence observation. Failed current disclosure returns no
+historical receipt; allowed history is marked replayed without another debit.
+Bearer calls require no synchronizer; cookie calls require
+the actual current session synchronizer at admission and protected use. This
+native selection enables no HTTP/reference routes and does not implement phone
+signup, reset, enrolled-factor fallback or metadata migration.
 
 ### Selected existing-account phone verification
 

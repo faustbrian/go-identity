@@ -2,6 +2,31 @@
 
 ## Unreleased
 
+- Fence every phone-replacement keyed-history return with current account,
+  credential and query authority, including concurrent completion after an
+  initial absence observation. Historical receipts never imply fresh execution.
+
+- Preserve one replacement command/OTP attempt per retry key, including
+  wrong-code and lost-response recovery. New replacement send/completion
+  schemas use canonical standard-retention identifier audit events; retained
+  enrollment/removal history is unchanged.
+
+- Compose verified-phone replacement through `NewPhoneChangeService`: send
+  encrypted new-number SMS without changing the old phone, then consume a
+  distinct fresh update proof and the original OTP atomically with replacement,
+  retirement, required old-number notice and pending cascade. Retain actual
+  independent email/password signin/reset owners and exact current factor,
+  session/CSRF and protected-risk admission. Original code-free recovery neither
+  repeats mutation nor renews authentication. Install the forward phone-change
+  directory and proof-consumption histories before selecting this workflow.
+
+- Admit exact self-only `identity.phone.update` action-primary proof custody
+  independently of the SMS-request action. Reuse original proof/session binding
+  and one-use admission. Install `PhoneChangeReauthenticationMigrationSource`
+  after the selected phone proof history before consuming update proofs;
+  installed migration bytes remain unchanged. These prerequisites alone enable
+  no phone-change workflow.
+
 - Compose fresh password-authenticated phone self-removal with exact current
   phone/factor authority, real retained email/password signin/reset owners and
   one encrypted old-number notice. Proof use, protected admission, removal and

@@ -20,6 +20,40 @@ import (
 
 const phonePrimaryAction = "identity.phone.send-verification"
 
+func TestPhoneChangeSendPrimaryKeepsOriginalProofAndDistinctSchema(t *testing.T) {
+	source, request, fields, binding := phonePrimaryFixture(t, phonePrimaryAction)
+	selected, err := phoneChangeSendPrimary(source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	binding.SchemaID = "identity.phone.send-verification.change.native-v1"
+	binding.RecordID, request.RecordID = string(binding.CommandID), string(binding.CommandID)
+	admission, err := selected.Restore(context.Background(), request, fields)
+	if err != nil {
+		t.Fatal("replacement send lost original signed action proof", err)
+	}
+	command, err := admission.Command(binding, nil)
+	if err != nil {
+		t.Fatal("replacement send selected the enrollment schema", err)
+	}
+	spec, ok := command.Feature()
+	if !ok || spec.Operation.SchemaID != binding.SchemaID || source.primary.operation() != actionPrimaryOperation(phonePrimaryAction) {
+		t.Fatal("replacement selection mutated the enrollment owner")
+	}
+	if _, err := selected.RestoreCommand(context.Background(), command, request.Caller, request.CSRFToken); err != nil {
+		t.Fatal("replacement restart could not restore original proof custody", err)
+	}
+	if _, err := source.RestoreCommand(context.Background(), command, request.Caller, request.CSRFToken); err == nil {
+		t.Fatal("ordinary enrollment owner admitted replacement framing")
+	}
+	wrongAction, _, _, _ := phonePrimaryFixture(t, "identity.phone.update")
+	for _, invalid := range []*ActionPrimarySource{nil, {}, wrongAction, selected} {
+		if _, err := phoneChangeSendPrimary(invalid); err == nil {
+			t.Fatal("invalid or already-selected source admitted replacement")
+		}
+	}
+}
+
 // This fixture supplies synthetic signed-original storage custody only. It does
 // not authenticate a live session or prove admission/consumption in PostgreSQL.
 func phonePrimaryFixture(t *testing.T, action string) (*ActionPrimarySource, ActionPrimaryRequest, []identity.FeatureField, identity.CommandBinding) {
@@ -237,7 +271,7 @@ func TestPhoneActionPrimaryRejectsForeignOrTamperedOriginal(t *testing.T) {
 }
 
 func TestPhoneActionPrimaryKeepsOtherProfilesClosed(t *testing.T) {
-	for _, action := range []string{"identity.phone.verify", "identity.phone.signin", "identity.phone.update", "identity.phone.password-signin", "identity.phone.password-reset-request", "identity.phone.password-reset-complete"} {
+	for _, action := range []string{"identity.phone.verify", "identity.phone.signin", "identity.phone.password-signin", "identity.phone.password-reset-request", "identity.phone.password-reset-complete"} {
 		source, request, fields, _ := phonePrimaryFixture(t, action)
 		if _, err := source.Restore(context.Background(), request, fields); err == nil {
 			t.Fatal("unsupported phone action accepted")
@@ -256,6 +290,36 @@ func TestPhoneActionPrimaryKeepsOtherProfilesClosed(t *testing.T) {
 		if _, err := source.RestoreCommand(context.Background(), command, request.Caller, request.CSRFToken); err != nil {
 			t.Fatal("existing restart profile changed", err)
 		}
+	}
+}
+
+func TestPhoneChangeActionPrimaryConservesOriginalScope(t *testing.T) {
+	source, request, fields, binding := phonePrimaryFixture(t, "identity.phone.update")
+	admission, err := source.Restore(context.Background(), request, fields)
+	if err != nil {
+		t.Fatal("signed original phone-change custody rejected", err)
+	}
+	command, err := admission.Command(binding, nil)
+	if err != nil {
+		t.Fatal("phone update could not construct its own protected command", err)
+	}
+	if _, err := source.RestoreCommand(context.Background(), command, request.Caller, request.CSRFToken); err != nil {
+		t.Fatal("phone update lost original restart custody", err)
+	}
+	for name, mutate := range map[string]func(*ActionPrimaryRequest){
+		"foreign-target":  func(r *ActionPrimaryRequest) { r.TargetSubjectID = "foreign" },
+		"explicit-target": func(r *ActionPrimaryRequest) { r.TargetSubjectID = "user" },
+		"tenant":          func(r *ActionPrimaryRequest) { r.TenantID = "foreign" },
+		"session":         func(r *ActionPrimaryRequest) { r.Proof.SessionVersion++ },
+		"send-action":     func(r *ActionPrimaryRequest) { r.Proof.Action = phonePrimaryAction },
+	} {
+		t.Run(name, func(t *testing.T) {
+			candidate := request
+			mutate(&candidate)
+			if _, err := source.Restore(context.Background(), candidate, fields); err == nil {
+				t.Fatal("substituted phone-change custody accepted")
+			}
+		})
 	}
 }
 

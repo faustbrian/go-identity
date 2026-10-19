@@ -57,6 +57,10 @@ type EmailPrimarySource struct {
 	// action selects the closed non-email adapters of the same password owner.
 	// Public email constructors never select it; their framing stays unchanged.
 	action bool
+	// phoneChangeSend selects the sole replacement-send schema internally.
+	// Its action proof is unchanged, but enrollment's schema attaches a new
+	// identifier and therefore cannot describe a non-mutating replacement send.
+	phoneChangeSend bool
 }
 
 // EmailPrimaryAdmission is opaque original custody, not mutation permission.
@@ -355,7 +359,11 @@ func emailPrimaryOperation(action string) identity.FeatureOperation {
 
 func (s *EmailPrimarySource) operation() identity.FeatureOperation {
 	if s.action {
-		return actionPrimaryOperation(s.config.Action)
+		op := actionPrimaryOperation(s.config.Action)
+		if s.phoneChangeSend && s.config.Action == "identity.phone.send-verification" {
+			op.SchemaID = "identity.phone.send-verification.change.native-v1"
+		}
+		return op
 	}
 	return emailPrimaryOperation(s.config.Action)
 }

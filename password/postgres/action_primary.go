@@ -17,7 +17,7 @@ import (
 	"github.com/faustbrian/go-identity/session"
 )
 
-// ActionPrimaryConfig selects username update, phone enrollment/removal, or
+// ActionPrimaryConfig selects username update, phone enrollment/change/removal, or
 // organization ownership transfer and its explicit signed-proof audience.
 // MaximumAge is positive and at most
 // fifteen minutes. Transport explicitly selects bearer or cookie; cookies need
@@ -59,6 +59,19 @@ type ActionPrimarySource struct{ primary *EmailPrimarySource }
 // Zero denies. Copies share immutable custody and cannot renew freshness.
 type ActionPrimaryAdmission struct{ primary EmailPrimaryAdmission }
 
+// Replacement sends retain the same signed action and proof owner, but have
+// no identifier-attachment effect. Freeze that one native schema without an
+// arbitrary schema override or mutating a shared enrollment source.
+func phoneChangeSendPrimary(source *ActionPrimarySource) (*ActionPrimarySource, error) {
+	if source == nil || source.primary == nil || source.primary.phoneChangeSend ||
+		!source.Matches("identity.phone.send-verification", source.primary.config.Audience) {
+		return nil, password.ErrPasswordWork
+	}
+	selected := *source.primary
+	selected.phoneChangeSend = true
+	return &ActionPrimarySource{primary: &selected}, nil
+}
+
 // NewActionPrimarySource validates immutable composition without IO. It does not
 // extend the public email profile or change its existing persisted framing.
 func NewActionPrimarySource(source *ReauthenticationService, c ActionPrimaryConfig) (*ActionPrimarySource, error) {
@@ -81,7 +94,7 @@ func actionPrimaryOperation(action string) identity.FeatureOperation {
 	switch action {
 	case "identity.username.update":
 		return identity.FeatureOperation{Owner: "identity/username", OperationID: action, SchemaID: action + ".native-v1", SchemaVersion: 1, RecordRequirement: identity.FeatureRecordRequired}
-	case "identity.phone.send-verification", "identity.phone.remove":
+	case "identity.phone.send-verification", "identity.phone.update", "identity.phone.remove":
 		return identity.FeatureOperation{Owner: "identity/phone", OperationID: action, SchemaID: action + ".native-v1", SchemaVersion: 1, RecordRequirement: identity.FeatureRecordRequired}
 	case "identity.organization.owner-transfer":
 		return identity.FeatureOperation{Owner: "organization", OperationID: action, SchemaID: "organization-membership", SchemaVersion: 1, RecordRequirement: identity.FeatureRecordRequired}
@@ -94,7 +107,7 @@ func actionPrimaryDescriptor(action string) kernel.ContributorDescriptor {
 	switch action {
 	case "identity.username.update":
 		return kernel.ContributorDescriptor{Owner: "identity/username/postgres", ContractID: "identity.username", Version: 1}
-	case "identity.phone.send-verification", "identity.phone.remove":
+	case "identity.phone.send-verification", "identity.phone.update", "identity.phone.remove":
 		return kernel.ContributorDescriptor{Owner: "identity/phone/postgres", ContractID: "identity.phone", Version: 1}
 	case "identity.organization.owner-transfer":
 		return kernel.ContributorDescriptor{Owner: "organization/postgres", ContractID: "organization.membership", Version: 1}
@@ -107,7 +120,7 @@ func (s *ActionPrimarySource) request(r ActionPrimaryRequest) (EmailPrimaryReque
 	if s == nil || s.primary == nil || !s.primary.action || actionPrimaryOperation(s.primary.config.Action).Owner == "" {
 		return EmailPrimaryRequest{}, password.ErrPasswordWork
 	}
-	if s.primary.config.Action == "identity.organization.owner-transfer" && r.TargetSubjectID == "" || (s.primary.config.Action == "identity.username.update" || s.primary.config.Action == "identity.phone.send-verification" || s.primary.config.Action == "identity.phone.remove") && r.TargetSubjectID != "" {
+	if s.primary.config.Action == "identity.organization.owner-transfer" && r.TargetSubjectID == "" || (s.primary.config.Action == "identity.username.update" || s.primary.config.Action == "identity.phone.send-verification" || s.primary.config.Action == "identity.phone.update" || s.primary.config.Action == "identity.phone.remove") && r.TargetSubjectID != "" {
 		return EmailPrimaryRequest{}, identity.ForbiddenError{}
 	}
 	return EmailPrimaryRequest{TenantID: r.TenantID, TargetSubjectID: r.TargetSubjectID, CommandID: r.CommandID, AddressID: identity.IdentifierID(r.RecordID), Session: r.Session, Proof: r.Proof, Caller: r.Caller, CSRFToken: r.CSRFToken}, nil

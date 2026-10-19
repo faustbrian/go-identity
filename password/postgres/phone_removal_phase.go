@@ -6,12 +6,10 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"slices"
-	"strconv"
 	"time"
 
 	identity "github.com/faustbrian/go-identity"
 	deliverypg "github.com/faustbrian/go-identity/delivery/postgres"
-	"github.com/faustbrian/go-identity/email"
 	mfapg "github.com/faustbrian/go-identity/mfa/postgres"
 	password "github.com/faustbrian/go-identity/password"
 	"github.com/faustbrian/go-identity/phone"
@@ -367,46 +365,5 @@ func (p *phoneRemovalPhase) RecoverParticipant(ctx context.Context, w kernel.Rec
 // identity. Repeat after the removal's own identifier-epoch successor, without
 // requiring or treating the removed phone as a remaining recovery path.
 func (p *phoneRemovalPhase) remainingRecovery(ctx context.Context, w kernel.Work) error {
-	original, err := p.primary.Original()
-	if err != nil {
-		return err
-	}
-	b, err := original.Bindings()
-	if err != nil {
-		return err
-	}
-	rows, err := w.Query(ctx, `SELECT i.canonical_value FROM identity.identifiers i
-JOIN identity.users u USING(tenant_id,user_id)
-JOIN identity.credential_references c USING(tenant_id,user_id)
-WHERE i.tenant_id=$1 AND i.user_id=$2 AND i.kind='email'
-AND i.verified AND i.verification_state=2 AND i.verified_at IS NOT NULL AND u.status='active'
-AND c.credential_id=$3 AND c.version=$4::numeric AND c.kind=1 AND c.owner='identity/password' AND c.enabled
-AND (c.expires_at IS NULL OR c.expires_at>clock_timestamp())
-AND NOT EXISTS(SELECT 1 FROM identity.credential_references other
- WHERE other.tenant_id=c.tenant_id AND other.user_id=c.user_id AND other.kind=1
- AND other.owner='identity/password' AND other.credential_id<>c.credential_id)
-ORDER BY i.is_primary DESC,i.identifier_id LIMIT 128 FOR SHARE OF u,i,c`, string(p.intent.Change.TenantID), string(p.intent.Change.UserID), b.Authentication.CredentialID, strconv.FormatUint(original.EffectiveCredentialVersion(), 10))
-	if err != nil {
-		return err
-	}
-	defer rows.Close()
-	usable := false
-	for rows.Next() {
-		var canonical string
-		if rows.Scan(&canonical) != nil {
-			return identity.UnavailableError{}
-		}
-		signin, first := p.service.signin.address.Parse(email.AddressInput(canonical))
-		reset, second := p.service.reset.request.config.Address.Parse(email.AddressInput(canonical))
-		if first == nil && second == nil && signin.Canonical().Record().Value == canonical && reset.Canonical().Record().Value == canonical {
-			usable = true
-		}
-	}
-	if rows.Err() != nil {
-		return identity.UnavailableError{}
-	}
-	if !usable {
-		return identity.FinalAccessError{}
-	}
-	return ctx.Err()
+	return requireIndependentPhoneRecovery(ctx, w, p.primary, p.intent.Change.TenantID, p.intent.Change.UserID, p.service.signin, p.service.reset)
 }

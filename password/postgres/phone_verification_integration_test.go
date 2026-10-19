@@ -34,12 +34,16 @@ import (
 )
 
 type phoneRecoveryDisclosurePolicy struct {
-	base  authorization.Service
-	armed atomic.Bool
-	calls atomic.Uint32
+	base         authorization.Service
+	armed        atomic.Bool
+	calls        atomic.Uint32
+	updateDenied atomic.Bool
 }
 
 func (p *phoneRecoveryDisclosurePolicy) Decide(ctx context.Context, c authorization.DecisionContext) (authorization.Decision, error) {
+	if p.updateDenied.Load() && c.Request.Action == "identity.phone.update.recover" {
+		return authorization.Decision{Outcome: authorization.Deny, Revision: c.PolicyRevision}, ctx.Err()
+	}
 	if p.armed.Load() && c.Request.Action == "identity.phone.verify.recover" && p.calls.Add(1) == 2 {
 		return authorization.Decision{Outcome: authorization.Deny, Revision: c.PolicyRevision}, ctx.Err()
 	}
@@ -166,6 +170,12 @@ func testNativePhoneEnrollment(t *testing.T, ctx context.Context, pool *database
 	_, signinConfig := publicSigninFixture(t, pool, c.Repository.HashPolicy, c.Screening.Primitive, c.Screening.DummyHash, c.Session, profile)
 	signinConfig.Risk = counted
 	signinConfig.Coordinator.LeaseDuration = 500 * time.Millisecond
+	if strings.HasPrefix(outcome, "change-send:concurrent") {
+		// The 500ms fixture lease makes ambiguous-COMMIT recovery prompt. This
+		// case instead exercises two live consumers through the protected lock
+		// chain; give that Work the existing bounded coordinator IO budget.
+		signinConfig.Coordinator.LeaseDuration = signinConfig.Coordinator.MaximumDuration
+	}
 	disclosurePolicy := &phoneRecoveryDisclosurePolicy{base: signinConfig.Coordinator.QueryPolicy.Authorization}
 	queryPolicy := *signinConfig.Coordinator.QueryPolicy
 	queryPolicy.Authorization = disclosurePolicy
@@ -289,7 +299,8 @@ func testNativePhoneEnrollment(t *testing.T, ctx context.Context, pool *database
 	if err != nil {
 		t.Fatal(err)
 	}
-	issuer, err := otppg.NewPhoneEnrollmentIssuer(otppg.PhoneEnrollmentIssuerConfig{Store: otppg.ContributorConfig{Schema: "phone_codes", GlobalAuthorityID: profile.GlobalAuthorityID, UserPolicyNamespace: profile.PolicyNamespace, Codec: codec, LockoutKey: [32]byte{133}}, Session: otppg.SessionAdmissionConfig{Store: c.Session, Profile: profile, RetainedTokenKeys: map[uint32][]byte{1: bytes.Repeat([]byte{82}, 32)}, FreshnessLimit: 10 * time.Minute}, Delivery: deliveryOwner, Policy: codePolicy, TemplateID: "phone-code", TemplateVersion: 1, ProviderVersion: 2, LocaleChain: []string{"en"}, Templates: templates})
+	issuerConfig := otppg.PhoneEnrollmentIssuerConfig{Store: otppg.ContributorConfig{Schema: "phone_codes", GlobalAuthorityID: profile.GlobalAuthorityID, UserPolicyNamespace: profile.PolicyNamespace, Codec: codec, LockoutKey: [32]byte{133}}, Session: otppg.SessionAdmissionConfig{Store: c.Session, Profile: profile, RetainedTokenKeys: map[uint32][]byte{1: bytes.Repeat([]byte{82}, 32)}, FreshnessLimit: 10 * time.Minute}, Delivery: deliveryOwner, Policy: codePolicy, TemplateID: "phone-code", TemplateVersion: 1, ProviderVersion: 2, LocaleChain: []string{"en"}, Templates: templates}
+	issuer, err := otppg.NewPhoneEnrollmentIssuer(issuerConfig)
 	if err != nil || issuer.Initialize(ctx, pool) != nil {
 		t.Fatal("actual phone issuer startup", err)
 	}
@@ -549,7 +560,7 @@ func testNativePhoneEnrollment(t *testing.T, ctx context.Context, pool *database
 	}
 	verification := service
 	var fault *signinCommitFault
-	if outcome != "normal" {
+	if outcome == "before-commit" || outcome == "lost-commit" {
 		fault = &signinCommitFault{before: outcome == "before-commit", marker: "UPDATE identity.identifiers SET kind="}
 		faulted, err := database.Connect(ctx, database.Config{DSN: pool.Raw().Config().ConnConfig.ConnString(), MaxConns: 3, Configure: func(c *database.PoolConfig) error { c.ConnConfig.DialFunc = fault.dial; return nil }})
 		if err != nil {
@@ -650,6 +661,9 @@ func testNativePhoneEnrollment(t *testing.T, ctx context.Context, pool *database
 		t.Fatal("post-query disclosure withdrawal returned phone history or missed the final policy check")
 	}
 	disclosurePolicy.armed.Store(false)
+	if strings.HasPrefix(outcome, "change-send:") {
+		testNativePhoneChangeSend(t, ctx, pool, c, keys, signinConfig, configuration, issuerConfig, deliveryCustody, reauthConfig, numberPolicy, registration, original.UserID, strings.TrimPrefix(outcome, "change-send:"), transport)
+	}
 	if transport == session.CredentialCookie {
 		bad, err := recovery.Bindings()
 		if err != nil {
