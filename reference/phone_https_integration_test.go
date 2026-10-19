@@ -73,10 +73,13 @@ func proveReferencePhoneHTTPS(t *testing.T, ctx context.Context, f liveStores, f
 			t.Fatal("phone selection omitted its real route")
 		}
 	}
-	for _, path := range []string{"/v1/phone/signin", "/v1/phone/password-reset", "/v1/phone/update", "/v1/phone/remove"} {
+	for _, path := range []string{"/v1/phone/password-reset", "/v1/phone/update", "/v1/phone/remove"} {
 		if strings.Contains(document, path) {
 			t.Fatal("phone selection advertised an unsupported profile")
 		}
+	}
+	if _, err := features.PhoneOTPSignin(); (err == nil) != strings.Contains(document, "/v1/phone/signin") {
+		t.Fatal("phone OTP selection and exposed route disagree")
 	}
 	call := func(method, path string, body any, key, token, requestOrigin string, selected []*http.Cookie) (*http.Response, []byte) {
 		t.Helper()

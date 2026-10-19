@@ -5,7 +5,9 @@
 See [phone enrollment and consumer journey](PHONE.md) for native/HTTP selection,
 fresh password-action proof, encrypted SMS delivery, counted verification and
 code-free original recovery. Phone signup, signin, reset and replacement are not
-enabled by this selection.
+enabled by this selection. The same guide describes independently selected
+phone/password and phone SMS-code login, original target-bound initiation and
+the resulting session read/logout journeys.
 
 ## Optional delivered email OTP signin
 

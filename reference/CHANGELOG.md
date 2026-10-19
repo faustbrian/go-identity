@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Independently compose existing verified-phone SMS-code signin through the
+  native OTP, risk, encrypted delivery and session owners. Select native and
+  HTTP send/signin/code-free recovery separately, with target-bound original
+  initiation, mandatory known-empty factor authority and explicit SMS workers.
+  Apply the final native session-purpose suffix before serving; existing
+  enrollment, phone/password, username and email OTP profiles remain separate.
+
 - Independently select native verified-phone/password signin and its opt-in
   HTTP route plus target-bound initiation method. Compose current native phone,
   password, MFA and session authority; preserve forward migration histories,

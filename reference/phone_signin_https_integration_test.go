@@ -27,7 +27,7 @@ func (referencePhoneSigninPolicy) Decide(ctx context.Context, c authorization.De
 	if err := ctx.Err(); err != nil {
 		return authorization.Decision{}, err
 	}
-	if string(c.Request.Tenant) == otpTenant && c.PolicyRevision == 9 && c.Request.Subject.Kind == authorization.SubjectServiceAccount && c.Request.Subject.ID == "AAAAAAAAAAAAAAAAAAAAAw" && (c.Request.Action == "identity.phone.password-signin" || c.Request.Action == "identity.phone.password-signin.recover") {
+	if string(c.Request.Tenant) == otpTenant && c.PolicyRevision == 9 && c.Request.Subject.Kind == authorization.SubjectServiceAccount && c.Request.Subject.ID == "AAAAAAAAAAAAAAAAAAAAAw" && (c.Request.Action == "identity.phone.password-signin" || c.Request.Action == "identity.phone.password-signin.recover" || c.Request.Action == "identity.phone.signin" || c.Request.Action == "identity.phone.signin.recover") {
 		return authorization.Decision{Outcome: authorization.Allow, Revision: 9}, nil
 	}
 	return (referenceUsernamePolicy{}).Decide(ctx, c)

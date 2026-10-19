@@ -125,6 +125,13 @@ func (s *Server) preAuthFeature(network identityhttp.NetworkConfig, f FeatureSet
 		}
 		c.Methods = append(c.Methods, sessionhttp.PreAuthMethod{Name: "phone-password", Service: owner, IdentifierBinder: owner, Action: "identity.phone.password-signin", CallbackURL: selected.preauth.CallbackURL, PolicyID: selected.policy, PolicyVersion: selected.version})
 	}
+	if s.state.features.httpPhoneOTPSignin != nil {
+		owner, err := f.PhoneOTPSigninPreAuth()
+		if err != nil {
+			return nil, err
+		}
+		c.Methods = append(c.Methods, sessionhttp.PreAuthMethod{Name: "phone-otp", Service: owner, IdentifierBinder: owner, Action: "identity.phone.signin", CallbackURL: h.deployment.CallbackURL, PolicyID: h.policy, PolicyVersion: h.version})
+	}
 	if h.device != nil {
 		feature, err = sessionhttp.NewPreAuthFeatureWithBrowserDevice(c, *h.device)
 	} else {

@@ -113,6 +113,8 @@ type featureState struct {
 	username                     *usernameState
 	phone                        *phoneState
 	phoneSignin                  *phoneSigninState
+	phoneOTPSignin               *phoneOTPSigninState
+	httpPhoneOTPSignin           *phoneOTPSigninHTTPState
 	httpPhoneSignin              *passwordSigninHTTPState
 	httpUsername                 *usernameHTTPState
 	registrationConfirmation     *passwordpg.EmailVerificationRouter
@@ -223,6 +225,9 @@ func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDepen
 	}
 	if c.PhoneSignin != nil && (c.PasswordSignin == nil || c.Session == nil || c.OTP == nil) || c.HTTPPhoneSignin != nil && c.PhoneSignin == nil {
 		return identity.InvalidInputError{Field: "reference_phone_signin"}
+	}
+	if c.PhoneOTPSignin != nil && (c.OTP == nil || c.OTP.Signin == nil || c.OTP.PreAuth == nil || c.Session == nil) || c.HTTPPhoneOTPSignin != nil && c.PhoneOTPSignin == nil {
+		return identity.InvalidInputError{Field: "reference_phone_otp_signin"}
 	}
 	if c.PasswordSignin != nil && c.OTP == nil {
 		return identity.InvalidInputError{Field: "reference_password_signin"}
@@ -468,6 +473,17 @@ func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDepen
 	if err != nil {
 		return err
 	}
+	phoneOTPSigninOwner, err := composePhoneOTPSignin(c, d, otpConfig, crypto)
+	if err != nil {
+		return err
+	}
+	if phoneOTPSigninOwner != nil {
+		migrationConfig.otpSigninFactors = true
+	}
+	httpPhoneOTPSignin, err := composePhoneOTPSigninHTTP(c, phoneOTPSigninOwner, httpPreAuth)
+	if err != nil {
+		return err
+	}
 	httpPhoneSignin, err := composePhoneSigninHTTP(c, phoneSigninOwner, httpPreAuth)
 	if err != nil {
 		return err
@@ -695,6 +711,8 @@ func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDepen
 	s.features.username = usernameOwner
 	s.features.phone = phoneOwner
 	s.features.phoneSignin = phoneSigninOwner
+	s.features.phoneOTPSignin = phoneOTPSigninOwner
+	s.features.httpPhoneOTPSignin = httpPhoneOTPSignin
 	s.features.httpPhoneSignin = httpPhoneSignin
 	s.features.httpUsername = httpUsername
 	s.features.registrationConfirmation = registrationConfirmation
@@ -803,7 +821,7 @@ func ComposeWorkers(stores StoreSet, providers ProviderSet, configs ...deliveryp
 		return WorkerSet{}, identity.InvalidInputError{Field: "reference_workers"}
 	}
 	for tenant := range s.tenants {
-		if !seen[tenant][f.provider] || f.phone != nil && !seen[tenant][f.phone.provider] {
+		if !seen[tenant][f.provider] || f.phone != nil && !seen[tenant][f.phone.provider] || f.phoneOTPSignin != nil && !seen[tenant][f.phoneOTPSignin.provider] {
 			return WorkerSet{}, identity.InvalidInputError{Field: "reference_workers"}
 		}
 	}
@@ -868,6 +886,11 @@ func (f FeatureSet) Initialize(ctx context.Context) error {
 	}
 	if err := s.features.otp.Initialize(w); err != nil {
 		return err
+	}
+	if p := s.features.phoneOTPSignin; p != nil {
+		if err := p.owner.Initialize(w); err != nil {
+			return err
+		}
 	}
 	if s.features.phone != nil {
 		if err := s.features.phone.owner.Initialize(w); err != nil {

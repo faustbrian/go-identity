@@ -1,8 +1,8 @@
-# Existing-account phone enrollment and password signin
+# Existing-account phone enrollment and signin
 
 This optional backend profile attaches and verifies a phone on an existing,
-verified account. Password signin is separately selected below; phone signup,
-OTP signin, reset, replacement, removal and MFA remain unselected.
+verified account. Password and SMS-code signin are separately selected below;
+phone signup, reset, replacement, removal and MFA remain unselected.
 Unknown/enrolled/changed factor authority denies the
 single-factor enrollment profile; it never falls back to weaker authentication.
 
@@ -112,6 +112,58 @@ histories using the graph migration APIs; do not copy or replay older SQL.
 This checkpoint qualifies adding phone signin after those selected histories;
 enabling additional predecessor profiles afterwards is not yet qualified.
 
+## Independently selected phone SMS-code signin
+
+Set `StoreConfiguration.PhoneOTPSignin` with the immutable `NumberPolicy`, a
+consuming-only `CodePolicy` for purpose `signin`, independent `RequestKeys`
+namespace, SMS template/version, provider version and locale chain. The graph
+reuses `OTP.Signin`, `OTP.PreAuth`, counted risk, encrypted delivery and `Session`
+read/logout configuration. Those common owners must match; enrollment, password
+login and their HTTP routes are not implicit dependencies. Existing verified
+phones must have the exact retained normalization profile, and actual current
+factor authority must be known-empty. Unknown/enrolled factors deny without an
+MFA or password fallback.
+
+`FeatureSet.PhoneOTPSignin()` exposes native send/signin/code-free recovery and
+trusted original-source resolution. `PhoneOTPSigninPreAuth()` supplies its own
+lookup-free canonical binder and original issuer. These handles retain startup,
+tenant and shutdown guards. Apply the graph's selected migrations before use:
+the native session-purpose suffix is last, after every selected username,
+phone/password, verification or MFA history. It preserves populated rows and
+installed checksums. Selecting this provenance history does not enable password
+authentication. Add a worker for the selected SMS provider for every tenant.
+
+Select `HTTPPhoneOTPSignin` separately with the canonical service actor ID and
+matching authorization revision. The HTTP actor is independent of the original
+flow issuer's actor; do not substitute an informal service label where canonical
+risk-audit attribution is required. HTTP additionally requires signed
+`HTTPPreAuth.Device`, the original flow cookie and strong `HTTPRate` admission.
+Nil selection advertises no routes or initiation method.
+
+1. Start `POST /v1/session/preauth-issue` with
+   `{"method":"phone-otp","identifier":"+12025550123","remember":false}`.
+   Retain its flow ID and both original flow/device cookies. The trusted binder
+   fixes the canonical number without an account lookup.
+2. Send `{flowID, number}` to `POST /v1/phone/send-signin` with exact Origin,
+   original cookies and a stable `Idempotency-Key`. Matching retries retain the
+   original challenge; changing input is a different request, not a safe retry.
+   Accepted means queued or suppressed, not delivered or verified eligibility.
+3. Run the selected SMS worker, then submit `{flowID, sendCommandID, code}` to
+   `POST /v1/phone/signin` with the original flow cookie and exact Origin.
+   Password, purpose, user and remember overrides are not accepted. A wrong code
+   is one counted native attempt; only fresh known commitment delivers the
+   session cookie and `X-CSRF-Token` with the original remember policy.
+4. Use the ordinary session get/signout endpoints. For an ambiguous submission,
+   retain its returned correlation and call `POST /v1/phone/signin/recover`
+   with `{flowID, recovery}` and original custody, **without the code**. Recovery
+   never compares, charges, renews or returns credentials. Do not submit the
+   same code as a new attempt to resolve an unknown outcome.
+
+Phone enrollment, password signin and SMS-code signin can be composed together
+under one `identity/phone` HTTP owner. Email OTP remains a separate selection.
+Additional predecessor profiles enabled after the final phone suffix still need
+their own populated-history qualification; this profile does not claim it.
+
 ## Reproduce the selected HTTPS journey
 
 Use [the disposable baseline setup](BASELINE.md), its explicit loopback port and
@@ -123,6 +175,10 @@ GOWORK=off go test -race -tags=integration \
 
 GOWORK=off go test -race -tags=integration \
   -run '^TestReferencePostgresPhonePasswordSigninHTTPS$' -count=1 -v .
+
+GOWORK=off go test -race -tags=integration \
+  -run '^TestReferencePostgresPhoneOTP(Signin|PasswordUsernameCoexistence)HTTPS$' \
+  -count=1 -v .
 ```
 
 The test uses real public registration, proof, session, OTP, PostgreSQL and

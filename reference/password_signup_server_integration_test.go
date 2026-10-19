@@ -249,6 +249,7 @@ func proveReferenceSignupGraph(t *testing.T, competing bool, protected ...bool) 
 type signupGraphExtensions struct {
 	phoneEnrollment bool
 	phonePassword   bool
+	phoneOTP        string
 
 	emailSignin                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            string
 	usernameTOTPOnly                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       bool
@@ -383,7 +384,7 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 	if extensions.username {
 		selectedAuthorization = referenceUsernamePolicy{}
 	}
-	if extensions.phonePassword {
+	if extensions.phonePassword || extensions.phoneOTP != "" {
 		selectedAuthorization = referencePhoneSigninPolicy{}
 	}
 	if extensions.verificationSignin == "totp-original-expiry" {
@@ -613,6 +614,9 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 	if extensions.phonePassword {
 		c.PhoneSignin = &reference.PhoneSigninConfiguration{Policy: c.Phone.Policy}
 		c.HTTPPhoneSignin = &reference.HTTPPasswordSigninConfiguration{ActorID: c.HTTPPasswordSignin.ActorID, PolicyRevision: c.HTTPPasswordSignin.PolicyRevision}
+	}
+	if extensions.phoneOTP != "" {
+		configureReferencePhoneOTPSignin(t, &c)
 	}
 	var emailUpgrade *reference.StoreConfiguration
 	if extensions.emailRemoval || extensions.emailChangeCase == "graph" || extensions.emailChangeCase == "graph-upgrade" || extensions.emailChangeCase == "shared-http" || extensions.emailChangeCase == "keyed-graph" || extensions.emailChangeCase == "request-http" || extensions.emailChangeCase == "change-origin-graph" || strings.HasPrefix(extensions.emailChangeCase, "totp-change") || strings.HasPrefix(extensions.emailChangeCase, "otp-change") || strings.HasPrefix(extensions.emailChangeCase, "otp-verification") {
@@ -884,6 +888,16 @@ END $$`); err != nil {
 		seen[op.Record.OperationID] = true
 	}
 	wantOperations := 8
+	if c.HTTPPhoneOTPSignin != nil {
+		wantOperations += 3
+		for _, id := range []string{"identity.phone.send-signin", "identity.phone.signin", "identity.phone.signin.recover"} {
+			if !seen[id] {
+				t.Fatal("selected phone OTP operation missing", id)
+			}
+		}
+	} else if seen["identity.phone.send-signin"] || seen["identity.phone.signin"] || seen["identity.phone.signin.recover"] {
+		t.Fatal("unselected phone OTP operation advertised")
+	}
 	if c.HTTPPhoneSignin != nil {
 		wantOperations++
 		if !seen["identity.phone.password-signin"] {
@@ -1082,6 +1096,19 @@ END $$`); err != nil {
 	if r := server.Readiness(ctx); !r.Ready {
 		t.Fatal("selected native readiness", r.Failures)
 	}
+	if extensions.phoneOTP != "" {
+		const rename = `ALTER TABLE session_store.session_issuances RENAME CONSTRAINT session_issuances_purpose_phone_otp_v1 TO phone_otp_fixture_missing`
+		if _, err := f.pool.Raw().Exec(ctx, rename); err != nil {
+			t.Fatal(err)
+		}
+		missing := server.Readiness(ctx)
+		if _, err := f.pool.Raw().Exec(ctx, `ALTER TABLE session_store.session_issuances RENAME CONSTRAINT phone_otp_fixture_missing TO session_issuances_purpose_phone_otp_v1`); err != nil {
+			t.Fatal(err)
+		}
+		if missing.Ready || !server.Readiness(ctx).Ready {
+			t.Fatal("readiness ignored native phone OTP successor")
+		}
+	}
 	if extensions.username {
 		if extensions.usernameTOTP {
 			f.usernamePrimaryRecovery = func(challenge passwordhttp.SigninResponse, cookies []*http.Cookie) {
@@ -1092,6 +1119,9 @@ END $$`); err != nil {
 		if extensions.phonePassword {
 			targets[2].constraint = "session_issuances_purpose_phone_password_v1"
 			targets = append(targets, struct{ table, constraint string }{"identity_password.signin_records", "signin_records_purpose_phone_v1"})
+		}
+		if extensions.phoneOTP != "" {
+			targets[2].constraint = "session_issuances_purpose_phone_otp_v1"
 		}
 		for _, target := range targets {
 			if _, err := f.pool.Raw().Exec(ctx, "ALTER TABLE "+target.table+" RENAME CONSTRAINT "+target.constraint+" TO username_fixture_missing"); err != nil {
@@ -1163,7 +1193,18 @@ END $$`); err != nil {
 		f.afterEmailSignin = func(ctx context.Context, user identity.UserID, cookies []*http.Cookie, csrf string, fresh func(...string) ([]*http.Cookie, string), readSession func([]*http.Cookie) bool) {
 			var afterVerified func()
 			if extensions.phonePassword {
-				afterVerified = func() { proveReferencePhonePasswordHTTPS(t, ctx, f, features, client, network.URL, origin, c.PasswordSignin.PreAuth.CallbackURL, *c.HTTPPreAuth.Device, user, readSession) }
+				afterVerified = func() {
+					proveReferencePhonePasswordHTTPS(t, ctx, f, features, client, network.URL, origin, c.PasswordSignin.PreAuth.CallbackURL, *c.HTTPPreAuth.Device, user, readSession)
+				}
+			}
+			if extensions.phoneOTP != "" {
+				prior := afterVerified
+				afterVerified = func() {
+					if prior != nil {
+						prior()
+					}
+					proveReferencePhoneOTPHTTPS(t, ctx, f, workers, messages, client, network.URL, origin, user, readSession, extensions.phoneOTP == "persistent")
+				}
 			}
 			proveReferencePhoneHTTPS(t, ctx, f, features, workers, messages, client, network.URL, origin, server, user, cookies, csrf, fresh, readSession, afterVerified)
 		}

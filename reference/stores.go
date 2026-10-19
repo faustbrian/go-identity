@@ -83,6 +83,11 @@ type StoreConfiguration struct {
 	// HTTPPhoneSignin enables only phone/password signin and its bound original
 	// pre-auth method; the native owner and shared browser admission are required.
 	HTTPPhoneSignin *HTTPPasswordSigninConfiguration
+	// PhoneOTPSignin independently selects verified-phone SMS-code login.
+	PhoneOTPSignin *PhoneOTPSigninConfiguration
+	// HTTPPhoneOTPSignin opts into SMS request/signin/recovery and its bound
+	// original-flow method. Nil exposes no phone OTP route or metadata.
+	HTTPPhoneOTPSignin *HTTPPhoneOTPSigninConfiguration
 	// Session selects native primary reads and self-signout, not HTTP.
 	Session *SessionConfiguration
 	// PasswordVerification selects native reauthentication/proof recovery, not HTTP.
