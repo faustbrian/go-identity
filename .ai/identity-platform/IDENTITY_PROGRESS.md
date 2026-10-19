@@ -1,6 +1,6 @@
 # Identity Platform Progress
 
-## TL;DR — updated 2026-10-19 08:55 UTC
+## TL;DR — updated 2026-10-19 09:32 UTC
 
 **Estimated whole-goal completion: approximately 20%, with low confidence.**
 **Consumer milestones: 8/39 closed** (20.5% unweighted); full scope remains
@@ -13,6 +13,22 @@ queued work is not counted as delivered.
 This is an effort/scope estimate, not a measured percentage or an ETA.
 M10's existing confirmed-TOTP enrollment/signin consumer is now counted after
 source/acceptance reconciliation; this corrects a stale row, not new development.
+
+**Newly delivered organization profile:** the intended verified recipient can
+reject an invitation without membership or bearer proof. Durable rejection
+denies later acceptance, including the original proof after reconstruction;
+replay/recovery, faults, contention and current-authority checks pass. Root
+`0035389` and native `5483038` are independently approved, pushed and Required-CI
+green. Their public artifacts match committed source. A separate no-replacement
+public consumer passes genuine PostgreSQL/race rejection (19.677s). Apply the
+forward rejection migration before enabling it. Organization HTTP/reference and
+the remaining M22 lifecycle remain open; this is not a new full milestone.
+
+**Active implementation:** verified-phone replacement, from authenticated
+new-number SMS to atomic replacement, old-number denial and retained recovery.
+Its compound directory transition and exact request/consuming-plan contracts
+are coded and unit/race tested; native persistence/OTP orchestration and the
+HTTP/reference consumer are still pending. No delivery is counted for it yet.
 
 **Newly delivered M08 profile — phone self-removal:** fresh action-bound proof
 removes the verified phone atomically with its retirement, pending cascade and

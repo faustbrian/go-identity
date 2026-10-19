@@ -1,5 +1,106 @@
 # Identity Implementation — Current Milestone
 
+## Active M08 — authenticated verified-phone replacement
+
+Primary owns go-identity main from `92f34fa`: phone contracts, kernel directory/
+cascade, OTP admission, password native proof/workflow, optional phone HTTP and
+reference composition. Consume the delivered verified-phone enrollment, SMS OTP,
+fresh action-bound password proof, atomic removal/recycling and email/password
+recovery contracts at this committed checkpoint; do not restart them. Selected
+profile: existing active account, known-empty MFA, independently usable verified
+email/password recovery, original authenticated session and exact old-phone
+versions -> request new-number SMS -> purpose-bound confirmation -> atomic new
+verified number/old-number retirement and pending identifier-change cascade ->
+old-phone and old-session denial, new-phone signin and retained email recovery.
+Send binds the current subject/session/old identifier, never public pre-auth;
+it does not retire the old phone. Final OTP consumption, proof/session effects,
+required encrypted old-number notice, audit and cascade share the existing
+coordinator transaction. Exact original retry/query recovers without renewed
+proof/code or duplicate effects. Explicit new-number collision/recycling,
+current account/factor/recovery/risk checks, wrong/stale/foreign proof/code,
+CSRF, rollback, contention and lost-COMMIT acceptance. Preserve enrollment and
+removal profiles. Exclude signup, reset, enrolled-MFA alternatives and metadata
+migration from this slice, not the full goal. Focused contract red/green and
+affected native unit/race/tagged vet, real PostgreSQL/HTTPS and actual public
+consumer proof; one independent complete-final-diff review before publication.
+First implementation boundary is exact replacement intent and atomic native
+directory semantics, not a second phone/OTP/proof engine. Full M08 remains open.
+
+2026-10-19 09:32 UTC: replacement is under implementation, not delivered. Root
+regression exposed the absent compound action and change-cascade receipt; the
+existing +1 receipt contract requires one atomic verified replacement, not two
+separately versioned mutations. Root/full internal race passes1.502s/1.395s;
+generic Replace behavior remains unchanged and primary selection is preserved.
+Phone original-request contracts pass; kernel exact-intent/consuming-plan/target
+and redacted-custody tests pass race1.405s against the task-owned three-module
+workspace. Actual kernel apply/cascade, new-number OTP/native orchestration,
+HTTP/reference/public-consumer and independent review remain unwritten/pending.
+Source is deliberately uncommitted until a coherent reviewed prerequisite or
+consumer boundary. Continue this slice, do not rediscover delivered removal.
+
+Latest affected constructor/target regression pass: phone race1.357s and kernel
+phone/change/removal/enrollment/verification/cascade race1.218s. No genuine
+phone-replacement transaction or consumer is claimed by those unit results.
+
+## Parallel M22 — recipient-owned invitation rejection
+
+Worker owns only `/Users/brian/Developer/golib/go-organization` root and postgres
+source/tests/module-local docs/migrations, main `93df26f62e692ace57ff9b13480c264fbfacd729`.
+Consume its genuine session, recipient-bound invitation read/accept/cancel,
+capability terminal-state and coordinator contracts. Finite outcome: genuinely
+authenticated intended verified recipient rejects an exact pending invitation;
+later acceptance denies, membership is not created, original keyed retry and
+code-free recovery return the original outcome. Required current authority,
+tenant/recipient isolation, version/expiry checks, required canonical audit, rollback,
+accept-vs-reject contention and ambiguous-COMMIT behavior must use existing
+owners. Do not implement resend/expire/dynamic roles or HTTP/reference here.
+Primary owns later identity HTTP/reference integration and all aggregate notes.
+Worker may not stage/commit/push/branch or spawn agents; preserve others' work.
+One bounded consumed-contract pass, then TDD implementation; report a concrete
+missing upstream seam instead of inventing authority. Focused root/native checks
+and a genuine public-API PostgreSQL consumer; serialize heavy runs with primary.
+Independent complete-final-diff review and main delivery remain primary-owned.
+
+2026-10-19 09:32 UTC: selected native rejection CLOSED. Root0035389 and native
+5483038 are main-pushed, Required39229624808/39230229218 SUCCESS. Independent
+complete18 review APPROVEf711bac2, root6 addendum01ddb2bf and final native14
+64e3040b preserve native source; two stale README claims corrected. Canonical
+rejection audit uses standard retention per SECURITY_EVENTS, not the initial
+note's stronger accidental wording; existing send/accept remain unchanged.
+Producer genuine rejection5.838s, retained invitation consumers14.078s and
+rejection race16.700s pass. Native adopts actual public root0035389; GOWORKoff
+native PG/race19.932s, ordinary race1.337s, tagged vet, module verification,
+planning and current-tree secrets pass. Actual public native version
+v0.0.0-20261019092731-5483038c7222 has exact origin; all53 downloaded files match
+immutable source (inherited root LICENSE explicit), root51 likewise. Separate
+example.com/organization-rejection-consumer uses unchanged external fixtures,
+no production copies or replacements: genuine PG/race rejection19.677s PASS,
+including original-proof denial, replay/recovery, faults and current authority.
+Module verification/no-Replace graph pass. Sum
+h1:7MbV2gy0/xUA57/z6+kAJW1shSH34APlRggo8df9LMw=.
+Apply the forward rejection migration before enabling the native operation.
+Organization HTTP/reference, remaining invitation/lifecycle variants and full
+M22/M23/unit qualification remain open; 8/39 is unchanged.
+
+## Next parallel M22 — authorized explicit invitation expiry
+
+Same worker owns only go-organization root/postgres source/tests/local docs and
+migrations on clean main5483038c722261a064e4b58d274a2f687ee609b9. Consume the
+delivered genuine-session invitation creation/acceptance/cancellation/rejection
+and authoritative terminal-row fence (public native consumer19.677s). Deliver
+authorized org:invite owner/administrator explicit expiry of an exact pending
+invitation/version with bounded registered reason, one atomic terminal outcome,
+canonical identity.organization.expire_invitation audit and lifecycle event;
+the original still-live proof must no longer admit membership. Preserve natural
+expired projection vs durably terminal expiry, no resurrection, exact retry and
+code-free unknown recovery, current scoped authority/tenant isolation, rollback
+and accept-vs-expire contention. Confirm exact catalog semantics in one bounded
+pass; report a real contradiction or missing upstream seam, never fake authority.
+Exclude resend, roles, HTTP/reference and shared identity changes. No Git or
+children; primary retains source/public-pin review, publication and integration.
+Coordinate heavy runs; retain only resources needed for the bounded review/
+public-consumer continuation until primary confirms cleanup, not indefinitely.
+
 ## Parallel native WebAuthn discoverable-credential lane
 
 Worker owns only go-webauthn root and postgres source/tests/module-local docs
