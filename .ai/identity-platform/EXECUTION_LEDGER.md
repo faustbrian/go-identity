@@ -1,6 +1,6 @@
 # Identity Implementation — Current Milestone
 
-## Current checkpoint — 2026-10-19 01:54 UTC
+## Current checkpoint — 2026-10-19 02:00 UTC
 
 Phone native `650d24f` and HTTP `422b56d` are main-pushed with green Required CI.
 The actual published HTTP modules match all 69 reviewed Go/manifests. Reference
@@ -10,8 +10,15 @@ PostgreSQL/race phone journey plus combined username/TOTP and baseline profiles
 pass (15.946s). This includes genuine SMS verification, original target binding,
 wrong-password/retarget/replay denial, metadata-only recovery and browser/
 persistent session read/logout. The complete corrected source has independent
-APPROVE (`d4e61ed9`); final reference22 public-pin snapshot `5430a606` is under
-retained review reconciliation. Reference publication/downloaded consumer/CI remain.
+APPROVE (`d4e61ed9`); final reference22 public-pin snapshot `5430a606` has retained
+independent APPROVE. Reference `d65ed4cf5649b1b5509abfe3687bbeb492332678` is
+main-pushed, Required CI 39187551070 SUCCESS. Actual downloaded reference
+`v0.0.0-20261019015527-d65ed4cf5649` authenticates to that exact origin;
+sum `h1:ZDdSOkwfmtc8ux39mFf/zISecKvhR+5dXiOYp9eMBUA=` and module sum
+`h1:6EVkrtApKWnRxsWNwCW/4Kp0AGD5VHYAh1K53IdJI4k=`. All 279 Go/manifests
+are byte-equal committed source. Its genuine phone/password and combined
+username/TOTP PostgreSQL/HTTPS consumer passes `GOWORK=off` with race detection
+(13.824s). Selected consumer slice delivered; full M08 remains open.
 
 Review F1 was a real combined-profile readiness defect: the probe required a
 password constraint replaced by the phone migration. Actual PostgreSQL/race

@@ -1,6 +1,6 @@
 # Identity Platform Progress
 
-## TL;DR — updated 2026-10-19 01:54 UTC
+## TL;DR — updated 2026-10-19 02:00 UTC
 
 **Estimated whole-goal completion: approximately 15%, with low confidence.**
 **Consumer milestones: 6/39 closed** (15.4% unweighted); full scope remains
@@ -23,9 +23,12 @@ read and logout. Retargeting and replay disclose no credentials. Focused HTTP
 schema/binding and reference migration/lifetime tests pass. Independent review's
 combined-username readiness defect is fixed and proven RED -> GREEN, including
 username TOTP and missing-successor probes. Canonical reference ordinary race
-and actual PostgreSQL/race pass. Final public-pin review and reference delivery
-remain; no current source defect is known. M08
-still includes later OTP/reset/change/removal profiles and is not closed.
+and actual PostgreSQL/race pass. Final public-pin review APPROVE covers snapshot
+`5430a606`; reference is main-pushed `d65ed4c`, Required CI 39187551070 green.
+Its actual downloaded public module matches all 279 Go/manifests and the genuine
+phone/password plus combined username/TOTP PostgreSQL/HTTPS consumer passes with
+race detection (13.824s). The selected phone/password consumer slice is delivered.
+M08 still includes later OTP/reset/change/removal profiles and is not closed.
 
 **Parallel delivery:** selected identified-user WebAuthn none/ES256 root and
 PostgreSQL adapter are independently reviewed and main-pushed in go-webauthn
