@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Preserve the distinct phone/password-signin operation in opaque paired
+  password/pre-auth custody. Phone OTP, signup and reset profiles cannot use
+  this variant. Native phone discovery, identifier-bound original flow, risk,
+  factor and session admission remain required; no endpoint is enabled here.
+
 - Add the native-only comparison-bound username rename transition. Display-only
   edits preserve verification; canonical changes retire the exact predecessor
   and reset possession. Generic identifier commands do not expose this workflow.

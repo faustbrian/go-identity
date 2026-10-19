@@ -8,7 +8,8 @@ import (
 // NewFeaturePasswordSigninCommand freezes structural signin metadata with the
 // existing primitive-owned password and original pre-auth cookie. The closed
 // native profiles are identity/password, identity.password.signin, password-signin
-// v1, and identity/username, identity.username.signin, username-signin v1, both
+// v1; identity/username, identity.username.signin, username-signin v1; and
+// identity/phone, identity.phone.password-signin, phone-password-signin v1, all
 // record-omitted with explicit user or anonymous-flow scope. This internal
 // adapter schema is distinct from the public request schema. Cookie transport
 // uses NewFeaturePreAuthCommand's canonical 32..64-byte base64url bounds.
@@ -43,7 +44,7 @@ func NewFeaturePasswordSigninCommand(spec FeatureCommandSpec, password primitive
 }
 
 func passwordSigninOperation(op FeatureOperation) bool {
-	selected := op.Owner == "identity/password" && op.OperationID == "identity.password.signin" && op.SchemaID == "password-signin" || op.Owner == "identity/username" && op.OperationID == "identity.username.signin" && op.SchemaID == "username-signin"
+	selected := op.Owner == "identity/password" && op.OperationID == "identity.password.signin" && op.SchemaID == "password-signin" || op.Owner == "identity/username" && op.OperationID == "identity.username.signin" && op.SchemaID == "username-signin" || op.Owner == "identity/phone" && op.OperationID == "identity.phone.password-signin" && op.SchemaID == "phone-password-signin"
 	return selected && op.SchemaVersion == 1 && op.RecordRequirement == FeatureRecordOmitted && op.SubjectRequirement <= FeatureSubjectAnonymousFlow
 }
 
