@@ -1,6 +1,6 @@
 # Identity Platform Progress
 
-## TL;DR — updated 2026-10-19 06:26 UTC
+## TL;DR — updated 2026-10-19 08:55 UTC
 
 **Estimated whole-goal completion: approximately 20%, with low confidence.**
 **Consumer milestones: 8/39 closed** (20.5% unweighted); full scope remains
@@ -14,7 +14,35 @@ This is an effort/scope estimate, not a measured percentage or an ETA.
 M10's existing confirmed-TOTP enrollment/signin consumer is now counted after
 source/acceptance reconciliation; this corrects a stale row, not new development.
 
-**Newly delivered M08 profile:** verified-phone SMS-code signin through the
+**Newly delivered M08 profile — phone self-removal:** fresh action-bound proof
+removes the verified phone atomically with its retirement, pending cascade and
+required old-number notice. Old sessions/phone signin deny; original-key replay
+and reconstructed recovery preserve history; actual email/password signin/reset
+remain usable. Native bearer/cookie and separately selected cookie HTTP are
+supported. Independently approved root `91beaaf`, prerequisites `e97faf1`, native
+and HTTP `6dbd35b`, and reference `62ee204` are on main with exact Required CI
+green. The downloaded reference artifact matches its committed source. A separate
+consumer with no replacements passes real PostgreSQL/HTTPS/race removal and
+populated upgrade (79.635s), using only the published modules. See the
+[consumer guide](../../reference/PHONE.md#independently-selected-phone-self-removal).
+
+**Retained uncertainty:** one public-dependency aggregate failed during router
+startup. The unchanged upgrade case subsequently passed alone and through the
+downloaded module; the cause/stability is unproved, not fixed. Completed cases
+retain their individual results; the failed aggregate is not reported as green.
+Full M08 and final unit qualification remain open; 8/39 is unchanged.
+
+**Parallel WebAuthn:** resident-required registration/discoverable assertion root
+API `479cf9a` and native adapter `f9533eb` are independently approved, main-pushed
+and Required-CI green (39216149866 / 39217738873). The adapter consumes the actual
+public root; PostgreSQL/race/Chromium, late mapping withdrawal and lost-COMMIT
+checks pass. Its public artifact matches every committed adapter file. The
+downloaded adapter's actual external PostgreSQL/Chromium discoverable and retained
+identified consumers pass (1.651s / 1.239s), with authenticated dependencies and
+no local replacements. Task resources are removed. This protocol prerequisite
+is delivered; passkey/session integration and M16 remain open.
+
+**Retained delivered M08 profile:** verified-phone SMS-code signin through the
 reference HTTPS backend, from genuine registration/email verification and
 fresh-proof phone enrollment to encrypted SMS, one consuming signin, usable
 browser/persistent session read and logout. Wrong-code debit, original target
@@ -25,7 +53,7 @@ passes, and its actual public module matches all 285 Go/manifest files. The
 downloaded module's genuine PostgreSQL/HTTPS race consumer passes (15.324s).
 Independent delivery audit supports that bounded claim. See
 [the consumer guide](../../reference/PHONE.md#independently-selected-phone-sms-code-signin).
-**M08 remains open** for reset, phone change/removal and its remaining assigned
+**M08 remains open** for reset, phone change/signup and its remaining assigned
 profiles. No whole-unit qualification or new full-roadmap closure is claimed:
 8/39 and the approximate 20% whole-goal estimate remain unchanged.
 
@@ -1417,7 +1445,7 @@ restart old slices merely to fill this table; adopt applicable prior proof.
 | M05 | Username availability/signin/rename: identity/username, stable identifier contracts | Closed selected consumer profile: required-email Latin-v1 signup/verification/signin, metered advisory availability, fresh-proof rename/session invalidation and opt-in TOTP signin. Reference `4315bbf`, independent final review, green Required CI, canonical public-dependency PostgreSQL/race 48.976s and downloaded-reference consumer 31.145s. Broader typed-catalog variants and whole-unit/release qualification remain pending. |
 | M06 | Delivered magic-link signin and session: identity/magiclink | Closed: selected browser-SFA signin/optional-signup public-reference journey `647ac4b`; independent review, green CI and downloaded-module PostgreSQL consumer. Full-unit qualification remains open. |
 | M07 | Purpose-bound email OTP request/delivery/completion: identity/otp, identity/otp/postgres | Closed selected email-signin profile: genuine registration/verification, original browser, encrypted delivery, counted consumption, session read/logout and code-free unknown recovery. Native `8008afd` and reference `00ca1bb`, independent reviews, green Required CI and actual downloaded-reference PostgreSQL consumer. OTP-MFA/phone/reset variants and full-unit qualification remain separate. |
-| M08 | Verified phone enrollment/change, OTP/password signin and reset: identity/phone, OTP/password owners | Enrollment/verification and separately selected phone/password signin are delivered through reference `d65ed4c`, independent review, green CI and actual downloaded-reference PostgreSQL/HTTPS consumer. OTP signin, reset/change/removal and full qualification remain open. |
+| M08 | Verified phone enrollment/change, OTP/password signin and reset: identity/phone, OTP/password owners | Enrollment/verification, distinct phone/password signin, SMS-code signin and fresh-authenticated self-removal are delivered through actual public-reference PostgreSQL/HTTPS consumers, independent review and green CI; latest removal reference `62ee204`. Signup, number change, phone password reset, remaining assigned variants and full qualification remain open. One intermittent router-startup failure remains unproved, not a claimed fix. |
 | M09 | Anonymous session, self-deletion and collision-safe permanent upgrade: identity/anonymous, identity/anonymous/postgres | Closure not reassessed |
 | M10 | Confirmed TOTP enrollment and TOTP signin: identity/mfa, identity/mfa/postgres | Closed selected cookie/password-primary TOTP profile, including username-primary composition: genuine registration, fresh proof, pending enrollment, reveal-once URI, explicit confirmation, challenge-only primary, TOTP completion and usable session/read/logout. Reviewed/pushed reference `4315bbf` and `02c6195`, green CI and original canonical/downloaded consumers retained. Fresh source audit at `d65ed4c` found the closure row stale; current downloaded combined phone/username/TOTP consumer also passes (13.824s). Broader MFA profiles and unit/release qualification remain separate. |
 | M11 | Confirmed secondary-OTP enrollment, delivered-code signin and session: MFA/OTP/password/session owners | Selected email profile proven; full milestone not closed |

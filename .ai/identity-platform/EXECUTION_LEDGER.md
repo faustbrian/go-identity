@@ -1,5 +1,188 @@
 # Identity Implementation — Current Milestone
 
+## Parallel native WebAuthn discoverable-credential lane
+
+Worker owns only go-webauthn root and postgres source/tests/module-local docs
+and migrations, on main from committed 75a475e; no identity/session/passkey or
+tooling changes. Consumes the existing identified-user none/ES256 ceremony,
+native atomic challenge/counter store and active-subject fence, proven by M15's
+retained browser/PostgreSQL consumer. Deliver existing-active-user resident-
+required registration -> usernameless assertion -> durable verified resolved
+credential/subject, with mandatory handle matching, scope/current-authority,
+replay, rollback and original ambiguous-outcome recovery. Actual Chromium plus
+isolated PostgreSQL proves the path. Preserve identified/nonresident APIs and
+tests; focused ordinary/native race, hostile-input checks and browser consumer,
+one complete independent review before authorized main delivery. Exclude signup,
+session issuance, credential management and conditional UI. Primary owns later
+passkey/session integration; this prerequisite alone does not close M16. Heavy
+local runs are serialized with the primary. Missing upstream authority must be
+reported, never replaced by private identity/session engines.
+
+2026-10-19 07:46 UTC: root `479cf9a` and native `f9533eb` independently APPROVE,
+main-pushed and exact-head Required CI39216149866/39217738873 SUCCESS. Root11
+81ecd6c9 and native10 99d3c6fd reviewed bytes match their publication commits.
+Native uses authenticated public root and passes selected PG/race, both actual
+Chromium/WPT flows, module/vet/planning/secrets. Public adapter
+`v0.0.0-20261019074211-f9533eb111c9` has exact origin; all committed postgres
+files compare equal. External downloaded native PG/browser consumer awaits the
+serialized slot. This remains M16's protocol prerequisite, not identity/session
+or full-unit qualification.
+
+2026-10-19 07:56 UTC: selected discoverable prerequisite CLOSED. Actual downloaded
+public native/root consumer, with no replaces/local production source, passes
+real PostgreSQL/Chromium discoverable1.651s and retained identified1.239s. Module
+verification and no-Replace provenance pass; published fixture/WPT bytes match.
+Native public sum `h1:hywjqAhG7dF2ih3gKCpgzLOlhN+iDgRQhgCrVSD7w2g=`;
+module sum `h1:+3p4THKWFCWJUNA1BHjHDlPISJzUCSddc6pBFMunfZY=`. Primary refreshed
+clean main/remote f9533eb and exact Required39217738873 SUCCESS. Worker cleanup
+removed owned358MB resources, stopped PG/browser children. Operators must apply
+forward migration2 before new binaries. No signup/session/M16/full-unit claim.
+
+## M08 — fresh-authenticated phone self-removal: selected profile CLOSED
+
+Primary owns the complete native-to-reference slice on main from `5a5c41b`:
+verified existing phone -> fresh action-bound password proof -> atomic removal
+and pending identifier-removal cascade -> prior-session/old-phone signin denial
+-> retained verified-email/password signin and recovery. Require actual selected
+signin/reset owners, known-empty current MFA authority, exact phone/profile and
+predecessor versions and protected risk/counter admission. Advance identifier
+authority to deny every prior identifier-bound session; do not claim physical
+session-row cleanup. Require one encrypted notice to the original removed SMS
+channel in the same commit; sender delivery remains a separate worker outcome.
+Removal consumes no OTP or public pre-auth flow. Reuse native Work,
+proof/request custody, identifier writer/tombstone and lifecycle/delivery stores.
+No new engine. Exclude replacement, signup, reset and enrolled-MFA alternatives.
+Owner paths: phone contracts; kernel removal/cascade; native password proof and
+removal composition; MFA exact-action fence; opt-in HTTP/reference composition.
+Finite proof: bounded/opaque input; wrong/stale/foreign proof/CSRF denial;
+missing recovery/current authority denial; one-use/race/rollback; exact keyed
+replay and code-free lost-COMMIT recovery; genuine PostgreSQL then HTTPS and
+downloaded public consumer, preserving existing phone/password/OTP journeys.
+Use focused new tests, affected native ordinary race/tagged vet and actual PG
+checks; one complete independent final review before each coherent publication,
+main push and applicable Required CI. Existing delivered source/evidence stays.
+Fresh bounded mapping and QA are implementation input, not a new start programme.
+Initial public contract test is RED because removal construction/API is absent.
+One QA pass: `/root/phone_remove_qa`, `m08-phone-remove-bounded-qa`, base `5a5c41b`,
+artifact `ad1ad5ceba479c498189349ee7dc98782f769fb2973420af4590eb1d7af71be5`.
+Its native report retains P1-P8 coverage; no implementation blocker or amendment.
+
+2026-10-19 07:29 UTC: native-to-reference selected consumer PASS40.115s,
+`go -C reference test -tags=integration -run
+'^TestReferencePostgresPhoneRemovalNative$' -count=1 .` in task-owned workspace
+with actual disposable PG18.6. Real account/enrollment and both phone signin
+owners precede removal; test waits for the actual minimum30s send-family policy
+rather than changing persisted history. Invalid CSRF/forged proof/stale version
+leave protected state unchanged. Exact user/identifier deltas, retirement, one
+pending cascade, proof use and encrypted notice commit; pending OTP counters and
+session issuance do not change. Old sessions/password/pending code deny;
+matching replay and code-free original query preserve history, old-number SMS
+is delivered, retained email signin/reset and changed-password signin work.
+Fixed real composition gaps: matching immutable risk policy and required native
+lockout suffix. Explicit in-memory template hashing respects forbidden implicit
+exports. Query caller keeps original operation (not transport .recover alias).
+No full native race/fault matrix, independent review, public pin or delivery
+claim yet. HTTP contract REDmissingAPI; implementation continues. PG removed;
+bounded task caches retained only for adjacent checks.
+
+2026-10-19 07:46 UTC: selected `TestReferencePostgresPhoneRemovalHTTPS`
+PASS34.495s on actual PG18.6. Complete prior native behavior is connected through
+the selected cookie endpoint; missing/foreign Origin and CSRF deny unchanged
+state, original retry after own session invalidation returns identical metadata.
+Canonical stored-session CSRF selection initially rejected removal; focused
+`TestPhoneRemovalStoredSynchronizerContract` reproduced that failure and now
+passes alongside retained enrollment selection, while weaker declarations deny.
+Real before-COMMIT/lost-acknowledgement/contention acceptance is executing next.
+No phone-removal review, public delivery or M08 closure claimed.
+
+2026-10-19 07:56 UTC: lost-COMMIT and two-key contention pass in real PG suite;
+before-COMMIT retry/reconciliation PASS37.689s after correcting the oracle to
+retain the kernel's dependency-failure error beside proven NotCommitted.
+New actual final-fence tests caught session revocation after protected writes;
+native removal now checks exact original session/family separately from its own
+identifier-epoch successor. REDcommitted then GREEN; six reached late authority/
+write-failure cases pass with race34.807s, including MFA, credential, account,
+session and independent recovery withdrawal. A fixed PG notice proves each
+negative injection reached its intended final boundary, not an earlier denial.
+Populated graph removal upgrade/reapplication PASS32.946s; original account,
+operator custody and versions preserved, then real removal/recovery succeeds.
+Eight affected modules ordinary race PASS (root/internal, phone, postgres,
+password/postgres, MFA/postgres, HTTP, HTTP/phone, reference/command). Current
+full selected PG/race path is running after the final session-fence/source edits;
+bounded parser fuzz, tagged vet, final review and publication remain.
+
+Bounded independent device-readiness check: oauth_device_ready_slice found the
+real shared capability/consent coordinator gate missing at identity5a5c41b and
+OAuth7292fbe, so no speculative device implementation was assigned. A later
+primary-owned prerequisite must prove atomic capability/consent composition
+before a separate OAuth/device worker consumes it; no private engine or stub.
+
+2026-10-19 08:02 UTC: canonical current-production native/HTTPS/populated-upgrade
+and before/lost-COMMIT/contention PG/race matrix PASS223.751s. Test-only additions
+now reconstruct the actual graph before original retry/query, add explicit native
+bearer custody and protected-risk outage; reached session/risk-outage cases pass
+race11.342s including reconstructed recovery. These added assertions require
+current focused confirmation, not a repo-wide restart. Freeze this coherent
+removal source for one independent complete-diff review; final native commands,
+bounded hostile-input fuzz, module/vet/planning/secrets and public pin/delivery
+checks remain. Full M08, M16 and 67-unit qualification are still open.
+
+2026-10-19 08:26 UTC: full frozen original matrix PASS310.215s, eight affected
+ordinary race/tagged-vet/module checks pass; parser fuzz126699 executions passes.
+Independent complete61-path review /root/phone_removal_final_review returned
+REQUEST_CHANGES: F1 actual email-recovery owner selection, F2 independent HTTP
+atomic-rate migration, F3 canonical identifier-removal audit. All three reproduced
+RED before owning fixes. Corrected compatibility unit/race passes1.489s; genuine
+native and independent-HTTP plus retained email-removal rate/consumer checks pass
+PG/race91.646s, including exactly one canonical success audit. Explicit reached
+denial-audit assertion awaits its focused run. No new planning or history repair.
+Reviewed prerequisite25 source remained byte-identical62795ae2; public-root
+pin addendum29 beda38c1 independently APPROVE. Root91beaaf and prerequisites
+e97faf1 are ordinary-main-pushed; Required39221912187/39222495947 SUCCESS.
+Public root/phone/kernel/MFA/HTTP provenance is exact. Standalone native password
+and phone HTTP now adopt those actual public prerequisites; affected checks and
+fresh complete final review precede their publication. Full historical secrets
+scan still FAILS retained imported-history findings; selected immutable-range
+and current-tree scans PASS. No full-history or whole-unit pass is claimed.
+
+2026-10-19 08:37 UTC: all accepted review corrections now have affected current
+proof: reached denial-audit PG/race10.834s; remaining bearer/HTTPS/populated
+upgrade/final-fence/beforeCOMMIT/lostack/contention matrix PASS292.997s. Fresh
+independent /root/phone_removal_corrected_review APPROVE on complete73
+41057e32 and native22 681d016b; actual source/ownership and test-oracle audit
+found no remaining material defect. Native22 committed/pushed6dbd35b with exact
+Required39223802060 SUCCESS. Actual public native and HTTP versions are
+v0.0.0-20261019083454-6dbd35bc483d. Reference adopts those and public prerequisites;
+GOWORKoff ordinary race11.399s/cmd8.904s, taggedvet/module verification pass.
+Remaining acceptance is actual public-dependency PG composition, bounded pin
+review, reference publication/Required and downloaded-reference consumer. Prior
+workspace results are not relabelled public proof. No full M08/unit closure.
+
+2026-10-19 08:55 UTC: finite selected removal profile CLOSED. Independent
+reference22 pin/source addendum APPROVE76bea385 (full75 d62a07a5), native22
+681d016b retained. Reference62ee204 is main-pushed; Required39225550103 SUCCESS.
+Actual public version v0.0.0-20261019084932-62ee204951c7 origin62ee204; all300
+downloaded files match immutable source, including inherited LICENSE. Public sum
+h1:YeB9tPYYPT1j/c4epcueZ9dMNenP0meA++EP/lCr9WQ= and module sum
+h1:1zW2LVfM/kCsSoogrl1r0QL/oDja3f+EpDSr7mUWHTA=. Separate consumer module
+example.com/identity-public-reference copied74 unchanged public fixtures, not
+production code. GOWORKoff, no replacements and module verification pass;
+actual PG18.6/Go1.27.2 race consumer IndependentRateMigrations39.05s and populated
+upgrade38.98s PASS79.635s. Complete real journey retains old-phone denial,
+original retry/query, required SMS notice and actual email/password recovery.
+
+Public-dependency66236 remains FAILED overall385.735s: one initial populated-
+upgrade router-startup failure; all other completed cases retain their own
+passing results, including beforeCOMMIT/lostack/contention. Eight diagnostic
+startup constructions passed2.54-3.08s; that added work exhausted the fixture's
+outer60s context, so the diagnostic is not acceptance. Original unmodified
+focused upgrade40845 PASS42.777s, and external public upgrade above also passes.
+Cause/stability of the initial startup failure remains unproved; no production
+source, deadline or policy was weakened and no fix/aggregate pass is claimed.
+Final unit qualification must retain that uncertainty. Full M08 still requires
+number change, signup/reset and remaining profiles; 8/39 and all67-unit scope
+remain unchanged. Do not reopen this delivered finite profile for those variants.
+
 ## M15 selected consumer CLOSED — 2026-10-19 03:49 UTC
 
 `go-webauthn` clean main and remote main are
