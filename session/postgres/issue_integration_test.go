@@ -282,6 +282,12 @@ func testNativeIssueIntegration(t *testing.T, ctx context.Context, pool *databas
 			t.Fatal(e)
 		}
 		defer install.Rollback(ctx)
+		// The native outbox adapter owns public.outbox_messages, whereas its
+		// upstream migration is unqualified. Pin its installation schema even
+		// when the test role has a same-named schema (for example, identity).
+		if _, e = install.Exec(ctx, `SET LOCAL search_path = public, pg_catalog`); e != nil {
+			t.Fatal("dependency installation schema", e)
+		}
 		if _, e = install.Exec(ctx, auditpostgres.FreshInstallPreflightSQL()); e != nil {
 			t.Fatal("audit preflight", e)
 		}

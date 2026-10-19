@@ -82,8 +82,16 @@ func testOwnedPreAuthIssue(t *testing.T, ctx context.Context, pool *database.Poo
 		if err != nil {
 			t.Fatal(err)
 		}
-		for _, choice := range []session.RememberChoice{session.BrowserSession, session.PersistentSession} {
-			remember, err := session.ResolveRememberPolicy(choice, session.LifetimeConfig{Default: session.BrowserSession, AbsoluteTTL: time.Hour, IdleTTL: 30 * time.Minute, RefreshAfter: time.Minute, FreshFor: 15 * time.Minute})
+		for _, profile := range []struct {
+			choice     session.RememberChoice
+			identifier [32]byte
+		}{
+			{session.BrowserSession, [32]byte{}},
+			{session.PersistentSession, [32]byte{}},
+			{session.BrowserSession, [32]byte{96}},
+			{session.PersistentSession, [32]byte{97}},
+		} {
+			remember, err := session.ResolveRememberPolicy(profile.choice, session.LifetimeConfig{Default: session.BrowserSession, AbsoluteTTL: time.Hour, IdleTTL: 30 * time.Minute, RefreshAfter: time.Minute, FreshFor: 15 * time.Minute})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -91,7 +99,7 @@ func testOwnedPreAuthIssue(t *testing.T, ctx context.Context, pool *database.Poo
 			if err != nil {
 				t.Fatal(err)
 			}
-			prepared, err := issuer.Prepare(session.PreAuthPrepareInput{CommandID: id, TenantID: "issue", CorrelationID: "preauth-core", Remember: remember})
+			prepared, err := issuer.Prepare(session.PreAuthPrepareInput{CommandID: id, TenantID: "issue", CorrelationID: "preauth-core", Remember: remember, IdentifierBinding: profile.identifier})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -113,7 +121,7 @@ func testOwnedPreAuthIssue(t *testing.T, ctx context.Context, pool *database.Poo
 				t.Fatal(err)
 			}
 			digest, err := parsed.PreAuthDigest(key, spec.Binding)
-			if err != nil || digest != spec.Cookie || spec.Binding.Intent.Remember != remember {
+			if err != nil || digest != spec.Cookie || spec.Binding.Intent.Remember != remember || spec.Binding.Intent.IdentifierBinding != profile.identifier {
 				t.Fatal("original cookie commitment or remember choice changed")
 			}
 			counts(t, command, 1, 1)
@@ -124,6 +132,30 @@ func testOwnedPreAuthIssue(t *testing.T, ctx context.Context, pool *database.Poo
 			original, _ := encodePreAuth(command.Record)
 			if !bytes.Equal(payload, original) {
 				t.Fatal("native storage changed server-prepared original")
+			}
+			loaded, err := ReadPreAuth(ctx, pool.Raw(), config.Repository, spec.Binding.Intent.TenantID, spec.Binding.ID)
+			loadedSpec, bindingErr := loaded.Bindings()
+			if err != nil || bindingErr != nil || loadedSpec.Binding.Intent.IdentifierBinding != profile.identifier || loaded.Check(spec.Binding.IssuedAt, spec.Binding, digest) != nil {
+				t.Fatal("native read lost original identifier-bound possession")
+			}
+			if profile.identifier != ([32]byte{}) {
+				changed := spec
+				changed.Binding.Intent.IdentifierBinding[0]++
+				changedRecord, err := session.NewPreAuthTransaction(changed)
+				if err != nil {
+					t.Fatal(err)
+				}
+				altered := command
+				altered.Record = changedRecord
+				receipt, err := executor.ExecutePreAuthIssuance(ctx, altered)
+				var conflict identity.ConflictError
+				if !errors.As(err, &conflict) || receipt.Receipt.Outcome != identity.CommitOutcomeConflict {
+					t.Fatal("same-command changed identifier did not conflict")
+				}
+				if loaded.Check(spec.Binding.IssuedAt, changed.Binding, digest) == nil {
+					t.Fatal("original possession authorized another identifier")
+				}
+				counts(t, command, 1, 1)
 			}
 			replayed, err := executor.ExecutePreAuthIssuance(ctx, command)
 			if err != nil || !replayed.Replayed || replayed.Receipt.Outcome != identity.CommitOutcomeCommitted {

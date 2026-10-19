@@ -25,6 +25,7 @@ type storedPreAuth struct {
 	IssuedAt, ExpiresAt         time.Time
 	Cookie                      session.TokenDigest
 	Version                     uint64
+	IdentifierBinding           *[32]byte `json:",omitempty"`
 }
 
 func encodePreAuth(record session.PreAuthTransaction) ([]byte, error) {
@@ -38,7 +39,15 @@ func encodePreAuth(record session.PreAuthTransaction) ([]byte, error) {
 		return nil, ErrInvalidRecord
 	}
 	i := b.Intent
-	payload, err := json.Marshal(storedPreAuth{1, b.ID, i.TenantID, i.Action, i.Origin, i.CallbackURL, i.Nonce, r, i.PolicyID, i.PolicyVersion, b.IssuedAt, b.ExpiresAt, s.Cookie, s.Version})
+	// Omit absent binding entirely to preserve installed legacy bytea records.
+	// Older binaries reject bound records through their canonical-byte check,
+	// rather than silently loading them without the identifier commitment.
+	var identifierBinding *[32]byte
+	if i.IdentifierBinding != ([32]byte{}) {
+		original := i.IdentifierBinding
+		identifierBinding = &original
+	}
+	payload, err := json.Marshal(storedPreAuth{1, b.ID, i.TenantID, i.Action, i.Origin, i.CallbackURL, i.Nonce, r, i.PolicyID, i.PolicyVersion, b.IssuedAt, b.ExpiresAt, s.Cookie, s.Version, identifierBinding})
 	if err != nil || len(payload) > maximumPreAuthRecordBytes {
 		return nil, ErrInvalidRecord
 	}
@@ -58,7 +67,11 @@ func decodePreAuth(payload []byte) (session.PreAuthTransaction, error) {
 	if err != nil {
 		return bad()
 	}
-	result, err := session.NewPreAuthTransaction(session.PreAuthTransactionSpec{Binding: session.PreAuthBinding{ID: stored.ID, Intent: session.PreAuthIntent{TenantID: stored.TenantID, Action: stored.Action, Origin: stored.Origin, CallbackURL: stored.CallbackURL, Nonce: stored.Nonce, Remember: remember, PolicyID: stored.PolicyID, PolicyVersion: stored.PolicyVersion}, IssuedAt: stored.IssuedAt, ExpiresAt: stored.ExpiresAt}, Cookie: stored.Cookie, Version: stored.Version})
+	var identifierBinding [32]byte
+	if stored.IdentifierBinding != nil {
+		identifierBinding = *stored.IdentifierBinding
+	}
+	result, err := session.NewPreAuthTransaction(session.PreAuthTransactionSpec{Binding: session.PreAuthBinding{ID: stored.ID, Intent: session.PreAuthIntent{TenantID: stored.TenantID, Action: stored.Action, Origin: stored.Origin, CallbackURL: stored.CallbackURL, Nonce: stored.Nonce, Remember: remember, PolicyID: stored.PolicyID, PolicyVersion: stored.PolicyVersion, IdentifierBinding: identifierBinding}, IssuedAt: stored.IssuedAt, ExpiresAt: stored.ExpiresAt}, Cookie: stored.Cookie, Version: stored.Version})
 	if err != nil {
 		return bad()
 	}

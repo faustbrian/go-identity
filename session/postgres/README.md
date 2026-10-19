@@ -542,6 +542,15 @@ factor. It performs no IO and grants no authentication or mutation permission.
 
 ### Canonical pre-auth state
 
+An optional original `PreAuthIntent.IdentifierBinding` commitment is retained in
+the canonical record and initiation command. Zero preserves existing storage and
+command bytes; bound flows add one exact 32-byte field. Older binaries reject
+the extended record instead of dropping its binding. Deploy compatible readers
+before enabling bound flows, and retain the selected workflow's identifier-key
+profile for their lifetime. No migration or alternate journal is required.
+The consuming workflow must compare the original commitment before password work;
+this adapter preserves custody, not canonicalization or credential authority.
+
 Install `PreAuthMigrationSource` after the base session schema in the single
 migration history. It adds a separate canonical private `bytea` record and
 digest index, retaining the complete original flow binding and nanosecond UTC

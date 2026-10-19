@@ -171,9 +171,10 @@ func preAuthURL(raw string, origin bool) bool {
 
 // PreAuthDigest derives HMAC-SHA-256 cookie lookup under the exact named key
 // and complete original binding. Use a dedicated pre-auth key, not the session
-// lookup/signing/envelope key. The framing is golib-preauth-cookie-v1 NUL,
-// uint32 key version, uint16-length-prefixed ID/tenant/action/origin/callback/
-// policy strings, nonce, uint64 policy version, UTC RFC3339Nano issued/expiry
+// lookup/signing/envelope key. The framing starts with golib-preauth-cookie-v1
+// NUL and the uint32 key version. Next come ID, tenant, action, origin, callback
+// and policy strings, each with a uint16 byte length, then nonce, uint64 policy
+// version, UTC RFC3339Nano issued/expiry
 // strings, resolved uint8 remember choice and four uint64 nanosecond durations,
 // then uint8 decoded token size and token bytes, all integers big-endian.
 // With nonzero IdentifierBinding, the domain is instead

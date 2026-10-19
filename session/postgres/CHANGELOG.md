@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Preserve optional original identifier commitments in pre-auth record storage
+  and command custody, including restart/retry conflict checks. Legacy unbound
+  bytes remain unchanged; old binaries fail closed on bound records rather than
+  discarding the commitment. No new table, journal or renewal path is introduced.
+
 - Retain the exact consumed username-signin browser origin during MFA
   completion and denial accounting. Match its original committed command,
   fingerprint, generation, cookie and exclusive expiry without consuming or

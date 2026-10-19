@@ -49,6 +49,9 @@ func mapPreAuthIssue(b identity.CommandBinding, record session.PreAuthTransactio
 	duration("remember.idle", remember.IdleTTL)
 	duration("remember.refresh", remember.RefreshAfter)
 	duration("remember.fresh", remember.FreshFor)
+	if i.IdentifierBinding != ([32]byte{}) {
+		add("flow.identifier", identity.FeatureValue{Kind: identity.FeatureBytes, Bytes: i.IdentifierBinding[:]})
+	}
 	return identity.NewFeatureCommand(identity.FeatureCommandSpec{Binding: b, Operation: op, Fields: fields})
 }
 
@@ -112,10 +115,23 @@ func nativePreAuthIssue(command identity.Command) (identity.CommandBinding, sess
 		valid = false
 	}
 	remember, err := session.NewRememberPolicy(session.RememberPolicySpec{Choice: session.RememberChoice(choice), AbsoluteTTL: duration("remember.absolute"), IdleTTL: duration("remember.idle"), RefreshAfter: duration("remember.refresh"), FreshFor: duration("remember.fresh")})
-	if err != nil || !valid || len(values) != 0 {
+	if err != nil || !valid {
 		return bad()
 	}
 	b.Intent.Remember = remember
+	if _, present := values["flow.identifier"]; present {
+		identifier := take("flow.identifier", identity.FeatureBytes).Bytes
+		if len(identifier) != len(b.Intent.IdentifierBinding) {
+			return bad()
+		}
+		copy(b.Intent.IdentifierBinding[:], identifier)
+		if !valid || b.Intent.IdentifierBinding == ([32]byte{}) {
+			return bad()
+		}
+	}
+	if len(values) != 0 {
+		return bad()
+	}
 	record, err := session.NewPreAuthTransaction(s)
 	if err != nil {
 		return bad()

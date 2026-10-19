@@ -54,6 +54,50 @@ func TestPreAuthIssueCommandPreservesOriginalPrivateBinding(t *testing.T) {
 	}
 }
 
+func TestPreAuthIssueCommandRetainsIdentifierCommitment(t *testing.T) {
+	legacy := testPreAuth(t, time.Date(2026, 10, 7, 0, 0, 0, 0, time.UTC))
+	spec, _ := legacy.Bindings()
+	spec.Binding.Intent.IdentifierBinding = [32]byte{95}
+	original, err := session.NewPreAuthTransaction(spec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	command, err := mapPreAuthIssue(preAuthIssueBinding(original), original)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, decoded, err := nativePreAuthIssue(command)
+	got, bindingErr := decoded.Bindings()
+	if err != nil || bindingErr != nil || got.Binding.Intent.IdentifierBinding != spec.Binding.Intent.IdentifierBinding {
+		t.Fatal("command mapping dropped original canonical identifier commitment")
+	}
+	for _, value := range []identity.FeatureValue{
+		{Kind: identity.FeatureBytes, Bytes: make([]byte, 31)},
+		{Kind: identity.FeatureBytes, Bytes: make([]byte, 32)},
+		{Kind: identity.FeatureBytes, Bytes: make([]byte, 33)},
+		{Kind: identity.FeatureText, Text: "not-a-commitment"},
+	} {
+		projection, _ := command.Feature()
+		found := false
+		for i := range projection.Fields {
+			if projection.Fields[i].Name == "flow.identifier" {
+				projection.Fields[i].Value = value
+				found = true
+			}
+		}
+		if !found {
+			t.Fatal("native command did not retain identifier field")
+		}
+		altered, err := identity.NewFeatureCommand(projection)
+		if err != nil {
+			continue // Root hostile-value validation may reject before native decode.
+		}
+		if _, _, err := nativePreAuthIssue(altered); err == nil {
+			t.Fatal("malformed explicit identifier commitment admitted")
+		}
+	}
+}
+
 func TestPreAuthIssueCommandRejectsScopeSubstitution(t *testing.T) {
 	record := testPreAuth(t, time.Now().UTC())
 	original := preAuthIssueBinding(record)

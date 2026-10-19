@@ -57,6 +57,40 @@ func TestPreAuthStorageExactRoundTrip(t *testing.T) {
 	}
 }
 
+func TestPreAuthStoragePreservesOriginalIdentifierCommitment(t *testing.T) {
+	legacy := testPreAuth(t, time.Date(2026, 10, 7, 0, 0, 0, 0, time.UTC))
+	spec, _ := legacy.Bindings()
+	spec.Binding.Intent.IdentifierBinding = [32]byte{94}
+	original, err := session.NewPreAuthTransaction(spec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, err := encodePreAuth(original)
+	if err != nil {
+		t.Fatal("bound original cannot be encoded", err)
+	}
+	decoded, err := decodePreAuth(payload)
+	got, bindingErr := decoded.Bindings()
+	if err != nil || bindingErr != nil || got.Binding.Intent.IdentifierBinding != spec.Binding.Intent.IdentifierBinding {
+		t.Fatal("durable preauth lost canonical identifier commitment")
+	}
+	legacyPayload, err := encodePreAuth(legacy)
+	if err != nil || bytes.Contains(legacyPayload, []byte("IdentifierBinding")) {
+		t.Fatal("unbound durable preauth changed legacy encoding")
+	}
+	for _, corrupt := range [][]byte{
+		bytes.Replace(payload, []byte(`"IdentifierBinding":[94,0`), []byte(`"IdentifierBinding":[94,null`), 1),
+		bytes.Replace(payload, []byte(`"IdentifierBinding":[94,0`), []byte(`"IdentifierBinding":[94.5,0`), 1),
+	} {
+		if bytes.Equal(corrupt, payload) {
+			t.Fatal("identifier corruption fixture did not change original")
+		}
+		if _, err := decodePreAuth(corrupt); err == nil {
+			t.Fatal("corrupt identifier commitment restored as original custody")
+		}
+	}
+}
+
 func TestPreAuthNativeInvalidInput(t *testing.T) {
 	ctx := context.Background()
 	record := testPreAuth(t, time.Now().UTC())
@@ -107,7 +141,19 @@ func TestPreAuthReservedNativeContract(t *testing.T) {
 }
 
 func FuzzPreAuthStoredRecord(f *testing.F) {
-	b, err := encodePreAuth(testPreAuth(f, time.Date(2026, 10, 7, 0, 0, 0, 1, time.UTC)))
+	original := testPreAuth(f, time.Date(2026, 10, 7, 0, 0, 0, 1, time.UTC))
+	b, err := encodePreAuth(original)
+	if err != nil {
+		f.Fatal(err)
+	}
+	f.Add(b)
+	spec, _ := original.Bindings()
+	spec.Binding.Intent.IdentifierBinding = [32]byte{98}
+	bound, err := session.NewPreAuthTransaction(spec)
+	if err != nil {
+		f.Fatal(err)
+	}
+	b, err = encodePreAuth(bound)
 	if err != nil {
 		f.Fatal(err)
 	}
