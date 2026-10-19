@@ -1,5 +1,6 @@
 {
   "identity.email.verification-signin": "authentication",
   "identity.oauth-server.continue": "privileged",
+  "identity.organization.invitation.expire": "privileged",
   "identity.username.available": "state_neutral_read"
 }

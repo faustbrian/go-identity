@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Admit explicit invitation expiry through the protected privileged profile,
+  requiring current provider signals and transaction-owned actor/resource
+  counters. This grants no organization permission or invitation authority;
+  unlisted aliases still deny.
+
 - Require state-neutral read counters for username availability instead of
   treating it as unmetered public discovery. Selected availability consumers
   must honor the bounded tenant and trusted subject-or-network rate profile.

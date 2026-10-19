@@ -831,6 +831,13 @@ requires actor/resource/network-bound counters in the owning transaction; clean
 provider facts alone are not consent or issuance authority. Native entries may
 fill an omitted matrix classification, never override an explicit pinned class.
 
+Explicit invitation expiry (`identity.organization.invitation.expire`) uses the
+same Privileged reservation profile as invitation cancellation. It requires
+complete current provider signals and transaction-owned tenant, actor,
+invitation-resource and network counters. Assessment and preparation confer no
+organization permission or durable expiry; the native organization owner must
+still prove current administrator authority and atomically finalize the effect.
+
 Regenerate from the selected current planning snapshot, then format the output:
 
 ```sh
