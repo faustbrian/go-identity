@@ -130,7 +130,7 @@ func readObservedCounterPreparation(ctx context.Context, reader interface {
 	QueryRow(context.Context, string, ...any) pgx.Row
 }, id []byte, observed *commandObservation) error {
 	_, feature, err := decodeObservedScope(observed.scope)
-	if err != nil || observed.plan != nil || feature == nil || feature.OperationID != "identity.mfa.otp-verify" && *feature != organizationInvitationSendOperation() || observed.state == nil || observed.until == nil || (*observed.state != "pending" && *observed.state != "aborted") {
+	if err != nil || observed.plan != nil || feature == nil || feature.OperationID != "identity.mfa.otp-verify" && !organizationInvitationIssuanceOperation(*feature) || observed.state == nil || observed.until == nil || (*observed.state != "pending" && *observed.state != "aborted") {
 		return nil
 	}
 	return reader.QueryRow(ctx, `SELECT j.preparation_profile,CASE WHEN octet_length(j.preparation_declaration) BETWEEN 1 AND 65536 THEN j.preparation_declaration END
@@ -304,7 +304,7 @@ func observedCommandPlan(binding identity.CommandBinding, feature *identity.Feat
 		if feature == nil || observed.state == nil || (*observed.state != "pending" && *observed.state != "aborted") || observed.preparationProfile == nil || (*observed.preparationProfile != 3 && *observed.preparationProfile != 4) {
 			return CommandPlan{}, false, identity.UnavailableError{}
 		}
-		if *feature == organizationInvitationSendOperation() {
+		if organizationInvitationIssuanceOperation(*feature) {
 			plan, err := decodeFeaturePlan(binding, fp, observed.declaration)
 			if err != nil || !validOrganizationInvitationPreparation(binding, plan) {
 				return CommandPlan{}, false, identity.UnavailableError{}

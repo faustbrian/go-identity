@@ -70,7 +70,7 @@ func validateFeatureCommand(phase FeatureExecutionContributor, command identity.
 		}
 		return owner.ValidateOAuthConsent(command)
 	}
-	if plan.Feature != nil && plan.Feature.Operation == organizationInvitationSendOperation() {
+	if plan.Feature != nil && organizationInvitationIssuanceOperation(plan.Feature.Operation) {
 		owner, ok := phase.(OrganizationInvitationIssuanceContributor)
 		if !ok {
 			return invalidPlan()
@@ -228,7 +228,7 @@ func (r *ContributorRegistry) admitFeaturePlanMode(b identity.CommandBinding, fi
 	if _, ok := feature.contributor.(FeatureExecutionContributor); !ok {
 		return nil, invalidPlan()
 	}
-	if p.Feature.Operation == organizationInvitationSendOperation() {
+	if organizationInvitationIssuanceOperation(p.Feature.Operation) {
 		if _, ok := feature.contributor.(OrganizationInvitationIssuanceContributor); !ok {
 			return nil, invalidPlan()
 		}

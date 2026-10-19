@@ -9,8 +9,8 @@ import (
 	identity "github.com/faustbrian/go-identity"
 )
 
-// OrganizationInvitationIssuanceContributor owns the closed invitation-send
-// workflow. Preparation validates current genuine owner/session, organization,
+// OrganizationInvitationIssuanceContributor owns the closed invitation-send and
+// invitation-resend workflows. Preparation validates current genuine owner/session, organization,
 // verified recipient and pending limits before acknowledged token generation.
 // Validation is pure; generated proof/address custody is authenticated and
 // encrypted by the existing preparation owner. Apply and final commit check
@@ -26,25 +26,42 @@ type organizationInvitationRecipientAdmission struct {
 	recipient RecipientRecord
 }
 
+// Resend rotates this invitation's proof, not its identity, recipient or
+// authority aggregate. The existing native owner must retain its original
+// exclusive deadline and enforce supersession in the same Work as issuance.
+func validOrganizationInvitationIssuanceProfile(b identity.CommandBinding, p CommandPlan) bool {
+	if b.ActorKind != authorization.SubjectUser || p.Feature == nil ||
+		!organizationInvitationIssuanceOperation(p.Feature.Operation) ||
+		p.Feature.Contributor != organizationInvitationDescriptor() || b.ValidateFor(p.Feature.Operation) != nil ||
+		p.SubjectType != "invitation" || p.Lifecycle == nil || len(p.Audits) != 1 {
+		return false
+	}
+	if p.Feature.Operation == organizationInvitationSendOperation() {
+		return *p.Lifecycle == (LifecyclePlan{EventType: "invitation.created.v1", BeforeVersion: 0, AfterVersion: 1}) &&
+			p.Audits[0].EventType == "identity.organization.create_invitation" && p.Audits[0].RetentionClass == "protected"
+	}
+	before := p.Lifecycle.BeforeVersion
+	// The issued successor must itself retain room for acceptance/terminal
+	// advancement; issuing MaxUint64 would strand an otherwise valid proof.
+	return before > 0 && before < ^uint64(0)-1 &&
+		*p.Lifecycle == (LifecyclePlan{EventType: "invitation.resent.v1", BeforeVersion: before, AfterVersion: before + 1}) &&
+		p.Audits[0].Required && p.Audits[0].EventType == "identity.organization.resend_invitation" && p.Audits[0].RetentionClass == "standard"
+}
+
 // The existing preparation journal freezes this declaration before token
 // generation. It can prove an unfinished/denied attempt, never final issuance.
 func validOrganizationInvitationPreparation(b identity.CommandBinding, p CommandPlan) bool {
-	return b.ActorKind == authorization.SubjectUser && p.Feature != nil &&
-		p.Feature.Operation == organizationInvitationSendOperation() &&
-		p.Feature.Contributor == organizationInvitationDescriptor() && b.ValidateFor(p.Feature.Operation) == nil &&
-		p.SubjectType == "invitation" && p.CommandCounters != nil &&
-		p.Lifecycle != nil && *p.Lifecycle == (LifecyclePlan{EventType: "invitation.created.v1", BeforeVersion: 0, AfterVersion: 1}) &&
-		len(p.Audits) == 1 && p.Audits[0].EventType == "identity.organization.create_invitation" && p.Audits[0].RetentionClass == "protected" &&
+	return validOrganizationInvitationIssuanceProfile(b, p) && p.CommandCounters != nil &&
 		!preparationProtected(p) && p.Delivery == nil && p.MFAContinuation == nil && p.MFACompletion == nil &&
 		p.MagicLinkRegistration == nil && !p.SignupAcceptance && !p.MagicLinkRequestAcceptance
 }
 
 func validOrganizationInvitationIssuance(b identity.CommandBinding, p CommandPlan) bool {
-	if b.ActorKind != authorization.SubjectUser {
+	if !validOrganizationInvitationIssuanceProfile(b, p) {
 		return false
 	}
 	i := p.CapabilityIssuance
-	if i == nil || p.Feature == nil || p.Feature.Operation != organizationInvitationSendOperation() || p.Feature.Contributor != organizationInvitationDescriptor() || b.ValidateFor(p.Feature.Operation) != nil || p.SubjectType != "invitation" || p.Lifecycle == nil || *p.Lifecycle != (LifecyclePlan{EventType: "invitation.created.v1", BeforeVersion: 0, AfterVersion: 1}) || p.CommandCounters == nil || p.Capability != nil || p.OTP != nil || p.RiskEvidence != nil || p.CaptchaEvidence != nil || i.RegistrationUserID != "" || i.ResetRecipientUserID != "" || i.MagicLinkRecipientUserID != "" || i.MFAContinuationUserID != "" || len(i.Grants) != 1 || i.Grants[0].Purpose != "identity.organization.invitation.accept" || !validCapabilityIssuancePlan(i) || p.Delivery == nil || !validDeliveryPlan(p.Delivery) || len(p.Delivery.Intents) != 1 {
+	if i == nil || p.CommandCounters == nil || p.Capability != nil || p.OTP != nil || p.RiskEvidence != nil || p.CaptchaEvidence != nil || i.RegistrationUserID != "" || i.ResetRecipientUserID != "" || i.MagicLinkRecipientUserID != "" || i.MFAContinuationUserID != "" || len(i.Grants) != 1 || i.Grants[0].Purpose != "identity.organization.invitation.accept" || !validCapabilityIssuancePlan(i) || p.Delivery == nil || !validDeliveryPlan(p.Delivery) || len(p.Delivery.Intents) != 1 {
 		return false
 	}
 	d := p.Delivery.Intents[0]
@@ -64,7 +81,7 @@ func (w Work) RequireOrganizationInvitationRecipient(ctx context.Context, owner 
 	}
 	fail := func() error { return w.fail(w.state.ctx, invalidWork()) }
 	b, f, _, err := w.FeatureScope(owner)
-	if err != nil || ctx == nil || f.Operation != organizationInvitationSendOperation() || f.Contributor != organizationInvitationDescriptor() || recipient.Validate() != nil || recipient.Suppressed || recipient.Query.Kind != identity.IdentifierEmail || recipient.Query.Eligibility != RecipientVerified || recipient.Query.UserID != b.UserID || recipient.User.ID != b.UserID || w.state.invitationRecipient != nil {
+	if err != nil || ctx == nil || !organizationInvitationIssuanceOperation(f.Operation) || f.Contributor != organizationInvitationDescriptor() || recipient.Validate() != nil || recipient.Suppressed || recipient.Query.Kind != identity.IdentifierEmail || recipient.Query.Eligibility != RecipientVerified || recipient.Query.UserID != b.UserID || recipient.User.ID != b.UserID || w.state.invitationRecipient != nil {
 		return fail()
 	}
 	command := w.state.featurePreparationCommand
@@ -109,7 +126,7 @@ func organizationInvitationIssuanceSubject(s *workState, p CommandPlan, payload 
 	}
 	r := s.invitationRecipient.recipient
 	b := s.binding
-	if payload.Subject != string(r.User.ID) || payload.Tenant != string(b.TenantID) || payload.Resource != b.RecordID || payload.CorrelationID != string(b.CommandID) || payload.Operation != "identity.organization.invitation.accept" || payload.Bearer || payload.MaxUses != 1 || len(payload.Caveats) != 5 || !payload.ExpiresAt.Equal(p.CapabilityIssuance.Grants[0].ExpiresAt) || payload.Caveats["organization.recipient-identifier"] != string(r.Identifier.ID) || payload.Caveats["organization.recipient-identifier-version"] != strconv.FormatUint(r.Identifier.Version, 10) || payload.Caveats["organization.invitation-version"] != "1" || payload.Caveats["organization.role"] != "member" {
+	if payload.Subject != string(r.User.ID) || payload.Tenant != string(b.TenantID) || payload.Resource != b.RecordID || payload.CorrelationID != string(b.CommandID) || payload.Operation != "identity.organization.invitation.accept" || payload.Bearer || payload.MaxUses != 1 || len(payload.Caveats) != 5 || !payload.ExpiresAt.Equal(p.CapabilityIssuance.Grants[0].ExpiresAt) || payload.Caveats["organization.recipient-identifier"] != string(r.Identifier.ID) || payload.Caveats["organization.recipient-identifier-version"] != strconv.FormatUint(r.Identifier.Version, 10) || payload.Caveats["organization.invitation-version"] != strconv.FormatUint(p.Lifecycle.AfterVersion, 10) || payload.Caveats["organization.role"] != "member" {
 		return "", invalidWork()
 	}
 	command, ok := s.featureApplyCommand.Feature()
@@ -130,7 +147,7 @@ func organizationInvitationIssuanceSubject(s *workState, p CommandPlan, payload 
 			}
 			matched++
 		case "organization.invitation-version":
-			if f.Value.Kind != identity.FeatureUint64 || f.Value.Uint64 != 0 {
+			if f.Value.Kind != identity.FeatureUint64 || f.Value.Uint64 != p.Lifecycle.BeforeVersion {
 				return "", invalidWork()
 			}
 			matched++

@@ -101,6 +101,11 @@ func (s *contributorRegistryState) registerFeatures(index int) error {
 // this exception to the exact existing adapter and closed paired-custody tuples;
 // no arbitrary cross-owner operation, schema or future version is admitted.
 func featureContributorOwns(d ContributorDescriptor, op identity.FeatureOperation) bool {
+	// A schema alias must not turn this issuance/supersession operation into
+	// a generic feature without its typed grant, delivery and audit phases.
+	if op.OperationID == organizationInvitationResendOperation().OperationID {
+		return op == organizationInvitationResendOperation() && d == organizationInvitationDescriptor()
+	}
 	// Reserve the operation before generic same-owner registration. An unknown
 	// schema must not skip the typed replacement/OTP/cascade path and report
 	// success as a generic feature with no identifier mutation.

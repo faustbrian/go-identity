@@ -87,11 +87,12 @@ func (w Work) StagedOrganizationInvitationMembership() (StagedLifecycle, error) 
 		return StagedLifecycle{}, invalidWork()
 	}
 	p := w.state.execution.reservation.plan
-	if p.feature == nil || p.feature.Operation != organizationInvitationAcceptOperation() || w.state.featureReceipt == nil {
+	if p.feature == nil || p.feature.Operation != organizationInvitationAcceptOperation() || w.state.featureReceipt == nil ||
+		p.lifecycle == nil || p.lifecycle.BeforeVersion == 0 || p.lifecycle.BeforeVersion == ^uint64(0) || p.lifecycle.AfterVersion != p.lifecycle.BeforeVersion+1 {
 		return StagedLifecycle{}, invalidWork()
 	}
 	primary, err := w.StagedLifecycle()
-	if err != nil || len(primary) != 1 || primary[0].EventIndex != 0 || primary[0].EventType != "invitation.accepted.v1" || primary[0].SubjectType != "invitation" || primary[0].BeforeVersion != 1 || primary[0].AfterVersion != 2 {
+	if err != nil || len(primary) != 1 || primary[0].EventIndex != 0 || primary[0].EventType != "invitation.accepted.v1" || primary[0].SubjectType != "invitation" || primary[0].BeforeVersion != p.lifecycle.BeforeVersion || primary[0].AfterVersion != p.lifecycle.AfterVersion {
 		return StagedLifecycle{}, invalidLifecycle()
 	}
 	b, m := w.state.binding, w.state.invitationMembership

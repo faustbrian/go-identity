@@ -169,7 +169,7 @@ func (w Work) StageCapabilityIssuanceFor(p CapabilityIssuanceContributor, index 
 	}
 	v, payload := d.plan.Grants[index], grant.Payload()
 	subject := w.state.binding.UserID
-	if w.state.binding.OperationID == organizationInvitationSendOperation().OperationID {
+	if w.state.binding.OperationID == organizationInvitationSendOperation().OperationID || w.state.binding.OperationID == organizationInvitationResendOperation().OperationID {
 		var err error
 		subject, err = organizationInvitationIssuanceSubject(w.state, w.state.execution.reservation.plan.snapshot(), payload)
 		if err != nil {

@@ -125,6 +125,20 @@ recording a second issuance selection. Original invitation expiry, recipient,
 member role and all five signed scope caveats must match; no subject override is
 added. The native owner separately enforces current owner and organization policy.
 
+The separate `identity.organization.invitation.resend` operation selects only
+`organization-invitation-resend` v1 with the same typed native owner. Its exact
+positive invitation version advances once, and the new capability binds that
+successor; initial send still uses 0-to-1. Resend requires the canonical
+`identity.organization.resend_invitation` audit with standard retention and the
+informational `invitation.resent.v1` event. It cannot reuse send's created event
+or audit. Native ownership must atomically supersede the old proof, preserve the
+original exclusive expiry/recipient/member role, and enforce current authority
+and limits alongside one issued grant and one encrypted delivery. This kernel
+profile alone does not implement resend or confer permission to renew a grant.
+Pending/aborted preparation history uses the original frozen journal declaration,
+not regenerated credentials. Resend's existing immutable invitation row anchors
+its organization; the optional send-origin profile below is unchanged.
+
 Send owners additionally freeze `OrganizationInvitationOrigin` with the exact
 original command's `organization.id` and `organization.version`. The existing
 preparation declaration retains it before generation; final attachment cannot
@@ -142,7 +156,8 @@ one-use capability participant and `OrganizationInvitationLifecycleContributor`.
 exact owner's Apply, after provisional consumption. After successful native
 membership SQL, record `OrganizationInvitationMembership` with the real retained
 member version; `StagedOrganizationInvitationMembership` emits index1 alongside
-the primary index0 invitation1-to-2 event. Rejoining a removed member advances
+the primary index0 invitation's exact positive-version successor event
+(initial acceptance is 1-to-2). Rejoining a removed member advances
 its actual tombstone, not invitation versions. No ignored recording failure can
 leave usable Work. Capability finalization, both events, audit and mutation must
 commit together; any failure rolls back. Metadata is not proof or a commit receipt.
@@ -168,7 +183,9 @@ non-selected declaration encodings are unchanged.
 
 Scoped lifecycle-catalog additions for these profiles are
 `invitation.created.v1` (invitation0-to-1), `invitation.accepted.v1`
-(invitation1-to-2), and `consent.reconfirmed.v1` (independent retained consent
+(positive invitation successor), `invitation.resent.v1` (the same invitation's
+positive successor, not a membership/organization-authority cascade), and
+`consent.reconfirmed.v1` (independent retained consent
 successor). The existing `membership.created.v1` and `consent.created.v1`
 semantics remain unchanged. These safe informational envelopes do not alter
 current-authority epochs, grant membership or acknowledge cascade completion;

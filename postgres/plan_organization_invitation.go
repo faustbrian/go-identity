@@ -14,6 +14,14 @@ func organizationInvitationSendOperation() identity.FeatureOperation {
 	return identity.FeatureOperation{Owner: "organization", OperationID: "identity.organization.invitation-send", SchemaID: "organization-invitation-send", SchemaVersion: 1, RecordRequirement: identity.FeatureRecordRequired, SubjectRequirement: identity.FeatureSubjectUser}
 }
 
+func organizationInvitationResendOperation() identity.FeatureOperation {
+	return identity.FeatureOperation{Owner: "organization", OperationID: "identity.organization.invitation.resend", SchemaID: "organization-invitation-resend", SchemaVersion: 1, RecordRequirement: identity.FeatureRecordRequired, SubjectRequirement: identity.FeatureSubjectUser}
+}
+
+func organizationInvitationIssuanceOperation(op identity.FeatureOperation) bool {
+	return op == organizationInvitationSendOperation() || op == organizationInvitationResendOperation()
+}
+
 func organizationInvitationAcceptOperation() identity.FeatureOperation {
 	return identity.FeatureOperation{Owner: "organization", OperationID: "identity.organization.invitation.accept", SchemaID: "organization-invitation-accept", SchemaVersion: 1, RecordRequirement: identity.FeatureRecordRequired, SubjectRequirement: identity.FeatureSubjectUser}
 }
@@ -26,7 +34,7 @@ func organizationInvitationDescriptor() ContributorDescriptor {
 // authority. The enlisted native owner and capability participant independently
 // recheck original recipient, invitation and authenticated grant custody.
 func encodeOrganizationInvitationConsumptionPlan(b identity.CommandBinding, fp [32]byte, p CommandPlan) ([]byte, error) {
-	if p.Lifecycle == nil || p.Lifecycle.BeforeVersion != 1 {
+	if p.Lifecycle == nil || p.Lifecycle.BeforeVersion == 0 || p.Lifecycle.BeforeVersion == math.MaxUint64 {
 		return nil, invalidPlan()
 	}
 	owner := ContributorDescriptor{Owner: "capability/postgres", ContractID: "capability.one-use", Version: 1}

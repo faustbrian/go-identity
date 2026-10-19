@@ -78,6 +78,47 @@ func TestOrganizationInvitationMemberReceiptPoisonsIgnoredWrongOwner(t *testing.
 	}
 }
 
+func TestOrganizationInvitationResentMemberEventUsesAdmittedVersion(t *testing.T) {
+	for _, invitationBefore := range []uint64{2, ^uint64(0) - 1} {
+		w, owner := invitationInvocationFixture(t, 9)
+		if err := w.RecordOrganizationInvitationMembership(owner, OrganizationInvitationMembership{
+			OrganizationID: "org-a", UserID: w.state.binding.UserID, BeforeVersion: 9, AfterVersion: 10,
+		}); err != nil {
+			t.Fatal(err)
+		}
+		p := w.state.execution.reservation.plan
+		p.lifecycle.BeforeVersion, p.lifecycle.AfterVersion = invitationBefore, invitationBefore+1
+		w.state.lifecycle.plan = *p.lifecycle
+		now := time.Now().UTC().Truncate(time.Microsecond)
+		_, declaration := organizationInvitationPlanFixture(t)
+		p.audits = declaration.Audits
+		record, err := securityMutationAudit(t.Context(), w.state.binding, invitationBefore, invitationBefore+1, now,
+			"committed", declaration.Audits[0].EventType, "invitation", w.state.binding.RecordID, "protected", true)
+		if err != nil {
+			t.Fatal(err)
+		}
+		p.audits[0].BindingDigest, err = FeatureAuditBindingDigest(w.state.binding, p.feature.Operation, "invitation", record)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := bindAuditPlans(w, p.audits); err != nil {
+			t.Fatal(err)
+		}
+		if err := w.StageAudit(0, record); err != nil {
+			t.Fatal(err)
+		}
+		if err := w.StageLifecycle(0, now); err != nil {
+			t.Fatal(err)
+		}
+		w.state.featureReceipt = &identity.FeatureReceipt{Operation: p.feature.Operation, BeforeVersion: invitationBefore, AfterVersion: invitationBefore + 1}
+		got, err := w.StagedOrganizationInvitationMembership()
+		if err != nil || got.EventIndex != 1 || got.EventType != "membership.created.v1" || got.SubjectID != "org-a" ||
+			got.BeforeVersion != 9 || got.AfterVersion != 10 || got.OccurredAt != now {
+			t.Fatal("resent acceptance lost paired independent membership event", err)
+		}
+	}
+}
+
 func TestOrganizationInvitationMemberEventUsesActualTombstone(t *testing.T) {
 	for _, before := range []uint64{0, 2, 9} {
 		t.Run(string(rune('a'+before)), func(t *testing.T) {

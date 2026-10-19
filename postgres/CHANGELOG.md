@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Admit the exact organization invitation-resend preparation, successor-grant
+  and history profile through the existing coordinator. Bind the positive
+  invitation predecessor/successor, canonical standard-retention resend audit
+  and informational resent event; accept consumes the exact positive issued
+  version. Native organization ownership still must enforce original expiry,
+  recipient, supersession and current authority atomically. Existing send and
+  origin encodings and schema histories are unchanged.
+
 - Add the exact consuming verified-phone replacement transition: lock the
   original target before OTP metering, atomically retire its old value and
   persist the verified successor, and admit a pending identifier-change cascade.
