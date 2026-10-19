@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Independently compose native authenticated phone self-removal using the
+  graph's real proof, risk, encrypted delivery and retained signin/reset
+  owners. Include required lockout, proof and cascade migration successors;
+  enrollment and HTTP remain separate selections.
+
+- Include atomic rate-admission storage when HTTP phone removal is the only
+  selected protected HTTP workflow, preserving independent opt-in composition.
+
 - Independently compose existing verified-phone SMS-code signin through the
   native OTP, risk, encrypted delivery and session owners. Select native and
   HTTP send/signin/code-free recovery separately, with target-bound original

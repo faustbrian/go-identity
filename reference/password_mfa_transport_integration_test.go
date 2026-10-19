@@ -23,6 +23,8 @@ type completionCommitFault struct {
 	factorManagement         bool
 	replacementConfirmation  bool
 	emailRemoval             bool
+	phoneRemoval             bool
+	beforeCommit             bool
 	emailPreparation         bool
 	emailVerification        bool
 	registrationVerification bool
@@ -88,6 +90,9 @@ func (c *completionCommitConn) Write(p []byte) (int, error) {
 	if c.fault.emailRemoval {
 		selected = bytes.Contains(p, []byte("INSERT INTO identity.status_consumers("))
 	}
+	if c.fault.phoneRemoval {
+		selected = bytes.Contains(p, []byte("INSERT INTO identity.status_consumers("))
+	}
 	if c.fault.emailPreparation {
 		selected = bytes.Contains(p, []byte("UPDATE identity.commands SET preparation_ciphertext="))
 	}
@@ -105,6 +110,12 @@ func (c *completionCommitConn) Write(p []byte) (int, error) {
 	}
 	if c.fault.armed.Load() && selected {
 		c.mutation.Store(true)
+	}
+	// The selected phone case also proves the opposite ambiguous transport
+	// outcome: close before COMMIT reaches PostgreSQL, after protected writes.
+	if c.fault.beforeCommit && c.fault.armed.Load() && c.mutation.Load() && len(p) >= 5 && p[0] == 'Q' && bytes.EqualFold(p[5:], []byte("commit\x00")) && c.fault.hit.CompareAndSwap(false, true) {
+		_ = c.Conn.Close()
+		return 0, io.ErrUnexpectedEOF
 	}
 	return c.Conn.Write(p)
 }

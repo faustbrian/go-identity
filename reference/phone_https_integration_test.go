@@ -65,7 +65,7 @@ func configureReferencePhone(t *testing.T, c *reference.StoreConfiguration, orig
 
 // Every identity, password proof, challenge and delivery is created through the
 // real graph and HTTPS. The only provider substitution is the declared sender.
-func proveReferencePhoneHTTPS(t *testing.T, ctx context.Context, f liveStores, features reference.FeatureSet, workers reference.WorkerSet, messages <-chan string, client *http.Client, base, origin string, server *reference.Server, user identity.UserID, cookies []*http.Cookie, csrf string, fresh func(...string) ([]*http.Cookie, string), readSession func([]*http.Cookie) bool, afterVerified func()) {
+func proveReferencePhoneHTTPS(t *testing.T, ctx context.Context, f liveStores, features reference.FeatureSet, workers reference.WorkerSet, messages <-chan string, client *http.Client, base, origin string, server *reference.Server, user identity.UserID, cookies []*http.Cookie, csrf string, fresh func(...string) ([]*http.Cookie, string), readSession func([]*http.Cookie) bool, afterVerified func(), selectedRemoval ...bool) {
 	t.Helper()
 	document := string(server.OpenAPI().JSON())
 	for _, path := range []string{"/v1/phone/send-verification", "/v1/phone/verify", "/v1/phone/verify/recover"} {
@@ -73,10 +73,13 @@ func proveReferencePhoneHTTPS(t *testing.T, ctx context.Context, f liveStores, f
 			t.Fatal("phone selection omitted its real route")
 		}
 	}
-	for _, path := range []string{"/v1/phone/password-reset", "/v1/phone/update", "/v1/phone/remove"} {
+	for _, path := range []string{"/v1/phone/password-reset", "/v1/phone/update"} {
 		if strings.Contains(document, path) {
 			t.Fatal("phone selection advertised an unsupported profile")
 		}
+	}
+	if strings.Contains(document, "/v1/phone/remove") != (len(selectedRemoval) == 1 && selectedRemoval[0]) {
+		t.Fatal("phone removal HTTP opt-in differs from advertised route")
 	}
 	if _, err := features.PhoneOTPSignin(); (err == nil) != strings.Contains(document, "/v1/phone/signin") {
 		t.Fatal("phone OTP selection and exposed route disagree")

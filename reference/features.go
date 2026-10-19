@@ -112,6 +112,8 @@ type featureState struct {
 	passwordSignup               *passwordpg.SignupService
 	username                     *usernameState
 	phone                        *phoneState
+	phoneRemoval                 *phoneRemovalState
+	httpPhoneRemoval             *phoneRemovalHTTPState
 	phoneSignin                  *phoneSigninState
 	phoneOTPSignin               *phoneOTPSigninState
 	httpPhoneOTPSignin           *phoneOTPSigninHTTPState
@@ -469,6 +471,10 @@ func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDepen
 	if err != nil {
 		return err
 	}
+	phoneRemovalOwner, err := composePhoneRemoval(c, d, evaluator, passwordVerificationOwner, passwordSigninOwner, resetOwner)
+	if err != nil {
+		return err
+	}
 	phoneSigninOwner, err := composePhoneSignin(c, d, evaluator)
 	if err != nil {
 		return err
@@ -651,6 +657,15 @@ func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDepen
 			httpEmailRequests.close()
 		}
 	}()
+	httpPhoneRemoval, err := composePhoneRemovalHTTP(c, phoneRemovalOwner, passwordVerificationOwner, s.httpRate)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if httpPhoneRemoval != nil && !retainedResetHTTP {
+			httpPhoneRemoval.rate.Close()
+		}
+	}()
 	httpEmailOTPVerification, err := composeEmailOTPVerificationHTTP(c, emailOwner, sessionOwner, s.httpRate)
 	if err != nil {
 		return err
@@ -710,6 +725,8 @@ func (s *storeState) composeFeatureStores(c StoreConfiguration, d ReferenceDepen
 	s.features.passwordSignup = passwordSignupOwner
 	s.features.username = usernameOwner
 	s.features.phone = phoneOwner
+	s.features.phoneRemoval = phoneRemovalOwner
+	s.features.httpPhoneRemoval = httpPhoneRemoval
 	s.features.phoneSignin = phoneSigninOwner
 	s.features.phoneOTPSignin = phoneOTPSigninOwner
 	s.features.httpPhoneOTPSignin = httpPhoneOTPSignin
@@ -821,7 +838,7 @@ func ComposeWorkers(stores StoreSet, providers ProviderSet, configs ...deliveryp
 		return WorkerSet{}, identity.InvalidInputError{Field: "reference_workers"}
 	}
 	for tenant := range s.tenants {
-		if !seen[tenant][f.provider] || f.phone != nil && !seen[tenant][f.phone.provider] || f.phoneOTPSignin != nil && !seen[tenant][f.phoneOTPSignin.provider] {
+		if !seen[tenant][f.provider] || f.phone != nil && !seen[tenant][f.phone.provider] || f.phoneOTPSignin != nil && !seen[tenant][f.phoneOTPSignin.provider] || f.phoneRemoval != nil && !seen[tenant][f.phoneRemoval.provider] {
 			return WorkerSet{}, identity.InvalidInputError{Field: "reference_workers"}
 		}
 	}

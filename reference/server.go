@@ -188,6 +188,21 @@ func NewServer(c ReferenceConfig, d ReferenceDependencies, f FeatureSet) (*Serve
 			phoneFeature = &combined
 		}
 	}
+	phoneRemoval, err := server.phoneRemovalFeature(c.HTTP.Network, f)
+	if err != nil {
+		return nil, err
+	}
+	if phoneRemoval != nil {
+		if phoneFeature == nil {
+			phoneFeature = phoneRemoval
+		} else {
+			combined, err := identityhttp.NewFeature(identityhttp.FeatureConfig{ID: "identity/phone", Operations: append(phoneFeature.Operations(), phoneRemoval.Operations()...)})
+			if err != nil {
+				return nil, err
+			}
+			phoneFeature = &combined
+		}
+	}
 	if phoneFeature != nil {
 		contributions = append(contributions, *phoneFeature)
 	}

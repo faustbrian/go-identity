@@ -250,6 +250,7 @@ type signupGraphExtensions struct {
 	phoneEnrollment bool
 	phonePassword   bool
 	phoneOTP        string
+	phoneRemoval    string
 
 	emailSignin                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            string
 	usernameTOTPOnly                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       bool
@@ -315,6 +316,9 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 	f.mfaListRecheck = extensions.mfaListRecheck
 	c, deps, worker := otpGraphConfiguration(t, f.config)
 	deps.PostgreSQL = f.pool
+	if strings.HasPrefix(extensions.phoneRemoval, "fence-") {
+		deps.PostgreSQL, f.phoneRemovalTrace = newPhoneRemovalFencePool(t, ctx, f.pool)
+	}
 	if strings.HasPrefix(extensions.verificationSignin, "totp-") {
 		var traced *database.Pool
 		traced, f.verificationMFAHook = newVerificationMFAEnrollmentTrace(t, ctx, f.pool)
@@ -322,6 +326,8 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 	}
 	if extensions.completionCommitFault {
 		f.completionFault = &completionCommitFault{factorProof: extensions.activeStepUp, regeneration: extensions.regeneration, factorManagement: extensions.factorManagement || extensions.disable, replacementConfirmation: extensions.factorReplacementConfirmationFault, emailRemoval: extensions.emailRemoval}
+		f.completionFault.phoneRemoval = extensions.phoneRemoval != ""
+		f.completionFault.beforeCommit = extensions.phoneRemoval == "before-commit"
 		f.completionFault.emailPreparation = extensions.emailChangeCase == "removal-admin-output-unknown"
 		f.completionFault.emailVerification = extensions.emailChangeCase == "otp-verification-unknown" || extensions.emailChangeCase == "otp-change-unknown"
 		f.completionFault.registrationVerification = extensions.verificationSignin == "verification-unknown" || extensions.verificationHooks == "unknown"
@@ -371,10 +377,10 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 	cookie, _ := session.NewCookiePolicy(session.CookieConfig{Name: "__Host-identity_device", SameSite: http.SameSiteLaxMode})
 	c.HTTPPreAuth = &reference.HTTPPreAuthConfiguration{Lifetime: session.LifetimeConfig{Default: session.BrowserSession, AbsoluteTTL: time.Hour, IdleTTL: 30 * time.Minute, RefreshAfter: time.Minute, FreshFor: 15 * time.Minute}, Device: &session.BrowserDeviceConfig{Namespace: "reference-registration", Keys: []session.BrowserDeviceKey{key}, ActiveVersion: 1, Lifetime: 24 * time.Hour, Cookie: cookie}}
 	resetRiskVersion := uint64(3)
-	if extensions.emailRemoval {
+	if extensions.emailRemoval || extensions.phoneRemoval != "" {
 		resetRiskVersion = 9
 	}
-	configureReferencePasswordResetPolicy(t, &c, origin, f.pool, resetRiskVersion, !extensions.factorRemoval && !extensions.emailRemoval, extensions.factorRemoval || extensions.emailRemoval, extensions.factorRemovalReset || extensions.emailRemoval)
+	configureReferencePasswordResetPolicy(t, &c, origin, f.pool, resetRiskVersion, !extensions.factorRemoval && !extensions.emailRemoval && extensions.phoneRemoval == "", extensions.factorRemoval || extensions.emailRemoval || extensions.phoneRemoval != "", extensions.factorRemovalReset || extensions.emailRemoval || extensions.phoneRemoval != "")
 	selectedReset := c.PasswordReset
 	selectedResetHTTP := c.HTTPPasswordReset
 	var selectedAuthorization authorization.Service = referenceRegistrationPolicy{}
@@ -420,7 +426,7 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 		c.Email.Addresses.AdministrativeAudit = &reference.EmailAddressAuditConfiguration{MaximumDuration: time.Second}
 		c.HTTPEmailAddresses = &reference.HTTPEmailAddressesConfiguration{Get: true, List: true, AdministrativeTargets: true}
 	}
-	if extensions.factorRemoval || extensions.emailRemoval {
+	if extensions.factorRemoval || extensions.emailRemoval || extensions.phoneRemoval != "" {
 		c.PasswordReset = selectedReset
 		c.PasswordReset.Native.Coordinator.QueryPolicy = c.OTP.Signin.Coordinator.QueryPolicy
 		c.PasswordReset.Native.Coordinator.AdmissionPolicy = c.OTP.Signin.Coordinator.QueryPolicy
@@ -618,6 +624,9 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 	if extensions.phoneOTP != "" {
 		configureReferencePhoneOTPSignin(t, &c)
 	}
+	if extensions.phoneRemoval != "" {
+		calls = configureReferencePhoneRemoval(t, &c, extensions.phoneRemoval)
+	}
 	var emailUpgrade *reference.StoreConfiguration
 	if extensions.emailRemoval || extensions.emailChangeCase == "graph" || extensions.emailChangeCase == "graph-upgrade" || extensions.emailChangeCase == "shared-http" || extensions.emailChangeCase == "keyed-graph" || extensions.emailChangeCase == "request-http" || extensions.emailChangeCase == "change-origin-graph" || strings.HasPrefix(extensions.emailChangeCase, "totp-change") || strings.HasPrefix(extensions.emailChangeCase, "otp-change") || strings.HasPrefix(extensions.emailChangeCase, "otp-verification") {
 		var retainedTargets []passwordpg.ReauthenticationTarget
@@ -796,6 +805,11 @@ func proveReferenceSignupGraphExtensions(t *testing.T, competing bool, extension
 	if extensions.verificationHooks != "" {
 		verificationHooks = configureReferenceVerificationHooks(t, &c, f, extensions.verificationHooks)
 	}
+	var phoneRemovalUpgrade *reference.StoreConfiguration
+	if extensions.phoneRemoval == "upgrade" {
+		selected := c
+		phoneRemovalUpgrade, c.PhoneRemoval = &selected, nil
+	}
 	stores, err := reference.ComposeStores(c, deps)
 	if err != nil {
 		var invalid identity.InvalidInputError
@@ -851,7 +865,10 @@ END $$`); err != nil {
 		}
 	})
 	if extensions.emailChangeCase == "removal-only-http" {
-		proveEmailRemovalIndependentRateMigrations(t, ctx, f, c, deps, worker, modules)
+		proveIndependentRemovalRateMigrations(t, ctx, f, c, deps, workerConfigs, modules)
+	}
+	if extensions.phoneRemoval == "independent-http" {
+		proveIndependentRemovalRateMigrations(t, ctx, f, c, deps, workerConfigs, modules)
 	}
 	migrationRequest := applyRequest(t, ctx, stores, modules)
 	migrationResult, migrationErr := stores.ReferenceMigrationApply(ctx, migrationRequest)
@@ -1070,6 +1087,14 @@ END $$`); err != nil {
 	} else if seen["identity.otp.email-change-request"] || seen["identity.otp.email-change-confirm"] || seen["identity.otp.email-change-confirm.recover"] {
 		t.Fatal("native primary-change OTP implicitly advertised HTTP")
 	}
+	if c.HTTPPhoneRemoval != nil {
+		wantOperations++
+		if !seen["identity.phone.remove"] {
+			t.Fatal("selected phone removal route missing")
+		}
+	} else if seen["identity.phone.remove"] {
+		t.Fatal("native phone removal implicitly exposed HTTP")
+	}
 	if !seen["identity.password.signup"] || !seen["identity.email.verification-confirm"] || !seen["identity.password.signin"] || (c.HTTPSession != nil && (!seen["identity.session.get"] || !seen["identity.session.signout"])) || len(seen) != wantOperations {
 		t.Fatal("selected public registration routes missing")
 	}
@@ -1192,12 +1217,12 @@ END $$`); err != nil {
 	if extensions.phoneEnrollment {
 		f.afterEmailSignin = func(ctx context.Context, user identity.UserID, cookies []*http.Cookie, csrf string, fresh func(...string) ([]*http.Cookie, string), readSession func([]*http.Cookie) bool) {
 			var afterVerified func()
-			if extensions.phonePassword {
+			if extensions.phonePassword && extensions.phoneRemoval == "" {
 				afterVerified = func() {
 					proveReferencePhonePasswordHTTPS(t, ctx, f, features, client, network.URL, origin, c.PasswordSignin.PreAuth.CallbackURL, *c.HTTPPreAuth.Device, user, readSession)
 				}
 			}
-			if extensions.phoneOTP != "" {
+			if extensions.phoneOTP != "" && extensions.phoneRemoval == "" {
 				prior := afterVerified
 				afterVerified = func() {
 					if prior != nil {
@@ -1206,7 +1231,48 @@ END $$`); err != nil {
 					proveReferencePhoneOTPHTTPS(t, ctx, f, workers, messages, client, network.URL, origin, user, readSession, extensions.phoneOTP == "persistent")
 				}
 			}
-			proveReferencePhoneHTTPS(t, ctx, f, features, workers, messages, client, network.URL, origin, server, user, cookies, csrf, fresh, readSession, afterVerified)
+			proveReferencePhoneHTTPS(t, ctx, f, features, workers, messages, client, network.URL, origin, server, user, cookies, csrf, fresh, readSession, afterVerified, c.HTTPPhoneRemoval != nil)
+			if extensions.phoneRemoval != "" {
+				removalConfig, removalFeatures := c, features
+				if phoneRemovalUpgrade != nil {
+					removalConfig = *phoneRemovalUpgrade
+					removalFeatures = upgradeReferenceEmailGraph(t, ctx, f, removalConfig, deps, worker, modules, user, migrationRequest, workerConfigs[1:]...)
+				}
+				rebuild := func() *reference.PhoneRemovalService {
+					graph, err := reference.ComposeStores(removalConfig, deps)
+					if err != nil {
+						t.Fatal("phone removal reconstructed stores", err)
+					}
+					t.Cleanup(func() {
+						bounded, stop := context.WithTimeout(context.Background(), 3*time.Second)
+						defer stop()
+						if err := graph.Close(bounded); err != nil {
+							t.Error("phone removal reconstructed graph cleanup", err)
+						}
+					})
+					providers, err := reference.ComposeProviders(graph)
+					if err != nil {
+						t.Fatal(err)
+					}
+					workers, err := reference.ComposeWorkers(graph, providers, workerConfigs...)
+					if err != nil {
+						t.Fatal(err)
+					}
+					features, err := reference.ComposeFeatures(graph, providers, workers)
+					if err != nil {
+						t.Fatal(err)
+					}
+					if err := features.Initialize(ctx); err != nil {
+						t.Fatal("phone removal reconstructed initialization", err)
+					}
+					owner, err := features.PhoneRemoval()
+					if err != nil {
+						t.Fatal(err)
+					}
+					return owner
+				}
+				proveReferencePhoneRemoval(t, ctx, f, removalFeatures, workers, messages, client, network.URL, origin, removalConfig, user, fresh, readSession, extensions.phoneRemoval, rebuild)
+			}
 		}
 	}
 	if extensions.emailManagementResend || extensions.emailManagementChange {

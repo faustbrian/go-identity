@@ -2,7 +2,8 @@
 
 This optional backend profile attaches and verifies a phone on an existing,
 verified account. Password and SMS-code signin are separately selected below;
-phone signup, reset, replacement, removal and MFA remain unselected.
+phone signup, reset, replacement and MFA remain unselected. Authenticated
+self-removal is a separate explicit selection described below.
 Unknown/enrolled/changed factor authority denies the
 single-factor enrollment profile; it never falls back to weaker authentication.
 
@@ -164,6 +165,77 @@ under one `identity/phone` HTTP owner. Email OTP remains a separate selection.
 Additional predecessor profiles enabled after the final phone suffix still need
 their own populated-history qualification; this profile does not claim it.
 
+## Independently selected phone self-removal
+
+Set `StoreConfiguration.PhoneRemoval` with the immutable number policy,
+`Primary.Action = "identity.phone.remove"`, an explicit proof audience and
+positive `MaximumAge` (no more than 15 minutes). Register that exact action and
+audience in the selected password-verification owner's target allowlist. Select
+the actual password signin, reset, proof, session, protected-risk and delivery
+owners. The supported profile requires their known-empty MFA authority; missing,
+changed or enrolled factors deny instead of falling back. A verified address
+alone is insufficient: the retained email/password identity must be usable by
+both configured signin and reset owners under the protected transaction.
+
+Configure `Native.RequestKeys` with an independent stable namespace, protected
+counters with lockout enforcement, an explicit identifier-removal cascade and
+one required SMS notice template/provider/locale/TTL. The notice has no caller
+variables and targets the original removed number. Leave
+`Native.Risk.Evaluation`, `Native.Risk.Keys`, `Native.Notice.Delivery` and
+`Native.Notice.Templates` zero: the graph injects its actual owners. For cookie
+transport leave `Primary.CSRFKeys` empty for the same reason. Add a worker for
+the notice's selected SMS provider for each tenant.
+
+Apply the graph's selected migration catalog before startup. Forward suffixes
+extend the existing phone proof and identifier-removal cascade histories and
+install protected lockouts without selecting MFA or username workflows. Preserve
+installed namespaces/checksums. Enrollment is not required merely to select
+removal, but an existing verified phone must retain the exact canonical profile.
+
+`FeatureSet.PhoneRemoval()` exposes `Remove`, original `RemovalRateSource` and
+code-free `RecoverRemoval`. The rate-source method grants no mutation authority.
+Native bearer or cookie custody is chosen at construction, not from a request.
+Separately set `HTTPPhoneRemoval` with the trusted Origin and matching policy
+revision for the cookie-only `POST /v1/phone/remove` route. Native selection alone
+exposes neither that route nor its capability. HTTP requires the original
+session cookie, exact Origin, `X-CSRF-Token`, one `Idempotency-Key` header and:
+
+```json
+{
+  "number": "+12025550123",
+  "identifierID": "<original verified identifier ID>",
+  "expectedIdentifierVersion": "2",
+  "expectedVerificationVersion": "2",
+  "proofID": "<original password-verification proof ID>",
+  "reason": "user-requested"
+}
+```
+
+Versions are canonical decimal strings in `1..18446744073709551614`, not JSON
+numbers. IDs, versions and the original action-bound proof come from supported
+identity/proof APIs; the reason must be registered in the native cascade policy.
+OTP, tenant/user, command/key and notification-suppression overrides are rejected.
+
+A known commitment atomically removes and retires the exact phone, consumes the
+one-use password proof, advances identifier authority and queues the encrypted
+old-number notice plus lifecycle cascade. Prior identifier-bound sessions and
+old phone-password/preissued OTP authentication then deny. Removal neither uses
+an OTP nor issues a replacement session. `cascadeStatus: "pending"` describes
+unfinished downstream cleanup, not physical deletion of every session row.
+Sender failure cannot restore the removed phone's authority.
+The protected security audit uses `identity.identifier.remove`; command and
+recovery identity remain `identity.phone.remove`. There is no synonymous second
+security event.
+
+Retain the exact original key and request for matching retries, including after
+the original session is invalidated by removal. Changed input under that key
+conflicts. For code-free native reconciliation, retain the returned command ID
+and exact `RecoveryQuery` binding and use the original `identity.phone.remove`
+self-resource caller under current historical disclosure policy. Recovery never
+reexecutes removal or renews proof/session validity. An unknown response is not
+rollback and must not be resubmitted as a new logical request. A retained verified
+email/password signin and reset path remains usable after successful removal.
+
 ## Reproduce the selected HTTPS journey
 
 Use [the disposable baseline setup](BASELINE.md), its explicit loopback port and
@@ -179,6 +251,9 @@ GOWORK=off go test -race -tags=integration \
 GOWORK=off go test -race -tags=integration \
   -run '^TestReferencePostgresPhoneOTP(Signin|PasswordUsernameCoexistence)HTTPS$' \
   -count=1 -v .
+
+GOWORK=off go test -race -tags=integration \
+  -run '^TestReferencePostgresPhoneRemoval(HTTPS|CommitCustody)$' -count=1 -v .
 ```
 
 The test uses real public registration, proof, session, OTP, PostgreSQL and

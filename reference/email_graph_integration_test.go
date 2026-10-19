@@ -118,7 +118,7 @@ func TestReferencePostgresEmailChangeGraphUpgrade(t *testing.T) {
 // The existing HTTPS baseline remains a real credential issuer. A reconstructed
 // graph opts into email only after that baseline has populated the primary; no
 // helper writes selected DDL or invents an identity or password-proof owner.
-func upgradeReferenceEmailGraph(t *testing.T, ctx context.Context, f liveStores, c reference.StoreConfiguration, d reference.ReferenceDependencies, worker deliverypg.WorkerConfig, modules []reference.ModuleID, user identity.UserID, original reference.ReferenceMigrationApplyRequest) reference.FeatureSet {
+func upgradeReferenceEmailGraph(t *testing.T, ctx context.Context, f liveStores, c reference.StoreConfiguration, d reference.ReferenceDependencies, worker deliverypg.WorkerConfig, modules []reference.ModuleID, user identity.UserID, original reference.ReferenceMigrationApplyRequest, extraWorkers ...deliverypg.WorkerConfig) reference.FeatureSet {
 	t.Helper()
 	stores, err := reference.ComposeStores(c, d)
 	if err != nil {
@@ -135,7 +135,7 @@ func upgradeReferenceEmailGraph(t *testing.T, ctx context.Context, f liveStores,
 	if err != nil {
 		t.Fatal(err)
 	}
-	workers, err := reference.ComposeWorkers(stores, providers, worker)
+	workers, err := reference.ComposeWorkers(stores, providers, append([]deliverypg.WorkerConfig{worker}, extraWorkers...)...)
 	if err != nil {
 		t.Fatal(err)
 	}

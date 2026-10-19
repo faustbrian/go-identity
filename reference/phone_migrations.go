@@ -16,7 +16,7 @@ import (
 // common action predecessor once: later username selection must not rerun an
 // older CHECK that removes phone consumption from a populated deployment.
 func (s StoreSet) phoneMigrationCatalog(ctx context.Context, catalog []migrationHistory) ([]migrationHistory, error) {
-	if s.state.features == nil || s.state.features.phone == nil {
+	if s.state.features == nil || s.state.features.phone == nil && s.state.features.phoneRemoval == nil {
 		return catalog, nil
 	}
 	invalid := identity.InvalidInputError{Field: "reference_phone_migrations"}
@@ -97,6 +97,9 @@ func (s StoreSet) phoneMigrationCatalog(ctx context.Context, catalog []migration
 	_, err = appendLast("identity_phone_password", "identity/password/postgres", passwordpg.PhoneReauthenticationMigrationSource{Base: fixedMigrationSource(passwordHistory), Version: 23}, migrationGuard{version: 23, schema: "identity_password", constraints: []string{"reauthentication_records.reauthentication_consumption_complete"}, constraintValue: "identity.phone.send-verification"})
 	if err != nil {
 		return nil, err
+	}
+	if s.state.features.phone == nil {
+		return catalog, nil
 	}
 	_, err = appendLast("identity_phone_otp", "identity/otp/postgres", otppg.PhonePurposeMigrationSource{Schema: s.state.features.migrations.otpSchema, Version: 1}, migrationGuard{version: 1, schema: s.state.features.migrations.otpSchema, constraints: []string{"challenges.challenges_purpose_v2"}, constraintValue: "phone-verification"})
 	if err != nil {

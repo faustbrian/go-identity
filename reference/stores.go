@@ -77,6 +77,12 @@ type StoreConfiguration struct {
 	Username *UsernameConfiguration
 	// Phone selects native existing-account phone enrollment, not HTTP or login.
 	Phone *PhoneConfiguration
+	// PhoneRemoval independently selects authenticated self-removal and its
+	// required old-number notice, not enrollment, login or HTTP.
+	PhoneRemoval *PhoneRemovalConfiguration
+	// HTTPPhoneRemoval opts into cookie self-removal only, independently of
+	// enrollment and the HTTP signin/password-verification selections.
+	HTTPPhoneRemoval *HTTPPhoneRemovalConfiguration
 	// PhoneSignin independently selects existing verified-phone/password login.
 	// Enrollment and its HTTP routes are not dependencies of this selection.
 	PhoneSignin *PhoneSigninConfiguration
@@ -474,6 +480,9 @@ func (s StoreSet) Close(ctx context.Context) error {
 	}
 	if state.features != nil && state.features.httpPhoneVerification != nil {
 		state.features.httpPhoneVerification.rate.Close()
+	}
+	if state.features != nil && state.features.httpPhoneRemoval != nil {
+		state.features.httpPhoneRemoval.rate.Close()
 	}
 	if state.features != nil && state.features.httpEmailOTPChange != nil {
 		state.features.httpEmailOTPChange.close()

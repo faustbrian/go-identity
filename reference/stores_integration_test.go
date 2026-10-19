@@ -102,6 +102,7 @@ type liveStores struct {
 	secondCSRF                         string
 	recoveryRace                       bool
 	completionFault                    *completionCommitFault
+	phoneRemovalTrace                  *phoneRemovalFenceTrace
 	stores                             reference.StoreSet
 	pool                               *database.Pool
 	config                             reference.StoreConfiguration

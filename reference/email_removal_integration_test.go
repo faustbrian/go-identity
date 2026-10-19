@@ -72,9 +72,15 @@ func TestReferencePostgresEmailRemovalIndependentRateMigrations(t *testing.T) {
 // contribute its atomic migration. No identity authority is fabricated: the
 // synthetic user below scopes only this generic rate-admission probe. The full
 // original HTTPS journey then creates and authenticates its real account.
-func proveEmailRemovalIndependentRateMigrations(t *testing.T, ctx context.Context, f liveStores, c reference.StoreConfiguration, d reference.ReferenceDependencies, worker deliverypg.WorkerConfig, modules []reference.ModuleID) {
+func proveIndependentRemovalRateMigrations(t *testing.T, ctx context.Context, f liveStores, c reference.StoreConfiguration, d reference.ReferenceDependencies, workers []deliverypg.WorkerConfig, modules []reference.ModuleID) {
 	t.Helper()
 	c.HTTPRegistrationVerification, c.HTTPPasswordReset, c.HTTPPasswordVerification, c.HTTPPasswordChange, c.HTTPMagicLink = nil, nil, nil, nil, nil
+	c.HTTPPhoneVerification, c.HTTPEmailOTPVerification, c.HTTPUsername = nil, nil, nil
+	operation, path := "identity.email.address-remove", "/v1/email/address-remove"
+	if c.HTTPPhoneRemoval != nil {
+		c.HTTPEmailRequests = nil
+		operation, path = "identity.phone.remove", "/v1/phone/remove"
+	}
 	stores, err := reference.ComposeStores(c, d)
 	if err != nil {
 		t.Fatal("independent removal stores", err)
@@ -90,11 +96,11 @@ func proveEmailRemovalIndependentRateMigrations(t *testing.T, ctx context.Contex
 	if err != nil {
 		t.Fatal(err)
 	}
-	workers, err := reference.ComposeWorkers(stores, providers, worker)
+	workerSet, err := reference.ComposeWorkers(stores, providers, workers...)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := reference.ComposeFeatures(stores, providers, workers); err != nil {
+	if _, err := reference.ComposeFeatures(stores, providers, workerSet); err != nil {
 		t.Fatal(err)
 	}
 	request := applyRequest(t, ctx, stores, modules)
@@ -123,7 +129,7 @@ func proveEmailRemovalIndependentRateMigrations(t *testing.T, ctx context.Contex
 	if err != nil {
 		t.Fatal(err)
 	}
-	probe := httptest.NewRequest(http.MethodPost, "/v1/email/address-remove", nil)
+	probe := httptest.NewRequest(http.MethodPost, path, nil)
 	probe.Host, probe.RemoteAddr = "127.0.0.1", "127.0.0.1:1234"
 	facts, err := network.Resolve(probe)
 	if err != nil {
@@ -133,7 +139,7 @@ func proveEmailRemovalIndependentRateMigrations(t *testing.T, ctx context.Contex
 	if err != nil {
 		t.Fatal(err)
 	}
-	if out, err := limiter.Admit(ctx, facts, identityhttp.KeyedSecretRateRequest{OperationID: "identity.email.address-remove", UserID: "synthetic-rate-subject", IdempotencyKey: key}); err != nil || !out.Allowed {
+	if out, err := limiter.Admit(ctx, facts, identityhttp.KeyedSecretRateRequest{OperationID: operation, UserID: "synthetic-rate-subject", IdempotencyKey: key}); err != nil || !out.Allowed {
 		t.Fatal("independent removal migration omitted usable atomic rate admission", err)
 	}
 }
