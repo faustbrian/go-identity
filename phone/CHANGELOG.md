@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Describe the native phone signin Send and historical-recovery contracts for
+  independently selected HTTP composition, without enabling routes by metadata.
+
 - Add an opaque existing-account SMS-code signin request and workflow contract.
   Preserve canonical number and original pre-auth custody; no request field can
   select user identity, challenge, code, session or remember policy.

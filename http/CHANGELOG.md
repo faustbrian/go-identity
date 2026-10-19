@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Describe separately selected phone SMS-code issuance and original signin
+  recovery without changing retained operation contracts or enabling routes.
+
 - Admit the explicitly selected native stored-session CSRF profile for phone
   enrollment, confirmation and code-free recovery. Register the direct recovery
   contract without enabling any handler, route or advertised capability by

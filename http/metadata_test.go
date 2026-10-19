@@ -166,6 +166,8 @@ func TestMetadataSelectedSnapshotAndCoverageAreDeterministicAndConcurrent(t *tes
 	verificationRecoveryUnselected := false
 	changeRecoveryUnselected := false
 	phoneRecoveryUnselected := false
+	phoneSigninSendUnselected := false
+	phoneSigninRecoveryUnselected := false
 	for _, row := range d.Coverage() {
 		if row.OperationID == "identity.otp.email-verify.recover" {
 			verificationRecoveryUnselected = row.Status == identityhttp.CoverageUnselectedRouted
@@ -175,6 +177,12 @@ func TestMetadataSelectedSnapshotAndCoverageAreDeterministicAndConcurrent(t *tes
 		}
 		if row.OperationID == "identity.phone.verify.recover" {
 			phoneRecoveryUnselected = row.Status == identityhttp.CoverageUnselectedRouted
+		}
+		if row.OperationID == "identity.phone.send-signin" {
+			phoneSigninSendUnselected = row.Status == identityhttp.CoverageUnselectedRouted
+		}
+		if row.OperationID == "identity.phone.signin.recover" {
+			phoneSigninRecoveryUnselected = row.Status == identityhttp.CoverageUnselectedRouted
 		}
 		if row.Status == identityhttp.CoverageSelectedRouted {
 			selected++
@@ -186,7 +194,7 @@ func TestMetadataSelectedSnapshotAndCoverageAreDeterministicAndConcurrent(t *tes
 			}
 		}
 	}
-	if selected != 4 || len(d.Coverage()) != 335 || !verificationRecoveryUnselected || !changeRecoveryUnselected || !phoneRecoveryUnselected {
+	if selected != 4 || len(d.Coverage()) != 337 || !verificationRecoveryUnselected || !changeRecoveryUnselected || !phoneRecoveryUnselected || !phoneSigninSendUnselected || !phoneSigninRecoveryUnselected {
 		t.Fatal("selection report mismatched", selected)
 	}
 	w := httptest.NewRecorder()

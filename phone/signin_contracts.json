@@ -1,0 +1,82 @@
+{
+  "operations": [{
+    "id": "identity.phone.send-signin", "owner": "identity/phone", "declared_owners": ["identity/phone"],
+    "method": {"interface": "go:identity/phone:SigninService", "name": "SendSignin", "signature": "SendSignin(context.Context, SigninSendRequest) (otp.SendResult, error)"},
+    "request_type": "identity.phone.send-signin.request", "result_type": "identity.phone.send-signin.result", "error_types": ["identity.phone.send-signin.errors"],
+    "transport": {"exposure": "both", "http_method": "POST", "http_path": "/v1/phone/send-signin", "openapi_operation_id": "identity.phone.send-signin"}
+  }, {
+    "id": "identity.phone.signin.recover", "owner": "identity/phone", "declared_owners": ["identity/phone"],
+    "method": {"interface": "go:identity/phone:SigninService", "name": "RecoverSignin", "signature": "RecoverSignin(context.Context, otp.SigninRecoveryRequest) (otp.SigninResult, error)"},
+    "request_type": "identity.phone.signin.recover.request", "result_type": "identity.phone.signin.recover.result", "error_types": ["identity.phone.signin.recover.errors"],
+    "transport": {"exposure": "both", "http_method": "POST", "http_path": "/v1/phone/signin/recover", "openapi_operation_id": "identity.phone.signin.recover"}
+  }],
+  "semantics": [{
+    "id": "identity.phone.send-signin", "owners": ["identity/phone"],
+    "access": "original target-bound public pre-auth possession", "authorization": "original phone-signin flow and canonical number binding; current native recipient and issuance policy",
+    "csrf_origin": "origin", "exposure": "both", "http_method": "POST", "http_path": "/v1/phone/send-signin", "openapi_operation_id": "identity.phone.send-signin",
+    "idempotency": "keyed", "idempotency_transport": "exactly one Idempotency-Key header -> required request.IdempotencyKey", "rate_policy": "rate.delivery", "risk_class": "auth",
+    "event_semantics": "Existing-account phone SMS-code issuance only. Authenticate original target-bound pre-auth custody before discovery or code work; preserve tenant, canonical number profile, purpose, remember policy and earliest expiry. Acceptance includes suppression and proves neither recipient existence nor delivery. Actual OTP/delivery owners retain counted admission, encrypted generation, durable idempotency and unknown-outcome recovery. No signup, enrollment, reset, replacement, code comparison or session issuance."
+  }, {
+    "id": "identity.phone.signin.recover", "owners": ["identity/phone"],
+    "access": "original pre-auth custody plus current historical disclosure policy", "authorization": "original phone-signin possession and current historical disclosure policy; no executable-flow requirement",
+    "csrf_origin": "origin", "exposure": "both", "http_method": "POST", "http_path": "/v1/phone/signin/recover", "openapi_operation_id": "identity.phone.signin.recover",
+    "idempotency": "read", "idempotency_transport": "Idempotency-Key and request.IdempotencyKey forbidden", "rate_policy": "rate.signin", "risk_class": "auth",
+    "event_semantics": "Code-free observation of the original phone consuming correlation, including consumed or expired original flows. Current disclosure permission and original possession remain mandatory. No code comparison, attempt debit, execution retry, SMS resend, session/CSRF delivery or renewed freshness. Historical session identity is not current authentication; unknown remains unknown. Apply signin IP admission without executable-source discovery or another identifier debit."
+  }],
+  "types": [{
+    "id": "identity.phone.send-signin.request", "owner": "identity/phone", "category": "operation_request",
+    "definition": {
+      "name": "SigninSendRequest", "schema_id": "identity.phone.send-signin.request",
+      "representation": "Opaque constructor-only handle; fields describe the explicit SigninSendRequestSpec projection, never automatic JSON.",
+      "fields": [
+        {"name": "TenantID", "type": "identity.TenantID", "required": true, "semantics": "Trusted tenant, exactly matching original target-bound pre-auth custody."},
+        {"name": "Number", "type": "phone.Number", "required": true, "semantics": "Owner-canonical number under the exact selected stored profile; not phone possession or account eligibility."},
+        {"name": "Caller", "type": "authorization.DecisionContext", "required": true, "semantics": "Trusted identity.phone.signin initiating actor/policy; never browser-selected account authority."},
+        {"name": "Flow", "type": "otp.SendFlow", "required": true, "semantics": "Original public pre-auth ID and actual cookie possession. Native ownership compares action, number commitment, remember and expiry."},
+        {"name": "Network", "type": "string", "required": true, "semantics": "Bounded network attribution from trusted ingress."},
+        {"name": "Device", "type": "string", "required": true, "semantics": "Bounded original signed-device attribution from trusted ingress."},
+        {"name": "IdempotencyKey", "type": "identity.IdempotencyKey", "required": true, "semantics": "Original issuance retry key; never a code, challenge or user selector."}
+      ]
+    }
+  }, {
+    "id": "identity.phone.send-signin.result", "owner": "identity/phone", "category": "operation_result",
+    "definition": {"name": "otp.SendResult", "schema_id": "identity.phone.send-signin.result", "fields": [
+      {"name": "CommandID", "type": "identity.CommandID", "required": false, "semantics": "Original server-derived Send correlation when available; not delivery or authentication evidence."},
+      {"name": "Outcome", "type": "identity.CommitOutcome", "required": true, "semantics": "Observed issuance or suppression durability. Unknown does not imply rollback."},
+      {"name": "RetryAfter", "type": "time.Duration", "required": false, "semantics": "Bounded original pending receipt delay, not permission to generate replacement custody."}
+    ]}
+  }, {
+    "id": "identity.phone.send-signin.errors", "owner": "identity/phone", "category": "operation_errors",
+    "definition": {"name": "PhoneSigninSendError", "schema_id": "identity.phone.send-signin.errors", "variants": [
+      {"identity": "invalid", "type": "identity.InvalidInputError", "semantics": "Malformed canonical request or unsupported initiating profile; no supplied number or cookie in diagnostics."},
+      {"identity": "denied", "type": "identity.ForbiddenError", "semantics": "Original possession, number/action binding or current policy denies without recipient disclosure."},
+      {"identity": "unknown", "type": "identity.UnknownCommitError", "semantics": "Retain original issuance key/custody; never infer rollback or regenerate code."},
+      {"identity": "unavailable", "type": "error", "semantics": "Bounded native storage, admission, cancellation or delivery-preparation failure; no credentials disclosed."}
+    ]}
+  }, {
+    "id": "identity.phone.signin.recover.request", "owner": "identity/phone", "category": "operation_request",
+    "definition": {"name": "otp.SigninRecoveryRequest", "schema_id": "identity.phone.signin.recover.request", "fields": [
+      {"name": "TenantID", "type": "identity.TenantID", "required": true, "semantics": "Exact original tenant, agreeing with retained correlation and trusted host."},
+      {"name": "UserID", "type": "identity.UserID", "required": false, "semantics": "Must be empty for this anonymous public initiating profile; native custody selects the original account."},
+      {"name": "Caller", "type": "authorization.DecisionContext", "required": true, "semantics": "Trusted identity.phone.signin.recover actor; native current historical disclosure policy remains mandatory."},
+      {"name": "Flow", "type": "otp.SendFlow", "required": true, "semantics": "Original public flow ID and cookie possession, not renewed executable admission."},
+      {"name": "Recovery", "type": "otp.SigninRecovery", "required": true, "semantics": "Unchanged original Send/attempt/fingerprint/version/scope correlation, without a submitted code."}
+    ]}
+  }, {
+    "id": "identity.phone.signin.recover.result", "owner": "identity/phone", "category": "operation_result",
+    "definition": {"name": "otp.SigninResult", "schema_id": "identity.phone.signin.recover.result", "fields": [
+      {"name": "SessionID", "type": "string", "required": false, "semantics": "Historical original session identity only when committed and authorized for disclosure; never current authentication."},
+      {"name": "Issuance", "type": "session.IssueResult", "required": true, "semantics": "Original command, outcome and replayed history; token/cookie credentials absent and live session may be zero."},
+      {"name": "CSRFToken", "type": "session.CSRFToken", "required": false, "semantics": "Always zero during historical recovery."},
+      {"name": "Recovery", "type": "otp.SigninRecovery", "required": true, "semantics": "Unchanged original code-free correlation; no authority to resubmit execution."}
+    ]}
+  }, {
+    "id": "identity.phone.signin.recover.errors", "owner": "identity/phone", "category": "operation_errors",
+    "definition": {"name": "PhoneSigninRecoveryError", "schema_id": "identity.phone.signin.recover.errors", "variants": [
+      {"identity": "invalid", "type": "otp.ErrInvalidAttempt", "semantics": "Malformed or mismatched original recovery correlation."},
+      {"identity": "denied", "type": "identity.ForbiddenError", "semantics": "Original possession or current historical disclosure policy denies; no destination or credential is returned."},
+      {"identity": "unknown", "type": "identity.UnknownCommitError", "semantics": "Original durability unresolved; preserve correlation and never compare the code again."},
+      {"identity": "unavailable", "type": "error", "semantics": "Bounded native storage/custody/cancellation failure, never fabricated rollback or credential delivery."}
+    ]}
+  }]
+}

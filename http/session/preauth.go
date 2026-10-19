@@ -250,7 +250,7 @@ func newPreAuthHandler(c PreAuthConfig, middleware []identityhttp.MiddlewareDesc
 	stamp := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 	base := PreAuthMethod{Service: c.Service, Action: c.Action, CallbackURL: c.CallbackURL, PolicyID: c.PolicyID, PolicyVersion: c.PolicyVersion, IdentifierBinder: c.IdentifierBinder}
 	validProfile := func(p PreAuthMethod) bool {
-		if p.IdentifierBinder != nil && preAuthNil(p.IdentifierBinder) || p.Action == "identity.phone.password-signin" && preAuthNil(p.IdentifierBinder) {
+		if p.IdentifierBinder != nil && preAuthNil(p.IdentifierBinder) || (p.Action == "identity.phone.password-signin" || p.Action == "identity.phone.signin") && preAuthNil(p.IdentifierBinder) {
 			return false
 		}
 		_, err := session.NewPreAuthTransaction(session.PreAuthTransactionSpec{Binding: session.PreAuthBinding{ID: "AQEBAQEBAQEBAQEBAQEBAQ", Intent: session.PreAuthIntent{TenantID: "configuration", Action: p.Action, Origin: string(c.Origin), CallbackURL: p.CallbackURL, PolicyID: p.PolicyID, PolicyVersion: p.PolicyVersion, Nonce: [32]byte{1}, Remember: remember}, IssuedAt: stamp, ExpiresAt: stamp.Add(5 * time.Minute)}, Cookie: session.TokenDigest{KeyVersion: 1, Sum: [32]byte{1}}, Version: 1})

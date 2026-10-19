@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Require a canonical target-binding owner when selecting phone SMS-code
+  pre-auth initiation, including default and method-specific selections.
+
 - Select original target-bound initiation with a trusted identifier binder.
   Phone/password requires the binder, derives custody after shared IP admission
   and verifies the prepared intent before issue. Unselected methods still

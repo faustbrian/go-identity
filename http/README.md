@@ -443,6 +443,13 @@ the original stored `X-CSRF-Token` synchronizer with exact Origin and denied
 Referer fallback; it neither issues an independently aged token nor enables
 phone signup/signin/reset or any handler by registration alone.
 
+Phone SMS-code signin's separate Send and historical-recovery definitions live
+in `phone/signin_contracts.json`. Use that as the generator's fifth input for
+these native additions; retain all existing embedded rows and their provenance
+when adopting only the two new operations. The embedded combined-operation and
+native-source digests bind the retained rows plus these additions. Catalog
+registration alone enables no route or authentication method.
+
 ## Bounded ordinary request parsing
 
 Construct one `NewRequestDecoder(Limits{...})` with every bound explicit.

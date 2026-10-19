@@ -91,6 +91,32 @@ func TestPreAuthHTTPSelectedIdentifierBinding(t *testing.T) {
 	}
 }
 
+func TestPreAuthHTTPPhoneOTPRequiresItsTargetBindingOwner(t *testing.T) {
+	for _, base := range []bool{false, true} {
+		for _, missing := range []bool{false, true} {
+			c, _, _, binder := phonePreAuthHTTPFixture(t)
+			p := &c.Methods[0]
+			p.Name, p.Action = "phone-otp", "identity.phone.signin"
+			if missing {
+				p.IdentifierBinder = nil
+			}
+			if base {
+				c.Service, c.Action, c.PolicyID, c.PolicyVersion = p.Service, p.Action, p.PolicyID, p.PolicyVersion
+				c.IdentifierBinder = p.IdentifierBinder
+				c.Methods = nil
+			}
+			h, err := sessionhttp.NewPreAuthHandler(c)
+			if missing {
+				if err == nil || h != nil || binder.calls != 0 {
+					t.Fatal("phone OTP profile admitted without its original-target owner")
+				}
+			} else if err != nil || h == nil || binder.calls != 0 {
+				t.Fatal("phone OTP target owner was rejected or invoked during construction", err)
+			}
+		}
+	}
+}
+
 func TestPreAuthHTTPIdentifierCannotBypassSelection(t *testing.T) {
 	for _, body := range []string{`{"method":"phone-password"}`, `{"method":"phone-password","identifier":null}`, `{"method":"phone-password","identifier":""}`, `{"method":"phone-password","identifier":7}`, `{"method":"phone-password","identifier":"invalid"}`, `{"identifier":"+12025550123"}`, `{"method":"phone-password","identifier":"+12025550123","identifierBinding":"forged"}`} {
 		t.Run(body, func(t *testing.T) {
