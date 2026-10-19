@@ -18,6 +18,7 @@ import (
 	email "github.com/faustbrian/go-identity/email"
 	identityhttp "github.com/faustbrian/go-identity/http"
 	"github.com/faustbrian/go-identity/otp"
+	"github.com/faustbrian/go-identity/phone"
 	"github.com/faustbrian/go-identity/session"
 )
 
@@ -83,6 +84,7 @@ type sendAttemptKey struct{}
 type sendInput struct {
 	facts   identityhttp.NetworkFacts
 	request otp.SendRequest
+	phone   phone.SigninSendRequest
 	device  session.BrowserDevice
 	attempt *sendAttempt
 }
@@ -133,8 +135,16 @@ func NewEmailSigninSendHandler(c EmailSigninSendConfig) (http.Handler, error) {
 // delivery budgets, Handle calls the native owner once. Hooks cannot replace
 // source custody or emit credentials, including cookie/CSRF response trailers.
 func NewEmailSigninSendHandlerWithMiddleware(c EmailSigninSendConfig, middleware []identityhttp.MiddlewareDescriptor) (http.Handler, error) {
-	if nilOwner(c.Service) || !c.Rate.Configured() || c.Now == nil || c.MaximumDuration < time.Millisecond || c.MaximumDuration > 30*time.Second || !sendTarget(c.TargetID) {
+	return newSigninSendHandler(c, middleware, nil)
+}
+
+func newSigninSendHandler(c EmailSigninSendConfig, middleware []identityhttp.MiddlewareDescriptor, phoneProfile *phoneSigninSendProfile) (http.Handler, error) {
+	if phoneProfile == nil && nilOwner(c.Service) || !c.Rate.Configured() || c.Now == nil || c.MaximumDuration < time.Millisecond || c.MaximumDuration > 30*time.Second || !sendTarget(c.TargetID) {
 		return nil, identityhttp.ErrInvalidInput
+	}
+	action, operation, path, field := authorization.Action("identity.otp.send"), "identity.otp.send", "/v1/otp/send", "email"
+	if phoneProfile != nil {
+		action, operation, path, field = "identity.phone.signin", "identity.phone.send-signin", "/v1/phone/send-signin", "number"
 	}
 	network, err := identityhttp.NewNetworkResolver(c.Network)
 	if err != nil {
@@ -156,12 +166,15 @@ func NewEmailSigninSendHandlerWithMiddleware(c EmailSigninSendConfig, middleware
 	if err != nil {
 		return nil, identityhttp.ErrInvalidInput
 	}
-	addresses, err := email.NewAddressParser(c.Address)
-	if err != nil {
-		return nil, identityhttp.ErrInvalidInput
+	var addresses email.AddressParser
+	if phoneProfile == nil {
+		addresses, err = email.NewAddressParser(c.Address)
+		if err != nil {
+			return nil, identityhttp.ErrInvalidInput
+		}
 	}
 	caller := func(tenant identity.TenantID) authorization.DecisionContext {
-		return authorization.DecisionContext{PolicyRevision: c.PolicyRevision, Request: authorization.Request{Tenant: authorization.TenantID(tenant), Subject: authorization.Subject{Kind: authorization.SubjectServiceAccount, ID: authorization.SubjectID(c.ActorID)}, Action: "identity.otp.send", Resource: authorization.Resource{Type: "identity.request-admission", ID: "identity.otp.send"}}}
+		return authorization.DecisionContext{PolicyRevision: c.PolicyRevision, Request: authorization.Request{Tenant: authorization.TenantID(tenant), Subject: authorization.Subject{Kind: authorization.SubjectServiceAccount, ID: authorization.SubjectID(c.ActorID)}, Action: action, Resource: authorization.Resource{Type: "identity.request-admission", ID: authorization.ResourceID(operation)}}}
 	}
 	if caller("configuration").Validate() != nil {
 		return nil, identityhttp.ErrInvalidInput
@@ -201,7 +214,7 @@ func NewEmailSigninSendHandlerWithMiddleware(c EmailSigninSendConfig, middleware
 	pipeline, err := identityhttp.NewOperationPipeline(identityhttp.OperationPipelineConfig[SendState]{MaximumDuration: c.MaximumDuration, Middleware: middleware, Reject: reject,
 		Decode: func(r *http.Request) (SendState, error) {
 			s := SendState{input: &sendInput{attempt: attemptFor(r)}}
-			if r.URL.Path != "/v1/otp/send" || r.URL.EscapedPath() != r.URL.Path {
+			if r.URL.Path != path || r.URL.EscapedPath() != r.URL.Path {
 				return s, signinFailure{status: 404, code: "not_found"}
 			}
 			if r.Method != http.MethodPost {
@@ -244,7 +257,7 @@ func NewEmailSigninSendHandlerWithMiddleware(c EmailSigninSendConfig, middleware
 				return s, identityhttp.ErrInvalidInput
 			}
 			var flowID, address string
-			if !recoveryFields(input, map[string]any{"flowID": &flowID, "email": &address}) {
+			if !recoveryFields(input, map[string]any{"flowID": &flowID, field: &address}) {
 				return s, identityhttp.ErrInvalidInput
 			}
 			id, err := identity.ParsePreAuthTransactionID(flowID)
@@ -255,24 +268,46 @@ func NewEmailSigninSendHandlerWithMiddleware(c EmailSigninSendConfig, middleware
 			if err != nil {
 				return s, identityhttp.ErrInvalidInput
 			}
-			parsed, err := addresses.Parse(email.AddressInput(address))
+			var number phone.Number
+			canonical := ""
+			channel := otp.ChannelEmail
+			if phoneProfile != nil {
+				number, err = phoneProfile.policy.Canonicalize(r.Context(), address)
+				if err != nil {
+					return s, identityhttp.ErrInvalidInput
+				}
+				record, err := number.Record()
+				if err != nil {
+					return s, identityhttp.ErrInvalidInput
+				}
+				canonical, channel = record.E164, otp.ChannelSMS
+			} else {
+				parsed, err := addresses.Parse(email.AddressInput(address))
+				if err != nil {
+					return s, identityhttp.ErrInvalidInput
+				}
+				canonical = parsed.Canonical().Record().Value
+			}
+			destination, err := otp.NewDestinationInput(canonical)
 			if err != nil {
 				return s, identityhttp.ErrInvalidInput
 			}
-			destination, err := otp.NewDestinationInput(parsed.Canonical().Record().Value)
-			if err != nil {
-				return s, identityhttp.ErrInvalidInput
-			}
-			s.input.request = otp.SendRequest{TenantID: facts.TenantID(), Caller: caller(facts.TenantID()), Flow: flow, Channel: otp.ChannelEmail, Destination: destination, Purpose: otp.PurposeSignin, TargetID: c.TargetID, Network: facts.ClientIP().String(), Device: device.DeviceID(), IdempotencyKey: key}
+			s.input.request = otp.SendRequest{TenantID: facts.TenantID(), Caller: caller(facts.TenantID()), Flow: flow, Channel: channel, Destination: destination, Purpose: otp.PurposeSignin, TargetID: c.TargetID, Network: facts.ClientIP().String(), Device: device.DeviceID(), IdempotencyKey: key}
 			if s.input.request.Validate() != nil {
 				return s, identityhttp.ErrInvalidInput
+			}
+			if phoneProfile != nil {
+				s.input.phone, err = phone.NewSigninSendRequest(phone.SigninSendRequestSpec{TenantID: facts.TenantID(), Number: number, Caller: s.input.request.Caller, Flow: flow, Network: s.input.request.Network, Device: device.DeviceID(), IdempotencyKey: key})
+				if err != nil {
+					return s, identityhttp.ErrInvalidInput
+				}
 			}
 			s.input.facts, s.input.device = facts, device
 			return s, nil
 		},
 		Authenticate: func(_ *http.Request, s SendState) (SendState, error) { return s, nil },
 		Admit: func(r *http.Request, s SendState) error {
-			return signinRateError(c.Rate.Admit(r.Context(), s.input.facts, identityhttp.AuthRateRequest{OperationID: "identity.otp.send", Identifier: s.input.request.Destination.Value()}))
+			return signinRateError(c.Rate.Admit(r.Context(), s.input.facts, identityhttp.AuthRateRequest{OperationID: operation, Identifier: s.input.request.Destination.Value()}))
 		},
 		Handle: func(w http.ResponseWriter, r *http.Request, s SendState) {
 			a := s.input.attempt
@@ -282,7 +317,13 @@ func NewEmailSigninSendHandlerWithMiddleware(c EmailSigninSendConfig, middleware
 			}
 			a.attempted = true
 			a.out.CommitOutcome = "unknown"
-			result, err := c.Service.Send(r.Context(), s.input.request)
+			var result otp.SendResult
+			var err error
+			if phoneProfile != nil {
+				result, err = phoneProfile.owner.SendSignin(r.Context(), s.input.phone)
+			} else {
+				result, err = c.Service.Send(r.Context(), s.input.request)
+			}
 			if result.CommandID != "" {
 				if _, e := identity.ParseCommandID(string(result.CommandID)); e != nil {
 					reject(w, r, identityhttp.ErrUnavailable)

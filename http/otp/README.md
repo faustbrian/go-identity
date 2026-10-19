@@ -1,5 +1,37 @@
 # OTP HTTP transport
 
+## Verified-phone SMS signin
+
+`NewPhoneSigninFeature(send, signin, recovery)` explicitly contributes three
+operations under `identity/phone`; omission exposes no route or metadata.
+Supply the actual native phone signin/source/recovery owners, their same frozen
+number policy, retained shared rate owner, exact HTTPS tenant/Origin and secure
+flow/device/session cookie configuration. Constructors perform no native IO.
+
+| POST path | Exact JSON fields | Idempotency-Key |
+| --- | --- | --- |
+| `/v1/phone/send-signin` | `flowID`, `number` | Required |
+| `/v1/phone/signin` | `flowID`, `sendCommandID`, `code` | Forbidden |
+| `/v1/phone/signin/recover` | `flowID`, `recovery` | Forbidden |
+
+First select a separate pre-auth method bound to `identity.phone.signin`, using
+the native phone target commitment, original remember policy and browser
+custody. SMS issuance also requires the existing signed device cookie. Native
+issuance authenticates that original target/profile before preparing a code;
+202 acceptance proves neither account existence nor delivery. Only a fresh
+committed consuming signin may deliver session and synchronizer headers.
+Recovery returns original code-free history, never credentials or renewed
+authority. Unknown outcomes must not be resolved by resubmitting a code.
+
+This profile requires a genuinely verified existing phone and known-empty
+native factor authority. It does not select enrollment, password signin,
+signup, reset, number replacement or stronger-factor continuation. Preserve the
+separate generic email OTP selection. Combine selected phone contributions
+under one feature owner; do not register duplicate `identity/phone` features.
+The individual `NewPhoneSigninSendHandler`, `NewPhoneSigninHandler` and
+`NewPhoneSigninRecoveryHandler` retain the same policies without selecting
+routes or schemas. Reference-server composition remains a separate boundary.
+
 ## Primary-email replacement
 
 `NewEmailChangeFeature(EmailChangeConfig)` independently selects the following

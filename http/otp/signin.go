@@ -112,8 +112,32 @@ func NewSigninHandler(c SigninConfig) (http.Handler, error) {
 // observes attempts, not an assertion of commitment. Detached request headers
 // remain sensitive; hooks must not log or retain them.
 func NewSigninHandlerWithMiddleware(c SigninConfig, middleware []identityhttp.MiddlewareDescriptor) (http.Handler, error) {
+	return newSigninHandler(c, middleware, false)
+}
+
+// NewPhoneSigninHandler selects only POST /v1/phone/signin using the original
+// phone SMS-code owner and original-source reader. Both must be the same native
+// phone workflow; neither may be an email OTP owner or a caller destination.
+// The original flow, rate, timeout and guarded credential-delivery semantics
+// are the same as NewSigninHandler, with a fixed phone action and SMS-only
+// source/authentication provenance. No route or feature is registered here.
+func NewPhoneSigninHandler(c SigninConfig) (http.Handler, error) {
+	return NewPhoneSigninHandlerWithMiddleware(c, nil)
+}
+
+// NewPhoneSigninHandlerWithMiddleware retains the same real typed execution
+// phases, without exposing a caller-configurable workflow/path substitution.
+func NewPhoneSigninHandlerWithMiddleware(c SigninConfig, middleware []identityhttp.MiddlewareDescriptor) (http.Handler, error) {
+	return newSigninHandler(c, middleware, true)
+}
+
+func newSigninHandler(c SigninConfig, middleware []identityhttp.MiddlewareDescriptor, phone bool) (http.Handler, error) {
 	if nilOwner(c.Service) || nilOwner(c.Source) || !c.Rate.Configured() || c.Now == nil || c.MaximumDuration < time.Millisecond || c.MaximumDuration > 30*time.Second || c.Audience == "" {
 		return nil, identityhttp.ErrInvalidInput
+	}
+	action, path := authorization.Action("identity.otp.signin"), "/v1/otp/signin"
+	if phone {
+		action, path = "identity.phone.signin", "/v1/phone/signin"
 	}
 	network, err := identityhttp.NewNetworkResolver(c.Network)
 	if err != nil {
@@ -136,7 +160,7 @@ func NewSigninHandlerWithMiddleware(c SigninConfig, middleware []identityhttp.Mi
 		return nil, identityhttp.ErrInvalidInput
 	}
 	caller := func(tenant identity.TenantID) authorization.DecisionContext {
-		return authorization.DecisionContext{PolicyRevision: c.PolicyRevision, Request: authorization.Request{Subject: authorization.Subject{Kind: authorization.SubjectServiceAccount, ID: authorization.SubjectID(c.ActorID)}, Tenant: authorization.TenantID(tenant), Action: "identity.otp.signin", Resource: authorization.Resource{Type: "identity.request-admission", ID: "identity.otp.signin"}}}
+		return authorization.DecisionContext{PolicyRevision: c.PolicyRevision, Request: authorization.Request{Subject: authorization.Subject{Kind: authorization.SubjectServiceAccount, ID: authorization.SubjectID(c.ActorID)}, Tenant: authorization.TenantID(tenant), Action: action, Resource: authorization.Resource{Type: "identity.request-admission", ID: authorization.ResourceID(action)}}}
 	}
 	if caller("configuration").Validate() != nil || len(c.Audience) > 256 {
 		return nil, identityhttp.ErrInvalidInput
@@ -167,7 +191,7 @@ func NewSigninHandlerWithMiddleware(c SigninConfig, middleware []identityhttp.Mi
 		Decode: func(r *http.Request) (SigninState, error) {
 			s := SigninState{attempt: signinAttemptFor(r)}
 			ctx := r.Context()
-			if r.URL.Path != "/v1/otp/signin" || r.URL.EscapedPath() != r.URL.Path {
+			if r.URL.Path != path || r.URL.EscapedPath() != r.URL.Path {
 				return s, signinFailure{status: 404, code: "not_found"}
 			}
 			if r.Method != http.MethodPost {
@@ -235,20 +259,20 @@ func NewSigninHandlerWithMiddleware(c SigninConfig, middleware []identityhttp.Mi
 			return s, nil
 		},
 		Authenticate: func(r *http.Request, s SigninState) (SigninState, error) {
-			if err := signinRateError(c.Rate.AdmitSigninIP(r.Context(), s.facts, "identity.otp.signin")); err != nil {
+			if err := signinRateError(c.Rate.AdmitSigninIP(r.Context(), s.facts, string(action))); err != nil {
 				return s, err
 			}
 			request := s.request
 			source, err := c.Source.ResolveSigninSource(r.Context(), otp.SigninSourceRequest{TenantID: request.TenantID, Caller: request.Caller, Flow: request.Flow, SendCommandID: request.SendCommandID})
 			binding, e := source.Bindings()
-			if err != nil || e != nil || r.Context().Err() != nil || binding.TenantID != request.TenantID || binding.SendCommandID != request.SendCommandID {
+			if err != nil || e != nil || r.Context().Err() != nil || binding.TenantID != request.TenantID || binding.SendCommandID != request.SendCommandID || phone && binding.Channel != otp.ChannelSMS {
 				return s, identityhttp.ErrUnavailable
 			}
 			s.identifier = binding.Destination.Value()
 			return s, nil
 		},
 		Admit: func(r *http.Request, s SigninState) error {
-			return signinRateError(c.Rate.AdmitSigninIdentifier(r.Context(), s.facts, identityhttp.AuthRateRequest{OperationID: "identity.otp.signin", Identifier: s.identifier}))
+			return signinRateError(c.Rate.AdmitSigninIdentifier(r.Context(), s.facts, identityhttp.AuthRateRequest{OperationID: string(action), Identifier: s.identifier}))
 		},
 		Handle: func(w http.ResponseWriter, r *http.Request, s SigninState) {
 			a := s.attempt
@@ -288,7 +312,7 @@ func NewSigninHandlerWithMiddleware(c SigninConfig, middleware []identityhttp.Mi
 			}
 			metadata, e := result.Issuance.Session.OTPAuthentication().Bindings()
 			csrfState, csrfErr := result.Issuance.Session.CSRFState().Bindings()
-			if e != nil || metadata.CommandID != out.CommandID || metadata.SendCommandID != command || !now.Before(metadata.ValidUntil) || csrfErr != nil || csrfState.Binding != (session.CSRFBinding{TenantID: request.TenantID, SessionID: result.SessionID, SessionVersion: spec.Version}) {
+			if e != nil || metadata.CommandID != out.CommandID || metadata.SendCommandID != command || !now.Before(metadata.ValidUntil) || phone && metadata.IdentifierKind != identity.IdentifierPhone || csrfErr != nil || csrfState.Binding != (session.CSRFBinding{TenantID: request.TenantID, SessionID: result.SessionID, SessionVersion: spec.Version}) {
 				respond(503, "unavailable")
 				return
 			}

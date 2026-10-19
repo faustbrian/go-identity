@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- Add an explicitly selected phone SMS-code consuming handler over the existing
+  guarded OTP pipeline. It uses the phone action and original SMS rate source,
+  and rejects email authentication before credential delivery. Generic OTP
+  routes and caller contracts are unchanged. Separately select original phone
+  recovery with its historical action and no credential delivery; no route is
+  enabled automatically.
+- Add original target-bound SMS issuance and the combined opt-in phone
+  send/signin/recovery feature with concrete OpenAPI contracts. Canonical phone
+  policy, original flow/device custody and header-only idempotency remain
+  mandatory; accepted issuance reveals neither account existence nor delivery.
+
 - Document first-primary OTP establishment through an explicitly selected native
   profile and original sole-verified change policy. HTTP selection alone still
   grants no such authority and existing routes/responses remain unchanged.

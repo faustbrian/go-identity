@@ -111,8 +111,32 @@ func NewSigninRecoveryHandler(c SigninRecoveryConfig) (http.Handler, error) {
 // Authenticate applies trusted IP admission, and Handle recovers once. Hooks
 // cannot forge cookie/CSRF delivery, even by short-circuiting or trailers.
 func NewSigninRecoveryHandlerWithMiddleware(c SigninRecoveryConfig, middleware []identityhttp.MiddlewareDescriptor) (http.Handler, error) {
+	return newSigninRecoveryHandler(c, middleware, false)
+}
+
+// NewPhoneSigninRecoveryHandler selects POST /v1/phone/signin/recover with the
+// exact original phone workflow owner and phone.signin.recover action. Original
+// possession and current disclosure authority remain native responsibilities.
+// All other bounds and credential-free history semantics match
+// NewSigninRecoveryHandler; no consuming-source lookup or route registration
+// occurs, and generic OTP recovery is not enabled by this constructor.
+func NewPhoneSigninRecoveryHandler(c SigninRecoveryConfig) (http.Handler, error) {
+	return NewPhoneSigninRecoveryHandlerWithMiddleware(c, nil)
+}
+
+// NewPhoneSigninRecoveryHandlerWithMiddleware freezes the existing historical
+// pipeline under a separately closed phone action and exact path.
+func NewPhoneSigninRecoveryHandlerWithMiddleware(c SigninRecoveryConfig, middleware []identityhttp.MiddlewareDescriptor) (http.Handler, error) {
+	return newSigninRecoveryHandler(c, middleware, true)
+}
+
+func newSigninRecoveryHandler(c SigninRecoveryConfig, middleware []identityhttp.MiddlewareDescriptor, phone bool) (http.Handler, error) {
 	if nilOwner(c.Service) || !c.Rate.Configured() || c.MaximumDuration < time.Millisecond || c.MaximumDuration > 30*time.Second {
 		return nil, identityhttp.ErrInvalidInput
+	}
+	action, operation, path := authorization.Action("identity.otp.signin"), "identity.otp.signin", "/v1/otp/signin/recover"
+	if phone {
+		action, operation, path = "identity.phone.signin.recover", "identity.phone.signin", "/v1/phone/signin/recover"
 	}
 	network, err := identityhttp.NewNetworkResolver(c.Network)
 	if err != nil {
@@ -131,7 +155,7 @@ func NewSigninRecoveryHandlerWithMiddleware(c SigninRecoveryConfig, middleware [
 		return nil, identityhttp.ErrInvalidInput
 	}
 	caller := func(tenant identity.TenantID) authorization.DecisionContext {
-		return authorization.DecisionContext{PolicyRevision: c.PolicyRevision, Request: authorization.Request{Subject: authorization.Subject{Kind: authorization.SubjectServiceAccount, ID: authorization.SubjectID(c.ActorID)}, Tenant: authorization.TenantID(tenant), Action: "identity.otp.signin", Resource: authorization.Resource{Type: "identity.request-admission", ID: "identity.otp.signin"}}}
+		return authorization.DecisionContext{PolicyRevision: c.PolicyRevision, Request: authorization.Request{Subject: authorization.Subject{Kind: authorization.SubjectServiceAccount, ID: authorization.SubjectID(c.ActorID)}, Tenant: authorization.TenantID(tenant), Action: action, Resource: authorization.Resource{Type: "identity.request-admission", ID: authorization.ResourceID(operation)}}}
 	}
 	if caller("configuration").Validate() != nil {
 		return nil, identityhttp.ErrInvalidInput
@@ -162,7 +186,7 @@ func NewSigninRecoveryHandlerWithMiddleware(c SigninRecoveryConfig, middleware [
 			fail := func(status int, code string) (SigninRecoveryState, error) {
 				return s, signinFailure{status: status, code: code}
 			}
-			if r.URL.Path != "/v1/otp/signin/recover" || r.URL.EscapedPath() != r.URL.Path {
+			if r.URL.Path != path || r.URL.EscapedPath() != r.URL.Path {
 				return fail(404, "not_found")
 			}
 			if r.Method != http.MethodPost {
@@ -224,7 +248,7 @@ func NewSigninRecoveryHandlerWithMiddleware(c SigninRecoveryConfig, middleware [
 			return s, nil
 		},
 		Authenticate: func(r *http.Request, s SigninRecoveryState) (SigninRecoveryState, error) {
-			return s, signinRateError(c.Rate.AdmitSigninIP(r.Context(), s.facts, "identity.otp.signin"))
+			return s, signinRateError(c.Rate.AdmitSigninIP(r.Context(), s.facts, operation))
 		},
 		Admit: func(*http.Request, SigninRecoveryState) error { return nil },
 		Handle: func(w http.ResponseWriter, r *http.Request, s SigninRecoveryState) {
