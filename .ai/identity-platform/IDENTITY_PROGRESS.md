@@ -1,6 +1,6 @@
 # Identity Platform Progress
 
-## TL;DR — updated 2026-10-19 05:25 UTC
+## TL;DR — updated 2026-10-19 06:26 UTC
 
 **Estimated whole-goal completion: approximately 20%, with low confidence.**
 **Consumer milestones: 8/39 closed** (20.5% unweighted); full scope remains
@@ -14,7 +14,22 @@ This is an effort/scope estimate, not a measured percentage or an ETA.
 M10's existing confirmed-TOTP enrollment/signin consumer is now counted after
 source/acceptance reconciliation; this corrects a stale row, not new development.
 
-**Active M08 profile, not delivered:** phone SMS-code signin. Prerequisites
+**Newly delivered M08 profile:** verified-phone SMS-code signin through the
+reference HTTPS backend, from genuine registration/email verification and
+fresh-proof phone enrollment to encrypted SMS, one consuming signin, usable
+browser/persistent session read and logout. Wrong-code debit, original target
+and browser custody, replay, credential-free recovery and mixed phone-password/
+username composition are proven. Independently reviewed reference `fba0485` is
+on main, Required CI [39209602841](https://github.com/faustbrian/go-identity/actions/runs/39209602841)
+passes, and its actual public module matches all 285 Go/manifest files. The
+downloaded module's genuine PostgreSQL/HTTPS race consumer passes (15.324s).
+Independent delivery audit supports that bounded claim. See
+[the consumer guide](../../reference/PHONE.md#independently-selected-phone-sms-code-signin).
+**M08 remains open** for reset, phone change/removal and its remaining assigned
+profiles. No whole-unit qualification or new full-roadmap closure is claimed:
+8/39 and the approximate 20% whole-goal estimate remain unchanged.
+
+**Retained native/HTTP delivery evidence:** phone SMS-code signin. Prerequisites
 `60bd1ec` and native adapter `c50fb10` are independently reviewed, main-pushed,
 Required CI green and publicly downloadable. The actual public native module
 matches all 130 Go/manifests. Its genuine enrollment -> encrypted SMS -> signin
@@ -33,10 +48,10 @@ main-pushed `b88e709`, Required39204171362 green and publicly downloadable.
 The actual downloaded module's mixed phone/email route/schema/dispatch test
 passes with race detection (2.967s); independent delivery audit matches the
 approved source and public artifact. The complete native-to-HTTPS reference
-journey remains implementation work, so M08 is not closed. Earlier enrollment
+journey is now delivered above; broad M08 is not closed. Earlier enrollment
 fixture intermittency is unexplained; these passes do not prove stability.
 
-**Current outcome:** native verified-phone/password signin is main-pushed
+**Earlier M08 outcome:** native verified-phone/password signin is main-pushed
 `650d24f`, Required CI green, and exercised through its downloaded public module.
 HTTP/session and HTTP/password are main-pushed `422b56d`, Required CI green;
 their public modules match all 69 reviewed Go/manifests. The real reference
@@ -65,7 +80,7 @@ no credential/success-effect mutation or ceremony consumption. Independent final
 review and delivery audit approve the bounded claim; the actual public native
 module matches all nine Go/manifests. No M16/passkey/session integration,
 whole-unit qualification, tagged release or production claim. Worker resources
-are removed. Primary now implements selected phone SMS-code signin.
+are removed. The selected phone SMS-code reference consumer is delivered above.
 
 ### Earlier checkpoints — historical evidence, not current pending state
 

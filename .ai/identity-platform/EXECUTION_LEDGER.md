@@ -24,7 +24,45 @@ and rootrace2.034 retain original producer identities, not new executions.
 Count8/39 (20.5% unweighted), effort estimate~20% low confidence. Full unit,
 tagged release, production and passkey/session composition remain unqualified.
 
-## Primary successor — selected verified-phone SMS-code signin
+## M08 selected phone SMS-code consumer DELIVERED — 2026-10-19 06:26 UTC
+
+Reference `fba048570a3fb6d6acc229e8014d0d6f3fad7ea1` is main-pushed;
+Required 39209602841 SUCCESS (planning/structure/change-range secrets, not
+runtime CI). Complete 20-path source `02756ea9ca8404ecd052249bd967788cb5c76cbdebe75c79ed24be0f025f79de`
+has native final-review, regression and Go-compatibility APPROVE. Review's weak
+lifecycle-test oracle is corrected; bypassing only graph admission now fails
+that assertion. Independent delivery audit received the native reports directly
+and matched committed source, clean main, remote, CI and public artifact.
+
+Actual public `reference@v0.0.0-20261019062255-fba048570a3f` has exact origin and
+285 Go/manifest files byte-equal to committed reference. Content sum
+`h1:SPssK1UpY8PSpu5PwUbR9z016onMRq/8SSzFrvlbiAM=`, module sum
+`h1:MrClZcHhSyCfoEOmzdqbQx70U6XGb0RWDuQhqOgIn7w=`. Its genuine
+PostgreSQL/HTTPS race consumer passes 15.324s with `GOWORK=off`, read-only module
+mode, browser/persistent sessions and phone/password/username coexistence:
+`go test -race -tags=integration -run
+'^TestReferencePostgresPhoneOTP(Signin|PasswordUsernameCoexistence)HTTPS$'
+-count=1 .`. It performs actual registration, email verification, fresh-proof
+phone enrollment/verification, target-bound SMS request, captured encrypted
+delivery, counted denial, consuming signin, session read/logout and original
+code-free recovery. Disposable PostgreSQL is removed after the run.
+
+Canonical affected PostgreSQL/race matrix passed 63.392s at original runtime
+snapshot `3d8869bbf840d8352bb63c498a7eb1b1bba1622b50eb1ec1472fd85072b524b9`;
+only the guard unit-test oracle changed afterwards. Current ordinary reference
+race passed 10.411s (unchanged command package cached 9.656s); tagged vet,
+module verification, planning and changed-base/current-tree secrets passed.
+These retain their original executions, not a re-run at the delivered commit.
+The corrected canonical HTTP actor is independent of the original flow actor;
+no risk audit, deadline, attempt or session policy was weakened.
+
+This closes only the frozen SMS-code reference outcome below. Full M08 still
+needs reset, number change/removal and remaining assigned profiles. No full-unit,
+live-provider, tagged-release or production qualification. Count remains 8/39;
+whole-goal estimate approximately 20%, low confidence. Next: one finite remaining
+M08 lifecycle profile, preserving this delivered consumer and unchanged evidence.
+
+### Retained frozen scope and execution — selected verified-phone SMS-code signin
 
 Primary owns phone/OTP/session contracts and native adapters, then opt-in
 HTTP/reference composition; no other writer owns these paths. Consume the
