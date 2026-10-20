@@ -1,6 +1,6 @@
 # Identity Platform Progress
 
-## TL;DR — updated 2026-10-20 07:12 UTC
+## TL;DR — updated 2026-10-20 07:48 UTC
 
 **Estimated whole-goal completion: approximately 20%, with low confidence.**
 **Consumer milestones: 8/39 closed** (20.5% unweighted); full scope remains
@@ -129,8 +129,21 @@ consumer passes (15.081s). Apply the forward pairwise migration before selection
 Multi-host sector URI, HTTP/reference/logout/private exchange and full M31/unit
 qualification remain open. No new whole milestone is counted.
 
-**Active:** primary phone-password recovery; separate WebAuthn worker implements
-the required explicit Ed25519 algorithm profile against existing durable owners.
+**New WebAuthn backend delivery:** opt-in Ed25519 registration and identified/
+discoverable assertion, preserving legacy ES256 and original ceremony policy.
+Root `ed89b24` and native `43ab7e1` are independently reviewed, main-pushed and
+exact Required-CI green. Seven focused actual-public-root PostgreSQL/race cases
+pass, including retained ES256, current subject, rollback, lost-COMMIT and
+populated upgrade. All 36 root and 18 native public files match committed source.
+The downloaded native module's Ed25519 consumer passes PostgreSQL/race (5.238s),
+without replacements. Root CI's first scanner startup timed out; attempt 2
+passed without source changes or bypass. Actual Ed25519 browser/authenticator
+interoperability remains unverified; this is experimental backend support, not
+full M15, passkey orchestration or unit qualification. No whole milestone added.
+
+**Active:** primary phone-password recovery. Canonical capability scope and joint
+password/capability/SMS/TOTP command custody are locally tested, not delivered;
+native request/completion, atomic consumption/revocation and HTTP remain open.
 SSO domain verification is not started: genuine challenge/evidence authority
 must precede verified claims; an unproven domain reservation cannot substitute.
 

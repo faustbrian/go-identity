@@ -1,5 +1,58 @@
 # Identity Implementation — Current Milestone
 
+## Active M08 — explicitly enabled phone-password recovery
+
+2026-10-20 07:20 UTC: primary freezes one public recovery outcome on main03e4ae4:
+dedicated pre-auth -> current verified-phone/credential/TOTP eligibility -> fresh
+initiation-only native risk evidence -> same-command SMS OTP and canonical reset
+capability issuance/delivery -> distinct completion risk evidence plus original
+capability, phone OTP and current independent TOTP -> HIBP-screened password
+replacement and session invalidation in one coordinator transaction -> old password/
+sessions deny, new password+TOTP signin works, original code-free recovery. Zero/
+unselected recovery exposes no method/HTTP capability; explicit startup acceptance
+of carrier/SIM-swap/recycling risk is required. The SMS and reset capability are
+not two independent factors: a current TOTP is mandatory for this profile.
+No known-empty-MFA/email fallback, caller carrier decisions or weaker normal
+email-reset endpoint may satisfy this phone proof. Other independent factors and
+phone signup remain full-goal obligations, not silently supported variants.
+
+Owners: primary phone/password/kernel/OTP/MFA/risk/native transport/reference;
+consume main03e4ae4 and delivered reference10eb07f, native password481045f,
+kernelb1c611f/33871a2 and risk issuance/reservation contracts at their existing
+public pins. Preserve normal email reset and all installed bytes. Extend exact
+typed consuming profiles only; no generic registry bypass, second OTP, reset,
+risk or TOTP engine, transaction/journal or caller-writable factor proof.
+Initial root boundary is the canonical password reset capability's opt-in phone
+scope, cryptographically distinct from normal emailed reset and bound to original
+pre-auth/OTP/attempt/phone/factor/policy versions. Native scope must not accept
+this preparatory profile as usable recovery by itself.
+
+Checks: focused scope red/green and legacy payload preservation; native genuine
+request/delivery/completion/signin/session-denial PG/race plus wrong/stale/foreign
+proof, missing/current-factor withdrawal, all carrier deny classes, HIBP failure,
+purpose substitution/replay, rollback/contention/lost COMMIT and original retry;
+opt-in HTTPS and downloaded public consumer. One complete independent review,
+coherent main publication/CI, then close this profile without neighboring variants.
+Worker WebAuthn paths are disjoint; heavy runs remain serialized. Not delivered.
+
+First canonical capability boundary: expected missing public API RED, then scoped
+phone/legacy signed-grant tests GREEN0.206s. NewPhoneResetProfile selects phone
+purpose and original TOTP/pre-auth/OTP/attempt/number-key/verification/risk scope;
+normal email profile remains closed and neither accepts the other's grant.
+Expanded complete password-module race PASS1.406s, vet0; bounded phone-caveat
+parser fuzz PASS7,067execs/3.238s. Signed malformed/missing/overflow/noncanonical
+dependencies, purpose downgrade and factor-ID colon preservation are covered.
+Source remains local/unreviewed, with explicit README/changelog limits; no phone
+recovery service, consuming transaction or delivered profile is claimed yet.
+
+2026-10-20 07:48 UTC: joint root command custody now keeps original password or
+generated verifier plus canonical reset capability, phone OTP and independent
+TOTP in one exact native phone operation. Expected absent-API RED, focused green
+0.262s and expanded joint custody/bounds/mixed-variant race1.278s. Legacy email,
+ordinary feature and single-code paths deny instead of dropping a required
+factor. Borrowed proof/password terminal lifetimes are preserved. This remains
+local, unreviewed preparation; no native phone reset service or endpoint yet.
+
 ## M08 — authenticated verified-phone replacement: selected profile CLOSED
 
 Primary owns go-identity main from `92f34fa`: phone contracts, kernel directory/
@@ -251,7 +304,28 @@ substitute: it could squat another organization's domain before ownership proof.
 Full domain challenge/verification remains unstarted. No new canonical operation
 or caller-writable proof authority was approved. Worker made no changes.
 
-## Parallel WebAuthn — required Ed25519 algorithm profile
+## Parallel WebAuthn — Ed25519 backend delivered; interoperability OPEN
+
+2026-10-20 07:48 UTC: root ed89b240ab206ae73328f529bbadf24a5d77c81a and native
+43ab7e11dc796020049ce118d828648d0f34f43a are main-pushed, exact Required39388039812
+(attempt2) and39388547345 SUCCESS. Root first40s scanner-startup timeout reported
+no finding; same-job retry passed unchanged. Full14 independent review6c47ae2d
+APPROVE after adding the valid-but-unselected COSE denial/original-ceremony
+survival regression; native4 publication addendumacf05497 APPROVE. Source/pins
+unchanged after review. No installed schema bytes or native ownership changed.
+Actual public root v0.0.0-20261020074004-ed89b240ab20 (36 files) and native
+v0.0.0-20261020074433-43ab7e11dc79 (18 files) are sumdb-authenticated and byte-match
+their owners, including inherited LICENSE. Explicit Go1.27.2/GOWORKoff/normal
+proxy+sumdb public-root native ordinary race (no ordinary tests), tagged vet and
+module verification pass. Fresh isolated PG18.6/race: Ed25519NativeIdentifiedAnd
+Discoverable8.947s, RegistrationAssertion12.771s, DiscoverableAssertion4.781s,
+CommittedAcknowledgementLoss3.360s, DiscoverableAcknowledgementLoss2.234s,
+DiscoverablePopulatedMigration1.269s, SuspendedSubjectCannotFinalize1.611s. Each
+used a fresh cluster. Actual downloaded native Ed25519 consumer passes5.238s.
+Root race3.644s/vet0, worker bounded COSE fuzz and protocol/oracle proof retained.
+Actual Ed25519 browser/authenticator interoperability remains UNVERIFIED; prior
+Chromium proof was ES256, not this algorithm. Full M15/units/passkey integration
+remain open. This closes experimental backend delivery only, not whole milestone.
 
 2026-10-20 07:11 UTC: new separate-repository worker owns one finite none-
 attestation Ed25519 registration/assertion profile in go-webauthn main
