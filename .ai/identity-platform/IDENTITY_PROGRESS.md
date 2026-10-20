@@ -1,6 +1,6 @@
 # Identity Platform Progress
 
-## TL;DR — updated 2026-10-20 08:33 UTC
+## TL;DR — updated 2026-10-20 08:57 UTC
 
 **Estimated whole-goal completion: approximately 20%, with low confidence.**
 **Consumer milestones: 8/39 closed** (20.5% unweighted); full scope remains
@@ -141,13 +141,22 @@ passed without source changes or bypass. Actual Ed25519 browser/authenticator
 interoperability remains unverified; this is experimental backend support, not
 full M15, passkey orchestration or unit qualification. No whole milestone added.
 
-**Active:** primary phone-password recovery. Canonical capability scope and joint
-password/capability/SMS/TOTP command custody are locally tested, not delivered;
-sessionless pre-auth issuance/recovery now passes real PostgreSQL without
-issuing a session or inventing remember policy. Native request/completion,
-atomic consumption/revocation and HTTP remain open.
-SSO domain verification is not started: genuine challenge/evidence authority
-must precede verified claims; an unproven domain reservation cannot substitute.
+**Active:** primary phone-password recovery. Canonical capability scope, joint
+password/capability/SMS/TOTP custody and sessionless pre-auth prerequisites are
+now independently approved, main-pushed and exact Required-CI green at
+`928f9b7` / `c9ff4fb`. The actual downloaded native adapter passes real
+PostgreSQL/race issuance/recovery (2.513s), with no session or invented remember
+policy. Native reset request/completion, atomic consumption/revocation and HTTP
+remain unfinished and disabled; no whole milestone is added.
+An independent organization lane is starting authenticated domain reservation/
+read/withdrawal against committed owners. This is not domain verification:
+genuine challenge/evidence authority must precede verified claims or SSO routing.
+OAuth's real fresh-login continuation has a local genuine-session/RP success;
+failure/recovery acceptance and review remain open, not delivered.
+
+**Qualification limit:** scheduled full-history scan `39394030689` has untriaged
+secret candidates. Current-change checks and exact publication CI pass, not
+full-history security/release qualification. No scanner bypass or history repair.
 
 **Newly delivered native OIDC profile:** actual HTTPS sector registration now
 supports multiple callback hosts with stable pairwise ID-token/UserInfo identity.

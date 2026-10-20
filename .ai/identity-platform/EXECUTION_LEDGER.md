@@ -69,6 +69,61 @@ phone recovery-target binding has expected absent-API RED, then complete phone
 race1.536s/vet0 with public suppliers. All this remains local/unreviewed: actual
 request/delivery and atomic TOTP/OTP/reset/risk/session execution are unfinished.
 
+2026-10-20 08:57 UTC: these prerequisites are now independently approved and
+main-pushed: core/password/phone/session928f9b7, native kernel/pre-authc9ff4fb.
+Both exact Required runs pass (39395655841 / 39396658237). All four public API
+modules byte-match their reviewed commit; both public native modules match theirs.
+Standalone public-supplier race/vet pass for all four core modules and both
+native adapters; both native dependency graphs authenticate. The genuine
+sessionless pre-auth PostgreSQL/race consumer passes against public suppliers
+(1.998s) and from the downloaded final adapter (2.513s), without replacements.
+This closes the prerequisite publication, not M08 or a phone-reset service.
+Generic consuming execution remains closed. Next is the existing OTP/MFA-owner
+conjunction: correct SMS with wrong TOTP must debit the one challenge attempt
+budget without consuming capability/risk/session proofs; successful completion
+must reverify and atomically advance TOTP replay with password/session effects.
+The current owner boundaries do not yet express that conjunction; no private
+attempt budget or caller-writable factor verdict may substitute.
+
+Scheduled full-history scan39394030689 still has untriaged secret candidates;
+current-change secret checks and both exact publication Required runs pass.
+No full-history security or release clearance is claimed; no historical repair
+or scanner bypass is part of this prerequisite batch.
+
+## Active M25 prerequisite — authenticated domain claim custody
+
+2026-10-20 08:57 UTC: freeze one organization-owned reserve -> authenticated
+current read -> withdraw consumer, not verified-domain routing. Owner is the
+organization-domain worker in go-organization main a20a7b95cc7a. Writable paths:
+root organization/domain claim Go and tests; postgres domain claim, contributor,
+service/apply mappings, tests and one forward migration; scoped root/native
+README, CHANGELOG and domain documentation. Manifests, dependency pins, workspace,
+Git, shared identity owners, HTTP/reference and these notes remain primary-owned.
+
+Consume existing native public organization9b574e6, identitycb4384b, kernel08705b0,
+session6fadb5e/nativee3b8aff and their proven current-session/membership/audit/
+outbox/coordinator contracts. A genuine authorized owner/admin can reserve an
+exact canonical domain for an active tenant/organization, read its own claim,
+withdraw the exact current version and recover an ambiguous original mutation.
+PostgreSQL must enforce unique active ownership across tenants; the losing
+organization learns no competing owner. Current actor/session/credential/global
+and scoped authority, active organization, policy and expected versions fence
+every effect. Claim, organization epoch, audit, lifecycle and participant result
+commit together through the existing coordinator. Withdrawal keeps the tombstone;
+later reservation uses a new claim identity, never resurrecting the old claim.
+Bound domain input/cardinality and keep canonicalization explicit and deterministic.
+
+No challenge, DNS/HTTPS observation, usable DomainProof, verified state, SSO
+routing, automatic expiry takeover or parent/child delegation is selected. Those
+remain downstream work; this reservation is never proof of domain ownership.
+Tests: genuine password-session reserve/read/withdraw; cross-tenant contention;
+stale/wrong-scope/current-authority denial; original replay/reconstruction and
+changed-intent conflict; audit/outbox rollback; actual lost-COMMIT recovery;
+populated forward migration; bounded canonicalization fuzz plus affected root/
+native race/vet. Parent owns public-pin/downloaded consumer adoption, independent
+complete review and main publication/CI. Workers request the serialized heavy
+slot and do not spawn agents or perform Git operations. Full M25 remains open.
+
 ## M08 — authenticated verified-phone replacement: selected profile CLOSED
 
 Primary owns go-identity main from `92f34fa`: phone contracts, kernel directory/
